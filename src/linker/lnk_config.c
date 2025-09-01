@@ -944,6 +944,57 @@ lnk_is_dll_delay_load(LNK_Config *config, String8 dll_name)
   return hash_table_search_path_u64(config->delay_load_ht, dll_name, 0);
 }
 
+internal String8
+lnk_get_lib_name(String8 path)
+{
+  static String8 LIB_EXT = str8_lit_comp(".LIB");
+  
+  // strip path
+  String8 name = str8_skip_last_slash(path);
+  
+  // strip extension
+  String8 name_ext = str8_postfix(name, LIB_EXT.size);
+  if (str8_match(name_ext, LIB_EXT, StringMatchFlag_CaseInsensitive)) {
+    name = str8_chop(name, LIB_EXT.size);
+  }
+  
+  return name;
+}
+
+internal void
+lnk_push_disallow_lib(LNK_Config *config, String8 path)
+{
+  String8 lib_name = lnk_get_lib_name(path);
+  hash_table_push_path_u64(config->arena, config->disallow_lib_ht, lib_name, 0);
+}
+
+internal B32
+lnk_is_lib_disallowed(LNK_Config *config, String8 path)
+{
+  String8 lib_name = lnk_get_lib_name(path);
+  return hash_table_search_path(config->disallow_lib_ht, lib_name) != 0;
+}
+
+internal void
+lnk_include_symbol(LNK_Config *config, String8 name, LNK_Obj *obj)
+{
+  // is this a duplicate symbol?
+  if (hash_table_search_string_raw(config->include_symbol_ht, name, 0)) {
+    return;
+  }
+
+  name = push_str8_copy(config->arena, name);
+
+  LNK_IncludeSymbolNode *node = push_array(config->arena, LNK_IncludeSymbolNode, 1);
+  node->v.name = name;
+  node->v.obj  = obj;
+
+  SLLQueuePush(config->include_symbol_list.first, config->include_symbol_list.last, node);
+  config->include_symbol_list.count += 1;
+
+  hash_table_push_string_raw(config->arena, config->include_symbol_ht, name, node);
+}
+
 internal void
 lnk_print_build_info()
 {
@@ -1068,9 +1119,9 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
 }
 
 internal void
-lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_name, String8List value_strings, LNK_Obj *obj)
+lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List value_strings, LNK_Obj *obj)
 {
-  Temp scratch = scratch_begin(&arena,1);
+  Temp scratch = scratch_begin(&config->arena, 1);
 
   LNK_CmdSwitchType cmd_switch = lnk_cmd_switch_type_from_string(cmd_name);
 
@@ -1111,12 +1162,12 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
             lnk_error_obj(LNK_Error_AlternateNameConflict, obj, "conflicting alternative name: existing '%S=%S' vs. new '%S=%S'", alt_name.from, to_extant, alt_name.from, alt_name.to);
           }
         } else {
-          hash_table_push_string_string(arena, config->alt_name_ht, alt_name.from, alt_name.to);
+          hash_table_push_string_string(config->arena, config->alt_name_ht, alt_name.from, alt_name.to);
 
-          alt_name.from = push_str8_copy(arena, alt_name.from);
-          alt_name.to   = push_str8_copy(arena, alt_name.to);
+          alt_name.from = push_str8_copy(config->arena, alt_name.from);
+          alt_name.to   = push_str8_copy(config->arena, alt_name.to);
 
-          LNK_AltNameNode *alt_name_n = push_array(arena, LNK_AltNameNode, 1);
+          LNK_AltNameNode *alt_name_n = push_array(config->arena, LNK_AltNameNode, 1);
           alt_name_n->data            = alt_name;
 
           SLLQueuePush(config->alt_name_list.first, config->alt_name_list.last, alt_name_n);
@@ -1182,7 +1233,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_DefaultLib: {
-    String8List default_lib_list = str8_list_copy(arena, &value_strings);
+    String8List default_lib_list = str8_list_copy(config->arena, &value_strings);
     if (obj) {
       str8_list_concat_in_place(&config->input_obj_lib_list, &default_lib_list);
     } else {
@@ -1208,9 +1259,9 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   case LNK_CmdSwitch_DelayLoad: {
     for (String8Node *name_n = value_strings.first; name_n != 0; name_n = name_n->next) {
       if (hash_table_search_path_u64(config->delay_load_ht, name_n->string, 0)) { continue; }
-      String8 name = push_str8_copy(arena, name_n->string);
-      hash_table_push_path_u64(arena, config->delay_load_ht, name, 0);
-      str8_list_push(arena, &config->delay_load_dll_list, name);
+      String8 name = push_str8_copy(config->arena, name_n->string);
+      hash_table_push_path_u64(config->arena, config->delay_load_ht, name, 0);
+      str8_list_push(config->arena, &config->delay_load_dll_list, name);
     }
   } break;
 
@@ -1228,7 +1279,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Entry: {
     String8 new_entry_point_name = {0};
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &new_entry_point_name);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &new_entry_point_name);
 
     if (config->entry_point_name.size) {
       lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "unable to redefine entry point \"%S\" to \"%S\"", config->entry_point_name, new_entry_point_name);
@@ -1240,7 +1291,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Export: {
     PE_ExportParse export_parse = {0};
-    if (lnk_parse_export_directive_ex(arena, value_strings, obj, &export_parse)) {
+    if (lnk_parse_export_directive_ex(config->arena, value_strings, obj, &export_parse)) {
       PE_ExportParseNode *exp_n = 0;
       String8 export_name = pe_name_from_export_parse(&export_parse);
       hash_table_search_string_raw(config->export_ht, export_name, &exp_n);
@@ -1248,13 +1299,13 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       if (exp_n == 0) {
         // make sure export is defined
         if (!export_parse.is_forwarder) {
-          str8_list_push(arena, &config->include_symbol_list, export_parse.name);
+          lnk_include_symbol(config, export_parse.name, 0);
         }
 
         // push new export
-        exp_n = pe_export_parse_list_push(arena, &config->export_symbol_list, export_parse);
+        exp_n = pe_export_parse_list_push(config->arena, &config->export_symbol_list, export_parse);
 
-        hash_table_push_string_raw(arena, config->export_ht, export_name, exp_n);
+        hash_table_push_string_raw(config->arena, config->export_ht, export_name, exp_n);
       } else {
         B32 is_ambiguous = 1;
         PE_ExportParse *extant_export = &exp_n->data;
@@ -1352,19 +1403,12 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_ImpLib: {
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->imp_lib_name);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->imp_lib_name);
   } break;
 
   case LNK_CmdSwitch_Include: {
     for (String8Node *value_n = value_strings.first; value_n != 0; value_n = value_n->next) {
-      // is this a duplicate symbol?
-      if (hash_table_search_string_raw(config->include_symbol_ht, value_n->string, 0)) {
-        continue;
-      }
-
-      String8 include_symbol = push_str8_copy(arena, value_n->string);
-      hash_table_push_string_raw(arena, config->include_symbol_ht, include_symbol, 0);
-      str8_list_push(arena, &config->include_symbol_list, include_symbol);
+      lnk_include_symbol(config, value_n->string, obj);
     }
   } break;
 
@@ -1386,7 +1430,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_LibPath: {
-    String8List lib_dir_list = str8_list_copy(arena, &value_strings);
+    String8List lib_dir_list = str8_list_copy(config->arena, &value_strings);
     for (String8Node *dir_n = lib_dir_list.first; dir_n != 0; dir_n = dir_n->next) {
       if (!os_folder_path_exists(dir_n->string)) {
         String8 full_path = os_full_path_from_path(scratch.arena, dir_n->string);
@@ -1426,7 +1470,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
               if (res_id_arr.count == 2) {
                 U64 resource_id;
                 if (try_u64_from_str8_c_rules(res_id_arr.v[1], &resource_id)) {
-                  config->manifest_resource_id = push_u64(arena, resource_id);
+                  config->manifest_resource_id = push_u64(config->arena, resource_id);
                 } else {
                   lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse resource_id \"%S\"", res_id_arr.v[1]);
                 }
@@ -1455,7 +1499,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_ManifestDependency: {
-    String8List manifest_dependency_list = str8_list_copy(arena, &value_strings);
+    String8List manifest_dependency_list = str8_list_copy(config->arena, &value_strings);
     str8_list_concat_in_place(&config->manifest_dependency_list, &manifest_dependency_list);
 
     if (config->manifest_opt == LNK_ManifestOpt_Null) {
@@ -1464,7 +1508,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_ManifestFile: {
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->manifest_name);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->manifest_name);
   } break;
 
   case LNK_CmdSwitch_ManifestInput: {
@@ -1488,7 +1532,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
                   str8_match_lit("'requireAdministrator'", level, 0)) {
                 // manifest level was parsed!
                 config->manifest_uac = 1;
-                config->manifest_level = push_str8_copy(arena, level);
+                config->manifest_level = push_str8_copy(config->arena, level);
                 if (param_arr.count > 1) {
                   String8 ui_access_param = param_arr.v[1];
                   String8List ui_access_list = str8_split_by_string_chars(scratch.arena, ui_access_param, str8_lit("="), 0);
@@ -1497,7 +1541,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
                     if (str8_match_lit("'true'", ui_access, 0) ||
                         str8_match_lit("'false'", ui_access, 0)) {
                       // ui access was parsed!
-                      config->manifest_ui_access = push_str8_copy(arena, ui_access);
+                      config->manifest_ui_access = push_str8_copy(config->arena, ui_access);
                     } else {
                       lnk_error_invalid_uac_ui_access_param(LNK_Error_Cmdl, obj, cmd_switch, ui_access_param);
                     }
@@ -1531,9 +1575,9 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (value_strings.node_count == 1) {
       LNK_MergeDirective merge = {0};
       if (lnk_parse_merge_directive(value_strings.first->string, obj, &merge)) {
-        merge.src = push_str8_copy(arena, merge.src);
-        merge.dst = push_str8_copy(arena, merge.dst);
-        lnk_merge_directive_list_push(arena, &config->merge_list, merge);
+        merge.src = push_str8_copy(config->arena, merge.src);
+        merge.dst = push_str8_copy(config->arena, merge.dst);
+        lnk_merge_directive_list_push(config->arena, &config->merge_list, merge);
       }
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters %d", value_strings.node_count);
@@ -1549,7 +1593,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       }
     }
 
-    String8List natvis_list = str8_list_copy(arena, &value_strings);
+    String8List natvis_list = str8_list_copy(config->arena, &value_strings);
     str8_list_concat_in_place(&config->natvis_list, &natvis_list);
   } break;
 
@@ -1558,8 +1602,13 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (value_strings.node_count == 0) {
       config->no_default_libs = 1;
     } else {
-      String8List no_default_lib_list = str8_list_copy(arena, &value_strings);
-      str8_list_concat_in_place(&config->disallow_lib_list, &no_default_lib_list);
+      for (String8Node *lib_n = value_strings.first; lib_n != 0; lib_n = lib_n->next) {
+        String8 lib_name = lnk_get_lib_name(lib_n->string);
+        if (hash_table_search_path_raw(config->disallow_lib_ht, lib_name)) {
+          continue;
+        }
+        hash_table_push_path_raw(config->arena, config->disallow_lib_ht, lib_name, 0);
+      }
     }
   } break;
 
@@ -1614,16 +1663,16 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Out: {
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->image_name);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->image_name);
   } break;
 
   case LNK_CmdSwitch_Pdb: {
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->pdb_name);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->pdb_name);
   } break;
 
   case LNK_CmdSwitch_PdbAltPath: {
     // see :PdbAltPath
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->pdb_alt_path);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->pdb_alt_path);
   } break;
 
   case LNK_CmdSwitch_PdbPageSize: {
@@ -1723,7 +1772,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_Map: {
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->rad_chunk_map_name);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->rad_chunk_map_name);
     config->rad_chunk_map = LNK_SwitchState_Yes;
   } break;
 
@@ -1737,11 +1786,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Rad_DebugName: {
     // :Rad_DebugAltPath
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->rad_debug_name);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->rad_debug_name);
   } break;
 
   case LNK_CmdSwitch_Rad_DebugAltPath: {
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->rad_debug_alt_path);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->rad_debug_alt_path);
   } break;
 
   case LNK_CmdSwitch_Rad_DelayBind: {
@@ -1839,7 +1888,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_MtPath: {
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->mt_path);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->mt_path);
   } break;
 
   case LNK_CmdSwitch_Rad_OsVer: {
@@ -1880,7 +1929,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_PdbHashTypeNameMap: {
-    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->pdb_hash_type_name_map);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->pdb_hash_type_name_map);
   } break;
 
   case LNK_CmdSwitch_Rad_PdbHashTypeNameLength: {
@@ -1890,8 +1939,8 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   case LNK_CmdSwitch_Rad_RemoveSection: {
     String8 sect_name = {0};
     if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &sect_name)) {
-      sect_name = push_str8_copy(arena, sect_name);
-      str8_list_push(arena, &config->remove_sections, sect_name);
+      sect_name = push_str8_copy(config->arena, sect_name);
+      str8_list_push(config->arena, &config->remove_sections, sect_name);
     }
   } break;
 
@@ -1991,12 +2040,14 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 }
 
 internal LNK_Config *
-lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd_line)
+lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
+  Temp scratch = scratch_begin(0, 0);
   
-  LNK_Config *config                = push_array(arena, LNK_Config, 1);
+  Arena      *arena  = arena_alloc();
+  LNK_Config *config = push_array(arena, LNK_Config, 1);
+  config->arena                     = arena;
   config->raw_cmd_line              = str8_list_copy(arena, &raw_cmd_line);
   config->work_dir                  = os_get_current_path(arena);
   config->build_imp_lib             = 1;
@@ -2012,10 +2063,11 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd
   config->alt_name_ht               = hash_table_init(arena, 0x100);
   config->include_symbol_ht         = hash_table_init(arena, 0x100);
   config->delay_load_ht             = hash_table_init(arena, 0x100);
+  config->disallow_lib_ht           = hash_table_init(arena, 0x100);
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
-    lnk_apply_cmd_option_to_config(arena, config, cmd->string, cmd->value_strings, 0);
+    lnk_apply_cmd_option_to_config(config, cmd->string, cmd->value_strings, 0);
   }
 
   // :manifest_input

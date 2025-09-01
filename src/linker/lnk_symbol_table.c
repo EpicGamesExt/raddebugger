@@ -15,7 +15,18 @@ internal B32
 lnk_symbol_defined_is_before(void *raw_a, void *raw_b)
 {
   LNK_Symbol *a = raw_a, *b = raw_b;
-  return a->defined.obj->input_idx < b->defined.obj->input_idx;
+
+
+  U32 a_lib_input_idx = a->defined.obj->lib ? a->defined.obj->lib->input_idx : 0;
+  U32 b_lib_input_idx = b->defined.obj->lib ? b->defined.obj->lib->input_idx : 0;
+
+  if (a_lib_input_idx == b_lib_input_idx) {
+    if (a->defined.obj->input_idx == b->defined.obj->input_idx) {
+      return a->defined.symbol_idx < b->defined.symbol_idx;
+    }
+    return a->defined.obj->input_idx < b->defined.obj->input_idx;
+  }
+  return a_lib_input_idx < b_lib_input_idx;
 }
 
 internal B32

@@ -7,21 +7,25 @@
 
 typedef struct LNK_Obj
 {
-  String8              data;
-  String8              path;
-  struct LNK_Lib      *lib;
-  U32                  input_idx;
-  COFF_FileHeaderInfo  header;
-  U32                 *comdats;
-  B8                   hotpatch;
-  B8                   exclude_from_debug_info;
-  U32Node            **associated_sections;
-  LNK_SymbolHashTrie **symlinks;
+  String8                  path;
+  String8                  data;
+  struct LNK_Lib          *lib;
+  struct LNK_LibMemberRef *trigger_symbol;
+  U32                      input_idx;
+  COFF_FileHeaderInfo      header;
+  U32                     *comdats;
+  B8                       hotpatch;
+  B8                       exclude_from_debug_info;
+  U32Node                **associated_sections;
+  LNK_SymbolHashTrie     **symlinks;
+
+  struct LNK_ObjNode *node;
 } LNK_Obj;
 
 typedef struct LNK_ObjNode
 {
   struct LNK_ObjNode *next;
+  struct LNK_ObjNode *prev;
   LNK_Obj             data;
 } LNK_ObjNode;
 
@@ -63,16 +67,16 @@ typedef struct LNK_DirectiveInfo
 
 typedef struct
 {
-  LNK_InputObj    **inputs;
-  LNK_ObjNodeArray  objs;
-  U64               obj_id_base;
-  U32               machine;
+  struct LNK_Input **inputs;
+  LNK_ObjNode       *objs;
+  U64                obj_id_base;
+  U32                machine;
 } LNK_ObjIniter;
 
 typedef struct
 {
-  LNK_SymbolTable *symtab;
-  LNK_ObjNodeArray objs;
+  LNK_SymbolTable  *symtab;
+  LNK_Obj         **objs;
 } LNK_InputCoffSymbolTable;
 
 typedef struct
@@ -86,12 +90,15 @@ typedef struct
 // --- Error -------------------------------------------------------------------
 
 internal void lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...);
+internal void lnk_error_input_obj(LNK_ErrorCode code, struct LNK_Input *input, char *fmt, ...);
 
 // --- Input -------------------------------------------------------------------
 
-internal LNK_Obj **       lnk_array_from_obj_list(Arena *arena, LNK_ObjList list);
-internal LNK_ObjNodeArray lnk_obj_list_push_parallel(TP_Context *tp, TP_Arena *tp_arena, LNK_ObjList *obj_list, COFF_MachineType machine, U64 input_count, LNK_InputObj **inputs);
-internal void             lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, LNK_ObjNodeArray objs);
+internal LNK_Obj ** lnk_array_from_obj_list(Arena *arena, LNK_ObjList list);
+internal void       lnk_obj_list_push_node_many(LNK_ObjList *list, U64 count, LNK_ObjNode *nodes);
+internal void       lnk_obj_list_push_node(LNK_ObjList *list, LNK_ObjNode *node);
+
+internal void       lnk_inputer_push_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, U64 objs_count, LNK_ObjNode *objs);
 
 // --- Metadata ----------------------------------------------------------------
 

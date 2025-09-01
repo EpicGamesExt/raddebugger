@@ -11,6 +11,14 @@ lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...)
   va_end(args);
 }
 
+internal void
+lnk_error_input_obj(LNK_ErrorCode code, LNK_Input *input, char *fmt, ...)
+{
+  va_list args; va_start(args, fmt);
+  lnk_error_with_loc_fv(code, input->path, input->trigger->lib ? input->trigger->lib->path : str8_zero(), fmt, args);
+  va_end(args);
+}
+
 internal LNK_Obj **
 lnk_array_from_obj_list(Arena *arena, LNK_ObjList list)
 {
@@ -26,9 +34,8 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 {
   LNK_ObjIniter *task    = raw_task;
-  LNK_InputObj  *input   = task->inputs[task_id];
-  LNK_Obj       *obj     = &task->objs.v[task_id].data;
-  U64            obj_idx = task->obj_id_base + task_id;
+  LNK_Input     *input   = task->inputs[task_id];
+  LNK_Obj       *obj     = &task->objs[task_id].data;
 
   ProfBeginV("Init Obj [%S%s%S]", input->lib_path, (input->lib_path.size ? ": " : 0), input->path);
 
@@ -281,58 +288,60 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   // fill out obj
   obj->data                    = input->data;
   obj->path                    = push_str8_copy(arena, input->path);
-  obj->lib                     = input->lib;
-  obj->input_idx               = obj_idx;
+  obj->lib                     = input->trigger ? input->trigger->lib : 0;
   obj->header                  = header;
   obj->comdats                 = comdats;
   obj->exclude_from_debug_info = input->exclude_from_debug_info;
   obj->hotpatch                = hotpatch;
   obj->associated_sections     = associated_sections;
+  obj->node                    = &task->objs[task_id];
+  obj->trigger_symbol          = input->trigger;
 
   ProfEnd();
 }
 
-internal LNK_ObjNodeArray
-lnk_obj_list_push_parallel(TP_Context        *tp,
-                           TP_Arena          *arena,
-                           LNK_ObjList       *list,
-                           COFF_MachineType   machine,
-                           U64                input_count,
-                           LNK_InputObj     **inputs)
+internal LNK_ObjNode *
+lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, COFF_MachineType machine, U64 inputs_count, LNK_Input **inputs)
 {
-  ProfBeginFunction();
-
-  // store base id
-  U64 obj_id_base = list->count;
-
-  // reserve obj nodes
-  LNK_ObjNodeArray objs = {0};
-  if (input_count > 0) {
-    objs.count = input_count;
-    objs.v = push_array(arena->v[0], LNK_ObjNode, input_count);
-    for (LNK_ObjNode *ptr = objs.v, *opl = objs.v + input_count; ptr < opl; ++ptr) {
-      SLLQueuePush(list->first, list->last, ptr);
-    }
-    list->count += input_count;
+  LNK_ObjNode *objs = 0;
+  if (inputs_count) {
+    objs = push_array(arena->v[0], LNK_ObjNode, inputs_count);
+    tp_for_parallel(tp, arena, inputs_count, lnk_obj_initer, &(LNK_ObjIniter){ .inputs = inputs, .objs = objs, .machine = machine });
   }
-  
-  // fill out & run task
-  LNK_ObjIniter task = {0};
-  task.inputs        = inputs;
-  task.obj_id_base   = obj_id_base;
-  task.objs          = objs;
-  task.machine       = machine;
-  tp_for_parallel(tp, arena, input_count, lnk_obj_initer, &task);
-  
-  ProfEnd();
   return objs;
+}
+
+internal LNK_ObjNode *
+lnk_obj_from_input(Arena *arena, COFF_MachineType machine, LNK_Input *input)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  TP_Context  *tp       = tp_alloc(scratch.arena, 1, 1, str8_zero());
+  TP_Arena     tp_arena = { .count = 1, .v = &arena };
+  LNK_ObjNode *result   = lnk_obj_from_input_many(tp, &tp_arena, machine, 1, &input);
+  scratch_end(scratch);
+  return result;
+}
+
+internal void
+lnk_obj_list_push_node_many(LNK_ObjList *list, U64 count, LNK_ObjNode *nodes)
+{
+  for EachIndex(i, count) {
+    DLLPushBack(list->first, list->last, &nodes[i]);
+  }
+  list->count += count;
+}
+
+internal void
+lnk_obj_list_push_node(LNK_ObjList *list, LNK_ObjNode *node)
+{
+  lnk_obj_list_push_node_many(list, 1, node);
 }
 
 internal
 THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
 {
   LNK_InputCoffSymbolTable *task = raw_task;
-  LNK_Obj                  *obj  = &task->objs.v[task_id].data;
+  LNK_Obj                  *obj  = task->objs[task_id];
   COFF_ParsedSymbol symbol = {0};
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
@@ -400,17 +409,17 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_assign_comdat_symlinks_task)
 {
   LNK_InputCoffSymbolTable *task = raw_task;
-  LNK_Obj                  *obj  = &task->objs.v[task_id].data;
+  LNK_Obj                  *obj  = task->objs[task_id];
   obj->symlinks = lnk_symlinks_from_obj(arena, task->symtab, obj);
 }
 
 internal void
-lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, LNK_ObjNodeArray objs)
+lnk_push_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs)
 {
   ProfBeginFunction();
   LNK_InputCoffSymbolTable task = { .symtab = symtab, .objs = objs };
-  tp_for_parallel(tp, arena, objs.count, lnk_input_coff_symbol_table, &task);
-  tp_for_parallel(tp, arena, objs.count, lnk_assign_comdat_symlinks_task, &task);
+  tp_for_parallel(tp, arena, objs_count, lnk_input_coff_symbol_table, &task);
+  tp_for_parallel(tp, arena, objs_count, lnk_assign_comdat_symlinks_task, &task);
   ProfEnd();
 }
 
