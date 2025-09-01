@@ -285,7 +285,7 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
             can_replace = lnk_obj_is_before(src_obj, dst_obj);
           } else {
             // both COMDATs are valid but to get smaller exe pick smallest
-            can_replace = src_section_length < dst_section_length;
+            can_replace = 0;
           }
         } break;
         case COFF_ComdatSelect_NoDuplicates: {
