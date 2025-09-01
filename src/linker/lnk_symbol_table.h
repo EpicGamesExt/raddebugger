@@ -14,6 +14,7 @@ typedef struct LNK_SymbolDefined
 typedef struct LNK_Symbol
 {
   String8           name;
+  B8                is_lib_member_linked;
   LNK_SymbolDefined defined;
 } LNK_Symbol;
 

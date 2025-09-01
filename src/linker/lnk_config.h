@@ -249,6 +249,25 @@ typedef enum
   LNK_ManifestOpt_No,
 } LNK_ManifestOpt;
 
+typedef struct LNK_IncludeSymbol
+{
+  String8         name;
+  struct LNK_Obj *obj;
+} LNK_IncludeSymbol;
+
+typedef struct LNK_IncludeSymbolNode
+{
+  struct LNK_IncludeSymbolNode *next;
+  LNK_IncludeSymbol             v;
+} LNK_IncludeSymbolNode;
+
+typedef struct LNK_IncludeSymbolList
+{
+  U64                    count;
+  LNK_IncludeSymbolNode *first;
+  LNK_IncludeSymbolNode *last;
+} LNK_IncludeSymbolList;
+
 typedef struct LNK_AltName
 {
   String8 from;
@@ -304,6 +323,7 @@ typedef enum
 
 typedef struct LNK_Config
 {
+  Arena                      *arena;
   LNK_ConfigFlags             flags;
   LNK_DebugMode               debug_mode;
   LNK_SwitchState             opt_ref;
@@ -362,7 +382,6 @@ typedef struct LNK_Config
   String8List                 input_list[LNK_Input_Count];
   String8List                 input_obj_lib_list;
   String8List                 input_default_lib_list;
-  String8List                 disallow_lib_list;
   String8List                 delay_load_dll_list;
   String8List                 natvis_list;
   String8                     manifest_name;
@@ -375,7 +394,7 @@ typedef struct LNK_Config
   String8                     rad_chunk_map_name;
   String8                     rad_debug_name;
   String8                     rad_debug_alt_path;
-  String8List                 include_symbol_list;
+  LNK_IncludeSymbolList       include_symbol_list;
   LNK_AltNameList             alt_name_list;
   LNK_MergeDirectiveList      merge_list;
   U64                         symbol_table_cap_defined;
@@ -397,6 +416,7 @@ typedef struct LNK_Config
   HashTable                  *alt_name_ht;
   HashTable                  *include_symbol_ht;
   HashTable                  *delay_load_ht;
+  HashTable                  *disallow_lib_ht;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
@@ -573,20 +593,26 @@ internal LNK_MergeDirectiveNode * lnk_merge_directive_list_push(Arena *arena, LN
 
 // --- Getters -----------------------------------------------------------------
 
-internal String8 lnk_get_image_name(LNK_Config *config);
-internal U64     lnk_get_default_function_pad_min(COFF_MachineType machine);
-internal U64     lnk_get_base_addr(LNK_Config *config);
+internal String8 lnk_get_image_name               (LNK_Config *config);
+internal U64     lnk_get_default_function_pad_min (COFF_MachineType machine);
+internal U64     lnk_get_base_addr                (LNK_Config *config);
 internal Version lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine);
-internal Version lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine);
+internal Version lnk_get_min_subsystem_version    (PE_WindowsSubsystem subsystem, COFF_MachineType machine);
 
 internal B32 lnk_do_debug_info        (LNK_Config *config);
 internal B32 lnk_is_thread_pool_shared(LNK_Config *config);
 internal B32 lnk_is_section_removed   (LNK_Config *config, String8 section_name);
 internal B32 lnk_is_dll_delay_load    (LNK_Config *config, String8 dll_name);
 
+internal String8 lnk_get_lib_name     (String8 path);
+internal void    lnk_push_disallow_lib(LNK_Config *config, String8 path);
+internal B32     lnk_is_lib_disallowed(LNK_Config *config, String8 path);
+
+internal void lnk_include_symbol(LNK_Config *config, String8 name, struct LNK_Obj *obj);
+
 // --- Config ------------------------------------------------------------------
 
-internal void lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 name, String8List value_list, struct LNK_Obj *obj);
+internal void lnk_apply_cmd_option_to_config(LNK_Config *config, String8 name, String8List value_list, struct LNK_Obj *obj);
 
-internal LNK_Config * lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd_line);
+internal LNK_Config * lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line);
 

@@ -99,7 +99,6 @@
 #include "lnk_timer.h"
 #include "lnk_io.h"
 #include "lnk_cmd_line.h"
-#include "lnk_input.h"
 #include "lnk_config.h"
 #include "lnk_symbol_table.h"
 #include "lnk_section_table.h"
@@ -114,7 +113,6 @@
 #include "lnk_timer.c"
 #include "lnk_io.c"
 #include "lnk_cmd_line.c"
-#include "lnk_input.c"
 #include "lnk_config.c"
 #include "lnk_symbol_table.c"
 #include "lnk_section_table.c"
@@ -212,7 +210,7 @@ lnk_config_from_argcv(Arena *arena, int argc, char **argv)
   }
 
   // init config
-  LNK_Config *config = lnk_config_from_cmd_line(arena, raw_cmd_line, cmd_line);
+  LNK_Config *config = lnk_config_from_cmd_line(raw_cmd_line, cmd_line);
 
 #if PROFILE_TELEMETRY
   {
@@ -375,7 +373,7 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
   for (String8Node *man_node = manifest_path_list.first;
        man_node != 0;
        man_node = man_node->next) {
-    // resolve relativ path inputs
+    // resolve relative inputs
     String8 full_path = path_absolute_dst_from_relative_dst_src(scratch.arena, man_node->string, work_dir);
 
     // normalize slashes
@@ -467,7 +465,7 @@ lnk_make_null_obj(Arena *arena)
 
   // push import stub
   {
-    COFF_ObjSymbol *tag = coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("RAD_IMPORT_STUB_NULL"), 0, COFF_SymStorageClass_Static);
+    COFF_ObjSymbol *tag = coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_IMPORT_STUB), 0, COFF_SymStorageClass_Static);
     coff_obj_writer_push_symbol_weak(obj_writer, str8_lit(LNK_IMPORT_STUB), COFF_WeakExt_AntiDependency, tag);
   }
 
@@ -919,114 +917,1148 @@ lnk_make_linker_obj(Arena *arena, LNK_Config *config)
 }
 
 internal String8
-lnk_get_lib_name(String8 path)
+lnk_make_obj_with_undefined_symbols(Arena *arena, String8List symbol_names)
 {
-  static String8 LIB_EXT = str8_lit_comp(".LIB");
-  
-  // strip path
-  String8 name = str8_skip_last_slash(path);
-  
-  // strip extension
-  String8 name_ext = str8_postfix(name, LIB_EXT.size);
-  if (str8_match(name_ext, LIB_EXT, StringMatchFlag_CaseInsensitive)) {
-    name = str8_chop(name, LIB_EXT.size);
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
+  for (String8Node *name_n = symbol_names.first; name_n != 0; name_n = name_n->next) {
+    coff_obj_writer_push_symbol_undef(obj_writer, name_n->string);
   }
-  
-  return name;
-}
-
-internal B32
-lnk_is_lib_disallowed(HashTable *disallow_lib_ht, String8 path)
-{
-  String8 lib_name = lnk_get_lib_name(path);
-  return hash_table_search_path(disallow_lib_ht, lib_name) != 0;
-}
-
-internal B32
-lnk_is_lib_loaded(HashTable *loaded_lib_ht, String8 path)
-{
-  KeyValuePair *is_loaded = hash_table_search_path(loaded_lib_ht, path);
-  return is_loaded != 0;
+  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
+  coff_obj_writer_release(&obj_writer);
+  return obj;
 }
 
 internal void
-lnk_push_disallow_lib(Arena *arena, HashTable *disallow_lib_ht, String8 path)
+lnk_input_list_push_node(LNK_InputList *list, LNK_Input *node)
 {
-  String8 lib_name = lnk_get_lib_name(path);
-  hash_table_push_path_u64(arena, disallow_lib_ht, lib_name, 0);
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
 }
 
 internal void
-lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path)
+lnk_input_list_concat_in_place(LNK_InputList *list, LNK_InputList *to_concat)
 {
-  if (!hash_table_search_path(loaded_lib_ht, path)) {
-    String8 path_copy = push_str8_copy(arena, path);
-    hash_table_push_path_u64(arena, loaded_lib_ht, path_copy, 0);
+  SLLConcatInPlace(list, to_concat);
+}
+
+internal LNK_InputPtrArray
+lnk_array_from_input_list(Arena *arena, LNK_InputList list)
+{
+  LNK_InputPtrArray result = {0};
+  result.v = push_array(arena, LNK_Input *, list.count);
+  for (LNK_Input *node = list.first; node != 0; node = node->next, result.count += 1) {
+    result.v[result.count] = node;
   }
+  return result;
 }
 
-internal void
-lnk_queue_lib_member_for_input(Arena               *arena,
-                               LNK_Config          *config,
-                               LNK_Symbol          *pull_in_ref,
-                               LNK_Lib             *lib,
-                               U32                  member_idx,
-                               LNK_InputImportList *input_import_list,
-                               LNK_InputObjList    *input_obj_list)
+internal LNK_Inputer *
+lnk_inputer_init(void)
 {
-  B32 was_member_queued = ins_atomic_u8_eval_assign(&lib->was_member_queued[member_idx], 1);
-  if (!was_member_queued) {
-    U64 member_offset = lib->member_offsets[member_idx];
+  Arena *arena = arena_alloc();
+  LNK_Inputer *inputer = push_array(arena, LNK_Inputer, 1);
+  inputer->arena            = arena;
+  inputer->objs_ht          = hash_table_init(arena, 0x20000);
+  inputer->libs_ht          = hash_table_init(arena, 0x1000);
+  inputer->missing_lib_ht   = hash_table_init(arena, 0x100);
+  return inputer;
+}
 
-    // compose input index so that members are laid out in the image
-    // in the order of undefined symbols appearing in objs,
-    // mimicking serial discovery
-    U64 input_idx = Compose64Bit(pull_in_ref->defined.obj->input_idx, pull_in_ref->defined.symbol_idx);
+internal LNK_Input *
+lnk_input_push(Arena *arena, LNK_InputList *list, String8 path, String8 data)
+{
+  LNK_Input *node = push_array(arena, LNK_Input, 1);
+  node->path      = path;
+  node->data      = data;
+  lnk_input_list_push_node(list, node);
+  return node;
+}
 
-    // parse member
-    COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, member_offset);
-    COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
+internal LNK_Input *
+lnk_inputer_push_linkgen(Arena *arena, LNK_InputList *list, String8 data, String8 path)
+{
+  LNK_Input *input = lnk_input_push(arena, list, data, path);
+  input->exclude_from_debug_info = 1;
+  return input;
+}
 
-    switch (member_type) {
-    case COFF_DataType_Null: break;
-    case COFF_DataType_Import: {
-      LNK_InputImportNode *input = lnk_input_import_list_push(arena, input_import_list);
-      input->data.coff_import = member_info.data;
-      input->data.input_idx   = input_idx;
-    } break;
-    case COFF_DataType_BigObj:
-    case COFF_DataType_Obj: {
-      String8 obj_path = coff_parse_long_name(lib->long_names, member_info.header.name);
+internal LNK_Input *
+lnk_inputer_push_thin(Arena *arena, LNK_InputList *list, HashTable *ht, String8 full_path)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  LNK_Input *input = hash_table_search_path_raw(ht, full_path);
+  if (input == 0) {
+    input          = lnk_input_push(arena, list, full_path, str8_zero());
+    input->path    = push_str8_copy(arena, full_path);
+    input->is_thin = 1;
 
-      // obj path in thin archive has slash appended which screws up 
-      // file lookup on disk; it couble be there to enable paths to symbols
-      // but we don't use this feature
-      String8 slash = str8_lit("/");
-      if (str8_ends_with(obj_path, slash, 0)) {
-        obj_path = str8_chop(obj_path, slash.size);
-      }
+    hash_table_push_path_raw(arena, ht, full_path, input);
+  }
+  scratch_end(scratch);
+  return input;
+}
 
-      // obj path in thin archive is relative to directory with archive
-      B32 is_thin = lib->type == COFF_Archive_Thin;
-      if (is_thin) {
-        Temp scratch = scratch_begin(&arena, 1);
-        String8List obj_path_list = {0};
-        str8_list_push(scratch.arena, &obj_path_list, str8_chop_last_slash(lib->path));
-        str8_list_push(scratch.arena, &obj_path_list, obj_path);
-        obj_path = str8_path_list_join_by_style(arena, &obj_path_list, config->path_style);
-        scratch_end(scratch);
-      }
+internal LNK_Input *
+lnk_inputer_push_obj(LNK_Inputer *inputer, LNK_LibMemberRef *trigger, String8 path, String8 data)
+{
+  lnk_log(LNK_Log_InputObj, "Input Obj: %S", path);
+  LNK_Input *input = lnk_input_push(inputer->arena, &inputer->new_objs, path, data);
+  input->trigger = trigger;
+  return input;
+}
 
-      LNK_InputObj *input = lnk_input_obj_list_push(arena, input_obj_list);
-      input->is_thin      = is_thin;
-      input->dedup_id     = push_str8f(arena, "%S/%S", lib->path, obj_path);
-      input->path         = obj_path;
-      input->data         = member_info.data;
-      input->lib          = lib;
-      input->input_idx    = input_idx;
-    } break;
+internal LNK_Input *
+lnk_inputer_push_obj_linkgen(LNK_Inputer *inputer, LNK_LibMemberRef *trigger, String8 path, String8 data)
+{
+  lnk_log(LNK_Log_InputObj, "Input Obj: %S", path);
+  LNK_Input *input = lnk_inputer_push_linkgen(inputer->arena, &inputer->new_objs, path, data);
+  input->trigger = trigger;
+  return input;
+}
+
+internal LNK_Input *
+lnk_inputer_push_obj_thin(LNK_Inputer *inputer, LNK_LibMemberRef *trigger, String8 path)
+{
+  lnk_log(LNK_Log_InputObj, "Input Obj: %S", path);
+  Temp scratch = scratch_begin(0,0);
+  String8    full_path = os_full_path_from_path(scratch.arena, path);
+  LNK_Input *input     = lnk_inputer_push_thin(inputer->arena, &inputer->new_objs, inputer->objs_ht, full_path);
+  input->trigger = trigger;
+  scratch_end(scratch);
+  return input;
+}
+
+internal LNK_Input *
+lnk_inputer_push_lib(LNK_Inputer *inputer, LNK_InputSourceType input_source, String8 path, String8 data)
+{
+  lnk_log(LNK_Log_InputLib, "Input Lib: %S", path);
+  return lnk_input_push(inputer->arena, &inputer->new_libs[input_source], path, data);
+}
+
+internal LNK_Input *
+lnk_inputer_push_lib_linkgen(LNK_Inputer *inputer, LNK_InputSourceType input_source, String8 path, String8 data)
+{
+  lnk_log(LNK_Log_InputLib, "Input Lib: %S", path);
+  return lnk_input_push(inputer->arena, &inputer->new_libs[input_source], path, data);
+}
+
+internal LNK_Input *
+lnk_input_from_path(HashTable *load_ht, String8 path)
+{
+  LNK_Input *input = hash_table_search_path_raw(load_ht, path);
+  if (input == 0) {
+    Temp scratch = scratch_begin(0, 0);
+    String8 full_path = os_full_path_from_path(scratch.arena, path);
+    input = hash_table_search_path_raw(load_ht, full_path);
+    scratch_end(scratch);
+  }
+  return input;
+}
+
+internal LNK_Input *
+lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSourceType input_source, String8 path)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  LNK_Input *input = 0;
+
+  // default libraries may omit extension
+  if (input_source == LNK_InputSource_Default || input_source == LNK_InputSource_Obj) {
+    if (!str8_ends_with(path, str8_lit(".lib"), StringMatchFlag_CaseInsensitive)) {
+      path = push_str8f(scratch.arena, "%S.lib", path);
+    }
+    if (lnk_is_lib_disallowed(config, path)) {
+      goto exit;
     }
   }
+
+  // was library already loaded?
+  input = hash_table_search_path_raw(inputer->libs_ht, path);
+  if (input) {
+    goto exit;
+  }
+
+  // search disk for library
+  String8List matches = lnk_file_search(scratch.arena, config->lib_dir_list, path);
+
+  // warn about missing library
+  if (matches.node_count == 0) {
+    KeyValuePair *was_reported = hash_table_search_path(inputer->missing_lib_ht, path);
+    if (was_reported == 0) {
+      hash_table_push_path_u64(inputer->arena, inputer->missing_lib_ht, path, 0);
+      lnk_error(LNK_Warning_FileNotFound, "unable to find library `%S`", path);
+    }
+    goto exit;
+  }
+
+  String8 first_match = matches.first->string;
+  input = hash_table_search_path_raw(inputer->libs_ht, first_match);
+  if (input) {
+    goto exit;
+  }
+
+  // warn about multiple matches
+  if (matches.node_count > 1) {
+    lnk_error(LNK_Warning_MultipleLibMatch, "multiple libraries match `%S` (picking first match)", path);
+    lnk_supplement_error_list(matches);
+  }
+
+  lnk_log(LNK_Log_InputLib, "Input Lib: %S", first_match);
+  input = lnk_inputer_push_thin(inputer->arena, &inputer->new_libs[input_source], inputer->libs_ht, first_match);
+
+  exit:;
+  scratch_end(scratch);
+  return input;
+}
+
+internal B32
+lnk_inputer_has_items(LNK_Inputer *inputer)
+{
+  if (inputer->new_objs.count > 0) {
+    return 1;
+  }
+
+  for EachIndex(i, ArrayCount(inputer->new_libs)) {
+    if (inputer->new_libs[i].count > 0) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+internal LNK_InputPtrArray
+lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Flags io_flags, LNK_InputList *all_inputs, LNK_InputList *new_inputs)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  ProfBegin("Gather Thin Inputs");
+  U64 thin_inputs_count = 0;
+  for (LNK_Input *node = new_inputs->first; node != 0; node = node->next) {
+    if (node->is_thin) {
+      thin_inputs_count += 1;
+    }
+  }
+  LNK_Input **thin_inputs = push_array(scratch.arena, LNK_Input *, thin_inputs_count);
+  U64         thin_idx    = 0;
+  for (LNK_Input *node = new_inputs->first; node != 0; node = node->next) {
+    if (node->is_thin) {
+      thin_inputs[thin_idx++] = node;
+    }
+  }
+  String8Array thin_input_paths = {0};
+  thin_input_paths.count = thin_inputs_count;
+  thin_input_paths.v     = push_array(scratch.arena, String8, thin_inputs_count);
+  for EachIndex(i, thin_inputs_count) {
+    thin_input_paths.v[i] = thin_inputs[i]->path;
+  }
+  ProfEnd();
+
+  ProfBegin("Load Inputs From Disk"); 
+  String8Array thin_input_datas  = lnk_read_data_from_file_path_parallel(tp, inputer->arena, io_flags, thin_input_paths);
+  for EachIndex(thin_input_idx, thin_inputs_count) {
+    thin_inputs[thin_input_idx]->has_disk_read_failed = thin_input_datas.v[thin_input_idx].size == 0;
+    thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
+  }
+  ProfEnd();
+
+  ProfBegin("Disk Read Check");
+  for EachIndex(i, thin_inputs_count) {
+    if (thin_inputs[i]->has_disk_read_failed) {
+      lnk_error(LNK_Error_InvalidPath, "unable to find file \"%S\"", thin_inputs[i]->path);
+    }
+  }
+  ProfEnd();
+
+  LNK_InputPtrArray result = lnk_array_from_input_list(arena, *new_inputs);
+
+  lnk_input_list_concat_in_place(all_inputs, new_inputs);
+
+  scratch_end(scratch);
+  return result;
+}
+
+internal void
+lnk_lib_member_ref_list_push_node(LNK_LibMemberRefList *list, LNK_LibMemberRef *node)
+{
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
+}
+
+internal int
+lnk_lib_member_ref_is_before(void *raw_a, void *raw_b)
+{
+  LNK_LibMemberRef **a = raw_a, **b = raw_b;
+  LNK_Symbol *a_pull_in_ref = (*a)->lib->was_member_linked[(*a)->member_idx];
+  LNK_Symbol *b_pull_in_ref = (*b)->lib->was_member_linked[(*b)->member_idx];
+  return lnk_symbol_defined_is_before(a_pull_in_ref, b_pull_in_ref);
+}
+
+internal LNK_LibMemberRef **
+lnk_array_from_lib_member_list(Arena *arena, LNK_LibMemberRefList list)
+{
+  LNK_LibMemberRef **result = push_array(arena, LNK_LibMemberRef *, list.count);
+  U64 idx = 0;
+  for (LNK_LibMemberRef *node = list.first; node != 0; node = node->next, idx += 1) {
+    result[idx] = node;
+  }
+  return result;
+}
+
+internal LNK_ObjNode *
+lnk_load_objs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link, U64 *objs_count_out)
+{
+  ProfBegin("Input Objs [Count %llu]", inputer->new_objs.count);
+  Temp scratch = scratch_begin(arena->v, arena->count);
+
+  // load obj inputer from disk
+  LNK_InputPtrArray new_input_objs = lnk_inputer_flush(arena->v[0], tp, inputer, config->io_flags, &inputer->objs, &inputer->new_objs);
+
+  if (lnk_get_log_status(LNK_Log_InputObj) && new_input_objs.count) {
+    U64 input_size = 0;
+    for EachIndex(i, new_input_objs.count) { input_size += new_input_objs.v[i]->data.size; }
+    lnk_log(LNK_Log_InputObj, "[ Obj Input Size %M ]", input_size);
+  }
+
+  LNK_ObjNode *new_objs = lnk_obj_from_input_many(tp, arena, config->machine, new_input_objs.count, new_input_objs.v);
+
+  // if machine type was unspecified on the command line, derive it from obj file
+  if (config->machine == COFF_MachineType_Unknown) {
+    for EachIndex(obj_idx, new_input_objs.count) {
+      if (new_objs[obj_idx].data.header.machine != COFF_MachineType_Unknown) {
+        config->machine = new_objs[obj_idx].data.header.machine;
+        break;
+      }
+    }
+  }
+
+  ProfBegin("Apply Directives");
+  for EachIndex(obj_idx, new_input_objs.count) {
+    LNK_Obj           *obj            = &new_objs[obj_idx].data;
+    String8List        raw_directives = lnk_raw_directives_from_obj(scratch.arena, obj);
+    LNK_DirectiveInfo  directive_info = lnk_directive_info_from_raw_directives(scratch.arena, obj, raw_directives);
+    for EachIndex(i, ArrayCount(directive_info.v)) {
+      for (LNK_Directive *dir = directive_info.v[i].first; dir != 0; dir = dir->next) {
+        lnk_apply_cmd_option_to_config(config, dir->id, dir->value_list, obj);
+      }
+    }
+  }
+  ProfEnd();
+
+  if (objs_count_out) {
+    *objs_count_out = new_input_objs.count;
+  }
+
+  scratch_end(scratch);
+  ProfEnd();
+  return new_objs;
+}
+
+internal void
+lnk_load_libs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_Link *link)
+{
+  for EachIndex(input_source, LNK_InputSource_Count) {
+    ProfBegin("Input Libs [Count %llu]", inputer->new_libs[i].count);
+
+    LNK_InputPtrArray new_input_libs = lnk_inputer_flush(arena->v[0], tp, inputer, config->io_flags, &inputer->libs, &inputer->new_libs[input_source]);
+
+    if (lnk_get_log_status(LNK_Log_InputLib) && new_input_libs.count) {
+      U64 input_size = 0;
+      for EachIndex(i, new_input_libs.count) { input_size += new_input_libs.v[i]->data.size; }
+      lnk_log(LNK_Log_InputObj, "[ Lib Input Size %M ]", input_size);
+    }
+
+    lnk_lib_list_push_parallel(tp, arena, &link->libs, new_input_libs.count, new_input_libs.v);
+
+    ProfEnd();
+  }
+}
+
+internal void
+lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link)
+{
+  Temp scratch = scratch_begin(arena->v, arena->count);
+
+  U64 obj_id_base = link->objs.count;
+
+  U64          objs_count  = 0;
+  LNK_ObjNode *objs        = lnk_load_objs(tp, arena, config, inputer, symtab, link, &objs_count);
+  lnk_obj_list_push_node_many(&link->objs, objs_count, objs);
+
+  // handle /INCLUDE
+  {
+    // group include symbols by obj
+    HashTable *ht = hash_table_init(scratch.arena, 64);
+    for (LNK_IncludeSymbolNode *node = config->include_symbol_list.first; node != 0; node = node->next) {
+      LNK_IncludeSymbol *include_symbol = &node->v;
+
+      // skip, include symbol is already in the global symbol table
+      if (lnk_symbol_table_search(symtab, include_symbol->name)) {
+        continue;
+      }
+
+      // was obj already seen?
+      String8List *include_name_list = hash_table_search_raw_raw(ht, include_symbol->obj);
+
+      if (include_name_list == 0) {
+        // push entry for new obj
+        include_name_list = push_array(scratch.arena, String8List, 1);
+        hash_table_push_raw_raw(scratch.arena, ht, include_symbol->obj, include_name_list);
+      }
+
+      // append include symbol to obj's name list
+      str8_list_push(scratch.arena, include_name_list, include_symbol->name);
+    }
+
+    LNK_Obj     **objs_with_includes = keys_from_hash_table_raw(scratch.arena, ht);
+    String8List **include_names      = values_from_hash_table_raw(scratch.arena, ht);
+    for EachIndex(i, ht->count) {
+      LNK_Obj *obj_with_includes = objs_with_includes[i];
+      String8  include_obj_path  = obj_with_includes ? obj_with_includes->path : str8_lit("RADLINK");
+      String8  include_obj_data  = lnk_make_obj_with_undefined_symbols(arena->v[0], *include_names[i]);
+      lnk_inputer_push_obj_linkgen(inputer, obj_with_includes ? obj_with_includes->trigger_symbol : 0, include_obj_path, include_obj_data);
+
+      U64          include_obj_count = 0;
+      LNK_ObjNode *include_obj       = lnk_load_objs(tp, arena, config, inputer, symtab, link, &include_obj_count);
+      AssertAlways(include_obj_count == 1);
+
+      if (obj_with_includes) {
+        DLLInsert(link->objs.first, link->objs.last, obj_with_includes->node, include_obj);
+        link->objs.count += 1;
+      } else {
+        lnk_obj_list_push_node(&link->objs, include_obj);
+      }
+    }
+  }
+
+  // assign input indices to objs
+  {
+    U64 node_idx = 0;
+    for (LNK_ObjNode *node = objs; node != 0; node = node->next, node_idx += 1) {
+      node->data.input_idx = obj_id_base + node_idx;
+    }
+  }
+
+  // input indices on objs are finalized, push external symbols to the global symbol table
+  {
+    U64 new_objs_count = 0;
+    for (LNK_ObjNode *node = objs; node != 0; node = node->next) { new_objs_count += 1; }
+
+    LNK_Obj **new_objs = push_array(scratch.arena, LNK_Obj *, new_objs_count);
+    {
+      U64 node_idx = 0;
+      for (LNK_ObjNode *node = objs; node != 0; node = node->next) {
+        new_objs[node_idx++] = &node->data;
+      }
+    }
+
+    lnk_push_obj_symbols(tp, arena, symtab, new_objs_count, new_objs);
+  }
+
+  // input default libraries
+  for (; *link->last_default_lib; link->last_default_lib = &(*link->last_default_lib)->next) {
+    lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Default, (*link->last_default_lib)->string);
+  }
+
+  // input libraries referenced in objs
+  for (; *link->last_obj_lib; link->last_obj_lib = &(*link->last_obj_lib)->next) {
+    lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, (*link->last_obj_lib)->string);
+  }
+
+  // load new libs
+  lnk_load_libs(tp, arena, config, inputer, link);
+
+  scratch_end(scratch);
+}
+
+internal void
+lnk_resolve_entry_point(LNK_Config *config, LNK_SymbolTable *symtab, LNK_Link *link)
+{
+  // loop over all possible subsystems and entry point names and pick
+  // subsystem that has a defined entry point symbol
+  if (config->entry_point_name.size == 0) {
+    PE_WindowsSubsystem  subsys_first       = config->subsystem;
+    PE_WindowsSubsystem  subsys_last        = config->subsystem == PE_WindowsSubsystem_UNKNOWN ? PE_WindowsSubsystem_COUNT : config->subsystem+1;
+    LNK_Symbol          *entry_point_symbol = 0;
+    for (U64 subsys_idx = subsys_first; subsys_idx < subsys_last; subsys_idx += 1) {
+      String8Array entry_points = pe_get_entry_point_names(config->machine, (PE_WindowsSubsystem)subsys_idx, config->file_characteristics);
+      for EachIndex(i, entry_points.count) {
+        LNK_Symbol *symbol = lnk_symbol_table_search(symtab, entry_points.v[i]);
+        if (symbol) {
+          config->subsystem        = subsys_idx;
+          config->entry_point_name = entry_points.v[i];
+          goto found_entry_and_subsystem;
+        }
+      }
+    }
+found_entry_and_subsystem:;
+  }
+
+  // search for entry point in libs
+  if (config->entry_point_name.size == 0 && config->subsystem != PE_WindowsSubsystem_UNKNOWN) {
+    String8Array entry_points = pe_get_entry_point_names(config->machine, config->subsystem, config->file_characteristics);
+    for EachIndex(entry_idx, entry_points.count) {
+      for (LNK_LibNode *lib_n = link->libs.first; lib_n != 0; lib_n = lib_n->next) {
+        if (lnk_search_lib(&lib_n->data, entry_points.v[entry_idx], 0)) {
+          config->entry_point_name = entry_points.v[entry_idx];
+          goto found_entry_in_libs;
+        }
+      }
+    }
+found_entry_in_libs:;
+  }
+
+  // infer subsystem from entry point name
+  if (config->entry_point_name.size != 0 && config->subsystem == PE_WindowsSubsystem_UNKNOWN) {
+    for EachIndex(subsys_idx, PE_WindowsSubsystem_COUNT) {
+      String8Array entry_points = pe_get_entry_point_names(config->machine, subsys_idx, config->file_characteristics);
+      for EachIndex(i, entry_points.count) {
+        if (str8_match(entry_points.v[i], config->entry_point_name, 0)) {
+          config->subsystem = subsys_idx;
+          goto subsystem_inferred_from_entry;
+        }
+      }
+    }
+subsystem_inferred_from_entry:;
+  }
+
+  // do we have an entry point name?
+  if (config->entry_point_name.size) {
+    // redirect user entry to appropriate CRT entry
+    String8 crt_entry_point_name = msvcrt_ctr_entry_from_user_entry(config->entry_point_name);
+    config->entry_point_name = crt_entry_point_name.size ? crt_entry_point_name : config->entry_point_name;
+
+    // generate undefined symbol for entry point
+    lnk_include_symbol(config, config->entry_point_name, 0);
+
+    // do we have a subsystem?
+    if (config->subsystem != PE_WindowsSubsystem_UNKNOWN) {
+      // if subsystem version not specified set default values
+      if (config->subsystem_ver.major == 0 && config->subsystem_ver.minor == 0) {
+        config->subsystem_ver = lnk_get_default_subsystem_version(config->subsystem, config->machine);
+      }
+
+      // check subsystem version against allowed min version
+      Version min_subsystem_ver = lnk_get_min_subsystem_version(config->subsystem, config->machine);
+      if (version_compar(config->subsystem_ver, min_subsystem_ver) < 0) {
+        lnk_error(LNK_Error_Cmdl, "subsystem version %I64u.%I64u can't be lower than %I64u.%I64u", 
+            config->subsystem_ver.major, config->subsystem_ver.minor, min_subsystem_ver.major, min_subsystem_ver.minor);
+      }
+
+      // by default terminal server is enabled for windows and console applications
+      if (~config->flags & LNK_ConfigFlag_NoTsAware && ~config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+        if (config->subsystem == PE_WindowsSubsystem_WINDOWS_GUI || config->subsystem == PE_WindowsSubsystem_WINDOWS_CUI) {
+          config->dll_characteristics |= PE_DllCharacteristic_TERMINAL_SERVER_AWARE;
+        }
+      }
+
+      // entry point found!
+      link->try_to_resolve_entry_point = 0;
+    } else {
+      lnk_error(LNK_Error_NoSubsystem, "unknown subsystem, please use /SUBSYSTEM to set subsytem type you need");
+    }
+  }
+}
+
+internal void
+lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Symbol *trigger_symbol, LNK_Lib *lib, U32 member_idx)
+{
+  if (lnk_flag_member_as_queued(lib, member_idx, trigger_symbol)) {
+    LNK_LibMemberRef *member_ref = push_array(arena, LNK_LibMemberRef, 1);
+    member_ref->lib              = lib;
+    member_ref->member_idx       = member_idx;
+
+    lnk_lib_member_ref_list_push_node(queued_members, member_ref);
+
+    trigger_symbol->is_lib_member_linked = 1;
+  }
+}
+
+internal void
+lnk_link_inputs_(TP_Context      *tp,
+                TP_Arena         *arena,
+                LNK_Config       *config,
+                LNK_Inputer      *inputer,
+                LNK_SymbolTable  *symtab,
+                LNK_Link         *link, 
+                LNK_ImportTables *imps,
+                B32               search_anti_deps)
+{
+  Temp scratch = scratch_begin(arena->v, arena->count);
+
+  lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+
+  for (U64 resolved_members_count = 0; ; resolved_members_count = 0) {
+    if (link->try_to_resolve_entry_point) {
+      lnk_resolve_entry_point(config, symtab, link);
+    }
+
+    for (LNK_LibNode *lib_n = link->libs.first; lib_n != 0; lib_n = lib_n->next) {
+      do {
+        LNK_LibMemberRefList queued_members = {0};
+        for EachIndex(worker_id, symtab->arena->count) {
+          for (LNK_SymbolHashTrieChunk *c = symtab->chunks[worker_id].first; c != 0; c = c->next) {
+            for EachIndex(i, c->count) {
+              LNK_Symbol *symbol = c->v[i].symbol;
+              if (symbol->is_lib_member_linked) { continue; }
+
+              COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+              COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+              if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
+                U32 member_idx;
+                if (lnk_search_lib(&lib_n->data, symbol->name, &member_idx)) {
+                  lnk_queue_lib_member(arena->v[0], &queued_members, symbol, &lib_n->data, member_idx);
+                }
+              } else if (symbol_interp == COFF_SymbolValueInterp_Weak) {
+                COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol_parsed, symbol->defined.obj->header.is_big_obj);
+                if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
+                  U32 member_idx;
+                  if (lnk_search_lib(&lib_n->data, symbol->name, &member_idx)) {
+                    lnk_queue_lib_member(arena->v[0], &queued_members, symbol, &lib_n->data, member_idx);
+                  }
+                } else if (search_anti_deps && weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
+                  LNK_SymbolDefined          dep_symbol = lnk_resolve_weak_symbol(symtab, symbol->defined);
+                  COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dep_symbol.obj, dep_symbol.symbol_idx);
+                  COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
+                  if (dep_interp == COFF_SymbolValueInterp_Weak) {
+                    U32 member_idx;
+                    if (lnk_search_lib(&lib_n->data, symbol_parsed.name, &member_idx)) {
+                      lnk_queue_lib_member(scratch.arena, &queued_members, symbol, &lib_n->data, member_idx);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        LNK_LibMemberRef **member_refs = lnk_array_from_lib_member_list(scratch.arena, queued_members);
+        radsort(member_refs, queued_members.count, lnk_lib_member_ref_is_before);
+
+        // load lib member refs
+        for EachIndex(i, queued_members.count) {
+          LNK_LibMemberRef *member_ref    = member_refs[i];
+          LNK_Lib          *lib           = member_ref->lib;
+          U32               member_offset = lib->member_offsets[member_ref->member_idx];
+
+          // parse member
+          COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, member_offset);
+          COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
+
+          switch (member_type) {
+          case COFF_DataType_Import: {
+            COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(member_info.data);
+
+            // import machine compat check
+            if (import_header.machine != config->machine) {
+              lnk_error(LNK_Error_IncompatibleMachine, "symbol %S pulled in import with incompatible machine %S (expected %S)",
+                  import_header.func_name,
+                  coff_string_from_machine_type(import_header.machine),
+                  coff_string_from_machine_type(config->machine));
+              break;
+            }
+
+            if (str8_match(import_header.func_name, str8_lit("LoadLibraryA"), 0)) {
+              int x = 0;
+            }
+
+            // skip duplicate import inputer
+            if (hash_table_search_string_raw(imps->import_stub_ht, import_header.func_name, 0)) { break; }
+            hash_table_push_string_raw(imps->arena, imps->import_stub_ht, import_header.func_name, 0);
+
+            // create import stubs (later replaced with acutal imports generated by linker)
+            LNK_Symbol *import_stub  = lnk_symbol_table_search(symtab, str8_lit(LNK_IMPORT_STUB));
+            LNK_Symbol *thunk_symbol = lnk_make_defined_symbol(symtab->arena->v[0], import_header.func_name, import_stub->defined.obj, import_stub->defined.symbol_idx);
+            LNK_Symbol *imp_symbol   = lnk_make_defined_symbol(symtab->arena->v[0], push_str8f(symtab->arena->v[0], "__imp_%S", import_header.func_name), import_stub->defined.obj, import_stub->defined.symbol_idx);
+            lnk_symbol_table_push(symtab, thunk_symbol);
+            lnk_symbol_table_push(symtab, imp_symbol);
+
+            // search DLL symbol list
+            HashTable   *imports_ht     = lnk_is_dll_delay_load(config, import_header.dll_name) ? imps->delayed_imports : imps->static_imports;
+            String8List *import_symbols = hash_table_search_path_raw(imports_ht, import_header.dll_name);
+            if (import_symbols == 0) {
+              import_symbols = push_array(imps->arena, String8List, 1);
+              hash_table_push_path_raw(imps->arena, imports_ht, import_header.dll_name, import_symbols);
+            }
+
+            // push symbol
+            str8_list_push(imps->arena, import_symbols, member_info.data);
+          } break;
+          case COFF_DataType_BigObj:
+          case COFF_DataType_Obj: {
+            String8 obj_path = coff_parse_long_name(lib->long_names, member_info.header.name);
+
+            // obj path in thin archive has slash appended which screws up 
+            // file lookup on disk; it couble be there to enable paths to symbols
+            // but we don't use this feature
+            String8 slash = str8_lit("/");
+            if (str8_ends_with(obj_path, slash, 0)) {
+              obj_path = str8_chop(obj_path, slash.size);
+            }
+
+            B32 is_thin = lib->type == COFF_Archive_Thin;
+            if (is_thin) {
+
+              // obj path in thin archive is relative to directory with archive
+              String8List obj_path_list = {0};
+              str8_list_push(scratch.arena, &obj_path_list, str8_chop_last_slash(lib->path));
+              str8_list_push(scratch.arena, &obj_path_list, obj_path);
+              obj_path = str8_path_list_join_by_style(inputer->arena, &obj_path_list, config->path_style);
+
+              lnk_inputer_push_obj_thin(inputer, member_ref, obj_path);
+            } else {
+              lnk_inputer_push_obj(inputer, member_ref, obj_path, member_info.data);
+            }
+          } break;
+          case COFF_DataType_Null: break;
+          default: { InvalidPath; } break;
+          }
+        }
+
+        lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+
+        resolved_members_count += queued_members.count;
+      } while (lnk_inputer_has_items(inputer));
+    }
+
+    if (resolved_members_count == 0) { break; }
+  }
+
+  scratch_end(scratch);
+}
+
+internal void
+lnk_link_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link  *link, LNK_ImportTables *imps)
+{
+  lnk_link_inputs_(tp, arena, config, inputer, symtab, link, imps, 0);
+
+  // input /ALTERNATENAME
+  {
+    // replace undefined symbols that have an alternate name with a weak symbol
+    for (LNK_AltNameNode *alt_name_n = config->alt_name_list.first; alt_name_n != 0; alt_name_n = alt_name_n->next) {
+      LNK_SymbolHashTrie *symbol_ht = lnk_symbol_table_search_(symtab, alt_name_n->data.from);
+      if (symbol_ht) {
+        COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(symbol_ht->symbol);
+        if (interp == COFF_SymbolValueInterp_Undefined) {
+          // clear out slot so weak symbol can replace undefined symbol (general rule is
+          // weak symbol is not allowed to replace undefined)
+          symbol_ht->symbol = 0;
+
+          // make obj with alternamte name symbol
+          String8 alt_name_obj_data;
+          {
+            COFF_ObjWriter *obj_writer  = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
+            COFF_ObjSymbol *from_symbol = coff_obj_writer_push_symbol_weak(obj_writer, alt_name_n->data.from, COFF_WeakExt_SearchLibrary, 0);
+            COFF_ObjSymbol *to_symbol   = coff_obj_writer_push_symbol_weak(obj_writer, alt_name_n->data.to,   COFF_WeakExt_AntiDependency, from_symbol);
+            coff_obj_writer_set_default_symbol(from_symbol, to_symbol);
+            alt_name_obj_data = coff_obj_writer_serialize(arena->v[0], obj_writer);
+            coff_obj_writer_release(&obj_writer);
+          }
+
+          // input alt name obj
+          LNK_Obj *obj_with_alt_name = alt_name_n->data.obj;
+          String8  alt_name_obj_path = obj_with_alt_name ? obj_with_alt_name->path : str8_lit("RADLINK");
+          lnk_inputer_push_obj_linkgen(inputer, 0, alt_name_obj_path, alt_name_obj_data);
+        }
+      }
+    }
+  }
+
+  //
+  // include delay load helper
+  //
+  if (config->machine != COFF_MachineType_Unknown && config->delay_load_helper_name.size == 0 && config->delay_load_dll_list.node_count) {
+    config->delay_load_helper_name = mscrt_delay_load_helper_name_from_machine(config->machine);
+    if (config->delay_load_helper_name.size) {
+      lnk_include_symbol(config, config->delay_load_helper_name, 0);
+    }
+  }
+
+  lnk_link_inputs_(tp, arena, config, inputer, symtab, link, imps, 1);
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
+{
+  LNK_ReplaceWeakSymbolsWithDefaultSymbolTask *task   = raw_task;
+  LNK_SymbolTable                             *symtab = task->symtab;
+  LNK_SymbolHashTrieChunk                     *chunk  = task->chunks[task_id];
+  for EachIndex(i, chunk->count) {
+    LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+    COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+    COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+    if (symbol_interp == COFF_SymbolValueInterp_Weak) {
+      LNK_SymbolDefined          resolve        = lnk_resolve_weak_symbol(symtab, symbol->defined);
+      COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx(resolve.obj, resolve.symbol_idx);
+      COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
+      if (resolve_interp == COFF_SymbolValueInterp_Weak) {
+        COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol->defined.obj->header.is_big_obj);
+        if (symbol->defined.obj->header.is_big_obj) {
+          COFF_Symbol32 *symbol32  = symbol_parsed.raw_symbol;
+          symbol32->section_number = COFF_Symbol_UndefinedSection;
+          symbol32->value          = 0;
+          symbol32->storage_class  = COFF_SymStorageClass_External;
+        } else {
+          COFF_Symbol16 *symbol16  = symbol_parsed.raw_symbol;
+          symbol16->section_number = COFF_Symbol_UndefinedSection;
+          symbol16->value          = 0;
+          symbol16->storage_class  = COFF_SymStorageClass_External;
+        }
+      } else {
+        symbol->defined = resolve;
+      }
+    }
+  }
+}
+
+internal LNK_Link *
+lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab)
+{
+  Temp scratch = scratch_begin(arena->v, arena->count);
+
+  //
+  // init link context
+  //
+  LNK_Link *link = push_array(arena->v[0], LNK_Link, 1);
+  link->last_include               = &config->include_symbol_list.first;
+  link->last_default_lib           = &config->input_default_lib_list.first;
+  link->last_obj_lib               = &config->input_obj_lib_list.first;
+  link->last_cmd_lib               = &config->input_list[LNK_Input_Lib].first;
+  link->try_to_resolve_entry_point = 1;
+
+  //
+  // init import hash tables
+  //
+  LNK_ImportTables *imps = 0;
+  {
+    Arena *imps_arena = arena_alloc();
+    imps = push_array(imps_arena, LNK_ImportTables, 1);
+    imps->arena           = imps_arena;
+    imps->static_imports  = hash_table_init(imps->arena, 0x1000);
+    imps->delayed_imports = hash_table_init(imps->arena, 0x1000);
+    imps->import_stub_ht  = hash_table_init(imps->arena, 0x10000);
+  }
+
+  // input :null_obj
+  String8 null_obj = lnk_make_null_obj(inputer->arena);
+  lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Null *"), null_obj);
+
+  // input objs on command line
+  for (String8Node *obj_path = config->input_list[LNK_Input_Obj].first; obj_path != 0; obj_path = obj_path->next) {
+    lnk_inputer_push_obj_thin(inputer, 0, obj_path->string);
+  }
+
+  // input libs from command line
+  for (; *link->last_cmd_lib; link->last_cmd_lib = &(*link->last_cmd_lib)->next) {
+    lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_CmdLine, (*link->last_cmd_lib)->string);
+  }
+
+  // link inputer
+  lnk_link_inputs(tp, arena, config, inputer, symtab, link, imps);
+
+  // TODO: need to know under which condition to include load config
+  //lnk_include_symbol(config, str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME), 0);
+
+  {
+    ProfBegin("Push Linker Symbols");
+    String8 linker_symbols_obj = lnk_make_linker_obj(arena->v[0], config);
+    lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Linker Symbols *"), linker_symbols_obj);
+    ProfEnd();
+  }
+
+  // make and input delayed imports
+  {
+    HashTable *delayed_imports = imps->delayed_imports;
+    if (delayed_imports->count) {
+      ProfBegin("Build Delay Import Table");
+
+      COFF_TimeStamp   time_stamp         = COFF_TimeStamp_Max;
+      B32              emit_biat          = config->import_table_emit_biat == LNK_SwitchState_Yes;
+      B32              emit_uiat          = config->import_table_emit_uiat == LNK_SwitchState_Yes;
+      String8         *dll_names          = keys_from_hash_table_string(scratch.arena, delayed_imports);
+      String8List    **dll_import_headers = values_from_hash_table_raw(scratch.arena, delayed_imports);
+
+      for EachIndex(dll_idx, delayed_imports->count) {
+        String8 import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_names[dll_idx]);
+        String8 import_obj = pe_make_import_dll_obj_delayed(arena->v[0], time_stamp, config->machine, dll_names[dll_idx], config->delay_load_helper_name, import_debug_symbols, *dll_import_headers[dll_idx], emit_biat, emit_uiat);
+        lnk_inputer_push_obj(inputer, 0, dll_names[dll_idx], import_obj);
+      }
+
+      String8 linker_debug_symbols = lnk_make_linker_debug_symbols(arena->v[0], config->machine);
+      String8 null_desc_obj        = pe_make_null_import_descriptor_delayed(arena->v[0], time_stamp, config->machine, linker_debug_symbols);
+      String8 null_thunk_obj       = pe_make_null_thunk_data_obj_delayed(arena->v[0], lnk_get_image_name(config), time_stamp, config->machine, linker_debug_symbols);
+      lnk_inputer_push_obj(inputer, 0, str8_lit("* Delayed Null Import Descriptor *"), null_desc_obj);
+      lnk_inputer_push_obj(inputer, 0, str8_lit("* Delayed Null Thunk Data *"), null_thunk_obj);
+
+      ProfEnd();
+    }
+  }
+
+  // make and input static imports
+  {
+    HashTable *static_imports = imps->static_imports;
+    if (static_imports->count) {
+      ProfBegin("Build Static Import Table");
+
+      COFF_TimeStamp   time_stamp         = COFF_TimeStamp_Max;
+      String8         *dll_names          = keys_from_hash_table_string(scratch.arena, static_imports);
+      String8List    **dll_import_headers = values_from_hash_table_raw(scratch.arena, static_imports);
+      for EachIndex(dll_idx, static_imports->count) {
+        String8 import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_names[dll_idx]);
+        String8 import_obj = pe_make_import_dll_obj_static(arena->v[0], time_stamp, config->machine, dll_names[dll_idx], import_debug_symbols, *dll_import_headers[dll_idx]);
+        lnk_inputer_push_obj(inputer, 0, dll_names[dll_idx], import_obj);
+      }
+
+      String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);
+      String8 null_desc_obj = pe_make_null_import_descriptor_obj(arena->v[0], time_stamp, config->machine, linker_debug_symbols);
+      String8 null_thunk_obj = pe_make_null_thunk_data_obj(arena->v[0], lnk_get_image_name(config), time_stamp, config->machine, linker_debug_symbols);
+      lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Null Import Descriptor *"), null_desc_obj);
+      lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Null Thunk Data *"), null_thunk_obj);
+
+      ProfEnd();
+    }
+  }
+
+  if (config->export_symbol_list.count) {
+    ProfBegin("Build Export Table");
+
+    PE_ExportParseList resolved_exports = {0};
+    for (PE_ExportParseNode *exp_n = config->export_symbol_list.first, *exp_n_next; exp_n != 0; exp_n = exp_n_next) {
+      exp_n_next = exp_n->next;
+      PE_ExportParse *exp = &exp_n->data;
+
+      if (str8_match(exp->name, config->entry_point_name, 0)) {
+        lnk_error_with_loc(LNK_Warning_TryingToExportEntryPoint, exp->obj_path, exp->lib_path, "exported entry point \"%S\"", exp->name);
+      }
+      if (str8_match(exp->alias, config->entry_point_name, 0)) {
+        lnk_error_with_loc(LNK_Warning_TryingToExportEntryPoint, exp->obj_path, exp->lib_path, "alias exports entry point \"%S=%S\"", exp->name, exp->alias);
+        continue;
+      }
+
+      if (!exp->is_forwarder) {
+        // filter out unresolved exports
+        LNK_Symbol *symbol = lnk_symbol_table_search(symtab, exp_n->data.name);
+        if (symbol == 0) {
+          lnk_error_with_loc(LNK_Warning_IllExport, exp->obj_path, exp->lib_path, "unresolved export symbol %S\n", exp->name);
+          continue;
+        }
+      }
+
+      // push resolved export
+      pe_export_parse_list_push_node(&resolved_exports, exp_n);
+    }
+
+    PE_FinalizedExports finalized_exports = pe_finalize_export_list(scratch.arena, resolved_exports);
+    String8             edata_obj         = pe_make_edata_obj(arena->v[0], str8_skip_last_slash(config->image_name), COFF_TimeStamp_Max, config->machine, finalized_exports);
+    lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Exports *"), edata_obj);
+
+    ProfEnd();
+  }
+
+  {
+    String8List res_data_list = {0};
+    String8List res_path_list = {0};
+    
+    // do we have manifest deps passed through pragma alone?
+    LNK_ManifestOpt manifest_opt = config->manifest_opt;
+    if (config->manifest_dependency_list.node_count > 0 && manifest_opt == LNK_ManifestOpt_Null) {
+      manifest_opt = LNK_ManifestOpt_Embed;
+    }
+
+    switch (manifest_opt) {
+    case LNK_ManifestOpt_Embed: {
+      ProfBegin("Embed Manifest");
+      // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
+      // resource to the tree directly
+      String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
+      String8 manifest_res  = pe_make_manifest_resource(scratch.arena, *config->manifest_resource_id, manifest_data);
+      str8_list_push(scratch.arena, &res_data_list, manifest_res);
+      str8_list_push(scratch.arena, &res_path_list, str8_lit("* Manifest *"));
+      ProfEnd();
+    } break;
+    case LNK_ManifestOpt_WriteToFile: {
+      ProfBeginDynamic("Write Manifest To: %.*s", str8_varg(config->manifest_name));
+      Temp temp = temp_begin(scratch.arena);
+      String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
+      lnk_write_data_to_file_path(config->manifest_name, str8_zero(), manifest_data);
+      temp_end(temp);
+      ProfEnd();
+    } break;
+    case LNK_ManifestOpt_Null: {
+      Assert(config->input_list[LNK_Input_Manifest].node_count == 0);
+      Assert(config->manifest_dependency_list.node_count == 0);
+    } break;
+    case LNK_ManifestOpt_No: {
+      // omit manifest generation
+    } break;
+    }
+    
+    ProfBegin("Load .res files from disk");
+    for (String8Node *node = config->input_list[LNK_Input_Res].first; node != 0; node = node->next) {
+      String8 res_data = lnk_read_data_from_file_path(scratch.arena, config->io_flags, node->string);
+      if (res_data.size > 0) {
+        if (pe_is_res(res_data)) {
+          str8_list_push(scratch.arena, &res_data_list, res_data);
+          String8 stable_res_path = lnk_make_full_path(scratch.arena, config->path_style, config->work_dir, node->string);
+          str8_list_push(scratch.arena, &res_path_list, stable_res_path);
+        } else {
+          lnk_error(LNK_Error_LoadRes, "file is not of RES format: %S", node->string);
+        }
+      } else {
+        lnk_error(LNK_Error_LoadRes, "unable to open res file: %S", node->string);
+      }
+    }
+    ProfEnd();
+    
+    if (res_data_list.node_count > 0) {
+      ProfBegin("Build * Resources *");
+      String8 obj_name = str8_lit("* Resources *");
+      String8 obj_data = lnk_make_res_obj(arena->v[0], res_data_list, res_path_list, config->machine, config->time_stamp, config->work_dir, config->path_style, obj_name);
+      lnk_inputer_push_obj_linkgen(inputer, 0, obj_name, obj_data);
+      ProfEnd();
+    }
+  }
+
+  if (lnk_do_debug_info(config)) {
+    {
+      ProfBegin("Build * Linker * Obj");
+      String8 obj_name     = str8_lit("* Linker *");
+      String8 raw_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ str8_lit_comp(""),  str8_lit_comp(" "), str8_lit_comp("") });
+      String8 obj_data     = lnk_make_linker_coff_obj(arena->v[0], config->time_stamp, config->machine, config->work_dir, config->image_name, config->pdb_name, raw_cmd_line, obj_name);
+      lnk_inputer_push_obj_linkgen(inputer, 0, obj_name, obj_data);
+      ProfEnd();
+    }
+
+    ProfBegin("Build * Debug Directories *");
+    if (config->debug_mode != LNK_DebugMode_None && config->debug_mode != LNK_DebugMode_Null) {
+      String8 pdb_dir_obj = pe_make_debug_directory_pdb_obj(arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->pdb_alt_path);
+      lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Debug Directory PDB *"), pdb_dir_obj);
+    }
+    if (config->rad_debug == LNK_SwitchState_Yes) {
+      String8 rdi_dir_obj = pe_make_debug_directory_rdi_obj(arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->rad_debug_alt_path);
+      lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Debug Directory RDI *"), rdi_dir_obj);
+    }
+    ProfEnd();
+  }
+
+  //
+  // link linker made objs
+  //
+  lnk_link_inputs(tp, arena, config, inputer, symtab, link, imps);
+
+  //
+  // warn about unused delayloads
+  //
+  if (config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll) {
+    for (String8Node *dll_name_n = config->delay_load_dll_list.first; dll_name_n != 0; dll_name_n = dll_name_n->next) {
+      if (!hash_table_search_path_raw(imps->delayed_imports, dll_name_n->string)) {
+        lnk_error(LNK_Warning_UnusedDelayLoadDll, "/DELAYLOAD: %S found no imports", dll_name_n->string);
+      }
+    }
+  }
+
+  //
+  // report undefined symbols
+  //
+  {
+    U64                       chunks_count = 0;
+    LNK_SymbolHashTrieChunk **chunks       = lnk_array_from_symbol_hash_trie_chunk_list(scratch.arena, symtab->chunks, symtab->arena->count, &chunks_count);
+
+    ProfBegin("Replace Unresolved Weak Symbols With Defualt Symbol");
+    {
+      LNK_ReplaceWeakSymbolsWithDefaultSymbolTask task = { .symtab = symtab, .chunks = chunks };
+      tp_for_parallel(tp, 0, chunks_count, lnk_replace_weak_with_default_symbol_task, &task);
+#if BUILD_DEBUG
+      for EachIndex(chunk_idx, chunks_count) {
+        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
+        for EachIndex(i, chunk->count) {
+          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
+          AssertAlways(symbol_interp != COFF_SymbolValueInterp_Weak);
+        }
+      }
+#endif
+    }
+    ProfEnd();
+
+
+    if (config->entry_point_name.size == 0) {
+      lnk_error(LNK_Error_EntryPoint, "unable to find entry point symbol");
+    }
+
+    ProfBegin("Report Unresolved Symbols");
+    {
+      U64 count = 0;
+      for EachIndex(chunk_idx, chunks_count) {
+        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
+        for EachIndex(i, chunk->count) {
+          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
+          if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
+            count += 1;
+          }
+        }
+      }
+
+      U64          cursor     = 0;
+      LNK_Symbol **unresolved = push_array(scratch.arena, LNK_Symbol *, count);
+      for EachIndex(chunk_idx, chunks_count) {
+        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
+        for EachIndex(i, chunk->count) {
+          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
+          if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
+            unresolved[cursor++] = chunk->v[i].symbol;
+          }
+        }
+      }
+
+      radsort(unresolved, count, lnk_symbol_defined_ptr_is_before);
+
+      for EachIndex(i, count) {
+        LNK_Symbol *symbol = unresolved[i];
+        lnk_error_obj(LNK_Error_UnresolvedSymbol, symbol->defined.obj, "unresolved symbol %S", symbol->name);
+      }
+
+      // TODO: /FORCE
+      if (count) {
+        lnk_exit(LNK_Error_UnresolvedSymbol);
+      }
+    }
+    ProfEnd();
+  }
+
+  //
+  // discard COMDAT sections that are not referenced
+  //
+  if (config->opt_ref == LNK_SwitchState_Yes) {
+    lnk_opt_ref(tp, symtab, config, link->objs);
+  }
+
+  //
+  // infer minimal padding size for functions from the target machine
+  //
+  if (config->machine != COFF_MachineType_Unknown && config->infer_function_pad_min) {
+    config->function_pad_min = lnk_get_default_function_pad_min(config->machine);
+    config->infer_function_pad_min = 0;
+  }
+
+  //
+  // log
+  //
+  if (lnk_get_log_status(LNK_Log_InputObj)) {
+    U64 total_input_size = 0;
+    for (LNK_ObjNode *obj_n = link->objs.first; obj_n != 0; obj_n = obj_n->next) { total_input_size += obj_n->data.data.size; }
+    lnk_log(LNK_Log_InputObj, "[Total Obj Input Size %M]", total_input_size);
+  }
+  if (lnk_get_log_status(LNK_Log_InputLib)) {
+    U64 total_input_size = 0;
+    for (LNK_LibNode *lib_n = link->libs.first; lib_n != 0; lib_n = lib_n->next) { total_input_size += lib_n->data.data.size; }
+    lnk_log(LNK_Log_InputLib, "[Total Lib Input Size %M]", total_input_size);
+  }
+
+  scratch_end(scratch);
+  return link;
 }
 
 internal void
@@ -1053,17 +2085,15 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
   // define roots
   //
   {
-    String8List roots = str8_list_copy(scratch.arena, &config->include_symbol_list);
-
     // tls
     LNK_Symbol *tls_symbol = lnk_symbol_table_searchf(symtab, MSCRT_TLS_SYMBOL_NAME);
     if (tls_symbol) {
-      str8_list_pushf(scratch.arena, &roots, MSCRT_TLS_SYMBOL_NAME);
+      lnk_include_symbol(config, str8_lit(MSCRT_TLS_SYMBOL_NAME), 0);
     }
 
     // push tasks for each root symbol
-    for (String8Node *root_n = roots.first; root_n != 0; root_n = root_n->next) {
-      LNK_Symbol *root = lnk_symbol_table_search(symtab, root_n->string);
+    for (LNK_IncludeSymbolNode *root_n = config->include_symbol_list.first; root_n != 0; root_n = root_n->next) {
+      LNK_Symbol *root = lnk_symbol_table_search(symtab, root_n->v.name);
 
       struct Task *t         = push_array(scratch.arena, struct Task, 1);
       t->obj                 = root->defined.obj;
@@ -1193,9 +2223,11 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
   ProfBegin("Remove Unreachable Sections");
   for (LNK_ObjNode *obj_n = objs.first; obj_n != 0; obj_n = obj_n->next) {
     LNK_Obj *obj = &obj_n->data;
+
     for EachIndex(sect_idx, obj->header.section_count_no_null) {
       U32                 section_number = sect_idx+1;
       COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
+
 
       if (lnk_is_coff_section_debug(obj, sect_idx)) { continue; }
 
@@ -1223,1058 +2255,6 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
 
   scratch_end(scratch);
   ProfEnd();
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
-{
-  LNK_ReplaceWeakSymbolsWithDefaultSymbolTask *task   = raw_task;
-  LNK_SymbolTable                             *symtab = task->symtab;
-  LNK_SymbolHashTrieChunk                     *chunk  = task->chunks[task_id];
-  for EachIndex(i, chunk->count) {
-    LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-    COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
-    COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-    if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-      LNK_SymbolDefined          resolve        = lnk_resolve_weak_symbol(symtab, symbol->defined);
-      COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx(resolve.obj, resolve.symbol_idx);
-      COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
-      if (resolve_interp == COFF_SymbolValueInterp_Weak) {
-        COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol->defined.obj->header.is_big_obj);
-        if (symbol->defined.obj->header.is_big_obj) {
-          COFF_Symbol32 *symbol32  = symbol_parsed.raw_symbol;
-          symbol32->section_number = COFF_Symbol_UndefinedSection;
-          symbol32->value          = 0;
-          symbol32->storage_class  = COFF_SymStorageClass_External;
-        } else {
-          COFF_Symbol16 *symbol16  = symbol_parsed.raw_symbol;
-          symbol16->section_number = COFF_Symbol_UndefinedSection;
-          symbol16->value          = 0;
-          symbol16->storage_class  = COFF_SymStorageClass_External;
-        }
-      } else {
-        symbol->defined = resolve;
-      }
-    }
-  }
-}
-
-internal LNK_LinkContext
-lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
-{
-  enum State {
-    State_Null,
-    State_InputDisallowLibs,
-    State_InputImports,
-    State_InputInclude,
-    State_InputObjs,
-    State_InputLibs,
-    State_InputDelayLoadDlls,
-    State_InputLinkerObjs,
-    State_SearchUndefinedAndWeak,
-    State_SearchWeakAntiDep,
-    State_SearchEntryPoint,
-  };
-  struct StateNode { struct StateNode *next; enum State state; };
-  struct StateList { U64 count; struct StateNode *first; struct StateNode *last; };
-#define state_list_push(a, l, s) do {                          \
-  struct StateNode *node = push_array(a, struct StateNode, 1); \
-  node->state = s;                                             \
-  SLLQueuePush(l.first, l.last, node);                         \
-  l.count += 1;                                                \
-} while (0)
-#define state_list_pop(l) (l).first->state; SLLQueuePop((l).first, (l).last); (l).count -= 1
-  typedef enum {
-    SearchFlag_UndefinedAndWeak = (1 << 0),
-    SearchFlag_WeakAntiDep      = (1 << 1),
-    SearchFlag_All              = (SearchFlag_UndefinedAndWeak|SearchFlag_WeakAntiDep)
-  } SearchFlags;
-  
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
-
-  //
-  // state
-  //
-  LNK_SymbolTable      *symtab                            = lnk_symbol_table_init(tp_arena);
-  String8Node         **last_include_symbol               = &config->include_symbol_list.first;
-  String8Node         **last_disallow_lib                 = &config->disallow_lib_list.first;
-  String8Node         **last_delay_load_dll               = &config->delay_load_dll_list.first;
-  LNK_InputObjList      input_obj_list                    = {0};
-  LNK_InputImportList   input_import_list                 = {0};
-  LNK_InputLib        **input_libs[LNK_InputSource_Count] = { &config->input_list[LNK_Input_Lib].first, &config->input_default_lib_list.first, &config->input_obj_lib_list.first };
-  LNK_ObjList           obj_list                          = {0};
-  LNK_LibList           lib_index[LNK_InputSource_Count]  = {0};
-  U64                   entry_point_search_attempts       = 0;
-  SearchFlags           search_flags                      = SearchFlag_All;
-  B32                   input_linker_objs                 = 1;
-  HashTable            *static_imports                    = hash_table_init(scratch.arena, 512);
-  HashTable            *delayed_imports                   = hash_table_init(scratch.arena, 512);
-  HashTable            *import_stub_ht                    = hash_table_init(scratch.arena, 0x1000);
-  // TODO: move disallow_lib, loaded_lib, missing_lib, and loaded_obj to config
-  Arena                *ht_arena                          = arena_alloc();
-  HashTable            *disallow_lib_ht                   = hash_table_init(scratch.arena, 0x100);
-  HashTable            *loaded_lib_ht                     = hash_table_init(scratch.arena, 0x100);
-  HashTable            *missing_lib_ht                    = hash_table_init(scratch.arena, 0x100);
-  HashTable            *loaded_obj_ht                     = hash_table_init(scratch.arena, 0x4000);
-
-  // TODO: this should happen in the config before state machine setup
-  {
-    // input :null_obj
-    LNK_InputObj *null_obj_input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-    null_obj_input->exclude_from_debug_info = 1;
-    null_obj_input->path                    = str8_lit("* Null Obj *");
-    null_obj_input->dedup_id                = null_obj_input->path;
-    null_obj_input->data                    = lnk_make_null_obj(tp_arena->v[0]);
-
-    // input command line objs
-    LNK_InputObjList cmd_line_obj_inputs = lnk_input_obj_list_from_string_list(scratch.arena, config->input_list[LNK_Input_Obj]);
-    lnk_input_obj_list_concat_in_place(&input_obj_list, &cmd_line_obj_inputs);
-  }
-
-  // TODO: MSVC does not need this flag to include load config
-  if (config->guard_flags != LNK_Guard_None) {
-    // TODO: config_refactor
-    String8List value_strings = {0};
-    str8_list_push(scratch.arena, &value_strings, str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME));
-    lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, 0);
-  }
-
-  //
-  // run states
-  //
-  struct StateList state_list = {0};
-  for (;;) {
-    for (; state_list.count > 0; ) {
-      enum State state = state_list_pop(state_list);
-      switch (state) {
-      case State_Null: break;
-
-      case State_InputDisallowLibs: {
-        ProfBegin("Input /disallowlib");
-        for (; *last_disallow_lib; last_disallow_lib = &(*last_disallow_lib)->next) {
-          if ( ! lnk_is_lib_disallowed(disallow_lib_ht, (*last_disallow_lib)->string)) {
-            lnk_push_disallow_lib(scratch.arena, disallow_lib_ht, (*last_disallow_lib)->string);
-          }
-        }
-        ProfEnd();
-      } break;
-      case State_InputImports: {
-        ProfBegin("Input Imports");
-        for (LNK_InputImportNode *input = input_import_list.first; input != 0; input = input->next) {
-          COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(input->data.coff_import);
-          
-          // import machine compat check
-          if (import_header.machine != config->machine) {
-            lnk_error(LNK_Error_IncompatibleMachine, "symbol %S pulled in import with incompatible machine %S (expected %S)",
-                      import_header.func_name,
-                      coff_string_from_machine_type(import_header.machine),
-                      coff_string_from_machine_type(config->machine));
-            continue;
-          }
-
-          // skip duplicate import inputs
-          if (hash_table_search_string_raw(import_stub_ht, import_header.func_name, 0)) { continue; }
-          hash_table_push_string_raw(ht_arena, import_stub_ht, import_header.func_name, 0);
-
-          // create import stubs (later replaced with acutal imports generated by linker)
-          LNK_Symbol *import_stub  = lnk_symbol_table_search(symtab, str8_lit(LNK_IMPORT_STUB));
-          LNK_Symbol *thunk_symbol = lnk_make_defined_symbol(symtab->arena->v[0], import_header.func_name, import_stub->defined.obj, import_stub->defined.symbol_idx);
-          LNK_Symbol *imp_symbol   = lnk_make_defined_symbol(symtab->arena->v[0], push_str8f(scratch.arena, "__imp_%S", import_header.func_name), import_stub->defined.obj, import_stub->defined.symbol_idx);
-          lnk_symbol_table_push(symtab, thunk_symbol);
-          lnk_symbol_table_push(symtab, imp_symbol);
-
-          // pick imports hash table
-          HashTable *imports_ht = lnk_is_dll_delay_load(config, import_header.dll_name) ? delayed_imports : static_imports;
-          
-          // search DLL symbol list
-          String8List *import_symbols = hash_table_search_path_raw(imports_ht, import_header.dll_name);
-          if (import_symbols == 0) {
-            import_symbols = push_array(scratch.arena, String8List, 1);
-            hash_table_push_path_raw(scratch.arena, imports_ht, import_header.dll_name, import_symbols);
-          }
-          
-          // push symbol
-          str8_list_push(scratch.arena, import_symbols, input->data.coff_import);
-        }
-
-        search_flags = SearchFlag_All;
-        
-        // reset input
-        MemoryZeroStruct(&input_import_list);
-        
-        ProfEnd();
-      } break;
-      case State_InputInclude: {
-        ProfBegin("Input Include");
-        
-        // push a relocation which references an undefined include symbol
-        COFF_ObjWriter  *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
-        COFF_ObjSection *sect       = coff_obj_writer_push_section(obj_writer, str8_lit(".radinc$"), 0, str8_zero());
-        for (; *last_include_symbol; last_include_symbol = &(*last_include_symbol)->next) {
-          COFF_ObjSymbol *include_symbol = coff_obj_writer_push_symbol_undef(obj_writer,  (*last_include_symbol)->string);
-          coff_obj_writer_section_push_reloc(obj_writer, sect, 0, include_symbol, 0);
-        }
-
-        // input obj with includes
-        LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-        input->exclude_from_debug_info = 1;
-        input->path                    = str8_lit("* INCLUDE SYMBOLS *");
-        input->dedup_id                = push_str8f(scratch.arena, "%S %llu", input->path, obj_list.count);
-        input->data                    = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
-
-        coff_obj_writer_release(&obj_writer);
-        
-        ProfEnd();
-      } break;
-      case State_InputObjs: {
-        ProfBegin("Input Objs [Count %llu]", input_obj_list.count);
-        
-        ProfBegin("Collect Obj Paths");
-        LNK_InputObjList unique_obj_input_list = {0};
-        for (LNK_InputObj *input = input_obj_list.first, *next; input != 0; input = next) {
-          next = input->next;
-
-          B32 was_obj_loaded = hash_table_search_path_u64(loaded_obj_ht, input->dedup_id, 0);
-          if (was_obj_loaded) { continue; }
-
-          if (input->is_thin) {
-            String8 full_path          = input->dedup_id.size ? os_full_path_from_path(scratch.arena, input->dedup_id) : str8_zero();
-            B32     was_full_path_used = hash_table_search_path_u64(loaded_obj_ht, full_path, 0);
-            if (was_full_path_used) { continue; }
-            if (!str8_match(input->dedup_id, full_path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive)) {
-              hash_table_push_path_u64(scratch.arena, loaded_obj_ht, full_path, 0);
-            }
-          }
-
-          hash_table_push_path_u64(scratch.arena, loaded_obj_ht, input->dedup_id, 0);
-
-          lnk_input_obj_list_push_node(&unique_obj_input_list, input);
-
-          lnk_log(LNK_Log_InputObj, "Input Obj: %S", input->path);
-        }
-        ProfEnd();
-        
-        ProfBegin("Load Objs From Disk"); 
-        U64            thin_inputs_count = 0;
-        LNK_InputObj **thin_inputs       = lnk_thin_array_from_input_obj_list(scratch.arena, unique_obj_input_list, &thin_inputs_count);
-        String8Array   thin_input_paths  = lnk_path_array_from_input_obj_array(scratch.arena, thin_inputs, thin_inputs_count);
-        String8Array   thin_input_datas  = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], config->io_flags, thin_input_paths);
-        for EachIndex(thin_input_idx, thin_inputs_count) {
-          thin_inputs[thin_input_idx]->has_disk_read_failed = thin_input_datas.v[thin_input_idx].size == 0;
-          thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
-        }
-        ProfEnd();
-
-        ProfBegin("Disk Read Check");
-        LNK_InputObj **input_obj_arr = lnk_array_from_input_obj_list(scratch.arena, unique_obj_input_list);
-        for EachIndex(input_idx, unique_obj_input_list.count) {
-          if (input_obj_arr[input_idx]->has_disk_read_failed) {
-            lnk_error(LNK_Error_InvalidPath, "unable to find obj \"%S\"", input_obj_arr[input_idx]->path);
-          }
-        }
-        ProfEnd();
-        
-        if (lnk_get_log_status(LNK_Log_InputObj)) {
-          U64 input_size = 0;
-          for EachIndex(i, unique_obj_input_list.count) { input_size += input_obj_arr[i]->data.size; }
-          lnk_log(LNK_Log_InputObj, "[ Obj Input Size %M ]", input_size);
-        }
-        
-        LNK_ObjNodeArray obj_node_arr = lnk_obj_list_push_parallel(tp, tp_arena, &obj_list, config->machine, unique_obj_input_list.count, input_obj_arr);
-
-        // if the machine was omitted on the command line, derive machine from obj
-        if (config->machine == COFF_MachineType_Unknown) {
-          for EachIndex(obj_idx, obj_node_arr.count) {
-            if (obj_node_arr.v[obj_idx].data.header.machine != COFF_MachineType_Unknown) {
-              config->machine = obj_node_arr.v[obj_idx].data.header.machine;
-              break;
-            }
-          }
-        }
-
-        ProfBegin("Apply Directives");
-        for EachIndex(obj_idx, obj_node_arr.count) {
-          LNK_Obj           *obj            = &obj_node_arr.v[obj_idx].data;
-          String8List        raw_directives = lnk_raw_directives_from_obj(scratch.arena, obj);
-          LNK_DirectiveInfo  directive_info = lnk_directive_info_from_raw_directives(scratch.arena, obj, raw_directives);
-          for EachIndex(i, ArrayCount(directive_info.v)) {
-            for (LNK_Directive *dir = directive_info.v[i].first; dir != 0; dir = dir->next) {
-              lnk_apply_cmd_option_to_config(tp_arena->v[0], config, dir->id, dir->value_list, obj);
-            }
-          }
-        }
-        ProfEnd();
-
-        // input extern symbols from each obj to the symbol table
-        lnk_input_obj_symbols(tp, tp_arena, symtab, obj_node_arr);
-        
-        // schedule symbol input
-        search_flags = SearchFlag_All;
-        
-        // reset input objs
-        MemoryZeroStruct(&input_obj_list);
-
-        // replace undefined symbols that have an alternate name with a weak symbol
-        for (LNK_AltNameNode *alt_name_n = config->alt_name_list.first; alt_name_n != 0; alt_name_n = alt_name_n->next) {
-          LNK_SymbolHashTrie *symbol_ht = lnk_symbol_table_search_(symtab, alt_name_n->data.from);
-          if (symbol_ht) {
-            COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(symbol_ht->symbol);
-            if (interp == COFF_SymbolValueInterp_Undefined) {
-              // clear out slot so weak symbol can replace undefined symbol
-              symbol_ht->symbol = 0;
-
-              // make obj with alternamte name symbol
-              String8 alt_name_obj;
-              {
-                COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
-                COFF_ObjSymbol *from_symbol = coff_obj_writer_push_symbol_weak(obj_writer, alt_name_n->data.from, COFF_WeakExt_SearchLibrary, 0);
-                COFF_ObjSymbol *to_symbol   = coff_obj_writer_push_symbol_weak(obj_writer, alt_name_n->data.to,   COFF_WeakExt_AntiDependency, from_symbol);
-                coff_obj_writer_set_default_symbol(from_symbol, to_symbol);
-                alt_name_obj = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
-                coff_obj_writer_release(&obj_writer);
-              }
-
-              // input alt name obj
-              {
-                LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-                input->path                    = alt_name_n->data.obj ? alt_name_n->data.obj->path : str8_lit("RADLINK");
-                input->exclude_from_debug_info = 1;
-                input->dedup_id                = push_str8f(scratch.arena, "* ALTERNATE NAME FOR %S=%S %u *", alt_name_n->data.from, alt_name_n->data.to, obj_list.count);
-                input->data                    = alt_name_obj;
-                input->lib                     = alt_name_n->data.obj ? alt_name_n->data.obj->lib : 0;
-              }
-            }
-          }
-        }
-        
-        ProfEnd();
-      } break;
-      case State_InputLibs: {
-        ProfBegin("Input Libs");
-
-        // input libs from command line only
-        U64 input_source_opl = config->no_default_libs ? LNK_InputSource_Default: LNK_InputSource_Count;
-        for EachIndex(input_source, input_source_opl) {
-          ProfBeginV("Input Source %S", lnk_string_from_input_source(input_source));
-
-          Temp             temp                  = temp_begin(scratch.arena);
-          LNK_InputLibList unique_input_lib_list = {0};
-
-          ProfBegin("Collect unique input libs");
-          for (; *input_libs[input_source] != 0; input_libs[input_source] = &(*input_libs[input_source])->next) {
-            String8 path = (*input_libs[input_source])->string;
-
-            if (input_source == LNK_InputSource_Default || input_source == LNK_InputSource_Obj) {
-              if (!str8_ends_with(path, str8_lit(".lib"), StringMatchFlag_CaseInsensitive)) {
-                path = push_str8f(temp.arena, "%S.lib", path);
-              }
-              if (lnk_is_lib_disallowed(disallow_lib_ht, path)) {
-                continue;
-              }
-            }
-
-            if (lnk_is_lib_loaded(loaded_lib_ht, path)) {
-              continue;
-            }
-            
-            // search disk for library
-            String8List match_list = lnk_file_search(temp.arena, config->lib_dir_list, path);
-
-            // warn about missing lib
-            if (match_list.node_count == 0) {
-              KeyValuePair *was_reported = hash_table_search_path(missing_lib_ht, path);
-              if (was_reported == 0) {
-                hash_table_push_path_u64(ht_arena, missing_lib_ht, path, 0);
-                lnk_error(LNK_Warning_FileNotFound, "unable to find library `%S`", path);
-              }
-              continue;
-            }
-
-            // pick first match
-            String8 full_path = str8_list_first(&match_list);
-            
-            if (lnk_is_lib_loaded(loaded_lib_ht, full_path)) {
-              continue;
-            }
-            
-            // warn about multiple matches
-            if (match_list.node_count > 1) {
-              lnk_error(LNK_Warning_MultipleLibMatch, "multiple libs match `%S` (picking first match)", path);
-              lnk_supplement_error_list(match_list);
-            }
-            
-            // push library for loading
-            str8_list_push(temp.arena, &unique_input_lib_list, full_path);
-
-            // save paths for future checks
-            lnk_push_loaded_lib(ht_arena, loaded_lib_ht, path);
-            lnk_push_loaded_lib(ht_arena, loaded_lib_ht, full_path);
-            
-            lnk_log(LNK_Log_InputLib, "Input Lib: %S", full_path);
-          }
-          ProfEnd();
-          
-          ProfBegin("Disk Read Libs");
-          String8Array paths = str8_array_from_list(temp.arena, &unique_input_lib_list);
-          String8Array datas = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], config->io_flags, paths);
-          ProfEnd();
-          
-          ProfBegin("Lib Init");
-          LNK_LibNodeArray libs = lnk_lib_list_push_parallel(tp, tp_arena, &lib_index[input_source], datas, paths);
-          ProfEnd();
-          
-          if (lnk_get_log_status(LNK_Log_InputLib)) {
-            if (libs.count > 0) {
-              U64 input_size = 0;
-              for EachIndex(i, libs.count) { input_size += libs.v[i]->data.data.size; }
-              lnk_log(LNK_Log_InputObj, "[ Lib Input Size %M ]", input_size);
-            }
-          }
-
-          temp_end(temp);
-          ProfEnd();
-        }
-
-        // schedule symbol input
-        search_flags = SearchFlag_All;
-        
-        ProfEnd();
-      } break;
-      case State_InputDelayLoadDlls: {
-        ProfBegin("Input Delay Load Dlls");
-
-        // skip input delay load dlls
-        for (; *last_delay_load_dll; last_delay_load_dll = &(*last_delay_load_dll)->next);
-
-        // establish delay load helper name
-        config->delay_load_helper_name = mscrt_delay_load_helper_name_from_machine(config->machine);
-
-        // TODO: config_refactor
-        String8List value_strings = {0};
-        str8_list_push(scratch.arena, &value_strings, config->delay_load_helper_name);
-        lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, 0);
-
-        ProfEnd();
-      } break;
-      case State_SearchUndefinedAndWeak: {
-        ProfBegin("Search Undefined And Weak");
-        LNK_InputImportList new_imports = {0};
-        LNK_InputObjList    new_objs    = {0};
-        for EachIndex(i, ArrayCount(lib_index)) {
-          for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
-            for EachIndex(worker_id, symtab->arena->count) {
-              for (LNK_SymbolHashTrieChunk *c = symtab->chunks[worker_id].first; c != 0; c = c->next) {
-                for EachIndex(i, c->count) {
-                  LNK_Symbol                 *symbol        = c->v[i].symbol;
-                  COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
-                  COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-                  if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
-                    U32 member_idx;
-                    if (lnk_search_lib(&lib_n->data, symbol->name, &member_idx)) {
-                      lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &new_imports, &new_objs);
-                    }
-                  } else if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-                    COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol_parsed, symbol->defined.obj->header.is_big_obj);
-                    if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
-                      U32 member_idx;
-                      if (lnk_search_lib(&lib_n->data, symbol->name, &member_idx)) {
-                        lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &new_imports, &new_objs);
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            if (new_imports.count || new_objs.count) {
-              goto end_search_undefined;
-            }
-          }
-        }
-        end_search_undefined:;
-        
-        {
-          LNK_InputImportNode **import_nodes = lnk_input_import_arr_from_list(scratch.arena, new_imports);
-          radsort(import_nodes, new_imports.count, lnk_input_import_is_before);
-          new_imports = lnk_list_from_input_import_arr(import_nodes, new_imports.count);
-
-          LNK_InputObj **obj_nodes = lnk_array_from_input_obj_list(scratch.arena, new_objs);
-          radsort(obj_nodes, new_objs.count, lnk_input_obj_compar_is_before);
-          new_objs = lnk_list_from_input_obj_arr(obj_nodes, new_objs.count);
-
-          lnk_input_import_list_concat_in_place(&input_import_list, &new_imports);
-          lnk_input_obj_list_concat_in_place(&input_obj_list, &new_objs);
-        }
-
-        ProfEnd();
-      } break;
-      case State_SearchWeakAntiDep: {
-        ProfBegin("Search Weak AntiDep");
-        LNK_InputImportList new_imports = {0};
-        LNK_InputObjList    new_objs    = {0};
-        for EachIndex(i, ArrayCount(lib_index)) {
-          for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
-            for EachIndex(worker_id, symtab->arena->count) {
-              for (LNK_SymbolHashTrieChunk *c = symtab->chunks[worker_id].first; c != 0; c = c->next) {
-                for EachIndex(i, c->count) {
-                  LNK_Symbol                 *symbol        = c->v[i].symbol;
-                  COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
-                  COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-                  if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-                    COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol_parsed, symbol->defined.obj->header.is_big_obj);
-                    if (weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
-                      LNK_SymbolDefined          dep_symbol = lnk_resolve_weak_symbol(symtab, symbol->defined);
-                      COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dep_symbol.obj, dep_symbol.symbol_idx);
-                      COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
-                      if (dep_interp == COFF_SymbolValueInterp_Weak) {
-                        U32 member_idx;
-                        if (lnk_search_lib(&lib_n->data, symbol_parsed.name, &member_idx)) {
-                          lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &new_imports, &new_objs);
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            if (new_imports.count || new_objs.count) {
-              goto end_search_antidep;
-            }
-          }
-        }
-        end_search_antidep:;
-
-        {
-          LNK_InputImportNode **import_nodes = lnk_input_import_arr_from_list(scratch.arena, new_imports);
-          radsort(import_nodes, new_imports.count, lnk_input_import_is_before);
-          new_imports = lnk_list_from_input_import_arr(import_nodes, new_imports.count);
-
-          LNK_InputObj **obj_nodes = lnk_array_from_input_obj_list(scratch.arena, new_objs);
-          radsort(obj_nodes, new_objs.count, lnk_input_obj_compar_is_before);
-          new_objs = lnk_list_from_input_obj_arr(obj_nodes, new_objs.count);
-
-          lnk_input_import_list_concat_in_place(&input_import_list, &new_imports);
-          lnk_input_obj_list_concat_in_place(&input_obj_list, &new_objs);
-        }
-
-        ProfEnd();
-      } break;
-      case State_SearchEntryPoint: {
-        ProfBegin("Search Entry Point");
-        
-        // loop over all possible subsystems and entry point names and pick
-        // subsystem that has a defined entry point symbol
-        if (config->entry_point_name.size == 0) {
-          PE_WindowsSubsystem  subsys_first       = config->subsystem;
-          PE_WindowsSubsystem  subsys_last        = config->subsystem == PE_WindowsSubsystem_UNKNOWN ? PE_WindowsSubsystem_COUNT : config->subsystem+1;
-          LNK_Symbol          *entry_point_symbol = 0;
-          for (U64 subsys_idx = subsys_first; subsys_idx < subsys_last; subsys_idx += 1) {
-            String8Array entry_points = pe_get_entry_point_names(config->machine, (PE_WindowsSubsystem)subsys_idx, config->file_characteristics);
-            for EachIndex(i, entry_points.count) {
-              LNK_Symbol *symbol = lnk_symbol_table_search(symtab, entry_points.v[i]);
-              if (symbol) {
-                config->subsystem        = subsys_idx;
-                config->entry_point_name = entry_points.v[i];
-                goto found_entry_and_subsystem;
-              }
-            }
-          }
-          found_entry_and_subsystem:;
-        }
-
-        // search for entry point in libs
-        if (config->entry_point_name.size == 0 && config->subsystem != PE_WindowsSubsystem_UNKNOWN) {
-          String8Array entry_points = pe_get_entry_point_names(config->machine, config->subsystem, config->file_characteristics);
-          for EachIndex(entry_idx, entry_points.count) {
-            for EachIndex(i, ArrayCount(lib_index)) {
-              for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
-                if (lnk_search_lib(&lib_n->data, entry_points.v[entry_idx], 0)) {
-                  config->entry_point_name = entry_points.v[entry_idx];
-                  goto found_entry_in_libs;
-                }
-              }
-            }
-          }
-          found_entry_in_libs:;
-        }
-
-        // infer subsystem from entry point name
-        if (config->entry_point_name.size != 0 && config->subsystem == PE_WindowsSubsystem_UNKNOWN) {
-          for EachIndex(subsys_idx, PE_WindowsSubsystem_COUNT) {
-            String8Array entry_points = pe_get_entry_point_names(config->machine, subsys_idx, config->file_characteristics);
-            for EachIndex(i, entry_points.count) {
-              if (str8_match(entry_points.v[i], config->entry_point_name, 0)) {
-                config->subsystem = subsys_idx;
-                goto subsystem_inferred_from_entry;
-              }
-            }
-          }
-          subsystem_inferred_from_entry:;
-        }
-
-        // do we have an entry point name?
-        if (config->entry_point_name.size) {
-          // redirect user entry to appropriate CRT entry
-          String8 crt_entry_point_name = msvcrt_ctr_entry_from_user_entry(config->entry_point_name);
-          config->entry_point_name = crt_entry_point_name.size ? crt_entry_point_name : config->entry_point_name;
-
-          // generate undefined symbol for entry point
-          //
-          // TODO: config_refactor
-          String8List value_strings = {0};
-          str8_list_push(scratch.arena, &value_strings, config->entry_point_name);
-          lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, 0);
-
-          // do we have a subsystem?
-          if (config->subsystem != PE_WindowsSubsystem_UNKNOWN) {
-            // if subsystem version not specified set default values
-            if (config->subsystem_ver.major == 0 && config->subsystem_ver.minor == 0) {
-              config->subsystem_ver = lnk_get_default_subsystem_version(config->subsystem, config->machine);
-            }
-
-            // check subsystem version against allowed min version
-            Version min_subsystem_ver = lnk_get_min_subsystem_version(config->subsystem, config->machine);
-            if (version_compar(config->subsystem_ver, min_subsystem_ver) < 0) {
-              lnk_error(LNK_Error_Cmdl, "subsystem version %I64u.%I64u can't be lower than %I64u.%I64u", 
-                        config->subsystem_ver.major, config->subsystem_ver.minor, min_subsystem_ver.major, min_subsystem_ver.minor);
-            }
-
-            // by default terminal server is enabled for windows and console applications
-            if (~config->flags & LNK_ConfigFlag_NoTsAware && ~config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
-              if (config->subsystem == PE_WindowsSubsystem_WINDOWS_GUI || config->subsystem == PE_WindowsSubsystem_WINDOWS_CUI) {
-                config->dll_characteristics |= PE_DllCharacteristic_TERMINAL_SERVER_AWARE;
-              }
-            }
-          } else {
-            lnk_error(LNK_Error_NoSubsystem, "unknown subsystem, please use /SUBSYSTEM to set subsytem type you need");
-          }
-        }
-
-        ProfEnd();
-      } break;
-      case State_InputLinkerObjs: {
-        {
-          ProfBegin("Push Linker Symbols");
-          LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-          input->path                    = str8_lit("* Linker Symbols *");
-          input->exclude_from_debug_info = 1;
-          input->dedup_id                = input->path;
-          input->data                    = lnk_make_linker_obj(tp_arena->v[0], config);
-          ProfEnd();
-        }
-
-        // warn about unused delayloads
-        if (config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll) {
-          for (String8Node *dll_name_n = config->delay_load_dll_list.first; dll_name_n != 0; dll_name_n = dll_name_n->next) {
-            if (!hash_table_search_path_raw(delayed_imports, dll_name_n->string)) {
-              lnk_error(LNK_Warning_UnusedDelayLoadDll, "/DELAYLOAD: %S found no imports", dll_name_n->string);
-            }
-          }
-        }
-
-        // make and input delayed imports
-        if (delayed_imports->count) {
-          ProfBegin("Build Delay Import Table");
-
-          COFF_TimeStamp   time_stamp         = COFF_TimeStamp_Max;
-          B32              emit_biat          = config->import_table_emit_biat == LNK_SwitchState_Yes;
-          B32              emit_uiat          = config->import_table_emit_uiat == LNK_SwitchState_Yes;
-          String8         *dll_names          = keys_from_hash_table_string(scratch.arena, delayed_imports);
-          String8List    **dll_import_headers = values_from_hash_table_raw(scratch.arena, delayed_imports);
-
-          for EachIndex(dll_idx, delayed_imports->count) {
-            String8 import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_names[dll_idx]);
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx = obj_list.count;
-            input->data      = pe_make_import_dll_obj_delayed(tp_arena->v[0], time_stamp, config->machine, dll_names[dll_idx], config->delay_load_helper_name, import_debug_symbols, *dll_import_headers[dll_idx], emit_biat, emit_uiat);
-            input->path      = dll_names[dll_idx];
-            input->dedup_id  = input->path;
-          }
-          String8 linker_debug_symbols = lnk_make_linker_debug_symbols(tp_arena->v[0], config->machine);
-          {
-            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx               = obj_list.count;
-            input->exclude_from_debug_info = 1;
-            input->data                    = pe_make_null_import_descriptor_delayed(tp_arena->v[0], time_stamp, config->machine, linker_debug_symbols);
-            input->path                    = str8_lit("* Delayed Null Import Descriptor *");
-            input->dedup_id                = input->path;
-          }
-          {
-            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx               = obj_list.count;
-            input->exclude_from_debug_info = 1;
-            input->data                    = pe_make_null_thunk_data_obj_delayed(tp_arena->v[0], lnk_get_image_name(config), time_stamp, config->machine, linker_debug_symbols);
-            input->path                    = str8_lit("* Delayed Null Thunk Data *");
-            input->dedup_id                = input->path;
-          }
-
-          ProfEnd();
-        }
-
-        // make and input static imports
-        if (static_imports->count) {
-          ProfBegin("Build Static Import Table");
-
-          COFF_TimeStamp   time_stamp         = COFF_TimeStamp_Max;
-          String8         *dll_names          = keys_from_hash_table_string(scratch.arena, static_imports);
-          String8List    **dll_import_headers = values_from_hash_table_raw(scratch.arena, static_imports);
-          for EachIndex(dll_idx, static_imports->count) {
-            String8 import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_names[dll_idx]);
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx = obj_list.count;
-            input->data      = pe_make_import_dll_obj_static(tp_arena->v[0], time_stamp, config->machine, dll_names[dll_idx], import_debug_symbols, *dll_import_headers[dll_idx]);
-            input->path      = dll_names[dll_idx];
-            input->dedup_id  = dll_names[dll_idx];
-          }
-          String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);
-          {
-            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx               = obj_list.count;
-            input->exclude_from_debug_info = 1;
-            input->data                    = pe_make_null_import_descriptor_obj(tp_arena->v[0], time_stamp, config->machine, linker_debug_symbols);
-            input->path                    = str8_lit("* Null Import Descriptor *");
-            input->dedup_id                = input->path;
-          }
-          {
-            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx               = obj_list.count;
-            input->exclude_from_debug_info = 1;
-            input->data                    = pe_make_null_thunk_data_obj(tp_arena->v[0], lnk_get_image_name(config), time_stamp, config->machine, linker_debug_symbols);
-            input->path                    = str8_lit("* Null Thunk Data *");
-            input->dedup_id                = input->path;
-          }
-        
-          ProfEnd();
-        }
-
-        if (config->export_symbol_list.count) {
-          ProfBegin("Build Export Table");
-
-          PE_ExportParseList resolved_exports = {0};
-          for (PE_ExportParseNode *exp_n = config->export_symbol_list.first, *exp_n_next; exp_n != 0; exp_n = exp_n_next) {
-            exp_n_next = exp_n->next;
-            PE_ExportParse *exp = &exp_n->data;
-
-            if (str8_match(exp->name, config->entry_point_name, 0)) {
-              lnk_error_with_loc(LNK_Warning_TryingToExportEntryPoint, exp->obj_path, exp->lib_path, "exported entry point \"%S\"", exp->name);
-            }
-            if (str8_match(exp->alias, config->entry_point_name, 0)) {
-              lnk_error_with_loc(LNK_Warning_TryingToExportEntryPoint, exp->obj_path, exp->lib_path, "alias exports entry point \"%S=%S\"", exp->name, exp->alias);
-              continue;
-            }
-
-            if (!exp->is_forwarder) {
-              // filter out unresolved exports
-              LNK_Symbol *symbol = lnk_symbol_table_search(symtab, exp_n->data.name);
-              if (symbol == 0) {
-                lnk_error_with_loc(LNK_Warning_IllExport, exp->obj_path, exp->lib_path, "unresolved export symbol %S\n", exp->name);
-                continue;
-              }
-            }
-
-            // push resolved export
-            pe_export_parse_list_push_node(&resolved_exports, exp_n);
-          }
-
-          PE_FinalizedExports finalized_exports = pe_finalize_export_list(scratch.arena, resolved_exports);
-          String8 edata_obj = pe_make_edata_obj(tp_arena->v[0], str8_skip_last_slash(config->image_name), COFF_TimeStamp_Max, config->machine, finalized_exports);
-
-          LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-          input->path = str8_lit("* Exports *");
-          input->dedup_id = input->path;
-          input->data = edata_obj;
-
-          ProfEnd();
-        }
-
-        {
-          String8List res_data_list = {0};
-          String8List res_path_list = {0};
-          
-          // do we have manifest deps passed through pragma alone?
-          LNK_ManifestOpt manifest_opt = config->manifest_opt;
-          if (config->manifest_dependency_list.node_count > 0 && manifest_opt == LNK_ManifestOpt_Null) {
-            manifest_opt = LNK_ManifestOpt_Embed;
-          }
-
-          switch (manifest_opt) {
-          case LNK_ManifestOpt_Embed: {
-            ProfBegin("Embed Manifest");
-            // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
-            // resource to the tree directly
-            String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
-            String8 manifest_res  = pe_make_manifest_resource(scratch.arena, *config->manifest_resource_id, manifest_data);
-            str8_list_push(scratch.arena, &res_data_list, manifest_res);
-            str8_list_push(scratch.arena, &res_path_list, str8_lit("* Manifest *"));
-            ProfEnd();
-          } break;
-          case LNK_ManifestOpt_WriteToFile: {
-            ProfBeginDynamic("Write Manifest To: %.*s", str8_varg(config->manifest_name));
-            Temp temp = temp_begin(scratch.arena);
-            String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
-            lnk_write_data_to_file_path(config->manifest_name, str8_zero(), manifest_data);
-            temp_end(temp);
-            ProfEnd();
-          } break;
-          case LNK_ManifestOpt_Null: {
-            Assert(config->input_list[LNK_Input_Manifest].node_count == 0);
-            Assert(config->manifest_dependency_list.node_count == 0);
-          } break;
-          case LNK_ManifestOpt_No: {
-            // omit manifest generation
-          } break;
-          }
-          
-          ProfBegin("Load .res files from disk");
-          for (String8Node *node = config->input_list[LNK_Input_Res].first; node != 0; node = node->next) {
-            String8 res_data = lnk_read_data_from_file_path(scratch.arena, config->io_flags, node->string);
-            if (res_data.size > 0) {
-              if (pe_is_res(res_data)) {
-                str8_list_push(scratch.arena, &res_data_list, res_data);
-                String8 stable_res_path = lnk_make_full_path(scratch.arena, config->path_style, config->work_dir, node->string);
-                str8_list_push(scratch.arena, &res_path_list, stable_res_path);
-              } else {
-                lnk_error(LNK_Error_LoadRes, "file is not of RES format: %S", node->string);
-              }
-            } else {
-              lnk_error(LNK_Error_LoadRes, "unable to open res file: %S", node->string);
-            }
-          }
-          ProfEnd();
-          
-          if (res_data_list.node_count > 0) {
-            ProfBegin("Build * Resources *");
-
-            String8 obj_name = str8_lit("* Resources *");
-            String8 obj_data = lnk_make_res_obj(tp_arena->v[0],
-                                                res_data_list,
-                                                res_path_list,
-                                                config->machine,
-                                                config->time_stamp,
-                                                config->work_dir,
-                                                config->path_style,
-                                                obj_name);
-
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->dedup_id     = obj_name;
-            input->path         = obj_name;
-            input->data         = obj_data;
-
-            ProfEnd();
-          }
-        }
-
-        if (lnk_do_debug_info(config)) {
-          {
-            ProfBegin("Build * Linker * Obj");
-
-            String8 obj_name     = str8_lit("* Linker *");
-            String8 raw_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ str8_lit_comp(""),  str8_lit_comp(" "), str8_lit_comp("") });
-            String8 obj_data     = lnk_make_linker_coff_obj(tp_arena->v[0], config->time_stamp, config->machine, config->work_dir, config->image_name, config->pdb_name, raw_cmd_line, obj_name);
-            
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->dedup_id = obj_name;
-            input->path     = obj_name;
-            input->data     = obj_data;
-
-            ProfEnd();
-          }
-
-          {
-            ProfBegin("Build * Debug Directories *");
-            if (config->debug_mode != LNK_DebugMode_None && config->debug_mode != LNK_DebugMode_Null) {
-              LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-              input->exclude_from_debug_info = 1;
-              input->path                    = str8_lit("* Debug Directory PDB *");
-              input->dedup_id                = input->path;
-              input->data                    = pe_make_debug_directory_pdb_obj(tp_arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->pdb_alt_path);
-            }
-            if (config->rad_debug == LNK_SwitchState_Yes) {
-              LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-              input->exclude_from_debug_info = 1;
-              input->path                    = str8_lit("* Debug Directory RDI *");
-              input->dedup_id                = input->path;
-              input->data                    = pe_make_debug_directory_rdi_obj(tp_arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->rad_debug_alt_path);
-            }
-            ProfEnd();
-          }
-        }
-      } break;
-      }
-    }
-    
-    if (*last_disallow_lib) {
-      state_list_push(scratch.arena, state_list, State_InputDisallowLibs);
-      continue;
-    }
-    if (input_import_list.count) {
-      state_list_push(scratch.arena, state_list, State_InputImports);
-      continue;
-    }
-    if (*last_include_symbol) {
-      state_list_push(scratch.arena, state_list, State_InputInclude);
-      continue;
-    }
-    {
-      B32 have_pending_lib_inputs = 0;
-      for EachIndex(i, ArrayCount(input_libs)) {
-        if (*input_libs[i] != 0) {
-          have_pending_lib_inputs = 1;
-          break;
-        }
-      }
-      if (have_pending_lib_inputs) {
-        state_list_push(scratch.arena, state_list, State_InputLibs);
-        continue;
-      }
-    }
-    if (input_obj_list.count) {
-      state_list_push(scratch.arena, state_list, State_InputObjs);
-      continue;
-    }
-    if (*last_delay_load_dll) {
-      state_list_push(scratch.arena, state_list, State_InputDelayLoadDlls);
-      continue;
-    }
-    if (search_flags & SearchFlag_UndefinedAndWeak) {
-      search_flags &= ~SearchFlag_UndefinedAndWeak;
-      state_list_push(scratch.arena, state_list, State_SearchUndefinedAndWeak);
-      continue;
-    }
-    if (search_flags & SearchFlag_WeakAntiDep) {
-      search_flags &= ~SearchFlag_WeakAntiDep;
-      state_list_push(scratch.arena, state_list, State_SearchWeakAntiDep);
-      continue;
-    }
-    if (entry_point_search_attempts == 0) {
-      state_list_push(scratch.arena, state_list, State_SearchEntryPoint);
-      entry_point_search_attempts += 1;
-      continue;
-    }
-    if (input_linker_objs) {
-      input_linker_objs = 0;
-      state_list_push(scratch.arena, state_list, State_InputLinkerObjs);
-      continue;
-    }
-    
-    break;
-  }
-
-  {
-    U64                       chunks_count = 0;
-    LNK_SymbolHashTrieChunk **chunks       = lnk_array_from_symbol_hash_trie_chunk_list(scratch.arena, symtab->chunks, symtab->arena->count, &chunks_count);
-
-    ProfBegin("Replace Unresolved Weak Symbols With Defualt Symbol");
-    {
-      LNK_ReplaceWeakSymbolsWithDefaultSymbolTask task = { .symtab = symtab, .chunks = chunks };
-      tp_for_parallel(tp, 0, chunks_count, lnk_replace_weak_with_default_symbol_task, &task);
-#if BUILD_DEBUG
-      for EachIndex(chunk_idx, chunks_count) {
-        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
-        for EachIndex(i, chunk->count) {
-          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
-          AssertAlways(symbol_interp != COFF_SymbolValueInterp_Weak);
-        }
-      }
-#endif
-    }
-    ProfEnd();
-
-
-    if (config->entry_point_name.size == 0) {
-      lnk_error(LNK_Error_EntryPoint, "unable to find entry point symbol");
-    }
-
-    ProfBegin("Report Unresolved Symbols");
-    {
-      U64 count = 0;
-      for EachIndex(chunk_idx, chunks_count) {
-        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
-        for EachIndex(i, chunk->count) {
-          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
-          if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
-            count += 1;
-          }
-        }
-      }
-
-      U64          cursor     = 0;
-      LNK_Symbol **unresolved = push_array(scratch.arena, LNK_Symbol *, count);
-      for EachIndex(chunk_idx, chunks_count) {
-        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
-        for EachIndex(i, chunk->count) {
-          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
-          if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
-            unresolved[cursor++] = chunk->v[i].symbol;
-          }
-        }
-      }
-
-      radsort(unresolved, count, lnk_symbol_defined_ptr_is_before);
-
-      for EachIndex(i, count) {
-        LNK_Symbol *symbol = unresolved[i];
-        lnk_error_obj(LNK_Error_UnresolvedSymbol, symbol->defined.obj, "unresolved symbol %S", symbol->name);
-      }
-
-      // TODO: /FORCE
-      if (count) {
-        lnk_exit(LNK_Error_UnresolvedSymbol);
-      }
-    }
-    ProfEnd();
-  }
-
-  //
-  // discard COMDAT sections that are not referenced
-  //
-  if (config->opt_ref == LNK_SwitchState_Yes) {
-    lnk_opt_ref(tp, symtab, config, obj_list);
-  }
-
-  //
-  // infer minimal padding size for functions from the target machine
-  //
-  if (config->machine != COFF_MachineType_Unknown && config->infer_function_pad_min) {
-    config->function_pad_min = lnk_get_default_function_pad_min(config->machine);
-    config->infer_function_pad_min = 0;
-  }
-  
-  //
-  // log
-  //
-  if (lnk_get_log_status(LNK_Log_InputObj)) {
-    U64 total_input_size = 0;
-    for (LNK_ObjNode *obj_n = obj_list.first; obj_n != 0; obj_n = obj_n->next) { total_input_size += obj_n->data.data.size; }
-    lnk_log(LNK_Log_InputObj, "[Total Obj Input Size %M]", total_input_size);
-  }
-  if (lnk_get_log_status(LNK_Log_InputLib)) {
-    U64 total_input_size = 0;
-    for EachIndex(i, ArrayCount(lib_index)) {
-      LNK_LibList list = lib_index[i];
-      for (LNK_LibNode *lib_n = list.first; lib_n != 0; lib_n = lib_n->next) { total_input_size += lib_n->data.data.size; }
-    }
-    lnk_log(LNK_Log_InputLib, "[Total Lib Input Size %M]", total_input_size);
-  }
-
-  //
-  // fill out link context
-  //
-  LNK_LinkContext link_ctx        = {0};
-  link_ctx.symtab                 = symtab;
-  link_ctx.objs_count             = obj_list.count;
-  link_ctx.objs                   = lnk_array_from_obj_list(tp_arena->v[0], obj_list);
-  MemoryCopyTyped(&link_ctx.lib_index[0], &lib_index[0], ArrayCount(lib_index));
-
-  ProfEnd();
-  scratch_end(scratch);
-  return link_ctx;
-  
-#undef state_list_push
-#undef state_list_pop
 }
 
 internal B32
@@ -2769,6 +2749,10 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
   String8              symbol_table  = str8_substr(obj->data, obj_header.symbol_table_range);
   String8              string_table  = str8_substr(obj->data, obj_header.string_table_range);
 
+  U32 closest_sect  = 0;
+  U32 closest_reloc = 0;
+  U32 closest_foff  = max_U32;
+
   for EachIndex(sect_idx, obj_header.section_count_no_null) {
     COFF_SectionHeader *section_header = &section_table[sect_idx];
 
@@ -2917,15 +2901,17 @@ THREAD_POOL_TASK_FUNC(lnk_flag_hotpatch_contribs_task)
   U64                 obj_idx = task_id;
   LNK_Obj            *obj     = task->objs[obj_idx];
   
-  COFF_ParsedSymbol symbol;
-  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-    if (interp == COFF_SymbolValueInterp_Regular && COFF_SymbolType_IsFunc(symbol.type)) {
-      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-      LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
-      if (sc != task->null_sc) {
-        sc->hotpatch = !!(section_header->flags & COFF_SectionFlag_CntCode);
+  if (obj->hotpatch) {
+    COFF_ParsedSymbol symbol;
+    for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+      symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+      COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+      if (interp == COFF_SymbolValueInterp_Regular && COFF_SymbolType_IsFunc(symbol.type)) {
+        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
+        LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
+        if (sc != task->null_sc) {
+          sc->hotpatch = !!(section_header->flags & COFF_SectionFlag_CntCode);
+        }
       }
     }
   }
@@ -3859,6 +3845,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   lnk_section_table_push(sectab, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS);
   lnk_section_table_push(sectab, str8_lit(".data" ), PE_DATA_SECTION_FLAGS );
   lnk_section_table_push(sectab, str8_lit(".bss"  ), PE_BSS_SECTION_FLAGS  );
+  lnk_section_table_push(sectab, str8_lit(".pdata"), PE_PDATA_SECTION_FLAGS);
   LNK_Section *common_block_sect = lnk_section_table_search(sectab, str8_lit(".bss"), PE_BSS_SECTION_FLAGS);
 
   LNK_BuildImageTask task = {
@@ -4577,7 +4564,7 @@ lnk_pair_u32_nearest_section(PairU32 *arr, U64 count, LNK_Obj **objs, U32 voff)
 }
 
 internal String8List
-lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs_count, LNK_Obj **objs, LNK_LibList lib_index[LNK_InputSource_Count], LNK_SectionTable *sectab)
+lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs_count, LNK_Obj **objs, U64 libs_count, LNK_Lib **libs, LNK_SectionTable *sectab)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -4687,12 +4674,10 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
   str8_list_pushf(arena, &map, "\n");
 
   ProfBegin("LIBS");
-  for (U64 input_source = 0; input_source < LNK_InputSource_Count; ++input_source) {
-    if (lib_index[input_source].count) {
-      str8_list_pushf(arena, &map, "# LIBS (%S)\n", lnk_string_from_input_source(input_source));
-      for (LNK_LibNode *lib_n = lib_index[input_source].first; lib_n != 0; lib_n = lib_n->next) {
-        str8_list_pushf(arena, &map, "%S\n", lib_n->data.path);
-      }
+  if (libs_count) {
+    str8_list_pushf(arena, &map, "# LIBS\n");
+    for EachIndex(i, libs_count) {
+      str8_list_pushf(arena, &map, "%S\n", libs[i]->path);
     }
   }
   ProfEnd();
@@ -4752,14 +4737,29 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   //
-  // Link Inputs
+  // Input Context
   //
-  LNK_LinkContext link_ctx = lnk_build_link_context(tp, arena, config);
+  LNK_Inputer *inputer = lnk_inputer_init();
 
   //
-  // Image
+  // Symbol Table
   //
-  LNK_ImageContext image_ctx = lnk_build_image(arena, tp, config, link_ctx.symtab, link_ctx.objs_count, link_ctx.objs);
+  LNK_SymbolTable *symtab = lnk_symbol_table_init(arena);
+
+  //
+  // Link Image
+  //
+  LNK_Link *link = lnk_link_image(tp, arena, config, inputer, symtab);
+
+  U64       objs_count = link->objs.count;
+  U64       libs_count = link->libs.count;
+  LNK_Obj **objs       = lnk_array_from_obj_list(scratch.arena, link->objs);
+  LNK_Lib **libs       = lnk_array_from_lib_list(scratch.arena, link->libs);
+
+  //
+  // Layout Image
+  //
+  LNK_ImageContext image_ctx = lnk_build_image(arena, tp, config, symtab, objs_count, objs);
 
   // Write image in the background
   LNK_WriteThreadContext *image_write_ctx = push_array(scratch.arena, LNK_WriteThreadContext, 1);
@@ -4772,7 +4772,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   // RAD Map
   //
   if (config->rad_chunk_map == LNK_SwitchState_Yes) {
-    String8List rad_map = lnk_build_rad_map(scratch.arena, image_ctx.image_data, config, link_ctx.objs_count, link_ctx.objs, link_ctx.lib_index, image_ctx.sectab);
+    String8List rad_map = lnk_build_rad_map(scratch.arena, image_ctx.image_data, config, objs_count, objs, libs_count, libs, image_ctx.sectab);
     lnk_write_data_list_to_file_path(config->rad_chunk_map_name, config->temp_rad_chunk_map_name, rad_map);
   }
 
@@ -4796,18 +4796,18 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     ProfBegin("Debug Info");
     lnk_timer_begin(LNK_Timer_Debug);
 
-    U64       objs_count = 0;
-    LNK_Obj **objs       = push_array(scratch.arena, LNK_Obj *, link_ctx.objs_count);
-    for EachIndex(obj_idx, link_ctx.objs_count) {
-      LNK_Obj *obj = link_ctx.objs[obj_idx];
+    U64       debug_info_objs_count = 0;
+    LNK_Obj **debug_info_objs       = push_array(scratch.arena, LNK_Obj *, objs_count);
+    for EachIndex(obj_idx, objs_count) {
+      LNK_Obj *obj = objs[obj_idx];
       if (obj->exclude_from_debug_info) { continue; }
-      objs[objs_count++] = obj;
+      debug_info_objs[debug_info_objs_count++] = obj;
     }
 
     //
     // CodeView
     //
-    LNK_CodeViewInput input = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, objs_count, objs);
+    LNK_CodeViewInput input = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, debug_info_objs_count, debug_info_objs);
     CV_DebugT        *types = lnk_import_types(tp, arena, &input);
 
     //
@@ -4851,7 +4851,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
                                            arena,
                                            image_ctx.image_data,
                                            config,
-                                           link_ctx.symtab,
+                                           symtab,
                                            input.count,
                                            input.obj_arr,
                                            input.debug_s_arr,

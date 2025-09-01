@@ -10,8 +10,7 @@ lnk_lib_node_is_before(void *a, void *b)
 internal int
 lnk_lib_node_ptr_is_before(void *raw_a, void *raw_b)
 {
-  LNK_LibNode **a = raw_a, **b = raw_b;
-  return lnk_lib_node_is_before(*a, *b);
+  return raw_a < raw_b;
 }
 
 internal B32
@@ -117,7 +116,7 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
   lib_out->symbol_count      = symbol_count;
   lib_out->member_offsets    = member_offsets;
   lib_out->symbol_indices    = symbol_indices;
-  lib_out->was_member_queued = push_array(arena, B8, member_count);
+  lib_out->was_member_linked = push_array(arena, LNK_Symbol *, member_count);
   lib_out->symbol_names      = symbol_names;
   lib_out->long_names        = parse.long_names;
   
@@ -128,13 +127,13 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
 internal
 THREAD_POOL_TASK_FUNC(lnk_lib_initer)
 {
-  LNK_LibIniter *task = raw_task;
+  LNK_LibIniter *task  = raw_task;
+  LNK_Input     *input = task->inputs[task_id];
 
   U64          lib_node_idx = ins_atomic_u64_inc_eval(&task->next_free_lib_idx)-1;
   LNK_LibNode *lib_node     = &task->free_libs[lib_node_idx];
-  lib_node->data.input_idx = task_id;
 
-  B32 is_valid_lib = lnk_lib_from_data(arena, task->data_arr[task_id], task->path_arr[task_id], &lib_node->data);
+  B32 is_valid_lib = lnk_lib_from_data(arena, input->data, input->path, &lib_node->data);
   if (is_valid_lib) {
     U64 valid_lib_idx = ins_atomic_u64_inc_eval(&task->valid_libs_count)-1;
     task->valid_libs[valid_lib_idx] = lib_node;
@@ -142,6 +141,17 @@ THREAD_POOL_TASK_FUNC(lnk_lib_initer)
     U64 invalid_lib_idx = ins_atomic_u64_inc_eval(&task->invalid_libs_count);
     task->invalid_libs[invalid_lib_idx] = lib_node;
   }
+}
+
+internal LNK_Lib **
+lnk_array_from_lib_list(Arena *arena, LNK_LibList list)
+{
+  LNK_Lib **arr = push_array_no_zero(arena, LNK_Lib *, list.count);
+  U64 idx = 0;
+  for (LNK_LibNode *node = list.first; node != 0; node = node->next, ++idx) {
+    arr[idx] = &node->data;
+  }
+  return arr;
 }
 
 internal void
@@ -152,32 +162,31 @@ lnk_lib_list_push_node(LNK_LibList *list, LNK_LibNode *node)
 }
 
 internal LNK_LibNodeArray
-lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, String8Array data_arr, String8Array path_arr)
+lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U64 inputs_count, LNK_Input **inputs)
 {
   Temp scratch = scratch_begin(arena->v, arena->count);
 
-  Assert(data_arr.count == path_arr.count);
-  U64 lib_count = data_arr.count;
+  U64 lib_id_base = list->count;
 
   // parse libs in parallel
   LNK_LibIniter task = {0};
-  task.free_libs     = push_array(arena->v[0], LNK_LibNode, lib_count);
-  task.valid_libs    = push_array(scratch.arena, LNK_LibNode *, lib_count);
-  task.invalid_libs  = push_array(scratch.arena, LNK_LibNode *, lib_count);
-  task.data_arr      = data_arr.v;
-  task.path_arr      = path_arr.v;
-  tp_for_parallel(tp, arena, lib_count, lnk_lib_initer, &task);
+  task.free_libs     = push_array(arena->v[0], LNK_LibNode, inputs_count);
+  task.valid_libs    = push_array(scratch.arena, LNK_LibNode *, inputs_count);
+  task.invalid_libs  = push_array(scratch.arena, LNK_LibNode *, inputs_count);
+  task.inputs        = inputs;
+  tp_for_parallel(tp, arena, inputs_count, lnk_lib_initer, &task);
 
   // report invalid libs
   radsort(task.invalid_libs, task.invalid_libs_count, lnk_lib_node_ptr_is_before);
   for EachIndex(i, task.invalid_libs_count) {
     U64 input_idx = task.invalid_libs[i]->data.input_idx;
-    lnk_error(LNK_Error_InvalidLib, "%S: failed to parse library", path_arr.v[input_idx]);
+    lnk_error(LNK_Error_InvalidLib, "%S: failed to parse library", inputs[input_idx]->path);
   }
 
   // push parsed libs
   radsort(task.valid_libs, task.valid_libs_count, lnk_lib_node_ptr_is_before);
   for EachIndex(i, task.valid_libs_count) {
+    task.valid_libs[i]->data.input_idx = lib_id_base + i;
     lnk_lib_list_push_node(list, task.valid_libs[i]);
   }
 
@@ -185,6 +194,14 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, S
 
   scratch_end(scratch);
   return result;
+}
+
+internal B32
+lnk_flag_member_as_queued(LNK_Lib *lib, U32 member_idx, LNK_Symbol *trigger)
+{
+  LNK_Symbol *slot = ins_atomic_ptr_eval_cond_assign(&lib->was_member_linked[member_idx], trigger, 0);
+  B32 is_first_queue_attempt = (slot == 0);
+  return is_first_queue_attempt;
 }
 
 internal B32
