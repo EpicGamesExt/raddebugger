@@ -16,9 +16,10 @@ lnk_symbol_defined_is_before(void *raw_a, void *raw_b)
 {
   LNK_Symbol *a = raw_a, *b = raw_b;
 
-
-  U32 a_lib_input_idx = a->defined.obj->lib ? a->defined.obj->lib->input_idx : 0;
-  U32 b_lib_input_idx = b->defined.obj->lib ? b->defined.obj->lib->input_idx : 0;
+  LNK_Lib *a_lib = lnk_obj_get_lib(a->defined.obj);
+  LNK_Lib *b_lib = lnk_obj_get_lib(b->defined.obj);
+  U32 a_lib_input_idx = a_lib ? a_lib->input_idx : 0;
+  U32 b_lib_input_idx = b_lib ? b_lib->input_idx : 0;
 
   if (a_lib_input_idx == b_lib_input_idx) {
     if (a->defined.obj->input_idx == b->defined.obj->input_idx) {
@@ -655,6 +656,66 @@ lnk_symbol_table_searchf(LNK_SymbolTable *symtab, char *fmt, ...)
 
   scratch_end(scratch);
   return symbol;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
+{
+  LNK_ReplaceWeakSymbolsWithDefaultSymbolTask *task   = raw_task;
+  LNK_SymbolTable                             *symtab = task->symtab;
+  LNK_SymbolHashTrieChunk                     *chunk  = task->chunks[task_id];
+  for EachIndex(i, chunk->count) {
+    LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+    COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+    COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+    if (symbol_interp == COFF_SymbolValueInterp_Weak) {
+      LNK_SymbolDefined          resolve        = lnk_resolve_weak_symbol(symtab, symbol->defined);
+      COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx(resolve.obj, resolve.symbol_idx);
+      COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
+      if (resolve_interp == COFF_SymbolValueInterp_Weak) {
+        COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol->defined.obj->header.is_big_obj);
+        if (symbol->defined.obj->header.is_big_obj) {
+          COFF_Symbol32 *symbol32  = symbol_parsed.raw_symbol;
+          symbol32->section_number = COFF_Symbol_UndefinedSection;
+          symbol32->value          = 0;
+          symbol32->storage_class  = COFF_SymStorageClass_External;
+        } else {
+          COFF_Symbol16 *symbol16  = symbol_parsed.raw_symbol;
+          symbol16->section_number = COFF_Symbol_UndefinedSection;
+          symbol16->value          = 0;
+          symbol16->storage_class  = COFF_SymStorageClass_External;
+        }
+      } else {
+        symbol->defined = resolve;
+      }
+    }
+  }
+}
+
+internal void
+lnk_replace_weak_with_default_symbols(TP_Context *tp, LNK_SymbolTable *symtab)
+{
+  Temp scratch = scratch_begin(0,0);
+  U64                       chunks_count = 0;
+  LNK_SymbolHashTrieChunk **chunks       = lnk_array_from_symbol_hash_trie_chunk_list(scratch.arena, symtab->chunks, symtab->arena->count, &chunks_count);
+
+  ProfBegin("Replace Unresolved Weak Symbols With Defualt Symbol");
+  LNK_ReplaceWeakSymbolsWithDefaultSymbolTask task = { .symtab = symtab, .chunks = chunks };
+  tp_for_parallel(tp, 0, chunks_count, lnk_replace_weak_with_default_symbol_task, &task);
+
+#if BUILD_DEBUG
+  for EachIndex(chunk_idx, chunks_count) {
+    LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
+    for EachIndex(i, chunk->count) {
+      LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+      COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
+      AssertAlways(symbol_interp != COFF_SymbolValueInterp_Weak);
+    }
+  }
+#endif
+
+  scratch_end(scratch);
+  ProfEnd();
 }
 
 internal ISectOff

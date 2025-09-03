@@ -78,6 +78,14 @@ typedef struct LNK_SymbolTable
   LNK_SymbolHashTrieChunkList *chunks;
 } LNK_SymbolTable;
 
+// --- Workers Contexts --------------------------------------------------------
+
+typedef struct
+{
+  LNK_SymbolTable          *symtab;
+  LNK_SymbolHashTrieChunk **chunks;
+} LNK_ReplaceWeakSymbolsWithDefaultSymbolTask;
+
 // --- Symbol Make -------------------------------------------------------------
 
 internal LNK_Symbol * lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx);
