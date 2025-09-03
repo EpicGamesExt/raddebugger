@@ -76,6 +76,8 @@ struct RDIM2_Shared
   RDIM_TopLevelNameMapBakeResult baked_top_level_name_maps;
   RDIM_NameMapBakeResult baked_name_maps;
   
+  RDIM_SrcFileBakeResult baked_src_files;
+  
   RDI_U64 *scope_local_chunk_lane_counts; // [lane_count * scope_chunk_count]
   RDI_U64 *scope_local_chunk_lane_offs; // [lane_count * scope_chunk_count]
   RDI_U64 *scope_voff_chunk_lane_counts; // [lane_count * scope_chunk_count]
@@ -84,7 +86,6 @@ struct RDIM2_Shared
   RDIM_ScopeBakeResult baked_scopes;
   
   RDIM_UnitBakeResult baked_units;
-  RDIM_SrcFileBakeResult baked_src_files;
   RDIM_TypeNodeBakeResult baked_type_nodes;
   RDIM_UDTBakeResult baked_udts;
   RDIM_LocationBakeResult baked_locations;

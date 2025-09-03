@@ -14,7 +14,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: gather unsorted vmap keys/markers
+  //- rjf: @rdim_bake_stage gather unsorted vmap keys/markers
   //
   ProfScope("gather unsorted vmap keys/markers")
   {
@@ -193,7 +193,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: sort all vmap keys
+  //- rjf: @rdim_bake_stage sort all vmap keys
   //
   ProfScope("sort all vmap keys")
   {
@@ -306,7 +306,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: bake all vmaps
+  //- rjf: @rdim_bake_stage bake all vmaps
   //
   ProfScope("bake all vmaps")
   {
@@ -491,7 +491,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: build interned path tree
+  //- rjf: @rdim_bake_stage build interned path tree
   //
   if(lane_idx() == 0) ProfScope("build interned path tree")
   {
@@ -501,7 +501,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_BakePathTree *path_tree = rdim2_shared->path_tree;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: gather all unsorted, joined, line table info; & sort
+  //- rjf: @rdim_bake_stage gather all unsorted, joined, line table info; & sort
   //
   ProfScope("gather all unsorted, joined, line table info; & sort")
   {
@@ -678,7 +678,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_SortKey **sorted_line_table_keys = rdim2_shared->sorted_line_table_keys;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: build string map
+  //- rjf: @rdim_bake_stage build string map
   //
   ProfScope("build string map")
   {
@@ -916,7 +916,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_BakeStringMapTight *bake_strings = &rdim2_shared->bake_strings;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: build name maps
+  //- rjf: @rdim_bake_stage build name maps
   //
   ProfScope("build name maps")
   {
@@ -1061,7 +1061,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: build index runs
+  //- rjf: @rdim_bake_stage build index runs
   //
   ProfScope("build index runs")
   {
@@ -1281,7 +1281,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_BakeIdxRunMap2 *bake_idx_runs = &rdim2_shared->bake_idx_runs;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: bake strings
+  //- rjf: @rdim_bake_stage bake strings
   //
   ProfScope("bake strings")
   {
@@ -1332,7 +1332,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_StringBakeResult baked_strings = rdim2_shared->baked_strings;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: bake idx runs
+  //- rjf: @rdim_bake_stage bake idx runs
   //
   ProfScope("bake idx runs")
   {
@@ -1365,7 +1365,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_IndexRunBakeResult baked_idx_runs = rdim2_shared->baked_idx_runs;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: bake name maps
+  //- rjf: @rdim_bake_stage bake name maps
   //
   ProfScope("bake name maps")
   {
@@ -1577,7 +1577,32 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: compute layout for scope sub-lists (locals / voffs)
+  //- rjf: @rdim_bake_stage bake src files
+  //
+  ProfScope("bake src files")
+  {
+    //- rjf: set up
+    if(lane_idx() == lane_from_task_idx(0))
+    {
+      rdim2_shared->baked_src_files.source_files_count = params->src_files.total_count+1;
+      rdim2_shared->baked_src_files.source_files = push_array(arena, RDI_SourceFile, rdim2_shared->baked_src_files.source_files_count);
+    }
+    if(lane_idx() == lane_from_task_idx(1))
+    {
+      rdim2_shared->baked_src_files.source_line_maps_count = params->src_files.source_line_map_count+1;
+      rdim2_shared->baked_src_files.source_line_maps = push_array(arena, RDI_SourceLineMap, rdim2_shared->baked_src_files.source_line_maps_count);
+    }
+    lane_sync();
+    
+    //- rjf: bake src files
+    ProfScope("bake src files")
+    {
+      
+    }
+  }
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage compute layout for scope sub-lists (locals / voffs)
   //
   ProfScope("compute layout for scope sub-lists (locals / voffs)")
   {
@@ -1635,7 +1660,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: bake scopes
+  //- rjf: @rdim_bake_stage bake scopes
   //
   ProfScope("bake scopes")
   {
@@ -1708,7 +1733,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: bake units, src files, symbols, types, UDTs
+  //- rjf: @rdim_bake_stage bake units, symbols, types, UDTs
   //
   {
     //- rjf: setup outputs
@@ -1719,75 +1744,65 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(1))
     {
-      rdim2_shared->baked_src_files.source_files_count = params->src_files.total_count+1;
-      rdim2_shared->baked_src_files.source_files = push_array(arena, RDI_SourceFile, rdim2_shared->baked_src_files.source_files_count);
-    }
-    if(lane_idx() == lane_from_task_idx(2))
-    {
-      rdim2_shared->baked_src_files.source_line_maps_count = params->src_files.source_line_map_count+1;
-      rdim2_shared->baked_src_files.source_line_maps = push_array(arena, RDI_SourceLineMap, rdim2_shared->baked_src_files.source_line_maps_count);
-    }
-    if(lane_idx() == lane_from_task_idx(3))
-    {
       rdim2_shared->baked_type_nodes.type_nodes_count = params->types.total_count+1;
       rdim2_shared->baked_type_nodes.type_nodes = push_array(arena, RDI_TypeNode, rdim2_shared->baked_type_nodes.type_nodes_count);
     }
-    if(lane_idx() == lane_from_task_idx(4))
+    if(lane_idx() == lane_from_task_idx(2))
     {
       rdim2_shared->baked_udts.udts_count = params->udts.total_count+1;
       rdim2_shared->baked_udts.udts = push_array(arena, RDI_UDT, rdim2_shared->baked_udts.udts_count);
     }
-    if(lane_idx() == lane_from_task_idx(5))
+    if(lane_idx() == lane_from_task_idx(3))
     {
       rdim2_shared->baked_udts.members_count = params->members.total_count+1;
       rdim2_shared->baked_udts.members = push_array(arena, RDI_Member, rdim2_shared->baked_udts.members_count);
     }
-    if(lane_idx() == lane_from_task_idx(6))
+    if(lane_idx() == lane_from_task_idx(4))
     {
       rdim2_shared->baked_udts.enum_members_count = params->enum_vals.total_count+1;
       rdim2_shared->baked_udts.enum_members = push_array(arena, RDI_EnumMember, rdim2_shared->baked_udts.enum_members_count);
     }
-    if(lane_idx() == lane_from_task_idx(7))
+    if(lane_idx() == lane_from_task_idx(5))
     {
       rdim2_shared->baked_locations.location_data_size = params->locations.total_encoded_size+1;
       rdim2_shared->baked_locations.location_data = push_array(arena, RDI_U8, rdim2_shared->baked_locations.location_data_size);
     }
-    if(lane_idx() == lane_from_task_idx(8))
+    if(lane_idx() == lane_from_task_idx(6))
     {
       rdim2_shared->baked_location_blocks.location_blocks_count = params->location_cases.total_count+1;
       rdim2_shared->baked_location_blocks.location_blocks = push_array(arena, RDI_LocationBlock, rdim2_shared->baked_location_blocks.location_blocks_count);
     }
-    if(lane_idx() == lane_from_task_idx(9))
+    if(lane_idx() == lane_from_task_idx(7))
     {
       rdim2_shared->baked_global_variables.global_variables_count = params->global_variables.total_count+1;
       rdim2_shared->baked_global_variables.global_variables = push_array(arena, RDI_GlobalVariable, rdim2_shared->baked_global_variables.global_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(10))
+    if(lane_idx() == lane_from_task_idx(8))
     {
       rdim2_shared->baked_thread_variables.thread_variables_count = params->thread_variables.total_count+1;
       rdim2_shared->baked_thread_variables.thread_variables = push_array(arena, RDI_ThreadVariable, rdim2_shared->baked_thread_variables.thread_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(11))
+    if(lane_idx() == lane_from_task_idx(9))
     {
       rdim2_shared->baked_constants.constants_count = params->constants.total_count+1;
       rdim2_shared->baked_constants.constants = push_array(arena, RDI_Constant, rdim2_shared->baked_constants.constants_count);
     }
-    if(lane_idx() == lane_from_task_idx(12))
+    if(lane_idx() == lane_from_task_idx(10))
     {
       rdim2_shared->baked_constants.constant_values_count = params->constants.total_count+1;
       rdim2_shared->baked_constants.constant_values = push_array(arena, RDI_U32, rdim2_shared->baked_constants.constant_values_count);
     }
-    if(lane_idx() == lane_from_task_idx(13))
+    if(lane_idx() == lane_from_task_idx(11))
     {
       rdim2_shared->baked_constants.constant_value_data_size = params->constants.total_value_data_size;
       rdim2_shared->baked_constants.constant_value_data = push_array(arena, RDI_U8, rdim2_shared->baked_constants.constant_value_data_size);
     }
-    if(lane_idx() == lane_from_task_idx(14))
+    if(lane_idx() == lane_from_task_idx(12))
     {
       rdim2_shared->baked_procedures.procedures_count = params->procedures.total_count+1;
       rdim2_shared->baked_procedures.procedures = push_array(arena, RDI_Procedure, rdim2_shared->baked_procedures.procedures_count);
     }
-    if(lane_idx() == lane_from_task_idx(15))
+    if(lane_idx() == lane_from_task_idx(13))
     {
       rdim2_shared->baked_inline_sites.inline_sites_count = params->inline_sites.total_count+1;
       rdim2_shared->baked_inline_sites.inline_sites = push_array(arena, RDI_InlineSite, rdim2_shared->baked_inline_sites.inline_sites_count);
@@ -2102,7 +2117,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: bake file paths
+  //- rjf: @rdim_bake_stage bake file paths
   //
   ProfScope("bake file paths")
   {
@@ -2150,7 +2165,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: do small final baking tasks
+  //- rjf: @rdim_bake_stage do small final baking tasks
   //
   ProfScope("do small final baking tasks")
   {
@@ -2185,7 +2200,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: package results
+  //- rjf: @rdim_bake_stage package results
   //
   RDIM_BakeResults result = {0};
   {
