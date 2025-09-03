@@ -1126,7 +1126,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
               }
               
               // rjf: next element hash doesn't match the active? -> push index run, clear active list, start new list
-              if(hash != active_hash && active_idx_count != 0)
+              if(hash != active_hash)
               {
                 if(active_idx_count > 1)
                 {
@@ -1371,7 +1371,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
                 }
               }
             }
-            rdim2_shared->lane_name_map_node_counts[k] += total_unique_name_count;
+            rdim2_shared->lane_name_map_node_counts[k][lane_idx()] += total_unique_name_count;
           }
         }
       }
@@ -1477,34 +1477,38 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
               }
               
               // rjf: next element hash doesn't match the active? -> push index run, clear active list, start new list
-              if(hash != active_hash && active_idx_count != 0)
+              if(hash != active_hash)
               {
-                // rjf: flatten idxes
-                RDI_U64 idxs_count = active_idx_count;
-                RDI_U32 *idxs = rdim_push_array(scratch.arena, RDI_U32, idxs_count);
+                // rjf: has active hash -> flatten & serialize
+                if(active_hash != 0)
                 {
-                  U64 write_idx = 0;
-                  for EachNode(idx_run_n, IdxRunNode, first_idx_run_node)
+                  // rjf: flatten idxes
+                  RDI_U64 idxs_count = active_idx_count;
+                  RDI_U32 *idxs = rdim_push_array(scratch.arena, RDI_U32, idxs_count);
                   {
-                    idxs[write_idx] = (RDI_U32)idx_run_n->idx; // TODO(rjf): @u64_to_u32
-                    write_idx += 1;
+                    U64 write_idx = 0;
+                    for EachNode(idx_run_n, IdxRunNode, first_idx_run_node)
+                    {
+                      idxs[write_idx] = (RDI_U32)idx_run_n->idx; // TODO(rjf): @u64_to_u32
+                      write_idx += 1;
+                    }
                   }
+                  
+                  // rjf: serialize node
+                  RDI_NameMapNode *dst_node = &dst_nodes[write_node_off];
+                  dst_node->string_idx = rdim_bake_idx_from_string(bake_strings, active_string);
+                  dst_node->match_count = idxs_count;
+                  if(dst_node->match_count == 1)
+                  {
+                    dst_node->match_idx_or_idx_run_first = idxs[0];
+                  }
+                  else if(dst_node->match_count > 1)
+                  {
+                    dst_node->match_idx_or_idx_run_first = rdim_bake_idx_from_idx_run_2(bake_idx_runs, idxs, idxs_count);
+                  }
+                  dst_bucket->node_count += 1;
+                  write_node_off += 1;
                 }
-                
-                // rjf: serialize node
-                RDI_NameMapNode *dst_node = &dst_nodes[write_node_off];
-                dst_node->string_idx = rdim_bake_idx_from_string(bake_strings, active_string);
-                dst_node->match_count = idxs_count;
-                if(dst_node->match_count == 1)
-                {
-                  dst_node->match_idx_or_idx_run_first = idxs[0];
-                }
-                else
-                {
-                  dst_node->match_idx_or_idx_run_first = rdim_bake_idx_from_idx_run_2(bake_idx_runs, idxs, idxs_count);
-                }
-                dst_bucket->node_count += 1;
-                write_node_off += 1;
                 
                 // rjf: start new list
                 active_hash = hash;
