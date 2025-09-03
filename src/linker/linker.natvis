@@ -4,6 +4,14 @@
     <DisplayString>{{ name={name} flags={flags} id={id} sort_index={sort_index} }}</DisplayString>
   </Type>
 
+  <Type Name="LNK_LibMemberRef">
+    <Expand>
+      <Item Name="[Link Symbol]">lib->was_member_linked[member_idx]</Item>
+      <Item Name="[Lib]">lib</Item>
+      <Item Name="[Member Index]">member_idx</Item>
+    </Expand>
+  </Type>
+
   <Type Name="U32Array">
     <AlternativeType Name="U64Array"/>
     <Expand>
