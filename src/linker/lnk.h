@@ -9,7 +9,6 @@ typedef struct LNK_LibMemberRef
 {
   LNK_Lib    *lib;
   U32         member_idx;
-
   struct LNK_LibMemberRef *next;
 } LNK_LibMemberRef;
 
@@ -36,7 +35,7 @@ typedef struct LNK_Input
   B32               is_thin;
   B32               has_disk_read_failed;
   B32               exclude_from_debug_info;
-  LNK_LibMemberRef *trigger;
+  LNK_LibMemberRef *link_member;
   void             *loaded_input;
 
   struct LNK_Input *next;
@@ -79,6 +78,8 @@ typedef struct LNK_Inputer
 typedef struct LNK_ImportTables
 {
   Arena     *arena;
+  String8List delayed_dll_names;
+  String8List static_dll_names;
   HashTable *static_imports;
   HashTable *delayed_imports;
   HashTable *import_stub_ht;
@@ -269,9 +270,9 @@ internal LNK_Input * lnk_input_push(Arena *arena, LNK_InputList *list, String8 p
 internal LNK_Input * lnk_inputer_push_linkgen(Arena *arena, LNK_InputList *list, String8 path, String8 data);
 internal LNK_Input * lnk_inputer_push_thin(Arena *arena, LNK_InputList *list, HashTable *ht, String8 full_path);
 
-internal LNK_Input * lnk_inputer_push_obj(LNK_Inputer *inputer, LNK_LibMemberRef *trigger, String8 path, String8 data);
-internal LNK_Input * lnk_inputer_push_obj_linkgen(LNK_Inputer *inputer, LNK_LibMemberRef *trigger, String8 path, String8 data);
-internal LNK_Input * lnk_inputer_push_obj_thin(LNK_Inputer *inputer, LNK_LibMemberRef *trigger, String8 path);
+internal LNK_Input * lnk_inputer_push_obj(LNK_Inputer *inputer, LNK_LibMemberRef *link_member, String8 path, String8 data);
+internal LNK_Input * lnk_inputer_push_obj_linkgen(LNK_Inputer *inputer, LNK_LibMemberRef *link_member, String8 path, String8 data);
+internal LNK_Input * lnk_inputer_push_obj_thin(LNK_Inputer *inputer, LNK_LibMemberRef *link_member, String8 path);
 
 internal LNK_Input * lnk_inputer_push_lib(LNK_Inputer *inputer, LNK_InputSourceType input_source, String8 path, String8 data);
 internal LNK_Input * lnk_inputer_push_lib_linkgen(LNK_Inputer *inputer, LNK_InputSourceType input_source, String8 path, String8 data);

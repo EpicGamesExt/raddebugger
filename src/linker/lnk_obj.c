@@ -15,7 +15,9 @@ internal void
 lnk_error_input_obj(LNK_ErrorCode code, LNK_Input *input, char *fmt, ...)
 {
   va_list args; va_start(args, fmt);
-  lnk_error_with_loc_fv(code, input->path, input->trigger->lib ? input->trigger->lib->path : str8_zero(), fmt, args);
+  LNK_LibMemberRef *link_member = input->link_member;
+  LNK_Lib          *link_lib    = link_member ? link_member->lib : 0;
+  lnk_error_with_loc_fv(code, input->path, link_lib ? link_lib->path : str8_zero(), fmt, args);
   va_end(args);
 }
 
@@ -37,7 +39,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   LNK_Input     *input   = task->inputs[task_id];
   LNK_Obj       *obj     = &task->objs[task_id].data;
 
-  ProfBeginV("Init Obj [%S%s%S]", input->lib_path, (input->lib_path.size ? ": " : 0), input->path);
+  //ProfBeginV("Init Obj [%S%s%S]", input->lib_path, (input->lib_path.size ? ": " : 0), input->path);
 
   //
   // parse obj header
@@ -244,19 +246,20 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     }
   }
   
-  //
-  // extract obj features from compile symbol in .debug$S
-  //
   B8 hotpatch = 0;
   if (header.machine == COFF_MachineType_X64) {
     hotpatch = 1;
-  } else {
+  }
+  //
+  // extract obj features from compile symbol in .debug$S
+  //
+  else {
     Temp scratch = scratch_begin(&arena, 1);
 
     CV_Symbol comp_symbol = {0};
-    for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+    for (U64 sect_idx = 0; sect_idx < header.section_count_no_null; sect_idx += 1) {
       COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
-      String8 name = str8_cstring_capped_reverse(sect_header->name, sect_header->name+sizeof(sect_header->name));
+      String8 name = str8_cstring_capped(sect_header->name, sect_header->name+sizeof(sect_header->name));
       if (str8_match(name, str8_lit(".debug$S"), 0)) {
         Temp temp = temp_begin(scratch.arena);
         String8 debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
@@ -288,14 +291,13 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   // fill out obj
   obj->data                    = input->data;
   obj->path                    = push_str8_copy(arena, input->path);
-  obj->lib                     = input->trigger ? input->trigger->lib : 0;
   obj->header                  = header;
   obj->comdats                 = comdats;
   obj->exclude_from_debug_info = input->exclude_from_debug_info;
   obj->hotpatch                = hotpatch;
   obj->associated_sections     = associated_sections;
   obj->node                    = &task->objs[task_id];
-  obj->trigger_symbol          = input->trigger;
+  obj->link_member             = input->link_member;
 
   ProfEnd();
 }
@@ -454,12 +456,19 @@ lnk_obj_get_vol_md(LNK_Obj *obj)
   return lnk_obj_match_symbol(obj, str8_lit("@vol.md")).value;
 }
 
+internal LNK_Lib *
+lnk_obj_get_lib(LNK_Obj *obj)
+{
+  return obj->link_member ? obj->link_member->lib : 0;
+}
+
 internal String8
 lnk_obj_get_lib_path(LNK_Obj *obj)
 {
   String8 lib_path = {0};
-  if (obj && obj->lib) {
-    lib_path = obj->lib->path;
+  if (obj) {
+    LNK_Lib *lib = lnk_obj_get_lib(obj);
+    lib_path = lib ? lib->path : str8_zero();
   }
   return lib_path;
 }
