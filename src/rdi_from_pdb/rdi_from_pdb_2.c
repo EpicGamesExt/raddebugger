@@ -941,18 +941,21 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       {
         rdim_unit_chunk_list_push(arena, &p2r2_shared->all_units, comp_units->count);
       }
-      p2r2_shared->lanes_line_tables = push_array(arena, RDIM_LineTableChunkList, lane_count());
+      p2r2_shared->lanes_main_line_tables = push_array(arena, RDIM_LineTableChunkList, lane_count());
+      p2r2_shared->lanes_inline_line_tables = push_array(arena, RDIM_LineTableChunkList, lane_count());
       p2r2_shared->lanes_first_inline_site_line_tables = push_array(arena, RDIM_LineTable *, lane_count());
     }
     lane_sync();
     RDIM_Unit *units = p2r2_shared->all_units.first->v;
     U64 units_count = p2r2_shared->all_units.first->count;
-    RDIM_LineTableChunkList *lanes_line_tables = p2r2_shared->lanes_line_tables;
+    RDIM_LineTableChunkList *lanes_main_line_tables = p2r2_shared->lanes_main_line_tables;
+    RDIM_LineTableChunkList *lanes_inline_line_tables = p2r2_shared->lanes_inline_line_tables;
     Assert(units_count == comp_units->count);
     
     //- rjf: do per-lane work
     {
-      RDIM_LineTableChunkList *dst_line_tables = &lanes_line_tables[lane_idx()];
+      RDIM_LineTableChunkList *dst_main_line_tables = &lanes_main_line_tables[lane_idx()];
+      RDIM_LineTableChunkList *dst_inline_line_tables = &lanes_inline_line_tables[lane_idx()];
       
       //- rjf: per-unit line table conversion
       ProfScope("per-unit line table conversion")
@@ -1039,9 +1042,9 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   if(line_table == 0)
                   {
-                    line_table = rdim_line_table_chunk_list_push(arena, dst_line_tables, 256);
+                    line_table = rdim_line_table_chunk_list_push(arena, dst_main_line_tables, 256);
                   }
-                  RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, dst_line_tables, line_table, src_file_node->src_file, lines->voffs, lines->line_nums, lines->col_nums, lines->line_count);
+                  RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, dst_main_line_tables, line_table, src_file_node->src_file, lines->voffs, lines->line_nums, lines->col_nums, lines->line_count);
                 }
               }
             }
@@ -1250,13 +1253,13 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       {
                         if(line_table == 0)
                         {
-                          line_table = rdim_line_table_chunk_list_push(arena, dst_line_tables, 256);
+                          line_table = rdim_line_table_chunk_list_push(arena, dst_inline_line_tables, 256);
                           if(p2r2_shared->lanes_first_inline_site_line_tables[lane_idx()] == 0)
                           {
                             p2r2_shared->lanes_first_inline_site_line_tables[lane_idx()] = line_table;
                           }
                         }
-                        rdim_line_table_push_sequence(arena, dst_line_tables, line_table, src_file_node->src_file, voffs, line_nums, 0, line_count);
+                        rdim_line_table_push_sequence(arena, dst_inline_line_tables, line_table, src_file_node->src_file, voffs, line_nums, 0, line_count);
                       }
                       
                       // rjf: clear line chunks for subsequent sequences
@@ -1300,7 +1303,8 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   }
   lane_sync();
   RDIM_UnitChunkList all_units = p2r2_shared->all_units;
-  RDIM_LineTableChunkList *lanes_line_tables = p2r2_shared->lanes_line_tables;
+  RDIM_LineTableChunkList *lanes_main_line_tables = p2r2_shared->lanes_main_line_tables;
+  RDIM_LineTableChunkList *lanes_inline_line_tables = p2r2_shared->lanes_inline_line_tables;
   RDIM_LineTable **lanes_first_inline_site_line_tables = p2r2_shared->lanes_first_inline_site_line_tables;
   
   //////////////////////////////////////////////////////////////
@@ -1310,7 +1314,11 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   {
     for EachIndex(idx, lane_count())
     {
-      rdim_line_table_chunk_list_concat_in_place(&p2r2_shared->all_line_tables, &p2r2_shared->lanes_line_tables[idx]);
+      rdim_line_table_chunk_list_concat_in_place(&p2r2_shared->all_line_tables, &p2r2_shared->lanes_main_line_tables[idx]);
+    }
+    for EachIndex(idx, lane_count())
+    {
+      rdim_line_table_chunk_list_concat_in_place(&p2r2_shared->all_line_tables, &p2r2_shared->lanes_inline_line_tables[idx]);
     }
   }
   lane_sync();
