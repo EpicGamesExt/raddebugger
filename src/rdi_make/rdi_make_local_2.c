@@ -1678,7 +1678,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         for EachInRange(n_idx, range)
         {
           num_locals_in_this_lane_and_node += n->v[n_idx].local_count;
-          num_voffs_in_this_lane_and_node += n->v[n_idx].voff_ranges.count;
+          num_voffs_in_this_lane_and_node += n->v[n_idx].voff_ranges.count*2;
         }
         rdim2_shared->scope_local_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_locals_in_this_lane_and_node;
         rdim2_shared->scope_voff_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_voffs_in_this_lane_and_node;
@@ -1690,7 +1690,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     // rjf: lay out each lane's range
     if(lane_idx() == 0)
     {
-      U64 local_layout_off = 0;
+      U64 local_layout_off = 1;
       U64 voff_layout_off = 0;
       U64 chunk_idx = 0;
       for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
@@ -1723,7 +1723,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(1))
     {
-      rdim2_shared->baked_scopes.scope_voffs_count = params->scopes.scope_voff_count+1;
+      rdim2_shared->baked_scopes.scope_voffs_count = params->scopes.scope_voff_count;
       rdim2_shared->baked_scopes.scope_voffs = push_array(arena, RDI_U64, rdim2_shared->baked_scopes.scope_voffs_count);
     }
     if(lane_idx() == lane_from_task_idx(2))
@@ -1782,6 +1782,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       }
     }
   }
+  lane_sync();
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake units, symbols, types, UDTs
