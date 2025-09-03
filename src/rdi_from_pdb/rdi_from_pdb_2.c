@@ -471,8 +471,10 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: prep outputs
     ProfScope("prep outputs") if(lane_idx() == 0)
     {
-      p2r2_shared->lane_file_paths = push_array(arena, String8Array, lane_count());
-      p2r2_shared->lane_file_paths_hashes = push_array(arena, U64Array, lane_count());
+      p2r2_shared->lane_inline_file_paths = push_array(arena, String8Array, lane_count());
+      p2r2_shared->lane_line_file_paths = push_array(arena, String8Array, lane_count());
+      p2r2_shared->lane_inline_file_paths_hashes = push_array(arena, U64Array, lane_count());
+      p2r2_shared->lane_line_file_paths_hashes = push_array(arena, U64Array, lane_count());
     }
     lane_sync();
     
@@ -480,7 +482,8 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     ProfScope("do wide gather")
     {
       Temp scratch = scratch_begin(&arena, 1);
-      String8List src_file_paths = {0};
+      String8List inline_src_file_paths = {0};
+      String8List line_src_file_paths = {0};
       
       //- rjf: build local hash table to dedup files within this lane
       U64 hit_path_slots_count = 4096;
@@ -648,7 +651,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       hit_path_node = push_array(scratch.arena, String8Node, 1);
                       SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
                       hit_path_node->string = file_path_normalized;
-                      str8_list_push(arena, &src_file_paths, push_str8_copy(arena, file_path_normalized));
+                      str8_list_push(arena, &inline_src_file_paths, push_str8_copy(arena, file_path_normalized));
                     }
                     line_count = 0;
                   }
@@ -739,7 +742,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                   hit_path_node = push_array(scratch.arena, String8Node, 1);
                   SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
                   hit_path_node->string = file_path_sanitized;
-                  str8_list_push(scratch.arena, &src_file_paths, push_str8_copy(arena, file_path_sanitized));
+                  str8_list_push(scratch.arena, &line_src_file_paths, push_str8_copy(arena, file_path_sanitized));
                 }
               }
             }
@@ -748,27 +751,42 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       }
       
       //- rjf: merge into array for this lane
-      p2r2_shared->lane_file_paths[lane_idx()] = str8_array_from_list(arena, &src_file_paths);
+      p2r2_shared->lane_inline_file_paths[lane_idx()] = str8_array_from_list(arena, &inline_src_file_paths);
+      p2r2_shared->lane_line_file_paths[lane_idx()] = str8_array_from_list(arena, &line_src_file_paths);
       
       //- rjf: hash this lane's file paths
       {
-        String8Array lane_paths = p2r2_shared->lane_file_paths[lane_idx()];
-        U64Array lane_paths_hashes = {0};
-        lane_paths_hashes.count = lane_paths.count;
-        lane_paths_hashes.v = push_array(arena, U64, lane_paths_hashes.count);
-        for EachIndex(idx, lane_paths.count)
+        struct
         {
-          lane_paths_hashes.v[idx] = rdi_hash(lane_paths.v[idx].str, lane_paths.v[idx].size);
+          String8Array paths;
+          U64Array *hashes_out;
         }
-        p2r2_shared->lane_file_paths_hashes[lane_idx()] = lane_paths_hashes;
+        tasks[] =
+        {
+          {p2r2_shared->lane_inline_file_paths[lane_idx()], &p2r2_shared->lane_inline_file_paths_hashes[lane_idx()]},
+          {p2r2_shared->lane_line_file_paths[lane_idx()], &p2r2_shared->lane_line_file_paths_hashes[lane_idx()]},
+        };
+        for EachElement(task_idx, tasks)
+        {
+          U64Array hashes = {0};
+          hashes.count = tasks[task_idx].paths.count;
+          hashes.v = push_array(arena, U64, hashes.count);
+          for EachIndex(idx, tasks[task_idx].paths.count)
+          {
+            hashes.v[idx] = rdi_hash(tasks[task_idx].paths.v[idx].str, tasks[task_idx].paths.v[idx].size);
+          }
+          tasks[task_idx].hashes_out[0] = hashes;
+        }
       }
       
       scratch_end(scratch);
     }
   }
   lane_sync();
-  String8Array *lane_file_paths = p2r2_shared->lane_file_paths;
-  U64Array *lane_file_paths_hashes = p2r2_shared->lane_file_paths_hashes;
+  String8Array *lane_inline_file_paths = p2r2_shared->lane_inline_file_paths;
+  String8Array *lane_line_file_paths = p2r2_shared->lane_line_file_paths;
+  U64Array *lane_inline_file_paths_hashes = p2r2_shared->lane_inline_file_paths_hashes;
+  U64Array *lane_line_file_paths_hashes = p2r2_shared->lane_line_file_paths_hashes;
   
   //////////////////////////////////////////////////////////////
   //- rjf: build unified collection & map for source files
@@ -780,7 +798,8 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       p2r2_shared->total_path_count = 0;
       for EachIndex(idx, lane_count())
       {
-        p2r2_shared->total_path_count += p2r2_shared->lane_file_paths[idx].count;
+        p2r2_shared->total_path_count += lane_line_file_paths[idx].count;
+        p2r2_shared->total_path_count += lane_inline_file_paths[idx].count;
       }
       p2r2_shared->src_file_map.slots_count = p2r2_shared->total_path_count + p2r2_shared->total_path_count/2 + 1;
       p2r2_shared->src_file_map.slots = push_array(arena, P2R_SrcFileNode *, p2r2_shared->src_file_map.slots_count);
@@ -790,28 +809,43 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: fill table
     ProfScope("fill table") if(lane_idx() == 0)
     {
-      for EachIndex(idx, lane_count())
+      struct
       {
-        for EachIndex(path_idx, p2r2_shared->lane_file_paths[idx].count)
+        String8Array *lane_paths;
+        U64Array *lane_hashes;
+      }
+      tasks[] =
+      {
+        {lane_inline_file_paths, lane_inline_file_paths_hashes},
+        {lane_line_file_paths, lane_line_file_paths_hashes},
+      };
+      for EachElement(task_idx, tasks)
+      {
+        for EachIndex(idx, lane_count())
         {
-          String8 file_path_sanitized = p2r2_shared->lane_file_paths[idx].v[path_idx];
-          U64 file_path_sanitized_hash = p2r2_shared->lane_file_paths_hashes[idx].v[path_idx];
-          U64 src_file_slot = file_path_sanitized_hash%p2r2_shared->src_file_map.slots_count;
-          P2R_SrcFileNode *src_file_node = 0;
-          for(P2R_SrcFileNode *n = p2r2_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+          String8Array paths = tasks[task_idx].lane_paths[idx];
+          U64Array hashes = tasks[task_idx].lane_hashes[idx];
+          for EachIndex(path_idx, paths.count)
           {
-            if(str8_match(n->src_file->path, file_path_sanitized, 0))
+            String8 file_path_sanitized = paths.v[path_idx];
+            U64 file_path_sanitized_hash = hashes.v[path_idx];
+            U64 src_file_slot = file_path_sanitized_hash%p2r2_shared->src_file_map.slots_count;
+            P2R_SrcFileNode *src_file_node = 0;
+            for(P2R_SrcFileNode *n = p2r2_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
             {
-              src_file_node = n;
-              break;
+              if(str8_match(n->src_file->path, file_path_sanitized, 0))
+              {
+                src_file_node = n;
+                break;
+              }
             }
-          }
-          if(src_file_node == 0)
-          {
-            src_file_node = push_array(arena, P2R_SrcFileNode, 1);
-            SLLStackPush(p2r2_shared->src_file_map.slots[src_file_slot], src_file_node);
-            src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &p2r2_shared->all_src_files__sequenceless, p2r2_shared->total_path_count);
-            src_file_node->src_file->path = push_str8_copy(arena, file_path_sanitized);
+            if(src_file_node == 0)
+            {
+              src_file_node = push_array(arena, P2R_SrcFileNode, 1);
+              SLLStackPush(p2r2_shared->src_file_map.slots[src_file_slot], src_file_node);
+              src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &p2r2_shared->all_src_files__sequenceless, p2r2_shared->total_path_count);
+              src_file_node->src_file->path = push_str8_copy(arena, file_path_sanitized);
+            }
           }
         }
       }
