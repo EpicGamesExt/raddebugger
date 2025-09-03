@@ -1676,40 +1676,6 @@ lnk_link_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
   lnk_link_inputs_(tp, arena, config, inputer, symtab, link, imps, 1);
 }
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
-{
-  LNK_ReplaceWeakSymbolsWithDefaultSymbolTask *task   = raw_task;
-  LNK_SymbolTable                             *symtab = task->symtab;
-  LNK_SymbolHashTrieChunk                     *chunk  = task->chunks[task_id];
-  for EachIndex(i, chunk->count) {
-    LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-    COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
-    COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-    if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-      LNK_SymbolDefined          resolve        = lnk_resolve_weak_symbol(symtab, symbol->defined);
-      COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx(resolve.obj, resolve.symbol_idx);
-      COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
-      if (resolve_interp == COFF_SymbolValueInterp_Weak) {
-        COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol->defined.obj->header.is_big_obj);
-        if (symbol->defined.obj->header.is_big_obj) {
-          COFF_Symbol32 *symbol32  = symbol_parsed.raw_symbol;
-          symbol32->section_number = COFF_Symbol_UndefinedSection;
-          symbol32->value          = 0;
-          symbol32->storage_class  = COFF_SymStorageClass_External;
-        } else {
-          COFF_Symbol16 *symbol16  = symbol_parsed.raw_symbol;
-          symbol16->section_number = COFF_Symbol_UndefinedSection;
-          symbol16->value          = 0;
-          symbol16->storage_class  = COFF_SymStorageClass_External;
-        }
-      } else {
-        symbol->defined = resolve;
-      }
-    }
-  }
-}
-
 internal LNK_Link *
 lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab)
 {
@@ -1946,6 +1912,65 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   lnk_link_inputs(tp, arena, config, inputer, symtab, link, imps);
 
   //
+  // finalize symbol table
+  //
+  lnk_replace_weak_with_default_symbols(tp, symtab);
+
+  //
+  // was entry point resolved?
+  //
+  if (config->entry_point_name.size == 0 || link->try_to_resolve_entry_point) {
+    lnk_error(LNK_Error_EntryPoint, "unable to find entry point symbol");
+  }
+
+  //
+  // report undefined symbols
+  //
+  {
+    ProfBegin("Report Unresolved Symbols");
+    U64                       chunks_count = 0;
+    LNK_SymbolHashTrieChunk **chunks       = lnk_array_from_symbol_hash_trie_chunk_list(scratch.arena, symtab->chunks, symtab->arena->count, &chunks_count);
+
+    U64 count = 0;
+    for EachIndex(chunk_idx, chunks_count) {
+      LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
+      for EachIndex(i, chunk->count) {
+        LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+        COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
+        if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
+          count += 1;
+        }
+      }
+    }
+
+    U64          cursor     = 0;
+    LNK_Symbol **unresolved = push_array(scratch.arena, LNK_Symbol *, count);
+    for EachIndex(chunk_idx, chunks_count) {
+      LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
+      for EachIndex(i, chunk->count) {
+        LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+        COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
+        if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
+          unresolved[cursor++] = chunk->v[i].symbol;
+        }
+      }
+    }
+
+    radsort(unresolved, count, lnk_symbol_defined_ptr_is_before);
+
+    for EachIndex(i, count) {
+      LNK_Symbol *symbol = unresolved[i];
+      lnk_error_obj(LNK_Error_UnresolvedSymbol, symbol->defined.obj, "unresolved symbol %S", symbol->name);
+    }
+
+    // TODO: /FORCE
+    if (count) {
+      lnk_exit(LNK_Error_UnresolvedSymbol);
+    }
+    ProfEnd();
+  }
+
+  //
   // warn about unused delayloads
   //
   if (config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll) {
@@ -1954,77 +1979,6 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
         lnk_error(LNK_Warning_UnusedDelayLoadDll, "/DELAYLOAD: %S found no imports", dll_name_n->string);
       }
     }
-  }
-
-  //
-  // report undefined symbols
-  //
-  {
-    U64                       chunks_count = 0;
-    LNK_SymbolHashTrieChunk **chunks       = lnk_array_from_symbol_hash_trie_chunk_list(scratch.arena, symtab->chunks, symtab->arena->count, &chunks_count);
-
-    ProfBegin("Replace Unresolved Weak Symbols With Defualt Symbol");
-    {
-      LNK_ReplaceWeakSymbolsWithDefaultSymbolTask task = { .symtab = symtab, .chunks = chunks };
-      tp_for_parallel(tp, 0, chunks_count, lnk_replace_weak_with_default_symbol_task, &task);
-#if BUILD_DEBUG
-      for EachIndex(chunk_idx, chunks_count) {
-        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
-        for EachIndex(i, chunk->count) {
-          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
-          AssertAlways(symbol_interp != COFF_SymbolValueInterp_Weak);
-        }
-      }
-#endif
-    }
-    ProfEnd();
-
-
-    if (config->entry_point_name.size == 0) {
-      lnk_error(LNK_Error_EntryPoint, "unable to find entry point symbol");
-    }
-
-    ProfBegin("Report Unresolved Symbols");
-    {
-      U64 count = 0;
-      for EachIndex(chunk_idx, chunks_count) {
-        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
-        for EachIndex(i, chunk->count) {
-          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
-          if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
-            count += 1;
-          }
-        }
-      }
-
-      U64          cursor     = 0;
-      LNK_Symbol **unresolved = push_array(scratch.arena, LNK_Symbol *, count);
-      for EachIndex(chunk_idx, chunks_count) {
-        LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
-        for EachIndex(i, chunk->count) {
-          LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-          COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
-          if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
-            unresolved[cursor++] = chunk->v[i].symbol;
-          }
-        }
-      }
-
-      radsort(unresolved, count, lnk_symbol_defined_ptr_is_before);
-
-      for EachIndex(i, count) {
-        LNK_Symbol *symbol = unresolved[i];
-        lnk_error_obj(LNK_Error_UnresolvedSymbol, symbol->defined.obj, "unresolved symbol %S", symbol->name);
-      }
-
-      // TODO: /FORCE
-      if (count) {
-        lnk_exit(LNK_Error_UnresolvedSymbol);
-      }
-    }
-    ProfEnd();
   }
 
   //
