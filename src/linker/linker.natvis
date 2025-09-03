@@ -184,6 +184,9 @@
   </Type>
 
 	<Type Name="BucketList">
+    <AlternativeType Name="LNK_IncludeSymbolList"/>
+    <AlternativeType Name="LNK_AltNameList"/>
+    <AlternativeType Name="LNK_MergeDirectiveList"/>
     <DisplayString Condition="first == 0">empty</DisplayString>
 		<Expand>
 			<LinkedListItems>
@@ -193,16 +196,28 @@
 			</LinkedListItems>
 		</Expand>
 	</Type>
+
   <Type Name="HashTable">
     <Expand>
       <Item Name="[cap]">cap</Item>
       <Item Name="[count]">count</Item>
       <Item Name="[free buckets]">free_buckets</Item>
-      <ArrayItems>
-        <Size>cap</Size>
-        <ValuePointer>buckets</ValuePointer>
-      </ArrayItems>
+      <CustomListItems MaxItemsPerView="512">
+        <Variable Name="bucket_idx" InitialValue="0"/>
+        <Variable Name="node" InitialValue="buckets[0].first"/>
+        <Loop>
+          <Exec>node = buckets[bucket_idx].first</Exec>
+          <Break Condition="bucket_idx >= cap"/>
+          <Loop>
+            <Break Condition="node == 0"/>
+            <Item>node</Item>
+            <Exec>node = node->next</Exec>
+          </Loop>
+          <Exec>bucket_idx += 1</Exec>
+        </Loop>
+      </CustomListItems>
     </Expand>
   </Type>
+
 </AutoVisualizer>
 
