@@ -33,7 +33,7 @@ pe_make_indirect_jump_thunk_x64(COFF_ObjWriter *obj_writer, COFF_ObjSection *cod
   static const U64 JMP_OPERAND_OFFSET = 2;
   coff_obj_writer_section_push_reloc(obj_writer, code_sect, jmp_data_offset + JMP_OPERAND_OFFSET, iat_symbol, COFF_Reloc_X64_Rel32); 
   
-  COFF_ObjSymbol *jmp_thunk_symbol = coff_obj_writer_push_symbol_extern(obj_writer, thunk_name, jmp_data_offset, code_sect);
+  COFF_ObjSymbol *jmp_thunk_symbol = coff_obj_writer_push_symbol_extern_func(obj_writer, thunk_name, jmp_data_offset, code_sect);
 
   ProfEnd();
   return jmp_thunk_symbol;
@@ -64,7 +64,7 @@ pe_make_load_thunk_x64(COFF_ObjWriter *obj_writer, COFF_ObjSection *code_sect, C
 
   // emit symbol
   String8         thunk_name        = push_str8f(obj_writer->arena, "__imp_load_%S", func_name);
-  COFF_ObjSymbol *load_thunk_symbol = coff_obj_writer_push_symbol_extern(obj_writer, thunk_name, load_thunk_data_offset, code_sect);
+  COFF_ObjSymbol *load_thunk_symbol = coff_obj_writer_push_symbol_extern_func(obj_writer, thunk_name, load_thunk_data_offset, code_sect);
   
   ProfEnd();
   return load_thunk_symbol;
