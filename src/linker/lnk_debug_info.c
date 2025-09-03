@@ -3021,9 +3021,9 @@ THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_defined_task)
     U64            node_idx = 0;
     for EachIndex(i, chunk->count) {
       LNK_Symbol        *symbol        = chunk->v[i].symbol;
-      COFF_ParsedSymbol  symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+      COFF_ParsedSymbol  symbol_parsed = lnk_parse_symbol(symbol);
 
-      if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol->defined.obj)) { continue; }
+      if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol->ref.obj)) { continue; }
 
       COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
       if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }

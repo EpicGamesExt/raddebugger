@@ -5,17 +5,17 @@
 
 // --- Symbol ------------------------------------------------------------------
 
-typedef struct LNK_SymbolDefined
+typedef struct LNK_ObjSymbolRef
 {
   struct LNK_Obj *obj;
   U32             symbol_idx;
-} LNK_SymbolDefined;
+} LNK_ObjSymbolRef;
 
 typedef struct LNK_Symbol
 {
-  String8           name;
-  B8                is_lib_member_linked;
-  LNK_SymbolDefined defined;
+  String8          name;
+  B8               is_lib_member_linked;
+  LNK_ObjSymbolRef ref;
 } LNK_Symbol;
 
 // --- Symbol Containers -------------------------------------------------------
@@ -88,7 +88,7 @@ typedef struct
 
 // --- Symbol Make -------------------------------------------------------------
 
-internal LNK_Symbol * lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx);
+internal LNK_Symbol * lnk_make_obj_ref_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx);
 
 // --- Symbol Containers ------------------------------------------------------
 
@@ -109,9 +109,9 @@ internal LNK_SymbolHashTrieChunk ** lnk_array_from_symbol_hash_trie_chunk_list(A
 
 // --- Symbol Helpers ----------------------------------------------------------
 
-internal COFF_ParsedSymbol          lnk_parsed_symbol_from_defined(LNK_Symbol *symbol);
-internal COFF_SymbolValueInterpType lnk_interp_from_symbol(LNK_Symbol *symbol);
-internal LNK_SymbolDefined          lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol);
+internal COFF_ParsedSymbol          lnk_parse_symbol(LNK_Symbol *symbol);
+internal COFF_SymbolValueInterpType lnk_interp_symbol(LNK_Symbol *symbol);
+internal LNK_ObjSymbolRef           lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol);
 
 // --- Symbol Table ------------------------------------------------------------
 
