@@ -66,7 +66,15 @@ struct RDIM2_Shared
   RDIM_BakeIdxRunMap2 bake_idx_runs;
   
   RDIM_StringBakeResult baked_strings;
+  
   RDIM_IndexRunBakeResult baked_idx_runs;
+  
+  RDI_U64 *lane_name_map_node_counts[RDI_NameMapKind_COUNT];
+  RDI_U64 *lane_name_map_node_offs[RDI_NameMapKind_COUNT];
+  RDI_U64 name_map_node_counts[RDI_NameMapKind_COUNT];
+  RDI_U64 total_name_map_node_count;
+  RDIM_TopLevelNameMapBakeResult baked_top_level_name_maps;
+  RDIM_NameMapBakeResult baked_name_maps;
   
   RDI_U64 *scope_local_chunk_lane_counts; // [lane_count * scope_chunk_count]
   RDI_U64 *scope_local_chunk_lane_offs; // [lane_count * scope_chunk_count]
@@ -86,6 +94,9 @@ struct RDIM2_Shared
   RDIM_ConstantsBakeResult baked_constants;
   RDIM_ProcedureBakeResult baked_procedures;
   RDIM_InlineSiteBakeResult baked_inline_sites;
+  
+  RDIM_BakePathNode **baked_file_path_src_nodes;
+  RDIM_FilePathBakeResult baked_file_paths;
   
   RDIM_TopLevelInfoBakeResult baked_top_level_info;
   RDIM_BinarySectionBakeResult baked_binary_sections;

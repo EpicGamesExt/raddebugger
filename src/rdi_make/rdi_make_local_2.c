@@ -1333,6 +1333,214 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_IndexRunBakeResult baked_idx_runs = rdim2_shared->baked_idx_runs;
   
   //////////////////////////////////////////////////////////////
+  //- rjf: bake name maps
+  //
+  ProfScope("bake name maps")
+  {
+    // rjf: count unique names in all name maps; lay out baked nodes
+    ProfScope("count unique names in all name maps; lay out baked nodes")
+    {
+      if(lane_idx() == 0)
+      {
+        for EachNonZeroEnumVal(RDI_NameMapKind, k)
+        {
+          rdim2_shared->lane_name_map_node_counts[k] = push_array(arena, U64, lane_count());
+          rdim2_shared->lane_name_map_node_offs[k] = push_array(arena, U64, lane_count());
+        }
+      }
+      lane_sync();
+      for EachNonZeroEnumVal(RDI_NameMapKind, k)
+      {
+        RDIM_BakeNameMapTopology *top = &rdim2_shared->bake_name_map_topology[k];
+        RDIM_BakeNameMap2 *map = rdim2_shared->bake_name_maps[k];
+        Rng1U64 range = lane_range(top->slots_count);
+        for EachInRange(idx, range)
+        {
+          if(map->slots[idx] != 0)
+          {
+            U64 total_unique_name_count = 0;
+            U64 last_hash = 0;
+            for EachNode(n, RDIM_BakeNameChunkNode, map->slots[idx]->first)
+            {
+              for EachIndex(n_idx, n->count)
+              {
+                if(n->v[n_idx].hash != last_hash)
+                {
+                  total_unique_name_count += 1;
+                  last_hash = n->v[n_idx].hash;
+                }
+              }
+            }
+            rdim2_shared->lane_name_map_node_counts[k] += total_unique_name_count;
+          }
+        }
+      }
+      lane_sync();
+      if(lane_idx() == 0)
+      {
+        for EachNonZeroEnumVal(RDI_NameMapKind, k)
+        {
+          RDI_U64 node_off = 0;
+          for EachIndex(l_idx, lane_count())
+          {
+            rdim2_shared->name_map_node_counts[k] += rdim2_shared->lane_name_map_node_counts[k][l_idx];
+            rdim2_shared->lane_name_map_node_offs[k][l_idx] = node_off;
+            node_off += rdim2_shared->lane_name_map_node_counts[k][l_idx];
+          }
+          rdim2_shared->total_name_map_node_count += rdim2_shared->name_map_node_counts[k];
+        }
+      }
+    }
+    lane_sync();
+    
+    // rjf: setup
+    ProfScope("setup")
+    {
+      if(lane_idx() == lane_from_task_idx(0))
+      {
+        rdim2_shared->baked_top_level_name_maps.name_maps_count = RDI_NameMapKind_COUNT;
+        rdim2_shared->baked_top_level_name_maps.name_maps = push_array(arena, RDI_NameMap, rdim2_shared->baked_top_level_name_maps.name_maps_count);
+        RDI_U32 bucket_off = 0;
+        RDI_U32 node_off = 0;
+        for EachNonZeroEnumVal(RDI_NameMapKind, k)
+        {
+          rdim2_shared->baked_top_level_name_maps.name_maps[k].bucket_base_idx = bucket_off;
+          rdim2_shared->baked_top_level_name_maps.name_maps[k].node_base_idx = node_off;
+          rdim2_shared->baked_top_level_name_maps.name_maps[k].bucket_count = (RDI_U32)rdim2_shared->bake_name_map_topology[k].slots_count; // TODO(rjf): @u64_to_u32
+          rdim2_shared->baked_top_level_name_maps.name_maps[k].node_count = (RDI_U32)rdim2_shared->name_map_node_counts[k]; // TODO(rjf): @u64_to_u32
+          bucket_off += rdim2_shared->baked_top_level_name_maps.name_maps[k].bucket_count;
+          node_off += rdim2_shared->baked_top_level_name_maps.name_maps[k].node_count;
+        }
+        rdim2_shared->baked_name_maps.buckets_count = bucket_off;
+        rdim2_shared->baked_name_maps.buckets = push_array(arena, RDI_NameMapBucket, rdim2_shared->baked_name_maps.buckets_count);
+      }
+      if(lane_idx() == lane_from_task_idx(1))
+      {
+        rdim2_shared->baked_name_maps.nodes_count = rdim2_shared->total_name_map_node_count;
+        rdim2_shared->baked_name_maps.nodes = push_array(arena, RDI_NameMapNode, rdim2_shared->baked_name_maps.nodes_count);
+      }
+    }
+    lane_sync();
+    
+    // rjf: wide fill baked name maps
+    ProfScope("wide fill baked name maps")
+    {
+      for EachNonZeroEnumVal(RDI_NameMapKind, k) ProfScope("wide fill (%.*s)", str8_varg(rdi_string_from_name_map_kind(k)))
+      {
+        RDI_U64 write_node_off = rdim2_shared->lane_name_map_node_offs[k][lane_idx()];
+        RDIM_BakeNameMapTopology *top = &rdim2_shared->bake_name_map_topology[k];
+        U64 slots_count = top->slots_count;
+        RDIM_BakeNameMap2 *src_map = rdim2_shared->bake_name_maps[k];
+        RDI_NameMap *dst_map = &rdim2_shared->baked_top_level_name_maps.name_maps[k];
+        RDI_NameMapBucket *dst_buckets = rdim2_shared->baked_name_maps.buckets + dst_map->bucket_base_idx;
+        RDI_NameMapNode *dst_nodes = rdim2_shared->baked_name_maps.nodes + dst_map->node_base_idx;
+        Rng1U64 slot_range = lane_range(slots_count);
+        for EachInRange(slot_idx, slot_range)
+        {
+          RDIM_BakeNameChunkList *src_slot = src_map->slots[slot_idx];
+          if(src_slot == 0) { continue; }
+          RDI_NameMapBucket *dst_bucket = &dst_buckets[slot_idx];
+          dst_bucket->first_node = write_node_off;
+          {
+            Temp scratch = scratch_begin(&arena, 1);
+            typedef struct IdxRunNode IdxRunNode;
+            struct IdxRunNode
+            {
+              IdxRunNode *next;
+              RDI_U64 idx;
+            };
+            IdxRunNode *first_idx_run_node = 0;
+            IdxRunNode *last_idx_run_node = 0;
+            U64 active_idx_count = 0;
+            U64 active_hash = 0;
+            String8 active_string = {0};
+            RDIM_BakeNameChunkNode *n = src_slot->first;
+            U64 n_idx = 0;
+            for(;;)
+            {
+              // rjf: advance chunk
+              if(n != 0 && n_idx >= n->count)
+              {
+                n = n->next;
+                n_idx = 0;
+              }
+              
+              // rjf: grab next element
+              U64 hash = 0;
+              U64 idx = 0;
+              String8 string = {0};
+              if(n != 0)
+              {
+                hash   = n->v[n_idx].hash;
+                idx    = n->v[n_idx].idx;
+                string = n->v[n_idx].string;
+              }
+              
+              // rjf: next element hash doesn't match the active? -> push index run, clear active list, start new list
+              if(hash != active_hash && active_idx_count != 0)
+              {
+                // rjf: flatten idxes
+                RDI_U64 idxs_count = active_idx_count;
+                RDI_U32 *idxs = rdim_push_array(scratch.arena, RDI_U32, idxs_count);
+                {
+                  U64 write_idx = 0;
+                  for EachNode(idx_run_n, IdxRunNode, first_idx_run_node)
+                  {
+                    idxs[write_idx] = (RDI_U32)idx_run_n->idx; // TODO(rjf): @u64_to_u32
+                    write_idx += 1;
+                  }
+                }
+                
+                // rjf: serialize node
+                RDI_NameMapNode *dst_node = &dst_nodes[write_node_off];
+                dst_node->string_idx = rdim_bake_idx_from_string(bake_strings, active_string);
+                dst_node->match_count = idxs_count;
+                if(dst_node->match_count == 1)
+                {
+                  dst_node->match_idx_or_idx_run_first = idxs[0];
+                }
+                else
+                {
+                  dst_node->match_idx_or_idx_run_first = rdim_bake_idx_from_idx_run_2(bake_idx_runs, idxs, idxs_count);
+                }
+                dst_bucket->node_count += 1;
+                write_node_off += 1;
+                
+                // rjf: start new list
+                active_hash = hash;
+                active_string = string;
+                first_idx_run_node = 0;
+                last_idx_run_node = 0;
+                temp_end(scratch);
+              }
+              
+              // rjf: hash matches the active list -> push
+              if(hash != 0 && hash == active_hash)
+              {
+                IdxRunNode *idx_run_n = push_array(scratch.arena, IdxRunNode, 1);
+                idx_run_n->idx = idx;
+                SLLQueuePush(first_idx_run_node, last_idx_run_node, idx_run_n);
+                active_idx_count += 1;
+              }
+              
+              // rjf: advance index
+              n_idx += 1;
+              
+              // rjf: end on zero node
+              if(n == 0)
+              {
+                break;
+              }
+            }
+            scratch_end(scratch);
+          }
+        }
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: compute layout for scope sub-lists (locals / voffs)
   //
   ProfScope("compute layout for scope sub-lists (locals / voffs)")
@@ -1858,17 +2066,84 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: do final baking tasks
+  //- rjf: bake file paths
   //
-  ProfScope("do final baking tasks")
+  ProfScope("bake file paths")
+  {
+    // rjf: set up
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->baked_file_paths.nodes_count = path_tree->count;
+      rdim2_shared->baked_file_paths.nodes = push_array(arena, RDI_FilePathNode, rdim2_shared->baked_file_paths.nodes_count);
+      rdim2_shared->baked_file_path_src_nodes = push_array(arena, RDIM_BakePathNode *, rdim2_shared->baked_file_paths.nodes_count);
+      {
+        U64 idx = 0;
+        for(RDIM_BakePathNode *n = path_tree->first; n != 0; n = n->next_order)
+        {
+          rdim2_shared->baked_file_path_src_nodes[idx] = n;
+          idx += 1;
+        }
+      }
+    }
+    lane_sync();
+    
+    // rjf: fill
+    {
+      Rng1U64 range = lane_range(rdim2_shared->baked_file_paths.nodes_count);
+      for EachInRange(idx, range)
+      {
+        RDIM_BakePathNode *src = rdim2_shared->baked_file_path_src_nodes[idx];
+        RDI_FilePathNode *dst = &rdim2_shared->baked_file_paths.nodes[idx];
+        dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
+        dst->source_file_idx = rdim_idx_from_src_file(src->src_file);
+        if(src->parent != 0)
+        {
+          dst->parent_path_node = src->parent->idx;
+        }
+        if(src->first_child != 0)
+        {
+          dst->first_child = src->first_child->idx;
+        }
+        if(src->next_sibling != 0)
+        {
+          dst->next_sibling = src->next_sibling->idx;
+        }
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: do small final baking tasks
+  //
+  ProfScope("do small final baking tasks")
   {
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("bake top level info")
     {
-      rdim2_shared->baked_top_level_info = rdim_bake_top_level_info(arena, bake_strings, &params->top_level_info);
+      rdim2_shared->baked_top_level_info.top_level_info.arch                     = params->top_level_info.arch;
+      rdim2_shared->baked_top_level_info.top_level_info.exe_name_string_idx      = rdim_bake_idx_from_string(bake_strings, params->top_level_info.exe_name);
+      rdim2_shared->baked_top_level_info.top_level_info.exe_hash                 = params->top_level_info.exe_hash;
+      rdim2_shared->baked_top_level_info.top_level_info.voff_max                 = params->top_level_info.voff_max;
+      rdim2_shared->baked_top_level_info.top_level_info.producer_name_string_idx = rdim_bake_idx_from_string(bake_strings, params->top_level_info.producer_name);
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("bake binary sections")
     {
-      rdim2_shared->baked_binary_sections = rdim_bake_binary_sections(arena, bake_strings, &params->binary_sections);
+      RDIM_BinarySectionList *src = &params->binary_sections;
+      RDI_BinarySection *dst_base = rdim_push_array(arena, RDI_BinarySection, src->count+1);
+      U64 dst_idx = 1;
+      for(RDIM_BinarySectionNode *src_n = src->first; src_n != 0; src_n = src_n->next, dst_idx += 1)
+      {
+        RDIM_BinarySection *src = &src_n->v;
+        RDI_BinarySection *dst = &dst_base[dst_idx];
+        dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
+        dst->flags           = src->flags;
+        dst->voff_first      = src->voff_first;
+        dst->voff_opl        = src->voff_opl;
+        dst->foff_first      = src->foff_first;
+        dst->foff_opl        = src->foff_opl;
+      }
+      rdim2_shared->baked_binary_sections.binary_sections = dst_base;
+      rdim2_shared->baked_binary_sections.binary_sections_count = dst_idx;
     }
   }
   lane_sync();
@@ -1894,9 +2169,9 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     result.scopes                 = rdim2_shared->baked_scopes;
     result.inline_sites           = rdim2_shared->baked_inline_sites;
     result.scope_vmap             = rdim2_shared->baked_scope_vmap;
-    // result.top_level_name_maps    = rdim2_shared->baked_top_level_name_maps;
-    // result.name_maps              = rdim2_shared->baked_name_maps;
-    // result.file_paths             = rdim2_shared->baked_file_paths;
+    result.top_level_name_maps    = rdim2_shared->baked_top_level_name_maps;
+    result.name_maps              = rdim2_shared->baked_name_maps;
+    result.file_paths             = rdim2_shared->baked_file_paths;
     result.strings                = rdim2_shared->baked_strings;
     result.idx_runs               = rdim2_shared->baked_idx_runs;
     // result.location_blocks        = rdim2_shared->baked_location_blocks;
