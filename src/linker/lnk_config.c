@@ -1162,8 +1162,6 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
             lnk_error_obj(LNK_Error_AlternateNameConflict, obj, "conflicting alternative name: existing '%S=%S' vs. new '%S=%S'", alt_name.from, to_extant, alt_name.from, alt_name.to);
           }
         } else {
-          hash_table_push_string_string(config->arena, config->alt_name_ht, alt_name.from, alt_name.to);
-
           alt_name.from = push_str8_copy(config->arena, alt_name.from);
           alt_name.to   = push_str8_copy(config->arena, alt_name.to);
 
@@ -1172,6 +1170,8 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
           SLLQueuePush(config->alt_name_list.first, config->alt_name_list.last, alt_name_n);
           config->alt_name_list.count += 1;
+
+          hash_table_push_string_string(config->arena, config->alt_name_ht, alt_name.from, alt_name.to);
         }
       }
     } else {
