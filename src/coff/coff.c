@@ -477,7 +477,7 @@ coff_string_from_time_stamp(Arena *arena, COFF_TimeStamp time_stamp)
   return result;
 }
 
-read_only struct
+global read_only struct
 {
   String8          string;
   COFF_MachineType machine;
@@ -509,7 +509,7 @@ read_only struct
   { str8_lit_comp("WceMipsV2"), COFF_MachineType_WceMipsV2 },
 };
 
-read_only static struct {
+global read_only struct {
   char *                name;
   COFF_ImportType type;
 } g_coff_import_header_type_map[] = {

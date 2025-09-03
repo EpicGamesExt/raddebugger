@@ -23,6 +23,10 @@
  * See md5.c for more information.
  */
 
+#ifndef MD5_API
+# define MD5_API
+#endif
+
 #ifdef HAVE_OPENSSL
 #include <openssl/md5.h>
 #elif !defined(_MD5_H)
@@ -38,8 +42,8 @@ typedef struct {
 	MD5_u32plus block[16];
 } MD5_CTX;
 
-extern void MD5_Init(MD5_CTX *ctx);
-extern void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
-extern void MD5_Final(unsigned char *result, MD5_CTX *ctx);
+MD5_API void MD5_Init(MD5_CTX *ctx);
+MD5_API void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
+MD5_API void MD5_Final(unsigned char *result, MD5_CTX *ctx);
 
 #endif

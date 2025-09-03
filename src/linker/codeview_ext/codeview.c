@@ -1175,6 +1175,7 @@ cv_debug_t_array_count_leaves(U64 count, CV_DebugT *arr)
   return total_leaf_count;
 }
 
+internal
 THREAD_POOL_TASK_FUNC(cv_str8_list_from_debug_t_task)
 {
   CV_Str8ListFromDebugT *task = raw_task;
@@ -1785,7 +1786,7 @@ cv_c13_patch_checksum_offsets_in_frame_data_list(String8List frame_data, U32 che
 ////////////////////////////////
 // $$Lines Accel
 
-int
+internal int
 cv_c13_voff_map_compar(const void *raw_a, const void *raw_b)
 {
   CV_Line *a = (CV_Line*)raw_a;
