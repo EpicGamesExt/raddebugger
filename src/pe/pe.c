@@ -25,7 +25,7 @@ pe_slot_count_from_unwind_op_code(PE_UnwindOpCode opcode)
   return result;
 }
 
-read_only struct
+global read_only struct
 {
   String8             string;
   PE_WindowsSubsystem type;

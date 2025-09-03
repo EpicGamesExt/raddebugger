@@ -3,6 +3,9 @@
 
 #pragma once
 
+#define BLAKE3_API static
+#define BLAKE3_PRIVATE static
+
 #if defined(__clang__) && defined(__x86_64__)
 #  if defined(__IMMINTRIN_H)
 #    error "include this header before immintrin.h / x86intrin.h / intrin.h"

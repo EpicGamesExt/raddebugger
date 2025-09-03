@@ -14,8 +14,12 @@
 
 #include "base_ext/base_blake3.h"
 #include "base_ext/base_blake3.c"
+#define MD5_API static
 #include "third_party/md5/md5.c"
 #include "third_party/md5/md5.h"
+#define XXH_PRIVATE_API
+#define XXH_IMPLEMENTATION
+#define XXH_STATIC_LINKING_ONLY
 #include "third_party/xxHash/xxhash.c"
 #include "third_party/xxHash/xxhash.h"
 #include "third_party/radsort/radsort.h"
@@ -3386,14 +3390,14 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
   ProfEnd();
 }
 
-int
+internal int
 lnk_base_reloc_page_compar(const void *raw_a, const void *raw_b)
 {
   const LNK_BaseRelocPage *a = raw_a, *b = raw_b;
   return u64_compar(&a->voff, &b->voff);
 }
 
-int
+internal int
 lnk_base_reloc_page_is_before(void *raw_a, void *raw_b)
 {
   LNK_BaseRelocPage* a = raw_a;

@@ -345,6 +345,7 @@ pdb_hash_table_get_present_keys_and_values(Arena *arena, PDB_HashTable *ht, Stri
 
 ////////////////////////////////
 
+internal
 PDB_HASH_TABLE_UNPACK_FUNC(pdb_named_stream_ht_unpack)
 {
   Assert(!ud);
@@ -366,6 +367,7 @@ PDB_HASH_TABLE_UNPACK_FUNC(pdb_named_stream_ht_unpack)
   return 0;
 }
 
+internal
 PDB_HASH_TABLE_UNPACK_FUNC(pdb_hash_adj_ht_unpack)
 {
   Assert(local_data.size == 0);
@@ -391,6 +393,7 @@ PDB_HASH_TABLE_UNPACK_FUNC(pdb_hash_adj_ht_unpack)
   return 0;
 }
 
+internal
 PDB_HASH_TABLE_UNPACK_FUNC(pdb_src_header_block_ht_unpack)
 {
   if (*key_value_cursor + sizeof(PDB_StringOffset) > key_value_data.size) {
@@ -414,6 +417,7 @@ PDB_HASH_TABLE_UNPACK_FUNC(pdb_src_header_block_ht_unpack)
   return 0;
 }
 
+internal
 PDB_HASH_TABLE_PACK_FUNC(pdb_named_stream_ht_pack)
 {
   Assert(!ud);
@@ -427,6 +431,7 @@ PDB_HASH_TABLE_PACK_FUNC(pdb_named_stream_ht_pack)
   str8_serial_push_string(arena, key_value_srl, value);
 }
 
+internal
 PDB_HASH_TABLE_PACK_FUNC(pdb_hash_adj_ht_pack)
 {
   Assert(value.size == sizeof(CV_TypeIndex));
@@ -443,6 +448,7 @@ PDB_HASH_TABLE_PACK_FUNC(pdb_hash_adj_ht_pack)
   str8_serial_push_string(arena, key_value_srl, value);
 }
 
+internal
 PDB_HASH_TABLE_PACK_FUNC(pdb_src_header_block_ht_pack)
 {
   Assert(value.size == sizeof(PDB_SrcHeaderBlockEntry));

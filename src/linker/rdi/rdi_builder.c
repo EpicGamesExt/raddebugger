@@ -2201,11 +2201,13 @@ rdib_string_map_insert_name_map_item(Arena *arena, RDIB_CollectStringsTask *task
   rdib_string_map_insert_item(arena, task, task_id, string, node);
 }
 
+internal
 RDIB_STRING_MAP_UPDATE_FUNC(rdib_string_map_update_null)
 {
   // null update
 }
 
+internal
 RDIB_STRING_MAP_UPDATE_FUNC(rdib_string_map_update_concat_void_list_atomic)
 {
   node->next = ins_atomic_ptr_eval_assign(head, node);
@@ -3549,6 +3551,7 @@ rdib_data_from_vmap(Arena *arena, U64 range_count, RDIB_VMapRange *ranges)
   return raw_vmap;
 }
 
+internal
 THREAD_POOL_TASK_FUNC(rdib_fill_scope_vmaps_task)
 {
   ProfBeginFunction();
