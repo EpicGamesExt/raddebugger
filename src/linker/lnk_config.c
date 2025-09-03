@@ -148,10 +148,6 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_SharedThreadPool,           0, "RAD_SHARED_THREAD_POOL",             "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                               },
   { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, 0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",        "Sets maximum number of workers in a thread pool."                                 },
   { LNK_CmdSwitch_Rad_SuppressError,              0, "RAD_SUPPRESS_ERROR",                 ":#",        ""                                                                                 },
-  { LNK_CmdSwitch_Rad_SymbolTableCapDefined,      0, "RAD_SYMBOL_TABLE_CAP_DEFINED",       ":#",        "Number of buckets allocated in the symbol table for defined symbols."             },
-  { LNK_CmdSwitch_Rad_SymbolTableCapInternal,     0, "RAD_SYMBOL_TABLE_CAP_INTERNAL",      ":#",        "Number of buckets allocated in the symbol table for internal symbols."            },
-  { LNK_CmdSwitch_Rad_SymbolTableCapLib,          0, "RAD_SYMBOL_TABLE_CAP_LIB",           ":#",        "Number of buckets allocated in the symbol table for library symbols."             },
-  { LNK_CmdSwitch_Rad_SymbolTableCapWeak,         0, "RAD_SYMBOL_TABLE_CAP_WEAK",          ":#",        "Number of buckets allocated in the symbol table for weak symbols."                },
   { LNK_CmdSwitch_Rad_TargetOs,                   0, "RAD_TARGET_OS",                      ":{WINDOWS,LINUX,MAC}"                                                                          },
   { LNK_CmdSwitch_Rad_WriteTempFiles,             0, "RAD_WRITE_TEMP_FILES",               "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
   { LNK_CmdSwitch_Rad_TimeStamp,                  0, "RAD_TIME_STAMP",                     ":#",        "Time stamp embeded in EXE and PDB."                                               },
@@ -741,16 +737,6 @@ lnk_parse_export_directive(Arena *arena, String8 directive, LNK_Obj *obj, PE_Exp
   return is_parsed;
 }
 
-internal LNK_MergeDirectiveNode *
-lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data)
-{
-  LNK_MergeDirectiveNode *node = push_array_no_zero(arena, LNK_MergeDirectiveNode, 1);
-  node->data = data;
-  SLLQueuePush(list->first, list->last, node);
-  list->count += 1;
-  return node;
-}
-
 internal B32
 lnk_parse_merge_directive(String8 string, LNK_Obj *obj, LNK_MergeDirective *out)
 {
@@ -766,6 +752,26 @@ lnk_parse_merge_directive(String8 string, LNK_Obj *obj, LNK_MergeDirective *out)
   }
   scratch_end(scratch);
   return is_parse_ok;
+}
+
+internal LNK_AltNameNode *
+lnk_alt_name_list_push(Arena *arena, LNK_AltNameList *list, LNK_AltName v)
+{
+  LNK_AltNameNode *node = push_array(arena, LNK_AltNameNode, 1);
+  node->v = v;
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
+  return node;
+}
+
+internal LNK_MergeDirectiveNode *
+lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective v)
+{
+  LNK_MergeDirectiveNode *node = push_array_no_zero(arena, LNK_MergeDirectiveNode, 1);
+  node->v = v;
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
+  return node;
 }
 
 internal String8
@@ -979,7 +985,7 @@ internal void
 lnk_include_symbol(LNK_Config *config, String8 name, LNK_Obj *obj)
 {
   // is this a duplicate symbol?
-  if (hash_table_search_string_raw(config->include_symbol_ht, name, 0)) {
+  if (hash_table_search_string_raw(config->include_symbol_ht, name)) {
     return;
   }
 
@@ -1165,12 +1171,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
           alt_name.from = push_str8_copy(config->arena, alt_name.from);
           alt_name.to   = push_str8_copy(config->arena, alt_name.to);
 
-          LNK_AltNameNode *alt_name_n = push_array(config->arena, LNK_AltNameNode, 1);
-          alt_name_n->data            = alt_name;
-
-          SLLQueuePush(config->alt_name_list.first, config->alt_name_list.last, alt_name_n);
-          config->alt_name_list.count += 1;
-
+          lnk_alt_name_list_push(config->arena, &config->alt_name_list, alt_name);
           hash_table_push_string_string(config->arena, config->alt_name_ht, alt_name.from, alt_name.to);
         }
       }
@@ -1292,9 +1293,8 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   case LNK_CmdSwitch_Export: {
     PE_ExportParse export_parse = {0};
     if (lnk_parse_export_directive_ex(config->arena, value_strings, obj, &export_parse)) {
-      PE_ExportParseNode *exp_n = 0;
-      String8 export_name = pe_name_from_export_parse(&export_parse);
-      hash_table_search_string_raw(config->export_ht, export_name, &exp_n);
+      String8             export_name = pe_name_from_export_parse(&export_parse);
+      PE_ExportParseNode *exp_n       = hash_table_search_string_raw(config->export_ht, export_name);
 
       if (exp_n == 0) {
         // make sure export is defined
@@ -1981,19 +1981,6 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         }
       }
     }
-  } break;
-
-  case LNK_CmdSwitch_Rad_SymbolTableCapDefined: {
-    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->symbol_table_cap_defined, 0);
-  } break;
-  case LNK_CmdSwitch_Rad_SymbolTableCapInternal: {
-    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->symbol_table_cap_internal, 0);
-  } break;
-  case LNK_CmdSwitch_Rad_SymbolTableCapWeak: {
-    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->symbol_table_cap_weak, 0);
-  } break;
-  case LNK_CmdSwitch_Rad_SymbolTableCapLib: {
-    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->symbol_table_cap_lib, 0);
   } break;
 
   case LNK_CmdSwitch_Rad_TargetOs: {

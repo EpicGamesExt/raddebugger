@@ -178,8 +178,7 @@ lnk_section_table_search(LNK_SectionTable *sectab, String8 full_or_partial_name,
   coff_parse_section_name(full_or_partial_name, &name, &postfix);
 
   String8      name_with_flags = lnk_make_name_with_flags(scratch.arena, name, flags);
-  LNK_Section *section         = 0;
-  hash_table_search_string_raw(sectab->sect_ht, name_with_flags, &section);
+  LNK_Section *section         = hash_table_search_string_raw(sectab->sect_ht, name_with_flags);
 
   scratch_end(scratch);
   return section;
@@ -222,7 +221,7 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
   Temp scratch = scratch_begin(0, 0);
   
   for (LNK_MergeDirectiveNode *merge_node = merge_list.first; merge_node != 0; merge_node = merge_node->next) {
-    LNK_MergeDirective *merge = &merge_node->data;
+    LNK_MergeDirective *merge = &merge_node->v;
 
     // guard against illegal merges
     {
@@ -242,19 +241,18 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
 
     // guard against circular merges
     {
-      if (str8_match(merge_node->data.dst, merge_node->data.src, 0)) {
-        lnk_error(LNK_Error_CircularMerge, "detected circular /MERGE:%S=%S", merge_node->data.src, merge_node->data.dst);
+      if (str8_match(merge_node->v.dst, merge_node->v.src, 0)) {
+        lnk_error(LNK_Error_CircularMerge, "detected circular /MERGE:%S=%S", merge_node->v.src, merge_node->v.dst);
       }
       for (LNK_SectionNode *sect_n = sectab->merge_list.first; sect_n != 0; sect_n = sect_n->next) {
-        if (str8_match(sect_n->data.name, merge_node->data.dst, 0)) {
-          lnk_error(LNK_Error_CircularMerge, "detected circular /MERGE:%S=%S", merge_node->data.src, merge_node->data.dst);
+        if (str8_match(sect_n->data.name, merge_node->v.dst, 0)) {
+          lnk_error(LNK_Error_CircularMerge, "detected circular /MERGE:%S=%S", merge_node->v.src, merge_node->v.dst);
         }
       }
     }
     
     // are we trying to merge section that was already merged?
-    LNK_Section *merge_sect = 0;
-    hash_table_search_string_raw(sectab->sect_ht, merge->src, &merge_sect);
+    LNK_Section *merge_sect = hash_table_search_string_raw(sectab->sect_ht, merge->src);
     if (merge_sect && merge_sect->merge_dst) {
       LNK_Section *dst = merge_sect->merge_dst;
       B32 is_ambiguous_merge = !str8_match(dst->name, merge->dst, 0);

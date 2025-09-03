@@ -176,10 +176,6 @@ typedef enum
   LNK_CmdSwitch_Rad_SharedThreadPool,
   LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,
   LNK_CmdSwitch_Rad_SuppressError,
-  LNK_CmdSwitch_Rad_SymbolTableCapDefined,
-  LNK_CmdSwitch_Rad_SymbolTableCapInternal,
-  LNK_CmdSwitch_Rad_SymbolTableCapLib,
-  LNK_CmdSwitch_Rad_SymbolTableCapWeak,
   LNK_CmdSwitch_Rad_TargetOs,
   LNK_CmdSwitch_Rad_TimeStamp,
   LNK_CmdSwitch_Rad_Version,
@@ -278,7 +274,7 @@ typedef struct LNK_AltName
 typedef struct LNK_AltNameNode
 {
   struct LNK_AltNameNode *next;
-  LNK_AltName data;
+  LNK_AltName v;
 } LNK_AltNameNode;
 
 typedef struct LNK_AltNameList
@@ -297,7 +293,7 @@ typedef struct LNK_MergeDirective
 typedef struct LNK_MergeDirectiveNode
 {
   struct LNK_MergeDirectiveNode *next;
-  LNK_MergeDirective             data;
+  LNK_MergeDirective             v;
 } LNK_MergeDirectiveNode;
 
 typedef struct LNK_MergeDirectiveList
@@ -397,10 +393,6 @@ typedef struct LNK_Config
   LNK_IncludeSymbolList       include_symbol_list;
   LNK_AltNameList             alt_name_list;
   LNK_MergeDirectiveList      merge_list;
-  U64                         symbol_table_cap_defined;
-  U64                         symbol_table_cap_internal;
-  U64                         symbol_table_cap_weak;
-  U64                         symbol_table_cap_lib;
   U64                         data_dir_count;
   B32                         build_imp_lib;
   B32                         build_exp;
@@ -588,8 +580,8 @@ internal B32 lnk_parse_merge_directive    (String8 string, struct LNK_Obj *obj, 
 internal B32 lnk_parse_export_directive   (Arena *arena, String8 directive, struct LNK_Obj *obj, PE_ExportParse *export_out);
 internal B32 lnk_parse_export_directive_ex(Arena *arena, String8List directive, struct LNK_Obj *obj, PE_ExportParse *export_out);
 
-internal LNK_AltNameNode *        lnk_alt_name_list_push(Arena *arena, LNK_AltNameList *list, LNK_AltName data);
-internal LNK_MergeDirectiveNode * lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data);
+internal LNK_AltNameNode *        lnk_alt_name_list_push(Arena *arena, LNK_AltNameList *list, LNK_AltName v);
+internal LNK_MergeDirectiveNode * lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective v);
 
 // --- Getters -----------------------------------------------------------------
 

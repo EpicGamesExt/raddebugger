@@ -1,14 +1,6 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal U32 *
-push_u32(Arena *arena, U32 value)
-{
-  U32 *result = push_array_no_zero(arena, U32, 1);
-  *result = value;
-  return result;
-}
-
 internal U64 *
 push_u64(Arena *arena, U64 value)
 {
