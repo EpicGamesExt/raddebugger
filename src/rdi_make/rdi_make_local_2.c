@@ -1300,6 +1300,39 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_StringBakeResult baked_strings = rdim2_shared->baked_strings;
   
   //////////////////////////////////////////////////////////////
+  //- rjf: bake idx runs
+  //
+  ProfScope("bake idx runs")
+  {
+    // rjf: set up
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->baked_idx_runs.idx_count = bake_idx_runs->total_count;
+      rdim2_shared->baked_idx_runs.idx_runs = push_array_no_zero(arena, RDI_U32, rdim2_shared->baked_idx_runs.idx_count);
+    }
+    lane_sync();
+    
+    // rjf: wide fill
+    {
+      Rng1U64 range = lane_range(bake_idx_runs->slots_count);
+      for EachInRange(slot_idx, range)
+      {
+        RDI_U64 off = bake_idx_runs->slots_base_idxs[slot_idx];
+        for EachNode(n, RDIM_BakeIdxRunChunkNode, bake_idx_runs->slots[slot_idx].first)
+        {
+          for EachIndex(n_idx, n->count)
+          {
+            rdim_memcpy(rdim2_shared->baked_idx_runs.idx_runs + off, n->v[n_idx].idxes, sizeof(n->v[n_idx].idxes[0])*n->v[n_idx].count);
+            off += n->v[n_idx].count;
+          }
+        }
+      }
+    }
+  }
+  lane_sync();
+  RDIM_IndexRunBakeResult baked_idx_runs = rdim2_shared->baked_idx_runs;
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: compute layout for scope sub-lists (locals / voffs)
   //
   ProfScope("compute layout for scope sub-lists (locals / voffs)")
@@ -1858,14 +1891,14 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     result.thread_variables       = rdim2_shared->baked_thread_variables;
     result.constants              = rdim2_shared->baked_constants;
     result.procedures             = rdim2_shared->baked_procedures;
-    // result.scopes                 = rdim2_shared->baked_scopes;
+    result.scopes                 = rdim2_shared->baked_scopes;
     result.inline_sites           = rdim2_shared->baked_inline_sites;
     result.scope_vmap             = rdim2_shared->baked_scope_vmap;
     // result.top_level_name_maps    = rdim2_shared->baked_top_level_name_maps;
     // result.name_maps              = rdim2_shared->baked_name_maps;
     // result.file_paths             = rdim2_shared->baked_file_paths;
     result.strings                = rdim2_shared->baked_strings;
-    // result.idx_runs               = rdim2_shared->baked_idx_runs;
+    result.idx_runs               = rdim2_shared->baked_idx_runs;
     // result.location_blocks        = rdim2_shared->baked_location_blocks;
     // result.location_data          = rdim2_shared->baked_location_data;
   }
