@@ -10,6 +10,8 @@
 // [ ] hardware breakpoints regression (global eval in ctrl)
 // [ ] native filesystem dialog, resizing raddbg window -> crash!
 // [ ] stdout/stderr path target setting is now busted >:(
+// [ ] target ui entry point should override built-in entry point
+// [ ] list of all tabs in palette
 //
 //- memory view
 // [ ] have smaller visible range than entire memory

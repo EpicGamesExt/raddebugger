@@ -345,6 +345,15 @@ enum{
   Anonymous_D,
 };
 
+typedef uint32_t SizedKind;
+enum SizedKindEnum
+{
+  SizedKind_A,
+  SizedKind_B,
+  SizedKind_C,
+  SizedKind_D,
+};
+
 typedef Kind Alias1;
 typedef Flag Alias2;
 typedef Has_Enums Alias3;
@@ -634,6 +643,8 @@ type_coverage_eval_tests(void)
   dynamic_array_vector.push_back(dynamic);
   dynamic_array_vector.push_back(dynamic);
   dynamic_array_vector.push_back(dynamic);
+  
+  SizedKind sized_kind = SizedKind_C;
   
   int x = (int)(Anonymous_D);
 }
