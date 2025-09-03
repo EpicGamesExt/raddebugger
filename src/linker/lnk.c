@@ -1560,10 +1560,6 @@ lnk_link_inputs_(TP_Context      *tp,
               break;
             }
 
-            if (str8_match(import_header.func_name, str8_lit("LoadLibraryA"), 0)) {
-              int x = 0;
-            }
-
             // skip duplicate import inputer
             if (hash_table_search_string_raw(imps->import_stub_ht, import_header.func_name, 0)) { break; }
             hash_table_push_string_raw(imps->arena, imps->import_stub_ht, import_header.func_name, 0);
@@ -4851,8 +4847,6 @@ entry_point(CmdLine *cmdline)
   TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
   TP_Arena   *tp_arena = tp_arena_alloc(tp);
   lnk_run(tp, tp_arena, config);
-
-exit:;
   scratch_end(scratch);
 }
 
