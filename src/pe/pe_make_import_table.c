@@ -1,6 +1,22 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal void
+pe_make_import_header_list_push_node(PE_MakeImportList *list, PE_MakeImportNode *node)
+{
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
+}
+
+internal PE_MakeImportNode *
+pe_make_import_header_list_push(Arena *arena, PE_MakeImportList *list, PE_MakeImport v)
+{
+  PE_MakeImportNode *node = push_array(arena, PE_MakeImportNode, 1);
+  node->v = v;
+  pe_make_import_header_list_push_node(list, node);
+  return node;
+}
+
 internal COFF_ObjSymbol *
 pe_make_indirect_jump_thunk_x64(COFF_ObjWriter *obj_writer, COFF_ObjSection *code_sect, COFF_ObjSymbol *iat_symbol, String8 thunk_name)
 {
@@ -237,7 +253,7 @@ pe_make_null_thunk_data_obj(Arena *arena, String8 dll_name, COFF_TimeStamp time_
 }
 
 internal String8
-pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 dll_name, String8 debug_symbols, String8List import_headers)
+pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 dll_name, String8 debug_symbols, PE_MakeImportList import_headers)
 {
   COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(time_stamp, machine);
 
@@ -252,7 +268,7 @@ pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mach
   COFF_ObjSection *iat_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$5"), PE_IDATA_SECTION_FLAGS|import_align,                  str8_zero());
   COFF_ObjSection *int_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$6"), PE_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes,  str8_zero());
   COFF_ObjSection *dll_name_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$7"), PE_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes,  dll_name_cstr);
-  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$i"),  PE_TEXT_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,   str8_zero());
+  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$zz"), PE_TEXT_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,   str8_zero());
 
   COFF_ObjSymbol *ilt_symbol      = coff_obj_writer_push_symbol_static(obj_writer, ilt_sect->name,      0, ilt_sect);
   COFF_ObjSymbol *iat_symbol      = coff_obj_writer_push_symbol_static(obj_writer, iat_sect->name,      0, iat_sect);
@@ -263,8 +279,8 @@ pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mach
   coff_obj_writer_section_push_reloc_voff(obj_writer, dll_sect, OffsetOf(PE_ImportEntry, name_voff),              dll_name_symbol);
   coff_obj_writer_section_push_reloc_voff(obj_writer, dll_sect, OffsetOf(PE_ImportEntry, import_addr_table_voff), iat_symbol);
 
-  for (String8Node *import_header_n = import_headers.first; import_header_n != 0; import_header_n = import_header_n->next) {
-    COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(import_header_n->string);
+  for (PE_MakeImportNode *import_header_n = import_headers.first; import_header_n != 0; import_header_n = import_header_n->next) {
+    COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(import_header_n->v.header);
 
     COFF_ObjSymbol *iat_symbol = 0;
     switch (import_header.import_by) {
@@ -300,12 +316,15 @@ pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mach
     }
 
     // emit thunks
-    COFF_ObjSymbol *jmp_thunk_symbol = 0;
-    if (import_header.type == COFF_ImportHeader_Code) {
-      switch (import_header.machine) {
-      case COFF_MachineType_Unknown: {} break;
-      case COFF_MachineType_X64: { jmp_thunk_symbol = pe_make_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name); } break;
-      default: { NotImplemented; } break;
+    if (import_header_n->v.make_jump_thunk) {
+      if (import_header.type == COFF_ImportHeader_Code) {
+        switch (import_header.machine) {
+        case COFF_MachineType_Unknown: {} break;
+        case COFF_MachineType_X64: { pe_make_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name); } break;
+        default: { NotImplemented; } break;
+        }
+      } else {
+        Assert(0 && "unable to make a jump thunk for non-code target");
       }
     }
   }
@@ -314,12 +333,13 @@ pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mach
   str8_list_push(obj_writer->arena, &iat_sect->data, str8(0, coff_word_size_from_machine(machine)));
 
   String8 dll_obj = coff_obj_writer_serialize(arena, obj_writer);
+
   coff_obj_writer_release(&obj_writer);
   return dll_obj;
 }
 
 internal String8
-pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 dll_name, String8 delay_load_helper_name, String8 debug_symbols, String8List import_headers, B32 emit_biat, B32 emit_uiat)
+pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 dll_name, String8 delay_load_helper_name, String8 debug_symbols, PE_MakeImportList import_headers, B32 emit_biat, B32 emit_uiat)
 {
   COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(time_stamp, machine);
 
@@ -385,11 +405,10 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
   default:                       { NotImplemented; } break;
   }
 
-  for (String8Node *import_header_n = import_headers.first; import_header_n != 0; import_header_n = import_header_n->next) {
-    COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(import_header_n->string);
+  for (PE_MakeImportNode *import_header_n = import_headers.first; import_header_n != 0; import_header_n = import_header_n->next) {
+    COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(import_header_n->v.header);
 
     // emit thunks
-    COFF_ObjSymbol *jmp_thunk_symbol  = 0;
     COFF_ObjSymbol *load_thunk_symbol = 0;
     if (import_header.type == COFF_ImportHeader_Code) {
       switch (machine) {
@@ -398,8 +417,11 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
         String8 iat_symbol_name = push_str8f(obj_writer->arena, "__imp_%S", import_header.func_name);
         iat_symbol = coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_sect->data.total_size, iat_sect);
 
-        // emit thunks
-        jmp_thunk_symbol  = pe_make_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name);
+        if (import_header_n->v.make_jump_thunk) {
+          pe_make_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name);
+        }
+
+        // emit load thunk
         load_thunk_symbol = pe_make_load_thunk_x64(obj_writer, code_sect, iat_symbol, tail_merge_symbol, import_header.func_name);
       } break;
       default: { NotImplemented; } break;
