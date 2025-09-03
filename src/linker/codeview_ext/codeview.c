@@ -587,7 +587,7 @@ cv_file_chksms_from_debug_s(CV_DebugS debug_s)
 internal U64
 cv_string_hash_table_hash(String8 string)
 {
-  return hash_from_str8(string);
+  return u64_hash_from_str8(string);
 }
 
 internal int
