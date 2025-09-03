@@ -57,6 +57,20 @@ lnk_array_from_section_contrib_chunk_list(Arena *arena, LNK_SectionContribChunkL
   return result;
 }
 
+internal void
+lnk_section_list_push_node(LNK_SectionList *list, LNK_SectionNode *node)
+{
+  DLLPushBack(list->first, list->last, node);
+  list->count += 1;
+}
+
+internal void
+lnk_section_list_remove_node(LNK_SectionList *list, LNK_SectionNode *node)
+{
+  DLLRemove(list->first, list->last, node);
+  list->count -= 1;
+}
+
 internal LNK_SectionArray
 lnk_section_array_from_list(Arena *arena, LNK_SectionList list)
 {
@@ -115,7 +129,7 @@ lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags
   sect->flags = flags;
 
   LNK_SectionList *sect_list = &sectab->list;
-  SLLQueuePush(sect_list->first, sect_list->last, sect_node);
+  DLLPushBack(sect_list->first, sect_list->last, sect_node);
   sect_list->count += 1;
 
   String8 name_with_flags = lnk_make_name_with_flags(sectab->arena, name, flags);
@@ -129,45 +143,29 @@ internal LNK_SectionNode *
 lnk_section_table_remove(LNK_SectionTable *sectab, String8 name)
 {
   ProfBeginFunction();
-  
-  // find node
   LNK_SectionNode *node;
   for (node = sectab->list.first; node != 0; node = node->next) {
     if (str8_match(node->data.name, name, 0)) {
+      lnk_section_list_remove_node(&sectab->list, node);
       break;
     }
   }
-
-  // remove node
-  {
-    LNK_SectionList *list = &sectab->list;
-    if (list->count > 0) {
-      if (list->first == node) {
-        list->first = list->first->next;
-        list->count -= 1;
-
-        if (list->last == node) {
-          list->last = 0;
-        }
-      } else {
-        for (LNK_SectionNode *curr = list->first, *prev = 0; curr != 0; prev = curr, curr = curr->next) {
-          if (curr == node) {
-            prev->next = curr->next;
-            list->count -= 1;
-
-            if (list->last == curr) {
-              list->last = prev;
-            }
-
-            break;
-          }
-        }
-      }
-    }
-  }
-
   ProfEnd();
   return node;
+}
+
+internal void
+lnk_section_table_purge(LNK_SectionTable *sectab, String8 name)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  LNK_SectionNode *node            = lnk_section_table_remove(sectab, name);
+  String8          name_with_flags = lnk_make_name_with_flags(scratch.arena, name, node->data.flags);
+  KeyValuePair    *kv              = hash_table_search_string(sectab->sect_ht, name_with_flags);
+  kv->key_string   = str8_zero();
+  kv->value_raw    = 0;
+
+  scratch_end(scratch);
 }
 
 internal LNK_Section *
@@ -232,7 +230,7 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
         str8_lit_comp(".rsrc"),
         str8_lit_comp(".reloc"),
       };
-      for (U64 i = 0; i < ArrayCount(illegal_merge_sections); i += 1) {
+      for EachIndex(i, ArrayCount(illegal_merge_sections)) {
         if (str8_match(merge->src, illegal_merge_sections[i], 0)) {
           lnk_error(LNK_Error_IllegalSectionMerge, "illegal to merge %S with %S", illegal_merge_sections[i], merge->dst);
         }
@@ -248,8 +246,7 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
         lnk_error(LNK_Error_CircularMerge, "detected circular /MERGE:%S=%S", merge_node->data.src, merge_node->data.dst);
       }
       for (LNK_SectionNode *sect_n = sectab->merge_list.first; sect_n != 0; sect_n = sect_n->next) {
-        if (str8_match(sect_n->data.name, merge_node->data.dst, 0) ||
-            str8_match(sect_n->data.name, merge_node->data.src, 0)) {
+        if (str8_match(sect_n->data.name, merge_node->data.dst, 0)) {
           lnk_error(LNK_Error_CircularMerge, "detected circular /MERGE:%S=%S", merge_node->data.src, merge_node->data.dst);
         }
       }
@@ -292,7 +289,7 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
       }
     }
 
-    for (U64 src_idx = 0; src_idx < src_matches.count; src_idx += 1) {
+    for EachIndex(src_idx, src_matches.count) {
       LNK_Section *src = src_matches.v[src_idx];
 
       if (src->flags != dst->flags) {
@@ -304,12 +301,11 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
       lnk_section_contrib_chunk_list_concat_in_place(&dst->contribs, &src->contribs);
       src->merge_dst = dst;
 
-      // remove from output section list
+      // remove node from output section list
       LNK_SectionNode *merge_node = lnk_section_table_remove(sectab, src->name);
 
       // move node to the merge list
-      SLLQueuePush(sectab->merge_list.first, sectab->merge_list.last, merge_node);
-      sectab->merge_list.count += 1;
+      lnk_section_list_push_node(&sectab->merge_list, merge_node);
     }
   }
   scratch_end(scratch);
