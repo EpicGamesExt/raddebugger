@@ -1709,7 +1709,7 @@ rdim_bake_idx_run_chunk_list_concat_in_place(RDIM_BakeIdxRunChunkList *dst, RDIM
 {
   for(RDIM_BakeIdxRunChunkNode *n = to_push->first; n != 0; n = n->next)
   {
-    n->base_idx += dst->total_count;
+    n->base_idx += dst->total_idx_count;
   }
   if(dst->last != 0 && to_push->first != 0)
   {
@@ -1810,6 +1810,7 @@ rdim_bake_idx_run_map_loose_make(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology *
 {
   RDIM_BakeIdxRunMapLoose *map = rdim_push_array(arena, RDIM_BakeIdxRunMapLoose, 1);
   map->slots = rdim_push_array(arena, RDIM_BakeIdxRunChunkList *, top->slots_count);
+  map->slots_idx_counts = rdim_push_array(arena, RDI_U64, top->slots_count);
   return map;
 }
 
@@ -1844,47 +1845,12 @@ rdim_bake_idx_run_map_loose_insert(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology
       bir->hash = hash;
       bir->count = count;
       bir->idxes = idxes;
+      map->slots_idx_counts[slot_idx] += count;
     }
   }
-}
-
-RDI_PROC RDIM_BakeIdxRunMapBaseIndices
-rdim_bake_idx_run_map_base_indices_from_map_loose(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology *map_topology, RDIM_BakeIdxRunMapLoose *map)
-{
-  RDIM_BakeIdxRunMapBaseIndices indices = {0};
-  indices.slots_base_idxs = rdim_push_array(arena, RDI_U64, map_topology->slots_count+1);
-  RDI_U64 total_count = 0;
-  for(RDI_U64 idx = 0; idx < map_topology->slots_count; idx += 1)
-  {
-    indices.slots_base_idxs[idx] += total_count;
-    if(map->slots[idx] != 0)
-    {
-      total_count += map->slots[idx]->total_count;
-    }
-  }
-  indices.slots_base_idxs[map_topology->slots_count] = total_count;
-  return indices;
 }
 
 //- rjf: finalized / tight map
-
-RDI_PROC RDIM_BakeIdxRunMap2 *
-rdim_bake_idx_run_map_from_loose(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology *map_topology, RDIM_BakeIdxRunMapBaseIndices *map_base_indices, RDIM_BakeIdxRunMapLoose *map)
-{
-  RDIM_BakeIdxRunMap2 *m = rdim_push_array(arena, RDIM_BakeIdxRunMap2, 1);
-  m->slots_count = map_topology->slots_count;
-  m->slots = rdim_push_array(arena, RDIM_BakeIdxRunChunkList, m->slots_count);
-  m->slots_base_idxs = map_base_indices->slots_base_idxs;
-  for(RDI_U64 idx = 0; idx < m->slots_count; idx += 1)
-  {
-    if(map->slots[idx] != 0)
-    {
-      rdim_memcpy_struct(&m->slots[idx], map->slots[idx]);
-    }
-  }
-  m->total_count = m->slots_base_idxs[m->slots_count];
-  return m;
-}
 
 RDI_PROC RDI_U32
 rdim_bake_idx_from_idx_run_2(RDIM_BakeIdxRunMap2 *map, RDI_U32 *idxes, RDI_U32 count)
@@ -1900,7 +1866,7 @@ rdim_bake_idx_from_idx_run_2(RDIM_BakeIdxRunMap2 *map, RDI_U32 *idxes, RDI_U32 c
       {
         if(n->v[chunk_idx].hash == hash)
         {
-          idx = map->slots_base_idxs[slot_idx] + n->base_idx + chunk_idx + 1;
+          idx = map->slots_base_idxs[slot_idx] + n->base_idx + n->v[chunk_idx].encoding_idx;
           break;
         }
       }
