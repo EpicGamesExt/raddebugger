@@ -708,38 +708,60 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       // rjf: push small top-level strings
       if(lane_idx() == 0) ProfScope("push small top-level strings")
       {
-        rdim_bake_string_map_loose_push_top_level_info(arena, lane_map_top, lane_map, &params->top_level_info);
-        rdim_bake_string_map_loose_push_binary_sections(arena, lane_map_top, lane_map, &params->binary_sections);
-        rdim_bake_string_map_loose_push_path_tree(arena, lane_map_top, lane_map, path_tree);
+        rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 1, params->top_level_info.exe_name);
+        rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 1, params->top_level_info.producer_name);
+        for(RDIM_BinarySectionNode *n = params->binary_sections.first; n != 0; n = n->next)
+        {
+          rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 1, n->v.name);
+        }
+        for(RDIM_BakePathNode *n = path_tree->first; n != 0; n = n->next_order)
+        {
+          rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 1, n->name);
+        }
       }
       
       // rjf: push strings from source files
       ProfScope("src files")
       {
-        for(RDIM_SrcFileChunkNode *n = params->src_files.first; n != 0; n = n->next)
+        for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
         {
           Rng1U64 range = lane_range(n->count);
-          rdim_bake_string_map_loose_push_src_file_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+          for EachInRange(n_idx, range)
+          {
+            RDIM_String8 normalized_path = rdim_lower_from_str8(arena, n->v[n_idx].path);
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 1, normalized_path);
+          }
         }
       }
       
       // rjf: push strings from units
       ProfScope("units")
       {
-        for(RDIM_UnitChunkNode *n = params->units.first; n != 0; n = n->next)
+        for EachNode(n, RDIM_UnitChunkNode, params->units.first)
         {
           Rng1U64 range = lane_range(n->count);
-          rdim_bake_string_map_loose_push_unit_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+          for EachInRange(n_idx, range)
+          {
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].unit_name);
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].compiler_name);
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].source_file);
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].object_file);
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].archive_file);
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].build_path);
+          }
         }
       }
       
       // rjf: push strings from types
       ProfScope("types")
       {
-        for(RDIM_TypeChunkNode *n = params->types.first; n != 0; n = n->next)
+        for EachNode(n, RDIM_TypeChunkNode, params->types.first)
         {
           Rng1U64 range = lane_range(n->count);
-          rdim_bake_string_map_loose_push_type_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+          for EachInRange(n_idx, range)
+          {
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].name);
+          }
         }
       }
       
@@ -775,12 +797,13 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       {
         for EachElement(list_idx, symbol_lists)
         {
-          ProfScope("symbols (%I64u)", list_idx)
+          for EachNode(n, RDIM_SymbolChunkNode, symbol_lists[list_idx]->first)
           {
-            for(RDIM_SymbolChunkNode *n = symbol_lists[list_idx]->first; n != 0; n = n->next)
+            Rng1U64 range = lane_range(n->count);
+            for EachInRange(n_idx, range)
             {
-              Rng1U64 range = lane_range(n->count);
-              rdim_bake_string_map_loose_push_symbol_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+              rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].name);
+              rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].link_name);
             }
           }
         }
@@ -789,20 +812,29 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       //- rjf: push strings from inline sites
       ProfScope("inline sites")
       {
-        for(RDIM_InlineSiteChunkNode *n = params->inline_sites.first; n != 0; n = n->next)
+        for EachNode(n, RDIM_InlineSiteChunkNode, params->inline_sites.first)
         {
           Rng1U64 range = lane_range(n->count);
-          rdim_bake_string_map_loose_push_inline_site_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+          for EachInRange(n_idx, range)
+          {
+            rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, n->v[n_idx].name);
+          }
         }
       }
       
       //- rjf: push strings from scopes
       ProfScope("scopes")
       {
-        for(RDIM_ScopeChunkNode *n = params->scopes.first; n != 0; n = n->next)
+        for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
         {
           Rng1U64 range = lane_range(n->count);
-          rdim_bake_string_map_loose_push_scope_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+          for EachInRange(n_idx, range)
+          {
+            for EachNode(local, RDIM_Local, n->v[n_idx].first_local)
+            {
+              rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, local->name);
+            }
+          }
         }
       }
     }
