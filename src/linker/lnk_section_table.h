@@ -106,6 +106,7 @@ internal LNK_SectionTable *  lnk_section_table_alloc(void);
 internal void                lnk_section_table_release(LNK_SectionTable **sectab_ptr);
 internal LNK_Section *       lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags);
 internal LNK_SectionNode *   lnk_section_table_remove(LNK_SectionTable *sectab, String8 name);
+internal void                lnk_section_table_purge(LNK_SectionTable *sectab, String8 name);
 internal LNK_Section *       lnk_section_table_search(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags);
 internal LNK_SectionArray    lnk_section_table_search_many(Arena *arena, LNK_SectionTable *sectab, String8 full_or_partial_name);
 internal void                lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_list);
