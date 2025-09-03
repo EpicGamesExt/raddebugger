@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 static LNK_ErrorMode g_error_mode_arr[LNK_Error_Count];
