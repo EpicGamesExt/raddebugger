@@ -53,13 +53,12 @@ internal Arena *tctx_get_scratch(Arena **conflicts, U64 count);
 //- rjf: lane metadata
 internal LaneCtx tctx_set_lane_ctx(LaneCtx lane_ctx);
 internal void tctx_lane_barrier_wait(void);
-internal Rng1U64 tctx_lane_idx_range_from_count(U64 count);
 #define lane_idx() (tctx_selected()->lane_ctx.lane_idx)
 #define lane_count() (tctx_selected()->lane_ctx.lane_count)
 #define lane_from_task_idx(idx) ((idx)%lane_count())
 #define lane_ctx(ctx) tctx_set_lane_ctx((ctx))
 #define lane_sync() tctx_lane_barrier_wait()
-#define lane_range(count) tctx_lane_idx_range_from_count(count)
+#define lane_range(count) m_range_from_n_idx_m_count(lane_idx(), lane_count(), (count))
 
 //- rjf: thread names
 internal void tctx_set_thread_name(String8 name);

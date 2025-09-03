@@ -809,3 +809,20 @@ rng1s64_array_from_list(Arena *arena, Rng1S64List *list)
   }
   return arr;
 }
+
+////////////////////////////////
+//~ rjf: N -> M Element Subdivision
+
+internal Rng1U64
+m_range_from_n_idx_m_count(U64 n_idx, U64 n_count, U64 m_count)
+{
+  U64 main_idxes_per_lane = m_count/n_count;
+  U64 leftover_idxes_count = m_count - main_idxes_per_lane*n_count;
+  U64 leftover_idxes_before_this_lane_count = Min(n_idx, leftover_idxes_count);
+  U64 lane_base_idx = n_idx*main_idxes_per_lane + leftover_idxes_before_this_lane_count;
+  U64 lane_base_idx__clamped = Min(lane_base_idx, m_count);
+  U64 lane_opl_idx = lane_base_idx__clamped + main_idxes_per_lane + ((n_idx < leftover_idxes_count) ? 1 : 0);
+  U64 lane_opl_idx__clamped = Min(lane_opl_idx, m_count);
+  Rng1U64 result = r1u64(lane_base_idx__clamped, lane_opl_idx__clamped);
+  return result;
+}

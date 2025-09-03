@@ -691,4 +691,9 @@ internal U64 rng_1u64_array_bsearch(Rng1U64Array arr, U64 value);
 internal void rng1s64_list_push(Arena *arena, Rng1S64List *list, Rng1S64 rng);
 internal Rng1S64Array rng1s64_array_from_list(Arena *arena, Rng1S64List *list);
 
+////////////////////////////////
+//~ rjf: N -> M Element Subdivision
+
+internal Rng1U64 m_range_from_n_idx_m_count(U64 n_idx, U64 n_count, U64 m_count);
+
 #endif //BASE_MATH_H

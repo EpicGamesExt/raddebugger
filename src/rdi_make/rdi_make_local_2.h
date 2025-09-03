@@ -25,8 +25,20 @@ struct RDIM2_Shared
   RDIM_SortKey *scope_vmap_keys;
   RDIM_SortKey *scope_vmap_keys__swap;
   RDIM_VMapMarker *scope_vmap_markers;
+  RDI_U64 unit_vmap_count;
+  RDIM_SortKey *unit_vmap_keys;
+  RDIM_SortKey *unit_vmap_keys__swap;
+  RDIM_VMapMarker *unit_vmap_markers;
+  RDI_U64 global_vmap_count;
+  RDIM_SortKey *global_vmap_keys;
+  RDIM_SortKey *global_vmap_keys__swap;
+  RDIM_VMapMarker *global_vmap_markers;
   U32 **lane_digit_counts;
   U32 **lane_digit_offsets;
+  
+  RDIM_ScopeVMapBakeResult baked_scope_vmap;
+  RDIM_UnitVMapBakeResult baked_unit_vmap;
+  RDIM_GlobalVMapBakeResult baked_global_vmap;
   
   RDIM_BakePathTree *path_tree;
   
@@ -56,6 +68,13 @@ struct RDIM2_Shared
   RDIM_StringBakeResult baked_strings;
   RDIM_IndexRunBakeResult baked_idx_runs;
   
+  RDI_U64 *scope_local_chunk_lane_counts; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_local_chunk_lane_offs; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_voff_chunk_lane_counts; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_voff_chunk_lane_offs; // [lane_count * scope_chunk_count]
+  
+  RDIM_ScopeBakeResult baked_scopes;
+  
   RDIM_UnitBakeResult baked_units;
   RDIM_SrcFileBakeResult baked_src_files;
   RDIM_TypeNodeBakeResult baked_type_nodes;
@@ -70,9 +89,6 @@ struct RDIM2_Shared
   
   RDIM_TopLevelInfoBakeResult baked_top_level_info;
   RDIM_BinarySectionBakeResult baked_binary_sections;
-  RDIM_UnitVMapBakeResult baked_unit_vmap;
-  RDIM_ScopeVMapBakeResult baked_scope_vmap;
-  RDIM_GlobalVMapBakeResult baked_global_vmap;
 };
 
 global RDIM2_Shared *rdim2_shared = 0;
