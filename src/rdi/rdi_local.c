@@ -798,7 +798,7 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
           str8_list_pushf(scratch.arena, &param_idx_strings, "%u", param_idx_array[param_idx]);
         }
         String8 param_idx_str = str8_list_join(scratch.arena, &param_idx_strings, &(StringJoin){.pre = str8_lit("["), .sep = str8_lit(", "), .post = str8_lit("]")});
-        dumpf("    constructed__params: %S\n", param_idx_str);
+        dumpf("    constructed__params: %S // idx_run[%u]\n", param_idx_str, type->constructed.param_idx_run_first);
         dumpf("    return_type: %u\n", type->constructed.direct_type_idx);
       }
       else if(type->kind == RDI_TypeKind_Method)
@@ -818,8 +818,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
           str8_list_pushf(scratch.arena, &param_idx_strings, "%u", param_idx_array[param_idx]);
         }
         String8 param_idx_str = str8_list_join(scratch.arena, &param_idx_strings, &(StringJoin){.pre = str8_lit("["), .sep = str8_lit(", "), .post = str8_lit("]")});
-        dumpf("    constructed__this_type: %S\n", this_type_str);
-        dumpf("    constructed__params: %S\n", param_idx_str);
+        dumpf("    constructed__this_type: %S // idx_run[%u]\n", this_type_str, type->constructed.param_idx_run_first);
+        dumpf("    constructed__params: %S // idx_run[%u]\n", param_idx_str, type->constructed.param_idx_run_first);
         dumpf("    return_type: %u\n", type->constructed.direct_type_idx);
       }
       else if(RDI_TypeKind_FirstConstructed <= type->kind && type->kind <= RDI_TypeKind_LastConstructed)

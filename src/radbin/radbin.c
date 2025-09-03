@@ -14,6 +14,15 @@ rb_entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0, 0);
   U64 threads_count = os_get_system_info()->logical_processor_count;
+  String8 threads_count_from_cmdline_string = cmd_line_string(cmdline, str8_lit("thread_count"));
+  if(threads_count_from_cmdline_string.size != 0)
+  {
+    U64 threads_count_from_cmdline = 0;
+    if(try_u64_from_str8_c_rules(threads_count_from_cmdline_string, &threads_count_from_cmdline))
+    {
+      threads_count = threads_count_from_cmdline;
+    }
+  }
   OS_Handle *threads = push_array(scratch.arena, OS_Handle, threads_count);
   RB_ThreadParams *threads_params = push_array(scratch.arena, RB_ThreadParams, threads_count);
   Barrier barrier = barrier_alloc(threads_count);

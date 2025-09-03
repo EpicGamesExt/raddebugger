@@ -1777,7 +1777,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   // subsequent passes, to build RDI "UDT" information, which is distinct
   // from regular type info.
   //
-  ProfScope("types pass 3: construct all root/stub types from TPI") if(lane_idx() == 0)
+  if(lane_idx() == 0) ProfScope("types pass 3: construct all root/stub types from TPI")
   {
 #define p2r_builtin_type_ptr_from_kind(kind) ((basic_type_ptrs && RDI_TypeKind_FirstBuiltIn <= (kind) && (kind) <= RDI_TypeKind_LastBuiltIn) ? (basic_type_ptrs[(kind) - RDI_TypeKind_FirstBuiltIn]) : 0)
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)

@@ -1183,6 +1183,7 @@ struct RDIM_BakeIdxRun
   RDI_U64 hash;
   RDI_U64 count;
   RDI_U32 *idxes;
+  RDI_U64 encoding_idx;
 };
 
 typedef struct RDIM_BakeIdxRunChunkNode RDIM_BakeIdxRunChunkNode;
@@ -1202,6 +1203,7 @@ struct RDIM_BakeIdxRunChunkList
   RDIM_BakeIdxRunChunkNode *last;
   RDI_U64 chunk_count;
   RDI_U64 total_count;
+  RDI_U64 total_idx_count;
 };
 
 typedef struct RDIM_BakeIdxRunMapTopology RDIM_BakeIdxRunMapTopology;
@@ -1210,25 +1212,19 @@ struct RDIM_BakeIdxRunMapTopology
   RDI_U64 slots_count;
 };
 
-typedef struct RDIM_BakeIdxRunMapBaseIndices RDIM_BakeIdxRunMapBaseIndices;
-struct RDIM_BakeIdxRunMapBaseIndices
-{
-  RDI_U64 *slots_base_idxs;
-};
-
 typedef struct RDIM_BakeIdxRunMapLoose RDIM_BakeIdxRunMapLoose;
 struct RDIM_BakeIdxRunMapLoose
 {
   RDIM_BakeIdxRunChunkList **slots;
+  RDI_U64 *slots_idx_counts;
 };
 
 typedef struct RDIM_BakeIdxRunMap2 RDIM_BakeIdxRunMap2;
 struct RDIM_BakeIdxRunMap2
 {
   RDIM_BakeIdxRunChunkList *slots;
-  RDI_U64 *slots_base_idxs;
+  RDI_U64 *slots_base_idxs; // NOTE(rjf): [slots_count+1], [slots_count] holds total count
   RDI_U64 slots_count;
-  RDI_U64 total_count;
 };
 
 //- rjf: index runs (OLD)
@@ -1836,10 +1832,8 @@ RDI_PROC RDIM_BakeIdxRunChunkList rdim_bake_idx_run_chunk_list_sorted_from_unsor
 //- rjf: loose map
 RDI_PROC RDIM_BakeIdxRunMapLoose *rdim_bake_idx_run_map_loose_make(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology *top);
 RDI_PROC void rdim_bake_idx_run_map_loose_insert(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology *map_topology, RDIM_BakeIdxRunMapLoose *map, RDI_U64 chunk_cap, RDI_U32 *idxes, RDI_U32 count);
-RDI_PROC RDIM_BakeIdxRunMapBaseIndices rdim_bake_idx_run_map_base_indices_from_map_loose(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology *map_topology, RDIM_BakeIdxRunMapLoose *map);
 
 //- rjf: finalized / tight map
-RDI_PROC RDIM_BakeIdxRunMap2 *rdim_bake_idx_run_map_from_loose(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology *map_topology, RDIM_BakeIdxRunMapBaseIndices *map_base_indices, RDIM_BakeIdxRunMapLoose *map);
 RDI_PROC RDI_U32 rdim_bake_idx_from_idx_run_2(RDIM_BakeIdxRunMap2 *map, RDI_U32 *idxes, RDI_U32 count);
 
 ////////////////////////////////
