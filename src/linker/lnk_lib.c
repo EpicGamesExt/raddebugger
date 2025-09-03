@@ -10,11 +10,11 @@ lnk_lib_node_is_before(void *a, void *b)
 internal int
 lnk_lib_node_ptr_is_before(void *raw_a, void *raw_b)
 {
-  return raw_a < raw_b;
+  return lnk_lib_node_is_before(*(LNK_Lib **)raw_a, *(LNK_Lib **)raw_b);
 }
 
 internal B32
-lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
+lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_Lib *lib_out)
 {
   ProfBeginFunction();
 
@@ -119,6 +119,7 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
   lib_out->was_member_linked = push_array(arena, LNK_Symbol *, member_count);
   lib_out->symbol_names      = symbol_names;
   lib_out->long_names        = parse.long_names;
+  lib_out->input_idx         = input_idx;
   
   ProfEnd();
   return 1;
@@ -133,7 +134,7 @@ THREAD_POOL_TASK_FUNC(lnk_lib_initer)
   U64          lib_node_idx = ins_atomic_u64_inc_eval(&task->next_free_lib_idx)-1;
   LNK_LibNode *lib_node     = &task->free_libs[lib_node_idx];
 
-  B32 is_valid_lib = lnk_lib_from_data(arena, input->data, input->path, &lib_node->data);
+  B32 is_valid_lib = lnk_lib_from_data(arena, input->data, input->path, task->lib_id_base + task_id, &lib_node->data);
   if (is_valid_lib) {
     U64 valid_lib_idx = ins_atomic_u64_inc_eval(&task->valid_libs_count)-1;
     task->valid_libs[valid_lib_idx] = lib_node;
@@ -170,6 +171,7 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U
 
   // parse libs in parallel
   LNK_LibIniter task = {0};
+  task.lib_id_base   = list->count;
   task.free_libs     = push_array(arena->v[0], LNK_LibNode, inputs_count);
   task.valid_libs    = push_array(scratch.arena, LNK_LibNode *, inputs_count);
   task.invalid_libs  = push_array(scratch.arena, LNK_LibNode *, inputs_count);
@@ -186,7 +188,6 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U
   // push parsed libs
   radsort(task.valid_libs, task.valid_libs_count, lnk_lib_node_ptr_is_before);
   for EachIndex(i, task.valid_libs_count) {
-    task.valid_libs[i]->data.input_idx = lib_id_base + i;
     lnk_lib_list_push_node(list, task.valid_libs[i]);
   }
 
@@ -197,9 +198,9 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U
 }
 
 internal B32
-lnk_flag_member_as_queued(LNK_Lib *lib, U32 member_idx, LNK_Symbol *trigger)
+lnk_lib_set_link_symbol(LNK_Lib *lib, U32 member_idx, LNK_Symbol *link_symbol)
 {
-  LNK_Symbol *slot = ins_atomic_ptr_eval_cond_assign(&lib->was_member_linked[member_idx], trigger, 0);
+  LNK_Symbol *slot = ins_atomic_ptr_eval_cond_assign(&lib->was_member_linked[member_idx], link_symbol, 0);
   B32 is_first_queue_attempt = (slot == 0);
   return is_first_queue_attempt;
 }
