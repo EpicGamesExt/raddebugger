@@ -1373,6 +1373,8 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
 internal void
 lnk_resolve_entry_point(LNK_Config *config, LNK_SymbolTable *symtab, LNK_Link *link)
 {
+  B32 is_entry_point_name_inferred = config->entry_point_name.size == 0;
+
   // loop over all possible subsystems and entry point names and pick
   // subsystem that has a defined entry point symbol
   if (config->entry_point_name.size == 0) {
@@ -1423,9 +1425,11 @@ subsystem_inferred_from_entry:;
 
   // do we have an entry point name?
   if (config->entry_point_name.size) {
-    // redirect user entry to appropriate CRT entry
-    String8 crt_entry_point_name = msvcrt_ctr_entry_from_user_entry(config->entry_point_name);
-    config->entry_point_name = crt_entry_point_name.size ? crt_entry_point_name : config->entry_point_name;
+    if (is_entry_point_name_inferred) {
+      // redirect user entry to appropriate CRT entry
+      String8 crt_entry_point_name = msvcrt_ctr_entry_from_user_entry(config->entry_point_name);
+      config->entry_point_name = crt_entry_point_name.size ? crt_entry_point_name : config->entry_point_name;
+    }
 
     // generate undefined symbol for entry point
     lnk_include_symbol(config, config->entry_point_name, 0);
