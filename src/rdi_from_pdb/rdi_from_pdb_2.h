@@ -86,8 +86,10 @@ struct P2R2_Shared
   
   P2R2_UnitSubStartPtInfo *lane_unit_sub_start_pt_infos;
   
-  String8Array *lane_file_paths;
-  U64Array *lane_file_paths_hashes;
+  String8Array *lane_inline_file_paths;
+  String8Array *lane_line_file_paths;
+  U64Array *lane_inline_file_paths_hashes;
+  U64Array *lane_line_file_paths_hashes;
   
   U64 total_path_count;
   
