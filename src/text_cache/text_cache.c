@@ -31,7 +31,8 @@ txt_lang_kind_from_extension(String8 extension)
           str8_match(extension, str8_lit("hxx"), StringMatchFlag_CaseInsensitive) ||
           str8_match(extension, str8_lit("hh"), StringMatchFlag_CaseInsensitive) ||
           str8_match(extension, str8_lit("h++"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("H"), 0))
+          str8_match(extension, str8_lit("H"), 0) ||
+          str8_match(extension, str8_lit("inl"), StringMatchFlag_CaseInsensitive))
   {
     kind = TXT_LangKind_CPlusPlus;
   }
