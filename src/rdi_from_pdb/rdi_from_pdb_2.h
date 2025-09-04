@@ -17,30 +17,6 @@ struct P2R2_ConvertThreadParams
   RDIM_BakeParams *out_bake_params;
 };
 
-typedef struct P2R2_SymBlock P2R2_SymBlock;
-struct P2R2_SymBlock
-{
-  P2R2_SymBlock *next;
-  PDB_CompUnit *unit;
-  CV_SymParsed *sym;
-  CV_C13Parsed *c13;
-  Rng1U64 sym_rec_range;
-};
-
-typedef struct P2R2_SymBlockList P2R2_SymBlockList;
-struct P2R2_SymBlockList
-{
-  P2R2_SymBlock *first;
-  P2R2_SymBlock *last;
-};
-
-typedef struct P2R2_UnitSubStartPtInfo P2R2_UnitSubStartPtInfo;
-struct P2R2_UnitSubStartPtInfo
-{
-  CV_SymFrameproc last_frameproc;
-  U64 last_proc_voff;
-};
-
 typedef struct P2R2_Shared P2R2_Shared;
 struct P2R2_Shared
 {
@@ -81,15 +57,10 @@ struct P2R2_Shared
   
   P2R_LinkNameMap link_name_map;
   
-  U64 total_sym_record_count;
-  P2R2_SymBlockList *lane_sym_blocks;
+  U64 sym_lane_take_counter;
   
-  P2R2_UnitSubStartPtInfo *lane_unit_sub_start_pt_infos;
-  
-  String8Array *lane_inline_file_paths;
-  String8Array *lane_line_file_paths;
-  U64Array *lane_inline_file_paths_hashes;
-  U64Array *lane_line_file_paths_hashes;
+  String8Array *unit_file_paths;
+  U64Array *unit_file_paths_hashes;
   
   U64 total_path_count;
   
@@ -121,15 +92,15 @@ struct P2R2_Shared
   RDIM_UDTMemberChunkList all_members;
   RDIM_UDTEnumValChunkList all_enum_vals;
   
-  RDIM_LocationChunkList *lanes_locations;
-  RDIM_LocationCaseChunkList *lanes_location_cases;
-  RDIM_SymbolChunkList *lanes_procedures;
-  RDIM_SymbolChunkList *lanes_global_variables;
-  RDIM_SymbolChunkList *lanes_thread_variables;
-  RDIM_SymbolChunkList *lanes_constants;
-  RDIM_ScopeChunkList *lanes_scopes;
-  RDIM_InlineSiteChunkList *lanes_inline_sites;
-  RDIM_TypeChunkList *lanes_typedefs;
+  RDIM_LocationChunkList *syms_locations;
+  RDIM_LocationCaseChunkList *syms_location_cases;
+  RDIM_SymbolChunkList *syms_procedures;
+  RDIM_SymbolChunkList *syms_global_variables;
+  RDIM_SymbolChunkList *syms_thread_variables;
+  RDIM_SymbolChunkList *syms_constants;
+  RDIM_ScopeChunkList *syms_scopes;
+  RDIM_InlineSiteChunkList *syms_inline_sites;
+  RDIM_TypeChunkList *syms_typedefs;
   
   RDIM_LocationChunkList all_locations;
   RDIM_LocationCaseChunkList all_location_cases;
