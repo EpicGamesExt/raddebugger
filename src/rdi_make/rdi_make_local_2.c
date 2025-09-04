@@ -1926,6 +1926,146 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage compute lane location block layout
+  //
+  U64 total_location_case_chunk_count = (params->procedures.chunk_count + params->scopes.chunk_count);
+  ProfScope("compute lane location block layout")
+  {
+    // rjf: set up
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->location_case_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * total_location_case_chunk_count);
+      rdim2_shared->location_case_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * total_location_case_chunk_count);
+    }
+    lane_sync();
+    
+    // rjf: per-chunk-lane count of location cases
+    {
+      // rjf: count location cases in scopes
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      {
+        U64 slot_idx = lane_idx() * total_location_case_chunk_count + chunk_idx;
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(idx, range)
+        {
+          for EachNode(local, RDIM_Local, n->v[idx].first_local)
+          {
+            rdim2_shared->location_case_chunk_lane_counts[slot_idx] += local->location_cases.count;
+          }
+        }
+        chunk_idx += 1;
+      }
+      
+      // rjf: count location cases in procedures
+      for EachNode(n, RDIM_SymbolChunkNode, params->procedures.first)
+      {
+        U64 slot_idx = lane_idx() * total_location_case_chunk_count + chunk_idx;
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(idx, range)
+        {
+          rdim2_shared->location_case_chunk_lane_counts[slot_idx] += n->v[idx].location_cases.count;
+        }
+        chunk_idx += 1;
+      }
+    }
+    lane_sync();
+    
+    // rjf: lay out location case offsets
+    if(lane_idx() == 0)
+    {
+      U64 chunk_idx = 0;
+      U64 location_case_layout_off = 1;
+      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          U64 slot_idx = l_idx * total_location_case_chunk_count + chunk_idx;
+          rdim2_shared->location_case_chunk_lane_offs[slot_idx] = location_case_layout_off;
+          location_case_layout_off += rdim2_shared->location_case_chunk_lane_counts[slot_idx];
+        }
+        chunk_idx += 1;
+      }
+      for EachNode(n, RDIM_SymbolChunkNode, params->procedures.first)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          U64 slot_idx = l_idx * total_location_case_chunk_count + chunk_idx;
+          rdim2_shared->location_case_chunk_lane_offs[slot_idx] = location_case_layout_off;
+          location_case_layout_off += rdim2_shared->location_case_chunk_lane_counts[slot_idx];
+        }
+        chunk_idx += 1;
+      }
+      rdim2_shared->total_location_case_count = location_case_layout_off;
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage bake location blocks
+  //
+  ProfScope("bake location blocks")
+  {
+    // rjf: set up
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->baked_location_blocks.location_blocks_count = rdim2_shared->total_location_case_count;
+      rdim2_shared->baked_location_blocks.location_blocks = push_array(arena, RDI_LocationBlock, rdim2_shared->baked_location_blocks.location_blocks_count);
+    }
+    lane_sync();
+    
+    // rjf: wide fill from scopes
+    U64 chunk_idx = 0;
+    ProfScope("wide fill from scopes")
+    {
+      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      {
+        U64 layout_slot_idx = lane_idx() * total_location_case_chunk_count + chunk_idx;
+        U64 layout_off = rdim2_shared->location_case_chunk_lane_offs[layout_slot_idx];
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(idx, range)
+        {
+          for EachNode(local, RDIM_Local, n->v[idx].first_local)
+          {
+            for EachNode(src, RDIM_LocationCase2, local->location_cases.first)
+            {
+              RDI_LocationBlock *dst = &rdim2_shared->baked_location_blocks.location_blocks[layout_off];
+              dst->scope_off_first   = (RDI_U32)src->voff_range.min; // TODO(rjf): @u64_to_u32
+              dst->scope_off_opl     = (RDI_U32)src->voff_range.max; // TODO(rjf): @u64_to_u32
+              dst->location_data_off = (RDI_U32)rdim_off_from_location(src->location); // TODO(rjf): @u64_to_u32
+              layout_off += 1;
+            }
+          }
+        }
+        chunk_idx += 1;
+      }
+    }
+    
+    // rjf: wide fill from procedures
+    ProfScope("wide fill from procedures")
+    {
+      for EachNode(n, RDIM_SymbolChunkNode, params->procedures.first)
+      {
+        U64 layout_slot_idx = lane_idx() * total_location_case_chunk_count + chunk_idx;
+        U64 layout_off = rdim2_shared->location_case_chunk_lane_offs[layout_slot_idx];
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(idx, range)
+        {
+          for EachNode(src, RDIM_LocationCase2, n->v[idx].location_cases.first)
+          {
+            RDI_LocationBlock *dst = &rdim2_shared->baked_location_blocks.location_blocks[layout_off];
+            dst->scope_off_first = (RDI_U32)src->voff_range.min; // TODO(rjf): @u64_to_u32
+            dst->scope_off_opl   = (RDI_U32)src->voff_range.max; // TODO(rjf): @u64_to_u32
+            dst->location_data_off = (RDI_U32)rdim_off_from_location(src->location); // TODO(rjf): @u64_to_u32
+            layout_off += 1;
+          }
+        }
+        chunk_idx += 1;
+      }
+    }
+  }
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake units, symbols, types, UDTs
   //
   {
@@ -2312,8 +2452,8 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     result.file_paths             = rdim2_shared->baked_file_paths;
     result.strings                = rdim2_shared->baked_strings;
     result.idx_runs               = rdim2_shared->baked_idx_runs;
-    // result.location_blocks        = rdim2_shared->baked_location_blocks;
-    // result.location_data          = rdim2_shared->baked_location_data;
+    result.locations              = rdim2_shared->baked_locations;
+    result.location_blocks2       = rdim2_shared->baked_location_blocks;
   }
   
   return result;

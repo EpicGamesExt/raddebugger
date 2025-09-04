@@ -91,12 +91,18 @@ struct RDIM2_Shared
   RDI_U64 *member_chunk_lane_offs; // [lane_count * udt_chunk_count]
   RDI_U64 *enum_val_chunk_lane_counts; // [lane_count * udt_chunk_count]
   RDI_U64 *enum_val_chunk_lane_offs; // [lane_count * udt_chunk_count]
+  
   RDIM_UDTBakeResult baked_udts;
+  
+  RDI_U64 *location_case_chunk_lane_counts; // [lane_count * (scope_chunk_count + procedure_chunk_count)
+  RDI_U64 *location_case_chunk_lane_offs; // [lane_count * (scope_chunk_count + procedure_chunk_count)
+  RDI_U64 total_location_case_count;
+  
+  RDIM_LocationBlockBakeResult baked_location_blocks;
   
   RDIM_UnitBakeResult baked_units;
   RDIM_TypeNodeBakeResult baked_type_nodes;
   RDIM_LocationBakeResult baked_locations;
-  RDIM_LocationBlockBakeResult baked_location_blocks;
   RDIM_GlobalVariableBakeResult baked_global_variables;
   RDIM_ThreadVariableBakeResult baked_thread_variables;
   RDIM_ConstantsBakeResult baked_constants;
