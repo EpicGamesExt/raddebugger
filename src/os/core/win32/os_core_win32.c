@@ -8,6 +8,7 @@
 
 typedef HRESULT W32_SetThreadDescription_Type(HANDLE hThread, PCWSTR lpThreadDescription);
 global W32_SetThreadDescription_Type *w32_SetThreadDescription_func = 0;
+global RIO_EXTENSION_FUNCTION_TABLE w32_rio_functions = {0};
 
 ////////////////////////////////
 //~ rjf: File Info Conversion Helpers
@@ -207,6 +208,7 @@ internal B32
 os_commit(void *ptr, U64 size)
 {
   B32 result = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+  w32_rio_functions.RIODeregisterBuffer(w32_rio_functions.RIORegisterBuffer(ptr, size));
   return result;
 }
 
@@ -1714,6 +1716,18 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
       }
       CloseHandle(token);
     }
+  }
+  
+  //- rjf: get RIO extension function table
+  {
+    // NOTE(mmozeiko): need to get function pointers to RIO functions, and that requires dummy socket
+    WSADATA WinSockData;
+    WSAStartup(MAKEWORD(2, 2), &WinSockData);
+    GUID guid = WSAID_MULTIPLE_RIO;
+    DWORD rio_byte = 0;
+    SOCKET Sock = socket(AF_UNSPEC, SOCK_STREAM, IPPROTO_TCP);
+    WSAIoctl(Sock, SIO_GET_MULTIPLE_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), (void**)&w32_rio_functions, sizeof(w32_rio_functions), &rio_byte, 0, 0);
+    closesocket(Sock);
   }
   
   //- rjf: get system info
