@@ -864,23 +864,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     lane_sync();
     
-    // TODO(rjf): debugging:
-    if(lane_idx() == 0)
-    {
-      for EachIndex(slot_idx, rdim2_shared->bake_string_map_topology.slots_count)
-      {
-        if(rdim2_shared->bake_string_map__loose->slots[slot_idx] == 0) { continue; }
-        for EachNode(n, RDIM_BakeStringChunkNode, rdim2_shared->bake_string_map__loose->slots[slot_idx]->first)
-        {
-          for EachIndex(n_idx, n->count)
-          {
-            // printf("%.*s\n", str8_varg(n->v[n_idx].string));
-          }
-        }
-      }
-      fflush(stdout);
-    }
-    
     //- rjf: sort
     ProfScope("sort")
     {
@@ -925,22 +908,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   }
   lane_sync();
   RDIM_BakeStringMapTight *bake_strings = &rdim2_shared->bake_strings;
-  // TODO(rjf): debugging:
-  if(lane_idx() == 0)
-  {
-    for EachIndex(slot_idx, bake_strings->slots_count)
-    {
-      for EachNode(n, RDIM_BakeStringChunkNode, bake_strings->slots[slot_idx].first)
-      {
-        for EachIndex(n_idx, n->count)
-        {
-          // printf("%.*s\n", str8_varg(n->v[n_idx].string));
-        }
-      }
-    }
-    fflush(stdout);
-  }
-  
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage build name maps
@@ -1164,7 +1131,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
             IdxRunNode *first_idx_run_node = 0;
             IdxRunNode *last_idx_run_node = 0;
             U64 active_idx_count = 0;
-            U64 active_hash = 0;
+            String8 active_string = {0};
             RDIM_BakeNameChunkNode *n = slot->first;
             U64 n_idx = 0;
             for(;;)
@@ -1177,16 +1144,16 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
               }
               
               // rjf: grab next element
-              U64 hash = 0;
+              String8 string = {0};
               U64 idx = 0;
               if(n != 0)
               {
-                hash = n->v[n_idx].hash;
+                string = n->v[n_idx].string;
                 idx  = n->v[n_idx].idx;
               }
               
               // rjf: next element hash doesn't match the active? -> push index run, clear active list, start new list
-              if(hash != active_hash)
+              if(!str8_match(string, active_string, 0))
               {
                 if(active_idx_count > 1)
                 {
@@ -1202,14 +1169,15 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
                   }
                   rdim_bake_idx_run_map_loose_insert(arena, lane_map_top, lane_map, 4, idxs, idxs_count);
                 }
-                active_hash = hash;
+                active_string = string;
                 first_idx_run_node = 0;
                 last_idx_run_node = 0;
+                active_idx_count = 0;
                 temp_end(scratch);
               }
               
-              // rjf: hash matches the active list -> push
-              if(hash != 0 && hash == active_hash)
+              // rjf: new element matches the active list -> push
+              if(active_string.size != 0 && str8_match(string, active_string, 0))
               {
                 IdxRunNode *idx_run_n = push_array(scratch.arena, IdxRunNode, 1);
                 idx_run_n->idx = idx;
@@ -1243,6 +1211,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         {
           RDIM_BakeIdxRunMapLoose *src_map = rdim2_shared->lane_bake_idx_run_maps__loose[src_lane_idx];
           RDIM_BakeIdxRunMapLoose *dst_map = rdim2_shared->bake_idx_run_map__loose;
+          dst_map->slots_idx_counts[slot_idx] += src_map->slots_idx_counts[slot_idx];
           if(dst_map->slots[slot_idx] == 0 && src_map->slots[slot_idx] != 0)
           {
             dst_map->slots[slot_idx] = src_map->slots[slot_idx];
@@ -1266,6 +1235,14 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         if(map->slots[slot_idx] != 0 && map->slots[slot_idx]->total_count > 1)
         {
           *map->slots[slot_idx] = rdim_bake_idx_run_chunk_list_sorted_from_unsorted(arena, map->slots[slot_idx]);
+          map->slots_idx_counts[slot_idx] = 0;
+          for EachNode(n, RDIM_BakeIdxRunChunkNode, map->slots[slot_idx]->first)
+          {
+            for EachIndex(idx, n->count)
+            {
+              map->slots_idx_counts[slot_idx] += n->v[idx].count;
+            }
+          }
         }
       }
     }
@@ -1287,9 +1264,10 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           rdim2_shared->bake_idx_runs.slots_base_idxs[slot_idx] = encoding_idx_off;
           if(map->slots[slot_idx] != 0)
           {
-            encoding_idx_off += map->slots[slot_idx]->total_idx_count;
+            encoding_idx_off += map->slots_idx_counts[slot_idx];
           }
         }
+        rdim2_shared->bake_idx_runs.slots_base_idxs[map_top->slots_count] = encoding_idx_off;
       }
       lane_sync();
       ProfScope("fill tight map")
@@ -1358,16 +1336,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   }
   lane_sync();
   RDIM_StringBakeResult baked_strings = rdim2_shared->baked_strings;
-  // TODO(rjf): debugging:
-  if(lane_idx() == 0)
-  {
-    for EachIndex(string_idx, baked_strings.string_offs_count)
-    {
-      String8 string = str8(baked_strings.string_data + baked_strings.string_offs[string_idx], baked_strings.string_offs[string_idx+1]-baked_strings.string_offs[string_idx]);
-      // printf("%.*s\n", str8_varg(string));
-    }
-    fflush(stdout);
-  }
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake idx runs
@@ -1393,7 +1361,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           StaticAssert(sizeof(rdim2_shared->baked_idx_runs.idx_runs[0]) == sizeof(n->v[0].idxes[0]), idx_run_size_check);
           for EachIndex(n_idx, n->count)
           {
-            rdim_memcpy(rdim2_shared->baked_idx_runs.idx_runs + off, n->v[n_idx].idxes, sizeof(RDI_U32) * n->v[n_idx].count);
+            rdim_memcpy(rdim2_shared->baked_idx_runs.idx_runs + off, n->v[n_idx].idxes, sizeof(n->v[n_idx].idxes[0]) * n->v[n_idx].count);
             off += n->v[n_idx].count;
           }
         }
@@ -1531,7 +1499,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
             IdxRunNode *first_idx_run_node = 0;
             IdxRunNode *last_idx_run_node = 0;
             U64 active_idx_count = 0;
-            U64 active_hash = 0;
             String8 active_string = {0};
             RDIM_BakeNameChunkNode *n = src_slot->first;
             U64 n_idx = 0;
@@ -1545,21 +1512,19 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
               }
               
               // rjf: grab next element
-              U64 hash = 0;
               U64 idx = 0;
               String8 string = {0};
               if(n != 0)
               {
-                hash   = n->v[n_idx].hash;
                 idx    = n->v[n_idx].idx;
                 string = n->v[n_idx].string;
               }
               
-              // rjf: next element hash doesn't match the active? -> push index run, clear active list, start new list
-              if(hash != active_hash)
+              // rjf: next element doesn't match the active list? -> push index run, clear active list, start new list
+              if(!str8_match(active_string, string, 0))
               {
-                // rjf: has active hash -> flatten & serialize
-                if(active_hash != 0)
+                // rjf: has active run -> flatten & serialize
+                if(active_string.size != 0)
                 {
                   // rjf: flatten idxes
                   RDI_U64 idxs_count = active_idx_count;
@@ -1590,15 +1555,15 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
                 }
                 
                 // rjf: start new list
-                active_hash = hash;
                 active_string = string;
                 first_idx_run_node = 0;
                 last_idx_run_node = 0;
+                active_idx_count = 0;
                 temp_end(scratch);
               }
               
               // rjf: hash matches the active list -> push
-              if(hash != 0 && hash == active_hash)
+              if(active_string.size != 0 && str8_match(active_string, string, 0))
               {
                 IdxRunNode *idx_run_n = push_array(scratch.arena, IdxRunNode, 1);
                 idx_run_n->idx = idx;

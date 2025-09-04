@@ -1183,7 +1183,6 @@ struct RDIM_BakeIdxRun
   RDI_U64 hash;
   RDI_U64 count;
   RDI_U32 *idxes;
-  RDI_U64 encoding_idx;
 };
 
 typedef struct RDIM_BakeIdxRunChunkNode RDIM_BakeIdxRunChunkNode;
@@ -1193,7 +1192,6 @@ struct RDIM_BakeIdxRunChunkNode
   RDIM_BakeIdxRun *v;
   RDI_U64 count;
   RDI_U64 cap;
-  RDI_U64 base_idx;
 };
 
 typedef struct RDIM_BakeIdxRunChunkList RDIM_BakeIdxRunChunkList;
@@ -1203,7 +1201,6 @@ struct RDIM_BakeIdxRunChunkList
   RDIM_BakeIdxRunChunkNode *last;
   RDI_U64 chunk_count;
   RDI_U64 total_count;
-  RDI_U64 total_idx_count;
 };
 
 typedef struct RDIM_BakeIdxRunMapTopology RDIM_BakeIdxRunMapTopology;

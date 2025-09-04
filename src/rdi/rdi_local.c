@@ -1201,9 +1201,10 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
             for(U32 idx_i = 0; idx_i < idx_count; idx_i += 1)
             {
               U32 idx = idx_array[idx_i];
-              str8_list_pushf(temp.arena, &idx_strings, "%u");
+              str8_list_pushf(temp.arena, &idx_strings, "%u", idx);
             }
-            indices = str8_list_join(scratch.arena, &idx_strings, &(StringJoin){.sep = str8_lit(", ")});
+            String8 extra = push_str8f(temp.arena, " // idx_run[%u]", node_ptr->match_idx_or_idx_run_first);
+            indices = str8_list_join(scratch.arena, &idx_strings, &(StringJoin){.sep = str8_lit(", "), .post = extra});
           }
           dumpf("      \"%S\": %S\n", str, indices);
           temp_end(temp);
