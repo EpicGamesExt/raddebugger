@@ -2171,19 +2171,13 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     if(lane_idx() == 0)
     {
       p2r2_shared->lanes_udts = push_array(arena, RDIM_UDTChunkList, lane_count());
-      p2r2_shared->lanes_members = push_array(arena, RDIM_UDTMemberChunkList, lane_count());
-      p2r2_shared->lanes_enum_vals = push_array(arena, RDIM_UDTEnumValChunkList, lane_count());
     }
     lane_sync();
     
     //- rjf: do wide fill
     {
       U64 udts_chunk_cap = 4096;
-      U64 members_chunk_cap = 4096;
-      U64 enum_vals_chunk_cap = 4096;
       RDIM_UDTChunkList *udts = &p2r2_shared->lanes_udts[lane_idx()];
-      RDIM_UDTMemberChunkList *members = &p2r2_shared->lanes_members[lane_idx()];
-      RDIM_UDTEnumValChunkList *enum_vals = &p2r2_shared->lanes_enum_vals[lane_idx()];
       Rng1U64 range = lane_range(itype_opl);
       for EachInRange(idx, range)
       {
@@ -2371,7 +2365,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       next_read_ptr = name.str+name.size+1;
                       
                       // rjf: emit member
-                      RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                      RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                       mem->kind = RDI_MemberKind_DataField;
                       mem->name = name;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
@@ -2393,7 +2387,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       next_read_ptr = name.str+name.size+1;
                       
                       // rjf: emit member
-                      RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                      RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                       mem->kind = RDI_MemberKind_StaticData;
                       mem->name = name;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
@@ -2471,7 +2465,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                         {
                           default:
                           {
-                            RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                            RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                             mem->kind = RDI_MemberKind_Method;
                             mem->name = name;
                             mem->type = method_type;
@@ -2479,7 +2473,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                           }break;
                           case CV_MethodProp_Static:
                           {
-                            RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                            RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                             mem->kind = RDI_MemberKind_StaticMethod;
                             mem->name = name;
                             mem->type = method_type;
@@ -2490,7 +2484,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                           case CV_MethodProp_Intro:
                           case CV_MethodProp_PureIntro:
                           {
-                            RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                            RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                             mem->kind = RDI_MemberKind_VirtualMethod;
                             mem->name = name;
                             mem->type = method_type;
@@ -2529,7 +2523,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       {
                         default:
                         {
-                          RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                           mem->kind = RDI_MemberKind_Method;
                           mem->name = name;
                           mem->type = method_type;
@@ -2537,7 +2531,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                         }break;
                         case CV_MethodProp_Static:
                         {
-                          RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                           mem->kind = RDI_MemberKind_StaticMethod;
                           mem->name = name;
                           mem->type = method_type;
@@ -2548,7 +2542,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                         case CV_MethodProp_Intro:
                         case CV_MethodProp_PureIntro:
                         {
-                          RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                           mem->kind = RDI_MemberKind_VirtualMethod;
                           mem->name = name;
                           mem->type = method_type;
@@ -2569,7 +2563,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       next_read_ptr = name.str+name.size+1;
                       
                       // rjf: emit member
-                      RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                      RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                       mem->kind = RDI_MemberKind_NestedType;
                       mem->name = name;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
@@ -2590,7 +2584,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       next_read_ptr = name.str+name.size+1;
                       
                       // rjf: emit member
-                      RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                      RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                       mem->kind = RDI_MemberKind_NestedType;
                       mem->name = name;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
@@ -2612,7 +2606,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       next_read_ptr = offset_ptr+offset.encoded_size;
                       
                       // rjf: emit member
-                      RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                      RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                       mem->kind = RDI_MemberKind_Base;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
                       mem->off  = (U32)offset64;
@@ -2638,7 +2632,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       next_read_ptr = (U8 *)(lf+1);
                       
                       // rjf: emit member
-                      RDIM_UDTMember *mem = rdim_udt_member_chunk_list_push(arena, members, members_chunk_cap);
+                      RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                       mem->kind = RDI_MemberKind_VirtualBase;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
                       new_member = mem;
@@ -2810,7 +2804,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       next_read_ptr = name.str+name.size+1;
                       
                       // rjf: emit member
-                      RDIM_UDTEnumVal *enum_val = rdim_udt_enum_val_chunk_list_push(arena, enum_vals, enum_vals_chunk_cap);
+                      RDIM_UDTEnumVal *enum_val = rdim_udt_push_enum_val(arena, udts, dst_udt);
                       enum_val->name = name;
                       enum_val->val  = val64;
                       new_enum_val = enum_val;
@@ -2842,8 +2836,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   }
   lane_sync();
   RDIM_UDTChunkList *lanes_udts = p2r2_shared->lanes_udts;
-  RDIM_UDTMemberChunkList *lanes_members = p2r2_shared->lanes_members;
-  RDIM_UDTEnumValChunkList *lanes_enum_vals = p2r2_shared->lanes_enum_vals;
   
   //////////////////////////////////////////////////////////////
   //- rjf: join all UDTs
@@ -2853,14 +2845,10 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     for EachIndex(idx, lane_count())
     {
       rdim_udt_chunk_list_concat_in_place(&p2r2_shared->all_udts, &lanes_udts[idx]);
-      rdim_udt_member_chunk_list_concat_in_place(&p2r2_shared->all_members, &lanes_members[idx]);
-      rdim_udt_enum_val_chunk_list_concat_in_place(&p2r2_shared->all_enum_vals, &lanes_enum_vals[idx]);
     }
   }
   lane_sync();
   RDIM_UDTChunkList all_udts = p2r2_shared->all_udts;
-  RDIM_UDTMemberChunkList all_members = p2r2_shared->all_members;
-  RDIM_UDTEnumValChunkList all_enum_vals = p2r2_shared->all_enum_vals;
   
   //////////////////////////////////////////////////////////////
   //- rjf: produce symbols from all streams
@@ -3934,8 +3922,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     result.units            = all_units;
     result.types            = all_types;
     result.udts             = all_udts;
-    result.members          = all_members;
-    result.enum_vals        = all_enum_vals;
     result.src_files        = all_src_files;
     result.line_tables      = all_line_tables;
     result.locations        = all_locations;

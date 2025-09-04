@@ -84,12 +84,8 @@ struct P2R2_Shared
   RDIM_TypeChunkList all_types__pre_typedefs;
   
   RDIM_UDTChunkList *lanes_udts;
-  RDIM_UDTMemberChunkList *lanes_members;
-  RDIM_UDTEnumValChunkList *lanes_enum_vals;
   
   RDIM_UDTChunkList all_udts;
-  RDIM_UDTMemberChunkList all_members;
-  RDIM_UDTEnumValChunkList all_enum_vals;
   
   RDIM_LocationChunkList *syms_locations;
   RDIM_LocationCaseChunkList *syms_location_cases;
