@@ -68,9 +68,8 @@ struct P2R2_Shared
   P2R_SrcFileMap src_file_map;
   
   RDIM_UnitChunkList all_units;
-  RDIM_LineTableChunkList *lanes_main_line_tables;
-  RDIM_LineTableChunkList *lanes_inline_line_tables;
-  RDIM_LineTable **lanes_first_inline_site_line_tables;
+  RDIM_LineTableChunkList *units_line_tables;
+  RDIM_LineTable **units_first_inline_site_line_tables;
   
   RDIM_LineTableChunkList all_line_tables;
   
