@@ -853,6 +853,14 @@ struct RDIM_LocationCase2
   RDIM_Rng1U64 voff_range;
 };
 
+typedef struct RDIM_LocationCaseList RDIM_LocationCaseList;
+struct RDIM_LocationCaseList
+{
+  RDIM_LocationCase2 *first;
+  RDIM_LocationCase2 *last;
+  RDI_U64 count;
+};
+
 //- rjf: locations (OLD)
 
 typedef struct RDIM_Location RDIM_Location;
@@ -964,8 +972,7 @@ struct RDIM_Local
   RDIM_String8 name;
   RDIM_Type *type;
   RDIM_LocationSet locset;
-  RDIM_LocationCase2 *first_location_case;
-  RDI_U64 location_case_count;
+  RDIM_LocationCaseList location_cases;
 };
 
 typedef struct RDIM_Scope RDIM_Scope;
@@ -1681,6 +1688,13 @@ RDI_PROC void rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkLi
 ////////////////////////////////
 //~ rjf: [Building] Location Info Building
 
+//- rjf: bytecode
+RDI_PROC void rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p);
+RDI_PROC void rdim_bytecode_push_uconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_U64 x);
+RDI_PROC void rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S64 x);
+RDI_PROC void rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed);
+
+//- rjf: locations
 RDI_PROC RDI_U64 rdim_encoded_size_from_location_info(RDIM_LocationInfo *info);
 RDI_PROC RDIM_Location2 *rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_LocationInfo *info);
 RDI_PROC RDI_U64 rdim_idx_from_location(RDIM_Location2 *location);
@@ -1696,12 +1710,7 @@ RDI_PROC RDI_U64 rdim_idx_from_scope(RDIM_Scope *scope);
 RDI_PROC void rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkList *to_push);
 RDI_PROC void rdim_scope_push_voff_range(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDIM_Scope *scope, RDIM_Rng1U64 range);
 RDI_PROC RDIM_Local *rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *scope);
-
-//- rjf: bytecode
-RDI_PROC void rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p);
-RDI_PROC void rdim_bytecode_push_uconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_U64 x);
-RDI_PROC void rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S64 x);
-RDI_PROC void rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed);
+RDI_PROC RDIM_LocationCase2 *rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location2 *location, RDIM_Rng1U64 voff_range);
 
 //- rjf: individual locations
 RDI_PROC RDIM_Location *rdim_push_location_addr_bytecode_stream(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode);
