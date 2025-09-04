@@ -205,6 +205,8 @@ internal String8 backslashed_from_str8(Arena *arena, String8 string);
 internal B32 str8_match(String8 a, String8 b, StringMatchFlags flags);
 internal U64 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
 internal U64 str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
+internal B32 str8_is_before(String8 a, String8 b);
+#define str8_ends_with(string, end, flags) str8_match(str8_postfix((string), (end).size), (end), (flags))
 
 ////////////////////////////////
 //~ rjf: String Slicing

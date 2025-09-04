@@ -1482,7 +1482,7 @@ rdim_bake_string_chunk_list_concat_in_place(RDIM_BakeStringChunkList *dst, RDIM_
 RSFORCEINLINE int
 rdim_bake_string_is_before(void *l, void *r)
 {
-  return ((RDIM_BakeString *)l)->hash < ((RDIM_BakeString *)r)->hash;
+  return str8_is_before(((RDIM_BakeString *)l)->string, ((RDIM_BakeString *)r)->string);
 }
 
 RDI_PROC RDIM_BakeStringChunkList
@@ -1495,6 +1495,10 @@ rdim_bake_string_chunk_list_sorted_from_unsorted(RDIM_Arena *arena, RDIM_BakeStr
     for(RDI_U64 idx = 0; idx < n->count; idx += 1)
     {
       RDIM_BakeString *src_str = &n->v[idx];
+      if(str8_match(src_str->string, str8_lit("x2"), 0))
+      {
+        int x = 0;
+      }
       RDIM_BakeString *dst_str = rdim_bake_string_chunk_list_push(arena, &dst, src->total_count);
       rdim_memcpy_struct(dst_str, src_str);
     }
@@ -1728,7 +1732,25 @@ rdim_bake_idx_run_chunk_list_concat_in_place(RDIM_BakeIdxRunChunkList *dst, RDIM
 RSFORCEINLINE int
 rdim_bake_idx_run_is_before(void *l, void *r)
 {
-  return ((RDIM_BakeIdxRun *)l)->hash < ((RDIM_BakeIdxRun *)r)->hash;
+  B32 is_less_than = 0;
+  {
+    RDIM_BakeIdxRun *lir = (RDIM_BakeIdxRun *)l;
+    RDIM_BakeIdxRun *rir = (RDIM_BakeIdxRun *)r;
+    U64 common_count = Min(lir->count, rir->count);
+    for(U64 off = 0; off < common_count; off += 1)
+    {
+      if(lir->idxes[off] < rir->idxes[off])
+      {
+        is_less_than = 1;
+        break;
+      }
+      if(off+1 == common_count)
+      {
+        is_less_than = (lir->count < rir->count);
+      }
+    }
+  }
+  return is_less_than;
 }
 
 RDI_PROC RDIM_BakeIdxRunChunkList
@@ -1923,7 +1945,7 @@ rdim_bake_name_chunk_list_concat_in_place(RDIM_BakeNameChunkList *dst, RDIM_Bake
 RSFORCEINLINE int
 rdim_bake_name_is_before(void *l, void *r)
 {
-  return ((RDIM_BakeName *)l)->hash < ((RDIM_BakeName *)r)->hash;
+  return str8_is_before(((RDIM_BakeName *)l)->string, ((RDIM_BakeName *)r)->string);
 }
 
 RDI_PROC RDIM_BakeNameChunkList

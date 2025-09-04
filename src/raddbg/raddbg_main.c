@@ -12,6 +12,7 @@
 // [ ] stdout/stderr path target setting is now busted >:(
 // [ ] target ui entry point should override built-in entry point
 // [ ] list of all tabs in palette
+// [ ] u64 + (ptr - ptr) seems to produce unexpected results - double check with C rules?
 //
 //- memory view
 // [ ] have smaller visible range than entire memory

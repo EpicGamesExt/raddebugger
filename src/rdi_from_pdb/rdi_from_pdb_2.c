@@ -413,57 +413,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   P2R_LinkNameMap link_name_map = p2r2_shared->link_name_map;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: organize subsets of unit symbol streams by lane
-  //
-  ProfScope("organize subsets of unit symbol streams by lane")
-  {
-    //- rjf: set up
-    ProfScope("set up") if(lane_idx() == 0)
-    {
-      p2r2_shared->lane_sym_blocks = push_array(arena, P2R2_SymBlockList, lane_count());
-      p2r2_shared->total_sym_record_count = 0;
-      for EachIndex(sym_idx, p2r2_shared->all_syms_count)
-      {
-        p2r2_shared->total_sym_record_count += all_syms[sym_idx]->sym_ranges.count;
-      }
-    }
-    lane_sync();
-    
-    //- rjf: gather
-    ProfScope("gather")
-    {
-      Rng1U64 lane_sym_range = lane_range(p2r2_shared->total_sym_record_count);
-      {
-        U64 scan_sym_idx = 0;
-        for EachIndex(idx, all_syms_count)
-        {
-          Rng1U64 stream_sym_range = r1u64(scan_sym_idx, scan_sym_idx + all_syms[idx]->sym_ranges.count);
-          Rng1U64 sym_range_in_stream = intersect_1u64(stream_sym_range, lane_sym_range);
-          if(sym_range_in_stream.max > sym_range_in_stream.min)
-          {
-            P2R2_SymBlock *block = push_array(arena, P2R2_SymBlock, 1);
-            SLLQueuePush(p2r2_shared->lane_sym_blocks[lane_idx()].first, p2r2_shared->lane_sym_blocks[lane_idx()].last, block);
-            if(idx > 0)
-            {
-              block->unit = comp_units->units[idx-1];
-            }
-            else
-            {
-              block->unit = &pdb_comp_unit_nil;
-            }
-            block->sym = all_syms[idx];
-            block->c13 = all_c13s[idx];
-            block->sym_rec_range = r1u64(sym_range_in_stream.min - scan_sym_idx, sym_range_in_stream.max - scan_sym_idx);
-          }
-          scan_sym_idx += all_syms[idx]->sym_ranges.count;
-        }
-      }
-    }
-  }
-  lane_sync();
-  P2R2_SymBlockList *lane_sym_blocks = p2r2_shared->lane_sym_blocks;
-  
-  //////////////////////////////////////////////////////////////
   //- rjf: gather all file paths
   //
   ProfScope("gather all file paths")
@@ -471,10 +420,9 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: prep outputs
     ProfScope("prep outputs") if(lane_idx() == 0)
     {
-      p2r2_shared->lane_inline_file_paths = push_array(arena, String8Array, lane_count());
-      p2r2_shared->lane_line_file_paths = push_array(arena, String8Array, lane_count());
-      p2r2_shared->lane_inline_file_paths_hashes = push_array(arena, U64Array, lane_count());
-      p2r2_shared->lane_line_file_paths_hashes = push_array(arena, U64Array, lane_count());
+      p2r2_shared->unit_file_paths = push_array(arena, String8Array, comp_units->count);
+      p2r2_shared->unit_file_paths_hashes = push_array(arena, U64Array, comp_units->count);
+      p2r2_shared->sym_lane_take_counter = 0;
     }
     lane_sync();
     
@@ -482,25 +430,29 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     ProfScope("do wide gather")
     {
       Temp scratch = scratch_begin(&arena, 1);
-      String8List inline_src_file_paths = {0};
-      String8List line_src_file_paths = {0};
       
       //- rjf: build local hash table to dedup files within this lane
       U64 hit_path_slots_count = 4096;
       String8Node **hit_path_slots = push_array(scratch.arena, String8Node *, hit_path_slots_count);
       
-      //- rjf: iterate lane blocks & gather inline site file names
-      ProfScope("gather inline site file names from this lane's symbols")
-        for(P2R2_SymBlock *lane_block = lane_sym_blocks[lane_idx()].first;
-            lane_block != 0;
-            lane_block = lane_block->next)
+      //- rjf: take units across lanes, find all file paths
+      ProfScope("take units across lanes, find all file paths")
+        for(;;)
       {
+        //- rjf: take next unit
+        U64 unit_num = ins_atomic_u64_inc_eval(&p2r2_shared->sym_lane_take_counter);
+        if(unit_num > comp_units->count)
+        {
+          break;
+        }
+        U64 unit_idx = unit_num-1;
+        
         //- rjf: unpack unit
-        PDB_CompUnit *unit = lane_block->unit;
-        CV_SymParsed *sym = lane_block->sym;
-        CV_C13Parsed *c13 = lane_block->c13;
-        CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges + lane_block->sym_rec_range.min;
-        CV_RecRange *rec_ranges_opl   = sym->sym_ranges.ranges + lane_block->sym_rec_range.max;
+        PDB_CompUnit *unit = comp_units->units[unit_idx];
+        CV_SymParsed *sym = all_syms[unit_idx+1];
+        CV_C13Parsed *c13 = all_c13s[unit_idx+1];
+        CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
+        CV_RecRange *rec_ranges_opl   = sym->sym_ranges.ranges + sym->sym_ranges.count;
         
         //- rjf: produce obj name/path
         String8 obj_name = unit->obj_name;
@@ -514,6 +466,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
         String8 obj_folder_path = backslashed_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
         
         //- rjf: find all inline site symbols & gather filenames
+        String8List src_file_paths = {0};
         U64 base_voff = 0;
         for(CV_RecRange *rec_range = rec_ranges_first;
             rec_range < rec_ranges_opl;
@@ -651,7 +604,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       hit_path_node = push_array(scratch.arena, String8Node, 1);
                       SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
                       hit_path_node->string = file_path_normalized;
-                      str8_list_push(arena, &inline_src_file_paths, push_str8_copy(arena, file_path_normalized));
+                      str8_list_push(arena, &src_file_paths, push_str8_copy(arena, file_path_normalized));
                     }
                     line_count = 0;
                   }
@@ -672,121 +625,78 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
             }break;
           }
         }
-      }
-      
-      //- rjf: do per-unit wide gather from unit line tables
-      ProfScope("do per-unit wide gather from unit line tables")
-      {
-        // rjf: iterate all units for this lane
-        Rng1U64 range = lane_range(comp_units->count);
-        for EachInRange(idx, range)
+        
+        // rjf: find all files in this unit's (non-inline) line info
+        ProfScope("find all files in this unit's (non-inline) line info")
+          for(CV_C13SubSectionNode *node = c13->first_sub_section;
+              node != 0;
+              node = node->next)
         {
-          PDB_CompUnit *unit = comp_units->units[idx];
-          CV_SymParsed *unit_sym = all_syms[idx+1];
-          CV_C13Parsed *unit_c13 = all_c13s[idx+1];
-          CV_RecRange *rec_ranges_first = unit_sym->sym_ranges.ranges;
-          CV_RecRange *rec_ranges_opl   = rec_ranges_first+unit_sym->sym_ranges.count;
-          
-          // rjf: produce obj name/path
-          String8 obj_name = unit->obj_name;
-          if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
-             str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
+          if(node->kind == CV_C13SubSectionKind_Lines)
           {
-            MemoryZeroStruct(&obj_name);
-          }
-          String8 obj_folder_path = backslashed_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
-          
-          // rjf: find all files in this unit's (non-inline) line info
-          ProfScope("find all files in this unit's (non-inline) line info")
-            for(CV_C13SubSectionNode *node = unit_c13->first_sub_section;
-                node != 0;
-                node = node->next)
-          {
-            if(node->kind == CV_C13SubSectionKind_Lines)
+            for(CV_C13LinesParsedNode *lines_n = node->lines_first;
+                lines_n != 0;
+                lines_n = lines_n->next)
             {
-              for(CV_C13LinesParsedNode *lines_n = node->lines_first;
-                  lines_n != 0;
-                  lines_n = lines_n->next)
+              // rjf: file name -> sanitized file path
+              String8 file_path = lines_n->v.file_name;
+              String8 file_path_sanitized = str8_copy(scratch.arena, str8_skip_chop_whitespace(file_path));
               {
-                // rjf: file name -> sanitized file path
-                String8 file_path = lines_n->v.file_name;
-                String8 file_path_sanitized = str8_copy(scratch.arena, str8_skip_chop_whitespace(file_path));
+                PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
+                String8List file_path_sanitized_parts = str8_split_path(scratch.arena, file_path_sanitized);
+                if(file_path_sanitized_style == PathStyle_Relative)
                 {
-                  PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
-                  String8List file_path_sanitized_parts = str8_split_path(scratch.arena, file_path_sanitized);
-                  if(file_path_sanitized_style == PathStyle_Relative)
-                  {
-                    String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
-                    str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
-                    file_path_sanitized_parts = obj_folder_path_parts;
-                    file_path_sanitized_style = path_style_from_str8(obj_folder_path);
-                  }
-                  str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
-                  file_path_sanitized = str8_path_list_join_by_style(scratch.arena, &file_path_sanitized_parts, file_path_sanitized_style);
+                  String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
+                  str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
+                  file_path_sanitized_parts = obj_folder_path_parts;
+                  file_path_sanitized_style = path_style_from_str8(obj_folder_path);
                 }
-                
-                // rjf: sanitized file path -> source file node
-                U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
-                U64 hit_path_slot = file_path_sanitized_hash%hit_path_slots_count;
-                String8Node *hit_path_node = 0;
-                for(String8Node *n = hit_path_slots[hit_path_slot]; n != 0; n = n->next)
+                str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
+                file_path_sanitized = str8_path_list_join_by_style(scratch.arena, &file_path_sanitized_parts, file_path_sanitized_style);
+              }
+              
+              // rjf: sanitized file path -> source file node
+              U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
+              U64 hit_path_slot = file_path_sanitized_hash%hit_path_slots_count;
+              String8Node *hit_path_node = 0;
+              for(String8Node *n = hit_path_slots[hit_path_slot]; n != 0; n = n->next)
+              {
+                if(str8_match(n->string, file_path_sanitized, 0))
                 {
-                  if(str8_match(n->string, file_path_sanitized, 0))
-                  {
-                    hit_path_node = n;
-                    break;
-                  }
+                  hit_path_node = n;
+                  break;
                 }
-                if(hit_path_node == 0)
-                {
-                  hit_path_node = push_array(scratch.arena, String8Node, 1);
-                  SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
-                  hit_path_node->string = file_path_sanitized;
-                  str8_list_push(scratch.arena, &line_src_file_paths, push_str8_copy(arena, file_path_sanitized));
-                }
+              }
+              if(hit_path_node == 0)
+              {
+                hit_path_node = push_array(scratch.arena, String8Node, 1);
+                SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
+                hit_path_node->string = file_path_sanitized;
+                str8_list_push(scratch.arena, &src_file_paths, push_str8_copy(arena, file_path_sanitized));
               }
             }
           }
         }
-      }
-      
-      //- rjf: merge into array for this lane
-      p2r2_shared->lane_inline_file_paths[lane_idx()] = str8_array_from_list(arena, &inline_src_file_paths);
-      p2r2_shared->lane_line_file_paths[lane_idx()] = str8_array_from_list(arena, &line_src_file_paths);
-      
-      //- rjf: hash this lane's file paths
-      {
-        struct
+        
+        //- rjf: merge into array for this unit
+        p2r2_shared->unit_file_paths[unit_idx] = str8_array_from_list(arena, &src_file_paths);
+        
+        //- rjf: hash this unit's file paths
+        U64Array hashes = {0};
+        hashes.count = p2r2_shared->unit_file_paths[unit_idx].count;
+        hashes.v = push_array(arena, U64, hashes.count);
+        for EachIndex(idx, p2r2_shared->unit_file_paths[unit_idx].count)
         {
-          String8Array paths;
-          U64Array *hashes_out;
+          hashes.v[idx] = rdi_hash(p2r2_shared->unit_file_paths[unit_idx].v[idx].str, p2r2_shared->unit_file_paths[unit_idx].v[idx].size);
         }
-        tasks[] =
-        {
-          {p2r2_shared->lane_inline_file_paths[lane_idx()], &p2r2_shared->lane_inline_file_paths_hashes[lane_idx()]},
-          {p2r2_shared->lane_line_file_paths[lane_idx()], &p2r2_shared->lane_line_file_paths_hashes[lane_idx()]},
-        };
-        for EachElement(task_idx, tasks)
-        {
-          U64Array hashes = {0};
-          hashes.count = tasks[task_idx].paths.count;
-          hashes.v = push_array(arena, U64, hashes.count);
-          for EachIndex(idx, tasks[task_idx].paths.count)
-          {
-            hashes.v[idx] = rdi_hash(tasks[task_idx].paths.v[idx].str, tasks[task_idx].paths.v[idx].size);
-          }
-          tasks[task_idx].hashes_out[0] = hashes;
-        }
+        p2r2_shared->unit_file_paths_hashes[unit_idx] = hashes;
       }
-      
       scratch_end(scratch);
     }
   }
   lane_sync();
-  String8Array *lane_inline_file_paths = p2r2_shared->lane_inline_file_paths;
-  String8Array *lane_line_file_paths = p2r2_shared->lane_line_file_paths;
-  U64Array *lane_inline_file_paths_hashes = p2r2_shared->lane_inline_file_paths_hashes;
-  U64Array *lane_line_file_paths_hashes = p2r2_shared->lane_line_file_paths_hashes;
+  String8Array *unit_file_paths = p2r2_shared->unit_file_paths;
+  U64Array *unit_file_paths_hashes = p2r2_shared->unit_file_paths_hashes;
   
   //////////////////////////////////////////////////////////////
   //- rjf: build unified collection & map for source files
@@ -796,10 +706,9 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     ProfScope("set up table") if(lane_idx() == 0)
     {
       p2r2_shared->total_path_count = 0;
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, comp_units->count)
       {
-        p2r2_shared->total_path_count += lane_line_file_paths[idx].count;
-        p2r2_shared->total_path_count += lane_inline_file_paths[idx].count;
+        p2r2_shared->total_path_count += unit_file_paths[idx].count;
       }
       p2r2_shared->src_file_map.slots_count = p2r2_shared->total_path_count + p2r2_shared->total_path_count/2 + 1;
       p2r2_shared->src_file_map.slots = push_array(arena, P2R_SrcFileNode *, p2r2_shared->src_file_map.slots_count);
@@ -809,43 +718,30 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: fill table
     ProfScope("fill table") if(lane_idx() == 0)
     {
-      struct
+      for EachIndex(idx, comp_units->count)
       {
-        String8Array *lane_paths;
-        U64Array *lane_hashes;
-      }
-      tasks[] =
-      {
-        {lane_inline_file_paths, lane_inline_file_paths_hashes},
-        {lane_line_file_paths, lane_line_file_paths_hashes},
-      };
-      for EachElement(task_idx, tasks)
-      {
-        for EachIndex(idx, lane_count())
+        String8Array paths = unit_file_paths[idx];
+        U64Array hashes = unit_file_paths_hashes[idx];
+        for EachIndex(path_idx, paths.count)
         {
-          String8Array paths = tasks[task_idx].lane_paths[idx];
-          U64Array hashes = tasks[task_idx].lane_hashes[idx];
-          for EachIndex(path_idx, paths.count)
+          String8 file_path_sanitized = paths.v[path_idx];
+          U64 file_path_sanitized_hash = hashes.v[path_idx];
+          U64 src_file_slot = file_path_sanitized_hash%p2r2_shared->src_file_map.slots_count;
+          P2R_SrcFileNode *src_file_node = 0;
+          for(P2R_SrcFileNode *n = p2r2_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
           {
-            String8 file_path_sanitized = paths.v[path_idx];
-            U64 file_path_sanitized_hash = hashes.v[path_idx];
-            U64 src_file_slot = file_path_sanitized_hash%p2r2_shared->src_file_map.slots_count;
-            P2R_SrcFileNode *src_file_node = 0;
-            for(P2R_SrcFileNode *n = p2r2_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+            if(str8_match(n->src_file->path, file_path_sanitized, 0))
             {
-              if(str8_match(n->src_file->path, file_path_sanitized, 0))
-              {
-                src_file_node = n;
-                break;
-              }
+              src_file_node = n;
+              break;
             }
-            if(src_file_node == 0)
-            {
-              src_file_node = push_array(arena, P2R_SrcFileNode, 1);
-              SLLStackPush(p2r2_shared->src_file_map.slots[src_file_slot], src_file_node);
-              src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &p2r2_shared->all_src_files__sequenceless, p2r2_shared->total_path_count);
-              src_file_node->src_file->path = push_str8_copy(arena, file_path_sanitized);
-            }
+          }
+          if(src_file_node == 0)
+          {
+            src_file_node = push_array(arena, P2R_SrcFileNode, 1);
+            SLLStackPush(p2r2_shared->src_file_map.slots[src_file_slot], src_file_node);
+            src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &p2r2_shared->all_src_files__sequenceless, p2r2_shared->total_path_count);
+            src_file_node->src_file->path = push_str8_copy(arena, file_path_sanitized);
           }
         }
       }
@@ -854,80 +750,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   lane_sync();
   RDIM_SrcFileChunkList all_src_files__sequenceless = p2r2_shared->all_src_files__sequenceless;
   P2R_SrcFileMap src_file_map = p2r2_shared->src_file_map;
-  
-  //////////////////////////////////////////////////////////////
-  //- rjf: for each lane, figure out info for starting a sub-unit range
-  //
-  ProfScope("for each lane, figure out info for starting a sub-unit range")
-  {
-    // rjf: set up
-    if(lane_idx() == 0)
-    {
-      p2r2_shared->lane_unit_sub_start_pt_infos = push_array(arena, P2R2_UnitSubStartPtInfo, lane_count());
-    }
-    lane_sync();
-    
-    // rjf: fill
-    {
-      P2R2_UnitSubStartPtInfo *out_info = &p2r2_shared->lane_unit_sub_start_pt_infos[lane_idx()];
-      P2R2_SymBlock *first_block = lane_sym_blocks[lane_idx()].first;
-      if(first_block != 0 && first_block->sym_rec_range.min > 0)
-      {
-        CV_SymParsed *sym = first_block->sym;
-        CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
-        CV_RecRange *rec_ranges_opl   = sym->sym_ranges.ranges + first_block->sym_rec_range.min;
-        for(CV_RecRange *rec_range = rec_ranges_first;
-            rec_range < rec_ranges_opl;
-            rec_range += 1)
-        {
-          // rjf: rec range -> symbol info range
-          U64 sym_off_first = rec_range->off + 2;
-          U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
-          
-          // rjf: skip invalid ranges
-          if(sym_off_opl > sym->data.size || sym_off_first > sym->data.size || sym_off_first > sym_off_opl)
-          {
-            continue;
-          }
-          
-          // rjf: unpack symbol info
-          CV_SymKind kind = rec_range->hdr.kind;
-          U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-          void *sym_header_struct_base = sym->data.str + sym_off_first;
-          void *sym_data_opl = sym->data.str + sym_off_opl;
-          
-          // rjf: skip bad sizes
-          if(sym_off_first + sym_header_struct_size > sym_off_opl)
-          {
-            continue;
-          }
-          
-          // rjf: find range starters
-          switch(kind)
-          {
-            default:{}break;
-            case CV_SymKind_LPROC32:
-            case CV_SymKind_GPROC32:
-            {
-              CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
-              COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= coff_sections.count) ? &coff_sections.v[proc32->sec-1] : 0;
-              if(section != 0)
-              {
-                out_info->last_proc_voff = section->voff + proc32->off;
-              }
-            }break;
-            case CV_SymKind_FRAMEPROC:
-            {
-              CV_SymFrameproc *frameproc = (CV_SymFrameproc*)sym_header_struct_base;
-              out_info->last_frameproc = *frameproc;
-            }break;
-          }
-        }
-      }
-    }
-  }
-  lane_sync();
-  P2R2_UnitSubStartPtInfo *lane_unit_sub_start_pt_infos = p2r2_shared->lane_unit_sub_start_pt_infos;
   
   //////////////////////////////////////////////////////////////
   //- rjf: convert unit info
@@ -944,6 +766,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       p2r2_shared->lanes_main_line_tables = push_array(arena, RDIM_LineTableChunkList, lane_count());
       p2r2_shared->lanes_inline_line_tables = push_array(arena, RDIM_LineTableChunkList, lane_count());
       p2r2_shared->lanes_first_inline_site_line_tables = push_array(arena, RDIM_LineTable *, lane_count());
+      p2r2_shared->sym_lane_take_counter = 0;
     }
     lane_sync();
     RDIM_Unit *units = p2r2_shared->all_units.first->v;
@@ -1066,14 +889,21 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       //- rjf: build per-inline-site line tables
       ProfScope("build per-inline-site line tables")
       {
-        for(P2R2_SymBlock *lane_block = lane_sym_blocks[lane_idx()].first;
-            lane_block != 0;
-            lane_block = lane_block->next)
+        for(;;)
         {
+          //- rjf: take next unit
+          U64 unit_num = ins_atomic_u64_inc_eval(&p2r2_shared->sym_lane_take_counter);
+          if(unit_num > comp_units->count)
+          {
+            break;
+          }
+          U64 unit_idx = unit_num-1;
+          
+          //- rjf: unpack unit
           Temp scratch = scratch_begin(&arena, 1);
-          PDB_CompUnit *src_unit     = lane_block->unit;
-          CV_SymParsed *src_unit_sym = lane_block->sym;
-          CV_C13Parsed *src_unit_c13 = lane_block->c13;
+          PDB_CompUnit *src_unit     = comp_units->units[unit_idx];
+          CV_SymParsed *src_unit_sym = all_syms[unit_idx+1];
+          CV_C13Parsed *src_unit_c13 = all_c13s[unit_idx+1];
           String8 obj_name = src_unit->obj_name;
           if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
              str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
@@ -1081,9 +911,9 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
             MemoryZeroStruct(&obj_name);
           }
           String8 obj_folder_path = backslashed_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
-          CV_RecRange *rec_ranges_first = src_unit_sym->sym_ranges.ranges + lane_block->sym_rec_range.min;
-          CV_RecRange *rec_ranges_opl   = src_unit_sym->sym_ranges.ranges + lane_block->sym_rec_range.max;
-          U64 base_voff = lane_unit_sub_start_pt_infos[lane_idx()].last_proc_voff;
+          CV_RecRange *rec_ranges_first = src_unit_sym->sym_ranges.ranges;
+          CV_RecRange *rec_ranges_opl   = src_unit_sym->sym_ranges.ranges + src_unit_sym->sym_ranges.count;
+          U64 base_voff = 0;
           for(CV_RecRange *rec_range = rec_ranges_first;
               rec_range < rec_ranges_opl;
               rec_range += 1)
@@ -3075,49 +2905,53 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     //
     if(lane_idx() == 0)
     {
-      p2r2_shared->lanes_locations        = push_array(arena, RDIM_LocationChunkList, lane_count());
-      p2r2_shared->lanes_location_cases   = push_array(arena, RDIM_LocationCaseChunkList, lane_count());
-      p2r2_shared->lanes_procedures       = push_array(arena, RDIM_SymbolChunkList, lane_count());
-      p2r2_shared->lanes_global_variables = push_array(arena, RDIM_SymbolChunkList, lane_count());
-      p2r2_shared->lanes_thread_variables = push_array(arena, RDIM_SymbolChunkList, lane_count());
-      p2r2_shared->lanes_constants        = push_array(arena, RDIM_SymbolChunkList, lane_count());
-      p2r2_shared->lanes_scopes           = push_array(arena, RDIM_ScopeChunkList, lane_count());
-      p2r2_shared->lanes_inline_sites     = push_array(arena, RDIM_InlineSiteChunkList, lane_count());
-      p2r2_shared->lanes_typedefs         = push_array(arena, RDIM_TypeChunkList, lane_count());
+      p2r2_shared->syms_locations        = push_array(arena, RDIM_LocationChunkList, all_syms_count);
+      p2r2_shared->syms_location_cases   = push_array(arena, RDIM_LocationCaseChunkList, all_syms_count);
+      p2r2_shared->syms_procedures       = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      p2r2_shared->syms_global_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      p2r2_shared->syms_thread_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      p2r2_shared->syms_constants        = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      p2r2_shared->syms_scopes           = push_array(arena, RDIM_ScopeChunkList, all_syms_count);
+      p2r2_shared->syms_inline_sites     = push_array(arena, RDIM_InlineSiteChunkList, all_syms_count);
+      p2r2_shared->syms_typedefs         = push_array(arena, RDIM_TypeChunkList, all_syms_count);
+      p2r2_shared->sym_lane_take_counter  = 0;
     }
     lane_sync();
     
     ////////////////////////////
-    //- rjf: set up outputs for this sym stream
-    //
-    U64 sym_locations_chunk_cap = 16384;
-    U64 sym_location_cases_chunk_cap = 16384;
-    U64 sym_procedures_chunk_cap = 16384;
-    U64 sym_global_variables_chunk_cap = 16384;
-    U64 sym_thread_variables_chunk_cap = 16384;
-    U64 sym_constants_chunk_cap = 16384;
-    U64 sym_scopes_chunk_cap = 16384;
-    U64 sym_inline_sites_chunk_cap = 16384;
-    RDIM_LocationChunkList sym_locations = {0};
-    RDIM_LocationCaseChunkList sym_location_cases = {0};
-    RDIM_SymbolChunkList sym_procedures = {0};
-    RDIM_SymbolChunkList sym_global_variables = {0};
-    RDIM_SymbolChunkList sym_thread_variables = {0};
-    RDIM_SymbolChunkList sym_constants = {0};
-    RDIM_ScopeChunkList sym_scopes = {0};
-    RDIM_InlineSiteChunkList sym_inline_sites = {0};
-    RDIM_TypeChunkList typedefs = {0};
-    
-    ////////////////////////////
     //- rjf: fill outputs for all unit sym blocks in this lane
     //
-    for(P2R2_SymBlock *lane_block = lane_sym_blocks[lane_idx()].first;
-        lane_block != 0;
-        lane_block = lane_block->next)
+    for(;;)
     {
+      //- rjf: take next sym
+      U64 sym_num = ins_atomic_u64_inc_eval(&p2r2_shared->sym_lane_take_counter);
+      if(sym_num > all_syms_count)
+      {
+        break;
+      }
+      U64 sym_idx = sym_num-1;
+      
+      //- rjf: unpack sym
       Temp scratch = scratch_begin(&arena, 1);
-      CV_SymParsed *sym = lane_block->sym;
-      Rng1U64 sym_rec_range = lane_block->sym_rec_range;
+      CV_SymParsed *sym = all_syms[sym_idx];
+      Rng1U64 sym_rec_range = r1u64(0, sym->sym_ranges.count);
+      U64 sym_locations_chunk_cap = 16384;
+      U64 sym_location_cases_chunk_cap = 16384;
+      U64 sym_procedures_chunk_cap = 16384;
+      U64 sym_global_variables_chunk_cap = 16384;
+      U64 sym_thread_variables_chunk_cap = 16384;
+      U64 sym_constants_chunk_cap = 16384;
+      U64 sym_scopes_chunk_cap = 16384;
+      U64 sym_inline_sites_chunk_cap = 16384;
+      RDIM_LocationChunkList *sym_locations = &p2r2_shared->syms_locations[sym_idx];
+      RDIM_LocationCaseChunkList *sym_location_cases = &p2r2_shared->syms_location_cases[sym_idx];
+      RDIM_SymbolChunkList *sym_procedures = &p2r2_shared->syms_procedures[sym_idx];
+      RDIM_SymbolChunkList *sym_global_variables = &p2r2_shared->syms_global_variables[sym_idx];
+      RDIM_SymbolChunkList *sym_thread_variables = &p2r2_shared->syms_thread_variables[sym_idx];
+      RDIM_SymbolChunkList *sym_constants = &p2r2_shared->syms_constants[sym_idx];
+      RDIM_ScopeChunkList *sym_scopes = &p2r2_shared->syms_scopes[sym_idx];
+      RDIM_InlineSiteChunkList *sym_inline_sites = &p2r2_shared->syms_inline_sites[sym_idx];
+      RDIM_TypeChunkList *typedefs = &p2r2_shared->syms_typedefs[sym_idx];
       
       //////////////////////////
       //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
@@ -3253,7 +3087,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               CV_SymBlock32 *block32 = (CV_SymBlock32 *)sym_header_struct_base;
               
               // rjf: build scope, insert into current parent scope
-              RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
+              RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, sym_scopes, sym_scopes_chunk_cap);
               {
                 if(top_scope_node == 0)
                 {
@@ -3272,7 +3106,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                   U64 voff_first = section->voff + block32->off;
                   U64 voff_last = voff_first + block32->len;
                   RDIM_Rng1U64 voff_range = {voff_first, voff_last};
-                  rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
+                  rdim_scope_push_voff_range(arena, sym_scopes, scope, voff_range);
                 }
               }
               
@@ -3331,7 +3165,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 }
                 
                 // rjf: build symbol
-                RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, &sym_global_variables, sym_global_variables_chunk_cap);
+                RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, sym_global_variables, sym_global_variables_chunk_cap);
                 symbol->is_extern        = (kind == CV_SymKind_GDATA32);
                 symbol->name             = name;
                 symbol->type             = type;
@@ -3347,7 +3181,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
             {
               CV_SymUDT *udt = (CV_SymUDT *)sym_header_struct_base;
               String8 name = str8_cstring_capped(udt+1, sym_data_opl);
-              RDIM_Type *type   = rdim_type_chunk_list_push(arena, &typedefs, 4096);
+              RDIM_Type *type   = rdim_type_chunk_list_push(arena, typedefs, 4096);
               type->kind        = RDI_TypeKind_Alias;
               type->name        = name;
               type->direct_type = p2r_type_ptr_from_itype(udt->itype);
@@ -3390,7 +3224,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               //       it here because these scopes refer to the ranges of code that make up a
               //       procedure *not* the namespaces, so a procedure's root scope always has
               //       no parent.
-              RDIM_Scope *procedure_root_scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
+              RDIM_Scope *procedure_root_scope = rdim_scope_chunk_list_push(arena, sym_scopes, sym_scopes_chunk_cap);
               {
                 COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= coff_sections.count) ? &coff_sections.v[proc32->sec-1] : 0;
                 if(section != 0)
@@ -3398,7 +3232,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                   U64 voff_first = section->voff + proc32->off;
                   U64 voff_last = voff_first + proc32->len;
                   RDIM_Rng1U64 voff_range = {voff_first, voff_last};
-                  rdim_scope_push_voff_range(arena, &sym_scopes, procedure_root_scope, voff_range);
+                  rdim_scope_push_voff_range(arena, sym_scopes, procedure_root_scope, voff_range);
                   procedure_base_voff = voff_first;
                 }
               }
@@ -3422,7 +3256,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               }
               
               // rjf: build procedure symbol
-              RDIM_Symbol *procedure_symbol = rdim_symbol_chunk_list_push(arena, &sym_procedures, sym_procedures_chunk_cap);
+              RDIM_Symbol *procedure_symbol = rdim_symbol_chunk_list_push(arena, sym_procedures, sym_procedures_chunk_cap);
               procedure_symbol->is_extern        = (kind == CV_SymKind_GPROC32);
               procedure_symbol->name             = name;
               procedure_symbol->link_name        = link_name;
@@ -3507,7 +3341,11 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               
               // rjf: build local
               RDIM_Scope *scope = top_scope_node->scope;
-              RDIM_Local *local = rdim_scope_push_local(arena, &sym_scopes, scope);
+              RDIM_Local *local = rdim_scope_push_local(arena, sym_scopes, scope);
+              if(str8_match(name, str8_lit("example_color_struct"), 0))
+              {
+                int x = 0;
+              }
               local->kind = local_kind;
               local->name = name;
               local->type = type;
@@ -3537,8 +3375,8 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: build location
                 RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
-                RDIM_Location2 *loc2 = rdim_location_chunk_list_push_new(arena, &sym_locations, sym_locations_chunk_cap, &loc_info);
-                RDIM_LocationCase2 *loc_case = rdim_location_case_chunk_list_push(arena, &sym_location_cases, sym_locations_chunk_cap);
+                RDIM_Location2 *loc2 = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
+                RDIM_LocationCase2 *loc_case = rdim_location_case_chunk_list_push(arena, sym_location_cases, sym_locations_chunk_cap);
                 loc_case->location = loc2;
                 loc_case->voff_range.min = 0;
                 loc_case->voff_range.max = max_U64;
@@ -3550,7 +3388,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 // rjf: set location case
                 RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
                 RDIM_Rng1U64 voff_range = {0, max_U64};
-                rdim_location_set_push_case(arena, &sym_scopes, &local->locset, voff_range, loc);
+                rdim_location_set_push_case(arena, sym_scopes, &local->locset, voff_range, loc);
               }
             }break;
             
@@ -3582,7 +3420,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               }
               
               // rjf: build symbol
-              RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, &sym_thread_variables, sym_thread_variables_chunk_cap);
+              RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, sym_thread_variables, sym_thread_variables_chunk_cap);
               tvar->name             = name;
               tvar->type             = type;
               tvar->is_extern        = (kind == CV_SymKind_GTHREAD32);
@@ -3634,7 +3472,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: build local
                 RDIM_Scope *scope = top_scope_node->scope;
-                RDIM_Local *local = rdim_scope_push_local(arena, &sym_scopes, scope);
+                RDIM_Local *local = rdim_scope_push_local(arena, sym_scopes, scope);
                 local->kind = local_kind;
                 local->name = name;
                 local->type = type;
@@ -3668,7 +3506,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               RDIM_Location *location = rdim_push_location_val_reg(arena, reg_code);
               
               // rjf: emit locations over ranges
-              p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
+              p2r_location_over_lvar_addr_range(arena, sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_FRAMEPOINTER_REL
@@ -3712,7 +3550,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               U32 byte_pos = 0;
               S64 var_off = (S64)defrange_fprel->off;
               RDIM_LocationInfo location_info = p2r2_location_info_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
-              RDIM_Location2 *location = rdim_location_chunk_list_push_new(arena, &sym_locations, sym_locations_chunk_cap, &location_info);
+              RDIM_Location2 *location = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &location_info);
               
               // rjf: emit locations over ranges
               // TODO(rjf): p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
@@ -3747,7 +3585,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               RDIM_Location *location = rdim_push_location_val_reg(arena, reg_code);
               
               // rjf: emit locations over ranges
-              p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
+              p2r_location_over_lvar_addr_range(arena, sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE
@@ -3788,7 +3626,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               
               // rjf: emit location over ranges
               RDIM_Rng1U64 voff_range = {0, max_U64};
-              rdim_location_set_push_case(arena, &sym_scopes, defrange_target, voff_range, location);
+              rdim_location_set_push_case(arena, sym_scopes, defrange_target, voff_range, location);
             }break;
             
             //- rjf: DEFRANGE_REGISTER_REL
@@ -3819,7 +3657,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
               
               // rjf: emit locations over ranges
-              p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
+              p2r_location_over_lvar_addr_range(arena, sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: FILESTATIC
@@ -3872,7 +3710,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               }
               
               // rjf: build inline site
-              RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, &sym_inline_sites, sym_inline_sites_chunk_cap);
+              RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, sym_inline_sites, sym_inline_sites_chunk_cap);
               inline_site->name       = name;
               inline_site->type       = type;
               inline_site->owner      = owner;
@@ -3899,7 +3737,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               }
               
               // rjf: build scope
-              RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
+              RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, sym_scopes, sym_scopes_chunk_cap);
               scope->inline_site = inline_site;
               if(top_scope_node == 0)
               {
@@ -3933,7 +3771,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                   {
                     // rjf: build new range & add to scope
                     RDIM_Rng1U64 voff_range = { step.range.min, step.range.max };
-                    rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
+                    rdim_scope_push_voff_range(arena, sym_scopes, scope, voff_range);
                   }
                   
                   if(step.flags & CV_C13InlineSiteDecoderStepFlag_ExtendLastRange)
@@ -3991,10 +3829,10 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               // rjf: build constant symbol
               if(name_qualified.size != 0)
               {
-                RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, &sym_constants, sym_constants_chunk_cap);
+                RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, sym_constants, sym_constants_chunk_cap);
                 cnst->name = name_qualified;
                 cnst->type = type;
-                rdim_symbol_push_value_data(arena, &sym_constants, cnst, val_data);
+                rdim_symbol_push_value_data(arena, sym_constants, cnst, val_data);
               }
             }break;
           }
@@ -4003,20 +3841,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       
       scratch_end(scratch);
     }
-    
-    ////////////////////////////
-    //- rjf: output this lane's symbols
-    //
-    p2r2_shared->lanes_locations[lane_idx()]               = sym_locations;
-    p2r2_shared->lanes_location_cases[lane_idx()]          = sym_location_cases;
-    p2r2_shared->lanes_procedures[lane_idx()]              = sym_procedures;
-    p2r2_shared->lanes_global_variables[lane_idx()]        = sym_global_variables;
-    p2r2_shared->lanes_thread_variables[lane_idx()]        = sym_thread_variables;
-    p2r2_shared->lanes_constants[lane_idx()]               = sym_constants;
-    p2r2_shared->lanes_scopes[lane_idx()]                  = sym_scopes;
-    p2r2_shared->lanes_inline_sites[lane_idx()]            = sym_inline_sites;
-    p2r2_shared->lanes_typedefs[lane_idx()]                = typedefs;
-    
 #undef p2r_type_ptr_from_itype
   }
   lane_sync();
@@ -4027,65 +3851,65 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   {
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("join locations")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_location_chunk_list_concat_in_place(&p2r2_shared->all_locations, &p2r2_shared->lanes_locations[idx]);
+        rdim_location_chunk_list_concat_in_place(&p2r2_shared->all_locations, &p2r2_shared->syms_locations[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("join location cases")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_location_case_chunk_list_concat_in_place(&p2r2_shared->all_location_cases, &p2r2_shared->lanes_location_cases[idx]);
+        rdim_location_case_chunk_list_concat_in_place(&p2r2_shared->all_location_cases, &p2r2_shared->syms_location_cases[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("join procedures")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_procedures, &p2r2_shared->lanes_procedures[idx]);
+        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_procedures, &p2r2_shared->syms_procedures[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(3)) ProfScope("join global variables")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_global_variables, &p2r2_shared->lanes_global_variables[idx]);
+        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_global_variables, &p2r2_shared->syms_global_variables[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(4)) ProfScope("join thread variables")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_thread_variables, &p2r2_shared->lanes_thread_variables[idx]);
+        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_thread_variables, &p2r2_shared->syms_thread_variables[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(5)) ProfScope("join constants")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_constants, &p2r2_shared->lanes_constants[idx]);
+        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_constants, &p2r2_shared->syms_constants[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(6)) ProfScope("join scopes")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_scope_chunk_list_concat_in_place(&p2r2_shared->all_scopes, &p2r2_shared->lanes_scopes[idx]);
+        rdim_scope_chunk_list_concat_in_place(&p2r2_shared->all_scopes, &p2r2_shared->syms_scopes[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(7)) ProfScope("join inline sites")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_inline_site_chunk_list_concat_in_place(&p2r2_shared->all_inline_sites, &p2r2_shared->lanes_inline_sites[idx]);
+        rdim_inline_site_chunk_list_concat_in_place(&p2r2_shared->all_inline_sites, &p2r2_shared->syms_inline_sites[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(8)) ProfScope("join typedefs")
     {
-      for EachIndex(idx, lane_count())
+      for EachIndex(idx, all_syms_count)
       {
-        rdim_type_chunk_list_concat_in_place(&p2r2_shared->all_types__pre_typedefs, &p2r2_shared->lanes_typedefs[idx]);
+        rdim_type_chunk_list_concat_in_place(&p2r2_shared->all_types__pre_typedefs, &p2r2_shared->syms_typedefs[idx]);
       }
       p2r2_shared->all_types = p2r2_shared->all_types__pre_typedefs;
     }
