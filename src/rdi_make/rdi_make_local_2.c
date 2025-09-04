@@ -766,23 +766,23 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
       
-      // rjf: push strings from udt members
-      ProfScope("udt members")
+      // rjf: push strings from udts
+      ProfScope("udts")
       {
-        for EachNode(n, RDIM_UDTMemberChunkNode, params->members.first)
+        for EachNode(n, RDIM_UDTChunkNode, params->udts.first)
         {
           Rng1U64 range = lane_range(n->count);
-          rdim_bake_string_map_loose_push_udt_member_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
-        }
-      }
-      
-      // rjf: push strings from udt enum values
-      ProfScope("udt enum values")
-      {
-        for EachNode(n, RDIM_UDTEnumValChunkNode, params->enum_vals.first)
-        {
-          Rng1U64 range = lane_range(n->count);
-          rdim_bake_string_map_loose_push_udt_enum_val_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+          for EachInRange(idx, range)
+          {
+            for EachNode(mem, RDIM_UDTMember, n->v[idx].first_member)
+            {
+              rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, mem->name);
+            }
+            for EachNode(enum_val, RDIM_UDTEnumVal, n->v[idx].first_enum_val)
+            {
+              rdim_bake_string_map_loose_insert(arena, lane_map_top, lane_map, 4, enum_val->name);
+            }
+          }
         }
       }
       
@@ -1808,12 +1808,12 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(3))
     {
-      rdim2_shared->baked_udts.members_count = params->members.total_count+1;
+      rdim2_shared->baked_udts.members_count = params->udts.total_member_count+1;
       rdim2_shared->baked_udts.members = push_array(arena, RDI_Member, rdim2_shared->baked_udts.members_count);
     }
     if(lane_idx() == lane_from_task_idx(4))
     {
-      rdim2_shared->baked_udts.enum_members_count = params->enum_vals.total_count+1;
+      rdim2_shared->baked_udts.enum_members_count = params->udts.total_enum_val_count+1;
       rdim2_shared->baked_udts.enum_members = push_array(arena, RDI_EnumMember, rdim2_shared->baked_udts.enum_members_count);
     }
     if(lane_idx() == lane_from_task_idx(5))
@@ -1960,6 +1960,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     
     //- rjf: bake UDT members
+#if 0
     ProfScope("bake UDT members")
     {
       for EachNode(n, RDIM_UDTMemberChunkNode, params->members.first)
@@ -1992,6 +1993,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
     }
+#endif
     
     //- rjf: bake UDTs
     ProfScope("bake UDTs")
@@ -2011,19 +2013,23 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           dst_udt->col  = src_udt->col;
           
           //- rjf: fill member info
+#if 0
           if(src_udt->member_count != 0)
           {
             dst_udt->member_first = rdim_idx_from_udt_member(src_udt->first_member);
             dst_udt->member_count = src_udt->member_count;
           }
+#endif
           
           //- rjf: fill enum members
+#if 0
           else if(src_udt->enum_val_count != 0)
           {
             dst_udt->flags |= RDI_UDTFlag_EnumMembers;
             dst_udt->member_first = rdim_idx_from_udt_enum_val(src_udt->first_enum_val);
             dst_udt->member_count = src_udt->enum_val_count;
           }
+#endif
         }
       }
     }

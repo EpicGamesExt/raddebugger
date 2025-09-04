@@ -837,50 +837,6 @@ rdim_type_chunk_list_concat_in_place(RDIM_TypeChunkList *dst, RDIM_TypeChunkList
   RDIM_IdxedChunkListConcatInPlace(RDIM_TypeChunkNode, dst, to_push);
 }
 
-//- rjf: UDT members
-
-RDI_PROC RDIM_UDTMember *
-rdim_udt_member_chunk_list_push(RDIM_Arena *arena, RDIM_UDTMemberChunkList *list, RDI_U64 cap)
-{
-  RDIM_IdxedChunkListPush(arena, list, RDIM_UDTMemberChunkNode, RDIM_UDTMember, cap, result);
-  return result;
-}
-
-RDI_PROC RDI_U64
-rdim_idx_from_udt_member(RDIM_UDTMember *member)
-{
-  RDIM_IdxedChunkListElementGetIdx(member, idx);
-  return idx;
-}
-
-RDI_PROC void
-rdim_udt_member_chunk_list_concat_in_place(RDIM_UDTMemberChunkList *dst, RDIM_UDTMemberChunkList *to_push)
-{
-  RDIM_IdxedChunkListConcatInPlace(RDIM_UDTMemberChunkNode, dst, to_push);
-}
-
-//- rjf: UDT enum values
-
-RDI_PROC RDIM_UDTEnumVal *
-rdim_udt_enum_val_chunk_list_push(RDIM_Arena *arena, RDIM_UDTEnumValChunkList *list, RDI_U64 cap)
-{
-  RDIM_IdxedChunkListPush(arena, list, RDIM_UDTEnumValChunkNode, RDIM_UDTEnumVal, cap, result);
-  return result;
-}
-
-RDI_PROC RDI_U64
-rdim_idx_from_udt_enum_val(RDIM_UDTEnumVal *enum_val)
-{
-  RDIM_IdxedChunkListElementGetIdx(enum_val, idx);
-  return idx;
-}
-
-RDI_PROC void
-rdim_udt_enum_val_chunk_list_concat_in_place(RDIM_UDTEnumValChunkList *dst, RDIM_UDTEnumValChunkList *to_push)
-{
-  RDIM_IdxedChunkListConcatInPlace(RDIM_UDTEnumValChunkNode, dst, to_push);
-}
-
 //- rjf: UDTs
 
 RDI_PROC RDIM_UDT *
