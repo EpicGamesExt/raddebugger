@@ -39,9 +39,38 @@ p2r2_location_info_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode re
 }
 
 internal void
-p2r2_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
+p2r2_local_push_location_cases_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location2 *loc, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
 {
+  //- rjf: extract range info
+  U64 voff_first = 0;
+  U64 voff_opl = 0;
+  if(section != 0)
+  {
+    voff_first = section->voff + range->off;
+    voff_opl = voff_first + range->len;
+  }
   
+  //- rjf: emit location for ranges not coverd by gaps
+  CV_LvarAddrGap *gap_ptr = gaps;
+  U64 voff_cursor = voff_first;
+  for(U64 i = 0; i < gap_count; i += 1, gap_ptr += 1)
+  {
+    U64 voff_gap_first = voff_first + gap_ptr->off;
+    U64 voff_gap_opl   = voff_gap_first + gap_ptr->len;
+    if(voff_cursor < voff_gap_first)
+    {
+      RDIM_Rng1U64 voff_range = {voff_cursor, voff_gap_first};
+      rdim_local_push_location_case(arena, scopes, local, loc, voff_range);
+    }
+    voff_cursor = voff_gap_opl;
+  }
+  
+  //- rjf: emit remaining range
+  if(voff_cursor < voff_opl)
+  {
+    RDIM_Rng1U64 voff_range = {voff_cursor, voff_opl};
+    rdim_local_push_location_case(arena, scopes, local, loc, voff_range);
+  }
 }
 
 internal RDIM_BakeParams
@@ -3419,9 +3448,12 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(arch, cv_reg);
               
               // rjf: build location
+              RDIM_LocationInfo loc_info = {RDI_LocationKind_ValReg, reg_code};
+              RDIM_Location2 *loc = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
               RDIM_Location *location = rdim_push_location_val_reg(arena, reg_code);
               
               // rjf: emit locations over ranges
+              p2r2_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target2, loc, range, range_section, gaps, gap_count);
               p2r_location_over_lvar_addr_range(arena, sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
@@ -3473,6 +3505,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               RDIM_Location2 *location = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &location_info);
               
               // rjf: emit locations over ranges
+              p2r2_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target2, location, range, range_section, gaps, gap_count);
               // TODO(rjf): p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
@@ -3506,9 +3539,12 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               }
               
               // rjf: build location
+              RDIM_LocationInfo loc_info = {RDI_LocationKind_ValReg, reg_code};
+              RDIM_Location2 *loc = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
               RDIM_Location *location = rdim_push_location_val_reg(arena, reg_code);
               
               // rjf: emit locations over ranges
+              p2r2_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target2, loc, range, range_section, gaps, gap_count);
               p2r_location_over_lvar_addr_range(arena, sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
@@ -3589,9 +3625,12 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               U32 byte_pos = 0;
               B32 extra_indirection_to_value = 0;
               S64 var_off = defrange_register_rel->reg_off;
+              RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
+              RDIM_Location2 *loc = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
               RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
               
               // rjf: emit locations over ranges
+              p2r2_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target2, loc, range, range_section, gaps, gap_count);
               p2r_location_over_lvar_addr_range(arena, sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
