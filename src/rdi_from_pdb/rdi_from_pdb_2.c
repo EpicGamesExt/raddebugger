@@ -2309,7 +2309,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                   }
                   
                   // rjf: process field
-                  RDIM_UDTMember *new_member = 0;
                   switch(field_kind)
                   {
                     //- rjf: unhandled/invalid cases
@@ -2370,7 +2369,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       mem->name = name;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
                       mem->off  = (U32)offset64;
-                      new_member = mem;
                     }break;
                     
                     //- rjf: STMEMBER
@@ -2391,7 +2389,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       mem->kind = RDI_MemberKind_StaticData;
                       mem->name = name;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
-                      new_member = mem;
                     }break;
                     
                     //- rjf: METHOD
@@ -2469,7 +2466,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                             mem->kind = RDI_MemberKind_Method;
                             mem->name = name;
                             mem->type = method_type;
-                            new_member = mem;
                           }break;
                           case CV_MethodProp_Static:
                           {
@@ -2477,7 +2473,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                             mem->kind = RDI_MemberKind_StaticMethod;
                             mem->name = name;
                             mem->type = method_type;
-                            new_member = mem;
                           }break;
                           case CV_MethodProp_Virtual:
                           case CV_MethodProp_PureVirtual:
@@ -2488,7 +2483,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                             mem->kind = RDI_MemberKind_VirtualMethod;
                             mem->name = name;
                             mem->type = method_type;
-                            new_member = mem;
                           }break;
                         }
                       }
@@ -2527,7 +2521,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                           mem->kind = RDI_MemberKind_Method;
                           mem->name = name;
                           mem->type = method_type;
-                          new_member = mem;
                         }break;
                         case CV_MethodProp_Static:
                         {
@@ -2535,7 +2528,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                           mem->kind = RDI_MemberKind_StaticMethod;
                           mem->name = name;
                           mem->type = method_type;
-                          new_member = mem;
                         }break;
                         case CV_MethodProp_Virtual:
                         case CV_MethodProp_PureVirtual:
@@ -2546,7 +2538,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                           mem->kind = RDI_MemberKind_VirtualMethod;
                           mem->name = name;
                           mem->type = method_type;
-                          new_member = mem;
                         }break;
                       }
                     }break;
@@ -2567,7 +2558,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       mem->kind = RDI_MemberKind_NestedType;
                       mem->name = name;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
-                      new_member = mem;
                     }break;
                     
                     //- rjf: NESTTYPEEX
@@ -2588,7 +2578,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       mem->kind = RDI_MemberKind_NestedType;
                       mem->name = name;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
-                      new_member = mem;
                     }break;
                     
                     //- rjf: BCLASS
@@ -2610,7 +2599,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       mem->kind = RDI_MemberKind_Base;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
                       mem->off  = (U32)offset64;
-                      new_member = mem;
                     }break;
                     
                     //- rjf: VBCLASS/IVBCLASS
@@ -2635,7 +2623,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                       mem->kind = RDI_MemberKind_VirtualBase;
                       mem->type = p2r_type_ptr_from_itype(lf->itype);
-                      new_member = mem;
                     }break;
                     
                     //- rjf: VFUNCTAB
@@ -2649,16 +2636,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       // NOTE(rjf): currently no-op this case
                       (void)lf;
                     }break;
-                  }
-                  
-                  // rjf: add member to UDT
-                  if(new_member != 0)
-                  {
-                    if(dst_udt->first_member == 0)
-                    {
-                      dst_udt->first_member = new_member;
-                    }
-                    dst_udt->member_count += 1;
                   }
                   
                   // rjf: align-up next field
@@ -2751,7 +2728,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                   }
                   
                   // rjf: process field
-                  RDIM_UDTEnumVal *new_enum_val = 0;
                   switch(field_kind)
                   {
                     //- rjf: unhandled/invalid cases
@@ -2807,18 +2783,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                       RDIM_UDTEnumVal *enum_val = rdim_udt_push_enum_val(arena, udts, dst_udt);
                       enum_val->name = name;
                       enum_val->val  = val64;
-                      new_enum_val = enum_val;
                     }break;
-                  }
-                  
-                  // rjf: push new enum val to udt
-                  if(new_enum_val != 0)
-                  {
-                    if(dst_udt->first_enum_val == 0)
-                    {
-                      dst_udt->first_enum_val = new_enum_val;
-                    }
-                    dst_udt->enum_val_count += 1;
                   }
                   
                   // rjf: align-up next field
