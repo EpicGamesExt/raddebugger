@@ -1757,6 +1757,11 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           for EachNode(src_local, RDIM_Local, src_scope->first_local)
           {
             RDI_Local *dst_local = &rdim2_shared->baked_scopes.locals[chunk_local_off];
+            dst_local->kind            = src_local->kind;
+            dst_local->name_string_idx = rdim_bake_idx_from_string(bake_strings, src_local->name);
+            dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
+            // dst_local->location_first  = location_block_idx_first;
+            // dst_local->location_opl    = location_block_idx_opl;
             chunk_local_off += 1;
           }
           U64 local_idx_opl = chunk_local_off;
@@ -1942,40 +1947,35 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(3))
     {
-      rdim2_shared->baked_location_blocks.location_blocks_count = params->location_cases.total_count+1;
-      rdim2_shared->baked_location_blocks.location_blocks = push_array(arena, RDI_LocationBlock, rdim2_shared->baked_location_blocks.location_blocks_count);
-    }
-    if(lane_idx() == lane_from_task_idx(4))
-    {
       rdim2_shared->baked_global_variables.global_variables_count = params->global_variables.total_count+1;
       rdim2_shared->baked_global_variables.global_variables = push_array(arena, RDI_GlobalVariable, rdim2_shared->baked_global_variables.global_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(5))
+    if(lane_idx() == lane_from_task_idx(4))
     {
       rdim2_shared->baked_thread_variables.thread_variables_count = params->thread_variables.total_count+1;
       rdim2_shared->baked_thread_variables.thread_variables = push_array(arena, RDI_ThreadVariable, rdim2_shared->baked_thread_variables.thread_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(6))
+    if(lane_idx() == lane_from_task_idx(5))
     {
       rdim2_shared->baked_constants.constants_count = params->constants.total_count+1;
       rdim2_shared->baked_constants.constants = push_array(arena, RDI_Constant, rdim2_shared->baked_constants.constants_count);
     }
-    if(lane_idx() == lane_from_task_idx(7))
+    if(lane_idx() == lane_from_task_idx(6))
     {
       rdim2_shared->baked_constants.constant_values_count = params->constants.total_count+1;
       rdim2_shared->baked_constants.constant_values = push_array(arena, RDI_U32, rdim2_shared->baked_constants.constant_values_count);
     }
-    if(lane_idx() == lane_from_task_idx(8))
+    if(lane_idx() == lane_from_task_idx(7))
     {
       rdim2_shared->baked_constants.constant_value_data_size = params->constants.total_value_data_size;
       rdim2_shared->baked_constants.constant_value_data = push_array(arena, RDI_U8, rdim2_shared->baked_constants.constant_value_data_size);
     }
-    if(lane_idx() == lane_from_task_idx(9))
+    if(lane_idx() == lane_from_task_idx(8))
     {
       rdim2_shared->baked_procedures.procedures_count = params->procedures.total_count+1;
       rdim2_shared->baked_procedures.procedures = push_array(arena, RDI_Procedure, rdim2_shared->baked_procedures.procedures_count);
     }
-    if(lane_idx() == lane_from_task_idx(10))
+    if(lane_idx() == lane_from_task_idx(9))
     {
       rdim2_shared->baked_inline_sites.inline_sites_count = params->inline_sites.total_count+1;
       rdim2_shared->baked_inline_sites.inline_sites = push_array(arena, RDI_InlineSite, rdim2_shared->baked_inline_sites.inline_sites_count);
@@ -2117,23 +2117,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
               MemoryCopy(dst, &baked, sizeof(baked));
             }break;
           }
-        }
-      }
-    }
-    
-    //- rjf: bake location blocks
-    ProfScope("bake location blocks")
-    {
-      for EachNode(n, RDIM_LocationCaseChunkNode, params->location_cases.first)
-      {
-        Rng1U64 range = lane_range(n->count);
-        for EachInRange(n_idx, range)
-        {
-          RDIM_LocationCase2 *src = &n->v[n_idx];
-          RDI_LocationBlock *dst = &rdim2_shared->baked_location_blocks.location_blocks[n->base_idx + n_idx + 1];
-          dst->scope_off_first = (RDI_U32)src->voff_range.min; // TODO(rjf): @u64_to_u32
-          dst->scope_off_opl = (RDI_U32)src->voff_range.max; // TODO(rjf): @u64_to_u32
-          dst->location_data_off = rdim_off_from_location(src->location);
         }
       }
     }

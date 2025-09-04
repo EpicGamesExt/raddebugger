@@ -848,28 +848,9 @@ struct RDIM_LocationChunkList
 typedef struct RDIM_LocationCase2 RDIM_LocationCase2;
 struct RDIM_LocationCase2
 {
-  struct RDIM_LocationCaseChunkNode *chunk;
+  RDIM_LocationCase2 *next;
   RDIM_Location2 *location;
   RDIM_Rng1U64 voff_range;
-};
-
-typedef struct RDIM_LocationCaseChunkNode RDIM_LocationCaseChunkNode;
-struct RDIM_LocationCaseChunkNode
-{
-  RDIM_LocationCaseChunkNode *next;
-  RDIM_LocationCase2 *v;
-  RDI_U64 count;
-  RDI_U64 cap;
-  RDI_U64 base_idx;
-};
-
-typedef struct RDIM_LocationCaseChunkList RDIM_LocationCaseChunkList;
-struct RDIM_LocationCaseChunkList
-{
-  RDIM_LocationCaseChunkNode *first;
-  RDIM_LocationCaseChunkNode *last;
-  RDI_U64 chunk_count;
-  RDI_U64 total_count;
 };
 
 //- rjf: locations (OLD)
@@ -1022,7 +1003,7 @@ struct RDIM_ScopeChunkList
   RDI_U64 total_count;
   RDI_U64 scope_voff_count;
   RDI_U64 local_count;
-  RDI_U64 location_count;
+  RDI_U64 location_case_count;
 };
 
 ////////////////////////////////
@@ -1041,7 +1022,6 @@ struct RDIM_BakeParams
   RDIM_SrcFileChunkList src_files;
   RDIM_LineTableChunkList line_tables;
   RDIM_LocationChunkList locations;
-  RDIM_LocationCaseChunkList location_cases;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList constants;
@@ -1706,10 +1686,6 @@ RDI_PROC RDIM_Location2 *rdim_location_chunk_list_push_new(RDIM_Arena *arena, RD
 RDI_PROC RDI_U64 rdim_idx_from_location(RDIM_Location2 *location);
 RDI_PROC RDI_U64 rdim_off_from_location(RDIM_Location2 *location);
 RDI_PROC void rdim_location_chunk_list_concat_in_place(RDIM_LocationChunkList *dst, RDIM_LocationChunkList *to_push);
-
-RDI_PROC RDIM_LocationCase2 *rdim_location_case_chunk_list_push(RDIM_Arena *arena, RDIM_LocationCaseChunkList *list, RDI_U64 cap);
-RDI_PROC RDI_U64 rdim_idx_from_location_case(RDIM_LocationCase2 *location_case);
-RDI_PROC void rdim_location_case_chunk_list_concat_in_place(RDIM_LocationCaseChunkList *dst, RDIM_LocationCaseChunkList *to_push);
 
 ////////////////////////////////
 //~ rjf: [Building] Scope Info Building

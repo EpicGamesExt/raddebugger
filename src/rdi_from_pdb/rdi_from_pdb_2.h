@@ -88,7 +88,6 @@ struct P2R2_Shared
   RDIM_UDTChunkList all_udts;
   
   RDIM_LocationChunkList *syms_locations;
-  RDIM_LocationCaseChunkList *syms_location_cases;
   RDIM_SymbolChunkList *syms_procedures;
   RDIM_SymbolChunkList *syms_global_variables;
   RDIM_SymbolChunkList *syms_thread_variables;
@@ -98,7 +97,6 @@ struct P2R2_Shared
   RDIM_TypeChunkList *syms_typedefs;
   
   RDIM_LocationChunkList all_locations;
-  RDIM_LocationCaseChunkList all_location_cases;
   RDIM_SymbolChunkList all_procedures;
   RDIM_SymbolChunkList all_global_variables;
   RDIM_SymbolChunkList all_thread_variables;
