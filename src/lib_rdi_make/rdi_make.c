@@ -1007,26 +1007,6 @@ rdim_location_chunk_list_concat_in_place(RDIM_LocationChunkList *dst, RDIM_Locat
   RDIM_IdxedChunkListConcatInPlace(RDIM_LocationChunkNode, dst, to_push, dst->total_encoded_size += to_push->total_encoded_size);
 }
 
-RDI_PROC RDIM_LocationCase2 *
-rdim_location_case_chunk_list_push(RDIM_Arena *arena, RDIM_LocationCaseChunkList *list, RDI_U64 cap)
-{
-  RDIM_IdxedChunkListPush(arena, list, RDIM_LocationCaseChunkNode, RDIM_LocationCase2, cap, result);
-  return result;
-}
-
-RDI_PROC RDI_U64
-rdim_idx_from_location_case(RDIM_LocationCase2 *location_case)
-{
-  RDIM_IdxedChunkListElementGetIdx(location_case, idx);
-  return idx;
-}
-
-RDI_PROC void
-rdim_location_case_chunk_list_concat_in_place(RDIM_LocationCaseChunkList *dst, RDIM_LocationCaseChunkList *to_push)
-{
-  RDIM_IdxedChunkListConcatInPlace(RDIM_LocationCaseChunkNode, dst, to_push);
-}
-
 ////////////////////////////////
 //~ rjf: [Building] Scope Info Building
 
@@ -1050,9 +1030,9 @@ RDI_PROC void
 rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkList *to_push)
 {
   RDIM_IdxedChunkListConcatInPlace(RDIM_ScopeChunkNode, dst, to_push,
-                                   dst->scope_voff_count += to_push->scope_voff_count,
-                                   dst->local_count      += to_push->local_count,
-                                   dst->location_count   += to_push->location_count);
+                                   dst->scope_voff_count      += to_push->scope_voff_count,
+                                   dst->local_count           += to_push->local_count,
+                                   dst->location_case_count   += to_push->location_case_count);
 }
 
 RDI_PROC void
@@ -1214,7 +1194,7 @@ rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM
   locset->location_case_count += 1;
   location_case->voff_range = voff_range;
   location_case->location   = location;
-  scopes->location_count +=1;
+  scopes->location_case_count +=1;
 }
 
 //- rjf:location block chunk list

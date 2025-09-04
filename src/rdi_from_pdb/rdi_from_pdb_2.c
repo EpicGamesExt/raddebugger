@@ -330,7 +330,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     }
   }
   lane_sync();
-  RDI_Arch arch = RDI_Arch_NULL;
+  RDI_Arch arch = p2r2_shared->arch;
   U64 arch_addr_size = rdi_addr_size_from_arch(arch);
   
   //////////////////////////////////////////////////////////////
@@ -2828,7 +2828,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     if(lane_idx() == 0)
     {
       p2r2_shared->syms_locations        = push_array(arena, RDIM_LocationChunkList, all_syms_count);
-      p2r2_shared->syms_location_cases   = push_array(arena, RDIM_LocationCaseChunkList, all_syms_count);
       p2r2_shared->syms_procedures       = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
       p2r2_shared->syms_global_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
       p2r2_shared->syms_thread_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
@@ -2858,7 +2857,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       CV_SymParsed *sym = all_syms[sym_idx];
       Rng1U64 sym_rec_range = r1u64(0, sym->sym_ranges.count);
       U64 sym_locations_chunk_cap = 16384;
-      U64 sym_location_cases_chunk_cap = 16384;
       U64 sym_procedures_chunk_cap = 16384;
       U64 sym_global_variables_chunk_cap = 16384;
       U64 sym_thread_variables_chunk_cap = 16384;
@@ -2866,7 +2864,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       U64 sym_scopes_chunk_cap = 16384;
       U64 sym_inline_sites_chunk_cap = 16384;
       RDIM_LocationChunkList *sym_locations = &p2r2_shared->syms_locations[sym_idx];
-      RDIM_LocationCaseChunkList *sym_location_cases = &p2r2_shared->syms_location_cases[sym_idx];
       RDIM_SymbolChunkList *sym_procedures = &p2r2_shared->syms_procedures[sym_idx];
       RDIM_SymbolChunkList *sym_global_variables = &p2r2_shared->syms_global_variables[sym_idx];
       RDIM_SymbolChunkList *sym_thread_variables = &p2r2_shared->syms_thread_variables[sym_idx];
@@ -3294,6 +3291,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 // rjf: build location
                 RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
                 RDIM_Location2 *loc2 = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
+#if 0
                 RDIM_LocationCase2 *loc_case = rdim_location_case_chunk_list_push(arena, sym_location_cases, sym_locations_chunk_cap);
                 loc_case->location = loc2;
                 loc_case->voff_range.min = 0;
@@ -3302,6 +3300,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 // rjf: equip location case to local
                 local->first_location_case = loc_case;
                 local->location_case_count = 1;
+#endif
                 
                 // rjf: set location case
                 RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
@@ -3774,56 +3773,49 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
         rdim_location_chunk_list_concat_in_place(&p2r2_shared->all_locations, &p2r2_shared->syms_locations[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(1)) ProfScope("join location cases")
-    {
-      for EachIndex(idx, all_syms_count)
-      {
-        rdim_location_case_chunk_list_concat_in_place(&p2r2_shared->all_location_cases, &p2r2_shared->syms_location_cases[idx]);
-      }
-    }
-    if(lane_idx() == lane_from_task_idx(2)) ProfScope("join procedures")
+    if(lane_idx() == lane_from_task_idx(1)) ProfScope("join procedures")
     {
       for EachIndex(idx, all_syms_count)
       {
         rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_procedures, &p2r2_shared->syms_procedures[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(3)) ProfScope("join global variables")
+    if(lane_idx() == lane_from_task_idx(2)) ProfScope("join global variables")
     {
       for EachIndex(idx, all_syms_count)
       {
         rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_global_variables, &p2r2_shared->syms_global_variables[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(4)) ProfScope("join thread variables")
+    if(lane_idx() == lane_from_task_idx(3)) ProfScope("join thread variables")
     {
       for EachIndex(idx, all_syms_count)
       {
         rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_thread_variables, &p2r2_shared->syms_thread_variables[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(5)) ProfScope("join constants")
+    if(lane_idx() == lane_from_task_idx(4)) ProfScope("join constants")
     {
       for EachIndex(idx, all_syms_count)
       {
         rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_constants, &p2r2_shared->syms_constants[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(6)) ProfScope("join scopes")
+    if(lane_idx() == lane_from_task_idx(5)) ProfScope("join scopes")
     {
       for EachIndex(idx, all_syms_count)
       {
         rdim_scope_chunk_list_concat_in_place(&p2r2_shared->all_scopes, &p2r2_shared->syms_scopes[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(7)) ProfScope("join inline sites")
+    if(lane_idx() == lane_from_task_idx(6)) ProfScope("join inline sites")
     {
       for EachIndex(idx, all_syms_count)
       {
         rdim_inline_site_chunk_list_concat_in_place(&p2r2_shared->all_inline_sites, &p2r2_shared->syms_inline_sites[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(8)) ProfScope("join typedefs")
+    if(lane_idx() == lane_from_task_idx(7)) ProfScope("join typedefs")
     {
       for EachIndex(idx, all_syms_count)
       {
@@ -3834,7 +3826,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   }
   lane_sync();
   RDIM_LocationChunkList all_locations           = p2r2_shared->all_locations;
-  RDIM_LocationCaseChunkList all_location_cases  = p2r2_shared->all_location_cases;
   RDIM_SymbolChunkList all_procedures            = p2r2_shared->all_procedures;
   RDIM_SymbolChunkList all_global_variables      = p2r2_shared->all_global_variables;
   RDIM_SymbolChunkList all_thread_variables      = p2r2_shared->all_thread_variables;
@@ -3890,7 +3881,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     result.src_files        = all_src_files;
     result.line_tables      = all_line_tables;
     result.locations        = all_locations;
-    result.location_cases   = all_location_cases;
     result.global_variables = all_global_variables;
     result.thread_variables = all_thread_variables;
     result.constants        = all_constants;
