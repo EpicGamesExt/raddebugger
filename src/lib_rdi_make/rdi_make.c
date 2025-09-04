@@ -1495,10 +1495,6 @@ rdim_bake_string_chunk_list_sorted_from_unsorted(RDIM_Arena *arena, RDIM_BakeStr
     for(RDI_U64 idx = 0; idx < n->count; idx += 1)
     {
       RDIM_BakeString *src_str = &n->v[idx];
-      if(str8_match(src_str->string, str8_lit("x2"), 0))
-      {
-        int x = 0;
-      }
       RDIM_BakeString *dst_str = rdim_bake_string_chunk_list_push(arena, &dst, src->total_count);
       rdim_memcpy_struct(dst_str, src_str);
     }
