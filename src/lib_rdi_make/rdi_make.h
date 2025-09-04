@@ -906,6 +906,7 @@ struct RDIM_Symbol
   RDIM_Type *container_type;
   struct RDIM_Scope *root_scope;
   RDIM_LocationSet frame_base;
+  RDIM_LocationCaseList location_cases;
   RDIM_String8 value_data;
 };
 
@@ -1537,6 +1538,8 @@ struct RDIM_BakeResults
   RDIM_FilePathBakeResult file_paths;
   RDIM_StringBakeResult strings;
   RDIM_IndexRunBakeResult idx_runs;
+  RDIM_LocationBakeResult locations;
+  RDIM_LocationBlockBakeResult location_blocks2;
   RDIM_String8 location_blocks;
   RDIM_String8 location_data;
 };
