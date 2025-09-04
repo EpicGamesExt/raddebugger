@@ -3311,10 +3311,6 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               // rjf: build local
               RDIM_Scope *scope = top_scope_node->scope;
               RDIM_Local *local = rdim_scope_push_local(arena, sym_scopes, scope);
-              if(str8_match(name, str8_lit("example_color_struct"), 0))
-              {
-                int x = 0;
-              }
               local->kind = local_kind;
               local->name = name;
               local->type = type;
