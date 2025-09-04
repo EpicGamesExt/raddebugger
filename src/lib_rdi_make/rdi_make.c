@@ -937,6 +937,91 @@ rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_
 ////////////////////////////////
 //~ rjf: [Building] Location Info Building
 
+//- rjf: bytecode
+
+RDI_PROC void
+rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p)
+{
+  RDI_U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+  RDI_U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+  
+  RDIM_EvalBytecodeOp *node = rdim_push_array(arena, RDIM_EvalBytecodeOp, 1);
+  node->op = op;
+  node->p_size = p_size;
+  node->p = p;
+  
+  RDIM_SLLQueuePush(bytecode->first_op, bytecode->last_op, node);
+  bytecode->op_count += 1;
+  bytecode->encoded_size += 1 + p_size;
+}
+
+RDI_PROC void
+rdim_bytecode_push_uconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_U64 x)
+{
+  if(x <= 0xFF)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU8, x);
+  }
+  else if(x <= 0xFFFF)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU16, x);
+  }
+  else if(x <= 0xFFFFFFFF)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU32, x);
+  }
+  else
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU64, x);
+  }
+}
+
+RDI_PROC void
+rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S64 x)
+{
+  if(-0x80 <= x && x <= 0x7F)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU8, (RDI_U64)x);
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 8);
+  }
+  else if(-0x8000 <= x && x <= 0x7FFF)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU16, (RDI_U64)x);
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 16);
+  }
+  else if(-0x80000000ll <= x && x <= 0x7FFFFFFFll)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU32, (RDI_U64)x);
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 32);
+  }
+  else
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU64, (RDI_U64)x);
+  }
+}
+
+RDI_PROC void
+rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed)
+{
+  if(right_destroyed->first_op != 0)
+  {
+    if(left_dst->first_op == 0)
+    {
+      rdim_memcpy_struct(left_dst, right_destroyed);
+    }
+    else
+    {
+      left_dst->last_op->next  = right_destroyed->first_op;
+      left_dst->last_op        = right_destroyed->last_op;
+      left_dst->op_count      += right_destroyed->op_count;
+      left_dst->encoded_size  += right_destroyed->encoded_size;
+    }
+    rdim_memzero_struct(right_destroyed);
+  }
+}
+
+//- rjf: locations
+
 RDI_PROC RDI_U64
 rdim_encoded_size_from_location_info(RDIM_LocationInfo *info)
 {
@@ -1052,87 +1137,16 @@ rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope
   return local;
 }
 
-//- rjf: bytecode
-
-RDI_PROC void
-rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p)
+RDI_PROC RDIM_LocationCase2 *
+rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location2 *location, RDIM_Rng1U64 voff_range)
 {
-  RDI_U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
-  RDI_U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
-  
-  RDIM_EvalBytecodeOp *node = rdim_push_array(arena, RDIM_EvalBytecodeOp, 1);
-  node->op = op;
-  node->p_size = p_size;
-  node->p = p;
-  
-  RDIM_SLLQueuePush(bytecode->first_op, bytecode->last_op, node);
-  bytecode->op_count += 1;
-  bytecode->encoded_size += 1 + p_size;
-}
-
-RDI_PROC void
-rdim_bytecode_push_uconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_U64 x)
-{
-  if(x <= 0xFF)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU8, x);
-  }
-  else if(x <= 0xFFFF)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU16, x);
-  }
-  else if(x <= 0xFFFFFFFF)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU32, x);
-  }
-  else
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU64, x);
-  }
-}
-
-RDI_PROC void
-rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S64 x)
-{
-  if(-0x80 <= x && x <= 0x7F)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU8, (RDI_U64)x);
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 8);
-  }
-  else if(-0x8000 <= x && x <= 0x7FFF)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU16, (RDI_U64)x);
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 16);
-  }
-  else if(-0x80000000ll <= x && x <= 0x7FFFFFFFll)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU32, (RDI_U64)x);
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 32);
-  }
-  else
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU64, (RDI_U64)x);
-  }
-}
-
-RDI_PROC void
-rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed)
-{
-  if(right_destroyed->first_op != 0)
-  {
-    if(left_dst->first_op == 0)
-    {
-      rdim_memcpy_struct(left_dst, right_destroyed);
-    }
-    else
-    {
-      left_dst->last_op->next  = right_destroyed->first_op;
-      left_dst->last_op        = right_destroyed->last_op;
-      left_dst->op_count      += right_destroyed->op_count;
-      left_dst->encoded_size  += right_destroyed->encoded_size;
-    }
-    rdim_memzero_struct(right_destroyed);
-  }
+  RDIM_LocationCase2 *loc_case = rdim_push_array(arena, RDIM_LocationCase2, 1);
+  RDIM_SLLQueuePush(local->location_cases.first, local->location_cases.last, loc_case);
+  local->location_cases.count += 1;
+  loc_case->location = location;
+  loc_case->voff_range = voff_range;
+  scopes->location_case_count += 1;
+  return loc_case;
 }
 
 //- rjf: individual locations

@@ -2941,6 +2941,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       ProfScope("symbols pass 2: construct all symbols, given procedure frame info map")
       {
         RDIM_LocationSet *defrange_target = 0;
+        RDIM_Local *defrange_target2 = 0;
         B32 defrange_target_is_param = 0;
         U64 procedure_num = 0;
         U64 procedure_base_voff = 0;
@@ -2996,6 +2997,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 SLLStackPush(free_scope_node, n);
               }
               defrange_target = 0;
+              defrange_target2 = 0;
               defrange_target_is_param = 0;
             }break;
             
@@ -3291,16 +3293,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 // rjf: build location
                 RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
                 RDIM_Location2 *loc2 = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
-#if 0
-                RDIM_LocationCase2 *loc_case = rdim_location_case_chunk_list_push(arena, sym_location_cases, sym_locations_chunk_cap);
-                loc_case->location = loc2;
-                loc_case->voff_range.min = 0;
-                loc_case->voff_range.max = max_U64;
-                
-                // rjf: equip location case to local
-                local->first_location_case = loc_case;
-                local->location_case_count = 1;
-#endif
+                rdim_local_push_location_case(arena, sym_scopes, local, loc2, (RDIM_Rng1U64){0, max_U64});
                 
                 // rjf: set location case
                 RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
@@ -3374,6 +3367,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               {
                 // TODO(rjf): add global modification symbols
                 defrange_target = 0;
+                defrange_target2 = 0;
                 defrange_target_is_param = 0;
               }
               
@@ -3396,6 +3390,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: save defrange target, for subsequent defrange symbols
                 defrange_target = &local->locset;
+                defrange_target2 = local;
                 defrange_target_is_param = (local_kind == RDI_LocalKind_Parameter);
               }
             }break;
@@ -3406,6 +3401,10 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
               // a local - break immediately
               if(defrange_target == 0)
+              {
+                break;
+              }
+              if(defrange_target2 == 0)
               {
                 break;
               }
@@ -3432,6 +3431,10 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
               // a local - break immediately
               if(defrange_target == 0)
+              {
+                break;
+              }
+              if(defrange_target2 == 0)
               {
                 break;
               }
@@ -3482,6 +3485,10 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               {
                 break;
               }
+              if(defrange_target2 == 0)
+              {
+                break;
+              }
               
               // rjf: unpack sym
               CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)sym_header_struct_base;
@@ -3514,6 +3521,10 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               {
                 break;
               }
+              if(defrange_target2 == 0)
+              {
+                break;
+              }
               
               // rjf: find current procedure's frameproc
               CV_SymFrameproc *frameproc = 0;
@@ -3540,10 +3551,13 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               U32 byte_pos = 0;
               S64 var_off = (S64)defrange_fprel_full_scope->off;
               RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
+              RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
+              RDIM_Location2 *loc = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
               
               // rjf: emit location over ranges
               RDIM_Rng1U64 voff_range = {0, max_U64};
               rdim_location_set_push_case(arena, sym_scopes, defrange_target, voff_range, location);
+              rdim_local_push_location_case(arena, sym_scopes, defrange_target2, loc, voff_range);
             }break;
             
             //- rjf: DEFRANGE_REGISTER_REL
@@ -3552,6 +3566,10 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
               // a local - break immediately
               if(defrange_target == 0)
+              {
+                break;
+              }
+              if(defrange_target2 == 0)
               {
                 break;
               }
@@ -3585,6 +3603,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               RDIM_Type *type = p2r_type_ptr_from_itype(file_static->itype);
               // TODO(rjf): emit a global modifier symbol
               defrange_target = 0;
+              defrange_target2 = 0;
               defrange_target_is_param = 0;
             }break;
             
@@ -3717,6 +3736,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 SLLStackPush(free_scope_node, n);
               }
               defrange_target = 0;
+              defrange_target2 = 0;
               defrange_target_is_param = 0;
             }break;
             
