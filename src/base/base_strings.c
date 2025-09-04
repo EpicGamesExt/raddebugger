@@ -379,7 +379,12 @@ str8_is_before(String8 a, String8 b)
         result = 1;
         break;
       }
-      if(off+1 == common_size)
+      else if(a.str[off] > b.str[off])
+      {
+        result = 0;
+        break;
+      }
+      else if(off+1 == common_size)
       {
         result = (a.size < b.size);
       }

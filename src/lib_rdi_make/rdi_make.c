@@ -1740,7 +1740,12 @@ rdim_bake_idx_run_is_before(void *l, void *r)
         is_less_than = 1;
         break;
       }
-      if(off+1 == common_count)
+      else if(lir->idxes[off] > rir->idxes[off])
+      {
+        is_less_than = 0;
+        break;
+      }
+      else if(off+1 == common_count)
       {
         is_less_than = (lir->count < rir->count);
       }
