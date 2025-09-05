@@ -1647,143 +1647,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: @rdim_bake_stage compute layout for scope sub-lists (locals / voffs)
-  //
-  ProfScope("compute layout for scope sub-lists (locals / voffs)")
-  {
-    // rjf: set up
-    if(lane_idx() == 0)
-    {
-      rdim2_shared->scope_local_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
-      rdim2_shared->scope_local_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
-      rdim2_shared->scope_voff_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
-      rdim2_shared->scope_voff_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
-    }
-    lane_sync();
-    
-    // rjf: count per-lane-chunk
-    {
-      U64 chunk_idx = 0;
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
-      {
-        U64 num_locals_in_this_lane_and_node = 0;
-        U64 num_voffs_in_this_lane_and_node = 0;
-        Rng1U64 range = lane_range(n->count);
-        for EachInRange(n_idx, range)
-        {
-          num_locals_in_this_lane_and_node += n->v[n_idx].local_count;
-          num_voffs_in_this_lane_and_node += n->v[n_idx].voff_ranges.count*2;
-        }
-        rdim2_shared->scope_local_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_locals_in_this_lane_and_node;
-        rdim2_shared->scope_voff_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_voffs_in_this_lane_and_node;
-        chunk_idx += 1;
-      }
-    }
-    lane_sync();
-    
-    // rjf: lay out each lane's range
-    if(lane_idx() == 0)
-    {
-      U64 local_layout_off = 1;
-      U64 voff_layout_off = 0;
-      U64 chunk_idx = 0;
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
-      {
-        for EachIndex(l_idx, lane_count())
-        {
-          U64 slot_idx = l_idx*params->scopes.chunk_count + chunk_idx;
-          rdim2_shared->scope_local_chunk_lane_offs[slot_idx] = local_layout_off;
-          rdim2_shared->scope_voff_chunk_lane_offs[slot_idx] = voff_layout_off;
-          local_layout_off += rdim2_shared->scope_local_chunk_lane_counts[slot_idx];
-          voff_layout_off += rdim2_shared->scope_voff_chunk_lane_counts[slot_idx];
-        }
-        chunk_idx += 1;
-      }
-    }
-    lane_sync();
-  }
-  lane_sync();
-  
-  //////////////////////////////////////////////////////////////
-  //- rjf: @rdim_bake_stage bake scopes
-  //
-  ProfScope("bake scopes")
-  {
-    //- rjf: setup outputs
-    if(lane_idx() == lane_from_task_idx(0))
-    {
-      rdim2_shared->baked_scopes.scopes_count = params->scopes.total_count+1;
-      rdim2_shared->baked_scopes.scopes = push_array(arena, RDI_Scope, rdim2_shared->baked_scopes.scopes_count);
-    }
-    if(lane_idx() == lane_from_task_idx(1))
-    {
-      rdim2_shared->baked_scopes.scope_voffs_count = params->scopes.scope_voff_count;
-      rdim2_shared->baked_scopes.scope_voffs = push_array(arena, RDI_U64, rdim2_shared->baked_scopes.scope_voffs_count);
-    }
-    if(lane_idx() == lane_from_task_idx(2))
-    {
-      rdim2_shared->baked_scopes.locals_count = params->scopes.local_count+1;
-      rdim2_shared->baked_scopes.locals = push_array(arena, RDI_Local, rdim2_shared->baked_scopes.locals_count);
-    }
-    lane_sync();
-    
-    //- rjf: wide fill
-    {
-      U64 chunk_idx = 0;
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
-      {
-        Rng1U64 range = lane_range(n->count);
-        U64 chunk_lane_slot_idx = lane_idx()*params->scopes.chunk_count + chunk_idx;
-        U64 chunk_local_off = rdim2_shared->scope_local_chunk_lane_offs[chunk_lane_slot_idx];
-        U64 chunk_voff_off = rdim2_shared->scope_voff_chunk_lane_offs[chunk_lane_slot_idx];
-        for EachInRange(n_idx, range)
-        {
-          U64 dst_idx = 1 + n->base_idx + n_idx;
-          RDIM_Scope *src_scope = &n->v[n_idx];
-          RDI_Scope *dst_scope = &rdim2_shared->baked_scopes.scopes[dst_idx];
-          
-          //- rjf: fill voff ranges
-          U64 voff_idx_first = chunk_voff_off;
-          for EachNode(rng_n, RDIM_Rng1U64Node, src_scope->voff_ranges.first)
-          {
-            rdim2_shared->baked_scopes.scope_voffs[chunk_voff_off+0] = rng_n->v.min;
-            rdim2_shared->baked_scopes.scope_voffs[chunk_voff_off+1] = rng_n->v.max;
-            chunk_voff_off += 2;
-          }
-          U64 voff_idx_opl = chunk_voff_off;
-          
-          //- rjf: fill locals
-          U64 local_idx_first = chunk_local_off;
-          for EachNode(src_local, RDIM_Local, src_scope->first_local)
-          {
-            RDI_Local *dst_local = &rdim2_shared->baked_scopes.locals[chunk_local_off];
-            dst_local->kind            = src_local->kind;
-            dst_local->name_string_idx = rdim_bake_idx_from_string(bake_strings, src_local->name);
-            dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
-            // dst_local->location_first  = location_block_idx_first;
-            // dst_local->location_opl    = location_block_idx_opl;
-            chunk_local_off += 1;
-          }
-          U64 local_idx_opl = chunk_local_off;
-          
-          //- rjf: fill scope
-          dst_scope->proc_idx               = (RDI_U32)rdim_idx_from_symbol(src_scope->symbol); // TODO(rjf): @u64_to_u32
-          dst_scope->parent_scope_idx       = (RDI_U32)rdim_idx_from_scope(src_scope->parent_scope); // TODO(rjf): @u64_to_u32
-          dst_scope->first_child_scope_idx  = (RDI_U32)rdim_idx_from_scope(src_scope->first_child); // TODO(rjf): @u64_to_u32
-          dst_scope->next_sibling_scope_idx = (RDI_U32)rdim_idx_from_scope(src_scope->next_sibling); // TODO(rjf): @u64_to_u32
-          dst_scope->voff_range_first       = (RDI_U32)voff_idx_first;                    // TODO(rjf): @u64_to_u32
-          dst_scope->voff_range_opl         = (RDI_U32)voff_idx_opl;                      // TODO(rjf): @u64_to_u32
-          dst_scope->local_first            = (RDI_U32)local_idx_first;                   // TODO(rjf): @u64_to_u32
-          dst_scope->local_count            = (RDI_U32)(local_idx_opl - local_idx_first); // TODO(rjf): @u64_to_u32
-          dst_scope->inline_site_idx        = (RDI_U32)rdim_idx_from_inline_site(src_scope->inline_site); // TODO(rjf): @u64_to_u32
-        }
-        chunk_idx += 1;
-      }
-    }
-  }
-  lane_sync();
-  
-  //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute lane UDT member/enum-val layouts
   //
   ProfScope("compute lane UDT member/enum-val layouts")
@@ -1928,7 +1791,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute lane location block layout
   //
-  U64 total_location_case_chunk_count = (params->procedures.chunk_count + params->scopes.chunk_count);
+  U64 total_location_case_chunk_count = (params->scopes.chunk_count + params->procedures.chunk_count);
   ProfScope("compute lane location block layout")
   {
     // rjf: set up
@@ -2066,6 +1929,349 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   }
   
   //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage bake locations
+  //
+  ProfScope("bake locations")
+  {
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->baked_locations.location_data_size = params->locations.total_encoded_size+1;
+      rdim2_shared->baked_locations.location_data = push_array(arena, RDI_U8, rdim2_shared->baked_locations.location_data_size);
+    }
+    lane_sync();
+    for EachNode(n, RDIM_LocationChunkNode, params->locations.first)
+    {
+      Rng1U64 range = lane_range(n->count);
+      for EachInRange(n_idx, range)
+      {
+        RDIM_Location2 *loc = &n->v[n_idx];
+        RDI_U8 *dst = &rdim2_shared->baked_locations.location_data[n->base_encoding_off + loc->relative_encoding_off + 1];
+        switch((RDI_LocationKindEnum)loc->info.kind)
+        {
+          case RDI_LocationKind_NULL:{}break;
+          case RDI_LocationKind_AddrBytecodeStream:
+          case RDI_LocationKind_ValBytecodeStream:
+          {
+            MemoryCopy(dst+0, &loc->info.kind, sizeof(loc->info.kind));
+            RDI_U64 write_off = sizeof(loc->info.kind);
+            for EachNode(op_node, RDIM_EvalBytecodeOp, loc->info.bytecode.first_op)
+            {
+              MemoryCopy(dst + write_off, &op_node->op, 1);
+              write_off += 1;
+              MemoryCopy(dst + write_off, &op_node->p, op_node->p_size);
+              write_off += op_node->p_size;
+            }
+            dst[write_off] = 0;
+          }break;
+          case RDI_LocationKind_AddrRegPlusU16:
+          case RDI_LocationKind_AddrAddrRegPlusU16:
+          {
+            RDI_LocationRegPlusU16 baked = {loc->info.kind, loc->info.reg_code, loc->info.offset};
+            MemoryCopy(dst, &baked, sizeof(baked));
+          }break;
+          case RDI_LocationKind_ValReg:
+          {
+            RDI_LocationReg baked = {loc->info.kind, loc->info.reg_code};
+            MemoryCopy(dst, &baked, sizeof(baked));
+          }break;
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage compute layout for scope sub-lists (locals / voffs)
+  //
+  ProfScope("compute layout for scope sub-lists (locals / voffs)")
+  {
+    // rjf: set up
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->scope_local_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
+      rdim2_shared->scope_local_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
+      rdim2_shared->scope_voff_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
+      rdim2_shared->scope_voff_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
+    }
+    lane_sync();
+    
+    // rjf: count per-lane-chunk
+    {
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      {
+        U64 num_locals_in_this_lane_and_node = 0;
+        U64 num_voffs_in_this_lane_and_node = 0;
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          num_locals_in_this_lane_and_node += n->v[n_idx].local_count;
+          num_voffs_in_this_lane_and_node += n->v[n_idx].voff_ranges.count*2;
+        }
+        rdim2_shared->scope_local_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_locals_in_this_lane_and_node;
+        rdim2_shared->scope_voff_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_voffs_in_this_lane_and_node;
+        chunk_idx += 1;
+      }
+    }
+    lane_sync();
+    
+    // rjf: lay out each lane's range
+    if(lane_idx() == 0)
+    {
+      U64 local_layout_off = 1;
+      U64 voff_layout_off = 0;
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          U64 slot_idx = l_idx*params->scopes.chunk_count + chunk_idx;
+          rdim2_shared->scope_local_chunk_lane_offs[slot_idx] = local_layout_off;
+          rdim2_shared->scope_voff_chunk_lane_offs[slot_idx] = voff_layout_off;
+          local_layout_off += rdim2_shared->scope_local_chunk_lane_counts[slot_idx];
+          voff_layout_off += rdim2_shared->scope_voff_chunk_lane_counts[slot_idx];
+        }
+        chunk_idx += 1;
+      }
+    }
+    lane_sync();
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage bake scopes
+  //
+  ProfScope("bake scopes")
+  {
+    //- rjf: setup outputs
+    if(lane_idx() == lane_from_task_idx(0))
+    {
+      rdim2_shared->baked_scopes.scopes_count = params->scopes.total_count+1;
+      rdim2_shared->baked_scopes.scopes = push_array(arena, RDI_Scope, rdim2_shared->baked_scopes.scopes_count);
+    }
+    if(lane_idx() == lane_from_task_idx(1))
+    {
+      rdim2_shared->baked_scopes.scope_voffs_count = params->scopes.scope_voff_count;
+      rdim2_shared->baked_scopes.scope_voffs = push_array(arena, RDI_U64, rdim2_shared->baked_scopes.scope_voffs_count);
+    }
+    if(lane_idx() == lane_from_task_idx(2))
+    {
+      rdim2_shared->baked_scopes.locals_count = params->scopes.local_count+1;
+      rdim2_shared->baked_scopes.locals = push_array(arena, RDI_Local, rdim2_shared->baked_scopes.locals_count);
+    }
+    lane_sync();
+    
+    //- rjf: wide fill
+    {
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        U64 scope_chunk_lane_slot_idx = lane_idx()*params->scopes.chunk_count + chunk_idx;
+        U64 chunk_local_off = rdim2_shared->scope_local_chunk_lane_offs[scope_chunk_lane_slot_idx];
+        U64 chunk_voff_off = rdim2_shared->scope_voff_chunk_lane_offs[scope_chunk_lane_slot_idx];
+        U64 location_block_chunk_lane_slot_idx = lane_idx() * total_location_case_chunk_count + chunk_idx;
+        U64 chunk_location_block_off = rdim2_shared->location_case_chunk_lane_offs[location_block_chunk_lane_slot_idx];
+        for EachInRange(n_idx, range)
+        {
+          U64 dst_idx = 1 + n->base_idx + n_idx;
+          RDIM_Scope *src_scope = &n->v[n_idx];
+          RDI_Scope *dst_scope = &rdim2_shared->baked_scopes.scopes[dst_idx];
+          
+          //- rjf: fill voff ranges
+          U64 voff_idx_first = chunk_voff_off;
+          for EachNode(rng_n, RDIM_Rng1U64Node, src_scope->voff_ranges.first)
+          {
+            rdim2_shared->baked_scopes.scope_voffs[chunk_voff_off+0] = rng_n->v.min;
+            rdim2_shared->baked_scopes.scope_voffs[chunk_voff_off+1] = rng_n->v.max;
+            chunk_voff_off += 2;
+          }
+          U64 voff_idx_opl = chunk_voff_off;
+          
+          //- rjf: fill locals
+          U64 local_idx_first = chunk_local_off;
+          for EachNode(src_local, RDIM_Local, src_scope->first_local)
+          {
+            RDI_Local *dst_local = &rdim2_shared->baked_scopes.locals[chunk_local_off];
+            dst_local->kind            = src_local->kind;
+            dst_local->name_string_idx = rdim_bake_idx_from_string(bake_strings, src_local->name);
+            dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
+            if(src_local->location_cases.count != 0)
+            {
+              dst_local->location_first  = chunk_location_block_off;
+              dst_local->location_opl    = chunk_location_block_off + src_local->location_cases.count;
+              chunk_location_block_off += src_local->location_cases.count;
+            }
+            chunk_local_off += 1;
+          }
+          U64 local_idx_opl = chunk_local_off;
+          
+          //- rjf: fill scope
+          dst_scope->proc_idx               = (RDI_U32)rdim_idx_from_symbol(src_scope->symbol); // TODO(rjf): @u64_to_u32
+          dst_scope->parent_scope_idx       = (RDI_U32)rdim_idx_from_scope(src_scope->parent_scope); // TODO(rjf): @u64_to_u32
+          dst_scope->first_child_scope_idx  = (RDI_U32)rdim_idx_from_scope(src_scope->first_child); // TODO(rjf): @u64_to_u32
+          dst_scope->next_sibling_scope_idx = (RDI_U32)rdim_idx_from_scope(src_scope->next_sibling); // TODO(rjf): @u64_to_u32
+          dst_scope->voff_range_first       = (RDI_U32)voff_idx_first;                    // TODO(rjf): @u64_to_u32
+          dst_scope->voff_range_opl         = (RDI_U32)voff_idx_opl;                      // TODO(rjf): @u64_to_u32
+          dst_scope->local_first            = (RDI_U32)local_idx_first;                   // TODO(rjf): @u64_to_u32
+          dst_scope->local_count            = (RDI_U32)(local_idx_opl - local_idx_first); // TODO(rjf): @u64_to_u32
+          dst_scope->inline_site_idx        = (RDI_U32)rdim_idx_from_inline_site(src_scope->inline_site); // TODO(rjf): @u64_to_u32
+        }
+        chunk_idx += 1;
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage bake procedures
+  //
+  ProfScope("bake procedures")
+  {
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->baked_procedures.procedures_count = params->procedures.total_count+1;
+      rdim2_shared->baked_procedures.procedures = push_array(arena, RDI_Procedure, rdim2_shared->baked_procedures.procedures_count);
+    }
+    lane_sync();
+    {
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_SymbolChunkNode, params->procedures.first)
+      {
+        U64 location_block_layout_slot_idx = lane_idx()*total_location_case_chunk_count + params->scopes.chunk_count + chunk_idx;
+        U64 location_block_off = rdim2_shared->location_case_chunk_lane_offs[location_block_layout_slot_idx];
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_Symbol *src = &n->v[n_idx];
+          RDI_Procedure *dst = &rdim2_shared->baked_procedures.procedures[n->base_idx + n_idx + 1];
+          dst->name_string_idx      = rdim_bake_idx_from_string(bake_strings, src->name);
+          dst->link_name_string_idx = rdim_bake_idx_from_string(bake_strings, src->link_name);
+          if(src->is_extern)
+          {
+            dst->link_flags |= RDI_LinkFlag_External;
+          }
+          if(src->container_type != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_TypeScoped;
+            dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
+          }
+          else if(src->container_symbol != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_ProcScoped;
+            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+          }
+          dst->type_idx                  = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+          dst->root_scope_idx            = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
+          if(src->location_cases.count != 0)
+          {
+            dst->frame_base_location_first = location_block_off;
+            dst->frame_base_location_opl   = location_block_off + src->location_cases.count;
+            location_block_off += src->location_cases.count;
+          }
+        }
+        chunk_idx += 1;
+      }
+    }
+  }
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage compute layout for constant data
+  //
+  ProfScope("compute layout for constant data")
+  {
+    // rjf: set up
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->constant_data_chunk_lane_counts = push_array(arena, U64, lane_count() * params->constants.chunk_count);
+    }
+    lane_sync();
+    
+    // rjf: count
+    {
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_SymbolChunkNode, params->constants.first)
+      {
+        U64 slot_idx = lane_idx()*params->constants.chunk_count + chunk_idx;
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(idx, range)
+        {
+          rdim2_shared->constant_data_chunk_lane_counts[slot_idx] += n->v[idx].value_data.size;
+        }
+        chunk_idx += 1;
+      }
+    }
+    lane_sync();
+    
+    // rjf: layout
+    if(lane_idx() == 0)
+    {
+      U64 chunk_idx = 0;
+      U64 layout_off = 0;
+      for EachNode(n, RDIM_SymbolChunkNode, params->constants.first)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          U64 slot_idx = l_idx*params->constants.chunk_count + chunk_idx;
+          rdim2_shared->constant_data_chunk_lane_offs[slot_idx] = layout_off;
+          layout_off += rdim2_shared->constant_data_chunk_lane_counts[slot_idx];
+        }
+        chunk_idx += 1;
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage bake constants
+  //
+  ProfScope("bake constants")
+  {
+    // rjf: set up
+    if(lane_idx() == lane_from_task_idx(0))
+    {
+      rdim2_shared->baked_constants.constant_values_count = params->constants.total_count+1;
+      rdim2_shared->baked_constants.constant_values = push_array(arena, RDI_U32, rdim2_shared->baked_constants.constant_values_count);
+    }
+    if(lane_idx() == lane_from_task_idx(1))
+    {
+      rdim2_shared->baked_constants.constant_value_data_size = params->constants.total_value_data_size;
+      rdim2_shared->baked_constants.constant_value_data = push_array(arena, RDI_U8, rdim2_shared->baked_constants.constant_value_data_size);
+    }
+    if(lane_idx() == lane_from_task_idx(2))
+    {
+      rdim2_shared->baked_constants.constants_count = params->constants.total_count+1;
+      rdim2_shared->baked_constants.constants = push_array(arena, RDI_Constant, rdim2_shared->baked_constants.constants_count);
+    }
+    lane_sync();
+    
+    // rjf: wide bake
+    {
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_SymbolChunkNode, params->constants.first)
+      {
+        U64 slot_idx = lane_idx()*params->constants.chunk_count + chunk_idx;
+        U64 value_data_off = rdim2_shared->constant_data_chunk_lane_offs[slot_idx];
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_Symbol *src = &n->v[n_idx];
+          RDI_Constant *dst = &rdim2_shared->baked_constants.constants[1 + n->base_idx + n_idx];
+          RDI_U32 *dst_value_off = &rdim2_shared->baked_constants.constant_values[1 + n->base_idx + n_idx];
+          RDI_U8 *dst_value_data = rdim2_shared->baked_constants.constant_value_data + value_data_off;
+          dst->name_string_idx    = rdim_bake_idx_from_string(bake_strings, src->name);
+          dst->type_idx           = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+          dst->constant_value_idx = 1 + n->base_idx + n_idx;
+          dst_value_off[0] = (RDI_U32)value_data_off; // TODO(rjf): @u64_to_u32
+          rdim_memcpy(dst_value_data, src->value_data.str, src->value_data.size);
+          value_data_off += src->value_data.size;
+        }
+        chunk_idx += 1;
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake units, symbols, types, UDTs
   //
   {
@@ -2082,40 +2288,15 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(2))
     {
-      rdim2_shared->baked_locations.location_data_size = params->locations.total_encoded_size+1;
-      rdim2_shared->baked_locations.location_data = push_array(arena, RDI_U8, rdim2_shared->baked_locations.location_data_size);
-    }
-    if(lane_idx() == lane_from_task_idx(3))
-    {
       rdim2_shared->baked_global_variables.global_variables_count = params->global_variables.total_count+1;
       rdim2_shared->baked_global_variables.global_variables = push_array(arena, RDI_GlobalVariable, rdim2_shared->baked_global_variables.global_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(4))
+    if(lane_idx() == lane_from_task_idx(3))
     {
       rdim2_shared->baked_thread_variables.thread_variables_count = params->thread_variables.total_count+1;
       rdim2_shared->baked_thread_variables.thread_variables = push_array(arena, RDI_ThreadVariable, rdim2_shared->baked_thread_variables.thread_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(5))
-    {
-      rdim2_shared->baked_constants.constants_count = params->constants.total_count+1;
-      rdim2_shared->baked_constants.constants = push_array(arena, RDI_Constant, rdim2_shared->baked_constants.constants_count);
-    }
-    if(lane_idx() == lane_from_task_idx(6))
-    {
-      rdim2_shared->baked_constants.constant_values_count = params->constants.total_count+1;
-      rdim2_shared->baked_constants.constant_values = push_array(arena, RDI_U32, rdim2_shared->baked_constants.constant_values_count);
-    }
-    if(lane_idx() == lane_from_task_idx(7))
-    {
-      rdim2_shared->baked_constants.constant_value_data_size = params->constants.total_value_data_size;
-      rdim2_shared->baked_constants.constant_value_data = push_array(arena, RDI_U8, rdim2_shared->baked_constants.constant_value_data_size);
-    }
-    if(lane_idx() == lane_from_task_idx(8))
-    {
-      rdim2_shared->baked_procedures.procedures_count = params->procedures.total_count+1;
-      rdim2_shared->baked_procedures.procedures = push_array(arena, RDI_Procedure, rdim2_shared->baked_procedures.procedures_count);
-    }
-    if(lane_idx() == lane_from_task_idx(9))
+    if(lane_idx() == lane_from_task_idx(4))
     {
       rdim2_shared->baked_inline_sites.inline_sites_count = params->inline_sites.total_count+1;
       rdim2_shared->baked_inline_sites.inline_sites = push_array(arena, RDI_InlineSite, rdim2_shared->baked_inline_sites.inline_sites_count);
@@ -2213,49 +2394,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
             dst->bitfield.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
             dst->bitfield.off  = src->off;
             dst->bitfield.size = src->count;
-          }
-        }
-      }
-    }
-    
-    //- rjf: bake locations
-    ProfScope("bake locations")
-    {
-      for EachNode(n, RDIM_LocationChunkNode, params->locations.first)
-      {
-        Rng1U64 range = lane_range(n->count);
-        for EachInRange(n_idx, range)
-        {
-          RDIM_Location2 *loc = &n->v[n_idx];
-          RDI_U8 *dst = &rdim2_shared->baked_locations.location_data[n->base_encoding_off + loc->relative_encoding_off + 1];
-          switch((RDI_LocationKindEnum)loc->info.kind)
-          {
-            case RDI_LocationKind_NULL:{}break;
-            case RDI_LocationKind_AddrBytecodeStream:
-            case RDI_LocationKind_ValBytecodeStream:
-            {
-              MemoryCopy(dst+0, &loc->info.kind, sizeof(loc->info.kind));
-              RDI_U64 write_off = sizeof(loc->info.kind);
-              for EachNode(op_node, RDIM_EvalBytecodeOp, loc->info.bytecode.first_op)
-              {
-                MemoryCopy(dst + write_off, &op_node->op, 1);
-                write_off += 1;
-                MemoryCopy(dst + write_off, &op_node->p, op_node->p_size);
-                write_off += op_node->p_size;
-              }
-              dst[write_off] = 0;
-            }break;
-            case RDI_LocationKind_AddrRegPlusU16:
-            case RDI_LocationKind_AddrAddrRegPlusU16:
-            {
-              RDI_LocationRegPlusU16 baked = {loc->info.kind, loc->info.reg_code, loc->info.offset};
-              MemoryCopy(dst, &baked, sizeof(baked));
-            }break;
-            case RDI_LocationKind_ValReg:
-            {
-              RDI_LocationReg baked = {loc->info.kind, loc->info.reg_code};
-              MemoryCopy(dst, &baked, sizeof(baked));
-            }break;
           }
         }
       }

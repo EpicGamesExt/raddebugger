@@ -530,7 +530,7 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
       RDI_SectionKind  kind     = (RDI_SectionKind)idx;
       RDI_Section     *section  = &rdi->sections[idx];
       String8          kind_str = rdi_string_from_data_section_kind(scratch.arena, kind);
-      dumpf("  {%#08llx  %7u  %7u  %*s} // data_section[%I64u]\n", section->off, section->encoded_size, section->unpacked_size, 24, kind_str.str, idx);
+      dumpf("  {%#010llx  %10u  %10u  %*s} // data_section[%I64u]\n", section->off, section->encoded_size, section->unpacked_size, 24, kind_str.str, idx);
       scratch_end(scratch);
     }
   }
@@ -987,20 +987,23 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
     {
       RDI_Procedure *proc = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
-      String8List frame_base_location_strings = rdi_strings_from_locations(scratch.arena, rdi, tli->arch, r1u64(proc->frame_base_location_first, proc->frame_base_location_opl));
       dumpf("\n  '%S': // procedure[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, proc->name_string_idx), idx);
       dumpf("    link_name: '%S'\n", str8_from_rdi_string_idx(rdi, proc->link_name_string_idx));
       dumpf("    link_flags: `%S`\n",   rdi_string_from_link_flags(scratch.arena, proc->link_flags));
       dumpf("    type_idx: %u\n",   proc->type_idx);
       dumpf("    root_scope_idx: %u\n",   proc->root_scope_idx);
       dumpf("    container_idx: %u\n",   proc->container_idx);
-      dumpf("    frame_base: // (first: %u, opl: %u)\n", proc->frame_base_location_first, proc->frame_base_location_opl);
-      dumpf("    {\n");
-      for(String8Node *n = frame_base_location_strings.first; n != 0; n = n->next)
+      if(proc->frame_base_location_first != 0)
       {
-        dumpf("      %S\n", n->string);
+        String8List frame_base_location_strings = rdi_strings_from_locations(scratch.arena, rdi, tli->arch, r1u64(proc->frame_base_location_first, proc->frame_base_location_opl));
+        dumpf("    frame_base: // (first: %u, opl: %u)\n", proc->frame_base_location_first, proc->frame_base_location_opl);
+        dumpf("    {\n");
+        for(String8Node *n = frame_base_location_strings.first; n != 0; n = n->next)
+        {
+          dumpf("      %S\n", n->string);
+        }
+        dumpf("    }\n");
       }
-      dumpf("    }\n");
       dumpf("  }\n");
       scratch_end(scratch);
     }
