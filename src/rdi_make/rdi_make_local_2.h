@@ -80,13 +80,6 @@ struct RDIM2_Shared
   RDI_U64 *lane_src_line_map_offs;
   RDIM_SrcFileBakeResult baked_src_files;
   
-  RDI_U64 *scope_local_chunk_lane_counts; // [lane_count * scope_chunk_count]
-  RDI_U64 *scope_local_chunk_lane_offs; // [lane_count * scope_chunk_count]
-  RDI_U64 *scope_voff_chunk_lane_counts; // [lane_count * scope_chunk_count]
-  RDI_U64 *scope_voff_chunk_lane_offs; // [lane_count * scope_chunk_count]
-  
-  RDIM_ScopeBakeResult baked_scopes;
-  
   RDI_U64 *member_chunk_lane_counts; // [lane_count * udt_chunk_count]
   RDI_U64 *member_chunk_lane_offs; // [lane_count * udt_chunk_count]
   RDI_U64 *enum_val_chunk_lane_counts; // [lane_count * udt_chunk_count]
@@ -100,13 +93,26 @@ struct RDIM2_Shared
   
   RDIM_LocationBlockBakeResult baked_location_blocks;
   
+  RDIM_LocationBakeResult baked_locations;
+  
+  RDI_U64 *scope_local_chunk_lane_counts; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_local_chunk_lane_offs; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_voff_chunk_lane_counts; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_voff_chunk_lane_offs; // [lane_count * scope_chunk_count]
+  
+  RDIM_ScopeBakeResult baked_scopes;
+  
+  RDIM_ProcedureBakeResult baked_procedures;
+  
+  RDI_U64 *constant_data_chunk_lane_counts; // [lane_count * constant_chunk_count]
+  RDI_U64 *constant_data_chunk_lane_offs; // [lane_count * constant_chunk_count]
+  
+  RDIM_ConstantsBakeResult baked_constants;
+  
   RDIM_UnitBakeResult baked_units;
   RDIM_TypeNodeBakeResult baked_type_nodes;
-  RDIM_LocationBakeResult baked_locations;
   RDIM_GlobalVariableBakeResult baked_global_variables;
   RDIM_ThreadVariableBakeResult baked_thread_variables;
-  RDIM_ConstantsBakeResult baked_constants;
-  RDIM_ProcedureBakeResult baked_procedures;
   RDIM_InlineSiteBakeResult baked_inline_sites;
   
   RDIM_BakePathNode **baked_file_path_src_nodes;
