@@ -538,6 +538,7 @@ struct RDIM_SrcFile
   RDIM_String8 path;
   RDIM_SrcFileLineMapFragment *first_line_map_fragment;
   RDIM_SrcFileLineMapFragment *last_line_map_fragment;
+  RDI_U64 total_line_count;
 };
 
 typedef struct RDIM_SrcFileChunkNode RDIM_SrcFileChunkNode;

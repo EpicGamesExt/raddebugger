@@ -1581,70 +1581,125 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage compute src file / src file line map layout
+  //
+  ProfScope("compute src file / src file line map layout")
+  {
+    // rjf: set up
+    if(lane_idx() == 0)
+    {
+      rdim2_shared->lane_chunk_src_file_num_counts  = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+      rdim2_shared->lane_chunk_src_file_map_counts  = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+      rdim2_shared->lane_chunk_src_file_num_offs    = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+      rdim2_shared->lane_chunk_src_file_map_offs    = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+    }
+    lane_sync();
+    
+    // rjf: wide count
+    {
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        U64 slot_idx = lane_idx()*params->src_files.chunk_count + chunk_idx;
+        for EachInRange(idx, range)
+        {
+          U64 line_count = n->v[idx].total_line_count;
+          rdim2_shared->lane_chunk_src_file_num_counts[slot_idx] += line_count;
+          rdim2_shared->lane_chunk_src_file_map_counts[slot_idx] += !!line_count;
+        }
+        chunk_idx += 1;
+      }
+    }
+    lane_sync();
+    
+    // rjf: layout
+    if(lane_idx() == 0)
+    {
+      U64 chunk_idx = 0;
+      U64 num_layout_off = 0;
+      U64 map_layout_off = 1;
+      for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          U64 slot_idx = l_idx*params->src_files.chunk_count + chunk_idx;
+          rdim2_shared->lane_chunk_src_file_num_offs[slot_idx] = num_layout_off;
+          rdim2_shared->lane_chunk_src_file_map_offs[slot_idx] = map_layout_off;
+          num_layout_off += rdim2_shared->lane_chunk_src_file_num_counts[slot_idx];
+          map_layout_off += rdim2_shared->lane_chunk_src_file_map_counts[slot_idx];
+        }
+        chunk_idx += 1;
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake src files
   //
   ProfScope("bake src files")
   {
     //- rjf: set up
-    ProfScope("set up")
+    if(lane_idx() == 0)
     {
-      if(lane_idx() == lane_from_task_idx(0))
-      {
-        rdim2_shared->lane_src_line_map_counts = push_array(arena, U64, lane_count());
-        rdim2_shared->lane_src_line_map_offs = push_array(arena, U64, lane_count());
-      }
-      if(lane_idx() == lane_from_task_idx(1))
-      {
-        rdim2_shared->baked_src_files.source_files_count = params->src_files.total_count+1;
-        rdim2_shared->baked_src_files.source_files = push_array(arena, RDI_SourceFile, rdim2_shared->baked_src_files.source_files_count);
-      }
-      if(lane_idx() == lane_from_task_idx(2))
-      {
-        rdim2_shared->baked_src_files.source_line_maps_count = params->src_files.source_line_map_count+1;
-        rdim2_shared->baked_src_files.source_line_maps = push_array(arena, RDI_SourceLineMap, rdim2_shared->baked_src_files.source_line_maps_count);
-      }
-    }
-    lane_sync();
-    
-    //- rjf: calculate layout of src file line maps
-    ProfScope("calculate layout of src file line maps")
-    {
-      // rjf: count lines seen by each lane
-      for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
-      {
-        Rng1U64 range = lane_range(n->count);
-        for EachInRange(n_idx, range)
-        {
-          RDIM_SrcFile *src_file = &n->v[n_idx];
-          for(RDIM_SrcFileLineMapFragment *f = src_file->first_line_map_fragment; f != 0; f = f->next)
-          {
-            rdim2_shared->lane_src_line_map_counts[lane_idx()] += f->seq->line_count;
-          }
-        }
-      }
-      lane_sync();
-      
-      // rjf: lay out per-lane offset 
-      if(lane_idx() == 0)
-      {
-        U64 off = 0;
-        for EachIndex(l_idx, lane_count())
-        {
-          rdim2_shared->lane_src_line_map_offs[l_idx] = off;
-          off += rdim2_shared->lane_src_line_map_counts[l_idx];
-        }
-        // rdim2_shared->baked_src_files.
-      }
+      rdim2_shared->baked_src_files.source_files_count = params->src_files.total_count+1;
+      rdim2_shared->baked_src_files.source_files = push_array(arena, RDI_SourceFile, rdim2_shared->baked_src_files.source_files_count);
+      rdim2_shared->baked_src_files.source_line_maps_count = params->src_files.source_line_map_count;
+      rdim2_shared->baked_src_files.source_line_maps = push_array(arena, RDI_SourceLineMap, rdim2_shared->baked_src_files.source_line_maps_count);
+      rdim2_shared->baked_src_files.source_line_map_nums_count = params->src_files.total_line_count;
+      rdim2_shared->baked_src_files.source_line_map_nums = push_array(arena, RDI_U32, rdim2_shared->baked_src_files.source_line_map_nums_count);
+      rdim2_shared->baked_src_files.source_line_map_rngs_count = params->src_files.total_line_count + rdim2_shared->baked_src_files.source_line_maps_count;
+      rdim2_shared->baked_src_files.source_line_map_rngs = push_array(arena, RDI_U32, rdim2_shared->baked_src_files.source_line_map_rngs_count);
+      rdim2_shared->baked_src_files.source_line_map_voffs_count = params->src_files.total_line_count;
+      rdim2_shared->baked_src_files.source_line_map_voffs = push_array(arena, RDI_U64, rdim2_shared->baked_src_files.source_line_map_voffs_count);
     }
     lane_sync();
     
     //- rjf: bake
-    ProfScope("bake")
+    U64 chunk_idx = 0;
+    for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
     {
-      
+      Rng1U64 range = lane_range(n->count);
+      U64 slot_idx = lane_idx()*params->src_files.chunk_count + chunk_idx;
+      U64 dst_num_off  = rdim2_shared->lane_chunk_src_file_num_offs[slot_idx];
+      U64 dst_map_off  = rdim2_shared->lane_chunk_src_file_map_offs[slot_idx];
+      U64 dst_rng_off  = dst_num_off + dst_map_off;
+      U64 dst_voff_off = dst_num_off;
+      for EachInRange(idx, range)
+      {
+        RDIM_SrcFile *src = &n->v[idx];
+        RDI_SourceFile *dst = &rdim2_shared->baked_src_files.source_files[n->base_idx + idx + 1];
+        RDI_SourceLineMap *dst_map = &rdim2_shared->baked_src_files.source_line_maps[dst_map_off];
+        RDI_U32 *dst_nums  = &rdim2_shared->baked_src_files.source_line_map_nums[dst_num_off];
+        RDI_U32 *dst_rngs  = &rdim2_shared->baked_src_files.source_line_map_rngs[dst_rng_off];
+        RDI_U64 *dst_voffs = &rdim2_shared->baked_src_files.source_line_map_voffs[dst_voff_off];
+        
+        //- rjf: fill nums/ranges/voffs info
+        if(src->total_line_count != 0)
+        {
+          
+        }
+        
+        //- rjf: fill map info
+        if(src->total_line_count != 0)
+        {
+          // dst_map->line_count = (RDI_U32)src->total_line_count; // TODO(rjf): @u64_to_u32
+          // dst_map->voff_count = (RDI_U32)src->total_line_count+1; // TODO(rjf): @u64_to_u32
+          dst_map_off += 1;
+        }
+        
+        //- rjf: fill file info
+        Temp scratch = scratch_begin(&arena, 1);
+        String8 normalized_path = rdim_lower_from_str8(scratch.arena, src->path);
+        dst->file_path_node_idx = rdim_bake_path_node_idx_from_string(path_tree, src->path);
+        dst->normal_full_path_string_idx = rdim_bake_idx_from_string(bake_strings, normalized_path);
+        dst->source_line_map_idx = src->total_line_count ? dst_map_off : 0;
+        scratch_end(scratch);
+      }
+      chunk_idx += 1;
     }
   }
-  lane_sync();
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute lane UDT member/enum-val layouts
