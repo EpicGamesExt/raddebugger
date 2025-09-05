@@ -751,6 +751,13 @@ rb_thread_entry_point(void *p)
         log_user_errorf("Could not load debug info from the specified inputs. You must provide either a valid PDB file or an executable image (PE, ELF) file with DWARF debug info.");
       }
       
+      //- rjf: bake
+      RDIM_BakeResults bake_results = {0};
+      if(convert_done) ProfScope("bake")
+      {
+        bake_results = rdim2_bake(arena, &bake_params);
+      }
+      
       //- rjf: convert done => generate output
       if(convert_done) switch(output_kind)
       {
@@ -759,10 +766,6 @@ rb_thread_entry_point(void *p)
         //- rjf: generate RDI blobs
         case OutputKind_RDI:
         {
-          // rjf: bake
-          RDIM_BakeResults bake_results = {0};
-          ProfScope("bake") bake_results = rdim2_bake(arena, &bake_params);
-          
           // rjf: serialize
           RDIM_SerializedSectionBundle serialized_section_bundle = {0};
           ProfScope("serialize") serialized_section_bundle = rdim_serialized_section_bundle_from_bake_results(&bake_results);
@@ -782,8 +785,138 @@ rb_thread_entry_point(void *p)
         //- rjf: generate breakpad text
         case OutputKind_Breakpad:
         {
-          String8List dump = {0};
+          //- rjf: set up shared state
+          typedef struct P2B_Shared P2B_Shared;
+          struct P2B_Shared
+          {
+            String8List dump;
+            String8List *lane_chunk_file_dumps;
+            String8List *lane_chunk_func_dumps;
+          };
+          local_persist P2B_Shared *p2b_shared = 0;
+          if(lane_idx() == 0)
+          {
+            p2b_shared = push_array(arena, P2B_Shared, 1);
+            p2b_shared->lane_chunk_file_dumps = push_array(arena, String8List, lane_count()*bake_params.src_files.chunk_count);
+            p2b_shared->lane_chunk_func_dumps = push_array(arena, String8List, lane_count()*bake_params.procedures.chunk_count);
+          }
+          lane_sync();
           
+          //- rjf: dump MODULE record
+          if(lane_idx() == 0)
+          {
+            str8_list_pushf(arena, &p2b_shared->dump, "MODULE windows x86_64 %I64x %S\n", bake_params.top_level_info.exe_hash, bake_params.top_level_info.exe_name);
+          }
+          
+          //- rjf: dump FILE records
+          ProfScope("dump FILE records")
+          {
+            U64 chunk_idx = 0;
+            for EachNode(n, RDIM_SrcFileChunkNode, bake_params.src_files.first)
+            {
+              Rng1U64 range = lane_range(n->count);
+              for EachInRange(idx, range)
+              {
+                U64 file_idx = rdim_idx_from_src_file(&n->v[idx]);
+                String8 src_path = n->v[idx].path;
+                str8_list_pushf(arena, &p2b_shared->lane_chunk_file_dumps[lane_idx()*bake_params.src_files.chunk_count + chunk_idx], "FILE %I64u %S\n", file_idx, src_path);
+              }
+              chunk_idx += 1;
+            }
+          }
+          
+          //- rjf: dump FUNC records
+          ProfScope("dump FUNC records")
+          {
+            U64 chunk_idx = 0;
+            for EachNode(n, RDIM_SymbolChunkNode, bake_params.procedures.first)
+            {
+              String8List *out = &p2b_shared->lane_chunk_func_dumps[lane_idx()*bake_params.procedures.chunk_count + chunk_idx];
+              Rng1U64 range = lane_range(n->count);
+              for EachInRange(idx, range)
+              {
+                // NOTE(rjf): breakpad does not support multiple voff ranges per procedure.
+                RDIM_Symbol *proc = &n->v[idx];
+                RDIM_Scope *root_scope = proc->root_scope;
+                if(root_scope != 0 && root_scope->voff_ranges.first != 0)
+                {
+                  // rjf: dump function record
+                  RDIM_Rng1U64 voff_range = root_scope->voff_ranges.first->v;
+                  str8_list_pushf(arena, out, "FUNC %I64x %I64x %I64x %S\n", voff_range.min, voff_range.max-voff_range.min, 0ull, proc->name);
+                  
+                  // rjf: dump function lines
+                  U64 unit_idx = rdi_vmap_idx_from_voff(bake_results.unit_vmap.vmap.vmap, bake_results.unit_vmap.vmap.count, voff_range.min);
+                  if(0 < unit_idx && unit_idx <= bake_results.units.units_count)
+                  {
+                    U32 line_table_idx = bake_results.units.units[unit_idx].line_table_idx;
+                    if(0 < line_table_idx && line_table_idx <= bake_results.line_tables.line_tables_count)
+                    {
+                      // rjf: unpack unit line info
+                      RDI_LineTable *line_table = &bake_results.line_tables.line_tables[line_table_idx];
+                      RDI_ParsedLineTable line_info =
+                      {
+                        bake_results.line_tables.line_table_voffs + line_table->voffs_base_idx,
+                        bake_results.line_tables.line_table_lines + line_table->lines_base_idx,
+                        0,
+                        line_table->lines_count,
+                        0
+                      };
+                      for(U64 voff = voff_range.min, last_voff = 0;
+                          voff < voff_range.max && voff > last_voff;)
+                      {
+                        RDI_U64 line_info_idx = rdi_line_info_idx_from_voff(&line_info, voff);
+                        if(line_info_idx < line_info.count)
+                        {
+                          RDI_Line *line = &line_info.lines[line_info_idx];
+                          U64 line_voff_min = line_info.voffs[line_info_idx];
+                          U64 line_voff_opl = line_info.voffs[line_info_idx+1];
+                          if(line->file_idx != 0)
+                          {
+                            str8_list_pushf(arena, out, "%I64x %I64x %I64u %I64u\n",
+                                            line_voff_min,
+                                            line_voff_opl-line_voff_min,
+                                            (U64)line->line_num,
+                                            (U64)line->file_idx);
+                          }
+                          last_voff = voff;
+                          voff = line_voff_opl;
+                        }
+                        else
+                        {
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              chunk_idx += 1;
+            }
+          }
+          
+          //- rjf: join
+          lane_sync();
+          if(lane_idx() == 0)
+          {
+            for EachIndex(chunk_idx, bake_params.src_files.chunk_count)
+            {
+              for EachIndex(ln_idx, lane_count())
+              {
+                str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_chunk_file_dumps[ln_idx*bake_params.src_files.chunk_count + chunk_idx]);
+              }
+            }
+            for EachIndex(chunk_idx, bake_params.procedures.chunk_count)
+            {
+              for EachIndex(ln_idx, lane_count())
+              {
+                str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_chunk_func_dumps[ln_idx*bake_params.procedures.chunk_count + chunk_idx]);
+              }
+            }
+          }
+          lane_sync();
+          output_blobs = p2b_shared->dump;
+          
+#if 0
           //- rjf: kick off unit vmap baking
           P2B_BakeUnitVMapIn bake_unit_vmap_in = {&bake_params.units};
           ASYNC_Task *bake_unit_vmap_task = async_task_launch(arena, p2b_bake_unit_vmap_work, .input = &bake_unit_vmap_in);
@@ -864,6 +997,7 @@ rb_thread_entry_point(void *p)
           }
           
           str8_list_concat_in_place(&output_blobs, &dump);
+#endif
         }break;
       }
     }break;

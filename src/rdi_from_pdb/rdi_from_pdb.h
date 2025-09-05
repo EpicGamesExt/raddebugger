@@ -303,6 +303,9 @@ internal RDIM_Location *p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch ar
 internal RDI_RegCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg);
 internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
 
+internal RDIM_LocationInfo p2r2_location_info_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection);
+internal void p2r2_local_push_location_cases_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location2 *loc, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
+
 ////////////////////////////////
 //~ rjf: Initial Parsing & Preparation Pass Tasks
 
@@ -354,6 +357,6 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work);
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
 
-internal RDIM_BakeParams p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in);
+internal RDIM_BakeParams p2r2_convert(Arena *arena, P2R_ConvertParams *params);
 
 #endif // RDI_FROM_PDB_H
