@@ -2213,7 +2213,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     if(lane_idx() == 0)
     {
       U64 local_layout_off = 1;
-      U64 voff_layout_off = 0;
+      U64 voff_layout_off = 1;
       U64 chunk_idx = 0;
       for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
       {
@@ -2245,7 +2245,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(1))
     {
-      rdim2_shared->baked_scopes.scope_voffs_count = params->scopes.scope_voff_count;
+      rdim2_shared->baked_scopes.scope_voffs_count = params->scopes.scope_voff_count+1;
       rdim2_shared->baked_scopes.scope_voffs = push_array(arena, RDI_U64, rdim2_shared->baked_scopes.scope_voffs_count);
     }
     if(lane_idx() == lane_from_task_idx(2))
