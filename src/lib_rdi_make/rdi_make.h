@@ -1315,6 +1315,32 @@ struct RDIM_VMapMarker
   RDI_U32 begin_range;
 };
 
+//- rjf: source line maps
+
+typedef struct RDIM_BakeSrcLineMapNode RDIM_BakeSrcLineMapNode;
+struct RDIM_BakeSrcLineMapNode
+{
+  RDIM_BakeSrcLineMapNode *next;
+  RDI_U32 line_num;
+  RDIM_Rng1U64List voff_ranges;
+};
+
+typedef struct RDIM_BakeSrcLineMapSlot RDIM_BakeSrcLineMapSlot;
+struct RDIM_BakeSrcLineMapSlot
+{
+  RDIM_BakeSrcLineMapNode *first;
+  RDIM_BakeSrcLineMapNode *last;
+};
+
+typedef struct RDIM_BakeSrcLineMap RDIM_BakeSrcLineMap;
+struct RDIM_BakeSrcLineMap
+{
+  RDIM_BakeSrcLineMapSlot *slots;
+  RDI_U64 slots_count;
+  RDI_U64 line_count;
+  RDI_U64 voff_range_count;
+};
+
 //- rjf: line table records
 
 typedef struct RDIM_LineRec RDIM_LineRec;
