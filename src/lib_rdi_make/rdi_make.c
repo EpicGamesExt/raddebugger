@@ -719,6 +719,7 @@ rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_f
   RDIM_SrcFileLineMapFragment *fragment = rdim_push_array(arena, RDIM_SrcFileLineMapFragment, 1);
   fragment->seq = seq;
   RDIM_SLLQueuePush(src_file->first_line_map_fragment, src_file->last_line_map_fragment, fragment);
+  src_file->total_line_count += seq->line_count;
   src_files->total_line_count += seq->line_count;
 }
 

@@ -76,8 +76,11 @@ struct RDIM2_Shared
   RDIM_TopLevelNameMapBakeResult baked_top_level_name_maps;
   RDIM_NameMapBakeResult baked_name_maps;
   
-  RDI_U64 *lane_src_line_map_counts;
-  RDI_U64 *lane_src_line_map_offs;
+  RDI_U64 *lane_chunk_src_file_num_counts; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_map_counts; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_num_offs; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_map_offs; // [lane_count * src_file_chunk_count]
+  
   RDIM_SrcFileBakeResult baked_src_files;
   
   RDI_U64 *member_chunk_lane_counts; // [lane_count * udt_chunk_count]
