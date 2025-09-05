@@ -2183,6 +2183,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     if(lane_idx() == 0)
     {
       rdim2_shared->constant_data_chunk_lane_counts = push_array(arena, U64, lane_count() * params->constants.chunk_count);
+      rdim2_shared->constant_data_chunk_lane_offs = push_array(arena, U64, lane_count() * params->constants.chunk_count);
     }
     lane_sync();
     
