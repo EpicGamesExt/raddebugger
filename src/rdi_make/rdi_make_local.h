@@ -48,340 +48,141 @@
 //- rjf: main library
 #include "lib_rdi_make/rdi_make.h"
 
-//- rjf: line table baking task types
+//- rjf: unsorted joined line table info
 
-typedef struct RDIM_BakeLineTablesIn RDIM_BakeLineTablesIn;
-struct RDIM_BakeLineTablesIn
+typedef struct RDIM_UnsortedJoinedLineTable RDIM_UnsortedJoinedLineTable;
+struct RDIM_UnsortedJoinedLineTable
 {
-  RDIM_LineTableChunkList *line_tables;
+  RDI_U64 line_count;
+  RDI_U64 seq_count;
+  RDI_U64 key_count;
+  RDIM_SortKey *line_keys;
+  RDIM_LineRec *line_recs;
 };
 
-//- rjf: string map baking task types
+//- rjf: shared state bundle
 
-typedef struct RDIM_BakeSrcFilesStringsIn RDIM_BakeSrcFilesStringsIn;
-struct RDIM_BakeSrcFilesStringsIn
+typedef struct RDIM2_Shared RDIM2_Shared;
+struct RDIM2_Shared
 {
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose **maps;
-  RDIM_SrcFileChunkList *list;
-};
-
-typedef struct RDIM_BakeUnitsStringsIn RDIM_BakeUnitsStringsIn;
-struct RDIM_BakeUnitsStringsIn
-{
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose **maps;
-  RDIM_UnitChunkList *list;
-};
-
-typedef struct RDIM_BakeUDTsStringsInNode RDIM_BakeUDTsStringsInNode;
-struct RDIM_BakeUDTsStringsInNode
-{
-  RDIM_BakeUDTsStringsInNode *next;
-  RDIM_UDT *v;
-  RDI_U64 count;
-};
-
-typedef struct RDIM_BakeTypesStringsInNode RDIM_BakeTypesStringsInNode;
-struct RDIM_BakeTypesStringsInNode
-{
-  RDIM_BakeTypesStringsInNode *next;
-  RDIM_Type *v;
-  RDI_U64 count;
-};
-
-typedef struct RDIM_BakeTypesStringsIn RDIM_BakeTypesStringsIn;
-struct RDIM_BakeTypesStringsIn
-{
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose **maps;
-  RDIM_BakeTypesStringsInNode *first;
-  RDIM_BakeTypesStringsInNode *last;
-};
-
-typedef struct RDIM_BakeUDTsStringsIn RDIM_BakeUDTsStringsIn;
-struct RDIM_BakeUDTsStringsIn
-{
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose **maps;
-  RDIM_BakeUDTsStringsInNode *first;
-  RDIM_BakeUDTsStringsInNode *last;
-};
-
-typedef struct RDIM_BakeSymbolsStringsInNode RDIM_BakeSymbolsStringsInNode;
-struct RDIM_BakeSymbolsStringsInNode
-{
-  RDIM_BakeSymbolsStringsInNode *next;
-  RDIM_Symbol *v;
-  RDI_U64 count;
-};
-
-typedef struct RDIM_BakeSymbolsStringsIn RDIM_BakeSymbolsStringsIn;
-struct RDIM_BakeSymbolsStringsIn
-{
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose **maps;
-  RDIM_BakeSymbolsStringsInNode *first;
-  RDIM_BakeSymbolsStringsInNode *last;
-};
-
-typedef struct RDIM_BakeInlineSiteStringsInNode RDIM_BakeInlineSiteStringsInNode;
-struct RDIM_BakeInlineSiteStringsInNode
-{
-  RDIM_BakeInlineSiteStringsInNode *next;
-  RDIM_InlineSite *v;
-  RDI_U64 count;
-};
-
-typedef struct RDIM_BakeInlineSiteStringsIn RDIM_BakeInlineSiteStringsIn;
-struct RDIM_BakeInlineSiteStringsIn
-{
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose **maps;
-  RDIM_BakeInlineSiteStringsInNode *first;
-  RDIM_BakeInlineSiteStringsInNode *last;
-};
-
-typedef struct RDIM_BakeScopesStringsInNode RDIM_BakeScopesStringsInNode;
-struct RDIM_BakeScopesStringsInNode
-{
-  RDIM_BakeScopesStringsInNode *next;
-  RDIM_Scope *v;
-  RDI_U64 count;
-};
-
-typedef struct RDIM_BakeScopesStringsIn RDIM_BakeScopesStringsIn;
-struct RDIM_BakeScopesStringsIn
-{
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose **maps;
-  RDIM_BakeScopesStringsInNode *first;
-  RDIM_BakeScopesStringsInNode *last;
-};
-
-//- rjf: OLD string map baking types
-
-typedef struct RDIM_BuildBakeStringMapIn RDIM_BuildBakeStringMapIn;
-struct RDIM_BuildBakeStringMapIn
-{
+  RDI_U64 scope_vmap_count;
+  RDIM_SortKey *scope_vmap_keys;
+  RDIM_SortKey *scope_vmap_keys__swap;
+  RDIM_VMapMarker *scope_vmap_markers;
+  RDI_U64 unit_vmap_count;
+  RDIM_SortKey *unit_vmap_keys;
+  RDIM_SortKey *unit_vmap_keys__swap;
+  RDIM_VMapMarker *unit_vmap_markers;
+  RDI_U64 global_vmap_count;
+  RDIM_SortKey *global_vmap_keys;
+  RDIM_SortKey *global_vmap_keys__swap;
+  RDIM_VMapMarker *global_vmap_markers;
+  U32 **lane_digit_counts;
+  U32 **lane_digit_offsets;
+  
+  RDIM_ScopeVMapBakeResult baked_scope_vmap;
+  RDIM_UnitVMapBakeResult baked_unit_vmap;
+  RDIM_GlobalVMapBakeResult baked_global_vmap;
+  
   RDIM_BakePathTree *path_tree;
-  RDIM_BakeParams *params;
+  
+  RDI_U64 line_tables_count;
+  RDI_U64 line_table_block_take_counter;
+  RDIM_LineTable **src_line_tables;
+  RDIM_UnsortedJoinedLineTable *unsorted_joined_line_tables;
+  
+  RDIM_SortKey **sorted_line_table_keys;
+  
+  RDIM_LineTableBakeResult baked_line_tables;
+  
+  RDIM_BakeStringMapTopology bake_string_map_topology;
+  RDIM_BakeStringMapLoose **lane_bake_string_maps__loose;
+  RDIM_BakeStringMapLoose *bake_string_map__loose;
+  RDIM_BakeStringMapTight bake_strings;
+  
+  RDIM_BakeNameMapTopology bake_name_map_topology[RDI_NameMapKind_COUNT];
+  RDIM_BakeNameMap **lane_bake_name_maps[RDI_NameMapKind_COUNT];
+  RDIM_BakeNameMap *bake_name_maps[RDI_NameMapKind_COUNT];
+  
+  RDIM_BakeIdxRunMapTopology bake_idx_run_map_topology;
+  RDIM_BakeIdxRunMapLoose **lane_bake_idx_run_maps__loose;
+  RDIM_BakeIdxRunMapLoose *bake_idx_run_map__loose;
+  RDIM_BakeIdxRunMap bake_idx_runs;
+  
+  RDIM_StringBakeResult baked_strings;
+  
+  RDIM_IndexRunBakeResult baked_idx_runs;
+  
+  RDI_U64 *lane_name_map_node_counts[RDI_NameMapKind_COUNT];
+  RDI_U64 *lane_name_map_node_offs[RDI_NameMapKind_COUNT];
+  RDI_U64 name_map_node_counts[RDI_NameMapKind_COUNT];
+  RDI_U64 total_name_map_node_count;
+  RDIM_TopLevelNameMapBakeResult baked_top_level_name_maps;
+  RDIM_NameMapBakeResult baked_name_maps;
+  
+  RDIM_BakeSrcLineMap *bake_src_line_maps;
+  
+  RDI_U64 bake_src_line_map_take_counter;
+  RDIM_SortKey **bake_src_line_map_keys;
+  
+  RDI_U64 *lane_chunk_src_file_num_counts; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_voff_counts; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_map_counts; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_num_offs; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_voff_offs; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_map_offs; // [lane_count * src_file_chunk_count]
+  RDI_U64 total_src_map_line_count;
+  RDI_U64 total_src_map_voff_count;
+  
+  RDIM_SrcFileBakeResult baked_src_files;
+  
+  RDI_U64 *member_chunk_lane_counts; // [lane_count * udt_chunk_count]
+  RDI_U64 *member_chunk_lane_offs; // [lane_count * udt_chunk_count]
+  RDI_U64 *enum_val_chunk_lane_counts; // [lane_count * udt_chunk_count]
+  RDI_U64 *enum_val_chunk_lane_offs; // [lane_count * udt_chunk_count]
+  
+  RDIM_UDTBakeResult baked_udts;
+  
+  RDI_U64 *location_case_chunk_lane_counts; // [lane_count * (scope_chunk_count + procedure_chunk_count)
+  RDI_U64 *location_case_chunk_lane_offs; // [lane_count * (scope_chunk_count + procedure_chunk_count)
+  RDI_U64 total_location_case_count;
+  
+  RDIM_LocationBlockBakeResult baked_location_blocks;
+  
+  RDIM_LocationBakeResult baked_locations;
+  
+  RDI_U64 *scope_local_chunk_lane_counts; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_local_chunk_lane_offs; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_voff_chunk_lane_counts; // [lane_count * scope_chunk_count]
+  RDI_U64 *scope_voff_chunk_lane_offs; // [lane_count * scope_chunk_count]
+  
+  RDIM_ScopeBakeResult baked_scopes;
+  
+  RDIM_ProcedureBakeResult baked_procedures;
+  
+  RDI_U64 *constant_data_chunk_lane_counts; // [lane_count * constant_chunk_count]
+  RDI_U64 *constant_data_chunk_lane_offs; // [lane_count * constant_chunk_count]
+  
+  RDIM_ConstantsBakeResult baked_constants;
+  
+  RDIM_UnitBakeResult baked_units;
+  RDIM_TypeNodeBakeResult baked_type_nodes;
+  RDIM_GlobalVariableBakeResult baked_global_variables;
+  RDIM_ThreadVariableBakeResult baked_thread_variables;
+  RDIM_InlineSiteBakeResult baked_inline_sites;
+  
+  RDIM_BakePathNode **baked_file_path_src_nodes;
+  RDIM_FilePathBakeResult baked_file_paths;
+  
+  RDIM_TopLevelInfoBakeResult baked_top_level_info;
+  RDIM_BinarySectionBakeResult baked_binary_sections;
 };
 
-typedef struct RDIM_BuildBakeNameMapIn RDIM_BuildBakeNameMapIn;
-struct RDIM_BuildBakeNameMapIn
-{
-  RDI_NameMapKind k;
-  RDIM_BakeParams *params;
-};
-
-//- rjf: string map joining task types
-
-typedef struct RDIM_JoinBakeStringMapSlotsIn RDIM_JoinBakeStringMapSlotsIn;
-struct RDIM_JoinBakeStringMapSlotsIn
-{
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose **src_maps;
-  U64 src_maps_count;
-  RDIM_BakeStringMapLoose *dst_map;
-  Rng1U64 slot_idx_range;
-};
-
-//- rjf: string map sorting task types
-
-typedef struct RDIM_SortBakeStringMapSlotsIn RDIM_SortBakeStringMapSlotsIn;
-struct RDIM_SortBakeStringMapSlotsIn
-{
-  RDIM_BakeStringMapTopology *top;
-  RDIM_BakeStringMapLoose *src_map;
-  RDIM_BakeStringMapLoose *dst_map;
-  U64 slot_idx;
-  U64 slot_count;
-};
-
-//- rjf: debug info baking task types
-
-typedef struct RDIM_BakeUnitsIn RDIM_BakeUnitsIn;
-struct RDIM_BakeUnitsIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_BakePathTree *path_tree;
-  RDIM_UnitChunkList *units;
-};
-
-typedef struct RDIM_BakeUnitVMapIn RDIM_BakeUnitVMapIn;
-struct RDIM_BakeUnitVMapIn
-{
-  RDIM_UnitChunkList *units;
-};
-
-typedef struct RDIM_BakeSrcFilesIn RDIM_BakeSrcFilesIn;
-struct RDIM_BakeSrcFilesIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_BakePathTree *path_tree;
-  RDIM_SrcFileChunkList *src_files;
-};
-
-typedef struct RDIM_BakeUDTsIn RDIM_BakeUDTsIn;
-struct RDIM_BakeUDTsIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_UDTChunkList *udts;
-};
-
-typedef struct RDIM_BakeGlobalVariablesIn RDIM_BakeGlobalVariablesIn;
-struct RDIM_BakeGlobalVariablesIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_SymbolChunkList *global_variables;
-};
-
-typedef struct RDIM_BakeConstantsIn RDIM_BakeConstantsIn;
-struct RDIM_BakeConstantsIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_SymbolChunkList *constants;
-};
-
-typedef struct RDIM_BakeGlobalVMapIn RDIM_BakeGlobalVMapIn;
-struct RDIM_BakeGlobalVMapIn
-{
-  RDIM_SymbolChunkList *global_variables;
-};
-
-typedef struct RDIM_BakeThreadVariablesIn RDIM_BakeThreadVariablesIn;
-struct RDIM_BakeThreadVariablesIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_SymbolChunkList *thread_variables;
-};
-
-typedef struct RDIM_BakeProceduresIn RDIM_BakeProceduresIn;
-struct RDIM_BakeProceduresIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_SymbolChunkList *procedures;
-  RDIM_String8List *location_blocks;
-  RDIM_String8List *location_data_blobs;
-};
-
-typedef struct RDIM_BakeScopesIn RDIM_BakeScopesIn;
-struct RDIM_BakeScopesIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_ScopeChunkList *scopes;
-  RDIM_String8List *location_blocks;
-  RDIM_String8List *location_data_blobs;
-};
-
-typedef struct RDIM_BakeScopeVMapIn RDIM_BakeScopeVMapIn;
-struct RDIM_BakeScopeVMapIn
-{
-  RDIM_ScopeChunkList *scopes;
-};
-
-typedef struct RDIM_BakeInlineSitesIn RDIM_BakeInlineSitesIn;
-struct RDIM_BakeInlineSitesIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_InlineSiteChunkList *inline_sites;
-};
-
-typedef struct RDIM_BakeFilePathsIn RDIM_BakeFilePathsIn;
-struct RDIM_BakeFilePathsIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_BakePathTree *path_tree;
-};
-
-typedef struct RDIM_BakeStringsIn RDIM_BakeStringsIn;
-struct RDIM_BakeStringsIn
-{
-  RDIM_BakeStringMapTight *strings;
-};
-
-typedef struct RDIM_BakeTypeNodesIn RDIM_BakeTypeNodesIn;
-struct RDIM_BakeTypeNodesIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_BakeIdxRunMap *idx_runs;
-  RDIM_TypeChunkList *types;
-};
-
-typedef struct RDIM_BakeNameMapIn RDIM_BakeNameMapIn;
-struct RDIM_BakeNameMapIn
-{
-  RDIM_BakeStringMapTight *strings;
-  RDIM_BakeIdxRunMap *idx_runs;
-  RDIM_BakeNameMap *map;
-  RDI_NameMapKind kind;
-};
-
-typedef struct RDIM_BakeIdxRunsIn RDIM_BakeIdxRunsIn;
-struct RDIM_BakeIdxRunsIn
-{
-  RDIM_BakeIdxRunMap *idx_runs;
-};
-
-////////////////////////////////
+global RDIM2_Shared *rdim2_shared = 0;
 
 internal RDIM_DataModel rdim_data_model_from_os_arch(OperatingSystem os, RDI_Arch arch);
-
-////////////////////////////////
-//~ rjf: Baking Stage Tasks
-
-//- rjf: unsorted bake string map building
-ASYNC_WORK_DEF(rdim_bake_src_files_strings_work);
-ASYNC_WORK_DEF(rdim_bake_units_strings_work);
-ASYNC_WORK_DEF(rdim_bake_types_strings_work);
-ASYNC_WORK_DEF(rdim_bake_udts_strings_work);
-ASYNC_WORK_DEF(rdim_bake_symbols_strings_work);
-ASYNC_WORK_DEF(rdim_bake_scopes_strings_work);
-ASYNC_WORK_DEF(rdim_bake_line_tables_work);
-
-//- rjf: bake string map joining
-ASYNC_WORK_DEF(rdim_bake_string_map_join_work);
-
-//- rjf: bake string map sorting
-ASYNC_WORK_DEF(rdim_bake_string_map_sort_work);
-
-//- rjf: pass 1: interner/deduper map builds
-ASYNC_WORK_DEF(rdim_build_bake_name_map_work);
-
-//- rjf: pass 2: string-map-dependent debug info stream builds
-ASYNC_WORK_DEF(rdim_bake_units_work);
-ASYNC_WORK_DEF(rdim_bake_unit_vmap_work);
-ASYNC_WORK_DEF(rdim_bake_src_files_work);
-ASYNC_WORK_DEF(rdim_bake_udts_work);
-ASYNC_WORK_DEF(rdim_bake_global_variables_work);
-ASYNC_WORK_DEF(rdim_bake_global_vmap_work);
-ASYNC_WORK_DEF(rdim_bake_thread_variables_work);
-ASYNC_WORK_DEF(rdim_bake_constants_work);
-ASYNC_WORK_DEF(rdim_bake_procedures_work);
-ASYNC_WORK_DEF(rdim_bake_scopes_work);
-ASYNC_WORK_DEF(rdim_bake_scope_vmap_work);
-ASYNC_WORK_DEF(rdim_bake_file_paths_work);
-ASYNC_WORK_DEF(rdim_bake_strings_work);
-
-//- rjf: pass 3: idx-run-map-dependent debug info stream builds
-ASYNC_WORK_DEF(rdim_bake_type_nodes_work);
-ASYNC_WORK_DEF(rdim_bake_name_map_work);
-ASYNC_WORK_DEF(rdim_bake_idx_runs_work);
-
-////////////////////////////////
-//~ rjf: Globals
-
-global ASYNC_Root *rdim_local_async_root = 0;
-
-////////////////////////////////
-
-internal RDIM_DataModel    rdim_data_model_from_os_arch(OperatingSystem os, RDI_Arch arch);
 internal RDIM_TopLevelInfo rdim_make_top_level_info(String8 image_name, Arch arch, U64 exe_hash, RDIM_BinarySectionList sections);
-
-////////////////////////////////
-
-internal RDIM_BakeResults             rdim_bake(Arena *arena, ASYNC_Root *async_root, RDIM_BakeParams *in);
+internal RDIM_BakeResults rdim2_bake(Arena *arena, RDIM_BakeParams *params);
 internal RDIM_SerializedSectionBundle rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in);
 
 #endif // RDI_MAKE_LOCAL_H

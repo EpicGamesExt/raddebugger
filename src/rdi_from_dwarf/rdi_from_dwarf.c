@@ -871,9 +871,9 @@ d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, U64 addr
     B32               is_addr  = 0;
     RDIM_EvalBytecode bytecode = d2r_bytecode_from_expression(arena, input, image_base, address_size, arch, addr_lu, expr, cu, &is_addr);
     
-    loc           = push_array(arena, RDIM_Location, 1);
-    loc->kind     = is_addr ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
-    loc->bytecode = bytecode;
+    loc = push_array(arena, RDIM_Location, 1);
+    loc->info.kind     = is_addr ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
+    loc->info.bytecode = bytecode;
   }
   return loc;
 }
@@ -886,7 +886,7 @@ d2r_location_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 ima
   return location;
 }
 
-internal RDIM_LocationSet
+internal RDIM_LocationCaseList
 d2r_locset_from_attrib(Arena               *arena,
                        DW_Input            *input,
                        DW_CompUnit         *cu,
@@ -897,7 +897,7 @@ d2r_locset_from_attrib(Arena               *arena,
                        DW_Tag               tag,
                        DW_AttribKind        kind)
 {
-  RDIM_LocationSet locset = {0};
+  RDIM_LocationCaseList locset = {0};
   
   // extract attrib from tag
   DW_Attrib      *attrib       = dw_attrib_from_tag(input, cu, tag, kind);
@@ -913,7 +913,8 @@ d2r_locset_from_attrib(Arena               *arena,
     for (DW_LocNode *loc_n = loclist.first; loc_n != 0; loc_n = loc_n->next) {
       RDIM_Location *location   = d2r_transpile_expression(arena, input, image_base, cu->address_size, arch, cu->addr_lu, cu, loc_n->v.expr);
       RDIM_Rng1U64   voff_range = { .min = loc_n->v.range.min -  image_base, .max = loc_n->v.range.max - image_base };
-      rdim_location_set_push_case(arena, scopes, &locset, voff_range, location);
+      // rdim_location_set_push_case(arena, scopes, &locset, voff_range, location);
+      // TODO(rjf): need to use rdim_local_push_location_case here
     }
     
     scratch_end(scratch);
@@ -924,7 +925,8 @@ d2r_locset_from_attrib(Arena               *arena,
     // convert expression and inherit life-time ranges from enclosed scope
     RDIM_Location *location = d2r_transpile_expression(arena, input, image_base, cu->address_size, arch, cu->addr_lu, cu, expr);
     for (RDIM_Rng1U64Node *range_n = curr_scope->voff_ranges.first; range_n != 0; range_n = range_n->next) {
-      rdim_location_set_push_case(arena, scopes, &locset, range_n->v, location);
+      // rdim_location_set_push_case(arena, scopes, &locset, range_n->v, location);
+      // TODO(rjf): need to use rdim_local_push_location_case here
     }
   } else if (attrib_class != DW_AttribClass_Null) {
     AssertAlways(!"unexpected attrib class");
@@ -933,7 +935,7 @@ d2r_locset_from_attrib(Arena               *arena,
   return locset;
 }
 
-internal RDIM_LocationSet
+internal RDIM_LocationCaseList
 d2r_var_locset_from_tag(Arena               *arena,
                         DW_Input            *input,
                         DW_CompUnit         *cu,
@@ -943,7 +945,7 @@ d2r_var_locset_from_tag(Arena               *arena,
                         Arch                 arch,
                         DW_Tag               tag)
 {
-  RDIM_LocationSet locset = {0};
+  RDIM_LocationCaseList locset = {0};
   
   B32 has_const_value = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_ConstValue);
   B32 has_location    = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Location);
@@ -962,13 +964,15 @@ d2r_var_locset_from_tag(Arena               *arena,
     rdim_bytecode_push_uconst(arena, &bc, const_value);
     
     // fill out location
+    // TODO(rjf): these need to be pushed into a RDIM_LocationChunkList
     RDIM_Location *loc = push_array(arena, RDIM_Location, 1);
-    loc->kind          = RDI_LocationKind_ValBytecodeStream;
-    loc->bytecode      = bc;
+    loc->info.kind     = RDI_LocationKind_ValBytecodeStream;
+    loc->info.bytecode = bc;
     
     // push location cases
     for (RDIM_Rng1U64Node *range_n = curr_scope->voff_ranges.first; range_n != 0; range_n = range_n->next) {
-      rdim_location_set_push_case(arena, scopes, &locset, range_n->v, loc);
+      // rdim_location_set_push_case(arena, scopes, &locset, range_n->v, loc);
+      // TODO(rjf): need to use rdim_local_push_location_case here
     }
   } else if (has_location) {
     locset = d2r_locset_from_attrib(arena, input, cu, scopes, curr_scope, image_base, arch, tag, DW_AttribKind_Location);
@@ -1871,7 +1875,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                 proc->container_symbol = 0;
                 proc->container_type   = container_type;
                 proc->root_scope       = root_scope;
-                proc->frame_base       = d2r_locset_from_attrib(arena, &input, cu, &scopes, root_scope, image_base, arch, tag, DW_AttribKind_FrameBase);
+                proc->location_cases   = d2r_locset_from_attrib(arena, &input, cu, &scopes, root_scope, image_base, arch, tag, DW_AttribKind_FrameBase);
                 
                 // sub program with user-defined parent tag is a method
                 DW_TagKind parent_tag_kind = tag_stack->next->cur_node->tag.kind;
@@ -1947,10 +1951,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                 parent_tag_kind == DW_TagKind_LexicalBlock) {
               RDIM_Scope *scope = tag_stack->next->scope;
               RDIM_Local *local = rdim_scope_push_local(arena, &scopes, tag_stack->next->scope);
-              local->kind       = RDI_LocalKind_Variable;
-              local->name       = name;
-              local->type       = type;
-              local->locset     = d2r_var_locset_from_tag(arena, &input, cu, &scopes, scope, image_base, arch, tag);
+              local->kind           = RDI_LocalKind_Variable;
+              local->name           = name;
+              local->type           = type;
+              local->location_cases = d2r_var_locset_from_tag(arena, &input, cu, &scopes, scope, image_base, arch, tag);
             } else {
               
               // NOTE: due to a bug in clang in stb_sprint.h local variables
@@ -1974,10 +1978,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             if (parent_tag_kind == DW_TagKind_SubProgram || parent_tag_kind == DW_TagKind_InlinedSubroutine) {
               RDIM_Scope *scope = tag_stack->next->scope;
               RDIM_Local *param = rdim_scope_push_local(arena, &scopes, scope);
-              param->kind       = RDI_LocalKind_Parameter;
-              param->name       = dw_string_from_tag_attrib_kind(&input, cu, tag, DW_AttribKind_Name);
-              param->type       = d2r_type_from_attrib(arena, type_table, &input, cu, tag, DW_AttribKind_Type);
-              param->locset     = d2r_var_locset_from_tag(arena, &input, cu, &scopes, scope, image_base, arch, tag);
+              param->kind           = RDI_LocalKind_Parameter;
+              param->name           = dw_string_from_tag_attrib_kind(&input, cu, tag, DW_AttribKind_Name);
+              param->type           = d2r_type_from_attrib(arena, type_table, &input, cu, tag, DW_AttribKind_Type);
+              param->location_cases = d2r_var_locset_from_tag(arena, &input, cu, &scopes, scope, image_base, arch, tag);
             } else {
               // TODO: error handling
               AssertAlways(!"this is a local variable");

@@ -73,23 +73,23 @@ d2r_bytecode_from_expression(Arena       *arena,
                              B32         *is_addr_out);
 internal RDIM_Location *d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr);
 internal RDIM_Location *d2r_location_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind);
-internal RDIM_LocationSet d2r_locset_from_attrib(Arena               *arena,
-                                                 DW_Input            *input,
-                                                 DW_CompUnit         *cu,
-                                                 RDIM_ScopeChunkList *scopes,
-                                                 RDIM_Scope          *curr_scope,
-                                                 U64                  image_base,
-                                                 Arch                 arch,
-                                                 DW_Tag               tag,
-                                                 DW_AttribKind        kind);
-internal RDIM_LocationSet d2r_var_locset_from_tag(Arena               *arena,
-                                                  DW_Input            *input,
-                                                  DW_CompUnit         *cu,
-                                                  RDIM_ScopeChunkList *scopes,
-                                                  RDIM_Scope          *curr_scope,
-                                                  U64                  image_base,
-                                                  Arch                 arch,
-                                                  DW_Tag               tag);
+internal RDIM_LocationCaseList d2r_locset_from_attrib(Arena               *arena,
+                                                      DW_Input            *input,
+                                                      DW_CompUnit         *cu,
+                                                      RDIM_ScopeChunkList *scopes,
+                                                      RDIM_Scope          *curr_scope,
+                                                      U64                  image_base,
+                                                      Arch                 arch,
+                                                      DW_Tag               tag,
+                                                      DW_AttribKind        kind);
+internal RDIM_LocationCaseList d2r_var_locset_from_tag(Arena               *arena,
+                                                       DW_Input            *input,
+                                                       DW_CompUnit         *cu,
+                                                       RDIM_ScopeChunkList *scopes,
+                                                       RDIM_Scope          *curr_scope,
+                                                       U64                  image_base,
+                                                       Arch                 arch,
+                                                       DW_Tag               tag);
 
 ////////////////////////////////
 //~ rjf: Compilation Unit / Scope Conversion Helpers

@@ -17,7 +17,6 @@
 #include "async/async.h"
 #include "rdi/rdi_local.h"
 #include "rdi_make/rdi_make_local.h"
-#include "rdi_make/rdi_make_local_2.h"
 #include "coff/coff_inc.h"
 #include "pe/pe.h"
 #include "elf/elf.h"
@@ -33,8 +32,6 @@
 #include "rdi_from_coff/rdi_from_coff.h"
 #include "rdi_from_elf/rdi_from_elf.h"
 #include "rdi_from_pdb/rdi_from_pdb.h"
-#include "rdi_from_pdb/rdi_from_pdb_2.h"
-#include "rdi_breakpad_from_pdb/rdi_breakpad_from_pdb.h"
 #include "rdi_from_dwarf/rdi_from_dwarf.h"
 #include "radbin/radbin.h"
 
@@ -45,7 +42,6 @@
 #include "async/async.c"
 #include "rdi/rdi_local.c"
 #include "rdi_make/rdi_make_local.c"
-#include "rdi_make/rdi_make_local_2.c"
 #include "coff/coff_inc.c"
 #include "pe/pe.c"
 #include "elf/elf.c"
@@ -61,8 +57,6 @@
 #include "rdi_from_coff/rdi_from_coff.c"
 #include "rdi_from_elf/rdi_from_elf.c"
 #include "rdi_from_pdb/rdi_from_pdb.c"
-#include "rdi_from_pdb/rdi_from_pdb_2.c"
-#include "rdi_breakpad_from_pdb/rdi_breakpad_from_pdb.c"
 #include "rdi_from_dwarf/rdi_from_dwarf.c"
 #include "radbin/radbin.c"
 
