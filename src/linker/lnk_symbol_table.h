@@ -11,11 +11,17 @@ typedef struct LNK_ObjSymbolRef
   U32             symbol_idx;
 } LNK_ObjSymbolRef;
 
+typedef struct LNK_ObjSymbolRefNode
+{
+  struct LNK_ObjSymbolRefNode *next;
+  LNK_ObjSymbolRef             v;
+} LNK_ObjSymbolRefNode;
+
 typedef struct LNK_Symbol
 {
-  String8          name;
-  B8               is_lib_member_linked;
-  LNK_ObjSymbolRef ref;
+  String8               name;
+  B8                    is_lib_member_linked;
+  LNK_ObjSymbolRefNode *refs;
 } LNK_Symbol;
 
 // --- Symbol Containers -------------------------------------------------------
@@ -109,6 +115,8 @@ internal LNK_SymbolHashTrieChunk ** lnk_array_from_symbol_hash_trie_chunk_list(A
 
 // --- Symbol Helpers ----------------------------------------------------------
 
+internal LNK_ObjSymbolRef           lnk_get_obj_symbol_ref(LNK_Symbol *symbol);
+internal U64                        lnk_get_obj_symbol_ref_count(LNK_Symbol *symbol);
 internal COFF_ParsedSymbol          lnk_parse_symbol(LNK_Symbol *symbol);
 internal COFF_SymbolValueInterpType lnk_interp_symbol(LNK_Symbol *symbol);
 internal LNK_ObjSymbolRef           lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol);

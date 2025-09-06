@@ -1606,6 +1606,12 @@ cv_c13_collect_source_file_names(Arena *arena, CV_ChecksumList checksum_list, St
 
 // $$Lines
 
+internal void
+cv_c13_lines_header_list_concat_in_place(CV_C13LinesHeaderList *list, CV_C13LinesHeaderList *to_concat)
+{
+  SLLConcatInPlace(list, to_concat);
+}
+
 internal CV_C13LinesHeaderList
 cv_c13_lines_from_sub_sections(Arena *arena, String8 c13_data, Rng1U64 ss_range)
 {
@@ -1840,7 +1846,64 @@ cv_c13_make_lines_accel(Arena *arena, U64 lines_count, CV_LineArray *lines)
   return accel;
 }
 
-#if 0
+internal CV_LinesAccel *
+cv_lines_accel_from_debug_s(Arena *arena, CV_DebugS debug_s)
+{
+  // parse $$LINES
+  U64           c13_lines_count = 0;
+  CV_LineArray *c13_lines       = 0;
+  {
+    String8List raw_lines_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
+
+    for (String8Node *raw_lines_node = raw_lines_list.first; raw_lines_node != 0; raw_lines_node = raw_lines_node->next) {
+      Temp temp = temp_begin(arena);
+      CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(temp.arena, raw_lines_node->string, rng_1u64(0, raw_lines_node->string.size));
+      c13_lines_count += parsed_list.count;
+      temp_end(temp);
+    }
+
+    c13_lines = push_array_no_zero(arena, CV_LineArray, c13_lines_count);
+
+    U64 c13_lines_idx = 0;
+    for (String8Node *raw_lines_node = raw_lines_list.first; raw_lines_node != 0; raw_lines_node = raw_lines_node->next) {
+      String8               raw_lines   = raw_lines_node->string;
+      CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(arena, raw_lines, rng_1u64(0, raw_lines.size));
+
+      for(CV_C13LinesHeaderNode *header_node = parsed_list.first; header_node != 0; header_node = header_node->next) {
+        c13_lines[c13_lines_idx++] = cv_c13_line_array_from_data(arena, raw_lines, 0, header_node->v);
+      }
+    }
+  }
+
+  return cv_c13_make_lines_accel(arena, c13_lines_count, c13_lines);
+}
+
+internal U64
+cv_nearest_line(CV_Line *arr, U64 count, U64 value)
+{
+  if(count > 1 && arr[0].voff <= value && value < arr[count-1].voff)
+  {
+    U64 l = 0;
+    U64 r = count - 1;
+    for (; l <= r; ) {
+      U64 m = l + (r - l) / 2;
+      if (arr[m].voff == value) {
+        return m;
+      } else if (arr[m].voff < value) {
+        l = m + 1;
+      } else {
+        r = m - 1;
+      }
+    }
+    return l;
+  }
+  else if (count == 1 && arr[0].voff == value)
+  {
+    return 0;
+  }
+  return max_U64;
+}
+
 internal CV_Line *
 cv_line_from_voff(CV_LinesAccel *accel, U64 voff, U64 *out_line_count)
 {
@@ -1849,7 +1912,7 @@ cv_line_from_voff(CV_LinesAccel *accel, U64 voff, U64 *out_line_count)
   U64      voff_line_count = 0;
   CV_Line *lines           = 0;
 
-  U64 map_idx = bsearch_nearest_u64(accel->map, accel->map_count, voff, sizeof(accel->map[0]), OffsetOf(CV_Line, voff));
+  U64 map_idx = cv_nearest_line(accel->map, accel->map_count, voff);
   if(map_idx < accel->map_count) {
     U64 near_voff = accel->map[map_idx].voff;
 
@@ -1874,7 +1937,6 @@ cv_line_from_voff(CV_LinesAccel *accel, U64 voff, U64 *out_line_count)
   ProfEnd();
   return lines;
 }
-#endif
 
 ////////////////////////////////
 // $$InlineeLines Accel

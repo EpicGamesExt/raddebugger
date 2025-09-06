@@ -164,6 +164,7 @@ typedef enum
   LNK_CmdSwitch_Rad_Log,
   LNK_CmdSwitch_Rad_Logo,
   LNK_CmdSwitch_Rad_Map,
+  LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols,
   LNK_CmdSwitch_Rad_MemoryMapFiles,
   LNK_CmdSwitch_Rad_MtPath,
   LNK_CmdSwitch_Rad_OsVer,
@@ -178,6 +179,8 @@ typedef enum
   LNK_CmdSwitch_Rad_SuppressError,
   LNK_CmdSwitch_Rad_TargetOs,
   LNK_CmdSwitch_Rad_TimeStamp,
+  LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,
+  LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,
   LNK_CmdSwitch_Rad_Version,
   LNK_CmdSwitch_Rad_Workers,
   LNK_CmdSwitch_Rad_WriteTempFiles,
@@ -409,6 +412,9 @@ typedef struct LNK_Config
   HashTable                  *include_symbol_ht;
   HashTable                  *delay_load_ht;
   HashTable                  *disallow_lib_ht;
+  U64                         unresolved_symbol_limit;
+  U64                         unresolved_symbol_ref_limit;
+  LNK_SwitchState             map_lines_for_unresolved_symbols;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------

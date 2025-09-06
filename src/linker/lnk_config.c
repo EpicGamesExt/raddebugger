@@ -121,38 +121,41 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_NotImplemented,     0, "WX",                   "", ""                                                                                                      },
 
   //- internal switches
-  { LNK_CmdSwitch_Rad_Age,                        0, "RAD_AGE",                            ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1."    },
-  { LNK_CmdSwitch_Rad_BuildInfo,                  0, "RAD_BUILD_INFO",                     "",          "Print build info and exit."                                                       },
-  { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,    0, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",    "[:NO]",     ""                                                                                 },
-  { LNK_CmdSwitch_Rad_Map,                        0, "RAD_MAP",                            ":FILENAME", "Emit file with the output image's layout description."                            },
-  { LNK_CmdSwitch_Rad_MemoryMapFiles,             0, "RAD_MEMORY_MAP_FILES",               "[:NO]",     "When enabled, files are memory-mapped instead of being read entirely on request." },
-  { LNK_CmdSwitch_Rad_Debug,                      0, "RAD_DEBUG",                          "[:NO]",     "Emit RAD debug info file."                                                        },
-  { LNK_CmdSwitch_Rad_DebugAltPath,               0, "RAD_DEBUGALTPATH",                   "", ""                                                                                          },
-  { LNK_CmdSwitch_Rad_DebugName,                  0, "RAD_DEBUG_NAME",                     ":FILENAME", "Sets file name for RAD debug info file."                                          },
-  { LNK_CmdSwitch_Rad_DelayBind,                  0, "RAD_DELAY_BIND",                     "[:NO]", ""                                                                                     },
-  { LNK_CmdSwitch_Rad_DoMerge,                    0, "RAD_DO_MERGE",                       "[:NO]", ""                                                                                     },
-  { LNK_CmdSwitch_Rad_EnvLib,                     0, "RAD_ENV_LIB",                        "[:NO]", ""                                                                                     },
-  { LNK_CmdSwitch_Rad_Exe,                        0, "RAD_EXE",                            "[:NO]", ""                                                                                     },
-  { LNK_CmdSwitch_Rad_Guid,                       0, "RAD_GUID",                           ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", ""                                   },
-  { LNK_CmdSwitch_Rad_LargePages,                 0, "RAD_LARGE_PAGES",                    "[:NO]",     "Disabled by default on Windows."                                                  },
-  { LNK_CmdSwitch_Rad_LinkVer,                    0, "RAD_LINK_VER",                       ":##,##", ""                                                                                    },
-  { LNK_CmdSwitch_Rad_Log,                        0, "RAD_LOG",                            ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                           },
-  { LNK_CmdSwitch_Rad_MtPath,                     0, "RAD_MT_PATH",                        ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME                },
-  { LNK_CmdSwitch_Rad_OsVer,                      0, "RAD_OS_VER",                         ":##,##", ""                                                                                    },
-  { LNK_CmdSwitch_Rad_PageSize,                   0, "RAD_PAGE_SIZE",                      ":#",        "Must be power of two."                                                            },
-  { LNK_CmdSwitch_Rad_PathStyle,                  0, "RAD_PATH_STYLE",                     ":{WindowsAbsolute|UnixAbsolute}", ""                                                           },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,      0, "RAD_PDB_HASH_TYPE_NAME_LENGTH",      ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."      },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,         0, "RAD_PDB_HASH_TYPE_NAME_MAP",         ":FILENAME", "Produce map file with hash -> type name mappings."                                },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNames,           0, "RAD_PDB_HASH_TYPE_NAMES",            ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."          },
-  { LNK_CmdSwitch_Rad_RemoveSection,              0, "RAD_REMOVE_SECTION",                 ":NAME",     "Removes a section from output image."                                             },
-  { LNK_CmdSwitch_Rad_SharedThreadPool,           0, "RAD_SHARED_THREAD_POOL",             "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                               },
-  { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, 0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",        "Sets maximum number of workers in a thread pool."                                 },
-  { LNK_CmdSwitch_Rad_SuppressError,              0, "RAD_SUPPRESS_ERROR",                 ":#",        ""                                                                                 },
-  { LNK_CmdSwitch_Rad_TargetOs,                   0, "RAD_TARGET_OS",                      ":{WINDOWS,LINUX,MAC}"                                                                          },
-  { LNK_CmdSwitch_Rad_WriteTempFiles,             0, "RAD_WRITE_TEMP_FILES",               "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
-  { LNK_CmdSwitch_Rad_TimeStamp,                  0, "RAD_TIME_STAMP",                     ":#",        "Time stamp embeded in EXE and PDB."                                               },
-  { LNK_CmdSwitch_Rad_Version,                    0, "RAD_VERSION",                        "",          "Print version and exit."                                                          },
-  { LNK_CmdSwitch_Rad_Workers,                    0, "RAD_WORKERS",                        ":#",        "Sets number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
+  { LNK_CmdSwitch_Rad_Age,                          0, "RAD_AGE",                              ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1."    },
+  { LNK_CmdSwitch_Rad_BuildInfo,                    0, "RAD_BUILD_INFO",                       "",          "Print build info and exit."                                                       },
+  { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,      0, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",      "[:NO]",     ""                                                                                 },
+  { LNK_CmdSwitch_Rad_Map,                          0, "RAD_MAP",                              ":FILENAME", "Emit file with the output image's layout description."                            },
+  { LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols, 0, "RAD_MAP_LINES_FOR_UNRESOLVED_SYMBOLS", "[:NO]",     "Use debug info to print source file location for unresolved symbol"               },
+  { LNK_CmdSwitch_Rad_MemoryMapFiles,               0, "RAD_MEMORY_MAP_FILES",                 "[:NO]",     "When enabled, files are memory-mapped instead of being read entirely on request." },
+  { LNK_CmdSwitch_Rad_Debug,                        0, "RAD_DEBUG",                            "[:NO]",     "Emit RAD debug info file."                                                        },
+  { LNK_CmdSwitch_Rad_DebugAltPath,                 0, "RAD_DEBUGALTPATH",                     "", ""                                                                                          },
+  { LNK_CmdSwitch_Rad_DebugName,                    0, "RAD_DEBUG_NAME",                       ":FILENAME", "Sets file name for RAD debug info file."                                          },
+  { LNK_CmdSwitch_Rad_DelayBind,                    0, "RAD_DELAY_BIND",                       "[:NO]", ""                                                                                     },
+  { LNK_CmdSwitch_Rad_DoMerge,                      0, "RAD_DO_MERGE",                         "[:NO]", ""                                                                                     },
+  { LNK_CmdSwitch_Rad_EnvLib,                       0, "RAD_ENV_LIB",                          "[:NO]", ""                                                                                     },
+  { LNK_CmdSwitch_Rad_Exe,                          0, "RAD_EXE",                              "[:NO]", ""                                                                                     },
+  { LNK_CmdSwitch_Rad_Guid,                         0, "RAD_GUID",                             ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", ""                                   },
+  { LNK_CmdSwitch_Rad_LargePages,                   0, "RAD_LARGE_PAGES",                      "[:NO]",     "Disabled by default on Windows."                                                  },
+  { LNK_CmdSwitch_Rad_LinkVer,                      0, "RAD_LINK_VER",                         ":##,##", ""                                                                                    },
+  { LNK_CmdSwitch_Rad_Log,                          0, "RAD_LOG",                              ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                           },
+  { LNK_CmdSwitch_Rad_MtPath,                       0, "RAD_MT_PATH",                          ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME                },
+  { LNK_CmdSwitch_Rad_OsVer,                        0, "RAD_OS_VER",                           ":##,##", ""                                                                                    },
+  { LNK_CmdSwitch_Rad_PageSize,                     0, "RAD_PAGE_SIZE",                        ":#",        "Must be power of two."                                                            },
+  { LNK_CmdSwitch_Rad_PathStyle,                    0, "RAD_PATH_STYLE",                       ":{WindowsAbsolute|UnixAbsolute}", ""                                                           },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,        0, "RAD_PDB_HASH_TYPE_NAME_LENGTH",        ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."      },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,           0, "RAD_PDB_HASH_TYPE_NAME_MAP",           ":FILENAME", "Produce map file with hash -> type name mappings."                                },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNames,             0, "RAD_PDB_HASH_TYPE_NAMES",              ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."          },
+  { LNK_CmdSwitch_Rad_RemoveSection,                0, "RAD_REMOVE_SECTION",                   ":NAME",     "Removes a section from output image."                                             },
+  { LNK_CmdSwitch_Rad_SharedThreadPool,             0, "RAD_SHARED_THREAD_POOL",               "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                               },
+  { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,   0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS",   ":#",        "Sets maximum number of workers in a thread pool."                                 },
+  { LNK_CmdSwitch_Rad_SuppressError,                0, "RAD_SUPPRESS_ERROR",                   ":#",        ""                                                                                 },
+  { LNK_CmdSwitch_Rad_TargetOs,                     0, "RAD_TARGET_OS",                        ":{WINDOWS,LINUX,MAC}"                                                                          },
+  { LNK_CmdSwitch_Rad_WriteTempFiles,               0, "RAD_WRITE_TEMP_FILES",                 "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
+  { LNK_CmdSwitch_Rad_TimeStamp,                    0, "RAD_TIME_STAMP",                       ":#",        "Time stamp embeded in EXE and PDB."                                               },
+  { LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,        0, "RAD_UNRESOLVED_SYMBOL_LIMIT",          ":#",        "Limits number of unresolved symbol errors linker reports."                        },
+  { LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,     0, "RAD_UNRESOLVED_SYMBOL_REF_LIMIT",      ":#",        "Limit number of unresolved symbol references linker reports."                     },
+  { LNK_CmdSwitch_Rad_Version,                      0, "RAD_VERSION",                          "",          "Print version and exit."                                                          },
+  { LNK_CmdSwitch_Rad_Workers,                      0, "RAD_WORKERS",                          ":#",        "Sets number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
 
   { LNK_CmdSwitch_Help, 0, "HELP", "", "" },
   { LNK_CmdSwitch_Help, 0, "?",    "", "" },
@@ -1776,6 +1779,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     config->rad_chunk_map = LNK_SwitchState_Yes;
   } break;
 
+  case LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->map_lines_for_unresolved_symbols);
+  } break;
+
   case LNK_CmdSwitch_Rad_MemoryMapFiles: {
     lnk_cmd_switch_set_flag_32(obj, cmd_switch, value_strings, &config->io_flags, LNK_IO_Flags_MemoryMapFiles);
   } break;
@@ -2003,6 +2010,14 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Rad_TimeStamp: {
     lnk_cmd_switch_parse_u32(obj, cmd_switch, value_strings, &config->time_stamp, 0);
+  } break;
+
+  case LNK_CmdSwitch_Rad_UnresolvedSymbolLimit: {
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->unresolved_symbol_limit, 0);
+  } break;
+
+  case LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit: {
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->unresolved_symbol_ref_limit, 0);
   } break;
 
   case LNK_CmdSwitch_Rad_Version: {

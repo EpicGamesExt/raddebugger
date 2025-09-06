@@ -89,6 +89,7 @@ typedef struct
 
 // --- Error -------------------------------------------------------------------
 
+internal String8 lnk_loc_from_obj(Arena *arena, LNK_Obj *obj);
 internal void lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...);
 internal void lnk_error_input_obj(LNK_ErrorCode code, struct LNK_Input *input, char *fmt, ...);
 
@@ -115,7 +116,9 @@ internal LNK_Symbol *     lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_n
 internal COFF_ParsedSymbol    lnk_parsed_symbol_from_coff(LNK_Obj *obj, void *coff_symbol);
 internal COFF_ParsedSymbol    lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
 internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
+internal COFF_RelocArray      lnk_coff_relocs_from_section_header(LNK_Obj *obj, COFF_SectionHeader *section_header);
 internal COFF_SectionHeader * lnk_coff_section_table_from_obj(LNK_Obj *obj);
+internal String8              lnk_coff_string_table_from_obj(LNK_Obj *obj);
 internal B32                  lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_number_out, U32 *section_length_out, U32 *check_sum_out);
 internal B32                  lnk_is_coff_section_debug(LNK_Obj *obj, U64 sect_idx);
 
@@ -129,4 +132,8 @@ internal B32           lnk_obj_is_before(void *raw_a, void *raw_b);
 internal void              lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj *obj, LNK_DirectiveInfo *directive_info, String8 buffer);
 internal String8List       lnk_raw_directives_from_obj(Arena *arena, LNK_Obj *obj);
 internal LNK_DirectiveInfo lnk_directive_info_from_raw_directives(Arena *arena, LNK_Obj *obj, String8List raw_directives);
+
+// --- Debug Info --------------------------------------------------------------
+
+internal CV_DebugS lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj);
 

@@ -1,11 +1,25 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal String8
+lnk_loc_from_obj(Arena *arena, LNK_Obj *obj)
+{
+  String8 obj_path = str8_skip_last_slash(obj ? obj->path : str8_lit("RADLINK"));
+  String8 lib_path = str8_skip_last_slash(lnk_obj_get_lib_path(obj));
+  String8 result;
+  if (lib_path.size) {
+    result = push_str8f(arena, "%S(%S)", lib_path, obj_path);
+  } else {
+    result = push_str8_copy(arena, obj_path);
+  }
+  return result;
+}
+
 internal void
 lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...)
 {
   va_list args; va_start(args, fmt);
-  String8 obj_path = obj ? obj->path : str8_lit("RADLINK");
+  String8 obj_path = obj ? obj->path : str8_zero();
   String8 lib_path = lnk_obj_get_lib_path(obj);
   lnk_error_with_loc_fv(code, obj_path, lib_path, fmt, args);
   va_end(args);
@@ -494,10 +508,25 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
   return section_header;
 }
 
+internal COFF_RelocArray
+lnk_coff_relocs_from_section_header(LNK_Obj *obj, COFF_SectionHeader *section_header)
+{
+  COFF_RelocInfo   reloc_info = coff_reloc_info_from_section_header(obj->data, section_header);
+  COFF_Reloc      *relocs     = (COFF_Reloc *)(obj->data.str + reloc_info.array_off);
+  COFF_RelocArray  result     = { .count = reloc_info.count, .v = relocs };
+  return result;
+}
+
 internal COFF_SectionHeader *
 lnk_coff_section_table_from_obj(LNK_Obj *obj)
 {
   return (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+}
+
+internal String8
+lnk_coff_string_table_from_obj(LNK_Obj *obj)
+{
+  return str8_substr(obj->data, obj->header.string_table_range);
 }
 
 internal COFF_RelocArray
@@ -682,5 +711,49 @@ lnk_directive_info_from_raw_directives(Arena *arena, LNK_Obj *obj, String8List r
     lnk_parse_msvc_linker_directive(arena, obj, &directive_info, drectve_n->string);
   }
   return directive_info;
+}
+
+internal CV_DebugS
+lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List raw_debug_s = {0};
+  {
+    COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(obj);
+    String8             string_table  = lnk_coff_string_table_from_obj(obj);
+    for EachIndex(sect_idx, obj->header.section_count_no_null) {
+      COFF_SectionHeader *section_header = &section_table[sect_idx];
+      String8             section_name   = coff_name_from_section_header(string_table, section_header);
+      if (str8_match(section_name, str8_lit(".debug$S"), 0)) {
+        String8 debug_s = str8_substr(obj->data, rng_1u64(section_header->foff, section_header->foff + section_header->fsize));
+        str8_list_push(scratch.arena, &raw_debug_s, debug_s);
+      }
+    }
+  }
+
+  CV_DebugS debug_s = {0};
+  {
+    for (String8Node *node = raw_debug_s.first; node != 0; node = node->next) {
+      // parse & merge sub sections
+      CV_DebugS ds = cv_parse_debug_s(scratch.arena, node->string);
+      cv_debug_s_concat_in_place(&debug_s, &ds);
+
+      // make sure there is one string table
+      String8List string_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
+      if (string_data_list.node_count > 1) {
+        break;
+      }
+
+      // make sure there is one file checksum table
+      String8List checksum_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
+      if (checksum_data_list.node_count > 1) {
+        continue;
+      }
+    }
+  }
+
+  scratch_end(scratch);
+  return debug_s;
 }
 

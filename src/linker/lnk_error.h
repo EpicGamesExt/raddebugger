@@ -37,7 +37,6 @@ typedef enum
   LNK_Error_IllegalSectionMerge,
   LNK_Error_IllegalRelocation,
   LNK_Error_CircularMerge,
-  LNK_Error_UnresolvedSymbol,
   LNK_Error_AssociativeLoop,
   LNK_Error_AlternateNameConflict,
   LNK_Error_RelocationAgainstRemovedSection,
@@ -55,6 +54,7 @@ typedef enum
   LNK_Error_UndefinedIsWeak,
   LNK_Error_WeakCycle,
   LNK_Error_InvalidLib,
+  LNK_Error_UnresolvedSymbol,
   LNK_Error_Last,
   
   LNK_Warning_First,

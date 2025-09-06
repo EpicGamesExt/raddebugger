@@ -4,30 +4,51 @@
 internal LNK_Symbol *
 lnk_make_obj_ref_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx)
 {
+  LNK_ObjSymbolRefNode *ref = push_array(arena, LNK_ObjSymbolRefNode, 1);
+  ref->v.obj                = obj;
+  ref->v.symbol_idx         = symbol_idx;
+
   LNK_Symbol *symbol     = push_array(arena, LNK_Symbol, 1);
   symbol->name           = name;
-  symbol->ref.obj        = obj;
-  symbol->ref.symbol_idx = symbol_idx;
+  symbol->refs           = ref;
+
   return symbol;
+}
+
+internal int
+lnk_obj_symbol_ref_is_before(void *raw_a, void *raw_b)
+{
+  LNK_ObjSymbolRef *a_ref           = raw_a;
+  LNK_ObjSymbolRef *b_ref           = raw_b;
+  LNK_Lib          *a_lib           = lnk_obj_get_lib(a_ref->obj);
+  LNK_Lib          *b_lib           = lnk_obj_get_lib(b_ref->obj);
+  U32               a_lib_input_idx = a_lib ? a_lib->input_idx : 0;
+  U32               b_lib_input_idx = b_lib ? b_lib->input_idx : 0;
+
+  if (a_lib_input_idx == b_lib_input_idx) {
+    if (a_ref->obj->input_idx == b_ref->obj->input_idx) {
+      return a_ref->symbol_idx < b_ref->symbol_idx;
+    }
+    return a_ref->obj->input_idx < b_ref->obj->input_idx;
+  }
+
+  return a_lib_input_idx < b_lib_input_idx;
+}
+
+internal int
+lnk_obj_symbol_ref_ptr_is_before(void *raw_a, void *raw_b)
+{
+  LNK_ObjSymbolRef **a = raw_a, **b = raw_b;
+  return lnk_obj_symbol_ref_is_before(*a, *b);
 }
 
 internal B32
 lnk_symbol_is_before(void *raw_a, void *raw_b)
 {
   LNK_Symbol *a = raw_a, *b = raw_b;
-
-  LNK_Lib *a_lib = lnk_obj_get_lib(a->ref.obj);
-  LNK_Lib *b_lib = lnk_obj_get_lib(b->ref.obj);
-  U32 a_lib_input_idx = a_lib ? a_lib->input_idx : 0;
-  U32 b_lib_input_idx = b_lib ? b_lib->input_idx : 0;
-
-  if (a_lib_input_idx == b_lib_input_idx) {
-    if (a->ref.obj->input_idx == b->ref.obj->input_idx) {
-      return a->ref.symbol_idx < b->ref.symbol_idx;
-    }
-    return a->ref.obj->input_idx < b->ref.obj->input_idx;
-  }
-  return a_lib_input_idx < b_lib_input_idx;
+  LNK_ObjSymbolRef a_ref = lnk_get_obj_symbol_ref(a);
+  LNK_ObjSymbolRef b_ref = lnk_get_obj_symbol_ref(b);
+  return lnk_obj_symbol_ref_is_before(&a_ref, &b_ref);
 }
 
 internal B32
@@ -120,7 +141,9 @@ lnk_symbol_hash_trie_chunk_list_push(Arena *arena, LNK_SymbolHashTrieChunkList *
 internal void
 lnk_error_multiply_defined_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
-  lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst->ref.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst->ref.symbol_idx, src->ref.obj->path, src->ref.symbol_idx);
+  LNK_ObjSymbolRef dst_ref = lnk_get_obj_symbol_ref(dst);
+  LNK_ObjSymbolRef src_ref = lnk_get_obj_symbol_ref(src);
+  lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst_ref.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst_ref.symbol_idx, src_ref.obj->path, src_ref.symbol_idx);
 }
 
 internal B32
@@ -128,12 +151,14 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
   B32 can_replace = 0;
 
-  LNK_Obj                    *dst_obj    = dst->ref.obj;
-  LNK_Obj                    *src_obj    = src->ref.obj;
-  COFF_ParsedSymbol           dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->ref.obj, dst->ref.symbol_idx);
-  COFF_ParsedSymbol           src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->ref.obj, src->ref.symbol_idx);
-  COFF_SymbolValueInterpType  dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
-  COFF_SymbolValueInterpType  src_interp = coff_interp_from_parsed_symbol(src_parsed);
+  COFF_ParsedSymbol           dst_parsed = lnk_parse_symbol(dst);
+  COFF_ParsedSymbol           src_parsed = lnk_parse_symbol(src);
+  COFF_SymbolValueInterpType  dst_interp = lnk_interp_symbol(dst);
+  COFF_SymbolValueInterpType  src_interp = lnk_interp_symbol(src);
+  LNK_ObjSymbolRef            dst_ref    = lnk_get_obj_symbol_ref(dst);
+  LNK_ObjSymbolRef            src_ref    = lnk_get_obj_symbol_ref(src);
+  LNK_Obj                    *dst_obj    = dst_ref.obj;
+  LNK_Obj                    *src_obj    = src_ref.obj;
 
   // undefined vs regular
   if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Regular) {
@@ -151,7 +176,8 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
       weak_parsed = src_parsed;
     }
 
-    COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(weak_parsed, weak->ref.obj->header.is_big_obj);
+    LNK_ObjSymbolRef    weak_symbol_ref = lnk_get_obj_symbol_ref(weak);
+    COFF_SymbolWeakExt *weak_ext        = coff_parse_weak_tag(weak_parsed, weak_symbol_ref.obj->header.is_big_obj);
     if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
       // NOTE: MSVC does not let a weak symbol to replace an undefined one,
       // but LLD links without errors or warnings, meaning undefined symbols
@@ -214,8 +240,8 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
   }
   // weak vs weak
   else if (dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Weak) {
-    COFF_SymbolWeakExt *dst_ext = coff_parse_weak_tag(dst_parsed, dst->ref.obj->header.is_big_obj);
-    COFF_SymbolWeakExt *src_ext = coff_parse_weak_tag(src_parsed, src->ref.obj->header.is_big_obj);
+    COFF_SymbolWeakExt *dst_ext = coff_parse_weak_tag(dst_parsed, dst_ref.obj->header.is_big_obj);
+    COFF_SymbolWeakExt *src_ext = coff_parse_weak_tag(src_parsed, src_ref.obj->header.is_big_obj);
     if ((dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics != COFF_WeakExt_SearchAlias)) {
       if (lnk_symbol_is_before(dst, src) || src_ext->characteristics == COFF_WeakExt_AntiDependency) {
         can_replace = 0;
@@ -250,7 +276,7 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     U32                   dst_section_length;
     U32                   dst_check_sum;
     if (dst_interp == COFF_SymbolValueInterp_Regular) {
-      dst_is_comdat = lnk_try_comdat_props_from_section_number(dst->ref.obj, dst_parsed.section_number, &dst_select, 0, &dst_section_length, &dst_check_sum);
+      dst_is_comdat = lnk_try_comdat_props_from_section_number(dst_ref.obj, dst_parsed.section_number, &dst_select, 0, &dst_section_length, &dst_check_sum);
     } else if (dst_interp == COFF_SymbolValueInterp_Common) {
       dst_select         = COFF_ComdatSelect_Largest;
       dst_section_length = dst_parsed.value;
@@ -264,7 +290,7 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     U32                   src_section_length, src_checks;
     U32                   src_check_sum;
     if (src_interp == COFF_SymbolValueInterp_Regular) {
-      src_is_comdat = lnk_try_comdat_props_from_section_number(src->ref.obj, src_parsed.section_number, &src_select, 0, &src_section_length, &src_check_sum);
+      src_is_comdat = lnk_try_comdat_props_from_section_number(src_ref.obj, src_parsed.section_number, &src_select, 0, &src_section_length, &src_check_sum);
     } else if (src_interp == COFF_SymbolValueInterp_Common) {
       src_select         = COFF_ComdatSelect_Largest;
       src_section_length = src_parsed.value;
@@ -356,29 +382,38 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 internal void
 lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
 {
-  COFF_ParsedSymbol          dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->ref.obj, dst->ref.symbol_idx);
-  COFF_SymbolValueInterpType dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
+  COFF_ParsedSymbol          dst_parsed = lnk_parse_symbol(dst);
+  COFF_SymbolValueInterpType dst_interp = lnk_interp_symbol(dst);
+  LNK_ObjSymbolRef           dst_ref    = lnk_get_obj_symbol_ref(dst);
+
   if (dst_interp == COFF_SymbolValueInterp_Regular) {
     // remove replaced section from the output
-    COFF_SectionHeader *dst_sect = lnk_coff_section_header_from_section_number(dst->ref.obj, dst_parsed.section_number);
+    COFF_SectionHeader *dst_sect = lnk_coff_section_header_from_section_number(dst_ref.obj, dst_parsed.section_number);
     dst_sect->flags |= COFF_SectionFlag_LnkRemove;
 
     // remove associated sections from the output
-    for (U32Node *associated_section = dst->ref.obj->associated_sections[dst_parsed.section_number];
+    for (U32Node *associated_section = dst_ref.obj->associated_sections[dst_parsed.section_number];
         associated_section != 0;
         associated_section = associated_section->next) {
-      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(dst->ref.obj, associated_section->data);
+      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(dst_ref.obj, associated_section->data);
       section_header->flags |= COFF_SectionFlag_LnkRemove;
     }
   }
 
+  // merge symbol refs
+  LNK_ObjSymbolRefNode *src_last_ref;
+  for (src_last_ref = src->refs; src_last_ref->next != 0; src_last_ref = src_last_ref->next);
+  src_last_ref->next = dst->refs;
+
   // assert leader section is live
 #if BUILD_DEBUG
   {
-    COFF_ParsedSymbol          src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->ref.obj, src->ref.symbol_idx);
-    COFF_SymbolValueInterpType src_interp = coff_interp_from_parsed_symbol(src_parsed);
+    COFF_ParsedSymbol          src_parsed = lnk_parse_symbol(src);
+    COFF_SymbolValueInterpType src_interp = lnk_interp_symbol(src);
+    LNK_ObjSymbolRef           src_ref    = lnk_get_obj_symbol_ref(src);
+
     if (src_interp == COFF_SymbolValueInterp_Regular) {
-      COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->ref.obj, src_parsed.section_number);
+      COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src_ref.obj, src_parsed.section_number);
       AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
     }
   }
@@ -505,10 +540,42 @@ lnk_array_from_symbol_hash_trie_chunk_list(Arena *arena, LNK_SymbolHashTrieChunk
   return chunks;
 }
 
+internal LNK_ObjSymbolRef
+lnk_get_obj_symbol_ref(LNK_Symbol *symbol)
+{
+  return symbol->refs->v;
+}
+
+internal U64
+lnk_get_obj_symbol_ref_count(LNK_Symbol *symbol)
+{
+  U64 count = 0;
+  for (LNK_ObjSymbolRefNode *node = symbol->refs; node != 0; node = node->next, count += 1);
+  return count;
+}
+
+internal LNK_ObjSymbolRef **
+lnk_get_obj_symbol_ref_many(Arena *arena, LNK_Symbol *symbol, U64 *count_out)
+{
+  // TODO: would be simpler if we sorted refs on insert/update
+  U64                refs_count = lnk_get_obj_symbol_ref_count(symbol);
+  LNK_ObjSymbolRef **refs       = push_array(arena, LNK_ObjSymbolRef *, refs_count);
+  U64                i          = 0;
+  for (LNK_ObjSymbolRefNode *node = symbol->refs; node != 0; node = node->next, i += 1) {
+    refs[i] = &node->v;
+  }
+  radsort(refs, refs_count, lnk_obj_symbol_ref_ptr_is_before);
+  if (count_out) {
+    *count_out = refs_count;
+  }
+  return refs;
+}
+
 internal COFF_ParsedSymbol
 lnk_parse_symbol(LNK_Symbol *symbol)
 {
-  return lnk_parsed_symbol_from_coff_symbol_idx(symbol->ref.obj, symbol->ref.symbol_idx);
+  LNK_ObjSymbolRef ref = lnk_get_obj_symbol_ref(symbol);
+  return lnk_parsed_symbol_from_coff_symbol_idx(ref.obj, ref.symbol_idx);
 }
 
 internal COFF_SymbolValueInterpType
@@ -559,10 +626,10 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol)
 
       // does weak symbol have a definition?
       LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, current_parsed.name);
-      COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_coff_symbol_idx(defn_symbol->ref.obj, defn_symbol->ref.symbol_idx);
+      COFF_ParsedSymbol           defn_parsed = lnk_parse_symbol(defn_symbol);
       COFF_SymbolValueInterpType  defn_interp = coff_interp_symbol(defn_parsed.section_number, defn_parsed.value, defn_parsed.storage_class);
       if (defn_interp != COFF_SymbolValueInterp_Weak) {
-        current_symbol = defn_symbol->ref;
+        current_symbol = lnk_get_obj_symbol_ref(defn_symbol);
         break;
       }
 
@@ -588,7 +655,7 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol)
       if (defn_interp == COFF_SymbolValueInterp_Undefined) { break; }
 
       // follow symbol definition
-      current_symbol = defn_symbol->ref;
+      current_symbol = lnk_get_obj_symbol_ref(defn_symbol);
     } else { break; }
   }
 
@@ -666,15 +733,16 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
   LNK_SymbolHashTrieChunk                     *chunk  = task->chunks[task_id];
   for EachIndex(i, chunk->count) {
     LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+    LNK_ObjSymbolRef            symbol_ref    = lnk_get_obj_symbol_ref(symbol);
     COFF_ParsedSymbol           symbol_parsed = lnk_parse_symbol(symbol);
     COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
     if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-      LNK_ObjSymbolRef           resolve        = lnk_resolve_weak_symbol(symtab, symbol->ref);
+      LNK_ObjSymbolRef           resolve        = lnk_resolve_weak_symbol(symtab, symbol_ref);
       COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx(resolve.obj, resolve.symbol_idx);
       COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
       if (resolve_interp == COFF_SymbolValueInterp_Weak) {
-        COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol->ref.obj->header.is_big_obj);
-        if (symbol->ref.obj->header.is_big_obj) {
+        COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol_ref.obj->header.is_big_obj);
+        if (symbol_ref.obj->header.is_big_obj) {
           COFF_Symbol32 *symbol32  = symbol_parsed.raw_symbol;
           symbol32->section_number = COFF_Symbol_UndefinedSection;
           symbol32->value          = 0;
@@ -686,7 +754,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
           symbol16->storage_class  = COFF_SymStorageClass_External;
         }
       } else {
-        symbol->ref = resolve;
+        symbol->refs->v = resolve;
       }
     }
   }
@@ -721,7 +789,7 @@ lnk_replace_weak_with_default_symbols(TP_Context *tp, LNK_SymbolTable *symtab)
 internal ISectOff
 lnk_sc_from_symbol(LNK_Symbol *symbol)
 {
-  COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->ref.obj, symbol->ref.symbol_idx);
+  COFF_ParsedSymbol parsed_symbol = lnk_parse_symbol(symbol);
 
   ISectOff sc = {0};
   sc.isect    = parsed_symbol.section_number;

@@ -72,4 +72,3 @@ lnk_make_dll_import_debug_symbols(Arena *arena, COFF_MachineType machine, String
   return debug_symbols;
 }
 
-

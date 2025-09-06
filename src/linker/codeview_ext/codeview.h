@@ -455,7 +455,7 @@ internal String8List cv_c13_collect_source_file_names(Arena *arena, CV_ChecksumL
 
 // $$Lines
 internal CV_C13LinesHeaderList cv_c13_lines_from_sub_sections(Arena *arena, String8 c13_data, Rng1U64 ss_range);
-internal CV_LineArray     cv_c13_line_array_from_data(Arena *arena, String8 c13_data, U64 sec_base, CV_C13LinesHeader parsed_lines);
+internal CV_LineArray          cv_c13_line_array_from_data(Arena *arena, String8 c13_data, U64 sec_base, CV_C13LinesHeader parsed_lines);
 
 // $$InlineeLines
 internal CV_C13InlineeLinesParsedList cv_c13_inlinee_lines_from_sub_sections(Arena *arena, String8List raw_inlinee_lines);
