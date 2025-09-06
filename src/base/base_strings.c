@@ -2808,8 +2808,7 @@ str8_compar(String8 a, String8 b, B32 ignore_case)
   return cmp;
 }
 
-internal int
-str8_compar_ignore_case(const void *a, const void *b)
+internal int str8_compar_ignore_case(const void *a, const void *b)
 {
   return str8_compar(*(String8*)a, *(String8*)b, 1);
 }
@@ -2831,6 +2830,7 @@ str8_is_before_case_sensitive(const void *a, const void *b)
 //~ rjf: Basic String Hashes
 
 #if !defined(XXH_IMPLEMENTATION)
+# define XXH_PRIVATE_API
 # define XXH_IMPLEMENTATION
 # define XXH_STATIC_LINKING_ONLY
 # include "third_party/xxHash/xxhash.h"
@@ -2839,7 +2839,10 @@ str8_is_before_case_sensitive(const void *a, const void *b)
 internal U64
 u64_hash_from_seed_str8(U64 seed, String8 string)
 {
-  U64 result = XXH3_64bits_withSeed(string.str, string.size, seed);
+  XXH3_state_t hasher; XXH3_64bits_reset_withSeed(&hasher, seed);
+  XXH3_64bits_update(&hasher, &string.size, sizeof(string.size));
+  XXH3_64bits_update(&hasher, string.str, string.size);
+  XXH64_hash_t result = XXH3_64bits_digest(&hasher);
   return result;
 }
 
