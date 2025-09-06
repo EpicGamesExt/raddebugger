@@ -2018,10 +2018,12 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
                 CV_Line *line_matches       = 0;
                 if (config->map_lines_for_unresolved_symbols == LNK_SwitchState_Yes) {
                   if (debug_lines == 0) {
+                    String8List raw_checksums = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
+                    String8List raw_strings   = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
                     debug_s         = lnk_debug_s_from_obj(scratch.arena, obj);
                     debug_lines     = cv_lines_accel_from_debug_s(scratch.arena, debug_s);
-                    debug_checksums = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms).first->string;
-                    debug_strings   = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable).first->string;
+                    debug_checksums = str8_list_first(&raw_checksums);
+                    debug_strings   = str8_list_first(&raw_strings);
                   }
                   line_matches_count = 0;
                   line_matches      = cv_line_from_voff(debug_lines, reloc->apply_off, &line_matches_count);
