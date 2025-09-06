@@ -82,7 +82,6 @@ typedef struct LNK_ImportTables
   String8List static_dll_names;
   HashTable *static_imports;
   HashTable *delayed_imports;
-  HashTable *import_stub_ht;
 } LNK_ImportTables;
 
 typedef struct LNK_Link
