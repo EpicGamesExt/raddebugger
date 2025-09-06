@@ -93,7 +93,7 @@ struct P2R_Shared
   PDB_TpiHashParsed *ipi_hash;
   CV_LeafParsed *ipi_leaf;
   PDB_CompUnitArray *comp_units;
-  PDB_CompUnitContributionArray *comp_unit_contributions;
+  PDB_CompUnitContributionArray comp_unit_contributions;
   RDIM_Rng1U64ChunkList *unit_ranges;
   
   U64 sym_c13_unit_lane_counter;

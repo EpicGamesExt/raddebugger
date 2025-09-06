@@ -215,18 +215,22 @@ pdb_strtbl_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-internal PDB_DbiParsed*
-pdb_dbi_from_data(Arena *arena, String8 data){
-  ProfBegin("pdb_dbi_from_data");
+internal PDB_DbiParsed *
+pdb_dbi_from_data(Arena *arena, String8 data)
+{
+  ProfBeginFunction();
+  PDB_DbiParsed *result = push_array(arena, PDB_DbiParsed, 1);;
   
-  // get header
+  // rjf: extract header
   PDB_DbiHeader *header = 0;
-  if (sizeof(*header) <= data.size){
+  if(sizeof(*header) <= data.size)
+  {
     header = (PDB_DbiHeader*)data.str;
   }
   
-  PDB_DbiParsed *result = 0;
-  if (header != 0 && header->sig == PDB_DbiHeaderSignature_V1){
+  // rjf: parse
+  if(header != 0 && header->sig == PDB_DbiHeaderSignature_V1)
+  {
     // extract range sizes
     U64 range_size[PDB_DbiRange_COUNT];
     range_size[PDB_DbiRange_ModuleInfo] = header->module_info_size;
@@ -238,7 +242,6 @@ pdb_dbi_from_data(Arena *arena, String8 data){
     range_size[PDB_DbiRange_DbgHeader]  = header->dbg_header_size;
     
     // fill result
-    result = push_array(arena, PDB_DbiParsed, 1);
     result->data = data;
     result->machine_type = header->machine;
     result->gsi_sn = header->gsi_sn;
@@ -249,7 +252,8 @@ pdb_dbi_from_data(Arena *arena, String8 data){
     // fill result's range offsets
     {
       U64 cursor = sizeof(*header);
-      for (U64 i = 0; i < (U64)(PDB_DbiRange_COUNT); i += 1){
+      for(U64 i = 0; i < (U64)(PDB_DbiRange_COUNT); i += 1)
+      {
         result->range_off[i] = cursor;
         cursor += range_size[i];
         cursor = ClampTop(cursor, data.size);
@@ -263,36 +267,36 @@ pdb_dbi_from_data(Arena *arena, String8 data){
     U64 dbg_streams_size_raw = dbg_streams_max - dbg_streams_min;
     U64 dbg_streams_size = ClampTop(dbg_streams_size_raw, sizeof(result->dbg_streams));
     MemoryCopy(result->dbg_streams, data.str + dbg_streams_min, dbg_streams_size);
-    if (dbg_streams_size < sizeof(result->dbg_streams)){
+    if(dbg_streams_size < sizeof(result->dbg_streams))
+    {
       U64 filled_count = dbg_streams_size/sizeof(MSF_StreamNumber);
-      MemorySet(result->dbg_streams + filled_count, 0xff,
-                (ArrayCount(result->dbg_streams) - filled_count)*sizeof(MSF_StreamNumber));
+      MemorySet(result->dbg_streams + filled_count, 0xff, (ArrayCount(result->dbg_streams) - filled_count)*sizeof(MSF_StreamNumber));
     }
   }
-  
   ProfEnd();
-  
-  return(result);
+  return result;
 }
 
-internal PDB_TpiParsed*
-pdb_tpi_from_data(Arena *arena, String8 data){
-  ProfBegin("pdb_tpi_from_data");
+internal PDB_TpiParsed *
+pdb_tpi_from_data(Arena *arena, String8 data)
+{
+  ProfBeginFunction();
+  PDB_TpiParsed *result = push_array(arena, PDB_TpiParsed, 1);
   
-  // get header
+  // rjf: extract header
   PDB_TpiHeader *header = 0;
   if (sizeof(*header) <= data.size){
     header = (PDB_TpiHeader*)data.str;
   }
   
-  PDB_TpiParsed *result = 0;
-  if (header != 0 && header->version == PDB_TpiVersion_IMPV80){
+  // rjf: parse
+  if(header != 0 && header->version == PDB_TpiVersion_IMPV80)
+  {
     U64 leaf_first_raw = header->header_size;
     U64 leaf_first     = ClampTop(leaf_first_raw, data.size);
     U64 leaf_opl_raw   = leaf_first + header->leaf_data_size;
     U64 leaf_opl       = ClampTop(leaf_opl_raw, data.size);
     
-    result       = push_array(arena, PDB_TpiParsed, 1);
     result->data = data;
     
     result->leaf_first  = leaf_first;
@@ -313,20 +317,18 @@ pdb_tpi_from_data(Arena *arena, String8 data){
   }
   
   ProfEnd();
-  
-  return(result);
+  return result;
 }
 
 internal PDB_TpiHashParsed*
-pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, String8 data, String8 aux_data){
-  ProfBegin("pdb_tpi_hash_from_data");
-  
-  PDB_TpiHashParsed *result = 0;
-  
+pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, String8 data, String8 aux_data)
+{
+  ProfBeginFunction();
+  PDB_TpiHashParsed *result = push_array(arena, PDB_TpiHashParsed, 1);
   U32 stride = tpi->hash_key_size;
   U32 bucket_count = tpi->hash_bucket_count;
-  if (1 <= stride && stride <= 8 && bucket_count > 0 && data.str != 0){
-    
+  if(1 <= stride && stride <= 8 && bucket_count > 0 && data.str != 0)
+  {
     // allocate buckets
     PDB_TpiHashBlock **buckets = push_array(arena, PDB_TpiHashBlock*, bucket_count);
     
@@ -436,32 +438,33 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, Str
     }
     
     // fill result
-    result = push_array(arena, PDB_TpiHashParsed, 1);
     result->data = data;
     result->aux_data = aux_data;
     result->buckets = buckets;
     result->bucket_count = bucket_count;
     result->bucket_mask = bucket_mask;
   }
-  
   ProfEnd();
-  
-  return(result);
+  return result;
 }
 
-internal PDB_GsiParsed*
-pdb_gsi_from_data(Arena *arena, String8 data){
-  ProfBegin("pdb_gsi_from_data");
+internal PDB_GsiParsed *
+pdb_gsi_from_data(Arena *arena, String8 data)
+{
+  ProfBeginFunction();
+  PDB_GsiParsed *result = push_array(arena, PDB_GsiParsed, 1);
   
-  // get header
+  // rjf: extract header
   PDB_GsiHeader *header = 0;
-  if (sizeof(*header) <= data.size){
+  if(sizeof(*header) <= data.size)
+  {
     header = (PDB_GsiHeader*)data.str;
   }
   
-  PDB_GsiParsed *result = 0;
-  if (header != 0 && header->signature == PDB_GsiSignature_Basic &&
-      header->version == PDB_GsiVersion_V70 && header->bucket_data_size != 0){
+  // rjf: parse
+  if(header != 0 && header->signature == PDB_GsiSignature_Basic &&
+     header->version == PDB_GsiVersion_V70 && header->bucket_data_size != 0)
+  {
     Temp scratch = scratch_begin(&arena, 1);
     
     // hash offset
@@ -479,7 +482,8 @@ pdb_gsi_from_data(Arena *arena, String8 data){
     // get bitmask & packed offset arrays
     U8 *bitmasks = 0;
     U8 *packed_offsets = 0;
-    if (bitmask_off + bitmask_byte_size <= data.size){
+    if(bitmask_off + bitmask_byte_size <= data.size)
+    {
       bitmasks = (data.str + bitmask_off);
       packed_offsets = (data.str + offsets_off);
     }
@@ -487,7 +491,8 @@ pdb_gsi_from_data(Arena *arena, String8 data){
     
     // unpack
     U32 *unpacked_offsets = 0;
-    if (packed_offsets != 0){
+    if(packed_offsets != 0)
+    {
       unpacked_offsets = push_array(scratch.arena, U32, slot_count);
       
       U32 *bitmask_ptr = (U32*)bitmasks;
@@ -496,34 +501,38 @@ pdb_gsi_from_data(Arena *arena, String8 data){
       U32 *src_opl = src_ptr + packed_offset_count;
       U32 *dst_ptr = unpacked_offsets;
       U32 *dst_opl = dst_ptr + slot_count;
-      for (; bitmask_ptr < bitmask_opl && src_ptr < src_opl; bitmask_ptr += 1){
+      for(; bitmask_ptr < bitmask_opl && src_ptr < src_opl; bitmask_ptr += 1)
+      {
         U32 bits = *bitmask_ptr;
         U32 src_max = (U32)(src_opl - src_ptr);
         U32 dst_max = (U32)(dst_opl - dst_ptr);
         U32 k_max0 = ClampTop(32, dst_max);
         U32 k_max  = ClampTop(k_max0, src_max);
-        for (U32 k = 0; k < k_max; k += 1){
-          if ((bits & 1) == 1){
+        for(U32 k = 0; k < k_max; k += 1)
+        {
+          if((bits & 1) == 1)
+          {
             *dst_ptr = *src_ptr;
             src_ptr += 1;
           }
-          else{
+          else
+          {
             *dst_ptr = 0xFFFFFFFF;
           }
           dst_ptr += 1;
           bits >>= 1;
         }
       }
-      for (; dst_ptr < dst_opl; dst_ptr += 1){
+      for(; dst_ptr < dst_opl; dst_ptr += 1)
+      {
         *dst_ptr = 0xFFFFFFFF;
       }
     }
     
     // construct table
     B32 bad_table = 0;
-    if (unpacked_offsets != 0){
-      result = push_array(arena, PDB_GsiParsed, 1);
-      
+    if(unpacked_offsets != 0)
+    {
       // hash records
       PDB_GsiHashRecord *hash_records = (PDB_GsiHashRecord*)(data.str + hash_record_array_off);
       U32 hash_record_count = header->hash_record_arr_size/sizeof(PDB_GsiHashRecord);
@@ -539,13 +548,16 @@ pdb_gsi_from_data(Arena *arena, String8 data){
       // build table
       PDB_GsiHashRecord *hash_record_ptr = hash_records + hash_record_count - 1;
       U32 prev_n = hash_record_count;
-      for (U32 i = slot_count; i > 1;){
+      for(U32 i = slot_count; i > 1;)
+      {
         i -= 1;
-        if (unpacked_offsets[i] != 0xFFFFFFFF){
+        if(unpacked_offsets[i] != 0xFFFFFFFF)
+        {
           // determine hash record range to use
           // * The "12" here is the result of some really sloppy PDB magic.
           U32 n = unpacked_offsets[i]/12;
-          if (n > prev_n){
+          if(n > prev_n)
+          {
             bad_table = 1;
             break;
           }
@@ -553,7 +565,8 @@ pdb_gsi_from_data(Arena *arena, String8 data){
           
           // fill this bucket
           U32 *bucket_offs = push_array_aligned(arena, U32, num_steps, 4);
-          for (U32 j = num_steps; j > 0;){
+          for(U32 j = num_steps; j > 0;)
+          {
             j -= 1;
             // * The "- 1" is more sloppy PDB magic.
             bucket_offs[j] = hash_record_ptr->symbol_off - 1;
@@ -568,13 +581,11 @@ pdb_gsi_from_data(Arena *arena, String8 data){
         }
       }
     }
-    
     scratch_end(scratch);
   }
   
   ProfEnd();
-  
-  return(result);
+  return result;
 }
 
 internal U64
@@ -703,18 +714,20 @@ pdb_comp_unit_array_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-internal PDB_CompUnitContributionArray*
+internal PDB_CompUnitContributionArray
 pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data, COFF_SectionHeaderArray sections)
 {
   PDB_CompUnitContribution *contributions = 0;
   U64 count = 0;
-  if (data.size >= sizeof(PDB_DbiSectionContribVersion)){
+  if(data.size >= sizeof(PDB_DbiSectionContribVersion))
+  {
     PDB_DbiSectionContribVersion *version = (PDB_DbiSectionContribVersion*)data.str;
     
     // determine array layout from version
     U32 item_size = 0;
     U32 array_off = 0;
-    switch (*version){
+    switch(*version)
+    {
       default:
       {
         // TODO(allen): do we have a test case for this?
@@ -743,11 +756,12 @@ pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data, COFF_Sect
     // fill array
     PDB_CompUnitContribution *contribution_ptr = contributions;
     U64 cursor = array_off;
-    for (; cursor + item_size <= data.size; cursor += item_size){
+    for(; cursor + item_size <= data.size; cursor += item_size)
+    {
       PDB_DbiSectionContrib40 *sc = (PDB_DbiSectionContrib40*)(data.str + cursor);
-      if (sc->size > 0 && 1 <= sc->sec && sc->sec <= section_count){
+      if(sc->size > 0 && 1 <= sc->sec && sc->sec <= section_count)
+      {
         U64 voff = section_headers[sc->sec - 1].voff + sc->sec_off;
-        
         contribution_ptr->mod        = sc->mod;
         contribution_ptr->voff_first = voff;
         contribution_ptr->voff_opl   = voff + sc->size;
@@ -758,11 +772,10 @@ pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data, COFF_Sect
   }
   
   // fill result
-  PDB_CompUnitContributionArray *result = push_array(arena, PDB_CompUnitContributionArray, 1);
-  result->contributions = contributions;
-  result->count = count;
-  
-  return(result);
+  PDB_CompUnitContributionArray result = {0};
+  result.contributions = contributions;
+  result.count = count;
+  return result;
 }
 
 ////////////////////////////////

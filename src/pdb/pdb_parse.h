@@ -211,9 +211,7 @@ internal COFF_SectionHeaderArray pdb_coff_section_array_from_data(Arena *arena, 
 internal PDB_CompUnitArray*   pdb_comp_unit_array_from_data(Arena *arena,
                                                             String8 module_info_data);
 
-internal PDB_CompUnitContributionArray*
-pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 seccontrib_data,
-                                           COFF_SectionHeaderArray sections);
+internal PDB_CompUnitContributionArray pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 seccontrib_data, COFF_SectionHeaderArray sections);
 
 ////////////////////////////////
 //~ PDB Dbi Functions

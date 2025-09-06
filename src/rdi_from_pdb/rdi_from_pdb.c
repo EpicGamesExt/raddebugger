@@ -562,7 +562,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   PDB_TpiHashParsed *ipi_hash = p2r_shared->ipi_hash;
   CV_LeafParsed *ipi_leaf = p2r_shared->ipi_leaf;
   PDB_CompUnitArray *comp_units = p2r_shared->comp_units;
-  PDB_CompUnitContributionArray *comp_unit_contributions = p2r_shared->comp_unit_contributions;
+  PDB_CompUnitContributionArray *comp_unit_contributions = &p2r_shared->comp_unit_contributions;
   
   //////////////////////////////////////////////////////////////
   //- rjf: bucket compilation unit contributions
