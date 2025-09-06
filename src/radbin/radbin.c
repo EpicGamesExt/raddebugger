@@ -755,7 +755,7 @@ rb_thread_entry_point(void *p)
       RDIM_BakeResults bake_results = {0};
       if(convert_done) ProfScope("bake")
       {
-        bake_results = rdim2_bake(arena, &bake_params);
+        bake_results = rdim_bake(arena, &bake_params);
       }
       
       //- rjf: convert done => generate output

@@ -315,7 +315,7 @@ p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encod
 }
 
 internal RDIM_LocationInfo
-p2r2_location_info_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection)
+p2r_location_info_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection)
 {
   RDIM_LocationInfo result = {0};
   if(0 <= offset && offset <= (S64)max_U16)
@@ -352,7 +352,7 @@ p2r2_location_info_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode re
 }
 
 internal void
-p2r2_local_push_location_cases_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *loc, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
+p2r_local_push_location_cases_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *loc, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
 {
   //- rjf: extract range info
   U64 voff_first = 0;
@@ -399,14 +399,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     // rjf: setup output buckets
     if(lane_idx() == 0)
     {
-      p2r2_shared = push_array(arena, P2R2_Shared, 1);
-      p2r2_shared->msf_raw_stream_table = msf_raw_stream_table_from_data(arena, params->input_pdb_data);
-      p2r2_shared->msf = push_array(arena, MSF_Parsed, 1);
-      p2r2_shared->msf->page_size    = p2r2_shared->msf_raw_stream_table->page_size;
-      p2r2_shared->msf->page_count   = p2r2_shared->msf_raw_stream_table->total_page_count;
-      p2r2_shared->msf->stream_count = p2r2_shared->msf_raw_stream_table->stream_count;
-      p2r2_shared->msf->streams      = push_array(arena, String8, p2r2_shared->msf->stream_count);
-      p2r2_shared->msf_stream_lane_counter = 0;
+      p2r_shared = push_array(arena, P2R_Shared, 1);
+      p2r_shared->msf_raw_stream_table = msf_raw_stream_table_from_data(arena, params->input_pdb_data);
+      p2r_shared->msf = push_array(arena, MSF_Parsed, 1);
+      p2r_shared->msf->page_size    = p2r_shared->msf_raw_stream_table->page_size;
+      p2r_shared->msf->page_count   = p2r_shared->msf_raw_stream_table->total_page_count;
+      p2r_shared->msf->stream_count = p2r_shared->msf_raw_stream_table->stream_count;
+      p2r_shared->msf->streams      = push_array(arena, String8, p2r_shared->msf->stream_count);
+      p2r_shared->msf_stream_lane_counter = 0;
     }
     lane_sync();
     
@@ -414,18 +414,18 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       for(;;)
       {
-        U64 stream_num = ins_atomic_u64_inc_eval(&p2r2_shared->msf_stream_lane_counter);
-        if(stream_num < 1 || p2r2_shared->msf->stream_count < stream_num)
+        U64 stream_num = ins_atomic_u64_inc_eval(&p2r_shared->msf_stream_lane_counter);
+        if(stream_num < 1 || p2r_shared->msf->stream_count < stream_num)
         {
           break;
         }
         U64 stream_idx = stream_num-1;
-        p2r2_shared->msf->streams[stream_idx] = msf_data_from_stream_number(arena, params->input_pdb_data, p2r2_shared->msf_raw_stream_table, stream_idx);
+        p2r_shared->msf->streams[stream_idx] = msf_data_from_stream_number(arena, params->input_pdb_data, p2r_shared->msf_raw_stream_table, stream_idx);
       }
     }
   }
   lane_sync();
-  MSF_Parsed *msf = p2r2_shared->msf;
+  MSF_Parsed *msf = p2r_shared->msf;
   
   //////////////////////////////////////////////////////////////
   //- rjf: do top-level MSF/PDB extraction
@@ -435,20 +435,20 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     ProfScope("parse PDB info")
     {
       String8 info_data = msf_data_from_stream(msf, PDB_FixedStream_Info);
-      p2r2_shared->pdb_info = pdb_info_from_data(arena, info_data);
-      if(p2r2_shared->pdb_info->features & PDB_FeatureFlag_MINIMAL_DBG_INFO)
+      p2r_shared->pdb_info = pdb_info_from_data(arena, info_data);
+      if(p2r_shared->pdb_info->features & PDB_FeatureFlag_MINIMAL_DBG_INFO)
       {
         log_user_error(str8_lit("PDB was linked with /DEBUG:FASTLINK; partial debug info is not supported. Please relink using /DEBUG:FULL."));
       }
     }
     ProfScope("parse named streams table")
     {
-      p2r2_shared->named_streams = pdb_named_stream_table_from_info(arena, p2r2_shared->pdb_info);
+      p2r_shared->named_streams = pdb_named_stream_table_from_info(arena, p2r_shared->pdb_info);
     }
   }
   lane_sync();
-  PDB_Info *pdb_info = p2r2_shared->pdb_info;
-  PDB_NamedStreamTable *named_streams = p2r2_shared->named_streams;
+  PDB_Info *pdb_info = p2r_shared->pdb_info;
+  PDB_NamedStreamTable *named_streams = p2r_shared->named_streams;
   
   //////////////////////////////////////////////////////////////
   //- rjf: parse PDB strtbl & top-level streams
@@ -459,31 +459,31 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       MSF_StreamNumber strtbl_sn = named_streams->sn[PDB_NamedStream_StringTable];
       String8 strtbl_data = msf_data_from_stream(msf, strtbl_sn);
-      p2r2_shared->strtbl = pdb_strtbl_from_data(arena, strtbl_data);
-      p2r2_shared->raw_strtbl = str8_substr(strtbl_data, rng_1u64(p2r2_shared->strtbl->strblock_min, p2r2_shared->strtbl->strblock_max));
+      p2r_shared->strtbl = pdb_strtbl_from_data(arena, strtbl_data);
+      p2r_shared->raw_strtbl = str8_substr(strtbl_data, rng_1u64(p2r_shared->strtbl->strblock_min, p2r_shared->strtbl->strblock_max));
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("parse DBI")
     {
       String8 dbi_data = msf_data_from_stream(msf, PDB_FixedStream_Dbi);
-      p2r2_shared->dbi = pdb_dbi_from_data(arena, dbi_data);
+      p2r_shared->dbi = pdb_dbi_from_data(arena, dbi_data);
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("parse TPI")
     {
       String8 tpi_data = msf_data_from_stream(msf, PDB_FixedStream_Tpi);
-      p2r2_shared->tpi = pdb_tpi_from_data(arena, tpi_data);
+      p2r_shared->tpi = pdb_tpi_from_data(arena, tpi_data);
     }
     if(lane_idx() == lane_from_task_idx(3)) ProfScope("parse IPI")
     {
       String8 ipi_data = msf_data_from_stream(msf, PDB_FixedStream_Ipi);
-      p2r2_shared->ipi = pdb_tpi_from_data(arena, ipi_data);
+      p2r_shared->ipi = pdb_tpi_from_data(arena, ipi_data);
     }
   }
   lane_sync();
-  PDB_Strtbl *strtbl = p2r2_shared->strtbl;
-  String8 raw_strtbl = p2r2_shared->raw_strtbl;
-  PDB_DbiParsed *dbi = p2r2_shared->dbi;
-  PDB_TpiParsed *tpi = p2r2_shared->tpi;
-  PDB_TpiParsed *ipi = p2r2_shared->ipi;
+  PDB_Strtbl *strtbl = p2r_shared->strtbl;
+  String8 raw_strtbl = p2r_shared->raw_strtbl;
+  PDB_DbiParsed *dbi = p2r_shared->dbi;
+  PDB_TpiParsed *tpi = p2r_shared->tpi;
+  PDB_TpiParsed *ipi = p2r_shared->ipi;
   
   //////////////////////////////////////////////////////////////
   //- rjf: unpack DBI
@@ -494,24 +494,24 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       MSF_StreamNumber section_stream = dbi->dbg_streams[PDB_DbiStream_SECTION_HEADER];
       String8 section_data = msf_data_from_stream(msf, section_stream);
-      p2r2_shared->coff_sections = pdb_coff_section_array_from_data(arena, section_data);
+      p2r_shared->coff_sections = pdb_coff_section_array_from_data(arena, section_data);
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("parse GSI")
     {
       String8 gsi_data = msf_data_from_stream(msf, dbi->gsi_sn);
-      p2r2_shared->gsi = pdb_gsi_from_data(arena, gsi_data);
+      p2r_shared->gsi = pdb_gsi_from_data(arena, gsi_data);
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("parse GSI part of PSI")
     {
       String8 psi_data = msf_data_from_stream(msf, dbi->psi_sn);
       String8 psi_data_gsi_part = str8_range(psi_data.str + sizeof(PDB_PsiHeader), psi_data.str + psi_data.size);
-      p2r2_shared->psi_gsi_part = pdb_gsi_from_data(arena, psi_data_gsi_part);
+      p2r_shared->psi_gsi_part = pdb_gsi_from_data(arena, psi_data_gsi_part);
     }
   }
   lane_sync();
-  COFF_SectionHeaderArray coff_sections = p2r2_shared->coff_sections;
-  PDB_GsiParsed *gsi = p2r2_shared->gsi;
-  PDB_GsiParsed *psi_gsi_part = p2r2_shared->psi_gsi_part;
+  COFF_SectionHeaderArray coff_sections = p2r_shared->coff_sections;
+  PDB_GsiParsed *gsi = p2r_shared->gsi;
+  PDB_GsiParsed *psi_gsi_part = p2r_shared->psi_gsi_part;
   
   //////////////////////////////////////////////////////////////
   //- rjf: hash EXE, parse TPI/IPI hash/leaf & global symbol stream & comp units
@@ -520,68 +520,68 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   {
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("hash EXE")
     {
-      p2r2_shared->exe_hash = rdi_hash(params->input_exe_data.str, params->input_exe_data.size);
+      p2r_shared->exe_hash = rdi_hash(params->input_exe_data.str, params->input_exe_data.size);
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("parse TPI hash")
     {
       String8 hash_data = msf_data_from_stream(msf, tpi->hash_sn);
       String8 aux_data  = msf_data_from_stream(msf, tpi->hash_sn_aux);
-      p2r2_shared->tpi_hash = pdb_tpi_hash_from_data(arena, strtbl, tpi, hash_data, aux_data);
+      p2r_shared->tpi_hash = pdb_tpi_hash_from_data(arena, strtbl, tpi, hash_data, aux_data);
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("parse TPI leaf")
     {
       String8 leaf_data = pdb_leaf_data_from_tpi(tpi);
-      p2r2_shared->tpi_leaf = cv_leaf_from_data(arena, leaf_data, tpi->itype_first);
+      p2r_shared->tpi_leaf = cv_leaf_from_data(arena, leaf_data, tpi->itype_first);
     }
     if(lane_idx() == lane_from_task_idx(3)) ProfScope("parse IPI hash")
     {
       String8 hash_data = msf_data_from_stream(msf, ipi->hash_sn);
       String8 aux_data  = msf_data_from_stream(msf, ipi->hash_sn_aux);
-      p2r2_shared->ipi_hash = pdb_tpi_hash_from_data(arena, strtbl, ipi, hash_data, aux_data);
+      p2r_shared->ipi_hash = pdb_tpi_hash_from_data(arena, strtbl, ipi, hash_data, aux_data);
     }
     if(lane_idx() == lane_from_task_idx(4)) ProfScope("parse IPI leaf")
     {
       String8 leaf_data = pdb_leaf_data_from_tpi(ipi);
-      p2r2_shared->ipi_leaf = cv_leaf_from_data(arena, leaf_data, ipi->itype_first);
+      p2r_shared->ipi_leaf = cv_leaf_from_data(arena, leaf_data, ipi->itype_first);
     }
     if(lane_idx() == lane_from_task_idx(5)) ProfScope("parse compilation units")
     {
       String8 comp_units_data = pdb_data_from_dbi_range(dbi, PDB_DbiRange_ModuleInfo);
-      p2r2_shared->comp_units = pdb_comp_unit_array_from_data(arena, comp_units_data);
+      p2r_shared->comp_units = pdb_comp_unit_array_from_data(arena, comp_units_data);
     }
     if(lane_idx() == lane_from_task_idx(6)) ProfScope("parse compilation unit contributions")
     {
       String8 contribs_data = pdb_data_from_dbi_range(dbi, PDB_DbiRange_SecCon);
-      p2r2_shared->comp_unit_contributions = pdb_comp_unit_contribution_array_from_data(arena, contribs_data, coff_sections);
+      p2r_shared->comp_unit_contributions = pdb_comp_unit_contribution_array_from_data(arena, contribs_data, coff_sections);
     }
   }
   lane_sync();
-  U64 exe_hash = p2r2_shared->exe_hash;
-  PDB_TpiHashParsed *tpi_hash = p2r2_shared->tpi_hash;
-  CV_LeafParsed *tpi_leaf = p2r2_shared->tpi_leaf;
-  PDB_TpiHashParsed *ipi_hash = p2r2_shared->ipi_hash;
-  CV_LeafParsed *ipi_leaf = p2r2_shared->ipi_leaf;
-  PDB_CompUnitArray *comp_units = p2r2_shared->comp_units;
-  PDB_CompUnitContributionArray *comp_unit_contributions = p2r2_shared->comp_unit_contributions;
+  U64 exe_hash = p2r_shared->exe_hash;
+  PDB_TpiHashParsed *tpi_hash = p2r_shared->tpi_hash;
+  CV_LeafParsed *tpi_leaf = p2r_shared->tpi_leaf;
+  PDB_TpiHashParsed *ipi_hash = p2r_shared->ipi_hash;
+  CV_LeafParsed *ipi_leaf = p2r_shared->ipi_leaf;
+  PDB_CompUnitArray *comp_units = p2r_shared->comp_units;
+  PDB_CompUnitContributionArray *comp_unit_contributions = p2r_shared->comp_unit_contributions;
   
   //////////////////////////////////////////////////////////////
   //- rjf: bucket compilation unit contributions
   //
   ProfScope("bucket compilation unit contributions") if(lane_idx() == 0)
   {
-    p2r2_shared->unit_ranges = push_array(arena, RDIM_Rng1U64ChunkList, comp_units->count);
+    p2r_shared->unit_ranges = push_array(arena, RDIM_Rng1U64ChunkList, comp_units->count);
     for(U64 idx = 0; idx < comp_unit_contributions->count; idx += 1)
     {
       PDB_CompUnitContribution *contribution = &comp_unit_contributions->contributions[idx];
       if(contribution->mod < comp_units->count)
       {
         RDIM_Rng1U64 r = {contribution->voff_first, contribution->voff_opl};
-        rdim_rng1u64_chunk_list_push(arena, &p2r2_shared->unit_ranges[contribution->mod], 256, r);
+        rdim_rng1u64_chunk_list_push(arena, &p2r_shared->unit_ranges[contribution->mod], 256, r);
       }
     }
   }
   lane_sync();
-  RDIM_Rng1U64ChunkList *unit_ranges = p2r2_shared->unit_ranges;
+  RDIM_Rng1U64ChunkList *unit_ranges = p2r_shared->unit_ranges;
   
   //////////////////////////////////////////////////////////////
   //- rjf: parse all syms & c13 line info streams
@@ -591,19 +591,19 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: setup outputs
     if(lane_idx() == 0)
     {
-      p2r2_shared->all_syms_count = comp_units->count+1; // +1 for global symbol stream from DBI
-      p2r2_shared->all_syms = push_array(arena, CV_SymParsed *, p2r2_shared->all_syms_count);
-      p2r2_shared->all_c13s = push_array(arena, CV_C13Parsed *, p2r2_shared->all_syms_count);
-      p2r2_shared->sym_c13_unit_lane_counter = 0;
+      p2r_shared->all_syms_count = comp_units->count+1; // +1 for global symbol stream from DBI
+      p2r_shared->all_syms = push_array(arena, CV_SymParsed *, p2r_shared->all_syms_count);
+      p2r_shared->all_c13s = push_array(arena, CV_C13Parsed *, p2r_shared->all_syms_count);
+      p2r_shared->sym_c13_unit_lane_counter = 0;
     }
     lane_sync();
     
     //- rjf: wide fill
     {
-      U64 task_count = p2r2_shared->all_syms_count;
+      U64 task_count = p2r_shared->all_syms_count;
       for(;;)
       {
-        U64 task_num = ins_atomic_u64_inc_eval(&p2r2_shared->sym_c13_unit_lane_counter);
+        U64 task_num = ins_atomic_u64_inc_eval(&p2r_shared->sym_c13_unit_lane_counter);
         if(task_num == 0 || task_count < task_num)
         {
           break;
@@ -614,21 +614,21 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           PDB_CompUnit *unit = comp_units->units[task_idx-1];
           String8 unit_sym_data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_Symbols);
           String8 unit_c13_data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_C13);
-          p2r2_shared->all_syms[task_idx] = cv_sym_from_data(arena, unit_sym_data, 4);
-          p2r2_shared->all_c13s[task_idx] = cv_c13_parsed_from_data(arena, unit_c13_data, raw_strtbl, coff_sections);
+          p2r_shared->all_syms[task_idx] = cv_sym_from_data(arena, unit_sym_data, 4);
+          p2r_shared->all_c13s[task_idx] = cv_c13_parsed_from_data(arena, unit_c13_data, raw_strtbl, coff_sections);
         }
         else
         {
           String8 global_sym_data = msf_data_from_stream(msf, dbi->sym_sn);
-          p2r2_shared->all_syms[task_idx] = cv_sym_from_data(arena, global_sym_data, 4);
+          p2r_shared->all_syms[task_idx] = cv_sym_from_data(arena, global_sym_data, 4);
         }
       }
     }
   }
   lane_sync();
-  U64 all_syms_count = p2r2_shared->all_syms_count;
-  CV_SymParsed **all_syms = p2r2_shared->all_syms;
-  CV_C13Parsed **all_c13s = p2r2_shared->all_c13s;
+  U64 all_syms_count = p2r_shared->all_syms_count;
+  CV_SymParsed **all_syms = p2r_shared->all_syms;
+  CV_C13Parsed **all_c13s = p2r_shared->all_c13s;
   
   //////////////////////////////////////////////////////////////
   //- rjf: calculate EXE's max voff
@@ -640,11 +640,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     for(;coff_sec_ptr < coff_ptr_opl; coff_sec_ptr += 1)
     {
       U64 sec_voff_max = coff_sec_ptr->voff + coff_sec_ptr->vsize;
-      p2r2_shared->exe_voff_max = Max(p2r2_shared->exe_voff_max, sec_voff_max);
+      p2r_shared->exe_voff_max = Max(p2r_shared->exe_voff_max, sec_voff_max);
     }
   }
   lane_sync();
-  U64 exe_voff_max = p2r2_shared->exe_voff_max;
+  U64 exe_voff_max = p2r_shared->exe_voff_max;
   
   //////////////////////////////////////////////////////////////
   //- rjf: determine architecture
@@ -667,15 +667,15 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //
     for EachIndex(idx, all_syms_count)
     {
-      p2r2_shared->arch = p2r_rdi_arch_from_cv_arch(all_syms[idx]->info.arch);
-      if(p2r2_shared->arch != RDI_Arch_NULL)
+      p2r_shared->arch = p2r_rdi_arch_from_cv_arch(all_syms[idx]->info.arch);
+      if(p2r_shared->arch != RDI_Arch_NULL)
       {
         break;
       }
     }
   }
   lane_sync();
-  RDI_Arch arch = p2r2_shared->arch;
+  RDI_Arch arch = p2r_shared->arch;
   U64 arch_addr_size = rdi_addr_size_from_arch(arch);
   
   //////////////////////////////////////////////////////////////
@@ -688,11 +688,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       rec_range_count += all_syms[idx]->sym_ranges.count;
     }
-    p2r2_shared->symbol_count_prediction = rec_range_count/8;
-    p2r2_shared->symbol_count_prediction = Max(p2r2_shared->symbol_count_prediction, 256);
+    p2r_shared->symbol_count_prediction = rec_range_count/8;
+    p2r_shared->symbol_count_prediction = Max(p2r_shared->symbol_count_prediction, 256);
   }
   lane_sync();
-  U64 symbol_count_prediction = p2r2_shared->symbol_count_prediction;
+  U64 symbol_count_prediction = p2r_shared->symbol_count_prediction;
   
   //////////////////////////////////////////////////////////////
   //- rjf: build link name map
@@ -701,8 +701,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   {
     // rjf: set up
     {
-      p2r2_shared->link_name_map.buckets_count = symbol_count_prediction;
-      p2r2_shared->link_name_map.buckets = push_array(arena, P2R_LinkNameNode *, p2r2_shared->link_name_map.buckets_count);
+      p2r_shared->link_name_map.buckets_count = symbol_count_prediction;
+      p2r_shared->link_name_map.buckets = push_array(arena, P2R_LinkNameNode *, p2r_shared->link_name_map.buckets_count);
     }
     
     // rjf: fill
@@ -744,9 +744,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             
             // rjf: commit to link name map
             U64 hash = p2r_hash_from_voff(voff);
-            U64 bucket_idx = hash%p2r2_shared->link_name_map.buckets_count;
+            U64 bucket_idx = hash%p2r_shared->link_name_map.buckets_count;
             P2R_LinkNameNode *node = push_array(arena, P2R_LinkNameNode, 1);
-            SLLStackPush(p2r2_shared->link_name_map.buckets[bucket_idx], node);
+            SLLStackPush(p2r_shared->link_name_map.buckets[bucket_idx], node);
             node->voff = voff;
             node->name = name;
           }break;
@@ -755,7 +755,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     }
   }
   lane_sync();
-  P2R_LinkNameMap link_name_map = p2r2_shared->link_name_map;
+  P2R_LinkNameMap link_name_map = p2r_shared->link_name_map;
   
   //////////////////////////////////////////////////////////////
   //- rjf: gather all file paths
@@ -765,9 +765,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: prep outputs
     ProfScope("prep outputs") if(lane_idx() == 0)
     {
-      p2r2_shared->unit_file_paths = push_array(arena, String8Array, comp_units->count);
-      p2r2_shared->unit_file_paths_hashes = push_array(arena, U64Array, comp_units->count);
-      p2r2_shared->sym_lane_take_counter = 0;
+      p2r_shared->unit_file_paths = push_array(arena, String8Array, comp_units->count);
+      p2r_shared->unit_file_paths_hashes = push_array(arena, U64Array, comp_units->count);
+      p2r_shared->sym_lane_take_counter = 0;
     }
     lane_sync();
     
@@ -785,7 +785,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         for(;;)
       {
         //- rjf: take next unit
-        U64 unit_num = ins_atomic_u64_inc_eval(&p2r2_shared->sym_lane_take_counter);
+        U64 unit_num = ins_atomic_u64_inc_eval(&p2r_shared->sym_lane_take_counter);
         if(unit_num > comp_units->count)
         {
           break;
@@ -1024,24 +1024,24 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
         
         //- rjf: merge into array for this unit
-        p2r2_shared->unit_file_paths[unit_idx] = str8_array_from_list(arena, &src_file_paths);
+        p2r_shared->unit_file_paths[unit_idx] = str8_array_from_list(arena, &src_file_paths);
         
         //- rjf: hash this unit's file paths
         U64Array hashes = {0};
-        hashes.count = p2r2_shared->unit_file_paths[unit_idx].count;
+        hashes.count = p2r_shared->unit_file_paths[unit_idx].count;
         hashes.v = push_array(arena, U64, hashes.count);
-        for EachIndex(idx, p2r2_shared->unit_file_paths[unit_idx].count)
+        for EachIndex(idx, p2r_shared->unit_file_paths[unit_idx].count)
         {
-          hashes.v[idx] = rdi_hash(p2r2_shared->unit_file_paths[unit_idx].v[idx].str, p2r2_shared->unit_file_paths[unit_idx].v[idx].size);
+          hashes.v[idx] = rdi_hash(p2r_shared->unit_file_paths[unit_idx].v[idx].str, p2r_shared->unit_file_paths[unit_idx].v[idx].size);
         }
-        p2r2_shared->unit_file_paths_hashes[unit_idx] = hashes;
+        p2r_shared->unit_file_paths_hashes[unit_idx] = hashes;
       }
       scratch_end(scratch);
     }
   }
   lane_sync();
-  String8Array *unit_file_paths = p2r2_shared->unit_file_paths;
-  U64Array *unit_file_paths_hashes = p2r2_shared->unit_file_paths_hashes;
+  String8Array *unit_file_paths = p2r_shared->unit_file_paths;
+  U64Array *unit_file_paths_hashes = p2r_shared->unit_file_paths_hashes;
   
   //////////////////////////////////////////////////////////////
   //- rjf: build unified collection & map for source files
@@ -1050,13 +1050,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: set up table
     ProfScope("set up table") if(lane_idx() == 0)
     {
-      p2r2_shared->total_path_count = 0;
+      p2r_shared->total_path_count = 0;
       for EachIndex(idx, comp_units->count)
       {
-        p2r2_shared->total_path_count += unit_file_paths[idx].count;
+        p2r_shared->total_path_count += unit_file_paths[idx].count;
       }
-      p2r2_shared->src_file_map.slots_count = p2r2_shared->total_path_count + p2r2_shared->total_path_count/2 + 1;
-      p2r2_shared->src_file_map.slots = push_array(arena, P2R_SrcFileNode *, p2r2_shared->src_file_map.slots_count);
+      p2r_shared->src_file_map.slots_count = p2r_shared->total_path_count + p2r_shared->total_path_count/2 + 1;
+      p2r_shared->src_file_map.slots = push_array(arena, P2R_SrcFileNode *, p2r_shared->src_file_map.slots_count);
     }
     lane_sync();
     
@@ -1071,9 +1071,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         {
           String8 file_path_sanitized = paths.v[path_idx];
           U64 file_path_sanitized_hash = hashes.v[path_idx];
-          U64 src_file_slot = file_path_sanitized_hash%p2r2_shared->src_file_map.slots_count;
+          U64 src_file_slot = file_path_sanitized_hash%p2r_shared->src_file_map.slots_count;
           P2R_SrcFileNode *src_file_node = 0;
-          for(P2R_SrcFileNode *n = p2r2_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+          for(P2R_SrcFileNode *n = p2r_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
           {
             if(str8_match(n->src_file->path, file_path_sanitized, 0))
             {
@@ -1084,8 +1084,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           if(src_file_node == 0)
           {
             src_file_node = push_array(arena, P2R_SrcFileNode, 1);
-            SLLStackPush(p2r2_shared->src_file_map.slots[src_file_slot], src_file_node);
-            src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &p2r2_shared->all_src_files__sequenceless, p2r2_shared->total_path_count);
+            SLLStackPush(p2r_shared->src_file_map.slots[src_file_slot], src_file_node);
+            src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &p2r_shared->all_src_files__sequenceless, p2r_shared->total_path_count);
             src_file_node->src_file->path = push_str8_copy(arena, file_path_sanitized);
           }
         }
@@ -1093,8 +1093,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     }
   }
   lane_sync();
-  RDIM_SrcFileChunkList all_src_files__sequenceless = p2r2_shared->all_src_files__sequenceless;
-  P2R_SrcFileMap src_file_map = p2r2_shared->src_file_map;
+  RDIM_SrcFileChunkList all_src_files__sequenceless = p2r_shared->all_src_files__sequenceless;
+  P2R_SrcFileMap src_file_map = p2r_shared->src_file_map;
   
   //////////////////////////////////////////////////////////////
   //- rjf: convert unit info
@@ -1106,23 +1106,23 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       for EachIndex(idx, comp_units->count)
       {
-        rdim_unit_chunk_list_push(arena, &p2r2_shared->all_units, comp_units->count);
+        rdim_unit_chunk_list_push(arena, &p2r_shared->all_units, comp_units->count);
       }
-      p2r2_shared->units_line_tables = push_array(arena, RDIM_LineTableChunkList, comp_units->count);
-      p2r2_shared->units_first_inline_site_line_tables = push_array(arena, RDIM_LineTable *, comp_units->count);
-      p2r2_shared->sym_lane_take_counter = 0;
+      p2r_shared->units_line_tables = push_array(arena, RDIM_LineTableChunkList, comp_units->count);
+      p2r_shared->units_first_inline_site_line_tables = push_array(arena, RDIM_LineTable *, comp_units->count);
+      p2r_shared->sym_lane_take_counter = 0;
     }
     lane_sync();
-    RDIM_Unit *units = p2r2_shared->all_units.first->v;
-    U64 units_count = p2r2_shared->all_units.first->count;
-    RDIM_LineTableChunkList *units_line_tables = p2r2_shared->units_line_tables;
+    RDIM_Unit *units = p2r_shared->all_units.first->v;
+    U64 units_count = p2r_shared->all_units.first->count;
+    RDIM_LineTableChunkList *units_line_tables = p2r_shared->units_line_tables;
     Assert(units_count == comp_units->count);
     
     //- rjf: do per-lane work
     ProfScope("wide fill") for(;;)
     {
       //- rjf: take next unit
-      U64 unit_num = ins_atomic_u64_inc_eval(&p2r2_shared->sym_lane_take_counter);
+      U64 unit_num = ins_atomic_u64_inc_eval(&p2r_shared->sym_lane_take_counter);
       if(unit_num > comp_units->count)
       {
         break;
@@ -1403,9 +1403,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                       if(line_table == 0)
                       {
                         line_table = rdim_line_table_chunk_list_push(arena, dst_line_tables, 256);
-                        if(p2r2_shared->units_first_inline_site_line_tables[unit_idx] == 0)
+                        if(p2r_shared->units_first_inline_site_line_tables[unit_idx] == 0)
                         {
-                          p2r2_shared->units_first_inline_site_line_tables[unit_idx] = line_table;
+                          p2r_shared->units_first_inline_site_line_tables[unit_idx] = line_table;
                         }
                       }
                       rdim_line_table_push_sequence(arena, dst_line_tables, line_table, src_file_node->src_file, voffs, line_nums, 0, line_count);
@@ -1451,9 +1451,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     }
   }
   lane_sync();
-  RDIM_UnitChunkList all_units = p2r2_shared->all_units;
-  RDIM_LineTableChunkList *units_line_tables = p2r2_shared->units_line_tables;
-  RDIM_LineTable **units_first_inline_site_line_tables = p2r2_shared->units_first_inline_site_line_tables;
+  RDIM_UnitChunkList all_units = p2r_shared->all_units;
+  RDIM_LineTableChunkList *units_line_tables = p2r_shared->units_line_tables;
+  RDIM_LineTable **units_first_inline_site_line_tables = p2r_shared->units_first_inline_site_line_tables;
   
   //////////////////////////////////////////////////////////////
   //- rjf: join all line tables
@@ -1462,11 +1462,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   {
     for EachIndex(idx, comp_units->count)
     {
-      rdim_line_table_chunk_list_concat_in_place(&p2r2_shared->all_line_tables, &units_line_tables[idx]);
+      rdim_line_table_chunk_list_concat_in_place(&p2r_shared->all_line_tables, &units_line_tables[idx]);
     }
   }
   lane_sync();
-  RDIM_LineTableChunkList all_line_tables = p2r2_shared->all_line_tables;
+  RDIM_LineTableChunkList all_line_tables = p2r_shared->all_line_tables;
   
   //////////////////////////////////////////////////////////////
   //- rjf: equip source files with line sequences
@@ -1482,13 +1482,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         RDIM_LineTable *line_table = &line_table_chunk_n->v[chunk_line_table_idx];
         for(RDIM_LineSequenceNode *s = line_table->first_seq; s != 0; s = s->next)
         {
-          rdim_src_file_push_line_sequence(arena, &p2r2_shared->all_src_files__sequenceless, s->v.src_file, &s->v);
+          rdim_src_file_push_line_sequence(arena, &p2r_shared->all_src_files__sequenceless, s->v.src_file, &s->v);
         }
       }
     }
   }
   lane_sync();
-  RDIM_SrcFileChunkList all_src_files = p2r2_shared->all_src_files__sequenceless;
+  RDIM_SrcFileChunkList all_src_files = p2r_shared->all_src_files__sequenceless;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 1: produce type forward resolution map
@@ -1504,19 +1504,19 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: allocate forward resolution map
     if(lane_idx() == 0)
     {
-      p2r2_shared->itype_first = tpi_leaf->itype_first;
-      p2r2_shared->itype_opl = tpi_leaf->itype_opl;
-      p2r2_shared->itype_fwd_map = push_array(arena, CV_TypeId, (U64)p2r2_shared->itype_opl);
+      p2r_shared->itype_first = tpi_leaf->itype_first;
+      p2r_shared->itype_opl = tpi_leaf->itype_opl;
+      p2r_shared->itype_fwd_map = push_array(arena, CV_TypeId, (U64)p2r_shared->itype_opl);
     }
     lane_sync();
     
     //- rjf: do wide fill
     {
-      Rng1U64 range = lane_range(p2r2_shared->itype_opl);
+      Rng1U64 range = lane_range(p2r_shared->itype_opl);
       for EachInRange(idx, range)
       {
         CV_TypeId itype = (CV_TypeId)idx;
-        if(itype < p2r2_shared->itype_first) { continue; }
+        if(itype < p2r_shared->itype_first) { continue; }
         
         //- rjf: determine if this itype resolves to another
         CV_TypeId itype_fwd = 0;
@@ -1628,15 +1628,15 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         //- rjf: if the forwarded itype is nonzero & in TPI range -> save to map
         if(itype_fwd != 0 && itype_fwd < tpi_leaf->itype_opl)
         {
-          p2r2_shared->itype_fwd_map[itype] = itype_fwd;
+          p2r_shared->itype_fwd_map[itype] = itype_fwd;
         }
       }
     }
   }
   lane_sync();
-  CV_TypeId *itype_fwd_map = p2r2_shared->itype_fwd_map;
-  CV_TypeId itype_first = p2r2_shared->itype_first;
-  CV_TypeId itype_opl = p2r2_shared->itype_opl;
+  CV_TypeId *itype_fwd_map = p2r_shared->itype_fwd_map;
+  CV_TypeId itype_first = p2r_shared->itype_first;
+  CV_TypeId itype_opl = p2r_shared->itype_opl;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 2: produce per-itype itype chain
@@ -1653,23 +1653,23 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: allocate itype chain table
     if(lane_idx() == 0)
     {
-      p2r2_shared->itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)p2r2_shared->itype_opl);
+      p2r_shared->itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)p2r_shared->itype_opl);
     }
     lane_sync();
     
     //- rjf: do wide fill
     {
-      Rng1U64 range = lane_range(p2r2_shared->itype_opl);
+      Rng1U64 range = lane_range(p2r_shared->itype_opl);
       for EachInRange(idx, range)
       {
         CV_TypeId itype = (CV_TypeId)idx;
-        if(itype < p2r2_shared->itype_first) { continue; }
+        if(itype < p2r_shared->itype_first) { continue; }
         
         //- rjf: push initial itype - should be final-visited-itype for this itype
         {
           P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
           c->itype = itype;
-          SLLStackPush(p2r2_shared->itype_chains[itype], c);
+          SLLStackPush(p2r_shared->itype_chains[itype], c);
         }
         
         //- rjf: skip basic types for dependency walk
@@ -1714,7 +1714,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itype
@@ -1734,7 +1734,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itype
@@ -1754,7 +1754,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->ret_itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk return itype
@@ -1789,7 +1789,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = arglist_itypes_base[idx];
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk arg types
@@ -1810,17 +1810,17 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->ret_itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->arg_itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->this_itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itypes
@@ -1865,7 +1865,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = arglist_itypes_base[idx];
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk arg types
@@ -1886,7 +1886,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itype
@@ -1906,12 +1906,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->entry_itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->index_itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itypes
@@ -1936,7 +1936,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
                   c->itype = lf->base_itype;
-                  SLLStackPush(p2r2_shared->itype_chains[itype], c);
+                  SLLStackPush(p2r_shared->itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itypes
@@ -1954,7 +1954,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     }
   }
   lane_sync();
-  P2R_TypeIdChain **itype_chains = p2r2_shared->itype_chains;
+  P2R_TypeIdChain **itype_chains = p2r_shared->itype_chains;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 3: construct all types from TPI
@@ -2494,16 +2494,16 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
       }
     }
-    p2r2_shared->itype_type_ptrs = itype_type_ptrs;
-    p2r2_shared->basic_type_ptrs = basic_type_ptrs;
-    p2r2_shared->all_types__pre_typedefs = all_types;
+    p2r_shared->itype_type_ptrs = itype_type_ptrs;
+    p2r_shared->basic_type_ptrs = basic_type_ptrs;
+    p2r_shared->all_types__pre_typedefs = all_types;
 #undef p2r_type_ptr_from_itype
 #undef p2r_builtin_type_ptr_from_kind
   }
   lane_sync();
-  RDIM_Type **itype_type_ptrs = p2r2_shared->itype_type_ptrs;
-  RDIM_Type **basic_type_ptrs = p2r2_shared->basic_type_ptrs;
-  RDIM_TypeChunkList all_types__pre_typedefs = p2r2_shared->all_types__pre_typedefs;
+  RDIM_Type **itype_type_ptrs = p2r_shared->itype_type_ptrs;
+  RDIM_Type **basic_type_ptrs = p2r_shared->basic_type_ptrs;
+  RDIM_TypeChunkList all_types__pre_typedefs = p2r_shared->all_types__pre_typedefs;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 4: build UDTs
@@ -2515,14 +2515,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: set up
     if(lane_idx() == 0)
     {
-      p2r2_shared->lanes_udts = push_array(arena, RDIM_UDTChunkList, lane_count());
+      p2r_shared->lanes_udts = push_array(arena, RDIM_UDTChunkList, lane_count());
     }
     lane_sync();
     
     //- rjf: do wide fill
     {
       U64 udts_chunk_cap = 4096;
-      RDIM_UDTChunkList *udts = &p2r2_shared->lanes_udts[lane_idx()];
+      RDIM_UDTChunkList *udts = &p2r_shared->lanes_udts[lane_idx()];
       Rng1U64 range = lane_range(itype_opl);
       for EachInRange(idx, range)
       {
@@ -3145,7 +3145,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
 #undef p2r_type_ptr_from_itype
   }
   lane_sync();
-  RDIM_UDTChunkList *lanes_udts = p2r2_shared->lanes_udts;
+  RDIM_UDTChunkList *lanes_udts = p2r_shared->lanes_udts;
   
   //////////////////////////////////////////////////////////////
   //- rjf: join all UDTs
@@ -3154,11 +3154,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   {
     for EachIndex(idx, lane_count())
     {
-      rdim_udt_chunk_list_concat_in_place(&p2r2_shared->all_udts, &lanes_udts[idx]);
+      rdim_udt_chunk_list_concat_in_place(&p2r_shared->all_udts, &lanes_udts[idx]);
     }
   }
   lane_sync();
-  RDIM_UDTChunkList all_udts = p2r2_shared->all_udts;
+  RDIM_UDTChunkList all_udts = p2r_shared->all_udts;
   
   //////////////////////////////////////////////////////////////
   //- rjf: produce symbols from all streams
@@ -3172,15 +3172,15 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //
     if(lane_idx() == 0)
     {
-      p2r2_shared->syms_locations        = push_array(arena, RDIM_LocationChunkList, all_syms_count);
-      p2r2_shared->syms_procedures       = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      p2r2_shared->syms_global_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      p2r2_shared->syms_thread_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      p2r2_shared->syms_constants        = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      p2r2_shared->syms_scopes           = push_array(arena, RDIM_ScopeChunkList, all_syms_count);
-      p2r2_shared->syms_inline_sites     = push_array(arena, RDIM_InlineSiteChunkList, all_syms_count);
-      p2r2_shared->syms_typedefs         = push_array(arena, RDIM_TypeChunkList, all_syms_count);
-      p2r2_shared->sym_lane_take_counter  = 0;
+      p2r_shared->syms_locations        = push_array(arena, RDIM_LocationChunkList, all_syms_count);
+      p2r_shared->syms_procedures       = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      p2r_shared->syms_global_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      p2r_shared->syms_thread_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      p2r_shared->syms_constants        = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      p2r_shared->syms_scopes           = push_array(arena, RDIM_ScopeChunkList, all_syms_count);
+      p2r_shared->syms_inline_sites     = push_array(arena, RDIM_InlineSiteChunkList, all_syms_count);
+      p2r_shared->syms_typedefs         = push_array(arena, RDIM_TypeChunkList, all_syms_count);
+      p2r_shared->sym_lane_take_counter  = 0;
     }
     lane_sync();
     
@@ -3190,7 +3190,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     for(;;)
     {
       //- rjf: take next sym
-      U64 sym_num = ins_atomic_u64_inc_eval(&p2r2_shared->sym_lane_take_counter);
+      U64 sym_num = ins_atomic_u64_inc_eval(&p2r_shared->sym_lane_take_counter);
       if(sym_num > all_syms_count)
       {
         break;
@@ -3208,14 +3208,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       U64 sym_constants_chunk_cap = 16384;
       U64 sym_scopes_chunk_cap = 16384;
       U64 sym_inline_sites_chunk_cap = 16384;
-      RDIM_LocationChunkList *sym_locations = &p2r2_shared->syms_locations[sym_idx];
-      RDIM_SymbolChunkList *sym_procedures = &p2r2_shared->syms_procedures[sym_idx];
-      RDIM_SymbolChunkList *sym_global_variables = &p2r2_shared->syms_global_variables[sym_idx];
-      RDIM_SymbolChunkList *sym_thread_variables = &p2r2_shared->syms_thread_variables[sym_idx];
-      RDIM_SymbolChunkList *sym_constants = &p2r2_shared->syms_constants[sym_idx];
-      RDIM_ScopeChunkList *sym_scopes = &p2r2_shared->syms_scopes[sym_idx];
-      RDIM_InlineSiteChunkList *sym_inline_sites = &p2r2_shared->syms_inline_sites[sym_idx];
-      RDIM_TypeChunkList *typedefs = &p2r2_shared->syms_typedefs[sym_idx];
+      RDIM_LocationChunkList *sym_locations = &p2r_shared->syms_locations[sym_idx];
+      RDIM_SymbolChunkList *sym_procedures = &p2r_shared->syms_procedures[sym_idx];
+      RDIM_SymbolChunkList *sym_global_variables = &p2r_shared->syms_global_variables[sym_idx];
+      RDIM_SymbolChunkList *sym_thread_variables = &p2r_shared->syms_thread_variables[sym_idx];
+      RDIM_SymbolChunkList *sym_constants = &p2r_shared->syms_constants[sym_idx];
+      RDIM_ScopeChunkList *sym_scopes = &p2r_shared->syms_scopes[sym_idx];
+      RDIM_InlineSiteChunkList *sym_inline_sites = &p2r_shared->syms_inline_sites[sym_idx];
+      RDIM_TypeChunkList *typedefs = &p2r_shared->syms_typedefs[sym_idx];
       
       //////////////////////////
       //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
@@ -3634,7 +3634,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 U32 byte_pos = 0;
                 
                 // rjf: build location
-                RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
+                RDIM_LocationInfo loc_info = p2r_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
                 RDIM_Location *loc2 = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
                 RDIM_Rng1U64 voff_range = {0, max_U64};
                 rdim_local_push_location_case(arena, sym_scopes, local, loc2, voff_range);
@@ -3756,7 +3756,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               RDIM_Location *loc = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
               
               // rjf: emit locations over ranges
-              p2r2_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target, loc, range, range_section, gaps, gap_count);
+              p2r_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target, loc, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_FRAMEPOINTER_REL
@@ -3799,11 +3799,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               U32 byte_size = rdi_addr_size_from_arch(arch);
               U32 byte_pos = 0;
               S64 var_off = (S64)defrange_fprel->off;
-              RDIM_LocationInfo location_info = p2r2_location_info_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
+              RDIM_LocationInfo location_info = p2r_location_info_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
               RDIM_Location *location = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &location_info);
               
               // rjf: emit locations over ranges
-              p2r2_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
+              p2r_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_SUBFIELD_REGISTER
@@ -3836,7 +3836,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               RDIM_Location *loc = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
               
               // rjf: emit locations over ranges
-              p2r2_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target, loc, range, range_section, gaps, gap_count);
+              p2r_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target, loc, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE
@@ -3873,7 +3873,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               U32 byte_size = rdi_addr_size_from_arch(arch);
               U32 byte_pos = 0;
               S64 var_off = (S64)defrange_fprel_full_scope->off;
-              RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
+              RDIM_LocationInfo loc_info = p2r_location_info_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
               RDIM_Location *loc = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
               
               // rjf: emit location over ranges
@@ -3906,11 +3906,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               U32 byte_pos = 0;
               B32 extra_indirection_to_value = 0;
               S64 var_off = defrange_register_rel->reg_off;
-              RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
+              RDIM_LocationInfo loc_info = p2r_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
               RDIM_Location *loc = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
               
               // rjf: emit locations over ranges
-              p2r2_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target, loc, range, range_section, gaps, gap_count);
+              p2r_local_push_location_cases_over_lvar_addr_range(arena, sym_scopes, defrange_target, loc, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: FILESTATIC
@@ -4106,69 +4106,69 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_location_chunk_list_concat_in_place(&p2r2_shared->all_locations, &p2r2_shared->syms_locations[idx]);
+        rdim_location_chunk_list_concat_in_place(&p2r_shared->all_locations, &p2r_shared->syms_locations[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("join procedures")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_procedures, &p2r2_shared->syms_procedures[idx]);
+        rdim_symbol_chunk_list_concat_in_place(&p2r_shared->all_procedures, &p2r_shared->syms_procedures[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("join global variables")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_global_variables, &p2r2_shared->syms_global_variables[idx]);
+        rdim_symbol_chunk_list_concat_in_place(&p2r_shared->all_global_variables, &p2r_shared->syms_global_variables[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(3)) ProfScope("join thread variables")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_thread_variables, &p2r2_shared->syms_thread_variables[idx]);
+        rdim_symbol_chunk_list_concat_in_place(&p2r_shared->all_thread_variables, &p2r_shared->syms_thread_variables[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(4)) ProfScope("join constants")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_constants, &p2r2_shared->syms_constants[idx]);
+        rdim_symbol_chunk_list_concat_in_place(&p2r_shared->all_constants, &p2r_shared->syms_constants[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(5)) ProfScope("join scopes")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_scope_chunk_list_concat_in_place(&p2r2_shared->all_scopes, &p2r2_shared->syms_scopes[idx]);
+        rdim_scope_chunk_list_concat_in_place(&p2r_shared->all_scopes, &p2r_shared->syms_scopes[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(6)) ProfScope("join inline sites")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_inline_site_chunk_list_concat_in_place(&p2r2_shared->all_inline_sites, &p2r2_shared->syms_inline_sites[idx]);
+        rdim_inline_site_chunk_list_concat_in_place(&p2r_shared->all_inline_sites, &p2r_shared->syms_inline_sites[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(7)) ProfScope("join typedefs")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_type_chunk_list_concat_in_place(&p2r2_shared->all_types__pre_typedefs, &p2r2_shared->syms_typedefs[idx]);
+        rdim_type_chunk_list_concat_in_place(&p2r_shared->all_types__pre_typedefs, &p2r_shared->syms_typedefs[idx]);
       }
-      p2r2_shared->all_types = p2r2_shared->all_types__pre_typedefs;
+      p2r_shared->all_types = p2r_shared->all_types__pre_typedefs;
     }
   }
   lane_sync();
-  RDIM_LocationChunkList all_locations           = p2r2_shared->all_locations;
-  RDIM_SymbolChunkList all_procedures            = p2r2_shared->all_procedures;
-  RDIM_SymbolChunkList all_global_variables      = p2r2_shared->all_global_variables;
-  RDIM_SymbolChunkList all_thread_variables      = p2r2_shared->all_thread_variables;
-  RDIM_SymbolChunkList all_constants             = p2r2_shared->all_constants;
-  RDIM_ScopeChunkList all_scopes                 = p2r2_shared->all_scopes;
-  RDIM_InlineSiteChunkList all_inline_sites      = p2r2_shared->all_inline_sites;
-  RDIM_TypeChunkList all_types                   = p2r2_shared->all_types;
+  RDIM_LocationChunkList all_locations           = p2r_shared->all_locations;
+  RDIM_SymbolChunkList all_procedures            = p2r_shared->all_procedures;
+  RDIM_SymbolChunkList all_global_variables      = p2r_shared->all_global_variables;
+  RDIM_SymbolChunkList all_thread_variables      = p2r_shared->all_thread_variables;
+  RDIM_SymbolChunkList all_constants             = p2r_shared->all_constants;
+  RDIM_ScopeChunkList all_scopes                 = p2r_shared->all_scopes;
+  RDIM_InlineSiteChunkList all_inline_sites      = p2r_shared->all_inline_sites;
+  RDIM_TypeChunkList all_types                   = p2r_shared->all_types;
   
   //////////////////////////////////////////////////////////////
   //- rjf: bundle all outputs

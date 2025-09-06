@@ -62,8 +62,8 @@ struct RDIM_UnsortedJoinedLineTable
 
 //- rjf: shared state bundle
 
-typedef struct RDIM2_Shared RDIM2_Shared;
-struct RDIM2_Shared
+typedef struct RDIM_Shared RDIM_Shared;
+struct RDIM_Shared
 {
   RDI_U64 scope_vmap_count;
   RDIM_SortKey *scope_vmap_keys;
@@ -178,11 +178,11 @@ struct RDIM2_Shared
   RDIM_BinarySectionBakeResult baked_binary_sections;
 };
 
-global RDIM2_Shared *rdim2_shared = 0;
+global RDIM_Shared *rdim_shared = 0;
 
 internal RDIM_DataModel rdim_data_model_from_os_arch(OperatingSystem os, RDI_Arch arch);
 internal RDIM_TopLevelInfo rdim_make_top_level_info(String8 image_name, Arch arch, U64 exe_hash, RDIM_BinarySectionList sections);
-internal RDIM_BakeResults rdim2_bake(Arena *arena, RDIM_BakeParams *params);
+internal RDIM_BakeResults rdim_bake(Arena *arena, RDIM_BakeParams *params);
 internal RDIM_SerializedSectionBundle rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in);
 
 #endif // RDI_MAKE_LOCAL_H
