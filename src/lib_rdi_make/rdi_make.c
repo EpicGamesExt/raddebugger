@@ -320,7 +320,7 @@ rdim_str8_list_join(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 sep)
 
 //- rjf: sortable range sorting
 
-RSFORCEINLINE int
+RDI_PROC RSFORCEINLINE int
 rdim_sort_key_is_before(void *l, void *r)
 {
   return ((RDIM_SortKey *)l)->key < ((RDIM_SortKey *)r)->key;
@@ -1185,7 +1185,7 @@ rdim_bake_string_chunk_list_concat_in_place(RDIM_BakeStringChunkList *dst, RDIM_
   rdim_memzero_struct(to_push);
 }
 
-RSFORCEINLINE int
+RDI_PROC RSFORCEINLINE int
 rdim_bake_string_is_before(void *l, void *r)
 {
   return str8_is_before(((RDIM_BakeString *)l)->string, ((RDIM_BakeString *)r)->string);
@@ -1407,7 +1407,7 @@ rdim_bake_idx_run_chunk_list_concat_in_place(RDIM_BakeIdxRunChunkList *dst, RDIM
   rdim_memzero_struct(to_push);
 }
 
-RSFORCEINLINE int
+RDI_PROC RSFORCEINLINE int
 rdim_bake_idx_run_is_before(void *l, void *r)
 {
   B32 is_less_than = 0;
@@ -1635,7 +1635,7 @@ rdim_bake_name_chunk_list_concat_in_place(RDIM_BakeNameChunkList *dst, RDIM_Bake
   rdim_memzero_struct(to_push);
 }
 
-RSFORCEINLINE int
+RDI_PROC RSFORCEINLINE int
 rdim_bake_name_is_before(void *l, void *r)
 {
   RDIM_BakeName *lhs = (RDIM_BakeName *)l;
