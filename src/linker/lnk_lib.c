@@ -200,9 +200,34 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U
 internal B32
 lnk_lib_set_link_symbol(LNK_Lib *lib, U32 member_idx, LNK_Symbol *link_symbol)
 {
-  LNK_Symbol *slot = ins_atomic_ptr_eval_cond_assign(&lib->was_member_linked[member_idx], link_symbol, 0);
-  B32 is_first_queue_attempt = (slot == 0);
-  return is_first_queue_attempt;
+  local_persist LNK_Symbol null_symbol;
+
+  LNK_Symbol *slot         = ins_atomic_ptr_eval_assign(&lib->was_member_linked[member_idx], &null_symbol);
+  B32         is_first_set = (slot == 0);
+
+  for (;;) {
+    // update slot symbol if it is empty or link symbol comes before symbol in the slot
+    if (slot && slot != &null_symbol) {
+      if (lnk_symbol_is_before(slot, link_symbol)) {
+        slot = link_symbol;
+      }
+    } else {
+      slot = link_symbol;
+    }
+
+    // try to insert back updated slot symbol
+    LNK_Symbol *was_replaced = ins_atomic_ptr_eval_cond_assign(&lib->was_member_linked[member_idx], slot, &null_symbol);
+
+    // exit if slot symbol was null
+    if (was_replaced == &null_symbol) {
+      break;
+    }
+
+    // reload slot symbol
+    slot = ins_atomic_ptr_eval_assign(&lib->was_member_linked[member_idx], &null_symbol);
+  }
+
+  return is_first_set;
 }
 
 internal B32
