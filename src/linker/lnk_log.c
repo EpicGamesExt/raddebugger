@@ -45,6 +45,7 @@ lnk_log_type_from_string(String8 string)
     "SizeBreakdown", LNK_Log_SizeBreakdown,
     "LinkStats",     LNK_Log_LinkStats,
     "Timers",        LNK_Log_Timers,
+    "Links",         LNK_Log_Links,
   };
   Assert(ArrayCount(map) == LNK_Log_Count);
 

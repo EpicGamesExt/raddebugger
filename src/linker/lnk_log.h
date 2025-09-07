@@ -14,6 +14,7 @@ typedef enum
   LNK_Log_SizeBreakdown,
   LNK_Log_LinkStats,
   LNK_Log_Timers,
+  LNK_Log_Links, 
   LNK_Log_Count
 } LNK_LogType;
 
