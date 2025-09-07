@@ -42,7 +42,6 @@ struct Arena
   char *allocation_site_file;
   int allocation_site_line;
 #if ARENA_FREE_LIST
-  U64 free_size;
   Arena *free_last;
 #endif
 };
