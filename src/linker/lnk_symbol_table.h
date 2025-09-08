@@ -131,7 +131,7 @@ internal U64      lnk_foff_from_symbol(COFF_SectionHeader **image_section_table,
 
 // --- Weak Symbol -------------------------------------------------------------
 
-internal LNK_ObjSymbolRef lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol);
+internal B32 lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymbolRef *resolved_symbol_out);
 
 internal void lnk_replace_weak_with_default_symbols(TP_Context *tp, LNK_SymbolTable *symtab);
 

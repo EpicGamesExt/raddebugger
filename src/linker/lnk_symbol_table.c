@@ -614,10 +614,12 @@ lnk_foff_from_symbol(COFF_SectionHeader **image_section_table, LNK_Symbol *symbo
   return foff;
 }
 
-internal LNK_ObjSymbolRef
-lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol)
+internal B32
+lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymbolRef *resolved_symbol_out)
 {
   Temp scratch = scratch_begin(0,0);
+
+  B32 is_resolved = 0;
 
   struct S { struct S *next; LNK_ObjSymbolRef symbol; B32 is_anti_dep; };
   struct S *sf = 0, *sl = 0;
@@ -641,8 +643,7 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol)
       String8 chain_string = str8_list_join(scratch.arena, &chain, &(StringJoin){ .sep = str8_lit("\n") });
       lnk_error_obj(LNK_Error_WeakCycle, symbol.obj, "unable to resolve cyclic symbol %S; ref chain:\n%S", symbol_parsed.name, chain_string);
 
-      MemoryZeroStruct(&current_symbol);
-      break;
+      goto exit;
     }
 
     COFF_ParsedSymbol          current_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, current_symbol.symbol_idx);
@@ -688,9 +689,14 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol)
     } else { break; }
   }
 
+  if (resolved_symbol_out) {
+    *resolved_symbol_out = current_symbol;
+  }
+  is_resolved = 1;
+
 exit:;
   scratch_end(scratch);
-  return current_symbol;
+  return is_resolved;
 }
 
 internal
@@ -705,24 +711,26 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
     COFF_ParsedSymbol           symbol_parsed = lnk_parsed_from_symbol(symbol);
     COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
     if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-      LNK_ObjSymbolRef           resolve        = lnk_resolve_weak_symbol(symtab, symbol_ref);
-      COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx(resolve.obj, resolve.symbol_idx);
-      COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
-      if (resolve_interp == COFF_SymbolValueInterp_Weak) {
-        COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol_ref.obj->header.is_big_obj);
-        if (symbol_ref.obj->header.is_big_obj) {
-          COFF_Symbol32 *symbol32  = symbol_parsed.raw_symbol;
-          symbol32->section_number = COFF_Symbol_UndefinedSection;
-          symbol32->value          = 0;
-          symbol32->storage_class  = COFF_SymStorageClass_External;
+      LNK_ObjSymbolRef resolve = {0};
+      if (lnk_resolve_weak_symbol(symtab, symbol_ref, &resolve)) {
+        COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx(resolve.obj, resolve.symbol_idx);
+        COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
+        if (resolve_interp == COFF_SymbolValueInterp_Weak) {
+          COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol_ref.obj->header.is_big_obj);
+          if (symbol_ref.obj->header.is_big_obj) {
+            COFF_Symbol32 *symbol32  = symbol_parsed.raw_symbol;
+            symbol32->section_number = COFF_Symbol_UndefinedSection;
+            symbol32->value          = 0;
+            symbol32->storage_class  = COFF_SymStorageClass_External;
+          } else {
+            COFF_Symbol16 *symbol16  = symbol_parsed.raw_symbol;
+            symbol16->section_number = COFF_Symbol_UndefinedSection;
+            symbol16->value          = 0;
+            symbol16->storage_class  = COFF_SymStorageClass_External;
+          }
         } else {
-          COFF_Symbol16 *symbol16  = symbol_parsed.raw_symbol;
-          symbol16->section_number = COFF_Symbol_UndefinedSection;
-          symbol16->value          = 0;
-          symbol16->storage_class  = COFF_SymStorageClass_External;
+          symbol->refs->v = resolve;
         }
-      } else {
-        symbol->refs->v = resolve;
       }
     }
   }
@@ -733,22 +741,9 @@ lnk_replace_weak_with_default_symbols(TP_Context *tp, LNK_SymbolTable *symtab)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-
   U64                       chunks_count = 0;
   LNK_SymbolHashTrieChunk **chunks       = lnk_array_from_symbol_hash_trie_chunk_list(scratch.arena, symtab->chunks, symtab->arena->count, &chunks_count);
   tp_for_parallel(tp, 0, chunks_count, lnk_replace_weak_with_default_symbol_task, &(LNK_ReplaceWeakSymbolsWithDefaultSymbolTask){ .symtab = symtab, .chunks = chunks });
-
-#if BUILD_DEBUG
-  for EachIndex(chunk_idx, chunks_count) {
-    LNK_SymbolHashTrieChunk *chunk = chunks[chunk_idx];
-    for EachIndex(i, chunk->count) {
-      LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-      COFF_SymbolValueInterpType  symbol_interp = lnk_interp_from_symbol(symbol);
-      AssertAlways(symbol_interp != COFF_SymbolValueInterp_Weak);
-    }
-  }
-#endif
-
   scratch_end(scratch);
   ProfEnd();
 }

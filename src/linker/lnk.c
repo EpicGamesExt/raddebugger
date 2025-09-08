@@ -1528,13 +1528,15 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
             lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
           }
         } else if (task->search_anti_deps && weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
-          LNK_ObjSymbolRef           dep_symbol = lnk_resolve_weak_symbol(symtab, symbol_ref);
-          COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dep_symbol.obj, dep_symbol.symbol_idx);
-          COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
-          if (dep_interp == COFF_SymbolValueInterp_Weak) {
-            U32 member_idx;
-            if (lnk_search_lib(lib, symbol_parsed.name, &member_idx)) {
-              lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
+          LNK_ObjSymbolRef dep_symbol = {0};
+          if (lnk_resolve_weak_symbol(symtab, symbol_ref, &dep_symbol)) {
+            COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dep_symbol.obj, dep_symbol.symbol_idx);
+            COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
+            if (dep_interp == COFF_SymbolValueInterp_Weak) {
+              U32 member_idx;
+              if (lnk_search_lib(lib, symbol_parsed.name, &member_idx)) {
+                lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
+              }
             }
           }
         }
