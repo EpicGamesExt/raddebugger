@@ -57,7 +57,8 @@ internal COFF_LibWriterMemberNode * coff_lib_writer_member_list_push(Arena *aren
 internal COFF_LibWriterSymbol * coff_lib_writer_symbol_array_from_list(Arena *arena, COFF_LibWriterSymbolList list);
 internal COFF_LibWriterMember * coff_lib_writer_member_array_from_list(Arena *arena, COFF_LibWriterMemberList list);
 
-internal void coff_lib_writer_symbol_array_sort(COFF_LibWriterSymbol *arr, U64 count);
+internal void coff_lib_writer_symbol_array_sort_on_name(COFF_LibWriterSymbol *arr, U64 count);
+internal void coff_lib_writer_symbol_array_sort_on_member_idx(COFF_LibWriterSymbol *arr, U64 count);
 
 internal COFF_LibWriter * coff_lib_writer_alloc(void);
 internal void             coff_lib_writer_release(COFF_LibWriter **writer_ptr);
