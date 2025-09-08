@@ -14,6 +14,13 @@ lnk_lib_node_ptr_is_before(void *raw_a, void *raw_b)
 }
 
 internal B32
+lnk_first_member_sort_key_is_before(void *raw_a, void *raw_b)
+{
+  LNK_FirstMemberSortKey *a = raw_a, *b = raw_b;
+  return str8_is_before_case_sensitive(&a->symbol_name, &b->symbol_name);
+}
+
+internal B32
 lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_Lib *lib_out)
 {
   ProfBeginFunction();
@@ -24,16 +31,17 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
     return 0;
   }
 
+  // TODO: report parse errors
   COFF_ArchiveParse parse = coff_archive_parse_from_data(data);
   if (parse.error.size) {
     return 0;
   }
 
-  U32     member_count   = 0;
-  U64     symbol_count   = 0;
-  String8 string_table   = {0};
-  U16    *symbol_indices = 0;
-  U32    *member_offsets = 0;
+  U32           member_count   = 0;
+  U64           symbol_count   = 0;
+  String8Array  symbol_names   = {0};
+  U16          *symbol_indices = 0;
+  U32          *member_offsets = 0;
 
   // try to init library from optional second member
   if (parse.second_member.member_count) {
@@ -43,9 +51,17 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
     
     member_count   = second_member.member_count;
     symbol_count   = second_member.symbol_count;
-    string_table   = second_member.string_table;
     member_offsets = second_member.member_offsets;
     symbol_indices = second_member.symbol_indices;
+
+    // parse symbol names
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      String8List symbol_name_list = str8_split_by_string_chars(scratch.arena, second_member.string_table, str8_lit("\0"), StringSplitFlag_KeepEmpties);
+      Assert(symbol_name_list.node_count >= symbol_count);
+      symbol_names = str8_array_from_list(arena, &symbol_name_list);
+      scratch_end(scratch);
+    }
   } 
   // first member is deprecated however tools emit it for compatibility reasons
   // and lld-link with /DLL emits only first member
@@ -55,8 +71,7 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
     COFF_ArchiveFirstMember first_member = parse.first_member;
     Assert(first_member.symbol_count == first_member.member_offset_count);
     
-    symbol_count   = first_member.symbol_count;
-    string_table   = first_member.string_table;
+    symbol_count = first_member.symbol_count;
     
     // convert big endian offsets
     for (U32 offset_idx = 0; offset_idx < symbol_count; offset_idx += 1) {
@@ -84,6 +99,7 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
 
       member_count   = member_off_ht->count;
       member_offsets = push_array_no_zero(arena, U32, member_count);
+
       for EachIndex(bucket_idx, member_off_ht->cap) {
         BucketList *bucket = &member_off_ht->buckets[bucket_idx];
         for (BucketNode *n = bucket->first; n != 0; n = n->next) {
@@ -92,28 +108,39 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
           member_offsets[member_off_idx] = member_off;
         }
       }
+      
+      // parse symbol names
+      String8Array symbol_names;
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        String8List symbol_name_list = str8_split_by_string_chars(scratch.arena, first_member.string_table, str8_lit("\0"), StringSplitFlag_KeepEmpties);
+        Assert(symbol_name_list.node_count >= first_member.symbol_count);
+        symbol_names = str8_array_from_list(arena, &symbol_name_list);
+        scratch_end(scratch);
+      }
+
+      // sort lexically symbol names
+      LNK_FirstMemberSortKey *sort_keys = push_array_no_zero(scratch.arena, LNK_FirstMemberSortKey, first_member.symbol_count);
+      for EachIndex(symbol_idx, first_member.symbol_count) {
+        sort_keys[symbol_idx].symbol_name    = symbol_names.v[symbol_idx];
+        sort_keys[symbol_idx].member_off_idx = symbol_indices[symbol_idx];
+      }
+      radsort(sort_keys, first_member.symbol_count, lnk_first_member_sort_key_is_before);
+
+      for EachIndex(symbol_idx, first_member.symbol_count) {
+        symbol_names.v[symbol_idx] = sort_keys[symbol_idx].symbol_name;
+        symbol_indices[symbol_idx] = sort_keys[symbol_idx].member_off_idx;
+      }
     }
 
     scratch_end(scratch);
   }
   
-  // parse string table
-  String8Array symbol_names;
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    String8List symbol_name_list = str8_split_by_string_chars(scratch.arena, string_table, str8_lit("\0"), StringSplitFlag_KeepEmpties);
-    Assert(symbol_name_list.node_count >= symbol_count);
-    symbol_names = str8_array_from_list(arena, &symbol_name_list);
-    scratch_end(scratch);
-  }
-
-  symbol_count = Min(symbol_count, symbol_names.count);
-  
   // init lib
   lib_out->path              = push_str8_copy(arena, path);
   lib_out->data              = data;
   lib_out->type              = type;
-  lib_out->symbol_count      = symbol_count;
+  lib_out->symbol_count      = Min(symbol_count, symbol_names.count); // TODO: warn about mismatched number of symbol names and symbol count in the header
   lib_out->member_offsets    = member_offsets;
   lib_out->symbol_indices    = symbol_indices;
   lib_out->was_member_linked = push_array(arena, LNK_Symbol *, member_count);
@@ -233,14 +260,12 @@ lnk_lib_set_link_symbol(LNK_Lib *lib, U32 member_idx, LNK_Symbol *link_symbol)
 internal B32
 lnk_search_lib(LNK_Lib *lib, String8 symbol_name, U32 *member_idx_out)
 {
-  // TODO: symbol names are already sorted, replace with binary search
-  for EachIndex(symbol_idx, lib->symbol_count) {
-    if (str8_match(lib->symbol_names.v[symbol_idx], symbol_name, 0)) {
-      if (member_idx_out) {
-        *member_idx_out = lib->symbol_indices[symbol_idx] - 1;
-      }
-      return 1;
+  U64 symbol_idx = str8_array_bsearch(lib->symbol_names, symbol_name);
+  if (symbol_idx < lib->symbol_count) {
+    if (member_idx_out) {
+      *member_idx_out = lib->symbol_indices[symbol_idx]-1;
     }
+    return 1;
   }
   return 0;
 }
