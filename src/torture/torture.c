@@ -23,6 +23,9 @@
 #include "coff/coff_lib_writer.h"
 #include "pe/pe.h"
 #include "pe/pe_section_flags.h"
+#include "linker/base_ext/base_core.h"
+#include "linker/base_ext/base_arena.h"
+#include "linker/base_ext/base_arrays.h"
 #include "linker/hash_table.h"
 
 #include "base/base_inc.c"
@@ -33,6 +36,9 @@
 #include "coff/coff_lib_writer.c"
 #include "pe/pe.c"
 #include "linker/hash_table.c"
+#include "linker/base_ext/base_core.c"
+#include "linker/base_ext/base_arena.c"
+#include "linker/base_ext/base_arrays.c"
 
 #include "linker/lnk_cmd_line.h"
 #include "linker/lnk_cmd_line.c"
@@ -4769,6 +4775,90 @@ exit:;
 }
 
 internal T_Result
+t_first_member_header(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  String8 obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("8"), 0x8, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("1"), 0x1, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("9"), 0x9, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("7"), 0x7, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("4"), 0x4, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("5"), 0x5, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("2"), 0x2, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("3"), 0x3, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("6"), 0x6, COFF_SymStorageClass_External);
+    obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 lib;
+  {
+    COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
+    coff_lib_writer_push_obj(lib_writer, str8_lit("obj.obj"), obj);
+    lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 0);
+    coff_lib_writer_release(&lib_writer);
+  }
+
+  t_write_file(str8_lit("test.lib"), lib);
+  t_write_entry_obj();
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe test.lib entry.obj /include:1 /include:2 /include:3 /include:4 /include:5 /include:6 /include:7 /include:8 /include:9");
+  if (linker_exit_code != 0) goto exit;
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_second_member_header(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  String8 obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("8"), 0x8, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("1"), 0x1, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("9"), 0x9, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("7"), 0x7, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("4"), 0x4, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("5"), 0x5, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("2"), 0x2, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("3"), 0x3, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("6"), 0x6, COFF_SymStorageClass_External);
+    obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 lib;
+  {
+    COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
+    coff_lib_writer_push_obj(lib_writer, str8_lit("obj.obj"), obj);
+    lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
+    coff_lib_writer_release(&lib_writer);
+  }
+
+  t_write_file(str8_lit("test.lib"), lib);
+  t_write_entry_obj();
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe test.lib entry.obj /include:1 /include:2 /include:3 /include:4 /include:5 /include:6 /include:7 /include:8 /include:9");
+  if (linker_exit_code != 0) goto exit;
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
 t_opt_ref_dangling_section(void)
 {
   Temp scratch = scratch_begin(0,0);
@@ -4927,6 +5017,8 @@ entry_point(CmdLine *cmdline)
     { "empty_section",                     t_empty_section                     },
     { "removed_section",                   t_removed_section                   },
     { "function_pad_min",                  t_function_pad_min                  },
+    { "first_member_header",               t_first_member_header               },
+    { "second_member_header",              t_second_member_header              },
   };
 
   //
