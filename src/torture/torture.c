@@ -3116,7 +3116,7 @@ t_import_export(void)
   }
 
   #if OS_WINDOWS
-  BOOL is_dir_set = SetDllDirectoryA(g_wdir.str);
+  BOOL is_dir_set = SetDllDirectoryA((LPCSTR)g_wdir.str);
   AssertAlways(is_dir_set);
 
   HANDLE export_dll = LoadLibrary("export.dll");
@@ -5143,7 +5143,7 @@ entry_point(CmdLine *cmdline)
   //
   {
     U64 max_label_size = 0;
-    for (U64 i = 0; i < ArrayCount(target_array); i += 1) { max_label_size = Max(max_label_size, cstring8_length(target_array[i].label)); }
+    for (U64 i = 0; i < ArrayCount(target_array); i += 1) { max_label_size = Max(max_label_size, cstring8_length((U8*)target_array[i].label)); }
 
     U64 dots_min = 10;
     U64 dots_size = max_label_size+dots_min;
@@ -5191,7 +5191,7 @@ entry_point(CmdLine *cmdline)
 
       T_Result result = t_run(target_array[target_idx].r);
 
-      U64 dots_count = (max_label_size - cstring8_length(target_array[target_idx].label)) + dots_min;
+      U64 dots_count = (max_label_size - cstring8_length((U8*)target_array[target_idx].label)) + dots_min;
       String8 msg = push_str8f(scratch.arena, "%s%.*s%s", target_array[target_idx].label, dots_count, dots, t_string_from_result(result));
 
       // run progress
