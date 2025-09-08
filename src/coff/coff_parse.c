@@ -731,7 +731,7 @@ coff_parse_second_archive_member(COFF_ArchiveMember *member)
 }
 
 internal String8
-coff_parse_long_name(String8 long_names, String8 name)
+coff_decode_raw_member_name(String8 long_names, String8 name)
 {
   String8 result = name;
   if (name.size > 0 && name.str[0] == '/') {
@@ -749,6 +749,17 @@ coff_parse_long_name(String8 long_names, String8 name)
     }
   }
   return result;
+}
+
+internal String8
+coff_decode_member_name(String8 long_names, String8 name)
+{
+  String8 member_name = coff_decode_raw_member_name(long_names, name);
+  String8 slash = str8_lit("/");
+  if (str8_ends_with(member_name, slash, 0)) {
+    member_name = str8_chop(member_name, slash.size);
+  }
+  return member_name;
 }
 
 internal U64

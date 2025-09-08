@@ -156,6 +156,14 @@ typedef struct LNK_BaseRelocPageArray
 
 typedef struct
 {
+  B32                   search_anti_deps;
+  LNK_SymbolTable      *symtab;
+  LNK_Lib              *lib;
+  LNK_LibMemberRefList *member_ref_lists;
+} LNK_SearchLibTask;
+
+typedef struct
+{
   LNK_SymbolTable           *symtab;
   LNK_SectionTable          *sectab;
   U64                        objs_count;
@@ -283,6 +291,7 @@ internal LNK_InputPtrArray lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_I
 // --- Link Context ------------------------------------------------------------
 
 internal void                lnk_lib_member_ref_list_push_node(LNK_LibMemberRefList *list, LNK_LibMemberRef *node);
+internal void                lnk_lib_member_ref_list_concat_in_place_array(LNK_LibMemberRefList *list, LNK_LibMemberRefList *to_concat_arr, U64 count);
 internal int                 lnk_lib_member_ref_is_before(void *raw_a, void *raw_b);
 internal LNK_LibMemberRef ** lnk_array_from_lib_member_list(Arena *arena, LNK_LibMemberRefList list);
 

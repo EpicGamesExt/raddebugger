@@ -307,7 +307,8 @@ internal COFF_ArchiveType coff_archive_type_from_data(String8 raw_archive);
 internal U64                      coff_parse_archive_member_header(String8 raw_archive, U64 offset, COFF_ParsedArchiveMemberHeader *header_out);
 internal COFF_ArchiveFirstMember  coff_parse_first_archive_member (COFF_ArchiveMember *member);
 internal COFF_ArchiveSecondMember coff_parse_second_archive_member(COFF_ArchiveMember *member);
-internal String8                  coff_parse_long_name            (String8 long_names, String8 name);
+internal String8                  coff_decode_raw_member_name     (String8 long_names, String8 name);
+internal String8                  coff_decode_member_name         (String8 long_names, String8 name);
 internal U64                      coff_parse_import               (String8 raw_archive_member, U64 offset, COFF_ParsedArchiveImportHeader *header_out);
 
 internal COFF_ArchiveMember             coff_archive_member_from_offset(String8 raw_archive, U64 offset);
