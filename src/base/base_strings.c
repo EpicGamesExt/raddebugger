@@ -2830,7 +2830,7 @@ str8_is_before_case_sensitive(const void *a, const void *b)
 //~ rjf: Basic String Hashes
 
 #if !defined(XXH_IMPLEMENTATION)
-# define XXH_PRIVATE_API
+# define XXH_INLINE_ALL
 # define XXH_IMPLEMENTATION
 # define XXH_STATIC_LINKING_ONLY
 # include "third_party/xxHash/xxhash.h"

@@ -17,7 +17,7 @@
 #define MD5_API static
 #include "third_party/md5/md5.c"
 #include "third_party/md5/md5.h"
-#define XXH_PRIVATE_API
+#define XXH_INLINE_ALL
 #define XXH_IMPLEMENTATION
 #define XXH_STATIC_LINKING_ONLY
 #include "third_party/xxHash/xxhash.c"
