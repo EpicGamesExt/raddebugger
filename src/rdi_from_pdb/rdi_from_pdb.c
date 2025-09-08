@@ -1113,8 +1113,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       p2r_shared->sym_lane_take_counter = 0;
     }
     lane_sync();
-    RDIM_Unit *units = p2r_shared->all_units.first->v;
-    U64 units_count = p2r_shared->all_units.first->count;
+    RDIM_Unit *units = p2r_shared->all_units.first ? p2r_shared->all_units.first->v : 0;
+    U64 units_count = p2r_shared->all_units.first ? p2r_shared->all_units.first->count : 0;
     RDIM_LineTableChunkList *units_line_tables = p2r_shared->units_line_tables;
     Assert(units_count == comp_units->count);
     
