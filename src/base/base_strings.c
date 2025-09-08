@@ -2839,10 +2839,7 @@ str8_is_before_case_sensitive(const void *a, const void *b)
 internal U64
 u64_hash_from_seed_str8(U64 seed, String8 string)
 {
-  XXH3_state_t hasher; XXH3_64bits_reset_withSeed(&hasher, seed);
-  XXH3_64bits_update(&hasher, &string.size, sizeof(string.size));
-  XXH3_64bits_update(&hasher, string.str, string.size);
-  XXH64_hash_t result = XXH3_64bits_digest(&hasher);
+  U64 result = XXH3_64bits_withSeed(string.str, string.size, seed);
   return result;
 }
 
