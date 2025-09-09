@@ -77,17 +77,18 @@ typedef struct LNK_Inputer
 
 typedef struct LNK_ImportTables
 {
-  Arena     *arena;
+  Arena      *arena;
   String8List delayed_dll_names;
   String8List static_dll_names;
-  HashTable *static_imports;
-  HashTable *delayed_imports;
+  HashTable  *static_imports;
+  HashTable  *delayed_imports;
 } LNK_ImportTables;
 
 typedef struct LNK_Link
 {
   LNK_ObjList             objs;
   LNK_LibList             libs;
+  LNK_ObjNode           **last_symbol_input;
   LNK_IncludeSymbolNode **last_include;
   String8Node           **last_cmd_lib;
   String8Node           **last_default_lib;

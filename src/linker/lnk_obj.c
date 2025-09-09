@@ -312,8 +312,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->associated_sections     = associated_sections;
   obj->node                    = &task->objs[task_id];
   obj->link_member             = input->link_member;
-
-  ProfEnd();
 }
 
 internal LNK_ObjNode *

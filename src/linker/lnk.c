@@ -1139,6 +1139,8 @@ lnk_inputer_has_items(LNK_Inputer *inputer)
 internal LNK_InputPtrArray
 lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Flags io_flags, LNK_InputList *all_inputs, LNK_InputList *new_inputs)
 {
+  ProfBeginFunction();
+
   Temp scratch = scratch_begin(&arena, 1);
 
   ProfBegin("Gather Thin Inputs");
@@ -1184,6 +1186,7 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Fla
   lnk_input_list_concat_in_place(all_inputs, new_inputs);
 
   scratch_end(scratch);
+  ProfEnd();
   return result;
 }
 
@@ -1223,7 +1226,7 @@ lnk_array_from_lib_member_list(Arena *arena, LNK_LibMemberRefList list)
 internal LNK_ObjNode *
 lnk_load_objs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link, U64 *objs_count_out)
 {
-  ProfBegin("Input Objs [Count %llu]", inputer->new_objs.count);
+  ProfBeginV("Load Objs [Count %llu]", inputer->new_objs.count);
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   // load obj inputer from disk
@@ -1292,6 +1295,7 @@ lnk_load_libs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *
 internal void
 lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   U64 obj_id_base = link->objs.count;
@@ -1308,12 +1312,13 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
     }
   }
 
-  // handle /INCLUDE
   {
+    ProfBegin("Process /INCLUDE");
+
     // group include symbols by obj
     HashTable *ht = hash_table_init(scratch.arena, 64);
-    for (LNK_IncludeSymbolNode *node = config->include_symbol_list.first; node != 0; node = node->next) {
-      LNK_IncludeSymbol *include_symbol = &node->v;
+    for (; *link->last_include; link->last_include = &(*link->last_include)->next) {
+      LNK_IncludeSymbol *include_symbol = &(*link->last_include)->v;
 
       // skip, include symbol is already in the global symbol table
       if (lnk_symbol_table_search(symtab, include_symbol->name)) {
@@ -1352,27 +1357,22 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
         lnk_obj_list_push_node(&link->objs, include_obj);
       }
     }
+
+    ProfEnd();
   }
 
-  // assign input indices to objs
+  // finalize input indices on new objs and push external symbols to the symbol table
   {
     U64 node_idx = 0;
-    for (LNK_ObjNode *node = objs; node != 0; node = node->next, node_idx += 1) {
-      node->data.input_idx = obj_id_base + node_idx;
+    for (LNK_ObjNode **n = link->last_symbol_input; *n; n = &(*n)->next, node_idx += 1) {
+      (*n)->data.input_idx = obj_id_base + node_idx;
     }
-  }
 
-  // input indices on objs are finalized, push external symbols to the global symbol table
-  {
-    U64 new_objs_count = 0;
-    for (LNK_ObjNode *node = objs; node != 0; node = node->next) { new_objs_count += 1; }
-
-    LNK_Obj **new_objs = push_array(scratch.arena, LNK_Obj *, new_objs_count);
-    {
-      U64 node_idx = 0;
-      for (LNK_ObjNode *node = objs; node != 0; node = node->next) {
-        new_objs[node_idx++] = &node->data;
-      }
+    U64       new_objs_count = node_idx;
+    LNK_Obj **new_objs       = push_array(scratch.arena, LNK_Obj *, node_idx);
+    node_idx = 0;
+    for (; *link->last_symbol_input; link->last_symbol_input = &(*link->last_symbol_input)->next, node_idx += 1) {
+      new_objs[node_idx] = &(*link->last_symbol_input)->data;
     }
 
     lnk_push_obj_symbols(tp, arena, symtab, new_objs_count, new_objs);
@@ -1484,6 +1484,7 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
   }
 
   scratch_end(scratch);
+  ProfEnd();
 }
 
 internal void
@@ -1504,8 +1505,6 @@ lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Sym
 internal
 THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
 {
-  ProfBeginFunction();
-
   LNK_SearchLibTask    *task            = raw_task;
   LNK_Lib              *lib             = task->lib;
   LNK_SymbolTable      *symtab          = task->symtab;
@@ -1519,7 +1518,6 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
       LNK_ObjSymbolRef           symbol_ref    = lnk_ref_from_symbol(symbol);
       COFF_ParsedSymbol          symbol_parsed = lnk_parsed_from_symbol(symbol);
       COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-
       if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
         U32 member_idx;
         if (lnk_search_lib(lib, symbol->name, &member_idx)) {
@@ -1548,8 +1546,6 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
       }
     }
   }
-
-  ProfEnd();
 }
 
 internal void
@@ -1561,6 +1557,7 @@ lnk_link_inputs(TP_Context      *tp,
                 LNK_Link         *link, 
                 LNK_ImportTables *imps)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   B32 search_anti_deps = 0;
@@ -1568,17 +1565,15 @@ lnk_link_inputs(TP_Context      *tp,
     lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
     for (LNK_LibNode *lib_n = link->libs.first; lib_n != 0; lib_n = lib_n->next) {
+      ProfBeginV("Search %S", str8_skip_last_slash(lib_n->data.path));
       do {
         lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
         LNK_LibMemberRefList queued_members = {0};
         {
-          LNK_SearchLibTask task = {0};
-          task.search_anti_deps  = search_anti_deps;
-          task.lib               = &lib_n->data;
-          task.symtab            = symtab;
+          LNK_SearchLibTask task = { .search_anti_deps = search_anti_deps, .lib = &lib_n->data, .symtab = symtab };
           task.member_ref_lists  = push_array(scratch.arena, LNK_LibMemberRefList, tp->worker_count);
-          tp_for_parallel_prof(tp, arena, tp->worker_count, lnk_search_lib_task, &task, "Search Lib");
+          tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &task);
           lnk_lib_member_ref_list_concat_in_place_array(&queued_members, task.member_ref_lists, tp->worker_count);
         }
 
@@ -1606,7 +1601,7 @@ lnk_link_inputs(TP_Context      *tp,
             for EachIndex(i, refs_count) {
               lnk_log(LNK_Log_Links, "\t\tReferenced in %S", lnk_loc_from_obj(temp.arena, refs[i]->obj));
             }
-            
+
             temp_end(temp);
           }
         }
@@ -1691,6 +1686,7 @@ lnk_link_inputs(TP_Context      *tp,
 
         resolved_members_count += queued_members.count;
       } while (lnk_inputer_has_items(inputer));
+      ProfEnd();
     }
 
     if (resolved_members_count == 0) {
@@ -1734,17 +1730,20 @@ lnk_link_inputs(TP_Context      *tp,
   }
 
   scratch_end(scratch);
+  ProfEnd();
 }
 
 internal LNK_Link *
 lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   //
   // init link context
   //
   LNK_Link *link = push_array(arena->v[0], LNK_Link, 1);
+  link->last_symbol_input          = &link->objs.first;
   link->last_include               = &config->include_symbol_list.first;
   link->last_default_lib           = &config->input_default_lib_list.first;
   link->last_obj_lib               = &config->input_obj_lib_list.first;
@@ -1986,7 +1985,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   }
 
   //
-  // report undefined symbols
+  // report unresolved symbols
   //
   {
     ProfBegin("Report Unresolved Symbols");
@@ -2094,6 +2093,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
             }
           }
         }
+        next_undefined_symbol:;
       }
 
       lnk_error(LNK_Error_UnresolvedSymbol, "unresolved symbol %S", symbol->name);
@@ -2149,6 +2149,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   }
 
   scratch_end(scratch);
+  ProfEnd();
   return link;
 }
 
