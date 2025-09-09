@@ -112,7 +112,7 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
       // parse symbol names
       {
         Temp scratch = scratch_begin(&arena, 1);
-        String8List symbol_name_list = str8_split_by_string_chars(scratch.arena, first_member.string_table, str8_lit("\0"), StringSplitFlag_KeepEmpties);
+        String8List symbol_name_list = str8_split_by_string_chars(scratch.arena, first_member.string_table, str8_lit("\0"), 0);
         Assert(symbol_name_list.node_count >= first_member.symbol_count);
         symbol_names = str8_array_from_list(arena, &symbol_name_list);
         scratch_end(scratch);
