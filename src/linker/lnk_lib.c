@@ -23,8 +23,6 @@ lnk_first_member_sort_key_is_before(void *raw_a, void *raw_b)
 internal B32
 lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_Lib *lib_out)
 {
-  ProfBeginFunction();
-
   // is data archive?
   COFF_ArchiveType type = coff_archive_type_from_data(data);
   if (type == COFF_Archive_Null) {
@@ -147,7 +145,6 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
   lib_out->long_names        = parse.long_names;
   lib_out->input_idx         = input_idx;
   
-  ProfEnd();
   return 1;
 }
 
