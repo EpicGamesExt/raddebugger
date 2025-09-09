@@ -2044,6 +2044,9 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
           String8             debug_strings   = {0};
 
           for EachIndex(sect_idx, obj->header.section_count_no_null) {
+            if (lnk_is_coff_section_debug(obj, sect_idx)) {
+              continue;
+            }
             COFF_SectionHeader *section_header = &section_table[sect_idx];
             String8             section_name   = coff_name_from_section_header(string_table, section_header);
             U64                 section_number = sect_idx+1;
@@ -2051,7 +2054,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
             for EachIndex(reloc_idx, relocs.count) {
               if (supp_info.node_count > config->unresolved_symbol_ref_limit) {
                 str8_list_pushf(scratch.arena, &supp_info, "too many unresolved symbol references reported, stopping now");
-                break;
+                goto next_undefined_symbol;
               }
               COFF_Reloc *reloc = &relocs.v[reloc_idx];
               if (reloc->isymbol == ref->symbol_idx) {
@@ -2059,9 +2062,9 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
                 CV_Line *line_matches       = 0;
                 if (config->map_lines_for_unresolved_symbols == LNK_SwitchState_Yes) {
                   if (debug_lines == 0) {
+                    debug_s = lnk_debug_s_from_obj(scratch.arena, obj);
                     String8List raw_checksums = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
                     String8List raw_strings   = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
-                    debug_s         = lnk_debug_s_from_obj(scratch.arena, obj);
                     debug_lines     = cv_lines_accel_from_debug_s(scratch.arena, debug_s);
                     debug_checksums = str8_list_first(&raw_checksums);
                     debug_strings   = str8_list_first(&raw_strings);
