@@ -228,13 +228,22 @@ lnk_lib_set_link_symbol(LNK_Lib *lib, U32 member_idx, LNK_Symbol *link_symbol)
 {
   local_persist LNK_Symbol null_symbol;
 
-  LNK_Symbol *slot         = ins_atomic_ptr_eval_assign(&lib->was_member_linked[member_idx], &null_symbol);
-  B32         is_first_set = (slot == 0);
+  B32 is_first_set;
+
+  LNK_Symbol *slot = ins_atomic_ptr_eval_assign(&lib->was_member_linked[member_idx], &null_symbol);
 
   for (;;) {
+    is_first_set = (slot == 0);
+
     // update slot symbol if it is empty or link symbol comes before symbol in the slot
     if (slot && slot != &null_symbol) {
-      if (lnk_symbol_is_before(slot, link_symbol)) {
+      if (!str8_starts_with(link_symbol->name, str8_lit("__imp_")) && str8_starts_with(slot->name, str8_lit("__imp_"))) {
+        // replace import address symbol with jump thunk symbol
+        slot = link_symbol;
+        is_first_set = 1;
+      } else if (str8_starts_with(link_symbol->name, str8_lit("__imp_")) && !str8_starts_with(slot->name, str8_lit("__imp_"))) {
+        // no need to replace
+      } else if (lnk_symbol_is_before(slot, link_symbol)) {
         slot = link_symbol;
       }
     } else {
