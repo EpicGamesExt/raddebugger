@@ -1110,6 +1110,11 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
   lnk_log(LNK_Log_InputLib, "Input Lib: %S", first_match);
   input = lnk_inputer_push_thin(inputer->arena, &inputer->new_libs[input_source], inputer->libs_ht, first_match);
 
+  // store input path to early-out of file searches for default libs
+  if (!str8_match(first_match, path, StringMatchFlag_CaseInsensitive)) {
+    hash_table_push_path_raw(inputer->arena, inputer->libs_ht, path, input);
+  }
+
   exit:;
   scratch_end(scratch);
   return input;
