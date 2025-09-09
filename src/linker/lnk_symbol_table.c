@@ -675,7 +675,7 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_Ob
           LNK_Symbol *dep_symbol = lnk_symbol_table_search(symtab, tag_parsed.name);
           tag_interp = lnk_interp_from_symbol(dep_symbol);
         }
-        if (tag_interp == COFF_SymbolValueInterp_Weak) { goto exit; }
+        if (tag_interp == COFF_SymbolValueInterp_Weak) { break; }
       }
     } else if (current_interp == COFF_SymbolValueInterp_Undefined) {
       LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, current_parsed.name);
