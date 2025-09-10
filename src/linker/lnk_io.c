@@ -48,51 +48,27 @@ lnk_write_file(void *raw_handle, uint64_t offset, void *buffer, uint64_t buffer_
   return write_size;
 }
 
-internal String8List
-lnk_file_search(Arena *arena, String8List dir_list, String8 file_path)
+internal String8
+lnk_find_first_file(Arena *arena, String8List dir_list, String8 path)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List match_list; MemoryZeroStruct(&match_list);
-
-  if (os_file_path_exists(file_path)) {
-    String8 str = push_str8_copy(arena, file_path);
-    str8_list_push(arena, &match_list, str);
-  }
-
-  PathStyle file_path_style = path_style_from_str8(file_path);
-  B32 is_relative = file_path_style != PathStyle_WindowsAbsolute &&
-                    file_path_style != PathStyle_UnixAbsolute;
-
-  if (is_relative) {
-    for (String8Node *i = dir_list.first; i != 0; i = i->next) {
-      String8List path_list = {0};
-      str8_list_push(scratch.arena, &path_list, i->string);
-      str8_list_push(scratch.arena, &path_list, file_path);
-      String8 path = str8_path_list_join_by_style(scratch.arena, &path_list, PathStyle_SystemAbsolute);
-      B32 file_exists = os_file_path_exists(path);
-      if (file_exists) {
-        B32 is_unique = 1;
-        OS_FileID file_id = os_id_from_file_path(path);
-        for (String8Node *k = match_list.first; k != 0; k = k->next) {
-          OS_FileID test_id = os_id_from_file_path(k->string);
-          int cmp = os_file_id_compare(test_id, file_id) != 0;
-          if (cmp == 0) {
-            is_unique = 0;
-            break;
-          }
-        }
-        if (is_unique) {
-          String8 str = push_str8_copy(arena, path);
-          str8_list_push(arena, &match_list, str);
-        }
+  String8 result = {0};
+  if (os_file_path_exists(path)) {
+    result = path;
+  } else {
+    Temp scratch = scratch_begin(&arena, 1);
+    String8 file_name = str8_skip_last_slash(path);
+    for EachNode(n, String8Node, dir_list.first) {
+      String8 full_path = push_str8f(scratch.arena, "%S/%S", n->string, file_name);
+      if (os_file_path_exists(full_path)) {
+        result = push_str8_copy(arena, full_path);
+        break;
       }
     }
+    scratch_end(scratch);
   }
-
-  scratch_end(scratch);
   ProfEnd();
-  return match_list;
+  return result;
 }
 
 internal OS_Handle

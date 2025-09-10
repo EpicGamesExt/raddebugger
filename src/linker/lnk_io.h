@@ -28,8 +28,6 @@ shared_function uint64_t lnk_write_file(void *raw_handle, uint64_t offset, void 
 
 // --- IO Functions ------------------------------------------------------------
 
-internal String8List lnk_file_search(Arena *arena, String8List dir_list, String8 file_path);
-
 internal OS_Handle lnk_file_open_with_rename_permissions(String8 path);
 internal B32       lnk_file_set_delete_on_close(OS_Handle handle, B32 delete_file);
 internal B32       lnk_file_rename(OS_Handle handle, String8 new_name);

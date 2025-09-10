@@ -549,29 +549,11 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       CV_TypeServerInfo ts      = cv_type_server_info_from_leaf(leaf);
 
       // search disk for type server
-      String8List match_list = lnk_file_search(scratch.arena, lib_dir_list, ts.name);
+      String8 type_server_path = lnk_find_first_file(scratch.arena, lib_dir_list, ts.name);
 
-      // chop file name from path and search on it
-      //
-      // TODO: check if ts.name is a path and in that case do file search
-      if (match_list.node_count == 0) {
-        String8 file_name = str8_skip_last_slash(ts.name);
-        match_list = lnk_file_search(scratch.arena, lib_dir_list, file_name);
-      }
-
+      // report no match
       B32 do_debug_info_discard = 0;
-
-      // too many matches?
-      if (match_list.node_count > 1) {
-        if (!hash_table_search_path(ignored_path_ht, ts.name)) {
-          hash_table_push_path_u64(scratch.arena, ignored_path_ht, ts.name, 0);
-          lnk_error_obj(LNK_Warning_MultipleExternalTypeServers, obj_arr[obj_idx], "located multiple external type servers:");
-          lnk_supplement_error_list(match_list);
-        }
-        do_debug_info_discard = 1;
-      } 
-      // no match?
-      else if (match_list.node_count == 0) {
+      if (type_server_path.size == 0) {
         if (!hash_table_search_path(ignored_path_ht, ts.name)) {
           hash_table_push_string_u64(scratch.arena, ignored_path_ht, ts.name, 0);
           lnk_error_obj(LNK_Warning_MissingExternalTypeServer, obj_arr[obj_idx], "unable to open external type server %S", ts.name);
@@ -585,7 +567,6 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
         continue;
       }
 
-      String8 path = match_list.first->string;
       {
         struct HT_Value {
           CV_TypeServerInfo  ts;
@@ -594,7 +575,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
         };
 
         // was this type server queued?
-        KeyValuePair *is_path_queued = hash_table_search_path(type_server_path_ht, path);
+        KeyValuePair *is_path_queued = hash_table_search_path(type_server_path_ht, type_server_path);
         if (is_path_queued) {
           struct HT_Value *present = is_path_queued->value_raw;
           
@@ -616,12 +597,12 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
 
           // when we search matches on disk we store path on scratch,
           // make path copy in case we need it for error reporting
-          path = push_str8_copy(tp_arena->v[0], path);
+          type_server_path = push_str8_copy(tp_arena->v[0], type_server_path);
 
           // fill out type server info we read from obj
           CV_TypeServerInfoNode *ts_info_node = push_array(scratch.arena, CV_TypeServerInfoNode, 1);
           ts_info_node->data                  = ts;
-          ts_info_node->data.name             = path;
+          ts_info_node->data.name             = type_server_path;
 
           // push to type server info list
           SLLQueuePush(ts_info_list.first, ts_info_list.last, ts_info_node);
@@ -640,7 +621,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
           value->ts_idx = ts_idx;
           
           // update hash table
-          hash_table_push_path_raw(scratch.arena, type_server_path_ht, path, value);
+          hash_table_push_path_raw(scratch.arena, type_server_path_ht, type_server_path, value);
         }
       }
     }
