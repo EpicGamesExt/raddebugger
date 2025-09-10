@@ -2830,9 +2830,9 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
   LNK_Obj             *obj  = task->objs[task_id];
 
   COFF_FileHeaderInfo  obj_header    = obj->header;
-  COFF_SectionHeader  *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj_header.section_table_range).str;
-  String8              symbol_table  = str8_substr(obj->data, obj_header.symbol_table_range);
-  String8              string_table  = str8_substr(obj->data, obj_header.string_table_range);
+  COFF_SectionHeader  *section_table = lnk_coff_section_table_from_obj(obj);
+  String8              symbol_table  = lnk_coff_symbol_table_from_obj(obj);
+  String8              string_table  = lnk_coff_string_table_from_obj(obj);
 
   U32 closest_sect  = 0;
   U32 closest_reloc = 0;
@@ -2841,6 +2841,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
   for EachIndex(sect_idx, obj_header.section_count_no_null) {
     COFF_SectionHeader *section_header = &section_table[sect_idx];
 
+    if (section_header->flags & COFF_SectionFlag_LnkInfo)              { continue; }
     if (section_header->flags & COFF_SectionFlag_LnkRemove)            { continue; }
     if (section_header->flags & COFF_SectionFlag_CntUninitializedData) { continue; }
 
@@ -2860,7 +2861,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
           lnk_error_obj(LNK_Error_IllegalRelocation, obj, "unknown relocation type 0x%x", reloc->type);
         }
       } else if (obj->header.machine != COFF_MachineType_Unknown) {
-        NotImplemented;
+        lnk_not_implemented("relocation patching is not implemented for %S", coff_string_from_machine_type(obj->header.machine));
+        continue;
       }
 
       // compute virtual offsets
