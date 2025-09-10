@@ -1083,10 +1083,10 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
   }
 
   // search disk for library
-  String8List matches = lnk_file_search(scratch.arena, config->lib_dir_list, path);
+  String8 first_match = lnk_find_first_file(scratch.arena, config->lib_dir_list, path);
 
   // warn about missing library
-  if (matches.node_count == 0) {
+  if (first_match.size == 0) {
     KeyValuePair *was_reported = hash_table_search_path(inputer->missing_lib_ht, path);
     if (was_reported == 0) {
       hash_table_push_path_u64(inputer->arena, inputer->missing_lib_ht, path, 0);
@@ -1095,16 +1095,10 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
     goto exit;
   }
 
-  String8 first_match = matches.first->string;
+  // was input with full path already loaded?
   input = hash_table_search_path_raw(inputer->libs_ht, first_match);
   if (input) {
     goto exit;
-  }
-
-  // warn about multiple matches
-  if (matches.node_count > 1) {
-    lnk_error(LNK_Warning_MultipleLibMatch, "multiple libraries match `%S` (picking first match)", path);
-    lnk_supplement_error_list(matches);
   }
 
   lnk_log(LNK_Log_InputLib, "Input Lib: %S", first_match);
@@ -2878,7 +2872,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
       S64 symbol_voff   = 0;
       {
         COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, reloc->isymbol);
-        COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+        COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
         if (interp == COFF_SymbolValueInterp_Regular) {
           if (symbol.section_number == lnk_obj_get_removed_section_number(obj)) {
             if (!lnk_is_coff_section_debug(obj, sect_idx)) {
@@ -2887,7 +2881,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
             }
             continue;
           }
-
           symbol_secnum = symbol.section_number;
           symbol_secoff = symbol.value;
           symbol_voff   = safe_cast_u32((U64)task->image_section_table[symbol.section_number]->voff + (U64)symbol_secoff);
@@ -2898,7 +2891,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
           if (str8_match(symbol.name, str8_lit("__ImageBase"), 0)) {
             symbol.value = task->image_base;
           }
-
           symbol_secnum = 0;
           symbol_secoff = 0;
           symbol_voff   = (S64)symbol.value - (S64)task->image_base;
