@@ -527,6 +527,12 @@ lnk_coff_string_table_from_obj(LNK_Obj *obj)
   return str8_substr(obj->data, obj->header.string_table_range);
 }
 
+internal String8
+lnk_coff_symbol_table_from_obj(LNK_Obj *obj)
+{
+  return str8_substr(obj->data, obj->header.symbol_table_range);
+}
+
 internal COFF_RelocArray
 lnk_coff_reloc_info_from_section_number(LNK_Obj *obj, U64 section_number)
 {
