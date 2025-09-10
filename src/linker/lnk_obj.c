@@ -259,6 +259,19 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
       }
     }
   }
+
+  //
+  // mark debug info sections
+  //
+  {
+    for EachIndex(sect_idx, header.section_count_no_null) {
+      COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
+      String8             sect_name   = str8_cstring_capped(sect_header->name, sect_header->name + sizeof(sect_header->name));
+      if (str8_starts_with(sect_name, str8_lit(".debug$"))) {
+        sect_header->flags |= LNK_SECTION_FLAG_DEBUG_INFO;
+      }
+    }
+  }
   
   B8 hotpatch = 0;
   if (header.machine == COFF_MachineType_X64) {
@@ -271,25 +284,27 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     Temp scratch = scratch_begin(&arena, 1);
 
     CV_Symbol comp_symbol = {0};
-    for (U64 sect_idx = 0; sect_idx < header.section_count_no_null; sect_idx += 1) {
+    for EachIndex(sect_idx, header.section_count_no_null) {
       COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
-      String8 name = str8_cstring_capped(sect_header->name, sect_header->name+sizeof(sect_header->name));
-      if (str8_match(name, str8_lit(".debug$S"), 0)) {
-        Temp temp = temp_begin(scratch.arena);
-        String8 debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
-        CV_DebugS debug_s = cv_parse_debug_s(temp.arena, debug_s_data);
-        for (String8Node *symbols_n = debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first; symbols_n != 0; symbols_n = symbols_n->next) {
-          CV_SymbolList symbol_list = {0};
-          cv_parse_symbol_sub_section_capped(scratch.arena, &symbol_list, 0, symbols_n->string, CV_SymbolAlign, 2);
-          if (symbol_list.first->data.kind == CV_SymKind_COMPILE3) {
-            comp_symbol = symbol_list.first->data;
-            goto found_comp_symbol;
-          } else if (symbol_list.last->data.kind == CV_SymKind_COMPILE3) {
-            comp_symbol = symbol_list.last->data;
-            goto found_comp_symbol;
+      if (sect_header->flags & LNK_SECTION_FLAG_DEBUG_INFO) {
+        String8 name = str8_cstring_capped(sect_header->name, sect_header->name+sizeof(sect_header->name));
+        if (str8_match(name, str8_lit(".debug$S"), 0)) {
+          Temp temp = temp_begin(scratch.arena);
+          String8   debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
+          CV_DebugS debug_s      = cv_parse_debug_s(temp.arena, debug_s_data);
+          for EachNode(symbols_n, String8Node, debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first) {
+            CV_SymbolList symbol_list = {0};
+            cv_parse_symbol_sub_section_capped(scratch.arena, &symbol_list, 0, symbols_n->string, CV_SymbolAlign, 2);
+            if (symbol_list.first->data.kind == CV_SymKind_COMPILE3) {
+              comp_symbol = symbol_list.first->data;
+              goto found_comp_symbol;
+            } else if (symbol_list.last->data.kind == CV_SymKind_COMPILE3) {
+              comp_symbol = symbol_list.last->data;
+              goto found_comp_symbol;
+            }
           }
+          temp_end(temp);
         }
-        temp_end(temp);
       }
     }
     found_comp_symbol:;
@@ -554,20 +569,6 @@ lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_
     return 1;
   }
   return 0;
-}
-
-internal B32
-lnk_is_coff_section_debug(LNK_Obj *obj, U64 sect_idx)
-{
-  String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
-  COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx+1);
-  
-  String8 full_name = coff_name_from_section_header(string_table, section_header);
-  String8 name, postfix;
-  coff_parse_section_name(full_name, &name, &postfix);
-
-  B32 is_debug = str8_match(name, str8_lit(".debug"), 0);
-  return is_debug;
 }
 
 internal COFF_ParsedSymbol

@@ -121,7 +121,6 @@ internal COFF_SectionHeader * lnk_coff_section_table_from_obj(LNK_Obj *obj);
 internal String8              lnk_coff_string_table_from_obj(LNK_Obj *obj);
 internal String8              lnk_coff_symbol_table_from_obj(LNK_Obj *obj);
 internal B32                  lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_number_out, U32 *section_length_out, U32 *check_sum_out);
-internal B32                  lnk_is_coff_section_debug(LNK_Obj *obj, U64 sect_idx);
 
 // --- Helpers ----------------------------------------------------------------- 
 
