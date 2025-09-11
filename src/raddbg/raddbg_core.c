@@ -11833,10 +11833,6 @@ rd_frame(void)
         rd_cmd(RD_CmdKind_InsertText, .string = insertion8);
         rd_request_frame();
         take = 1;
-        if(event->modifiers & OS_Modifier_Alt)
-        {
-          ws->menu_bar_focus_press_started = 0;
-        }
       }
       
       //- rjf: do fall-through

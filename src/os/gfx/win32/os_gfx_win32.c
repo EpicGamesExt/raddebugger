@@ -507,10 +507,6 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         if(character >= 32 && character != 127)
         {
           OS_Event *event = os_w32_push_event(OS_EventKind_Text, window);
-          if(lParam & bit29)
-          {
-            event->modifiers |= OS_Modifier_Alt;
-          }
           event->character = character;
         }
       }break;
