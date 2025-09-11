@@ -2563,7 +2563,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
             value          = parsed_symlink.value;
           } else {
             // COMDAT section may have static symbols which are now invalid to relocate against
-            section_number = LNK_REMOVED_SECTION_NUMBER_32;
+            section_number = lnk_obj_get_removed_section_number(obj);
             value          = max_U32;
             task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx] = 1;
           }
@@ -2711,10 +2711,10 @@ THREAD_POOL_TASK_FUNC(lnk_patch_regular_symbols_task)
       COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
 
       LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
-      U16                 section_number;
+      U32                 section_number;
       U32                 value;
       if (sc == task->null_sc) {
-        section_number = LNK_REMOVED_SECTION_NUMBER_16;
+        section_number = lnk_obj_get_removed_section_number(obj);
         value          = max_U32;
       } else {
         section_number = safe_cast_u32(sc->u.sect_idx + 1);
