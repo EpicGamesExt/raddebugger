@@ -52,11 +52,20 @@ internal String8
 lnk_find_first_file(Arena *arena, String8List dir_list, String8 path)
 {
   ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
   String8 result = {0};
   if (os_file_path_exists(path)) {
-    result = path;
+    PathStyle path_style = path_style_from_str8(path);
+    if (path_style == PathStyle_Relative) {
+      String8 current_path = os_get_current_path(scratch.arena);
+      String8List l = {0};
+      str8_list_push(scratch.arena, &l, current_path);
+      str8_list_push(scratch.arena, &l, path);
+      result = str8_path_list_join_by_style(arena, &l, PathStyle_SystemAbsolute);
+    } else {
+      result = path;
+    }
   } else {
-    Temp scratch = scratch_begin(&arena, 1);
     String8 file_name = str8_skip_last_slash(path);
     for EachNode(n, String8Node, dir_list.first) {
       String8 full_path = push_str8f(scratch.arena, "%S/%S", n->string, file_name);
@@ -65,8 +74,8 @@ lnk_find_first_file(Arena *arena, String8List dir_list, String8 path)
         break;
       }
     }
-    scratch_end(scratch);
   }
+  scratch_end(scratch);
   ProfEnd();
   return result;
 }
