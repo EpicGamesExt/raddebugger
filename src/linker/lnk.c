@@ -465,13 +465,10 @@ lnk_make_null_obj(Arena *arena)
   COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0,COFF_MachineType_Unknown);
 
   // push null symbol
-  coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_NULL_SYMBOL), 0, COFF_SymStorageClass_External);
+  COFF_ObjSymbol *null_abs = coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_NULL_SYMBOL), 0, COFF_SymStorageClass_External);
 
   // push import stub
-  {
-    COFF_ObjSymbol *tag = coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_IMPORT_STUB), 0, COFF_SymStorageClass_Static);
-    coff_obj_writer_push_symbol_weak(obj_writer, str8_lit(LNK_IMPORT_STUB), COFF_WeakExt_AntiDependency, tag);
-  }
+  coff_obj_writer_push_symbol_weak(obj_writer, str8_lit(LNK_IMPORT_STUB), COFF_WeakExt_SearchAlias, null_abs);
 
   // push .debug$T sections with null leaf
   String8 null_debug_data;
