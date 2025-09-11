@@ -1478,7 +1478,7 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
   ProfEnd();
 }
 
-internal void
+internal force_inline void
 lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Symbol *link_symbol, LNK_Lib *lib, U32 member_idx)
 {
   B32 is_first_set = lnk_lib_set_link_symbol(lib, member_idx, link_symbol);
@@ -1496,12 +1496,13 @@ lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Sym
 internal
 THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
 {
-  LNK_SearchLibTask    *task            = raw_task;
-  LNK_Lib              *lib             = task->lib;
-  LNK_SymbolTable      *symtab          = task->symtab;
-  LNK_LibMemberRefList *member_ref_list = &task->member_ref_lists[task_id];
+  LNK_SearchLibTask    *task             = raw_task;
+  LNK_Lib              *lib              = task->lib;
+  LNK_SymbolTable      *symtab           = task->symtab;
+  B32                   search_anti_deps = task->search_anti_deps;
+  LNK_LibMemberRefList *member_ref_list  = &task->member_ref_lists[task_id];
 
-  for (LNK_SymbolHashTrieChunk *c = symtab->chunks[task_id].first; c != 0; c = c->next) {
+  for EachNode(c, LNK_SymbolHashTrieChunk, symtab->weak_undef_chunks[task_id].first) {
     for EachIndex(i, c->count) {
       LNK_Symbol *symbol = c->v[i].symbol;
       if (symbol->is_lib_member_linked) { continue; }
@@ -1521,15 +1522,17 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
           if (lnk_search_lib(lib, symbol->name, &member_idx)) {
             lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
           }
-        } else if (task->search_anti_deps && weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
-          LNK_ObjSymbolRef dep_symbol = {0};
-          if (lnk_resolve_weak_symbol(symtab, symbol_ref, &dep_symbol)) {
-            COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dep_symbol.obj, dep_symbol.symbol_idx);
-            COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
-            if (dep_interp == COFF_SymbolValueInterp_Weak) {
-              U32 member_idx;
-              if (lnk_search_lib(lib, symbol_parsed.name, &member_idx)) {
-                lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
+        } else if (weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
+          if (search_anti_deps) {
+            LNK_ObjSymbolRef dep_symbol = {0};
+            if (lnk_resolve_weak_symbol(symtab, symbol_ref, &dep_symbol)) {
+              COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dep_symbol.obj, dep_symbol.symbol_idx);
+              COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
+              if (dep_interp == COFF_SymbolValueInterp_Weak) {
+                U32 member_idx;
+                if (lnk_search_lib(lib, symbol_parsed.name, &member_idx)) {
+                  lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
+                }
               }
             }
           }
@@ -1555,7 +1558,7 @@ lnk_link_inputs(TP_Context      *tp,
   for (U64 resolved_members_count = 0; ; resolved_members_count = 0) {
     lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
-    for (LNK_LibNode *lib_n = link->libs.first; lib_n != 0; lib_n = lib_n->next) {
+    for EachNode(lib_n, LNK_LibNode, link->libs.first) {
       ProfBeginV("Search %S", str8_skip_last_slash(lib_n->data.path));
       do {
         lnk_load_inputs(tp, arena, config, inputer, symtab, link);

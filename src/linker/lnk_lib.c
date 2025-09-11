@@ -262,7 +262,7 @@ lnk_lib_set_link_symbol(LNK_Lib *lib, U32 member_idx, LNK_Symbol *link_symbol)
   return is_first_set;
 }
 
-internal B32
+internal force_inline B32
 lnk_search_lib(LNK_Lib *lib, String8 symbol_name, U32 *member_idx_out)
 {
   U64 symbol_idx = str8_array_bsearch(lib->symbol_names, symbol_name);
