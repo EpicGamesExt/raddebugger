@@ -76,6 +76,7 @@ typedef struct LNK_SymbolTable
   TP_Arena                    *arena;
   LNK_SymbolHashTrie          *root;
   LNK_SymbolHashTrieChunkList *chunks;
+  LNK_SymbolHashTrieChunkList *weak_undef_chunks;
 } LNK_SymbolTable;
 
 // --- Workers Contexts --------------------------------------------------------
@@ -102,6 +103,8 @@ internal LNK_SymbolNode * lnk_symbol_list_push(Arena *arena, LNK_SymbolList *lis
 
 // --- Symbol Hash Trie --------------------------------------------------------
 
+internal LNK_SymbolHashTrie *       lnk_symbol_hash_tire_chunk_list_push(Arena *arena, LNK_SymbolHashTrieChunkList *list, U64 cap);
+internal void                       lnk_symbol_hash_trie_chunk_list_concat_in_place(LNK_SymbolHashTrieChunkList *list, LNK_SymbolHashTrieChunkList *to_concat);
 internal void                       lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList *chunks, LNK_SymbolHashTrie **trie, U64 hash, LNK_Symbol *symbol);
 internal LNK_SymbolHashTrie *       lnk_symbol_hash_trie_search(LNK_SymbolHashTrie *trie, U64 hash, String8 name);
 internal void                       lnk_symbol_hash_trie_remove(LNK_SymbolHashTrie *trie);
