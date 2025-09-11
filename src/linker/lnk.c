@@ -1640,6 +1640,9 @@ lnk_link_inputs(TP_Context      *tp,
             LNK_Symbol       *import_symbol     = lnk_make_symbol(symtab->arena->v[0], link_symbol->name, import_symbol_ref.obj, import_symbol_ref.symbol_idx);
             lnk_symbol_table_push(symtab, import_symbol);
 
+            // skip lib search
+            import_symbol->is_lib_member_linked = 1;
+
             // find DLL with import symbols
             B32                is_delay_load  = lnk_is_dll_delay_load(config, import_header.dll_name);
             String8List       *dll_names      = is_delay_load ? &imps->delayed_dll_names : &imps->static_dll_names;
