@@ -1158,6 +1158,7 @@ internal void
 os_mutex_release(Mutex mutex)
 {
   OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(mutex.u64[0]);
+  DeleteCriticalSection(&entity->mutex);
   os_w32_entity_release(entity);
 }
 
