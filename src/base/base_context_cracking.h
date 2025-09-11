@@ -110,9 +110,9 @@
 ////////////////////////////////
 //~ rjf: Arch Cracking
 
-#if defined(ARCH_X64)
+#if defined(ARCH_X64) || defined(ARCH_ARM64)
 # define ARCH_64BIT 1
-#elif defined(ARCH_X86)
+#elif defined(ARCH_X86) || defined(ARCH_ARM32)
 # define ARCH_32BIT 1
 #endif
 
