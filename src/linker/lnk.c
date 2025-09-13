@@ -468,7 +468,7 @@ lnk_make_null_obj(Arena *arena)
   COFF_ObjSymbol *null_abs = coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_NULL_SYMBOL), 0, COFF_SymStorageClass_External);
 
   // push import stub
-  coff_obj_writer_push_symbol_weak(obj_writer, str8_lit(LNK_IMPORT_STUB), COFF_WeakExt_SearchAlias, null_abs);
+  coff_obj_writer_push_symbol_weak(obj_writer, str8_lit(LNK_IMPORT_STUB), COFF_WeakExt_Null, null_abs);
 
   // push .debug$T sections with null leaf
   String8 null_debug_data;
@@ -1198,8 +1198,8 @@ internal int
 lnk_lib_member_ref_is_before(void *raw_a, void *raw_b)
 {
   LNK_LibMemberRef **a = raw_a, **b = raw_b;
-  LNK_Symbol *a_pull_in_ref = (*a)->lib->was_member_linked[(*a)->member_idx];
-  LNK_Symbol *b_pull_in_ref = (*b)->lib->was_member_linked[(*b)->member_idx];
+  LNK_Symbol *a_pull_in_ref = (*a)->lib->member_links[(*a)->member_idx];
+  LNK_Symbol *b_pull_in_ref = (*b)->lib->member_links[(*b)->member_idx];
   return lnk_symbol_is_before(a_pull_in_ref, b_pull_in_ref);
 }
 
@@ -1478,17 +1478,14 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
   ProfEnd();
 }
 
-internal force_inline void
+internal void
 lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Symbol *link_symbol, LNK_Lib *lib, U32 member_idx)
 {
-  B32 is_first_set = lnk_lib_set_link_symbol(lib, member_idx, link_symbol);
-  if (is_first_set) {
-    link_symbol->is_lib_member_linked = 1;
-
+  B32 was_linked = lnk_lib_set_link_symbol(lib, member_idx, link_symbol);
+  if (was_linked) {
     LNK_LibMemberRef *member_ref = push_array(arena, LNK_LibMemberRef, 1);
-    member_ref->lib              = lib;
-    member_ref->member_idx       = member_idx;
-
+    member_ref->lib        = lib;
+    member_ref->member_idx = member_idx;
     lnk_lib_member_ref_list_push_node(queued_members, member_ref);
   }
 }
@@ -1502,10 +1499,9 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
   B32                   search_anti_deps = task->search_anti_deps;
   LNK_LibMemberRefList *member_ref_list  = &task->member_ref_lists[task_id];
 
-  for EachNode(c, LNK_SymbolHashTrieChunk, symtab->weak_undef_chunks[task_id].first) {
+  for EachNode(c, LNK_SymbolHashTrieChunk, symtab->search_chunks[task_id].first) {
     for EachIndex(i, c->count) {
       LNK_Symbol *symbol = c->v[i].symbol;
-      if (symbol->is_lib_member_linked) { continue; }
 
       LNK_ObjSymbolRef           symbol_ref    = lnk_ref_from_symbol(symbol);
       COFF_ParsedSymbol          symbol_parsed = lnk_parsed_from_symbol(symbol);
@@ -1548,31 +1544,33 @@ lnk_link_inputs(TP_Context      *tp,
                 LNK_Config       *config,
                 LNK_Inputer      *inputer,
                 LNK_SymbolTable  *symtab,
-                LNK_Link         *link, 
-                LNK_ImportTables *imps)
+                LNK_Link         *link)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
 
-  B32 search_anti_deps = 0;
+  LNK_LibMemberRefList *member_ref_lists = push_array(scratch.arena, LNK_LibMemberRefList, tp->worker_count);
+  B32                   search_anti_deps = 0;
   for (U64 resolved_members_count = 0; ; resolved_members_count = 0) {
     lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
     for EachNode(lib_n, LNK_LibNode, link->libs.first) {
-      ProfBeginV("Search %S", str8_skip_last_slash(lib_n->data.path));
+      LNK_Lib *lib = &lib_n->data;
+
+      ProfBeginV("Search %S", str8_skip_last_slash(lib->path));
       do {
         lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
+        // search symbols in lib
+        MemoryZeroTyped(member_ref_lists, tp->worker_count);
+        tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &(LNK_SearchLibTask){ .search_anti_deps = search_anti_deps, .lib = lib, .symtab = symtab, .member_ref_lists = member_ref_lists });
+
         LNK_LibMemberRefList queued_members = {0};
-        {
-          LNK_SearchLibTask task = { .search_anti_deps = search_anti_deps, .lib = &lib_n->data, .symtab = symtab };
-          task.member_ref_lists  = push_array(scratch.arena, LNK_LibMemberRefList, tp->worker_count);
-          tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &task);
-          lnk_lib_member_ref_list_concat_in_place_array(&queued_members, task.member_ref_lists, tp->worker_count);
-        }
+        lnk_lib_member_ref_list_concat_in_place_array(&queued_members, member_ref_lists, tp->worker_count);
 
         // sort library member refs to match the order of their appearance in obj symbol tables
         LNK_LibMemberRef **member_refs = lnk_array_from_lib_member_list(scratch.arena, queued_members);
+        //qsort(member_refs, queued_members.count, sizeof(member_refs[0]), lnk_lib_member_ref_compar);
         radsort(member_refs, queued_members.count, lnk_lib_member_ref_is_before);
 
         if (queued_members.count) {
@@ -1583,7 +1581,7 @@ lnk_link_inputs(TP_Context      *tp,
 
             LNK_LibMemberRef *member_ref  = member_refs[i];
             LNK_Lib          *lib         = member_ref->lib;
-            LNK_Symbol       *link_symbol = lib->was_member_linked[member_ref->member_idx];
+            LNK_Symbol       *link_symbol = lib->member_links[member_ref->member_idx];
 
             COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_ref->member_idx]);
             COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
@@ -1602,70 +1600,50 @@ lnk_link_inputs(TP_Context      *tp,
 
         // push inputs for lib member refs
         for EachIndex(i, queued_members.count) {
-          LNK_LibMemberRef *member_ref  = member_refs[i];
-          LNK_Lib          *lib         = member_ref->lib;
-          LNK_Symbol       *link_symbol = lib->was_member_linked[member_ref->member_idx];
+          LNK_LibMemberRef *member_ref = member_refs[i];
+          U64               member_idx = member_ref->member_idx;
 
-          // parse member
-          COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_ref->member_idx]);
+          // parse member info
+          COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_idx]);
           COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
           String8            member_name = coff_decode_member_name(lib->long_names, member_info.header.name);
 
           switch (member_type) {
           case COFF_DataType_Import: {
-            COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(member_info.data);
+            LNK_Symbol *link_symbol = lib->member_links[member_idx];
 
-            // import machine compat check
-            if (import_header.machine != config->machine) {
-              LNK_ObjSymbolRef ref = lnk_ref_from_symbol(link_symbol);
-              lnk_error_obj(LNK_Error_IncompatibleMachine,
-                            ref.obj,
-                            "symbol %S pulls-in import from %S for an incompatible machine %S (expected machine %S)",
-                            link_symbol->name,
-                            str8_chop_last_slash(lib->path),
-                            coff_string_from_machine_type(import_header.machine),
-                            coff_string_from_machine_type(config->machine));
-              break;
+            LNK_Symbol *import_symbols[2] = {0};
+            if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
+              import_symbols[0] = link_symbol;
+              import_symbols[1] = lnk_symbol_table_search(symtab, str8_skip(link_symbol->name, str8_lit("__imp_").size));
+            } else {
+              Temp temp = temp_begin(scratch.arena);
+              String8 imp_name = push_str8f(temp.arena, "__imp_%S", link_symbol->name);
+              import_symbols[0] = lnk_symbol_table_search(symtab, imp_name);
+              import_symbols[1] = link_symbol;
+              temp_end(temp);
             }
 
-            // was import already created?
-            LNK_Symbol *is_import_loaded = lnk_symbol_table_search(symtab, link_symbol->name);
-            if (is_import_loaded) {
-              COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(is_import_loaded);
-              if (interp != COFF_SymbolValueInterp_Undefined) {
-                break;
-              }
+            for EachIndex(i, ArrayCount(import_symbols)) {
+              LNK_Symbol *import_symbol = import_symbols[i];
+              if (import_symbol == 0) { continue; }
+
+              LNK_Symbol *import_stub = lnk_symbol_table_search(symtab, str8_lit(LNK_IMPORT_STUB));
+
+              // same import symbol must never be queued more than once, if it is, there is a bug in the link set logic
+              AssertAlways(import_symbol->refs != import_stub->refs);
+
+              // replace the import symbol with a stub, which is later replaced with the real import symbol once import obj is ready
+              import_symbol->refs = import_stub->refs;
             }
 
-            // create import stub symbol (later replaced with actual import)
-            LNK_Symbol       *import_stub       = lnk_symbol_table_search(symtab, str8_lit(LNK_IMPORT_STUB));
-            LNK_ObjSymbolRef  import_symbol_ref = lnk_ref_from_symbol(import_stub);
-            LNK_Symbol       *import_symbol     = lnk_make_symbol(symtab->arena->v[0], link_symbol->name, import_symbol_ref.obj, import_symbol_ref.symbol_idx);
-            lnk_symbol_table_push(symtab, import_symbol);
-
-            // skip lib search
-            import_symbol->is_lib_member_linked = 1;
-
-            // find DLL with import symbols
-            B32                is_delay_load  = lnk_is_dll_delay_load(config, import_header.dll_name);
-            String8List       *dll_names      = is_delay_load ? &imps->delayed_dll_names : &imps->static_dll_names;
-            HashTable         *imports_ht     = is_delay_load ? imps->delayed_imports    : imps->static_imports;
-            PE_MakeImportList *import_symbols = hash_table_search_path_raw(imports_ht, import_header.dll_name);
-
-            // create record for a first time-DLL
-            if (import_symbols == 0) {
-              import_symbols = push_array(imps->arena, PE_MakeImportList, 1);
-              str8_list_push(imps->arena, dll_names, import_header.dll_name);
-              hash_table_push_path_raw(imps->arena, imports_ht, import_header.dll_name, import_symbols);
-            }
-
-            // push make import info
-            pe_make_import_header_list_push(imps->arena, import_symbols, (PE_MakeImport){ .header = member_info.data, .make_jump_thunk = !str8_starts_with(link_symbol->name, str8_lit("__imp_")) });
+            // push import member for import obj generation
+            lnk_lib_member_ref_list_push_node(&link->imports, member_ref);
           } break;
           case COFF_DataType_BigObj:
           case COFF_DataType_Obj: {
             if (lib->type == COFF_Archive_Thin) {
-              // obj path in thin archive is relative to the directory with archive
+              // obj path in thin archive is relative to the directory with lib
               String8List obj_path_list = {0};
               str8_list_push(scratch.arena, &obj_path_list, str8_chop_last_slash(lib->path));
               str8_list_push(scratch.arena, &obj_path_list, member_name);
@@ -1747,18 +1725,6 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   link->last_cmd_lib               = &config->input_list[LNK_Input_Lib].first;
   link->try_to_resolve_entry_point = 1;
 
-  //
-  // init import hash tables
-  //
-  LNK_ImportTables *imps = 0;
-  {
-    Arena *imps_arena = arena_alloc();
-    imps = push_array(imps_arena, LNK_ImportTables, 1);
-    imps->arena           = imps_arena;
-    imps->static_imports  = hash_table_init(imps->arena, 0x1000);
-    imps->delayed_imports = hash_table_init(imps->arena, 0x1000);
-  }
-
   // input :null_obj
   String8 null_obj = lnk_make_null_obj(inputer->arena);
   lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Null *"), null_obj);
@@ -1774,7 +1740,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   }
 
   // link inputer
-  lnk_link_inputs(tp, arena, config, inputer, symtab, link, imps);
+  lnk_link_inputs(tp, arena, config, inputer, symtab, link);
 
   // TODO: need to figure out under what condition to include load config
   //lnk_include_symbol(config, str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME), 0);
@@ -1786,11 +1752,64 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     ProfEnd();
   }
 
-  // make and input delayed imports
+  //
+  // make imports
+  //
   {
-    String8List  delayed_dll_names  = imps->delayed_dll_names;
-    HashTable   *delayed_imports_ht = imps->delayed_imports;
+    HashTable   *static_imports_ht  = hash_table_init(scratch.arena, 0x1000);
+    HashTable   *delayed_imports_ht = hash_table_init(scratch.arena, 0x1000);
+    String8List  delayed_dll_names  = {0};
+    String8List  static_dll_names   = {0};
+
+    for EachNode(member_ref, LNK_LibMemberRef, link->imports.first) {
+      LNK_Lib    *lib         = member_ref->lib;
+      U64         member_idx  = member_ref->member_idx;
+      LNK_Symbol *link_symbol = lib->member_links[member_idx];
+
+      COFF_ArchiveMember             member_info   = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_idx]);
+      COFF_DataType                  member_type   = coff_data_type_from_data(member_info.data);
+      String8                        member_name   = coff_decode_member_name(lib->long_names, member_info.header.name);
+      COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(member_info.data);
+
+      // import machine compat check
+      if (import_header.machine != config->machine) {
+        LNK_ObjSymbolRef ref = lnk_ref_from_symbol(link_symbol);
+        lnk_error_obj(LNK_Error_IncompatibleMachine,
+                      ref.obj,
+                      "symbol %S pulls-in import from %S with an incompatible machine %S (expected machine %S)",
+                      link_symbol->name,
+                      str8_chop_last_slash(lib->path),
+                      coff_string_from_machine_type(import_header.machine),
+                      coff_string_from_machine_type(config->machine));
+        break;
+      }
+
+      // find DLL with import symbols
+      B32                is_delay_load  = lnk_is_dll_delay_load(config, import_header.dll_name);
+      String8List       *dll_names      = is_delay_load ? &delayed_dll_names : &static_dll_names;
+      HashTable         *imports_ht     = is_delay_load ? delayed_imports_ht : static_imports_ht;
+      PE_MakeImportList *import_symbols = hash_table_search_path_raw(imports_ht, import_header.dll_name);
+
+      // create record for a first time-DLL
+      if (import_symbols == 0) {
+        import_symbols = push_array(scratch.arena, PE_MakeImportList, 1);
+        str8_list_push(scratch.arena, dll_names, import_header.dll_name);
+        hash_table_push_path_raw(scratch.arena, imports_ht, import_header.dll_name, import_symbols);
+      }
+
+      B32 make_jump_thunk = 1;
+      if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
+        LNK_Symbol *thunk_symbol = lnk_symbol_table_search(symtab, str8_skip(link_symbol->name, str8_lit("__imp_").size));
+        make_jump_thunk = thunk_symbol != 0;
+      }
+
+      // push make import info
+      pe_make_import_header_list_push(scratch.arena, import_symbols, (PE_MakeImport){ .header = member_info.data, .make_jump_thunk = make_jump_thunk });
+    }
     AssertAlways(delayed_dll_names.node_count == delayed_imports_ht->count);
+    AssertAlways(static_dll_names.node_count == static_imports_ht->count);
+
+    // make and input delayed imports
     if (delayed_imports_ht->count) {
       ProfBegin("Build Delay Import Table");
 
@@ -1813,13 +1832,8 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
 
       ProfEnd();
     }
-  }
 
-  // make and input static imports
-  {
-    String8List  static_dll_names  = imps->static_dll_names;
-    HashTable   *static_imports_ht = imps->static_imports;
-    AssertAlways(static_dll_names.node_count == static_imports_ht->count);
+    // make and input static imports
     if (static_imports_ht->count) {
       ProfBegin("Build Static Import Table");
 
@@ -1839,6 +1853,15 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
       lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Null Thunk Data *"),        null_thunk_obj);
 
       ProfEnd();
+    }
+    
+    // warn about unused delayloads
+    if (config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll) {
+      for (String8Node *dll_name_n = config->delay_load_dll_list.first; dll_name_n != 0; dll_name_n = dll_name_n->next) {
+        if (!hash_table_search_path_raw(delayed_imports_ht, dll_name_n->string)) {
+          lnk_error(LNK_Warning_UnusedDelayLoadDll, "/DELAYLOAD: %S found no imports", dll_name_n->string);
+        }
+      }
     }
   }
 
@@ -1967,7 +1990,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   //
   // link linker made objs
   //
-  lnk_link_inputs(tp, arena, config, inputer, symtab, link, imps);
+  lnk_link_inputs(tp, arena, config, inputer, symtab, link);
 
   //
   // finalize symbol table
@@ -2102,17 +2125,6 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     }
 
     ProfEnd();
-  }
-
-  //
-  // warn about unused delayloads
-  //
-  if (config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll) {
-    for (String8Node *dll_name_n = config->delay_load_dll_list.first; dll_name_n != 0; dll_name_n = dll_name_n->next) {
-      if (!hash_table_search_path_raw(imps->delayed_imports, dll_name_n->string)) {
-        lnk_error(LNK_Warning_UnusedDelayLoadDll, "/DELAYLOAD: %S found no imports", dll_name_n->string);
-      }
-    }
   }
 
   //

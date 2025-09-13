@@ -5,16 +5,17 @@
 
 typedef struct LNK_Lib
 {
-  String8          path;
-  String8          data;
-  COFF_ArchiveType type;
-  U32              symbol_count;
-  U32             *member_offsets;
-  U16             *symbol_indices;
-  LNK_Symbol     **was_member_linked;
-  String8Array     symbol_names;
-  String8          long_names;
-  U64              input_idx;
+  String8              path;
+  String8              data;
+  COFF_ArchiveType     type;
+  U32                  member_count;
+  U32                  symbol_count;
+  U32                 *member_offsets;
+  U16                 *symbol_indices;
+  LNK_Symbol         **member_links;
+  String8Array         symbol_names;
+  String8              long_names;
+  U64                  input_idx;
 } LNK_Lib;
  
 typedef struct LNK_LibNode

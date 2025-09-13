@@ -7,8 +7,8 @@
 
 typedef struct LNK_LibMemberRef
 {
-  LNK_Lib    *lib;
-  U32         member_idx;
+  LNK_Lib *lib;
+  U32      member_idx;
   struct LNK_LibMemberRef *next;
 } LNK_LibMemberRef;
 
@@ -76,25 +76,17 @@ typedef struct LNK_Inputer
 #define LNK_SECTION_FLAG_IS_LIVE    (1 << 0)
 #define LNK_SECTION_FLAG_DEBUG_INFO (1 << 1)
 
-typedef struct LNK_ImportTables
-{
-  Arena      *arena;
-  String8List delayed_dll_names;
-  String8List static_dll_names;
-  HashTable  *static_imports;
-  HashTable  *delayed_imports;
-} LNK_ImportTables;
-
 typedef struct LNK_Link
 {
-  LNK_ObjList             objs;
-  LNK_LibList             libs;
-  LNK_ObjNode           **last_symbol_input;
-  LNK_IncludeSymbolNode **last_include;
-  String8Node           **last_cmd_lib;
-  String8Node           **last_default_lib;
-  String8Node           **last_obj_lib;
-  B32                     try_to_resolve_entry_point;
+  LNK_ObjList              objs;
+  LNK_LibList              libs;
+  LNK_ObjNode            **last_symbol_input;
+  LNK_IncludeSymbolNode  **last_include;
+  String8Node            **last_cmd_lib;
+  String8Node            **last_default_lib;
+  String8Node            **last_obj_lib;
+  LNK_LibMemberRefList     imports;
+  B32                      try_to_resolve_entry_point;
 } LNK_Link;
 
 // -- Image Layout ------------------------------------------------------------
@@ -299,7 +291,7 @@ internal LNK_LibMemberRef ** lnk_array_from_lib_member_list(Arena *arena, LNK_Li
 
 internal LNK_ObjNode * lnk_load_objs  (TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link, U64 *objs_count_out);
 internal void          lnk_load_libs  (TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_Link *link);
-internal void          lnk_link_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link, LNK_ImportTables *imps);
+internal void          lnk_link_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link);
 internal LNK_Link *    lnk_link_image (TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab);
 
 // --- Optimizations -----------------------------------------------------------

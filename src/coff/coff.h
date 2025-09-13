@@ -294,6 +294,7 @@ typedef struct COFF_Symbol32
 typedef U32 COFF_WeakExtType;
 enum
 {
+  COFF_WeakExt_Null           = 0,
   COFF_WeakExt_NoLibrary      = 1,
   COFF_WeakExt_SearchLibrary  = 2,
   COFF_WeakExt_SearchAlias    = 3,

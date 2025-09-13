@@ -20,7 +20,6 @@ typedef struct LNK_ObjSymbolRefNode
 typedef struct LNK_Symbol
 {
   String8               name;
-  B8                    is_lib_member_linked;
   LNK_ObjSymbolRefNode *refs;
 } LNK_Symbol;
 
@@ -76,7 +75,7 @@ typedef struct LNK_SymbolTable
   TP_Arena                    *arena;
   LNK_SymbolHashTrie          *root;
   LNK_SymbolHashTrieChunkList *chunks;
-  LNK_SymbolHashTrieChunkList *weak_undef_chunks;
+  LNK_SymbolHashTrieChunkList *search_chunks;
 } LNK_SymbolTable;
 
 // --- Workers Contexts --------------------------------------------------------

@@ -137,10 +137,11 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
   lib_out->path              = push_str8_copy(arena, path);
   lib_out->data              = data;
   lib_out->type              = type;
+  lib_out->member_count      = member_count;
   lib_out->symbol_count      = Min(symbol_count, symbol_names.count); // TODO: warn about mismatched number of symbol names and symbol count in the header
   lib_out->member_offsets    = member_offsets;
   lib_out->symbol_indices    = symbol_indices;
-  lib_out->was_member_linked = push_array(arena, LNK_Symbol *, member_count);
+  lib_out->member_links      = push_array(arena, LNK_Symbol *, member_count);
   lib_out->symbol_names      = symbol_names;
   lib_out->long_names        = parse.long_names;
   lib_out->input_idx         = input_idx;
@@ -225,41 +226,33 @@ lnk_lib_set_link_symbol(LNK_Lib *lib, U32 member_idx, LNK_Symbol *link_symbol)
 {
   local_persist LNK_Symbol null_symbol;
 
-  B32 is_first_set;
+  LNK_Symbol *slot = ins_atomic_ptr_eval_assign(&lib->member_links[member_idx], &null_symbol);
 
-  LNK_Symbol *slot = ins_atomic_ptr_eval_assign(&lib->was_member_linked[member_idx], &null_symbol);
+  B32 was_linked = (slot == 0);
 
-  for (;;) {
-    is_first_set = (slot == 0);
-
+  for (LNK_Symbol *leader = link_symbol;;) {
     // update slot symbol if it is empty or link symbol comes before symbol in the slot
     if (slot && slot != &null_symbol) {
-      if (!str8_starts_with(link_symbol->name, str8_lit("__imp_")) && str8_starts_with(slot->name, str8_lit("__imp_"))) {
-        // replace import address symbol with jump thunk symbol
-        slot = link_symbol;
-        is_first_set = 1;
-      } else if (str8_starts_with(link_symbol->name, str8_lit("__imp_")) && !str8_starts_with(slot->name, str8_lit("__imp_"))) {
-        // no need to replace
-      } else if (lnk_symbol_is_before(slot, link_symbol)) {
-        slot = link_symbol;
+      if (lnk_symbol_is_before(slot, leader)) {
+        leader = slot;
       }
     } else {
-      slot = link_symbol;
+      leader = link_symbol;
     }
 
     // try to insert back updated slot symbol
-    LNK_Symbol *was_replaced = ins_atomic_ptr_eval_cond_assign(&lib->was_member_linked[member_idx], slot, &null_symbol);
+    LNK_Symbol *swap = ins_atomic_ptr_eval_cond_assign(&lib->member_links[member_idx], leader, &null_symbol);
 
     // exit if slot symbol was null
-    if (was_replaced == &null_symbol) {
+    if (swap == &null_symbol) {
       break;
     }
 
     // reload slot symbol
-    slot = ins_atomic_ptr_eval_assign(&lib->was_member_linked[member_idx], &null_symbol);
+    slot = ins_atomic_ptr_eval_assign(&lib->member_links[member_idx], &null_symbol);
   }
 
-  return is_first_set;
+  return was_linked;
 }
 
 internal force_inline B32

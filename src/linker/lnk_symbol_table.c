@@ -551,7 +551,7 @@ lnk_symbol_table_init(TP_Arena *arena)
   LNK_SymbolTable *symtab   = push_array(arena->v[0], LNK_SymbolTable, 1);
   symtab->arena             = arena;
   symtab->chunks            = push_array(arena->v[0], LNK_SymbolHashTrieChunkList, arena->count);
-  symtab->weak_undef_chunks = push_array(arena->v[0], LNK_SymbolHashTrieChunkList, arena->count);
+  symtab->search_chunks     = push_array(arena->v[0], LNK_SymbolHashTrieChunkList, arena->count);
   return symtab;
 }
 
@@ -562,7 +562,7 @@ lnk_symbol_table_push_(LNK_SymbolTable *symtab, Arena *arena, U64 worker_id, LNK
   COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(symbol);
   LNK_SymbolHashTrieChunkList *chunks;
   if (interp == COFF_SymbolValueInterp_Weak || interp == COFF_SymbolValueInterp_Undefined) {
-    chunks = &symtab->weak_undef_chunks[worker_id];
+    chunks = &symtab->search_chunks[worker_id];
   } else {
     chunks = &symtab->chunks[worker_id];
   }
@@ -717,7 +717,7 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
 {
   LNK_SymbolTable *symtab = raw_task;
-  for EachNode(c, LNK_SymbolHashTrieChunk, symtab->weak_undef_chunks[task_id].first) {
+  for EachNode(c, LNK_SymbolHashTrieChunk, symtab->search_chunks[task_id].first) {
     for EachIndex(i, c->count) {
       LNK_Symbol                 *symbol        = c->v[i].symbol;
       LNK_ObjSymbolRef            symbol_ref    = lnk_ref_from_symbol(symbol);
@@ -758,7 +758,7 @@ lnk_replace_weak_with_default_symbols(TP_Context *tp, LNK_SymbolTable *symtab)
   tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_replace_weak_with_default_symbol_task, symtab, "Replace Weak With Default Symbols");
 
   for EachIndex(i, tp->worker_count) {
-    lnk_symbol_hash_trie_chunk_list_concat_in_place(&symtab->chunks[i], &symtab->weak_undef_chunks[i]);
+    lnk_symbol_hash_trie_chunk_list_concat_in_place(&symtab->chunks[i], &symtab->search_chunks[i]);
   }
 
   ProfEnd();
