@@ -503,7 +503,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_TypeKey r_restype = e_type_key_unwrap(r.type_key, E_TypeUnwrapFlag_AllDecorative);
       E_TypeKind l_restype_kind = e_type_kind_from_key(l_restype);
       E_TypeKind r_restype_kind = e_type_kind_from_key(r_restype);
-      E_TypeKey direct_type = e_type_key_unwrap(l_restype, E_TypeUnwrapFlag_All);
+      E_TypeKey direct_type = e_type_key_unwrap(l_restype, E_TypeUnwrapFlag_All & ~(E_TypeUnwrapFlag_Enums|E_TypeUnwrapFlag_Aliases));
       U64 direct_type_size = e_type_byte_size_from_key(direct_type);
       
       // rjf: bad conditions? -> error if applicable, exit
