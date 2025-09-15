@@ -1084,7 +1084,6 @@ rb_thread_entry_point(void *p)
           {
             RDI_Parsed rdi = {0};
             RDI_ParseStatus rdi_status = rdi_parse(f->data.str, f->data.size, &rdi);
-            String8 error = {0};
             switch(rdi_status)
             {
               default:{}break;
@@ -1094,7 +1093,10 @@ rb_thread_entry_point(void *p)
               case RDI_ParseStatus_Good:
               {
                 String8List dump = rdi_dump_list_from_parsed(arena, &rdi, rdi_dump_subset_flags);
-                str8_list_concat_in_place(&output_blobs, &dump);
+                if(lane_idx() == 0)
+                {
+                  str8_list_concat_in_place(&output_blobs, &dump);
+                }
               }break;
             }
           }break;
@@ -1106,7 +1108,10 @@ rb_thread_entry_point(void *p)
           str8_list_pushf(arena, &output_blobs, "// %S (%S) (DWARF)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
           {
             String8List dump = dw_dump_list_from_sections(arena, &dw, arch, dw_dump_subset_flags);
-            str8_list_concat_in_place(&output_blobs, &dump);
+            if(lane_idx() == 0)
+            {
+              str8_list_concat_in_place(&output_blobs, &dump);
+            }
           }
         }
       }
