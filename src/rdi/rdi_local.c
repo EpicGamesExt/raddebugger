@@ -512,19 +512,46 @@ rdi_strings_from_locations(Arena *arena, RDI_Parsed *rdi, RDI_Arch arch, Rng1U64
 internal String8List
 rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags flags)
 {
-  String8List strings = {0};
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
   String8 indent = str8_lit("                                                                                                                                ");
-#define dump(str)  str8_list_push(arena, &strings, (str))
-#define dumpf(...) str8_list_pushf(arena, &strings, __VA_ARGS__)
-#define DumpSubset(name) if(flags & RDI_DumpSubsetFlag_##name) DeferLoop(dumpf("////////////////////////////////\n//~ %S\n\n%S:\n{", rdi_name_title_from_dump_subset_table[RDI_DumpSubset_##name], rdi_name_lowercase_from_dump_subset_table[RDI_DumpSubset_##name]), dump(str8_lit("}\n\n")))
+  
+  //////////////////////////////
+  //- rjf: set up
+  //
+  typedef struct DumpSubsetOutputNode DumpSubsetOutputNode;
+  struct DumpSubsetOutputNode
+  {
+    DumpSubsetOutputNode *next;
+    RDI_DumpSubset subset;
+    String8List *lane_strings;
+  };
+  local_persist DumpSubsetOutputNode *first_output_node = 0;
+  local_persist DumpSubsetOutputNode *last_output_node = 0;
+  local_persist String8List result_strings = {0};
+  String8List *strings = 0;
+#define dump(str)  str8_list_push(arena, strings, (str))
+#define dumpf(...) str8_list_pushf(arena, strings, __VA_ARGS__)
+#define DumpSubset(name) \
+if(lane_idx() == 0)\
+{\
+DumpSubsetOutputNode *n = push_array(scratch.arena, DumpSubsetOutputNode, 1);\
+SLLQueuePush(first_output_node, last_output_node, n);\
+n->subset = RDI_DumpSubset_##name;\
+n->lane_strings = push_array(scratch.arena, String8List, lane_count());\
+}\
+lane_sync();\
+strings = &last_output_node->lane_strings[lane_idx()];\
+lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
   
   //////////////////////////////
   //- rjf: dump data sections
   //
   DumpSubset(DataSections)
   {
-    dumpf("\n");
-    for EachIndex(idx, rdi->sections_count)
+    if(lane_idx() == 0) { dumpf("\n"); }
+    Rng1U64 range = lane_range(rdi->sections_count);
+    for EachInRange(idx, range)
     {
       Temp scratch = scratch_begin(&arena, 1);
       RDI_SectionKind  kind     = (RDI_SectionKind)idx;
@@ -540,14 +567,17 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //
   DumpSubset(TopLevelInfo)
   {
-    RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
-    Temp scratch = scratch_begin(&arena, 1);
-    dumpf("\n");
-    dumpf("  arch:          %S\n",      rdi_string_from_arch(scratch.arena, tli->arch));
-    dumpf("  exe_name:      '%S'\n",    str8_from_rdi_string_idx(rdi, tli->exe_name_string_idx));
-    dumpf("  voff_max:      %#08llx\n", tli->voff_max);
-    dumpf("  producer_name: '%S'\n",    str8_from_rdi_string_idx(rdi, tli->producer_name_string_idx));
-    scratch_end(scratch);
+    if(lane_idx() == 0)
+    {
+      RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+      Temp scratch = scratch_begin(&arena, 1);
+      dumpf("\n");
+      dumpf("  arch:          %S\n",      rdi_string_from_arch(scratch.arena, tli->arch));
+      dumpf("  exe_name:      '%S'\n",    str8_from_rdi_string_idx(rdi, tli->exe_name_string_idx));
+      dumpf("  voff_max:      %#08llx\n", tli->voff_max);
+      dumpf("  producer_name: '%S'\n",    str8_from_rdi_string_idx(rdi, tli->producer_name_string_idx));
+      scratch_end(scratch);
+    }
   }
   
   //////////////////////////////
@@ -555,10 +585,14 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //
   DumpSubset(BinarySections)
   {
+    if(lane_idx() == 0)
+    {
+      dumpf("\n  // %-16s %-16s %-12s %-12s %-12s %s\n", "name", "flags", "voff_first", "voff_opl", "foff_first", "foff_opl");
+    }
     U64 count = 0;
     RDI_BinarySection *v = rdi_table_from_name(rdi, BinarySections, &count);
-    dumpf("\n  // %-16s %-16s %-12s %-12s %-12s %s\n", "name", "flags", "voff_first", "voff_opl", "foff_first", "foff_opl");
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       Temp scratch = scratch_begin(&arena, 1);
       RDI_BinarySection *bin_section = &v[idx];
@@ -581,11 +615,12 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //
   DumpSubset(FilePaths)
   {
-    dumpf("\n");
+    if(lane_idx() == 0) { dumpf("\n"); }
     U64 count = 0;
     RDI_FilePathNode *v = rdi_table_from_name(rdi, FilePathNodes, &count);
     RDI_FilePathNode *nil = &v[0];
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_FilePathNode *root = &v[idx];
       if(root->parent_path_node != 0) { continue; }
@@ -636,7 +671,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_SourceFile *v = rdi_table_from_name(rdi, SourceFiles, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_SourceFile *source_file = &v[idx];
       dumpf("\n  { file_path_node_idx: %4u, source_line_map: %4u, path: %-192S } // source_file[%I64u]",
@@ -645,7 +681,7 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
             push_str8f(arena, "'%S'", str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx)),
             idx);
     }
-    dumpf("\n");
+    if(lane_idx() == lane_count()-1) { dumpf("\n"); }
   }
   
   //////////////////////////////
@@ -655,7 +691,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_Unit *v = rdi_table_from_name(rdi, Units, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_Unit *unit = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
@@ -678,10 +715,11 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //
   DumpSubset(UnitVMap)
   {
+    if(lane_idx() == 0) { dumpf("\n"); }
     U64 count = 0;
     RDI_VMapEntry *v = rdi_table_from_name(rdi, UnitVMap, &count);
-    dumpf("\n");
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       dumpf("  {0x%I64x => %I64u}\n", v[idx].voff, v[idx].idx);
     }
@@ -694,7 +732,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_LineTable *v = rdi_table_from_name(rdi, LineTables, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_LineTable *line_table = &v[idx];
       RDI_ParsedLineTable parsed_line_table = {0};
@@ -730,7 +769,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_SourceLineMap *v = rdi_table_from_name(rdi, SourceLineMaps, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       Temp scratch = scratch_begin(&arena, 1);
       RDI_ParsedSourceLineMap line_map = {0};
@@ -762,7 +802,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_TypeNode *v = rdi_table_from_name(rdi, TypeNodes, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       Temp scratch = scratch_begin(&arena, 1);
       RDI_TypeNode *type = &v[idx];
@@ -853,7 +894,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
     RDI_Member *all_members = rdi_table_from_name(rdi, Members, &all_members_count);
     U64 all_enum_members_count = 0;
     RDI_EnumMember *all_enum_members = rdi_table_from_name(rdi, EnumMembers, &all_enum_members_count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_UDT *udt = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
@@ -910,7 +952,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_GlobalVariable *v = rdi_table_from_name(rdi, GlobalVariables, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_GlobalVariable *gvar = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
@@ -929,10 +972,11 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //
   DumpSubset(GlobalVariablesVMap)
   {
+    if(lane_idx() == 0) { dumpf("\n"); }
     U64 count = 0;
     RDI_VMapEntry *v = rdi_table_from_name(rdi, GlobalVMap, &count);
-    dumpf("\n");
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       dumpf("  {0x%I64x => %I64u}\n", v[idx].voff, v[idx].idx);
     }
@@ -945,7 +989,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_ThreadVariable *v = rdi_table_from_name(rdi, ThreadVariables, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_ThreadVariable *tvar = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
@@ -966,7 +1011,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_Constant *v = rdi_table_from_name(rdi, Constants, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_Constant *cnst = &v[idx];
       dumpf("\n  '%S': // constant[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, cnst->name_string_idx), idx);
@@ -983,7 +1029,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
     RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
     U64 count = 0;
     RDI_Procedure *v = rdi_table_from_name(rdi, Procedures, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_Procedure *proc = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
@@ -1023,7 +1070,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
     U64 count = 0;
     RDI_Scope *v = rdi_table_from_name(rdi, Scopes, &count);
     RDI_Scope *nil = &v[0];
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       if(v[idx].parent_scope_idx != 0) { continue; }
       RDI_Scope *root = &v[idx];
@@ -1132,10 +1180,11 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //
   DumpSubset(ScopeVMap)
   {
+    if(lane_idx() == 0) { dumpf("\n"); }
     U64 count = 0;
     RDI_VMapEntry *v = rdi_table_from_name(rdi, ScopeVMap, &count);
-    dumpf("\n");
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       dumpf("  {0x%I64x => %I64u}\n", v[idx].voff, v[idx].idx);
     }
@@ -1148,7 +1197,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_InlineSite *v = rdi_table_from_name(rdi, InlineSites, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_InlineSite *inline_site = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
@@ -1165,7 +1215,7 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
             inline_site_idx);
       scratch_end(scratch);
     }
-    dumpf("\n");
+    if(lane_idx() == lane_count()-1) { dumpf("\n"); }
   }
   
   //////////////////////////////
@@ -1176,7 +1226,8 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
     Temp scratch = scratch_begin(&arena, 1);
     U64 count = 0;
     RDI_NameMap *v = rdi_table_from_name(rdi, NameMaps, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       RDI_ParsedNameMap name_map = {0};
       rdi_parsed_from_name_map(rdi, &v[idx], &name_map);
@@ -1226,15 +1277,41 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     U32 *v = rdi_table_from_name(rdi, StringTable, &count);
-    for EachIndex(idx, count)
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
     {
       dumpf("\n  \"%S\" // string[%I64u]", str8_from_rdi_string_idx(rdi, idx), idx);
     }
-    dumpf("\n");
+    if(lane_idx() == lane_count()-1) { dumpf("\n"); }
   }
+  
+  //////////////////////////////
+  //- rjf: join results
+  //
+  lane_sync();
+  if(lane_idx() == 0)
+  {
+    for EachNode(n, DumpSubsetOutputNode, first_output_node)
+    {
+      String8List subset_strings = {0};
+      for EachIndex(idx, lane_count())
+      {
+        str8_list_concat_in_place(&subset_strings, &n->lane_strings[idx]);
+      }
+      if(subset_strings.total_size != 0)
+      {
+        str8_list_pushf(arena, &result_strings, "////////////////////////////////\n//~ %S\n\n%S:\n{", rdi_name_title_from_dump_subset_table[n->subset], rdi_name_lowercase_from_dump_subset_table[n->subset]);
+        str8_list_concat_in_place(&result_strings, &subset_strings);
+        str8_list_pushf(arena, &result_strings, "}\n\n");
+      }
+    }
+  }
+  lane_sync();
   
 #undef DumpSubset
 #undef dumpf
 #undef dump
-  return strings;
+  scratch_end(scratch);
+  ProfEnd();
+  return result_strings;
 }
