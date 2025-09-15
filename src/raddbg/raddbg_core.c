@@ -12807,6 +12807,12 @@ rd_frame(void)
               }
             }
             
+            // rjf: run -> refocus pre-stop focused window
+            if(kind == RD_CmdKind_Run)
+            {
+              os_focus_external_window(rd_state->prestop_focused_window);
+            }
+            
             // rjf: run -> no active targets, no processes, but we only have one target? -> just launch it, then select it
             if((kind == RD_CmdKind_Run ||
                 kind == RD_CmdKind_StepInto ||
@@ -17071,6 +17077,7 @@ rd_frame(void)
               }
               if(ws != &rd_nil_window_state)
               {
+                rd_state->prestop_focused_window = os_focused_external_window();
                 os_window_set_minimized(ws->os, 0);
                 os_window_bring_to_front(ws->os);
                 os_window_focus(ws->os);

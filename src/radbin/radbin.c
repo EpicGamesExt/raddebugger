@@ -999,7 +999,11 @@ rb_thread_entry_point(void *p)
       for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
       {
         RB_File *f = n->v;
-        str8_list_pushf(arena, &output_blobs, "// %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+        if(lane_idx() == 0)
+        {
+          str8_list_pushf(arena, &output_blobs, "// %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+        }
+        lane_sync();
         
         //- rjf: unpack file parses
         Arch arch = Arch_Null;
@@ -1105,7 +1109,11 @@ rb_thread_entry_point(void *p)
         //- rjf: dump file extension info
         if(f->format_flags & RB_FileFormatFlag_HasDWARF)
         {
-          str8_list_pushf(arena, &output_blobs, "// %S (%S) (DWARF)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+          if(lane_idx() == 0)
+          {
+            str8_list_pushf(arena, &output_blobs, "// %S (%S) (DWARF)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+          }
+          lane_sync();
           {
             String8List dump = dw_dump_list_from_sections(arena, &dw, arch, dw_dump_subset_flags);
             if(lane_idx() == 0)

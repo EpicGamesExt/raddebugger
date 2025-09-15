@@ -164,6 +164,12 @@ internal Rng2F32        os_client_rect_from_window(OS_Handle window);
 internal F32            os_dpi_from_window(OS_Handle window);
 
 ////////////////////////////////
+//~ rjf: @os_hooks External Windows (Implemented Per-OS)
+
+internal OS_Handle      os_focused_external_window(void);
+internal void           os_focus_external_window(OS_Handle handle);
+
+////////////////////////////////
 //~ rjf: @os_hooks Monitors (Implemented Per-OS)
 
 internal OS_HandleArray os_push_monitors_array(Arena *arena);

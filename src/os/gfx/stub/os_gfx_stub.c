@@ -150,6 +150,23 @@ os_dpi_from_window(OS_Handle window)
 }
 
 ////////////////////////////////
+//~ rjf: @os_hooks External Windows (Implemented Per-OS)
+
+internal OS_Handle
+os_focused_external_window(void)
+{
+  OS_Handle result = {0};
+  // TODO(rjf)
+  return result;
+}
+
+internal void
+os_focus_external_window(OS_Handle handle)
+{
+  // TODO(rjf)
+}
+
+////////////////////////////////
 //~ rjf: @os_hooks Monitors (Implemented Per-OS)
 
 internal OS_HandleArray

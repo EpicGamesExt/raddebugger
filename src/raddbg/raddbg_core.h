@@ -705,6 +705,9 @@ struct RD_State
   B32 bind_change_active;
   RD_CfgID bind_change_binding_id;
   String8 bind_change_cmd_name;
+  
+  // rjf: pre-stop focused window
+  OS_Handle prestop_focused_window;
 };
 
 ////////////////////////////////

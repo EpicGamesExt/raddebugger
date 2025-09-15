@@ -1368,6 +1368,25 @@ os_dpi_from_window(OS_Handle handle)
 }
 
 ////////////////////////////////
+//~ rjf: @os_hooks External Windows (Implemented Per-OS)
+
+internal OS_Handle
+os_focused_external_window(void)
+{
+  HWND hwnd = GetForegroundWindow();
+  OS_Handle result = {(U64)hwnd};
+  return result;
+}
+
+internal void
+os_focus_external_window(OS_Handle handle)
+{
+  HWND hwnd = (HWND)handle.u64[0];
+  SetForegroundWindow(hwnd);
+  SetFocus(hwnd);
+}
+
+////////////////////////////////
 //~ rjf: @os_hooks Monitors (Implemented Per-OS)
 
 internal OS_HandleArray
