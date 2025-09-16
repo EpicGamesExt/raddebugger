@@ -273,12 +273,7 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
         switch (src_select) {
         case COFF_ComdatSelect_Null:
         case COFF_ComdatSelect_Any: {
-          if (src_section_length == dst_section_length) {
-            can_replace = lnk_obj_is_before(src_obj, dst_obj);
-          } else {
-            // both COMDATs are valid but to get smaller exe pick smallest
-            can_replace = 0;
-          }
+          can_replace = lnk_obj_is_before(src_obj, dst_obj);
         } break;
         case COFF_ComdatSelect_NoDuplicates: {
           lnk_error_multiply_defined_symbol(dst, src);
