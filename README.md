@@ -1,45 +1,94 @@
 # The RAD Debugger Project
 
-_**Note:** This README does not document usage instructions and tips for the
+_**NOTE:** This README does not document usage instructions and tips for the
 debugger itself, and is intended as a technical overview of the project. The
 debugger's README, which includes usage instructions and tips, can be found
 packaged along with debugger releases, or within the `build` folder after a
-local copy has been built._
+local copy has been built. You can find pre-built release binaries
+[here](https://github.com/EpicGamesExt/raddebugger/releases)._
 
 The RAD Debugger is a native, user-mode, multi-process, graphical debugger. It
 currently only supports local-machine Windows x64 debugging with PDBs, with
 plans to expand and port in the future. In the future we'll expand to also
 support native Linux debugging and DWARF debug info.
 
-The RAD Debugger is currently in *ALPHA*. In order to get the debugger bullet-
-proof, it'd greatly help out if you submitted the issues you find here, along
-with any information you can gather, like dump files (along with the build you
-used), instructions to reproduce, test executables, and so on.
+The debugger is currently in *ALPHA*. In order to get the debugger
+bullet-proof, it'd greatly help out if you submitted the issues you find
+[here](https://github.com/EpicGamesExt/raddebugger/issues), along with any
+information you can gather, like dump files (along with the build you used),
+instructions to reproduce, test executables, and so on.
 
-You can download pre-built binaries for the debugger
-[here](https://github.com/EpicGamesExt/raddebugger/releases).
+In addition to the debugger, we aim to further improve the toolchain with two
+additional related technologies: **(1)** the RAD Debug Info (RDI) format, and
+**(2)** the RAD Linker.
 
-The RAD Debugger project aims to simplify the debugger by simplifying and
-unifying the underlying debug info format. In that pursuit we've built the RAD
-Debug Info (RDI) format, which is what the debugger parses and uses. To work
-with existing toolchains, we convert PDB (and eventually PE/ELF files with
-embedded DWARF) into the RDI format on-demand.
+## The RAD Debug Info (RDI) Format
+
+The RAD Debug Info (RDI) format is our custom debug information format, which
+the debugger parses and uses, rather than the debug information natively
+produced by toolchains, like PDB or DWARF. To work with these existing
+toolchains, we convert PDB (and eventually PE/ELF files with embedded DWARF)
+into the RDI format on-demand.
 
 The RDI format is currently specified in code, in the files within the
-`src/lib_rdi_format` folder. The other relevant folders for working with the
-format are:
+`src/lib_rdi` folder. In [`rdi.h`](src/lib_rdi/rdi.h) and
+[`rdi.c`](src/lib_rdi/rdi.c), the types and functions which define the format
+itself are specified. In [`rdi_parse.h`](src/lib_rdi/rdi_parse.h) and
+[`rdi_parse.c`](src/lib_rdi/rdi_parse.c), helpers for parsing the format are
+included.
 
-- `lib_rdi_make`: The "RAD Debug Info Make" library, for making RDI debug info.
-- `rdi_from_pdb`: Our PDB-to-RDI converter. Can be used as a helper codebase
-  layer, or built as an executable with a command line interface frontend.
-- `rdi_from_dwarf`: Our in-progress DWARF-to-RDI converter.
-- `rdi_dump`: Our RDI textual dumping utility.
+We also have an in-progress library for constructing and serializing RDI data,
+located within the `src/lib_rdi_make` folder.
 
-## Development Setup Instructions
+Our `radbin` utility (accessible through the debugger too, via the `--bin`
+command line argument) is capable of converting native debug information formats
+to RDI, and of producing textual dumps of contents stored within RDI files.
 
-**Note: Currently, only x64 Windows development is supported.**
+## The RAD Linker
 
-### 1. Installing the Required Tools (MSVC & Windows SDK)
+The RAD Linker is a new performance linker for generating x64 PE/COFF binaries.
+It is designed to be very fast when creating gigantic executables. It generates
+standard PDB files for debugging, but it can also (optionally) natively create
+RAD Debug Info too, which is useful both to eliminate on-demand conversion time
+when debugging, but also for huge executables that otherwise create broken
+PDBs that overflow internal 32-bit tables.
+
+The RAD Linker is primarily optimized to handle huge linking projects. In our
+test cases (where debug info is multiple gigabytes), we see 50% faster link
+times.
+
+The command line syntax is fully compatible with MSVC; you can get a full list
+of implemented switches from `/help`.
+
+Our current designed-for use case for the linker is to help with the
+compile-debug cycle of huge projects. We don't yet have support for
+dead-code-elimination or link-time-optimizations, but these features are on the
+road map.
+
+By default, the linker spawns as many threads as there are cores, so if you plan
+to run multiple linkers in parallel, you can limit the number of thread workers
+via `/rad_workers`.
+
+We also have support for large memory pages, which, when enabled, reduce link
+time by another 25%. To link with large pages, you need to explicitly request
+them via `/rad_large_pages`. Large pages are off by default, since Windows
+support for large pages is a bit buggy; we recommend they only be used in Docker
+or VM images where the environment is reset after each link. In a standard
+Windows environment, using large pages otherwise will fragment memory quickly,
+forcing a reboot. We are working on a Linux port of the linker that will be able
+to build with large pages robustly.
+
+A benchmark of the linker's performance is below:
+
+![AMD Ryzen Threadripper PRO 3995WX 64-Cores, 256 GiB RAM (Windows x64)](https://github.com/user-attachments/assets/a95b382a-76b4-4a4c-b809-b61fe25e667a)
+
+---
+
+# Project Development Setup Instructions
+
+**NOTE: Currently, only x64 Windows development is supported for the project.**
+
+## 1. Installing the Required Tools (MSVC & Windows SDK)
 
 In order to work with the codebase, you'll need the [Microsoft C/C++ Build Tools
 v15 (2017) or later](https://aka.ms/vs/17/release/vs_BuildTools.exe), for both
@@ -48,7 +97,7 @@ the Windows SDK and the MSVC compiler and linker.
 If the Windows SDK is installed (e.g. via installation of the Microsoft C/C++
 Build Tools), you may also build with [Clang](https://releases.llvm.org/).
 
-### 2. Build Environment Setup
+## 2. Build Environment Setup
 
 Building the codebase can be done in a terminal which is equipped with the
 ability to call either MSVC or Clang from command line.
@@ -92,9 +141,9 @@ You should see the following output:
 [msvc compile]
 [default mode, assuming `raddbg` build]
 metagen_main.c
-searching C:\devel\raddebugger/src... 447 files found
-parsing metadesk... 14 metadesk files parsed
-gathering tables... 93 tables found
+searching C:\devel\raddebugger/src... 458 files found
+parsing metadesk... 16 metadesk files parsed
+gathering tables... 97 tables found
 generating layer code...
 raddbg_main.c
 ```
@@ -112,23 +161,43 @@ build release
 
 This build will take significantly longer.
 
-## Short-To-Medium-Term Roadmap
+By default, `build.bat` only builds the debugger if no arguments (or just
+`release`) are passed, but additional arguments can be passed to build the RAD
+Linker, or the `radbin` CLI binary file utility:
+
+```
+build radlink release
+build radbin release
+```
+
+---
+
+# Project Roadmap
 
 ### The Initial Alpha Battle-Testing Phase
 
-The first priority for the project is to ensure that the most crucial debugger
-components are functioning extremely reliably for local, x64, Windows
-debugging. This would include parts like debug info conversion, debug info
-loading, process control, stepping, evaluation (correct usage of both location
-info and type info), and a robust frontend which ensures the lower level parts
-are usable.
+The first priority for the project is to ensure that the most crucial components
+are functioning extremely reliably for local, x64, Windows development.
+For the debugger, this would include parts like debug info conversion, debug
+info loading, process control, stepping, evaluation (correct usage of both
+location info and type info), and a robust frontend which ensures the lower
+level parts are usable. For the linker, this is a matter of reliability and
+convergence with existing linker behavior.
 
-We feel that the debugger has already come a long way in all of these respects,
-but given the massive set of possible combinations of languages, build
-settings, toolchains, used language features, and patterns of generated code,
-there are still cases where the debugger has not been tested, and so there are
-still issues. So, we feel that the top priority is eliminating these issues,
-such that the debugging experience is rock solid.
+We feel that we've already come a long way in all of these respects, but given
+the massive set of possible combinations of languages, build settings,
+toolchains, used language features, and patterns of generated code, we still
+expect some issues, and are prioritizing these issues being resolved first.
+
+We also hope to continue to improve performance in this phase. For the debugger,
+this primarily includes frontend performance, introducing caches when economical
+to do so, and tightening existing systems up. For the linker, it has been mostly
+tuned thus far for giant projects, and so we'd like to improve linking speed for
+small-to-mid sized projects as well.
+
+For the linker, there are also a number of features to come, like
+dead-code-elimination (`/opt:ref`), and link-time-optimizations with the help
+of `clang` (we won't support LTCG from MSVC, since it is undocumented).
 
 ### Local x64 Linux Debugging Phase
 
@@ -171,42 +240,7 @@ But for now, we're mostly focused on those first two phases.
 
 ---
 
-# The RAD Linker
-
-The RAD Linker is a new performance linker for generating x64 PE/COFF binaries. It is designed to be very fast when creating gigantic executables. It generates standard PDB files for debugging, but it can also optionally create RAD Debugger debug info too (useful for huge executables that otherwise create broken PDBs that overflow internal 32-bit tables).
-
-The RAD Linker is primarily optimized to handle huge linking projects - in our test cases (where debug info is multiple gigabytes), we see 50% faster link times. 
-
-The command line syntax is fully compatible with MSVC and you can get a full list of implemented switches from `/help`.
-
-Our current designed-for use case for the linker is to help with the compile-debug cycle of huge projects. We don't yet have support for dead-code-elimination or link-time-optimizations, but these features are on the road map.
-
-By default, the RAD linker spawns as many threads as there are cores, so if you plan to run multiple linkers in parallel, you can limit the number of thread workers via `/rad_workers`.
-
-We also have support for large memory pages, which, when enabled, reduce link time by
-another 25%. To link with large pages, you need to explicitly request them via `/rad_large_pages`. Large pages are off by default, since Windows support for large pages is a bit buggy - we recommend they only be used in Docker or VM images where the environment is reset after each link. In a standard Windows environment, using large pages otherwise will fragment memory quickly forcing a reboot. We are working on a Linux port of the linker that will be able to build with large pages robustly.
-
-## Short Term Roadmap
-- Porting linker to Linux (for Windows executables, just running on Linux).
-- Debug info features
-  - Get DWARF debug info converter up-and-running.
-  - Smooth out rough edges in RADDBGI builder.
-  - Improve build speed further (especially for tiny and mid sizes projects).
-- Other features to come
-  - Dead-code-elimination via `/opt:ref`.
-  - Link Time Optimizations with the help of clang (we won't support LTCG from MSVC compiler since it is undocumented).
-
-## To build the RAD Linker
-- Setup development environment, [see](#Development-Setup-Instructions)
-- Run `build radlink release` or if you have clang installed `build radlink release clang`. We favor latter option for better code generation.
-
-If build was successful linker executable is placed in `build` folder under `radlink.exe`.
-
-## Benchmarks
-
-![AMD Ryzen Threadripper PRO 3995WX 64-Cores, 256 GiB RAM (Windows x64)](https://github.com/user-attachments/assets/a95b382a-76b4-4a4c-b809-b61fe25e667a)
-
----
+# Codebase Introduction
 
 ## Top-Level Directory Descriptions
 
@@ -221,7 +255,7 @@ also exist:
 - `local`: Local files, used for local build configuration input files. Not
   checked in to version control.
 
-## Codebase Introduction
+## Layer Descriptions
 
 The codebase is organized into *layers*. Layers are separated either to isolate
 certain problems, and to allow inclusion into various builds without needing to
@@ -249,35 +283,33 @@ so in other words, layers are arranged into a directed acyclic graph.
 A few layers are built to be used completely independently from the rest of the
 codebase, as libraries in other codebases and projects. As such, these layers do
 not depend on any other layers in the codebase. The folders which contain these
-layers are prefixed with `lib_`, like `lib_rdi_format`.
+layers are prefixed with `lib_`, like `lib_rdi`.
 
 A list of the layers in the codebase and their associated namespaces is below:
 - `async` (`ASYNC_`): Implements a system for asynchronous work to be queued
   and executed on a thread pool.
 - `base` (no namespace): Universal, codebase-wide constructs. Strings, math,
-  memory allocators, helper macros, command-line parsing, and so on. Depends
-  on no other codebase layers.
-- `codeview` (`CV_`): Code for parsing and/or writing the CodeView format.
-- `coff` (`COFF_`): Code for parsing and/or writing the COFF (Common Object File
+  memory allocators, helper macros, command-line parsing, and so on. Requires
+  no other codebase layers.
+- `codeview` (`CV_`): Code for parsing and writing the CodeView format.
+- `coff` (`COFF_`): Code for parsing and writing the COFF (Common Object File
   Format) file format.
 - `ctrl` (`CTRL_`): The debugger's "control system" layer. Implements
   asynchronous process control, stepping, and breakpoints for all attached
   processes. Runs in lockstep with attached processes. When it runs, attached
   processes are halted. When attached processes are running, it is halted.
   Driven by a debugger frontend on another thread.
-- `dasm_cache` (`DASM_`): An asynchronous disassembly decoder and cache. Users
-  ask for disassembly for some data, with a particular architecture, and other
-  various parameters, and threads implemented in this layer decode and cache the
-  disassembly for that data with those parameters.
-- `dbgi` (`DI_`): An asynchronous debug info loader and cache. Loads debug info
-  stored in the RDI format. Users ask for debug info for a particular path, and
-  on separate threads, this layer loads the associated debug info file. If
-  necessary, it will launch a separate conversion process to convert original
-  debug info into the RDI format.
+- `dasm_cache` (`DASM_`): Asynchronous disassembly computation, and a cache to
+  store asynchronously produced disassembly artifacts.
+- `dbgi` (`DI_`): Asynchronous debug info loading, and a cache for loaded
+  debug info. Loads RAD Debug Info (RDI) files. Launches separate processes for
+  on-demand conversion to the RDI format if necessary. Also provides various
+  asynchronous operations for using debug information, like fuzzy searching
+  across all records in loaded debug information.
 - `dbg_engine` (`D_`): Implements the core debugger system, without any
   graphical components. This contains top-level logic for things like stepping,
-  launching, freezing threads, mid-run breakpoint addition, some caching layers,
-  and so on.
+  launching, freezing threads, mid-run breakpoint addition, some caches, and so
+  on.
 - `demon` (`DMN_`): An abstraction layer for local-machine, low-level process
   control. The abstraction is used to provide a common interface for process
   control on target platforms. Used to implement part of `ctrl`.
@@ -285,15 +317,17 @@ A list of the layers in the codebase and their associated namespaces is below:
   debugger's purposes, using the underlying `render` abstraction layer. Provides
   high-level APIs for various draw commands, but takes care of batching them,
   and so on.
-- `eval` (`E_`): Implements a compiler for an expression language built for
-  evaluation of variables, registers, types, and more, from debugger-attached
-  processes, debug info, debugger state, and files. Broken into several phases
-  mostly corresponding to traditional compiler phases - lexer, parser,
-  type-checker, IR generation, and IR evaluation.
+- `dwarf` (`DW_`): Code for parsing the DWARF format.
+- `elf` (`ELF_`): Code for parsing the ELF format.
+- `eval` (`E_`): A compiler for an expression language, built for evaluation of
+  variables, registers, types, and more, from debugger-attached processes,
+  debug info, debugger state, and files. Broken into several phases mostly
+  corresponding to traditional compiler phases: lexer, parser, type-checker, IR
+  generation, and IR evaluation.
 - `eval_visualization` (`EV_`): Implements the core non-graphical evaluation
   visualization engine, which can be used to visualize evaluations (provided by
   the `eval` layer) in a number of ways. Implements core data structures and
-  transforms for the `Watch` view.
+  transforms for watch tables.
 - `file_stream` (`FS_`): Provides asynchronous file loading, storing the
   artifacts inside of the cache implemented by the `hash_store` layer, and
   hot-reloading the contents of files when they change. Allows callers to map
@@ -304,31 +338,29 @@ A list of the layers in the codebase and their associated namespaces is below:
   layer.
 - `font_provider` (`FP_`): An abstraction layer for various font file decoding
   and font rasterization backends.
-- `fuzzy_search` (`FZY_`): Provides a fuzzy searching engine for doing
-  large, asynchronous fuzzy searches. Used by the debugger for implementing
-  things like the symbol lister or the `Procedures` view, which search across
-  all loaded debug info records, using fuzzy matching rules.
 - `geo_cache` (`GEO_`): Implements an asynchronously-filled cache for GPU
   geometry data, filled by data sourced in the `hash_store` layer's cache. Used
   for asynchronously preparing data for visualization.
 - `hash_store` (`HS_`): Implements a cache for general data blobs, keyed by a
-  128-bit hash of the data. Also implements a 128-bit key cache on top, where
-  the keys refer to a unique identity, associated with a 128-bit hash, where the
-  hash may change across time. Used as a general data store by other layers.
+  128-bit hash of the data. Also implements a keying system on top, where keys
+  refer to a unique identity which corresponds to a history of 128-bit hashes.
+  Used as a general data store by other layers.
 - `lib_raddbg_markup` (`RADDBG_`): Standalone library for marking up user
   programs to work with various features in the debugger. Does not depend on
   `base`, and can be independently relocated to other codebases.
-- `lib_rdi_format` (`RDI_`): Standalone library which defines the core RDI types
+- `lib_rdi` (`RDI_`): Standalone library which defines the core RDI types
   and helper functions for reading and writing the RDI debug info file format.
   Does not depend on `base`, and can be independently relocated to other
   codebases.
 - `lib_rdi_make` (`RDIM_`): Standalone library for constructing RDI debug info
   data. Does not depend on `base`, and can be independently relocated
   to other codebases.
+- `linker` (`LNK_`): The layer which implements the RAD Linker executable
+  itself.
 - `mdesk` (`MD_`): Code for parsing Metadesk files (stored as `.mdesk`), which
   is the JSON-like (technically a JSON superset) text format used for the
-  debugger's user and project configuration files, view rules, and metacode,
-  which is parsed and used to generate code with the `metagen` layer.
+  debugger's user and project configuration files and metacode, which is parsed
+  and used to generate code with the `metagen` layer.
 - `metagen` (`MG_`): A metaprogram which is used to generate primarily code and
   data tables. Consumes Metadesk files, stored with the extension `.mdesk`, and
   generates C code which is then included by hand-written C code. Currently, it
@@ -337,18 +369,13 @@ A list of the layers in the codebase and their associated namespaces is below:
   tables, which are then used to produce e.g. C `enum`s and a number of
   associated data tables. There are also a number of other generation features,
   like embedding binary files or complex multi-line strings into source code.
-  This layer cannot depend on any other layer in the codebase directly,
-  including `base`, because it may be used to generate code for those layers. To
-  still use `base` and `os` layer features in the `metagen` program, a separate,
-  duplicate version of `base` and `os` are included in this layer. They are
-  updated manually, as needed. This is to ensure the stability of the
-  metaprogram.
-- `msf` (`MSF_`): Code for parsing and/or writing the MSF file format.
+- `msf` (`MSF_`): Code for parsing and writing the MSF file format.
+- `msvc_crt` (`MSCRT_`): Code for parsing that's specific to the MSVC CRT.
 - `mule` (no namespace): Test executables for battle testing debugger
   functionality.
 - `mutable_text` (`MTX_`): Implements an asynchronously-filled-and-mutated
   cache for text buffers which are mutated across time. In the debugger, this is
-  used to implement the `Output` view.
+  used to implement the `Output` log.
 - `natvis` (no namespace): NatVis files for type visualization of the codebase's
   types in other debuggers.
 - `os/core` (`OS_`): An abstraction layer providing core, non-graphical
@@ -357,26 +384,30 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `os/gfx` (`OS_`): An abstraction layer, building on `os/core`, providing
   graphical operating system features under an abstract API, which is
   implemented per-target-operating-system.
-- `path` (`PATH_`): Small helpers for manipulating file path strings.
-- `pdb` (`PDB_`): Code for parsing and/or writing the PDB file format.
-- `pe` (`PE_`): Code for parsing and/or writing the PE (Portable Executable)
-  file format.
+- `pdb` (`PDB_`): Code for parsing and writing the PDB file format.
+- `pe` (`PE_`): Code for parsing and writing the PE (Portable Executable) file
+  format.
+- `ptr_graph_cache` (`PG_`): An in-progress layer which will supply
+  asynchronously-computed pointer graphs, used for graph visualization in the
+  debugger, including structures like trees and linked lists.
+- `radbin` (`RB_`): The layer implementing the `radbin` binary utility
+  executable.
 - `raddbg` (`RD_`): The layer which ties everything together for the main
-  graphical debugger. Implements the debugger's graphical frontend, all of the
-  debugger-specific UI, the debugger executable's command line interface, and
-  all of the built-in visualizers.
-- `rdi_breakpad_from_pdb` (`P2B_`): Our implementation, using the codebase's RDI
-  technology, for extracting information from PDBs and generating Breakpad text
-  dumps.
-- `rdi_dump` (no namespace): A dumper utility program for dumping
-  textualizations of RDI debug info files.
-- `rdi_format` (no namespace): A layer which includes the `lib_rdi_format` layer
-  and bundles it with codebase-specific helpers, to easily include the library
-  in codebase programs, and have it be integrated with codebase constructs.
-- `rdi_from_dwarf` (`D2R_`): Our in-progress implementation of DWARF-to-RDI
-  conversion.
-- `rdi_from_pdb` (`P2R_`): Our implementation of PDB-to-RDI conversion.
-- `rdi_make` (no namespace): A layer which includes the `lib_rdi_make` layer and
+  graphical debugger executable. Implements the debugger's graphical frontend,
+  all of the debugger-specific UI, the debugger executable's command line
+  interface, and all of the built-in visualizers.
+- `rdi` (`RDI_`): A layer which includes the `lib_rdi` layer and bundles it with
+  codebase-specific helpers, to easily include the library in codebase programs,
+  and have it be integrated with codebase constructs.
+- `rdi_from_coff` (`C2R_`): Code for converting information in COFF files to the
+  equivalent RDI data.
+- `rdi_from_dwarf` (`D2R_`): In-progress code for converting DWARF to the
+  equivalent RDI data.
+- `rdi_from_elf` (`E2R_`)): Code for converting ELF data to the equivalent RDI
+  data.
+- `rdi_from_pdb` (`P2R_`): Code for converting PDB data to the equivalent RDI
+  data.
+- `rdi_make` (`RDIM_`): A layer which includes the `lib_rdi_make` layer and
   bundles it with codebase-specific helpers, to easily include the library in
   codebase programs, and have it be integrated with codebase constructs.
 - `regs` (`REGS_`): Types, helper functions, and metadata for registers on
@@ -388,11 +419,12 @@ A list of the layers in the codebase and their associated namespaces is below:
   as-needed basis. Higher level drawing features are implemented in the `draw`
   layer.
 - `scratch` (no namespace): Scratch space for small and transient test programs.
-- `texture_cache` (`TEX_`): Implements an asynchronously-filled cache for GPU
-  texture data, filled by data sourced in the `hash_store` layer's cache. Used
-  for asynchronously preparing data for visualization.
-- `text_cache` (`TXT_`): Implements an asynchronously-filled cache for textual
-  analysis data (tokens, line ranges, and so on), filled by data sourced in the
+- `tester` (no namespace): A program used for automated testing.
+- `texture_cache` (`TEX_`): An asynchronously-filled cache for GPU texture data,
+  filled by data sourced in the `hash_store` layer's cache. Used for
+  asynchronously preparing data for visualization.
+- `text_cache` (`TXT_`): An asynchronously-filled cache for textual analysis
+  data (tokens, line ranges, and so on), filled by data sourced in the
   `hash_store` layer's cache. Used for asynchronously preparing data for
   visualization (like for the source code viewer).
 - `third_party` (no namespace): External code from other projects, which some
