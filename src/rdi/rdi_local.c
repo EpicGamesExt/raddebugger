@@ -167,7 +167,7 @@ rdi_string_from_eval_op(Arena *arena, RDI_EvalOp op)
   switch(op)
   {
     default:{result = push_str8f(arena, "%#x", op);}break;
-#define X(name) case RDI_EvalOp_##name:{result = str8_lit("#name");}break;
+#define X(name) case RDI_EvalOp_##name:{result = str8_lit(#name);}break;
     RDI_EvalOp_XList
 #undef X
   }
@@ -181,7 +181,7 @@ rdi_string_from_eval_type_group(Arena *arena, RDI_EvalTypeGroup eval_type_group)
   switch(eval_type_group)
   {
     default:{result = push_str8f(arena, "%#x", eval_type_group);}break;
-#define X(name) case RDI_EvalTypeGroup_##name:{result = str8_lit("#name");}break;
+#define X(name) case RDI_EvalTypeGroup_##name:{result = str8_lit(#name);}break;
     RDI_EvalTypeGroup_XList
 #undef X
   }

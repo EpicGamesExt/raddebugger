@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ rjf: API Implementation Helper Macros
 
-#define RDIM_IdxedChunkListPush(arena, list, chunk_type, element_type, cap_value, result) \
+#define RDIM_IdxedChunkListPush(arena, list, chunk_type, element_type, cap_value, result, ...) \
 element_type *result = 0;\
 do\
 {\
@@ -14,6 +14,7 @@ if(n == 0 || n->count >= n->cap)\
 n = rdim_push_array(arena, chunk_type, 1);\
 n->cap = cap_value;\
 n->base_idx = list->total_count;\
+__VA_ARGS__;\
 n->v = rdim_push_array_no_zero(arena, element_type, n->cap);\
 RDIM_SLLQueuePush(list->first, list->last, n);\
 list->chunk_count += 1;\
@@ -1054,7 +1055,7 @@ rdim_encoded_size_from_location_info(RDIM_LocationInfo *info)
 RDI_PROC RDIM_Location *
 rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_LocationInfo *info)
 {
-  RDIM_IdxedChunkListPush(arena, list, RDIM_LocationChunkNode, RDIM_Location, cap, result);
+  RDIM_IdxedChunkListPush(arena, list, RDIM_LocationChunkNode, RDIM_Location, cap, result, n->base_encoding_off = list->total_encoded_size);
   {
     RDI_U64 encoded_size = rdim_encoded_size_from_location_info(info);
     rdim_memcpy_struct(&result->info, info);
