@@ -266,7 +266,7 @@ entry_point(CmdLine *cmdl)
   // print run info
   DateTime now_time_universal = os_now_universal_time();
   DateTime now_time_local     = os_local_time_from_universal_time(&now_time_universal);
-  String8  now_time_str       = push_date_time_string(arena, &now_time_local);
+  String8  now_time_str       = string_from_date_time(arena, &now_time_local);
   fprintf(stdout, "Time: %.*s\n", str8_varg(now_time_str));
   fprintf(stdout, "File: %.*s\n", str8_varg(pdb_name));
   fprintf(stdout, "Size: %llu (bytes)\n", pdb_data.size);

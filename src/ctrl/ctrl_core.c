@@ -3991,8 +3991,8 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *
         String8 filename_normalized = push_str8_copy(scratch.arena, filename);
         for(U64 idx = 0; idx < filename_normalized.size; idx += 1)
         {
-          filename_normalized.str[idx] = char_to_lower(filename_normalized.str[idx]);
-          filename_normalized.str[idx] = char_to_correct_slash(filename_normalized.str[idx]);
+          filename_normalized.str[idx] = lower_from_char(filename_normalized.str[idx]);
+          filename_normalized.str[idx] = correct_slash_from_char(filename_normalized.str[idx]);
         }
         
         // rjf: filename -> src_id

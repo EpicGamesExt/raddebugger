@@ -275,7 +275,7 @@ rd_format_preamble(Arena *arena, String8List *out, String8 indent, String8 input
   
   DateTime universal_dt = os_now_universal_time();
   DateTime local_dt     = os_local_time_from_universal(&universal_dt);
-  String8  time         = push_date_time_string(scratch.arena, &local_dt);
+  String8  time         = string_from_date_time(scratch.arena, &local_dt);
   String8  full_path    = os_full_path_from_path(scratch.arena, input_path);
   rd_printf("# %S, [%S] %S", time, input_type_string, full_path);
   

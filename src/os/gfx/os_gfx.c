@@ -35,13 +35,9 @@ internal String8List
 os_string_list_from_modifiers(Arena *arena, OS_Modifiers modifiers)
 {
   String8List result = {0};
-  String8 modifier_strs[] = 
-  {
-    str8_lit("Ctrl"),
-    str8_lit("Shift"),
-    str8_lit("Alt"),
-  };
-  str8_list_from_flags(arena, &result, modifiers, modifier_strs, ArrayCount(modifier_strs));
+  if(modifiers & OS_Modifier_Ctrl)  { str8_list_push(arena, &result, str8_lit("Ctrl")); }
+  if(modifiers & OS_Modifier_Shift) { str8_list_push(arena, &result, str8_lit("Shift")); }
+  if(modifiers & OS_Modifier_Alt)   { str8_list_push(arena, &result, str8_lit("Alt")); }
   return result;
 }
 

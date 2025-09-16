@@ -13,7 +13,7 @@ di_hash_from_seed_string(U64 seed, String8 string, StringMatchFlags match_flags)
   U64 result = seed;
   for(U64 i = 0; i < string.size; i += 1)
   {
-    result = ((result << 5) + result) + ((match_flags & StringMatchFlag_CaseInsensitive) ? char_to_lower(string.str[i]) : string.str[i]);
+    result = ((result << 5) + result) + ((match_flags & StringMatchFlag_CaseInsensitive) ? lower_from_char(string.str[i]) : string.str[i]);
   }
   return result;
 }

@@ -31,21 +31,21 @@ coff_section_flag_from_align_size(U64 align)
 {
   COFF_SectionFlags flags = 0;
   switch (align) {
-  case 0:    flags = COFF_SectionAlign_None;      break;
-  case 1:    flags = COFF_SectionAlign_1Bytes;    break;
-  case 2:    flags = COFF_SectionAlign_2Bytes;    break;
-  case 4:    flags = COFF_SectionAlign_4Bytes;    break;
-  case 8:    flags = COFF_SectionAlign_8Bytes;    break;
-  case 16:   flags = COFF_SectionAlign_16Bytes;   break;
-  case 32:   flags = COFF_SectionAlign_32Bytes;   break;
-  case 64:   flags = COFF_SectionAlign_64Bytes;   break;
-  case 128:  flags = COFF_SectionAlign_128Bytes;  break;
-  case 256:  flags = COFF_SectionAlign_256Bytes;  break;
-  case 512:  flags = COFF_SectionAlign_512Bytes;  break;
-  case 1024: flags = COFF_SectionAlign_1024Bytes; break;
-  case 2048: flags = COFF_SectionAlign_2048Bytes; break;
-  case 4096: flags = COFF_SectionAlign_4096Bytes; break;
-  case 8192: flags = COFF_SectionAlign_8192Bytes; break;
+    case 0:    flags = COFF_SectionAlign_None;      break;
+    case 1:    flags = COFF_SectionAlign_1Bytes;    break;
+    case 2:    flags = COFF_SectionAlign_2Bytes;    break;
+    case 4:    flags = COFF_SectionAlign_4Bytes;    break;
+    case 8:    flags = COFF_SectionAlign_8Bytes;    break;
+    case 16:   flags = COFF_SectionAlign_16Bytes;   break;
+    case 32:   flags = COFF_SectionAlign_32Bytes;   break;
+    case 64:   flags = COFF_SectionAlign_64Bytes;   break;
+    case 128:  flags = COFF_SectionAlign_128Bytes;  break;
+    case 256:  flags = COFF_SectionAlign_256Bytes;  break;
+    case 512:  flags = COFF_SectionAlign_512Bytes;  break;
+    case 1024: flags = COFF_SectionAlign_1024Bytes; break;
+    case 2048: flags = COFF_SectionAlign_2048Bytes; break;
+    case 4096: flags = COFF_SectionAlign_4096Bytes; break;
+    case 8192: flags = COFF_SectionAlign_8192Bytes; break;
   }
   flags <<= COFF_SectionFlag_AlignShift;
   return flags;
@@ -182,67 +182,67 @@ coff_pick_reloc_value_x64(COFF_Reloc_X64 type,
 {
   U64 reloc_value_size = 0;
   S64 reloc_value      = 0;
-
+  
   switch (type) {
-  case COFF_Reloc_X64_Abs: {} break;
-  case COFF_Reloc_X64_Addr64: {
-    reloc_value_size = 8;
-    reloc_value      = symbol_virtual_offset + (S64)image_base;
-  } break;
-  case COFF_Reloc_X64_Addr32: {
-    reloc_value_size = 4;
-    reloc_value      = safe_cast_s32(symbol_virtual_offset + (S64)image_base);
-  } break;
-  case COFF_Reloc_X64_Addr32Nb: {
-    reloc_value_size = 4;
-    reloc_value      = symbol_virtual_offset;
-  } break;
-  case COFF_Reloc_X64_Rel32: {
-    reloc_value_size = 4;
-    reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 0));
-  } break;
-  case COFF_Reloc_X64_Rel32_1: {
-    reloc_value_size = 4;
-    reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 1));
-  } break;
-  case COFF_Reloc_X64_Rel32_2: {
-    reloc_value_size = 4;
-    reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 2));
-  } break;
-  case COFF_Reloc_X64_Rel32_3: {
-    reloc_value_size = 4;
-    reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 3));
-  } break;
-  case COFF_Reloc_X64_Rel32_4: {
-    reloc_value_size = 4;
-    reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 4));
-  } break;
-  case COFF_Reloc_X64_Rel32_5: {
-    reloc_value_size = 4;
-    reloc_value = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 5));
-  } break;
-  case COFF_Reloc_X64_Section: {
-    reloc_value_size = 4;
-    reloc_value      = symbol_section_number;
-  } break;
-  case COFF_Reloc_X64_SecRel: {
-    reloc_value_size = 4;
-    reloc_value      = symbol_section_offset;
-  } break;
-  case COFF_Reloc_X64_SecRel7:
-  case COFF_Reloc_X64_Token:
-  case COFF_Reloc_X64_SRel32:
-  case COFF_Reloc_X64_Pair:
-  case COFF_Reloc_X64_SSpan32:
-  case COFF_Reloc_X64_Unknown_11: {
-    NotImplemented;
-  } break;
+    case COFF_Reloc_X64_Abs: {} break;
+    case COFF_Reloc_X64_Addr64: {
+      reloc_value_size = 8;
+      reloc_value      = symbol_virtual_offset + (S64)image_base;
+    } break;
+    case COFF_Reloc_X64_Addr32: {
+      reloc_value_size = 4;
+      reloc_value      = safe_cast_s32(symbol_virtual_offset + (S64)image_base);
+    } break;
+    case COFF_Reloc_X64_Addr32Nb: {
+      reloc_value_size = 4;
+      reloc_value      = symbol_virtual_offset;
+    } break;
+    case COFF_Reloc_X64_Rel32: {
+      reloc_value_size = 4;
+      reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 0));
+    } break;
+    case COFF_Reloc_X64_Rel32_1: {
+      reloc_value_size = 4;
+      reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 1));
+    } break;
+    case COFF_Reloc_X64_Rel32_2: {
+      reloc_value_size = 4;
+      reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 2));
+    } break;
+    case COFF_Reloc_X64_Rel32_3: {
+      reloc_value_size = 4;
+      reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 3));
+    } break;
+    case COFF_Reloc_X64_Rel32_4: {
+      reloc_value_size = 4;
+      reloc_value      = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 4));
+    } break;
+    case COFF_Reloc_X64_Rel32_5: {
+      reloc_value_size = 4;
+      reloc_value = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 5));
+    } break;
+    case COFF_Reloc_X64_Section: {
+      reloc_value_size = 4;
+      reloc_value      = symbol_section_number;
+    } break;
+    case COFF_Reloc_X64_SecRel: {
+      reloc_value_size = 4;
+      reloc_value      = symbol_section_offset;
+    } break;
+    case COFF_Reloc_X64_SecRel7:
+    case COFF_Reloc_X64_Token:
+    case COFF_Reloc_X64_SRel32:
+    case COFF_Reloc_X64_Pair:
+    case COFF_Reloc_X64_SSpan32:
+    case COFF_Reloc_X64_Unknown_11: {
+      NotImplemented;
+    } break;
   }
-
+  
   COFF_RelocValue result = {0};
   result.size            = reloc_value_size;
   result.value           = reloc_value;
-
+  
   return result;
 }
 
@@ -265,7 +265,7 @@ coff_make_lib_member_header(Arena *arena, String8 name, COFF_TimeStamp time_stam
   str8_list_pushf(scratch.arena, &list, "%-10u", size);
   str8_list_pushf(scratch.arena, &list, "`\n");
   String8 result = str8_list_join(arena, &list, 0);
-
+  
   Assert(result.size == sizeof(COFF_ArchiveMemberHeader));
   scratch_end(scratch);
   return result;
@@ -302,18 +302,18 @@ coff_ordinal_data_from_hint(Arena *arena, COFF_MachineType machine, U16 hint)
 {
   String8 ordinal_data = {0}; 
   switch (machine) {
-  case COFF_MachineType_Unknown: break;
-  case COFF_MachineType_X64: {
-    U64 *ordinal = push_array(arena, U64, 1);
-    *ordinal     = coff_make_ordinal64(hint);
-    ordinal_data = str8_struct(ordinal);
-  } break;
-  case COFF_MachineType_X86: {
-    U32 *ordinal = push_array(arena, U32, 1);
-    *ordinal     = coff_make_ordinal32(hint);
-    ordinal_data = str8_struct(ordinal);
-  } break;
-  default: { NotImplemented; } break;
+    case COFF_MachineType_Unknown: break;
+    case COFF_MachineType_X64: {
+      U64 *ordinal = push_array(arena, U64, 1);
+      *ordinal     = coff_make_ordinal64(hint);
+      ordinal_data = str8_struct(ordinal);
+    } break;
+    case COFF_MachineType_X86: {
+      U32 *ordinal = push_array(arena, U32, 1);
+      *ordinal     = coff_make_ordinal32(hint);
+      ordinal_data = str8_struct(ordinal);
+    } break;
+    default: { NotImplemented; } break;
   }
   return ordinal_data;
 }
@@ -331,7 +331,7 @@ coff_make_import_header(Arena            *arena,
   COFF_ImportHeaderFlags flags = 0;
   flags |= (type & COFF_ImportHeader_TypeMask) << COFF_ImportHeader_TypeShift;
   flags |= import_by << COFF_ImportHeader_ImportByShift;
-
+  
   COFF_ImportHeader header = {0};
   header.sig1              = COFF_MachineType_Unknown;
   header.sig2              = max_U16;
@@ -368,12 +368,12 @@ coff_code_align_byte_from_machine(COFF_MachineType machine)
 {
   U8 align_byte = 0;
   switch (machine) {
-  case COFF_MachineType_Unknown: break;
-  case COFF_MachineType_X64:
-  case COFF_MachineType_X86: {
-    align_byte = 0xCC;
-  } break;
-  default: { NotImplemented; } break;
+    case COFF_MachineType_Unknown: break;
+    case COFF_MachineType_X64:
+    case COFF_MachineType_X86: {
+      align_byte = 0xCC;
+    } break;
+    default: { NotImplemented; } break;
   }
   return align_byte;
 }
@@ -383,11 +383,11 @@ coff_default_align_from_machine(COFF_MachineType machine)
 {
   U16 align = 0;
   switch (machine) {
-  case COFF_MachineType_Unknown: break;
-  case COFF_MachineType_X64: {
-    align = 16;
-  } break;
-  default: { NotImplemented; } break;
+    case COFF_MachineType_Unknown: break;
+    case COFF_MachineType_X64: {
+      align = 16;
+    } break;
+    default: { NotImplemented; } break;
   }
   return align;
 }
@@ -472,7 +472,7 @@ coff_string_from_time_stamp(Arena *arena, COFF_TimeStamp time_stamp)
     result = str8_lit("-1");
   } else {
     DateTime dt = date_time_from_unix_time(time_stamp);
-    result = push_date_time_string(arena, &dt);
+    result = string_from_date_time(arena, &dt);
   }
   return result;
 }

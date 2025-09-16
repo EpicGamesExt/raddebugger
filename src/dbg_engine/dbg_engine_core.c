@@ -37,7 +37,7 @@ d_hash_from_seed_string__case_insensitive(U64 seed, String8 string)
   U64 result = seed;
   for(U64 i = 0; i < string.size; i += 1)
   {
-    result = ((result << 5) + result) + char_to_lower(string.str[i]);
+    result = ((result << 5) + result) + lower_from_char(string.str[i]);
   }
   return result;
 }

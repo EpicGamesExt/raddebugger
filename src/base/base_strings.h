@@ -38,13 +38,6 @@ struct String8Node
   String8 string;
 };
 
-typedef struct String8MetaNode String8MetaNode;
-struct String8MetaNode
-{
-  String8MetaNode *next;
-  String8Node *node;
-};
-
 typedef struct String8List String8List;
 struct String8List
 {
@@ -59,6 +52,7 @@ struct String8Array
 {
   String8 *v;
   U64 count;
+  U64 total_size;
 };
 
 ////////////////////////////////
@@ -152,9 +146,9 @@ internal B32 char_is_lower(U8 c);
 internal B32 char_is_alpha(U8 c);
 internal B32 char_is_slash(U8 c);
 internal B32 char_is_digit(U8 c, U32 base);
-internal U8 char_to_lower(U8 c);
-internal U8 char_to_upper(U8 c);
-internal U8 char_to_correct_slash(U8 c);
+internal U8 lower_from_char(U8 c);
+internal U8 upper_from_char(U8 c);
+internal U8 correct_slash_from_char(U8 c);
 
 ////////////////////////////////
 //~ rjf: C-String Measurement
@@ -262,12 +256,12 @@ internal F64 f64_from_str8(String8 string);
 ////////////////////////////////
 //~ rjf: String List Construction Functions
 
-internal String8Node* str8_list_push_node(String8List *list, String8Node *node);
-internal String8Node* str8_list_push_node_set_string(String8List *list, String8Node *node, String8 string);
-internal String8Node* str8_list_push_node_front(String8List *list, String8Node *node);
-internal String8Node* str8_list_push_node_front_set_string(String8List *list, String8Node *node, String8 string);
-internal String8Node* str8_list_push(Arena *arena, String8List *list, String8 string);
-internal String8Node* str8_list_push_front(Arena *arena, String8List *list, String8 string);
+internal String8Node *str8_list_push_node(String8List *list, String8Node *node);
+internal String8Node *str8_list_push_node_set_string(String8List *list, String8Node *node, String8 string);
+internal String8Node *str8_list_push_node_front(String8List *list, String8Node *node);
+internal String8Node *str8_list_push_node_front_set_string(String8List *list, String8Node *node, String8 string);
+internal String8Node *str8_list_push(Arena *arena, String8List *list, String8 string);
+internal String8Node *str8_list_push_front(Arena *arena, String8List *list, String8 string);
 internal void         str8_list_concat_in_place(String8List *list, String8List *to_push);
 internal String8Node* str8_list_push_aligner(Arena *arena, String8List *list, U64 min, U64 align);
 internal String8Node* str8_list_pushf(Arena *arena, String8List *list, char *fmt, ...);
@@ -280,9 +274,7 @@ internal String8List  str8_list_copy(Arena *arena, String8List *list);
 
 internal String8List  str8_split(Arena *arena, String8 string, U8 *split_chars, U64 split_char_count, StringSplitFlags flags);
 internal String8List  str8_split_by_string_chars(Arena *arena, String8 string, String8 split_chars, StringSplitFlags flags);
-internal String8List  str8_list_split_by_string_chars(Arena *arena, String8List list, String8 split_chars, StringSplitFlags flags);
 internal String8      str8_list_join(Arena *arena, String8List *list, StringJoin *optional_params);
-internal void         str8_list_from_flags(Arena *arena, String8List *list, U32 flags, String8 *flag_string_table, U32 flag_string_count);
 
 ////////////////////////////////
 //~ rjf: Basic Data Stringification Helpers
@@ -298,7 +290,7 @@ internal String8Array str8_array_reserve(Arena *arena, U64 count);
 internal String8Array str8_array_copy(Arena *arena, String8Array array);
 
 ////////////////////////////////
-//~ rjf: String Version Helpers
+//~ rjf: String <-> Version Helpers
 
 internal U64 version_from_str8(String8 string);
 internal String8 str8_from_version(Arena *arena, U64 version);
@@ -362,7 +354,6 @@ internal UnicodeDecode utf8_decode(U8 *str, U64 max);
 internal UnicodeDecode utf16_decode(U16 *str, U64 max);
 internal U32 utf8_encode(U8 *str, U32 codepoint);
 internal U32 utf16_encode(U16 *str, U32 codepoint);
-internal U32 utf8_from_utf32_single(U8 *buffer, U32 character);
 
 ////////////////////////////////
 //~ rjf: Unicode String Conversions
@@ -373,29 +364,21 @@ internal String8 str8_from_32(Arena *arena, String32 in);
 internal String32 str32_from_8(Arena *arena, String8 in);
 
 ////////////////////////////////
-//~ String -> Enum Conversions
+//~ rjf: Basic Types & Space Enum <-> String Conversions
 
 internal OperatingSystem operating_system_from_string(String8 string);
-
-////////////////////////////////
-//~ rjf: Basic Types & Space Enum -> String Conversions
-
 internal String8 string_from_dimension(Dimension dimension);
 internal String8 string_from_side(Side side);
 internal String8 string_from_operating_system(OperatingSystem os);
 internal String8 string_from_arch(Arch arch);
-
-////////////////////////////////
-//~ rjf: Time Types -> String
-
 internal String8 string_from_week_day(WeekDay week_day);
 internal String8 string_from_month(Month month);
-internal String8 push_date_time_string(Arena *arena, DateTime *date_time);
-internal String8 push_file_name_date_time_string(Arena *arena, DateTime *date_time);
+internal String8 string_from_date_time(Arena *arena, DateTime *date_time);
+internal String8 string_from_date_time__file_name(Arena *arena, DateTime *date_time);
 internal String8 string_from_elapsed_time(Arena *arena, DateTime dt);
 
 ////////////////////////////////
-//~ Globally Unique Ids
+//~ rjf: String <-> Globally Unique IDs
 
 internal String8 string_from_guid(Arena *arena, Guid guid);
 internal B32     try_guid_from_string(String8 string, Guid *guid_out);
@@ -467,4 +450,4 @@ internal U64    str8_deserial_read_block(String8 string, U64 off, U64 size, Stri
 internal U64 u64_hash_from_seed_str8(U64 seed, String8 string);
 internal U64 u64_hash_from_str8(String8 string);
 
-#endif //BASE_STRINGS_H
+#endif // BASE_STRINGS_H
