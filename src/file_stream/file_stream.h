@@ -57,6 +57,22 @@ struct FS_Stripe
 ////////////////////////////////
 //~ rjf: Shared State Bundle
 
+typedef struct FS_Request FS_Request;
+struct FS_Request
+{
+  FS_Request *next;
+  HS_Key key;
+  String8 path;
+  Rng1U64 range;
+};
+
+typedef struct FS_RequestNode FS_RequestNode;
+struct FS_RequestNode
+{
+  FS_RequestNode *next;
+  FS_Request v;
+};
+
 typedef struct FS_Shared FS_Shared;
 struct FS_Shared
 {
@@ -68,6 +84,13 @@ struct FS_Shared
   U64 stripes_count;
   FS_Slot *slots;
   FS_Stripe *stripes;
+  
+  // rjf: requests
+  Mutex req_mutex;
+  Arena *req_arena;
+  FS_RequestNode *first_req;
+  FS_RequestNode *last_req;
+  U64 req_count;
   
   // rjf: user -> streamer ring buffer
   U64 u2s_ring_size;
@@ -108,6 +131,11 @@ internal U64 fs_change_gen(void);
 internal HS_Key fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
 internal U128 fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
 internal FileProperties fs_properties_from_path(String8 path);
+
+////////////////////////////////
+//~ rjf: Asynchronous Tick
+
+internal void fs_async_tick(void);
 
 ////////////////////////////////
 //~ rjf: Streaming Work

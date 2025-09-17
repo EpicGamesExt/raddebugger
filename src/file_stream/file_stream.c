@@ -245,6 +245,119 @@ fs_properties_from_path(String8 path)
 }
 
 ////////////////////////////////
+//~ rjf: Asynchronous Tick
+
+internal void
+fs_async_tick(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: gather all requests
+  local_persist FS_Request *reqs = 0;
+  local_persist U64 reqs_count = 0;
+  if(lane_idx() == 0) MutexScope(fs_shared->req_mutex)
+  {
+    reqs_count = fs_shared->req_count;
+    reqs = push_array(scratch.arena, FS_Request, reqs_count);
+    U64 idx = 0;
+    for EachNode(r, FS_RequestNode, fs_shared->first_req)
+    {
+      MemoryCopyStruct(&reqs[idx], &r->v);
+      reqs[idx].path = str8_copy(scratch.arena, reqs[idx].path);
+      idx += 1;
+    }
+    arena_clear(fs_shared->req_arena);
+    fs_shared->first_req = fs_shared->last_req = 0;
+    fs_shared->req_count = 0;
+  }
+  lane_sync();
+  
+  //- rjf: do requests
+  Rng1U64 range = lane_range(reqs_count);
+  for EachInRange(req_idx, range)
+  {
+    //- rjf: unpack
+    FS_Request *r = &reqs[req_idx];
+    HS_Key key = r->key;
+    String8 path = r->path;
+    Rng1U64 range = r->range;
+    U64 path_hash = fs_little_hash_from_string(path);
+    U64 path_slot_idx = path_hash%fs_shared->slots_count;
+    U64 path_stripe_idx = path_slot_idx%fs_shared->stripes_count;
+    FS_Slot *path_slot = &fs_shared->slots[path_slot_idx];
+    FS_Stripe *path_stripe = &fs_shared->stripes[path_stripe_idx];
+    
+    //- rjf: load
+    ProfBegin("load \"%.*s\"", str8_varg(path));
+    FileProperties pre_props = os_properties_from_file_path(path);
+    U64 range_size = dim_1u64(range);
+    U64 read_size = Min(pre_props.size - range.min, range_size);
+    OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+    B32 file_handle_is_valid = !os_handle_match(os_handle_zero(), file);
+    U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
+    data_arena_size += KB(4)-1;
+    data_arena_size -= data_arena_size%KB(4);
+    ProfBegin("allocate");
+    Arena *data_arena = arena_alloc(.reserve_size = data_arena_size, .commit_size = data_arena_size);
+    ProfEnd();
+    ProfBegin("read");
+    String8 data = os_string_from_file_range(data_arena, file, r1u64(range.min, range.min+read_size));
+    ProfEnd();
+    os_file_close(file);
+    FileProperties post_props = os_properties_from_file_path(path);
+    
+    //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file
+    B32 read_good = (pre_props.modified == post_props.modified &&
+                     pre_props.size == post_props.size &&
+                     read_size == data.size &&
+                     (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
+    if(!read_good)
+    {
+      ProfScope("abort")
+      {
+        arena_release(data_arena);
+        MemoryZeroStruct(&data);
+        data_arena = 0;
+      }
+    }
+    
+    //- rjf: submit
+    else
+    {
+      ProfScope("submit")
+      {
+        hs_submit_data(key, &data_arena, data);
+      }
+    }
+    
+    //- rjf: commit info to cache
+    ProfScope("commit to cache") OS_MutexScopeW(path_stripe->rw_mutex)
+    {
+      FS_Node *node = 0;
+      for(FS_Node *n = path_slot->first; n != 0; n = n->next)
+      {
+        if(str8_match(n->path, path, 0))
+        {
+          node = n;
+          break;
+        }
+      }
+      if(node != 0 && read_good)
+      {
+        if(node->props.modified != 0)
+        {
+          ins_atomic_u64_inc_eval(&fs_shared->change_gen);
+        }
+        node->props = post_props;
+      }
+    }
+    cond_var_broadcast(path_stripe->cv);
+  }
+  
+  scratch_end(scratch);
+}
+
+////////////////////////////////
 //~ rjf: Streamer Threads
 
 internal B32

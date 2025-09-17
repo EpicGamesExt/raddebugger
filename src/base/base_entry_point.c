@@ -2,12 +2,18 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 global U64 global_update_tick_idx = 0;
+global CondVar async_tick_cond_var = {0};
+global Mutex async_tick_mutex = {0};
 
 internal void
 main_thread_base_entry_point(int arguments_count, char **arguments)
 {
   Temp scratch = scratch_begin(0, 0);
   ThreadNameF("[main thread]");
+  
+  //- rjf: set up async thread group info
+  async_tick_cond_var = cond_var_alloc();
+  async_tick_mutex = mutex_alloc();
   
   //- rjf: set up telemetry
 #if PROFILE_TELEMETRY
@@ -132,4 +138,16 @@ update(void)
   B32 result = 0;
 #endif
   return result;
+}
+
+internal void
+async_thread_entry_point(void *params)
+{
+  MutexScope(async_tick_mutex) for(;;)
+  {
+    cond_var_wait(async_tick_cond_var, async_tick_mutex, max_U64);
+#if defined(FILE_STREAM_H)
+    fs_async_tick();
+#endif
+  }
 }
