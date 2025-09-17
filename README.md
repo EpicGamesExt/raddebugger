@@ -62,8 +62,7 @@ of implemented switches from `/help`.
 
 Our current designed-for use case for the linker is to help with the
 compile-debug cycle of huge projects. We don't yet have support for
-dead-code-elimination or link-time-optimizations, but these features are on the
-road map.
+link-time-optimizations, but this feature is on the road map.
 
 By default, the linker spawns as many threads as there are cores, so if you plan
 to run multiple linkers in parallel, you can limit the number of thread workers
