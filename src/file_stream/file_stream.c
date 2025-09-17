@@ -241,10 +241,10 @@ fs_properties_from_path(String8 path)
 }
 
 ////////////////////////////////
-//~ rjf: Asynchronous Tick
+//~ rjf: Tick
 
 internal void
-fs_async_tick(void)
+fs_tick(void)
 {
   Temp scratch = scratch_begin(0, 0);
   

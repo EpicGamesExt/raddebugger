@@ -2850,7 +2850,7 @@ str8_compar(String8 a, String8 b, B32 ignore_case)
   return cmp;
 }
 
-internal int str8_compar_ignore_case(const void *a, const void *b)
+internal int str8_compar_ignore_case(const void *a, const void *b)
 {
   return str8_compar(*(String8*)a, *(String8*)b, 1);
 }

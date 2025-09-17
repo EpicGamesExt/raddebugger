@@ -191,7 +191,7 @@ async_thread_entry_point(void *params)
   {
     MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
 #if defined(FILE_STREAM_H)
-    fs_async_tick();
+    fs_tick();
 #endif
     cond_var_broadcast(async_tick_stop_cond_var);
   }
