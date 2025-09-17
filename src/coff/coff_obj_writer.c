@@ -73,8 +73,8 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
       // long name
       if (s->name.size > sizeof(name.short_name)) {
         U64 string_table_offset = string_table.total_size;
-        str8_list_push(scratch.arena, &string.table, s->name);
-        str8_list_push(scratch.arena, &string.table, str8_lit("\0"));
+        str8_list_push(scratch.arena, &string_table, s->name);
+        str8_list_push(scratch.arena, &string_table, str8_lit("\0"));
         
         name.long_name.zeroes = 0;
         name.long_name.string_table_offset = safe_cast_u32(string_table_offset);
@@ -169,7 +169,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
       String8 sect_name = s->name;
       if (sect_name.size > sizeof(d->name)) {
         U64 sect_name_off = string_table.total_size;
-        str8_list_push_cstr(scratch.arena, &string_table, sect_name);
+        str8_list_push(scratch.arena, &string_table, push_cstr(scratch.arena, sect_name));
         
         sect_name = push_str8f(scratch.arena, "/%u", sect_name_off);
         AssertAlways(sect_name.size <= sizeof(d->name));
