@@ -35,7 +35,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_DynamicBase,        0, "DYNAMICBASE",          "[:NO]", ""                                                                                                 },
   { LNK_CmdSwitch_NotImplemented,     0, "EMITVOLATILEMETADATA", "", ""                                                                                                      },
   { LNK_CmdSwitch_Entry,              1, "ENTRY",                ":FUNCTION", ""                                                                                             },
-  { LNK_CmdSwitch_Null,               0, "ERRORREPORT",          "", "Deprecated starting Windows Vista."                                                                    },
+  { LNK_CmdSwitch_ErrorReport,        0, "ERRORREPORT",          "", "Deprecated starting Windows Vista."                                                                    },
   { LNK_CmdSwitch_Export,             1, "EXPORT",               ":SYMBOL", ""                                                                                               },
   { LNK_CmdSwitch_NotImplemented,     0, "EXPORTADMIN",          "", ""                                                                                                      },
   { LNK_CmdSwitch_FastFail,           0, "FASTFAIL",             "", "Not used."                                                                                             },
@@ -1291,6 +1291,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     }
 
     config->entry_point_name = new_entry_point_name;
+  } break;
+
+  case LNK_CmdSwitch_ErrorReport: {
+    // not supported -- ignore
   } break;
 
   case LNK_CmdSwitch_Export: {
