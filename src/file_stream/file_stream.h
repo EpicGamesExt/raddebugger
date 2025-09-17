@@ -91,17 +91,6 @@ struct FS_Shared
   FS_RequestNode *first_req;
   FS_RequestNode *last_req;
   U64 req_count;
-  
-  // rjf: user -> streamer ring buffer
-  U64 u2s_ring_size;
-  U8 *u2s_ring_base;
-  U64 u2s_ring_write_pos;
-  U64 u2s_ring_read_pos;
-  CondVar u2s_ring_cv;
-  Mutex u2s_ring_mutex;
-  
-  // rjf: change detector threads
-  OS_Handle detector_thread;
 };
 
 ////////////////////////////////
@@ -136,17 +125,5 @@ internal FileProperties fs_properties_from_path(String8 path);
 //~ rjf: Asynchronous Tick
 
 internal void fs_async_tick(void);
-
-////////////////////////////////
-//~ rjf: Streaming Work
-
-internal B32 fs_u2s_enqueue_req(HS_Key key, Rng1U64 range, String8 path, U64 endt_us);
-internal void fs_u2s_dequeue_req(Arena *arena, HS_Key *key_out, Rng1U64 *range_out, String8 *path_out);
-ASYNC_WORK_DEF(fs_stream_work);
-
-////////////////////////////////
-//~ rjf: Change Detector Thread
-
-internal void fs_detector_thread__entry_point(void *p);
 
 #endif // FILE_STREAM_H

@@ -357,7 +357,7 @@ global CondVar ipc_s2m_ring_cv = {0};
 internal void
 ipc_signaler_thread__entry_point(void *p)
 {
-  ThreadNameF("[rd] ipc signaler thread");
+  ThreadNameF("rd_ipc_signaler_thread");
   for(;;)
   {
     if(os_semaphore_take(ipc_sender2main_signal_semaphore, max_U64))
@@ -367,7 +367,7 @@ ipc_signaler_thread__entry_point(void *p)
         IPCInfo *ipc_info = (IPCInfo *)ipc_sender2main_shared_memory_base;
         String8 msg = str8((U8 *)(ipc_info+1), ipc_info->msg_size);
         msg.size = Min(msg.size, IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo));
-        OS_MutexScope(ipc_s2m_ring_mutex) for(;;)
+        MutexScope(ipc_s2m_ring_mutex) for(;;)
         {
           U64 unconsumed_size = ipc_s2m_ring_write_pos - ipc_s2m_ring_read_pos;
           U64 available_size = (sizeof(ipc_s2m_ring_buffer) - unconsumed_size);
@@ -535,7 +535,7 @@ entry_point(CmdLine *cmd_line)
         if(ipc_sender2main_shared_memory_base != 0)
         {
           MemoryZeroStruct(ipc_info);
-          os_thread_launch(ipc_signaler_thread__entry_point, 0, 0);
+          thread_launch(ipc_signaler_thread__entry_point, 0);
         }
         
         scratch_end(scratch);
@@ -551,7 +551,7 @@ entry_point(CmdLine *cmd_line)
             Temp scratch = scratch_begin(0, 0);
             B32 consumed = 0;
             String8 msg = {0};
-            OS_MutexScope(ipc_s2m_ring_mutex)
+            MutexScope(ipc_s2m_ring_mutex)
             {
               U64 unconsumed_size = ipc_s2m_ring_write_pos - ipc_s2m_ring_read_pos;
               if(unconsumed_size >= sizeof(U64))
@@ -711,7 +711,13 @@ entry_point(CmdLine *cmd_line)
         IPCInfo *ipc_info = (IPCInfo *)ipc_sender2main_shared_memory_base;
         U8 *buffer = (U8 *)(ipc_info+1);
         U64 buffer_max = IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo);
-        String8List parts = os_string_list_from_argcv(scratch.arena, cmd_line->argc - 1, cmd_line->argv + 1);
+        String8List parts = {0};
+        {
+          for EachIndex(idx, cmd_line->argc-1)
+          {
+            str8_list_push(scratch.arena, &parts, str8_cstring(cmd_line->argv[idx+1]));
+          }
+        }
         StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
         String8 msg = str8_list_join(scratch.arena, &parts, &join);
         ipc_info->msg_size = Min(buffer_max, msg.size);

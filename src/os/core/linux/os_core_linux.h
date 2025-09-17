@@ -54,7 +54,7 @@ typedef struct OS_LNX_SafeCallChain OS_LNX_SafeCallChain;
 struct OS_LNX_SafeCallChain
 {
   OS_LNX_SafeCallChain *next;
-  OS_ThreadFunctionType *fail_handler;
+  ThreadEntryPointFunctionType *fail_handler;
   void *ptr;
 };
 
@@ -81,7 +81,7 @@ struct OS_LNX_Entity
     struct
     {
       pthread_t handle;
-      OS_ThreadFunctionType *func;
+      ThreadEntryPointFunctionType *func;
       void *ptr;
     } thread;
     pthread_mutex_t mutex_handle;

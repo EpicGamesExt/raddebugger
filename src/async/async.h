@@ -104,7 +104,7 @@ struct ASYNC_Shared
   CondVar ring_cv;
   
   // rjf: work threads
-  OS_Handle *work_threads;
+  Thread *work_threads;
   U64 work_threads_count;
   U64 work_threads_live_count;
 };

@@ -181,10 +181,10 @@ struct PTG_Shared
   
   // rjf: builder threads
   U64 builder_thread_count;
-  OS_Handle *builder_threads;
+  Thread *builder_threads;
   
   // rjf: evictor thread
-  OS_Handle evictor_thread;
+  Thread evictor_thread;
 };
 
 ////////////////////////////////

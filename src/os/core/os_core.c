@@ -41,21 +41,6 @@ os_handle_array_from_list(Arena *arena, OS_HandleList *list)
 }
 
 ////////////////////////////////
-//~ rjf: Command Line Argc/Argv Helper (Helper, Implemented Once)
-
-internal String8List
-os_string_list_from_argcv(Arena *arena, int argc, char **argv)
-{
-  String8List result = {0};
-  for(int i = 0; i < argc; i += 1)
-  {
-    String8 str = str8_cstring(argv[i]);
-    str8_list_push(arena, &result, str);
-  }
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Filesystem Helpers (Helpers, Implemented Once)
 
 internal String8

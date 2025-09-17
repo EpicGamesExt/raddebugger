@@ -23,7 +23,7 @@ rb_entry_point(CmdLine *cmdline)
       threads_count = threads_count_from_cmdline;
     }
   }
-  OS_Handle *threads = push_array(scratch.arena, OS_Handle, threads_count);
+  Thread *threads = push_array(scratch.arena, Thread, threads_count);
   RB_ThreadParams *threads_params = push_array(scratch.arena, RB_ThreadParams, threads_count);
   Barrier barrier = barrier_alloc(threads_count);
   for EachIndex(idx, threads_count)
@@ -32,11 +32,11 @@ rb_entry_point(CmdLine *cmdline)
     threads_params[idx].lane_ctx.lane_idx   = idx;
     threads_params[idx].lane_ctx.lane_count = threads_count;
     threads_params[idx].lane_ctx.barrier    = barrier;
-    threads[idx] = os_thread_launch(rb_thread_entry_point, &threads_params[idx], 0);
+    threads[idx] = thread_launch(rb_thread_entry_point, &threads_params[idx]);
   }
   for EachIndex(idx, threads_count)
   {
-    os_thread_join(threads[idx], max_U64);
+    thread_join(threads[idx], max_U64);
   }
   scratch_end(scratch);
 }

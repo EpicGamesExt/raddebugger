@@ -238,9 +238,9 @@ di_init(void)
     di_shared->search_threads[idx].ring_cv    = cond_var_alloc();
     di_shared->search_threads[idx].ring_size  = KB(64);
     di_shared->search_threads[idx].ring_base  = push_array_no_zero(arena, U8, di_shared->search_threads[idx].ring_size);
-    di_shared->search_threads[idx].thread = os_thread_launch(di_search_thread__entry_point, (void *)idx, 0);
+    di_shared->search_threads[idx].thread = thread_launch(di_search_thread__entry_point, (void *)idx);
   }
-  di_shared->search_evictor_thread = os_thread_launch(di_search_evictor_thread__entry_point, 0, 0);
+  di_shared->search_evictor_thread = thread_launch(di_search_evictor_thread__entry_point, 0);
 }
 
 ////////////////////////////////
@@ -468,7 +468,7 @@ di_open(DI_Key *key)
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
     log_infof("open_debug_info: {\"%S\", 0x%I64x}\n", key->path, key->min_timestamp);
-    OS_MutexScopeW(stripe->rw_mutex)
+    MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
       DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, key);
@@ -529,7 +529,7 @@ di_close(DI_Key *key)
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
     log_infof("close_debug_info: {\"%S\", 0x%I64x}\n", key->path, key->min_timestamp);
-    OS_MutexScopeW(stripe->rw_mutex)
+    MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
       DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, key);
@@ -591,7 +591,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us)
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
-    ProfScope("grab node") OS_MutexScopeR(stripe->rw_mutex) for(;;)
+    ProfScope("grab node") MutexScopeR(stripe->rw_mutex) for(;;)
     {
       //- rjf: find existing node
       DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, key);
@@ -662,7 +662,7 @@ di_search_items_from_key_params_query(DI_Scope *scope, U128 key, DI_SearchParams
     U64               stripe_idx = slot_idx%di_shared->search_stripes_count;
     DI_SearchSlot *   slot       = &di_shared->search_slots[slot_idx];
     DI_SearchStripe * stripe     = &di_shared->search_stripes[stripe_idx];
-    OS_MutexScopeW(stripe->rw_mutex) for(;;)
+    MutexScopeW(stripe->rw_mutex) for(;;)
     {
       // rjf: map key -> node
       DI_SearchNode *node = 0;
@@ -753,7 +753,7 @@ internal B32
 di_u2p_enqueue_key(DI_Key *key, U64 endt_us)
 {
   B32 sent = 0;
-  OS_MutexScope(di_shared->u2p_ring_mutex) for(;;)
+  MutexScope(di_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = di_shared->u2p_ring_write_pos - di_shared->u2p_ring_read_pos;
     U64 available_size = di_shared->u2p_ring_size - unconsumed_size;
@@ -782,7 +782,7 @@ di_u2p_enqueue_key(DI_Key *key, U64 endt_us)
 internal void
 di_u2p_dequeue_key(Arena *arena, DI_Key *out_key)
 {
-  OS_MutexScope(di_shared->u2p_ring_mutex) for(;;)
+  MutexScope(di_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = di_shared->u2p_ring_write_pos - di_shared->u2p_ring_read_pos;
     if(unconsumed_size >= sizeof(out_key->path.size) + sizeof(out_key->min_timestamp))
@@ -801,7 +801,7 @@ di_u2p_dequeue_key(Arena *arena, DI_Key *out_key)
 internal void
 di_p2u_push_event(DI_Event *event)
 {
-  OS_MutexScope(di_shared->p2u_ring_mutex) for(;;)
+  MutexScope(di_shared->p2u_ring_mutex) for(;;)
   {
     U64 unconsumed_size = (di_shared->p2u_ring_write_pos-di_shared->p2u_ring_read_pos);
     U64 available_size = di_shared->p2u_ring_size-unconsumed_size;
@@ -822,7 +822,7 @@ internal DI_EventList
 di_p2u_pop_events(Arena *arena, U64 endt_us)
 {
   DI_EventList events = {0};
-  OS_MutexScope(di_shared->p2u_ring_mutex) for(;;)
+  MutexScope(di_shared->p2u_ring_mutex) for(;;)
   {
     U64 unconsumed_size = (di_shared->p2u_ring_write_pos-di_shared->p2u_ring_read_pos);
     if(unconsumed_size >= sizeof(DI_EventKind) + sizeof(U64))
@@ -1111,7 +1111,7 @@ ASYNC_WORK_DEF(di_parse_work)
   ////////////////////////////
   //- rjf: commit parsed info to cache
   //
-  OS_MutexScopeW(stripe->rw_mutex)
+  MutexScopeW(stripe->rw_mutex)
   {
     DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
     if(node != 0)
@@ -1153,7 +1153,7 @@ di_u2s_enqueue_req(U128 key, U64 endt_us)
   B32 result = 0;
   U64 thread_idx = key.u64[0]%di_shared->search_threads_count;
   DI_SearchThread *thread = &di_shared->search_threads[thread_idx];
-  OS_MutexScope(thread->ring_mutex) for(;;)
+  MutexScope(thread->ring_mutex) for(;;)
   {
     U64 unconsumed_size = thread->ring_write_pos - thread->ring_read_pos;
     U64 available_size = thread->ring_size - unconsumed_size;
@@ -1181,7 +1181,7 @@ di_u2s_dequeue_req(U64 thread_idx)
 {
   U128 key = {0};
   DI_SearchThread *thread = &di_shared->search_threads[thread_idx];
-  OS_MutexScope(thread->ring_mutex) for(;;)
+  MutexScope(thread->ring_mutex) for(;;)
   {
     U64 unconsumed_size = thread->ring_write_pos - thread->ring_read_pos;
     if(unconsumed_size >= sizeof(key))
@@ -1272,7 +1272,7 @@ ASYNC_WORK_DEF(di_search_work)
     //- rjf: every so often, check the key's write gen - if it has been bumped, then cancel
     if(idx%100 == 0)
     {
-      OS_MutexScopeR(stripe->rw_mutex)
+      MutexScopeR(stripe->rw_mutex)
       {
         for(DI_SearchNode *n = slot->first; n != 0; n = n->next)
         {
@@ -1385,7 +1385,7 @@ internal void
 di_search_thread__entry_point(void *p)
 {
   U64 thread_idx = (U64)p;
-  ThreadNameF("[di] search thread #%I64u", thread_idx);
+  ThreadNameF("di_search_thread_%I64u", thread_idx);
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
@@ -1402,7 +1402,7 @@ di_search_thread__entry_point(void *p)
     String8 query = {0};
     DI_SearchParams params = {0};
     U64 initial_bucket_write_gen = 0;
-    OS_MutexScopeW(stripe->rw_mutex)
+    MutexScopeW(stripe->rw_mutex)
     {
       for(DI_SearchNode *n = slot->first; n != 0; n = n->next)
       {
@@ -1512,7 +1512,7 @@ di_search_thread__entry_point(void *p)
     //- rjf: commit to cache - wait on scope touches
     if(arena != 0)
     {
-      OS_MutexScopeW(stripe->rw_mutex) for(;;)
+      MutexScopeW(stripe->rw_mutex) for(;;)
       {
         B32 found = 0;
         B32 done = 0;
@@ -1553,7 +1553,7 @@ di_search_thread__entry_point(void *p)
 internal void
 di_search_evictor_thread__entry_point(void *p)
 {
-  ThreadNameF("[di] search evictor thread");
+  ThreadNameF("di_search_evictor_thread");
   for(;;)
   {
     for(U64 slot_idx = 0; slot_idx < di_shared->search_slots_count; slot_idx += 1)
@@ -1562,7 +1562,7 @@ di_search_evictor_thread__entry_point(void *p)
       DI_SearchSlot *slot = &di_shared->search_slots[slot_idx];
       DI_SearchStripe *stripe = &di_shared->search_stripes[stripe_idx];
       B32 slot_has_work = 0;
-      OS_MutexScopeR(stripe->rw_mutex)
+      MutexScopeR(stripe->rw_mutex)
       {
         for(DI_SearchNode *n = slot->first; n != 0; n = n->next)
         {
@@ -1573,7 +1573,7 @@ di_search_evictor_thread__entry_point(void *p)
           }
         }
       }
-      if(slot_has_work) OS_MutexScopeW(stripe->rw_mutex)
+      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
       {
         for(DI_SearchNode *n = slot->first, *next = 0; n != 0; n = next)
         {
@@ -1642,7 +1642,7 @@ di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys)
   }
   
   // rjf: store parameters if needed
-  if(store->params_hash != params_hash) OS_MutexScopeW(store->params_rw_mutex)
+  if(store->params_hash != params_hash) MutexScopeW(store->params_rw_mutex)
   {
     arena_clear(store->params_arena);
     store->params_hash = params_hash;
@@ -1738,7 +1738,7 @@ di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us)
     if(completed_params_hash != store->params_hash && node->req_count == ins_atomic_u64_eval(&node->cmp_count))
     {
       B32 sent = 0;
-      OS_MutexScope(store->u2m_ring_mutex) for(;;)
+      MutexScope(store->u2m_ring_mutex) for(;;)
       {
         U64 unconsumed_size = store->u2m_ring_write_pos - store->u2m_ring_read_pos;
         U64 available_size = store->u2m_ring_size - unconsumed_size;
@@ -1770,7 +1770,7 @@ di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us)
     // rjf: if this node's state is stale, wait for it if we need to
     if(os_now_microseconds() < endt_us && node->req_params_hash != completed_params_hash)
     {
-      OS_MutexScopeR(store->match_rw_mutex) for(;;)
+      MutexScopeR(store->match_rw_mutex) for(;;)
       {
         if(node->req_params_hash == ins_atomic_u64_eval(&node->cmp_params_hash))
         {
@@ -1805,7 +1805,7 @@ ASYNC_WORK_DEF(di_match_work)
     DI_MatchNameNode *node = 0;
     U64 alloc_gen = 0;
     String8 name = {0};
-    ProfScope("get next name") OS_MutexScope(store->u2m_ring_mutex) for(;;)
+    ProfScope("get next name") MutexScope(store->u2m_ring_mutex) for(;;)
     {
       U64 unconsumed_size = store->u2m_ring_write_pos - store->u2m_ring_read_pos;
       if(unconsumed_size >= sizeof(U64))
@@ -1824,7 +1824,7 @@ ASYNC_WORK_DEF(di_match_work)
     //- rjf: read parameters
     U64 params_hash = 0;
     DI_KeyArray params_keys = {0};
-    ProfScope("read parameters") OS_MutexScopeR(store->params_rw_mutex)
+    ProfScope("read parameters") MutexScopeR(store->params_rw_mutex)
     {
       params_keys = di_key_array_copy(scratch.arena, &store->params_keys);
       params_hash = store->params_hash;

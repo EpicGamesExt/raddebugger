@@ -41,7 +41,7 @@ tex_init(void)
   tex_shared->u2x_ring_base = push_array_no_zero(arena, U8, tex_shared->u2x_ring_size);
   tex_shared->u2x_ring_cv = cond_var_alloc();
   tex_shared->u2x_ring_mutex = mutex_alloc();
-  tex_shared->evictor_thread = os_thread_launch(tex_evictor_thread__entry_point, 0, 0);
+  tex_shared->evictor_thread = thread_launch(tex_evictor_thread__entry_point, 0);
 }
 
 ////////////////////////////////
@@ -89,7 +89,7 @@ tex_scope_close(TEX_Scope *scope)
     U64 stripe_idx = slot_idx%tex_shared->stripes_count;
     TEX_Slot *slot = &tex_shared->slots[slot_idx];
     TEX_Stripe *stripe = &tex_shared->stripes[stripe_idx];
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(TEX_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -140,7 +140,7 @@ tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topolog
     TEX_Stripe *stripe = &tex_shared->stripes[stripe_idx];
     B32 found = 0;
     B32 stale = 0;
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(TEX_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -156,7 +156,7 @@ tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topolog
     B32 node_is_new = 0;
     if(!found)
     {
-      OS_MutexScopeW(stripe->rw_mutex)
+      MutexScopeW(stripe->rw_mutex)
       {
         TEX_Node *node = 0;
         for(TEX_Node *n = slot->first; n != 0; n = n->next)
@@ -222,7 +222,7 @@ internal B32
 tex_u2x_enqueue_req(U128 hash, TEX_Topology top, U64 endt_us)
 {
   B32 good = 0;
-  OS_MutexScope(tex_shared->u2x_ring_mutex) for(;;)
+  MutexScope(tex_shared->u2x_ring_mutex) for(;;)
   {
     U64 unconsumed_size = tex_shared->u2x_ring_write_pos-tex_shared->u2x_ring_read_pos;
     U64 available_size = tex_shared->u2x_ring_size-unconsumed_size;
@@ -249,7 +249,7 @@ tex_u2x_enqueue_req(U128 hash, TEX_Topology top, U64 endt_us)
 internal void
 tex_u2x_dequeue_req(U128 *hash_out, TEX_Topology *top_out)
 {
-  OS_MutexScope(tex_shared->u2x_ring_mutex) for(;;)
+  MutexScope(tex_shared->u2x_ring_mutex) for(;;)
   {
     U64 unconsumed_size = tex_shared->u2x_ring_write_pos-tex_shared->u2x_ring_read_pos;
     if(unconsumed_size >= sizeof(*hash_out)+sizeof(*top_out))
@@ -281,7 +281,7 @@ ASYNC_WORK_DEF(tex_xfer_work)
   
   //- rjf: take task
   B32 got_task = 0;
-  OS_MutexScopeR(stripe->rw_mutex)
+  MutexScopeR(stripe->rw_mutex)
   {
     for(TEX_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -308,7 +308,7 @@ ASYNC_WORK_DEF(tex_xfer_work)
   }
   
   //- rjf: commit results to cache
-  if(got_task) OS_MutexScopeW(stripe->rw_mutex)
+  if(got_task) MutexScopeW(stripe->rw_mutex)
   {
     for(TEX_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -333,7 +333,7 @@ ASYNC_WORK_DEF(tex_xfer_work)
 internal void
 tex_evictor_thread__entry_point(void *p)
 {
-  ThreadNameF("[tex] evictor thread");
+  ThreadNameF("tex_evictor_thread");
   for(;;)
   {
     U64 check_time_us = os_now_microseconds();
@@ -346,7 +346,7 @@ tex_evictor_thread__entry_point(void *p)
       TEX_Slot *slot = &tex_shared->slots[slot_idx];
       TEX_Stripe *stripe = &tex_shared->stripes[stripe_idx];
       B32 slot_has_work = 0;
-      OS_MutexScopeR(stripe->rw_mutex)
+      MutexScopeR(stripe->rw_mutex)
       {
         for(TEX_Node *n = slot->first; n != 0; n = n->next)
         {
@@ -361,7 +361,7 @@ tex_evictor_thread__entry_point(void *p)
           }
         }
       }
-      if(slot_has_work) OS_MutexScopeW(stripe->rw_mutex)
+      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
       {
         for(TEX_Node *n = slot->first, *next = 0; n != 0; n = next)
         {

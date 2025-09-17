@@ -30,7 +30,7 @@ mtx_init(void)
     mtx_shared->mut_threads[idx].ring_base = push_array_no_zero(arena, U8, mtx_shared->mut_threads[idx].ring_size);
     mtx_shared->mut_threads[idx].cv = cond_var_alloc();
     mtx_shared->mut_threads[idx].mutex = mutex_alloc();
-    mtx_shared->mut_threads[idx].thread = os_thread_launch(mtx_mut_thread__entry_point, &mtx_shared->mut_threads[idx], 0);
+    mtx_shared->mut_threads[idx].thread = thread_launch(mtx_mut_thread__entry_point, &mtx_shared->mut_threads[idx]);
   }
 }
 
@@ -52,7 +52,7 @@ internal void
 mtx_enqueue_op(MTX_MutThread *thread, HS_Key buffer_key, MTX_Op op)
 {
   // TODO(rjf): if op.replace is too big, need to split into multiple edits
-  OS_MutexScope(thread->mutex) for(;;)
+  MutexScope(thread->mutex) for(;;)
   {
     U64 unconsumed_size = thread->ring_write_pos - thread->ring_read_pos;
     U64 available_size = thread->ring_size - unconsumed_size;
@@ -73,7 +73,7 @@ mtx_enqueue_op(MTX_MutThread *thread, HS_Key buffer_key, MTX_Op op)
 internal void
 mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, HS_Key *buffer_key_out, MTX_Op *op_out)
 {
-  OS_MutexScope(thread->mutex) for(;;)
+  MutexScope(thread->mutex) for(;;)
   {
     U64 unconsumed_size = thread->ring_write_pos - thread->ring_read_pos;
     if(unconsumed_size >= sizeof(*buffer_key_out) + sizeof(op_out->range) + sizeof(op_out->replace.size))
@@ -94,7 +94,7 @@ internal void
 mtx_mut_thread__entry_point(void *p)
 {
   MTX_MutThread *mut_thread = (MTX_MutThread *)p;
-  ThreadNameF("[mtx] mut thread #%I64u", (U64)(mut_thread - mtx_shared->mut_threads));
+  ThreadNameF("mtx_mut_thread_%I64u", (U64)(mut_thread - mtx_shared->mut_threads));
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);

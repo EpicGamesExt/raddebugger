@@ -49,7 +49,7 @@ struct MTX_MutThread
   U64 ring_write_pos;
   CondVar cv;
   Mutex mutex;
-  OS_Handle thread;
+  Thread thread;
 };
 
 ////////////////////////////////

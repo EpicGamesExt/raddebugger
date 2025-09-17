@@ -88,7 +88,7 @@ struct GEO_Shared
   Mutex u2x_ring_mutex;
   
   // rjf: evictor thread
-  OS_Handle evictor_thread;
+  Thread evictor_thread;
 };
 
 ////////////////////////////////

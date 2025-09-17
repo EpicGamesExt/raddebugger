@@ -25,12 +25,12 @@ ptg_init(void)
   ptg_shared->u2b_ring_cv = cond_var_alloc();
   ptg_shared->u2b_ring_mutex = mutex_alloc();
   ptg_shared->builder_thread_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
-  ptg_shared->builder_threads = push_array(arena, OS_Handle, ptg_shared->builder_thread_count);
+  ptg_shared->builder_threads = push_array(arena, Thread, ptg_shared->builder_thread_count);
   for(U64 idx = 0; idx < ptg_shared->builder_thread_count; idx += 1)
   {
-    ptg_shared->builder_threads[idx] = os_thread_launch(ptg_builder_thread__entry_point, (void *)idx, 0);
+    ptg_shared->builder_threads[idx] = thread_launch(ptg_builder_thread__entry_point, (void *)idx);
   }
-  ptg_shared->evictor_thread = os_thread_launch(ptg_evictor_thread__entry_point, 0, 0);
+  ptg_shared->evictor_thread = thread_launch(ptg_evictor_thread__entry_point, 0);
 }
 
 ////////////////////////////////
@@ -122,7 +122,7 @@ internal B32
 ptg_u2b_enqueue_req(PTG_Key *key, U64 endt_us)
 {
   B32 good = 0;
-  OS_MutexScope(ptg_shared->u2b_ring_mutex) for(;;)
+  MutexScope(ptg_shared->u2b_ring_mutex) for(;;)
   {
     U64 unconsumed_size = ptg_shared->u2b_ring_write_pos-ptg_shared->u2b_ring_read_pos;
     U64 available_size = ptg_shared->u2b_ring_size-unconsumed_size;
@@ -148,7 +148,7 @@ ptg_u2b_enqueue_req(PTG_Key *key, U64 endt_us)
 internal void
 ptg_u2b_dequeue_req(PTG_Key *key_out)
 {
-  OS_MutexScope(ptg_shared->u2b_ring_mutex) for(;;)
+  MutexScope(ptg_shared->u2b_ring_mutex) for(;;)
   {
     U64 unconsumed_size = ptg_shared->u2b_ring_write_pos-ptg_shared->u2b_ring_read_pos;
     if(unconsumed_size >= sizeof(*key_out))
@@ -180,7 +180,7 @@ ptg_builder_thread__entry_point(void *p)
     
     //- rjf: take task
     B32 got_task = 0;
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(PTG_GraphNode *n = slot->first; n != 0; n = n->next)
       {
@@ -200,7 +200,7 @@ ptg_builder_thread__entry_point(void *p)
     
     
     //- rjf: commit results to cache
-    if(got_task) OS_MutexScopeW(stripe->rw_mutex)
+    if(got_task) MutexScopeW(stripe->rw_mutex)
     {
       for(PTG_GraphNode *n = slot->first; n != 0; n = n->next)
       {
@@ -236,7 +236,7 @@ ptg_evictor_thread__entry_point(void *p)
       PTG_GraphSlot *slot = &ptg_shared->slots[slot_idx];
       PTG_GraphStripe *stripe = &ptg_shared->stripes[stripe_idx];
       B32 slot_has_work = 0;
-      OS_MutexScopeR(stripe->rw_mutex)
+      MutexScopeR(stripe->rw_mutex)
       {
         for(PTG_GraphNode *n = slot->first; n != 0; n = n->next)
         {
@@ -251,7 +251,7 @@ ptg_evictor_thread__entry_point(void *p)
           }
         }
       }
-      if(slot_has_work) OS_MutexScopeW(stripe->rw_mutex)
+      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
       {
         for(PTG_GraphNode *n = slot->first, *next = 0; n != 0; n = next)
         {

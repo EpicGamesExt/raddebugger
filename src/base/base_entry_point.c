@@ -2,18 +2,23 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 global U64 global_update_tick_idx = 0;
-global CondVar async_tick_cond_var = {0};
-global Mutex async_tick_mutex = {0};
+global CondVar async_tick_start_cond_var = {0};
+global CondVar async_tick_stop_cond_var = {0};
+global Mutex async_tick_start_mutex = {0};
+global Mutex async_tick_stop_mutex = {0};
+global B32 global_async_exit = 0;
 
 internal void
 main_thread_base_entry_point(int arguments_count, char **arguments)
 {
+  ThreadNameF("main_thread");
   Temp scratch = scratch_begin(0, 0);
-  ThreadNameF("[main thread]");
   
   //- rjf: set up async thread group info
-  async_tick_cond_var = cond_var_alloc();
-  async_tick_mutex = mutex_alloc();
+  async_tick_start_cond_var = cond_var_alloc();
+  async_tick_start_mutex = mutex_alloc();
+  async_tick_stop_cond_var = cond_var_alloc();
+  async_tick_stop_mutex = mutex_alloc();
   
   //- rjf: set up telemetry
 #if PROFILE_TELEMETRY
@@ -29,7 +34,13 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #endif
   
   //- rjf: parse command line
-  String8List command_line_argument_strings = os_string_list_from_argcv(scratch.arena, arguments_count, arguments);
+  String8List command_line_argument_strings = {0};
+  {
+    for EachIndex(idx, arguments_count)
+    {
+      str8_list_push(scratch.arena, &command_line_argument_strings, str8_cstring(arguments[idx]));
+    }
+  }
   CmdLine cmdline = cmd_line_from_string_list(scratch.arena, command_line_argument_strings);
   
   //- rjf: begin captures
@@ -37,11 +48,8 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   if(capture)
   {
     ProfBeginCapture(arguments[0]);
+    ProfMsg(BUILD_TITLE);
   }
-  
-#if PROFILE_TELEMETRY 
-  tmMessage(0, TMMF_ICON_NOTE, BUILD_TITLE);
-#endif
   
   //- rjf: initialize all included layers
 #if defined(ASYNC_H) && !defined(ASYNC_INIT_MANUAL)
@@ -96,8 +104,41 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   rd_init(&cmdline);
 #endif
   
+  //- rjf: launch async threads
+  Thread *async_threads = 0;
+  U64 async_threads_count = 0;
+  {
+    U64 num_main_threads = 1;
+#if defined(CTRL_CORE_H)
+    num_main_threads += 1;
+#endif
+    U64 num_async_threads = os_get_system_info()->logical_processor_count;
+    U64 num_main_threads_clamped = Min(num_async_threads, num_main_threads);
+    num_async_threads -= num_main_threads_clamped;
+    num_async_threads = Max(1, num_async_threads);
+    Barrier barrier = barrier_alloc(num_async_threads);
+    LaneCtx *lane_ctxs = push_array(scratch.arena, LaneCtx, num_async_threads);
+    async_threads_count = num_async_threads;
+    async_threads = push_array(scratch.arena, Thread, async_threads_count);
+    for EachIndex(idx, num_async_threads)
+    {
+      lane_ctxs[idx].lane_idx = idx;
+      lane_ctxs[idx].lane_count = num_async_threads;
+      lane_ctxs[idx].barrier = barrier;
+      async_threads[idx] = thread_launch(async_thread_entry_point, &lane_ctxs[idx]);
+    }
+  }
+  
   //- rjf: call into entry point
   entry_point(&cmdline);
+  
+  //- rjf: join async threads
+  ins_atomic_u32_inc_eval(&global_async_exit);
+  cond_var_broadcast(async_tick_start_cond_var);
+  for EachIndex(idx, async_threads_count)
+  {
+    thread_join(async_threads[idx], max_U64);
+  }
   
   //- rjf: end captures
   if(capture)
@@ -143,11 +184,15 @@ update(void)
 internal void
 async_thread_entry_point(void *params)
 {
-  MutexScope(async_tick_mutex) for(;;)
+  LaneCtx lctx = *(LaneCtx *)params;
+  lane_ctx(lctx);
+  ThreadNameF("async_thread_%I64u", lane_idx());
+  for(;!ins_atomic_u32_eval(&global_async_exit);)
   {
-    cond_var_wait(async_tick_cond_var, async_tick_mutex, max_U64);
+    MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
 #if defined(FILE_STREAM_H)
     fs_async_tick();
 #endif
+    cond_var_broadcast(async_tick_stop_cond_var);
   }
 }

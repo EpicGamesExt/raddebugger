@@ -252,7 +252,7 @@ struct TXT_Shared
   Mutex u2p_ring_mutex;
   
   // rjf: evictor thread
-  OS_Handle evictor_thread;
+  Thread evictor_thread;
 };
 
 ////////////////////////////////

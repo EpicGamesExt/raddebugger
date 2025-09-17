@@ -62,7 +62,7 @@ struct OS_W32_Entity
   {
     struct
     {
-      OS_ThreadFunctionType *func;
+      ThreadEntryPointFunctionType *func;
       void *ptr;
       HANDLE handle;
       DWORD tid;

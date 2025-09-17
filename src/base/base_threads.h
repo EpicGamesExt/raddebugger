@@ -1,8 +1,18 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef BASE_SYNC_H
-#define BASE_SYNC_H
+#ifndef BASE_THREADS_H
+#define BASE_THREADS_H
+
+////////////////////////////////
+//~ rjf: Thread Types
+
+typedef struct Thread Thread;
+struct Thread
+{
+  U64 u64[1];
+};
+typedef void ThreadEntryPointFunctionType(void *p);
 
 ////////////////////////////////
 //~ rjf: Synchronization Primitive Types
@@ -38,6 +48,13 @@ struct Barrier
 };
 
 ////////////////////////////////
+//~ rjf: Thread Functions
+
+internal Thread thread_launch(ThreadEntryPointFunctionType *f, void *p);
+internal B32 thread_join(Thread thread, U64 endt_us);
+internal void thread_detach(Thread thread);
+
+////////////////////////////////
 //~ rjf: Synchronization Primitive Functions
 
 //- rjf: recursive mutexes
@@ -49,18 +66,21 @@ internal void  mutex_drop(Mutex mutex);
 //- rjf: reader/writer mutexes
 internal RWMutex rw_mutex_alloc(void);
 internal void    rw_mutex_release(RWMutex mutex);
-internal void    rw_mutex_take_r(RWMutex mutex);
-internal void    rw_mutex_drop_r(RWMutex mutex);
-internal void    rw_mutex_take_w(RWMutex mutex);
-internal void    rw_mutex_drop_w(RWMutex mutex);
+internal void    rw_mutex_take(RWMutex mutex, B32 write_mode);
+internal void    rw_mutex_drop(RWMutex mutex, B32 write_mode);
+#define rw_mutex_take_r(m) rw_mutex_take((m), (0))
+#define rw_mutex_take_w(m) rw_mutex_take((m), (1))
+#define rw_mutex_drop_r(m) rw_mutex_drop((m), (0))
+#define rw_mutex_drop_w(m) rw_mutex_drop((m), (1))
 
 //- rjf: condition variables
 internal CondVar   cond_var_alloc(void);
 internal void      cond_var_release(CondVar cv);
 // returns false on timeout, true on signal, (max_wait_ms = max_U64) -> no timeout
 internal B32       cond_var_wait(CondVar cv, Mutex mutex, U64 endt_us);
-internal B32       cond_var_wait_rw_r(CondVar cv, RWMutex mutex_rw, U64 endt_us);
-internal B32       cond_var_wait_rw_w(CondVar cv, RWMutex mutex_rw, U64 endt_us);
+internal B32       cond_var_wait_rw(CondVar cv, RWMutex mutex_rw, B32 write_mode, U64 endt_us);
+#define cond_var_wait_rw_r(cv, m, endt) cond_var_wait_rw((cv), (m), (0), (endt))
+#define cond_var_wait_rw_w(cv, m, endt) cond_var_wait_rw((cv), (m), (1), (endt))
 internal void      cond_var_signal(CondVar cv);
 internal void      cond_var_broadcast(CondVar cv);
 
@@ -79,8 +99,9 @@ internal void      barrier_wait(Barrier barrier);
 
 //- rjf: scope macros
 #define MutexScope(mutex) DeferLoop(mutex_take(mutex), mutex_drop(mutex))
+#define RWMutexScope(mutex, write_mode) DeferLoop(rw_mutex_take((mutex), (write_mode)), rw_mutex_drop((mutex), (write_mode)))
 #define MutexScopeR(mutex) DeferLoop(rw_mutex_take_r(mutex), rw_mutex_drop_r(mutex))
 #define MutexScopeW(mutex) DeferLoop(rw_mutex_take_w(mutex), rw_mutex_drop_w(mutex))
 #define MutexScopeRWPromote(mutex) DeferLoop((rw_mutex_drop_r(mutex), rw_mutex_take_w(mutex)), (rw_mutex_drop_w(mutex), rw_mutex_take_r(mutex)))
 
-#endif // BASE_SYNC_H
+#endif // BASE_THREADS_H

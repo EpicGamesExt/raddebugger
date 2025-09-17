@@ -121,7 +121,7 @@ internal void *
 os_lnx_thread_entry_point(void *ptr)
 {
   OS_LNX_Entity *entity = (OS_LNX_Entity *)ptr;
-  OS_ThreadFunctionType *func = entity->thread.func;
+  ThreadEntryPointFunctionType *func = entity->thread.func;
   void *thread_ptr = entity->thread.ptr;
   supplement_thread_base_entry_point(func, thread_ptr);
   return 0;
@@ -801,7 +801,7 @@ os_process_kill(OS_Handle handle)
 //~ rjf: @os_hooks Threads (Implemented Per-OS)
 
 internal OS_Handle
-os_thread_launch(OS_ThreadFunctionType *func, void *ptr, void *params)
+os_thread_launch(ThreadEntryPointFunctionType *func, void *ptr, void *params)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Thread);
   entity->thread.func = func;
@@ -911,31 +911,22 @@ os_rw_mutex_release(OS_Handle rw_mutex)
 }
 
 internal void
-os_rw_mutex_take_r(OS_Handle rw_mutex)
+os_rw_mutex_take(OS_Handle rw_mutex, B32 write_mode)
 {
   if(os_handle_match(rw_mutex, os_handle_zero())) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)rw_mutex.u64[0];
-  pthread_rwlock_rdlock(&entity->rwmutex_handle);
+  if(write_mode)
+  {
+    pthread_rwlock_wrlock(&entity->rwmutex_handle);
+  }
+  else
+  {
+    pthread_rwlock_rdlock(&entity->rwmutex_handle);
+  }
 }
 
 internal void
-os_rw_mutex_drop_r(OS_Handle rw_mutex)
-{
-  if(os_handle_match(rw_mutex, os_handle_zero())) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)rw_mutex.u64[0];
-  pthread_rwlock_unlock(&entity->rwmutex_handle);
-}
-
-internal void
-os_rw_mutex_take_w(OS_Handle rw_mutex)
-{
-  if(os_handle_match(rw_mutex, os_handle_zero())) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)rw_mutex.u64[0];
-  pthread_rwlock_wrlock(&entity->rwmutex_handle);
-}
-
-internal void
-os_rw_mutex_drop_w(OS_Handle rw_mutex)
+os_rw_mutex_drop(OS_Handle rw_mutex, B32 write_mode)
 {
   if(os_handle_match(rw_mutex, os_handle_zero())) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)rw_mutex.u64[0];
@@ -995,7 +986,7 @@ os_cond_var_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us)
 }
 
 internal B32
-os_cond_var_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
+os_cond_var_wait_rw(OS_Handle cv, OS_Handle mutex_rw, B32 write_mode, U64 endt_us)
 {
   // TODO(rjf): because pthread does not supply cv/rw natively, I had to hack
   // this together, but this would probably just be a lot better if we just
@@ -1016,49 +1007,27 @@ os_cond_var_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
     int wait_result = pthread_cond_timedwait(&cv_entity->cv.cond_handle, &cv_entity->cv.rwlock_mutex_handle, &endt_timespec);
     if(wait_result != ETIMEDOUT)
     {
-      pthread_rwlock_rdlock(&rw_mutex_entity->rwmutex_handle);
+      if(write_mode)
+      {
+        pthread_rwlock_wrlock(&rw_mutex_entity->rwmutex_handle);
+      }
+      else
+      {
+        pthread_rwlock_rdlock(&rw_mutex_entity->rwmutex_handle);
+      }
       result = 1;
       break;
     }
     if(wait_result == ETIMEDOUT)
     {
-      pthread_rwlock_rdlock(&rw_mutex_entity->rwmutex_handle);
-      break;
-    }
-  }
-  pthread_mutex_unlock(&cv_entity->cv.rwlock_mutex_handle);
-  return result;
-}
-
-internal B32
-os_cond_var_wait_rw_w(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
-{
-  // TODO(rjf): because pthread does not supply cv/rw natively, I had to hack
-  // this together, but this would probably just be a lot better if we just
-  // implemented the primitives ourselves with e.g. futexes
-  //
-  if(os_handle_match(cv, os_handle_zero())) { return 0; }
-  if(os_handle_match(mutex_rw, os_handle_zero())) { return 0; }
-  OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
-  OS_LNX_Entity *rw_mutex_entity = (OS_LNX_Entity *)mutex_rw.u64[0];
-  struct timespec endt_timespec;
-  endt_timespec.tv_sec = endt_us/Million(1);
-  endt_timespec.tv_nsec = Thousand(1) * (endt_us - (endt_us/Million(1))*Million(1));
-  B32 result = 0;
-  pthread_mutex_lock(&cv_entity->cv.rwlock_mutex_handle);
-  pthread_rwlock_unlock(&rw_mutex_entity->rwmutex_handle);
-  for(;;)
-  {
-    int wait_result = pthread_cond_timedwait(&cv_entity->cv.cond_handle, &cv_entity->cv.rwlock_mutex_handle, &endt_timespec);
-    if(wait_result != ETIMEDOUT)
-    {
-      pthread_rwlock_wrlock(&rw_mutex_entity->rwmutex_handle);
-      result = 1;
-      break;
-    }
-    if(wait_result == ETIMEDOUT)
-    {
-      pthread_rwlock_wrlock(&rw_mutex_entity->rwmutex_handle);
+      if(write_mode)
+      {
+        pthread_rwlock_wrlock(&rw_mutex_entity->rwmutex_handle);
+      }
+      else
+      {
+        pthread_rwlock_rdlock(&rw_mutex_entity->rwmutex_handle);
+      }
       break;
     }
   }
@@ -1229,7 +1198,7 @@ os_library_close(OS_Handle lib)
 //~ rjf: @os_hooks Safe Calls (Implemented Per-OS)
 
 internal void
-os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, void *ptr)
+os_safe_call(ThreadEntryPointFunctionType *func, ThreadEntryPointFunctionType *fail_handler, void *ptr)
 {
   // rjf: push handler to chain
   OS_LNX_SafeCallChain chain = {0};

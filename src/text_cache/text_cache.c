@@ -1614,7 +1614,7 @@ txt_init(void)
   txt_shared->u2p_ring_base = push_array_no_zero(arena, U8, txt_shared->u2p_ring_size);
   txt_shared->u2p_ring_cv = cond_var_alloc();
   txt_shared->u2p_ring_mutex = mutex_alloc();
-  txt_shared->evictor_thread = os_thread_launch(txt_evictor_thread__entry_point, 0, 0);
+  txt_shared->evictor_thread = thread_launch(txt_evictor_thread__entry_point, 0);
 }
 
 ////////////////////////////////
@@ -1662,7 +1662,7 @@ txt_scope_close(TXT_Scope *scope)
     U64 stripe_idx = slot_idx%txt_shared->stripes_count;
     TXT_Slot *slot = &txt_shared->slots[slot_idx];
     TXT_Stripe *stripe = &txt_shared->stripes[stripe_idx];
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(TXT_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -1713,7 +1713,7 @@ txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
     TXT_Slot *slot = &txt_shared->slots[slot_idx];
     TXT_Stripe *stripe = &txt_shared->stripes[stripe_idx];
     B32 found = 0;
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(TXT_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -1731,7 +1731,7 @@ txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
     B32 node_is_new = 0;
     if(!found)
     {
-      OS_MutexScopeW(stripe->rw_mutex)
+      MutexScopeW(stripe->rw_mutex)
       {
         TXT_Node *node = 0;
         for(TXT_Node *n = slot->first; n != 0; n = n->next)
@@ -2157,7 +2157,7 @@ internal B32
 txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us)
 {
   B32 good = 0;
-  OS_MutexScope(txt_shared->u2p_ring_mutex) for(;;)
+  MutexScope(txt_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = txt_shared->u2p_ring_write_pos - txt_shared->u2p_ring_read_pos;
     U64 available_size = txt_shared->u2p_ring_size - unconsumed_size;
@@ -2184,7 +2184,7 @@ txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us)
 internal void
 txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out)
 {
-  OS_MutexScope(txt_shared->u2p_ring_mutex) for(;;)
+  MutexScope(txt_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = txt_shared->u2p_ring_write_pos - txt_shared->u2p_ring_read_pos;
     if(unconsumed_size >= sizeof(*hash_out) + sizeof(*lang_out))
@@ -2216,7 +2216,7 @@ ASYNC_WORK_DEF(txt_parse_work)
   
   //- rjf: take task
   B32 got_task = 0;
-  OS_MutexScopeR(stripe->rw_mutex)
+  MutexScopeR(stripe->rw_mutex)
   {
     for(TXT_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -2245,7 +2245,7 @@ ASYNC_WORK_DEF(txt_parse_work)
     //- rjf: grab pointers to working counters
     U64 *bytes_processed_ptr = 0;
     U64 *bytes_to_process_ptr = 0;
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(TXT_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -2482,7 +2482,7 @@ ASYNC_WORK_DEF(txt_parse_work)
   }
   
   //- rjf: commit results to cache
-  if(got_task) OS_MutexScopeW(stripe->rw_mutex)
+  if(got_task) MutexScopeW(stripe->rw_mutex)
   {
     for(TXT_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -2511,7 +2511,7 @@ ASYNC_WORK_DEF(txt_parse_work)
 internal void
 txt_evictor_thread__entry_point(void *p)
 {
-  ThreadNameF("[txt] evictor thread");
+  ThreadNameF("txt_evictor_thread");
   for(;;)
   {
     U64 check_time_us = os_now_microseconds();
@@ -2524,7 +2524,7 @@ txt_evictor_thread__entry_point(void *p)
       TXT_Slot *slot = &txt_shared->slots[slot_idx];
       TXT_Stripe *stripe = &txt_shared->stripes[stripe_idx];
       B32 slot_has_work = 0;
-      OS_MutexScopeR(stripe->rw_mutex)
+      MutexScopeR(stripe->rw_mutex)
       {
         for(TXT_Node *n = slot->first; n != 0; n = n->next)
         {
@@ -2539,7 +2539,7 @@ txt_evictor_thread__entry_point(void *p)
           }
         }
       }
-      if(slot_has_work) OS_MutexScopeW(stripe->rw_mutex)
+      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
       {
         for(TXT_Node *n = slot->first, *next = 0; n != 0; n = next)
         {

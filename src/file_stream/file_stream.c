@@ -52,11 +52,8 @@ fs_init(void)
     fs_shared->stripes[idx].cv = cond_var_alloc();
     fs_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
   }
-  fs_shared->u2s_ring_size = KB(64);
-  fs_shared->u2s_ring_base = push_array_no_zero(arena, U8, fs_shared->u2s_ring_size);
-  fs_shared->u2s_ring_cv = cond_var_alloc();
-  fs_shared->u2s_ring_mutex = mutex_alloc();
-  fs_shared->detector_thread = os_thread_launch(fs_detector_thread__entry_point, 0, 0);
+  fs_shared->req_mutex = mutex_alloc();
+  fs_shared->req_arena = arena_alloc();
 }
 
 ////////////////////////////////
@@ -84,23 +81,13 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
   FS_Slot *path_slot = &fs_shared->slots[path_slot_idx];
   FS_Stripe *path_stripe = &fs_shared->stripes[path_stripe_idx];
   
-  //- rjf: get root for this path
+  //- rjf: get root for this path - on 1st try (read mode), try to read, on 2nd try (write mode), create node
   HS_Root root = {0};
-  OS_MutexScopeR(path_stripe->rw_mutex)
+  for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
   {
     B32 node_found = 0;
-    for(FS_Node *n = path_slot->first; n != 0; n = n->next)
+    RWMutexScope(path_stripe->rw_mutex, write_mode)
     {
-      if(str8_match(n->path, path, 0))
-      {
-        node_found = 1;
-        root = n->root;
-        break;
-      }
-    }
-    if(!node_found) OS_MutexScopeRWPromote(path_stripe->rw_mutex)
-    {
-      B32 node_found = 0;
       for(FS_Node *n = path_slot->first; n != 0; n = n->next)
       {
         if(str8_match(n->path, path, 0))
@@ -110,7 +97,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
           break;
         }
       }
-      if(!node_found)
+      if(write_mode && !node_found)
       {
         FS_Node *node = push_array(path_stripe->arena, FS_Node, 1);
         SLLQueuePush(path_slot->first, path_slot->last, node);
@@ -120,6 +107,10 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         node->slots = push_array(path_stripe->arena, FS_RangeSlot, node->slots_count);
         root = node->root;
       }
+    }
+    if(node_found)
+    {
+      break;
     }
   }
   
@@ -131,7 +122,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
   if(u128_match(hs_hash_from_key(key, 0), u128_zero()))
   {
     // rjf: loop: request, check for results, return until we can't
-    OS_MutexScopeW(path_stripe->rw_mutex) for(;;)
+    RWMutexScope(path_stripe->rw_mutex, 1) for(;;)
     {
       // rjf: path -> node
       FS_Node *node = 0;
@@ -172,22 +163,27 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         range_node->id = key.id;
       }
       
-      // rjf: try to send stream request
-      if(ins_atomic_u64_eval(&range_node->working_count) == 0 &&
-         fs_u2s_enqueue_req(key, range, path, endt_us))
+      // rjf: push request
+      if(range_node->working_count == 0)
       {
-        ins_atomic_u64_inc_eval(&range_node->working_count);
-        DeferLoop(rw_mutex_drop_w(path_stripe->rw_mutex), rw_mutex_take_w(path_stripe->rw_mutex))
+        range_node->working_count += 1;
+        MutexScope(fs_shared->req_mutex)
         {
-          async_push_work(fs_stream_work, .working_counter = &range_node->working_count);
+          FS_RequestNode *n = push_array(fs_shared->req_arena, FS_RequestNode, 1);
+          SLLQueuePush(fs_shared->first_req, fs_shared->last_req, n);
+          fs_shared->req_count += 1;
+          n->v.key = key;
+          n->v.path = str8_copy(fs_shared->req_arena, path);
+          n->v.range = range;
         }
+        cond_var_broadcast(async_tick_start_cond_var);
       }
       
       // rjf: have time to wait? -> wait on this stripe; otherwise exit
       B32 have_results = !u128_match(hs_hash_from_key(key, 0), u128_zero());
       if(!have_results && os_now_microseconds() < endt_us)
       {
-        cond_var_wait_rw_w(path_stripe->cv, path_stripe->rw_mutex, endt_us);
+        cond_var_wait_rw(path_stripe->cv, path_stripe->rw_mutex, 1, endt_us);
       }
       else
       {
@@ -229,7 +225,7 @@ fs_properties_from_path(String8 path)
   U64 stripe_idx = slot_idx%fs_shared->stripes_count;
   FS_Slot *slot = &fs_shared->slots[slot_idx];
   FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-  OS_MutexScopeR(stripe->rw_mutex)
+  MutexScopeR(stripe->rw_mutex)
   {
     for(FS_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -251,6 +247,51 @@ internal void
 fs_async_tick(void)
 {
   Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: do detection pass
+  {
+    U64 slots_per_stripe = fs_shared->slots_count/fs_shared->stripes_count;
+    Rng1U64 range = lane_range(fs_shared->stripes_count);
+    for EachInRange(stripe_idx, range)
+    {
+      FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
+      MutexScopeR(stripe->rw_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
+      {
+        U64 slot_idx = stripe_idx*slots_per_stripe + slot_in_stripe_idx;
+        FS_Slot *slot = &fs_shared->slots[slot_idx];
+        for(FS_Node *n = slot->first; n != 0; n = n->next)
+        {
+          FileProperties props = os_properties_from_file_path(n->path);
+          if(props.modified != n->props.modified)
+          {
+            for(U64 range_slot_idx = 0; range_slot_idx < n->slots_count; range_slot_idx += 1)
+            {
+              for(FS_RangeNode *range_n = n->slots[range_slot_idx].first;
+                  range_n != 0;
+                  range_n = range_n->next)
+              {
+                HS_Key key = hs_key_make(n->root, range_n->id);
+                if(ins_atomic_u64_eval(&range_n->working_count) == 0)
+                {
+                  ins_atomic_u64_inc_eval(&range_n->working_count);
+                  MutexScope(fs_shared->req_mutex)
+                  {
+                    FS_RequestNode *req_n = push_array(fs_shared->req_arena, FS_RequestNode, 1);
+                    SLLQueuePush(fs_shared->first_req, fs_shared->last_req, req_n);
+                    fs_shared->req_count += 1;
+                    req_n->v.key = key;
+                    req_n->v.path = str8_copy(fs_shared->req_arena, n->path);
+                    req_n->v.range = range;
+                  }
+                  cond_var_broadcast(async_tick_start_cond_var);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   
   //- rjf: gather all requests
   local_persist FS_Request *reqs = 0;
@@ -331,7 +372,7 @@ fs_async_tick(void)
     }
     
     //- rjf: commit info to cache
-    ProfScope("commit to cache") OS_MutexScopeW(path_stripe->rw_mutex)
+    ProfScope("commit to cache") MutexScopeW(path_stripe->rw_mutex)
     {
       FS_Node *node = 0;
       for(FS_Node *n = path_slot->first; n != 0; n = n->next)
@@ -355,192 +396,4 @@ fs_async_tick(void)
   }
   
   scratch_end(scratch);
-}
-
-////////////////////////////////
-//~ rjf: Streamer Threads
-
-internal B32
-fs_u2s_enqueue_req(HS_Key key, Rng1U64 range, String8 path, U64 endt_us)
-{
-  B32 result = 0;
-  path.size = Min(path.size, fs_shared->u2s_ring_size);
-  OS_MutexScope(fs_shared->u2s_ring_mutex) for(;;)
-  {
-    U64 unconsumed_size = fs_shared->u2s_ring_write_pos - fs_shared->u2s_ring_read_pos;
-    U64 available_size = fs_shared->u2s_ring_size - unconsumed_size;
-    U64 needed_size = sizeof(key) + sizeof(range.min) + sizeof(range.max) + sizeof(path.size) + path.size;
-    if(available_size >= needed_size)
-    {
-      result = 1;
-      fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &key);
-      fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &range.min);
-      fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &range.max);
-      fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &path.size);
-      fs_shared->u2s_ring_write_pos += ring_write(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, path.str, path.size);
-      break;
-    }
-    cond_var_wait(fs_shared->u2s_ring_cv, fs_shared->u2s_ring_mutex, endt_us);
-  }
-  if(result)
-  {
-    cond_var_broadcast(fs_shared->u2s_ring_cv);
-  }
-  return result;
-}
-
-internal void
-fs_u2s_dequeue_req(Arena *arena, HS_Key *key_out, Rng1U64 *range_out, String8 *path_out)
-{
-  OS_MutexScope(fs_shared->u2s_ring_mutex) for(;;)
-  {
-    U64 unconsumed_size = fs_shared->u2s_ring_write_pos - fs_shared->u2s_ring_read_pos;
-    if(unconsumed_size >= sizeof(*key_out) + sizeof(U64)*2 + sizeof(U64))
-    {
-      fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, key_out);
-      fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &range_out->min);
-      fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &range_out->max);
-      fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &path_out->size);
-      path_out->str = push_array(arena, U8, path_out->size);
-      fs_shared->u2s_ring_read_pos += ring_read(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, path_out->str, path_out->size);
-      break;
-    }
-    cond_var_wait(fs_shared->u2s_ring_cv, fs_shared->u2s_ring_mutex, max_U64);
-  }
-  cond_var_broadcast(fs_shared->u2s_ring_cv);
-}
-
-ASYNC_WORK_DEF(fs_stream_work)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  
-  //- rjf: get next request
-  HS_Key key = {0};
-  Rng1U64 range = {0};
-  String8 path = {0};
-  fs_u2s_dequeue_req(scratch.arena, &key, &range, &path);
-  
-  //- rjf: unpack request
-  U64 path_hash = fs_little_hash_from_string(path);
-  U64 path_slot_idx = path_hash%fs_shared->slots_count;
-  U64 path_stripe_idx = path_slot_idx%fs_shared->stripes_count;
-  FS_Slot *path_slot = &fs_shared->slots[path_slot_idx];
-  FS_Stripe *path_stripe = &fs_shared->stripes[path_stripe_idx];
-  
-  //- rjf: load
-  ProfBegin("load \"%.*s\"", str8_varg(path));
-  FileProperties pre_props = os_properties_from_file_path(path);
-  U64 range_size = dim_1u64(range);
-  U64 read_size = Min(pre_props.size - range.min, range_size);
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
-  B32 file_handle_is_valid = !os_handle_match(os_handle_zero(), file);
-  U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
-  data_arena_size += KB(4)-1;
-  data_arena_size -= data_arena_size%KB(4);
-  ProfBegin("allocate");
-  Arena *data_arena = arena_alloc(.reserve_size = data_arena_size, .commit_size = data_arena_size);
-  ProfEnd();
-  ProfBegin("read");
-  String8 data = os_string_from_file_range(data_arena, file, r1u64(range.min, range.min+read_size));
-  ProfEnd();
-  os_file_close(file);
-  FileProperties post_props = os_properties_from_file_path(path);
-  
-  //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file
-  B32 read_good = (pre_props.modified == post_props.modified &&
-                   pre_props.size == post_props.size &&
-                   read_size == data.size &&
-                   (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
-  if(!read_good)
-  {
-    ProfScope("abort")
-    {
-      arena_release(data_arena);
-      MemoryZeroStruct(&data);
-      data_arena = 0;
-    }
-  }
-  
-  //- rjf: submit
-  else
-  {
-    ProfScope("submit")
-    {
-      hs_submit_data(key, &data_arena, data);
-    }
-  }
-  
-  //- rjf: commit info to cache
-  ProfScope("commit to cache") OS_MutexScopeW(path_stripe->rw_mutex)
-  {
-    FS_Node *node = 0;
-    for(FS_Node *n = path_slot->first; n != 0; n = n->next)
-    {
-      if(str8_match(n->path, path, 0))
-      {
-        node = n;
-        break;
-      }
-    }
-    if(node != 0 && read_good)
-    {
-      if(node->props.modified != 0)
-      {
-        ins_atomic_u64_inc_eval(&fs_shared->change_gen);
-      }
-      node->props = post_props;
-    }
-  }
-  cond_var_broadcast(path_stripe->cv);
-  
-  ProfEnd();
-  scratch_end(scratch);
-  ProfEnd();
-  return 0;
-}
-
-////////////////////////////////
-//~ rjf: Change Detector Thread
-
-internal void
-fs_detector_thread__entry_point(void *p)
-{
-  ThreadNameF("[fs] detector thread");
-  for(;;)
-  {
-    U64 slots_per_stripe = fs_shared->slots_count/fs_shared->stripes_count;
-    for(U64 stripe_idx = 0; stripe_idx < fs_shared->stripes_count; stripe_idx += 1)
-    {
-      FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-      OS_MutexScopeR(stripe->rw_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
-      {
-        U64 slot_idx = stripe_idx*slots_per_stripe + slot_in_stripe_idx;
-        FS_Slot *slot = &fs_shared->slots[slot_idx];
-        for(FS_Node *n = slot->first; n != 0; n = n->next)
-        {
-          FileProperties props = os_properties_from_file_path(n->path);
-          if(props.modified != n->props.modified)
-          {
-            for(U64 range_slot_idx = 0; range_slot_idx < n->slots_count; range_slot_idx += 1)
-            {
-              for(FS_RangeNode *range_n = n->slots[range_slot_idx].first;
-                  range_n != 0;
-                  range_n = range_n->next)
-              {
-                HS_Key key = hs_key_make(n->root, range_n->id);
-                if(ins_atomic_u64_eval(&range_n->working_count) == 0 &&
-                   fs_u2s_enqueue_req(key, r1u64(key.id.u128[0].u64[0], key.id.u128[0].u64[1]), n->path, os_now_microseconds()+100000))
-                {
-                  ins_atomic_u64_inc_eval(&range_n->working_count);
-                  async_push_work(fs_stream_work, .working_counter = &range_n->working_count);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    os_sleep_milliseconds(100);
-  }
 }

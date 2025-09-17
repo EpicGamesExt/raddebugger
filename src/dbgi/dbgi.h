@@ -248,7 +248,7 @@ struct DI_TCTX
 typedef struct DI_SearchThread DI_SearchThread;
 struct DI_SearchThread
 {
-  OS_Handle thread;
+  Thread thread;
   Mutex ring_mutex;
   CondVar ring_cv;
   U64 ring_size;
@@ -386,7 +386,7 @@ struct DI_Shared
   // rjf: search threads
   U64 search_threads_count;
   DI_SearchThread *search_threads;
-  OS_Handle search_evictor_thread;
+  Thread search_evictor_thread;
 };
 
 ////////////////////////////////

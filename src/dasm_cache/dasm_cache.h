@@ -263,7 +263,7 @@ struct DASM_Shared
   Mutex u2p_ring_mutex;
   
   // rjf: evictor/detector thread
-  OS_Handle evictor_detector_thread;
+  Thread evictor_detector_thread;
 };
 
 ////////////////////////////////

@@ -103,7 +103,7 @@ hs_init(void)
     stripe->rw_mutex = rw_mutex_alloc();
     stripe->cv = cond_var_alloc();
   }
-  hs_shared->evictor_thread = os_thread_launch(hs_evictor_thread__entry_point, 0, 0);
+  hs_shared->evictor_thread = thread_launch(hs_evictor_thread__entry_point, 0);
 }
 
 ////////////////////////////////
@@ -118,7 +118,7 @@ hs_root_alloc(void)
   U64 stripe_idx = slot_idx%hs_shared->root_stripes_count;
   HS_RootSlot *slot = &hs_shared->root_slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->root_stripes[stripe_idx];
-  OS_MutexScopeW(stripe->rw_mutex)
+  MutexScopeW(stripe->rw_mutex)
   {
     HS_RootNode *node = hs_shared->root_stripes_free_nodes[stripe_idx];
     if(node != 0)
@@ -148,7 +148,7 @@ hs_root_release(HS_Root root)
   //- rjf: release root node, grab its arena / ID list
   Arena *root_arena = 0;
   HS_RootIDChunkList root_ids = {0};
-  OS_MutexScopeW(stripe->rw_mutex)
+  MutexScopeW(stripe->rw_mutex)
   {
     for(HS_RootNode *n = slot->first; n != 0; n = n->next)
     {
@@ -175,7 +175,7 @@ hs_root_release(HS_Root root)
       U64 key_stripe_idx = key_slot_idx%hs_shared->key_stripes_count;
       HS_KeySlot *key_slot = &hs_shared->key_slots[key_slot_idx];
       HS_Stripe *key_stripe = &hs_shared->key_stripes[key_stripe_idx];
-      OS_MutexScopeW(key_stripe->rw_mutex)
+      MutexScopeW(key_stripe->rw_mutex)
       {
         for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
         {
@@ -189,7 +189,7 @@ hs_root_release(HS_Root root)
               U64 hash_stripe_idx = hash_slot_idx%hs_shared->stripes_count;
               HS_Slot *hash_slot = &hs_shared->slots[hash_slot_idx];
               HS_Stripe *hash_stripe = &hs_shared->stripes[hash_stripe_idx];
-              OS_MutexScopeR(hash_stripe->rw_mutex)
+              MutexScopeR(hash_stripe->rw_mutex)
               {
                 for(HS_Node *n = hash_slot->first; n != 0; n = n->next)
                 {
@@ -231,7 +231,7 @@ hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
   
   //- rjf: commit data to cache - if already there, just bump key refcount
-  ProfScope("commit data to cache - if already there, just bump key refcount") OS_MutexScopeW(stripe->rw_mutex)
+  ProfScope("commit data to cache - if already there, just bump key refcount") MutexScopeW(stripe->rw_mutex)
   {
     HS_Node *existing_node = 0;
     for(HS_Node *n = slot->first; n != 0; n = n->next)
@@ -279,7 +279,7 @@ hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
   
   //- rjf: commit this hash to key cache
   U128 key_expired_hash = {0};
-  ProfScope("commit this hash to key cache") OS_MutexScopeW(key_stripe->rw_mutex)
+  ProfScope("commit this hash to key cache") MutexScopeW(key_stripe->rw_mutex)
   {
     // rjf: find existing key
     B32 key_is_new = 0;
@@ -329,7 +329,7 @@ hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
       U64 root_stripe_idx = root_slot_idx%hs_shared->root_stripes_count;
       HS_RootSlot *root_slot = &hs_shared->root_slots[root_slot_idx];
       HS_Stripe *root_stripe = &hs_shared->root_stripes[root_stripe_idx];
-      OS_MutexScopeW(root_stripe->rw_mutex)
+      MutexScopeW(root_stripe->rw_mutex)
       {
         for(HS_RootNode *n = root_slot->first; n != 0; n = n->next)
         {
@@ -362,7 +362,7 @@ hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
     U64 old_hash_stripe_idx = old_hash_slot_idx%hs_shared->stripes_count;
     HS_Slot *old_hash_slot = &hs_shared->slots[old_hash_slot_idx];
     HS_Stripe *old_hash_stripe = &hs_shared->stripes[old_hash_stripe_idx];
-    OS_MutexScopeR(old_hash_stripe->rw_mutex)
+    MutexScopeR(old_hash_stripe->rw_mutex)
     {
       for(HS_Node *n = old_hash_slot->first; n != 0; n = n->next)
       {
@@ -414,7 +414,7 @@ hs_scope_close(HS_Scope *scope)
     U64 stripe_idx = slot_idx%hs_shared->stripes_count;
     HS_Slot *slot = &hs_shared->slots[slot_idx];
     HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(HS_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -458,7 +458,7 @@ hs_hash_downstream_inc(U128 hash)
   U64 stripe_idx = slot_idx%hs_shared->stripes_count;
   HS_Slot *slot = &hs_shared->slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
-  OS_MutexScopeR(stripe->rw_mutex)
+  MutexScopeR(stripe->rw_mutex)
   {
     for(HS_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -478,7 +478,7 @@ hs_hash_downstream_dec(U128 hash)
   U64 stripe_idx = slot_idx%hs_shared->stripes_count;
   HS_Slot *slot = &hs_shared->slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
-  OS_MutexScopeR(stripe->rw_mutex)
+  MutexScopeR(stripe->rw_mutex)
   {
     for(HS_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -503,7 +503,7 @@ hs_hash_from_key(HS_Key key, U64 rewind_count)
   U64 key_stripe_idx = key_slot_idx%hs_shared->key_stripes_count;
   HS_KeySlot *key_slot = &hs_shared->key_slots[key_slot_idx];
   HS_Stripe *key_stripe = &hs_shared->key_stripes[key_stripe_idx];
-  OS_MutexScopeR(key_stripe->rw_mutex)
+  MutexScopeR(key_stripe->rw_mutex)
   {
     for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
     {
@@ -526,7 +526,7 @@ hs_data_from_hash(HS_Scope *scope, U128 hash)
   U64 stripe_idx = slot_idx%hs_shared->stripes_count;
   HS_Slot *slot = &hs_shared->slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
-  OS_MutexScopeR(stripe->rw_mutex)
+  MutexScopeR(stripe->rw_mutex)
   {
     for(HS_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -548,7 +548,7 @@ hs_data_from_hash(HS_Scope *scope, U128 hash)
 internal void
 hs_evictor_thread__entry_point(void *p)
 {
-  ThreadNameF("[hs] evictor thread");
+  ThreadNameF("hs_evictor_thread");
   for(;;)
   {
     for(U64 slot_idx = 0; slot_idx < hs_shared->slots_count; slot_idx += 1)
@@ -557,7 +557,7 @@ hs_evictor_thread__entry_point(void *p)
       HS_Slot *slot = &hs_shared->slots[slot_idx];
       HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
       B32 slot_has_work = 0;
-      OS_MutexScopeR(stripe->rw_mutex)
+      MutexScopeR(stripe->rw_mutex)
       {
         for(HS_Node *n = slot->first; n != 0; n = n->next)
         {
@@ -571,7 +571,7 @@ hs_evictor_thread__entry_point(void *p)
           }
         }
       }
-      if(slot_has_work) OS_MutexScopeW(stripe->rw_mutex)
+      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
       {
         for(HS_Node *n = slot->first, *next = 0; n != 0; n = next)
         {

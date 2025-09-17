@@ -870,7 +870,7 @@ struct CTRL_State
   // rjf: ctrl thread state
   U64 ctrl_thread_run_state;
   String8 ctrl_thread_log_path;
-  OS_Handle ctrl_thread;
+  Thread ctrl_thread;
   Log *ctrl_thread_log;
   RWMutex ctrl_thread_entity_ctx_rw_mutex;
   CTRL_EntityCtxRWStore *ctrl_thread_entity_store;

@@ -866,7 +866,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
           MemoryZero(zmm_d, sizeof(*zmm_d));
         }
       }
-
+      
       // CET / Shadow Stack
       if(xstate_mask & XSTATE_MASK_CET_U)
       {
@@ -1204,7 +1204,7 @@ dmn_ctrl_begin(void)
 internal void
 dmn_ctrl_exclusive_access_begin(void)
 {
-  OS_MutexScope(dmn_w32_shared->access_mutex)
+  MutexScope(dmn_w32_shared->access_mutex)
   {
     dmn_w32_shared->access_run_state = 1;
   }
@@ -1213,7 +1213,7 @@ dmn_ctrl_exclusive_access_begin(void)
 internal void
 dmn_ctrl_exclusive_access_end(void)
 {
-  OS_MutexScope(dmn_w32_shared->access_mutex)
+  MutexScope(dmn_w32_shared->access_mutex)
   {
     dmn_w32_shared->access_run_state = 0;
   }

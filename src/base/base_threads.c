@@ -2,6 +2,29 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Thread Functions
+
+internal Thread
+thread_launch(ThreadEntryPointFunctionType *f, void *p)
+{
+  Thread thread = os_thread_launch(f, p);
+  return thread;
+}
+
+internal B32
+thread_join(Thread thread, U64 endt_us)
+{
+  B32 result = os_thread_join(thread, endt_us);
+  return result;
+}
+
+internal void
+thread_detach(Thread thread)
+{
+  os_thread_detach(thread);
+}
+
+////////////////////////////////
 //~ rjf: Synchronization Primitive Functions
 
 //- rjf: recursive mutexes
@@ -15,20 +38,17 @@ internal void  mutex_drop(Mutex mutex)           {os_mutex_drop(mutex);}
 
 internal RWMutex rw_mutex_alloc(void)            {return os_rw_mutex_alloc();}
 internal void    rw_mutex_release(RWMutex mutex) {os_rw_mutex_release(mutex);}
-internal void    rw_mutex_take_r(RWMutex mutex)  {os_rw_mutex_take_r(mutex);}
-internal void    rw_mutex_drop_r(RWMutex mutex)  {os_rw_mutex_drop_r(mutex);}
-internal void    rw_mutex_take_w(RWMutex mutex)  {os_rw_mutex_take_w(mutex);}
-internal void    rw_mutex_drop_w(RWMutex mutex)  {os_rw_mutex_drop_w(mutex);}
+internal void    rw_mutex_take(RWMutex mutex, B32 write_mode) {os_rw_mutex_take(mutex, write_mode);}
+internal void    rw_mutex_drop(RWMutex mutex, B32 write_mode) {os_rw_mutex_drop(mutex, write_mode);}
 
 //- rjf: condition variables
 
-internal CondVar   cond_var_alloc(void)                                          {return os_cond_var_alloc();}
-internal void      cond_var_release(CondVar cv)                                  {os_cond_var_release(cv);}
-internal B32       cond_var_wait(CondVar cv, Mutex mutex, U64 endt_us)           {return os_cond_var_wait(cv, mutex, endt_us);}
-internal B32       cond_var_wait_rw_r(CondVar cv, RWMutex mutex_rw, U64 endt_us) {return os_cond_var_wait_rw_r(cv, mutex_rw, endt_us);}
-internal B32       cond_var_wait_rw_w(CondVar cv, RWMutex mutex_rw, U64 endt_us) {return os_cond_var_wait_rw_w(cv, mutex_rw, endt_us);}
-internal void      cond_var_signal(CondVar cv)                                   {os_cond_var_signal(cv);}
-internal void      cond_var_broadcast(CondVar cv)                                {os_cond_var_broadcast(cv);}
+internal CondVar   cond_var_alloc(void)                                                        {return os_cond_var_alloc();}
+internal void      cond_var_release(CondVar cv)                                                {os_cond_var_release(cv);}
+internal B32       cond_var_wait(CondVar cv, Mutex mutex, U64 endt_us)                         {return os_cond_var_wait(cv, mutex, endt_us);}
+internal B32       cond_var_wait_rw(CondVar cv, RWMutex mutex_rw, B32 write_mode, U64 endt_us) {return os_cond_var_wait_rw(cv, mutex_rw, write_mode, endt_us);}
+internal void      cond_var_signal(CondVar cv)                                                 {os_cond_var_signal(cv);}
+internal void      cond_var_broadcast(CondVar cv)                                              {os_cond_var_broadcast(cv);}
 
 //- rjf: cross-process semaphores
 

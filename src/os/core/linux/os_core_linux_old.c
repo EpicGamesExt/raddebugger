@@ -783,7 +783,7 @@ lnx_free_entity(LNX_Entity *entity){
 internal void*
 lnx_thread_base(void *ptr){
   LNX_Entity *entity = (LNX_Entity*)ptr;
-  OS_ThreadFunctionType *func = entity->thread.func;
+  ThreadEntryPointFunctionType *func = entity->thread.func;
   void *thread_ptr = entity->thread.ptr;
   
   TCTX tctx_;
@@ -1377,7 +1377,7 @@ os_launch_process(OS_LaunchOptions *options){
 //~ rjf: @os_hooks Threads (Implemented Per-OS)
 
 internal OS_Handle
-os_thread_launch(OS_ThreadFunctionType *func, void *ptr, void *params){
+os_thread_launch(ThreadEntryPointFunctionType *func, void *ptr, void *params){
   // entity
   LNX_Entity *entity = lnx_alloc_entity(LNX_EntityKind_Thread);
   entity->reference_mask = 0x3;
@@ -1642,7 +1642,7 @@ os_library_close(OS_Handle lib)
 //~ rjf: @os_hooks Dynamically-Loaded Libraries (Implemented Per-OS)
 
 internal void
-os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, void *ptr){
+os_safe_call(ThreadEntryPointFunctionType *func, ThreadEntryPointFunctionType *fail_handler, void *ptr){
   LNX_SafeCallChain chain = {0};
   SLLStackPush(lnx_safe_call_chain, &chain);
   chain.fail_handler = fail_handler;

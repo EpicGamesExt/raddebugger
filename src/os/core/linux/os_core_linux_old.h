@@ -48,7 +48,7 @@ struct LNX_Entity{
   volatile U32 reference_mask;
   union{
     struct{
-      OS_ThreadFunctionType *func;
+      ThreadEntryPointFunctionType *func;
       void *ptr;
       pthread_t handle;
     } thread;
@@ -62,7 +62,7 @@ struct LNX_Entity{
 
 struct LNX_SafeCallChain{
   LNX_SafeCallChain *next;
-  OS_ThreadFunctionType *fail_handler;
+  ThreadEntryPointFunctionType *fail_handler;
   void *ptr;
 };
 

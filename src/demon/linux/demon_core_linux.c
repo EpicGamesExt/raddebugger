@@ -922,7 +922,7 @@ dmn_ctrl_begin(void)
 internal void
 dmn_ctrl_exclusive_access_begin(void)
 {
-  OS_MutexScope(dmn_lnx_state->access_mutex)
+  MutexScope(dmn_lnx_state->access_mutex)
   {
     dmn_lnx_state->access_run_state = 1;
   }
@@ -931,7 +931,7 @@ dmn_ctrl_exclusive_access_begin(void)
 internal void
 dmn_ctrl_exclusive_access_end(void)
 {
-  OS_MutexScope(dmn_lnx_state->access_mutex)
+  MutexScope(dmn_lnx_state->access_mutex)
   {
     dmn_lnx_state->access_run_state = 0;
   }

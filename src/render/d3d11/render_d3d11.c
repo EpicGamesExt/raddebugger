@@ -487,7 +487,7 @@ r_window_equip(OS_Handle handle)
 {
   ProfBeginFunction();
   R_Handle result = {0};
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     //- rjf: allocate per-window-state
     R_D3D11_Window *window = r_d3d11_state->first_free_window;
@@ -559,7 +559,7 @@ r_hook void
 r_window_unequip(OS_Handle handle, R_Handle equip_handle)
 {
   ProfBeginFunction();
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Window *window = r_d3d11_window_from_handle(equip_handle);
     window->stage_color_srv->lpVtbl->Release(window->stage_color_srv);
@@ -588,7 +588,7 @@ r_tex2d_alloc(R_ResourceKind kind, Vec2S32 size, R_Tex2DFormat format, void *dat
   
   //- rjf: allocate
   R_D3D11_Tex2D *texture = 0;
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     texture = r_d3d11_state->first_free_tex2d;
     if(texture == 0)
@@ -675,7 +675,7 @@ r_hook void
 r_tex2d_release(R_Handle handle)
 {
   ProfBeginFunction();
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
     if(texture != &r_d3d11_tex2d_nil)
@@ -711,7 +711,7 @@ r_hook void
 r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
 {
   ProfBeginFunction();
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
     if(texture != &r_d3d11_tex2d_nil)
@@ -739,7 +739,7 @@ r_buffer_alloc(R_ResourceKind kind, U64 size, void *data)
   
   //- rjf: allocate
   R_D3D11_Buffer *buffer = 0;
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     buffer = r_d3d11_state->first_free_buffer;
     if(buffer == 0)
@@ -798,7 +798,7 @@ r_hook void
 r_buffer_release(R_Handle handle)
 {
   ProfBeginFunction();
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Buffer *buffer = r_d3d11_buffer_from_handle(handle);
     SLLStackPush(r_d3d11_state->first_to_free_buffer, buffer);
@@ -811,7 +811,7 @@ r_buffer_release(R_Handle handle)
 r_hook void
 r_begin_frame(void)
 {
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     // NOTE(rjf): no-op
   }
@@ -820,7 +820,7 @@ r_begin_frame(void)
 r_hook void
 r_end_frame(void)
 {
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     for(R_D3D11_FlushBuffer *buffer = r_d3d11_state->first_buffer_to_flush; buffer != 0; buffer = buffer->next)
     {
@@ -858,7 +858,7 @@ r_hook void
 r_window_begin_frame(OS_Handle window, R_Handle window_equip)
 {
   ProfBeginFunction();
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Window *wnd = r_d3d11_window_from_handle(window_equip);
     ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
@@ -990,7 +990,7 @@ r_hook void
 r_window_end_frame(OS_Handle window, R_Handle window_equip)
 {
   ProfBeginFunction();
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Window *wnd = r_d3d11_window_from_handle(window_equip);
     ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
@@ -1060,7 +1060,7 @@ r_hook void
 r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
 {
   ProfBeginFunction();
-  OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
+  MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     ////////////////////////////
     //- rjf: unpack arguments

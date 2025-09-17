@@ -144,7 +144,7 @@ internal DWORD
 os_w32_thread_entry_point(void *ptr)
 {
   OS_W32_Entity *entity = (OS_W32_Entity *)ptr;
-  OS_ThreadFunctionType *func = entity->thread.func;
+  ThreadEntryPointFunctionType *func = entity->thread.func;
   void *thread_ptr = entity->thread.ptr;
   supplement_thread_base_entry_point(func, thread_ptr);
   return 0;
@@ -1103,19 +1103,19 @@ os_process_detach(OS_Handle handle)
 ////////////////////////////////
 //~ rjf: @os_hooks Threads (Implemented Per-OS)
 
-internal OS_Handle
-os_thread_launch(OS_ThreadFunctionType *func, void *ptr, void *params)
+internal Thread
+os_thread_launch(ThreadEntryPointFunctionType *f, void *p)
 {
   OS_W32_Entity *entity = os_w32_entity_alloc(OS_W32_EntityKind_Thread);
-  entity->thread.func = func;
-  entity->thread.ptr = ptr;
+  entity->thread.func = f;
+  entity->thread.ptr = p;
   entity->thread.handle = CreateThread(0, 0, os_w32_thread_entry_point, entity, 0, &entity->thread.tid);
-  OS_Handle result = {IntFromPtr(entity)};
+  Thread result = {IntFromPtr(entity)};
   return result;
 }
 
 internal B32
-os_thread_join(OS_Handle handle, U64 endt_us)
+os_thread_join(Thread handle, U64 endt_us)
 {
   DWORD sleep_ms = os_w32_sleep_ms_from_endt_us(endt_us);
   OS_W32_Entity *entity = (OS_W32_Entity *)PtrFromInt(handle.u64[0]);
@@ -1130,7 +1130,7 @@ os_thread_join(OS_Handle handle, U64 endt_us)
 }
 
 internal void
-os_thread_detach(OS_Handle thread)
+os_thread_detach(Thread thread)
 {
   OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(thread.u64[0]);
   if(entity != 0)
@@ -1194,31 +1194,31 @@ os_rw_mutex_release(RWMutex rw_mutex)
 }
 
 internal void
-os_rw_mutex_take_r(RWMutex rw_mutex)
+os_rw_mutex_take(RWMutex rw_mutex, B32 write_mode)
 {
   OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(rw_mutex.u64[0]);
-  AcquireSRWLockShared(&entity->rw_mutex);
+  if(write_mode)
+  {
+    AcquireSRWLockExclusive(&entity->rw_mutex);
+  }
+  else
+  {
+    AcquireSRWLockShared(&entity->rw_mutex);
+  }
 }
 
 internal void
-os_rw_mutex_drop_r(RWMutex rw_mutex)
+os_rw_mutex_drop(RWMutex rw_mutex, B32 write_mode)
 {
   OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(rw_mutex.u64[0]);
-  ReleaseSRWLockShared(&entity->rw_mutex);
-}
-
-internal void
-os_rw_mutex_take_w(RWMutex rw_mutex)
-{
-  OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(rw_mutex.u64[0]);
-  AcquireSRWLockExclusive(&entity->rw_mutex);
-}
-
-internal void
-os_rw_mutex_drop_w(RWMutex rw_mutex)
-{
-  OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(rw_mutex.u64[0]);
-  ReleaseSRWLockExclusive(&entity->rw_mutex);
+  if(write_mode)
+  {
+    ReleaseSRWLockExclusive(&entity->rw_mutex);
+  }
+  else
+  {
+    ReleaseSRWLockShared(&entity->rw_mutex);
+  }
 }
 
 //- rjf: condition variables
@@ -1254,7 +1254,7 @@ os_cond_var_wait(CondVar cv, Mutex mutex, U64 endt_us)
 }
 
 internal B32
-os_cond_var_wait_rw_r(CondVar cv, RWMutex mutex_rw, U64 endt_us)
+os_cond_var_wait_rw(CondVar cv, RWMutex mutex_rw, B32 write_mode, U64 endt_us)
 {
   U32 sleep_ms = os_w32_sleep_ms_from_endt_us(endt_us);
   BOOL result = 0;
@@ -1263,21 +1263,7 @@ os_cond_var_wait_rw_r(CondVar cv, RWMutex mutex_rw, U64 endt_us)
     OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(cv.u64[0]);
     OS_W32_Entity *mutex_entity = (OS_W32_Entity*)PtrFromInt(mutex_rw.u64[0]);
     result = SleepConditionVariableSRW(&entity->cv, &mutex_entity->rw_mutex, sleep_ms,
-                                       CONDITION_VARIABLE_LOCKMODE_SHARED);
-  }
-  return result;
-}
-
-internal B32
-os_cond_var_wait_rw_w(CondVar cv, RWMutex mutex_rw, U64 endt_us)
-{
-  U32 sleep_ms = os_w32_sleep_ms_from_endt_us(endt_us);
-  BOOL result = 0;
-  if(sleep_ms > 0)
-  {
-    OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(cv.u64[0]);
-    OS_W32_Entity *mutex_entity = (OS_W32_Entity*)PtrFromInt(mutex_rw.u64[0]);
-    result = SleepConditionVariableSRW(&entity->cv, &mutex_entity->rw_mutex, sleep_ms, 0);
+                                       write_mode ? 0 : CONDITION_VARIABLE_LOCKMODE_SHARED);
   }
   return result;
 }
@@ -1413,7 +1399,7 @@ os_library_close(OS_Handle lib)
 //~ rjf: @os_hooks Safe Calls (Implemented Per-OS)
 
 internal void
-os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, void *ptr)
+os_safe_call(ThreadEntryPointFunctionType *func, ThreadEntryPointFunctionType *fail_handler, void *ptr)
 {
   __try
   {

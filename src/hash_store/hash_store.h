@@ -208,7 +208,7 @@ struct HS_Shared
   U64 root_id_gen;
   
   // rjf: evictor thread
-  OS_Handle evictor_thread;
+  Thread evictor_thread;
 };
 
 ////////////////////////////////

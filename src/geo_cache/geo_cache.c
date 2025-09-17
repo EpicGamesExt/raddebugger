@@ -28,7 +28,7 @@ geo_init(void)
   geo_shared->u2x_ring_base = push_array_no_zero(arena, U8, geo_shared->u2x_ring_size);
   geo_shared->u2x_ring_cv = cond_var_alloc();
   geo_shared->u2x_ring_mutex = mutex_alloc();
-  geo_shared->evictor_thread = os_thread_launch(geo_evictor_thread__entry_point, 0, 0);
+  geo_shared->evictor_thread = thread_launch(geo_evictor_thread__entry_point, 0);
 }
 
 ////////////////////////////////
@@ -76,7 +76,7 @@ geo_scope_close(GEO_Scope *scope)
     U64 stripe_idx = slot_idx%geo_shared->stripes_count;
     GEO_Slot *slot = &geo_shared->slots[slot_idx];
     GEO_Stripe *stripe = &geo_shared->stripes[stripe_idx];
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(GEO_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -126,7 +126,7 @@ geo_buffer_from_hash(GEO_Scope *scope, U128 hash)
     GEO_Slot *slot = &geo_shared->slots[slot_idx];
     GEO_Stripe *stripe = &geo_shared->stripes[stripe_idx];
     B32 found = 0;
-    OS_MutexScopeR(stripe->rw_mutex)
+    MutexScopeR(stripe->rw_mutex)
     {
       for(GEO_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -142,7 +142,7 @@ geo_buffer_from_hash(GEO_Scope *scope, U128 hash)
     B32 node_is_new = 0;
     if(!found)
     {
-      OS_MutexScopeW(stripe->rw_mutex)
+      MutexScopeW(stripe->rw_mutex)
       {
         GEO_Node *node = 0;
         for(GEO_Node *n = slot->first; n != 0; n = n->next)
@@ -203,7 +203,7 @@ internal B32
 geo_u2x_enqueue_req(U128 hash, U64 endt_us)
 {
   B32 good = 0;
-  OS_MutexScope(geo_shared->u2x_ring_mutex) for(;;)
+  MutexScope(geo_shared->u2x_ring_mutex) for(;;)
   {
     U64 unconsumed_size = geo_shared->u2x_ring_write_pos-geo_shared->u2x_ring_read_pos;
     U64 available_size = geo_shared->u2x_ring_size-unconsumed_size;
@@ -229,7 +229,7 @@ geo_u2x_enqueue_req(U128 hash, U64 endt_us)
 internal void
 geo_u2x_dequeue_req(U128 *hash_out)
 {
-  OS_MutexScope(geo_shared->u2x_ring_mutex) for(;;)
+  MutexScope(geo_shared->u2x_ring_mutex) for(;;)
   {
     U64 unconsumed_size = geo_shared->u2x_ring_write_pos-geo_shared->u2x_ring_read_pos;
     if(unconsumed_size >= sizeof(*hash_out))
@@ -259,7 +259,7 @@ ASYNC_WORK_DEF(geo_xfer_work)
   
   //- rjf: take task
   B32 got_task = 0;
-  OS_MutexScopeR(stripe->rw_mutex)
+  MutexScopeR(stripe->rw_mutex)
   {
     for(GEO_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -286,7 +286,7 @@ ASYNC_WORK_DEF(geo_xfer_work)
   }
   
   //- rjf: commit results to cache
-  if(got_task) OS_MutexScopeW(stripe->rw_mutex)
+  if(got_task) MutexScopeW(stripe->rw_mutex)
   {
     for(GEO_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -311,7 +311,7 @@ ASYNC_WORK_DEF(geo_xfer_work)
 internal void
 geo_evictor_thread__entry_point(void *p)
 {
-  ThreadNameF("[geo] evictor thread");
+  ThreadNameF("geo_evictor_thread");
   for(;;)
   {
     U64 check_time_us = os_now_microseconds();
@@ -324,7 +324,7 @@ geo_evictor_thread__entry_point(void *p)
       GEO_Slot *slot = &geo_shared->slots[slot_idx];
       GEO_Stripe *stripe = &geo_shared->stripes[stripe_idx];
       B32 slot_has_work = 0;
-      OS_MutexScopeR(stripe->rw_mutex)
+      MutexScopeR(stripe->rw_mutex)
       {
         for(GEO_Node *n = slot->first; n != 0; n = n->next)
         {
@@ -339,7 +339,7 @@ geo_evictor_thread__entry_point(void *p)
           }
         }
       }
-      if(slot_has_work) OS_MutexScopeW(stripe->rw_mutex)
+      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
       {
         for(GEO_Node *n = slot->first, *next = 0; n != 0; n = next)
         {
