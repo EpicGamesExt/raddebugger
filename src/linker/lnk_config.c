@@ -15,6 +15,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_NotImplemented,     0, "ASSEMBLYMODULE",       "", ""                                                                                                      }, // .NET
   { LNK_CmdSwitch_NotImplemented,     0, "ASSEMBLYRESOURCE",     "", ""                                                                                                      }, // .NET
   { LNK_CmdSwitch_Base,               0, "BASE",                 "{ADDRESS[,SIZE]|@FILENAME,KEY}", ""                                                                        },
+  { LNK_CmdSwitch_Brepro,             0, "BREPRO",               "", "Not supported"                                                                                         },
   { LNK_CmdSwitch_NotImplemented,     0, "CLRIMAGETYPE",         "", ""                                                                                                      }, // .NET
   { LNK_CmdSwitch_NotImplemented,     0, "CLRLOADEROPTIMIZATION","", ""                                                                                                      }, // .NET
   { LNK_CmdSwitch_NotImplemented,     0, "CLRSUPPORTLASTERROR",  "", ""                                                                                                      }, // .NET
@@ -1213,6 +1214,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "too many parameters");
     }
+  } break;
+
+  case LNK_CmdSwitch_Brepro: {
+    // not supported -- ignore
   } break;
 
   case LNK_CmdSwitch_Debug: {

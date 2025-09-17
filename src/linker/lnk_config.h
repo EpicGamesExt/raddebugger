@@ -37,6 +37,7 @@ typedef enum
   LNK_CmdSwitch_AlternateName,
   LNK_CmdSwitch_AppContainer,
   LNK_CmdSwitch_Base,
+  LNK_CmdSwitch_Brepro,
   LNK_CmdSwitch_Debug,
   LNK_CmdSwitch_DefaultLib,
   LNK_CmdSwitch_Delay,
