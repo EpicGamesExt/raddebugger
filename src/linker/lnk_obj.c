@@ -261,14 +261,23 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   //
-  // mark debug info sections
+  // mark sections
   //
   {
     for EachIndex(sect_idx, header.section_count_no_null) {
       COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
-      String8             sect_name   = str8_cstring_capped(sect_header->name, sect_header->name + sizeof(sect_header->name));
+      String8             sect_name   = coff_name_from_section_header(raw_coff_string_table, sect_header);
+
+      // debug info
       if (str8_starts_with(sect_name, str8_lit(".debug$"))) {
         sect_header->flags |= LNK_SECTION_FLAG_DEBUG;
+      }
+
+      // function overrides
+      if (str8_ends_with(sect_name, str8_lit("$fo$"), 0) ||
+          str8_ends_with(sect_name, str8_lit("$fo_rvas$"), 0) ||
+          str8_ends_with(sect_name, str8_lit("$fo_bdd$"), 0)) {
+        sect_header->flags |= COFF_SectionFlag_LnkInfo;
       }
     }
   }
