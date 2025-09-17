@@ -17276,7 +17276,7 @@ rd_frame(void)
       {
         next = ws->hash_next;
         RD_Cfg *cfg = rd_cfg_from_id(ws->cfg_id);
-        if(cfg == &rd_nil_cfg || ws->last_frame_index_touched < rd_state->frame_index)
+        if(cfg == &rd_nil_cfg || ws->last_frame_index_touched < rd_state->frame_index || rd_state->quit)
         {
           ui_state_release(ws->ui);
           r_window_unequip(ws->os, ws->r);
