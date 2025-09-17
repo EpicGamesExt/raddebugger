@@ -103,7 +103,6 @@ hs_init(void)
     stripe->rw_mutex = rw_mutex_alloc();
     stripe->cv = cond_var_alloc();
   }
-  hs_shared->evictor_thread = thread_launch(hs_evictor_thread__entry_point, 0);
 }
 
 ////////////////////////////////
@@ -543,54 +542,50 @@ hs_data_from_hash(HS_Scope *scope, U128 hash)
 }
 
 ////////////////////////////////
-//~ rjf: Evictor Thread
+//~ rjf: Tick
 
 internal void
-hs_evictor_thread__entry_point(void *p)
+hs_tick(void)
 {
-  ThreadNameF("hs_evictor_thread");
-  for(;;)
+  Rng1U64 range = lane_range(hs_shared->slots_count);
+  for EachInRange(slot_idx, range)
   {
-    for(U64 slot_idx = 0; slot_idx < hs_shared->slots_count; slot_idx += 1)
+    U64 stripe_idx = slot_idx%hs_shared->stripes_count;
+    HS_Slot *slot = &hs_shared->slots[slot_idx];
+    HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
+    B32 slot_has_work = 0;
+    MutexScopeR(stripe->rw_mutex)
     {
-      U64 stripe_idx = slot_idx%hs_shared->stripes_count;
-      HS_Slot *slot = &hs_shared->slots[slot_idx];
-      HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
-      B32 slot_has_work = 0;
-      MutexScopeR(stripe->rw_mutex)
+      for(HS_Node *n = slot->first; n != 0; n = n->next)
       {
-        for(HS_Node *n = slot->first; n != 0; n = n->next)
+        U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
+        U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
+        U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
+        if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
         {
-          U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
-          U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
-          U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
-          if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
-          {
-            slot_has_work = 1;
-            break;
-          }
+          slot_has_work = 1;
+          break;
         }
       }
-      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
+    }
+    if(slot_has_work) MutexScopeW(stripe->rw_mutex)
+    {
+      for(HS_Node *n = slot->first, *next = 0; n != 0; n = next)
       {
-        for(HS_Node *n = slot->first, *next = 0; n != 0; n = next)
+        next = n->next;
+        U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
+        U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
+        U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
+        if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
         {
-          next = n->next;
-          U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
-          U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
-          U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
-          if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
+          DLLRemove(slot->first, slot->last, n);
+          SLLStackPush(hs_shared->stripes_free_nodes[stripe_idx], n);
+          if(n->arena != 0)
           {
-            DLLRemove(slot->first, slot->last, n);
-            SLLStackPush(hs_shared->stripes_free_nodes[stripe_idx], n);
-            if(n->arena != 0)
-            {
-              arena_release(n->arena);
-            }
+            arena_release(n->arena);
           }
         }
       }
     }
-    os_sleep_milliseconds(1000);
   }
 }

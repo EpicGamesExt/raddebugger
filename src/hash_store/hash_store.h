@@ -206,9 +206,6 @@ struct HS_Shared
   HS_Stripe *root_stripes;
   HS_RootNode **root_stripes_free_nodes;
   U64 root_id_gen;
-  
-  // rjf: evictor thread
-  Thread evictor_thread;
 };
 
 ////////////////////////////////
@@ -263,8 +260,8 @@ internal U128 hs_hash_from_key(HS_Key key, U64 rewind_count);
 internal String8 hs_data_from_hash(HS_Scope *scope, U128 hash);
 
 ////////////////////////////////
-//~ rjf: Evictor Thread
+//~ rjf: Tick
 
-internal void hs_evictor_thread__entry_point(void *p);
+internal void hs_tick(void);
 
 #endif // HASH_STORE_H

@@ -190,6 +190,9 @@ async_thread_entry_point(void *params)
   for(;!ins_atomic_u32_eval(&global_async_exit);)
   {
     MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
+#if defined(HASH_STORE_H)
+    hs_tick();
+#endif
 #if defined(FILE_STREAM_H)
     fs_tick();
 #endif

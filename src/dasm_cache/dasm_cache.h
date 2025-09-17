@@ -101,6 +101,24 @@ struct DASM_Params
 };
 
 ////////////////////////////////
+//~ rjf: Disassembly Request Bundle
+
+typedef struct DASM_Request DASM_Request;
+struct DASM_Request
+{
+  HS_Root root;
+  U128 hash;
+  DASM_Params params;
+};
+
+typedef struct DASM_RequestNode DASM_RequestNode;
+struct DASM_RequestNode
+{
+  DASM_RequestNode *next;
+  DASM_Request v;
+};
+
+////////////////////////////////
 //~ rjf: Disassembly Text Line Types
 
 typedef U32 DASM_LineFlags;
@@ -141,16 +159,6 @@ struct DASM_LineArray
 {
   DASM_Line *v;
   U64 count;
-};
-
-////////////////////////////////
-//~ rjf: Disassembly Result Bundle
-
-typedef struct DASM_Result DASM_Result;
-struct DASM_Result
-{
-  String8 text;
-  DASM_LineArray lines;
 };
 
 ////////////////////////////////
@@ -254,6 +262,13 @@ struct DASM_Shared
   DASM_Slot *slots;
   DASM_Stripe *stripes;
   
+  // rjf: requests
+  Mutex req_mutex;
+  Arena *req_arena;
+  DASM_RequestNode *first_req;
+  DASM_RequestNode *last_req;
+  U64 req_count;
+  
   // rjf: user -> parse thread
   U64 u2p_ring_size;
   U8 *u2p_ring_base;
@@ -312,6 +327,11 @@ internal void dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_No
 
 internal DASM_Info dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params);
 internal DASM_Info dasm_info_from_key_params(DASM_Scope *scope, HS_Key key, DASM_Params *params, U128 *hash_out);
+
+////////////////////////////////
+//~ rjf: Ticks
+
+internal void dasm_tick(void);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
