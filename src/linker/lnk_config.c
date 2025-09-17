@@ -32,6 +32,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Dll,                0, "DLL",                  "", ""                                                                                                      },
   { LNK_CmdSwitch_NotImplemented,     0, "DRIVER",               "", ""                                                                                                      },
   { LNK_CmdSwitch_DisallowLib,        1, "DISALLOWLIB",          ":LIBRARY", "",                                                                                             },
+  { LNK_CmdSwitch_D2,                 0, "D2",                   ""                                                                                                          },
   { LNK_CmdSwitch_EditAndContinue,    1, "EDITANDCONTINUE",      "[:NO]", ""                                                                                                 },
   { LNK_CmdSwitch_DynamicBase,        0, "DYNAMICBASE",          "[:NO]", ""                                                                                                 },
   { LNK_CmdSwitch_NotImplemented,     0, "EMITVOLATILEMETADATA", "", ""                                                                                                      },
@@ -1284,6 +1285,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Dump: { 
     lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unsupported switch; binary dump is done by passing /DUMP to link.exe");
+  } break;
+
+  case LNK_CmdSwitch_D2: {
+    // not supported -- ignore
   } break;
 
   case LNK_CmdSwitch_Entry: {

@@ -45,6 +45,7 @@ typedef enum
   LNK_CmdSwitch_Dll,
   LNK_CmdSwitch_DynamicBase,
   LNK_CmdSwitch_Dump,
+  LNK_CmdSwitch_D2,
   LNK_CmdSwitch_Entry,
   LNK_CmdSwitch_ErrorReport,
   LNK_CmdSwitch_Export,
