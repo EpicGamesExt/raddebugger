@@ -73,8 +73,8 @@ typedef struct LNK_Inputer
 #define LNK_IMPORT_STUB "*** RAD_IMPORT_STUB ***"
 #define LNK_NULL_SYMBOL "*** RAD_NULL_SYMBOL ***"
 
-#define LNK_SECTION_FLAG_IS_LIVE    (1 << 0)
-#define LNK_SECTION_FLAG_DEBUG_INFO (1 << 1)
+#define LNK_SECTION_FLAG_LIVE    (1 << 0)
+#define LNK_SECTION_FLAG_DEBUG (1 << 1)
 
 typedef struct LNK_Link
 {
@@ -118,6 +118,39 @@ typedef struct LNK_CommonBlockContrib
   } u;
 } LNK_CommonBlockContrib;
 
+// --- Ref ---------------------------------------------------------------------
+
+#define PointerBitSize      64u
+#define PointerFreeBitsSize 16u
+
+#define PointerTagBitSize PointerFreeBitsSize
+#define PointerTagMask    ((1ull << (PointerTagBitSize)) - 1u)
+#define PointerTagShift   (PointerBitSize - PointerTagBitSize)
+
+#define PackPointer(ptr, tag) (void *)(IntFromPtr(ptr) | (((tag) & PointerTagMask) << PointerTagShift))
+#define UnpackPointerTag(ptr) ((IntFromPtr(ptr) >> PointerTagShift) & PointerTagMask)
+#define UnpackPointer(ptr)    (void *)(IntFromPtr(ptr) & ~(PointerTagMask << PointerTagShift))
+#define BumpPointerTag(ptr)   PackPointer(UnpackPointer(ptr), UnpackPointerTag(ptr) + 1)
+
+#define LNK_RELOCS_PER_TASK 0x1000
+
+typedef struct LNK_RelocRefs
+{
+  LNK_Obj         *obj;
+  COFF_RelocArray  relocs;
+} LNK_RelocRefs;
+
+typedef struct LNK_RelocRefsNode
+{
+  LNK_RelocRefs *v;
+  struct LNK_RelocRefsNode *next;
+} LNK_RelocRefsNode;
+
+typedef struct LNK_RelocRefsList
+{
+  LNK_RelocRefsNode *head;
+} LNK_RelocRefsList;
+
 // --- Base Reloc --------------------------------------------------------------
 
 typedef struct LNK_BaseRelocPage
@@ -155,6 +188,13 @@ typedef struct
   LNK_Lib              *lib;
   LNK_LibMemberRefList *member_ref_lists;
 } LNK_SearchLibTask;
+
+typedef struct
+{
+  LNK_SymbolTable  *symtab;
+  U32               active_thread_count;
+  LNK_RelocRefsList reloc_refs;
+} LNK_OptRefTask;
 
 typedef struct
 {

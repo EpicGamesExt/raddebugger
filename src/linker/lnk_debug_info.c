@@ -2934,9 +2934,9 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *obj_sect_header = &obj_section_table[sect_idx];
 
-    if (obj_sect_header->flags & COFF_SectionFlag_LnkInfo)    { continue; }
-    if (obj_sect_header->flags & COFF_SectionFlag_LnkRemove)  { continue; }
-    if (obj_sect_header->flags & LNK_SECTION_FLAG_DEBUG_INFO) { continue; }
+    if (obj_sect_header->flags & COFF_SectionFlag_LnkInfo)   { continue; }
+    if (obj_sect_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
+    if (obj_sect_header->flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
 
     U64     sect_number;
     String8 sect_data;

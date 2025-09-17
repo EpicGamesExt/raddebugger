@@ -268,7 +268,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
       COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
       String8             sect_name   = str8_cstring_capped(sect_header->name, sect_header->name + sizeof(sect_header->name));
       if (str8_starts_with(sect_name, str8_lit(".debug$"))) {
-        sect_header->flags |= LNK_SECTION_FLAG_DEBUG_INFO;
+        sect_header->flags |= LNK_SECTION_FLAG_DEBUG;
       }
     }
   }
@@ -286,7 +286,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     CV_Symbol comp_symbol = {0};
     for EachIndex(sect_idx, header.section_count_no_null) {
       COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
-      if (sect_header->flags & LNK_SECTION_FLAG_DEBUG_INFO) {
+      if (sect_header->flags & LNK_SECTION_FLAG_DEBUG) {
         String8 name = str8_cstring_capped(sect_header->name, sect_header->name+sizeof(sect_header->name));
         if (str8_match(name, str8_lit(".debug$S"), 0)) {
           Temp temp = temp_begin(scratch.arena);
