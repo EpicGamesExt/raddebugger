@@ -1618,92 +1618,10 @@ txt_init(void)
 }
 
 ////////////////////////////////
-//~ rjf: Thread Context Initialization
-
-internal void
-txt_tctx_ensure_inited(void)
-{
-  if(txt_tctx == 0)
-  {
-    Arena *arena = arena_alloc();
-    txt_tctx = push_array(arena, TXT_TCTX, 1);
-    txt_tctx->arena = arena;
-  }
-}
-
-////////////////////////////////
-//~ rjf: Scoped Access
-
-internal TXT_Scope *
-txt_scope_open(void)
-{
-  txt_tctx_ensure_inited();
-  TXT_Scope *scope = txt_tctx->free_scope;
-  if(scope)
-  {
-    SLLStackPop(txt_tctx->free_scope);
-  }
-  else
-  {
-    scope = push_array_no_zero(txt_tctx->arena, TXT_Scope, 1);
-  }
-  MemoryZeroStruct(scope);
-  return scope;
-}
-
-internal void
-txt_scope_close(TXT_Scope *scope)
-{
-  for(TXT_Touch *touch = scope->top_touch, *next = 0; touch != 0; touch = next)
-  {
-    U128 hash = touch->hash;
-    next = touch->next;
-    U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
-    U64 stripe_idx = slot_idx%txt_shared->stripes_count;
-    TXT_Slot *slot = &txt_shared->slots[slot_idx];
-    TXT_Stripe *stripe = &txt_shared->stripes[stripe_idx];
-    MutexScopeR(stripe->rw_mutex)
-    {
-      for(TXT_Node *n = slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(hash, n->hash) && touch->lang == n->lang)
-        {
-          ins_atomic_u64_dec_eval(&n->scope_ref_count);
-          break;
-        }
-      }
-    }
-    SLLStackPush(txt_tctx->free_touch, touch);
-  }
-  SLLStackPush(txt_tctx->free_scope, scope);
-}
-
-internal void
-txt_scope_touch_node__stripe_r_guarded(TXT_Scope *scope, TXT_Node *node)
-{
-  TXT_Touch *touch = txt_tctx->free_touch;
-  ins_atomic_u64_inc_eval(&node->scope_ref_count);
-  ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
-  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, update_tick_idx());
-  if(touch != 0)
-  {
-    SLLStackPop(txt_tctx->free_touch);
-  }
-  else
-  {
-    touch = push_array_no_zero(txt_tctx->arena, TXT_Touch, 1);
-  }
-  MemoryZeroStruct(touch);
-  touch->hash = node->hash;
-  touch->lang = node->lang;
-  SLLStackPush(scope->top_touch, touch);
-}
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
 internal TXT_TextInfo
-txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
+txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang)
 {
   TXT_TextInfo info = {0};
   if(!u128_match(hash, u128_zero()))
@@ -1723,7 +1641,9 @@ txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
           info.bytes_processed = ins_atomic_u64_eval(&n->info.bytes_processed);
           info.bytes_to_process = ins_atomic_u64_eval(&n->info.bytes_to_process);
           found = 1;
-          txt_scope_touch_node__stripe_r_guarded(scope, n);
+          ins_atomic_u64_eval_assign(&n->last_time_touched_us, os_now_microseconds());
+          ins_atomic_u64_eval_assign(&n->last_user_clock_idx_touched, update_tick_idx());
+          access_touch(access, &n->scope_ref_count, stripe->cv);
           break;
         }
       }
@@ -1771,13 +1691,13 @@ txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
 }
 
 internal TXT_TextInfo
-txt_text_info_from_key_lang(TXT_Scope *scope, C_Key key, TXT_LangKind lang, U128 *hash_out)
+txt_text_info_from_key_lang(Access *access, C_Key key, TXT_LangKind lang, U128 *hash_out)
 {
   TXT_TextInfo result = {0};
   for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
     U128 hash = c_hash_from_key(key, rewind_idx);
-    result = txt_text_info_from_hash_lang(scope, hash, lang);
+    result = txt_text_info_from_hash_lang(access, hash, lang);
     if(result.lines_count != 0)
     {
       if(hash_out)

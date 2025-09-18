@@ -197,35 +197,6 @@ struct TXT_Stripe
 };
 
 ////////////////////////////////
-//~ rjf: Scoped Access
-
-typedef struct TXT_Touch TXT_Touch;
-struct TXT_Touch
-{
-  TXT_Touch *next;
-  U128 hash;
-  TXT_LangKind lang;
-};
-
-typedef struct TXT_Scope TXT_Scope;
-struct TXT_Scope
-{
-  TXT_Scope *next;
-  TXT_Touch *top_touch;
-};
-
-////////////////////////////////
-//~ rjf: Thread Context
-
-typedef struct TXT_TCTX TXT_TCTX;
-struct TXT_TCTX
-{
-  Arena *arena;
-  TXT_Scope *free_scope;
-  TXT_Touch *free_touch;
-};
-
-////////////////////////////////
 //~ rjf: Shared State
 
 typedef struct TXT_Shared TXT_Shared;
@@ -259,7 +230,6 @@ struct TXT_Shared
 //~ rjf: Globals
 
 read_only global TXT_ScopeNode txt_scope_node_nil = {0};
-thread_static TXT_TCTX *txt_tctx = 0;
 global TXT_Shared *txt_shared = 0;
 
 ////////////////////////////////
@@ -293,22 +263,10 @@ internal TXT_TokenArray txt_token_array_from_string__disasm_x64_intel(Arena *are
 internal void txt_init(void);
 
 ////////////////////////////////
-//~ rjf: Thread Context Initialization
-
-internal void txt_tctx_ensure_inited(void);
-
-////////////////////////////////
-//~ rjf: Scoped Access
-
-internal TXT_Scope *txt_scope_open(void);
-internal void txt_scope_close(TXT_Scope *scope);
-internal void txt_scope_touch_node__stripe_r_guarded(TXT_Scope *scope, TXT_Node *node);
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal TXT_TextInfo txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang);
-internal TXT_TextInfo txt_text_info_from_key_lang(TXT_Scope *scope, C_Key key, TXT_LangKind lang, U128 *hash_out);
+internal TXT_TextInfo txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang);
+internal TXT_TextInfo txt_text_info_from_key_lang(Access *access, C_Key key, TXT_LangKind lang, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Text Info Extractor Helpers

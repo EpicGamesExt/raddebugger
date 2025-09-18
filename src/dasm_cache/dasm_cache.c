@@ -500,7 +500,6 @@ dasm_tick(void)
     U64 req_idx = req_num-1;
     Access *access = access_open();
     DI_Scope *di_scope = di_scope_open();
-    TXT_Scope *txt_scope = txt_scope_open();
     
     //- rjf: unpack
     B32 stale = 0;
@@ -597,7 +596,7 @@ dasm_tick(void)
                   TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
                   U64 endt_us = max_U64;
                   U128 hash = {0};
-                  TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+                  TXT_TextInfo text_info = txt_text_info_from_key_lang(access, key, lang_kind, &hash);
                   stale = (stale || u128_match(hash, u128_zero()));
                   if(0 < line->line_num && line->line_num < text_info.lines_count)
                   {
@@ -730,7 +729,6 @@ dasm_tick(void)
       req_n->v.params.dbgi_key = di_key_copy(dasm_shared->req_arena, &req_n->v.params.dbgi_key);
     }
     
-    txt_scope_close(txt_scope);
     di_scope_close(di_scope);
     access_close(access);
   }

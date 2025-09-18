@@ -16092,13 +16092,12 @@ rd_frame(void)
           case RD_CmdKind_ToggleWatchExpressionAtCursor:
           {
             Access *access = access_open();
-            TXT_Scope *txt_scope = txt_scope_open();
             RD_Regs *regs = rd_regs();
             C_Key text_key = regs->text_key;
             TXT_LangKind lang_kind = regs->lang_kind;
             TxtRng range = txt_rng(regs->cursor, regs->mark);
             U128 hash = {0};
-            TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, lang_kind, &hash);
+            TXT_TextInfo info = txt_text_info_from_key_lang(access, text_key, lang_kind, &hash);
             String8 data = c_data_from_hash(access, hash);
             Rng1U64 expr_off_range = {0};
             if(range.min.column != range.max.column)
@@ -16114,7 +16113,6 @@ rd_frame(void)
                     kind == RD_CmdKind_ToggleWatchExpressionAtCursor ? RD_CmdKind_ToggleWatchExpression :
                     RD_CmdKind_GoToName),
                    .string = expr);
-            txt_scope_close(txt_scope);
             access_close(access);
           }break;
           case RD_CmdKind_SetNextStatement:

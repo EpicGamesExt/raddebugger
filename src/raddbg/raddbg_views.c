@@ -2026,7 +2026,6 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   rd_code_view_init(cv);
   Temp scratch = scratch_begin(0, 0);
   Access *access = access_open();
-  TXT_Scope *txt_scope = txt_scope_open();
   
   //////////////////////////////
   //- rjf: set up invariants
@@ -2090,7 +2089,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
     rd_regs()->lang_kind = txt_lang_kind_from_extension(lang);
   }
   U128 hash = {0};
-  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
+  TXT_TextInfo info = txt_text_info_from_key_lang(access, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
   String8 data = c_data_from_hash(access, hash);
   B32 file_is_missing = (rd_regs()->file_path.size != 0 && os_properties_from_file_path(rd_regs()->file_path).modified == 0);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
@@ -2250,7 +2249,6 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   rd_store_view_param_s64(str8_lit("mark_line"), rd_regs()->mark.line);
   rd_store_view_param_s64(str8_lit("mark_column"), rd_regs()->mark.column);
   
-  txt_scope_close(txt_scope);
   access_close(access);
   scratch_end(scratch);
 }
@@ -2292,7 +2290,6 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   RD_CodeViewState *cv = &dv->cv;
   Temp scratch = scratch_begin(0, 0);
   Access *access = access_open();
-  TXT_Scope *txt_scope = txt_scope_open();
   
   //////////////////////////////
   //- rjf: if disassembly views are not parameterized by anything, they
@@ -2413,7 +2410,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   rd_regs()->text_key = dasm_info.text_key;
   rd_regs()->lang_kind = txt_lang_kind_from_arch(arch);
   U128 dasm_text_hash = {0};
-  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &dasm_text_hash);
+  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(access, rd_regs()->text_key, rd_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = c_data_from_hash(access, dasm_text_hash);
   B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
   B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null && (space.kind != RD_EvalSpaceKind_CtrlEntity || space_entity != &ctrl_entity_nil));
@@ -2494,7 +2491,6 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   dv->cursor = rd_regs()->cursor;
   dv->mark = rd_regs()->mark;
   
-  txt_scope_close(txt_scope);
   access_close(access);
   scratch_end(scratch);
 }
