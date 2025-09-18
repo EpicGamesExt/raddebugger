@@ -571,10 +571,10 @@ struct RD_State
   F32 tooltip_animation_rate;
   
   // rjf: serialized config debug string keys
-  HS_Key user_cfg_string_key;
-  HS_Key project_cfg_string_key;
-  HS_Key cmdln_cfg_string_key;
-  HS_Key transient_cfg_string_key;
+  C_Key user_cfg_string_key;
+  C_Key project_cfg_string_key;
+  C_Key cmdln_cfg_string_key;
+  C_Key transient_cfg_string_key;
   
   // rjf: schema table
   MD_NodePtrList *schemas;
@@ -898,7 +898,7 @@ internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range
 internal B32 rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
 
 //- rjf: asynchronous streamed reads -> hashes from spaces
-internal HS_Key rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated);
+internal C_Key rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated);
 
 //- rjf: space -> entire range
 internal Rng1U64 rd_whole_range_from_eval_space(E_Space space);
@@ -988,7 +988,7 @@ internal void rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
-internal MD_Node *rd_theme_tree_from_name(Arena *arena, HS_Scope *scope, String8 theme_name);
+internal MD_Node *rd_theme_tree_from_name(Arena *arena, C_Scope *scope, String8 theme_name);
 internal Vec4F32 rd_rgba_from_code_color_slot(RD_CodeColorSlot slot);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);

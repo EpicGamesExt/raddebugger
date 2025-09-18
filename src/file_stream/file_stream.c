@@ -27,7 +27,7 @@ fs_big_hash_from_string_range(String8 string, Rng1U64 range)
   MemoryCopy(buffer, string.str, string.size);
   MemoryCopy(buffer + string.size, &range.min, sizeof(range.min));
   MemoryCopy(buffer + string.size + sizeof(range.min), &range.max, sizeof(range.max));
-  U128 hash = hs_hash_from_data(str8(buffer, buffer_size));
+  U128 hash = c_hash_from_data(str8(buffer, buffer_size));
   scratch_end(scratch);
   return hash;
 }
@@ -68,7 +68,7 @@ fs_change_gen(void)
 ////////////////////////////////
 //~ rjf: Cache Interaction
 
-internal HS_Key
+internal C_Key
 fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -82,7 +82,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
   FS_Stripe *path_stripe = &fs_shared->stripes[path_stripe_idx];
   
   //- rjf: get root for this path - on 1st try (read mode), try to read, on 2nd try (write mode), create node
-  HS_Root root = {0};
+  C_Root root = {0};
   for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
   {
     B32 node_found = 0;
@@ -102,7 +102,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         FS_Node *node = push_array(path_stripe->arena, FS_Node, 1);
         SLLQueuePush(path_slot->first, path_slot->last, node);
         node->path = push_str8_copy(path_stripe->arena, path);
-        node->root = hs_root_alloc();
+        node->root = c_root_alloc();
         node->slots_count = 64;
         node->slots = push_array(path_stripe->arena, FS_RangeSlot, node->slots_count);
         root = node->root;
@@ -115,11 +115,11 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
   }
   
   //- rjf: build a key for this path/range combo
-  HS_Key key = hs_key_make(root, hs_id_make(range.min, range.max));
+  C_Key key = c_key_make(root, c_id_make(range.min, range.max));
   
   //- rjf: if the most recent hash for this key is zero, then try to submit a new
   // request to pull it in.
-  if(u128_match(hs_hash_from_key(key, 0), u128_zero()))
+  if(u128_match(c_hash_from_key(key, 0), u128_zero()))
   {
     // rjf: loop: request, check for results, return until we can't
     RWMutexScope(path_stripe->rw_mutex, 1) for(;;)
@@ -148,7 +148,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
       FS_RangeNode *range_node = 0;
       for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
       {
-        if(hs_id_match(n->id, key.id))
+        if(c_id_match(n->id, key.id))
         {
           range_node = n;
           break;
@@ -180,7 +180,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
       }
       
       // rjf: have time to wait? -> wait on this stripe; otherwise exit
-      B32 have_results = !u128_match(hs_hash_from_key(key, 0), u128_zero());
+      B32 have_results = !u128_match(c_hash_from_key(key, 0), u128_zero());
       if(!have_results && os_now_microseconds() < endt_us)
       {
         cond_var_wait_rw(path_stripe->cv, path_stripe->rw_mutex, 1, endt_us);
@@ -201,10 +201,10 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
 {
   U128 hash = {0};
   {
-    HS_Key key = fs_key_from_path_range(path, range, endt_us);
-    for EachIndex(rewind_idx, HS_KEY_HASH_HISTORY_COUNT)
+    C_Key key = fs_key_from_path_range(path, range, endt_us);
+    for EachIndex(rewind_idx, C_KEY_HASH_HISTORY_COUNT)
     {
-      hash = hs_hash_from_key(key, rewind_idx);
+      hash = c_hash_from_key(key, rewind_idx);
       if(!u128_match(hash, u128_zero()))
       {
         break;
@@ -271,7 +271,7 @@ fs_tick(void)
                   range_n != 0;
                   range_n = range_n->next)
               {
-                HS_Key key = hs_key_make(n->root, range_n->id);
+                C_Key key = c_key_make(n->root, range_n->id);
                 if(ins_atomic_u64_eval(&range_n->working_count) == 0)
                 {
                   ins_atomic_u64_inc_eval(&range_n->working_count);
@@ -325,7 +325,7 @@ fs_tick(void)
     }
     U64 req_idx = req_num-1;
     FS_Request *r = &reqs[req_idx];
-    HS_Key key = r->key;
+    C_Key key = r->key;
     String8 path = r->path;
     Rng1U64 range = r->range;
     U64 path_hash = fs_little_hash_from_string(path);
@@ -373,7 +373,7 @@ fs_tick(void)
     {
       ProfScope("submit")
       {
-        hs_submit_data(key, &data_arena, data);
+        c_submit_data(key, &data_arena, data);
       }
     }
     

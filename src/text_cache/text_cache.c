@@ -1771,12 +1771,12 @@ txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
 }
 
 internal TXT_TextInfo
-txt_text_info_from_key_lang(TXT_Scope *scope, HS_Key key, TXT_LangKind lang, U128 *hash_out)
+txt_text_info_from_key_lang(TXT_Scope *scope, C_Key key, TXT_LangKind lang, U128 *hash_out)
 {
   TXT_TextInfo result = {0};
-  for(U64 rewind_idx = 0; rewind_idx < HS_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
+  for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
-    U128 hash = hs_hash_from_key(key, rewind_idx);
+    U128 hash = c_hash_from_key(key, rewind_idx);
     result = txt_text_info_from_hash_lang(scope, hash, lang);
     if(result.lines_count != 0)
     {
@@ -2206,7 +2206,7 @@ ASYNC_WORK_DEF(txt_parse_work)
   U128 hash = {0};
   TXT_LangKind lang = TXT_LangKind_Null;
   txt_u2p_dequeue_req(&hash, &lang);
-  HS_Scope *scope = hs_scope_open();
+  C_Scope *scope = c_scope_open();
   
   //- rjf: unpack hash
   U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
@@ -2232,7 +2232,7 @@ ASYNC_WORK_DEF(txt_parse_work)
   String8 data = {0};
   if(got_task)
   {
-    data = hs_data_from_hash(scope, hash);
+    data = c_data_from_hash(scope, hash);
   }
   
   //- rjf: data -> text info
@@ -2488,7 +2488,7 @@ ASYNC_WORK_DEF(txt_parse_work)
     {
       if(u128_match(n->hash, hash) && n->lang == lang)
       {
-        hs_hash_downstream_inc(n->hash);
+        c_hash_downstream_inc(n->hash);
         n->arena = info_arena;
         info.bytes_processed = n->info.bytes_processed;
         info.bytes_to_process = n->info.bytes_to_process;
@@ -2500,7 +2500,7 @@ ASYNC_WORK_DEF(txt_parse_work)
     }
   }
   
-  hs_scope_close(scope);
+  c_scope_close(scope);
   ProfEnd();
   return 0;
 }
@@ -2551,7 +2551,7 @@ txt_evictor_thread__entry_point(void *p)
              n->is_working == 0)
           {
             DLLRemove(slot->first, slot->last, n);
-            hs_hash_downstream_dec(n->hash);
+            c_hash_downstream_dec(n->hash);
             if(n->arena != 0)
             {
               arena_release(n->arena);

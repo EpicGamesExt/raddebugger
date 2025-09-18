@@ -1421,8 +1421,8 @@ d_init(void)
   d_state = push_array(arena, D_State, 1);
   d_state->arena = arena;
   d_state->cmds_arena = arena_alloc();
-  d_state->output_log_key = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
-  hs_submit_data(d_state->output_log_key, 0, str8_zero());
+  d_state->output_log_key = c_key_make(c_root_alloc(), c_id_make(0, 0));
+  c_submit_data(d_state->output_log_key, 0, str8_zero());
   d_state->ctrl_entity_store = ctrl_entity_ctx_rw_store_alloc();
   d_state->ctrl_stop_arena = arena_alloc();
   d_state->ctrl_msg_arena = arena_alloc();

@@ -283,7 +283,7 @@ struct D_State
   D_CmdList cmds;
   
   // rjf: output log key
-  HS_Key output_log_key;
+  C_Key output_log_key;
   
   // rjf: per-run caches
   U64 tls_base_cache_reggen_idx;

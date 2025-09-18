@@ -38,9 +38,9 @@ mtx_init(void)
 //~ rjf: Buffer Operations
 
 internal void
-mtx_push_op(HS_Key buffer_key, MTX_Op op)
+mtx_push_op(C_Key buffer_key, MTX_Op op)
 {
-  U64 hash = hs_little_hash_from_data(str8_struct(&buffer_key));
+  U64 hash = c_little_hash_from_data(str8_struct(&buffer_key));
   MTX_MutThread *thread = &mtx_shared->mut_threads[hash%mtx_shared->mut_threads_count];
   mtx_enqueue_op(thread, buffer_key, op);
 }
@@ -49,7 +49,7 @@ mtx_push_op(HS_Key buffer_key, MTX_Op op)
 //~ rjf: Mutation Threads
 
 internal void
-mtx_enqueue_op(MTX_MutThread *thread, HS_Key buffer_key, MTX_Op op)
+mtx_enqueue_op(MTX_MutThread *thread, C_Key buffer_key, MTX_Op op)
 {
   // TODO(rjf): if op.replace is too big, need to split into multiple edits
   MutexScope(thread->mutex) for(;;)
@@ -71,7 +71,7 @@ mtx_enqueue_op(MTX_MutThread *thread, HS_Key buffer_key, MTX_Op op)
 }
 
 internal void
-mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, HS_Key *buffer_key_out, MTX_Op *op_out)
+mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, C_Key *buffer_key_out, MTX_Op *op_out)
 {
   MutexScope(thread->mutex) for(;;)
   {
@@ -98,16 +98,16 @@ mtx_mut_thread__entry_point(void *p)
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
-    HS_Scope *hs_scope = hs_scope_open();
+    C_Scope *c_scope = c_scope_open();
     
     //- rjf: get next op
-    HS_Key buffer_key = {0};
+    C_Key buffer_key = {0};
     MTX_Op op = {0};
     mtx_dequeue_op(scratch.arena, mut_thread, &buffer_key, &op);
     
     //- rjf: get buffer's current data
-    U128 hash = hs_hash_from_key(buffer_key, 0);
-    String8 data = hs_data_from_hash(hs_scope, hash);
+    U128 hash = c_hash_from_key(buffer_key, 0);
+    String8 data = c_data_from_hash(c_scope, hash);
     
     //- rjf: clamp op by data
     op.range.min = Min(op.range.min, data.size);
@@ -134,10 +134,10 @@ mtx_mut_thread__entry_point(void *p)
         MemoryCopy(new_data_base+pre_replace_data.size+op.replace.size, post_replace_data.str, post_replace_data.size);
       }
       String8 new_data = str8(new_data_base, new_data_size);
-      hs_submit_data(buffer_key, &arena, new_data);
+      c_submit_data(buffer_key, &arena, new_data);
     }
     
-    hs_scope_close(hs_scope);
+    c_scope_close(c_scope);
     scratch_end(scratch);
   }
 }

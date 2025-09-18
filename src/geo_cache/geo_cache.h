@@ -118,7 +118,7 @@ internal void geo_scope_touch_node__stripe_r_guarded(GEO_Scope *scope, GEO_Node 
 //~ rjf: Cache Lookups
 
 internal R_Handle geo_buffer_from_hash(GEO_Scope *scope, U128 hash);
-internal R_Handle geo_buffer_from_key(GEO_Scope *scope, HS_Key key);
+internal R_Handle geo_buffer_from_key(GEO_Scope *scope, C_Key key);
 
 ////////////////////////////////
 //~ rjf: Transfer Threads

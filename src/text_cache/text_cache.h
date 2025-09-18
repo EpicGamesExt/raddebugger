@@ -308,7 +308,7 @@ internal void txt_scope_touch_node__stripe_r_guarded(TXT_Scope *scope, TXT_Node 
 //~ rjf: Cache Lookups
 
 internal TXT_TextInfo txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang);
-internal TXT_TextInfo txt_text_info_from_key_lang(TXT_Scope *scope, HS_Key key, TXT_LangKind lang, U128 *hash_out);
+internal TXT_TextInfo txt_text_info_from_key_lang(TXT_Scope *scope, C_Key key, TXT_LangKind lang, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Text Info Extractor Helpers

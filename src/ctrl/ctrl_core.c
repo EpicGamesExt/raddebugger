@@ -1620,7 +1620,7 @@ ctrl_set_wakeup_hook(CTRL_WakeupFunctionType *wakeup_hook)
 
 //- rjf: process memory cache key reading
 
-internal HS_Key
+internal C_Key
 ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, U64 endt_us, B32 *out_is_stale)
 {
   CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
@@ -1634,7 +1634,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
   
   //- rjf: get the hash store root for this process; construct process node if it
   // doesn't exist
-  HS_Root root = {0};
+  C_Root root = {0};
   {
     B32 node_found = 0;
     MutexScopeR(process_stripe->rw_mutex)
@@ -1667,7 +1667,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
         DLLPushBack(process_slot->first, process_slot->last, node);
         node->arena = node_arena;
         node->handle = process;
-        node->root = hs_root_alloc();
+        node->root = c_root_alloc();
         node->range_hash_slots_count = 1024;
         node->range_hash_slots = push_array(node_arena, CTRL_ProcessMemoryRangeHashSlot, node->range_hash_slots_count);
         root = node->root;
@@ -1676,7 +1676,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
   }
   
   //- rjf: form ID for this process memory query
-  HS_ID id = {0};
+  C_ID id = {0};
   {
     id.u128[0].u64[0] = vaddr_range.min & 0x00ffffffffffffffull;
     id.u128[0].u64[1] = vaddr_range.max & 0x00ffffffffffffffull;
@@ -1685,10 +1685,10 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
       id.u128[0].u64[0] |= (1ull << 63);
     }
   }
-  U64 range_hash = hs_little_hash_from_data(str8_struct(&id));
+  U64 range_hash = c_little_hash_from_data(str8_struct(&id));
   
   //- rjf: form full key
-  HS_Key key = hs_key_make(root, id);
+  C_Key key = c_key_make(root, id);
   
   //- rjf: loop: try to look for current results, request if not there, wait if we can, repeat until we can't
   U64 mem_gen = ctrl_mem_gen();
@@ -1709,7 +1709,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
           CTRL_ProcessMemoryRangeHashSlot *range_slot = &process_n->range_hash_slots[range_slot_idx];
           for(CTRL_ProcessMemoryRangeHashNode *n = range_slot->first; n != 0; n = n->next)
           {
-            if(hs_id_match(n->id, id))
+            if(c_id_match(n->id, id))
             {
               id_exists = 1;
               id_stale = (n->mem_gen < mem_gen);
@@ -1758,7 +1758,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
             CTRL_ProcessMemoryRangeHashNode *range_n = 0;
             for(CTRL_ProcessMemoryRangeHashNode *n = range_slot->first; n != 0; n = n->next)
             {
-              if(hs_id_match(n->id, id))
+              if(c_id_match(n->id, id))
               {
                 range_n = n;
                 break;
@@ -1807,7 +1807,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
               CTRL_ProcessMemoryRangeHashNode *range_n = 0;
               for(CTRL_ProcessMemoryRangeHashNode *n = range_slot->first; n != 0; n = n->next)
               {
-                if(hs_id_match(n->id, id))
+                if(c_id_match(n->id, id))
                 {
                   n->working_count -= 1;
                   break;
@@ -1851,7 +1851,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
      range.max <= 0x000FFFFFFFFFFFFFull)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    HS_Scope *scope = hs_scope_open();
+    C_Scope *scope = c_scope_open();
     CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
     
     //- rjf: unpack address range, prepare per-touched-page info
@@ -1868,9 +1868,9 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
       {
         U64 page_base_vaddr = page_range.min + page_idx*page_size;
         B32 page_is_stale = 0;
-        HS_Key page_key = ctrl_key_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, endt_us, &page_is_stale);
-        U128 page_hash = hs_hash_from_key(page_key, 0);
-        U128 page_last_hash = hs_hash_from_key(page_key, 1);
+        C_Key page_key = ctrl_key_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, endt_us, &page_is_stale);
+        U128 page_hash = c_hash_from_key(page_key, 0);
+        U128 page_last_hash = c_hash_from_key(page_key, 1);
         result.stale = (result.stale || page_is_stale);
         page_hashes[page_idx] = page_hash;
         page_last_hashes[page_idx] = page_last_hash;
@@ -1889,7 +1889,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
       for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
       {
         // rjf: read data for this page
-        String8 data = hs_data_from_hash(scope, page_hashes[page_idx]);
+        String8 data = c_data_from_hash(scope, page_hashes[page_idx]);
         Rng1U64 data_vaddr_range = r1u64(page_range.min + page_idx*page_size, page_range.min + page_idx*page_size+data.size);
         
         // rjf: skip/chop bytes which are irrelevant for the actual requested read
@@ -1925,7 +1925,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
         // fill out changed flags
         if(!u128_match(page_hashes[page_idx], page_last_hashes[page_idx])) ProfScope("hashes don't match; diff each byte")
         {
-          String8 last_data = hs_data_from_hash(scope, page_last_hashes[page_idx]);
+          String8 last_data = c_data_from_hash(scope, page_last_hashes[page_idx]);
           String8 in_range_last_data = last_data;
           if(page_idx == page_count-1 && data_vaddr_range.max > range.max)
           {
@@ -1977,7 +1977,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
       }
     }
     
-    hs_scope_close(scope);
+    c_scope_close(scope);
     scratch_end(scratch);
   }
   ProfEnd();
@@ -6866,7 +6866,7 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 //- rjf: user -> memory stream communication
 
 internal B32
-ctrl_u2ms_enqueue_req(HS_Key key, CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, U64 endt_us)
+ctrl_u2ms_enqueue_req(C_Key key, CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, U64 endt_us)
 {
   B32 good = 0;
   MutexScope(ctrl_state->u2ms_ring_mutex) for(;;)
@@ -6890,7 +6890,7 @@ ctrl_u2ms_enqueue_req(HS_Key key, CTRL_Handle process, Rng1U64 vaddr_range, B32 
 }
 
 internal void
-ctrl_u2ms_dequeue_req(HS_Key *out_key, CTRL_Handle *out_process, Rng1U64 *out_vaddr_range, B32 *out_zero_terminated)
+ctrl_u2ms_dequeue_req(C_Key *out_key, CTRL_Handle *out_process, Rng1U64 *out_vaddr_range, B32 *out_zero_terminated)
 {
   MutexScope(ctrl_state->u2ms_ring_mutex) for(;;)
   {
@@ -6917,7 +6917,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
   
   //- rjf: unpack next request
-  HS_Key key = {0};
+  C_Key key = {0};
   CTRL_Handle process = {0};
   Rng1U64 vaddr_range = {0};
   B32 zero_terminated = 0;
@@ -6932,7 +6932,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   CTRL_ProcessMemoryCacheStripe *process_stripe = &cache->stripes[process_stripe_idx];
   
   //- rjf: unpack address range hash cache key
-  U64 range_hash = hs_little_hash_from_data(str8_struct(&key.id));
+  U64 range_hash = c_little_hash_from_data(str8_struct(&key.id));
   
   //- rjf: clamp vaddr range
   Rng1U64 vaddr_range_clamped = vaddr_range;
@@ -7037,7 +7037,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   U128 hash = {0};
   if(range_base != 0 && pre_read_mem_gen == post_read_mem_gen)
   {
-    hash = hs_submit_data(key, &range_arena, str8((U8*)range_base, zero_terminated_size));
+    hash = c_submit_data(key, &range_arena, str8((U8*)range_base, zero_terminated_size));
   }
   else if(range_arena != 0)
   {
@@ -7055,7 +7055,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
         CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
         for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
         {
-          if(hs_id_match(range_n->id, key.id))
+          if(c_id_match(range_n->id, key.id))
           {
             if(pre_read_mem_gen == post_read_mem_gen)
             {

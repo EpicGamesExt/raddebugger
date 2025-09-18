@@ -733,7 +733,7 @@ RD_RegTable:
   {String8           file_path        FilePath      }
   {TxtPt             cursor           Cursor        }
   {TxtPt             mark             Mark          }
-  {HS_Key            text_key         TextKey       }
+  {C_Key            text_key         TextKey       }
   {TXT_LangKind      lang_kind        LangKind      }
   {D_LineList        lines            Lines         }
   {DI_Key            dbgi_key         DbgiKey       }

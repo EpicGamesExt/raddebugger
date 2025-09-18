@@ -106,7 +106,7 @@ struct DASM_Params
 typedef struct DASM_Request DASM_Request;
 struct DASM_Request
 {
-  HS_Root root;
+  C_Root root;
   U128 hash;
   DASM_Params params;
 };
@@ -167,7 +167,7 @@ struct DASM_LineArray
 typedef struct DASM_Info DASM_Info;
 struct DASM_Info
 {
-  HS_Key text_key;
+  C_Key text_key;
   DASM_LineArray lines;
 };
 
@@ -186,7 +186,7 @@ struct DASM_Node
   DASM_Params params;
   
   // rjf: root
-  HS_Root root;
+  C_Root root;
   
   // rjf: generations
   U64 change_gen;
@@ -318,7 +318,7 @@ internal void dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_No
 //~ rjf: Cache Lookups
 
 internal DASM_Info dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params);
-internal DASM_Info dasm_info_from_key_params(DASM_Scope *scope, HS_Key key, DASM_Params *params, U128 *hash_out);
+internal DASM_Info dasm_info_from_key_params(DASM_Scope *scope, C_Key key, DASM_Params *params, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Ticks

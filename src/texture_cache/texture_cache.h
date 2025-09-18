@@ -135,7 +135,7 @@ internal void tex_scope_touch_node__stripe_r_guarded(TEX_Scope *scope, TEX_Node 
 //~ rjf: Cache Lookups
 
 internal R_Handle tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topology);
-internal R_Handle tex_texture_from_key_topology(TEX_Scope *scope, HS_Key key, TEX_Topology topology, U128 *hash_out);
+internal R_Handle tex_texture_from_key_topology(TEX_Scope *scope, C_Key key, TEX_Topology topology, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Transfer Threads

@@ -181,12 +181,12 @@ geo_buffer_from_hash(GEO_Scope *scope, U128 hash)
 }
 
 internal R_Handle
-geo_buffer_from_key(GEO_Scope *scope, HS_Key key)
+geo_buffer_from_key(GEO_Scope *scope, C_Key key)
 {
   R_Handle handle = {0};
-  for(U64 rewind_idx = 0; rewind_idx < HS_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
+  for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
-    U128 hash = hs_hash_from_key(key, rewind_idx);
+    U128 hash = c_hash_from_key(key, rewind_idx);
     handle = geo_buffer_from_hash(scope, hash);
     if(!r_handle_match(handle, r_handle_zero()))
     {
@@ -245,7 +245,7 @@ geo_u2x_dequeue_req(U128 *hash_out)
 ASYNC_WORK_DEF(geo_xfer_work)
 {
   ProfBeginFunction();
-  HS_Scope *scope = hs_scope_open();
+  C_Scope *scope = c_scope_open();
   
   //- rjf: decode
   U128 hash = {0};
@@ -275,7 +275,7 @@ ASYNC_WORK_DEF(geo_xfer_work)
   String8 data = {0};
   if(got_task)
   {
-    data = hs_data_from_hash(scope, hash);
+    data = c_data_from_hash(scope, hash);
   }
   
   //- rjf: data -> buffer
@@ -300,7 +300,7 @@ ASYNC_WORK_DEF(geo_xfer_work)
     }
   }
   
-  hs_scope_close(scope);
+  c_scope_close(scope);
   ProfEnd();
   return 0;
 }

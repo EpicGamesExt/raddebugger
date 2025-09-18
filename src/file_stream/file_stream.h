@@ -11,7 +11,7 @@ typedef struct FS_RangeNode FS_RangeNode;
 struct FS_RangeNode
 {
   FS_RangeNode *next;
-  HS_ID id;
+  C_ID id;
   U64 working_count;
 };
 
@@ -32,7 +32,7 @@ struct FS_Node
   FileProperties props;
   
   // rjf: hash store root
-  HS_Root root;
+  C_Root root;
   
   // rjf: sub-table of per-requested-file-range info
   U64 slots_count;
@@ -61,7 +61,7 @@ typedef struct FS_Request FS_Request;
 struct FS_Request
 {
   FS_Request *next;
-  HS_Key key;
+  C_Key key;
   String8 path;
   Rng1U64 range;
 };
@@ -120,7 +120,7 @@ internal U64 fs_change_gen(void);
 ////////////////////////////////
 //~ rjf: Cache Interaction
 
-internal HS_Key fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
+internal C_Key fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
 internal U128 fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
 internal FileProperties fs_properties_from_path(String8 path);
 

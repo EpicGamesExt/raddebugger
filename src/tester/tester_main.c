@@ -14,7 +14,7 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "hash_store/hash_store.h"
+#include "content/content.h"
 #include "rdi_format/rdi_format_local.h"
 #include "regs/regs.h"
 #include "regs/rdi/regs_rdi.h"
@@ -23,7 +23,7 @@
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "hash_store/hash_store.c"
+#include "content/content.c"
 #include "rdi_format/rdi_format_local.c"
 #include "regs/regs.c"
 #include "regs/rdi/regs_rdi.c"
@@ -148,7 +148,7 @@ for(Test *test = test_##name_identifier; test != 0; test = 0)
           Temp scratch = scratch_begin(0, 0);
           String8 path = n->string;
           String8 data = os_data_from_file_path(scratch.arena, path);
-          rdi_hashes[idx] = hs_hash_from_data(data);
+          rdi_hashes[idx] = c_hash_from_data(data);
           rdi_paths_array[idx] = path;
           scratch_end(scratch);
         }
@@ -160,7 +160,7 @@ for(Test *test = test_##name_identifier; test != 0; test = 0)
           Temp scratch = scratch_begin(0, 0);
           String8 path = n->string;
           String8 data = os_data_from_file_path(scratch.arena, path);
-          dump_hashes[idx] = hs_hash_from_data(data);
+          dump_hashes[idx] = c_hash_from_data(data);
           dump_paths_array[idx] = path;
           scratch_end(scratch);
         }

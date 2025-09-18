@@ -382,7 +382,7 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
           DLLPushBack(slot->first, slot->last, node);
           node->hash = hash;
           MemoryCopyStruct(&node->params, params);
-          node->root = hs_root_alloc();
+          node->root = c_root_alloc();
           // TODO(rjf): need to make this releasable - currently all exe_paths just leak
           node->params.dbgi_key = di_key_copy(stripe->arena, &node->params.dbgi_key);
           ins_atomic_u64_inc_eval(&node->working_count);
@@ -416,12 +416,12 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
 }
 
 internal DASM_Info
-dasm_info_from_key_params(DASM_Scope *scope, HS_Key key, DASM_Params *params, U128 *hash_out)
+dasm_info_from_key_params(DASM_Scope *scope, C_Key key, DASM_Params *params, U128 *hash_out)
 {
   DASM_Info result = {0};
-  for(U64 rewind_idx = 0; rewind_idx < HS_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
+  for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
-    U128 hash = hs_hash_from_key(key, rewind_idx);
+    U128 hash = c_hash_from_key(key, rewind_idx);
     result = dasm_info_from_hash_params(scope, hash, params);
     if(result.lines.count != 0)
     {
@@ -552,17 +552,17 @@ dasm_tick(void)
       break;
     }
     U64 req_idx = req_num-1;
-    HS_Scope *hs_scope = hs_scope_open();
+    C_Scope *c_scope = c_scope_open();
     DI_Scope *di_scope = di_scope_open();
     TXT_Scope *txt_scope = txt_scope_open();
     
     //- rjf: unpack
     B32 stale = 0;
     DASM_Request *r = &reqs[req_idx];
-    HS_Root root = r->root;
+    C_Root root = r->root;
     U128 hash = r->hash;
     DASM_Params params = r->params;
-    String8 data = hs_data_from_hash(hs_scope, hash);
+    String8 data = c_data_from_hash(c_scope, hash);
     U64 change_gen = fs_change_gen();
     U64 slot_idx = hash.u64[1]%dasm_shared->slots_count;
     U64 stripe_idx = slot_idx%dasm_shared->stripes_count;
@@ -647,7 +647,7 @@ dasm_tick(void)
                 {
                   // TODO(rjf): need redirection path - this may map to a different path on the local machine,
                   // need frontend to communicate path remapping info to this layer
-                  HS_Key key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64), 0);
+                  C_Key key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64), 0);
                   TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
                   U64 endt_us = max_U64;
                   U128 hash = {0};
@@ -655,7 +655,7 @@ dasm_tick(void)
                   stale = (stale || u128_match(hash, u128_zero()));
                   if(0 < line->line_num && line->line_num < text_info.lines_count)
                   {
-                    String8 data = hs_data_from_hash(hs_scope, hash);
+                    String8 data = c_data_from_hash(c_scope, hash);
                     String8 line_text = str8_skip_chop_whitespace(str8_substr(data, text_info.lines_ranges[line->line_num-1]));
                     if(line_text.size != 0)
                     {
@@ -738,10 +738,10 @@ dasm_tick(void)
       String8 text = str8_list_join(text_arena, &inst_strings, &text_join);
       
       //- rjf: produce unique key for this disassembly's text
-      HS_Key text_key = hs_key_make(root, hs_id_make(0, 0));
+      C_Key text_key = c_key_make(root, c_id_make(0, 0));
       
       //- rjf: submit text data to hash store
-      U128 text_hash = hs_submit_data(text_key, &text_arena, text);
+      U128 text_hash = c_submit_data(text_key, &text_arena, text);
       
       //- rjf: produce value bundle
       info_arena = arena_alloc();
@@ -786,7 +786,7 @@ dasm_tick(void)
     
     txt_scope_close(txt_scope);
     di_scope_close(di_scope);
-    hs_scope_close(hs_scope);
+    c_scope_close(c_scope);
   }
   lane_sync();
   

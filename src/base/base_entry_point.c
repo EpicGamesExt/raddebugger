@@ -56,8 +56,8 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(ASYNC_H) && !defined(ASYNC_INIT_MANUAL)
   async_init(&cmdline);
 #endif
-#if defined(HASH_STORE_H) && !defined(HS_INIT_MANUAL)
-  hs_init();
+#if defined(CONTENT_H) && !defined(C_INIT_MANUAL)
+  c_init();
 #endif
 #if defined(FILE_STREAM_H) && !defined(FS_INIT_MANUAL)
   fs_init();
@@ -191,8 +191,8 @@ async_thread_entry_point(void *params)
   for(;!ins_atomic_u32_eval(&global_async_exit);)
   {
     MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
-#if defined(HASH_STORE_H)
-    hs_tick();
+#if defined(CONTENT_H)
+    c_tick();
 #endif
 #if defined(FILE_STREAM_H)
     fs_tick();

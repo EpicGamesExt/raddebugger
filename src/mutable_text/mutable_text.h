@@ -84,13 +84,13 @@ internal void mtx_init(void);
 ////////////////////////////////
 //~ rjf: Buffer Operations
 
-internal void mtx_push_op(HS_Key buffer_key, MTX_Op op);
+internal void mtx_push_op(C_Key buffer_key, MTX_Op op);
 
 ////////////////////////////////
 //~ rjf: Mutation Threads
 
-internal void mtx_enqueue_op(MTX_MutThread *thread, HS_Key buffer_key, MTX_Op op);
-internal void mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, HS_Key *buffer_key_out, MTX_Op *op_out);
+internal void mtx_enqueue_op(MTX_MutThread *thread, C_Key buffer_key, MTX_Op op);
+internal void mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, C_Key *buffer_key_out, MTX_Op *op_out);
 internal void mtx_mut_thread__entry_point(void *p);
 
 #endif // MUTABLE_TEXT_H

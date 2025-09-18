@@ -1746,13 +1746,13 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     //- rjf: reads from hash store key
     case E_SpaceKind_HashStoreKey:
     {
-      HS_Root root = {space.u64_0};
-      HS_ID id = {space.u128};
-      HS_Key key = hs_key_make(root, id);
-      U128 hash = hs_hash_from_key(key, 0);
-      HS_Scope *scope = hs_scope_open();
+      C_Root root = {space.u64_0};
+      C_ID id = {space.u128};
+      C_Key key = c_key_make(root, id);
+      U128 hash = c_hash_from_key(key, 0);
+      C_Scope *scope = c_scope_open();
       {
-        String8 data = hs_data_from_hash(scope, hash);
+        String8 data = c_data_from_hash(scope, hash);
         Rng1U64 legal_range = r1u64(0, data.size);
         Rng1U64 read_range = intersect_1u64(range, legal_range);
         if(read_range.min < read_range.max)
@@ -1761,7 +1761,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           MemoryCopy(out, data.str + read_range.min, dim_1u64(read_range));
         }
       }
-      hs_scope_close(scope);
+      c_scope_close(scope);
     }break;
     
     //- rjf: file reads
@@ -1779,13 +1779,13 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       containing_range.max -= containing_range.max%chunk_size;
       
       // rjf: map to hash
-      HS_Key key  = fs_key_from_path_range(file_path, containing_range, 0);
-      U128 hash = hs_hash_from_key(key, 0);
+      C_Key key  = fs_key_from_path_range(file_path, containing_range, 0);
+      U128 hash = c_hash_from_key(key, 0);
       
       // rjf: look up from hash store
-      HS_Scope *scope = hs_scope_open();
+      C_Scope *scope = c_scope_open();
       {
-        String8 data = hs_data_from_hash(scope, hash);
+        String8 data = c_data_from_hash(scope, hash);
         Rng1U64 legal_range = r1u64(containing_range.min, containing_range.min + data.size);
         Rng1U64 read_range = intersect_1u64(range, legal_range);
         if(read_range.min < read_range.max)
@@ -1794,7 +1794,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           MemoryCopy(out, data.str + read_range.min - containing_range.min, dim_1u64(read_range));
         }
       }
-      hs_scope_close(scope);
+      c_scope_close(scope);
     }break;
     
     //- rjf: interior control entity reads (inside process address space or thread register block)
@@ -2137,17 +2137,17 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
 
 //- rjf: asynchronous streamed reads -> hashes from spaces
 
-internal HS_Key
+internal C_Key
 rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
 {
-  HS_Key result = {0};
+  C_Key result = {0};
   switch(space.kind)
   {
     case E_SpaceKind_HashStoreKey:
     {
-      HS_Root root = {space.u64_0};
-      HS_ID id = {space.u128};
-      result = hs_key_make(root, id);
+      C_Root root = {space.u64_0};
+      C_ID id = {space.u128};
+      result = c_key_make(root, id);
     }break;
     case E_SpaceKind_File:
     {
@@ -2177,16 +2177,16 @@ rd_whole_range_from_eval_space(E_Space space)
   {
     case E_SpaceKind_HashStoreKey:
     {
-      HS_Root root = {space.u64_0};
-      HS_ID id = {space.u128};
-      HS_Key key = hs_key_make(root, id);
-      U128 hash = hs_hash_from_key(key, 0);
-      HS_Scope *hs_scope = hs_scope_open();
+      C_Root root = {space.u64_0};
+      C_ID id = {space.u128};
+      C_Key key = c_key_make(root, id);
+      U128 hash = c_hash_from_key(key, 0);
+      C_Scope *c_scope = c_scope_open();
       {
-        String8 data = hs_data_from_hash(hs_scope, hash);
+        String8 data = c_data_from_hash(c_scope, hash);
         result = r1u64(0, data.size);
       }
-      hs_scope_close(hs_scope);
+      c_scope_close(c_scope);
     }break;
     case E_SpaceKind_File:
     {
@@ -2872,17 +2872,17 @@ rd_view_ui(Rng2F32 rect)
       // rjf: unpack view's target expression & hash
       E_Eval eval = e_eval_from_string(expr_string);
       Rng1U64 range = r1u64(0, 1024);
-      HS_Key key = rd_key_from_eval_space_range(eval.space, range, 0);
-      U128 hash = hs_hash_from_key(key, 0);
+      C_Key key = rd_key_from_eval_space_range(eval.space, range, 0);
+      U128 hash = c_hash_from_key(key, 0);
       
       // rjf: determine if hash's blob is ready, and which viewer to use
       B32 data_is_ready = 0;
       String8 new_view_name = {0};
       {
-        HS_Scope *hs_scope = hs_scope_open();
+        C_Scope *c_scope = c_scope_open();
         if(!u128_match(hash, u128_zero()))
         {
-          String8 data = hs_data_from_hash(hs_scope, hash);
+          String8 data = c_data_from_hash(c_scope, hash);
           U64 num_utf8_bytes = 0;
           U64 num_unknown_bytes = 0;
           for(U64 idx = 0; idx < data.size && idx < range.max;)
@@ -2911,7 +2911,7 @@ rd_view_ui(Rng2F32 rect)
             new_view_name = str8_lit("memory");
           }
         }
-        hs_scope_close(hs_scope);
+        c_scope_close(c_scope);
       }
       
       // rjf: if we don't have a viewer, just use the memory viewer.
@@ -5993,7 +5993,7 @@ rd_window_frame(void)
   //- rjf: @window_frame_part compute window's theme
   //
   {
-    HS_Scope *hs_scope = hs_scope_open();
+    C_Scope *c_scope = c_scope_open();
     
     //- rjf: try to find theme settings from the project, then the user.
     RD_CfgList colors_cfgs = {0};
@@ -6039,7 +6039,7 @@ rd_window_frame(void)
     }
     
     //- rjf: map the theme config to the associated tree (either from a preset, or from a file)
-    MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, hs_scope, theme_cfg->first->string);
+    MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, c_scope, theme_cfg->first->string);
     if(colors_cfgs.count == 0 && theme_tree == &md_nil_node)
     {
       theme_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
@@ -6110,7 +6110,7 @@ rd_window_frame(void)
       }
     }
     
-    hs_scope_close(hs_scope);
+    c_scope_close(c_scope);
   }
   
   //////////////////////////////
@@ -10205,7 +10205,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
 //- rjf: colors
 
 internal MD_Node *
-rd_theme_tree_from_name(Arena *arena, HS_Scope *scope, String8 theme_name)
+rd_theme_tree_from_name(Arena *arena, C_Scope *scope, String8 theme_name)
 {
   Temp scratch = scratch_begin(&arena, 1);
   MD_Node *theme_tree = &md_nil_node;
@@ -10228,7 +10228,7 @@ rd_theme_tree_from_name(Arena *arena, HS_Scope *scope, String8 theme_name)
         endt_us = os_now_microseconds()+50000;
       }
       U128 hash = fs_hash_from_path_range(path, r1u64(0, max_U64), endt_us);
-      String8 data = hs_data_from_hash(scope, hash);
+      String8 data = c_data_from_hash(scope, hash);
       theme_tree = md_tree_from_string(arena, data);
     }
   }
@@ -10864,10 +10864,10 @@ rd_init(CmdLine *cmdln)
   rd_state->user_path_arena = arena_alloc();
   rd_state->project_path_arena = arena_alloc();
   rd_state->theme_path_arena = arena_alloc();
-  rd_state->user_cfg_string_key      = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
-  rd_state->project_cfg_string_key   = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
-  rd_state->cmdln_cfg_string_key     = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
-  rd_state->transient_cfg_string_key = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
+  rd_state->user_cfg_string_key      = c_key_make(c_root_alloc(), c_id_make(0, 0));
+  rd_state->project_cfg_string_key   = c_key_make(c_root_alloc(), c_id_make(0, 0));
+  rd_state->cmdln_cfg_string_key     = c_key_make(c_root_alloc(), c_id_make(0, 0));
+  rd_state->transient_cfg_string_key = c_key_make(c_root_alloc(), c_id_make(0, 0));
   for(U64 idx = 0; idx < ArrayCount(rd_state->frame_arenas); idx += 1)
   {
     rd_state->frame_arenas[idx] = arena_alloc();
@@ -11272,7 +11272,7 @@ rd_frame(void)
   {
     struct
     {
-      HS_Key key;
+      C_Key key;
       String8 name;
     }
     table[] =
@@ -11288,7 +11288,7 @@ rd_frame(void)
       String8 data = rd_string_from_cfg_tree(arena,
                                              str8_zero(),
                                              rd_cfg_child_from_string(rd_state->root_cfg, table[idx].name));
-      hs_submit_data(table[idx].key, &arena, data);
+      c_submit_data(table[idx].key, &arena, data);
     }
   }
 #endif
@@ -12459,10 +12459,10 @@ rd_frame(void)
       
       //- rjf: add macro for output log
       {
-        HS_Scope *hs_scope = hs_scope_open();
-        HS_Key key = d_state->output_log_key;
-        U128 hash = hs_hash_from_key(key, 0);
-        String8 data = hs_data_from_hash(hs_scope, hash);
+        C_Scope *c_scope = c_scope_open();
+        C_Key key = d_state->output_log_key;
+        U128 hash = c_hash_from_key(key, 0);
+        String8 data = c_data_from_hash(c_scope, hash);
         E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
         space.u64_0 = key.root.u64[0];
         space.u128 = key.id.u128[0];
@@ -12471,7 +12471,7 @@ rd_frame(void)
         expr->mode     = E_Mode_Offset;
         expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
         e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("output"), expr);
-        hs_scope_close(hs_scope);
+        c_scope_close(c_scope);
       }
       
       //- rjf: (DEBUG) add macro for cfg strings
@@ -12479,7 +12479,7 @@ rd_frame(void)
       {
         struct
         {
-          HS_Key key;
+          C_Key key;
           String8 name;
         }
         table[] =
@@ -12491,10 +12491,10 @@ rd_frame(void)
         };
         for EachElement(idx, table)
         {
-          HS_Scope *hs_scope = hs_scope_open();
-          HS_Key key = table[idx].key;
-          U128 hash = hs_hash_from_key(key, 0);
-          String8 data = hs_data_from_hash(hs_scope, hash);
+          C_Scope *c_scope = c_scope_open();
+          C_Key key = table[idx].key;
+          U128 hash = c_hash_from_key(key, 0);
+          String8 data = c_data_from_hash(c_scope, hash);
           E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
           space.u64_0 = key.root.u64[0];
@@ -12503,7 +12503,7 @@ rd_frame(void)
           expr->mode     = E_Mode_Offset;
           expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
           e_string2expr_map_insert(scratch.arena, macro_map, table[idx].name, expr);
-          hs_scope_close(hs_scope);
+          c_scope_close(c_scope);
         }
       }
 #endif
@@ -15936,10 +15936,10 @@ rd_frame(void)
           }break;
           case RD_CmdKind_AddThemeColor:
           {
-            HS_Scope *hs_scope = hs_scope_open();
+            C_Scope *c_scope = c_scope_open();
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
             RD_Cfg *theme = rd_cfg_child_from_string_or_alloc(parent, str8_lit("theme"));
-            MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, hs_scope, theme->first->string);
+            MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, c_scope, theme->first->string);
             if(theme_tree == &md_nil_node)
             {
               rd_cfg_new_replace(theme, rd_theme_preset_display_string_table[RD_ThemePreset_DefaultDark]);
@@ -15948,11 +15948,11 @@ rd_frame(void)
             rd_cfg_new(color, str8_lit("tags"));
             RD_Cfg *value = rd_cfg_new(color, str8_lit("value"));
             rd_cfg_new(value, str8_lit("0xffffffff"));
-            hs_scope_close(hs_scope);
+            c_scope_close(c_scope);
           }break;
           case RD_CmdKind_ForkTheme:
           {
-            HS_Scope *hs_scope = hs_scope_open();
+            C_Scope *c_scope = c_scope_open();
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
             RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("theme_color"));
             for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
@@ -15961,7 +15961,7 @@ rd_frame(void)
             }
             RD_Cfg *theme_cfg = rd_cfg_child_from_string(parent, str8_lit("theme"));
             String8 theme_name = theme_cfg->first->string;
-            MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, hs_scope, theme_name);
+            MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, c_scope, theme_name);
             if(theme_tree == &md_nil_node)
             {
               theme_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
@@ -15978,7 +15978,7 @@ rd_frame(void)
               }
             }
             rd_cfg_release(theme_cfg);
-            hs_scope_close(hs_scope);
+            c_scope_close(c_scope);
           }break;
           case RD_CmdKind_SaveTheme:
           case RD_CmdKind_SaveAndSetTheme:
@@ -16091,15 +16091,15 @@ rd_frame(void)
           case RD_CmdKind_GoToNameAtCursor:
           case RD_CmdKind_ToggleWatchExpressionAtCursor:
           {
-            HS_Scope *hs_scope = hs_scope_open();
+            C_Scope *c_scope = c_scope_open();
             TXT_Scope *txt_scope = txt_scope_open();
             RD_Regs *regs = rd_regs();
-            HS_Key text_key = regs->text_key;
+            C_Key text_key = regs->text_key;
             TXT_LangKind lang_kind = regs->lang_kind;
             TxtRng range = txt_rng(regs->cursor, regs->mark);
             U128 hash = {0};
             TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, lang_kind, &hash);
-            String8 data = hs_data_from_hash(hs_scope, hash);
+            String8 data = c_data_from_hash(c_scope, hash);
             Rng1U64 expr_off_range = {0};
             if(range.min.column != range.max.column)
             {
@@ -16115,7 +16115,7 @@ rd_frame(void)
                     RD_CmdKind_GoToName),
                    .string = expr);
             txt_scope_close(txt_scope);
-            hs_scope_close(hs_scope);
+            c_scope_close(c_scope);
           }break;
           case RD_CmdKind_SetNextStatement:
           {
