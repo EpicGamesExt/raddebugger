@@ -140,7 +140,7 @@ THREAD_POOL_TASK_FUNC(lnk_parse_cv_symbols_task)
 }
 
 internal LNK_PchInfo *
-lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj **obj_arr, CV_DebugT *debug_t_arr, CV_DebugT *debug_p_arr, CV_SymbolListArray *parsed_symbols)
+lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj **obj_arr, CV_DebugT *debug_t_arr, CV_DebugT *debug_p_arr, CV_SymbolListArray *parsed_symbols, String8List alt_pch_dirs)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -180,9 +180,20 @@ lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj **obj_arr, CV_DebugT *debug_t
 
       String8 obj_path = path_absolute_dst_from_relative_dst_src(scratch.arena, precomp.obj_name, work_dir);
 
+
       // map obj name in LF_PRECOMP to obj index
-      U64 debug_p_obj_idx;
+      U64 debug_p_obj_idx = max_U64;
       if (!hash_table_search_path_u64(debug_p_ht, obj_path, &debug_p_obj_idx)) {
+        String8 obj_name = str8_skip_last_slash(obj_path);
+        for EachNode(alt_dir_n, String8Node, alt_pch_dirs.first) {
+          String8 alt_obj_path = str8f(scratch.arena, "%S/%S", alt_dir_n->string, obj_name);
+          if (hash_table_search_path_u64(debug_p_ht, alt_obj_path, &debug_p_obj_idx)) {
+            break;
+          }
+        }
+      }
+
+      if (debug_p_obj_idx == max_U64) {
         lnk_error_obj(LNK_Error_PrecompObjNotFound, obj_arr[obj_idx], "LF_PRECOMP references non-existent obj %S", obj_path);
         lnk_exit(LNK_Error_PrecompObjNotFound);
       }
@@ -358,7 +369,7 @@ lnk_merge_debug_t_and_debug_p(Arena *arena, U64 obj_count, CV_DebugT *debug_t_ar
 }
 
 internal LNK_CodeViewInput
-lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_flags, String8List lib_dir_list, U64 obj_count, LNK_Obj **obj_arr)
+lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_flags, String8List lib_dir_list, String8List alt_pch_dirs, U64 obj_count, LNK_Obj **obj_arr)
 {
   ProfBegin("Extract CodeView");
   Temp scratch = scratch_begin(0,0);
@@ -522,7 +533,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
                                        internal_obj_arr,
                                        internal_debug_t_arr,
                                        internal_debug_p_arr,
-                                       internal_parsed_symbols);
+                                       internal_parsed_symbols,
+                                       alt_pch_dirs);
 
   CV_DebugT *merged_debug_t_p_arr = lnk_merge_debug_t_and_debug_p(tp_arena->v[0], internal_count, internal_debug_t_arr, internal_debug_p_arr);
 
