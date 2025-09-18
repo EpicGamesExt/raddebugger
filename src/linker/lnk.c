@@ -394,7 +394,7 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
   OS_ProcessLaunchParams launch_opts = {0};
   launch_opts.cmd_line               = cmd_line;
   launch_opts.inherit_env            = 1;
-  launch_opts.consoleless            = 1;
+  launch_opts.consoleless            = 0;
   OS_Handle mt_handle = os_process_launch(&launch_opts);
   if (os_handle_match(mt_handle, os_handle_zero())) {
     lnk_error(LNK_Error_Mt, "unable to start process: %S", mt_path);
