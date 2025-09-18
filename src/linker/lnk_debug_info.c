@@ -179,8 +179,7 @@ lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj **obj_arr, CV_DebugT *debug_t
       CV_PrecompInfo precomp      = cv_precomp_info_from_leaf(precomp_leaf);
 
       String8 obj_path = path_absolute_dst_from_relative_dst_src(scratch.arena, precomp.obj_name, work_dir);
-
-
+      
       // map obj name in LF_PRECOMP to obj index
       U64 debug_p_obj_idx = max_U64;
       if (!hash_table_search_path_u64(debug_p_ht, obj_path, &debug_p_obj_idx)) {
@@ -1981,39 +1980,43 @@ lnk_assign_type_indices(TP_Context *tp, LNK_LeafBucketArray bucket_arr, CV_TypeI
 internal
 THREAD_POOL_TASK_FUNC(lnk_patch_symbols_task)
 {
+  ProfBeginFunction();
   LNK_PatchSymbolTypesTask *task         = raw_task;
-  Arena                    *fixed_arena  = task->arena_arr[worker_id];
-  LNK_CodeViewSymbolsInput  symbol_input = task->input->symbol_inputs[task_id];
+  Arena                    *fixed_arena  = task->arena_arr[task_id];
 
-  LNK_LeafLocType loc_type = lnk_loc_type_from_obj_idx(task->input, symbol_input.obj_idx);
-  U64             loc_idx  = lnk_loc_idx_from_obj_idx(task->input, symbol_input.obj_idx);
+  for EachInRange(symbol_input_idx, task->ranges[task_id]) {
+    LNK_CodeViewSymbolsInput symbol_input = task->input->symbol_inputs[symbol_input_idx];
+    LNK_LeafLocType          loc_type     = lnk_loc_type_from_obj_idx(task->input, symbol_input.obj_idx);
+    U64                      loc_idx      = lnk_loc_idx_from_obj_idx(task->input, symbol_input.obj_idx);
 
-  CV_TypeIndex ti_lo_arr[CV_TypeIndexSource_COUNT];
-  ti_lo_arr[CV_TypeIndexSource_NULL] = lnk_ti_lo_from_loc(task->input, loc_type, loc_idx, CV_TypeIndexSource_NULL);
-  ti_lo_arr[CV_TypeIndexSource_TPI ] = lnk_ti_lo_from_loc(task->input, loc_type, loc_idx, CV_TypeIndexSource_TPI);
-  ti_lo_arr[CV_TypeIndexSource_IPI ] = lnk_ti_lo_from_loc(task->input, loc_type, loc_idx, CV_TypeIndexSource_IPI);
+    CV_TypeIndex ti_lo_arr[CV_TypeIndexSource_COUNT];
+    ti_lo_arr[CV_TypeIndexSource_NULL] = lnk_ti_lo_from_loc(task->input, loc_type, loc_idx, CV_TypeIndexSource_NULL);
+    ti_lo_arr[CV_TypeIndexSource_TPI ] = lnk_ti_lo_from_loc(task->input, loc_type, loc_idx, CV_TypeIndexSource_TPI);
+    ti_lo_arr[CV_TypeIndexSource_IPI ] = lnk_ti_lo_from_loc(task->input, loc_type, loc_idx, CV_TypeIndexSource_IPI);
 
-  for (CV_SymbolNode *symnode = symbol_input.symbol_list->first; symnode != 0; symnode = symnode->next) {
-    Temp temp = temp_begin(fixed_arena);
+    for (CV_SymbolNode *symnode = symbol_input.symbol_list->first; symnode != 0; symnode = symnode->next) {
+      Temp temp = temp_begin(fixed_arena);
 
-    // find type index offsets in symbol
-    CV_TypeIndexInfoList ti_list = cv_get_symbol_type_index_offsets(temp.arena, symnode->data.kind, symnode->data.data);
-    
-    // overwrite type indices in symbol
-    for (CV_TypeIndexInfo *ti_info = ti_list.first; ti_info != 0; ti_info = ti_info->next) {
-      CV_TypeIndex *ti_ptr = (CV_TypeIndex *) (symnode->data.data.str + ti_info->offset);
-      if (*ti_ptr >= ti_lo_arr[ti_info->source]) {
-        LNK_LeafHashTable *leaf_ht     = &task->leaf_ht_arr[ti_info->source];
-        LNK_LeafRef        leaf_ref    = lnk_leaf_ref_from_loc_idx_and_ti(task->input, loc_type, ti_info->source, loc_idx, *ti_ptr);
-        LNK_LeafBucket    *leaf_bucket = lnk_leaf_hash_table_search(leaf_ht, task->input, task->hashes, leaf_ref);
+      // find type index offsets in symbol
+      CV_TypeIndexInfoList ti_list = cv_get_symbol_type_index_offsets(temp.arena, symnode->data.kind, symnode->data.data);
 
-        // we overwrite section memory directly
-        *ti_ptr = leaf_bucket->type_index;
+      // overwrite type indices in symbol
+      for (CV_TypeIndexInfo *ti_info = ti_list.first; ti_info != 0; ti_info = ti_info->next) {
+        CV_TypeIndex *ti_ptr = (CV_TypeIndex *) (symnode->data.data.str + ti_info->offset);
+        if (*ti_ptr >= ti_lo_arr[ti_info->source]) {
+          LNK_LeafHashTable *leaf_ht     = &task->leaf_ht_arr[ti_info->source];
+          LNK_LeafRef        leaf_ref    = lnk_leaf_ref_from_loc_idx_and_ti(task->input, loc_type, ti_info->source, loc_idx, *ti_ptr);
+          LNK_LeafBucket    *leaf_bucket = lnk_leaf_hash_table_search(leaf_ht, task->input, task->hashes, leaf_ref);
+
+          // we overwrite section memory directly
+          *ti_ptr = leaf_bucket->type_index;
+        }
       }
+
+      temp_end(temp);
     }
-    
-    temp_end(temp);
   }
+  ProfEnd();
 }
 
 internal void
@@ -2028,11 +2031,12 @@ lnk_patch_symbols(TP_Context         *tp,
   U64 max_ti_list_size = sizeof(CV_TypeIndexInfo) * (max_U16 / sizeof(CV_TypeIndex));
 
   LNK_PatchSymbolTypesTask task = {0};
+  task.ranges          = tp_divide_work(scratch.arena, input->total_symbol_input_count, tp->worker_count);
   task.input           = input;
   task.hashes          = hashes;
   task.leaf_ht_arr     = leaf_ht_arr;
   task.arena_arr       = alloc_fixed_size_arena_array(scratch.arena, tp->worker_count, max_ti_list_size, max_ti_list_size);
-  tp_for_parallel(tp, 0, input->total_symbol_input_count, lnk_patch_symbols_task, &task);
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_patch_symbols_task, &task);
 
   scratch_end(scratch);
   ProfEnd();
