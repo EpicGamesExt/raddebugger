@@ -2974,6 +2974,8 @@ lnk_compute_win32_image_header_size(LNK_Config *config, U64 sect_count)
 internal
 THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
 {
+  ProfBeginFunction();
+
   LNK_ObjRelocPatcher *task = raw_task;
   LNK_Obj             *obj  = task->objs[task_id];
 
@@ -3074,6 +3076,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
       MemoryCopy(section_data.str + reloc->apply_off, &reloc_result, reloc_value.size);
     }
   }
+
+  ProfEnd();
 }
 
 internal int
