@@ -132,7 +132,10 @@ lnk_config_from_argcv(Arena *arena, int argc, char **argv)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  String8List raw_cmd_line = os_string_list_from_argcv(arena, argc, argv);
+  String8List raw_cmd_line = {0};
+  for EachIndex(i, argc) {
+    str8_list_push(arena, &raw_cmd_line, str8_cstring(argv[i]));
+  }
 
   // remove exe name first argument
   str8_list_pop_front(&raw_cmd_line); 
@@ -4995,7 +4998,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   image_write_ctx->path      = config->image_name;
   image_write_ctx->temp_path = config->temp_image_name;
   image_write_ctx->data      = image_ctx.image_data;
-  OS_Handle image_write_thread = os_thread_launch(lnk_write_thread, image_write_ctx, 0);
+  Thread image_write_thread = thread_launch(lnk_write_thread, image_write_ctx);
 
   //
   // RAD Map
@@ -5098,7 +5101,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   }
 
   // wait for the thread to finish writing image to disk
-  os_thread_join(image_write_thread, -1);
+  thread_join(image_write_thread, -1);
 
   //
   // Timers
