@@ -5032,7 +5032,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     //
     // CodeView
     //
-    LNK_CodeViewInput input = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, debug_info_objs_count, debug_info_objs);
+    LNK_CodeViewInput input = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, config->alt_pch_dirs, debug_info_objs_count, debug_info_objs);
     CV_DebugT        *types = lnk_import_types(tp, arena, &input);
 
     //

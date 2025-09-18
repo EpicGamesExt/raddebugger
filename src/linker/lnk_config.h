@@ -151,6 +151,7 @@ typedef enum
   LNK_CmdSwitch_Wx,
 
   LNK_CmdSwitch_Rad_Age,
+  LNK_CmdSwitch_Rad_AltPchDir,
   LNK_CmdSwitch_Rad_BuildInfo,
   LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,
   LNK_CmdSwitch_Rad_Debug,
@@ -417,6 +418,7 @@ typedef struct LNK_Config
   U64                         unresolved_symbol_limit;
   U64                         unresolved_symbol_ref_limit;
   LNK_SwitchState             map_lines_for_unresolved_symbols;
+  String8List                 alt_pch_dirs;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
