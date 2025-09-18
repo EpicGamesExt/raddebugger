@@ -405,63 +405,64 @@ dasm_tick(void)
       U64 stripe_idx = slot_idx%dasm_shared->stripes_count;
       DASM_Slot *slot = &dasm_shared->slots[slot_idx];
       DASM_Stripe *stripe = &dasm_shared->stripes[stripe_idx];
-      B32 slot_has_work = 0;
-      MutexScopeR(stripe->rw_mutex)
+      for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
       {
-        for(DASM_Node *n = slot->first; n != 0; n = n->next)
+        B32 slot_has_work = 0;
+        RWMutexScope(stripe->rw_mutex, write_mode) for(DASM_Node *n = slot->first; n != 0; n = n->next)
         {
+          // rjf: node needs eviction
           if(n->scope_ref_count == 0 &&
              n->last_time_touched_us+evict_threshold_us <= check_time_us &&
              n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
              ins_atomic_u64_eval(&n->working_count) == 0)
           {
             slot_has_work = 1;
-            break;
+            if(!write_mode)
+            {
+              break;
+            }
+            else
+            {
+              DLLRemove(slot->first, slot->last, n);
+              if(n->info_arena != 0)
+              {
+                arena_release(n->info_arena);
+              }
+              SLLStackPush(stripe->free_node, n);
+            }
           }
+          
+          // rjf: node needs recomputation
           if(n->change_gen != 0 && n->change_gen != change_gen &&
              n->last_time_requested_us+retry_threshold_us <= check_time_us &&
              n->last_user_clock_idx_requested+retry_threshold_user_clocks <= check_time_user_clocks)
           {
             slot_has_work = 1;
-            break;
+            if(!write_mode)
+            {
+              break;
+            }
+            else
+            {
+              MutexScope(dasm_shared->req_mutex)
+              {
+                DASM_RequestNode *req_n = push_array(dasm_shared->req_arena, DASM_RequestNode, 1);
+                SLLQueuePush(dasm_shared->first_req, dasm_shared->last_req, req_n);
+                dasm_shared->req_count += 1;
+                req_n->v.root = n->root;
+                req_n->v.hash = n->hash;
+                req_n->v.params = n->params;
+                req_n->v.params.dbgi_key = di_key_copy(dasm_shared->req_arena, &req_n->v.params.dbgi_key);
+              }
+              n->last_time_requested_us = os_now_microseconds();
+              n->last_user_clock_idx_requested = check_time_user_clocks;
+              ins_atomic_u64_inc_eval(&n->working_count);
+            }
           }
         }
-      }
-      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
-      {
-        for(DASM_Node *n = slot->first, *next = 0; n != 0; n = next)
+        if(!slot_has_work)
         {
-          next = n->next;
-          if(n->scope_ref_count == 0 &&
-             n->last_time_touched_us+evict_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
-             ins_atomic_u64_eval(&n->working_count) == 0)
-          {
-            DLLRemove(slot->first, slot->last, n);
-            if(n->info_arena != 0)
-            {
-              arena_release(n->info_arena);
-            }
-            SLLStackPush(stripe->free_node, n);
-          }
-          if(n->change_gen != 0 && n->change_gen != change_gen &&
-             n->last_time_requested_us+retry_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_requested+retry_threshold_user_clocks <= check_time_user_clocks)
-          {
-            MutexScope(dasm_shared->req_mutex)
-            {
-              DASM_RequestNode *req_n = push_array(dasm_shared->req_arena, DASM_RequestNode, 1);
-              SLLQueuePush(dasm_shared->first_req, dasm_shared->last_req, req_n);
-              dasm_shared->req_count += 1;
-              req_n->v.root = n->root;
-              req_n->v.hash = n->hash;
-              req_n->v.params = n->params;
-              req_n->v.params.dbgi_key = di_key_copy(dasm_shared->req_arena, &req_n->v.params.dbgi_key);
-            }
-            n->last_time_requested_us = os_now_microseconds();
-            n->last_user_clock_idx_requested = check_time_user_clocks;
-            ins_atomic_u64_inc_eval(&n->working_count);
-          }
+          break;
         }
       }
     }

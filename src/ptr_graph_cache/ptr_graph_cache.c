@@ -34,82 +34,10 @@ ptg_init(void)
 }
 
 ////////////////////////////////
-//~ rjf: User Clock
-
-internal void
-ptg_user_clock_tick(void)
-{
-  ins_atomic_u64_inc_eval(&ptg_shared->user_clock_idx);
-}
-
-internal U64
-ptg_user_clock_idx(void)
-{
-  return ins_atomic_u64_eval(&ptg_shared->user_clock_idx);
-}
-
-////////////////////////////////
-//~ rjf: Scoped Access
-
-internal PTG_Scope *
-ptg_scope_open(void)
-{
-  if(ptg_tctx == 0)
-  {
-    Arena *arena = arena_alloc();
-    ptg_tctx = push_array(arena, PTG_TCTX, 1);
-    ptg_tctx->arena = arena;
-  }
-  PTG_Scope *scope = ptg_tctx->free_scope;
-  if(scope)
-  {
-    SLLStackPop(ptg_tctx->free_scope);
-  }
-  else
-  {
-    scope = push_array_no_zero(ptg_tctx->arena, PTG_Scope, 1);
-  }
-  MemoryZeroStruct(scope);
-  return scope;
-}
-
-internal void
-ptg_scope_close(PTG_Scope *scope)
-{
-  for(PTG_Touch *touch = scope->top_touch, *next = 0; touch != 0; touch = next)
-  {
-    next = touch->next;
-    ins_atomic_u64_dec_eval(&touch->node->scope_ref_count);
-    SLLStackPush(ptg_tctx->free_touch, touch);
-  }
-  SLLStackPush(ptg_tctx->free_scope, scope);
-}
-
-internal void
-ptg_scope_touch_node__stripe_r_guarded(PTG_Scope *scope, PTG_GraphNode *node)
-{
-  PTG_Touch *touch = ptg_tctx->free_touch;
-  ins_atomic_u64_inc_eval(&node->scope_ref_count);
-  ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
-  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, ptg_user_clock_idx());
-  if(touch != 0)
-  {
-    SLLStackPop(ptg_tctx->free_touch);
-  }
-  else
-  {
-    touch = push_array_no_zero(ptg_tctx->arena, PTG_Touch, 1);
-  }
-  MemoryZeroStruct(touch);
-  touch->node = node;
-  SLLStackPush(scope->top_touch, touch);
-}
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
 internal PTG_Graph *
-ptg_graph_from_key(PTG_Scope *scope, PTG_Key *key)
+ptg_graph_from_key(Access *access, PTG_Key *key)
 {
   PTG_Graph *g = 0;
   return g;
@@ -197,7 +125,6 @@ ptg_builder_thread__entry_point(void *p)
     {
       
     }
-    
     
     //- rjf: commit results to cache
     if(got_task) MutexScopeW(stripe->rw_mutex)

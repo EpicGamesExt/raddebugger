@@ -127,43 +127,12 @@ struct PTG_GraphStripe
 };
 
 ////////////////////////////////
-//~ rjf: Scoped Access Types
-
-typedef struct PTG_Touch PTG_Touch;
-struct PTG_Touch
-{
-  PTG_Touch *next;
-  PTG_GraphNode *node;
-};
-
-typedef struct PTG_Scope PTG_Scope;
-struct PTG_Scope
-{
-  PTG_Scope *next;
-  PTG_Touch *top_touch;
-};
-
-////////////////////////////////
-//~ rjf: Thread Context
-
-typedef struct PTG_TCTX PTG_TCTX;
-struct PTG_TCTX
-{
-  Arena *arena;
-  PTG_Scope *free_scope;
-  PTG_Touch *free_touch;
-};
-
-////////////////////////////////
 //~ rjf: Shared State
 
 typedef struct PTG_Shared PTG_Shared;
 struct PTG_Shared
 {
   Arena *arena;
-  
-  // rjf: user clock
-  U64 user_clock_idx;
   
   // rjf: cache
   U64 slots_count;
@@ -190,7 +159,6 @@ struct PTG_Shared
 ////////////////////////////////
 //~ rjf: Globals
 
-thread_static PTG_TCTX *ptg_tctx = 0;
 global PTG_Shared *ptg_shared = 0;
 
 ////////////////////////////////
@@ -199,22 +167,9 @@ global PTG_Shared *ptg_shared = 0;
 internal void ptg_init(void);
 
 ////////////////////////////////
-//~ rjf: User Clock
-
-internal void ptg_user_clock_tick(void);
-internal U64 ptg_user_clock_idx(void);
-
-////////////////////////////////
-//~ rjf: Scoped Access
-
-internal PTG_Scope *ptg_scope_open(void);
-internal void ptg_scope_close(PTG_Scope *scope);
-internal void ptg_scope_touch_node__stripe_r_guarded(PTG_Scope *scope, PTG_GraphNode *node);
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal PTG_Graph *ptg_graph_from_key(PTG_Scope *scope, PTG_Key *key);
+internal PTG_Graph *ptg_graph_from_key(Access *access, PTG_Key *key);
 
 ////////////////////////////////
 //~ rjf: Transfer Threads
