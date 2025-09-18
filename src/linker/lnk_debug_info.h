@@ -236,6 +236,7 @@ typedef struct
 
 typedef struct
 {
+  Rng1U64            *ranges;
   LNK_CodeViewInput  *input;
   LNK_LeafHashes     *hashes;
   LNK_LeafHashTable  *leaf_ht_arr;
