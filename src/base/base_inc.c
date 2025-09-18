@@ -5,7 +5,7 @@
 //~ rjf: Base Includes
 
 #undef LAYER_COLOR
-#define LAYER_COLOR 0.20f, 0.60f, 0.80f
+#define LAYER_COLOR 0x3399ccff
 
 #include "base_core.c"
 #include "base_profile.c"
