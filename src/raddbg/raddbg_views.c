@@ -4338,7 +4338,7 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(geo3d)
 RD_VIEW_UI_FUNCTION_DEF(geo3d)
 {
   Temp scratch = scratch_begin(0, 0);
-  GEO_Scope *geo_scope = geo_scope_open();
+  Access *access = access_open();
   RD_Geo3DViewState *state = rd_view_state(RD_Geo3DViewState);
   
   //////////////////////////////
@@ -4360,8 +4360,8 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   Rng1U64 vtxs_range = r1u64(vtx_base_off, vtx_base_off+vtx_size);
   C_Key idxs_key = rd_key_from_eval_space_range(eval.space, idxs_range, 0);
   C_Key vtxs_key = rd_key_from_eval_space_range(eval.space, vtxs_range, 0);
-  R_Handle idxs_buffer = geo_buffer_from_key(geo_scope, idxs_key);
-  R_Handle vtxs_buffer = geo_buffer_from_key(geo_scope, vtxs_key);
+  R_Handle idxs_buffer = geo_buffer_from_key(access, idxs_key);
+  R_Handle vtxs_buffer = geo_buffer_from_key(access, vtxs_key);
   
   //////////////////////////////
   //- rjf: equip loading info
@@ -4445,6 +4445,6 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   rd_store_view_param_f32(str8_lit("pitch"), pitch_target);
   rd_store_view_param_f32(str8_lit("zoom"),  zoom_target);
   
-  geo_scope_close(geo_scope);
+  access_close(access);
   scratch_end(scratch);
 }

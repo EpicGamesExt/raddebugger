@@ -37,34 +37,6 @@ struct GEO_Stripe
 };
 
 ////////////////////////////////
-//~ rjf: Scoped Access
-
-typedef struct GEO_Touch GEO_Touch;
-struct GEO_Touch
-{
-  GEO_Touch *next;
-  U128 hash;
-};
-
-typedef struct GEO_Scope GEO_Scope;
-struct GEO_Scope
-{
-  GEO_Scope *next;
-  GEO_Touch *top_touch;
-};
-
-////////////////////////////////
-//~ rjf: Thread Context
-
-typedef struct GEO_TCTX GEO_TCTX;
-struct GEO_TCTX
-{
-  Arena *arena;
-  GEO_Scope *free_scope;
-  GEO_Touch *free_touch;
-};
-
-////////////////////////////////
 //~ rjf: Shared State
 
 typedef struct GEO_Shared GEO_Shared;
@@ -94,7 +66,6 @@ struct GEO_Shared
 ////////////////////////////////
 //~ rjf: Globals
 
-thread_static GEO_TCTX *geo_tctx = 0;
 global GEO_Shared *geo_shared = 0;
 
 ////////////////////////////////
@@ -103,22 +74,10 @@ global GEO_Shared *geo_shared = 0;
 internal void geo_init(void);
 
 ////////////////////////////////
-//~ rjf: Thread Context Initialization
-
-internal void geo_tctx_ensure_inited(void);
-
-////////////////////////////////
-//~ rjf: Scoped Access
-
-internal GEO_Scope *geo_scope_open(void);
-internal void geo_scope_close(GEO_Scope *scope);
-internal void geo_scope_touch_node__stripe_r_guarded(GEO_Scope *scope, GEO_Node *node);
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal R_Handle geo_buffer_from_hash(GEO_Scope *scope, U128 hash);
-internal R_Handle geo_buffer_from_key(GEO_Scope *scope, C_Key key);
+internal R_Handle geo_buffer_from_hash(Access *access, U128 hash);
+internal R_Handle geo_buffer_from_key(Access *access, C_Key key);
 
 ////////////////////////////////
 //~ rjf: Transfer Threads
