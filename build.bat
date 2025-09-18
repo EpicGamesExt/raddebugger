@@ -45,8 +45,7 @@ if "%asan%"=="1"      set auto_compile_flags=%auto_compile_flags% -fsanitize=add
 if "%opengl%"=="1"    set auto_compile_flags=%auto_compile_flags% -DR_BACKEND=R_BACKEND_OPENGL && echo [opengl render backend]
 if "%pgo%"=="1" (
   if "%no_meta%"=="" echo ERROR: PGO build must have no_meta argument || exit /b 1
-  where llvm-profdata /q || echo llvm-profdata is not in the PATH || exit /b 1
-  
+  where llvm-profdata /q || echo llvm-profdata is not in the PATH || exit /b 1 
   if "%clang%"=="1" (
     if "%pgo_run%" == "1" (
       call llvm-profdata merge %LLVM_PROFILE_FILE% -output=%~dp0build\build.profdata || exit /b 1
@@ -160,12 +159,11 @@ if "%didbuild%"=="" (
   exit /b 1
 )
 
-:: --- PGO Run ---------------------------------------------------------------
-
+:: --- PGO Run ----------------------------------------------------------------
 if "%pgo_run%"=="1" (
   if "%radlink%"=="1" (
-    pushd build
-    call radlink lnk.obj /debug:full
+    pushd local\lyra_pgo
+    call %~dp0build\radlink @lyra.rsp /rad_alt_pch_dir:%~dp0local\lyra_pgo || exit /b 1
     popd
   )
   call %0 %*
