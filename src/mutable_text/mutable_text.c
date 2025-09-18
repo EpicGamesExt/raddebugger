@@ -98,7 +98,7 @@ mtx_mut_thread__entry_point(void *p)
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
-    C_Scope *c_scope = c_scope_open();
+    Access *access = access_open();
     
     //- rjf: get next op
     C_Key buffer_key = {0};
@@ -107,7 +107,7 @@ mtx_mut_thread__entry_point(void *p)
     
     //- rjf: get buffer's current data
     U128 hash = c_hash_from_key(buffer_key, 0);
-    String8 data = c_data_from_hash(c_scope, hash);
+    String8 data = c_data_from_hash(access, hash);
     
     //- rjf: clamp op by data
     op.range.min = Min(op.range.min, data.size);
@@ -137,7 +137,7 @@ mtx_mut_thread__entry_point(void *p)
       c_submit_data(buffer_key, &arena, new_data);
     }
     
-    c_scope_close(c_scope);
+    access_close(access);
     scratch_end(scratch);
   }
 }

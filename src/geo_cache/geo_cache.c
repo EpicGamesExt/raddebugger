@@ -245,7 +245,7 @@ geo_u2x_dequeue_req(U128 *hash_out)
 ASYNC_WORK_DEF(geo_xfer_work)
 {
   ProfBeginFunction();
-  C_Scope *scope = c_scope_open();
+  Access *access = access_open();
   
   //- rjf: decode
   U128 hash = {0};
@@ -275,7 +275,7 @@ ASYNC_WORK_DEF(geo_xfer_work)
   String8 data = {0};
   if(got_task)
   {
-    data = c_data_from_hash(scope, hash);
+    data = c_data_from_hash(access, hash);
   }
   
   //- rjf: data -> buffer
@@ -300,7 +300,7 @@ ASYNC_WORK_DEF(geo_xfer_work)
     }
   }
   
-  c_scope_close(scope);
+  access_close(access);
   ProfEnd();
   return 0;
 }

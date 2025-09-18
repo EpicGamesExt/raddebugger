@@ -2206,7 +2206,7 @@ ASYNC_WORK_DEF(txt_parse_work)
   U128 hash = {0};
   TXT_LangKind lang = TXT_LangKind_Null;
   txt_u2p_dequeue_req(&hash, &lang);
-  C_Scope *scope = c_scope_open();
+  Access *access = access_open();
   
   //- rjf: unpack hash
   U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
@@ -2232,7 +2232,7 @@ ASYNC_WORK_DEF(txt_parse_work)
   String8 data = {0};
   if(got_task)
   {
-    data = c_data_from_hash(scope, hash);
+    data = c_data_from_hash(access, hash);
   }
   
   //- rjf: data -> text info
@@ -2500,7 +2500,7 @@ ASYNC_WORK_DEF(txt_parse_work)
     }
   }
   
-  c_scope_close(scope);
+  access_close(access);
   ProfEnd();
   return 0;
 }

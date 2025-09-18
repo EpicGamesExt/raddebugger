@@ -130,3 +130,58 @@ tctx_read_srcloc(char **file_name, U64 *line_number)
   *file_name = tctx->file_name;
   *line_number = tctx->line_number;
 }
+
+////////////////////////////////
+//~ rjf: Touch Scope Functions
+
+internal Access *
+access_open(void)
+{
+  if(tctx_thread_local->access_arena == 0)
+  {
+    tctx_thread_local->access_arena = arena_alloc();
+  }
+  Access *access = tctx_thread_local->free_access;
+  if(access != 0)
+  {
+    SLLStackPop(tctx_thread_local->free_access);
+  }
+  else
+  {
+    access = push_array_no_zero(tctx_thread_local->access_arena, Access, 1);
+  }
+  MemoryZeroStruct(access);
+  return access;
+}
+
+internal void
+access_close(Access *access)
+{
+  for(Touch *touch = access->top_touch, *next = 0; touch != 0; touch = next)
+  {
+    next = touch->next;
+    ins_atomic_u64_dec_eval(touch->touch_count);
+    if(touch->cv.u64[0] != 0) { cond_var_broadcast(touch->cv); }
+    SLLStackPush(tctx_thread_local->free_touch, touch);
+  }
+  SLLStackPush(tctx_thread_local->free_access, access);
+}
+
+internal void
+access_touch(Access *access, U64 *touch_count, CondVar cv)
+{
+  ins_atomic_u64_inc_eval(touch_count);
+  Touch *touch = tctx_thread_local->free_touch;
+  if(touch != 0)
+  {
+    SLLStackPop(tctx_thread_local->free_touch);
+  }
+  else
+  {
+    touch = push_array_no_zero(tctx_thread_local->access_arena, Touch, 1);
+  }
+  MemoryZeroStruct(touch);
+  SLLStackPush(access->top_touch, touch);
+  touch->cv = cv;
+  touch->touch_count = touch_count;
+}

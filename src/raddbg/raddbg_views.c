@@ -1944,8 +1944,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
       dr_fstrs_push_new(arena, &fstrs, &params, name);
       {
-        C_Scope *c_scope = c_scope_open();
-        MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, c_scope, name);
+        Access *access = access_open();
+        MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, access, name);
         U64 color_idx = 0;
         for(MD_Node *n = theme_tree; color_idx < 4 && !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, theme_tree).next)
         {
@@ -1973,7 +1973,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             }
           }
         }
-        c_scope_close(c_scope);
+        access_close(access);
       }
       result.eval_fstrs = fstrs;
     }break;
@@ -2025,7 +2025,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   RD_CodeViewState *cv = rd_view_state(RD_CodeViewState);
   rd_code_view_init(cv);
   Temp scratch = scratch_begin(0, 0);
-  C_Scope *c_scope = c_scope_open();
+  Access *access = access_open();
   TXT_Scope *txt_scope = txt_scope_open();
   
   //////////////////////////////
@@ -2091,7 +2091,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   }
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
-  String8 data = c_data_from_hash(c_scope, hash);
+  String8 data = c_data_from_hash(access, hash);
   B32 file_is_missing = (rd_regs()->file_path.size != 0 && os_properties_from_file_path(rd_regs()->file_path).modified == 0);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
   ProfEnd();
@@ -2251,7 +2251,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   rd_store_view_param_s64(str8_lit("mark_column"), rd_regs()->mark.column);
   
   txt_scope_close(txt_scope);
-  c_scope_close(c_scope);
+  access_close(access);
   scratch_end(scratch);
 }
 
@@ -2291,8 +2291,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   }
   RD_CodeViewState *cv = &dv->cv;
   Temp scratch = scratch_begin(0, 0);
-  C_Scope *c_scope = c_scope_open();
-  DASM_Scope *dasm_scope = dasm_scope_open();
+  Access *access = access_open();
   TXT_Scope *txt_scope = txt_scope_open();
   
   //////////////////////////////
@@ -2410,12 +2409,12 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     dasm_params.base_vaddr  = base_vaddr;
     dasm_params.dbgi_key    = dbgi_key;
   }
-  DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
+  DASM_Info dasm_info = dasm_info_from_key_params(access, dasm_key, &dasm_params, &dasm_data_hash);
   rd_regs()->text_key = dasm_info.text_key;
   rd_regs()->lang_kind = txt_lang_kind_from_arch(arch);
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &dasm_text_hash);
-  String8 dasm_text_data = c_data_from_hash(c_scope, dasm_text_hash);
+  String8 dasm_text_data = c_data_from_hash(access, dasm_text_hash);
   B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
   B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null && (space.kind != RD_EvalSpaceKind_CtrlEntity || space_entity != &ctrl_entity_nil));
   
@@ -2496,8 +2495,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   dv->mark = rd_regs()->mark;
   
   txt_scope_close(txt_scope);
-  dasm_scope_close(dasm_scope);
-  c_scope_close(c_scope);
+  access_close(access);
   scratch_end(scratch);
 }
 
@@ -3826,7 +3824,7 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(bitmap)
 RD_VIEW_UI_FUNCTION_DEF(bitmap)
 {
   Temp scratch = scratch_begin(0, 0);
-  C_Scope *c_scope = c_scope_open();
+  Access *access = access_open();
   TEX_Scope *tex_scope = tex_scope_open();
   
   //////////////////////////////
@@ -3878,7 +3876,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   TEX_Topology topology = tex_topology_make(dim, fmt);
   U128 data_hash = {0};
   R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology, &data_hash);
-  String8 data = c_data_from_hash(c_scope, data_hash);
+  String8 data = c_data_from_hash(access, data_hash);
   
   //////////////////////////////
   //- rjf: equip loading info
@@ -4031,8 +4029,8 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   rd_store_view_param_f32(str8_lit("x"), view_center_pos.x);
   rd_store_view_param_f32(str8_lit("y"), view_center_pos.y);
   
-  c_scope_close(c_scope);
   tex_scope_close(tex_scope);
+  access_close(access);
   scratch_end(scratch);
 }
 

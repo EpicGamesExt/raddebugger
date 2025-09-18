@@ -156,34 +156,6 @@ struct C_Stripe
 };
 
 ////////////////////////////////
-//~ rjf: Scoped Access
-
-typedef struct C_Touch C_Touch;
-struct C_Touch
-{
-  C_Touch *next;
-  U128 hash;
-};
-
-typedef struct C_Scope C_Scope;
-struct C_Scope
-{
-  C_Scope *next;
-  C_Touch *top_touch;
-};
-
-////////////////////////////////
-//~ rjf: Thread Context
-
-typedef struct C_TCTX C_TCTX;
-struct C_TCTX
-{
-  Arena *arena;
-  C_Scope *free_scope;
-  C_Touch *free_touch;
-};
-
-////////////////////////////////
 //~ rjf: Shared State
 
 typedef struct C_Shared C_Shared;
@@ -191,12 +163,12 @@ struct C_Shared
 {
   Arena *arena;
   
-  // rjf: main data cache
-  U64 slots_count;
-  U64 stripes_count;
-  C_BlobSlot *slots;
-  C_Stripe *stripes;
-  C_BlobNode **stripes_free_nodes;
+  // rjf: main data blob cache
+  U64 blob_slots_count;
+  U64 blob_stripes_count;
+  C_BlobSlot *blob_slots;
+  C_Stripe *blob_stripes;
+  C_BlobNode **blob_stripes_free_nodes;
   
   // rjf: key cache
   U64 key_slots_count;
@@ -217,7 +189,6 @@ struct C_Shared
 ////////////////////////////////
 //~ rjf: Globals
 
-thread_static C_TCTX *c_tctx = 0;
 global C_Shared *c_shared = 0;
 
 ////////////////////////////////
@@ -247,13 +218,6 @@ internal void c_root_release(C_Root root);
 internal U128 c_submit_data(C_Key key, Arena **data_arena, String8 data);
 
 ////////////////////////////////
-//~ rjf: Scoped Access
-
-internal C_Scope *c_scope_open(void);
-internal void c_scope_close(C_Scope *scope);
-internal void c_scope_touch_node__stripe_r_guarded(C_Scope *scope, C_BlobNode *node);
-
-////////////////////////////////
 //~ rjf: Downstream Accesses
 
 internal void c_hash_downstream_inc(U128 hash);
@@ -263,7 +227,7 @@ internal void c_hash_downstream_dec(U128 hash);
 //~ rjf: Cache Lookups
 
 internal U128 c_hash_from_key(C_Key key, U64 rewind_count);
-internal String8 c_data_from_hash(C_Scope *scope, U128 hash);
+internal String8 c_data_from_hash(Access *access, U128 hash);
 
 ////////////////////////////////
 //~ rjf: Tick

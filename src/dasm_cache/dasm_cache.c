@@ -278,66 +278,10 @@ dasm_init(void)
 }
 
 ////////////////////////////////
-//~ rjf: Scoped Access
-
-internal DASM_Scope *
-dasm_scope_open(void)
-{
-  if(dasm_tctx == 0)
-  {
-    Arena *arena = arena_alloc();
-    dasm_tctx = push_array(arena, DASM_TCTX, 1);
-    dasm_tctx->arena = arena;
-  }
-  U64 base_pos = arena_pos(dasm_tctx->arena);
-  DASM_Scope *scope = push_array(dasm_tctx->arena, DASM_Scope, 1);
-  scope->base_pos = base_pos;
-  return scope;
-}
-
-internal void
-dasm_scope_close(DASM_Scope *scope)
-{
-  for(DASM_Touch *t = scope->top_touch, *next = 0; t != 0; t = next)
-  {
-    next = t->next;
-    U64 slot_idx = t->hash.u64[1]%dasm_shared->slots_count;
-    U64 stripe_idx = slot_idx%dasm_shared->stripes_count;
-    DASM_Slot *slot = &dasm_shared->slots[slot_idx];
-    DASM_Stripe *stripe = &dasm_shared->stripes[stripe_idx];
-    MutexScopeR(stripe->rw_mutex)
-    {
-      for(DASM_Node *n = slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(t->hash, n->hash) && dasm_params_match(&t->params, &n->params))
-        {
-          ins_atomic_u64_dec_eval(&n->scope_ref_count);
-          break;
-        }
-      }
-    }
-  }
-  arena_pop_to(dasm_tctx->arena, scope->base_pos);
-}
-
-internal void
-dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_Node *node)
-{
-  DASM_Touch *touch = push_array(dasm_tctx->arena, DASM_Touch, 1);
-  ins_atomic_u64_inc_eval(&node->scope_ref_count);
-  ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
-  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, update_tick_idx());
-  touch->hash = node->hash;
-  MemoryCopyStruct(&touch->params, &node->params);
-  touch->params.dbgi_key = di_key_copy(dasm_tctx->arena, &touch->params.dbgi_key);
-  SLLStackPush(scope->top_touch, touch);
-}
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
 internal DASM_Info
-dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
+dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params)
 {
   DASM_Info info = {0};
   if(!u128_match(hash, u128_zero()))
@@ -402,7 +346,9 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
         // rjf: nonzero node, request if needed - touch & return results
         if(node != 0)
         {
-          dasm_scope_touch_node__stripe_r_guarded(scope, node);
+          ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
+          ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, update_tick_idx());
+          access_touch(access, &node->scope_ref_count, stripe->cv);
           MemoryCopyStruct(&info, &node->info);
         }
       }
@@ -416,13 +362,13 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
 }
 
 internal DASM_Info
-dasm_info_from_key_params(DASM_Scope *scope, C_Key key, DASM_Params *params, U128 *hash_out)
+dasm_info_from_key_params(Access *access, C_Key key, DASM_Params *params, U128 *hash_out)
 {
   DASM_Info result = {0};
   for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
     U128 hash = c_hash_from_key(key, rewind_idx);
-    result = dasm_info_from_hash_params(scope, hash, params);
+    result = dasm_info_from_hash_params(access, hash, params);
     if(result.lines.count != 0)
     {
       if(hash_out)
@@ -552,7 +498,7 @@ dasm_tick(void)
       break;
     }
     U64 req_idx = req_num-1;
-    C_Scope *c_scope = c_scope_open();
+    Access *access = access_open();
     DI_Scope *di_scope = di_scope_open();
     TXT_Scope *txt_scope = txt_scope_open();
     
@@ -562,7 +508,7 @@ dasm_tick(void)
     C_Root root = r->root;
     U128 hash = r->hash;
     DASM_Params params = r->params;
-    String8 data = c_data_from_hash(c_scope, hash);
+    String8 data = c_data_from_hash(access, hash);
     U64 change_gen = fs_change_gen();
     U64 slot_idx = hash.u64[1]%dasm_shared->slots_count;
     U64 stripe_idx = slot_idx%dasm_shared->stripes_count;
@@ -655,7 +601,7 @@ dasm_tick(void)
                   stale = (stale || u128_match(hash, u128_zero()));
                   if(0 < line->line_num && line->line_num < text_info.lines_count)
                   {
-                    String8 data = c_data_from_hash(c_scope, hash);
+                    String8 data = c_data_from_hash(access, hash);
                     String8 line_text = str8_skip_chop_whitespace(str8_substr(data, text_info.lines_ranges[line->line_num-1]));
                     if(line_text.size != 0)
                     {
@@ -786,7 +732,7 @@ dasm_tick(void)
     
     txt_scope_close(txt_scope);
     di_scope_close(di_scope);
-    c_scope_close(c_scope);
+    access_close(access);
   }
   lane_sync();
   

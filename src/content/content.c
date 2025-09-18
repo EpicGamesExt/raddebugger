@@ -67,14 +67,14 @@ c_init(void)
   Arena *arena = arena_alloc();
   c_shared = push_array(arena, C_Shared, 1);
   c_shared->arena = arena;
-  c_shared->slots_count = 4096;
-  c_shared->stripes_count = Min(c_shared->slots_count, os_get_system_info()->logical_processor_count);
-  c_shared->slots = push_array(arena, C_BlobSlot, c_shared->slots_count);
-  c_shared->stripes = push_array(arena, C_Stripe, c_shared->stripes_count);
-  c_shared->stripes_free_nodes = push_array(arena, C_BlobNode *, c_shared->stripes_count);
-  for(U64 idx = 0; idx < c_shared->stripes_count; idx += 1)
+  c_shared->blob_slots_count = 16384;
+  c_shared->blob_stripes_count = Min(c_shared->blob_slots_count, os_get_system_info()->logical_processor_count);
+  c_shared->blob_slots = push_array(arena, C_BlobSlot, c_shared->blob_slots_count);
+  c_shared->blob_stripes = push_array(arena, C_Stripe, c_shared->blob_stripes_count);
+  c_shared->blob_stripes_free_nodes = push_array(arena, C_BlobNode *, c_shared->blob_stripes_count);
+  for(U64 idx = 0; idx < c_shared->blob_stripes_count; idx += 1)
   {
-    C_Stripe *stripe = &c_shared->stripes[idx];
+    C_Stripe *stripe = &c_shared->blob_stripes[idx];
     stripe->arena = arena_alloc();
     stripe->rw_mutex = rw_mutex_alloc();
     stripe->cv = cond_var_alloc();
@@ -184,10 +184,10 @@ c_root_release(C_Root root)
             for(U64 history_idx = 0; history_idx < C_KEY_HASH_HISTORY_STRONG_REF_COUNT && history_idx < n->hash_history_gen; history_idx += 1)
             {
               U128 hash = n->hash_history[(n->hash_history_gen+history_idx)%ArrayCount(n->hash_history)];
-              U64 hash_slot_idx = hash.u64[1]%c_shared->slots_count;
-              U64 hash_stripe_idx = hash_slot_idx%c_shared->stripes_count;
-              C_BlobSlot *hash_slot = &c_shared->slots[hash_slot_idx];
-              C_Stripe *hash_stripe = &c_shared->stripes[hash_stripe_idx];
+              U64 hash_slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+              U64 hash_stripe_idx = hash_slot_idx%c_shared->blob_stripes_count;
+              C_BlobSlot *hash_slot = &c_shared->blob_slots[hash_slot_idx];
+              C_Stripe *hash_stripe = &c_shared->blob_stripes[hash_stripe_idx];
               MutexScopeR(hash_stripe->rw_mutex)
               {
                 for(C_BlobNode *n = hash_slot->first; n != 0; n = n->next)
@@ -224,10 +224,10 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
   C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
   U128 hash = c_hash_from_data(data);
-  U64 slot_idx = hash.u64[1]%c_shared->slots_count;
-  U64 stripe_idx = slot_idx%c_shared->stripes_count;
-  C_BlobSlot *slot = &c_shared->slots[slot_idx];
-  C_Stripe *stripe = &c_shared->stripes[stripe_idx];
+  U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+  U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
+  C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
+  C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
   
   //- rjf: commit data to cache - if already there, just bump key refcount
   ProfScope("commit data to cache - if already there, just bump key refcount") MutexScopeW(stripe->rw_mutex)
@@ -243,10 +243,10 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
     }
     if(existing_node == 0)
     {
-      C_BlobNode *node = c_shared->stripes_free_nodes[stripe_idx];
+      C_BlobNode *node = c_shared->blob_stripes_free_nodes[stripe_idx];
       if(node)
       {
-        SLLStackPop(c_shared->stripes_free_nodes[stripe_idx]);
+        SLLStackPop(c_shared->blob_stripes_free_nodes[stripe_idx]);
       }
       else
       {
@@ -357,10 +357,10 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
   ProfScope("decrement key ref count of expired hash")
     if(!u128_match(key_expired_hash, u128_zero()))
   {
-    U64 old_hash_slot_idx = key_expired_hash.u64[1]%c_shared->slots_count;
-    U64 old_hash_stripe_idx = old_hash_slot_idx%c_shared->stripes_count;
-    C_BlobSlot *old_hash_slot = &c_shared->slots[old_hash_slot_idx];
-    C_Stripe *old_hash_stripe = &c_shared->stripes[old_hash_stripe_idx];
+    U64 old_hash_slot_idx = key_expired_hash.u64[1]%c_shared->blob_slots_count;
+    U64 old_hash_stripe_idx = old_hash_slot_idx%c_shared->blob_stripes_count;
+    C_BlobSlot *old_hash_slot = &c_shared->blob_slots[old_hash_slot_idx];
+    C_Stripe *old_hash_stripe = &c_shared->blob_stripes[old_hash_stripe_idx];
     MutexScopeR(old_hash_stripe->rw_mutex)
     {
       for(C_BlobNode *n = old_hash_slot->first; n != 0; n = n->next)
@@ -378,85 +378,15 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
 }
 
 ////////////////////////////////
-//~ rjf: Scoped Access
-
-internal C_Scope *
-c_scope_open(void)
-{
-  if(c_tctx == 0)
-  {
-    Arena *arena = arena_alloc();
-    c_tctx = push_array(arena, C_TCTX, 1);
-    c_tctx->arena = arena;
-  }
-  C_Scope *scope = c_tctx->free_scope;
-  if(scope)
-  {
-    SLLStackPop(c_tctx->free_scope);
-  }
-  else
-  {
-    scope = push_array_no_zero(c_tctx->arena, C_Scope, 1);
-  }
-  MemoryZeroStruct(scope);
-  return scope;
-}
-
-internal void
-c_scope_close(C_Scope *scope)
-{
-  for(C_Touch *touch = scope->top_touch, *next = 0; touch != 0; touch = next)
-  {
-    U128 hash = touch->hash;
-    next = touch->next;
-    U64 slot_idx = hash.u64[1]%c_shared->slots_count;
-    U64 stripe_idx = slot_idx%c_shared->stripes_count;
-    C_BlobSlot *slot = &c_shared->slots[slot_idx];
-    C_Stripe *stripe = &c_shared->stripes[stripe_idx];
-    MutexScopeR(stripe->rw_mutex)
-    {
-      for(C_BlobNode *n = slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(hash, n->hash))
-        {
-          ins_atomic_u64_dec_eval(&n->scope_ref_count);
-          break;
-        }
-      }
-    }
-    SLLStackPush(c_tctx->free_touch, touch);
-  }
-  SLLStackPush(c_tctx->free_scope, scope);
-}
-
-internal void
-c_scope_touch_node__stripe_r_guarded(C_Scope *scope, C_BlobNode *node)
-{
-  C_Touch *touch = c_tctx->free_touch;
-  ins_atomic_u64_inc_eval(&node->scope_ref_count);
-  if(touch != 0)
-  {
-    SLLStackPop(c_tctx->free_touch);
-  }
-  else
-  {
-    touch = push_array_no_zero(c_tctx->arena, C_Touch, 1);
-  }
-  MemoryZeroStruct(touch);
-  touch->hash = node->hash;
-  SLLStackPush(scope->top_touch, touch);
-}
-
-////////////////////////////////
 //~ rjf: Downstream Accesses
 
 internal void
 c_hash_downstream_inc(U128 hash)
 {
-  U64 slot_idx = hash.u64[1]%c_shared->slots_count;
-  U64 stripe_idx = slot_idx%c_shared->stripes_count;
-  C_BlobSlot *slot = &c_shared->slots[slot_idx];
-  C_Stripe *stripe = &c_shared->stripes[stripe_idx];
+  U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+  U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
+  C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
+  C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
   MutexScopeR(stripe->rw_mutex)
   {
     for(C_BlobNode *n = slot->first; n != 0; n = n->next)
@@ -473,10 +403,10 @@ c_hash_downstream_inc(U128 hash)
 internal void
 c_hash_downstream_dec(U128 hash)
 {
-  U64 slot_idx = hash.u64[1]%c_shared->slots_count;
-  U64 stripe_idx = slot_idx%c_shared->stripes_count;
-  C_BlobSlot *slot = &c_shared->slots[slot_idx];
-  C_Stripe *stripe = &c_shared->stripes[stripe_idx];
+  U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+  U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
+  C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
+  C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
   MutexScopeR(stripe->rw_mutex)
   {
     for(C_BlobNode *n = slot->first; n != 0; n = n->next)
@@ -517,14 +447,14 @@ c_hash_from_key(C_Key key, U64 rewind_count)
 }
 
 internal String8
-c_data_from_hash(C_Scope *scope, U128 hash)
+c_data_from_hash(Access *access, U128 hash)
 {
   ProfBeginFunction();
   String8 result = {0};
-  U64 slot_idx = hash.u64[1]%c_shared->slots_count;
-  U64 stripe_idx = slot_idx%c_shared->stripes_count;
-  C_BlobSlot *slot = &c_shared->slots[slot_idx];
-  C_Stripe *stripe = &c_shared->stripes[stripe_idx];
+  U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+  U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
+  C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
+  C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
   MutexScopeR(stripe->rw_mutex)
   {
     for(C_BlobNode *n = slot->first; n != 0; n = n->next)
@@ -532,7 +462,7 @@ c_data_from_hash(C_Scope *scope, U128 hash)
       if(u128_match(n->hash, hash))
       {
         result = n->data;
-        c_scope_touch_node__stripe_r_guarded(scope, n);
+        access_touch(access, &n->scope_ref_count, stripe->cv);
         break;
       }
     }
@@ -548,12 +478,12 @@ internal void
 c_tick(void)
 {
   ProfBeginFunction();
-  Rng1U64 range = lane_range(c_shared->slots_count);
+  Rng1U64 range = lane_range(c_shared->blob_slots_count);
   for EachInRange(slot_idx, range)
   {
-    U64 stripe_idx = slot_idx%c_shared->stripes_count;
-    C_BlobSlot *slot = &c_shared->slots[slot_idx];
-    C_Stripe *stripe = &c_shared->stripes[stripe_idx];
+    U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
+    C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
+    C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
     B32 slot_has_work = 0;
     MutexScopeR(stripe->rw_mutex)
     {
@@ -580,7 +510,7 @@ c_tick(void)
         if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
         {
           DLLRemove(slot->first, slot->last, n);
-          SLLStackPush(c_shared->stripes_free_nodes[stripe_idx], n);
+          SLLStackPush(c_shared->blob_stripes_free_nodes[stripe_idx], n);
           if(n->arena != 0)
           {
             arena_release(n->arena);

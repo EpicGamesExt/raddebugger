@@ -1851,7 +1851,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
      range.max <= 0x000FFFFFFFFFFFFFull)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    C_Scope *scope = c_scope_open();
+    Access *access = access_open();
     CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
     
     //- rjf: unpack address range, prepare per-touched-page info
@@ -1889,7 +1889,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
       for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
       {
         // rjf: read data for this page
-        String8 data = c_data_from_hash(scope, page_hashes[page_idx]);
+        String8 data = c_data_from_hash(access, page_hashes[page_idx]);
         Rng1U64 data_vaddr_range = r1u64(page_range.min + page_idx*page_size, page_range.min + page_idx*page_size+data.size);
         
         // rjf: skip/chop bytes which are irrelevant for the actual requested read
@@ -1925,7 +1925,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
         // fill out changed flags
         if(!u128_match(page_hashes[page_idx], page_last_hashes[page_idx])) ProfScope("hashes don't match; diff each byte")
         {
-          String8 last_data = c_data_from_hash(scope, page_last_hashes[page_idx]);
+          String8 last_data = c_data_from_hash(access, page_last_hashes[page_idx]);
           String8 in_range_last_data = last_data;
           if(page_idx == page_count-1 && data_vaddr_range.max > range.max)
           {
@@ -1977,7 +1977,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
       }
     }
     
-    c_scope_close(scope);
+    access_close(access);
     scratch_end(scratch);
   }
   ProfEnd();

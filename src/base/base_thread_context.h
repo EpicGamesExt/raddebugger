@@ -16,6 +16,24 @@ struct LaneCtx
 };
 
 ////////////////////////////////
+//~ rjf: Access Scopes
+
+typedef struct Touch Touch;
+struct Touch
+{
+  Touch *next;
+  U64 *touch_count;
+  CondVar cv;
+};
+
+typedef struct Access Access;
+struct Access
+{
+  Access *next;
+  Touch *top_touch;
+};
+
+////////////////////////////////
 //~ rjf: Base Per-Thread State Bundle
 
 typedef struct TCTX TCTX;
@@ -34,6 +52,11 @@ struct TCTX
   // rjf: source location info
   char *file_name;
   U64 line_number;
+  
+  // rjf: accesses
+  Arena *access_arena;
+  Access *free_access;
+  Touch *free_touch;
 };
 
 ////////////////////////////////
@@ -68,5 +91,10 @@ internal String8 tctx_get_thread_name(void);
 internal void tctx_write_srcloc(char *file_name, U64 line_number);
 internal void tctx_read_srcloc(char **file_name, U64 *line_number);
 #define tctx_write_this_srcloc() tctx_write_srcloc(__FILE__, __LINE__)
+
+//- rjf: access scopes
+internal Access *access_open(void);
+internal void access_close(Access *access);
+internal void access_touch(Access *access, U64 *touch_count, CondVar cv);
 
 #endif // BASE_THREAD_CONTEXT_H

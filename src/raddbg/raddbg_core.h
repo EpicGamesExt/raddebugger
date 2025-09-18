@@ -988,7 +988,7 @@ internal void rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
-internal MD_Node *rd_theme_tree_from_name(Arena *arena, C_Scope *scope, String8 theme_name);
+internal MD_Node *rd_theme_tree_from_name(Arena *arena, Access *access, String8 theme_name);
 internal Vec4F32 rd_rgba_from_code_color_slot(RD_CodeColorSlot slot);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);

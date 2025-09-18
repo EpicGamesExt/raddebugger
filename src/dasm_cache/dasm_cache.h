@@ -221,25 +221,6 @@ struct DASM_Stripe
 };
 
 ////////////////////////////////
-//~ rjf: Scoped Access Types
-
-typedef struct DASM_Touch DASM_Touch;
-struct DASM_Touch
-{
-  DASM_Touch *next;
-  U128 hash;
-  DASM_Params params;
-};
-
-typedef struct DASM_Scope DASM_Scope;
-struct DASM_Scope
-{
-  DASM_Scope *next;
-  DASM_Touch *top_touch;
-  U64 base_pos;
-};
-
-////////////////////////////////
 //~ rjf: Thread Context
 
 typedef struct DASM_TCTX DASM_TCTX;
@@ -308,17 +289,10 @@ internal U64 dasm_line_array_code_off_from_idx(DASM_LineArray *array, U64 idx);
 internal void dasm_init(void);
 
 ////////////////////////////////
-//~ rjf: Scoped Access
-
-internal DASM_Scope *dasm_scope_open(void);
-internal void dasm_scope_close(DASM_Scope *scope);
-internal void dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_Node *node);
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal DASM_Info dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params);
-internal DASM_Info dasm_info_from_key_params(DASM_Scope *scope, C_Key key, DASM_Params *params, U128 *hash_out);
+internal DASM_Info dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params);
+internal DASM_Info dasm_info_from_key_params(Access *access, C_Key key, DASM_Params *params, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Ticks

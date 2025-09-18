@@ -166,7 +166,7 @@ ptg_builder_thread__entry_point(void *p)
 {
   for(;;)
   {
-    C_Scope *scope = c_scope_open();
+    Access *access = access_open();
     
     //- rjf: get next key
     PTG_Key key = {0};
@@ -214,7 +214,7 @@ ptg_builder_thread__entry_point(void *p)
       }
     }
     
-    c_scope_close(scope);
+    access_close(access);
   }
 }
 
