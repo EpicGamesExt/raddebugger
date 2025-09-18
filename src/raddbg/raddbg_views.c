@@ -3821,7 +3821,6 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
 {
   Temp scratch = scratch_begin(0, 0);
   Access *access = access_open();
-  TEX_Scope *tex_scope = tex_scope_open();
   
   //////////////////////////////
   //- rjf: evaluate expression
@@ -3871,7 +3870,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   C_Key texture_key = rd_key_from_eval_space_range(eval.space, offset_range, 0);
   TEX_Topology topology = tex_topology_make(dim, fmt);
   U128 data_hash = {0};
-  R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology, &data_hash);
+  R_Handle texture = tex_texture_from_key_topology(access, texture_key, topology, &data_hash);
   String8 data = c_data_from_hash(access, data_hash);
   
   //////////////////////////////
@@ -4025,7 +4024,6 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   rd_store_view_param_f32(str8_lit("x"), view_center_pos.x);
   rd_store_view_param_f32(str8_lit("y"), view_center_pos.y);
   
-  tex_scope_close(tex_scope);
   access_close(access);
   scratch_end(scratch);
 }

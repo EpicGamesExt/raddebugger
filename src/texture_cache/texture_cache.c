@@ -45,92 +45,10 @@ tex_init(void)
 }
 
 ////////////////////////////////
-//~ rjf: Thread Context Initialization
-
-internal void
-tex_tctx_ensure_inited(void)
-{
-  if(tex_tctx == 0)
-  {
-    Arena *arena = arena_alloc();
-    tex_tctx = push_array(arena, TEX_TCTX, 1);
-    tex_tctx->arena = arena;
-  }
-}
-
-////////////////////////////////
-//~ rjf: Scoped Access
-
-internal TEX_Scope *
-tex_scope_open(void)
-{
-  tex_tctx_ensure_inited();
-  TEX_Scope *scope = tex_tctx->free_scope;
-  if(scope)
-  {
-    SLLStackPop(tex_tctx->free_scope);
-  }
-  else
-  {
-    scope = push_array_no_zero(tex_tctx->arena, TEX_Scope, 1);
-  }
-  MemoryZeroStruct(scope);
-  return scope;
-}
-
-internal void
-tex_scope_close(TEX_Scope *scope)
-{
-  for(TEX_Touch *touch = scope->top_touch, *next = 0; touch != 0; touch = next)
-  {
-    U128 hash = touch->hash;
-    next = touch->next;
-    U64 slot_idx = hash.u64[1]%tex_shared->slots_count;
-    U64 stripe_idx = slot_idx%tex_shared->stripes_count;
-    TEX_Slot *slot = &tex_shared->slots[slot_idx];
-    TEX_Stripe *stripe = &tex_shared->stripes[stripe_idx];
-    MutexScopeR(stripe->rw_mutex)
-    {
-      for(TEX_Node *n = slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(hash, n->hash) && MemoryMatchStruct(&touch->topology, &n->topology))
-        {
-          ins_atomic_u64_dec_eval(&n->scope_ref_count);
-          break;
-        }
-      }
-    }
-    SLLStackPush(tex_tctx->free_touch, touch);
-  }
-  SLLStackPush(tex_tctx->free_scope, scope);
-}
-
-internal void
-tex_scope_touch_node__stripe_r_guarded(TEX_Scope *scope, TEX_Node *node)
-{
-  TEX_Touch *touch = tex_tctx->free_touch;
-  ins_atomic_u64_inc_eval(&node->scope_ref_count);
-  ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
-  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, update_tick_idx());
-  if(touch != 0)
-  {
-    SLLStackPop(tex_tctx->free_touch);
-  }
-  else
-  {
-    touch = push_array_no_zero(tex_tctx->arena, TEX_Touch, 1);
-  }
-  MemoryZeroStruct(touch);
-  touch->hash = node->hash;
-  touch->topology = node->topology;
-  SLLStackPush(scope->top_touch, touch);
-}
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
 internal R_Handle
-tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topology)
+tex_texture_from_hash_topology(Access *access, U128 hash, TEX_Topology topology)
 {
   R_Handle handle = {0};
   {
@@ -148,7 +66,9 @@ tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topolog
         {
           handle = n->texture;
           found = !r_handle_match(r_handle_zero(), handle);
-          tex_scope_touch_node__stripe_r_guarded(scope, n);
+          ins_atomic_u64_eval_assign(&n->last_time_touched_us, os_now_microseconds());
+          ins_atomic_u64_eval_assign(&n->last_user_clock_idx_touched, update_tick_idx());
+          access_touch(access, &n->scope_ref_count, stripe->cv);
           break;
         }
       }
@@ -196,13 +116,13 @@ tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topolog
 }
 
 internal R_Handle
-tex_texture_from_key_topology(TEX_Scope *scope, C_Key key, TEX_Topology topology, U128 *hash_out)
+tex_texture_from_key_topology(Access *access, C_Key key, TEX_Topology topology, U128 *hash_out)
 {
   R_Handle handle = {0};
   for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
     U128 hash = c_hash_from_key(key, rewind_idx);
-    handle = tex_texture_from_hash_topology(scope, hash, topology);
+    handle = tex_texture_from_hash_topology(access, hash, topology);
     if(!r_handle_match(handle, r_handle_zero()))
     {
       if(hash_out)
