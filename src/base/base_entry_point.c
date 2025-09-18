@@ -6,6 +6,7 @@ global CondVar async_tick_start_cond_var = {0};
 global CondVar async_tick_stop_cond_var = {0};
 global Mutex async_tick_start_mutex = {0};
 global Mutex async_tick_stop_mutex = {0};
+global U64 async_wait_timeout = 0;
 global B32 global_async_exit = 0;
 
 internal void

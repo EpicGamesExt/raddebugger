@@ -64,7 +64,7 @@ struct HS_Key
 };
 
 ////////////////////////////////
-//~ rjf: Cache Types
+//~ rjf: Root Cache Types
 
 typedef struct HS_RootIDChunkNode HS_RootIDChunkNode;
 struct HS_RootIDChunkNode
@@ -101,6 +101,9 @@ struct HS_RootSlot
   HS_RootNode *last;
 };
 
+////////////////////////////////
+//~ rjf: Key Cache Types
+
 #define HS_KEY_HASH_HISTORY_COUNT 64
 #define HS_KEY_HASH_HISTORY_STRONG_REF_COUNT 2
 
@@ -121,11 +124,14 @@ struct HS_KeySlot
   HS_KeyNode *last;
 };
 
-typedef struct HS_Node HS_Node;
-struct HS_Node
+////////////////////////////////
+//~ rjf: Content Blob Cache Types
+
+typedef struct HS_BlobNode HS_BlobNode;
+struct HS_BlobNode
 {
-  HS_Node *next;
-  HS_Node *prev;
+  HS_BlobNode *next;
+  HS_BlobNode *prev;
   U128 hash;
   Arena *arena;
   String8 data;
@@ -134,11 +140,11 @@ struct HS_Node
   U64 downstream_ref_count;
 };
 
-typedef struct HS_Slot HS_Slot;
-struct HS_Slot
+typedef struct HS_BlobSlot HS_BlobSlot;
+struct HS_BlobSlot
 {
-  HS_Node *first;
-  HS_Node *last;
+  HS_BlobNode *first;
+  HS_BlobNode *last;
 };
 
 typedef struct HS_Stripe HS_Stripe;
@@ -188,9 +194,9 @@ struct HS_Shared
   // rjf: main data cache
   U64 slots_count;
   U64 stripes_count;
-  HS_Slot *slots;
+  HS_BlobSlot *slots;
   HS_Stripe *stripes;
-  HS_Node **stripes_free_nodes;
+  HS_BlobNode **stripes_free_nodes;
   
   // rjf: key cache
   U64 key_slots_count;
@@ -245,7 +251,7 @@ internal U128 hs_submit_data(HS_Key key, Arena **data_arena, String8 data);
 
 internal HS_Scope *hs_scope_open(void);
 internal void hs_scope_close(HS_Scope *scope);
-internal void hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node);
+internal void hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_BlobNode *node);
 
 ////////////////////////////////
 //~ rjf: Downstream Accesses

@@ -69,9 +69,9 @@ hs_init(void)
   hs_shared->arena = arena;
   hs_shared->slots_count = 4096;
   hs_shared->stripes_count = Min(hs_shared->slots_count, os_get_system_info()->logical_processor_count);
-  hs_shared->slots = push_array(arena, HS_Slot, hs_shared->slots_count);
+  hs_shared->slots = push_array(arena, HS_BlobSlot, hs_shared->slots_count);
   hs_shared->stripes = push_array(arena, HS_Stripe, hs_shared->stripes_count);
-  hs_shared->stripes_free_nodes = push_array(arena, HS_Node *, hs_shared->stripes_count);
+  hs_shared->stripes_free_nodes = push_array(arena, HS_BlobNode *, hs_shared->stripes_count);
   for(U64 idx = 0; idx < hs_shared->stripes_count; idx += 1)
   {
     HS_Stripe *stripe = &hs_shared->stripes[idx];
@@ -186,11 +186,11 @@ hs_root_release(HS_Root root)
               U128 hash = n->hash_history[(n->hash_history_gen+history_idx)%ArrayCount(n->hash_history)];
               U64 hash_slot_idx = hash.u64[1]%hs_shared->slots_count;
               U64 hash_stripe_idx = hash_slot_idx%hs_shared->stripes_count;
-              HS_Slot *hash_slot = &hs_shared->slots[hash_slot_idx];
+              HS_BlobSlot *hash_slot = &hs_shared->slots[hash_slot_idx];
               HS_Stripe *hash_stripe = &hs_shared->stripes[hash_stripe_idx];
               MutexScopeR(hash_stripe->rw_mutex)
               {
-                for(HS_Node *n = hash_slot->first; n != 0; n = n->next)
+                for(HS_BlobNode *n = hash_slot->first; n != 0; n = n->next)
                 {
                   if(u128_match(n->hash, hash))
                   {
@@ -226,14 +226,14 @@ hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
   U128 hash = hs_hash_from_data(data);
   U64 slot_idx = hash.u64[1]%hs_shared->slots_count;
   U64 stripe_idx = slot_idx%hs_shared->stripes_count;
-  HS_Slot *slot = &hs_shared->slots[slot_idx];
+  HS_BlobSlot *slot = &hs_shared->slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
   
   //- rjf: commit data to cache - if already there, just bump key refcount
   ProfScope("commit data to cache - if already there, just bump key refcount") MutexScopeW(stripe->rw_mutex)
   {
-    HS_Node *existing_node = 0;
-    for(HS_Node *n = slot->first; n != 0; n = n->next)
+    HS_BlobNode *existing_node = 0;
+    for(HS_BlobNode *n = slot->first; n != 0; n = n->next)
     {
       if(u128_match(n->hash, hash))
       {
@@ -243,14 +243,14 @@ hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
     }
     if(existing_node == 0)
     {
-      HS_Node *node = hs_shared->stripes_free_nodes[stripe_idx];
+      HS_BlobNode *node = hs_shared->stripes_free_nodes[stripe_idx];
       if(node)
       {
         SLLStackPop(hs_shared->stripes_free_nodes[stripe_idx]);
       }
       else
       {
-        node = push_array(stripe->arena, HS_Node, 1);
+        node = push_array(stripe->arena, HS_BlobNode, 1);
       }
       node->hash = hash;
       if(data_arena != 0)
@@ -359,11 +359,11 @@ hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
   {
     U64 old_hash_slot_idx = key_expired_hash.u64[1]%hs_shared->slots_count;
     U64 old_hash_stripe_idx = old_hash_slot_idx%hs_shared->stripes_count;
-    HS_Slot *old_hash_slot = &hs_shared->slots[old_hash_slot_idx];
+    HS_BlobSlot *old_hash_slot = &hs_shared->slots[old_hash_slot_idx];
     HS_Stripe *old_hash_stripe = &hs_shared->stripes[old_hash_stripe_idx];
     MutexScopeR(old_hash_stripe->rw_mutex)
     {
-      for(HS_Node *n = old_hash_slot->first; n != 0; n = n->next)
+      for(HS_BlobNode *n = old_hash_slot->first; n != 0; n = n->next)
       {
         if(u128_match(n->hash, key_expired_hash))
         {
@@ -411,11 +411,11 @@ hs_scope_close(HS_Scope *scope)
     next = touch->next;
     U64 slot_idx = hash.u64[1]%hs_shared->slots_count;
     U64 stripe_idx = slot_idx%hs_shared->stripes_count;
-    HS_Slot *slot = &hs_shared->slots[slot_idx];
+    HS_BlobSlot *slot = &hs_shared->slots[slot_idx];
     HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
     MutexScopeR(stripe->rw_mutex)
     {
-      for(HS_Node *n = slot->first; n != 0; n = n->next)
+      for(HS_BlobNode *n = slot->first; n != 0; n = n->next)
       {
         if(u128_match(hash, n->hash))
         {
@@ -430,7 +430,7 @@ hs_scope_close(HS_Scope *scope)
 }
 
 internal void
-hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node)
+hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_BlobNode *node)
 {
   HS_Touch *touch = hs_tctx->free_touch;
   ins_atomic_u64_inc_eval(&node->scope_ref_count);
@@ -455,11 +455,11 @@ hs_hash_downstream_inc(U128 hash)
 {
   U64 slot_idx = hash.u64[1]%hs_shared->slots_count;
   U64 stripe_idx = slot_idx%hs_shared->stripes_count;
-  HS_Slot *slot = &hs_shared->slots[slot_idx];
+  HS_BlobSlot *slot = &hs_shared->slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
   MutexScopeR(stripe->rw_mutex)
   {
-    for(HS_Node *n = slot->first; n != 0; n = n->next)
+    for(HS_BlobNode *n = slot->first; n != 0; n = n->next)
     {
       if(u128_match(hash, n->hash))
       {
@@ -475,11 +475,11 @@ hs_hash_downstream_dec(U128 hash)
 {
   U64 slot_idx = hash.u64[1]%hs_shared->slots_count;
   U64 stripe_idx = slot_idx%hs_shared->stripes_count;
-  HS_Slot *slot = &hs_shared->slots[slot_idx];
+  HS_BlobSlot *slot = &hs_shared->slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
   MutexScopeR(stripe->rw_mutex)
   {
-    for(HS_Node *n = slot->first; n != 0; n = n->next)
+    for(HS_BlobNode *n = slot->first; n != 0; n = n->next)
     {
       if(u128_match(hash, n->hash))
       {
@@ -523,11 +523,11 @@ hs_data_from_hash(HS_Scope *scope, U128 hash)
   String8 result = {0};
   U64 slot_idx = hash.u64[1]%hs_shared->slots_count;
   U64 stripe_idx = slot_idx%hs_shared->stripes_count;
-  HS_Slot *slot = &hs_shared->slots[slot_idx];
+  HS_BlobSlot *slot = &hs_shared->slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
   MutexScopeR(stripe->rw_mutex)
   {
-    for(HS_Node *n = slot->first; n != 0; n = n->next)
+    for(HS_BlobNode *n = slot->first; n != 0; n = n->next)
     {
       if(u128_match(n->hash, hash))
       {
@@ -552,12 +552,12 @@ hs_tick(void)
   for EachInRange(slot_idx, range)
   {
     U64 stripe_idx = slot_idx%hs_shared->stripes_count;
-    HS_Slot *slot = &hs_shared->slots[slot_idx];
+    HS_BlobSlot *slot = &hs_shared->slots[slot_idx];
     HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
     B32 slot_has_work = 0;
     MutexScopeR(stripe->rw_mutex)
     {
-      for(HS_Node *n = slot->first; n != 0; n = n->next)
+      for(HS_BlobNode *n = slot->first; n != 0; n = n->next)
       {
         U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
         U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
@@ -571,7 +571,7 @@ hs_tick(void)
     }
     if(slot_has_work) MutexScopeW(stripe->rw_mutex)
     {
-      for(HS_Node *n = slot->first, *next = 0; n != 0; n = next)
+      for(HS_BlobNode *n = slot->first, *next = 0; n != 0; n = next)
       {
         next = n->next;
         U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);

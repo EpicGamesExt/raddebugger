@@ -268,6 +268,9 @@ struct DASM_Shared
   DASM_RequestNode *first_req;
   DASM_RequestNode *last_req;
   U64 req_count;
+  
+  // rjf: request take counter
+  U64 lane_req_take_counter;
 };
 
 ////////////////////////////////

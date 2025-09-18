@@ -538,13 +538,20 @@ dasm_tick(void)
     arena_clear(dasm_shared->req_arena);
     dasm_shared->first_req = dasm_shared->last_req = 0;
     dasm_shared->req_count = 0;
+    dasm_shared->lane_req_take_counter = 0;
   }
   lane_sync();
   
   //- rjf: do requests
-  Rng1U64 range = lane_range(reqs_count);
-  for EachInRange(req_idx, range)
+  for(;;)
   {
+    //- rjf: get next request
+    U64 req_num = ins_atomic_u64_inc_eval(&dasm_shared->lane_req_take_counter);
+    if(req_num < 1 || reqs_count < req_num)
+    {
+      break;
+    }
+    U64 req_idx = req_num-1;
     HS_Scope *hs_scope = hs_scope_open();
     DI_Scope *di_scope = di_scope_open();
     TXT_Scope *txt_scope = txt_scope_open();
@@ -766,7 +773,7 @@ dasm_tick(void)
     }
     
     //- rjf: re-request if stale
-    MutexScope(dasm_shared->req_mutex)
+    if(stale) MutexScope(dasm_shared->req_mutex)
     {
       DASM_RequestNode *req_n = push_array(dasm_shared->req_arena, DASM_RequestNode, 1);
       SLLQueuePush(dasm_shared->first_req, dasm_shared->last_req, req_n);
@@ -781,6 +788,7 @@ dasm_tick(void)
     di_scope_close(di_scope);
     hs_scope_close(hs_scope);
   }
+  lane_sync();
   
   scratch_end(scratch);
   ProfEnd();

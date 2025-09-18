@@ -310,14 +310,20 @@ fs_tick(void)
     arena_clear(fs_shared->req_arena);
     fs_shared->first_req = fs_shared->last_req = 0;
     fs_shared->req_count = 0;
+    fs_shared->lane_req_take_counter = 0;
   }
   lane_sync();
   
   //- rjf: do requests
-  Rng1U64 range = lane_range(reqs_count);
-  for EachInRange(req_idx, range)
+  for(;;)
   {
     //- rjf: unpack
+    U64 req_num = ins_atomic_u64_inc_eval(&fs_shared->lane_req_take_counter);
+    if(req_num < 1 || reqs_count < req_num)
+    {
+      break;
+    }
+    U64 req_idx = req_num-1;
     FS_Request *r = &reqs[req_idx];
     HS_Key key = r->key;
     String8 path = r->path;
@@ -394,6 +400,7 @@ fs_tick(void)
     }
     cond_var_broadcast(path_stripe->cv);
   }
+  lane_sync();
   
   scratch_end(scratch);
   ProfEnd();
