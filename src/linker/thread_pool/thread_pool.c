@@ -99,7 +99,7 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
   // launch worker threads
   for (U64 i = 1; i < worker_count; i += 1) {
     TP_Worker *worker = &pool->worker_arr[i];
-    worker->handle    = os_thread_launch(worker_entry, worker, 0);
+    worker->handle    = thread_launch(worker_entry, worker);
   }
   
   ProfEnd();
@@ -114,20 +114,20 @@ tp_release(TP_Context *pool)
   B32 is_shared = pool->exec_semaphore.u64[0] != 0;
   if (is_shared) {
     for (U64 i = 0; i < pool->worker_count; ++i) {
-      os_semaphore_drop(pool->exec_semaphore);
+      semaphore_drop(pool->exec_semaphore);
     }
   }
   for (U64 i = 0; i < pool->worker_count; ++i) {
-    os_semaphore_drop(pool->task_semaphore);
+    semaphore_drop(pool->task_semaphore);
   }
   for (U64 i = 1; i < pool->worker_count; i += 1) {
-    os_thread_detach(pool->worker_arr[i].handle);
+    thread_detach(pool->worker_arr[i].handle);
   }
   if (is_shared) {
-    os_semaphore_release(pool->exec_semaphore);
+    semaphore_release(pool->exec_semaphore);
   }
-  os_semaphore_release(pool->task_semaphore);
-  os_semaphore_release(pool->main_semaphore);
+  semaphore_release(pool->task_semaphore);
+  semaphore_release(pool->main_semaphore);
 
   MemoryZeroStruct(pool);
 }

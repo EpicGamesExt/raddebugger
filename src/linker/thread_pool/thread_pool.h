@@ -22,7 +22,7 @@ typedef struct TP_Worker
 {
   U64                id;
   struct TP_Context *pool;
-  OS_Handle          handle;
+  Thread             handle;
 } TP_Worker;
 
 typedef struct TP_Context
