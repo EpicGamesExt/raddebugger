@@ -547,6 +547,7 @@ hs_data_from_hash(HS_Scope *scope, U128 hash)
 internal void
 hs_tick(void)
 {
+  ProfBeginFunction();
   Rng1U64 range = lane_range(hs_shared->slots_count);
   for EachInRange(slot_idx, range)
   {
@@ -588,4 +589,5 @@ hs_tick(void)
       }
     }
   }
+  ProfEnd();
 }

@@ -246,6 +246,7 @@ fs_properties_from_path(String8 path)
 internal void
 fs_tick(void)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: do detection pass
@@ -283,7 +284,6 @@ fs_tick(void)
                     req_n->v.path = str8_copy(fs_shared->req_arena, n->path);
                     req_n->v.range = range;
                   }
-                  cond_var_broadcast(async_tick_start_cond_var);
                 }
               }
             }
@@ -396,4 +396,5 @@ fs_tick(void)
   }
   
   scratch_end(scratch);
+  ProfEnd();
 }

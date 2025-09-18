@@ -268,17 +268,6 @@ struct DASM_Shared
   DASM_RequestNode *first_req;
   DASM_RequestNode *last_req;
   U64 req_count;
-  
-  // rjf: user -> parse thread
-  U64 u2p_ring_size;
-  U8 *u2p_ring_base;
-  U64 u2p_ring_write_pos;
-  U64 u2p_ring_read_pos;
-  CondVar u2p_ring_cv;
-  Mutex u2p_ring_mutex;
-  
-  // rjf: evictor/detector thread
-  Thread evictor_detector_thread;
 };
 
 ////////////////////////////////
@@ -332,17 +321,5 @@ internal DASM_Info dasm_info_from_key_params(DASM_Scope *scope, HS_Key key, DASM
 //~ rjf: Ticks
 
 internal void dasm_tick(void);
-
-////////////////////////////////
-//~ rjf: Parse Threads
-
-internal B32 dasm_u2p_enqueue_req(HS_Root root, U128 hash, DASM_Params *params, U64 endt_us);
-internal void dasm_u2p_dequeue_req(Arena *arena, HS_Root *root_out, U128 *hash_out, DASM_Params *params_out);
-ASYNC_WORK_DEF(dasm_parse_work);
-
-////////////////////////////////
-//~ rjf: Evictor/Detector Thread
-
-internal void dasm_evictor_detector_thread__entry_point(void *p);
 
 #endif // DASM_CACHE_H
