@@ -6,7 +6,7 @@ global CondVar async_tick_start_cond_var = {0};
 global CondVar async_tick_stop_cond_var = {0};
 global Mutex async_tick_start_mutex = {0};
 global Mutex async_tick_stop_mutex = {0};
-global U64 async_wait_timeout = 0;
+global B32 async_loop_again = 0;
 global B32 global_async_exit = 0;
 
 internal void
@@ -190,7 +190,14 @@ async_thread_entry_point(void *params)
   ThreadNameF("async_thread_%I64u", lane_idx());
   for(;!ins_atomic_u32_eval(&global_async_exit);)
   {
-    MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
+    if(!ins_atomic_u32_eval(&async_loop_again))
+    {
+      MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
+      if(lane_idx() == 0)
+      {
+        async_loop_again = 0;
+      }
+    }
 #if defined(CONTENT_H)
     c_tick();
 #endif

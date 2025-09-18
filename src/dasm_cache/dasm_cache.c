@@ -728,6 +728,7 @@ dasm_tick(void)
       req_n->v.hash = hash;
       req_n->v.params = params;
       req_n->v.params.dbgi_key = di_key_copy(dasm_shared->req_arena, &req_n->v.params.dbgi_key);
+      ins_atomic_u32_eval_assign(&async_loop_again, 1);
     }
     
     di_scope_close(di_scope);
