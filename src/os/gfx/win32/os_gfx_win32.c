@@ -1382,8 +1382,11 @@ internal void
 os_focus_external_window(OS_Handle handle)
 {
   HWND hwnd = (HWND)handle.u64[0];
-  SetForegroundWindow(hwnd);
-  SetFocus(hwnd);
+  if(hwnd != 0)
+  {
+    SetForegroundWindow(hwnd);
+    SetFocus(hwnd);
+  }
 }
 
 ////////////////////////////////
