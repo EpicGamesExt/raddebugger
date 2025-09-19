@@ -165,7 +165,6 @@ dr_fuzzy_match_find_from_fstrs(Arena *arena, DR_FStrList *fstrs, String8 needle)
 internal DR_FRunList
 dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs)
 {
-  ProfBeginFunction();
   DR_FRunList run_list = {0};
   F32 base_align_px = 0;
   for(DR_FStrNode *n = strs->first; n != 0; n = n->next)
@@ -182,7 +181,6 @@ dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs)
     run_list.dim.y = Max(run_list.dim.y, dst_n->v.run.dim.y);
     base_align_px += dst_n->v.run.dim.x;
   }
-  ProfEnd();
   return run_list;
 }
 
@@ -536,8 +534,6 @@ dr_sub_bucket(DR_Bucket *bucket)
 internal void
 dr_truncated_fancy_run_list(Vec2F32 p, DR_FRunList *list, F32 max_x, FNT_Run trailer_run)
 {
-  ProfBeginFunction();
-  
   //- rjf: total advance > max? -> enable trailer
   B32 trailer_enabled = (list->dim.x > max_x && trailer_run.dim.x < max_x);
   
@@ -632,8 +628,6 @@ dr_truncated_fancy_run_list(Vec2F32 p, DR_FRunList *list, F32 max_x, FNT_Run tra
       advance += piece->advance;
     }
   }
-  
-  ProfEnd();
 }
 
 internal void
@@ -691,7 +685,6 @@ dr_truncated_fancy_run_fuzzy_matches(Vec2F32 p, DR_FRunList *list, F32 max_x, Fu
 internal void
 dr_text_run(Vec2F32 p, Vec4F32 color, FNT_Run run)
 {
-  ProfBeginFunction();
   F32 advance = 0;
   FNT_Piece *piece_first = run.pieces.v;
   FNT_Piece *piece_opl = piece_first + run.pieces.count;
@@ -712,7 +705,6 @@ dr_text_run(Vec2F32 p, Vec4F32 color, FNT_Run run)
     }
     advance += piece->advance;
   }
-  ProfEnd();
 }
 
 internal void

@@ -246,8 +246,6 @@ fnt_path_from_tag(FNT_Tag tag)
 internal Rng2S16
 fnt_atlas_region_alloc(Arena *arena, FNT_Atlas *atlas, Vec2S16 needed_size)
 {
-  ProfBeginFunction();
-  
   //- rjf: find node with best-fit size
   Vec2S16 region_p0 = {0};
   Vec2S16 region_sz = {0};
@@ -356,15 +354,12 @@ fnt_atlas_region_alloc(Arena *arena, FNT_Atlas *atlas, Vec2S16 needed_size)
   Rng2S16 result = {0};
   result.p0 = region_p0;
   result.p1 = add_2s16(region_p0, region_sz);
-  ProfEnd();
   return result;
 }
 
 internal void
 fnt_atlas_region_release(FNT_Atlas *atlas, Rng2S16 region)
 {
-  ProfBeginFunction();
-  
   //- rjf: extract region size
   Vec2S16 region_size = v2s16(region.x1 - region.x0, region.y1 - region.y0);
   
@@ -463,7 +458,6 @@ fnt_atlas_region_release(FNT_Atlas *atlas, Rng2S16 region)
       }
     }
   }
-  ProfEnd();
 }
 
 ////////////////////////////////
@@ -542,7 +536,6 @@ fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags)
   //- rjf: style hash -> style node
   FNT_Hash2StyleRasterCacheNode *hash2style_node = 0;
   {
-    ProfBegin("style hash -> style node");
     U64 slot_idx = style_hash%fnt_state->hash2style_slots_count;
     FNT_Hash2StyleRasterCacheSlot *slot = &fnt_state->hash2style_slots[slot_idx];
     for(FNT_Hash2StyleRasterCacheNode *n = slot->first;
@@ -567,7 +560,6 @@ fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags)
       hash2style_node->hash2info_slots_count = 1024;
       hash2style_node->hash2info_slots = push_array(fnt_state->raster_arena, FNT_Hash2InfoRasterCacheSlot, hash2style_node->hash2info_slots_count);
     }
-    ProfEnd();
   }
   
   return hash2style_node;
@@ -576,8 +568,6 @@ fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags)
 internal FNT_Run
 fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, String8 string)
 {
-  ProfBeginFunction();
-  
   //- rjf: map tag/size to style node
   FNT_Hash2StyleRasterCacheNode *hash2style_node = fnt_hash2style_from_tag_size_flags(tag, size, flags);
   
@@ -615,8 +605,6 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
     run = run_node->run;
   }
   else
-    ProfScope("no run node? -> cache miss")
-    ProfScope("compute & build & fill node for '%.*s'", str8_varg(string))
   {
     //- rjf: decode string & produce run pieces
     FNT_PieceChunkList piece_chunks = {0};
@@ -700,7 +688,6 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
       //- rjf: no info found -> miss... fill this hash in the cache
       if(info == 0)
       {
-        ProfBegin("no info found -> miss... fill this hash in the cache");
         Temp scratch = scratch_begin(0, 0);
         
         // rjf: grab font handle for this tag if we don't have one already
@@ -822,7 +809,6 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
         }
         
         scratch_end(scratch);
-        ProfEnd();
       }
       
       //- rjf: push piece for this raster portion
@@ -898,7 +884,6 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
     run_node->run = run;
   }
   
-  ProfEnd();
   return run;
 }
 
@@ -1018,20 +1003,17 @@ fnt_wrapped_string_lines_from_font_size_string_max(Arena *arena, FNT_Tag font, F
 internal Vec2F32
 fnt_dim_from_tag_size_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string)
 {
-  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   Vec2F32 result = {0};
   FNT_Run run = fnt_run_from_string(tag, size, base_align_px, tab_size_px, 0, string);
   result = run.dim;
   scratch_end(scratch);
-  ProfEnd();
   return result;
 }
 
 internal Vec2F32
 fnt_dim_from_tag_size_string_list(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8List list)
 {
-  ProfBeginFunction();
   Vec2F32 sum = {0};
   for(String8Node *n = list.first; n != 0; n = n->next)
   {
@@ -1039,7 +1021,6 @@ fnt_dim_from_tag_size_string_list(FNT_Tag tag, F32 size, F32 base_align_px, F32 
     sum.x += str_dim.x;
     sum.y = Max(sum.y, str_dim.y);
   }
-  ProfEnd();
   return sum;
 }
 
@@ -1084,7 +1065,6 @@ fnt_char_pos_from_tag_size_string_p(FNT_Tag tag, F32 size, F32 base_align_px, F3
 internal FNT_Metrics
 fnt_metrics_from_tag_size(FNT_Tag tag, F32 size)
 {
-  ProfBeginFunction();
   FP_Metrics metrics = fnt_fp_metrics_from_tag(tag);
   FNT_Metrics result = {0};
   {
@@ -1093,7 +1073,6 @@ fnt_metrics_from_tag_size(FNT_Tag tag, F32 size)
     result.line_gap = floor_f32(size) * metrics.line_gap / metrics.design_units_per_em;
     result.capital_height = floor_f32(size) * metrics.capital_height / metrics.design_units_per_em;
   }
-  ProfEnd();
   return result;
 }
 

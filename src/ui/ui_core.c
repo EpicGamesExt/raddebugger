@@ -9,12 +9,6 @@ thread_static UI_State *ui_state = 0;
 ////////////////////////////////
 //~ rjf: Basic Type Functions
 
-#if !defined(XXH_IMPLEMENTATION)
-# define XXH_IMPLEMENTATION
-# define XXH_STATIC_LINKING_ONLY
-# include "third_party/xxHash/xxhash.h"
-#endif
-
 internal String8
 ui_hash_part_from_key_string(String8 string)
 {
@@ -56,14 +50,12 @@ ui_key_make(U64 v)
 internal UI_Key
 ui_key_from_string(UI_Key seed_key, String8 string)
 {
-  ProfBeginFunction();
   UI_Key result = {0};
   if(string.size != 0)
   {
     String8 hash_part = ui_hash_part_from_key_string(string);
     result.u64[0] = u64_hash_from_seed_str8(seed_key.u64[0], hash_part);
   }
-  ProfEnd();
   return result;
 }
 
@@ -2416,7 +2408,6 @@ ui_color_from_tags_key_name(UI_Key key, String8 name)
 internal UI_Box *
 ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
 {
-  ProfBeginFunction();
   ui_state->build_box_count += 1;
   
   //- rjf: grab active parent
@@ -2622,7 +2613,6 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   }
   
   //- rjf: return
-  ProfEnd();
   return box;
 }
 
@@ -2646,8 +2636,6 @@ ui_active_seed_key(void)
 internal UI_Box *
 ui_build_box_from_string(UI_BoxFlags flags, String8 string)
 {
-  ProfBeginFunction();
-  
   //- rjf: grab active parent
   UI_Box *parent = ui_top_parent();
   
@@ -2662,7 +2650,6 @@ ui_build_box_from_string(UI_BoxFlags flags, String8 string)
   }
   
   //- rjf: return
-  ProfEnd();
   return box;
 }
 
@@ -2684,7 +2671,6 @@ ui_build_box_from_stringf(UI_BoxFlags flags, char *fmt, ...)
 internal void
 ui_box_equip_display_string(UI_Box *box, String8 string)
 {
-  ProfBeginFunction();
   box->string = push_str8_copy(ui_build_arena(), string);
   box->flags |= UI_BoxFlag_HasDisplayString;
   Vec4F32 text_color = box->text_color;
@@ -2721,7 +2707,6 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     }
     scratch_end(scratch);
   }
-  ProfEnd();
 }
 
 internal void
@@ -2822,7 +2807,6 @@ ui_box_char_pos_from_xy(UI_Box *box, Vec2F32 xy)
 internal UI_Signal
 ui_signal_from_box(UI_Box *box)
 {
-  ProfBeginFunction();
   B32 is_focus_hot = box->flags & UI_BoxFlag_FocusHot && !(box->flags & UI_BoxFlag_FocusHotDisabled);
   UI_Signal sig = {box};
   sig.event_flags |= os_get_modifiers();
@@ -2843,7 +2827,6 @@ ui_signal_from_box(UI_Box *box)
   //- rjf: determine if we're under the context menu or not
   //
   B32 ctx_menu_is_ancestor = 0;
-  ProfScope("check context menu ancestor")
   {
     for(UI_Box *parent = box; !ui_box_is_nil(parent); parent = parent->parent)
     {
@@ -3230,7 +3213,6 @@ ui_signal_from_box(UI_Box *box)
     }
   }
   
-  ProfEnd();
   return sig;
 }
 
