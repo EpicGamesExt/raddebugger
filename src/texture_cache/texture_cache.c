@@ -97,6 +97,7 @@ tex_texture_from_hash_topology(Access *access, U128 hash, TEX_Topology topology)
             n->v.top  = topology;
             tex_shared->req_count += 1;
           }
+          cond_var_broadcast(async_tick_start_cond_var);
         }
         
         // rjf: node? -> grab & access

@@ -193,10 +193,10 @@ async_thread_entry_point(void *params)
     if(!ins_atomic_u32_eval(&async_loop_again))
     {
       MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
-      if(lane_idx() == 0)
-      {
-        async_loop_again = 0;
-      }
+    }
+    else if(lane_idx() == 0)
+    {
+      async_loop_again = 0;
     }
 #if defined(CONTENT_H)
     c_tick();

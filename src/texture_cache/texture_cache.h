@@ -109,4 +109,4 @@ internal R_Handle tex_texture_from_key_topology(Access *access, C_Key key, TEX_T
 
 internal void tex_tick(void);
 
-#endif //TEXTURE_CACHE_H
+#endif // TEXTURE_CACHE_H
