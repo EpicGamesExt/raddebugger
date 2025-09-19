@@ -207,6 +207,9 @@ async_thread_entry_point(void *params)
 #if defined(DASM_CACHE_H)
     dasm_tick();
 #endif
+#if defined(TEXTURE_CACHE_H)
+    tex_tick();
+#endif
     cond_var_broadcast(async_tick_stop_cond_var);
   }
 }

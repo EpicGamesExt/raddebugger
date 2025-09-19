@@ -196,10 +196,8 @@ struct DASM_Node
   DASM_Info info;
   
   // rjf: metadata
+  AccessPt access_pt;
   U64 working_count;
-  U64 scope_ref_count;
-  U64 last_time_touched_us;
-  U64 last_user_clock_idx_touched;
   U64 last_time_requested_us;
   U64 last_user_clock_idx_requested;
 };
@@ -249,8 +247,6 @@ struct DASM_Shared
   DASM_RequestNode *first_req;
   DASM_RequestNode *last_req;
   U64 req_count;
-  
-  // rjf: request take counter
   U64 lane_req_take_counter;
 };
 

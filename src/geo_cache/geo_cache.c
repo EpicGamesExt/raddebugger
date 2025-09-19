@@ -53,9 +53,7 @@ geo_buffer_from_hash(Access *access, U128 hash)
         {
           handle = n->buffer;
           found = !r_handle_match(r_handle_zero(), handle);
-          ins_atomic_u64_eval_assign(&n->last_time_touched_us, os_now_microseconds());
-          ins_atomic_u64_eval_assign(&n->last_user_clock_idx_touched, update_tick_idx());
-          access_touch(access, &n->scope_ref_count, stripe->cv);
+          access_touch(access, &n->access_pt, stripe->cv);
           break;
         }
       }
@@ -249,9 +247,7 @@ geo_evictor_thread__entry_point(void *p)
       {
         for(GEO_Node *n = slot->first; n != 0; n = n->next)
         {
-          if(n->scope_ref_count == 0 &&
-             n->last_time_touched_us+evict_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
+          if(access_pt_is_expired(&n->access_pt) &&
              n->load_count != 0 &&
              n->is_working == 0)
           {
@@ -265,9 +261,7 @@ geo_evictor_thread__entry_point(void *p)
         for(GEO_Node *n = slot->first, *next = 0; n != 0; n = next)
         {
           next = n->next;
-          if(n->scope_ref_count == 0 &&
-             n->last_time_touched_us+evict_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
+          if(access_pt_is_expired(&n->access_pt) &&
              n->load_count != 0 &&
              n->is_working == 0)
           {

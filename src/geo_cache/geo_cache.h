@@ -15,10 +15,8 @@ struct GEO_Node
   U128 hash;
   R_Handle buffer;
   B32 is_working;
-  U64 scope_ref_count;
-  U64 last_time_touched_us;
-  U64 last_user_clock_idx_touched;
   U64 load_count;
+  AccessPt access_pt;
 };
 
 typedef struct GEO_Slot GEO_Slot;

@@ -64,6 +64,17 @@ struct C_Key
 };
 
 ////////////////////////////////
+//~ rjf: Cache Stripe Type
+
+typedef struct C_Stripe C_Stripe;
+struct C_Stripe
+{
+  Arena *arena;
+  RWMutex rw_mutex;
+  CondVar cv;
+};
+
+////////////////////////////////
 //~ rjf: Root Cache Types
 
 typedef struct C_RootIDChunkNode C_RootIDChunkNode;
@@ -135,7 +146,7 @@ struct C_BlobNode
   U128 hash;
   Arena *arena;
   String8 data;
-  U64 scope_ref_count;
+  AccessPt access_pt;
   U64 key_ref_count;
   U64 downstream_ref_count;
 };
@@ -145,14 +156,6 @@ struct C_BlobSlot
 {
   C_BlobNode *first;
   C_BlobNode *last;
-};
-
-typedef struct C_Stripe C_Stripe;
-struct C_Stripe
-{
-  Arena *arena;
-  RWMutex rw_mutex;
-  CondVar cv;
 };
 
 ////////////////////////////////
@@ -216,6 +219,11 @@ internal void c_root_release(C_Root root);
 //~ rjf: Cache Submission
 
 internal U128 c_submit_data(C_Key key, Arena **data_arena, String8 data);
+
+////////////////////////////////
+//~ rjf: Key Closing
+
+internal void c_close_key(C_Key key);
 
 ////////////////////////////////
 //~ rjf: Downstream Accesses

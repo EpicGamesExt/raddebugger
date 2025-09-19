@@ -160,7 +160,7 @@ access_close(Access *access)
   for(Touch *touch = access->top_touch, *next = 0; touch != 0; touch = next)
   {
     next = touch->next;
-    ins_atomic_u64_dec_eval(touch->touch_count);
+    ins_atomic_u64_dec_eval(&touch->pt->access_refcount);
     if(touch->cv.u64[0] != 0) { cond_var_broadcast(touch->cv); }
     SLLStackPush(tctx_thread_local->free_touch, touch);
   }
@@ -168,9 +168,11 @@ access_close(Access *access)
 }
 
 internal void
-access_touch(Access *access, U64 *touch_count, CondVar cv)
+access_touch(Access *access, AccessPt *pt, CondVar cv)
 {
-  ins_atomic_u64_inc_eval(touch_count);
+  ins_atomic_u64_inc_eval(&pt->access_refcount);
+  ins_atomic_u64_eval_assign(&pt->last_time_touched_us, os_now_microseconds());
+  ins_atomic_u64_eval_assign(&pt->last_update_idx_touched, update_tick_idx());
   Touch *touch = tctx_thread_local->free_touch;
   if(touch != 0)
   {
@@ -183,5 +185,19 @@ access_touch(Access *access, U64 *touch_count, CondVar cv)
   MemoryZeroStruct(touch);
   SLLStackPush(access->top_touch, touch);
   touch->cv = cv;
-  touch->touch_count = touch_count;
+  touch->pt = pt;
+}
+
+//- rjf: access points
+
+internal B32
+access_pt_is_expired(AccessPt *pt)
+{
+  U64 access_refcount = ins_atomic_u64_eval(&pt->access_refcount);
+  U64 last_time_touched_us = ins_atomic_u64_eval(&pt->last_time_touched_us);
+  U64 last_update_idx_touched = ins_atomic_u64_eval(&pt->last_update_idx_touched);
+  B32 result = (access_refcount == 0 &&
+                last_time_touched_us + 2000000 < os_now_microseconds() &&
+                last_update_idx_touched + 10 < update_tick_idx());
+  return result;
 }

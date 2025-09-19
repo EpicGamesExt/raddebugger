@@ -169,45 +169,7 @@ c_root_release(C_Root root)
     {
       C_ID id = id_chunk_n->v[chunk_idx];
       C_Key key = c_key_make(root, id);
-      U64 key_hash = c_little_hash_from_data(str8_struct(&key));
-      U64 key_slot_idx = key_hash%c_shared->key_slots_count;
-      U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
-      C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
-      C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
-      MutexScopeW(key_stripe->rw_mutex)
-      {
-        for(C_KeyNode *n = key_slot->first; n != 0; n = n->next)
-        {
-          if(c_key_match(n->key, key))
-          {
-            // rjf: release reference to all hashes
-            for(U64 history_idx = 0; history_idx < C_KEY_HASH_HISTORY_STRONG_REF_COUNT && history_idx < n->hash_history_gen; history_idx += 1)
-            {
-              U128 hash = n->hash_history[(n->hash_history_gen+history_idx)%ArrayCount(n->hash_history)];
-              U64 hash_slot_idx = hash.u64[1]%c_shared->blob_slots_count;
-              U64 hash_stripe_idx = hash_slot_idx%c_shared->blob_stripes_count;
-              C_BlobSlot *hash_slot = &c_shared->blob_slots[hash_slot_idx];
-              C_Stripe *hash_stripe = &c_shared->blob_stripes[hash_stripe_idx];
-              MutexScopeR(hash_stripe->rw_mutex)
-              {
-                for(C_BlobNode *n = hash_slot->first; n != 0; n = n->next)
-                {
-                  if(u128_match(n->hash, hash))
-                  {
-                    ins_atomic_u64_dec_eval(&n->key_ref_count);
-                    break;
-                  }
-                }
-              }
-            }
-            
-            // rjf: release key node
-            DLLRemove(key_slot->first, key_slot->last, n);
-            SLLStackPush(c_shared->key_stripes_free_nodes[key_stripe_idx], n);
-            break;
-          }
-        }
-      }
+      c_close_key(key);
     }
   }
 }
@@ -218,11 +180,14 @@ c_root_release(C_Root root)
 internal U128
 c_submit_data(C_Key key, Arena **data_arena, String8 data)
 {
+  //- rjf: unpack key
   U64 key_hash = c_little_hash_from_data(str8_struct(&key));
   U64 key_slot_idx = key_hash%c_shared->key_slots_count;
   U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
   C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
+  
+  //- rjf: hash data, unpack hash
   U128 hash = c_hash_from_data(data);
   U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
   U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
@@ -250,15 +215,15 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
       }
       else
       {
-        node = push_array(stripe->arena, C_BlobNode, 1);
+        node = push_array_no_zero(stripe->arena, C_BlobNode, 1);
       }
+      MemoryZeroStruct(node);
       node->hash = hash;
       if(data_arena != 0)
       {
         node->arena = *data_arena;
       }
       node->data = data;
-      node->scope_ref_count = 0;
       node->key_ref_count = 1;
       DLLPushBack(slot->first, slot->last, node);
     }
@@ -378,6 +343,52 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
 }
 
 ////////////////////////////////
+//~ rjf: Key Closing
+
+internal void
+c_close_key(C_Key key)
+{
+  U64 key_hash = c_little_hash_from_data(str8_struct(&key));
+  U64 key_slot_idx = key_hash%c_shared->key_slots_count;
+  U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
+  C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
+  C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
+  RWMutexScope(key_stripe->rw_mutex, 1)
+  {
+    for(C_KeyNode *n = key_slot->first; n != 0; n = n->next)
+    {
+      if(c_key_match(n->key, key))
+      {
+        for(U64 history_idx = 0;
+            history_idx < C_KEY_HASH_HISTORY_STRONG_REF_COUNT && history_idx < n->hash_history_gen;
+            history_idx += 1)
+        {
+          U128 hash = n->hash_history[(n->hash_history_gen+history_idx)%ArrayCount(n->hash_history)];
+          U64 hash_slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+          U64 hash_stripe_idx = hash_slot_idx%c_shared->blob_stripes_count;
+          C_BlobSlot *hash_slot = &c_shared->blob_slots[hash_slot_idx];
+          C_Stripe *hash_stripe = &c_shared->blob_stripes[hash_stripe_idx];
+          MutexScopeR(hash_stripe->rw_mutex)
+          {
+            for(C_BlobNode *n = hash_slot->first; n != 0; n = n->next)
+            {
+              if(u128_match(n->hash, hash))
+              {
+                ins_atomic_u64_dec_eval(&n->key_ref_count);
+                break;
+              }
+            }
+          }
+        }
+        DLLRemove(key_slot->first, key_slot->last, n);
+        SLLStackPush(c_shared->key_stripes_free_nodes[key_stripe_idx], n);
+        break;
+      }
+    }
+  }
+}
+
+////////////////////////////////
 //~ rjf: Downstream Accesses
 
 internal void
@@ -432,7 +443,7 @@ c_hash_from_key(C_Key key, U64 rewind_count)
   U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
   C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
-  MutexScopeR(key_stripe->rw_mutex)
+  RWMutexScope(key_stripe->rw_mutex, 0)
   {
     for(C_KeyNode *n = key_slot->first; n != 0; n = n->next)
     {
@@ -462,7 +473,7 @@ c_data_from_hash(Access *access, U128 hash)
       if(u128_match(n->hash, hash))
       {
         result = n->data;
-        access_touch(access, &n->scope_ref_count, stripe->cv);
+        access_touch(access, &n->access_pt, stripe->cv);
         break;
       }
     }
@@ -478,46 +489,52 @@ internal void
 c_tick(void)
 {
   ProfBeginFunction();
-  Rng1U64 range = lane_range(c_shared->blob_slots_count);
-  for EachInRange(slot_idx, range)
+  
+  //- rjf: garbage collect blobs
   {
-    U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
-    C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
-    C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
-    B32 slot_has_work = 0;
-    MutexScopeR(stripe->rw_mutex)
+    Rng1U64 range = lane_range(c_shared->blob_slots_count);
+    for EachInRange(slot_idx, range)
     {
-      for(C_BlobNode *n = slot->first; n != 0; n = n->next)
+      U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
+      C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
+      C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
+      for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
       {
-        U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
-        U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
-        U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
-        if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
+        B32 slot_has_work = 0;
+        RWMutexScope(stripe->rw_mutex, write_mode)
         {
-          slot_has_work = 1;
+          for(C_BlobNode *n = slot->first, *next = 0; n != 0; n = next)
+          {
+            next = n->next;
+            U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
+            U64 scope_ref_count = ins_atomic_u64_eval(&n->access_pt.access_refcount);
+            U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
+            if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
+            {
+              slot_has_work = 1;
+              if(!write_mode)
+              {
+                break;
+              }
+              else
+              {
+                DLLRemove(slot->first, slot->last, n);
+                SLLStackPush(c_shared->blob_stripes_free_nodes[stripe_idx], n);
+                if(n->arena != 0)
+                {
+                  arena_release(n->arena);
+                }
+              }
+            }
+          }
+        }
+        if(!slot_has_work)
+        {
           break;
         }
       }
     }
-    if(slot_has_work) MutexScopeW(stripe->rw_mutex)
-    {
-      for(C_BlobNode *n = slot->first, *next = 0; n != 0; n = next)
-      {
-        next = n->next;
-        U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
-        U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
-        U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
-        if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
-        {
-          DLLRemove(slot->first, slot->last, n);
-          SLLStackPush(c_shared->blob_stripes_free_nodes[stripe_idx], n);
-          if(n->arena != 0)
-          {
-            arena_release(n->arena);
-          }
-        }
-      }
-    }
   }
+  
   ProfEnd();
 }

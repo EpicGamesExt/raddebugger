@@ -1641,9 +1641,7 @@ txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang)
           info.bytes_processed = ins_atomic_u64_eval(&n->info.bytes_processed);
           info.bytes_to_process = ins_atomic_u64_eval(&n->info.bytes_to_process);
           found = 1;
-          ins_atomic_u64_eval_assign(&n->last_time_touched_us, os_now_microseconds());
-          ins_atomic_u64_eval_assign(&n->last_user_clock_idx_touched, update_tick_idx());
-          access_touch(access, &n->scope_ref_count, stripe->cv);
+          access_touch(access, &n->access_pt, stripe->cv);
           break;
         }
       }
@@ -2434,10 +2432,6 @@ txt_evictor_thread__entry_point(void *p)
   ThreadNameF("txt_evictor_thread");
   for(;;)
   {
-    U64 check_time_us = os_now_microseconds();
-    U64 check_time_user_clocks = update_tick_idx();
-    U64 evict_threshold_us = 2*1000000;
-    U64 evict_threshold_user_clocks = 10;
     for(U64 slot_idx = 0; slot_idx < txt_shared->slots_count; slot_idx += 1)
     {
       U64 stripe_idx = slot_idx%txt_shared->stripes_count;
@@ -2448,9 +2442,7 @@ txt_evictor_thread__entry_point(void *p)
       {
         for(TXT_Node *n = slot->first; n != 0; n = n->next)
         {
-          if(n->scope_ref_count == 0 &&
-             n->last_time_touched_us+evict_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
+          if(access_pt_is_expired(&n->access_pt) &&
              n->load_count != 0 &&
              n->is_working == 0)
           {
@@ -2464,9 +2456,7 @@ txt_evictor_thread__entry_point(void *p)
         for(TXT_Node *n = slot->first, *next = 0; n != 0; n = next)
         {
           next = n->next;
-          if(n->scope_ref_count == 0 &&
-             n->last_time_touched_us+evict_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
+          if(access_pt_is_expired(&n->access_pt) &&
              n->load_count != 0 &&
              n->is_working == 0)
           {

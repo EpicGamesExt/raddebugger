@@ -25,10 +25,8 @@ struct TEX_Node
   U128 hash;
   TEX_Topology topology;
   R_Handle texture;
-  B32 is_working;
-  U64 scope_ref_count;
-  U64 last_time_touched_us;
-  U64 last_user_clock_idx_touched;
+  AccessPt access_pt;
+  U64 working_count;
   U64 load_count;
 };
 
@@ -50,6 +48,20 @@ struct TEX_Stripe
 ////////////////////////////////
 //~ rjf: Shared State
 
+typedef struct TEX_Request TEX_Request;
+struct TEX_Request
+{
+  U128 hash;
+  TEX_Topology top;
+};
+
+typedef struct TEX_RequestNode TEX_RequestNode;
+struct TEX_RequestNode
+{
+  TEX_RequestNode *next;
+  TEX_Request v;
+};
+
 typedef struct TEX_Shared TEX_Shared;
 struct TEX_Shared
 {
@@ -62,16 +74,13 @@ struct TEX_Shared
   TEX_Stripe *stripes;
   TEX_Node **stripes_free_nodes;
   
-  // rjf: user -> xfer thread
-  U64 u2x_ring_size;
-  U8 *u2x_ring_base;
-  U64 u2x_ring_write_pos;
-  U64 u2x_ring_read_pos;
-  CondVar u2x_ring_cv;
-  Mutex u2x_ring_mutex;
-  
-  // rjf: evictor thread
-  Thread evictor_thread;
+  // rjf: requests
+  Mutex req_mutex;
+  Arena *req_arena;
+  TEX_RequestNode *first_req;
+  TEX_RequestNode *last_req;
+  U64 req_count;
+  U64 lane_req_take_counter;
 };
 
 ////////////////////////////////
@@ -96,15 +105,8 @@ internal R_Handle tex_texture_from_hash_topology(Access *access, U128 hash, TEX_
 internal R_Handle tex_texture_from_key_topology(Access *access, C_Key key, TEX_Topology topology, U128 *hash_out);
 
 ////////////////////////////////
-//~ rjf: Transfer Threads
+//~ rjf: Tick
 
-internal B32 tex_u2x_enqueue_req(U128 hash, TEX_Topology top, U64 endt_us);
-internal void tex_u2x_dequeue_req(U128 *hash_out, TEX_Topology *top_out);
-ASYNC_WORK_DEF(tex_xfer_work);
-
-////////////////////////////////
-//~ rjf: Evictor Threads
-
-internal void tex_evictor_thread__entry_point(void *p);
+internal void tex_tick(void);
 
 #endif //TEXTURE_CACHE_H

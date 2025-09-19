@@ -174,10 +174,8 @@ struct TXT_Node
   TXT_TextInfo info;
   
   // rjf: metadata
+  AccessPt access_pt;
   B32 is_working;
-  U64 scope_ref_count;
-  U64 last_time_touched_us;
-  U64 last_user_clock_idx_touched;
   U64 load_count;
 };
 

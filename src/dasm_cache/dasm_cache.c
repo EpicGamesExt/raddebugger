@@ -346,9 +346,7 @@ dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params)
         // rjf: nonzero node, request if needed - touch & return results
         if(node != 0)
         {
-          ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
-          ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, update_tick_idx());
-          access_touch(access, &node->scope_ref_count, stripe->cv);
+          access_touch(access, &node->access_pt, stripe->cv);
           MemoryCopyStruct(&info, &node->info);
         }
       }
@@ -411,10 +409,7 @@ dasm_tick(void)
         RWMutexScope(stripe->rw_mutex, write_mode) for(DASM_Node *n = slot->first; n != 0; n = n->next)
         {
           // rjf: node needs eviction
-          if(n->scope_ref_count == 0 &&
-             n->last_time_touched_us+evict_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
-             ins_atomic_u64_eval(&n->working_count) == 0)
+          if(access_pt_is_expired(&n->access_pt) && ins_atomic_u64_eval(&n->working_count) == 0)
           {
             slot_has_work = 1;
             if(!write_mode)

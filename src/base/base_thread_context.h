@@ -18,11 +18,19 @@ struct LaneCtx
 ////////////////////////////////
 //~ rjf: Access Scopes
 
+typedef struct AccessPt AccessPt;
+struct AccessPt
+{
+  U64 access_refcount;
+  U64 last_time_touched_us;
+  U64 last_update_idx_touched;
+};
+
 typedef struct Touch Touch;
 struct Touch
 {
   Touch *next;
-  U64 *touch_count;
+  AccessPt *pt;
   CondVar cv;
 };
 
@@ -95,6 +103,9 @@ internal void tctx_read_srcloc(char **file_name, U64 *line_number);
 //- rjf: access scopes
 internal Access *access_open(void);
 internal void access_close(Access *access);
-internal void access_touch(Access *access, U64 *touch_count, CondVar cv);
+internal void access_touch(Access *access, AccessPt *pt, CondVar cv);
+
+//- rjf: access points
+internal B32 access_pt_is_expired(AccessPt *pt);
 
 #endif // BASE_THREAD_CONTEXT_H

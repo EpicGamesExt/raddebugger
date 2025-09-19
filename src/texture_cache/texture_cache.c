@@ -37,11 +37,8 @@ tex_init(void)
     tex_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
     tex_shared->stripes[idx].cv = cond_var_alloc();
   }
-  tex_shared->u2x_ring_size = KB(64);
-  tex_shared->u2x_ring_base = push_array_no_zero(arena, U8, tex_shared->u2x_ring_size);
-  tex_shared->u2x_ring_cv = cond_var_alloc();
-  tex_shared->u2x_ring_mutex = mutex_alloc();
-  tex_shared->evictor_thread = thread_launch(tex_evictor_thread__entry_point, 0);
+  tex_shared->req_mutex = mutex_alloc();
+  tex_shared->req_arena = arena_alloc();
 }
 
 ////////////////////////////////
@@ -52,42 +49,32 @@ tex_texture_from_hash_topology(Access *access, U128 hash, TEX_Topology topology)
 {
   R_Handle handle = {0};
   {
+    //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%tex_shared->slots_count;
     U64 stripe_idx = slot_idx%tex_shared->stripes_count;
     TEX_Slot *slot = &tex_shared->slots[slot_idx];
     TEX_Stripe *stripe = &tex_shared->stripes[stripe_idx];
-    B32 found = 0;
-    B32 stale = 0;
-    MutexScopeR(stripe->rw_mutex)
+    
+    //- rjf: get results, request if needed
+    for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
     {
-      for(TEX_Node *n = slot->first; n != 0; n = n->next)
+      B32 got_node = 0;
+      RWMutexScope(stripe->rw_mutex, write_mode)
       {
-        if(u128_match(hash, n->hash) && MemoryMatchStruct(&topology, &n->topology))
-        {
-          handle = n->texture;
-          found = !r_handle_match(r_handle_zero(), handle);
-          ins_atomic_u64_eval_assign(&n->last_time_touched_us, os_now_microseconds());
-          ins_atomic_u64_eval_assign(&n->last_user_clock_idx_touched, update_tick_idx());
-          access_touch(access, &n->scope_ref_count, stripe->cv);
-          break;
-        }
-      }
-    }
-    B32 node_is_new = 0;
-    if(!found)
-    {
-      MutexScopeW(stripe->rw_mutex)
-      {
+        // rjf: get node
         TEX_Node *node = 0;
         for(TEX_Node *n = slot->first; n != 0; n = n->next)
         {
           if(u128_match(hash, n->hash) && MemoryMatchStruct(&topology, &n->topology))
           {
             node = n;
+            got_node = 1;
             break;
           }
         }
-        if(node == 0)
+        
+        // rjf: no node? -> create & request
+        if(write_mode && !node)
         {
           node = tex_shared->stripes_free_nodes[stripe_idx];
           if(node)
@@ -102,14 +89,27 @@ tex_texture_from_hash_topology(Access *access, U128 hash, TEX_Topology topology)
           DLLPushBack(slot->first, slot->last, node);
           node->hash = hash;
           MemoryCopyStruct(&node->topology, &topology);
-          node_is_new = 1;
+          MutexScope(tex_shared->req_mutex)
+          {
+            TEX_RequestNode *n = push_array(tex_shared->req_arena, TEX_RequestNode, 1);
+            SLLQueuePush(tex_shared->first_req, tex_shared->last_req, n);
+            n->v.hash = hash;
+            n->v.top  = topology;
+            tex_shared->req_count += 1;
+          }
+        }
+        
+        // rjf: node? -> grab & access
+        if(!write_mode && node)
+        {
+          handle = node->texture;
+          access_touch(access, &node->access_pt, stripe->cv);
         }
       }
-    }
-    if(node_is_new)
-    {
-      tex_u2x_enqueue_req(hash, topology, max_U64);
-      async_push_work(tex_xfer_work);
+      if(got_node)
+      {
+        break;
+      }
     }
   }
   return handle;
@@ -136,173 +136,129 @@ tex_texture_from_key_topology(Access *access, C_Key key, TEX_Topology topology, 
 }
 
 ////////////////////////////////
-//~ rjf: Transfer Threads
-
-internal B32
-tex_u2x_enqueue_req(U128 hash, TEX_Topology top, U64 endt_us)
-{
-  B32 good = 0;
-  MutexScope(tex_shared->u2x_ring_mutex) for(;;)
-  {
-    U64 unconsumed_size = tex_shared->u2x_ring_write_pos-tex_shared->u2x_ring_read_pos;
-    U64 available_size = tex_shared->u2x_ring_size-unconsumed_size;
-    if(available_size >= sizeof(hash)+sizeof(top))
-    {
-      good = 1;
-      tex_shared->u2x_ring_write_pos += ring_write_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_write_pos, &hash);
-      tex_shared->u2x_ring_write_pos += ring_write_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_write_pos, &top);
-      break;
-    }
-    if(os_now_microseconds() >= endt_us)
-    {
-      break;
-    }
-    cond_var_wait(tex_shared->u2x_ring_cv, tex_shared->u2x_ring_mutex, endt_us);
-  }
-  if(good)
-  {
-    cond_var_broadcast(tex_shared->u2x_ring_cv);
-  }
-  return good;
-}
+//~ rjf: Tick
 
 internal void
-tex_u2x_dequeue_req(U128 *hash_out, TEX_Topology *top_out)
+tex_tick(void)
 {
-  MutexScope(tex_shared->u2x_ring_mutex) for(;;)
-  {
-    U64 unconsumed_size = tex_shared->u2x_ring_write_pos-tex_shared->u2x_ring_read_pos;
-    if(unconsumed_size >= sizeof(*hash_out)+sizeof(*top_out))
-    {
-      tex_shared->u2x_ring_read_pos += ring_read_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_read_pos, hash_out);
-      tex_shared->u2x_ring_read_pos += ring_read_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_read_pos, top_out);
-      break;
-    }
-    cond_var_wait(tex_shared->u2x_ring_cv, tex_shared->u2x_ring_mutex, max_U64);
-  }
-  cond_var_broadcast(tex_shared->u2x_ring_cv);
-}
-
-ASYNC_WORK_DEF(tex_xfer_work)
-{
+  if(ins_atomic_u64_eval(&tex_shared) == 0) { return; }
   ProfBeginFunction();
-  Access *access = access_open();
+  Temp scratch = scratch_begin(0, 0);
   
-  //- rjf: decode
-  U128 hash = {0};
-  TEX_Topology top = {0};
-  tex_u2x_dequeue_req(&hash, &top);
-  
-  //- rjf: unpack hash
-  U64 slot_idx = hash.u64[1]%tex_shared->slots_count;
-  U64 stripe_idx = slot_idx%tex_shared->stripes_count;
-  TEX_Slot *slot = &tex_shared->slots[slot_idx];
-  TEX_Stripe *stripe = &tex_shared->stripes[stripe_idx];
-  
-  //- rjf: take task
-  B32 got_task = 0;
-  MutexScopeR(stripe->rw_mutex)
-  {
-    for(TEX_Node *n = slot->first; n != 0; n = n->next)
-    {
-      if(u128_match(n->hash, hash) && MemoryMatchStruct(&top, &n->topology))
-      {
-        got_task = !ins_atomic_u32_eval_cond_assign(&n->is_working, 1, 0);
-        break;
-      }
-    }
-  }
-  
-  //- rjf: hash -> data
-  String8 data = {0};
-  if(got_task)
-  {
-    data = c_data_from_hash(access, hash);
-  }
-  
-  //- rjf: data * topology -> texture
-  R_Handle texture = {0};
-  if(got_task && top.dim.x > 0 && top.dim.y > 0 && data.size >= (U64)top.dim.x*(U64)top.dim.y*(U64)r_tex2d_format_bytes_per_pixel_table[top.fmt])
-  {
-    texture = r_tex2d_alloc(R_ResourceKind_Static, v2s32(top.dim.x, top.dim.y), top.fmt, data.str);
-  }
-  
-  //- rjf: commit results to cache
-  if(got_task) MutexScopeW(stripe->rw_mutex)
-  {
-    for(TEX_Node *n = slot->first; n != 0; n = n->next)
-    {
-      if(u128_match(n->hash, hash) && MemoryMatchStruct(&top, &n->topology))
-      {
-        n->texture = texture;
-        ins_atomic_u32_eval_assign(&n->is_working, 0);
-        ins_atomic_u64_inc_eval(&n->load_count);
-        break;
-      }
-    }
-  }
-  
-  access_close(access);
-  ProfEnd();
-  return 0;
-}
-
-////////////////////////////////
-//~ rjf: Evictor Threads
-
-internal void
-tex_evictor_thread__entry_point(void *p)
-{
-  ThreadNameF("tex_evictor_thread");
-  for(;;)
+  //- rjf: do eviction pass
   {
     U64 check_time_us = os_now_microseconds();
     U64 check_time_user_clocks = update_tick_idx();
     U64 evict_threshold_us = 10*1000000;
     U64 evict_threshold_user_clocks = 10;
-    for(U64 slot_idx = 0; slot_idx < tex_shared->slots_count; slot_idx += 1)
+    Rng1U64 range = lane_range(tex_shared->slots_count);
+    for EachInRange(slot_idx, range)
     {
       U64 stripe_idx = slot_idx%tex_shared->stripes_count;
       TEX_Slot *slot = &tex_shared->slots[slot_idx];
       TEX_Stripe *stripe = &tex_shared->stripes[stripe_idx];
-      B32 slot_has_work = 0;
-      MutexScopeR(stripe->rw_mutex)
+      for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
       {
-        for(TEX_Node *n = slot->first; n != 0; n = n->next)
+        B32 slot_has_work = 0;
+        RWMutexScope(stripe->rw_mutex, write_mode)
         {
-          if(n->scope_ref_count == 0 &&
-             n->last_time_touched_us+evict_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
-             n->load_count != 0 &&
-             n->is_working == 0)
+          for(TEX_Node *n = slot->first; n != 0; n = n->next)
           {
-            slot_has_work = 1;
-            break;
-          }
-        }
-      }
-      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
-      {
-        for(TEX_Node *n = slot->first, *next = 0; n != 0; n = next)
-        {
-          next = n->next;
-          if(n->scope_ref_count == 0 &&
-             n->last_time_touched_us+evict_threshold_us <= check_time_us &&
-             n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
-             n->load_count != 0 &&
-             n->is_working == 0)
-          {
-            DLLRemove(slot->first, slot->last, n);
-            if(!r_handle_match(n->texture, r_handle_zero()))
+            if(access_pt_is_expired(&n->access_pt) &&
+               n->load_count != 0 &&
+               n->working_count == 0)
             {
-              r_tex2d_release(n->texture);
+              slot_has_work = 1;
+              if(!write_mode)
+              {
+                break;
+              }
+              else
+              {
+                DLLRemove(slot->first, slot->last, n);
+                if(!r_handle_match(n->texture, r_handle_zero()))
+                {
+                  r_tex2d_release(n->texture);
+                }
+                SLLStackPush(tex_shared->stripes_free_nodes[stripe_idx], n);
+              }
             }
-            SLLStackPush(tex_shared->stripes_free_nodes[stripe_idx], n);
           }
         }
+        if(!slot_has_work)
+        {
+          break;
+        }
       }
-      os_sleep_milliseconds(5);
     }
-    os_sleep_milliseconds(1000);
   }
+  
+  //- rjf: gather all requests
+  local_persist TEX_Request *reqs = 0;
+  local_persist U64 reqs_count = 0;
+  if(lane_idx() == 0) MutexScope(tex_shared->req_mutex)
+  {
+    reqs_count = tex_shared->req_count;
+    reqs = push_array(scratch.arena, TEX_Request, reqs_count);
+    U64 idx = 0;
+    for EachNode(r, TEX_RequestNode, tex_shared->first_req)
+    {
+      MemoryCopyStruct(&reqs[idx], &r->v);
+      idx += 1;
+    }
+    arena_clear(tex_shared->req_arena);
+    tex_shared->first_req = tex_shared->last_req = 0;
+    tex_shared->req_count = 0;
+    tex_shared->lane_req_take_counter = 0;
+  }
+  lane_sync();
+  
+  //- rjf: do requests
+  for(;;)
+  {
+    //- rjf: get next request
+    U64 req_num = ins_atomic_u64_inc_eval(&tex_shared->lane_req_take_counter);
+    if(req_num < 1 || reqs_count < req_num)
+    {
+      break;
+    }
+    U64 req_idx = req_num-1;
+    U128 hash = reqs[req_idx].hash;
+    TEX_Topology top = reqs[req_idx].top;
+    Access *access = access_open();
+    
+    //- rjf: unpack request
+    U64 slot_idx = hash.u64[1]%tex_shared->slots_count;
+    U64 stripe_idx = slot_idx%tex_shared->stripes_count;
+    TEX_Slot *slot = &tex_shared->slots[slot_idx];
+    TEX_Stripe *stripe = &tex_shared->stripes[stripe_idx];
+    String8 data = c_data_from_hash(access, hash);
+    
+    //- rjf: create texture
+    R_Handle texture = {0};
+    if(top.dim.x > 0 && top.dim.y > 0 && data.size >= (U64)top.dim.x*(U64)top.dim.y*(U64)r_tex2d_format_bytes_per_pixel_table[top.fmt])
+    {
+      texture = r_tex2d_alloc(R_ResourceKind_Static, v2s32(top.dim.x, top.dim.y), top.fmt, data.str);
+    }
+    
+    //- rjf: commit results to cache
+    RWMutexScope(stripe->rw_mutex, 1)
+    {
+      for(TEX_Node *n = slot->first; n != 0; n = n->next)
+      {
+        if(u128_match(n->hash, hash) && MemoryMatchStruct(&top, &n->topology))
+        {
+          n->texture = texture;
+          ins_atomic_u64_dec_eval(&n->working_count);
+          ins_atomic_u64_inc_eval(&n->load_count);
+          break;
+        }
+      }
+    }
+    
+    access_close(access);
+  }
+  
+  scratch_end(scratch);
+  ProfEnd();
 }
