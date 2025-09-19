@@ -550,6 +550,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
 
     // push null
     CV_TypeServerInfoNode *null_ts_info = push_array(scratch.arena, CV_TypeServerInfoNode, 1);
+    null_ts_info->data.name = str8_lit("\0");
     SLLQueuePush(ts_info_list.first, ts_info_list.last, null_ts_info);
     ++ts_info_list.count;
 
