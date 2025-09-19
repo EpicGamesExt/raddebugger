@@ -125,6 +125,14 @@
 # error AlignOf not defined for this compiler.
 #endif
 
+#if COMPILER_MSVC
+# define AlignType(x) __declspec(align(x))
+#elif COMPILER_CLANG || COMPILER_GCC
+# define AlignType(x) __attribute__((aligned(x)))
+#else
+# error AlignType not defined for this compiler.
+#endif
+
 ////////////////////////////////
 //~ rjf: Member Offsets
 
