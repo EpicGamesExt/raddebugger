@@ -120,18 +120,6 @@ typedef struct LNK_CommonBlockContrib
 
 // --- Ref ---------------------------------------------------------------------
 
-#define PointerBitSize      64u
-#define PointerFreeBitsSize 16u
-
-#define PointerTagBitSize PointerFreeBitsSize
-#define PointerTagMask    ((1ull << (PointerTagBitSize)) - 1u)
-#define PointerTagShift   (PointerBitSize - PointerTagBitSize)
-
-#define PackPointer(ptr, tag) (void *)(IntFromPtr(ptr) | (((tag) & PointerTagMask) << PointerTagShift))
-#define UnpackPointerTag(ptr) ((IntFromPtr(ptr) >> PointerTagShift) & PointerTagMask)
-#define UnpackPointer(ptr)    (void *)(IntFromPtr(ptr) & ~(PointerTagMask << PointerTagShift))
-#define BumpPointerTag(ptr)   PackPointer(UnpackPointer(ptr), UnpackPointerTag(ptr) + 1)
-
 #define LNK_RELOCS_PER_TASK 0x1000
 
 typedef struct LNK_RelocRefs
@@ -146,9 +134,18 @@ typedef struct LNK_RelocRefsNode
   struct LNK_RelocRefsNode *next;
 } LNK_RelocRefsNode;
 
-typedef struct LNK_RelocRefsList
+typedef union LNK_RelocRefsPointer
 {
-  LNK_RelocRefsNode *head;
+  struct {
+    LNK_RelocRefsNode *node;
+    U64                tag;
+  };
+  U64 v[2];
+} LNK_RelocRefsPointer;
+
+typedef struct AlignType(16) LNK_RelocRefsList
+{
+  LNK_RelocRefsPointer head;
 } LNK_RelocRefsList;
 
 // --- Base Reloc --------------------------------------------------------------
@@ -191,9 +188,9 @@ typedef struct
 
 typedef struct
 {
-  LNK_SymbolTable  *symtab;
-  U32               active_thread_count;
-  LNK_RelocRefsList reloc_refs;
+  LNK_SymbolTable   *symtab;
+  U32                active_thread_count;
+  LNK_RelocRefsList *reloc_refs;
 } LNK_OptRefTask;
 
 typedef struct

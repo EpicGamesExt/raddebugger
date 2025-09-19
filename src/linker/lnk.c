@@ -2167,26 +2167,21 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
 }
 
 internal void
-lnk_reloc_refs_list_push_node(LNK_RelocRefsList *list, LNK_RelocRefsNode *tagged_node)
+lnk_reloc_refs_list_push_node(LNK_RelocRefsList *list, LNK_RelocRefsNode *node)
 {
-  U64                node_tag = UnpackPointerTag(tagged_node);
-  LNK_RelocRefsNode *node     = UnpackPointer(tagged_node);
-
-  node->next = list->head;
-  list->head = PackPointer(node, node_tag);
+  LNK_RelocRefsPointer old_head = list->head;
+  node->next = old_head.node;
+  list->head = (LNK_RelocRefsPointer){ .node = node, .tag = old_head.tag + 1 };
 }
 
 internal LNK_RelocRefsNode *
 lnk_reloc_refs_list_pop_node(LNK_RelocRefsList *list)
 {
-  LNK_RelocRefsNode *result = list->head;
-
-  if (list->head) {
-    LNK_RelocRefsNode *head = UnpackPointer(list->head);
-    list->head = head->next;
+  LNK_RelocRefsPointer old_head = list->head;
+  if (old_head.node) {
+    list->head = (LNK_RelocRefsPointer){ .node = old_head.node->next, .tag = old_head.tag + 1};
   }
-
-  return result;
+  return old_head.node;
 }
 
 internal LNK_RelocRefsNode *
@@ -2201,43 +2196,34 @@ lnk_reloc_refs_list_push(Arena *arena, LNK_RelocRefsList *list, LNK_RelocRefs *v
 internal LNK_RelocRefsNode *
 lnk_reloc_refs_list_pop_node_atomic(LNK_RelocRefsList *list)
 {
-  LNK_RelocRefsNode *tagged_node;
+  LNK_RelocRefsPointer old_head = { .node = ins_atomic_ptr_eval(&list->head.node), .tag = ins_atomic_u64_eval(&list->head.tag) };
   for (;;) {
-    tagged_node = list->head;
-    if (tagged_node == 0) { break; }
-
-    LNK_RelocRefsNode *head        = UnpackPointer(tagged_node);
-    LNK_RelocRefsNode *tagged_next = head->next;
-
-    void *swap = ins_atomic_ptr_eval_cond_assign(&list->head, tagged_next, tagged_node);
-    if (swap == tagged_node) { break; }
+    if (old_head.node == 0) { break; }
+    LNK_RelocRefsPointer new_head = { .node = old_head.node->next, .tag = old_head.tag + 1 };
+    if (ins_atomic_u128_eval_cond_assign(&list->head, &new_head, &old_head)) { break; }
   }
-  return tagged_node;
+  return old_head.node;
 }
 
 internal void
-lnk_reloc_refs_list_push_node_atomic(LNK_RelocRefsList *list, LNK_RelocRefsNode *tagged_node)
+lnk_reloc_refs_list_push_node_atomic(LNK_RelocRefsList *list, LNK_RelocRefsNode *node)
 {
-  tagged_node = BumpPointerTag(tagged_node);
+  LNK_RelocRefsPointer old_head = { .node = ins_atomic_ptr_eval(&list->head.node), .tag = ins_atomic_u64_eval(&list->head.tag) };
   for (;;) {
-    LNK_RelocRefsNode *old_head = list->head;
-    LNK_RelocRefsNode *node = UnpackPointer(tagged_node);
-    node->next = old_head;
-    void *swap = ins_atomic_ptr_eval_cond_assign(&list->head, tagged_node, old_head);
-    if (swap == old_head) { break; }
+    node->next = old_head.node;
+    LNK_RelocRefsPointer new_head = { .node = node, .tag = old_head.tag + 1 };
+    if (ins_atomic_u128_eval_cond_assign(&list->head, &new_head, &old_head)) { break; }
   }
 }
 
 internal void
-lnk_reloc_refs_list_concat_in_place(LNK_RelocRefsList *list, LNK_RelocRefsNode *tagged_first, LNK_RelocRefsNode *tagged_last)
+lnk_reloc_refs_list_concat_in_place(LNK_RelocRefsList *list, LNK_RelocRefsNode *first, LNK_RelocRefsNode *last)
 {
-  tagged_first = BumpPointerTag(tagged_first);
+  LNK_RelocRefsPointer old_head = { .node = ins_atomic_ptr_eval(&list->head.node), .tag = ins_atomic_u64_eval(&list->head.tag) };
   for (;;) {
-    LNK_RelocRefsNode *old_head = list->head;
-    LNK_RelocRefsNode *last = UnpackPointer(tagged_last);
-    last->next = old_head;
-    void *swap = ins_atomic_ptr_eval_cond_assign(&list->head, tagged_first, old_head);
-    if (swap == old_head) { break;}
+    last->next = old_head.node;
+    LNK_RelocRefsPointer new_head = { .node = first, .tag = old_head.tag + 1 };
+    if (ins_atomic_u128_eval_cond_assign(&list->head, &new_head, &old_head)) { break; }
   }
 }
 
@@ -2257,11 +2243,10 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
 
     for (;;) {
       // pop head node
-      LNK_RelocRefsNode *node = lnk_reloc_refs_list_pop_node_atomic(&task->reloc_refs);
+      LNK_RelocRefsNode *node = lnk_reloc_refs_list_pop_node_atomic(task->reloc_refs);
       if (!node) { break; }
 
-      LNK_RelocRefsNode *reloc_refs_node = UnpackPointer(node);
-      LNK_RelocRefs     *reloc_refs      = reloc_refs_node->v;
+      LNK_RelocRefs *reloc_refs = node->v;
 
       LNK_RelocRefsNode *first_node = 0, *last_node = 0;
       for EachIndex(reloc_idx, reloc_refs->relocs.count) {
@@ -2330,25 +2315,23 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
             // mark section live
             section_header->flags |= LNK_SECTION_FLAG_LIVE;
 
-            LNK_RelocRefsNode *tagged_node;
-            if (free_list.head) {
-              tagged_node = lnk_reloc_refs_list_pop_node(&free_list);
-              tagged_node = BumpPointerTag(tagged_node);
+            LNK_RelocRefsNode *node;
+            if (free_list.head.node) {
+              node = lnk_reloc_refs_list_pop_node(&free_list);
             } else {
-              tagged_node    = push_array(scratch.arena, LNK_RelocRefsNode, 1);
-              tagged_node->v = push_array(scratch.arena, LNK_RelocRefs, 1);
+              node    = push_array(scratch.arena, LNK_RelocRefsNode, 1);
+              node->v = push_array(scratch.arena, LNK_RelocRefs, 1);
             }
 
-            LNK_RelocRefsNode *node = UnpackPointer(tagged_node);
             node->v->obj    = ref_obj;
             node->v->relocs = lnk_coff_reloc_info_from_section_number(ref_obj, section_number_n->data);
 
             if (first_node == 0) {
-              first_node = tagged_node;
-              last_node  = tagged_node;
+              first_node = node;
+              last_node  = node;
             } else {
               node->next = first_node;
-              first_node = tagged_node;
+              first_node = node;
             }
           }
         }
@@ -2357,18 +2340,18 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
       lnk_reloc_refs_list_push_node(&free_list, node);
 
       if (first_node && last_node) {
-        lnk_reloc_refs_list_concat_in_place(&task->reloc_refs, first_node, last_node);
+        lnk_reloc_refs_list_concat_in_place(task->reloc_refs, first_node, last_node);
       }
     }
 
     // are all threads done walking?
     U32 active_thread_count = ins_atomic_u32_dec_eval(&task->active_thread_count);
-    if (active_thread_count == 0 && task->reloc_refs.head == 0) {
+    if (active_thread_count == 0 && ins_atomic_ptr_eval(&task->reloc_refs->head.node) == 0) {
       break;
     }
 
     // comprehensive solution to the waiting problem
-    for (; ins_atomic_ptr_eval(&task->reloc_refs.head) == 0; ) {
+    for (; ins_atomic_ptr_eval(&task->reloc_refs->head.node) == 0; ) {
       // was signaled to exit?
       if (ins_atomic_u64_eval(&task->active_thread_count) == 0) { goto exit; }
     }
@@ -2455,7 +2438,7 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
   //
   LNK_OptRefTask task = {0};
   task.symtab         = symtab;
-  task.reloc_refs     = reloc_refs;
+  task.reloc_refs     = &reloc_refs;
   tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_walk_relocs_and_mark_ref_sections_task, &task, "Mark Live Sections");
 
   ProfBegin("Remove Unreachable Sections");
