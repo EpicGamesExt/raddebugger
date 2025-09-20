@@ -193,6 +193,15 @@ typedef struct
   LNK_RelocRefsList *reloc_refs;
 } LNK_OptRefTask;
 
+typedef struct LNK_ImageFillNode
+{
+  U64                  base_foff;
+  U64                  sc_count;
+  LNK_SectionContrib **sc;
+
+  struct LNK_ImageFillNode *next;
+} LNK_ImageFillNode;
+
 typedef struct
 {
   LNK_SymbolTable           *symtab;
@@ -224,6 +233,10 @@ typedef struct
       LNK_CommonBlockContrib     *common_block_contribs;
       COFF_SymbolValueInterpType  fixup_type;
     } patch_symtabs;
+    struct {
+      String8             image_data;
+      LNK_ImageFillNode **fill_nodes;
+    } image_fill;
   } u;
 } LNK_BuildImageTask;
 

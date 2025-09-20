@@ -110,6 +110,8 @@ internal void                lnk_section_table_purge(LNK_SectionTable *sectab, S
 internal LNK_Section *       lnk_section_table_search(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags);
 internal LNK_SectionArray    lnk_section_table_search_many(Arena *arena, LNK_SectionTable *sectab, String8 full_or_partial_name);
 internal void                lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_list);
+internal U64                 lnk_section_table_total_fsize(LNK_SectionTable *sectab);
+internal U64                 lnk_section_table_total_vsize(LNK_SectionTable *sectab);
 
 // --- Section Finalization ----------------------------------------------------
 

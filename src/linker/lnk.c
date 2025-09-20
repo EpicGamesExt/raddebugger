@@ -2828,7 +2828,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_regular_symbols_task)
   U64                 obj_idx = task_id;
   LNK_Obj            *obj     = task->objs[obj_idx];
 
-  ProfBegin("Patch Regular Symbols [%S]", obj->path);
+  ProfBeginV("Patch Regular Symbols [%S]", obj->path);
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
@@ -2942,6 +2942,27 @@ THREAD_POOL_TASK_FUNC(lnk_patch_weak_symbols_task)
 {
   LNK_BuildImageTask *task = raw_task;
   lnk_patch_obj_symtab(task->symtab, task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Weak);
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_image_fill_task)
+{
+  ProfBeginFunction();
+  LNK_BuildImageTask *task       = raw_task;
+  String8             image_data = task->u.image_fill.image_data;
+  for EachNode(n, LNK_ImageFillNode, task->u.image_fill.fill_nodes[task_id]) {
+    for EachIndex(i, n->sc_count) {
+      LNK_SectionContrib *sc = n->sc[i];
+      U64 cursor = 0;
+      for EachNode(data_n, String8Node, &sc->first_data_node) {
+        U64 image_off = sc->u.off + n->base_foff + cursor;
+        Assert(image_off + data_n->string.size <= image_data.size);
+        MemoryCopyStr8(image_data.str + image_off, data_n->string);
+        cursor += data_n->string.size;
+      }
+    }
+  }
+  ProfEnd();
 }
 
 internal U64
@@ -4406,55 +4427,59 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   {
     ProfBegin("Image Fill");
 
-    LNK_SectionArray sects = lnk_section_array_from_list(scratch.arena, sectab->list);
+    ProfBeginV("Alloc Image Buffer [%M]", lnk_section_table_total_fsize(sectab));
+    image_data.size = lnk_section_table_total_fsize(sectab);
+    image_data.str  = push_array_no_zero(arena->v[0], U8, image_data.size);
+    ProfEnd();
 
-    U64 image_size = 0;
-    for EachIndex(sect_idx, sects.count) { image_size += sects.v[sect_idx]->fsize; }
+    ProfBegin("Fill Align Bytes");
+    for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+      LNK_Section *sect = &sect_n->data;
+      ProfBeginV("Section: %S Size: %M", sect->name, sect->fsize);
+      U8 fill_byte = sect->flags & COFF_SectionFlag_CntCode ? coff_code_align_byte_from_machine(config->machine) : 0;
+      MemorySet(image_data.str + sect->foff, fill_byte, sect->fsize);
+      ProfEnd();
+    }
+    ProfEnd();
 
-    image_data.size = image_size;
-    image_data.str  = push_array_no_zero(arena->v[0], U8, image_size);
+    Temp temp = temp_begin(scratch.arena);
 
-    for EachIndex(sect_idx, sects.count) {
-      LNK_Section *sect = sects.v[sect_idx];
+    ProfBegin("Prepare Worker Nodes");
+    LNK_ImageFillNode **fill_nodes = push_array(scratch.arena, LNK_ImageFillNode *, tp->worker_count);
+    U64 worker_cap = 4096, worker_load = 0, worker_idx = 0;
+    for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+      LNK_Section *sect = &sect_n->data;
 
-      if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
-        // pick fill pick
-        U8 fill_byte = 0;
-        if (sect->flags & COFF_SectionFlag_CntCode) {
-          fill_byte = coff_code_align_byte_from_machine(config->machine);
-        }
+      // skip bss sections
+      if (sect->flags & COFF_SectionFlag_CntUninitializedData) { continue; }
 
-        // copy section contribution
-        U64 prev_sc_opl = 0;
-        for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
-          for EachIndex(sc_idx, sc_chunk->count) {
-            LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
+      for EachNode(sc_chunk, LNK_SectionContribChunk, sect->contribs.first) {
+        for (U64 sc_left = sc_chunk->count; sc_left > 0; ) {
+          U64 count  = Min(worker_cap - worker_load, sc_left);
+          U64 sc_pos = sc_chunk->count - sc_left;
+          sc_left -= count;
 
-            // fill align bytes
-            Assert(sc->u.off >= prev_sc_opl);
-            U64 fill_size = sc->u.off - prev_sc_opl;
-            MemorySet(image_data.str + sect->foff + prev_sc_opl, fill_byte, fill_size);
-            prev_sc_opl = sc->u.off + lnk_size_from_section_contrib(sc);
+          LNK_ImageFillNode *n = push_array(scratch.arena, LNK_ImageFillNode, 1);
+          n->base_foff = sect->foff;
+          n->sc_count  = count;
+          n->sc        = sc_chunk->v + sc_pos;
+          SLLStackPush(fill_nodes[worker_idx], n);
 
-            // copy contrib contents
-            {
-              U64 cursor = 0;
-              for (String8Node *data_n = &sc->first_data_node; data_n != 0; data_n = data_n->next) {
-                Assert(sc->u.off + data_n->string.size <= sect->vsize);
-                MemoryCopy(image_data.str + sect->foff + sc->u.off + cursor, data_n->string.str, data_n->string.size);
-                cursor += data_n->string.size;
-              }
-            }
+          worker_load += count;
+          if (worker_load >= worker_cap) {
+            worker_load = 0;
+            worker_idx  = (worker_idx + 1) % tp->worker_count;
           }
-        }
-
-        // fill section align bytes
-        {
-          U64 fill_size = sect->fsize - prev_sc_opl;
-          MemorySet(image_data.str + sect->foff + prev_sc_opl, fill_byte, fill_size);
         }
       }
     }
+    ProfEnd();
+
+    task.u.image_fill.image_data = image_data;
+    task.u.image_fill.fill_nodes = fill_nodes;
+    tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_image_fill_task, &task, "Fill");
+
+    temp_end(temp);
 
     ProfEnd();
   }

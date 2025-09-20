@@ -310,6 +310,22 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
   ProfEnd();
 }
 
+internal U64
+lnk_section_table_total_fsize(LNK_SectionTable *sectab)
+{
+  U64 total_fsize = 0;
+  for EachNode(n, LNK_SectionNode, sectab->list.first) { total_fsize += n->data.fsize; }
+  return total_fsize;
+}
+
+internal U64
+lnk_section_table_total_vsize(LNK_SectionTable *sectab)
+{
+  U64 total_vsize = 0;
+  for EachNode(n, LNK_SectionNode, sectab->list.first) { total_vsize += n->data.vsize; }
+  return total_vsize;
+}
+
 internal int
 lnk_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
 {
@@ -468,3 +484,4 @@ lnk_get_first_section_contrib_voff(COFF_SectionHeader **image_section_table, LNK
   LNK_SectionContrib *sc = lnk_get_first_section_contrib(sect);
   return lnk_voff_from_section_contrib(image_section_table, sc);
 }
+
