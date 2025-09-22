@@ -26,12 +26,14 @@ rb_entry_point(CmdLine *cmdline)
   Thread *threads = push_array(scratch.arena, Thread, threads_count);
   RB_ThreadParams *threads_params = push_array(scratch.arena, RB_ThreadParams, threads_count);
   Barrier barrier = barrier_alloc(threads_count);
+  U64 broadcast_val = 0;
   for EachIndex(idx, threads_count)
   {
     threads_params[idx].cmdline = cmdline;
-    threads_params[idx].lane_ctx.lane_idx   = idx;
-    threads_params[idx].lane_ctx.lane_count = threads_count;
-    threads_params[idx].lane_ctx.barrier    = barrier;
+    threads_params[idx].lane_ctx.lane_idx         = idx;
+    threads_params[idx].lane_ctx.lane_count       = threads_count;
+    threads_params[idx].lane_ctx.barrier          = barrier;
+    threads_params[idx].lane_ctx.broadcast_memory = &broadcast_val;
     threads[idx] = thread_launch(rb_thread_entry_point, &threads_params[idx]);
   }
   for EachIndex(idx, threads_count)

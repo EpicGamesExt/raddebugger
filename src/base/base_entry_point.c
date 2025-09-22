@@ -117,6 +117,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
     U64 num_main_threads_clamped = Min(num_async_threads, num_main_threads);
     num_async_threads -= num_main_threads_clamped;
     num_async_threads = Max(1, num_async_threads);
+    U64 lane_broadcast_val = 0;
     Barrier barrier = barrier_alloc(num_async_threads);
     LaneCtx *lane_ctxs = push_array(scratch.arena, LaneCtx, num_async_threads);
     async_threads_count = num_async_threads;
@@ -126,6 +127,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
       lane_ctxs[idx].lane_idx = idx;
       lane_ctxs[idx].lane_count = num_async_threads;
       lane_ctxs[idx].barrier = barrier;
+      lane_ctxs[idx].broadcast_memory = &lane_broadcast_val;
       async_threads[idx] = thread_launch(async_thread_entry_point, &lane_ctxs[idx]);
     }
   }

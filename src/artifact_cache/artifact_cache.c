@@ -221,10 +221,26 @@ ac_tick(void)
     lane_sync();
     
     // rjf: compute val
-    void *val = reqs[idx].create(reqs[idx].key);
+    B32 retry = 0;
+    void *val = reqs[idx].create(reqs[idx].key, &retry);
+    
+    // rjf: retry? -> resubmit request
+    if(retry && lane_idx() == 0)
+    {
+      MutexScope(ac_shared->req_mutex)
+      {
+        AC_RequestNode *n = push_array(ac_shared->req_arena, AC_RequestNode, 1);
+        SLLQueuePush(ac_shared->first_req, ac_shared->last_req, n);
+        ac_shared->req_count += 1;
+        MemoryCopyStruct(&n->v, &reqs[idx]);
+        n->v.key = str8_copy(ac_shared->req_arena, n->v.key);
+      }
+      ins_atomic_u32_eval_assign(&async_loop_again, 1);
+    }
     
     // rjf: create function -> cache
     AC_Cache *cache = 0;
+    if(!retry)
     {
       U64 cache_hash = u64_hash_from_str8(str8_struct(&reqs[idx].create));
       U64 cache_slot_idx = cache_hash%ac_shared->cache_slots_count;
@@ -243,7 +259,7 @@ ac_tick(void)
     }
     
     // rjf: write value into cache
-    if(lane_idx() == 0)
+    if(!retry && lane_idx() == 0)
     {
       U64 hash = u64_hash_from_str8(reqs[idx].key);
       U64 slot_idx = hash%cache->slots_count;

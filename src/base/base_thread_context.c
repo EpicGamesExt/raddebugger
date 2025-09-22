@@ -4,9 +4,9 @@
 ////////////////////////////////
 //~ rjf: Globals
 
-C_LINKAGE thread_static TCTX* tctx_thread_local;
+C_LINKAGE thread_static TCTX *tctx_thread_local;
 #if !BUILD_SUPPLEMENTARY_UNIT
-C_LINKAGE thread_static TCTX* tctx_thread_local = 0;
+C_LINKAGE thread_static TCTX *tctx_thread_local = 0;
 #endif
 
 ////////////////////////////////
@@ -85,12 +85,21 @@ tctx_set_lane_ctx(LaneCtx lane_ctx)
 }
 
 internal void
-tctx_lane_barrier_wait(void)
+tctx_lane_barrier_wait(void *broadcast_ptr, U64 broadcast_size, U64 broadcast_src_lane_idx)
 {
   ProfBeginFunction();
   ProfColor(0x00000ff);
   TCTX *tctx = tctx_selected();
+  U64 broadcast_size_clamped = ClampTop(broadcast_size, sizeof(tctx->lane_ctx.broadcast_memory[0]));
+  if(broadcast_ptr != 0 && lane_idx() == broadcast_src_lane_idx)
+  {
+    MemoryCopy(tctx->lane_ctx.broadcast_memory, broadcast_ptr, broadcast_size_clamped);
+  }
   os_barrier_wait(tctx->lane_ctx.barrier);
+  if(broadcast_ptr != 0 && lane_idx() != broadcast_src_lane_idx)
+  {
+    MemoryCopy(broadcast_ptr, tctx->lane_ctx.broadcast_memory, broadcast_size_clamped);
+  }
   ProfEnd();
 }
 

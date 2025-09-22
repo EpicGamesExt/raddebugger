@@ -1969,19 +1969,19 @@ struct TXT_ArtifactCreateShared
 };
 
 internal void *
-txt_artifact_create(String8 key)
+txt_artifact_create(String8 key, B32 *retry_out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   Access *access = access_open();
   
   //- rjf: get shared state
-  local_persist TXT_ArtifactCreateShared *shared = 0;
+  TXT_ArtifactCreateShared *shared = 0;
   if(lane_idx() == 0)
   {
     shared = push_array(scratch.arena, TXT_ArtifactCreateShared, 1);
   }
-  lane_sync();
+  lane_sync_u64(&shared, 0);
   
   //- rjf: unpack key
   U128 hash = {0};

@@ -7,7 +7,7 @@
 ////////////////////////////////
 //~ rjf: Artifact Computation Function Types
 
-typedef void *AC_CreateFunctionType(String8 key);
+typedef void *AC_CreateFunctionType(String8 key, B32 *retry_out);
 typedef void AC_DestroyFunctionType(void *artifact);
 
 ////////////////////////////////

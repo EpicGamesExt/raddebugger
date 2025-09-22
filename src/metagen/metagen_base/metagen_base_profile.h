@@ -21,6 +21,7 @@
 #if PROFILE_TELEMETRY
 # include "rad_tm.h"
 # if OS_WINDOWS
+#  pragma comment(lib, "ws2_32.lib")
 #  pragma comment(lib, "rad_tm_win64.lib")
 # endif
 #endif
@@ -44,25 +45,25 @@
 # define ProfLockDrop(...)         tmReleasedLock(0, __VA_ARGS__)
 # define ProfColor(color)          tmZoneColorSticky(color)
 # define ProfBeginV(...)                                                           \
-  if (TM_API_PTR) {                                                                \
-    static tm_uint64 file_id = 0; TM_API_PTR->_tmStaticString(&file_id, __FILE__); \
-    Temp scratch = scratch_begin(0,0);                                             \
-    String8 string = push_str8f(scratch.arena, __VA_ARGS__);                       \
-    tm_uint64 hash = TM_API_PTR->_tmHash((char*)string.str, string.size);          \
-    hash = TM_API_PTR->_tmSendDynamicString(hash, (char*)string.str);              \
-    TM_API_PTR->_tmEnterZoneFast_Core(0, 0, file_id, __LINE__, hash);              \
-    scratch_end(scratch);                                                          \
-  }
+if (TM_API_PTR) {                                                                \
+static tm_uint64 file_id = 0; TM_API_PTR->_tmStaticString(&file_id, __FILE__); \
+Temp scratch = scratch_begin(0,0);                                             \
+String8 string = push_str8f(scratch.arena, __VA_ARGS__);                       \
+tm_uint64 hash = TM_API_PTR->_tmHash((char*)string.str, string.size);          \
+hash = TM_API_PTR->_tmSendDynamicString(hash, (char*)string.str);              \
+TM_API_PTR->_tmEnterZoneFast_Core(0, 0, file_id, __LINE__, hash);              \
+scratch_end(scratch);                                                          \
+}
 # define ProfNoteV(...) 														   \
-  if (TM_API_PTR) {     														   \
-    static tm_uint64 file_id = 0; TM_API_PTR->_tmStaticString(&file_id, __FILE__); \
-    Temp scratch = scratch_begin(0,0);                                             \
-    String8 string = push_str8f(scratch.arena, __VA_ARGS__);                       \
-    tm_uint64 hash = TM_API_PTR->_tmHash((char*)string.str, string.size);          \
-    hash = TM_API_PTR->_tmSendDynamicString(hash, (char*)string.str);              \
-    TM_API_PTR->_tmMessageFast_Core(0, TMMF_ICON_NOTE, file_id, __LINE__, hash);   \
-    scratch_end(scratch);                                                          \
-  }
+if (TM_API_PTR) {     														   \
+static tm_uint64 file_id = 0; TM_API_PTR->_tmStaticString(&file_id, __FILE__); \
+Temp scratch = scratch_begin(0,0);                                             \
+String8 string = push_str8f(scratch.arena, __VA_ARGS__);                       \
+tm_uint64 hash = TM_API_PTR->_tmHash((char*)string.str, string.size);          \
+hash = TM_API_PTR->_tmSendDynamicString(hash, (char*)string.str);              \
+TM_API_PTR->_tmMessageFast_Core(0, TMMF_ICON_NOTE, file_id, __LINE__, hash);   \
+scratch_end(scratch);                                                          \
+}
 #endif
 
 ////////////////////////////////

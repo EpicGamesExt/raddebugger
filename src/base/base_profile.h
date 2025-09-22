@@ -20,6 +20,7 @@
 #if PROFILE_TELEMETRY
 # include "rad_tm.h"
 # if OS_WINDOWS
+#  pragma comment(lib, "ws2_32.lib")
 #  pragma comment(lib, "rad_tm_win64.lib")
 # endif
 #elif PROFILE_SPALL
@@ -44,8 +45,8 @@
 # define ProfLockTake(...)         tmAcquiredLock(0, 0, __VA_ARGS__)
 # define ProfLockDrop(...)         tmReleasedLock(0, __VA_ARGS__)
 # define ProfColor(color)          tmZoneColor((((color) & 0xff000000) >> 24) / 255.f, (((color) & 0x00ff0000) >> 16) / 255.f, (((color) & 0x0000ff00) >> 8) / 255.f)
-# define ProfBeginV(...)                                                           \
-if (TM_API_PTR) {                                                                \
+# define ProfBeginV(...)                                                         \
+if (TM_API_PTR) {                                                               \
 static tm_uint64 file_id = 0; TM_API_PTR->_tmStaticString(&file_id, __FILE__); \
 Temp scratch = scratch_begin(0,0);                                             \
 String8 string = push_str8f(scratch.arena, __VA_ARGS__);                       \
@@ -54,8 +55,8 @@ hash = TM_API_PTR->_tmSendDynamicString(hash, (char*)string.str);              \
 TM_API_PTR->_tmEnterZoneFast_Core(0, 0, file_id, __LINE__, hash);              \
 scratch_end(scratch);                                                          \
 }
-# define ProfNoteV(...) 														   \
-if (TM_API_PTR) {     														   \
+# define ProfNoteV(...) 														                             \
+if (TM_API_PTR) {     														                              \
 static tm_uint64 file_id = 0; TM_API_PTR->_tmStaticString(&file_id, __FILE__); \
 Temp scratch = scratch_begin(0,0);                                             \
 String8 string = push_str8f(scratch.arena, __VA_ARGS__);                       \
