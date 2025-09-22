@@ -3676,18 +3676,9 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
 }
 
 internal int
-lnk_base_reloc_page_compar(const void *raw_a, const void *raw_b)
-{
-  const LNK_BaseRelocPage *a = raw_a, *b = raw_b;
-  return u64_compar(&a->voff, &b->voff);
-}
-
-internal int
 lnk_base_reloc_page_is_before(void *raw_a, void *raw_b)
 {
-  LNK_BaseRelocPage* a = raw_a;
-  LNK_BaseRelocPage* b = raw_b;
-  return a->voff < b->voff;
+  return ((LNK_BaseRelocPage *)raw_a)->voff < ((LNK_BaseRelocPage *)raw_b)->voff;
 }
 
 internal String8List
@@ -3760,8 +3751,7 @@ lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U6
     ProfEnd();
 
     ProfBegin("Sort Pages on VOFF");
-    //radsort(page_arr.v, page_arr.count, lnk_base_reloc_page_is_before);
-    qsort(page_arr.v, page_arr.count, sizeof(page_arr.v[0]), lnk_base_reloc_page_compar);
+    radsort(page_arr.v, page_arr.count, lnk_base_reloc_page_is_before);
     ProfEnd();
   }
   
