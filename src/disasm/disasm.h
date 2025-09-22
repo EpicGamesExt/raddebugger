@@ -1,8 +1,8 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef DASM_CACHE_H
-#define DASM_CACHE_H
+#ifndef DISASM_H
+#define DISASM_H
 
 ////////////////////////////////
 //~ rjf: Disassembly Syntax Types
@@ -202,4 +202,4 @@ internal void dasm_artifact_destroy(void *ptr);
 internal DASM_Info dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params);
 internal DASM_Info dasm_info_from_key_params(Access *access, C_Key key, DASM_Params *params, U128 *hash_out);
 
-#endif // DASM_CACHE_H
+#endif // DISASM_H

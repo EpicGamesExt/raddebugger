@@ -1,8 +1,8 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef TEXT_CACHE_H
-#define TEXT_CACHE_H
+#ifndef TEXT_H
+#define TEXT_H
 
 ////////////////////////////////
 //~ rjf: Value Types
@@ -208,4 +208,4 @@ internal void txt_artifact_destroy(void *ptr);
 internal TXT_TextInfo txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang);
 internal TXT_TextInfo txt_text_info_from_key_lang(Access *access, C_Key key, TXT_LangKind lang, U128 *hash_out);
 
-#endif // TEXT_CACHE_H
+#endif // TEXT_H

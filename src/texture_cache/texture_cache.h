@@ -109,4 +109,10 @@ internal R_Handle tex_texture_from_key_topology(Access *access, C_Key key, TEX_T
 
 internal void tex_tick(void);
 
+////////////////////////////////
+//~ rjf: Artifact Cache Hooks / Lookups
+
+internal void *tex_artifact_create(String8 key, B32 *retry_out);
+internal void tex_artifact_destroy(void *ptr);
+
 #endif // TEXTURE_CACHE_H
