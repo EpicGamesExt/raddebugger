@@ -68,9 +68,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(MUTABLE_TEXT_H) && !defined(MTX_INIT_MANUAL)
   mtx_init();
 #endif
-#if defined(DASM_CACHE_H) && !defined(DASM_INIT_MANUAL)
-  dasm_init();
-#endif
 #if defined(DBGI_H) && !defined(DI_INIT_MANUAL)
   di_init();
 #endif
@@ -208,9 +205,6 @@ async_thread_entry_point(void *params)
 #endif
 #if defined(FILE_STREAM_H)
     fs_tick();
-#endif
-#if defined(DASM_CACHE_H)
-    dasm_tick();
 #endif
 #if defined(TEXTURE_CACHE_H)
     tex_tick();
