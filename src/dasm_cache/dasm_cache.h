@@ -172,91 +172,6 @@ struct DASM_Info
 };
 
 ////////////////////////////////
-//~ rjf: Cache Types
-
-typedef struct DASM_Node DASM_Node;
-struct DASM_Node
-{
-  // rjf: links
-  DASM_Node *next;
-  DASM_Node *prev;
-  
-  // rjf: key
-  U128 hash;
-  DASM_Params params;
-  
-  // rjf: root
-  C_Root root;
-  
-  // rjf: generations
-  U64 change_gen;
-  
-  // rjf: value
-  Arena *info_arena;
-  DASM_Info info;
-  
-  // rjf: metadata
-  AccessPt access_pt;
-  U64 working_count;
-  U64 last_time_requested_us;
-  U64 last_user_clock_idx_requested;
-};
-
-typedef struct DASM_Slot DASM_Slot;
-struct DASM_Slot
-{
-  DASM_Node *first;
-  DASM_Node *last;
-};
-
-typedef struct DASM_Stripe DASM_Stripe;
-struct DASM_Stripe
-{
-  Arena *arena;
-  RWMutex rw_mutex;
-  CondVar cv;
-  DASM_Node *free_node;
-};
-
-////////////////////////////////
-//~ rjf: Thread Context
-
-typedef struct DASM_TCTX DASM_TCTX;
-struct DASM_TCTX
-{
-  Arena *arena;
-};
-
-////////////////////////////////
-//~ rjf: Shared State
-
-typedef struct DASM_Shared DASM_Shared;
-struct DASM_Shared
-{
-  Arena *arena;
-  
-  // rjf: cache
-  U64 slots_count;
-  U64 stripes_count;
-  DASM_Slot *slots;
-  DASM_Stripe *stripes;
-  
-  // rjf: requests
-  Mutex req_mutex;
-  Arena *req_arena;
-  DASM_RequestNode *first_req;
-  DASM_RequestNode *last_req;
-  U64 req_count;
-  U64 lane_req_take_counter;
-};
-
-////////////////////////////////
-//~ rjf: Globals
-
-thread_static DASM_TCTX *dasm_tctx = 0;
-global DASM_Shared *dasm_shared = 0;
-
-////////////////////////////////
 //~ rjf: Instruction Decoding/Disassembling Type Functions
 
 internal DASM_Inst dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Syntax syntax);
@@ -280,21 +195,10 @@ internal U64 dasm_line_array_idx_from_code_off__linear_scan(DASM_LineArray *arra
 internal U64 dasm_line_array_code_off_from_idx(DASM_LineArray *array, U64 idx);
 
 ////////////////////////////////
-//~ rjf: Main Layer Initialization
-
-internal void dasm_init(void);
-
-////////////////////////////////
-//~ rjf: Ticks
-
-internal void dasm_tick(void);
-
-////////////////////////////////
 //~ rjf: Artifact Cache Hooks / Lookups
 
 internal void *dasm_artifact_create(String8 key, B32 *retry_out);
 internal void dasm_artifact_destroy(void *ptr);
-
 internal DASM_Info dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params);
 internal DASM_Info dasm_info_from_key_params(Access *access, C_Key key, DASM_Params *params, U128 *hash_out);
 
