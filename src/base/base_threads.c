@@ -64,3 +64,39 @@ internal void      semaphore_drop(Semaphore semaphore)                          
 internal Barrier   barrier_alloc(U64 count)         {return os_barrier_alloc(count);}
 internal void      barrier_release(Barrier barrier) {os_barrier_release(barrier);}
 internal void      barrier_wait(Barrier barrier)    {os_barrier_wait(barrier);}
+
+////////////////////////////////
+//~ rjf: Table Stripe Functions
+
+internal StripeArray
+stripe_array_alloc(Arena *arena)
+{
+  StripeArray array = {0};
+  array.count = os_get_system_info()->logical_processor_count;
+  array.v = push_array(arena, Stripe, array.count);
+  for EachIndex(idx, array.count)
+  {
+    array.v[idx].arena = arena_alloc();
+    array.v[idx].rw_mutex = rw_mutex_alloc();
+    array.v[idx].cv = cond_var_alloc();
+  }
+  return array;
+}
+
+internal void
+stripe_array_release(StripeArray *stripes)
+{
+  for EachIndex(idx, stripes->count)
+  {
+    arena_release(stripes->v[idx].arena);
+    rw_mutex_release(stripes->v[idx].rw_mutex);
+    cond_var_release(stripes->v[idx].cv);
+  }
+}
+
+internal Stripe *
+stripe_from_slot_idx(StripeArray *stripes, U64 slot_idx)
+{
+  Stripe *stripe = &stripes->v[slot_idx%stripes->count];
+  return stripe;
+}

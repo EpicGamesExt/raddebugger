@@ -1601,15 +1601,8 @@ txt_init(void)
   txt_shared->arena = arena;
   txt_shared->slots_count = 1024;
   txt_shared->slots = push_array(arena, TXT_Slot, txt_shared->slots_count);
-  txt_shared->stripes_count = Min(txt_shared->slots_count, os_get_system_info()->logical_processor_count);
-  txt_shared->stripes = push_array(arena, TXT_Stripe, txt_shared->stripes_count);
-  txt_shared->stripes_free_nodes = push_array(arena, TXT_Node *, txt_shared->stripes_count);
-  for(U64 idx = 0; idx < txt_shared->stripes_count; idx += 1)
-  {
-    txt_shared->stripes[idx].arena = arena_alloc();
-    txt_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
-    txt_shared->stripes[idx].cv = cond_var_alloc();
-  }
+  txt_shared->stripes = stripe_array_alloc(arena);
+  txt_shared->stripes_free_nodes = push_array(arena, TXT_Node *, txt_shared->stripes.count);
   txt_shared->u2p_ring_size = KB(64);
   txt_shared->u2p_ring_base = push_array_no_zero(arena, U8, txt_shared->u2p_ring_size);
   txt_shared->u2p_ring_cv = cond_var_alloc();
@@ -1627,9 +1620,9 @@ txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang)
   if(!u128_match(hash, u128_zero()))
   {
     U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
-    U64 stripe_idx = slot_idx%txt_shared->stripes_count;
     TXT_Slot *slot = &txt_shared->slots[slot_idx];
-    TXT_Stripe *stripe = &txt_shared->stripes[stripe_idx];
+    Stripe *stripe = stripe_from_slot_idx(&txt_shared->stripes, slot_idx);
+    U64 stripe_idx = (stripe - txt_shared->stripes.v);
     B32 found = 0;
     MutexScopeR(stripe->rw_mutex)
     {
@@ -2128,9 +2121,8 @@ ASYNC_WORK_DEF(txt_parse_work)
   
   //- rjf: unpack hash
   U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
-  U64 stripe_idx = slot_idx%txt_shared->stripes_count;
   TXT_Slot *slot = &txt_shared->slots[slot_idx];
-  TXT_Stripe *stripe = &txt_shared->stripes[stripe_idx];
+  Stripe *stripe = stripe_from_slot_idx(&txt_shared->stripes, slot_idx);
   
   //- rjf: take task
   B32 got_task = 0;
@@ -2434,9 +2426,9 @@ txt_evictor_thread__entry_point(void *p)
   {
     for(U64 slot_idx = 0; slot_idx < txt_shared->slots_count; slot_idx += 1)
     {
-      U64 stripe_idx = slot_idx%txt_shared->stripes_count;
       TXT_Slot *slot = &txt_shared->slots[slot_idx];
-      TXT_Stripe *stripe = &txt_shared->stripes[stripe_idx];
+      Stripe *stripe = stripe_from_slot_idx(&txt_shared->stripes, slot_idx);
+      U64 stripe_idx = (stripe - txt_shared->stripes.v);
       B32 slot_has_work = 0;
       MutexScopeR(stripe->rw_mutex)
       {
@@ -2472,5 +2464,57 @@ txt_evictor_thread__entry_point(void *p)
       }
     }
     os_sleep_milliseconds(500);
+  }
+}
+
+////////////////////////////////
+//~ rjf: Tick
+
+internal void
+txt_tick(void)
+{
+  //- rjf: do eviction pass
+  {
+    Rng1U64 range = lane_range(txt_shared->slots_count);
+    for EachInRange(slot_idx, range)
+    {
+      TXT_Slot *slot = &txt_shared->slots[slot_idx];
+      Stripe *stripe = stripe_from_slot_idx(&txt_shared->stripes, slot_idx);
+      for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
+      {
+        B32 slot_has_work = 0;
+        RWMutexScope(stripe->rw_mutex, write_mode)
+        {
+          for(TXT_Node *n = slot->first, *next = 0; n != 0; n = next)
+          {
+            next = n->next;
+            if(access_pt_is_expired(&n->access_pt) &&
+               n->load_count != 0 &&
+               n->is_working == 0)
+            {
+              slot_has_work = 1;
+              if(!write_mode)
+              {
+                break;
+              }
+              else
+              {
+                DLLRemove(slot->first, slot->last, n);
+                c_hash_downstream_dec(n->hash);
+                if(n->arena != 0)
+                {
+                  arena_release(n->arena);
+                }
+                SLLStackPush(txt_shared->stripes_free_nodes[(stripe - txt_shared->stripes.v)], n);
+              }
+            }
+          }
+        }
+        if(!slot_has_work)
+        {
+          break;
+        }
+      }
+    }
   }
 }

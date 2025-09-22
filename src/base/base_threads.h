@@ -48,6 +48,25 @@ struct Barrier
 };
 
 ////////////////////////////////
+//~ rjf: Table Stripes
+
+typedef struct Stripe Stripe;
+struct Stripe
+{
+  Arena *arena;
+  RWMutex rw_mutex;
+  CondVar cv;
+  void *free;
+};
+
+typedef struct StripeArray StripeArray;
+struct StripeArray
+{
+  Stripe *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Thread Functions
 
 internal Thread thread_launch(ThreadEntryPointFunctionType *f, void *p);
@@ -103,5 +122,12 @@ internal void      barrier_wait(Barrier barrier);
 #define MutexScopeR(mutex) DeferLoop(rw_mutex_take_r(mutex), rw_mutex_drop_r(mutex))
 #define MutexScopeW(mutex) DeferLoop(rw_mutex_take_w(mutex), rw_mutex_drop_w(mutex))
 #define MutexScopeRWPromote(mutex) DeferLoop((rw_mutex_drop_r(mutex), rw_mutex_take_w(mutex)), (rw_mutex_drop_w(mutex), rw_mutex_take_r(mutex)))
+
+////////////////////////////////
+//~ rjf: Table Stripe Functions
+
+internal StripeArray stripe_array_alloc(Arena *arena);
+internal void stripe_array_release(StripeArray *stripes);
+internal Stripe *stripe_from_slot_idx(StripeArray *stripes, U64 slot_idx);
 
 #endif // BASE_THREADS_H

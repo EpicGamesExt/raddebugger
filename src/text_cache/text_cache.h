@@ -158,6 +158,20 @@ typedef TXT_TokenArray TXT_LangLexFunctionType(Arena *arena, U64 *bytes_processe
 ////////////////////////////////
 //~ rjf: Cache Types
 
+typedef struct TXT_Request TXT_Request;
+struct TXT_Request
+{
+  U128 hash;
+  TXT_LangKind lang;
+};
+
+typedef struct TXT_RequestNode TXT_RequestNode;
+struct TXT_RequestNode
+{
+  TXT_RequestNode *next;
+  TXT_Request v;
+};
+
 typedef struct TXT_Node TXT_Node;
 struct TXT_Node
 {
@@ -186,14 +200,6 @@ struct TXT_Slot
   TXT_Node *last;
 };
 
-typedef struct TXT_Stripe TXT_Stripe;
-struct TXT_Stripe
-{
-  Arena *arena;
-  RWMutex rw_mutex;
-  CondVar cv;
-};
-
 ////////////////////////////////
 //~ rjf: Shared State
 
@@ -207,10 +213,16 @@ struct TXT_Shared
   
   // rjf: cache
   U64 slots_count;
-  U64 stripes_count;
   TXT_Slot *slots;
-  TXT_Stripe *stripes;
+  StripeArray stripes;
   TXT_Node **stripes_free_nodes;
+  
+  // rjf: requests
+  Mutex req_mutex;
+  Arena *req_arena;
+  TXT_RequestNode *first_req;
+  TXT_RequestNode *last_req;
+  U64 req_count;
   
   // rjf: user -> parse thread
   U64 u2p_ring_size;
@@ -292,5 +304,10 @@ ASYNC_WORK_DEF(txt_parse_work);
 //~ rjf: Evictor Threads
 
 internal void txt_evictor_thread__entry_point(void *p);
+
+////////////////////////////////
+//~ rjf: Tick
+
+internal void txt_tick(void);
 
 #endif // TEXT_CACHE_H
