@@ -1591,117 +1591,6 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
 }
 
 ////////////////////////////////
-//~ rjf: Main Layer Initialization
-
-internal void
-txt_init(void)
-{
-  Arena *arena = arena_alloc();
-  txt_shared = push_array(arena, TXT_Shared, 1);
-  txt_shared->arena = arena;
-  txt_shared->slots_count = 1024;
-  txt_shared->slots = push_array(arena, TXT_Slot, txt_shared->slots_count);
-  txt_shared->stripes = stripe_array_alloc(arena);
-  txt_shared->stripes_free_nodes = push_array(arena, TXT_Node *, txt_shared->stripes.count);
-  txt_shared->u2p_ring_size = KB(64);
-  txt_shared->u2p_ring_base = push_array_no_zero(arena, U8, txt_shared->u2p_ring_size);
-  txt_shared->u2p_ring_cv = cond_var_alloc();
-  txt_shared->u2p_ring_mutex = mutex_alloc();
-  txt_shared->evictor_thread = thread_launch(txt_evictor_thread__entry_point, 0);
-}
-
-////////////////////////////////
-//~ rjf: Cache Lookups
-
-internal TXT_TextInfo
-txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang)
-{
-  TXT_TextInfo info = {0};
-  if(!u128_match(hash, u128_zero()))
-  {
-    U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
-    TXT_Slot *slot = &txt_shared->slots[slot_idx];
-    Stripe *stripe = stripe_from_slot_idx(&txt_shared->stripes, slot_idx);
-    U64 stripe_idx = (stripe - txt_shared->stripes.v);
-    B32 found = 0;
-    MutexScopeR(stripe->rw_mutex)
-    {
-      for(TXT_Node *n = slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(hash, n->hash) && n->lang == lang)
-        {
-          MemoryCopyStruct(&info, &n->info);
-          info.bytes_processed = ins_atomic_u64_eval(&n->info.bytes_processed);
-          info.bytes_to_process = ins_atomic_u64_eval(&n->info.bytes_to_process);
-          found = 1;
-          access_touch(access, &n->access_pt, stripe->cv);
-          break;
-        }
-      }
-    }
-    B32 node_is_new = 0;
-    if(!found)
-    {
-      MutexScopeW(stripe->rw_mutex)
-      {
-        TXT_Node *node = 0;
-        for(TXT_Node *n = slot->first; n != 0; n = n->next)
-        {
-          if(u128_match(hash, n->hash) && n->lang == lang)
-          {
-            node = n;
-            break;
-          }
-        }
-        if(node == 0)
-        {
-          node = txt_shared->stripes_free_nodes[stripe_idx];
-          if(node)
-          {
-            SLLStackPop(txt_shared->stripes_free_nodes[stripe_idx]);
-          }
-          else
-          {
-            node = push_array_no_zero(stripe->arena, TXT_Node, 1);
-          }
-          MemoryZeroStruct(node);
-          DLLPushBack(slot->first, slot->last, node);
-          node->hash = hash;
-          node->lang = lang;
-          node_is_new = 1;
-        }
-      }
-    }
-    if(node_is_new)
-    {
-      txt_u2p_enqueue_req(hash, lang, max_U64);
-      async_push_work(txt_parse_work);
-    }
-  }
-  return info;
-}
-
-internal TXT_TextInfo
-txt_text_info_from_key_lang(Access *access, C_Key key, TXT_LangKind lang, U128 *hash_out)
-{
-  TXT_TextInfo result = {0};
-  for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
-  {
-    U128 hash = c_hash_from_key(key, rewind_idx);
-    result = txt_text_info_from_hash_lang(access, hash, lang);
-    if(result.lines_count != 0)
-    {
-      if(hash_out)
-      {
-        *hash_out = hash;
-      }
-      break;
-    }
-  }
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Text Info Extractor Helpers
 
 internal U64
@@ -2062,120 +1951,61 @@ txt_scope_node_from_info_pt(TXT_TextInfo *info, TxtPt pt)
 }
 
 ////////////////////////////////
-//~ rjf: Transfer Threads
+//~ rjf: Artifact Cache Hooks / Lookups
 
-internal B32
-txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us)
+typedef struct TXT_Artifact TXT_Artifact;
+struct TXT_Artifact
 {
-  B32 good = 0;
-  MutexScope(txt_shared->u2p_ring_mutex) for(;;)
-  {
-    U64 unconsumed_size = txt_shared->u2p_ring_write_pos - txt_shared->u2p_ring_read_pos;
-    U64 available_size = txt_shared->u2p_ring_size - unconsumed_size;
-    if(available_size >= sizeof(hash)+sizeof(lang))
-    {
-      good = 1;
-      txt_shared->u2p_ring_write_pos += ring_write_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_write_pos, &hash);
-      txt_shared->u2p_ring_write_pos += ring_write_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_write_pos, &lang);
-      break;
-    }
-    if(os_now_microseconds() >= endt_us)
-    {
-      break;
-    }
-    cond_var_wait(txt_shared->u2p_ring_cv, txt_shared->u2p_ring_mutex, endt_us);
-  }
-  if(good)
-  {
-    cond_var_broadcast(txt_shared->u2p_ring_cv);
-  }
-  return good;
-}
+  Arena *arena;
+  TXT_TextInfo info;
+};
 
-internal void
-txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out)
+typedef struct TXT_ArtifactCreateShared TXT_ArtifactCreateShared;
+struct TXT_ArtifactCreateShared
 {
-  MutexScope(txt_shared->u2p_ring_mutex) for(;;)
-  {
-    U64 unconsumed_size = txt_shared->u2p_ring_write_pos - txt_shared->u2p_ring_read_pos;
-    if(unconsumed_size >= sizeof(*hash_out) + sizeof(*lang_out))
-    {
-      txt_shared->u2p_ring_read_pos += ring_read_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_read_pos, hash_out);
-      txt_shared->u2p_ring_read_pos += ring_read_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_read_pos, lang_out);
-      break;
-    }
-    cond_var_wait(txt_shared->u2p_ring_cv, txt_shared->u2p_ring_mutex, max_U64);
-  }
-  cond_var_broadcast(txt_shared->u2p_ring_cv);
-}
+  Arena *arena;
+  TXT_TextInfo info;
+  TXT_Artifact *artifact;
+};
 
-ASYNC_WORK_DEF(txt_parse_work)
+internal void *
+txt_artifact_create(String8 key)
 {
   ProfBeginFunction();
-  
-  //- rjf: get next key
-  U128 hash = {0};
-  TXT_LangKind lang = TXT_LangKind_Null;
-  txt_u2p_dequeue_req(&hash, &lang);
+  Temp scratch = scratch_begin(0, 0);
   Access *access = access_open();
   
-  //- rjf: unpack hash
-  U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
-  TXT_Slot *slot = &txt_shared->slots[slot_idx];
-  Stripe *stripe = stripe_from_slot_idx(&txt_shared->stripes, slot_idx);
-  
-  //- rjf: take task
-  B32 got_task = 0;
-  MutexScopeR(stripe->rw_mutex)
+  //- rjf: get shared state
+  local_persist TXT_ArtifactCreateShared *shared = 0;
+  if(lane_idx() == 0)
   {
-    for(TXT_Node *n = slot->first; n != 0; n = n->next)
-    {
-      if(u128_match(n->hash, hash) && n->lang == lang)
-      {
-        got_task = !ins_atomic_u32_eval_cond_assign(&n->is_working, 1, 0);
-        break;
-      }
-    }
+    shared = push_array(scratch.arena, TXT_ArtifactCreateShared, 1);
   }
+  lane_sync();
   
-  //- rjf: hash -> data
-  String8 data = {0};
-  if(got_task)
-  {
-    data = c_data_from_hash(access, hash);
-  }
+  //- rjf: unpack key
+  U128 hash = {0};
+  TXT_LangKind lang = TXT_LangKind_Null;
+  str8_deserial_read_struct(key, 0, &hash);
+  str8_deserial_read_struct(key, sizeof(hash), &lang);
+  String8 data = c_data_from_hash(access, hash);
+  TXT_LangLexFunctionType *lex_function = txt_lex_function_from_lang_kind(lang);
   
   //- rjf: data -> text info
-  Arena *info_arena = 0;
-  TXT_TextInfo info = {0};
-  if(got_task && !u128_match(hash, u128_zero()))
+  if(!u128_match(hash, u128_zero()))
   {
-    info_arena = arena_alloc();
-    
-    //- rjf: grab pointers to working counters
-    U64 *bytes_processed_ptr = 0;
-    U64 *bytes_to_process_ptr = 0;
-    MutexScopeR(stripe->rw_mutex)
+    if(lane_idx() == 0)
     {
-      for(TXT_Node *n = slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(n->hash, hash) && n->lang == lang)
-        {
-          bytes_processed_ptr = &n->info.bytes_processed;
-          bytes_to_process_ptr = &n->info.bytes_to_process;
-        }
-      }
+      shared->arena = arena_alloc();
     }
     
     //- rjf: set # of bytes to process
-    if(bytes_to_process_ptr)
-    {
-      //                                               (line ending calc)     (line counting)    (line measuring)   (lexing)
-      ins_atomic_u64_eval_assign(bytes_to_process_ptr, Min(data.size, 1024) + data.size        + data.size        + data.size*(lang != TXT_LangKind_Null));
-    }
+    //                  (line ending calc)     (line counting)    (line measuring)   (lexing)
+    set_progress_target(Min(data.size, 1024) + data.size        + data.size        + data.size*(lang != TXT_LangKind_Null));
     
     //- rjf: detect line end kind
     TXT_LineEndKind line_end_kind = TXT_LineEndKind_Null;
+    if(lane_idx() == 0)
     {
       U64 lf_count = 0;
       U64 cr_count = 0;
@@ -2198,323 +2028,255 @@ ASYNC_WORK_DEF(txt_parse_work)
       {
         line_end_kind = TXT_LineEndKind_LF;
       }
-      info.line_end_kind = line_end_kind;
+      shared->info.line_end_kind = line_end_kind;
     }
-    
-    //- rjf: bump progress
-    if(bytes_processed_ptr)
-    {
-      ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024));
-    }
+    lane_sync();
+    set_progress(Min(data.size, 1024));
     
     //- rjf: count # of lines
-    U64 line_count = 1;
-    U64 byte_process_start_idx = 0;
-    for(U64 idx = 0; idx < data.size; idx += 1)
+    U64 lane_line_count = 0;
+    if(lane_idx() == 0)
     {
-      if(data.str[idx] == '\n' || data.str[idx] == '\r')
+      lane_line_count = 1;
+    }
+    {
+      Rng1U64 range = lane_range(data.size);
+      for EachInRange(idx, range)
       {
-        line_count += 1;
-        if(data.str[idx] == '\r')
+        if(data.str[idx] == '\n' || data.str[idx] == '\r')
         {
-          idx += 1;
+          lane_line_count += 1;
+          if(data.str[idx] == '\r')
+          {
+            idx += 1;
+          }
+        }
+        if(idx && idx%1000 == 0)
+        {
+          add_progress(1000);
         }
       }
-      if(idx && idx%1000 == 0)
-      {
-        ins_atomic_u64_add_eval(bytes_processed_ptr, 1000);
-      }
     }
-    
-    //- rjf: bump progress
-    if(bytes_processed_ptr)
-    {
-      ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024) + data.size);
-    }
+    ins_atomic_u64_add_eval(&shared->info.lines_count, lane_line_count);
+    lane_sync();
+    set_progress(Min(data.size, 1024) + data.size);
     
     //- rjf: allocate & store line ranges
-    info.lines_count = line_count;
-    info.lines_ranges = push_array_no_zero(info_arena, Rng1U64, info.lines_count);
-    U64 line_idx = 0;
-    U64 line_start_idx = 0;
-    for(U64 idx = 0; idx <= data.size; idx += 1)
+    if(lane_idx() == 0)
     {
-      if(idx == data.size || data.str[idx] == '\n' || data.str[idx] == '\r')
+      shared->info.lines_ranges = push_array_no_zero(shared->arena, Rng1U64, shared->info.lines_count);
+      U64 line_idx = 0;
+      U64 line_start_idx = 0;
+      for(U64 idx = 0; idx <= data.size; idx += 1)
       {
-        Rng1U64 line_range = r1u64(line_start_idx, idx);
-        U64 line_size = dim_1u64(line_range);
-        info.lines_ranges[line_idx] = line_range;
-        info.lines_max_size = Max(info.lines_max_size, line_size);
-        line_idx += 1;
-        line_start_idx = idx+1;
-        if(idx < data.size && data.str[idx] == '\r')
+        if(idx == data.size || data.str[idx] == '\n' || data.str[idx] == '\r')
         {
-          line_start_idx += 1;
-          idx += 1;
+          Rng1U64 line_range = r1u64(line_start_idx, idx);
+          U64 line_size = dim_1u64(line_range);
+          shared->info.lines_ranges[line_idx] = line_range;
+          shared->info.lines_max_size = Max(shared->info.lines_max_size, line_size);
+          line_idx += 1;
+          line_start_idx = idx+1;
+          if(idx < data.size && data.str[idx] == '\r')
+          {
+            line_start_idx += 1;
+            idx += 1;
+          }
+        }
+        if(idx && idx%1000 == 0)
+        {
+          add_progress(1000);
         }
       }
-      if(idx && idx%1000 == 0)
-      {
-        ins_atomic_u64_add_eval(bytes_processed_ptr, 1000);
-      }
     }
-    
-    //- rjf: bump progress
-    if(bytes_processed_ptr)
-    {
-      ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024) + data.size + data.size);
-    }
+    lane_sync();
+    set_progress(Min(data.size, 1024) + data.size + data.size);
     
     //- rjf: lex function * data -> tokens
-    TXT_TokenArray tokens = {0};
-    TXT_LangLexFunctionType *lex_function = txt_lex_function_from_lang_kind(lang);
-    if(lex_function != 0)
+    if(lane_idx() == 0 && lex_function != 0)
     {
-      tokens = lex_function(info_arena, bytes_processed_ptr, data);
+      shared->info.tokens = lex_function(shared->arena, 0, data);
     }
-    info.tokens = tokens;
-    
-    //- rjf: bump progress
-    if(bytes_processed_ptr)
-    {
-      ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024) + data.size + data.size + data.size*(lex_function != 0));
-    }
+    lane_sync();
+    set_progress(Min(data.size, 1024) + data.size + data.size + data.size*(lex_function != 0));
+    TXT_TokenArray tokens = shared->info.tokens;
     
     //- rjf: count scope points
-    U64 scope_pt_opener_count = 0;
-    U64 scope_pt_count = 0;
-    for EachIndex(idx, tokens.count)
     {
-      if(tokens.v[idx].kind == TXT_TokenKind_Symbol)
+      U64 lane_scope_pt_opener_count = 0;
+      U64 lane_scope_pt_count = 0;
+      Rng1U64 range = lane_range(tokens.count);
+      for EachInRange(idx, range)
       {
-        String8 token_string = str8_substr(data, tokens.v[idx].range);
-        B32 is_opener = (token_string.str[0] == '{' ||
-                         token_string.str[0] == '(' ||
-                         token_string.str[0] == '[');
-        B32 is_closer = (token_string.str[0] == '}' ||
-                         token_string.str[0] == ')' ||
-                         token_string.str[0] == ']');
-        if(token_string.size == 1 && (is_opener || is_closer))
+        if(tokens.v[idx].kind == TXT_TokenKind_Symbol)
         {
-          scope_pt_count += 1;
-          scope_pt_opener_count += !!is_opener;
-        }
-      }
-    }
-    
-    //- rjf: allocate & fill scope data
-    info.scope_pts.count = scope_pt_count;
-    info.scope_pts.v = push_array_no_zero(info_arena, TXT_ScopePt, info.scope_pts.count);
-    info.scope_nodes.count = scope_pt_opener_count;
-    info.scope_nodes.v = push_array_no_zero(info_arena, TXT_ScopeNode, info.scope_nodes.count);
-    {
-      typedef struct ScopeTask ScopeTask;
-      struct ScopeTask
-      {
-        ScopeTask *next;
-        U64 scope_idx;
-      };
-      Temp scratch = scratch_begin(0, 0);
-      ScopeTask *top_scope_task = 0;
-      ScopeTask *free_scope_task = 0;
-      U64 pt_idx = 0;
-      U64 scope_idx = 0;
-      for EachIndex(token_idx, tokens.count)
-      {
-        if(tokens.v[token_idx].kind == TXT_TokenKind_Symbol)
-        {
-          String8 token_string = str8_substr(data, tokens.v[token_idx].range);
+          String8 token_string = str8_substr(data, tokens.v[idx].range);
           B32 is_opener = (token_string.str[0] == '{' ||
                            token_string.str[0] == '(' ||
                            token_string.str[0] == '[');
           B32 is_closer = (token_string.str[0] == '}' ||
                            token_string.str[0] == ')' ||
                            token_string.str[0] == ']');
-          
-          // rjf: opener symbols -> push scope
-          if(is_opener)
+          if(token_string.size == 1 && (is_opener || is_closer))
           {
-            // rjf: insert into scope tree
-            TXT_ScopeNode *new_scope = &info.scope_nodes.v[scope_idx];
-            new_scope->token_idx_range.min = token_idx;
-            if(top_scope_task)
-            {
-              U64 new_scope_num = scope_idx+1;
-              TXT_ScopeNode *parent = &info.scope_nodes.v[top_scope_task->scope_idx];
-              if(parent->first_num == 0)
-              {
-                parent->first_num = new_scope_num;
-              }
-              if(parent->last_num != 0)
-              {
-                TXT_ScopeNode *prev_scope = &info.scope_nodes.v[parent->last_num-1];
-                prev_scope->next_num = new_scope_num;
-              }
-              parent->last_num = new_scope_num;
-              new_scope->parent_num = top_scope_task->scope_idx+1;
-            }
+            lane_scope_pt_count += 1;
+            lane_scope_pt_opener_count += !!is_opener;
+          }
+        }
+      }
+      ins_atomic_u64_add_eval(&shared->info.scope_pts.count, lane_scope_pt_count);
+      ins_atomic_u64_add_eval(&shared->info.scope_nodes.count, lane_scope_pt_opener_count);
+    }
+    lane_sync();
+    
+    //- rjf: allocate & fill scope data
+    if(lane_idx() == 0)
+    {
+      shared->info.scope_pts.v = push_array_no_zero(shared->arena, TXT_ScopePt, shared->info.scope_pts.count);
+      shared->info.scope_nodes.v = push_array_no_zero(shared->arena, TXT_ScopeNode, shared->info.scope_nodes.count);
+      {
+        typedef struct ScopeTask ScopeTask;
+        struct ScopeTask
+        {
+          ScopeTask *next;
+          U64 scope_idx;
+        };
+        Temp scratch = scratch_begin(0, 0);
+        ScopeTask *top_scope_task = 0;
+        ScopeTask *free_scope_task = 0;
+        U64 pt_idx = 0;
+        U64 scope_idx = 0;
+        for EachIndex(token_idx, tokens.count)
+        {
+          if(tokens.v[token_idx].kind == TXT_TokenKind_Symbol)
+          {
+            String8 token_string = str8_substr(data, tokens.v[token_idx].range);
+            B32 is_opener = (token_string.str[0] == '{' ||
+                             token_string.str[0] == '(' ||
+                             token_string.str[0] == '[');
+            B32 is_closer = (token_string.str[0] == '}' ||
+                             token_string.str[0] == ')' ||
+                             token_string.str[0] == ']');
             
-            // rjf: push onto scope stack
-            ScopeTask *scope_task = free_scope_task;
-            if(scope_task)
+            // rjf: opener symbols -> push scope
+            if(is_opener)
             {
-              SLLStackPop(free_scope_task);
-            }
-            else
-            {
-              scope_task = push_array(scratch.arena, ScopeTask, 1);
-            }
-            scope_task->scope_idx = scope_idx;
-            scope_idx += 1;
-            SLLStackPush(top_scope_task, scope_task);
-          }
-          
-          // rjf: opener or closer -> fill endpoint
-          if(top_scope_task && (is_opener || is_closer))
-          {
-            info.scope_pts.v[pt_idx].token_idx = token_idx;
-            info.scope_pts.v[pt_idx].scope_idx = top_scope_task->scope_idx;
-            pt_idx += 1;
-          }
-          
-          // rjf: closer symbols -> pop
-          if(is_closer && top_scope_task != 0)
-          {
-            ScopeTask *popped = top_scope_task;
-            info.scope_nodes.v[popped->scope_idx].token_idx_range.max = token_idx;
-            SLLStackPop(top_scope_task);
-            SLLStackPush(free_scope_task, popped);
-          }
-        }
-      }
-      scratch_end(scratch);
-    }
-  }
-  
-  //- rjf: commit results to cache
-  if(got_task) MutexScopeW(stripe->rw_mutex)
-  {
-    for(TXT_Node *n = slot->first; n != 0; n = n->next)
-    {
-      if(u128_match(n->hash, hash) && n->lang == lang)
-      {
-        c_hash_downstream_inc(n->hash);
-        n->arena = info_arena;
-        info.bytes_processed = n->info.bytes_processed;
-        info.bytes_to_process = n->info.bytes_to_process;
-        MemoryCopyStruct(&n->info, &info);
-        ins_atomic_u32_eval_assign(&n->is_working, 0);
-        ins_atomic_u64_inc_eval(&n->load_count);
-        break;
-      }
-    }
-  }
-  
-  access_close(access);
-  ProfEnd();
-  return 0;
-}
-
-////////////////////////////////
-//~ rjf: Evictor Threads
-
-internal void
-txt_evictor_thread__entry_point(void *p)
-{
-  ThreadNameF("txt_evictor_thread");
-  for(;;)
-  {
-    for(U64 slot_idx = 0; slot_idx < txt_shared->slots_count; slot_idx += 1)
-    {
-      TXT_Slot *slot = &txt_shared->slots[slot_idx];
-      Stripe *stripe = stripe_from_slot_idx(&txt_shared->stripes, slot_idx);
-      U64 stripe_idx = (stripe - txt_shared->stripes.v);
-      B32 slot_has_work = 0;
-      MutexScopeR(stripe->rw_mutex)
-      {
-        for(TXT_Node *n = slot->first; n != 0; n = n->next)
-        {
-          if(access_pt_is_expired(&n->access_pt) &&
-             n->load_count != 0 &&
-             n->is_working == 0)
-          {
-            slot_has_work = 1;
-            break;
-          }
-        }
-      }
-      if(slot_has_work) MutexScopeW(stripe->rw_mutex)
-      {
-        for(TXT_Node *n = slot->first, *next = 0; n != 0; n = next)
-        {
-          next = n->next;
-          if(access_pt_is_expired(&n->access_pt) &&
-             n->load_count != 0 &&
-             n->is_working == 0)
-          {
-            DLLRemove(slot->first, slot->last, n);
-            c_hash_downstream_dec(n->hash);
-            if(n->arena != 0)
-            {
-              arena_release(n->arena);
-            }
-            SLLStackPush(txt_shared->stripes_free_nodes[stripe_idx], n);
-          }
-        }
-      }
-    }
-    os_sleep_milliseconds(500);
-  }
-}
-
-////////////////////////////////
-//~ rjf: Tick
-
-internal void
-txt_tick(void)
-{
-  //- rjf: do eviction pass
-  {
-    Rng1U64 range = lane_range(txt_shared->slots_count);
-    for EachInRange(slot_idx, range)
-    {
-      TXT_Slot *slot = &txt_shared->slots[slot_idx];
-      Stripe *stripe = stripe_from_slot_idx(&txt_shared->stripes, slot_idx);
-      for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
-      {
-        B32 slot_has_work = 0;
-        RWMutexScope(stripe->rw_mutex, write_mode)
-        {
-          for(TXT_Node *n = slot->first, *next = 0; n != 0; n = next)
-          {
-            next = n->next;
-            if(access_pt_is_expired(&n->access_pt) &&
-               n->load_count != 0 &&
-               n->is_working == 0)
-            {
-              slot_has_work = 1;
-              if(!write_mode)
+              // rjf: insert into scope tree
+              TXT_ScopeNode *new_scope = &shared->info.scope_nodes.v[scope_idx];
+              new_scope->token_idx_range.min = token_idx;
+              if(top_scope_task)
               {
-                break;
+                U64 new_scope_num = scope_idx+1;
+                TXT_ScopeNode *parent = &shared->info.scope_nodes.v[top_scope_task->scope_idx];
+                if(parent->first_num == 0)
+                {
+                  parent->first_num = new_scope_num;
+                }
+                if(parent->last_num != 0)
+                {
+                  TXT_ScopeNode *prev_scope = &shared->info.scope_nodes.v[parent->last_num-1];
+                  prev_scope->next_num = new_scope_num;
+                }
+                parent->last_num = new_scope_num;
+                new_scope->parent_num = top_scope_task->scope_idx+1;
+              }
+              
+              // rjf: push onto scope stack
+              ScopeTask *scope_task = free_scope_task;
+              if(scope_task)
+              {
+                SLLStackPop(free_scope_task);
               }
               else
               {
-                DLLRemove(slot->first, slot->last, n);
-                c_hash_downstream_dec(n->hash);
-                if(n->arena != 0)
-                {
-                  arena_release(n->arena);
-                }
-                SLLStackPush(txt_shared->stripes_free_nodes[(stripe - txt_shared->stripes.v)], n);
+                scope_task = push_array(scratch.arena, ScopeTask, 1);
               }
+              scope_task->scope_idx = scope_idx;
+              scope_idx += 1;
+              SLLStackPush(top_scope_task, scope_task);
+            }
+            
+            // rjf: opener or closer -> fill endpoint
+            if(top_scope_task && (is_opener || is_closer))
+            {
+              shared->info.scope_pts.v[pt_idx].token_idx = token_idx;
+              shared->info.scope_pts.v[pt_idx].scope_idx = top_scope_task->scope_idx;
+              pt_idx += 1;
+            }
+            
+            // rjf: closer symbols -> pop
+            if(is_closer && top_scope_task != 0)
+            {
+              ScopeTask *popped = top_scope_task;
+              shared->info.scope_nodes.v[popped->scope_idx].token_idx_range.max = token_idx;
+              SLLStackPop(top_scope_task);
+              SLLStackPush(free_scope_task, popped);
             }
           }
         }
-        if(!slot_has_work)
-        {
-          break;
-        }
+        scratch_end(scratch);
       }
     }
+    lane_sync();
   }
+  
+  //- rjf: package as artifact
+  if(lane_idx() == 0 && shared->arena != 0)
+  {
+    shared->artifact = push_array(shared->arena, TXT_Artifact, 1);
+    shared->artifact->arena = shared->arena;
+    shared->artifact->info  = shared->info;
+  }
+  lane_sync();
+  
+  access_close(access);
+  scratch_end(scratch);
+  ProfEnd();
+  return shared->artifact;
+}
+
+internal void
+txt_artifact_destroy(void *ptr)
+{
+  if(ptr == 0) { return; }
+  TXT_Artifact *artifact = (TXT_Artifact *)ptr;
+  arena_release(artifact->arena);
+}
+
+internal TXT_TextInfo
+txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang)
+{
+  struct
+  {
+    U128 hash;
+    TXT_LangKind lang;
+  } key = {hash, lang};
+  String8 key_string = str8_struct(&key);
+  TXT_Artifact *artifact = ac_artifact_from_key(access, key_string, txt_artifact_create, txt_artifact_destroy, 1024);
+  TXT_TextInfo info = {0};
+  if(artifact != 0)
+  {
+    info = artifact->info;
+  }
+  return info;
+}
+
+internal TXT_TextInfo
+txt_text_info_from_key_lang(Access *access, C_Key key, TXT_LangKind lang, U128 *hash_out)
+{
+  TXT_TextInfo result = {0};
+  for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
+  {
+    U128 hash = c_hash_from_key(key, rewind_idx);
+    result = txt_text_info_from_hash_lang(access, hash, lang);
+    if(result.lines_count != 0)
+    {
+      if(hash_out)
+      {
+        *hash_out = hash;
+      }
+      break;
+    }
+  }
+  return result;
 }

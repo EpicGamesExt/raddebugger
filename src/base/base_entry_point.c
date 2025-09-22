@@ -65,9 +65,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(FILE_STREAM_H) && !defined(FS_INIT_MANUAL)
   fs_init();
 #endif
-#if defined(TEXT_CACHE_H) && !defined(TXT_INIT_MANUAL)
-  txt_init();
-#endif
 #if defined(MUTABLE_TEXT_H) && !defined(MTX_INIT_MANUAL)
   mtx_init();
 #endif

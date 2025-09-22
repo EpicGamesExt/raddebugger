@@ -208,9 +208,6 @@ struct TXT_Shared
 {
   Arena *arena;
   
-  // rjf: user clock
-  U64 user_clock_idx;
-  
   // rjf: cache
   U64 slots_count;
   TXT_Slot *slots;
@@ -240,7 +237,6 @@ struct TXT_Shared
 //~ rjf: Globals
 
 read_only global TXT_ScopeNode txt_scope_node_nil = {0};
-global TXT_Shared *txt_shared = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -268,17 +264,6 @@ internal TXT_TokenArray txt_token_array_from_string__zig(Arena *arena, U64 *byte
 internal TXT_TokenArray txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed_counter, String8 string);
 
 ////////////////////////////////
-//~ rjf: Main Layer Initialization
-
-internal void txt_init(void);
-
-////////////////////////////////
-//~ rjf: Cache Lookups
-
-internal TXT_TextInfo txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang);
-internal TXT_TextInfo txt_text_info_from_key_lang(Access *access, C_Key key, TXT_LangKind lang, U128 *hash_out);
-
-////////////////////////////////
 //~ rjf: Text Info Extractor Helpers
 
 internal U64 txt_off_from_info_pt(TXT_TextInfo *info, TxtPt pt);
@@ -294,20 +279,11 @@ internal TXT_ScopeNode *txt_scope_node_from_info_off(TXT_TextInfo *info, U64 off
 internal TXT_ScopeNode *txt_scope_node_from_info_pt(TXT_TextInfo *info, TxtPt pt);
 
 ////////////////////////////////
-//~ rjf: Parse Threads
+//~ rjf: Artifact Cache Hooks / Lookups
 
-internal B32 txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us);
-internal void txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out);
-ASYNC_WORK_DEF(txt_parse_work);
-
-////////////////////////////////
-//~ rjf: Evictor Threads
-
-internal void txt_evictor_thread__entry_point(void *p);
-
-////////////////////////////////
-//~ rjf: Tick
-
-internal void txt_tick(void);
+internal void *txt_artifact_create(String8 key);
+internal void txt_artifact_destroy(void *ptr);
+internal TXT_TextInfo txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang);
+internal TXT_TextInfo txt_text_info_from_key_lang(Access *access, C_Key key, TXT_LangKind lang, U128 *hash_out);
 
 #endif // TEXT_CACHE_H

@@ -13,6 +13,8 @@ ac_init(void)
   ac_shared->cache_slots_count = 256;
   ac_shared->cache_slots = push_array(arena, AC_Cache *, ac_shared->cache_slots_count);
   ac_shared->cache_stripes = stripe_array_alloc(arena);
+  ac_shared->req_mutex = mutex_alloc();
+  ac_shared->req_arena = arena_alloc();
 }
 
 ////////////////////////////////
@@ -88,12 +90,13 @@ ac_artifact_from_key(Access *access, String8 key, AC_CreateFunctionType *create,
           }
           else
           {
-            node = push_array(stripe->arena, AC_Node, 1);
-            DLLPushBack(slot->first, slot->last, node);
-            // TODO(rjf): string allocator for keys
-            node->key = str8_copy(stripe->arena, key);
-            node->working_count = 1;
+            node = push_array_no_zero(stripe->arena, AC_Node, 1);
           }
+          MemoryZeroStruct(node);
+          DLLPushBack(slot->first, slot->last, node);
+          // TODO(rjf): string allocator for keys
+          node->key = str8_copy(stripe->arena, key);
+          node->working_count = 1;
         }
       }
       if(found)
@@ -110,6 +113,7 @@ ac_artifact_from_key(Access *access, String8 key, AC_CreateFunctionType *create,
           n->v.key = str8_copy(ac_shared->req_arena, key);
           n->v.create = create;
         }
+        cond_var_broadcast(async_tick_start_cond_var);
       }
     }
   }
@@ -199,7 +203,49 @@ ac_tick(void)
   //- rjf: do all requests on all lanes
   for EachIndex(idx, reqs_count)
   {
-    reqs[idx].create(reqs[idx].key);
+    lane_sync();
+    
+    // rjf: compute val
+    void *val = reqs[idx].create(reqs[idx].key);
+    
+    // rjf: create function -> cache
+    AC_Cache *cache = 0;
+    {
+      U64 cache_hash = u64_hash_from_str8(str8_struct(&reqs[idx].create));
+      U64 cache_slot_idx = cache_hash%ac_shared->cache_slots_count;
+      Stripe *cache_stripe = stripe_from_slot_idx(&ac_shared->cache_stripes, cache_slot_idx);
+      RWMutexScope(cache_stripe->rw_mutex, 0)
+      {
+        for(AC_Cache *c = ac_shared->cache_slots[cache_slot_idx]; c != 0; c = c->next)
+        {
+          if(c->create == reqs[idx].create)
+          {
+            cache = c;
+            break;
+          }
+        }
+      }
+    }
+    
+    // rjf: write value into cache
+    if(lane_idx() == 0)
+    {
+      U64 hash = u64_hash_from_str8(reqs[idx].key);
+      U64 slot_idx = hash%cache->slots_count;
+      AC_Slot *slot = &cache->slots[slot_idx];
+      Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
+      RWMutexScope(stripe->rw_mutex, 1)
+      {
+        for(AC_Node *n = slot->first; n != 0; n = n->next)
+        {
+          if(str8_match(n->key, reqs[idx].key, 0))
+          {
+            n->val = val;
+            ins_atomic_u64_dec_eval(&n->working_count);
+          }
+        }
+      }
+    }
   }
   lane_sync();
   

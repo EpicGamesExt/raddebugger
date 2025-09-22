@@ -65,6 +65,10 @@ struct TCTX
   Arena *access_arena;
   Access *free_access;
   Touch *free_touch;
+  
+  // rjf: progress
+  U64 *progress_counter_ptr;
+  U64 *progress_target_ptr;
 };
 
 ////////////////////////////////
@@ -107,5 +111,12 @@ internal void access_touch(Access *access, AccessPt *pt, CondVar cv);
 
 //- rjf: access points
 internal B32 access_pt_is_expired(AccessPt *pt);
+
+//- rjf: progress counters
+#define set_progress_ptr(ptr) (tctx_selected()->progress_counter_ptr = (ptr))
+#define set_progress_target_ptr(ptr) (tctx_selected()->progress_target_ptr = (ptr))
+#define set_progress(val) (tctx_selected()->progress_counter_ptr ? ins_atomic_u64_eval_assign(tctx_selected()->progress_counter_ptr, (val)) : (void)0)
+#define add_progress(val) (tctx_selected()->progress_counter_ptr ? ins_atomic_u64_add_eval(tctx_selected()->progress_counter_ptr, (val)) : (void)0)
+#define set_progress_target(val) (tctx_selected()->progress_target_ptr ? ins_atomic_u64_eval_assign(tctx_selected()->progress_target_ptr, (val)) : (void)0)
 
 #endif // BASE_THREAD_CONTEXT_H
