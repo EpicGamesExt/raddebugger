@@ -2252,7 +2252,7 @@ txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang)
     TXT_LangKind lang;
   } key = {hash, lang};
   String8 key_string = str8_struct(&key);
-  TXT_Artifact *artifact = ac_artifact_from_key(access, key_string, txt_artifact_create, txt_artifact_destroy, 1024);
+  TXT_Artifact *artifact = ac_artifact_from_key(access, key_string, 0, txt_artifact_create, txt_artifact_destroy, 1024);
   TXT_TextInfo info = {0};
   if(artifact != 0)
   {

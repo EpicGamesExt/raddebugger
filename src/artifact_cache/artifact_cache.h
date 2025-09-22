@@ -17,6 +17,7 @@ typedef struct AC_Request AC_Request;
 struct AC_Request
 {
   String8 key;
+  U64 gen;
   AC_CreateFunctionType *create;
 };
 
@@ -33,8 +34,9 @@ struct AC_Node
   AC_Node *next;
   AC_Node *prev;
   
-  // rjf: key/value
+  // rjf: key/gen/value
   String8 key;
+  U64 gen;
   void *val;
   
   // rjf: metadata
@@ -94,7 +96,7 @@ internal void ac_init(void);
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal void *ac_artifact_from_key(Access *access, String8 key, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count);
+internal void *ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count);
 
 ////////////////////////////////
 //~ rjf: Tick

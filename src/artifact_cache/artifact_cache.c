@@ -21,7 +21,7 @@ ac_init(void)
 //~ rjf: Cache Lookups
 
 internal void *
-ac_artifact_from_key(Access *access, String8 key, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count)
+ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count)
 {
   //- rjf: create function -> cache
   AC_Cache *cache = 0;
@@ -69,8 +69,10 @@ ac_artifact_from_key(Access *access, String8 key, AC_CreateFunctionType *create,
     for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
     {
       B32 found = 0;
+      B32 need_request = 0;
       RWMutexScope(stripe->rw_mutex, write_mode)
       {
+        // rjf: look up node
         for(AC_Node *n = slot->first; n != 0; n = n->next)
         {
           if(str8_match(n->key, key, 0))
@@ -78,11 +80,19 @@ ac_artifact_from_key(Access *access, String8 key, AC_CreateFunctionType *create,
             found = 1;
             artifact = n->val;
             access_touch(access, &n->access_pt, stripe->cv);
+            if(n->gen != gen)
+            {
+              B32 got_task = (ins_atomic_u64_eval_cond_assign(&n->working_count, 1, 0) == 0);
+              need_request = got_task;
+            }
             break;
           }
         }
+        
+        // rjf: no node? -> create
         if(write_mode && !found)
         {
+          need_request = 1;
           AC_Node *node = stripe->free;
           if(node)
           {
@@ -99,11 +109,9 @@ ac_artifact_from_key(Access *access, String8 key, AC_CreateFunctionType *create,
           node->working_count = 1;
         }
       }
-      if(found)
-      {
-        break;
-      }
-      else if(write_mode)
+      
+      // rjf: need request -> push
+      if(need_request)
       {
         MutexScope(ac_shared->req_mutex)
         {
@@ -111,9 +119,16 @@ ac_artifact_from_key(Access *access, String8 key, AC_CreateFunctionType *create,
           SLLQueuePush(ac_shared->first_req, ac_shared->last_req, n);
           ac_shared->req_count += 1;
           n->v.key = str8_copy(ac_shared->req_arena, key);
+          n->v.gen = gen;
           n->v.create = create;
         }
         cond_var_broadcast(async_tick_start_cond_var);
+      }
+      
+      // rjf: found node -> break
+      if(found)
+      {
+        break;
       }
     }
   }
@@ -240,6 +255,7 @@ ac_tick(void)
         {
           if(str8_match(n->key, reqs[idx].key, 0))
           {
+            n->gen = reqs[idx].gen;
             n->val = val;
             ins_atomic_u64_dec_eval(&n->working_count);
           }
