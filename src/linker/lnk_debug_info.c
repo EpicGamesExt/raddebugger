@@ -541,8 +541,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   String8Array ts_path_arr;
   Rng1U64    **external_ti_ranges;
   CV_DebugT  **external_leaves;
-  U64         *obj_to_ts_idx_arr = push_array_no_zero(tp_arena->v[0], U64, external_count);
-  U64List     *ts_to_obj_arr     = push_array(tp_arena->v[0], U64List, external_count);
+  U64         *obj_to_ts_idx_arr = push_array_no_zero(tp_arena->v[0], U64, external_count + 1);
+  U64List     *ts_to_obj_arr     = push_array(tp_arena->v[0], U64List, external_count + 1);
   {
     HashTable             *type_server_path_ht   = hash_table_init(scratch.arena, 256);
     HashTable             *ignored_path_ht       = hash_table_init(scratch.arena, 256);
