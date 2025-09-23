@@ -526,6 +526,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       String8 hash_data = msf_data_from_stream(msf, tpi->hash_sn);
       String8 aux_data  = msf_data_from_stream(msf, tpi->hash_sn_aux);
+      if(!(params->subset_flags & (RDIM_SubsetFlag_Types|RDIM_SubsetFlag_UDTs)))
+      {
+        hash_data = aux_data = str8_zero();
+      }
       p2r_shared->tpi_hash = pdb_tpi_hash_from_data(arena, strtbl, tpi, hash_data, aux_data);
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("parse TPI leaf")
@@ -537,6 +541,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       String8 hash_data = msf_data_from_stream(msf, ipi->hash_sn);
       String8 aux_data  = msf_data_from_stream(msf, ipi->hash_sn_aux);
+      if(!(params->subset_flags & (RDIM_SubsetFlag_Types|RDIM_SubsetFlag_UDTs)))
+      {
+        hash_data = aux_data = str8_zero();
+      }
       p2r_shared->ipi_hash = pdb_tpi_hash_from_data(arena, strtbl, ipi, hash_data, aux_data);
     }
     if(lane_idx() == lane_from_task_idx(4)) ProfScope("parse IPI leaf")
@@ -706,6 +714,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     }
     
     // rjf: fill
+    if(params->subset_flags & RDIM_SubsetFlag_Procedures)
     {
       CV_SymParsed *sym = all_syms[0];
       CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
