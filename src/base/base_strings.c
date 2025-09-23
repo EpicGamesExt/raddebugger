@@ -2891,3 +2891,19 @@ u64_hash_from_str8(String8 string)
   U64 result = u64_hash_from_seed_str8(5381, string);
   return result;
 }
+
+internal U128
+u128_hash_from_seed_str8(U64 seed, String8 string)
+{
+  U128 result = {0};
+  XXH128_hash_t hash = XXH3_128bits_withSeed(string.str, string.size, seed);
+  MemoryCopy(&result, &hash, sizeof(result));
+  return result;
+}
+
+internal U128
+u128_hash_from_str8(String8 string)
+{
+  U128 result = u128_hash_from_seed_str8(5381, string);
+  return result;
+}

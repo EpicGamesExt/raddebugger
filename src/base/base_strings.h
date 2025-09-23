@@ -449,5 +449,7 @@ internal U64    str8_deserial_read_block(String8 string, U64 off, U64 size, Stri
 
 internal U64 u64_hash_from_seed_str8(U64 seed, String8 string);
 internal U64 u64_hash_from_str8(String8 string);
+internal U128 u128_hash_from_seed_str8(U64 seed, String8 string);
+internal U128 u128_hash_from_str8(String8 string);
 
 #endif // BASE_STRINGS_H

@@ -120,9 +120,11 @@ internal U64 fs_change_gen(void);
 ////////////////////////////////
 //~ rjf: Cache Interaction
 
+internal AC_Artifact fs_artifact_create(String8 key, B32 *retry_out);
+internal void fs_artifact_destroy(AC_Artifact artifact);
+
 internal C_Key fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
 internal U128 fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
-internal FileProperties fs_properties_from_path(String8 path);
 
 ////////////////////////////////
 //~ rjf: Asynchronous Tick

@@ -2177,7 +2177,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   B32 file_is_out_of_date = 0;
   String8 out_of_date_dbgi_name = {0};
   {
-    U64 file_timestamp = fs_properties_from_path(rd_regs()->file_path).modified;
+    U64 file_timestamp = os_properties_from_file_path(rd_regs()->file_path).modified;
     if(file_timestamp != 0)
     {
       for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)

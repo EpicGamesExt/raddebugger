@@ -206,9 +206,6 @@ async_thread_entry_point(void *params)
 #if defined(FILE_STREAM_H)
     fs_async_tick();
 #endif
-#if defined(CTRL_CORE_H)
-    ctrl_async_tick();
-#endif
 #if defined(TEXTURE_CACHE_H)
     tex_async_tick();
 #endif

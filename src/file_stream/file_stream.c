@@ -68,6 +68,89 @@ fs_change_gen(void)
 ////////////////////////////////
 //~ rjf: Cache Interaction
 
+internal AC_Artifact
+fs_artifact_create(String8 key, B32 *retry_out)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: unpack key
+  String8 path = {0};
+  Rng1U64 range = {0};
+  {
+    U64 key_read_off = 0;
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &path.size);
+    path.str = push_array(scratch.arena, U8, path.size);
+    key_read_off += str8_deserial_read(key, key_read_off, path.str, path.size, 1);
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &range);
+  }
+  
+  //- rjf: do read
+  ProfBegin("read \"%.*s\" [0x%I64x, 0x%I64x)", str8_varg(path), range.min, range.max);
+  FileProperties pre_props = os_properties_from_file_path(path);
+  U64 range_size = dim_1u64(range);
+  U64 read_size = Min(pre_props.size - range.min, range_size);
+  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+  B32 file_handle_is_valid = !os_handle_match(os_handle_zero(), file);
+  U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
+  data_arena_size += KB(4)-1;
+  data_arena_size -= data_arena_size%KB(4);
+  ProfBegin("allocate");
+  Arena *data_arena = arena_alloc(.reserve_size = data_arena_size, .commit_size = data_arena_size);
+  ProfEnd();
+  ProfBegin("read");
+  String8 data = os_string_from_file_range(data_arena, file, r1u64(range.min, range.min+read_size));
+  ProfEnd();
+  os_file_close(file);
+  FileProperties post_props = os_properties_from_file_path(path);
+  
+  //- rjf: form content key
+  C_Key content_key = {0};
+  {
+    content_key.id.u128[0] = u128_hash_from_str8(key);
+  }
+  
+  //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file
+  B32 read_good = (pre_props.modified == post_props.modified &&
+                   pre_props.size == post_props.size &&
+                   read_size == data.size &&
+                   (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
+  if(!read_good)
+  {
+    retry_out[0] = 1;
+    ProfScope("abort")
+    {
+      arena_release(data_arena);
+      MemoryZeroStruct(&data);
+      data_arena = 0;
+    }
+  }
+  
+  //- rjf: submit to content store
+  else
+  {
+    ProfScope("submit")
+    {
+      c_submit_data(content_key, &data_arena, data);
+    }
+  }
+  
+  //- rjf: bundle content key as artifact
+  AC_Artifact artifact = {0};
+  StaticAssert(sizeof(content_key) == sizeof(artifact), artifact_key_size_check);
+  MemoryCopyStruct(&artifact, &content_key);
+  
+  scratch_end(scratch);
+  return artifact;
+}
+
+internal void
+fs_artifact_destroy(AC_Artifact artifact)
+{
+  C_Key key = {0};
+  MemoryCopyStruct(&key, &artifact);
+  c_close_key(key);
+}
+
 internal C_Key
 fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
 {
@@ -212,32 +295,6 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
     }
   }
   return hash;
-}
-
-internal FileProperties
-fs_properties_from_path(String8 path)
-{
-  Temp scratch = scratch_begin(0, 0);
-  FileProperties result = {0};
-  path = path_normalized_from_string(scratch.arena, path);
-  U64 path_hash = fs_little_hash_from_string(path);
-  U64 slot_idx = path_hash%fs_shared->slots_count;
-  U64 stripe_idx = slot_idx%fs_shared->stripes_count;
-  FS_Slot *slot = &fs_shared->slots[slot_idx];
-  FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-  MutexScopeR(stripe->rw_mutex)
-  {
-    for(FS_Node *n = slot->first; n != 0; n = n->next)
-    {
-      if(str8_match(path, n->path, 0))
-      {
-        result = n->props;
-        break;
-      }
-    }
-  }
-  scratch_end(scratch);
-  return result;
 }
 
 ////////////////////////////////
