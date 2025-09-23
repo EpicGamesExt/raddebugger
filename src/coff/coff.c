@@ -104,6 +104,21 @@ coff_read_symbol_name(String8 string_table, COFF_SymbolName *name)
 }
 
 internal U64
+coff_is_addr_reloc(COFF_MachineType machine, U32 type)
+{
+  U64 is_addr = 0;
+  switch (machine) {
+  case COFF_MachineType_Unknown: is_addr = 0; break;
+  case COFF_MachineType_X64: {
+    if (type == COFF_Reloc_X64_Addr32)      is_addr = 4;
+    else if (type == COFF_Reloc_X64_Addr64) is_addr = 8;
+  } break;
+  default: NotImplemented; break;
+  }
+  return is_addr;
+}
+
+internal U64
 coff_apply_size_from_reloc_x64(COFF_Reloc_X64 x)
 {
   switch (x) {

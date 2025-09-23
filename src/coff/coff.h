@@ -601,6 +601,8 @@ internal String8 coff_read_symbol_name(String8 string_table, COFF_SymbolName *na
 ////////////////////////////////
 // Reloc
 
+internal U64 coff_is_addr_reloc(COFF_MachineType machine, U32 type);
+
 internal U64 coff_apply_size_from_reloc_x64(COFF_Reloc_X64 x);
 internal U64 coff_apply_size_from_reloc_x86(COFF_Reloc_X86 x);
 
