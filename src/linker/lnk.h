@@ -152,9 +152,10 @@ typedef struct AlignType(16) LNK_RelocRefsList
 
 typedef struct LNK_BaseRelocPage
 {
-  U64     voff;
-  U64List entries_addr32;
-  U64List entries_addr64;
+  U32      buffer_offset;
+  U32      voff;
+  U64List *entries_addr32;
+  U64List *entries_addr64;
 } LNK_BaseRelocPage;
 
 typedef struct LNK_BaseRelocPageNode
@@ -251,13 +252,22 @@ typedef struct
 
 typedef struct
 {
-  Rng1U64                *ranges;
-  U64                     page_size;
-  LNK_BaseRelocPageList  *list_arr;
-  LNK_Obj               **obj_arr;
-  HashTable             **page_ht_arr;
-  B32                     is_large_addr_aware;
-} LNK_ObjBaseRelocTask;
+  U64 page_size;
+  B32 is_large_addr_aware;
+  union {
+    struct {
+      LNK_Obj               **objs;
+      LNK_BaseRelocPageList  *pages;
+      HashTable             **page_ht;
+    } gather;
+    struct {
+      U64                     buffer_size;
+      U8                     *buffer;
+      LNK_BaseRelocPageArray  pages;
+      Rng1U64                *ranges;
+    } serialize;
+  };
+} LNK_BaseRelocsTask;
 
 typedef struct
 {
@@ -351,7 +361,7 @@ internal void lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *c
 // --- Win32 Image -------------------------------------------------------------
 
 internal String8List      lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
-internal String8List      lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_temp, LNK_Config *config, U64 objs_count, LNK_Obj **objs);
+internal String8          lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_temp, LNK_Config *config, U64 objs_count, LNK_Obj **objs);
 internal String8List      lnk_build_win32_image_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sect_arr, U64 expected_image_header_size);
 internal LNK_ImageContext lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, U64 obj_count, LNK_Obj **objs);
 

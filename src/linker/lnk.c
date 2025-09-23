@@ -3505,90 +3505,6 @@ lnk_build_guard_tables(TP_Context       *tp,
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_emit_base_relocs_from_objs_task)
-{
-  ProfBeginFunction();
-
-  LNK_ObjBaseRelocTask *task  = raw_task;
-  Rng1U64               range = task->ranges[task_id];
-
-  HashTable             *page_ht   = task->page_ht_arr[task_id];
-  LNK_BaseRelocPageList *page_list = &task->list_arr[task_id];
-
-  for (U64 obj_idx = range.min; obj_idx < range.max; ++obj_idx) {
-    LNK_Obj            *obj           = task->obj_arr[obj_idx];
-    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
-    for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
-      COFF_SectionHeader *sect_header = &section_table[sect_idx];
-
-      if (sect_header->flags & COFF_SectionFlag_LnkRemove) {
-        continue;
-      }
-
-      COFF_RelocInfo  reloc_info = coff_reloc_info_from_section_header(obj->data, sect_header);
-      COFF_Reloc     *relocs     = (COFF_Reloc *)(obj->data.str + reloc_info.array_off);
-
-      for (U64 reloc_idx = 0; reloc_idx < reloc_info.count; reloc_idx += 1) {
-        COFF_Reloc *r = &relocs[reloc_idx];
-
-        COFF_ParsedSymbol          symbol            = lnk_parsed_symbol_from_coff_symbol_idx(obj, r->isymbol);
-        COFF_SymbolValueInterpType symbol_interp     = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-        B32                        is_symbol_address = symbol_interp != COFF_SymbolValueInterp_Abs;
-
-        if (is_symbol_address) {
-          B32 is_addr32 = 0, is_addr64 = 0;
-          switch (obj->header.machine) {
-          case COFF_MachineType_Unknown: {} break;
-          case COFF_MachineType_X64: {
-            is_addr32 = r->type == COFF_Reloc_X64_Addr32;
-            is_addr64 = r->type == COFF_Reloc_X64_Addr64;
-          } break;
-          default: { NotImplemented; } break;
-          }
-
-          if (is_addr32 || is_addr64) {
-            U64 reloc_voff = sect_header->voff + r->apply_off;
-            U64 page_voff  = AlignDownPow2(reloc_voff, task->page_size);
-
-            LNK_BaseRelocPageNode *page;
-            {
-              KeyValuePair *is_page_present = hash_table_search_u64(page_ht, page_voff);
-              if (is_page_present) {
-                page = is_page_present->value_raw;
-              } else {
-                // fill out page
-                page = push_array(arena, LNK_BaseRelocPageNode, 1);
-                page->v.voff = page_voff;
-
-                // push page
-                SLLQueuePush(page_list->first, page_list->last, page);
-                page_list->count += 1;
-
-                // register page voff
-                hash_table_push_u64_raw(arena, page_ht, page_voff, page);
-              }
-            }
-
-            if (is_addr32) {
-              if (task->is_large_addr_aware) {
-                COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, r->isymbol);
-                lnk_error_obj(LNK_Error_LargeAddrAwareRequired, obj, "found out of range ADDR32 relocation for '%S', link with /LARGEADDRESSAWARE:NO", symbol.name);
-              } else {
-                u64_list_push(arena, &page->v.entries_addr32, reloc_voff);
-              }
-            } else {
-              u64_list_push(arena, &page->v.entries_addr64, reloc_voff);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  ProfEnd();
-}
-
-internal
 THREAD_POOL_TASK_FUNC(lnk_patch_virtual_offsets_and_sizes_in_obj_section_headers_task)
 {
   LNK_BuildImageTask *task    = raw_task;
@@ -3675,167 +3591,246 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
   ProfEnd();
 }
 
+internal
+THREAD_POOL_TASK_FUNC(lnk_gather_base_reloc_pages_task)
+{
+  LNK_BaseRelocsTask    *task       = raw_task;
+  HashTable             *page_ht    = task->gather.page_ht[worker_id];
+  LNK_BaseRelocPageList *pages      = &task->gather.pages[worker_id];
+  LNK_Obj               *obj        = task->gather.objs[task_id];
+  COFF_SectionHeader    *sect_table = lnk_coff_section_table_from_obj(obj);
+
+  ProfBeginV("%S", obj->path);
+  for EachIndex(sect_idx, obj->header.section_count_no_null) {
+    COFF_SectionHeader *sect_header = &sect_table[sect_idx];
+    if (sect_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
+
+    COFF_RelocArray relocs = lnk_coff_relocs_from_section_header(obj, sect_header);
+    for EachIndex(reloc_idx, relocs.count) {
+      COFF_Reloc *r = &relocs.v[reloc_idx];
+
+      COFF_ParsedSymbol          symbol        = lnk_parsed_symbol_from_coff_symbol_idx(obj, r->isymbol);
+      COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol);
+      if (symbol_interp == COFF_SymbolValueInterp_Abs) { continue; }
+
+      U64 is_addr = coff_is_addr_reloc(obj->header.machine, r->type);
+      if (is_addr == 0) { continue; }
+
+      U64                    reloc_voff = sect_header->voff + r->apply_off;
+      U64                    page_voff  = AlignDownPow2(reloc_voff, task->page_size);
+      LNK_BaseRelocPageNode *page       = hash_table_search_u64_raw(page_ht, page_voff);
+      if (page == 0) {
+        // fill out page
+        page         = push_array(arena, LNK_BaseRelocPageNode, 1);
+        page->v.voff = page_voff;
+        page->v.entries_addr32 = push_array(arena, U64List, 1);
+        page->v.entries_addr64 = push_array(arena, U64List, 1);
+
+        // push page
+        SLLQueuePush(pages->first, pages->last, page);
+        pages->count += 1;
+
+        // register page voff
+        hash_table_push_u64_raw(arena, page_ht, page_voff, page);
+      }
+
+      switch (is_addr) {
+      case 4: {
+        if (task->is_large_addr_aware) {
+          lnk_error_obj(LNK_Error_LargeAddrAwareRequired, obj, "found out of range ADDR32 relocation for '%S', link with /LARGEADDRESSAWARE:NO", symbol.name);
+        } else {
+          u64_list_push(arena, page->v.entries_addr32, reloc_voff);
+        }
+      } break;
+      case 8: {
+        u64_list_push(arena, page->v.entries_addr64, reloc_voff);
+      } break;
+      default: { InvalidPath; } break;
+      }
+    }
+
+  }
+  ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_serialize_base_reloc_pages_task)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+
+  LNK_BaseRelocsTask *task    = raw_task;
+  HashTable          *voff_ht = hash_table_init(scratch.arena, task->page_size);
+
+  U64  voffs_max = task->page_size;
+  U32 *voffs32   = push_array(scratch.arena, U32, voffs_max);
+  U64 *voffs64   = push_array(scratch.arena, U64, voffs_max);
+
+  for EachInRange(page_idx, task->serialize.ranges[task_id]) {
+    LNK_BaseRelocPage *page = &task->serialize.pages.v[page_idx];
+
+    // filter out duplicate 32-bit virtual offsets
+    U64 voff_count32 = 0;
+    for EachNode(voff_n, U64Node, page->entries_addr32->first) {
+      if (hash_table_search_u64(voff_ht, voff_n->data)) { continue; }
+      hash_table_push_u64_u64(scratch.arena, voff_ht, voff_n->data, 0);
+      voffs32[voff_count32] = voff_n->data;
+      voff_count32 += 1;
+    }
+
+    // filter out duplicate 64-bit virtual offsets
+    U64 voff_count64 = 0;
+    for EachNode(voff_n, U64Node, page->entries_addr64->first) {
+      if (hash_table_search_u64(voff_ht, voff_n->data)) { continue; }
+      hash_table_push_u64_u64(scratch.arena, voff_ht, voff_n->data, 0);
+      voffs64[voff_count64] = voff_n->data;
+      voff_count64 += 1;
+    }
+
+    // gather step is not deterministic
+    radsort(voffs32, voff_count32, u32_is_before);
+    radsort(voffs64, voff_count64, u64_is_before);
+
+    // find block bytes in the buffer
+    void *block = task->serialize.buffer + page->buffer_offset;
+
+    // setup pointers into the block
+    U32 *page_voff_ptr  = block;
+    U32 *block_size_ptr = page_voff_ptr + 1;
+    U16 *reloc_arr_base = (U16 *)(block_size_ptr + 1);
+    U16 *reloc_arr_ptr = reloc_arr_base;
+
+    // write 32-bit relocation entries
+    for EachIndex(i, voff_count32) {
+      U64 rel_off = voffs32[i] - page->voff;
+      *reloc_arr_ptr = PE_BaseRelocMake(PE_BaseRelocKind_HIGHLOW, rel_off);
+      reloc_arr_ptr += 1;
+    }
+
+    // write 64-bit relocation entries
+    for EachIndex(i, voff_count64) {
+      U64 rel_off = voffs64[i] - page->voff;
+      *reloc_arr_ptr = PE_BaseRelocMake(PE_BaseRelocKind_DIR64, rel_off);
+      reloc_arr_ptr += 1;
+    }
+
+    // compute block size
+    U64 reloc_arr_size     = IntFromPtr(reloc_arr_ptr - reloc_arr_base) * sizeof(reloc_arr_ptr[0]);
+    U64 block_size         = sizeof(*page_voff_ptr) + sizeof(*block_size_ptr) + reloc_arr_size;
+    U64 block_size_aligned = AlignPow2(block_size, sizeof(U32));
+
+    // zero-out alignment
+    U64 align_size = block_size_aligned - block_size;
+    MemoryZero(reloc_arr_ptr, align_size);
+
+    // write page header
+    *page_voff_ptr  = safe_cast_u32(page->voff);
+    *block_size_ptr = safe_cast_u32(block_size_aligned);
+
+    // purge hash table for the next run
+    hash_table_purge(voff_ht);
+  }
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
 internal int
 lnk_base_reloc_page_is_before(void *raw_a, void *raw_b)
 {
   return ((LNK_BaseRelocPage *)raw_a)->voff < ((LNK_BaseRelocPage *)raw_b)->voff;
 }
 
-internal String8List
+internal String8
 lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U64 objs_count, LNK_Obj **objs)
 {
   ProfBeginFunction();
-
   Arena *arena   = tp_arena->v[0];
   Temp   scratch = scratch_begin(tp_arena->v, tp_arena->count);
   tp_arena->v[0] = scratch.arena;
   TP_Temp tp_temp = tp_temp_begin(tp_arena);
+
+  LNK_BaseRelocsTask task  = {0};
+  task.page_size           = config->machine_page_size;
+  task.is_large_addr_aware = !!(config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE);
   
-  LNK_BaseRelocPageArray page_arr;
+  LNK_BaseRelocPageArray pages = {0};
   {
-    LNK_BaseRelocPageList  *page_list_arr = push_array(scratch.arena, LNK_BaseRelocPageList, tp->worker_count);
-    HashTable             **page_ht_arr   = push_array_no_zero(scratch.arena, HashTable *, tp->worker_count);
-    for (U64 i = 0; i < tp->worker_count; ++i) {
-      page_ht_arr[i] = hash_table_init(scratch.arena, 1024);
-    }
+    LNK_BaseRelocPageList  *page_lists = push_array(scratch.arena, LNK_BaseRelocPageList, tp->worker_count);
+    HashTable             **page_ht    = push_array(scratch.arena, HashTable *,           tp->worker_count);
+    for EachIndex(i, tp->worker_count) { page_ht[i] = hash_table_init(scratch.arena, task.page_size/2); }
 
-    {
-      ProfBegin("Emit Relocs From Objs");
-      LNK_ObjBaseRelocTask task = {0};
-      task.ranges               = tp_divide_work(scratch.arena, objs_count, tp->worker_count);
-      task.page_size            = config->machine_page_size;
-      task.page_ht_arr          = page_ht_arr;
-      task.list_arr             = page_list_arr;
-      task.obj_arr              = objs;
-      task.is_large_addr_aware  = !!(config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE);
-      tp_for_parallel(tp, tp_arena, tp->worker_count, lnk_emit_base_relocs_from_objs_task, &task);
-      ProfEnd();
-    }
+    task.gather.objs    = objs;
+    task.gather.pages   = page_lists;
+    task.gather.page_ht = page_ht;
+    tp_for_parallel_prof(tp, tp_arena, objs_count, lnk_gather_base_reloc_pages_task, &task, "Gather");
 
-    LNK_BaseRelocPageList *main_page_list = &page_list_arr[0];
-    {
-      ProfBegin("Merge Worker Page Lists");
-      HashTable *main_ht = page_ht_arr[0];
-      for (U64 list_idx = 1; list_idx < tp->worker_count; ++list_idx) {
-        LNK_BaseRelocPageList src = page_list_arr[list_idx];
+    ProfBegin("Merge Page Lists");
+    LNK_BaseRelocPageList *main_page_list = &page_lists[0];
+    HashTable             *main_ht        = page_ht[0];
+    for (U64 list_idx = 1; list_idx < tp->worker_count; list_idx += 1) {
+      for (LNK_BaseRelocPageNode *src_page = page_lists[list_idx].first, *src_next; src_page != 0; src_page = src_next) {
+        src_next = src_page->next;
 
-        for (LNK_BaseRelocPageNode *src_page = src.first, *src_next; src_page != 0; src_page = src_next) {
-          src_next = src_page->next;
+        LNK_BaseRelocPageNode *page = hash_table_search_u64_raw(main_ht, src_page->v.voff);
+        if (page) {
+          // page exists, concat voffs
+          Assert(page != src_page);
+          u64_list_concat_in_place(page->v.entries_addr32, src_page->v.entries_addr32);
+          u64_list_concat_in_place(page->v.entries_addr64, src_page->v.entries_addr64);
+        } else {
+          // push page to the main list
+          SLLQueuePush(main_page_list->first, main_page_list->last, src_page);
+          main_page_list->count += 1;
 
-          KeyValuePair *is_page_present = hash_table_search_u64(main_ht, src_page->v.voff);
-          if (is_page_present) {
-            // page exists concat voffs
-            LNK_BaseRelocPageNode *page = is_page_present->value_raw;
-            Assert(page != src_page);
-            u64_list_concat_in_place(&page->v.entries_addr32, &src_page->v.entries_addr32);
-            u64_list_concat_in_place(&page->v.entries_addr64, &src_page->v.entries_addr64);
-          } else {
-            // push page to main list
-            SLLQueuePush(main_page_list->first, main_page_list->last, src_page);
-            main_page_list->count += 1;
-
-            // store lookup voff 
-            hash_table_push_u64_raw(scratch.arena, main_ht, src_page->v.voff, src_page);
-          }
+          // store lookup voff 
+          hash_table_push_u64_raw(scratch.arena, main_ht, src_page->v.voff, src_page);
         }
       }
-      ProfEnd();
     }
+    ProfEnd();
 
     ProfBegin("Page List -> Array");
-    page_arr.count = 0;
-    page_arr.v     = push_array_no_zero(scratch.arena, LNK_BaseRelocPage, main_page_list->count);
-    for (LNK_BaseRelocPageNode* n = main_page_list->first; n != 0; n = n->next) {
-      page_arr.v[page_arr.count++] = n->v;
+    pages.v = push_array_no_zero(scratch.arena, LNK_BaseRelocPage, main_page_list->count);
+    for EachNode(n, LNK_BaseRelocPageNode, main_page_list->first) { pages.v[pages.count++] = n->v; }
+    ProfEnd();
+  }
+
+  ProfBeginV("Sort Pages [Count %llu]", pages.count);
+  radsort(pages.v, pages.count, lnk_base_reloc_page_is_before);
+  ProfEnd();
+  
+  String8 base_relocs = {0};
+  {
+    ProfBegin("Compute Buffer Size");
+    U64 buffer_size = 0;
+    for EachIndex(page_idx, pages.count) {
+      LNK_BaseRelocPage *page = &pages.v[page_idx];
+      page->buffer_offset = buffer_size;
+      buffer_size += /* page base voff */ sizeof(U32) + /* size of block */ sizeof(U32); // header
+      buffer_size += sizeof(U16)*page->entries_addr32->count;                            // 32-bit voff entries
+      buffer_size += sizeof(U16)*page->entries_addr64->count;                            // 64-bit voff entries
+      buffer_size  = AlignPow2(buffer_size, sizeof(U32));
     }
     ProfEnd();
 
-    ProfBegin("Sort Pages on VOFF");
-    radsort(page_arr.v, page_arr.count, lnk_base_reloc_page_is_before);
+    ProfBeginV("Alloc Buffer [%M]", buffer_size);
+    U8 *buffer = push_array_no_zero(arena, U8, buffer_size);
     ProfEnd();
+
+    task.serialize.buffer_size = buffer_size;
+    task.serialize.buffer      = buffer;
+    task.serialize.pages       = pages;
+    task.serialize.ranges      = tp_divide_work(scratch.arena, pages.count, tp->worker_count);
+    tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_serialize_base_reloc_pages_task, &task, "Serialize");
+
+    base_relocs = str8(task.serialize.buffer, task.serialize.buffer_size);
   }
-  
-  String8List result = {0};
-  if (page_arr.count) {
-    ProfBegin("Serialize Pages");
-    HashTable *voff_ht = hash_table_init(scratch.arena, config->machine_page_size);
-    for (U64 page_idx = 0; page_idx < page_arr.count; ++page_idx) {
-      LNK_BaseRelocPage *page = &page_arr.v[page_idx];
 
-      U64 total_entry_count = 0;
-      total_entry_count += page->entries_addr32.count;
-      total_entry_count += page->entries_addr64.count;
-
-      U32 *page_voff_ptr;
-      U32 *block_size_ptr;
-      U16 *reloc_arr_base;
-      
-      // push buffer
-      U64   buf_size = AlignPow2(sizeof(*page_voff_ptr) + sizeof(*block_size_ptr) + sizeof(*reloc_arr_base)*total_entry_count, sizeof(U32));
-      void *buf      = push_array_no_zero(arena, U8, buf_size);
-      
-      // setup pointers into buffer
-      page_voff_ptr  = buf;
-      block_size_ptr = page_voff_ptr + 1;
-      reloc_arr_base = (U16*)(block_size_ptr + 1);
-      
-      // write 32-bit relocations
-      U16 *reloc_arr_ptr = reloc_arr_base;
-      for (U64Node *i = page->entries_addr32.first; i != 0; i = i->next) {
-        // was base reloc_entry made?
-        if (hash_table_search_u64(voff_ht, i->data)) {
-          continue;
-        }
-        hash_table_push_u64_u64(scratch.arena, voff_ht, i->data, 0);
-
-        // write entry
-        U64 rel_off = i->data - page->voff;
-        Assert(rel_off <= config->machine_page_size);
-        *reloc_arr_ptr++ = PE_BaseRelocMake(PE_BaseRelocKind_HIGHLOW, rel_off);
-      }
-      
-      // write 64-bit relocations
-      for (U64Node *i = page->entries_addr64.first; i != 0; i = i->next) {
-        // was base reloc entry made?
-        if (hash_table_search_u64(voff_ht, i->data)) {
-          continue;
-        }
-        hash_table_push_u64_u64(scratch.arena, voff_ht, i->data, 0);
-        
-        // write entry
-        U64 rel_off = i->data - page->voff;
-        Assert(rel_off <= config->machine_page_size);
-        *reloc_arr_ptr++ = PE_BaseRelocMake(PE_BaseRelocKind_DIR64, rel_off);
-      }
-      
-      // write pad
-      U64 pad_reloc_count = AlignPadPow2(total_entry_count, sizeof(reloc_arr_ptr[0]));
-      MemoryZeroTyped(reloc_arr_ptr, pad_reloc_count); // fill pad with PE_BaseRelocKind_ABSOLUTE
-      reloc_arr_ptr += pad_reloc_count;
-      
-      // compute block size
-      U64 reloc_arr_size = (U64)((U8*)reloc_arr_ptr - (U8*)reloc_arr_base);
-      U64 block_size     = sizeof(*page_voff_ptr) + sizeof(*block_size_ptr) + reloc_arr_size;
-      
-      // write header
-      *page_voff_ptr  = safe_cast_u32(page->voff);
-      *block_size_ptr = safe_cast_u32(block_size);
-      Assert(*block_size_ptr <= buf_size);
-
-      // push page 
-      str8_list_push(arena, &result, str8(buf, buf_size));
-      
-      // purge voffs for next page
-      hash_table_purge(voff_ht);
-    }
-    ProfEnd();
-  }
-  
   tp_temp_end(tp_temp); // scratch is cleared here
   tp_arena->v[0] = arena;
-
   ProfEnd();
-  return result;
+  return base_relocs;
 }
 
 internal String8List
@@ -4374,15 +4369,15 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // build base relocs
     if (~config->flags & LNK_ConfigFlag_Fixed) {
-      String8List base_relocs_data = lnk_build_base_relocs(tp, arena, config, objs_count, objs);
-      if (base_relocs_data.total_size) {
+      String8 base_relocs_data = lnk_build_base_relocs(tp, arena, config, objs_count, objs);
+      if (base_relocs_data.size) {
         LNK_Section             *reloc          = lnk_section_table_push(sectab, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
         LNK_SectionContribChunk *first_sc_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &reloc->contribs, 1, str8_zero());
         LNK_SectionContrib      *sc             = lnk_section_contrib_chunk_push(first_sc_chunk, 1);
-        sc->first_data_node = *base_relocs_data.first;
-        sc->last_data_node  = base_relocs_data.last;
-        sc->align           = 1;
-        sc->u.obj_idx       = max_U32;
+        sc->first_data_node.string = base_relocs_data;
+        sc->last_data_node         = &sc->first_data_node;
+        sc->align                  = 1;
+        sc->u.obj_idx              = max_U32;
 
         lnk_finalize_section_layout(reloc, config->file_align, config->function_pad_min);
         lnk_assign_section_virtual_space(reloc, config->sect_align, &voff_cursor);
