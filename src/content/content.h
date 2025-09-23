@@ -197,7 +197,6 @@ global C_Shared *c_shared = 0;
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
-internal U64 c_little_hash_from_data(String8 data);
 internal U128 c_hash_from_data(String8 data);
 internal C_ID c_id_make(U64 u64_0, U64 u64_1);
 internal B32 c_id_match(C_ID a, C_ID b);
@@ -238,8 +237,8 @@ internal U128 c_hash_from_key(C_Key key, U64 rewind_count);
 internal String8 c_data_from_hash(Access *access, U128 hash);
 
 ////////////////////////////////
-//~ rjf: Tick
+//~ rjf: Asynchronous Tick
 
-internal void c_tick(void);
+internal void c_async_tick(void);
 
 #endif // CONTENT_H

@@ -99,8 +99,8 @@ internal void ac_init(void);
 internal void *ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count);
 
 ////////////////////////////////
-//~ rjf: Tick
+//~ rjf: Asynchronous Tick
 
-internal void ac_tick(void);
+internal void ac_async_tick(void);
 
 #endif // ARTIFACT_CACHE_H

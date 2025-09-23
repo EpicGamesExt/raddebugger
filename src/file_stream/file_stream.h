@@ -125,8 +125,8 @@ internal U128 fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
 internal FileProperties fs_properties_from_path(String8 path);
 
 ////////////////////////////////
-//~ rjf: Tick
+//~ rjf: Asynchronous Tick
 
-internal void fs_tick(void);
+internal void fs_async_tick(void);
 
 #endif // FILE_STREAM_H

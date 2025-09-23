@@ -1594,6 +1594,8 @@ ctrl_init(void)
       ctrl_state->exception_code_filters[k/64] |= 1ull<<(k%64);
     }
   }
+  ctrl_state->mem_req_mutex = mutex_alloc();
+  ctrl_state->mem_req_arena = arena_alloc();
   ctrl_state->u2ms_ring_size = KB(64);
   ctrl_state->u2ms_ring_base = push_array(arena, U8, ctrl_state->u2ms_ring_size);
   ctrl_state->u2ms_ring_mutex = mutex_alloc();
@@ -1632,36 +1634,28 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
   CTRL_ProcessMemoryCacheSlot *process_slot = &cache->slots[process_slot_idx];
   CTRL_ProcessMemoryCacheStripe *process_stripe = &cache->stripes[process_stripe_idx];
   
-  //- rjf: get the hash store root for this process; construct process node if it
+  //- rjf: get the content root for this process; construct process node if it
   // doesn't exist
   C_Root root = {0};
   {
-    B32 node_found = 0;
-    MutexScopeR(process_stripe->rw_mutex)
+    for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
     {
-      for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+      B32 node_found = 0;
+      RWMutexScope(process_stripe->rw_mutex, write_mode)
       {
-        if(ctrl_handle_match(n->handle, process))
+        for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
         {
-          node_found = 1;
-          root = n->root;
-          break;
+          if(ctrl_handle_match(n->handle, process))
+          {
+            node_found = 1;
+            root = n->root;
+            break;
+          }
         }
       }
-    }
-    if(!node_found) MutexScopeW(process_stripe->rw_mutex)
-    {
-      for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+      if(write_mode && !node_found)
       {
-        if(ctrl_handle_match(n->handle, process))
-        {
-          node_found = 1;
-          root = n->root;
-          break;
-        }
-      }
-      if(!node_found)
-      {
+        node_found = 1;
         Arena *node_arena = arena_alloc();
         CTRL_ProcessMemoryCacheNode *node = push_array(node_arena, CTRL_ProcessMemoryCacheNode, 1);
         DLLPushBack(process_slot->first, process_slot->last, node);
@@ -1671,6 +1665,10 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
         node->range_hash_slots_count = 1024;
         node->range_hash_slots = push_array(node_arena, CTRL_ProcessMemoryRangeHashSlot, node->range_hash_slots_count);
         root = node->root;
+      }
+      if(node_found)
+      {
+        break;
       }
     }
   }
@@ -1685,7 +1683,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
       id.u128[0].u64[0] |= (1ull << 63);
     }
   }
-  U64 range_hash = c_little_hash_from_data(str8_struct(&id));
+  U64 range_hash = u64_hash_from_str8(str8_struct(&id));
   
   //- rjf: form full key
   C_Key key = c_key_make(root, id);
@@ -6932,7 +6930,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   CTRL_ProcessMemoryCacheStripe *process_stripe = &cache->stripes[process_stripe_idx];
   
   //- rjf: unpack address range hash cache key
-  U64 range_hash = c_little_hash_from_data(str8_struct(&key.id));
+  U64 range_hash = u64_hash_from_str8(str8_struct(&key.id));
   
   //- rjf: clamp vaddr range
   Rng1U64 vaddr_range_clamped = vaddr_range;
@@ -7460,4 +7458,190 @@ ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work)
   ctrl_scope_close(ctrl_scope);
   scratch_end(scratch);
   return 0;
+}
+
+////////////////////////////////
+//~ rjf: Asynchronous Tick
+
+internal void
+ctrl_async_tick(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: get all memory requests
+  U64 mem_reqs_count = 0;
+  CTRL_MemRequest *mem_reqs = 0;
+  MutexScope(ctrl_state->mem_req_mutex)
+  {
+    mem_reqs_count = ctrl_state->mem_req_count;
+    mem_reqs = push_array(scratch.arena, CTRL_MemRequest, mem_reqs_count);
+    U64 idx = 0;
+    for EachNode(n, CTRL_MemRequestNode, ctrl_state->first_mem_req)
+    {
+      MemoryCopyStruct(&mem_reqs[idx], &n->v);
+      idx += 1;
+    }
+  }
+  
+  //- rjf: do all memory requests
+  {
+    CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
+    U64 mem_req_take_counter = 0;
+    U64 *mem_req_take_counter_ptr = &mem_req_take_counter;
+    lane_sync_u64(&mem_req_take_counter_ptr, 0);
+    for(;;)
+    {
+      // rjf: take next task
+      U64 mem_req_num = ins_atomic_u64_inc_eval(mem_req_take_counter_ptr);
+      U64 mem_req_idx = (mem_req_num-1);
+      if(mem_reqs_count <= mem_req_idx)
+      {
+        break;
+      }
+      
+      // rjf: unpack request
+      CTRL_MemRequest *req = &mem_reqs[mem_req_idx];
+      C_Key key = req->key;
+      CTRL_Handle process = req->process;
+      Rng1U64 vaddr_range = req->vaddr_range;
+      B32 zero_terminated = req->zero_terminated;
+      
+      // rjf: unpack process key
+      U64 process_hash = ctrl_hash_from_handle(process);
+      U64 process_slot_idx = process_hash%cache->slots_count;
+      U64 process_stripe_idx = process_slot_idx%cache->stripes_count;
+      CTRL_ProcessMemoryCacheSlot *process_slot = &cache->slots[process_slot_idx];
+      CTRL_ProcessMemoryCacheStripe *process_stripe = &cache->stripes[process_stripe_idx];
+      
+      // rjf: unpack little hash of range key
+      U64 range_hash = u64_hash_from_str8(str8_struct(&key.id));
+      
+      // rjf: clamp vaddr range
+      Rng1U64 vaddr_range_clamped = vaddr_range;
+      {
+        vaddr_range_clamped.max = Max(vaddr_range_clamped.max, vaddr_range_clamped.min);
+        U64 max_size_cap = Min(max_U64-vaddr_range_clamped.min, GB(1));
+        vaddr_range_clamped.max = Min(vaddr_range_clamped.max, vaddr_range_clamped.min+max_size_cap);
+      }
+      
+      // rjf: read
+      U64 range_size = 0;
+      Arena *range_arena = 0;
+      void *range_base = 0;
+      U64 zero_terminated_size = 0;
+      U64 pre_read_mem_gen = ctrl_mem_gen();
+      B32 pre_run_state = ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
+      {
+        range_size = dim_1u64(vaddr_range_clamped);
+        U64 page_size = os_get_system_info()->page_size;
+        U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
+        range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
+        if(range_arena == 0)
+        {
+          range_size = 0;
+        }
+        else
+        {
+          range_base = push_array_no_zero(range_arena, U8, range_size);
+          U64 bytes_read = 0;
+          U64 retry_count = 0;
+          U64 retry_limit = range_size > page_size ? 64 : 0;
+          for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped;
+              retry_count <= retry_limit;
+              retry_count += 1)
+          {
+            bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped_retry, range_base);
+            if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)
+            {
+              U64 diff = (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
+              vaddr_range_clamped_retry.max -= diff;
+              vaddr_range_clamped_retry.max = AlignDownPow2(vaddr_range_clamped_retry.max, page_size);
+              if(diff == 0)
+              {
+                break;
+              }
+            }
+            else
+            {
+              break;
+            }
+          }
+          if(bytes_read == 0)
+          {
+            arena_release(range_arena);
+            range_base = 0;
+            range_size = 0;
+            range_arena = 0;
+          }
+          else if(bytes_read < range_size)
+          {
+            MemoryZero((U8 *)range_base + bytes_read, range_size-bytes_read);
+          }
+          zero_terminated_size = range_size;
+          if(zero_terminated)
+          {
+            for(U64 idx = 0; idx < bytes_read; idx += 1)
+            {
+              if(((U8 *)range_base)[idx] == 0)
+              {
+                zero_terminated_size = idx;
+                break;
+              }
+            }
+          }
+        }
+      }
+      U64 post_read_mem_gen = ctrl_mem_gen();
+      B32 post_run_state = ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
+      
+      // rjf: read successful -> submit to hash store
+      U128 hash = {0};
+      if(range_base != 0 && pre_read_mem_gen == post_read_mem_gen)
+      {
+        hash = c_submit_data(key, &range_arena, str8((U8*)range_base, zero_terminated_size));
+      }
+      else if(range_arena != 0)
+      {
+        arena_release(range_arena);
+      }
+      
+      // rjf: commit new info to cache
+      MutexScopeW(process_stripe->rw_mutex)
+      {
+        for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+        {
+          if(ctrl_handle_match(n->handle, process))
+          {
+            U64 range_slot_idx = range_hash%n->range_hash_slots_count;
+            CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
+            for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
+            {
+              if(c_id_match(range_n->id, key.id))
+              {
+                if(pre_read_mem_gen == post_read_mem_gen)
+                {
+                  range_n->mem_gen = post_read_mem_gen;
+                }
+                range_n->working_count -= 1;
+                goto commit__break_all;
+              }
+            }
+          }
+        }
+        commit__break_all:;
+      }
+      
+      // rjf: broadcast changes
+      cond_var_broadcast(process_stripe->cv);
+      if(!u128_match(u128_zero(), hash))
+      {
+        if(ctrl_state->wakeup_hook != 0)
+        {
+          ctrl_state->wakeup_hook();
+        }
+      }
+    }
+  }
+  
+  scratch_end(scratch);
 }

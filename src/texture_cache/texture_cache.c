@@ -137,10 +137,10 @@ tex_texture_from_key_topology(Access *access, C_Key key, TEX_Topology topology, 
 }
 
 ////////////////////////////////
-//~ rjf: Tick
+//~ rjf: Asynchronous Tick
 
 internal void
-tex_tick(void)
+tex_async_tick(void)
 {
   if(ins_atomic_u64_eval(&tex_shared) == 0) { return; }
   ProfBeginFunction();

@@ -137,10 +137,10 @@ ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType
 }
 
 ////////////////////////////////
-//~ rjf: Tick
+//~ rjf: Asynchronous Tick
 
 internal void
-ac_tick(void)
+ac_async_tick(void)
 {
   Temp scratch = scratch_begin(0, 0);
   

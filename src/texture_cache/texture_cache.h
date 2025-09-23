@@ -105,9 +105,9 @@ internal R_Handle tex_texture_from_hash_topology(Access *access, U128 hash, TEX_
 internal R_Handle tex_texture_from_key_topology(Access *access, C_Key key, TEX_Topology topology, U128 *hash_out);
 
 ////////////////////////////////
-//~ rjf: Tick
+//~ rjf: Asynchronous Tick
 
-internal void tex_tick(void);
+internal void tex_async_tick(void);
 
 ////////////////////////////////
 //~ rjf: Artifact Cache Hooks / Lookups

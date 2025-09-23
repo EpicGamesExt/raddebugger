@@ -198,16 +198,19 @@ async_thread_entry_point(void *params)
       async_loop_again = 0;
     }
 #if defined(ARTIFACT_CACHE_H)
-    ac_tick();
+    ac_async_tick();
 #endif
 #if defined(CONTENT_H)
-    c_tick();
+    c_async_tick();
 #endif
 #if defined(FILE_STREAM_H)
-    fs_tick();
+    fs_async_tick();
+#endif
+#if defined(CTRL_CORE_H)
+    ctrl_async_tick();
 #endif
 #if defined(TEXTURE_CACHE_H)
-    tex_tick();
+    tex_async_tick();
 #endif
     cond_var_broadcast(async_tick_stop_cond_var);
   }

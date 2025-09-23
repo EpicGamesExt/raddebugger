@@ -828,6 +828,22 @@ typedef CTRL_WAKEUP_FUNCTION_DEF(CTRL_WakeupFunctionType);
 ////////////////////////////////
 //~ rjf: Main State Types
 
+typedef struct CTRL_MemRequest CTRL_MemRequest;
+struct CTRL_MemRequest
+{
+  C_Key key;
+  CTRL_Handle process;
+  Rng1U64 vaddr_range;
+  B32 zero_terminated;
+};
+
+typedef struct CTRL_MemRequestNode CTRL_MemRequestNode;
+struct CTRL_MemRequestNode
+{
+  CTRL_MemRequestNode *next;
+  CTRL_MemRequest v;
+};
+
 typedef struct CTRL_State CTRL_State;
 struct CTRL_State
 {
@@ -890,6 +906,13 @@ struct CTRL_State
   CTRL_ModuleReqCacheNode **module_req_cache_slots;
   String8List msg_user_bp_touched_files;
   String8List msg_user_bp_touched_symbols;
+  
+  // rjf: memory requests
+  Mutex mem_req_mutex;
+  Arena *mem_req_arena;
+  CTRL_MemRequestNode *first_mem_req;
+  CTRL_MemRequestNode *last_mem_req;
+  U64 mem_req_count;
   
   // rjf: user -> memstream ring buffer
   U64 u2ms_ring_size;
@@ -1226,5 +1249,10 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work);
 //~ rjf: Asynchronous Call Stack Tree Building Functions
 
 ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work);
+
+////////////////////////////////
+//~ rjf: Asynchronous Tick
+
+internal void ctrl_async_tick(void);
 
 #endif // CTRL_CORE_H

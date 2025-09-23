@@ -13,13 +13,6 @@
 # include "third_party/xxHash/xxhash.h"
 #endif
 
-internal U64
-c_little_hash_from_data(String8 data)
-{
-  U64 result = XXH3_64bits(data.str, data.size);
-  return result;
-}
-
 internal U128
 c_hash_from_data(String8 data)
 {
@@ -181,7 +174,7 @@ internal U128
 c_submit_data(C_Key key, Arena **data_arena, String8 data)
 {
   //- rjf: unpack key
-  U64 key_hash = c_little_hash_from_data(str8_struct(&key));
+  U64 key_hash = u64_hash_from_str8(str8_struct(&key));
   U64 key_slot_idx = key_hash%c_shared->key_slots_count;
   U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
@@ -288,7 +281,7 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
     // rjf: key is new -> add this key to the associated root
     if(key_is_new)
     {
-      U64 root_hash = c_little_hash_from_data(str8_struct(&key.root));
+      U64 root_hash = u64_hash_from_str8(str8_struct(&key.root));
       U64 root_slot_idx = root_hash%c_shared->root_slots_count;
       U64 root_stripe_idx = root_slot_idx%c_shared->root_stripes_count;
       C_RootSlot *root_slot = &c_shared->root_slots[root_slot_idx];
@@ -348,7 +341,7 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
 internal void
 c_close_key(C_Key key)
 {
-  U64 key_hash = c_little_hash_from_data(str8_struct(&key));
+  U64 key_hash = u64_hash_from_str8(str8_struct(&key));
   U64 key_slot_idx = key_hash%c_shared->key_slots_count;
   U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
@@ -438,7 +431,7 @@ internal U128
 c_hash_from_key(C_Key key, U64 rewind_count)
 {
   U128 result = {0};
-  U64 key_hash = c_little_hash_from_data(str8_struct(&key));
+  U64 key_hash = u64_hash_from_str8(str8_struct(&key));
   U64 key_slot_idx = key_hash%c_shared->key_slots_count;
   U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
@@ -483,10 +476,10 @@ c_data_from_hash(Access *access, U128 hash)
 }
 
 ////////////////////////////////
-//~ rjf: Tick
+//~ rjf: Asynchronous Tick
 
 internal void
-c_tick(void)
+c_async_tick(void)
 {
   ProfBeginFunction();
   
