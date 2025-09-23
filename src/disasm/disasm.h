@@ -197,8 +197,8 @@ internal U64 dasm_line_array_code_off_from_idx(DASM_LineArray *array, U64 idx);
 ////////////////////////////////
 //~ rjf: Artifact Cache Hooks / Lookups
 
-internal void *dasm_artifact_create(String8 key, B32 *retry_out);
-internal void dasm_artifact_destroy(void *ptr);
+internal AC_Artifact dasm_artifact_create(String8 key, B32 *retry_out);
+internal void dasm_artifact_destroy(AC_Artifact artifact);
 internal DASM_Info dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params);
 internal DASM_Info dasm_info_from_key_params(Access *access, C_Key key, DASM_Params *params, U128 *hash_out);
 

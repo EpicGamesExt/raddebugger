@@ -264,10 +264,10 @@ struct DASM_Artifact
   DASM_Info info;
 };
 
-internal void *
+internal AC_Artifact
 dasm_artifact_create(String8 key, B32 *retry_out)
 {
-  void *result = 0;
+  DASM_Artifact *artifact = 0;
   if(lane_idx() == 0)
   {
     Temp scratch = scratch_begin(0, 0);
@@ -473,27 +473,28 @@ dasm_artifact_create(String8 key, B32 *retry_out)
     //- rjf: fill result
     if(info_arena != 0)
     {
-      DASM_Artifact *artifact = push_array(info_arena, DASM_Artifact, 1);
+      artifact = push_array(info_arena, DASM_Artifact, 1);
       artifact->arena = info_arena;
       artifact->info = info;
-      result = artifact;
     }
     
     di_scope_close(di_scope);
     access_close(access);
     scratch_end(scratch);
   }
-  lane_sync_u64(&result, 0);
+  lane_sync_u64(&artifact, 0);
+  AC_Artifact result = {0};
+  result.u64[0] = (U64)artifact;
   return result;
 }
 
 internal void
-dasm_artifact_destroy(void *ptr)
+dasm_artifact_destroy(AC_Artifact artifact)
 {
-  if(ptr == 0) { return; }
-  DASM_Artifact *artifact = (DASM_Artifact *)ptr;
-  c_close_key(artifact->info.text_key);
-  arena_release(artifact->arena);
+  DASM_Artifact *dasm_artifact = (DASM_Artifact *)artifact.u64[0];
+  if(dasm_artifact == 0) { return; }
+  c_close_key(dasm_artifact->info.text_key);
+  arena_release(dasm_artifact->arena);
 }
 
 internal DASM_Info
@@ -511,10 +512,11 @@ dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params)
     String8 key = str8_list_join(scratch.arena, &key_parts, 0);
     
     // rjf: get info
-    DASM_Artifact *artifact = ac_artifact_from_key(access, key, fs_change_gen(), dasm_artifact_create, dasm_artifact_destroy, 1024);
-    if(artifact)
+    AC_Artifact artifact = ac_artifact_from_key(access, key, fs_change_gen(), dasm_artifact_create, dasm_artifact_destroy, 1024);
+    DASM_Artifact *dasm_artifact = (DASM_Artifact *)artifact.u64[0];
+    if(dasm_artifact)
     {
-      info = artifact->info;
+      info = dasm_artifact->info;
     }
     
     scratch_end(scratch);

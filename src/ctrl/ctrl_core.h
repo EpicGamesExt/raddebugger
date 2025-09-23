@@ -1251,6 +1251,12 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work);
 ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work);
 
 ////////////////////////////////
+//~ rjf: Process Memory Artifact Cache Hooks / Lookups
+
+internal void *ctrl_memory_artifact_create(String8 key, B32 *retry_out);
+internal void ctrl_memory_artifact_destroy(void *ptr);
+
+////////////////////////////////
 //~ rjf: Asynchronous Tick
 
 internal void ctrl_async_tick(void);

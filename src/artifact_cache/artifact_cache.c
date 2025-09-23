@@ -20,7 +20,7 @@ ac_init(void)
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal void *
+internal AC_Artifact
 ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count)
 {
   //- rjf: create function -> cache
@@ -60,7 +60,7 @@ ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType
   }
   
   //- rjf: cache * key -> artifact
-  void *artifact = 0;
+  AC_Artifact artifact = {0};
   {
     U64 hash = u64_hash_from_str8(key);
     U64 slot_idx = hash%cache->slots_count;
@@ -222,7 +222,7 @@ ac_async_tick(void)
     
     // rjf: compute val
     B32 retry = 0;
-    void *val = reqs[idx].create(reqs[idx].key, &retry);
+    AC_Artifact val = reqs[idx].create(reqs[idx].key, &retry);
     
     // rjf: retry? -> resubmit request
     if(retry && lane_idx() == 0)

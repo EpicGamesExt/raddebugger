@@ -1968,7 +1968,7 @@ struct TXT_ArtifactCreateShared
   TXT_Artifact *artifact;
 };
 
-internal void *
+internal AC_Artifact
 txt_artifact_create(String8 key, B32 *retry_out)
 {
   ProfBeginFunction();
@@ -2232,15 +2232,17 @@ txt_artifact_create(String8 key, B32 *retry_out)
   access_close(access);
   scratch_end(scratch);
   ProfEnd();
-  return shared->artifact;
+  AC_Artifact result = {0};
+  result.u64[0] = (U64)shared->artifact;
+  return result;
 }
 
 internal void
-txt_artifact_destroy(void *ptr)
+txt_artifact_destroy(AC_Artifact artifact)
 {
-  if(ptr == 0) { return; }
-  TXT_Artifact *artifact = (TXT_Artifact *)ptr;
-  arena_release(artifact->arena);
+  TXT_Artifact *txt_artifact = (TXT_Artifact *)artifact.u64[0];
+  if(txt_artifact == 0) { return; }
+  arena_release(txt_artifact->arena);
 }
 
 internal TXT_TextInfo
@@ -2252,11 +2254,12 @@ txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang)
     TXT_LangKind lang;
   } key = {hash, lang};
   String8 key_string = str8_struct(&key);
-  TXT_Artifact *artifact = ac_artifact_from_key(access, key_string, 0, txt_artifact_create, txt_artifact_destroy, 1024);
+  AC_Artifact artifact = ac_artifact_from_key(access, key_string, 0, txt_artifact_create, txt_artifact_destroy, 1024);
+  TXT_Artifact *txt_artifact = (TXT_Artifact *)artifact.u64[0];
   TXT_TextInfo info = {0};
-  if(artifact != 0)
+  if(txt_artifact != 0)
   {
-    info = artifact->info;
+    info = txt_artifact->info;
   }
   return info;
 }

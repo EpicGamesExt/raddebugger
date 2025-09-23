@@ -5,10 +5,19 @@
 #define ARTIFACT_CACHE_H
 
 ////////////////////////////////
+//~ rjf: Artifact Handle Type
+
+typedef struct AC_Artifact AC_Artifact;
+struct AC_Artifact
+{
+  U64 u64[4];
+};
+
+////////////////////////////////
 //~ rjf: Artifact Computation Function Types
 
-typedef void *AC_CreateFunctionType(String8 key, B32 *retry_out);
-typedef void AC_DestroyFunctionType(void *artifact);
+typedef AC_Artifact AC_CreateFunctionType(String8 key, B32 *retry_out);
+typedef void AC_DestroyFunctionType(AC_Artifact artifact);
 
 ////////////////////////////////
 //~ rjf: Cache Types
@@ -37,7 +46,7 @@ struct AC_Node
   // rjf: key/gen/value
   String8 key;
   U64 gen;
-  void *val;
+  AC_Artifact val;
   
   // rjf: metadata
   AccessPt access_pt;
@@ -96,7 +105,7 @@ internal void ac_init(void);
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal void *ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count);
+internal AC_Artifact ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count);
 
 ////////////////////////////////
 //~ rjf: Asynchronous Tick
