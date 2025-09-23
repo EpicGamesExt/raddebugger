@@ -194,6 +194,33 @@ typedef struct
   LNK_RelocRefsList *reloc_refs;
 } LNK_OptRefTask;
 
+typedef struct
+{
+  String8              image_data;
+  LNK_Obj            **objs;
+  U64                  image_base;
+  COFF_SectionHeader **image_section_table;
+} LNK_ObjRelocPatcher;
+
+typedef struct
+{
+  U64 page_size;
+  B32 is_large_addr_aware;
+  union {
+    struct {
+      LNK_Obj               **objs;
+      LNK_BaseRelocPageList  *pages;
+      HashTable             **page_ht;
+    } gather;
+    struct {
+      U64                     buffer_size;
+      U8                     *buffer;
+      LNK_BaseRelocPageArray  pages;
+      Rng1U64                *ranges;
+    } serialize;
+  };
+} LNK_BaseRelocsTask;
+
 typedef struct LNK_ImageFillNode
 {
   U64                  base_foff;
@@ -240,42 +267,6 @@ typedef struct
     } image_fill;
   } u;
 } LNK_BuildImageTask;
-
-typedef struct
-{
-  U64                     page_size;
-  Rng1U64                *range_arr;
-  LNK_BaseRelocPageList  *list_arr;
-  HashTable             **page_ht_arr;
-  B32                     is_large_addr_aware;
-} LNK_BaseRelocTask;
-
-typedef struct
-{
-  U64 page_size;
-  B32 is_large_addr_aware;
-  union {
-    struct {
-      LNK_Obj               **objs;
-      LNK_BaseRelocPageList  *pages;
-      HashTable             **page_ht;
-    } gather;
-    struct {
-      U64                     buffer_size;
-      U8                     *buffer;
-      LNK_BaseRelocPageArray  pages;
-      Rng1U64                *ranges;
-    } serialize;
-  };
-} LNK_BaseRelocsTask;
-
-typedef struct
-{
-  String8              image_data;
-  LNK_Obj            **objs;
-  U64                  image_base;
-  COFF_SectionHeader **image_section_table;
-} LNK_ObjRelocPatcher;
 
 typedef struct
 {
