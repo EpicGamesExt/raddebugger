@@ -1061,7 +1061,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
   //
   DumpSubset(Scopes)
   {
-    dumpf("\n");
+    if(lane_idx() == 0) { dumpf("\n"); }
     RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
     U64 scope_voffs_count = 0;
     U64 *scope_voffs = rdi_table_from_name(rdi, ScopeVOffData,  &scope_voffs_count);
