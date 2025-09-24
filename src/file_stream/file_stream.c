@@ -372,6 +372,7 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
 internal void
 fs_async_tick(void)
 {
+#if 0
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
@@ -530,4 +531,5 @@ fs_async_tick(void)
   
   scratch_end(scratch);
   ProfEnd();
+#endif
 }

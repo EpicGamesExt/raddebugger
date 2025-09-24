@@ -362,7 +362,7 @@ dasm_artifact_create(String8 key, B32 *retry_out)
                 {
                   // TODO(rjf): need redirection path - this may map to a different path on the local machine,
                   // need frontend to communicate path remapping info to this layer
-                  C_Key key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64), 0);
+                  C_Key key = fs_key_from_path_range_new(file_normalized_full_path, r1u64(0, max_U64), 0);
                   TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
                   U64 endt_us = max_U64;
                   U128 hash = {0};
