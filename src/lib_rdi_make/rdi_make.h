@@ -318,6 +318,7 @@ X(Units,                       units)\
 X(Procedures,                  procedures)\
 X(GlobalVariables,             global_variables)\
 X(ThreadVariables,             thread_variables)\
+X(Constants,                   constants)\
 X(Scopes,                      scopes)\
 X(Locals,                      locals)\
 X(Types,                       types)\

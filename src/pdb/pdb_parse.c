@@ -823,207 +823,209 @@ pdb_leaf_data_from_tpi(PDB_TpiParsed *tpi){
 }
 
 internal CV_TypeIdArray
-pdb_tpi_itypes_from_name(Arena *arena, PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *leaf,
-                         String8 name, B32 compare_unique_name, U32 output_cap){
-  U32 hash = pdb_hash_v1(name);
-  U32 bucket_idx = ((tpi_hash->bucket_mask != 0) ?
-                    hash&tpi_hash->bucket_mask :
-                    hash%tpi_hash->bucket_count);
-  
-  CV_TypeId itype_first = leaf->itype_first;
-  CV_TypeId itype_opl = leaf->itype_opl;
-  String8 data = leaf->data;
-  
-  Temp scratch = scratch_begin(&arena, 1);
-  struct Chain{
-    struct Chain *next;
-    CV_TypeId itype;
-  };
-  struct Chain *first = 0;
-  struct Chain *last = 0;
-  U32 count = 0;
-  
-  for (PDB_TpiHashBlock *block = tpi_hash->buckets[bucket_idx];
-       block != 0;
-       block = block->next){
-    U32 local_count = block->local_count;
-    CV_TypeId *itype_ptr = block->itypes;
-    for (U32 i = 0; i < local_count; i += 1, itype_ptr += 1){
-      
-      String8 extracted_name = {0};
-      
-      CV_TypeId itype = *itype_ptr;
-      if (itype_first <= itype && itype < itype_opl){
-        CV_RecRange *range = &leaf->leaf_ranges.ranges[itype - leaf->itype_first];
-        if (range->off + range->hdr.size <= data.size){
-          U8 *first = data.str + range->off + 2;
-          U64 cap = range->hdr.size - 2;
-          
-          switch (range->hdr.kind){
-            default:break;
+pdb_tpi_itypes_from_name(Arena *arena, PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *leaf, String8 name, B32 compare_unique_name, U32 output_cap)
+{
+  CV_TypeIdArray result = {0};
+  if(tpi_hash->bucket_count != 0)
+  {
+    U32 hash = pdb_hash_v1(name);
+    U32 bucket_idx = ((tpi_hash->bucket_mask != 0) ?
+                      hash&tpi_hash->bucket_mask :
+                      hash%tpi_hash->bucket_count);
+    
+    CV_TypeId itype_first = leaf->itype_first;
+    CV_TypeId itype_opl = leaf->itype_opl;
+    String8 data = leaf->data;
+    
+    Temp scratch = scratch_begin(&arena, 1);
+    struct Chain
+    {
+      struct Chain *next;
+      CV_TypeId itype;
+    };
+    struct Chain *first = 0;
+    struct Chain *last = 0;
+    U32 count = 0;
+    
+    for (PDB_TpiHashBlock *block = tpi_hash->buckets[bucket_idx];
+         block != 0;
+         block = block->next){
+      U32 local_count = block->local_count;
+      CV_TypeId *itype_ptr = block->itypes;
+      for (U32 i = 0; i < local_count; i += 1, itype_ptr += 1){
+        
+        String8 extracted_name = {0};
+        
+        CV_TypeId itype = *itype_ptr;
+        if (itype_first <= itype && itype < itype_opl){
+          CV_RecRange *range = &leaf->leaf_ranges.ranges[itype - leaf->itype_first];
+          if (range->off + range->hdr.size <= data.size){
+            U8 *first = data.str + range->off + 2;
+            U64 cap = range->hdr.size - 2;
             
-            case CV_LeafKind_CLASS:
-            case CV_LeafKind_STRUCTURE:
-            {
-              if (sizeof(CV_LeafStruct) <= cap){
-                CV_LeafStruct *lf_struct = (CV_LeafStruct*)first;
-                
-                if (!(lf_struct->props & CV_TypeProp_FwdRef)){
-                  // size
-                  U8 *numeric_ptr = (U8*)(lf_struct + 1);
-                  CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+            switch (range->hdr.kind){
+              default:break;
+              
+              case CV_LeafKind_CLASS:
+              case CV_LeafKind_STRUCTURE:
+              {
+                if (sizeof(CV_LeafStruct) <= cap){
+                  CV_LeafStruct *lf_struct = (CV_LeafStruct*)first;
                   
-                  // name
-                  U8 *name_ptr = numeric_ptr + size.encoded_size;
-                  String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
-                  
-                  // unique name
-                  if (compare_unique_name){
-                    if (lf_struct->props & CV_TypeProp_HasUniqueName) {
-                      U8 *unique_name_ptr = name_ptr + name.size + 1;
-                      String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
-                      extracted_name = unique_name;
+                  if (!(lf_struct->props & CV_TypeProp_FwdRef)){
+                    // size
+                    U8 *numeric_ptr = (U8*)(lf_struct + 1);
+                    CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+                    
+                    // name
+                    U8 *name_ptr = numeric_ptr + size.encoded_size;
+                    String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
+                    
+                    // unique name
+                    if (compare_unique_name){
+                      if (lf_struct->props & CV_TypeProp_HasUniqueName) {
+                        U8 *unique_name_ptr = name_ptr + name.size + 1;
+                        String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
+                        extracted_name = unique_name;
+                      }
+                    }
+                    else{
+                      extracted_name = name;
                     }
                   }
-                  else{
-                    extracted_name = name;
-                  }
                 }
-              }
-            }break;
-            
-            case CV_LeafKind_CLASS2:
-            case CV_LeafKind_STRUCT2:
-            {
-              if (sizeof(CV_LeafStruct2) <= cap){
-                CV_LeafStruct2 *lf_struct = (CV_LeafStruct2*)first;
-                
-                if (!(lf_struct->props & CV_TypeProp_FwdRef)){
-                  // size
-                  U8 *numeric_ptr = (U8*)(lf_struct + 1);
-                  CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+              }break;
+              
+              case CV_LeafKind_CLASS2:
+              case CV_LeafKind_STRUCT2:
+              {
+                if (sizeof(CV_LeafStruct2) <= cap){
+                  CV_LeafStruct2 *lf_struct = (CV_LeafStruct2*)first;
                   
-                  // name
-                  U8 *name_ptr = numeric_ptr + size.encoded_size;
-                  String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
-                  
-                  // unique name
-                  if (compare_unique_name){
-                    if (lf_struct->props & CV_TypeProp_HasUniqueName) {
-                      U8 *unique_name_ptr = name_ptr + name.size + 1;
-                      String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
-                      extracted_name = unique_name;
+                  if (!(lf_struct->props & CV_TypeProp_FwdRef)){
+                    // size
+                    U8 *numeric_ptr = (U8*)(lf_struct + 1);
+                    CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+                    
+                    // name
+                    U8 *name_ptr = numeric_ptr + size.encoded_size;
+                    String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
+                    
+                    // unique name
+                    if (compare_unique_name){
+                      if (lf_struct->props & CV_TypeProp_HasUniqueName) {
+                        U8 *unique_name_ptr = name_ptr + name.size + 1;
+                        String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
+                        extracted_name = unique_name;
+                      }
+                    }
+                    else{
+                      extracted_name = name;
                     }
                   }
-                  else{
-                    extracted_name = name;
-                  }
                 }
-              }
-            }break;
-            
-            case CV_LeafKind_UNION:
-            {
-              if (sizeof(CV_LeafUnion) <= cap){
-                CV_LeafUnion *lf_union = (CV_LeafUnion*)first;
-                
-                if (!(lf_union->props & CV_TypeProp_FwdRef)){
-                  // size
-                  U8 *numeric_ptr = (U8*)(lf_union + 1);
-                  CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+              }break;
+              
+              case CV_LeafKind_UNION:
+              {
+                if (sizeof(CV_LeafUnion) <= cap){
+                  CV_LeafUnion *lf_union = (CV_LeafUnion*)first;
                   
-                  // name
-                  U8 *name_ptr = numeric_ptr + size.encoded_size;
-                  String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
-                  
-                  // unique name
-                  if (compare_unique_name){
-                    if (lf_union->props & CV_TypeProp_HasUniqueName) {
-                      U8 *unique_name_ptr = name_ptr + name.size + 1;
-                      String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
-                      extracted_name = unique_name;
+                  if (!(lf_union->props & CV_TypeProp_FwdRef)){
+                    // size
+                    U8 *numeric_ptr = (U8*)(lf_union + 1);
+                    CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+                    
+                    // name
+                    U8 *name_ptr = numeric_ptr + size.encoded_size;
+                    String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
+                    
+                    // unique name
+                    if (compare_unique_name){
+                      if (lf_union->props & CV_TypeProp_HasUniqueName) {
+                        U8 *unique_name_ptr = name_ptr + name.size + 1;
+                        String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
+                        extracted_name = unique_name;
+                      }
+                    }
+                    else{
+                      extracted_name = name;
                     }
                   }
-                  else{
-                    extracted_name = name;
-                  }
                 }
-              }
-            }break;
-            
-            case CV_LeafKind_ENUM:
-            {
-              if (sizeof(CV_LeafEnum) <= cap){
-                CV_LeafEnum *lf_enum = (CV_LeafEnum*)first;
-                
-                if (!(lf_enum->props & CV_TypeProp_FwdRef)){
-                  // name
-                  U8 *name_ptr = (U8*)(lf_enum + 1);
-                  String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
+              }break;
+              
+              case CV_LeafKind_ENUM:
+              {
+                if (sizeof(CV_LeafEnum) <= cap){
+                  CV_LeafEnum *lf_enum = (CV_LeafEnum*)first;
                   
-                  // unique name
-                  if (compare_unique_name){
-                    if (lf_enum->props & CV_TypeProp_HasUniqueName) {
-                      U8 *unique_name_ptr = name_ptr + name.size + 1;
-                      String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
-                      extracted_name = unique_name;
+                  if (!(lf_enum->props & CV_TypeProp_FwdRef)){
+                    // name
+                    U8 *name_ptr = (U8*)(lf_enum + 1);
+                    String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
+                    
+                    // unique name
+                    if (compare_unique_name){
+                      if (lf_enum->props & CV_TypeProp_HasUniqueName) {
+                        U8 *unique_name_ptr = name_ptr + name.size + 1;
+                        String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
+                        extracted_name = unique_name;
+                      }
+                    }
+                    else{
+                      extracted_name = name;
                     }
                   }
-                  else{
-                    extracted_name = name;
-                  }
                 }
-              }
-            }break;
+              }break;
+            }
+          }
+        }
+        
+        if (str8_match(extracted_name, name, 0)){
+          struct Chain *chain = push_array(scratch.arena, struct Chain, 1);
+          SLLQueuePush(first, last, chain);
+          count += 1;
+          chain->itype = itype;
+          if (count == output_cap){
+            goto dblbreak;
           }
         }
       }
-      
-      if (str8_match(extracted_name, name, 0)){
-        struct Chain *chain = push_array(scratch.arena, struct Chain, 1);
-        SLLQueuePush(first, last, chain);
-        count += 1;
-        chain->itype = itype;
-        if (count == output_cap){
-          goto dblbreak;
-        }
+    }
+    
+    dblbreak:;
+    
+    
+    // assemble result
+    CV_TypeId *itypes = push_array_aligned(arena, CV_TypeId, count, 8);
+    {
+      CV_TypeId *itype_ptr = itypes;
+      for (struct Chain *node = first;
+           node != 0;
+           node = node->next, itype_ptr += 1){
+        *itype_ptr = node->itype;
       }
     }
+    result.itypes = itypes;
+    result.count = count;
+    
+    scratch_end(scratch);
   }
-  
-  dblbreak:;
-  
-  
-  // assemble result
-  CV_TypeId *itypes = push_array_aligned(arena, CV_TypeId, count, 8);
-  {
-    CV_TypeId *itype_ptr = itypes;
-    for (struct Chain *node = first;
-         node != 0;
-         node = node->next, itype_ptr += 1){
-      *itype_ptr = node->itype;
-    }
-  }
-  CV_TypeIdArray result = {0};
-  result.itypes = itypes;
-  result.count = count;
-  
-  scratch_end(scratch);
-  
-  return(result);
+  return result;
 }
 
 internal CV_TypeId
-pdb_tpi_first_itype_from_name(PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *tpi_leaf,
-                              String8 name, B32 compare_unique_name){
+pdb_tpi_first_itype_from_name(PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *tpi_leaf, String8 name, B32 compare_unique_name)
+{
   Temp scratch = scratch_begin(0, 0);
-  CV_TypeIdArray array = pdb_tpi_itypes_from_name(scratch.arena, tpi_hash, tpi_leaf,
-                                                  name, compare_unique_name, 1);
+  CV_TypeIdArray array = pdb_tpi_itypes_from_name(scratch.arena, tpi_hash, tpi_leaf, name, compare_unique_name, 1);
   CV_TypeId result = 0;
-  if (array.count > 0){
+  if(array.count > 0)
+  {
     result = array.itypes[0];
   }
-  
   scratch_end(scratch);
   return(result);
 }

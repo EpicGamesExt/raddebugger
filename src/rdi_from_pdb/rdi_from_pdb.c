@@ -4118,6 +4118,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               
               //- rjf: CONSTANT
               case CV_SymKind_CONSTANT:
+              if(params->subset_flags & RDIM_SubsetFlag_Constants)
               {
                 // rjf: unpack
                 CV_SymConstant *sym = (CV_SymConstant *)sym_header_struct_base;
