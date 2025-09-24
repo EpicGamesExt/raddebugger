@@ -7575,6 +7575,7 @@ ctrl_memory_artifact_create(String8 key, B32 *retry_out)
     else if(range_arena != 0)
     {
       arena_release(range_arena);
+      retry_out[0] = 1;
     }
     
     //- rjf: wakeup on new reads
@@ -7617,10 +7618,196 @@ ctrl_key_from_process_vaddr_range_new(CTRL_Handle process, Rng1U64 vaddr_range, 
   } key_data = {process, vaddr_range, zero_terminated};
   String8 key = str8_struct(&key_data);
   Access *access = access_open();
-  AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, endt_us, .gen = ctrl_mem_gen(), .slots_count = 2048);
+  AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, endt_us, .gen = ctrl_mem_gen(), .slots_count = 2048, .stale_out = out_is_stale);
   C_Key content_key = {0};
   MemoryCopyStruct(&content_key, &artifact);
   access_close(access);
   ProfEnd();
   return content_key;
+}
+
+////////////////////////////////
+//~ rjf: Call Stack Artifact Cache Hooks / Lookups
+
+internal AC_Artifact
+ctrl_call_stack_artifact_create(String8 key, B32 *retry_out)
+{
+  AC_Artifact artifact = {0};
+  if(lane_idx() == 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    
+    //- rjf: unpack key
+    CTRL_Handle thread_handle = {0};
+    str8_deserial_read_struct(key, 0, &thread_handle);
+    
+    //- rjf: produce mini entity context for just this call stack build
+    CTRL_EntityCtx *entity_ctx = push_array(scratch.arena, CTRL_EntityCtx, 1);
+    MutexScopeR(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
+    {
+      CTRL_EntityCtx *src_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
+      CTRL_EntityCtx *dst_ctx = entity_ctx;
+      {
+        dst_ctx->root = &ctrl_entity_nil;
+        dst_ctx->hash_slots_count = 1024;
+        dst_ctx->hash_slots = push_array(scratch.arena, CTRL_EntityHashSlot, dst_ctx->hash_slots_count);
+        MemoryCopyArray(dst_ctx->entity_kind_counts, src_ctx->entity_kind_counts);
+        MemoryCopyArray(dst_ctx->entity_kind_alloc_gens, src_ctx->entity_kind_alloc_gens);
+      }
+      CTRL_Entity *src_thread = ctrl_entity_from_handle(src_ctx, thread_handle);
+      CTRL_Entity *src_process = ctrl_process_from_entity(src_thread);
+      {
+        CTRL_EntityRec rec = {0};
+        CTRL_Entity *dst_parent = &ctrl_entity_nil;
+        for(CTRL_Entity *src_e = src_process; src_e != &ctrl_entity_nil; src_e = rec.next)
+        {
+          rec = ctrl_entity_rec_depth_first_pre(src_e, src_process);
+          
+          // rjf: copy this entity
+          CTRL_Entity *dst_e = push_array(scratch.arena, CTRL_Entity, 1);
+          {
+            dst_e->first = dst_e->last = dst_e->next = dst_e->prev = &ctrl_entity_nil;
+            dst_e->parent           = dst_parent;
+            dst_e->kind             = src_e->kind;
+            dst_e->arch             = src_e->arch;
+            dst_e->is_frozen        = src_e->is_frozen;
+            dst_e->is_soloed        = src_e->is_soloed;
+            dst_e->rgba             = src_e->rgba;
+            dst_e->handle           = src_e->handle;
+            dst_e->id               = src_e->id;
+            dst_e->vaddr_range      = src_e->vaddr_range;
+            dst_e->stack_base       = src_e->stack_base;
+            dst_e->timestamp        = src_e->timestamp;
+            dst_e->bp_flags         = src_e->bp_flags;
+            dst_e->string           = push_str8_copy(scratch.arena, src_e->string);
+          }
+          if(dst_parent == &ctrl_entity_nil)
+          {
+            dst_ctx->root = dst_e;
+          }
+          else
+          {
+            DLLPushBack_NPZ(&ctrl_entity_nil, dst_parent->first, dst_parent->last, dst_e, next, prev);
+          }
+          
+          // rjf: insert into hash map
+          {
+            U64 hash = ctrl_hash_from_handle(dst_e->handle);
+            U64 slot_idx = hash%dst_ctx->hash_slots_count;
+            CTRL_EntityHashSlot *slot = &dst_ctx->hash_slots[slot_idx];
+            CTRL_EntityHashNode *node = 0;
+            for(CTRL_EntityHashNode *n = slot->first; n != 0; n = n->next)
+            {
+              if(ctrl_handle_match(n->entity->handle, dst_e->handle))
+              {
+                node = n;
+                break;
+              }
+            }
+            if(node == 0)
+            {
+              node = push_array(scratch.arena, CTRL_EntityHashNode, 1);
+              MemoryZeroStruct(node);
+              DLLPushBack(slot->first, slot->last, node);
+              node->entity = dst_e;
+            }
+          }
+          
+          // rjf: push/pop
+          if(rec.push_count)
+          {
+            dst_parent = dst_e;
+          }
+          else for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
+          {
+            dst_parent = dst_parent->parent;
+          }
+        }
+      }
+    }
+    
+    //- rjf: compute call stack
+    B32 good = 0;
+    Arena *arena = arena_alloc();
+    CTRL_CallStack *call_stack = push_array(arena, CTRL_CallStack, 1);
+    {
+      CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, thread_handle);
+      CTRL_Entity *process = ctrl_process_from_entity(thread);
+      U64 pre_reg_gen = 0;
+      U64 post_reg_gen = 0;
+      U64 pre_mem_gen = 0;
+      U64 post_mem_gen = 0;
+      CTRL_Unwind unwind = {0};
+      {
+        pre_reg_gen = ctrl_reg_gen();
+        pre_mem_gen = ctrl_mem_gen();
+        unwind = ctrl_unwind_from_thread(arena, entity_ctx, thread_handle, os_now_microseconds()+5000);
+        if(unwind.flags == 0)
+        {
+          good = 1;
+          call_stack[0] = ctrl_call_stack_from_unwind(arena, process, &unwind);
+        }
+        post_reg_gen = ctrl_reg_gen();
+        post_mem_gen = ctrl_mem_gen();
+      }
+      if(pre_reg_gen != post_reg_gen || pre_mem_gen != post_mem_gen)
+      {
+        good = 0;
+      }
+    }
+    
+    //- rjf: broadcast update
+    if(good && ctrl_state->wakeup_hook != 0)
+    {
+      ctrl_state->wakeup_hook();
+    }
+    
+    //- rjf: bundle call stack as artifact
+    if(good)
+    {
+      artifact.u64[0] = (U64)arena;
+      artifact.u64[1] = (U64)call_stack;
+    }
+    
+    //- rjf: release results on bad
+    if(!good)
+    {
+      arena_release(arena);
+    }
+    
+    //- rjf: retry on bad
+    if(!good)
+    {
+      retry_out[0] = 1;
+    }
+    
+    scratch_end(scratch);
+  }
+  lane_sync_u64(&artifact.u64[0], 0);
+  lane_sync_u64(&artifact.u64[1], 0);
+  return artifact;
+}
+
+internal void
+ctrl_call_stack_artifact_destroy(AC_Artifact artifact)
+{
+  Arena *arena = (Arena *)artifact.u64[0];
+  if(arena != 0)
+  {
+    arena_release(arena);
+  }
+}
+
+internal CTRL_CallStack
+ctrl_call_stack_from_thread_new(Access *access, CTRL_Handle thread_handle, B32 high_priority, U64 endt_us)
+{
+  CTRL_CallStack result = {0};
+  {
+    AC_Artifact artifact = ac_artifact_from_key(access, str8_struct(&thread_handle), ctrl_call_stack_artifact_create, ctrl_call_stack_artifact_destroy, endt_us, .gen = ctrl_mem_gen() + ctrl_reg_gen());
+    if(artifact.u64[1] != 0)
+    {
+      MemoryCopyStruct(&result, (CTRL_CallStack *)artifact.u64[1]);
+    }
+  }
+  return result;
 }

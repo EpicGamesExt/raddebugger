@@ -104,6 +104,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   //- rjf: launch async threads
   Thread *async_threads = 0;
   U64 async_threads_count = 0;
+  U64 lane_broadcast_val = 0;
   {
     U64 num_main_threads = 1;
 #if defined(CTRL_CORE_H)
@@ -113,7 +114,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
     U64 num_main_threads_clamped = Min(num_async_threads, num_main_threads);
     num_async_threads -= num_main_threads_clamped;
     num_async_threads = Max(1, num_async_threads);
-    U64 lane_broadcast_val = 0;
     Barrier barrier = barrier_alloc(num_async_threads);
     LaneCtx *lane_ctxs = push_array(scratch.arena, LaneCtx, num_async_threads);
     async_threads_count = num_async_threads;

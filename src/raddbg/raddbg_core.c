@@ -11495,8 +11495,10 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: push frame scopes
   //
+  Access *frame_access_restore = rd_state->frame_access;
   DI_Scope *frame_di_scope_restore = rd_state->frame_di_scope;
   CTRL_Scope *frame_ctrl_scope_restore = rd_state->frame_ctrl_scope;
+  rd_state->frame_access = access_open();
   rd_state->frame_di_scope = di_scope_open();
   rd_state->frame_ctrl_scope = ctrl_scope_open();
   rd_state->got_frame_call_stack_tree = 0;
@@ -17323,8 +17325,10 @@ rd_frame(void)
   // will sleep for vsync, and we do not want to hold handles for long,
   // since eviction threads may be waiting to get rid of stuff.
   //
+  access_close(rd_state->frame_access);
   di_scope_close(rd_state->frame_di_scope);
   ctrl_scope_close(rd_state->frame_ctrl_scope);
+  rd_state->frame_access = frame_access_restore;
   rd_state->frame_di_scope = frame_di_scope_restore;
   rd_state->frame_ctrl_scope = frame_ctrl_scope_restore;
   

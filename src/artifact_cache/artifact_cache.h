@@ -27,6 +27,7 @@ struct AC_ArtifactParams
   U64 slots_count;
   U64 gen;
   B32 wait_for_fresh;
+  B32 *stale_out;
 };
 
 ////////////////////////////////

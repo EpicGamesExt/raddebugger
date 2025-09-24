@@ -66,6 +66,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
   Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
   
   //- rjf: cache * key -> existing artifact
+  B32 artifact_is_stale = 0;
   B32 got_artifact = 0;
   B32 need_request = 0;
   AC_Artifact artifact = {0};
@@ -78,6 +79,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
         if(ins_atomic_u64_eval(&n->completion_count) != 0 && (n->gen == params->gen || !params->wait_for_fresh))
         {
           got_artifact = 1;
+          artifact_is_stale = (n->gen == params->gen);
           artifact = n->val;
           access_touch(access, &n->access_pt, stripe->cv);
         }
@@ -150,6 +152,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
       if(!got_artifact && ins_atomic_u64_eval(&node->completion_count) != 0 && ((node->gen == params->gen) || !params->wait_for_fresh || out_of_time))
       {
         got_artifact = 1;
+        artifact_is_stale = (node->gen == params->gen);
         artifact = node->val;
         access_touch(access, &node->access_pt, stripe->cv);
       }
@@ -163,6 +166,12 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
       // rjf: wait for results
       cond_var_wait_rw(stripe->cv, stripe->rw_mutex, 1, endt_us);
     }
+  }
+  
+  //- rjf: report staleness
+  if(params->stale_out)
+  {
+    params->stale_out[0] = artifact_is_stale;
   }
   
   return artifact;
