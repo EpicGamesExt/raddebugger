@@ -7617,7 +7617,7 @@ ctrl_key_from_process_vaddr_range_new(CTRL_Handle process, Rng1U64 vaddr_range, 
   } key_data = {process, vaddr_range, zero_terminated};
   String8 key = str8_struct(&key_data);
   Access *access = access_open();
-  AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_mem_gen(), ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, 2048);
+  AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, endt_us, .gen = ctrl_mem_gen(), .slots_count = 2048);
   C_Key content_key = {0};
   MemoryCopyStruct(&content_key, &artifact);
   access_close(access);

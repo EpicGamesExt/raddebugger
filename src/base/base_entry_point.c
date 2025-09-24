@@ -3,11 +3,11 @@
 
 global U64 global_update_tick_idx = 0;
 global CondVar async_tick_start_cond_var = {0};
-global CondVar async_tick_stop_cond_var = {0};
 global Mutex async_tick_start_mutex = {0};
 global Mutex async_tick_stop_mutex = {0};
 global B32 async_loop_again = 0;
 global B32 global_async_exit = 0;
+thread_static B32 is_async_thread = 0;
 
 internal void
 main_thread_base_entry_point(int arguments_count, char **arguments)
@@ -18,7 +18,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   //- rjf: set up async thread group info
   async_tick_start_cond_var = cond_var_alloc();
   async_tick_start_mutex = mutex_alloc();
-  async_tick_stop_cond_var = cond_var_alloc();
   async_tick_stop_mutex = mutex_alloc();
   
   //- rjf: set up telemetry
@@ -186,9 +185,11 @@ async_thread_entry_point(void *params)
 {
   LaneCtx lctx = *(LaneCtx *)params;
   lane_ctx(lctx);
+  is_async_thread = 1;
   ThreadNameF("async_thread_%I64u", lane_idx());
-  for(;!ins_atomic_u32_eval(&global_async_exit);)
+  for(;;)
   {
+    // rjf: wait for signal if we need, otherwise reset loop signal & continue
     if(!ins_atomic_u32_eval(&async_loop_again))
     {
       MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
@@ -197,6 +198,7 @@ async_thread_entry_point(void *params)
     {
       async_loop_again = 0;
     }
+    
 #if defined(ARTIFACT_CACHE_H)
     ac_async_tick();
 #endif
@@ -209,6 +211,18 @@ async_thread_entry_point(void *params)
 #if defined(TEXTURE_CACHE_H)
     tex_async_tick();
 #endif
-    cond_var_broadcast(async_tick_stop_cond_var);
+    
+    // rjf: take exit signal; break if set
+    lane_sync();
+    B32 need_exit = 0;
+    if(lane_idx() == 0)
+    {
+      need_exit = ins_atomic_u32_eval(&global_async_exit);
+    }
+    lane_sync_u64(&need_exit, 0);
+    if(need_exit)
+    {
+      break;
+    }
   }
 }

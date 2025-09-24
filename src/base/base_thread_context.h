@@ -94,7 +94,7 @@ internal void tctx_lane_barrier_wait(void *broadcast_ptr, U64 broadcast_size, U6
 #define lane_from_task_idx(idx) ((idx)%lane_count())
 #define lane_ctx(ctx) tctx_set_lane_ctx((ctx))
 #define lane_sync() tctx_lane_barrier_wait(0, 0, 0)
-#define lane_sync_u64(ptr, src_lane_idx) tctx_lane_barrier_wait((ptr), sizeof(U64), (src_lane_idx))
+#define lane_sync_u64(ptr, src_lane_idx) tctx_lane_barrier_wait((ptr), sizeof(*(ptr)), (src_lane_idx))
 #define lane_range(count) m_range_from_n_idx_m_count(lane_idx(), lane_count(), (count))
 
 //- rjf: thread names

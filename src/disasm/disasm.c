@@ -512,7 +512,7 @@ dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params)
     String8 key = str8_list_join(scratch.arena, &key_parts, 0);
     
     // rjf: get info
-    AC_Artifact artifact = ac_artifact_from_key(access, key, fs_change_gen(), dasm_artifact_create, dasm_artifact_destroy, 1024);
+    AC_Artifact artifact = ac_artifact_from_key(access, key, dasm_artifact_create, dasm_artifact_destroy, 0, .gen = fs_change_gen());
     DASM_Artifact *dasm_artifact = (DASM_Artifact *)artifact.u64[0];
     if(dasm_artifact)
     {

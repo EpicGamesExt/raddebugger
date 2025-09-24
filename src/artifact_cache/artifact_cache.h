@@ -19,6 +19,16 @@ struct AC_Artifact
 typedef AC_Artifact AC_CreateFunctionType(String8 key, B32 *retry_out);
 typedef void AC_DestroyFunctionType(AC_Artifact artifact);
 
+typedef struct AC_ArtifactParams AC_ArtifactParams;
+struct AC_ArtifactParams
+{
+  AC_CreateFunctionType *create;
+  AC_DestroyFunctionType *destroy;
+  U64 slots_count;
+  U64 gen;
+  B32 wait_for_fresh;
+};
+
 ////////////////////////////////
 //~ rjf: Cache Types
 
@@ -51,6 +61,7 @@ struct AC_Node
   // rjf: metadata
   AccessPt access_pt;
   U64 working_count;
+  U64 completion_count;
 };
 
 typedef struct AC_Slot AC_Slot;
@@ -105,7 +116,8 @@ internal void ac_init(void);
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal AC_Artifact ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType *create, AC_DestroyFunctionType *destroy, U64 slots_count);
+internal AC_Artifact ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U64 endt_us);
+#define ac_artifact_from_key(access, key, create_fn, destroy_fn, endt_us, ...) ac_artifact_from_key_((access), (key), &(AC_ArtifactParams){.create = (create_fn), .destroy = (destroy_fn), __VA_ARGS__}, (endt_us))
 
 ////////////////////////////////
 //~ rjf: Asynchronous Tick

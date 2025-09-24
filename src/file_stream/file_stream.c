@@ -84,24 +84,69 @@ fs_artifact_create(String8 key, B32 *retry_out)
     key_read_off += str8_deserial_read_struct(key, key_read_off, &range);
   }
   
-  //- rjf: do read
-  ProfBegin("read \"%.*s\" [0x%I64x, 0x%I64x)", str8_varg(path), range.min, range.max);
-  FileProperties pre_props = os_properties_from_file_path(path);
-  U64 range_size = dim_1u64(range);
-  U64 read_size = Min(pre_props.size - range.min, range_size);
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+  //- rjf: measure file properties *before* read
+  FileProperties pre_props = {0};
+  if(lane_idx() == 0)
+  {
+    pre_props = os_properties_from_file_path(path);
+  }
+  
+  //- rjf: setup output data
+  Arena *data_arena = 0;
+  U64 data_buffer_size = 0;
+  U8 *data_buffer = 0;
+  if(lane_idx() == 0)
+  {
+    U64 range_size = dim_1u64(range);
+    U64 read_size = Min(pre_props.size - range.min, range_size);
+    U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
+    data_arena_size += KB(4)-1;
+    data_arena_size -= data_arena_size%KB(4);
+    data_arena = arena_alloc(.reserve_size = data_arena_size, .commit_size = data_arena_size);
+    data_buffer_size = read_size;
+    data_buffer = push_array_no_zero(data_arena, U8, data_buffer_size);
+  }
+  lane_sync_u64(&data_buffer, 0);
+  lane_sync_u64(&data_buffer_size, 0);
+  
+  //- rjf: open file
+  OS_Handle file = {0};
+  if(lane_idx() == 0)
+  {
+    file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+  }
+  lane_sync_u64(&file, 0);
   B32 file_handle_is_valid = !os_handle_match(os_handle_zero(), file);
-  U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
-  data_arena_size += KB(4)-1;
-  data_arena_size -= data_arena_size%KB(4);
-  ProfBegin("allocate");
-  Arena *data_arena = arena_alloc(.reserve_size = data_arena_size, .commit_size = data_arena_size);
-  ProfEnd();
-  ProfBegin("read");
-  String8 data = os_string_from_file_range(data_arena, file, r1u64(range.min, range.min+read_size));
-  ProfEnd();
-  os_file_close(file);
-  FileProperties post_props = os_properties_from_file_path(path);
+  
+  //- rjf: do read
+  U64 total_bytes_read = 0;
+  U64 *total_bytes_read_ptr = 0;
+  if(lane_idx() == 0)
+  {
+    total_bytes_read_ptr = &total_bytes_read;
+  }
+  lane_sync_u64(&total_bytes_read_ptr, 0);
+  ProfScope("read \"%.*s\" [0x%I64x, 0x%I64x)", str8_varg(path), range.min, range.max)
+  {
+    Rng1U64 lane_read_range = lane_range(data_buffer_size);
+    U64 bytes_read = os_file_read(file, lane_read_range, data_buffer + (lane_read_range.min - range.min));
+    ins_atomic_u64_add_eval(total_bytes_read_ptr, bytes_read);
+  }
+  lane_sync();
+  lane_sync_u64(&total_bytes_read, 0);
+  
+  //- rjf: close file
+  if(lane_idx() == 0)
+  {
+    os_file_close(file);
+  }
+  
+  //- rjf: measure file properties *after* read
+  FileProperties post_props = {0};
+  if(lane_idx() == 0)
+  {
+    post_props = os_properties_from_file_path(path);
+  }
   
   //- rjf: form content key
   C_Key content_key = {0};
@@ -109,30 +154,32 @@ fs_artifact_create(String8 key, B32 *retry_out)
     content_key.id.u128[0] = u128_hash_from_str8(key);
   }
   
-  //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file
-  B32 read_good = (pre_props.modified == post_props.modified &&
-                   pre_props.size == post_props.size &&
-                   read_size == data.size &&
-                   (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
-  if(!read_good)
+  //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file;
+  //       otherwise submit data
+  if(lane_idx() == 0)
   {
-    retry_out[0] = 1;
-    ProfScope("abort")
+    B32 read_good = (pre_props.modified == post_props.modified &&
+                     pre_props.size == post_props.size &&
+                     data_buffer_size == total_bytes_read &&
+                     (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
+    if(!read_good)
     {
-      arena_release(data_arena);
-      MemoryZeroStruct(&data);
-      data_arena = 0;
+      retry_out[0] = 1;
+      ProfScope("abort")
+      {
+        arena_release(data_arena);
+        MemoryZeroStruct(&content_key);
+      }
+    }
+    else
+    {
+      ProfScope("submit")
+      {
+        c_submit_data(content_key, &data_arena, str8(data_buffer, data_buffer_size));
+      }
     }
   }
-  
-  //- rjf: submit to content store
-  else
-  {
-    ProfScope("submit")
-    {
-      c_submit_data(content_key, &data_arena, data);
-    }
-  }
+  lane_sync();
   
   //- rjf: bundle content key as artifact
   AC_Artifact artifact = {0};
@@ -149,6 +196,26 @@ fs_artifact_destroy(AC_Artifact artifact)
   C_Key key = {0};
   MemoryCopyStruct(&key, &artifact);
   c_close_key(key);
+}
+
+internal C_Key
+fs_key_from_path_range_new(String8 path, Rng1U64 range, U64 endt_us)
+{
+  C_Key result = {0};
+  Temp scratch = scratch_begin(0, 0);
+  Access *access = access_open();
+  {
+    String8List key_parts = {0};
+    str8_list_push(scratch.arena, &key_parts, str8_struct(&path.size));
+    str8_list_push(scratch.arena, &key_parts, path);
+    str8_list_push(scratch.arena, &key_parts, str8_struct(&range));
+    String8 key = str8_list_join(scratch.arena, &key_parts, 0);
+    AC_Artifact artifact = ac_artifact_from_key(access, key, fs_artifact_create, fs_artifact_destroy, endt_us);
+    MemoryCopyStruct(&result, &artifact);
+  }
+  access_close(access);
+  scratch_end(scratch);
+  return result;
 }
 
 internal C_Key
