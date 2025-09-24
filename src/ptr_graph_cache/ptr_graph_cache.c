@@ -151,6 +151,7 @@ ptg_builder_thread__entry_point(void *p)
 internal void
 ptg_evictor_thread__entry_point(void *p)
 {
+#if 0
   for(;;)
   {
     U64 check_time_us = os_now_microseconds();
@@ -199,4 +200,5 @@ ptg_evictor_thread__entry_point(void *p)
     }
     os_sleep_milliseconds(1000);
   }
+#endif
 }
