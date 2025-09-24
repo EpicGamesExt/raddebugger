@@ -747,7 +747,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   cv.type_server_count                 = ts_path_arr.count;
   cv.type_server_path_arr              = ts_path_arr.v;
   cv.ts_to_obj_arr                     = ts_to_obj_arr;
-  cv.obj_arr                           = obj_arr;
+  cv.obj_arr                           = sorted_obj_arr;
   cv.pch_arr                           = pch_arr;
   cv.debug_s_arr                       = sorted_debug_s_arr;
   cv.debug_p_arr                       = sorted_debug_p_arr;
