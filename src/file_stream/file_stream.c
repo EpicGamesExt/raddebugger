@@ -5,34 +5,6 @@
 #define LAYER_COLOR 0xfffa00ff
 
 ////////////////////////////////
-//~ rjf: Basic Helpers
-
-internal U64
-fs_little_hash_from_string(String8 string)
-{
-  U64 result = 5381;
-  for(U64 i = 0; i < string.size; i += 1)
-  {
-    result = ((result << 5) + result) + string.str[i];
-  }
-  return result;
-}
-
-internal U128
-fs_big_hash_from_string_range(String8 string, Rng1U64 range)
-{
-  Temp scratch = scratch_begin(0, 0);
-  U64 buffer_size = string.size + sizeof(U64)*2;
-  U8 *buffer = push_array_no_zero(scratch.arena, U8, buffer_size);
-  MemoryCopy(buffer, string.str, string.size);
-  MemoryCopy(buffer + string.size, &range.min, sizeof(range.min));
-  MemoryCopy(buffer + string.size + sizeof(range.min), &range.max, sizeof(range.max));
-  U128 hash = c_hash_from_data(str8(buffer, buffer_size));
-  scratch_end(scratch);
-  return hash;
-}
-
-////////////////////////////////
 //~ rjf: Top-Level API
 
 internal void
@@ -43,17 +15,8 @@ fs_init(void)
   fs_shared->arena = arena;
   fs_shared->change_gen = 1;
   fs_shared->slots_count = 1024;
-  fs_shared->stripes_count = os_get_system_info()->logical_processor_count;
   fs_shared->slots = push_array(arena, FS_Slot, fs_shared->slots_count);
-  fs_shared->stripes = push_array(arena, FS_Stripe, fs_shared->stripes_count);
-  for(U64 idx = 0; idx < fs_shared->stripes_count; idx += 1)
-  {
-    fs_shared->stripes[idx].arena = arena_alloc();
-    fs_shared->stripes[idx].cv = cond_var_alloc();
-    fs_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
-  }
-  fs_shared->req_mutex = mutex_alloc();
-  fs_shared->req_arena = arena_alloc();
+  fs_shared->stripes = stripe_array_alloc(arena);
 }
 
 ////////////////////////////////
@@ -67,6 +30,16 @@ fs_change_gen(void)
 
 ////////////////////////////////
 //~ rjf: Cache Interaction
+
+internal C_Key
+fs_content_key_from_artifact_key(String8 key)
+{
+  C_Key content_key = {0};
+  {
+    content_key.id.u128[0] = u128_hash_from_str8(key);
+  }
+  return content_key;
+}
 
 internal AC_Artifact
 fs_artifact_create(String8 key, B32 *retry_out)
@@ -150,19 +123,17 @@ fs_artifact_create(String8 key, B32 *retry_out)
   }
   
   //- rjf: form content key
-  C_Key content_key = {0};
-  {
-    content_key.id.u128[0] = u128_hash_from_str8(key);
-  }
+  C_Key content_key = fs_content_key_from_artifact_key(key);
   
   //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file;
   //       otherwise submit data
+  B32 read_good = 0;
   if(lane_idx() == 0)
   {
-    B32 read_good = (pre_props.modified == post_props.modified &&
-                     pre_props.size == post_props.size &&
-                     data_buffer_size == total_bytes_read &&
-                     (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
+    read_good = (pre_props.modified == post_props.modified &&
+                 pre_props.size == post_props.size &&
+                 data_buffer_size == total_bytes_read &&
+                 (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
     if(!read_good)
     {
       retry_out[0] = 1;
@@ -182,6 +153,45 @@ fs_artifact_create(String8 key, B32 *retry_out)
   }
   lane_sync();
   
+  //- rjf: if the read was good, record this path's timestamp in this layer's path info cache
+  U64 path_hash = u64_hash_from_str8(path);
+  if(lane_idx() == 0 && read_good)
+  {
+    U64 slot_idx = path_hash%fs_shared->slots_count;
+    FS_Slot *slot = &fs_shared->slots[slot_idx];
+    Stripe *stripe = stripe_from_slot_idx(&fs_shared->stripes, slot_idx);
+    RWMutexScope(stripe->rw_mutex, 1)
+    {
+      FS_Node *node = 0;
+      for(FS_Node *n = slot->first; n != 0; n = n->next)
+      {
+        if(str8_match(n->path, path, 0))
+        {
+          node = n;
+          break;
+        }
+      }
+      if(node == 0)
+      {
+        node = stripe->free;
+        if(node)
+        {
+          stripe->free = node->next;
+        }
+        else
+        {
+          node = push_array_no_zero(stripe->arena, FS_Node, 1);
+        }
+        MemoryZeroStruct(node);
+        node->path = str8_copy(stripe->arena, path);
+        DLLPushBack(slot->first, slot->last, node);
+      }
+      node->last_modified_timestamp = pre_props.modified;
+      node->size = pre_props.size;
+    }
+  }
+  lane_sync();
+  
   //- rjf: bundle content key as artifact
   AC_Artifact artifact = {0};
   StaticAssert(sizeof(content_key) == sizeof(artifact), artifact_key_size_check);
@@ -197,11 +207,12 @@ fs_artifact_destroy(AC_Artifact artifact)
 {
   C_Key key = {0};
   MemoryCopyStruct(&key, &artifact);
+  key._padding_ = 0;
   c_close_key(key);
 }
 
 internal C_Key
-fs_key_from_path_range_new(String8 path, Rng1U64 range, U64 endt_us)
+fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
 {
   C_Key result = {0};
   Temp scratch = scratch_begin(0, 0);
@@ -212,140 +223,35 @@ fs_key_from_path_range_new(String8 path, Rng1U64 range, U64 endt_us)
     str8_list_push(scratch.arena, &key_parts, path);
     str8_list_push(scratch.arena, &key_parts, str8_struct(&range));
     String8 key = str8_list_join(scratch.arena, &key_parts, 0);
-    AC_Artifact artifact = ac_artifact_from_key(access, key, fs_artifact_create, fs_artifact_destroy, endt_us);
+    
+    //- rjf: find generation number for this key
+    U64 gen = 0;
+    {
+      U64 hash = u64_hash_from_str8(path);
+      U64 slot_idx = hash%fs_shared->slots_count;
+      FS_Slot *slot = &fs_shared->slots[slot_idx];
+      Stripe *stripe = stripe_from_slot_idx(&fs_shared->stripes, slot_idx);
+      RWMutexScope(stripe->rw_mutex, 0)
+      {
+        for(FS_Node *n = slot->first; n != 0; n = n->next)
+        {
+          if(str8_match(path, n->path, 0))
+          {
+            gen = n->gen;
+            break;
+          }
+        }
+      }
+    }
+    
+    //- rjf: map to artifact
+    AC_Artifact artifact = ac_artifact_from_key(access, key, fs_artifact_create, fs_artifact_destroy, endt_us, .gen = gen);
     MemoryCopyStruct(&result, &artifact);
+    result._padding_ = 0;
   }
   access_close(access);
   scratch_end(scratch);
   return result;
-}
-
-internal C_Key
-fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
-{
-  Temp scratch = scratch_begin(0, 0);
-  
-  //- rjf: unpack args
-  path = path_normalized_from_string(scratch.arena, path);
-  U64 path_little_hash = fs_little_hash_from_string(path);
-  U64 path_slot_idx = path_little_hash%fs_shared->slots_count;
-  U64 path_stripe_idx = path_slot_idx%fs_shared->stripes_count;
-  FS_Slot *path_slot = &fs_shared->slots[path_slot_idx];
-  FS_Stripe *path_stripe = &fs_shared->stripes[path_stripe_idx];
-  
-  //- rjf: get root for this path - on 1st try (read mode), try to read, on 2nd try (write mode), create node
-  C_Root root = {0};
-  for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
-  {
-    B32 node_found = 0;
-    RWMutexScope(path_stripe->rw_mutex, write_mode)
-    {
-      for(FS_Node *n = path_slot->first; n != 0; n = n->next)
-      {
-        if(str8_match(n->path, path, 0))
-        {
-          node_found = 1;
-          root = n->root;
-          break;
-        }
-      }
-      if(write_mode && !node_found)
-      {
-        FS_Node *node = push_array(path_stripe->arena, FS_Node, 1);
-        SLLQueuePush(path_slot->first, path_slot->last, node);
-        node->path = push_str8_copy(path_stripe->arena, path);
-        node->root = c_root_alloc();
-        node->slots_count = 64;
-        node->slots = push_array(path_stripe->arena, FS_RangeSlot, node->slots_count);
-        root = node->root;
-      }
-    }
-    if(node_found)
-    {
-      break;
-    }
-  }
-  
-  //- rjf: build a key for this path/range combo
-  C_Key key = c_key_make(root, c_id_make(range.min, range.max));
-  
-  //- rjf: if the most recent hash for this key is zero, then try to submit a new
-  // request to pull it in.
-  if(u128_match(c_hash_from_key(key, 0), u128_zero()))
-  {
-    // rjf: loop: request, check for results, return until we can't
-    RWMutexScope(path_stripe->rw_mutex, 1) for(;;)
-    {
-      // rjf: path -> node
-      FS_Node *node = 0;
-      for(FS_Node *n = path_slot->first; n != 0; n = n->next)
-      {
-        if(str8_match(path, n->path, 0))
-        {
-          node = n;
-          break;
-        }
-      }
-      
-      // rjf: no node? -> weird case, node should've been made at this point.
-      if(node == 0)
-      {
-        break;
-      }
-      
-      // rjf: range -> node
-      U64 range_hash = fs_little_hash_from_string(str8_struct(&key.id));
-      U64 range_slot_idx = range_hash%node->slots_count;
-      FS_RangeSlot *range_slot = &node->slots[range_slot_idx];
-      FS_RangeNode *range_node = 0;
-      for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
-      {
-        if(c_id_match(n->id, key.id))
-        {
-          range_node = n;
-          break;
-        }
-      }
-      
-      // rjf: range node does not exist? create & store
-      if(range_node == 0)
-      {
-        range_node = push_array(path_stripe->arena, FS_RangeNode, 1);
-        SLLQueuePush(range_slot->first, range_slot->last, range_node);
-        range_node->id = key.id;
-      }
-      
-      // rjf: push request
-      if(range_node->working_count == 0)
-      {
-        range_node->working_count += 1;
-        MutexScope(fs_shared->req_mutex)
-        {
-          FS_RequestNode *n = push_array(fs_shared->req_arena, FS_RequestNode, 1);
-          SLLQueuePush(fs_shared->first_req, fs_shared->last_req, n);
-          fs_shared->req_count += 1;
-          n->v.key = key;
-          n->v.path = str8_copy(fs_shared->req_arena, path);
-          n->v.range = range;
-        }
-        cond_var_broadcast(async_tick_start_cond_var);
-      }
-      
-      // rjf: have time to wait? -> wait on this stripe; otherwise exit
-      B32 have_results = !u128_match(c_hash_from_key(key, 0), u128_zero());
-      if(!have_results && os_now_microseconds() < endt_us)
-      {
-        cond_var_wait_rw(path_stripe->cv, path_stripe->rw_mutex, 1, endt_us);
-      }
-      else
-      {
-        break;
-      }
-    }
-  }
-  
-  scratch_end(scratch);
-  return key;
 }
 
 internal U128
@@ -372,8 +278,42 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
 internal void
 fs_async_tick(void)
 {
-#if 0
   ProfBeginFunction();
+  
+  //- rjf: detect changed timestamps for active paths
+  {
+    Rng1U64 range = lane_range(fs_shared->slots_count);
+    for EachInRange(slot_idx, range)
+    {
+      FS_Slot *slot = &fs_shared->slots[slot_idx];
+      Stripe *stripe = stripe_from_slot_idx(&fs_shared->stripes, slot_idx);
+      for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
+      {
+        B32 found_work = 0;
+        RWMutexScope(stripe->rw_mutex, write_mode)
+        {
+          for(FS_Node *n = slot->first; n != 0; n = n->next)
+          {
+            FileProperties props = os_properties_from_file_path(n->path);
+            if(props.modified != n->last_modified_timestamp)
+            {
+              found_work = 1;
+              if(write_mode)
+              {
+                n->gen += 1;
+              }
+            }
+          }
+        }
+        if(!found_work)
+        {
+          break;
+        }
+      }
+    }
+  }
+  
+#if 0
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: do detection pass
@@ -530,6 +470,6 @@ fs_async_tick(void)
   lane_sync();
   
   scratch_end(scratch);
-  ProfEnd();
 #endif
+  ProfEnd();
 }
