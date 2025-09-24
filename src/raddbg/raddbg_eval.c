@@ -968,7 +968,7 @@ E_TYPE_IREXT_FUNCTION_DEF(call_stack)
       B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
       accel->arch = entity->arch;
       accel->process = ctrl_process_from_entity(entity)->handle;
-      accel->call_stack = ctrl_call_stack_from_thread_new(rd_state->frame_access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+      accel->call_stack = ctrl_call_stack_from_thread(rd_state->frame_ctrl_scope, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
     }
     scratch_end(scratch);
   }
