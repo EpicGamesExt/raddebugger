@@ -7727,11 +7727,15 @@ ctrl_call_stack_artifact_create(String8 key, B32 *retry_out)
     }
     
     //- rjf: compute call stack
-    B32 good = 0;
-    Arena *arena = arena_alloc();
-    CTRL_CallStack *call_stack = push_array(arena, CTRL_CallStack, 1);
+    CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, thread_handle);
+    B32 good = 1;
+    Arena *arena = 0;
+    CTRL_CallStack *call_stack = 0;
+    if(thread != &ctrl_entity_nil)
     {
-      CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, thread_handle);
+      good = 0;
+      arena = arena_alloc();
+      call_stack = push_array(arena, CTRL_CallStack, 1);
       CTRL_Entity *process = ctrl_process_from_entity(thread);
       U64 pre_reg_gen = 0;
       U64 post_reg_gen = 0;
@@ -7754,6 +7758,10 @@ ctrl_call_stack_artifact_create(String8 key, B32 *retry_out)
       {
         good = 0;
       }
+      if(!good)
+      {
+        arena_release(arena);
+      }
     }
     
     //- rjf: broadcast update
@@ -7767,12 +7775,6 @@ ctrl_call_stack_artifact_create(String8 key, B32 *retry_out)
     {
       artifact.u64[0] = (U64)arena;
       artifact.u64[1] = (U64)call_stack;
-    }
-    
-    //- rjf: release results on bad
-    if(!good)
-    {
-      arena_release(arena);
     }
     
     //- rjf: retry on bad

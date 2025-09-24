@@ -184,7 +184,7 @@ fs_artifact_create(String8 key, B32 *retry_out)
         }
         MemoryZeroStruct(node);
         node->path = str8_copy(stripe->arena, path);
-        DLLPushBack(slot->first, slot->last, node);
+        SLLQueuePush(slot->first, slot->last, node);
       }
       node->last_modified_timestamp = pre_props.modified;
       node->size = pre_props.size;
@@ -207,7 +207,6 @@ fs_artifact_destroy(AC_Artifact artifact)
 {
   C_Key key = {0};
   MemoryCopyStruct(&key, &artifact);
-  key._padding_ = 0;
   c_close_key(key);
 }
 
@@ -247,7 +246,6 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
     //- rjf: map to artifact
     AC_Artifact artifact = ac_artifact_from_key(access, key, fs_artifact_create, fs_artifact_destroy, endt_us, .gen = gen);
     MemoryCopyStruct(&result, &artifact);
-    result._padding_ = 0;
   }
   access_close(access);
   scratch_end(scratch);

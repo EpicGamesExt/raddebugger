@@ -12493,10 +12493,10 @@ rd_frame(void)
         };
         for EachElement(idx, table)
         {
-          C_Scope *c_scope = c_scope_open();
+          Access *access = access_open();
           C_Key key = table[idx].key;
           U128 hash = c_hash_from_key(key, 0);
-          String8 data = c_data_from_hash(c_scope, hash);
+          String8 data = c_data_from_hash(access, hash);
           E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
           space.u64_0 = key.root.u64[0];
@@ -12505,7 +12505,7 @@ rd_frame(void)
           expr->mode     = E_Mode_Offset;
           expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
           e_string2expr_map_insert(scratch.arena, macro_map, table[idx].name, expr);
-          c_scope_close(c_scope);
+          access_close(access);
         }
       }
 #endif

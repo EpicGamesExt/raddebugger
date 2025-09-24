@@ -11,7 +11,6 @@ typedef struct FS_Node FS_Node;
 struct FS_Node
 {
   FS_Node *next;
-  FS_Node *prev;
   String8 path;
   U64 gen;
   U64 last_modified_timestamp;
