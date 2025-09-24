@@ -190,27 +190,32 @@ async_thread_entry_point(void *params)
   for(;;)
   {
     // rjf: wait for signal if we need, otherwise reset loop signal & continue
-    if(!ins_atomic_u32_eval(&async_loop_again))
+    if(lane_idx() == 0)
     {
-      MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
+      if(!ins_atomic_u32_eval(&async_loop_again))
+      {
+        MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
+      }
+      ins_atomic_u32_eval_assign(&async_loop_again, 0);
     }
-    else if(lane_idx() == 0)
-    {
-      async_loop_again = 0;
-    }
+    lane_sync();
     
+    // rjf: do all ticks for all layers
+    ProfScope("async tick")
+    {
 #if defined(ARTIFACT_CACHE_H)
-    ac_async_tick();
+      ac_async_tick();
 #endif
 #if defined(CONTENT_H)
-    c_async_tick();
+      c_async_tick();
 #endif
 #if defined(FILE_STREAM_H)
-    fs_async_tick();
+      fs_async_tick();
 #endif
 #if defined(TEXTURE_CACHE_H)
-    tex_async_tick();
+      tex_async_tick();
 #endif
+    }
     
     // rjf: take exit signal; break if set
     lane_sync();

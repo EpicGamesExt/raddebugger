@@ -1779,7 +1779,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       containing_range.max -= containing_range.max%chunk_size;
       
       // rjf: map to hash
-      C_Key key  = fs_key_from_path_range(file_path, containing_range, 0);
+      C_Key key = fs_key_from_path_range(file_path, containing_range, 0);
       U128 hash = c_hash_from_key(key, 0);
       
       // rjf: look up from hash store
@@ -2153,7 +2153,7 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
     {
       U64 file_path_string_id = space.u64_0;
       String8 file_path = e_string_from_id(file_path_string_id);
-      result = fs_key_from_path_range(file_path, range, 0);
+      result = fs_key_from_path_range_new(file_path, range, 0);
     }break;
     case RD_EvalSpaceKind_CtrlEntity:
     {

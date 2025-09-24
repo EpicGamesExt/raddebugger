@@ -289,8 +289,8 @@ dasm_artifact_create(String8 key, B32 *retry_out)
     if(params.dbgi_key.path.size != 0)
     {
       rdi = di_rdi_from_key(di_scope, &params.dbgi_key, 1, 0);
+      stale = (stale || (rdi == &rdi_parsed_nil));
     }
-    stale = (stale || (rdi == &rdi_parsed_nil));
     
     //- rjf: data * arch * addr * dbg -> decode artifacts
     DASM_LineChunkList line_list = {0};

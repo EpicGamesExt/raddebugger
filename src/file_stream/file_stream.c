@@ -71,6 +71,7 @@ fs_change_gen(void)
 internal AC_Artifact
 fs_artifact_create(String8 key, B32 *retry_out)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: unpack key
@@ -187,6 +188,7 @@ fs_artifact_create(String8 key, B32 *retry_out)
   MemoryCopyStruct(&artifact, &content_key);
   
   scratch_end(scratch);
+  ProfEnd();
   return artifact;
 }
 
