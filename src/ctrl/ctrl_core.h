@@ -1255,5 +1255,6 @@ ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work);
 
 internal AC_Artifact ctrl_memory_artifact_create(String8 key, B32 *retry_out);
 internal void ctrl_memory_artifact_destroy(AC_Artifact artifact);
+internal C_Key ctrl_key_from_process_vaddr_range_new(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, U64 endt_us, B32 *out_is_stale);
 
 #endif // CTRL_CORE_H

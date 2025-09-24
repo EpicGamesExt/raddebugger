@@ -123,6 +123,7 @@ ac_artifact_from_key(Access *access, String8 key, U64 gen, AC_CreateFunctionType
           n->v.create = create;
         }
         cond_var_broadcast(async_tick_start_cond_var);
+        ins_atomic_u32_eval_assign(&async_loop_again, 1);
       }
       
       // rjf: found node -> break
