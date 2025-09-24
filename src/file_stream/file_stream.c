@@ -130,7 +130,7 @@ fs_artifact_create(String8 key, B32 *retry_out)
   ProfScope("read \"%.*s\" [0x%I64x, 0x%I64x)", str8_varg(path), range.min, range.max)
   {
     Rng1U64 lane_read_range = lane_range(data_buffer_size);
-    U64 bytes_read = os_file_read(file, lane_read_range, data_buffer + (lane_read_range.min - range.min));
+    U64 bytes_read = os_file_read(file, shift_1u64(lane_read_range, range.min), data_buffer + lane_read_range.min);
     ins_atomic_u64_add_eval(total_bytes_read_ptr, bytes_read);
   }
   lane_sync();

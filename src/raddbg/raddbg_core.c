@@ -1779,7 +1779,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       containing_range.max -= containing_range.max%chunk_size;
       
       // rjf: map to hash
-      C_Key key = fs_key_from_path_range(file_path, containing_range, 0);
+      C_Key key = fs_key_from_path_range_new(file_path, containing_range, 0);
       U128 hash = c_hash_from_key(key, 0);
       
       // rjf: look up from hash store
