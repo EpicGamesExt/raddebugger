@@ -86,9 +86,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(RENDER_CORE_H) && !defined(R_INIT_MANUAL)
   r_init(&cmdline);
 #endif
-#if defined(GEO_CACHE_H) && !defined(GEO_INIT_MANUAL)
-  geo_init();
-#endif
 #if defined(FONT_CACHE_H) && !defined(FNT_INIT_MANUAL)
   fnt_init();
 #endif

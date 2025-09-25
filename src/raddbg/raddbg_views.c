@@ -4363,6 +4363,51 @@ struct RD_Geo3DBoxDrawData
   R_Handle index_buffer;
 };
 
+internal AC_Artifact
+rd_geo3d_artifact_create(String8 key, B32 *retry_out)
+{
+  Access *access = access_open();
+  U128 hash = {0};
+  str8_deserial_read_struct(key, 0, &hash);
+  String8 data = c_data_from_hash(access, hash);
+  R_Handle buffer = {0};
+  if(data.size != 0)
+  {
+    buffer = r_buffer_alloc(R_ResourceKind_Static, data.size, data.str);
+  }
+  AC_Artifact artifact = {0};
+  MemoryCopy(&artifact, &buffer, Min(sizeof(artifact), sizeof(buffer)));
+  access_close(access);
+  return artifact;
+}
+
+internal void
+rd_geo3d_artifact_destroy(AC_Artifact artifact)
+{
+  R_Handle buffer = {0};
+  MemoryCopy(&buffer, &artifact, Min(sizeof(buffer), sizeof(artifact)));
+  r_buffer_release(buffer);
+}
+
+internal R_Handle
+rd_geo3d_buffer_from_key(Access *access, C_Key key)
+{
+  R_Handle result = {0};
+  for EachIndex(rewind_idx, C_KEY_HASH_HISTORY_COUNT)
+  {
+    U128 hash = c_hash_from_key(key, rewind_idx);
+    AC_Artifact artifact = ac_artifact_from_key(access, str8_struct(&hash), rd_geo3d_artifact_create, rd_geo3d_artifact_destroy, 0);
+    R_Handle buffer = {0};
+    MemoryCopy(&buffer, &artifact, Min(sizeof(buffer), sizeof(artifact)));
+    if(!r_handle_match(buffer, r_handle_zero()))
+    {
+      result = buffer;
+      break;
+    }
+  }
+  return result;
+}
+
 internal UI_BOX_CUSTOM_DRAW(rd_geo3d_box_draw)
 {
   RD_Geo3DBoxDrawData *draw_data = (RD_Geo3DBoxDrawData *)user_data;
@@ -4425,8 +4470,8 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   Rng1U64 vtxs_range = r1u64(vtx_base_off, vtx_base_off+vtx_size);
   C_Key idxs_key = rd_key_from_eval_space_range(eval.space, idxs_range, 0);
   C_Key vtxs_key = rd_key_from_eval_space_range(eval.space, vtxs_range, 0);
-  R_Handle idxs_buffer = geo_buffer_from_key(access, idxs_key);
-  R_Handle vtxs_buffer = geo_buffer_from_key(access, vtxs_key);
+  R_Handle idxs_buffer = rd_geo3d_buffer_from_key(access, idxs_key);
+  R_Handle vtxs_buffer = rd_geo3d_buffer_from_key(access, vtxs_key);
   
   //////////////////////////////
   //- rjf: equip loading info
