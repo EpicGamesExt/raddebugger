@@ -106,7 +106,7 @@ d2r_find_or_create_type_from_offset(Arena *arena, D2R_TypeTable *type_table, U64
 internal RDIM_Type *
 d2r_type_from_attrib(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
-  RDIM_Type *type = 0;
+  RDIM_Type *type = type_table->builtin_types[RDI_TypeKind_NULL];
   
   // find attrib
   DW_Attrib *attrib = dw_attrib_from_tag(input, cu, tag, kind);
@@ -127,11 +127,16 @@ d2r_type_from_attrib(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, D
     } else {
       Assert(!"unexpected attrib class");
     }
-  } else if (attrib->attrib_kind == DW_AttribKind_Null) {
-    // TODO(rjf):
-    // type = rdim_builtin_type_from_kind(*type_table->types, RDI_TypeKind_NULL);
   }
   
+  return type;
+}
+
+internal RDIM_Type *
+d2r_infer_parent_type(DW_CompUnit *cu, D2R_TagNode *tag_stack)
+{
+  D2R_TagNode *parent = tag_stack->next;
+  RDIM_Type *type = hash_table_search_u64_raw(cu->tag_ht, parent->cur_node->tag.info_off);
   return type;
 }
 
@@ -1437,8 +1442,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               type->byte_size   = dw_byte_size_32_from_tag(&input, cu, tag);
               type->udt         = udt;
               type->direct_type = d2r_type_from_attrib(arena, type_table, &input, cu, tag, DW_AttribKind_Type);
-
-              tag_stack->type = type;
             }
           } break;
           case DW_TagKind_StructureType: {
@@ -1459,8 +1462,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               type->kind      = RDI_TypeKind_Struct;
               type->udt       = udt;
               type->byte_size = dw_byte_size_32_from_tag(&input, cu, tag);
-
-              tag_stack->type = type;
             }
           } break;
           case DW_TagKind_UnionType: {
@@ -1481,8 +1482,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               type->kind      = RDI_TypeKind_Union;
               type->byte_size = dw_byte_size_32_from_tag(&input, cu, tag);
               type->udt       = udt;
-
-              tag_stack->type = type;
             }
           } break;
           case DW_TagKind_EnumerationType: {
@@ -1503,8 +1502,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               type->kind      = RDI_TypeKind_Enum;
               type->byte_size = dw_byte_size_32_from_tag(&input, cu, tag);
               type->udt       = udt;
-
-              tag_stack->type = type;
             }
           } break;
           case DW_TagKind_SubroutineType: {
@@ -1788,7 +1785,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               AssertAlways(!"unexpected parent tag");
             }
 
-            RDIM_Type      *parent = tag_stack->next->type;
+            RDIM_Type      *parent = d2r_infer_parent_type(cu, tag_stack);
             RDIM_UDTMember *member = rdim_udt_push_member(arena, &udts, parent->udt);
             member->kind           = RDI_MemberKind_Base;
             member->type           = d2r_type_from_attrib(arena, type_table, &input, cu, tag, DW_AttribKind_Type);
@@ -1801,7 +1798,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               AssertAlways(!"unexpected parent tag");
             }
 
-            RDIM_Type       *type   = tag_stack->next->type;
+            RDIM_Type       *type   = d2r_infer_parent_type(cu, tag_stack);
             RDIM_UDTEnumVal *member = rdim_udt_push_enum_val(arena, &udts, type->udt);
             member->name            = dw_string_from_tag_attrib_kind(&input, cu, tag, DW_AttribKind_Name);
             member->val             = dw_const_u64_from_tag_attrib_kind(&input, cu, tag, DW_AttribKind_ConstValue);
@@ -1822,7 +1819,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               AssertAlways(!"UDT member with multiple locations are not supported");
             }
 
-            RDIM_Type      *type   = tag_stack->next->type;
+            RDIM_Type      *type   = d2r_infer_parent_type(cu, tag_stack);
             RDIM_UDTMember *member = rdim_udt_push_member(arena, &udts, type->udt);
             member->kind           = RDI_MemberKind_DataField;
             member->name           = dw_string_from_tag_attrib_kind(&input, cu, tag, DW_AttribKind_Name);
@@ -1886,7 +1883,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                                                                                                        //default: InvalidPath; break;
                 }
 
-                RDIM_Type      *type   = tag_stack->next->type;
+                RDIM_Type      *type   = d2r_infer_parent_type(cu, tag_stack);
                 RDIM_UDTMember *member = rdim_udt_push_member(arena, &udts, type->udt);
                 member->kind           = member_kind;
                 member->type           = type;

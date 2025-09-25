@@ -27,7 +27,6 @@ typedef struct D2R_TagNode
 {
   struct D2R_TagNode *next;
   DW_TagNode         *cur_node;
-  RDIM_Type          *type;
   RDIM_Scope         *scope;
 } D2R_TagNode;
 
@@ -49,11 +48,12 @@ internal RDI_RegCode d2r_rdi_reg_code_from_dw_reg(Arch arch, DW_Reg v);
 ////////////////////////////////
 //~ rjf: Type Conversion Helpers
 
-internal RDIM_Type *d2r_create_type(Arena *arena, D2R_TypeTable *type_table);
-internal RDIM_Type *d2r_find_or_create_type_from_offset(Arena *arena, D2R_TypeTable *type_table, U64 info_off);
-internal RDIM_Type *d2r_type_from_attrib(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal RDIM_Type * d2r_create_type(Arena *arena, D2R_TypeTable *type_table);
+internal RDIM_Type * d2r_find_or_create_type_from_offset(Arena *arena, D2R_TypeTable *type_table, U64 info_off);
+internal RDIM_Type * d2r_type_from_attrib(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal RDIM_Type * d2r_infer_parent_type(DW_CompUnit *cu, D2R_TagNode *tag_stack);
 internal Rng1U64List d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag);
-internal RDIM_Type **d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out);
+internal RDIM_Type ** d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out);
 internal RDI_TypeKind d2r_unsigned_type_kind_from_size(U64 byte_size);
 internal RDI_TypeKind d2r_signed_type_kind_from_size(U64 byte_size);
 internal RDI_EvalTypeGroup d2r_type_group_from_type_kind(RDI_TypeKind x);
