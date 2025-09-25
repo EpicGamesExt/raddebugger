@@ -1866,7 +1866,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
       {
         U64 page_base_vaddr = page_range.min + page_idx*page_size;
         B32 page_is_stale = 0;
-        C_Key page_key = ctrl_key_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, endt_us, &page_is_stale);
+        C_Key page_key = ctrl_key_from_process_vaddr_range_new(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, endt_us, &page_is_stale);
         U128 page_hash = c_hash_from_key(page_key, 0);
         U128 page_last_hash = c_hash_from_key(page_key, 1);
         result.stale = (result.stale || page_is_stale);
@@ -7610,13 +7610,15 @@ ctrl_key_from_process_vaddr_range_new(CTRL_Handle process, Rng1U64 vaddr_range, 
     CTRL_Handle process;
     Rng1U64 vaddr_range;
     B32 zero_terminated;
+    B32 _padding_;
   } key_data = {process, vaddr_range, zero_terminated};
   String8 key = str8_struct(&key_data);
   Access *access = access_open();
   AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, endt_us,
                                               .gen = ctrl_mem_gen(),
                                               .slots_count = 2048,
-                                              .stale_out = out_is_stale);
+                                              .stale_out = out_is_stale,
+                                              .evict_threshold_us = 30000000);
   C_Key content_key = {0};
   MemoryCopyStruct(&content_key, &artifact);
   access_close(access);

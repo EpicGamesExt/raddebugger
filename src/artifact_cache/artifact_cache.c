@@ -81,14 +81,15 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
     {
       if(str8_match(n->key, key, 0))
       {
-        if(ins_atomic_u64_eval(&n->completion_count) != 0 && (n->gen == params->gen || !(params->flags & AC_Flag_WaitForFresh)))
+        B32 is_stale = (n->gen != params->gen);
+        if(ins_atomic_u64_eval(&n->completion_count) != 0 && (!is_stale || !(params->flags & AC_Flag_WaitForFresh)))
         {
           got_artifact = 1;
-          artifact_is_stale = (n->gen == params->gen);
+          artifact_is_stale = is_stale;
           artifact = n->val;
           access_touch(access, &n->access_pt, stripe->cv);
         }
-        if(n->gen != params->gen)
+        if(is_stale)
         {
           B32 got_task = (ins_atomic_u64_eval_cond_assign(&n->working_count, 1, 0) == 0);
           need_request = got_task;
@@ -135,6 +136,8 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
         node->key = str8_copy(stripe->arena, key);
         node->working_count = 1;
         node->evict_threshold_us = params->evict_threshold_us;
+        node->access_pt.last_time_touched_us = os_now_microseconds();
+        node->access_pt.last_update_idx_touched = update_tick_idx();
       }
       
       // rjf: request
@@ -304,6 +307,7 @@ ac_async_tick(void)
   }
   lane_sync_u64(&tasks, 0);
   lane_sync_u64(&tasks_count, 0);
+  lane_sync();
   
   //////////////////////////////
   //- rjf: do all requests
@@ -318,6 +322,7 @@ ac_async_tick(void)
     {
       for EachIndex(idx, task->wide_count)
       {
+        lane_sync();
         AC_Request *r = &task->wide[idx];
         
         // rjf: compute val
@@ -341,7 +346,7 @@ ac_async_tick(void)
         
         // rjf: create function -> cache
         AC_Cache *cache = 0;
-        if(!retry)
+        if(!retry && lane_idx() == 0)
         {
           U64 cache_hash = u64_hash_from_str8(str8_struct(&r->create));
           U64 cache_slot_idx = cache_hash%ac_shared->cache_slots_count;
@@ -383,6 +388,7 @@ ac_async_tick(void)
         }
       }
     }
+    lane_sync();
     
     //- rjf: do all thin requests for this priority
     ProfScope("thin requests (p%I64u)", task_idx)
@@ -462,7 +468,9 @@ ac_async_tick(void)
           cond_var_broadcast(stripe->cv);
         }
       }
+      lane_sync();
     }
+    lane_sync();
   }
   lane_sync();
   

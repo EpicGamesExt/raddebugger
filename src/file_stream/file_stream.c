@@ -31,16 +31,6 @@ fs_change_gen(void)
 ////////////////////////////////
 //~ rjf: Cache Interaction
 
-internal C_Key
-fs_content_key_from_artifact_key(String8 key)
-{
-  C_Key content_key = {0};
-  {
-    content_key.id.u128[0] = u128_hash_from_str8(key);
-  }
-  return content_key;
-}
-
 internal AC_Artifact
 fs_artifact_create(String8 key, B32 *retry_out)
 {
@@ -59,60 +49,75 @@ fs_artifact_create(String8 key, B32 *retry_out)
   }
   
   //- rjf: measure file properties *before* read
+  B32 file_is_good = 0;
   FileProperties pre_props = {0};
   if(lane_idx() == 0)
   {
     pre_props = os_properties_from_file_path(path);
+    file_is_good = (pre_props.modified != 0);
   }
+  lane_sync_u64(&file_is_good, 0);
   
   //- rjf: setup output data
   Arena *data_arena = 0;
   U64 data_buffer_size = 0;
   U8 *data_buffer = 0;
-  if(lane_idx() == 0)
+  if(file_is_good)
   {
-    U64 range_size = dim_1u64(range);
-    U64 read_size = Min(pre_props.size - range.min, range_size);
-    U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
-    data_arena_size += KB(4)-1;
-    data_arena_size -= data_arena_size%KB(4);
-    data_arena = arena_alloc(.reserve_size = data_arena_size, .commit_size = data_arena_size);
-    data_buffer_size = read_size;
-    data_buffer = push_array_no_zero(data_arena, U8, data_buffer_size);
+    if(lane_idx() == 0)
+    {
+      U64 range_size = dim_1u64(range);
+      U64 read_size = Min(pre_props.size - range.min, range_size);
+      U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
+      data_arena_size += KB(4)-1;
+      data_arena_size -= data_arena_size%KB(4);
+      data_arena = arena_alloc(.reserve_size = data_arena_size, .commit_size = data_arena_size);
+      data_buffer_size = read_size;
+      data_buffer = push_array_no_zero(data_arena, U8, data_buffer_size);
+    }
+    lane_sync_u64(&data_buffer, 0);
+    lane_sync_u64(&data_buffer_size, 0);
   }
-  lane_sync_u64(&data_buffer, 0);
-  lane_sync_u64(&data_buffer_size, 0);
   
   //- rjf: open file
   OS_Handle file = {0};
-  if(lane_idx() == 0)
+  if(file_is_good)
   {
-    file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+    if(lane_idx() == 0)
+    {
+      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+    }
+    lane_sync_u64(&file, 0);
   }
-  lane_sync_u64(&file, 0);
   B32 file_handle_is_valid = !os_handle_match(os_handle_zero(), file);
   
   //- rjf: do read
   U64 total_bytes_read = 0;
-  U64 *total_bytes_read_ptr = 0;
-  if(lane_idx() == 0)
+  if(file_handle_is_valid)
   {
-    total_bytes_read_ptr = &total_bytes_read;
+    U64 *total_bytes_read_ptr = 0;
+    if(lane_idx() == 0)
+    {
+      total_bytes_read_ptr = &total_bytes_read;
+    }
+    lane_sync_u64(&total_bytes_read_ptr, 0);
+    ProfScope("read \"%.*s\" [0x%I64x, 0x%I64x)", str8_varg(path), range.min, range.max)
+    {
+      Rng1U64 lane_read_range = lane_range(data_buffer_size);
+      U64 bytes_read = os_file_read(file, shift_1u64(lane_read_range, range.min), data_buffer + lane_read_range.min);
+      ins_atomic_u64_add_eval(total_bytes_read_ptr, bytes_read);
+    }
+    lane_sync();
+    lane_sync_u64(&total_bytes_read, 0);
   }
-  lane_sync_u64(&total_bytes_read_ptr, 0);
-  ProfScope("read \"%.*s\" [0x%I64x, 0x%I64x)", str8_varg(path), range.min, range.max)
-  {
-    Rng1U64 lane_read_range = lane_range(data_buffer_size);
-    U64 bytes_read = os_file_read(file, shift_1u64(lane_read_range, range.min), data_buffer + lane_read_range.min);
-    ins_atomic_u64_add_eval(total_bytes_read_ptr, bytes_read);
-  }
-  lane_sync();
-  lane_sync_u64(&total_bytes_read, 0);
   
   //- rjf: close file
-  if(lane_idx() == 0)
+  if(file_handle_is_valid)
   {
-    os_file_close(file);
+    if(lane_idx() == 0)
+    {
+      os_file_close(file);
+    }
   }
   
   //- rjf: measure file properties *after* read
@@ -123,35 +128,41 @@ fs_artifact_create(String8 key, B32 *retry_out)
   }
   
   //- rjf: form content key
-  C_Key content_key = fs_content_key_from_artifact_key(key);
+  C_Key content_key = {0};
+  {
+    content_key.id.u128[0] = u128_hash_from_str8(key);
+  }
   
   //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file;
   //       otherwise submit data
   B32 read_good = 0;
-  if(lane_idx() == 0)
+  if(file_is_good)
   {
-    read_good = (pre_props.modified == post_props.modified &&
-                 pre_props.size == post_props.size &&
-                 data_buffer_size == total_bytes_read &&
-                 (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
-    if(!read_good)
+    if(lane_idx() == 0)
     {
-      retry_out[0] = 1;
-      ProfScope("abort")
+      read_good = (pre_props.modified == post_props.modified &&
+                   pre_props.size == post_props.size &&
+                   data_buffer_size == total_bytes_read &&
+                   (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
+      if(!read_good)
       {
-        arena_release(data_arena);
-        MemoryZeroStruct(&content_key);
+        retry_out[0] = 1;
+        ProfScope("abort")
+        {
+          arena_release(data_arena);
+          MemoryZeroStruct(&content_key);
+        }
+      }
+      else
+      {
+        ProfScope("submit")
+        {
+          c_submit_data(content_key, &data_arena, str8(data_buffer, data_buffer_size));
+        }
       }
     }
-    else
-    {
-      ProfScope("submit")
-      {
-        c_submit_data(content_key, &data_arena, str8(data_buffer, data_buffer_size));
-      }
-    }
+    lane_sync();
   }
-  lane_sync();
   
   //- rjf: if the read was good, record this path's timestamp in this layer's path info cache
   U64 path_hash = u64_hash_from_str8(path);

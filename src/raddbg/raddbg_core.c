@@ -2160,7 +2160,7 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       if(entity->kind == CTRL_EntityKind_Process)
       {
-        result = ctrl_key_from_process_vaddr_range(entity->handle, range, zero_terminated, 0, 0);
+        result = ctrl_key_from_process_vaddr_range_new(entity->handle, range, zero_terminated, 0, 0);
       }
     }break;
   }

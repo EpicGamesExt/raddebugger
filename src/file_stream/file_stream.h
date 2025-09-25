@@ -55,8 +55,6 @@ internal U64 fs_change_gen(void);
 ////////////////////////////////
 //~ rjf: Artifact Cache Hooks / Accessing API
 
-internal C_Key fs_content_key_from_artifact_key(String8 key);
-
 internal AC_Artifact fs_artifact_create(String8 key, B32 *retry_out);
 internal void fs_artifact_destroy(AC_Artifact artifact);
 

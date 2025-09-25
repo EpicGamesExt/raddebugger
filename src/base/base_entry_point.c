@@ -2,6 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 global U64 global_update_tick_idx = 0;
+global U64 async_threads_count = 0;
 global CondVar async_tick_start_cond_var = {0};
 global Mutex async_tick_start_mutex = {0};
 global Mutex async_tick_stop_mutex = {0};
@@ -103,7 +104,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   
   //- rjf: launch async threads
   Thread *async_threads = 0;
-  U64 async_threads_count = 0;
   U64 lane_broadcast_val = 0;
   {
     U64 num_main_threads = 1;
@@ -121,7 +121,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
     for EachIndex(idx, num_async_threads)
     {
       lane_ctxs[idx].lane_idx = idx;
-      lane_ctxs[idx].lane_count = num_async_threads;
+      lane_ctxs[idx].lane_count = async_threads_count;
       lane_ctxs[idx].barrier = barrier;
       lane_ctxs[idx].broadcast_memory = &lane_broadcast_val;
       async_threads[idx] = thread_launch(async_thread_entry_point, &lane_ctxs[idx]);
