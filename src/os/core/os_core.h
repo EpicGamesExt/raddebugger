@@ -319,7 +319,7 @@ internal Guid os_make_guid(void);
 
 #if BUILD_ENTRY_DEFINING_UNIT
 raddbg_entry_point(entry_point);
-internal void entry_point(CmdLine *cmdline);
+internal no_inline void entry_point(CmdLine *cmdline);
 #endif
 
 #endif // OS_CORE_H

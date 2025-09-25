@@ -45,12 +45,24 @@
 # define thread_static __declspec(thread)
 #elif COMPILER_CLANG || COMPILER_GCC
 # define thread_static __thread
+#else
+# error thread_static not defined for this compiler.
 #endif
 
 #if COMPILER_MSVC
 # define force_inline __forceinline
 #elif COMPILER_CLANG || COMPILER_GCC
 # define force_inline __attribute__((always_inline))
+#else
+# error force_inline not defined for this compiler.
+#endif
+
+#if COMPILER_MSVC
+# define no_inline __declspec(noinline)
+#elif COMPILER_CLANG || COMPILER_GCC
+# define no_inline __attribute__((noinline))
+#else
+# error no_inline not defined for this compiler.
 #endif
 
 ////////////////////////////////
