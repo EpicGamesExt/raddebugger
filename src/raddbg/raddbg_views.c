@@ -3724,6 +3724,13 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(graph)
 ////////////////////////////////
 //~ rjf: bitmap @view_hook_impl
 
+typedef struct RD_BitmapTopology RD_BitmapTopology;
+struct RD_BitmapTopology
+{
+  Vec2S16 dim;
+  R_Tex2DFormat fmt;
+};
+
 typedef struct RD_BitmapBoxDrawData RD_BitmapBoxDrawData;
 struct RD_BitmapBoxDrawData
 {
@@ -3741,6 +3748,46 @@ struct RD_BitmapCanvasBoxDrawData
   Vec2F32 view_center_pos;
   F32 zoom;
 };
+
+internal AC_Artifact
+rd_bitmap_artifact_create(String8 key, B32 *retry_out)
+{
+  Access *access = access_open();
+  
+  //- rjf: unpack key
+  U128 hash = {0};
+  RD_BitmapTopology top = {0};
+  {
+    U64 key_read_off = 0;
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &hash);
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &top);
+  }
+  String8 data = c_data_from_hash(access, hash);
+  
+  //- rjf: create texture
+  R_Handle texture = {0};
+  if(top.dim.x > 0 && top.dim.y > 0 &&
+     data.size >= (U64)top.dim.x*(U64)top.dim.y*(U64)r_tex2d_format_bytes_per_pixel_table[top.fmt])
+  {
+    texture = r_tex2d_alloc(R_ResourceKind_Static, v2s32(top.dim.x, top.dim.y), top.fmt, data.str);
+  }
+  
+  //- rjf: bundle as artifact
+  AC_Artifact artifact = {0};
+  StaticAssert(sizeof(artifact) >= sizeof(texture), tex_artifact_size_check);
+  MemoryCopy(&artifact, &texture, Min(sizeof(texture), sizeof(artifact)));
+  
+  access_close(access);
+  return artifact;
+}
+
+internal void
+rd_bitmap_artifact_destroy(AC_Artifact artifact)
+{
+  R_Handle texture = {0};
+  MemoryCopy(&texture, &artifact, Min(sizeof(texture), sizeof(artifact)));
+  r_tex2d_release(texture);
+}
 
 internal Vec2F32
 rd_bitmap_screen_from_canvas_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 cvs)
@@ -3868,9 +3915,29 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //- rjf: map expression artifacts -> texture
   //
   C_Key texture_key = rd_key_from_eval_space_range(eval.space, offset_range, 0);
-  TEX_Topology topology = tex_topology_make(dim, fmt);
+  RD_BitmapTopology topology = {v2s16(dim.x, dim.y), fmt};
   U128 data_hash = {0};
-  R_Handle texture = tex_texture_from_key_topology(access, texture_key, topology, &data_hash);
+  R_Handle texture = {0};
+  for EachIndex(rewind_idx, C_KEY_HASH_HISTORY_COUNT)
+  {
+    U128 hash = c_hash_from_key(texture_key, rewind_idx);
+    struct
+    {
+      U128 hash;
+      RD_BitmapTopology top;
+    }
+    key_data = {hash, topology};
+    String8 key = str8_struct(&key_data);
+    AC_Artifact artifact = ac_artifact_from_key(access, key, rd_bitmap_artifact_create, rd_bitmap_artifact_destroy, 0);
+    R_Handle texture_candidate = {0};
+    MemoryCopy(&texture_candidate, &artifact, Min(sizeof(texture_candidate), sizeof(artifact)));
+    if(!r_handle_match(texture_candidate, r_handle_zero()))
+    {
+      data_hash = hash;
+      texture = texture_candidate;
+      break;
+    }
+  }
   String8 data = c_data_from_hash(access, data_hash);
   
   //////////////////////////////

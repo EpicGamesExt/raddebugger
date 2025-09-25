@@ -259,7 +259,6 @@
 #include "font_provider/font_provider_inc.h"
 #include "render/render_inc.h"
 #include "ptr_graph_cache/ptr_graph_cache.h"
-#include "texture_cache/texture_cache.h"
 #include "geo_cache/geo_cache.h"
 #include "font_cache/font_cache.h"
 #include "draw/draw.h"
@@ -309,7 +308,6 @@
 #include "font_provider/font_provider_inc.c"
 #include "render/render_inc.c"
 #include "ptr_graph_cache/ptr_graph_cache.c"
-#include "texture_cache/texture_cache.c"
 #include "geo_cache/geo_cache.c"
 #include "font_cache/font_cache.c"
 #include "draw/draw.c"
@@ -499,7 +497,6 @@ entry_point(CmdLine *cmd_line)
         os_gfx_init();
         fp_init();
         r_init(cmd_line);
-        tex_init();
         geo_init();
         fnt_init();
         d_init();

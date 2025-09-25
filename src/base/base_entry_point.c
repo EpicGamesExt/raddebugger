@@ -86,9 +86,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(RENDER_CORE_H) && !defined(R_INIT_MANUAL)
   r_init(&cmdline);
 #endif
-#if defined(TEXTURE_CACHE_H) && !defined(TEX_INIT_MANUAL)
-  tex_init();
-#endif
 #if defined(GEO_CACHE_H) && !defined(GEO_INIT_MANUAL)
   geo_init();
 #endif
@@ -211,9 +208,6 @@ async_thread_entry_point(void *params)
 #endif
 #if defined(FILE_STREAM_H)
       fs_async_tick();
-#endif
-#if defined(TEXTURE_CACHE_H)
-      tex_async_tick();
 #endif
     }
     
