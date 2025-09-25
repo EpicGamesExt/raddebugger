@@ -244,7 +244,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
     }
     
     //- rjf: map to artifact
-    AC_Artifact artifact = ac_artifact_from_key(access, key, fs_artifact_create, fs_artifact_destroy, endt_us, .gen = gen);
+    AC_Artifact artifact = ac_artifact_from_key(access, key, fs_artifact_create, fs_artifact_destroy, endt_us, .gen = gen, .flags = AC_Flag_Wide);
     MemoryCopyStruct(&result, &artifact);
   }
   access_close(access);

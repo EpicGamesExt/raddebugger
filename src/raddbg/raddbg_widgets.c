@@ -547,12 +547,12 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   {
     Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
-    CTRL_Scope *ctrl_scope = ctrl_scope_open();
+    Access *access = access_open();
     DI_Scope *di_scope = di_scope_open();
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
     Arch arch = entity->arch;
     B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
-    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+    CTRL_CallStack call_stack = ctrl_call_stack_from_thread_new(access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
     B32 did_first_known = 0;
     for(U64 idx = 0, limit = 10;
         idx < call_stack.frames_count && idx < limit;
@@ -592,7 +592,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
       }
     }
     di_scope_close(di_scope);
-    ctrl_scope_close(ctrl_scope);
+    access_close(access);
   }
   
   //- rjf: modules get debug info status extras

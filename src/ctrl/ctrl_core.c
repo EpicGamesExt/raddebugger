@@ -7467,7 +7467,6 @@ internal AC_Artifact
 ctrl_memory_artifact_create(String8 key, B32 *retry_out)
 {
   AC_Artifact artifact = {0};
-  if(lane_idx() == 0)
   {
     //- rjf: unpack key
     CTRL_Handle process = {0};
@@ -7591,10 +7590,6 @@ ctrl_memory_artifact_create(String8 key, B32 *retry_out)
     StaticAssert(sizeof(content_key) == sizeof(artifact), artifact_key_size_check);
     MemoryCopyStruct(&artifact, &content_key);
   }
-  lane_sync_u64(&artifact.u64[0], 0);
-  lane_sync_u64(&artifact.u64[1], 0);
-  lane_sync_u64(&artifact.u64[2], 0);
-  lane_sync_u64(&artifact.u64[3], 0);
   return artifact;
 }
 
@@ -7618,7 +7613,10 @@ ctrl_key_from_process_vaddr_range_new(CTRL_Handle process, Rng1U64 vaddr_range, 
   } key_data = {process, vaddr_range, zero_terminated};
   String8 key = str8_struct(&key_data);
   Access *access = access_open();
-  AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, endt_us, .gen = ctrl_mem_gen(), .slots_count = 2048, .stale_out = out_is_stale);
+  AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, endt_us,
+                                              .gen = ctrl_mem_gen(),
+                                              .slots_count = 2048,
+                                              .stale_out = out_is_stale);
   C_Key content_key = {0};
   MemoryCopyStruct(&content_key, &artifact);
   access_close(access);
@@ -7633,7 +7631,6 @@ internal AC_Artifact
 ctrl_call_stack_artifact_create(String8 key, B32 *retry_out)
 {
   AC_Artifact artifact = {0};
-  if(lane_idx() == 0)
   {
     Temp scratch = scratch_begin(0, 0);
     
@@ -7785,8 +7782,6 @@ ctrl_call_stack_artifact_create(String8 key, B32 *retry_out)
     
     scratch_end(scratch);
   }
-  lane_sync_u64(&artifact.u64[0], 0);
-  lane_sync_u64(&artifact.u64[1], 0);
   return artifact;
 }
 
@@ -7805,7 +7800,10 @@ ctrl_call_stack_from_thread_new(Access *access, CTRL_Handle thread_handle, B32 h
 {
   CTRL_CallStack result = {0};
   {
-    AC_Artifact artifact = ac_artifact_from_key(access, str8_struct(&thread_handle), ctrl_call_stack_artifact_create, ctrl_call_stack_artifact_destroy, endt_us, .gen = ctrl_mem_gen() + ctrl_reg_gen());
+    AC_Artifact artifact = ac_artifact_from_key(access, str8_struct(&thread_handle), ctrl_call_stack_artifact_create, ctrl_call_stack_artifact_destroy, endt_us,
+                                                .gen = ctrl_mem_gen() + ctrl_reg_gen(),
+                                                .evict_threshold_us = 10000000,
+                                                .flags = high_priority ? AC_Flag_HighPriority : 0);
     if(artifact.u64[1] != 0)
     {
       MemoryCopyStruct(&result, (CTRL_CallStack *)artifact.u64[1]);

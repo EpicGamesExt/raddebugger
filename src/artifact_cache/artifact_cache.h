@@ -19,6 +19,15 @@ struct AC_Artifact
 typedef AC_Artifact AC_CreateFunctionType(String8 key, B32 *retry_out);
 typedef void AC_DestroyFunctionType(AC_Artifact artifact);
 
+typedef U32 AC_Flags;
+typedef enum AC_FlagsEnum
+{
+  AC_Flag_WaitForFresh = (1<<0),
+  AC_Flag_HighPriority = (1<<1),
+  AC_Flag_Wide = (1<<2),
+}
+AC_FlagsEnum;
+
 typedef struct AC_ArtifactParams AC_ArtifactParams;
 struct AC_ArtifactParams
 {
@@ -26,8 +35,9 @@ struct AC_ArtifactParams
   AC_DestroyFunctionType *destroy;
   U64 slots_count;
   U64 gen;
-  B32 wait_for_fresh;
+  U64 evict_threshold_us;
   B32 *stale_out;
+  AC_Flags flags;
 };
 
 ////////////////////////////////
@@ -63,6 +73,7 @@ struct AC_Node
   AccessPt access_pt;
   U64 working_count;
   U64 completion_count;
+  U64 evict_threshold_us;
 };
 
 typedef struct AC_Slot AC_Slot;
@@ -86,6 +97,19 @@ struct AC_Cache
   StripeArray stripes;
 };
 
+typedef struct AC_RequestBatch AC_RequestBatch;
+struct AC_RequestBatch
+{
+  Mutex mutex;
+  Arena *arena;
+  AC_RequestNode *first_wide;
+  AC_RequestNode *last_wide;
+  AC_RequestNode *first_thin;
+  AC_RequestNode *last_thin;
+  U64 wide_count;
+  U64 thin_count;
+};
+
 typedef struct AC_Shared AC_Shared;
 struct AC_Shared
 {
@@ -97,11 +121,7 @@ struct AC_Shared
   StripeArray cache_stripes;
   
   // rjf: requests
-  Mutex req_mutex;
-  Arena *req_arena;
-  AC_RequestNode *first_req;
-  AC_RequestNode *last_req;
-  U64 req_count;
+  AC_RequestBatch req_batches[2]; // 0: high priority, 1: low priority
 };
 
 ////////////////////////////////
@@ -118,7 +138,7 @@ internal void ac_init(void);
 //~ rjf: Cache Lookups
 
 internal AC_Artifact ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U64 endt_us);
-#define ac_artifact_from_key(access, key, create_fn, destroy_fn, endt_us, ...) ac_artifact_from_key_((access), (key), &(AC_ArtifactParams){.create = (create_fn), .destroy = (destroy_fn), __VA_ARGS__}, (endt_us))
+#define ac_artifact_from_key(access, key, create_fn, destroy_fn, endt_us, ...) ac_artifact_from_key_((access), (key), &(AC_ArtifactParams){.create = (create_fn), .destroy = (destroy_fn), .evict_threshold_us = (2000000), __VA_ARGS__}, (endt_us))
 
 ////////////////////////////////
 //~ rjf: Asynchronous Tick

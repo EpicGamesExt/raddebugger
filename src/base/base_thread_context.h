@@ -27,6 +27,13 @@ struct AccessPt
   U64 last_update_idx_touched;
 };
 
+typedef struct AccessPtExpireParams AccessPtExpireParams;
+struct AccessPtExpireParams
+{
+  U64 time;
+  U64 update_idxs;
+};
+
 typedef struct Touch Touch;
 struct Touch
 {
@@ -112,7 +119,8 @@ internal void access_close(Access *access);
 internal void access_touch(Access *access, AccessPt *pt, CondVar cv);
 
 //- rjf: access points
-internal B32 access_pt_is_expired(AccessPt *pt);
+internal B32 access_pt_is_expired_(AccessPt *pt, AccessPtExpireParams *params);
+#define access_pt_is_expired(pt, ...) access_pt_is_expired_((pt), &(AccessPtExpireParams){.time = 2000000, .update_idxs = 10, __VA_ARGS__})
 
 //- rjf: progress counters
 #define set_progress_ptr(ptr) (tctx_selected()->progress_counter_ptr = (ptr))

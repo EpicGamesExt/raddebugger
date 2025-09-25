@@ -1026,11 +1026,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(block_eval.space);
       if(entity->kind == CTRL_EntityKind_Thread)
       {
-        CTRL_Scope *ctrl_scope = ctrl_scope_open();
+        Access *access = access_open();
         info.callstack_thread = entity;
         U64 frame_num = ev_block_num_from_id(block, key.child_id);
         B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
-        CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+        CTRL_CallStack call_stack = ctrl_call_stack_from_thread_new(access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
         if(1 <= frame_num && frame_num <= call_stack.frames_count)
         {
           CTRL_CallStackFrame *f = &call_stack.frames[frame_num-1];
@@ -1038,7 +1038,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           info.callstack_inline_depth = f->inline_depth;
           info.callstack_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         }
-        ctrl_scope_close(ctrl_scope);
+        access_close(access);
       }
     }
     
@@ -2930,10 +2930,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   };
   AnnotationList *visible_memory_annotations = push_array(scratch.arena, AnnotationList, visible_memory_size);
   {
-    CTRL_Scope *ctrl_scope = ctrl_scope_open();
+    Access *access = access_open();
     CTRL_Entity *selected_thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
     CTRL_Entity *selected_process = ctrl_entity_ancestor_from_kind(selected_thread, CTRL_EntityKind_Process);
-    CTRL_CallStack selected_call_stack = ctrl_call_stack_from_thread(ctrl_scope, selected_thread->handle, 1, 0);
+    CTRL_CallStack selected_call_stack = ctrl_call_stack_from_thread_new(access, selected_thread->handle, 1, 0);
     CTRL_Entity *eval_process = &ctrl_entity_nil;
     if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
     {
@@ -3203,7 +3203,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       }
     }
     
-    ctrl_scope_close(ctrl_scope);
+    access_close(access);
   }
   
   //////////////////////////////

@@ -1208,13 +1208,13 @@ d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count)
   }
   else
   {
-    CTRL_Scope *ctrl_scope = ctrl_scope_open();
-    CTRL_CallStack callstack = ctrl_call_stack_from_thread(ctrl_scope, thread->handle, 1, 0);
+    Access *access = access_open();
+    CTRL_CallStack callstack = ctrl_call_stack_from_thread_new(access, thread->handle, 1, 0);
     if(callstack.concrete_frames_count != 0)
     {
       result = regs_rip_from_arch_block(thread->arch, callstack.concrete_frames[unwind_count%callstack.concrete_frames_count]->regs);
     }
-    ctrl_scope_close(ctrl_scope);
+    access_close(access);
   }
   return result;
 }
@@ -1886,10 +1886,10 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               case D_CmdKind_StepOverLine: {traps = d_trap_net_from_thread__step_over_line(scratch.arena, thread);}break;
               case D_CmdKind_StepOut:
               {
-                CTRL_Scope *ctrl_scope = ctrl_scope_open();
+                Access *access = access_open();
                 
                 // rjf: thread => call stack
-                CTRL_CallStack callstack = ctrl_call_stack_from_thread(ctrl_scope, thread->handle, 1, os_now_microseconds()+10000);
+                CTRL_CallStack callstack = ctrl_call_stack_from_thread_new(access, thread->handle, 1, os_now_microseconds()+10000);
                 
                 // rjf: use first unwind frame to generate trap
                 if(callstack.concrete_frames_count > 1)
@@ -1904,7 +1904,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                   good = 0;
                 }
                 
-                ctrl_scope_close(ctrl_scope);
+                access_close(access);
               }break;
             }
             if(good && traps.count != 0)
