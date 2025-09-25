@@ -208,8 +208,6 @@
 #define OS_GFX_INIT_MANUAL 1
 #define FP_INIT_MANUAL 1
 #define R_INIT_MANUAL 1
-#define TEX_INIT_MANUAL 1
-#define GEO_INIT_MANUAL 1
 #define FNT_INIT_MANUAL 1
 #define D_INIT_MANUAL 1
 #define RD_INIT_MANUAL 1
@@ -495,7 +493,6 @@ entry_point(CmdLine *cmd_line)
         os_gfx_init();
         fp_init();
         r_init(cmd_line);
-        geo_init();
         fnt_init();
         d_init();
         rd_init(cmd_line);
