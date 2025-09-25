@@ -17,10 +17,10 @@ struct D2R_ConvertParams
 
 typedef struct D2R_TypeTable
 {
-  HashTable          *ht;
-  RDIM_TypeChunkList *types;
-  U64                 type_chunk_cap;
-  RDIM_Type          *varg_type;
+  HashTable           *ht;
+  RDIM_TypeChunkList  *types;
+  U64                  type_chunk_cap;
+  RDIM_Type          **builtin_types;
 } D2R_TypeTable;
 
 typedef struct D2R_TagNode
