@@ -68,7 +68,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(MUTABLE_TEXT_H) && !defined(MTX_INIT_MANUAL)
   mtx_init();
 #endif
-#if defined(DBGI_H) && !defined(DI_INIT_MANUAL)
+#if defined(DBG_INFO_H) && !defined(DI_INIT_MANUAL)
   di_init();
 #endif
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)

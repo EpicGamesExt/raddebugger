@@ -1,8 +1,8 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef DBGI_H
-#define DBGI_H
+#ifndef DBG_INFO_H
+#define DBG_INFO_H
 
 ////////////////////////////////
 //~ rjf: Cache Key Type
@@ -486,4 +486,4 @@ internal void di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys);
 internal DI_Match di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us);
 ASYNC_WORK_DEF(di_match_work);
 
-#endif // DBGI_H
+#endif // DBG_INFO_H
