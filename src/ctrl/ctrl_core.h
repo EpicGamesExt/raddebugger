@@ -1253,14 +1253,14 @@ ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work);
 ////////////////////////////////
 //~ rjf: Process Memory Artifact Cache Hooks / Lookups
 
-internal AC_Artifact ctrl_memory_artifact_create(String8 key, B32 *retry_out);
+internal AC_Artifact ctrl_memory_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out);
 internal void ctrl_memory_artifact_destroy(AC_Artifact artifact);
 internal C_Key ctrl_key_from_process_vaddr_range_new(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, U64 endt_us, B32 *out_is_stale);
 
 ////////////////////////////////
 //~ rjf: Call Stack Artifact Cache Hooks / Lookups
 
-internal AC_Artifact ctrl_call_stack_artifact_create(String8 key, B32 *retry_out);
+internal AC_Artifact ctrl_call_stack_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out);
 internal void ctrl_call_stack_artifact_destroy(AC_Artifact artifact);
 internal CTRL_CallStack ctrl_call_stack_from_thread_new(Access *access, CTRL_Handle thread_handle, B32 high_priority, U64 endt_us);
 

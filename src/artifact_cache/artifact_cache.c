@@ -81,7 +81,8 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
     {
       if(str8_match(n->key, key, 0))
       {
-        B32 is_stale = (n->gen != params->gen);
+        ins_atomic_u64_eval_assign(&n->last_requested_gen, params->gen);
+        B32 is_stale = (n->last_completed_gen != params->gen);
         if(ins_atomic_u64_eval(&n->completion_count) != 0 && (!is_stale || !(params->flags & AC_Flag_WaitForFresh)))
         {
           got_artifact = 1;
@@ -159,6 +160,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
           }
           n->v.key = str8_copy(req_batch->arena, key);
           n->v.gen = params->gen;
+          n->v.last_requested_gen = &node->last_requested_gen;
           n->v.create = params->create;
         }
         cond_var_broadcast(async_tick_start_cond_var);
@@ -166,10 +168,10 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
       }
       
       // rjf: get value from node, if possible
-      if(!got_artifact && ins_atomic_u64_eval(&node->completion_count) != 0 && ((node->gen == params->gen) || !(params->flags & AC_Flag_WaitForFresh) || out_of_time))
+      if(!got_artifact && ins_atomic_u64_eval(&node->completion_count) != 0 && ((node->last_completed_gen == params->gen) || !(params->flags & AC_Flag_WaitForFresh) || out_of_time))
       {
         got_artifact = 1;
-        artifact_is_stale = (node->gen == params->gen);
+        artifact_is_stale = (node->last_completed_gen == params->gen);
         artifact = node->val;
         access_touch(access, &node->access_pt, stripe->cv);
       }
@@ -327,7 +329,7 @@ ac_async_tick(void)
         
         // rjf: compute val
         B32 retry = 0;
-        AC_Artifact val = r->create(r->key, &retry);
+        AC_Artifact val = r->create(r->key, r->gen, r->last_requested_gen, &retry);
         
         // rjf: retry? -> resubmit request
         if(retry && lane_idx() == 0)
@@ -377,7 +379,7 @@ ac_async_tick(void)
             {
               if(str8_match(n->key, r->key, 0))
               {
-                n->gen = r->gen;
+                n->last_completed_gen = r->gen;
                 n->val = val;
                 ins_atomic_u64_dec_eval(&n->working_count);
                 ins_atomic_u64_inc_eval(&n->completion_count);
@@ -408,7 +410,7 @@ ac_async_tick(void)
         
         // rjf: compute val
         B32 retry = 0;
-        AC_Artifact val = r->create(r->key, &retry);
+        AC_Artifact val = r->create(r->key, r->gen, r->last_requested_gen, &retry);
         
         // rjf: retry? -> resubmit request
         if(retry)
@@ -458,7 +460,7 @@ ac_async_tick(void)
             {
               if(str8_match(n->key, r->key, 0))
               {
-                n->gen = r->gen;
+                n->last_completed_gen = r->gen;
                 n->val = val;
                 ins_atomic_u64_dec_eval(&n->working_count);
                 ins_atomic_u64_inc_eval(&n->completion_count);

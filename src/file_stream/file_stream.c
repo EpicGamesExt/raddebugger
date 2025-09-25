@@ -32,7 +32,7 @@ fs_change_gen(void)
 //~ rjf: Cache Interaction
 
 internal AC_Artifact
-fs_artifact_create(String8 key, B32 *retry_out)
+fs_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);

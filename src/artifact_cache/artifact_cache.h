@@ -16,7 +16,7 @@ struct AC_Artifact
 ////////////////////////////////
 //~ rjf: Artifact Computation Function Types
 
-typedef AC_Artifact AC_CreateFunctionType(String8 key, B32 *retry_out);
+typedef AC_Artifact AC_CreateFunctionType(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out);
 typedef void AC_DestroyFunctionType(AC_Artifact artifact);
 
 typedef U32 AC_Flags;
@@ -48,6 +48,7 @@ struct AC_Request
 {
   String8 key;
   U64 gen;
+  U64 *last_requested_gen;
   AC_CreateFunctionType *create;
 };
 
@@ -66,7 +67,8 @@ struct AC_Node
   
   // rjf: key/gen/value
   String8 key;
-  U64 gen;
+  U64 last_requested_gen;
+  U64 last_completed_gen;
   AC_Artifact val;
   
   // rjf: metadata
@@ -74,6 +76,8 @@ struct AC_Node
   U64 working_count;
   U64 completion_count;
   U64 evict_threshold_us;
+  B32 cancelled;
+  U64 _unused_;
 };
 
 typedef struct AC_Slot AC_Slot;

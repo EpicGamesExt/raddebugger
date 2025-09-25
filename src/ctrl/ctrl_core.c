@@ -7464,7 +7464,7 @@ ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work)
 //~ rjf: Process Memory Artifact Cache Hooks / Lookups
 
 internal AC_Artifact
-ctrl_memory_artifact_create(String8 key, B32 *retry_out)
+ctrl_memory_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
 {
   AC_Artifact artifact = {0};
   {
@@ -7631,7 +7631,7 @@ ctrl_key_from_process_vaddr_range_new(CTRL_Handle process, Rng1U64 vaddr_range, 
 //~ rjf: Call Stack Artifact Cache Hooks / Lookups
 
 internal AC_Artifact
-ctrl_call_stack_artifact_create(String8 key, B32 *retry_out)
+ctrl_call_stack_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
 {
   AC_Artifact artifact = {0};
   {
