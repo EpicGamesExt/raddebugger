@@ -601,7 +601,6 @@ struct RD_State
   F32 frame_dt;
   Access *frame_access;
   DI_Scope *frame_di_scope;
-  CTRL_Scope *frame_ctrl_scope;
   CTRL_CallStackTree frame_call_stack_tree;
   B32 got_frame_call_stack_tree;
   
