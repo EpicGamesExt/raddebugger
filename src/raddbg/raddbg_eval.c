@@ -968,7 +968,7 @@ E_TYPE_IREXT_FUNCTION_DEF(call_stack)
       B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
       accel->arch = entity->arch;
       accel->process = ctrl_process_from_entity(entity)->handle;
-      accel->call_stack = ctrl_call_stack_from_thread_new(rd_state->frame_access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+      accel->call_stack = ctrl_call_stack_from_thread(rd_state->frame_access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
     }
     scratch_end(scratch);
   }
@@ -1571,7 +1571,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack_tree)
   if(!rd_state->got_frame_call_stack_tree)
   {
     rd_state->got_frame_call_stack_tree = 1;
-    rd_state->frame_call_stack_tree = ctrl_call_stack_tree_new(rd_state->frame_access, 0);
+    rd_state->frame_call_stack_tree = ctrl_call_stack_tree(rd_state->frame_access, 0);
   }
   RD_CallStackTreeExpandAccel *accel = push_array(arena, RD_CallStackTreeExpandAccel, 1);
   accel->node = &ctrl_call_stack_tree_node_nil;
