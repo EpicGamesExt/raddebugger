@@ -7829,17 +7829,143 @@ ctrl_call_stack_from_thread_new(Access *access, CTRL_Handle thread_handle, B32 h
 internal AC_Artifact
 ctrl_call_stack_tree_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
 {
+  Temp scratch = scratch_begin(0, 0);
+  Access *access = access_open();
   
+  //- rjf: gather list of all thread handles
+  U64 threads_count = 0;
+  CTRL_Handle *threads = 0;
+  CTRL_Handle *threads_processes = 0;
+  Arch *threads_arches = 0;
+  MutexScopeR(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
+  {
+    CTRL_EntityCtx *ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
+    CTRL_EntityArray thread_entities = ctrl_entity_array_from_kind(ctx, CTRL_EntityKind_Thread);
+    threads_count = thread_entities.count;
+    threads = push_array(scratch.arena, CTRL_Handle, threads_count);
+    threads_processes = push_array(scratch.arena, CTRL_Handle, threads_count);
+    threads_arches = push_array(scratch.arena, Arch, threads_count);
+    for EachIndex(idx, threads_count)
+    {
+      threads[idx] = thread_entities.v[idx]->handle;
+      threads_processes[idx] = thread_entities.v[idx]->parent->handle;
+      threads_arches[idx] = thread_entities.v[idx]->arch;
+    }
+  }
+  
+  //- rjf: gather all callstacks
+  B32 stale = 0;
+  U64 pre_mem_gen = ctrl_mem_gen();
+  U64 pre_reg_gen = ctrl_reg_gen();
+  CTRL_CallStack *call_stacks = push_array(scratch.arena, CTRL_CallStack, threads_count);
+  {
+    for EachIndex(idx, threads_count)
+    {
+      call_stacks[idx] = ctrl_call_stack_from_thread_new(access, threads[idx], 0, 0);
+      if(call_stacks[idx].concrete_frames_count == 0)
+      {
+        stale = 1;
+        break;
+      }
+    }
+  }
+  U64 post_mem_gen = ctrl_mem_gen();
+  U64 post_reg_gen = ctrl_reg_gen();
+  stale = (stale || pre_mem_gen != post_mem_gen || pre_reg_gen != post_reg_gen);
+  
+  //- rjf: build call stack tree
+  Arena *arena = 0;
+  CTRL_CallStackTree *tree = 0;
+  if(!stale)
+  {
+    U64 id_gen = 0;
+    arena = arena_alloc();
+    tree = push_array(arena, CTRL_CallStackTree, 1);
+    tree->root = push_array(arena, CTRL_CallStackTreeNode, 1);
+    MemoryCopyStruct(tree->root, &ctrl_call_stack_tree_node_nil);
+    tree->root->id = id_gen;
+    tree->slots_count = Max(1, threads_count);
+    tree->slots = push_array(arena, CTRL_CallStackTreeNode *, tree->slots_count);
+    id_gen += 1;
+    for EachIndex(thread_idx, threads_count)
+    {
+      CTRL_Handle thread = threads[thread_idx];
+      CTRL_Handle process = threads_processes[thread_idx];
+      Arch arch = threads_arches[thread_idx];
+      CTRL_CallStack call_stack = call_stacks[thread_idx];
+      CTRL_CallStackTreeNode *thread_node = tree->root;
+      for EachIndex(frame_idx, call_stack.frames_count)
+      {
+        U64 vaddr = regs_rip_from_arch_block(arch, call_stack.frames[frame_idx].regs);
+        U64 depth = call_stack.frames[frame_idx].inline_depth;
+        CTRL_CallStackTreeNode *next_node = &ctrl_call_stack_tree_node_nil;
+        for(CTRL_CallStackTreeNode *child = thread_node->first; child != &ctrl_call_stack_tree_node_nil; child = child->next)
+        {
+          if(ctrl_handle_match(child->process, process) && child->vaddr == vaddr && child->depth == depth)
+          {
+            next_node = child;
+            break;
+          }
+        }
+        if(next_node == &ctrl_call_stack_tree_node_nil)
+        {
+          next_node = push_array(arena, CTRL_CallStackTreeNode, 1);
+          MemoryCopyStruct(next_node, &ctrl_call_stack_tree_node_nil);
+          next_node->id = id_gen;
+          SLLStackPush_N(tree->slots[next_node->id%tree->slots_count], next_node, hash_next);
+          id_gen += 1;
+          SLLQueuePush_NZ(&ctrl_call_stack_tree_node_nil, thread_node->first, thread_node->last, next_node, next);
+          next_node->parent = thread_node;
+          thread_node->child_count += 1;
+        }
+        thread_node = next_node;
+      }
+      ctrl_handle_list_push(arena, &thread_node->threads, &thread);
+      for(CTRL_CallStackTreeNode *n = thread_node; n != &ctrl_call_stack_tree_node_nil; n = n->parent)
+      {
+        n->all_descendant_threads_count += 1;
+      }
+    }
+  }
+  
+  //- rjf: produce artifact
+  AC_Artifact artifact = {0};
+  {
+    artifact.u64[0] = (U64)arena;
+    artifact.u64[1] = (U64)tree;
+  }
+  
+  //- rjf: retry on stale
+  if(stale)
+  {
+    retry_out[0] = 1;
+  }
+  
+  access_close(access);
+  scratch_end(scratch);
+  return artifact;
 }
 
 internal void
 ctrl_call_stack_tree_artifact_destroy(AC_Artifact artifact)
 {
-  
+  Arena *arena = (Arena *)artifact.u64[0];
+  if(arena != 0)
+  {
+    arena_release(arena);
+  }
 }
 
 internal CTRL_CallStackTree
 ctrl_call_stack_tree_new(Access *access, U64 endt_us)
 {
-  
+  CTRL_CallStackTree result = {&ctrl_call_stack_tree_node_nil};
+  {
+    AC_Artifact artifact = ac_artifact_from_key(access, str8_zero(), ctrl_call_stack_tree_artifact_create, ctrl_call_stack_tree_artifact_destroy, endt_us);
+    if(artifact.u64[1] != 0)
+    {
+      MemoryCopyStruct(&result, (CTRL_CallStackTree *)artifact.u64[1]);
+    }
+  }
+  return result;
 }

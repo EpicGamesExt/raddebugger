@@ -1571,7 +1571,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack_tree)
   if(!rd_state->got_frame_call_stack_tree)
   {
     rd_state->got_frame_call_stack_tree = 1;
-    rd_state->frame_call_stack_tree = ctrl_call_stack_tree(rd_state->frame_ctrl_scope, 0);
+    rd_state->frame_call_stack_tree = ctrl_call_stack_tree_new(rd_state->frame_access, 0);
   }
   RD_CallStackTreeExpandAccel *accel = push_array(arena, RD_CallStackTreeExpandAccel, 1);
   accel->node = &ctrl_call_stack_tree_node_nil;
