@@ -886,6 +886,10 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                 {
                   flags |= E_TypeFlag_Volatile;
                 }
+                if(rdi_type->flags & RDI_TypeModifierFlag_Restrict)
+                {
+                  flags |= E_TypeFlag_Restrict;
+                }
                 type = push_array(arena, E_Type, 1);
                 type->kind            = kind;
                 type->direct_type_key = direct_type_key;
@@ -1678,6 +1682,10 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       if(type->flags & E_TypeFlag_Volatile)
       {
         str8_list_push(arena, out, str8_lit("volatile "));
+      }
+      if(type->flags & E_TypeFlag_Restrict)
+      {
+        str8_list_push(arena, out, str8_lit("restrict "));
       }
     }break;
     
