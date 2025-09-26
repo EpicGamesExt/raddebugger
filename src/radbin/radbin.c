@@ -827,9 +827,23 @@ rb_thread_entry_point(void *p)
               MSF_RawStreamTable *st = msf_raw_stream_table_from_data(scratch.arena, msf_data);
               String8 info_data = msf_data_from_stream_number(scratch.arena, msf_data, st, PDB_FixedStream_Info);
               PDB_Info *info = pdb_info_from_data(scratch.arena, info_data);
-              if(info != 0)
+              if(info != 0 && info_data.size >= sizeof(PDB_InfoHeader))
               {
-                unique_identifier_string = string_from_guid(arena, info->auth_guid);
+                PDB_InfoHeader *info_header = (PDB_InfoHeader *)info_data.str;
+                Guid guid = info->auth_guid;
+                unique_identifier_string = str8f(arena, "%08X%04X%04X%02X%02X%02X%02X%02X%02X%02X%02X%u",
+                                                 guid.data1,
+                                                 guid.data2,
+                                                 guid.data3,
+                                                 guid.data4[0],
+                                                 guid.data4[1],
+                                                 guid.data4[2],
+                                                 guid.data4[3],
+                                                 guid.data4[4],
+                                                 guid.data4[5],
+                                                 guid.data4[6],
+                                                 guid.data4[7],
+                                                 info_header->age);
               }
               scratch_end(scratch);
             }
