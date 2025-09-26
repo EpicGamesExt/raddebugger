@@ -1177,8 +1177,15 @@ rb_thread_entry_point(void *p)
   {
     if(output_path.size != 0) ProfScope("write outputs [file]")
     {
-      os_write_data_list_to_file_path(output_path, output_blobs);
-      log_infof("Results written to %S", output_path);
+      B32 is_written = os_write_data_list_to_file_path(output_path, output_blobs);
+      if(is_written)
+      {
+        log_infof("Results written to %S", output_path);
+      }
+      else
+      {
+        log_user_errorf("ERROR: failed to write file %S\n", output_path);
+      }
     }
     else ProfScope("write outputs [stdout]")
     {
