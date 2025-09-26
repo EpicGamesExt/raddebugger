@@ -1957,6 +1957,7 @@ typedef struct TXT_Artifact TXT_Artifact;
 struct TXT_Artifact
 {
   Arena *arena;
+  U128 data_hash;
   TXT_TextInfo info;
 };
 
@@ -2220,12 +2221,16 @@ txt_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
     lane_sync();
   }
   
+  //- rjf: mark dependency on hash
+  c_hash_downstream_inc(hash);
+  
   //- rjf: package as artifact
   if(lane_idx() == 0 && shared->arena != 0)
   {
     shared->artifact = push_array(shared->arena, TXT_Artifact, 1);
-    shared->artifact->arena = shared->arena;
-    shared->artifact->info  = shared->info;
+    shared->artifact->arena     = shared->arena;
+    shared->artifact->data_hash = hash;
+    shared->artifact->info      = shared->info;
   }
   lane_sync();
   
@@ -2242,6 +2247,7 @@ txt_artifact_destroy(AC_Artifact artifact)
 {
   TXT_Artifact *txt_artifact = (TXT_Artifact *)artifact.u64[0];
   if(txt_artifact == 0) { return; }
+  c_hash_downstream_dec(txt_artifact->data_hash);
   arena_release(txt_artifact->arena);
 }
 

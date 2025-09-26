@@ -6166,7 +6166,7 @@ ctrl_memory_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry
     B32 pre_run_state = ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
     {
       range_size = dim_1u64(vaddr_range_clamped);
-      U64 page_size = os_get_system_info()->page_size;
+      U64 page_size = os_get_system_info()->page_size; // TODO(rjf): @page_size_from_process
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
       range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
       if(range_arena == 0)
@@ -6289,7 +6289,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
                                               .gen = ctrl_mem_gen(),
                                               .slots_count = 2048,
                                               .stale_out = out_is_stale,
-                                              .evict_threshold_us = 30000000);
+                                              .evict_threshold_us = 10000000);
   C_Key content_key = {0};
   MemoryCopyStruct(&content_key, &artifact);
   access_close(access);
@@ -6481,7 +6481,7 @@ ctrl_process_write(CTRL_Handle process, Rng1U64 range, void *src)
   if(result)
   {
     U64 endt_us = os_now_microseconds()+5000;
-    U64 page_size = os_get_system_info()->page_size;
+    U64 page_size = os_get_system_info()->page_size; // TODO(rjf): @page_size_from_process
     Rng1U64 page_range = r1u64(range.min/page_size, range.max/page_size);
     for EachInRange(page_idx, page_range)
     {

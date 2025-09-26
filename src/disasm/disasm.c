@@ -262,6 +262,7 @@ struct DASM_Artifact
 {
   Arena *arena;
   DASM_Info info;
+  U128 data_hash;
 };
 
 internal AC_Artifact
@@ -470,12 +471,16 @@ dasm_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
       retry_out[0] = 1;
     }
     
+    //- rjf: mark dependency on data hash
+    c_hash_downstream_inc(hash);
+    
     //- rjf: fill result
     if(info_arena != 0)
     {
       artifact = push_array(info_arena, DASM_Artifact, 1);
       artifact->arena = info_arena;
       artifact->info = info;
+      artifact->data_hash = hash;
     }
     
     di_scope_close(di_scope);
@@ -494,6 +499,7 @@ dasm_artifact_destroy(AC_Artifact artifact)
   DASM_Artifact *dasm_artifact = (DASM_Artifact *)artifact.u64[0];
   if(dasm_artifact == 0) { return; }
   c_close_key(dasm_artifact->info.text_key);
+  c_hash_downstream_dec(dasm_artifact->data_hash);
   arena_release(dasm_artifact->arena);
 }
 

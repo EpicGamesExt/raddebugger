@@ -437,7 +437,7 @@ ac_async_tick(void)
       for(;;)
       {
         // rjf: any new higher priority tasks? -> cancel
-        if(task_idx == 1 && ins_atomic_u64_eval(req_take_counter_ptr) != 0) MutexScope(ac_shared->req_batches[0].mutex)
+        if(task_idx == 1 && ins_atomic_u64_eval(req_take_counter_ptr) >= task->thin_count/2) MutexScope(ac_shared->req_batches[0].mutex)
         {
           if(ac_shared->req_batches[0].wide_count != 0 || ac_shared->req_batches[0].thin_count != 0)
           {

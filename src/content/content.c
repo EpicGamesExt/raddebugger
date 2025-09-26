@@ -356,7 +356,7 @@ c_close_key(C_Key key)
             history_idx < C_KEY_HASH_HISTORY_STRONG_REF_COUNT && history_idx < n->hash_history_gen;
             history_idx += 1)
         {
-          U128 hash = n->hash_history[(n->hash_history_gen+history_idx)%ArrayCount(n->hash_history)];
+          U128 hash = n->hash_history[(n->hash_history_gen-1-history_idx) % ArrayCount(n->hash_history)];
           U64 hash_slot_idx = hash.u64[1]%c_shared->blob_slots_count;
           U64 hash_stripe_idx = hash_slot_idx%c_shared->blob_stripes_count;
           C_BlobSlot *hash_slot = &c_shared->blob_slots[hash_slot_idx];
@@ -500,9 +500,8 @@ c_async_tick(void)
           {
             next = n->next;
             U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
-            U64 scope_ref_count = ins_atomic_u64_eval(&n->access_pt.access_refcount);
             U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
-            if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
+            if(access_pt_is_expired(&n->access_pt, .time = 5000000) && key_ref_count == 0 && downstream_ref_count == 0)
             {
               slot_has_work = 1;
               if(!write_mode)
