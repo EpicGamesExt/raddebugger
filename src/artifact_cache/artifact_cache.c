@@ -26,6 +26,7 @@ ac_init(void)
 internal AC_Artifact
 ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U64 endt_us)
 {
+  ProfBeginFunction();
   AC_RequestBatch *req_batch = &ac_shared->req_batches[params->flags & AC_Flag_HighPriority ? 0 : 1];
   
   //- rjf: create function -> cache
@@ -193,6 +194,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
     params->stale_out[0] = artifact_is_stale;
   }
   
+  ProfEnd();
   return artifact;
 }
 

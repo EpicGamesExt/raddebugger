@@ -1264,4 +1264,11 @@ internal AC_Artifact ctrl_call_stack_artifact_create(String8 key, U64 gen, U64 *
 internal void ctrl_call_stack_artifact_destroy(AC_Artifact artifact);
 internal CTRL_CallStack ctrl_call_stack_from_thread_new(Access *access, CTRL_Handle thread_handle, B32 high_priority, U64 endt_us);
 
+////////////////////////////////
+//~ rjf: Call Stack Tree Artifact Cache Hooks / Lookups
+
+internal AC_Artifact ctrl_call_stack_tree_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out);
+internal void ctrl_call_stack_tree_artifact_destroy(AC_Artifact artifact);
+internal CTRL_CallStackTree ctrl_call_stack_tree_new(Access *access, U64 endt_us);
+
 #endif // CTRL_CORE_H

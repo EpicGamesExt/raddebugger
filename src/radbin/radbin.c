@@ -807,7 +807,35 @@ rb_thread_entry_point(void *p)
           //- rjf: dump MODULE record
           if(lane_idx() == 0)
           {
-            str8_list_pushf(arena, &p2b_shared->dump, "MODULE windows x86_64 %I64x %S\n", bake_params.top_level_info.exe_hash, bake_params.top_level_info.exe_name);
+            // rjf: pick name to identify module
+            String8 module_name_string = bake_params.top_level_info.exe_name;
+            if(module_name_string.size == 0 && input_files.first != 0)
+            {
+              module_name_string = input_files.first->v->path;
+            }
+            
+            // rjf: pick string for unique code
+            String8 unique_identifier_string = {0};
+            if(unique_identifier_string.size == 0 && bake_params.top_level_info.exe_hash != 0)
+            {
+              unique_identifier_string = str8f(arena, "%I64x", bake_params.top_level_info.exe_hash);
+            }
+            if(unique_identifier_string.size == 0 && input_files.first != 0 && input_files.first->v->format == RB_FileFormat_PDB)
+            {
+              Temp scratch = scratch_begin(&arena, 1);
+              String8 msf_data = input_files.first->v->data;
+              MSF_RawStreamTable *st = msf_raw_stream_table_from_data(scratch.arena, msf_data);
+              String8 info_data = msf_data_from_stream_number(scratch.arena, msf_data, st, PDB_FixedStream_Info);
+              PDB_Info *info = pdb_info_from_data(scratch.arena, info_data);
+              if(info != 0)
+              {
+                unique_identifier_string = string_from_guid(arena, info->auth_guid);
+              }
+              scratch_end(scratch);
+            }
+            
+            // rjf: push record
+            str8_list_pushf(arena, &p2b_shared->dump, "MODULE windows x86_64 %S %S\n", unique_identifier_string, module_name_string);
           }
           
           //- rjf: dump FILE records

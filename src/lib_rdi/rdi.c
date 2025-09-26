@@ -133,11 +133,15 @@ struct {RDI_U8 *str; RDI_U64 size;} rdi_eval_conversion_kind_message_string_tabl
 RDI_PROC RDI_U64
 rdi_hash(RDI_U8 *ptr, RDI_U64 size)
 {
-  RDI_U64 result = 5381;
-  RDI_U8 *opl = ptr + size;
-  for(;ptr < opl; ptr += 1)
+  RDI_U64 result = 0;
+  if(size != 0)
   {
-    result = ((result << 5) + result) + *ptr;
+    result = 5381;
+    RDI_U8 *opl = ptr + size;
+    for(;ptr < opl; ptr += 1)
+    {
+      result = ((result << 5) + result) + *ptr;
+    }
   }
   return result;
 }
