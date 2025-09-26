@@ -1757,6 +1757,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       //////////////////////////
       //- rjf: modifiers / no-ops
       //
+      case E_TypeKind_Alias:
       case E_TypeKind_Modifier:
       case E_TypeKind_MetaDescription:
       case E_TypeKind_MetaDisplayName:

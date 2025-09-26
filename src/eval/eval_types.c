@@ -1953,7 +1953,8 @@ e_default_expansion_type_from_key(E_TypeKey root_key)
     // want to ignore them.
     //
     else if(kind == E_TypeKind_Lens ||
-            kind == E_TypeKind_Modifier)
+            kind == E_TypeKind_Modifier ||
+            kind == E_TypeKind_Alias)
     {
       done = 0;
     }
