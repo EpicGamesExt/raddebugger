@@ -7663,34 +7663,42 @@ ctrl_call_stack_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *r
         {
           rec = ctrl_entity_rec_depth_first_pre(src_e, src_process);
           
+          // rjf: determine if we need this entity
+          B32 need_this_entity = (ctrl_handle_match(thread_handle, src_e->handle) || src_e->kind == CTRL_EntityKind_Module || src_e->kind == CTRL_EntityKind_Process);
+          
           // rjf: copy this entity
-          CTRL_Entity *dst_e = push_array(scratch.arena, CTRL_Entity, 1);
+          CTRL_Entity *dst_e = &ctrl_entity_nil;
+          if(need_this_entity)
           {
-            dst_e->first = dst_e->last = dst_e->next = dst_e->prev = &ctrl_entity_nil;
-            dst_e->parent           = dst_parent;
-            dst_e->kind             = src_e->kind;
-            dst_e->arch             = src_e->arch;
-            dst_e->is_frozen        = src_e->is_frozen;
-            dst_e->is_soloed        = src_e->is_soloed;
-            dst_e->rgba             = src_e->rgba;
-            dst_e->handle           = src_e->handle;
-            dst_e->id               = src_e->id;
-            dst_e->vaddr_range      = src_e->vaddr_range;
-            dst_e->stack_base       = src_e->stack_base;
-            dst_e->timestamp        = src_e->timestamp;
-            dst_e->bp_flags         = src_e->bp_flags;
-            dst_e->string           = push_str8_copy(scratch.arena, src_e->string);
-          }
-          if(dst_parent == &ctrl_entity_nil)
-          {
-            dst_ctx->root = dst_e;
-          }
-          else
-          {
-            DLLPushBack_NPZ(&ctrl_entity_nil, dst_parent->first, dst_parent->last, dst_e, next, prev);
+            dst_e = push_array(scratch.arena, CTRL_Entity, 1);
+            {
+              dst_e->first = dst_e->last = dst_e->next = dst_e->prev = &ctrl_entity_nil;
+              dst_e->parent           = dst_parent;
+              dst_e->kind             = src_e->kind;
+              dst_e->arch             = src_e->arch;
+              dst_e->is_frozen        = src_e->is_frozen;
+              dst_e->is_soloed        = src_e->is_soloed;
+              dst_e->rgba             = src_e->rgba;
+              dst_e->handle           = src_e->handle;
+              dst_e->id               = src_e->id;
+              dst_e->vaddr_range      = src_e->vaddr_range;
+              dst_e->stack_base       = src_e->stack_base;
+              dst_e->timestamp        = src_e->timestamp;
+              dst_e->bp_flags         = src_e->bp_flags;
+              dst_e->string           = push_str8_copy(scratch.arena, src_e->string);
+            }
+            if(dst_parent == &ctrl_entity_nil)
+            {
+              dst_ctx->root = dst_e;
+            }
+            else
+            {
+              DLLPushBack_NPZ(&ctrl_entity_nil, dst_parent->first, dst_parent->last, dst_e, next, prev);
+            }
           }
           
           // rjf: insert into hash map
+          if(dst_e != &ctrl_entity_nil)
           {
             U64 hash = ctrl_hash_from_handle(dst_e->handle);
             U64 slot_idx = hash%dst_ctx->hash_slots_count;

@@ -524,6 +524,7 @@ ac_async_tick(void)
     //- rjf: cancelled early, unfinished tasks? -> defer to next tick
     if(lane_idx() == 0 && task_idx > 0)
     {
+      B32 need_another_try = (done_wide_count < task->wide_count || done_thin_count < task->thin_count);
       AC_RequestBatch *batch = &ac_shared->req_batches[task_idx];
       MutexScope(batch->mutex)
       {
@@ -549,7 +550,10 @@ ac_async_tick(void)
           n->v.key = str8_copy(batch->arena, n->v.key);
         }
       }
-      ins_atomic_u32_eval_assign(&async_loop_again, 1);
+      if(need_another_try)
+      {
+        ins_atomic_u32_eval_assign(&async_loop_again, 1);
+      }
     }
     lane_sync();
   }
