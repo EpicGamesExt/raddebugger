@@ -4,9 +4,10 @@
 ////////////////////////////////
 // NOTE(allen): Thread Context Functions
 
-C_LINKAGE thread_static TCTX* tctx_thread_local;
 #if !BUILD_SUPPLEMENTARY_UNIT
 C_LINKAGE thread_static TCTX* tctx_thread_local = 0;
+#else
+C_LINKAGE thread_static TCTX* tctx_thread_local;
 #endif
 
 internal void
