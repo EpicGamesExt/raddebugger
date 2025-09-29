@@ -571,15 +571,25 @@ di2_async_tick(void)
           if(0){}
           else if(og_size <= MB(4))   {thread_count = 1;}
           else if(og_size <= MB(256)) {thread_count = max_thread_count/4;}
-          else if(og_size <= MB(512)) {thread_count = max_thread_count/2;}
+          else if(og_size <= MB(512)) {thread_count = max_thread_count/3;}
+          else if(og_size <= GB(1)) {thread_count = max_thread_count/2;}
           else {thread_count = max_thread_count;}
         }
         thread_count = Max(1, thread_count);
         t->thread_count = thread_count;
       }
       
+      //- rjf: determine if there are threads available
+      B32 threads_available = 0;
+      {
+        U64 max_threads = os_get_system_info()->logical_processor_count*8;
+        U64 current_threads = di2_shared->conversion_thread_count;
+        U64 needed_threads = (current_threads + t->thread_count);
+        threads_available = (max_threads >= needed_threads);
+      }
+      
       //- rjf: launch conversion processes
-      if(!og_is_rdi && rdi_is_stale && t->thread_count != 0 && t->status != DI2_LoadTaskStatus_Active)
+      if(threads_available && !og_is_rdi && rdi_is_stale && t->thread_count != 0 && t->status != DI2_LoadTaskStatus_Active)
       {
         B32 should_compress = 0;
         OS_ProcessLaunchParams params = {0};
@@ -610,6 +620,8 @@ di2_async_tick(void)
         if(t->status == DI2_LoadTaskStatus_Active && os_process_join(t->process, 0, &exit_code))
         {
           t->status = DI2_LoadTaskStatus_Done;
+          di2_shared->conversion_process_count -= 1;
+          di2_shared->conversion_thread_count -= t->thread_count;
         }
       }
       
@@ -625,8 +637,6 @@ di2_async_tick(void)
       {
         DLLRemove(di2_shared->first_load_task, di2_shared->last_load_task, t);
         SLLStackPush(di2_shared->free_load_task, t);
-        di2_shared->conversion_process_count -= 1;
-        di2_shared->conversion_thread_count -= t->thread_count;
         ParseTaskNode *n = push_array(scratch.arena, ParseTaskNode, 1);
         n->v.key = key;
         n->v.rdi_path = rdi_path;
