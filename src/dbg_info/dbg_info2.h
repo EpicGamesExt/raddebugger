@@ -43,12 +43,6 @@ struct DI2_Node
   DI2_Node *next;
   DI2_Node *prev;
   
-  // rjf: metadata
-  AccessPt access_pt;
-  U64 refcount;
-  U64 working_count;
-  U64 completion_count;
-  
   // rjf: key
   DI2_Key key;
   
@@ -59,6 +53,13 @@ struct DI2_Node
   FileProperties file_props;
   Arena *arena;
   RDI_Parsed rdi;
+  
+  // rjf: metadata
+  AccessPt access_pt;
+  U64 refcount;
+  U64 batch_request_counts[2];
+  U64 working_count;
+  U64 completion_count;
 };
 
 typedef struct DI2_Slot DI2_Slot;

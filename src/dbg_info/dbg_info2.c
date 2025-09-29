@@ -198,20 +198,120 @@ di2_key_from_path_timestamp(String8 path, U64 min_timestamp)
 internal void
 di2_open(DI2_Key key)
 {
-  DI2_RequestBatch *batch = &di2_shared->req_batches[1];
-  MutexScope(batch->mutex)
+  //- rjf: unpack key
+  U64 hash = u64_hash_from_str8(str8_struct(&key));
+  U64 slot_idx = hash%di2_shared->slots_count;
+  DI2_Slot *slot = &di2_shared->slots[slot_idx];
+  Stripe *stripe = stripe_from_slot_idx(&di2_shared->stripes, slot_idx);
+  
+  //- rjf: bump this key's node's refcount; create if needed
+  B32 node_is_new = 0;
+  RWMutexScope(stripe->rw_mutex, 1)
   {
-    DI2_RequestNode *n = push_array(batch->arena, DI2_RequestNode, 1);
-    SLLQueuePush(batch->first, batch->last, n);
-    n->v.key = key;
-    batch->count += 1;
+    DI2_Node *node = 0;
+    for(DI2_Node *n = slot->first; n != 0; n = n->next)
+    {
+      if(di2_key_match(n->key, key) && ins_atomic_u64_eval(&n->completion_count) > 0)
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node == 0)
+    {
+      node_is_new = 1;
+      node = stripe->free;
+      if(node)
+      {
+        stripe->free = node->next;
+      }
+      else
+      {
+        node = push_array_no_zero(stripe->arena, DI2_Node, 1);
+      }
+      MemoryZeroStruct(node);
+      DLLPushBack(slot->first, slot->last, node);
+      node->key = key;
+      node->batch_request_counts[1] = 1;
+    }
+    node->refcount += 1;
+  }
+  
+  //- rjf: if new, submit low-priority request to load this key
+  if(node_is_new)
+  {
+    DI2_RequestBatch *batch = &di2_shared->req_batches[1];
+    MutexScope(batch->mutex)
+    {
+      DI2_RequestNode *n = push_array(batch->arena, DI2_RequestNode, 1);
+      SLLQueuePush(batch->first, batch->last, n);
+      n->v.key = key;
+      batch->count += 1;
+    }
+    cond_var_broadcast(async_tick_start_cond_var);
   }
 }
 
 internal void
 di2_close(DI2_Key key)
 {
-  // TODO(rjf)
+  //- rjf: unpack key
+  U64 hash = u64_hash_from_str8(str8_struct(&key));
+  U64 slot_idx = hash%di2_shared->slots_count;
+  DI2_Slot *slot = &di2_shared->slots[slot_idx];
+  Stripe *stripe = stripe_from_slot_idx(&di2_shared->stripes, slot_idx);
+  
+  //- rjf: decrement this key's node's refcount; remove if needed
+  B32 node_released = 0;
+  OS_Handle file = {0};
+  OS_Handle file_map = {0};
+  FileProperties file_props = {0};
+  void *file_base = 0;
+  Arena *arena = 0;
+  RWMutexScope(stripe->rw_mutex, 1)
+  {
+    DI2_Node *node = 0;
+    for(DI2_Node *n = slot->first; n != 0; n = n->next)
+    {
+      if(di2_key_match(n->key, key) && ins_atomic_u64_eval(&n->completion_count) > 0)
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node)
+    {
+      node->refcount -= 1;
+      if(node->refcount == 0)
+      {
+        for(;;)
+        {
+          if(access_pt_is_expired(&node->access_pt, .time = 0, .update_idxs = 0))
+          {
+            node_released = 1;
+            DLLRemove(slot->first, slot->last, node);
+            node->next = stripe->free;
+            stripe->free = node;
+            file = node->file;
+            file_map = node->file_map;
+            file_props = node->file_props;
+            arena = node->arena;
+            break;
+          }
+          cond_var_wait_rw(stripe->cv, stripe->rw_mutex, 1, max_U64);
+        }
+      }
+    }
+  }
+  
+  //- rjf: release node's resources if needed
+  if(node_released)
+  {
+    arena_release(arena);
+    os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
+    os_file_map_close(file_map);
+    os_file_close(file);
+  }
 }
 
 ////////////////////////////////
@@ -222,7 +322,58 @@ di2_rdi_from_key(Access *access, DI2_Key key, B32 high_priority, U64 endt_us)
 {
   RDI_Parsed *rdi = &rdi_parsed_nil;
   {
-    // TODO(rjf)
+    U64 hash = u64_hash_from_str8(str8_struct(&key));
+    U64 slot_idx = hash%di2_shared->slots_count;
+    DI2_Slot *slot = &di2_shared->slots[slot_idx];
+    Stripe *stripe = stripe_from_slot_idx(&di2_shared->stripes, slot_idx);
+    RWMutexScope(stripe->rw_mutex, 0) for(;;)
+    {
+      // rjf: try to grab current results
+      B32 found = 0;
+      B32 need_hi_request = 0;
+      B32 grabbed = 0;
+      for(DI2_Node *n = slot->first; n != 0; n = n->next)
+      {
+        if(di2_key_match(n->key, key))
+        {
+          found = 1;
+          if(high_priority && ins_atomic_u64_eval_cond_assign(&n->batch_request_counts[0], 1, 0) == 0)
+          {
+            need_hi_request = 1;
+          }
+          if(ins_atomic_u64_eval(&n->completion_count) > 0)
+          {
+            grabbed = 1;
+            rdi = &n->rdi;
+            access_touch(access, &n->access_pt, stripe->cv);
+          }
+          break;
+        }
+      }
+      
+      // rjf: push high-priority request if needed
+      if(need_hi_request)
+      {
+        DI2_RequestBatch *batch = &di2_shared->req_batches[0];
+        MutexScope(batch->mutex)
+        {
+          DI2_RequestNode *n = push_array(batch->arena, DI2_RequestNode, 1);
+          SLLQueuePush(batch->first, batch->last, n);
+          n->v.key = key;
+          batch->count += 1;
+        }
+        cond_var_broadcast(async_tick_start_cond_var);
+      }
+      
+      // rjf: found current results, or out-of-time? abort
+      if(grabbed || os_now_microseconds() >= endt_us)
+      {
+        break;
+      }
+      
+      // rjf: wait on stripe change
+      cond_var_wait_rw(stripe->cv, stripe->rw_mutex, 0, endt_us);
+    }
   }
   return rdi;
 }
@@ -258,8 +409,10 @@ di2_async_tick(void)
     ParseTaskNode *last_parse_task = 0;
     
     ////////////////////////////
-    //- rjf: pop requests, high priority first, and generate conversion tasks for them
+    //- rjf: pop all requests, high priority first
     //
+    DI2_RequestNode *first_req = 0;
+    DI2_RequestNode *last_req = 0;
     for EachElement(idx, di2_shared->req_batches)
     {
       DI2_RequestBatch *b = &di2_shared->req_batches[idx];
@@ -267,22 +420,59 @@ di2_async_tick(void)
       {
         for EachNode(n, DI2_RequestNode, b->first)
         {
-          DI2_LoadTask *t = di2_shared->free_load_task;
-          if(t)
-          {
-            SLLStackPop(di2_shared->free_load_task);
-          }
-          else
-          {
-            t = push_array_no_zero(di2_shared->arena, DI2_LoadTask, 1);
-          }
-          MemoryZeroStruct(t);
-          DLLPushBack(di2_shared->first_load_task, di2_shared->last_load_task, t);
-          t->key = n->v.key;
+          DI2_RequestNode *n_copy = push_array(scratch.arena, DI2_RequestNode, 1);
+          MemoryCopyStruct(&n_copy->v, &n->v);
+          SLLQueuePush(first_req, last_req, n_copy);
         }
-        arena_clear(b->arena);
-        b->first = b->last = 0;
-        b->count = 0;
+      }
+      arena_clear(b->arena);
+      b->first = b->last = 0;
+      b->count = 0;
+    }
+    
+    ////////////////////////////
+    //- rjf: generate load tasks for all unique requests
+    //
+    for EachNode(n, DI2_RequestNode, first_req)
+    {
+      // rjf: unpack request
+      DI2_Key key = n->v.key;
+      
+      // rjf: determine if this request is a duplicate
+      B32 request_is_duplicate = 1;
+      {
+        U64 hash = u64_hash_from_str8(str8_struct(&key));
+        U64 slot_idx = hash%di2_shared->slots_count;
+        DI2_Slot *slot = &di2_shared->slots[slot_idx];
+        Stripe *stripe = stripe_from_slot_idx(&di2_shared->stripes, slot_idx);
+        RWMutexScope(stripe->rw_mutex, 0)
+        {
+          for(DI2_Node *n = slot->first; n != 0; n = n->next)
+          {
+            if(di2_key_match(n->key, key))
+            {
+              request_is_duplicate = (ins_atomic_u64_eval_cond_assign(&n->working_count, 1, 0) != 0);
+              break;
+            }
+          }
+        }
+      }
+      
+      // rjf: if not a duplicate, create new task
+      if(!request_is_duplicate)
+      {
+        DI2_LoadTask *t = di2_shared->free_load_task;
+        if(t)
+        {
+          SLLStackPop(di2_shared->free_load_task);
+        }
+        else
+        {
+          t = push_array_no_zero(di2_shared->arena, DI2_LoadTask, 1);
+        }
+        MemoryZeroStruct(t);
+        DLLPushBack(di2_shared->first_load_task, di2_shared->last_load_task, t);
+        t->key = key;
       }
     }
     
@@ -481,6 +671,7 @@ di2_async_tick(void)
       //- rjf: unpack task
       DI2_Key key = parse_tasks[parse_task_idx].key;
       String8 rdi_path = parse_tasks[parse_task_idx].rdi_path;
+      ProfBegin("parse %.*s", str8_varg(rdi_path));
       
       //- rjf: open file
       OS_Handle file = {0};
@@ -518,8 +709,47 @@ di2_async_tick(void)
       
       //- rjf: commit parsed info to cache
       {
-        // TODO(rjf)
+        U64 hash = u64_hash_from_str8(str8_struct(&key));
+        U64 slot_idx = hash%di2_shared->slots_count;
+        DI2_Slot *slot = &di2_shared->slots[slot_idx];
+        Stripe *stripe = stripe_from_slot_idx(&di2_shared->stripes, slot_idx);
+        RWMutexScope(stripe->rw_mutex, 1)
+        {
+          DI2_Node *node = 0;
+          for(DI2_Node *n = slot->first; n != 0; n = n->next)
+          {
+            if(di2_key_match(n->key, key))
+            {
+              node = n;
+              break;
+            }
+          }
+          if(node)
+          {
+            node->file = file;
+            node->file_map = file_map;
+            node->file_props = file_props;
+            node->file_base = file_base;
+            node->arena = rdi_parsed_arena;
+            MemoryCopyStruct(&node->rdi, &rdi_parsed);
+            node->completion_count += 1;
+            node->working_count -= 1;
+          }
+          else
+          {
+            if(rdi_parsed_arena != 0)
+            {
+              arena_release(rdi_parsed_arena);
+            }
+            os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
+            os_file_map_close(file_map);
+            os_file_close(file);
+          }
+        }
+        cond_var_broadcast(stripe->cv);
       }
+      
+      ProfEnd();
     }
   }
   lane_sync();
