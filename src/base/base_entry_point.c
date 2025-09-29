@@ -72,7 +72,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   di_init();
 #endif
 #if defined(DBG_INFO2_H) && !defined(DI_INIT_MANUAL)
-  di2_init();
+  di2_init(&cmdline);
 #endif
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();

@@ -510,8 +510,8 @@ entry_point(CmdLine *cmd_line)
         String8 ipc_sender2main_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_sender2main_lock_semaphore_%i_", instance_pid);
         OS_Handle ipc_sender2main_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_sender2main_shared_memory_name);
         ipc_sender2main_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_sender2main_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
-        ipc_sender2main_signal_semaphore = os_semaphore_alloc(0, 1, ipc_sender2main_signal_semaphore_name);
-        ipc_sender2main_lock_semaphore = os_semaphore_alloc(1, 1, ipc_sender2main_lock_semaphore_name);
+        ipc_sender2main_signal_semaphore = semaphore_alloc(0, 1, ipc_sender2main_signal_semaphore_name);
+        ipc_sender2main_lock_semaphore = semaphore_alloc(1, 1, ipc_sender2main_lock_semaphore_name);
         
         // rjf: set up cross-process main -> sender ring buffer
         String8 ipc_main2sender_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_main2sender_shared_memory_%i_", instance_pid);
@@ -519,8 +519,8 @@ entry_point(CmdLine *cmd_line)
         String8 ipc_main2sender_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_main2sender_lock_semaphore_%i_", instance_pid);
         OS_Handle ipc_main2sender_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_main2sender_shared_memory_name);
         ipc_main2sender_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_main2sender_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
-        ipc_main2sender_signal_semaphore = os_semaphore_alloc(0, 1, ipc_main2sender_signal_semaphore_name);
-        ipc_main2sender_lock_semaphore = os_semaphore_alloc(1, 1, ipc_main2sender_lock_semaphore_name);
+        ipc_main2sender_signal_semaphore = semaphore_alloc(0, 1, ipc_main2sender_signal_semaphore_name);
+        ipc_main2sender_lock_semaphore = semaphore_alloc(1, 1, ipc_main2sender_lock_semaphore_name);
         
         // rjf: set up ipc-receiver -> main thread ring buffer; launch signaler thread
         ipc_s2m_ring_mutex = mutex_alloc();
@@ -751,6 +751,7 @@ entry_point(CmdLine *cmd_line)
     case ExecMode_BinaryUtility:
     {
       rb_entry_point(cmd_line);
+      di2_signal_completion();
     }break;
     
     //- rjf: help message box

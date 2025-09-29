@@ -158,6 +158,11 @@ struct DI2_Shared
   DI2_LoadTask *free_load_task;
   U64 conversion_process_count;
   U64 conversion_thread_count;
+  
+  // rjf: conversion completion receiving thread
+  String8 conversion_completion_signal_semaphore_name;
+  Semaphore conversion_completion_signal_semaphore;
+  Thread conversion_completion_signal_receiver_thread;
 };
 
 ////////////////////////////////
@@ -174,7 +179,7 @@ internal B32 di2_key_match(DI2_Key a, DI2_Key b);
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
 
-internal void di2_init(void);
+internal void di2_init(CmdLine *cmdline);
 
 ////////////////////////////////
 //~ rjf: Path * Timestamp Cache Submission & Lookup
@@ -196,5 +201,11 @@ internal RDI_Parsed *di2_rdi_from_key(Access *access, DI2_Key key, B32 high_prio
 //~ rjf: Asynchronous Tick
 
 internal void di2_async_tick(void);
+
+////////////////////////////////
+//~ rjf: Conversion Completion Signal Receiver Thread
+
+internal void di2_signal_completion(void);
+internal void di2_conversion_completion_signal_receiver_thread_entry_point(void *p);
 
 #endif // DBG_INFO2_H

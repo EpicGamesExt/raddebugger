@@ -22,7 +22,7 @@ di2_key_match(DI2_Key a, DI2_Key b)
 //~ rjf: Main Layer Initialization
 
 internal void
-di2_init(void)
+di2_init(CmdLine *cmdline)
 {
   Arena *arena = arena_alloc();
   di2_shared = push_array(arena, DI2_Shared, 1);
@@ -40,6 +40,24 @@ di2_init(void)
   {
     di2_shared->req_batches[idx].mutex = mutex_alloc();
     di2_shared->req_batches[idx].arena = arena_alloc();
+  }
+  U64 signal_pid = 0;
+  String8 signal_pid_string = cmd_line_string(cmdline, str8_lit("signal_pid"));
+  B32 has_parent = 1;
+  if(!try_u64_from_str8_c_rules(signal_pid_string, &signal_pid))
+  {
+    has_parent = 0;
+    signal_pid = os_get_process_info()->pid;
+  }
+  di2_shared->conversion_completion_signal_semaphore_name = str8f(arena, "conversion_completion_signal_pid_%I64u", signal_pid);
+  if(has_parent)
+  {
+    di2_shared->conversion_completion_signal_semaphore = semaphore_open(di2_shared->conversion_completion_signal_semaphore_name);
+  }
+  else
+  {
+    di2_shared->conversion_completion_signal_semaphore = semaphore_alloc(0, 65536, di2_shared->conversion_completion_signal_semaphore_name);
+    di2_shared->conversion_completion_signal_receiver_thread = thread_launch(di2_conversion_completion_signal_receiver_thread_entry_point, 0);
   }
 }
 
@@ -607,6 +625,7 @@ di2_async_tick(void)
         str8_list_pushf(scratch.arena, &params.cmd_line, "--rdi");
         str8_list_pushf(scratch.arena, &params.cmd_line, "--out:%S", rdi_path);
         str8_list_pushf(scratch.arena, &params.cmd_line, "--thread_count:%I64u", t->thread_count);
+        str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_pid:%I64u", (U64)os_get_process_info()->pid);
         str8_list_pushf(scratch.arena, &params.cmd_line, "%S", og_path);
         t->process = os_process_launch(&params);
         t->status = DI2_LoadTaskStatus_Active;
@@ -769,4 +788,26 @@ di2_async_tick(void)
   lane_sync();
   
   scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ rjf: Conversion Completion Signal Receiver Thread
+
+internal void
+di2_signal_completion(void)
+{
+  semaphore_drop(di2_shared->conversion_completion_signal_semaphore);
+}
+
+internal void
+di2_conversion_completion_signal_receiver_thread_entry_point(void *p)
+{
+  ThreadNameF("di2_conversion_completion_signal_receiver_thread");
+  for(;;)
+  {
+    if(semaphore_take(di2_shared->conversion_completion_signal_semaphore, max_U64))
+    {
+      cond_var_broadcast(async_tick_start_cond_var);
+    }
+  }
 }

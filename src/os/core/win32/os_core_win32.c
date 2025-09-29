@@ -1300,7 +1300,7 @@ os_semaphore_open(String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
   String16 name16 = str16_from_8(scratch.arena, name);
-  HANDLE handle = OpenSemaphoreW(SEMAPHORE_ALL_ACCESS , 0, (WCHAR *)name16.str);
+  HANDLE handle = OpenSemaphoreW(SEMAPHORE_ALL_ACCESS, 0, (WCHAR *)name16.str);
   Semaphore result = {(U64)handle};
   scratch_end(scratch);
   return result;

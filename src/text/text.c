@@ -2044,13 +2044,9 @@ txt_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
       Rng1U64 range = lane_range(data.size);
       for EachInRange(idx, range)
       {
-        if(data.str[idx] == '\n' || data.str[idx] == '\r')
+        if(data.str[idx] == '\n')
         {
           lane_line_count += 1;
-          if(data.str[idx] == '\r')
-          {
-            idx += 1;
-          }
         }
         if(idx && idx%1000 == 0)
         {
