@@ -114,7 +114,7 @@ for(Test *test = test_##name_identifier; test != 0; test = 0)
         }
         for(OS_HandleNode *n = processes.first; n != 0; n = n->next)
         {
-          os_process_join(n->v, max_U64);
+          os_process_join(n->v, max_U64, 0);
         }
       }
       
@@ -130,7 +130,7 @@ for(Test *test = test_##name_identifier; test != 0; test = 0)
         }
         for(OS_HandleNode *n = processes.first; n != 0; n = n->next)
         {
-          os_process_join(n->v, max_U64);
+          os_process_join(n->v, max_U64, 0);
         }
       }
       

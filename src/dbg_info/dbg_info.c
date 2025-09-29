@@ -1040,7 +1040,7 @@ ASYNC_WORK_DEF(di_parse_work)
         U64 start_wait_t = os_now_microseconds();
         for(;;)
         {
-          B32 wait_done = os_process_join(process, os_now_microseconds()+1000);
+          B32 wait_done = os_process_join(process, os_now_microseconds()+1000, 0);
           if(wait_done)
           {
             rdi_file_is_up_to_date = 1;

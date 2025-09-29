@@ -71,6 +71,9 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(DBG_INFO_H) && !defined(DI_INIT_MANUAL)
   di_init();
 #endif
+#if defined(DBG_INFO2_H) && !defined(DI_INIT_MANUAL)
+  di2_init();
+#endif
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();
 #endif
@@ -205,6 +208,9 @@ async_thread_entry_point(void *params)
 #endif
 #if defined(FILE_STREAM_H)
       fs_async_tick();
+#endif
+#if defined(DBG_INFO2_H)
+      di2_async_tick();
 #endif
     }
     

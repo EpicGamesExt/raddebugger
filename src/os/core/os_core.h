@@ -244,8 +244,7 @@ internal void        os_sleep_milliseconds(U32 msec);
 //~ rjf: @os_hooks Child Processes (Implemented Per-OS)
 
 internal OS_Handle os_process_launch(OS_ProcessLaunchParams *params);
-internal B32       os_process_join(OS_Handle handle, U64 endt_us);
-internal B32       os_process_join_exit_code(OS_Handle handle, U64 endt_us, int *exit_code_out);
+internal B32       os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out);
 internal void      os_process_detach(OS_Handle handle);
 internal B32       os_process_kill(OS_Handle handle);
 

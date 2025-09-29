@@ -142,7 +142,9 @@ t_invoke_linker_with_time_out(U64 time_out, String8 cmdline)
     if (os_handle_match(linker_handle, os_handle_zero())) {
       fprintf(stderr, "unable to start process: %.*s\n", str8_varg(g_linker));
     } else {
-      B32 was_joined = os_process_join_exit_code(linker_handle, time_out, &exit_code);
+      U64 exit_code_u64 = 0;
+      B32 was_joined = os_process_join(linker_handle, time_out, &exit_code_u64);
+      exit_code = (int)exit_code_u64;
       if (!was_joined) {
         os_process_kill(linker_handle);
         exit_code = T_LINKER_TIME_OUT_EXIT_CODE;
@@ -4428,8 +4430,8 @@ t_import_kernel32(void)
     str8_list_pushf(scratch.arena, &launch_opts.cmd_line, "%S/a.exe", g_wdir);
     OS_Handle handle = os_process_launch(&launch_opts);
     AssertAlways(!os_handle_match(handle, os_handle_zero()));
-    int exit_code = -1;
-    os_process_join_exit_code(handle, max_U64, &exit_code);
+    U64 exit_code = max_U64;
+    os_process_join(handle, max_U64, &exit_code);
     os_process_detach(handle);
     if (exit_code != 0) { goto exit; }
 

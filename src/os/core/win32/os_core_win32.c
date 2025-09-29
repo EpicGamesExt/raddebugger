@@ -1061,28 +1061,21 @@ os_process_launch(OS_ProcessLaunchParams *params)
 }
 
 internal B32
-os_process_join(OS_Handle handle, U64 endt_us)
+os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
 {
   HANDLE process = (HANDLE)(handle.u64[0]);
   DWORD sleep_ms = os_w32_sleep_ms_from_endt_us(endt_us);
   DWORD result = WaitForSingleObject(process, sleep_ms);
-  return (result == WAIT_OBJECT_0);
-}
-
-internal B32
-os_process_join_exit_code(OS_Handle handle, U64 endt_us, int *exit_code_out)
-{
-  B32 result = 0;
-  if(os_process_join(handle, endt_us))
+  B32 process_joined = (result == WAIT_OBJECT_0);
+  if(process_joined && exit_code_out)
   {
-    DWORD exit_code;
-    if(GetExitCodeProcess((HANDLE)handle.u64[0], &exit_code))
+    DWORD exit_code = 0;
+    if(GetExitCodeProcess(process, &exit_code))
     {
       *exit_code_out = exit_code;
-      result = 1;
     }
   }
-  return result; 
+  return process_joined;
 }
 
 internal B32

@@ -774,13 +774,13 @@ os_process_launch(OS_ProcessLaunchParams *params)
 }
 
 internal B32
-os_process_join(OS_Handle handle, U64 endt_us)
+os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
 {
   NotImplemented;
 }
 
-internal B32
-os_process_join_exit_code(OS_Handle handle, U64 endt_us, int *exit_code_out)
+internal U64
+os_process_array_join(OS_HandleArray processes, U64 endt_us, U64 *exit_code_out)
 {
   NotImplemented;
 }
