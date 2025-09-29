@@ -1999,6 +1999,8 @@ dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
     } else {
       result = dw_interp_const_u64(attrib->form_kind, attrib->form);
     }
+  } else if (attrib_class == DW_AttribClass_Address) {
+    result = dw_address_from_attrib(input, cu, attrib);
   } else if (attrib_class == DW_AttribClass_Reference) {
     NotImplemented;
   } else if (attrib_class != DW_AttribClass_Null) {

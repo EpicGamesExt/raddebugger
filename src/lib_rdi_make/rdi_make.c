@@ -1131,15 +1131,21 @@ rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope
 }
 
 RDI_PROC RDIM_LocationCase *
+rdim_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationCaseList *list, RDIM_Location *location, RDIM_Rng1U64 voff_range)
+{
+  RDIM_LocationCase *n = rdim_push_array(arena, RDIM_LocationCase, 1);
+  RDIM_SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  n->location = location;
+  n->voff_range = voff_range;
+  scopes->location_case_count += 1;
+  return n;
+}
+
+RDI_PROC RDIM_LocationCase *
 rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *location, RDIM_Rng1U64 voff_range)
 {
-  RDIM_LocationCase *loc_case = rdim_push_array(arena, RDIM_LocationCase, 1);
-  RDIM_SLLQueuePush(local->location_cases.first, local->location_cases.last, loc_case);
-  local->location_cases.count += 1;
-  loc_case->location = location;
-  loc_case->voff_range = voff_range;
-  scopes->location_case_count += 1;
-  return loc_case;
+  return rdim_push_location_case(arena, scopes, &local->location_cases, location, voff_range);
 }
 
 ////////////////////////////////

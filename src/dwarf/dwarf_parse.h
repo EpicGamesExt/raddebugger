@@ -132,6 +132,7 @@ typedef struct DW_Tag
   DW_TagKind     kind;
   DW_AttribList  attribs;
   U64            info_off;
+  U8             v[1];
 } DW_Tag;
 
 typedef struct DW_TagNode
