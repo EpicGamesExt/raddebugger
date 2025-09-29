@@ -16,6 +16,8 @@
 #include "content/content.h"
 #include "artifact_cache/artifact_cache.h"
 #include "file_stream/file_stream.h"
+#include "rdi/rdi_local.h"
+#include "dbg_info/dbg_info2.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
@@ -23,6 +25,8 @@
 #include "content/content.c"
 #include "artifact_cache/artifact_cache.c"
 #include "file_stream/file_stream.c"
+#include "rdi/rdi_local.c"
+#include "dbg_info/dbg_info2.c"
 
 ////////////////////////////////
 //~ rjf: Entry Point
@@ -30,15 +34,16 @@
 internal void
 entry_point(CmdLine *cmdline)
 {
+  DI2_Key key = di2_key_from_path_timestamp(str8_lit("C:/devel/raddebugger/build/raddbg.pdb"), 0);
+  di2_open(key);
   for(;;)
   {
-    C_Key key = fs_key_from_path(str8_lit("C:/devel/raddebugger/build/x.dump"), os_now_microseconds() + 100000);
-    U128 hash = c_hash_from_key(key, 0);
-    printf("hash: 0x%I64x, 0x%I64x\n", hash.u64[0], hash.u64[1]);
-    fflush(stdout);
-    if(!u128_match(u128_zero(), hash))
+    Access *access = access_open();
+    RDI_Parsed *rdi = di2_rdi_from_key(access, key, 1, 0);
+    if(rdi != &rdi_parsed_nil)
     {
-      break;
+      int x = 0;
     }
+    access_close(access);
   }
 }

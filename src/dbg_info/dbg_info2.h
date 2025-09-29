@@ -135,14 +135,14 @@ struct DI2_Shared
   Arena *arena;
   
   // rjf: key -> path cache
-  U64 key_slots_count;
-  DI2_KeySlot *key_slots;
-  StripeArray key_stripes;
+  U64 key2path_slots_count;
+  DI2_KeySlot *key2path_slots;
+  StripeArray key2path_stripes;
   
   // rjf: path -> key cache
-  U64 key_path_slots_count;
-  DI2_KeySlot *key_path_slots;
-  StripeArray key_path_stripes;
+  U64 path2key_slots_count;
+  DI2_KeySlot *path2key_slots;
+  StripeArray path2key_stripes;
   
   // rjf: debug info cache
   U64 slots_count;
@@ -179,7 +179,7 @@ internal void di2_init(void);
 ////////////////////////////////
 //~ rjf: Path * Timestamp Cache Submission & Lookup
 
-internal DI2_Key di2_key_from_path_timestamp(String8 path, U64 timestamp);
+internal DI2_Key di2_key_from_path_timestamp(String8 path, U64 min_timestamp);
 
 ////////////////////////////////
 //~ rjf: Debug Info Opening / Closing

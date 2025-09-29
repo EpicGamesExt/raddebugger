@@ -27,12 +27,12 @@ di2_init(void)
   Arena *arena = arena_alloc();
   di2_shared = push_array(arena, DI2_Shared, 1);
   di2_shared->arena = arena;
-  di2_shared->key_slots_count = 4096;
-  di2_shared->key_slots = push_array(arena, DI2_KeySlot, di2_shared->key_slots_count);
-  di2_shared->key_stripes = stripe_array_alloc(arena);
-  di2_shared->key_path_slots_count = 4096;
-  di2_shared->key_path_slots = push_array(arena, DI2_KeySlot, di2_shared->key_path_slots_count);
-  di2_shared->key_path_stripes = stripe_array_alloc(arena);
+  di2_shared->key2path_slots_count = 4096;
+  di2_shared->key2path_slots = push_array(arena, DI2_KeySlot, di2_shared->key2path_slots_count);
+  di2_shared->key2path_stripes = stripe_array_alloc(arena);
+  di2_shared->path2key_slots_count = 4096;
+  di2_shared->path2key_slots = push_array(arena, DI2_KeySlot, di2_shared->path2key_slots_count);
+  di2_shared->path2key_stripes = stripe_array_alloc(arena);
   di2_shared->slots_count = 4096;
   di2_shared->slots = push_array(arena, DI2_Slot, di2_shared->slots_count);
   di2_shared->stripes = stripe_array_alloc(arena);
@@ -51,9 +51,9 @@ di2_key_from_path_timestamp(String8 path, U64 min_timestamp)
 {
   //- rjf: unpack key
   U64 hash = u64_hash_from_str8(path);
-  U64 slot_idx = hash%di2_shared->key_slots_count;
-  DI2_KeySlot *slot = &di2_shared->key_slots[slot_idx];
-  Stripe *stripe = stripe_from_slot_idx(&di2_shared->key_stripes, slot_idx);
+  U64 slot_idx = hash%di2_shared->path2key_slots_count;
+  DI2_KeySlot *slot = &di2_shared->path2key_slots[slot_idx];
+  Stripe *stripe = stripe_from_slot_idx(&di2_shared->path2key_stripes, slot_idx);
   
   //- rjf: look up key, create if needed
   DI2_Key key = {0};
@@ -117,6 +117,7 @@ di2_key_from_path_timestamp(String8 path, U64 min_timestamp)
             B32 is_pdb = 0;
             if(!is_pdb)
             {
+              read_only local_persist char msf_msf20_magic[] = "Microsoft C/C++ program database 2.00\r\n\x1aJG\0\0";
               U8 msf20_magic_maybe[sizeof(msf_msf20_magic)] = {0};
               os_file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
               if(MemoryMatch(msf20_magic_maybe, msf_msf20_magic, sizeof(msf20_magic_maybe)))
@@ -126,6 +127,7 @@ di2_key_from_path_timestamp(String8 path, U64 min_timestamp)
             }
             if(!is_pdb)
             {
+              read_only local_persist char msf_msf70_magic[] = "Microsoft C/C++ MSF 7.00\r\n\032DS\0\0";
               U8 msf70_magic_maybe[sizeof(msf_msf70_magic)] = {0};
               os_file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
               if(MemoryMatch(msf70_magic_maybe, msf_msf70_magic, sizeof(msf70_magic_maybe)))
@@ -154,9 +156,9 @@ di2_key_from_path_timestamp(String8 path, U64 min_timestamp)
       if(made_key)
       {
         U64 key_hash = u64_hash_from_str8(str8_struct(&key));
-        U64 key_slot_idx = key_hash%di2_shared->key_path_slots_count;
-        DI2_KeySlot *key_slot = &di2_shared->key_path_slots[key_slot_idx];
-        Stripe *key_stripe = stripe_from_slot_idx(&di2_shared->key_path_stripes, key_slot_idx);
+        U64 key_slot_idx = key_hash%di2_shared->key2path_slots_count;
+        DI2_KeySlot *key_slot = &di2_shared->key2path_slots[key_slot_idx];
+        Stripe *key_stripe = stripe_from_slot_idx(&di2_shared->key2path_stripes, key_slot_idx);
         RWMutexScope(key_stripe->rw_mutex, 1)
         {
           DI2_KeyNode *node = 0;
@@ -486,9 +488,9 @@ di2_async_tick(void)
       //- rjf: unpack key
       DI2_Key key = t->key;
       U64 key_hash = u64_hash_from_str8(str8_struct(&key));
-      U64 key_slot_idx = key_hash%di2_shared->key_slots_count;
-      DI2_KeySlot *key_slot = &di2_shared->key_slots[key_slot_idx];
-      Stripe *key_stripe = stripe_from_slot_idx(&di2_shared->key_stripes, key_slot_idx);
+      U64 key_slot_idx = key_hash%di2_shared->key2path_slots_count;
+      DI2_KeySlot *key_slot = &di2_shared->key2path_slots[key_slot_idx];
+      Stripe *key_stripe = stripe_from_slot_idx(&di2_shared->key2path_stripes, key_slot_idx);
       
       //- rjf: get key's O.G. path
       String8 og_path = {0};
@@ -646,6 +648,8 @@ di2_async_tick(void)
       }
     }
   }
+  lane_sync_u64(&parse_tasks, 0);
+  lane_sync_u64(&parse_tasks_count, 0);
   lane_sync();
   
   //////////////////////////////
@@ -662,7 +666,7 @@ di2_async_tick(void)
     for(;;)
     {
       //- rjf: take next task
-      U64 parse_task_idx = ins_atomic_u64_inc_eval(parse_task_take_counter_ptr);
+      U64 parse_task_idx = ins_atomic_u64_inc_eval(parse_task_take_counter_ptr) - 1;
       if(parse_task_idx >= parse_tasks_count)
       {
         break;
