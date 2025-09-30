@@ -386,6 +386,21 @@ dw_pick_default_lower_bound(DW_Language lang)
   return lower_bound;
 }
 
+internal U64
+dw_operand_count_from_expr_op(DW_ExprOp op)
+{
+  switch (op) {
+#define X(_N, _ID, _OPER_COUNT) case _ID: return _OPER_COUNT;
+    DW_Expr_V3_XList(X)
+    DW_Expr_V4_XList(X)
+    DW_Expr_V5_XList(X)
+    DW_Expr_GNU_XList(X)
+#undef X
+  default: { NotImplemented; } break;
+  }
+  return 0;
+}
+
 ////////////////////////////////
 //~ rjf: String <=> Enum
 
