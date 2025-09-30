@@ -402,7 +402,7 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
   if (os_handle_match(mt_handle, os_handle_zero())) {
     lnk_error(LNK_Error_Mt, "unable to start process: %S", mt_path);
   } else {
-    os_process_join(mt_handle, max_U64);
+    os_process_join(mt_handle, max_U64, 0);
     os_process_detach(mt_handle);
   }
   
