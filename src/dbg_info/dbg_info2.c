@@ -352,13 +352,13 @@ di2_close(DI2_Key key)
   //- rjf: release node's resources if needed
   if(node_released)
   {
+    os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
+    os_file_map_close(file_map);
+    os_file_close(file);
     if(arena != 0)
     {
       arena_release(arena);
     }
-    os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
-    os_file_map_close(file_map);
-    os_file_close(file);
   }
 }
 
