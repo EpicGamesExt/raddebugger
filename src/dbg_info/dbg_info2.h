@@ -187,6 +187,17 @@ struct DI2_SearchItemArray
 };
 
 ////////////////////////////////
+//~ rjf: Match Types
+
+typedef struct DI2_Match DI2_Match;
+struct DI2_Match
+{
+  DI2_Key key;
+  RDI_SectionKind section_kind;
+  U32 idx;
+};
+
+////////////////////////////////
 //~ rjf: Shared State
 
 typedef struct DI2_Shared DI2_Shared;
@@ -277,5 +288,11 @@ internal void di2_conversion_completion_signal_receiver_thread_entry_point(void 
 internal AC_Artifact di2_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
 internal void di2_search_artifact_destroy(AC_Artifact artifact);
 internal DI2_SearchItemArray di2_search_item_array_from_target_query(Access *access, RDI_SectionKind target, String8 query, U64 endt_us);
+
+////////////////////////////////
+//~ rjf: Match Artifact Cache Hooks / Lookups
+
+internal AC_Artifact di2_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
+internal DI2_Match di2_match_from_string(String8 string, U64 index, U64 endt_us);
 
 #endif // DBG_INFO2_H

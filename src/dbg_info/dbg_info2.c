@@ -1267,3 +1267,107 @@ di2_search_item_array_from_target_query(Access *access, RDI_SectionKind target, 
   }
   return result;
 }
+
+////////////////////////////////
+//~ rjf: Match Artifact Cache Hooks / Lookups
+
+internal AC_Artifact
+di2_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: unpack key
+  U64 index = 0;
+  String8 name = {0};
+  {
+    U64 key_read_off = 0;
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &index);
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &name.size);
+    name.str = push_array_no_zero(scratch.arena, U8, name.size);
+    key_read_off += str8_deserial_read(key, key_read_off, name.str, name.size, 1);
+  }
+  
+  //- rjf: get all loaded keys
+  DI2_KeyArray dbgi_keys = di2_push_all_loaded_keys(scratch.arena);
+  
+  //- rjf: wide search across all debug infos
+  DI2_Match match = {0};
+  {
+    read_only local_persist RDI_NameMapKind name_map_kinds[] =
+    {
+      RDI_NameMapKind_GlobalVariables,
+      RDI_NameMapKind_ThreadVariables,
+      RDI_NameMapKind_Constants,
+      RDI_NameMapKind_Procedures,
+      RDI_NameMapKind_Types,
+    };
+    read_only local_persist RDI_SectionKind name_map_section_kinds[] =
+    {
+      RDI_SectionKind_GlobalVariables,
+      RDI_SectionKind_ThreadVariables,
+      RDI_SectionKind_Constants,
+      RDI_SectionKind_Procedures,
+      RDI_SectionKind_TypeNodes,
+    };
+    Rng1U64 range = lane_range(dbgi_keys.count);
+    for EachInRange(dbgi_idx, range)
+    {
+      Access *access = access_open();
+      {
+        DI2_Key dbgi_key = dbgi_keys.v[dbgi_idx];
+        RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
+        for EachElement(name_map_kind_idx, name_map_kinds)
+        {
+          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kinds[name_map_kind_idx]);
+          RDI_ParsedNameMap parsed_name_map = {0};
+          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+          RDI_NameMapNode *map_node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
+          U32 num = 0;
+          U32 *run = rdi_matches_from_map_node(rdi, map_node, &num);
+          if(num != 0)
+          {
+            match.key          = dbgi_key;
+            match.section_kind = name_map_section_kinds[name_map_kind_idx];
+            match.idx          = run[num-1];
+          }
+        }
+      }
+      access_close(access);
+    }
+  }
+  
+  //- rjf: package as artifact
+  AC_Artifact artifact = {0};
+  {
+    StaticAssert(ArrayCount(artifact.u64) >= 4, artifact_size_check);
+    artifact.u64[0] = match.key.u64[0];
+    artifact.u64[1] = match.key.u64[1];
+    artifact.u64[2] = match.section_kind;
+    artifact.u64[3] = match.idx;
+  }
+  
+  scratch_end(scratch);
+}
+
+internal DI2_Match
+di2_match_from_string(String8 string, U64 index, U64 endt_us)
+{
+  DI2_Match result = {0};
+  Access *access = access_open();
+  Temp scratch = scratch_begin(0, 0);
+  {
+    String8List key_parts = {0};
+    str8_list_push(scratch.arena, &key_parts, str8_struct(&index));
+    str8_list_push(scratch.arena, &key_parts, str8_struct(&string.size));
+    str8_list_push(scratch.arena, &key_parts, string);
+    String8 key = str8_list_join(scratch.arena, &key_parts, 0);
+    AC_Artifact artifact = ac_artifact_from_key(access, key, di2_match_artifact_create, 0, endt_us, .flags = AC_Flag_Wide);
+    result.key.u64[0]   = artifact.u64[0];
+    result.key.u64[1]   = artifact.u64[1];
+    result.section_kind = artifact.u64[2];
+    result.idx          = artifact.u64[3];
+  }
+  scratch_end(scratch);
+  access_close(access);
+  return result;
+}
