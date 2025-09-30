@@ -274,7 +274,7 @@ internal void di2_conversion_completion_signal_receiver_thread_entry_point(void 
 ////////////////////////////////
 //~ rjf: Search Artifact Cache Hooks / Lookups
 
-internal AC_Artifact di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out);
+internal AC_Artifact di2_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
 internal void di2_search_artifact_destroy(AC_Artifact artifact);
 internal DI2_SearchItemArray di2_search_item_array_from_target_query(Access *access, RDI_SectionKind target, String8 query, U64 endt_us);
 

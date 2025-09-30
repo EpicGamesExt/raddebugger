@@ -266,7 +266,7 @@ struct DASM_Artifact
 };
 
 internal AC_Artifact
-dasm_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
+dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
 {
   DASM_Artifact *artifact = 0;
   if(lane_idx() == 0)

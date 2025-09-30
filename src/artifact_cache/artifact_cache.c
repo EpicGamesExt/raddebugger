@@ -161,8 +161,8 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
           }
           n->v.key = str8_copy(req_batch->arena, key);
           n->v.gen = params->gen;
-          n->v.last_requested_gen = &node->last_requested_gen;
           n->v.create = params->create;
+          n->v.cancel_signal = params->cancel_signal;
         }
         cond_var_broadcast(async_tick_start_cond_var);
         ins_atomic_u32_eval_assign(&async_loop_again, 1);
@@ -356,7 +356,7 @@ ac_async_tick(void)
         
         // rjf: compute val
         B32 retry = 0;
-        AC_Artifact val = r->create(r->key, r->gen, r->last_requested_gen, &retry);
+        AC_Artifact val = r->create(r->key, r->cancel_signal, &retry);
         
         // rjf: retry? -> resubmit request
         if(retry && lane_idx() == 0)
@@ -458,7 +458,7 @@ ac_async_tick(void)
         
         // rjf: compute val
         B32 retry = 0;
-        AC_Artifact val = r->create(r->key, r->gen, r->last_requested_gen, &retry);
+        AC_Artifact val = r->create(r->key, r->cancel_signal, &retry);
         
         // rjf: retry? -> resubmit request
         if(retry)

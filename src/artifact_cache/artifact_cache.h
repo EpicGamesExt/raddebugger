@@ -16,7 +16,7 @@ struct AC_Artifact
 ////////////////////////////////
 //~ rjf: Artifact Computation Function Types
 
-typedef AC_Artifact AC_CreateFunctionType(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out);
+typedef AC_Artifact AC_CreateFunctionType(String8 key, B32 *cancel_signal, B32 *retry_out);
 typedef void AC_DestroyFunctionType(AC_Artifact artifact);
 
 typedef U32 AC_Flags;
@@ -37,6 +37,7 @@ struct AC_ArtifactParams
   U64 gen;
   U64 evict_threshold_us;
   B32 *stale_out;
+  B32 *cancel_signal;
   AC_Flags flags;
 };
 
@@ -48,7 +49,7 @@ struct AC_Request
 {
   String8 key;
   U64 gen;
-  U64 *last_requested_gen;
+  B32 *cancel_signal;
   AC_CreateFunctionType *create;
 };
 
@@ -137,6 +138,11 @@ global AC_Shared *ac_shared = 0;
 //~ rjf: Layer Initialization
 
 internal void ac_init(void);
+
+////////////////////////////////
+//~ rjf: Helpers
+
+internal B32 ac_cancelled(void);
 
 ////////////////////////////////
 //~ rjf: Cache Lookups

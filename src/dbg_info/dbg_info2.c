@@ -861,7 +861,7 @@ di2_conversion_completion_signal_receiver_thread_entry_point(void *p)
 //~ rjf: Search Artifact Cache Hooks / Lookups
 
 internal AC_Artifact
-di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
+di2_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
 {
   ProfBeginFunction();
   Access *access = access_open();
@@ -1065,9 +1065,144 @@ di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_
     }
     lane_sync();
     
-    //- rjf: flatten into array
+    //- rjf: produce sort records
+    typedef struct SortRecord SortRecord;
+    struct SortRecord
+    {
+      U64 key;
+      DI2_SearchItem *item;
+    };
+    U64 sort_records_count = all_items->total_count;
+    SortRecord *sort_records = 0;
+    SortRecord *sort_records__swap = 0;
+    ProfScope("produce sort records")
+    {
+      if(lane_idx() == 0)
+      {
+        sort_records = push_array(scratch.arena, SortRecord, sort_records_count);
+      }
+      if(lane_idx() == lane_from_task_idx(1))
+      {
+        sort_records__swap = push_array(scratch.arena, SortRecord, sort_records_count);
+      }
+      lane_sync_u64(&sort_records, 0);
+      lane_sync_u64(&sort_records__swap, lane_from_task_idx(1));
+      for EachNode(n, DI2_SearchItemChunk, all_items->first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        U64 dst_idx = n->base_idx + range.min;
+        for EachInRange(n_idx, range)
+        {
+          DI2_SearchItem *item = &n->v[n_idx];
+          sort_records[dst_idx].item = item;
+          sort_records[dst_idx].key = (((item->missed_size & 0xffffffffull) << 32) | (u64_hash_from_seed_str8(item->idx, str8_struct(&key)) & 0xffffffffull));
+          dst_idx += 1;
+        }
+      }
+    }
+    lane_sync();
+    
+    //- rjf: sort records
+    ProfScope("sort records")
+    {
+      //- rjf: set up common data
+      U64 bits_per_digit = 8;
+      U64 digits_count = 64 / bits_per_digit;
+      U64 num_possible_values_per_digit = 1 << bits_per_digit;
+      U32 **lanes_digit_counts = 0;
+      U32 **lanes_digit_offsets = 0;
+      if(lane_idx() == 0)
+      {
+        lanes_digit_counts = push_array(scratch.arena, U32 *, lane_count());
+        lanes_digit_offsets = push_array(scratch.arena, U32 *, lane_count());
+      }
+      lane_sync_u64(&lanes_digit_counts, 0);
+      lane_sync_u64(&lanes_digit_offsets, 0);
+      
+      //- rjf: set up this lane
+      lanes_digit_counts[lane_idx()] = push_array(scratch.arena, U32, num_possible_values_per_digit);
+      lanes_digit_offsets[lane_idx()] = push_array(scratch.arena, U32, num_possible_values_per_digit);
+      SortRecord *src = sort_records;
+      SortRecord *dst = sort_records__swap;
+      U64 count = sort_records_count;
+      
+      //- rjf: do all per-digit sorts
+      for EachIndex(digit_idx, digits_count)
+      {
+        // rjf: count digit value occurrences per-lane
+        {
+          U32 *digit_counts = lanes_digit_counts[lane_idx()];
+          MemoryZero(digit_counts, sizeof(digit_counts[0])*num_possible_values_per_digit);
+          Rng1U64 range = lane_range(count);
+          for EachInRange(idx, range)
+          {
+            SortRecord *r = &src[idx];
+            U16 digit_value = (U16)(U8)(r->key >> (digit_idx*bits_per_digit));
+            digit_counts[digit_value] += 1;
+          }
+        }
+        lane_sync();
+        
+        // rjf: compute thread * digit value *relative* offset table
+        {
+          Rng1U64 range = lane_range(num_possible_values_per_digit);
+          for EachInRange(value_idx, range)
+          {
+            U64 layout_off = 0;
+            for EachIndex(lane_idx, lane_count())
+            {
+              lanes_digit_offsets[lane_idx][value_idx] = layout_off;
+              layout_off += lanes_digit_counts[lane_idx][value_idx];
+            }
+          }
+        }
+        lane_sync();
+        
+        // rjf: convert relative offsets -> absolute offsets
+        if(lane_idx() == 0)
+        {
+          U64 last_off = 0;
+          U64 num_of_nonzero_digit = 0;
+          for EachIndex(value_idx, num_possible_values_per_digit)
+          {
+            for EachIndex(lane_idx, lane_count())
+            {
+              lanes_digit_offsets[lane_idx][value_idx] += last_off;
+            }
+            last_off = lanes_digit_offsets[lane_count()-1][value_idx] + lanes_digit_counts[lane_count()-1][value_idx];
+          }
+          // NOTE(rjf): required that: (last_off == element_count)
+        }
+        lane_sync();
+        
+        // rjf: move
+        {
+          U32 *lane_digit_offsets = lanes_digit_offsets[lane_idx()];
+          Rng1U64 range = lane_range(count);
+          for EachInRange(idx, range)
+          {
+            SortRecord *src_r = &src[idx];
+            U16 digit_value = (U16)(U8)(src_r->key >> (digit_idx*bits_per_digit));
+            U64 dst_off = lane_digit_offsets[digit_value];
+            lane_digit_offsets[digit_value] += 1;
+            MemoryCopyStruct(&dst[dst_off], src_r);
+          }
+        }
+        lane_sync();
+        
+        // rjf: swap
+        {
+          SortRecord *swap = src;
+          src = dst;
+          dst = swap;
+        }
+      }
+    }
+    lane_sync();
+    
+    //- rjf: produce final array
     DI2_SearchItemArray items = {0};
-    ProfScope("flatten into array")
+    ProfScope("produce final array")
     {
       if(lane_idx() == 0)
       {
@@ -1076,19 +1211,15 @@ di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_
       }
       lane_sync_u64(&items.count, 0);
       lane_sync_u64(&items.v, 0);
-      for EachNode(n, DI2_SearchItemChunk, all_items->first)
+      Rng1U64 range = lane_range(sort_records_count);
+      for EachInRange(idx, range)
       {
-        Rng1U64 range = lane_range(n->count);
-        U64 dst_idx = n->base_idx + range.min;
-        MemoryCopy(&items.v[dst_idx], n->v, sizeof(n->v[0]) * dim_1u64(range));
+        SortRecord *record = &sort_records[idx];
+        DI2_SearchItem *dst_item = &items.v[idx];
+        MemoryCopyStruct(dst_item, record->item);
       }
     }
-    
-    //- rjf: sort items
-    ProfScope("sort items")
-    {
-      
-    }
+    lane_sync();
     
     //- rjf: bundle as artifact
     artifact.u64[0] = (U64)arena;

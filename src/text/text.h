@@ -203,7 +203,7 @@ internal TXT_ScopeNode *txt_scope_node_from_info_pt(TXT_TextInfo *info, TxtPt pt
 ////////////////////////////////
 //~ rjf: Artifact Cache Hooks / Lookups
 
-internal AC_Artifact txt_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out);
+internal AC_Artifact txt_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
 internal void txt_artifact_destroy(AC_Artifact artifact);
 internal TXT_TextInfo txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang);
 internal TXT_TextInfo txt_text_info_from_key_lang(Access *access, C_Key key, TXT_LangKind lang, U128 *hash_out);
