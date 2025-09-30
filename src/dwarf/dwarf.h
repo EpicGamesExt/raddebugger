@@ -1575,7 +1575,7 @@ X(GNU_ParameterRef,    0xfa, 1) \
 X(GNU_AddrIndex,       0xfb, 0) \
 X(GNU_ConstIndex,      0xfc, 1)
 
-typedef U64 DW_ExprOp;
+typedef U8 DW_ExprOp;
 typedef enum DW_ExprOpEnum
 {
 #define X(_N, _ID, _OPER_COUNT) DW_ExprOp_##_N = _ID,
