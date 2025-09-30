@@ -187,128 +187,130 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
   C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
   C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
   
-  //- rjf: commit data to cache - if already there, just bump key refcount
-  U128 key_expired_hash = {0};
-  ProfScope("commit data to cache - if already there, just bump key refcount")
-    MutexScopeW(stripe->rw_mutex)
-    MutexScopeW(key_stripe->rw_mutex)
+  //- rjf: commit to (hash -> data) cache
+  ProfScope("commit to (hash -> data) cache") RWMutexScope(stripe->rw_mutex, 1)
   {
-    //- rjf: commit data to (hash -> data) cache
+    // rjf: find existing node
+    C_BlobNode *node = 0;
+    for(C_BlobNode *n = slot->first; n != 0; n = n->next)
     {
-      C_BlobNode *existing_node = 0;
-      for(C_BlobNode *n = slot->first; n != 0; n = n->next)
+      if(u128_match(n->hash, hash))
       {
-        if(u128_match(n->hash, hash))
-        {
-          existing_node = n;
-          break;
-        }
-      }
-      if(existing_node == 0)
-      {
-        C_BlobNode *node = c_shared->blob_stripes_free_nodes[stripe_idx];
-        if(node)
-        {
-          SLLStackPop(c_shared->blob_stripes_free_nodes[stripe_idx]);
-        }
-        else
-        {
-          node = push_array_no_zero(stripe->arena, C_BlobNode, 1);
-        }
-        MemoryZeroStruct(node);
-        node->hash = hash;
-        if(data_arena != 0)
-        {
-          node->arena = *data_arena;
-        }
-        node->data = data;
-        node->key_ref_count = 1;
-        DLLPushBack(slot->first, slot->last, node);
-      }
-      else
-      {
-        existing_node->key_ref_count += 1;
-        if(data_arena != 0)
-        {
-          arena_release(*data_arena);
-        }
-      }
-      if(data_arena != 0)
-      {
-        *data_arena = 0;
+        node = n;
+        break;
       }
     }
     
-    //- rjf: commit hash to key cache
+    // rjf: release duplicate data if node already exists
+    if(node != 0)
     {
-      // rjf: find existing key
-      B32 key_is_new = 0;
-      C_KeyNode *key_node = 0;
-      for(C_KeyNode *n = key_slot->first; n != 0; n = n->next)
+      arena_release(*data_arena);
+    }
+    
+    // rjf: allocate node if needed
+    if(node == 0)
+    {
+      node = c_shared->blob_stripes_free_nodes[stripe_idx];
+      if(node)
       {
-        if(c_key_match(n->key, key))
-        {
-          key_node = n;
-          break;
-        }
+        SLLStackPop(c_shared->blob_stripes_free_nodes[stripe_idx]);
       }
-      
-      // rjf: create key node if it doesn't exist
-      if(!key_node)
+      else
       {
-        key_is_new = 1;
-        key_node = c_shared->key_stripes_free_nodes[key_stripe_idx];
-        if(key_node)
-        {
-          SLLStackPop(c_shared->key_stripes_free_nodes[key_stripe_idx]);
-        }
-        else
-        {
-          key_node = push_array(key_stripe->arena, C_KeyNode, 1);
-        }
-        key_node->key = key;
-        DLLPushBack(key_slot->first, key_slot->last, key_node);
+        node = push_array_no_zero(stripe->arena, C_BlobNode, 1);
       }
-      
-      // rjf: push hash into key's history
+      MemoryZeroStruct(node);
+      node->hash = hash;
+      if(data_arena != 0)
+      {
+        node->arena = *data_arena;
+      }
+      node->data = data;
+      DLLPushBack(slot->first, slot->last, node);
+    }
+    
+    // rjf: bump key ref count
+    node->key_ref_count += 1;
+    
+    // rjf "steal" arena from caller
+    if(data_arena != 0)
+    {
+      *data_arena = 0;
+    }
+  }
+  
+  //- rjf: commit to (key -> list(hash)) cache
+  U128 key_expired_hash = {0};
+  ProfScope("commit to (key -> list(hash)) cache") RWMutexScope(key_stripe->rw_mutex, 1)
+  {
+    // rjf: find existing key
+    C_KeyNode *key_node = 0;
+    for(C_KeyNode *n = key_slot->first; n != 0; n = n->next)
+    {
+      if(c_key_match(n->key, key))
+      {
+        key_node = n;
+        break;
+      }
+    }
+    
+    // rjf: create key node if it doesn't exist
+    B32 key_is_new = 0;
+    if(!key_node)
+    {
+      key_is_new = 1;
+      key_node = c_shared->key_stripes_free_nodes[key_stripe_idx];
       if(key_node)
       {
-        if(key_node->hash_history_gen >= C_KEY_HASH_HISTORY_STRONG_REF_COUNT)
-        {
-          key_expired_hash = key_node->hash_history[(key_node->hash_history_gen-C_KEY_HASH_HISTORY_STRONG_REF_COUNT)%ArrayCount(key_node->hash_history)];
-        }
-        key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)] = hash;
-        key_node->hash_history_gen += 1;
+        SLLStackPop(c_shared->key_stripes_free_nodes[key_stripe_idx]);
       }
-      
-      // rjf: key is new -> add this key to the associated root
-      if(key_is_new)
+      else
       {
-        U64 root_hash = u64_hash_from_str8(str8_struct(&key.root));
-        U64 root_slot_idx = root_hash%c_shared->root_slots_count;
-        U64 root_stripe_idx = root_slot_idx%c_shared->root_stripes_count;
-        C_RootSlot *root_slot = &c_shared->root_slots[root_slot_idx];
-        C_Stripe *root_stripe = &c_shared->root_stripes[root_stripe_idx];
-        MutexScopeW(root_stripe->rw_mutex)
+        key_node = push_array_no_zero(key_stripe->arena, C_KeyNode, 1);
+      }
+      MemoryZeroStruct(key_node);
+      key_node->key = key;
+      DLLPushBack(key_slot->first, key_slot->last, key_node);
+    }
+    
+    // rjf: push hash into key's history
+    if(key_node)
+    {
+      if(key_node->hash_history_gen >= C_KEY_HASH_HISTORY_STRONG_REF_COUNT)
+      {
+        key_expired_hash = key_node->hash_history[(key_node->hash_history_gen-C_KEY_HASH_HISTORY_STRONG_REF_COUNT)%ArrayCount(key_node->hash_history)];
+      }
+      key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)] = hash;
+      key_node->hash_history_gen += 1;
+    }
+    
+    // rjf: key is new -> add this key to the associated root
+    if(key_is_new)
+    {
+      U64 root_hash = u64_hash_from_str8(str8_struct(&key.root));
+      U64 root_slot_idx = root_hash%c_shared->root_slots_count;
+      U64 root_stripe_idx = root_slot_idx%c_shared->root_stripes_count;
+      C_RootSlot *root_slot = &c_shared->root_slots[root_slot_idx];
+      C_Stripe *root_stripe = &c_shared->root_stripes[root_stripe_idx];
+      RWMutexScope(root_stripe->rw_mutex, 1)
+      {
+        for(C_RootNode *n = root_slot->first; n != 0; n = n->next)
         {
-          for(C_RootNode *n = root_slot->first; n != 0; n = n->next)
+          if(MemoryMatchStruct(&n->root, &key.root))
           {
-            if(MemoryMatchStruct(&n->root, &key.root))
+            C_RootIDChunkNode *chunk = n->ids.last;
+            if(chunk == 0 || chunk->count >= chunk->cap)
             {
-              C_RootIDChunkNode *chunk = n->ids.last;
-              if(chunk == 0 || chunk->count >= chunk->cap)
-              {
-                chunk = push_array(n->arena, C_RootIDChunkNode, 1);
-                SLLQueuePush(n->ids.first, n->ids.last, chunk);
-                n->ids.chunk_count += 1;
-                chunk->cap = 1024;
-                chunk->v = push_array_no_zero(n->arena, C_ID, chunk->cap);
-              }
-              chunk->v[chunk->count] = key.id;
-              chunk->count += 1;
-              n->ids.total_count += 1;
-              break;
+              chunk = push_array(n->arena, C_RootIDChunkNode, 1);
+              SLLQueuePush(n->ids.first, n->ids.last, chunk);
+              n->ids.chunk_count += 1;
+              chunk->cap = 1024;
+              chunk->v = push_array_no_zero(n->arena, C_ID, chunk->cap);
             }
+            chunk->v[chunk->count] = key.id;
+            chunk->count += 1;
+            n->ids.total_count += 1;
+            break;
           }
         }
       }
@@ -316,14 +318,13 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
   }
   
   //- rjf: decrement key ref count of expired hash
-  ProfScope("decrement key ref count of expired hash")
-    if(!u128_match(key_expired_hash, u128_zero()))
+  if(!u128_match(key_expired_hash, u128_zero())) ProfScope("decrement key ref count of expired hash")
   {
     U64 old_hash_slot_idx = key_expired_hash.u64[1]%c_shared->blob_slots_count;
     U64 old_hash_stripe_idx = old_hash_slot_idx%c_shared->blob_stripes_count;
     C_BlobSlot *old_hash_slot = &c_shared->blob_slots[old_hash_slot_idx];
     C_Stripe *old_hash_stripe = &c_shared->blob_stripes[old_hash_stripe_idx];
-    MutexScopeR(old_hash_stripe->rw_mutex)
+    RWMutexScope(old_hash_stripe->rw_mutex, 0)
     {
       for(C_BlobNode *n = old_hash_slot->first; n != 0; n = n->next)
       {
