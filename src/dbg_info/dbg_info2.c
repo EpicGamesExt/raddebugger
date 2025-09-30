@@ -1347,6 +1347,7 @@ di2_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
   }
   
   scratch_end(scratch);
+  return artifact;
 }
 
 internal DI2_Match
