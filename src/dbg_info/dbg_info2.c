@@ -337,6 +337,13 @@ di2_close(DI2_Key key)
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
 
+internal U64
+di2_load_gen(void)
+{
+  U64 result = ins_atomic_u64_eval(&di2_shared->load_gen);
+  return result;
+}
+
 internal DI2_KeyArray
 di2_push_all_loaded_keys(Arena *arena)
 {
@@ -804,6 +811,7 @@ di2_async_tick(void)
             MemoryCopyStruct(&node->rdi, &rdi_parsed);
             node->completion_count += 1;
             node->working_count -= 1;
+            ins_atomic_u64_inc_eval(&di2_shared->load_gen);
           }
           else
           {
@@ -1062,6 +1070,9 @@ di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_
       U64 dst_idx = n->base_idx + range.min;
       MemoryCopy(&items.v[dst_idx], n->v, sizeof(n->v[0]) * dim_1u64(range));
     }
+    
+    //- rjf: sort items
+    
   }
   scratch_end(scratch);
   access_close(access);

@@ -193,6 +193,7 @@ typedef struct DI2_Shared DI2_Shared;
 struct DI2_Shared
 {
   Arena *arena;
+  U64 load_gen;
   
   // rjf: key -> path cache
   U64 key2path_slots_count;
@@ -255,6 +256,7 @@ internal void di2_close(DI2_Key key);
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
 
+internal U64 di2_load_gen(void);
 internal DI2_KeyArray di2_push_all_loaded_keys(Arena *arena);
 internal RDI_Parsed *di2_rdi_from_key(Access *access, DI2_Key key, B32 high_priority, U64 endt_us);
 
