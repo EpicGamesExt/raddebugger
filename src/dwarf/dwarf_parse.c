@@ -3112,3 +3112,214 @@ dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_Sect
   return names_table;
 }
 
+internal DW_Expr
+dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size, String8 data)
+{
+  DW_Expr expr = {0};
+  for (U64 cursor = 0; cursor < data.size; ) {
+    U64 inst_start = cursor;
+
+    DW_ExprOp opcode = 0;
+    cursor += str8_deserial_read_struct(data, cursor, &opcode);
+    
+    DW_ExprOperand operands[4] = {0};
+    switch (opcode) {
+    case DW_ExprOp_Lit0:  case DW_ExprOp_Lit1:  case DW_ExprOp_Lit2:
+    case DW_ExprOp_Lit3:  case DW_ExprOp_Lit4:  case DW_ExprOp_Lit5:
+    case DW_ExprOp_Lit6:  case DW_ExprOp_Lit7:  case DW_ExprOp_Lit8:
+    case DW_ExprOp_Lit9:  case DW_ExprOp_Lit10: case DW_ExprOp_Lit11:
+    case DW_ExprOp_Lit12: case DW_ExprOp_Lit13: case DW_ExprOp_Lit14:
+    case DW_ExprOp_Lit15: case DW_ExprOp_Lit16: case DW_ExprOp_Lit17:
+    case DW_ExprOp_Lit18: case DW_ExprOp_Lit19: case DW_ExprOp_Lit20:
+    case DW_ExprOp_Lit21: case DW_ExprOp_Lit22: case DW_ExprOp_Lit23:
+    case DW_ExprOp_Lit24: case DW_ExprOp_Lit25: case DW_ExprOp_Lit26:
+    case DW_ExprOp_Lit27: case DW_ExprOp_Lit28: case DW_ExprOp_Lit29:
+    case DW_ExprOp_Lit30: case DW_ExprOp_Lit31: {
+      // implicit operands
+    } break;
+    case DW_ExprOp_Const1U: { cursor += str8_deserial_read_struct(data, cursor, &operands[0].u8);   } break;
+    case DW_ExprOp_Const2U: { cursor += str8_deserial_read_struct(data, cursor, &operands[0].u16);  } break;
+    case DW_ExprOp_Const4U: { cursor += str8_deserial_read_struct(data, cursor, &operands[0].u32);  } break;
+    case DW_ExprOp_Const8U: { cursor += str8_deserial_read_struct(data, cursor, &operands[0].u64);  } break;
+    case DW_ExprOp_Const1S: { cursor += str8_deserial_read_struct(data, cursor, &operands[0].s8);   } break;
+    case DW_ExprOp_Const2S: { cursor += str8_deserial_read_struct(data, cursor, &operands[0].s16);  } break;
+    case DW_ExprOp_Const4S: { cursor += str8_deserial_read_struct(data, cursor, &operands[0].s32);  } break;
+    case DW_ExprOp_Const8S: { cursor += str8_deserial_read_struct(data, cursor, &operands[0].s64);  } break;
+    case DW_ExprOp_ConstU:  { cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64); } break;
+    case DW_ExprOp_ConstS:  { cursor += str8_deserial_read_sleb128(data, cursor, &operands[0].s64); } break;
+    case DW_ExprOp_Addr:    { cursor += str8_deserial_read(data, cursor, &operands[0].u64, addr_size, addr_size); } break;
+    case DW_ExprOp_Reg0:  case DW_ExprOp_Reg1:  case DW_ExprOp_Reg2:
+    case DW_ExprOp_Reg3:  case DW_ExprOp_Reg4:  case DW_ExprOp_Reg5:
+    case DW_ExprOp_Reg6:  case DW_ExprOp_Reg7:  case DW_ExprOp_Reg8:
+    case DW_ExprOp_Reg9:  case DW_ExprOp_Reg10: case DW_ExprOp_Reg11:
+    case DW_ExprOp_Reg12: case DW_ExprOp_Reg13: case DW_ExprOp_Reg14:
+    case DW_ExprOp_Reg15: case DW_ExprOp_Reg16: case DW_ExprOp_Reg17:
+    case DW_ExprOp_Reg18: case DW_ExprOp_Reg19: case DW_ExprOp_Reg20:
+    case DW_ExprOp_Reg21: case DW_ExprOp_Reg22: case DW_ExprOp_Reg23:
+    case DW_ExprOp_Reg24: case DW_ExprOp_Reg25: case DW_ExprOp_Reg26:
+    case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
+    case DW_ExprOp_Reg30: case DW_ExprOp_Reg31: {
+      // implicit operands
+    } break;
+    case DW_ExprOp_RegX: { cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64); } break;
+    case DW_ExprOp_ImplicitValue: {
+      U64 value_size = 0; String8 value = {0};
+      cursor += str8_deserial_read_uleb128(data, cursor, &value_size);
+      cursor += str8_deserial_read_block(data, cursor, value_size, &operands[0].block);
+    } break;
+    case DW_ExprOp_Piece: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+    } break;
+    case DW_ExprOp_BitPiece: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[1].u64);
+    } break;
+    case DW_ExprOp_Pick: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].u8);
+    } break;
+    case DW_ExprOp_PlusUConst: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+    } break;
+    case DW_ExprOp_Skip: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].s16);
+    } break;
+    case DW_ExprOp_Bra: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].s16);
+    } break;
+    case DW_ExprOp_BReg0:  case DW_ExprOp_BReg1:  case DW_ExprOp_BReg2: 
+    case DW_ExprOp_BReg3:  case DW_ExprOp_BReg4:  case DW_ExprOp_BReg5: 
+    case DW_ExprOp_BReg6:  case DW_ExprOp_BReg7:  case DW_ExprOp_BReg8:  
+    case DW_ExprOp_BReg9:  case DW_ExprOp_BReg10: case DW_ExprOp_BReg11: 
+    case DW_ExprOp_BReg12: case DW_ExprOp_BReg13: case DW_ExprOp_BReg14: 
+    case DW_ExprOp_BReg15: case DW_ExprOp_BReg16: case DW_ExprOp_BReg17: 
+    case DW_ExprOp_BReg18: case DW_ExprOp_BReg19: case DW_ExprOp_BReg20: 
+    case DW_ExprOp_BReg21: case DW_ExprOp_BReg22: case DW_ExprOp_BReg23: 
+    case DW_ExprOp_BReg24: case DW_ExprOp_BReg25: case DW_ExprOp_BReg26: 
+    case DW_ExprOp_BReg27: case DW_ExprOp_BReg28: case DW_ExprOp_BReg29: 
+    case DW_ExprOp_BReg30: case DW_ExprOp_BReg31: {
+      cursor += str8_deserial_read_sleb128(data, cursor, &operands[0].s64);
+    } break;
+    case DW_ExprOp_BRegX: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+      cursor += str8_deserial_read_sleb128(data, cursor, &operands[1].s64);
+    } break;
+    case DW_ExprOp_FBReg: {
+      cursor += str8_deserial_read_sleb128(data, cursor, &operands[0].s64);
+    } break;
+    case DW_ExprOp_Deref: {
+      // no operands
+    } break;
+    case DW_ExprOp_DerefSize: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].u8);
+    } break;
+    case DW_ExprOp_XDerefSize: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].u8);
+    } break;
+    case DW_ExprOp_Call2: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].u16);
+    } break;
+    case DW_ExprOp_Call4: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].u32);
+    } break;
+    case DW_ExprOp_CallRef: {
+      cursor += str8_deserial_read_dwarf_uint(data, cursor, format, &operands[0].u64);
+    } break;
+    case DW_ExprOp_ImplicitPointer:
+    case DW_ExprOp_GNU_ImplicitPointer: {
+      cursor += str8_deserial_read_dwarf_uint(data, cursor, format, &operands[0].u64);
+      cursor += str8_deserial_read_sleb128(data, cursor, &operands[1].s64);
+    } break;
+    case DW_ExprOp_Convert:
+    case DW_ExprOp_GNU_Convert: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+    } break;
+    case DW_ExprOp_GNU_ParameterRef: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].u32);
+    } break;
+    case DW_ExprOp_DerefType:
+    case DW_ExprOp_GNU_DerefType: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].u8);
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[1].u64);
+    } break;
+    case DW_ExprOp_XDerefType: {
+      cursor += str8_deserial_read_struct(data, cursor, &operands[0].u8);
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[1].u64);
+    } break;
+    case DW_ExprOp_ConstType: 
+    case DW_ExprOp_GNU_ConstType: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+      cursor += str8_deserial_read_struct(data, cursor, &operands[1].u8);
+      cursor += str8_deserial_read_block(data, cursor, operands[1].u8, &operands[2].block);
+    } break;
+    case DW_ExprOp_RegvalType: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[1].u64);
+    } break;
+    case DW_ExprOp_EntryValue:
+    case DW_ExprOp_GNU_EntryValue: {
+      U64 entry_value_expr_size = 0;
+      cursor += str8_deserial_read_uleb128(data, cursor, &entry_value_expr_size);
+      cursor += str8_deserial_read_block(data, cursor, entry_value_expr_size, &operands[0].block);
+    } break;
+    case DW_ExprOp_Addrx: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+    } break;
+    case DW_ExprOp_Constx: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+    } break;
+    case DW_ExprOp_CallFrameCfa:
+    case DW_ExprOp_FormTlsAddress:
+    case DW_ExprOp_PushObjectAddress:
+    case DW_ExprOp_Nop:
+    case DW_ExprOp_Eq:
+    case DW_ExprOp_Ge:
+    case DW_ExprOp_Gt:
+    case DW_ExprOp_Le:
+    case DW_ExprOp_Lt:
+    case DW_ExprOp_Ne:
+    case DW_ExprOp_Shl:
+    case DW_ExprOp_Shr:
+    case DW_ExprOp_Shra:
+    case DW_ExprOp_Xor:
+    case DW_ExprOp_XDeref:
+    case DW_ExprOp_Abs:
+    case DW_ExprOp_And:
+    case DW_ExprOp_Div:
+    case DW_ExprOp_Minus:
+    case DW_ExprOp_Mod:
+    case DW_ExprOp_Mul:
+    case DW_ExprOp_Neg:
+    case DW_ExprOp_Not:
+    case DW_ExprOp_Or:
+    case DW_ExprOp_Plus:
+    case DW_ExprOp_Rot:
+    case DW_ExprOp_Swap:
+    case DW_ExprOp_Dup:
+    case DW_ExprOp_Drop:
+    case DW_ExprOp_Over:
+    case DW_ExprOp_StackValue:
+    case DW_ExprOp_GNU_PushTlsAddress: {
+      // no operands
+    } break;
+    case DW_ExprOp_GNU_AddrIndex: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+    } break;
+    case DW_ExprOp_GNU_ConstIndex: {
+      cursor += str8_deserial_read_uleb128(data, cursor, &operands[0].u64);
+    } break;
+    default: { InvalidPath; } break;
+    }
+
+    U64 operand_count = dw_operand_count_from_expr_op(opcode);
+    DW_ExprInst *inst = push_array(arena, DW_ExprInst, 1);
+    inst->opcode   = opcode;
+    inst->size     = cursor - inst_start;
+    inst->operands = push_array(arena, DW_ExprOperand, operand_count);
+    MemoryCopy(inst->operands, operands, operand_count * sizeof(DW_ExprOperand));
+
+    DLLPushBack(expr.first, expr.last, inst);
+    expr.count += 1;
+  }
+  return expr;
+}
+

@@ -319,6 +319,40 @@ typedef struct DW_Reference
   U64          info_off;
 } DW_Reference;
 
+////////////////////////////////
+//~ Expression
+
+typedef union DW_ExprOperand
+{
+  U8  u8;
+  U16 u16;
+  U32 u32;
+  U64 u64;
+
+  S8  s8;
+  S16 s16;
+  S32 s32;
+  S64 s64;
+
+  String8 block;
+} DW_ExprOperand;
+
+typedef struct DW_ExprInst
+{
+  DW_ExprOp       opcode;
+  DW_ExprOperand *operands;
+  U64             size;
+  struct DW_ExprInst *next;
+  struct DW_ExprInst *prev;
+} DW_ExprInst;
+
+typedef struct DW_Expr
+{
+  U64          count;
+  DW_ExprInst *first;
+  DW_ExprInst *last;
+} DW_Expr;
+
 // hasher
 
 internal U64 dw_hash_from_string(String8 string);
@@ -417,27 +451,8 @@ internal DW_TagNode * dw_tag_node_from_info_off(DW_CompUnit *cu, U64 info_off);
 
 // line info
 
-internal U64 dw_read_line_file(String8      line_data,
-                               U64          line_off,
-                               DW_Input    *input,
-                               DW_Version   unit_version,
-                               DW_Format    unit_format,
-                               DW_Ext       ext,
-                               U64          address_size,
-                               DW_ListUnit *str_offsets,
-                               U64          enc_count,
-                               U64         *enc_arr,
-                               DW_LineFile *line_file_out);
-internal U64 dw_read_line_vm_header(Arena           *arena,
-                                    String8          line_data,
-                                    U64              line_off,
-                                    DW_Input        *input,
-                                    String8          cu_dir,
-                                    String8          cu_name,
-                                    U8               cu_address_size,
-                                    DW_ListUnit     *cu_str_offsets,
-                                    DW_LineVMHeader *header_out);
-
+internal U64 dw_read_line_file(String8 line_data, U64 line_off, DW_Input *input, DW_Version unit_version, DW_Format unit_format, DW_Ext ext, U64 address_size, DW_ListUnit *str_offsets, U64 enc_count, U64 *enc_arr, DW_LineFile *line_file_out);
+internal U64 dw_read_line_vm_header(Arena *arena, String8 line_data, U64 line_off, DW_Input *input, String8 cu_dir, String8 cu_name, U8 cu_address_size, DW_ListUnit *cu_str_offsets, DW_LineVMHeader *header_out);
 internal void             dw_line_vm_reset(DW_LineVMState *state, B32 default_is_stmt);
 internal void             dw_line_vm_advance(DW_LineVMState *state, U64 advance, U64 min_inst_len, U64 max_ops_for_inst);
 internal DW_LineSeqNode * dw_push_line_seq(Arena* arena, DW_LineTableParseResult *parsed_tbl);
@@ -450,5 +465,9 @@ internal DW_LineTableParseResult dw_parsed_line_table_from_data(Arena *arena, St
 // helper for .debug_pubtypes and .debug_pubnames 
 
 internal DW_PubStringsTable dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_SectionKind section_kind);
+
+// expression
+
+internal DW_Expr dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size, String8 data);
 
 #endif // DWARF_PARSE_H
