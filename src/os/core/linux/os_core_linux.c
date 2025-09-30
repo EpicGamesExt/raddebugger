@@ -800,8 +800,8 @@ os_process_kill(OS_Handle handle)
 ////////////////////////////////
 //~ rjf: @os_hooks Threads (Implemented Per-OS)
 
-internal OS_Handle
-os_thread_launch(ThreadEntryPointFunctionType *func, void *ptr, void *params)
+internal Thread
+os_thread_launch(ThreadEntryPointFunctionType *func, void *ptr)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Thread);
   entity->thread.func = func;
@@ -814,14 +814,14 @@ os_thread_launch(ThreadEntryPointFunctionType *func, void *ptr, void *params)
       entity = 0;
     }
   }
-  OS_Handle handle = {(U64)entity};
+  Thread handle = {(U64)entity};
   return handle;
 }
 
 internal B32
-os_thread_join(OS_Handle handle, U64 endt_us)
+os_thread_join(Thread handle, U64 endt_us)
 {
-  if(os_handle_match(handle, os_handle_zero())) { return 0; }
+  if(MemoryIsZeroStruct(&handle)) { return 0; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)handle.u64[0];
   int join_result = pthread_join(entity->thread.handle, 0);
   B32 result = (join_result == 0);
@@ -830,9 +830,9 @@ os_thread_join(OS_Handle handle, U64 endt_us)
 }
 
 internal void
-os_thread_detach(OS_Handle handle)
+os_thread_detach(Thread handle)
 {
-  if(os_handle_match(handle, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&handle)) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)handle.u64[0];
   os_lnx_entity_release(entity);
 }
@@ -842,7 +842,7 @@ os_thread_detach(OS_Handle handle)
 
 //- rjf: mutexes
 
-internal OS_Handle
+internal Mutex
 os_mutex_alloc(void)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Mutex);
@@ -856,38 +856,38 @@ os_mutex_alloc(void)
     os_lnx_entity_release(entity);
     entity = 0;
   }
-  OS_Handle handle = {(U64)entity};
+  Mutex handle = {(U64)entity};
   return handle;
 }
 
 internal void
-os_mutex_release(OS_Handle mutex)
+os_mutex_release(Mutex mutex)
 {
-  if(os_handle_match(mutex, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&mutex)) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
   pthread_mutex_destroy(&entity->mutex_handle);
   os_lnx_entity_release(entity);
 }
 
 internal void
-os_mutex_take(OS_Handle mutex)
+os_mutex_take(Mutex mutex)
 {
-  if(os_handle_match(mutex, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&mutex)) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
   pthread_mutex_lock(&entity->mutex_handle);
 }
 
 internal void
-os_mutex_drop(OS_Handle mutex)
+os_mutex_drop(Mutex mutex)
 {
-  if(os_handle_match(mutex, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&mutex)) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
   pthread_mutex_unlock(&entity->mutex_handle);
 }
 
 //- rjf: reader/writer mutexes
 
-internal OS_Handle
+internal RWMutex
 os_rw_mutex_alloc(void)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_RWMutex);
@@ -897,23 +897,23 @@ os_rw_mutex_alloc(void)
     os_lnx_entity_release(entity);
     entity = 0;
   }
-  OS_Handle handle = {(U64)entity};
+  RWMutex handle = {(U64)entity};
   return handle;
 }
 
 internal void
-os_rw_mutex_release(OS_Handle rw_mutex)
+os_rw_mutex_release(RWMutex rw_mutex)
 {
-  if(os_handle_match(rw_mutex, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&rw_mutex)) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)rw_mutex.u64[0];
   pthread_rwlock_destroy(&entity->rwmutex_handle);
   os_lnx_entity_release(entity);
 }
 
 internal void
-os_rw_mutex_take(OS_Handle rw_mutex, B32 write_mode)
+os_rw_mutex_take(RWMutex rw_mutex, B32 write_mode)
 {
-  if(os_handle_match(rw_mutex, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&rw_mutex)) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)rw_mutex.u64[0];
   if(write_mode)
   {
@@ -926,16 +926,16 @@ os_rw_mutex_take(OS_Handle rw_mutex, B32 write_mode)
 }
 
 internal void
-os_rw_mutex_drop(OS_Handle rw_mutex, B32 write_mode)
+os_rw_mutex_drop(RWMutex rw_mutex, B32 write_mode)
 {
-  if(os_handle_match(rw_mutex, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&rw_mutex)) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)rw_mutex.u64[0];
   pthread_rwlock_unlock(&entity->rwmutex_handle);
 }
 
 //- rjf: condition variables
 
-internal OS_Handle
+internal CondVar
 os_cond_var_alloc(void)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_ConditionVariable);
@@ -956,14 +956,14 @@ os_cond_var_alloc(void)
     os_lnx_entity_release(entity);
     entity = 0;
   }
-  OS_Handle handle = {(U64)entity};
+  CondVar handle = {(U64)entity};
   return handle;
 }
 
 internal void
-os_cond_var_release(OS_Handle cv)
+os_cond_var_release(CondVar cv)
 {
-  if(os_handle_match(cv, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&cv)) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)cv.u64[0];
   pthread_cond_destroy(&entity->cv.cond_handle);
   pthread_mutex_destroy(&entity->cv.rwlock_mutex_handle);
@@ -971,10 +971,10 @@ os_cond_var_release(OS_Handle cv)
 }
 
 internal B32
-os_cond_var_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us)
+os_cond_var_wait(CondVar cv, Mutex mutex, U64 endt_us)
 {
-  if(os_handle_match(cv, os_handle_zero())) { return 0; }
-  if(os_handle_match(mutex, os_handle_zero())) { return 0; }
+  if(MemoryIsZeroStruct(&cv)) { return 0; }
+  if(MemoryIsZeroStruct(&mutex)) { return 0; }
   OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
   OS_LNX_Entity *mutex_entity = (OS_LNX_Entity *)mutex.u64[0];
   struct timespec endt_timespec;
@@ -986,14 +986,14 @@ os_cond_var_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us)
 }
 
 internal B32
-os_cond_var_wait_rw(OS_Handle cv, OS_Handle mutex_rw, B32 write_mode, U64 endt_us)
+os_cond_var_wait_rw(CondVar cv, RWMutex mutex_rw, B32 write_mode, U64 endt_us)
 {
   // TODO(rjf): because pthread does not supply cv/rw natively, I had to hack
   // this together, but this would probably just be a lot better if we just
   // implemented the primitives ourselves with e.g. futexes
   //
-  if(os_handle_match(cv, os_handle_zero())) { return 0; }
-  if(os_handle_match(mutex_rw, os_handle_zero())) { return 0; }
+  if(MemoryIsZeroStruct(&cv)) { return 0; }
+  if(MemoryIsZeroStruct(&mutex_rw)) { return 0; }
   OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
   OS_LNX_Entity *rw_mutex_entity = (OS_LNX_Entity *)mutex_rw.u64[0];
   struct timespec endt_timespec;
@@ -1036,27 +1036,27 @@ os_cond_var_wait_rw(OS_Handle cv, OS_Handle mutex_rw, B32 write_mode, U64 endt_u
 }
 
 internal void
-os_cond_var_signal(OS_Handle cv)
+os_cond_var_signal(CondVar cv)
 {
-  if(os_handle_match(cv, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&cv)) { return; }
   OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
   pthread_cond_signal(&cv_entity->cv.cond_handle);
 }
 
 internal void
-os_cond_var_broadcast(OS_Handle cv)
+os_cond_var_broadcast(CondVar cv)
 {
-  if(os_handle_match(cv, os_handle_zero())) { return; }
+  if(MemoryIsZeroStruct(&cv)) { return; }
   OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
   pthread_cond_broadcast(&cv_entity->cv.cond_handle);
 }
 
 //- rjf: cross-process semaphores
 
-internal OS_Handle
+internal Semaphore
 os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 {
-  OS_Handle result = {0};
+  Semaphore result = {0};
   if (name.size > 0)
   {
     // TODO: we need to allocate shared memory to store sem_t
@@ -1076,26 +1076,26 @@ os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 }
 
 internal void
-os_semaphore_release(OS_Handle semaphore)
+os_semaphore_release(Semaphore semaphore)
 {
   int err = munmap((void*)semaphore.u64[0], sizeof(sem_t));
   AssertAlways(err == 0);
 }
 
-internal OS_Handle
+internal Semaphore
 os_semaphore_open(String8 name)
 {
   NotImplemented;
 }
 
 internal void
-os_semaphore_close(OS_Handle semaphore)
+os_semaphore_close(Semaphore semaphore)
 {
   NotImplemented;
 }
 
 internal B32
-os_semaphore_take(OS_Handle semaphore, U64 endt_us)
+os_semaphore_take(Semaphore semaphore, U64 endt_us)
 {
   // TODO(rjf): we need to use `sem_timedwait` here.
   AssertAlways(endt_us == max_U64);
@@ -1116,7 +1116,7 @@ os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 }
 
 internal void
-os_semaphore_drop(OS_Handle semaphore)
+os_semaphore_drop(Semaphore semaphore)
 {
   for(;;)
   {
@@ -1138,17 +1138,17 @@ os_semaphore_drop(OS_Handle semaphore)
 
 //- rjf: barriers
 
-internal OS_Handle
+internal Barrier
 os_barrier_alloc(U64 count)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Barrier);
   pthread_barrier_init(&entity->barrier, 0, count);
-  OS_Handle result = {IntFromPtr(entity)};
+  Barrier result = {IntFromPtr(entity)};
   return result;
 }
 
 internal void
-os_barrier_release(OS_Handle barrier)
+os_barrier_release(Barrier barrier)
 {
   OS_LNX_Entity *entity = (OS_LNX_Entity*)PtrFromInt(barrier.u64[0]);
   pthread_barrier_destroy(&entity->barrier);
@@ -1156,7 +1156,7 @@ os_barrier_release(OS_Handle barrier)
 }
 
 internal void
-os_barrier_wait(OS_Handle barrier)
+os_barrier_wait(Barrier barrier)
 {
   OS_LNX_Entity *entity = (OS_LNX_Entity*)PtrFromInt(barrier.u64[0]);
   pthread_barrier_wait(&entity->barrier);
@@ -1288,9 +1288,10 @@ main(int argc, char **argv)
       for(S64 cap = 4096, r = 0; r < 4; cap *= 2, r += 1)
       {
         scratch_end(scratch);
-        buffer = push_array_no_zero(scratch.arena, U8, cap);
-        size = gethostname((char*)buffer, cap);
-        if(size < cap)
+        buffer = push_array(scratch.arena, U8, cap);
+        int gethostname_result = gethostname((char*)buffer, cap);
+        size = cstring8_length(buffer);
+        if(gethostname_result == 0 && size < cap)
         {
           got_final_result = 1;
           break;
