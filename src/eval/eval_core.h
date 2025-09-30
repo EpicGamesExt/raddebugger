@@ -763,7 +763,6 @@ struct E_BaseCtx
   E_Module *modules;
   U64 modules_count;
   E_Module *primary_module;
-  DI_MatchStore *dbgi_match_store;
   
   // rjf: space hooks
   void *space_rw_user_data;

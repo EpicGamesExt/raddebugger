@@ -786,11 +786,11 @@ ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr)
   return result;
 }
 
-internal DI_Key
+internal DI2_Key
 ctrl_dbgi_key_from_module(CTRL_Entity *module)
 {
   CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
-  DI_Key dbgi_key = {debug_info_path->string, debug_info_path->timestamp};
+  DI2_Key dbgi_key = di2_key_from_path_timestamp(debug_info_path->string, debug_info_path->timestamp);
   return dbgi_key;
 }
 
@@ -1176,15 +1176,15 @@ ctrl_entity_array_from_kind(CTRL_EntityCtx *ctx, CTRL_EntityKind kind)
 }
 
 internal CTRL_EntityList
-ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityCtx *ctx, DI_Key *dbgi_key)
+ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityCtx *ctx, DI2_Key dbgi_key)
 {
   CTRL_EntityList list = {0};
   CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(ctx, CTRL_EntityKind_Module);
   for EachIndex(idx, all_modules.count)
   {
     CTRL_Entity *module = all_modules.v[idx];
-    DI_Key module_dbgi_key = ctrl_dbgi_key_from_module(module);
-    if(di_key_match(&module_dbgi_key, dbgi_key))
+    DI2_Key module_dbgi_key = ctrl_dbgi_key_from_module(module);
+    if(di2_key_match(module_dbgi_key, dbgi_key))
     {
       ctrl_entity_list_push(arena, &list, module);
     }
@@ -2756,7 +2756,7 @@ internal CTRL_CallStack
 ctrl_call_stack_from_unwind(Arena *arena, CTRL_Entity *process, CTRL_Unwind *base_unwind)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  DI_Scope *di_scope = di_scope_open();
+  Access *access = access_open();
   Arch arch = process->arch;
   CTRL_CallStack result = {0};
   {
@@ -2778,8 +2778,8 @@ ctrl_call_stack_from_unwind(Arena *arena, CTRL_Entity *process, CTRL_Unwind *bas
       U64 rip_vaddr = regs_rip_from_arch_block(arch, src->regs);
       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
-      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
+      DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+      RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
       RDI_Scope *scope = rdi_scope_from_voff(rdi, rip_voff);
       
       // rjf: build inline frames (minus parent & inline depth)
@@ -2841,7 +2841,7 @@ ctrl_call_stack_from_unwind(Arena *arena, CTRL_Entity *process, CTRL_Unwind *bas
       }
     }
   }
-  di_scope_close(di_scope);
+  access_close(access);
   scratch_end(scratch);
   return result;
 }
@@ -3185,16 +3185,16 @@ ctrl_thread__entry_point(void *p)
             String8 path = msg->path;
             CTRL_Entity *module = ctrl_entity_from_handle(entity_ctx, msg->entity);
             CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
-            DI_Key old_dbgi_key = {debug_info_path->string, debug_info_path->timestamp};
-            di_close(&old_dbgi_key);
+            DI2_Key old_dbgi_key = di2_key_from_path_timestamp(debug_info_path->string, debug_info_path->timestamp);
+            di2_close(old_dbgi_key);
             MutexScopeW(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
             {
               ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, debug_info_path, path_normalized_from_string(scratch.arena, path));
             }
             U64 new_dbgi_timestamp = os_properties_from_file_path(path).modified;
             debug_info_path->timestamp = new_dbgi_timestamp;
-            DI_Key new_dbgi_key = {debug_info_path->string, new_dbgi_timestamp};
-            di_open(&new_dbgi_key);
+            DI2_Key new_dbgi_key = di2_key_from_path_timestamp(debug_info_path->string, new_dbgi_timestamp);
+            di2_open(new_dbgi_key);
             CTRL_EventList evts = {0};
             CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
             evt->kind       = CTRL_EventKind_ModuleDebugInfoPathChange;
@@ -3259,12 +3259,12 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *
   if(user_bps->first == 0) { return; }
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
-  DI_Scope *di_scope = eval_scope->di_scope;
+  Access *access = eval_scope->access;
   CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   CTRL_Entity *module_entity = ctrl_entity_from_handle(entity_ctx, module);
   CTRL_Entity *debug_info_path_entity = ctrl_entity_child_from_kind(module_entity, CTRL_EntityKind_DebugInfoPath);
-  DI_Key dbgi_key = {debug_info_path_entity->string, debug_info_path_entity->timestamp};
-  RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
+  DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module_entity);
+  RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
   U64 base_vaddr = module_entity->vaddr_range.min;
   for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
   {
@@ -3828,7 +3828,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
             if(!should_filter_event && ev->code == 0xc0000005 &&
                (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value))
             {
-              DI_Scope *di_scope = di_scope_open();
+              Access *access = access_open();
               CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, ev->process));
               CTRL_Entity *module = &ctrl_entity_nil;
               for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
@@ -3844,9 +3844,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 // rjf: determine base address of asan shadow space
                 U64 asan_shadow_base_vaddr = 0;
                 B32 asan_shadow_variable_exists_but_is_zero = 0;
-                CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
-                DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-                RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, max_U64);
+                DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, max_U64);
                 RDI_NameMap *unparsed_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
                 {
                   RDI_ParsedNameMap map = {0};
@@ -3888,7 +3887,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 }
               }
               
-              di_scope_close(di_scope);
+              access_close(access);
             }
           }break;
         }
@@ -4057,8 +4056,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt2->parent     = process_handle;
       out_evt2->timestamp  = debug_info_timestamp;
       out_evt2->string     = initial_debug_info_path;
-      DI_Key initial_dbgi_key = {initial_debug_info_path, debug_info_timestamp};
-      di_open(&initial_dbgi_key);
+      DI2_Key initial_dbgi_key = di2_key_from_path_timestamp(initial_debug_info_path, debug_info_timestamp);
+      di2_open(initial_dbgi_key);
     }break;
     case DMN_EventKind_ExitProcess:
     {
@@ -4090,12 +4089,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->msg_id     = msg->msg_id;
       out_evt->entity     = module_handle;
       out_evt->string     = module_path;
-      CTRL_Entity *debug_info_path_ent = ctrl_entity_child_from_kind(module_ent, CTRL_EntityKind_DebugInfoPath);
-      if(debug_info_path_ent != &ctrl_entity_nil)
-      {
-        DI_Key dbgi_key = {debug_info_path_ent->string, debug_info_path_ent->timestamp};
-        di_close(&dbgi_key);
-      }
+      DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module_ent);
+      di2_close(dbgi_key);
     }break;
     case DMN_EventKind_DebugString:
     {
@@ -4169,187 +4164,6 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     ctrl_state->dbg_dir_root = push_array(ctrl_state->dbg_dir_arena, CTRL_DbgDirNode, 1);
   }
   
-  //- rjf: when a new module is loaded, pre-emptively try to open all adjacent
-  // debug infos. with debug events, we learn about loaded modules serially,
-  // and we need to completely load debug info before continuing. for massive
-  // projects, this is a problem, because completely loading debug info isn't a
-  // trivial cost, and there are often 1000s of DLLs.
-  //
-  // an imperfect but usually reasonable heuristic is to look at adjacent
-  // debug info files, in the same or under the directory as the initially
-  // loaded, and pre-emptively convert all of them (which for us is the
-  // heaviest part of debug info loading, if native RDI is not used).
-  //
-  // only do this on the first ever loaded module, *or* once we get beyond 256
-  // modules (a very bad heuristic that may or may not inform us that we are
-  // dealing with insane-town projects)
-  //
-  if(0 &&
-     event->kind == DMN_EventKind_LoadModule &&
-     (entity_ctx->entity_kind_counts[CTRL_EntityKind_Module] > 256 ||
-      entity_ctx->entity_kind_counts[CTRL_EntityKind_Module] == 1))
-  {
-    //- rjf: unpack event
-    CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
-    CTRL_Handle loaded_module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
-    CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, process_handle);
-    CTRL_Entity *loaded_module = ctrl_entity_from_handle(entity_ctx, loaded_module_handle);
-    
-    //- rjf: for each module, use its full path as the start to a new limited recursive
-    // directory search. cache each directory once traversed in the dbg_dir tree. if any
-    // node is not cached, then scan it & pre-emptively convert debug info.
-    ProfScope("pre-emptively load adjacent debug info for %.*s", str8_varg(loaded_module->string))
-    {
-      //- rjf: calculate seed path
-      DI_Key loaded_di_key = ctrl_dbgi_key_from_module(loaded_module);
-      String8 loaded_di_name = str8_skip_last_slash(loaded_di_key.path);
-      String8 debug_info_ext = str8_skip_last_dot(loaded_di_key.path);
-      String8 seed_folder_path = str8_chop_last_slash(loaded_di_key.path);
-      if(seed_folder_path.size == 0)
-      {
-        String8 module_path = loaded_module->string;
-        seed_folder_path = str8_chop_last_slash(module_path);
-      }
-      
-      //- rjf: split seed path
-      String8List seed_path_parts = str8_split_path(scratch.arena, seed_folder_path);
-      
-      //- rjf: find parent dir node for this module's debug info; build tree leading to this dir
-      CTRL_DbgDirNode *parent_dir_node = ctrl_state->dbg_dir_root;
-      for(String8Node *n = seed_path_parts.first; n != 0; n = n->next)
-      {
-        String8 name = n->string;
-        CTRL_DbgDirNode *next_child = 0;
-        for(CTRL_DbgDirNode *child = parent_dir_node->first; child != 0; child = child->next)
-        {
-          if(str8_match(child->name, name, StringMatchFlag_CaseInsensitive))
-          {
-            next_child = child;
-            break;
-          }
-        }
-        if(next_child == 0)
-        {
-          next_child = push_array(ctrl_state->dbg_dir_arena, CTRL_DbgDirNode, 1);
-          DLLPushBack(parent_dir_node->first, parent_dir_node->last, next_child);
-          next_child->parent = parent_dir_node;
-          next_child->name = push_str8_copy(ctrl_state->dbg_dir_arena, name);
-          parent_dir_node->child_count += 1;
-        }
-        parent_dir_node = next_child;
-      }
-      
-      //- rjf: count modules
-      {
-        parent_dir_node->module_direct_count += 1;
-      }
-      
-      //- rjf: iterate from dir node up its ancestor chain - do recursive
-      // searches if this is an ancestor of loaded modules, it has not been
-      // searched yet, but it has >4 child branches, meaning it looks like
-      // project directory
-      //
-      DI_KeyList preemptively_loaded_keys = {0};
-      for(CTRL_DbgDirNode *dir_node = parent_dir_node; dir_node != 0; dir_node = dir_node->parent)
-      {
-        if(dir_node->search_count == 0 && dir_node->module_direct_count >= 1)
-        {
-          //- rjf: form full path of this directory node
-          String8List dir_node_path_parts = {0};
-          for(CTRL_DbgDirNode *n = dir_node; n != 0; n = n->parent)
-          {
-            if(n->name.size != 0)
-            {
-              str8_list_push_front(scratch.arena, &dir_node_path_parts, n->name);
-            }
-          }
-          String8 dir_node_path = str8_list_join(scratch.arena, &dir_node_path_parts, &(StringJoin){.sep = str8_lit("/")});
-          
-          //- rjf: iterate downwards from this directory recursively, locate
-          // debug infos, and pre-emptively convert
-          typedef struct Task Task;
-          struct Task
-          {
-            Task *next;
-            CTRL_DbgDirNode *node;
-            String8 path;
-          };
-          Task start_task = {0, dir_node, dir_node_path};
-          Task *first_task = &start_task;
-          Task *last_task = first_task;
-          U64 task_count = 0;
-          for(Task *t = first_task; t != 0; t = t->next)
-          {
-            ProfBegin("search task %.*s", str8_varg(t->path));
-            
-            // rjf: increment search counter
-            t->node->search_count += 1;
-            
-            // rjf: iterate this directory. if debug infos are encountered,
-            // kick off pre-emptive conversion, and gather key. if folders
-            // are encountered, then add them to the tree, and kick off a
-            // sub-search if needed.
-            OS_FileIter *it = os_file_iter_begin(scratch.arena, t->path, 0);
-            U64 idx = 0;
-            for(OS_FileInfo info = {0}; idx < 16384 && os_file_iter_next(scratch.arena, it, &info); idx += 1)
-            {
-              // rjf: folder -> do sub-search if not duplicative
-              if(info.props.flags & FilePropertyFlag_IsFolder && task_count < 16384 && !str8_match(str8_prefix(info.name, 1), str8_lit("."), 0))
-              {
-                CTRL_DbgDirNode *existing_dir_child = 0;
-                for(CTRL_DbgDirNode *child = t->node->first; child != 0; child = child->next)
-                {
-                  if(str8_match(child->name, info.name, StringMatchFlag_CaseInsensitive))
-                  {
-                    existing_dir_child = child;
-                    break;
-                  }
-                }
-                if(existing_dir_child == 0)
-                {
-                  existing_dir_child = push_array(ctrl_state->dbg_dir_arena, CTRL_DbgDirNode, 1);
-                  DLLPushBack(t->node->first, t->node->last, existing_dir_child);
-                  existing_dir_child->parent = t->node;
-                  existing_dir_child->name = push_str8_copy(ctrl_state->dbg_dir_arena, info.name);
-                  t->node->child_count += 1;
-                }
-                if(existing_dir_child->search_count == 0)
-                {
-                  Task *task = push_array(scratch.arena, Task, 1);
-                  task->node = existing_dir_child;
-                  task->path = push_str8f(scratch.arena, "%S/%S", t->path, info.name);
-                  SLLQueuePush(first_task, last_task, task);
-                  task_count += 1;
-                }
-              }
-              
-              // rjf: debug info file -> kick off open
-              else if(preemptively_loaded_keys.count < 4096 &&
-                      !(info.props.flags & FilePropertyFlag_IsFolder) &&
-                      str8_match(str8_skip_last_dot(info.name), debug_info_ext, StringMatchFlag_CaseInsensitive) &&
-                      !str8_match(loaded_di_name, info.name, StringMatchFlag_CaseInsensitive))
-              {
-                DI_Key key = {push_str8f(scratch.arena, "%S/%S", t->path, info.name), info.props.modified};
-                di_open(&key);
-                di_key_list_push(scratch.arena, &preemptively_loaded_keys, &key);
-                if(preemptively_loaded_keys.count >= Max(1, async_thread_count()/2))
-                {
-                  for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
-                  {
-                    di_close(&n->v);
-                  }
-                  MemoryZeroStruct(&preemptively_loaded_keys);
-                }
-              }
-            }
-            os_file_iter_end(it);
-            ProfEnd();
-          }
-        }
-      }
-    }
-  }
-  
   //- rjf: out of queued up demon events -> clear event arena
   if(ctrl_state->first_dmn_event_node == 0)
   {
@@ -4416,7 +4230,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
 {
   CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   CTRL_EvalScope *scope = push_array(arena, CTRL_EvalScope, 1);
-  scope->di_scope = di_scope_open();
+  scope->access = access_open();
   
   //////////////////////////////
   //- rjf: unpack thread
@@ -4452,11 +4266,10 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
             mod = mod->next)
         {
           if(mod->kind != CTRL_EntityKind_Module) { continue; }
-          CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
-          DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+          DI2_Key dbgi_key = ctrl_dbgi_key_from_module(mod);
           
           //- rjf: try to obtain this module's RDI
-          RDI_Parsed *rdi = di_rdi_from_key(scope->di_scope, &dbgi_key, 1, 0);
+          RDI_Parsed *rdi = di2_rdi_from_key(scope->access, dbgi_key, 0, 0);
           
           //- rjf: if this RDI is not yet ready => determine if we need to wait for it
           //
@@ -4488,7 +4301,8 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
             // rjf: not cached -> compute & store
             else ProfScope("cache miss")
             {
-              OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, dbgi_key.path);
+              CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
+              OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, debug_info_path->string);
               {
                 //- rjf: determine if file is PDB
                 B32 file_is_pdb = 0;
@@ -4538,7 +4352,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
           //- rjf: if this RDI is necessary, but we do not have it => wait for it forever
           if(rdi == &rdi_parsed_nil && rdi_is_necessary)
           {
-            rdi = di_rdi_from_key(scope->di_scope, &dbgi_key, 1, max_U64);
+            rdi = di2_rdi_from_key(scope->access, dbgi_key, 1, max_U64);
           }
           
           //- rjf: fill evaluation module info
@@ -4625,7 +4439,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
 internal void
 ctrl_thread__eval_scope_end(CTRL_EvalScope *scope)
 {
-  di_scope_close(scope->di_scope);
+  access_close(scope->access);
 }
 
 //- rjf: log flusher
@@ -5351,15 +5165,14 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       if(msg->run_flags & CTRL_RunFlag_StopOnEntryPoint && !launch_done_first_module && event->kind == DMN_EventKind_HandshakeComplete)
       {
         launch_done_first_module = 1;
-        DI_Scope *di_scope = di_scope_open();
+        Access *access = access_open();
         
         //- rjf: unpack process/module info
         CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
         CTRL_Entity *module = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Module);
         U64 module_base_vaddr = module->vaddr_range.min;
-        CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
-        DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, max_U64);
+        DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+        RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, max_U64);
         RDI_NameMap *unparsed_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
         RDI_ParsedNameMap map = {0};
         rdi_parsed_from_name_map(rdi, unparsed_map, &map);
@@ -5572,7 +5385,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         //- rjf: found entry points -> add to joined traps
         dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &entry_traps);
         
-        di_scope_close(di_scope);
+        access_close(access);
       }
       
       //////////////////////////

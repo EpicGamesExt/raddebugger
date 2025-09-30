@@ -152,7 +152,6 @@ d_line_list_copy(Arena *arena, D_LineList *list)
     D_LineNode *dst_n = push_array(arena, D_LineNode, 1);
     MemoryCopyStruct(dst_n, src_n);
     dst_n->v.file_path = push_str8_copy(arena, dst_n->v.file_path);
-    dst_n->v.dbgi_key = di_key_copy(arena, &src_n->v.dbgi_key);
     SLLQueuePush(dst.first, dst.last, dst_n);
     dst.count += 1;
   }
@@ -340,15 +339,15 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   U64 ip_vaddr = ctrl_rip_from_thread(&d_state->ctrl_entity_store->ctx, thread->handle);
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ip_vaddr);
-  DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+  DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
   log_infof("ip_vaddr: 0x%I64x\n", ip_vaddr);
-  log_infof("dbgi_key: {%S, 0x%I64x}\n", dbgi_key.path, dbgi_key.min_timestamp);
+  log_infof("dbgi_key: {0x%I64x, 0x%I64x}\n", dbgi_key.u64[0], dbgi_key.u64[1]);
   
   // rjf: ip => line vaddr range
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = ctrl_voff_from_vaddr(module, ip_vaddr);
-    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, ip_voff);
+    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, ip_voff);
     Rng1U64 line_voff_rng = {0};
     if(lines.first != 0)
     {
@@ -366,7 +365,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   // is enabled. This is enabled by default normally.
   {
     U64 opl_line_voff_rng = ctrl_voff_from_vaddr(module, line_vaddr_rng.max);
-    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, opl_line_voff_rng);
+    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, opl_line_voff_rng);
     if(lines.first != 0 && (lines.first->v.pt.line == 0xf00f00 || lines.first->v.pt.line == 0xfeefee))
     {
       line_vaddr_rng.max = ctrl_vaddr_from_voff(module, lines.first->v.voff_range.max);
@@ -503,13 +502,13 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   U64 ip_vaddr = ctrl_rip_from_thread(&d_state->ctrl_entity_store->ctx, thread->handle);
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ip_vaddr);
-  DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+  DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
   
   // rjf: ip => line vaddr range
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = ctrl_voff_from_vaddr(module, ip_vaddr);
-    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, ip_voff);
+    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, ip_voff);
     Rng1U64 line_voff_rng = {0};
     if(lines.first != 0)
     {
@@ -524,7 +523,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   // is enabled. This is enabled by default normally.
   {
     U64 opl_line_voff_rng = ctrl_voff_from_vaddr(module, line_vaddr_rng.max);
-    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, opl_line_voff_rng);
+    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, opl_line_voff_rng);
     if(lines.first != 0 && (lines.first->v.pt.line == 0xf00f00 || lines.first->v.pt.line == 0xfeefee))
     {
       line_vaddr_rng.max = ctrl_vaddr_from_voff(module, lines.first->v.voff_range.max);
@@ -586,8 +585,8 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
       U64 jump_dest_vaddr = point->jump_dest_vaddr;
       CTRL_Entity *jump_dest_module = ctrl_module_from_process_vaddr(process, jump_dest_vaddr);
       U64 jump_dest_voff = ctrl_voff_from_vaddr(jump_dest_module, jump_dest_vaddr);
-      DI_Key jump_dest_dbgi_key = ctrl_dbgi_key_from_module(jump_dest_module);
-      D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &jump_dest_dbgi_key, jump_dest_voff);
+      DI2_Key jump_dest_dbgi_key = ctrl_dbgi_key_from_module(jump_dest_module);
+      D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, jump_dest_dbgi_key, jump_dest_voff);
       if(lines.count == 0)
       {
         add = 0;
@@ -644,97 +643,14 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
 
-//- rjf: symbol -> voff lookups
-
-internal U64
-d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  DI_Scope *scope = di_scope_open();
-  U64 result = 0;
-  {
-    RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 1, 0);
-    RDI_NameMapKind name_map_kinds[] =
-    {
-      RDI_NameMapKind_GlobalVariables,
-      RDI_NameMapKind_Procedures,
-    };
-    if(rdi != &rdi_parsed_nil)
-    {
-      for(U64 name_map_kind_idx = 0;
-          name_map_kind_idx < ArrayCount(name_map_kinds);
-          name_map_kind_idx += 1)
-      {
-        RDI_NameMapKind name_map_kind = name_map_kinds[name_map_kind_idx];
-        RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kind);
-        RDI_ParsedNameMap parsed_name_map = {0};
-        rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, symbol_name.str, symbol_name.size);
-        
-        // rjf: node -> num
-        U64 entity_num = 0;
-        if(node != 0)
-        {
-          switch(node->match_count)
-          {
-            case 1:
-            {
-              entity_num = node->match_idx_or_idx_run_first + 1;
-            }break;
-            default:
-            {
-              U32 num = 0;
-              U32 *run = rdi_matches_from_map_node(rdi, node, &num);
-              if(num != 0)
-              {
-                entity_num = run[0]+1;
-              }
-            }break;
-          }
-        }
-        
-        // rjf: num -> voff
-        U64 voff = 0;
-        if(entity_num != 0) switch(name_map_kind)
-        {
-          default:{}break;
-          case RDI_NameMapKind_GlobalVariables:
-          {
-            RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, entity_num-1);
-            voff = global_var->voff;
-          }break;
-          case RDI_NameMapKind_Procedures:
-          {
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, entity_num-1);
-            RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
-            voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
-          }break;
-        }
-        
-        // rjf: nonzero voff -> break
-        if(voff != 0)
-        {
-          result = voff;
-          break;
-        }
-      }
-    }
-  }
-  di_scope_close(scope);
-  scratch_end(scratch);
-  ProfEnd();
-  return result;
-}
-
 //- rjf: voff -> line info
 
 internal D_LineList
-d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
+d_lines_from_dbgi_key_voff(Arena *arena, DI2_Key dbgi_key, U64 voff)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  DI_Scope *scope = di_scope_open();
-  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 1, 0);
+  Access *access = access_open();
+  RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, 0);
   D_LineList result = {0};
   {
     //- rjf: gather line tables
@@ -799,7 +715,7 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
         }
         n->v.pt = txt_pt(line->line_num, column ? column->col_first : 1);
         n->v.voff_range = r1u64(parsed_line_table.voffs[line_info_idx], parsed_line_table.voffs[line_info_idx+1]);
-        n->v.dbgi_key = *dbgi_key;
+        n->v.dbgi_key = dbgi_key;
         if(line_table_n == top_line_table)
         {
           shallowest_voff_range = n->v.voff_range;
@@ -813,7 +729,7 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
       n->v.voff_range = intersect_1u64(n->v.voff_range, shallowest_voff_range);
     }
   }
-  di_scope_close(scope);
+  access_close(access);
   scratch_end(scratch);
   return result;
 }
@@ -823,17 +739,17 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
 // TODO(rjf): this depends on file path maps, needs to move
 
 internal D_LineListArray
-d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, String8 file_path, Rng1S64 line_num_range)
+d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI2_Key dbgi_key, String8 file_path, Rng1S64 line_num_range)
 {
   D_LineListArray array = {0};
   {
     array.count = dim_1s64(line_num_range)+1;
     array.v = push_array(arena, D_LineList, array.count);
-    di_key_list_push(arena, &array.dbgi_keys, &dbgi_key);
+    di2_key_list_push(arena, &array.dbgi_keys, dbgi_key);
   }
   Temp scratch = scratch_begin(&arena, 1);
   U64 *lines_num_voffs = push_array(scratch.arena, U64, array.count);
-  DI_Scope *scope = di_scope_open();
+  Access *access = access_open();
   String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, file_path);
   for(String8Node *override_n = overrides.first;
       override_n != 0;
@@ -843,7 +759,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
     String8 file_path_normalized = lower_from_str8(scratch.arena, path_normalized_from_string(scratch.arena, file_path));
     
     // rjf: binary -> rdi
-    RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 1, 0);
+    RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
     
     // rjf: file_path_normalized * rdi -> src_id
     B32 good_src_id = 0;
@@ -911,7 +827,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
       }
     }
   }
-  di_scope_close(scope);
+  access_close(access);
   scratch_end(scratch);
   return array;
 }
@@ -926,8 +842,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
   }
   Temp scratch = scratch_begin(&arena, 1);
   U64 *lines_num_voffs = push_array(scratch.arena, U64, array.count);
-  DI_Scope *scope = di_scope_open();
-  DI_KeyList dbgi_keys = d_push_active_dbgi_key_list(scratch.arena);
+  DI2_KeyArray dbgi_keys = di2_push_all_loaded_keys(scratch.arena);
   String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, file_path);
   for(String8Node *override_n = overrides.first;
       override_n != 0;
@@ -935,13 +850,13 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
   {
     String8 file_path = override_n->string;
     String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
-    for(DI_KeyNode *dbgi_key_n = dbgi_keys.first;
-        dbgi_key_n != 0;
-        dbgi_key_n = dbgi_key_n->next)
+    for EachIndex(idx, dbgi_keys.count)
     {
+      Access *access = access_open();
+      
       // rjf: binary -> rdi
-      DI_Key key = dbgi_key_n->v;
-      RDI_Parsed *rdi = di_rdi_from_key(scope, &key, 1, 0);
+      DI2_Key key = dbgi_keys.v[idx];
+      RDI_Parsed *rdi = di2_rdi_from_key(access, key, 1, 0);
       
       // rjf: file_path_normalized * rdi -> src_id
       B32 good_src_id = 0;
@@ -1012,17 +927,18 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
       // rjf: good src id -> push to relevant dbgi keys
       if(good_src_id)
       {
-        di_key_list_push(arena, &array.dbgi_keys, &key);
+        di2_key_list_push(arena, &array.dbgi_keys, key);
       }
+      
+      access_close(access);
     }
   }
-  di_scope_close(scope);
   scratch_end(scratch);
   return array;
 }
 
 internal D_LineList
-d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 file_path, S64 line_num)
+d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI2_Key dbgi_key, String8 file_path, S64 line_num)
 {
   D_LineListArray array = d_lines_array_from_dbgi_key_file_path_line_range(arena, dbgi_key, file_path, r1s64(line_num, line_num+1));
   D_LineList list = {0};
@@ -1175,16 +1091,16 @@ d_ctrl_targets_running(void)
 
 //- rjf: active entity based queries
 
-internal DI_KeyList
+internal DI2_KeyList
 d_push_active_dbgi_key_list(Arena *arena)
 {
-  DI_KeyList dbgis = {0};
+  DI2_KeyList dbgis = {0};
   CTRL_EntityArray modules = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Module);
   for EachIndex(idx, modules.count)
   {
     CTRL_Entity *module = modules.v[idx];
-    DI_Key key = ctrl_dbgi_key_from_module(module);
-    di_key_list_push(arena, &dbgis, &key);
+    DI2_Key key = ctrl_dbgi_key_from_module(module);
+    di2_key_list_push(arena, &dbgis, key);
   }
   return dbgis;
 }
@@ -1271,7 +1187,7 @@ d_query_cached_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 ro
 }
 
 internal E_String2NumMap *
-d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
+d_query_cached_locals_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
 {
   ProfBeginFunction();
   E_String2NumMap *map = &e_string2num_map_nil;
@@ -1287,13 +1203,13 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     {
       break;
     }
-    U64 hash = di_hash_from_key(dbgi_key);
+    U64 hash = u64_hash_from_str8(str8_struct(&dbgi_key));
     U64 slot_idx = hash % cache->table_size;
     D_RunLocalsCacheSlot *slot = &cache->table[slot_idx];
     D_RunLocalsCacheNode *node = 0;
     for(D_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
     {
-      if(di_key_match(&n->dbgi_key, dbgi_key) && n->voff == voff)
+      if(di2_key_match(n->dbgi_key, dbgi_key) && n->voff == voff)
       {
         node = n;
         break;
@@ -1301,18 +1217,18 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     }
     if(node == 0)
     {
-      DI_Scope *scope = di_scope_open();
-      RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 1, 0);
+      Access *access = access_open();
+      RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, 0);
       E_String2NumMap *map = e_push_locals_map_from_rdi_voff(cache->arena, rdi, voff);
       if(map->slots_count != 0)
       {
         node = push_array(cache->arena, D_RunLocalsCacheNode, 1);
-        node->dbgi_key = di_key_copy(cache->arena, dbgi_key);
+        node->dbgi_key = dbgi_key;
         node->voff = voff;
         node->locals_map = map;
         SLLQueuePush_N(slot->first, slot->last, node, hash_next);
       }
-      di_scope_close(scope);
+      access_close(access);
     }
     if(node != 0 && node->locals_map->slots_count != 0)
     {
@@ -1325,7 +1241,7 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 }
 
 internal E_String2NumMap *
-d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
+d_query_cached_member_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
 {
   ProfBeginFunction();
   E_String2NumMap *map = &e_string2num_map_nil;
@@ -1341,13 +1257,13 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     {
       break;
     }
-    U64 hash = di_hash_from_key(dbgi_key);
+    U64 hash = u64_hash_from_str8(str8_struct(&dbgi_key));
     U64 slot_idx = hash % cache->table_size;
     D_RunLocalsCacheSlot *slot = &cache->table[slot_idx];
     D_RunLocalsCacheNode *node = 0;
     for(D_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
     {
-      if(di_key_match(&n->dbgi_key, dbgi_key) && n->voff == voff)
+      if(di2_key_match(n->dbgi_key, dbgi_key) && n->voff == voff)
       {
         node = n;
         break;
@@ -1355,18 +1271,18 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     }
     if(node == 0)
     {
-      DI_Scope *scope = di_scope_open();
-      RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 1, 0);
+      Access *access = access_open();
+      RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, 0);
       E_String2NumMap *map = e_push_member_map_from_rdi_voff(cache->arena, rdi, voff);
       if(map->slots_count != 0)
       {
         node = push_array(cache->arena, D_RunLocalsCacheNode, 1);
-        node->dbgi_key = di_key_copy(cache->arena, dbgi_key);
+        node->dbgi_key = dbgi_key;
         node->voff = voff;
         node->locals_map = map;
         SLLQueuePush_N(slot->first, slot->last, node, hash_next);
       }
-      di_scope_close(scope);
+      access_close(access);
     }
     if(node != 0 && node->locals_map->slots_count != 0)
     {

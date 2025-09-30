@@ -520,7 +520,7 @@ Rng1U64 rd_reg_slot_range_table[47] =
 {OffsetOf(RD_Regs, text_key), OffsetOf(RD_Regs, text_key) + sizeof(C_Key)},
 {OffsetOf(RD_Regs, lang_kind), OffsetOf(RD_Regs, lang_kind) + sizeof(TXT_LangKind)},
 {OffsetOf(RD_Regs, lines), OffsetOf(RD_Regs, lines) + sizeof(D_LineList)},
-{OffsetOf(RD_Regs, dbgi_key), OffsetOf(RD_Regs, dbgi_key) + sizeof(DI_Key)},
+{OffsetOf(RD_Regs, dbgi_key), OffsetOf(RD_Regs, dbgi_key) + sizeof(DI2_Key)},
 {OffsetOf(RD_Regs, vaddr), OffsetOf(RD_Regs, vaddr) + sizeof(U64)},
 {OffsetOf(RD_Regs, voff), OffsetOf(RD_Regs, voff) + sizeof(U64)},
 {OffsetOf(RD_Regs, vaddr_range), OffsetOf(RD_Regs, vaddr_range) + sizeof(Rng1U64)},

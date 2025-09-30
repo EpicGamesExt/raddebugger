@@ -18,6 +18,30 @@ di2_key_match(DI2_Key a, DI2_Key b)
   return result;
 }
 
+internal void
+di2_key_list_push(Arena *arena, DI2_KeyList *list, DI2_Key key)
+{
+  DI2_KeyNode *n = push_array(arena, DI2_KeyNode, 1);
+  n->v = key;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal DI2_KeyArray
+di2_key_array_from_list(Arena *arena, DI2_KeyList *list)
+{
+  DI2_KeyArray array = {0};
+  array.count = list->count;
+  array.v = push_array(arena, DI2_Key, array.count);
+  U64 idx = 0;
+  for EachNode(n, DI2_KeyNode, list->first)
+  {
+    array.v[idx] = n->v;
+    idx += 1;
+  }
+  return array;
+}
+
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
 
@@ -269,6 +293,7 @@ di2_open(DI2_Key key)
       batch->count += 1;
     }
     cond_var_broadcast(async_tick_start_cond_var);
+    ins_atomic_u32_eval_assign(&async_loop_again, 1);
   }
 }
 
@@ -327,7 +352,10 @@ di2_close(DI2_Key key)
   //- rjf: release node's resources if needed
   if(node_released)
   {
-    arena_release(arena);
+    if(arena != 0)
+    {
+      arena_release(arena);
+    }
     os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
     os_file_map_close(file_map);
     os_file_close(file);
@@ -398,7 +426,7 @@ di2_rdi_from_key(Access *access, DI2_Key key, B32 high_priority, U64 endt_us)
       B32 grabbed = 0;
       for(DI2_Node *n = slot->first; n != 0; n = n->next)
       {
-        if(di2_key_match(n->key, key))
+        if(di2_key_match(n->key, key) && ins_atomic_u64_eval(&n->refcount) > 0)
         {
           found = 1;
           if(high_priority && ins_atomic_u64_eval_cond_assign(&n->batch_request_counts[0], 1, 0) == 0)
@@ -427,6 +455,7 @@ di2_rdi_from_key(Access *access, DI2_Key key, B32 high_priority, U64 endt_us)
           batch->count += 1;
         }
         cond_var_broadcast(async_tick_start_cond_var);
+        ins_atomic_u32_eval_assign(&async_loop_again, 1);
       }
       
       // rjf: found current results, or out-of-time? abort
@@ -695,6 +724,14 @@ di2_async_tick(void)
         t->status = DI2_LoadTaskStatus_Done;
       }
       
+      //- rjf: if the RDI for this task *is* stale, but the O.G. path is actually RDI,
+      // then we can't actually re-convert to produce a non-stale RDI. in this case, just
+      // mark as done.
+      if(rdi_is_stale && og_is_rdi)
+      {
+        t->status = DI2_LoadTaskStatus_Done;
+      }
+      
       //- rjf: if task is done, retire & recycle task; gather path to load
       if(t->status == DI2_LoadTaskStatus_Done)
       {
@@ -853,6 +890,7 @@ di2_conversion_completion_signal_receiver_thread_entry_point(void *p)
     if(semaphore_take(di2_shared->conversion_completion_signal_semaphore, max_U64))
     {
       cond_var_broadcast(async_tick_start_cond_var);
+      ins_atomic_u32_eval_assign(&async_loop_again, 1);
     }
   }
 }
@@ -1291,7 +1329,12 @@ di2_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
   DI2_KeyArray dbgi_keys = di2_push_all_loaded_keys(scratch.arena);
   
   //- rjf: wide search across all debug infos
-  DI2_Match match = {0};
+  DI2_Match *lane_matches = 0;
+  if(lane_idx() == 0)
+  {
+    lane_matches = push_array(scratch.arena, DI2_Match, lane_count());
+  }
+  lane_sync_u64(&lane_matches, 0);
   {
     read_only local_persist RDI_NameMapKind name_map_kinds[] =
     {
@@ -1326,13 +1369,25 @@ di2_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
           U32 *run = rdi_matches_from_map_node(rdi, map_node, &num);
           if(num != 0)
           {
-            match.key          = dbgi_key;
-            match.section_kind = name_map_section_kinds[name_map_kind_idx];
-            match.idx          = run[num-1];
+            lane_matches[lane_idx()].key          = dbgi_key;
+            lane_matches[lane_idx()].section_kind = name_map_section_kinds[name_map_kind_idx];
+            lane_matches[lane_idx()].idx          = run[num-1];
           }
         }
       }
       access_close(access);
+    }
+  }
+  lane_sync();
+  
+  //- rjf: pick match
+  DI2_Match match = {0};
+  for EachIndex(idx, lane_count())
+  {
+    if(lane_matches[idx].idx != 0)
+    {
+      match = lane_matches[idx];
+      break;
     }
   }
   
@@ -1362,7 +1417,7 @@ di2_match_from_string(String8 string, U64 index, U64 endt_us)
     str8_list_push(scratch.arena, &key_parts, str8_struct(&string.size));
     str8_list_push(scratch.arena, &key_parts, string);
     String8 key = str8_list_join(scratch.arena, &key_parts, 0);
-    AC_Artifact artifact = ac_artifact_from_key(access, key, di2_match_artifact_create, 0, endt_us, .flags = AC_Flag_Wide);
+    AC_Artifact artifact = ac_artifact_from_key(access, key, di2_match_artifact_create, 0, endt_us, .flags = AC_Flag_Wide, .gen = di2_load_gen());
     result.key.u64[0]   = artifact.u64[0];
     result.key.u64[1]   = artifact.u64[1];
     result.section_kind = artifact.u64[2];

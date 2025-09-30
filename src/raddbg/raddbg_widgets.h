@@ -104,7 +104,7 @@ struct RD_CodeSliceParams
   RD_CfgList *line_pins;
   U64 *line_vaddrs;
   D_LineList *line_infos;
-  DI_KeyList relevant_dbgi_keys;
+  DI2_KeyList relevant_dbgi_keys;
   TXT_TextInfo *text_info;
   String8 text_data;
   

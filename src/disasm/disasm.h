@@ -97,7 +97,7 @@ struct DASM_Params
   DASM_StyleFlags style_flags;
   DASM_Syntax syntax;
   U64 base_vaddr;
-  DI_Key dbgi_key;
+  DI2_Key dbgi_key;
 };
 
 ////////////////////////////////

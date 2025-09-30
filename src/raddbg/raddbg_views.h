@@ -67,7 +67,7 @@ struct RD_CodeViewState
 typedef struct RD_CodeViewBuildResult RD_CodeViewBuildResult;
 struct RD_CodeViewBuildResult
 {
-  DI_KeyList dbgi_keys;
+  DI2_KeyList dbgi_keys;
 };
 
 ////////////////////////////////
@@ -199,7 +199,7 @@ struct RD_WatchViewState
 //~ rjf: Code View Functions
 
 internal void rd_code_view_init(RD_CodeViewState *cv);
-internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
+internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI2_Key dasm_dbgi_key);
 
 ////////////////////////////////
 //~ rjf: Watch View Functions

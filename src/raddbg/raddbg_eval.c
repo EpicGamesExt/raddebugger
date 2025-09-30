@@ -1634,9 +1634,7 @@ typedef struct RD_DebugInfoTableLookupAccel RD_DebugInfoTableLookupAccel;
 struct RD_DebugInfoTableLookupAccel
 {
   RDI_SectionKind section;
-  U64 rdis_count;
-  RDI_Parsed **rdis;
-  DI_SearchItemArray items;
+  DI2_SearchItemArray items;
 };
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
@@ -1663,28 +1661,10 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
   {
     U64 endt_us = rd_state->frame_eval_memread_endt_us;
     
-    //- rjf: unpack context
-    DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
-    DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
-    U64 rdis_count = dbgi_keys.count;
-    RDI_Parsed **rdis = push_array(arena, RDI_Parsed *, rdis_count);
-    for(U64 idx = 0; idx < rdis_count; idx += 1)
-    {
-      rdis[idx] = di_rdi_from_key(rd_state->frame_di_scope, &dbgi_keys.v[idx], 1, endt_us);
-    }
-    
     //- rjf: query all filtered items from dbgi searching system
     U128 fuzzy_search_key = {d_hash_from_string(str8_struct(&rd_regs()->view)), (U64)section};
-    B32 items_stale = 0;
-    DI_SearchParams params = {section, dbgi_keys};
     accel->section = section;
-    accel->rdis_count = rdis_count;
-    accel->rdis = rdis;
-    accel->items = di_search_items_from_key_params_query(rd_state->frame_di_scope, fuzzy_search_key, &params, filter, endt_us, &items_stale);
-    if(items_stale)
-    {
-      rd_request_frame();
-    }
+    accel->items = di2_search_item_array_from_target_query(rd_state->frame_access, section, filter, endt_us);
   }
   E_TypeExpandInfo info = {accel, accel->items.count};
   scratch_end(scratch);
@@ -1698,18 +1678,11 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
   U64 needed_row_count = dim_1u64(idx_range);
   for EachIndex(idx, needed_row_count)
   {
+    Access *access = access_open();
+    
     // rjf: unpack row
-    DI_SearchItem *item = &accel->items.v[idx_range.min + idx];
-    
-    // rjf: skip bad elements
-    if(item->dbgi_idx >= accel->rdis_count)
-    {
-      continue;
-    }
-    
-    // rjf: unpack row info
-    RDI_Parsed *rdi = accel->rdis[item->dbgi_idx];
-    E_Module *module = &e_base_ctx->modules[item->dbgi_idx];
+    DI2_SearchItem *item = &accel->items.v[idx_range.min + idx];
+    RDI_Parsed *rdi = di2_rdi_from_key(access, item->key, 0, 0);
     
     // rjf: get item's string
     String8 item_string = {0};
@@ -1721,51 +1694,43 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
         default:{}break;
         case RDI_SectionKind_Procedures:
         {
-          RDI_Procedure *procedure = rdi_element_from_name_idx(module->rdi, Procedures, element_idx);
-          RDI_Scope *scope = rdi_element_from_name_idx(module->rdi, Scopes, procedure->root_scope_idx);
-          U64 voff = *rdi_element_from_name_idx(module->rdi, ScopeVOffData, scope->voff_range_first);
-          E_OpList oplist = {0};
-          e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
-          String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
-          U32 type_idx = procedure->type_idx;
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_base_ctx->modules));
+          RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, element_idx);
           String8 symbol_name = {0};
-          symbol_name.str = rdi_string_from_idx(module->rdi, procedure->name_string_idx, &symbol_name.size);
+          symbol_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &symbol_name.size);
           item_string = symbol_name;
         }break;
         case RDI_SectionKind_GlobalVariables:
         {
-          RDI_GlobalVariable *gvar = rdi_element_from_name_idx(module->rdi, GlobalVariables, element_idx);
+          RDI_GlobalVariable *gvar = rdi_element_from_name_idx(rdi, GlobalVariables, element_idx);
           String8 symbol_name = {0};
-          symbol_name.str = rdi_string_from_idx(module->rdi, gvar->name_string_idx, &symbol_name.size);
+          symbol_name.str = rdi_string_from_idx(rdi, gvar->name_string_idx, &symbol_name.size);
           item_string = symbol_name;
         }break;
         case RDI_SectionKind_ThreadVariables:
         {
-          RDI_ThreadVariable *tvar = rdi_element_from_name_idx(module->rdi, ThreadVariables, element_idx);
+          RDI_ThreadVariable *tvar = rdi_element_from_name_idx(rdi, ThreadVariables, element_idx);
           String8 symbol_name = {0};
-          symbol_name.str = rdi_string_from_idx(module->rdi, tvar->name_string_idx, &symbol_name.size);
+          symbol_name.str = rdi_string_from_idx(rdi, tvar->name_string_idx, &symbol_name.size);
           item_string = symbol_name;
         }break;
         case RDI_SectionKind_Constants:
         {
-          RDI_Constant *cnst = rdi_element_from_name_idx(module->rdi, Constants, element_idx);
+          RDI_Constant *cnst = rdi_element_from_name_idx(rdi, Constants, element_idx);
           String8 symbol_name = {0};
-          symbol_name.str = rdi_string_from_idx(module->rdi, cnst->name_string_idx, &symbol_name.size);
+          symbol_name.str = rdi_string_from_idx(rdi, cnst->name_string_idx, &symbol_name.size);
           item_string = symbol_name;
         }break;
         case RDI_SectionKind_UDTs:
         {
-          RDI_UDT *udt = rdi_element_from_name_idx(module->rdi, UDTs, element_idx);
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, udt->self_type_idx);
+          RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, element_idx);
+          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
           String8 name = {0};
-          name.str = rdi_string_from_idx(module->rdi, type_node->user_defined.name_string_idx, &name.size);
+          name.str = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name.size);
           item_string = name;
         }break;
         case RDI_SectionKind_SourceFiles:
         {
-          RDI_SourceFile *sf = rdi_element_from_name_idx(module->rdi, SourceFiles, element_idx);
+          RDI_SourceFile *sf = rdi_element_from_name_idx(rdi, SourceFiles, element_idx);
           String8List path_parts = {0};
           for(RDI_FilePathNode *fpn = rdi_element_from_name_idx(rdi, FilePathNodes, sf->file_path_node_idx);
               fpn != rdi_element_from_name_idx(rdi, FilePathNodes, 0);
@@ -1815,6 +1780,8 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
     // rjf: fill
     evals_out[idx] = item_eval;
     temp_end(scratch);
+    
+    access_close(access);
   }
   scratch_end(scratch);
 }
@@ -1825,7 +1792,10 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(debug_info_table)
   U64 id = 0;
   if(0 < num && num <= accel->items.count)
   {
-    id = accel->items.v[num-1].idx+1;
+    U64 hash = 5381;
+    hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[num-1].key.u64[0]));
+    hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[num-1].key.u64[1]));
+    hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[num-1].idx));
   }
   return id;
 }
@@ -1833,6 +1803,18 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(debug_info_table)
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(debug_info_table)
 {
   RD_DebugInfoTableLookupAccel *accel = (RD_DebugInfoTableLookupAccel *)user_data;
-  U64 num = di_search_item_num_from_array_element_idx__linear_search(&accel->items, id-1);
+  U64 num = 0;
+  for EachIndex(idx, accel->items.count)
+  {
+    U64 hash = 5381;
+    hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[idx].key.u64[0]));
+    hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[idx].key.u64[1]));
+    hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[idx].idx));
+    if(hash == id)
+    {
+      num = idx+1;
+      break;
+    }
+  }
   return num;
 }

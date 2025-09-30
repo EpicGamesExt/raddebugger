@@ -247,6 +247,8 @@ global DI2_Shared *di2_shared = 0;
 
 internal DI2_Key di2_key_zero(void);
 internal B32 di2_key_match(DI2_Key a, DI2_Key b);
+internal void di2_key_list_push(Arena *arena, DI2_KeyList *list, DI2_Key key);
+internal DI2_KeyArray di2_key_array_from_list(Arena *arena, DI2_KeyList *list);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization

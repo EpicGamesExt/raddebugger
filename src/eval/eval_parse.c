@@ -585,14 +585,23 @@ e_leaf_type_key_from_name(String8 name)
   E_TypeKey key = e_leaf_builtin_type_key_from_name(name);
   if(!e_type_key_match(e_type_key_zero(), key))
   {
-    DI_Match match = di_match_from_name(e_base_ctx->dbgi_match_store, name, 0);
-    if(match.section == RDI_SectionKind_TypeNodes)
+    DI2_Match match = di2_match_from_string(name, 0, 0);
+    if(match.section_kind == RDI_SectionKind_TypeNodes)
     {
-      E_Module *module = &e_base_ctx->modules[match.dbgi_idx];
-      RDI_Parsed *rdi = module->rdi;
-      U32 type_idx = match.idx;
-      RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-      key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)match.dbgi_idx);
+      Access *access = access_open();
+      RDI_Parsed *rdi = di2_rdi_from_key(access, match.key, 0, 0);
+      for EachIndex(idx, e_base_ctx->modules_count)
+      {
+        E_Module *module = &e_base_ctx->modules[idx];
+        if(module->rdi == rdi)
+        {
+          U32 type_idx = match.idx;
+          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+          key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)idx);
+          break;
+        }
+      }
+      access_close(access);
     }
   }
   return key;

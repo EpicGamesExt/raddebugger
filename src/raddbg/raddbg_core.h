@@ -600,12 +600,8 @@ struct RD_State
   // rjf: frame parameters
   F32 frame_dt;
   Access *frame_access;
-  DI_Scope *frame_di_scope;
   CTRL_CallStackTree frame_call_stack_tree;
   B32 got_frame_call_stack_tree;
-  
-  // rjf: dbgi match store
-  DI_MatchStore *match_store;
   
   // rjf: evaluation cache
   E_Cache *eval_cache;

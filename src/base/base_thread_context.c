@@ -219,7 +219,7 @@ access_pt_is_expired_(AccessPt *pt, AccessPtExpireParams *params)
   U64 last_time_touched_us = ins_atomic_u64_eval(&pt->last_time_touched_us);
   U64 last_update_idx_touched = ins_atomic_u64_eval(&pt->last_update_idx_touched);
   B32 result = (access_refcount == 0 &&
-                last_time_touched_us + params->time < os_now_microseconds() &&
-                last_update_idx_touched + params->update_idxs < update_tick_idx());
+                last_time_touched_us + params->time <= os_now_microseconds() &&
+                last_update_idx_touched + params->update_idxs <= update_tick_idx());
   return result;
 }

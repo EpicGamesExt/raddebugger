@@ -548,7 +548,6 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
     Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
     Access *access = access_open();
-    DI_Scope *di_scope = di_scope_open();
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
     Arch arch = entity->arch;
     B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
@@ -564,8 +563,8 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
       U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
       String8 name = {0};
       {
-        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
+        DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+        RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
         if(rdi != &rdi_parsed_nil)
         {
           RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, rip_voff);
@@ -591,22 +590,21 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
         }
       }
     }
-    di_scope_close(di_scope);
     access_close(access);
   }
   
   //- rjf: modules get debug info status extras
   if(entity->kind == CTRL_EntityKind_Module && include_extras)
   {
-    DI_Scope *di_scope = di_scope_open();
-    DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
-    RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
+    Access *access = access_open();
+    DI2_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
+    RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
     if(rdi->raw_data_size == 0)
     {
       dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
       dr_fstrs_push_new(arena, &result, &params, str8_lit("(Symbols not found)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
     }
-    di_scope_close(di_scope);
+    access_close(access);
   }
   
   return result;
@@ -1419,7 +1417,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
-            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+            DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
@@ -1490,7 +1488,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 D_Line *line = 0;
                 for(D_LineNode *n = lines->first; n != 0; n = n->next)
                 {
-                  if(di_key_match(&n->v.dbgi_key, &dbgi_key))
+                  if(di2_key_match(n->v.dbgi_key, dbgi_key))
                   {
                     line = &n->v;
                     break;
@@ -1575,7 +1573,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
-            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+            DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
@@ -1644,7 +1642,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 D_Line *line = 0;
                 for(D_LineNode *n = lines->first; n != 0; n = n->next)
                 {
-                  if(di_key_match(&n->v.dbgi_key, &dbgi_key))
+                  if(di2_key_match(n->v.dbgi_key, dbgi_key))
                   {
                     line = &n->v;
                     break;
@@ -1867,19 +1865,14 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         // rjf: line info on this line -> adjust bg color to visualize
         B32 has_line_info = 0;
         {
-          U64 best_stamp = 0;
           S64 line_info_line_num = 0;
           F32 line_info_t = 0;
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            if(n->v.dbgi_key.min_timestamp >= best_stamp)
-            {
-              has_line_info = (n->v.pt.line == line_num || params->line_vaddrs[line_idx] != 0);
-              line_info_line_num = n->v.pt.line;
-              best_stamp = n->v.dbgi_key.min_timestamp;
-              line_info_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "dbgi_alive_t_%S", n->v.dbgi_key.path), 1.f);
-            }
+            has_line_info = (has_line_info || n->v.pt.line == line_num || params->line_vaddrs[line_idx] != 0);
+            line_info_line_num = n->v.pt.line;
+            line_info_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "dbgi_alive_t_%I64x_%I64x", n->v.dbgi_key.u64[0], n->v.dbgi_key.u64[1]), 1.f);
           }
           if(has_line_info)
           {
@@ -2019,7 +2012,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //
   UI_Focus(UI_FocusKind_Off)
   {
-    DI_Scope *scope = di_scope_open();
     U64 line_idx = 0;
     for(S64 line_num = params->line_num_range.min;
         line_num < params->line_num_range.max;
@@ -2152,7 +2144,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         }
       }
     }
-    di_scope_close(scope);
   }
   
   //////////////////////////////
@@ -2275,7 +2266,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, &n->v.dbgi_key);
+            CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, n->v.dbgi_key);
             CTRL_Entity *module = ctrl_module_from_thread_candidates(&d_state->ctrl_entity_store->ctx, thread, &modules);
             if(module != &ctrl_entity_nil)
             {
@@ -2805,7 +2796,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
             if((n->v.pt.line == line_num || params->line_vaddrs[line_idx] != 0) &&
-               ((di_key_match(&n->v.dbgi_key, &hover_regs->dbgi_key) &&
+               ((di2_key_match(n->v.dbgi_key, hover_regs->dbgi_key) &&
                  n->v.voff_range.min <= hover_voff_range.min && hover_voff_range.min < n->v.voff_range.max) ||
                 (params->line_vaddrs[line_idx] == hover_regs->vaddr_range.min && hover_regs->vaddr_range.min != 0)))
             {

@@ -185,7 +185,7 @@ dasm_params_match(DASM_Params *a, DASM_Params *b)
                 a->style_flags == b->style_flags &&
                 a->syntax == b->syntax &&
                 a->base_vaddr == b->base_vaddr &&
-                di_key_match(&a->dbgi_key, &b->dbgi_key));
+                di2_key_match(a->dbgi_key, b->dbgi_key));
   return result;
 }
 
@@ -273,7 +273,6 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
   {
     Temp scratch = scratch_begin(0, 0);
     Access *access = access_open();
-    DI_Scope *di_scope = di_scope_open();
     
     //- rjf: unpack key
     U128 hash = {0};
@@ -281,15 +280,14 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
     U64 key_read_off = 0;
     key_read_off += str8_deserial_read_struct(key, key_read_off, &hash);
     key_read_off += str8_deserial_read_struct(key, key_read_off, &params);
-    params.dbgi_key.path.str = key.str + key_read_off;
     String8 data = c_data_from_hash(access, hash);
     
     //- rjf: get dbg info
     B32 stale = 0;
     RDI_Parsed *rdi = &rdi_parsed_nil;
-    if(params.dbgi_key.path.size != 0)
+    if(!di2_key_match(params.dbgi_key, di2_key_zero()))
     {
-      rdi = di_rdi_from_key(di_scope, &params.dbgi_key, 1, 0);
+      rdi = di2_rdi_from_key(access, params.dbgi_key, 0, 0);
       stale = (stale || (rdi == &rdi_parsed_nil));
     }
     
@@ -483,7 +481,6 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
       artifact->data_hash = hash;
     }
     
-    di_scope_close(di_scope);
     access_close(access);
     scratch_end(scratch);
   }
@@ -514,7 +511,6 @@ dasm_info_from_hash_params(Access *access, U128 hash, DASM_Params *params)
     String8List key_parts = {0};
     str8_list_push(scratch.arena, &key_parts, str8_struct(&hash));
     str8_list_push(scratch.arena, &key_parts, str8_struct(params));
-    str8_list_push(scratch.arena, &key_parts, params->dbgi_key.path);
     String8 key = str8_list_join(scratch.arena, &key_parts, 0);
     
     // rjf: get info
