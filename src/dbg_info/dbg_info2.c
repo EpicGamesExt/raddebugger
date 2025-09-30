@@ -863,6 +863,7 @@ di2_conversion_completion_signal_receiver_thread_entry_point(void *p)
 internal AC_Artifact
 di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out)
 {
+  ProfBeginFunction();
   Access *access = access_open();
   Temp scratch = scratch_begin(0, 0);
   AC_Artifact artifact = {0};
@@ -880,147 +881,156 @@ di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_
     
     //- rjf: gather all debug info keys we'll search on
     DI2_KeyArray keys = {0};
-    if(lane_idx() == 0)
+    ProfScope("gather all debug info keys we'll search on")
     {
-      keys = di2_push_all_loaded_keys(scratch.arena);
+      if(lane_idx() == 0)
+      {
+        keys = di2_push_all_loaded_keys(scratch.arena);
+      }
+      lane_sync_u64(&keys.v, 0);
+      lane_sync_u64(&keys.count, 0);
     }
-    lane_sync_u64(&keys.v, 0);
-    lane_sync_u64(&keys.count, 0);
     
     //- rjf: map all debug info keys -> RDIs
     RDI_Parsed **rdis = 0;
-    if(lane_idx() == 0)
+    ProfScope("map all debug info keys -> RDIs")
     {
-      rdis = push_array(scratch.arena, RDI_Parsed *, keys.count);
-    }
-    lane_sync_u64(&rdis, 0);
-    {
-      Rng1U64 range = lane_range(keys.count);
-      for EachInRange(idx, range)
+      if(lane_idx() == 0)
       {
-        rdis[idx] = di2_rdi_from_key(access, keys.v[idx], 0, 0);
+        rdis = push_array(scratch.arena, RDI_Parsed *, keys.count);
+      }
+      lane_sync_u64(&rdis, 0);
+      {
+        Rng1U64 range = lane_range(keys.count);
+        for EachInRange(idx, range)
+        {
+          rdis[idx] = di2_rdi_from_key(access, keys.v[idx], 0, 0);
+        }
       }
     }
     lane_sync();
     
     //- rjf: do wide search on all lanes
-    DI2_SearchItemChunkList *lanes_items = 0;
-    if(lane_idx() == 0)
-    {
-      lanes_items = push_array(scratch.arena, DI2_SearchItemChunkList, lane_count());
-    }
-    lane_sync_u64(&lanes_items, 0);
     Arena *arena = arena_alloc();
-    DI2_SearchItemChunkList *lane_items = &lanes_items[lane_idx()];
+    DI2_SearchItemChunkList *lanes_items = 0;
+    ProfScope("do wide search on all lanes")
     {
-      for EachIndex(rdi_idx, keys.count)
+      if(lane_idx() == 0)
       {
-        DI2_Key key = keys.v[rdi_idx];
-        RDI_Parsed *rdi = rdis[rdi_idx];
-        
-        // rjf: unpack table info
-        U64 element_count = 0;
-        void *table_base = rdi_section_raw_table_from_kind(rdi, section_kind, &element_count);
-        U64 element_size = rdi_section_element_size_table[section_kind];
-        
-        // rjf: determine name string index offset, depending on table kind
-        U64 element_name_idx_off = 0;
-        switch(section_kind)
+        lanes_items = push_array(scratch.arena, DI2_SearchItemChunkList, lane_count());
+      }
+      lane_sync_u64(&lanes_items, 0);
+      {
+        DI2_SearchItemChunkList *lane_items = &lanes_items[lane_idx()];
+        for EachIndex(rdi_idx, keys.count)
         {
-          default:{}break;
-          case RDI_SectionKind_Procedures:
-          {
-            element_name_idx_off = OffsetOf(RDI_Procedure, name_string_idx);
-          }break;
-          case RDI_SectionKind_GlobalVariables:
-          {
-            element_name_idx_off = OffsetOf(RDI_GlobalVariable, name_string_idx);
-          }break;
-          case RDI_SectionKind_ThreadVariables:
-          {
-            element_name_idx_off = OffsetOf(RDI_ThreadVariable, name_string_idx);
-          }break;
-          case RDI_SectionKind_UDTs:
-          {
-            // NOTE(rjf): name must be determined from self_type_idx
-          }break;
-          case RDI_SectionKind_SourceFiles:
-          {
-            // NOTE(rjf): name must be determined from file path node chain
-          }break;
-        }
-        
-        Rng1U64 range = lane_range(element_count);
-        for EachInRange(idx, range)
-        {
-          //- rjf: every so often, check if we need to cancel, and cancel
-          {
-            // TODO(rjf)
-          }
+          DI2_Key key = keys.v[rdi_idx];
+          RDI_Parsed *rdi = rdis[rdi_idx];
           
-          //- rjf: get element, map to string; if empty, continue to next element
-          void *element = (U8 *)table_base + element_size*idx;
-          String8 name = {0};
+          // rjf: unpack table info
+          U64 element_count = 0;
+          void *table_base = rdi_section_raw_table_from_kind(rdi, section_kind, &element_count);
+          U64 element_size = rdi_section_element_size_table[section_kind];
+          
+          // rjf: determine name string index offset, depending on table kind
+          U64 element_name_idx_off = 0;
           switch(section_kind)
           {
+            default:{}break;
+            case RDI_SectionKind_Procedures:
+            {
+              element_name_idx_off = OffsetOf(RDI_Procedure, name_string_idx);
+            }break;
+            case RDI_SectionKind_GlobalVariables:
+            {
+              element_name_idx_off = OffsetOf(RDI_GlobalVariable, name_string_idx);
+            }break;
+            case RDI_SectionKind_ThreadVariables:
+            {
+              element_name_idx_off = OffsetOf(RDI_ThreadVariable, name_string_idx);
+            }break;
             case RDI_SectionKind_UDTs:
             {
-              RDI_UDT *udt = (RDI_UDT *)element;
-              RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
-              name.str = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name.size);
-              name = str8_copy(arena, name);
+              // NOTE(rjf): name must be determined from self_type_idx
             }break;
             case RDI_SectionKind_SourceFiles:
             {
-              Temp scratch = scratch_begin(&arena, 1);
-              RDI_SourceFile *file = (RDI_SourceFile *)element;
-              String8List path_parts = {0};
-              for(RDI_FilePathNode *fpn = rdi_element_from_name_idx(rdi, FilePathNodes, file->file_path_node_idx);
-                  fpn != rdi_element_from_name_idx(rdi, FilePathNodes, 0);
-                  fpn = rdi_element_from_name_idx(rdi, FilePathNodes, fpn->parent_path_node))
-              {
-                String8 path_part = {0};
-                path_part.str = rdi_string_from_idx(rdi, fpn->name_string_idx, &path_part.size);
-                str8_list_push_front(scratch.arena, &path_parts, path_part);
-              }
-              StringJoin join = {0};
-              join.sep = str8_lit("/");
-              name = str8_list_join(arena, &path_parts, &join);
-              scratch_end(scratch);
-            }break;
-            default:
-            {
-              U32 name_idx = *(U32 *)((U8 *)element + element_name_idx_off);
-              U64 name_size = 0;
-              U8 *name_base = rdi_string_from_idx(rdi, name_idx, &name_size);
-              name = str8(name_base, name_size);
+              // NOTE(rjf): name must be determined from file path node chain
             }break;
           }
-          if(name.size == 0) { continue; }
           
-          //- rjf: fuzzy match against query
-          FuzzyMatchRangeList matches = fuzzy_match_find(arena, query, name);
-          
-          //- rjf: collect
-          if(matches.count == matches.needle_part_count)
+          Rng1U64 range = lane_range(element_count);
+          for EachInRange(idx, range)
           {
-            DI2_SearchItemChunk *chunk = lane_items->last;
-            if(chunk == 0 || chunk->count >= chunk->cap)
+            //- rjf: every so often, check if we need to cancel, and cancel
             {
-              chunk = push_array(scratch.arena, DI2_SearchItemChunk, 1);
-              chunk->base_idx = lane_items->total_count;
-              chunk->cap = 1024;
-              chunk->count = 0;
-              chunk->v = push_array_no_zero(scratch.arena, DI2_SearchItem, chunk->cap);
-              SLLQueuePush(lane_items->first, lane_items->last, chunk);
-              lane_items->chunk_count += 1;
+              // TODO(rjf)
             }
-            chunk->v[chunk->count].idx          = idx;
-            chunk->v[chunk->count].key          = key;
-            chunk->v[chunk->count].match_ranges = matches;
-            chunk->v[chunk->count].missed_size  = (name.size > matches.total_dim) ? (name.size-matches.total_dim) : 0;
-            chunk->count += 1;
-            lane_items->total_count += 1;
+            
+            //- rjf: get element, map to string; if empty, continue to next element
+            void *element = (U8 *)table_base + element_size*idx;
+            String8 name = {0};
+            switch(section_kind)
+            {
+              case RDI_SectionKind_UDTs:
+              {
+                RDI_UDT *udt = (RDI_UDT *)element;
+                RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
+                name.str = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name.size);
+                name = str8_copy(arena, name);
+              }break;
+              case RDI_SectionKind_SourceFiles:
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                RDI_SourceFile *file = (RDI_SourceFile *)element;
+                String8List path_parts = {0};
+                for(RDI_FilePathNode *fpn = rdi_element_from_name_idx(rdi, FilePathNodes, file->file_path_node_idx);
+                    fpn != rdi_element_from_name_idx(rdi, FilePathNodes, 0);
+                    fpn = rdi_element_from_name_idx(rdi, FilePathNodes, fpn->parent_path_node))
+                {
+                  String8 path_part = {0};
+                  path_part.str = rdi_string_from_idx(rdi, fpn->name_string_idx, &path_part.size);
+                  str8_list_push_front(scratch.arena, &path_parts, path_part);
+                }
+                StringJoin join = {0};
+                join.sep = str8_lit("/");
+                name = str8_list_join(arena, &path_parts, &join);
+                scratch_end(scratch);
+              }break;
+              default:
+              {
+                U32 name_idx = *(U32 *)((U8 *)element + element_name_idx_off);
+                U64 name_size = 0;
+                U8 *name_base = rdi_string_from_idx(rdi, name_idx, &name_size);
+                name = str8(name_base, name_size);
+              }break;
+            }
+            if(name.size == 0) { continue; }
+            
+            //- rjf: fuzzy match against query
+            FuzzyMatchRangeList matches = fuzzy_match_find(arena, query, name);
+            
+            //- rjf: collect
+            if(matches.count == matches.needle_part_count)
+            {
+              DI2_SearchItemChunk *chunk = lane_items->last;
+              if(chunk == 0 || chunk->count >= chunk->cap)
+              {
+                chunk = push_array(scratch.arena, DI2_SearchItemChunk, 1);
+                chunk->base_idx = lane_items->total_count;
+                chunk->cap = 1024;
+                chunk->count = 0;
+                chunk->v = push_array_no_zero(scratch.arena, DI2_SearchItem, chunk->cap);
+                SLLQueuePush(lane_items->first, lane_items->last, chunk);
+                lane_items->chunk_count += 1;
+              }
+              chunk->v[chunk->count].idx          = idx;
+              chunk->v[chunk->count].key          = key;
+              chunk->v[chunk->count].match_ranges = matches;
+              chunk->v[chunk->count].missed_size  = (name.size > matches.total_dim) ? (name.size-matches.total_dim) : 0;
+              chunk->count += 1;
+              lane_items->total_count += 1;
+            }
           }
         }
       }
@@ -1029,7 +1039,7 @@ di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_
     
     //- rjf: join all lane chunk lists
     DI2_SearchItemChunkList *all_items = &lanes_items[0];
-    if(lane_idx() == 0)
+    if(lane_idx() == 0) ProfScope("join all lane chunk lists")
     {
       for(U64 lidx = 1; lidx < lane_count(); lidx += 1)
       {
@@ -1057,36 +1067,72 @@ di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_
     
     //- rjf: flatten into array
     DI2_SearchItemArray items = {0};
-    if(lane_idx() == 0)
+    ProfScope("flatten into array")
     {
-      items.count = all_items->total_count;
-      items.v = push_array(arena, DI2_SearchItem, items.count);
-    }
-    lane_sync_u64(&items.count, 0);
-    lane_sync_u64(&items.v, 0);
-    for EachNode(n, DI2_SearchItemChunk, all_items->first)
-    {
-      Rng1U64 range = lane_range(n->count);
-      U64 dst_idx = n->base_idx + range.min;
-      MemoryCopy(&items.v[dst_idx], n->v, sizeof(n->v[0]) * dim_1u64(range));
+      if(lane_idx() == 0)
+      {
+        items.count = all_items->total_count;
+        items.v = push_array(arena, DI2_SearchItem, items.count);
+      }
+      lane_sync_u64(&items.count, 0);
+      lane_sync_u64(&items.v, 0);
+      for EachNode(n, DI2_SearchItemChunk, all_items->first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        U64 dst_idx = n->base_idx + range.min;
+        MemoryCopy(&items.v[dst_idx], n->v, sizeof(n->v[0]) * dim_1u64(range));
+      }
     }
     
     //- rjf: sort items
+    ProfScope("sort items")
+    {
+      
+    }
     
+    //- rjf: bundle as artifact
+    artifact.u64[0] = (U64)arena;
+    artifact.u64[1] = (U64)items.v;
+    artifact.u64[2] = items.count;
   }
   scratch_end(scratch);
   access_close(access);
+  ProfEnd();
   return artifact;
 }
 
 internal void
 di2_search_artifact_destroy(AC_Artifact artifact)
 {
-  
+  Arena *arena = (Arena *)artifact.u64[0];
+  if(arena != 0)
+  {
+    arena_release(arena);
+  }
 }
 
 internal DI2_SearchItemArray
-di2_search_item_array_from_target_query(RDI_SectionKind target, String8 query)
+di2_search_item_array_from_target_query(Access *access, RDI_SectionKind target, String8 query, U64 endt_us)
 {
-  
+  DI2_SearchItemArray result = {0};
+  {
+    Temp scratch = scratch_begin(0, 0);
+    
+    // rjf: form key
+    String8List key_parts = {0};
+    str8_list_push(scratch.arena, &key_parts, str8_struct(&target));
+    str8_list_push(scratch.arena, &key_parts, str8_struct(&query.size));
+    str8_list_push(scratch.arena, &key_parts, query);
+    String8 key = str8_list_join(scratch.arena, &key_parts, 0);
+    
+    // rjf: get artifact
+    AC_Artifact artifact = ac_artifact_from_key(access, key, di2_search_artifact_create, di2_search_artifact_destroy, endt_us, .gen = di2_load_gen(), .flags = AC_Flag_Wide);
+    
+    // rjf: unpack artifact
+    result.v = (DI2_SearchItem *)artifact.u64[1];
+    result.count = artifact.u64[2];
+    
+    scratch_end(scratch);
+  }
+  return result;
 }
