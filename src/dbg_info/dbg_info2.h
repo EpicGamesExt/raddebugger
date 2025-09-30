@@ -13,14 +13,36 @@ struct DI2_Key
   U64 u64[2];
 };
 
-////////////////////////////////
-//~ rjf: Debug Info Path / Timestamp => Key Cache Types
-
 typedef struct DI2_KeyNode DI2_KeyNode;
 struct DI2_KeyNode
 {
   DI2_KeyNode *next;
-  DI2_KeyNode *prev;
+  DI2_Key v;
+};
+
+typedef struct DI2_KeyList DI2_KeyList;
+struct DI2_KeyList
+{
+  DI2_KeyNode *first;
+  DI2_KeyNode *last;
+  U64 count;
+};
+
+typedef struct DI2_KeyArray DI2_KeyArray;
+struct DI2_KeyArray
+{
+  DI2_Key *v;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Debug Info Path / Timestamp => Key Cache Types
+
+typedef struct DI2_KeyPathNode DI2_KeyPathNode;
+struct DI2_KeyPathNode
+{
+  DI2_KeyPathNode *next;
+  DI2_KeyPathNode *prev;
   String8 path;
   U64 min_timestamp;
   DI2_Key key;
@@ -29,8 +51,8 @@ struct DI2_KeyNode
 typedef struct DI2_KeySlot DI2_KeySlot;
 struct DI2_KeySlot
 {
-  DI2_KeyNode *first;
-  DI2_KeyNode *last;
+  DI2_KeyPathNode *first;
+  DI2_KeyPathNode *last;
 };
 
 ////////////////////////////////
@@ -127,6 +149,44 @@ struct DI2_LoadTask
 };
 
 ////////////////////////////////
+//~ rjf: Search Types
+
+typedef struct DI2_SearchItem DI2_SearchItem;
+struct DI2_SearchItem
+{
+  U64 idx;
+  DI2_Key key;
+  U64 missed_size;
+  FuzzyMatchRangeList match_ranges;
+};
+
+typedef struct DI2_SearchItemChunk DI2_SearchItemChunk;
+struct DI2_SearchItemChunk
+{
+  DI2_SearchItemChunk *next;
+  U64 base_idx;
+  DI2_SearchItem *v;
+  U64 count;
+  U64 cap;
+};
+
+typedef struct DI2_SearchItemChunkList DI2_SearchItemChunkList;
+struct DI2_SearchItemChunkList
+{
+  DI2_SearchItemChunk *first;
+  DI2_SearchItemChunk *last;
+  U64 chunk_count;
+  U64 total_count;
+};
+
+typedef struct DI2_SearchItemArray DI2_SearchItemArray;
+struct DI2_SearchItemArray
+{
+  DI2_SearchItem *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Shared State
 
 typedef struct DI2_Shared DI2_Shared;
@@ -195,6 +255,7 @@ internal void di2_close(DI2_Key key);
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
 
+internal DI2_KeyArray di2_push_all_loaded_keys(Arena *arena);
 internal RDI_Parsed *di2_rdi_from_key(Access *access, DI2_Key key, B32 high_priority, U64 endt_us);
 
 ////////////////////////////////
@@ -207,5 +268,12 @@ internal void di2_async_tick(void);
 
 internal void di2_signal_completion(void);
 internal void di2_conversion_completion_signal_receiver_thread_entry_point(void *p);
+
+////////////////////////////////
+//~ rjf: Search Artifact Cache Hooks / Lookups
+
+internal AC_Artifact di2_search_artifact_create(String8 key, U64 gen, U64 *requested_gen, B32 *retry_out);
+internal void di2_search_artifact_destroy(AC_Artifact artifact);
+internal DI2_SearchItemArray di2_search_item_array_from_target_query(RDI_SectionKind target, String8 query);
 
 #endif // DBG_INFO2_H
