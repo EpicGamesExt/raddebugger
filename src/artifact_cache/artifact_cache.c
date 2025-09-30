@@ -340,13 +340,17 @@ ac_async_tick(void)
         AC_Request *r = &task->wide[idx];
         
         // rjf: any new higher priority tasks? -> cancel
-        if(task_idx == 1 && idx != 0) MutexScope(ac_shared->req_batches[0].mutex)
+        if(lane_idx() == 0)
         {
-          if(ac_shared->req_batches[0].wide_count != 0 || ac_shared->req_batches[0].thin_count != 0)
+          if(task_idx == 1 && idx != 0) MutexScope(ac_shared->req_batches[0].mutex)
           {
-            ins_atomic_u64_eval_assign(cancelled_ptr, 1);
+            if(ac_shared->req_batches[0].wide_count != 0 || ac_shared->req_batches[0].thin_count != 0)
+            {
+              ins_atomic_u64_eval_assign(cancelled_ptr, 1);
+            }
           }
         }
+        lane_sync();
         
         // rjf: cancelled? -> exit
         if(ins_atomic_u64_eval(cancelled_ptr))
