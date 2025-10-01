@@ -1251,7 +1251,7 @@ rd_target_from_cfg(Arena *arena, RD_Cfg *cfg)
   target.stdout_path                = rd_cfg_child_from_string(cfg, str8_lit("stdout_path"))->first->string;
   target.stderr_path                = rd_cfg_child_from_string(cfg, str8_lit("stderr_path"))->first->string;
   target.stdin_path                 = rd_cfg_child_from_string(cfg, str8_lit("stdin_path"))->first->string;
-  target.debug_subprocesses         = (rd_cfg_child_from_string(cfg, str8_lit("debug_subprocesses")) != &rd_nil_cfg);
+  target.debug_subprocesses         = !!e_value_from_string(rd_cfg_child_from_string(cfg, str8_lit("debug_subprocesses"))->first->string).u64;
   for(RD_Cfg *child = cfg->first; child != &rd_nil_cfg; child = child->next)
   {
     if(str8_match(child->string, str8_lit("environment"), 0))

@@ -331,7 +331,7 @@ rb_thread_entry_point(void *p)
         String8 string_table = str8_substr(file_data, pe_bin_info.string_table_range);
         U64 section_count = raw_section_table.size / sizeof(COFF_SectionHeader);
         COFF_SectionHeader *section_table = (COFF_SectionHeader *)raw_section_table.str;
-        if(dw_is_dwarf_present_coff_section_table(file_data, string_table, section_count, section_table))
+        if(dw_is_dwarf_present_coff_section_table(string_table, section_count, section_table))
         {
           file_format_flags |= RB_FileFormatFlag_HasDWARF;
         }

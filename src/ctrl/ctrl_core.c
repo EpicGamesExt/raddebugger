@@ -3399,11 +3399,12 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   U32 pdb_dbg_time = 0;
   U32 pdb_dbg_age = 0;
   Guid pdb_dbg_guid = {0};
-  String8 pdb_dbg_path = str8_zero();
+  String8 pdb_dbg_path = {0};
   U32 rdi_dbg_time = 0;
   Guid rdi_dbg_guid = {0};
-  String8 rdi_dbg_path = str8_zero();
-  String8 raddbg_data = str8_zero();
+  String8 exe_dbg_path = {0};
+  String8 rdi_dbg_path = {0};
+  String8 raddbg_data = {0};
   Rng1U64 raddbg_section_voff_range = r1u64(0, 0);
   Rng1U64 raddbg_is_attached_section_voff_range = r1u64(0, 0);
   ProfScope("unpack relevant PE info")
@@ -3453,6 +3454,8 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     U32 data_dir_count = 0;
     if(opt_ext_size > 0)
     {
+      Temp scratch = scratch_begin(0, 0);
+      
       // rjf: read magic number
       U16 opt_ext_magic = 0;
       dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &opt_ext_magic);
@@ -3523,6 +3526,12 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         }
       }
       
+      // rjf: extract sections
+      U64 sec_array_off = opt_ext_off_range.max;
+      U64 sec_count = file_header.section_count;
+      COFF_SectionHeader *sec = push_array(scratch.arena, COFF_SectionHeader, sec_count);
+      dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + sec_array_off, vaddr_range.min + sec_array_off + sec_count*sizeof(COFF_SectionHeader)), sec);
+      
       // rjf: grab entry point vaddr
       entry_point_voff = entry_point;
       
@@ -3589,13 +3598,18 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         }
       }
       
+      // rjf: look for DWARF debug info
+      {
+        U64 symbol_array_off = file_header.symbol_table_foff;
+        U64 symbol_count = file_header.symbol_count;
+        if(symbol_array_off != 0)
+        {
+          exe_dbg_path = path;
+        }
+      }
+      
       // rjf: extract copy of module's raddbg data
       {
-        Temp scratch = scratch_begin(0, 0);
-        U64 sec_array_off = opt_ext_off_range.max;
-        U64 sec_count = file_header.section_count;
-        COFF_SectionHeader *sec = push_array(scratch.arena, COFF_SectionHeader, sec_count);
-        dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + sec_array_off, vaddr_range.min + sec_array_off + sec_count*sizeof(COFF_SectionHeader)), sec);
         for EachIndex(idx, sec_count)
         {
           String8 section_name = str8_cstring((char *)sec[idx].name);
@@ -3614,7 +3628,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         raddbg_data.str = push_array(arena, U8, raddbg_data.size);
         dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + raddbg_section_voff_range.min,
                                                    vaddr_range.min + raddbg_section_voff_range.max), raddbg_data.str);
-        scratch_end(scratch);
       }
       
       // rjf: if we have a "raddbg is attached" section, mark the first byte as 1, to signify attachment
@@ -3623,6 +3636,8 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         U8 new_value = 1;
         dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_is_attached_section_voff_range.min, &new_value);
       }
+      
+      scratch_end(scratch);
     }
   }
   
@@ -3648,6 +3663,10 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     {
       str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S/%S", exe_folder, rdi_dbg_path);
       str8_list_push(scratch.arena,  &dbg_path_candidates, rdi_dbg_path);
+    }
+    if(exe_dbg_path.size != 0)
+    {
+      str8_list_push(scratch.arena, &dbg_path_candidates, path);
     }
     if(pdb_dbg_path.size != 0)
     {
