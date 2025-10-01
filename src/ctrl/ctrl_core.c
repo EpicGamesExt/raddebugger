@@ -3084,12 +3084,15 @@ ctrl_thread__entry_point(void *p)
         }
         
         //- rjf: reset per-message state
-        arena_clear(ctrl_state->ctrl_thread_msg_process_arena);
-        ctrl_state->module_req_cache_slots_count = 1024;
-        ctrl_state->module_req_cache_slots = push_array(ctrl_state->ctrl_thread_msg_process_arena, CTRL_ModuleReqCacheNode *, ctrl_state->module_req_cache_slots_count);
-        MemoryZeroStruct(&ctrl_state->msg_user_bp_touched_files);
-        MemoryZeroStruct(&ctrl_state->msg_user_bp_touched_symbols);
-        MemoryCopyArray(ctrl_state->exception_code_filters, msg->exception_code_filters);
+        ProfScope("reset per-message state")
+        {
+          arena_clear(ctrl_state->ctrl_thread_msg_process_arena);
+          ctrl_state->module_req_cache_slots_count = 4096;
+          ctrl_state->module_req_cache_slots = push_array(ctrl_state->ctrl_thread_msg_process_arena, CTRL_ModuleReqCacheNode *, ctrl_state->module_req_cache_slots_count);
+          MemoryZeroStruct(&ctrl_state->msg_user_bp_touched_files);
+          MemoryZeroStruct(&ctrl_state->msg_user_bp_touched_symbols);
+          MemoryCopyArray(ctrl_state->exception_code_filters, msg->exception_code_filters);
+        }
         
         //- rjf: gather all touched symbols by user breakpoints
         {
@@ -3655,6 +3658,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.pdb", path);
     str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.rdi", str8_chop_last_dot(path));
     str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.rdi", path);
+    str8_list_push(scratch.arena, &dbg_path_candidates, path);
     for(String8Node *n = dbg_path_candidates.first; n != 0; n = n->next)
     {
       String8 candidate_path = n->string;
@@ -4283,7 +4287,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
             U64 slot_idx = hash%ctrl_state->module_req_cache_slots_count;
             CTRL_ModuleReqCacheNode *slot = ctrl_state->module_req_cache_slots[slot_idx];
             CTRL_ModuleReqCacheNode *node = 0;
-            for(CTRL_ModuleReqCacheNode *n = slot; slot != 0; slot = slot->next)
+            for(CTRL_ModuleReqCacheNode *n = slot; n != 0; n = n->next)
             {
               if(ctrl_handle_match(n->module, mod->handle))
               {
@@ -4303,6 +4307,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
             {
               CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
               OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, debug_info_path->string);
+              ProfScope("determine if %.*s is necessary", str8_varg(debug_info_path->string))
               {
                 //- rjf: determine if file is PDB
                 B32 file_is_pdb = 0;
