@@ -1648,10 +1648,11 @@ RDI_PROC void rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkLi
 //~ rjf: [Building] Location Info Building
 
 //- rjf: bytecode
-RDI_PROC void rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p);
+RDI_PROC RDIM_EvalBytecodeOp * rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p);
 RDI_PROC void rdim_bytecode_push_uconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_U64 x);
 RDI_PROC void rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S64 x);
 RDI_PROC void rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed);
+RDI_PROC B32 rdim_is_bytecode_tls_dependent(RDIM_EvalBytecode bytecode);
 
 //- rjf: locations
 RDI_PROC RDI_U64 rdim_encoded_size_from_location_info(RDIM_LocationInfo *info);

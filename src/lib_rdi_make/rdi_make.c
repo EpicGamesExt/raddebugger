@@ -941,7 +941,7 @@ rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_
 
 //- rjf: bytecode
 
-RDI_PROC void
+RDI_PROC RDIM_EvalBytecodeOp *
 rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p)
 {
   RDI_U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
@@ -955,6 +955,8 @@ rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp
   RDIM_SLLQueuePush(bytecode->first_op, bytecode->last_op, node);
   bytecode->op_count += 1;
   bytecode->encoded_size += 1 + p_size;
+
+  return node;
 }
 
 RDI_PROC void
@@ -1020,6 +1022,21 @@ rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *ri
     }
     rdim_memzero_struct(right_destroyed);
   }
+}
+
+RDI_PROC B32
+rdim_is_bytecode_tls_dependent(RDIM_EvalBytecode bytecode)
+{
+  B32 result = 0;
+  for(RDIM_EvalBytecodeOp *n = bytecode.first_op; n != 0; n = n->next)
+  {
+    if(n->op == RDI_EvalOp_TLSOff)
+    {
+      result = 1;
+      break;
+    }
+  }
+  return result;
 }
 
 //- rjf: locations
