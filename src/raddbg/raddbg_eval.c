@@ -1660,12 +1660,22 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
   if(section != RDI_SectionKind_NULL)
   {
     U64 endt_us = rd_state->frame_eval_memread_endt_us;
-    
-    //- rjf: query all filtered items from dbgi searching system
     U128 fuzzy_search_key = {d_hash_from_string(str8_struct(&rd_regs()->view)), (U64)section};
     accel->section = section;
     accel->items = di2_search_item_array_from_target_query(rd_state->frame_access, section, filter, endt_us);
+    RD_ViewState *vs = rd_view_state_from_cfg(rd_cfg_from_id(rd_regs()->view));
+    if(accel->items.count == 0)
+    {
+      String8 last_query = str8(vs->last_successful_query_buffer, vs->last_successful_query_string_size);
+      accel->items = di2_search_item_array_from_target_query(rd_state->frame_access, section, last_query, endt_us);
+    }
+    else
+    {
+      vs->last_successful_query_string_size = Min(sizeof(vs->last_successful_query_buffer), filter.size);
+      MemoryCopy(vs->last_successful_query_buffer, filter.str, vs->last_successful_query_string_size);
+    }
   }
+  
   E_TypeExpandInfo info = {accel, accel->items.count};
   scratch_end(scratch);
   return info;
@@ -1796,6 +1806,7 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(debug_info_table)
     hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[num-1].key.u64[0]));
     hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[num-1].key.u64[1]));
     hash = u64_hash_from_seed_str8(hash, str8_struct(&accel->items.v[num-1].idx));
+    id = hash;
   }
   return id;
 }
