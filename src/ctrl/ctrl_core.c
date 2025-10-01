@@ -4232,6 +4232,7 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 internal CTRL_EvalScope *
 ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, CTRL_Entity *thread)
 {
+  ProfBeginFunction();
   CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   CTRL_EvalScope *scope = push_array(arena, CTRL_EvalScope, 1);
   scope->access = access_open();
@@ -4280,7 +4281,11 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
           // (we *always* wait for the initial module)
           //
           B32 rdi_is_necessary = 1;
-          if(rdi == &rdi_parsed_nil) ProfScope("determine if RDI is necessary")
+          if(user_bps->count == 0)
+          {
+            rdi_is_necessary = 0;
+          }
+          else if(rdi == &rdi_parsed_nil) ProfScope("determine if RDI is necessary")
           {
             // rjf: find cached result
             U64 hash = ctrl_hash_from_handle(mod->handle);
@@ -4438,6 +4443,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
   }
   e_select_interpret_ctx(&scope->interpret_ctx, eval_modules_primary->rdi, thread_rip_voff);
   
+  ProfEnd();
   return scope;
 }
 
