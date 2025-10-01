@@ -73,16 +73,29 @@ di2_init(CmdLine *cmdline)
     has_parent = 0;
     signal_pid = os_get_process_info()->pid;
   }
+  U64 signal_code = 0;
+  String8 signal_code_string = cmd_line_string(cmdline, str8_lit("signal_code"));
+  try_u64_from_str8_c_rules(signal_code_string, &signal_code);
+  di2_shared->conversion_completion_code = signal_code;
+  di2_shared->conversion_completion_lock_semaphore_name = str8f(arena, "conversion_completion_lock_pid_%I64u", signal_pid);
   di2_shared->conversion_completion_signal_semaphore_name = str8f(arena, "conversion_completion_signal_pid_%I64u", signal_pid);
+  di2_shared->conversion_completion_shared_memory_name = str8f(arena, "conversion_completion_shared_memory_pid_%I64u", signal_pid);
   if(has_parent)
   {
+    di2_shared->conversion_completion_lock_semaphore = semaphore_open(di2_shared->conversion_completion_lock_semaphore_name);
     di2_shared->conversion_completion_signal_semaphore = semaphore_open(di2_shared->conversion_completion_signal_semaphore_name);
+    di2_shared->conversion_completion_shared_memory = os_shared_memory_open(di2_shared->conversion_completion_shared_memory_name);
   }
   else
   {
+    di2_shared->conversion_completion_lock_semaphore = semaphore_alloc(1, 1, di2_shared->conversion_completion_lock_semaphore_name);
     di2_shared->conversion_completion_signal_semaphore = semaphore_alloc(0, 65536, di2_shared->conversion_completion_signal_semaphore_name);
+    di2_shared->conversion_completion_shared_memory = os_shared_memory_alloc(KB(4), di2_shared->conversion_completion_shared_memory_name);
     di2_shared->conversion_completion_signal_receiver_thread = thread_launch(di2_conversion_completion_signal_receiver_thread_entry_point, 0);
   }
+  di2_shared->conversion_completion_shared_memory_base = (U64 *)os_shared_memory_view_open(di2_shared->conversion_completion_shared_memory, r1u64(0, KB(4)));
+  di2_shared->completion_mutex = mutex_alloc();
+  di2_shared->completion_arena = arena_alloc();
 }
 
 ////////////////////////////////
@@ -456,6 +469,7 @@ di2_rdi_from_key(Access *access, DI2_Key key, B32 high_priority, U64 endt_us)
         }
         cond_var_broadcast(async_tick_start_cond_var);
         ins_atomic_u32_eval_assign(&async_loop_again, 1);
+        ins_atomic_u32_eval_assign(&async_loop_again_high_priority, 1);
       }
       
       // rjf: found current results, or out-of-time? abort
@@ -521,6 +535,23 @@ di2_async_tick(void)
         b->first = b->last = 0;
         b->count = 0;
       }
+    }
+    
+    ////////////////////////////
+    //- rjf: gather all completions
+    //
+    DI2_LoadCompletion *first_completion = 0;
+    DI2_LoadCompletion *last_completion = 0;
+    MutexScope(di2_shared->completion_mutex)
+    {
+      for EachNode(c, DI2_LoadCompletion, di2_shared->first_completion)
+      {
+        DI2_LoadCompletion *dst_c = push_array(scratch.arena, DI2_LoadCompletion, 1);
+        SLLQueuePush(first_completion, last_completion, dst_c);
+        dst_c->code = c->code;
+      }
+      arena_clear(di2_shared->completion_arena);
+      di2_shared->first_completion = di2_shared->last_completion = 0;
     }
     
     ////////////////////////////
@@ -699,7 +730,9 @@ di2_async_tick(void)
         str8_list_pushf(scratch.arena, &params.cmd_line, "--out:%S", rdi_path);
         str8_list_pushf(scratch.arena, &params.cmd_line, "--thread_count:%I64u", t->thread_count);
         str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_pid:%I64u", (U64)os_get_process_info()->pid);
+        str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_code:%I64u", (U64)t);
         str8_list_pushf(scratch.arena, &params.cmd_line, "%S", og_path);
+        ProfMsg("launch creation for %.*s", str8_varg(rdi_path));
         t->process = os_process_launch(&params);
         t->status = DI2_LoadTaskStatus_Active;
         di2_shared->conversion_process_count += 1;
@@ -709,11 +742,27 @@ di2_async_tick(void)
       //- rjf: if active & process has completed, mark as done
       {
         U64 exit_code = 0;
-        if(t->status == DI2_LoadTaskStatus_Active && os_process_join(t->process, 0, &exit_code))
+        if(t->status == DI2_LoadTaskStatus_Active)
         {
-          t->status = DI2_LoadTaskStatus_Done;
-          di2_shared->conversion_process_count -= 1;
-          di2_shared->conversion_thread_count -= t->thread_count;
+          B32 task_is_done = 0;
+          for(DI2_LoadCompletion *c = first_completion; c != 0; c = c->next)
+          {
+            if(c->code == (U64)t)
+            {
+              task_is_done = 1;
+              break;
+            }
+          }
+          if(!task_is_done)
+          {
+            task_is_done = os_process_join(t->process, 0, 0);
+          }
+          if(task_is_done)
+          {
+            t->status = DI2_LoadTaskStatus_Done;
+            di2_shared->conversion_process_count -= 1;
+            di2_shared->conversion_thread_count -= t->thread_count;
+          }
         }
       }
       
@@ -823,6 +872,7 @@ di2_async_tick(void)
       
       //- rjf: commit parsed info to cache
       {
+        ProfMsg("commit %.*s", str8_varg(rdi_path));
         U64 hash = u64_hash_from_str8(str8_struct(&key));
         U64 slot_idx = hash%di2_shared->slots_count;
         DI2_Slot *slot = &di2_shared->slots[slot_idx];
@@ -878,6 +928,9 @@ di2_async_tick(void)
 internal void
 di2_signal_completion(void)
 {
+  semaphore_take(di2_shared->conversion_completion_lock_semaphore, max_U64);
+  di2_shared->conversion_completion_shared_memory_base[0] = di2_shared->conversion_completion_code;
+  semaphore_drop(di2_shared->conversion_completion_lock_semaphore);
   semaphore_drop(di2_shared->conversion_completion_signal_semaphore);
 }
 
@@ -889,8 +942,25 @@ di2_conversion_completion_signal_receiver_thread_entry_point(void *p)
   {
     if(semaphore_take(di2_shared->conversion_completion_signal_semaphore, max_U64))
     {
-      cond_var_broadcast(async_tick_start_cond_var);
+      // rjf: get the next retired code
+      U64 retired_code = 0;
+      semaphore_take(di2_shared->conversion_completion_lock_semaphore, max_U64);
+      retired_code = di2_shared->conversion_completion_shared_memory_base[0];
+      semaphore_drop(di2_shared->conversion_completion_lock_semaphore);
+      
+      // rjf: push completion record
+      MutexScope(di2_shared->completion_mutex)
+      {
+        DI2_LoadCompletion *c = push_array(di2_shared->completion_arena, DI2_LoadCompletion, 1);
+        SLLQueuePush(di2_shared->first_completion, di2_shared->last_completion, c);
+        c->code = retired_code;
+      }
+      
+      // rjf: signal async system to resume
+      ProfMsg("signal conversion completion");
       ins_atomic_u32_eval_assign(&async_loop_again, 1);
+      ins_atomic_u32_eval_assign(&async_loop_again_high_priority, 1);
+      cond_var_broadcast(async_tick_start_cond_var);
     }
   }
 }
@@ -1312,6 +1382,7 @@ di2_search_item_array_from_target_query(Access *access, RDI_SectionKind target, 
 internal AC_Artifact
 di2_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: unpack key
@@ -1403,6 +1474,7 @@ di2_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
   
   lane_sync();
   scratch_end(scratch);
+  ProfEnd();
   return artifact;
 }
 

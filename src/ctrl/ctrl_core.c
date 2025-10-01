@@ -3658,7 +3658,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.pdb", path);
     str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.rdi", str8_chop_last_dot(path));
     str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.rdi", path);
-    str8_list_push(scratch.arena, &dbg_path_candidates, path);
     for(String8Node *n = dbg_path_candidates.first; n != 0; n = n->next)
     {
       String8 candidate_path = n->string;
@@ -4360,7 +4359,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
           }
           
           //- rjf: if this RDI is necessary, but we do not have it => wait for it forever
-          if(rdi == &rdi_parsed_nil && rdi_is_necessary)
+          if(rdi == &rdi_parsed_nil && rdi_is_necessary) ProfScope("RDI is necessary -> wait")
           {
             rdi = di2_rdi_from_key(scope->access, dbgi_key, 1, max_U64);
           }

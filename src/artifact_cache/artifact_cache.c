@@ -166,6 +166,10 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
         }
         cond_var_broadcast(async_tick_start_cond_var);
         ins_atomic_u32_eval_assign(&async_loop_again, 1);
+        if(params->flags & AC_Flag_HighPriority)
+        {
+          ins_atomic_u32_eval_assign(&async_loop_again_high_priority, 1);
+        }
       }
       
       // rjf: get value from node, if possible
@@ -342,18 +346,15 @@ ac_async_tick(void)
         // rjf: any new higher priority tasks? -> cancel
         if(lane_idx() == 0)
         {
-          if(task_idx == 1 && idx != 0) MutexScope(ac_shared->req_batches[0].mutex)
+          if(task_idx == 1 && idx != 0 && ins_atomic_u32_eval(&async_loop_again_high_priority))
           {
-            if(ac_shared->req_batches[0].wide_count != 0 || ac_shared->req_batches[0].thin_count != 0)
-            {
-              ins_atomic_u64_eval_assign(cancelled_ptr, 1);
-            }
+            ins_atomic_u64_eval_assign(cancelled_ptr, 1);
           }
         }
         lane_sync();
         
         // rjf: cancelled? -> exit
-        if(ins_atomic_u64_eval(cancelled_ptr))
+        if(ins_atomic_u32_eval(cancelled_ptr))
         {
           break;
         }
@@ -441,12 +442,10 @@ ac_async_tick(void)
       for(;;)
       {
         // rjf: any new higher priority tasks? -> cancel
-        if(task_idx == 1 && ins_atomic_u64_eval(req_take_counter_ptr) >= task->thin_count/2) MutexScope(ac_shared->req_batches[0].mutex)
+        if(task_idx == 1 && ins_atomic_u64_eval(req_take_counter_ptr) >= task->thin_count/2 &&
+           ins_atomic_u32_eval(&async_loop_again_high_priority))
         {
-          if(ac_shared->req_batches[0].wide_count != 0 || ac_shared->req_batches[0].thin_count != 0)
-          {
-            ins_atomic_u64_eval_assign(cancelled_ptr, 1);
-          }
+          ins_atomic_u64_eval_assign(cancelled_ptr, 1);
         }
         
         // rjf: cancelled? -> exit

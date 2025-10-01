@@ -7,6 +7,7 @@ global CondVar async_tick_start_cond_var = {0};
 global Mutex async_tick_start_mutex = {0};
 global Mutex async_tick_stop_mutex = {0};
 global B32 async_loop_again = 0;
+global B32 async_loop_again_high_priority = 0;
 global B32 global_async_exit = 0;
 thread_static B32 is_async_thread = 0;
 

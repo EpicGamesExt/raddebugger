@@ -148,6 +148,13 @@ struct DI2_LoadTask
   OS_Handle process;
 };
 
+typedef struct DI2_LoadCompletion DI2_LoadCompletion;
+struct DI2_LoadCompletion
+{
+  DI2_LoadCompletion *next;
+  U64 code;
+};
+
 ////////////////////////////////
 //~ rjf: Search Types
 
@@ -232,9 +239,21 @@ struct DI2_Shared
   U64 conversion_thread_count;
   
   // rjf: conversion completion receiving thread
+  U64 conversion_completion_code;
+  String8 conversion_completion_lock_semaphore_name;
   String8 conversion_completion_signal_semaphore_name;
+  String8 conversion_completion_shared_memory_name;
+  Semaphore conversion_completion_lock_semaphore;
   Semaphore conversion_completion_signal_semaphore;
+  OS_Handle conversion_completion_shared_memory;
+  U64 *conversion_completion_shared_memory_base;
   Thread conversion_completion_signal_receiver_thread;
+  
+  // rjf: completion batch
+  Mutex completion_mutex;
+  Arena *completion_arena;
+  DI2_LoadCompletion *first_completion;
+  DI2_LoadCompletion *last_completion;
 };
 
 ////////////////////////////////
