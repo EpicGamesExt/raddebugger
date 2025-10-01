@@ -517,10 +517,10 @@ di2_async_tick(void)
           MemoryCopyStruct(&n_copy->v, &n->v);
           SLLQueuePush(first_req, last_req, n_copy);
         }
+        arena_clear(b->arena);
+        b->first = b->last = 0;
+        b->count = 0;
       }
-      arena_clear(b->arena);
-      b->first = b->last = 0;
-      b->count = 0;
     }
     
     ////////////////////////////
@@ -673,7 +673,7 @@ di2_async_tick(void)
       //- rjf: determine if there are threads available
       B32 threads_available = 0;
       {
-        U64 max_threads = os_get_system_info()->logical_processor_count*8;
+        U64 max_threads = os_get_system_info()->logical_processor_count*2;
         U64 current_threads = di2_shared->conversion_thread_count;
         U64 needed_threads = (current_threads + t->thread_count);
         threads_available = (max_threads >= needed_threads);
