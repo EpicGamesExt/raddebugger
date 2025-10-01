@@ -362,6 +362,57 @@ di2_close(DI2_Key key)
     }
   }
   
+  //- rjf: remove (path -> key) and (key -> path) records
+  if(node_released)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    
+    // rjf: remove from key -> path cache; obtain path
+    String8 path = {0};
+    {
+      U64 key2path_slot_idx = hash%di2_shared->key2path_slots_count;
+      DI2_KeySlot *key2path_slot = &di2_shared->key2path_slots[key2path_slot_idx];
+      Stripe *key2path_stripe = stripe_from_slot_idx(&di2_shared->key2path_stripes, key2path_slot_idx);
+      RWMutexScope(key2path_stripe->rw_mutex, 1)
+      {
+        for(DI2_KeyPathNode *n = key2path_slot->first; n != 0; n = n->next)
+        {
+          if(di2_key_match(n->key, key))
+          {
+            DLLRemove(key2path_slot->first, key2path_slot->last, n);
+            n->next = key2path_stripe->free;
+            key2path_stripe->free = n;
+            path = str8_copy(scratch.arena, n->path);
+            break;
+          }
+        }
+      }
+    }
+    
+    // rjf: remove from path -> key cache
+    {
+      U64 path_hash = u64_hash_from_str8(path);
+      U64 path2key_slot_idx = path_hash%di2_shared->path2key_slots_count;
+      DI2_KeySlot *path2key_slot = &di2_shared->path2key_slots[path2key_slot_idx];
+      Stripe *path2key_stripe = stripe_from_slot_idx(&di2_shared->path2key_stripes, path2key_slot_idx);
+      RWMutexScope(path2key_stripe->rw_mutex, 1)
+      {
+        for(DI2_KeyPathNode *n = path2key_slot->first; n != 0; n = n->next)
+        {
+          if(str8_match(n->path, path, 0) && di2_key_match(n->key, key))
+          {
+            DLLRemove(path2key_slot->first, path2key_slot->last, n);
+            n->next = path2key_stripe->free;
+            path2key_stripe->free = n;
+            break;
+          }
+        }
+      }
+    }
+    
+    scratch_end(scratch);
+  }
+  
   //- rjf: release node's resources if needed
   if(node_released)
   {
