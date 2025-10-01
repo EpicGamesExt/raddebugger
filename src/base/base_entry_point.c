@@ -195,6 +195,7 @@ async_thread_entry_point(void *params)
         MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
       }
       ins_atomic_u32_eval_assign(&async_loop_again, 0);
+      ins_atomic_u32_eval_assign(&async_loop_again_high_priority, 0);
     }
     lane_sync();
     
