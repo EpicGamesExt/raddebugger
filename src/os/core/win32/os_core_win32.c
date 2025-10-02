@@ -336,6 +336,11 @@ os_file_open(OS_AccessFlags flags, String8 path)
   {
     result.u64[0] = (U64)file;
   }
+  else
+  {
+    DWORD err = GetLastError();
+    (void)err;
+  }
   scratch_end(scratch);
   return result;
 }
