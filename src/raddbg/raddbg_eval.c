@@ -1661,13 +1661,14 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
   {
     U64 endt_us = rd_state->frame_eval_memread_endt_us;
     U128 fuzzy_search_key = {d_hash_from_string(str8_struct(&rd_regs()->view)), (U64)section};
+    B32 stale = 0;
     accel->section = section;
-    accel->items = di_search_item_array_from_target_query(rd_state->frame_access, section, filter, endt_us);
+    accel->items = di_search_item_array_from_target_query(rd_state->frame_access, section, filter, endt_us, &stale);
     RD_ViewState *vs = rd_view_state_from_cfg(rd_cfg_from_id(rd_regs()->view));
-    if(accel->items.count == 0)
+    if(stale)
     {
       String8 last_query = str8(vs->last_successful_query_buffer, vs->last_successful_query_string_size);
-      accel->items = di_search_item_array_from_target_query(rd_state->frame_access, section, last_query, endt_us);
+      accel->items = di_search_item_array_from_target_query(rd_state->frame_access, section, last_query, endt_us, 0);
     }
     else
     {
