@@ -41,6 +41,18 @@ typedef int64_t  RDI_S64;
 #endif
 
 ////////////////////////////////////////////////////////////////
+//~ Checksum Types
+
+typedef union RDI_MD5 RDI_MD5;
+union RDI_MD5 {RDI_U8 u8[16]; RDI_U64 u64[2];};
+
+typedef union RDI_SHA1 RDI_SHA1;
+union RDI_SHA1 {RDI_U8 u8[20];};
+
+typedef union RDI_SHA256 RDI_SHA256;
+union RDI_SHA256 {RDI_U8 u8[32]; RDI_U64 u64[4];};
+
+////////////////////////////////////////////////////////////////
 //~ Overridable Enabling/Disabling Of Table Index Typechecking
 
 #if !defined(RDI_DISABLE_TABLE_INDEX_TYPECHECKING)
@@ -52,7 +64,7 @@ typedef int64_t  RDI_S64;
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 14
+#define RDI_ENCODING_VERSION 15
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -96,12 +108,14 @@ RDI_SectionKind_LocationBlocks       = 0x0020,
 RDI_SectionKind_LocationData         = 0x0021,
 RDI_SectionKind_ConstantValueData    = 0x0022,
 RDI_SectionKind_ConstantValueTable   = 0x0023,
-RDI_SectionKind_ChecksumData         = 0x0024,
-RDI_SectionKind_ChecksumTable        = 0x0025,
-RDI_SectionKind_NameMaps             = 0x0026,
-RDI_SectionKind_NameMapBuckets       = 0x0027,
-RDI_SectionKind_NameMapNodes         = 0x0028,
-RDI_SectionKind_COUNT                = 0x0029,
+RDI_SectionKind_MD5Checksums         = 0x0024,
+RDI_SectionKind_SHA1Checksums        = 0x0025,
+RDI_SectionKind_SHA256Checksums      = 0x0026,
+RDI_SectionKind_Timestamps           = 0x0027,
+RDI_SectionKind_NameMaps             = 0x0028,
+RDI_SectionKind_NameMapBuckets       = 0x0029,
+RDI_SectionKind_NameMapNodes         = 0x002A,
+RDI_SectionKind_COUNT                = 0x002B,
 } RDI_SectionKindEnum;
 
 typedef RDI_U32 RDI_SectionEncoding;
@@ -310,11 +324,12 @@ RDI_BinarySectionFlag_Execute    = 1<<2,
 typedef RDI_U16 RDI_ChecksumKind;
 typedef enum RDI_ChecksumKindEnum
 {
-RDI_ChecksumKind_Null       = 0,
+RDI_ChecksumKind_NULL       = 0,
 RDI_ChecksumKind_MD5        = 1,
 RDI_ChecksumKind_SHA1       = 2,
 RDI_ChecksumKind_SHA256     = 3,
 RDI_ChecksumKind_Timestamp  = 4,
+RDI_ChecksumKind_COUNT      = 5,
 } RDI_ChecksumKindEnum;
 
 typedef RDI_U32 RDI_Language;
@@ -590,8 +605,10 @@ X(LocationBlocks, location_blocks, RDI_LocationBlock)\
 X(LocationData, location_data, RDI_U8)\
 X(ConstantValueData, constant_value_data, RDI_U8)\
 X(ConstantValueTable, constant_value_table, RDI_U32)\
-X(ChecksumData, checksum_data, RDI_U8)\
-X(ChecksumTable, checksum_table, RDI_U32)\
+X(MD5Checksums, md5_checksums, RDI_MD5)\
+X(SHA1Checksums, sha1_checksums, RDI_SHA1)\
+X(SHA256Checksums, sha256_checksums, RDI_SHA256)\
+X(Timestamps, timestamps, RDI_U64)\
 X(NameMaps, name_maps, RDI_NameMap)\
 X(NameMapBuckets, name_map_buckets, RDI_NameMapBucket)\
 X(NameMapNodes, name_map_nodes, RDI_NameMapNode)\
@@ -805,11 +822,12 @@ X(RDI_U64, foff_first)\
 X(RDI_U64, foff_opl)\
 
 #define RDI_ChecksumKind_XList \
-X(Null)\
-X(MD5)\
-X(SHA1)\
-X(SHA256)\
-X(Timestamp)\
+X(NULL, NULL)\
+X(MD5, MD5Checksums)\
+X(SHA1, SHA1Checksums)\
+X(SHA256, SHA256Checksums)\
+X(Timestamp, Timestamps)\
+X(COUNT, NULL)\
 
 #define RDI_FilePathNode_XList \
 X(RDI_U32, name_string_idx)\
@@ -1173,7 +1191,10 @@ typedef struct RDI_U32_LocationBlocks              { RDI_U32 v; } RDI_U32_Locati
 typedef struct RDI_U32_LocationData                { RDI_U32 v; } RDI_U32_LocationData;
 typedef struct RDI_U32_ConstantValueData           { RDI_U32 v; } RDI_U32_ConstantValueData;
 typedef struct RDI_U32_ConstantValueTable          { RDI_U32 v; } RDI_U32_ConstantValueTable;
-typedef struct RDI_U32_ChecksumTable               { RDI_U32 v; } RDI_U32_ChecksumTable;
+typedef struct RDI_U32_MD5Checksums                { RDI_U32 v; } RDI_U32_MD5Checksums;
+typedef struct RDI_U32_SHA1Checksums               { RDI_U32 v; } RDI_U32_SHA1Checksums;
+typedef struct RDI_U32_SHA256Checksums             { RDI_U32 v; } RDI_U32_SHA256Checksums;
+typedef struct RDI_U32_Timestamps                  { RDI_U32 v; } RDI_U32_Timestamps;
 typedef struct RDI_U32_NameMaps                    { RDI_U32 v; } RDI_U32_NameMaps;
 typedef struct RDI_U32_NameMapBuckets              { RDI_U32 v; } RDI_U32_NameMapBuckets;
 typedef struct RDI_U32_NameMapNodes                { RDI_U32 v; } RDI_U32_NameMapNodes;
@@ -1210,7 +1231,10 @@ typedef RDI_U32_Table RDI_U32_LocationBlocks;
 typedef RDI_U32_Table RDI_U32_LocationData;
 typedef RDI_U32_Table RDI_U32_ConstantValueData;
 typedef RDI_U32_Table RDI_U32_ConstantValueTable;
-typedef RDI_U32_Table RDI_U32_ChecksumTable;
+typedef RDI_U32_Table RDI_U32_MD5Checksums;
+typedef RDI_U32_Table RDI_U32_SHA1Checksums;
+typedef RDI_U32_Table RDI_U32_SHA256Checksums;
+typedef RDI_U32_Table RDI_U32_Timestamps;
 typedef RDI_U32_Table RDI_U32_NameMaps;
 typedef RDI_U32_Table RDI_U32_NameMapBuckets;
 typedef RDI_U32_Table RDI_U32_NameMapNodes;
@@ -1578,8 +1602,10 @@ typedef RDI_LocationBlock                RDI_SectionElementType_LocationBlocks;
 typedef RDI_U8                           RDI_SectionElementType_LocationData;
 typedef RDI_U8                           RDI_SectionElementType_ConstantValueData;
 typedef RDI_U32                          RDI_SectionElementType_ConstantValueTable;
-typedef RDI_U8                           RDI_SectionElementType_ChecksumData;
-typedef RDI_U32                          RDI_SectionElementType_ChecksumTable;
+typedef RDI_MD5                          RDI_SectionElementType_MD5Checksums;
+typedef RDI_SHA1                         RDI_SectionElementType_SHA1Checksums;
+typedef RDI_SHA256                       RDI_SectionElementType_SHA256Checksums;
+typedef RDI_U64                          RDI_SectionElementType_Timestamps;
 typedef RDI_NameMap                      RDI_SectionElementType_NameMaps;
 typedef RDI_NameMapBucket                RDI_SectionElementType_NameMapBuckets;
 typedef RDI_NameMapNode                  RDI_SectionElementType_NameMapNodes;
@@ -1592,7 +1618,7 @@ RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_Eva
 RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
 RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
 
-extern RDI_U16 rdi_section_element_size_table[42];
+extern RDI_U16 rdi_section_element_size_table[44];
 extern RDI_U16 rdi_eval_op_ctrlbits_table[52];
 
 #endif // RDI_H

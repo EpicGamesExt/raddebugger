@@ -51,6 +51,18 @@
   "#endif";
   "";
   "////////////////////////////////////////////////////////////////";
+  "//~ Checksum Types";
+  "";
+  "typedef union RDI_MD5 RDI_MD5;";
+  "union RDI_MD5 {RDI_U8 u8[16]; RDI_U64 u64[2];};";
+  "";
+  "typedef union RDI_SHA1 RDI_SHA1;";
+  "union RDI_SHA1 {RDI_U8 u8[20];};";
+  "";
+  "typedef union RDI_SHA256 RDI_SHA256;";
+  "union RDI_SHA256 {RDI_U8 u8[32]; RDI_U64 u64[4];};";
+  "";
+  "////////////////////////////////////////////////////////////////";
   "//~ Overridable Enabling/Disabling Of Table Index Typechecking";
   "";
   "#if !defined(RDI_DISABLE_TABLE_INDEX_TYPECHECKING)";
@@ -62,7 +74,7 @@
   "";
   "// \"raddbg\\0\\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 14";
+  "#define RDI_ENCODING_VERSION 15";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -156,12 +168,14 @@ RDI_SectionTable:
   {LocationData                  location_data                      RDI_U8              0x0021   U32                                            ""}
   {ConstantValueData             constant_value_data                RDI_U8              0x0022   U32                                            ""}
   {ConstantValueTable            constant_value_table               RDI_U32             0x0023   U32                                            ""}
-  {ChecksumData                  checksum_data                      RDI_U8              0x0024   -                                              ""}
-  {ChecksumTable                 checksum_table                     RDI_U32             0x0025   U32                                            ""}
-  {NameMaps                      name_maps                          RDI_NameMap         0x0026   U32                                            ""}
-  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket   0x0027   U32                                            ""}
-  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode     0x0028   U32                                            ""}
-  {COUNT                         count                              RDI_U8              0x0029   -                                              ""}
+  {MD5Checksums                  md5_checksums                      RDI_MD5             0x0024   U32                                            ""}
+  {SHA1Checksums                 sha1_checksums                     RDI_SHA1            0x0025   U32                                            ""}
+  {SHA256Checksums               sha256_checksums                   RDI_SHA256          0x0026   U32                                            ""}
+  {Timestamps                    timestamps                         RDI_U64             0x0027   U32                                            ""}
+  {NameMaps                      name_maps                          RDI_NameMap         0x0028   U32                                            ""}
+  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket   0x0029   U32                                            ""}
+  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode     0x002A   U32                                            ""}
+  {COUNT                         count                              RDI_U8              0x002B   -                                              ""}
 }
 
 @table(name value)
@@ -539,14 +553,15 @@ RDI_BinarySectionMemberTable:
 ////////////////////////////////
 //~ rjf: Checksum Type Tables
 
-@table(name value)
+@table(name value section)
 RDI_ChecksumKindTable:
 {
-  {Null            0}
-  {MD5             1}
-  {SHA1            2}
-  {SHA256          3}
-  {Timestamp       4}
+  {NULL            0  NULL           }
+  {MD5             1  MD5Checksums   }
+  {SHA1            2  SHA1Checksums  }
+  {SHA256          3  SHA256Checksums}
+  {Timestamp       4  Timestamps     }
+  {COUNT           5  NULL           }
 }
 
 @enum(RDI_U16) RDI_ChecksumKind:
@@ -556,7 +571,7 @@ RDI_ChecksumKindTable:
 
 @xlist RDI_ChecksumKind_XList:
 {
-  @expand(RDI_ChecksumKindTable a) `$(a.name)`;
+  @expand(RDI_ChecksumKindTable a) `$(a.name), $(a.section)`;
 }
 
 ////////////////////////////////

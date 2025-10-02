@@ -1928,14 +1928,15 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     // rjf: allocate
     if(lane_idx() == 0)
     {
-      rdim_shared->lane_chunk_src_file_checksum_counts = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
-      rdim_shared->lane_chunk_src_file_checksum_sizes = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
-      rdim_shared->lane_chunk_src_file_checksum_off_offs = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
-      rdim_shared->lane_chunk_src_file_checksum_data_offs = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+      for EachEnumVal(RDI_ChecksumKind, k)
+      {
+        rdim_shared->lane_chunk_src_file_checksum_counts[k] = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+        rdim_shared->lane_chunk_src_file_checksum_offs[k] = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+      }
     }
     lane_sync();
     
-    // rjf: compute counts / sizes of all checksum data
+    // rjf: compute counts of all checksums
     {
       U64 chunk_idx = 0;
       for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
@@ -1944,10 +1945,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         U64 slot_idx = lane_idx()*params->src_files.chunk_count + chunk_idx;
         for EachInRange(n_idx, range)
         {
-          if(n->v[n_idx].checksum_kind != RDI_ChecksumKind_Null && n->v[n_idx].checksum.size != 0)
+          if(RDI_ChecksumKind_NULL < n->v[n_idx].checksum_kind && n->v[n_idx].checksum_kind < RDI_ChecksumKind_COUNT && n->v[n_idx].checksum.size != 0)
           {
-            rdim_shared->lane_chunk_src_file_checksum_counts[slot_idx] += 1;
-            rdim_shared->lane_chunk_src_file_checksum_sizes[slot_idx] += n->v[n_idx].checksum.size;
+            rdim_shared->lane_chunk_src_file_checksum_counts[n->v[n_idx].checksum_kind][slot_idx] += 1;
           }
         }
         chunk_idx += 1;
@@ -1958,23 +1958,22 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     // rjf: lay out per-lane-chunk offsets
     if(lane_idx() == 0)
     {
-      U64 off_off = 0;
-      U64 data_off = 0;
-      U64 chunk_idx = 0;
-      for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
+      for EachEnumVal(RDI_ChecksumKind, k)
       {
-        for EachIndex(l_idx, lane_count())
+        U64 off = 0;
+        U64 chunk_idx = 0;
+        for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
         {
-          U64 slot_idx = l_idx*params->src_files.chunk_count + chunk_idx;
-          rdim_shared->lane_chunk_src_file_checksum_off_offs[slot_idx] = off_off;
-          rdim_shared->lane_chunk_src_file_checksum_data_offs[slot_idx] = data_off;
-          off_off += rdim_shared->lane_chunk_src_file_checksum_counts[slot_idx];
-          data_off += rdim_shared->lane_chunk_src_file_checksum_sizes[slot_idx];
+          for EachIndex(l_idx, lane_count())
+          {
+            U64 slot_idx = l_idx*params->src_files.chunk_count + chunk_idx;
+            rdim_shared->lane_chunk_src_file_checksum_offs[k][slot_idx] = off;
+            off += rdim_shared->lane_chunk_src_file_checksum_counts[k][slot_idx];
+          }
+          chunk_idx += 1;
         }
-        chunk_idx += 1;
+        rdim_shared->total_checksum_counts[k] = off;
       }
-      rdim_shared->total_checksum_count = off_off;
-      rdim_shared->total_checksum_size = data_off;
     }
   }
   lane_sync();
@@ -1987,10 +1986,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     // rjf: allocate
     if(lane_idx() == 0)
     {
-      rdim_shared->baked_checksums.offs_count = rdim_shared->total_checksum_count+1;
-      rdim_shared->baked_checksums.offs = push_array(arena, U32, rdim_shared->baked_checksums.offs_count);
-      rdim_shared->baked_checksums.data_size  = rdim_shared->total_checksum_size;
-      rdim_shared->baked_checksums.data = push_array(arena, U8, rdim_shared->baked_checksums.data_size);
+      rdim_shared->baked_checksums.md5s_count = rdim_shared->total_checksum_counts[RDI_ChecksumKind_MD5];
+      rdim_shared->baked_checksums.sha1s_count = rdim_shared->total_checksum_counts[RDI_ChecksumKind_SHA1];
+      rdim_shared->baked_checksums.sha256s_count = rdim_shared->total_checksum_counts[RDI_ChecksumKind_SHA256];
+      rdim_shared->baked_checksums.timestamps_count = rdim_shared->total_checksum_counts[RDI_ChecksumKind_Timestamp];
+      rdim_shared->baked_checksums.md5s = push_array(arena, RDI_MD5, rdim_shared->baked_checksums.md5s_count);
+      rdim_shared->baked_checksums.sha1s = push_array(arena, RDI_SHA1, rdim_shared->baked_checksums.sha1s_count);
+      rdim_shared->baked_checksums.sha256s = push_array(arena, RDI_SHA256, rdim_shared->baked_checksums.sha256s_count);
+      rdim_shared->baked_checksums.timestamps = push_array(arena, RDI_U64, rdim_shared->baked_checksums.timestamps_count);
     }
     lane_sync();
     
@@ -2001,23 +2004,33 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       {
         Rng1U64 range = lane_range(n->count);
         U64 slot_idx = lane_idx()*params->src_files.chunk_count + chunk_idx;
-        U64 dst_off_off = rdim_shared->lane_chunk_src_file_checksum_off_offs[slot_idx];
-        U64 dst_data_off = rdim_shared->lane_chunk_src_file_checksum_data_offs[slot_idx];
+        U64 dst_offs[RDI_ChecksumKind_COUNT] = {0};
+        for EachEnumVal(RDI_ChecksumKind, k)
+        {
+          dst_offs[k] = rdim_shared->lane_chunk_src_file_checksum_offs[k][slot_idx];
+        }
         for EachInRange(n_idx, range)
         {
-          if(n->v[n_idx].checksum_kind != RDI_ChecksumKind_Null && n->v[n_idx].checksum.size != 0)
+          RDI_ChecksumKind k = n->v[n_idx].checksum_kind;
+          String8 val = n->v[n_idx].checksum;
+          if(RDI_ChecksumKind_NULL < k && k < RDI_ChecksumKind_COUNT && val.size != 0)
           {
-            rdim_shared->baked_checksums.offs[dst_off_off] = (U32)dst_data_off;
-            MemoryCopy(&rdim_shared->baked_checksums.data[dst_data_off], n->v[n_idx].checksum.str, n->v[n_idx].checksum.size);
-            dst_off_off += 1;
-            dst_data_off += n->v[n_idx].checksum.size;
+            switch((RDI_ChecksumKindEnum)k)
+            {
+              case RDI_ChecksumKind_NULL:
+              case RDI_ChecksumKind_COUNT:
+              {}break;
+#define Case(name, table_name) case RDI_ChecksumKind_##name:{MemoryCopy(&rdim_shared->baked_checksums.table_name[dst_offs[k]], val.str, Min(val.size, sizeof(rdim_shared->baked_checksums.table_name[0])));}break
+              Case(MD5, md5s);
+              Case(SHA1, sha1s);
+              Case(SHA256, sha256s);
+              Case(Timestamp, timestamps);
+#undef Case
+            }
+            dst_offs[k] += 1;
           }
         }
         chunk_idx += 1;
-      }
-      if(lane_idx() == 0)
-      {
-        rdim_shared->baked_checksums.offs[rdim_shared->baked_checksums.offs_count-1] = rdim_shared->baked_checksums.data_size;
       }
     }
   }

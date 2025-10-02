@@ -2026,8 +2026,9 @@ rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
   bundle.sections[RDI_SectionKind_LocationData]         = rdim_serialized_section_make_unpacked_array(results->locations.location_data, results->locations.location_data_size);
   bundle.sections[RDI_SectionKind_ConstantValueData]    = rdim_serialized_section_make_unpacked_array(results->constants.constant_value_data, results->constants.constant_value_data_size);
   bundle.sections[RDI_SectionKind_ConstantValueTable]   = rdim_serialized_section_make_unpacked_array(results->constants.constant_values, results->constants.constant_values_count);
-  bundle.sections[RDI_SectionKind_ChecksumData]         = rdim_serialized_section_make_unpacked_array(results->checksums.data, results->checksums.data_size);
-  bundle.sections[RDI_SectionKind_ChecksumTable]        = rdim_serialized_section_make_unpacked_array(results->checksums.offs, results->checksums.offs_count);
+  bundle.sections[RDI_SectionKind_MD5Checksums]         = rdim_serialized_section_make_unpacked_array(results->checksums.md5s, results->checksums.md5s_count);
+  bundle.sections[RDI_SectionKind_SHA1Checksums]        = rdim_serialized_section_make_unpacked_array(results->checksums.sha1s, results->checksums.sha1s_count);
+  bundle.sections[RDI_SectionKind_SHA256Checksums]      = rdim_serialized_section_make_unpacked_array(results->checksums.sha256s, results->checksums.sha256s_count);
   bundle.sections[RDI_SectionKind_NameMaps]             = rdim_serialized_section_make_unpacked_array(results->top_level_name_maps.name_maps, results->top_level_name_maps.name_maps_count);
   bundle.sections[RDI_SectionKind_NameMapBuckets]       = rdim_serialized_section_make_unpacked_array(results->name_maps.buckets, results->name_maps.buckets_count);
   bundle.sections[RDI_SectionKind_NameMapNodes]         = rdim_serialized_section_make_unpacked_array(results->name_maps.nodes, results->name_maps.nodes_count);

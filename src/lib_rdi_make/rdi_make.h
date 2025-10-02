@@ -1315,10 +1315,14 @@ struct RDIM_SrcFileBakeResult
 typedef struct RDIM_ChecksumBakeResult RDIM_ChecksumBakeResult;
 struct RDIM_ChecksumBakeResult
 {
-  RDI_U32 *offs;
-  RDI_U64 offs_count;
-  RDI_U8 *data;
-  RDI_U64 data_size;
+  RDI_MD5 *md5s;
+  RDI_U64 md5s_count;
+  RDI_SHA1 *sha1s;
+  RDI_U64 sha1s_count;
+  RDI_SHA256 *sha256s;
+  RDI_U64 sha256s_count;
+  RDI_U64 *timestamps;
+  RDI_U64 timestamps_count;
 };
 
 typedef struct RDIM_LineTableBakeResult RDIM_LineTableBakeResult;

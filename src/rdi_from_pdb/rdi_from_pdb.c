@@ -267,10 +267,10 @@ p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type)
 internal RDI_ChecksumKind
 p2r_rdi_from_cv_c13_checksum_kind(CV_C13ChecksumKind k)
 {
-  RDI_ChecksumKind result = RDI_ChecksumKind_Null;
+  RDI_ChecksumKind result = RDI_ChecksumKind_NULL;
   switch((CV_C13ChecksumKindEnum)k)
   {
-    case CV_C13ChecksumKind_Null:  {result = RDI_ChecksumKind_Null;}break;
+    case CV_C13ChecksumKind_Null:  {result = RDI_ChecksumKind_NULL;}break;
     case CV_C13ChecksumKind_MD5:   {result = RDI_ChecksumKind_MD5;}break;
     case CV_C13ChecksumKind_SHA1:  {result = RDI_ChecksumKind_SHA1;}break;
     case CV_C13ChecksumKind_SHA256:{result = RDI_ChecksumKind_SHA256;}break;

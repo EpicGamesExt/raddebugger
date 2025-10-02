@@ -136,12 +136,9 @@ struct RDIM_Shared
   
   RDIM_SrcFileBakeResult baked_src_files;
   
-  RDI_U64 *lane_chunk_src_file_checksum_counts; // [lane_count * src_file_chunk_count]
-  RDI_U64 *lane_chunk_src_file_checksum_sizes; // [lane_count * src_file_chunk_count]
-  RDI_U64 *lane_chunk_src_file_checksum_off_offs; // [lane_count * src_file_chunk_count]
-  RDI_U64 *lane_chunk_src_file_checksum_data_offs; // [lane_count * src_file_chunk_count]
-  U64 total_checksum_count;
-  U64 total_checksum_size;
+  RDI_U64 *lane_chunk_src_file_checksum_counts[RDI_ChecksumKind_COUNT]; // [lane_count * src_file_chunk_count]
+  RDI_U64 *lane_chunk_src_file_checksum_offs[RDI_ChecksumKind_COUNT]; // [lane_count * src_file_chunk_count]
+  U64 total_checksum_counts[RDI_ChecksumKind_COUNT];
   
   RDIM_ChecksumBakeResult baked_checksums;
   
