@@ -52,7 +52,7 @@ typedef int64_t  RDI_S64;
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 13
+#define RDI_ENCODING_VERSION 14
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -96,10 +96,12 @@ RDI_SectionKind_LocationBlocks       = 0x0020,
 RDI_SectionKind_LocationData         = 0x0021,
 RDI_SectionKind_ConstantValueData    = 0x0022,
 RDI_SectionKind_ConstantValueTable   = 0x0023,
-RDI_SectionKind_NameMaps             = 0x0024,
-RDI_SectionKind_NameMapBuckets       = 0x0025,
-RDI_SectionKind_NameMapNodes         = 0x0026,
-RDI_SectionKind_COUNT                = 0x0027,
+RDI_SectionKind_ChecksumData         = 0x0024,
+RDI_SectionKind_ChecksumTable        = 0x0025,
+RDI_SectionKind_NameMaps             = 0x0026,
+RDI_SectionKind_NameMapBuckets       = 0x0027,
+RDI_SectionKind_NameMapNodes         = 0x0028,
+RDI_SectionKind_COUNT                = 0x0029,
 } RDI_SectionKindEnum;
 
 typedef RDI_U32 RDI_SectionEncoding;
@@ -588,6 +590,8 @@ X(LocationBlocks, location_blocks, RDI_LocationBlock)\
 X(LocationData, location_data, RDI_U8)\
 X(ConstantValueData, constant_value_data, RDI_U8)\
 X(ConstantValueTable, constant_value_table, RDI_U32)\
+X(ChecksumData, checksum_data, RDI_U8)\
+X(ChecksumTable, checksum_table, RDI_U32)\
 X(NameMaps, name_maps, RDI_NameMap)\
 X(NameMapBuckets, name_map_buckets, RDI_NameMapBucket)\
 X(NameMapNodes, name_map_nodes, RDI_NameMapNode)\
@@ -1169,6 +1173,7 @@ typedef struct RDI_U32_LocationBlocks              { RDI_U32 v; } RDI_U32_Locati
 typedef struct RDI_U32_LocationData                { RDI_U32 v; } RDI_U32_LocationData;
 typedef struct RDI_U32_ConstantValueData           { RDI_U32 v; } RDI_U32_ConstantValueData;
 typedef struct RDI_U32_ConstantValueTable          { RDI_U32 v; } RDI_U32_ConstantValueTable;
+typedef struct RDI_U32_ChecksumTable               { RDI_U32 v; } RDI_U32_ChecksumTable;
 typedef struct RDI_U32_NameMaps                    { RDI_U32 v; } RDI_U32_NameMaps;
 typedef struct RDI_U32_NameMapBuckets              { RDI_U32 v; } RDI_U32_NameMapBuckets;
 typedef struct RDI_U32_NameMapNodes                { RDI_U32 v; } RDI_U32_NameMapNodes;
@@ -1205,6 +1210,7 @@ typedef RDI_U32_Table RDI_U32_LocationBlocks;
 typedef RDI_U32_Table RDI_U32_LocationData;
 typedef RDI_U32_Table RDI_U32_ConstantValueData;
 typedef RDI_U32_Table RDI_U32_ConstantValueTable;
+typedef RDI_U32_Table RDI_U32_ChecksumTable;
 typedef RDI_U32_Table RDI_U32_NameMaps;
 typedef RDI_U32_Table RDI_U32_NameMapBuckets;
 typedef RDI_U32_Table RDI_U32_NameMapNodes;
@@ -1572,6 +1578,8 @@ typedef RDI_LocationBlock                RDI_SectionElementType_LocationBlocks;
 typedef RDI_U8                           RDI_SectionElementType_LocationData;
 typedef RDI_U8                           RDI_SectionElementType_ConstantValueData;
 typedef RDI_U32                          RDI_SectionElementType_ConstantValueTable;
+typedef RDI_U8                           RDI_SectionElementType_ChecksumData;
+typedef RDI_U32                          RDI_SectionElementType_ChecksumTable;
 typedef RDI_NameMap                      RDI_SectionElementType_NameMaps;
 typedef RDI_NameMapBucket                RDI_SectionElementType_NameMapBuckets;
 typedef RDI_NameMapNode                  RDI_SectionElementType_NameMapNodes;
@@ -1584,7 +1592,7 @@ RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_Eva
 RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
 RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
 
-extern RDI_U16 rdi_section_element_size_table[40];
+extern RDI_U16 rdi_section_element_size_table[42];
 extern RDI_U16 rdi_eval_op_ctrlbits_table[52];
 
 #endif // RDI_H

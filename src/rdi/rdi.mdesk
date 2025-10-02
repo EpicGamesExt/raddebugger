@@ -62,7 +62,7 @@
   "";
   "// \"raddbg\\0\\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 13";
+  "#define RDI_ENCODING_VERSION 14";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -156,10 +156,12 @@ RDI_SectionTable:
   {LocationData                  location_data                      RDI_U8              0x0021   U32                                            ""}
   {ConstantValueData             constant_value_data                RDI_U8              0x0022   U32                                            ""}
   {ConstantValueTable            constant_value_table               RDI_U32             0x0023   U32                                            ""}
-  {NameMaps                      name_maps                          RDI_NameMap         0x0024   U32                                            ""}
-  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket   0x0025   U32                                            ""}
-  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode     0x0026   U32                                            ""}
-  {COUNT                         count                              RDI_U8              0x0027   -                                              ""}
+  {ChecksumData                  checksum_data                      RDI_U8              0x0024   -                                              ""}
+  {ChecksumTable                 checksum_table                     RDI_U32             0x0025   U32                                            ""}
+  {NameMaps                      name_maps                          RDI_NameMap         0x0026   U32                                            ""}
+  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket   0x0027   U32                                            ""}
+  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode     0x0028   U32                                            ""}
+  {COUNT                         count                              RDI_U8              0x0029   -                                              ""}
 }
 
 @table(name value)

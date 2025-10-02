@@ -1921,6 +1921,109 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   }
   
   //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage compute lane checksum layouts
+  //
+  ProfScope("compute lane checksum layouts")
+  {
+    // rjf: allocate
+    if(lane_idx() == 0)
+    {
+      rdim_shared->lane_chunk_src_file_checksum_counts = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+      rdim_shared->lane_chunk_src_file_checksum_sizes = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+      rdim_shared->lane_chunk_src_file_checksum_off_offs = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+      rdim_shared->lane_chunk_src_file_checksum_data_offs = push_array(arena, U64, lane_count()*params->src_files.chunk_count);
+    }
+    lane_sync();
+    
+    // rjf: compute counts / sizes of all checksum data
+    {
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        U64 slot_idx = lane_idx()*params->src_files.chunk_count + chunk_idx;
+        for EachInRange(n_idx, range)
+        {
+          if(n->v[n_idx].checksum_kind != RDI_ChecksumKind_Null && n->v[n_idx].checksum.size != 0)
+          {
+            rdim_shared->lane_chunk_src_file_checksum_counts[slot_idx] += 1;
+            rdim_shared->lane_chunk_src_file_checksum_sizes[slot_idx] += n->v[n_idx].checksum.size;
+          }
+        }
+        chunk_idx += 1;
+      }
+    }
+    lane_sync();
+    
+    // rjf: lay out per-lane-chunk offsets
+    if(lane_idx() == 0)
+    {
+      U64 off_off = 0;
+      U64 data_off = 0;
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          U64 slot_idx = l_idx*params->src_files.chunk_count + chunk_idx;
+          rdim_shared->lane_chunk_src_file_checksum_off_offs[slot_idx] = off_off;
+          rdim_shared->lane_chunk_src_file_checksum_data_offs[slot_idx] = data_off;
+          off_off += rdim_shared->lane_chunk_src_file_checksum_counts[slot_idx];
+          data_off += rdim_shared->lane_chunk_src_file_checksum_sizes[slot_idx];
+        }
+        chunk_idx += 1;
+      }
+      rdim_shared->total_checksum_count = off_off;
+      rdim_shared->total_checksum_size = data_off;
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage bake checksums
+  //
+  ProfScope("bake checksums")
+  {
+    // rjf: allocate
+    if(lane_idx() == 0)
+    {
+      rdim_shared->baked_checksums.offs_count = rdim_shared->total_checksum_count+1;
+      rdim_shared->baked_checksums.offs = push_array(arena, U32, rdim_shared->baked_checksums.offs_count);
+      rdim_shared->baked_checksums.data_size  = rdim_shared->total_checksum_size;
+      rdim_shared->baked_checksums.data = push_array(arena, U8, rdim_shared->baked_checksums.data_size);
+    }
+    lane_sync();
+    
+    // rjf: fill
+    {
+      U64 chunk_idx = 0;
+      for EachNode(n, RDIM_SrcFileChunkNode, params->src_files.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        U64 slot_idx = lane_idx()*params->src_files.chunk_count + chunk_idx;
+        U64 dst_off_off = rdim_shared->lane_chunk_src_file_checksum_off_offs[slot_idx];
+        U64 dst_data_off = rdim_shared->lane_chunk_src_file_checksum_data_offs[slot_idx];
+        for EachInRange(n_idx, range)
+        {
+          if(n->v[n_idx].checksum_kind != RDI_ChecksumKind_Null && n->v[n_idx].checksum.size != 0)
+          {
+            rdim_shared->baked_checksums.offs[dst_off_off] = (U32)dst_data_off;
+            MemoryCopy(&rdim_shared->baked_checksums.data[dst_data_off], n->v[n_idx].checksum.str, n->v[n_idx].checksum.size);
+            dst_off_off += 1;
+            dst_data_off += n->v[n_idx].checksum.size;
+          }
+        }
+        chunk_idx += 1;
+      }
+      if(lane_idx() == 0)
+      {
+        rdim_shared->baked_checksums.offs[rdim_shared->baked_checksums.offs_count-1] = rdim_shared->baked_checksums.data_size;
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute lane UDT member/enum-val layouts
   //
   ProfScope("compute lane UDT member/enum-val layouts")
@@ -2849,6 +2952,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     result.units                  = rdim_shared->baked_units;
     result.unit_vmap              = rdim_shared->baked_unit_vmap;
     result.src_files              = rdim_shared->baked_src_files;
+    result.checksums              = rdim_shared->baked_checksums;
     result.line_tables            = rdim_shared->baked_line_tables;
     result.type_nodes             = rdim_shared->baked_type_nodes;
     result.udts                   = rdim_shared->baked_udts;
@@ -2866,7 +2970,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     result.strings                = rdim_shared->baked_strings;
     result.idx_runs               = rdim_shared->baked_idx_runs;
     result.locations              = rdim_shared->baked_locations;
-    result.location_blocks2       = rdim_shared->baked_location_blocks;
+    result.location_blocks        = rdim_shared->baked_location_blocks;
   }
   
   return result;

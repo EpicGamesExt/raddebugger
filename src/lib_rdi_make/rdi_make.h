@@ -1312,6 +1312,15 @@ struct RDIM_SrcFileBakeResult
   RDI_U64 source_line_map_voffs_count;
 };
 
+typedef struct RDIM_ChecksumBakeResult RDIM_ChecksumBakeResult;
+struct RDIM_ChecksumBakeResult
+{
+  RDI_U32 *offs;
+  RDI_U64 offs_count;
+  RDI_U8 *data;
+  RDI_U64 data_size;
+};
+
 typedef struct RDIM_LineTableBakeResult RDIM_LineTableBakeResult;
 struct RDIM_LineTableBakeResult
 {
@@ -1466,6 +1475,7 @@ struct RDIM_BakeResults
   RDIM_UnitBakeResult units;
   RDIM_UnitVMapBakeResult unit_vmap;
   RDIM_SrcFileBakeResult src_files;
+  RDIM_ChecksumBakeResult checksums;
   RDIM_LineTableBakeResult line_tables;
   RDIM_TypeNodeBakeResult type_nodes;
   RDIM_UDTBakeResult udts;
@@ -1483,9 +1493,7 @@ struct RDIM_BakeResults
   RDIM_StringBakeResult strings;
   RDIM_IndexRunBakeResult idx_runs;
   RDIM_LocationBakeResult locations;
-  RDIM_LocationBlockBakeResult location_blocks2;
-  RDIM_String8 location_blocks;
-  RDIM_String8 location_data;
+  RDIM_LocationBlockBakeResult location_blocks;
 };
 
 ////////////////////////////////

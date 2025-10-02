@@ -10,7 +10,7 @@
 #ifndef RDI_C
 #define RDI_C
 
-RDI_U16 rdi_section_element_size_table[40] =
+RDI_U16 rdi_section_element_size_table[42] =
 {
 sizeof(RDI_U8),
 sizeof(RDI_TopLevelInfo),
@@ -46,6 +46,8 @@ sizeof(RDI_InlineSite),
 sizeof(RDI_Local),
 sizeof(RDI_LocationBlock),
 sizeof(RDI_U8),
+sizeof(RDI_U8),
+sizeof(RDI_U32),
 sizeof(RDI_U8),
 sizeof(RDI_U32),
 sizeof(RDI_NameMap),
