@@ -671,13 +671,39 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
   {
     U64 count = 0;
     RDI_SourceFile *v = rdi_table_from_name(rdi, SourceFiles, &count);
+    U64 checksums_count[RDI_ChecksumKind_COUNT] = {0};
+    RDI_U8 *checksums_data[RDI_ChecksumKind_COUNT] = {0};
+    RDI_U64 checksums_element_sizes[RDI_ChecksumKind_COUNT] = {0};
+    for EachEnumVal(RDI_ChecksumKind, k)
+    {
+      RDI_SectionKind section_kind = rdi_section_kind_from_checksum_kind(k);
+      checksums_data[k] = rdi_section_raw_table_from_kind(rdi, section_kind, &checksums_count[k]);
+      checksums_element_sizes[k] = rdi_section_element_size_table[section_kind];
+    }
     Rng1U64 range = lane_range(count);
     for EachInRange(idx, range)
     {
       RDI_SourceFile *source_file = &v[idx];
-      dumpf("\n  { file_path_node_idx: %4u, source_line_map: %4u, path: %-192S } // source_file[%I64u]",
+      RDI_ChecksumKind checksum_kind = source_file->checksum_kind;
+      RDI_U32 checksum_idx = source_file->checksum_idx;
+      String8 checksum_kind_name = {0};
+      switch(checksum_kind)
+      {
+        default:{checksum_kind_name = str8_lit("Null");}break;
+#define X(name, s) case RDI_ChecksumKind_##name:{checksum_kind_name = str8_lit(#name);}break;
+        RDI_ChecksumKind_XList
+#undef X
+      }
+      String8 checksum_value = str8(checksums_data[checksum_kind] + checksums_element_sizes[checksum_kind]*checksum_idx, checksums_element_sizes[checksum_kind]);
+      String8List checksum_vals = numeric_str8_list_from_data(arena, 16, checksum_value, 1);
+      StringJoin join = {0};
+      join.sep = str8_lit(", ");
+      String8 checksum_val_string = str8_list_join(arena, &checksum_vals, &join);
+      dumpf("\n  { file_path_node_idx: %4u, source_line_map: %4u, checksum_kind: %10S, checksum_value: %192S, path: %-192S } // source_file[%I64u]",
             source_file->file_path_node_idx,
             source_file->source_line_map_idx,
+            checksum_kind_name,
+            checksum_val_string,
             push_str8f(arena, "'%S'", str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx)),
             idx);
     }

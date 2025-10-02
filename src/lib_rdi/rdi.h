@@ -64,7 +64,7 @@ union RDI_SHA256 {RDI_U8 u8[32]; RDI_U64 u64[4];};
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 15
+#define RDI_ENCODING_VERSION 16
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -321,7 +321,7 @@ RDI_BinarySectionFlag_Write      = 1<<1,
 RDI_BinarySectionFlag_Execute    = 1<<2,
 } RDI_BinarySectionFlagsEnum;
 
-typedef RDI_U16 RDI_ChecksumKind;
+typedef RDI_U32 RDI_ChecksumKind;
 typedef enum RDI_ChecksumKindEnum
 {
 RDI_ChecksumKind_NULL       = 0,
@@ -840,6 +840,8 @@ X(RDI_U32, source_file_idx)\
 X(RDI_U32, file_path_node_idx)\
 X(RDI_U32, normal_full_path_string_idx)\
 X(RDI_U32, source_line_map_idx)\
+X(RDI_ChecksumKind, checksum_kind)\
+X(RDI_U32, checksum_idx)\
 
 #define RDI_Unit_XList \
 X(RDI_U32, unit_name_string_idx)\
@@ -1309,6 +1311,8 @@ struct RDI_SourceFile
 RDI_U32 file_path_node_idx;
 RDI_U32 normal_full_path_string_idx;
 RDI_U32 source_line_map_idx;
+RDI_ChecksumKind checksum_kind;
+RDI_U32 checksum_idx;
 };
 
 typedef struct RDI_Unit RDI_Unit;

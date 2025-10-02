@@ -321,4 +321,21 @@ rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RD
   return rdi_eval_conversion_kind_message_string_table[kind].str;
 }
 
+RDI_PROC RDI_SectionKind
+rdi_section_kind_from_checksum_kind(RDI_ChecksumKind kind)
+{
+RDI_SectionKind result = 0;
+switch(kind)
+{
+default:{}break;
+case RDI_ChecksumKind_NULL:{result = RDI_SectionKind_NULL;}break;
+case RDI_ChecksumKind_MD5:{result = RDI_SectionKind_MD5Checksums;}break;
+case RDI_ChecksumKind_SHA1:{result = RDI_SectionKind_SHA1Checksums;}break;
+case RDI_ChecksumKind_SHA256:{result = RDI_SectionKind_SHA256Checksums;}break;
+case RDI_ChecksumKind_Timestamp:{result = RDI_SectionKind_Timestamps;}break;
+case RDI_ChecksumKind_COUNT:{result = RDI_SectionKind_NULL;}break;
+}
+return result;
+}
+
 #endif // RDI_C

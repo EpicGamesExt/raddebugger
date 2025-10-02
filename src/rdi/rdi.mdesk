@@ -74,7 +74,7 @@
   "";
   "// \"raddbg\\0\\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 15";
+  "#define RDI_ENCODING_VERSION 16";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -564,7 +564,7 @@ RDI_ChecksumKindTable:
   {COUNT           5  NULL           }
 }
 
-@enum(RDI_U16) RDI_ChecksumKind:
+@enum(RDI_U32) RDI_ChecksumKind:
 {
   @expand(RDI_ChecksumKindTable a) `$(a.name .. =>10) = $(a.value)`
 }
@@ -590,13 +590,15 @@ RDI_FilePathNodeMemberTable:
 @table(name type desc)
 RDI_SourceFileMemberTable:
 {
-  {file_path_node_idx           RDI_U32        ""}
-  {normal_full_path_string_idx  RDI_U32        ""}
+  {file_path_node_idx           RDI_U32          ""}
+  {normal_full_path_string_idx  RDI_U32          ""}
   // usage of line map to go from a line number to an array of voffs
   //  (line_map_nums * line_number) -> (nil | index)
   //  (line_map_data * index) -> (range)
   //  (line_map_voff_data * range) -> (array(voff))
-  {source_line_map_idx          RDI_U32        ""}
+  {source_line_map_idx          RDI_U32          ""}
+  {checksum_kind                RDI_ChecksumKind ""}
+  {checksum_idx                 RDI_U32          ""}
 }
 
 @xlist RDI_FilePathNode_XList:
@@ -1648,3 +1650,19 @@ rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RD
   return rdi_eval_conversion_kind_message_string_table[kind].str;
 }
 ```
+
+@gen(functions) @c_file
+{
+  `RDI_PROC RDI_SectionKind`;
+  `rdi_section_kind_from_checksum_kind(RDI_ChecksumKind kind)`;
+  `{`;
+    `RDI_SectionKind result = 0;`;
+    `switch(kind)`;
+    `{`;
+      `default:{}break;`;
+      @expand(RDI_ChecksumKindTable a) `case RDI_ChecksumKind_$(a.name):{result = RDI_SectionKind_$(a.section);}break;`,
+      `}`;
+    `return result;`;
+    `}`;
+  ``;
+}

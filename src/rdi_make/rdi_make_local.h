@@ -131,16 +131,15 @@ struct RDIM_Shared
   RDI_U64 *lane_chunk_src_file_num_offs; // [lane_count * src_file_chunk_count]
   RDI_U64 *lane_chunk_src_file_voff_offs; // [lane_count * src_file_chunk_count]
   RDI_U64 *lane_chunk_src_file_map_offs; // [lane_count * src_file_chunk_count]
-  RDI_U64 total_src_map_line_count;
-  RDI_U64 total_src_map_voff_count;
-  
-  RDIM_SrcFileBakeResult baked_src_files;
-  
   RDI_U64 *lane_chunk_src_file_checksum_counts[RDI_ChecksumKind_COUNT]; // [lane_count * src_file_chunk_count]
   RDI_U64 *lane_chunk_src_file_checksum_offs[RDI_ChecksumKind_COUNT]; // [lane_count * src_file_chunk_count]
   U64 total_checksum_counts[RDI_ChecksumKind_COUNT];
+  RDI_U64 total_src_map_line_count;
+  RDI_U64 total_src_map_voff_count;
   
   RDIM_ChecksumBakeResult baked_checksums;
+  
+  RDIM_SrcFileBakeResult baked_src_files;
   
   RDI_U64 *member_chunk_lane_counts; // [lane_count * udt_chunk_count]
   RDI_U64 *member_chunk_lane_offs; // [lane_count * udt_chunk_count]
