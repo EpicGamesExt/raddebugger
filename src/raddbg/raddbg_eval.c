@@ -1634,7 +1634,7 @@ typedef struct RD_DebugInfoTableLookupAccel RD_DebugInfoTableLookupAccel;
 struct RD_DebugInfoTableLookupAccel
 {
   RDI_SectionKind section;
-  DI2_SearchItemArray items;
+  DI_SearchItemArray items;
 };
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
@@ -1662,12 +1662,12 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
     U64 endt_us = rd_state->frame_eval_memread_endt_us;
     U128 fuzzy_search_key = {d_hash_from_string(str8_struct(&rd_regs()->view)), (U64)section};
     accel->section = section;
-    accel->items = di2_search_item_array_from_target_query(rd_state->frame_access, section, filter, endt_us);
+    accel->items = di_search_item_array_from_target_query(rd_state->frame_access, section, filter, endt_us);
     RD_ViewState *vs = rd_view_state_from_cfg(rd_cfg_from_id(rd_regs()->view));
     if(accel->items.count == 0)
     {
       String8 last_query = str8(vs->last_successful_query_buffer, vs->last_successful_query_string_size);
-      accel->items = di2_search_item_array_from_target_query(rd_state->frame_access, section, last_query, endt_us);
+      accel->items = di_search_item_array_from_target_query(rd_state->frame_access, section, last_query, endt_us);
     }
     else
     {
@@ -1691,8 +1691,8 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
     Access *access = access_open();
     
     // rjf: unpack row
-    DI2_SearchItem *item = &accel->items.v[idx_range.min + idx];
-    RDI_Parsed *rdi = di2_rdi_from_key(access, item->key, 0, 0);
+    DI_SearchItem *item = &accel->items.v[idx_range.min + idx];
+    RDI_Parsed *rdi = di_rdi_from_key(access, item->key, 0, 0);
     
     // rjf: get item's string
     String8 item_string = {0};

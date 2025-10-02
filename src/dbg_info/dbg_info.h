@@ -5,13 +5,12 @@
 #define DBG_INFO_H
 
 ////////////////////////////////
-//~ rjf: Cache Key Type
+//~ rjf: Unique Debug Info Key
 
 typedef struct DI_Key DI_Key;
 struct DI_Key
 {
-  String8 path;
-  U64 min_timestamp;
+  U64 u64[2];
 };
 
 typedef struct DI_KeyNode DI_KeyNode;
@@ -37,49 +36,27 @@ struct DI_KeyArray
 };
 
 ////////////////////////////////
-//~ rjf: Event Types
+//~ rjf: Debug Info Path / Timestamp => Key Cache Types
 
-typedef enum DI_EventKind
+typedef struct DI_KeyPathNode DI_KeyPathNode;
+struct DI_KeyPathNode
 {
-  DI_EventKind_Null,
-  DI_EventKind_ConversionStarted,
-  DI_EventKind_ConversionEnded,
-  DI_EventKind_ConversionFailureUnsupportedFormat,
-  DI_EventKind_COUNT
-}
-DI_EventKind;
-
-typedef struct DI_Event DI_Event;
-struct DI_Event
-{
-  DI_EventKind kind;
-  String8 string;
+  DI_KeyPathNode *next;
+  DI_KeyPathNode *prev;
+  String8 path;
+  U64 min_timestamp;
+  DI_Key key;
 };
 
-typedef struct DI_EventNode DI_EventNode;
-struct DI_EventNode
+typedef struct DI_KeySlot DI_KeySlot;
+struct DI_KeySlot
 {
-  DI_EventNode *next;
-  DI_Event v;
-};
-
-typedef struct DI_EventList DI_EventList;
-struct DI_EventList
-{
-  DI_EventNode *first;
-  DI_EventNode *last;
-  U64 count;
+  DI_KeyPathNode *first;
+  DI_KeyPathNode *last;
 };
 
 ////////////////////////////////
 //~ rjf: Debug Info Cache Types
-
-typedef struct DI_StringChunkNode DI_StringChunkNode;
-struct DI_StringChunkNode
-{
-  DI_StringChunkNode *next;
-  U64 size;
-};
 
 typedef struct DI_Node DI_Node;
 struct DI_Node
@@ -88,24 +65,23 @@ struct DI_Node
   DI_Node *next;
   DI_Node *prev;
   
-  // rjf: metadata
-  U64 ref_count;
-  U64 touch_count;
-  U64 is_working;
-  
   // rjf: key
   DI_Key key;
   
-  // rjf: file handles
+  // rjf: value
   OS_Handle file;
   OS_Handle file_map;
   void *file_base;
   FileProperties file_props;
-  
-  // rjf: parse artifacts
   Arena *arena;
   RDI_Parsed rdi;
-  B32 parse_done;
+  
+  // rjf: metadata
+  AccessPt access_pt;
+  U64 refcount;
+  U64 batch_request_counts[2];
+  U64 working_count;
+  U64 completion_count;
 };
 
 typedef struct DI_Slot DI_Slot;
@@ -115,24 +91,78 @@ struct DI_Slot
   DI_Node *last;
 };
 
-typedef struct DI_Stripe DI_Stripe;
-struct DI_Stripe
+////////////////////////////////
+//~ rjf: Requests
+
+typedef struct DI_Request DI_Request;
+struct DI_Request
 {
+  DI_Key key;
+};
+
+typedef struct DI_RequestNode DI_RequestNode;
+struct DI_RequestNode
+{
+  DI_RequestNode *next;
+  DI_Request v;
+};
+
+typedef struct DI_RequestBatch DI_RequestBatch;
+struct DI_RequestBatch
+{
+  Mutex mutex;
   Arena *arena;
-  DI_Node *free_node;
-  DI_StringChunkNode *free_string_chunks[8];
-  RWMutex rw_mutex;
-  CondVar cv;
+  DI_RequestNode *first;
+  DI_RequestNode *last;
+  U64 count;
 };
 
 ////////////////////////////////
-//~ rjf: Search Cache Types
+//~ rjf: Load Tasks
+
+typedef enum DI_LoadTaskStatus
+{
+  DI_LoadTaskStatus_Null,
+  DI_LoadTaskStatus_Active,
+  DI_LoadTaskStatus_Done,
+}
+DI_LoadTaskStatus;
+
+typedef struct DI_LoadTask DI_LoadTask;
+struct DI_LoadTask
+{
+  DI_LoadTask *next;
+  DI_LoadTask *prev;
+  
+  DI_Key key;
+  DI_LoadTaskStatus status;
+  
+  B32 og_analyzed;
+  B32 og_is_rdi;
+  U64 og_size;
+  
+  B32 rdi_analyzed;
+  B32 rdi_is_stale;
+  
+  U64 thread_count;
+  OS_Handle process;
+};
+
+typedef struct DI_LoadCompletion DI_LoadCompletion;
+struct DI_LoadCompletion
+{
+  DI_LoadCompletion *next;
+  U64 code;
+};
+
+////////////////////////////////
+//~ rjf: Search Types
 
 typedef struct DI_SearchItem DI_SearchItem;
 struct DI_SearchItem
 {
   U64 idx;
-  U64 dbgi_idx;
+  DI_Key key;
   U64 missed_size;
   FuzzyMatchRangeList match_ranges;
 };
@@ -141,6 +171,7 @@ typedef struct DI_SearchItemChunk DI_SearchItemChunk;
 struct DI_SearchItemChunk
 {
   DI_SearchItemChunk *next;
+  U64 base_idx;
   DI_SearchItem *v;
   U64 count;
   U64 cap;
@@ -162,328 +193,127 @@ struct DI_SearchItemArray
   U64 count;
 };
 
-typedef struct DI_SearchParams DI_SearchParams;
-struct DI_SearchParams
-{
-  RDI_SectionKind target;
-  DI_KeyArray dbgi_keys;
-};
-
-typedef struct DI_SearchBucket DI_SearchBucket;
-struct DI_SearchBucket
-{
-  Arena *arena;
-  String8 query;
-  U64 params_hash;
-  DI_SearchParams params;
-};
-
-typedef struct DI_SearchNode DI_SearchNode;
-struct DI_SearchNode
-{
-  DI_SearchNode *next;
-  DI_SearchNode *prev;
-  U128 key;
-  U64 scope_refcount;
-  U64 work_refcount;
-  U64 last_update_tick_idx;
-  U64 bucket_read_gen;
-  U64 bucket_write_gen;
-  U64 bucket_items_gen;
-  DI_SearchBucket buckets[6];
-  DI_SearchItemArray items;
-};
-
-typedef struct DI_SearchSlot DI_SearchSlot;
-struct DI_SearchSlot
-{
-  DI_SearchNode *first;
-  DI_SearchNode *last;
-};
-
-typedef struct DI_SearchStripe DI_SearchStripe;
-struct DI_SearchStripe
-{
-  Arena *arena;
-  DI_SearchNode *free_node;
-  RWMutex rw_mutex;
-  CondVar cv;
-};
-
 ////////////////////////////////
-//~ rjf: Scoped Access Types
-
-typedef struct DI_Touch DI_Touch;
-struct DI_Touch
-{
-  DI_Touch *next;
-  DI_Node *node;
-  DI_Stripe *stripe;
-  DI_SearchNode *search_node;
-  DI_SearchStripe *search_stripe;
-};
-
-typedef struct DI_Scope DI_Scope;
-struct DI_Scope
-{
-  DI_Scope *next;
-  DI_Scope *prev;
-  DI_Touch *first_touch;
-  DI_Touch *last_touch;
-};
-
-typedef struct DI_TCTX DI_TCTX;
-struct DI_TCTX
-{
-  Arena *arena;
-  DI_Scope *first_scope;
-  DI_Scope *last_scope;
-  DI_Scope *free_scope;
-  DI_Touch *free_touch;
-};
-
-////////////////////////////////
-//~ rjf: Search Thread State Types
-
-typedef struct DI_SearchThread DI_SearchThread;
-struct DI_SearchThread
-{
-  Thread thread;
-  Mutex ring_mutex;
-  CondVar ring_cv;
-  U64 ring_size;
-  U8 *ring_base;
-  U64 ring_write_pos;
-  U64 ring_read_pos;
-};
-
-////////////////////////////////
-//~ rjf: Match Cache State Types
+//~ rjf: Match Types
 
 typedef struct DI_Match DI_Match;
 struct DI_Match
 {
-  U64 dbgi_idx;
-  RDI_SectionKind section;
+  DI_Key key;
+  RDI_SectionKind section_kind;
   U32 idx;
 };
 
-typedef struct DI_MatchNode DI_MatchNode;
-struct DI_MatchNode
-{
-  DI_MatchNode *next;
-  DI_Match v;
-};
-
-typedef struct DI_MatchNameNode DI_MatchNameNode;
-struct DI_MatchNameNode
-{
-  // rjf: synchronously written by usage code
-  DI_MatchNameNode *next;
-  DI_MatchNameNode *prev;
-  DI_MatchNameNode *lru_next;
-  DI_MatchNameNode *lru_prev;
-  U64 alloc_gen;
-  U64 first_gen_touched;
-  U64 last_gen_touched;
-  U64 req_params_hash;
-  U64 req_count;
-  String8 name;
-  U64 hash;
-  
-  // rjf: atomically written by match work
-  U64 cmp_count;
-  U64 cmp_params_hash;
-  DI_Match primary_match;
-  // DI_MatchNode *first_alt_match;
-  // DI_MatchNode *last_alt_match;
-};
-
-typedef struct DI_MatchNameSlot DI_MatchNameSlot;
-struct DI_MatchNameSlot
-{
-  DI_MatchNameNode *first;
-  DI_MatchNameNode *last;
-};
-
-typedef struct DI_MatchStore DI_MatchStore;
-struct DI_MatchStore
-{
-  Arena *arena;
-  U64 gen;
-  Arena *gen_arenas[2];
-  
-  // rjf: parameters
-  Arena *params_arena;
-  RWMutex params_rw_mutex;
-  U64 params_hash;
-  DI_KeyArray params_keys;
-  
-  // rjf: match cache
-  U64 match_name_slots_count;
-  DI_MatchNameSlot *match_name_slots;
-  DI_MatchNameNode *first_free_match_name;
-  DI_Match *first_free_match;
-  DI_MatchNameNode *first_lru_match_name;
-  DI_MatchNameNode *last_lru_match_name;
-  U64 active_match_name_nodes_count;
-  RWMutex match_rw_mutex;
-  CondVar match_cv;
-  
-  // rjf: user -> match work ring buffer
-  CondVar u2m_ring_cv;
-  Mutex u2m_ring_mutex;
-  U64 u2m_ring_size;
-  U8 *u2m_ring_base;
-  U64 u2m_ring_write_pos;
-  U64 u2m_ring_read_pos;
-  
-  // rjf: match -> user work ring buffer
-  CondVar m2u_ring_cv;
-  Mutex m2u_ring_mutex;
-  U64 m2u_ring_size;
-  U8 *m2u_ring_base;
-  U64 m2u_ring_write_pos;
-  U64 m2u_ring_read_pos;
-};
-
 ////////////////////////////////
-//~ rjf: Shared State Types
+//~ rjf: Shared State
 
 typedef struct DI_Shared DI_Shared;
 struct DI_Shared
 {
   Arena *arena;
+  U64 load_gen;
+  
+  // rjf: key -> path cache
+  U64 key2path_slots_count;
+  DI_KeySlot *key2path_slots;
+  StripeArray key2path_stripes;
+  
+  // rjf: path -> key cache
+  U64 path2key_slots_count;
+  DI_KeySlot *path2key_slots;
+  StripeArray path2key_stripes;
   
   // rjf: debug info cache
   U64 slots_count;
   DI_Slot *slots;
-  U64 stripes_count;
-  DI_Stripe *stripes;
+  StripeArray stripes;
   
-  // rjf: search cache
-  U64 search_slots_count;
-  DI_SearchSlot *search_slots;
-  U64 search_stripes_count;
-  DI_SearchStripe *search_stripes;
+  // rjf: requests
+  DI_RequestBatch req_batches[2]; // [0] -> high priority, [1] -> low priority
   
-  // rjf: user -> parse ring
-  Mutex u2p_ring_mutex;
-  CondVar u2p_ring_cv;
-  U64 u2p_ring_size;
-  U8 *u2p_ring_base;
-  U64 u2p_ring_write_pos;
-  U64 u2p_ring_read_pos;
+  // rjf: conversion tasks
+  DI_LoadTask *first_load_task;
+  DI_LoadTask *last_load_task;
+  DI_LoadTask *free_load_task;
+  U64 conversion_process_count;
+  U64 conversion_thread_count;
   
-  // rjf: parse -> user event ring
-  Mutex p2u_ring_mutex;
-  CondVar p2u_ring_cv;
-  U64 p2u_ring_size;
-  U8 *p2u_ring_base;
-  U64 p2u_ring_write_pos;
-  U64 p2u_ring_read_pos;
+  // rjf: conversion completion receiving thread
+  U64 conversion_completion_code;
+  String8 conversion_completion_lock_semaphore_name;
+  String8 conversion_completion_signal_semaphore_name;
+  String8 conversion_completion_shared_memory_name;
+  Semaphore conversion_completion_lock_semaphore;
+  Semaphore conversion_completion_signal_semaphore;
+  OS_Handle conversion_completion_shared_memory;
+  U64 *conversion_completion_shared_memory_base;
+  Thread conversion_completion_signal_receiver_thread;
   
-  // rjf: search threads
-  U64 search_threads_count;
-  DI_SearchThread *search_threads;
-  Thread search_evictor_thread;
+  // rjf: completion batch
+  Mutex completion_mutex;
+  Arena *completion_arena;
+  DI_LoadCompletion *first_completion;
+  DI_LoadCompletion *last_completion;
 };
 
 ////////////////////////////////
 //~ rjf: Globals
 
 global DI_Shared *di_shared = 0;
-thread_static DI_TCTX *di_tctx = 0;
 
 ////////////////////////////////
-//~ rjf: Basic Helpers
+//~ rjf: Helpers
 
-internal U64 di_hash_from_seed_string(U64 seed, String8 string, StringMatchFlags match_flags);
-internal U64 di_hash_from_string(String8 string, StringMatchFlags match_flags);
-internal U64 di_hash_from_key(DI_Key *k);
 internal DI_Key di_key_zero(void);
-internal B32 di_key_match(DI_Key *a, DI_Key *b);
-internal DI_Key di_key_copy(Arena *arena, DI_Key *src);
-internal DI_Key di_normalized_key_from_key(Arena *arena, DI_Key *src);
-internal void di_key_list_push(Arena *arena, DI_KeyList *list, DI_Key *key);
+internal B32 di_key_match(DI_Key a, DI_Key b);
+internal void di_key_list_push(Arena *arena, DI_KeyList *list, DI_Key key);
 internal DI_KeyArray di_key_array_from_list(Arena *arena, DI_KeyList *list);
-internal DI_KeyArray di_key_array_copy(Arena *arena, DI_KeyArray *src);
-internal DI_SearchParams di_search_params_copy(Arena *arena, DI_SearchParams *src);
-internal U64 di_hash_from_search_params(DI_SearchParams *params);
-internal void di_search_item_chunk_list_concat_in_place(DI_SearchItemChunkList *dst, DI_SearchItemChunkList *to_push);
-internal U64 di_search_item_num_from_array_element_idx__linear_search(DI_SearchItemArray *array, U64 element_idx);
-internal String8 di_search_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, RDI_SectionKind target, U64 element_idx);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
 
-internal void di_init(void);
+internal void di_init(CmdLine *cmdline);
 
 ////////////////////////////////
-//~ rjf: Scope Functions
+//~ rjf: Path * Timestamp Cache Submission & Lookup
 
-internal DI_Scope *di_scope_open(void);
-internal void di_scope_close(DI_Scope *scope);
-internal void di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Stripe *stripe, DI_Node *node);
-internal void di_scope_touch_search_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_SearchStripe *stripe, DI_SearchNode *node);
+internal DI_Key di_key_from_path_timestamp(String8 path, U64 min_timestamp);
 
 ////////////////////////////////
-//~ rjf: Per-Slot Functions
+//~ rjf: Debug Info Opening / Closing
 
-internal DI_Node *di_node_from_key_slot__stripe_mutex_r_guarded(DI_Slot *slot, DI_Key *key);
-
-////////////////////////////////
-//~ rjf: Per-Stripe Functions
-
-internal U64 di_string_bucket_idx_from_string_size(U64 size);
-internal String8 di_string_alloc__stripe_mutex_w_guarded(DI_Stripe *stripe, String8 string);
-internal void di_string_release__stripe_mutex_w_guarded(DI_Stripe *stripe, String8 string);
+internal void di_open(DI_Key key);
+internal void di_close(DI_Key key);
 
 ////////////////////////////////
-//~ rjf: Key Opening/Closing
+//~ rjf: Debug Info Lookups
 
-internal void di_open(DI_Key *key);
-internal void di_close(DI_Key *key);
-
-////////////////////////////////
-//~ rjf: Debug Info Cache Lookups
-
-internal RDI_Parsed *di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us);
+internal U64 di_load_gen(void);
+internal DI_KeyArray di_push_all_loaded_keys(Arena *arena);
+internal RDI_Parsed *di_rdi_from_key(Access *access, DI_Key key, B32 high_priority, U64 endt_us);
 
 ////////////////////////////////
-//~ rjf: Search Cache Lookups
+//~ rjf: Asynchronous Tick
 
-internal DI_SearchItemArray di_search_items_from_key_params_query(DI_Scope *scope, U128 key, DI_SearchParams *params, String8 query, U64 endt_us, B32 *stale_out);
-
-////////////////////////////////
-//~ rjf: Asynchronous Parse Work
-
-internal B32 di_u2p_enqueue_key(DI_Key *key, U64 endt_us);
-internal void di_u2p_dequeue_key(Arena *arena, DI_Key *out_key);
-
-internal void di_p2u_push_event(DI_Event *event);
-internal DI_EventList di_p2u_pop_events(Arena *arena, U64 endt_us);
-
-ASYNC_WORK_DEF(di_parse_work);
+internal void di_async_tick(void);
 
 ////////////////////////////////
-//~ rjf: Search Threads
+//~ rjf: Conversion Completion Signal Receiver Thread
 
-internal B32 di_u2s_enqueue_req(U128 key, U64 endt_us);
-internal U128 di_u2s_dequeue_req(U64 thread_idx);
-
-ASYNC_WORK_DEF(di_search_work);
-internal int di_qsort_compare_search_items(DI_SearchItem *a, DI_SearchItem *b);
-internal void di_search_thread__entry_point(void *p);
-
-internal void di_search_evictor_thread__entry_point(void *p);
+internal void di_signal_completion(void);
+internal void di_conversion_completion_signal_receiver_thread_entry_point(void *p);
 
 ////////////////////////////////
-//~ rjf: Match Store
+//~ rjf: Search Artifact Cache Hooks / Lookups
 
-internal DI_MatchStore *di_match_store_alloc(void);
-internal void di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys);
-internal DI_Match di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us);
-ASYNC_WORK_DEF(di_match_work);
+internal AC_Artifact di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
+internal void di_search_artifact_destroy(AC_Artifact artifact);
+internal DI_SearchItemArray di_search_item_array_from_target_query(Access *access, RDI_SectionKind target, String8 query, U64 endt_us);
+
+////////////////////////////////
+//~ rjf: Match Artifact Cache Hooks / Lookups
+
+internal AC_Artifact di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
+internal DI_Match di_match_from_string(String8 string, U64 index, U64 endt_us);
 
 #endif // DBG_INFO_H

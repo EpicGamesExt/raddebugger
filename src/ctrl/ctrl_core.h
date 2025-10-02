@@ -845,7 +845,7 @@ internal CTRL_Entity *ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_Enti
 internal CTRL_Entity *ctrl_entity_ancestor_from_kind(CTRL_Entity *entity, CTRL_EntityKind kind);
 internal CTRL_Entity *ctrl_process_from_entity(CTRL_Entity *entity);
 internal CTRL_Entity *ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr);
-internal DI2_Key ctrl_dbgi_key_from_module(CTRL_Entity *module);
+internal DI_Key ctrl_dbgi_key_from_module(CTRL_Entity *module);
 internal CTRL_Entity *ctrl_module_from_thread_candidates(CTRL_EntityCtx *ctx, CTRL_Entity *thread, CTRL_EntityList *candidates);
 internal U64 ctrl_vaddr_from_voff(CTRL_Entity *module, U64 voff);
 internal U64 ctrl_voff_from_vaddr(CTRL_Entity *module, U64 vaddr);
@@ -877,7 +877,7 @@ internal void ctrl_entity_equip_string(CTRL_EntityCtxRWStore *store, CTRL_Entity
 //- rjf: accelerated entity context lookups
 internal CTRL_EntityCtxLookupAccel *ctrl_thread_entity_ctx_lookup_accel(void);
 internal CTRL_EntityArray ctrl_entity_array_from_kind(CTRL_EntityCtx *ctx, CTRL_EntityKind kind);
-internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityCtx *ctx, DI2_Key dbgi_key);
+internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityCtx *ctx, DI_Key dbgi_key);
 internal CTRL_Entity *ctrl_thread_from_id(CTRL_EntityCtx *ctx, U64 id);
 
 //- rjf: applying events to entity caches

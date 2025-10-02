@@ -20,7 +20,7 @@ rd_code_view_init(RD_CodeViewState *cv)
 }
 
 internal RD_CodeViewBuildResult
-rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI2_Key dasm_dbgi_key)
+rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -289,7 +289,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
         CTRL_Entity *module = ctrl_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
         U64 rip_voff = ctrl_voff_from_vaddr(module, last_inst_on_unwound_rip_vaddr);
-        DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
         D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, rip_voff);
         for(D_LineNode *n = lines.first; n != 0; n = n->next)
         {
@@ -341,7 +341,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     {
       String8 file_path = rd_regs()->file_path;
       CTRL_Entity *module = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->module);
-      DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
       D_LineListArray lines_array = d_lines_array_from_dbgi_key_file_path_line_range(scratch.arena, dbgi_key, file_path, visible_line_num_range);
       if(lines_array.count != 0)
       {
@@ -423,7 +423,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     if(dasm_lines)
     {
       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
       for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
       {
         U64 vaddr = dasm_vaddr_range.min + dasm_line_array_code_off_from_idx(dasm_lines, line_num-1);
@@ -437,7 +437,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: add dasm dbgi key to relevant dbgis
     if(dasm_lines != 0)
     {
-      di2_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, dasm_dbgi_key);
+      di_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, dasm_dbgi_key);
     }
   }
   
@@ -813,9 +813,9 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //
   RD_CodeViewBuildResult result = {0};
   {
-    for(DI2_KeyNode *n = code_slice_params.relevant_dbgi_keys.first; n != 0; n = n->next)
+    for(DI_KeyNode *n = code_slice_params.relevant_dbgi_keys.first; n != 0; n = n->next)
     {
-      di2_key_list_push(arena, &result.dbgi_keys, n->v);
+      di_key_list_push(arena, &result.dbgi_keys, n->v);
     }
   }
   
@@ -2147,7 +2147,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: build code contents
   //
-  DI2_KeyList dbgi_keys = {0};
+  DI_KeyList dbgi_keys = {0};
   if(!file_is_missing)
   {
     RD_CodeViewBuildFlags flags = RD_CodeViewBuildFlag_All;
@@ -2155,7 +2155,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
     {
       flags &= ~RD_CodeViewBuildFlag_Margins;
     }
-    RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, cv, flags, code_area_rect, data, &info, 0, r1u64(0, 0), di2_key_zero());
+    RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, cv, flags, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
     dbgi_keys = result.dbgi_keys;
   }
   
@@ -2165,7 +2165,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   if(rd_regs()->file_path.size != 0)
   {
     CTRL_Entity *module = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->module);
-    DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+    DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
     rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, rd_regs()->file_path, rd_regs()->cursor.line);
   }
   
@@ -2178,9 +2178,9 @@ RD_VIEW_UI_FUNCTION_DEF(text)
     U64 file_timestamp = os_properties_from_file_path(rd_regs()->file_path).modified;
     if(file_timestamp != 0)
     {
-      for(DI2_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
+      for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
       {
-        DI2_Key key = n->v;
+        DI_Key key = n->v;
         // TODO(rjf): @dbgi2
 #if 0
         if(key.min_timestamp < file_timestamp && key.min_timestamp != 0 && key.path.size != 0)
@@ -2358,7 +2358,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   Arch arch = rd_arch_from_eval(eval);
   CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
   CTRL_Entity *dasm_module = &ctrl_entity_nil;
-  DI2_Key dbgi_key = {0};
+  DI_Key dbgi_key = {0};
   U64 base_vaddr = 0;
   switch(space_entity->kind)
   {
@@ -2958,8 +2958,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           U64 f_rip_vaddr = regs_rip_from_arch_block(selected_thread->arch, f->regs);
           CTRL_Entity *module = ctrl_module_from_process_vaddr(selected_process, f_rip_vaddr);
           U64 f_rip_voff = ctrl_voff_from_vaddr(module, f_rip_vaddr);
-          DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-          RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
+          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+          RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
           RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, f_rip_voff);
           String8 procedure_name = {0};
           procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
@@ -3071,8 +3071,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         if(module != &ctrl_entity_nil)
         {
           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-          DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-          RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
+          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+          RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
           RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
           RDI_Scope *root_scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
           if(procedure->root_scope_idx != 0)
@@ -3128,8 +3128,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         if(module != &ctrl_entity_nil)
         {
           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-          DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-          RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
+          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+          RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
           RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
           if(gvar->voff != 0)
           {

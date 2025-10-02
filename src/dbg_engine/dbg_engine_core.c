@@ -339,7 +339,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   U64 ip_vaddr = ctrl_rip_from_thread(&d_state->ctrl_entity_store->ctx, thread->handle);
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ip_vaddr);
-  DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+  DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
   log_infof("ip_vaddr: 0x%I64x\n", ip_vaddr);
   log_infof("dbgi_key: {0x%I64x, 0x%I64x}\n", dbgi_key.u64[0], dbgi_key.u64[1]);
   
@@ -502,7 +502,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   U64 ip_vaddr = ctrl_rip_from_thread(&d_state->ctrl_entity_store->ctx, thread->handle);
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ip_vaddr);
-  DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+  DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
   
   // rjf: ip => line vaddr range
   Rng1U64 line_vaddr_rng = {0};
@@ -585,7 +585,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
       U64 jump_dest_vaddr = point->jump_dest_vaddr;
       CTRL_Entity *jump_dest_module = ctrl_module_from_process_vaddr(process, jump_dest_vaddr);
       U64 jump_dest_voff = ctrl_voff_from_vaddr(jump_dest_module, jump_dest_vaddr);
-      DI2_Key jump_dest_dbgi_key = ctrl_dbgi_key_from_module(jump_dest_module);
+      DI_Key jump_dest_dbgi_key = ctrl_dbgi_key_from_module(jump_dest_module);
       D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, jump_dest_dbgi_key, jump_dest_voff);
       if(lines.count == 0)
       {
@@ -646,11 +646,11 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
 //- rjf: voff -> line info
 
 internal D_LineList
-d_lines_from_dbgi_key_voff(Arena *arena, DI2_Key dbgi_key, U64 voff)
+d_lines_from_dbgi_key_voff(Arena *arena, DI_Key dbgi_key, U64 voff)
 {
   Temp scratch = scratch_begin(&arena, 1);
   Access *access = access_open();
-  RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, 0);
+  RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
   D_LineList result = {0};
   {
     //- rjf: gather line tables
@@ -739,13 +739,13 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI2_Key dbgi_key, U64 voff)
 // TODO(rjf): this depends on file path maps, needs to move
 
 internal D_LineListArray
-d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI2_Key dbgi_key, String8 file_path, Rng1S64 line_num_range)
+d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, String8 file_path, Rng1S64 line_num_range)
 {
   D_LineListArray array = {0};
   {
     array.count = dim_1s64(line_num_range)+1;
     array.v = push_array(arena, D_LineList, array.count);
-    di2_key_list_push(arena, &array.dbgi_keys, dbgi_key);
+    di_key_list_push(arena, &array.dbgi_keys, dbgi_key);
   }
   Temp scratch = scratch_begin(&arena, 1);
   U64 *lines_num_voffs = push_array(scratch.arena, U64, array.count);
@@ -759,7 +759,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI2_Key dbgi_key,
     String8 file_path_normalized = lower_from_str8(scratch.arena, path_normalized_from_string(scratch.arena, file_path));
     
     // rjf: binary -> rdi
-    RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
+    RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
     
     // rjf: file_path_normalized * rdi -> src_id
     B32 good_src_id = 0;
@@ -842,7 +842,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
   }
   Temp scratch = scratch_begin(&arena, 1);
   U64 *lines_num_voffs = push_array(scratch.arena, U64, array.count);
-  DI2_KeyArray dbgi_keys = di2_push_all_loaded_keys(scratch.arena);
+  DI_KeyArray dbgi_keys = di_push_all_loaded_keys(scratch.arena);
   String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, file_path);
   for(String8Node *override_n = overrides.first;
       override_n != 0;
@@ -855,8 +855,8 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
       Access *access = access_open();
       
       // rjf: binary -> rdi
-      DI2_Key key = dbgi_keys.v[idx];
-      RDI_Parsed *rdi = di2_rdi_from_key(access, key, 1, 0);
+      DI_Key key = dbgi_keys.v[idx];
+      RDI_Parsed *rdi = di_rdi_from_key(access, key, 1, 0);
       
       // rjf: file_path_normalized * rdi -> src_id
       B32 good_src_id = 0;
@@ -927,7 +927,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
       // rjf: good src id -> push to relevant dbgi keys
       if(good_src_id)
       {
-        di2_key_list_push(arena, &array.dbgi_keys, key);
+        di_key_list_push(arena, &array.dbgi_keys, key);
       }
       
       access_close(access);
@@ -938,7 +938,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
 }
 
 internal D_LineList
-d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI2_Key dbgi_key, String8 file_path, S64 line_num)
+d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 file_path, S64 line_num)
 {
   D_LineListArray array = d_lines_array_from_dbgi_key_file_path_line_range(arena, dbgi_key, file_path, r1s64(line_num, line_num+1));
   D_LineList list = {0};
@@ -1091,16 +1091,16 @@ d_ctrl_targets_running(void)
 
 //- rjf: active entity based queries
 
-internal DI2_KeyList
+internal DI_KeyList
 d_push_active_dbgi_key_list(Arena *arena)
 {
-  DI2_KeyList dbgis = {0};
+  DI_KeyList dbgis = {0};
   CTRL_EntityArray modules = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Module);
   for EachIndex(idx, modules.count)
   {
     CTRL_Entity *module = modules.v[idx];
-    DI2_Key key = ctrl_dbgi_key_from_module(module);
-    di2_key_list_push(arena, &dbgis, key);
+    DI_Key key = ctrl_dbgi_key_from_module(module);
+    di_key_list_push(arena, &dbgis, key);
   }
   return dbgis;
 }
@@ -1187,7 +1187,7 @@ d_query_cached_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 ro
 }
 
 internal E_String2NumMap *
-d_query_cached_locals_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
+d_query_cached_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
 {
   ProfBeginFunction();
   E_String2NumMap *map = &e_string2num_map_nil;
@@ -1209,7 +1209,7 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
     D_RunLocalsCacheNode *node = 0;
     for(D_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
     {
-      if(di2_key_match(n->dbgi_key, dbgi_key) && n->voff == voff)
+      if(di_key_match(n->dbgi_key, dbgi_key) && n->voff == voff)
       {
         node = n;
         break;
@@ -1218,7 +1218,7 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
     if(node == 0)
     {
       Access *access = access_open();
-      RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, 0);
+      RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
       E_String2NumMap *map = e_push_locals_map_from_rdi_voff(cache->arena, rdi, voff);
       if(map->slots_count != 0)
       {
@@ -1241,7 +1241,7 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
 }
 
 internal E_String2NumMap *
-d_query_cached_member_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
+d_query_cached_member_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
 {
   ProfBeginFunction();
   E_String2NumMap *map = &e_string2num_map_nil;
@@ -1263,7 +1263,7 @@ d_query_cached_member_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
     D_RunLocalsCacheNode *node = 0;
     for(D_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
     {
-      if(di2_key_match(n->dbgi_key, dbgi_key) && n->voff == voff)
+      if(di_key_match(n->dbgi_key, dbgi_key) && n->voff == voff)
       {
         node = n;
         break;
@@ -1272,7 +1272,7 @@ d_query_cached_member_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff)
     if(node == 0)
     {
       Access *access = access_open();
-      RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, 0);
+      RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
       E_String2NumMap *map = e_push_member_map_from_rdi_voff(cache->arena, rdi, voff);
       if(map->slots_count != 0)
       {

@@ -219,7 +219,6 @@
 #include "base/base_inc.h"
 #include "linker/hash_table.h"
 #include "os/os_inc.h"
-#include "async/async.h"
 #include "artifact_cache/artifact_cache.h"
 #include "rdi/rdi_local.h"
 #include "rdi_make/rdi_make_local.h"
@@ -248,7 +247,7 @@
 #include "radbin/radbin.h"
 #include "regs/regs.h"
 #include "regs/rdi/regs_rdi.h"
-#include "dbg_info/dbg_info2.h"
+#include "dbg_info/dbg_info.h"
 #include "disasm/disasm.h"
 #include "demon/demon_inc.h"
 #include "eval/eval_inc.h"
@@ -266,7 +265,6 @@
 #include "base/base_inc.c"
 #include "linker/hash_table.c"
 #include "os/os_inc.c"
-#include "async/async.c"
 #include "artifact_cache/artifact_cache.c"
 #include "rdi/rdi_local.c"
 #include "rdi_make/rdi_make_local.c"
@@ -295,7 +293,7 @@
 #include "radbin/radbin.c"
 #include "regs/regs.c"
 #include "regs/rdi/regs_rdi.c"
-#include "dbg_info/dbg_info2.c"
+#include "dbg_info/dbg_info.c"
 #include "disasm/disasm.c"
 #include "demon/demon_inc.c"
 #include "eval/eval_inc.c"
@@ -749,7 +747,7 @@ entry_point(CmdLine *cmd_line)
     case ExecMode_BinaryUtility:
     {
       rb_entry_point(cmd_line);
-      di2_signal_completion();
+      di_signal_completion();
     }break;
     
     //- rjf: help message box

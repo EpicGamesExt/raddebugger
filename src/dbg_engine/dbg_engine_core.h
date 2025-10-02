@@ -126,7 +126,7 @@ struct D_Line
   String8 file_path;
   TxtPt pt;
   Rng1U64 voff_range;
-  DI2_Key dbgi_key;
+  DI_Key dbgi_key;
 };
 
 typedef struct D_LineNode D_LineNode;
@@ -149,7 +149,7 @@ struct D_LineListArray
 {
   D_LineList *v;
   U64 count;
-  DI2_KeyList dbgi_keys;
+  DI_KeyList dbgi_keys;
 };
 
 ////////////////////////////////
@@ -248,7 +248,7 @@ typedef struct D_RunLocalsCacheNode D_RunLocalsCacheNode;
 struct D_RunLocalsCacheNode
 {
   D_RunLocalsCacheNode *hash_next;
-  DI2_Key dbgi_key;
+  DI_Key dbgi_key;
   U64 voff;
   E_String2NumMap *locals_map;
 };
@@ -366,14 +366,14 @@ internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL
 //~ rjf: Debug Info Lookups
 
 //- rjf: voff -> line info
-internal D_LineList d_lines_from_dbgi_key_voff(Arena *arena, DI2_Key dbgi_key, U64 voff);
+internal D_LineList d_lines_from_dbgi_key_voff(Arena *arena, DI_Key dbgi_key, U64 voff);
 
 //- rjf: file:line -> line info
 // TODO(rjf): this depends on file path maps, needs to move
 // TODO(rjf): need to clean this up & dedup
-internal D_LineListArray d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI2_Key dbgi_key, String8 file_path, Rng1S64 line_num_range);
+internal D_LineListArray d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, String8 file_path, Rng1S64 line_num_range);
 internal D_LineListArray d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range);
-internal D_LineList d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI2_Key dbgi_key, String8 file_path, S64 line_num);
+internal D_LineList d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 file_path, S64 line_num);
 internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num);
 
 ////////////////////////////////
@@ -399,14 +399,14 @@ internal U64 d_ctrl_last_run_frame_idx(void);
 internal B32 d_ctrl_targets_running(void);
 
 //- rjf: active entity based queries
-internal DI2_KeyList d_push_active_dbgi_key_list(Arena *arena);
+internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);
 
 //- rjf: per-run caches
 internal U64 d_query_cached_rip_from_thread(CTRL_Entity *thread);
 internal U64 d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count);
 internal U64 d_query_cached_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
-internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff);
-internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI2_Key dbgi_key, U64 voff);
+internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff);
+internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff);
 
 //- rjf: top-level command dispatch
 internal void d_push_cmd(D_CmdKind kind, D_CmdParams *params);

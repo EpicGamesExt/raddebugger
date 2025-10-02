@@ -3273,11 +3273,11 @@ rd_view_ui(Rng2F32 rect)
                       U64 vaddr = eval.value.u64;
                       CTRL_Entity *process = rd_ctrl_entity_from_eval_space(eval.space);
                       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                      DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
                       U64 voff = ctrl_voff_from_vaddr(module, vaddr);
                       {
                         Access *access = access_open();
-                        RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
+                        RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
                         String8 name = {0};
                         if(name.size == 0)
                         {
@@ -3360,11 +3360,11 @@ rd_view_ui(Rng2F32 rect)
                           U64 vaddr = eval.value.u64;
                           CTRL_Entity *process = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process);
                           CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                          DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
                           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
                           {
                             Access *access = access_open();
-                            RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 1, 0);
+                            RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
                             if(name.size == 0)
                             {
                               RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
@@ -5298,7 +5298,7 @@ rd_view_ui(Rng2F32 rect)
                             {
                               U64 vaddr = cell->eval.value.u64;
                               CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                              DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                              DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
                               U64 voff = ctrl_voff_from_vaddr(module, vaddr);
                               D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
                               String8 file_path = {0};
@@ -6444,8 +6444,8 @@ rd_window_frame(void)
           {
             Access *access = access_open();
             CTRL_Entity *dbg_info_entity = ctrl_entity_child_from_kind(ctrl_entity, CTRL_EntityKind_DebugInfoPath);
-            DI2_Key dbgi_key = ctrl_dbgi_key_from_module(ctrl_entity);
-            RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
+            DI_Key dbgi_key = ctrl_dbgi_key_from_module(ctrl_entity);
+            RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
             if(rdi->raw_data_size != 0)
             {
               ui_labelf("Symbols successfully loaded from %S", dbg_info_entity->string);
@@ -10311,7 +10311,7 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
     // rjf: try to map using asynchronous matching system
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      DI2_Match match = di2_match_from_string(string, 0, 0);
+      DI_Match match = di_match_from_string(string, 0, 0);
       RDI_SectionKind section_kind = match.section_kind;
       mapped = 1;
       switch(section_kind)
@@ -11872,15 +11872,15 @@ rd_frame(void)
     E_Module *eval_modules_primary = &eval_modules[0];
     eval_modules_primary->rdi = &rdi_parsed_nil;
     eval_modules_primary->vaddr_range = r1u64(0, max_U64);
-    DI2_Key primary_dbgi_key = {0};
+    DI_Key primary_dbgi_key = {0};
     ProfScope("produce all eval modules")
     {
       for EachIndex(eval_module_idx, all_modules.count)
       {
         CTRL_Entity *m = all_modules.v[eval_module_idx];
-        DI2_Key dbgi_key = ctrl_dbgi_key_from_module(m);
+        DI_Key dbgi_key = ctrl_dbgi_key_from_module(m);
         eval_modules[eval_module_idx].arch        = m->arch;
-        eval_modules[eval_module_idx].rdi         = di2_rdi_from_key(rd_state->frame_access, dbgi_key, 0, 0);
+        eval_modules[eval_module_idx].rdi         = di_rdi_from_key(rd_state->frame_access, dbgi_key, 0, 0);
         eval_modules[eval_module_idx].vaddr_range = m->vaddr_range;
         eval_modules[eval_module_idx].space       = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process), RD_EvalSpaceKind_CtrlEntity);
         if(module == m)
@@ -14678,8 +14678,8 @@ rd_frame(void)
             U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_index);
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-            DI2_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-            RDI_Parsed *rdi = di2_rdi_from_key(access, dbgi_key, 0, 0);
+            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+            RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
             U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
             D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, rip_voff);
             D_Line line = {0};
@@ -14695,7 +14695,7 @@ rd_frame(void)
               }
             }
             B32 missing_rip   = (rip_vaddr == 0);
-            B32 dbgi_missing  = (di2_key_match(di2_key_zero(), dbgi_key));
+            B32 dbgi_missing  = (di_key_match(di_key_zero(), dbgi_key));
             B32 dbgi_pending  = !dbgi_missing && rdi == &rdi_parsed_nil;
             B32 has_line_info = (line.voff_range.max != 0);
             B32 has_module    = (module != &ctrl_entity_nil);
@@ -14759,16 +14759,16 @@ rd_frame(void)
               
               // rjf: try to resolve name as a symbol
               U64 voff = 0;
-              DI2_Key voff_dbgi_key = {0};
+              DI_Key voff_dbgi_key = {0};
               if(!name_resolved)
               {
-                DI2_Match match = di2_match_from_string(name, 0, 0);
+                DI_Match match = di_match_from_string(name, 0, 0);
                 if(match.section_kind == RDI_SectionKind_Procedures)
                 {
                   Access *access = access_open();
                   {
                     name_resolved = 1;
-                    RDI_Parsed *rdi = di2_rdi_from_key(access, match.key, 0, 0);
+                    RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);
                     RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, match.idx);
                     voff = rdi_first_voff_from_procedure(rdi, procedure);
                     voff_dbgi_key = match.key;

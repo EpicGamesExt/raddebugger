@@ -585,11 +585,11 @@ e_leaf_type_key_from_name(String8 name)
   E_TypeKey key = e_leaf_builtin_type_key_from_name(name);
   if(!e_type_key_match(e_type_key_zero(), key))
   {
-    DI2_Match match = di2_match_from_string(name, 0, 0);
+    DI_Match match = di_match_from_string(name, 0, 0);
     if(match.section_kind == RDI_SectionKind_TypeNodes)
     {
       Access *access = access_open();
-      RDI_Parsed *rdi = di2_rdi_from_key(access, match.key, 0, 0);
+      RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);
       for EachIndex(idx, e_base_ctx->modules_count)
       {
         E_Module *module = &e_base_ctx->modules[idx];

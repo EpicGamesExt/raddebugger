@@ -185,7 +185,7 @@ dasm_params_match(DASM_Params *a, DASM_Params *b)
                 a->style_flags == b->style_flags &&
                 a->syntax == b->syntax &&
                 a->base_vaddr == b->base_vaddr &&
-                di2_key_match(a->dbgi_key, b->dbgi_key));
+                di_key_match(a->dbgi_key, b->dbgi_key));
   return result;
 }
 
@@ -285,9 +285,9 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
     //- rjf: get dbg info
     B32 stale = 0;
     RDI_Parsed *rdi = &rdi_parsed_nil;
-    if(!di2_key_match(params.dbgi_key, di2_key_zero()))
+    if(!di_key_match(params.dbgi_key, di_key_zero()))
     {
-      rdi = di2_rdi_from_key(access, params.dbgi_key, 0, 0);
+      rdi = di_rdi_from_key(access, params.dbgi_key, 0, 0);
       stale = (stale || (rdi == &rdi_parsed_nil));
     }
     
