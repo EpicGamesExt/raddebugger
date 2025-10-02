@@ -205,6 +205,40 @@ struct DI_Match
 };
 
 ////////////////////////////////
+//~ rjf: Events
+
+typedef enum DI_EventKind
+{
+  DI_EventKind_Null,
+  DI_EventKind_ConversionStarted,
+  DI_EventKind_ConversionEnded,
+  DI_EventKind_COUNT
+}
+DI_EventKind;
+
+typedef struct DI_Event DI_Event;
+struct DI_Event
+{
+  DI_EventKind kind;
+  String8 string;
+};
+
+typedef struct DI_EventNode DI_EventNode;
+struct DI_EventNode
+{
+  DI_EventNode *next;
+  DI_Event v;
+};
+
+typedef struct DI_EventList DI_EventList;
+struct DI_EventList
+{
+  DI_EventNode *first;
+  DI_EventNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Shared State
 
 typedef struct DI_Shared DI_Shared;
@@ -254,6 +288,11 @@ struct DI_Shared
   Arena *completion_arena;
   DI_LoadCompletion *first_completion;
   DI_LoadCompletion *last_completion;
+  
+  // rjf: events
+  Mutex event_mutex;
+  Arena *event_arena;
+  DI_EventList events;
 };
 
 ////////////////////////////////
@@ -291,6 +330,11 @@ internal void di_close(DI_Key key);
 internal U64 di_load_gen(void);
 internal DI_KeyArray di_push_all_loaded_keys(Arena *arena);
 internal RDI_Parsed *di_rdi_from_key(Access *access, DI_Key key, B32 high_priority, U64 endt_us);
+
+////////////////////////////////
+//~ rjf: Events
+
+internal DI_EventList di_get_events(Arena *arena);
 
 ////////////////////////////////
 //~ rjf: Asynchronous Tick

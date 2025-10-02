@@ -11399,10 +11399,9 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: sync with di parsers
   //
-#if 0 // TODO(rjf): @dbgi2
   ProfScope("sync with di parsers")
   {
-    DI_EventList events = di_p2u_pop_events(scratch.arena, 0);
+    DI_EventList events = di_get_events(scratch.arena);
     for(DI_EventNode *n = events.first; n != 0; n = n->next)
     {
       DI_Event *event = &n->v;
@@ -11430,7 +11429,6 @@ rd_frame(void)
       }
     }
   }
-#endif
   
   //////////////////////////////
   //- rjf: animate all views

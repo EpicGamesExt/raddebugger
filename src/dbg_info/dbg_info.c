@@ -96,6 +96,8 @@ di_init(CmdLine *cmdline)
   di_shared->conversion_completion_shared_memory_base = (U64 *)os_shared_memory_view_open(di_shared->conversion_completion_shared_memory, r1u64(0, KB(4)));
   di_shared->completion_mutex = mutex_alloc();
   di_shared->completion_arena = arena_alloc();
+  di_shared->event_mutex = mutex_alloc();
+  di_shared->event_arena = arena_alloc();
 }
 
 ////////////////////////////////
@@ -487,6 +489,29 @@ di_rdi_from_key(Access *access, DI_Key key, B32 high_priority, U64 endt_us)
 }
 
 ////////////////////////////////
+//~ rjf: Events
+
+internal DI_EventList
+di_get_events(Arena *arena)
+{
+  DI_EventList dst = {0};
+  MutexScope(di_shared->event_mutex)
+  {
+    for EachNode(src_n, DI_EventNode, di_shared->events.first)
+    {
+      DI_EventNode *dst_n = push_array(arena, DI_EventNode, 1);
+      MemoryCopyStruct(&dst_n->v, &src_n->v);
+      dst_n->v.string = str8_copy(arena, dst_n->v.string);
+      SLLQueuePush(dst.first, dst.last, dst_n);
+      dst.count += 1;
+    }
+    MemoryZeroStruct(&di_shared->events);
+    arena_clear(di_shared->event_arena);
+  }
+  return dst;
+}
+
+////////////////////////////////
 //~ rjf: Asynchronous Tick
 
 internal void
@@ -738,6 +763,16 @@ di_async_tick(void)
         t->status = DI_LoadTaskStatus_Active;
         di_shared->conversion_process_count += 1;
         di_shared->conversion_thread_count += t->thread_count;
+        
+        // rjf: send event
+        MutexScope(di_shared->event_mutex)
+        {
+          DI_EventNode *n = push_array(di_shared->event_arena, DI_EventNode, 1);
+          SLLQueuePush(di_shared->events.first, di_shared->events.last, n);
+          di_shared->events.count += 1;
+          n->v.kind = DI_EventKind_ConversionStarted;
+          n->v.string = str8_copy(di_shared->event_arena, rdi_path);
+        }
       }
       
       //- rjf: if active & process has completed, mark as done
@@ -785,6 +820,14 @@ di_async_tick(void)
       //- rjf: if task is done, retire & recycle task; gather path to load
       if(t->status == DI_LoadTaskStatus_Done)
       {
+        if(!os_handle_match(t->process, os_handle_zero())) MutexScope(di_shared->event_mutex)
+        {
+          DI_EventNode *n = push_array(di_shared->event_arena, DI_EventNode, 1);
+          SLLQueuePush(di_shared->events.first, di_shared->events.last, n);
+          di_shared->events.count += 1;
+          n->v.kind = DI_EventKind_ConversionEnded;
+          n->v.string = str8_copy(di_shared->event_arena, rdi_path);
+        }
         DLLRemove(di_shared->first_load_task, di_shared->last_load_task, t);
         SLLStackPush(di_shared->free_load_task, t);
         ParseTaskNode *n = push_array(scratch.arena, ParseTaskNode, 1);
