@@ -305,6 +305,16 @@ RDI_BinarySectionFlag_Write      = 1<<1,
 RDI_BinarySectionFlag_Execute    = 1<<2,
 } RDI_BinarySectionFlagsEnum;
 
+typedef RDI_U16 RDI_ChecksumKind;
+typedef enum RDI_ChecksumKindEnum
+{
+RDI_ChecksumKind_Null       = 0,
+RDI_ChecksumKind_MD5        = 1,
+RDI_ChecksumKind_SHA1       = 2,
+RDI_ChecksumKind_SHA256     = 3,
+RDI_ChecksumKind_Timestamp  = 4,
+} RDI_ChecksumKindEnum;
+
 typedef RDI_U32 RDI_Language;
 typedef enum RDI_LanguageEnum
 {
@@ -789,6 +799,13 @@ X(RDI_U64, voff_first)\
 X(RDI_U64, voff_opl)\
 X(RDI_U64, foff_first)\
 X(RDI_U64, foff_opl)\
+
+#define RDI_ChecksumKind_XList \
+X(Null)\
+X(MD5)\
+X(SHA1)\
+X(SHA256)\
+X(Timestamp)\
 
 #define RDI_FilePathNode_XList \
 X(RDI_U32, name_string_idx)\

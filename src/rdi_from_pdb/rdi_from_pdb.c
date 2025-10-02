@@ -264,6 +264,20 @@ p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type)
   return result;
 }
 
+internal RDI_ChecksumKind
+p2r_rdi_from_cv_c13_checksum_kind(CV_C13ChecksumKind k)
+{
+  RDI_ChecksumKind result = RDI_ChecksumKind_Null;
+  switch((CV_C13ChecksumKindEnum)k)
+  {
+    case CV_C13ChecksumKind_Null:  {result = RDI_ChecksumKind_Null;}break;
+    case CV_C13ChecksumKind_MD5:   {result = RDI_ChecksumKind_MD5;}break;
+    case CV_C13ChecksumKind_SHA1:  {result = RDI_ChecksumKind_SHA1;}break;
+    case CV_C13ChecksumKind_SHA256:{result = RDI_ChecksumKind_SHA256;}break;
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Location Info Building Helpers
 
@@ -774,7 +788,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: prep outputs
     ProfScope("prep outputs") if(lane_idx() == 0)
     {
-      p2r_shared->unit_file_paths = push_array(arena, String8Array, comp_units->count);
+      p2r_shared->unit_file_stubs = push_array(arena, P2R_SrcFileStubArray, comp_units->count);
       p2r_shared->unit_file_paths_hashes = push_array(arena, U64Array, comp_units->count);
       p2r_shared->sym_lane_take_counter = 0;
     }
@@ -819,8 +833,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
         String8 obj_folder_path = backslashed_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
         
-        //- rjf: find all inline site symbols & gather filenames
-        String8List src_file_paths = {0};
+        //- rjf: find all inline site symbols & gather file stubs
+        P2R_SrcFileStubNode *first_src_file_stub = 0;
+        P2R_SrcFileStubNode *last_src_file_stub = 0;
+        U64 src_file_stub_count = 0;
         U64 base_voff = 0;
         for(CV_RecRange *rec_range = rec_ranges_first;
             rec_range < rec_ranges_opl;
@@ -917,11 +933,16 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   if(last_file_off != max_U32 && last_file_off != curr_file_off)
                   {
                     String8 seq_file_name = {0};
+                    CV_C13ChecksumKind checksum_kind = CV_C13ChecksumKind_Null;
+                    String8 checksum_value = {0};
                     if(last_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
                     {
                       CV_C13Checksum *checksum = (CV_C13Checksum *)(c13->data.str + file_chksms->off + last_file_off);
-                      U32             name_off = checksum->name_off;
+                      U32 name_off = checksum->name_off;
                       seq_file_name = pdb_strtbl_string_from_off(strtbl, name_off);
+                      checksum_kind = checksum->kind;
+                      checksum_value = str8_skip(c13->data, file_chksms->off + last_file_off + sizeof(*checksum));
+                      checksum_value.size = Min(checksum->len, checksum_value.size);
                     }
                     
                     // rjf: file name -> normalized file path
@@ -958,7 +979,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                       hit_path_node = push_array(scratch.arena, String8Node, 1);
                       SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
                       hit_path_node->string = file_path_normalized;
-                      str8_list_push(arena, &src_file_paths, push_str8_copy(arena, file_path_normalized));
+                      P2R_SrcFileStubNode *stub_n = push_array(arena, P2R_SrcFileStubNode, 1);
+                      SLLQueuePush(first_src_file_stub, last_src_file_stub, stub_n);
+                      src_file_stub_count += 1;
+                      stub_n->v.file_path = str8_copy(arena, file_path_normalized);
+                      stub_n->v.checksum_kind = checksum_kind;
+                      stub_n->v.checksum = str8_copy(arena, checksum_value);
                     }
                     line_count = 0;
                   }
@@ -1026,22 +1052,36 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 hit_path_node = push_array(scratch.arena, String8Node, 1);
                 SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
                 hit_path_node->string = file_path_sanitized;
-                str8_list_push(scratch.arena, &src_file_paths, push_str8_copy(arena, file_path_sanitized));
+                P2R_SrcFileStubNode *stub_n = push_array(arena, P2R_SrcFileStubNode, 1);
+                SLLQueuePush(first_src_file_stub, last_src_file_stub, stub_n);
+                src_file_stub_count += 1;
+                stub_n->v.file_path = str8_copy(arena, file_path_sanitized);
+                stub_n->v.checksum_kind = lines_n->v.checksum_kind;
+                stub_n->v.checksum = str8_copy(arena, lines_n->v.checksum);
               }
             }
           }
         }
         
         //- rjf: merge into array for this unit
-        p2r_shared->unit_file_paths[unit_idx] = str8_array_from_list(arena, &src_file_paths);
+        p2r_shared->unit_file_stubs[unit_idx].count = src_file_stub_count;
+        p2r_shared->unit_file_stubs[unit_idx].v = push_array_no_zero(arena, P2R_SrcFileStub, p2r_shared->unit_file_stubs[unit_idx].count);
+        {
+          U64 idx = 0;
+          for EachNode(n, P2R_SrcFileStubNode, first_src_file_stub)
+          {
+            p2r_shared->unit_file_stubs[unit_idx].v[idx] = n->v;
+            idx += 1;
+          }
+        }
         
         //- rjf: hash this unit's file paths
         U64Array hashes = {0};
-        hashes.count = p2r_shared->unit_file_paths[unit_idx].count;
+        hashes.count = p2r_shared->unit_file_stubs[unit_idx].count;
         hashes.v = push_array(arena, U64, hashes.count);
-        for EachIndex(idx, p2r_shared->unit_file_paths[unit_idx].count)
+        for EachIndex(idx, p2r_shared->unit_file_stubs[unit_idx].count)
         {
-          hashes.v[idx] = rdi_hash(p2r_shared->unit_file_paths[unit_idx].v[idx].str, p2r_shared->unit_file_paths[unit_idx].v[idx].size);
+          hashes.v[idx] = rdi_hash(p2r_shared->unit_file_stubs[unit_idx].v[idx].file_path.str, p2r_shared->unit_file_stubs[unit_idx].v[idx].file_path.size);
         }
         p2r_shared->unit_file_paths_hashes[unit_idx] = hashes;
       }
@@ -1049,7 +1089,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     }
   }
   lane_sync();
-  String8Array *unit_file_paths = p2r_shared->unit_file_paths;
+  P2R_SrcFileStubArray *unit_file_stubs = p2r_shared->unit_file_stubs;
   U64Array *unit_file_paths_hashes = p2r_shared->unit_file_paths_hashes;
   
   //////////////////////////////////////////////////////////////
@@ -1065,7 +1105,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       p2r_shared->total_path_count = 0;
       for EachIndex(idx, comp_units->count)
       {
-        p2r_shared->total_path_count += unit_file_paths[idx].count;
+        p2r_shared->total_path_count += unit_file_stubs[idx].count;
       }
       p2r_shared->src_file_map.slots_count = p2r_shared->total_path_count + p2r_shared->total_path_count/2 + 1;
       p2r_shared->src_file_map.slots = push_array(arena, P2R_SrcFileNode *, p2r_shared->src_file_map.slots_count);
@@ -1077,12 +1117,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       for EachIndex(idx, comp_units->count)
       {
-        String8Array paths = unit_file_paths[idx];
+        P2R_SrcFileStubArray stubs = unit_file_stubs[idx];
         U64Array hashes = unit_file_paths_hashes[idx];
-        for EachIndex(path_idx, paths.count)
+        for EachIndex(stub_idx, stubs.count)
         {
-          String8 file_path_sanitized = paths.v[path_idx];
-          U64 file_path_sanitized_hash = hashes.v[path_idx];
+          String8 file_path_sanitized = stubs.v[stub_idx].file_path;
+          CV_C13ChecksumKind c13_checksum_kind = stubs.v[stub_idx].checksum_kind;
+          String8 checksum = stubs.v[stub_idx].checksum;
+          U64 file_path_sanitized_hash = hashes.v[stub_idx];
           U64 src_file_slot = file_path_sanitized_hash%p2r_shared->src_file_map.slots_count;
           P2R_SrcFileNode *src_file_node = 0;
           for(P2R_SrcFileNode *n = p2r_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
@@ -1098,7 +1140,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             src_file_node = push_array(arena, P2R_SrcFileNode, 1);
             SLLStackPush(p2r_shared->src_file_map.slots[src_file_slot], src_file_node);
             src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &p2r_shared->all_src_files__sequenceless, p2r_shared->total_path_count);
-            src_file_node->src_file->path = push_str8_copy(arena, file_path_sanitized);
+            src_file_node->src_file->path = str8_copy(arena, file_path_sanitized);
+            src_file_node->src_file->checksum_kind = p2r_rdi_from_cv_c13_checksum_kind(c13_checksum_kind);
+            src_file_node->src_file->checksum = str8_copy(arena, checksum);
           }
         }
       }
@@ -1369,7 +1413,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                       if(last_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
                       {
                         CV_C13Checksum *checksum = (CV_C13Checksum*)(src_unit_c13->data.str + file_chksms->off + last_file_off);
-                        U32             name_off = checksum->name_off;
+                        U32 name_off = checksum->name_off;
                         seq_file_name = pdb_strtbl_string_from_off(strtbl, name_off);
                       }
                       

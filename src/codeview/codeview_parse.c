@@ -1460,14 +1460,18 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
           U32 line_count_unclamped = file->num_lines;
           U32 block_size = file->block_size;
           
-          // file_name from file_off
+          // file_name / checksum from file_off
           String8 file_name = {0};
+          CV_C13ChecksumKind checksum_kind = CV_C13ChecksumKind_Null;
+          String8 checksum_value = {0};
           if(file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
           {
             CV_C13Checksum *checksum = (CV_C13Checksum*)(c13_data.str + file_chksms->off + file_off);
             U32 name_off = checksum->name_off;
-            file_name =  str8_cstring_capped((char*)(strtbl.str + name_off),
-                                             (char*)(strtbl.str + strtbl.size));
+            file_name =  str8_cstring_capped((char*)(strtbl.str + name_off), (char*)(strtbl.str + strtbl.size));
+            checksum_kind = checksum->kind;
+            checksum_value = str8_skip(c13_data, file_chksms->off + file_off + sizeof(*checksum));
+            checksum_value.size = Min(checksum->len, checksum_value.size);
           }
           
           // array layouts
@@ -1503,13 +1507,15 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
           // emit parsed lines
           CV_C13LinesParsedNode *lines_parsed_node = push_array(arena, CV_C13LinesParsedNode, 1);
           CV_C13LinesParsed *lines_parsed = &lines_parsed_node->v;
-          lines_parsed->sec_idx = sec_idx;
-          lines_parsed->file_off = file_off;
+          lines_parsed->sec_idx         = sec_idx;
+          lines_parsed->file_off        = file_off;
           lines_parsed->secrel_base_off = secrel_off;
-          lines_parsed->file_name = file_name;
-          lines_parsed->voffs  = voffs;
-          lines_parsed->line_nums = line_nums;
-          lines_parsed->line_count = line_count;
+          lines_parsed->file_name       = file_name;
+          lines_parsed->checksum_kind   = checksum_kind;
+          lines_parsed->checksum        = checksum_value;
+          lines_parsed->voffs           = voffs;
+          lines_parsed->line_nums       = line_nums;
+          lines_parsed->line_count      = line_count;
           SLLQueuePush(node->lines_first, node->lines_last, lines_parsed_node);
           
           // rjf: advance
@@ -1539,12 +1545,16 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
           
           // rjf: file_off -> file_name
           String8 file_name = {0};
+          CV_C13ChecksumKind checksum_kind = CV_C13ChecksumKind_Null;
+          String8 checksum_value = {0};
           if(hdr->file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
           {
             CV_C13Checksum *checksum = (CV_C13Checksum*)(c13_data.str + file_chksms->off + hdr->file_off);
             U32 name_off = checksum->name_off;
-            file_name =  str8_cstring_capped((char*)(strtbl.str + name_off),
-                                             (char*)(strtbl.str + strtbl.size));
+            file_name =  str8_cstring_capped((char*)(strtbl.str + name_off), (char*)(strtbl.str + strtbl.size));
+            checksum_kind = checksum->kind;
+            checksum_value = str8_skip(c13_data, file_chksms->off + hdr->file_off + sizeof(*checksum));
+            checksum_value.size = Min(checksum->len, checksum_value.size);
           }
           
           // rjf: parse extra files
@@ -1564,8 +1574,10 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
           CV_C13InlineeLinesParsedNode *n = push_array(arena, CV_C13InlineeLinesParsedNode, 1);
           SLLQueuePush(node->inlinee_lines_first, node->inlinee_lines_last, n);
           n->v.inlinee          = hdr->inlinee;
-          n->v.file_name        = file_name;
           n->v.file_off         = hdr->file_off;
+          n->v.file_name        = file_name;
+          n->v.checksum_kind    = checksum_kind;
+          n->v.checksum         = checksum_value;
           n->v.first_source_ln  = hdr->first_source_ln;
           n->v.extra_file_count = extra_file_count;
           n->v.extra_files      = extra_files;

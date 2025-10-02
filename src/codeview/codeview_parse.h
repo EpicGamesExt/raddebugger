@@ -150,6 +150,8 @@ struct CV_C13LinesParsed
   
   // parsed info
   String8  file_name;
+  CV_C13ChecksumKind checksum_kind;
+  String8 checksum;
   U64     *voffs;     // [line_count + 1]
   U32     *line_nums; // [line_count]
   U16     *col_nums;  // [2*line_count]
@@ -166,12 +168,14 @@ struct CV_C13LinesParsedNode
 typedef struct CV_C13InlineeLinesParsed CV_C13InlineeLinesParsed;
 struct CV_C13InlineeLinesParsed
 {
-  CV_ItemId  inlinee;
-  U32        file_off;
-  String8    file_name;
-  U32        first_source_ln;
-  U32        extra_file_count;
-  U32       *extra_files;
+  CV_ItemId inlinee;
+  U32 file_off;
+  String8 file_name;
+  CV_C13ChecksumKind checksum_kind;
+  String8 checksum;
+  U32 first_source_ln;
+  U32 extra_file_count;
+  U32 *extra_files;
 };
 
 typedef struct CV_C13InlineeLinesParsedNode CV_C13InlineeLinesParsedNode;

@@ -535,6 +535,29 @@ RDI_BinarySectionMemberTable:
 }
 
 ////////////////////////////////
+//~ rjf: Checksum Type Tables
+
+@table(name value)
+RDI_ChecksumKindTable:
+{
+  {Null            0}
+  {MD5             1}
+  {SHA1            2}
+  {SHA256          3}
+  {Timestamp       4}
+}
+
+@enum(RDI_U16) RDI_ChecksumKind:
+{
+  @expand(RDI_ChecksumKindTable a) `$(a.name .. =>10) = $(a.value)`
+}
+
+@xlist RDI_ChecksumKind_XList:
+{
+  @expand(RDI_ChecksumKindTable a) `$(a.name)`;
+}
+
+////////////////////////////////
 //~ rjf: File Path Tree Info Type Tables
 
 @table(name type desc)

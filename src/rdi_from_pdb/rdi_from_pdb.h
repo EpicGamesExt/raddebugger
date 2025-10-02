@@ -42,6 +42,28 @@ struct P2R_LinkNameMap
 
 //- rjf: normalized file path -> source file map
 
+typedef struct P2R_SrcFileStub P2R_SrcFileStub;
+struct P2R_SrcFileStub
+{
+  String8 file_path;
+  CV_C13ChecksumKind checksum_kind;
+  String8 checksum;
+};
+
+typedef struct P2R_SrcFileStubArray P2R_SrcFileStubArray;
+struct P2R_SrcFileStubArray
+{
+  P2R_SrcFileStub *v;
+  U64 count;
+};
+
+typedef struct P2R_SrcFileStubNode P2R_SrcFileStubNode;
+struct P2R_SrcFileStubNode
+{
+  P2R_SrcFileStubNode *next;
+  P2R_SrcFileStub v;
+};
+
 typedef struct P2R_SrcFileNode P2R_SrcFileNode;
 struct P2R_SrcFileNode
 {
@@ -109,7 +131,7 @@ struct P2R_Shared
   
   U64 sym_lane_take_counter;
   
-  String8Array *unit_file_paths;
+  P2R_SrcFileStubArray *unit_file_stubs;
   U64Array *unit_file_paths_hashes;
   
   U64 total_path_count;
@@ -175,10 +197,11 @@ internal RDI_BinarySectionFlags p2r_rdi_binary_section_flags_from_coff_section_f
 ////////////////////////////////
 //~ rjf: CodeView => RDI Canonical Conversions
 
-internal RDI_Arch     p2r_rdi_arch_from_cv_arch(CV_Arch arch);
-internal RDI_RegCode  p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
-internal RDI_Language p2r_rdi_language_from_cv_language(CV_Language language);
-internal RDI_TypeKind p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
+internal RDI_Arch         p2r_rdi_arch_from_cv_arch(CV_Arch arch);
+internal RDI_RegCode      p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
+internal RDI_Language     p2r_rdi_language_from_cv_language(CV_Language language);
+internal RDI_TypeKind     p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
+internal RDI_ChecksumKind p2r_rdi_from_cv_c13_checksum_kind(CV_C13ChecksumKind k);
 
 ////////////////////////////////
 //~ rjf: Location Info Building Helpers
