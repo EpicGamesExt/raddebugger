@@ -259,17 +259,6 @@ d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input
 ////////////////////////////////
 
 internal B32
-rdim_is_bytecode_tls_dependent(RDIM_EvalBytecode bc)
-{
-  for EachNode(n, RDIM_EvalBytecodeOp, bc.first_op) {
-    if (n->op == RDI_EvalOp_TLSOff) {
-      return 1;
-    }
-  }
-  return 0;
-}
-
-internal B32
 rdim_is_eval_bytecode_static(RDIM_EvalBytecode bc)
 {
   B32 is_static = 1;

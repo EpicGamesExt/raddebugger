@@ -111,7 +111,6 @@ internal RDI_EvalTypeGroup d2r_type_group_from_type_kind(RDI_TypeKind x);
 ////////////////////////////////
 //~ RDIM Bytecode Helpers
 
-internal B32 rdim_is_bytecode_tls_dependent(RDIM_EvalBytecode bc);
 internal B32 rdim_is_eval_bytecode_static(RDIM_EvalBytecode bc);
 internal U64 rdim_virt_off_from_eval_bytecode(RDIM_EvalBytecode bc, U64 image_base);
 
