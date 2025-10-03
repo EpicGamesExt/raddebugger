@@ -390,7 +390,37 @@ internal U64
 dw_operand_count_from_expr_op(DW_ExprOp op)
 {
   switch (op) {
-#define X(_N, _ID, _OPER_COUNT) case _ID: return _OPER_COUNT;
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _OPER_COUNT;
+    DW_Expr_V3_XList(X)
+    DW_Expr_V4_XList(X)
+    DW_Expr_V5_XList(X)
+    DW_Expr_GNU_XList(X)
+#undef X
+  default: { NotImplemented; } break;
+  }
+  return 0;
+}
+
+internal U64
+dw_pop_count_from_expr_op(DW_ExprOp op)
+{
+  switch (op) {
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _POP_COUNT;
+    DW_Expr_V3_XList(X)
+    DW_Expr_V4_XList(X)
+    DW_Expr_V5_XList(X)
+    DW_Expr_GNU_XList(X)
+#undef X
+  default: { NotImplemented; } break;
+  }
+  return 0;
+}
+
+internal U64
+dw_push_count_from_expr_op(DW_ExprOp op) 
+{
+  switch (op) {
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _PUSH_COUNT;
     DW_Expr_V3_XList(X)
     DW_Expr_V4_XList(X)
     DW_Expr_V5_XList(X)

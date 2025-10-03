@@ -1391,198 +1391,199 @@ enum
 ////////////////////////////////
 // Expression Opcodes
 
-#define DW_Expr_V3_XList(X)  \
-X(Null,              0x00, 0) \
-X(Addr,              0x03, 1) \
-X(Deref,             0x06, 0) \
-X(Const1U,           0x08, 1) \
-X(Const1S,           0x09, 1) \
-X(Const2U,           0x0a, 1) \
-X(Const2S,           0x0b, 1) \
-X(Const4U,           0x0c, 1) \
-X(Const4S,           0x0d, 1) \
-X(Const8U,           0x0e, 1) \
-X(Const8S,           0x0f, 1) \
-X(ConstU,            0x10, 1) \
-X(ConstS,            0x11, 1) \
-X(Dup,               0x12, 0) \
-X(Drop,              0x13, 0) \
-X(Over,              0x14, 0) \
-X(Pick,              0x15, 1) \
-X(Swap,              0x16, 0) \
-X(Rot,               0x17, 0) \
-X(XDeref,            0x18, 0) \
-X(Abs,               0x19, 0) \
-X(And,               0x1a, 0) \
-X(Div,               0x1b, 0) \
-X(Minus,             0x1c, 0) \
-X(Mod,               0x1d, 0) \
-X(Mul,               0x1e, 0) \
-X(Neg,               0x1f, 0) \
-X(Not,               0x20, 0) \
-X(Or,                0x21, 0) \
-X(Plus,              0x22, 0) \
-X(PlusUConst,        0x23, 1) \
-X(Shl,               0x24, 0) \
-X(Shr,               0x25, 0) \
-X(Shra,              0x26, 0) \
-X(Xor,               0x27, 0) \
-X(Bra,               0x28, 1) \
-X(Eq,                0x29, 0) \
-X(Ge,                0x2a, 0) \
-X(Gt,                0x2b, 0) \
-X(Le,                0x2c, 0) \
-X(Lt,                0x2d, 0) \
-X(Ne,                0x2e, 0) \
-X(Skip,              0x2f, 1) \
-X(Lit0,              0x30, 0) \
-X(Lit1,              0x31, 0) \
-X(Lit2,              0x32, 0) \
-X(Lit3,              0x33, 0) \
-X(Lit4,              0x34, 0) \
-X(Lit5,              0x35, 0) \
-X(Lit6,              0x36, 0) \
-X(Lit7,              0x37, 0) \
-X(Lit8,              0x38, 0) \
-X(Lit9,              0x39, 0) \
-X(Lit10,             0x3a, 0) \
-X(Lit11,             0x3b, 0) \
-X(Lit12,             0x3c, 0) \
-X(Lit13,             0x3d, 0) \
-X(Lit14,             0x3e, 0) \
-X(Lit15,             0x3f, 0) \
-X(Lit16,             0x40, 0) \
-X(Lit17,             0x41, 0) \
-X(Lit18,             0x42, 0) \
-X(Lit19,             0x43, 0) \
-X(Lit20,             0x44, 0) \
-X(Lit21,             0x45, 0) \
-X(Lit22,             0x46, 0) \
-X(Lit23,             0x47, 0) \
-X(Lit24,             0x48, 0) \
-X(Lit25,             0x49, 0) \
-X(Lit26,             0x4a, 0) \
-X(Lit27,             0x4b, 0) \
-X(Lit28,             0x4c, 0) \
-X(Lit29,             0x4d, 0) \
-X(Lit30,             0x4e, 0) \
-X(Lit31,             0x4f, 0) \
-X(Reg0,              0x50, 0) \
-X(Reg1,              0x51, 0) \
-X(Reg2,              0x52, 0) \
-X(Reg3,              0x53, 0) \
-X(Reg4,              0x54, 0) \
-X(Reg5,              0x55, 0) \
-X(Reg6,              0x56, 0) \
-X(Reg7,              0x57, 0) \
-X(Reg8,              0x58, 0) \
-X(Reg9,              0x59, 0) \
-X(Reg10,             0x5a, 0) \
-X(Reg11,             0x5b, 0) \
-X(Reg12,             0x5c, 0) \
-X(Reg13,             0x5d, 0) \
-X(Reg14,             0x5e, 0) \
-X(Reg15,             0x5f, 0) \
-X(Reg16,             0x60, 0) \
-X(Reg17,             0x61, 0) \
-X(Reg18,             0x62, 0) \
-X(Reg19,             0x63, 0) \
-X(Reg20,             0x64, 0) \
-X(Reg21,             0x65, 0) \
-X(Reg22,             0x66, 0) \
-X(Reg23,             0x67, 0) \
-X(Reg24,             0x68, 0) \
-X(Reg25,             0x69, 0) \
-X(Reg26,             0x6a, 0) \
-X(Reg27,             0x6b, 0) \
-X(Reg28,             0x6c, 0) \
-X(Reg29,             0x6d, 0) \
-X(Reg30,             0x6e, 0) \
-X(Reg31,             0x6f, 0) \
-X(BReg0,             0x70, 1) \
-X(BReg1,             0x71, 1) \
-X(BReg2,             0x72, 1) \
-X(BReg3,             0x73, 1) \
-X(BReg4,             0x74, 1) \
-X(BReg5,             0x75, 1) \
-X(BReg6,             0x76, 1) \
-X(BReg7,             0x77, 1) \
-X(BReg8,             0x78, 1) \
-X(BReg9,             0x79, 1) \
-X(BReg10,            0x7a, 1) \
-X(BReg11,            0x7b, 1) \
-X(BReg12,            0x7c, 1) \
-X(BReg13,            0x7d, 1) \
-X(BReg14,            0x7e, 1) \
-X(BReg15,            0x7f, 1) \
-X(BReg16,            0x80, 1) \
-X(BReg17,            0x81, 1) \
-X(BReg18,            0x82, 1) \
-X(BReg19,            0x83, 1) \
-X(BReg20,            0x84, 1) \
-X(BReg21,            0x85, 1) \
-X(BReg22,            0x86, 1) \
-X(BReg23,            0x87, 1) \
-X(BReg24,            0x88, 1) \
-X(BReg25,            0x89, 1) \
-X(BReg26,            0x8a, 1) \
-X(BReg27,            0x8b, 1) \
-X(BReg28,            0x8c, 1) \
-X(BReg29,            0x8d, 1) \
-X(BReg30,            0x8e, 1) \
-X(BReg31,            0x8f, 1) \
-X(RegX,              0x90, 1) \
-X(FBReg,             0x91, 1) \
-X(BRegX,             0x92, 2) \
-X(Piece,             0x93, 1) \
-X(DerefSize,         0x94, 1) \
-X(XDerefSize,        0x95, 1) \
-X(Nop,               0x96, 0) \
-X(PushObjectAddress, 0x97, 0) \
-X(Call2,             0x98, 1) \
-X(Call4,             0x99, 1) \
-X(CallRef,           0x9a, 1) \
-X(FormTlsAddress,    0x9b, 0) \
-X(CallFrameCfa,      0x9c, 0) \
-X(BitPiece,          0x9d, 2)
+// (opcode name, opcode id, operand count, pop count, push count)
+#define DW_Expr_V3_XList(X)         \
+X(Null,              0x00, 0, 0, 0) \
+X(Addr,              0x03, 1, 0, 1) \
+X(Deref,             0x06, 0, 1, 1) \
+X(Const1U,           0x08, 1, 0, 1) \
+X(Const1S,           0x09, 1, 0, 1) \
+X(Const2U,           0x0a, 1, 0, 1) \
+X(Const2S,           0x0b, 1, 0, 1) \
+X(Const4U,           0x0c, 1, 0, 1) \
+X(Const4S,           0x0d, 1, 0, 1) \
+X(Const8U,           0x0e, 1, 0, 1) \
+X(Const8S,           0x0f, 1, 0, 1) \
+X(ConstU,            0x10, 1, 0, 1) \
+X(ConstS,            0x11, 1, 0, 1) \
+X(Dup,               0x12, 0, 0, 1) \
+X(Drop,              0x13, 0, 1, 0) \
+X(Over,              0x14, 0, 0, 1) \
+X(Pick,              0x15, 1, 0, 1) \
+X(Swap,              0x16, 0, 0, 0) \
+X(Rot,               0x17, 0, 0, 0) \
+X(XDeref,            0x18, 0, 2, 1) \
+X(Abs,               0x19, 0, 1, 1) \
+X(And,               0x1a, 0, 2, 1) \
+X(Div,               0x1b, 0, 2, 1) \
+X(Minus,             0x1c, 0, 2, 1) \
+X(Mod,               0x1d, 0, 2, 1) \
+X(Mul,               0x1e, 0, 2, 1) \
+X(Neg,               0x1f, 0, 1, 1) \
+X(Not,               0x20, 0, 1, 1) \
+X(Or,                0x21, 0, 2, 1) \
+X(Plus,              0x22, 0, 2, 1) \
+X(PlusUConst,        0x23, 1, 1, 1) \
+X(Shl,               0x24, 0, 2, 1) \
+X(Shr,               0x25, 0, 2, 1) \
+X(Shra,              0x26, 0, 2, 1) \
+X(Xor,               0x27, 0, 2, 1) \
+X(Bra,               0x28, 1, 1, 0) \
+X(Eq,                0x29, 0, 2, 1) \
+X(Ge,                0x2a, 0, 2, 1) \
+X(Gt,                0x2b, 0, 2, 1) \
+X(Le,                0x2c, 0, 2, 1) \
+X(Lt,                0x2d, 0, 2, 1) \
+X(Ne,                0x2e, 0, 2, 1) \
+X(Skip,              0x2f, 1, 0, 0) \
+X(Lit0,              0x30, 0, 0, 0) \
+X(Lit1,              0x31, 0, 0, 0) \
+X(Lit2,              0x32, 0, 0, 0) \
+X(Lit3,              0x33, 0, 0, 0) \
+X(Lit4,              0x34, 0, 0, 0) \
+X(Lit5,              0x35, 0, 0, 0) \
+X(Lit6,              0x36, 0, 0, 0) \
+X(Lit7,              0x37, 0, 0, 0) \
+X(Lit8,              0x38, 0, 0, 0) \
+X(Lit9,              0x39, 0, 0, 0) \
+X(Lit10,             0x3a, 0, 0, 0) \
+X(Lit11,             0x3b, 0, 0, 0) \
+X(Lit12,             0x3c, 0, 0, 0) \
+X(Lit13,             0x3d, 0, 0, 0) \
+X(Lit14,             0x3e, 0, 0, 0) \
+X(Lit15,             0x3f, 0, 0, 0) \
+X(Lit16,             0x40, 0, 0, 0) \
+X(Lit17,             0x41, 0, 0, 0) \
+X(Lit18,             0x42, 0, 0, 0) \
+X(Lit19,             0x43, 0, 0, 0) \
+X(Lit20,             0x44, 0, 0, 0) \
+X(Lit21,             0x45, 0, 0, 0) \
+X(Lit22,             0x46, 0, 0, 0) \
+X(Lit23,             0x47, 0, 0, 0) \
+X(Lit24,             0x48, 0, 0, 0) \
+X(Lit25,             0x49, 0, 0, 0) \
+X(Lit26,             0x4a, 0, 0, 0) \
+X(Lit27,             0x4b, 0, 0, 0) \
+X(Lit28,             0x4c, 0, 0, 0) \
+X(Lit29,             0x4d, 0, 0, 0) \
+X(Lit30,             0x4e, 0, 0, 0) \
+X(Lit31,             0x4f, 0, 0, 0) \
+X(Reg0,              0x50, 0, 0, 1) \
+X(Reg1,              0x51, 0, 0, 1) \
+X(Reg2,              0x52, 0, 0, 1) \
+X(Reg3,              0x53, 0, 0, 1) \
+X(Reg4,              0x54, 0, 0, 1) \
+X(Reg5,              0x55, 0, 0, 1) \
+X(Reg6,              0x56, 0, 0, 1) \
+X(Reg7,              0x57, 0, 0, 1) \
+X(Reg8,              0x58, 0, 0, 1) \
+X(Reg9,              0x59, 0, 0, 1) \
+X(Reg10,             0x5a, 0, 0, 1) \
+X(Reg11,             0x5b, 0, 0, 1) \
+X(Reg12,             0x5c, 0, 0, 1) \
+X(Reg13,             0x5d, 0, 0, 1) \
+X(Reg14,             0x5e, 0, 0, 1) \
+X(Reg15,             0x5f, 0, 0, 1) \
+X(Reg16,             0x60, 0, 0, 1) \
+X(Reg17,             0x61, 0, 0, 1) \
+X(Reg18,             0x62, 0, 0, 1) \
+X(Reg19,             0x63, 0, 0, 1) \
+X(Reg20,             0x64, 0, 0, 1) \
+X(Reg21,             0x65, 0, 0, 1) \
+X(Reg22,             0x66, 0, 0, 1) \
+X(Reg23,             0x67, 0, 0, 1) \
+X(Reg24,             0x68, 0, 0, 1) \
+X(Reg25,             0x69, 0, 0, 1) \
+X(Reg26,             0x6a, 0, 0, 1) \
+X(Reg27,             0x6b, 0, 0, 1) \
+X(Reg28,             0x6c, 0, 0, 1) \
+X(Reg29,             0x6d, 0, 0, 1) \
+X(Reg30,             0x6e, 0, 0, 1) \
+X(Reg31,             0x6f, 0, 0, 1) \
+X(BReg0,             0x70, 1, 0, 1) \
+X(BReg1,             0x71, 1, 0, 1) \
+X(BReg2,             0x72, 1, 0, 1) \
+X(BReg3,             0x73, 1, 0, 1) \
+X(BReg4,             0x74, 1, 0, 1) \
+X(BReg5,             0x75, 1, 0, 1) \
+X(BReg6,             0x76, 1, 0, 1) \
+X(BReg7,             0x77, 1, 0, 1) \
+X(BReg8,             0x78, 1, 0, 1) \
+X(BReg9,             0x79, 1, 0, 1) \
+X(BReg10,            0x7a, 1, 0, 1) \
+X(BReg11,            0x7b, 1, 0, 1) \
+X(BReg12,            0x7c, 1, 0, 1) \
+X(BReg13,            0x7d, 1, 0, 1) \
+X(BReg14,            0x7e, 1, 0, 1) \
+X(BReg15,            0x7f, 1, 0, 1) \
+X(BReg16,            0x80, 1, 0, 1) \
+X(BReg17,            0x81, 1, 0, 1) \
+X(BReg18,            0x82, 1, 0, 1) \
+X(BReg19,            0x83, 1, 0, 1) \
+X(BReg20,            0x84, 1, 0, 1) \
+X(BReg21,            0x85, 1, 0, 1) \
+X(BReg22,            0x86, 1, 0, 1) \
+X(BReg23,            0x87, 1, 0, 1) \
+X(BReg24,            0x88, 1, 0, 1) \
+X(BReg25,            0x89, 1, 0, 1) \
+X(BReg26,            0x8a, 1, 0, 1) \
+X(BReg27,            0x8b, 1, 0, 1) \
+X(BReg28,            0x8c, 1, 0, 1) \
+X(BReg29,            0x8d, 1, 0, 1) \
+X(BReg30,            0x8e, 1, 0, 1) \
+X(BReg31,            0x8f, 1, 0, 1) \
+X(RegX,              0x90, 1, 0, 1) \
+X(FBReg,             0x91, 1, 0, 1) \
+X(BRegX,             0x92, 2, 0, 1) \
+X(Piece,             0x93, 1, 0, 0) \
+X(DerefSize,         0x94, 1, 1, 1) \
+X(XDerefSize,        0x95, 1, 2, 1) \
+X(Nop,               0x96, 0, 0, 0) \
+X(PushObjectAddress, 0x97, 0, 0, 1) \
+X(Call2,             0x98, 1, 0, 0) \
+X(Call4,             0x99, 1, 0, 0) \
+X(CallRef,           0x9a, 1, 0, 0) \
+X(FormTlsAddress,    0x9b, 0, 0, 1) \
+X(CallFrameCfa,      0x9c, 0, 0, 1) \
+X(BitPiece,          0x9d, 2, 0, 0)
 
-#define DW_Expr_V4_XList(X) \
-X(ImplicitValue, 0x9e, 2)   \
-X(StackValue,    0x9f, 0)
+#define DW_Expr_V4_XList(X)     \
+X(ImplicitValue, 0x9e, 2, 0, 1) \
+X(StackValue,    0x9f, 0, 0, 0)
 
-#define DW_Expr_V5_XList(X) \
-X(ImplicitPointer, 0xa0, 2) \
-X(Addrx,           0xa1, 1) \
-X(Constx,          0xa2, 1) \
-X(EntryValue,      0xa3, 2) \
-X(ConstType,       0xa4, 3) \
-X(RegvalType,      0xa5, 2) \
-X(DerefType,       0xa6, 2) \
-X(XDerefType,      0xa7, 2) \
-X(Convert,         0xa8, 1) \
-X(ReInterpret,     0xa9, 1)
+#define DW_Expr_V5_XList(X)             \
+X(ImplicitPointer, 0xa0, 2, 0, 1)       \
+X(Addrx,           0xa1, 1, 0, 1)       \
+X(Constx,          0xa2, 1, 0, 1)       \
+X(EntryValue,      0xa3, 2, 0, 0)       \
+X(ConstType,       0xa4, 3, 0, 1)       \
+X(RegvalType,      0xa5, 2, 0, 1)       \
+X(DerefType,       0xa6, 2, 1, 1) \
+X(XDerefType,      0xa7, 2, 2, 1)       \
+X(Convert,         0xa8, 1, 1, 1)       \
+X(ReInterpret,     0xa9, 1, 1, 1)
 
-#define DW_Expr_GNU_XList(X)    \
-X(GNU_PushTlsAddress,  0xe0, 0) \
-X(GNU_UnInit,          0xf0, 0) \
-X(GNU_ImplicitPointer, 0xf2, 2) \
-X(GNU_EntryValue,      0xf3, 2) \
-X(GNU_ConstType,       0xf4, 3) \
-X(GNU_RegvalType,      0xf5, 2) \
-X(GNU_DerefType,       0xf6, 2) \
-X(GNU_Convert,         0xf7, 1) \
-X(GNU_ParameterRef,    0xfa, 1) \
-X(GNU_AddrIndex,       0xfb, 0) \
-X(GNU_ConstIndex,      0xfc, 1)
+#define DW_Expr_GNU_XList(X)          \
+X(GNU_PushTlsAddress,  0xe0, 0, 0, 1) \
+X(GNU_UnInit,          0xf0, 0, 0, 0) \
+X(GNU_ImplicitPointer, 0xf2, 2, 0, 1) \
+X(GNU_EntryValue,      0xf3, 2, 0, 0) \
+X(GNU_ConstType,       0xf4, 3, 0, 1) \
+X(GNU_RegvalType,      0xf5, 2, 0, 1) \
+X(GNU_DerefType,       0xf6, 2, 1, 1) \
+X(GNU_Convert,         0xf7, 1, 1, 1) \
+X(GNU_ParameterRef,    0xfa, 1, 0, 0) \
+X(GNU_AddrIndex,       0xfb, 0, 0, 1) \
+X(GNU_ConstIndex,      0xfc, 1, 0, 1)
 
 typedef U8 DW_ExprOp;
 typedef enum DW_ExprOpEnum
 {
-#define X(_N, _ID, _OPER_COUNT) DW_ExprOp_##_N = _ID,
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) DW_ExprOp_##_N = _ID,
   DW_Expr_V3_XList(X)
-    DW_Expr_V4_XList(X)
-    DW_Expr_V5_XList(X) 
-    DW_Expr_GNU_XList(X)
+  DW_Expr_V4_XList(X)
+  DW_Expr_V5_XList(X) 
+  DW_Expr_GNU_XList(X)
 #undef X
 } DW_ExprOpEnum;
 
