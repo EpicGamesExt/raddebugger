@@ -842,6 +842,21 @@ e_interpret(String8 bytecode)
         }
       }break;
 
+      case RDI_EvalOp_CallSiteValue:
+      {
+        NotImplemented;
+      }break;
+
+      case RDI_EvalOp_PartialValue:
+      {
+        NotImplemented;
+      }break;
+
+      case RDI_EvalOp_PartialValueBit:
+      {
+        NotImplemented;
+      }break;
+
       case RDI_EvalOp_Swap:
       {
         // TODO: add support for pushing multiple values onto the stack
