@@ -523,7 +523,8 @@ RDI_EvalOp_ByteSwap             = 47,
 RDI_EvalOp_CallSiteValue        = 48,
 RDI_EvalOp_PartialValue         = 49,
 RDI_EvalOp_PartialValueBit      = 50,
-RDI_EvalOp_COUNT                = 51,
+RDI_EvalOp_Swap                 = 51,
+RDI_EvalOp_COUNT                = 52,
 } RDI_EvalOpEnum;
 
 typedef RDI_U8 RDI_EvalTypeGroup;
@@ -1122,6 +1123,7 @@ X(ByteSwap)\
 X(CallSiteValue)\
 X(PartialValue)\
 X(PartialValueBit)\
+X(Swap)\
 
 #define RDI_EvalTypeGroup_XList \
 X(Other)\
@@ -1623,6 +1625,6 @@ RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTyp
 RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
 
 extern RDI_U16 rdi_section_element_size_table[44];
-extern RDI_U16 rdi_eval_op_ctrlbits_table[52];
+extern RDI_U16 rdi_eval_op_ctrlbits_table[53];
 
 #endif // RDI_H

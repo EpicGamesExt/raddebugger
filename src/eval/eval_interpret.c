@@ -841,6 +841,12 @@ e_interpret(String8 bytecode)
           case 8:{nval.u64 = bswap_u64(svals[0].u64);}break;
         }
       }break;
+
+      case RDI_EvalOp_Swap:
+      {
+        // TODO: add support for pushing multiple values onto the stack
+        NotImplemented;
+      }break;
     }
     
     // rjf: push
