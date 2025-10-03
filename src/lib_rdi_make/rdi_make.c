@@ -1005,6 +1005,12 @@ rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S6
 }
 
 RDI_PROC void
+rdim_bytecode_push_convert(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalTypeGroup in, RDI_EvalTypeGroup out)
+{
+  rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_Convert, (U16)(in) | ((U16)(out) << 8));
+}
+
+RDI_PROC void
 rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed)
 {
   if(right_destroyed->first_op != 0)
