@@ -169,13 +169,20 @@ internal Rng1U64List
 d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag)
 {
   // collect non-contiguous range
-  Rng1U64List ranges = dw_rnglist_from_tag_attrib_kind(arena, input, cu, tag, DW_AttribKind_Ranges);
+  Rng1U64List raw_ranges = dw_rnglist_from_tag_attrib_kind(arena, input, cu, tag, DW_AttribKind_Ranges);
+
+  // exclude invalid ranges caused by linker optimizations
+  Rng1U64List ranges = {0};
+  for (Rng1U64Node *n = raw_ranges.first, *next = 0; n != 0; n = next) {
+    next = n->next;
+    if (n->v.min < image_base || n->v.min > n->v.max) {
+      continue;
+    }
+    rng1u64_list_push_node(&ranges, n);
+  }
   
   // debase ranges
   for EachNode(r, Rng1U64Node, ranges.first) {
-    // TODO: error handling
-    AssertAlways(r->v.min >= image_base);
-    AssertAlways(r->v.max >= image_base);
     r->v.min -= image_base;
     r->v.max -= image_base;
   }
@@ -2808,8 +2815,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       if (cu_idx < cu_contrib_map.count) {
         cu_voff_ranges = d2r_voff_ranges_from_cu_info_off(cu_contrib_map, cu_ranges.v[cu_idx].min);
       } else {
-        // TODO: synthesize cu ranges from scopes
-        NotImplemented;
+        Rng1U64List range_list  = d2r_range_list_from_tag(scratch.arena, &input, cu, image_base, cu->tag);
+        for EachNode(n, Rng1U64Node, range_list.first) {
+          rdim_rng1u64_chunk_list_push(arena, &cu_voff_ranges, 512, (RDIM_Rng1U64){ .min = n->v.min, .max = n->v.max });
+        }
       }
 
       // convert compile unit

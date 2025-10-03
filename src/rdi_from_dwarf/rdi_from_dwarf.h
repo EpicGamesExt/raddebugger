@@ -119,19 +119,19 @@ internal U64 rdim_virt_off_from_eval_bytecode(RDIM_EvalBytecode bc, U64 image_ba
 //~ rjf: Bytecode Conversion Helpers
 
 internal D2R_ValueTypeNode * d2r_value_type_stack_push(Arena *arena, D2R_ValueTypeStack *stack, D2R_ValueType type);
-internal D2R_ValueType d2r_value_type_stack_pop(D2R_ValueTypeStack *stack);
-internal D2R_ValueType d2r_value_type_stack_peek(D2R_ValueTypeStack *stack);
+internal D2R_ValueType       d2r_value_type_stack_pop(D2R_ValueTypeStack *stack);
+internal D2R_ValueType       d2r_value_type_stack_peek(D2R_ValueTypeStack *stack);
 
-internal D2R_ValueType d2r_unsigned_value_type_from_bit_size(U64 bit_size);
-internal D2R_ValueType d2r_signed_value_type_from_bit_size(U64 bit_size);
-internal D2R_ValueType d2r_float_type_from_bit_size(U64 bit_size);
+internal D2R_ValueType     d2r_unsigned_value_type_from_bit_size(U64 bit_size);
+internal D2R_ValueType     d2r_signed_value_type_from_bit_size(U64 bit_size);
+internal D2R_ValueType     d2r_float_type_from_bit_size(U64 bit_size);
 internal RDI_EvalTypeGroup d2r_value_type_to_rdi(D2R_ValueType v);
-internal U64 d2r_size_from_value_type(U64 addr_size, D2R_ValueType value_type);
-internal D2R_ValueType d2r_pick_common_value_type(D2R_ValueType lhs, D2R_ValueType rhs);
+internal U64               d2r_size_from_value_type(U64 addr_size, D2R_ValueType value_type);
+internal D2R_ValueType     d2r_pick_common_value_type(D2R_ValueType lhs, D2R_ValueType rhs);
 
 internal D2R_ValueType d2r_apply_usual_arithmetic_conversions(Arena *arena, D2R_ValueType lhs, D2R_ValueType rhs, RDIM_EvalBytecode *bc);
-internal void d2r_push_arithmetic_op(Arena *arena, D2R_ValueTypeStack *stack, RDIM_EvalBytecode *bc, RDI_EvalOp op);
-internal void d2r_push_relational_op(Arena *arena, D2R_ValueTypeStack *stack, RDIM_EvalBytecode *bc, RDI_EvalOp op);
+internal void          d2r_push_arithmetic_op(Arena *arena, D2R_ValueTypeStack *stack, RDIM_EvalBytecode *bc, RDI_EvalOp op);
+internal void          d2r_push_relational_op(Arena *arena, D2R_ValueTypeStack *stack, RDIM_EvalBytecode *bc, RDI_EvalOp op);
 
 internal RDIM_EvalBytecode     d2r_bytecode_from_expression(Arena *arena, DW_Input *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, String8 expr, DW_CompUnit *cu, D2R_ValueType *result_type_out);
 internal RDIM_Location *       d2r_transpile_expression(Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr);

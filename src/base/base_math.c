@@ -708,12 +708,19 @@ rgba_from_u32(U32 hex)
 //~ rjf: List Type Functions
 
 internal void
+rng1u64_list_push_node(Rng1U64List *list, Rng1U64Node *n)
+{
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal Rng1U64Node *
 rng1u64_list_push(Arena *arena, Rng1U64List *list, Rng1U64 rng)
 {
   Rng1U64Node *n = push_array(arena, Rng1U64Node, 1);
   MemoryCopyStruct(&n->v, &rng);
-  SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
+  rng1u64_list_push_node(list, n);
+  return n;
 }
 
 internal void
