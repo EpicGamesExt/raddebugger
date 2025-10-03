@@ -2257,7 +2257,6 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //- rjf: determine if file is out-of-date
   //
   B32 file_is_out_of_date = 0;
-  String8 out_of_date_dbgi_name = {0};
   {
     Temp scratch = scratch_begin(0, 0);
     
@@ -2367,9 +2366,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
         {
           UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1)) UI_TextPadding(0)
           {
-            UI_TagF("weak") ui_labelf("This file has changed since ");
-            ui_label(out_of_date_dbgi_name);
-            UI_TagF("weak") ui_labelf(" was produced.");
+            UI_TagF("weak") ui_labelf("This file has changed since it was compiled.");
           }
         }
       }
