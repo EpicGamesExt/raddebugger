@@ -2010,6 +2010,90 @@ RD_VIEW_UI_FUNCTION_DEF(null) {}
 ////////////////////////////////
 //~ rjf: text @view_hook_impl
 
+internal AC_Artifact
+rd_md5_artifact_create(String8 key, B32 *cancel_out, B32 *retry_out)
+{
+  AC_Artifact result = {0};
+  {
+    Access *access = access_open();
+    U128 hash = {0};
+    str8_deserial_read_struct(key, 0, &hash);
+    String8 data = c_data_from_hash(access, hash);
+    MD5 md5 = md5_from_data(data);
+    StaticAssert(sizeof(result) >= sizeof(md5), artifact_size_check);
+    MemoryCopy(&result, &md5, Min(sizeof(result), sizeof(md5)));
+    access_close(access);
+  }
+  return result;
+}
+
+internal AC_Artifact
+rd_sha1_artifact_create(String8 key, B32 *cancel_out, B32 *retry_out)
+{
+  AC_Artifact result = {0};
+  {
+    Access *access = access_open();
+    U128 hash = {0};
+    str8_deserial_read_struct(key, 0, &hash);
+    String8 data = c_data_from_hash(access, hash);
+    SHA1 sha1 = sha1_from_data(data);
+    StaticAssert(sizeof(result) >= sizeof(sha1), artifact_size_check);
+    MemoryCopy(&result, &sha1, Min(sizeof(result), sizeof(sha1)));
+    access_close(access);
+  }
+  return result;
+}
+
+internal AC_Artifact
+rd_sha256_artifact_create(String8 key, B32 *cancel_out, B32 *retry_out)
+{
+  AC_Artifact result = {0};
+  {
+    Access *access = access_open();
+    U128 hash = {0};
+    str8_deserial_read_struct(key, 0, &hash);
+    String8 data = c_data_from_hash(access, hash);
+    SHA1 sha256 = sha1_from_data(data);
+    StaticAssert(sizeof(result) >= sizeof(sha256), artifact_size_check);
+    MemoryCopy(&result, &sha256, Min(sizeof(result), sizeof(sha256)));
+    access_close(access);
+  }
+  return result;
+}
+
+internal MD5
+rd_md5_from_hash(U128 hash)
+{
+  Access *access = access_open();
+  AC_Artifact artifact = ac_artifact_from_key(access, str8_struct(&hash), rd_md5_artifact_create, 0, 0);
+  MD5 md5 = {0};
+  MemoryCopy(&md5, &artifact, Min(sizeof(md5), sizeof(artifact)));
+  access_close(access);
+  return md5;
+}
+
+internal SHA1
+rd_sha1_from_hash(U128 hash)
+{
+  Access *access = access_open();
+  AC_Artifact artifact = ac_artifact_from_key(access, str8_struct(&hash), rd_sha1_artifact_create, 0, 0);
+  SHA1 sha1 = {0};
+  MemoryCopy(&sha1, &artifact, Min(sizeof(sha1), sizeof(artifact)));
+  access_close(access);
+  return sha1;
+}
+
+internal SHA256
+rd_sha256_from_hash(U128 hash)
+{
+  Access *access = access_open();
+  AC_Artifact artifact = ac_artifact_from_key(access, str8_struct(&hash), rd_sha256_artifact_create, 0, 0);
+  SHA256 sha256 = {0};
+  MemoryCopy(&sha256, &artifact, Min(sizeof(sha256), sizeof(artifact)));
+  access_close(access);
+  return sha256;
+}
+
 EV_EXPAND_RULE_INFO_FUNCTION_DEF(text)
 {
   EV_ExpandInfo info = {0};
@@ -2175,23 +2259,103 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   B32 file_is_out_of_date = 0;
   String8 out_of_date_dbgi_name = {0};
   {
+    Temp scratch = scratch_begin(0, 0);
+    
+    // rjf: gather file overrides
+    String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, rd_regs()->file_path);
+    
+    // rjf: determine checksum in relevant debug infos
+    RDI_ChecksumKind checksum_kind = RDI_ChecksumKind_NULL;
+    String8 checksum_expected = {0};
+    for(DI_KeyNode *n = dbgi_keys.first; n != 0 && checksum_kind == RDI_ChecksumKind_NULL; n = n->next)
+    {
+      Access *access = access_open();
+      
+      // rjf: unpack RDI
+      DI_Key key = n->v;
+      RDI_Parsed *rdi = di_rdi_from_key(access, key, 0, 0);
+      
+      // rjf: file_path_normalized * rdi -> src_id
+      for EachNode(override_n, String8Node, overrides.first)
+      {
+        String8 file_path = override_n->string;
+        String8 file_path_normalized = lower_from_str8(scratch.arena, path_normalized_from_string(scratch.arena, file_path));
+        B32 good_src_id = 0;
+        U32 src_id = 0;
+        if(rdi != &rdi_parsed_nil)
+        {
+          RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
+          RDI_ParsedNameMap map = {0};
+          rdi_parsed_from_name_map(rdi, mapptr, &map);
+          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
+          if(node != 0)
+          {
+            U32 id_count = 0;
+            U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+            if(id_count > 0)
+            {
+              U32 src_id = ids[0];
+              RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+              checksum_kind = src->checksum_kind;
+              RDI_SectionKind checksum_section_kind = rdi_section_kind_from_checksum_kind(checksum_kind);
+              U64 checksum_size = rdi_section_element_size_table[checksum_section_kind];
+              U8 *checksum_data = rdi_section_raw_element_from_kind_idx(rdi, checksum_section_kind, src->checksum_idx);
+              checksum_expected = str8_copy(scratch.arena, str8(checksum_data, checksum_size));
+              break;
+            }
+          }
+        }
+      }
+      
+      access_close(access);
+    }
+    
+    // rjf: if we got a checksum, compute it locally - check if they match.
+    switch(checksum_kind)
+    {
+      default:{}break;
+      case RDI_ChecksumKind_MD5:
+      {
+        MD5 md5 = rd_md5_from_hash(hash);
+        String8 md5_string = str8_struct(&md5);
+        file_is_out_of_date = !str8_match(md5_string, checksum_expected, 0);
+      }break;
+      case RDI_ChecksumKind_SHA1:
+      {
+        SHA1 sha1 = rd_sha1_from_hash(hash);
+        String8 sha1_string = str8_struct(&sha1);
+        file_is_out_of_date = !str8_match(sha1_string, checksum_expected, 0);
+      }break;
+      case RDI_ChecksumKind_SHA256:
+      {
+        SHA256 sha256 = rd_sha256_from_hash(hash);
+        String8 sha256_string = str8_struct(&sha256);
+        file_is_out_of_date = !str8_match(sha256_string, checksum_expected, 0);
+      }break;
+    }
+    
+    // TODO(rjf): turn this back on once done...
+    file_is_out_of_date = 0;
+    
+    scratch_end(scratch);
+    
+    // TODO(rjf): @dbgi2
+#if 0
     U64 file_timestamp = os_properties_from_file_path(rd_regs()->file_path).modified;
     if(file_timestamp != 0)
     {
       for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
       {
         DI_Key key = n->v;
-        // TODO(rjf): @dbgi2
-#if 0
         if(key.min_timestamp < file_timestamp && key.min_timestamp != 0 && key.path.size != 0)
         {
           file_is_out_of_date = 1;
           out_of_date_dbgi_name = str8_skip_last_slash(key.path);
           break;
         }
-#endif
       }
     }
+#endif
   }
   
   //////////////////////////////
