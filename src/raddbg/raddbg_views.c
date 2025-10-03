@@ -2053,7 +2053,7 @@ rd_sha256_artifact_create(String8 key, B32 *cancel_out, B32 *retry_out)
     U128 hash = {0};
     str8_deserial_read_struct(key, 0, &hash);
     String8 data = c_data_from_hash(access, hash);
-    SHA1 sha256 = sha1_from_data(data);
+    SHA256 sha256 = sha256_from_data(data);
     StaticAssert(sizeof(result) >= sizeof(sha256), artifact_size_check);
     MemoryCopy(&result, &sha256, Min(sizeof(result), sizeof(sha256)));
     access_close(access);
@@ -2299,7 +2299,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
               checksum_kind = src->checksum_kind;
               RDI_SectionKind checksum_section_kind = rdi_section_kind_from_checksum_kind(checksum_kind);
               U64 checksum_size = rdi_section_element_size_table[checksum_section_kind];
-              U8 *checksum_data = rdi_section_raw_element_from_kind_idx(rdi, checksum_section_kind, src->checksum_idx);
+              U8 *checksum_data = (U8 *)rdi_section_raw_element_from_kind_idx(rdi, checksum_section_kind, src->checksum_idx);
               checksum_expected = str8_copy(scratch.arena, str8(checksum_data, checksum_size));
               break;
             }
@@ -2332,30 +2332,15 @@ RD_VIEW_UI_FUNCTION_DEF(text)
         String8 sha256_string = str8_struct(&sha256);
         file_is_out_of_date = !str8_match(sha256_string, checksum_expected, 0);
       }break;
+      case RDI_ChecksumKind_Timestamp:
+      {
+        FileProperties props = os_properties_from_file_path(rd_regs()->file_path);
+        String8 timestamp_string = str8_struct(&props.modified);
+        file_is_out_of_date = !str8_match(timestamp_string, checksum_expected, 0);
+      }break;
     }
-    
-    // TODO(rjf): turn this back on once done...
-    file_is_out_of_date = 0;
     
     scratch_end(scratch);
-    
-    // TODO(rjf): @dbgi2
-#if 0
-    U64 file_timestamp = os_properties_from_file_path(rd_regs()->file_path).modified;
-    if(file_timestamp != 0)
-    {
-      for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
-      {
-        DI_Key key = n->v;
-        if(key.min_timestamp < file_timestamp && key.min_timestamp != 0 && key.path.size != 0)
-        {
-          file_is_out_of_date = 1;
-          out_of_date_dbgi_name = str8_skip_last_slash(key.path);
-          break;
-        }
-      }
-    }
-#endif
   }
   
   //////////////////////////////
