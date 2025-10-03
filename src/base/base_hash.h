@@ -35,9 +35,13 @@ union SHA256
 };
 
 ////////////////////////////////
-//~ rjf: Hash Functions
+//~ rjf: MD5
 
 internal MD5 md5_from_data(String8 data);
+
+////////////////////////////////
+//~ rjf: SHA
+
 internal SHA1 sha1_from_data(String8 data);
 internal SHA256 sha256_from_data(String8 data);
 
