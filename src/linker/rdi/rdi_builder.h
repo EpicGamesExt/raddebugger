@@ -14,15 +14,6 @@ StaticAssert(sizeof(RDI_Header) == AlignPow2(sizeof(RDI_Header), 8), g_rdi_heade
 #define RDI_IsBuiltinType(x)                   (RDI_TypeKind_FirstBuiltIn <= (x) && (x) <= RDI_TypeKind_LastBuiltIn)
 #define RDI_IsPtrType(x)                       ((x) == RDI_TypeKind_Ptr || (x) == RDI_TypeKind_LRef || (x) == RDI_TypeKind_RRef)
 
-typedef enum
-{
-  RDI_Checksum_Null,
-  RDI_Checksum_MD5,
-  RDI_Checksum_SHA1,
-  RDI_Checksum_SHA256,
-  RDI_Checksum_TimeStamp
-} RDI_ChecksumKind;
-
 ////////////////////////////////
 
 typedef enum

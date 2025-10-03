@@ -234,11 +234,10 @@ internal RDI_ChecksumKind
 rdi_checksum_from_cv_c13(CV_C13ChecksumKind kind)
 {
   switch (kind) {
-  case CV_C13ChecksumKind_Null:   return RDI_Checksum_Null;
-  case CV_C13ChecksumKind_MD5:    return RDI_Checksum_MD5;
-  case CV_C13ChecksumKind_SHA1:   return RDI_Checksum_SHA1;
-  case CV_C13ChecksumKind_SHA256: return RDI_Checksum_SHA256;
+  case CV_C13ChecksumKind_Null:   return RDI_ChecksumKind_NULL;
+  case CV_C13ChecksumKind_MD5:    return RDI_ChecksumKind_MD5;
+  case CV_C13ChecksumKind_SHA1:   return RDI_ChecksumKind_SHA1;
+  case CV_C13ChecksumKind_SHA256: return RDI_ChecksumKind_SHA256;
   }
-  InvalidPath;
-  return RDI_Checksum_Null;
+  return RDI_ChecksumKind_NULL;
 }
