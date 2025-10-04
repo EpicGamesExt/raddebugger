@@ -982,7 +982,7 @@ internal U64
 dw_interp_const64(U64 type_byte_size, DW_ATE type_encoding, DW_FormKind form_kind, DW_Form form)
 {
   U64 result = max_U64;
-  if (form_kind == DW_Form_Data1 || form_kind == DW_Form_Data2 || form_kind == DW_Form_Data4 || form_kind == DW_Form_Data16) {
+  if (form_kind == DW_Form_Data1 || form_kind == DW_Form_Data2 || form_kind == DW_Form_Data4 || form_kind == DW_Form_Data8 || form_kind == DW_Form_Data16) {
     if (form.data.size <= sizeof(result)) {
       if (!dw_try_u64_from_const_value(type_byte_size, type_encoding, form.data, &result)) {
         Assert(!"unable to decode data");
@@ -1007,7 +1007,7 @@ dw_interp_const64(U64 type_byte_size, DW_ATE type_encoding, DW_FormKind form_kin
 internal U64
 dw_interp_const_u64(DW_FormKind form_kind, DW_Form form)
 {
-  return dw_interp_const64(DW_ATE_Unsigned, sizeof(U64), form_kind, form);
+  return dw_interp_const64(sizeof(U64), DW_ATE_Unsigned, form_kind, form);
 }
 
 internal U32
