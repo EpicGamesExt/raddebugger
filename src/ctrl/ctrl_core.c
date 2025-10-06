@@ -6000,14 +6000,14 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
     }
     
     //- rjf: do read
-    U64 range_size = 0;
+    U64 range_size = dim_1u64(vaddr_range_clamped);
     Arena *range_arena = 0;
     void *range_base = 0;
     U64 zero_terminated_size = 0;
     U64 pre_read_mem_gen = ctrl_mem_gen();
     B32 pre_run_state = ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
+    if(range_size != 0)
     {
-      range_size = dim_1u64(vaddr_range_clamped);
       U64 page_size = os_get_system_info()->page_size; // TODO(rjf): @page_size_from_process
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
       range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
@@ -6053,7 +6053,7 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
           MemoryZero((U8 *)range_base + bytes_read, range_size-bytes_read);
         }
         zero_terminated_size = range_size;
-        if(zero_terminated)
+        if(zero_terminated && range_base != 0)
         {
           for(U64 idx = 0; idx < bytes_read; idx += 1)
           {

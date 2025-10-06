@@ -11435,6 +11435,15 @@ rd_frame(void)
   //
   if(rd_state->frame_depth == 1)
   {
+    B32 any_window_is_focused = 0;
+    for(RD_WindowState *w = rd_state->first_window_state; w != &rd_nil_window_state; w = w->order_next)
+    {
+      if(os_window_is_focused(w->os))
+      {
+        any_window_is_focused = 1;
+        break;
+      }
+    }
     F32 slow_rate = 1 - pow_f32(2, (-10.f * rd_state->frame_dt));
     F32 fast_rate = 1 - pow_f32(2, (-40.f * rd_state->frame_dt));
     for EachIndex(slot_idx, rd_state->view_state_slots_count)
@@ -11449,7 +11458,7 @@ rd_frame(void)
         vs->scroll_pos.x.off += scroll_x_diff*rd_state->scrolling_animation_rate;
         vs->scroll_pos.y.off += scroll_y_diff*rd_state->scrolling_animation_rate;
         vs->loading_t += loading_t_diff * slow_rate;
-        if(abs_f32(loading_t_diff) > 0.01f ||
+        if((any_window_is_focused && abs_f32(loading_t_diff) > 0.01f) ||
            abs_f32(scroll_x_diff) > 0.01f ||
            abs_f32(scroll_y_diff) > 0.01f)
         {
@@ -11466,7 +11475,7 @@ rd_frame(void)
         RD_Cfg *vcfg = rd_cfg_from_id(vs->cfg_id);
         if(rd_cfg_child_from_string(vcfg, str8_lit("selected")) != &rd_nil_cfg)
         {
-          if(vs->loading_t_target > 0.5f)
+          if(vs->loading_t_target > 0.5f && any_window_is_focused)
           {
             rd_request_frame();
           }
