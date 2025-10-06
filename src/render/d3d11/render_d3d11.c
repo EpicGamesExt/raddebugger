@@ -831,8 +831,14 @@ r_end_frame(void)
         tex = next)
     {
       next = tex->next;
-      tex->view->lpVtbl->Release(tex->view);
-      tex->texture->lpVtbl->Release(tex->texture);
+      if(tex->view != 0)
+      {
+        tex->view->lpVtbl->Release(tex->view);
+      }
+      if(tex->texture != 0)
+      {
+        tex->texture->lpVtbl->Release(tex->texture);
+      }
       tex->view = 0;
       tex->texture = 0;
       tex->generation += 1;
@@ -843,8 +849,12 @@ r_end_frame(void)
         buf = next)
     {
       next = buf->next;
-      buf->buffer->lpVtbl->Release(buf->buffer);
+      if(buf->buffer != 0)
+      {
+        buf->buffer->lpVtbl->Release(buf->buffer);
+      }
       buf->generation += 1;
+      buf->buffer = 0;
       SLLStackPush(r_d3d11_state->first_free_buffer, buf);
     }
     arena_clear(r_d3d11_state->buffer_flush_arena);
