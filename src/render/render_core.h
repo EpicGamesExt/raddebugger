@@ -14,6 +14,62 @@
 ////////////////////////////////
 //~ rjf: Enums
 
+typedef U8 R_ChannelCode; // 3 bits
+typedef enum R_ChannelCodeEnum
+{
+  R_ChannelCode_Null,
+  R_ChannelCode_R,
+  R_ChannelCode_G,
+  R_ChannelCode_B,
+  R_ChannelCode_A,
+}
+R_ChannelCodeEnum;
+
+typedef U8 R_ChannelSizeKind; // 3 bits
+typedef enum R_ChannelSizeKindEnum
+{
+  R_ChannelSizeKind_Null,
+  R_ChannelSizeKind_2,
+  R_ChannelSizeKind_8,
+  R_ChannelSizeKind_10,
+  R_ChannelSizeKind_11,
+  R_ChannelSizeKind_16,
+  R_ChannelSizeKind_24,
+  R_ChannelSizeKind_32,
+}
+R_ChannelSizeKindEnum;
+
+typedef U8 R_ChannelTypeKind; // 3 bits
+typedef enum R_ChannelTypeKindEnum
+{
+  R_ChannelTypeKind_Null,
+  R_ChannelTypeKind_UInt,
+  R_ChannelTypeKind_SInt,
+  R_ChannelTypeKind_UNorm,
+  R_ChannelTypeKind_SNorm,
+  R_ChannelTypeKind_Float,
+}
+R_ChannelTypeKindEnum;
+
+typedef U64 R_Tex2DFmt;
+//
+// set of channels, each channel including {code, size, type kind}, 3 bits each:
+//   [0, 3) -> channel code
+//   [3, 6) -> channel size
+//   [6, 9) -> channel type kind
+//
+// 9 bits per channel, * number of channels, e.g. 4 channels -> 36 bits
+
+#define R_Channel(channel_idx, code_name, size_kind_name, type_kind_name) ((((U64)(R_ChannelCode_##code_name & 0x7)) | ((U64)(R_ChannelSizeKind_##size_kind_name & 0x7) << 3) | ((U64)(R_ChannelTypeKind_##type_kind_name & 0x7) << 6)) << ((channel_idx)*9))
+#define r_code_from_tex2dfmt_channel(fmt, channel_idx) ((R_ChannelCode)(((fmt) & (0x7<<((channel_idx)*9))) >> ((channel_idx)*9)))
+#define r_size_kind_from_tex2dfmt_channel(fmt, channel_idx) ((R_ChannelSizeKind)(((fmt) & (0x38<<((channel_idx)*9))) >> ((channel_idx)*9 + 3)))
+#define r_type_kind_from_tex2dfmt_channel(fmt, channel_idx) ((R_ChannelTypeKind)(((fmt) & (0x1c0<<((channel_idx)*9))) >> ((channel_idx)*9 + 6)))
+
+#define R_Tex2DFmt_R8    (R_Channel(0, R, 8, UInt))
+#define R_Tex2DFmt_RG8   (R_Channel(0, R, 8, UInt) | R_Channel(1, G, 8, UInt))
+#define R_Tex2DFmt_RGB8  (R_Channel(0, R, 8, UInt) | R_Channel(1, G, 8, UInt) | R_Channel(2, B, 8, UInt))
+#define R_Tex2DFmt_RGBA8 (R_Channel(0, R, 8, UInt) | R_Channel(1, G, 8, UInt) | R_Channel(2, B, 8, UInt) | R_Channel(3, A, 8, UInt))
+
 typedef U32 R_GeoVertexFlags;
 enum
 {
@@ -197,6 +253,8 @@ struct R_PassList
 ////////////////////////////////
 //~ rjf: Helpers
 
+internal U64 r_bytes_per_pixel_from_tex2dfmt(R_Tex2DFmt fmt);
+internal Mat4x4F32 r_sample_channel_map_from_tex2dfmt(R_Tex2DFmt fmt);
 internal Mat4x4F32 r_sample_channel_map_from_tex2dformat(R_Tex2DFormat fmt);
 
 ////////////////////////////////

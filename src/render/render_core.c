@@ -9,6 +9,46 @@
 ////////////////////////////////
 //~ rjf: Helpers
 
+internal U64
+r_bytes_per_pixel_from_tex2dfmt(R_Tex2DFmt fmt)
+{
+  U64 num_bits = 0;
+  for EachIndex(channel_idx, 4)
+  {
+    R_ChannelSizeKind size_kind = r_size_kind_from_tex2dfmt_channel(fmt, channel_idx);
+    switch(size_kind)
+    {
+      default:{}break;
+      case R_ChannelSizeKind_2: {num_bits += 2;}break;
+      case R_ChannelSizeKind_8: {num_bits += 8;}break;
+      case R_ChannelSizeKind_10:{num_bits += 10;}break;
+      case R_ChannelSizeKind_11:{num_bits += 11;}break;
+      case R_ChannelSizeKind_16:{num_bits += 16;}break;
+      case R_ChannelSizeKind_24:{num_bits += 24;}break;
+      case R_ChannelSizeKind_32:{num_bits += 32;}break;
+    }
+  }
+  U64 num_bits_rounded = num_bits+7;
+  num_bits_rounded -= num_bits_rounded%8;
+  U64 num_bytes = num_bits_rounded/8;
+  return num_bytes;
+}
+
+internal Mat4x4F32
+r_sample_channel_map_from_tex2dfmt(R_Tex2DFmt fmt)
+{
+  Mat4x4F32 result =
+  {
+    {
+      {1, 0, 0, 0},
+      {0, 1, 0, 0},
+      {0, 0, 1, 0},
+      {0, 0, 0, 1},
+    }
+  };
+  return result;
+}
+
 internal Mat4x4F32
 r_sample_channel_map_from_tex2dformat(R_Tex2DFormat fmt)
 {
