@@ -1920,7 +1920,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   {
                     module = &e_base_ctx->modules[idx];
                     dbgi_idx = (U32)idx;
-                    break;
+                    if(module == e_base_ctx->primary_module ||
+                       e_space_match(module->space, e_base_ctx->primary_module->space))
+                    {
+                      break;
+                    }
                   }
                 }
                 
