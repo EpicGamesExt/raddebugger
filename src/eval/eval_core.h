@@ -570,6 +570,7 @@ struct E_ConsTypeSlot
 typedef struct E_Module E_Module;
 struct E_Module
 {
+  DI_Key dbgi_key;
   RDI_Parsed *rdi;
   Rng1U64 vaddr_range;
   Arch arch;
@@ -1111,7 +1112,7 @@ read_only global E_String2ExprMap e_string2expr_map_nil = {0};
 read_only global E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil};
 read_only global E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
 read_only global E_Eval e_eval_nil = {{0}, {0}, {0}, &e_expr_nil, {&e_irnode_nil}};
-read_only global E_Module e_module_nil = {&rdi_parsed_nil};
+read_only global E_Module e_module_nil = {{0}, &rdi_parsed_nil};
 read_only global E_CacheBundle e_cache_bundle_nil = {0, {0}, {0}, {0}, {{0}, 0, &e_expr_nil, &e_expr_nil}, {&e_irnode_nil}};
 thread_static E_BaseCtx *e_base_ctx = 0;
 thread_static E_IRCtx *e_ir_ctx = 0;

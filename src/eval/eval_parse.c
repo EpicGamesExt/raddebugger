@@ -585,7 +585,7 @@ e_leaf_type_key_from_name(String8 name)
   E_TypeKey key = e_leaf_builtin_type_key_from_name(name);
   if(!e_type_key_match(e_type_key_zero(), key))
   {
-    DI_Match match = di_match_from_string(name, 0, 0);
+    DI_Match match = di_match_from_string(name, 0, e_base_ctx->primary_module->dbgi_key, 0);
     if(match.section_kind == RDI_SectionKind_TypeNodes)
     {
       Access *access = access_open();

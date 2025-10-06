@@ -4385,6 +4385,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
           
           //- rjf: fill evaluation module info
           eval_modules[eval_module_idx].arch        = arch;
+          eval_modules[eval_module_idx].dbgi_key    = dbgi_key;
           eval_modules[eval_module_idx].rdi         = rdi;
           eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
           eval_modules[eval_module_idx].space       = e_space_make(CTRL_EvalSpaceKind_Entity);

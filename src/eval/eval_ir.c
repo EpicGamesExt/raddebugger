@@ -1871,7 +1871,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 Access *access = access_open();
                 
                 // rjf: find match
-                DI_Match match = di_match_from_string(string, 0, 0);
+                DI_Match match = di_match_from_string(string, 0, e_base_ctx->primary_module->dbgi_key, 0);
                 if(match.idx == 0)
                 {
                   String8List namespaceified_strings = {0};
@@ -1900,7 +1900,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   }
                   for(String8Node *n = namespaceified_strings.first; n != 0; n = n->next)
                   {
-                    match = di_match_from_string(n->string, 0, 0);
+                    match = di_match_from_string(n->string, 0, e_base_ctx->primary_module->dbgi_key, 0);
                     if(match.idx != 0)
                     {
                       break;

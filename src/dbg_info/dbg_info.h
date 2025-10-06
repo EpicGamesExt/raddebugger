@@ -358,6 +358,6 @@ internal DI_SearchItemArray di_search_item_array_from_target_query(Access *acces
 //~ rjf: Match Artifact Cache Hooks / Lookups
 
 internal AC_Artifact di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
-internal DI_Match di_match_from_string(String8 string, U64 index, U64 endt_us);
+internal DI_Match di_match_from_string(String8 string, U64 index, DI_Key preferred_dbgi_key, U64 endt_us);
 
 #endif // DBG_INFO_H

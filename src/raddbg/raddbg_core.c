@@ -10311,7 +10311,7 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
     // rjf: try to map using asynchronous matching system
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      DI_Match match = di_match_from_string(string, 0, 0);
+      DI_Match match = di_match_from_string(string, 0, e_base_ctx->primary_module->dbgi_key, 0);
       RDI_SectionKind section_kind = match.section_kind;
       mapped = 1;
       switch(section_kind)
@@ -11887,6 +11887,7 @@ rd_frame(void)
         CTRL_Entity *m = all_modules.v[eval_module_idx];
         DI_Key dbgi_key = ctrl_dbgi_key_from_module(m);
         eval_modules[eval_module_idx].arch        = m->arch;
+        eval_modules[eval_module_idx].dbgi_key    = dbgi_key;
         eval_modules[eval_module_idx].rdi         = di_rdi_from_key(rd_state->frame_access, dbgi_key, 0, 0);
         eval_modules[eval_module_idx].vaddr_range = m->vaddr_range;
         eval_modules[eval_module_idx].space       = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process), RD_EvalSpaceKind_CtrlEntity);
@@ -14769,7 +14770,7 @@ rd_frame(void)
               DI_Key voff_dbgi_key = {0};
               if(!name_resolved)
               {
-                DI_Match match = di_match_from_string(name, 0, 0);
+                DI_Match match = di_match_from_string(name, 0, e_base_ctx->primary_module->dbgi_key, 0);
                 if(match.section_kind == RDI_SectionKind_Procedures)
                 {
                   Access *access = access_open();
