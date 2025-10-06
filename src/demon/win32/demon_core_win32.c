@@ -2882,7 +2882,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               single_step_thread_ctx = 0;
             }
-            if(ctx != 0)
+            if(single_step_thread_ctx != 0)
             {
               U64 rflags = single_step_thread_ctx->EFlags|0x2;
               U64 new_rflags = rflags & ~0x100;
