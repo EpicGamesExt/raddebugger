@@ -230,10 +230,6 @@ struct RD_ViewState
   U8 query_buffer[KB(1)];
   U64 query_string_size;
   
-  // rjf: last successful query string state
-  U8 last_successful_query_buffer[KB(1)];
-  U64 last_successful_query_string_size;
-  
   // rjf: contents are focused (disables query focus)
   B32 contents_are_focused;
 };

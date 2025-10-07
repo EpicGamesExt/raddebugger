@@ -72,7 +72,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
   Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
   
   //- rjf: cache * key -> existing artifact
-  B32 artifact_is_stale = 0;
+  B32 artifact_is_stale = 1;
   B32 got_artifact = 0;
   B32 need_request = 0;
   AC_Artifact artifact = {0};
