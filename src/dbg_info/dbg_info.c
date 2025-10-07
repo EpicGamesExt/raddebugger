@@ -1073,6 +1073,14 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
     
     //- rjf: do wide search on all lanes
     Arena *arena = arena_alloc();
+    Arena **arenas = 0;
+    U64 arenas_count = lane_count();
+    if(lane_idx() == 0)
+    {
+      arenas = push_array(arena, Arena *, arenas_count);
+    }
+    lane_sync_u64(&arenas, 0);
+    arenas[lane_idx()] = arena;
     DI_SearchItemChunkList *lanes_items = 0;
     ProfScope("do wide search on all lanes")
     {
@@ -1383,9 +1391,10 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
     lane_sync();
     
     //- rjf: bundle as artifact
-    artifact.u64[0] = (U64)arena;
-    artifact.u64[1] = (U64)items.v;
-    artifact.u64[2] = items.count;
+    artifact.u64[0] = (U64)arenas;
+    artifact.u64[1] = arenas_count;
+    artifact.u64[2] = (U64)items.v;
+    artifact.u64[3] = items.count;
   }
   scratch_end(scratch);
   access_close(access);
@@ -1396,11 +1405,19 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
 internal void
 di_search_artifact_destroy(AC_Artifact artifact)
 {
-  Arena *arena = (Arena *)artifact.u64[0];
-  if(arena != 0)
+  Temp scratch = scratch_begin(0, 0);
+  Arena **arenas = (Arena **)artifact.u64[0];
+  U64 arenas_count = artifact.u64[1];
+  Arena **arenas_copy = push_array(scratch.arena, Arena *, arenas_count);
+  MemoryCopy(arenas_copy, arenas, sizeof(Arena *) * arenas_count);
+  for EachIndex(idx, arenas_count)
   {
-    arena_release(arena);
+    if(arenas_copy[idx])
+    {
+      arena_release(arenas_copy[idx]);
+    }
   }
+  scratch_end(scratch);
 }
 
 internal DI_SearchItemArray
@@ -1421,8 +1438,8 @@ di_search_item_array_from_target_query(Access *access, RDI_SectionKind target, S
     AC_Artifact artifact = ac_artifact_from_key(access, key, di_search_artifact_create, di_search_artifact_destroy, endt_us, .gen = di_load_gen(), .flags = AC_Flag_Wide, .stale_out = stale_out);
     
     // rjf: unpack artifact
-    result.v = (DI_SearchItem *)artifact.u64[1];
-    result.count = artifact.u64[2];
+    result.v = (DI_SearchItem *)artifact.u64[2];
+    result.count = artifact.u64[3];
     
     scratch_end(scratch);
   }
