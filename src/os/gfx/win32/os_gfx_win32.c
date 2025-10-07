@@ -369,6 +369,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         BeginPaint(hwnd, &ps);
         update();
         EndPaint(hwnd, &ps);
+        DwmFlush();
       }break;
       
       case WM_CLOSE:
@@ -1056,7 +1057,7 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
     Temp scratch = scratch_begin(0, 0);
     String16 title16 = str16_from_8(scratch.arena, title);
     os_w32_new_window_custom_border = custom_border;
-    hwnd = CreateWindowExW(WS_EX_APPWINDOW,
+    hwnd = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP,
                            L"graphical-window",
                            (WCHAR*)title16.str,
                            WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
