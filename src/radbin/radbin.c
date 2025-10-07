@@ -613,13 +613,16 @@ rb_thread_entry_point(void *p)
       RDIM_BakeParams dwarf_bake_params = {0};
       {
         //- rjf: PE inputs w/ DWARF, or ELF inputs => DWARF -> RDI conversion
-        if(((input_files_from_format_table[RB_FileFormat_PE].count != 0 &&
-             input_files_from_format_table[RB_FileFormat_PE].first->v->format_flags & RB_FileFormatFlag_HasDWARF) ||
-            (input_files_from_format_table[RB_FileFormat_ELF32].count != 0 ||
-             input_files_from_format_table[RB_FileFormat_ELF64].count != 0)))
+        B32 pe_w_dwarf = (input_files_from_format_table[RB_FileFormat_PE].count != 0 &&
+                          input_files_from_format_table[RB_FileFormat_PE].first->v->format_flags & RB_FileFormatFlag_HasDWARF);
+        B32 elf_w_dwarf = (input_files_from_format_table[RB_FileFormat_ELF32].count != 0 ||
+                           input_files_from_format_table[RB_FileFormat_ELF64].count != 0);
+        if(pe_w_dwarf || elf_w_dwarf)
         {
           convert_done = 1;
-          log_infof("PEs w/ DWARF, or ELFs specified; converting DWARF data to RDI\n");
+          if(0){}
+          else if(pe_w_dwarf)  { log_infof("PEs w/ DWARF specified; converting DWARF data to RDI\n"); }
+          else if(elf_w_dwarf) { log_infof("ELFs specified; converting DWARF data to RDI\n"); }
           
           // rjf: convert
           D2R_ConvertParams convert_params = {0};
