@@ -197,7 +197,6 @@ global C_Shared *c_shared = 0;
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
-internal U128 c_hash_from_data(String8 data);
 internal C_ID c_id_make(U64 u64_0, U64 u64_1);
 internal B32 c_id_match(C_ID a, C_ID b);
 internal C_Key c_key_make(C_Root root, C_ID id);

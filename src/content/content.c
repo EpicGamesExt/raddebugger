@@ -7,21 +7,6 @@
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
-#if !defined(XXH_IMPLEMENTATION)
-# define XXH_IMPLEMENTATION
-# define XXH_STATIC_LINKING_ONLY
-# include "third_party/xxHash/xxhash.h"
-#endif
-
-internal U128
-c_hash_from_data(String8 data)
-{
-  U128 u128 = {0};
-  XXH128_hash_t hash = XXH3_128bits(data.str, data.size);
-  MemoryCopy(&u128, &hash, sizeof(u128));
-  return u128;
-}
-
 internal C_ID
 c_id_make(U64 u64_0, U64 u64_1)
 {
@@ -181,7 +166,7 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
   C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
   
   //- rjf: hash data, unpack hash
-  U128 hash = c_hash_from_data(data);
+  U128 hash = u128_hash_from_str8(data);
   U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
   U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
   C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];

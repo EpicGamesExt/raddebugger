@@ -6009,15 +6009,15 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
     B32 pre_run_state = ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
     if(range_size != 0)
     {
+      // rjf: set up arena
       U64 page_size = os_get_system_info()->page_size; // TODO(rjf): @page_size_from_process
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
       range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
-      if(range_arena == 0)
+      
+      // rjf: if we got an arena -> push buffer & read
+      if(range_arena != 0)
       {
-        range_size = 0;
-      }
-      else
-      {
+        // rjf: read as much as possible
         range_base = push_array_no_zero(range_arena, U8, range_size);
         U64 bytes_read = 0;
         U64 retry_count = 0;
@@ -6042,16 +6042,22 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
             break;
           }
         }
+        
+        // rjf: if we read nothing, release arena
         if(bytes_read == 0)
         {
           arena_release(range_arena);
           range_base = 0;
           range_arena = 0;
         }
+        
+        // rjf: if we only got a partial read, zero the rest
         else if(bytes_read < range_size)
         {
           MemoryZero((U8 *)range_base + bytes_read, range_size-bytes_read);
         }
+        
+        // rjf: determine final size; zero terminate if needed; pop any unneeded bytes if zero-terminating
         zero_terminated_size = bytes_read;
         if(zero_terminated && range_base != 0)
         {
@@ -6091,7 +6097,7 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
     U128 hash = {0};
     if((zero_terminated_size > 0 || !key_has_history) && range_size != 0 && pre_read_mem_gen == post_read_mem_gen)
     {
-      hash = c_submit_data(content_key, &range_arena, str8((U8*)range_base, zero_terminated_size));
+      hash = c_submit_data(content_key, &range_arena, str8((U8 *)range_base, zero_terminated_size));
     }
     else if(range_arena != 0)
     {
