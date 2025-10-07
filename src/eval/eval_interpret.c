@@ -125,7 +125,7 @@ e_interpret(String8 bytecode)
     }
     else switch(op)
     {
-      case E_IRExtKind_SetSpace:     {ctrlbits = RDI_EVAL_CTRLBITS(32, 0, 0);}break;
+      case E_IRExtKind_SetSpace:{ctrlbits = RDI_EVAL_CTRLBITS(32, 0, 0);}break;
       default:
       {
         result.code = E_InterpretationCode_BadOp;
@@ -209,10 +209,6 @@ e_interpret(String8 bytecode)
         {
           result.code = E_InterpretationCode_BadMemRead;
           goto done;
-        }
-        if(e_space_match(selected_space, e_interpret_ctx->reg_space))
-        {
-          selected_space = e_interpret_ctx->primary_space;
         }
       }break;
       

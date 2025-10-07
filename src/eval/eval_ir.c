@@ -2178,7 +2178,6 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 {
                   string_mapped = 1;
                   RDI_LocationReg loc = *(RDI_LocationReg *)(all_location_data + block->location_data_off);
-                  
                   REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc.reg_code);
                   REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
                   E_OpList oplist = {0};
