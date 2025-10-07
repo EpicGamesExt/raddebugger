@@ -2482,8 +2482,8 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(access, rd_regs()->text_key, rd_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = c_data_from_hash(access, dasm_text_hash);
-  B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
-  B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null && (space.kind != RD_EvalSpaceKind_CtrlEntity || space_entity != &ctrl_entity_nil));
+  B32 is_loading = (dasm_text_info.lines_count == 0 && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null && (space.kind != RD_EvalSpaceKind_CtrlEntity || space_entity != &ctrl_entity_nil));
+  B32 has_disasm = (dasm_text_info.lines_count != 0 && dasm_info.lines.count != 0);
   
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information

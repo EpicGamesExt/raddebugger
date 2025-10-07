@@ -1142,7 +1142,10 @@ internal Barrier
 os_barrier_alloc(U64 count)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Barrier);
-  pthread_barrier_init(&entity->barrier, 0, count);
+  if(entity != 0)
+  {
+    pthread_barrier_init(&entity->barrier, 0, count);
+  }
   Barrier result = {IntFromPtr(entity)};
   return result;
 }
@@ -1151,15 +1154,21 @@ internal void
 os_barrier_release(Barrier barrier)
 {
   OS_LNX_Entity *entity = (OS_LNX_Entity*)PtrFromInt(barrier.u64[0]);
-  pthread_barrier_destroy(&entity->barrier);
-  os_lnx_entity_release(entity);
+  if(entity != 0)
+  {
+    pthread_barrier_destroy(&entity->barrier);
+    os_lnx_entity_release(entity);
+  }
 }
 
 internal void
 os_barrier_wait(Barrier barrier)
 {
   OS_LNX_Entity *entity = (OS_LNX_Entity*)PtrFromInt(barrier.u64[0]);
-  pthread_barrier_wait(&entity->barrier);
+  if(entity != 0)
+  {
+    pthread_barrier_wait(&entity->barrier);
+  }
 }
 
 ////////////////////////////////

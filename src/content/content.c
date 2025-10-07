@@ -202,7 +202,7 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
     }
     
     // rjf: release duplicate data if node already exists
-    if(node != 0)
+    if(node != 0 && data_arena != 0 && *data_arena != 0)
     {
       arena_release(*data_arena);
     }

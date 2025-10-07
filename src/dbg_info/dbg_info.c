@@ -368,6 +368,7 @@ di_close(DI_Key key)
   //- rjf: release node's resources if needed
   if(node_released)
   {
+    ins_atomic_u64_dec_eval(&di_shared->load_count);
     os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
     os_file_map_close(file_map);
     os_file_close(file);
@@ -385,6 +386,13 @@ internal U64
 di_load_gen(void)
 {
   U64 result = ins_atomic_u64_eval(&di_shared->load_gen);
+  return result;
+}
+
+internal U64
+di_load_count(void)
+{
+  U64 result = ins_atomic_u64_eval(&di_shared->load_count);
   return result;
 }
 
@@ -943,6 +951,7 @@ di_async_tick(void)
             node->completion_count += 1;
             node->working_count -= 1;
             ins_atomic_u64_inc_eval(&di_shared->load_gen);
+            ins_atomic_u64_inc_eval(&di_shared->load_count);
           }
           else
           {
@@ -1540,7 +1549,9 @@ di_match_from_string(String8 string, U64 index, DI_Key preferred_dbgi_key, U64 e
     str8_list_push(scratch.arena, &key_parts, str8_struct(&string.size));
     str8_list_push(scratch.arena, &key_parts, string);
     String8 key = str8_list_join(scratch.arena, &key_parts, 0);
-    AC_Artifact artifact = ac_artifact_from_key(access, key, di_match_artifact_create, 0, endt_us, .flags = AC_Flag_Wide, .gen = di_load_gen());
+    U64 dbgi_count = di_load_count();
+    B32 wide = (dbgi_count > 256);
+    AC_Artifact artifact = ac_artifact_from_key(access, key, di_match_artifact_create, 0, endt_us, .flags = wide ? AC_Flag_Wide : 0, .gen = di_load_gen());
     result.key.u64[0]   = artifact.u64[0];
     result.key.u64[1]   = artifact.u64[1];
     result.section_kind = artifact.u64[2];

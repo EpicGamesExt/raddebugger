@@ -246,6 +246,7 @@ struct DI_Shared
 {
   Arena *arena;
   U64 load_gen;
+  U64 load_count;
   
   // rjf: key -> path cache
   U64 key2path_slots_count;
@@ -328,6 +329,7 @@ internal void di_close(DI_Key key);
 //~ rjf: Debug Info Lookups
 
 internal U64 di_load_gen(void);
+internal U64 di_load_count(void);
 internal DI_KeyArray di_push_all_loaded_keys(Arena *arena);
 internal RDI_Parsed *di_rdi_from_key(Access *access, DI_Key key, B32 high_priority, U64 endt_us);
 

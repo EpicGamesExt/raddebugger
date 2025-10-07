@@ -6046,14 +6046,13 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
         {
           arena_release(range_arena);
           range_base = 0;
-          range_size = 0;
           range_arena = 0;
         }
         else if(bytes_read < range_size)
         {
           MemoryZero((U8 *)range_base + bytes_read, range_size-bytes_read);
         }
-        zero_terminated_size = range_size;
+        zero_terminated_size = bytes_read;
         if(zero_terminated && range_base != 0)
         {
           for(U64 idx = 0; idx < bytes_read; idx += 1)
@@ -6080,7 +6079,7 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
     
     //- rjf: read successful -> submit to hash store
     U128 hash = {0};
-    if(range_base != 0 && pre_read_mem_gen == post_read_mem_gen)
+    if(range_size != 0 && pre_read_mem_gen == post_read_mem_gen)
     {
       hash = c_submit_data(content_key, &range_arena, str8((U8*)range_base, zero_terminated_size));
     }

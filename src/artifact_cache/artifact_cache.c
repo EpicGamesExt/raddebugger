@@ -459,9 +459,17 @@ ac_async_tick(void)
         if(req_idx >= task->thin_count) { break; }
         AC_Request *r = &task->thin[req_idx];
         
+        // rjf: push thin lane ctx
+        U64 thin_lane_ctx_broadcast_memory = 0;
+        LaneCtx thin_lane_ctx = {0, 1, {0}, &thin_lane_ctx_broadcast_memory};
+        LaneCtx lane_ctx_restore = lane_ctx(thin_lane_ctx);
+        
         // rjf: compute val
         B32 retry = 0;
         AC_Artifact val = r->create(r->key, r->cancel_signal, &retry);
+        
+        // rjf: restore wide lane ctx
+        lane_ctx(lane_ctx_restore);
         
         // rjf: retry? -> resubmit request
         if(retry)
