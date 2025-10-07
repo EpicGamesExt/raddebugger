@@ -5041,6 +5041,39 @@ rd_view_ui(Rng2F32 rect)
                             {
                               cell_params.flags &= ~RD_CellFlag_NoBackground;
                             }
+                            
+                            // rjf: apply type note
+                            if(!(cell_info.flags & RD_WatchCellFlag_NoEval) &&
+                               cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity &&
+                               row_info->callstack_thread == &ctrl_entity_nil &&
+                               e_type_kind_from_key(cell->eval.irtree.type_key) != E_TypeKind_Function)
+                              UI_FontSize(ui_top_font_size()*0.8f)
+                            {
+                              if(cell_width_px >= ui_top_font_size()*8.f)
+                              {
+                                E_TypeKey type_key = cell->eval.irtree.type_key;
+                                String8 note_string = {0};
+                                if(cell->eval.irtree.mode == E_Mode_Null && (row->block->eval.irtree.mode != E_Mode_Null || row->block->parent == &ev_nil_block))
+                                {
+                                  note_string = str8f(scratch.arena, "type (size: %I64u)", e_type_byte_size_from_key(type_key));
+                                }
+                                else if(cell->eval.irtree.mode == E_Mode_Null)
+                                {
+                                  note_string = str8f(scratch.arena, "type (size: %I64u, offset: %I64u)",
+                                                      e_type_byte_size_from_key(type_key),
+                                                      cell->eval.value.u64);
+                                }
+                                else
+                                {
+                                  note_string = e_type_string_from_key(scratch.arena, type_key);
+                                }
+                                DR_FStrList note_fstrs = rd_fstrs_from_code_string(scratch.arena, 1, 0, ui_color_from_name(str8_lit("text")), note_string);
+                                F32 note_fstrs_width_px = dr_dim_from_fstrs(0, &note_fstrs).x + 10;
+                                note_fstrs_width_px = Min(note_fstrs_width_px, cell_width_px*0.5f);
+                                cell_params.note_fstrs = note_fstrs;
+                                cell_params.note_width = ui_px(note_fstrs_width_px, 1);
+                              }
+                            }
                           }
                           
                           // rjf: build
@@ -6448,15 +6481,15 @@ rd_window_frame(void)
             RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
             if(rdi->raw_data_size != 0)
             {
-              ui_labelf("Symbols successfully loaded from %S", dbg_info_entity->string);
+              ui_labelf("Debug information successfully loaded from %S", dbg_info_entity->string);
             }
             else if(dbg_info_entity->string.size != 0)
             {
-              ui_labelf("Symbols not found at %S", dbg_info_entity->string);
+              ui_labelf("Debug information not found at %S", dbg_info_entity->string);
             }
             else if(dbg_info_entity->string.size == 0)
             {
-              ui_labelf("Symbol information not found in module file");
+              ui_labelf("Debug information location not found in module file");
             }
             access_close(access);
           }

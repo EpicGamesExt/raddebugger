@@ -51,6 +51,8 @@ struct RD_CellParams
   String8 pre_edit_value;
   DR_FStrList meta_fstrs;
   DR_FStrList value_fstrs;
+  DR_FStrList note_fstrs;
+  UI_Size note_width;
   String8 search_needle;
   String8 description;
   

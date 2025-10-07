@@ -208,9 +208,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(registers)
   CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
   Arch arch = thread->arch;
   U64 reg_count     = regs_reg_code_count_from_arch(arch);
-  U64 alias_count   = regs_alias_code_count_from_arch(arch);
   String8 *reg_strings   = regs_reg_code_string_table_from_arch(arch);
-  String8 *alias_strings = regs_alias_code_string_table_from_arch(arch);
   String8List exprs_list = {0};
   for(U64 idx = 1; idx < reg_count; idx += 1)
   {
@@ -218,14 +216,6 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(registers)
     if(matches.count == matches.needle_part_count)
     {
       str8_list_push(scratch.arena, &exprs_list, reg_strings[idx]);
-    }
-  }
-  for(U64 idx = 1; idx < alias_count; idx += 1)
-  {
-    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, alias_strings[idx]);
-    if(matches.count == matches.needle_part_count)
-    {
-      str8_list_push(scratch.arena, &exprs_list, alias_strings[idx]);
     }
   }
   String8Array *accel = push_array(arena, String8Array, 1);

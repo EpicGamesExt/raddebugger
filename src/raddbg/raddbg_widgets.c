@@ -602,7 +602,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
     if(rdi->raw_data_size == 0)
     {
       dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
-      dr_fstrs_push_new(arena, &result, &params, str8_lit("(Symbols not found)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("(Debug information not loaded)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
     }
     access_close(access);
   }
@@ -3372,8 +3372,10 @@ rd_cell(RD_CellParams *params, String8 string)
   B32 build_bindings      = !!(params->flags & RD_CellFlag_Bindings) && !is_focus_active;
   B32 build_lhs_name_desc = (params->meta_fstrs.node_count != 0 || params->description.size != 0);
   B32 build_line_edit     = (params->pre_edit_value.size != 0 || params->value_fstrs.node_count != 0);
+  B32 build_note          = (params->note_fstrs.node_count != 0 && !is_focus_active);
   DR_FStrList lhs_name_fstrs = params->meta_fstrs;
   DR_FStrList value_name_fstrs = params->value_fstrs;
+  DR_FStrList note_fstrs = params->note_fstrs;
   
   //////////////////////////////
   //- rjf: determine autocompletion string
@@ -3799,6 +3801,15 @@ rd_cell(RD_CellParams *params, String8 string)
         rd_cmd_binding_buttons(params->bindings_name, params->search_needle, 1);
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: build notes
+  //
+  if(build_note) UI_Parent(box) UI_PrefWidth(params->note_width)
+  {
+    UI_Box *note_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+    ui_box_equip_display_fstrs(note_box, &note_fstrs);
   }
   
   //////////////////////////////

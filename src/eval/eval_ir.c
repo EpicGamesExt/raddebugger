@@ -1815,6 +1815,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local->type_idx, module_idx);
                 
                 // rjf: extract local's location block
+                B32 got_location_block = 0;
                 U64 ip_voff = e_base_ctx->thread_ip_voff;
                 for(U32 loc_block_idx = local->location_first;
                     loc_block_idx < local->location_opl;
@@ -1825,7 +1826,14 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   {
                     mapped_location_block_module = module;
                     mapped_location_block = block;
+                    got_location_block = 1;
                   }
+                }
+                
+                // rjf: no location block -> error
+                if(!got_location_block)
+                {
+                  e_msgf(arena, &result.msgs, E_MsgKind_MissingInfo, expr->range, "Could not find location info for `%S`.", string__redirected);
                 }
               }
             }break;
