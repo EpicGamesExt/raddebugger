@@ -1604,6 +1604,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   //////////////////////////////
   //- rjf: process top-level commands
   //
+  D_CmdList deferred_cmds = {0};
   CTRL_MsgList ctrl_msgs = {0};
   ProfScope("process top-level commands")
   {
@@ -1852,11 +1853,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               run_flags  = 0;
               run_traps  = trap_net.traps;
             }
-            else if(!trap_net.good && params->retry_idx < 1000)
+            else if(!trap_net.good && params->retry_idx < 100)
             {
               D_CmdParams params_copy = *params;
               params_copy.retry_idx += 1;
-              d_push_cmd(cmd->kind, &params_copy);
+              d_cmd_list_push_new(scratch.arena, &deferred_cmds, cmd->kind, &params_copy);
             }
             else if(!trap_net.good)
             {
@@ -2117,6 +2118,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   {
     arena_clear(d_state->cmds_arena);
     MemoryZeroStruct(&d_state->cmds);
+  }
+  
+  //////////////////////////////
+  //- rjf: push deferred commands
+  //
+  for EachNode(n, D_CmdNode, deferred_cmds.first)
+  {
+    d_cmd_list_push_new(d_state->cmds_arena, &d_state->cmds, n->cmd.kind, &n->cmd.params);
   }
   
   //////////////////////////////
