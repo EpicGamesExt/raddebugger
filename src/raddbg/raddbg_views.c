@@ -2381,7 +2381,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     {
       auto_selected = 1;
       auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
-      eval = e_eval_from_stringf("(rip.u64 & (~(0x4000 - 1)))");
+      eval = e_eval_from_stringf("(reg:rip.u64 & (~(0x4000 - 1)))");
     }
   }
   
