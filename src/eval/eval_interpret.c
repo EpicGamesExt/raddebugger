@@ -150,6 +150,10 @@ e_interpret(String8 bytecode)
       ptr = next_ptr;
     }
     
+    // rjf: unpack imm -> type group & arithmetic width
+    RDI_EvalTypeGroup type_group = (RDI_EvalTypeGroup)imm.u512.u8[0];
+    U64 op_arithmetic_size = (U64)imm.u512.u8[1];
+    
     // rjf: pop
     E_Value *svals = 0;
     {
@@ -297,7 +301,7 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Abs:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.f32 = svals[0].f32;
           if(svals[0].f32 < 0)
@@ -305,7 +309,7 @@ e_interpret(String8 bytecode)
             nval.f32 = -svals[0].f32;
           }
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.f64 = svals[0].f64;
           if(svals[0].f64 < 0)
@@ -325,11 +329,11 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Neg:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.f32 = -svals[0].f32;
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.f64 = -svals[0].f64;
         }
@@ -341,11 +345,11 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Add:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.f32 = svals[0].f32 + svals[1].f32;
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.f64 = svals[0].f64 + svals[1].f64;
         }
@@ -357,11 +361,11 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Sub:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.f32 = svals[0].f32 - svals[1].f32;
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.f64 = svals[0].f64 - svals[1].f64;
         }
@@ -373,11 +377,11 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Mul:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.f32 = svals[0].f32*svals[1].f32;
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.f64 = svals[0].f64*svals[1].f64;
         }
@@ -389,7 +393,7 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Div:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           if(svals[1].f32 != 0.f)
           {
@@ -401,7 +405,7 @@ e_interpret(String8 bytecode)
             goto done;
           }
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           if(svals[1].f64 != 0.)
           {
@@ -413,8 +417,8 @@ e_interpret(String8 bytecode)
             goto done;
           }
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_U ||
-                imm.u64 == RDI_EvalTypeGroup_S)
+        else if(type_group == RDI_EvalTypeGroup_U ||
+                type_group == RDI_EvalTypeGroup_S)
         {
           if(svals[1].u64 != 0)
           {
@@ -435,8 +439,8 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Mod:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U ||
+           type_group == RDI_EvalTypeGroup_S)
         {
           if(svals[1].u64 != 0)
           {
@@ -452,10 +456,27 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_LShift:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U)
         {
-          nval.u64 = svals[0].u64 << svals[1].u64;
+          switch(op_arithmetic_size)
+          {
+            default:{}break;
+            case 1:{nval.u8  = svals[0].u8 << svals[1].u8;}break;
+            case 2:{nval.u16 = svals[0].u16 << svals[1].u16;}break;
+            case 4:{nval.u32 = svals[0].u32 << svals[1].u32;}break;
+            case 8:{nval.u64 = svals[0].u64 << svals[1].u64;}break;
+          }
+        }
+        else if(type_group == RDI_EvalTypeGroup_S)
+        {
+          switch(op_arithmetic_size)
+          {
+            default:{}break;
+            case 1:{nval.s8  = svals[0].s8 << svals[1].s8;}break;
+            case 2:{nval.s16 = svals[0].s16 << svals[1].s16;}break;
+            case 4:{nval.s32 = svals[0].s32 << svals[1].s32;}break;
+            case 8:{nval.s64 = svals[0].s64 << svals[1].s64;}break;
+          }
         }
         else
         {
@@ -466,13 +487,27 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_RShift:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U)
+        if(type_group == RDI_EvalTypeGroup_U)
         {
-          nval.u64 = svals[0].u64 >> svals[1].u64;
+          switch(op_arithmetic_size)
+          {
+            default:{}break;
+            case 1:{nval.u8  = svals[0].u8 >> svals[1].u8;}break;
+            case 2:{nval.u16 = svals[0].u16 >> svals[1].u16;}break;
+            case 4:{nval.u32 = svals[0].u32 >> svals[1].u32;}break;
+            case 8:{nval.u64 = svals[0].u64 >> svals[1].u64;}break;
+          }
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_S)
+        else if(type_group == RDI_EvalTypeGroup_S)
         {
-          nval.u64 = svals[0].s64 >> svals[1].u64;
+          switch(op_arithmetic_size)
+          {
+            default:{}break;
+            case 1:{nval.s8  = svals[0].s8 >> svals[1].s8;}break;
+            case 2:{nval.s16 = svals[0].s16 >> svals[1].s16;}break;
+            case 4:{nval.s32 = svals[0].s32 >> svals[1].s32;}break;
+            case 8:{nval.s64 = svals[0].s64 >> svals[1].s64;}break;
+          }
         }
         else
         {
@@ -483,8 +518,8 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_BitAnd:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U ||
+           type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = svals[0].u64&svals[1].u64;
         }
@@ -497,8 +532,8 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_BitOr:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U ||
+           type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = svals[0].u64|svals[1].u64;
         }
@@ -511,8 +546,8 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_BitXor:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U ||
+           type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = svals[0].u64^svals[1].u64;
         }
@@ -525,8 +560,8 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_BitNot:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U ||
+           type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = ~svals[0].u64;
         }
@@ -539,8 +574,8 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_LogAnd:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U ||
+           type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = (svals[0].u64 && svals[1].u64);
         }
@@ -553,8 +588,8 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_LogOr:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U ||
+           type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = (svals[0].u64 || svals[1].u64);
         }
@@ -567,8 +602,8 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_LogNot:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_U ||
-           imm.u64 == RDI_EvalTypeGroup_S)
+        if(type_group == RDI_EvalTypeGroup_U ||
+           type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = (!svals[0].u64);
         }
@@ -593,19 +628,19 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_LsEq:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.u64 = (svals[0].f32 <= svals[1].f32);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.u64 = (svals[0].f64 <= svals[1].f64);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_U)
+        else if(type_group == RDI_EvalTypeGroup_U)
         {
           nval.u64 = (svals[0].u64 <= svals[1].u64);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_S)
+        else if(type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = (svals[0].s64 <= svals[1].s64);
         }
@@ -618,19 +653,19 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_GrEq:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.u64 = (svals[0].f32 >= svals[1].f32);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.u64 = (svals[0].f64 >= svals[1].f64);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_U)
+        else if(type_group == RDI_EvalTypeGroup_U)
         {
           nval.u64 = (svals[0].u64 >= svals[1].u64);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_S)
+        else if(type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = (svals[0].s64 >= svals[1].s64);
         }
@@ -643,19 +678,19 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Less:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.u64 = (svals[0].f32 < svals[1].f32);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.u64 = (svals[0].f64 < svals[1].f64);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_U)
+        else if(type_group == RDI_EvalTypeGroup_U)
         {
           nval.u64 = (svals[0].u64 < svals[1].u64);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_S)
+        else if(type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = (svals[0].s64 < svals[1].s64);
         }
@@ -668,19 +703,19 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_Grtr:
       {
-        if(imm.u64 == RDI_EvalTypeGroup_F32)
+        if(type_group == RDI_EvalTypeGroup_F32)
         {
           nval.u64 = (svals[0].f32 > svals[1].f32);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_F64)
+        else if(type_group == RDI_EvalTypeGroup_F64)
         {
           nval.u64 = (svals[0].f64 > svals[1].f64);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_U)
+        else if(type_group == RDI_EvalTypeGroup_U)
         {
           nval.u64 = (svals[0].u64 > svals[1].u64);
         }
-        else if(imm.u64 == RDI_EvalTypeGroup_S)
+        else if(type_group == RDI_EvalTypeGroup_S)
         {
           nval.u64 = (svals[0].s64 > svals[1].s64);
         }
@@ -841,22 +876,22 @@ e_interpret(String8 bytecode)
           case 8:{nval.u64 = bswap_u64(svals[0].u64);}break;
         }
       }break;
-
+      
       case RDI_EvalOp_CallSiteValue:
       {
         NotImplemented;
       }break;
-
+      
       case RDI_EvalOp_PartialValue:
       {
         NotImplemented;
       }break;
-
+      
       case RDI_EvalOp_PartialValueBit:
       {
         NotImplemented;
       }break;
-
+      
       case RDI_EvalOp_Swap:
       {
         // TODO: add support for pushing multiple values onto the stack

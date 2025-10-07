@@ -163,19 +163,20 @@ e_irtree_unary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode
 }
 
 internal E_IRNode *
-e_irtree_binary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *l, E_IRNode *r)
+e_irtree_binary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, U64 operand_size, E_IRNode *l, E_IRNode *r)
 {
   E_IRNode *n = e_push_irnode(arena, op);
-  n->value.u64 = group;
+  n->value.u512.u8[0] = (U8)group;
+  n->value.u512.u8[1] = (U8)operand_size;
   e_irnode_push_child(n, l);
   e_irnode_push_child(n, r);
   return n;
 }
 
 internal E_IRNode *
-e_irtree_binary_op_u(Arena *arena, RDI_EvalOp op, E_IRNode *l, E_IRNode *r)
+e_irtree_binary_op_u(Arena *arena, RDI_EvalOp op, U64 operand_size, E_IRNode *l, E_IRNode *r)
 {
-  E_IRNode *n = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_U, l, r);
+  E_IRNode *n = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_U, operand_size, l, r);
   return n;
 }
 
@@ -314,8 +315,8 @@ e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_Type
       {
         valid_bits_mask |= (1ull<<idx);
       }
-      result = e_irtree_binary_op_u(arena, RDI_EvalOp_RShift, result, e_irtree_const_u(arena, type->off));
-      result = e_irtree_binary_op_u(arena, RDI_EvalOp_BitAnd, result, e_irtree_const_u(arena, valid_bits_mask));
+      result = e_irtree_binary_op_u(arena, RDI_EvalOp_RShift, type->byte_size, result, e_irtree_const_u(arena, type->off));
+      result = e_irtree_binary_op_u(arena, RDI_EvalOp_BitAnd, type->byte_size, result, e_irtree_const_u(arena, valid_bits_mask));
     }
   }
   return result;
@@ -475,7 +476,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
         if(r_value != 0 && !r_is_constant_value)
         {
           E_IRNode *const_tree = e_irtree_const_u(arena, r_value);
-          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, new_tree, const_tree);
+          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, e_type_byte_size_from_key(new_tree_type), new_tree, const_tree);
         }
         else if(r_is_constant_value)
         {
@@ -544,7 +545,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
           if(direct_type_size > 1)
           {
             E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
-            offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
+            offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, 8, offset_tree, const_tree);
           }
           
           // rjf: ops to push stack value, push offset, + read from stack value
@@ -562,7 +563,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
           if(direct_type_size > 1)
           {
             E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
-            offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
+            offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, 8, offset_tree, const_tree);
           }
           
           // rjf: ops to compute the base offset (resolve to value if addr-of-pointer)
@@ -573,7 +574,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
           }
           
           // rjf: ops to compute the final address
-          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, offset_tree, base_tree);
+          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, 8, offset_tree, base_tree);
           if(mode != E_Mode_Null)
           {
             mode = E_Mode_Offset;
@@ -1136,6 +1137,9 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+        U64 l_type_size = e_type_byte_size_from_key(l_type);
+        U64 r_type_size = e_type_byte_size_from_key(r_type);
+        U64 op_operand_size = Max(l_type_size, r_type_size);
         
         // rjf: resolve complex types to simple arithmetic tyeps
         if(l_type_kind == E_TypeKind_Bitfield)
@@ -1254,7 +1258,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               E_IRNode *r_value_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
               l_value_tree = e_irtree_convert_hi(arena, l_value_tree, l_type, l_type);
               r_value_tree = e_irtree_convert_hi(arena, r_value_tree, l_type, r_type);
-              E_IRNode *new_tree = e_irtree_binary_op(arena, op, l_type_group, l_value_tree, r_value_tree);
+              E_IRNode *new_tree = e_irtree_binary_op(arena, op, l_type_group, op_operand_size, l_value_tree, r_value_tree);
               result.root     = new_tree;
               result.type_key = final_type_key;
               result.mode     = E_Mode_Value;
@@ -1267,10 +1271,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             // rjf: map l/r to ptr/int
             E_IRTreeAndType *ptr_tree = &l_tree;
             E_IRTreeAndType *int_tree = &r_tree;
+            U64 ptr_size = l_type_size;
             B32 ptr_is_decay = l_is_decay;
             if(ptr_arithmetic_mul_rptr)
             {
               ptr_tree = &r_tree;
+              ptr_size = r_type_size;
               int_tree = &l_tree;
               ptr_is_decay = r_is_decay;
             }
@@ -1291,14 +1297,14 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               if(direct_type_size > 1)
               {
                 E_IRNode *const_root = e_irtree_const_u(arena, direct_type_size);
-                int_root = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, int_root, const_root);
+                int_root = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, ptr_size, int_root, const_root);
               }
               E_TypeKey ptr_type = ptr_tree->type_key;
               if(ptr_is_decay)
               {
                 ptr_type = e_type_key_cons_ptr(e_base_ctx->primary_module->arch, direct_type, 1, 0);
               }
-              E_IRNode *new_root = e_irtree_binary_op_u(arena, op, ptr_root, int_root);
+              E_IRNode *new_root = e_irtree_binary_op_u(arena, op, ptr_size, ptr_root, int_root);
               result.root     = new_root;
               result.type_key = ptr_type;
               result.mode     = E_Mode_Value;
@@ -1323,12 +1329,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             {
               r_root = e_irtree_resolve_to_value(arena, r_tree.mode, r_root, r_type);
             }
-            E_IRNode *op_tree = e_irtree_binary_op_u(arena, op, l_root, r_root);
+            E_IRNode *op_tree = e_irtree_binary_op_u(arena, op, l_type_size, l_root, r_root);
             E_IRNode *new_tree = op_tree;
             if(direct_type_size > 1)
             {
               E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
-              new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Div, new_tree, const_tree);
+              new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Div, l_type_size, new_tree, const_tree);
             }
             result.root     = new_tree;
             result.type_key = e_type_key_basic(E_TypeKind_U64);
@@ -1342,11 +1348,13 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             B32 ptr_is_decay = l_is_decay;
             E_IRTreeAndType *ptr_tree = &l_tree;
             E_IRTreeAndType *arr_tree = &r_tree;
+            U64 ptr_size = l_type_size;
             if(l_type_kind == E_TypeKind_Array && l_tree.mode == E_Mode_Value)
             {
               ptr_is_decay = r_is_decay;
               ptr_tree = &r_tree;
               arr_tree = &l_tree;
+              ptr_size = r_type_size;
             }
             
             // rjf: resolve pointer to value, sized same as array
@@ -1361,7 +1369,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             E_IRNode *mem_root = e_irtree_mem_read_type(arena, ptr_root, arr_tree->type_key);
             
             // rjf: generate
-            result.root     = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_Other, mem_root, arr_root);
+            result.root     = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_Other, ptr_size, mem_root, arr_root);
             result.type_key = e_type_key_basic(E_TypeKind_Bool);
             result.mode     = E_Mode_Value;
           }break;
@@ -2701,7 +2709,7 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         
         // rjf: fill bytecode
         ptr[0] = opcode;
-        MemoryCopy(ptr + 1, &op->value.u64, extra_byte_count);
+        MemoryCopy(ptr + 1, &op->value.u512.u8[0], extra_byte_count);
         
         // rjf: advance
         ptr = next_ptr;

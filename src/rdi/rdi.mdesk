@@ -1323,8 +1323,8 @@ RDI_EvalOpTable:
   {Mul             22      1 2 1}
   {Div             23      1 2 1}
   {Mod             24      1 2 1}
-  {LShift          25      1 2 1}
-  {RShift          26      1 2 1}
+  {LShift          25      2 2 1}
+  {RShift          26      2 2 1}
   {BitAnd          27      1 2 1}
   {BitOr           28      1 2 1}
   {BitXor          29      1 2 1}

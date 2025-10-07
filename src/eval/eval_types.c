@@ -2661,6 +2661,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
     if(ext->base_ptr_member != 0)
     {
       Temp scratch = scratch_begin(&arena, 1);
+      U64 addr_size = e_type_byte_size_from_key(ext->base_ptr_member->type_key);
       
       // rjf: compute ir tree for struct base
       E_IRNode *struct_base_tree = &e_irnode_nil;
@@ -2681,7 +2682,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
         base_ptr_tree = struct_base_tree;
         if(ext->base_ptr_member->off != 0)
         {
-          base_ptr_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, struct_base_tree, e_irtree_const_u(arena, ext->base_ptr_member->off));
+          base_ptr_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, addr_size, struct_base_tree, e_irtree_const_u(arena, ext->base_ptr_member->off));
         }
         base_ptr_tree = e_irtree_mem_read_type(arena, base_ptr_tree, ext->base_ptr_member->type_key);
       }
@@ -2692,8 +2693,8 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
       {
         E_IRTreeAndType idx_irtree = e_push_irtree_and_type_from_expr(arena, 0, &e_default_identifier_resolution_rule, 0, 1, expr->first->next);
         E_IRNode *idx_root = e_irtree_resolve_to_value(arena, idx_irtree.mode, idx_irtree.root, idx_irtree.type_key);
-        E_IRNode *off_root = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, idx_root, e_irtree_const_u(arena, e_type_byte_size_from_key(e_type_key_unwrap(ext->base_ptr_member->type_key, E_TypeUnwrapFlag_All))));
-        idxed_base_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, base_ptr_tree, off_root);
+        E_IRNode *off_root = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, addr_size, idx_root, e_irtree_const_u(arena, e_type_byte_size_from_key(e_type_key_unwrap(ext->base_ptr_member->type_key, E_TypeUnwrapFlag_All))));
+        idxed_base_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, addr_size, base_ptr_tree, off_root);
       }
       
       // rjf: form final result
