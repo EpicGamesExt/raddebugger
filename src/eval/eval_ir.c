@@ -2600,8 +2600,8 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space
   U32 op = root->op;
   {
     E_Space zero_space = zero_struct;
-    if(!MemoryMatchStruct(&root->space, &zero_space) &&
-       !MemoryMatchStruct(&root->space, current_space))
+    if(!e_space_match(root->space, zero_space) &&
+       !e_space_match(root->space, *current_space))
     {
       *current_space = root->space;
       e_oplist_push_set_space(arena, out, root->space);

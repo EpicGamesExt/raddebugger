@@ -2604,6 +2604,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Vec4F32 main_tx_color_rgba = ui_color_from_name(str8_lit("text"));
   Vec4F32 main_tx_color_hsva = hsva_from_rgba(main_tx_color_rgba);
   F32 main_font_size = ui_bottom_font_size();
+  if(e_space_match(eval.space, e_base_ctx->thread_reg_space))
+  {
+    eval = e_value_eval_from_eval(eval);
+    eval.space = e_base_ctx->primary_module->space;
+  }
   Rng1U64 view_range = rd_space_range_from_eval(eval);
   if(eval.space.kind == 0)
   {
