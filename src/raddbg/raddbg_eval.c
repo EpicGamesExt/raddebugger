@@ -1653,11 +1653,12 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
     B32 stale = 0;
     accel->section = section;
     accel->items = di_search_item_array_from_target_query(rd_state->frame_access, section, filter, endt_us, &stale);
-    RD_Cfg *last_successful_query_cfg = rd_immediate_cfg_from_keyf("last_successful_query_%I64x", rd_regs()->view);
+    RD_Cfg *last_successful_query_cfg = rd_immediate_cfg_from_keyf("last_successful_query_%I64x_%I64u", rd_regs()->view, (U64)section);
     if(stale)
     {
       String8 last_query = last_successful_query_cfg->first->string;
       accel->items = di_search_item_array_from_target_query(rd_state->frame_access, section, last_query, endt_us, 0);
+      rd_request_frame();
     }
     else
     {
