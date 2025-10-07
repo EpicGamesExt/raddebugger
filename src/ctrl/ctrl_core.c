@@ -6077,16 +6077,29 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out)
       content_key.id.u128[0] = u128_hash_from_str8(key);
     }
     
-    //- rjf: read successful -> submit to hash store
+    //- rjf: determine if we have any history for this key
+    B32 key_has_history = 0;
+    {
+      U128 last_hash = c_hash_from_key(content_key, 0);
+      if(!u128_match(last_hash, u128_zero()))
+      {
+        key_has_history = 1;
+      }
+    }
+    
+    //- rjf: read successful, OR we have no history -> submit to hash store
     U128 hash = {0};
-    if(range_size != 0 && pre_read_mem_gen == post_read_mem_gen)
+    if((zero_terminated_size > 0 || !key_has_history) && range_size != 0 && pre_read_mem_gen == post_read_mem_gen)
     {
       hash = c_submit_data(content_key, &range_arena, str8((U8*)range_base, zero_terminated_size));
     }
     else if(range_arena != 0)
     {
       arena_release(range_arena);
-      retry_out[0] = 1;
+      if(pre_read_mem_gen != post_read_mem_gen && range_size != 0)
+      {
+        retry_out[0] = 1;
+      }
     }
     
     //- rjf: wakeup on new reads
