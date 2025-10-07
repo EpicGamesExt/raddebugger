@@ -276,20 +276,12 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
     // rjf: push hash into key's history
     if(key_node)
     {
-      U128 last_hash = {0};
-      if(key_node->hash_history_gen >= 1)
+      if(key_node->hash_history_gen >= C_KEY_HASH_HISTORY_STRONG_REF_COUNT)
       {
-        last_hash = key_node->hash_history[(key_node->hash_history_gen-1)%ArrayCount(key_node->hash_history)];
+        key_expired_hash = key_node->hash_history[(key_node->hash_history_gen-C_KEY_HASH_HISTORY_STRONG_REF_COUNT)%ArrayCount(key_node->hash_history)];
       }
-      if(!u128_match(last_hash, hash))
-      {
-        if(key_node->hash_history_gen >= C_KEY_HASH_HISTORY_STRONG_REF_COUNT)
-        {
-          key_expired_hash = key_node->hash_history[(key_node->hash_history_gen-C_KEY_HASH_HISTORY_STRONG_REF_COUNT)%ArrayCount(key_node->hash_history)];
-        }
-        key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)] = hash;
-        key_node->hash_history_gen += 1;
-      }
+      key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)] = hash;
+      key_node->hash_history_gen += 1;
     }
     
     // rjf: key is new -> add this key to the associated root

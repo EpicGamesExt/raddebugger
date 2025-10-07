@@ -1805,7 +1805,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         default:{}break;
         case CTRL_EntityKind_Process:
         {
-          CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, range, rd_state->frame_eval_memread_endt_us);
+          CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, range, 0, rd_state->frame_eval_memread_endt_us);
           String8 data = slice.data;
           if(data.size == dim_1u64(range))
           {
@@ -2159,7 +2159,7 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       if(entity->kind == CTRL_EntityKind_Process)
       {
-        result = ctrl_key_from_process_vaddr_range(entity->handle, range, zero_terminated, 0, 0);
+        result = ctrl_key_from_process_vaddr_range(entity->handle, range, zero_terminated, 0, 0, 0);
       }
     }break;
   }
@@ -4641,7 +4641,7 @@ rd_view_ui(Rng2F32 rect)
                             CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(cell->eval.space);
                             if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && space_entity->kind == CTRL_EntityKind_Process)
                             {
-                              CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, cell_vaddr_rng, rd_state->frame_eval_memread_endt_us);
+                              CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, cell_vaddr_rng, 0, rd_state->frame_eval_memread_endt_us);
                               for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                               {
                                 if(slice.byte_changed_flags[idx] != 0)
@@ -5047,7 +5047,7 @@ rd_view_ui(Rng2F32 rect)
                                cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity &&
                                row_info->callstack_thread == &ctrl_entity_nil &&
                                e_type_kind_from_key(cell->eval.irtree.type_key) != E_TypeKind_Function)
-                              UI_FontSize(ui_top_font_size()*0.8f)
+                              UI_FontSize(ui_top_font_size()*0.9f)
                             {
                               if(cell_width_px >= ui_top_font_size()*8.f)
                               {
@@ -7133,12 +7133,8 @@ rd_window_frame(void)
             ev_key_set_expansion(rd_view_eval_view(), ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
             predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval);
           }
-          F32 row_height_px = ui_top_px_height();
-          U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
-          if(ws->hover_eval_focused)
-          {
-            max_row_count *= 3;
-          }
+          F32 row_height_px = floor_f32(ui_top_font_size()*rd_setting_f32_from_name(str8_lit("row_height")));
+          U64 max_row_count = 12;
           U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
           F32 width_px = floor_f32(70.f*ui_top_font_size());
           F32 height_px = needed_row_count*row_height_px;

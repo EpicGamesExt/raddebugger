@@ -70,6 +70,16 @@ struct D_PathMapArray
 };
 
 ////////////////////////////////
+//~ rjf: Trap Nets
+
+typedef struct D_TrapNet D_TrapNet;
+struct D_TrapNet
+{
+  CTRL_TrapList traps;
+  B32 good;
+};
+
+////////////////////////////////
 //~ rjf: Tick Output Types
 
 typedef enum D_EventKind
@@ -187,6 +197,7 @@ struct D_CmdParams
   U32 pid;
   U32 rgba;
   D_TargetArray targets;
+  U64 retry_idx;
 };
 
 typedef struct D_Cmd D_Cmd;
@@ -358,9 +369,9 @@ internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind,
 ////////////////////////////////
 //~ rjf: Stepping "Trap Net" Builders
 
-internal CTRL_TrapList d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread);
-internal CTRL_TrapList d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread);
-internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread);
+internal D_TrapNet d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread);
+internal D_TrapNet d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread);
+internal D_TrapNet d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread);
 
 ////////////////////////////////
 //~ rjf: Debug Info Lookups

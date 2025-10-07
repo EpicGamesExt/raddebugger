@@ -290,11 +290,11 @@ d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *
 // - for any instructions which may change the stack pointer, traps are placed
 //     at them with the "save-stack-pointer | single-step-after" behaviors.
 
-internal CTRL_TrapList
+internal D_TrapNet
 d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  CTRL_TrapList result = {0};
+  D_TrapNet result = {0};
   
   // rjf: thread => unpacked info
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
@@ -305,13 +305,15 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread)
   String8 machine_code = {0};
   {
     Rng1U64 rng = r1u64(ip_vaddr, ip_vaddr+max_instruction_size_from_arch(arch));
-    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, rng, os_now_microseconds()+5000);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, rng, 0, os_now_microseconds()+5000);
     machine_code = machine_code_slice.data;
   }
   
   // rjf: build traps if machine code was read successfully
   if(machine_code.size != 0)
   {
+    result.good = 1;
+    
     // rjf: decode instruction
     DASM_Inst inst = dasm_inst_from_code(scratch.arena, arch, ip_vaddr, machine_code, DASM_Syntax_Intel);
     
@@ -319,7 +321,7 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread)
     if(inst.flags & DASM_InstFlag_Call || inst.flags & DASM_InstFlag_Repeats)
     {
       CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, ip_vaddr+inst.size};
-      ctrl_trap_list_push(arena, &result, &trap);
+      ctrl_trap_list_push(arena, &result.traps, &trap);
     }
   }
   
@@ -327,12 +329,12 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread)
   return result;
 }
 
-internal CTRL_TrapList
+internal D_TrapNet
 d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
 {
   Temp scratch = scratch_begin(&arena, 1);
   log_infof("step_over_line:\n{\n");
-  CTRL_TrapList result = {0};
+  D_TrapNet result = {0};
   
   // rjf: thread => info
   Arch arch = thread->arch;
@@ -380,7 +382,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   B32 good_machine_code = 0;
   if(good_line_info)
   {
-    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+50000);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, os_now_microseconds()+50000);
     machine_code = machine_code_slice.data;
     good_machine_code = (machine_code.size == dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
     LogInfoNamedBlockF("machine_code_slice")
@@ -469,7 +471,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
     if(add)
     {
       CTRL_Trap trap = {flags, trap_addr};
-      ctrl_trap_list_push(arena, &result, &trap);
+      ctrl_trap_list_push(arena, &result.traps, &trap);
     }
   }
   
@@ -477,11 +479,17 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   if(good_line_info && good_machine_code)
   {
     CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, line_vaddr_rng.max};
-    ctrl_trap_list_push(arena, &result, &trap);
+    ctrl_trap_list_push(arena, &result.traps, &trap);
+  }
+  
+  // rjf: good if we got machine code
+  if(good_machine_code)
+  {
+    result.good = 1;
   }
   
   // rjf: log
-  LogInfoNamedBlockF("traps") for(CTRL_TrapNode *n = result.first; n != 0; n = n->next)
+  LogInfoNamedBlockF("traps") for(CTRL_TrapNode *n = result.traps.first; n != 0; n = n->next)
   {
     log_infof("{flags:0x%x, vaddr:0x%I64x}\n", n->v.flags, n->v.vaddr);
   }
@@ -491,11 +499,11 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   return result;
 }
 
-internal CTRL_TrapList
+internal D_TrapNet
 d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  CTRL_TrapList result = {0};
+  D_TrapNet result = {0};
   
   // rjf: thread => info
   Arch arch = thread->arch;
@@ -538,7 +546,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   B32 good_machine_code = 0;
   if(good_line_info)
   {
-    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+5000);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, os_now_microseconds()+5000);
     machine_code = machine_code_slice.data;
     good_machine_code = (machine_code.size == dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
   }
@@ -625,7 +633,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
     if(add)
     {
       CTRL_Trap trap = {flags, trap_addr};
-      ctrl_trap_list_push(arena, &result, &trap);
+      ctrl_trap_list_push(arena, &result.traps, &trap);
     }
   }
   
@@ -633,7 +641,13 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   if(good_line_info && good_machine_code)
   {
     CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, line_vaddr_rng.max};
-    ctrl_trap_list_push(arena, &result, &trap);
+    ctrl_trap_list_push(arena, &result.traps, &trap);
+  }
+  
+  // rjf: good if we got machine code
+  if(good_machine_code)
+  {
+    result.good = 1;
   }
   
   scratch_end(scratch);
@@ -981,7 +995,7 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
     U64 tls_index = 0;
     if(addr_size != 0)
     {
-      CTRL_ProcessMemorySlice tls_index_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, tls_vaddr_range, 0);
+      CTRL_ProcessMemorySlice tls_index_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, tls_vaddr_range, 0, 0);
       if(tls_index_slice.data.size >= addr_size)
       {
         tls_index = *(U64 *)tls_index_slice.data.str;
@@ -994,13 +1008,13 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
       U64 thread_info_addr = root_vaddr;
       U64 tls_addr_off = tls_index*addr_size;
       U64 tls_addr_array = 0;
-      CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0);
+      CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0, 0);
       String8 tls_addr_array_data = tls_addr_array_slice.data;
       if(tls_addr_array_data.size >= 8)
       {
         MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
       }
-      CTRL_ProcessMemorySlice result_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0);
+      CTRL_ProcessMemorySlice result_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0, 0);
       String8 result_data = result_slice.data;
       if(result_data.size >= 8)
       {
@@ -1791,15 +1805,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           }
           else
           {
-            B32 good = 1;
-            CTRL_TrapList traps = {0};
+            D_TrapNet trap_net = {0};
             switch(cmd->kind)
             {
               default: break;
-              case D_CmdKind_StepIntoInst: {}break;
-              case D_CmdKind_StepOverInst: {traps = d_trap_net_from_thread__step_over_inst(scratch.arena, thread);}break;
-              case D_CmdKind_StepIntoLine: {traps = d_trap_net_from_thread__step_into_line(scratch.arena, thread);}break;
-              case D_CmdKind_StepOverLine: {traps = d_trap_net_from_thread__step_over_line(scratch.arena, thread);}break;
+              case D_CmdKind_StepIntoInst: {trap_net.good = 1;}break;
+              case D_CmdKind_StepOverInst: {trap_net = d_trap_net_from_thread__step_over_inst(scratch.arena, thread);}break;
+              case D_CmdKind_StepIntoLine: {trap_net = d_trap_net_from_thread__step_into_line(scratch.arena, thread);}break;
+              case D_CmdKind_StepOverLine: {trap_net = d_trap_net_from_thread__step_over_line(scratch.arena, thread);}break;
               case D_CmdKind_StepOut:
               {
                 Access *access = access_open();
@@ -1812,32 +1825,42 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 {
                   U64 vaddr = regs_rip_from_arch_block(thread->arch, callstack.concrete_frames[1]->regs);
                   CTRL_Trap trap = {CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck, vaddr};
-                  ctrl_trap_list_push(scratch.arena, &traps, &trap);
+                  ctrl_trap_list_push(scratch.arena, &trap_net.traps, &trap);
+                  trap_net.good = 1;
                 }
                 else
                 {
                   log_user_error(str8_lit("Could not find the return address of the current callstack frame successfully."));
-                  good = 0;
                 }
                 
                 access_close(access);
               }break;
             }
-            if(good && traps.count != 0)
+            if(trap_net.good && trap_net.traps.count != 0)
             {
               need_run   = 1;
               run_kind   = D_RunKind_Step;
               run_thread = thread;
               run_flags  = 0;
-              run_traps  = traps;
+              run_traps  = trap_net.traps;
             }
-            if(good && traps.count == 0)
+            else if(trap_net.good && trap_net.traps.count == 0)
             {
               need_run   = 1;
               run_kind   = D_RunKind_SingleStep;
               run_thread = thread;
               run_flags  = 0;
-              run_traps  = traps;
+              run_traps  = trap_net.traps;
+            }
+            else if(!trap_net.good && params->retry_idx < 1000)
+            {
+              D_CmdParams params_copy = *params;
+              params_copy.retry_idx += 1;
+              d_push_cmd(cmd->kind, &params_copy);
+            }
+            else if(!trap_net.good)
+            {
+              log_user_error(str8_lit("Could not successfully step."));
             }
           }
         }break;

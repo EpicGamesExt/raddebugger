@@ -2973,7 +2973,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
     if(entity->kind == CTRL_EntityKind_Process)
     {
-      CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, viz_range_bytes, 0);
+      CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, viz_range_bytes, 0, 0);
       visible_memory_change_flags = slice.byte_changed_flags;
       visible_memory_bad_flags = slice.byte_bad_flags;
     }

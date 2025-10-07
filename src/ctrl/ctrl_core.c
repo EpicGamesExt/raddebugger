@@ -6114,7 +6114,7 @@ ctrl_memory_artifact_destroy(AC_Artifact artifact)
 }
 
 internal C_Key
-ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, U64 endt_us, B32 *out_is_stale)
+ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, B32 wait_for_fresh, U64 endt_us, B32 *out_is_stale)
 {
   ProfBeginFunction();
   struct
@@ -6127,7 +6127,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
   String8 key = str8_struct(&key_data);
   Access *access = access_open();
   AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, endt_us,
-                                              .flags = AC_Flag_HighPriority,
+                                              .flags = AC_Flag_HighPriority | (wait_for_fresh ? AC_Flag_WaitForFresh : 0),
                                               .gen = ctrl_mem_gen(),
                                               .slots_count = 2048,
                                               .stale_out = out_is_stale,
@@ -6142,7 +6142,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
 //- rjf: process memory reading helpers
 
 internal CTRL_ProcessMemorySlice
-ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rng1U64 range, U64 endt_us)
+ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rng1U64 range, B32 wait_for_fresh, U64 endt_us)
 {
   ProfBeginFunction();
   CTRL_ProcessMemorySlice result = {0};
@@ -6168,7 +6168,7 @@ ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rn
       {
         U64 page_base_vaddr = page_range.min + page_idx*page_size;
         B32 page_is_stale = 0;
-        C_Key page_key = ctrl_key_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, endt_us, &page_is_stale);
+        C_Key page_key = ctrl_key_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, wait_for_fresh, endt_us, &page_is_stale);
         U128 page_hash = c_hash_from_key(page_key, 0);
         U128 page_last_hash = c_hash_from_key(page_key, 1);
         result.stale = (result.stale || page_is_stale);
@@ -6289,7 +6289,7 @@ ctrl_process_memory_read(CTRL_Handle process, Rng1U64 range, B32 *is_stale_out, 
 {
   Temp scratch = scratch_begin(0, 0);
   U64 needed_size = dim_1u64(range);
-  CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process, range, endt_us);
+  CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process, range, 0, endt_us);
   B32 good = (slice.data.size >= needed_size && !slice.any_byte_bad);
   if(good)
   {
@@ -6322,15 +6322,15 @@ ctrl_process_write(CTRL_Handle process, Rng1U64 range, void *src)
   // time.
   if(result)
   {
-    U64 endt_us = os_now_microseconds()+5000;
+    U64 endt_us = os_now_microseconds()+10000;
     U64 page_size = os_get_system_info()->page_size; // TODO(rjf): @page_size_from_process
-    Rng1U64 page_range = r1u64(range.min/page_size, range.max/page_size);
+    Rng1U64 page_range = r1u64(range.min/page_size, (range.max+page_size-1)/page_size);
     for EachInRange(page_idx, page_range)
     {
       Temp scratch = scratch_begin(0, 0);
-      ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process, r1u64(page_idx*page_size, (page_idx+1)*page_size), endt_us);
+      CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process, r1u64(page_idx*page_size, (page_idx+1)*page_size), 1, endt_us);
       scratch_end(scratch);
-      if(os_now_microseconds() >= endt_us)
+      if(!slice.stale || os_now_microseconds() >= endt_us)
       {
         break;
       }

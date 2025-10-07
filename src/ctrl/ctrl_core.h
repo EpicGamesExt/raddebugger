@@ -1004,10 +1004,10 @@ internal void ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 
 internal AC_Artifact ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
 internal void ctrl_memory_artifact_destroy(AC_Artifact artifact);
-internal C_Key ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, U64 endt_us, B32 *out_is_stale);
+internal C_Key ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, B32 wait_for_fresh, U64 endt_us, B32 *out_is_stale);
 
 //- rjf: process memory reading helpers
-internal CTRL_ProcessMemorySlice ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rng1U64 range, U64 endt_us);
+internal CTRL_ProcessMemorySlice ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rng1U64 range, B32 wait_for_fresh, U64 endt_us);
 internal B32 ctrl_process_memory_read(CTRL_Handle process, Rng1U64 range, B32 *is_stale_out, void *out, U64 endt_us);
 #define ctrl_process_memory_read_struct(process, vaddr, is_stale_out, ptr, endt_us) ctrl_process_memory_read((process), r1u64((vaddr), (vaddr)+(sizeof(*(ptr)))), (is_stale_out), (ptr), (endt_us))
 
