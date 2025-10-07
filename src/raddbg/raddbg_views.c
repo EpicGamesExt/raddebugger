@@ -2240,25 +2240,25 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       {
         MD5 md5 = rd_md5_from_hash(hash);
         String8 md5_string = str8_struct(&md5);
-        file_is_out_of_date = !str8_match(md5_string, checksum_expected, 0);
+        file_is_out_of_date = !MemoryIsZeroStruct(&md5) && !str8_match(md5_string, checksum_expected, 0);
       }break;
       case RDI_ChecksumKind_SHA1:
       {
         SHA1 sha1 = rd_sha1_from_hash(hash);
         String8 sha1_string = str8_struct(&sha1);
-        file_is_out_of_date = !str8_match(sha1_string, checksum_expected, 0);
+        file_is_out_of_date = !MemoryIsZeroStruct(&sha1) && !str8_match(sha1_string, checksum_expected, 0);
       }break;
       case RDI_ChecksumKind_SHA256:
       {
         SHA256 sha256 = rd_sha256_from_hash(hash);
         String8 sha256_string = str8_struct(&sha256);
-        file_is_out_of_date = !str8_match(sha256_string, checksum_expected, 0);
+        file_is_out_of_date = !MemoryIsZeroStruct(&sha256) && !str8_match(sha256_string, checksum_expected, 0);
       }break;
       case RDI_ChecksumKind_Timestamp:
       {
         FileProperties props = os_properties_from_file_path(rd_regs()->file_path);
         String8 timestamp_string = str8_struct(&props.modified);
-        file_is_out_of_date = !str8_match(timestamp_string, checksum_expected, 0);
+        file_is_out_of_date = !MemoryIsZeroStruct(&props.modified) && !str8_match(timestamp_string, checksum_expected, 0);
       }break;
     }
     
@@ -2381,7 +2381,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     {
       auto_selected = 1;
       auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
-      eval = e_eval_from_stringf("(reg:rip.u64 & (~(0x4000 - 1)))");
+      eval = e_eval_from_stringf("(reg:rip & (~(0x4000 - 1)))");
     }
   }
   

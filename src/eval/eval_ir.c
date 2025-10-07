@@ -2044,7 +2044,16 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 mapped_bytecode_mode = E_Mode_Offset;
                 mapped_bytecode_space = e_base_ctx->thread_reg_space;
-                mapped_type_key = e_type_key_reg(e_base_ctx->primary_module->arch, reg_num);
+                REGS_UsageKind reg_usage_kind = regs_reg_code_usage_kind_table_from_arch(e_base_ctx->primary_module->arch)[reg_num];
+                if(0){}
+                else if(reg_usage_kind == REGS_UsageKind_Normal && reg_rng.byte_size == 1) {mapped_type_key = e_type_key_basic(E_TypeKind_U8);}
+                else if(reg_usage_kind == REGS_UsageKind_Normal && reg_rng.byte_size == 2) {mapped_type_key = e_type_key_basic(E_TypeKind_U16);}
+                else if(reg_usage_kind == REGS_UsageKind_Normal && reg_rng.byte_size == 4) {mapped_type_key = e_type_key_basic(E_TypeKind_U32);}
+                else if(reg_usage_kind == REGS_UsageKind_Normal && reg_rng.byte_size == 8) {mapped_type_key = e_type_key_basic(E_TypeKind_U64);}
+                else
+                {
+                  mapped_type_key = e_type_key_reg(e_base_ctx->primary_module->arch, reg_num);
+                }
               }
             }break;
             
@@ -2063,7 +2072,16 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 mapped_bytecode_mode = E_Mode_Offset;
                 mapped_bytecode_space = e_base_ctx->thread_reg_space;
-                mapped_type_key = e_type_key_reg_alias(e_base_ctx->primary_module->arch, alias_num);
+                REGS_UsageKind reg_usage_kind = regs_alias_code_usage_kind_table_from_arch(e_base_ctx->primary_module->arch)[alias_num];
+                if(0){}
+                else if(reg_usage_kind == REGS_UsageKind_Normal && alias_slice.byte_size == 1) {mapped_type_key = e_type_key_basic(E_TypeKind_U8);}
+                else if(reg_usage_kind == REGS_UsageKind_Normal && alias_slice.byte_size == 2) {mapped_type_key = e_type_key_basic(E_TypeKind_U16);}
+                else if(reg_usage_kind == REGS_UsageKind_Normal && alias_slice.byte_size == 4) {mapped_type_key = e_type_key_basic(E_TypeKind_U32);}
+                else if(reg_usage_kind == REGS_UsageKind_Normal && alias_slice.byte_size == 8) {mapped_type_key = e_type_key_basic(E_TypeKind_U64);}
+                else
+                {
+                  mapped_type_key = e_type_key_reg_alias(e_base_ctx->primary_module->arch, alias_num);
+                }
               }
             }break;
             
