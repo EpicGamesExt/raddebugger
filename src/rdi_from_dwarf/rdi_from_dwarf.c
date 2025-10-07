@@ -1697,7 +1697,10 @@ d2r_tag_iterator_init(Arena *arena, DW_TagNode *root)
   iter->free_list            = 0;
   iter->stack                = push_array(arena, D2R_TagFrame, 1);
   iter->stack->node          = push_array(arena, DW_TagNode, 1);
-  *iter->stack->node         = *root;
+  if(root != 0)
+  {
+    *iter->stack->node         = *root;
+  }
   iter->stack->node->sibling = 0;
   iter->visit_children       = 1;
   iter->tag_node             = root;
@@ -1797,7 +1800,10 @@ d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *inpu
         
         // if we do not have a converted type at this point then debug info is malformed
         type = d2r_type_from_offset(type_table, ref.info_off);
-        Assert(type);
+        if(type == 0)
+        {
+          type = type_table->builtin_types[RDI_TypeKind_NULL];
+        }
       }
     } else {
       Assert(!"unexpected attrib class");
@@ -2054,7 +2060,8 @@ d2r_convert_types(Arena         *arena,
         Assert(!dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Allocated));
         Assert(!dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Associated));
         Assert(!dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Alignment));
-        Assert(!dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Name));
+        // TODO(rjf): this is not an invalid case; it shows up in `mule_main` pointer types
+        // Assert(!dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Name));
         Assert(!dw_tag_has_attrib(input, cu, tag, DW_AttribKind_AddressClass));
         
         U64 byte_size = arch_addr_size;
@@ -2192,11 +2199,14 @@ d2r_convert_types(Arena         *arena,
         }
         
         RDIM_Type      *parent = d2r_type_from_offset(type_table, parent_tag.info_off);
-        RDIM_Type      *type   = d2r_find_or_convert_type(arena, type_table, input, cu, cu_lang, arch_addr_size, tag, DW_AttribKind_Type);
-        RDIM_UDTMember *member = rdim_udt_push_member(arena, &udts, parent->udt);
-        member->kind           = RDI_MemberKind_Base;
-        member->type           = type;
-        member->off            = safe_cast_u32(dw_const_u32_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_DataMemberLocation));
+        if(parent->udt != 0)
+        {
+          RDIM_Type      *type   = d2r_find_or_convert_type(arena, type_table, input, cu, cu_lang, arch_addr_size, tag, DW_AttribKind_Type);
+          RDIM_UDTMember *member = rdim_udt_push_member(arena, &udts, parent->udt);
+          member->kind           = RDI_MemberKind_Base;
+          member->type           = type;
+          member->off            = safe_cast_u32(dw_const_u32_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_DataMemberLocation));
+        }
       } break;
     }
   }
@@ -2550,7 +2560,10 @@ d2r_convert_symbols(Arena         *arena,
       case DW_TagKind_ReferenceType: {
         // TODO:
       } break;
-      default: NotImplemented; break;
+      default:
+      {
+        // NotImplemented;
+      }break;
     }
   }
   scratch_end(scratch);

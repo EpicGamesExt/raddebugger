@@ -955,7 +955,7 @@ rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp
   RDIM_SLLQueuePush(bytecode->first_op, bytecode->last_op, node);
   bytecode->op_count += 1;
   bytecode->encoded_size += 1 + p_size;
-
+  
   return node;
 }
 
@@ -1169,6 +1169,89 @@ RDI_PROC RDIM_LocationCase *
 rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *location, RDIM_Rng1U64 voff_range)
 {
   return rdim_push_location_case(arena, scopes, &local->location_cases, location, voff_range);
+}
+
+////////////////////////////////
+//~ rjf: [Building] Bake Parameter Joining
+
+RDI_PROC void
+rdim_bake_params_concat_in_place(RDIM_BakeParams *dst, RDIM_BakeParams *src)
+{
+  // rjf: join top-level info (deduplicate - throw away conflicts)
+  {
+    if(dst->top_level_info.arch == RDI_Arch_NULL)
+    {
+      dst->top_level_info.arch = src->top_level_info.arch;
+    }
+    if(dst->top_level_info.exe_name.size == 0)
+    {
+      dst->top_level_info.exe_name = src->top_level_info.exe_name;
+    }
+    if(dst->top_level_info.exe_hash == 0)
+    {
+      dst->top_level_info.exe_hash = src->top_level_info.exe_hash;
+    }
+    if(dst->top_level_info.voff_max == 0)
+    {
+      dst->top_level_info.voff_max = src->top_level_info.voff_max;
+    }
+    if(dst->top_level_info.producer_name.size == 0)
+    {
+      dst->top_level_info.producer_name = src->top_level_info.producer_name;
+    }
+  }
+  
+  // rjf: join binary sections (deduplicate)
+  {
+    RDIM_Temp scratch = rdim_scratch_begin(0, 0);
+    RDI_U64 slots_count = 256;
+    RDIM_BinarySectionNode **slots = rdim_push_array(scratch.arena, RDIM_BinarySectionNode *, slots_count);
+    for(RDIM_BinarySectionNode *n = dst->binary_sections.first; n != 0; n = n->next)
+    {
+      RDIM_BinarySectionNode *hash_node = rdim_push_array(scratch.arena, RDIM_BinarySectionNode, 1);
+      RDI_U64 hash = rdi_hash(n->v.name.str, n->v.name.size);
+      RDI_U64 slot_idx = hash%slots_count;
+      RDIM_SLLStackPush(slots[slot_idx], hash_node);
+      hash_node->v = n->v;
+    }
+    for(RDIM_BinarySectionNode *n = src->binary_sections.first, *next = 0; n != 0; n = next)
+    {
+      next = n->next;
+      RDI_U64 hash = rdi_hash(n->v.name.str, n->v.name.size);
+      RDI_U64 slot_idx = hash%slots_count;
+      RDI_S32 is_duplicate = 0;
+      for(RDIM_BinarySectionNode *hash_n = slots[slot_idx]; hash_n != 0; hash_n = hash_n->next)
+      {
+        if(rdim_str8_match(hash_n->v.name, n->v.name, 0))
+        {
+          is_duplicate = 1;
+          break;
+        }
+      }
+      if(!is_duplicate)
+      {
+        RDIM_SLLQueuePush(dst->binary_sections.first, dst->binary_sections.last, n);
+        dst->binary_sections.count += 1;
+      }
+    }
+    rdim_scratch_end(scratch);
+  }
+  
+  // rjf: join non-top-level chunk lists
+  {
+    rdim_unit_chunk_list_concat_in_place(&dst->units, &src->units);
+    rdim_type_chunk_list_concat_in_place(&dst->types, &src->types);
+    rdim_udt_chunk_list_concat_in_place(&dst->udts, &src->udts);
+    rdim_src_file_chunk_list_concat_in_place(&dst->src_files, &src->src_files);
+    rdim_line_table_chunk_list_concat_in_place(&dst->line_tables, &src->line_tables);
+    rdim_location_chunk_list_concat_in_place(&dst->locations, &src->locations);
+    rdim_symbol_chunk_list_concat_in_place(&dst->global_variables, &src->global_variables);
+    rdim_symbol_chunk_list_concat_in_place(&dst->thread_variables, &src->thread_variables);
+    rdim_symbol_chunk_list_concat_in_place(&dst->constants, &src->constants);
+    rdim_symbol_chunk_list_concat_in_place(&dst->procedures, &src->procedures);
+    rdim_scope_chunk_list_concat_in_place(&dst->scopes, &src->scopes);
+    rdim_inline_site_chunk_list_concat_in_place(&dst->inline_sites, &src->inline_sites);
+  }
 }
 
 ////////////////////////////////

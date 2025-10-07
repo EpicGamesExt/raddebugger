@@ -604,17 +604,17 @@ rb_thread_entry_point(void *p)
       
       //- rjf: convert inputs to RDI info
       B32 convert_done = 0;
-      RDIM_BakeParams bake_params = {0};
+      RDIM_BakeParams pdb_bake_params = {0};
+      RDIM_BakeParams dwarf_bake_params = {0};
       {
         //- rjf: PE inputs w/ DWARF, or ELF inputs => DWARF -> RDI conversion
-        if(!convert_done &&
-           ((input_files_from_format_table[RB_FileFormat_PE].count != 0 &&
+        if(((input_files_from_format_table[RB_FileFormat_PE].count != 0 &&
              input_files_from_format_table[RB_FileFormat_PE].first->v->format_flags & RB_FileFormatFlag_HasDWARF) ||
             (input_files_from_format_table[RB_FileFormat_ELF32].count != 0 ||
              input_files_from_format_table[RB_FileFormat_ELF64].count != 0)))
         {
           convert_done = 1;
-          log_infof("PEs w/ DWARF, or ELFs specified; producing RDI by converting DWARF data\n");
+          log_infof("PEs w/ DWARF, or ELFs specified; converting DWARF data to RDI\n");
           
           // rjf: convert
           D2R_ConvertParams convert_params = {0};
@@ -695,21 +695,14 @@ rb_thread_entry_point(void *p)
             convert_params.subset_flags   = subset_flags;
             convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
-          ProfScope("convert") bake_params = d2r_convert(arena, &convert_params);
-          
-          // rjf: no output path? -> pick one based on debug
-          if(output_path.size == 0)
-          {
-            output_path = push_str8f(arena, "%S.rdi", str8_chop_last_dot(convert_params.dbg_name));
-          }
+          ProfScope("convert") dwarf_bake_params = d2r_convert(arena, &convert_params);
         }
         
         //- rjf: PDB inputs => PDB -> RDI conversion
-        if(!convert_done &&
-           input_files_from_format_table[RB_FileFormat_PDB].count != 0)
+        if(input_files_from_format_table[RB_FileFormat_PDB].count != 0)
         {
           convert_done = 1;
-          log_infof("PDBs specified; producing RDI by converting PDB data\n");
+          log_infof("PDBs specified; converting PDB data to RDI\n");
           
           // rjf: get EXE/PDB file data
           RB_File *exe_file = rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PE]);
@@ -729,21 +722,40 @@ rb_thread_entry_point(void *p)
             convert_params.subset_flags   = subset_flags;
             convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
-          ProfScope("convert") bake_params = p2r_convert(arena, &convert_params);
-          
-          // rjf: no output path? -> pick one based on PDB
-          if(output_path.size == 0) switch(output_kind)
+          ProfScope("convert") pdb_bake_params = p2r_convert(arena, &convert_params);
+        }
+      }
+      lane_sync();
+      
+      //- rjf: join conversion artifacts
+      RDIM_BakeParams *bake_params = 0;
+      if(lane_idx() == 0)
+      {
+        bake_params = push_array(arena, RDIM_BakeParams, 1);
+        rdim_bake_params_concat_in_place(bake_params, &pdb_bake_params);
+        rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params);
+      }
+      lane_sync_u64(&bake_params, 0);
+      
+      //- rjf: no output path? -> pick one based on input files
+      if(output_path.size == 0)
+      {
+        String8 output_path__noext = {0};
+        if(output_path__noext.size == 0) { output_path__noext = str8_chop_last_dot(rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PDB])->path); }
+        if(output_path__noext.size == 0) { output_path__noext = str8_chop_last_dot(rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PE])->path); }
+        if(output_path__noext.size == 0) { output_path__noext = str8_chop_last_dot(rb_file_list_first(&input_files_from_format_table[RB_FileFormat_ELF64])->path); }
+        if(output_path__noext.size == 0) { output_path__noext = str8_chop_last_dot(rb_file_list_first(&input_files_from_format_table[RB_FileFormat_ELF32])->path); }
+        switch(output_kind)
+        {
+          default:{}break;
+          case OutputKind_RDI:
           {
-            default:{}break;
-            case OutputKind_RDI:
-            {
-              output_path = push_str8f(arena, "%S.rdi", str8_chop_last_dot(convert_params.input_pdb_name));
-            }break;
-            case OutputKind_Breakpad:
-            {
-              output_path = push_str8f(arena, "%S.psym", str8_chop_last_dot(convert_params.input_pdb_name));
-            }break;
-          }
+            output_path = push_str8f(arena, "%S.rdi", output_path__noext);
+          }break;
+          case OutputKind_Breakpad:
+          {
+            output_path = push_str8f(arena, "%S.psym", output_path__noext);
+          }break;
         }
       }
       
@@ -757,7 +769,7 @@ rb_thread_entry_point(void *p)
       RDIM_BakeResults bake_results = {0};
       if(convert_done) ProfScope("bake")
       {
-        bake_results = rdim_bake(arena, &bake_params);
+        bake_results = rdim_bake(arena, bake_params);
       }
       
       //- rjf: convert done => generate output
@@ -799,8 +811,8 @@ rb_thread_entry_point(void *p)
           if(lane_idx() == 0)
           {
             p2b_shared = push_array(arena, P2B_Shared, 1);
-            p2b_shared->lane_chunk_file_dumps = push_array(arena, String8List, lane_count()*bake_params.src_files.chunk_count);
-            p2b_shared->lane_chunk_func_dumps = push_array(arena, String8List, lane_count()*bake_params.procedures.chunk_count);
+            p2b_shared->lane_chunk_file_dumps = push_array(arena, String8List, lane_count()*bake_params->src_files.chunk_count);
+            p2b_shared->lane_chunk_func_dumps = push_array(arena, String8List, lane_count()*bake_params->procedures.chunk_count);
           }
           lane_sync();
           
@@ -808,7 +820,7 @@ rb_thread_entry_point(void *p)
           if(lane_idx() == 0)
           {
             // rjf: pick name to identify module
-            String8 module_name_string = bake_params.top_level_info.exe_name;
+            String8 module_name_string = bake_params->top_level_info.exe_name;
             if(module_name_string.size == 0 && input_files.first != 0)
             {
               module_name_string = input_files.first->v->path;
@@ -816,9 +828,9 @@ rb_thread_entry_point(void *p)
             
             // rjf: pick string for unique code
             String8 unique_identifier_string = {0};
-            if(unique_identifier_string.size == 0 && bake_params.top_level_info.exe_hash != 0)
+            if(unique_identifier_string.size == 0 && bake_params->top_level_info.exe_hash != 0)
             {
-              unique_identifier_string = str8f(arena, "%I64x", bake_params.top_level_info.exe_hash);
+              unique_identifier_string = str8f(arena, "%I64x", bake_params->top_level_info.exe_hash);
             }
             if(unique_identifier_string.size == 0 && input_files.first != 0 && input_files.first->v->format == RB_FileFormat_PDB)
             {
@@ -856,14 +868,14 @@ rb_thread_entry_point(void *p)
           ProfScope("dump FILE records")
           {
             U64 chunk_idx = 0;
-            for EachNode(n, RDIM_SrcFileChunkNode, bake_params.src_files.first)
+            for EachNode(n, RDIM_SrcFileChunkNode, bake_params->src_files.first)
             {
               Rng1U64 range = lane_range(n->count);
               for EachInRange(idx, range)
               {
                 U64 file_idx = rdim_idx_from_src_file(&n->v[idx]);
                 String8 src_path = n->v[idx].path;
-                str8_list_pushf(arena, &p2b_shared->lane_chunk_file_dumps[lane_idx()*bake_params.src_files.chunk_count + chunk_idx], "FILE %I64u %S\n", file_idx, src_path);
+                str8_list_pushf(arena, &p2b_shared->lane_chunk_file_dumps[lane_idx()*bake_params->src_files.chunk_count + chunk_idx], "FILE %I64u %S\n", file_idx, src_path);
               }
               chunk_idx += 1;
             }
@@ -873,9 +885,9 @@ rb_thread_entry_point(void *p)
           ProfScope("dump FUNC records")
           {
             U64 chunk_idx = 0;
-            for EachNode(n, RDIM_SymbolChunkNode, bake_params.procedures.first)
+            for EachNode(n, RDIM_SymbolChunkNode, bake_params->procedures.first)
             {
-              String8List *out = &p2b_shared->lane_chunk_func_dumps[lane_idx()*bake_params.procedures.chunk_count + chunk_idx];
+              String8List *out = &p2b_shared->lane_chunk_func_dumps[lane_idx()*bake_params->procedures.chunk_count + chunk_idx];
               Rng1U64 range = lane_range(n->count);
               for EachInRange(idx, range)
               {
@@ -942,18 +954,18 @@ rb_thread_entry_point(void *p)
           lane_sync();
           if(lane_idx() == 0)
           {
-            for EachIndex(chunk_idx, bake_params.src_files.chunk_count)
+            for EachIndex(chunk_idx, bake_params->src_files.chunk_count)
             {
               for EachIndex(ln_idx, lane_count())
               {
-                str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_chunk_file_dumps[ln_idx*bake_params.src_files.chunk_count + chunk_idx]);
+                str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_chunk_file_dumps[ln_idx*bake_params->src_files.chunk_count + chunk_idx]);
               }
             }
-            for EachIndex(chunk_idx, bake_params.procedures.chunk_count)
+            for EachIndex(chunk_idx, bake_params->procedures.chunk_count)
             {
               for EachIndex(ln_idx, lane_count())
               {
-                str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_chunk_func_dumps[ln_idx*bake_params.procedures.chunk_count + chunk_idx]);
+                str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_chunk_func_dumps[ln_idx*bake_params->procedures.chunk_count + chunk_idx]);
               }
             }
           }

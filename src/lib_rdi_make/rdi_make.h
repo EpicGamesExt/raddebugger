@@ -1672,6 +1672,11 @@ RDI_PROC RDIM_Local *rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkLis
 RDI_PROC RDIM_LocationCase *rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *location, RDIM_Rng1U64 voff_range);
 
 ////////////////////////////////
+//~ rjf: [Building] Bake Parameter Joining
+
+RDI_PROC void rdim_bake_params_concat_in_place(RDIM_BakeParams *dst, RDIM_BakeParams *src);
+
+////////////////////////////////
 //~ rjf: [Baking Helpers] Deduplicated String Baking Map
 
 //- rjf: chunk lists
