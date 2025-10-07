@@ -291,6 +291,7 @@ rb_thread_entry_point(void *p)
       if(file_format == RB_FileFormat_PE) ProfScope("PE file => generate task for PDB")
       {
         Temp scratch = scratch_begin(&arena, 1);
+        String8 file_path = n->string;
         PE_BinInfo pe_bin_info = pe_bin_info_from_data(scratch.arena, file_data);
         String8 raw_debug_dir = str8_substr(file_data, pe_bin_info.data_dir_franges[PE_DataDirectoryIndex_DEBUG]);
         PE_DebugInfoList debug_dir = pe_debug_info_list_from_raw_debug_dir(scratch.arena, file_data, raw_debug_dir);
@@ -298,6 +299,7 @@ rb_thread_entry_point(void *p)
         {
           if(n->v.path.size != 0)
           {
+            log_infof("Found reference to separate debug info file in %S (%S) at %S\n", file_path, rb_file_format_display_name_table[file_format], n->v.path);
             str8_list_push(arena, &input_file_path_tasks, n->v.path);
           }
         }
@@ -315,6 +317,7 @@ rb_thread_entry_point(void *p)
         ELF_GnuDebugLink debug_link = elf_gnu_debug_link_from_bin(file_data, &bin);
         if(debug_link.path.size != 0)
         {
+          log_infof("Found reference to separate debug info file in %S (%S) at %S\n", n->string, rb_file_format_display_name_table[file_format], debug_link.path);
           str8_list_push(arena, &input_file_path_tasks, debug_link.path);
         }
         scratch_end(scratch);
@@ -333,6 +336,7 @@ rb_thread_entry_point(void *p)
         COFF_SectionHeader *section_table = (COFF_SectionHeader *)raw_section_table.str;
         if(dw_is_dwarf_present_coff_section_table(string_table, section_count, section_table))
         {
+          log_infof("DWARF data detected in %S (%S)\n", n->string, rb_file_format_display_name_table[file_format]);
           file_format_flags |= RB_FileFormatFlag_HasDWARF;
         }
         scratch_end(scratch);
@@ -348,6 +352,7 @@ rb_thread_entry_point(void *p)
         ELF_Bin elf_bin = elf_bin_from_data(scratch.arena, file_data);
         if(dw_is_dwarf_present_from_elf_bin(file_data, &elf_bin))
         {
+          log_infof("DWARF data detected in %S (%S)\n", n->string, rb_file_format_display_name_table[file_format]);
           file_format_flags |= RB_FileFormatFlag_HasDWARF;
         }
         scratch_end(scratch);
