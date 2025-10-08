@@ -1372,7 +1372,7 @@ typedef enum DW_CFAEnum
 {
 #define X(_N, _ID) DW_CFA_##_N = _ID,
   DW_CFA_Kind1_XList(X)
-    DW_CFA_Kind2_XList(X)
+  DW_CFA_Kind2_XList(X)
 #undef X
   
   DW_CFA_OplKind1 = DW_CFA_ValExpr,
@@ -1785,6 +1785,7 @@ internal U64 dw_operand_count_from_expr_op(DW_ExprOp op);
 ////////////////////////////////
 //~ rjf: String <=> Enum
 
+internal String8 dw_string_from_format(DW_Format format); 
 internal String8 dw_string_from_expr_op(Arena *arena, DW_Version ver, DW_Ext ext, DW_ExprOp op);
 internal String8 dw_string_from_tag_kind(Arena *arena, DW_TagKind kind);
 internal String8 dw_string_from_attrib_kind(Arena *arena, DW_Version ver, DW_Ext ext, DW_AttribKind kind);
@@ -1800,5 +1801,6 @@ internal String8 dw_string_from_loc_list_entry_kind(Arena *arena, DW_LLE kind);
 internal String8 dw_string_from_section_kind(Arena *arena, DW_SectionKind kind);
 internal String8 dw_string_from_rng_list_entry_kind(Arena *arena, DW_RLE kind);
 internal String8 dw_string_from_register(Arena *arena, Arch arch, U64 reg_id);
+internal String8 dw_string_from_cfa_opcode(DW_CFA cfa_opcode);
 
 #endif // DWARF_H

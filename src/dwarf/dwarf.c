@@ -435,6 +435,17 @@ dw_push_count_from_expr_op(DW_ExprOp op)
 //~ rjf: String <=> Enum
 
 internal String8
+dw_string_from_format(DW_Format format)
+{
+  switch (format) {
+  case DW_Format_Null:  return str8_zero();
+  case DW_Format_32Bit: return str8_lit("DWARF32");
+  case DW_Format_64Bit: return str8_lit("DWARF64");
+  }
+  return str8_zero();
+}
+
+internal String8
 dw_string_from_expr_op(Arena *arena, DW_Version ver, DW_Ext ext, DW_ExprOp op)
 {
   String8 result = {0};
@@ -703,4 +714,17 @@ dw_string_from_register(Arena *arena, Arch arch, U64 reg_id)
     reg_str = push_str8f(arena, "%#llx", reg_id);
   }
   return reg_str;
+}
+
+internal String8
+dw_string_from_cfa_opcode(DW_CFA cfa_opcode)
+{
+  switch (cfa_opcode) {
+#define X(_NAME, _ID) case _ID: return str8_lit(Stringify(_NAME));
+    DW_CFA_Kind1_XList(X)
+    DW_CFA_Kind2_XList(X)
+#undef X
+  default: InvalidPath; break;
+  }
+  return str8_zero();
 }
