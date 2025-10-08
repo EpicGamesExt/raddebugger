@@ -3963,6 +3963,16 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   Access *access = access_open();
   
   //////////////////////////////
+  //- rjf: if parameterized by a register-space evaluation, interpret as an
+  // address in the primary module.
+  //
+  if(e_space_match(eval.space, e_base_ctx->thread_reg_space))
+  {
+    eval = e_value_eval_from_eval(eval);
+    eval.space = e_base_ctx->primary_module->space;
+  }
+  
+  //////////////////////////////
   //- rjf: evaluate expression
   //
   Vec2S32 dim = v2s32((S32)rd_view_setting_u64_from_name(str8_lit("w")), (S32)rd_view_setting_u64_from_name(str8_lit("h")));
@@ -4543,6 +4553,16 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   Temp scratch = scratch_begin(0, 0);
   Access *access = access_open();
   RD_Geo3DViewState *state = rd_view_state(RD_Geo3DViewState);
+  
+  //////////////////////////////
+  //- rjf: if parameterized by a register-space evaluation, interpret as an
+  // address in the primary module.
+  //
+  if(e_space_match(eval.space, e_base_ctx->thread_reg_space))
+  {
+    eval = e_value_eval_from_eval(eval);
+    eval.space = e_base_ctx->primary_module->space;
+  }
   
   //////////////////////////////
   //- rjf: unpack parameters
