@@ -3323,3 +3323,157 @@ dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size, String8 data)
   return expr;
 }
 
+internal
+DW_READ_CFI_PTR(dw_read_cfi_ptr)
+{
+  DW_UnpackedCIE *cie = ud;
+  U64 read_size = 0;
+  if (cie->segment_selector_size) {
+    NotImplemented;
+  } else {
+    read_size = str8_deserial_read(data, off, ptr_out, cie->address_size, cie->address_size);
+  }
+  return read_size;
+}
+
+internal U64
+dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc_out)
+{
+  U32 first_four_bytes = 0;
+  str8_deserial_read_struct(data, off, &first_four_bytes);
+  DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
+
+  U64 length      = 0;
+  U64 length_size = str8_deserial_read_dwarf_packed_size(data, off, &length);
+  if (length_size == 0) { goto exit; }
+
+  Rng1U64 entry_range = rng_1u64(off + length_size, off + length_size + length);
+  String8 entry_data  = str8_substr(data, entry_range);
+  U64 id = 0;
+  U64 id_size = str8_deserial_read_dwarf_uint(entry_data, 0, format, &id);
+  if (id_size == 0) { goto exit; }
+
+  U64 id_type = format == DW_Format_32Bit ? max_U32 : max_U64;
+  desc_out->format      = format;
+  desc_out->type        = (id == id_type) ? DW_DescriptorEntryType_CIE : DW_DescriptorEntryType_FDE;
+  desc_out->entry_range = entry_range;
+
+exit:;
+  return length + length_size;
+}
+
+internal B32
+dw_unpack_cie(String8 data, DW_Format format, Arch arch, DW_UnpackedCIE *cie_out)
+{
+  B32 is_parsed = 0;
+  U64 cursor    = 0;
+
+  U64 cie_id = 0;
+  U64 cie_id_size = str8_deserial_read_dwarf_uint(data, cursor, format, &cie_id);
+  if (cie_id_size == 0) { goto exit; }
+  cursor += cie_id_size;
+
+  U8 version = 0;
+  U64 version_size = str8_deserial_read_struct(data, cursor, &version);
+  if (version_size == 0) { goto exit; }
+  cursor += version_size;
+
+  String8 aug_string = {0};
+  U64 aug_string_size = str8_deserial_read_cstr(data, cursor, &aug_string);
+  if (aug_string_size == 0) { goto exit; }
+  cursor += aug_string_size;
+
+  U8 address_size          = 0;
+  U8 segment_selector_size = 0;
+  if (version >= DW_Version_4) {
+    U64 address_size_size = str8_deserial_read_struct(data, cursor, &address_size);
+    if (address_size_size == 0) { goto exit; }
+    cursor += address_size_size;
+
+    U64 segment_selector_size_size = str8_deserial_read_struct(data, cursor, &segment_selector_size);
+    if (segment_selector_size_size == 0) { goto exit; }
+    cursor += segment_selector_size;
+  } else {
+    address_size = byte_size_from_arch(arch);
+  }
+
+  U64 code_align_factor = 0;
+  U64 code_align_factor_size = str8_deserial_read_uleb128(data, cursor, &code_align_factor);
+  if (code_align_factor_size == 0) { goto exit; }
+  cursor += code_align_factor_size;
+
+  S64 data_align_factor = 0;
+  U64 data_align_factor_size = str8_deserial_read_sleb128(data, cursor, &data_align_factor);
+  if (data_align_factor_size == 0) { goto exit; }
+  cursor += data_align_factor_size;
+
+  U64 ret_addr_reg = 0;
+  U64 ret_addr_reg_size = 0;
+  if (version == DW_Version_1) { ret_addr_reg_size = str8_deserial_read(data, cursor, &ret_addr_reg, sizeof(U8), sizeof(U8)); }
+  else                         { ret_addr_reg_size = str8_deserial_read_uleb128(data, cursor, &ret_addr_reg);                 }
+  if (ret_addr_reg_size == 0) { goto exit; }
+  cursor += ret_addr_reg_size;
+
+  if (aug_string.size > 0) { goto exit; }
+
+  cie_out->init_insts            = str8_skip(data, cursor);
+  cie_out->aug_string            = aug_string;
+  cie_out->code_align_factor     = code_align_factor;
+  cie_out->data_align_factor     = data_align_factor;
+  cie_out->ret_addr_reg          = ret_addr_reg;
+  cie_out->version               = version;
+  cie_out->address_size          = address_size;
+  cie_out->segment_selector_size = segment_selector_size;
+
+  is_parsed = 1;
+exit:;
+  return is_parsed;
+}
+
+internal B32
+dw_unpack_fde(String8               data,
+              DW_Format             format,
+              DW_CIEFromOffsetFunc *cie_from_offset_func,
+              void                 *cie_from_offset_ud,
+              DW_UnpackedFDE       *fde_out)
+{
+  B32 is_parsed = 0;
+  U64 cursor    = 0;
+
+  // extract CIE pointer
+  U64 cie_pointer      = 0;
+  U64 cie_pointer_size = str8_deserial_read_dwarf_uint(data, cursor, format, &cie_pointer);
+  if (cie_pointer_size == 0) { goto exit; }
+  cursor += cie_pointer_size;
+
+  // map offset -> CIE
+  DW_UnpackedCIE *cie = cie_from_offset_func(cie_from_offset_ud, cie_pointer);
+  if (cie == 0) { goto exit; }
+
+  // extract address of first instruction
+  U64 pc_begin = 0;
+  U64 pc_begin_size = dw_read_cfi_ptr(data, cursor, cie, &pc_begin);
+  if (pc_begin_size == 0) { goto exit; }
+  cursor += pc_begin_size;
+
+  // extract instruction range size
+  U64 pc_range      = 0;
+  U64 pc_range_size = dw_read_cfi_ptr(data, cursor, cie, &pc_range);
+  if (pc_range_size == 0) { goto exit; }
+  cursor += pc_range_size;
+
+  // parse augmentation data
+  String8 aug_data = str8_substr(data, rng_1u64(cursor, cursor + cie->aug_data.size));
+  cursor += cie->aug_data.size;
+
+  // commit values to out
+  fde_out->format      = format;
+  fde_out->cie_pointer = cie_pointer;
+  fde_out->pc_range    = rng_1u64(pc_begin, pc_begin + pc_range);
+  fde_out->insts       = str8_skip(data, cursor);
+
+  is_parsed = 1;
+exit:;
+  return is_parsed;
+}
+

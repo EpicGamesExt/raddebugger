@@ -353,6 +353,54 @@ typedef struct DW_Expr
   DW_ExprInst *last;
 } DW_Expr;
 
+////////////////////////////////
+// .debug_frame
+
+typedef enum
+{
+  DW_DescriptorEntryType_Null,
+  DW_DescriptorEntryType_CIE,
+  DW_DescriptorEntryType_FDE
+} DW_DescriptorEntryType;
+
+typedef struct DW_DescriptorEntry
+{
+  DW_DescriptorEntryType type;
+  DW_Format              format;
+  Rng1U64                entry_range;
+} DW_DescriptorEntry;
+
+typedef struct DW_UnpackedCIE
+{
+  String8   init_insts;
+  String8   aug_string;
+  String8   aug_data;
+  U64       code_align_factor;
+  S64       data_align_factor;
+  U64       ret_addr_reg;
+  DW_Format format;
+  U8        version;
+  U8        address_size;
+  U8        segment_selector_size;
+  Rng1U64   cfi_range;
+} DW_UnpackedCIE;
+
+typedef struct DW_UnpackedFDE
+{
+  DW_Format       format;
+  U64             cie_pointer;
+  Rng1U64         pc_range;
+  String8         insts;
+  Rng1U64         cfi_range;
+} DW_UnpackedFDE;
+
+#define DW_READ_CFI_PTR(name) U64 name(String8 data, U64 off, void *ud, U64 *ptr_out)
+typedef DW_READ_CFI_PTR(DW_ReadCfiPtrFunc);
+
+#define DW_CIE_FROM_OFFSET_FUNC(name) DW_UnpackedCIE * name(void *ud, U64 offset)
+typedef DW_CIE_FROM_OFFSET_FUNC(DW_CIEFromOffsetFunc);
+
+
 // hasher
 
 internal U64 dw_hash_from_string(String8 string);
@@ -469,5 +517,11 @@ internal DW_PubStringsTable dw_v4_pub_strings_table_from_section_kind(Arena *are
 // expression
 
 internal DW_Expr dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size, String8 data);
+
+// debug frame
+
+internal U64 dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc_out);
+internal B32 dw_unpack_cie(String8 data, Arch arch, DW_Format format, DW_UnpackedCIE *cie_out);
+internal B32 dw_unpack_fde(String8 data, DW_Format format, DW_CIEFromOffsetFunc *cie_from_offset_func, void *cie_from_offset_ud, DW_UnpackedFDE *fde_out);
 
 #endif // DWARF_PARSE_H
