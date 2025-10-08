@@ -85,6 +85,37 @@
 #endif
 
 ////////////////////////////////
+//~ rjf: Optimization Settings
+
+#if COMPILER_MSVC
+# define OPTIMIZE_BEGIN _Pragma("optimize(\"\", on)")
+# define OPTIMIZE_END _Pragma("optimize(\"\", off)")
+#elif COMPILER_CLANG
+# define OPTIMIZE_BEGIN _Pragma("clang optimize on")
+# define OPTIMIZE_END _Pragma("clang optimize off")
+#elif COMPILER_GCC
+# define OPTIMIZE_BEGIN _Pragma("GCC push_options") _Pragma("GCC optimize(\"O2\")")
+# define OPTIMIZE_END _Pragma("GCC pop_options")
+#else
+# define OPTIMIZE_BEGIN
+# define OPTIMIZE_END
+#endif
+
+#if COMPILER_MSVC && !BUILD_DEBUG
+# define NO_OPTIMIZE_BEGIN _Pragma("optimize(\"\", off)")
+# define NO_OPTIMIZE_END _Pragma("optimize(\"\", on)")
+#elif COMPILER_CLANG && !BUILD_DEBUG
+# define NO_OPTIMIZE_BEGIN _Pragma("clang optimize off")
+# define NO_OPTIMIZE_END _Pragma("clang optimize on")
+#elif COMPILER_GCC && !BUILD_DEBUG
+# define NO_OPTIMIZE_BEGIN _Pragma("GCC push_options") _Pragma("GCC optimize(\"O0\")")
+# define NO_OPTIMIZE_END _Pragma("GCC pop_options")
+#else
+# define NO_OPTIMIZE_BEGIN
+# define NO_OPTIMIZE_END
+#endif
+
+////////////////////////////////
 //~ rjf: Versions
 
 #define Version(major, minor, patch) (U64)((((U64)(major) & 0xffff) << 32) | ((((U64)(minor) & 0xffff) << 16)) | ((((U64)(patch) & 0xffff) << 0)))

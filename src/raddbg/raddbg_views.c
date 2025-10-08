@@ -4024,12 +4024,14 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   for EachIndex(rewind_idx, C_KEY_HASH_HISTORY_COUNT)
   {
     U128 hash = c_hash_from_key(texture_key, rewind_idx);
+#pragma pack(push, 1)
     struct
     {
       U128 hash;
       RD_BitmapTopology top;
     }
     key_data = {hash, topology};
+#pragma pack(pop)
     String8 key = str8_struct(&key_data);
     AC_Artifact artifact = ac_artifact_from_key(access, key, rd_bitmap_artifact_create, rd_bitmap_artifact_destroy, 0);
     R_Handle texture_candidate = {0};

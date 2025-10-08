@@ -6136,13 +6136,14 @@ internal C_Key
 ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, B32 wait_for_fresh, U64 endt_us, B32 *out_is_stale)
 {
   ProfBeginFunction();
+#pragma pack(push, 1)
   struct
   {
     CTRL_Handle process;
     Rng1U64 vaddr_range;
     B32 zero_terminated;
-    B32 _padding_;
   } key_data = {process, vaddr_range, zero_terminated};
+#pragma pack(pop)
   String8 key = str8_struct(&key_data);
   Access *access = access_open();
   AC_Artifact artifact = ac_artifact_from_key(access, key, ctrl_memory_artifact_create, ctrl_memory_artifact_destroy, endt_us,

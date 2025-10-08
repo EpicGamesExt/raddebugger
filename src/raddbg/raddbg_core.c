@@ -5779,10 +5779,11 @@ rd_store_view_loading_info(B32 is_loading, U64 progress_u64, U64 progress_u64_ta
 {
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
   RD_ViewState *view_state = rd_view_state_from_cfg(view);
+  B32 loading_state_is_new = (is_loading && view_state->loading_t_target != (F32)!!is_loading);
   view_state->loading_t_target = (F32)!!is_loading;
   view_state->loading_progress_v = progress_u64;
   view_state->loading_progress_v_target = progress_u64_target;
-  if(view_state->last_frame_index_built+1 < rd_state->frame_index)
+  if(loading_state_is_new || view_state->last_frame_index_built+1 < rd_state->frame_index)
   {
     view_state->loading_t = view_state->loading_t_target;
   }
@@ -5983,7 +5984,7 @@ rd_window_state_from_os_handle(OS_Handle os)
 }
 
 #if COMPILER_MSVC && !BUILD_DEBUG
-#pragma optimize("", off)
+NO_OPTIMIZE_BEGIN
 #endif
 
 internal void
@@ -9954,7 +9955,7 @@ rd_window_frame(void)
 }
 
 #if COMPILER_MSVC && !BUILD_DEBUG
-#pragma optimize("", on)
+NO_OPTIMIZE_END
 #endif
 
 ////////////////////////////////

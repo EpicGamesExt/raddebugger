@@ -2250,11 +2250,13 @@ txt_artifact_destroy(AC_Artifact artifact)
 internal TXT_TextInfo
 txt_text_info_from_hash_lang(Access *access, U128 hash, TXT_LangKind lang)
 {
+#pragma pack(push, 1)
   struct
   {
     U128 hash;
     TXT_LangKind lang;
   } key = {hash, lang};
+#pragma pack(pop)
   String8 key_string = str8_struct(&key);
   AC_Artifact artifact = ac_artifact_from_key(access, key_string, txt_artifact_create, txt_artifact_destroy, 0, .flags = AC_Flag_Wide);
   TXT_Artifact *txt_artifact = (TXT_Artifact *)artifact.u64[0];

@@ -4,37 +4,34 @@
 ////////////////////////////////
 //~ rjf: MD5
 
-#if !defined(MD5_API)
-# define MD5_API static
-# include "third_party/md5/md5.c"
-# include "third_party/md5/md5.h"
-#endif
+#include "third_party/martins_hash/md5.h"
 
 internal MD5
 md5_from_data(String8 data)
 {
-  MD5_CTX ctx = {0};
-  MD5_Init(&ctx);
-  MD5_Update(&ctx, (void*)data.str, data.size);
+  md5_ctx ctx = {0};
+  md5_init(&ctx);
+  md5_update(&ctx, (void*)data.str, data.size);
   MD5 result = {0};
-  MD5_Final(result.u8, &ctx);
+  md5_finish(&ctx, result.u8);
   return result;
 }
 
 ////////////////////////////////
-//~ rjf: SHA1
+//~ rjf: SHA
 
-#include "third_party/tomcrypt_hash/tomcrypt_hash.h"
+#include "third_party/martins_hash/sha1.h"
+#include "third_party/martins_hash/sha256.h"
 
 internal SHA1
 sha1_from_data(String8 data)
 {
   SHA1 result = {0};
   {
-    SHA1State state = {0};
-    sha1_init(&state);
-    sha1_process(&state, data.str, data.size);
-    sha1_done(&state, result.u8);
+    sha1_ctx ctx = {0};
+    sha1_init(&ctx);
+    sha1_update(&ctx, data.str, data.size);
+    sha1_finish(&ctx, result.u8);
   }
   return result;
 }
@@ -44,10 +41,10 @@ sha256_from_data(String8 data)
 {
   SHA256 result = {0};
   {
-    SHA256State state = {0};
-    sha256_init(&state);
-    sha256_process(&state, data.str, data.size);
-    sha256_done(&state, result.u8);
+    sha256_ctx ctx = {0};
+    sha256_init(&ctx);
+    sha256_update(&ctx, data.str, data.size);
+    sha256_finish(&ctx, result.u8);
   }
   return result;
 }
