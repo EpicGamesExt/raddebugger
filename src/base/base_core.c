@@ -408,6 +408,12 @@ bit_size_from_arch(Arch arch)
 }
 
 internal U64
+byte_size_from_arch(Arch arch)
+{
+  return bit_size_from_arch(arch) / 8;
+}
+
+internal U64
 max_instruction_size_from_arch(Arch arch)
 {
   // TODO(rjf): make this real

@@ -959,6 +959,7 @@ internal B32 txt_rng_contains(TxtRng r, TxtPt pt);
 //~ rjf: Toolchain/Environment Enum Functions
 
 internal U64 bit_size_from_arch(Arch arch);
+internal U64 byte_size_from_arch(Arch arch);
 internal U64 max_instruction_size_from_arch(Arch arch);
 
 ////////////////////////////////
