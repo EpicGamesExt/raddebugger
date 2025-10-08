@@ -753,7 +753,7 @@ cl = lg;                                 \
         Arena *arena = arena_alloc_(&(ArenaParams){ .flags = ArenaFlag_NoChain, .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer });
 
         String8 min = str8_from_u64(arena, range.min, 16, 0, 0);
-        MemoryCopyStr8(bf, min);
+        MemoryCopy(bf, min.str, min.size);
         bf += min.size;
 
         *bf = ','; ++bf;
@@ -761,7 +761,7 @@ cl = lg;                                 \
 
         arena_clear(arena);
         String8 max = str8_from_u64(arena, range.max, 16, 0, 0);
-        MemoryCopyStr8(bf, max);
+        MemoryCopy(bf, max.str, max.size);
         bf += max.size;
 
         *bf = ')'; ++bf;
