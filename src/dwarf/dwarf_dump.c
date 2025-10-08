@@ -325,7 +325,7 @@ dw_string_from_expression(Arena *arena, String8 expr, U64 cu_base, U64 addr_size
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List list = dw_string_list_from_expression(scratch.arena, expr, cu_base, addr_size, arch, ver, ext, format);
-  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=", "});
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
   return result;
 }
 

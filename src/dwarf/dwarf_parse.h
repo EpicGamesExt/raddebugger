@@ -521,7 +521,7 @@ internal DW_Expr dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size
 // debug frame
 
 internal U64 dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc_out);
-internal B32 dw_unpack_cie(String8 data, Arch arch, DW_Format format, DW_UnpackedCIE *cie_out);
+internal B32 dw_unpack_cie(String8 data, DW_Format format, Arch arch, DW_UnpackedCIE *cie_out);
 internal B32 dw_unpack_fde(String8 data, DW_Format format, DW_CIEFromOffsetFunc *cie_from_offset_func, void *cie_from_offset_ud, DW_UnpackedFDE *fde_out);
 
 #endif // DWARF_PARSE_H

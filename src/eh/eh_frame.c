@@ -82,13 +82,7 @@ eh_parse_aug_data(String8 aug_string, String8 aug_data, EH_PtrCtx *ptr_ctx, EH_A
   EH_PtrEnc handler_encoding = EH_PtrEnc_Omit;
   U64         handler_ip       = 0;
   if (str8_match(str8_prefix(aug_string, 1), str8_lit("z"), 0)) {
-    U64 aug_data_off  = cursor;
-    U64 aug_data_size = 0;
-    cursor += str8_deserial_read_uleb128(aug_string, cursor, &aug_data_size);
-    cursor += aug_data_size;
-
-    String8 aug_data   = str8_substr(aug_data, rng_1u64(aug_data_off, aug_data_off + aug_data_size));
-    U64     aug_cursor = 0;
+    U64 aug_cursor = 0;
     for (U8 *ptr = aug_string.str; ptr < (aug_string.str+aug_string.size); ptr += 1) {
       switch (*ptr) {
       case 'L': {
@@ -97,7 +91,7 @@ eh_parse_aug_data(String8 aug_string, String8 aug_data, EH_PtrCtx *ptr_ctx, EH_A
       } break;
       case 'P': {
         aug_cursor += str8_deserial_read_struct(aug_data, aug_cursor, &handler_encoding);
-        aug_cursor += str8_deserial_read_dwarf_ptr(aug_data, aug_cursor, ptr_ctx, handler_encoding, &handler_ip);
+        aug_cursor += eh_read_ptr(aug_data, aug_cursor, ptr_ctx, handler_encoding, &handler_ip);
         aug_flags |= EH_AugFlag_HasHandler;
       } break;
       case 'R': {
