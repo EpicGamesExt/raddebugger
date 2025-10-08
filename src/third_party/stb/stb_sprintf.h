@@ -743,6 +743,30 @@ cl = lg;                                 \
           ++bf;
         }
       }break;
+
+      case 'r':
+      {
+        Rng1U64 range = va_arg(va, Rng1U64);
+        *bf = '['; ++bf;
+
+        U8 buffer[ARENA_HEADER_SIZE + 128];
+        Arena *arena = arena_alloc_(&(ArenaParams){ .flags = ArenaFlag_NoChain, .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer });
+
+        String8 min = str8_from_u64(arena, range.min, 16, 0, 0);
+        MemoryCopyStr8(bf, min);
+        bf += min.size;
+
+        *bf = ','; ++bf;
+        *bf = ' '; ++bf;
+
+        arena_clear(arena);
+        String8 max = str8_from_u64(arena, range.max, 16, 0, 0);
+        MemoryCopyStr8(bf, max);
+        bf += max.size;
+
+        *bf = ')'; ++bf;
+      }break;
+
       //
       // NOTE(rjf): DEBUGGER PROJECT ADDITION ^^^
       //-
