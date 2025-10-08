@@ -2362,6 +2362,16 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   Access *access = access_open();
   
   //////////////////////////////
+  //- rjf: if disassembly views are parameterized by a register-space evaluation,
+  // we will interpret it as an address in the primary module.
+  //
+  if(e_space_match(eval.space, e_base_ctx->thread_reg_space))
+  {
+    eval = e_value_eval_from_eval(eval);
+    eval.space = e_base_ctx->primary_module->space;
+  }
+  
+  //////////////////////////////
   //- rjf: if disassembly views are not parameterized by anything, they
   // automatically snap to the selected thread's RIP, OR the "temp look
   // address" (commanded by go-to-disasm or go-to-address), rounded down to the
@@ -2597,6 +2607,27 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   RD_MemoryViewState *mv = rd_view_state(RD_MemoryViewState);
   
   //////////////////////////////
+  //- rjf: if memory views are parameterized by a register-space evaluation,
+  // we will interpret it as an address in the primary module.
+  //
+  if(e_space_match(eval.space, e_base_ctx->thread_reg_space))
+  {
+    eval = e_value_eval_from_eval(eval);
+    eval.space = e_base_ctx->primary_module->space;
+  }
+  
+  //////////////////////////////
+  //- rjf: if memory views are parameterized by nothing, we will
+  // default to showing the entire memory space of the primary module.
+  //
+  Rng1U64 view_range = rd_space_range_from_eval(eval);
+  if(eval.space.kind == 0)
+  {
+    eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
+    view_range = rd_whole_range_from_eval_space(eval.space);
+  }
+  
+  //////////////////////////////
   //- rjf: unpack parameterization info
   //
   Vec4F32 main_bg_color_rgba = ui_color_from_name(str8_lit("background"));
@@ -2604,17 +2635,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Vec4F32 main_tx_color_rgba = ui_color_from_name(str8_lit("text"));
   Vec4F32 main_tx_color_hsva = hsva_from_rgba(main_tx_color_rgba);
   F32 main_font_size = ui_bottom_font_size();
-  if(e_space_match(eval.space, e_base_ctx->thread_reg_space))
-  {
-    eval = e_value_eval_from_eval(eval);
-    eval.space = e_base_ctx->primary_module->space;
-  }
-  Rng1U64 view_range = rd_space_range_from_eval(eval);
-  if(eval.space.kind == 0)
-  {
-    eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
-    view_range = rd_whole_range_from_eval_space(eval.space);
-  }
   U64 cursor_base_vaddr = rd_view_setting_u64_from_name(str8_lit("cursor"));
   U64 mark_base_vaddr   = rd_view_setting_u64_from_name(str8_lit("mark"));
   U64 cursor_size       = rd_view_setting_u64_from_name(str8_lit("cursor_size"));

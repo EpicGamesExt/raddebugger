@@ -10773,7 +10773,8 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 strin
         E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
         if(eval_type_kind == E_TypeKind_Ptr ||
            eval_type_kind == E_TypeKind_LRef ||
-           eval_type_kind == E_TypeKind_RRef)
+           eval_type_kind == E_TypeKind_RRef ||
+           e_space_match(eval.space, e_base_ctx->thread_reg_space))
         {
           eval = e_value_eval_from_eval(eval);
         }
