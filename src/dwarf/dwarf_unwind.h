@@ -14,87 +14,19 @@ typedef struct DW_UnwindResult
 
 // EH: Exception Frames
 
-typedef U8 DW_EhPtrEnc;
-enum
+typedef struct DW_UnpackedCIENode
 {
-  DW_EhPtrEnc_TypeMask = 0x0F,
-  DW_EhPtrEnc_Ptr       = 0x00, // Pointer sized unsigned value
-  DW_EhPtrEnc_ULEB128   = 0x01, // Unsigned LE base-128 value
-  DW_EhPtrEnc_UData2    = 0x02, // Unsigned 16-bit value
-  DW_EhPtrEnc_UData4    = 0x03, // Unsigned 32-bit value
-  DW_EhPtrEnc_UData8    = 0x04, // Unsigned 64-bit value
-  DW_EhPtrEnc_Signed    = 0x08, // Signed pointer
-  DW_EhPtrEnc_SLEB128   = 0x09, // Signed LE base-128 value
-  DW_EhPtrEnc_SData2    = 0x0A, // Signed 16-bit value
-  DW_EhPtrEnc_SData4    = 0x0B, // Signed 32-bit value
-  DW_EhPtrEnc_SData8    = 0x0C, // Signed 64-bit value
-};
-
-enum
-{
-  DW_EhPtrEnc_ModifyMask = 0x70,
-  DW_EhPtrEnc_PcRel      = 0x10, // Value is relative to the current program counter.
-  DW_EhPtrEnc_TextRel    = 0x20, // Value is relative to the .text section.
-  DW_EhPtrEnc_DataRel    = 0x30, // Value is relative to the .got or .eh_frame_hdr section.
-  DW_EhPtrEnc_FuncRel    = 0x40, // Value is relative to the function.
-  DW_EhPtrEnc_Aligned    = 0x50, // Value is aligned to an address unit sized boundary.
-};
-
-enum
-{
-  DW_EhPtrEnc_Indirect = 0x80, // This flag indicates that value is stored in virtual memory.
-  DW_EhPtrEnc_Omit     = 0xFF,
-};
-
-typedef struct DW_EhPtrCtx
-{
-  U64 raw_base_vaddr; // address where pointer is being read
-  U64 text_vaddr;     // base address of section with instructions (used for encoding pointer on SH and IA64)
-  U64 data_vaddr;     // base address of data section (used for encoding pointer on x86-64)
-  U64 func_vaddr;     // base address of function where IP is located
-} DW_EhPtrCtx;
-
-// CIE: Common Information Entry
-typedef struct DW_CIEUnpacked
-{
-  U8          version;
-  DW_EhPtrEnc lsda_encoding;
-  DW_EhPtrEnc addr_encoding;
-  
-  B32     has_augmentation_size;
-  U64     augmentation_size;
-  String8 augmentation;
-  
-  U64 code_align_factor;
-  S64 data_align_factor;
-  U64 ret_addr_reg;
-  
-  U64 handler_ip;
-  
-  Rng1U64 cfi_range;
-} DW_CIEUnpacked;
-
-typedef struct DW_CIEUnpackedNode
-{
-  struct DW_CIEUnpackedNode *next;
-  DW_CIEUnpacked             cie;
+  struct DW_UnpackedCIENode *next;
+  DW_UnpackedCIE             cie;
   U64                        offset;
-} DW_CIEUnpackedNode;
-
-// FDE: Frame Description Entry
-typedef struct DW_FDEUnpacked
-{
-  Rng1U64 ip_voff_range;
-  U64     lsda_ip;
-  Rng1U64 cfi_range;
-} DW_FDEUnpacked;
+} DW_UnpackedCIENode;
 
 // CFI: Call Frame Information
 typedef struct DW_CFIRecords
 {
   B32            valid;
-  DW_CIEUnpacked cie;
-  DW_FDEUnpacked fde;
+  DW_UnpackedCIE cie;
+  DW_UnpackedFDE fde;
 } DW_CFIRecords;
 
 typedef enum DW_CFICFARule{
@@ -144,10 +76,10 @@ typedef struct DW_CFIRow
 typedef struct DW_CFIMachine
 {
   U64             cells_per_row;
-  DW_CIEUnpacked *cie;
-  DW_EhPtrCtx    *ptr_ctx;
+  DW_UnpackedCIE *cie;
   DW_CFIRow      *initial_row;
   U64             fde_ip;
+  EH_PtrCtx      *ptr_ctx;
 } DW_CFIMachine;
 
 typedef U8 DW_CFADecode;
@@ -200,17 +132,14 @@ internal DW_UnwindResult dw_unwind_x64__apply_frame_rules(String8 raw_eh_frame, 
 // x64 Unwind Helper Functions
 
 internal void dw_unwind_init_x64(void);
-internal U64  dw_unwind_parse_pointer_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, DW_EhPtrEnc ptr_enc, U64 off, U64 *ptr_out);
 
 //- eh_frame parsing
-internal void dw_unwind_parse_cie_x64(void *base,Rng1U64 range,DW_EhPtrCtx *ptr_ctx, U64 off, DW_CIEUnpacked *cie_out);
-internal void dw_unwind_parse_fde_x64(void *base,Rng1U64 range,DW_EhPtrCtx *ptr_ctx, DW_CIEUnpacked *parent_cie, U64 off, DW_FDEUnpacked *fde_out);
-internal DW_CFIRecords dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, DW_EhPtrCtx *ptr_ctx, U64 ip_voff);
-internal DW_CFIRecords dw_unwind_eh_frame_hdr_from_ip_fast_x64(String8 raw_eh_frame, String8 raw_eh_frame_hdr, DW_EhPtrCtx *ptr_ctx, U64 ip_voff);
+internal DW_CFIRecords dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, EH_PtrCtx *ptr_ctx, U64 ip_voff);
+internal DW_CFIRecords dw_unwind_eh_frame_hdr_from_ip_fast_x64(String8 raw_eh_frame, String8 raw_eh_frame_hdr, EH_PtrCtx *ptr_ctx, U64 ip_voff);
 
 //- cfi machine
 
-internal DW_CFIMachine dw_unwind_make_machine_x64(U64 cells_per_row, DW_CIEUnpacked *cie, DW_EhPtrCtx *ptr_ctx);
+internal DW_CFIMachine dw_unwind_make_machine_x64(U64 cells_per_row, DW_UnpackedCIE *cie, EH_PtrCtx *ptr_ctx);
 internal void          dw_unwind_machine_equip_initial_row_x64(DW_CFIMachine *machine, DW_CFIRow *initial_row);
 internal void          dw_unwind_machine_equip_fde_ip_x64(DW_CFIMachine *machine, U64 fde_ip);
 

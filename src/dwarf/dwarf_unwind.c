@@ -55,7 +55,7 @@ dw_unwind_x64(String8           raw_text,
   //- find cfi records
   DW_CFIRecords cfi_recs = {0};
   if (has_needed_sections) {
-    DW_EhPtrCtx ptr_ctx    = {0};
+    EH_PtrCtx ptr_ctx    = {0};
     ptr_ctx.raw_base_vaddr = frame_base_voff;
     ptr_ctx.text_vaddr     = text_base_vaddr;
     ptr_ctx.data_vaddr     = data_base_vaddr;
@@ -75,11 +75,11 @@ dw_unwind_x64(String8           raw_text,
   //- cfi machine setup
   DW_CFIMachine machine = {0};
   if (cfi_recs.valid) {
-    DW_EhPtrCtx ptr_ctx    = {0};
+    EH_PtrCtx ptr_ctx    = {0};
     ptr_ctx.raw_base_vaddr = frame_base_voff;
     ptr_ctx.text_vaddr     = text_base_vaddr;
     ptr_ctx.data_vaddr     = data_base_vaddr;
-    ptr_ctx.func_vaddr     = cfi_recs.fde.ip_voff_range.min + rebase_voff_to_vaddr; // TODO: it's not super clear how to set up this member, need more test cases
+    ptr_ctx.func_vaddr     = cfi_recs.fde.pc_range.min + rebase_voff_to_vaddr; // TODO: it's not super clear how to set up this member, need more test cases
     machine = dw_unwind_make_machine_x64(DW_UNWIND_X64__REG_SLOT_COUNT, &cfi_recs.cie, &ptr_ctx);
   }
   
@@ -101,7 +101,7 @@ dw_unwind_x64(String8           raw_text,
   if (init_row != 0) {
     // upgrade machine with new equipment
     dw_unwind_machine_equip_initial_row_x64(&machine, init_row);
-    dw_unwind_machine_equip_fde_ip_x64(&machine, cfi_recs.fde.ip_voff_range.min);
+    dw_unwind_machine_equip_fde_ip_x64(&machine, cfi_recs.fde.pc_range.min);
     
     // decode main row
     Rng1U64    main_cfi_range = cfi_recs.fde.cfi_range;
@@ -320,100 +320,10 @@ dw_unwind_init_x64(void)
   }
 }
 
-internal U64
-dw_unwind_parse_pointer_x64(void *frame_base, Rng1U64 frame_range, DW_EhPtrCtx *ptr_ctx, DW_EhPtrEnc encoding, U64 off, U64 *ptr_out)
-{
-  // aligned offset
-  U64 pointer_off = off;
-  if (encoding == DW_EhPtrEnc_Aligned) {
-    pointer_off = AlignPow2(off, 8); // TODO: align to 4 bytes when we parse x86 ELF binary
-    encoding    = DW_EhPtrEnc_Ptr;
-  }
-  
-  // decode pointer value
-  U64 size_param        = 0;
-  U64 after_pointer_off = 0;
-  U64 raw_pointer       = 0;
-  switch (encoding & DW_EhPtrEnc_TypeMask) {
-    default:break;
-    
-    case DW_EhPtrEnc_Ptr   : size_param = 8; goto ufixed;
-    case DW_EhPtrEnc_UData2: size_param = 2; goto ufixed;
-    case DW_EhPtrEnc_UData4: size_param = 4; goto ufixed;
-    case DW_EhPtrEnc_UData8: size_param = 8; goto ufixed;
-    ufixed:
-    {
-      dw_based_range_read(frame_base, frame_range, pointer_off, size_param, &raw_pointer);
-      after_pointer_off = pointer_off + size_param;
-    } break;
-    
-    // TODO: Signed is actually just a flag that indicates this int is negavite.
-    // There shouldn't be a read for Signed.
-    // For instance, (DW_EhPtrEnc_UData2 | DW_EhPtrEnc_Signed) == DW_EhPtrEnc_SData etc.
-    case DW_EhPtrEnc_Signed:size_param = 8; goto sfixed; 
-    
-    case DW_EhPtrEnc_SData2:size_param = 2; goto sfixed;
-    case DW_EhPtrEnc_SData4:size_param = 4; goto sfixed;
-    case DW_EhPtrEnc_SData8:size_param = 8; goto sfixed;
-    sfixed:
-    {
-      dw_based_range_read(frame_base, frame_range, pointer_off, size_param, &raw_pointer);
-      after_pointer_off = pointer_off + size_param;
-      // sign extension
-      U64 sign_bit = size_param*8 - 1;
-      if ((raw_pointer >> sign_bit) != 0) {
-        raw_pointer |= (~(1 << sign_bit)) + 1;
-      }
-    } break;
-    
-    case DW_EhPtrEnc_ULEB128:
-    {
-      U64 size = dw_based_range_read_uleb128(frame_base, frame_range, pointer_off, &raw_pointer);
-      after_pointer_off = pointer_off + size;
-    } break;
-    
-    case DW_EhPtrEnc_SLEB128:
-    {
-      U64 size = dw_based_range_read_sleb128(frame_base, frame_range, pointer_off,
-                                             (S64*)&raw_pointer);
-      after_pointer_off = pointer_off + size;
-    } break;
-  }
-  
-  // apply relative bases
-  U64 pointer = raw_pointer;
-  if (pointer != 0) {
-    switch (encoding & DW_EhPtrEnc_ModifyMask) {
-      case DW_EhPtrEnc_PcRel:
-      {
-        pointer = ptr_ctx->raw_base_vaddr + frame_range.min + off + raw_pointer;
-      } break;
-      case DW_EhPtrEnc_TextRel:
-      {
-        pointer = ptr_ctx->text_vaddr + raw_pointer;
-      } break;
-      case DW_EhPtrEnc_DataRel:
-      {
-        pointer = ptr_ctx->data_vaddr + raw_pointer;
-      } break;
-      case DW_EhPtrEnc_FuncRel:
-      {
-        Assert(!"TODO: need a sample to verify implementation");
-        pointer = ptr_ctx->func_vaddr + raw_pointer;
-      } break;
-    }
-  }
-  
-  // return
-  *ptr_out = pointer;
-  U64 result = after_pointer_off - off;
-  return(result);
-}
-
 //- eh_frame parsing
 
 internal void
-dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off, DW_CIEUnpacked *cie_out)
+dw_unwind_parse_cie_x64(void *base, Rng1U64 range, EH_PtrCtx *ptr_ctx, U64 off, DW_UnpackedCIE *cie_out)
 {
   NotImplemented;
 #if 0
@@ -474,9 +384,9 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
     U64 aug_data_off       = after_aug_size_off;
     U64 after_aug_data_off = after_aug_size_off;
     
-    DW_EhPtrEnc lsda_encoding = DW_EhPtrEnc_Omit;
+    EH_PtrEnc lsda_encoding = EH_PtrEnc_Omit;
     U64         handler_ip    = 0;
-    DW_EhPtrEnc addr_encoding = DW_EhPtrEnc_UData8;
+    EH_PtrEnc addr_encoding = EH_PtrEnc_UData8;
     
     if (has_augmentation_size > 0) {
       U64 aug_data_cursor = aug_data_off;
@@ -487,7 +397,7 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
             aug_data_cursor += sizeof(lsda_encoding);
           } break;
           case 'P': {
-            DW_EhPtrEnc handler_encoding = DW_EhPtrEnc_Omit;
+            EH_PtrEnc handler_encoding = EH_PtrEnc_Omit;
             dw_based_range_read_struct(base, range, aug_data_cursor, &handler_encoding);
             
             U64 ptr_off  = aug_data_cursor + sizeof(handler_encoding);
@@ -516,6 +426,7 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
     
     // commit values to out
     cie_out->version               = version;
+
     cie_out->lsda_encoding         = lsda_encoding;
     cie_out->addr_encoding         = addr_encoding;
     cie_out->has_augmentation_size = has_augmentation_size;
@@ -531,68 +442,15 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
 #endif
 }
 
-internal void
-dw_unwind_parse_fde_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, DW_CIEUnpacked *cie, U64 off, DW_FDEUnpacked *fde_out)
-{
-  // pull out pointer encoding field
-  DW_EhPtrEnc ptr_enc = cie->addr_encoding;
-  
-  // ip first
-  U64 ip_first_off  = off;
-  U64 ip_first      = 0;
-  U64 ip_first_size = dw_unwind_parse_pointer_x64(base, range, ptr_ctx, ptr_enc, ip_first_off, &ip_first);
-  
-  // ip range size
-  U64 ip_range_size_off  = ip_first_off + ip_first_size;
-  U64 ip_range_size      = 0;
-  U64 ip_range_size_size = dw_unwind_parse_pointer_x64(base, range, ptr_ctx, ptr_enc & DW_EhPtrEnc_TypeMask, ip_range_size_off, &ip_range_size);
-  
-  // augmentation data
-  U64 aug_data_off       = ip_range_size_off + ip_range_size_size;
-  U64 after_aug_data_off = aug_data_off;
-  U64 lsda_ip            = 0;
-  
-  if (cie->has_augmentation_size) {
-    // augmentation size
-    U64 augmentation_size  = 0;
-    U64 aug_size_size      = dw_based_range_read_uleb128(base, range, aug_data_off, &augmentation_size);
-    U64 after_aug_size_off = aug_data_off + aug_size_size;
-    
-    // extract lsda (only thing that can actually be in FDE's augmentation data as far as we know)
-    DW_EhPtrEnc lsda_encoding = cie->lsda_encoding;
-    if (lsda_encoding != DW_EhPtrEnc_Omit) {
-      U64 lsda_off = after_aug_size_off;
-      dw_unwind_parse_pointer_x64(base, range, ptr_ctx, lsda_encoding, lsda_off, &lsda_ip);
-    }
-    
-    // set offset at end of augmentation data
-    after_aug_data_off = after_aug_size_off + augmentation_size;
-  }
-  
-  // cfi range
-  U64 cfi_off  = range.min + after_aug_data_off;
-  U64 cfi_size = 0;
-  if (range.max > cfi_off) {
-    cfi_size = range.max - cfi_off;
-  }
-  
-  // commit values to out
-  fde_out->ip_voff_range.min = ip_first;
-  fde_out->ip_voff_range.max = ip_first + ip_range_size;
-  fde_out->lsda_ip           = lsda_ip;
-  fde_out->cfi_range.min     = cfi_off;
-  fde_out->cfi_range.max     = cfi_off + cfi_size;
-}
-
 internal DW_CFIRecords
-dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, DW_EhPtrCtx *ptr_ctx, U64 ip_voff)
+dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, EH_PtrCtx *ptr_ctx, U64 ip_voff)
 {
   Temp scratch = scratch_begin(0, 0);
   
   DW_CFIRecords result = {0};
   
-  DW_CIEUnpackedNode *cie_first = 0;
-  DW_CIEUnpackedNode *cie_last  = 0;
+  DW_UnpackedCIENode *cie_first = 0;
+  DW_UnpackedCIENode *cie_last  = 0;
   
   U64 cursor = 0;
   for (;;) {
@@ -632,10 +490,10 @@ dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, DW_EhPtrCtx *ptr_c
     
     // CIE
     if (discrim == 0) {
-      DW_CIEUnpacked cie = {0};
+      DW_UnpackedCIE cie = {0};
       dw_unwind_parse_cie_x64(raw_rec.str, rng_1u64(0, raw_rec.size), ptr_ctx, after_discrim_off, &cie);
       if (cie.version != 0) {
-        DW_CIEUnpackedNode *node = push_array(scratch.arena, DW_CIEUnpackedNode, 1);
+        DW_UnpackedCIENode *node = push_array(scratch.arena, DW_UnpackedCIENode, 1);
         node->cie                = cie;
         node->offset             = rec_off;
         SLLQueuePush(cie_first, cie_last, node);
@@ -647,8 +505,8 @@ dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, DW_EhPtrCtx *ptr_c
       U64 cie_offset = rec_range.min + discrim_off - discrim;
       
       // get cie node
-      DW_CIEUnpackedNode *cie_node = 0;
-      for (DW_CIEUnpackedNode *node = cie_first; node != 0; node = node->next) {
+      DW_UnpackedCIENode *cie_node = 0;
+      for (DW_UnpackedCIENode *node = cie_first; node != 0; node = node->next) {
         if (node->offset == cie_offset) {
           cie_node = node;
           break;
@@ -656,12 +514,13 @@ dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, DW_EhPtrCtx *ptr_c
       }
       
       // parse fde
-      DW_FDEUnpacked fde = {0};
+      DW_UnpackedFDE fde = {0};
       if (cie_node != 0) {
-        dw_unwind_parse_fde_x64(raw_rec.str, rng_1u64(0,raw_rec.size), ptr_ctx, &cie_node->cie, after_discrim_off, &fde);
+        NotImplemented;
+        //dw_unwind_parse_fde_x64(raw_rec.str, rng_1u64(0,raw_rec.size), ptr_ctx, &cie_node->cie, after_discrim_off, &fde);
       }
       
-      if (contains_1u64(fde.ip_voff_range, ip_voff)) {
+      if (contains_1u64(fde.pc_range, ip_voff)) {
         result.valid = 1;
         result.cie   = cie_node->cie;
         result.fde   = fde;
@@ -679,7 +538,7 @@ dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, DW_EhPtrCtx *ptr_c
 }
 
 internal U64
-dw_search_eh_frame_hdr_linear_x64(String8 raw_eh_frame_hdr, DW_EhPtrCtx *ptr_ctx, U64 location)
+dw_search_eh_frame_hdr_linear_x64(String8 raw_eh_frame_hdr, EH_PtrCtx *ptr_ctx, U64 location)
 {
   // Table contains only addresses for first instruction in a function and we cannot
   // guarantee that result is FDE that corresponds to the input location. 
@@ -695,7 +554,7 @@ dw_search_eh_frame_hdr_linear_x64(String8 raw_eh_frame_hdr, DW_EhPtrCtx *ptr_ctx
   
   if (version == 1) {
 #if 0
-    DW_EhPtrCtx ptr_ctx = {0};
+    EH_PtrCtx ptr_ctx = {0};
     // Set this to base address of .eh_frame_hdr. Entries are relative
     // to this section for some reason.
     ptr_ctx.data_vaddr = range.min;
@@ -704,7 +563,7 @@ dw_search_eh_frame_hdr_linear_x64(String8 raw_eh_frame_hdr, DW_EhPtrCtx *ptr_ctx
     ptr_ctx.text_vaddr = 0; 
 #endif
     
-    DW_EhPtrEnc eh_frame_ptr_enc = 0, fde_count_enc = 0, table_enc = 0;
+    EH_PtrEnc eh_frame_ptr_enc = 0, fde_count_enc = 0, table_enc = 0;
     cursor += str8_deserial_read_struct(raw_eh_frame_hdr, cursor, &eh_frame_ptr_enc);
     cursor += str8_deserial_read_struct(raw_eh_frame_hdr, cursor, &fde_count_enc);
     cursor += str8_deserial_read_struct(raw_eh_frame_hdr, cursor, &table_enc);
@@ -733,7 +592,7 @@ dw_search_eh_frame_hdr_linear_x64(String8 raw_eh_frame_hdr, DW_EhPtrCtx *ptr_ctx
 }
 
 internal DW_CFIRecords
-dw_unwind_eh_frame_hdr_from_ip_fast_x64(String8 raw_eh_frame, String8 raw_eh_frame_hdr, DW_EhPtrCtx *ptr_ctx, U64 ip_voff)
+dw_unwind_eh_frame_hdr_from_ip_fast_x64(String8 raw_eh_frame, String8 raw_eh_frame_hdr, EH_PtrCtx *ptr_ctx, U64 ip_voff)
 {
   DW_CFIRecords result = {0};
   
@@ -771,15 +630,16 @@ dw_unwind_eh_frame_hdr_from_ip_fast_x64(String8 raw_eh_frame, String8 raw_eh_fra
       Rng1U64 fde_range = rng_1u64(0, fde_read_offset + (fde_size - sizeof(fde_discrim)));
       
       // parse CIE
-      DW_CIEUnpacked cie = {0};
+      DW_UnpackedCIE cie = {0};
       dw_unwind_parse_cie_x64(raw_eh_frame.str, cie_range, ptr_ctx, cie_read_offset, &cie);
       
       // parse FDE
-      DW_FDEUnpacked fde = {0};
-      dw_unwind_parse_fde_x64(raw_eh_frame.str, fde_range, ptr_ctx, &cie, fde_read_offset, &fde);
+      DW_UnpackedFDE fde = {0};
+      NotImplemented;
+      //dw_unwind_parse_fde_x64(raw_eh_frame.str, fde_range, ptr_ctx, &cie, fde_read_offset, &fde);
       
       // range check instruction pointer
-      if (contains_1u64(fde.ip_voff_range, ip_voff)) {
+      if (contains_1u64(fde.pc_range, ip_voff)) {
         result.valid = 1;
         result.cie   = cie;
         result.fde   = fde;
@@ -793,7 +653,7 @@ dw_unwind_eh_frame_hdr_from_ip_fast_x64(String8 raw_eh_frame, String8 raw_eh_fra
 //- cfi machine
 
 internal DW_CFIMachine
-dw_unwind_make_machine_x64(U64 cells_per_row, DW_CIEUnpacked *cie, DW_EhPtrCtx *ptr_ctx)
+dw_unwind_make_machine_x64(U64 cells_per_row, DW_UnpackedCIE *cie, EH_PtrCtx *ptr_ctx)
 {
   DW_CFIMachine result = {0};
   result.cells_per_row = cells_per_row;
@@ -843,8 +703,8 @@ dw_unwind_machine_run_to_ip_x64(void *base, Rng1U64 range, DW_CFIMachine *machin
   B32 result = 0;
   
   // pull out machine's equipment
-  DW_CIEUnpacked *cie           = machine->cie;
-  DW_EhPtrCtx    *ptr_ctx       = machine->ptr_ctx;
+  DW_UnpackedCIE *cie           = machine->cie;
+  EH_PtrCtx    *ptr_ctx       = machine->ptr_ctx;
   U64             cells_per_row = machine->cells_per_row;
   DW_CFIRow      *initial_row   = machine->initial_row;
   
@@ -910,7 +770,9 @@ dw_unwind_machine_run_to_ip_x64(void *base, Rng1U64 range, DW_CFIMachine *machin
             }
           } break;
           case DW_CFADecode_Address: {
-            o_size = dw_unwind_parse_pointer_x64(base, range, ptr_ctx, cie->addr_encoding, decode_cursor, out);
+            // TODO:
+            NotImplemented;
+            //o_size = dw_unwind_parse_pointer_x64(base, range, ptr_ctx, cie->addr_encoding, decode_cursor, out);
           } break;
           case DW_CFADecode_ULEB128: {
             o_size = dw_based_range_read_uleb128(base, range, decode_cursor, out);
@@ -1160,6 +1022,49 @@ dw_unwind_machine_run_to_ip_x64(void *base, Rng1U64 range, DW_CFIMachine *machin
   done:;
   
   scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+
+internal String8
+dw_string_from_eh_ptr_enc_type(EH_PtrEnc type)
+{
+  switch (type) {
+  case EH_PtrEnc_Ptr:     return str8_lit("Ptr");
+  case EH_PtrEnc_ULEB128: return str8_lit("ULEB128");
+  case EH_PtrEnc_UData2:  return str8_lit("UData2");
+  case EH_PtrEnc_UData4:  return str8_lit("UData4");
+  case EH_PtrEnc_UData8:  return str8_lit("UData8");
+  case EH_PtrEnc_Signed:  return str8_lit("Signed");
+  case EH_PtrEnc_SLEB128: return str8_lit("SLEB128");
+  case EH_PtrEnc_SData2:  return str8_lit("SData2");
+  case EH_PtrEnc_SData4:  return str8_lit("SData4");
+  case EH_PtrEnc_SData8:  return str8_lit("SData8");
+  }
+  return str8_zero();
+}
+
+internal String8
+dw_string_from_eh_ptr_enc_modifier(EH_PtrEnc modifier)
+{
+  switch (modifier) {
+  case EH_PtrEnc_PcRel:   return str8_lit("PcRel");
+  case EH_PtrEnc_TextRel: return str8_lit("TextRel");
+  case EH_PtrEnc_DataRel: return str8_lit("DataRel");
+  case EH_PtrEnc_FuncRel: return str8_lit("FuncRel");
+  case EH_PtrEnc_Aligned: return str8_lit("Aligned");
+  }
+  return str8_zero();
+}
+
+internal String8
+dw_string_from_eh_ptr_enc(Arena *arena, EH_PtrEnc enc)
+{
+  String8 type_str    = dw_string_from_eh_ptr_enc_type(enc & EH_PtrEnc_TypeMask);
+  String8 modifer_str = dw_string_from_eh_ptr_enc_modifier(enc & EH_PtrEnc_ModifierMask);
+  String8 indir_str   = enc & EH_PtrEnc_Indirect ? str8_lit("Indirect") : str8_zero();
+  String8 result      = str8f(arena, "Type: %S, Modifier %S (%S)", type_str, modifer_str, indir_str);
   return result;
 }
 
