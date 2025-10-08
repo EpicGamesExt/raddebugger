@@ -369,6 +369,7 @@ di_close(DI_Key key)
   if(node_released)
   {
     ins_atomic_u64_dec_eval(&di_shared->load_count);
+    ins_atomic_u64_inc_eval(&di_shared->load_gen);
     os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
     os_file_map_close(file_map);
     os_file_close(file);
