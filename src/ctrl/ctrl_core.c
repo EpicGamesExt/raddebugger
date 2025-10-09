@@ -6007,7 +6007,7 @@ ctrl_memory_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry
     U64 zero_terminated_size = 0;
     U64 pre_read_mem_gen = ctrl_mem_gen();
     B32 pre_run_state = ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
-    if(pre_read_mem_gen == gen && range_size != 0)
+    if(range_size != 0)
     {
       // rjf: set up arena
       U64 page_size = os_get_system_info()->page_size; // TODO(rjf): @page_size_from_process
@@ -6099,25 +6099,26 @@ ctrl_memory_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry
     {
       hash = c_submit_data(content_key, &range_arena, str8((U8 *)range_base, zero_terminated_size));
     }
-    else
-    {
-      if(range_arena != 0)
-      {
-        arena_release(range_arena);
-      }
-      if((pre_read_mem_gen != gen || pre_read_mem_gen != post_read_mem_gen) && range_size != 0)
-      {
-        retry_out[0] = 1;
-      }
-    }
     
-    //- rjf: wakeup on new reads
+    //- rjf: wakeup on new submissions
     if(!u128_match(u128_zero(), hash))
     {
       if(ctrl_state->wakeup_hook != 0)
       {
         ctrl_state->wakeup_hook();
       }
+    }
+    
+    //- rjf: always release leftover arenas
+    if(range_arena != 0)
+    {
+      arena_release(range_arena);
+    }
+    
+    //- rjf: retry on mem gen "tearing", and if the range is non-empty
+    if(pre_read_mem_gen != post_read_mem_gen && range_size != 0)
+    {
+      retry_out[0] = 1;
     }
     
     //- rjf: bundle content key as artifact
