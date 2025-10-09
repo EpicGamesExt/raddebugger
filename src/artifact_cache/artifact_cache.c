@@ -361,7 +361,7 @@ ac_async_tick(void)
         
         // rjf: compute val
         B32 retry = 0;
-        AC_Artifact val = r->create(r->key, r->cancel_signal, &retry);
+        AC_Artifact val = r->create(r->key, r->gen, r->cancel_signal, &retry);
         
         // rjf: retry? -> resubmit request
         if(retry && lane_idx() == 0)
@@ -466,7 +466,7 @@ ac_async_tick(void)
         
         // rjf: compute val
         B32 retry = 0;
-        AC_Artifact val = r->create(r->key, r->cancel_signal, &retry);
+        AC_Artifact val = r->create(r->key, r->gen, r->cancel_signal, &retry);
         
         // rjf: restore wide lane ctx
         lane_ctx(lane_ctx_restore);

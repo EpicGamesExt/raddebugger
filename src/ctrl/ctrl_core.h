@@ -1002,7 +1002,7 @@ internal void ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 ////////////////////////////////
 //~ rjf: Process Memory Artifact Cache Hooks / Lookups
 
-internal AC_Artifact ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
+internal AC_Artifact ctrl_memory_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry_out);
 internal void ctrl_memory_artifact_destroy(AC_Artifact artifact);
 internal C_Key ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, B32 wait_for_fresh, U64 endt_us, B32 *out_is_stale);
 
@@ -1017,14 +1017,14 @@ internal B32 ctrl_process_write(CTRL_Handle process, Rng1U64 range, void *src);
 ////////////////////////////////
 //~ rjf: Call Stack Artifact Cache Hooks / Lookups
 
-internal AC_Artifact ctrl_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
+internal AC_Artifact ctrl_call_stack_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry_out);
 internal void ctrl_call_stack_artifact_destroy(AC_Artifact artifact);
 internal CTRL_CallStack ctrl_call_stack_from_thread(Access *access, CTRL_Handle thread_handle, B32 high_priority, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Call Stack Tree Artifact Cache Hooks / Lookups
 
-internal AC_Artifact ctrl_call_stack_tree_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out);
+internal AC_Artifact ctrl_call_stack_tree_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry_out);
 internal void ctrl_call_stack_tree_artifact_destroy(AC_Artifact artifact);
 internal CTRL_CallStackTree ctrl_call_stack_tree(Access *access, U64 endt_us);
 
