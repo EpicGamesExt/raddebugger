@@ -724,7 +724,7 @@ typedef unsigned char validate_uint32[sizeof(stbi__uint32)==4 ? 1 : -1];
 #define STBI_SSE2
 #include <emmintrin.h>
 
-#ifdef _MSC_VER
+#if !defined(__clang__) && defined(_MSC_VER)
 
 #if _MSC_VER >= 1400  // not VC6
 #include <intrin.h> // __cpuid
