@@ -352,14 +352,14 @@ internal void di_conversion_completion_signal_receiver_thread_entry_point(void *
 ////////////////////////////////
 //~ rjf: Search Artifact Cache Hooks / Lookups
 
-internal AC_Artifact di_search_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry_out);
+internal AC_Artifact di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out);
 internal void di_search_artifact_destroy(AC_Artifact artifact);
 internal DI_SearchItemArray di_search_item_array_from_target_query(Access *access, RDI_SectionKind target, String8 query, U64 endt_us, B32 *stale_out);
 
 ////////////////////////////////
 //~ rjf: Match Artifact Cache Hooks / Lookups
 
-internal AC_Artifact di_match_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry_out);
+internal AC_Artifact di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out);
 internal DI_Match di_match_from_string(String8 string, U64 index, DI_Key preferred_dbgi_key, U64 endt_us);
 
 #endif // DBG_INFO_H

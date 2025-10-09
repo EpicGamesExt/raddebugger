@@ -16,7 +16,7 @@ struct AC_Artifact
 ////////////////////////////////
 //~ rjf: Artifact Computation Function Types
 
-typedef AC_Artifact AC_CreateFunctionType(String8 key, U64 gen, B32 *cancel_signal, B32 *retry_out);
+typedef AC_Artifact AC_CreateFunctionType(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out);
 typedef void AC_DestroyFunctionType(AC_Artifact artifact);
 
 typedef U32 AC_Flags;

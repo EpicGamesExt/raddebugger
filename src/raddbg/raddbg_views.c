@@ -1934,7 +1934,7 @@ RD_VIEW_UI_FUNCTION_DEF(null) {}
 //~ rjf: text @view_hook_impl
 
 internal AC_Artifact
-rd_md5_artifact_create(String8 key, U64 gen, B32 *cancel_out, B32 *retry_out)
+rd_md5_artifact_create(String8 key, B32 *cancel_out, B32 *retry_out, U64 *gen_out)
 {
   AC_Artifact result = {0};
   {
@@ -1951,7 +1951,7 @@ rd_md5_artifact_create(String8 key, U64 gen, B32 *cancel_out, B32 *retry_out)
 }
 
 internal AC_Artifact
-rd_sha1_artifact_create(String8 key, U64 gen, B32 *cancel_out, B32 *retry_out)
+rd_sha1_artifact_create(String8 key, B32 *cancel_out, B32 *retry_out, U64 *gen_out)
 {
   AC_Artifact result = {0};
   {
@@ -1968,7 +1968,7 @@ rd_sha1_artifact_create(String8 key, U64 gen, B32 *cancel_out, B32 *retry_out)
 }
 
 internal AC_Artifact
-rd_sha256_artifact_create(String8 key, U64 gen, B32 *cancel_out, B32 *retry_out)
+rd_sha256_artifact_create(String8 key, B32 *cancel_out, B32 *retry_out, U64 *gen_out)
 {
   AC_Artifact result = {0};
   {
@@ -3843,7 +3843,7 @@ struct RD_BitmapCanvasBoxDrawData
 };
 
 internal AC_Artifact
-rd_bitmap_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry_out)
+rd_bitmap_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out)
 {
   Access *access = access_open();
   
@@ -4469,7 +4469,7 @@ struct RD_Geo3DBoxDrawData
 };
 
 internal AC_Artifact
-rd_geo3d_artifact_create(String8 key, U64 gen, B32 *cancel_signal, B32 *retry_out)
+rd_geo3d_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out)
 {
   Access *access = access_open();
   U128 hash = {0};

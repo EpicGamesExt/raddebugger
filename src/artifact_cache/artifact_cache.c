@@ -361,7 +361,8 @@ ac_async_tick(void)
         
         // rjf: compute val
         B32 retry = 0;
-        AC_Artifact val = r->create(r->key, r->gen, r->cancel_signal, &retry);
+        U64 gen = r->gen;
+        AC_Artifact val = r->create(r->key, r->cancel_signal, &retry, &gen);
         
         // rjf: retry? -> resubmit request
         if(retry && lane_idx() == 0)
@@ -411,7 +412,7 @@ ac_async_tick(void)
             {
               if(str8_match(n->key, r->key, 0))
               {
-                n->last_completed_gen = r->gen;
+                n->last_completed_gen = gen;
                 n->val = val;
                 ins_atomic_u64_dec_eval(&n->working_count);
                 ins_atomic_u64_inc_eval(&n->completion_count);
@@ -466,7 +467,8 @@ ac_async_tick(void)
         
         // rjf: compute val
         B32 retry = 0;
-        AC_Artifact val = r->create(r->key, r->gen, r->cancel_signal, &retry);
+        U64 gen = r->gen;
+        AC_Artifact val = r->create(r->key, r->cancel_signal, &retry, &gen);
         
         // rjf: restore wide lane ctx
         lane_ctx(lane_ctx_restore);
@@ -519,7 +521,7 @@ ac_async_tick(void)
             {
               if(str8_match(n->key, r->key, 0))
               {
-                n->last_completed_gen = r->gen;
+                n->last_completed_gen = gen;
                 n->val = val;
                 ins_atomic_u64_dec_eval(&n->working_count);
                 ins_atomic_u64_inc_eval(&n->completion_count);
