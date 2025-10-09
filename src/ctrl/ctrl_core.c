@@ -6095,7 +6095,7 @@ ctrl_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64
     
     //- rjf: read successful, OR we have no history -> submit to hash store
     U128 hash = {0};
-    if((zero_terminated_size > 0 || !key_has_history) && range_size != 0 && pre_read_mem_gen == post_read_mem_gen)
+    if((zero_terminated_size > 0 || !key_has_history) && range_base != 0 && range_size != 0 && pre_read_mem_gen == post_read_mem_gen)
     {
       hash = c_submit_data(content_key, &range_arena, str8((U8 *)range_base, zero_terminated_size));
       gen_out[0] = pre_read_mem_gen;
