@@ -7612,6 +7612,7 @@ rd_window_frame(void)
                   String8 cmds[] =
                   {
                     rd_cmd_kind_info_table[RD_CmdKind_Open].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Switch].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string,
                     rd_cmd_kind_info_table[RD_CmdKind_NewUser].string,
                     rd_cmd_kind_info_table[RD_CmdKind_NewProject].string,
@@ -7627,6 +7628,7 @@ rd_window_frame(void)
                   U32 codepoints[] =
                   {
                     'o',
+                    'i',
                     'n',
                     'w',
                     'j',
