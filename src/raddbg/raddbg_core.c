@@ -11093,15 +11093,9 @@ rd_init(CmdLine *cmdln)
           executable_name_string = exe_name;
         }
         
-        // rjf: unpack working directory
-        if(target_args.first->string.size != 0)
+        // rjf: get current directory, use as working directory
         {
-          String8 path_part_of_arg = str8_chop_last_slash(target_args.first->string);
-          if(path_part_of_arg.size != 0)
-          {
-            String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-            working_directory_string = path;
-          }
+          working_directory_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
         }
         
         // rjf: unpack arguments
