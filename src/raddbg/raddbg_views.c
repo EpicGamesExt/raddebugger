@@ -2082,6 +2082,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
   if(rd_regs()->mark.line == 0)     { rd_regs()->mark.line = 1; }
   if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
+  String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, rd_regs()->file_path);
   Rng1U64 range = rd_space_range_from_eval(eval);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
   String8 lang = rd_view_setting_from_name(str8_lit("lang"));
@@ -2092,6 +2093,55 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   else
   {
     rd_regs()->lang_kind = txt_lang_kind_from_extension(lang);
+  }
+  if(rd_regs()->lang_kind == TXT_LangKind_Null)
+  {
+    Access *access = access_open();
+    CTRL_Entity *module = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->module);
+    DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+    RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
+    if(rdi != &rdi_parsed_nil)
+    {
+      for EachNode(override_n, String8Node, overrides.first)
+      {
+        String8 file_path = override_n->string;
+        String8 file_path_normalized = lower_from_str8(scratch.arena, path_normalized_from_string(scratch.arena, file_path));
+        B32 good_src_id = 0;
+        U32 src_id = 0;
+        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
+        RDI_ParsedNameMap map = {0};
+        rdi_parsed_from_name_map(rdi, mapptr, &map);
+        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
+        if(node != 0)
+        {
+          U32 id_count = 0;
+          U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+          if(id_count > 0)
+          {
+            U32 src_id = ids[0];
+            RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+            RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
+            RDI_ParsedSourceLineMap parsed_src_line_map = {0};
+            rdi_parsed_from_source_line_map(rdi, src_line_map, &parsed_src_line_map);
+            if(src_line_map->voff_count != 0)
+            {
+              RDI_Unit *unit = rdi_unit_from_voff(rdi, parsed_src_line_map.voffs[0]);
+              switch((RDI_LanguageEnum)unit->language)
+              {
+                case RDI_Language_NULL:
+                case RDI_Language_COUNT:
+                case RDI_Language_Masm:
+                {}break;
+                case RDI_Language_C:        {rd_regs()->lang_kind = TXT_LangKind_C;}break;
+                case RDI_Language_CPlusPlus:{rd_regs()->lang_kind = TXT_LangKind_CPlusPlus;}break;
+              }
+            }
+            break;
+          }
+        }
+      }
+    }
+    access_close(access);
   }
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(access, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
@@ -2182,9 +2232,6 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   B32 file_is_out_of_date = 0;
   {
     Temp scratch = scratch_begin(0, 0);
-    
-    // rjf: gather file overrides
-    String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, rd_regs()->file_path);
     
     // rjf: determine checksum in relevant debug infos
     RDI_ChecksumKind checksum_kind = RDI_ChecksumKind_NULL;
