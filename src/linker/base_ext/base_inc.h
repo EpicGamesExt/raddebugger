@@ -10,5 +10,4 @@
 #include "base_blake3.h"
 #include "base_bit_array.h"
 #include "base_crc32.h"
-#include "base_md5.h"
 

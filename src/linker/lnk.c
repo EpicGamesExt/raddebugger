@@ -14,9 +14,6 @@
 
 #include "base_ext/base_blake3.h"
 #include "base_ext/base_blake3.c"
-#define MD5_API static
-#include "third_party/md5/md5.c"
-#include "third_party/md5/md5.h"
 #define XXH_INLINE_ALL
 #define XXH_IMPLEMENTATION
 #define XXH_STATIC_LINKING_ONLY
@@ -667,7 +664,7 @@ lnk_add_resource_debug_s(COFF_ObjWriter *obj_writer,
                          String8         exe_path,
                          CV_Arch         arch,
                          String8List     res_file_list,
-                         MD5Hash        *res_hash_array)
+                         MD5            *res_hash_array)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
@@ -686,7 +683,7 @@ lnk_add_resource_debug_s(COFF_ObjWriter *obj_writer,
   for (String8Node *n = res_file_list.first; n != NULL; n = n->next, ++node_idx) {
     CV_C13Checksum checksum = {0};
     checksum.name_off = string_srl.total_size;
-    checksum.len = sizeof(MD5Hash);
+    checksum.len = sizeof(MD5);
     checksum.kind = CV_C13ChecksumKind_MD5;
     str8_serial_push_struct(scratch.arena, &file_srl, &checksum);
     str8_serial_push_struct(scratch.arena, &file_srl, &res_hash_array[node_idx]);
@@ -779,10 +776,10 @@ lnk_make_res_obj(Arena            *arena,
   
   // load res files
   PE_ResourceDir *root_dir       = push_array(scratch.arena, PE_ResourceDir, 1);
-  MD5Hash        *res_hash_array = push_array(scratch.arena, MD5Hash, res_data_list.node_count);
+  MD5            *res_hash_array = push_array(scratch.arena, MD5, res_data_list.node_count);
   U64 node_idx = 0;
   for (String8Node *node = res_data_list.first; node != 0; node = node->next, node_idx += 1) {
-    res_hash_array[node_idx] = md5_hash_from_string(node->string);
+    res_hash_array[node_idx] = md5_from_data(node->string);
     pe_resource_dir_push_res_file(scratch.arena, root_dir, node->string);
   }
   
