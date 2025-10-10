@@ -370,9 +370,9 @@ typedef struct DW_DescriptorEntry
   Rng1U64                entry_range;
 } DW_DescriptorEntry;
 
-typedef struct DW_UnpackedCIE
+typedef struct DW_CIE
 {
-  String8   init_insts;
+  String8   insts;
   String8   aug_string;
   String8   aug_data;
   U64       code_align_factor;
@@ -382,24 +382,54 @@ typedef struct DW_UnpackedCIE
   U8        version;
   U8        address_size;
   U8        segment_selector_size;
-  Rng1U64   cfi_range;
-} DW_UnpackedCIE;
+} DW_CIE;
 
-typedef struct DW_UnpackedFDE
+typedef struct DW_FDE
 {
-  DW_Format       format;
-  U64             cie_pointer;
-  Rng1U64         pc_range;
-  String8         insts;
-  Rng1U64         cfi_range;
-} DW_UnpackedFDE;
+  DW_Format format;
+  U64       cie_pointer;
+  Rng1U64   pc_range;
+  String8   insts;
+} DW_FDE;
 
-#define DW_READ_CFI_PTR(name) U64 name(String8 data, U64 off, void *ud, U64 *ptr_out)
-typedef DW_READ_CFI_PTR(DW_ReadCfiPtrFunc);
+typedef union DW_CFA_Operand
+{
+  U64     u64;
+  S64     s64;
+  String8 block;
+} DW_CFA_Operand;
 
-#define DW_CIE_FROM_OFFSET_FUNC(name) DW_UnpackedCIE * name(void *ud, U64 offset)
+typedef enum
+{
+  DW_CFA_ParseErrorCode_NewInst,
+  DW_CFA_ParseErrorCode_End,
+  DW_CFA_ParseErrorCode_OutOfData
+} DW_CFA_ParseErrorCode;
+
+typedef struct DW_CFA_Inst
+{
+  DW_CFA_Opcode  opcode;
+  DW_CFA_Operand operands[DW_CFA_OperandMax];
+} DW_CFA_Inst;
+
+typedef struct DW_CFA_InstNode
+{
+  DW_CFA_Inst v;
+  struct DW_CFA_InstNode *next;
+} DW_CFA_InstNode;
+
+typedef struct DW_CFA_InstList
+{
+  U64              count;
+  DW_CFA_InstNode *first;
+  DW_CFA_InstNode *last;
+} DW_CFA_InstList;
+
+#define DW_DECODE_PTR(name) U64 name(String8 data, void *ud, U64 *ptr_out)
+typedef DW_DECODE_PTR(DW_DecodePtr);
+
+#define DW_CIE_FROM_OFFSET_FUNC(name) DW_CIE * name(void *ud, U64 offset)
 typedef DW_CIE_FROM_OFFSET_FUNC(DW_CIEFromOffsetFunc);
-
 
 // hasher
 
@@ -520,8 +550,16 @@ internal DW_Expr dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size
 
 // debug frame
 
+internal void              dw_cfa_inst_list_push_node(DW_CFA_InstList *list, DW_CFA_InstNode *n);
+internal DW_CFA_InstNode * dw_cfa_inst_list_push(Arena *arena, DW_CFA_InstList *list, DW_CFA_Inst v);
+
+internal U64 dw_read_debug_frame_ptr(String8 data, DW_CIE *cie, U64 *ptr_out);
+
 internal U64 dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc_out);
-internal B32 dw_unpack_cie(String8 data, DW_Format format, Arch arch, DW_UnpackedCIE *cie_out);
-internal B32 dw_unpack_fde(String8 data, DW_Format format, DW_CIEFromOffsetFunc *cie_from_offset_func, void *cie_from_offset_ud, DW_UnpackedFDE *fde_out);
+internal B32 dw_parse_cie(String8 data, DW_Format format, Arch arch, DW_CIE *cie_out);
+internal B32 dw_parse_fde(String8 data, DW_Format format, DW_CIEFromOffsetFunc *cie_from_offset_func, void *cie_from_offset_ud, DW_FDE *fde_out);
+
+internal DW_CFA_ParseErrorCode dw_parse_cfa_inst(String8 data, U64 code_align_factor, S64 data_align_factor, DW_DecodePtr *decode_ptr_func, void *decode_ptr_ud, U64 *bytes_read_out, DW_CFA_Inst *inst_out);
+internal DW_CFA_InstList       dw_parse_cfa_inst_list(Arena *arena, String8 data, U64 code_align_factor, S64 data_align_factor, DW_DecodePtr *decode_ptr_func, void *decode_ptr_ud);
 
 #endif // DWARF_PARSE_H

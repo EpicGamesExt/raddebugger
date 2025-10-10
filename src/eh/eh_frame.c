@@ -122,3 +122,160 @@ eh_size_from_aug_data(String8 aug_string, String8 data, EH_PtrCtx *ptr_ctx)
   return eh_parse_aug_data(aug_string, data, ptr_ctx, 0);
 }
 
+internal U64
+eh_frame_hdr_search_linear_x64(String8 raw_eh_frame_hdr, EH_PtrCtx *ptr_ctx, U64 location)
+{
+  // Table contains only addresses for first instruction in a function and we cannot
+  // guarantee that result is FDE that corresponds to the input location. 
+  // So input location must be cheked against range from FDE header again.
+  
+  U64 closest_location = max_U64;
+  U64 closest_address  = max_U64;
+  
+  U64 cursor = 0;
+  
+  U8 version = 0;
+  cursor += str8_deserial_read_struct(raw_eh_frame_hdr, cursor, &version);
+  
+  if (version == 1) {
+#if 0
+    EH_PtrCtx ptr_ctx = {0};
+    // Set this to base address of .eh_frame_hdr. Entries are relative
+    // to this section for some reason.
+    ptr_ctx.data_vaddr = range.min;
+    // If input location is VMA then set this to address of .text. 
+    // Pointer parsing function will adjust "init_location" to correct VMA.
+    ptr_ctx.text_vaddr = 0; 
+#endif
+    
+    EH_PtrEnc eh_frame_ptr_enc = 0, fde_count_enc = 0, table_enc = 0;
+    cursor += str8_deserial_read_struct(raw_eh_frame_hdr, cursor, &eh_frame_ptr_enc);
+    cursor += str8_deserial_read_struct(raw_eh_frame_hdr, cursor, &fde_count_enc);
+    cursor += str8_deserial_read_struct(raw_eh_frame_hdr, cursor, &table_enc);
+    
+    U64 eh_frame_ptr = 0, fde_count = 0;
+    NotImplemented;
+    //cursor += dw_unwind_parse_pointer_x64(raw_eh_frame_hdr.str, rng_1u64(0, raw_eh_frame_hdr.size), ptr_ctx, eh_frame_ptr_enc, cursor, &eh_frame_ptr);
+    //cursor += dw_unwind_parse_pointer_x64(raw_eh_frame_hdr.str, rng_1u64(0, raw_eh_frame_hdr.size), ptr_ctx, fde_count_enc, cursor, &fde_count);
+    
+    for (U64 fde_idx = 0; fde_idx < fde_count; ++fde_idx) {
+      U64 init_location = 0, address = 0;
+      NotImplemented;
+      //cursor += dw_unwind_parse_pointer_x64(raw_eh_frame_hdr.str, rng_1u64(0, raw_eh_frame_hdr.size), ptr_ctx, table_enc, cursor, &init_location);
+      //cursor += dw_unwind_parse_pointer_x64(raw_eh_frame_hdr.str, rng_1u64(0, raw_eh_frame_hdr.size), ptr_ctx, table_enc, cursor, &address);
+      
+      S64 current_delta = (S64)(location - init_location);
+      S64 closest_delta = (S64)(location - closest_location);
+      if (0 <= current_delta && current_delta < closest_delta) {
+        closest_location = init_location;
+        closest_address  = address;
+      }
+    }
+  }
+  
+  // address where to find corresponding FDE, this is an absolute offset
+  // into the image file.
+  return closest_address;
+}
+
+#if 0
+internal DW_CFIRecords
+dw_unwind_eh_frame_hdr_from_ip_fast_x64(String8 raw_eh_frame, String8 raw_eh_frame_hdr, EH_PtrCtx *ptr_ctx, U64 ip_voff)
+{
+  DW_CFIRecords result = {0};
+  
+  // find FDE offset
+  void *eh_frame_hdr = raw_eh_frame.str;
+  U64   fde_offset   = dw_search_eh_frame_hdr_linear_x64(raw_eh_frame_hdr, ptr_ctx, ip_voff);
+  
+  B32 is_fde_offset_valid = (fde_offset != max_U64);
+  if (is_fde_offset_valid) {
+    U64 fde_read_offset = (fde_offset - ptr_ctx->raw_base_vaddr);
+    
+    // read FDE size
+    U64 fde_size = 0;
+    fde_read_offset += str8_deserial_read_dwarf_packed_size(raw_eh_frame, fde_read_offset, &fde_size);
+    
+    // read FDE discriminator
+    U32 fde_discrim = 0;
+    fde_read_offset += str8_deserial_read_struct(raw_eh_frame, fde_read_offset, &fde_discrim);
+    
+    // compute parent CIE offset
+    U64 cie_read_offset = fde_read_offset - (fde_discrim + sizeof(fde_discrim));
+    
+    // read CIE size
+    U64 cie_size = 0;
+    cie_read_offset += str8_deserial_read_dwarf_packed_size(raw_eh_frame, cie_read_offset, &cie_size);
+    
+    // read CIE discriminator
+    U32 cie_discrim = max_U32;
+    cie_read_offset += str8_deserial_read_struct(raw_eh_frame, cie_read_offset, &cie_discrim);
+    
+    B32 is_fde = (fde_discrim != 0);
+    B32 is_cie = (cie_discrim == 0);
+    if (is_fde && is_cie) {
+      Rng1U64 cie_range = rng_1u64(0, cie_read_offset + (cie_size - sizeof(cie_discrim)));
+      Rng1U64 fde_range = rng_1u64(0, fde_read_offset + (fde_size - sizeof(fde_discrim)));
+      
+      // parse CIE
+      DW_CIE cie = {0};
+      dw_unwind_parse_cie_x64(raw_eh_frame.str, cie_range, ptr_ctx, cie_read_offset, &cie);
+      
+      // parse FDE
+      DW_FDE fde = {0};
+      NotImplemented;
+      //dw_unwind_parse_fde_x64(raw_eh_frame.str, fde_range, ptr_ctx, &cie, fde_read_offset, &fde);
+      
+      // range check instruction pointer
+      if (contains_1u64(fde.pc_range, ip_voff)) {
+        result.valid = 1;
+        result.cie   = cie;
+        result.fde   = fde;
+      }
+    }
+  }
+  
+  return result;
+}
+#endif
+
+internal String8
+eh_string_from_ptr_enc_type(EH_PtrEnc type)
+{
+  switch (type) {
+  case EH_PtrEnc_Ptr:     return str8_lit("Ptr");
+  case EH_PtrEnc_ULEB128: return str8_lit("ULEB128");
+  case EH_PtrEnc_UData2:  return str8_lit("UData2");
+  case EH_PtrEnc_UData4:  return str8_lit("UData4");
+  case EH_PtrEnc_UData8:  return str8_lit("UData8");
+  case EH_PtrEnc_Signed:  return str8_lit("Signed");
+  case EH_PtrEnc_SLEB128: return str8_lit("SLEB128");
+  case EH_PtrEnc_SData2:  return str8_lit("SData2");
+  case EH_PtrEnc_SData4:  return str8_lit("SData4");
+  case EH_PtrEnc_SData8:  return str8_lit("SData8");
+  }
+  return str8_zero();
+}
+
+internal String8
+eh_string_from_ptr_enc_modifier(EH_PtrEnc modifier)
+{
+  switch (modifier) {
+  case EH_PtrEnc_PcRel:   return str8_lit("PcRel");
+  case EH_PtrEnc_TextRel: return str8_lit("TextRel");
+  case EH_PtrEnc_DataRel: return str8_lit("DataRel");
+  case EH_PtrEnc_FuncRel: return str8_lit("FuncRel");
+  case EH_PtrEnc_Aligned: return str8_lit("Aligned");
+  }
+  return str8_zero();
+}
+
+internal String8
+eh_string_from_ptr_enc(Arena *arena, EH_PtrEnc enc)
+{
+  String8 type_str    = eh_string_from_ptr_enc_type(enc & EH_PtrEnc_TypeMask);
+  String8 modifer_str = eh_string_from_ptr_enc_modifier(enc & EH_PtrEnc_ModifierMask);
+  String8 indir_str   = enc & EH_PtrEnc_Indirect ? str8_lit("Indirect") : str8_zero();
+  String8 result      = str8f(arena, "Type: %S, Modifier %S (%S)", type_str, modifer_str, indir_str);
+  return result;
+}

@@ -4,150 +4,90 @@
 #ifndef DWARF_UNWIND_H
 #define DWARF_UNWIND_H
 
-typedef struct DW_UnwindResult
+typedef enum DW_CFI_RegisterRule
 {
-  B32 is_invalid;
-  B32 missed_read;
-  U64 missed_read_addr;
-  U64 stack_pointer;
-} DW_UnwindResult;
+  DW_CFI_RegisterRule_Undefined,
+  DW_CFI_RegisterRule_SameValue,
+  DW_CFI_RegisterRule_Offset,
+  DW_CFI_RegisterRule_ValOffset,
+  DW_CFI_RegisterRule_Register,
+  DW_CFI_RegisterRule_Expression,
+  DW_CFI_RegisterRule_ValExpression,
+  DW_CFI_RegisterRule_Architectural
+} DW_CFI_RegisterRule;
 
-// EH: Exception Frames
-
-typedef struct DW_UnpackedCIENode
+typedef enum DW_CFA_Rule
 {
-  struct DW_UnpackedCIENode *next;
-  DW_UnpackedCIE             cie;
-  U64                        offset;
-} DW_UnpackedCIENode;
+  DW_CFA_Rule_Null,
+  DW_CFA_Rule_RegOff,
+  DW_CFA_Rule_Expression
+} DW_CFA_Rule;
 
-// CFI: Call Frame Information
-typedef struct DW_CFIRecords
+typedef struct DW_CFA
 {
-  B32            valid;
-  DW_UnpackedCIE cie;
-  DW_UnpackedFDE fde;
-} DW_CFIRecords;
-
-typedef enum DW_CFICFARule{
-  DW_CFI_CFA_Rule_RegOff,
-  DW_CFI_CFA_Rule_Expr,
-} DW_CFICFARule;
-
-typedef struct DW_CFICFACell
-{
-  DW_CFICFARule rule;
+  DW_CFA_Rule rule;
   union {
     struct {
-      U64 reg_idx;
-      S64 offset;
+      DW_Reg reg;
+      S64    off;
     };
-    Rng1U64 expr;
+    String8 expr;
   };
-} DW_CFICFACell;
+} DW_CFA;
 
-typedef enum DW_CFIRegisterRule
+typedef struct DW_CFI_Register
 {
-  DW_CFIRegisterRule_SameValue,
-  DW_CFIRegisterRule_Undefined,
-  DW_CFIRegisterRule_Offset,
-  DW_CFIRegisterRule_ValOffset,
-  DW_CFIRegisterRule_Register,
-  DW_CFIRegisterRule_Expression,
-  DW_CFIRegisterRule_ValExpression,
-} DW_CFIRegisterRule;
-
-typedef struct DW_CFICell
-{
-  DW_CFIRegisterRule rule;
+  DW_CFI_RegisterRule rule;
   union {
-    S64 n;
-    Rng1U64 expr;
+    S64     n;
+    String8 expr;
   };
-} DW_CFICell;
+} DW_CFI_Register;
 
-typedef struct DW_CFIRow
+typedef struct DW_CFA_Row
 {
-  struct DW_CFIRow *next;
-  DW_CFICell       *cells;
-  DW_CFICFACell     cfa_cell;
-} DW_CFIRow;
+  DW_CFA          cfa;
+  DW_CFI_Register *regs;
+  struct DW_CFA_Row *next;
+} DW_CFA_Row;
 
-typedef struct DW_CFIMachine
+typedef struct DW_CFI_Unwind
 {
-  U64             cells_per_row;
-  DW_UnpackedCIE *cie;
-  DW_CFIRow      *initial_row;
-  U64             fde_ip;
-  EH_PtrCtx      *ptr_ctx;
-} DW_CFIMachine;
+  DW_CFA_InstList  insts;
+  DW_CIE          *cie;
+  DW_FDE          *fde;
+  DW_CFA_Row      *initial_row;
+  DW_CFA_Row      *row;
+  DW_CFA_InstNode *curr_inst;
+  DW_CFA_Row      *free_rows;
+  DW_Reg           reg_count;
+  U64              pc;
+  Arch             arch;
+} DW_CFI_Unwind;
 
-typedef U8 DW_CFADecode;
-enum
-{
-  DW_CFADecode_Nop     = 0x0,
-  // 1,2,4,8 reserved for literal byte sizes
-  DW_CFADecode_Address = 0x9,
-  DW_CFADecode_ULEB128 = 0xA,
-  DW_CFADecode_SLEB128 = 0xB,
-};
+typedef enum {
+  DW_UnwindStatus_Ok,
+  DW_UnwindStatus_Fail,
+  DW_UnwindStatus_Maybe
+} DW_UnwindStatus;
 
-typedef U16 DW_CFAControlBits;
-enum
-{
-  DW_CFAControlBits_Dec1Mask = 0x00F,
-  DW_CFAControlBits_Dec2Mask = 0x0F0,
-  DW_CFAControlBits_IsReg0   = 0x100,
-  DW_CFAControlBits_IsReg1   = 0x200,
-  DW_CFAControlBits_IsReg2   = 0x400,
-  DW_CFAControlBits_NewRow   = 0x800,
-};
+#define DW_REG_READ(name) DW_UnwindStatus name(DW_Reg reg_id, void *buffer, U64 buffer_max, void *ud)
+typedef DW_REG_READ(DW_RegRead);
 
-global read_only DW_CFAControlBits dw_unwind__cfa_control_bits_kind1[DW_CFA_OplKind1 + 1];
-global read_only DW_CFAControlBits dw_unwind__cfa_control_bits_kind2[DW_CFA_OplKind2 + 1];
+#define DW_REG_WRITE(name) DW_UnwindStatus name(DW_Reg reg_id, void *value, U64 value_size, void *ud)
+typedef DW_REG_WRITE(DW_RegWrite);
 
-// register codes for unwinding match the DW_RegX64 register codes
-#define DW_UNWIND_X64__REG_SLOT_COUNT 17
+#define DW_MEM_READ(name) DW_UnwindStatus name(U64 addr, U64 size, void *buffer, void *ud)
+typedef DW_MEM_READ(DW_MemRead);
 
 ////////////////////////////////
-// x64 Unwind Function
 
-internal DW_UnwindResult
-dw_unwind_x64(String8           raw_text,
-              String8           raw_eh_frame,
-              String8           raw_eh_frame_header,
-              Rng1U64           text_vrange,
-              Rng1U64           eh_frame_vrange,
-              Rng1U64           eh_frame_header_vrange,
-              U64               default_image_base,
-              U64               image_base,
-              U64               stack_pointer,
-              DW_RegsX64       *regs,
-              DW_ReadMemorySig *read_memory,
-              void             *read_memory_ud);
+internal DW_CFA_Row * dw_make_cfa_row(Arena *arena, U64 reg_count);
+internal DW_CFA_Row * dw_copy_cfa_row(Arena *arena, U64 reg_count, DW_CFA_Row *row);
 
-internal DW_UnwindResult dw_unwind_x64__apply_frame_rules(String8 raw_eh_frame, DW_CFIRow *row, U64 text_base_vaddr, DW_ReadMemorySig *read_memory, void *read_memory_ud, U64 stack_pointer, DW_RegsX64 *regs);
-
-////////////////////////////////
-// x64 Unwind Helper Functions
-
-internal void dw_unwind_init_x64(void);
-
-//- eh_frame parsing
-internal DW_CFIRecords dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, EH_PtrCtx *ptr_ctx, U64 ip_voff);
-internal DW_CFIRecords dw_unwind_eh_frame_hdr_from_ip_fast_x64(String8 raw_eh_frame, String8 raw_eh_frame_hdr, EH_PtrCtx *ptr_ctx, U64 ip_voff);
-
-//- cfi machine
-
-internal DW_CFIMachine dw_unwind_make_machine_x64(U64 cells_per_row, DW_UnpackedCIE *cie, EH_PtrCtx *ptr_ctx);
-internal void          dw_unwind_machine_equip_initial_row_x64(DW_CFIMachine *machine, DW_CFIRow *initial_row);
-internal void          dw_unwind_machine_equip_fde_ip_x64(DW_CFIMachine *machine, U64 fde_ip);
-
-internal DW_CFIRow* dw_unwind_row_alloc_x64(Arena *arena, U64 cells_per_row);
-internal void       dw_unwind_row_zero_x64(DW_CFIRow *row, U64 cells_per_row);
-internal void       dw_unwind_row_copy_x64(DW_CFIRow *dst, DW_CFIRow *src, U64 cells_per_row);
-
-internal B32 dw_unwind_machine_run_to_ip_x64(void *base, Rng1U64 range, DW_CFIMachine *machine, U64 target_ip, DW_CFIRow *row_out);
+internal DW_CFI_Unwind * dw_cfi_unwind_init(Arena *arena, Arch arch, DW_CIE *cie, DW_FDE *fde, DW_DecodePtr *decode_ptr_func, void *decode_ptr_ud);
+internal B32             dw_cfi_next_row(Arena *arena, DW_CFI_Unwind *uw);
+internal DW_UnwindStatus dw_cfi_apply_register_rules(DW_CFI_Unwind *uw, DW_MemRead *mem_read_func, void *mem_read_ud, DW_RegRead *reg_read_func,  void *reg_read_ud, DW_RegWrite *reg_write_func, void *reg_write_ud);
 
 #endif // DWARF_UNWIND_H
 

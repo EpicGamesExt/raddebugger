@@ -70,5 +70,12 @@ internal U64 eh_read_ptr(String8 frame_base, U64 off, EH_PtrCtx *ptr_ctx, EH_Ptr
 internal U64 eh_parse_aug_data(String8 aug_string, String8 aug_data, EH_PtrCtx *ptr_ctx, EH_Augmentation *aug_out);
 internal U64 eh_size_from_aug_data(String8 aug_string, String8 data, EH_PtrCtx *ptr_ctx);
 
+////////////////////////////////
+//~ Enum -> String
+
+internal String8 eh_string_from_ptr_enc_type(EH_PtrEnc type);
+internal String8 eh_string_from_ptr_enc_modifier(EH_PtrEnc modifier);
+internal String8 eh_string_from_ptr_enc(Arena *arena, EH_PtrEnc enc);
+
 #endif // EH_FRAME_H
 

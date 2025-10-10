@@ -1337,56 +1337,57 @@ typedef enum DW_LNCTEnum
   DW_LNCT_UserHi = 0x3fff
 } DW_LNCTEnum;
 
-#define DW_CFA_Kind1_XList(X) \
-X(Nop,            0x0)      \
-X(SetLoc,         0x1)      \
-X(AdvanceLoc1,    0x2)      \
-X(AdvanceLoc2,    0x3)      \
-X(AdvanceLoc4,    0x4)      \
-X(OffsetExt,      0x5)      \
-X(RestoreExt,     0x6)      \
-X(Undefined,      0x7)      \
-X(SameValue,      0x8)      \
-X(Register,       0x9)      \
-X(RememberState,  0xA)      \
-X(RestoreState,   0xB)      \
-X(DefCfa,         0xC)      \
-X(DefCfaRegister, 0xD)      \
-X(DefCfaOffset,   0xE)      \
-X(DefCfaExpr,     0xF)      \
-X(Expr,           0x10)     \
-X(OffsetExtSf,    0x11)     \
-X(DefCfaSf,       0x12)     \
-X(DefCfaOffsetSf, 0x13)     \
-X(ValOffset,      0x14)     \
-X(ValOffsetSf,    0x15)     \
-X(ValExpr,        0x16)
+////////////////////////////////
+// CFA
 
-#define DW_CFA_Kind2_XList(X) \
-X(AdvanceLoc,        0x40)  \
-X(Offset,            0x80)  \
-X(Restore,           0xC0)
-
-typedef U8 DW_CFA;
-typedef enum DW_CFAEnum
+typedef enum
 {
-#define X(_N, _ID) DW_CFA_##_N = _ID,
-  DW_CFA_Kind1_XList(X)
-  DW_CFA_Kind2_XList(X)
+  DW_CFA_OperandType_Null,
+  DW_CFA_OperandType_Value,
+  DW_CFA_OperandType_Register,
+  DW_CFA_OperandType_Expression,
+} DW_CFA_OperandType;
+
+// (opcode name, opcode id, operand count, operand types)
+#define DW_CFA_Kind_XList(X)                                                        \
+X(Nop,            0x0)                                                              \
+X(SetLoc,         0x1,  DW_CFA_OperandType_Value)                                   \
+X(AdvanceLoc1,    0x2,  DW_CFA_OperandType_Value)                                   \
+X(AdvanceLoc2,    0x3,  DW_CFA_OperandType_Value)                                   \
+X(AdvanceLoc4,    0x4,  DW_CFA_OperandType_Value)                                   \
+X(OffsetExt,      0x5,  DW_CFA_OperandType_Register, DW_CFA_OperandType_Value)      \
+X(RestoreExt,     0x6)                                                              \
+X(Undefined,      0x7,  DW_CFA_OperandType_Register)                                \
+X(SameValue,      0x8,  DW_CFA_OperandType_Register)                                \
+X(Register,       0x9,  DW_CFA_OperandType_Register)                                \
+X(RememberState,  0xa)                                                              \
+X(RestoreState,   0xb)                                                              \
+X(DefCfa,         0xc,  DW_CFA_OperandType_Register, DW_CFA_OperandType_Value)      \
+X(DefCfaRegister, 0xd,  DW_CFA_OperandType_Register)                                \
+X(DefCfaOffset,   0xe,  DW_CFA_OperandType_Value)                                   \
+X(DefCfaExpr,     0xf,  DW_CFA_OperandType_Expression)                              \
+X(Expr,           0x10, DW_CFA_OperandType_Expression)                              \
+X(OffsetExtSf,    0x11, DW_CFA_OperandType_Register, DW_CFA_OperandType_Value)      \
+X(DefCfaSf,       0x12, DW_CFA_OperandType_Register, DW_CFA_OperandType_Value)      \
+X(DefCfaOffsetSf, 0x13, DW_CFA_OperandType_Value)                                   \
+X(ValOffset,      0x14, DW_CFA_OperandType_Register, DW_CFA_OperandType_Value)      \
+X(ValOffsetSf,    0x15, DW_CFA_OperandType_Register, DW_CFA_OperandType_Value)      \
+X(ValExpr,        0x16, DW_CFA_OperandType_Register, DW_CFA_OperandType_Expression) \
+X(AdvanceLoc,     0x40, DW_CFA_OperandType_Value)                                   \
+X(Offset,         0x80, DW_CFA_OperandType_Register, DW_CFA_OperandType_Value)      \
+X(Restore,        0xc0, DW_CFA_OperandType_Register)
+
+#define DW_CFA_OperandMax 2
+#define DW_CFA_Mask_OpcodeHi 0xc0
+#define DW_CFA_Mask_Operand  0x3f
+
+typedef U8 DW_CFA_Opcode;
+typedef enum DW_CFA_Enum
+{
+#define X(_N, _ID, ...) DW_CFA_##_N = _ID,
+  DW_CFA_Kind_XList(X)
 #undef X
-  
-  DW_CFA_OplKind1 = DW_CFA_ValExpr,
-  DW_CFA_OplKind2 = DW_CFA_Restore,
-} DW_CFAEnum;
-
-typedef U8 DW_CFAMask;
-enum
-{
-  //  kind1:  opcode: [0,5] zeroes:[6,7]; kind2:  operand:[0,5] opcode:[6,7] 
-  DW_CFAMask_OpcodeHi = 0xC0,
-  DW_CFAMask_Operand  = 0x3F,
-  DW_CFAMask_Count    = 2
-};
+} DW_CFA_Enum;
 
 ////////////////////////////////
 // Expression Opcodes
@@ -1561,7 +1562,7 @@ X(RegvalType,      0xa5, 2, 0, 1)       \
 X(DerefType,       0xa6, 2, 1, 1) \
 X(XDerefType,      0xa7, 2, 2, 1)       \
 X(Convert,         0xa8, 1, 1, 1)       \
-X(ReInterpret,     0xa9, 1, 1, 1)
+X(Reinterpret,     0xa9, 1, 1, 1)
 
 #define DW_Expr_GNU_XList(X)          \
 X(GNU_PushTlsAddress,  0xe0, 0, 0, 1) \
@@ -1589,7 +1590,7 @@ typedef enum DW_ExprOpEnum
 
 //- Regs
 
-#define DW_Regs_X86_XList(X)   \
+#define DW_Regs_X86_XList(X) \
 X(Eax,    0,  eax,    0, 4)  \
 X(Ecx,    1,  ecx,    0, 4)  \
 X(Edx,    2,  edx,    0, 4)  \
@@ -1637,7 +1638,7 @@ X(Gs,     45, gs,     0, 2)  \
 X(Tr,     48, nil,    0, 0)  \
 X(Ldtr,   49, nil,    0, 0)
 
-#define DW_Regs_X64_XList(X)    \
+#define DW_Regs_X64_XList(X)  \
 X(Rax,     0,  rax,    0, 8)  \
 X(Rdx,     1,  rdx,    0, 8)  \
 X(Rcx,     2,  rcx,    0, 8)  \
@@ -1723,6 +1724,7 @@ typedef enum DW_RegX86Enum
 #define X(_N,_ID,...) DW_RegX86_##_N = _ID,
   DW_Regs_X86_XList(X)
 #undef X
+  DW_RegX86_Last
 } DW_RegX86Enum;
 
 typedef DW_Reg DW_RegX64;
@@ -1731,6 +1733,7 @@ typedef enum DW_RegX64Enum
 #define X(_N,_ID,...) DW_RegX64_##_N = _ID,
   DW_Regs_X64_XList(X)
 #undef X
+  DW_RegX64_Last
 } DW_RegX64Enum;
 
 ////////////////////////////////
@@ -1741,6 +1744,8 @@ internal U64 dw_reg_size_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_pos_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_size_from_code(Arch arch, DW_Reg reg_code);
 internal U64 dw_reg_pos_from_code(Arch arch, DW_Reg reg_code);
+internal U64 dw_reg_max_size_from_arch(Arch arch);
+internal U64 dw_reg_count_from_arch(Arch arch);
 
 //- Attrib Class Encodings
 
@@ -1781,6 +1786,16 @@ internal DW_AttribClass dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, B
 internal U64 dw_pick_default_lower_bound(DW_Language lang);
 
 internal U64 dw_operand_count_from_expr_op(DW_ExprOp op);
+internal U64 dw_pop_count_from_expr_op(DW_ExprOp op);
+internal U64 dw_push_count_from_expr_op(DW_ExprOp op);
+
+////////////////////////////////
+//~ CFA
+
+internal U64 dw_operand_count_from_cfa_opcode(DW_CFA_Opcode opcode);
+internal B32 dw_is_cfa_expr_opcode_invalid(DW_ExprOp opcode);
+internal B32 dw_is_new_row_cfa_opcode(DW_CFA_Opcode opcode);
+internal DW_CFA_OperandType * dw_operand_types_from_cfa_op(DW_CFA_Opcode opcode);
 
 ////////////////////////////////
 //~ rjf: String <=> Enum
@@ -1801,6 +1816,6 @@ internal String8 dw_string_from_loc_list_entry_kind(Arena *arena, DW_LLE kind);
 internal String8 dw_string_from_section_kind(Arena *arena, DW_SectionKind kind);
 internal String8 dw_string_from_rng_list_entry_kind(Arena *arena, DW_RLE kind);
 internal String8 dw_string_from_register(Arena *arena, Arch arch, U64 reg_id);
-internal String8 dw_string_from_cfa_opcode(DW_CFA cfa_opcode);
+internal String8 dw_string_from_cfa_opcode(DW_CFA_Opcodecfa_opcode);
 
 #endif // DWARF_H

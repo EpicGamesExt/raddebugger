@@ -3323,15 +3323,30 @@ dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size, String8 data)
   return expr;
 }
 
-internal
-DW_READ_CFI_PTR(dw_read_cfi_ptr)
+internal void
+dw_cfa_inst_list_push_node(DW_CFA_InstList *list, DW_CFA_InstNode *n)
 {
-  DW_UnpackedCIE *cie = ud;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal DW_CFA_InstNode *
+dw_cfa_inst_list_push(Arena *arena, DW_CFA_InstList *list, DW_CFA_Inst v)
+{
+  DW_CFA_InstNode *n = push_array(arena, DW_CFA_InstNode, 1);
+  n->v = v;
+  dw_cfa_inst_list_push_node(list, n);
+  return n;
+}
+
+internal U64
+dw_read_debug_frame_ptr(String8 data, DW_CIE *cie, U64 *ptr_out)
+{
   U64 read_size = 0;
   if (cie->segment_selector_size) {
     NotImplemented;
   } else {
-    read_size = str8_deserial_read(data, off, ptr_out, cie->address_size, cie->address_size);
+    read_size = str8_deserial_read(data, 0, ptr_out, cie->address_size, cie->address_size);
   }
   return read_size;
 }
@@ -3347,10 +3362,10 @@ dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc
   U64 length_size = str8_deserial_read_dwarf_packed_size(data, off, &length);
   if (length_size == 0) { goto exit; }
 
-  Rng1U64 entry_range = rng_1u64(off + length_size, off + length_size + length);
+  Rng1U64 entry_range = rng_1u64(off, off + length_size + length);
   String8 entry_data  = str8_substr(data, entry_range);
   U64 id = 0;
-  U64 id_size = str8_deserial_read_dwarf_uint(entry_data, 0, format, &id);
+  U64 id_size = str8_deserial_read_dwarf_uint(entry_data, length_size, format, &id);
   if (id_size == 0) { goto exit; }
 
   U64 id_type = format == DW_Format_32Bit ? max_U32 : max_U64;
@@ -3363,10 +3378,10 @@ exit:;
 }
 
 internal B32
-dw_unpack_cie(String8 data, DW_Format format, Arch arch, DW_UnpackedCIE *cie_out)
+dw_parse_cie(String8 data, DW_Format format, Arch arch, DW_CIE *cie_out)
 {
   B32 is_parsed = 0;
-  U64 cursor    = 0;
+  U64 cursor    = format == DW_Format_32Bit ? 4 : 12;
 
   U64 cie_id = 0;
   U64 cie_id_size = str8_deserial_read_dwarf_uint(data, cursor, format, &cie_id);
@@ -3416,11 +3431,12 @@ dw_unpack_cie(String8 data, DW_Format format, Arch arch, DW_UnpackedCIE *cie_out
 
   if (aug_string.size > 0) { goto exit; }
 
-  cie_out->init_insts            = str8_skip(data, cursor);
+  cie_out->insts                 = str8_skip(data, cursor);
   cie_out->aug_string            = aug_string;
   cie_out->code_align_factor     = code_align_factor;
   cie_out->data_align_factor     = data_align_factor;
   cie_out->ret_addr_reg          = ret_addr_reg;
+  cie_out->format                = format;
   cie_out->version               = version;
   cie_out->address_size          = address_size;
   cie_out->segment_selector_size = segment_selector_size;
@@ -3431,14 +3447,14 @@ exit:;
 }
 
 internal B32
-dw_unpack_fde(String8               data,
+dw_parse_fde(String8               data,
               DW_Format             format,
               DW_CIEFromOffsetFunc *cie_from_offset_func,
               void                 *cie_from_offset_ud,
-              DW_UnpackedFDE       *fde_out)
+              DW_FDE       *fde_out)
 {
   B32 is_parsed = 0;
-  U64 cursor    = 0;
+  U64 cursor    = format == DW_Format_32Bit ? 4 : 12;
 
   // extract CIE pointer
   U64 cie_pointer      = 0;
@@ -3447,18 +3463,18 @@ dw_unpack_fde(String8               data,
   cursor += cie_pointer_size;
 
   // map offset -> CIE
-  DW_UnpackedCIE *cie = cie_from_offset_func(cie_from_offset_ud, cie_pointer);
+  DW_CIE *cie = cie_from_offset_func(cie_from_offset_ud, cie_pointer);
   if (cie == 0) { goto exit; }
 
   // extract address of first instruction
   U64 pc_begin = 0;
-  U64 pc_begin_size = dw_read_cfi_ptr(data, cursor, cie, &pc_begin);
+  U64 pc_begin_size = dw_read_debug_frame_ptr(str8_skip(data, cursor), cie, &pc_begin);
   if (pc_begin_size == 0) { goto exit; }
   cursor += pc_begin_size;
 
   // extract instruction range size
   U64 pc_range      = 0;
-  U64 pc_range_size = dw_read_cfi_ptr(data, cursor, cie, &pc_range);
+  U64 pc_range_size = dw_read_debug_frame_ptr(str8_skip(data, cursor), cie, &pc_range);
   if (pc_range_size == 0) { goto exit; }
   cursor += pc_range_size;
 
@@ -3475,5 +3491,310 @@ dw_unpack_fde(String8               data,
   is_parsed = 1;
 exit:;
   return is_parsed;
+}
+
+internal DW_CFA_ParseErrorCode
+dw_parse_cfa_inst(String8        data,
+                   U64           code_align_factor,
+                   S64           data_align_factor,
+                   DW_DecodePtr *decode_ptr_func,
+                   void         *decode_ptr_ud,
+                   U64          *bytes_read_out,
+                   DW_CFA_Inst   *inst_out)
+{
+  *bytes_read_out = 0;
+
+  DW_CFA_ParseErrorCode error_code = DW_CFA_ParseErrorCode_End;
+  U64                   cursor     = 0;
+
+  // read opcode
+  DW_CFA_Opcode raw_opcode      = 0;
+  U64           raw_opcode_size = str8_deserial_read_struct(data, cursor, &raw_opcode);
+  if (raw_opcode_size == 0) { goto exit; }
+  cursor += raw_opcode_size;
+
+  // decode opcode implicit operand
+  U64 opcode           = raw_opcode & ~DW_CFA_Mask_OpcodeHi;
+  U64 implicit_operand = 0;
+  if ((raw_opcode & DW_CFA_Mask_OpcodeHi) != 0) {
+    opcode           = raw_opcode & DW_CFA_Mask_OpcodeHi;
+    implicit_operand = raw_opcode & DW_CFA_Mask_Operand;
+  }
+
+  // decode operands
+  DW_CFA_Operand operands[DW_CFA_OperandMax] = {0};
+  switch (opcode) {
+  case DW_CFA_SetLoc: {
+    U64 address_size = decode_ptr_func(str8_skip(data, cursor), decode_ptr_ud, &operands[0].u64);
+    if (address_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += address_size;
+  } break;
+  case DW_CFA_AdvanceLoc: {
+    operands[0].u64 = implicit_operand * code_align_factor;
+  } break;
+  case DW_CFA_AdvanceLoc1: {
+    U8 delta = 0;
+    U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
+    if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += delta_size;
+    operands[0].u64 = delta * code_align_factor;
+  } break;
+  case DW_CFA_AdvanceLoc2: {
+    U16 delta = 0;
+    U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
+    if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += delta_size;
+    operands[0].u64 = delta * code_align_factor;
+  } break;
+  case DW_CFA_AdvanceLoc4: {
+    U32 delta = 0;
+    U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
+    if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    operands[0].u64 = delta * code_align_factor;
+  } break;
+  case DW_CFA_DefCfa: {
+    U64 reg = 0;
+    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += reg_size;
+
+    U64 offset = 0;
+    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = reg;
+    operands[1].u64 = offset;
+  } break;
+  case DW_CFA_DefCfaSf: {
+    U64 reg = 0;
+    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += reg_size;
+
+    S64 offset = 0;
+    U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = reg;
+    operands[1].s64 = offset * data_align_factor;
+  } break;
+  case DW_CFA_DefCfaRegister: {
+    U64 reg = 0;
+    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += reg_size;
+
+    operands[0].u64 = reg;
+  } break;
+  case DW_CFA_DefCfaOffset: {
+    U64 offset = 0;
+    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = offset;
+  } break;
+  case DW_CFA_DefCfaOffsetSf: {
+    U64 offset = 0;
+    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = offset * data_align_factor;
+  } break;
+  case DW_CFA_DefCfaExpr: {
+    U64 expr_size = 0;
+    U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
+    if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += expr_size_size;
+
+    if (cursor + expr_size > data.size) { goto exit; }
+    String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
+
+    operands[0].block = expr;
+    cursor += expr_size;
+  } break;
+  case DW_CFA_Undefined: {
+    U64 reg = 0;
+    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += reg_size;
+
+    operands[0].u64 = reg;
+  } break;
+  case DW_CFA_SameValue: {
+    U64 reg = 0;
+    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += reg_size;
+
+    operands[0].u64 = reg;
+  } break;
+  case DW_CFA_Offset: {
+    U64 offset = 0;
+    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = implicit_operand;
+    operands[1].s64 = (S64)offset * data_align_factor;
+  } break;
+  case DW_CFA_OffsetExt: {
+    U64 reg = 0;
+    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += reg_size;
+
+    U64 offset = 0;
+    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = reg;
+    operands[1].u64 = offset * data_align_factor;
+  } break;
+  case DW_CFA_OffsetExtSf: {
+    U64 reg = 0;
+    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += reg_size;
+
+    S64 offset = 0;
+    U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = reg;
+    operands[1].s64 = offset * data_align_factor;
+  } break;
+  case DW_CFA_ValOffset: {
+    U64 val = 0;
+    U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
+    if (val_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += val_size;
+
+    U64 offset = 0;
+    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = val;
+    operands[1].u64 = offset * data_align_factor;
+  } break;
+  case DW_CFA_ValOffsetSf: {
+    U64 val = 0;
+    U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
+    if (val_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += val_size;
+
+    S64 offset = 0;
+    U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
+    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += offset_size;
+
+    operands[0].u64 = val;
+    operands[1].s64 = offset;
+  } break;
+  case DW_CFA_Register: {
+    U64 dst_reg = 0;
+    U64 dst_reg_size = str8_deserial_read_uleb128(data, cursor, &dst_reg);
+    if (dst_reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += dst_reg_size;
+
+    U64 src_reg = 0;
+    U64 src_reg_size = str8_deserial_read_uleb128(data, cursor, &src_reg);
+    if (src_reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += src_reg_size;
+
+    operands[0].u64 = dst_reg;
+    operands[1].u64 = src_reg;
+  } break;
+  case DW_CFA_Expr: {
+    U64 reg = 0;
+    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += reg_size;
+
+    U64 expr_size = 0;
+    U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
+    if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += expr_size_size;
+
+    if (cursor + expr_size > data.size) { goto exit; }
+    String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
+    cursor += expr_size;
+
+    operands[0].block = expr;
+  } break;
+  case DW_CFA_ValExpr: {
+    U64 val = 0;
+    U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
+    if (val_size == 0) { goto exit; }
+    cursor += val_size;
+
+    U64 expr_size = 0;
+    U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
+    if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += expr_size_size;
+
+    if (cursor + expr_size > data.size) { goto exit; }
+    String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
+    cursor += expr_size;
+
+    operands[0].u64 = val;
+    operands[1].block = expr;
+  } break;
+  case DW_CFA_Restore: {
+    operands[0].u64 = implicit_operand;
+  } break;
+  case DW_CFA_RestoreExt: {} break;
+  case DW_CFA_RememberState: {} break;
+  case DW_CFA_RestoreState: {} break;
+  case DW_CFA_Nop: {} break;
+  default: { NotImplemented; goto exit; } break;
+  }
+
+  // fill out output
+  inst_out->opcode = opcode;
+  MemoryCopyTyped(&inst_out->operands[0], &operands[0], DW_CFA_OperandMax);
+
+  *bytes_read_out = cursor;
+
+  error_code = DW_CFA_ParseErrorCode_NewInst;
+
+exit:;
+  return error_code;
+}
+
+internal DW_CFA_InstList
+dw_parse_cfa_inst_list(Arena          *arena,
+                        String8        data,
+                        U64            code_align_factor,
+                        S64            data_align_factor,
+                        DW_DecodePtr  *decode_ptr_func,
+                        void          *decode_ptr_ud)
+{
+  U64 pos = arena_pos(arena);
+  DW_CFA_InstList list = {0};
+  for (U64 cursor = 0, inst_size;; cursor += inst_size) {
+    DW_CFA_Inst           inst       = {0};
+    DW_CFA_ParseErrorCode error_code = dw_parse_cfa_inst(str8_skip(data, cursor), code_align_factor, data_align_factor, decode_ptr_func, decode_ptr_ud, &inst_size, &inst);
+    if (error_code == DW_CFA_ParseErrorCode_End) { break; }
+    if (error_code != DW_CFA_ParseErrorCode_NewInst) {
+      MemoryZeroStruct(&list);
+      arena_pop_to(arena, pos);
+      break;
+    }
+    dw_cfa_inst_list_push(arena, &list, inst);
+  }
+  return list;
+}
+
+internal
+DW_DECODE_PTR(dw_decode_ptr_debug_frame)
+{
+  return dw_read_debug_frame_ptr(data, ud, ptr_out);
 }
 

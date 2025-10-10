@@ -69,6 +69,31 @@ dw_reg_pos_from_code(Arch arch, DW_Reg reg_code)
   return max_U64;
 }
 
+internal U64
+dw_reg_count_from_arch(Arch arch)
+{
+  switch (arch) {
+  default: { NotImplemented; } // fall-through
+  case Arch_Null: return 0;
+  case Arch_x86: return DW_RegX86_Last;
+  case Arch_x64: return DW_RegX64_Last;
+  }
+}
+
+internal U64
+dw_reg_max_size_from_arch(Arch arch)
+{
+  local_persist U64 max_size = 0;
+  if (max_size == 0) {
+    U64 max_idx  = dw_reg_count_from_arch(arch);
+    for EachIndex(reg_idx, max_idx) {
+      U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
+      max_size = Max(max_size, reg_size);
+    }
+  }
+  return max_size;
+}
+
 internal DW_AttribClass
 dw_attrib_class_from_attrib_v2(DW_AttribKind k)
 {
@@ -431,6 +456,71 @@ dw_push_count_from_expr_op(DW_ExprOp op)
   return 0;
 }
 
+internal U64
+dw_operand_count_from_cfa_opcode(DW_CFA_Opcode opcode)
+{
+  switch (opcode) {
+#define X(_N, _ID, ...) case _ID: { local_persist DW_CFA_OperandType t[] = { DW_CFA_OperandType_Null, __VA_ARGS__ }; return ArrayCount(t)-1; }
+    DW_CFA_Kind_XList(X)
+#undef X
+  default: { NotImplemented; } break;
+  }
+  return 0;
+}
+
+internal B32
+dw_is_cfa_expr_opcode_invalid(DW_ExprOp opcode)
+{
+  B32 is_invalid = 0;
+  switch (opcode) {
+  case DW_ExprOp_Addrx:
+  case DW_ExprOp_Call2:
+  case DW_ExprOp_Call4:
+  case DW_ExprOp_CallRef:
+  case DW_ExprOp_ConstType:
+  case DW_ExprOp_Constx:
+  case DW_ExprOp_Convert:
+  case DW_ExprOp_DerefType:
+  case DW_ExprOp_RegvalType:
+  case DW_ExprOp_Reinterpret:
+  case DW_ExprOp_PushObjectAddress:
+  case DW_ExprOp_CallFrameCfa: {
+    is_invalid = 1;
+  } break;
+  default: break;
+  }
+  return is_invalid;
+}
+
+internal B32
+dw_is_new_row_cfa_opcode(DW_CFA_Opcode opcode)
+{
+  B32 is_new_row_op = 0;
+  switch (opcode) {
+  case DW_CFA_SetLoc:
+  case DW_CFA_AdvanceLoc:
+  case DW_CFA_AdvanceLoc1:
+  case DW_CFA_AdvanceLoc2:
+  case DW_CFA_AdvanceLoc4: {
+    is_new_row_op = 1;
+  } break;
+  default: break;
+  }
+  return is_new_row_op;
+}
+
+internal DW_CFA_OperandType *
+dw_operand_types_from_cfa_op(DW_CFA_Opcode opcode)
+{
+  switch (opcode) {
+#define X(_N, _ID, ...) case _ID: { local_persist DW_CFA_OperandType t[] = { DW_CFA_OperandType_Null, __VA_ARGS__ }; return &t[0] + 1; }
+    DW_CFA_Kind_XList(X)
+#undef X
+  default: { NotImplemented; } break;
+  }
+  return 0;
+}
+
 ////////////////////////////////
 //~ rjf: String <=> Enum
 
@@ -717,12 +807,11 @@ dw_string_from_register(Arena *arena, Arch arch, U64 reg_id)
 }
 
 internal String8
-dw_string_from_cfa_opcode(DW_CFA cfa_opcode)
+dw_string_from_cfa_opcode(DW_CFA_Opcode opcode)
 {
-  switch (cfa_opcode) {
-#define X(_NAME, _ID) case _ID: return str8_lit(Stringify(_NAME));
-    DW_CFA_Kind1_XList(X)
-    DW_CFA_Kind2_XList(X)
+  switch (opcode) {
+#define X(_NAME, _ID, ...) case _ID: return str8_lit(Stringify(_NAME));
+    DW_CFA_Kind_XList(X)
 #undef X
   default: InvalidPath; break;
   }
