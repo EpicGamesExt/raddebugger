@@ -202,7 +202,7 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
     // TODO: report error (invalid register read)
     U64 cfa_reg_value = 0;
     U64 reg_size = dw_reg_size_from_code(uw->arch, row->cfa.reg);
-    AssertAlawys(reg_size <= sizeof(cfa_reg_value));
+    AssertAlways(reg_size <= sizeof(cfa_reg_value));
     unwind_status = reg_read_func(row->cfa.reg, &cfa_reg_value, reg_size, reg_read_ud);
     if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
     cfa = cfa_reg_value + row->cfa.off;
@@ -212,7 +212,7 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
   } break;
   }
 
-  U64   max_reg_size = dw_max_reg_size_from_arch(uw->arch);
+  U64   max_reg_size = dw_reg_max_size_from_arch(uw->arch);
   void *reg_buffer   = push_array(scratch.arena, U8, max_reg_size);
 
   for EachIndex(reg_idx, uw->reg_count) {
@@ -231,7 +231,7 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
       if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
 
       // write register value to the thread context
-      unwind_status = reg_write(reg_idx, reg_buffer, reg_size, reg_write_ud);
+      unwind_status = reg_write_func(reg_idx, reg_buffer, reg_size, reg_write_ud);
       if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
     } break;
     case DW_CFI_RegisterRule_ValOffset: {
@@ -240,17 +240,17 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
 
       // write register value to the thread context
       U64 reg_size = dw_reg_size_from_code(uw->arch, reg_idx);
-      unwind_status = reg_write(reg_idx, &reg_value, reg_size, reg_write_ud);
+      unwind_status = reg_write_func(reg_idx, &reg_value, reg_size, reg_write_ud);
       if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
     } break;
     case DW_CFI_RegisterRule_Register: {
       // read register value from another register
       U64 reg_size = dw_reg_size_from_code(uw->arch, reg_idx);
-      unwind_status = reg_read(reg->n, reg_buffer, reg_size, reg_read_ud);
+      unwind_status = reg_read_func(reg->n, reg_buffer, reg_size, reg_read_ud);
       if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
 
       // write register value to the thread context
-      unwind_status = reg_write(reg_idx, reg_buffer, reg_size, reg_write_ud);
+      unwind_status = reg_write_func(reg_idx, reg_buffer, reg_size, reg_write_ud);
       if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
     } break;
     case DW_CFI_RegisterRule_Expression: {
