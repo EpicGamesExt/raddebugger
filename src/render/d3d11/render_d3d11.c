@@ -801,7 +801,10 @@ r_buffer_release(R_Handle handle)
   MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Buffer *buffer = r_d3d11_buffer_from_handle(handle);
-    SLLStackPush(r_d3d11_state->first_to_free_buffer, buffer);
+    if(buffer != &r_d3d11_buffer_nil)
+    {
+      SLLStackPush(r_d3d11_state->first_to_free_buffer, buffer);
+    }
   }
   ProfEnd();
 }
