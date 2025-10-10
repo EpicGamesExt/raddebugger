@@ -1,6 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 cd /D "%~dp0"
+:restart
 
 :: --- Usage Notes (2024/1/10) ------------------------------------------------
 ::
@@ -168,5 +169,5 @@ if "%pgo_run%"=="1" (
     call %~dp0build\radlink @lyra.rsp /rad_alt_pch_dir:%~dp0local\lyra_pgo || exit /b 1
     popd
   )
-  call %0 %*
+  goto restart
 )
