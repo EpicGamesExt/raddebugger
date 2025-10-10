@@ -285,38 +285,45 @@ not depend on any other layers in the codebase. The folders which contain these
 layers are prefixed with `lib_`, like `lib_rdi`.
 
 A list of the layers in the codebase and their associated namespaces is below:
-- `async` (`ASYNC_`): Implements a system for asynchronous work to be queued
-  and executed on a thread pool.
+- `artifact_cache` (`AC_`): Implements an asynchronously-filled cache of
+  computation artifacts, which are automatically evicted when not accessed. Used
+  for asynchronously streaming and caching process memory and file system
+  contents, as well as asynchronously preparing visualizer data.
 - `base` (no namespace): Universal, codebase-wide constructs. Strings, math,
   memory allocators, helper macros, command-line parsing, and so on. Requires
   no other codebase layers.
 - `codeview` (`CV_`): Code for parsing and writing the CodeView format.
 - `coff` (`COFF_`): Code for parsing and writing the COFF (Common Object File
   Format) file format.
+- `content` (`C_`): Implements a cache for general data blobs, keyed by a
+  128-bit hash of the data. Also implements a keying system on top, where keys
+  refer to a unique identity which corresponds to a history of 128-bit hashes.
+  Used as a general data store by other layers.
 - `ctrl` (`CTRL_`): The debugger's "control system" layer. Implements
   asynchronous process control, stepping, and breakpoints for all attached
   processes. Runs in lockstep with attached processes. When it runs, attached
   processes are halted. When attached processes are running, it is halted.
   Driven by a debugger frontend on another thread.
-- `dasm_cache` (`DASM_`): Asynchronous disassembly computation, and a cache to
-  store asynchronously produced disassembly artifacts.
-- `dbgi` (`DI_`): Asynchronous debug info loading, and a cache for loaded
-  debug info. Loads RAD Debug Info (RDI) files. Launches separate processes for
-  on-demand conversion to the RDI format if necessary. Also provides various
-  asynchronous operations for using debug information, like fuzzy searching
-  across all records in loaded debug information.
 - `dbg_engine` (`D_`): Implements the core debugger system, without any
   graphical components. This contains top-level logic for things like stepping,
   launching, freezing threads, mid-run breakpoint addition, some caches, and so
   on.
+- `dbg_info` (`DI_`): Implements asynchronous debug info conversion and loading.
+  Maintains a cache for loaded debug info. Loads RAD Debug Info (RDI) files.
+  Launches separate processes for on-demand conversion to the RDI format if
+  necessary. Also provides various asynchronous operations for using debug info,
+  like fuzzy searching across all records in loaded debug info.
 - `demon` (`DMN_`): An abstraction layer for local-machine, low-level process
   control. The abstraction is used to provide a common interface for process
   control on target platforms. Used to implement part of `ctrl`.
+- `disasm` (`DASM_`): Implements disassembly generation, including exposing the
+  ability to compute and cache disassembly asynchronously.
 - `draw` (`DR_`): Implements a high-level graphics drawing API for the
   debugger's purposes, using the underlying `render` abstraction layer. Provides
   high-level APIs for various draw commands, but takes care of batching them,
   and so on.
 - `dwarf` (`DW_`): Code for parsing the DWARF format.
+- `eh` (`EH_`): Code for parsing the EH frame format.
 - `elf` (`ELF_`): Code for parsing the ELF format.
 - `eval` (`E_`): A compiler for an expression language, built for evaluation of
   variables, registers, types, and more, from debugger-attached processes,
@@ -327,23 +334,17 @@ A list of the layers in the codebase and their associated namespaces is below:
   visualization engine, which can be used to visualize evaluations (provided by
   the `eval` layer) in a number of ways. Implements core data structures and
   transforms for watch tables.
-- `file_stream` (`FS_`): Provides asynchronous file loading, storing the
-  artifacts inside of the cache implemented by the `hash_store` layer, and
-  hot-reloading the contents of files when they change. Allows callers to map
-  file paths to data hashes, which can then be used to obtain the file's data.
+- `file_stream` (`FS_`): Implements asynchronous file streaming, storing the
+  artifacts inside of the cache implemented by the `content` and
+  `artifact_cache` layers, hot-reloading the contents of files when they change.
+  Allows callers to map file paths to data hashes, which can then be used to
+  obtain the file's data.
 - `font_cache` (`FNT_`): Implements a cache of rasterized font data, both in
   CPU-side data for text shaping, and in GPU texture atlases for rasterized
   glyphs. All cache information is sourced from the `font_provider` abstraction
   layer.
 - `font_provider` (`FP_`): An abstraction layer for various font file decoding
   and font rasterization backends.
-- `geo_cache` (`GEO_`): Implements an asynchronously-filled cache for GPU
-  geometry data, filled by data sourced in the `hash_store` layer's cache. Used
-  for asynchronously preparing data for visualization.
-- `hash_store` (`HS_`): Implements a cache for general data blobs, keyed by a
-  128-bit hash of the data. Also implements a keying system on top, where keys
-  refer to a unique identity which corresponds to a history of 128-bit hashes.
-  Used as a general data store by other layers.
 - `lib_raddbg_markup` (`RADDBG_`): Standalone library for marking up user
   programs to work with various features in the debugger. Does not depend on
   `base`, and can be independently relocated to other codebases.
@@ -386,9 +387,6 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `pdb` (`PDB_`): Code for parsing and writing the PDB file format.
 - `pe` (`PE_`): Code for parsing and writing the PE (Portable Executable) file
   format.
-- `ptr_graph_cache` (`PG_`): An in-progress layer which will supply
-  asynchronously-computed pointer graphs, used for graph visualization in the
-  debugger, including structures like trees and linked lists.
 - `radbin` (`RB_`): The layer implementing the `radbin` binary utility
   executable.
 - `raddbg` (`RD_`): The layer which ties everything together for the main
@@ -419,13 +417,9 @@ A list of the layers in the codebase and their associated namespaces is below:
   layer.
 - `scratch` (no namespace): Scratch space for small and transient test programs.
 - `tester` (no namespace): A program used for automated testing.
-- `texture_cache` (`TEX_`): An asynchronously-filled cache for GPU texture data,
-  filled by data sourced in the `hash_store` layer's cache. Used for
-  asynchronously preparing data for visualization.
-- `text_cache` (`TXT_`): An asynchronously-filled cache for textual analysis
-  data (tokens, line ranges, and so on), filled by data sourced in the
-  `hash_store` layer's cache. Used for asynchronously preparing data for
-  visualization (like for the source code viewer).
+- `text` (`TXT_`): Implements text processing functions, like parsing line
+  breaks, and lexing and parsing source code. Also offers an API to do this
+  asynchronously.
 - `third_party` (no namespace): External code from other projects, which some
   layers in the codebase depend on. All external code is included and built
   directly within the codebase.
