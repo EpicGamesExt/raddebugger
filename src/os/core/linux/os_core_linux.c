@@ -1059,8 +1059,19 @@ os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
   Semaphore result = {0};
   if (name.size > 0)
   {
-    // TODO: we need to allocate shared memory to store sem_t
-    // NotImplemented;
+    for EachIndex(attempt_idx, 64)
+    {
+      sem_t *s = sem_open((char *)name.str, O_CREAT | O_EXCL, 0666, initial_count);
+      if(s == SEM_FAILED)
+      {
+        s = sem_open((char *)name.str, 0);
+      }
+      if(s != SEM_FAILED)
+      {
+        result.u64[0] = (U64)s;
+        break;
+      }
+    }
   }
   else
   {
