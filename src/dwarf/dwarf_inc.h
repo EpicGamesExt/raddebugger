@@ -11,5 +11,6 @@
 #include "dwarf/dwarf_elf.h"
 #include "dwarf/dwarf_unwind.h"
 #include "dwarf/dwarf_dump.h"
+#include "dwarf/dwarf_help.h"
 
 #endif // DWARF_INC_H

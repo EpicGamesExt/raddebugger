@@ -44,25 +44,25 @@ typedef struct DW_CFI_Register
   };
 } DW_CFI_Register;
 
-typedef struct DW_CFA_Row
+typedef struct DW_CFI_Row
 {
-  DW_CFA          cfa;
+  DW_CFA           cfa;
   DW_CFI_Register *regs;
-  struct DW_CFA_Row *next;
-} DW_CFA_Row;
+  struct DW_CFI_Row *next;
+} DW_CFI_Row;
 
 typedef struct DW_CFI_Unwind
 {
   DW_CFA_InstList  insts;
   DW_CIE          *cie;
   DW_FDE          *fde;
-  DW_CFA_Row      *initial_row;
-  DW_CFA_Row      *row;
+  DW_CFI_Row      *initial_row;
+  DW_CFI_Row      *row;
   DW_CFA_InstNode *curr_inst;
-  DW_CFA_Row      *free_rows;
-  DW_Reg           reg_count;
+  DW_CFI_Row      *free_rows;
   U64              pc;
   Arch             arch;
+  U64              reg_count;
 } DW_CFI_Unwind;
 
 typedef enum {
@@ -82,12 +82,14 @@ typedef DW_MEM_READ(DW_MemRead);
 
 ////////////////////////////////
 
-internal DW_CFA_Row * dw_make_cfa_row(Arena *arena, U64 reg_count);
-internal DW_CFA_Row * dw_copy_cfa_row(Arena *arena, U64 reg_count, DW_CFA_Row *row);
+internal DW_CFI_Row * dw_make_cfi_row(Arena *arena, U64 reg_count);
+internal DW_CFI_Row * dw_copy_cfi_row(Arena *arena, DW_CFI_Row *row, U64 reg_count);
 
 internal DW_CFI_Unwind * dw_cfi_unwind_init(Arena *arena, Arch arch, DW_CIE *cie, DW_FDE *fde, DW_DecodePtr *decode_ptr_func, void *decode_ptr_ud);
 internal B32             dw_cfi_next_row(Arena *arena, DW_CFI_Unwind *uw);
-internal DW_UnwindStatus dw_cfi_apply_register_rules(DW_CFI_Unwind *uw, DW_MemRead *mem_read_func, void *mem_read_ud, DW_RegRead *reg_read_func,  void *reg_read_ud, DW_RegWrite *reg_write_func, void *reg_write_ud);
+
+internal DW_CFI_Row *    dw_cfi_row_from_pc(Arena *arena, Arch arch, struct DW_CIE *cie, struct DW_FDE *fde, DW_DecodePtr *decode_ptr_func, void *decode_ptr_ctx, U64 pc);
+internal DW_UnwindStatus dw_cfi_apply_register_rules(Arch arch, DW_CIE *cie, DW_CFI_Row *row, DW_MemRead *mem_read_func, void *mem_read_ud, DW_RegRead *reg_read_func,  void *reg_read_ud, DW_RegWrite *reg_write_func, void *reg_write_ud);
 
 #endif // DWARF_UNWIND_H
 

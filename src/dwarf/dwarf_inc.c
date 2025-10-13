@@ -8,3 +8,4 @@
 #include "dwarf/dwarf_elf.c"
 #include "dwarf/dwarf_unwind.c"
 #include "dwarf/dwarf_dump.c"
+#include "dwarf/dwarf_help.c"
