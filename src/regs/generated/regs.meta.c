@@ -103,7 +103,7 @@ case Arch_x86:{result = regs_g_alias_code_x86_usage_kind_table;}break;
 return result;
 }
 C_LINKAGE_BEGIN
-REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[103] =
+REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[105] =
 {
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
@@ -198,6 +198,8 @@ REGS_UsageKind_Vector,
 REGS_UsageKind_Vector,
 REGS_UsageKind_Vector,
 REGS_UsageKind_Vector,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
@@ -310,7 +312,7 @@ REGS_UsageKind_Vector,
 REGS_UsageKind_Vector,
 };
 
-String8 regs_g_reg_code_x64_string_table[103] =
+String8 regs_g_reg_code_x64_string_table[105] =
 {
 str8_lit_comp(""),
 str8_lit_comp("rax"),
@@ -415,6 +417,8 @@ str8_lit_comp("k6"),
 str8_lit_comp("k7"),
 str8_lit_comp("cetmsr"),
 str8_lit_comp("cetssp"),
+str8_lit_comp("tr"),
+str8_lit_comp("ldtr"),
 };
 
 String8 regs_g_alias_code_x64_string_table[96] =
@@ -517,7 +521,7 @@ str8_lit_comp("mm6"),
 str8_lit_comp("mm7"),
 };
 
-REGS_Rng regs_g_reg_code_x64_rng_table[103] =
+REGS_Rng regs_g_reg_code_x64_rng_table[105] =
 {
 {0},
 {(U16)OffsetOf(REGS_RegBlockX64, rax), 8},
@@ -622,6 +626,8 @@ REGS_Rng regs_g_reg_code_x64_rng_table[103] =
 {(U16)OffsetOf(REGS_RegBlockX64, k7), 8},
 {(U16)OffsetOf(REGS_RegBlockX64, cetmsr), 8},
 {(U16)OffsetOf(REGS_RegBlockX64, cetssp), 8},
+{(U16)OffsetOf(REGS_RegBlockX64, tr), 2},
+{(U16)OffsetOf(REGS_RegBlockX64, ldtr), 2},
 };
 
 REGS_Slice regs_g_alias_code_x64_slice_table[96] =
@@ -724,8 +730,10 @@ REGS_Slice regs_g_alias_code_x64_slice_table[96] =
 {REGS_RegCodeX64_fpr7, 0, 8},
 };
 
-REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[61] =
+REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[63] =
 {
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
@@ -829,7 +837,7 @@ REGS_UsageKind_Vector,
 REGS_UsageKind_Vector,
 };
 
-String8 regs_g_reg_code_x86_string_table[61] =
+String8 regs_g_reg_code_x86_string_table[63] =
 {
 str8_lit_comp(""),
 str8_lit_comp("eax"),
@@ -884,6 +892,8 @@ str8_lit_comp("ds"),
 str8_lit_comp("es"),
 str8_lit_comp("fs"),
 str8_lit_comp("gs"),
+str8_lit_comp("tr"),
+str8_lit_comp("ldtr"),
 str8_lit_comp("ymm0"),
 str8_lit_comp("ymm1"),
 str8_lit_comp("ymm2"),
@@ -934,7 +944,7 @@ str8_lit_comp("mm6"),
 str8_lit_comp("mm7"),
 };
 
-REGS_Rng regs_g_reg_code_x86_rng_table[61] =
+REGS_Rng regs_g_reg_code_x86_rng_table[63] =
 {
 {0},
 {(U16)OffsetOf(REGS_RegBlockX86, eax), 4},
@@ -989,6 +999,8 @@ REGS_Rng regs_g_reg_code_x86_rng_table[61] =
 {(U16)OffsetOf(REGS_RegBlockX86, es), 2},
 {(U16)OffsetOf(REGS_RegBlockX86, fs), 2},
 {(U16)OffsetOf(REGS_RegBlockX86, gs), 2},
+{(U16)OffsetOf(REGS_RegBlockX86, tr), 2},
+{(U16)OffsetOf(REGS_RegBlockX86, ldtr), 2},
 {(U16)OffsetOf(REGS_RegBlockX86, ymm0), 32},
 {(U16)OffsetOf(REGS_RegBlockX86, ymm1), 32},
 {(U16)OffsetOf(REGS_RegBlockX86, ymm2), 32},

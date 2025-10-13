@@ -203,6 +203,8 @@ RDI_RegCodeX86_ymm4       = 57,
 RDI_RegCodeX86_ymm5       = 58,
 RDI_RegCodeX86_ymm6       = 59,
 RDI_RegCodeX86_ymm7       = 60,
+RDI_RegCodeX86_tr         = 61,
+RDI_RegCodeX86_ldtr       = 62,
 } RDI_RegCodeX86Enum;
 
 typedef RDI_U8 RDI_RegCodeX64;
@@ -311,6 +313,8 @@ RDI_RegCodeX64_fdp        = 99,
 RDI_RegCodeX64_mxcsr_mask = 100,
 RDI_RegCodeX64_cetmsr     = 101,
 RDI_RegCodeX64_cetssp     = 102,
+RDI_RegCodeX64_tr         = 103,
+RDI_RegCodeX64_ldtr       = 104,
 } RDI_RegCodeX64Enum;
 
 typedef RDI_U32 RDI_BinarySectionFlags;
@@ -696,6 +700,8 @@ X(ymm4, 57)\
 X(ymm5, 58)\
 X(ymm6, 59)\
 X(ymm7, 60)\
+X(tr, 61)\
+X(ldtr, 62)\
 
 #define RDI_RegCodeX64_XList \
 X(nil, 0)\
@@ -801,6 +807,8 @@ X(fdp, 99)\
 X(mxcsr_mask, 100)\
 X(cetmsr, 101)\
 X(cetssp, 102)\
+X(tr, 103)\
+X(ldtr, 104)\
 
 #define RDI_TopLevelInfo_XList \
 X(RDI_Arch, arch)\
