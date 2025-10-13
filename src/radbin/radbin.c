@@ -1152,6 +1152,13 @@ rb_thread_entry_point(void *p)
           {
             RDI_Parsed rdi = {0};
             RDI_ParseStatus rdi_status = rdi_parse(f->data.str, f->data.size, &rdi);
+            U64 decompressed_size = rdi_decompressed_size_from_parsed(&rdi);
+            if(decompressed_size > rdi.raw_data_size)
+            {
+              U8 *decompressed_data = push_array_no_zero(arena, U8, decompressed_size);
+              rdi_decompress_parsed(decompressed_data, decompressed_size, &rdi);
+              rdi_status = rdi_parse(decompressed_data, decompressed_size, &rdi);
+            }
             switch(rdi_status)
             {
               default:{}break;

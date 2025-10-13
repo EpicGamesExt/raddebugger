@@ -2982,12 +2982,7 @@ rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in)
     RDIM_SerializedSection *src = &in->sections[k];
     RDIM_SerializedSection *dst = &out.sections[k];
     MemoryCopyStruct(dst, src);
-    
-    // rjf: determine if this section should be compressed
-    B32 should_compress = 1;
-    
-    // rjf: compress if needed
-    if(should_compress)
+    if(src->encoded_size != 0)
     {
       MemoryZero(ctx.m_hashTable, sizeof(U16)*(1<<ctx.m_tableSizeBits));
       dst->data = push_array_no_zero(arena, U8, src->encoded_size);
