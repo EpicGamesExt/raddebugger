@@ -775,7 +775,7 @@ rb_thread_entry_point(void *p)
       
       //- rjf: bake
       RDIM_BakeResults bake_results = {0};
-      if(convert_done) ProfScope("bake")
+      ProfScope("bake")
       {
         bake_results = rdim_bake(arena, bake_params);
       }
@@ -789,14 +789,19 @@ rb_thread_entry_point(void *p)
         case OutputKind_RDI:
         {
           // rjf: serialize
-          RDIM_SerializedSectionBundle serialized_section_bundle = {0};
-          ProfScope("serialize") serialized_section_bundle = rdim_serialized_section_bundle_from_bake_results(&bake_results);
+          RDIM_SerializedSectionBundle *serialized_section_bundle = 0;
+          ProfScope("serialize") if(lane_idx() == 0)
+          {
+            serialized_section_bundle = push_array(arena, RDIM_SerializedSectionBundle, 1);
+            serialized_section_bundle[0] = rdim_serialized_section_bundle_from_bake_results(&bake_results);
+          }
+          lane_sync_u64(&serialized_section_bundle, 0);
           
           // rjf: compress
-          RDIM_SerializedSectionBundle serialized_section_bundle__compressed = serialized_section_bundle;
+          RDIM_SerializedSectionBundle serialized_section_bundle__compressed = serialized_section_bundle[0];
           if(cmd_line_has_flag(cmdline, str8_lit("compress"))) ProfScope("compress")
           {
-            serialized_section_bundle__compressed = rdim_compress(arena, &serialized_section_bundle);
+            serialized_section_bundle__compressed = rdim_compress(arena, serialized_section_bundle);
           }
           
           // rjf: serialize

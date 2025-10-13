@@ -2969,18 +2969,23 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
 internal RDIM_SerializedSectionBundle
 rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in)
 {
-  RDIM_SerializedSectionBundle out = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  RDIM_SerializedSectionBundle out_ = {0};
+  RDIM_SerializedSectionBundle *out = &out_;
+  lane_sync_u64(&out, 0);
   
   //- rjf: set up compression context
   rr_lzb_simple_context ctx = {0};
   ctx.m_tableSizeBits = 14;
-  ctx.m_hashTable = push_array(arena, U16, 1<<ctx.m_tableSizeBits);
+  ctx.m_hashTable = push_array(scratch.arena, U16, 1<<ctx.m_tableSizeBits);
   
   //- rjf: compress, or just copy, all sections
-  for EachEnumVal(RDI_SectionKind, k)
+  Rng1U64 range = lane_range(RDI_SectionKind_COUNT);
+  for EachInRange(idx, range)
   {
+    RDI_SectionKind k = (RDI_SectionKind)idx;
     RDIM_SerializedSection *src = &in->sections[k];
-    RDIM_SerializedSection *dst = &out.sections[k];
+    RDIM_SerializedSection *dst = &out->sections[k];
     MemoryCopyStruct(dst, src);
     if(src->encoded_size != 0)
     {
@@ -2991,6 +2996,8 @@ rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in)
       dst->encoding = RDI_SectionEncoding_LZB;
     }
   }
+  lane_sync();
   
-  return out;
+  scratch_end(scratch);
+  return *out;
 }
