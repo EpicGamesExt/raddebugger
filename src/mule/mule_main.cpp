@@ -523,6 +523,20 @@ type_coverage_eval_tests(void)
   
   Has_Enums has_enums = {(Kind)4, (Flag)7};
   
+  struct EnumBitfields
+  {
+    Kind k1 : 4;
+    Kind k2 : 3;
+    Kind k3 : 1;
+    Kind k4 : 16;
+  };
+  
+  EnumBitfields enum_bitfields = {};
+  enum_bitfields.k1 = Kind_First;
+  enum_bitfields.k2 = Kind_Second;
+  enum_bitfields.k3 = Kind_None;
+  enum_bitfields.k4 = Kind_Fourth;
+  
   Crazy_Union crazy_union = {};
   
   crazy_union.kind = Kind_First;

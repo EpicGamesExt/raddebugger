@@ -1770,6 +1770,18 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       }break;
       
       //////////////////////////
+      //- rjf: bitfields
+      //
+      case E_TypeKind_Bitfield:
+      {
+        need_pop = 1;
+        need_new_task = 1;
+        new_task.params = *params;
+        new_task.eval = e_value_eval_from_eval(eval);
+        new_task.eval.irtree.type_key = e_type_key_direct(eval.irtree.type_key);
+      }break;
+      
+      //////////////////////////
       //- rjf: pointers
       //
       case E_TypeKind_Function:
