@@ -1783,6 +1783,17 @@ ctrl_raddbg_data_from_module(Arena *arena, CTRL_Handle module_handle)
 }
 
 ////////////////////////////////
+//~ Process Info Functions
+
+internal Arch
+ctrl_arch_from_process_handle(CTRL_Handle process_handle)
+{
+  CTRL_EntityCtx *entity_ctx     = &ctrl_state->ctrl_thread_entity_store->ctx;
+  CTRL_Entity    *process_entity = ctrl_entity_from_handle(entity_ctx, process_handle);
+  return process_entity->arch;
+}
+
+////////////////////////////////
 //~ rjf: Unwinding Functions
 
 //- rjf: unwind deep copier
@@ -1804,6 +1815,239 @@ ctrl_unwind_deep_copy(Arena *arena, Arch arch, CTRL_Unwind *src)
     }
   }
   return dst;
+}
+
+//- DWARF
+
+typedef struct
+{
+  CTRL_Handle process_handle;
+  U64         endt_us;
+} CTRL_MemoryReadContextDwarfX64;
+
+internal
+DW_MEM_READ(ctrl_unwind_mem_read_dwarf_x64)
+{
+  CTRL_MemoryReadContextDwarfX64 *ctx = ud;
+
+  B32 is_stale = 0;
+  B32 is_read  = ctrl_process_memory_read(ctx->process_handle, r1u64(addr, addr + size), &is_stale, buffer, ctx->endt_us);
+
+  DW_UnwindStatus status = DW_UnwindStatus_Fail;
+  if(is_stale && is_read)
+  {
+    status = DW_UnwindStatus_Maybe;
+  }
+  else if(is_read)
+  {
+    status = DW_UnwindStatus_Ok;
+  }
+
+  return status;
+}
+
+internal
+DW_REG_READ(ctrl_unwind_reg_read_dwarf_x64)
+{
+  // map DWARF register to -> the internal register
+  REGS_RegBlockX64 *regs = ud;
+  U64 reg_size = 0; void *reg_bytes = 0;
+  switch(reg_id)
+  {
+#define X(_N, _ID, _MAP_N, ...) case _ID: { reg_size = sizeof(regs->_MAP_N); reg_bytes = &regs->_MAP_N; } break;
+    DW_Regs_X64_XList(X)
+#undef X
+  default: { InvalidPath; } break;
+  }
+
+  // copy out register value
+  DW_UnwindStatus status = DW_UnwindStatus_Fail;
+  if(reg_size > 0)
+  {
+    AssertAlways(reg_size == buffer_max);
+    MemoryCopy(buffer, reg_bytes, reg_size);
+    status = DW_UnwindStatus_Ok;
+  }
+
+  return status;
+}
+
+internal
+DW_REG_WRITE(ctrl_unwind_reg_write_dwarf_x64)
+{
+  // map DWARF register to -> the internal register
+  REGS_RegBlockX64 *regs = ud;
+  U64 reg_size = 0; void *reg_bytes = 0;
+  switch(reg_id)
+  {
+#define X(_N, _ID, _MAP_N, ...) case _ID: { reg_size = sizeof(regs->_MAP_N); reg_bytes = &regs->_MAP_N; } break;
+    DW_Regs_X64_XList(X)
+#undef X
+  default: { InvalidPath; } break;
+  }
+
+  // write value to the register
+  DW_UnwindStatus status = DW_UnwindStatus_Fail;
+  if(reg_size > 0)
+  {
+    AssertAlways(value_size <= reg_size);
+    MemoryCopy(reg_bytes, value, value_size);
+    status = DW_UnwindStatus_Ok;
+  }
+
+  return status;
+}
+
+internal CTRL_UnwindStepResult
+ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us)
+{
+  CTRL_UnwindStepResult result = { .flags = CTRL_UnwindFlag_Error };
+
+  // gather context for virtual stack unwinder
+  U64         rebase            = 0;
+  B32         is_unwind_data_eh = 0;
+  String8     unwind_data       = {0};
+  EH_FrameHdr eh_frame_hdr      = {0};
+  EH_PtrCtx   eh_ptr_ctx        = {0};
+  {
+    U64                              hash       = ctrl_hash_from_handle(module_handle);
+    U64                              slot_idx   = hash % ctrl_state->module_image_info_cache.slots_count;
+    U64                              stripe_idx = slot_idx % ctrl_state->module_image_info_cache.stripes_count;
+    CTRL_ModuleImageInfoCacheSlot   *slot       = &ctrl_state->module_image_info_cache.slots[slot_idx];
+    CTRL_ModuleImageInfoCacheStripe *stripe     = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+    MutexScopeR(stripe->rw_mutex) for EachNode(n, CTRL_ModuleImageInfoCacheNode, slot->first)
+    {
+      if(ctrl_handle_match(n->module, module_handle))
+      {
+        rebase            = n->rebase;
+        is_unwind_data_eh = n->is_dwarf_unwind_data_eh;
+        unwind_data       = n->dwarf_unwind_data;
+        eh_frame_hdr      = n->eh_frame_hdr;
+        eh_ptr_ctx        = n->eh_ptr_ctx;
+        break;
+      }
+    }
+  }
+
+  // rebase IP to the base used for linking the module
+  U64 ip     = regs_rip_from_arch_block(arch, regs);
+  U64 cfi_ip = ip + rebase;
+
+  // use .eh_frame_hdr to quickly locate nearest FDE offset
+  U64 fde_offset = eh_find_nearest_fde(eh_frame_hdr, &eh_ptr_ctx, cfi_ip);
+
+  if(fde_offset < unwind_data.size)
+  {
+    // parse call frame info
+    DW_CIE cie = {0};
+    DW_FDE fde = {0};
+    B32 is_cfi_parsed = is_unwind_data_eh ?
+                        eh_parse_cfi(unwind_data, fde_offset, arch, &eh_ptr_ctx, &cie, &fde) : 
+                        dw_parse_cfi(unwind_data, fde_offset, arch, &cie, &fde);
+
+    if(is_cfi_parsed)
+    {
+      Temp scratch = scratch_begin(0, 0);
+
+      // setup pointer decoder ops
+      DW_DecodePtr *decode_ptr_func = 0;
+      void         *decode_ptr_ctx  = 0;
+      if(is_unwind_data_eh)
+      {
+        EH_DecodePtrCtx *decode_ptr_ctx_eh = push_array(scratch.arena, EH_DecodePtrCtx, 1);
+        decode_ptr_ctx_eh->ptr_ctx  = &eh_ptr_ctx;
+        decode_ptr_ctx_eh->addr_enc = cie.ext[EH_CIE_Ext_AddrEnc];
+
+        decode_ptr_func = eh_decode_ptr;
+        decode_ptr_ctx  = decode_ptr_ctx_eh;
+      }
+      else
+      {
+        decode_ptr_func = dw_decode_ptr_debug_frame;
+        decode_ptr_ctx  = &cie;
+      }
+
+      // find register rules for IP
+      DW_CFI_Row *cfi_row = dw_cfi_row_from_pc(scratch.arena, arch, &cie, &fde, decode_ptr_func, decode_ptr_ctx, cfi_ip);
+      if(cfi_row)
+      {
+        // setup machine ops
+        void *mem_read_ctx  = 0;
+        void *reg_read_ctx  = 0;
+        void *reg_write_ctx = 0;
+        DW_MemRead  *mem_read_func  = 0;
+        DW_RegRead  *reg_read_func  = 0;
+        DW_RegWrite *reg_write_func = 0;
+        switch(arch)
+        {
+        case Arch_Null: break;
+        case Arch_x64:
+        {
+          CTRL_MemoryReadContextDwarfX64 *mem_read_ctx_x64 = push_array(scratch.arena, CTRL_MemoryReadContextDwarfX64, 1);
+          mem_read_ctx_x64->process_handle = process_handle;
+          mem_read_ctx_x64->endt_us        = endt_us;
+
+          mem_read_ctx   = mem_read_ctx_x64;
+          reg_read_ctx   = regs;
+          reg_write_ctx  = regs;
+
+          mem_read_func  = ctrl_unwind_mem_read_dwarf_x64;
+          reg_read_func  = ctrl_unwind_reg_read_dwarf_x64;
+          reg_write_func = ctrl_unwind_reg_write_dwarf_x64;
+        }break;
+        case Arch_x86:
+        case Arch_arm64:
+        case Arch_arm32:
+        {
+          NotImplemented;
+        }break;
+        default: { InvalidPath; } break;
+        }
+        
+        // apply register rules to the context
+        DW_UnwindStatus cfi_uw_status = dw_cfi_apply_register_rules(arch,
+                                                                    &cie,
+                                                                    cfi_row,
+                                                                    mem_read_func,
+                                                                    mem_read_ctx,
+                                                                    reg_read_func,
+                                                                    reg_read_ctx,
+                                                                    reg_write_func,
+                                                                    reg_write_ctx);
+
+        // translate unwind status code to control layer's result flags
+        switch(cfi_uw_status)
+        {
+        case DW_UnwindStatus_Ok:
+        {
+          result.flags &= ~(CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale);
+        }break;
+        case DW_UnwindStatus_Fail:
+        {
+          result.flags |= CTRL_UnwindFlag_Error;
+        }break;
+        case DW_UnwindStatus_Maybe:
+        {
+          result.flags &= ~CTRL_UnwindFlag_Error;
+          result.flags |= CTRL_UnwindFlag_Stale;
+        }break;
+        default: { InvalidPath; } break;
+        }
+      }
+
+      scratch_end(scratch);
+    }
+    else
+    {
+      Assert(0 && "failed to parse CFI");
+    }
+  }
+  else
+  {
+    // TODO: if IP does not have FDE, does this mean function is a leaf?
+  }
+
+  return result;
 }
 
 //- rjf: [x64]
@@ -2652,13 +2896,19 @@ internal CTRL_UnwindStepResult
 ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr, Arch arch, void *reg_block, U64 endt_us)
 {
   CTRL_UnwindStepResult result = {0};
-  switch(arch)
+
+  result = ctrl_unwind_step__dwarf(process, module, arch, reg_block, endt_us);
+
+  if(result.flags != 0)
   {
-    default:{}break;
-    case Arch_x64:
+    switch(arch)
     {
-      result = ctrl_unwind_step__pe_x64(process, module, module_base_vaddr, (REGS_RegBlockX64 *)reg_block, endt_us);
-    }break;
+      default:{}break;
+      case Arch_x64:
+      {
+          result = ctrl_unwind_step__pe_x64(process, module, module_base_vaddr, (REGS_RegBlockX64 *)reg_block, endt_us);
+      }break;
+    }
   }
   return result;
 }
@@ -3147,7 +3397,11 @@ ctrl_thread__entry_point(void *p)
           scratch_end(scratch);
         }
         
-        //- rjf: gather all touched files by user breakpoints
+       
+
+
+
+             //- rjf: gather all touched files by user breakpoints
         for(CTRL_UserBreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
         {
           if(n->v.kind != CTRL_UserBreakpointKind_FileNameAndLineColNumber)
@@ -3392,8 +3646,15 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   //- rjf: parse module image info
   //
   Arena *arena = arena_alloc();
+  COFF_MachineType machine = COFF_MachineType_Unknown;
+  PE_ImageFileCharacteristics file_characteristics = 0;
   PE_IntelPdata *pdatas = 0;
   U64 pdatas_count = 0;
+  U64 rebase = 0;
+  B32 is_dwarf_unwind_data_eh = 0;
+  String8 dwarf_unwind_data = {0};
+  EH_FrameHdr eh_frame_hdr = {0};
+  EH_PtrCtx eh_ptr_ctx = {0};
   U64 entry_point_voff = 0;
   Rng1U64 tls_vaddr_range = {0};
   U32 pdb_dbg_time = 0;
@@ -3438,7 +3699,12 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     COFF_FileHeader file_header = {0};
     if(is_valid)
     {
-      if(!dmn_process_read_struct(process.dmn_handle, vaddr_range.min + file_header_off, &file_header))
+      if(dmn_process_read_struct(process.dmn_handle, vaddr_range.min + file_header_off, &file_header))
+      {
+        machine              = file_header.machine;
+        file_characteristics = file_header.flags;
+      }
+      else
       {
         is_valid = 0;
       }
@@ -3462,24 +3728,24 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       
       // rjf: read info
       U32 reported_data_dir_offset = 0;
-      U32 reported_data_dir_count = 0;
+      U32 reported_data_dir_count  = 0;
       switch(opt_ext_magic)
       {
         case PE_PE32_MAGIC:
         {
           PE_OptionalHeader32 pe_optional = {0};
           dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
-          entry_point = pe_optional.entry_point_va;
+          entry_point              = pe_optional.entry_point_va;
           reported_data_dir_offset = sizeof(pe_optional);
-          reported_data_dir_count = pe_optional.data_dir_count;
+          reported_data_dir_count  = pe_optional.data_dir_count;
         }break;
         case PE_PE32PLUS_MAGIC:
         {
           PE_OptionalHeader32Plus pe_optional = {0};
           dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
-          entry_point = pe_optional.entry_point_va;
+          entry_point              = pe_optional.entry_point_va;
           reported_data_dir_offset = sizeof(pe_optional);
-          reported_data_dir_count = pe_optional.data_dir_count;
+          reported_data_dir_count  = pe_optional.data_dir_count;
         }break;
       }
       
@@ -3607,7 +3873,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
           exe_dbg_path = path;
         }
       }
-      
+
       // rjf: extract copy of module's raddbg data
       {
         for EachIndex(idx, sec_count)
@@ -3636,6 +3902,41 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         U8 new_value = 1;
         dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_is_attached_section_voff_range.min, &new_value);
       }
+
+#if 0
+      // TODO(ns): temporary hack to test DWARF unwinder on windows -- remove when done
+      {
+        for EachIndex(idx, sec_count)
+        {
+          String8 section_name = str8_cstring((char *)sec[idx].name);
+          if(str8_match(section_name, str8_lit("/130"), 0))
+          {
+            U64 restore_pos = arena_pos(arena); 
+            Rng1U64 debug_frame_voff_range  = rng_1u64(sec[idx].voff, sec[idx].voff + sec[idx].vsize);
+            Rng1U64 debug_frame_vaddr_range = shift_1u64(debug_frame_voff_range, vaddr_range.min);
+            void   *debug_frame_buffer      = push_array(arena, U8, sec[idx].vsize);
+            U64     debug_frame_read_size   = dmn_process_read(process.dmn_handle, debug_frame_vaddr_range, debug_frame_buffer);
+            if(debug_frame_read_size == sec[idx].vsize)
+            {
+              U64              default_base      = pe_get_default_base_addr(file_characteristics, machine);
+              Arch             arch              = ctrl_arch_from_process_handle(process);
+              String8          debug_frame       = str8(debug_frame_buffer, debug_frame_read_size);
+              DW_CallFrameInfo dwarf_cfi         = dw_call_frame_info_from_data(scratch.arena, arch, debug_frame);
+              String8          eh_frame_hdr_data = eh_frame_hdr_from_call_frame_info(arena, dwarf_cfi.fde_count, dwarf_cfi.fde_offsets, dwarf_cfi.fde);
+              rebase                  = default_base - vaddr_range.min; // DL overwrites image base in the optional header, if image is linked with a custom base this breaks
+              dwarf_unwind_data       = debug_frame;
+              is_dwarf_unwind_data_eh = 0;
+              eh_frame_hdr            = eh_parse_frame_hdr(eh_frame_hdr_data, byte_size_from_arch(arch), 0);
+            }
+            else
+            {
+              arena_pop_to(arena, restore_pos);
+            }
+            break;
+          }
+        }
+      }
+#endif
       
       scratch_end(scratch);
     }
@@ -3718,10 +4019,13 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         node->arena = arena;
         node->pdatas = pdatas;
         node->pdatas_count = pdatas_count;
+        node->rebase = rebase;
+        node->is_dwarf_unwind_data_eh = is_dwarf_unwind_data_eh;
+        node->dwarf_unwind_data = dwarf_unwind_data;
+        node->eh_frame_hdr = eh_frame_hdr;
+        node->eh_ptr_ctx = eh_ptr_ctx;
         node->entry_point_voff = entry_point_voff;
         node->initial_debug_info_path = initial_debug_info_path;
-        node->raddbg_section_voff_range = raddbg_section_voff_range;
-        node->raddbg_data = raddbg_data;
       }
     }
   }
