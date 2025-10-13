@@ -993,7 +993,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: fill row's module
     //
-    if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+    if(row->eval.space.kind == CTRL_EvalSpaceKind_Entity)
     {
       CTRL_Entity *row_ctrl_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
       switch(row_ctrl_entity->kind)
@@ -1782,7 +1782,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             {
               string_params.radix = 16;
             }
-            if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity &&
+            if(cell->eval.space.kind == CTRL_EvalSpaceKind_Entity &&
                rd_ctrl_entity_from_eval_space(cell->eval.space)->kind == CTRL_EntityKind_Thread)
             {
               string_params.radix = 16;
@@ -2431,13 +2431,13 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     if(dv->temp_look_vaddr != 0 && dv->temp_look_run_gen == ctrl_run_gen())
     {
       auto_selected = 1;
-      auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, dv->temp_look_process), RD_EvalSpaceKind_CtrlEntity);
+      auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, dv->temp_look_process), CTRL_EvalSpaceKind_Entity);
       eval = e_eval_from_stringf("(0x%I64x & (~(0x4000 - 1)))", dv->temp_look_vaddr);
     }
     else
     {
       auto_selected = 1;
-      auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
+      auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), CTRL_EvalSpaceKind_Entity);
       eval = e_eval_from_stringf("(reg:rip & (~(0x4000 - 1)))");
     }
   }
@@ -2539,7 +2539,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(access, rd_regs()->text_key, rd_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = c_data_from_hash(access, dasm_text_hash);
-  B32 is_loading = (dasm_text_info.lines_count == 0 && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null && (space.kind != RD_EvalSpaceKind_CtrlEntity || space_entity != &ctrl_entity_nil));
+  B32 is_loading = (dasm_text_info.lines_count == 0 && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null && (space.kind != CTRL_EvalSpaceKind_Entity || space_entity != &ctrl_entity_nil));
   B32 has_disasm = (dasm_text_info.lines_count != 0 && dasm_info.lines.count != 0);
   
   //////////////////////////////
@@ -2670,7 +2670,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Rng1U64 view_range = rd_space_range_from_eval(eval);
   if(eval.space.kind == 0)
   {
-    eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
+    eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), CTRL_EvalSpaceKind_Entity);
     view_range = rd_whole_range_from_eval_space(eval.space);
   }
   
@@ -3035,7 +3035,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   {
     e_space_read(eval.space, visible_memory, viz_range_bytes);
   }
-  if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+  if(eval.space.kind == CTRL_EvalSpaceKind_Entity)
   {
     CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
     if(entity->kind == CTRL_EntityKind_Process)
@@ -3077,7 +3077,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     CTRL_Entity *selected_process = ctrl_entity_ancestor_from_kind(selected_thread, CTRL_EntityKind_Process);
     CTRL_CallStack selected_call_stack = ctrl_call_stack_from_thread(access, selected_thread->handle, 1, 0);
     CTRL_Entity *eval_process = &ctrl_entity_nil;
-    if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+    if(eval.space.kind == CTRL_EvalSpaceKind_Entity)
     {
       eval_process = rd_ctrl_entity_from_eval_space(eval.space);
     }
@@ -3149,7 +3149,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     }
     
     //- rjf: fill local variable annotations
-    if(e_space_match(rd_eval_space_from_ctrl_entity(selected_process, RD_EvalSpaceKind_CtrlEntity), eval.space))
+    if(e_space_match(rd_eval_space_from_ctrl_entity(selected_process, CTRL_EvalSpaceKind_Entity), eval.space))
     {
       Vec4F32 local_color = ui_color_from_name(str8_lit("code_local"));
       Vec4F32 color_gen_table[] =

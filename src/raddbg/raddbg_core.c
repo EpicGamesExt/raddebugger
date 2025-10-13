@@ -1684,7 +1684,7 @@ internal CTRL_Entity *
 rd_ctrl_entity_from_eval_space(E_Space space)
 {
   CTRL_Entity *entity = &ctrl_entity_nil;
-  if(space.kind == RD_EvalSpaceKind_CtrlEntity ||
+  if(space.kind == CTRL_EvalSpaceKind_Entity ||
      space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
      space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
   {
@@ -1721,7 +1721,7 @@ rd_cmd_name_from_eval(E_Eval eval)
 //- rjf: eval space reads/writes
 
 internal U64
-rd_eval_space_gen(void *u, E_Space space)
+rd_eval_space_gen(E_Space space)
 {
   U64 result = 0;
   switch(space.kind)
@@ -1736,68 +1736,19 @@ rd_eval_space_gen(void *u, E_Space space)
 }
 
 internal B32
-rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
+rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
   switch(space.kind)
   {
-    //- rjf: reads from hash store key
-    case E_SpaceKind_HashStoreKey:
+    default:
     {
-      C_Root root = {space.u64_0};
-      C_ID id = {space.u128};
-      C_Key key = c_key_make(root, id);
-      U128 hash = c_hash_from_key(key, 0);
-      Access *access = access_open();
-      {
-        String8 data = c_data_from_hash(access, hash);
-        Rng1U64 legal_range = r1u64(0, data.size);
-        Rng1U64 read_range = intersect_1u64(range, legal_range);
-        if(read_range.min < read_range.max)
-        {
-          result = 1;
-          MemoryCopy(out, data.str + read_range.min, dim_1u64(read_range));
-        }
-      }
-      access_close(access);
-    }break;
-    
-    //- rjf: file reads
-    case E_SpaceKind_File:
-    {
-      // rjf: unpack space/path
-      U64 file_path_string_id = space.u64_0;
-      String8 file_path = e_string_from_id(file_path_string_id);
-      
-      // rjf: find containing chunk range
-      U64 chunk_size = KB(4);
-      Rng1U64 containing_range = range;
-      containing_range.min -= containing_range.min%chunk_size;
-      containing_range.max += chunk_size-1;
-      containing_range.max -= containing_range.max%chunk_size;
-      
-      // rjf: map to hash
-      C_Key key = fs_key_from_path_range(file_path, containing_range, 0);
-      U128 hash = c_hash_from_key(key, 0);
-      
-      // rjf: look up from hash store
-      Access *access = access_open();
-      {
-        String8 data = c_data_from_hash(access, hash);
-        Rng1U64 legal_range = r1u64(containing_range.min, containing_range.min + data.size);
-        Rng1U64 read_range = intersect_1u64(range, legal_range);
-        if(read_range.min < read_range.max)
-        {
-          result = 1;
-          MemoryCopy(out, data.str + read_range.min - containing_range.min, dim_1u64(read_range));
-        }
-      }
-      access_close(access);
+      result = ctrl_eval_space_read(space, out, range);
     }break;
     
     //- rjf: interior control entity reads (inside process address space or thread register block)
-    case RD_EvalSpaceKind_CtrlEntity:
+    case CTRL_EvalSpaceKind_Entity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       switch(entity->kind)
@@ -1997,7 +1948,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 }
 
 internal B32
-rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
+rd_eval_space_write(E_Space space, void *in, Rng1U64 range)
 {
   B32 result = 0;
   switch(space.kind)
@@ -2006,7 +1957,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
     
     //- rjf: interior control entity writes (inside process address space or
     // thread register block)
-    case RD_EvalSpaceKind_CtrlEntity:
+    case CTRL_EvalSpaceKind_Entity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       switch(entity->kind)
@@ -2082,6 +2033,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       }
     }break;
     
+    //- rjf: meta-ctrl-entity writes
     case RD_EvalSpaceKind_MetaCtrlEntity:
     {
       Temp scratch = scratch_begin(0, 0);
@@ -2154,7 +2106,7 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
       String8 file_path = e_string_from_id(file_path_string_id);
       result = fs_key_from_path_range(file_path, range, 0);
     }break;
-    case RD_EvalSpaceKind_CtrlEntity:
+    case CTRL_EvalSpaceKind_Entity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       if(entity->kind == CTRL_EntityKind_Process)
@@ -2194,7 +2146,7 @@ rd_whole_range_from_eval_space(E_Space space)
       FileProperties props = os_properties_from_file_path(file_path);
       result = r1u64(0, props.size);
     }break;
-    case RD_EvalSpaceKind_CtrlEntity:
+    case CTRL_EvalSpaceKind_Entity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       if(entity->kind == CTRL_EntityKind_Process)
@@ -4536,7 +4488,7 @@ rd_view_ui(Rng2F32 rect)
                     ////////////////////
                     //- rjf: draw start of cache lines in expansions
                     //
-                    if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && row_info->view_ui_rule == &rd_nil_view_ui_rule)
+                    if(row->eval.space.kind == CTRL_EvalSpaceKind_Entity && row_info->view_ui_rule == &rd_nil_view_ui_rule)
                     {
                       CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
                       if(space_entity->kind == CTRL_EntityKind_Process)
@@ -4557,7 +4509,7 @@ rd_view_ui(Rng2F32 rect)
                     //////////////
                     //- rjf: draw mid-row cache line boundaries in expansions
                     //
-                    if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && row_info->view_ui_rule == &rd_nil_view_ui_rule)
+                    if(row->eval.space.kind == CTRL_EvalSpaceKind_Entity && row_info->view_ui_rule == &rd_nil_view_ui_rule)
                     {
                       CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
                       if(space_entity->kind == CTRL_EntityKind_Process &&
@@ -4639,7 +4591,7 @@ rd_view_ui(Rng2F32 rect)
                               cell_is_rich_hovered = (intersection.max > intersection.min);
                             }
                             CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(cell->eval.space);
-                            if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && space_entity->kind == CTRL_EntityKind_Process)
+                            if(cell->eval.space.kind == CTRL_EvalSpaceKind_Entity && space_entity->kind == CTRL_EntityKind_Process)
                             {
                               CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, cell_vaddr_rng, 0, rd_state->frame_eval_memread_endt_us);
                               for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
@@ -5044,7 +4996,7 @@ rd_view_ui(Rng2F32 rect)
                             
                             // rjf: apply type note
                             if(!(cell_info.flags & RD_WatchCellFlag_NoEval) &&
-                               cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity &&
+                               cell->eval.space.kind == CTRL_EvalSpaceKind_Entity &&
                                row_info->callstack_thread == &ctrl_entity_nil &&
                                e_type_kind_from_key(cell->eval.irtree.type_key) != E_TypeKind_Function)
                               UI_FontSize(ui_top_font_size()*0.9f)
@@ -5169,7 +5121,7 @@ rd_view_ui(Rng2F32 rect)
                               case CTRL_EntityKind_Thread:{RD_RegsScope(.thread = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Thread);}break;
                             }
                           }
-                          else if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity ||
+                          else if(cell->eval.space.kind == CTRL_EvalSpaceKind_Entity ||
                                   cell->eval.space.kind == E_SpaceKind_FileSystem ||
                                   cell->eval.space.kind == E_SpaceKind_File ||
                                   cell->eval.space.kind == E_SpaceKind_Null)
@@ -5323,7 +5275,7 @@ rd_view_ui(Rng2F32 rect)
                           }
                           
                           // rjf: can't edit, but has address info? -> go to address
-                          else if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+                          else if(cell->eval.space.kind == CTRL_EvalSpaceKind_Entity)
                           {
                             CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(cell->eval.space);
                             CTRL_Entity *process = ctrl_process_from_entity(entity);
@@ -7099,7 +7051,7 @@ rd_window_frame(void)
             build_hover_eval = 0;
           }
           else if((hover_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-                   hover_eval.space.kind == RD_EvalSpaceKind_CtrlEntity) &&
+                   hover_eval.space.kind == CTRL_EvalSpaceKind_Entity) &&
                   rd_ctrl_entity_from_eval_space(hover_eval.space) == &ctrl_entity_nil)
           {
             build_hover_eval = 0;
@@ -7200,7 +7152,7 @@ rd_window_frame(void)
           rd_cmd(RD_CmdKind_CancelQuery);
         }
         else if((eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-                 eval.space.kind == RD_EvalSpaceKind_CtrlEntity) &&
+                 eval.space.kind == CTRL_EvalSpaceKind_Entity) &&
                 rd_ctrl_entity_from_eval_space(eval.space) == &ctrl_entity_nil)
         {
           query_is_open = 0;
@@ -11917,7 +11869,7 @@ rd_frame(void)
         eval_modules[eval_module_idx].dbgi_key    = dbgi_key;
         eval_modules[eval_module_idx].rdi         = di_rdi_from_key(rd_state->frame_access, dbgi_key, 0, 0);
         eval_modules[eval_module_idx].vaddr_range = m->vaddr_range;
-        eval_modules[eval_module_idx].space       = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process), RD_EvalSpaceKind_CtrlEntity);
+        eval_modules[eval_module_idx].space       = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process), CTRL_EvalSpaceKind_Entity);
         if(module == m)
         {
           eval_modules_primary = &eval_modules[eval_module_idx];
@@ -11942,7 +11894,7 @@ rd_frame(void)
       //- rjf: fill instruction pointer info
       ctx->thread_ip_vaddr     = rip_vaddr;
       ctx->thread_ip_voff      = rip_voff;
-      ctx->thread_reg_space    = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_CtrlEntity);
+      ctx->thread_reg_space    = rd_eval_space_from_ctrl_entity(thread, CTRL_EvalSpaceKind_Entity);
       ctx->thread_arch         = thread->arch;
       ctx->thread_unwind_count = unwind_count;
       
@@ -12737,7 +12689,7 @@ rd_frame(void)
       ctx->space_write       = rd_eval_space_write;
       ctx->primary_space     = eval_modules_primary->space;
       ctx->reg_arch          = eval_modules_primary->arch;
-      ctx->reg_space         = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_CtrlEntity);
+      ctx->reg_space         = rd_eval_space_from_ctrl_entity(thread, CTRL_EvalSpaceKind_Entity);
       ctx->reg_unwind_count  = unwind_count;
       ctx->module_base       = push_array(scratch.arena, U64, 1);
       ctx->module_base[0]    = module->vaddr_range.min;

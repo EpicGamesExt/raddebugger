@@ -81,8 +81,7 @@ struct RD_KeyMap
 typedef U64 RD_EvalSpaceKind;
 enum
 {
-  RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
-  RD_EvalSpaceKind_MetaQuery,
+  RD_EvalSpaceKind_MetaQuery = CTRL_EvalSpaceKind_FirstUserDefined,
   RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaCmd,
   RD_EvalSpaceKind_MetaTheme,
@@ -889,9 +888,9 @@ internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind
 internal String8 rd_cmd_name_from_eval(E_Eval eval);
 
 //- rjf: eval space reads/writes
-internal U64 rd_eval_space_gen(void *u, E_Space space);
-internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
-internal B32 rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
+internal U64 rd_eval_space_gen(E_Space space);
+internal B32 rd_eval_space_read(E_Space space, void *out, Rng1U64 range);
+internal B32 rd_eval_space_write(E_Space space, void *in, Rng1U64 range);
 
 //- rjf: asynchronous streamed reads -> hashes from spaces
 internal C_Key rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated);

@@ -61,7 +61,7 @@ e_space_gen(E_Space space)
   U64 result = 0;
   if(e_base_ctx->space_gen != 0)
   {
-    result = e_base_ctx->space_gen(e_base_ctx->space_rw_user_data, space);
+    result = e_base_ctx->space_gen(space);
   }
   return result;
 }
@@ -71,9 +71,70 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
 {
   ProfBeginFunction();
   B32 result = 0;
-  if(e_interpret_ctx->space_read != 0)
   {
-    result = e_interpret_ctx->space_read(e_interpret_ctx->space_rw_user_data, space, out, range);
+    switch(space.kind)
+    {
+      //- rjf: reads from hash store key
+      case E_SpaceKind_HashStoreKey:
+      {
+        C_Root root = {space.u64_0};
+        C_ID id = {space.u128};
+        C_Key key = c_key_make(root, id);
+        U128 hash = c_hash_from_key(key, 0);
+        Access *access = access_open();
+        {
+          String8 data = c_data_from_hash(access, hash);
+          Rng1U64 legal_range = r1u64(0, data.size);
+          Rng1U64 read_range = intersect_1u64(range, legal_range);
+          if(read_range.min < read_range.max)
+          {
+            result = 1;
+            MemoryCopy(out, data.str + read_range.min, dim_1u64(read_range));
+          }
+        }
+        access_close(access);
+      }break;
+      
+      //- rjf: file reads
+      case E_SpaceKind_File:
+      {
+        // rjf: unpack space/path
+        U64 file_path_string_id = space.u64_0;
+        String8 file_path = e_string_from_id(file_path_string_id);
+        
+        // rjf: find containing chunk range
+        U64 chunk_size = KB(4);
+        Rng1U64 containing_range = range;
+        containing_range.min -= containing_range.min%chunk_size;
+        containing_range.max += chunk_size-1;
+        containing_range.max -= containing_range.max%chunk_size;
+        
+        // rjf: map to hash
+        C_Key key = fs_key_from_path_range(file_path, containing_range, 0);
+        U128 hash = c_hash_from_key(key, 0);
+        
+        // rjf: look up from hash store
+        Access *access = access_open();
+        {
+          String8 data = c_data_from_hash(access, hash);
+          Rng1U64 legal_range = r1u64(containing_range.min, containing_range.min + data.size);
+          Rng1U64 read_range = intersect_1u64(range, legal_range);
+          if(read_range.min < read_range.max)
+          {
+            result = 1;
+            MemoryCopy(out, data.str + read_range.min - containing_range.min, dim_1u64(read_range));
+          }
+        }
+        access_close(access);
+      }break;
+      
+      //- rjf: default -> use hooks
+      default:
+      if(e_interpret_ctx->space_read != 0)
+      {
+        result = e_interpret_ctx->space_read(space, out, range);
+      }break;
+    }
   }
   ProfEnd();
   return result;
@@ -86,7 +147,13 @@ e_space_write(E_Space space, void *in, Rng1U64 range)
   B32 result = 0;
   if(e_interpret_ctx->space_write != 0)
   {
-    result = e_interpret_ctx->space_write(e_interpret_ctx->space_rw_user_data, space, in, range);
+    switch(space.kind)
+    {
+      default:
+      {
+        result = e_interpret_ctx->space_write(space, in, range);
+      }break;
+    }
   }
   ProfEnd();
   return result;

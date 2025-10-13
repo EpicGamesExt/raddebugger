@@ -4201,7 +4201,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
 //- rjf: eval helpers
 
 internal B32
-ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
+ctrl_eval_space_read(E_Space space, void *out, Rng1U64 range)
 {
   B32 result = 0;
   switch(space.kind)
@@ -4234,12 +4234,6 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           scratch_end(scratch);
         }break;
       }
-    }break;
-    
-    //- rjf: meta evaluations
-    case CTRL_EvalSpaceKind_Meta:
-    {
-      
     }break;
   }
   return result;

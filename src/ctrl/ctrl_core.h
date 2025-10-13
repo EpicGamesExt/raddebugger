@@ -357,7 +357,7 @@ typedef U64 CTRL_EvalSpaceKind;
 enum
 {
   CTRL_EvalSpaceKind_Entity = E_SpaceKind_FirstUserDefined,
-  CTRL_EvalSpaceKind_Meta,
+  CTRL_EvalSpaceKind_FirstUserDefined,
 };
 
 ////////////////////////////////
@@ -981,7 +981,7 @@ internal void ctrl_thread__module_close(CTRL_Handle process, CTRL_Handle module,
 internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);
 
 //- rjf: eval helpers
-internal B32 ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range);
+internal B32 ctrl_eval_space_read(E_Space space, void *out, Rng1U64 vaddr_range);
 
 //- rjf: control thread eval scopes
 internal CTRL_EvalScope *ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, CTRL_Entity *thread);

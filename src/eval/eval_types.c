@@ -2571,6 +2571,59 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(array)
 }
 
 ////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `list` lens
+
+typedef struct E_ListGatherArtifact E_ListGatherArtifact;
+struct E_ListGatherArtifact
+{
+  U64 *node_vaddrs;
+  U64 node_vaddrs_count;
+};
+
+internal AC_Artifact
+e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out)
+{
+  
+}
+
+internal void
+e_list_gather_artifact_destroy(AC_Artifact artifact)
+{
+  
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(list)
+{
+  E_Type *type = e_type_from_key(eval.irtree.type_key);
+  String8 next_link_member_name = str8_lit("next");
+  if(type->args != 0 && type->count > 0)
+  {
+    next_link_member_name = type->args[0]->string;
+  }
+  E_TypeKey node_type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_All);
+  E_Member next_link_member = e_type_member_from_key_name__cached(node_type_key, next_link_member_name);
+  if(next_link_member.kind != E_MemberKind_DataField)
+  {
+    // TODO(rjf): error reporting
+  }
+  else
+  {
+    
+  }
+  E_TypeExpandInfo info = {0, 0};
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(list)
+{
+  U64 read_range_count = dim_1u64(idx_range);
+  for(U64 idx = 0; idx < read_range_count; idx += 1)
+  {
+    evals_out[idx] = e_eval_wrapf(eval, "$[%I64u]", idx_range.min + idx);
+  }
+}
+
+////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `slice` lens
 
 typedef struct E_SliceIRExt E_SliceIRExt;

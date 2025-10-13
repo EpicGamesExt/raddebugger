@@ -745,8 +745,8 @@ struct E_AutoHookParams
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
-typedef U64 E_SpaceGenFunction(void *user_data, E_Space space);
-typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
+typedef U64 E_SpaceGenFunction(E_Space space);
+typedef B32 E_SpaceRWFunction(E_Space space, void *out, Rng1U64 offset_range);
 
 //- rjf: base context
 
