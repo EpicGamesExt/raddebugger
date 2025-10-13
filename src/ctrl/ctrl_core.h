@@ -597,6 +597,11 @@ struct CTRL_ModuleImageInfoCacheNode
   Arena *arena;
   PE_IntelPdata *pdatas;
   U64 pdatas_count;
+  U64 rebase;
+  B32 is_dwarf_unwind_data_eh;
+  String8 dwarf_unwind_data;
+  EH_FrameHdr eh_frame_hdr;
+  EH_PtrCtx eh_ptr_ctx;
   U64 entry_point_voff;
   Rng1U64 tls_vaddr_range;
   String8 initial_debug_info_path;
@@ -916,10 +921,18 @@ internal String8 ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_Han
 internal String8 ctrl_raddbg_data_from_module(Arena *arena, CTRL_Handle module_handle);
 
 ////////////////////////////////
+//~ Process Info Functions
+
+internal Arch ctrl_arch_from_process_handle(CTRL_Handle process_handle);
+
+////////////////////////////////
 //~ rjf: Unwinding Functions
 
 //- rjf: unwind deep copier
 internal CTRL_Unwind ctrl_unwind_deep_copy(Arena *arena, Arch arch, CTRL_Unwind *src);
+
+//- DWARF
+internal CTRL_UnwindStepResult ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us);
 
 //- rjf: [x64]
 internal REGS_Reg64 *ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX64 gpr_reg);
