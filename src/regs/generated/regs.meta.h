@@ -111,6 +111,8 @@ REGS_RegCodeX64_k6,
 REGS_RegCodeX64_k7,
 REGS_RegCodeX64_cetmsr,
 REGS_RegCodeX64_cetssp,
+REGS_RegCodeX64_tr,
+REGS_RegCodeX64_ldtr,
 REGS_RegCodeX64_COUNT,
 } REGS_RegCodeX64;
 
@@ -270,6 +272,8 @@ REGS_RegCodeX86_ds,
 REGS_RegCodeX86_es,
 REGS_RegCodeX86_fs,
 REGS_RegCodeX86_gs,
+REGS_RegCodeX86_tr,
+REGS_RegCodeX86_ldtr,
 REGS_RegCodeX86_ymm0,
 REGS_RegCodeX86_ymm1,
 REGS_RegCodeX86_ymm2,
@@ -427,6 +431,8 @@ REGS_Reg64 k6;
 REGS_Reg64 k7;
 REGS_Reg64 cetmsr;
 REGS_Reg64 cetssp;
+REGS_Reg16 tr;
+REGS_Reg16 ldtr;
 };
 
 typedef struct REGS_RegBlockX86 REGS_RegBlockX86;
@@ -484,6 +490,8 @@ REGS_Reg16 ds;
 REGS_Reg16 es;
 REGS_Reg16 fs;
 REGS_Reg16 gs;
+REGS_Reg16 tr;
+REGS_Reg16 ldtr;
 REGS_Reg256 ymm0;
 REGS_Reg256 ymm1;
 REGS_Reg256 ymm2;
@@ -495,17 +503,17 @@ REGS_Reg256 ymm7;
 };
 
 C_LINKAGE_BEGIN
-extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[103];
+extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[105];
 extern REGS_UsageKind regs_g_alias_code_x64_usage_kind_table[96];
-extern String8 regs_g_reg_code_x64_string_table[103];
+extern String8 regs_g_reg_code_x64_string_table[105];
 extern String8 regs_g_alias_code_x64_string_table[96];
-extern REGS_Rng regs_g_reg_code_x64_rng_table[103];
+extern REGS_Rng regs_g_reg_code_x64_rng_table[105];
 extern REGS_Slice regs_g_alias_code_x64_slice_table[96];
-extern REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[61];
+extern REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[63];
 extern REGS_UsageKind regs_g_alias_code_x86_usage_kind_table[36];
-extern String8 regs_g_reg_code_x86_string_table[61];
+extern String8 regs_g_reg_code_x86_string_table[63];
 extern String8 regs_g_alias_code_x86_string_table[36];
-extern REGS_Rng regs_g_reg_code_x86_rng_table[61];
+extern REGS_Rng regs_g_reg_code_x86_rng_table[63];
 extern REGS_Slice regs_g_alias_code_x86_slice_table[36];
 
 C_LINKAGE_END

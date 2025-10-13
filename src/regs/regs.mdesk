@@ -109,6 +109,8 @@ REGS_RegTableX64:
   {k7                             64   Normal}
   {cetmsr                         64   Normal}
   {cetssp                         64   Normal}
+  {tr                             16   Normal}
+  {ldtr                           16   Normal}
 }
 
 @table(name base off size usage)
@@ -277,6 +279,8 @@ REGS_RegTableX86:
   {es                        16  Normal}
   {fs                        16  Normal}
   {gs                        16  Normal}
+  {tr                        16  Normal}
+  {ldtr                      16  Normal}
   // SIMD REGISTERS
   {ymm0                      256 Vector}
   {ymm1                      256 Vector}

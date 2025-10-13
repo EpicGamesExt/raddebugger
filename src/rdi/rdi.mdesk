@@ -346,6 +346,8 @@ RDI_RegCodeX86Table:
   {ymm5           58}
   {ymm6           59}
   {ymm7           60}
+  {tr             61}
+  {ldtr           62}
 }
 
 @table(name value)
@@ -454,6 +456,8 @@ RDI_RegCodeX64Table:
   {mxcsr_mask      100}
   {cetmsr          101}
   {cetssp          102}
+  {tr              103}
+  {ldtr            104}
 }
 
 @enum(RDI_U32) RDI_Arch:

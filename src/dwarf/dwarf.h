@@ -1635,8 +1635,8 @@ X(Ss,     42, ss,     0, 2)  \
 X(Ds,     43, ds,     0, 2)  \
 X(Fs,     44, fs,     0, 2)  \
 X(Gs,     45, gs,     0, 2)  \
-X(Tr,     48, nil,    0, 0)  \
-X(Ldtr,   49, nil,    0, 0)
+X(Tr,     48, tr,    0, 0)  \
+X(Ldtr,   49, ldtr,    0, 0)
 
 #define DW_Regs_X64_XList(X)  \
 X(Rax,     0,  rax,    0, 8)  \
@@ -1711,10 +1711,10 @@ X(Ss,      52, ss,     0, 2)  \
 X(Ds,      53, ds,     0, 2)  \
 X(Fs,      54, fs,     0, 2)  \
 X(Gs,      55, gs,     0, 2)  \
-X(FsBase,  58, nil,    0, 0)  \
-X(GsBase,  59, nil,    0, 0)  \
-X(Tr,      62, nil,    0, 0)  \
-X(Ldtr,    63, nil,    0, 0)
+X(FsBase,  58, fsbase, 0, 0)  \
+X(GsBase,  59, gsbase, 0, 0)  \
+X(Tr,      62, tr,     0, 0)  \
+X(Ldtr,    63, ldtr,   0, 0)
 
 typedef U32 DW_Reg;
 
@@ -1744,8 +1744,8 @@ internal U64 dw_reg_size_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_pos_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_size_from_code(Arch arch, DW_Reg reg_code);
 internal U64 dw_reg_pos_from_code(Arch arch, DW_Reg reg_code);
-internal U64 dw_reg_max_size_from_arch(Arch arch);
 internal U64 dw_reg_count_from_arch(Arch arch);
+internal U64 dw_reg_max_size_from_arch(Arch arch);
 
 //- Attrib Class Encodings
 
