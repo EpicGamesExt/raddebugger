@@ -3383,18 +3383,18 @@ dw_parse_cie(String8 data, DW_Format format, Arch arch, DW_CIE *cie_out)
   B32 is_parsed = 0;
   U64 cursor    = format == DW_Format_32Bit ? 4 : 12;
 
-  U64 cie_id = 0;
+  U64 cie_id      = 0;
   U64 cie_id_size = str8_deserial_read_dwarf_uint(data, cursor, format, &cie_id);
   if (cie_id_size == 0) { goto exit; }
   cursor += cie_id_size;
 
-  U8 version = 0;
+  U8  version      = 0;
   U64 version_size = str8_deserial_read_struct(data, cursor, &version);
   if (version_size == 0) { goto exit; }
   cursor += version_size;
 
-  String8 aug_string = {0};
-  U64 aug_string_size = str8_deserial_read_cstr(data, cursor, &aug_string);
+  String8 aug_string      = {0};
+  U64     aug_string_size = str8_deserial_read_cstr(data, cursor, &aug_string);
   if (aug_string_size == 0) { goto exit; }
   cursor += aug_string_size;
 
@@ -3447,11 +3447,11 @@ exit:;
 }
 
 internal B32
-dw_parse_fde(String8               data,
+dw_parse_fde(String8                data,
               DW_Format             format,
               DW_CIEFromOffsetFunc *cie_from_offset_func,
               void                 *cie_from_offset_ud,
-              DW_FDE       *fde_out)
+              DW_FDE               *fde_out)
 {
   B32 is_parsed = 0;
   U64 cursor    = format == DW_Format_32Bit ? 4 : 12;
@@ -3485,11 +3485,44 @@ dw_parse_fde(String8               data,
   // commit values to out
   fde_out->format      = format;
   fde_out->cie_pointer = cie_pointer;
+  fde_out->cie         = cie;
   fde_out->pc_range    = rng_1u64(pc_begin, pc_begin + pc_range);
   fde_out->insts       = str8_skip(data, cursor);
 
   is_parsed = 1;
 exit:;
+  return is_parsed;
+}
+
+internal
+DW_CIE_FROM_OFFSET_FUNC(dw_parse_cfi_cie_from_offset)
+{
+  return ud;
+}
+
+internal B32
+dw_parse_cfi(String8 data, U64 fde_offset, Arch arch, DW_CIE *cie_out, DW_FDE *fde_out)
+{
+  B32 is_parsed = 0;
+  DW_DescriptorEntry fde_desc = {0};
+  dw_parse_descriptor_entry_header(data, fde_offset, &fde_desc);
+  if (fde_desc.type == DW_DescriptorEntryType_FDE) {
+    U64 cie_pointer_off  = fde_desc.format == DW_Format_32Bit ? 4 : 12;
+    U64 cie_pointer      = 0;
+    U64 cie_pointer_size = str8_deserial_read_dwarf_uint(data, fde_offset + cie_pointer_off, fde_desc.format, &cie_pointer);
+    if (cie_pointer_size) {
+      DW_DescriptorEntry cie_desc = {0};
+      dw_parse_descriptor_entry_header(data, cie_pointer, &cie_desc);
+      if (cie_desc.type == DW_DescriptorEntryType_CIE) {
+        if (dw_parse_cie(str8_substr(data, cie_desc.entry_range), cie_desc.format, arch, cie_out)) {
+          if (dw_parse_fde(str8_substr(data, fde_desc.entry_range), fde_desc.format, dw_parse_cfi_cie_from_offset, cie_out, fde_out)) {
+            is_parsed = 1;
+          }
+        }
+      }
+    }
+  }
+
   return is_parsed;
 }
 

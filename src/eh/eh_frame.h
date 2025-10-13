@@ -4,6 +4,9 @@
 #ifndef EH_FRAME_H
 #define EH_FRAME_H
 
+////////////////////////////////
+//~ Format
+
 typedef U8 EH_PtrEnc;
 enum
 {
@@ -65,10 +68,48 @@ typedef struct EH_Augmentation
 } EH_Augmentation;
 
 ////////////////////////////////
+//~ Parser
 
-internal U64 eh_read_ptr(String8 frame_base, U64 off, EH_PtrCtx *ptr_ctx, EH_PtrEnc encoding, U64 *ptr_out);
-internal U64 eh_parse_aug_data(String8 aug_string, String8 aug_data, EH_PtrCtx *ptr_ctx, EH_Augmentation *aug_out);
-internal U64 eh_size_from_aug_data(String8 aug_string, String8 data, EH_PtrCtx *ptr_ctx);
+enum
+{
+  EH_CIE_Ext_AddrEnc,
+  EH_CIE_Ext_LSDAEnc,
+  EH_CIE_Ext_HandlerEnc,
+  EH_CIE_Ext_HandlerIp,
+} EH_CIE_Ext;
+
+typedef struct EH_FrameHdrEntry
+{
+  U64 addr;
+  U64 fde_offset;
+} EH_FrameHdrEntry;
+
+typedef struct EH_FrameHdr
+{
+  U8        version;
+  EH_PtrEnc eh_frame_ptr_enc;
+  EH_PtrEnc fde_count_enc;
+  EH_PtrEnc table_enc;
+  U64       field_byte_size;
+  U64       entry_byte_size;
+  U64       fde_count;
+  String8   table;
+} EH_FrameHdr;
+
+typedef struct EH_DecodePtrCtx
+{
+  EH_PtrEnc  addr_enc;
+  EH_PtrCtx *ptr_ctx;
+} EH_DecodePtrCtx;
+   
+////////////////////////////////
+
+internal U64         eh_parse_ptr(String8 frame_base, U64 off, EH_PtrCtx *ptr_ctx, EH_PtrEnc encoding, U64 *ptr_out);
+internal EH_FrameHdr eh_parse_frame_hdr(String8 data, U64 address_size, EH_PtrCtx *ptr_ctx);
+internal U64         eh_parse_aug_data(String8 aug_string, String8 aug_data, EH_PtrCtx *ptr_ctx, EH_Augmentation *aug_out);
+internal B32         eh_parse_cfi(String8 eh_frame, U64 fde_offset, Arch arch, EH_PtrCtx *ptr_ctx, struct DW_CIE *cie_out, struct DW_FDE *fde_out);
+internal U64         eh_find_nearest_fde(EH_FrameHdr header, EH_PtrCtx *ptr_ctx, U64 pc);
+internal String8     eh_frame_hdr_from_call_frame_info(Arena *arena, U64 fde_count, U64 *fde_offsets, struct DW_FDE *fde);
 
 ////////////////////////////////
 //~ Enum -> String

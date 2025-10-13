@@ -2237,7 +2237,8 @@ dw_dump_list_from_sections(Arena              *arena,
             String8 cfi_regs_str = {0};
             {
               String8List cfi_regs_list = {0};
-              for EachIndex(reg_idx, cfi_unwind->reg_count) {
+              U64 reg_count = dw_reg_count_from_arch(arch);
+              for EachIndex(reg_idx, reg_count) {
                 DW_CFI_Register *cfi_reg = &cfi_unwind->row->regs[reg_idx];
                 String8 rule_str = str8_lit("???");
                 switch (cfi_reg->rule) {

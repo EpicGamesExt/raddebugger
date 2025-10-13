@@ -1,10 +1,10 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal DW_CFA_Row *
-dw_make_cfa_row(Arena *arena, U64 reg_count)
+internal DW_CFI_Row *
+dw_make_cfi_row(Arena *arena, U64 reg_count)
 {
-  DW_CFA_Row *row = push_array(arena, DW_CFA_Row, 1);
+  DW_CFI_Row *row = push_array(arena, DW_CFI_Row, 1);
   row->regs = push_array(arena, DW_CFI_Register, reg_count);
   for EachIndex(reg_idx, reg_count) {
     row->regs[reg_idx].rule = DW_CFI_RegisterRule_SameValue;
@@ -12,12 +12,18 @@ dw_make_cfa_row(Arena *arena, U64 reg_count)
   return row;
 }
 
-internal DW_CFA_Row *
-dw_copy_cfa_row(Arena *arena, U64 reg_count, DW_CFA_Row *row)
+internal void
+dw_memcpy_cfi_row(DW_CFI_Row *dst, DW_CFI_Row *src, U64 reg_count)
 {
-  DW_CFA_Row *new_row = dw_make_cfa_row(arena, reg_count);
-  new_row->cfa = row->cfa;
-  MemoryCopyTyped(new_row->regs, row->regs, reg_count);
+  dst->cfa = src->cfa;
+  MemoryCopyTyped(dst->regs, src->regs, reg_count);
+}
+
+internal DW_CFI_Row *
+dw_copy_cfi_row(Arena *arena, DW_CFI_Row *row, U64 reg_count)
+{
+  DW_CFI_Row *new_row = dw_make_cfi_row(arena, reg_count);
+  dw_memcpy_cfi_row(new_row, row, reg_count);
   return new_row;
 }
 
@@ -35,19 +41,21 @@ dw_cfi_unwind_init(Arena        *arena,
   uw->insts     = dw_parse_cfa_inst_list(arena, fde->insts, cie->code_align_factor, cie->data_align_factor, decode_ptr_func, decode_ptr_ud);
   uw->cie       = cie;
   uw->fde       = fde;
-  uw->reg_count = dw_reg_count_from_arch(arch);
   uw->pc        = fde->pc_range.min;
   uw->arch      = arch;
+  uw->reg_count = dw_reg_count_from_arch(arch);
 
   // setup initial register rules
   DW_CFA_InstList initial_insts = dw_parse_cfa_inst_list(scratch.arena, cie->insts, cie->code_align_factor, cie->data_align_factor, decode_ptr_func, decode_ptr_ud);
-  uw->row       = dw_make_cfa_row(arena, uw->reg_count);
+  uw->row       = dw_make_cfi_row(arena, uw->reg_count);
   uw->curr_inst = initial_insts.first;
-  dw_cfi_next_row(arena, uw);
+  if (!dw_cfi_next_row(arena, uw)) {
+    AssertAlways(0 && "unable to interpret initial row instructions");
+  }
 
   // make first row from initial rules
   uw->initial_row = uw->row;
-  uw->row         = dw_copy_cfa_row(arena, uw->reg_count, uw->initial_row);
+  uw->row         = dw_copy_cfi_row(arena, uw->initial_row, uw->reg_count);
   uw->curr_inst   = uw->insts.first;
 
   scratch_end(scratch);
@@ -156,12 +164,12 @@ dw_cfi_next_row(Arena *arena, DW_CFI_Unwind *uw)
       
     // Row State Instructions
     case DW_CFA_RememberState: {
-      DW_CFA_Row *new_row = dw_copy_cfa_row(arena, uw->reg_count, uw->row);
+      DW_CFI_Row *new_row = dw_copy_cfi_row(arena, uw->row, uw->reg_count);
       SLLStackPush(uw->row, new_row);
     } break;
     case DW_CFA_RestoreState: {
       if (uw->row == 0) { goto exit; } // TODO: report error: unbalanced number of pushes and pops
-      DW_CFA_Row *free_row = uw->row;
+      DW_CFI_Row *free_row = uw->row;
       SLLStackPop(uw->row);
       SLLStackPush(uw->free_rows, free_row);
     } break;
@@ -183,16 +191,53 @@ exit:;
   return is_row_valid;
 }
 
+internal DW_CFI_Row *
+dw_cfi_row_from_pc(Arena *arena, Arch arch, DW_CIE *cie, DW_FDE *fde, DW_DecodePtr *decode_ptr_func, void *decode_ptr_ctx, U64 pc)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  B32            is_row_found = 0;
+  U64            reg_count    = dw_reg_count_from_arch(arch);
+  DW_CFI_Unwind *uw           = dw_cfi_unwind_init(scratch.arena, arch, cie, fde, decode_ptr_func, decode_ptr_ctx);
+  DW_CFI_Row    *row          = dw_copy_cfi_row(scratch.arena, uw->row, uw->reg_count);
+  U64            prev_pc      = uw->pc;
+  while (dw_cfi_next_row(scratch.arena, uw)) {
+    if (prev_pc <= pc && pc < uw->pc) {
+      is_row_found = 1;
+      break;
+    }
+    dw_memcpy_cfi_row(row, uw->row, uw->reg_count);
+    prev_pc = uw->pc;
+  }
+
+  // handle last row
+  if (!is_row_found) {
+    if (prev_pc <= pc && pc < uw->pc && contains_1u64(fde->pc_range, pc)) {
+      row = uw->row;
+      is_row_found = 1;
+    }
+  }
+
+  // copy out final row
+  DW_CFI_Row *result = 0;
+  if (is_row_found) {
+    result = dw_copy_cfi_row(arena, row, reg_count);
+  }
+
+  scratch_end(scratch);
+  return result;
+}
+
 internal DW_UnwindStatus
-dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
-                            DW_MemRead    *mem_read_func,  void *mem_read_ud,
-                            DW_RegRead    *reg_read_func,  void *reg_read_ud,
-                            DW_RegWrite   *reg_write_func, void *reg_write_ud)
+dw_cfi_apply_register_rules(Arch         arch,
+                            DW_CIE      *cie,
+                            DW_CFI_Row  *row,
+                            DW_MemRead  *mem_read_func,  void *mem_read_ud,
+                            DW_RegRead  *reg_read_func,  void *reg_read_ud,
+                            DW_RegWrite *reg_write_func, void *reg_write_ud)
 {
   Temp scratch = scratch_begin(0,0);
   DW_UnwindStatus unwind_status = DW_UnwindStatus_Ok;
-
-  DW_CFA_Row *row = uw->row;
 
   // establish CFA
   U64 cfa = 0;
@@ -201,7 +246,7 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
   case DW_CFA_Rule_RegOff: {
     // TODO: report error (invalid register read)
     U64 cfa_reg_value = 0;
-    U64 reg_size = dw_reg_size_from_code(uw->arch, row->cfa.reg);
+    U64 reg_size = dw_reg_size_from_code(arch, row->cfa.reg);
     AssertAlways(reg_size <= sizeof(cfa_reg_value));
     unwind_status = reg_read_func(row->cfa.reg, &cfa_reg_value, reg_size, reg_read_ud);
     if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
@@ -212,11 +257,12 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
   } break;
   }
 
-  U64   max_reg_size = dw_reg_max_size_from_arch(uw->arch);
+  U64   max_reg_size = dw_reg_max_size_from_arch(arch);
   void *reg_buffer   = push_array(scratch.arena, U8, max_reg_size);
 
-  for EachIndex(reg_idx, uw->reg_count) {
-    DW_CFI_Register *reg = &uw->row->regs[reg_idx];
+  U64 reg_count = dw_reg_count_from_arch(arch);
+  for EachIndex(reg_idx, reg_count) {
+    DW_CFI_Register *reg = &row->regs[reg_idx];
     switch (reg->rule) {
     case DW_CFI_RegisterRule_Undefined: {
       // TODO: ???
@@ -226,7 +272,7 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
     case DW_CFI_RegisterRule_Offset: {
       // read register value from memory
       U64 addr     = cfa + reg->n;
-      U64 reg_size = dw_reg_size_from_code(uw->arch, reg_idx);
+      U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
       unwind_status = mem_read_func(addr, reg_size, reg_buffer, mem_read_ud);
       if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
 
@@ -239,13 +285,13 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
       U64 reg_value = cfa + reg->n;
 
       // write register value to the thread context
-      U64 reg_size = dw_reg_size_from_code(uw->arch, reg_idx);
+      U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
       unwind_status = reg_write_func(reg_idx, &reg_value, reg_size, reg_write_ud);
       if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
     } break;
     case DW_CFI_RegisterRule_Register: {
       // read register value from another register
-      U64 reg_size = dw_reg_size_from_code(uw->arch, reg_idx);
+      U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
       unwind_status = reg_read_func(reg->n, reg_buffer, reg_size, reg_read_ud);
       if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
 
@@ -264,8 +310,10 @@ dw_cfi_apply_register_rules(DW_CFI_Unwind *uw,
     case DW_CFI_RegisterRule_Architectural: {
       NotImplemented;
     } break;
+    default: { InvalidPath; } break;
     }
   }
+
   
 exit:;
   scratch_end(scratch);
