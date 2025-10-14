@@ -553,10 +553,19 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       VMapRangeTask *next;
       U32 idx;
     };
+    typedef struct VMapFixupTask VMapFixupTask;
+    struct VMapFixupTask
+    {
+      VMapFixupTask *next;
+      VMapFixupTask *prev;
+      U64 idx;
+    };
     Rng1U64 range = lane_range(count);
     RDI_U64 lane_vmap_count_cap = dim_1u64(range);
     RDI_VMapEntry *lane_vmap = push_array(arena, RDI_VMapEntry, lane_vmap_count_cap);
     VMapRangeTask *top_range_task = 0;
+    VMapFixupTask *first_fixup_task = 0;
+    VMapFixupTask *last_fixup_task = 0;
     RDI_U64 lane_vmap_count_actual = 0;
     ProfScope("do vmap entry generation for portions of the keys array")
     {
@@ -634,13 +643,18 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           final_idx = top_range_task->idx;
         }
         
-        // rjf: if final is different from initial - emit new vmap entry
+        // rjf: failed pop -> rely on latter pass, need cross-lane information. remember this spot to fixup
         if(failed_pop)
         {
+          VMapFixupTask *fixup_task = push_array(scratch.arena, VMapFixupTask, 1);
+          fixup_task->idx = (U64)(lane_vmap_ptr - lane_vmap);
+          DLLPushBack(first_fixup_task, last_fixup_task, fixup_task);
           lane_vmap_ptr->voff = voff;
           lane_vmap_ptr->idx = 0xffffffff;
           lane_vmap_ptr += 1;
         }
+        
+        // rjf: if final is different from initial - emit new vmap entry
         else if(final_idx != initial_idx)
         {
           lane_vmap_ptr->voff = voff;
@@ -653,42 +667,64 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     
     //- rjf: collect all per-lane artifacts
     RDI_U64 *lane_vmaps_counts = 0;
+    RDI_VMapEntry **lane_vmaps = 0;
     VMapRangeTask **lane_leftover_tasks = 0;
+    VMapFixupTask **lane_first_fixup_tasks = 0;
+    VMapFixupTask **lane_last_fixup_tasks = 0;
     ProfScope("collect all lane vmap counts")
     {
       if(lane_idx() == 0)
       {
         lane_vmaps_counts = push_array(scratch.arena, RDI_U64, lane_count());
-        lane_leftover_tasks = push_array(arena, VMapRangeTask *, lane_count());
+        lane_vmaps = push_array(scratch.arena, RDI_VMapEntry *, lane_count());
+        lane_leftover_tasks = push_array(scratch.arena, VMapRangeTask *, lane_count());
+        lane_first_fixup_tasks = push_array(scratch.arena, VMapFixupTask *, lane_count());
+        lane_last_fixup_tasks = push_array(scratch.arena, VMapFixupTask *, lane_count());
       }
       lane_sync_u64(&lane_vmaps_counts, 0);
+      lane_sync_u64(&lane_vmaps, 0);
       lane_sync_u64(&lane_leftover_tasks, 0);
+      lane_sync_u64(&lane_first_fixup_tasks, 0);
+      lane_sync_u64(&lane_last_fixup_tasks, 0);
       lane_vmaps_counts[lane_idx()] = lane_vmap_count_actual;
+      lane_vmaps[lane_idx()] = lane_vmap;
       lane_leftover_tasks[lane_idx()] = top_range_task;
+      lane_first_fixup_tasks[lane_idx()] = first_fixup_task;
+      lane_last_fixup_tasks[lane_idx()] = last_fixup_task;
     }
     lane_sync();
     
-    //- rjf: apply leftovers to per-lane vmaps
-    if(lane_idx() > 0)
+    //- rjf: apply fixups to per-lane vmaps
+    if(lane_idx() == 0)
     {
-      VMapRangeTask *top_leftover_task = lane_leftover_tasks[lane_idx()-1];
-      for EachIndex(idx, lane_vmap_count_actual)
+      VMapRangeTask *top_range_task = 0;
+      for EachIndex(l_idx, lane_count())
       {
-        if(!top_leftover_task)
+        VMapFixupTask *first_fixup = lane_first_fixup_tasks[l_idx];
+        VMapFixupTask *last_fixup = lane_first_fixup_tasks[l_idx];
+        for(VMapFixupTask *f = first_fixup; f != 0; f = f->next)
         {
-          break;
-        }
-        if(lane_vmap[idx].idx == 0xffffffff)
-        {
-          SLLStackPop(top_leftover_task);
-          if(top_leftover_task)
+          if(top_range_task)
           {
-            lane_vmap[idx].idx = top_leftover_task->idx;
+            SLLStackPop(top_range_task);
+          }
+          if(top_range_task)
+          {
+            lane_vmaps[l_idx][f->idx].idx = top_range_task->idx;
+          }
+        }
+        for(VMapRangeTask *lot = lane_leftover_tasks[l_idx]; lot != 0; lot = lot->next)
+        {
+          if(lot->next == 0)
+          {
+            lot->next = top_range_task;
+            top_range_task = lane_leftover_tasks[l_idx];
+            break;
           }
         }
       }
     }
-    lane_idx();
+    lane_sync();
     
     //- rjf: lay out all lane vmaps into single range
     RDI_U64 *lane_vmaps_offs = 0;
