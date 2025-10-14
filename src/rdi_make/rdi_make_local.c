@@ -169,215 +169,418 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     lane_sync();
     
     ////////////////////////////
-    //- rjf: sort vmap records
+    //- rjf: gather unsorted global vmap records
     //
-    ProfScope("sort vmap records")
+    VMapRecord *global_vmap_records = 0;
+    U64 global_vmap_records_count = 0;
+    ProfScope("gather unsorted global vmap records")
     {
-      //- rjf: set up constants
-      U64 bytes_per_digit = 1;
-      U64 num_possible_values_per_digit = 1<<(bytes_per_digit*8);
-      U64 digits_count = sizeof(((VMapRecord *)0)->key)/bytes_per_digit;
-      
-      //- rjf: set up swap buffer / lane counters
-      U64 records_count = scope_vmap_records_count;
-      VMapRecord *records = scope_vmap_records;
-      VMapRecord *records__swap = 0;
-      U32 **lane_digit_counts = 0;
-      U32 **lane_digit_offs = 0;
+      //- rjf: calculate per-lane-chunk counts
+      U64 *lane_chunk_range_counts = 0;
       if(lane_idx() == 0)
       {
-        records__swap = push_array_no_zero(scratch.arena, VMapRecord, records_count);
-        lane_digit_counts = push_array_no_zero(scratch.arena, U32 *, lane_count());
-        lane_digit_offs = push_array_no_zero(scratch.arena, U32 *, lane_count());
+        lane_chunk_range_counts = push_array(scratch.arena, U64, params->global_variables.chunk_count * lane_count());
       }
-      lane_sync_u64(&records__swap, 0);
-      lane_sync_u64(&lane_digit_counts, 0);
-      lane_sync_u64(&lane_digit_offs, 0);
-      lane_digit_counts[lane_idx()] = push_array_no_zero(scratch.arena, U32, num_possible_values_per_digit);
-      lane_digit_offs[lane_idx()] = push_array_no_zero(scratch.arena, U32, num_possible_values_per_digit);
-      
-      //- rjf: do all sort passes
+      lane_sync_u64(&lane_chunk_range_counts, 0);
       {
-        VMapRecord *src = records;
-        VMapRecord *dst = records__swap;
-        for EachIndex(digit_idx, digits_count)
+        U64 chunk_idx = 0;
+        for EachNode(n, RDIM_SymbolChunkNode, params->global_variables.first)
         {
-          // rjf: count digit value occurrences per-lane
+          U64 slot_idx = lane_idx()*params->global_variables.chunk_count + chunk_idx;
+          Rng1U64 range = lane_range(n->count);
+          lane_chunk_range_counts[slot_idx] += dim_1u64(range);
+          chunk_idx += 1;
+        }
+      }
+      lane_sync();
+      
+      //- rjf: calculate per-lane-chunk offsets
+      U64 *lane_chunk_range_offs = 0;
+      U64 total_range_count = 0;
+      if(lane_idx() == 0)
+      {
+        lane_chunk_range_offs = push_array(scratch.arena, U64, params->global_variables.chunk_count * lane_count());
+        U64 off = 0;
+        U64 chunk_idx = 0;
+        for EachNode(n, RDIM_SymbolChunkNode, params->global_variables.first)
+        {
+          for EachIndex(l_idx, lane_count())
           {
-            U32 *digit_counts = lane_digit_counts[lane_idx()];
-            MemoryZero(digit_counts, sizeof(digit_counts[0])*num_possible_values_per_digit);
-            Rng1U64 range = lane_range(records_count);
-            for EachInRange(idx, range)
-            {
-              VMapRecord *rec = &src[idx];
-              U16 digit_value = (U16)rec->key.digits[digit_idx];
-              digit_counts[digit_value] += 1;
-            }
+            U64 slot_idx = l_idx*params->global_variables.chunk_count + chunk_idx;
+            lane_chunk_range_offs[slot_idx] = off;
+            off += lane_chunk_range_counts[slot_idx];
           }
-          lane_sync();
-          
-          // rjf: compute thread * digit value *relative* offset table
+          chunk_idx += 1;
+        }
+        total_range_count = off;
+      }
+      lane_sync_u64(&lane_chunk_range_offs, 0);
+      lane_sync_u64(&total_range_count, 0);
+      
+      //- rjf: allocate records
+      if(lane_idx() == 0)
+      {
+        global_vmap_records_count = total_range_count;
+        global_vmap_records = push_array_no_zero(scratch.arena, VMapRecord, global_vmap_records_count);
+      }
+      lane_sync_u64(&global_vmap_records, 0);
+      lane_sync_u64(&global_vmap_records_count, 0);
+      
+      //- rjf: fill records
+      {
+        U64 chunk_idx = 0;
+        for EachNode(n, RDIM_SymbolChunkNode, params->global_variables.first)
+        {
+          U64 slot_idx = lane_idx()*params->global_variables.chunk_count + chunk_idx;
+          U64 off = lane_chunk_range_offs[slot_idx];
+          Rng1U64 range = lane_range(n->count);
+          for EachInRange(n_idx, range)
           {
-            Rng1U64 range = lane_range(num_possible_values_per_digit);
-            for EachInRange(value_idx, range)
-            {
-              U64 layout_off = 0;
-              for EachIndex(lane_idx, lane_count())
-              {
-                lane_digit_offs[lane_idx][value_idx] = layout_off;
-                layout_off += lane_digit_counts[lane_idx][value_idx];
-              }
-            }
+            RDI_U32 global_idx  = (RDI_U32)rdim_idx_from_symbol(&n->v[n_idx]); // TODO(rjf): @u64_to_u32
+            RDI_U32 global_size = (RDI_U32)(n->v[n_idx].type ? n->v[n_idx].type->byte_size : 1);
+            RDI_U64 global_voff = n->v[n_idx].offset;
+            global_vmap_records[off].key.voff = global_voff;
+            global_vmap_records[off].key.negative_size = -global_size;
+            global_vmap_records[off].idx = global_idx;
+            off += 1;
           }
-          lane_sync();
-          
-          // rjf: convert relative offsets -> absolute offsets
-          if(lane_idx() == 0)
-          {
-            U64 last_off = 0;
-            U64 num_of_nonzero_digit = 0;
-            for EachIndex(value_idx, num_possible_values_per_digit)
-            {
-              for EachIndex(lane_idx, lane_count())
-              {
-                lane_digit_offs[lane_idx][value_idx] += last_off;
-              }
-              last_off = lane_digit_offs[lane_count()-1][value_idx] + lane_digit_counts[lane_count()-1][value_idx];
-            }
-            // NOTE(rjf): required that: (last_off == element_count)
-          }
-          lane_sync();
-          
-          // rjf: move
-          {
-            U32 *lane_digit_offsets = lane_digit_offs[lane_idx()];
-            Rng1U64 range = lane_range(records_count);
-            for EachInRange(idx, range)
-            {
-              VMapRecord *src_rec = &src[idx];
-              U16 digit_value = (U16)src_rec->key.digits[digit_idx];
-              U64 dst_off = lane_digit_offsets[digit_value];
-              lane_digit_offsets[digit_value] += 1;
-              MemoryCopyStruct(&dst[dst_off], src_rec);
-            }
-          }
-          lane_sync();
-          
-          // rjf: swap source with destination for next pass
-          Swap(VMapRecord *, src, dst);
+          chunk_idx += 1;
         }
       }
     }
     lane_sync();
     
     ////////////////////////////
-    //- rjf: produce vmap
+    //- rjf: gather unsorted unit vmap records
     //
-    RDI_VMapEntry *vmap = 0;
-    RDI_U64 vmap_count = 0;
+    VMapRecord *unit_vmap_records = 0;
+    U64 unit_vmap_records_count = 0;
+    ProfScope("gather unsorted unit vmap records")
     {
-      U64 records_count = scope_vmap_records_count;
-      VMapRecord *records = scope_vmap_records;
-      
-      //- rjf: allocate vmap
-      RDI_U64 vmap_count__cap = records_count*2 + 1;
+      //- rjf: calculate per-lane-chunk counts
+      U64 *lane_chunk_range_counts = 0;
       if(lane_idx() == 0)
       {
-        vmap = push_array(arena, RDI_VMapEntry, vmap_count__cap);
+        lane_chunk_range_counts = push_array(scratch.arena, U64, params->units.chunk_count * lane_count());
       }
-      lane_sync_u64(&vmap, 0);
+      lane_sync_u64(&lane_chunk_range_counts, 0);
+      {
+        U64 chunk_idx = 0;
+        for EachNode(n, RDIM_UnitChunkNode, params->units.first)
+        {
+          U64 slot_idx = lane_idx()*params->units.chunk_count + chunk_idx;
+          Rng1U64 range = lane_range(n->count);
+          for EachInRange(n_idx, range)
+          {
+            lane_chunk_range_counts[slot_idx] += n->v[n_idx].voff_ranges.total_count;
+          }
+          chunk_idx += 1;
+        }
+      }
+      lane_sync();
       
-      //- rjf: bake
+      //- rjf: calculate per-lane-chunk offsets
+      U64 *lane_chunk_range_offs = 0;
+      U64 total_range_count = 0;
       if(lane_idx() == 0)
       {
-        typedef struct RangeNode RangeNode;
-        struct RangeNode
+        lane_chunk_range_offs = push_array(scratch.arena, U64, params->units.chunk_count * lane_count());
+        U64 off = 0;
+        U64 chunk_idx = 0;
+        for EachNode(n, RDIM_UnitChunkNode, params->units.first)
         {
-          RangeNode *next;
-          Rng1U64 voff_range;
-          U64 idx;
-        };
-        RDI_VMapEntry *vmap_ptr = vmap;
-        RDI_VMapEntry *vmap_opl = vmap + vmap_count__cap;
-        RangeNode *top_range = 0;
-        RangeNode *free_range = 0;
-        U64 last_recorded_voff = 0;
-        for(U64 record_idx = 0; record_idx <= records_count; record_idx += 1)
-        {
-          // rjf: get next voff range and index
-          Rng1U64 voff_range = r1u64(max_U64, max_U64);
-          U64 idx = 0;
-          if(record_idx < records_count)
+          for EachIndex(l_idx, lane_count())
           {
-            VMapRecord *record = &records[record_idx];
-            voff_range = r1u64(record->key.voff, record->key.voff + -record->key.negative_size);
-            idx = (U64)record->idx;
+            U64 slot_idx = l_idx*params->units.chunk_count + chunk_idx;
+            lane_chunk_range_offs[slot_idx] = off;
+            off += lane_chunk_range_counts[slot_idx];
           }
-          
-          // rjf: pop nodes we've advanced past
-          {
-            for(RangeNode *n = top_range, *next = 0; n != 0; n = next)
-            {
-              next = n->next;
-              if(n->voff_range.max <= voff_range.min)
-              {
-                SLLStackPop(top_range);
-                SLLStackPush(free_range, n);
-                if(n->voff_range.max != last_recorded_voff)
-                {
-                  vmap_ptr += 1;
-                }
-                vmap_ptr->voff = n->voff_range.max;
-                vmap_ptr->idx = next ? next->idx : 0;
-                last_recorded_voff = vmap_ptr->voff;
-              }
-              else
-              {
-                break;
-              }
-            }
-          }
-          
-          // rjf: push this node
-          if(record_idx < records_count)
-          {
-            RangeNode *r = free_range;
-            if(r)
-            {
-              SLLStackPop(free_range);
-            }
-            else
-            {
-              r = push_array(scratch.arena, RangeNode, 1);
-            }
-            SLLStackPush(top_range, r);
-            r->voff_range = voff_range;
-            r->idx = idx;
-            if(voff_range.min != last_recorded_voff || (vmap_ptr->idx != idx && vmap_ptr->idx != 0))
-            {
-              vmap_ptr += 1;
-            }
-            vmap_ptr->voff = voff_range.min;
-            vmap_ptr->idx = idx;
-            last_recorded_voff = voff_range.min;
-          }
+          chunk_idx += 1;
         }
-        if(last_recorded_voff != 0)
-        {
-          vmap_ptr += 1;
-        }
-        vmap_count = (vmap_ptr - vmap);
+        total_range_count = off;
       }
-      lane_sync_u64(&vmap_count, 0);
+      lane_sync_u64(&lane_chunk_range_offs, 0);
+      lane_sync_u64(&total_range_count, 0);
+      
+      //- rjf: allocate records
+      if(lane_idx() == 0)
+      {
+        unit_vmap_records_count = total_range_count;
+        unit_vmap_records = push_array_no_zero(scratch.arena, VMapRecord, unit_vmap_records_count);
+      }
+      lane_sync_u64(&unit_vmap_records, 0);
+      lane_sync_u64(&unit_vmap_records_count, 0);
+      
+      //- rjf: fill records
+      {
+        U64 chunk_idx = 0;
+        for EachNode(n, RDIM_UnitChunkNode, params->units.first)
+        {
+          U64 slot_idx = lane_idx()*params->units.chunk_count + chunk_idx;
+          U64 off = lane_chunk_range_offs[slot_idx];
+          Rng1U64 range = lane_range(n->count);
+          for EachInRange(n_idx, range)
+          {
+            RDI_U32 unit_idx = (RDI_U32)rdim_idx_from_unit(&n->v[n_idx]); // TODO(rjf): @u64_to_u32
+            for EachNode(rng_n, RDIM_Rng1U64ChunkNode, n->v[n_idx].voff_ranges.first)
+            {
+              for EachIndex(rng_n_idx, rng_n->count)
+              {
+                unit_vmap_records[off].key.voff = rng_n->v[rng_n_idx].min;
+                unit_vmap_records[off].key.negative_size = -(RDI_U32)(rng_n->v[rng_n_idx].max - rng_n->v[rng_n_idx].min);
+                unit_vmap_records[off].idx = unit_idx;
+                off += 1;
+              }
+            }
+          }
+          chunk_idx += 1;
+        }
+      }
     }
     lane_sync();
     
+    ////////////////////////////
+    //- rjf: sort & bake all vmaps
+    //
+    struct
+    {
+      String8 name;
+      VMapRecord *records;
+      U64 records_count;
+      RDI_VMapEntry **vmap_out;
+      U32 *vmap_count_out;
+    }
+    vmap_tasks[] =
+    {
+      {str8_lit_comp("scopes"),  scope_vmap_records,   scope_vmap_records_count,  &rdim_shared->baked_scope_vmap.vmap.vmap,  &rdim_shared->baked_scope_vmap.vmap.count},
+      {str8_lit_comp("globals"), global_vmap_records,  global_vmap_records_count, &rdim_shared->baked_global_vmap.vmap.vmap, &rdim_shared->baked_global_vmap.vmap.count},
+      {str8_lit_comp("units"),   unit_vmap_records,    unit_vmap_records_count,   &rdim_shared->baked_unit_vmap.vmap.vmap,   &rdim_shared->baked_unit_vmap.vmap.count},
+    };
+    ProfScope("sort & bake all vmaps")
+    {
+      for EachElement(vmap_task_idx, vmap_tasks) ProfScope("sort & bake vmap for %.*s", str8_varg(vmap_tasks[vmap_task_idx].name))
+      {
+        VMapRecord *records = vmap_tasks[vmap_task_idx].records;
+        U64 records_count = vmap_tasks[vmap_task_idx].records_count;
+        
+        ////////////////////////
+        //- rjf: sort
+        //
+        ProfScope("sort")
+        {
+          //- rjf: set up constants
+          U64 bytes_per_digit = 1;
+          U64 num_possible_values_per_digit = 1<<(bytes_per_digit*8);
+          U64 digits_count = sizeof(((VMapRecord *)0)->key)/bytes_per_digit;
+          
+          //- rjf: set up swap buffer / lane counters
+          VMapRecord *records__swap = 0;
+          U32 **lane_digit_counts = 0;
+          U32 **lane_digit_offs = 0;
+          if(lane_idx() == 0)
+          {
+            records__swap = push_array_no_zero(scratch.arena, VMapRecord, records_count);
+            lane_digit_counts = push_array_no_zero(scratch.arena, U32 *, lane_count());
+            lane_digit_offs = push_array_no_zero(scratch.arena, U32 *, lane_count());
+          }
+          lane_sync_u64(&records__swap, 0);
+          lane_sync_u64(&lane_digit_counts, 0);
+          lane_sync_u64(&lane_digit_offs, 0);
+          lane_digit_counts[lane_idx()] = push_array_no_zero(scratch.arena, U32, num_possible_values_per_digit);
+          lane_digit_offs[lane_idx()] = push_array_no_zero(scratch.arena, U32, num_possible_values_per_digit);
+          
+          //- rjf: do all sort passes
+          {
+            VMapRecord *src = records;
+            VMapRecord *dst = records__swap;
+            for EachIndex(digit_idx, digits_count)
+            {
+              // rjf: count digit value occurrences per-lane
+              {
+                U32 *digit_counts = lane_digit_counts[lane_idx()];
+                MemoryZero(digit_counts, sizeof(digit_counts[0])*num_possible_values_per_digit);
+                Rng1U64 range = lane_range(records_count);
+                for EachInRange(idx, range)
+                {
+                  VMapRecord *rec = &src[idx];
+                  U16 digit_value = (U16)rec->key.digits[digit_idx];
+                  digit_counts[digit_value] += 1;
+                }
+              }
+              lane_sync();
+              
+              // rjf: compute thread * digit value *relative* offset table
+              {
+                Rng1U64 range = lane_range(num_possible_values_per_digit);
+                for EachInRange(value_idx, range)
+                {
+                  U64 layout_off = 0;
+                  for EachIndex(lane_idx, lane_count())
+                  {
+                    lane_digit_offs[lane_idx][value_idx] = layout_off;
+                    layout_off += lane_digit_counts[lane_idx][value_idx];
+                  }
+                }
+              }
+              lane_sync();
+              
+              // rjf: convert relative offsets -> absolute offsets
+              if(lane_idx() == 0)
+              {
+                U64 last_off = 0;
+                U64 num_of_nonzero_digit = 0;
+                for EachIndex(value_idx, num_possible_values_per_digit)
+                {
+                  for EachIndex(lane_idx, lane_count())
+                  {
+                    lane_digit_offs[lane_idx][value_idx] += last_off;
+                  }
+                  last_off = lane_digit_offs[lane_count()-1][value_idx] + lane_digit_counts[lane_count()-1][value_idx];
+                }
+                // NOTE(rjf): required that: (last_off == element_count)
+              }
+              lane_sync();
+              
+              // rjf: move
+              {
+                U32 *lane_digit_offsets = lane_digit_offs[lane_idx()];
+                Rng1U64 range = lane_range(records_count);
+                for EachInRange(idx, range)
+                {
+                  VMapRecord *src_rec = &src[idx];
+                  U16 digit_value = (U16)src_rec->key.digits[digit_idx];
+                  U64 dst_off = lane_digit_offsets[digit_value];
+                  lane_digit_offsets[digit_value] += 1;
+                  MemoryCopyStruct(&dst[dst_off], src_rec);
+                }
+              }
+              lane_sync();
+              
+              // rjf: swap source with destination for next pass
+              Swap(VMapRecord *, src, dst);
+            }
+          }
+        }
+        lane_sync();
+        
+        ////////////////////////
+        //- rjf: bake
+        //
+        RDI_VMapEntry *vmap = 0;
+        RDI_U64 vmap_count = 0;
+        {
+          //- rjf: allocate vmap
+          RDI_U64 vmap_count__cap = records_count*2 + 1;
+          if(lane_idx() == 0)
+          {
+            vmap = push_array(arena, RDI_VMapEntry, vmap_count__cap);
+          }
+          lane_sync_u64(&vmap, 0);
+          
+          //- rjf: bake
+          if(lane_idx() == 0)
+          {
+            typedef struct RangeNode RangeNode;
+            struct RangeNode
+            {
+              RangeNode *next;
+              Rng1U64 voff_range;
+              U64 idx;
+            };
+            RDI_VMapEntry *vmap_ptr = vmap;
+            RDI_VMapEntry *vmap_opl = vmap + vmap_count__cap;
+            RangeNode *top_range = 0;
+            RangeNode *free_range = 0;
+            U64 last_recorded_voff = 0;
+            for(U64 record_idx = 0; record_idx <= records_count; record_idx += 1)
+            {
+              // rjf: get next voff range and index
+              Rng1U64 voff_range = r1u64(max_U64, max_U64);
+              U64 idx = 0;
+              if(record_idx < records_count)
+              {
+                VMapRecord *record = &records[record_idx];
+                voff_range = r1u64(record->key.voff, record->key.voff + -record->key.negative_size);
+                idx = (U64)record->idx;
+              }
+              
+              // rjf: pop nodes we've advanced past
+              {
+                for(RangeNode *n = top_range, *next = 0; n != 0; n = next)
+                {
+                  next = n->next;
+                  if(n->voff_range.max <= voff_range.min)
+                  {
+                    SLLStackPop(top_range);
+                    SLLStackPush(free_range, n);
+                    if(n->voff_range.max != last_recorded_voff)
+                    {
+                      vmap_ptr += 1;
+                    }
+                    vmap_ptr->voff = n->voff_range.max;
+                    vmap_ptr->idx = next ? next->idx : 0;
+                    last_recorded_voff = vmap_ptr->voff;
+                  }
+                  else
+                  {
+                    break;
+                  }
+                }
+              }
+              
+              // rjf: push this node
+              if(record_idx < records_count)
+              {
+                RangeNode *r = free_range;
+                if(r)
+                {
+                  SLLStackPop(free_range);
+                }
+                else
+                {
+                  r = push_array(scratch.arena, RangeNode, 1);
+                }
+                SLLStackPush(top_range, r);
+                r->voff_range = voff_range;
+                r->idx = idx;
+                if(voff_range.min != last_recorded_voff || (vmap_ptr->idx != idx && vmap_ptr->idx != 0))
+                {
+                  vmap_ptr += 1;
+                }
+                vmap_ptr->voff = voff_range.min;
+                vmap_ptr->idx = idx;
+                last_recorded_voff = voff_range.min;
+              }
+            }
+            if(last_recorded_voff != 0)
+            {
+              vmap_ptr += 1;
+            }
+            vmap_count = (vmap_ptr - vmap);
+          }
+          lane_sync_u64(&vmap_count, 0);
+        }
+        lane_sync();
+        
+        ////////////////////////
+        //- rjf: store
+        //
+        if(lane_idx() == 0)
+        {
+          vmap_tasks[vmap_task_idx].vmap_out[0] = vmap;
+          vmap_tasks[vmap_task_idx].vmap_count_out[0] = vmap_count;
+        }
+      }
+    }
+    
     scratch_end(scratch);
   }
+  lane_sync();
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage gather unsorted vmap keys/markers
   //
+#if 0
   ProfScope("gather unsorted vmap keys/markers")
   {
     //- rjf: gather scope vmap keys/markers
@@ -553,10 +756,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
   }
   lane_sync();
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage sort all vmap keys
   //
+#if 0
   ProfScope("sort all vmap keys")
   {
     // rjf: set up
@@ -666,10 +871,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
   }
   lane_sync();
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake all vmaps
   //
+#if 0
   ProfScope("bake all vmaps")
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -850,6 +1057,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     scratch_end(scratch);
   }
   lane_sync();
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage build interned path tree
