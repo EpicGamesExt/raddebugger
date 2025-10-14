@@ -539,7 +539,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake all vmaps (NEW)
   //
-#if 0
+#if 1
   ProfScope("bake all vmaps (NEW)")
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -695,6 +695,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     lane_sync();
     
     //- rjf: apply fixups to per-lane vmaps
+#if 0
     if(lane_idx() == 0)
     {
       VMapRangeTask *top_range_task = 0;
@@ -725,6 +726,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       }
     }
     lane_sync();
+#endif
     
     //- rjf: lay out all lane vmaps into single range
     RDI_U64 *lane_vmaps_offs = 0;

@@ -76,7 +76,8 @@ typedef struct D_TrapNet D_TrapNet;
 struct D_TrapNet
 {
   CTRL_TrapList traps;
-  B32 good;
+  B32 good_line_info;
+  B32 good_read;
 };
 
 ////////////////////////////////
