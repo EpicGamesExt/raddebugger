@@ -3676,8 +3676,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   switch(arch)
                   {
                     default:{}break;
-                    case RDI_Arch_X86:{is_stack_reg = (cv_reg == CV_Regx86_ESP);}break;
-                    case RDI_Arch_X64:{is_stack_reg = (cv_reg == CV_Regx64_RSP);}break;
+                    case RDI_Arch_X86:{is_stack_reg = (cv_reg == CV_Regx86_ESP || cv_reg == CV_Regx86_EBP);}break;
+                    case RDI_Arch_X64:{is_stack_reg = (cv_reg == CV_Regx64_RSP || cv_reg == CV_Regx64_RBP);}break;
                   }
                   if(is_stack_reg)
                   {
