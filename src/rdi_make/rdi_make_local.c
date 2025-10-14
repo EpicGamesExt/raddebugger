@@ -59,9 +59,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: @rdim_bake_stage bake vmaps (NEW)
+  //- rjf: @rdim_bake_stage bake vmaps
   //
-  ProfScope("bake vmaps (NEW)")
+  ProfScope("bake vmaps")
   {
     Temp scratch = scratch_begin(&arena, 1);
 #pragma pack(push, 1)
