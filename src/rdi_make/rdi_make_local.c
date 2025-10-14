@@ -446,7 +446,6 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           // * we must process _all_ of the changes that apply at this voff before moving on
           //
           RDI_U64 voff = key_ptr->key;
-          
           for(;key_ptr < key_opl && key_ptr->key == voff; key_ptr += 1)
           {
             RDIM_VMapMarker *marker = (RDIM_VMapMarker*)key_ptr->val;
@@ -536,6 +535,219 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     scratch_end(scratch);
   }
   lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage bake all vmaps (NEW)
+  //
+#if 0
+  ProfScope("bake all vmaps (NEW)")
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    RDI_U64 count = rdim_shared->scope_vmap_count;
+    RDIM_SortKey *keys = rdim_shared->scope_vmap_keys;
+    
+    //- rjf: do vmap entry generation for portions of the keys array
+    typedef struct VMapRangeTask VMapRangeTask;
+    struct VMapRangeTask
+    {
+      VMapRangeTask *next;
+      U32 idx;
+    };
+    Rng1U64 range = lane_range(count);
+    RDI_U64 lane_vmap_count_cap = dim_1u64(range);
+    RDI_VMapEntry *lane_vmap = push_array(arena, RDI_VMapEntry, lane_vmap_count_cap);
+    VMapRangeTask *top_range_task = 0;
+    RDI_U64 lane_vmap_count_actual = 0;
+    ProfScope("do vmap entry generation for portions of the keys array")
+    {
+      VMapRangeTask *free_range_task = 0;
+      RDI_VMapEntry *lane_vmap_ptr = lane_vmap;
+      RDIM_SortKey *key_ptr = keys + range.min;
+      RDIM_SortKey *key_opl = keys + range.max;
+      for(;key_ptr < key_opl;)
+      {
+        // rjf: get initial range index from range task stack
+        RDI_U32 initial_idx = (RDI_U32)0xffffffff;
+        if(top_range_task != 0)
+        {
+          initial_idx = top_range_task->idx;
+        }
+        
+        // rjf: update range task stack
+        //
+        // * we must process _all_ of the changes that apply at this voff before moving on
+        //
+        RDI_U64 voff = key_ptr->key;
+        B32 failed_pop = 0;
+        for(;key_ptr < key_opl && key_ptr->key == voff && !failed_pop; key_ptr += 1)
+        {
+          RDIM_VMapMarker *marker = (RDIM_VMapMarker *)key_ptr->val;
+          RDI_U32 idx = marker->idx;
+          
+          // rjf: range begin -> push to stack
+          if(marker->begin_range)
+          {
+            VMapRangeTask *task = free_range_task;
+            if(task != 0)
+            {
+              RDIM_SLLStackPop(free_range_task);
+            }
+            else
+            {
+              task = rdim_push_array(scratch.arena, VMapRangeTask, 1);
+            }
+            RDIM_SLLStackPush(top_range_task, task);
+            task->idx = idx;
+          }
+          
+          // rjf: range ending -> pop matching node from stack (not always the top)
+          else
+          {
+            VMapRangeTask **ptr_in = &top_range_task;
+            VMapRangeTask *match = 0;
+            for(VMapRangeTask *node = top_range_task; node != 0;)
+            {
+              if(node->idx == idx)
+              {
+                match = node;
+                break;
+              }
+              ptr_in = &node->next;
+              node = node->next;
+            }
+            if(match != 0)
+            {
+              *ptr_in = match->next;
+              RDIM_SLLStackPush(free_range_task, match);
+            }
+            else
+            {
+              failed_pop = 1;
+            }
+          }
+        }
+        
+        // rjf: get final map state from tracker stack
+        RDI_U32 final_idx = 0;
+        if(top_range_task != 0)
+        {
+          final_idx = top_range_task->idx;
+        }
+        
+        // rjf: if final is different from initial - emit new vmap entry
+        if(failed_pop)
+        {
+          lane_vmap_ptr->voff = voff;
+          lane_vmap_ptr->idx = 0xffffffff;
+          lane_vmap_ptr += 1;
+        }
+        else if(final_idx != initial_idx)
+        {
+          lane_vmap_ptr->voff = voff;
+          lane_vmap_ptr->idx = final_idx;
+          lane_vmap_ptr += 1;
+        }
+      }
+      lane_vmap_count_actual = (lane_vmap_ptr - lane_vmap);
+    }
+    
+    //- rjf: collect all per-lane artifacts
+    RDI_U64 *lane_vmaps_counts = 0;
+    VMapRangeTask **lane_leftover_tasks = 0;
+    ProfScope("collect all lane vmap counts")
+    {
+      if(lane_idx() == 0)
+      {
+        lane_vmaps_counts = push_array(scratch.arena, RDI_U64, lane_count());
+        lane_leftover_tasks = push_array(arena, VMapRangeTask *, lane_count());
+      }
+      lane_sync_u64(&lane_vmaps_counts, 0);
+      lane_sync_u64(&lane_leftover_tasks, 0);
+      lane_vmaps_counts[lane_idx()] = lane_vmap_count_actual;
+      lane_leftover_tasks[lane_idx()] = top_range_task;
+    }
+    lane_sync();
+    
+    //- rjf: apply leftovers to per-lane vmaps
+    if(lane_idx() > 0)
+    {
+      VMapRangeTask *top_leftover_task = lane_leftover_tasks[lane_idx()-1];
+      for EachIndex(idx, lane_vmap_count_actual)
+      {
+        if(!top_leftover_task)
+        {
+          break;
+        }
+        if(lane_vmap[idx].idx == 0xffffffff)
+        {
+          SLLStackPop(top_leftover_task);
+          if(top_leftover_task)
+          {
+            lane_vmap[idx].idx = top_leftover_task->idx;
+          }
+        }
+      }
+    }
+    lane_idx();
+    
+    //- rjf: lay out all lane vmaps into single range
+    RDI_U64 *lane_vmaps_offs = 0;
+    RDI_U64 lane_vmap_count_total = 0;
+    ProfScope("lay out all lane vmaps into single range")
+    {
+      if(lane_idx() == 0)
+      {
+        lane_vmaps_offs = push_array(scratch.arena, RDI_U64, lane_count());
+        RDI_U64 off = 0;
+        for EachIndex(lidx, lane_count())
+        {
+          lane_vmaps_offs[lidx] = off;
+          off += lane_vmaps_counts[lidx];
+        }
+        lane_vmap_count_total = off;
+      }
+    }
+    lane_sync_u64(&lane_vmaps_offs, 0);
+    lane_sync_u64(&lane_vmap_count_total, 0);
+    
+    //- rjf: join all lane vmaps
+    RDI_U64 vmap_count = lane_vmap_count_total + 1;
+    RDI_VMapEntry *vmap = 0;
+    ProfScope("join all lane vmaps")
+    {
+      if(lane_idx() == 0)
+      {
+        vmap = push_array_no_zero(arena, RDI_VMapEntry, vmap_count);
+      }
+      lane_sync_u64(&vmap, 0);
+      MemoryCopy(vmap + lane_vmaps_offs[lane_idx()], lane_vmap, sizeof(lane_vmap[0])*lane_vmaps_counts[lane_idx()]);
+    }
+    lane_sync();
+    
+    //- rjf: combine duplicate neighbors
+    RDI_U64 vmap_count__deduplicated = 0;
+    ProfScope("combine duplicate neighbors") if(lane_idx() == 0)
+    {
+      RDI_VMapEntry *vmap_ptr = vmap;
+      RDI_VMapEntry *vmap_opl = vmap + vmap_count;
+      RDI_VMapEntry *vmap_out = vmap;
+      for(;vmap_ptr < vmap_opl;)
+      {
+        RDI_VMapEntry *vmap_range_first = vmap_ptr;
+        RDI_U64 idx = vmap_ptr->idx;
+        vmap_ptr += 1;
+        for(;vmap_ptr < vmap_opl && vmap_ptr->idx == idx;) vmap_ptr += 1;
+        rdim_memcpy_struct(vmap_out, vmap_range_first);
+        vmap_out += 1;
+      }
+      vmap_count__deduplicated = (RDI_U64)(vmap_out - vmap);
+    }
+    lane_sync_u64(&vmap_count__deduplicated, 0);
+    
+    scratch_end(scratch);
+  }
+  lane_sync();
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage build interned path tree
