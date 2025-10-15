@@ -996,6 +996,7 @@ struct RDIM_ScopeChunkList
 typedef struct RDIM_BakeParams RDIM_BakeParams;
 struct RDIM_BakeParams
 {
+  RDIM_SubsetFlags subset_flags;
   RDIM_TopLevelInfo top_level_info;
   RDIM_BinarySectionList binary_sections;
   RDIM_UnitChunkList units;

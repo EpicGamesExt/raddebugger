@@ -1039,6 +1039,16 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage build name maps
   //
+  B32 name_maps_need_build[RDI_NameMapKind_COUNT] = {0};
+  {
+    name_maps_need_build[RDI_NameMapKind_GlobalVariables]    = !!(params->subset_flags & RDIM_SubsetFlag_GlobalVariableNameMap);
+    name_maps_need_build[RDI_NameMapKind_ThreadVariables]    = !!(params->subset_flags & RDIM_SubsetFlag_ThreadVariableNameMap);
+    name_maps_need_build[RDI_NameMapKind_Constants]          = !!(params->subset_flags & RDIM_SubsetFlag_ConstantNameMap);
+    name_maps_need_build[RDI_NameMapKind_Procedures]         = !!(params->subset_flags & RDIM_SubsetFlag_ProcedureNameMap);
+    name_maps_need_build[RDI_NameMapKind_Types]              = !!(params->subset_flags & RDIM_SubsetFlag_TypeNameMap);
+    name_maps_need_build[RDI_NameMapKind_LinkNameProcedures] = !!(params->subset_flags & RDIM_SubsetFlag_LinkNameProcedureNameMap);
+    name_maps_need_build[RDI_NameMapKind_NormalSourcePaths]  = !!(params->subset_flags & RDIM_SubsetFlag_NormalSourcePathNameMap);
+  }
   RDIM_BakeNameMapTopology *bake_name_maps_tops = 0;
   RDIM_BakeNameMap **bake_name_maps = 0;
   ProfScope("build name maps")
@@ -1081,6 +1091,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     //- rjf: wide build
     for EachNonZeroEnumVal(RDI_NameMapKind, k) ProfScope("name map build %.*s", str8_varg(rdi_string_from_name_map_kind(k)))
     {
+      if(!name_maps_need_build[k]) { continue; }
       RDIM_BakeNameMapTopology *top = &bake_name_maps_tops[k];
       lane_maps[k][lane_idx()] = rdim_bake_name_map_make(scratch.arena, top);
       RDIM_BakeNameMap *map = lane_maps[k][lane_idx()];
@@ -1144,12 +1155,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     {
       for EachNonZeroEnumVal(RDI_NameMapKind, k)
       {
+        if(!name_maps_need_build[k]) { continue; }
         bake_name_maps[k] = rdim_bake_name_map_make(arena, &bake_name_maps_tops[k]);
       }
     }
     lane_sync();
     for EachNonZeroEnumVal(RDI_NameMapKind, k) ProfScope("name map join & sort %.*s", str8_varg(rdi_string_from_name_map_kind(k)))
     {
+      if(!name_maps_need_build[k]) { continue; }
       RDIM_BakeNameMapTopology *top = &bake_name_maps_tops[k];
       RDIM_BakeNameMap *map = bake_name_maps[k];
       
@@ -1261,6 +1274,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       //- rjf: bake runs of name map match lists
       for EachNonZeroEnumVal(RDI_NameMapKind, k) ProfScope("bake runs of name map match lists (%.*s)", str8_varg(rdi_string_from_name_map_kind(k)))
       {
+        if(!name_maps_need_build[k]) { continue; }
         RDIM_BakeNameMapTopology *name_map_top = &bake_name_maps_tops[k];
         RDIM_BakeNameMap *name_map = bake_name_maps[k];
         Rng1U64 slot_idx_range = lane_range(name_map_top->slots_count);
@@ -1537,6 +1551,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       lane_sync();
       for EachNonZeroEnumVal(RDI_NameMapKind, k)
       {
+        if(!name_maps_need_build[k]) { continue; }
         RDIM_BakeNameMapTopology *top = &bake_name_maps_tops[k];
         RDIM_BakeNameMap *map = bake_name_maps[k];
         Rng1U64 range = lane_range(top->slots_count);
@@ -1613,6 +1628,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     {
       for EachNonZeroEnumVal(RDI_NameMapKind, k) ProfScope("wide fill (%.*s)", str8_varg(rdi_string_from_name_map_kind(k)))
       {
+        if(!name_maps_need_build[k]) { continue; }
         RDI_U64 write_node_off = rdim_shared->lane_name_map_node_offs[k][lane_idx()];
         RDIM_BakeNameMapTopology *top = &bake_name_maps_tops[k];
         U64 slots_count = top->slots_count;

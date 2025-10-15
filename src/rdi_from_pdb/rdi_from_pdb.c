@@ -4421,6 +4421,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     }
     
     //- rjf: fill
+    result.subset_flags     = params->subset_flags;
     result.top_level_info   = top_level_info;
     result.binary_sections  = binary_sections;
     result.units            = all_units;

@@ -2849,6 +2849,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   lane_sync();
   
   RDIM_BakeParams bake_params  = {0};
+  bake_params.subset_flags     = params->subset_flags;
   bake_params.top_level_info   = top_level_info;
   bake_params.binary_sections  = binary_sections;
   bake_params.units            = units;
@@ -2866,4 +2867,3 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   scratch_end(scratch);
   return bake_params;
 }
-
