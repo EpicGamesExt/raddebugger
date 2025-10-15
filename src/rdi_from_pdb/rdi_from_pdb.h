@@ -87,34 +87,6 @@ struct P2R_TypeIdChain
   CV_TypeId itype;
 };
 
-//- rjf: main state bundle
-
-typedef struct P2R_Shared P2R_Shared;
-struct P2R_Shared
-{
-  RDIM_UDTChunkList *lanes_udts;
-  
-  RDIM_UDTChunkList all_udts;
-  
-  RDIM_LocationChunkList *syms_locations;
-  RDIM_SymbolChunkList *syms_procedures;
-  RDIM_SymbolChunkList *syms_global_variables;
-  RDIM_SymbolChunkList *syms_thread_variables;
-  RDIM_SymbolChunkList *syms_constants;
-  RDIM_ScopeChunkList *syms_scopes;
-  RDIM_InlineSiteChunkList *syms_inline_sites;
-  RDIM_TypeChunkList *syms_typedefs;
-  
-  RDIM_LocationChunkList all_locations;
-  RDIM_SymbolChunkList all_procedures;
-  RDIM_SymbolChunkList all_global_variables;
-  RDIM_SymbolChunkList all_thread_variables;
-  RDIM_SymbolChunkList all_constants;
-  RDIM_ScopeChunkList all_scopes;
-  RDIM_InlineSiteChunkList all_inline_sites;
-  RDIM_TypeChunkList all_types;
-};
-
 ////////////////////////////////
 //~ rjf: Basic Helpers
 

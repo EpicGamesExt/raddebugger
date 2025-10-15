@@ -409,16 +409,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   Temp scratch = scratch_begin(&arena, 1);
   
   //////////////////////////////////////////////////////////////
-  //- rjf: setup shared state
-  //
-  P2R_Shared *p2r_shared = 0;
-  if(lane_idx() == 0)
-  {
-    p2r_shared = push_array(scratch.arena, P2R_Shared, 1);
-  }
-  lane_sync_u64(&p2r_shared, 0);
-  
-  //////////////////////////////////////////////////////////////
   //- rjf: do base MSF parse
   //
   MSF_Parsed *msf = 0;
@@ -2660,23 +2650,18 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 4: build UDTs
   //
+  RDIM_UDTChunkList *lanes_udts = 0;
   ProfScope("types pass 4: build UDTs")
   {
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < tpi_leaf->itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
     
-    //- rjf: set up
-    if(lane_idx() == 0)
-    {
-      p2r_shared->lanes_udts = push_array(arena, RDIM_UDTChunkList, lane_count());
-    }
-    lane_sync();
-    
-    //- rjf: do wide fill
+    //- rjf: gather this lane's UDTs
+    RDIM_UDTChunkList lane_udts = {0};
     if(params->subset_flags & RDIM_SubsetFlag_Types &&
        params->subset_flags & RDIM_SubsetFlag_UDTs)
     {
       U64 udts_chunk_cap = 4096;
-      RDIM_UDTChunkList *udts = &p2r_shared->lanes_udts[lane_idx()];
+      RDIM_UDTChunkList *udts = &lane_udts;
       Rng1U64 range = lane_range(itype_opl);
       for EachInRange(idx, range)
       {
@@ -3296,27 +3281,45 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
       }
     }
+    
+    //- rjf: collect all lanes
+    if(lane_idx() == 0)
+    {
+      lanes_udts = push_array(scratch.arena, RDIM_UDTChunkList, lane_count());
+    }
+    lane_sync_u64(&lanes_udts, 0);
+    lanes_udts[lane_idx()] = lane_udts;
 #undef p2r_type_ptr_from_itype
   }
   lane_sync();
-  RDIM_UDTChunkList *lanes_udts = p2r_shared->lanes_udts;
   
   //////////////////////////////////////////////////////////////
   //- rjf: join all UDTs
   //
+  RDIM_UDTChunkList all_udts = {0};
   ProfScope("join all UDTs") if(lane_idx() == 0)
   {
     for EachIndex(idx, lane_count())
     {
-      rdim_udt_chunk_list_concat_in_place(&p2r_shared->all_udts, &lanes_udts[idx]);
+      rdim_udt_chunk_list_concat_in_place(&all_udts, &lanes_udts[idx]);
     }
   }
   lane_sync();
-  RDIM_UDTChunkList all_udts = p2r_shared->all_udts;
+  RDIM_UDTChunkList *all_udts_ptr = &all_udts;
+  lane_sync_u64(&all_udts_ptr, 0);
+  all_udts = *all_udts_ptr;
   
   //////////////////////////////////////////////////////////////
   //- rjf: produce symbols from all streams
   //
+  RDIM_LocationChunkList *syms_locations = 0;
+  RDIM_SymbolChunkList *syms_procedures = 0;
+  RDIM_SymbolChunkList *syms_global_variables = 0;
+  RDIM_SymbolChunkList *syms_thread_variables = 0;
+  RDIM_SymbolChunkList *syms_constants = 0;
+  RDIM_ScopeChunkList *syms_scopes = 0;
+  RDIM_InlineSiteChunkList *syms_inline_sites = 0;
+  RDIM_TypeChunkList *syms_typedefs = 0;
   ProfScope("produce symbols from all streams")
   {
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
@@ -3326,16 +3329,23 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //
     if(lane_idx() == 0)
     {
-      p2r_shared->syms_locations        = push_array(arena, RDIM_LocationChunkList, all_syms_count);
-      p2r_shared->syms_procedures       = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      p2r_shared->syms_global_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      p2r_shared->syms_thread_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      p2r_shared->syms_constants        = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      p2r_shared->syms_scopes           = push_array(arena, RDIM_ScopeChunkList, all_syms_count);
-      p2r_shared->syms_inline_sites     = push_array(arena, RDIM_InlineSiteChunkList, all_syms_count);
-      p2r_shared->syms_typedefs         = push_array(arena, RDIM_TypeChunkList, all_syms_count);
+      syms_locations        = push_array(arena, RDIM_LocationChunkList, all_syms_count);
+      syms_procedures       = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      syms_global_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      syms_thread_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      syms_constants        = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
+      syms_scopes           = push_array(arena, RDIM_ScopeChunkList, all_syms_count);
+      syms_inline_sites     = push_array(arena, RDIM_InlineSiteChunkList, all_syms_count);
+      syms_typedefs         = push_array(arena, RDIM_TypeChunkList, all_syms_count);
     }
-    lane_sync();
+    lane_sync_u64(&syms_locations, 0);
+    lane_sync_u64(&syms_procedures, 0);
+    lane_sync_u64(&syms_global_variables, 0);
+    lane_sync_u64(&syms_thread_variables, 0);
+    lane_sync_u64(&syms_constants, 0);
+    lane_sync_u64(&syms_scopes, 0);
+    lane_sync_u64(&syms_inline_sites, 0);
+    lane_sync_u64(&syms_typedefs, 0);
     
     ////////////////////////////
     //- rjf: fill outputs for all unit sym blocks in this lane
@@ -3375,14 +3385,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         U64 sym_constants_chunk_cap = 16384;
         U64 sym_scopes_chunk_cap = 16384;
         U64 sym_inline_sites_chunk_cap = 16384;
-        RDIM_LocationChunkList *sym_locations = &p2r_shared->syms_locations[sym_idx];
-        RDIM_SymbolChunkList *sym_procedures = &p2r_shared->syms_procedures[sym_idx];
-        RDIM_SymbolChunkList *sym_global_variables = &p2r_shared->syms_global_variables[sym_idx];
-        RDIM_SymbolChunkList *sym_thread_variables = &p2r_shared->syms_thread_variables[sym_idx];
-        RDIM_SymbolChunkList *sym_constants = &p2r_shared->syms_constants[sym_idx];
-        RDIM_ScopeChunkList *sym_scopes = &p2r_shared->syms_scopes[sym_idx];
-        RDIM_InlineSiteChunkList *sym_inline_sites = &p2r_shared->syms_inline_sites[sym_idx];
-        RDIM_TypeChunkList *typedefs = &p2r_shared->syms_typedefs[sym_idx];
+        RDIM_LocationChunkList *sym_locations = &syms_locations[sym_idx];
+        RDIM_SymbolChunkList *sym_procedures = &syms_procedures[sym_idx];
+        RDIM_SymbolChunkList *sym_global_variables = &syms_global_variables[sym_idx];
+        RDIM_SymbolChunkList *sym_thread_variables = &syms_thread_variables[sym_idx];
+        RDIM_SymbolChunkList *sym_constants = &syms_constants[sym_idx];
+        RDIM_ScopeChunkList *sym_scopes = &syms_scopes[sym_idx];
+        RDIM_InlineSiteChunkList *sym_inline_sites = &syms_inline_sites[sym_idx];
+        RDIM_TypeChunkList *typedefs = &syms_typedefs[sym_idx];
         
         //////////////////////////
         //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
@@ -4284,74 +4294,93 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: join all lane symbols
   //
+  RDIM_LocationChunkList *all_locations = 0;
+  RDIM_SymbolChunkList *all_procedures = 0;
+  RDIM_SymbolChunkList *all_global_variables = 0;
+  RDIM_SymbolChunkList *all_thread_variables = 0;
+  RDIM_SymbolChunkList *all_constants = 0;
+  RDIM_ScopeChunkList *all_scopes = 0;
+  RDIM_InlineSiteChunkList *all_inline_sites = 0;
+  RDIM_TypeChunkList *all_types = 0;
   {
+    if(lane_idx() == 0)
+    {
+      all_locations = push_array(scratch.arena, RDIM_LocationChunkList, 1);
+      all_procedures = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      all_global_variables = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      all_thread_variables = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      all_constants = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      all_scopes = push_array(scratch.arena, RDIM_ScopeChunkList, 1);
+      all_inline_sites = push_array(scratch.arena, RDIM_InlineSiteChunkList, 1);
+      all_types = push_array(scratch.arena, RDIM_TypeChunkList, 1);
+    }
+    lane_sync_u64(&all_locations, 0);
+    lane_sync_u64(&all_procedures, 0);
+    lane_sync_u64(&all_global_variables, 0);
+    lane_sync_u64(&all_thread_variables, 0);
+    lane_sync_u64(&all_constants, 0);
+    lane_sync_u64(&all_scopes, 0);
+    lane_sync_u64(&all_inline_sites, 0);
+    lane_sync_u64(&all_types, 0);
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("join locations")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_location_chunk_list_concat_in_place(&p2r_shared->all_locations, &p2r_shared->syms_locations[idx]);
+        rdim_location_chunk_list_concat_in_place(all_locations, &syms_locations[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("join procedures")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r_shared->all_procedures, &p2r_shared->syms_procedures[idx]);
+        rdim_symbol_chunk_list_concat_in_place(all_procedures, &syms_procedures[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("join global variables")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r_shared->all_global_variables, &p2r_shared->syms_global_variables[idx]);
+        rdim_symbol_chunk_list_concat_in_place(all_global_variables, &syms_global_variables[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(3)) ProfScope("join thread variables")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r_shared->all_thread_variables, &p2r_shared->syms_thread_variables[idx]);
+        rdim_symbol_chunk_list_concat_in_place(all_thread_variables, &syms_thread_variables[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(4)) ProfScope("join constants")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(&p2r_shared->all_constants, &p2r_shared->syms_constants[idx]);
+        rdim_symbol_chunk_list_concat_in_place(all_constants, &syms_constants[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(5)) ProfScope("join scopes")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_scope_chunk_list_concat_in_place(&p2r_shared->all_scopes, &p2r_shared->syms_scopes[idx]);
+        rdim_scope_chunk_list_concat_in_place(all_scopes, &syms_scopes[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(6)) ProfScope("join inline sites")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_inline_site_chunk_list_concat_in_place(&p2r_shared->all_inline_sites, &p2r_shared->syms_inline_sites[idx]);
+        rdim_inline_site_chunk_list_concat_in_place(all_inline_sites, &syms_inline_sites[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(7)) ProfScope("join typedefs")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_type_chunk_list_concat_in_place(&all_types__pre_typedefs, &p2r_shared->syms_typedefs[idx]);
+        rdim_type_chunk_list_concat_in_place(&all_types__pre_typedefs, &syms_typedefs[idx]);
       }
-      p2r_shared->all_types = all_types__pre_typedefs;
+      *all_types = all_types__pre_typedefs;
     }
   }
   lane_sync();
-  RDIM_LocationChunkList all_locations           = p2r_shared->all_locations;
-  RDIM_SymbolChunkList all_procedures            = p2r_shared->all_procedures;
-  RDIM_SymbolChunkList all_global_variables      = p2r_shared->all_global_variables;
-  RDIM_SymbolChunkList all_thread_variables      = p2r_shared->all_thread_variables;
-  RDIM_SymbolChunkList all_constants             = p2r_shared->all_constants;
-  RDIM_ScopeChunkList all_scopes                 = p2r_shared->all_scopes;
-  RDIM_InlineSiteChunkList all_inline_sites      = p2r_shared->all_inline_sites;
-  RDIM_TypeChunkList all_types                   = p2r_shared->all_types;
   
   //////////////////////////////////////////////////////////////
   //- rjf: bundle all outputs
@@ -4395,17 +4424,17 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     result.top_level_info   = top_level_info;
     result.binary_sections  = binary_sections;
     result.units            = all_units;
-    result.types            = all_types;
+    result.types            = *all_types;
     result.udts             = all_udts;
     result.src_files        = all_src_files;
     result.line_tables      = all_line_tables;
-    result.locations        = all_locations;
-    result.global_variables = all_global_variables;
-    result.thread_variables = all_thread_variables;
-    result.constants        = all_constants;
-    result.procedures       = all_procedures;
-    result.scopes           = all_scopes;
-    result.inline_sites     = all_inline_sites;
+    result.locations        = *all_locations;
+    result.global_variables = *all_global_variables;
+    result.thread_variables = *all_thread_variables;
+    result.constants        = *all_constants;
+    result.procedures       = *all_procedures;
+    result.scopes           = *all_scopes;
+    result.inline_sites     = *all_inline_sites;
   }
   
   scratch_end(scratch);
