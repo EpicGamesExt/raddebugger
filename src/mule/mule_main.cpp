@@ -569,6 +569,18 @@ type_coverage_eval_tests(void)
   
   Linked_List list = {&list, &list, 0};
   
+  struct SLLNode
+  {
+    SLLNode *next;
+    int x;
+  };
+  SLLNode node6 = {0, 6};
+  SLLNode node5 = {&node6, 5};
+  SLLNode node4 = {&node5, 4};
+  SLLNode node3 = {&node4, 3};
+  SLLNode node2 = {&node3, 2};
+  SLLNode node1 = {&node2, 1};
+  
   Alias1 a1 = has_enums.kind;
   Alias2 a2 = has_enums.flags;
   Alias3 a3 = has_enums;

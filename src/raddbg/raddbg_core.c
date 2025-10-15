@@ -12511,6 +12511,7 @@ rd_frame(void)
         {str8_lit("range1"),      0, 0, 0,        0, 0, {0}},
         {str8_lit("array"),       0, 0, 1,        0, 0, {E_TYPE_EXPAND_INFO_FUNCTION_NAME(array), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(array)}},
         {str8_lit("slice"),       0, 0, 1,        E_TYPE_IREXT_FUNCTION_NAME(slice), E_TYPE_ACCESS_FUNCTION_NAME(slice), {E_TYPE_EXPAND_INFO_FUNCTION_NAME(slice), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(slice)}},
+        {str8_lit("list"),        0, 0, 1,        E_TYPE_IREXT_FUNCTION_NAME(list), E_TYPE_ACCESS_FUNCTION_NAME(list), {E_TYPE_EXPAND_INFO_FUNCTION_NAME(list), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(list)}},
         {str8_lit("text"),        0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
         {str8_lit("disasm"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
         {str8_lit("memory"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
@@ -12685,8 +12686,6 @@ rd_frame(void)
     E_InterpretCtx *interpret_ctx = push_array(scratch.arena, E_InterpretCtx, 1);
     {
       E_InterpretCtx *ctx = interpret_ctx;
-      ctx->space_read        = rd_eval_space_read;
-      ctx->space_write       = rd_eval_space_write;
       ctx->primary_space     = eval_modules_primary->space;
       ctx->reg_arch          = eval_modules_primary->arch;
       ctx->reg_space         = rd_eval_space_from_ctrl_entity(thread, CTRL_EvalSpaceKind_Entity);

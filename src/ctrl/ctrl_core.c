@@ -4443,7 +4443,6 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
   //
   {
     E_InterpretCtx *ctx = &scope->interpret_ctx;
-    ctx->space_read    = ctrl_eval_space_read;
     ctx->primary_space = eval_modules_primary->space;
     ctx->reg_arch      = eval_modules_primary->arch;
     ctx->reg_space     = e_space_make(CTRL_EvalSpaceKind_Entity);

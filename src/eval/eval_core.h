@@ -766,7 +766,6 @@ struct E_BaseCtx
   E_Module *primary_module;
   
   // rjf: space hooks
-  void *space_rw_user_data;
   E_SpaceGenFunction *space_gen;
   E_SpaceRWFunction *space_read;
   E_SpaceRWFunction *space_write;

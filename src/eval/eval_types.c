@@ -2573,45 +2573,244 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(array)
 ////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `list` lens
 
-typedef struct E_ListGatherArtifact E_ListGatherArtifact;
-struct E_ListGatherArtifact
-{
-  U64 *node_vaddrs;
-  U64 node_vaddrs_count;
-};
-
 internal AC_Artifact
 e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out)
 {
+  Temp scratch = scratch_begin(0, 0);
   
+  //- rjf: unpack key
+  E_Space space = {0};
+  U64 base_off = 0;
+  U64 member_element_off = 0;
+  U64 member_size = 0;
+  E_SpaceRWFunction *space_read = 0;
+  {
+    U64 key_read_off = 0;
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &space);
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &base_off);
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &member_element_off);
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &member_size);
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &space_read);
+  }
+  
+  //- rjf: gather chain
+  typedef struct HitOffsetNode HitOffsetNode;
+  struct HitOffsetNode
+  {
+    HitOffsetNode *next;
+    U64 off;
+  };
+  typedef struct OffsetChunk OffsetChunk;
+  struct OffsetChunk
+  {
+    OffsetChunk *next;
+    U64 *v;
+    U64 count;
+    U64 cap;
+  };
+  OffsetChunk *first_chunk = 0;
+  OffsetChunk *last_chunk = 0;
+  U64 total_count = 0;
+  {
+    U64 hit_slots_count = 4096;
+    HitOffsetNode **hit_slots = push_array(scratch.arena, HitOffsetNode *, hit_slots_count);
+    for(U64 off = base_off, next_off = 0;; off = next_off)
+    {
+      //- rjf: see if we've cycled
+      B32 hit_cycle = 0;
+      {
+        U64 hash = u64_hash_from_str8(str8_struct(&off));
+        U64 slot_idx = hash%hit_slots_count;
+        for(HitOffsetNode *n = hit_slots[slot_idx]; n != 0; n = n->next)
+        {
+          if(n->off == off)
+          {
+            hit_cycle = 1;
+            break;
+          }
+        }
+      }
+      
+      //- rjf: terminate loop
+      B32 terminated = (hit_cycle || off == 0);
+      if(terminated)
+      {
+        break;
+      }
+      
+      //- rjf: another node -> push offset to chunk list
+      OffsetChunk *chunk = last_chunk;
+      if(chunk == 0 || chunk->count >= chunk->cap)
+      {
+        chunk = push_array(scratch.arena, OffsetChunk, 1);
+        SLLQueuePush(first_chunk, last_chunk, chunk);
+        chunk->cap = 1024;
+        chunk->v = push_array_no_zero(scratch.arena, U64, chunk->cap);
+      }
+      chunk->v[chunk->count] = off;
+      chunk->count += 1;
+      total_count += 1;
+      
+      //- rjf: read next offset, advance
+      if(!space_read(space, &next_off, r1u64(off + member_element_off, off + member_element_off + member_size)))
+      {
+        break;
+      }
+    }
+  }
+  
+  //- rjf: flatten
+  Arena *arena = 0;
+  U64 node_offs_count = 0;
+  U64 *node_offs = 0;
+  if(total_count != 0)
+  {
+    arena = arena_alloc();
+    node_offs_count = total_count;
+    node_offs = push_array_no_zero(arena, U64, node_offs_count);
+    {
+      U64 idx = 0;
+      for EachNode(n, OffsetChunk, first_chunk)
+      {
+        MemoryCopy(node_offs + idx, n->v, n->count * sizeof(n->v[0]));
+        idx += n->count;
+      }
+    }
+  }
+  
+  //- rjf: package
+  AC_Artifact artifact = {0};
+  {
+    artifact.u64[0] = (U64)arena;
+    artifact.u64[1] = (U64)node_offs;
+    artifact.u64[2] = node_offs_count;
+  }
+  
+  scratch_end(scratch);
+  return artifact;
 }
 
 internal void
 e_list_gather_artifact_destroy(AC_Artifact artifact)
 {
-  
+  Arena *arena = (Arena *)artifact.u64[0];
+  if(arena != 0)
+  {
+    arena_release(arena);
+  }
 }
 
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(list)
+typedef struct E_ListIRExt E_ListIRExt;
+struct E_ListIRExt
 {
-  E_Type *type = e_type_from_key(eval.irtree.type_key);
+  U64 *offs;
+  U64 offs_count;
+};
+
+E_TYPE_IREXT_FUNCTION_DEF(list)
+{
+  E_IRExt result = {0};
+  E_Type *type = e_type_from_key(irtree->type_key);
   String8 next_link_member_name = str8_lit("next");
   if(type->args != 0 && type->count > 0)
   {
     next_link_member_name = type->args[0]->string;
   }
-  E_TypeKey node_type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_All);
+  E_TypeKey node_type_key = e_type_key_unwrap(irtree->type_key, E_TypeUnwrapFlag_All);
   E_Member next_link_member = e_type_member_from_key_name__cached(node_type_key, next_link_member_name);
+  E_TypeExpandInfo info = {0, 0};
   if(next_link_member.kind != E_MemberKind_DataField)
   {
     // TODO(rjf): error reporting
   }
   else
   {
+    Temp scratch = scratch_begin(&arena, 1);
+    Access *access = access_open();
     
+    // rjf: evaluate first offset
+    E_OpList oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
+    String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+    E_Interpretation base_off_interpret = e_interpret(bytecode);
+    
+    // rjf: get artifact
+#pragma pack(push, 1)
+    struct
+    {
+      E_Space space;
+      U64 base_off;
+      U64 member_element_off;
+      U64 member_size;
+      E_SpaceRWFunction *space_read;
+    }
+    key_data =
+    {
+      base_off_interpret.space,
+      base_off_interpret.value.u64,
+      next_link_member.off,
+      e_type_byte_size_from_key(next_link_member.type_key),
+      e_base_ctx->space_read,
+    };
+#pragma pack(pop)
+    AC_Artifact gather_artifact = ac_artifact_from_key(access, str8_struct(&key_data), e_list_gather_artifact_create, e_list_gather_artifact_destroy, 0);
+    U64 *offs = (U64 *)gather_artifact.u64[1];
+    U64 offs_count = gather_artifact.u64[2];
+    
+    // rjf: fill info from artifact
+    E_ListIRExt *ext = push_array(arena, E_ListIRExt, 1);
+    ext->offs = offs;
+    ext->offs_count = offs_count;
+    result.user_data = ext;
+    
+    access_close(access);
+    scratch_end(scratch);
   }
-  E_TypeExpandInfo info = {0, 0};
+  return result;
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(list)
+{
+  E_ListIRExt *ext = (E_ListIRExt *)eval.irtree.user_data;
+  U64 count = 0;
+  if(ext != 0)
+  {
+    count = ext->offs_count;
+  }
+  E_TypeExpandInfo info = {0, count};
   return info;
+}
+
+E_TYPE_ACCESS_FUNCTION_DEF(list)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  E_ListIRExt *ext = (E_ListIRExt *)lhs_irtree->user_data;
+  if(ext != 0 && expr->kind == E_ExprKind_ArrayIndex)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    // rjf: compute index
+    E_Expr *rhs_expr = expr->last;
+    E_IRTreeAndType rhs_irtree = e_push_irtree_and_type_from_expr(scratch.arena, overridden, &e_default_identifier_resolution_rule, 0, 0, rhs_expr);
+    E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
+    String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
+    E_Interpretation rhs_interpret = e_interpret(rhs_bytecode);
+    U64 idx = rhs_interpret.value.u64;
+    
+    // rjf: get offset
+    U64 off = 0;
+    if(idx < ext->offs_count)
+    {
+      off = ext->offs[idx];
+    }
+    
+    // rjf: generate IR tree to compute this offset w/ the node type
+    result.root = e_irtree_const_u(arena, off);
+    result.type_key = e_type_key_unwrap(lhs_irtree->type_key, E_TypeUnwrapFlag_AllDecorative);
+    result.mode = E_Mode_Offset;
+    
+    scratch_end(scratch);
+  }
+  return result;
 }
 
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(list)

@@ -1179,6 +1179,7 @@ rdim_bake_params_concat_in_place(RDIM_BakeParams *dst, RDIM_BakeParams *src)
 {
   // rjf: join top-level info (deduplicate - throw away conflicts)
   {
+    dst->subset_flags |= src->subset_flags;
     if(dst->top_level_info.arch == RDI_Arch_NULL)
     {
       dst->top_level_info.arch = src->top_level_info.arch;

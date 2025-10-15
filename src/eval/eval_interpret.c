@@ -130,9 +130,9 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
       
       //- rjf: default -> use hooks
       default:
-      if(e_interpret_ctx->space_read != 0)
+      if(e_base_ctx->space_read != 0)
       {
-        result = e_interpret_ctx->space_read(space, out, range);
+        result = e_base_ctx->space_read(space, out, range);
       }break;
     }
   }
@@ -145,13 +145,13 @@ e_space_write(E_Space space, void *in, Rng1U64 range)
 {
   ProfBeginFunction();
   B32 result = 0;
-  if(e_interpret_ctx->space_write != 0)
+  if(e_base_ctx->space_write != 0)
   {
     switch(space.kind)
     {
       default:
       {
-        result = e_interpret_ctx->space_write(space, in, range);
+        result = e_base_ctx->space_write(space, in, range);
       }break;
     }
   }
