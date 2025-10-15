@@ -1212,7 +1212,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage build index runs
   //
-  ProfScope("build index runs")
+  B32 need_index_runs = (!!(params->subset_flags & RDIM_SubsetFlag_NameMaps) ||
+                         !!(params->subset_flags & RDIM_SubsetFlag_Types));
+  if(need_index_runs) ProfScope("build index runs")
   {
     Temp scratch = scratch_begin(&arena, 1);
     
@@ -1501,7 +1503,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake idx runs
   //
-  ProfScope("bake idx runs")
+  if(need_index_runs) ProfScope("bake idx runs")
   {
     // rjf: set up
     if(lane_idx() == 0)

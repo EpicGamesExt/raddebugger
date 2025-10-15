@@ -563,8 +563,10 @@ rb_thread_entry_point(void *p)
           
           fprintf(stderr, "RAD DEBUG INFO SUBSET NAMES\n\n");
 #define X(name, name_lower) fprintf(stderr, " - " #name_lower "\n");
+#define Y(name, name_lower) X(name, name_lower)
           RDIM_Subset_XList
 #undef X
+#undef Y
         }break;
         case OutputKind_Breakpad:
         {
@@ -589,16 +591,20 @@ rb_thread_entry_point(void *p)
           {
             if(0){}
 #define X(name, name_lower) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { subset_flags |= RDIM_SubsetFlag_##name; }
+#define Y(name, name_lower) X(name, name_lower)
             RDIM_Subset_XList
 #undef X
+#undef Y
           }
           String8List omit_names = cmd_line_strings(cmdline, str8_lit("omit"));
           for(String8Node *n = omit_names.first; n != 0; n = n->next)
           {
             if(0){}
 #define X(name, name_lower) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { subset_flags &= ~RDIM_SubsetFlag_##name; }
+#define Y(name, name_lower) X(name, name_lower)
             RDIM_Subset_XList
 #undef X
+#undef Y
           }
         }break;
         case OutputKind_Breakpad:

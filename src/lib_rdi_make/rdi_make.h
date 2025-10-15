@@ -325,19 +325,21 @@ X(Types,                       types)\
 X(UDTs,                        udts)\
 X(LineInfo,                    line_info)\
 X(InlineLineInfo,              inline_line_info)\
-X(GlobalVariableNameMap,       global_variable_name_map)\
-X(ThreadVariableNameMap,       thread_variable_name_map)\
-X(ProcedureNameMap,            procedure_name_map)\
-X(ConstantNameMap,             constant_name_map)\
-X(TypeNameMap,                 type_name_map)\
-X(LinkNameProcedureNameMap,    link_name_procedure_name_map)\
-X(NormalSourcePathNameMap,     normal_source_path_name_map)\
+Y(GlobalVariableNameMap,       global_variable_name_map)\
+Y(ThreadVariableNameMap,       thread_variable_name_map)\
+Y(ProcedureNameMap,            procedure_name_map)\
+Y(ConstantNameMap,             constant_name_map)\
+Y(TypeNameMap,                 type_name_map)\
+Y(LinkNameProcedureNameMap,    link_name_procedure_name_map)\
+Y(NormalSourcePathNameMap,     normal_source_path_name_map)\
 
 typedef enum RDIM_Subset
 {
 #define X(name, name_lower) RDIM_Subset_##name,
+#define Y(name, name_lower) RDIM_Subset_##name,
   RDIM_Subset_XList
 #undef X
+#undef Y
 }
 RDIM_Subset;
 
@@ -345,8 +347,15 @@ typedef U32 RDIM_SubsetFlags;
 enum
 {
 #define X(name, name_lower) RDIM_SubsetFlag_##name = (1<<RDIM_Subset_##name),
+#define Y(name, name_lower) RDIM_SubsetFlag_##name = (1<<RDIM_Subset_##name),
   RDIM_Subset_XList
 #undef X
+#undef Y
+#define X(name, name_lower)
+#define Y(name, name_lower) |RDIM_SubsetFlag_##name
+  RDIM_SubsetFlag_NameMaps = 0 RDIM_Subset_XList,
+#undef X
+#undef Y
   RDIM_SubsetFlag_All = 0xffffffffu,
 };
 
