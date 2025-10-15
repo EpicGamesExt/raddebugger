@@ -1109,7 +1109,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 hit_path_node = push_array(scratch2.arena, String8Node, 1);
                 SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
                 hit_path_node->string = file_path_sanitized;
-                P2R_SrcFileStubNode *stub_n = push_array(arena, P2R_SrcFileStubNode, 1);
+                P2R_SrcFileStubNode *stub_n = push_array(scratch2.arena, P2R_SrcFileStubNode, 1);
                 SLLQueuePush(first_src_file_stub, last_src_file_stub, stub_n);
                 src_file_stub_count += 1;
                 stub_n->v.file_path = str8_copy(scratch.arena, file_path_sanitized);
@@ -1122,7 +1122,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         
         //- rjf: merge into array for this unit
         unit_file_stubs[unit_idx].count = src_file_stub_count;
-        unit_file_stubs[unit_idx].v = push_array_no_zero(arena, P2R_SrcFileStub, unit_file_stubs[unit_idx].count);
+        unit_file_stubs[unit_idx].v = push_array_no_zero(scratch.arena, P2R_SrcFileStub, unit_file_stubs[unit_idx].count);
         {
           U64 idx = 0;
           for EachNode(n, P2R_SrcFileStubNode, first_src_file_stub)
@@ -1135,7 +1135,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         //- rjf: hash this unit's file paths
         U64Array hashes = {0};
         hashes.count = unit_file_stubs[unit_idx].count;
-        hashes.v = push_array(arena, U64, hashes.count);
+        hashes.v = push_array(scratch.arena, U64, hashes.count);
         for EachIndex(idx, unit_file_stubs[unit_idx].count)
         {
           hashes.v[idx] = rdi_hash(unit_file_stubs[unit_idx].v[idx].file_path.str, unit_file_stubs[unit_idx].v[idx].file_path.size);
@@ -3378,13 +3378,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         Temp scratch = scratch_begin(&arena, 1);
         CV_SymParsed *sym = all_syms[sym_idx];
         Rng1U64 sym_rec_range = r1u64(0, sym->sym_ranges.count);
-        U64 sym_locations_chunk_cap = 16384;
-        U64 sym_procedures_chunk_cap = 16384;
-        U64 sym_global_variables_chunk_cap = 16384;
-        U64 sym_thread_variables_chunk_cap = 16384;
-        U64 sym_constants_chunk_cap = 16384;
-        U64 sym_scopes_chunk_cap = 16384;
-        U64 sym_inline_sites_chunk_cap = 16384;
+        U64 sym_locations_chunk_cap = 4096;
+        U64 sym_procedures_chunk_cap = 2048;
+        U64 sym_global_variables_chunk_cap = 2048;
+        U64 sym_thread_variables_chunk_cap = 2048;
+        U64 sym_constants_chunk_cap = 2048;
+        U64 sym_scopes_chunk_cap = 4096;
+        U64 sym_inline_sites_chunk_cap = 2048;
         RDIM_LocationChunkList *sym_locations = &syms_locations[sym_idx];
         RDIM_SymbolChunkList *sym_procedures = &syms_procedures[sym_idx];
         RDIM_SymbolChunkList *sym_global_variables = &syms_global_variables[sym_idx];
