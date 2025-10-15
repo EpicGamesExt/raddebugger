@@ -65,21 +65,6 @@ struct RDIM_UnsortedJoinedLineTable
 typedef struct RDIM_Shared RDIM_Shared;
 struct RDIM_Shared
 {
-  RDI_U64 scope_vmap_count;
-  RDIM_SortKey *scope_vmap_keys;
-  RDIM_SortKey *scope_vmap_keys__swap;
-  RDIM_VMapMarker *scope_vmap_markers;
-  RDI_U64 unit_vmap_count;
-  RDIM_SortKey *unit_vmap_keys;
-  RDIM_SortKey *unit_vmap_keys__swap;
-  RDIM_VMapMarker *unit_vmap_markers;
-  RDI_U64 global_vmap_count;
-  RDIM_SortKey *global_vmap_keys;
-  RDIM_SortKey *global_vmap_keys__swap;
-  RDIM_VMapMarker *global_vmap_markers;
-  U32 **lane_digit_counts;
-  U32 **lane_digit_offsets;
-  
   RDIM_ScopeVMapBakeResult baked_scope_vmap;
   RDIM_UnitVMapBakeResult baked_unit_vmap;
   RDIM_GlobalVMapBakeResult baked_global_vmap;
@@ -95,18 +80,8 @@ struct RDIM_Shared
   
   RDIM_LineTableBakeResult baked_line_tables;
   
-  RDIM_BakeStringMapTopology bake_string_map_topology;
-  RDIM_BakeStringMapLoose **lane_bake_string_maps__loose;
-  RDIM_BakeStringMapLoose *bake_string_map__loose;
   RDIM_BakeStringMapTight bake_strings;
   
-  RDIM_BakeNameMapTopology bake_name_map_topology[RDI_NameMapKind_COUNT];
-  RDIM_BakeNameMap **lane_bake_name_maps[RDI_NameMapKind_COUNT];
-  RDIM_BakeNameMap *bake_name_maps[RDI_NameMapKind_COUNT];
-  
-  RDIM_BakeIdxRunMapTopology bake_idx_run_map_topology;
-  RDIM_BakeIdxRunMapLoose **lane_bake_idx_run_maps__loose;
-  RDIM_BakeIdxRunMapLoose *bake_idx_run_map__loose;
   RDIM_BakeIdxRunMap bake_idx_runs;
   
   RDIM_StringBakeResult baked_strings;
