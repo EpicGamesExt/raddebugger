@@ -2752,7 +2752,7 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
       e_base_ctx->space_read,
     };
 #pragma pack(pop)
-    AC_Artifact gather_artifact = ac_artifact_from_key(access, str8_struct(&key_data), e_list_gather_artifact_create, e_list_gather_artifact_destroy, 0);
+    AC_Artifact gather_artifact = ac_artifact_from_key(access, str8_struct(&key_data), e_list_gather_artifact_create, e_list_gather_artifact_destroy, 0, .gen = e_space_gen(base_off_interpret.space));
     U64 *offs = (U64 *)gather_artifact.u64[1];
     U64 offs_count = gather_artifact.u64[2];
     
