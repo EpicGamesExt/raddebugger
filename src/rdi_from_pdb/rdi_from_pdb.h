@@ -92,69 +92,6 @@ struct P2R_TypeIdChain
 typedef struct P2R_Shared P2R_Shared;
 struct P2R_Shared
 {
-  MSF_RawStreamTable *msf_raw_stream_table;
-  U64 msf_stream_lane_counter;
-  MSF_Parsed *msf;
-  
-  PDB_Info *pdb_info;
-  PDB_NamedStreamTable *named_streams;
-  
-  PDB_Strtbl *strtbl;
-  String8 raw_strtbl;
-  PDB_DbiParsed *dbi;
-  PDB_TpiParsed *tpi;
-  PDB_TpiParsed *ipi;
-  
-  COFF_SectionHeaderArray coff_sections;
-  PDB_GsiParsed *gsi;
-  PDB_GsiParsed *psi_gsi_part;
-  
-  U64 exe_hash;
-  PDB_TpiHashParsed *tpi_hash;
-  CV_LeafParsed *tpi_leaf;
-  PDB_TpiHashParsed *ipi_hash;
-  CV_LeafParsed *ipi_leaf;
-  PDB_CompUnitArray *comp_units;
-  PDB_CompUnitContributionArray comp_unit_contributions;
-  RDIM_Rng1U64ChunkList *unit_ranges;
-  
-  U64 sym_c13_unit_lane_counter;
-  U64 all_syms_count;
-  CV_SymParsed **all_syms; // [0] -> global; rest are unit nums
-  CV_C13Parsed **all_c13s; // [0] -> blank (global); rest are unit nums
-  
-  U64 exe_voff_max;
-  RDI_Arch arch;
-  U64 symbol_count_prediction;
-  
-  P2R_LinkNameMap link_name_map;
-  
-  U64 sym_lane_take_counter;
-  
-  P2R_SrcFileStubArray *unit_file_stubs;
-  U64Array *unit_file_paths_hashes;
-  
-  U64 total_path_count;
-  
-  RDIM_SrcFileChunkList all_src_files__sequenceless;
-  P2R_SrcFileMap src_file_map;
-  
-  RDIM_UnitChunkList all_units;
-  RDIM_LineTableChunkList *units_line_tables;
-  RDIM_LineTable **units_first_inline_site_line_tables;
-  
-  RDIM_LineTableChunkList all_line_tables;
-  
-  CV_TypeId *itype_fwd_map;
-  CV_TypeId itype_first;
-  CV_TypeId itype_opl;
-  
-  P2R_TypeIdChain **itype_chains;
-  
-  RDIM_Type **itype_type_ptrs;
-  RDIM_Type **basic_type_ptrs;
-  RDIM_TypeChunkList all_types__pre_typedefs;
-  
   RDIM_UDTChunkList *lanes_udts;
   
   RDIM_UDTChunkList all_udts;
@@ -177,11 +114,6 @@ struct P2R_Shared
   RDIM_InlineSiteChunkList all_inline_sites;
   RDIM_TypeChunkList all_types;
 };
-
-////////////////////////////////
-//~ rjf: Globals
-
-global P2R_Shared *p2r_shared = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Helpers

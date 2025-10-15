@@ -406,135 +406,170 @@ p2r_local_push_location_cases_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunk
 internal RDIM_BakeParams
 p2r_convert(Arena *arena, P2R_ConvertParams *params)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: setup shared state
+  //
+  P2R_Shared *p2r_shared = 0;
+  if(lane_idx() == 0)
+  {
+    p2r_shared = push_array(scratch.arena, P2R_Shared, 1);
+  }
+  lane_sync_u64(&p2r_shared, 0);
+  
   //////////////////////////////////////////////////////////////
   //- rjf: do base MSF parse
   //
+  MSF_Parsed *msf = 0;
   {
+    Temp scratch2 = scratch_begin(&scratch.arena, 1);
+    
     // rjf: setup output buckets
+    MSF_RawStreamTable *msf_raw_stream_table = 0;
     if(lane_idx() == 0)
     {
-      p2r_shared = push_array(arena, P2R_Shared, 1);
-      p2r_shared->msf_raw_stream_table = msf_raw_stream_table_from_data(arena, params->input_pdb_data);
-      p2r_shared->msf = push_array(arena, MSF_Parsed, 1);
-      p2r_shared->msf->page_size    = p2r_shared->msf_raw_stream_table->page_size;
-      p2r_shared->msf->page_count   = p2r_shared->msf_raw_stream_table->total_page_count;
-      p2r_shared->msf->stream_count = p2r_shared->msf_raw_stream_table->stream_count;
-      p2r_shared->msf->streams      = push_array(arena, String8, p2r_shared->msf->stream_count);
-      p2r_shared->msf_stream_lane_counter = 0;
+      msf_raw_stream_table = msf_raw_stream_table_from_data(scratch2.arena, params->input_pdb_data);
+      msf = push_array(scratch.arena, MSF_Parsed, 1);
+      msf->page_size = msf_raw_stream_table->page_size;
+      msf->page_count = msf_raw_stream_table->total_page_count;
+      msf->stream_count = msf_raw_stream_table->stream_count;
+      msf->streams = push_array(scratch.arena, String8, msf->stream_count);
     }
-    lane_sync();
+    lane_sync_u64(&msf, 0);
+    lane_sync_u64(&msf_raw_stream_table, 0);
     
     // rjf: do wide fill
     {
+      U64 msf_stream_take_counter = 0;
+      U64 *msf_stream_take_counter_ptr = &msf_stream_take_counter;
+      lane_sync_u64(&msf_stream_take_counter_ptr, 0);
       for(;;)
       {
-        U64 stream_num = ins_atomic_u64_inc_eval(&p2r_shared->msf_stream_lane_counter);
-        if(stream_num < 1 || p2r_shared->msf->stream_count < stream_num)
+        U64 stream_idx = ins_atomic_u64_inc_eval(msf_stream_take_counter_ptr) - 1;
+        if(stream_idx >= msf->stream_count)
         {
           break;
         }
-        U64 stream_idx = stream_num-1;
-        p2r_shared->msf->streams[stream_idx] = msf_data_from_stream_number(arena, params->input_pdb_data, p2r_shared->msf_raw_stream_table, stream_idx);
+        msf->streams[stream_idx] = msf_data_from_stream_number(arena, params->input_pdb_data, msf_raw_stream_table, stream_idx);
       }
     }
+    lane_sync();
+    
+    scratch_end(scratch2);
   }
   lane_sync();
-  MSF_Parsed *msf = p2r_shared->msf;
   
   //////////////////////////////////////////////////////////////
   //- rjf: do top-level MSF/PDB extraction
   //
+  PDB_Info *pdb_info = 0;
+  PDB_NamedStreamTable *named_streams = 0;
   ProfScope("do top-level MSF/PDB extraction") if(lane_idx() == 0)
   {
     ProfScope("parse PDB info")
     {
       String8 info_data = msf_data_from_stream(msf, PDB_FixedStream_Info);
-      p2r_shared->pdb_info = pdb_info_from_data(arena, info_data);
-      if(p2r_shared->pdb_info->features & PDB_FeatureFlag_MINIMAL_DBG_INFO)
+      pdb_info = pdb_info_from_data(scratch.arena, info_data);
+      if(pdb_info->features & PDB_FeatureFlag_MINIMAL_DBG_INFO)
       {
         log_user_error(str8_lit("PDB was linked with /DEBUG:FASTLINK; partial debug info is not supported. Please relink using /DEBUG:FULL."));
       }
     }
     ProfScope("parse named streams table")
     {
-      p2r_shared->named_streams = pdb_named_stream_table_from_info(arena, p2r_shared->pdb_info);
+      named_streams = pdb_named_stream_table_from_info(scratch.arena, pdb_info);
     }
   }
-  lane_sync();
-  PDB_Info *pdb_info = p2r_shared->pdb_info;
-  PDB_NamedStreamTable *named_streams = p2r_shared->named_streams;
+  lane_sync_u64(&pdb_info, 0);
+  lane_sync_u64(&named_streams, 0);
   
   //////////////////////////////////////////////////////////////
   //- rjf: parse PDB strtbl & top-level streams
   //
+  PDB_Strtbl *strtbl = 0;
+  String8 raw_strtbl = {0};
+  PDB_DbiParsed *dbi = 0;
+  PDB_TpiParsed *tpi = 0;
+  PDB_TpiParsed *ipi = 0;
   ProfScope("parse PDB strtbl & top-level streams")
   {
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("parse PDB strtbl")
     {
       MSF_StreamNumber strtbl_sn = named_streams->sn[PDB_NamedStream_StringTable];
       String8 strtbl_data = msf_data_from_stream(msf, strtbl_sn);
-      p2r_shared->strtbl = pdb_strtbl_from_data(arena, strtbl_data);
-      p2r_shared->raw_strtbl = str8_substr(strtbl_data, rng_1u64(p2r_shared->strtbl->strblock_min, p2r_shared->strtbl->strblock_max));
+      strtbl = pdb_strtbl_from_data(scratch.arena, strtbl_data);
+      raw_strtbl = str8_substr(strtbl_data, rng_1u64(strtbl->strblock_min, strtbl->strblock_max));
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("parse DBI")
     {
       String8 dbi_data = msf_data_from_stream(msf, PDB_FixedStream_Dbi);
-      p2r_shared->dbi = pdb_dbi_from_data(arena, dbi_data);
+      dbi = pdb_dbi_from_data(scratch.arena, dbi_data);
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("parse TPI")
     {
       String8 tpi_data = msf_data_from_stream(msf, PDB_FixedStream_Tpi);
-      p2r_shared->tpi = pdb_tpi_from_data(arena, tpi_data);
+      tpi = pdb_tpi_from_data(scratch.arena, tpi_data);
     }
     if(lane_idx() == lane_from_task_idx(3)) ProfScope("parse IPI")
     {
       String8 ipi_data = msf_data_from_stream(msf, PDB_FixedStream_Ipi);
-      p2r_shared->ipi = pdb_tpi_from_data(arena, ipi_data);
+      ipi = pdb_tpi_from_data(scratch.arena, ipi_data);
     }
   }
-  lane_sync();
-  PDB_Strtbl *strtbl = p2r_shared->strtbl;
-  String8 raw_strtbl = p2r_shared->raw_strtbl;
-  PDB_DbiParsed *dbi = p2r_shared->dbi;
-  PDB_TpiParsed *tpi = p2r_shared->tpi;
-  PDB_TpiParsed *ipi = p2r_shared->ipi;
+  lane_sync_u64(&strtbl, lane_from_task_idx(0));
+  lane_sync_u64(&raw_strtbl.size, lane_from_task_idx(0));
+  lane_sync_u64(&raw_strtbl.str, lane_from_task_idx(0));
+  lane_sync_u64(&dbi, lane_from_task_idx(1));
+  lane_sync_u64(&tpi, lane_from_task_idx(2));
+  lane_sync_u64(&ipi, lane_from_task_idx(3));
   
   //////////////////////////////////////////////////////////////
   //- rjf: unpack DBI
   //
+  COFF_SectionHeaderArray coff_sections = {0};
+  PDB_GsiParsed *gsi = 0;
+  PDB_GsiParsed *psi_gsi_part = 0;
   ProfScope("unpack DBI")
   {
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("parse COFF sections")
     {
       MSF_StreamNumber section_stream = dbi->dbg_streams[PDB_DbiStream_SECTION_HEADER];
       String8 section_data = msf_data_from_stream(msf, section_stream);
-      p2r_shared->coff_sections = pdb_coff_section_array_from_data(arena, section_data);
+      coff_sections = pdb_coff_section_array_from_data(scratch.arena, section_data);
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("parse GSI")
     {
       String8 gsi_data = msf_data_from_stream(msf, dbi->gsi_sn);
-      p2r_shared->gsi = pdb_gsi_from_data(arena, gsi_data);
+      gsi = pdb_gsi_from_data(scratch.arena, gsi_data);
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("parse GSI part of PSI")
     {
       String8 psi_data = msf_data_from_stream(msf, dbi->psi_sn);
       String8 psi_data_gsi_part = str8_range(psi_data.str + sizeof(PDB_PsiHeader), psi_data.str + psi_data.size);
-      p2r_shared->psi_gsi_part = pdb_gsi_from_data(arena, psi_data_gsi_part);
+      psi_gsi_part = pdb_gsi_from_data(scratch.arena, psi_data_gsi_part);
     }
   }
-  lane_sync();
-  COFF_SectionHeaderArray coff_sections = p2r_shared->coff_sections;
-  PDB_GsiParsed *gsi = p2r_shared->gsi;
-  PDB_GsiParsed *psi_gsi_part = p2r_shared->psi_gsi_part;
+  lane_sync_u64(&coff_sections.v, lane_from_task_idx(0));
+  lane_sync_u64(&coff_sections.count, lane_from_task_idx(0));
+  lane_sync_u64(&gsi, lane_from_task_idx(1));
+  lane_sync_u64(&psi_gsi_part, lane_from_task_idx(2));
   
   //////////////////////////////////////////////////////////////
   //- rjf: hash EXE, parse TPI/IPI hash/leaf & global symbol stream & comp units
   //
+  U64 exe_hash = 0;
+  PDB_TpiHashParsed *tpi_hash = 0;
+  CV_LeafParsed *tpi_leaf = 0;
+  PDB_TpiHashParsed *ipi_hash = 0;
+  CV_LeafParsed *ipi_leaf = 0;
+  PDB_CompUnitArray *comp_units = 0;
+  PDB_CompUnitContributionArray *comp_unit_contributions = 0;
   ProfScope("hash EXE, parse TPI/IPI hash/leaf & global symbol stream & comp units")
   {
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("hash EXE")
     {
-      p2r_shared->exe_hash = rdi_hash(params->input_exe_data.str, params->input_exe_data.size);
+      exe_hash = rdi_hash(params->input_exe_data.str, params->input_exe_data.size);
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("parse TPI hash")
     {
@@ -544,12 +579,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       {
         hash_data = aux_data = str8_zero();
       }
-      p2r_shared->tpi_hash = pdb_tpi_hash_from_data(arena, strtbl, tpi, hash_data, aux_data);
+      tpi_hash = pdb_tpi_hash_from_data(scratch.arena, strtbl, tpi, hash_data, aux_data);
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("parse TPI leaf")
     {
       String8 leaf_data = pdb_leaf_data_from_tpi(tpi);
-      p2r_shared->tpi_leaf = cv_leaf_from_data(arena, leaf_data, tpi->itype_first);
+      tpi_leaf = cv_leaf_from_data(scratch.arena, leaf_data, tpi->itype_first);
     }
     if(lane_idx() == lane_from_task_idx(3)) ProfScope("parse IPI hash")
     {
@@ -559,119 +594,146 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       {
         hash_data = aux_data = str8_zero();
       }
-      p2r_shared->ipi_hash = pdb_tpi_hash_from_data(arena, strtbl, ipi, hash_data, aux_data);
+      ipi_hash = pdb_tpi_hash_from_data(scratch.arena, strtbl, ipi, hash_data, aux_data);
     }
     if(lane_idx() == lane_from_task_idx(4)) ProfScope("parse IPI leaf")
     {
       String8 leaf_data = pdb_leaf_data_from_tpi(ipi);
-      p2r_shared->ipi_leaf = cv_leaf_from_data(arena, leaf_data, ipi->itype_first);
+      ipi_leaf = cv_leaf_from_data(scratch.arena, leaf_data, ipi->itype_first);
     }
     if(lane_idx() == lane_from_task_idx(5)) ProfScope("parse compilation units")
     {
       String8 comp_units_data = pdb_data_from_dbi_range(dbi, PDB_DbiRange_ModuleInfo);
-      p2r_shared->comp_units = pdb_comp_unit_array_from_data(arena, comp_units_data);
+      comp_units = pdb_comp_unit_array_from_data(scratch.arena, comp_units_data);
     }
     if(lane_idx() == lane_from_task_idx(6)) ProfScope("parse compilation unit contributions")
     {
       String8 contribs_data = pdb_data_from_dbi_range(dbi, PDB_DbiRange_SecCon);
-      p2r_shared->comp_unit_contributions = pdb_comp_unit_contribution_array_from_data(arena, contribs_data, coff_sections);
+      comp_unit_contributions = push_array(scratch.arena, PDB_CompUnitContributionArray, 1);
+      comp_unit_contributions[0] = pdb_comp_unit_contribution_array_from_data(scratch.arena, contribs_data, coff_sections);
     }
   }
-  lane_sync();
-  U64 exe_hash = p2r_shared->exe_hash;
-  PDB_TpiHashParsed *tpi_hash = p2r_shared->tpi_hash;
-  CV_LeafParsed *tpi_leaf = p2r_shared->tpi_leaf;
-  PDB_TpiHashParsed *ipi_hash = p2r_shared->ipi_hash;
-  CV_LeafParsed *ipi_leaf = p2r_shared->ipi_leaf;
-  PDB_CompUnitArray *comp_units = p2r_shared->comp_units;
-  PDB_CompUnitContributionArray *comp_unit_contributions = &p2r_shared->comp_unit_contributions;
+  lane_sync_u64(&exe_hash, lane_from_task_idx(0));
+  lane_sync_u64(&tpi_hash, lane_from_task_idx(1));
+  lane_sync_u64(&tpi_leaf, lane_from_task_idx(2));
+  lane_sync_u64(&ipi_hash, lane_from_task_idx(3));
+  lane_sync_u64(&ipi_leaf, lane_from_task_idx(4));
+  lane_sync_u64(&comp_units, lane_from_task_idx(5));
+  lane_sync_u64(&comp_unit_contributions, lane_from_task_idx(6));
   
   //////////////////////////////////////////////////////////////
   //- rjf: bucket compilation unit contributions
   //
+  RDIM_Rng1U64ChunkList *unit_ranges = 0;
   ProfScope("bucket compilation unit contributions") if(lane_idx() == 0)
   {
-    p2r_shared->unit_ranges = push_array(arena, RDIM_Rng1U64ChunkList, comp_units->count);
+    unit_ranges = push_array(scratch.arena, RDIM_Rng1U64ChunkList, comp_units->count);
     for(U64 idx = 0; idx < comp_unit_contributions->count; idx += 1)
     {
       PDB_CompUnitContribution *contribution = &comp_unit_contributions->contributions[idx];
       if(contribution->mod < comp_units->count)
       {
         RDIM_Rng1U64 r = {contribution->voff_first, contribution->voff_opl};
-        rdim_rng1u64_chunk_list_push(arena, &p2r_shared->unit_ranges[contribution->mod], 256, r);
+        rdim_rng1u64_chunk_list_push(arena, &unit_ranges[contribution->mod], 256, r);
       }
     }
   }
-  lane_sync();
-  RDIM_Rng1U64ChunkList *unit_ranges = p2r_shared->unit_ranges;
+  lane_sync_u64(&unit_ranges, 0);
   
   //////////////////////////////////////////////////////////////
   //- rjf: parse all syms & c13 line info streams
   //
+  U64 all_syms_count = 0;
+  CV_SymParsed **all_syms = 0;
+  CV_C13Parsed **all_c13s = 0;
   ProfScope("parse all syms & c13 line info streams")
   {
     //- rjf: setup outputs
     if(lane_idx() == 0)
     {
-      p2r_shared->all_syms_count = comp_units->count+1; // +1 for global symbol stream from DBI
-      p2r_shared->all_syms = push_array(arena, CV_SymParsed *, p2r_shared->all_syms_count);
-      p2r_shared->all_c13s = push_array(arena, CV_C13Parsed *, p2r_shared->all_syms_count);
-      p2r_shared->sym_c13_unit_lane_counter = 0;
+      all_syms_count = comp_units->count+1; // +1 for global symbol stream from DBI
+      all_syms = push_array(scratch.arena, CV_SymParsed *, all_syms_count);
+      all_c13s = push_array(scratch.arena, CV_C13Parsed *, all_syms_count);
     }
-    lane_sync();
+    lane_sync_u64(&all_syms_count, 0);
+    lane_sync_u64(&all_syms, 0);
+    lane_sync_u64(&all_c13s, 0);
     
     //- rjf: wide fill
     {
-      U64 task_count = p2r_shared->all_syms_count;
+      U64 task_counter = 0;
+      U64 *task_counter_ptr = &task_counter;
+      lane_sync_u64(&task_counter_ptr, 0);
+      U64 task_count = all_syms_count;
       for(;;)
       {
-        U64 task_num = ins_atomic_u64_inc_eval(&p2r_shared->sym_c13_unit_lane_counter);
-        if(task_num == 0 || task_count < task_num)
+        U64 task_idx = ins_atomic_u64_inc_eval(task_counter_ptr) - 1;
+        if(task_idx >= task_count)
         {
           break;
         }
-        U64 task_idx = task_num-1;
         if(task_idx > 0)
         {
           PDB_CompUnit *unit = comp_units->units[task_idx-1];
           String8 unit_sym_data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_Symbols);
           String8 unit_c13_data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_C13);
-          p2r_shared->all_syms[task_idx] = cv_sym_from_data(arena, unit_sym_data, 4);
-          p2r_shared->all_c13s[task_idx] = cv_c13_parsed_from_data(arena, unit_c13_data, raw_strtbl, coff_sections);
+          all_syms[task_idx] = cv_sym_from_data(arena, unit_sym_data, 4);
+          all_c13s[task_idx] = cv_c13_parsed_from_data(arena, unit_c13_data, raw_strtbl, coff_sections);
         }
         else
         {
           String8 global_sym_data = msf_data_from_stream(msf, dbi->sym_sn);
-          p2r_shared->all_syms[task_idx] = cv_sym_from_data(arena, global_sym_data, 4);
+          all_syms[task_idx] = cv_sym_from_data(arena, global_sym_data, 4);
         }
       }
     }
   }
   lane_sync();
-  U64 all_syms_count = p2r_shared->all_syms_count;
-  CV_SymParsed **all_syms = p2r_shared->all_syms;
-  CV_C13Parsed **all_c13s = p2r_shared->all_c13s;
   
   //////////////////////////////////////////////////////////////
   //- rjf: calculate EXE's max voff
   //
-  if(lane_idx() == 0)
+  U64 exe_voff_max = 0;
   {
-    COFF_SectionHeader *coff_sec_ptr = coff_sections.v;
-    COFF_SectionHeader *coff_ptr_opl = coff_sec_ptr + coff_sections.count;
-    for(;coff_sec_ptr < coff_ptr_opl; coff_sec_ptr += 1)
+    Temp scratch2 = scratch_begin(&scratch.arena, 1);
+    
+    // rjf: set up
+    U64 *lane_voff_maxes = 0;
+    if(lane_idx() == 0)
     {
-      U64 sec_voff_max = coff_sec_ptr->voff + coff_sec_ptr->vsize;
-      p2r_shared->exe_voff_max = Max(p2r_shared->exe_voff_max, sec_voff_max);
+      lane_voff_maxes = push_array(scratch2.arena, U64, lane_count());
     }
+    lane_sync_u64(&lane_voff_maxes, 0);
+    
+    // rjf: compute each lane's max
+    {
+      U64 lane_voff_max = 0;
+      COFF_SectionHeader *sections = coff_sections.v;
+      Rng1U64 range = lane_range(coff_sections.count);
+      for EachInRange(idx, range)
+      {
+        lane_voff_max = Max(lane_voff_max, sections[idx].voff + sections[idx].vsize);
+      }
+      lane_voff_maxes[lane_idx()] = lane_voff_max;
+    }
+    lane_sync();
+    
+    // rjf: find max from all lanes
+    U64 exe_voff_max = 0;
+    for EachIndex(l_idx, lane_count())
+    {
+      exe_voff_max = Max(exe_voff_max, lane_voff_maxes[l_idx]);
+    }
+    lane_sync();
+    
+    scratch_end(scratch2);
   }
-  lane_sync();
-  U64 exe_voff_max = p2r_shared->exe_voff_max;
   
   //////////////////////////////////////////////////////////////
   //- rjf: determine architecture
   //
-  if(lane_idx() == 0)
+  RDI_Arch arch = RDI_Arch_NULL;
+  U64 arch_addr_size = 0;
   {
     //
     // TODO(rjf): in some cases, the first compilation unit has a zero
@@ -689,42 +751,44 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //
     for EachIndex(idx, all_syms_count)
     {
-      p2r_shared->arch = p2r_rdi_arch_from_cv_arch(all_syms[idx]->info.arch);
-      if(p2r_shared->arch != RDI_Arch_NULL)
+      arch = p2r_rdi_arch_from_cv_arch(all_syms[idx]->info.arch);
+      if(arch != RDI_Arch_NULL)
       {
         break;
       }
     }
+    arch_addr_size = rdi_addr_size_from_arch(arch);
   }
-  lane_sync();
-  RDI_Arch arch = p2r_shared->arch;
-  U64 arch_addr_size = rdi_addr_size_from_arch(arch);
   
   //////////////////////////////////////////////////////////////
   //- rjf: predict total symbol count
   //
-  if(lane_idx() == 0)
+  U64 symbol_count_prediction = 0;
   {
-    U64 rec_range_count = 0;
-    for EachIndex(idx, all_syms_count)
+    U64 *symbol_count_prediction_ptr = &symbol_count_prediction;
+    lane_sync_u64(&symbol_count_prediction_ptr, 0);
+    U64 lane_sym_count = 0;
+    Rng1U64 range = lane_range(all_syms_count);
+    for EachInRange(idx, range)
     {
-      rec_range_count += all_syms[idx]->sym_ranges.count;
+      lane_sym_count += all_syms[idx]->sym_ranges.count;
     }
-    p2r_shared->symbol_count_prediction = rec_range_count/8;
-    p2r_shared->symbol_count_prediction = Max(p2r_shared->symbol_count_prediction, 256);
+    ins_atomic_u64_add_eval(symbol_count_prediction_ptr, lane_sym_count);
+    lane_sync();
+    symbol_count_prediction = *symbol_count_prediction_ptr;
   }
-  lane_sync();
-  U64 symbol_count_prediction = p2r_shared->symbol_count_prediction;
   
   //////////////////////////////////////////////////////////////
   //- rjf: build link name map
   //
-  ProfScope("build link name map") if(lane_idx() == 0 && all_syms_count != 0)
+  P2R_LinkNameMap *link_name_map = 0;
+  ProfScope("build link name map") if(all_syms_count != 0 && lane_idx() == 0)
   {
     // rjf: set up
     {
-      p2r_shared->link_name_map.buckets_count = symbol_count_prediction;
-      p2r_shared->link_name_map.buckets = push_array(arena, P2R_LinkNameNode *, p2r_shared->link_name_map.buckets_count);
+      link_name_map = push_array(scratch.arena, P2R_LinkNameMap, 1);
+      link_name_map->buckets_count = Max(1, symbol_count_prediction);
+      link_name_map->buckets = push_array(scratch.arena, P2R_LinkNameNode *, link_name_map->buckets_count);
     }
     
     // rjf: fill
@@ -732,7 +796,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       CV_SymParsed *sym = all_syms[0];
       CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
-      CV_RecRange *rec_ranges_opl   = rec_ranges_first + sym->sym_ranges.count;
+      CV_RecRange *rec_ranges_opl = sym->sym_ranges.ranges + sym->sym_ranges.count;
       for(CV_RecRange *rec_range = rec_ranges_first;
           rec_range < rec_ranges_opl;
           rec_range += 1)
@@ -767,9 +831,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             
             // rjf: commit to link name map
             U64 hash = p2r_hash_from_voff(voff);
-            U64 bucket_idx = hash%p2r_shared->link_name_map.buckets_count;
-            P2R_LinkNameNode *node = push_array(arena, P2R_LinkNameNode, 1);
-            SLLStackPush(p2r_shared->link_name_map.buckets[bucket_idx], node);
+            U64 bucket_idx = hash%link_name_map->buckets_count;
+            P2R_LinkNameNode *node = push_array(scratch.arena, P2R_LinkNameNode, 1);
+            SLLStackPush(link_name_map->buckets[bucket_idx], node);
             node->voff = voff;
             node->name = name;
           }break;
@@ -777,43 +841,46 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       }
     }
   }
-  lane_sync();
-  P2R_LinkNameMap link_name_map = p2r_shared->link_name_map;
+  lane_sync_u64(&link_name_map, 0);
   
   //////////////////////////////////////////////////////////////
   //- rjf: gather all file paths
   //
+  P2R_SrcFileStubArray *unit_file_stubs = 0;
+  U64Array *unit_file_paths_hashes = 0;
   ProfScope("gather all file paths")
   {
     //- rjf: prep outputs
     ProfScope("prep outputs") if(lane_idx() == 0)
     {
-      p2r_shared->unit_file_stubs = push_array(arena, P2R_SrcFileStubArray, comp_units->count);
-      p2r_shared->unit_file_paths_hashes = push_array(arena, U64Array, comp_units->count);
-      p2r_shared->sym_lane_take_counter = 0;
+      unit_file_stubs = push_array(scratch.arena, P2R_SrcFileStubArray, comp_units->count);
+      unit_file_paths_hashes = push_array(scratch.arena, U64Array, comp_units->count);
     }
-    lane_sync();
+    lane_sync_u64(&unit_file_stubs, 0);
+    lane_sync_u64(&unit_file_paths_hashes, 0);
     
     //- rjf: do wide gather
     ProfScope("do wide gather")
     {
-      Temp scratch = scratch_begin(&arena, 1);
+      Temp scratch2 = scratch_begin(&scratch.arena, 1);
       
       //- rjf: build local hash table to dedup files within this lane
       U64 hit_path_slots_count = 4096;
-      String8Node **hit_path_slots = push_array(scratch.arena, String8Node *, hit_path_slots_count);
+      String8Node **hit_path_slots = push_array(scratch2.arena, String8Node *, hit_path_slots_count);
       
       //- rjf: take units across lanes, find all file paths
+      U64 sym_take_counter = 0;
+      U64 *sym_take_counter_ptr = &sym_take_counter;
+      lane_sync_u64(&sym_take_counter_ptr, 0);
       ProfScope("take units across lanes, find all file paths")
         for(;;)
       {
         //- rjf: take next unit
-        U64 unit_num = ins_atomic_u64_inc_eval(&p2r_shared->sym_lane_take_counter);
-        if(unit_num > comp_units->count)
+        U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter_ptr) - 1;
+        if(unit_idx >= comp_units->count)
         {
           break;
         }
-        U64 unit_idx = unit_num-1;
         
         //- rjf: unpack unit
         PDB_CompUnit *unit = comp_units->units[unit_idx];
@@ -831,7 +898,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             MemoryZeroStruct(&obj_name);
           }
         }
-        String8 obj_folder_path = backslashed_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
+        String8 obj_folder_path = backslashed_from_str8(scratch2.arena, str8_chop_last_slash(obj_name));
         
         //- rjf: find all inline site symbols & gather file stubs
         P2R_SrcFileStubNode *first_src_file_stub = 0;
@@ -947,19 +1014,19 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     
                     // rjf: file name -> normalized file path
                     String8 file_path            = seq_file_name;
-                    String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+                    String8 file_path_normalized = lower_from_str8(scratch2.arena, str8_skip_chop_whitespace(file_path));
                     {
                       PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
-                      String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
+                      String8List file_path_normalized_parts = str8_split_path(scratch2.arena, file_path_normalized);
                       if(file_path_normalized_style == PathStyle_Relative)
                       {
-                        String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
+                        String8List obj_folder_path_parts = str8_split_path(scratch2.arena, obj_folder_path);
                         str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
                         file_path_normalized_parts = obj_folder_path_parts;
                         file_path_normalized_style = path_style_from_str8(obj_folder_path);
                       }
                       str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
-                      file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
+                      file_path_normalized = str8_path_list_join_by_style(scratch2.arena, &file_path_normalized_parts, file_path_normalized_style);
                     }
                     
                     // rjf: normalized file path -> source file node
@@ -976,15 +1043,15 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     }
                     if(hit_path_node == 0)
                     {
-                      hit_path_node = push_array(scratch.arena, String8Node, 1);
+                      hit_path_node = push_array(scratch2.arena, String8Node, 1);
                       SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
                       hit_path_node->string = file_path_normalized;
-                      P2R_SrcFileStubNode *stub_n = push_array(arena, P2R_SrcFileStubNode, 1);
+                      P2R_SrcFileStubNode *stub_n = push_array(scratch.arena, P2R_SrcFileStubNode, 1);
                       SLLQueuePush(first_src_file_stub, last_src_file_stub, stub_n);
                       src_file_stub_count += 1;
-                      stub_n->v.file_path = str8_copy(arena, file_path_normalized);
+                      stub_n->v.file_path = str8_copy(scratch.arena, file_path_normalized);
                       stub_n->v.checksum_kind = checksum_kind;
-                      stub_n->v.checksum = str8_copy(arena, checksum_value);
+                      stub_n->v.checksum = str8_copy(scratch.arena, checksum_value);
                     }
                     line_count = 0;
                   }
@@ -1020,19 +1087,19 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             {
               // rjf: file name -> sanitized file path
               String8 file_path = lines_n->v.file_name;
-              String8 file_path_sanitized = str8_copy(scratch.arena, str8_skip_chop_whitespace(file_path));
+              String8 file_path_sanitized = str8_copy(scratch2.arena, str8_skip_chop_whitespace(file_path));
               {
                 PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
-                String8List file_path_sanitized_parts = str8_split_path(scratch.arena, file_path_sanitized);
+                String8List file_path_sanitized_parts = str8_split_path(scratch2.arena, file_path_sanitized);
                 if(file_path_sanitized_style == PathStyle_Relative)
                 {
-                  String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
+                  String8List obj_folder_path_parts = str8_split_path(scratch2.arena, obj_folder_path);
                   str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
                   file_path_sanitized_parts = obj_folder_path_parts;
                   file_path_sanitized_style = path_style_from_str8(obj_folder_path);
                 }
                 str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
-                file_path_sanitized = str8_path_list_join_by_style(scratch.arena, &file_path_sanitized_parts, file_path_sanitized_style);
+                file_path_sanitized = str8_path_list_join_by_style(scratch2.arena, &file_path_sanitized_parts, file_path_sanitized_style);
               }
               
               // rjf: sanitized file path -> source file node
@@ -1049,71 +1116,73 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               }
               if(hit_path_node == 0)
               {
-                hit_path_node = push_array(scratch.arena, String8Node, 1);
+                hit_path_node = push_array(scratch2.arena, String8Node, 1);
                 SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
                 hit_path_node->string = file_path_sanitized;
                 P2R_SrcFileStubNode *stub_n = push_array(arena, P2R_SrcFileStubNode, 1);
                 SLLQueuePush(first_src_file_stub, last_src_file_stub, stub_n);
                 src_file_stub_count += 1;
-                stub_n->v.file_path = str8_copy(arena, file_path_sanitized);
+                stub_n->v.file_path = str8_copy(scratch.arena, file_path_sanitized);
                 stub_n->v.checksum_kind = lines_n->v.checksum_kind;
-                stub_n->v.checksum = str8_copy(arena, lines_n->v.checksum);
+                stub_n->v.checksum = str8_copy(scratch.arena, lines_n->v.checksum);
               }
             }
           }
         }
         
         //- rjf: merge into array for this unit
-        p2r_shared->unit_file_stubs[unit_idx].count = src_file_stub_count;
-        p2r_shared->unit_file_stubs[unit_idx].v = push_array_no_zero(arena, P2R_SrcFileStub, p2r_shared->unit_file_stubs[unit_idx].count);
+        unit_file_stubs[unit_idx].count = src_file_stub_count;
+        unit_file_stubs[unit_idx].v = push_array_no_zero(arena, P2R_SrcFileStub, unit_file_stubs[unit_idx].count);
         {
           U64 idx = 0;
           for EachNode(n, P2R_SrcFileStubNode, first_src_file_stub)
           {
-            p2r_shared->unit_file_stubs[unit_idx].v[idx] = n->v;
+            unit_file_stubs[unit_idx].v[idx] = n->v;
             idx += 1;
           }
         }
         
         //- rjf: hash this unit's file paths
         U64Array hashes = {0};
-        hashes.count = p2r_shared->unit_file_stubs[unit_idx].count;
+        hashes.count = unit_file_stubs[unit_idx].count;
         hashes.v = push_array(arena, U64, hashes.count);
-        for EachIndex(idx, p2r_shared->unit_file_stubs[unit_idx].count)
+        for EachIndex(idx, unit_file_stubs[unit_idx].count)
         {
-          hashes.v[idx] = rdi_hash(p2r_shared->unit_file_stubs[unit_idx].v[idx].file_path.str, p2r_shared->unit_file_stubs[unit_idx].v[idx].file_path.size);
+          hashes.v[idx] = rdi_hash(unit_file_stubs[unit_idx].v[idx].file_path.str, unit_file_stubs[unit_idx].v[idx].file_path.size);
         }
-        p2r_shared->unit_file_paths_hashes[unit_idx] = hashes;
+        unit_file_paths_hashes[unit_idx] = hashes;
       }
-      scratch_end(scratch);
+      lane_sync();
+      
+      scratch_end(scratch2);
     }
   }
-  lane_sync();
-  P2R_SrcFileStubArray *unit_file_stubs = p2r_shared->unit_file_stubs;
-  U64Array *unit_file_paths_hashes = p2r_shared->unit_file_paths_hashes;
   
   //////////////////////////////////////////////////////////////
   //- rjf: build unified collection & map for source files
   //
-  if(params->subset_flags & (RDIM_SubsetFlag_NormalSourcePathNameMap|
-                             RDIM_SubsetFlag_LineInfo|
-                             RDIM_SubsetFlag_InlineLineInfo))
+  RDIM_SrcFileChunkList *all_src_files__sequenceless = 0;
+  P2R_SrcFileMap *src_file_map = 0;
+  if(lane_idx() == 0 && params->subset_flags & (RDIM_SubsetFlag_NormalSourcePathNameMap|
+                                                RDIM_SubsetFlag_LineInfo|
+                                                RDIM_SubsetFlag_InlineLineInfo))
   {
     //- rjf: set up table
-    ProfScope("set up table") if(lane_idx() == 0)
+    U64 total_path_count = 0;
+    ProfScope("set up table")
     {
-      p2r_shared->total_path_count = 0;
+      all_src_files__sequenceless = push_array(scratch.arena, RDIM_SrcFileChunkList, 1);
+      src_file_map = push_array(scratch.arena, P2R_SrcFileMap, 1);
       for EachIndex(idx, comp_units->count)
       {
-        p2r_shared->total_path_count += unit_file_stubs[idx].count;
+        total_path_count += unit_file_stubs[idx].count;
       }
-      p2r_shared->src_file_map.slots_count = p2r_shared->total_path_count + p2r_shared->total_path_count/2 + 1;
-      p2r_shared->src_file_map.slots = push_array(arena, P2R_SrcFileNode *, p2r_shared->src_file_map.slots_count);
+      src_file_map->slots_count = total_path_count + total_path_count/2 + 1;
+      src_file_map->slots = push_array(scratch.arena, P2R_SrcFileNode *, src_file_map->slots_count);
     }
-    lane_sync();
     
     //- rjf: fill table
-    ProfScope("fill table") if(lane_idx() == 0)
+    ProfScope("fill table")
     {
       for EachIndex(idx, comp_units->count)
       {
@@ -1125,9 +1194,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           CV_C13ChecksumKind c13_checksum_kind = stubs.v[stub_idx].checksum_kind;
           String8 checksum = stubs.v[stub_idx].checksum;
           U64 file_path_sanitized_hash = hashes.v[stub_idx];
-          U64 src_file_slot = file_path_sanitized_hash%p2r_shared->src_file_map.slots_count;
+          U64 src_file_slot = file_path_sanitized_hash%src_file_map->slots_count;
           P2R_SrcFileNode *src_file_node = 0;
-          for(P2R_SrcFileNode *n = p2r_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+          for(P2R_SrcFileNode *n = src_file_map->slots[src_file_slot]; n != 0; n = n->next)
           {
             if(str8_match(n->src_file->path, file_path_sanitized, 0))
             {
@@ -1138,8 +1207,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           if(src_file_node == 0)
           {
             src_file_node = push_array(arena, P2R_SrcFileNode, 1);
-            SLLStackPush(p2r_shared->src_file_map.slots[src_file_slot], src_file_node);
-            src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &p2r_shared->all_src_files__sequenceless, p2r_shared->total_path_count);
+            SLLStackPush(src_file_map->slots[src_file_slot], src_file_node);
+            src_file_node->src_file = rdim_src_file_chunk_list_push(arena, all_src_files__sequenceless, total_path_count);
             src_file_node->src_file->path = str8_copy(arena, file_path_sanitized);
             src_file_node->src_file->checksum_kind = p2r_rdi_from_cv_c13_checksum_kind(c13_checksum_kind);
             src_file_node->src_file->checksum = str8_copy(arena, checksum);
@@ -1148,33 +1217,36 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       }
     }
   }
-  lane_sync();
-  RDIM_SrcFileChunkList all_src_files__sequenceless = p2r_shared->all_src_files__sequenceless;
-  P2R_SrcFileMap src_file_map = p2r_shared->src_file_map;
+  lane_sync_u64(&all_src_files__sequenceless, 0);
+  lane_sync_u64(&src_file_map, 0);
   
   //////////////////////////////////////////////////////////////
   //- rjf: convert unit info
   //
+  RDIM_UnitChunkList *all_units_ptr = 0;
+  RDIM_LineTableChunkList *units_line_tables = 0;
+  RDIM_LineTable **units_first_inline_site_line_tables = 0;
   ProfScope("convert unit info")
   {
     //- rjf: set up outputs
     ProfScope("set up outputs") if(lane_idx() == 0)
     {
+      all_units_ptr = push_array(scratch.arena, RDIM_UnitChunkList, 1);
       if(params->subset_flags & RDIM_SubsetFlag_Units)
       {
         for EachIndex(idx, comp_units->count)
         {
-          rdim_unit_chunk_list_push(arena, &p2r_shared->all_units, comp_units->count);
+          rdim_unit_chunk_list_push(arena, all_units_ptr, comp_units->count);
         }
       }
-      p2r_shared->units_line_tables = push_array(arena, RDIM_LineTableChunkList, comp_units->count);
-      p2r_shared->units_first_inline_site_line_tables = push_array(arena, RDIM_LineTable *, comp_units->count);
-      p2r_shared->sym_lane_take_counter = 0;
+      units_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, comp_units->count);
+      units_first_inline_site_line_tables = push_array(scratch.arena, RDIM_LineTable *, comp_units->count);
     }
-    lane_sync();
-    RDIM_Unit *units = p2r_shared->all_units.first ? p2r_shared->all_units.first->v : 0;
-    U64 units_count = p2r_shared->all_units.first ? p2r_shared->all_units.first->count : 0;
-    RDIM_LineTableChunkList *units_line_tables = p2r_shared->units_line_tables;
+    lane_sync_u64(&all_units_ptr, 0);
+    lane_sync_u64(&units_line_tables, 0);
+    lane_sync_u64(&units_first_inline_site_line_tables, 0);
+    RDIM_Unit *units = all_units_ptr->first ? all_units_ptr->first->v : 0;
+    U64 units_count = all_units_ptr->first ? all_units_ptr->first->count : 0;
     Assert(units_count == comp_units->count);
     
     //- rjf: do per-lane work
@@ -1183,16 +1255,18 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                                RDIM_SubsetFlag_LineInfo|
                                RDIM_SubsetFlag_InlineLineInfo))
     {
+      U64 sym_take_counter = 0;
+      U64 *sym_take_counter_ptr = &sym_take_counter;
+      lane_sync_u64(&sym_take_counter_ptr, 0);
       ProfScope("wide fill") for(;;)
       {
         //- rjf: take next unit
-        U64 unit_num = ins_atomic_u64_inc_eval(&p2r_shared->sym_lane_take_counter);
-        if(unit_num > comp_units->count)
+        U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter_ptr) - 1;
+        if(unit_idx >= comp_units->count)
         {
           break;
         }
         Temp scratch = scratch_begin(&arena, 1);
-        U64 unit_idx = unit_num-1;
         RDIM_LineTableChunkList *dst_line_tables = &units_line_tables[unit_idx];
         PDB_CompUnit *src_unit     = comp_units->units[unit_idx];
         CV_SymParsed *src_unit_sym = all_syms[unit_idx+1];
@@ -1255,11 +1329,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: sanitized file path -> source file node
                 U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
-                U64 src_file_slot = file_path_sanitized_hash%src_file_map.slots_count;
+                U64 src_file_slot = file_path_sanitized_hash%src_file_map->slots_count;
                 P2R_SrcFileNode *src_file_node = 0;
                 if(lines->line_count != 0)
                 {
-                  for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+                  for(P2R_SrcFileNode *n = src_file_map->slots[src_file_slot]; n != 0; n = n->next)
                   {
                     if(str8_match(n->src_file->path, file_path_sanitized, 0))
                     {
@@ -1436,9 +1510,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                       
                       // rjf: sanitized file path -> source file node
                       U64              file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
-                      U64              src_file_slot            = file_path_sanitized_hash%src_file_map.slots_count;
+                      U64              src_file_slot            = file_path_sanitized_hash%src_file_map->slots_count;
                       P2R_SrcFileNode *src_file_node            = 0;
-                      for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+                      for(P2R_SrcFileNode *n = src_file_map->slots[src_file_slot]; n != 0; n = n->next)
                       {
                         if(str8_match(n->src_file->path, file_path_sanitized, 0))
                         {
@@ -1471,9 +1545,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                         if(line_table == 0)
                         {
                           line_table = rdim_line_table_chunk_list_push(arena, dst_line_tables, 256);
-                          if(p2r_shared->units_first_inline_site_line_tables[unit_idx] == 0)
+                          if(units_first_inline_site_line_tables[unit_idx] == 0)
                           {
-                            p2r_shared->units_first_inline_site_line_tables[unit_idx] = line_table;
+                            units_first_inline_site_line_tables[unit_idx] = line_table;
                           }
                         }
                         rdim_line_table_push_sequence(arena, dst_line_tables, line_table, src_file_node->src_file, voffs, line_nums, 0, line_count);
@@ -1520,22 +1594,22 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     }
   }
   lane_sync();
-  RDIM_UnitChunkList all_units = p2r_shared->all_units;
-  RDIM_LineTableChunkList *units_line_tables = p2r_shared->units_line_tables;
-  RDIM_LineTable **units_first_inline_site_line_tables = p2r_shared->units_first_inline_site_line_tables;
+  RDIM_UnitChunkList all_units = *all_units_ptr;
   
   //////////////////////////////////////////////////////////////
   //- rjf: join all line tables
   //
+  RDIM_LineTableChunkList all_line_tables = {0};
+  RDIM_LineTableChunkList *all_line_tables_ptr = &all_line_tables;
   ProfScope("join all line tables") if(lane_idx() == 0)
   {
     for EachIndex(idx, comp_units->count)
     {
-      rdim_line_table_chunk_list_concat_in_place(&p2r_shared->all_line_tables, &units_line_tables[idx]);
+      rdim_line_table_chunk_list_concat_in_place(&all_line_tables, &units_line_tables[idx]);
     }
   }
-  lane_sync();
-  RDIM_LineTableChunkList all_line_tables = p2r_shared->all_line_tables;
+  lane_sync_u64(&all_line_tables_ptr, 0);
+  all_line_tables = *all_line_tables_ptr;
   
   //////////////////////////////////////////////////////////////
   //- rjf: equip source files with line sequences
@@ -1551,13 +1625,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         RDIM_LineTable *line_table = &line_table_chunk_n->v[chunk_line_table_idx];
         for(RDIM_LineSequenceNode *s = line_table->first_seq; s != 0; s = s->next)
         {
-          rdim_src_file_push_line_sequence(arena, &p2r_shared->all_src_files__sequenceless, s->v.src_file, &s->v);
+          rdim_src_file_push_line_sequence(arena, all_src_files__sequenceless, s->v.src_file, &s->v);
         }
       }
     }
   }
   lane_sync();
-  RDIM_SrcFileChunkList all_src_files = p2r_shared->all_src_files__sequenceless;
+  RDIM_SrcFileChunkList all_src_files = *all_src_files__sequenceless;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 1: produce type forward resolution map
@@ -1568,25 +1642,30 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   // to hook types up to their actual destination complete types wherever
   // possible, and so this map can be used to do that in subsequent stages.
   //
+  CV_TypeId *itype_fwd_map = 0;
+  CV_TypeId itype_first = 0;
+  CV_TypeId itype_opl = 0;
   ProfScope("types pass 1: produce type forward resolution map")
   {
     //- rjf: allocate forward resolution map
     if(lane_idx() == 0)
     {
-      p2r_shared->itype_first = tpi_leaf->itype_first;
-      p2r_shared->itype_opl = tpi_leaf->itype_opl;
-      p2r_shared->itype_fwd_map = push_array(arena, CV_TypeId, (U64)p2r_shared->itype_opl);
+      itype_first = tpi_leaf->itype_first;
+      itype_opl = tpi_leaf->itype_opl;
+      itype_fwd_map = push_array(scratch.arena, CV_TypeId, (U64)itype_opl);
     }
-    lane_sync();
+    lane_sync_u64(&itype_first, 0);
+    lane_sync_u64(&itype_opl, 0);
+    lane_sync_u64(&itype_fwd_map, 0);
     
     //- rjf: do wide fill
     if(params->subset_flags & RDIM_SubsetFlag_Types)
     {
-      Rng1U64 range = lane_range(p2r_shared->itype_opl);
+      Rng1U64 range = lane_range(itype_opl);
       for EachInRange(idx, range)
       {
         CV_TypeId itype = (CV_TypeId)idx;
-        if(itype < p2r_shared->itype_first) { continue; }
+        if(itype < itype_first) { continue; }
         
         //- rjf: determine if this itype resolves to another
         CV_TypeId itype_fwd = 0;
@@ -1698,15 +1777,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         //- rjf: if the forwarded itype is nonzero & in TPI range -> save to map
         if(itype_fwd != 0 && itype_fwd < tpi_leaf->itype_opl)
         {
-          p2r_shared->itype_fwd_map[itype] = itype_fwd;
+          itype_fwd_map[itype] = itype_fwd;
         }
       }
     }
   }
   lane_sync();
-  CV_TypeId *itype_fwd_map = p2r_shared->itype_fwd_map;
-  CV_TypeId itype_first = p2r_shared->itype_first;
-  CV_TypeId itype_opl = p2r_shared->itype_opl;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 2: produce per-itype itype chain
@@ -1718,29 +1794,30 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   // this chain is walked, so that deeper dependencies are built first, and
   // as such, always show up *earlier* in the actually built types.
   //
+  P2R_TypeIdChain **itype_chains = 0;
   ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
   {
     //- rjf: allocate itype chain table
     if(lane_idx() == 0)
     {
-      p2r_shared->itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)p2r_shared->itype_opl);
+      itype_chains = push_array(scratch.arena, P2R_TypeIdChain *, (U64)itype_opl);
     }
-    lane_sync();
+    lane_sync_u64(&itype_chains, 0);
     
     //- rjf: do wide fill
     if(params->subset_flags & RDIM_SubsetFlag_Types)
     {
-      Rng1U64 range = lane_range(p2r_shared->itype_opl);
+      Rng1U64 range = lane_range(itype_opl);
       for EachInRange(idx, range)
       {
         CV_TypeId itype = (CV_TypeId)idx;
-        if(itype < p2r_shared->itype_first) { continue; }
+        if(itype < itype_first) { continue; }
         
         //- rjf: push initial itype - should be final-visited-itype for this itype
         {
-          P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+          P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
           c->itype = itype;
-          SLLStackPush(p2r_shared->itype_chains[itype], c);
+          SLLStackPush(itype_chains[itype], c);
         }
         
         //- rjf: skip basic types for dependency walk
@@ -1750,7 +1827,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
         
         //- rjf: walk dependent types, push to chain
-        Temp scratch = scratch_begin(&arena, 1);
+        Temp scratch2 = scratch_begin(&scratch.arena, 1);
         P2R_TypeIdChain start_walk_task = {0, itype};
         P2R_TypeIdChain *first_walk_task = &start_walk_task;
         P2R_TypeIdChain *last_walk_task = &start_walk_task;
@@ -1783,14 +1860,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: push dependent itype to chain
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itype
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -1803,14 +1880,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: push dependent itype to chain
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itype
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -1823,14 +1900,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: push return itypes to chain
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->ret_itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk return itype
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->ret_itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -1858,15 +1935,15 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 // rjf: push arg types to chain
                 for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = arglist_itypes_base[idx];
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk arg types
                 for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = arglist_itypes_base[idx];
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -1879,34 +1956,34 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: push dependent itypes to chain
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->ret_itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->arg_itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->this_itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itypes
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->ret_itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->arg_itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->this_itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -1934,15 +2011,15 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 // rjf: push arg types to chain
                 for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = arglist_itypes_base[idx];
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk arg types
                 for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = arglist_itypes_base[idx];
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -1955,14 +2032,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: push dependent itype to chain
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itype
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -1975,24 +2052,24 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: push dependent itypes to chain
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->entry_itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->index_itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itypes
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->entry_itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->index_itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -2005,14 +2082,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: push dependent itypes to chain
                 {
-                  P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->base_itype;
-                  SLLStackPush(p2r_shared->itype_chains[itype], c);
+                  SLLStackPush(itype_chains[itype], c);
                 }
                 
                 // rjf: push task to walk dependency itypes
                 {
-                  P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                  P2R_TypeIdChain *c = push_array(scratch2.arena, P2R_TypeIdChain, 1);
                   c->itype = lf->base_itype;
                   SLLQueuePush(first_walk_task, last_walk_task, c);
                 }
@@ -2020,12 +2097,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             }
           }
         }
-        scratch_end(scratch);
+        scratch_end(scratch2);
       }
     }
   }
   lane_sync();
-  P2R_TypeIdChain **itype_chains = p2r_shared->itype_chains;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 3: construct all types from TPI
@@ -2034,13 +2110,16 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   // subsequent passes, to build RDI "UDT" information, which is distinct
   // from regular type info.
   //
+  RDIM_TypeChunkList all_types__pre_typedefs = {0};
+  RDIM_TypeChunkList *all_types__pre_typedefs_ptr = &all_types__pre_typedefs;
+  RDIM_Type **itype_type_ptrs = 0;
+  RDIM_Type **basic_type_ptrs = 0;
   if(lane_idx() == 0) ProfScope("types pass 3: construct all root/stub types from TPI")
   {
 #define p2r_builtin_type_ptr_from_kind(kind) ((basic_type_ptrs && RDI_TypeKind_FirstBuiltIn <= (kind) && (kind) <= RDI_TypeKind_LastBuiltIn) ? (basic_type_ptrs[(kind) - RDI_TypeKind_FirstBuiltIn]) : 0)
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
-    RDIM_Type **itype_type_ptrs = push_array(arena, RDIM_Type *, (U64)(itype_opl));
-    RDIM_Type **basic_type_ptrs = push_array(arena, RDIM_Type *, (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn + 1));
-    RDIM_TypeChunkList all_types = {0};
+    itype_type_ptrs = push_array(scratch.arena, RDIM_Type *, (U64)(itype_opl));
+    basic_type_ptrs = push_array(scratch.arena, RDIM_Type *, (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn + 1));
     
     ////////////////////////////
     //- rjf: build basic types
@@ -2051,7 +2130,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           type_kind <= RDI_TypeKind_LastBuiltIn;
           type_kind += 1)
       {
-        RDIM_Type *type = rdim_type_chunk_list_push(arena, &all_types, 512);
+        RDIM_Type *type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, 512);
         type->name.str  = rdi_string_from_type_kind(type_kind, &type->name.size);
         type->kind      = type_kind;
         type->byte_size = rdi_size_from_basic_type_kind(type_kind);
@@ -2124,7 +2203,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       };
       for EachElement(idx, table)
       {
-        RDIM_Type *builtin_alias   = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
+        RDIM_Type *builtin_alias   = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, tpi_leaf->itype_opl);
         builtin_alias->kind        = RDI_TypeKind_Alias;
         builtin_alias->name        = str8_cstring(table[idx].name);
         builtin_alias->direct_type = p2r_builtin_type_ptr_from_kind(table[idx].kind_rdi);
@@ -2184,7 +2263,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             {
               RDI_TypeKind type_kind = p2r_rdi_type_kind_from_cv_basic_type(cv_basic_type_code);
               U32 byte_size = rdi_size_from_basic_type_kind(type_kind);
-              basic_type = dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+              basic_type = dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
               if(byte_size == 0xffffffff)
               {
                 byte_size = arch_addr_size;
@@ -2197,7 +2276,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             // rjf: nonzero ptr kind -> form ptr type to basic tpye
             if(cv_basic_ptr_kind != 0)
             {
-              dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+              dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
               dst_type->kind        = RDI_TypeKind_Ptr;
               dst_type->byte_size   = arch_addr_size;
               dst_type->direct_type = basic_type;
@@ -2242,7 +2321,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   }
                   else
                   {
-                    dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                    dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                     dst_type->kind        = RDI_TypeKind_Modifier;
                     dst_type->flags       = flags;
                     dst_type->direct_type = p2r_type_ptr_from_itype(lf->itype);
@@ -2292,8 +2371,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   // rjf: fill type
                   if(modifier_flags != 0)
                   {
-                    RDIM_Type *pointer_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
-                    dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                    RDIM_Type *pointer_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
+                    dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                     dst_type->kind             = RDI_TypeKind_Modifier;
                     dst_type->flags            = modifier_flags;
                     dst_type->direct_type      = pointer_type;
@@ -2304,7 +2383,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   }
                   else
                   {
-                    dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                    dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                     dst_type->kind        = type_kind;
                     dst_type->byte_size   = arch_addr_size;
                     dst_type->direct_type = direct_type;
@@ -2321,7 +2400,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   RDIM_Type *ret_type = p2r_type_ptr_from_itype(lf->ret_itype);
                   
                   // rjf: fill type's basics
-                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                   dst_type->kind        = RDI_TypeKind_Function;
                   dst_type->byte_size   = arch_addr_size;
                   dst_type->direct_type = ret_type;
@@ -2369,7 +2448,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   RDIM_Type *ret_type  = p2r_type_ptr_from_itype(lf->ret_itype);
                   
                   // rjf: fill type
-                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                   dst_type->kind        = (lf->this_itype != 0) ? RDI_TypeKind_Method : RDI_TypeKind_Function;
                   dst_type->byte_size   = arch_addr_size;
                   dst_type->direct_type = ret_type;
@@ -2423,7 +2502,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->itype);
                   
                   // rjf: fill type
-                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                   dst_type->kind        = RDI_TypeKind_Bitfield;
                   dst_type->off         = lf->pos;
                   dst_type->count       = lf->len;
@@ -2442,7 +2521,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   U64 full_size = cv_u64_from_numeric(&array_count);
                   
                   // rjf: fill type
-                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                   dst_type->kind        = RDI_TypeKind_Array;
                   dst_type->direct_type = direct_type;
                   dst_type->byte_size   = full_size;
@@ -2464,7 +2543,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
                   
                   // rjf: fill type
-                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                   if(lf->props & CV_TypeProp_FwdRef)
                   {
                     dst_type->kind = (kind == CV_LeafKind_CLASS ? RDI_TypeKind_IncompleteClass : RDI_TypeKind_IncompleteStruct);
@@ -2493,7 +2572,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
                   
                   // rjf: fill type
-                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                   if(lf->props & CV_TypeProp_FwdRef)
                   {
                     dst_type->kind = (kind == CV_LeafKind_CLASS2 ? RDI_TypeKind_IncompleteClass : RDI_TypeKind_IncompleteStruct);
@@ -2521,7 +2600,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
                   
                   // rjf: fill type
-                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                   if(lf->props & CV_TypeProp_FwdRef)
                   {
                     dst_type->kind = RDI_TypeKind_IncompleteUnion;
@@ -2547,7 +2626,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
                   
                   // rjf: fill type
-                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, all_types__pre_typedefs_ptr, (U64)itype_opl);
                   if(lf->props & CV_TypeProp_FwdRef)
                   {
                     dst_type->kind = RDI_TypeKind_IncompleteEnum;
@@ -2570,16 +2649,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
       }
     }
-    p2r_shared->itype_type_ptrs = itype_type_ptrs;
-    p2r_shared->basic_type_ptrs = basic_type_ptrs;
-    p2r_shared->all_types__pre_typedefs = all_types;
 #undef p2r_type_ptr_from_itype
 #undef p2r_builtin_type_ptr_from_kind
   }
-  lane_sync();
-  RDIM_Type **itype_type_ptrs = p2r_shared->itype_type_ptrs;
-  RDIM_Type **basic_type_ptrs = p2r_shared->basic_type_ptrs;
-  RDIM_TypeChunkList all_types__pre_typedefs = p2r_shared->all_types__pre_typedefs;
+  lane_sync_u64(&itype_type_ptrs, 0);
+  lane_sync_u64(&basic_type_ptrs, 0);
+  lane_sync_u64(&all_types__pre_typedefs_ptr, 0);
+  all_types__pre_typedefs = *all_types__pre_typedefs_ptr;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 4: build UDTs
@@ -3258,7 +3334,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       p2r_shared->syms_scopes           = push_array(arena, RDIM_ScopeChunkList, all_syms_count);
       p2r_shared->syms_inline_sites     = push_array(arena, RDIM_InlineSiteChunkList, all_syms_count);
       p2r_shared->syms_typedefs         = push_array(arena, RDIM_TypeChunkList, all_syms_count);
-      p2r_shared->sym_lane_take_counter  = 0;
     }
     lane_sync();
     
@@ -3277,15 +3352,17 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                                RDIM_SubsetFlag_LinkNameProcedureNameMap|
                                RDIM_SubsetFlag_Types))
     {
+      U64 sym_take_counter = 0;
+      U64 *sym_take_counter_ptr = &sym_take_counter;
+      lane_sync_u64(&sym_take_counter_ptr, 0);
       for(;;)
       {
         //- rjf: take next sym
-        U64 sym_num = ins_atomic_u64_inc_eval(&p2r_shared->sym_lane_take_counter);
-        if(sym_num > all_syms_count)
+        U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter_ptr) - 1;
+        if(sym_idx >= all_syms_count)
         {
           break;
         }
-        U64 sym_idx = sym_num-1;
         
         //- rjf: unpack sym
         Temp scratch = scratch_begin(&arena, 1);
@@ -3602,9 +3679,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   U64 voff = procedure_root_scope->voff_ranges.min;
                   U64 hash = p2r_hash_from_voff(voff);
-                  U64 bucket_idx = hash%link_name_map.buckets_count;
+                  U64 bucket_idx = hash%link_name_map->buckets_count;
                   P2R_LinkNameNode *node = 0;
-                  for(P2R_LinkNameNode *n = link_name_map.buckets[bucket_idx]; n != 0; n = n->next)
+                  for(P2R_LinkNameNode *n = link_name_map->buckets[bucket_idx]; n != 0; n = n->next)
                   {
                     if(n->voff == voff)
                     {
@@ -4261,9 +4338,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_type_chunk_list_concat_in_place(&p2r_shared->all_types__pre_typedefs, &p2r_shared->syms_typedefs[idx]);
+        rdim_type_chunk_list_concat_in_place(&all_types__pre_typedefs, &p2r_shared->syms_typedefs[idx]);
       }
-      p2r_shared->all_types = p2r_shared->all_types__pre_typedefs;
+      p2r_shared->all_types = all_types__pre_typedefs;
     }
   }
   lane_sync();
@@ -4331,5 +4408,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     result.inline_sites     = all_inline_sites;
   }
   
+  scratch_end(scratch);
   return result;
 }
