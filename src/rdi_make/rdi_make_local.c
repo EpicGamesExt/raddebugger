@@ -997,7 +997,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       Rng1U64 slot_range = lane_range(top->slots_count);
       for EachInRange(slot_idx, slot_range)
       {
-        if(map->slots[slot_idx] != 0 && map->slots[slot_idx]->total_count > 1)
+        if(map->slots[slot_idx] != 0)
         {
           *map->slots[slot_idx] = rdim_bake_string_chunk_list_sorted_from_unsorted(arena, map->slots[slot_idx]);
         }
@@ -1104,7 +1104,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             for EachInRange(n_idx, n_range)
             {
               RDIM_Symbol *symbol = &n->v[n_idx];
-              rdim_bake_name_map_insert(arena, top, map, 4, link_names ? symbol->link_name : symbol->name, rdim_idx_from_symbol(symbol));
+              rdim_bake_name_map_insert(scratch.arena, top, map, 4, link_names ? symbol->link_name : symbol->name, rdim_idx_from_symbol(symbol));
             }
           }
         }break;
@@ -1117,7 +1117,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             for EachInRange(n_idx, n_range)
             {
               RDIM_Type *type = &n->v[n_idx];
-              rdim_bake_name_map_insert(arena, top, map, 4, type->name, rdim_idx_from_type(type));
+              rdim_bake_name_map_insert(scratch.arena, top, map, 4, type->name, rdim_idx_from_type(type));
             }
           }
         }break;
@@ -1131,7 +1131,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             {
               RDIM_SrcFile *src_file = &n->v[n_idx];
               RDIM_String8 normalized_path = rdim_lower_from_str8(arena, src_file->path);
-              rdim_bake_name_map_insert(arena, top, map, 4, normalized_path, rdim_idx_from_src_file(src_file));
+              rdim_bake_name_map_insert(scratch.arena, top, map, 4, normalized_path, rdim_idx_from_src_file(src_file));
             }
           }
         }break;
@@ -1183,7 +1183,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         {
           if(map->slots[slot_idx] != 0)
           {
-            *map->slots[slot_idx] = rdim_bake_name_chunk_list_sorted_from_unsorted(arena, map->slots[slot_idx]);
+            RDIM_BakeNameChunkList *scratch_og_unsorted = map->slots[slot_idx];
+            map->slots[slot_idx] = push_array(arena, RDIM_BakeNameChunkList, 1);
+            *map->slots[slot_idx] = rdim_bake_name_chunk_list_sorted_from_unsorted(arena, scratch_og_unsorted);
           }
         }
       }
