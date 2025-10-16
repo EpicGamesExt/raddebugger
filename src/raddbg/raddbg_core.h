@@ -5,26 +5,6 @@
 #define RADDBG_CORE_H
 
 ////////////////////////////////
-//~ rjf: Config IDs
-
-typedef U64 RD_CfgID;
-
-typedef struct RD_CfgIDNode RD_CfgIDNode;
-struct RD_CfgIDNode
-{
-  RD_CfgIDNode *next;
-  RD_CfgID v;
-};
-
-typedef struct RD_CfgIDList RD_CfgIDList;
-struct RD_CfgIDList
-{
-  RD_CfgIDNode *first;
-  RD_CfgIDNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Key Bindings
 
 typedef struct RD_Binding RD_Binding;
@@ -39,7 +19,7 @@ struct RD_KeyMapNode
 {
   RD_KeyMapNode *name_hash_next;
   RD_KeyMapNode *binding_hash_next;
-  RD_CfgID cfg_id;
+  CFG_ID cfg_id;
   String8 name;
   RD_Binding binding;
 };
@@ -197,7 +177,7 @@ struct RD_ViewState
   // rjf: hash links & key
   RD_ViewState *hash_next;
   RD_ViewState *hash_prev;
-  RD_CfgID cfg_id;
+  CFG_ID cfg_id;
   
   // rjf: touch info
   U64 last_frame_index_touched;
@@ -278,7 +258,7 @@ struct RD_Cfg
   RD_Cfg *next;
   RD_Cfg *prev;
   RD_Cfg *parent;
-  RD_CfgID id;
+  CFG_ID id;
   String8 string;
 };
 
@@ -432,7 +412,7 @@ struct RD_WindowState
   RD_WindowState *order_prev;
   RD_WindowState *hash_next;
   RD_WindowState *hash_prev;
-  RD_CfgID cfg_id;
+  CFG_ID cfg_id;
   U64 frames_alive;
   U64 last_frame_index_touched;
   
@@ -470,8 +450,8 @@ struct RD_WindowState
   B32 query_is_active;
   Arena *query_arena;
   RD_Regs *query_regs;
-  RD_CfgID query_view_id;
-  RD_CfgID query_last_view_id;
+  CFG_ID query_view_id;
+  CFG_ID query_last_view_id;
   
   // rjf: hover eval state
   B32 hover_eval_focused;
@@ -674,7 +654,7 @@ struct RD_State
   RD_CfgSlot *cfg_id_slots;
   RD_CfgNode *free_cfg_id_node;
   U64 cfg_id_gen;
-  RD_CfgID cfg_last_accessed_id;
+  CFG_ID cfg_last_accessed_id;
   RD_Cfg *cfg_last_accessed;
   U64 cfg_change_gen;
   
@@ -682,23 +662,23 @@ struct RD_State
   U64 window_state_slots_count;
   RD_WindowStateSlot *window_state_slots;
   RD_WindowState *free_window_state;
-  RD_CfgID last_focused_window;
+  CFG_ID last_focused_window;
   RD_WindowState *first_window_state;
   RD_WindowState *last_window_state;
-  RD_CfgID window_state_last_accessed_id;
+  CFG_ID window_state_last_accessed_id;
   RD_WindowState *window_state_last_accessed;
   
   // rjf: view state cache
   U64 view_state_slots_count;
   RD_ViewStateSlot *view_state_slots;
   RD_ViewState *free_view_state;
-  RD_CfgID view_state_last_accessed_id;
+  CFG_ID view_state_last_accessed_id;
   RD_ViewState *view_state_last_accessed;
   
   // rjf: bind change
   Arena *bind_change_arena;
   B32 bind_change_active;
-  RD_CfgID bind_change_binding_id;
+  CFG_ID bind_change_binding_id;
   String8 bind_change_cmd_name;
   
   // rjf: pre-stop focused window
@@ -755,14 +735,8 @@ read_only global RD_WindowState rd_nil_window_state =
 };
 
 global RD_State *rd_state = 0;
-global RD_CfgID rd_last_drag_drop_panel = 0;
-global RD_CfgID rd_last_drag_drop_prev_tab = 0;
-
-////////////////////////////////
-//~ rjf: Config ID Type Functions
-
-internal void rd_cfg_id_list_push(Arena *arena, RD_CfgIDList *list, RD_CfgID id);
-internal RD_CfgIDList rd_cfg_id_list_copy(Arena *arena, RD_CfgIDList *src);
+global CFG_ID rd_last_drag_drop_panel = 0;
+global CFG_ID rd_last_drag_drop_prev_tab = 0;
 
 ////////////////////////////////
 //~ rjf: Registers Type Functions
@@ -807,7 +781,7 @@ internal void rd_name_release(String8 string);
 internal RD_Cfg *rd_cfg_alloc(void);
 internal void rd_cfg_release(RD_Cfg *cfg);
 internal void rd_cfg_release_all_children(RD_Cfg *cfg);
-internal RD_Cfg *rd_cfg_from_id(RD_CfgID id);
+internal RD_Cfg *rd_cfg_from_id(CFG_ID id);
 internal RD_Cfg *rd_cfg_new(RD_Cfg *parent, String8 string);
 internal RD_Cfg *rd_cfg_newf(RD_Cfg *parent, char *fmt, ...);
 internal RD_Cfg *rd_cfg_new_replace(RD_Cfg *parent, String8 string);

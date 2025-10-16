@@ -1089,7 +1089,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
                                            block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches) ||
                                            block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment)))
       {
-        RD_CfgID id = row->key.child_id;
+        CFG_ID id = row->key.child_id;
         info.group_cfg_child = rd_cfg_from_id(id);
       }
     }

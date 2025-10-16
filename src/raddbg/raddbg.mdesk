@@ -713,14 +713,14 @@ RD_RegTable:
   {CTRL_Handle       ctrl_entity      CtrlEntity    }
   
   // rjf: cfgs
-  {RD_CfgID          window           Window        }
-  {RD_CfgID          panel            Panel         }
-  {RD_CfgID          tab              Tab           }
-  {RD_CfgID          view             View          }
-  {RD_CfgID          prev_tab         PrevTab       }
-  {RD_CfgID          dst_panel        DstPanel      }
-  {RD_CfgID          cfg              Cfg           }
-  {RD_CfgIDList      cfg_list         CfgList       }
+  {CFG_ID            window           Window        }
+  {CFG_ID            panel            Panel         }
+  {CFG_ID            tab              Tab           }
+  {CFG_ID            view             View          }
+  {CFG_ID            prev_tab         PrevTab       }
+  {CFG_ID            dst_panel        DstPanel      }
+  {CFG_ID            cfg              Cfg           }
+  {CFG_IDList        cfg_list         CfgList       }
   
   // rjf: evaluation space
   {E_Space           eval_space       EvalSpace     }

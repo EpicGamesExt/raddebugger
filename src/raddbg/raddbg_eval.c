@@ -636,7 +636,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(cfgs)
      str8_match(str8_prefix(rhs->string, 1), str8_lit("$"), 0))
   {
     String8 numeric_part = str8_skip(rhs->string, 1);
-    RD_CfgID id = u64_from_str8(numeric_part, 16);
+    CFG_ID id = u64_from_str8(numeric_part, 16);
     RD_Cfg *cfg = rd_cfg_from_id(id);
     E_Space space = rd_eval_space_from_cfg(cfg);
     result.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
@@ -739,7 +739,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(cfgs_slice)
     case E_ExprKind_MemberAccess:
     {
       String8 rhs_name = expr->first->next->string;
-      RD_CfgID id = 0;
+      CFG_ID id = 0;
       if(str8_match(str8_prefix(rhs_name, 1), str8_lit("$"), 0))
       {
         id = u64_from_str8(str8_skip(rhs_name, 1), 16);

@@ -46,7 +46,7 @@ load_paths =
 commands =
 {
   //- rjf: [raddbg]
-  .f1 = { .win = "raddbg_stable --ipc kill_all && build raddbg telemetry", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .f1 = { .win = "raddbg_stable --ipc kill_all && build raddbg meta telemetry", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   // .f1 = { .win = "raddbg_stable --ipc kill_all && build radbin debug telemetry", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   
   //- rjf: [raddbg wsl]

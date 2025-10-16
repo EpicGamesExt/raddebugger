@@ -10,36 +10,13 @@
 #include "generated/raddbg.meta.c"
 
 ////////////////////////////////
-//~ rjf: Config ID Type Functions
-
-internal void
-rd_cfg_id_list_push(Arena *arena, RD_CfgIDList *list, RD_CfgID id)
-{
-  RD_CfgIDNode *n = push_array(arena, RD_CfgIDNode, 1);
-  n->v = id;
-  SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-}
-
-internal RD_CfgIDList
-rd_cfg_id_list_copy(Arena *arena, RD_CfgIDList *src)
-{
-  RD_CfgIDList result = {0};
-  for(RD_CfgIDNode *n = src->first; n != 0; n = n->next)
-  {
-    rd_cfg_id_list_push(arena, &result, n->v);
-  }
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Registers Type Functions
 
 internal void
 rd_regs_copy_contents(Arena *arena, RD_Regs *dst, RD_Regs *src)
 {
   MemoryCopyStruct(dst, src);
-  dst->cfg_list    = rd_cfg_id_list_copy(arena, &src->cfg_list);
+  dst->cfg_list    = cfg_id_list_copy(arena, &src->cfg_list);
   dst->file_path   = push_str8_copy(arena, src->file_path);
   dst->lines       = d_line_list_copy(arena, &src->lines);
   dst->expr        = push_str8_copy(arena, src->expr);
@@ -47,7 +24,7 @@ rd_regs_copy_contents(Arena *arena, RD_Regs *dst, RD_Regs *src)
   dst->cmd_name    = push_str8_copy(arena, src->cmd_name);
   if(dst->cfg_list.count == 0 && dst->cfg != 0)
   {
-    rd_cfg_id_list_push(arena, &dst->cfg_list, dst->cfg);
+    cfg_id_list_push(arena, &dst->cfg_list, dst->cfg);
   }
 }
 
@@ -368,7 +345,7 @@ rd_cfg_release_all_children(RD_Cfg *cfg)
 }
 
 internal RD_Cfg *
-rd_cfg_from_id(RD_CfgID id)
+rd_cfg_from_id(CFG_ID id)
 {
   RD_Cfg *result = &rd_nil_cfg;
   if(id != 0 &&
@@ -1664,7 +1641,7 @@ rd_cfg_from_eval_space(E_Space space)
   RD_Cfg *cfg = &rd_nil_cfg;
   if(space.kind == RD_EvalSpaceKind_MetaCfg)
   {
-    RD_CfgID id = space.u64s[0];
+    CFG_ID id = space.u64s[0];
     cfg = rd_cfg_from_id(id);
   }
   return cfg;
@@ -2454,7 +2431,7 @@ internal RD_ViewState *
 rd_view_state_from_cfg(RD_Cfg *cfg)
 {
   RD_ViewState *view_state = &rd_nil_view_state;
-  RD_CfgID id = cfg->id;
+  CFG_ID id = cfg->id;
   if(id != 0 &&
      id == rd_state->view_state_last_accessed_id &&
      id == rd_state->view_state_last_accessed->cfg_id)
@@ -5803,7 +5780,7 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
 {
   //- rjf: unpack
   RD_Cfg *window_cfg = rd_window_from_cfg(cfg);
-  RD_CfgID id = window_cfg->id;
+  CFG_ID id = window_cfg->id;
   
   //- rjf: scan for existing window
   RD_WindowState *ws = &rd_nil_window_state;
@@ -10660,7 +10637,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 strin
       if(!good && str8_match(str8_prefix(string, 1), str8_lit("$"), 0))
       {
         String8 numeric_part = str8_skip(string, 1);
-        RD_CfgID id = u64_from_str8(numeric_part, 16);
+        CFG_ID id = u64_from_str8(numeric_part, 16);
         rd_regs()->cfg = id;
         good = 1;
       }
@@ -17317,15 +17294,15 @@ rd_frame(void)
   //
   if(rd_state->frame_depth == 1)
   {
-    RD_CfgIDList windows_to_show = {0};
+    CFG_IDList windows_to_show = {0};
     for(RD_WindowState *w = rd_state->first_window_state; w != &rd_nil_window_state; w = w->order_next)
     {
       if(w->frames_alive == 1)
       {
-        rd_cfg_id_list_push(scratch.arena, &windows_to_show, w->cfg_id);
+        cfg_id_list_push(scratch.arena, &windows_to_show, w->cfg_id);
       }
     }
-    for(RD_CfgIDNode *n = windows_to_show.first; n != 0; n = n->next)
+    for(CFG_IDNode *n = windows_to_show.first; n != 0; n = n->next)
     {
       RD_Cfg *window = rd_cfg_from_id(n->v);
       RD_WindowState *ws = rd_window_state_from_cfg(window);
