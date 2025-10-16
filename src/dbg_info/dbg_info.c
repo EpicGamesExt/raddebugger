@@ -728,7 +728,7 @@ di_async_tick(void)
         if(!og_is_rdi && rdi_is_stale && t->thread_count == 0)
         {
           U64 thread_count = 1;
-          U64 max_thread_count = os_get_system_info()->logical_processor_count;
+          U64 max_thread_count = os_get_system_info()->logical_processor_count/2;
           if(priority_idx > 0)
           {
             max_thread_count = Max(1, max_thread_count/2);
@@ -748,7 +748,7 @@ di_async_tick(void)
         //- rjf: determine if there are threads available
         B32 threads_available = 0;
         {
-          U64 max_threads = os_get_system_info()->logical_processor_count;
+          U64 max_threads = os_get_system_info()->logical_processor_count/2;
           U64 current_threads = di_shared->conversion_thread_count;
           U64 needed_threads = (current_threads + t->thread_count);
           threads_available = (max_threads >= needed_threads);
