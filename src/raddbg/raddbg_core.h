@@ -579,8 +579,6 @@ struct RD_State
   // rjf: frame parameters
   F32 frame_dt;
   Access *frame_access;
-  CTRL_CallStackTree frame_call_stack_tree;
-  B32 got_frame_call_stack_tree;
   
   // rjf: evaluation cache
   E_Cache *eval_cache;

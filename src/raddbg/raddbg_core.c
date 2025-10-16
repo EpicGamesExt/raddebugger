@@ -11459,7 +11459,6 @@ rd_frame(void)
   //
   Access *frame_access_restore = rd_state->frame_access;
   rd_state->frame_access = access_open();
-  rd_state->got_frame_call_stack_tree = 0;
   
   //////////////////////////////
   //- rjf: calculate avg length in us of last many frames

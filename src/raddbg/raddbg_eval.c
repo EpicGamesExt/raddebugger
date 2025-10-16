@@ -1558,17 +1558,15 @@ struct RD_CallStackTreeExpandAccel
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack_tree)
 {
-  if(!rd_state->got_frame_call_stack_tree)
-  {
-    rd_state->got_frame_call_stack_tree = 1;
-    rd_state->frame_call_stack_tree = ctrl_call_stack_tree(rd_state->frame_access, 0);
-  }
+  Access *access = access_open();
+  CTRL_CallStackTree call_stack_tree = ctrl_call_stack_tree(access, 0);
+  access_close(access);
   RD_CallStackTreeExpandAccel *accel = push_array(arena, RD_CallStackTreeExpandAccel, 1);
   accel->node = &ctrl_call_stack_tree_node_nil;
   U64 id = e_value_eval_from_eval(eval).value.u64;
-  if(rd_state->frame_call_stack_tree.slots_count != 0)
+  if(call_stack_tree.slots_count != 0)
   {
-    for(CTRL_CallStackTreeNode *n = rd_state->frame_call_stack_tree.slots[id%rd_state->frame_call_stack_tree.slots_count];
+    for(CTRL_CallStackTreeNode *n = call_stack_tree.slots[id%call_stack_tree.slots_count];
         n != 0;
         n = n->hash_next)
     {
