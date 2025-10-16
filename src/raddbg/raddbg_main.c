@@ -24,7 +24,7 @@
 // [ ] fix type intepretations of cursor in bottom pane
 //
 //- bug fixes
-// [ ] disassembly sometimes has a problem where source line annotations are
+// [x] disassembly sometimes has a problem where source line annotations are
 //     periodically removed/inserted... maybe updating on fs change when we
 //     shouldn't, non-deterministic line annotation path?
 //
@@ -110,10 +110,10 @@
 //
 //- visualizer improvements
 // [ ] disasm starting address - need to use debug info for more correct results...
-// [ ] linked list view
 // [ ] multidimensional `array`
 // [ ] 2-vector, 3-vector, quaternion
 // [ ] audio waveform views
+// [x] linked list view
 //
 //- eval improvements
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
@@ -148,10 +148,10 @@
 // [ ] step-out-of-loop
 //
 //- late-conversion performance improvements
+// [ ] live++ investigations - ctrl+alt+f11 in UE?
 // [x] investigate wide-conversion performance
 //  [x] oversubscribing cores?
 //  [x] conversion crashes?
-// [ ] live++ investigations - ctrl+alt+f11 in UE?
 //
 //- memory usage improvements
 // [x] "root" concept in hash store, which buckets keys & allows usage code to
@@ -223,6 +223,7 @@
 #include "rdi/rdi_local.h"
 #include "rdi_make/rdi_make_local.h"
 #include "mdesk/mdesk.h"
+#include "config/config.h"
 #include "content/content.h"
 #include "file_stream/file_stream.h"
 #include "text/text.h"
@@ -270,6 +271,7 @@
 #include "rdi/rdi_local.c"
 #include "rdi_make/rdi_make_local.c"
 #include "mdesk/mdesk.c"
+#include "config/config.c"
 #include "content/content.c"
 #include "file_stream/file_stream.c"
 #include "text/text.c"

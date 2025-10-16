@@ -102,6 +102,24 @@ struct CFG_State
 };
 
 ////////////////////////////////
+//~ rjf: Schema Table
+
+typedef struct CFG_SchemaNode CFG_SchemaNode;
+struct CFG_SchemaNode
+{
+  CFG_SchemaNode *next;
+  String8 name;
+  MD_Node *schema;
+};
+
+typedef struct CFG_SchemaTable CFG_SchemaTable;
+struct CFG_SchemaTable
+{
+  CFG_SchemaNode **slots;
+  U64 slots_count;
+};
+
+////////////////////////////////
 //~ rjf: Globals
 
 read_only global CFG_Node cfg_nil_node =
@@ -129,6 +147,12 @@ internal void cfg_node_ptr_list_push_front(Arena *arena, CFG_NodePtrList *list, 
 #define cfg_node_ptr_list_first(list) ((list)->count ? (list)->first->v : &cfg_nil_node)
 #define cfg_node_ptr_list_last(list)  ((list)->count ? (list)->last->v  : &cfg_nil_node)
 internal CFG_NodePtrArray cfg_node_ptr_array_from_list(Arena *arena, CFG_NodePtrList *list);
+
+////////////////////////////////
+//~ rjf: Schema Data Structure Functions
+
+internal void cfg_schema_table_insert(Arena *arena, CFG_SchemaTable *table, String8 name, MD_Node *schema);
+internal MD_NodePtrList cfg_schemas_from_name(Arena *arena, CFG_SchemaTable *table, String8 name);
 
 ////////////////////////////////
 //~ rjf: Config Reading Functions

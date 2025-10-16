@@ -47,7 +47,6 @@ if "%opengl%"=="1"                  set auto_compile_flags=%auto_compile_flags% 
 if "%dwarf%"=="1" if "%clang%"=="1" set auto_compile_flags=%auto_compile_flags% -gdwarf && echo [dwarf debug info]
 if "%dwarf%"==""  if "%clang%"=="1" set auto_compile_flags=%auto_compile_flags% -gcodeview
 if "%pgo%"=="1" (
-  if "%no_meta%"=="" echo ERROR: PGO build must have no_meta argument || exit /b 1
   where llvm-profdata /q || echo llvm-profdata is not in the PATH || exit /b 1 
   if "%clang%"=="1" (
     if "%pgo_run%" == "1" (
@@ -120,8 +119,8 @@ for /f %%i in ('call git describe --always --dirty')   do set compile=%compile% 
 for /f %%i in ('call git rev-parse HEAD')              do set compile=%compile% -DBUILD_GIT_HASH_FULL=\"%%i\"
 
 :: --- Build & Run Metaprogram ------------------------------------------------
-if "%no_meta%"=="1" echo [skipping metagen]
-if not "%no_meta%"=="1" (
+if "%meta%"=="1" (
+  echo [doing metagen]
   pushd build
   %compile_debug% ..\src\metagen\metagen_main.c %compile_link% %out%metagen.exe || exit /b 1
   metagen.exe || exit /b 1
