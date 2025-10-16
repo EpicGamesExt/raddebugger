@@ -5,57 +5,6 @@
 #define RADDBG_CORE_H
 
 ////////////////////////////////
-//~ rjf: Key Bindings
-
-typedef struct RD_Binding RD_Binding;
-struct RD_Binding
-{
-  OS_Key key;
-  OS_Modifiers modifiers;
-};
-
-typedef struct RD_KeyMapNode RD_KeyMapNode;
-struct RD_KeyMapNode
-{
-  RD_KeyMapNode *name_hash_next;
-  RD_KeyMapNode *binding_hash_next;
-  CFG_ID cfg_id;
-  String8 name;
-  RD_Binding binding;
-};
-
-typedef struct RD_KeyMapNodePtr RD_KeyMapNodePtr;
-struct RD_KeyMapNodePtr
-{
-  RD_KeyMapNodePtr *next;
-  RD_KeyMapNode *v;
-};
-
-typedef struct RD_KeyMapNodePtrList RD_KeyMapNodePtrList;
-struct RD_KeyMapNodePtrList
-{
-  RD_KeyMapNodePtr *first;
-  RD_KeyMapNodePtr *last;
-  U64 count;
-};
-
-typedef struct RD_KeyMapSlot RD_KeyMapSlot;
-struct RD_KeyMapSlot
-{
-  RD_KeyMapNode *first;
-  RD_KeyMapNode *last;
-};
-
-typedef struct RD_KeyMap RD_KeyMap;
-struct RD_KeyMap
-{
-  U64 name_slots_count;
-  RD_KeyMapSlot *name_slots;
-  U64 binding_slots_count;
-  RD_KeyMapSlot *binding_slots;
-};
-
-////////////////////////////////
 //~ rjf: Evaluation Spaces
 
 typedef U64 RD_EvalSpaceKind;
@@ -513,7 +462,7 @@ struct RD_State
   RD_AmbiguousPathNode **ambiguous_path_slots;
   
   // rjf: key map (constructed from-scratch each frame)
-  RD_KeyMap *key_map;
+  CFG_KeyMap *key_map;
   
   // rjf: slot -> font tag map (constructed from-scratch each frame)
   FNT_Tag font_slot_table[RD_FontSlot_COUNT];
@@ -686,8 +635,6 @@ internal Rng2F32 rd_target_rect_from_panel_node_child(Rng2F32 parent_rect, RD_Pa
 internal Rng2F32 rd_target_rect_from_panel_node(Rng2F32 root_rect, RD_PanelNode *root, RD_PanelNode *panel);
 
 internal B32 rd_cfg_is_project_filtered(CFG_Node *cfg);
-internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_name(Arena *arena, String8 string);
-internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding);
 
 internal Vec4F32 rd_hsva_from_cfg(CFG_Node *cfg);
 internal Vec4F32 rd_color_from_cfg(CFG_Node *cfg);

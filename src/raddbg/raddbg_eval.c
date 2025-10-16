@@ -43,8 +43,8 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(commands)
         FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, display_name);
         FuzzyMatchRangeList tags_matches = fuzzy_match_find(scratch.arena, filter, search_tags);
         B32 binding_matches_good = 0;
-        RD_KeyMapNodePtrList bindings = rd_key_map_node_ptr_list_from_name(scratch.arena, code_name);
-        for(RD_KeyMapNodePtr *n = bindings.first; n != 0; n = n->next)
+        CFG_KeyMapNodePtrList bindings = cfg_key_map_node_ptr_list_from_name(scratch.arena, rd_state->key_map, code_name);
+        for(CFG_KeyMapNodePtr *n = bindings.first; n != 0; n = n->next)
         {
           String8 binding_text = os_string_from_modifiers_key(scratch.arena, n->v->binding.modifiers, n->v->binding.key);
           FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, binding_text);

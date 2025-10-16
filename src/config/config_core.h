@@ -1,8 +1,8 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef CONFIG_CORE_H
+#define CONFIG_CORE_H
 
 ////////////////////////////////
 //~ rjf: IDs
@@ -230,4 +230,4 @@ internal CFG_Node *cfg_node_child_from_string_or_alloc(CFG_State *state, CFG_Nod
 //- rjf: deserialization
 internal CFG_NodePtrList cfg_node_ptr_list_from_string(Arena *arena, CFG_State *state, CFG_SchemaTable *schema_table, String8 root_path, String8 string);
 
-#endif // CONFIG_H
+#endif // CONFIG_CORE_H

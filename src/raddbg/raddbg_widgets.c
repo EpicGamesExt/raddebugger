@@ -754,22 +754,22 @@ internal void
 rd_cmd_binding_buttons(String8 name, String8 filter, B32 add_new)
 {
   Temp scratch = scratch_begin(0, 0);
-  RD_KeyMapNodePtrList key_map_nodes = rd_key_map_node_ptr_list_from_name(scratch.arena, name);
+  CFG_KeyMapNodePtrList key_map_nodes = cfg_key_map_node_ptr_list_from_name(scratch.arena, rd_state->key_map, name);
   
   //- rjf: build buttons for each binding
-  UI_CornerRadius(ui_top_font_size()*0.5f) for(RD_KeyMapNodePtr *n = key_map_nodes.first; n != 0; n = n->next)
+  UI_CornerRadius(ui_top_font_size()*0.5f) for(CFG_KeyMapNodePtr *n = key_map_nodes.first; n != 0; n = n->next)
   {
     ui_spacer(ui_em(1.f, 1.f));
-    RD_Binding binding = n->v->binding;
+    CFG_Binding binding = n->v->binding;
     B32 rebinding_active_for_this_binding = (rd_state->bind_change_active &&
                                              str8_match(rd_state->bind_change_cmd_name, name, 0) &&
                                              n->v->cfg_id == rd_state->bind_change_binding_id);
     
     //- rjf: grab all conflicts
     B32 has_conflicts = 0;
-    RD_KeyMapNodePtrList nodes_with_this_binding = rd_key_map_node_ptr_list_from_binding(scratch.arena, binding);
+    CFG_KeyMapNodePtrList nodes_with_this_binding = cfg_key_map_node_ptr_list_from_binding(scratch.arena, rd_state->key_map, binding);
     {
-      for(RD_KeyMapNodePtr *n2 = nodes_with_this_binding.first; n2 != 0; n2 = n2->next)
+      for(CFG_KeyMapNodePtr *n2 = nodes_with_this_binding.first; n2 != 0; n2 = n2->next)
       {
         if(!str8_match(n->v->name, n2->v->name, 0))
         {
@@ -840,7 +840,7 @@ rd_cmd_binding_buttons(String8 name, String8 filter, B32 add_new)
       if(ui_hovering(sig) && has_conflicts) UI_Tooltip
       {
         UI_PrefWidth(ui_children_sum(1)) rd_error_label(str8_lit("This binding conflicts with those for:"));
-        for(RD_KeyMapNodePtr *n2 = nodes_with_this_binding.first; n2 != 0; n2 = n2->next)
+        for(CFG_KeyMapNodePtr *n2 = nodes_with_this_binding.first; n2 != 0; n2 = n2->next)
         {
           if(!str8_match(n2->v->name, n->v->name, 0))
           {

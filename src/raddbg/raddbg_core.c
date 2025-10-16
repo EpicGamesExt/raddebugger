@@ -356,48 +356,6 @@ rd_cfg_is_project_filtered(CFG_Node *cfg)
   return result;
 }
 
-internal RD_KeyMapNodePtrList
-rd_key_map_node_ptr_list_from_name(Arena *arena, String8 string)
-{
-  RD_KeyMapNodePtrList list = {0};
-  {
-    U64 hash = d_hash_from_string(string);
-    U64 slot_idx = hash%rd_state->key_map->name_slots_count;
-    for(RD_KeyMapNode *n = rd_state->key_map->name_slots[slot_idx].first; n != 0; n = n->name_hash_next)
-    {
-      if(str8_match(n->name, string, 0))
-      {
-        RD_KeyMapNodePtr *ptr = push_array(arena, RD_KeyMapNodePtr, 1);
-        ptr->v = n;
-        SLLQueuePush(list.first, list.last, ptr);
-        list.count += 1;
-      }
-    }
-  }
-  return list;
-}
-
-internal RD_KeyMapNodePtrList
-rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding)
-{
-  RD_KeyMapNodePtrList list = {0};
-  {
-    U64 hash = d_hash_from_string(str8_struct(&binding));
-    U64 slot_idx = hash%rd_state->key_map->binding_slots_count;
-    for(RD_KeyMapNode *n = rd_state->key_map->binding_slots[slot_idx].first; n != 0; n = n->binding_hash_next)
-    {
-      if(MemoryMatchStruct(&binding, &n->binding))
-      {
-        RD_KeyMapNodePtr *ptr = push_array(arena, RD_KeyMapNodePtr, 1);
-        ptr->v = n;
-        SLLQueuePush(list.first, list.last, ptr);
-        list.count += 1;
-      }
-    }
-  }
-  return list;
-}
-
 internal Vec4F32
 rd_hsva_from_cfg(CFG_Node *cfg)
 {
@@ -10825,72 +10783,7 @@ rd_frame(void)
   //
   ProfScope("build key map from config")
   {
-    //- rjf: set up table
-    rd_state->key_map = push_array(rd_frame_arena(), RD_KeyMap, 1);
-    RD_KeyMap *key_map = rd_state->key_map;
-    key_map->name_slots_count = 4096;
-    key_map->name_slots = push_array(rd_frame_arena(), RD_KeyMapSlot, key_map->name_slots_count);
-    key_map->binding_slots_count = 4096;
-    key_map->binding_slots = push_array(rd_frame_arena(), RD_KeyMapSlot, key_map->binding_slots_count);
-    
-    //- rjf: gather & parse all explicitly stored keybinding sets
-    CFG_NodePtrList keybindings_cfg_list = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("keybindings"));
-    for(CFG_NodePtrNode *n = keybindings_cfg_list.first; n != 0; n = n->next)
-    {
-      CFG_Node *keybindings_root = n->v;
-      for(CFG_Node *keybinding = keybindings_root->first; keybinding != &cfg_nil_node; keybinding = keybinding->next)
-      {
-        String8 name = {0};
-        RD_Binding binding = {0};
-        for(CFG_Node *child = keybinding->first; child != &cfg_nil_node; child = child->next)
-        {
-          if(0){}
-          else if(str8_match(child->string, str8_lit("ctrl"), 0))   { binding.modifiers |= OS_Modifier_Ctrl; }
-          else if(str8_match(child->string, str8_lit("alt"), 0))    { binding.modifiers |= OS_Modifier_Alt; }
-          else if(str8_match(child->string, str8_lit("shift"), 0))  { binding.modifiers |= OS_Modifier_Shift; }
-          else
-          {
-            OS_Key key = OS_Key_Null;
-            for EachEnumVal(OS_Key, k)
-            {
-              if(str8_match(child->string, os_g_key_cfg_string_table[k], StringMatchFlag_CaseInsensitive))
-              {
-                key = k;
-                break;
-              }
-            }
-            if(key != OS_Key_Null)
-            {
-              binding.key = key;
-            }
-            else
-            {
-              name = child->string;
-              for(U64 idx = 0; idx < ArrayCount(rd_binding_version_remap_old_name_table); idx += 1)
-              {
-                if(str8_match(rd_binding_version_remap_old_name_table[idx], name, StringMatchFlag_CaseInsensitive))
-                {
-                  name = rd_binding_version_remap_new_name_table[idx];
-                }
-              }
-            }
-          }
-        }
-        if(name.size != 0)
-        {
-          U64 name_hash = d_hash_from_string(name);
-          U64 binding_hash = d_hash_from_string(str8_struct(&binding));
-          U64 name_slot_idx = name_hash%key_map->name_slots_count;
-          U64 binding_slot_idx = binding_hash%key_map->binding_slots_count;
-          RD_KeyMapNode *n = push_array(rd_frame_arena(), RD_KeyMapNode, 1);
-          n->cfg_id = keybinding->id;
-          n->name = push_str8_copy(rd_frame_arena(), name);
-          n->binding = binding;
-          SLLQueuePush_N(key_map->name_slots[name_slot_idx].first, key_map->name_slots[name_slot_idx].last, n, name_hash_next);
-          SLLQueuePush_N(key_map->binding_slots[binding_slot_idx].first, key_map->binding_slots[binding_slot_idx].last, n, binding_hash_next);
-        }
-      }
-    }
+    rd_state->key_map = cfg_key_map_from_cfg(rd_frame_arena());
   }
   
   //////////////////////////////
@@ -10991,14 +10884,22 @@ rd_frame(void)
       //- rjf: try hotkey presses
       if(!take && event->kind == OS_EventKind_Press)
       {
-        RD_Binding binding = {event->key, event->modifiers};
-        RD_KeyMapNodePtrList key_map_nodes = rd_key_map_node_ptr_list_from_binding(scratch.arena, binding);
+        CFG_Binding binding = {event->key, event->modifiers};
+        CFG_KeyMapNodePtrList key_map_nodes = cfg_key_map_node_ptr_list_from_binding(scratch.arena, rd_state->key_map, binding);
         if(key_map_nodes.first != 0)
         {
           U32 hit_char = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
           if(hit_char == 0 || allow_text_hotkeys)
           {
-            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = key_map_nodes.first->v->name);
+            String8 cmd_name = key_map_nodes.first->v->name;
+            for(U64 idx = 0; idx < ArrayCount(rd_binding_version_remap_old_name_table); idx += 1)
+            {
+              if(str8_match(rd_binding_version_remap_old_name_table[idx], cmd_name, StringMatchFlag_CaseInsensitive))
+              {
+                cmd_name = rd_binding_version_remap_new_name_table[idx];
+              }
+            }
+            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_name);
             if(allow_text_hotkeys)
             {
               os_text(&events, event->window, hit_char);
@@ -12313,7 +12214,7 @@ rd_frame(void)
             for EachElement(idx, rd_default_binding_table)
             {
               String8 name = rd_default_binding_table[idx].string;
-              RD_Binding binding = rd_default_binding_table[idx].binding;
+              CFG_Binding binding = rd_default_binding_table[idx].binding;
               CFG_Node *binding_root = cfg_node_new(rd_state->cfg, keybindings, str8_zero());
               cfg_node_new(rd_state->cfg, binding_root, name);
               cfg_node_new(rd_state->cfg, binding_root, os_g_key_cfg_string_table[binding.key]);

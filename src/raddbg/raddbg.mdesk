@@ -1301,7 +1301,7 @@ RD_DefaultBindingTable:
   { "toggle_dev_menu"             D         ctrl     shift     alt        }
 }
 
-@data(`struct {String8 string; RD_Binding binding;}`) @c_file rd_default_binding_table:
+@data(`struct {String8 string; CFG_Binding binding;}`) @c_file rd_default_binding_table:
 {
   @expand(RD_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_Modifier_Ctrl`) $(a.shift != 0 -> `|OS_Modifier_Shift`) $(a.alt != 0 -> `|OS_Modifier_Alt`)}}```;
 }
@@ -1320,7 +1320,6 @@ RD_BindingVersionRemapTable:
   {"address_breakpoint" "add_address_breakpoint"}
   {"function_breakpoint" "add_function_breakpoint"}
   {"toggle_breakpoint_cursor" "toggle_breakpoint"}
-  
 }
 
 @data(String8) rd_binding_version_remap_old_name_table:
