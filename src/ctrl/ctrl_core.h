@@ -981,6 +981,7 @@ internal void ctrl_thread__module_close(CTRL_Handle process, CTRL_Handle module,
 internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);
 
 //- rjf: eval helpers
+internal U64 ctrl_eval_space_gen(E_Space space);
 internal B32 ctrl_eval_space_read(E_Space space, void *out, Rng1U64 vaddr_range);
 
 //- rjf: control thread eval scopes

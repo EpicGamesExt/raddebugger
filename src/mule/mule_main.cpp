@@ -572,14 +572,16 @@ type_coverage_eval_tests(void)
   struct SLLNode
   {
     SLLNode *next;
+    SLLNode *the_real_next_ptr;
     int x;
   };
-  SLLNode node6 = {0, 6};
-  SLLNode node5 = {&node6, 5};
-  SLLNode node4 = {&node5, 4};
-  SLLNode node3 = {&node4, 3};
-  SLLNode node2 = {&node3, 2};
-  SLLNode node1 = {&node2, 1};
+  SLLNode node6 = {0, 0, 6};
+  SLLNode node5 = {0, &node6, 5};
+  SLLNode node4 = {0, &node5, 4};
+  SLLNode node3 = {0, &node4, 3};
+  SLLNode node2 = {0, &node3, 2};
+  SLLNode node1 = {0, &node2, 1};
+  raddbg_pin(list(node1, the_real_next_ptr));
   
   Alias1 a1 = has_enums.kind;
   Alias2 a2 = has_enums.flags;

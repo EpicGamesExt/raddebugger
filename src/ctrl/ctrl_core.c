@@ -4200,6 +4200,21 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
 
 //- rjf: eval helpers
 
+internal U64
+ctrl_eval_space_gen(E_Space space)
+{
+  U64 result = 0;
+  switch(space.kind)
+  {
+    default:{}break;
+    case CTRL_EvalSpaceKind_Entity:
+    {
+      result = ctrl_mem_gen();
+    }break;
+  }
+  return result;
+}
+
 internal B32
 ctrl_eval_space_read(E_Space space, void *out, Rng1U64 range)
 {
@@ -4418,6 +4433,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
     ctx->primary_module = eval_modules_primary;
     
     //- rjf: fill space hooks
+    ctx->space_gen   = ctrl_eval_space_gen;
     ctx->space_read  = ctrl_eval_space_read;
   }
   e_select_base_ctx(&scope->base_ctx);

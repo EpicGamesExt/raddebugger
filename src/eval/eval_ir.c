@@ -2422,12 +2422,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
       }
       if(irext != 0 && result.user_data == 0)
       {
-        E_IRTreeAndType irtree_stripped = result;
-        if(type->kind == E_TypeKind_Lens)
-        {
-          irtree_stripped.type_key = e_type_key_direct(irtree_stripped.type_key);
-        }
-        E_IRExt ext = irext(arena, expr, &irtree_stripped);
+        E_IRExt ext = irext(arena, expr, &result);
         result.user_data = ext.user_data;
       }
     }

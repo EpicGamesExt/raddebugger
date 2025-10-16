@@ -1,3 +1,15 @@
+# v0.9.23-alpha
+
+## Debugger Changes
+
+- Further improved PDB -> RDI conversion performance & memory usage.
+- Adjusted limits for the amount of PDB -> RDI conversion work that the
+  debugger will kick off, to prevent PDB -> RDI conversion interfering with
+  debuggee performance.
+- Reintroduced the `list` lens, which gathers all nodes in a linked list, and
+  visualizes them as a flat list of pointers (the same as how an array of
+  pointers is visualized).
+
 # v0.9.22-alpha
 
 ## Debugger Changes

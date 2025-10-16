@@ -2711,13 +2711,54 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
 {
   E_IRExt result = {0};
   E_Type *type = e_type_from_key(irtree->type_key);
-  String8 next_link_member_name = str8_lit("next");
-  if(type->args != 0 && type->count > 0)
+  
+  //- rjf: get member encoding the link to the next node
+  E_Member next_link_member = {0};
   {
-    next_link_member_name = type->args[0]->string;
+    E_TypeKey node_type_key = e_type_key_unwrap(irtree->type_key, E_TypeUnwrapFlag_All);
+    
+    // rjf: try explicitly-passed name
+    if(next_link_member.kind == E_MemberKind_Null && type->args != 0 && type->count > 0 && type->args[0]->kind == E_ExprKind_LeafIdentifier)
+    {
+      String8 name = type->args[0]->string;
+      next_link_member = e_type_member_from_key_name__cached(node_type_key, name);
+    }
+    
+    // rjf: try `next`
+    if(next_link_member.kind == E_MemberKind_Null)
+    {
+      next_link_member = e_type_member_from_key_name__cached(node_type_key, str8_lit("next"));
+    }
+    
+    // rjf: try `prev`
+    if(next_link_member.kind == E_MemberKind_Null)
+    {
+      next_link_member = e_type_member_from_key_name__cached(node_type_key, str8_lit("prev"));
+    }
+    
+    // rjf: try any pointer to the same type
+    if(next_link_member.kind == E_MemberKind_Null)
+    {
+      E_Type *node_type = e_type_from_key(node_type_key);
+      if(node_type->members != 0)
+      {
+        for EachIndex(idx, node_type->count)
+        {
+          E_TypeKey member_type_key = node_type->members[idx].type_key;
+          E_TypeKey member_type_key_undecorated = e_type_key_unwrap(member_type_key, E_TypeUnwrapFlag_AllDecorative);
+          E_TypeKey member_ptee_type_key = e_type_key_unwrap(member_type_key_undecorated, E_TypeUnwrapFlag_All);
+          if(e_type_kind_from_key(member_type_key_undecorated) == E_TypeKind_Ptr &&
+             e_type_key_match(member_ptee_type_key, node_type_key))
+          {
+            next_link_member = node_type->members[idx];
+            break;
+          }
+        }
+      }
+    }
   }
-  E_TypeKey node_type_key = e_type_key_unwrap(irtree->type_key, E_TypeUnwrapFlag_All);
-  E_Member next_link_member = e_type_member_from_key_name__cached(node_type_key, next_link_member_name);
+  
+  //- rjf: generate expansion info
   E_TypeExpandInfo info = {0, 0};
   if(next_link_member.kind != E_MemberKind_DataField)
   {
@@ -2765,6 +2806,7 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
     access_close(access);
     scratch_end(scratch);
   }
+  
   return result;
 }
 

@@ -1726,6 +1726,10 @@ rd_eval_space_gen(E_Space space)
   U64 result = 0;
   switch(space.kind)
   {
+    default:
+    {
+      result = ctrl_eval_space_gen(space);
+    }break;
     case RD_EvalSpaceKind_MetaCfg:
     case RD_EvalSpaceKind_MetaQuery:
     {
