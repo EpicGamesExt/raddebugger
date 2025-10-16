@@ -5,6 +5,7 @@
 #define CONFIG_INC_H
 
 #include "config_core.h"
+#include "config_panels.h"
 #if defined(OS_GFX_H)
 # include "config_bindings.h"
 #endif

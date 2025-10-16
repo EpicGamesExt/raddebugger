@@ -208,48 +208,6 @@ struct RD_Location
 };
 
 ////////////////////////////////
-//~ rjf: Structured Panel Trees, Parsed From Config Trees
-
-typedef struct RD_PanelNode RD_PanelNode;
-struct RD_PanelNode
-{
-  // rjf: links data
-  RD_PanelNode *first;
-  RD_PanelNode *last;
-  RD_PanelNode *next;
-  RD_PanelNode *prev;
-  RD_PanelNode *parent;
-  U64 child_count;
-  CFG_Node *cfg;
-  
-  // rjf: split data
-  Axis2 split_axis;
-  F32 pct_of_parent;
-  
-  // rjf: tab params
-  Side tab_side;
-  
-  // rjf: which tabs are attached
-  CFG_NodePtrList tabs;
-  CFG_Node *selected_tab;
-};
-
-typedef struct RD_PanelTree RD_PanelTree;
-struct RD_PanelTree
-{
-  RD_PanelNode *root;
-  RD_PanelNode *focused;
-};
-
-typedef struct RD_PanelNodeRec RD_PanelNodeRec;
-struct RD_PanelNodeRec
-{
-  RD_PanelNode *next;
-  S32 push_count;
-  S32 pop_count;
-};
-
-////////////////////////////////
 //~ rjf: Command Types
 
 typedef struct RD_Cmd RD_Cmd;
@@ -554,18 +512,6 @@ struct RD_State
 
 read_only global RD_VocabInfo rd_nil_vocab_info = {0};
 
-read_only global RD_PanelNode rd_nil_panel_node =
-{
-  &rd_nil_panel_node,
-  &rd_nil_panel_node,
-  &rd_nil_panel_node,
-  &rd_nil_panel_node,
-  &rd_nil_panel_node,
-  0,
-  &cfg_nil_node,
-  .selected_tab = &cfg_nil_node,
-};
-
 read_only global RD_CmdKindInfo rd_nil_cmd_kind_info = {0};
 
 RD_VIEW_UI_FUNCTION_DEF(null);
@@ -625,14 +571,6 @@ internal RD_Regs *rd_get_hover_regs(void);
 
 ////////////////////////////////
 //~ rjf: Config Functions
-
-internal RD_PanelTree rd_panel_tree_from_cfg(Arena *arena, CFG_Node *cfg_root);
-internal RD_PanelNodeRec rd_panel_node_rec__depth_first(RD_PanelNode *root, RD_PanelNode *panel, U64 sib_off, U64 child_off);
-#define rd_panel_node_rec__depth_first_pre(root, p)     rd_panel_node_rec__depth_first((root), (p), OffsetOf(RD_PanelNode, next), OffsetOf(RD_PanelNode, first))
-#define rd_panel_node_rec__depth_first_pre_rev(root, p) rd_panel_node_rec__depth_first((root), (p), OffsetOf(RD_PanelNode, prev), OffsetOf(RD_PanelNode, last))
-internal RD_PanelNode *rd_panel_node_from_tree_cfg(RD_PanelNode *root, CFG_Node *cfg);
-internal Rng2F32 rd_target_rect_from_panel_node_child(Rng2F32 parent_rect, RD_PanelNode *parent, RD_PanelNode *panel);
-internal Rng2F32 rd_target_rect_from_panel_node(Rng2F32 root_rect, RD_PanelNode *root, RD_PanelNode *panel);
 
 internal B32 rd_cfg_is_project_filtered(CFG_Node *cfg);
 

@@ -582,7 +582,7 @@ entry_point(CmdLine *cmd_line)
                   if(dst_ws->cfg_id != rd_regs()->window)
                   {
                     Temp scratch = scratch_begin(0, 0);
-                    RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, cfg_node_from_id(dst_ws->cfg_id));
+                    CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, cfg_node_from_id(dst_ws->cfg_id));
                     rd_regs()->window = dst_ws->cfg_id;
                     rd_regs()->panel  = panel_tree.focused->cfg->id;
                     rd_regs()->tab    = panel_tree.focused->selected_tab->id;
