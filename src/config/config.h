@@ -78,6 +78,28 @@ struct CFG_NodeRec
 };
 
 ////////////////////////////////
+//~ rjf: String Allocator
+
+read_only global U64 cfg_string_bucket_chunk_sizes[] =
+{
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536,
+  0xffffffffffffffffull,
+};
+
+typedef struct CFG_StringChunkNode CFG_StringChunkNode;
+struct CFG_StringChunkNode
+{
+  CFG_StringChunkNode *next;
+  U64 size;
+};
+
+////////////////////////////////
 //~ rjf: Config State Bundles
 
 typedef struct CFG_Ctx CFG_Ctx;
@@ -97,6 +119,7 @@ struct CFG_State
   Arena *arena;
   CFG_Node *free;
   CFG_NodePtrNode *free_id_node;
+  CFG_StringChunkNode *free_string_chunks[ArrayCount(cfg_string_bucket_chunk_sizes)];
   U64 id_gen;
   CFG_Ctx ctx;
 };
@@ -182,6 +205,11 @@ internal void cfg_state_release(CFG_State *state);
 //- rjf: state -> ctx
 internal CFG_Ctx *cfg_state_ctx(CFG_State *state);
 
+//- rjf: string allocations
+internal U64 cfg_string_bucket_num_from_size(U64 size);
+internal String8 cfg_string_alloc(CFG_State *state, String8 string);
+internal void cfg_string_release(CFG_State *state, String8 string);
+
 //- rjf: tree building
 internal CFG_Node *cfg_node_alloc(CFG_State *state);
 internal void cfg_node_release(CFG_State *state, CFG_Node *node);
@@ -198,6 +226,6 @@ internal void cfg_node_unhook(CFG_State *state, CFG_Node *parent, CFG_Node *chil
 internal CFG_Node *cfg_node_child_from_string_or_alloc(CFG_State *state, CFG_Node *parent, String8 string);
 
 //- rjf: deserialization
-internal CFG_NodePtrList cfg_node_ptr_list_from_string(Arena *arena, String8 root_path, String8 string);
+internal CFG_NodePtrList cfg_node_ptr_list_from_string(Arena *arena, CFG_State *state, CFG_SchemaTable *schema_table, String8 root_path, String8 string);
 
 #endif // CONFIG_H
