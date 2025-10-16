@@ -8,6 +8,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <memory>
 #if !_WIN32
 # define RADDBG_MARKUP_STUBS
@@ -662,6 +663,13 @@ type_coverage_eval_tests(void)
   int_vector.push_back(5);
   int_vector.push_back(6);
   int_vector.push_back(7);
+  
+  std::unordered_map<std::string, int> people =
+  {
+    {"Peter", 1},
+    {"Oliver", 2},
+    {"Jack", 3},
+  };
   
   std::vector<int> *pint_vector = &int_vector;
   std::vector<int> &rint_vector =  int_vector;

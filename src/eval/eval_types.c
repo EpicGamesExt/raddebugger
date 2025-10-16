@@ -2744,6 +2744,10 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
       {
         for EachIndex(idx, node_type->count)
         {
+          if(node_type->members[idx].kind != E_MemberKind_DataField)
+          {
+            continue;
+          }
           E_TypeKey member_type_key = node_type->members[idx].type_key;
           E_TypeKey member_type_key_undecorated = e_type_key_unwrap(member_type_key, E_TypeUnwrapFlag_AllDecorative);
           E_TypeKey member_ptee_type_key = e_type_key_unwrap(member_type_key_undecorated, E_TypeUnwrapFlag_All);

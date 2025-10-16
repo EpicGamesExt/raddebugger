@@ -31,7 +31,7 @@ internal void
 cfg_node_ptr_list_push(Arena *arena, CFG_NodePtrList *list, CFG_Node *node)
 {
   CFG_NodePtrNode *n = push_array(arena, CFG_NodePtrNode, 1);
-  SLLQueuePush(list->first, list->last, n);
+  DLLPushBack(list->first, list->last, n);
   list->count += 1;
   n->v = node;
 }
@@ -40,7 +40,7 @@ internal void
 cfg_node_ptr_list_push_front(Arena *arena, CFG_NodePtrList *list, CFG_Node *node)
 {
   CFG_NodePtrNode *n = push_array(arena, CFG_NodePtrNode, 1);
-  SLLQueuePushFront(list->first, list->last, n);
+  DLLPushFront(list->first, list->last, n);
   list->count += 1;
   n->v = node;
 }
