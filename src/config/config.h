@@ -152,6 +152,7 @@ internal CFG_NodePtrArray cfg_node_ptr_array_from_list(Arena *arena, CFG_NodePtr
 //~ rjf: Schema Data Structure Functions
 
 internal void cfg_schema_table_insert(Arena *arena, CFG_SchemaTable *table, String8 name, MD_Node *schema);
+internal MD_Node *cfg_schema_from_name(CFG_SchemaTable *table, String8 name);
 internal MD_NodePtrList cfg_schemas_from_name(Arena *arena, CFG_SchemaTable *table, String8 name);
 
 ////////////////////////////////
@@ -169,7 +170,7 @@ internal CFG_NodePtrList cfg_node_top_level_list_from_string(Arena *arena, Strin
 internal CFG_NodeRec cfg_node_rec__depth_first(CFG_Node *root, CFG_Node *node);
 
 //- rjf: serialization
-internal String8 cfg_string_from_tree(Arena *arena, String8 root_path, CFG_Node *root);
+internal String8 cfg_string_from_tree(Arena *arena, CFG_SchemaTable *schema_table, String8 root_path, CFG_Node *root);
 
 ////////////////////////////////
 //~ rjf: Config Writing Functions

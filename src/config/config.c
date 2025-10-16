@@ -68,13 +68,73 @@ cfg_node_ptr_array_from_list(Arena *arena, CFG_NodePtrList *list)
 internal void
 cfg_schema_table_insert(Arena *arena, CFG_SchemaTable *table, String8 name, MD_Node *schema)
 {
-  
+  U64 hash = u64_hash_from_str8(name);
+  U64 slot_idx = hash%table->slots_count;
+  CFG_SchemaNode *node = 0;
+  for(CFG_SchemaNode *n = table->slots[slot_idx]; n != 0; n = n->next)
+  {
+    if(str8_match(n->name, name, 0))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    node = push_array(arena, CFG_SchemaNode, 1);
+    node->name = str8_copy(arena, name);
+    node->schema = schema;
+    SLLStackPush(table->slots[slot_idx], node);
+  }
+}
+
+internal MD_Node *
+cfg_schema_from_name(CFG_SchemaTable *table, String8 name)
+{
+  MD_Node *result = &md_nil_node;
+  {
+    U64 hash = u64_hash_from_str8(name);
+    U64 slot_idx = hash%table->slots_count;
+    CFG_SchemaNode *node = 0;
+    for(CFG_SchemaNode *n = table->slots[slot_idx]; n != 0; n = n->next)
+    {
+      if(str8_match(n->name, name, 0))
+      {
+        result = n->schema;
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 internal MD_NodePtrList
 cfg_schemas_from_name(Arena *arena, CFG_SchemaTable *table, String8 name)
 {
-  
+  MD_NodePtrList result = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    String8List tasks = {0};
+    String8Node seed_task = {0, name};
+    str8_list_push_node(&tasks, &seed_task);
+    for EachNode(task, String8Node, tasks.first)
+    {
+      MD_Node *schema = cfg_schema_from_name(table, task->string);
+      if(!md_node_is_nil(schema))
+      {
+        md_node_ptr_list_push_front(arena, &result, schema);
+        for MD_EachNode(tag, schema->first_tag)
+        {
+          if(str8_match(tag->string, str8_lit("inherit"), 0))
+          {
+            str8_list_push(scratch.arena, &tasks, tag->first->string);
+          }
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+  return result;
 }
 
 ////////////////////////////////
@@ -201,7 +261,7 @@ cfg_node_rec__depth_first(CFG_Node *root, CFG_Node *node)
 //- rjf: serialization
 
 internal String8
-cfg_string_from_tree(Arena *arena, String8 root_path, CFG_Node *root)
+cfg_string_from_tree(Arena *arena, CFG_SchemaTable *schema_table, String8 root_path, CFG_Node *root)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strings = {0};
@@ -223,7 +283,7 @@ cfg_string_from_tree(Arena *arena, String8 root_path, CFG_Node *root)
       if(top_nest_task != 0)
       {
         CFG_Node *parent = top_nest_task->cfg;
-        schemas = rd_schemas_from_name(parent->string);
+        schemas = cfg_schemas_from_name(scratch.arena, schema_table, parent->string);
       }
       
       // rjf: look up child schema
