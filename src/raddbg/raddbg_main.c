@@ -148,13 +148,13 @@
 // [ ] step-out-of-loop
 //
 //- late-conversion performance improvements
-// [ ] investigate wide-conversion performance
-//  [ ] oversubscribing cores?
-//  [ ] conversion crashes?
+// [x] investigate wide-conversion performance
+//  [x] oversubscribing cores?
+//  [x] conversion crashes?
 // [ ] live++ investigations - ctrl+alt+f11 in UE?
 //
 //- memory usage improvements
-// [ ] "root" concept in hash store, which buckets keys & allows usage code to
+// [x] "root" concept in hash store, which buckets keys & allows usage code to
 //     jettison a collection of keys in retained mode fashion
 //
 //- short-to-medium term future features

@@ -553,8 +553,8 @@ di_async_tick(void)
     ////////////////////////////
     //- rjf: pop all requests, high priority first
     //
-    DI_RequestNode *first_req = 0;
-    DI_RequestNode *last_req = 0;
+    DI_RequestNode *first_req[2] = {0};
+    DI_RequestNode *last_req[2] = {0};
     for EachElement(idx, di_shared->req_batches)
     {
       DI_RequestBatch *b = &di_shared->req_batches[idx];
@@ -564,7 +564,7 @@ di_async_tick(void)
         {
           DI_RequestNode *n_copy = push_array(scratch.arena, DI_RequestNode, 1);
           MemoryCopyStruct(&n_copy->v, &n->v);
-          SLLQueuePush(first_req, last_req, n_copy);
+          SLLQueuePush(first_req[idx], last_req[idx], n_copy);
         }
         arena_clear(b->arena);
         b->first = b->last = 0;
@@ -592,258 +592,268 @@ di_async_tick(void)
     ////////////////////////////
     //- rjf: generate load tasks for all unique requests
     //
-    for EachNode(n, DI_RequestNode, first_req)
+    for EachElement(priority_idx, first_req)
     {
-      // rjf: unpack request
-      DI_Key key = n->v.key;
-      
-      // rjf: determine if this request is a duplicate
-      B32 request_is_duplicate = 1;
+      for EachNode(n, DI_RequestNode, first_req[priority_idx])
       {
-        U64 hash = u64_hash_from_str8(str8_struct(&key));
-        U64 slot_idx = hash%di_shared->slots_count;
-        DI_Slot *slot = &di_shared->slots[slot_idx];
-        Stripe *stripe = stripe_from_slot_idx(&di_shared->stripes, slot_idx);
-        RWMutexScope(stripe->rw_mutex, 0)
+        // rjf: unpack request
+        DI_Key key = n->v.key;
+        
+        // rjf: determine if this request is a duplicate
+        B32 request_is_duplicate = 1;
         {
-          for(DI_Node *n = slot->first; n != 0; n = n->next)
+          U64 hash = u64_hash_from_str8(str8_struct(&key));
+          U64 slot_idx = hash%di_shared->slots_count;
+          DI_Slot *slot = &di_shared->slots[slot_idx];
+          Stripe *stripe = stripe_from_slot_idx(&di_shared->stripes, slot_idx);
+          RWMutexScope(stripe->rw_mutex, 0)
           {
-            if(di_key_match(n->key, key) && ins_atomic_u64_eval(&n->completion_count) == 0)
+            for(DI_Node *n = slot->first; n != 0; n = n->next)
             {
-              request_is_duplicate = (ins_atomic_u64_eval_cond_assign(&n->working_count, 1, 0) != 0);
-              break;
+              if(di_key_match(n->key, key) && ins_atomic_u64_eval(&n->completion_count) == 0)
+              {
+                request_is_duplicate = (ins_atomic_u64_eval_cond_assign(&n->working_count, 1, 0) != 0);
+                break;
+              }
             }
           }
         }
-      }
-      
-      // rjf: if not a duplicate, create new task
-      if(!request_is_duplicate)
-      {
-        DI_LoadTask *t = di_shared->free_load_task;
-        if(t)
+        
+        // rjf: if not a duplicate, create new task
+        if(!request_is_duplicate)
         {
-          SLLStackPop(di_shared->free_load_task);
+          DI_LoadTask *t = di_shared->free_load_task;
+          if(t)
+          {
+            SLLStackPop(di_shared->free_load_task);
+          }
+          else
+          {
+            t = push_array_no_zero(di_shared->arena, DI_LoadTask, 1);
+          }
+          MemoryZeroStruct(t);
+          DLLPushBack(di_shared->first_load_task[priority_idx], di_shared->last_load_task[priority_idx], t);
+          t->key = key;
         }
-        else
-        {
-          t = push_array_no_zero(di_shared->arena, DI_LoadTask, 1);
-        }
-        MemoryZeroStruct(t);
-        DLLPushBack(di_shared->first_load_task, di_shared->last_load_task, t);
-        t->key = key;
       }
     }
     
     ////////////////////////////
     //- rjf: update tasks: configure, launch if we can, & retire if we can
     //
-    for(DI_LoadTask *t = di_shared->first_load_task, *next = 0; t != 0; t = next)
+    for EachElement(priority_idx, di_shared->first_load_task)
     {
-      next = t->next;
-      
-      //- rjf: unpack key
-      DI_Key key = t->key;
-      U64 key_hash = u64_hash_from_str8(str8_struct(&key));
-      U64 key_slot_idx = key_hash%di_shared->key2path_slots_count;
-      DI_KeySlot *key_slot = &di_shared->key2path_slots[key_slot_idx];
-      Stripe *key_stripe = stripe_from_slot_idx(&di_shared->key2path_stripes, key_slot_idx);
-      
-      //- rjf: get key's O.G. path
-      String8 og_path = {0};
-      U64 og_min_timestamp = 0;
-      RWMutexScope(key_stripe->rw_mutex, 0)
+      for(DI_LoadTask *t = di_shared->first_load_task[priority_idx], *next = 0; t != 0; t = next)
       {
-        for(DI_KeyPathNode *n = key_slot->first; n != 0; n = n->next)
-        {
-          if(di_key_match(n->key, key))
-          {
-            og_path = str8_copy(scratch.arena, n->path);
-            og_min_timestamp = n->min_timestamp;
-            break;
-          }
-        }
-      }
-      
-      //- rjf: analyze O.G. debug info
-      if(!t->og_analyzed)
-      {
-        t->og_analyzed = 1;
-        OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, og_path);
-        FileProperties props = os_properties_from_file(file);
-        t->og_size = props.size;
-        U64 rdi_magic_maybe = 0;
-        if(os_file_read_struct(file, 0, &rdi_magic_maybe) == 8 &&
-           rdi_magic_maybe == RDI_MAGIC_CONSTANT)
-        {
-          t->og_is_rdi = 1;
-        }
-        os_file_close(file);
-      }
-      U64 og_size = t->og_size;
-      B32 og_is_rdi = t->og_is_rdi;
-      
-      //- rjf: compute key's RDI path
-      String8 rdi_path = {0};
-      {
-        if(og_is_rdi)
-        {
-          rdi_path = og_path;
-        }
-        else
-        {
-          rdi_path = str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(og_path));
-        }
-      }
-      
-      //- rjf: determine if RDI is stale
-      if(!t->rdi_analyzed)
-      {
-        t->rdi_analyzed = 1;
-        OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, rdi_path);
-        FileProperties props = os_properties_from_file(file);
-        if(props.modified < og_min_timestamp)
-        {
-          t->rdi_is_stale = 1;
-        }
-        else
-        {
-          t->rdi_is_stale = 1;
-          RDI_Header header = {0};
-          if(os_file_read_struct(file, 0, &header) == sizeof(header))
-          {
-            t->rdi_is_stale = (header.encoding_version != RDI_ENCODING_VERSION);
-          }
-        }
-        os_file_close(file);
-      }
-      B32 rdi_is_stale = t->rdi_is_stale;
-      
-      //- rjf: calculate thread counts for conversion processes
-      if(!og_is_rdi && rdi_is_stale && t->thread_count == 0)
-      {
-        U64 thread_count = 1;
-        U64 max_thread_count = os_get_system_info()->logical_processor_count;
-        {
-          if(0){}
-          else if(og_size <= MB(4))   {thread_count = 1;}
-          else if(og_size <= MB(256)) {thread_count = max_thread_count/4;}
-          else if(og_size <= MB(512)) {thread_count = max_thread_count/3;}
-          else if(og_size <= GB(1)) {thread_count = max_thread_count/2;}
-          else {thread_count = max_thread_count;}
-        }
-        thread_count = Max(1, thread_count);
-        t->thread_count = thread_count;
-      }
-      
-      //- rjf: determine if there are threads available
-      B32 threads_available = 0;
-      {
-        U64 max_threads = os_get_system_info()->logical_processor_count*2;
-        U64 current_threads = di_shared->conversion_thread_count;
-        U64 needed_threads = (current_threads + t->thread_count);
-        threads_available = (max_threads >= needed_threads);
-      }
-      
-      //- rjf: launch conversion processes
-      if(threads_available && !og_is_rdi && rdi_is_stale && t->thread_count != 0 && t->status != DI_LoadTaskStatus_Active)
-      {
-        B32 should_compress = 0;
-        OS_ProcessLaunchParams params = {0};
-        params.path = os_get_process_info()->binary_path;
-        params.inherit_env = 1;
-        params.consoleless = 1;
-        str8_list_pushf(scratch.arena, &params.cmd_line, "raddbg");
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--bin");
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--quiet");
-        if(should_compress)
-        {
-          str8_list_pushf(scratch.arena, &params.cmd_line, "--compress");
-        }
-        // str8_list_pushf(scratch.arena, &params.cmd_line, "--capture");
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--rdi");
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--out:%S", rdi_path);
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--thread_count:%I64u", t->thread_count);
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_pid:%I64u", (U64)os_get_process_info()->pid);
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_code:%I64u", (U64)t);
-        str8_list_pushf(scratch.arena, &params.cmd_line, "%S", og_path);
-        ProfMsg("launch creation for %.*s", str8_varg(rdi_path));
-        t->process = os_process_launch(&params);
-        t->status = DI_LoadTaskStatus_Active;
-        di_shared->conversion_process_count += 1;
-        di_shared->conversion_thread_count += t->thread_count;
+        next = t->next;
         
-        // rjf: send event
-        MutexScope(di_shared->event_mutex)
+        //- rjf: unpack key
+        DI_Key key = t->key;
+        U64 key_hash = u64_hash_from_str8(str8_struct(&key));
+        U64 key_slot_idx = key_hash%di_shared->key2path_slots_count;
+        DI_KeySlot *key_slot = &di_shared->key2path_slots[key_slot_idx];
+        Stripe *key_stripe = stripe_from_slot_idx(&di_shared->key2path_stripes, key_slot_idx);
+        
+        //- rjf: get key's O.G. path
+        String8 og_path = {0};
+        U64 og_min_timestamp = 0;
+        RWMutexScope(key_stripe->rw_mutex, 0)
         {
-          DI_EventNode *n = push_array(di_shared->event_arena, DI_EventNode, 1);
-          SLLQueuePush(di_shared->events.first, di_shared->events.last, n);
-          di_shared->events.count += 1;
-          n->v.kind = DI_EventKind_ConversionStarted;
-          n->v.string = str8_copy(di_shared->event_arena, rdi_path);
-        }
-      }
-      
-      //- rjf: if active & process has completed, mark as done
-      {
-        U64 exit_code = 0;
-        if(t->status == DI_LoadTaskStatus_Active)
-        {
-          B32 task_is_done = 0;
-          for(DI_LoadCompletion *c = first_completion; c != 0; c = c->next)
+          for(DI_KeyPathNode *n = key_slot->first; n != 0; n = n->next)
           {
-            if(c->code == (U64)t)
+            if(di_key_match(n->key, key))
             {
-              task_is_done = 1;
+              og_path = str8_copy(scratch.arena, n->path);
+              og_min_timestamp = n->min_timestamp;
               break;
             }
           }
-          if(!task_is_done)
-          {
-            task_is_done = os_process_join(t->process, 0, 0);
-          }
-          if(task_is_done)
-          {
-            t->status = DI_LoadTaskStatus_Done;
-            di_shared->conversion_process_count -= 1;
-            di_shared->conversion_thread_count -= t->thread_count;
-          }
         }
-      }
-      
-      //- rjf: if the RDI for this task is not stale, then we're already done - mark this
-      // task as done & prepped for storing into the cache
-      if(!rdi_is_stale)
-      {
-        t->status = DI_LoadTaskStatus_Done;
-      }
-      
-      //- rjf: if the RDI for this task *is* stale, but the O.G. path is actually RDI,
-      // then we can't actually re-convert to produce a non-stale RDI. in this case, just
-      // mark as done.
-      if(rdi_is_stale && og_is_rdi)
-      {
-        t->status = DI_LoadTaskStatus_Done;
-      }
-      
-      //- rjf: if task is done, retire & recycle task; gather path to load
-      if(t->status == DI_LoadTaskStatus_Done)
-      {
-        if(!os_handle_match(t->process, os_handle_zero())) MutexScope(di_shared->event_mutex)
+        
+        //- rjf: analyze O.G. debug info
+        if(!t->og_analyzed)
         {
-          DI_EventNode *n = push_array(di_shared->event_arena, DI_EventNode, 1);
-          SLLQueuePush(di_shared->events.first, di_shared->events.last, n);
-          di_shared->events.count += 1;
-          n->v.kind = DI_EventKind_ConversionEnded;
-          n->v.string = str8_copy(di_shared->event_arena, rdi_path);
+          t->og_analyzed = 1;
+          OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, og_path);
+          FileProperties props = os_properties_from_file(file);
+          t->og_size = props.size;
+          U64 rdi_magic_maybe = 0;
+          if(os_file_read_struct(file, 0, &rdi_magic_maybe) == 8 &&
+             rdi_magic_maybe == RDI_MAGIC_CONSTANT)
+          {
+            t->og_is_rdi = 1;
+          }
+          os_file_close(file);
         }
-        DLLRemove(di_shared->first_load_task, di_shared->last_load_task, t);
-        SLLStackPush(di_shared->free_load_task, t);
-        ParseTaskNode *n = push_array(scratch.arena, ParseTaskNode, 1);
-        n->v.key = key;
-        n->v.rdi_path = rdi_path;
-        SLLQueuePush(first_parse_task, last_parse_task, n);
-        parse_tasks_count += 1;
+        U64 og_size = t->og_size;
+        B32 og_is_rdi = t->og_is_rdi;
+        
+        //- rjf: compute key's RDI path
+        String8 rdi_path = {0};
+        {
+          if(og_is_rdi)
+          {
+            rdi_path = og_path;
+          }
+          else
+          {
+            rdi_path = str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(og_path));
+          }
+        }
+        
+        //- rjf: determine if RDI is stale
+        if(!t->rdi_analyzed)
+        {
+          t->rdi_analyzed = 1;
+          OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, rdi_path);
+          FileProperties props = os_properties_from_file(file);
+          if(props.modified < og_min_timestamp)
+          {
+            t->rdi_is_stale = 1;
+          }
+          else
+          {
+            t->rdi_is_stale = 1;
+            RDI_Header header = {0};
+            if(os_file_read_struct(file, 0, &header) == sizeof(header))
+            {
+              t->rdi_is_stale = (header.encoding_version != RDI_ENCODING_VERSION);
+            }
+          }
+          os_file_close(file);
+        }
+        B32 rdi_is_stale = t->rdi_is_stale;
+        
+        //- rjf: calculate thread counts for conversion processes
+        if(!og_is_rdi && rdi_is_stale && t->thread_count == 0)
+        {
+          U64 thread_count = 1;
+          U64 max_thread_count = os_get_system_info()->logical_processor_count;
+          if(priority_idx > 0)
+          {
+            max_thread_count = Max(1, max_thread_count/2);
+          }
+          {
+            if(0){}
+            else if(og_size <= MB(4))   {thread_count = 1;}
+            else if(og_size <= MB(256)) {thread_count = max_thread_count/4;}
+            else if(og_size <= MB(512)) {thread_count = max_thread_count/3;}
+            else if(og_size <= GB(1)) {thread_count = max_thread_count/2;}
+            else {thread_count = max_thread_count;}
+          }
+          thread_count = Max(1, thread_count);
+          t->thread_count = thread_count;
+        }
+        
+        //- rjf: determine if there are threads available
+        B32 threads_available = 0;
+        {
+          U64 max_threads = os_get_system_info()->logical_processor_count;
+          U64 current_threads = di_shared->conversion_thread_count;
+          U64 needed_threads = (current_threads + t->thread_count);
+          threads_available = (max_threads >= needed_threads);
+        }
+        
+        //- rjf: launch conversion processes
+        if(threads_available && !og_is_rdi && rdi_is_stale && t->thread_count != 0 && t->status != DI_LoadTaskStatus_Active)
+        {
+          B32 should_compress = 0;
+          OS_ProcessLaunchParams params = {0};
+          params.path = os_get_process_info()->binary_path;
+          params.inherit_env = 1;
+          params.consoleless = 1;
+          str8_list_pushf(scratch.arena, &params.cmd_line, "raddbg");
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--bin");
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--quiet");
+          if(should_compress)
+          {
+            str8_list_pushf(scratch.arena, &params.cmd_line, "--compress");
+          }
+          // str8_list_pushf(scratch.arena, &params.cmd_line, "--capture");
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--rdi");
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--out:%S", rdi_path);
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--thread_count:%I64u", t->thread_count);
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_pid:%I64u", (U64)os_get_process_info()->pid);
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_code:%I64u", (U64)t);
+          str8_list_pushf(scratch.arena, &params.cmd_line, "%S", og_path);
+          ProfMsg("launch creation for %.*s", str8_varg(rdi_path));
+          t->process = os_process_launch(&params);
+          t->status = DI_LoadTaskStatus_Active;
+          di_shared->conversion_process_count += 1;
+          di_shared->conversion_thread_count += t->thread_count;
+          
+          // rjf: send event
+          MutexScope(di_shared->event_mutex)
+          {
+            DI_EventNode *n = push_array(di_shared->event_arena, DI_EventNode, 1);
+            SLLQueuePush(di_shared->events.first, di_shared->events.last, n);
+            di_shared->events.count += 1;
+            n->v.kind = DI_EventKind_ConversionStarted;
+            n->v.string = str8_copy(di_shared->event_arena, rdi_path);
+          }
+        }
+        
+        //- rjf: if active & process has completed, mark as done
+        {
+          U64 exit_code = 0;
+          if(t->status == DI_LoadTaskStatus_Active)
+          {
+            B32 task_is_done = 0;
+            for(DI_LoadCompletion *c = first_completion; c != 0; c = c->next)
+            {
+              if(c->code == (U64)t)
+              {
+                task_is_done = 1;
+                break;
+              }
+            }
+            if(!task_is_done)
+            {
+              task_is_done = os_process_join(t->process, 0, 0);
+            }
+            if(task_is_done)
+            {
+              t->status = DI_LoadTaskStatus_Done;
+              di_shared->conversion_process_count -= 1;
+              di_shared->conversion_thread_count -= t->thread_count;
+            }
+          }
+        }
+        
+        //- rjf: if the RDI for this task is not stale, then we're already done - mark this
+        // task as done & prepped for storing into the cache
+        if(!rdi_is_stale)
+        {
+          t->status = DI_LoadTaskStatus_Done;
+        }
+        
+        //- rjf: if the RDI for this task *is* stale, but the O.G. path is actually RDI,
+        // then we can't actually re-convert to produce a non-stale RDI. in this case, just
+        // mark as done.
+        if(rdi_is_stale && og_is_rdi)
+        {
+          t->status = DI_LoadTaskStatus_Done;
+        }
+        
+        //- rjf: if task is done, retire & recycle task; gather path to load
+        if(t->status == DI_LoadTaskStatus_Done)
+        {
+          if(!os_handle_match(t->process, os_handle_zero())) MutexScope(di_shared->event_mutex)
+          {
+            DI_EventNode *n = push_array(di_shared->event_arena, DI_EventNode, 1);
+            SLLQueuePush(di_shared->events.first, di_shared->events.last, n);
+            di_shared->events.count += 1;
+            n->v.kind = DI_EventKind_ConversionEnded;
+            n->v.string = str8_copy(di_shared->event_arena, rdi_path);
+          }
+          DLLRemove(di_shared->first_load_task[priority_idx], di_shared->last_load_task[priority_idx], t);
+          SLLStackPush(di_shared->free_load_task, t);
+          ParseTaskNode *n = push_array(scratch.arena, ParseTaskNode, 1);
+          n->v.key = key;
+          n->v.rdi_path = rdi_path;
+          SLLQueuePush(first_parse_task, last_parse_task, n);
+          parse_tasks_count += 1;
+        }
       }
     }
     

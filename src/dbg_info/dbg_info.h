@@ -267,8 +267,8 @@ struct DI_Shared
   DI_RequestBatch req_batches[2]; // [0] -> high priority, [1] -> low priority
   
   // rjf: conversion tasks
-  DI_LoadTask *first_load_task;
-  DI_LoadTask *last_load_task;
+  DI_LoadTask *first_load_task[2];
+  DI_LoadTask *last_load_task[2];
   DI_LoadTask *free_load_task;
   U64 conversion_process_count;
   U64 conversion_thread_count;
