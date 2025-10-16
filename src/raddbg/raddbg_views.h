@@ -124,8 +124,8 @@ struct RD_WatchRowInfo
   B32 can_expand;
   B32 expr_is_editable;
   String8 group_cfg_name;
-  RD_Cfg *group_cfg_parent;
-  RD_Cfg *group_cfg_child;
+  CFG_Node *group_cfg_parent;
+  CFG_Node *group_cfg_child;
   CTRL_Entity *group_entity;
   CTRL_Entity *callstack_thread;
   U64 callstack_unwind_index;
@@ -140,7 +140,7 @@ typedef struct RD_WatchRowCellInfo RD_WatchRowCellInfo;
 struct RD_WatchRowCellInfo
 {
   RD_WatchCellFlags flags;
-  RD_Cfg *cfg;
+  CFG_Node *cfg;
   CTRL_Entity *entity;
   String8 cmd_name;
   String8 file_path;

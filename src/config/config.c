@@ -150,6 +150,28 @@ cfg_ctx_select(CFG_Ctx *ctx)
 
 //- rjf: tree navigations
 
+internal U64
+cfg_change_gen(void)
+{
+  U64 result = 0;
+  if(cfg_ctx != 0)
+  {
+    result = cfg_ctx->change_gen;
+  }
+  return result;
+}
+
+internal CFG_Node *
+cfg_node_root(void)
+{
+  CFG_Node *result = &cfg_nil_node;
+  if(cfg_ctx != 0)
+  {
+    result = cfg_ctx->root;
+  }
+  return result;
+}
+
 internal CFG_Node *
 cfg_node_from_id(CFG_ID id)
 {
@@ -867,7 +889,7 @@ cfg_node_ptr_list_from_string(Arena *arena, CFG_State *state, CFG_SchemaTable *s
         dst_active_parent_n = dst_active_parent_n->parent;
       }
     }
-    cfg_node_list_push(arena, &result, dst_root_n);
+    cfg_node_ptr_list_push(arena, &result, dst_root_n);
   }
   scratch_end(scratch);
   return result;

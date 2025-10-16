@@ -101,9 +101,9 @@ struct RD_CodeSliceParams
   String8 *line_text;
   Rng1U64 *line_ranges;
   TXT_TokenArray *line_tokens;
-  RD_CfgList *line_bps;
+  CFG_NodePtrList *line_bps;
   CTRL_EntityList *line_ips;
-  RD_CfgList *line_pins;
+  CFG_NodePtrList *line_pins;
   U64 *line_vaddrs;
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;
@@ -139,7 +139,7 @@ struct RD_CodeSliceSignal
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Title Strings
 
-internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, B32 include_extras);
+internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras);
 internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras);
 internal DR_FStrList rd_title_fstrs_from_code_name(Arena *arena, String8 code_name);
 internal DR_FStrList rd_title_fstrs_from_file_path(Arena *arena, String8 file_path);

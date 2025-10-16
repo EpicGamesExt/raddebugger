@@ -174,20 +174,20 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //
   if(rd_regs()->cursor.line == rd_regs()->mark.line)
   {
-    RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+    CFG_Node *view = cfg_node_from_id(rd_regs()->view);
     RD_ViewState *vs = rd_view_state_from_cfg(view);
     if(!vs->query_is_open)
     {
-      RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
-      RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
+      CFG_Node *query = cfg_node_child_from_string_or_alloc(rd_state->cfg, view, str8_lit("query"));
+      CFG_Node *input = cfg_node_child_from_string_or_alloc(rd_state->cfg, query, str8_lit("input"));
       String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, txt_rng(rd_regs()->cursor, rd_regs()->mark));
       if(text.size < 256)
       {
-        rd_cfg_new_replace(input, text);
+        cfg_node_new_replace(rd_state->cfg, input, text);
       }
       else
       {
-        rd_cfg_new_replace(input, str8_zero());
+        cfg_node_new_replace(rd_state->cfg, input, str8_zero());
       }
     }
   }
@@ -217,9 +217,9 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
     code_slice_params.line_tokens               = push_array(scratch.arena, TXT_TokenArray, visible_line_count);
-    code_slice_params.line_bps                  = push_array(scratch.arena, RD_CfgList, visible_line_count);
+    code_slice_params.line_bps                  = push_array(scratch.arena, CFG_NodePtrList, visible_line_count);
     code_slice_params.line_ips                  = push_array(scratch.arena, CTRL_EntityList, visible_line_count);
-    code_slice_params.line_pins                 = push_array(scratch.arena, RD_CfgList, visible_line_count);
+    code_slice_params.line_pins                 = push_array(scratch.arena, CFG_NodePtrList, visible_line_count);
     code_slice_params.line_vaddrs               = push_array(scratch.arena, U64, visible_line_count);
     code_slice_params.line_infos                = push_array(scratch.arena, D_LineList, visible_line_count);
     code_slice_params.text_info                 = text_info;
@@ -252,10 +252,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find visible breakpoints for source code
     if(!dasm_lines) ProfScope("find visible breakpoints for source code")
     {
-      RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
-      for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
+      CFG_NodePtrList bps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+      for(CFG_NodePtrNode *n = bps.first; n != 0; n = n->next)
       {
-        RD_Cfg *bp = n->v;
+        CFG_Node *bp = n->v;
         RD_Location loc = rd_location_from_cfg(bp);
         if(visible_line_num_range.min <= loc.pt.line && loc.pt.line <= visible_line_num_range.max)
         {
@@ -266,7 +266,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
             if(path_match_normalized(loc.file_path, override_n->string))
             {
               U64 slice_line_idx = (U64)(loc.pt.line-visible_line_num_range.min);
-              rd_cfg_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
+              cfg_node_ptr_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
               break;
             }
           }
@@ -314,10 +314,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find visible watch pins for source code
     if(!dasm_lines) ProfScope("find visible watch pins for source code")
     {
-      RD_CfgList wps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
-      for(RD_CfgNode *n = wps.first; n != 0; n = n->next)
+      CFG_NodePtrList wps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
+      for(CFG_NodePtrNode *n = wps.first; n != 0; n = n->next)
       {
-        RD_Cfg *wp = n->v;
+        CFG_Node *wp = n->v;
         RD_Location loc = rd_location_from_cfg(wp);
         if(visible_line_num_range.min <= loc.pt.line && loc.pt.line <= visible_line_num_range.max)
         {
@@ -328,7 +328,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
             if(path_match_normalized(loc.file_path, override_n->string))
             {
               U64 slice_line_idx = (loc.pt.line-visible_line_num_range.min);
-              rd_cfg_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
+              cfg_node_ptr_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
               break;
             }
           }
@@ -376,10 +376,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find breakpoints mapping to this disasm
     if(dasm_lines) ProfScope("find breakpoints mapping to this disassembly")
     {
-      RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
-      for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
+      CFG_NodePtrList bps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+      for(CFG_NodePtrNode *n = bps.first; n != 0; n = n->next)
       {
-        RD_Cfg *bp = n->v;
+        CFG_Node *bp = n->v;
         RD_Location loc = rd_location_from_cfg(bp);
         E_Value loc_value = e_value_from_string(loc.expr);
         if(contains_1u64(dasm_vaddr_range, loc_value.u64))
@@ -390,7 +390,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
           if(contains_1s64(visible_line_num_range, line_num))
           {
             U64 slice_line_idx = (line_num-visible_line_num_range.min);
-            rd_cfg_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
+            cfg_node_ptr_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
           }
         }
       }
@@ -399,10 +399,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find watch pins mapping to this disasm
     if(dasm_lines) ProfScope("find watch pins mapping to this disassembly")
     {
-      RD_CfgList wps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
-      for(RD_CfgNode *n = wps.first; n != 0; n = n->next)
+      CFG_NodePtrList wps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
+      for(CFG_NodePtrNode *n = wps.first; n != 0; n = n->next)
       {
-        RD_Cfg *wp = n->v;
+        CFG_Node *wp = n->v;
         RD_Location loc = rd_location_from_cfg(wp);
         E_Value loc_value = e_value_from_string(loc.expr);
         if(contains_1u64(dasm_vaddr_range, loc_value.u64))
@@ -413,7 +413,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
           if(contains_1s64(visible_line_num_range, line_num))
           {
             U64 slice_line_idx = (line_num-visible_line_num_range.min);
-            rd_cfg_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
+            cfg_node_ptr_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
           }
         }
       }
@@ -942,8 +942,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
   {
     .module           = &ctrl_entity_nil,
     .can_expand       = ev_row_is_expandable(row),
-    .group_cfg_parent = &rd_nil_cfg,
-    .group_cfg_child  = &rd_nil_cfg,
+    .group_cfg_parent = &cfg_nil_node,
+    .group_cfg_child  = &cfg_nil_node,
     .group_entity     = &ctrl_entity_nil,
     .callstack_thread = &ctrl_entity_nil,
     .view_ui_rule     = &rd_nil_view_ui_rule,
@@ -962,7 +962,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     E_TypeKey block_type_key = e_type_key_unwrap(block_eval.irtree.type_key, E_TypeUnwrapFlag_Meta);
     E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
     E_Type *block_type = e_type_from_key(block_type_key);
-    RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(row->eval.space);
+    CFG_Node *evalled_cfg = rd_cfg_from_eval_space(row->eval.space);
     CTRL_Entity *evalled_entity = (row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ? rd_ctrl_entity_from_eval_space(row->eval.space) : &ctrl_entity_nil);
     
     ////////////////////////////
@@ -970,7 +970,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     // are evaluating a cfg tree, or some descendant of it
     //
     B32 is_top_level = 0;
-    if(evalled_cfg != &rd_nil_cfg)
+    if(evalled_cfg != &cfg_nil_node)
     {
       E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, evalled_cfg->string);
       is_top_level = (row->eval.value.u64 == 0 && e_type_key_match(top_level_type_key, row->eval.irtree.type_key));
@@ -1090,7 +1090,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
                                            block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment)))
       {
         CFG_ID id = row->key.child_id;
-        info.group_cfg_child = rd_cfg_from_id(id);
+        info.group_cfg_child = cfg_node_from_id(id);
       }
     }
     
@@ -1129,9 +1129,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     {
       U64 column_count = maybe_table_type->count;
       info.cell_style_key = push_str8f(arena, "table_%I64u_cols", column_count);
-      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-      RD_Cfg *w_cfg = style->first;
+      CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+      CFG_Node *style = cfg_node_child_from_string(view, info.cell_style_key);
+      CFG_Node *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
       E_ParentKey(row->eval.key)
@@ -1175,7 +1175,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells autocomplete rows
     //
-    else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("autocomplete")) != &rd_nil_cfg)
+    else if(cfg_node_child_from_string(cfg_node_from_id(rd_regs()->view), str8_lit("autocomplete")) != &cfg_nil_node)
     {
       info.can_expand = 0;
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
@@ -1184,7 +1184,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells lister rows
     //
-    else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
+    else if(cfg_node_child_from_string(cfg_node_from_id(rd_regs()->view), str8_lit("lister")) != &cfg_nil_node)
     {
       info.can_expand = 0;
       RD_WatchCellFlags extra_flags = RD_WatchCellFlag_Expr;
@@ -1202,11 +1202,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells top-level cfg evaluations
     //
-    else if(is_top_level && evalled_cfg != &rd_nil_cfg)
+    else if(is_top_level && evalled_cfg != &cfg_nil_node)
     {
-      RD_Cfg *cfg = evalled_cfg;
+      CFG_Node *cfg = evalled_cfg;
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
-      MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
+      MD_NodePtrList schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, cfg->string);
       for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
       {
         MD_Node *schema = n->v;
@@ -1222,8 +1222,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           if(is_cmd_line_only)
           {
             B32 is_cmd_line = 0;
-            RD_Cfg *cmd_line = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
-            for(RD_Cfg *p = evalled_cfg->parent; p != &rd_nil_cfg; p = p->parent)
+            CFG_Node *cmd_line = cfg_node_child_from_string(cfg_node_root(), str8_lit("command_line"));
+            for(CFG_Node *p = evalled_cfg->parent; p != &cfg_nil_node; p = p->parent)
             {
               if(p == cmd_line)
               {
@@ -1362,7 +1362,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells "add new" expression rows
     //
-    else if(row->eval.expr == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
+    else if(row->eval.expr == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &cfg_nil_node)
     {
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented, .pct = 1.f);
@@ -1371,7 +1371,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells meta-evaluation booleans
     //
-    else if(info.group_cfg_child == &rd_nil_cfg &&
+    else if(info.group_cfg_child == &cfg_nil_node &&
             e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Bool &&
             (row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
              row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
@@ -1387,9 +1387,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(block_type->kind == E_TypeKind_Set && str8_match(block_type->name, str8_lit("procedures"), 0))
     {
       info.cell_style_key = str8_lit("procedure_expr_eval");
-      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-      RD_Cfg *w_cfg = style->first;
+      CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+      CFG_Node *style = cfg_node_child_from_string(view, info.cell_style_key);
+      CFG_Node *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
@@ -1409,9 +1409,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       CTRL_Entity *process = ctrl_process_from_entity(info.callstack_thread);
       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, info.callstack_vaddr);
       E_Eval module_eval = e_eval_from_stringf("query:control.%S", ctrl_string_from_handle(scratch.arena, module->handle));
-      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-      RD_Cfg *w_cfg = style->first;
+      CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+      CFG_Node *style = cfg_node_child_from_string(view, info.cell_style_key);
+      CFG_Node *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_CallStackFrame, row->eval,                                 .default_pct = 0.05f, .pct = take_pct());
@@ -1440,9 +1440,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         }
       }
       info.cell_style_key = str8_lit("normal");
-      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-      RD_Cfg *w_cfg = style->first;
+      CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+      CFG_Node *style = cfg_node_child_from_string(view, info.cell_style_key);
+      CFG_Node *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
@@ -1484,7 +1484,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   {
     .flags        = cell->flags,
     .view_ui_rule = &rd_nil_view_ui_rule,
-    .cfg          = &rd_nil_cfg,
+    .cfg          = &cfg_nil_node,
     .entity       = &ctrl_entity_nil,
   };
   
@@ -1493,7 +1493,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   //
   E_Type *block_type = e_type_from_key(row->block->eval.irtree.type_key);
   E_Type *cell_type = e_type_from_key(cell->eval.irtree.type_key);
-  MD_NodePtrList cell_schemas = rd_schemas_from_name(cell_type->name);
+  MD_NodePtrList cell_schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, cell_type->name);
   if(cell->eval.space.u64s[1] == 0 && cell_schemas.count != 0)
   {
     result.cfg = rd_cfg_from_eval_space(cell->eval.space);
@@ -1591,7 +1591,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       
       //- rjf: cfg evaluation -> button for cfg
-      else if(result.cfg != &rd_nil_cfg)
+      else if(result.cfg != &cfg_nil_node)
       {
         result.expr_fstrs = rd_title_fstrs_from_cfg(arena, result.cfg, 0);
         result.flags |= RD_WatchCellFlag_Button;

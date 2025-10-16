@@ -248,59 +248,6 @@ struct RD_VocabInfoMap
 };
 
 ////////////////////////////////
-//~ rjf: Config Tree
-
-typedef struct RD_Cfg RD_Cfg;
-struct RD_Cfg
-{
-  RD_Cfg *first;
-  RD_Cfg *last;
-  RD_Cfg *next;
-  RD_Cfg *prev;
-  RD_Cfg *parent;
-  CFG_ID id;
-  String8 string;
-};
-
-typedef struct RD_CfgNode RD_CfgNode;
-struct RD_CfgNode
-{
-  RD_CfgNode *next;
-  RD_CfgNode *prev;
-  RD_Cfg *v;
-};
-
-typedef struct RD_CfgSlot RD_CfgSlot;
-struct RD_CfgSlot
-{
-  RD_CfgNode *first;
-  RD_CfgNode *last;
-};
-
-typedef struct RD_CfgList RD_CfgList;
-struct RD_CfgList
-{
-  RD_CfgNode *first;
-  RD_CfgNode *last;
-  U64 count;
-};
-
-typedef struct RD_CfgArray RD_CfgArray;
-struct RD_CfgArray
-{
-  RD_Cfg **v;
-  U64 count;
-};
-
-typedef struct RD_CfgRec RD_CfgRec;
-struct RD_CfgRec
-{
-  RD_Cfg *next;
-  S32 push_count;
-  S32 pop_count;
-};
-
-////////////////////////////////
 //~ rjf: Structured Locations, Parsed From Config Trees
 
 typedef struct RD_Location RD_Location;
@@ -324,7 +271,7 @@ struct RD_PanelNode
   RD_PanelNode *prev;
   RD_PanelNode *parent;
   U64 child_count;
-  RD_Cfg *cfg;
+  CFG_Node *cfg;
   
   // rjf: split data
   Axis2 split_axis;
@@ -334,8 +281,8 @@ struct RD_PanelNode
   Side tab_side;
   
   // rjf: which tabs are attached
-  RD_CfgList tabs;
-  RD_Cfg *selected_tab;
+  CFG_NodePtrList tabs;
+  CFG_Node *selected_tab;
 };
 
 typedef struct RD_PanelTree RD_PanelTree;
@@ -489,25 +436,6 @@ struct RD_WindowStateSlot
 ////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
-read_only global U64 rd_name_bucket_chunk_sizes[] =
-{
-  16,
-  64,
-  256,
-  1024,
-  4096,
-  16384,
-  65536,
-  0xffffffffffffffffull,
-};
-
-typedef struct RD_NameChunkNode RD_NameChunkNode;
-struct RD_NameChunkNode
-{
-  RD_NameChunkNode *next;
-  U64 size;
-};
-
 typedef struct RD_AmbiguousPathNode RD_AmbiguousPathNode;
 struct RD_AmbiguousPathNode
 {
@@ -554,9 +482,6 @@ struct RD_State
   C_Key project_cfg_string_key;
   C_Key cmdln_cfg_string_key;
   C_Key transient_cfg_string_key;
-  
-  // rjf: schema table
-  MD_NodePtrList *schemas;
   
   // rjf: default theme table
   MD_Node *theme_preset_trees[RD_ThemePreset_COUNT];
@@ -645,16 +570,8 @@ struct RD_State
   RD_DragDropState drag_drop_state;
   
   // rjf: cfg state
-  RD_NameChunkNode *free_name_chunks[ArrayCount(rd_name_bucket_chunk_sizes)];
-  RD_Cfg *free_cfg;
-  RD_Cfg *root_cfg;
-  U64 cfg_id_slots_count;
-  RD_CfgSlot *cfg_id_slots;
-  RD_CfgNode *free_cfg_id_node;
-  U64 cfg_id_gen;
-  CFG_ID cfg_last_accessed_id;
-  RD_Cfg *cfg_last_accessed;
-  U64 cfg_change_gen;
+  CFG_State *cfg;
+  CFG_SchemaTable *cfg_schema_table;
   
   // rjf: window state cache
   U64 window_state_slots_count;
@@ -688,15 +605,6 @@ struct RD_State
 
 read_only global RD_VocabInfo rd_nil_vocab_info = {0};
 
-read_only global RD_Cfg rd_nil_cfg =
-{
-  &rd_nil_cfg,
-  &rd_nil_cfg,
-  &rd_nil_cfg,
-  &rd_nil_cfg,
-  &rd_nil_cfg,
-};
-
 read_only global RD_PanelNode rd_nil_panel_node =
 {
   &rd_nil_panel_node,
@@ -705,8 +613,8 @@ read_only global RD_PanelNode rd_nil_panel_node =
   &rd_nil_panel_node,
   &rd_nil_panel_node,
   0,
-  &rd_nil_cfg,
-  .selected_tab = &rd_nil_cfg,
+  &cfg_nil_node,
+  .selected_tab = &cfg_nil_node,
 };
 
 read_only global RD_CmdKindInfo rd_nil_cmd_kind_info = {0};
@@ -767,65 +675,30 @@ internal void rd_set_hover_regs(RD_RegSlot slot);
 internal RD_Regs *rd_get_hover_regs(void);
 
 ////////////////////////////////
-//~ rjf: Name Allocation
+//~ rjf: Config Functions
 
-internal U64 rd_name_bucket_num_from_string_size(U64 size);
-internal String8 rd_name_alloc(String8 string);
-internal void rd_name_release(String8 string);
-
-////////////////////////////////
-//~ rjf: Config Tree Functions
-
-internal RD_Cfg *rd_cfg_alloc(void);
-internal void rd_cfg_release(RD_Cfg *cfg);
-internal void rd_cfg_release_all_children(RD_Cfg *cfg);
-internal RD_Cfg *rd_cfg_from_id(CFG_ID id);
-internal RD_Cfg *rd_cfg_new(RD_Cfg *parent, String8 string);
-internal RD_Cfg *rd_cfg_newf(RD_Cfg *parent, char *fmt, ...);
-internal RD_Cfg *rd_cfg_new_replace(RD_Cfg *parent, String8 string);
-internal RD_Cfg *rd_cfg_new_replacef(RD_Cfg *parent, char *fmt, ...);
-internal RD_Cfg *rd_cfg_deep_copy(RD_Cfg *src_root);
-internal void rd_cfg_equip_string(RD_Cfg *cfg, String8 string);
-internal void rd_cfg_equip_stringf(RD_Cfg *cfg, char *fmt, ...);
-internal void rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *new_child);
-internal void rd_cfg_unhook(RD_Cfg *parent, RD_Cfg *child);
-internal RD_Cfg *rd_cfg_child_from_string(RD_Cfg *parent, String8 string);
-internal RD_Cfg *rd_cfg_child_from_string_or_alloc(RD_Cfg *parent, String8 string);
-internal RD_Cfg *rd_cfg_child_from_string_or_parent(RD_Cfg *parent, String8 string);
-internal RD_CfgList rd_cfg_child_list_from_string(Arena *arena, RD_Cfg *parent, String8 string);
-internal RD_CfgList rd_cfg_top_level_list_from_string(Arena *arena, String8 string);
-internal RD_CfgArray rd_cfg_array_from_list(Arena *arena, RD_CfgList *list);
-internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 root_path, String8 string);
-internal String8 rd_string_from_cfg_tree(Arena *arena, String8 root_path, RD_Cfg *cfg);
-internal RD_CfgRec rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg);
-internal void rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
-internal void rd_cfg_list_push_front(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
-#define rd_cfg_list_first(list) ((list)->count ? (list)->first->v : &rd_nil_cfg)
-#define rd_cfg_list_last(list)  ((list)->count ? (list)->last->v  : &rd_nil_cfg)
-
-internal RD_PanelTree rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg);
+internal RD_PanelTree rd_panel_tree_from_cfg(Arena *arena, CFG_Node *cfg_root);
 internal RD_PanelNodeRec rd_panel_node_rec__depth_first(RD_PanelNode *root, RD_PanelNode *panel, U64 sib_off, U64 child_off);
 #define rd_panel_node_rec__depth_first_pre(root, p)     rd_panel_node_rec__depth_first((root), (p), OffsetOf(RD_PanelNode, next), OffsetOf(RD_PanelNode, first))
 #define rd_panel_node_rec__depth_first_pre_rev(root, p) rd_panel_node_rec__depth_first((root), (p), OffsetOf(RD_PanelNode, prev), OffsetOf(RD_PanelNode, last))
-internal RD_PanelNode *rd_panel_node_from_tree_cfg(RD_PanelNode *root, RD_Cfg *cfg);
+internal RD_PanelNode *rd_panel_node_from_tree_cfg(RD_PanelNode *root, CFG_Node *cfg);
 internal Rng2F32 rd_target_rect_from_panel_node_child(Rng2F32 parent_rect, RD_PanelNode *parent, RD_PanelNode *panel);
 internal Rng2F32 rd_target_rect_from_panel_node(Rng2F32 root_rect, RD_PanelNode *root, RD_PanelNode *panel);
 
-internal B32 rd_cfg_is_project_filtered(RD_Cfg *cfg);
+internal B32 rd_cfg_is_project_filtered(CFG_Node *cfg);
 internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_name(Arena *arena, String8 string);
 internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding);
 
-internal Vec4F32 rd_hsva_from_cfg(RD_Cfg *cfg);
-internal Vec4F32 rd_color_from_cfg(RD_Cfg *cfg);
+internal Vec4F32 rd_hsva_from_cfg(CFG_Node *cfg);
+internal Vec4F32 rd_color_from_cfg(CFG_Node *cfg);
 
-internal B32 rd_disabled_from_cfg(RD_Cfg *cfg);
-internal RD_Location rd_location_from_cfg(RD_Cfg *cfg);
-internal String8 rd_label_from_cfg(RD_Cfg *cfg);
-internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
-internal String8 rd_path_from_cfg(RD_Cfg *cfg);
-internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
+internal B32 rd_disabled_from_cfg(CFG_Node *cfg);
+internal RD_Location rd_location_from_cfg(CFG_Node *cfg);
+internal String8 rd_label_from_cfg(CFG_Node *cfg);
+internal String8 rd_expr_from_cfg(CFG_Node *cfg);
+internal String8 rd_path_from_cfg(CFG_Node *cfg);
+internal D_Target rd_target_from_cfg(Arena *arena, CFG_Node *cfg);
 
-internal MD_NodePtrList rd_schemas_from_name(String8 name);
 internal String8 rd_default_setting_from_names(String8 schema_name, String8 setting_name);
 
 internal String8 rd_setting_from_name(String8 name);
@@ -833,8 +706,8 @@ internal B32 rd_setting_b32_from_name(String8 name);
 internal U64 rd_setting_u64_from_name(String8 name);
 internal F32 rd_setting_f32_from_name(String8 name);
 
-internal RD_Cfg *rd_immediate_cfg_from_key(String8 string);
-internal RD_Cfg *rd_immediate_cfg_from_keyf(char *fmt, ...);
+internal CFG_Node *rd_immediate_cfg_from_key(String8 string);
+internal CFG_Node *rd_immediate_cfg_from_keyf(char *fmt, ...);
 
 internal String8 rd_mapped_from_file_path(Arena *arena, String8 file_path);
 internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 file_path);
@@ -849,8 +722,8 @@ internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
 //~ rjf: Evaluation Spaces
 
 //- rjf: cfg <-> eval space
-internal RD_Cfg *rd_cfg_from_eval_space(E_Space space);
-internal E_Space rd_eval_space_from_cfg(RD_Cfg *cfg);
+internal CFG_Node *rd_cfg_from_eval_space(E_Space space);
+internal E_Space rd_eval_space_from_cfg(CFG_Node *cfg);
 
 //- rjf: ctrl entity <-> eval space
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
@@ -887,8 +760,8 @@ internal String8 rd_query_from_eval_string(Arena *arena, String8 string);
 ////////////////////////////////
 //~ rjf: View Functions
 
-internal RD_Cfg *rd_view_from_eval(RD_Cfg *parent, E_Eval eval);
-internal RD_ViewState *rd_view_state_from_cfg(RD_Cfg *cfg);
+internal CFG_Node *rd_view_from_eval(CFG_Node *parent, E_Eval eval);
+internal RD_ViewState *rd_view_state_from_cfg(CFG_Node *cfg);
 internal void rd_view_ui(Rng2F32 rect);
 
 ////////////////////////////////
@@ -930,8 +803,8 @@ internal void rd_store_view_paramf(String8 key, char *fmt, ...);
 //~ rjf: Window Functions
 
 internal String8 rd_push_window_title(Arena *arena);
-internal RD_Cfg *rd_window_from_cfg(RD_Cfg *cfg);
-internal RD_WindowState *rd_window_state_from_cfg(RD_Cfg *cfg);
+internal CFG_Node *rd_window_from_cfg(CFG_Node *cfg);
+internal RD_WindowState *rd_window_state_from_cfg(CFG_Node *cfg);
 internal RD_WindowState *rd_window_state_from_os_handle(OS_Handle os);
 internal void rd_window_frame(void);
 

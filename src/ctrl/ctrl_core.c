@@ -979,7 +979,7 @@ internal void
 ctrl_entity_string_release(CTRL_EntityCtxRWStore *store, String8 string)
 {
   U64 bucket_num = ctrl_name_bucket_num_from_string_size(string.size);
-  if(1 <= bucket_num && bucket_num <= ArrayCount(rd_name_bucket_chunk_sizes))
+  if(1 <= bucket_num && bucket_num <= ArrayCount(ctrl_entity_string_bucket_chunk_sizes))
   {
     U64 bucket_idx = bucket_num-1;
     CTRL_EntityStringChunkNode *node = (CTRL_EntityStringChunkNode *)string.str;

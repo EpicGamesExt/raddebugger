@@ -185,6 +185,8 @@ internal MD_NodePtrList cfg_schemas_from_name(Arena *arena, CFG_SchemaTable *tab
 internal void cfg_ctx_select(CFG_Ctx *ctx);
 
 //- rjf: tree navigations
+internal U64 cfg_change_gen(void);
+internal CFG_Node *cfg_node_root(void);
 internal CFG_Node *cfg_node_from_id(CFG_ID id);
 internal CFG_Node *cfg_node_child_from_string(CFG_Node *parent, String8 string);
 internal CFG_Node *cfg_node_child_from_string_or_parent(CFG_Node *parent, String8 string);
