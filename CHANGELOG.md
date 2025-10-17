@@ -9,6 +9,16 @@
 - Reintroduced the `list` lens, which gathers all nodes in a linked list, and
   visualizes them as a flat list of pointers (the same as how an array of
   pointers is visualized).
+- Fixed a crash when closing empty Geometry 3D views. (#652, #657)
+- Fixed the debugger not visualizing `enum` types when evaluated through a
+  bitfield type. (#655)
+- Fixed the PDB -> RDI conversion not correctly generating location information
+  for function parameters, when the EXE/PDB were built to include support for
+  Edit and Continue (`-ZI` switch). (#656)
+
+## Binary Utility Changes
+
+- Fixed a crash when using the `--compress` option, when generating RDI files.
 
 # v0.9.22-alpha
 
