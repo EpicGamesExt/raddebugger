@@ -368,6 +368,8 @@ typedef struct DW_DescriptorEntry
   DW_DescriptorEntryType type;
   DW_Format              format;
   Rng1U64                entry_range;
+  U64                    cie_pointer_off;
+  U64                    cie_pointer;
 } DW_DescriptorEntry;
 
 typedef struct DW_CIE
@@ -389,7 +391,6 @@ typedef struct DW_FDE
 {
   DW_Format format;
   U64       cie_pointer;
-  DW_CIE   *cie;
   Rng1U64   pc_range;
   String8   insts;
 } DW_FDE;
@@ -429,9 +430,6 @@ typedef struct DW_CFA_InstList
 
 #define DW_DECODE_PTR(name) U64 name(String8 data, void *ud, U64 *ptr_out)
 typedef DW_DECODE_PTR(DW_DecodePtr);
-
-#define DW_CIE_FROM_OFFSET_FUNC(name) DW_CIE * name(void *ud, U64 offset)
-typedef DW_CIE_FROM_OFFSET_FUNC(DW_CIEFromOffsetFunc);
 
 // hasher
 
@@ -559,7 +557,7 @@ internal U64 dw_read_debug_frame_ptr(String8 data, DW_CIE *cie, U64 *ptr_out);
 
 internal U64 dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc_out);
 internal B32 dw_parse_cie(String8 data, DW_Format format, Arch arch, DW_CIE *cie_out);
-internal B32 dw_parse_fde(String8 data, DW_Format format, DW_CIEFromOffsetFunc *cie_from_offset_func, void *cie_from_offset_ud, DW_FDE *fde_out);
+internal B32 dw_parse_fde(String8 data, DW_Format format, DW_CIE *cie, DW_FDE *fde_out);
 internal B32 dw_parse_cfi(String8 data, U64 fde_offset, Arch arch, DW_CIE *cie_out, DW_FDE *fde_out);
 
 internal DW_CFA_ParseErrorCode dw_parse_cfa_inst(String8 data, U64 code_align_factor, S64 data_align_factor, DW_DecodePtr *decode_ptr_func, void *decode_ptr_ud, U64 *bytes_read_out, DW_CFA_Inst *inst_out);

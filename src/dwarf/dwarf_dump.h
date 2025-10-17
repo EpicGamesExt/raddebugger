@@ -59,12 +59,16 @@ read_only global String8 dw_name_title_from_dump_subset_table[] =
 //~ rjf: Stringification Helpers
 
 internal String8 dw_string_from_reg_off(Arena *arena, Arch arch, DW_Reg reg_idx, S64 reg_off);
-internal String8List dw_string_list_from_expression  (Arena *arena, String8 raw_data, U64 cu_base, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
-internal String8 dw_single_line_string_from_expression(Arena *arena, String8 raw_data, U64 cu_base, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
+internal String8 dw_string_from_reg(Arena *arena, Arch arch, DW_Reg reg_idx);
+internal String8List dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 cu_base, U64 addr_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
+internal String8 dw_string_from_expression(Arena *arena, String8 expr, U64 cu_base, U64 addr_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
+
+internal String8List dw_string_list_from_cfi_program(Arena *arena, U64 cu_base, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format, U64 pc_begin, DW_CIE *cie, DW_DecodePtr *decode_ptr_func, void *deocde_ptr_ud, String8 program);
+
+internal String8 dw_string_from_cfa(Arena *arena, Arch arch, U64 address_size, DW_Version version, DW_Ext ext, DW_Format format, DW_CFA cfa);
+internal String8 dw_string_from_cfi_row(Arena *arena, Arch arch, U64 address_size, DW_Version version, DW_Ext ext, DW_Format format, DW_CFI_Row *row);
 
 #if 0
-internal void dw_string_from_cfi_program            (Arena *arena, String8List *out, String8 indent, String8 raw_data, DW_CIE *cie, EH_PtrCtx *ptr_ctx, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
-
 internal void dw_print_eh_frame         (Arena *arena, String8List *out, String8 indent, String8 raw_eh_frame, Arch arch, DW_Version ver, DW_Ext ext, EH_PtrCtx *ptr_ctx);
 internal void dw_print_debug_loc        (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ExecutableImageKind image_type, B32 relaxed);
 internal void dw_print_debug_ranges     (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ExecutableImageKind image_type, B32 relaxed);

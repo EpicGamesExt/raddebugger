@@ -1029,12 +1029,14 @@ rb_thread_entry_point(void *p)
       //- rjf: unpack dump subset flags
       RDI_DumpSubsetFlags rdi_dump_subset_flags = RDI_DumpSubsetFlag_All;
       DW_DumpSubsetFlags dw_dump_subset_flags = DW_DumpSubsetFlag_All;
+      EH_DumpSubsetFlags eh_dump_subset_flags = EH_DumpSubsetFlag_All;
       {
         String8List only_names = cmd_line_strings(cmdline, str8_lit("only"));
         if(only_names.node_count != 0)
         {
           rdi_dump_subset_flags = 0;
           dw_dump_subset_flags = 0;
+          eh_dump_subset_flags = 0;
         }
         for(String8Node *n = only_names.first; n != 0; n = n->next)
         {
@@ -1044,6 +1046,9 @@ rb_thread_entry_point(void *p)
 #undef X
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { dw_dump_subset_flags |= DW_DumpSubsetFlag_##name; }
           DW_DumpSubset_XList
+#undef X
+#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { eh_dump_subset_flags |= EH_DumpSubsetFlag_##name; }
+          EH_DumpSubset_XList
 #undef X
         }
         String8List omit_names = cmd_line_strings(cmdline, str8_lit("omit"));
@@ -1055,6 +1060,9 @@ rb_thread_entry_point(void *p)
 #undef X
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { dw_dump_subset_flags &= ~DW_DumpSubsetFlag_##name; }
           DW_DumpSubset_XList
+#undef X
+#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { eh_dump_subset_flags &= ~EH_DumpSubsetFlag_##name; }
+          EH_DumpSubset_XList
 #undef X
         }
       }
@@ -1074,6 +1082,10 @@ rb_thread_entry_point(void *p)
         PE_BinInfo pe = {0};
         ELF_Bin elf = {0};
         DW_Input dw = {0};
+        U64 eh_frame_hdr_vaddr = 0;
+        U64 eh_frame_vaddr = 0;
+        String8 eh_frame_hdr = {0};
+        String8 eh_frame = {0};
         {
           if(f->format == RB_FileFormat_PE)
           {
@@ -1100,6 +1112,22 @@ rb_thread_entry_point(void *p)
                     f->format == RB_FileFormat_ELF64)
             {
               dw = dw_input_from_elf_bin(arena, f->data, &elf);
+              for EachIndex(sect_idx, elf.hdr.e_shnum)
+              {
+                ELF_Shdr64 *shdr = &elf.shdrs.v[sect_idx];
+                String8 name = elf_name_from_shdr64(f->data, &elf, shdr);
+                if (str8_match(name, str8_lit(".eh_frame_hdr"), 0))
+                {
+                  eh_frame_hdr = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
+                  eh_frame_hdr_vaddr = shdr->sh_addr;
+
+                }
+                else if(str8_match(name, str8_lit(".eh_frame"), 0))
+                {
+                  eh_frame = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
+                  eh_frame_vaddr = shdr->sh_addr;
+                }
+              }
             }
           }
         }
@@ -1185,6 +1213,16 @@ rb_thread_entry_point(void *p)
               str8_list_concat_in_place(&output_blobs, &dump);
             }
           }
+        }
+
+        if(eh_dump_subset_flags)
+        {
+          if(lane_idx() == 0)
+          {
+            String8List dump = eh_dump_list_from_data(arena, arch, eh_frame_hdr_vaddr, eh_frame_vaddr, eh_frame_hdr, eh_frame, eh_dump_subset_flags);
+            str8_list_concat_in_place(&output_blobs, &dump);
+          }
+          lane_sync();
         }
       }
     }break;

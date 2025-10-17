@@ -1,12 +1,6 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal
-DW_CIE_FROM_OFFSET_FUNC(dw_call_frame_info_cie_from_offset)
-{
-  return hash_table_search_u64_raw(ud, offset);
-}
-
 internal DW_CallFrameInfo
 dw_call_frame_info_from_data(Arena *arena, Arch arch, U64 rebase, String8 debug_frame)
 {
@@ -49,7 +43,8 @@ dw_call_frame_info_from_data(Arena *arena, Arch arch, U64 rebase, String8 debug_
     desc_size = dw_parse_descriptor_entry_header(debug_frame, cursor, &desc);
     if (desc_size == 0) { break; }
     if (desc.type == DW_DescriptorEntryType_FDE) {
-      if (dw_parse_fde(str8_skip(debug_frame, cursor), desc.format, dw_call_frame_info_cie_from_offset, cie_ht, &fde[parse_fde_count])) {
+      DW_CIE *cie = hash_table_search_u64_raw(cie_ht, desc.cie_pointer);
+      if (dw_parse_fde(str8_skip(debug_frame, cursor), desc.format, cie, &fde[parse_fde_count])) {
         fde[parse_fde_count].pc_range.min += rebase;
         fde[parse_fde_count].pc_range.max += rebase;
         parse_fde_count += 1;

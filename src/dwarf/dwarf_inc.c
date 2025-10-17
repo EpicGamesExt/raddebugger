@@ -9,3 +9,5 @@
 #include "dwarf/dwarf_unwind.c"
 #include "dwarf/dwarf_dump.c"
 #include "dwarf/dwarf_help.c"
+#include "dwarf/eh_frame.c"
+#include "dwarf/eh_dump.c"
