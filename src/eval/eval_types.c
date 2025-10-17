@@ -2579,14 +2579,15 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: unpack key
-  E_Space space = {0};
+  // TODO(rjf): this needs to take any `E_Space`, once eval has been upgraded.
+  CTRL_Handle process = {0};
   U64 base_off = 0;
   U64 member_element_off = 0;
   U64 member_size = 0;
   E_SpaceRWFunction *space_read = 0;
   {
     U64 key_read_off = 0;
-    key_read_off += str8_deserial_read_struct(key, key_read_off, &space);
+    key_read_off += str8_deserial_read_struct(key, key_read_off, &process);
     key_read_off += str8_deserial_read_struct(key, key_read_off, &base_off);
     key_read_off += str8_deserial_read_struct(key, key_read_off, &member_element_off);
     key_read_off += str8_deserial_read_struct(key, key_read_off, &member_size);
@@ -2611,6 +2612,7 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
   OffsetChunk *first_chunk = 0;
   OffsetChunk *last_chunk = 0;
   U64 total_count = 0;
+  B32 retry = 0;
   {
     U64 hit_slots_count = 4096;
     HitOffsetNode **hit_slots = push_array(scratch.arena, HitOffsetNode *, hit_slots_count);
@@ -2652,18 +2654,30 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
       total_count += 1;
       
       //- rjf: read next offset, advance
-      if(!space_read(space, &next_off, r1u64(off + member_element_off, off + member_element_off + member_size)))
+      B32 read_stale = 0;
+      B32 read_good = ctrl_process_memory_read(process, r1u64(off + member_element_off, off + member_size), &read_stale, &next_off, 0);
+      if(read_stale)
+      {
+        retry = 1;
+      }
+      if(!read_good)
       {
         break;
       }
     }
   }
   
+  //- rjf: retry
+  if(retry)
+  {
+    retry_out[0] = 1;
+  }
+  
   //- rjf: flatten
   Arena *arena = 0;
   U64 node_offs_count = 0;
   U64 *node_offs = 0;
-  if(total_count != 0)
+  if(!retry && total_count != 0)
   {
     arena = arena_alloc();
     node_offs_count = total_count;
@@ -2782,7 +2796,7 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
 #pragma pack(push, 1)
     struct
     {
-      E_Space space;
+      CTRL_Handle process;
       U64 base_off;
       U64 member_element_off;
       U64 member_size;
@@ -2790,7 +2804,9 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
     }
     key_data =
     {
-      base_off_interpret.space,
+      // TODO(rjf): we cannot use `rd_` here - only doing this because the base eval layer does not
+      // support what we need yet...
+      rd_ctrl_entity_from_eval_space(base_off_interpret.space)->handle,
       base_off_interpret.value.u64,
       next_link_member.off,
       e_type_byte_size_from_key(next_link_member.type_key),

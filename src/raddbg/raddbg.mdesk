@@ -471,6 +471,18 @@ RD_VocabTable:
     ```
   }
   {
+    list,
+    ```
+      x:
+    {
+      @description("An expression describing the first node in the list.")
+        'expression': expr_string,
+      @order(0) @description("The name of the member which encodes the link to the next node.")
+        'member_name': code_string,
+    }
+    ```
+  }
+  {
     text,
     ```
       @inherit(tab) @expand_commands(@output clear_output) x:
