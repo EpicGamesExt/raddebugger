@@ -1565,14 +1565,17 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
   
   //- rjf: pick match
   DI_Match match = {0};
-  for EachIndex(idx, lane_count())
+  if(lane_matches != 0)
   {
-    if(lane_matches[idx].idx != 0)
+    for EachIndex(idx, lane_count())
     {
-      match = lane_matches[idx];
-      if(di_key_match(di_key_zero(), preferred_key) || di_key_match(match.key, preferred_key))
+      if(lane_matches[idx].idx != 0)
       {
-        break;
+        match = lane_matches[idx];
+        if(di_key_match(di_key_zero(), preferred_key) || di_key_match(match.key, preferred_key))
+        {
+          break;
+        }
       }
     }
   }
