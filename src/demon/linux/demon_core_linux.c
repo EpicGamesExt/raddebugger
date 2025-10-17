@@ -367,8 +367,11 @@ dmn_lnx_module_info_list_from_process(Arena *arena, DMN_LNX_Entity *process)
     DMN_LNX_ModuleInfoNode *n = push_array(arena, DMN_LNX_ModuleInfoNode, 1);
     SLLQueuePush(list.first, list.last, n);
     list.count += 1;
-    n->v.vaddr_range = shift_1u64(phdr_info.range, base_vaddr);
-    n->v.name = aux.execfn;
+    n->v.vaddr_range = r1u64(base_vaddr, base_vaddr + dim_1u64(phdr_info.range));
+    n->v.name        = aux.execfn;
+    n->v.phvaddr     = aux.phdr;
+    n->v.phentsize   = aux.phent;
+    n->v.phcount     = aux.phnum;
   }
   
   //- rjf: iterate link maps
@@ -426,7 +429,10 @@ dmn_lnx_module_info_list_from_process(Arena *arena, DMN_LNX_Entity *process)
         SLLQueuePush(list.first, list.last, n);
         list.count += 1;
         n->v.vaddr_range = r1u64(linkmap.base, linkmap.base + dim_1u64(module_phdr_info.range));
-        n->v.name = linkmap.name;
+        n->v.name        = linkmap.name;
+        n->v.phvaddr     = phvaddr;
+        n->v.phentsize   = phentsize;
+        n->v.phcount     = phcount;
       }
       
       // rjf: iterate
@@ -1108,14 +1114,16 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
               module->id = n->v.name;
               {
                 DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
-                e->kind    = DMN_EventKind_LoadModule;
-                e->process = dmn_lnx_handle_from_entity(process);
-                e->thread  = dmn_lnx_handle_from_entity(main_thread);
-                e->module  = dmn_lnx_handle_from_entity(module);
-                e->arch    = process->arch;
-                e->address = n->v.vaddr_range.min;
-                e->size    = dim_1u64(n->v.vaddr_range);
-                e->string  = dmn_lnx_read_string(dmn_lnx_state->deferred_events_arena, process->fd, n->v.name);
+                e->kind             = DMN_EventKind_LoadModule;
+                e->process          = dmn_lnx_handle_from_entity(process);
+                e->thread           = dmn_lnx_handle_from_entity(main_thread);
+                e->module           = dmn_lnx_handle_from_entity(module);
+                e->arch             = process->arch;
+                e->address          = n->v.vaddr_range.min;
+                e->size             = dim_1u64(n->v.vaddr_range);
+                e->string           = dmn_lnx_read_string(dmn_lnx_state->deferred_events_arena, process->fd, n->v.name);
+                e->elf_phdr_vrange  = r1u64(n->v.phvaddr, n->v.phvaddr + n->v.phentsize * n->v.phcount);
+                e->elf_phdr_entsize = n->v.phentsize;
               }
             }
             

@@ -76,6 +76,8 @@ struct DMN_Event
   U32 flags; // DMN_TrapFlags, if `DMN_EventKind_SetBreakpoint`
   S32 signo;
   S32 sigcode;
+  Rng1U64 elf_phdr_vrange;
+  U64 elf_phdr_entsize;
   U64 instruction_pointer;
   U64 stack_pointer;
   U64 user_data;
@@ -195,6 +197,8 @@ internal U64 dmn_rsp_from_thread(DMN_Handle thread);
 //~ rjf: Process Reading Helper Functions (Helpers, Implemented Once)
 
 internal String8 dmn_process_read_cstring(Arena *arena, DMN_Handle process, U64 addr);
+internal String8 dmn_process_read_block(Arena *arena, DMN_Handle process, Rng1U64 vrange);
+internal void *  dmn_process_read_raw(Arena *arena, DMN_Handle process, Rng1U64 vrange);
 
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)
