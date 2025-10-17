@@ -216,6 +216,9 @@ struct DMN_LNX_ModuleInfo
 {
   Rng1U64 vaddr_range;
   U64 name;
+  U64 phvaddr;
+  U64 phentsize;
+  U64 phcount;
 };
 
 typedef struct DMN_LNX_ModuleInfoNode DMN_LNX_ModuleInfoNode;
@@ -261,6 +264,9 @@ struct DMN_LNX_Entity
   U64 id;
   int fd;
   B32 expecting_dummy_sigstop;
+  U64 phvaddr;
+  U64 phentsize;
+  U64 phcount;
 };
 
 typedef struct DMN_LNX_EntityNode DMN_LNX_EntityNode;
@@ -311,6 +317,8 @@ internal B32 dmn_lnx_write(int memory_fd, Rng1U64 range, void *src);
 #define dmn_lnx_read_struct(fd, vaddr, ptr) dmn_lnx_read((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
 #define dmn_lnx_write_struct(fd, vaddr, ptr) dmn_lnx_write((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
 internal String8 dmn_lnx_read_string(Arena *arena, int memory_fd, U64 base_vaddr);
+internal void * dmn_lnx_read_raw(Arena *arena, int memory_fd, Rng1U64 vrange);
+internal String8 dmn_lnx_read_block(Arena *arena, int memory_fd, Rng1U64 vrange);
 
 //- rjf: pid => info extraction
 internal String8 dmn_lnx_exe_path_from_pid(Arena *arena, pid_t pid);
