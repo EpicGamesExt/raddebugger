@@ -1143,8 +1143,9 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
           for EachInRange(idx, range)
           {
             //- rjf: every so often, check if we need to cancel, and cancel
+            if(idx%10000 == 0 && !!ins_atomic_u32_eval(cancel_signal))
             {
-              // TODO(rjf)
+              break;
             }
             
             //- rjf: get element, map to string; if empty, continue to next element
@@ -1245,6 +1246,14 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
     }
     lane_sync();
     
+    //- rjf: decide if we cancelled
+    B32 cancelled = 0;
+    if(lane_idx() == 0 && !!ins_atomic_u32_eval(cancel_signal))
+    {
+      cancelled = 1;
+    }
+    lane_sync_u64(&cancelled, 0);
+    
     //- rjf: produce sort records
     typedef struct SortRecord SortRecord;
     struct SortRecord
@@ -1255,7 +1264,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
     U64 sort_records_count = all_items->total_count;
     SortRecord *sort_records = 0;
     SortRecord *sort_records__swap = 0;
-    ProfScope("produce sort records")
+    if(!cancelled) ProfScope("produce sort records")
     {
       if(lane_idx() == 0)
       {
@@ -1283,7 +1292,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
     lane_sync();
     
     //- rjf: sort records
-    ProfScope("sort records")
+    if(!cancelled) ProfScope("sort records")
     {
       //- rjf: set up common data
       U64 bits_per_digit = 8;
@@ -1382,7 +1391,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
     
     //- rjf: produce final array
     DI_SearchItemArray items = {0};
-    ProfScope("produce final array")
+    if(!cancelled) ProfScope("produce final array")
     {
       if(lane_idx() == 0)
       {
@@ -1402,10 +1411,19 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
     lane_sync();
     
     //- rjf: bundle as artifact
-    artifact.u64[0] = (U64)arenas;
-    artifact.u64[1] = arenas_count;
-    artifact.u64[2] = (U64)items.v;
-    artifact.u64[3] = items.count;
+    if(!cancelled) 
+    {
+      artifact.u64[0] = (U64)arenas;
+      artifact.u64[1] = arenas_count;
+      artifact.u64[2] = (U64)items.v;
+      artifact.u64[3] = items.count;
+    }
+    
+    //- rjf: release results on cancel
+    else
+    {
+      arena_release(arena);
+    }
   }
   scratch_end(scratch);
   access_close(access);

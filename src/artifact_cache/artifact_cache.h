@@ -37,7 +37,6 @@ struct AC_ArtifactParams
   U64 gen;
   U64 evict_threshold_us;
   B32 *stale_out;
-  B32 *cancel_signal;
   AC_Flags flags;
 };
 
@@ -127,6 +126,9 @@ struct AC_Shared
   
   // rjf: requests
   AC_RequestBatch req_batches[2]; // 0: high priority, 1: low priority
+  
+  // rjf: cancel thread
+  Thread cancel_thread;
 };
 
 ////////////////////////////////
@@ -140,11 +142,6 @@ global AC_Shared *ac_shared = 0;
 internal void ac_init(void);
 
 ////////////////////////////////
-//~ rjf: Helpers
-
-internal B32 ac_cancelled(void);
-
-////////////////////////////////
 //~ rjf: Cache Lookups
 
 internal AC_Artifact ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U64 endt_us);
@@ -154,5 +151,10 @@ internal AC_Artifact ac_artifact_from_key_(Access *access, String8 key, AC_Artif
 //~ rjf: Asynchronous Tick
 
 internal void ac_async_tick(void);
+
+////////////////////////////////
+//~ rjf: Cancel Thread
+
+internal void ac_cancel_thread_entry_point(void *p);
 
 #endif // ARTIFACT_CACHE_H

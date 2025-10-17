@@ -18,6 +18,7 @@ ac_init(void)
     ac_shared->req_batches[idx].mutex = mutex_alloc();
     ac_shared->req_batches[idx].arena = arena_alloc();
   }
+  ac_shared->cancel_thread = thread_launch(ac_cancel_thread_entry_point, 0);
 }
 
 ////////////////////////////////
@@ -161,8 +162,8 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
           }
           n->v.key = str8_copy(req_batch->arena, key);
           n->v.gen = params->gen;
+          n->v.cancel_signal = &node->cancelled;
           n->v.create = params->create;
-          n->v.cancel_signal = params->cancel_signal;
         }
         cond_var_broadcast(async_tick_start_cond_var);
         ins_atomic_u32_eval_assign(&async_loop_again, 1);
@@ -575,4 +576,61 @@ ac_async_tick(void)
   lane_sync();
   
   scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ rjf: Cancel Thread
+
+internal void
+ac_cancel_thread_entry_point(void *p)
+{
+  for(;;)
+  {
+    os_sleep_milliseconds(100);
+    
+    //- rjf: scan in-flight nodes for expiration
+    for EachIndex(cache_slot_idx, ac_shared->cache_slots_count)
+    {
+      Stripe *cache_stripe = stripe_from_slot_idx(&ac_shared->cache_stripes, cache_slot_idx);
+      RWMutexScope(cache_stripe->rw_mutex, 0)
+      {
+        for EachNode(cache, AC_Cache, ac_shared->cache_slots[cache_slot_idx])
+        {
+          Rng1U64 slot_range = lane_range(cache->slots_count);
+          for EachInRange(slot_idx, slot_range)
+          {
+            AC_Slot *slot = &cache->slots[slot_idx];
+            Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
+            for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
+            {
+              B32 slot_has_work = 0;
+              RWMutexScope(stripe->rw_mutex, write_mode)
+              {
+                for(AC_Node *n = slot->first, *next = 0; n != 0; n = next)
+                {
+                  next = n->next;
+                  if(access_pt_is_expired(&n->access_pt, .time = n->evict_threshold_us) && ins_atomic_u64_eval(&n->working_count) > 0)
+                  {
+                    slot_has_work = 1;
+                    if(!write_mode)
+                    {
+                      break;
+                    }
+                    else
+                    {
+                      n->cancelled = 1;
+                    }
+                  }
+                }
+              }
+              if(!slot_has_work)
+              {
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
