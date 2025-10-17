@@ -598,7 +598,7 @@ struct CTRL_ModuleImageInfoCacheNode
   PE_IntelPdata *pdatas;
   U64 pdatas_count;
   U64 rebase;
-  B32 is_dwarf_unwind_data_eh;
+  B32 is_unwind_eh;
   String8 dwarf_unwind_data;
   EH_FrameHdr eh_frame_hdr;
   EH_PtrCtx eh_ptr_ctx;
@@ -987,7 +987,7 @@ internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, C
 internal void ctrl_thread__append_program_defined_bp_traps(Arena *arena, CTRL_Entity *bp, DMN_TrapChunkList *traps_out);
 
 //- rjf: module lifetime open/close work
-internal void ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range, String8 path);
+internal void ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range, String8 path, Rng1U64 elf_phdr_vrange, U64 elf_phdr_entsize);
 internal void ctrl_thread__module_close(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range);
 
 //- rjf: attached process running/event gathering

@@ -486,6 +486,7 @@ struct PE_LoadConfig64
 #define PE_MAGIC          0x00004550u
 #define PE_PE32_MAGIC     0x010bu
 #define PE_PE32PLUS_MAGIC 0x020bu
+typedef U16 PE_DosMagic;
 
 typedef struct PE_MipsPdata PE_MipsPdata;
 struct PE_MipsPdata

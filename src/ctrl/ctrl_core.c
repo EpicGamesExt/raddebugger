@@ -1901,14 +1901,16 @@ DW_REG_WRITE(ctrl_unwind_reg_write_dwarf_x64)
 internal CTRL_UnwindStepResult
 ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us)
 {
+  Temp scratch = scratch_begin(0, 0);
+
   CTRL_UnwindStepResult result = { .flags = CTRL_UnwindFlag_Error };
 
   // gather context for virtual stack unwinder
-  U64         rebase            = 0;
-  B32         is_unwind_data_eh = 0;
-  String8     unwind_data       = {0};
-  EH_FrameHdr eh_frame_hdr      = {0};
-  EH_PtrCtx   eh_ptr_ctx        = {0};
+  U64         rebase       = 0;
+  B32         is_unwind_eh = 0;
+  String8     unwind_data  = {0};
+  EH_FrameHdr eh_frame_hdr = {0};
+  EH_PtrCtx   eh_ptr_ctx   = {0};
   {
     U64                              hash       = ctrl_hash_from_handle(module_handle);
     U64                              slot_idx   = hash % ctrl_state->module_image_info_cache.slots_count;
@@ -1919,11 +1921,11 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
     {
       if(ctrl_handle_match(n->module, module_handle))
       {
-        rebase            = n->rebase;
-        is_unwind_data_eh = n->is_dwarf_unwind_data_eh;
-        unwind_data       = n->dwarf_unwind_data;
-        eh_frame_hdr      = n->eh_frame_hdr;
-        eh_ptr_ctx        = n->eh_ptr_ctx;
+        rebase       = n->rebase;
+        is_unwind_eh = n->is_unwind_eh;
+        unwind_data  = n->dwarf_unwind_data;
+        eh_frame_hdr = n->eh_frame_hdr;
+        eh_ptr_ctx   = n->eh_ptr_ctx;
         break;
       }
     }
@@ -1934,25 +1936,103 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
   U64 cfi_ip = ip + rebase;
 
   // use .eh_frame_hdr to quickly locate nearest FDE offset
-  U64 fde_offset = eh_find_nearest_fde(eh_frame_hdr, &eh_ptr_ctx, cfi_ip);
+  U64 fde_addr = eh_find_nearest_fde(eh_frame_hdr, &eh_ptr_ctx, cfi_ip);
 
-  if(fde_offset < unwind_data.size)
+  if(fde_addr != max_U64)
   {
     // parse call frame info
     DW_CIE cie = {0};
     DW_FDE fde = {0};
-    B32 is_cfi_parsed = is_unwind_data_eh ?
-                        eh_parse_cfi(unwind_data, fde_offset, arch, &eh_ptr_ctx, &cie, &fde) : 
-                        dw_parse_cfi(unwind_data, fde_offset, arch, &cie, &fde);
+    B32 is_cfi_parsed = 0;
+    if(is_unwind_eh)
+    {
+      B32 is_stale = 0;
+
+      // extract FDE info
+      Rng1U64   fde_vrange = {0};
+      DW_Format fde_format = DW_Format_Null;
+      String8   fde_data   = {0};
+      U64       cie_addr   = 0;
+      {
+        // parse FDE length
+        U32 first_four_bytes = 0;
+        if(!ctrl_process_memory_read_struct(process_handle, fde_addr, &is_stale, &first_four_bytes, endt_us)) { goto eh_parse_exit; }
+        if(first_four_bytes == max_U32)
+        {
+          U64 length = 0;
+          if(!ctrl_process_memory_read_struct(process_handle, fde_addr + sizeof(first_four_bytes), &is_stale, &length, endt_us)) { goto eh_parse_exit; }
+          fde_vrange = r1u64(fde_addr, fde_addr + sizeof(first_four_bytes) + length);
+          fde_format = DW_Format_64Bit;
+        }
+        else
+        {
+          fde_vrange = r1u64(fde_addr, fde_addr + sizeof(first_four_bytes) + first_four_bytes);
+          fde_format = DW_Format_32Bit;
+        }
+
+        // read out whole FDE
+        void *fde_raw = push_array(scratch.arena, U8, dim_1u64(fde_vrange));
+        if(!ctrl_process_memory_read(process_handle, fde_vrange, &is_stale, fde_raw, endt_us)) { goto eh_parse_exit; }
+        fde_data = str8(fde_raw, dim_1u64(fde_vrange));
+
+        // compute CIE address
+        U64 cie_delta_off  = fde_format == DW_Format_32Bit ? 4 : 12;
+        U64 cie_delta      = 0;
+        U64 cie_delta_size = str8_deserial_read_dwarf_uint(fde_data, cie_delta_off, fde_format, &cie_delta);
+        if (cie_delta_size == 0) { goto eh_parse_exit; }
+        cie_addr = (fde_addr + cie_delta_off) - cie_delta;
+      }
+      
+      // extract CIE info
+      Rng1U64   cie_vrange = {0};
+      DW_Format cie_format = DW_Format_Null;
+      String8   cie_data   = {0};
+      {
+        // parse CIE length
+        U32 first_four_bytes = 0;
+        if(!ctrl_process_memory_read_struct(process_handle, cie_addr, &is_stale, &first_four_bytes, endt_us)) { goto eh_parse_exit; }
+        if(first_four_bytes == max_U32)
+        {
+          U64 length = 0;
+          if(!ctrl_process_memory_read_struct(process_handle, cie_addr + sizeof(first_four_bytes), &is_stale, &length, endt_us)) { goto eh_parse_exit; }
+          cie_vrange = r1u64(cie_addr, cie_addr + sizeof(first_four_bytes) + length);
+          cie_format = DW_Format_64Bit;
+        }
+        else
+        {
+          cie_vrange = r1u64(cie_addr, cie_addr + sizeof(first_four_bytes) + first_four_bytes);
+          cie_format = DW_Format_32Bit;
+        }
+
+        // read out whole CIE
+        void *cie_raw = push_array(scratch.arena, U8, dim_1u64(cie_vrange));
+        if(!ctrl_process_memory_read(process_handle, cie_vrange, &is_stale, cie_raw, endt_us)) { goto eh_parse_exit; }
+        cie_data = str8(cie_raw, dim_1u64(cie_vrange));
+      }
+
+      // parse CIE and FDE
+      if(eh_parse_cie(cie_data, cie_format, arch, cie_vrange.min, &eh_ptr_ctx, &cie))
+      {
+        is_cfi_parsed = eh_parse_fde(fde_data, fde_format, fde_vrange.min, &cie, &eh_ptr_ctx, &fde);
+      }
+
+      eh_parse_exit:;
+      if(is_stale)
+      {
+        result.flags = CTRL_UnwindFlag_Stale;
+      }
+    }
+    else
+    {
+      is_cfi_parsed = dw_parse_cfi(unwind_data, fde_addr, arch, &cie, &fde);
+    }
 
     if(is_cfi_parsed)
     {
-      Temp scratch = scratch_begin(0, 0);
-
       // setup pointer decoder ops
       DW_DecodePtr *decode_ptr_func = 0;
       void         *decode_ptr_ctx  = 0;
-      if(is_unwind_data_eh)
+      if(is_unwind_eh)
       {
         EH_DecodePtrCtx *decode_ptr_ctx_eh = push_array(scratch.arena, EH_DecodePtrCtx, 1);
         decode_ptr_ctx_eh->ptr_ctx  = &eh_ptr_ctx;
@@ -2034,12 +2114,6 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
         default: { InvalidPath; } break;
         }
       }
-
-      scratch_end(scratch);
-    }
-    else
-    {
-      Assert(0 && "failed to parse CFI");
     }
   }
   else
@@ -2047,6 +2121,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
     // TODO: if IP does not have FDE, does this mean function is a leaf?
   }
 
+  scratch_end(scratch);
   return result;
 }
 
@@ -3639,307 +3714,363 @@ ctrl_thread__append_program_defined_bp_traps(Arena *arena, CTRL_Entity *bp, DMN_
 
 //- rjf: module lifetime open/close work
 
-internal void
-ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range, String8 path)
+internal
+DW_MEM_READ(ctrl_dmn_mem_read)
 {
-  //////////////////////////////
-  //- rjf: parse module image info
-  //
-  Arena *arena = arena_alloc();
-  COFF_MachineType machine = COFF_MachineType_Unknown;
-  PE_ImageFileCharacteristics file_characteristics = 0;
-  PE_IntelPdata *pdatas = 0;
-  U64 pdatas_count = 0;
-  U64 rebase = 0;
-  B32 is_dwarf_unwind_data_eh = 0;
-  String8 dwarf_unwind_data = {0};
+  U64 read = dmn_process_read(((CTRL_Handle *)ud)->dmn_handle, r1u64(addr, addr + size), buffer);
+  return read == size ? DW_UnwindStatus_Ok : DW_UnwindStatus_Fail;
+}
+
+internal void
+ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range, String8 path, Rng1U64 elf_phdr_vrange, U64 elf_phdr_entsize)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  Arena   *arena                                 = arena_alloc();
+  U64      entry_point_voff                      = 0;
+  Rng1U64  tls_vaddr_range                       = {0};
+  U32      rdi_dbg_time                          = 0;
+  Guid     rdi_dbg_guid                          = {0};
+  String8  exe_dbg_path                          = {0};
+  String8  rdi_dbg_path                          = {0};
+  String8  raddbg_data                           = {0};
+  Rng1U64  raddbg_section_voff_range             = r1u64(0, 0);
+  Rng1U64  raddbg_is_attached_section_voff_range = r1u64(0, 0);
+
+  PE_IntelPdata *pdatas       = 0;
+  U64            pdatas_count = 0;
+  U32            pdb_dbg_time = 0;
+  U32            pdb_dbg_age  = 0;
+  Guid           pdb_dbg_guid = {0};
+  String8        pdb_dbg_path = {0};
+
+  U64         rebase       = 0;
+  B32         is_unwind_eh = 0;
   EH_FrameHdr eh_frame_hdr = {0};
-  EH_PtrCtx eh_ptr_ctx = {0};
-  U64 entry_point_voff = 0;
-  Rng1U64 tls_vaddr_range = {0};
-  U32 pdb_dbg_time = 0;
-  U32 pdb_dbg_age = 0;
-  Guid pdb_dbg_guid = {0};
-  String8 pdb_dbg_path = {0};
-  U32 rdi_dbg_time = 0;
-  Guid rdi_dbg_guid = {0};
-  String8 exe_dbg_path = {0};
-  String8 rdi_dbg_path = {0};
-  String8 raddbg_data = {0};
-  Rng1U64 raddbg_section_voff_range = r1u64(0, 0);
-  Rng1U64 raddbg_is_attached_section_voff_range = r1u64(0, 0);
-  ProfScope("unpack relevant PE info")
+  EH_PtrCtx   eh_ptr_ctx   = { .raw_base_vaddr = max_U64, .text_vaddr = max_U64, .data_vaddr = max_U64, .func_vaddr = max_U64, .ptr_align = 0 };
+
+  // read module's signature bytes
+  U64  module_sig_size  = Max(elf_magic_string.size, sizeof(PE_DosMagic));
+  U8  *module_sig_bytes = push_array(scratch.arena, U8, module_sig_size);
+  dmn_process_read(process.dmn_handle, rng_1u64(vaddr_range.min, vaddr_range.min + module_sig_size), module_sig_bytes);
+
+  //////////////////////////////
+  //- parse PE module
+  //
+  PE_DosMagic dos_magic = *(PE_DosMagic *)module_sig_bytes;
+  if(dos_magic == PE_DOS_MAGIC)
   {
-    B32 is_valid = 1;
-    
-    //- rjf: read DOS header
-    PE_DosHeader dos_header = {0};
-    if(is_valid)
+    ProfScope("unpack relevant PE info")
     {
-      if(!dmn_process_read_struct(process.dmn_handle, vaddr_range.min, &dos_header) ||
-         dos_header.magic != PE_DOS_MAGIC)
-      {
-        is_valid = 0;
-      }
-    }
-    
-    //- rjf: read PE magic
-    U32 pe_magic = 0;
-    if(is_valid)
-    {
-      if(!dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dos_header.coff_file_offset, &pe_magic) ||
-         pe_magic != PE_MAGIC)
-      {
-        is_valid = 0;
-      }
-    }
-    
-    //- rjf: read COFF header
-    U64 file_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
-    COFF_FileHeader file_header = {0};
-    if(is_valid)
-    {
-      if(dmn_process_read_struct(process.dmn_handle, vaddr_range.min + file_header_off, &file_header))
-      {
-        machine              = file_header.machine;
-        file_characteristics = file_header.flags;
-      }
-      else
-      {
-        is_valid = 0;
-      }
-    }
-    
-    //- rjf: unpack range of optional extension header
-    U32 opt_ext_size = file_header.optional_header_size;
-    Rng1U64 opt_ext_off_range = r1u64(file_header_off + sizeof(COFF_FileHeader),
-                                      file_header_off + sizeof(COFF_FileHeader) + opt_ext_size);
-    
-    //- rjf: read optional header
-    U64 entry_point = 0;
-    U32 data_dir_count = 0;
-    if(opt_ext_size > 0)
-    {
-      Temp scratch = scratch_begin(0, 0);
+      B32 is_valid = 1;
       
-      // rjf: read magic number
-      U16 opt_ext_magic = 0;
-      dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &opt_ext_magic);
-      
-      // rjf: read info
-      U32 reported_data_dir_offset = 0;
-      U32 reported_data_dir_count  = 0;
-      switch(opt_ext_magic)
+      //- rjf: read DOS header
+      PE_DosHeader dos_header = {0};
+      if(is_valid)
       {
-        case PE_PE32_MAGIC:
+        if(!dmn_process_read_struct(process.dmn_handle, vaddr_range.min, &dos_header) ||
+           dos_header.magic != PE_DOS_MAGIC)
         {
-          PE_OptionalHeader32 pe_optional = {0};
-          dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
-          entry_point              = pe_optional.entry_point_va;
-          reported_data_dir_offset = sizeof(pe_optional);
-          reported_data_dir_count  = pe_optional.data_dir_count;
-        }break;
-        case PE_PE32PLUS_MAGIC:
-        {
-          PE_OptionalHeader32Plus pe_optional = {0};
-          dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
-          entry_point              = pe_optional.entry_point_va;
-          reported_data_dir_offset = sizeof(pe_optional);
-          reported_data_dir_count  = pe_optional.data_dir_count;
-        }break;
-      }
-      
-      // rjf: find number of data directories
-      U32 data_dir_max = (opt_ext_size - reported_data_dir_offset) / sizeof(PE_DataDirectory);
-      data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
-      
-      // rjf: grab pdatas from exceptions section
-      if(data_dir_count > PE_DataDirectoryIndex_EXCEPTIONS)
-      {
-        PE_DataDirectory dir = {0};
-        dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, &dir);
-        Rng1U64 pdatas_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
-        pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
-        pdatas = push_array(arena, PE_IntelPdata, pdatas_count);
-        dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + pdatas_voff_range.min, vaddr_range.min + pdatas_voff_range.max), pdatas);
-      }
-      
-      // rjf: extract tls header
-      PE_TLSHeader64 tls_header = {0};
-      if(data_dir_count > PE_DataDirectoryIndex_TLS)
-      {
-        PE_DataDirectory dir = {0};
-        dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, &dir);
-        Rng1U64 tls_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
-        switch(file_header.machine)
-        {
-          default:{}break;
-          case COFF_MachineType_X86:
-          {
-            PE_TLSHeader32 tls_header32 = {0};
-            dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header32);
-            tls_header.raw_data_start    = (U64)tls_header32.raw_data_start;
-            tls_header.raw_data_end      = (U64)tls_header32.raw_data_end;
-            tls_header.index_address     = (U64)tls_header32.index_address;
-            tls_header.callbacks_address = (U64)tls_header32.callbacks_address;
-            tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
-            tls_header.characteristics   = (U64)tls_header32.characteristics;
-          }break;
-          case COFF_MachineType_X64:
-          {
-            dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header);
-          }break;
+          is_valid = 0;
         }
       }
       
-      // rjf: extract sections
-      U64 sec_array_off = opt_ext_off_range.max;
-      U64 sec_count = file_header.section_count;
-      COFF_SectionHeader *sec = push_array(scratch.arena, COFF_SectionHeader, sec_count);
-      dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + sec_array_off, vaddr_range.min + sec_array_off + sec_count*sizeof(COFF_SectionHeader)), sec);
-      
-      // rjf: grab entry point vaddr
-      entry_point_voff = entry_point;
-      
-      // rjf: calculate TLS vaddr range
-      tls_vaddr_range = r1u64(tls_header.index_address, tls_header.index_address+sizeof(U32));
-      
-      // rjf: grab data about debug info
-      if(data_dir_count > PE_DataDirectoryIndex_DEBUG)
+      //- rjf: read PE magic
+      U32 pe_magic = 0;
+      if(is_valid)
       {
-        // rjf: read data dir
-        PE_DataDirectory dir = {0};
-        dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DEBUG, &dir);
+        if(!dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dos_header.coff_file_offset, &pe_magic) ||
+           pe_magic != PE_MAGIC)
+        {
+          is_valid = 0;
+        }
+      }
+      
+      //- rjf: read COFF header
+      U64 file_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
+      COFF_FileHeader file_header = {0};
+      if(is_valid)
+      {
+        if(!dmn_process_read_struct(process.dmn_handle, vaddr_range.min + file_header_off, &file_header))
+        {
+          is_valid = 0;
+        }
+      }
+      
+      //- rjf: unpack range of optional extension header
+      U32 opt_ext_size = file_header.optional_header_size;
+      Rng1U64 opt_ext_off_range = r1u64(file_header_off + sizeof(COFF_FileHeader),
+                                        file_header_off + sizeof(COFF_FileHeader) + opt_ext_size);
+      
+      //- rjf: read optional header
+      U64 entry_point = 0;
+      U32 data_dir_count = 0;
+      if(opt_ext_size > 0)
+      {
+        // rjf: read magic number
+        U16 opt_ext_magic = 0;
+        dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &opt_ext_magic);
         
-        U64 dbg_dir_count = dir.virt_size / sizeof(PE_DebugDirectory);
-        for(U64 dbg_dir_idx = 0; dbg_dir_idx < dbg_dir_count; dbg_dir_idx += 1)
+        // rjf: read info
+        U32 reported_data_dir_offset = 0;
+        U32 reported_data_dir_count = 0;
+        switch(opt_ext_magic)
         {
-          // rjf: read debug directory
-          U64 dir_addr = vaddr_range.min + dir.virt_off + dbg_dir_idx * sizeof(PE_DebugDirectory);
-          PE_DebugDirectory dbg_data = {0};
-          dmn_process_read_struct(process.dmn_handle, dir_addr, &dbg_data);
+          case PE_PE32_MAGIC:
+          {
+            PE_OptionalHeader32 pe_optional = {0};
+            dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
+            entry_point = pe_optional.entry_point_va;
+            reported_data_dir_offset = sizeof(pe_optional);
+            reported_data_dir_count = pe_optional.data_dir_count;
+          }break;
+          case PE_PE32PLUS_MAGIC:
+          {
+            PE_OptionalHeader32Plus pe_optional = {0};
+            dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
+            entry_point = pe_optional.entry_point_va;
+            reported_data_dir_offset = sizeof(pe_optional);
+            reported_data_dir_count = pe_optional.data_dir_count;
+          }break;
+        }
+        
+        // rjf: find number of data directories
+        U32 data_dir_max = (opt_ext_size - reported_data_dir_offset) / sizeof(PE_DataDirectory);
+        data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
+        
+        // rjf: grab pdatas from exceptions section
+        if(data_dir_count > PE_DataDirectoryIndex_EXCEPTIONS)
+        {
+          PE_DataDirectory dir = {0};
+          dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, &dir);
+          Rng1U64 pdatas_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
+          pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
+          pdatas = push_array(arena, PE_IntelPdata, pdatas_count);
+          dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + pdatas_voff_range.min, vaddr_range.min + pdatas_voff_range.max), pdatas);
+        }
+        
+        // rjf: extract tls header
+        PE_TLSHeader64 tls_header = {0};
+        if(data_dir_count > PE_DataDirectoryIndex_TLS)
+        {
+          PE_DataDirectory dir = {0};
+          dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, &dir);
+          Rng1U64 tls_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
+          switch(file_header.machine)
+          {
+            default:{}break;
+            case COFF_MachineType_X86:
+            {
+              PE_TLSHeader32 tls_header32 = {0};
+              dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header32);
+              tls_header.raw_data_start    = (U64)tls_header32.raw_data_start;
+              tls_header.raw_data_end      = (U64)tls_header32.raw_data_end;
+              tls_header.index_address     = (U64)tls_header32.index_address;
+              tls_header.callbacks_address = (U64)tls_header32.callbacks_address;
+              tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
+              tls_header.characteristics   = (U64)tls_header32.characteristics;
+            }break;
+            case COFF_MachineType_X64:
+            {
+              dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header);
+            }break;
+          }
+        }
+        
+        // rjf: extract sections
+        U64 sec_array_off = opt_ext_off_range.max;
+        U64 sec_count = file_header.section_count;
+        COFF_SectionHeader *sec = push_array(scratch.arena, COFF_SectionHeader, sec_count);
+        dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + sec_array_off, vaddr_range.min + sec_array_off + sec_count*sizeof(COFF_SectionHeader)), sec);
+        
+        // rjf: grab entry point vaddr
+        entry_point_voff = entry_point;
+        
+        // rjf: calculate TLS vaddr range
+        tls_vaddr_range = r1u64(tls_header.index_address, tls_header.index_address+sizeof(U32));
+        
+        // rjf: grab data about debug info
+        if(data_dir_count > PE_DataDirectoryIndex_DEBUG)
+        {
+          // rjf: read data dir
+          PE_DataDirectory dir = {0};
+          dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DEBUG, &dir);
           
-          // rjf: extract external file info from codeview header
-          if(dbg_data.type == PE_DebugDirectoryType_CODEVIEW)
+          U64 dbg_dir_count = dir.virt_size / sizeof(PE_DebugDirectory);
+          for(U64 dbg_dir_idx = 0; dbg_dir_idx < dbg_dir_count; dbg_dir_idx += 1)
           {
-            U32 cv_magic = 0;
-            dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv_magic);
-            switch(cv_magic)
+            // rjf: read debug directory
+            U64 dir_addr = vaddr_range.min + dir.virt_off + dbg_dir_idx * sizeof(PE_DebugDirectory);
+            PE_DebugDirectory dbg_data = {0};
+            dmn_process_read_struct(process.dmn_handle, dir_addr, &dbg_data);
+            
+            // rjf: extract external file info from codeview header
+            if(dbg_data.type == PE_DebugDirectoryType_CODEVIEW)
             {
-              default:break;
-              case PE_CODEVIEW_PDB20_MAGIC:
+              U32 cv_magic = 0;
+              dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv_magic);
+              switch(cv_magic)
               {
-                PE_CvHeaderPDB20 cv;
-                U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min+dbg_data.voff, &cv);
-                if(read_size == sizeof(cv))
+                default:break;
+                case PE_CODEVIEW_PDB20_MAGIC:
                 {
-                  pdb_dbg_time = cv.time_stamp;
-                  pdb_dbg_age = cv.age;
-                  pdb_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
-                }
-              }break;
-              case PE_CODEVIEW_PDB70_MAGIC:
-              {
-                PE_CvHeaderPDB70 cv;
-                U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv);
-                if(read_size == sizeof(cv))
+                  PE_CvHeaderPDB20 cv;
+                  U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min+dbg_data.voff, &cv);
+                  if(read_size == sizeof(cv))
+                  {
+                    pdb_dbg_time = cv.time_stamp;
+                    pdb_dbg_age = cv.age;
+                    pdb_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
+                  }
+                }break;
+                case PE_CODEVIEW_PDB70_MAGIC:
                 {
-                  pdb_dbg_guid = cv.guid;
-                  pdb_dbg_age = cv.age;
-                  pdb_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
-                }
-              }break;
-              case PE_CODEVIEW_RDI_MAGIC:
-              {
-                PE_CvHeaderRDI cv;
-                U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv);
-                if(read_size == sizeof(cv))
+                  PE_CvHeaderPDB70 cv;
+                  U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv);
+                  if(read_size == sizeof(cv))
+                  {
+                    pdb_dbg_guid = cv.guid;
+                    pdb_dbg_age = cv.age;
+                    pdb_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
+                  }
+                }break;
+                case PE_CODEVIEW_RDI_MAGIC:
                 {
-                  rdi_dbg_guid = cv.guid;
-                  rdi_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
-                }
-              }break;
+                  PE_CvHeaderRDI cv;
+                  U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv);
+                  if(read_size == sizeof(cv))
+                  {
+                    rdi_dbg_guid = cv.guid;
+                    rdi_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
+                  }
+                }break;
+              }
             }
           }
         }
-      }
-      
-      // rjf: look for DWARF debug info
-      {
-        U64 symbol_array_off = file_header.symbol_table_foff;
-        U64 symbol_count = file_header.symbol_count;
-        if(symbol_array_off != 0)
+        
+        // rjf: look for DWARF debug info
         {
-          exe_dbg_path = path;
+          U64 symbol_array_off = file_header.symbol_table_foff;
+          U64 symbol_count = file_header.symbol_count;
+          if(symbol_array_off != 0)
+          {
+            exe_dbg_path = path;
+          }
+        }
+        
+        // rjf: extract copy of module's raddbg data
+        {
+          for EachIndex(idx, sec_count)
+          {
+            String8 section_name = str8_cstring((char *)sec[idx].name);
+            if(str8_match(section_name, str8_lit(".raddbg"), 0))
+            {
+              raddbg_section_voff_range.min = sec[idx].voff;
+              raddbg_section_voff_range.max = sec[idx].voff + sec[idx].vsize;
+            }
+            else if(str8_match(section_name, str8_lit(".rdbgia"), 0))
+            {
+              raddbg_is_attached_section_voff_range.min = sec[idx].voff;
+              raddbg_is_attached_section_voff_range.max = sec[idx].voff + sec[idx].vsize;
+            }
+          }
+          raddbg_data.size = dim_1u64(raddbg_section_voff_range);
+          raddbg_data.str = push_array(arena, U8, raddbg_data.size);
+          dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + raddbg_section_voff_range.min,
+                                                     vaddr_range.min + raddbg_section_voff_range.max), raddbg_data.str);
+        }
+        
+        // rjf: if we have a "raddbg is attached" section, mark the first byte as 1, to signify attachment
+        if(raddbg_is_attached_section_voff_range.max != raddbg_is_attached_section_voff_range.min)
+        {
+          U8 new_value = 1;
+          dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_is_attached_section_voff_range.min, &new_value);
         }
       }
+    }
+  }
+  //////////////////////////////
+  //- parse ELF module
+  //
+  else if(str8_match(str8(module_sig_bytes, elf_magic_string.size), elf_magic_string, 0))
+  {
+    U64      e_entry = 0;
+    ELF_Type e_type  = ELF_Type_None;
+    {
+      U8 *elf_sig = dmn_process_read_raw(scratch.arena, process.dmn_handle, rng_1u64(vaddr_range.min, vaddr_range.min + sizeof(elf_sig[0]) * ELF_Identifier_Max));
+      if(elf_sig == 0) { goto elf_exit; }
+      switch(elf_sig[ELF_Identifier_Class])
+      {
+      default:
+      case ELF_Class_None:{}break;
+      case ELF_Class_32:
+      {
+        NotImplemented;
+      }break;
+      case ELF_Class_64:
+      {
+        ELF_Hdr64 *ehdr = dmn_process_read_raw(scratch.arena, process.dmn_handle, rng_1u64(vaddr_range.min, vaddr_range.min + sizeof(*ehdr)));
+        if(ehdr == 0) { goto elf_exit; }
+        e_entry = ehdr->e_entry;
+        e_type  = ehdr->e_type;
+      }break;
+      }
+    }
 
-      // rjf: extract copy of module's raddbg data
-      {
-        for EachIndex(idx, sec_count)
-        {
-          String8 section_name = str8_cstring((char *)sec[idx].name);
-          if(str8_match(section_name, str8_lit(".raddbg"), 0))
-          {
-            raddbg_section_voff_range.min = sec[idx].voff;
-            raddbg_section_voff_range.max = sec[idx].voff + sec[idx].vsize;
-          }
-          else if(str8_match(section_name, str8_lit(".rdbgia"), 0))
-          {
-            raddbg_is_attached_section_voff_range.min = sec[idx].voff;
-            raddbg_is_attached_section_voff_range.max = sec[idx].voff + sec[idx].vsize;
-          }
-        }
-        raddbg_data.size = dim_1u64(raddbg_section_voff_range);
-        raddbg_data.str = push_array(arena, U8, raddbg_data.size);
-        dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + raddbg_section_voff_range.min,
-                                                   vaddr_range.min + raddbg_section_voff_range.max), raddbg_data.str);
-      }
-      
-      // rjf: if we have a "raddbg is attached" section, mark the first byte as 1, to signify attachment
-      if(raddbg_is_attached_section_voff_range.max != raddbg_is_attached_section_voff_range.min)
-      {
-        U8 new_value = 1;
-        dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_is_attached_section_voff_range.min, &new_value);
-      }
+    // find and parse .eh_frame_hdr
+    Rng1U64 eh_frame_hdr_vrange = {0};
+    String8 eh_frame_hdr_data   = {0};
+    {
+      void *phdrs_raw = dmn_process_read_raw(scratch.arena, process.dmn_handle, elf_phdr_vrange);
+      if(phdrs_raw == 0) { goto elf_exit; }
 
-#if 0
-      // TODO(ns): temporary hack to test DWARF unwinder on windows -- remove when done
+      if(elf_phdr_entsize == sizeof(ELF_Phdr32))
       {
-        for EachIndex(idx, sec_count)
+        NotImplemented;
+      }
+      else if(elf_phdr_entsize == sizeof(ELF_Phdr64))
+      {
+        U64 elf_phcount = dim_1u64(elf_phdr_vrange) / elf_phdr_entsize;
+        ELF_Phdr64 *phdrs64 = phdrs_raw;
+        for EachIndex(phdr_idx, elf_phcount)
         {
-          String8 section_name = str8_cstring((char *)sec[idx].name);
-          if(str8_match(section_name, str8_lit("/130"), 0))
+          ELF_Phdr64 *phdr = phdrs64 + phdr_idx;
+          if(phdr->p_type == ELF_PType_GnuEHFrame)
           {
-            U64 restore_pos = arena_pos(arena); 
-            Rng1U64 debug_frame_voff_range  = rng_1u64(sec[idx].voff, sec[idx].voff + sec[idx].vsize);
-            Rng1U64 debug_frame_vaddr_range = shift_1u64(debug_frame_voff_range, vaddr_range.min);
-            void   *debug_frame_buffer      = push_array(arena, U8, sec[idx].vsize);
-            U64     debug_frame_read_size   = dmn_process_read(process.dmn_handle, debug_frame_vaddr_range, debug_frame_buffer);
-            if(debug_frame_read_size == sec[idx].vsize)
-            {
-              U64              default_base      = pe_get_default_base_addr(file_characteristics, machine);
-              Arch             arch              = ctrl_arch_from_process_handle(process);
-              String8          debug_frame       = str8(debug_frame_buffer, debug_frame_read_size);
-              DW_CallFrameInfo dwarf_cfi         = dw_call_frame_info_from_data(scratch.arena, arch, debug_frame);
-              String8          eh_frame_hdr_data = eh_frame_hdr_from_call_frame_info(arena, dwarf_cfi.fde_count, dwarf_cfi.fde_offsets, dwarf_cfi.fde);
-              rebase                  = default_base - vaddr_range.min; // DL overwrites image base in the optional header, if image is linked with a custom base this breaks
-              dwarf_unwind_data       = debug_frame;
-              is_dwarf_unwind_data_eh = 0;
-              eh_frame_hdr            = eh_parse_frame_hdr(eh_frame_hdr_data, byte_size_from_arch(arch), 0);
-            }
-            else
-            {
-              arena_pop_to(arena, restore_pos);
-            }
+            eh_frame_hdr_vrange = r1u64(phdr->p_vaddr, phdr->p_vaddr + phdr->p_memsz);
+            eh_frame_hdr_data   = dmn_process_read_block(arena, process.dmn_handle, eh_frame_hdr_vrange);
+            is_unwind_eh        = 1;
             break;
           }
         }
       }
-#endif
-      
-      scratch_end(scratch);
     }
+
+    // parse .eh_frame_hdr
+    Arch arch = ctrl_arch_from_process_handle(process);
+    eh_ptr_ctx.raw_base_vaddr = eh_frame_hdr_vrange.min;
+    eh_ptr_ctx.data_vaddr = eh_frame_hdr_vrange.min;
+    eh_frame_hdr = eh_parse_frame_hdr(eh_frame_hdr_data, byte_size_from_arch(arch), &eh_ptr_ctx);
+
+    // set entry point
+    if (e_entry != 0)
+    {
+      entry_point_voff = e_entry - vaddr_range.min;
+    }
+
+    // TODO: is there a way to detect DWARF in runtime ELF?
+    if(1)
+    {
+      exe_dbg_path = path;
+    }
+
+    if(e_type == ELF_Type_Dyn)
+    {
+      rebase = -vaddr_range.min;
+    }
+
+    elf_exit:;
   }
   
   //////////////////////////////
@@ -3947,7 +4078,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   //
   String8 initial_debug_info_path = str8_zero();
   {
-    Temp scratch = scratch_begin(0, 0);
     String8 exe_folder = str8_chop_last_slash(path);
     String8List dbg_path_candidates = {0};
     //
@@ -3988,22 +4118,21 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         break;
       }
     }
-    scratch_end(scratch);
   }
   
   //////////////////////////////
   //- rjf: insert info into cache
   //
   {
-    U64 hash = ctrl_hash_from_handle(module);
-    U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
-    U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
-    CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
-    CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+    U64                              hash       = ctrl_hash_from_handle(module);
+    U64                              slot_idx   = hash%ctrl_state->module_image_info_cache.slots_count;
+    U64                              stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+    CTRL_ModuleImageInfoCacheSlot   *slot       = &ctrl_state->module_image_info_cache.slots[slot_idx];
+    CTRL_ModuleImageInfoCacheStripe *stripe     = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
     MutexScopeW(stripe->rw_mutex)
     {
       CTRL_ModuleImageInfoCacheNode *node = 0;
-      for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+      for EachNode(n, CTRL_ModuleImageInfoCacheNode, slot->first)
       {
         if(ctrl_handle_match(n->module, module))
         {
@@ -4015,20 +4144,21 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       {
         node = push_array(arena, CTRL_ModuleImageInfoCacheNode, 1);
         DLLPushBack(slot->first, slot->last, node);
-        node->module = module;
-        node->arena = arena;
-        node->pdatas = pdatas;
-        node->pdatas_count = pdatas_count;
-        node->rebase = rebase;
-        node->is_dwarf_unwind_data_eh = is_dwarf_unwind_data_eh;
-        node->dwarf_unwind_data = dwarf_unwind_data;
-        node->eh_frame_hdr = eh_frame_hdr;
-        node->eh_ptr_ctx = eh_ptr_ctx;
-        node->entry_point_voff = entry_point_voff;
+        node->module                  = module;
+        node->arena                   = arena;
+        node->pdatas                  = pdatas;
+        node->pdatas_count            = pdatas_count;
+        node->rebase                  = rebase;
+        node->is_unwind_eh            = is_unwind_eh;
+        node->eh_frame_hdr            = eh_frame_hdr;
+        node->eh_ptr_ctx              = eh_ptr_ctx;
+        node->entry_point_voff        = entry_point_voff;
         node->initial_debug_info_path = initial_debug_info_path;
       }
     }
   }
+
+  scratch_end(scratch);
 }
 
 internal void
@@ -4362,7 +4492,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       CTRL_Event *out_evt1 = ctrl_event_list_push(scratch.arena, &evts);
       String8 module_path = path_normalized_from_string(scratch.arena, event->string);
       U64 exe_timestamp = os_properties_from_file_path(module_path).modified;
-      ctrl_thread__module_open(process_handle, module_handle, r1u64(event->address, event->address+event->size), module_path);
+      ctrl_thread__module_open(process_handle, module_handle, r1u64(event->address, event->address+event->size), module_path, event->elf_phdr_vrange, event->elf_phdr_entsize);
       out_evt1->kind       = CTRL_EventKind_NewModule;
       out_evt1->msg_id     = msg->msg_id;
       out_evt1->entity     = module_handle;
