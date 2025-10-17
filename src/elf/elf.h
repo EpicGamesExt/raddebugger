@@ -106,6 +106,20 @@ enum
   ELF_Data_2MSB = 2,
 };
 
+typedef U16 ELF_Type;
+enum
+{
+  ELF_Type_None   = 0,
+  ELF_Type_Rel    = 1,
+  ELF_Type_Exec   = 2,
+  ELF_Type_Dyn    = 3,
+  ELF_Type_Core   = 4,
+  ELF_Type_LoOs   = 0xfe00,
+  ELF_Type_HiOs   = 0xff00,
+  ELF_Type_LoProc = 0xff00,
+  ELF_Type_HiProc = 0xffff
+};
+
 typedef U32 ELF_PType;
 enum
 {
@@ -123,15 +137,10 @@ enum
   ELF_PType_LowProc     = 0x70000000,
   ELF_PType_HighProc    = 0x7fffffff,
   
-  // specific to Sun
-  ELF_PType_LowSunW     = 0x6ffffffa,
-  ELF_PType_SunWBSS     = 0x6ffffffb,
-  ELF_PType_GnuEHFrame  = 0x6474E550,
-  
-  ELF_PType_GnuStack    = ELF_PType_LoOs + 0x474e550, // frame unwind information
-  ELF_PType_GnuRelro    = ELF_PType_LoOs + 0x474e551, // stack flags
-  ELF_PType_GnuProperty = ELF_PType_LoOs + 0x474e552, // read-only after relocations
-  ELF_PType_SunEHFrame  = ELF_PType_GnuEHFrame,
+  ELF_PType_GnuEHFrame  = ELF_PType_LoOs + 0x474E550, // segment with .eh_frame_hdr
+  ELF_PType_GnuStack    = ELF_PType_LoOs + 0x474e551, // frame unwind information
+  ELF_PType_GnuRelro    = ELF_PType_LoOs + 0x474e552, // stack flags
+  ELF_PType_GnuProperty = ELF_PType_LoOs + 0x474e553, // read-only after relocations
 };
 
 typedef U32 ELF_PFlag;
@@ -673,20 +682,6 @@ typedef enum ELF_Identifier
 
 read_only global U8 elf_magic[] = {0x7f, 'E', 'L', 'F'};
 read_only global String8 elf_magic_string = {elf_magic, sizeof(elf_magic)};
-
-typedef U16 ELF_Type;
-typedef enum ELF_TypeEnum
-{
-  ELF_Type_None   = 0,
-  ELF_Type_Rel    = 1,
-  ELF_Type_Exec   = 2,
-  ELF_Type_Dyn    = 3,
-  ELF_Type_Core   = 4,
-  ELF_Type_LoOs   = 0xfe00,
-  ELF_Type_HiOs   = 0xfeff,
-  ELF_Type_LoProc = 0xff00,
-  ELF_Type_HiProc = 0xffff,
-} ELF_TypeEnum;
 
 typedef struct ELF_Hdr64
 {

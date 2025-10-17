@@ -3369,9 +3369,11 @@ dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc
   if (id_size == 0) { goto exit; }
 
   U64 id_type = format == DW_Format_32Bit ? max_U32 : max_U64;
-  desc_out->format      = format;
-  desc_out->type        = (id == id_type) ? DW_DescriptorEntryType_CIE : DW_DescriptorEntryType_FDE;
-  desc_out->entry_range = entry_range;
+  desc_out->format          = format;
+  desc_out->type            = (id == id_type) ? DW_DescriptorEntryType_CIE : DW_DescriptorEntryType_FDE;
+  desc_out->entry_range     = entry_range;
+  desc_out->cie_pointer     = id;
+  desc_out->cie_pointer_off = length_size;
 
 exit:;
   return length + length_size;
@@ -3447,11 +3449,7 @@ exit:;
 }
 
 internal B32
-dw_parse_fde(String8                data,
-              DW_Format             format,
-              DW_CIEFromOffsetFunc *cie_from_offset_func,
-              void                 *cie_from_offset_ud,
-              DW_FDE               *fde_out)
+dw_parse_fde(String8 data, DW_Format format, DW_CIE *cie, DW_FDE *fde_out)
 {
   B32 is_parsed = 0;
   U64 cursor    = format == DW_Format_32Bit ? 4 : 12;
@@ -3461,10 +3459,6 @@ dw_parse_fde(String8                data,
   U64 cie_pointer_size = str8_deserial_read_dwarf_uint(data, cursor, format, &cie_pointer);
   if (cie_pointer_size == 0) { goto exit; }
   cursor += cie_pointer_size;
-
-  // map offset -> CIE
-  DW_CIE *cie = cie_from_offset_func(cie_from_offset_ud, cie_pointer);
-  if (cie == 0) { goto exit; }
 
   // extract address of first instruction
   U64 pc_begin = 0;
@@ -3485,19 +3479,12 @@ dw_parse_fde(String8                data,
   // commit values to out
   fde_out->format      = format;
   fde_out->cie_pointer = cie_pointer;
-  fde_out->cie         = cie;
   fde_out->pc_range    = rng_1u64(pc_begin, pc_begin + pc_range);
   fde_out->insts       = str8_skip(data, cursor);
 
   is_parsed = 1;
 exit:;
   return is_parsed;
-}
-
-internal
-DW_CIE_FROM_OFFSET_FUNC(dw_parse_cfi_cie_from_offset)
-{
-  return ud;
 }
 
 internal B32
@@ -3515,7 +3502,7 @@ dw_parse_cfi(String8 data, U64 fde_offset, Arch arch, DW_CIE *cie_out, DW_FDE *f
       dw_parse_descriptor_entry_header(data, cie_pointer, &cie_desc);
       if (cie_desc.type == DW_DescriptorEntryType_CIE) {
         if (dw_parse_cie(str8_substr(data, cie_desc.entry_range), cie_desc.format, arch, cie_out)) {
-          if (dw_parse_fde(str8_substr(data, fde_desc.entry_range), fde_desc.format, dw_parse_cfi_cie_from_offset, cie_out, fde_out)) {
+          if (dw_parse_fde(str8_substr(data, fde_desc.entry_range), fde_desc.format, cie_out, fde_out)) {
             is_parsed = 1;
           }
         }
