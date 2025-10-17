@@ -67,6 +67,14 @@ dw_cfi_next_row(Arena *arena, DW_CFI_Unwind *uw)
 {
   B32 is_row_valid = 0;
 
+  // skip leading nops
+  while (uw->curr_inst) {
+    if (uw->curr_inst->v.opcode != DW_CFA_Nop) {
+      break;
+    }
+    uw->curr_inst = uw->curr_inst->next;
+  }
+
   while (uw->curr_inst) {
     DW_CFA_Inst *inst = &uw->curr_inst->v;
 
