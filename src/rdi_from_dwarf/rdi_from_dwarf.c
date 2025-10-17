@@ -2582,9 +2582,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     
     ////////////////////////////////
     
-    Arch     arch       = Arch_Null;
-    U64      image_base = 0;
-    DW_Input input      = {0};
+    Arch      arch       = Arch_Null;
+    U64       image_base = 0;
+    DW_Input  input      = {0};
+    PathStyle path_style = PathStyle_Null;
     
     switch(params->exe_kind) {
       default:{}break;
@@ -2597,6 +2598,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         image_base      = pe.image_base;
         binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, params->exe_data, string_table, pe.section_count, section_table);
         input           = dw_input_from_coff_section_table(scratch.arena, params->exe_data, string_table, pe.section_count, section_table);
+        path_style      = PathStyle_WindowsAbsolute;
       } break;
       case ExecutableImageKind_Elf32:
       case ExecutableImageKind_Elf64: {
@@ -2605,6 +2607,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         image_base      = elf_base_addr_from_bin(&bin);
         binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, bin.shdrs);
         input           = dw_input_from_elf_bin(scratch.arena, params->dbg_data, &bin);
+        path_style      = PathStyle_UnixAbsolute;
       } break;
     }
     
@@ -2677,8 +2680,8 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         DW_LineFile  *file                 = &file_table->v[file_idx];
         String8       file_path            = dw_path_from_file_idx(scratch.arena, &line_table->vm_header, file_idx);
         String8List   file_path_split      = str8_split_path(scratch.arena, file_path);
-        str8_path_list_resolve_dots_in_place(&file_path_split, PathStyle_WindowsAbsolute);
-        String8       file_path_resolved   = str8_path_list_join_by_style(scratch.arena, &file_path_split, PathStyle_WindowsAbsolute);
+        str8_path_list_resolve_dots_in_place(&file_path_split, path_style);
+        String8       file_path_resolved   = str8_path_list_join_by_style(scratch.arena, &file_path_split, path_style);
         RDIM_SrcFile *src_file             = hash_table_search_path_raw(source_file_ht, file_path_resolved);
         if (src_file == 0) {
           src_file       = rdim_src_file_chunk_list_push(arena, &src_files, SRC_FILE_CAP);
