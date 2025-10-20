@@ -1801,7 +1801,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       for EachInRange(idx, range)
       {
         CV_TypeId itype = (CV_TypeId)idx;
-        if(itype < itype_first) { continue; }
         
         //- rjf: push initial itype - should be final-visited-itype for this itype
         {
