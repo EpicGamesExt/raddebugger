@@ -10028,7 +10028,14 @@ rd_init(CmdLine *cmdln)
         String8List passthrough_args_list = {0};
         for(String8Node *n = target_args.first->next; n != 0; n = n->next)
         {
-          str8_list_push(scratch.arena, &passthrough_args_list, n->string);
+          if(str8_find_needle(n->string, 0, str8_lit(" "), 0) < n->string.size)
+          {
+            str8_list_pushf(scratch.arena, &passthrough_args_list, "\"%S\"", escaped_from_raw_str8(scratch.arena, n->string));
+          }
+          else
+          {
+            str8_list_push(scratch.arena, &passthrough_args_list, n->string);
+          }
         }
         StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
         arguments_string = str8_list_join(scratch.arena, &passthrough_args_list, &join);

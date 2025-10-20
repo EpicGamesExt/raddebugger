@@ -170,7 +170,7 @@ raddbg_decode_utf8(char *str, unsigned __int64 max)
     case 2:
     if(2 < max)
     {
-      char cont_byte = str[1];
+      unsigned char cont_byte = str[1];
       if(raddbg_utf8_class[cont_byte >> 3] == 0)
       {
         result.codepoint = (byte & 0x0000001f) << 6;
@@ -181,7 +181,7 @@ raddbg_decode_utf8(char *str, unsigned __int64 max)
     case 3:
     if(2 < max)
     {
-      char cont_byte[2] = {str[1], str[2]};
+      unsigned char cont_byte[2] = {str[1], str[2]};
       if(raddbg_utf8_class[cont_byte[0] >> 3] == 0 &&
          raddbg_utf8_class[cont_byte[1] >> 3] == 0)
       {
@@ -194,7 +194,7 @@ raddbg_decode_utf8(char *str, unsigned __int64 max)
     case 4:
     if(3 < max)
     {
-      char cont_byte[3] = {str[1], str[2], str[3]};
+      unsigned char cont_byte[3] = {str[1], str[2], str[3]};
       if(raddbg_utf8_class[cont_byte[0] >> 3] == 0 &&
          raddbg_utf8_class[cont_byte[1] >> 3] == 0 &&
          raddbg_utf8_class[cont_byte[2] >> 3] == 0)
@@ -431,6 +431,9 @@ raddbg_annotate_vaddr_range__impl(void *ptr, unsigned __int64 size, char *fmt, .
       va_list args;
       va_start(args, fmt);
       buffer_size = RADDBG_MARKUP_VSNPRINTF(buffer, sizeof(buffer), fmt, args);
+      buffer_size = ((buffer_size < 0) ? 0 :
+                     (buffer_size > sizeof(buffer)) ? sizeof(buffer) :
+                     buffer_size);
       va_end(args);
     }
     
