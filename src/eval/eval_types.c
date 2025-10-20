@@ -2653,6 +2653,15 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
       chunk->count += 1;
       total_count += 1;
       
+      //- rjf: record this offset in our hit-offset table
+      {
+        U64 hash = u64_hash_from_str8(str8_struct(&off));
+        U64 slot_idx = hash%hit_slots_count;
+        HitOffsetNode *n = push_array(scratch.arena, HitOffsetNode, 1);
+        n->off = off;
+        SLLStackPush(hit_slots[slot_idx], n);
+      }
+      
       //- rjf: read next offset, advance
       B32 read_stale = 0;
       B32 read_good = ctrl_process_memory_read(process, r1u64(off + member_element_off, off + member_size), &read_stale, &next_off, 0);
