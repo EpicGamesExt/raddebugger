@@ -10030,7 +10030,7 @@ rd_init(CmdLine *cmdln)
         {
           if(str8_find_needle(n->string, 0, str8_lit(" "), 0) < n->string.size)
           {
-            str8_list_pushf(scratch.arena, &passthrough_args_list, "\"%S\"", escaped_from_raw_str8(scratch.arena, n->string));
+            str8_list_pushf(scratch.arena, &passthrough_args_list, "\"%S\"", n->string);
           }
           else
           {
