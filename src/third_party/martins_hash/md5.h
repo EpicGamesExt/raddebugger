@@ -46,9 +46,9 @@ static inline void md5_finish(md5_ctx* ctx, uint8_t digest[MD5_DIGEST_SIZE]);
 #endif
 
 #if defined(_MSC_VER)
-#   define MD5_GET32LE(ptr) *((const _UNALIGNED uint32_t*)(ptr))
-#   define MD5_SET32LE(ptr,x) *((_UNALIGNED uint32_t*)(ptr)) = (x)
-#   define MD5_SET64LE(ptr,x) *((_UNALIGNED uint64_t*)(ptr)) = (x)
+#   define MD5_GET32LE(ptr) *((const __unaligned uint32_t*)(ptr))
+#   define MD5_SET32LE(ptr,x) *((__unaligned uint32_t*)(ptr)) = (x)
+#   define MD5_SET64LE(ptr,x) *((__unaligned uint64_t*)(ptr)) = (x)
 #else
 #   define MD5_GET32LE(ptr) \
     (                       \
@@ -431,5 +431,5 @@ void md5_finish(md5_ctx* ctx, uint8_t digest[MD5_DIGEST_SIZE])
 }
 
 #if defined(__clang__)
-#pragma clang diagnostic pop
+#   pragma clang diagnostic pop
 #endif
