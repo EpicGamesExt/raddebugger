@@ -58,8 +58,8 @@ static inline void sha384_finish(sha384_ctx* ctx, uint8_t digest[SHA384_DIGEST_S
 
 #if defined(_MSC_VER)
 #   include <stdlib.h>
-#   define SHA512_GET64BE(ptr) _byteswap_uint64( *((const _UNALIGNED uint64_t*)(ptr)) )
-#   define SHA512_SET64BE(ptr,x) *((_UNALIGNED uint64_t*)(ptr)) = _byteswap_uint64(x)
+#   define SHA512_GET64BE(ptr) _byteswap_uint64( *((const __unaligned uint64_t*)(ptr)) )
+#   define SHA512_SET64BE(ptr,x) *((__unaligned uint64_t*)(ptr)) = _byteswap_uint64(x)
 #else
 #   define SHA512_GET64BE(ptr)              \
     (                                       \
@@ -86,9 +86,33 @@ static inline void sha384_finish(sha384_ctx* ctx, uint8_t digest[SHA384_DIGEST_S
     while (0)
 #endif
 
+static const uint64_t SHA512_K[80] =
+{
+    0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc,
+    0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118,
+    0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2,
+    0x72be5d74f27b896f, 0x80deb1fe3b1696b1, 0x9bdc06a725c71235, 0xc19bf174cf692694,
+    0xe49b69c19ef14ad2, 0xefbe4786384f25e3, 0x0fc19dc68b8cd5b5, 0x240ca1cc77ac9c65,
+    0x2de92c6f592b0275, 0x4a7484aa6ea6e483, 0x5cb0a9dcbd41fbd4, 0x76f988da831153b5,
+    0x983e5152ee66dfab, 0xa831c66d2db43210, 0xb00327c898fb213f, 0xbf597fc7beef0ee4,
+    0xc6e00bf33da88fc2, 0xd5a79147930aa725, 0x06ca6351e003826f, 0x142929670a0e6e70,
+    0x27b70a8546d22ffc, 0x2e1b21385c26c926, 0x4d2c6dfc5ac42aed, 0x53380d139d95b3df,
+    0x650a73548baf63de, 0x766a0abb3c77b2a8, 0x81c2c92e47edaee6, 0x92722c851482353b,
+    0xa2bfe8a14cf10364, 0xa81a664bbc423001, 0xc24b8b70d0f89791, 0xc76c51a30654be30,
+    0xd192e819d6ef5218, 0xd69906245565a910, 0xf40e35855771202a, 0x106aa07032bbd1b8,
+    0x19a4c116b8d2d0c8, 0x1e376c085141ab53, 0x2748774cdf8eeb99, 0x34b0bcb5e19b48a8,
+    0x391c0cb3c5c95a63, 0x4ed8aa4ae3418acb, 0x5b9cca4f7763e373, 0x682e6ff3d6b2b8a3,
+    0x748f82ee5defb2fc, 0x78a5636f43172f60, 0x84c87814a1f0ab72, 0x8cc702081a6439ec,
+    0x90befffa23631e28, 0xa4506cebde82bde9, 0xbef9a3f7b2c67915, 0xc67178f2e372532b,
+    0xca273eceea26619c, 0xd186b8c721c0c207, 0xeada7dd6cde0eb1e, 0xf57d4f7fee6ed178,
+    0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x113f9804bef90dae, 0x1b710b35131c471b,
+    0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c,
+    0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817,
+};
+
 #if defined(__x86_64__) || defined(_M_AMD64)
 
-#include <immintrin.h>
+#include <immintrin.h> // AVX2 + SHA512
 
 #if defined(__clang__) || defined(__GNUC__)
 #   include <cpuid.h>
@@ -117,7 +141,7 @@ static inline int sha512_cpuid(void)
     {
         int info[4];
 
-        SHA256_CPUID(1, info);
+        SHA512_CPUID(1, info);
         int has_xsave = info[2] & (1 << 26);
 
         int has_ymm = 0;
@@ -127,13 +151,13 @@ static inline int sha512_cpuid(void)
             has_ymm = xcr0 & (1 << 2);
         }
 
-        SHA256_CPUID_EX(7, 0, info);
+        SHA512_CPUID_EX(7, 0, info);
         int has_avx2 = info[1] & (1 << 5);
 
-        SHA256_CPUID_EX(7, 1, info);
+        SHA512_CPUID_EX(7, 1, info);
         int has_sha512 = info[0] & (1 << 0);
 
-        result |= SHA256_CPUID_INIT;
+        result |= SHA512_CPUID_INIT;
         if (has_ymm && has_avx2 && has_sha512)
         {
             result |= SHA512_CPUID_VSHA512;
@@ -152,50 +176,31 @@ static inline int sha512_cpuid(void)
 SHA512_TARGET("avx2,sha512")
 static void sha512_process_vsha512(uint64_t* state, const uint8_t* block, size_t count)
 {
-    const __m256i* buffer = (const __m256i*)block;
+    // pretty much same way how sha256 works, only with avx2 registers and 64-bit additions
+    // state is kept as two 256-bit ymm registers (8 qwords)
 
-    // to byteswap when doing big-ending load for message qwords
-    const __m256i bswap = _mm256_broadcastsi128_si256(_mm_setr_epi8(7,6,5,4,3,2,1,0, 15,14,13,12,11,10,9,8));
-
-    static const uint64_t K[20][4] =
-    {
-        { 0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc },
-        { 0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118 },
-        { 0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2 },
-        { 0x72be5d74f27b896f, 0x80deb1fe3b1696b1, 0x9bdc06a725c71235, 0xc19bf174cf692694 },
-        { 0xe49b69c19ef14ad2, 0xefbe4786384f25e3, 0x0fc19dc68b8cd5b5, 0x240ca1cc77ac9c65 },
-        { 0x2de92c6f592b0275, 0x4a7484aa6ea6e483, 0x5cb0a9dcbd41fbd4, 0x76f988da831153b5 },
-        { 0x983e5152ee66dfab, 0xa831c66d2db43210, 0xb00327c898fb213f, 0xbf597fc7beef0ee4 },
-        { 0xc6e00bf33da88fc2, 0xd5a79147930aa725, 0x06ca6351e003826f, 0x142929670a0e6e70 },
-        { 0x27b70a8546d22ffc, 0x2e1b21385c26c926, 0x4d2c6dfc5ac42aed, 0x53380d139d95b3df },
-        { 0x650a73548baf63de, 0x766a0abb3c77b2a8, 0x81c2c92e47edaee6, 0x92722c851482353b },
-        { 0xa2bfe8a14cf10364, 0xa81a664bbc423001, 0xc24b8b70d0f89791, 0xc76c51a30654be30 },
-        { 0xd192e819d6ef5218, 0xd69906245565a910, 0xf40e35855771202a, 0x106aa07032bbd1b8 },
-        { 0x19a4c116b8d2d0c8, 0x1e376c085141ab53, 0x2748774cdf8eeb99, 0x34b0bcb5e19b48a8 },
-        { 0x391c0cb3c5c95a63, 0x4ed8aa4ae3418acb, 0x5b9cca4f7763e373, 0x682e6ff3d6b2b8a3 },
-        { 0x748f82ee5defb2fc, 0x78a5636f43172f60, 0x84c87814a1f0ab72, 0x8cc702081a6439ec },
-        { 0x90befffa23631e28, 0xa4506cebde82bde9, 0xbef9a3f7b2c67915, 0xc67178f2e372532b },
-        { 0xca273eceea26619c, 0xd186b8c721c0c207, 0xeada7dd6cde0eb1e, 0xf57d4f7fee6ed178 },
-        { 0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x113f9804bef90dae, 0x1b710b35131c471b },
-        { 0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c },
-        { 0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817 },
-    };
+    // message qwords are loaded as 64-bit big-endian values
 
     #define W(i) w[(i)%4]
 
     // 4 wide round calculations
     #define QROUND(i) do {                                                                                                                                                          \
-        /* first four rounds loads input message */                                                                                                                                 \
+        /* first 4 rounds load input block */                                                                                                                                       \
         if (i < 4) W(i) = _mm256_shuffle_epi8(_mm256_loadu_si256(&buffer[i]), bswap);                                                                                               \
-        /* add round constant */                                                                                                                                                    \
-        tmp = _mm256_add_epi64(W(i), _mm256_loadu_si256((const __m256i*)K[i]));                                                                                                     \
-        /* update previous message qwords for next rounds */                                                                                                                        \
+        /* update message schedule */                                                                                                                                               \
         if (i > 2 && i < 19) W(i-3) = _mm256_sha512msg2_epi64(_mm256_add_epi64(W(i-3), _mm256_permute4x64_epi64(_mm256_blend_epi32(W(i-1), W(i), 3), _MM_SHUFFLE(0,3,2,1))), W(i)); \
         if (i > 0 && i < 17) W(i-1) = _mm256_sha512msg1_epi64(W(i-1), _mm256_castsi256_si128(W(i)));                                                                                \
+        /* add round constants */                                                                                                                                                   \
+        __m256i tmp = _mm256_add_epi64(W(i), _mm256_loadu_si256((const __m256i*)&SHA512_K[4*i]));                                                                                   \
         /* round functions */                                                                                                                                                       \
         state1 = _mm256_sha512rnds2_epi64(state1, state0, _mm256_castsi256_si128(tmp));                                                                                             \
         state0 = _mm256_sha512rnds2_epi64(state0, state1, _mm256_extracti128_si256(tmp, 1));                                                                                        \
     } while(0)
+
+    const __m256i* buffer = (const __m256i*)block;
+
+    // to byteswap when doing big-ending load for message qwords
+    const __m256i bswap = _mm256_broadcastsi128_si256(_mm_setr_epi8(7,6,5,4,3,2,1,0, 15,14,13,12,11,10,9,8));
 
     // load initial state 
     __m256i abcd = _mm256_permute4x64_epi64(_mm256_loadu_si256((const __m256i*)&state[0]), _MM_SHUFFLE(0,1,2,3)); // [a,b,c,d]
@@ -211,7 +216,7 @@ static void sha512_process_vsha512(uint64_t* state, const uint8_t* block, size_t
         __m256i last0 = state0;
         __m256i last1 = state1;
 
-        __m256i tmp, w[4];
+        __m256i w[4];
 
         QROUND(0);
         QROUND(1);
@@ -256,6 +261,189 @@ static void sha512_process_vsha512(uint64_t* state, const uint8_t* block, size_t
 
 #endif // defined(__x86_64__) || defined(_M_AMD64)
 
+#if defined(__aarch64__) || defined(_M_ARM64)
+
+#if defined(__clang__)
+#   define SHA512_TARGET __attribute__((target("sha3")))
+#elif defined(__GNUC__)
+#   define SHA512_TARGET __attribute__((target("+sha3")))
+#elif defined(_MSC_VER)
+#   define SHA512_TARGET
+#endif
+
+#include <arm_neon.h>
+
+#if defined(_WIN32)
+#   include <windows.h>
+#   pragma comment (lib, "advapi32")
+#elif defined(__linux__)
+#   include <sys/auxv.h>
+#   include <asm/hwcap.h>
+#elif defined(__APPLE__)
+#   include <sys/sysctl.h>
+#endif
+
+#define SHA512_CPUID_INIT  (1 << 0)
+#define SHA512_CPUID_ARM64 (1 << 1)
+
+#if defined(_WIN32)
+
+#endif
+
+static inline int sha512_cpuid(void)
+{
+#if defined(__ARM_FEATURE_SHA512)
+    int result = SHA512_CPUID_ARM64;
+#else
+    static int cpuid;
+
+    int result = cpuid;
+    if (result == 0)
+    {
+#if defined(_WIN32)
+        // no sha512 bit in IsProcessorFeaturePresent function :(
+        uint64_t bits;
+        DWORD bitsize = sizeof(bits);
+        RegGetValueA(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", "CP 4030", RRF_RT_QWORD | RRF_ZEROONFAILURE, NULL, &bits, &bitsize);
+        // bits from ID_AA64ISAR0_EL1
+        int has_arm64 = ((bits >> 15) & 0xf) == 0x2;
+#elif defined(__linux__)
+        unsigned long hwcap = getauxval(AT_HWCAP);
+        int has_arm64 = hwcap & HWCAP_SHA512;
+#elif defined(__APPLE__)
+        int value = 0;
+        size_t valuelen = sizeof(value);
+        int has_arm64 = sysctlbyname("hw.optional.arm.FEAT_SHA512", &value, &valuelen, NULL, 0) == 0 && value != 0;
+#else
+#error unknown platform
+#endif
+        result |= SHA512_CPUID_INIT;
+        if (has_arm64)
+        {
+            result |= SHA512_CPUID_ARM64;
+        }
+
+        cpuid = result;
+    }
+#endif
+
+#if defined(SHA512_CPUID_MASK)
+    result &= SHA512_CPUID_MASK;
+#endif
+
+    return result;
+}
+
+SHA512_TARGET
+static void sha512_process_arm64(uint64_t* state, const uint8_t* block, size_t count)
+{
+    #define W(i) w[(i)%8]
+    #define S(i) vstate.val[3-(i)%4]
+
+    #define DROUND(i) do {                                                                                          \
+        /* load 8 round constants */                                                                                \
+        if ((i % 4) == 0) rk = vld1q_u64_x4(&SHA512_K[2*i]);                                                        \
+        /* first 8 rounds reverse byte order in each 64-bit lane of input block */                                  \
+        if (i <  8) W(i) = vreinterpretq_u64_u8(vrev64q_u8(msg[(i/4)%2].val[i%4]));                                 \
+        /* update message schedule for next rounds */                                                               \
+        if (i >= 8) W(i) = vsha512su1q_u64(vsha512su0q_u64(W(i), W(i-7)), W(i-1), vextq_u64(W(i-4), W(i-3), 1));    \
+        /* add round constants */                                                                                   \
+        uint64x2_t tmp = vaddq_u64(W(i), rk.val[i%4]);                                                              \
+        /* 2 round functions */                                                                                     \
+        uint64x2_t x0 = vaddq_u64(vextq_u64(tmp, tmp, 1), S(i+0));                                                  \
+        uint64x2_t x1 = vsha512hq_u64(x0, vextq_u64(S(i+1), S(i+0), 1), vextq_u64(S(i+2), S(i+1), 1));              \
+        S(i+0) = vsha512h2q_u64(x1, S(i+2), S(i+3));                                                                \
+        S(i+2) = vaddq_u64(S(i+2), x1);                                                                             \
+    } while (0)
+
+    // load initial state
+    uint64x2x4_t vstate = vld1q_u64_x4(state);
+
+    do
+    {
+        // remember current state
+        uint64x2x4_t vlast = vstate;
+
+        // load 128-byte block
+        uint8x16x4_t msg[2] =
+        {
+            vld1q_u8_x4(block + 0 * 16),
+            vld1q_u8_x4(block + 4 * 16),
+        };
+
+        uint64x2x4_t rk;
+        uint64x2_t w[8];
+
+        DROUND( 0);
+        DROUND( 1);
+        DROUND( 2);
+        DROUND( 3);
+
+        DROUND( 4);
+        DROUND( 5);
+        DROUND( 6);
+        DROUND( 7);
+
+        DROUND( 8);
+        DROUND( 9);
+        DROUND(10);
+        DROUND(11);
+
+        DROUND(12);
+        DROUND(13);
+        DROUND(14);
+        DROUND(15);
+
+        DROUND(16);
+        DROUND(17);
+        DROUND(18);
+        DROUND(19);
+
+        DROUND(20);
+        DROUND(21);
+        DROUND(22);
+        DROUND(23);
+
+        DROUND(24);
+        DROUND(25);
+        DROUND(26);
+        DROUND(27);
+
+        DROUND(28);
+        DROUND(29);
+        DROUND(30);
+        DROUND(31);
+
+        DROUND(32);
+        DROUND(33);
+        DROUND(34);
+        DROUND(35);
+
+        DROUND(36);
+        DROUND(37);
+        DROUND(38);
+        DROUND(39);
+
+        // update next state
+        vstate.val[0] = vaddq_u64(vstate.val[0], vlast.val[0]);
+        vstate.val[1] = vaddq_u64(vstate.val[1], vlast.val[1]);
+        vstate.val[2] = vaddq_u64(vstate.val[2], vlast.val[2]);
+        vstate.val[3] = vaddq_u64(vstate.val[3], vlast.val[3]);
+
+        block += SHA512_BLOCK_SIZE;
+    }
+    while (--count);
+
+    // save the new state
+    vst1q_u64_x4(state, vstate);
+
+    #undef DROUND
+    #undef S
+    #undef W
+}
+
+#endif // defined(__aarch64__) || defined(_M_ARM64)
+
 static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
 {
 #if defined(__x86_64__) || defined(_M_AMD64)
@@ -263,6 +451,15 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
     if (cpuid & SHA512_CPUID_VSHA512)
     {
         sha512_process_vsha512(state, block, count);
+        return;
+    }
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+    int cpuid = sha512_cpuid();
+    if (cpuid & SHA512_CPUID_ARM64)
+    {
+        sha512_process_arm64(state, block, count);
         return;
     }
 #endif
@@ -277,13 +474,13 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
 
     #define W(i) w[(i+16)%16]
 
-    #define ROUND(i,a,b,c,d,e,f,g,h,K) do                                           \
+    #define ROUND(i,a,b,c,d,e,f,g,h) do                                             \
     {                                                                               \
         uint64_t w0;                                                                \
         if (i <  16) W(i) = w0 = SHA512_GET64BE(block + i*sizeof(uint64_t));        \
         if (i >= 16) W(i) = w0 = SSig1(W(i-2)) + W(i-7) + SSig0(W(i-15)) + W(i-16); \
                                                                                     \
-        uint64_t t1 = h + BSig1(e) + Ch(e,f,g) + K + w0;                            \
+        uint64_t t1 = h + BSig1(e) + Ch(e,f,g) + SHA512_K[i] + w0;                  \
         uint64_t t2 = BSig0(a) + Maj(a,b,c);                                        \
         d += t1;                                                                    \
         h = t1 + t2;                                                                \
@@ -302,86 +499,86 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
 
         uint64_t w[16];
 
-        ROUND( 0, a, b, c, d, e, f, g, h, 0x428a2f98d728ae22);
-        ROUND( 1, h, a, b, c, d, e, f, g, 0x7137449123ef65cd);
-        ROUND( 2, g, h, a, b, c, d, e, f, 0xb5c0fbcfec4d3b2f);
-        ROUND( 3, f, g, h, a, b, c, d, e, 0xe9b5dba58189dbbc);
-        ROUND( 4, e, f, g, h, a, b, c, d, 0x3956c25bf348b538);
-        ROUND( 5, d, e, f, g, h, a, b, c, 0x59f111f1b605d019);
-        ROUND( 6, c, d, e, f, g, h, a, b, 0x923f82a4af194f9b);
-        ROUND( 7, b, c, d, e, f, g, h, a, 0xab1c5ed5da6d8118);
-        ROUND( 8, a, b, c, d, e, f, g, h, 0xd807aa98a3030242);
-        ROUND( 9, h, a, b, c, d, e, f, g, 0x12835b0145706fbe);
-        ROUND(10, g, h, a, b, c, d, e, f, 0x243185be4ee4b28c);
-        ROUND(11, f, g, h, a, b, c, d, e, 0x550c7dc3d5ffb4e2);
-        ROUND(12, e, f, g, h, a, b, c, d, 0x72be5d74f27b896f);
-        ROUND(13, d, e, f, g, h, a, b, c, 0x80deb1fe3b1696b1);
-        ROUND(14, c, d, e, f, g, h, a, b, 0x9bdc06a725c71235);
-        ROUND(15, b, c, d, e, f, g, h, a, 0xc19bf174cf692694);
-        ROUND(16, a, b, c, d, e, f, g, h, 0xe49b69c19ef14ad2);
-        ROUND(17, h, a, b, c, d, e, f, g, 0xefbe4786384f25e3);
-        ROUND(18, g, h, a, b, c, d, e, f, 0x0fc19dc68b8cd5b5);
-        ROUND(19, f, g, h, a, b, c, d, e, 0x240ca1cc77ac9c65);
-        ROUND(20, e, f, g, h, a, b, c, d, 0x2de92c6f592b0275);
-        ROUND(21, d, e, f, g, h, a, b, c, 0x4a7484aa6ea6e483);
-        ROUND(22, c, d, e, f, g, h, a, b, 0x5cb0a9dcbd41fbd4);
-        ROUND(23, b, c, d, e, f, g, h, a, 0x76f988da831153b5);
-        ROUND(24, a, b, c, d, e, f, g, h, 0x983e5152ee66dfab);
-        ROUND(25, h, a, b, c, d, e, f, g, 0xa831c66d2db43210);
-        ROUND(26, g, h, a, b, c, d, e, f, 0xb00327c898fb213f);
-        ROUND(27, f, g, h, a, b, c, d, e, 0xbf597fc7beef0ee4);
-        ROUND(28, e, f, g, h, a, b, c, d, 0xc6e00bf33da88fc2);
-        ROUND(29, d, e, f, g, h, a, b, c, 0xd5a79147930aa725);
-        ROUND(30, c, d, e, f, g, h, a, b, 0x06ca6351e003826f);
-        ROUND(31, b, c, d, e, f, g, h, a, 0x142929670a0e6e70);
-        ROUND(32, a, b, c, d, e, f, g, h, 0x27b70a8546d22ffc);
-        ROUND(33, h, a, b, c, d, e, f, g, 0x2e1b21385c26c926);
-        ROUND(34, g, h, a, b, c, d, e, f, 0x4d2c6dfc5ac42aed);
-        ROUND(35, f, g, h, a, b, c, d, e, 0x53380d139d95b3df);
-        ROUND(36, e, f, g, h, a, b, c, d, 0x650a73548baf63de);
-        ROUND(37, d, e, f, g, h, a, b, c, 0x766a0abb3c77b2a8);
-        ROUND(38, c, d, e, f, g, h, a, b, 0x81c2c92e47edaee6);
-        ROUND(39, b, c, d, e, f, g, h, a, 0x92722c851482353b);
-        ROUND(40, a, b, c, d, e, f, g, h, 0xa2bfe8a14cf10364);
-        ROUND(41, h, a, b, c, d, e, f, g, 0xa81a664bbc423001);
-        ROUND(42, g, h, a, b, c, d, e, f, 0xc24b8b70d0f89791);
-        ROUND(43, f, g, h, a, b, c, d, e, 0xc76c51a30654be30);
-        ROUND(44, e, f, g, h, a, b, c, d, 0xd192e819d6ef5218);
-        ROUND(45, d, e, f, g, h, a, b, c, 0xd69906245565a910);
-        ROUND(46, c, d, e, f, g, h, a, b, 0xf40e35855771202a);
-        ROUND(47, b, c, d, e, f, g, h, a, 0x106aa07032bbd1b8);
-        ROUND(48, a, b, c, d, e, f, g, h, 0x19a4c116b8d2d0c8);
-        ROUND(49, h, a, b, c, d, e, f, g, 0x1e376c085141ab53);
-        ROUND(50, g, h, a, b, c, d, e, f, 0x2748774cdf8eeb99);
-        ROUND(51, f, g, h, a, b, c, d, e, 0x34b0bcb5e19b48a8);
-        ROUND(52, e, f, g, h, a, b, c, d, 0x391c0cb3c5c95a63);
-        ROUND(53, d, e, f, g, h, a, b, c, 0x4ed8aa4ae3418acb);
-        ROUND(54, c, d, e, f, g, h, a, b, 0x5b9cca4f7763e373);
-        ROUND(55, b, c, d, e, f, g, h, a, 0x682e6ff3d6b2b8a3);
-        ROUND(56, a, b, c, d, e, f, g, h, 0x748f82ee5defb2fc);
-        ROUND(57, h, a, b, c, d, e, f, g, 0x78a5636f43172f60);
-        ROUND(58, g, h, a, b, c, d, e, f, 0x84c87814a1f0ab72);
-        ROUND(59, f, g, h, a, b, c, d, e, 0x8cc702081a6439ec);
-        ROUND(60, e, f, g, h, a, b, c, d, 0x90befffa23631e28);
-        ROUND(61, d, e, f, g, h, a, b, c, 0xa4506cebde82bde9);
-        ROUND(62, c, d, e, f, g, h, a, b, 0xbef9a3f7b2c67915);
-        ROUND(63, b, c, d, e, f, g, h, a, 0xc67178f2e372532b);
-        ROUND(64, a, b, c, d, e, f, g, h, 0xca273eceea26619c);
-        ROUND(65, h, a, b, c, d, e, f, g, 0xd186b8c721c0c207);
-        ROUND(66, g, h, a, b, c, d, e, f, 0xeada7dd6cde0eb1e);
-        ROUND(67, f, g, h, a, b, c, d, e, 0xf57d4f7fee6ed178);
-        ROUND(68, e, f, g, h, a, b, c, d, 0x06f067aa72176fba);
-        ROUND(69, d, e, f, g, h, a, b, c, 0x0a637dc5a2c898a6);
-        ROUND(70, c, d, e, f, g, h, a, b, 0x113f9804bef90dae);
-        ROUND(71, b, c, d, e, f, g, h, a, 0x1b710b35131c471b);
-        ROUND(72, a, b, c, d, e, f, g, h, 0x28db77f523047d84);
-        ROUND(73, h, a, b, c, d, e, f, g, 0x32caab7b40c72493);
-        ROUND(74, g, h, a, b, c, d, e, f, 0x3c9ebe0a15c9bebc);
-        ROUND(75, f, g, h, a, b, c, d, e, 0x431d67c49c100d4c);
-        ROUND(76, e, f, g, h, a, b, c, d, 0x4cc5d4becb3e42b6);
-        ROUND(77, d, e, f, g, h, a, b, c, 0x597f299cfc657e2a);
-        ROUND(78, c, d, e, f, g, h, a, b, 0x5fcb6fab3ad6faec);
-        ROUND(79, b, c, d, e, f, g, h, a, 0x6c44198c4a475817);
+        ROUND( 0, a, b, c, d, e, f, g, h);
+        ROUND( 1, h, a, b, c, d, e, f, g);
+        ROUND( 2, g, h, a, b, c, d, e, f);
+        ROUND( 3, f, g, h, a, b, c, d, e);
+        ROUND( 4, e, f, g, h, a, b, c, d);
+        ROUND( 5, d, e, f, g, h, a, b, c);
+        ROUND( 6, c, d, e, f, g, h, a, b);
+        ROUND( 7, b, c, d, e, f, g, h, a);
+        ROUND( 8, a, b, c, d, e, f, g, h);
+        ROUND( 9, h, a, b, c, d, e, f, g);
+        ROUND(10, g, h, a, b, c, d, e, f);
+        ROUND(11, f, g, h, a, b, c, d, e);
+        ROUND(12, e, f, g, h, a, b, c, d);
+        ROUND(13, d, e, f, g, h, a, b, c);
+        ROUND(14, c, d, e, f, g, h, a, b);
+        ROUND(15, b, c, d, e, f, g, h, a);
+        ROUND(16, a, b, c, d, e, f, g, h);
+        ROUND(17, h, a, b, c, d, e, f, g);
+        ROUND(18, g, h, a, b, c, d, e, f);
+        ROUND(19, f, g, h, a, b, c, d, e);
+        ROUND(20, e, f, g, h, a, b, c, d);
+        ROUND(21, d, e, f, g, h, a, b, c);
+        ROUND(22, c, d, e, f, g, h, a, b);
+        ROUND(23, b, c, d, e, f, g, h, a);
+        ROUND(24, a, b, c, d, e, f, g, h);
+        ROUND(25, h, a, b, c, d, e, f, g);
+        ROUND(26, g, h, a, b, c, d, e, f);
+        ROUND(27, f, g, h, a, b, c, d, e);
+        ROUND(28, e, f, g, h, a, b, c, d);
+        ROUND(29, d, e, f, g, h, a, b, c);
+        ROUND(30, c, d, e, f, g, h, a, b);
+        ROUND(31, b, c, d, e, f, g, h, a);
+        ROUND(32, a, b, c, d, e, f, g, h);
+        ROUND(33, h, a, b, c, d, e, f, g);
+        ROUND(34, g, h, a, b, c, d, e, f);
+        ROUND(35, f, g, h, a, b, c, d, e);
+        ROUND(36, e, f, g, h, a, b, c, d);
+        ROUND(37, d, e, f, g, h, a, b, c);
+        ROUND(38, c, d, e, f, g, h, a, b);
+        ROUND(39, b, c, d, e, f, g, h, a);
+        ROUND(40, a, b, c, d, e, f, g, h);
+        ROUND(41, h, a, b, c, d, e, f, g);
+        ROUND(42, g, h, a, b, c, d, e, f);
+        ROUND(43, f, g, h, a, b, c, d, e);
+        ROUND(44, e, f, g, h, a, b, c, d);
+        ROUND(45, d, e, f, g, h, a, b, c);
+        ROUND(46, c, d, e, f, g, h, a, b);
+        ROUND(47, b, c, d, e, f, g, h, a);
+        ROUND(48, a, b, c, d, e, f, g, h);
+        ROUND(49, h, a, b, c, d, e, f, g);
+        ROUND(50, g, h, a, b, c, d, e, f);
+        ROUND(51, f, g, h, a, b, c, d, e);
+        ROUND(52, e, f, g, h, a, b, c, d);
+        ROUND(53, d, e, f, g, h, a, b, c);
+        ROUND(54, c, d, e, f, g, h, a, b);
+        ROUND(55, b, c, d, e, f, g, h, a);
+        ROUND(56, a, b, c, d, e, f, g, h);
+        ROUND(57, h, a, b, c, d, e, f, g);
+        ROUND(58, g, h, a, b, c, d, e, f);
+        ROUND(59, f, g, h, a, b, c, d, e);
+        ROUND(60, e, f, g, h, a, b, c, d);
+        ROUND(61, d, e, f, g, h, a, b, c);
+        ROUND(62, c, d, e, f, g, h, a, b);
+        ROUND(63, b, c, d, e, f, g, h, a);
+        ROUND(64, a, b, c, d, e, f, g, h);
+        ROUND(65, h, a, b, c, d, e, f, g);
+        ROUND(66, g, h, a, b, c, d, e, f);
+        ROUND(67, f, g, h, a, b, c, d, e);
+        ROUND(68, e, f, g, h, a, b, c, d);
+        ROUND(69, d, e, f, g, h, a, b, c);
+        ROUND(70, c, d, e, f, g, h, a, b);
+        ROUND(71, b, c, d, e, f, g, h, a);
+        ROUND(72, a, b, c, d, e, f, g, h);
+        ROUND(73, h, a, b, c, d, e, f, g);
+        ROUND(74, g, h, a, b, c, d, e, f);
+        ROUND(75, f, g, h, a, b, c, d, e);
+        ROUND(76, e, f, g, h, a, b, c, d);
+        ROUND(77, d, e, f, g, h, a, b, c);
+        ROUND(78, c, d, e, f, g, h, a, b);
+        ROUND(79, b, c, d, e, f, g, h, a);
 
         state[0] += a;
         state[1] += b;

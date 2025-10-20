@@ -50,9 +50,9 @@ static inline void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE]);
 
 #if defined(_MSC_VER)
 #   include <stdlib.h>
-#   define SHA1_GET32BE(ptr) _byteswap_ulong( *((const _UNALIGNED uint32_t*)(ptr)) )
-#   define SHA1_SET32BE(ptr,x) *((_UNALIGNED uint32_t*)(ptr)) = _byteswap_ulong(x)
-#   define SHA1_SET64BE(ptr,x) *((_UNALIGNED uint64_t*)(ptr)) = _byteswap_uint64(x)
+#   define SHA1_GET32BE(ptr) _byteswap_ulong( *((const __unaligned uint32_t*)(ptr)) )
+#   define SHA1_SET32BE(ptr,x) *((__unaligned uint32_t*)(ptr)) = _byteswap_ulong(x)
+#   define SHA1_SET64BE(ptr,x) *((__unaligned uint64_t*)(ptr)) = _byteswap_uint64(x)
 #else
 #   define SHA1_GET32BE(ptr) \
     (                       \
@@ -137,36 +137,86 @@ static inline int sha1_cpuid(void)
 SHA1_TARGET("ssse3,sha")
 static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t count)
 {
-    const __m128i* buffer = (const __m128i*)block;
+    // in SHA1 each round has two parts:
+    // 1) calculate message schedule dwords in w[i]
+    // 2) do round functions to update a/b/c/d/e state values using w[i]
 
-    // for performing two operations in one:
-    // 1) dwords need to be loaded as big-endian
-    // 2) order of dwords need to be reversed for sha instructions: [0,1,2,3] -> [3,2,1,0]
-    const __m128i bswap = _mm_setr_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0);
+    // w[i] in first 16 rounds is just loaded from block bytes, as 32-bit big-endian load
+
+    // for next rounds it is done as:
+    // w[i] = ROL(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16])
+    // where ROL(x) = 32-bit rotate left by 1
+
+    // this means it is possible to keep just the last 16 of w's in circular buffer
+    // and every new w calculated will need to update 1 to 3 previous w's
+
+    // unrolling round calculations by 4 we get:
+    // w[i+0] = ROL(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16])
+    // w[i+1] = ROL(w[i-2] ^ w[i-7] ^ w[i-13] ^ w[i-15])
+    // w[i+2] = ROL(w[i-1] ^ w[i-6] ^ w[i-12] ^ w[i-14])
+    // w[i+3] = ROL(w[i+0] ^ w[i-5] ^ w[i-11] ^ w[i-13])
+
+    // now if you store 4 w[..] values in 128-bit SSE register, then
+    // W(i) = ROL( r0 ^ r1 ^ r2 ^ r3 )
+    // with caveat that r0 lane 3 depends on W(i) lane 0
+
+    //         [3]      [2]      [1]      [0]      // lanes
+    // r0 = [ special, w[i-1],  w[i-2],  w[i-3]  ]
+    // r1 = [ w[i-5],  w[i-6],  w[i-7],  w[i-8]  ]
+    // r2 = [ w[i-11], w[i-12], w[i-13], w[i-14] ]
+    // r3 = [ w[i-13], w[i-14], w[i-15], w[i-16] ]
+
+    // in each 4-round i'th step it is possible to incrementally update new W(..) value when
+    // keeping W(i) values in 4 xmm element circular buffer
+
+    // rounds i>0: W(i-1) = r2 ^ r3          = _mm_sha1msg1_epu32(W(i-1), W(i))
+    // rounds i>1: W(i-2) = W(i-2) ^ r1      = _mm_xor_si128     (W(i-2), W(i))
+    // rounds i>2: W(i-3) = ROL(W(i-3) ^ r0) = _mm_sha1msg2_epu32(W(i-3), W(i))
+    // then the new W(i) can be used in round function calculations
+    // _mm_sha1msg2_epu32 correctly handles r0 lane 3 dependency on W(i) lane 0
+
+    // to perform round functions on two SIMD registers with state as:
+    // abcd = [a,b,c,d]
+    //   e0 = [e,0,0,0]
+    // use the following code to get next abcd/e0 state 4 rounds at a time:
+
+    //       tmp = _mm_sha1nexte_epu32(e0, W(i))      // rotates e0 and adds message dwords
+    // abcd_next = _mm_sha1rnds4_epu32(abcd, tmp, Fn) // with Fn = 0..3 round function selection
+    //   e0_next = abcd
+
+    // sha1nexte is not needed on first round, just regular add32(e0, W(i)) should be used
+    // after last round need to do extra rotation, which sha1nexte takes care when adding to last_e0
 
     #define W(i) w[(i)%4]
 
     // 4 wide round calculations
     #define QROUND(i) do {                                                          \
-        /* first four rounds loads input message */                                 \
+        /* first 4 rounds load input block */                                       \
         if (i < 4) W(i) = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[i]), bswap);     \
-        /* update previous message dwords for next rounds */                        \
+        /* update message schedule */                                               \
         if (i > 0 && i < 17) W(i-1) = _mm_sha1msg1_epu32(W(i-1), W(i));             \
-        if (i > 1 && i < 18) W(i-2) = _mm_xor_si128(W(i-2), W(i));                  \
+        if (i > 1 && i < 18) W(i-2) = _mm_xor_si128     (W(i-2), W(i));             \
         if (i > 2 && i < 19) W(i-3) = _mm_sha1msg2_epu32(W(i-3), W(i));             \
-        /* calculate E from message dwords */                                       \
-        if (i == 0) tmp = _mm_add_epi32(e0, W(i));                                  \
+        /* calculate E plus message schedule */                                     \
+        if (i == 0) tmp = _mm_add_epi32      (e0, W(i));                            \
         if (i != 0) tmp = _mm_sha1nexte_epu32(e0, W(i));                            \
-        /* round function */                                                        \
+        /* 4 round functions */                                                     \
         e0 = abcd;                                                                  \
-        abcd = _mm_sha1rnds4_epu32(abcd, tmp, (i/5)%4);                             \
+        abcd = _mm_sha1rnds4_epu32(abcd, tmp, i/5);                                 \
     } while(0)
+
+    const __m128i* buffer = (const __m128i*)block;
+
+    // for performing two operations in one:
+    // 1) dwords need to be loaded as big-endian
+    // 2) order of dwords need to be reversed for sha1 instructions: [0,1,2,3] -> [3,2,1,0]
+    const __m128i bswap = _mm_setr_epi8(15,14,13,12, 11,10,9,8, 7,6,5,4, 3,2,1,0);
 
     // load initial state
     __m128i abcd = _mm_loadu_si128((const __m128i*)state); // [d,c,b,a]
     __m128i e0 = _mm_loadu_si32(&state[4]);                // [0,0,0,e]
 
-    // change dword order
+    // flip dword order, to what sha1 instructions use
     abcd = _mm_shuffle_epi32(abcd, _MM_SHUFFLE(0,1,2,3)); // [a,b,c,d] where a is in the top lane
     e0 = _mm_slli_si128(e0, 12);                          // [e,0,0,0] where e is in top lane
 
@@ -183,16 +233,19 @@ static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t cou
         QROUND(2);
         QROUND(3);
         QROUND(4);
+
         QROUND(5);
         QROUND(6);
         QROUND(7);
         QROUND(8);
         QROUND(9);
+
         QROUND(10);
         QROUND(11);
         QROUND(12);
         QROUND(13);
         QROUND(14);
+
         QROUND(15);
         QROUND(16);
         QROUND(17);
@@ -221,6 +274,159 @@ static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t cou
 
 #endif // defined(__x86_64__) || defined(_M_AMD64)
 
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+
+#if defined(__clang__)
+#   define SHA1_TARGET __attribute__((target("sha2")))
+#elif defined(__GNUC__)
+#   define SHA1_TARGET __attribute__((target("+sha2")))
+#elif defined(_MSC_VER)
+#   define SHA1_TARGET
+#endif
+
+#include <arm_neon.h>
+
+#if defined(_WIN32)
+#   include <windows.h>
+#elif defined(__linux__)
+#   include <sys/auxv.h>
+#   include <asm/hwcap.h>
+#elif defined(__APPLE__)
+#   include <sys/sysctl.h>
+#endif
+
+#define SHA1_CPUID_INIT  (1 << 0)
+#define SHA1_CPUID_ARM64 (1 << 1)
+
+static inline int sha1_cpuid(void)
+{
+#if defined(__ARM_FEATURE_CRYPTO) || defined(__ARM_FEATURE_SHA2)
+    int result = SHA1_CPUID_ARM64;
+#else
+    static int cpuid;
+
+    int result = cpuid;
+    if (result == 0)
+    {
+#if defined(_WIN32)
+        int has_arm64 = IsProcessorFeaturePresent(PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE);
+#elif defined(__linux__)
+        unsigned long hwcap = getauxval(AT_HWCAP);
+        int has_arm64 = hwcap & HWCAP_SHA1;
+#elif defined(__APPLE__)
+        int value = 0;
+        size_t valuelen = sizeof(value);
+        int has_arm64 = sysctlbyname("hw.optional.arm.FEAT_SHA1", &value, &valuelen, NULL, 0) == 0 && value != 0;
+#else
+#error unknown platform
+#endif
+        result |= SHA1_CPUID_INIT;
+        if (has_arm64)
+        {
+            result |= SHA1_CPUID_ARM64;
+        }
+
+        cpuid = result;
+    }
+#endif
+
+#if defined(SHA1_CPUID_MASK)
+    result &= SHA1_CPUID_MASK;
+#endif
+
+    return result;
+}
+
+SHA1_TARGET
+static void sha1_process_arm64(uint32_t* state, const uint8_t* block, size_t count)
+{
+    // code here is similar to x64 shani implementation
+
+    // message array is 16 element circular buffer
+    // each iteration updates 4 rounds at the same time
+
+    #define W(i) w[(i)%4]
+
+    #define QROUND(i,F,k) do {                                  \
+        /* update message schedule */                           \
+        if (i >= 4) W(i) = vsha1su0q_u32(W(i), W(i-3), W(i-2)); \
+        if (i >= 4) W(i) = vsha1su1q_u32(W(i), W(i-1));         \
+        /* add round constant */                                \
+        uint32x4_t tmp = vaddq_u32(W(i), k);                    \
+        /* 4 round functions */                                 \
+        uint32_t x = e0;                                        \
+        e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));               \
+        abcd = F(abcd, x, tmp);                                 \
+    } while (0)
+
+    const uint32x4_t k0 = vdupq_n_u32(0x5a827999);
+    const uint32x4_t k1 = vdupq_n_u32(0x6ed9eba1);
+    const uint32x4_t k2 = vdupq_n_u32(0x8f1bbcdc);
+    const uint32x4_t k3 = vdupq_n_u32(0xca62c1d6);
+
+    // load state - a,b,c,d,e
+    uint32x4_t abcd = vld1q_u32(state);
+    uint32_t   e0   = state[4];
+
+    do
+    {
+        // remember current state
+        uint32x4_t last_abcd = abcd;
+        uint32_t   last_e0   = e0;
+
+        // load 64-byte block and advance pointer to next block
+        uint8x16x4_t msg = vld1q_u8_x4(block);
+        block += SHA1_BLOCK_SIZE;
+
+        uint32x4_t w[4];
+
+        // for first 16 w's reverse the byte order in each 32-bit lane
+        W(0) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[0]));
+        W(1) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[1]));
+        W(2) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[2]));
+        W(3) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[3]));
+
+        QROUND( 0, vsha1cq_u32, k0);
+        QROUND( 1, vsha1cq_u32, k0);
+        QROUND( 2, vsha1cq_u32, k0);
+        QROUND( 3, vsha1cq_u32, k0);
+        QROUND( 4, vsha1cq_u32, k0);
+
+        QROUND( 5, vsha1pq_u32, k1);
+        QROUND( 6, vsha1pq_u32, k1);
+        QROUND( 7, vsha1pq_u32, k1);
+        QROUND( 8, vsha1pq_u32, k1);
+        QROUND( 9, vsha1pq_u32, k1);
+
+        QROUND(10, vsha1mq_u32, k2);
+        QROUND(11, vsha1mq_u32, k2);
+        QROUND(12, vsha1mq_u32, k2);
+        QROUND(13, vsha1mq_u32, k2);
+        QROUND(14, vsha1mq_u32, k2);
+
+        QROUND(15, vsha1pq_u32, k3);
+        QROUND(16, vsha1pq_u32, k3);
+        QROUND(17, vsha1pq_u32, k3);
+        QROUND(18, vsha1pq_u32, k3);
+        QROUND(19, vsha1pq_u32, k3);
+
+        // update next state
+        abcd = vaddq_u32(abcd, last_abcd);
+        e0  += last_e0;
+    }
+    while (--count);
+
+    // save state
+    vst1q_u32(state, abcd);
+    state[4] = e0;
+
+    #undef QROUND
+    #undef W
+}
+
+#endif // defined(__aarch64__) || defined(_M_ARM64)
+
 static void sha1_process(uint32_t* state, const uint8_t* block, size_t count)
 {
 #if defined(__x86_64__) || defined(_M_AMD64)
@@ -232,12 +438,21 @@ static void sha1_process(uint32_t* state, const uint8_t* block, size_t count)
     }
 #endif
 
+#if defined(__aarch64__) || defined(_M_ARM64)
+    int cpuid = sha1_cpuid();
+    if (cpuid & SHA1_CPUID_ARM64)
+    {
+        sha1_process_arm64(state, block, count);
+        return;
+    }    
+#endif
+
     #define F1(x,y,z) (0x5a827999 + ((x & (y ^ z)) ^ z))
     #define F2(x,y,z) (0x6ed9eba1 + (x ^ y ^ z))
     #define F3(x,y,z) (0x8f1bbcdc + ((x & y) | (z & (x | y))))
     #define F4(x,y,z) (0xca62c1d6 + (x ^ y ^ z))
 
-    #define W(i) w[(i+16)%16]
+    #define W(i) w[(i)%16]
 
     #define ROUND(i,a,b,c,d,e,F) do                                                     \
     {                                                                                   \
