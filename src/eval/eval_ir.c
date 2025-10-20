@@ -699,6 +699,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               result = new_result_maybe;
               break;
             }
+            else if(new_result_maybe.msgs.count != 0 && result.msgs.count == 0)
+            {
+              result = new_result_maybe;
+            }
           }
           if(result.root != &e_irnode_nil)
           {
