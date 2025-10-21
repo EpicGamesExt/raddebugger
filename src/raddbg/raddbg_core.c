@@ -5176,6 +5176,19 @@ rd_window_frame(void)
       cfg_node_release(rd_state->cfg, cfg_node_child_from_string(window, str8_lit("maximized")));
     }
     
+    //- rjf: DPI changes -> xform font size / window size
+    F32 dpi = os_dpi_from_window(ws->os);
+    if(dpi != ws->last_dpi)
+    {
+      fnt_reset();
+      F32 current_font_size = rd_font_size();
+      F32 new_font_size = current_font_size * (dpi / ws->last_dpi);
+      new_font_size = Clamp(6.f, new_font_size, 72.f);
+      CFG_Node *font_size_cfg = cfg_node_child_from_string_or_alloc(rd_state->cfg, window, str8_lit("font_size"));
+      cfg_node_new_replacef(rd_state->cfg, font_size_cfg, "%I64u", (U64)new_font_size);
+      ws->last_dpi = dpi;
+    }
+    
     //- rjf: commit position
     Rng2F32 window_rect = os_rect_from_window(ws->os);
     if(!is_fullscreen && !is_maximized && !is_minimized)
