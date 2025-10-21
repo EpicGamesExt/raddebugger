@@ -1143,9 +1143,11 @@ pdb_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st
           Temp temp = temp_begin(scratch.arena);
           String8 path = file_n->string;
           String8 path_pdbstyle = path_convert_slashes(temp.arena, path, PathStyle_WindowsAbsolute);
-          U32 off = pdb_strtbl_off_from_string(strtbl, path_pdbstyle);
+          String8 path_pdbstyle_lower = lower_from_str8(temp.arena, path_pdbstyle);
+          U32 off1 = pdb_strtbl_off_from_string(strtbl, path_pdbstyle);
+          U32 off2 = pdb_strtbl_off_from_string(strtbl, path_pdbstyle_lower);
           temp_end(temp);
-          if(off != max_U32)
+          if(off1 != max_U32 || off2 != max_U32)
           {
             has_ref = 1;
             break;
