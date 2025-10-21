@@ -8547,7 +8547,7 @@ rd_window_frame(void)
           }
           
           // rjf: soft circle around mouse
-          if(box->hot_t > 0.01f) DR_ClipScope(box->rect)
+          if(box->hot_t > 0.01f) DR_ClipScope(intersect_2f32(box->rect, dr_top_clip()))
           {
             Vec4F32 color = hover_color;
             color.w *= 0.02f;
