@@ -2224,11 +2224,22 @@ rd_view_ui(Rng2F32 rect)
                   {
                     default:
                     {
-                      U64 vaddr = eval.value.u64;
-                      CTRL_Entity *process = rd_ctrl_entity_from_eval_space(eval.space);
-                      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-                      U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+                      U64 voff = 0;
+                      DI_Key dbgi_key = {0};
+                      if(eval.space.kind == CTRL_EvalSpaceKind_Entity)
+                      {
+                        U64 vaddr = eval.value.u64;
+                        CTRL_Entity *process = rd_ctrl_entity_from_eval_space(eval.space);
+                        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+                        dbgi_key = ctrl_dbgi_key_from_module(module);
+                        voff = ctrl_voff_from_vaddr(module, vaddr);
+                      }
+                      else
+                      {
+                        voff = eval.value.u64;
+                        E_DbgInfo *dbg_info = e_dbg_info_from_type_key(eval.irtree.type_key);
+                        dbgi_key = dbg_info->dbgi_key;
+                      }
                       {
                         Access *access = access_open();
                         RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);

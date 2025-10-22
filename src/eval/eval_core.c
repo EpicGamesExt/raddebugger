@@ -760,6 +760,18 @@ e_dbg_info_from_module(E_Module *module)
   return result;
 }
 
+internal E_DbgInfo *
+e_dbg_info_from_type_key(E_TypeKey type_key)
+{
+  E_DbgInfo *result = &e_dbg_info_nil;
+  if(type_key.kind == E_TypeKeyKind_Ext &&
+     0 < type_key.u32[2] && type_key.u32[2] <= e_base_ctx->dbg_infos_count)
+  {
+    result = &e_base_ctx->dbg_infos[type_key.u32[2]-1];
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Cache Accessing Functions
 

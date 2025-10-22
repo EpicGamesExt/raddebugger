@@ -174,8 +174,8 @@ struct E_TypeKey
   E_TypeKeyKind kind;
   U32 u32[3];
   // [0] -> E_TypeKind (Basic, Cons, Ext); Arch (Reg, RegAlias)
-  // [1] -> Type Index In RDI (Ext); Code (Reg, RegAlias); Type Index In Constructed (Cons)
-  // [2] -> RDI Index (Ext)
+  // [1] -> Type Index In Debug Info (Ext); Code (Reg, RegAlias); Type Index In Constructed (Cons)
+  // [2] -> Debug Info Number (Ext)
 };
 
 typedef struct E_TypeKeyNode E_TypeKeyNode;
@@ -1222,6 +1222,7 @@ internal void e_select_ir_ctx(E_IRCtx *ctx);
 //~ rjf: Context Accessors
 
 internal E_DbgInfo *e_dbg_info_from_module(E_Module *module);
+internal E_DbgInfo *e_dbg_info_from_type_key(E_TypeKey type_key);
 
 ////////////////////////////////
 //~ rjf: Base Cache Accessing Functions

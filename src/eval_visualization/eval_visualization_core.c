@@ -1915,6 +1915,15 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 }
               }
               E_DbgInfo *dbg_info = e_dbg_info_from_module(module);
+              if(dbg_info == &e_dbg_info_nil)
+              {
+                dbg_info = e_dbg_info_from_type_key(type_key);
+              }
+              U32 dbg_info_num = 0;
+              if(dbg_info != &e_dbg_info_nil)
+              {
+                dbg_info_num = (U32)(dbg_info - e_base_ctx->dbg_infos) + 1;
+              }
               RDI_Parsed *rdi = dbg_info->rdi;
               U64 voff = vaddr - module->vaddr_range.min;
               B32 good_symbol_match = 0;
@@ -1964,7 +1973,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                   if(inline_site != 0)
                   {
                     RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, inline_site->type_idx);
-                    E_TypeKey type = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), inline_site->type_idx, module->dbg_info_num);
+                    E_TypeKey type = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), inline_site->type_idx, dbg_info_num);
                     String8 name = {0};
                     name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
                     if(inline_site->type_idx != 0)
@@ -1994,7 +2003,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                   U64 proc_idx = scope->proc_idx;
                   RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
                   RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
-                  E_TypeKey type = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, module->dbg_info_num);
+                  E_TypeKey type = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, dbg_info_num);
                   String8 name = {0};
                   name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
                   if(procedure->type_idx != 0)
