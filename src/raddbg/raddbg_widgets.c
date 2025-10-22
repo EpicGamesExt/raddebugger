@@ -1251,9 +1251,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   CTRL_Entity *selected_thread_process = ctrl_entity_ancestor_from_kind(selected_thread, CTRL_EntityKind_Process);
   U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
   CTRL_Entity *selected_thread_module = ctrl_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
-  F32 selected_thread_alive_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###selected_thread_alive_t_%p", selected_thread), 1.f);
-  F32 selected_thread_module_alive_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###selected_thread_module_alive_t_%p", selected_thread_module), 1.f);
-  F32 selected_thread_arch_alive_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###selected_thread_arch_alive_t_%i", selected_thread->arch), 1.f);
   CTRL_Event stop_event = d_ctrl_last_stop_event();
   CTRL_Entity *stopper_thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
@@ -1552,9 +1549,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        CTRL_EntityList line_ips  = params->line_ips[line_idx];
-        CFG_NodePtrList line_bps       = params->line_bps[line_idx];
-        CFG_NodePtrList line_pins      = params->line_pins[line_idx];
+        CTRL_EntityList line_ips = params->line_ips[line_idx];
+        CFG_NodePtrList line_bps = params->line_bps[line_idx];
+        CFG_NodePtrList line_pins = params->line_pins[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         ui_set_next_background_color(v4f32(0, 0, 0, 0));
         UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);

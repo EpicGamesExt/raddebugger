@@ -585,19 +585,19 @@ e_leaf_type_key_from_name(String8 name)
   E_TypeKey key = e_leaf_builtin_type_key_from_name(name);
   if(!e_type_key_match(e_type_key_zero(), key))
   {
-    DI_Match match = di_match_from_string(name, 0, e_base_ctx->primary_module->dbgi_key, 0);
+    DI_Match match = di_match_from_string(name, 0, e_base_ctx->primary_dbg_info->dbgi_key, 0);
     if(match.section_kind == RDI_SectionKind_TypeNodes)
     {
       Access *access = access_open();
       RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);
-      for EachIndex(idx, e_base_ctx->modules_count)
+      for EachIndex(idx, e_base_ctx->dbg_infos_count)
       {
-        E_Module *module = &e_base_ctx->modules[idx];
-        if(module->rdi == rdi)
+        E_DbgInfo *dbg_info = &e_base_ctx->dbg_infos[idx];
+        if(dbg_info->rdi == rdi)
         {
           U32 type_idx = match.idx;
           RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-          key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)idx);
+          key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)idx+1);
           break;
         }
       }

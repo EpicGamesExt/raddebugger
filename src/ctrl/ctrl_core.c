@@ -3189,7 +3189,7 @@ ctrl_thread__entry_point(void *p)
             CTRL_Entity *module = ctrl_entity_from_handle(entity_ctx, msg->entity);
             CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
             DI_Key old_dbgi_key = di_key_from_path_timestamp(debug_info_path->string, debug_info_path->timestamp);
-            di_close(old_dbgi_key);
+            di_close(old_dbgi_key, 0);
             MutexScopeW(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
             {
               ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, debug_info_path, path_normalized_from_string(scratch.arena, path));
@@ -4112,7 +4112,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->entity     = module_handle;
       out_evt->string     = module_path;
       DI_Key dbgi_key = ctrl_dbgi_key_from_module(module_ent);
-      di_close(dbgi_key);
+      di_close(dbgi_key, 0);
     }break;
     case DMN_EventKind_DebugString:
     {
@@ -4274,15 +4274,19 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
   U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
   
   //////////////////////////////
-  //- rjf: gather evaluation modules
+  //- rjf: gather evaluation debug infos & modules
   //
   U64 eval_modules_count = Max(1, entity_ctx->entity_kind_counts[CTRL_EntityKind_Module]);
   E_Module *eval_modules = push_array(arena, E_Module, eval_modules_count);
   E_Module *eval_modules_primary = &eval_modules[0];
-  eval_modules_primary->rdi = &rdi_parsed_nil;
   eval_modules_primary->vaddr_range = r1u64(0, max_U64);
+  U64 eval_dbg_infos_count = Max(1, entity_ctx->entity_kind_counts[CTRL_EntityKind_Module]);
+  E_DbgInfo *eval_dbg_infos = push_array(arena, E_DbgInfo, eval_dbg_infos_count);
+  E_DbgInfo *eval_dbg_infos_primary = &eval_dbg_infos[0];
+  MemoryCopyStruct(eval_dbg_infos_primary, &e_dbg_info_nil);
   {
     U64 eval_module_idx = 0;
+    U64 eval_dbg_info_idx = 0;
     for(CTRL_Entity *machine = entity_ctx->root->first;
         machine != &ctrl_entity_nil;
         machine = machine->next)
@@ -4392,10 +4396,18 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
             rdi = di_rdi_from_key(scope->access, dbgi_key, 1, max_U64);
           }
           
+          //- rjf: fill debug info
+          eval_dbg_infos[eval_dbg_info_idx].dbgi_key = dbgi_key;
+          eval_dbg_infos[eval_dbg_info_idx].rdi      = rdi;
+          if(mod == module)
+          {
+            eval_dbg_infos_primary = &eval_dbg_infos[eval_dbg_info_idx];
+          }
+          eval_dbg_info_idx += 1;
+          
           //- rjf: fill evaluation module info
           eval_modules[eval_module_idx].arch        = arch;
-          eval_modules[eval_module_idx].dbgi_key    = dbgi_key;
-          eval_modules[eval_module_idx].rdi         = rdi;
+          eval_modules[eval_module_idx].dbg_info_num= (U32)eval_dbg_info_idx;
           eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
           eval_modules[eval_module_idx].space       = e_space_make(CTRL_EvalSpaceKind_Entity);
           eval_modules[eval_module_idx].space.u64_0 = (U64)process;
@@ -4427,6 +4439,11 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
     ctx->thread_reg_space = e_space_make(CTRL_EvalSpaceKind_Entity);
     ctx->thread_reg_space.u64_0 = (U64)thread;
     
+    //- rjf: fill debug infos
+    ctx->dbg_infos        = eval_dbg_infos;
+    ctx->dbg_infos_count  = eval_dbg_infos_count;
+    ctx->primary_dbg_info = eval_dbg_infos_primary;
+    
     //- rjf: fill modules
     ctx->modules        = eval_modules;
     ctx->modules_count  = eval_modules_count;
@@ -4445,8 +4462,8 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
     E_IRCtx *ctx = &scope->ir_ctx;
     ctx->regs_map      = ctrl_string2reg_from_arch(arch);
     ctx->reg_alias_map = ctrl_string2alias_from_arch(arch);
-    ctx->locals_map    = e_push_locals_map_from_rdi_voff(arena, eval_modules_primary->rdi, thread_rip_voff);
-    ctx->member_map    = e_push_member_map_from_rdi_voff(arena, eval_modules_primary->rdi, thread_rip_voff);
+    ctx->locals_map    = e_push_locals_map_from_rdi_voff(arena, eval_dbg_infos_primary->rdi, thread_rip_voff);
+    ctx->member_map    = e_push_member_map_from_rdi_voff(arena, eval_dbg_infos_primary->rdi, thread_rip_voff);
     ctx->macro_map     = push_array(arena, E_String2ExprMap, 1);
     ctx->macro_map[0]  = e_string2expr_map_make(arena, 512);
     ctx->auto_hook_map = push_array(arena, E_AutoHookMap, 1);
@@ -4469,7 +4486,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
     // TODO(rjf): need to compute this out here somehow... ctx->frame_base[0] = ;
     ctx->tls_base      = push_array(arena, U64, 1);
   }
-  e_select_interpret_ctx(&scope->interpret_ctx, eval_modules_primary->rdi, thread_rip_voff);
+  e_select_interpret_ctx(&scope->interpret_ctx, eval_dbg_infos_primary->rdi, thread_rip_voff);
   
   ProfEnd();
   return scope;

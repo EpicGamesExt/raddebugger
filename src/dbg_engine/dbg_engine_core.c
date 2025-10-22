@@ -1500,6 +1500,16 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           evt->code = event->u64_code;
         }break;
         
+        case CTRL_EventKind_NewModule:
+        {
+          D_EventNode *n = push_array(arena, D_EventNode, 1);
+          SLLQueuePush(result.first, result.last, n);
+          result.count += 1;
+          D_Event *evt = &n->v;
+          evt->kind = D_EventKind_ModuleLoad;
+          evt->module = event->entity;
+        }break;
+        
         //- rjf: debug strings
         
         case CTRL_EventKind_DebugString:

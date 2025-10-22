@@ -70,7 +70,7 @@ internal E_EnumValArray e_enum_val_array_from_list(Arena *arena, E_EnumValList *
 //- rjf: basic key constructors
 internal E_TypeKey e_type_key_zero(void);
 internal E_TypeKey e_type_key_basic(E_TypeKind kind);
-internal E_TypeKey e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_idx);
+internal E_TypeKey e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_num);
 internal E_TypeKey e_type_key_reg(Arch arch, REGS_RegCode code);
 internal E_TypeKey e_type_key_reg_alias(Arch arch, REGS_AliasCode code);
 

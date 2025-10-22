@@ -3998,7 +3998,9 @@ rd_view_ui(Rng2F32 rect)
                             
                             // rjf: apply type note
                             if(!(cell_info.flags & RD_WatchCellFlag_NoEval) &&
-                               cell->eval.space.kind == CTRL_EvalSpaceKind_Entity &&
+                               e_type_kind_from_key(cell->eval.irtree.type_key) != E_TypeKind_Null &&
+                               (cell->eval.space.kind == E_SpaceKind_Null ||
+                                cell->eval.space.kind == CTRL_EvalSpaceKind_Entity) &&
                                row_info->callstack_thread == &ctrl_entity_nil &&
                                e_type_kind_from_key(cell->eval.irtree.type_key) != E_TypeKind_Function)
                               UI_FontSize(ui_top_font_size()*0.9f)
@@ -9310,7 +9312,7 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
     // rjf: try to map using asynchronous matching system
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      DI_Match match = di_match_from_string(string, 0, e_base_ctx->primary_module->dbgi_key, 0);
+      DI_Match match = di_match_from_string(string, 0, di_key_zero(), 0);
       RDI_SectionKind section_kind = match.section_kind;
       mapped = 1;
       switch(section_kind)
@@ -10311,6 +10313,73 @@ rd_frame(void)
   }
   
   //////////////////////////////
+  //- rjf: iterate all loaded debug infos, remove hot markers
+  //
+  if(rd_state->frame_depth == 1)
+  {
+    CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), str8_lit("transient"));
+    CFG_Node *loaded_debug_infos = cfg_node_child_from_string_or_alloc(rd_state->cfg, transient, str8_lit("loaded_debug_infos"));
+    for(CFG_Node *child = loaded_debug_infos->first; child != &cfg_nil_node; child = child->next)
+    {
+      cfg_node_release(rd_state->cfg, cfg_node_child_from_string(child, str8_lit("hot")));
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: iterate all loaded debug infos, touch their dbgi load markers
+  //
+  if(rd_state->frame_depth == 1)
+  {
+    CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), str8_lit("transient"));
+    CFG_Node *loaded_debug_infos = cfg_node_child_from_string_or_alloc(rd_state->cfg, transient, str8_lit("loaded_debug_infos"));
+    CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
+    for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
+    {
+      CFG_Node *di = n->v;
+      String8 path = rd_path_from_cfg(di);
+      CFG_Node *di_timestamp = cfg_node_child_from_string(di, str8_lit("timestamp"));
+      U64 timestamp = 0;
+      try_u64_from_str8_c_rules(di_timestamp->first->string, &timestamp);
+      String8 loaded_di_key = push_str8f(scratch.arena, "$%I64x `%S` `%I64u`", di->id, path, timestamp);
+      CFG_Node *loaded_di = cfg_node_child_from_string(loaded_debug_infos, loaded_di_key);
+      if(loaded_di == &cfg_nil_node)
+      {
+        loaded_di = cfg_node_new(rd_state->cfg, loaded_debug_infos, loaded_di_key);
+        CFG_Node *path_node = cfg_node_new(rd_state->cfg, loaded_di, str8_lit("path"));
+        cfg_node_new(rd_state->cfg, path_node, path);
+        CFG_Node *timestamp_node = cfg_node_new(rd_state->cfg, loaded_di, str8_lit("timestamp"));
+        cfg_node_new(rd_state->cfg, timestamp_node, di_timestamp->first->string);
+        DI_Key dbgi_key = di_key_from_path_timestamp(path, timestamp);
+        di_open(dbgi_key);
+      }
+      cfg_node_child_from_string_or_alloc(rd_state->cfg, loaded_di, str8_lit("hot"));
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: iterate all loaded debug infos, close those without hot markers
+  //
+  if(rd_state->frame_depth == 1)
+  {
+    CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), str8_lit("transient"));
+    CFG_Node *loaded_debug_infos = cfg_node_child_from_string_or_alloc(rd_state->cfg, transient, str8_lit("loaded_debug_infos"));
+    for(CFG_Node *child = loaded_debug_infos->first, *next = &cfg_nil_node; child != &cfg_nil_node; child = next)
+    {
+      next = child->next;
+      if(cfg_node_child_from_string(child, str8_lit("hot")) == &cfg_nil_node)
+      {
+        CFG_Node *path_node = cfg_node_child_from_string(child, str8_lit("path"));
+        CFG_Node *timestamp_node = cfg_node_child_from_string(child, str8_lit("timestamp"));
+        U64 timestamp = 0;
+        try_u64_from_str8_c_rules(timestamp_node->first->string, &timestamp);
+        DI_Key dbgi_key = di_key_from_path_timestamp(path_node->first->string, timestamp);
+        di_close(dbgi_key, 0);
+        cfg_node_release(rd_state->cfg, child);
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: garbage collect untouched immediate cfg trees
   //
   if(rd_state->frame_depth == 1)
@@ -10776,7 +10845,56 @@ rd_frame(void)
   ProfScope("loop - consume events in core, tick engine, and repeat") for(U64 cmd_process_loop_idx = 0; cmd_process_loop_idx < 3; cmd_process_loop_idx += 1)
   {
     ////////////////////////////
-    //- rjf: unpack eval-dependent info
+    //- rjf: gather all unique debug info keys, build map
+    //
+    typedef struct DbgInfoNode DbgInfoNode;
+    struct DbgInfoNode
+    {
+      DbgInfoNode *hash_next;
+      DbgInfoNode *order_next;
+      DI_Key key;
+      U64 idx;
+    };
+    U64 dbg_info_slots_count = 4096;
+    DbgInfoNode **dbg_info_slots = push_array(scratch.arena, DbgInfoNode *, dbg_info_slots_count);
+    DbgInfoNode *first_dbg_info = 0;
+    DbgInfoNode *last_dbg_info = 0;
+    U64 dbg_infos_count = 0;
+    {
+      CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
+      for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
+      {
+        CFG_Node *di = n->v;
+        String8 path = rd_path_from_cfg(di);
+        CFG_Node *timestamp_node = cfg_node_child_from_string(di, str8_lit("timestamp"));
+        U64 timestamp = 0;
+        try_u64_from_str8_c_rules(timestamp_node->first->string, &timestamp);
+        DI_Key key = di_key_from_path_timestamp(path, timestamp);
+        U64 hash = u64_hash_from_str8(str8_struct(&key));
+        U64 slot_idx = hash%dbg_info_slots_count;
+        DbgInfoNode *node = 0;
+        for(DbgInfoNode *n = dbg_info_slots[slot_idx]; n != 0; n = n->hash_next)
+        {
+          if(di_key_match(n->key, key))
+          {
+            node = n;
+            break;
+          }
+        }
+        if(node == 0)
+        {
+          node = push_array(scratch.arena, DbgInfoNode, 1);
+          SLLStackPush_N(dbg_info_slots[slot_idx], node, hash_next);
+          SLLQueuePush_N(first_dbg_info, last_dbg_info, node, order_next);
+          node->key = key;
+          node->idx = dbg_infos_count;
+          dbg_infos_count += 1;
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: unpack basic evaluation context
     //
     ProfBegin("unpack eval-dependent info");
     CTRL_Entity *process = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process);
@@ -10787,32 +10905,67 @@ rd_frame(void)
     CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
     U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
     U64 tls_root_vaddr = ctrl_tls_root_vaddr_from_thread(&d_state->ctrl_entity_store->ctx, thread->handle);
+    ProfEnd();
+    
+    ////////////////////////////
+    //- rjf: produce all debug infos
+    //
+    U64 eval_dbg_infos_count = Max(1, dbg_infos_count);
+    E_DbgInfo *eval_dbg_infos = push_array(scratch.arena, E_DbgInfo, eval_dbg_infos_count);
+    E_DbgInfo *eval_dbg_infos_primary = &eval_dbg_infos[0];
+    MemoryCopyStruct(eval_dbg_infos_primary, &e_dbg_info_nil);
+    {
+      U64 idx = 0;
+      for(DbgInfoNode *n = first_dbg_info; n != 0; n = n->order_next)
+      {
+        eval_dbg_infos[idx].dbgi_key = n->key;
+        eval_dbg_infos[idx].rdi = di_rdi_from_key(rd_state->frame_access, n->key, 0, 0);
+        idx += 1;
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: produce all eval modules
+    //
     CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Module);
     U64 eval_modules_count = Max(1, all_modules.count);
     E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
     E_Module *eval_modules_primary = &eval_modules[0];
-    eval_modules_primary->rdi = &rdi_parsed_nil;
     eval_modules_primary->vaddr_range = r1u64(0, max_U64);
-    DI_Key primary_dbgi_key = {0};
     ProfScope("produce all eval modules")
     {
       for EachIndex(eval_module_idx, all_modules.count)
       {
         CTRL_Entity *m = all_modules.v[eval_module_idx];
         DI_Key dbgi_key = ctrl_dbgi_key_from_module(m);
-        eval_modules[eval_module_idx].arch        = m->arch;
-        eval_modules[eval_module_idx].dbgi_key    = dbgi_key;
-        eval_modules[eval_module_idx].rdi         = di_rdi_from_key(rd_state->frame_access, dbgi_key, 0, 0);
-        eval_modules[eval_module_idx].vaddr_range = m->vaddr_range;
-        eval_modules[eval_module_idx].space       = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process), CTRL_EvalSpaceKind_Entity);
+        
+        // rjf: dbgi key -> eval dbg info num
+        U32 dbg_info_num = 0;
+        {
+          U64 hash = u64_hash_from_str8(str8_struct(&dbgi_key));
+          U64 slot_idx = hash%dbg_info_slots_count;
+          for(DbgInfoNode *n = dbg_info_slots[slot_idx]; n != 0; n = n->hash_next)
+          {
+            if(di_key_match(n->key, dbgi_key))
+            {
+              dbg_info_num = n->idx+1;
+              break;
+            }
+          }
+        }
+        
+        // rjf: fill
+        eval_modules[eval_module_idx].vaddr_range  = m->vaddr_range;
+        eval_modules[eval_module_idx].arch         = m->arch;
+        eval_modules[eval_module_idx].dbg_info_num = dbg_info_num;
+        eval_modules[eval_module_idx].space        = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process), CTRL_EvalSpaceKind_Entity);
         if(module == m)
         {
           eval_modules_primary = &eval_modules[eval_module_idx];
-          primary_dbgi_key = dbgi_key;
+          eval_dbg_infos_primary = (0 < dbg_info_num && dbg_info_num <= eval_dbg_infos_count) ? &eval_dbg_infos[dbg_info_num-1] : &e_dbg_info_nil;
         }
       }
     }
-    ProfEnd();
     
     ////////////////////////////
     //- rjf: begin evaluation
@@ -10832,6 +10985,11 @@ rd_frame(void)
       ctx->thread_reg_space    = rd_eval_space_from_ctrl_entity(thread, CTRL_EvalSpaceKind_Entity);
       ctx->thread_arch         = thread->arch;
       ctx->thread_unwind_count = unwind_count;
+      
+      //- rjf: fill debug infos
+      ctx->dbg_infos        = eval_dbg_infos;
+      ctx->dbg_infos_count  = eval_dbg_infos_count;
+      ctx->primary_dbg_info = eval_dbg_infos_primary;
       
       //- rjf: fill modules
       ctx->modules          = eval_modules;
@@ -10959,6 +11117,7 @@ rd_frame(void)
         str8_lit("breakpoint"),
         str8_lit("watch_pin"),
         str8_lit("target"),
+        str8_lit("debug_info"),
         str8_lit("file_path_map"),
         str8_lit("type_view"),
         str8_lit("recent_project"),
@@ -11608,8 +11767,8 @@ rd_frame(void)
       E_IRCtx *ctx = ir_ctx;
       ctx->regs_map       = ctrl_string2reg_from_arch(eval_base_ctx->primary_module->arch);
       ctx->reg_alias_map  = ctrl_string2alias_from_arch(eval_base_ctx->primary_module->arch);
-      ctx->locals_map     = d_query_cached_locals_map_from_dbgi_key_voff(primary_dbgi_key, rip_voff);
-      ctx->member_map     = d_query_cached_member_map_from_dbgi_key_voff(primary_dbgi_key, rip_voff);
+      ctx->locals_map     = d_query_cached_locals_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
+      ctx->member_map     = d_query_cached_member_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
       ctx->macro_map      = macro_map;
       ctx->auto_hook_map  = auto_hook_map;
     }
@@ -11631,7 +11790,7 @@ rd_frame(void)
       ctx->tls_base          = push_array(scratch.arena, U64, 1);
       ctx->tls_base[0]       = d_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
     }
-    e_select_interpret_ctx(interpret_ctx, eval_modules_primary->rdi, rip_voff);
+    e_select_interpret_ctx(interpret_ctx, eval_dbg_infos_primary->rdi, rip_voff);
     
     ////////////////////////////
     //- rjf: evaluate unpacked settings (must be used earlier than this point in the frame,
@@ -13683,7 +13842,15 @@ rd_frame(void)
               DI_Key voff_dbgi_key = {0};
               if(!name_resolved)
               {
-                DI_Match match = di_match_from_string(name, 0, e_base_ctx->primary_module->dbgi_key, 0);
+                DI_Match match = {0};
+                if(match.idx == 0)
+                {
+                  match = di_match_from_string(name, 0, e_base_ctx->primary_dbg_info->dbgi_key, rd_state->frame_eval_memread_endt_us);
+                }
+                if(match.idx == 0)
+                {
+                  match = di_match_from_string(name, 0, di_key_zero(), rd_state->frame_eval_memread_endt_us);
+                }
                 if(match.section_kind == RDI_SectionKind_Procedures)
                 {
                   Access *access = access_open();
@@ -14812,6 +14979,21 @@ rd_frame(void)
             }
           }break;
           
+          //- rjf: debug infos
+          case RD_CmdKind_LoadDebugInfo:
+          {
+            CFG_Node *project = cfg_node_child_from_string(cfg_node_root(), str8_lit("project"));
+            CFG_Node *di = cfg_node_new(rd_state->cfg, project, str8_lit("debug_info"));
+            CFG_Node *path = cfg_node_new(rd_state->cfg, di, str8_lit("path"));
+            cfg_node_new(rd_state->cfg, path, rd_regs()->file_path);
+          }break;
+          case RD_CmdKind_UnloadDebugInfo:
+          {
+            CFG_Node *di = cfg_node_from_id(rd_regs()->cfg);
+            CFG_Node *path = cfg_node_child_from_string(di, str8_lit("path"));
+            cfg_node_release(rd_state->cfg, di);
+          }break;
+          
           //- rjf: type views
           case RD_CmdKind_AddTypeView:
           {
@@ -15897,6 +16079,43 @@ rd_frame(void)
       switch(evt->kind)
       {
         default:{}break;
+        case D_EventKind_ModuleLoad:
+        {
+          CTRL_Entity *module = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, evt->module);
+          CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+          String8 new_path = debug_info_path->string;
+          if(new_path.size != 0 && os_file_path_exists(new_path))
+          {
+            CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
+            B32 path_found = 0;
+            CFG_Node *found_di = &cfg_nil_node;
+            for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
+            {
+              CFG_Node *di = n->v;
+              String8 path = rd_path_from_cfg(di);
+              if(str8_match(path, new_path, 0))
+              {
+                path_found = 1;
+                found_di = di;
+                break;
+              }
+            }
+            if(!path_found)
+            {
+              CFG_Node *project = cfg_node_child_from_string(cfg_node_root(), str8_lit("project"));
+              CFG_Node *di = cfg_node_new(rd_state->cfg, project, str8_lit("debug_info"));
+              CFG_Node *path_root = cfg_node_new(rd_state->cfg, di, str8_lit("path"));
+              CFG_Node *timestamp_root = cfg_node_new(rd_state->cfg, di, str8_lit("timestamp"));
+              cfg_node_new(rd_state->cfg, path_root, new_path);
+              cfg_node_newf(rd_state->cfg, timestamp_root, "%I64u", debug_info_path->timestamp);
+            }
+            else
+            {
+              CFG_Node *timestamp_root = cfg_node_child_from_string_or_alloc(rd_state->cfg, found_di, str8_lit("timestamp"));
+              cfg_node_new_replacef(rd_state->cfg, timestamp_root, "%I64u", debug_info_path->timestamp);
+            }
+          }
+        }break;
         case D_EventKind_ProcessEnd:
         if(rd_state->quit_after_success)
         {

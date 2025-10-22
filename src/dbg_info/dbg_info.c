@@ -313,7 +313,7 @@ di_open(DI_Key key)
 }
 
 internal void
-di_close(DI_Key key)
+di_close(DI_Key key, B32 force_closed)
 {
   //- rjf: unpack key
   U64 hash = u64_hash_from_str8(str8_struct(&key));
@@ -341,7 +341,14 @@ di_close(DI_Key key)
     }
     if(node)
     {
-      node->refcount -= 1;
+      if(force_closed)
+      {
+        node->refcount = 0;
+      }
+      else
+      {
+        node->refcount -= 1;
+      }
       if(node->refcount == 0)
       {
         for(;;)
@@ -754,8 +761,31 @@ di_async_tick(void)
           threads_available = (max_threads >= needed_threads);
         }
         
+        //- rjf: if this conversion will overwrite an RDI we already have in cache,
+        // then we need to evict the old one from the cache.
+        B32 ready_to_launch_conversion = (threads_available && !og_is_rdi && rdi_is_stale && t->thread_count != 0 && t->status != DI_LoadTaskStatus_Active);
+        if(ready_to_launch_conversion)
+        {
+          U64 path2key_hash = u64_hash_from_str8(og_path);
+          U64 path2key_slot_idx = path2key_hash%di_shared->path2key_slots_count;
+          DI_KeySlot *path2key_slot = &di_shared->path2key_slots[path2key_slot_idx];
+          Stripe *path2key_stripe = stripe_from_slot_idx(&di_shared->path2key_stripes, path2key_slot_idx);
+          RWMutexScope(path2key_stripe->rw_mutex, 0)
+          {
+            // NOTE(rjf): we need to iterate from last -> first, since we want to evict the
+            // most recent key.
+            for(DI_KeyPathNode *n = path2key_slot->last; n != 0; n = n->prev)
+            {
+              if(str8_match(n->path, og_path, 0) && !di_key_match(key, n->key))
+              {
+                di_close(n->key, 1);
+              }
+            }
+          }
+        }
+        
         //- rjf: launch conversion processes
-        if(threads_available && !og_is_rdi && rdi_is_stale && t->thread_count != 0 && t->status != DI_LoadTaskStatus_Active)
+        if(ready_to_launch_conversion)
         {
           B32 should_compress = 0;
           OS_ProcessLaunchParams params = {0};
@@ -961,7 +991,10 @@ di_async_tick(void)
             MemoryCopyStruct(&node->rdi, &rdi_parsed);
             node->completion_count += 1;
             node->working_count -= 1;
-            ins_atomic_u64_inc_eval(&di_shared->load_gen);
+            if(node->rdi.raw_data_size != 0)
+            {
+              ins_atomic_u64_inc_eval(&di_shared->load_gen);
+            }
             ins_atomic_u64_inc_eval(&di_shared->load_count);
           }
           else

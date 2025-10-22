@@ -5,6 +5,22 @@
 #include "lib_rdi/rdi_parse.c"
 
 ////////////////////////////////
+//~ rjf: RDI Enum <=> Base Enum
+
+internal Arch
+arch_from_rdi_arch(RDI_Arch arch)
+{
+  Arch result = Arch_Null;
+  switch((RDI_ArchEnum)arch)
+  {
+    case RDI_Arch_NULL:{}break;
+    case RDI_Arch_X86:{result = Arch_x86;}break;
+    case RDI_Arch_X64:{result = Arch_x64;}break;
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Lookup Helpers
 
 internal String8

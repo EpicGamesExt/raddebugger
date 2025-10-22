@@ -33,6 +33,7 @@ RD_WatchTabFastPathTable:
   {Targets         "Targets"           targets           1                 Target                "Displays, and allows editing of, the list of all targets."}
   {Breakpoints     "Breakpoints"       breakpoints       1                 CircleFilled          "Displays, and allows editing of, the list of all breakpoints."}
   {WatchPins       "Watch Pins"        watch_pins        1                 Pin                   "Displays, and allows editing of, the list of all watch pins."}
+  {DebugInfos      "Debug Info"        debug_infos       1                 Module                "Displays, and allows editing of, the list of all debug info files that the debugger has loaded."}
   {Threads         "Threads"           threads           1                 Threads               "Displays the list of all threads in all processes to which the debugger is attached."}
   {Processes       "Processes"         processes         1                 Scheduler             "Displays the list of all processes to which the debugger is attached."}
   {Machines        "Machines"          machines          1                 Machine               "Displays the list of all machines to which the debugger is connected."}
@@ -91,6 +92,7 @@ RD_VocabTable:
   {type_view            _                           "Type View"                 _                     Binoculars                                     }
   {file_path_map        _                           "File Path Map"             _                     FileOutline                                    }
   {watch_pin            _                           "Watch Pin"                 _                     Pin                                            }
+  {debug_info           _                           "Debug Info"                "Debug Info"          Module                                         }
   {watch                watches                     "Watch"                     "Watches"             Binoculars                                     }
   {view                 _                           "View"                      _                     Binoculars                                     }
   {breakpoint           _                           "Breakpoint"                _                     CircleFilled                                   }
@@ -196,6 +198,7 @@ RD_VocabTable:
   {row_height           ""                          "Row Height"                ""                    Null                                           }
   {tab_height           ""                          "Tab Height"                ""                    Null                                           }
   {rgba                 ""                          "RGBA"                      ""                    Palette                                        }
+  {path                 ""                          "Path"                      ""                    FileOutline                                    }
 }
 
 @struct RD_VocabInfo:
@@ -657,6 +660,20 @@ RD_VocabTable:
     ```,
   }
   
+  //- rjf: debug infos
+  {
+    debug_info,
+    ```
+      @row_commands(enable_cfg, duplicate_cfg, remove_cfg)
+      @collection_commands(load_debug_info)
+      x:
+    {
+      'path': @no_relativize path,
+      @no_revert @no_expand @default(1) 'enabled': bool,
+    }
+    ```,
+  }
+  
   //- rjf: file path maps
   {
     file_path_map,
@@ -1043,6 +1060,10 @@ RD_CmdTable:    //               |        |              |                |     
   //- rjf: watch pins
   {AddWatchPin                    1        1              0                0               ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           Pin                   "add_watch_pin"               "Add Watch Pin"                               "Places a watch pin at a given location (file path and line number or address)."                                   ""                               "$watch_pins,"                                                   }
   {ToggleWatchPin                 1        0              0                0               ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           Pin                   "toggle_watch_pin"            "Toggle Watch Pin"                            "Places or removes a watch pin at a given location (file path and line number or address)."                        ""                               ""                                                               }
+  
+  //- rjf: debug infos
+  {LoadDebugInfo                  1        1              0                0               `folder:\\"$input\\"`                            FilePath           null              Nil                     Null       1  0  0  0  0  1  1                                                           Module                "load_debug_info"             "Load Debug Info"                             "Loads a debug info file."                                                                                         ""                               "$debug_infos,"                                                  }
+  {UnloadDebugInfo                1        1              0                0               "query:debug_infos"                              Cfg                null              Nil                     Null       0  0  0  0  1  1  1                                                           Module                "unload_debug_info"           "Unload Debug Info"                           "Unloads a debug info file."                                                                                       ""                               "$debug_infos,"                                                  }
   
   //- rjf: type views
   {AddTypeView                    0        0              0                0               ""                                               String             null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "add_type_view"               "Add Type View"                               "Adds a new type view."                                                                                            ""                               ""                                                               }

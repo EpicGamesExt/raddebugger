@@ -65,6 +65,11 @@ read_only global String8 rdi_name_title_from_dump_subset_table[] =
 };
 
 ////////////////////////////////
+//~ rjf: RDI Enum <=> Base Enum
+
+internal Arch arch_from_rdi_arch(RDI_Arch arch);
+
+////////////////////////////////
 //~ rjf: Lookup Helpers
 
 internal String8 str8_from_rdi_string_idx(RDI_Parsed *rdi, U32 idx);

@@ -271,7 +271,7 @@ e_type_key_basic(E_TypeKind kind)
 }
 
 internal E_TypeKey
-e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_idx)
+e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_num)
 {
   E_TypeKey key = {E_TypeKeyKind_Ext};
   key.u32[0] = (U32)kind;
@@ -282,7 +282,7 @@ e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_idx)
   else
   {
     key.u32[1] = type_idx;
-    key.u32[2] = rdi_idx;
+    key.u32[2] = rdi_num;
   }
   return key;
 }
@@ -646,10 +646,13 @@ e_type_byte_size_from_key(E_TypeKey key)
     case E_TypeKeyKind_Ext:
     {
       U64 type_node_idx = key.u32[1];
-      U32 rdi_idx = key.u32[2];
-      RDI_Parsed *rdi = e_base_ctx->modules[rdi_idx].rdi;
-      RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
-      result = rdi_type->byte_size;
+      U32 rdi_num = key.u32[2];
+      if(0 < rdi_num && rdi_num <= e_base_ctx->dbg_infos_count)
+      {
+        RDI_Parsed *rdi = e_base_ctx->dbg_infos[rdi_num-1].rdi;
+        RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
+        result = rdi_type->byte_size;
+      }
     }break;
     case E_TypeKeyKind_Cons:
     {
@@ -758,322 +761,327 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
       case E_TypeKeyKind_Ext:
       {
         U64 type_node_idx = key.u32[1];
-        U32 rdi_idx = key.u32[2];
-        RDI_Parsed *rdi = e_base_ctx->modules[rdi_idx].rdi;
-        RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
-        if(rdi_type->kind != RDI_TypeKind_NULL)
+        U32 rdi_num = key.u32[2];
+        if(0 < rdi_num && rdi_num <= e_base_ctx->dbg_infos_count)
         {
-          E_TypeKind kind = e_type_kind_from_rdi(rdi_type->kind);
-          
-          //- rjf: record types => unpack name * members & produce
-          if(RDI_TypeKind_FirstRecord <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastRecord)
+          RDI_Parsed *rdi = e_base_ctx->dbg_infos[rdi_num-1].rdi;
+          RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+          Arch arch = arch_from_rdi_arch(tli->arch);
+          RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
+          if(rdi_type->kind != RDI_TypeKind_NULL)
           {
-            // rjf: unpack name
-            String8 name = {0};
-            name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+            E_TypeKind kind = e_type_kind_from_rdi(rdi_type->kind);
             
-            // rjf: unpack UDT info
-            RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, rdi_type->user_defined.udt_idx);
-            
-            // rjf: unpack members
-            E_Member *members = 0;
-            U32 members_count = 0;
+            //- rjf: record types => unpack name * members & produce
+            if(RDI_TypeKind_FirstRecord <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastRecord)
             {
-              members_count = udt->member_count;
-              members = push_array(arena, E_Member, members_count);
-              if(members_count != 0)
+              // rjf: unpack name
+              String8 name = {0};
+              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              
+              // rjf: unpack UDT info
+              RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, rdi_type->user_defined.udt_idx);
+              
+              // rjf: unpack members
+              E_Member *members = 0;
+              U32 members_count = 0;
               {
+                members_count = udt->member_count;
+                members = push_array(arena, E_Member, members_count);
+                if(members_count != 0)
+                {
+                  for(U32 member_idx = udt->member_first;
+                      member_idx < udt->member_first+udt->member_count;
+                      member_idx += 1)
+                  {
+                    RDI_Member *src = rdi_element_from_name_idx(rdi, Members, member_idx);
+                    E_TypeKind member_type_kind = E_TypeKind_Null;
+                    RDI_TypeNode *member_type = rdi_element_from_name_idx(rdi, TypeNodes, src->type_idx);
+                    member_type_kind = e_type_kind_from_rdi(member_type->kind);
+                    E_Member *dst = &members[member_idx-udt->member_first];
+                    dst->kind     = e_member_kind_from_rdi(src->kind);
+                    dst->type_key = e_type_key_ext(member_type_kind, src->type_idx, rdi_num);
+                    dst->name.str = rdi_string_from_idx(rdi, src->name_string_idx, &dst->name.size);
+                    dst->off      = (U64)src->off;
+                  }
+                }
+              }
+              
+              // rjf: produce
+              type = push_array(arena, E_Type, 1);
+              type->kind       = kind;
+              type->name       = push_str8_copy(arena, name);
+              type->byte_size  = (U64)rdi_type->byte_size;
+              type->count      = members_count;
+              type->arch       = arch;
+              type->members    = members;
+            }
+            
+            //- rjf: enum types => unpack name * values & produce
+            else if(rdi_type->kind == RDI_TypeKind_Enum)
+            {
+              // rjf: unpack name
+              String8 name = {0};
+              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              
+              // rjf: unpack direct type
+              E_TypeKey direct_type_key = zero_struct;
+              if(rdi_type->user_defined.direct_type_idx < type_node_idx)
+              {
+                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
+                E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
+                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->user_defined.direct_type_idx, rdi_num);
+              }
+              
+              // rjf: unpack members
+              E_EnumVal *enum_vals = 0;
+              U32 enum_vals_count = 0;
+              {
+                U32 udt_idx = rdi_type->user_defined.udt_idx;
+                RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, udt_idx);
+                enum_vals_count = udt->member_count;
+                enum_vals = push_array(arena, E_EnumVal, enum_vals_count);
                 for(U32 member_idx = udt->member_first;
                     member_idx < udt->member_first+udt->member_count;
                     member_idx += 1)
                 {
-                  RDI_Member *src = rdi_element_from_name_idx(rdi, Members, member_idx);
-                  E_TypeKind member_type_kind = E_TypeKind_Null;
-                  RDI_TypeNode *member_type = rdi_element_from_name_idx(rdi, TypeNodes, src->type_idx);
-                  member_type_kind = e_type_kind_from_rdi(member_type->kind);
-                  E_Member *dst = &members[member_idx-udt->member_first];
-                  dst->kind     = e_member_kind_from_rdi(src->kind);
-                  dst->type_key = e_type_key_ext(member_type_kind, src->type_idx, rdi_idx);
+                  RDI_EnumMember *src = rdi_element_from_name_idx(rdi, EnumMembers, member_idx);
+                  E_EnumVal *dst = &enum_vals[member_idx-udt->member_first];
                   dst->name.str = rdi_string_from_idx(rdi, src->name_string_idx, &dst->name.size);
-                  dst->off      = (U64)src->off;
+                  dst->val      = src->val;
                 }
               }
-            }
-            
-            // rjf: produce
-            type = push_array(arena, E_Type, 1);
-            type->kind       = kind;
-            type->name       = push_str8_copy(arena, name);
-            type->byte_size  = (U64)rdi_type->byte_size;
-            type->count      = members_count;
-            type->arch       = e_base_ctx->modules[rdi_idx].arch;
-            type->members    = members;
-          }
-          
-          //- rjf: enum types => unpack name * values & produce
-          else if(rdi_type->kind == RDI_TypeKind_Enum)
-          {
-            // rjf: unpack name
-            String8 name = {0};
-            name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
-            
-            // rjf: unpack direct type
-            E_TypeKey direct_type_key = zero_struct;
-            if(rdi_type->user_defined.direct_type_idx < type_node_idx)
-            {
-              RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
-              E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
-              direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->user_defined.direct_type_idx, rdi_idx);
-            }
-            
-            // rjf: unpack members
-            E_EnumVal *enum_vals = 0;
-            U32 enum_vals_count = 0;
-            {
-              U32 udt_idx = rdi_type->user_defined.udt_idx;
-              RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, udt_idx);
-              enum_vals_count = udt->member_count;
-              enum_vals = push_array(arena, E_EnumVal, enum_vals_count);
-              for(U32 member_idx = udt->member_first;
-                  member_idx < udt->member_first+udt->member_count;
-                  member_idx += 1)
-              {
-                RDI_EnumMember *src = rdi_element_from_name_idx(rdi, EnumMembers, member_idx);
-                E_EnumVal *dst = &enum_vals[member_idx-udt->member_first];
-                dst->name.str = rdi_string_from_idx(rdi, src->name_string_idx, &dst->name.size);
-                dst->val      = src->val;
-              }
-            }
-            
-            // rjf: produce
-            type = push_array(arena, E_Type, 1);
-            type->kind            = kind;
-            type->name            = push_str8_copy(arena, name);
-            type->byte_size       = (U64)rdi_type->byte_size;
-            type->count           = enum_vals_count;
-            type->arch            = e_base_ctx->modules[rdi_idx].arch;
-            type->enum_vals       = enum_vals;
-            type->direct_type_key = direct_type_key;
-          }
-          
-          //- rjf: constructed types
-          else if(RDI_TypeKind_FirstConstructed <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastConstructed)
-          {
-            // rjf: unpack direct type
-            B32 direct_type_is_good = 0;
-            E_TypeKey direct_type_key = zero_struct;
-            U64 direct_type_byte_size = 0;
-            if(rdi_type->constructed.direct_type_idx < type_node_idx)
-            {
-              RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.direct_type_idx);
-              E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
-              direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->constructed.direct_type_idx, rdi_idx);
-              direct_type_is_good = 1;
-              direct_type_byte_size = (U64)direct_type_node->byte_size;
-            }
-            
-            // rjf: construct based on kind
-            switch(rdi_type->kind)
-            {
-              case RDI_TypeKind_Modifier:
-              {
-                E_TypeFlags flags = 0;
-                if(rdi_type->flags & RDI_TypeModifierFlag_Const)
-                {
-                  flags |= E_TypeFlag_Const;
-                }
-                if(rdi_type->flags & RDI_TypeModifierFlag_Volatile)
-                {
-                  flags |= E_TypeFlag_Volatile;
-                }
-                if(rdi_type->flags & RDI_TypeModifierFlag_Restrict)
-                {
-                  flags |= E_TypeFlag_Restrict;
-                }
-                type = push_array(arena, E_Type, 1);
-                type->kind            = kind;
-                type->direct_type_key = direct_type_key;
-                type->byte_size       = direct_type_byte_size;
-                type->flags           = flags;
-                type->arch            = e_base_ctx->modules[rdi_idx].arch;
-              }break;
-              case RDI_TypeKind_Ptr:
-              case RDI_TypeKind_LRef:
-              case RDI_TypeKind_RRef:
-              {
-                type = push_array(arena, E_Type, 1);
-                type->kind            = kind;
-                type->direct_type_key = direct_type_key;
-                type->byte_size       = bit_size_from_arch(e_base_ctx->modules[rdi_idx].arch)/8;
-                type->count           = 1;
-                type->arch            = e_base_ctx->modules[rdi_idx].arch;
-              }break;
               
-              case RDI_TypeKind_Array:
+              // rjf: produce
+              type = push_array(arena, E_Type, 1);
+              type->kind            = kind;
+              type->name            = push_str8_copy(arena, name);
+              type->byte_size       = (U64)rdi_type->byte_size;
+              type->count           = enum_vals_count;
+              type->arch            = arch;
+              type->enum_vals       = enum_vals;
+              type->direct_type_key = direct_type_key;
+            }
+            
+            //- rjf: constructed types
+            else if(RDI_TypeKind_FirstConstructed <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastConstructed)
+            {
+              // rjf: unpack direct type
+              B32 direct_type_is_good = 0;
+              E_TypeKey direct_type_key = zero_struct;
+              U64 direct_type_byte_size = 0;
+              if(rdi_type->constructed.direct_type_idx < type_node_idx)
               {
-                type = push_array(arena, E_Type, 1);
-                type->kind            = kind;
-                type->direct_type_key = direct_type_key;
-                type->count           = rdi_type->constructed.count;
-                type->byte_size       = direct_type_byte_size * type->count;
-                type->arch            = e_base_ctx->modules[rdi_idx].arch;
-              }break;
-              case RDI_TypeKind_Function:
+                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.direct_type_idx);
+                E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
+                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->constructed.direct_type_idx, rdi_num);
+                direct_type_is_good = 1;
+                direct_type_byte_size = (U64)direct_type_node->byte_size;
+              }
+              
+              // rjf: construct based on kind
+              switch(rdi_type->kind)
               {
-                U32 count = rdi_type->constructed.count;
-                U32 idx_run_first = rdi_type->constructed.param_idx_run_first;
-                U32 check_count = 0;
-                U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, count, &check_count);
-                if(check_count == count)
+                case RDI_TypeKind_Modifier:
                 {
+                  E_TypeFlags flags = 0;
+                  if(rdi_type->flags & RDI_TypeModifierFlag_Const)
+                  {
+                    flags |= E_TypeFlag_Const;
+                  }
+                  if(rdi_type->flags & RDI_TypeModifierFlag_Volatile)
+                  {
+                    flags |= E_TypeFlag_Volatile;
+                  }
+                  if(rdi_type->flags & RDI_TypeModifierFlag_Restrict)
+                  {
+                    flags |= E_TypeFlag_Restrict;
+                  }
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
-                  type->byte_size       = bit_size_from_arch(e_base_ctx->modules[rdi_idx].arch)/8;
                   type->direct_type_key = direct_type_key;
-                  type->count           = count;
-                  type->param_type_keys = push_array(arena, E_TypeKey, type->count);
-                  type->arch            = e_base_ctx->modules[rdi_idx].arch;
-                  for(U32 idx = 0; idx < type->count; idx += 1)
-                  {
-                    U32 param_type_idx = idx_run[idx];
-                    if(param_type_idx < type_node_idx)
-                    {
-                      RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
-                      E_TypeKind param_kind = e_type_kind_from_rdi(param_type_node->kind);
-                      type->param_type_keys[idx] = e_type_key_ext(param_kind, param_type_idx, rdi_idx);
-                    }
-                    else
-                    {
-                      break;
-                    }
-                  }
-                }
-              }break;
-              case RDI_TypeKind_Method:
-              {
-                // NOTE(rjf): for methods, the `direct` type points at the owner type.
-                // the return type, instead of being encoded via the `direct` type, is
-                // encoded via the first parameter.
-                U32 count = rdi_type->constructed.count;
-                U32 idx_run_first = rdi_type->constructed.param_idx_run_first;
-                U32 check_count = 0;
-                U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, count, &check_count);
-                if(check_count == count)
+                  type->byte_size       = direct_type_byte_size;
+                  type->flags           = flags;
+                  type->arch            = arch;
+                }break;
+                case RDI_TypeKind_Ptr:
+                case RDI_TypeKind_LRef:
+                case RDI_TypeKind_RRef:
                 {
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
-                  type->byte_size       = bit_size_from_arch(e_base_ctx->modules[rdi_idx].arch)/8;
-                  type->owner_type_key  = direct_type_key;
-                  type->count           = count;
-                  type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
-                  type->arch            = e_base_ctx->modules[rdi_idx].arch;
-                  for(U32 idx = 0; idx < type->count; idx += 1)
-                  {
-                    U32 param_type_idx = idx_run[idx];
-                    if(param_type_idx < type_node_idx)
-                    {
-                      RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
-                      E_TypeKind param_kind = e_type_kind_from_rdi(param_type_node->kind);
-                      type->param_type_keys[idx] = e_type_key_ext(param_kind, param_type_idx, rdi_idx);
-                    }
-                    else
-                    {
-                      break;
-                    }
-                  }
-                  if(type->count > 0)
-                  {
-                    type->direct_type_key = type->param_type_keys[0];
-                    type->count -= 1;
-                    type->param_type_keys += 1;
-                  }
-                }
-              }break;
-              case RDI_TypeKind_MemberPtr:
-              {
-                // rjf: unpack owner type
-                E_TypeKey owner_type_key = zero_struct;
-                if(rdi_type->constructed.owner_type_idx < type_node_idx)
+                  type->direct_type_key = direct_type_key;
+                  type->byte_size       = bit_size_from_arch(arch)/8;
+                  type->count           = 1;
+                  type->arch            = arch;
+                }break;
+                
+                case RDI_TypeKind_Array:
                 {
-                  RDI_TypeNode *owner_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.owner_type_idx);
-                  E_TypeKind owner_type_kind = e_type_kind_from_rdi(owner_type_node->kind);
-                  owner_type_key = e_type_key_ext(owner_type_kind, rdi_type->constructed.owner_type_idx, rdi_idx);
-                }
-                type = push_array(arena, E_Type, 1);
-                type->kind            = kind;
-                type->byte_size       = bit_size_from_arch(e_base_ctx->modules[rdi_idx].arch)/8;
-                type->owner_type_key  = owner_type_key;
-                type->direct_type_key = direct_type_key;
-                type->arch            = e_base_ctx->modules[rdi_idx].arch;
-              }break;
+                  type = push_array(arena, E_Type, 1);
+                  type->kind            = kind;
+                  type->direct_type_key = direct_type_key;
+                  type->count           = rdi_type->constructed.count;
+                  type->byte_size       = direct_type_byte_size * type->count;
+                  type->arch            = arch;
+                }break;
+                case RDI_TypeKind_Function:
+                {
+                  U32 count = rdi_type->constructed.count;
+                  U32 idx_run_first = rdi_type->constructed.param_idx_run_first;
+                  U32 check_count = 0;
+                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, count, &check_count);
+                  if(check_count == count)
+                  {
+                    type = push_array(arena, E_Type, 1);
+                    type->kind            = kind;
+                    type->byte_size       = bit_size_from_arch(arch)/8;
+                    type->direct_type_key = direct_type_key;
+                    type->count           = count;
+                    type->param_type_keys = push_array(arena, E_TypeKey, type->count);
+                    type->arch            = arch;
+                    for(U32 idx = 0; idx < type->count; idx += 1)
+                    {
+                      U32 param_type_idx = idx_run[idx];
+                      if(param_type_idx < type_node_idx)
+                      {
+                        RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
+                        E_TypeKind param_kind = e_type_kind_from_rdi(param_type_node->kind);
+                        type->param_type_keys[idx] = e_type_key_ext(param_kind, param_type_idx, rdi_num);
+                      }
+                      else
+                      {
+                        break;
+                      }
+                    }
+                  }
+                }break;
+                case RDI_TypeKind_Method:
+                {
+                  // NOTE(rjf): for methods, the `direct` type points at the owner type.
+                  // the return type, instead of being encoded via the `direct` type, is
+                  // encoded via the first parameter.
+                  U32 count = rdi_type->constructed.count;
+                  U32 idx_run_first = rdi_type->constructed.param_idx_run_first;
+                  U32 check_count = 0;
+                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, count, &check_count);
+                  if(check_count == count)
+                  {
+                    type = push_array(arena, E_Type, 1);
+                    type->kind            = kind;
+                    type->byte_size       = bit_size_from_arch(arch)/8;
+                    type->owner_type_key  = direct_type_key;
+                    type->count           = count;
+                    type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
+                    type->arch            = arch;
+                    for(U32 idx = 0; idx < type->count; idx += 1)
+                    {
+                      U32 param_type_idx = idx_run[idx];
+                      if(param_type_idx < type_node_idx)
+                      {
+                        RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
+                        E_TypeKind param_kind = e_type_kind_from_rdi(param_type_node->kind);
+                        type->param_type_keys[idx] = e_type_key_ext(param_kind, param_type_idx, rdi_num);
+                      }
+                      else
+                      {
+                        break;
+                      }
+                    }
+                    if(type->count > 0)
+                    {
+                      type->direct_type_key = type->param_type_keys[0];
+                      type->count -= 1;
+                      type->param_type_keys += 1;
+                    }
+                  }
+                }break;
+                case RDI_TypeKind_MemberPtr:
+                {
+                  // rjf: unpack owner type
+                  E_TypeKey owner_type_key = zero_struct;
+                  if(rdi_type->constructed.owner_type_idx < type_node_idx)
+                  {
+                    RDI_TypeNode *owner_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.owner_type_idx);
+                    E_TypeKind owner_type_kind = e_type_kind_from_rdi(owner_type_node->kind);
+                    owner_type_key = e_type_key_ext(owner_type_kind, rdi_type->constructed.owner_type_idx, rdi_num);
+                  }
+                  type = push_array(arena, E_Type, 1);
+                  type->kind            = kind;
+                  type->byte_size       = bit_size_from_arch(arch)/8;
+                  type->owner_type_key  = owner_type_key;
+                  type->direct_type_key = direct_type_key;
+                  type->arch            = arch;
+                }break;
+              }
             }
-          }
-          
-          //- rjf: alias types
-          else if(rdi_type->kind == RDI_TypeKind_Alias)
-          {
-            // rjf: unpack name
-            String8 name = {0};
-            name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
             
-            // rjf: unpack direct type
-            E_TypeKey direct_type_key = zero_struct;
-            U64 direct_type_byte_size = 0;
-            if(rdi_type->user_defined.direct_type_idx < type_node_idx)
+            //- rjf: alias types
+            else if(rdi_type->kind == RDI_TypeKind_Alias)
             {
-              RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
-              E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
-              direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->user_defined.direct_type_idx, rdi_idx);
-              direct_type_byte_size = direct_type_node->byte_size;
+              // rjf: unpack name
+              String8 name = {0};
+              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              
+              // rjf: unpack direct type
+              E_TypeKey direct_type_key = zero_struct;
+              U64 direct_type_byte_size = 0;
+              if(rdi_type->user_defined.direct_type_idx < type_node_idx)
+              {
+                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
+                E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
+                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->user_defined.direct_type_idx, rdi_num);
+                direct_type_byte_size = direct_type_node->byte_size;
+              }
+              
+              // rjf: produce
+              type = push_array(arena, E_Type, 1);
+              type->kind            = kind;
+              type->name            = push_str8_copy(arena, name);
+              type->byte_size       = direct_type_byte_size;
+              type->direct_type_key = direct_type_key;
+              type->arch            = arch;
             }
             
-            // rjf: produce
-            type = push_array(arena, E_Type, 1);
-            type->kind            = kind;
-            type->name            = push_str8_copy(arena, name);
-            type->byte_size       = direct_type_byte_size;
-            type->direct_type_key = direct_type_key;
-            type->arch            = e_base_ctx->modules[rdi_idx].arch;
-          }
-          
-          //- rjf: bitfields
-          else if(RDI_TypeKind_Bitfield == rdi_type->kind)
-          {
-            // rjf: unpack direct type
-            E_TypeKey direct_type_key = zero_struct;
-            U64 direct_type_byte_size = 0;
-            if(rdi_type->bitfield.direct_type_idx < type_node_idx)
+            //- rjf: bitfields
+            else if(RDI_TypeKind_Bitfield == rdi_type->kind)
             {
-              RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->bitfield.direct_type_idx);
-              E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
-              direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->bitfield.direct_type_idx, rdi_idx);
-              direct_type_byte_size = direct_type_node->byte_size;
+              // rjf: unpack direct type
+              E_TypeKey direct_type_key = zero_struct;
+              U64 direct_type_byte_size = 0;
+              if(rdi_type->bitfield.direct_type_idx < type_node_idx)
+              {
+                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->bitfield.direct_type_idx);
+                E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
+                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->bitfield.direct_type_idx, rdi_num);
+                direct_type_byte_size = direct_type_node->byte_size;
+              }
+              
+              // rjf: produce
+              type = push_array(arena, E_Type, 1);
+              type->kind            = kind;
+              type->byte_size       = direct_type_byte_size;
+              type->direct_type_key = direct_type_key;
+              type->off             = (U32)rdi_type->bitfield.off;
+              type->count           = (U64)rdi_type->bitfield.size;
+              type->arch            = arch;
             }
             
-            // rjf: produce
-            type = push_array(arena, E_Type, 1);
-            type->kind            = kind;
-            type->byte_size       = direct_type_byte_size;
-            type->direct_type_key = direct_type_key;
-            type->off             = (U32)rdi_type->bitfield.off;
-            type->count           = (U64)rdi_type->bitfield.size;
-            type->arch            = e_base_ctx->modules[rdi_idx].arch;
-          }
-          
-          //- rjf: incomplete types
-          else if(RDI_TypeKind_FirstIncomplete <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastIncomplete)
-          {
-            // rjf: unpack name
-            String8 name = {0};
-            name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+            //- rjf: incomplete types
+            else if(RDI_TypeKind_FirstIncomplete <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastIncomplete)
+            {
+              // rjf: unpack name
+              String8 name = {0};
+              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              
+              // rjf: produce
+              type = push_array(arena, E_Type, 1);
+              type->kind            = kind;
+              type->name            = push_str8_copy(arena, name);
+              type->arch            = arch;
+            }
             
-            // rjf: produce
-            type = push_array(arena, E_Type, 1);
-            type->kind            = kind;
-            type->name            = push_str8_copy(arena, name);
-            type->arch            = e_base_ctx->modules[rdi_idx].arch;
           }
-          
         }
       }break;
       

@@ -676,8 +676,10 @@ internal void
 e_select_base_ctx(E_BaseCtx *ctx)
 {
   //- rjf: select base context
-  if(ctx->modules == 0)        { ctx->modules = &e_module_nil; }
-  if(ctx->primary_module == 0) { ctx->primary_module = &e_module_nil; }
+  if(ctx->modules == 0)          { ctx->modules = &e_module_nil; }
+  if(ctx->primary_module == 0)   { ctx->primary_module = &e_module_nil; }
+  if(ctx->dbg_infos == 0)        { ctx->dbg_infos = &e_dbg_info_nil; }
+  if(ctx->primary_dbg_info == 0) { ctx->primary_dbg_info = &e_dbg_info_nil; }
   e_base_ctx = ctx;
   
   //- rjf: reset the evaluation cache
@@ -718,7 +720,7 @@ e_select_base_ctx(E_BaseCtx *ctx)
                                                .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(folder),
                                                .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(folder),
                                              });
-  e_cache->thread_ip_procedure = rdi_procedure_from_voff(e_base_ctx->primary_module->rdi, e_base_ctx->thread_ip_voff);
+  e_cache->thread_ip_procedure = rdi_procedure_from_voff(e_base_ctx->primary_dbg_info->rdi, e_base_ctx->thread_ip_voff);
   e_cache->used_expr_map = push_array(e_cache->arena, E_UsedExprMap, 1);
   e_cache->used_expr_map->slots_count = 64;
   e_cache->used_expr_map->slots = push_array(e_cache->arena, E_UsedExprSlot, e_cache->used_expr_map->slots_count);
@@ -742,6 +744,20 @@ e_select_ir_ctx(E_IRCtx *ctx)
   if(ctx->member_map == 0)     { ctx->member_map = &e_string2num_map_nil; }
   if(ctx->macro_map == 0)      { ctx->macro_map = push_array(e_cache->arena, E_String2ExprMap, 1); ctx->macro_map[0] = e_string2expr_map_make(e_cache->arena, 512); }
   e_ir_ctx = ctx;
+}
+
+////////////////////////////////
+//~ rjf: Context Accessors
+
+internal E_DbgInfo *
+e_dbg_info_from_module(E_Module *module)
+{
+  E_DbgInfo *result = &e_dbg_info_nil;
+  if(0 < module->dbg_info_num && module->dbg_info_num <= e_base_ctx->dbg_infos_count)
+  {
+    result = &e_base_ctx->dbg_infos[module->dbg_info_num-1];
+  }
+  return result;
 }
 
 ////////////////////////////////

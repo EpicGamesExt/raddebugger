@@ -323,7 +323,7 @@ internal DI_Key di_key_from_path_timestamp(String8 path, U64 min_timestamp);
 //~ rjf: Debug Info Opening / Closing
 
 internal void di_open(DI_Key key);
-internal void di_close(DI_Key key);
+internal void di_close(DI_Key key, B32 force_closed);
 
 ////////////////////////////////
 //~ rjf: Debug Info Lookups

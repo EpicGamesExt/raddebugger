@@ -181,7 +181,7 @@ raddbg_decode_utf8(char *str, unsigned __int64 max)
     case 3:
     if(2 < max)
     {
-      unsigned char cont_byte[2] = {str[1], str[2]};
+      unsigned char cont_byte[2] = {(unsigned char)str[1], (unsigned char)str[2]};
       if(raddbg_utf8_class[cont_byte[0] >> 3] == 0 &&
          raddbg_utf8_class[cont_byte[1] >> 3] == 0)
       {
@@ -194,7 +194,7 @@ raddbg_decode_utf8(char *str, unsigned __int64 max)
     case 4:
     if(3 < max)
     {
-      unsigned char cont_byte[3] = {str[1], str[2], str[3]};
+      unsigned char cont_byte[3] = {(unsigned char)str[1], (unsigned char)str[2], (unsigned char)str[3]};
       if(raddbg_utf8_class[cont_byte[0] >> 3] == 0 &&
          raddbg_utf8_class[cont_byte[1] >> 3] == 0 &&
          raddbg_utf8_class[cont_byte[2] >> 3] == 0)

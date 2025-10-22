@@ -565,14 +565,23 @@ struct E_ConsTypeSlot
 };
 
 ////////////////////////////////
+//~ rjf: Debug Info
+
+typedef struct E_DbgInfo E_DbgInfo;
+struct E_DbgInfo
+{
+  DI_Key dbgi_key;
+  RDI_Parsed *rdi;
+};
+
+////////////////////////////////
 //~ rjf: Modules
 
 typedef struct E_Module E_Module;
 struct E_Module
 {
-  DI_Key dbgi_key;
-  RDI_Parsed *rdi;
   Rng1U64 vaddr_range;
+  U32 dbg_info_num;
   Arch arch;
   E_Space space;
 };
@@ -759,6 +768,11 @@ struct E_BaseCtx
   E_Space thread_reg_space;
   Arch thread_arch;
   U64 thread_unwind_count;
+  
+  // rjf: debug infos
+  E_DbgInfo *dbg_infos;
+  U64 dbg_infos_count;
+  E_DbgInfo *primary_dbg_info;
   
   // rjf: modules
   E_Module *modules;
@@ -1111,7 +1125,8 @@ read_only global E_String2ExprMap e_string2expr_map_nil = {0};
 read_only global E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil};
 read_only global E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
 read_only global E_Eval e_eval_nil = {{0}, {0}, {0}, &e_expr_nil, {&e_irnode_nil}};
-read_only global E_Module e_module_nil = {{0}, &rdi_parsed_nil};
+read_only global E_DbgInfo e_dbg_info_nil = {{0}, &rdi_parsed_nil};
+read_only global E_Module e_module_nil = {0};
 read_only global E_CacheBundle e_cache_bundle_nil = {0, {0}, {0}, {0}, {{0}, 0, &e_expr_nil, &e_expr_nil}, {&e_irnode_nil}};
 thread_static E_BaseCtx *e_base_ctx = 0;
 thread_static E_IRCtx *e_ir_ctx = 0;
@@ -1202,6 +1217,11 @@ internal void e_select_cache(E_Cache *cache);
 
 internal void e_select_base_ctx(E_BaseCtx *ctx);
 internal void e_select_ir_ctx(E_IRCtx *ctx);
+
+////////////////////////////////
+//~ rjf: Context Accessors
+
+internal E_DbgInfo *e_dbg_info_from_module(E_Module *module);
 
 ////////////////////////////////
 //~ rjf: Base Cache Accessing Functions

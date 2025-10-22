@@ -86,6 +86,7 @@ struct D_TrapNet
 typedef enum D_EventKind
 {
   D_EventKind_Null,
+  D_EventKind_ModuleLoad,
   D_EventKind_ProcessEnd,
   D_EventKind_Stop,
   D_EventKind_COUNT
@@ -107,6 +108,7 @@ struct D_Event
 {
   D_EventKind kind;
   D_EventCause cause;
+  CTRL_Handle module;
   CTRL_Handle thread;
   U64 vaddr;
   U64 code;
