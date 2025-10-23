@@ -584,6 +584,8 @@ type_coverage_eval_tests(void)
   SLLNode node1 = {0, &node2, 1};
   raddbg_pin(list(node1, the_real_next_ptr));
   
+  node6.next = &node1;
+  
   Alias1 a1 = has_enums.kind;
   Alias2 a2 = has_enums.flags;
   Alias3 a3 = has_enums;
