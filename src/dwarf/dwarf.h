@@ -1746,6 +1746,7 @@ internal U64 dw_reg_size_from_code(Arch arch, DW_Reg reg_code);
 internal U64 dw_reg_pos_from_code(Arch arch, DW_Reg reg_code);
 internal U64 dw_reg_count_from_arch(Arch arch);
 internal U64 dw_reg_max_size_from_arch(Arch arch);
+internal U64 dw_sp_from_arch(Arch arch);
 
 //- Attrib Class Encodings
 
