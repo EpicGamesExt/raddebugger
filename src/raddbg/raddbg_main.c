@@ -14,19 +14,18 @@
 // [ ] list of all tabs in palette
 // [ ] u64 + (ptr - ptr) seems to produce unexpected results - double check with C rules?
 //
+//- flow notes
+// [ ] "skip breakpoint, run to source", when stopped at a non-source location
+// [ ] adjust menu bar rendering when not focused
+// [ ] treat int 0x29 similarly to int3
+// [ ] auto_step, launching terminal, terminal steals focus from debugger...
+//
 //- memory view
-// [ ] have smaller visible range than entire memory
-// space, within some bounds (e.g. 64KB)
-// [ ] dynamically expand memory space, based on
-// scrolling
+// [ ] have smaller visible range than entire memory space, within some bounds (e.g. 64KB)
+// [ ] dynamically expand memory space, based on scrolling
 // [ ] fix clicking through occluded panels etc.
 // [ ] disambiguate . character in ASCII columns
 // [ ] fix type intepretations of cursor in bottom pane
-//
-//- bug fixes
-// [x] disassembly sometimes has a problem where source line annotations are
-//     periodically removed/inserted... maybe updating on fs change when we
-//     shouldn't, non-deterministic line annotation path?
 //
 //- watch improvements
 // [ ] *ALL* expressions in watch windows need to be editable.
@@ -113,7 +112,6 @@
 // [ ] multidimensional `array`
 // [ ] 2-vector, 3-vector, quaternion
 // [ ] audio waveform views
-// [x] linked list view
 //
 //- eval improvements
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
@@ -149,13 +147,6 @@
 //
 //- late-conversion performance improvements
 // [ ] live++ investigations - ctrl+alt+f11 in UE?
-// [x] investigate wide-conversion performance
-//  [x] oversubscribing cores?
-//  [x] conversion crashes?
-//
-//- memory usage improvements
-// [x] "root" concept in hash store, which buckets keys & allows usage code to
-//     jettison a collection of keys in retained mode fashion
 //
 //- short-to-medium term future features
 // [ ] search-in-all-files
@@ -182,20 +173,6 @@
 //     code slice params)
 // [ ] font cache eviction (both for font tags, closing fp handles, and
 //     rasterizations)
-
-////////////////////////////////
-//~ rjf: Recently Completed Task Log
-//
-// [x] if a breakpoint matches the entry point's starting address, its hit count
-//     is not correctly incremented.
-// [x] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
-// [x] auto-annotations for non-locals
-// [x] []string being sized by [0], due to `.` applying to first ^string
-// [x] process memory cache sometimes is not correctly updating - best repro
-//     case so far is (for some reason?) only hover evaluation - only spotted
-//     on laptop in debug builds. g0 ctrl_bindings.bindings initialization.
-// [x] evaluate `foo.bar` symbol names without escape hatch?
-//  [x] fastpath lookup to determine debug info relevance?
 
 ////////////////////////////////
 //~ rjf: Build Options
