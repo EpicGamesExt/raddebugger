@@ -258,6 +258,16 @@ RD_FontSlot;
 ////////////////////////////////
 //~ rjf: Per-Window State
 
+typedef struct RD_DropCompletionTask RD_DropCompletionTask;
+struct RD_DropCompletionTask
+{
+  RD_DropCompletionTask *next;
+  B32 exe;
+  B32 dbg;
+  B32 cfg;
+  String8List paths;
+};
+
 typedef struct RD_WindowState RD_WindowState;
 struct RD_WindowState
 {
@@ -298,7 +308,8 @@ struct RD_WindowState
   
   // rjf: drop-completion state
   Arena *drop_completion_arena;
-  String8List drop_completion_paths;
+  CFG_ID drop_completion_panel;
+  RD_DropCompletionTask *top_drop_completion_task;
   
   // rjf: query state
   B32 query_is_active;

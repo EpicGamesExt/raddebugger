@@ -5747,75 +5747,73 @@ rd_window_frame(void)
     ////////////////////////////
     //- rjf: @window_ui_part drop-completion context menu
     //
-    if(ws->drop_completion_paths.node_count != 0)
+    if(ws->top_drop_completion_task != 0)
     {
+      RD_DropCompletionTask *task = ws->top_drop_completion_task;
+      B32 done = 0;
       UI_CtxMenu(rd_state->drop_completion_key) UI_PrefWidth(ui_em(40.f, 1.f)) UI_TagF("implicit")
       {
-        UI_TagF("weak")
-          for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+        // rjf: file names
+        UI_TagF("weak") UI_Row UI_Padding(ui_em(1.25f, 1.f))
         {
-          UI_Row UI_Padding(ui_em(1.f, 1.f))
+          String8List strings = {0};
+          U64 idx = 0;
+          for(String8Node *n = task->paths.first; n != 0 && idx < 20; n = n->next, idx += 1)
           {
-            UI_PrefWidth(ui_em(2.f, 1.f)) RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[RD_IconKind_FileOutline]);
-            UI_PrefWidth(ui_text_dim(10, 1)) ui_label(n->string);
+            str8_list_push(scratch.arena, &strings, str8_skip_last_slash(n->string));
+            if(idx+1 == 20)
+            {
+              str8_list_push(scratch.arena, &strings, str8_lit("..."));
+            }
           }
+          StringJoin join = {.sep = str8_lit(", ")};
+          String8 string = str8_list_join(scratch.arena, &strings, &join);
+          UI_PrefWidth(ui_pct(1, 0)) ui_label(string);
         }
-        ui_divider(ui_em(1.f, 1.f));
-        if(ui_clicked(rd_icon_buttonf(RD_IconKind_Target, 0, "Add File%s As Target%s",
-                                      (ws->drop_completion_paths.node_count > 1) ? "s" : "",
-                                      (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
+        
+        // rjf: option to add EXEs as targets
+        if(task->exe)
         {
-          for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+          if(ui_clicked(rd_icon_buttonf(RD_IconKind_Target, 0, "Add as target%s", (task->paths.node_count > 1) ? "s" : "")))
           {
-            rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
-          }
-          ui_ctx_menu_close();
-        }
-        if(ws->drop_completion_paths.node_count == 1)
-        {
-          if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Add File%s As Target%s And Run",
-                                        (ws->drop_completion_paths.node_count > 1) ? "s" : "",
-                                        (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
-          {
-            for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+            for(String8Node *n = task->paths.first; n != 0; n = n->next)
             {
               rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
             }
-            CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
-            if(processes.count != 0)
-            {
-              rd_cmd(RD_CmdKind_KillAll);
-            }
-            rd_cmd(RD_CmdKind_Run);
-            ui_ctx_menu_close();
+            done = 1;
           }
         }
-        if(ws->drop_completion_paths.node_count == 1)
+        
+        // rjf: option to load files as debug info
+        if(task->dbg)
         {
-          if(ui_clicked(rd_icon_buttonf(RD_IconKind_StepInto, 0, "Add File%s As Target%s And Step Into",
-                                        (ws->drop_completion_paths.node_count > 1) ? "s" : "",
-                                        (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
+          if(ui_clicked(rd_icon_buttonf(RD_IconKind_Module, 0, "Load as debug info")))
           {
-            for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+            for(String8Node *n = task->paths.first; n != 0; n = n->next)
             {
-              rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
+              rd_cmd(RD_CmdKind_LoadDebugInfo, .file_path = n->string);
             }
-            CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
-            if(processes.count != 0)
-            {
-              rd_cmd(RD_CmdKind_KillAll);
-            }
-            rd_cmd(RD_CmdKind_StepInto);
-            ui_ctx_menu_close();
+            done = 1;
           }
         }
-        if(ui_clicked(rd_icon_buttonf(RD_IconKind_Target, 0, "View File%s",
-                                      (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
+        
+        // rjf: option to just open & view the file contents
+        if(ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "View file%s contents", (task->paths.node_count > 1) ? "s'" : "")))
         {
-          for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+          for(String8Node *n = task->paths.first; n != 0; n = n->next)
           {
             rd_cmd(RD_CmdKind_Open, .file_path = n->string);
           }
+          done = 1;
+        }
+      }
+      
+      // rjf: pop task, close context menu if needed, when done
+      if(done)
+      {
+        SLLStackPop(ws->top_drop_completion_task);
+        if(ws->top_drop_completion_task == 0)
+        {
           ui_ctx_menu_close();
         }
       }
@@ -8349,23 +8347,45 @@ rd_window_frame(void)
               {
                 B32 need_drop_completion = 0;
                 arena_clear(ws->drop_completion_arena);
-                MemoryZeroStruct(&ws->drop_completion_paths);
+                ws->top_drop_completion_task = 0;
+                ws->drop_completion_panel = panel->cfg->id;
+                String8List exe_paths = {0};
+                String8List dbg_paths = {0};
                 for(String8Node *n = evt->paths.first; n != 0; n = n->next)
                 {
                   Temp scratch = scratch_begin(0, 0);
                   String8 path = n->string;
-                  if(str8_match(str8_skip_last_dot(path), str8_lit("exe"), StringMatchFlag_CaseInsensitive))
+                  String8 ext = str8_skip_last_dot(path);
+                  if(str8_match(ext, str8_lit("exe"), StringMatchFlag_CaseInsensitive))
                   {
-                    str8_list_push(ws->drop_completion_arena, &ws->drop_completion_paths, push_str8_copy(ws->drop_completion_arena, path));
-                    need_drop_completion = 1;
+                    str8_list_push(ws->drop_completion_arena, &exe_paths, str8_copy(ws->drop_completion_arena, path));
+                  }
+                  else if(str8_match(ext, str8_lit("pdb"), StringMatchFlag_CaseInsensitive) ||
+                          str8_match(ext, str8_lit("rdi"), StringMatchFlag_CaseInsensitive))
+                  {
+                    str8_list_push(ws->drop_completion_arena, &dbg_paths, str8_copy(ws->drop_completion_arena, path));
                   }
                   else
                   {
-                    rd_cmd(RD_CmdKind_Open, .file_path = path);
+                    rd_cmd(RD_CmdKind_Open, .file_path = path, .panel = panel->cfg->id);
                   }
                   scratch_end(scratch);
                 }
-                if(need_drop_completion)
+                if(dbg_paths.node_count != 0)
+                {
+                  RD_DropCompletionTask *t = push_array(ws->drop_completion_arena, RD_DropCompletionTask, 1);
+                  SLLStackPush(ws->top_drop_completion_task, t);
+                  t->dbg = 1;
+                  t->paths = dbg_paths;
+                }
+                if(exe_paths.node_count != 0)
+                {
+                  RD_DropCompletionTask *t = push_array(ws->drop_completion_arena, RD_DropCompletionTask, 1);
+                  SLLStackPush(ws->top_drop_completion_task, t);
+                  t->exe = 1;
+                  t->paths = exe_paths;
+                }
+                if(ws->top_drop_completion_task != 0)
                 {
                   ui_ctx_menu_open(rd_state->drop_completion_key, ui_key_zero(), evt->pos);
                 }
