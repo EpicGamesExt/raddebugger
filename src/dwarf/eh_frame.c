@@ -331,8 +331,8 @@ eh_find_nearest_fde(EH_FrameHdr header, EH_PtrCtx *ptr_ctx, U64 pc)
         goto exit;
       }
 
-      U64 last_off = header.table.size - header.entry_byte_size; 
-      U64 last = 0;
+      U64 last_off  = header.table.size - header.entry_byte_size;
+      U64 last      = 0;
       U64 last_size = eh_parse_ptr(header.table, last_off, ptr_ctx->pc_vaddr + last_off, ptr_ctx, header.table_enc, &last);
       AssertAlways(last_size);
       if (last <= pc) {
@@ -340,27 +340,25 @@ eh_find_nearest_fde(EH_FrameHdr header, EH_PtrCtx *ptr_ctx, U64 pc)
         goto exit;
       }
 
-      if (first <= pc && pc < last) {
-        U64 l = 0;
-        U64 r = header.fde_count - 1;
-        while (l <= r) {
-          U64 m = l + (r - l) / 2;
-          U64 m_pc_off = m * header.entry_byte_size;
-          U64 m_pc     = 0;
-          U64 m_pc_size = eh_parse_ptr(header.table, m_pc_off, ptr_ctx->pc_vaddr + m_pc_off, ptr_ctx, header.table_enc, &m_pc);
-          Assert(m_pc_size);
-
-          if (m_pc == pc) {
-            fde_idx = m;
-            goto exit;
-          } else if (m_pc < pc) {
-            l = m + 1;
-          } else {
-            r = m - 1;
-          }
+      U64 l = 0;
+      U64 r = header.fde_count - 1;
+      while (l <= r) {
+        U64 m         = l + (r - l) / 2;
+        U64 m_pc_off  = m * header.entry_byte_size;
+        U64 m_pc      = 0;
+        U64 m_pc_size = eh_parse_ptr(header.table, m_pc_off, ptr_ctx->pc_vaddr + m_pc_off, ptr_ctx, header.table_enc, &m_pc);
+        Assert(m_pc_size);
+        if (m_pc > pc) {
+          r = m - 1;
+        } else if (m_pc < pc) {
+          l = m + 1;
+        } else {
+          fde_idx = m;
+          goto exit;
         }
-        fde_idx = l;
       }
+
+      fde_idx = l > 0 ? l-1 : 0;
     }
   }
 
