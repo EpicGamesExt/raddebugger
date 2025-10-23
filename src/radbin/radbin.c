@@ -1108,6 +1108,23 @@ rb_thread_entry_point(void *p)
           {
             elf = elf_bin_from_data(arena, f->data);
             arch = arch_from_elf_machine(elf.hdr.e_machine);
+
+            for EachIndex(sect_idx, elf.hdr.e_shnum)
+            {
+              ELF_Shdr64 *shdr = &elf.shdrs.v[sect_idx];
+              String8 name = elf_name_from_shdr64(f->data, &elf, shdr);
+              if (str8_match(name, str8_lit(".eh_frame_hdr"), 0))
+              {
+                eh_frame_hdr = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
+                eh_frame_hdr_vaddr = shdr->sh_addr;
+
+              }
+              else if(str8_match(name, str8_lit(".eh_frame"), 0))
+              {
+                eh_frame = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
+                eh_frame_vaddr = shdr->sh_addr;
+              }
+            }
           }
           if(f->format_flags & RB_FileFormatFlag_HasDWARF)
           {
@@ -1123,22 +1140,6 @@ rb_thread_entry_point(void *p)
                     f->format == RB_FileFormat_ELF64)
             {
               dw = dw_input_from_elf_bin(arena, f->data, &elf);
-              for EachIndex(sect_idx, elf.hdr.e_shnum)
-              {
-                ELF_Shdr64 *shdr = &elf.shdrs.v[sect_idx];
-                String8 name = elf_name_from_shdr64(f->data, &elf, shdr);
-                if (str8_match(name, str8_lit(".eh_frame_hdr"), 0))
-                {
-                  eh_frame_hdr = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
-                  eh_frame_hdr_vaddr = shdr->sh_addr;
-
-                }
-                else if(str8_match(name, str8_lit(".eh_frame"), 0))
-                {
-                  eh_frame = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
-                  eh_frame_vaddr = shdr->sh_addr;
-                }
-              }
             }
           }
         }
