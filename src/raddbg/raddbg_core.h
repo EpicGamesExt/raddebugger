@@ -343,6 +343,24 @@ struct RD_WindowStateSlot
 ////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
+typedef struct RD_LoadedDbgInfoNode RD_LoadedDbgInfoNode;
+struct RD_LoadedDbgInfoNode
+{
+  RD_LoadedDbgInfoNode *hash_next;
+  RD_LoadedDbgInfoNode *hash_prev;
+  RD_LoadedDbgInfoNode *lru_next;
+  RD_LoadedDbgInfoNode *lru_prev;
+  DI_Key key;
+  U64 last_tick_idx_touched;
+};
+
+typedef struct RD_LoadedDbgInfoSlot RD_LoadedDbgInfoSlot;
+struct RD_LoadedDbgInfoSlot
+{
+  RD_LoadedDbgInfoNode *first;
+  RD_LoadedDbgInfoNode *last;
+};
+
 typedef struct RD_AmbiguousPathNode RD_AmbiguousPathNode;
 struct RD_AmbiguousPathNode
 {
@@ -479,6 +497,13 @@ struct RD_State
   // rjf: cfg state
   CFG_State *cfg;
   CFG_SchemaTable *cfg_schema_table;
+  
+  // rjf: loaded debug info cache
+  U64 loaded_dbg_info_slots_count;
+  RD_LoadedDbgInfoSlot *loaded_dbg_info_slots;
+  RD_LoadedDbgInfoNode *loaded_dbg_info_lru_first;
+  RD_LoadedDbgInfoNode *loaded_dbg_info_lru_last;
+  RD_LoadedDbgInfoNode *free_loaded_dbg_info_node;
   
   // rjf: window state cache
   U64 window_state_slots_count;

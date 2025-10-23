@@ -9992,6 +9992,12 @@ rd_init(CmdLine *cmdln)
     cfg_node_new(rd_state->cfg, cfg_node_root(), str8_lit("transient"));
   }
   
+  // rjf: set up loaded debug info cache
+  {
+    rd_state->loaded_dbg_info_slots_count = 4096;
+    rd_state->loaded_dbg_info_slots = push_array(arena, RD_LoadedDbgInfoSlot, rd_state->loaded_dbg_info_slots_count);
+  }
+  
   // rjf: set up window cache
   {
     rd_state->window_state_slots_count = 64;
@@ -10355,69 +10361,72 @@ rd_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: iterate all loaded debug infos, remove hot markers
+  //- rjf: apply debug info config trees -> loaded debug info cache
   //
-  if(rd_state->frame_depth == 1)
   {
-    CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), str8_lit("transient"));
-    CFG_Node *loaded_debug_infos = cfg_node_child_from_string_or_alloc(rd_state->cfg, transient, str8_lit("loaded_debug_infos"));
-    for(CFG_Node *child = loaded_debug_infos->first; child != &cfg_nil_node; child = child->next)
-    {
-      cfg_node_release(rd_state->cfg, cfg_node_child_from_string(child, str8_lit("hot")));
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: iterate all loaded debug infos, touch their dbgi load markers
-  //
-  if(rd_state->frame_depth == 1)
-  {
-    CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), str8_lit("transient"));
-    CFG_Node *loaded_debug_infos = cfg_node_child_from_string_or_alloc(rd_state->cfg, transient, str8_lit("loaded_debug_infos"));
+    U64 current_update_tick_idx = update_tick_idx();
+    
+    //- rjf: for each debug info config, reflect in cache - open if needed
     CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
     for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
     {
+      // rjf: unpack debug info config
       CFG_Node *di = n->v;
       String8 path = rd_path_from_cfg(di);
       CFG_Node *di_timestamp = cfg_node_child_from_string(di, str8_lit("timestamp"));
       U64 timestamp = 0;
       try_u64_from_str8_c_rules(di_timestamp->first->string, &timestamp);
-      String8 loaded_di_key = push_str8f(scratch.arena, "$%I64x `%S` `%I64u`", di->id, path, timestamp);
-      CFG_Node *loaded_di = cfg_node_child_from_string(loaded_debug_infos, loaded_di_key);
-      if(loaded_di == &cfg_nil_node)
+      DI_Key key = di_key_from_path_timestamp(path, timestamp);
+      
+      // rjf: touch in cache
+      U64 hash = u64_hash_from_str8(str8_struct(&key));
+      U64 slot_idx = hash%rd_state->loaded_dbg_info_slots_count;
+      RD_LoadedDbgInfoSlot *slot = &rd_state->loaded_dbg_info_slots[slot_idx];
+      RD_LoadedDbgInfoNode *node = 0;
+      for(RD_LoadedDbgInfoNode *n = slot->first; n != 0; n = n->hash_next)
       {
-        loaded_di = cfg_node_new(rd_state->cfg, loaded_debug_infos, loaded_di_key);
-        CFG_Node *path_node = cfg_node_new(rd_state->cfg, loaded_di, str8_lit("path"));
-        cfg_node_new(rd_state->cfg, path_node, path);
-        CFG_Node *timestamp_node = cfg_node_new(rd_state->cfg, loaded_di, str8_lit("timestamp"));
-        cfg_node_new(rd_state->cfg, timestamp_node, di_timestamp->first->string);
-        DI_Key dbgi_key = di_key_from_path_timestamp(path, timestamp);
-        di_open(dbgi_key);
+        if(di_key_match(key, n->key))
+        {
+          node = n;
+          break;
+        }
       }
-      cfg_node_child_from_string_or_alloc(rd_state->cfg, loaded_di, str8_lit("hot"));
+      if(node == 0)
+      {
+        node = rd_state->free_loaded_dbg_info_node;
+        if(node)
+        {
+          SLLStackPop_N(rd_state->free_loaded_dbg_info_node, hash_next);
+        }
+        else
+        {
+          node = push_array(rd_state->arena, RD_LoadedDbgInfoNode, 1);
+        }
+        DLLPushBack_NP(slot->first, slot->last, node, hash_next, hash_prev);
+        node->key = key;
+        di_open(key);
+      }
+      node->last_tick_idx_touched = current_update_tick_idx;
+      DLLRemove_NP(rd_state->loaded_dbg_info_lru_first, rd_state->loaded_dbg_info_lru_last, node, lru_next, lru_prev);
+      DLLPushBack_NP(rd_state->loaded_dbg_info_lru_first, rd_state->loaded_dbg_info_lru_last, node, lru_next, lru_prev);
     }
-  }
-  
-  //////////////////////////////
-  //- rjf: iterate all loaded debug infos, close those without hot markers
-  //
-  if(rd_state->frame_depth == 1)
-  {
-    CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), str8_lit("transient"));
-    CFG_Node *loaded_debug_infos = cfg_node_child_from_string_or_alloc(rd_state->cfg, transient, str8_lit("loaded_debug_infos"));
-    for(CFG_Node *child = loaded_debug_infos->first, *next = &cfg_nil_node; child != &cfg_nil_node; child = next)
+    
+    //- rjf: iterate least-recently-used loaded debug infos - if any have not been updated this tick,
+    // then evict
+    for(RD_LoadedDbgInfoNode *n = rd_state->loaded_dbg_info_lru_first, *next = 0; n != 0; n = next)
     {
-      next = child->next;
-      if(cfg_node_child_from_string(child, str8_lit("hot")) == &cfg_nil_node)
+      next = n->lru_next;
+      if(n->last_tick_idx_touched >= current_update_tick_idx)
       {
-        CFG_Node *path_node = cfg_node_child_from_string(child, str8_lit("path"));
-        CFG_Node *timestamp_node = cfg_node_child_from_string(child, str8_lit("timestamp"));
-        U64 timestamp = 0;
-        try_u64_from_str8_c_rules(timestamp_node->first->string, &timestamp);
-        DI_Key dbgi_key = di_key_from_path_timestamp(path_node->first->string, timestamp);
-        di_close(dbgi_key, 0);
-        cfg_node_release(rd_state->cfg, child);
+        break;
       }
+      U64 hash = u64_hash_from_str8(str8_struct(&n->key));
+      U64 slot_idx = hash%rd_state->loaded_dbg_info_slots_count;
+      RD_LoadedDbgInfoSlot *slot = &rd_state->loaded_dbg_info_slots[slot_idx];
+      DLLRemove_NP(rd_state->loaded_dbg_info_lru_first, rd_state->loaded_dbg_info_lru_last, n, lru_next, lru_prev);
+      DLLRemove_NP(slot->first, slot->last, n, hash_next, hash_prev);
+      SLLStackPush_N(rd_state->free_loaded_dbg_info_node, n, hash_next);
+      di_close(n->key, 0);
     }
   }
   
