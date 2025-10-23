@@ -133,13 +133,13 @@ eh_parse_aug_data(String8 aug_string, String8 aug_data, U64 pc, EH_PtrCtx *ptr_c
 
   U64 cursor = 0;
 
+  U64         aug_data_size    = 0;
   EH_AugFlags aug_flags        = 0;
-  EH_PtrEnc lsda_encoding    = EH_PtrEnc_Omit;
-  EH_PtrEnc addr_encoding    = EH_PtrEnc_UData8;
-  EH_PtrEnc handler_encoding = EH_PtrEnc_Omit;
+  EH_PtrEnc   lsda_encoding    = EH_PtrEnc_Omit;
+  EH_PtrEnc   addr_encoding    = EH_PtrEnc_UData8;
+  EH_PtrEnc   handler_encoding = EH_PtrEnc_Omit;
   U64         handler_ip       = 0;
   if (str8_match(str8_prefix(aug_string, 1), str8_lit("z"), 0)) {
-    U64 aug_data_size = 0;
     cursor = str8_deserial_read_uleb128(aug_data, cursor, &aug_data_size);
 
     for (U8 *ptr = aug_string.str+1; ptr < (aug_string.str+aug_string.size); ptr += 1) {
@@ -157,6 +157,9 @@ eh_parse_aug_data(String8 aug_string, String8 aug_data, U64 pc, EH_PtrCtx *ptr_c
         cursor += str8_deserial_read_struct(aug_data, cursor, &addr_encoding);
         aug_flags |= EH_AugFlag_HasAddrEnc;
       } break;
+      case 'S': {
+        aug_flags |= EH_AugFlag_SignalFrame;
+      } break;
       default: { Assert(!"failed to parse augmentation string"); goto exit; } break;
       }
     }
@@ -168,6 +171,7 @@ eh_parse_aug_data(String8 aug_string, String8 aug_data, U64 pc, EH_PtrCtx *ptr_c
     aug_out->lsda_encoding    = handler_encoding;
     aug_out->addr_encoding    = addr_encoding;
     aug_out->flags            = aug_flags;
+    aug_out->size             = aug_data_size;
   }
 
 exit:;
@@ -219,6 +223,7 @@ eh_parse_cie(String8 data, DW_Format format, Arch arch, U64 pc, EH_PtrCtx *ptr_c
   cursor += version_size;
 
   String8         aug_string        = {0};
+  String8         aug_data          = {0};
   EH_Augmentation aug               = {0};
   U64             code_align_factor = 0;
   S64             data_align_factor = 0;
@@ -248,11 +253,15 @@ eh_parse_cie(String8 data, DW_Format format, Arch arch, U64 pc, EH_PtrCtx *ptr_c
     cursor += ret_addr_reg_size;
 
     U64 aug_data_size = eh_parse_aug_data(aug_string, str8_skip(data, cursor), pc + cursor, ptr_ctx, &aug);
+    aug_data = str8_substr(data, r1u64(cursor, cursor + aug.size));
     cursor += aug_data_size;
+  } else {
+    Assert(0 && "unexpected version");
   }
 
   cie_out->insts                 = str8_skip(data, cursor);
   cie_out->aug_string            = aug_string;
+  cie_out->aug_data              = aug_data;
   cie_out->code_align_factor     = code_align_factor;
   cie_out->data_align_factor     = data_align_factor;
   cie_out->ret_addr_reg          = ret_addr_reg;
