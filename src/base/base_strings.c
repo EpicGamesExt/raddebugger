@@ -85,25 +85,40 @@ correct_slash_from_char(U8 c)
 internal U64
 cstring8_length(U8 *c)
 {
-  U8 *p = c;
-  for (;*p != 0; p += 1);
-  return (p - c);
+  U64 length = 0;
+  if(c)
+  {
+    U8 *p = c;
+    for (;*p != 0; p += 1);
+    length = (U64)(p - c);
+  }
+  return length;
 }
 
 internal U64
 cstring16_length(U16 *c)
 {
-  U16 *p = c;
-  for (;*p != 0; p += 1);
-  return (p - c);
+  U64 length = 0;
+  if(c)
+  {
+    U16 *p = c;
+    for (;*p != 0; p += 1);
+    length = (U64)(p - c);
+  }
+  return length;
 }
 
 internal U64
 cstring32_length(U32 *c)
 {
-  U32 *p = c;
-  for (;*p != 0; p += 1);
-  return (p - c);
+  U64 length = 0;
+  if(c)
+  {
+    U32 *p = c;
+    for (;*p != 0; p += 1);
+    length = (U64)(p - c);
+  }
+  return length;
 }
 
 ////////////////////////////////

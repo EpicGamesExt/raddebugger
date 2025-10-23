@@ -694,6 +694,7 @@ di_async_tick(void)
         }
         U64 og_size = t->og_size;
         B32 og_is_rdi = t->og_is_rdi;
+        B32 og_is_good = (og_size > 0);
         
         //- rjf: compute key's RDI path
         String8 rdi_path = {0};
@@ -785,7 +786,7 @@ di_async_tick(void)
         }
         
         //- rjf: launch conversion processes
-        if(ready_to_launch_conversion)
+        if(og_is_good && ready_to_launch_conversion)
         {
           B32 should_compress = 0;
           OS_ProcessLaunchParams params = {0};
@@ -848,6 +849,12 @@ di_async_tick(void)
               di_shared->conversion_thread_count -= t->thread_count;
             }
           }
+        }
+        
+        //- rjf: ready to launch, but bad O.G. file -> just immediately mark as done
+        if(!og_is_good && ready_to_launch_conversion)
+        {
+          t->status = DI_LoadTaskStatus_Done;
         }
         
         //- rjf: if the RDI for this task is not stale, then we're already done - mark this
