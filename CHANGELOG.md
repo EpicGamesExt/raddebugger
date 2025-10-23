@@ -25,6 +25,9 @@
   the quotes, and pass them to the target when launched.
 - Fixed the debugger not correctly responding (through font and UI scale) to DPI
   changes.
+- Fixed the debugger incorrectly generating conflicting source line info records
+  in PDB -> RDI conversion, which in some scenarios was preventing source line
+  maps from working (leading to breakpoint resolution failing).
 - Other small fixes, improvements, and tweaks.
 
 # v0.9.23-alpha
