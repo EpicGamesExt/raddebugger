@@ -2672,7 +2672,7 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
       
       //- rjf: read next offset, advance
       B32 read_stale = 0;
-      B32 read_good = ctrl_process_memory_read(process, r1u64(off + member_element_off, off + member_size), &read_stale, &next_off, 0);
+      B32 read_good = ctrl_process_memory_read(process, r1u64(off + member_element_off, off + member_element_off + member_size), &read_stale, &next_off, 0);
       if(read_stale)
       {
         retry = 1;
