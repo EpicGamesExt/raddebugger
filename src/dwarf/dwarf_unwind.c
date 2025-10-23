@@ -65,7 +65,8 @@ dw_cfi_unwind_init(Arena        *arena,
 internal B32
 dw_cfi_next_row(Arena *arena, DW_CFI_Unwind *uw)
 {
-  B32 is_row_valid = 0;
+  B32              is_row_valid = 0;
+  DW_CFA_InstNode *row_inst     = uw->curr_inst;
 
   // skip leading nops
   while (uw->curr_inst) {
@@ -80,7 +81,7 @@ dw_cfi_next_row(Arena *arena, DW_CFI_Unwind *uw)
 
     // validate register operands
     DW_CFA_OperandType *operand_types = dw_operand_types_from_cfa_op(inst->opcode);
-    U64                operand_count = dw_operand_count_from_cfa_opcode(inst->opcode);
+    U64                 operand_count = dw_operand_count_from_cfa_opcode(inst->opcode);
     for EachIndex(operand_idx, operand_count) {
       if (operand_types[operand_idx] == DW_CFA_OperandType_Register) {
         if (inst->operands[operand_idx].u64 >= uw->reg_count) {
@@ -187,14 +188,13 @@ dw_cfi_next_row(Arena *arena, DW_CFI_Unwind *uw)
     default: { NotImplemented; } break; // TODO: report error: unknown CFA opcode
     }
 
-    is_row_valid = 1;
-
     uw->curr_inst = uw->curr_inst->next;
     if (uw->curr_inst) {
       if (dw_is_new_row_cfa_opcode(uw->curr_inst->v.opcode)) { break; }
     }
   }
 
+  is_row_valid = row_inst != 0;
 exit:;
   return is_row_valid;
 }
@@ -220,7 +220,7 @@ dw_cfi_row_from_pc(Arena *arena, Arch arch, DW_CIE *cie, DW_FDE *fde, DW_DecodeP
 
   // handle last row
   if (!is_row_found) {
-    if (prev_pc <= pc && pc < uw->pc && contains_1u64(fde->pc_range, pc)) {
+    if (contains_1u64(fde->pc_range, pc)) {
       row = uw->row;
       is_row_found = 1;
     }
@@ -272,10 +272,7 @@ dw_cfi_apply_register_rules(Arch         arch,
   for EachIndex(reg_idx, reg_count) {
     DW_CFI_Register *reg = &row->regs[reg_idx];
     switch (reg->rule) {
-    case DW_CFI_RegisterRule_Undefined: {
-      // TODO: ???
-      Assert(!"undefined");
-    } break;
+    case DW_CFI_RegisterRule_Undefined: {} break;
     case DW_CFI_RegisterRule_SameValue: {} break;
     case DW_CFI_RegisterRule_Offset: {
       // read register value from memory
