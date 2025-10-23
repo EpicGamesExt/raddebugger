@@ -319,7 +319,10 @@ dw_cfi_apply_register_rules(Arch         arch,
     }
   }
 
-  
+  // update stack pointer
+  U64 sp = dw_sp_from_arch(arch);
+  reg_write_func(sp, &cfa, sizeof(cfa), reg_write_ud);
+
 exit:;
   scratch_end(scratch);
   return unwind_status;
