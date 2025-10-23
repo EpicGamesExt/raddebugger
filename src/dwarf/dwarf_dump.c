@@ -529,6 +529,9 @@ dw_string_from_cfi_row(Arena *arena, Arch arch, U64 address_size, DW_Version ver
     case DW_CFI_RegisterRule_ValOffset: {
       rule_str = str8f(scratch.arena, "Val(CFA%+I64d)", cfi_reg->n);
     } break;
+    case DW_CFI_RegisterRule_Register: {
+      rule_str = str8f(scratch.arena, "Register(%S)", dw_string_from_reg(scratch.arena, arch, cfi_reg->n));
+    } break;
     case DW_CFI_RegisterRule_Expression: {
       rule_str = str8f(scratch.arena, "Expression(%S)", dw_string_from_expression(scratch.arena, cfi_reg->expr, max_U64, address_size, arch, version, ext, format));
     } break;
