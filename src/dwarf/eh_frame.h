@@ -53,9 +53,10 @@ typedef struct EH_PtrCtx
 typedef U8 EH_AugFlags;
 enum
 {
-  EH_AugFlag_HasLSDA    = (1 << 0),
-  EH_AugFlag_HasHandler = (1 << 1),
-  EH_AugFlag_HasAddrEnc = (1 << 2),
+  EH_AugFlag_HasLSDA     = (1 << 0),
+  EH_AugFlag_HasHandler  = (1 << 1),
+  EH_AugFlag_HasAddrEnc  = (1 << 2),
+  EH_AugFlag_SignalFrame = (1 << 3),
 };
 
 typedef struct EH_Augmentation
@@ -65,6 +66,7 @@ typedef struct EH_Augmentation
   EH_PtrEnc   handler_encoding;
   EH_PtrEnc   lsda_encoding;
   EH_PtrEnc   addr_encoding;
+  U64         size;
 } EH_Augmentation;
 
 ////////////////////////////////
