@@ -805,22 +805,6 @@ typedef struct ELF_Dyn64
   U64 val;
 } ELF_Dyn64;
 
-typedef struct ELF_LinkMap32
-{
-  U32 base;
-  U32 name;
-  U32 ld;
-  U32 next;
-} ELF_LinkMap32;
-
-typedef struct ELF_LinkMap64
-{
-  U64 base;
-  U64 name;
-  U64 ld;
-  U64 next;
-} ELF_LinkMap64;
-
 ////////////////////////////////
 // Imports and Exports
 
@@ -982,6 +966,7 @@ internal ELF_Sym64  elf_sym64_from_sym32  (ELF_Sym32 sym32);
 internal ELF_Rel64  elf_rel64_from_rel32  (ELF_Rel32 rel32);
 internal ELF_Rela64 elf_rela64_from_rela32(ELF_Rela32 rela32);
 internal ELF_Chdr64 elf_chdr64_from_chdr32(ELF_Chdr32 chdr32);
+internal ELF_Auxv64 elf_auxv64_from_auxv32(ELF_Auxv32 auxv32);
 
 ////////////////////////////////
 
@@ -990,5 +975,10 @@ internal String8 elf_string_from_class(Arena *arena, ELF_Class v);
 ////////////////////////////////
 
 internal Arch arch_from_elf_machine(ELF_MachineKind machine);
+
+////////////////////////////////
+
+internal U64 elf_phdr_size_from_class(ELF_Class elf_class);
+internal U64 elf_dyn_size_from_class(ELF_Class elf_class);
 
 #endif // ELF_H

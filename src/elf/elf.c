@@ -112,6 +112,15 @@ elf_chdr64_from_chdr32(ELF_Chdr32 chdr32)
   return chdr64;
 }
 
+internal ELF_Auxv64
+elf_auxv64_from_auxv32(ELF_Auxv32 auxv32)
+{
+  ELF_Auxv64 auxv64 = {0};
+  auxv64.a_type = auxv32.a_type;
+  auxv64.a_val  = auxv32.a_val;
+  return auxv64;
+}
+
 ////////////////////////////////
 
 internal String8
@@ -141,3 +150,32 @@ arch_from_elf_machine(ELF_MachineKind e_machine)
   }
   return arch;
 }
+
+////////////////////////////////
+
+internal U64
+elf_phdr_size_from_class(ELF_Class elf_class)
+{
+  U64 result = 0;
+  switch (elf_class) {
+  case ELF_Class_None: break;
+  case ELF_Class_32: { result = sizeof(ELF_Phdr32); } break;
+  case ELF_Class_64: { result = sizeof(ELF_Phdr64); } break;
+  default: { NotImplemented; } break;
+  }
+  return result;
+}
+
+internal U64
+elf_dyn_size_from_class(ELF_Class elf_class)
+{
+  U64 result = 0;
+  switch (elf_class) {
+  case ELF_Class_None: break;
+  case ELF_Class_32: { result = sizeof(ELF_Dyn32); } break;
+  case ELF_Class_64: { result = sizeof(ELF_Dyn64); } break;
+  default: { NotImplemented; } break;
+  }
+  return result;
+}
+
