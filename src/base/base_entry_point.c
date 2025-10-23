@@ -108,6 +108,11 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
     U64 num_async_threads = os_get_system_info()->logical_processor_count;
     U64 num_main_threads_clamped = Min(num_async_threads, num_main_threads);
     num_async_threads -= num_main_threads_clamped;
+    String8 num_async_threads_string = cmd_line_string(&cmdline, str8_lit("async_thread_count"));
+    if(num_async_threads_string.size != 0)
+    {
+      try_u64_from_str8_c_rules(num_async_threads_string, &num_async_threads);
+    }
     num_async_threads = Max(1, num_async_threads);
     Barrier barrier = barrier_alloc(num_async_threads);
     LaneCtx *lane_ctxs = push_array(scratch.arena, LaneCtx, num_async_threads);
@@ -189,7 +194,7 @@ async_thread_entry_point(void *params)
     {
       if(!ins_atomic_u32_eval(&async_loop_again))
       {
-        MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+100000);
+        MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+1000000);
       }
       ins_atomic_u32_eval_assign(&async_loop_again, 0);
       ins_atomic_u32_eval_assign(&async_loop_again_high_priority, 0);
