@@ -217,6 +217,7 @@
 
 //- rjf: [h]
 #include "base/base_inc.h"
+#include "x64/x64.h"
 #include "linker/hash_table.h"
 #include "os/os_inc.h"
 #include "artifact_cache/artifact_cache.h"
@@ -264,6 +265,7 @@
 
 //- rjf: [c]
 #include "base/base_inc.c"
+#include "x64/x64.c"
 #include "linker/hash_table.c"
 #include "os/os_inc.c"
 #include "artifact_cache/artifact_cache.c"
