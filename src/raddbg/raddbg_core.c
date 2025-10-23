@@ -10309,6 +10309,16 @@ rd_frame(void)
 #endif
   
   //////////////////////////////
+  //- rjf: [windows] clear pages from working set shortly after startup, many of which will not be needed
+  //
+#if OS_WINDOWS
+  if(rd_state->frame_index == 1) ProfScope("SetProcessWorkingSetSize")
+  {
+    SetProcessWorkingSetSize(GetCurrentProcess(), max_U64, max_U64);
+  }
+#endif
+  
+  //////////////////////////////
   //- rjf: do per-frame resets
   //
   arena_clear(rd_frame_arena());
@@ -16588,16 +16598,6 @@ rd_frame(void)
       }
     }
   }
-  
-  //////////////////////////////
-  //- rjf: [windows] clear pages from working set shortly after startup, many of which will not be needed
-  //
-#if OS_WINDOWS
-  if(rd_state->frame_index == 10)
-  {
-    SetProcessWorkingSetSize(GetCurrentProcess(), max_U64, max_U64);
-  }
-#endif
   
   rd_state->frame_depth -= 1;
   scratch_end(scratch);

@@ -586,7 +586,7 @@ ac_cancel_thread_entry_point(void *p)
 {
   for(;;)
   {
-    os_sleep_milliseconds(100);
+    os_sleep_milliseconds(500);
     
     //- rjf: scan in-flight nodes for expiration
     for EachIndex(cache_slot_idx, ac_shared->cache_slots_count)
