@@ -597,7 +597,7 @@ struct CTRL_ModuleImageInfoCacheNode
   Arena *arena;
   PE_IntelPdata *pdatas;
   U64 pdatas_count;
-  U64 rebase;
+  U64 cfi_rebase;
   B32 is_unwind_eh;
   String8 dwarf_unwind_data;
   EH_FrameHdr eh_frame_hdr;
