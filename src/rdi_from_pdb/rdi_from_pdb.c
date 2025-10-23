@@ -1002,30 +1002,30 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                       checksum_value.size = Min(checksum->len, checksum_value.size);
                     }
                     
-                    // rjf: file name -> normalized file path
-                    String8 file_path            = seq_file_name;
-                    String8 file_path_normalized = lower_from_str8(scratch2.arena, str8_skip_chop_whitespace(file_path));
+                    // rjf: file name -> sanitized file path
+                    String8 file_path = seq_file_name;
+                    String8 file_path_sanitized = str8_copy(scratch2.arena, str8_skip_chop_whitespace(file_path));
                     {
-                      PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
-                      String8List file_path_normalized_parts = str8_split_path(scratch2.arena, file_path_normalized);
-                      if(file_path_normalized_style == PathStyle_Relative)
+                      PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
+                      String8List file_path_sanitized_parts = str8_split_path(scratch2.arena, file_path_sanitized);
+                      if(file_path_sanitized_style == PathStyle_Relative)
                       {
                         String8List obj_folder_path_parts = str8_split_path(scratch2.arena, obj_folder_path);
-                        str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
-                        file_path_normalized_parts = obj_folder_path_parts;
-                        file_path_normalized_style = path_style_from_str8(obj_folder_path);
+                        str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
+                        file_path_sanitized_parts = obj_folder_path_parts;
+                        file_path_sanitized_style = path_style_from_str8(obj_folder_path);
                       }
-                      str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
-                      file_path_normalized = str8_path_list_join_by_style(scratch2.arena, &file_path_normalized_parts, file_path_normalized_style);
+                      str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
+                      file_path_sanitized = str8_path_list_join_by_style(scratch2.arena, &file_path_sanitized_parts, file_path_sanitized_style);
                     }
                     
-                    // rjf: normalized file path -> source file node
-                    U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-                    U64 hit_path_slot = file_path_normalized_hash%hit_path_slots_count;
+                    // rjf: sanitized file path -> source file node
+                    U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
+                    U64 hit_path_slot = file_path_sanitized_hash%hit_path_slots_count;
                     String8Node *hit_path_node = 0;
                     for(String8Node *n = hit_path_slots[hit_path_slot]; n != 0; n = n->next)
                     {
-                      if(str8_match(n->string, file_path_normalized, 0))
+                      if(str8_match(n->string, file_path_sanitized, 0))
                       {
                         hit_path_node = n;
                         break;
@@ -1035,11 +1035,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     {
                       hit_path_node = push_array(scratch2.arena, String8Node, 1);
                       SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
-                      hit_path_node->string = file_path_normalized;
-                      P2R_SrcFileStubNode *stub_n = push_array(scratch.arena, P2R_SrcFileStubNode, 1);
+                      hit_path_node->string = file_path_sanitized;
+                      P2R_SrcFileStubNode *stub_n = push_array(scratch2.arena, P2R_SrcFileStubNode, 1);
                       SLLQueuePush(first_src_file_stub, last_src_file_stub, stub_n);
                       src_file_stub_count += 1;
-                      stub_n->v.file_path = str8_copy(scratch.arena, file_path_normalized);
+                      stub_n->v.file_path = str8_copy(scratch.arena, file_path_sanitized);
                       stub_n->v.checksum_kind = checksum_kind;
                       stub_n->v.checksum = str8_copy(scratch.arena, checksum_value);
                     }

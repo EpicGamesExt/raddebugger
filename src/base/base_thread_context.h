@@ -120,7 +120,7 @@ internal void access_touch(Access *access, AccessPt *pt, CondVar cv);
 
 //- rjf: access points
 internal B32 access_pt_is_expired_(AccessPt *pt, AccessPtExpireParams *params);
-#define access_pt_is_expired(pt, ...) access_pt_is_expired_((pt), &(AccessPtExpireParams){.time = 2000000, .update_idxs = 10, __VA_ARGS__})
+#define access_pt_is_expired(pt, ...) access_pt_is_expired_((pt), &(AccessPtExpireParams){.time = 2000000, .update_idxs = 2, __VA_ARGS__})
 
 //- rjf: progress counters
 #define set_progress_ptr(ptr) (tctx_selected()->progress_counter_ptr = (ptr))

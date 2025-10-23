@@ -1,3 +1,32 @@
+# v0.9.24-alpha
+
+## Debugger Changes
+
+- Added the ability for the debugger to load, use, and evaluate using debug
+  info, even when not actively debugging. The debugger will now keep a process'
+  debug info loaded, even after the process ends. It stores the set of loaded
+  debug info files in the project configuration file, meaning it will also
+  automatically load the same debug info across many runs. Debug info can also
+  be loaded manually (without ever launching a process) with the
+  `Load Debug Info` command. There is also a new tab, `Debug Info`, which allows
+  viewing and managing the set of loaded debug info files.
+- Improved the debugger's behavior when used as a drag & drop target, to allow
+  for debug info loading as an option (when relevant), and to better handle the
+  case where many files (potentially of different types) are dropped together.
+- Improved debug info searching performance and reponsiveness in large projects.
+- Fixed some crashes and incorrect results with the new `list` view.
+- Fixed some cases where RDIs did not contain some basic types from their
+  originating PDBs.
+- Allowed `.` and `->` operators to be used with array types.
+- Fixed the debugger's treatment of quoted command line arguments when building
+  targets. In previous versions, calling `raddbg main.exe "foo bar baz"` would
+  create a target `main.exe` with arguments `foo bar baz` (dropping the quotes).
+  This is now fixed, such that the target's arguments string will also contain
+  the quotes, and pass them to the target when launched.
+- Fixed the debugger not correctly responding (through font and UI scale) to DPI
+  changes.
+- Other small fixes, improvements, and tweaks.
+
 # v0.9.23-alpha
 
 ## Debugger Changes

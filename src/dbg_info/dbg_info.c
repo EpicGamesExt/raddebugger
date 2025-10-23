@@ -1504,7 +1504,7 @@ di_search_item_array_from_target_query(Access *access, RDI_SectionKind target, S
     String8 key = str8_list_join(scratch.arena, &key_parts, 0);
     
     // rjf: get artifact
-    AC_Artifact artifact = ac_artifact_from_key(access, key, di_search_artifact_create, di_search_artifact_destroy, endt_us, .gen = di_load_gen(), .flags = AC_Flag_Wide, .stale_out = stale_out);
+    AC_Artifact artifact = ac_artifact_from_key(access, key, di_search_artifact_create, di_search_artifact_destroy, endt_us, .gen = di_load_gen(), .flags = AC_Flag_Wide, .evict_threshold_us = 100000, .stale_out = stale_out);
     
     // rjf: unpack artifact
     result.v = (DI_SearchItem *)artifact.u64[2];
