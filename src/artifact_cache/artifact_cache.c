@@ -19,6 +19,8 @@ ac_init(void)
     ac_shared->req_batches[idx].arena = arena_alloc();
   }
   ac_shared->cancel_thread = thread_launch(ac_cancel_thread_entry_point, 0);
+  ac_shared->cancel_thread_mutex = mutex_alloc();
+  mutex_take(ac_shared->cancel_thread_mutex);
 }
 
 ////////////////////////////////
@@ -210,6 +212,14 @@ internal void
 ac_async_tick(void)
 {
   Temp scratch = scratch_begin(0, 0);
+  
+  //////////////////////////////
+  //- rjf: enable cancellation scanning
+  //
+  if(lane_idx() == 0)
+  {
+    mutex_drop(ac_shared->cancel_thread_mutex);
+  }
   
   //////////////////////////////
   //- rjf: do eviction pass across all caches
@@ -575,6 +585,13 @@ ac_async_tick(void)
   }
   lane_sync();
   
+  //////////////////////////////
+  //- rjf: disable cancellation scanning
+  //
+  if(lane_idx() == 0)
+  {
+    mutex_take(ac_shared->cancel_thread_mutex);
+  }
   scratch_end(scratch);
 }
 
@@ -586,46 +603,47 @@ ac_cancel_thread_entry_point(void *p)
 {
   for(;;)
   {
-    os_sleep_milliseconds(500);
-    
-    //- rjf: scan in-flight nodes for expiration
-    for EachIndex(cache_slot_idx, ac_shared->cache_slots_count)
+    os_sleep_milliseconds(50);
+    MutexScope(ac_shared->cancel_thread_mutex)
     {
-      Stripe *cache_stripe = stripe_from_slot_idx(&ac_shared->cache_stripes, cache_slot_idx);
-      RWMutexScope(cache_stripe->rw_mutex, 0)
+      for EachIndex(cache_slot_idx, ac_shared->cache_slots_count)
       {
-        for EachNode(cache, AC_Cache, ac_shared->cache_slots[cache_slot_idx])
+        Stripe *cache_stripe = stripe_from_slot_idx(&ac_shared->cache_stripes, cache_slot_idx);
+        RWMutexScope(cache_stripe->rw_mutex, 0)
         {
-          Rng1U64 slot_range = lane_range(cache->slots_count);
-          for EachInRange(slot_idx, slot_range)
+          for EachNode(cache, AC_Cache, ac_shared->cache_slots[cache_slot_idx])
           {
-            AC_Slot *slot = &cache->slots[slot_idx];
-            Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
-            for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
+            Rng1U64 slot_range = lane_range(cache->slots_count);
+            for EachInRange(slot_idx, slot_range)
             {
-              B32 slot_has_work = 0;
-              RWMutexScope(stripe->rw_mutex, write_mode)
+              AC_Slot *slot = &cache->slots[slot_idx];
+              Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
+              for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
               {
-                for(AC_Node *n = slot->first, *next = 0; n != 0; n = next)
+                B32 slot_has_work = 0;
+                RWMutexScope(stripe->rw_mutex, write_mode)
                 {
-                  next = n->next;
-                  if(access_pt_is_expired(&n->access_pt, .time = n->evict_threshold_us) && ins_atomic_u64_eval(&n->working_count) > 0)
+                  for(AC_Node *n = slot->first, *next = 0; n != 0; n = next)
                   {
-                    slot_has_work = 1;
-                    if(!write_mode)
+                    next = n->next;
+                    if(access_pt_is_expired(&n->access_pt, .time = n->evict_threshold_us) && ins_atomic_u64_eval(&n->working_count) > 0)
                     {
-                      break;
-                    }
-                    else
-                    {
-                      n->cancelled = 1;
+                      slot_has_work = 1;
+                      if(!write_mode)
+                      {
+                        break;
+                      }
+                      else
+                      {
+                        n->cancelled = 1;
+                      }
                     }
                   }
                 }
-              }
-              if(!slot_has_work)
-              {
-                break;
+                if(!slot_has_work)
+                {
+                  break;
+                }
               }
             }
           }

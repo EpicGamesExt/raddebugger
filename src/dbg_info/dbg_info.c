@@ -1301,11 +1301,11 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
     {
       if(lane_idx() == 0)
       {
-        sort_records = push_array(scratch.arena, SortRecord, sort_records_count);
+        sort_records = push_array_no_zero(scratch.arena, SortRecord, sort_records_count);
       }
       if(lane_idx() == lane_from_task_idx(1))
       {
-        sort_records__swap = push_array(scratch.arena, SortRecord, sort_records_count);
+        sort_records__swap = push_array_no_zero(scratch.arena, SortRecord, sort_records_count);
       }
       lane_sync_u64(&sort_records, 0);
       lane_sync_u64(&sort_records__swap, lane_from_task_idx(1));
@@ -1429,7 +1429,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
       if(lane_idx() == 0)
       {
         items.count = all_items->total_count;
-        items.v = push_array(arena, DI_SearchItem, items.count);
+        items.v = push_array_no_zero(arena, DI_SearchItem, items.count);
       }
       lane_sync_u64(&items.count, 0);
       lane_sync_u64(&items.v, 0);

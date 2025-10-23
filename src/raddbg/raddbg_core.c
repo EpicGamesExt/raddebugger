@@ -10309,16 +10309,6 @@ rd_frame(void)
 #endif
   
   //////////////////////////////
-  //- rjf: [windows] clear pages from working set shortly after startup, many of which will not be needed
-  //
-#if OS_WINDOWS
-  if(rd_state->frame_index == 1) ProfScope("SetProcessWorkingSetSize")
-  {
-    SetProcessWorkingSetSize(GetCurrentProcess(), max_U64, max_U64);
-  }
-#endif
-  
-  //////////////////////////////
   //- rjf: do per-frame resets
   //
   arena_clear(rd_frame_arena());
@@ -16562,6 +16552,19 @@ rd_frame(void)
   U64 end_time_us = os_now_microseconds();
   U64 frame_time_us = end_time_us-begin_time_us;
   rd_state->frame_time_us_history[rd_state->frame_index%ArrayCount(rd_state->frame_time_us_history)] = frame_time_us;
+  
+  //////////////////////////////
+  //- rjf: [windows] clear pages from working set shortly after startup, many of which will not be needed
+  //
+#if OS_WINDOWS
+  if(di_load_count() < 50)
+  {
+    if(rd_state->frame_index == 15) ProfScope("SetProcessWorkingSetSize")
+    {
+      SetProcessWorkingSetSize(GetCurrentProcess(), max_U64, max_U64);
+    }
+  }
+#endif
   
   //////////////////////////////
   //- rjf: bump frame time counters

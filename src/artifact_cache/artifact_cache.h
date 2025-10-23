@@ -129,6 +129,7 @@ struct AC_Shared
   
   // rjf: cancel thread
   Thread cancel_thread;
+  Mutex cancel_thread_mutex;
 };
 
 ////////////////////////////////
