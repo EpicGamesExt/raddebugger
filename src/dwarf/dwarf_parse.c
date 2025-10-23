@@ -3746,7 +3746,8 @@ dw_parse_cfa_inst(String8        data,
     String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
     cursor += expr_size;
 
-    operands[0].block = expr;
+    operands[0].u64   = reg;
+    operands[1].block = expr;
   } break;
   case DW_CFA_ValExpr: {
     U64 val = 0;
