@@ -294,38 +294,40 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       CFG_Node *child = cfg_node_child_from_string(cfg, child_schema->string);
       E_TypeKey child_type_key = zero_struct;
       B32 wrap_child_w_meta_expr = 0;
+      B32 is_query_child = md_node_has_tag(child_schema, str8_lit("query"), 0);
+      E_TypeFlags type_flags = (!!is_query_child * E_TypeFlag_IsNotEditable);
       if(0){}
       
       //- rjf: ctrl entity members
       else if(entity != &ctrl_entity_nil && str8_match(child_schema->string, str8_lit("label"), 0))
       {
-        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), entity->string.size, E_TypeFlag_IsCodeText);
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), entity->string.size, type_flags|E_TypeFlag_IsCodeText);
       }
       else if(entity != &ctrl_entity_nil && str8_match(child_schema->string, str8_lit("exe"), 0))
       {
-        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), entity->string.size, E_TypeFlag_IsPathText);
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), entity->string.size, type_flags|E_TypeFlag_IsPathText);
       }
       else if(entity != &ctrl_entity_nil && str8_match(child_schema->string, str8_lit("dbg"), 0))
       {
         CTRL_Entity *dbg = ctrl_entity_child_from_kind(entity, CTRL_EntityKind_DebugInfoPath);
-        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), dbg->string.size, E_TypeFlag_IsPathText);
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), dbg->string.size, type_flags|E_TypeFlag_IsPathText);
       }
       
       //- rjf: cfg members
       else if(str8_match(child_schema->first->string, str8_lit("code_string"), 0) ||
               str8_match(child_schema->first->string, str8_lit("expr_string"), 0))
       {
-        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsCodeText);
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, type_flags|E_TypeFlag_IsCodeText);
       }
       else if(str8_match(child_schema->first->string, str8_lit("path"), 0) ||
               str8_match(child_schema->first->string, str8_lit("path_pt"), 0))
       {
-        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsPathText);
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, type_flags|E_TypeFlag_IsPathText);
       }
       
       else if(str8_match(child_schema->first->string, str8_lit("string"), 0))
       {
-        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsPlainText);
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, type_flags|E_TypeFlag_IsPlainText);
       }
       
       //- rjf: catchall cases

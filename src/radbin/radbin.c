@@ -851,7 +851,7 @@ rb_thread_entry_point(void *p)
             {
               unique_identifier_string = str8f(arena, "%I64x", bake_params->top_level_info.exe_hash);
             }
-            if(unique_identifier_string.size == 0 && input_files.first != 0 && input_files.first->v->format == RB_FileFormat_PDB)
+            if(unique_identifier_string.size == 0)
             {
               Temp scratch = scratch_begin(&arena, 1);
               String8 msf_data = input_files.first->v->data;

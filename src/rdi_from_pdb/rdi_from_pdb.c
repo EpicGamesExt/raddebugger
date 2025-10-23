@@ -4395,6 +4395,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       top_level_info.voff_max      = exe_voff_max;
       if(!params->deterministic)
       {
+        MemoryCopy(&top_level_info.guid.u8[0], &pdb_info->auth_guid.v[0], Min(sizeof top_level_info.guid.u8, sizeof pdb_info->auth_guid.v));
         top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
       }
     }

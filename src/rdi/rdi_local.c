@@ -587,11 +587,14 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
     {
       RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
       Temp scratch = scratch_begin(&arena, 1);
+      Guid guid = {0};
+      MemoryCopy(&guid, &tli->guid, Min(sizeof guid, sizeof tli->guid));
       dumpf("\n");
       dumpf("  arch:          %S\n",      rdi_string_from_arch(scratch.arena, tli->arch));
       dumpf("  exe_name:      '%S'\n",    str8_from_rdi_string_idx(rdi, tli->exe_name_string_idx));
       dumpf("  voff_max:      %#08llx\n", tli->voff_max);
       dumpf("  producer_name: '%S'\n",    str8_from_rdi_string_idx(rdi, tli->producer_name_string_idx));
+      dumpf("  guid:          %S\n",      string_from_guid(scratch.arena, guid));
       scratch_end(scratch);
     }
   }

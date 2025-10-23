@@ -1196,6 +1196,11 @@ rdim_bake_params_concat_in_place(RDIM_BakeParams *dst, RDIM_BakeParams *src)
     {
       dst->top_level_info.voff_max = src->top_level_info.voff_max;
     }
+    if(dst->top_level_info.guid.u64[0] == 0 && 
+       dst->top_level_info.guid.u64[1] == 0)
+    {
+      dst->top_level_info.guid = src->top_level_info.guid;
+    }
     if(dst->top_level_info.producer_name.size == 0)
     {
       dst->top_level_info.producer_name = src->top_level_info.producer_name;

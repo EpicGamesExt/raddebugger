@@ -62,7 +62,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[357] =
+RD_VocabInfo rd_vocab_info_table[358] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -174,6 +174,7 @@ RD_VocabInfo rd_vocab_info_table[357] =
 {str8_lit_comp("tab_height"), str8_lit_comp(""), str8_lit_comp("Tab Height"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("rgba"), str8_lit_comp(""), str8_lit_comp("RGBA"), str8_lit_comp(""), RD_IconKind_Palette},
 {str8_lit_comp("path"), str8_lit_comp(""), str8_lit_comp("Path"), str8_lit_comp(""), RD_IconKind_FileOutline},
+{str8_lit_comp("guid"), str8_lit_comp(""), str8_lit_comp("GUID"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_step_into"), str8_lit_comp(""), str8_lit_comp("Launch and Step Into"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},
@@ -442,7 +443,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[26] =
 {str8_lit_comp("target"), str8_lit_comp("@row_commands(@cmd_line save_cfg_to_project, enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        expr_string,\n  'stdout_path':        @no_relativize path,\n  'stderr_path':        @no_relativize path,\n  'stdin_path':         @no_relativize path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_revert @no_expand @default(0) 'enabled': bool,\n}\n")},
 {str8_lit_comp("breakpoint"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint, clear_breakpoints)\nx:\n{\n  'label':            code_string,\n  'condition':        expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("watch_pin"), str8_lit_comp("@row_commands(duplicate_cfg, remove_cfg)\n@collection_commands(add_watch_pin, toggle_watch_pin)\nx:\n{\n  'expression':       expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n}\n")},
-{str8_lit_comp("debug_info"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(load_debug_info)\nx:\n{\n  'path': @no_relativize path,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},
+{str8_lit_comp("debug_info"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(load_debug_info)\nx:\n{\n  'path': @no_relativize path,\n  @query 'guid': string,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @no_relativize path, 'dest': @no_relativize path}")},
 {str8_lit_comp("type_view"), str8_lit_comp("@collection_commands(add_type_view) @row_commands(remove_cfg) x:{'type':expr_string, 'expr':expr_string}")},
 {str8_lit_comp("recent_project"), str8_lit_comp("x:{'path':path}")},

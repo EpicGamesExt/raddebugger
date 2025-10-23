@@ -384,11 +384,12 @@ enum
   E_TypeFlag_IsCodeText              = (1<<4),
   E_TypeFlag_IsPathText              = (1<<5),
   E_TypeFlag_IsNotText               = (1<<6),
-  E_TypeFlag_EditableChildren        = (1<<7),
-  E_TypeFlag_InheritedByMembers      = (1<<8),
-  E_TypeFlag_InheritedByElements     = (1<<9),
-  E_TypeFlag_ArrayLikeExpansion      = (1<<10),
-  E_TypeFlag_StubSingleLineExpansion = (1<<11),
+  E_TypeFlag_IsNotEditable           = (1<<7),
+  E_TypeFlag_EditableChildren        = (1<<8),
+  E_TypeFlag_InheritedByMembers      = (1<<9),
+  E_TypeFlag_InheritedByElements     = (1<<10),
+  E_TypeFlag_ArrayLikeExpansion      = (1<<11),
+  E_TypeFlag_StubSingleLineExpansion = (1<<12),
 };
 
 typedef struct E_Member E_Member;

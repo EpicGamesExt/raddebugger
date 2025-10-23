@@ -52,6 +52,9 @@ union RDI_SHA1 {RDI_U8 u8[20];};
 typedef union RDI_SHA256 RDI_SHA256;
 union RDI_SHA256 {RDI_U8 u8[32]; RDI_U64 u64[4];};
 
+typedef union RDI_GUID RDI_GUID;
+union RDI_GUID {RDI_U8 u8[16]; RDI_U64 u64[2];};
+
 ////////////////////////////////////////////////////////////////
 //~ Overridable Enabling/Disabling Of Table Index Typechecking
 
@@ -64,7 +67,7 @@ union RDI_SHA256 {RDI_U8 u8[32]; RDI_U64 u64[4];};
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 16
+#define RDI_ENCODING_VERSION 17
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -807,6 +810,7 @@ X(RDI_Arch, arch)\
 X(RDI_U32, exe_name_string_idx)\
 X(RDI_U64, exe_hash)\
 X(RDI_U64, voff_max)\
+X(RDI_GUID, guid)\
 X(RDI_U32, producer_name_string_idx)\
 
 #define RDI_BinarySectionFlags_XList \
@@ -1283,6 +1287,7 @@ RDI_Arch arch;
 RDI_U32 exe_name_string_idx;
 RDI_U64 exe_hash;
 RDI_U64 voff_max;
+RDI_GUID guid;
 RDI_U32 producer_name_string_idx;
 };
 

@@ -2994,6 +2994,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       rdim_shared->baked_top_level_info.top_level_info.exe_name_string_idx      = rdim_bake_idx_from_string(bake_strings, params->top_level_info.exe_name);
       rdim_shared->baked_top_level_info.top_level_info.exe_hash                 = params->top_level_info.exe_hash;
       rdim_shared->baked_top_level_info.top_level_info.voff_max                 = params->top_level_info.voff_max;
+      rdim_shared->baked_top_level_info.top_level_info.guid                     = params->top_level_info.guid;
       rdim_shared->baked_top_level_info.top_level_info.producer_name_string_idx = rdim_bake_idx_from_string(bake_strings, params->top_level_info.producer_name);
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("bake binary sections")

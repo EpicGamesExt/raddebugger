@@ -789,7 +789,7 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
     //- rjf: meta-config reads
     case RD_EvalSpaceKind_MetaCfg:
     {
-      // rjf: unpack cfg
+      //- rjf: unpack cfg
       CFG_Node *root_cfg = rd_cfg_from_eval_space(space);
       String8 child_key = e_string_from_id(space.u64s[1]);
       CFG_Node *cfg = root_cfg;
@@ -798,54 +798,85 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
         cfg = cfg_node_child_from_string(root_cfg, child_key);
       }
       
-      // rjf: determine data to read from, depending on child type in schema
+      //- rjf: determine data to read from, depending on child type in schema
       String8 read_data = {0};
       if(child_key.size != 0)
       {
-        MD_NodePtrList schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, root_cfg->string);
-        MD_Node *expr_child_schema = &md_nil_node;
+        // rjf: get schemas for the accessed child
         MD_Node *child_schema = &md_nil_node;
-        for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
+        MD_Node *expr_child_schema = &md_nil_node;
         {
-          child_schema = md_child_from_string(n->v, child_key, 0);
-          if(child_schema != &md_nil_node)
+          MD_NodePtrList schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, root_cfg->string);
+          for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
           {
-            expr_child_schema = md_child_from_string(n->v, str8_lit("expression"), 0);
+            child_schema = md_child_from_string(n->v, child_key, 0);
+            if(child_schema != &md_nil_node)
+            {
+              expr_child_schema = md_child_from_string(n->v, str8_lit("expression"), 0);
+            }
           }
         }
         String8 child_type_name = child_schema->first->string;
+        
+        // rjf: get value string (or default fallback)
+        String8 value_string = cfg->first->string;
+        if(value_string.size == 0)
+        {
+          value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
+        }
+        
+        // rjf: if this is an override child to a parent, fall back on defaults from parents
+        if(value_string.size == 0 && !md_node_is_nil(md_tag_from_string(child_schema, str8_lit("override"), 0)))
+        {
+          for(CFG_Node *parent = root_cfg->parent; parent != &cfg_nil_node; parent = parent->parent)
+          {
+            CFG_Node *parent_child_w_key = cfg_node_child_from_string(parent, child_key);
+            if(parent_child_w_key != &cfg_nil_node)
+            {
+              value_string = parent_child_w_key->first->string;
+              break;
+            }
+            value_string = rd_default_setting_from_names(parent->string, child_key);
+            if(value_string.size != 0)
+            {
+              break;
+            }
+          }
+        }
+        
+        // rjf: if this is a query -> compute the value string based on query path
+        if(md_node_has_tag(child_schema, str8_lit("query"), 0))
+        {
+          // TODO(rjf): this needs to be replaced by hooks
+          if(str8_match(child_schema->string, str8_lit("guid"), 0))
+          {
+            Access *access = access_open();
+            String8 path = rd_path_from_cfg(root_cfg);
+            U64 timestamp = 0;
+            try_u64_from_str8_c_rules(cfg_node_child_from_string(root_cfg, str8_lit("timestamp"))->first->string, &timestamp);
+            DI_Key key = di_key_from_path_timestamp(path, timestamp);
+            RDI_Parsed *rdi = di_rdi_from_key(access, key, 0, 0);
+            RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+            Guid guid = {0};
+            MemoryCopy(&guid, &tli->guid, Min(sizeof guid, sizeof tli->guid));
+            value_string = string_from_guid(scratch.arena, guid);
+            access_close(access);
+          }
+        }
+        
+        // rjf: textual data
         if(str8_match(child_type_name, str8_lit("path"), 0) ||
            str8_match(child_type_name, str8_lit("path_pt"), 0) ||
            str8_match(child_type_name, str8_lit("code_string"), 0) ||
            str8_match(child_type_name, str8_lit("expr_string"), 0) ||
            str8_match(child_type_name, str8_lit("string"), 0))
         {
-          read_data = cfg->first->string;
+          read_data = value_string;
         }
+        
+        // rjf: non-textual data
         else
         {
-          String8 value_string = cfg->first->string;
-          if(value_string.size == 0)
-          {
-            value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
-          }
-          if(value_string.size == 0 && !md_node_is_nil(md_tag_from_string(child_schema, str8_lit("override"), 0)))
-          {
-            for(CFG_Node *parent = root_cfg->parent; parent != &cfg_nil_node; parent = parent->parent)
-            {
-              CFG_Node *parent_child_w_key = cfg_node_child_from_string(parent, child_key);
-              if(parent_child_w_key != &cfg_nil_node)
-              {
-                value_string = parent_child_w_key->first->string;
-                break;
-              }
-              value_string = rd_default_setting_from_names(parent->string, child_key);
-              if(value_string.size != 0)
-              {
-                break;
-              }
-            }
-          }
           E_Key parent_key = {0};
           if(expr_child_schema != &md_nil_node && child_schema != expr_child_schema)
           {
@@ -11470,6 +11501,18 @@ rd_frame(void)
                                                       .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(cfgs_slice),
                                                       .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs_slice),
                                                       .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs_slice),
+                                                    }));
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("environment"),
+                                    e_type_key_cons(.kind = E_TypeKind_Set,
+                                                    .name = str8_lit("environment"),
+                                                    .irext  = E_TYPE_IREXT_FUNCTION_NAME(environment),
+                                                    .access = E_TYPE_ACCESS_FUNCTION_NAME(environment),
+                                                    .expand =
+                                                    {
+                                                      .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(environment),
+                                                      .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(environment),
+                                                      .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment),
+                                                      .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(environment),
                                                     }));
       }
       

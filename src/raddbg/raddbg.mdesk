@@ -199,6 +199,7 @@ RD_VocabTable:
   {tab_height           ""                          "Tab Height"                ""                    Null                                           }
   {rgba                 ""                          "RGBA"                      ""                    Palette                                        }
   {path                 ""                          "Path"                      ""                    FileOutline                                    }
+  {guid                 ""                          "GUID"                      ""                    Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -669,6 +670,7 @@ RD_VocabTable:
       x:
     {
       'path': @no_relativize path,
+      @query 'guid': string,
       @no_revert @no_expand @default(1) 'enabled': bool,
     }
     ```,

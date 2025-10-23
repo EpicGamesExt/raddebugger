@@ -62,6 +62,9 @@
   "typedef union RDI_SHA256 RDI_SHA256;";
   "union RDI_SHA256 {RDI_U8 u8[32]; RDI_U64 u64[4];};";
   "";
+  "typedef union RDI_GUID RDI_GUID;";
+  "union RDI_GUID {RDI_U8 u8[16]; RDI_U64 u64[2];};";
+  "";
   "////////////////////////////////////////////////////////////////";
   "//~ Overridable Enabling/Disabling Of Table Index Typechecking";
   "";
@@ -74,7 +77,7 @@
   "";
   "// \"raddbg\\0\\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 16";
+  "#define RDI_ENCODING_VERSION 17";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -495,6 +498,7 @@ RDI_TopLevelInfoMemberTable:
   {exe_name_string_idx      RDI_U32               ""}
   {exe_hash                 RDI_U64               ""}
   {voff_max                 RDI_U64               ""}
+  {guid                     RDI_GUID              ""}
   {producer_name_string_idx RDI_U32               ""}
 }
 

@@ -150,8 +150,14 @@ ev_type_key_is_editable(E_TypeKey type_key)
   B32 done = 0;
   for(E_TypeKey t = type_key; !result && !done; t = e_type_key_direct(t))
   {
-    E_TypeKind kind = e_type_kind_from_key(t);
-    switch(kind)
+    E_Type *type = e_type_from_key(t);
+    E_TypeKind kind = type->kind;
+    if(type->flags & E_TypeFlag_IsNotEditable)
+    {
+      result = 0;
+      done = 1;
+    }
+    else switch(kind)
     {
       case E_TypeKind_Null:
       case E_TypeKind_Function:
@@ -167,7 +173,6 @@ ev_type_key_is_editable(E_TypeKey type_key)
       }break;
       case E_TypeKind_Array:
       {
-        E_Type *type = e_type_from_key(t);
         if(type->flags & E_TypeFlag_IsNotText)
         {
           result = 0;
