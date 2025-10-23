@@ -558,13 +558,13 @@ dw_string_from_expr_op(Arena *arena, DW_Version ver, DW_Ext ext, DW_ExprOp op)
         DW_Expr_V4_XList(X)
       }
     } // fall-through
-    case DW_Version_3: {
+    case DW_Version_3:
+    case DW_Version_2:
+    case DW_Version_1: {
       switch (op) {
         DW_Expr_V3_XList(X)
       }
     } // fall-through
-    case DW_Version_2:
-    case DW_Version_1:
     case DW_Version_Null:
     break;
   }
