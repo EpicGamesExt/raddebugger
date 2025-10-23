@@ -94,6 +94,17 @@ dw_reg_max_size_from_arch(Arch arch)
   return max_size;
 }
 
+internal U64
+dw_sp_from_arch(Arch arch)
+{
+  switch (arch) {
+  default: NotImplemented;
+  case Arch_Null: return 0;
+  case Arch_x86:  return DW_RegX86_Esp;
+  case Arch_x64:  return DW_RegX64_Rsp;
+  }
+}
+
 internal DW_AttribClass
 dw_attrib_class_from_attrib_v2(DW_AttribKind k)
 {
