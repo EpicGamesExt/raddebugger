@@ -1906,7 +1906,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
   CTRL_UnwindStepResult result = { .flags = CTRL_UnwindFlag_Error };
 
   // gather context for virtual stack unwinder
-  U64         rebase       = 0;
+  U64         cfi_rebase   = 0;
   B32         is_unwind_eh = 0;
   String8     unwind_data  = {0};
   EH_FrameHdr eh_frame_hdr = {0};
@@ -1921,7 +1921,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
     {
       if(ctrl_handle_match(n->module, module_handle))
       {
-        rebase       = n->rebase;
+        cfi_rebase   = n->cfi_rebase;
         is_unwind_eh = n->is_unwind_eh;
         unwind_data  = n->dwarf_unwind_data;
         eh_frame_hdr = n->eh_frame_hdr;
@@ -1931,12 +1931,11 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
     }
   }
 
-  // rebase IP to the base used for linking the module
-  U64 ip     = regs_rip_from_arch_block(arch, regs);
-  U64 cfi_ip = ip + rebase;
+  // grab IP
+  U64 ip = regs_rip_from_arch_block(arch, regs);
 
-  // use .eh_frame_hdr to quickly locate nearest FDE offset
-  U64 fde_addr = eh_find_nearest_fde(eh_frame_hdr, &eh_ptr_ctx, cfi_ip);
+  // use .eh_frame_hdr to quickly locate nearest FDE
+  U64 fde_addr = eh_find_nearest_fde(eh_frame_hdr, &eh_ptr_ctx, ip);
 
   if(fde_addr != max_U64)
   {
@@ -2029,6 +2028,8 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
 
     if(is_cfi_parsed)
     {
+      Assert(contains_1u64(fde.pc_range, ip));
+
       // setup pointer decoder ops
       DW_DecodePtr *decode_ptr_func = 0;
       void         *decode_ptr_ctx  = 0;
@@ -2048,7 +2049,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
       }
 
       // find register rules for IP
-      DW_CFI_Row *cfi_row = dw_cfi_row_from_pc(scratch.arena, arch, &cie, &fde, decode_ptr_func, decode_ptr_ctx, cfi_ip);
+      DW_CFI_Row *cfi_row = dw_cfi_row_from_pc(scratch.arena, arch, &cie, &fde, decode_ptr_func, decode_ptr_ctx, ip);
       if(cfi_row)
       {
         // setup machine ops
@@ -2094,6 +2095,12 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
                                                                     reg_read_ctx,
                                                                     reg_write_func,
                                                                     reg_write_ctx);
+
+        // last frame typically has undefined rule for IP
+        if(cfi_row->regs[cie.ret_addr_reg].rule == DW_CFI_RegisterRule_Undefined)
+        {
+          regs_arch_block_write_rip(arch, regs, 0);
+        }
 
         // translate unwind status code to control layer's result flags
         switch(cfi_uw_status)
@@ -3744,10 +3751,10 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   Guid           pdb_dbg_guid = {0};
   String8        pdb_dbg_path = {0};
 
-  U64         rebase       = 0;
+  U64         cfi_rebase   = 0;
   B32         is_unwind_eh = 0;
   EH_FrameHdr eh_frame_hdr = {0};
-  EH_PtrCtx   eh_ptr_ctx   = { .raw_base_vaddr = max_U64, .text_vaddr = max_U64, .data_vaddr = max_U64, .func_vaddr = max_U64, .ptr_align = 0 };
+  EH_PtrCtx   eh_ptr_ctx   = { .pc_vaddr = max_U64, .text_vaddr = max_U64, .data_vaddr = max_U64, .func_vaddr = max_U64, .ptr_align = 0 };
 
   // read module's signature bytes
   U64  module_sig_size  = Max(elf_magic_string.size, sizeof(PE_DosMagic));
@@ -4018,6 +4025,11 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       }
     }
 
+    if(e_type == ELF_Type_Dyn)
+    {
+      cfi_rebase = vaddr_range.min;
+    }
+
     // find and parse .eh_frame_hdr
     Rng1U64 eh_frame_hdr_vrange = {0};
     String8 eh_frame_hdr_data   = {0};
@@ -4031,14 +4043,14 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       }
       else if(elf_phdr_entsize == sizeof(ELF_Phdr64))
       {
-        U64 elf_phcount = dim_1u64(elf_phdr_vrange) / elf_phdr_entsize;
-        ELF_Phdr64 *phdrs64 = phdrs_raw;
+        U64         elf_phcount = dim_1u64(elf_phdr_vrange) / elf_phdr_entsize;
+        ELF_Phdr64 *phdrs64     = phdrs_raw;
         for EachIndex(phdr_idx, elf_phcount)
         {
           ELF_Phdr64 *phdr = phdrs64 + phdr_idx;
           if(phdr->p_type == ELF_PType_GnuEHFrame)
           {
-            eh_frame_hdr_vrange = r1u64(phdr->p_vaddr, phdr->p_vaddr + phdr->p_memsz);
+            eh_frame_hdr_vrange = r1u64(cfi_rebase + phdr->p_vaddr, cfi_rebase + phdr->p_vaddr + phdr->p_memsz);
             eh_frame_hdr_data   = dmn_process_read_block(arena, process.dmn_handle, eh_frame_hdr_vrange);
             is_unwind_eh        = 1;
             break;
@@ -4049,9 +4061,9 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
 
     // parse .eh_frame_hdr
     Arch arch = ctrl_arch_from_process_handle(process);
-    eh_ptr_ctx.raw_base_vaddr = eh_frame_hdr_vrange.min;
+    eh_ptr_ctx.pc_vaddr   = eh_frame_hdr_vrange.min;
     eh_ptr_ctx.data_vaddr = eh_frame_hdr_vrange.min;
-    eh_frame_hdr = eh_parse_frame_hdr(eh_frame_hdr_data, byte_size_from_arch(arch), &eh_ptr_ctx);
+    eh_frame_hdr          = eh_parse_frame_hdr(eh_frame_hdr_data, byte_size_from_arch(arch), &eh_ptr_ctx);
 
     // set entry point
     if (e_entry != 0)
@@ -4064,12 +4076,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     {
       exe_dbg_path = path;
     }
-
-    if(e_type == ELF_Type_Dyn)
-    {
-      rebase = -vaddr_range.min;
-    }
-
     elf_exit:;
   }
   
@@ -4148,7 +4154,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         node->arena                   = arena;
         node->pdatas                  = pdatas;
         node->pdatas_count            = pdatas_count;
-        node->rebase                  = rebase;
+        node->cfi_rebase              = cfi_rebase;
         node->is_unwind_eh            = is_unwind_eh;
         node->eh_frame_hdr            = eh_frame_hdr;
         node->eh_ptr_ctx              = eh_ptr_ctx;
