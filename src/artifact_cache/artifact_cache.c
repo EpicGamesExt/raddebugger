@@ -141,9 +141,9 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
         node->key = str8_copy(stripe->arena, key);
         node->working_count = 1;
         node->evict_threshold_us = params->evict_threshold_us;
-        node->access_pt.last_time_touched_us = os_now_microseconds();
-        node->access_pt.last_update_idx_touched = update_tick_idx();
       }
+      node->access_pt.last_time_touched_us = os_now_microseconds();
+      node->access_pt.last_update_idx_touched = update_tick_idx();
       
       // rjf: request
       if(need_request)
