@@ -6502,6 +6502,7 @@ ctrl_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out,
     //- rjf: compute call stack
     CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, thread_handle);
     B32 good = 1;
+    B32 retry = 0;
     Arena *arena = 0;
     CTRL_CallStack *call_stack = 0;
     if(thread != &ctrl_entity_nil)
@@ -6524,12 +6525,17 @@ ctrl_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out,
           good = 1;
           call_stack[0] = ctrl_call_stack_from_unwind(arena, process, &unwind);
         }
+        if(unwind.flags & CTRL_UnwindFlag_Stale)
+        {
+          retry = 1;
+        }
         post_reg_gen = ctrl_reg_gen();
         post_mem_gen = ctrl_mem_gen();
       }
       if(pre_reg_gen != post_reg_gen || pre_mem_gen != post_mem_gen)
       {
         good = 0;
+        retry = 1;
       }
       if(!good)
       {
@@ -6550,11 +6556,8 @@ ctrl_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out,
       artifact.u64[1] = (U64)call_stack;
     }
     
-    //- rjf: retry on bad
-    if(!good)
-    {
-      retry_out[0] = 1;
-    }
+    //- rjf: mark retry
+    retry_out[0] = retry;
     
     scratch_end(scratch);
   }
