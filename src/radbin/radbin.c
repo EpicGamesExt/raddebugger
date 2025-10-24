@@ -1028,8 +1028,9 @@ rb_thread_entry_point(void *p)
       
       //- rjf: unpack dump subset flags
       RDI_DumpSubsetFlags rdi_dump_subset_flags = RDI_DumpSubsetFlag_All;
-      DW_DumpSubsetFlags dw_dump_subset_flags = DW_DumpSubsetFlag_All;
-      EH_DumpSubsetFlags eh_dump_subset_flags = EH_DumpSubsetFlag_All;
+      DW_DumpSubsetFlags  dw_dump_subset_flags  = DW_DumpSubsetFlag_All;
+      EH_DumpSubsetFlags  eh_dump_subset_flags  = EH_DumpSubsetFlag_All;
+      ELF_DumpSubsetFlags elf_dump_subset_flags = ELF_DumpSubsetFlag_All;
       {
         String8List only_names = cmd_line_strings(cmdline, str8_lit("only"));
         if(only_names.node_count != 0)
@@ -1050,6 +1051,9 @@ rb_thread_entry_point(void *p)
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { eh_dump_subset_flags |= EH_DumpSubsetFlag_##name; }
           EH_DumpSubset_XList
 #undef X
+#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { elf_dump_subset_flags |= ELF_DumpSubsetFlag_##name; }
+          ELF_DumpSubset_XList
+#undef X
         }
         String8List omit_names = cmd_line_strings(cmdline, str8_lit("omit"));
         for(String8Node *n = omit_names.first; n != 0; n = n->next)
@@ -1063,6 +1067,9 @@ rb_thread_entry_point(void *p)
 #undef X
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { eh_dump_subset_flags &= ~EH_DumpSubsetFlag_##name; }
           EH_DumpSubset_XList
+#undef X
+#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { elf_dump_subset_flags &= ~ELF_DumpSubsetFlag_##name; }
+          ELF_DumpSubset_XList
 #undef X
         }
       }
@@ -1078,14 +1085,14 @@ rb_thread_entry_point(void *p)
         lane_sync();
         
         //- rjf: unpack file parses
-        Arch arch = Arch_Null;
-        PE_BinInfo pe = {0};
-        ELF_Bin elf = {0};
-        DW_Input dw = {0};
-        U64 eh_frame_hdr_vaddr = 0;
-        U64 eh_frame_vaddr = 0;
-        String8 eh_frame_hdr = {0};
-        String8 eh_frame = {0};
+        Arch       arch               = Arch_Null;
+        PE_BinInfo pe                 = {0};
+        ELF_Bin    elf                = {0};
+        DW_Input   dw                 = {0};
+        U64        eh_frame_hdr_vaddr = 0;
+        U64        eh_frame_vaddr     = 0;
+        String8    eh_frame_hdr       = {0};
+        String8    eh_frame           = {0};
         {
           if(f->format == RB_FileFormat_PE)
           {
@@ -1173,7 +1180,8 @@ rb_thread_entry_point(void *p)
           case RB_FileFormat_ELF32:
           case RB_FileFormat_ELF64:
           {
-            // TODO(rjf)
+            String8List elf_strings = elf_dump(arena, f->data, elf_dump_subset_flags);
+            str8_list_concat_in_place(&output_blobs, &elf_strings);
           }break;
           
           //- rjf: RDI file

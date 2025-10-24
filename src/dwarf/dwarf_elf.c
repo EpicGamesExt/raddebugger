@@ -8,7 +8,7 @@ dw_is_dwarf_present_from_elf_bin(String8 data, ELF_Bin *bin)
   for EachIndex(idx, bin->shdrs.count)
   {
     ELF_Shdr64 *shdr = &bin->shdrs.v[idx];
-    if(shdr->sh_type != ELF_SectionCode_ProgBits) { continue; }
+    if(shdr->sh_type != ELF_ShType_ProgBits) { continue; }
     String8 name = elf_name_from_shdr64(data, bin, shdr);
     DW_SectionKind s = dw_section_kind_from_string(name);
     if(s == DW_Section_Null)
@@ -35,7 +35,7 @@ dw_input_from_elf_bin(Arena *arena, String8 data, ELF_Bin *bin)
   for(U64 section_idx = 1; section_idx < bin->shdrs.count; section_idx += 1)
   {
     ELF_Shdr64 *shdr = &bin->shdrs.v[section_idx];
-    if(shdr->sh_type != ELF_SectionCode_ProgBits) { continue; } // skip BSS sections
+    if(shdr->sh_type != ELF_ShType_ProgBits) { continue; } // skip BSS sections
     
     //- rjf: unpack section
     String8 section_name = elf_name_from_shdr64(data, bin, shdr);
