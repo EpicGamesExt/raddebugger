@@ -148,6 +148,7 @@ typedef enum TXT_LangKind
   TXT_LangKind_Odin,
   TXT_LangKind_Jai,
   TXT_LangKind_Zig,
+  TXT_LangKind_Rust,
   TXT_LangKind_DisasmX64Intel,
   TXT_LangKind_COUNT
 }
@@ -183,6 +184,7 @@ internal TXT_TokenArray txt_token_array_from_string__c_cpp(Arena *arena, U64 *by
 internal TXT_TokenArray txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, String8 string);
 internal TXT_TokenArray txt_token_array_from_string__jai(Arena *arena, U64 *bytes_processed_counter, String8 string);
 internal TXT_TokenArray txt_token_array_from_string__zig(Arena *arena, U64 *bytes_processed_counter, String8 string);
+internal TXT_TokenArray txt_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, String8 string);
 internal TXT_TokenArray txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed_counter, String8 string);
 
 ////////////////////////////////
