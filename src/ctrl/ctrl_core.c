@@ -1567,7 +1567,8 @@ ctrl_reg_block_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle handle
     {
       U64 current_reg_gen = ctrl_reg_gen();
       B32 need_stale = 1;
-      if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(handle.dmn_handle, result))
+      if(node->reg_gen != current_reg_gen && 
+          dmn_thread_read_reg_block(handle.dmn_handle, result))
       {
         if(node != 0)
         {
@@ -2981,7 +2982,7 @@ ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr,
 
   result = ctrl_unwind_step__dwarf(process, module, arch, reg_block, endt_us);
 
-  if(result.flags != 0)
+  if(result.flags == CTRL_UnwindFlag_Error && ~result.flags & CTRL_UnwindFlag_Stale)
   {
     switch(arch)
     {
