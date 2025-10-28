@@ -138,6 +138,14 @@ struct DMN_TrapChunkList
   U64 trap_count;
 };
 
+typedef struct DMN_ActiveTrap DMN_ActiveTrap;
+struct DMN_ActiveTrap
+{
+  DMN_Trap *trap;
+  U8 swap_byte;
+  DMN_ActiveTrap *next;
+};
+
 typedef struct DMN_RunCtrls DMN_RunCtrls;
 struct DMN_RunCtrls
 {
