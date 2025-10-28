@@ -164,3 +164,48 @@ elf_gnu_debug_link_from_bin(String8 raw_data, ELF_Bin *bin)
   }
   return result;
 }
+
+internal ELF_NoteList
+elf_parse_note(Arena *arena, String8 raw_note, ELF_Class elf_class, ELF_MachineKind e_machine)
+{
+  ELF_NoteList result = {0};
+
+  for (U64 cursor = 0; cursor < raw_note.size; ) {
+    U32 owner_size;
+    U64 owner_size_size = str8_deserial_read_struct(raw_note, cursor, &owner_size);
+    if (owner_size_size == 0) { goto exit; }
+    cursor += owner_size_size;
+
+    U32 desc_size;
+    U64 desc_size_size = str8_deserial_read_struct(raw_note, cursor, &desc_size);
+    if (desc_size_size == 0) { goto exit; }
+    cursor += desc_size_size;
+
+    ELF_NoteType type;
+    U64 type_size = str8_deserial_read_struct(raw_note, cursor, &type);
+    if (type_size == 0) { goto exit; }
+    cursor += type_size;
+
+    if (cursor + owner_size > raw_note.size) { goto exit; }
+    String8 owner = str8_cstring_capped(raw_note.str + cursor, raw_note.str + cursor + owner_size);
+    cursor += owner_size;
+
+    if (cursor + desc_size > raw_note.size) { goto exit; }
+    String8 desc = str8_substr(raw_note, r1u64(cursor, cursor + desc_size));
+    cursor += desc_size;
+    cursor = AlignPow2(cursor, 4);
+
+    ELF_NoteNode *n = push_array(arena, ELF_NoteNode, 1);
+    n->v.owner = owner;
+    n->v.desc  = desc;
+    n->v.type  = type;
+
+    SLLQueuePush(result.first, result.last, n);
+    result.count += 1;
+  }
+
+exit:;
+  return result;
+}
+
+
