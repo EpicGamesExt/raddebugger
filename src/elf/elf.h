@@ -784,15 +784,6 @@ typedef struct
   U16 vs_vers;
 } ELF_ExternalVersym;
 
-typedef struct
-{
-  U32 name_size;
-  U32 desc_size;
-  U32 type;
-  // name + desc
-  // U8  data[1];
-} ELF_Note;
-
 ////////////////////////////////
 // Extensions
 
