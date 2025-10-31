@@ -601,6 +601,22 @@ str8_is_integer(String8 string, U32 radix)
   return result;
 }
 
+internal B32
+str8_is_integer_signed(String8 string, U32 radix)
+{
+  B32 result = 0;
+  String8 sign = str8_prefix(string, 1);
+  if(str8_match(sign, str8_lit("-"), 0))
+  {
+    result = str8_is_integer(str8_skip(string, 1), radix);
+  }
+  else
+  {
+    result = str8_is_integer(string, radix);
+  }
+  return result;
+}
+
 internal U64
 u64_from_str8(String8 string, U32 radix)
 {
