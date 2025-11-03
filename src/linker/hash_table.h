@@ -21,8 +21,9 @@ typedef struct KeyValuePair
 
 typedef struct BucketNode
 {
-  struct BucketNode *next;
   KeyValuePair       v;
+  struct BucketNode *next;
+  struct BucketNode *prev;
 } BucketNode;
 
 typedef struct BucketList
@@ -64,11 +65,11 @@ internal BucketNode * hash_table_push_path_u64     (Arena *arena, HashTable *ht,
 internal BucketNode * hash_table_push_u64_u64      (Arena *arena, HashTable *ht, U64     key,  U64           value);
 internal BucketNode * hash_table_push_u32_u32      (Arena *arena, HashTable *ht, U32     key,  U32           value);
 
-internal KeyValuePair * hash_table_search_string  (HashTable *ht, String8 key);
-internal KeyValuePair * hash_table_search_u32     (HashTable *ht, U32     key);
-internal KeyValuePair * hash_table_search_u64     (HashTable *ht, U64     key);
-internal KeyValuePair * hash_table_search_path    (HashTable *ht, String8 key);
-internal KeyValuePair * hash_table_search_raw     (HashTable *ht, void   *key);
+internal BucketNode * hash_table_search_string  (HashTable *ht, String8 key);
+internal BucketNode * hash_table_search_u32     (HashTable *ht, U32     key);
+internal BucketNode * hash_table_search_u64     (HashTable *ht, U64     key);
+internal BucketNode * hash_table_search_path    (HashTable *ht, String8 key);
+internal BucketNode * hash_table_search_raw     (HashTable *ht, void   *key);
 
 internal B32 hash_table_search_path_u64     (HashTable *ht, String8 key, U64     *value_out);
 internal B32 hash_table_search_string_u64   (HashTable *ht, String8 key, U64     *value_out);
@@ -79,6 +80,10 @@ internal void * hash_table_search_string_raw(HashTable *ht, String8 key);
 internal void * hash_table_search_u64_raw   (HashTable *ht, U64     key);
 internal void * hash_table_search_path_raw  (HashTable *ht, String8 key);
 internal void * hash_table_search_raw_raw   (HashTable *ht, void   *key);
+
+internal void hash_table_purge_item  (HashTable *ht, U64 hash, BucketNode *node);
+internal B32  hash_table_purge_u64   (HashTable *ht, U64 key);
+internal B32  hash_table_purge_string(HashTable *ht, String8 key);
 
 // --- Key Value Helpers -------------------------------------------------------
 

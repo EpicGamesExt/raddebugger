@@ -587,9 +587,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
         };
 
         // was this type server queued?
-        KeyValuePair *is_path_queued = hash_table_search_path(type_server_path_ht, type_server_path);
+        BucketNode *is_path_queued = hash_table_search_path(type_server_path_ht, type_server_path);
         if (is_path_queued) {
-          struct HT_Value *present = is_path_queued->value_raw;
+          struct HT_Value *present = is_path_queued->v.value_raw;
           
           // make sure type servers sigs match
           if (MemoryMatchStruct(&ts.sig, &present->ts.sig)) {
@@ -4705,9 +4705,9 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       // get link name through virtual offset look up
       String8 link_name = {0};
       if (symbol.kind == CV_SymKind_GDATA32) {
-        KeyValuePair *pair = hash_table_search_u64(task->extern_symbol_voff_ht, data_voff);
+        BucketNode *pair = hash_table_search_u64(task->extern_symbol_voff_ht, data_voff);
         if (pair != 0) {
-          LNK_Symbol *link_symbol = pair->value_raw;
+          LNK_Symbol *link_symbol = pair->v.value_raw;
           link_name = link_symbol->name;
         }
       }
@@ -4801,9 +4801,8 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       // get link name through virtual offset look up
       String8 link_name = str8(0,0);
       if (symbol.kind == CV_SymKind_GPROC32) {
-        KeyValuePair *pair = hash_table_search_u64(task->extern_symbol_voff_ht, virt_range.min);
-        if (pair != 0) {
-          LNK_Symbol *link_symbol = pair->value_raw;
+        LNK_Symbol *link_symbol = hash_table_search_u64_raw(task->extern_symbol_voff_ht, virt_range.min);
+        if (link_symbol) {
           link_name = link_symbol->name;
         }
       }

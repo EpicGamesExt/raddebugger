@@ -1072,10 +1072,10 @@ lnk_expand_env_vars_windows(Arena *arena, HashTable *env_vars, String8 string)
     i += text.size;
 
     if (open < close) {
-      String8       env_var_name = str8_substr(string, rng_1u64(open+1, close));
-      KeyValuePair *match        = hash_table_search_path(env_vars, env_var_name);
+      String8     env_var_name = str8_substr(string, rng_1u64(open+1, close));
+      BucketNode *match        = hash_table_search_path(env_vars, env_var_name);
       if (match) {
-        str8_list_push(scratch.arena, &list, match->value_string);
+        str8_list_push(scratch.arena, &list, match->v.value_string);
         i = close+1;
       } else {
         str8_list_pushf(scratch.arena, &list, "%%%S", env_var_name);
@@ -2277,16 +2277,16 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
 
   // collect LIB and LIBPATH
   if (config->flags & LNK_ConfigFlag_EnvLib) {
-    KeyValuePair *lib = hash_table_search_path(env_vars, str8_lit("lib"));
+    BucketNode *lib = hash_table_search_path(env_vars, str8_lit("lib"));
     if (lib) {
-      String8List val_list      = str8_split_by_string_chars(scratch.arena, lib->value_string, str8_lit(";"), 0);
+      String8List val_list      = str8_split_by_string_chars(scratch.arena, lib->v.value_string, str8_lit(";"), 0);
       String8List val_list_copy = str8_list_copy(arena, &val_list);
       str8_list_concat_in_place(&config->lib_dir_list, &val_list_copy);
     }
 
-    KeyValuePair *lib_path = hash_table_search_path(env_vars, str8_lit("libpath"));
+    BucketNode *lib_path = hash_table_search_path(env_vars, str8_lit("libpath"));
     if (lib_path) {
-      String8List val_list      = str8_split_by_string_chars(scratch.arena, lib->value_string, str8_lit(";"), 0);
+      String8List val_list      = str8_split_by_string_chars(scratch.arena, lib->v.value_string, str8_lit(";"), 0);
       String8List val_list_copy = str8_list_copy(arena, &val_list);
       str8_list_concat_in_place(&config->lib_dir_list, &val_list_copy);
     }
