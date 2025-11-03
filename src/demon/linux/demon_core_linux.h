@@ -8,22 +8,12 @@
 //~ rjf: Includes
 
 #include <sys/ptrace.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/uio.h>
-#include <unistd.h>
 #include <elf.h>
-#include <dirent.h>
-#include <errno.h>
 
 ////////////////////////////////
-//~ rjf: ptrace options
-
-#define DMN_LNX_PTRACE_OPTIONS (PTRACE_O_TRACEEXIT|\
-PTRACE_O_EXITKILL|\
-PTRACE_O_TRACEFORK|\
-PTRACE_O_TRACEVFORK|\
-PTRACE_O_TRACECLONE)
+//~ SIGTRAP codes
 
 enum
 {
