@@ -1138,21 +1138,19 @@ pdb_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st
       PDB_Strtbl       *strtbl      = pdb_strtbl_from_data(scratch.arena, strtbl_data);
       if(strtbl->bucket_count != 0)
       {
-        for(String8Node *file_n = file_list.first; file_n != 0; file_n = file_n->next)
+        for EachIndex(idx, strtbl->bucket_count)
         {
-          Temp temp = temp_begin(scratch.arena);
-          String8 path = file_n->string;
-          String8 path_pdbstyle = path_convert_slashes(temp.arena, path, PathStyle_WindowsAbsolute);
-          String8 path_pdbstyle_lower = lower_from_str8(temp.arena, path_pdbstyle);
-          U32 off1 = pdb_strtbl_off_from_string(strtbl, path_pdbstyle);
-          U32 off2 = pdb_strtbl_off_from_string(strtbl, path_pdbstyle_lower);
-          temp_end(temp);
-          if(off1 != max_U32 || off2 != max_U32)
+          String8 stored_string = pdb_strtbl_string_from_index(strtbl, idx);
+          for(String8Node *file_n = file_list.first; file_n != 0; file_n = file_n->next)
           {
-            has_ref = 1;
-            break;
+            if(str8_match(file_n->string, stored_string, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive))
+            {
+              has_ref = 1;
+              goto dbl_break;
+            }
           }
         }
+        dbl_break:;
       }
     }
   }
