@@ -1636,7 +1636,8 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
         //- rjf: successful launch
         case LaunchStatus_Success:
         {
-          setoptions_result = ptrace(PTRACE_SETOPTIONS, pid, 0, PtrFromInt(DMN_LNX_PTRACE_OPTIONS));
+          uintptr_t trace_options = PTRACE_O_TRACEEXIT|PTRACE_O_EXITKILL|PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE;
+          setoptions_result = ptrace(PTRACE_SETOPTIONS, pid, 0, PtrFromInt(trace_options));
           if(setoptions_result == -1) { error__need_child_kill = 1; goto error; }
 
           ELF_Hdr64           exe_ehdr         = dmn_lnx_ehdr_from_pid(pid);
