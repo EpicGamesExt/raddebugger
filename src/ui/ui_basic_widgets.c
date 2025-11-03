@@ -11,10 +11,16 @@ ui_divider(UI_Size size)
   ui_set_next_pref_size(parent->child_layout_axis, size);
   ui_set_next_child_layout_axis(parent->child_layout_axis);
   UI_Box *box = ui_build_box_from_key(0, ui_key_zero());
-  UI_Parent(box) UI_PrefSize(parent->child_layout_axis, ui_pct(1, 0))
+  UI_Parent(box) UI_Padding(ui_pct(0.5f, 0.5f))
+    UI_PrefSize(parent->child_layout_axis, ui_em(0.1f, 1.f))
+    UI_BackgroundColor(ui_color_from_name(str8_lit("border")))
   {
-    ui_build_box_from_key(UI_BoxFlag_DrawSideBottom, ui_key_zero());
-    ui_build_box_from_key(0, ui_key_zero());
+    ui_set_next_child_layout_axis(axis2_flip(parent->child_layout_axis));
+    UI_Box *spacing_parent = ui_build_box_from_key(0, ui_key_zero());
+    UI_Parent(spacing_parent) UI_Padding(ui_em(1.f, 1.f)) UI_PrefSize(axis2_flip(parent->child_layout_axis), ui_pct(1, 0))
+    {
+      ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+    }
   }
 }
 

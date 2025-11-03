@@ -964,17 +964,24 @@ internal void
 rd_cmd_list_menu_buttons(U64 count, String8 *cmd_names, U32 *fastpath_codepoints)
 {
   Temp scratch = scratch_begin(0, 0);
-  for(U64 idx = 0; idx < count; idx += 1)
+  for EachIndex(idx, count)
   {
-    ui_set_next_fastpath_codepoint(fastpath_codepoints[idx]);
-    UI_Signal sig = rd_cmd_spec_button(cmd_names[idx]);
-    if(ui_clicked(sig))
+    if(cmd_names[idx].size == 0)
     {
-      rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_names[idx]);
-      ui_ctx_menu_close();
-      CFG_Node *window = cfg_node_from_id(rd_regs()->window);
-      RD_WindowState *ws = rd_window_state_from_cfg(window);
-      ws->menu_bar_focused = 0;
+      UI_TagF("floating") ui_divider(ui_em(1.f, 1.f));
+    }
+    else
+    {
+      ui_set_next_fastpath_codepoint(fastpath_codepoints[idx]);
+      UI_Signal sig = rd_cmd_spec_button(cmd_names[idx]);
+      if(ui_clicked(sig))
+      {
+        rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_names[idx]);
+        ui_ctx_menu_close();
+        CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+        RD_WindowState *ws = rd_window_state_from_cfg(window);
+        ws->menu_bar_focused = 0;
+      }
     }
   }
   scratch_end(scratch);

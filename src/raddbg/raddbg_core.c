@@ -6622,32 +6622,36 @@ rd_window_frame(void)
                   {
                     rd_cmd_kind_info_table[RD_CmdKind_Open].string,
                     rd_cmd_kind_info_table[RD_CmdKind_Switch].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_NewUser].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_NewProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_SaveUser].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_UserSettings].string,
+                    {0},//-
+                    rd_cmd_kind_info_table[RD_CmdKind_NewProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenRecentProject].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_SaveUser].string,
                     rd_cmd_kind_info_table[RD_CmdKind_SaveProject].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_UserSettings].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ProjectSettings].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_Exit].string,
                   };
                   U32 codepoints[] =
                   {
                     'o',
                     'i',
-                    'n',
+                    0,//-
                     'w',
-                    'j',
                     'u',
+                    's',
+                    'e',
+                    0,//-
+                    'j',
                     'p',
                     'r',
-                    's',
                     'a',
-                    'e',
                     't',
+                    0,//-
                     'x',
                   };
                   Assert(ArrayCount(codepoints) == ArrayCount(cmds));
@@ -6663,6 +6667,7 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_OpenWindow].string,
                     rd_cmd_kind_info_table[RD_CmdKind_CloseWindow].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ToggleFullscreen].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_WindowSettings].string,
                   };
                   U32 codepoints[] =
@@ -6670,6 +6675,7 @@ rd_window_frame(void)
                     'w',
                     'c',
                     'f',
+                    0,//-
                     's',
                   };
                   Assert(ArrayCount(codepoints) == ArrayCount(cmds));
@@ -6687,11 +6693,13 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_NewPanelRight].string,
                     rd_cmd_kind_info_table[RD_CmdKind_NewPanelLeft].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ClosePanel].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_RotatePanelColumns].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_NextPanel].string,
                     rd_cmd_kind_info_table[RD_CmdKind_PrevPanel].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_TabBarTop].string,
                     rd_cmd_kind_info_table[RD_CmdKind_TabBarBottom].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_ResetToDefaultPanels].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ResetToCompactPanels].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ResetToSimplePanels].string,
@@ -6702,12 +6710,14 @@ rd_window_frame(void)
                     'd',
                     'r',
                     'l',
-                    'x',
-                    'c',
+                    'o',
+                    0,//-
                     'n',
                     'p',
+                    0,//-
                     0,
                     0,
+                    0,//-
                     0,
                     0,
                     0,
@@ -6725,10 +6735,13 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_OpenTab].string,
                     rd_cmd_kind_info_table[RD_CmdKind_CloseTab].string,
                     rd_cmd_kind_info_table[RD_CmdKind_DuplicateTab].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_MoveTabLeft].string,
                     rd_cmd_kind_info_table[RD_CmdKind_MoveTabRight].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_NextTab].string,
                     rd_cmd_kind_info_table[RD_CmdKind_PrevTab].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_TabSettings].string,
                   };
                   U32 codepoints[] =
@@ -6736,10 +6749,13 @@ rd_window_frame(void)
                     'o',
                     'c',
                     'd',
+                    0,//-
                     'l',
                     'r',
+                    0,//-
                     'n',
                     'p',
+                    0,//-
                     's',
                   };
                   Assert(ArrayCount(codepoints) == ArrayCount(cmds));
@@ -6778,9 +6794,11 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[D_CmdKind_KillAll].string,
                     rd_cmd_kind_info_table[D_CmdKind_Restart].string,
                     rd_cmd_kind_info_table[D_CmdKind_Halt].string,
+                    {0},//-
                     rd_cmd_kind_info_table[D_CmdKind_StepInto].string,
                     rd_cmd_kind_info_table[D_CmdKind_StepOver].string,
                     rd_cmd_kind_info_table[D_CmdKind_StepOut].string,
+                    {0},//-
                     rd_cmd_kind_info_table[D_CmdKind_Attach].string,
                     rd_cmd_kind_info_table[D_CmdKind_Detach].string,
                   };
@@ -6790,9 +6808,11 @@ rd_window_frame(void)
                     'k',
                     's',
                     'h',
+                    0,//-
                     'i',
                     'o',
                     't',
+                    0,//-
                     'a',
                     'd',
                   };
@@ -6816,23 +6836,44 @@ rd_window_frame(void)
                       ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
                   }
                   ui_spacer(ui_em(1.f, 1.f));
-                  UI_Row
-                    UI_PrefWidth(ui_text_dim(10, 1))
+                  CFG_KeyMapNodePtrList key_map_nodes = cfg_key_map_node_ptr_list_from_name(scratch.arena, rd_state->key_map, rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string);
+                  CFG_Binding binding = {0};
+                  String8 binding_str = {0};
+                  if(key_map_nodes.first != 0)
+                  {
+                    binding = key_map_nodes.first->v->binding;
+                    binding_str = os_string_from_modifiers_key(scratch.arena, binding.modifiers, binding.key);
+                  }
+                  UI_TagF(".")
+                    UI_Row
                     UI_TextAlignment(UI_TextAlign_Center)
                     UI_Padding(ui_pct(1, 0))
                   {
-                    ui_labelf("Search for commands and options by pressing ");
-                    UI_Flags(UI_BoxFlag_DrawBorder)
-                      UI_TextAlignment(UI_TextAlign_Center)
-                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string, str8_zero(), 1);
+                    UI_Signal sig = {0};
+                    UI_PrefWidth(ui_children_sum(1))
+                      UI_Flags(UI_BoxFlag_DrawBorder)
+                      UI_CornerRadius(ui_top_font_size()*0.5f)
+                      sig = ui_buttonf("###open_palette");
+                    UI_Parent(sig.box) UI_PrefWidth(ui_text_dim(ui_top_font_size()*2.f, 1))
+                    {
+                      ui_labelf("Search for commands & settings");
+                      if(binding_str.size != 0)
+                      {
+                        UI_TagF("weak") ui_labelf("(%S)", binding_str);
+                      }
+                    }
+                    if(ui_clicked(sig))
+                    {
+                      rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string);
+                    }
                   }
                   ui_spacer(ui_em(1.f, 1.f));
                   UI_TagF("pop")
-                    UI_Row UI_Padding(ui_pct(1, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_text_dim(10, 1))
+                    UI_Row UI_Padding(ui_pct(1, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_text_dim(ui_top_font_size()*2.f, 1))
                     UI_CornerRadius(ui_top_font_size()*0.5f)
                   {
                     String8 url = str8_lit("https://github.com/EpicGamesExt/raddebugger/issues");
-                    UI_Signal sig = ui_button(str8_lit("Submit Request, Issue, or Bug Report"));
+                    UI_Signal sig = ui_button(str8_lit("Submit request, issue, or bug report"));
                     if(ui_clicked(sig))
                     {
                       os_open_in_browser(url);
@@ -8830,9 +8871,8 @@ rd_window_frame(void)
               {
                 color.w *= b->hot_t;
               }
+              color.w *= 0.01f;
               R_Rect2DInst *inst = dr_rect(b_border_rect, color, 0, 1.f, 1.f);
-              inst->colors[Corner_01].w *= 0.2f;
-              inst->colors[Corner_11].w *= 0.2f;
               MemoryCopyArray(inst->corner_radii, b_corner_radii);
             }
           }
@@ -14647,6 +14687,14 @@ rd_frame(void)
           {
             String8 cmd_name = rd_regs()->cmd_name;
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+            
+            // rjf: close existing context menus
+            {
+              CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+              RD_WindowState *ws = rd_window_state_from_cfg(window);
+              ui_ctx_menu_close();
+              ws->menu_bar_focused = 0;
+            }
             
             // rjf: floating queries -> set up window to build immediate-mode top-level query
             CFG_Node *view = &cfg_nil_node;
