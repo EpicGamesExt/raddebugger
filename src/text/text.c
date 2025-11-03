@@ -2066,19 +2066,18 @@ txt_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_ou
       U64 line_start_idx = 0;
       for(U64 idx = 0; idx <= data.size; idx += 1)
       {
-        if(idx == data.size || data.str[idx] == '\n' || data.str[idx] == '\r')
+        if(idx == data.size || data.str[idx] == '\n')
         {
           Rng1U64 line_range = r1u64(line_start_idx, idx);
+          if(idx > 0 && data.str[idx-1] == '\r' && line_range.max > line_range.min)
+          {
+            line_range.max -= 1;
+          }
           U64 line_size = dim_1u64(line_range);
           shared->info.lines_ranges[line_idx] = line_range;
           shared->info.lines_max_size = Max(shared->info.lines_max_size, line_size);
           line_idx += 1;
           line_start_idx = idx+1;
-          if(idx < data.size && data.str[idx] == '\r')
-          {
-            line_start_idx += 1;
-            idx += 1;
-          }
         }
         if(idx && idx%1000 == 0)
         {
