@@ -5358,6 +5358,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         if(process->kind != CTRL_EntityKind_Process) { continue; }
         for(CTRL_Entity *thread = process->first; thread != &ctrl_entity_nil; thread = thread->next)
         {
+          if(thread->kind != CTRL_EntityKind_Thread) { continue; }
           U64 rip = dmn_rip_from_thread(thread->handle.dmn_handle);
           
           // rjf: determine if thread is frozen
