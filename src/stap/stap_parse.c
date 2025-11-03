@@ -4,9 +4,7 @@
 internal B32
 stap_is_scale_valid(U64 scale)
 {
-  local_persist B8 valid_sizes[9] = { 0, 1, 1, 0, 1, 0, 0, 0, 1 };
-  B32 is_valid = scale < ArrayCount(valid_sizes) && valid_sizes[scale];
-  return is_valid;
+  return IsPow2(scale) && scale <= 8;
 }
 
 internal U64
@@ -52,7 +50,7 @@ stap_size_from_arg(String8 string)
 {
   U64 tag_sep      = str8_find_needle(string, 0, str8_lit("@"), 0);
   U64 next_tag_sep = str8_find_needle(string, tag_sep + 1, str8_lit("@"), 0);
-  U64 arg_end      = str8_find_needle_reverse(string, next_tag_sep, str8_lit(" "), 0);
+  U64 arg_end      = str8_find_needle_reverse(string, string.size - next_tag_sep, str8_lit(" "), 0);
   return arg_end == 0 ? string.size : arg_end;
 }
 
@@ -292,8 +290,8 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
     }
     // %reg
     else if (str8_match(str8_lit("%"), oper, StringMatchFlag_RightSideSloppy)) {
-      // skip %
-      String8 reg_str = str8_skip(oper, 1);
+      // skip % and strip white space
+      String8 reg_str = str8_skip_chop_whitespace(str8_skip(oper, 1));
       if (reg_str.size == 0) {
         goto operand_parse_exit;
       }
@@ -361,4 +359,80 @@ stap_arg_array_from_string(Arena *arena, Arch arch, String8 string)
   return result;
 }
 
+internal B32
+stap_read_arg(STAP_Arg         arg,
+              Arch             arch,
+              void            *reg_block,
+              STAP_MemoryRead *memory_read,
+              void            *memory_read_ctx,
+              void            *raw_value)
+{
+  AssertAlways(arg.value_size <= 8);
+
+  B32 is_value_read = 0;
+
+  switch (arg.type) {
+  case STAP_ArgType_Null: break;
+  case STAP_ArgType_Imm: {
+    MemoryCopy(raw_value, &arg.imm, arg.value_size);
+    is_value_read = 1;
+  } break;
+  case STAP_ArgType_Reg: {
+    Rng1U64 range     = regs_range_from_code(arch, arg.reg.is_alias, arg.reg.reg_code);
+    U64     copy_size = Min(arg.value_size, dim_1u64(range));
+    MemoryCopy(raw_value, (U8 *)reg_block + range.min, copy_size);
+    is_value_read = 1;
+  } break;
+  case STAP_ArgType_MemoryRef: {
+    U64 base = 0;
+    if(arg.memory_ref.base.reg_code) {
+      Rng1U64 range     = regs_range_from_code(arch, arg.memory_ref.base.is_alias, arg.memory_ref.base.reg_code);
+      U64     copy_size = Min(sizeof(base), dim_1u64(range));
+      MemoryCopy(&base, (U8 *)reg_block + range.min, copy_size);
+    }
+
+    U64 index = 0;
+    if(arg.memory_ref.index.reg_code) {
+      Rng1U64 range     = regs_range_from_code(arch, arg.memory_ref.index.is_alias, arg.memory_ref.index.reg_code);
+      U64     copy_size = Min(sizeof(base), dim_1u64(range));
+      MemoryCopy(&index, (U8 *)reg_block + range.min, copy_size);
+    }
+
+    U64 addr = arg.memory_ref.disp + (base + index * arg.memory_ref.scale);
+    if (memory_read(addr, raw_value, arg.value_size, memory_read_ctx)) {
+      is_value_read = 1;
+    }
+  } break;
+  default: { InvalidPath; } break;
+  }
+
+  if (arg.value_size < 8) {
+    if (arg.value_type == STAP_ArgValueType_S) {
+      *(U64 *)raw_value = extend_sign64(*(U64 *)raw_value, arg.value_size);
+    } else if (arg.value_type == STAP_ArgValueType_F) {
+      Assert(arg.value_size == 4);
+      *(F64 *)raw_value = *(F32 *)raw_value;
+    }
+  }
+
+  return is_value_read;
+}
+
+internal B32
+stap_read_arg_u(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, U64 *u_out)
+{
+  return stap_read_arg(arg, arch, reg_block, memory_read, memory_read_ctx, u_out);
+}
+
+internal B32
+stap_read_arg_s(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, S64 *s_out)
+{
+  return stap_read_arg(arg, arch, reg_block, memory_read, memory_read_ctx, s_out);
+}
+
+internal B32
+stap_read_arg_f(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, F64 *f_out)
+{
+  return stap_read_arg(arg, arch, reg_block, memory_read, memory_read_ctx, f_out);
+}
 
