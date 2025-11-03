@@ -1066,7 +1066,11 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
     Temp scratch = scratch_begin(0, 0);
     String16 title16 = str16_from_8(scratch.arena, title);
     os_w32_new_window_custom_border = custom_border;
-    hwnd = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP,
+    DWORD style_flags = WS_EX_APPWINDOW;
+#if defined(R_BACKEND) && R_BACKEND != R_BACKEND_OPENGL
+    style_flags |= WS_EX_NOREDIRECTIONBITMAP;
+#endif
+    hwnd = CreateWindowExW(style_flags,
                            L"graphical-window",
                            (WCHAR*)title16.str,
                            WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
