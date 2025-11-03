@@ -108,6 +108,9 @@ struct REGS_Slice
 ////////////////////////////////
 //~ rjf: Helpers
 
+internal REGS_RegCode regs_reg_code_from_name(Arch arch, String8 name);
+internal REGS_AliasCode regs_alias_code_from_name(Arch arch, String8 name);
+internal Rng1U64 regs_range_from_code(Arch arch, B32 is_alias, U64 reg_code);
 internal U64 regs_block_size_from_arch(Arch arch);
 internal U64 regs_reg_code_count_from_arch(Arch arch);
 internal U64 regs_alias_code_count_from_arch(Arch arch);

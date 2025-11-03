@@ -65,10 +65,18 @@ typedef struct STAP_ArgValueArray
   STAP_ArgValue *v;
 } STAP_ArgValueArray;
 
+#define STAP_MEMORY_READ(name) B32 name(U64 addr, void *buffer, U64 read_size, void *raw_ctx)
+typedef STAP_MEMORY_READ(STAP_MemoryRead);
+
 ////////////////////////////////
 
 internal String8 stap_parse_args_x64(String8 string, STAP_Arg *arg_out);
 internal STAP_ArgArray stap_arg_array_from_string(Arena *arena, Arch arch, String8 string);
+
+internal B32 stap_read_arg(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, void *raw_value);
+internal B32 stap_read_arg_u(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, U64 *u_out);
+internal B32 stap_read_arg_s(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, S64 *s_out);
+internal B32 stap_read_arg_f(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, F64 *f_out);
 
 #endif // STAP_PARSE_H
 
