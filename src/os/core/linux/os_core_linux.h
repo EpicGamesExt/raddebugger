@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <spawn.h>
 
 pid_t gettid(void);
 int pthread_setname_np(pthread_t thread, const char *name);

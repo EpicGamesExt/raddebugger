@@ -652,7 +652,7 @@ os_shared_memory_alloc(U64 size, String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
   String8 name_copy = push_str8_copy(scratch.arena, name);
-  int id = shm_open((char *)name_copy.str, O_RDWR, 0);
+  int id = shm_open((char *)name_copy.str, O_RDWR | O_CREAT, 0);
   ftruncate(id, size);
   OS_Handle result = {(U64)id};
   scratch_end(scratch);
@@ -770,13 +770,138 @@ os_sleep_milliseconds(U32 msec)
 internal OS_Handle
 os_process_launch(OS_ProcessLaunchParams *params)
 {
-  NotImplemented;
+  OS_Handle handle = {0};
+
+  posix_spawn_file_actions_t file_actions = {0};
+  int file_actions_init_code = posix_spawn_file_actions_init(&file_actions);
+  if(file_actions_init_code == 0)
+  {
+    // redirect STDOUT 
+    int stdout_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdout_file.u64[0], STDOUT_FILENO);
+    Assert(stdout_code == 0);
+
+    // redirect STDERR
+    int stderr_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stderr_file.u64[0], STDERR_FILENO);
+    Assert(stderr_code == 0);
+
+    // redirect STDIN
+    int stdin_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdin_file.u64[0], STDIN_FILENO);
+    Assert(stdin_code == 0);
+
+    posix_spawnattr_t attr = {0};
+    int attr_init_code = posix_spawnattr_init(&attr);
+    if(attr_init_code == 0)
+    {
+      Temp scratch = scratch_begin(0, 0);
+
+      // make path to exe
+      String8 path_to_exe;
+      {
+        String8List l = str8_split_path(scratch.arena, params->path);
+        str8_list_push(scratch.arena, &l, params->cmd_line.first->string);
+        path_to_exe = str8_path_list_join_by_style(scratch.arena, &l, PathStyle_SystemAbsolute);
+      }
+
+      // package argv
+      char **argv = push_array(scratch.arena, char *, params->cmd_line.node_count + 1);
+      {
+        argv[0] = (char *)path_to_exe.str;
+        U64 arg_idx = 1;
+        for EachNode(n, String8Node, params->cmd_line.first->next) { argv[arg_idx++] = (char *)n->string.str; }
+      }
+
+      // package envp
+      char **envp = 0;
+      if(params->inherit_env)
+      {
+        envp = __environ;
+      }
+      else
+      {
+        envp = push_array(scratch.arena, char *, params->env.node_count + 2);
+        U64 env_idx = 0;
+        for EachNode(n, String8Node, params->cmd_line.first)
+        {
+          envp[env_idx] = (char *)n->string.str;
+        }
+      }
+
+      if(params->debug_subprocesses)
+      {
+        // not suported
+        InvalidPath;
+      }
+
+      if(!params->consoleless)
+      {
+        NotImplemented;
+      }
+
+      // spawn process
+      pid_t pid = 0;
+      int spawn_code = posix_spawn(&pid, (char *)path_to_exe.str, &file_actions, &attr, argv, envp);
+
+      if(spawn_code == 0)
+      {
+        handle.u64[0] = (U64)pid;
+      }
+
+      // clean up attributes
+      int attr_destroy_code = posix_spawnattr_destroy(&attr);
+      Assert(attr_destroy_code == 0);
+
+      scratch_end(scratch);
+    }
+
+    // clean up file actions
+    int file_actions_destroy_code = posix_spawn_file_actions_destroy(&file_actions);
+    Assert(file_actions_destroy_code == 0);
+  }
+
+  return handle;
 }
 
 internal B32
 os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
 {
-  NotImplemented;
+  pid_t pid = (pid_t)handle.u64[0];
+  B32 result = 0;
+  if(endt_us == 0)
+  {
+    if(kill(pid, 0) >= 0)
+    {
+      result = (errno == ENOENT);
+
+      if(result)
+      {
+        int status;
+        waitpid(pid, &status, 0);
+      }
+    }
+    else { Assert(0 && "failed to get status from pid"); }
+  }
+  else if(endt_us == max_U64)
+  {
+    for(;;)
+    {
+      int status = 0;
+      int w = waitpid(pid, &status, 0);
+      if(w == -1)
+      {
+        break;
+      }
+      if(WIFEXITED(status) || WIFSTOPPED(status) || WIFSIGNALED(status))
+      {
+        result = 1;
+        break;
+      }
+    }
+  }
+  else
+  {
+    NotImplemented;
+  }
+  return result;
 }
 
 internal U64
@@ -788,13 +913,15 @@ os_process_array_join(OS_HandleArray processes, U64 endt_us, U64 *exit_code_out)
 internal void
 os_process_detach(OS_Handle handle)
 {
-  NotImplemented;
+  // no need to close pid
 }
 
 internal B32
 os_process_kill(OS_Handle handle)
 {
-  NotImplemented;
+  int error_code = kill((pid_t)handle.u64[0], SIGKILL);
+  B32 is_killed = error_code == 0;
+  return is_killed;
 }
 
 ////////////////////////////////
