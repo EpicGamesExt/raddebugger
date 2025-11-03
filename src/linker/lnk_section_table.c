@@ -161,9 +161,7 @@ lnk_section_table_purge(LNK_SectionTable *sectab, String8 name)
 
   LNK_SectionNode *node            = lnk_section_table_remove(sectab, name);
   String8          name_with_flags = lnk_make_name_with_flags(scratch.arena, name, node->data.flags);
-  KeyValuePair    *kv              = hash_table_search_string(sectab->sect_ht, name_with_flags);
-  kv->key_string   = str8_zero();
-  kv->value_raw    = 0;
+  hash_table_purge_string(sectab->sect_ht, name_with_flags);
 
   scratch_end(scratch);
 }

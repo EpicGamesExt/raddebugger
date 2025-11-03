@@ -184,10 +184,7 @@ coff_lib_writer_serialize(Arena *arena, COFF_LibWriter *lib_writer, COFF_TimeSta
       U64 name_with_slash_size = member->name.size + 1;
       if (name_with_slash_size > COFF_Archive_MaxShortNameSize) {
         // have we seen this member name before?
-        KeyValuePair *is_present = hash_table_search_string(name_ht, member->name);
-        if (is_present) {
-          name = is_present->value_string;
-        } else {
+        if (!hash_table_search_string_string(name_ht, member->name, &name)) {
           name = push_str8f(scratch.arena, "/%u", long_names_list.total_size);
           str8_list_pushf(scratch.arena, &long_names_list, "%S/\n", member->name);
           hash_table_push_string_string(scratch.arena, name_ht, member->name, name);

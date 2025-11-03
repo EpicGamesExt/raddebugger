@@ -1086,7 +1086,7 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
 
   // warn about missing library
   if (first_match.size == 0) {
-    KeyValuePair *was_reported = hash_table_search_path(inputer->missing_lib_ht, path);
+    BucketNode *was_reported = hash_table_search_path(inputer->missing_lib_ht, path);
     if (was_reported == 0) {
       hash_table_push_path_u64(inputer->arena, inputer->missing_lib_ht, path, 0);
       lnk_error(LNK_Warning_FileNotFound, "unable to find library `%S`", path);

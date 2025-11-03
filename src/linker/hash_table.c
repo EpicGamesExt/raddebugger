@@ -64,8 +64,8 @@ hash_table_push(Arena *arena, HashTable *ht, U64 hash, KeyValuePair v)
   node->v    = v;
   
   U64 ibucket = hash % ht->cap;
-  SLLQueuePush(ht->buckets[ibucket].first, ht->buckets[ibucket].last, node);
-  ++ht->count;
+  DLLPushBack(ht->buckets[ibucket].first, ht->buckets[ibucket].last, node);
+  ht->count += 1;
   
   return node;
 }
@@ -162,7 +162,7 @@ hash_table_push_path_raw(Arena *arena, HashTable *ht, String8 path, void *value)
 
 ////////////////////////////////
 
-internal KeyValuePair *
+internal BucketNode *
 hash_table_search_string(HashTable *ht, String8 key_string)
 {
   U64         hash    = hash_table_hasher(key_string);
@@ -170,13 +170,13 @@ hash_table_search_string(HashTable *ht, String8 key_string)
   BucketList *bucket  = ht->buckets + ibucket;
   for (BucketNode *n = bucket->first; n != 0; n = n->next) {
     if (str8_match(n->v.key_string, key_string, 0)) {
-      return &n->v;
+      return n;
     }
   }
   return 0;
 }
 
-internal KeyValuePair *
+internal BucketNode *
 hash_table_search_u32(HashTable *ht, U32 key_u32)
 {
   U64         hash    = hash_table_hasher(str8_struct(&key_u32));
@@ -184,13 +184,13 @@ hash_table_search_u32(HashTable *ht, U32 key_u32)
   BucketList *bucket  = ht->buckets + ibucket;
   for (BucketNode *n = bucket->first; n != 0; n = n->next) {
     if (n->v.key_u32 == key_u32) {
-      return &n->v;
+      return n;
     }
   }
   return 0;
 }
 
-internal KeyValuePair *
+internal BucketNode *
 hash_table_search_u64(HashTable *ht, U64 key_u64)
 {
   U64         hash    = hash_table_hasher(str8_struct(&key_u64));
@@ -198,25 +198,25 @@ hash_table_search_u64(HashTable *ht, U64 key_u64)
   BucketList *bucket  = ht->buckets + ibucket;
   for (BucketNode *n = bucket->first; n != 0; n = n->next) {
     if (n->v.key_u64 == key_u64) {
-      return &n->v;
+      return n;
     }
   }
   return 0;
 }
 
-internal KeyValuePair *
+internal BucketNode *
 hash_table_search_path(HashTable *ht, String8 path)
 {
   Temp scratch = scratch_begin(0,0);
   String8 path_canon = path;
   path_canon = lower_from_str8(scratch.arena, path_canon);
   path_canon = path_convert_slashes(scratch.arena, path_canon, PathStyle_UnixAbsolute);
-  KeyValuePair *result = hash_table_search_string(ht, path_canon);
+  BucketNode *result = hash_table_search_string(ht, path_canon);
   scratch_end(scratch);
   return result;
 }
 
-internal KeyValuePair *
+internal BucketNode *
 hash_table_search_raw(HashTable *ht, void *key)
 {
   U64         hash    = hash_table_hasher(str8_struct(&key));
@@ -224,7 +224,7 @@ hash_table_search_raw(HashTable *ht, void *key)
   BucketList *bucket  = ht->buckets + ibucket;
   for (BucketNode *n = bucket->first; n != 0; n = n->next) {
     if (n->v.key_raw == key) {
-      return &n->v;
+      return n;
     }
   }
   return 0;
@@ -233,10 +233,10 @@ hash_table_search_raw(HashTable *ht, void *key)
 internal B32
 hash_table_search_path_u64(HashTable *ht, String8 key, U64 *value_out)
 {
-  KeyValuePair *result = hash_table_search_path(ht, key);
+  BucketNode *result = hash_table_search_path(ht, key);
   if (result != 0) {
     if (value_out != 0) {
-      *value_out = result->value_u64;
+      *value_out = result->v.value_u64;
     }
     return 1;
   }
@@ -260,10 +260,10 @@ hash_table_push_raw_raw(Arena *arena, HashTable *ht, void *key, void *value)
 internal B32
 hash_table_search_string_u64(HashTable *ht, String8 key, U64 *value_out)
 {
-  KeyValuePair *result = hash_table_search_string(ht, key);
+  BucketNode *result = hash_table_search_string(ht, key);
   if (result != 0) {
     if (value_out != 0) {
-      *value_out = result->value_u64;
+      *value_out = result->v.value_u64;
     }
     return 1;
   }
@@ -273,10 +273,10 @@ hash_table_search_string_u64(HashTable *ht, String8 key, U64 *value_out)
 internal B32
 hash_table_search_string_string(HashTable *ht, String8 key, String8 *value_out)
 {
-  KeyValuePair *result = hash_table_search_string(ht, key);
+  BucketNode *result = hash_table_search_string(ht, key);
   if (result) {
     if (value_out) {
-      *value_out = result->value_string;
+      *value_out = result->v.value_string;
     }
     return 1;
   }
@@ -286,10 +286,10 @@ hash_table_search_string_string(HashTable *ht, String8 key, String8 *value_out)
 internal B32
 hash_table_search_u32_u32(HashTable *ht, U32 key, U32 *value_out)
 {
-  KeyValuePair *result = hash_table_search_u32(ht, key);
+  BucketNode *result = hash_table_search_u32(ht, key);
   if (result) {
     if (value_out) {
-      *value_out = result->value_u32;
+      *value_out = result->v.value_u32;
     }
     return 1;
   }
@@ -299,9 +299,9 @@ hash_table_search_u32_u32(HashTable *ht, U32 key, U32 *value_out)
 internal void *
 hash_table_search_string_raw(HashTable *ht, String8 key)
 {
-  KeyValuePair *result = hash_table_search_string(ht, key);
+  BucketNode *result = hash_table_search_string(ht, key);
   if (result) {
-    return result->value_raw;
+    return result->v.value_raw;
   }
   return 0;
 }
@@ -309,22 +309,54 @@ hash_table_search_string_raw(HashTable *ht, String8 key)
 internal void *
 hash_table_search_u64_raw(HashTable *ht, U64 key_u64)
 {
-  KeyValuePair *kv = hash_table_search_u64(ht, key_u64);
-  return kv ? kv->value_raw : 0;
+  BucketNode *n = hash_table_search_u64(ht, key_u64);
+  return n ? n->v.value_raw : 0;
 }
 
 internal void *
 hash_table_search_path_raw(HashTable *ht, String8 path)
 {
-  KeyValuePair *kv = hash_table_search_path(ht, path);
-  return kv ? kv->value_raw : 0;
+  BucketNode *n = hash_table_search_path(ht, path);
+  return n ? n->v.value_raw : 0;
 }
 
 internal void *
 hash_table_search_raw_raw(HashTable *ht, void *key)
 {
-  KeyValuePair *kv = hash_table_search_raw(ht, key);
-  return kv ? kv->value_raw : 0;
+  BucketNode *n = hash_table_search_raw(ht, key);
+  return n ? n->v.value_raw : 0;
+}
+
+internal void
+hash_table_purge_item(HashTable *ht, U64 hash, BucketNode *node)
+{
+  U64 bucket_idx = hash % ht->cap;
+  DLLRemove(ht->buckets[bucket_idx].first, ht->buckets[bucket_idx].last, node);
+  ht->count -= 1;
+}
+
+internal B32
+hash_table_purge_u64(HashTable *ht, U64 key)
+{
+  U64         hash = hash_table_hasher(str8_struct(&key));
+  BucketNode *n    = hash_table_search_u64(ht, key);
+  if (n) {
+    hash_table_purge_item(ht, hash, n);
+    return 1;
+  }
+  return 0;
+}
+
+internal B32
+hash_table_purge_string(HashTable *ht, String8 key)
+{
+  U64         hash = hash_table_hasher(key);
+  BucketNode *n    = hash_table_search_string(ht, key);
+  if (n) {
+    hash_table_purge_item(ht, hash, n);
+    return 1;
+  }
+  return 0;
 }
 
 internal int
@@ -451,7 +483,7 @@ remove_duplicates_u64_array(Arena *arena, U64Array arr)
   HashTable *ht = hash_table_init(scratch.arena, ((U64)(F64)arr.count * 0.5));
   
   for (U64 i = 0; i < arr.count; ++i) {
-    KeyValuePair *is_present = hash_table_search_u64(ht, arr.v[i]);
+    BucketNode *is_present = hash_table_search_u64(ht, arr.v[i]);
     if (!is_present) {
       hash_table_push_u64_raw(scratch.arena, ht, arr.v[i], 0);
     }
@@ -474,7 +506,7 @@ remove_duplicates_str8_list(Arena *arena, String8List list)
   HashTable   *ht     = hash_table_init(scratch.arena, list.node_count);
   
   for (String8Node *node = list.first; node != 0; node = node->next) {
-    KeyValuePair *is_present = hash_table_search_string(ht, node->string);
+    BucketNode *is_present = hash_table_search_string(ht, node->string);
     if (!is_present) {
       hash_table_push_string_raw(scratch.arena, ht, node->string, 0);
       str8_list_push(arena, &result, node->string);
