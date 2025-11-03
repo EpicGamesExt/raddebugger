@@ -86,16 +86,17 @@ struct DMN_LNX_UserX64
 StaticAssert(sizeof(DMN_LNX_UserX64) == 912, g_dmn_lnx_user_x64_size_check);
 
 ////////////////////////////////
-//~ Probes
+//~ SDT Probes
 
 typedef struct DMN_LNX_Probe DMN_LNX_Probe;
 struct DMN_LNX_Probe
 {
-  String8 provider;
-  String8 name;
-  String8 args;
-  U64     pc;
-  U64     semaphore;
+  String8       provider;
+  String8       name;
+  String8       args_string;
+  STAP_ArgArray args;
+  U64           pc;
+  U64           semaphore;
 };
 
 typedef struct DMN_LNX_ProbeNode DMN_LNX_ProbeNode;
@@ -113,23 +114,22 @@ struct DMN_LNX_ProbeList
   DMN_LNX_ProbeNode *last;
 };
 
-#define DMN_LNX_Probe_XList          \
-  X(InitStart,     "init_start")     \
-  X(InitComplete,  "init_complete")  \
-  X(RelocStart,    "reloc_start")    \
-  X(RelocComplete, "reloc_complete") \
-  X(MapStart,      "map_start")      \
-  X(MapComplete,   "map_complete")   \
-  X(UnmapStart,    "unmap_start")    \
-  X(UnmapComplete, "unmap_complete") \
-  X(LongJmp,       "longjmp")        \
-  X(LongJmpTarget, "longjmp_target") \
-  X(SetJmp,        "setjmp")
+#define DMN_LNX_Probe_XList             \
+  X(InitStart,     2, "init_start")     \
+  X(InitComplete,  2, "init_complete")  \
+  X(RelocStart,    2, "reloc_start")    \
+  X(RelocComplete, 3, "reloc_complete") \
+  X(MapStart,      2, "map_start")      \
+  X(MapComplete,   3, "map_complete")   \
+  X(UnmapStart,    2, "unmap_start")    \
+  X(UnmapComplete, 2, "unmap_complete") \
+  X(LongJmp,       3, "longjmp")        \
+  X(LongJmpTarget, 3, "longjmp_target") \
+  X(SetJmp,        3, "setjmp")
 
 typedef enum
 {
   DMN_LNX_ProbeType_Null,
-
 #define X(_N,...) DMN_LNX_ProbeType_##_N,
   DMN_LNX_Probe_XList
 #undef X
@@ -204,6 +204,7 @@ struct DMN_LNX_Entity
   U64 rdebug_brk_vaddr;
   ELF_Class dl_class;
   HashTable *loaded_modules_ht;
+  DMN_LNX_Probe **probes;
   U64 probe_vaddrs[DMN_LNX_ProbeType_Count];
 
   // process x64
@@ -220,7 +221,7 @@ struct DMN_LNX_Entity
   U64 phvaddr;
   U64 phentsize;
   U64 phcount;
-  B8  is_active;
+  B8  is_live;
 };
 
 typedef struct DMN_LNX_EntityNode DMN_LNX_EntityNode;
@@ -323,6 +324,8 @@ internal B32 dmn_lnx_thread_write_ip(DMN_LNX_Entity *thread, U64 ip);
 internal B32 dmn_lnx_thread_write_sp(DMN_LNX_Entity *thread, U64 sp);
 internal B32 dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block);
 internal B32 dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block);
+
+////////////////////////////////
 
 internal B32 dmn_lnx_set_single_step_flag(DMN_LNX_Entity *thread, B32 is_on);
 

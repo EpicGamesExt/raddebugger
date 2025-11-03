@@ -590,7 +590,7 @@ exit:;
 }
 
 ////////////////////////////////
-//~ Probes
+//~ SDT Probes
 
 internal DMN_LNX_ProbeList
 dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
@@ -657,6 +657,7 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
   U64      note_read_size = dmn_lnx_read(fd, note_range, raw_note);
   if(note_read_size != dim_1u64(note_range)) { goto exit; }
 
+  Arch         arch = arch_from_elf_machine(ehdr.e_machine);
   ELF_NoteList note = elf_parse_note(scratch.arena, str8(raw_note, dim_1u64(note_range)), ehdr.e_ident[ELF_Identifier_Class], ehdr.e_machine);
 
   for EachNode(n, ELF_NoteNode, note.first)
@@ -701,7 +702,7 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
 
       probe.provider  = provider;
       probe.name      = name;
-      probe.args      = args;
+      probe.args      = stap_arg_array_from_string(arena, arch, args);
       probe.pc        = pc + probe_rebase;
       probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
     }
@@ -715,6 +716,17 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
 exit:;
   scratch_end(scratch);
   return probes;
+}
+
+////////////////////////////////
+//~ STAP
+
+internal
+STAP_MEMORY_READ(dmn_lnx_stap_memory_read)
+{
+  DMN_LNX_Entity *process = raw_ctx;
+  U64 bytes_read = dmn_lnx_read(process->fd, r1u64(addr, addr + read_size), buffer);
+  return bytes_read == read_size;
 }
 
 ////////////////////////////////
@@ -1331,6 +1343,120 @@ dmn_lnx_set_single_step_flag(DMN_LNX_Entity *thread, B32 is_on)
   return is_flag_set;
 }
 
+internal void
+dmn_lnx_process_loaded_modules(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *process, U64 name_space_id, U64 new_link_map_vaddr)
+{
+  GNU_LinkMap64 map = {0};
+  for(U64 map_vaddr = new_link_map_vaddr; map_vaddr != 0; map_vaddr = map.next_vaddr)
+  {
+    // read out new link map item
+    if(!dmn_lnx_read_linkmap(process->fd, map_vaddr, process->dl_class, &map)) { goto exit; }
+
+    // was module with this base already registered?
+    DMN_LNX_Entity *module = hash_table_search_u64_raw(process->loaded_modules_ht, map.addr_vaddr);
+    if(module) { continue; }
+
+    // parse out module's ELF header
+    ELF_Hdr64 module_ehdr = {0};
+    if(!dmn_lnx_read_ehdr(process->fd, map.addr_vaddr, &module_ehdr)) { goto exit; }
+
+    // gather info about module
+    U64              module_rebase     = module_ehdr.e_type == ELF_Type_Dyn ? map.addr_vaddr : 0;
+    U64              module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
+    DMN_LNX_PhdrInfo module_phdr_info  = dmn_lnx_phdr_info_from_memory(process->fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
+    String8          module_name       = dmn_lnx_read_string(process->arena, process->fd, map.name_vaddr);
+
+    // fill out module
+    module             = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Module);
+    module->id         = map.name_vaddr;
+    module->base_vaddr = map.addr_vaddr;
+
+    // push load event
+    if(!str8_match(module_name, str8_lit("linux-vdso.so.1"), 0))
+    {
+      DMN_Event *e = dmn_event_list_push(arena, events);
+      e->kind             = DMN_EventKind_LoadModule;
+      e->process          = dmn_lnx_handle_from_entity(process);
+      e->module           = dmn_lnx_handle_from_entity(module);
+      e->arch             = arch_from_elf_machine(module_ehdr.e_machine);
+      e->address          = map.addr_vaddr;
+      e->size             = dim_1u64(module_phdr_info.range);
+      e->string           = module_name;
+      e->elf_phdr_vrange  = r1u64(module_phdr_vaddr, module_phdr_vaddr + module_ehdr.e_phentsize * module_ehdr.e_phnum);
+      e->elf_phdr_entsize = module_ehdr.e_phentsize;
+    }
+
+    // create mapping for base -> module
+    hash_table_push_u64_raw(process->arena, process->loaded_modules_ht, map.addr_vaddr, module);
+  }
+
+  exit:;
+}
+
+internal void
+dmn_lnx_process_unloaded_modules(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *process, U64 name_space_id, U64 rdebug_vaddr)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  B32 is_unmap_complete_finished = 0;
+
+  GNU_RDebugInfo64 rdebug = {0};
+  if(!dmn_lnx_read_r_debug(process->fd, rdebug_vaddr, process->arch, &rdebug)) { goto exit; }
+  if(rdebug.r_version != 1) { goto exit; }
+
+  // flag every module as inactive
+  for(DMN_LNX_Entity *module = process->first; module != &dmn_lnx_nil_entity; module = module->next)
+  {
+    if(module->kind != DMN_LNX_EntityKind_Module) {continue;}
+    module->is_live = 0;
+  }
+
+  // loop over modules in the link map and mark live modules
+  GNU_LinkMap64 map = {0};
+  for(U64 map_vaddr = rdebug.r_map; map_vaddr != 0; map_vaddr = map.next_vaddr)
+  {
+    if(dmn_lnx_read_linkmap(process->fd, map_vaddr, process->dl_class, &map))
+    {
+      DMN_LNX_Entity *module = hash_table_search_u64_raw(process->loaded_modules_ht, map.addr_vaddr);
+      if(module)
+      {
+        module->is_live = 1;
+      }
+      else { Assert(0 && "unknown module is being unloaded"); }
+    }
+    else { Assert(0 && "unable to read Link Map"); }
+  }
+
+  // unload inactive modules
+  DMN_HandleList to_release = {0};
+  for(DMN_LNX_Entity *module = process->first; module != &dmn_lnx_nil_entity; module = module->next)
+  {
+    if(module->kind != DMN_LNX_EntityKind_Module) {continue;}
+    if(module->is_live)                           {continue;}
+    dmn_handle_list_push(scratch.arena, &to_release, dmn_lnx_handle_from_entity(module));
+  }
+
+  // push events and clean up internal structures
+  for EachNode(n, DMN_HandleNode, to_release.first)
+  {
+    DMN_LNX_Entity *module = dmn_lnx_entity_from_handle(n->v);
+
+    DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
+    e->kind    = DMN_EventKind_UnloadModule;
+    e->process = dmn_lnx_handle_from_entity(process);
+    e->module  = dmn_lnx_handle_from_entity(module);
+    e->string  = dmn_lnx_read_string(arena, process->fd, module->id);
+
+    hash_table_purge_u64(process->loaded_modules_ht, module->base_vaddr);
+
+    dmn_lnx_entity_release(module);
+  }
+
+  is_unmap_complete_finished = 1;
+exit:;
+  Assert(is_unmap_complete_finished);
+  scratch_end(scratch);
+}
+
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)
 
@@ -1626,31 +1752,34 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
           }
           AssertAlways(dl_path.size);
 
-          DMN_LNX_ProbeList probes = {0};
+          // alloc arena for the process
+          Arena *process_arena = arena_alloc();
+
+          DMN_LNX_Probe **known_probes = push_array(process_arena, DMN_LNX_Probe *, DMN_LNX_ProbeType_Count);
           {
+            DMN_LNX_ProbeList probes = {0};
             int dl_fd = open((char *)dl_path.str, O_RDONLY);
             if(dl_fd >= 0)
             {
-              probes = dmn_lnx_read_probes(scratch.arena, dl_fd, 0, auxv.base);
+              probes = dmn_lnx_read_probes(process_arena, dl_fd, 0, auxv.base);
               close(dl_fd);
             }
-          }
 
-          DMN_LNX_Probe *known_probes[DMN_LNX_ProbeType_Count] = {0};
-          for EachNode(n, DMN_LNX_ProbeNode, probes.first)
-          {
-            DMN_LNX_Probe *p = &n->v;
-            if(str8_match(p->provider, str8_lit("rtld"), 0))
+            for EachNode(n, DMN_LNX_ProbeNode, probes.first)
             {
-#define X(_N,_S) if(str8_match(p->name, str8_lit(_S), 0)) { known_probes[DMN_LNX_ProbeType_##_N] = p; continue ; }
-              DMN_LNX_Probe_XList
-#undef X
+              DMN_LNX_Probe *p = &n->v;
+              if(str8_match(p->provider, str8_lit("rtld"), 0))
+              {
+                #define X(_N,_A,_S) if(str8_match(p->name, str8_lit(_S), 0)) { AssertAlways(p->args.count == _A); known_probes[DMN_LNX_ProbeType_##_N] = p; continue ; }
+                DMN_LNX_Probe_XList
+                #undef X
+              }
             }
           }
 
           // install DL probes
           U64 probe_vaddrs[DMN_LNX_ProbeType_Count] = {0};
-          for EachIndex(i, ArrayCount(known_probes))
+          for EachIndex(i, DMN_LNX_ProbeType_Count)
           {
             if(known_probes[i] == 0) { continue; }
 
@@ -1676,8 +1805,9 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
             process->rdebug_brk_vaddr              = rdebug_brk_vaddr;
             process->expect_rdebug_data_breakpoint = rdebug_vaddr != 0;
             process->dl_class                      = dl_class;
-            process->arena                         = arena_alloc();
-            process->loaded_modules_ht             = hash_table_init(process->arena, 0x1000);
+            process->arena                         = process_arena;
+            process->loaded_modules_ht             = hash_table_init(process_arena, 0x1000);
+            process->probes                        = known_probes;
             process->xcr0                          = xcr0;
             process->xsave_size                    = Max(xsave_size, sizeof(X64_XSave));
             process->xsave_layout                  = xsave_layout;
@@ -1697,7 +1827,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
             main_thread = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Thread);
             main_thread->id        = pid;
             main_thread->arch      = process->arch;
-            main_thread->reg_block = push_array(dmn_lnx_state->entities_arena, U8, regs_block_size_from_arch(process->arch));
+            main_thread->reg_block = push_array(process->arena, U8, regs_block_size_from_arch(process->arch));
             dmn_lnx_thread_read_reg_block(main_thread, main_thread->reg_block);
             {
               DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
@@ -1840,6 +1970,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   {
     ProfScope("write all traps into memory")
     {
+      HashTable *ht = hash_table_init(scratch.arena, ctrls->traps.trap_count);
       for EachNode(n, DMN_TrapChunkNode, ctrls->traps.first)
       {
         for EachIndex(n_idx, n->count)
@@ -1848,6 +1979,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 
           if(trap->flags == 0)
           {
+            DMN_ActiveTrap *is_set = hash_table_search_u64_raw(ht, trap->vaddr);
+            if(is_set) {continue;}
+
             U8 swap_byte = 0;
             if(dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &swap_byte) > 0)
             {
@@ -1858,6 +1992,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 active_trap->trap      = trap;
                 active_trap->swap_byte = swap_byte;
                 SLLQueuePush(active_trap_first, active_trap_last, active_trap);
+
+                hash_table_push_u64_raw(scratch.arena, ht, trap->vaddr, active_trap);
               } else { Assert(0 && "failed to write trap"); }
             } else { Assert(0 && "failed to read original byte"); }
           }
@@ -2168,120 +2304,84 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           break;
         }
       }
-
-      // rollback IP on user traps
-      if(hit_user_trap)
-      {
-        U64 ip = dmn_lnx_thread_read_ip(thread);
-        dmn_lnx_thread_write_ip(thread, ip - 1);
-      }
     }
 
     // is this a probe trap?
-    if(!hit_user_trap && e_kind == DMN_EventKind_Breakpoint)
+    if(e_kind == DMN_EventKind_Breakpoint)
     {
-      B32 skip_event = 0;
-
       // find which probe was triggered
-      U64               ip         = dmn_lnx_thread_read_ip(thread) - 1;
+      U64 ip = dmn_lnx_thread_read_ip(thread);
       DMN_LNX_ProbeType probe_type = DMN_LNX_ProbeType_Null;
       for EachIndex(i, ArrayCount(process->probe_vaddrs))
       {
-        if(process->probe_vaddrs[i] == ip)
+        if(process->probe_vaddrs[i] == ip-1)
         {
           probe_type = i;
-          skip_event = 1;
           break;
         }
       }
 
-      // handle the probe
-      if((probe_type == DMN_LNX_ProbeType_InitStart || probe_type == DMN_LNX_ProbeType_InitComplete))
+      if(probe_type == DMN_LNX_ProbeType_InitComplete)
       {
-        GNU_RDebugInfo64 rdebug = {0};
-        dmn_lnx_read_r_debug(process->fd, process->rdebug_vaddr, process->arch, &rdebug);
-
-        switch(rdebug.r_state)
+        U64 name_space_id = 0, rdebug_addr = 0;
+        DMN_LNX_Probe *probe = process->probes[DMN_LNX_ProbeType_InitComplete];
+        if(stap_read_arg_u(probe->args.v[0], process->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &name_space_id))
         {
-          case GNU_RT_Add:
-          case GNU_RT_Delete:
-          case GNU_RT_Consistent:
+          if(stap_read_arg_u(probe->args.v[1], process->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &rdebug_addr))
           {
-            // flag every module as inactive
-            for(DMN_LNX_Entity *module = process->first; module != &dmn_lnx_nil_entity; module = module->next)
+            GNU_RDebugInfo64 rdebug = {0};
+            if(dmn_lnx_read_r_debug(process->fd, rdebug_addr, process->arch, &rdebug))
             {
-              if(module->kind != DMN_LNX_EntityKind_Module) {continue;}
-              module->is_active = 0;
-            }
-            
-            for(U64 map_vaddr = rdebug.r_map; map_vaddr!= 0; )
-            {
-              // read out link map
-              GNU_LinkMap64 map = {0};
-              if(!dmn_lnx_read_linkmap(process->fd, map_vaddr, process->dl_class, &map)) { Assert(0 && "unable to read Link Map"); }
-
-              // make new module if never seen before
-              DMN_LNX_Entity *module = hash_table_search_u64_raw(process->loaded_modules_ht, map.addr_vaddr);
-              if(module == 0)
+              if(rdebug.r_version == 1)
               {
-                ELF_Hdr64 module_ehdr = {0};
-                if(!dmn_lnx_read_ehdr(process->fd, map.addr_vaddr, &module_ehdr)) { NotImplemented; }
-
-                U64              module_rebase     = module_ehdr.e_type == ELF_Type_Dyn ? map.addr_vaddr : 0;
-                U64              module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
-                DMN_LNX_PhdrInfo module_phdr_info  = dmn_lnx_phdr_info_from_memory(process->fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
-                String8          module_name       = dmn_lnx_read_string(process->arena, process->fd, map.name_vaddr);
-
-                module             = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Module);
-                module->id         = map.name_vaddr;
-                module->base_vaddr = map.addr_vaddr;
-
-                if (!str8_match(module_name, str8_lit("linux-vdso.so.1"), 0))
-                {
-                  DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
-                  e->kind             = DMN_EventKind_LoadModule;
-                  e->process          = dmn_lnx_handle_from_entity(process);
-                  e->module           = dmn_lnx_handle_from_entity(module);
-                  e->arch             = arch_from_elf_machine(module_ehdr.e_machine);
-                  e->address          = map.addr_vaddr;
-                  e->size             = dim_1u64(module_phdr_info.range);
-                  e->string           = module_name;
-                  e->elf_phdr_vrange  = r1u64(module_phdr_vaddr, module_phdr_vaddr + module_ehdr.e_phentsize * module_ehdr.e_phnum);
-                  e->elf_phdr_entsize = module_ehdr.e_phentsize;
-                }
-
-                hash_table_push_u64_raw(process->arena, process->loaded_modules_ht, map.addr_vaddr, module);
+                dmn_lnx_process_loaded_modules(arena, &evts, process, name_space_id, rdebug.r_map);
               }
-
-              // do not unload module
-              module->is_active = 1;
-
-              // advance to next link map
-              map_vaddr = map.next_vaddr;
+              else { Assert(0 && "unexpected version number"); }
             }
-
-            // unload inactive modules
-            for(DMN_LNX_Entity *module = process->first, *module_next; module != &dmn_lnx_nil_entity; module = module_next)
-            {
-              module_next = module->next;
-              if(module->kind != DMN_LNX_EntityKind_Module) {continue;}
-              if(module->is_active)                         {continue;}
-
-              DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
-              e->kind    = DMN_EventKind_UnloadModule;
-              e->process = dmn_lnx_handle_from_entity(process);
-              e->module  = dmn_lnx_handle_from_entity(module);
-              e->string  = dmn_lnx_read_string(arena, process->fd, module->id);
-
-              hash_table_purge_u64(process->loaded_modules_ht, module->base_vaddr);
-              dmn_lnx_entity_release(module);
-            }
-          } break;
-          default: { Assert(0 && "unexpected state"); } break;
+            else { Assert(0 && "failed to read rdebug"); }
+          }
+          else { Assert(0 && "failed to parse second argument"); }
         }
+        else { Assert(0 && "failed to parse first argument"); }
+      }
+      else if(probe_type == DMN_LNX_ProbeType_RelocComplete)
+      {
+        U64 name_space_id = 0, new_link_map_addr = 0;
+        DMN_LNX_Probe *probe = process->probes[DMN_LNX_ProbeType_RelocComplete];
+        if(stap_read_arg_u(probe->args.v[0], process->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &name_space_id))
+        {
+          if(stap_read_arg_u(probe->args.v[2], process->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &new_link_map_addr))
+          {
+            dmn_lnx_process_loaded_modules(arena, &evts, process, name_space_id, new_link_map_addr);
+          }
+          else { Assert(0 && "failed to parse third argument"); }
+        }
+        else { Assert(0 && "failed to parse first argument"); }
+      }
+      else if(probe_type == DMN_LNX_ProbeType_UnmapComplete)
+      {
+        // read probe's arguments
+        U64 name_space_id = 0, rdebug_vaddr = 0;
+        DMN_LNX_Probe *probe = process->probes[DMN_LNX_ProbeType_UnmapComplete];
+        if(stap_read_arg_u(probe->args.v[0], process->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &name_space_id))
+        {
+          if(stap_read_arg_u(probe->args.v[1], process->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &rdebug_vaddr))
+          {
+            dmn_lnx_process_unloaded_modules(arena, &evts, process, name_space_id, rdebug_vaddr);
+          }
+          else { Assert(0 && "failed to read second argument"); }
+        }
+        else { Assert(0 && "failed to read first argument"); }
       }
 
-      if(skip_event) {break;}
+      if(probe_type != DMN_LNX_ProbeType_Null) {break;}
+    }
+
+    // rollback IP on user traps
+    if(hit_user_trap)
+    {
+      U64 ip = dmn_lnx_thread_read_ip(thread);
+      dmn_lnx_thread_write_ip(thread, ip - 1);
     }
 
     switch(e_kind)
