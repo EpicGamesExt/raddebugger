@@ -1,0 +1,246 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@table(name       ext                keywords_table     multichar_symbol_table     tokenizer_rules_table)
+TXT_LangKindTable:
+{
+  { Null           null               null               null                       null}
+  { C              c                  c                  c                          c   }
+  { CPlusPlus      cpp                cpp                c                          c   }
+  { Odin           odin               odin               c                          null}
+  { Jai            jai                jai                c                          null}
+  { Zig            zig                zig                c                          null}
+  { Rust           rs                 rust               c                          null}
+  { DisasmX64Intel disasm_x64_intel   null               null                       null}
+}
+
+@table(string kind)
+TXT_LangKindExtTable:
+{
+  {"h"    C        }
+  {"cxx"  CPlusPlus}
+  {"cc"   CPlusPlus}
+  {"c++"  CPlusPlus}
+  {"ixx"  CPlusPlus}
+  {"cxxm" CPlusPlus}
+  {"c++m" CPlusPlus}
+  {"ccm"  CPlusPlus}
+  {"cppm" CPlusPlus}
+  {"mpp"  CPlusPlus}
+  {"C"    CPlusPlus}
+  {"hpp"  CPlusPlus}
+  {"hxx"  CPlusPlus}
+  {"hh"   CPlusPlus}
+  {"h++"  CPlusPlus}
+  {"H"    CPlusPlus}
+}
+
+@enum TXT_LangKind:
+{
+  @expand(TXT_LangKindTable a) `$(a.name)`,
+  COUNT
+}
+
+@data(String8)
+txt_lang_kind_ext_table:
+{
+  @expand(TXT_LangKindTable a) `str8_lit_comp("$(a.ext)")`
+}
+
+@data(`struct {String8 ext; TXT_LangKind kind;}`) @c_file
+txt_ext_lang_kind_table:
+{
+  @expand(TXT_LangKindTable a) `{str8_lit_comp("$(a.ext)"), TXT_LangKind_$(a.name)}`,
+  @expand(TXT_LangKindExtTable a) `{str8_lit_comp("$(a.string)"), TXT_LangKind_$(a.kind)}`,
+}
+
+@data(String8Array) txt_keywords_from_lang_kind_table:
+{
+  @expand(TXT_LangKindTable a) `{txt_keywords__$(a.keywords_table), ArrayCount(txt_keywords__$(a.keywords_table))}`
+}
+
+@data(String8Array) txt_multichar_symbols_from_lang_kind_table:
+{
+  @expand(TXT_LangKindTable a) `{txt_multichar_symbols__$(a.multichar_symbol_table), ArrayCount(txt_multichar_symbols__$(a.multichar_symbol_table))}`
+}
+
+@data(TXT_TokenizerRuleArray) txt_tokenizer_rules_from_lang_kind_table:
+{
+  @expand(TXT_LangKindTable a) `{txt_tokenizer_rules__$(a.tokenizer_rules_table), ArrayCount(txt_tokenizer_rules__$(a.tokenizer_rules_table))}`
+}
+
+@data(String8) txt_keywords__null:{`{0}`}
+@data(String8) txt_multichar_symbols__null:{`{0}`}
+@data(TXT_TokenizerRule) txt_tokenizer_rules__null:{`{TXT_TokenKind_Null}`}
+
+////////////////////////////////
+//~ rjf: C
+
+@table(string)
+txt_keywords__c:
+{
+  {"auto"} {"break"} {"case"} {"char"}
+  {"const"} {"continue"} {"default"} {"do"}
+  {"double"} {"else"} {"enum"} {"extern"}
+  {"float"} {"for"} {"goto"} {"if"}
+  {"int"} {"long"} {"register"} {"return"}
+  {"short"} {"signed"} {"sizeof"} {"static"}
+  {"struct"} {"switch"} {"typedef"} {"union"}
+  {"unsigned"} {"void"} {"volatile"} {"while"}
+}
+@data(String8) txt_keywords__c: {@expand(txt_keywords__c a) `str8_lit_comp("$(a.string)")`}
+
+@table(string)
+txt_multichar_symbols__c:
+{
+  {"<<"}
+  {">>"}
+  {"<="}
+  {">="}
+  {"=="}
+  {"!="}
+  {"&&"}
+  {"||"}
+  {"|="}
+  {"&="}
+  {"^="}
+  {"~="}
+  {"+="}
+  {"-="}
+  {"*="}
+  {"/="}
+  {"%="}
+  {"<<="}
+  {">>="}
+  {"->"}
+}
+@data(String8) txt_multichar_symbols__c: {@expand(txt_multichar_symbols__c a) `str8_lit_comp("$(a.string)")`}
+
+@table(token_kind open_string close_string close_advance nesting escaping parent_num) txt_tokenizer_rules__c:
+{
+  {Comment "//"  "\\n" 0 0 1 0}
+  {Comment "/*"  "*/"  2 0 0 0}
+  {Meta    "#"   "\\n" 0 0 1 0}
+  {String  '\\"' '\\"' 1 0 1 0}
+  {String  "'"   "'"   1 0 1 0}
+  {String  '\\"' '\\"' 1 0 1 3}
+  {String  "<"   ">"   1 0 1 3}
+}
+@data(TXT_TokenizerRule) txt_tokenizer_rules__c:
+{
+  @expand(txt_tokenizer_rules__c a) `{TXT_TokenKind_$(a.token_kind), str8_lit_comp("$(a.open_string)"), str8_lit_comp("$(a.close_string)"), $(a.close_advance), $(a.nesting), $(a.escaping), $(a.parent_num)}`
+}
+
+////////////////////////////////
+//~ rjf: C++
+
+@table(string)
+txt_keywords__cpp:
+{
+  {"alignas"} {"alignof"} {"and"} {"and_eq"}
+  {"asm"} {"atomic_cancel"} {"atomic_commit"} {"atomic_noexcept"}
+  {"auto"} {"bitand"} {"bitor"} {"bool"}
+  {"break"} {"case"} {"catch"} {"char"}
+  {"char8_t"} {"char16_t"} {"char32_t"} {"class"}
+  {"compl"} {"concept"} {"const"} {"consteval"}
+  {"constexpr"} {"constinit"} {"const_cast"} {"continue"}
+  {"co_await"} {"co_return"} {"co_yield"} {"decltype"}
+  {"default"} {"delete"} {"do"} {"double"}
+  {"dynamic_cast"} {"else"} {"enum"} {"explicit"}
+  {"export"} {"extern"} {"false"} {"float"}
+  {"for"} {"friend"} {"goto"} {"if"}
+  {"inline"} {"int"} {"long"} {"mutable"}
+  {"namespace"} {"new"} {"noexcept"} {"not"}
+  {"not_eq"} {"nullptr"} {"operator"} {"or"}
+  {"or_eq"} {"private"} {"protected"} {"public"}
+  {"reflexpr"} {"register"} {"reinterpret_cast"} {"requires"}
+  {"return"} {"short"} {"signed"} {"sizeof"}
+  {"static"} {"static_assert"} {"static_cast"} {"struct"}
+  {"switch"} {"synchronized"} {"template"} {"this"}
+  {"thread_local"} {"throw"} {"true"} {"try"}
+  {"typedef"} {"typeid"} {"typename"} {"union"}
+  {"unsigned"} {"using"} {"virtual"} {"void"}
+  {"volatile"} {"wchar_t"} {"while"} {"xor"}
+  {"xor_eq"}
+}
+@data(String8) txt_keywords__cpp: {@expand(txt_keywords__cpp a) `str8_lit_comp("$(a.string)")`}
+
+////////////////////////////////
+//~ rjf: Odin
+
+@table(string)
+txt_keywords__odin:
+{
+  {"align_of"} {"asm"} {"auto_cast"} {"bit_set"}
+  {"break"} {"case"} {"cast"} {"context"}
+  {"continue"} {"defer"} {"distinct"} {"do"}
+  {"dynamic"} {"else"} {"enum"} {"fallthrough"}
+  {"for"} {"foreign"} {"if"} {"in"}
+  {"map"} {"matrix"} {"not_in"} {"or_break"}
+  {"or_continue"} {"or_else"} {"or_return"} {"package"}
+  {"proc"} {"return"} {"size_of"} {"struct"}
+  {"switch"} {"transmute"} {"typeid"} {"union"}
+  {"using"} {"when"} {"where"} {"import"}
+}
+@data(String8) txt_keywords__odin: {@expand(txt_keywords__odin a) `str8_lit_comp("$(a.string)")`}
+
+////////////////////////////////
+//~ rjf: Jai
+
+@table(string)
+txt_keywords__jai:
+{
+  {"bool"} {"true"} {"false"} {"int"}
+  {"s8"} {"u8"} {"s16"} {"u16"}
+  {"s32"} {"u32"} {"s64"} {"u64"}
+  {"s128"} {"u128"} {"float"} {"float32"}
+  {"float64"} {"void"} {"enum"} {"enum_flags"}
+  {"size_of"} {"string"} {"type_of"} {"cast"}
+  {"if"} {"ifs"} {"then"} {"else"}
+  {"case"} {"for"} {"while"} {"break"}
+  {"continue"} {"remove"} {"return"} {"inline"}
+  {"null"} {"defer"} {"xx"}
+}
+@data(String8) txt_keywords__jai: {@expand(txt_keywords__jai a) `str8_lit_comp("$(a.string)")`}
+
+////////////////////////////////
+//~ rjf: Zig
+
+@table(string)
+txt_keywords__zig:
+{
+  {"addrspace"} {"align"} {"allowzero"} {"and"}
+  {"anyframe"} {"anytype"} {"asm"} {"async"}
+  {"await"} {"break"} {"callconv"} {"catch"}
+  {"comptime"} {"const"} {"continue"} {"defer"}
+  {"else"} {"enum"} {"errdefer"} {"error"}
+  {"export"} {"extern"} {"fn"} {"for"}
+  {"if"} {"inline"} {"noalias"} {"nosuspend"}
+  {"noinline"} {"opaque"} {"or"} {"orelse"}
+  {"packed"} {"pub"} {"resume"} {"return"}
+  {"linksection"} {"struct"} {"suspend"} {"switch"}
+  {"test"} {"threadlocal"} {"try"} {"union"}
+  {"unreachable"} {"usingnamespace"} {"var"} {"volatile"}
+  {"while"}
+}
+@data(String8) txt_keywords__zig: {@expand(txt_keywords__zig a) `str8_lit_comp("$(a.string)")`}
+
+////////////////////////////////
+//~ rjf: Rust
+
+@table(string)
+txt_keywords__rust:
+{
+  {"as"} {"break"} {"const"} {"continue"}
+  {"crate"} {"else"} {"enum"} {"extern"}
+  {"false"} {"fn"} {"for"} {"if"}
+  {"impl"} {"in"} {"let"} {"loop"}
+  {"match"} {"mod"} {"move"} {"mut"}
+  {"pub"} {"ref"} {"return"} {"self"}
+  {"Self"} {"static"} {"struct"} {"super"}
+  {"trait"} {"true"} {"type"} {"unsafe"}
+  {"use"} {"where"} {"while"} {"yield"}
+  {"async"} {"await"} {"dyn"} {"macro_rules"}
+  {"raw"} {"safe"} {"union"}
+}
+@data(String8) txt_keywords__rust: {@expand(txt_keywords__rust a) `str8_lit_comp("$(a.string)")`}
