@@ -1223,13 +1223,20 @@ os_semaphore_release(Semaphore semaphore)
 internal Semaphore
 os_semaphore_open(String8 name)
 {
-  NotImplemented;
+  Semaphore result = {0};
+  sem_t *s = sem_open((char *)name.str, 0);
+  if(s != SEM_FAILED)
+  {
+    result.u64[0] = (U64)s;
+  }
+  return result;
 }
 
 internal void
 os_semaphore_close(Semaphore semaphore)
 {
-  NotImplemented;
+  sem_t *s = (sem_t *)semaphore.u64[0];
+  sem_close(s);
 }
 
 internal B32
