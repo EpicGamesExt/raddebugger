@@ -1399,9 +1399,78 @@ os_make_guid(void)
 ////////////////////////////////
 //~ rjf: @os_hooks Entry Points (Implemented Per-OS)
 
+internal void
+lnx_signal_handler(int sig, siginfo_t *info, void *arg)
+{
+  local_persist volatile U32 first = 0;
+  if (ins_atomic_u32_eval_cond_assign(&first, 1, 0) != 0)
+  {
+    for(;;)
+    {
+      sleep(UINT32_MAX);
+    }
+  }
+
+  local_persist void *ips[4096];
+  int ips_count = backtrace(ips, ArrayCount(ips));
+
+  fprintf(stderr, "A fatal signal was received: %s (%d). The process is terminating.\n", strsignal(sig), sig);
+  fprintf(stderr, "Create a new issue with this report at %s.\n\n", BUILD_ISSUES_LINK_STRING_LITERAL);
+  fprintf(stderr, "Callstack:\n");
+  for EachIndex(i, ips_count)
+  {
+    Dl_info info = {0};
+    dladdr(ips[i], &info);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd), "llvm-symbolizer --relative-address -f -e %s %lu", info.dli_fname, (unsigned long)ips[i] - (unsigned long)info.dli_fbase);
+    FILE *f = popen(cmd, "r");
+    if(f)
+    {
+      char func_name[256], file_name[256];
+      if(fgets(func_name, sizeof(func_name), f) && fgets(file_name, sizeof(file_name), f))
+      {
+        String8 func = str8_cstring(func_name);
+        if(func.size > 0) func.size -= 1;
+        String8 module = str8_skip_last_slash(str8_cstring(info.dli_fname));
+        String8 file   = str8_skip_last_slash(str8_cstring_capped(file_name, file_name + sizeof(file_name)));
+        if(file.size > 0) file.size -= 1;
+
+        B32 no_func = str8_match(func, str8_lit("??"), StringMatchFlag_RightSideSloppy);
+        B32 no_file = str8_match(file, str8_lit("??"), StringMatchFlag_RightSideSloppy);
+        if(no_func) { func = str8_zero(); }
+        if(no_file) { file = str8_zero(); }
+
+        fprintf(stderr, "%ld. [0x%016lx] %.*s%s%.*s %.*s\n", i+1, (unsigned long)ips[i], (int)module.size, module.str, (!no_func || !no_file) ? ", " : "", (int)func.size, func.str, (int)file.size, file.str);
+      }
+      pclose(f);
+    }
+    else
+    {
+      fprintf(stderr, "%ld. [0x%016lx] %s\n", i+1, (unsigned long)ips[i], info.dli_fname);
+    }
+  }
+  fprintf(stderr, "\nVersion: %s%s\n\n", BUILD_VERSION_STRING_LITERAL, BUILD_GIT_HASH_STRING_LITERAL_APPEND);
+
+  _exit(0);
+}
+
 int
 main(int argc, char **argv)
 {
+  // install signal handler for the crash call stacks
+  {
+    struct sigaction handler = { .sa_sigaction = lnx_signal_handler, .sa_flags = SA_SIGINFO, };
+    sigfillset(&handler.sa_mask);
+    sigaction(SIGILL, &handler, NULL);
+    sigaction(SIGTRAP, &handler, NULL);
+    sigaction(SIGABRT, &handler, NULL);
+    sigaction(SIGFPE, &handler, NULL);
+    sigaction(SIGBUS, &handler, NULL);
+    sigaction(SIGSEGV, &handler, NULL);
+    sigaction(SIGQUIT, &handler, NULL);
+  }
+
   //- rjf: set up OS layer
   {
     //- rjf: get statically-allocated system/process info
