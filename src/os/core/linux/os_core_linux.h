@@ -7,7 +7,6 @@
 ////////////////////////////////
 //~ rjf: Includes
 
-#define _GNU_SOURCE
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -17,6 +16,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <spawn.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/random.h>
@@ -27,7 +27,8 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include <spawn.h>
+#include <execinfo.h>
+#include <dlfcn.h>
 
 pid_t gettid(void);
 int pthread_setname_np(pthread_t thread, const char *name);
