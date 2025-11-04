@@ -794,17 +794,13 @@ os_process_launch(OS_ProcessLaunchParams *params)
     {
       Temp scratch = scratch_begin(0, 0);
 
-      // make path to exe
-      String8 path_to_exe;
-      {
-        String8List l = str8_split_path(scratch.arena, params->path);
-        str8_list_push(scratch.arena, &l, params->cmd_line.first->string);
-        path_to_exe = str8_path_list_join_by_style(scratch.arena, &l, PathStyle_SystemAbsolute);
-      }
-
       // package argv
       char **argv = push_array(scratch.arena, char *, params->cmd_line.node_count + 1);
       {
+        String8List l = str8_split_path(scratch.arena, params->path);
+        str8_list_push(scratch.arena, &l, params->cmd_line.first->string);
+        String8 path_to_exe = str8_path_list_join_by_style(scratch.arena, &l, PathStyle_SystemAbsolute);
+
         argv[0] = (char *)path_to_exe.str;
         U64 arg_idx = 1;
         for EachNode(n, String8Node, params->cmd_line.first->next) { argv[arg_idx++] = (char *)n->string.str; }
@@ -839,7 +835,7 @@ os_process_launch(OS_ProcessLaunchParams *params)
 
       // spawn process
       pid_t pid = 0;
-      int spawn_code = posix_spawn(&pid, (char *)path_to_exe.str, &file_actions, &attr, argv, envp);
+      int spawn_code = posix_spawn(&pid, argv[0], &file_actions, &attr, argv, envp);
 
       if(spawn_code == 0)
       {
