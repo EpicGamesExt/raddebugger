@@ -652,7 +652,7 @@ os_shared_memory_alloc(U64 size, String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
   String8 name_copy = push_str8_copy(scratch.arena, name);
-  int id = shm_open((char *)name_copy.str, O_RDWR | O_CREAT, 0);
+  int id = shm_open((char *)name_copy.str, O_RDWR | O_CREAT, 0666);
   ftruncate(id, size);
   OS_Handle result = {(U64)id};
   scratch_end(scratch);
