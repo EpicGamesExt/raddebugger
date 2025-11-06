@@ -215,13 +215,12 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
         next_escaped = 1;
       }
       
-      // rjf: take starter, push new token tasks
+      // rjf: take token starters
+      B32 new_token_needed = (top_task == 0);
+      TXT_TokenizerRule *new_rule = nil_rule;
+      TXT_TokenKind new_token_kind = TXT_TokenKind_Null;
       {
-        TXT_TokenizerRule *new_rule = nil_rule;
-        TXT_TokenKind new_token_kind = TXT_TokenKind_Null;
-        
         // rjf: use next bytes to look up a rule from the table
-        if(top_task == 0)
         {
           TXT_TokenizerRule *active_rule = top_task ? top_task->rule : nil_rule;
           U64 hash_1byte = u64_hash_from_str8(string_1byte);
@@ -292,37 +291,11 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
                   byte == '>' || byte == '/' ||
                   byte == '?' || byte == '|')      { new_token_kind = TXT_TokenKind_Symbol; }
         }
-        
-        // rjf: start new token
-        if(new_token_kind != TXT_TokenKind_Null)
-        {
-          TokenTask *task = free_task;
-          if(task != 0)
-          {
-            SLLStackPop(free_task);
-          }
-          else
-          {
-            task = push_array(scratch.arena, TokenTask, 1);
-          }
-          SLLStackPush(top_task, task);
-          top_task->rule = new_rule;
-          top_task->kind = new_token_kind;
-          top_task->start_idx = idx;
-        }
-        
-        // rjf: invalid token kind -> emit error
-        else if(top_task == 0)
-        {
-          TXT_Token token = {TXT_TokenKind_Error, r1u64(idx, idx+1)};
-          txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
-        }
       }
       
       // rjf: look for ender based on rule's closing symbol
       U64 ender_pad = 0;
       B32 ender_found = 0;
-      B32 task_pop = 0;
       if(top_task != 0 && idx > top_task->start_idx)
       {
         TXT_TokenKind active_token_kind = top_task->kind;
@@ -373,13 +346,33 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
         }
       }
       
-      // rjf: next byte is ender => emit token
+      // rjf: if we have a new token to start, but we have an active token, then
+      // end the current token (but keep the same stack)
+      B32 keep_top_task = 0;
+      if(top_task != 0 && new_token_kind != TXT_TokenKind_Null && idx > top_task->start_idx)
+      {
+        keep_top_task = (!ender_found);
+        ender_found = 1;
+      }
+      
+      // rjf: if we have an ender => emit token(s) for current task
       if(ender_found)
       {
         TXT_Token token = {top_task->kind, r1u64(top_task->start_idx, idx+ender_pad)};
-        TokenTask *popped = top_task;
-        SLLStackPop(top_task);
-        SLLStackPush(free_task, popped);
+        if(!keep_top_task)
+        {
+          TokenTask *popped = top_task;
+          SLLStackPop(top_task);
+          SLLStackPush(free_task, popped);
+          if(top_task != 0)
+          {
+            top_task->start_idx = idx+ender_pad;
+          }
+        }
+        else
+        {
+          top_task->start_idx = idx+ender_pad;
+        }
         
         // rjf: trim \r's off of end
         {
@@ -442,9 +435,31 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
         {
           txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
         }
-        
-        // rjf: increment by ender padding
-        idx += ender_pad;
+      }
+      
+      // rjf: start new token
+      if(new_token_kind != TXT_TokenKind_Null)
+      {
+        TokenTask *task = free_task;
+        if(task != 0)
+        {
+          SLLStackPop(free_task);
+        }
+        else
+        {
+          task = push_array(scratch.arena, TokenTask, 1);
+        }
+        SLLStackPush(top_task, task);
+        top_task->rule = new_rule;
+        top_task->kind = new_token_kind;
+        top_task->start_idx = idx;
+      }
+      
+      // rjf: invalid token kind -> emit error
+      else if(new_token_needed)
+      {
+        TXT_Token token = {TXT_TokenKind_Error, r1u64(idx, idx+1)};
+        txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
       }
       
       // rjf: advance by 1 byte if we haven't found an ender
@@ -452,6 +467,11 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
       {
         idx += 1;
       }
+      
+      // rjf: advance by ender padding
+      idx += ender_pad;
+      
+      // rjf: advance escaping
       escaped = next_escaped;
     }
   }
