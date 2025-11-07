@@ -7,7 +7,6 @@
 ////////////////////////////////
 //~ rjf: Includes
 
-#define _GNU_SOURCE
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
