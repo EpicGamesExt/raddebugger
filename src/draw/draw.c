@@ -318,6 +318,7 @@ dr_rect(Rng2F32 dst, Vec4F32 color, F32 corner_radius, F32 border_thickness, F32
   inst->border_thickness = border_thickness;
   inst->edge_softness = edge_softness;
   inst->white_texture_override = 1.f;
+  inst->shear = 0.f;
   bucket->last_cmd_stack_gen = bucket->stack_gen;
   return inst;
 }
@@ -363,6 +364,7 @@ dr_img(Rng2F32 dst, Rng2F32 src, R_Handle texture, Vec4F32 color, F32 corner_rad
   inst->border_thickness = border_thickness;
   inst->edge_softness = edge_softness;
   inst->white_texture_override = 0.f;
+  inst->shear = 0.f;
   bucket->last_cmd_stack_gen = bucket->stack_gen;
   return inst;
 }

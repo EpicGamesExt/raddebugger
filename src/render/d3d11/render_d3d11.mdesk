@@ -56,7 +56,7 @@ struct CPU2Vertex
   float4 color10         : COL2;
   float4 color11         : COL3;
   float4 corner_radii_px : CRAD;
-  float4 style_params    : STY; // x: border_thickness_px, y: softness_px, z: omit_texture, w: unused
+  float4 style_params    : STY; // x: border_thickness_px, y: softness_px, z: omit_texture, w: shear
   uint vertex_id         : SV_VertexID;
 };
 
@@ -111,14 +111,15 @@ vs_main(CPU2Vertex cpu2vertex)
   float border_thickness_px = cpu2vertex.style_params.x;
   float softness_px         = cpu2vertex.style_params.y;
   float omit_texture        = cpu2vertex.style_params.z;
+  float shear_px            = cpu2vertex.style_params.w;
   
   //- rjf: prep per-vertex arrays to sample from (p: position, t: texcoord, c: colorcoord, r: cornerradius)
   float2 dst_p_verts_px[] =
   {
     float2(dst_p0_px.x, dst_p1_px.y),
     float2(dst_p0_px.x, dst_p0_px.y),
-    float2(dst_p1_px.x, dst_p1_px.y),
-    float2(dst_p1_px.x, dst_p0_px.y),
+    float2(dst_p1_px.x, dst_p1_px.y + shear_px),
+    float2(dst_p1_px.x, dst_p0_px.y + shear_px),
   };
   float2 src_p_verts_px[] =
   {

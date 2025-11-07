@@ -264,6 +264,10 @@ RD_VocabTable:
       @default(1) @display_name('Cursor Scope Lines') @description("Controls whether or not scopes containing the cursor in text views are drawn.")
         'cursor_scope_lines': bool,
       
+      //- rjf: cursor decorations
+      @default(1) @display_name('Cursor Trail') @description("Controls whether or not a movement trail of the cursor is drawn.")
+        'cursor_trail': bool,
+      
       //- rjf: thread & breakpoint decorations
       @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
         'thread_lines': bool,

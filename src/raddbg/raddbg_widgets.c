@@ -1277,6 +1277,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   B32 do_bp_lines = rd_setting_b32_from_name(str8_lit("breakpoint_lines"));
   B32 do_bp_glow = rd_setting_b32_from_name(str8_lit("breakpoint_glow"));
   B32 do_scope_lines = rd_setting_b32_from_name(str8_lit("cursor_scope_lines"));
+  B32 do_cursor_trail = rd_setting_b32_from_name(str8_lit("cursor_trail"));
   Vec4F32 pop_color = {0};
   UI_TagF("pop")
   {
@@ -2775,7 +2776,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         {
           S64 column = cursor->column;
           Vec2F32 advance = fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, column-1));
+          F32 cursor_y = line_box->rect.y0-params->font_size*0.125f;
+          F32 cursor_y__animated = ui_anim(ui_key_from_stringf(text_container_box->key, "cursor_y_px"), cursor_y);
           F32 cursor_off_pixels = advance.x;
+          F32 cursor_off_pixels__animated = ui_anim(ui_key_from_stringf(text_container_box->key, "cursor_off_px"), cursor_off_pixels);
           F32 cursor_thickness = ClampBot(1.f, floor_f32(line_box->font_size/10.f));
           Rng2F32 cursor_rect =
           {
@@ -2784,12 +2788,39 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_box_text_position(line_box).x+cursor_off_pixels+cursor_thickness,
             line_box->rect.y1+params->font_size*0.125f,
           };
+          Rng1F32 trail_off_span = r1f32(cursor_off_pixels__animated, cursor_off_pixels);
+          Rng2F32 trail_rect =
+          {
+            ui_box_text_position(line_box).x+trail_off_span.min,
+            line_box->rect.y0-params->font_size*0.125f,
+            ui_box_text_position(line_box).x+trail_off_span.max,
+            line_box->rect.y1+params->font_size*0.125f,
+          };
           Vec4F32 cursor_color = ui_color_from_name(str8_lit("cursor"));
+          Vec4F32 trail_color = cursor_color;
           if(!is_focused)
           {
             cursor_color.w *= 0.5f;
           }
+          trail_color.w *= 0.25f;
           dr_rect(cursor_rect, cursor_color, 1.f, 0, 0.f);
+          if(do_cursor_trail)
+          {
+            R_Rect2DInst *trail_inst = dr_rect(trail_rect, trail_color, ui_top_font_size()*0.2f, 0, 1.f);
+            trail_inst->shear = cursor_y - cursor_y__animated;
+            if(cursor_off_pixels > cursor_off_pixels__animated)
+            {
+              trail_inst->dst = shift_2f32(trail_inst->dst, v2f32(0, -trail_inst->shear));
+              trail_inst->colors[Corner_00].w *= 0.1f;
+              trail_inst->colors[Corner_01].w *= 0.1f;
+            }
+            else
+            {
+              trail_inst->shear *= -1;
+              trail_inst->colors[Corner_10].w *= 0.1f;
+              trail_inst->colors[Corner_11].w *= 0.1f;
+            }
+          }
         }
         
         // rjf: extra rendering for lines with line-info that match the hovered

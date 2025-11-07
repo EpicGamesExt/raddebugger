@@ -103,7 +103,7 @@ struct R_Rect2DInst
   F32 border_thickness;
   F32 edge_softness;
   F32 white_texture_override;
-  F32 _unused_[1];
+  F32 shear;
 };
 
 typedef struct R_Mesh3DInst R_Mesh3DInst;
