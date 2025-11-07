@@ -143,11 +143,14 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   cursor_color.w *= box->parent->parent->focus_active_t;
   Vec4F32 select_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("selection"));
   select_color.w *= (box->parent->parent->focus_active_t*0.2f + 0.8f);
+  Vec4F32 trail_color = cursor_color;
+  trail_color.w *= 0.25f;
   Vec2F32 text_position = ui_box_text_position(box);
   String8 edited_string = draw_data->edited_string;
   TxtPt cursor = draw_data->cursor;
   TxtPt mark = draw_data->mark;
   F32 cursor_pixel_off = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor.column-1)).x;
+  F32 cursor_pixel_off__animated = ui_anim(ui_key_from_stringf(box->key, "cursor_off_px"), cursor_pixel_off);
   F32 mark_pixel_off   = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark.column-1)).x;
   F32 cursor_thickness = ClampBot(1.f, floor_f32(font_size/10.f));
   Rng2F32 cursor_rect =
@@ -156,6 +159,14 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
     box->parent->parent->rect.y0+ui_top_font_size()*0.5f,
     text_position.x + cursor_pixel_off + cursor_thickness,
     box->parent->parent->rect.y1-ui_top_font_size()*0.5f,
+  };
+  Rng1F32 trail_off_span = r1f32(cursor_pixel_off, cursor_pixel_off__animated);
+  Rng2F32 trail_rect =
+  {
+    text_position.x + trail_off_span.min,
+    cursor_rect.y0,
+    text_position.x + trail_off_span.max,
+    cursor_rect.y1,
   };
   Rng2F32 mark_rect =
   {
@@ -167,6 +178,17 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   Rng2F32 select_rect = union_2f32(cursor_rect, mark_rect);
   dr_rect(select_rect, select_color, font_size/2.f, 0, 1.f);
   dr_rect(cursor_rect, cursor_color, 0.f, 0, 0.f);
+  R_Rect2DInst *trail_inst = dr_rect(trail_rect, trail_color, ui_top_font_size()*0.2f, 0, 1.f);
+  if(cursor_pixel_off > cursor_pixel_off__animated)
+  {
+    trail_inst->colors[Corner_00].w *= 0.1f;
+    trail_inst->colors[Corner_01].w *= 0.1f;
+  }
+  else
+  {
+    trail_inst->colors[Corner_10].w *= 0.1f;
+    trail_inst->colors[Corner_11].w *= 0.1f;
+  }
 }
 
 internal UI_Signal

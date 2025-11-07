@@ -3373,6 +3373,7 @@ rd_cell(RD_CellParams *params, String8 string)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+  B32 do_cursor_trail = rd_setting_b32_from_name(str8_lit("cursor_trail"));
   
   //////////////////////////////
   //- rjf: unpack visual metrics
