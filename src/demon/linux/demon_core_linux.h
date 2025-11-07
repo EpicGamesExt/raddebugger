@@ -8,7 +8,6 @@
 //~ rjf: Includes
 
 #include <sys/ptrace.h>
-#include <sys/wait.h>
 #include <sys/uio.h>
 #include <elf.h>
 

@@ -9,7 +9,9 @@
 
 #include <dirent.h>
 #include <dlfcn.h>
+#include <dlfcn.h>
 #include <errno.h>
+#include <execinfo.h>
 #include <fcntl.h>
 #include <features.h>
 #include <linux/limits.h>
@@ -25,10 +27,9 @@
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
-#include <execinfo.h>
-#include <dlfcn.h>
 
 pid_t gettid(void);
 int pthread_setname_np(pthread_t thread, const char *name);
