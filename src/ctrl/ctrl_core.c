@@ -2027,10 +2027,8 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
       is_cfi_parsed = dw_parse_cfi(unwind_data, fde_addr, arch, &cie, &fde);
     }
 
-    if(is_cfi_parsed)
+    if(is_cfi_parsed && contains_1u64(fde.pc_range, ip))
     {
-      Assert(contains_1u64(fde.pc_range, ip));
-
       // setup pointer decoder ops
       DW_DecodePtr *decode_ptr_func = 0;
       void         *decode_ptr_ctx  = 0;
