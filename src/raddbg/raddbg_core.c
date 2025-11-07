@@ -13515,7 +13515,7 @@ rd_frame(void)
             {
               path = rd_regs()->file_path;
             }
-            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0, .force_focus = 1);
+            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0, .force_focus = 1, .prefer_new_tab = 1);
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
           {
@@ -13542,7 +13542,7 @@ rd_frame(void)
                 FileProperties candidate_props = os_properties_from_file_path(candidate_path);
                 if(candidate_props.modified != 0)
                 {
-                  rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = candidate_path, .cursor = txt_pt(0, 0), .vaddr = 0);
+                  rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = candidate_path, .cursor = txt_pt(0, 0), .vaddr = 0, .prefer_new_tab = 1);
                   break;
                 }
               }
@@ -14124,12 +14124,14 @@ rd_frame(void)
             CTRL_Entity *process = &ctrl_entity_nil;
             U64 vaddr = 0;
             B32 require_disasm_snap = 0;
+            B32 prefer_new_tab = 0;
             {
-              file_path = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
-              point     = rd_regs()->cursor;
-              thread    = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
-              process   = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process);
-              vaddr     = rd_regs()->vaddr;
+              file_path      = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
+              point          = rd_regs()->cursor;
+              thread         = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
+              process        = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process);
+              vaddr          = rd_regs()->vaddr;
+              prefer_new_tab = rd_regs()->prefer_new_tab;
               if(file_path.size == 0)
               {
                 require_disasm_snap = 1;
@@ -14236,25 +14238,28 @@ rd_frame(void)
               // rjf: try to find panel/view pair that has any *auto* source code tab open
               info->panel_w_auto = &cfg_nil_panel_node;
               info->view_w_auto = &cfg_nil_node;
-              for(CFG_PanelNode *panel = panel_tree.root;
-                  panel != &cfg_nil_panel_node;
-                  panel = cfg_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
+              if(!prefer_new_tab)
               {
-                if(panel->first != &cfg_nil_panel_node)
+                for(CFG_PanelNode *panel = panel_tree.root;
+                    panel != &cfg_nil_panel_node;
+                    panel = cfg_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
                 {
-                  continue;
-                }
-                for(CFG_NodePtrNode *tab_n = panel->tabs.first; tab_n != 0; tab_n = tab_n->next)
-                {
-                  CFG_Node *tab = tab_n->v;
-                  if(rd_cfg_is_project_filtered(tab)) { continue; }
-                  RD_RegsScope(.tab = tab->id, .view = tab->id)
+                  if(panel->first != &cfg_nil_panel_node)
                   {
-                    if(str8_match(tab->string, str8_lit("text"), 0) &&
-                       rd_view_setting_b32_from_name(str8_lit("auto")))
+                    continue;
+                  }
+                  for(CFG_NodePtrNode *tab_n = panel->tabs.first; tab_n != 0; tab_n = tab_n->next)
+                  {
+                    CFG_Node *tab = tab_n->v;
+                    if(rd_cfg_is_project_filtered(tab)) { continue; }
+                    RD_RegsScope(.tab = tab->id, .view = tab->id)
                     {
-                      info->panel_w_auto = panel;
-                      info->view_w_auto = tab;
+                      if(str8_match(tab->string, str8_lit("text"), 0) &&
+                         rd_view_setting_b32_from_name(str8_lit("auto")))
+                      {
+                        info->panel_w_auto = panel;
+                        info->view_w_auto = tab;
+                      }
                     }
                   }
                 }
@@ -14616,8 +14621,11 @@ rd_frame(void)
                   dst_tab = cfg_node_new(rd_state->cfg, dst_panel->cfg, str8_lit("text"));
                   CFG_Node *expr = cfg_node_new(rd_state->cfg, dst_tab, str8_lit("expression"));
                   cfg_node_new(rd_state->cfg, expr, rd_eval_string_from_file_path(scratch.arena, file_path));
-                  CFG_Node *auto_root = cfg_node_new(rd_state->cfg, dst_tab, str8_lit("auto"));
-                  cfg_node_new(rd_state->cfg, auto_root, str8_lit("1"));
+                  if(!prefer_new_tab)
+                  {
+                    CFG_Node *auto_root = cfg_node_new(rd_state->cfg, dst_tab, str8_lit("auto"));
+                    cfg_node_new(rd_state->cfg, auto_root, str8_lit("1"));
+                  }
                 }
                 
                 // rjf: determine if we need a contain or center

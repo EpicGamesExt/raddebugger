@@ -797,6 +797,7 @@ RD_RegTable:
   {B32               do_big_rows      DoBigRows     }
   {B32               all_windows      AllWindows    }
   {B32               non_graphical    NonGraphical  }
+  {B32               prefer_new_tab   PreferNewTab  }
   {Dir2              dir2             Dir2          }
   {String8           string           String        }
   {String8           cmd_name         CmdName       }
