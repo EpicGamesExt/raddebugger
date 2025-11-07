@@ -376,7 +376,7 @@ ac_async_tick(void)
         AC_Artifact val = r->create(r->key, r->cancel_signal, &retry, &gen);
         
         // rjf: retry? -> resubmit request
-        if(retry && lane_idx() == 0)
+        if(retry && lane_idx() == 0 && !ins_atomic_u32_eval(r->cancel_signal))
         {
           AC_RequestBatch *batch = &ac_shared->req_batches[task_idx];
           MutexScope(batch->mutex)
@@ -485,7 +485,7 @@ ac_async_tick(void)
         lane_ctx(lane_ctx_restore);
         
         // rjf: retry? -> resubmit request
-        if(retry)
+        if(retry && !ins_atomic_u32_eval(r->cancel_signal))
         {
           AC_RequestBatch *batch = &ac_shared->req_batches[task_idx];
           MutexScope(batch->mutex)

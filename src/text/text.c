@@ -307,8 +307,8 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
           ender_found = 1;
         }
         else if(active_rule != nil_rule &&
-                str8_match(string_1byte, active_rule->close_string, 0) ||
-                str8_match(string_2byte, active_rule->close_string, 0))
+                (str8_match(string_1byte, active_rule->close_string, 0) ||
+                 str8_match(string_2byte, active_rule->close_string, 0)))
         {
           ender_found = 1;
           ender_pad = active_rule->close_advance;
