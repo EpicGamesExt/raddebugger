@@ -131,6 +131,7 @@ struct UI_LineEditDrawData
   String8 edited_string;
   TxtPt cursor;
   TxtPt mark;
+  B32 trail;
 };
 
 internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
@@ -178,16 +179,19 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   Rng2F32 select_rect = union_2f32(cursor_rect, mark_rect);
   dr_rect(select_rect, select_color, font_size/2.f, 0, 1.f);
   dr_rect(cursor_rect, cursor_color, 0.f, 0, 0.f);
-  R_Rect2DInst *trail_inst = dr_rect(trail_rect, trail_color, ui_top_font_size()*0.2f, 0, 1.f);
-  if(cursor_pixel_off > cursor_pixel_off__animated)
+  if(draw_data->trail)
   {
-    trail_inst->colors[Corner_00].w *= 0.1f;
-    trail_inst->colors[Corner_01].w *= 0.1f;
-  }
-  else
-  {
-    trail_inst->colors[Corner_10].w *= 0.1f;
-    trail_inst->colors[Corner_11].w *= 0.1f;
+    R_Rect2DInst *trail_inst = dr_rect(trail_rect, trail_color, ui_top_font_size()*0.2f, 0, 1.f);
+    if(cursor_pixel_off > cursor_pixel_off__animated)
+    {
+      trail_inst->colors[Corner_00].w *= 0.1f;
+      trail_inst->colors[Corner_01].w *= 0.1f;
+    }
+    else
+    {
+      trail_inst->colors[Corner_10].w *= 0.1f;
+      trail_inst->colors[Corner_11].w *= 0.1f;
+    }
   }
 }
 
@@ -288,6 +292,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = *cursor;
       draw_data->mark = *mark;
+      draw_data->trail = 1;
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));

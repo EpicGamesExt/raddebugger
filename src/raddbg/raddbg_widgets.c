@@ -4151,6 +4151,7 @@ rd_cell(RD_CellParams *params, String8 string)
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = params->cursor[0];
       draw_data->mark = params->mark[0];
+      draw_data->trail = do_cursor_trail;
       ui_box_equip_custom_draw(text_box, ui_line_edit_draw, draw_data);
       Vec2F32 text2mouse = sub_2f32(ui_mouse(), ui_box_text_position(text_box));
       FNT_Tag font = ui_top_font();
