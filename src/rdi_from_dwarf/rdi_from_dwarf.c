@@ -2604,7 +2604,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       case ExecutableImageKind_Elf64: {
         ELF_Bin bin = elf_bin_from_data(scratch.arena, params->dbg_data);
         arch            = arch_from_elf_machine(bin.hdr.e_machine);
-        image_base      = elf_base_addr_from_bin(&bin);
+        image_base      = bin.hdr.e_type == ELF_Type_Dyn ? 0 : elf_base_addr_from_bin(&bin);
         binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, bin.shdrs);
         input           = dw_input_from_elf_bin(scratch.arena, params->dbg_data, &bin);
         path_style      = PathStyle_UnixAbsolute;
