@@ -53,9 +53,9 @@ mkdir -p build
 mkdir -p local
 
 # --- Build & Run Metaprogram -------------------------------------------------
-if [ -v no_meta ]; then echo "[skipping metagen]"; fi
-if [ ! -v no_meta ]
+if [ ! -v meta ]
 then
+  echo "[doing metagen]"
   cd build
   $compile_debug ../src/metagen/metagen_main.c $compile_link $out metagen
   ./metagen

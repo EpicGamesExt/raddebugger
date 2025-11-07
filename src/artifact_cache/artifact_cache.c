@@ -19,8 +19,7 @@ ac_init(void)
     ac_shared->req_batches[idx].arena = arena_alloc();
   }
   ac_shared->cancel_thread = thread_launch(ac_cancel_thread_entry_point, 0);
-  ac_shared->cancel_thread_mutex = mutex_alloc();
-  mutex_take(ac_shared->cancel_thread_mutex);
+  ac_shared->cancel_thread_semaphore = semaphore_alloc(0, 1, str8_zero());
 }
 
 ////////////////////////////////
@@ -218,7 +217,7 @@ ac_async_tick(void)
   //
   if(lane_idx() == 0)
   {
-    mutex_drop(ac_shared->cancel_thread_mutex);
+    semaphore_drop(ac_shared->cancel_thread_semaphore);
   }
   
   //////////////////////////////
@@ -590,7 +589,7 @@ ac_async_tick(void)
   //
   if(lane_idx() == 0)
   {
-    mutex_take(ac_shared->cancel_thread_mutex);
+    semaphore_take(ac_shared->cancel_thread_semaphore, max_U64);
   }
   scratch_end(scratch);
 }
@@ -604,7 +603,7 @@ ac_cancel_thread_entry_point(void *p)
   for(;;)
   {
     os_sleep_milliseconds(50);
-    MutexScope(ac_shared->cancel_thread_mutex)
+    semaphore_take(ac_shared->cancel_thread_semaphore, max_U64);
     {
       for EachIndex(cache_slot_idx, ac_shared->cache_slots_count)
       {
@@ -650,5 +649,6 @@ ac_cancel_thread_entry_point(void *p)
         }
       }
     }
+    semaphore_drop(ac_shared->cancel_thread_semaphore);
   }
 }

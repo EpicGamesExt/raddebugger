@@ -57,9 +57,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(ARTIFACT_CACHE_H) && !defined(AC_INIT_MANUAL)
   ac_init();
 #endif
-#if defined(ASYNC_H) && !defined(ASYNC_INIT_MANUAL)
-  async_init(&cmdline);
-#endif
 #if defined(CONTENT_H) && !defined(C_INIT_MANUAL)
   c_init();
 #endif

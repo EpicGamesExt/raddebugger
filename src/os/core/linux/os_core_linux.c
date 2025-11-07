@@ -771,7 +771,7 @@ internal OS_Handle
 os_process_launch(OS_ProcessLaunchParams *params)
 {
   OS_Handle handle = {0};
-
+  
   posix_spawn_file_actions_t file_actions = {0};
   int file_actions_init_code = posix_spawn_file_actions_init(&file_actions);
   if(file_actions_init_code == 0)
@@ -779,33 +779,33 @@ os_process_launch(OS_ProcessLaunchParams *params)
     // redirect STDOUT 
     int stdout_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdout_file.u64[0], STDOUT_FILENO);
     Assert(stdout_code == 0);
-
+    
     // redirect STDERR
     int stderr_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stderr_file.u64[0], STDERR_FILENO);
     Assert(stderr_code == 0);
-
+    
     // redirect STDIN
     int stdin_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdin_file.u64[0], STDIN_FILENO);
     Assert(stdin_code == 0);
-
+    
     posix_spawnattr_t attr = {0};
     int attr_init_code = posix_spawnattr_init(&attr);
     if(attr_init_code == 0)
     {
       Temp scratch = scratch_begin(0, 0);
-
+      
       // package argv
       char **argv = push_array(scratch.arena, char *, params->cmd_line.node_count + 1);
       {
         String8List l = str8_split_path(scratch.arena, params->path);
         str8_list_push(scratch.arena, &l, params->cmd_line.first->string);
         String8 path_to_exe = str8_path_list_join_by_style(scratch.arena, &l, PathStyle_SystemAbsolute);
-
+        
         argv[0] = (char *)path_to_exe.str;
         U64 arg_idx = 1;
         for EachNode(n, String8Node, params->cmd_line.first->next) { argv[arg_idx++] = (char *)n->string.str; }
       }
-
+      
       // package envp
       char **envp = 0;
       if(params->inherit_env)
@@ -821,39 +821,39 @@ os_process_launch(OS_ProcessLaunchParams *params)
           envp[env_idx] = (char *)n->string.str;
         }
       }
-
+      
       if(params->debug_subprocesses)
       {
         // not suported
         InvalidPath;
       }
-
+      
       if(!params->consoleless)
       {
         NotImplemented;
       }
-
+      
       // spawn process
       pid_t pid = 0;
       int spawn_code = posix_spawn(&pid, argv[0], &file_actions, &attr, argv, envp);
-
+      
       if(spawn_code == 0)
       {
         handle.u64[0] = (U64)pid;
       }
-
+      
       // clean up attributes
       int attr_destroy_code = posix_spawnattr_destroy(&attr);
       Assert(attr_destroy_code == 0);
-
+      
       scratch_end(scratch);
     }
-
+    
     // clean up file actions
     int file_actions_destroy_code = posix_spawn_file_actions_destroy(&file_actions);
     Assert(file_actions_destroy_code == 0);
   }
-
+  
   return handle;
 }
 
@@ -867,7 +867,7 @@ os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
     if(kill(pid, 0) >= 0)
     {
       result = (errno == ENOENT);
-
+      
       if(result)
       {
         int status;
@@ -969,11 +969,7 @@ internal Mutex
 os_mutex_alloc(void)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Mutex);
-  pthread_mutexattr_t attr;
-  pthread_mutexattr_init(&attr);
-  pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-  int init_result = pthread_mutex_init(&entity->mutex_handle, &attr);
-  pthread_mutexattr_destroy(&attr);
+  int init_result = pthread_mutex_init(&entity->mutex_handle, 0);
   if(init_result == -1)
   {
     os_lnx_entity_release(entity);
@@ -1410,10 +1406,10 @@ lnx_signal_handler(int sig, siginfo_t *info, void *arg)
       sleep(UINT32_MAX);
     }
   }
-
+  
   local_persist void *ips[4096];
   int ips_count = backtrace(ips, ArrayCount(ips));
-
+  
   fprintf(stderr, "A fatal signal was received: %s (%d). The process is terminating.\n", strsignal(sig), sig);
   fprintf(stderr, "Create a new issue with this report at %s.\n\n", BUILD_ISSUES_LINK_STRING_LITERAL);
   fprintf(stderr, "Callstack:\n");
@@ -1421,7 +1417,7 @@ lnx_signal_handler(int sig, siginfo_t *info, void *arg)
   {
     Dl_info info = {0};
     dladdr(ips[i], &info);
-
+    
     char cmd[2048];
     snprintf(cmd, sizeof(cmd), "llvm-symbolizer --relative-address -f -e %s %lu", info.dli_fname, (unsigned long)ips[i] - (unsigned long)info.dli_fbase);
     FILE *f = popen(cmd, "r");
@@ -1435,12 +1431,12 @@ lnx_signal_handler(int sig, siginfo_t *info, void *arg)
         String8 module = str8_skip_last_slash(str8_cstring(info.dli_fname));
         String8 file   = str8_skip_last_slash(str8_cstring_capped(file_name, file_name + sizeof(file_name)));
         if(file.size > 0) file.size -= 1;
-
+        
         B32 no_func = str8_match(func, str8_lit("??"), StringMatchFlag_RightSideSloppy);
         B32 no_file = str8_match(file, str8_lit("??"), StringMatchFlag_RightSideSloppy);
         if(no_func) { func = str8_zero(); }
         if(no_file) { file = str8_zero(); }
-
+        
         fprintf(stderr, "%ld. [0x%016lx] %.*s%s%.*s %.*s\n", i+1, (unsigned long)ips[i], (int)module.size, module.str, (!no_func || !no_file) ? ", " : "", (int)func.size, func.str, (int)file.size, file.str);
       }
       pclose(f);
@@ -1451,7 +1447,7 @@ lnx_signal_handler(int sig, siginfo_t *info, void *arg)
     }
   }
   fprintf(stderr, "\nVersion: %s%s\n\n", BUILD_VERSION_STRING_LITERAL, BUILD_GIT_HASH_STRING_LITERAL_APPEND);
-
+  
   _exit(0);
 }
 
@@ -1470,7 +1466,7 @@ main(int argc, char **argv)
     sigaction(SIGSEGV, &handler, NULL);
     sigaction(SIGQUIT, &handler, NULL);
   }
-
+  
   //- rjf: set up OS layer
   {
     //- rjf: get statically-allocated system/process info
