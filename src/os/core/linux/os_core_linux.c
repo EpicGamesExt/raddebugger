@@ -900,12 +900,6 @@ os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
   return result;
 }
 
-internal U64
-os_process_array_join(OS_HandleArray processes, U64 endt_us, U64 *exit_code_out)
-{
-  NotImplemented;
-}
-
 internal void
 os_process_detach(OS_Handle handle)
 {
