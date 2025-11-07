@@ -57,7 +57,7 @@ in vec4 c2v_colors_1;
 in vec4 c2v_colors_2;
 in vec4 c2v_colors_3;
 in vec4 c2v_corner_radii;
-in vec4 c2v_style;  // x: border_thickness_px, y: softness_px, z: omit_texture, w: unused
+in vec4 c2v_style;  // x: border_thickness_px, y: softness_px, z: omit_texture, w: shear
 
 out vec2 v2p_sdf_sample_pos;
 out vec2 v2p_texcoord_pct;
@@ -76,10 +76,14 @@ void main(void)
   // rjf: constants
   vec2 vertices[] = vec2[](vec2(-1, -1), vec2(-1, +1), vec2(+1, -1), vec2(+1, +1));
   
+  // rjf: unpack shears
+  float shears[] = float[](0, 0, c2v_style.w, c2v_style.w);
+  
   // rjf: find dst position
   vec2 dst_half_size = (c2v_dst_rect.zw - c2v_dst_rect.xy) / 2;
   vec2 dst_center    = (c2v_dst_rect.zw + c2v_dst_rect.xy) / 2;
   vec2 dst_position  = vertices[gl_VertexID] * dst_half_size + dst_center;
+  dst_position.y += shears[gl_VertexID];
   
   // rjf: find src position
   vec2 src_half_size = (c2v_src_rect.zw - c2v_src_rect.xy) / 2;
