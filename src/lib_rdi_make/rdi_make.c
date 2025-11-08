@@ -1904,11 +1904,25 @@ rdim_bake_path_node_from_string(RDIM_BakePathTree *tree, RDIM_String8 string)
   RDI_U8 *opl = string.str + string.size;
   for(;ptr < opl && node != 0;)
   {
-    // rjf: skip past slashes
-    for(;ptr < opl && (*ptr == '/' || *ptr == '\\'); ptr += 1);
+    // rjf: skip past non-leading slashes
+    RDI_U32 leading_slash = 0;
+    if(ptr > string.str)
+    {
+      for(;ptr < opl && (*ptr == '/' || *ptr == '\\'); ptr += 1);
+    }
+    else if(ptr < opl)
+    {
+      leading_slash = (*ptr == '/');
+    }
     
     // rjf: save beginning of non-slash range
     RDI_U8 *range_first = ptr;
+    
+    // rjf: advance past leading slash
+    if(leading_slash)
+    {
+      ptr += 1;
+    }
     
     // rjf: skip past non-slashes
     for(;ptr < opl && !(*ptr == '/' || *ptr == '\\'); ptr += 1);
