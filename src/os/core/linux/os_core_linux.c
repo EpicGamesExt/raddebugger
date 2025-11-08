@@ -284,6 +284,7 @@ os_file_open(OS_AccessFlags flags, String8 path)
   {
     lnx_flags |= O_CREAT;
   }
+  lnx_flags |= O_CLOEXEC;
   int fd = open((char *)path_copy.str, lnx_flags, 0755);
   OS_Handle handle = {0};
   if(fd != -1)
@@ -652,7 +653,7 @@ os_shared_memory_alloc(U64 size, String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
   String8 name_copy = push_str8_copy(scratch.arena, name);
-  int id = shm_open((char *)name_copy.str, O_RDWR | O_CREAT, 0666);
+  int id = shm_open((char *)name_copy.str, O_RDWR|O_CREAT, 0666);
   ftruncate(id, size);
   OS_Handle result = {(U64)id};
   scratch_end(scratch);

@@ -110,7 +110,7 @@ internal int
 demon_lnx_open_memory_fd_for_pid(pid_t pid){
   Temp scratch = scratch_begin(0, 0);
   String8 memory_path = push_str8f(scratch.arena, "/proc/%i/mem", pid);
-  int result = open((char*)memory_path.str, O_RDWR);
+  int result = open((char*)memory_path.str, O_RDWR|O_CLOEXEC);
   scratch_end(scratch);
   return(result);
 }
@@ -126,7 +126,7 @@ demon_lnx_arch_from_pid(pid_t pid){
   // handle to exe
   int exe_fd = -1;
   if (exe_path.size != 0){
-    exe_fd = open((char*)exe_path.str, O_RDONLY);
+    exe_fd = open((char*)exe_path.str, O_RDONLY|O_CLOEXEC);
   }
   
   // elf identification
@@ -199,7 +199,7 @@ demon_lnx_aux_from_pid(pid_t pid, Arch arch){
   // open aux data
   Temp scratch = scratch_begin(0, 0);
   String8 auxv_symbol_path = push_str8f(scratch.arena, "/proc/%d/auxv", pid);
-  int aux_fd = open((char*)auxv_symbol_path.str, O_RDONLY);
+  int aux_fd = open((char*)auxv_symbol_path.str, O_RDONLY|O_CLOEXEC);
   
   // scan aux data
   if (aux_fd >= 0){
@@ -670,7 +670,7 @@ internal int
 demon_lnx_open_maps(pid_t pid){
   Temp scratch = scratch_begin(0, 0);
   String8 path = push_str8f(scratch.arena, "/proc/%d/maps", pid);
-  int maps = open((char*)path.str, O_RDONLY);
+  int maps = open((char*)path.str, O_RDONLY|O_CLOEXEC);
   scratch_end(scratch);
   return(maps);
 }

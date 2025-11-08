@@ -124,21 +124,21 @@ dmn_lnx_read_ehdr(int memory_fd, U64 addr, ELF_Hdr64 *ehdr_out)
     {
       switch(e_ident[ELF_Identifier_Class])
       {
-      default:{InvalidPath;}break;
-      case ELF_Class_None: {}break;
-      case ELF_Class_32:
-      {
-        ELF_Hdr32 ehdr32 = {0};
-        if(dmn_lnx_read_struct(memory_fd, addr, &ehdr32))
+        default:{InvalidPath;}break;
+        case ELF_Class_None: {}break;
+        case ELF_Class_32:
         {
-          *ehdr_out = elf_hdr64_from_hdr32(ehdr32);
-          is_read = 1;
-        }
-      }break;
-      case ELF_Class_64:
-      {
-        is_read = dmn_lnx_read_struct(memory_fd, addr, ehdr_out);
-      }break;
+          ELF_Hdr32 ehdr32 = {0};
+          if(dmn_lnx_read_struct(memory_fd, addr, &ehdr32))
+          {
+            *ehdr_out = elf_hdr64_from_hdr32(ehdr32);
+            is_read = 1;
+          }
+        }break;
+        case ELF_Class_64:
+        {
+          is_read = dmn_lnx_read_struct(memory_fd, addr, ehdr_out);
+        }break;
       }
     }
   }
@@ -151,21 +151,21 @@ dmn_lnx_read_phdr(int memory_fd, U64 addr, ELF_Class elf_class, ELF_Phdr64 *phdr
   B32 is_read = 0;
   switch (elf_class)
   {
-  case ELF_Class_None: break;
-  case ELF_Class_32: 
-  {
-    ELF_Phdr32 phdr32 = {0};
-    if(dmn_lnx_read_struct(memory_fd, addr, &phdr32))
+    case ELF_Class_None: break;
+    case ELF_Class_32: 
     {
-      *phdr_out = elf_phdr64_from_phdr32(phdr32);
-      is_read = 1;
-    }
-  }break;
-  case ELF_Class_64:
-  {
-    is_read = dmn_lnx_read_struct(memory_fd, addr, phdr_out);
-  }break;
-  default:{NotImplemented;}break;
+      ELF_Phdr32 phdr32 = {0};
+      if(dmn_lnx_read_struct(memory_fd, addr, &phdr32))
+      {
+        *phdr_out = elf_phdr64_from_phdr32(phdr32);
+        is_read = 1;
+      }
+    }break;
+    case ELF_Class_64:
+    {
+      is_read = dmn_lnx_read_struct(memory_fd, addr, phdr_out);
+    }break;
+    default:{NotImplemented;}break;
   }
   return is_read;
 }
@@ -176,21 +176,21 @@ dmn_lnx_read_shdr(int memory_fd, U64 addr, ELF_Class elf_class, ELF_Shdr64 *shdr
   B32 is_read = 0;
   switch (elf_class)
   {
-  case ELF_Class_None: break;
-  case ELF_Class_32: 
-  {
-    ELF_Shdr32 shdr32 = {0};
-    if(dmn_lnx_read_struct(memory_fd, addr, &shdr32))
+    case ELF_Class_None: break;
+    case ELF_Class_32: 
     {
-      *shdr_out = elf_shdr64_from_shdr32(shdr32);
-      is_read = 1;
-    }
-  }break;
-  case ELF_Class_64:
-  {
-    is_read = dmn_lnx_read_struct(memory_fd, addr, shdr_out);
-  }break;
-  default:{NotImplemented;}break;
+      ELF_Shdr32 shdr32 = {0};
+      if(dmn_lnx_read_struct(memory_fd, addr, &shdr32))
+      {
+        *shdr_out = elf_shdr64_from_shdr32(shdr32);
+        is_read = 1;
+      }
+    }break;
+    case ELF_Class_64:
+    {
+      is_read = dmn_lnx_read_struct(memory_fd, addr, shdr_out);
+    }break;
+    default:{NotImplemented;}break;
   }
   return is_read;
 }
@@ -201,22 +201,22 @@ dmn_lnx_read_linkmap(int memory_fd, U64 addr, ELF_Class elf_class, GNU_LinkMap64
   B32 is_read = 0;
   switch(elf_class) 
   {
-  case ELF_Class_None: {}break;
-  case ELF_Class_32:
-  {
-    // TODO(rjf): endianness
-    GNU_LinkMap32 linkmap32 = {0};
-    if(dmn_lnx_read_struct(memory_fd, addr, &linkmap32))
+    case ELF_Class_None: {}break;
+    case ELF_Class_32:
     {
-      *linkmap_out = gnu_linkmap64_from_linkmap32(linkmap32);
-      is_read = 1;
-    }
-  }break;
-  case ELF_Class_64:
-  {
-    is_read = dmn_lnx_read_struct(memory_fd, addr, linkmap_out);
-  }break;
-  default:{NotImplemented;}break;
+      // TODO(rjf): endianness
+      GNU_LinkMap32 linkmap32 = {0};
+      if(dmn_lnx_read_struct(memory_fd, addr, &linkmap32))
+      {
+        *linkmap_out = gnu_linkmap64_from_linkmap32(linkmap32);
+        is_read = 1;
+      }
+    }break;
+    case ELF_Class_64:
+    {
+      is_read = dmn_lnx_read_struct(memory_fd, addr, linkmap_out);
+    }break;
+    default:{NotImplemented;}break;
   }
   return is_read;
 }
@@ -227,21 +227,21 @@ dmn_lnx_read_dynamic(int memory_fd, U64 addr, ELF_Class elf_class, ELF_Dyn64 *dy
   B32 is_read = 0;
   switch(elf_class)
   {
-  case ELF_Class_None:{}break;
-  case ELF_Class_32:
-  {
-    ELF_Dyn32 dyn32 = {0};
-    if(dmn_lnx_read_struct(memory_fd, addr, &dyn32))
+    case ELF_Class_None:{}break;
+    case ELF_Class_32:
     {
-      *dyn_out = elf_dyn64_from_dyn32(dyn32);
-      is_read = 1;
-    }
-  }break;
-  case ELF_Class_64:
-  {
-    is_read = dmn_lnx_read_struct(memory_fd, addr, dyn_out);
-  }break;
-  default:{NotImplemented;}break;
+      ELF_Dyn32 dyn32 = {0};
+      if(dmn_lnx_read_struct(memory_fd, addr, &dyn32))
+      {
+        *dyn_out = elf_dyn64_from_dyn32(dyn32);
+        is_read = 1;
+      }
+    }break;
+    case ELF_Class_64:
+    {
+      is_read = dmn_lnx_read_struct(memory_fd, addr, dyn_out);
+    }break;
+    default:{NotImplemented;}break;
   }
   return is_read;
 }
@@ -252,21 +252,21 @@ dmn_lnx_read_symbol(int memory_fd, U64 addr, ELF_Class elf_class, ELF_Sym64 *sym
   B32 is_read = 0;
   switch(elf_class)
   {
-  case ELF_Class_None:{}break;
-  case ELF_Class_32:
-  {
-    ELF_Sym32 symbol32 = {0};
-    if(dmn_lnx_read_struct(memory_fd, addr, &symbol32))
+    case ELF_Class_None:{}break;
+    case ELF_Class_32:
     {
-      *symbol_out = elf_sym64_from_sym32(symbol32);
-      is_read = 1;
-    }
-  }break;
-  case ELF_Class_64:
-  {
-    is_read = dmn_lnx_read_struct(memory_fd, addr, symbol_out);
-  }break;
-  default:{NotImplemented;}break;
+      ELF_Sym32 symbol32 = {0};
+      if(dmn_lnx_read_struct(memory_fd, addr, &symbol32))
+      {
+        *symbol_out = elf_sym64_from_sym32(symbol32);
+        is_read = 1;
+      }
+    }break;
+    case ELF_Class_64:
+    {
+      is_read = dmn_lnx_read_struct(memory_fd, addr, symbol_out);
+    }break;
+    default:{NotImplemented;}break;
   }
   return is_read;
 }
@@ -277,20 +277,20 @@ dmn_lnx_read_r_debug(int memory_fd, U64 addr, Arch arch, GNU_RDebugInfo64 *rdebu
   B32 is_read = 0;
   switch(gnu_rdebug_info_size_from_arch(arch))
   {
-  case 0: {} break;
-  case sizeof(GNU_RDebugInfo32): {
-    GNU_RDebugInfo32 rdebug32 = {0};
-    if(dmn_lnx_read_struct(memory_fd, addr, &rdebug32))
+    case 0: {} break;
+    case sizeof(GNU_RDebugInfo32): {
+      GNU_RDebugInfo32 rdebug32 = {0};
+      if(dmn_lnx_read_struct(memory_fd, addr, &rdebug32))
+      {
+        *rdebug_out = gnu_rdebug_info64_from_rdebug_info32(rdebug32);
+        is_read = 1;
+      }
+    }break;
+    case sizeof(GNU_RDebugInfo64):
     {
-      *rdebug_out = gnu_rdebug_info64_from_rdebug_info32(rdebug32);
-      is_read = 1;
-    }
-  }break;
-  case sizeof(GNU_RDebugInfo64):
-  {
-    is_read = dmn_lnx_read_struct(memory_fd, addr, rdebug_out);
-  }break;
-  default:{InvalidPath;}break;
+      is_read = dmn_lnx_read_struct(memory_fd, addr, rdebug_out);
+    }break;
+    default:{InvalidPath;}break;
   }
   Assert(is_read);
   return is_read;
@@ -310,14 +310,14 @@ dmn_lnx_exe_path_from_pid(Arena *arena, pid_t pid)
   {
     U8 *buffer = push_array(arena, U8, cap);
     readlink_result = readlink((char *)exe_link_path.str, (char *)buffer, cap);
-
+    
     if(readlink_result < 0)
     {
       break;
     }
-
+    
     str8_list_push(scratch.arena, &parts, str8(buffer, readlink_result));
-
+    
     if(readlink_result < cap)
     {
       break;
@@ -338,7 +338,7 @@ dmn_lnx_ehdr_from_pid(pid_t pid)
   String8   exe_path = dmn_lnx_exe_path_from_pid(scratch.arena, pid);
   if(exe_path.size != 0)
   {
-    int exe_fd = open((char *)exe_path.str, O_RDONLY);
+    int exe_fd = open((char *)exe_path.str, O_RDONLY|O_CLOEXEC);
     if(exe_fd != -1)
     {
       is_read = dmn_lnx_read_ehdr(exe_fd, 0, &exe);
@@ -358,7 +358,7 @@ dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_class)
   
   // rjf: open aux data
   String8 auxv_path = push_str8f(scratch.arena, "/proc/%d/auxv", pid);
-  int     auxv_fd   = open((char*)auxv_path.str, O_RDONLY);
+  int     auxv_fd   = open((char*)auxv_path.str, O_RDONLY|O_CLOEXEC);
   
   // rjf: scan aux data
   if(auxv_fd >= 0)
@@ -369,24 +369,24 @@ dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_class)
       ELF_Auxv64 auxv = {0};
       switch(elf_class)
       {
-      case ELF_Class_None:{}break;
-      case ELF_Class_32:
-      {
-        ELF_Auxv32 auxv32 = {0};
-        if(read(auxv_fd, &auxv32, sizeof(auxv32)) != sizeof(auxv32))
+        case ELF_Class_None:{}break;
+        case ELF_Class_32:
         {
-          goto brkloop;
-        }
-        auxv = elf_auxv64_from_auxv32(auxv32);
-      }break;
-      case ELF_Class_64:
-      {
-        if(read(auxv_fd, &auxv, sizeof(auxv)) != sizeof(auxv))
+          ELF_Auxv32 auxv32 = {0};
+          if(read(auxv_fd, &auxv32, sizeof(auxv32)) != sizeof(auxv32))
+          {
+            goto brkloop;
+          }
+          auxv = elf_auxv64_from_auxv32(auxv32);
+        }break;
+        case ELF_Class_64:
         {
-          goto brkloop;
-        }
-      }break;
-      default:{NotImplemented;}break;
+          if(read(auxv_fd, &auxv, sizeof(auxv)) != sizeof(auxv))
+          {
+            goto brkloop;
+          }
+        }break;
+        default:{NotImplemented;}break;
       }
       
       // rjf: fill result
@@ -425,7 +425,7 @@ dmn_lnx_phdr_info_from_memory(int memory_fd, ELF_Class elf_class, U64 rebase, U6
     {
       Assert(0 && "unable to read a program header");
     }
-
+    
     // rjf: save
     switch(phdr.p_type)
     {
@@ -456,10 +456,10 @@ dmn_lnx_dynamic_info_from_memory(int memory_fd, ELF_Class elf_class, U64 rebase,
     // rjf: read next dyn entry
     ELF_Dyn64 dyn = {0};
     if(!dmn_lnx_read_dynamic(memory_fd, dynamic_cursor, elf_class, &dyn)) { Assert(0 && "unable to read dynamic"); }
-
+    
     // rjf: break on zero
     if(dyn.tag == ELF_DynTag_Null) { break; }
-
+    
     // extract reuiqred values out of dynamic section
     if(dyn.tag == ELF_DynTag_Strtab)
     {
@@ -493,35 +493,35 @@ internal U64
 dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase)
 {
   Temp scratch = scratch_begin(0, 0);
-
+  
   U64 rdebug_vaddr = 0;
-
+  
   // load DL's header
   ELF_Hdr64 ehdr = {0};
   if(!dmn_lnx_read_ehdr(memory_fd, loader_vbase, &ehdr)) { Assert(0 && "failed to read interp's header"); goto exit; }
-
+  
   U64       rebase    = ehdr.e_type == ELF_Type_Dyn ? loader_vbase : 0;
   ELF_Class elf_class = ehdr.e_ident[ELF_Identifier_Class];
-
+  
   // find dynamic program header
   U64 dynamic_vaddr = max_U64;
   for EachIndex(phdr_idx, ehdr.e_phnum)
   {
     U64 phdr_vaddr = loader_vbase + ehdr.e_phoff + phdr_idx * ehdr.e_phentsize;
-
+    
     ELF_Phdr64 phdr = {0};
     if(!dmn_lnx_read_phdr(memory_fd, phdr_vaddr, elf_class, &phdr)) { Assert(0 && "failed to read program header"); goto exit; }
-
+    
     if(phdr.p_type == ELF_PType_Dynamic)
     {
       dynamic_vaddr = rebase + phdr.p_offset;
       break;
     }
   }
-
+  
   // extract necessary info out of dynamic program header
   DMN_LNX_DynamicInfo dynamic_info = dmn_lnx_dynamic_info_from_memory(memory_fd, elf_class, rebase, dynamic_vaddr);
-
+  
   // extract symbol table count from available options
   U64 symbol_count = 0;
   if(dynamic_info.hash_vaddr)
@@ -531,7 +531,7 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase)
     {
       hash_entry_size = 8;
     }
-
+    
     U64 chain_count = 0;
     if(dmn_lnx_read(memory_fd, r1u64(dynamic_info.hash_vaddr, dynamic_info.hash_vaddr + hash_entry_size), &chain_count) == hash_entry_size)
     {
@@ -547,7 +547,7 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase)
     // TODO: extract count from GNU_HASH
     NotImplemented;
   }
-
+  
   // scan symbol table for the rendezvous symbol
   if(dynamic_info.symtab_vaddr && dynamic_info.symtab_entry_size && symbol_count)
   {
@@ -559,16 +559,16 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase)
         Assert(0 && "failed to read symbol table");
         break;
       }
-
+      
       Temp temp = temp_begin(scratch.arena);
-
+      
       String8 symbol_name = {0};
       if(symbol.st_name < dynamic_info.strtab_size)
       {
         U64 cap = dynamic_info.strtab_size - symbol.st_name;
         symbol_name = dmn_lnx_read_string_capped(temp.arena, memory_fd, dynamic_info.strtab_vaddr + symbol.st_name, cap);
       }
-
+      
       if(str8_match(symbol_name, str8_lit("_r_debug"), 0))
       {
         ELF_SymType symbol_type = ELF_ST_TYPE(symbol.st_info);
@@ -578,12 +578,12 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase)
           break;
         }
       }
-
+      
       temp_end(temp);
     }
   }
   
-exit:;
+  exit:;
   scratch_end(scratch);
   return rdebug_vaddr;
 }
@@ -595,33 +595,33 @@ internal DMN_LNX_ProbeList
 dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   DMN_LNX_ProbeList probes = {0};
-
+  
   ELF_Hdr64 ehdr = {0};
   if(!dmn_lnx_read_ehdr(fd, offset, &ehdr)) { goto exit; }
-
+  
   U64        strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
   ELF_Shdr64 strtab_shdr        = {0};
   if(!dmn_lnx_read_shdr(fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr)) { goto exit; }
-
+  
   B32 found_probes      = 0;
   B32 found_probes_base = 0;
   ELF_Shdr64 text_shdr         = {0};
   ELF_Shdr64 stapsdt_base_shdr = {0};
   ELF_Shdr64 stapsdt_shdr      = {0};
   for(U64 shdr_off = offset + ehdr.e_shoff, shdr_opl = shdr_off + ehdr.e_shentsize * ehdr.e_shnum;
-       shdr_off < shdr_opl;
-       shdr_off += ehdr.e_shentsize) {
+      shdr_off < shdr_opl;
+      shdr_off += ehdr.e_shentsize) {
     ELF_Shdr64 shdr = {0};
     if(!dmn_lnx_read_shdr(fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr)) { goto exit; }
-
+    
     if(shdr.sh_type == ELF_ShType_Note)
     {
       U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
       U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
       String8 name        = dmn_lnx_read_string_capped(scratch.arena, fd, name_offset, name_cap);
-
+      
       if(str8_match(name, str8_lit(".note.stapsdt"), 0))
       {
         stapsdt_shdr = shdr;
@@ -633,7 +633,7 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
       U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
       U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
       String8 name        = dmn_lnx_read_string_capped(scratch.arena, fd, name_offset, name_cap);
-
+      
       if(str8_match(name, str8_lit(".stapsdt.base"), 0))
       {
         stapsdt_base_shdr = shdr;
@@ -643,76 +643,76 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
         text_shdr = shdr;
       }
     }
-
+    
     if(found_probes && found_probes_base) { break; }
   }
-
+  
   if(!found_probes || !found_probes_base) { goto exit; }
-
+  
   U64 probes_base = stapsdt_base_shdr.sh_addr;
   
   Rng1U64  note_range     = shift_1u64(r1u64(stapsdt_shdr.sh_offset, stapsdt_shdr.sh_offset + stapsdt_shdr.sh_size), offset);
   void    *raw_note       = push_array(arena, U8, stapsdt_shdr.sh_size);
   U64      note_read_size = dmn_lnx_read(fd, note_range, raw_note);
   if(note_read_size != dim_1u64(note_range)) { goto exit; }
-
+  
   Arch         arch = arch_from_elf_machine(ehdr.e_machine);
   ELF_NoteList note = elf_parse_note(scratch.arena, str8(raw_note, dim_1u64(note_range)), ehdr.e_ident[ELF_Identifier_Class], ehdr.e_machine);
-
+  
   for EachNode(n, ELF_NoteNode, note.first)
   {
     ELF_Note *note = &n->v;
     if(!str8_match(note->owner, str8_lit("stapsdt"), 0)) { continue; }
     if(note->type != ELF_NoteType_STapSdt)               { continue; }
-
+    
     DMN_LNX_Probe probe = {0};
     {
       U64 cursor    = 0;
       U64 addr_size = ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64 ? 8 : 4;
-
+      
       U64 pc = 0;
       U64 pc_size = str8_deserial_read(note->desc, cursor, &pc, addr_size, addr_size);
       if (pc_size == 0) { goto exit; }
       cursor += pc_size;
-
+      
       U64 base_addr = 0;
       U64 base_addr_size = str8_deserial_read(note->desc, cursor, &base_addr, addr_size, addr_size);
       if (base_addr_size == 0) { goto exit; }
       cursor += base_addr_size;
-
+      
       U64 semaphore = 0;
       U64 semaphore_size = str8_deserial_read(note->desc, cursor, &semaphore, addr_size, addr_size);
       if (semaphore_size == 0) { goto exit; }
       cursor += semaphore_size;
-
+      
       String8 provider = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
       cursor += provider.size + 1;
       if (cursor > note->desc.size) { goto exit; }
-
+      
       String8 name = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
       cursor += name.size + 1;
       if (cursor > note->desc.size) { goto exit; }
-
+      
       String8 args = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
       cursor += args.size + 1;
       if (cursor > note->desc.size) { goto exit; }
-
+      
       U64 probe_rebase = image_base + (base_addr - probes_base);
-
+      
       probe.provider  = provider;
       probe.name      = name;
       probe.args      = stap_arg_array_from_string(arena, arch, args);
       probe.pc        = pc + probe_rebase;
       probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
     }
-
+    
     DMN_LNX_ProbeNode *n = push_array(arena, DMN_LNX_ProbeNode, 1);
     n->v = probe;
     SLLQueuePush(probes.first, probes.last, n);
     probes.count += 1;
   }
-
-exit:;
+  
+  exit:;
   scratch_end(scratch);
   return probes;
 }
@@ -883,7 +883,7 @@ internal B32
 dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
 {
   AssertAlways(gettid() == thread->parent->tracer_tid);
-
+  
   B32 result = 0;
   switch(thread->arch)
   {
@@ -947,7 +947,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
       if(got_gpr)
       {
         Temp scratch = scratch_begin(0, 0);
-
+        
         X64_XSave  *xsave  = 0;
         X64_FXSave *fxsave = 0;
         
@@ -980,7 +980,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
         if(fxsave)
         {
           X64_FXSave *src = fxsave;
-
+          
           // copy x87 registers
           dst->fcw.u16        = src->fcw;
           dst->fsw.u16        = src->fsw;
@@ -994,7 +994,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
           {
             MemoryCopy(&dst->st0 + i, src->st_space + i, sizeof(REGS_Reg80));
           }
-
+          
           // SSE registers are always available in x64
           {
             U128        *xmm_d = fxsave->xmm_space;
@@ -1005,7 +1005,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
             }
           }
         }
-
+        
         // copy xsave registers
         if(xsave)
         {
@@ -1019,7 +1019,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
               MemoryCopy(&zmm_d[n].v[16], &avx_s[n], sizeof(REGS_Reg128));
             }
           }
-
+          
           if(xsave->header.xstate_bv & X64_XStateComponentFlag_OPMASK)
           {
             AssertAlways(process->xsave_layout.opmask_offset + sizeof(REGS_Reg64) * 8 <= process->xsave_size);
@@ -1030,7 +1030,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
               MemoryCopy(&kmask_d[n], &kmask_s[n], sizeof(REGS_Reg64));
             }
           }
-
+          
           if(xsave->header.xstate_bv & X64_XStateComponentFlag_ZMM_H)
           {
             AssertAlways(process->xsave_layout.zmm_h_offset + sizeof(REGS_Reg256) * 16 <= process->xsave_size);
@@ -1041,7 +1041,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
               MemoryCopy(&zmmh_d[n].v[32], &avx512h_s[n], sizeof(REGS_Reg256));
             }
           }
-
+          
           if(xsave->header.xstate_bv & X64_XStateComponentFlag_ZMM)
           {
             AssertAlways(process->xsave_layout.zmm_offset + sizeof(REGS_Reg512) * 16 <= process->xsave_size);
@@ -1052,7 +1052,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
               MemoryCopy(&zmm_d[n], &avx512_s[n], sizeof(REGS_Reg512));
             }
           }
-
+          
           if(xsave->header.xstate_bv & X64_XStateComponentFlag_CETU)
           {
             AssertAlways(process->xsave_layout.cet_u_offset + sizeof(U64)*2 <= process->xsave_size);
@@ -1101,7 +1101,7 @@ internal B32
 dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
 {
   AssertAlways(gettid() == thread->parent->tracer_tid);
-
+  
   B32 result = 0;
   switch(thread->arch)
   {
@@ -1158,10 +1158,10 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
       if(did_gpr)
       {
         Temp scratch = scratch_begin(0, 0);
-
+        
         int xsave_result  = -1;
         int fxsave_result = -1;
-
+        
         X64_FXSave dst_fxsave = {0};
         {
           dst_fxsave.fcw          = src->fcw.u16;
@@ -1172,14 +1172,14 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
           dst_fxsave.b64.fdp      = src->fdp.u64;
           dst_fxsave.mxcsr        = src->mxcsr.u32;
           dst_fxsave.mxcsr_mask   = src->mxcsr_mask.u32;
-
+          
           REGS_Reg128 *st_d = (REGS_Reg128 *)dst_fxsave.st_space;
           REGS_Reg80  *st_s = &src->st0;
           for EachIndex(n, 8)
           {
             MemoryCopy(&st_d[n], &st_s[n], sizeof(REGS_Reg80));
           }
-
+          
           REGS_Reg128 *xmm_d = (REGS_Reg128 *)dst_fxsave.xmm_space;
           REGS_Reg512 *xmm_s = &src->zmm0;
           for EachIndex(n, 16)
@@ -1187,16 +1187,16 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
             MemoryCopy(&xmm_d[n], &xmm_s[n], sizeof(REGS_Reg128));
           }
         }
-
+        
         if(x64_is_xsave_supported())
         {
           U8  *xsave_raw = push_array(scratch.arena, U8, process->xsave_size);
           int  xsave_get = ptrace(PTRACE_GETREGSET, tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_base = xsave_raw, .iov_len = process->xsave_size });
           AssertAlways(xsave_get >= 0);
-
+          
           X64_XSave *dst = (X64_XSave *)xsave_raw;
           dst->fxsave = dst_fxsave;
-
+          
           if(process->xsave_layout.avx_offset)
           {
             if(process->xsave_layout.avx_offset + sizeof(REGS_Reg128) * 16 <= process->xsave_size)
@@ -1209,7 +1209,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
               }
             }
           }
-
+          
           if(process->xsave_layout.opmask_offset)
           {
             if(process->xsave_layout.opmask_offset + sizeof(REGS_Reg64) * 8 <= process->xsave_size)
@@ -1223,7 +1223,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
             }
             else { Assert(0 && "invalid xsave size"); }
           }
-
+          
           if(process->xsave_layout.zmm_h_offset)
           {
             if(process->xsave_layout.zmm_h_offset + sizeof(REGS_Reg256) * 16 <= process->xsave_size)
@@ -1237,7 +1237,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
             }
             else { Assert(0 && "invalid xsave size"); }
           }
-
+          
           if(process->xsave_layout.zmm_offset)
           {
             if(process->xsave_layout.zmm_offset + sizeof(REGS_Reg512) * 16 <= process->xsave_size)
@@ -1251,7 +1251,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
             }
             else { Assert(0 && "invalid xsave size"); }
           }
-
+          
           if(process->xsave_layout.cet_u_offset)
           {
             if(process->xsave_layout.cet_u_offset + sizeof(REGS_Reg64) * 2 <= process->xsave_size)
@@ -1262,22 +1262,22 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
             }
             else { Assert(0 && "invalid xsave size"); }
           }
-
+          
           // xsave
           xsave_result = ptrace(PTRACE_SETREGSET, tid, (void *)NT_X86_XSTATE, &(struct iovec){ .iov_base = dst, .iov_len = process->xsave_size });
           Assert(xsave_result >= 0);
         }
-
+        
         // fallback to fxsave
         if(xsave_result < 0)
         {
           fxsave_result = ptrace(PTRACE_SETREGSET, tid, (void *)NT_FPREGSET, &(struct iovec){ .iov_base = &dst_fxsave, sizeof(dst_fxsave) });
           Assert(fxsave_result >= 0);
         }
-
+        
         // rjf: good finish requires xsave or fxsave
         did_fpr = (xsave_result >= 0 || fxsave_result >= 0);
-
+        
         scratch_end(scratch);
       }
       
@@ -1286,9 +1286,9 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
       if(did_fpr)
       {
         did_dbg = 1;
-
+        
         src->dr7.u64 |= (1 << 10);
-
+        
         REGS_Reg64 *dr_s = &src->dr0;
         for EachIndex(n, 8)
         {
@@ -1317,27 +1317,27 @@ dmn_lnx_set_single_step_flag(DMN_LNX_Entity *thread, B32 is_on)
   B32 is_flag_set = 0;
   switch(thread->arch)
   {
-  case Arch_COUNT:
-  case Arch_Null: {} break;
-  case Arch_x64:
-  {
-    REGS_RegBlockX64 *reg_block = thread->reg_block;
-    if(is_on)
+    case Arch_COUNT:
+    case Arch_Null: {} break;
+    case Arch_x64:
     {
-      reg_block->rflags.u64 |= X64_RFlag_Trap;
-    }
-    else
+      REGS_RegBlockX64 *reg_block = thread->reg_block;
+      if(is_on)
+      {
+        reg_block->rflags.u64 |= X64_RFlag_Trap;
+      }
+      else
+      {
+        reg_block->rflags.u64 &= ~X64_RFlag_Trap;
+      }
+      is_flag_set = dmn_lnx_thread_write_reg_block(thread, thread->reg_block);
+    }break;
+    case Arch_x86:
+    case Arch_arm32:
+    case Arch_arm64:
     {
-      reg_block->rflags.u64 &= ~X64_RFlag_Trap;
-    }
-    is_flag_set = dmn_lnx_thread_write_reg_block(thread, thread->reg_block);
-  }break;
-  case Arch_x86:
-  case Arch_arm32:
-  case Arch_arm64:
-  {
-    NotImplemented;
-  }break;
+      NotImplemented;
+    }break;
   }
   Assert(is_flag_set);
   return is_flag_set;
@@ -1351,26 +1351,26 @@ dmn_lnx_process_loaded_modules(Arena *arena, DMN_EventList *events, DMN_LNX_Enti
   {
     // read out new link map item
     if(!dmn_lnx_read_linkmap(process->fd, map_vaddr, process->dl_class, &map)) { goto exit; }
-
+    
     // was module with this base already registered?
     DMN_LNX_Entity *module = hash_table_search_u64_raw(process->loaded_modules_ht, map.addr_vaddr);
     if(module) { continue; }
-
+    
     // parse out module's ELF header
     ELF_Hdr64 module_ehdr = {0};
     if(!dmn_lnx_read_ehdr(process->fd, map.addr_vaddr, &module_ehdr)) { goto exit; }
-
+    
     // gather info about module
     U64              module_rebase     = module_ehdr.e_type == ELF_Type_Dyn ? map.addr_vaddr : 0;
     U64              module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
     DMN_LNX_PhdrInfo module_phdr_info  = dmn_lnx_phdr_info_from_memory(process->fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
     String8          module_name       = dmn_lnx_read_string(process->arena, process->fd, map.name_vaddr);
-
+    
     // fill out module
     module             = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Module);
     module->id         = map.name_vaddr;
     module->base_vaddr = map.addr_vaddr;
-
+    
     // push load event
     if(!str8_match(module_name, str8_lit("linux-vdso.so.1"), 0))
     {
@@ -1385,11 +1385,11 @@ dmn_lnx_process_loaded_modules(Arena *arena, DMN_EventList *events, DMN_LNX_Enti
       e->elf_phdr_vrange  = r1u64(module_phdr_vaddr, module_phdr_vaddr + module_ehdr.e_phentsize * module_ehdr.e_phnum);
       e->elf_phdr_entsize = module_ehdr.e_phentsize;
     }
-
+    
     // create mapping for base -> module
     hash_table_push_u64_raw(process->arena, process->loaded_modules_ht, map.addr_vaddr, module);
   }
-
+  
   exit:;
 }
 
@@ -1398,18 +1398,18 @@ dmn_lnx_process_unloaded_modules(Arena *arena, DMN_EventList *events, DMN_LNX_En
 {
   Temp scratch = scratch_begin(&arena, 1);
   B32 is_unmap_complete_finished = 0;
-
+  
   GNU_RDebugInfo64 rdebug = {0};
   if(!dmn_lnx_read_r_debug(process->fd, rdebug_vaddr, process->arch, &rdebug)) { goto exit; }
   if(rdebug.r_version != 1) { goto exit; }
-
+  
   // flag every module as inactive
   for(DMN_LNX_Entity *module = process->first; module != &dmn_lnx_nil_entity; module = module->next)
   {
     if(module->kind != DMN_LNX_EntityKind_Module) {continue;}
     module->is_live = 0;
   }
-
+  
   // loop over modules in the link map and mark live modules
   GNU_LinkMap64 map = {0};
   for(U64 map_vaddr = rdebug.r_map; map_vaddr != 0; map_vaddr = map.next_vaddr)
@@ -1425,7 +1425,7 @@ dmn_lnx_process_unloaded_modules(Arena *arena, DMN_EventList *events, DMN_LNX_En
     }
     else { Assert(0 && "unable to read Link Map"); }
   }
-
+  
   // unload inactive modules
   DMN_HandleList to_release = {0};
   for(DMN_LNX_Entity *module = process->first; module != &dmn_lnx_nil_entity; module = module->next)
@@ -1434,25 +1434,25 @@ dmn_lnx_process_unloaded_modules(Arena *arena, DMN_EventList *events, DMN_LNX_En
     if(module->is_live)                           {continue;}
     dmn_handle_list_push(scratch.arena, &to_release, dmn_lnx_handle_from_entity(module));
   }
-
+  
   // push events and clean up internal structures
   for EachNode(n, DMN_HandleNode, to_release.first)
   {
     DMN_LNX_Entity *module = dmn_lnx_entity_from_handle(n->v);
-
+    
     DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
     e->kind    = DMN_EventKind_UnloadModule;
     e->process = dmn_lnx_handle_from_entity(process);
     e->module  = dmn_lnx_handle_from_entity(module);
     e->string  = dmn_lnx_read_string(arena, process->fd, module->id);
-
+    
     hash_table_purge_u64(process->loaded_modules_ht, module->base_vaddr);
-
+    
     dmn_lnx_entity_release(module);
   }
-
+  
   is_unmap_complete_finished = 1;
-exit:;
+  exit:;
   Assert(is_unmap_complete_finished);
   scratch_end(scratch);
 }
@@ -1545,11 +1545,11 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     int   ptrace_result          = 0;
     int   chdir_result           = 0;
     B32   error__need_child_kill = 0;
-
+    
     // open temp pipes to communicate with child process
     int pipe_fds[2] = {0};
     if (pipe(&pipe_fds[0]) < 0) { InvalidPath; }
-
+    
     //- rjf: fork
     pid = fork();
     if(pid == -1) { goto error; }
@@ -1560,14 +1560,14 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
       // wait for parent seize
       char b;
       read(pipe_fds[0], &b, sizeof(b));
-
+      
       // set current working directory to tracee
       chdir_result = chdir(path);
       if(chdir_result == -1) { goto error; }
-
+      
       // replace process with target
       execve(argv[0], argv, env);
-
+      
       // execve failed -- exit
       abort();
     }
@@ -1585,47 +1585,47 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
       enum LaunchStatus launch_status = LaunchStatus_FailBeforePtrace;
       {
         int s = 0;
-
+        
         // seize process
         if (ptrace(PTRACE_SEIZE, pid, 0, 0) < 0) { Assert(0 && "seize failed"); goto launch_error; }
-
+        
         // interrupt process
         launch_status = LaunchStatus_FailAfterPtrace;
         if (ptrace(PTRACE_INTERRUPT, pid, 0, 0) < 0) { Assert(0 && "interrupt failed");       goto launch_error; }
         if (waitpid(pid, &s, __WALL|__WNOTHREAD) < 0) { Assert(0 && "interrupt wait failed"); goto launch_error; }
-
+        
         //  entry read
         if (ptrace(PTRACE_SYSCALL, pid, 0, 0) < 0)    { Assert(0 && "syscall failed"); goto launch_error; }
-
+        
         // resume child
         char b = 1;
         if (write(pipe_fds[1], &b, sizeof(b)) < 0) { Assert(0 && "resume child failed"); goto launch_error; }
-
+        
         // exit read
         if (waitpid(pid, &s, __WALL|__WNOTHREAD) < 0) { Assert(0 && "wait failed");    goto launch_error; }
         if (ptrace(PTRACE_SYSCALL, pid, 0, 0) < 0)    { Assert(0 && "syscall failed"); goto launch_error; }
-
+        
         // entry chdir
         if (waitpid(pid, &s, __WALL|__WNOTHREAD) < 0) { Assert(0 && "wait failed");    goto launch_error; }
         if (ptrace(PTRACE_SYSCALL, pid, 0, 0) < 0)    { Assert(0 && "syscall failed"); goto launch_error; }
-
+        
         // exit chdir
         if (waitpid(pid, &s, __WALL|__WNOTHREAD) < 0) { Assert(0 && "wait failed");    goto launch_error; }
         if (ptrace(PTRACE_SYSCALL, pid, 0, 0) < 0)    { Assert(0 && "syscall failed"); goto launch_error; }
-
+        
         // entry execv
         if (waitpid(pid, &s, __WALL|__WNOTHREAD) < 0) { Assert(0 && "wait failed");    goto launch_error; }
         if (ptrace(PTRACE_SYSCALL, pid, 0, 0) < 0)    { Assert(0 && "syscall failed"); goto launch_error; }
-
+        
         // exit execve
         if (waitpid(pid, &s, __WALL | __WNOTHREAD) < 0) { Assert(0 && "wait failed");    goto launch_error; }
         if (ptrace(PTRACE_SYSCALL, pid, 0, 0) < 0)      { Assert(0 && "syscall failed"); goto launch_error; }
         if (waitpid(pid, &s, __WALL | __WNOTHREAD) < 0) { Assert(0 && "wait failed");    goto launch_error; }
-
+        
         uintptr_t trace_options = PTRACE_O_TRACEEXIT | PTRACE_O_EXITKILL | PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK | PTRACE_O_TRACECLONE | PTRACE_O_TRACEVFORKDONE;
         int setoptions_result = ptrace(PTRACE_SETOPTIONS, pid, 0, PtrFromInt(trace_options));
         if (setoptions_result == -1) { Assert(0 && "failed to set options");  error__need_child_kill = 1; goto launch_error; }
-
+        
         launch_status = LaunchStatus_Success;
         launch_error:;
       }
@@ -1667,19 +1667,19 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
         case LaunchStatus_Success:
         {
           ELF_Hdr64           exe_ehdr         = dmn_lnx_ehdr_from_pid(pid);
-          int                 memory_fd        = open((char*)str8f(scratch.arena, "/proc/%d/mem", pid).str, O_RDWR);
+          int                 memory_fd        = open((char*)str8f(scratch.arena, "/proc/%d/mem", pid).str, O_RDWR|O_CLOEXEC);
           DMN_LNX_ProcessAuxv auxv             = dmn_lnx_auxv_from_pid(pid, exe_ehdr.e_ident[ELF_Identifier_Class]);
           Arch                arch             = arch_from_elf_machine(exe_ehdr.e_machine);
           U64                 rdebug_vaddr     = dmn_lnx_rdebug_vaddr_from_memory(memory_fd, auxv.base);
           U64                 rdebug_brk_vaddr = rdebug_vaddr + gnu_r_brk_offset_from_arch(arch);
-
+          
           ELF_Class dl_class;
           {
             ELF_Hdr64 ehdr = {0};
             if(!dmn_lnx_read_ehdr(memory_fd, auxv.base, &ehdr)) { Assert(0 && "failed to read interp's header"); }
             dl_class = ehdr.e_ident[ELF_Identifier_Class];
           }
-
+          
           U64             xcr0         = 0;
           U64             xsave_size   = 0;
           X64_XSaveLayout xsave_layout = {0};
@@ -1699,10 +1699,10 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
               Assert(0 && "failed to get xstate");
             }
           }
-
+          
           String8 dl_path = {0};
           {
-            int maps_fd = open((char *)str8f(scratch.arena, "/proc/%d/maps", pid).str, O_RDONLY);
+            int maps_fd = open((char *)str8f(scratch.arena, "/proc/%d/maps", pid).str, O_RDONLY|O_CLOEXEC);
             if(maps_fd != -1)
             {
               struct stat st = {0};
@@ -1714,7 +1714,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
                 if(read_size == maps_size)
                 {
                   String8 maps = str8(maps_ptr, maps_size);
-
+                  
                   String8List parts = {0};
                   {
                     for(U64 cursor = 0, part_off = 0; cursor < maps.size; cursor += 1)
@@ -1735,36 +1735,36 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
                       }
                     }
                   }
-
+                  
                   for(String8Node *n = parts.first; n != 0; )
                   {
                     String8 vrange_str = n->string;
                     n = n->next;
                     if(n == 0) { break; }
-
+                    
                     String8 perms_str = n->string;
                     n = n->next;
                     if(n == 0) { break; }
-
+                    
                     String8 offset_str = n->string;
                     n = n->next;
                     if(n == 0) { break; }
-
+                    
                     String8 dev_str = n->string;
                     n = n->next;
                     if(n == 0) { break; }
-
+                    
                     String8 inode_str = n->string;
                     n = n->next;
                     if(n == 0) { break; }
-
+                    
                     String8 path = n->string;
                     n = n->next;
                     if(n == 0) { break; }
-
+                    
                     String8List vaddr_list = str8_split_by_string_chars(scratch.arena, vrange_str, str8_lit("-"), 0);
                     if(vaddr_list.node_count != 2) { break; }
-
+                    
                     U64 lo_vaddr = u64_from_str8(vaddr_list.first->string, 16);
                     if(lo_vaddr == auxv.base)
                     {
@@ -1778,48 +1778,48 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
             }
           }
           AssertAlways(dl_path.size);
-
+          
           // alloc arena for the process
           Arena *process_arena = arena_alloc();
-
+          
           DMN_LNX_Probe **known_probes = push_array(process_arena, DMN_LNX_Probe *, DMN_LNX_ProbeType_Count);
           {
             DMN_LNX_ProbeList probes = {0};
-            int dl_fd = open((char *)dl_path.str, O_RDONLY);
+            int dl_fd = open((char *)dl_path.str, O_RDONLY|O_CLOEXEC);
             if(dl_fd >= 0)
             {
               probes = dmn_lnx_read_probes(process_arena, dl_fd, 0, auxv.base);
               close(dl_fd);
             }
-
+            
             for EachNode(n, DMN_LNX_ProbeNode, probes.first)
             {
               DMN_LNX_Probe *p = &n->v;
               if(str8_match(p->provider, str8_lit("rtld"), 0))
               {
-                #define X(_N,_A,_S) if(str8_match(p->name, str8_lit(_S), 0)) { AssertAlways(p->args.count == _A); known_probes[DMN_LNX_ProbeType_##_N] = p; continue ; }
+#define X(_N,_A,_S) if(str8_match(p->name, str8_lit(_S), 0)) { AssertAlways(p->args.count == _A); known_probes[DMN_LNX_ProbeType_##_N] = p; continue ; }
                 DMN_LNX_Probe_XList
-                #undef X
+#undef X
               }
             }
           }
-
+          
           // install DL probes
           U64 probe_vaddrs[DMN_LNX_ProbeType_Count] = {0};
           for EachIndex(i, DMN_LNX_ProbeType_Count)
           {
             if(known_probes[i] == 0) { continue; }
-
+            
             U8 og_byte = 0;
             if(!dmn_lnx_read_struct(memory_fd, known_probes[i]->pc, &og_byte)) { Assert(0 && "failed to read original byte"); }
             Assert(og_byte == 0x90);
-
+            
             U8 trap = 0xcc;
             if(!dmn_lnx_write_struct(memory_fd, known_probes[i]->pc, &trap)) { Assert(0 && "failed to install probe"); }
-
+            
             probe_vaddrs[i] = known_probes[i]->pc;
           }
-
+          
           // make process entity & push create event
           DMN_LNX_Entity *process = &dmn_lnx_nil_entity;
           {
@@ -1847,7 +1847,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
               e->code    = pid;
             }
           }
-
+          
           // make thread entity & push create event
           DMN_LNX_Entity *main_thread = &dmn_lnx_nil_entity;
           {
@@ -1865,17 +1865,17 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
               e->code    = main_thread->id;
             }
           }
-
+          
           // make main module & push load module event
           {
             U64              base_vaddr = (auxv.phdr & ~(auxv.pagesz-1));
             U64              rebase     = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
             DMN_LNX_PhdrInfo phdr_info  = dmn_lnx_phdr_info_from_memory(memory_fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
-
+            
             DMN_LNX_Entity *module = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Module);
             module->id         = auxv.execfn;
             module->base_vaddr = base_vaddr;
-
+            
             DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
             e->kind             = DMN_EventKind_LoadModule;
             e->process          = dmn_lnx_handle_from_entity(process);
@@ -1887,11 +1887,11 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
             e->string           = dmn_lnx_read_string(dmn_lnx_state->deferred_events_arena, process->fd, auxv.execfn);
             e->elf_phdr_vrange  = r1u64(auxv.phdr, auxv.phdr + auxv.phent * auxv.phnum);
             e->elf_phdr_entsize = auxv.phent;
-
+            
             hash_table_push_u64_raw(process->arena, process->loaded_modules_ht, 0, module);
             hash_table_push_u64_raw(process->arena, process->loaded_modules_ht, base_vaddr, module);
           }
-
+          
           // rjf: handshake event
           {
             DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
@@ -1916,7 +1916,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     
     //- rjf: success
     success:;
-
+    
     // clean up pipes
     close(pipe_fds[0]);
     close(pipe_fds[1]);
@@ -1968,7 +1968,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
     pid_t wait_id = waitpid(tid, &status, __WALL|__WNOTHREAD);
     if(status == -1 && errno == EINTR) {continue;} // wait interrupted, try again
     if(status == -1) {InvalidPath;} // TODO: graceful exit
-
+    
     //- rjf: unpack event
     int             wifexited              = WIFEXITED(status);
     int             wifsignaled            = WIFSIGNALED(status);
@@ -1977,9 +1977,9 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
     int             ptrace_event_code      = (status>>16);
     DMN_LNX_Entity *thread                 = dmn_lnx_thread_from_pid(wait_id);
     DMN_LNX_Entity *process                = thread->parent;
-
+    
     //printf("waitpid - pid %d wifexited %d, wifsignaled %d, wifstopped %d, wstopsig %d\n", wait_id, wifexited, wifsignaled, wifstopped, wstopsig);
-
+    
     // update thread registers
     if(thread != &dmn_lnx_nil_entity)
     {
@@ -1992,7 +1992,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
     DMN_Trap      *hit_user_trap = 0;
     pid_t          new_pid       = 0;
     B32            is_group_stop = 0;
-
+    
     //- rjf: WIFEXITED(status) -> thread exit
     if(wifexited)
     {
@@ -2005,7 +2005,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
       e_kind    = DMN_EventKind_ExitThread;
       exit_code = WTERMSIG(status);
     }
- 
+    
     //- rjf: SIGTRAP:PTRACE_EVENT_EXIT
     else if(wifstopped && wstopsig == SIGTRAP && ptrace_event_code == PTRACE_EVENT_EXIT)
     {
@@ -2029,7 +2029,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
              ptrace_event_code == PTRACE_EVENT_VFORK))
     {
     }
-
+    
     // group stop
     else if(wifstopped && wstopsig == SIGTRAP && status >> 16 == PTRACE_EVENT_STOP)
     {
@@ -2042,7 +2042,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
       // translate signal code to DEMON event kind
       siginfo_t siginfo = {0};
       if(ptrace(PTRACE_GETSIGINFO, wait_id, 0, &siginfo) < 0) { Assert(0 && "failed to get signal info"); }
-
+      
       switch(siginfo.si_code)
       {
         case DMN_LNX_SigTrapCode_Brkpt:
@@ -2135,11 +2135,11 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
     {
       Assert(0 && "unexpected stop code");
     }
-
+    
     dmn_lnx_state->last_event_kind = e_kind;
     dmn_lnx_state->last_stop_pid   = wait_id;
     dmn_lnx_state->last_sig_code   = wstopsig;
-
+    
     if(wait_for_group_stop)
     {
       if(is_group_stop)
@@ -2151,7 +2151,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
     {
       done = 1;
     }
-
+    
     if(e_kind == DMN_EventKind_Breakpoint)
     {
       U64 ip = dmn_lnx_thread_read_ip(thread);
@@ -2164,7 +2164,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
         }
       }
     }
-
+    
     // is this a probe trap?
     if(e_kind == DMN_EventKind_Breakpoint)
     {
@@ -2179,7 +2179,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
           break;
         }
       }
-
+      
       if(probe_type == DMN_LNX_ProbeType_InitComplete)
       {
         U64 name_space_id = 0, rdebug_addr = 0;
@@ -2232,17 +2232,17 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
         }
         else { Assert(0 && "failed to read first argument"); }
       }
-
+      
       if(probe_type != DMN_LNX_ProbeType_Null) {break;}
     }
-
+    
     // rollback IP on user traps
     if(hit_user_trap)
     {
       U64 ip = dmn_lnx_thread_read_ip(thread);
       dmn_lnx_thread_write_ip(thread, ip - 1);
     }
-
+    
     switch(e_kind)
     {
       case DMN_EventKind_COUNT:
@@ -2251,7 +2251,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
       case DMN_EventKind_HandshakeComplete:
       case DMN_EventKind_LoadModule:
       case DMN_EventKind_UnloadModule:
-        {InvalidPath;}break;
+      {InvalidPath;}break;
       case DMN_EventKind_Trap:
       case DMN_EventKind_Memory:
       case DMN_EventKind_SetThreadName:
@@ -2267,7 +2267,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
       {
         // clear single step flag
         dmn_lnx_set_single_step_flag(thread, 0);
-
+        
         DMN_Event *e = dmn_event_list_push(arena, evts);
         e->kind                = e_kind;
         e->process             = dmn_lnx_handle_from_entity(process);
@@ -2351,7 +2351,7 @@ dmn_lnx_wait_for_events(Arena *arena, DMN_EventList *evts, pid_t tid, B32 wait_f
         thread->arch      = process->arch;
         thread->reg_block = push_array(process->arena, U8, regs_block_size_from_arch(process->arch));
         dmn_lnx_thread_read_reg_block(thread, thread->reg_block);
-
+        
         DMN_Event *e = dmn_event_list_push(arena, evts);
         e->kind    = DMN_EventKind_CreateThread;
         e->process = dmn_lnx_handle_from_entity(process);
@@ -2419,12 +2419,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       for EachIndex(n_idx, n->count)
       {
         DMN_Trap *trap = n->v+n_idx;
-
+        
         if(trap->flags == 0)
         {
           DMN_ActiveTrap *is_set = hash_table_search_u64_raw(ht, trap->vaddr);
           if(is_set) { continue; }
-
+          
           U8 swap_byte = 0;
           if(dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &swap_byte) > 0)
           {
@@ -2435,7 +2435,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               active_trap->trap      = trap;
               active_trap->swap_byte = swap_byte;
               SLLQueuePush(active_trap_first, active_trap_last, active_trap);
-
+              
               hash_table_push_u64_raw(scratch.arena, ht, trap->vaddr, active_trap);
             } else { Assert(0 && "failed to write trap"); }
           } else { Assert(0 && "failed to read original byte"); }
@@ -2443,7 +2443,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
     }
   }
-
+  
   ////////////////////////////
   //- enable single stepping
   if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero()))
@@ -2451,7 +2451,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     DMN_LNX_Entity *single_step_thread = dmn_lnx_entity_from_handle(ctrls->single_step_thread);
     dmn_lnx_set_single_step_flag(single_step_thread, 1);
   }
-
+  
   ////////////////////////////
   //- rjf: gather all threads which we should run
   //
@@ -2524,7 +2524,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
     }
   }
-
+  
   ////////////////////////////
   //- rjf: resume all threads we need to run
   //
@@ -2532,20 +2532,20 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   for EachNode(n, DMN_LNX_EntityNode, run_threads.first)
   {
     DMN_LNX_Entity *thread = n->v;
-
+    
     // update registers
     if(!dmn_lnx_thread_write_reg_block(thread, thread->reg_block)) { Assert(0 && "failed to write thread's registers"); }
-
+    
     // pass signal to the child process
     void *sig_code = 0;
     if(dmn_lnx_state->last_event_kind == DMN_EventKind_Exception && dmn_lnx_state->last_stop_pid == thread->id)
     {
       sig_code = (void *)(uintptr_t)dmn_lnx_state->last_sig_code;
     }
-
+    
     // resume thread
     if (ptrace(PTRACE_CONT, (pid_t)thread->id, 0, (void *)sig_code) < 0) { Assert(0 && "failed to resume a thread"); }
-
+    
     dmn_lnx_entity_list_push(scratch.arena, &ran_threads, thread);
   }
   
@@ -2556,7 +2556,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   {
     dmn_lnx_wait_for_events(arena, &evts, -1, 0, active_trap_first);
   }
-
+  
   ////////////////////////////
   //- rjf: stop all threads
   //
@@ -2578,7 +2578,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       dmn_lnx_wait_for_events(arena, &evts, -1, 1, active_trap_first);
     }
   }
-
+  
   // update registers
   for EachNode(n, DMN_LNX_EntityNode, ran_threads.first)
   {
