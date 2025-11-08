@@ -53,7 +53,7 @@ mkdir -p build
 mkdir -p local
 
 # --- Build & Run Metaprogram -------------------------------------------------
-if [ ! -v meta ]
+if [ -v meta ]
 then
   echo "[doing metagen]"
   cd build
