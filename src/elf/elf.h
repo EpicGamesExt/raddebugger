@@ -171,12 +171,12 @@ enum
   ELF_ShType_PreinitArray           = 16,         // Array of ptrs to finish functions
   ELF_ShType_Group                  = 17,         // Array of ptrs to pre-init funcs
   ELF_ShType_SymtabShndx            = 18,         // Section contains a section group
-
+  
   ELF_ShType_GNU_IncrementalInputs  = 0x6fff4700, // Indices for SHN_XINDEX entries
   ELF_ShType_GNU_Attributes         = 0x6ffffff5, // Incremental build data
   ELF_ShType_GNU_Hash               = 0x6ffffff6, // Object attributes
   ELF_ShType_GNU_LibList            = 0x6ffffff7, // GNU style symbol hash table
-
+  
   ELF_ShType_SUNW_verdef            = 0x6ffffffd,
   ELF_ShType_SUNW_verneed           = 0x6ffffffe, // Versions defined by file
   ELF_ShType_SUNW_versym            = 0x6fffffff, // Versions needed by file
@@ -216,7 +216,7 @@ enum
   ELF_SectionIndex_MIPS_SUndefined   = 0xff04,
 };
 
-typedef U32 ELF_SectionFlag;
+typedef U32 ELF_SectionFlags;
 enum
 {
   ELF_Shf_Write            = (1 << 0),

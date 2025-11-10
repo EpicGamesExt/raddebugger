@@ -1582,9 +1582,9 @@ typedef enum DW_ExprOpEnum
 {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) DW_ExprOp_##_N = _ID,
   DW_Expr_V3_XList(X)
-  DW_Expr_V4_XList(X)
-  DW_Expr_V5_XList(X) 
-  DW_Expr_GNU_XList(X)
+    DW_Expr_V4_XList(X)
+    DW_Expr_V5_XList(X) 
+    DW_Expr_GNU_XList(X)
 #undef X
 } DW_ExprOpEnum;
 

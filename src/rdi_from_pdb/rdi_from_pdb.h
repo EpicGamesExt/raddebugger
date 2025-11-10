@@ -5,7 +5,7 @@
 #define RDI_FROM_PDB_H
 
 ////////////////////////////////
-//~ rjf: Conversion Stage Inputs/Outputs
+//~ rjf: Conversion Stage Inputs
 
 typedef struct P2R_ConvertParams P2R_ConvertParams;
 struct P2R_ConvertParams
@@ -19,7 +19,7 @@ struct P2R_ConvertParams
 };
 
 ////////////////////////////////
-//~ rjf: Shared Conversion State
+//~ rjf: Conversion Helper Types
 
 //- rjf: link name map (voff -> string)
 
