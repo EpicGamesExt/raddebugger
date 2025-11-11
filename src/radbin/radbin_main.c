@@ -34,6 +34,7 @@
 #include "rdi_from_elf/rdi_from_elf.h"
 #include "rdi_from_pdb/rdi_from_pdb.h"
 #include "rdi_from_dwarf/rdi_from_dwarf.h"
+#include "rdi_from_dwarf/rdi_from_dwarf_2.h"
 #include "radbin/radbin.h"
 
 //- rjf: [c]
@@ -60,6 +61,7 @@
 #include "rdi_from_elf/rdi_from_elf.c"
 #include "rdi_from_pdb/rdi_from_pdb.c"
 #include "rdi_from_dwarf/rdi_from_dwarf.c"
+#include "rdi_from_dwarf/rdi_from_dwarf_2.c"
 #include "radbin/radbin.c"
 
 ////////////////////////////////

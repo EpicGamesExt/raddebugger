@@ -115,8 +115,6 @@ typedef struct DW_Attrib DW_Attrib;
 struct DW_Attrib
 {
   U64 info_off;
-  U64 abbrev_off;
-  U64 abbrev_id;
   DW_AttribKind attrib_kind;
   DW_FormKind form_kind;
   DW_Form form;

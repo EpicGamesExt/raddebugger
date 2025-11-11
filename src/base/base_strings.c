@@ -2769,14 +2769,14 @@ str8_serial_push_string(Arena *arena, String8List *srl, String8 str){
 internal U64
 str8_deserial_read(String8 string, U64 off, void *read_dst, U64 read_size, U64 granularity)
 {
-  U64 bytes_left = string.size-Min(off, string.size);
+  U64 bytes_left = string.size - Min(off, string.size);
   U64 actually_readable_size = Min(bytes_left, read_size);
   U64 legally_readable_size = actually_readable_size - actually_readable_size%granularity;
   if(legally_readable_size > 0)
   {
     MemoryCopy(read_dst, string.str+off, legally_readable_size);
   }
-  return legally_readable_size;
+  return actually_readable_size;
 }
 
 internal U64

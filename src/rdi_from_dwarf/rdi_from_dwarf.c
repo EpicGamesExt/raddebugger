@@ -2532,13 +2532,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   if(lane_idx() == 0)
   {
     ////////////////////////////
-    //- rjf: compute exe hash
-    //
-    ProfBegin("compute exe hash");
-    U64 exe_hash = rdi_hash(params->exe_data.str, params->exe_data.size);
-    ProfEnd();
-    
-    ////////////////////////////
     //- rjf: unpack input image info
     //
     Arch arch = Arch_Null;
@@ -2591,6 +2584,13 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         acceptable_vaddr_range.max = Max(n->v.voff_opl, acceptable_vaddr_range.max);
       }
     }
+    
+    ////////////////////////////
+    //- rjf: compute exe hash
+    //
+    ProfBegin("compute exe hash");
+    U64 exe_hash = rdi_hash(params->exe_data.str, params->exe_data.size);
+    ProfEnd();
     
     ////////////////////////////
     //- rjf: convert top-level-info

@@ -613,12 +613,10 @@ rb_thread_entry_point(void *p)
         }break;
       }
       
-      //- rjf: convert inputs to RDI info
+      //- rjf: convert DWARF in inputs to RDI info
       B32 convert_done = 0;
-      RDIM_BakeParams pdb_bake_params = {0};
       RDIM_BakeParams dwarf_bake_params = {0};
       {
-        //- rjf: PE inputs w/ DWARF, or ELF inputs => DWARF -> RDI conversion
         B32 pe_w_dwarf = (input_files_from_format_table[RB_FileFormat_PE].count != 0 &&
                           input_files_from_format_table[RB_FileFormat_PE].first->v->format_flags & RB_FileFormatFlag_HasDWARF);
         B32 elf_w_dwarf = (input_files_from_format_table[RB_FileFormat_ELF32].count != 0 ||
@@ -630,7 +628,103 @@ rb_thread_entry_point(void *p)
           else if(pe_w_dwarf)  { log_infof("PEs w/ DWARF specified; converting DWARF data to RDI\n"); }
           else if(elf_w_dwarf) { log_infof("ELFs specified; converting DWARF data to RDI\n"); }
           
+          // rjf: input files -> exe, exe metadata, & raw dwarf
+          RB_File *exe_file = &rb_file_nil;
+          Arch arch = Arch_Null;
+          U64 base_vaddr = 0;
+          RDIM_BinarySectionList binary_sections = {0};
+          DW_Raw raw = {0};
+          B32 got_dwarf = 0;
+          {
+            for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
+            {
+              // rjf: the first PE w/ DWARF, *or* the first ELF => pick as our exectable
+              if(exe_file == &rb_file_nil &&
+                 ((n->v->format == RB_FileFormat_PE && n->v->format_flags & RB_FileFormatFlag_HasDWARF) ||
+                  n->v->format == RB_FileFormat_ELF64 ||
+                  n->v->format == RB_FileFormat_ELF32))
+              {
+                exe_file = n->v;
+              }
+              
+              // rjf: PE => get PE info
+              PE_BinInfo pe = {0};
+              if(n->v->format == RB_FileFormat_PE)
+              {
+                pe = pe_bin_info_from_data(arena, n->v->data);
+                if(arch == Arch_Null)
+                {
+                  arch = pe.arch;
+                }
+                if(base_vaddr == 0)
+                {
+                  base_vaddr = pe.image_base;
+                }
+                if(binary_sections.count == 0)
+                {
+                  String8 raw_sections = str8_substr(n->v->data, pe.section_table_range);
+                  COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(raw_sections, 0, sizeof(COFF_SectionHeader)*pe.section_count);
+                  String8 string_table = str8_substr(n->v->data, pe.string_table_range);
+                  binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, n->v->data, string_table, pe.section_count, section_table);
+                }
+              }
+              
+              // rjf: ELF => get ELF info
+              ELF_Bin elf = {0};
+              if(n->v->format == RB_FileFormat_ELF32 ||
+                 n->v->format == RB_FileFormat_ELF64)
+              {
+                elf = elf_bin_from_data(arena, n->v->data);
+                if(arch == Arch_Null)
+                {
+                  arch = arch_from_elf_machine(elf.hdr.e_machine);
+                }
+                if(base_vaddr == 0)
+                {
+                  base_vaddr = elf_base_addr_from_bin(&elf);
+                }
+                if(binary_sections.count == 0)
+                {
+                  binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, n->v->data, &elf, elf.shdrs);
+                }
+              }
+              
+              // rjf: PE w/ DWARF => gather DWARF sections
+              if(!got_dwarf && n->v->format == RB_FileFormat_PE && n->v->format_flags & RB_FileFormatFlag_HasDWARF)
+              {
+                String8 raw_sections = str8_substr(n->v->data, pe.section_table_range);
+                COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(raw_sections, 0, sizeof(COFF_SectionHeader)*pe.section_count);
+                String8 string_table = str8_substr(n->v->data, pe.string_table_range);
+                raw = dw_raw_from_coff_section_table(arena, n->v->data, string_table, pe.section_count, section_table);
+                got_dwarf = 1;
+              }
+              
+              // rjf: ELF w/ DWARF => gather DWARF sections
+              if(!got_dwarf && (n->v->format == RB_FileFormat_ELF32 || n->v->format == RB_FileFormat_ELF64) && n->v->format_flags & RB_FileFormatFlag_HasDWARF)
+              {
+                raw = dw_raw_from_elf_bin(arena, n->v->data, &elf);
+                got_dwarf = 1;
+              }
+            }
+          }
+          
+          // rjf: convert (NEW)
+#if 0
+          D2R2_ConvertParams convert_params = {0};
+          {
+            convert_params.exe_name        = exe_file->path;
+            convert_params.exe_data        = exe_file->data;
+            convert_params.arch            = arch;
+            convert_params.base_vaddr      = base_vaddr;
+            convert_params.binary_sections = binary_sections;
+            convert_params.raw             = raw;
+            convert_params.subset_flags    = subset_flags;
+            convert_params.deterministic   = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
+          }
+          ProfScope("convert") dwarf_bake_params = d2r2_convert(arena, &convert_params);
+          
           // rjf: convert
+#else
           D2R_ConvertParams convert_params = {0};
           {
             B32 got_exe = 0;
@@ -710,34 +804,37 @@ rb_thread_entry_point(void *p)
             convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
           ProfScope("convert") dwarf_bake_params = d2r_convert(arena, &convert_params);
+#endif
         }
+      }
+      lane_sync();
+      
+      //- rjf: convert PDB in inputs to RDI info
+      RDIM_BakeParams pdb_bake_params = {0};
+      if(input_files_from_format_table[RB_FileFormat_PDB].count != 0)
+      {
+        convert_done = 1;
+        log_infof("PDBs specified; converting PDB data to RDI\n");
         
-        //- rjf: PDB inputs => PDB -> RDI conversion
-        if(input_files_from_format_table[RB_FileFormat_PDB].count != 0)
+        // rjf: get EXE/PDB file data
+        RB_File *exe_file = rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PE]);
+        RB_File *pdb_file = rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PDB]);
+        String8 exe_path  = exe_file->path;
+        String8 pdb_path  = pdb_file->path;
+        String8 exe_data  = exe_file->data;
+        String8 pdb_data  = pdb_file->data;
+        
+        // rjf: convert
+        P2R_ConvertParams convert_params = {0};
         {
-          convert_done = 1;
-          log_infof("PDBs specified; converting PDB data to RDI\n");
-          
-          // rjf: get EXE/PDB file data
-          RB_File *exe_file = rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PE]);
-          RB_File *pdb_file = rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PDB]);
-          String8 exe_path  = exe_file->path;
-          String8 pdb_path  = pdb_file->path;
-          String8 exe_data  = exe_file->data;
-          String8 pdb_data  = pdb_file->data;
-          
-          // rjf: convert
-          P2R_ConvertParams convert_params = {0};
-          {
-            convert_params.input_pdb_name = pdb_path;
-            convert_params.input_exe_name = exe_path;
-            convert_params.input_pdb_data = pdb_data;
-            convert_params.input_exe_data = exe_data;
-            convert_params.subset_flags   = subset_flags;
-            convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
-          }
-          ProfScope("convert") pdb_bake_params = p2r_convert(arena, &convert_params);
+          convert_params.input_pdb_name = pdb_path;
+          convert_params.input_exe_name = exe_path;
+          convert_params.input_pdb_data = pdb_data;
+          convert_params.input_exe_data = exe_data;
+          convert_params.subset_flags   = subset_flags;
+          convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
         }
+        ProfScope("convert") pdb_bake_params = p2r_convert(arena, &convert_params);
       }
       lane_sync();
       
