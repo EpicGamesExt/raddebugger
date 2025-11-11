@@ -4064,7 +4064,7 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
   }
   
   if (opts & RD_Option_Dwarf) {
-    DW_Input dwarf_input = dw_input_from_coff_section_table(scratch.arena, raw_data, raw_string_table, file_header->section_count, sections);
+    DW_Raw dwarf_input = dw_raw_from_coff_section_table(scratch.arena, raw_data, raw_string_table, file_header->section_count, sections);
     dw_format(arena, out, indent, opts, &dwarf_input, arch, ExecutableImageKind_CoffPe);
   }
   
@@ -4080,12 +4080,12 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
   
   ELF_Bin      bin         = elf_bin_from_data(raw_data);
   Arch             arch        = arch_from_elf_machine(bin.hdr.e_machine);
-  DW_Input         dwarf_input = dw_input_from_elf_bin(scratch.arena, raw_data, &bin);
+  DW_Raw         dwarf_input = dw_raw_from_elf_bin(scratch.arena, raw_data, &bin);
   ELF_Class        elf_class   = bin.hdr.e_ident[ELF_Identifier_Class];
   ExecutableImageKind        image_type  = elf_class == ELF_Class_32 ? ExecutableImageKind_Elf32 : elf_class == ELF_Class_64 ? ExecutableImageKind_Elf64 : ELF_Class_None;
   B32              relaxed     = 1;
   Rng1U64List      cu_ranges   = dw_unit_ranges_from_data(scratch.arena, dwarf_input.sec[DW_Section_Info].data);
-  DW_ListUnitInput lu_input    = dw_list_unit_input_from_input(scratch.arena, &dwarf_input);
+  DW_ListUnitInput lu_input    = dw_list_unit_input_from_raw(scratch.arena, &dwarf_input);
   
   if (bin.hdr.e_type == ELF_Type_Exec || bin.hdr.e_type == ELF_Type_Dyn) {
     U64 cu_idx = 0;

@@ -1099,7 +1099,7 @@ rb_thread_entry_point(void *p)
         Arch       arch               = Arch_Null;
         PE_BinInfo pe                 = {0};
         ELF_Bin    elf                = {0};
-        DW_Input   dw                 = {0};
+        DW_Raw   dw                 = {0};
         U64        eh_frame_hdr_vaddr = 0;
         U64        eh_frame_vaddr     = 0;
         String8    eh_frame_hdr       = {0};
@@ -1115,7 +1115,7 @@ rb_thread_entry_point(void *p)
           {
             elf = elf_bin_from_data(arena, f->data);
             arch = arch_from_elf_machine(elf.hdr.e_machine);
-
+            
             for EachIndex(sect_idx, elf.hdr.e_shnum)
             {
               ELF_Shdr64 *shdr = &elf.shdrs.v[sect_idx];
@@ -1124,7 +1124,7 @@ rb_thread_entry_point(void *p)
               {
                 eh_frame_hdr = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
                 eh_frame_hdr_vaddr = shdr->sh_addr;
-
+                
               }
               else if(str8_match(name, str8_lit(".eh_frame"), 0))
               {
@@ -1141,12 +1141,12 @@ rb_thread_entry_point(void *p)
               U64                 section_count = raw_sections.size / sizeof(COFF_SectionHeader);
               COFF_SectionHeader *section_table = (COFF_SectionHeader *)raw_sections.str;
               String8 string_table = str8_substr(f->data, pe.string_table_range);
-              dw = dw_input_from_coff_section_table(arena, f->data, string_table, section_count, section_table);
+              dw = dw_raw_from_coff_section_table(arena, f->data, string_table, section_count, section_table);
             }
             else if(f->format == RB_FileFormat_ELF32 ||
                     f->format == RB_FileFormat_ELF64)
             {
-              dw = dw_input_from_elf_bin(arena, f->data, &elf);
+              dw = dw_raw_from_elf_bin(arena, f->data, &elf);
             }
           }
         }
@@ -1241,7 +1241,7 @@ rb_thread_entry_point(void *p)
             }
           }
         }
-
+        
         if(eh_dump_subset_flags)
         {
           if(lane_idx() == 0)

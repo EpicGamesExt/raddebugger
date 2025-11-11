@@ -648,7 +648,7 @@ coff_print_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data,
   }
   
   if (opts & RD_Option_Dwarf) {
-    DW_Input dwarf_input = dw_input_from_coff_section_table(scratch.arena, raw_data, raw_string_table, header->section_count, section_table);
+    DW_Raw dwarf_input = dw_raw_from_coff_section_table(scratch.arena, raw_data, raw_string_table, header->section_count, section_table);
     dw_format(arena, out, indent, opts, &dwarf_input, arch, ExecutableImageKind_CoffPe);
   }
   

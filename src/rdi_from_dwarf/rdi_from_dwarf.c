@@ -136,7 +136,7 @@ d2r_type_from_offset(D2R_TypeTable *type_table, U64 info_off)
 }
 
 internal RDIM_Type *
-d2r_type_from_attrib(D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+d2r_type_from_attrib(D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   RDIM_Type *type = type_table->builtin_types[RDI_TypeKind_Void];
   
@@ -165,7 +165,7 @@ d2r_type_from_attrib(D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu
 }
 
 internal Rng1U64List
-d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag)
+d2r_range_list_from_tag(Arena *arena, DW_Raw *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag)
 {
   // collect non-contiguous range
   Rng1U64List raw_ranges = dw_rnglist_from_tag_attrib_kind(arena, input, cu, tag, DW_AttribKind_Ranges);
@@ -223,7 +223,7 @@ d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 imag
 }
 
 internal RDIM_Type **
-d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out)
+d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -892,7 +892,7 @@ d2r_push_relational_op(Arena *arena, D2R_ValueTypeStack *stack, RDIM_EvalBytecod
 
 internal RDIM_EvalBytecode
 d2r_bytecode_from_expression(Arena       *arena,
-                             DW_Input    *input,
+                             DW_Raw    *input,
                              U64          image_base,
                              U64          address_size,
                              Arch         arch,
@@ -1438,7 +1438,7 @@ d2r_bytecode_from_expression(Arena       *arena,
 }
 
 internal RDIM_Location *
-d2r_transpile_expression(Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
+d2r_transpile_expression(Arena *arena, RDIM_LocationChunkList *locations, DW_Raw *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
 {
   RDIM_Location *loc = 0;
   if (expr.size) {
@@ -1459,7 +1459,7 @@ d2r_locset_from_attrib(Arena                  *arena,
                        RDIM_ScopeChunkList    *scopes,
                        RDIM_Scope             *curr_scope,
                        RDIM_LocationChunkList *locations,
-                       DW_Input               *input,
+                       DW_Raw               *input,
                        DW_CompUnit            *cu,
                        U64                     image_base,
                        Arch                    arch,
@@ -1507,7 +1507,7 @@ d2r_var_locset_from_tag(Arena                  *arena,
                         RDIM_ScopeChunkList    *scopes,
                         RDIM_Scope             *curr_scope,
                         RDIM_LocationChunkList *locations,
-                        DW_Input               *input,
+                        DW_Raw               *input,
                         DW_CompUnit            *cu,
                         U64                     image_base,
                         Arch                    arch,
@@ -1687,7 +1687,7 @@ d2r_is_tag_converted(DW_TagNode *tag_node)
 }
 
 internal RDIM_Type *
-d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_Tag tag, DW_AttribKind kind)
+d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_Tag tag, DW_AttribKind kind)
 {
   RDIM_Type *type = type_table->builtin_types[RDI_TypeKind_Void];
   
@@ -1730,7 +1730,7 @@ d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *inpu
 }
 
 internal void
-d2r_convert_types(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_TagNode *root)
+d2r_convert_types(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_TagNode *root)
 {
   Temp scratch = scratch_begin(&arena, 1);
   for(D2R_TagIter *it = d2r_tag_iter_init(scratch.arena, root);
@@ -2146,7 +2146,7 @@ d2r_convert_types(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_C
 internal void
 d2r_convert_udts(Arena         *arena,
                  D2R_TypeTable *type_table,
-                 DW_Input      *input,
+                 DW_Raw      *input,
                  DW_CompUnit   *cu,
                  DW_Language    cu_lang,
                  U64            arch_addr_size,
@@ -2245,7 +2245,7 @@ d2r_convert_udts(Arena         *arena,
 }
 
 internal void
-d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, U64 image_base, Arch arch, DW_TagNode *root)
+d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, U64 image_base, Arch arch, DW_TagNode *root)
 {
   Temp scratch = scratch_begin(&arena, 1);
   for(D2R_TagIter *it = d2r_tag_iter_init(scratch.arena, root);
@@ -2543,7 +2543,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     //
     Arch arch = Arch_Null;
     U64 image_base = 0;
-    DW_Input input = {0};
+    DW_Raw input = {0};
     PathStyle path_style = PathStyle_Null;
     switch(params->exe_kind)
     {
@@ -2557,7 +2557,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         arch = pe.arch;
         image_base = pe.image_base;
         binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, params->exe_data, string_table, pe.section_count, section_table);
-        input = dw_input_from_coff_section_table(scratch.arena, params->exe_data, string_table, pe.section_count, section_table);
+        input = dw_raw_from_coff_section_table(scratch.arena, params->exe_data, string_table, pe.section_count, section_table);
         path_style = PathStyle_WindowsAbsolute;
       }break;
       case ExecutableImageKind_Elf32:
@@ -2567,7 +2567,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         arch = arch_from_elf_machine(bin.hdr.e_machine);
         image_base = (bin.hdr.e_type == ELF_Type_Dyn ? 0 : elf_base_addr_from_bin(&bin));
         binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, params->dbg_data, &bin, bin.shdrs);
-        input = dw_input_from_elf_bin(scratch.arena, params->dbg_data, &bin);
+        input = dw_raw_from_elf_bin(scratch.arena, params->dbg_data, &bin);
         path_style = PathStyle_UnixAbsolute;
       }break;
     }
@@ -2593,7 +2593,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     }
     
     ////////////////////////////
-    //- rjf: unpack input image info
+    //- rjf: convert top-level-info
     //
     {
       // rjf: base arch -> rdi
@@ -2655,7 +2655,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           
           //- rjf: read unit data length
           U64 unit_length = 0;
-          U64 unit_length_size = str8_deserial_read_dwarf_packed_size(unit_data, unit_cursor, &unit_length);
+          U64 unit_length_size = dw_str8_deserial_read_packed_size(unit_data, unit_cursor, &unit_length);
           B32 unit_length_good = (unit_length_size != 0);
           unit_cursor += unit_length_size;
           DW_Format unit_format = DW_FormatFromSize(unit_length);
@@ -2684,7 +2684,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               U8 unit_segment_selector_size = 0;
               B32 unit_good = 0;
               {
-                U64 unit_info_off_size = str8_deserial_read_dwarf_uint(unit_data, unit_cursor, unit_format, &unit_info_off);
+                U64 unit_info_off_size = dw_str8_deserial_read_fmt_uint(unit_data, unit_cursor, unit_format, &unit_info_off);
                 unit_cursor += unit_info_off_size;
                 U64 unit_address_size_size = str8_deserial_read_struct(unit_data, unit_cursor, &unit_address_size);
                 unit_cursor += unit_address_size_size;
@@ -2756,7 +2756,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     DW_ListUnitInput lu_input = {0};
     ProfScope("parse list of comp units")
     {
-      lu_input = dw_list_unit_input_from_input(scratch.arena, &input);
+      lu_input = dw_list_unit_input_from_raw(scratch.arena, &input);
     }
     
     ////////////////////////////
@@ -2775,14 +2775,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     DW_CompUnit *cu_arr = 0;
     ProfScope("parse comp unit headers")
     {
-      // TODO(rjf): parse should always be relaxed. any verification checks we do
-      // should just be logged via log_info(...), and then the caller of this
-      // converter can collect those & display as necessary.
-      B32 is_parse_relaxed = 1;
       cu_arr = push_array(scratch.arena, DW_CompUnit, cu_ranges.count);
       for EachIndex(cu_idx, cu_ranges.count)
       {
-        cu_arr[cu_idx] = dw_cu_from_info_off(scratch.arena, &input, lu_input, cu_ranges.v[cu_idx].min, is_parse_relaxed);
+        cu_arr[cu_idx] = dw_cu_from_info_off(scratch.arena, &input, lu_input, cu_ranges.v[cu_idx].min);
       }
     }
     

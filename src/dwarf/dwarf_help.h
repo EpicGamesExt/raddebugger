@@ -15,4 +15,3 @@ typedef struct DW_CallFrameInfo
 internal DW_CallFrameInfo dw_call_frame_info_from_data(Arena *arena, Arch arch, U64 rebase, String8 debug_frame);
 
 #endif // DWARF_HELP_H
-

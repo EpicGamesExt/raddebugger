@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal U64
-str8_deserial_read_dwarf_packed_size(String8 string, U64 off, U64 *size_out)
+dw_str8_deserial_read_packed_size(String8 string, U64 off, U64 *size_out)
 {
   U64 bytes_read = 0;
   if(str8_deserial_read(string, off, size_out, sizeof(U32), sizeof(U32)))
@@ -24,7 +24,7 @@ str8_deserial_read_dwarf_packed_size(String8 string, U64 off, U64 *size_out)
 }
 
 internal U64
-str8_deserial_read_dwarf_uint(String8 string, U64 off, DW_Format format, U64 *uint_out)
+dw_str8_deserial_read_fmt_uint(String8 string, U64 off, DW_Format format, U64 *uint_out)
 {
   U64 bytes_read = 0;
   switch(format)
@@ -40,126 +40,6 @@ str8_deserial_read_dwarf_uint(String8 string, U64 off, DW_Format format, U64 *ui
       bytes_read = str8_deserial_read_struct(string, off, uint_out);
     }break;
   }
-  return bytes_read;
-}
-
-internal U64
-str8_deserial_read_uleb128(String8 string, U64 off, U64 *value_out)
-{
-  U64 value  = 0;
-  U64 shift  = 0;
-  U64 cursor = off;
-  for(;;)
-  {
-    U8 byte = 0;
-    U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
-    if(bytes_read != sizeof(byte))
-    {
-      break;
-    }
-    U8 val = byte & 0x7fu;
-    value |= ((U64)val) << shift;
-    cursor += bytes_read;
-    shift += 7u;
-    if((byte & 0x80u) == 0)
-    {
-      break;
-    }
-  }
-  if(value_out != 0)
-  {
-    *value_out = value;
-  }
-  U64 bytes_read = cursor - off;
-  return bytes_read;
-}
-
-internal U64
-str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out)
-{
-  U64 value  = 0;
-  U64 shift  = 0;
-  U64 cursor = off;
-  for(;;)
-  {
-    U8 byte = 0;
-    U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
-    if(bytes_read != sizeof(byte))
-    {
-      break;
-    }
-    U8 val = byte & 0x7fu;
-    value |= ((U64)val) << shift;
-    cursor += bytes_read;
-    shift += 7u;
-    if((byte & 0x80u) == 0)
-    {
-      if(shift < sizeof(value) * 8 && (byte & 0x40u) != 0)
-      {
-        value |= -(S64)(1ull << shift);
-      }
-      break;
-    }
-  }
-  if(value_out != 0)
-  {
-    *value_out = value;
-  }
-  U64 bytes_read = cursor - off;
-  return bytes_read;
-}
-
-internal U64
-str8_deserial_read_uleb128_array(Arena *arena, String8 string, U64 off, U64 count, U64 **arr_out)
-{
-  Temp temp = temp_begin(arena);
-  
-  U64 *arr = push_array(arena, U64, count);
-  U64 i, cursor;
-  for (i = 0, cursor = off; i < count; ++i) {
-    U64 read_size = str8_deserial_read_uleb128(string, cursor, &arr[i]);
-    if (read_size == 0) {
-      break;
-    }
-    cursor += read_size;
-  }
-  
-  U64 bytes_read = 0;
-  if (i == count) {
-    *arr_out = arr;
-    bytes_read = cursor - off;
-  } else {
-    temp_end(temp);
-    *arr_out = 0;
-  }
-  
-  return bytes_read;
-}
-
-internal U64
-str8_deserial_read_sleb128_array(Arena *arena, String8 string, U64 off, U64 count, S64 **arr_out)
-{
-  Temp temp = temp_begin(arena);
-  
-  S64 *arr = push_array(arena, S64, count);
-  U64 i, cursor;
-  for (i = 0, cursor = off; i < count; ++i) {
-    U64 read_size = str8_deserial_read_sleb128(string, cursor, &arr[i]);
-    if (read_size == 0) {
-      break;
-    }
-    cursor += read_size;
-  }
-  
-  U64 bytes_read = 0;
-  if (i == count) {
-    *arr_out = arr;
-    bytes_read = cursor - off;
-  } else {
-    temp_end(temp);
-    *arr_out = 0;
-  }
-  
   return bytes_read;
 }
 
@@ -194,7 +74,7 @@ dw_unit_ranges_from_data(Arena *arena, String8 data)
   {
     // rjf: read CU size; bad read -> terminate
     U64 cu_size = 0;
-    U64 cu_size_size = str8_deserial_read_dwarf_packed_size(data, cursor, &cu_size);
+    U64 cu_size_size = dw_str8_deserial_read_packed_size(data, cursor, &cu_size);
     if(cu_size_size == 0)
     {
       break;
@@ -219,7 +99,7 @@ dw_read_list_unit_header_addr(String8 unit_data, DW_ListUnit *lu_out)
   U64 header_size = 0;
   
   U64 unit_length      = 0;
-  U64 unit_length_size = str8_deserial_read_dwarf_packed_size(unit_data, 0, &unit_length);
+  U64 unit_length_size = dw_str8_deserial_read_packed_size(unit_data, 0, &unit_length);
   
   if (unit_length_size) {
     DW_Version version      = DW_Version_Null;
@@ -260,7 +140,7 @@ dw_read_list_unit_header_str_offsets(String8 unit_data, DW_ListUnit *lu_out)
   U64 header_size = 0;
   
   U64 unit_length      = 0;
-  U64 unit_length_size = str8_deserial_read_dwarf_packed_size(unit_data, 0, &unit_length);
+  U64 unit_length_size = dw_str8_deserial_read_packed_size(unit_data, 0, &unit_length);
   
   if (unit_length_size) {
     DW_Version version      = DW_Version_Null;
@@ -291,7 +171,7 @@ dw_read_list_unit_header_list(String8 unit_data, DW_ListUnit *lu_out)
   U64 header_size = 0;
   
   U64 unit_length      = 0;
-  U64 unit_length_size = str8_deserial_read_dwarf_packed_size(unit_data, 0, &unit_length);
+  U64 unit_length_size = dw_str8_deserial_read_packed_size(unit_data, 0, &unit_length);
   
   if (unit_length_size) {
     DW_Version version      = DW_Version_Null;
@@ -327,7 +207,7 @@ dw_read_list_unit_header_list(String8 unit_data, DW_ListUnit *lu_out)
 }
 
 internal DW_ListUnitInput
-dw_list_unit_input_from_input(Arena *arena, DW_Input *input)
+dw_list_unit_input_from_raw(Arena *arena, DW_Raw *input)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -709,11 +589,11 @@ dw_read_form(String8      data,
       if (version < DW_Version_3) {
         bytes_read = str8_deserial_read(data, off, &form.ref, address_size, address_size);
       } else {
-        bytes_read = str8_deserial_read_dwarf_uint(data, off, unit_format, &form.ref);
+        bytes_read = dw_str8_deserial_read_fmt_uint(data, off, unit_format, &form.ref);
       }
     } break;
     case DW_Form_GNU_RefAlt: {
-      bytes_read = str8_deserial_read_dwarf_uint(data, off, unit_format, &form.ref);
+      bytes_read = dw_str8_deserial_read_fmt_uint(data, off, unit_format, &form.ref);
     } break;
     case DW_Form_Ref1: {
       bytes_read = str8_deserial_read(data, off, &form.ref, 1, 1);
@@ -734,7 +614,7 @@ dw_read_form(String8      data,
     case DW_Form_LineStrp:
     case DW_Form_GNU_StrpAlt:
     case DW_Form_Strp: {
-      bytes_read = str8_deserial_read_dwarf_uint(data, off, unit_format, &form.sec_offset);
+      bytes_read = dw_str8_deserial_read_fmt_uint(data, off, unit_format, &form.sec_offset);
     } break;
     case DW_Form_ExprLoc: {
       U64 expr_size      = 0;
@@ -764,7 +644,7 @@ dw_read_form(String8      data,
       NotImplemented;
     } break;
     case DW_Form_StrpSup: {
-      bytes_read = str8_deserial_read_dwarf_uint(data, off, unit_format, &form.strp_sup);
+      bytes_read = dw_str8_deserial_read_fmt_uint(data, off, unit_format, &form.strp_sup);
     } break;
     case DW_Form_Data16: {
       bytes_read = str8_deserial_read_block(data, off, 16, &form.data);
@@ -902,7 +782,7 @@ dw_read_tag(Arena          *arena,
 }
 
 internal U64
-dw_read_tag_cu(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 info_off, DW_Tag *tag_out)
+dw_read_tag_cu(Arena *arena, DW_Raw *input, DW_CompUnit *cu, U64 info_off, DW_Tag *tag_out)
 {
   String8 tag_data = str8_substr(input->sec[DW_Section_Info].data, cu->info_range);
   U64     tag_off  = info_off - cu->info_range.min;
@@ -1054,14 +934,14 @@ dw_interp_address(U64 address_size, U64 base_addr, DW_ListUnit *addr_lu, DW_Form
 }
 
 internal String8
-dw_interp_block(DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
+dw_interp_block(DW_Raw *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
 {
   NotImplemented;
   return str8_zero();
 }
 
 internal String8
-dw_interp_string(DW_Input    *input,
+dw_interp_string(DW_Raw    *input,
                  DW_Format    unit_format,
                  DW_ListUnit *str_offsets,
                  DW_FormKind  form_kind,
@@ -1100,7 +980,7 @@ dw_interp_string(DW_Input    *input,
 }
 
 internal String8
-dw_interp_line_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_line_ptr(DW_Raw *input, DW_FormKind form_kind, DW_Form form)
 {
   String8 result = {0};
   if (form_kind == DW_Form_SecOffset) {
@@ -1125,7 +1005,7 @@ dw_interp_file(DW_LineVMHeader *line_vm, DW_FormKind form_kind, DW_Form form)
 }
 
 internal DW_Reference
-dw_interp_ref(DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
+dw_interp_ref(DW_Raw *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
 {
   DW_Reference ref = {0};
   if (form_kind == DW_Form_Ref1 || form_kind == DW_Form_Ref2 ||
@@ -1146,7 +1026,7 @@ dw_interp_ref(DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form f
 }
 
 internal DW_LocList
-dw_interp_loclist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
+dw_interp_loclist(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
 {
   DW_LocList loclist = {0};
   
@@ -1433,7 +1313,7 @@ dw_interp_flag(DW_FormKind form_kind, DW_Form form)
 }
 
 internal Rng1U64List
-dw_interp_rnglist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
+dw_interp_rnglist(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
 {
   Rng1U64List rnglist = {0};
   
@@ -1624,7 +1504,7 @@ dw_interp_rnglist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind fo
 }
 
 internal String8
-dw_interp_secptr(DW_Input *input, DW_SectionKind section, DW_FormKind form_kind, DW_Form form)
+dw_interp_secptr(DW_Raw *input, DW_SectionKind section, DW_FormKind form_kind, DW_Form form)
 {
   String8 secptr = {0};
   if (form_kind == DW_Form_SecOffset) {
@@ -1638,25 +1518,25 @@ dw_interp_secptr(DW_Input *input, DW_SectionKind section, DW_FormKind form_kind,
 }
 
 internal String8
-dw_interp_addrptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_addrptr(DW_Raw *input, DW_FormKind form_kind, DW_Form form)
 {
   return dw_interp_secptr(input, DW_Section_Addr, form_kind, form);
 }
 
 internal String8
-dw_interp_str_offsets_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_str_offsets_ptr(DW_Raw *input, DW_FormKind form_kind, DW_Form form)
 {
   return dw_interp_secptr(input, DW_Section_StrOffsets, form_kind, form);
 }
 
 internal String8
-dw_interp_rnglists_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_rnglists_ptr(DW_Raw *input, DW_FormKind form_kind, DW_Form form)
 {
   return dw_interp_secptr(input, DW_Section_RngLists, form_kind, form);
 }
 
 internal String8
-dw_interp_loclists_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_loclists_ptr(DW_Raw *input, DW_FormKind form_kind, DW_Form form)
 {
   return dw_interp_secptr(input, DW_Section_LocLists, form_kind, form);
 }
@@ -1668,7 +1548,7 @@ dw_value_class_from_attrib(DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal String8
-dw_exprloc_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_exprloc_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_ExprLoc || value_class == DW_AttribClass_Block);
@@ -1676,7 +1556,7 @@ dw_exprloc_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal U128
-dw_const_u128_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_u128_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1684,7 +1564,7 @@ dw_const_u128_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal U64
-dw_const_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_u64_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1692,7 +1572,7 @@ dw_const_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal U32
-dw_const_u32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_u32_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1700,7 +1580,7 @@ dw_const_u32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal S64
-dw_const_s64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_s64_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1708,7 +1588,7 @@ dw_const_s64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal S32
-dw_const_s32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_s32_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1716,7 +1596,7 @@ dw_const_s32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal B32
-dw_flag_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_flag_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Flag);
@@ -1724,7 +1604,7 @@ dw_flag_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal U64
-dw_address_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_address_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null ||
@@ -1749,7 +1629,7 @@ dw_address_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal String8
-dw_block_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_block_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Block);
@@ -1757,7 +1637,7 @@ dw_block_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal String8
-dw_string_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_string_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_String || value_class == DW_AttribClass_StrOffsetsPtr);
@@ -1765,7 +1645,7 @@ dw_string_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal String8
-dw_line_ptr_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_line_ptr_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_LinePtr);
@@ -1781,7 +1661,7 @@ dw_file_from_attrib(DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Attrib *attrib
 }
 
 internal DW_Reference
-dw_ref_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_ref_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Reference);
@@ -1789,7 +1669,7 @@ dw_ref_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal DW_LocList
-dw_loclist_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_loclist_from_attrib(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null ||
@@ -1799,7 +1679,7 @@ dw_loclist_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib
 }
 
 internal Rng1U64List
-dw_rnglist_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_rnglist_from_attrib(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   Rng1U64List rnglist = {0};
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
@@ -1826,7 +1706,7 @@ dw_attrib_from_tag_(DW_Tag tag, DW_AttribKind kind)
 }
 
 internal DW_Attrib *
-dw_attrib_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_attrib_from_tag(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   DW_Attrib *attrib = dw_attrib_from_tag_(tag, kind);
   
@@ -1845,7 +1725,7 @@ dw_attrib_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
 }
 
 internal B32
-dw_tag_has_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_tag_has_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   DW_Attrib *attrib = dw_attrib_from_tag(input, cu, tag, kind);
   B32 has_attrib = attrib->attrib_kind != DW_AttribKind_Null;
@@ -1853,85 +1733,85 @@ dw_tag_has_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind ki
 }
 
 internal String8
-dw_exprloc_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_exprloc_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_exprloc_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal String8
-dw_block_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_block_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_block_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal U128
-dw_const_u128_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_const_u128_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_const_u128_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal U64
-dw_const_u64_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_const_u64_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_const_u64_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal U32
-dw_const_u32_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_const_u32_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_const_u32_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal U64
-dw_address_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_address_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_address_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal String8
-dw_string_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_string_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_string_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal String8
-dw_line_ptr_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_line_ptr_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_line_ptr_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal DW_Reference
-dw_ref_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_ref_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_ref_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal DW_LocList
-dw_loclist_from_tag_attrib_kind(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_loclist_from_tag_attrib_kind(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_loclist_from_attrib(arena, input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal Rng1U64List
-dw_rnglist_from_tag_attrib_kind(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_rnglist_from_tag_attrib_kind(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_rnglist_from_attrib(arena, input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal B32
-dw_flag_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_flag_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_flag_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal DW_LineFile *
-dw_file_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Tag tag, DW_AttribKind kind)
+dw_file_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_file_from_attrib(cu, line_vm, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal B32
-dw_try_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, U64 *byte_size_out)
+dw_try_byte_size_from_tag(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, U64 *byte_size_out)
 {
   B32 has_byte_size = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_ByteSize);
   B32 has_bit_size  = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_BitSize );
@@ -1953,7 +1833,7 @@ dw_try_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, U64 *byt
 }
 
 internal U64
-dw_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
+dw_byte_size_from_tag(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag)
 {
   U64 byte_size = max_U64;
   dw_try_byte_size_from_tag(input, cu, tag, &byte_size);
@@ -1961,7 +1841,7 @@ dw_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
 }
 
 internal U32
-dw_byte_size_32_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
+dw_byte_size_32_from_tag(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag)
 {
   U32 byte_size32 = 0;
   U64 byte_size64;
@@ -1972,7 +1852,7 @@ dw_byte_size_32_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
 }
 
 internal U64
-dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_u64_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   U64             result       = 0;
   DW_Attrib      *attrib       = dw_attrib_from_tag(input, cu, tag, kind);
@@ -2003,7 +1883,7 @@ dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
 }
 
 internal DW_CompUnit
-dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U64 offset, B32 relaxed)
+dw_cu_from_info_off(Arena *arena, DW_Raw *input, DW_ListUnitInput lu_input, U64 offset)
 {
   DW_CompUnit cu = {0};
   
@@ -2011,7 +1891,7 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
   
   // read unit size in bytes
   U64 length      = 0;
-  U64 length_size = str8_deserial_read_dwarf_packed_size(info_data, offset, &length);
+  U64 length_size = dw_str8_deserial_read_packed_size(info_data, offset, &length);
   
   if (length_size) {
     // compute unit range
@@ -2058,7 +1938,7 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
         case DW_Version_3:
         case DW_Version_4: {
           U64 abbrev_base_off  = cursor;
-          U64 abbrev_base_size = str8_deserial_read_dwarf_uint(data, abbrev_base_off, format, &abbrev_base);
+          U64 abbrev_base_size = dw_str8_deserial_read_fmt_uint(data, abbrev_base_off, format, &abbrev_base);
           if (!abbrev_base_size) {
             break;
           }
@@ -2086,7 +1966,7 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
           }
           
           U64 abbrev_base_off  = address_size_off + address_size_size;
-          U64 abbrev_base_size = str8_deserial_read_dwarf_uint(data, abbrev_base_off, format, &abbrev_base);
+          U64 abbrev_base_size = dw_str8_deserial_read_fmt_uint(data, abbrev_base_off, format, &abbrev_base);
           if (!abbrev_base_size) {
             break;
           }
@@ -2209,7 +2089,7 @@ dw_tag_tree_from_data(Arena *arena, String8 info_data, String8 abbrev_data, DW_C
 }
 
 internal DW_TagTree
-dw_tag_tree_from_cu(Arena *arena, DW_Input *input, DW_CompUnit *cu)
+dw_tag_tree_from_cu(Arena *arena, DW_Raw *input, DW_CompUnit *cu)
 {
   String8    abbrev_data = input->sec[DW_Section_Abbrev].data;
   String8    info_data   = str8_substr(input->sec[DW_Section_Info].data, cu->info_range);
@@ -2302,7 +2182,7 @@ dw_line_vm_file_array_from_list(Arena *arena, DW_LineVMFileList list)
 internal U64
 dw_read_line_file(String8       data,
                   U64           off,
-                  DW_Input     *input,
+                  DW_Raw     *input,
                   DW_Version    version,
                   DW_Format     format,
                   DW_Ext        ext,
@@ -2364,7 +2244,7 @@ internal U64
 dw_read_line_file_array(Arena              *arena,
                         String8             data,
                         U64                 off,
-                        DW_Input           *input,
+                        DW_Raw           *input,
                         DW_Version          version,
                         DW_Format           format,
                         DW_Ext              ext,
@@ -2412,7 +2292,7 @@ dw_read_line_file_array(Arena              *arena,
 }
 
 internal U64
-dw_read_line_vm_header(Arena *arena, String8 line_data, U64 line_off, DW_Input *input, String8 cu_dir, String8 cu_name, U8 cu_address_size,  DW_ListUnit *cu_str_offsets, DW_LineVMHeader *header_out)
+dw_read_line_vm_header(Arena *arena, String8 line_data, U64 line_off, DW_Raw *input, String8 cu_dir, String8 cu_name, U8 cu_address_size,  DW_ListUnit *cu_str_offsets, DW_LineVMHeader *header_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -2420,7 +2300,7 @@ dw_read_line_vm_header(Arena *arena, String8 line_data, U64 line_off, DW_Input *
   
   // read unit length
   U64 unit_length      = 0;
-  U64 unit_length_size = str8_deserial_read_dwarf_packed_size(line_data, line_off, &unit_length);
+  U64 unit_length_size = dw_str8_deserial_read_packed_size(line_data, line_off, &unit_length);
   
   U64       unit_opl    = line_off + unit_length_size + unit_length;
   Rng1U64   unit_range  = rng_1u64(line_off, unit_opl);
@@ -2457,7 +2337,7 @@ dw_read_line_vm_header(Arena *arena, String8 line_data, U64 line_off, DW_Input *
   
   // read header length
   U64 header_length = 0;
-  U64 header_length_size = str8_deserial_read_dwarf_uint(unit_data, unit_cursor, format, &header_length);
+  U64 header_length_size = dw_str8_deserial_read_fmt_uint(unit_data, unit_cursor, format, &header_length);
   if (header_length_size == 0) {
     goto exit;
   }
@@ -2611,12 +2491,11 @@ dw_read_line_vm_header(Arena *arena, String8 line_data, U64 line_off, DW_Input *
       unit_cursor += enc_count_size;
       
       // read table entry encodings
-      U64 *enc_arr      = 0;
-      U64  enc_arr_size = str8_deserial_read_uleb128_array(scratch.arena, unit_data, unit_cursor, enc_count*2, &enc_arr);
-      if (enc_arr_size == 0) {
-        goto exit;
+      U64 *enc_arr = push_array(scratch.arena, U64, enc_count*2);
+      for EachIndex(idx, enc_count)
+      {
+        unit_cursor += str8_deserial_read_uleb128(unit_data, unit_cursor, &enc_arr[idx]);
       }
-      unit_cursor += enc_arr_size;
       
       // read table count
       U64 table_count      = 0;
@@ -2657,12 +2536,11 @@ dw_read_line_vm_header(Arena *arena, String8 line_data, U64 line_off, DW_Input *
       unit_cursor += enc_count_size;
       
       // read table entry encodings
-      U64 *enc_arr = 0;
-      U64  enc_arr_size = str8_deserial_read_uleb128_array(scratch.arena, unit_data, unit_cursor, enc_count*2, &enc_arr);
-      if (enc_arr_size == 0) {
-        goto exit;
+      U64 *enc_arr = push_array(scratch.arena, U64, enc_count*2);
+      for EachIndex(idx, enc_count)
+      {
+        unit_cursor += str8_deserial_read_uleb128(unit_data, unit_cursor, &enc_arr[idx]);
       }
-      unit_cursor += enc_arr_size;
       
       // read table count
       U64 table_count      = 0;
@@ -2808,7 +2686,7 @@ dw_path_from_file_idx(Arena *arena, DW_LineVMHeader *vm, U64 file_idx)
 }
 
 internal DW_LineTableParseResult
-dw_parsed_line_table_from_data(Arena *arena, String8 unit_data, DW_Input *input, String8 cu_dir, String8 cu_name, U8 cu_address_size, DW_ListUnit *cu_str_offsets)
+dw_parsed_line_table_from_data(Arena *arena, String8 unit_data, DW_Raw *input, String8 cu_dir, String8 cu_name, U8 cu_address_size, DW_ListUnit *cu_str_offsets)
 {
   DW_LineVMHeader vm_header = {0};
   U64 vm_header_size = dw_read_line_vm_header(arena, unit_data, 0, input, cu_dir, cu_name, cu_address_size, cu_str_offsets, &vm_header);
@@ -3031,7 +2909,7 @@ dw_parsed_line_table_from_data(Arena *arena, String8 unit_data, DW_Input *input,
 }
 
 internal DW_PubStringsTable
-dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_SectionKind section_kind)
+dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Raw *input, DW_SectionKind section_kind)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -3043,7 +2921,7 @@ dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_Sect
   for(U64 cursor = 0; cursor < section_data.size; ) {
     
     U64 unit_length      = 0;
-    U64 unit_length_size = str8_deserial_read_dwarf_packed_size(section_data, cursor, &unit_length);
+    U64 unit_length_size = dw_str8_deserial_read_packed_size(section_data, cursor, &unit_length);
     if (unit_length_size == 0) {
       break;
     }
@@ -3063,13 +2941,13 @@ dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_Sect
     DW_Format format = DW_FormatFromSize(unit_length);
     
     U64 debug_info_off = 0;
-    cursor += str8_deserial_read_dwarf_uint(section_data, cursor, format, &debug_info_off);
+    cursor += dw_str8_deserial_read_fmt_uint(section_data, cursor, format, &debug_info_off);
     if (cursor >= cursor_opl) {
       break;
     }
     
     U64 debug_info_length = 0;
-    cursor += str8_deserial_read_dwarf_packed_size(section_data, cursor, &debug_info_length);
+    cursor += dw_str8_deserial_read_packed_size(section_data, cursor, &debug_info_length);
     if (cursor >= cursor_opl) {
       break;
     }
@@ -3077,7 +2955,7 @@ dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_Sect
     U64 off_size = dw_size_from_format(format);
     for (; (cursor + off_size) <= cursor_opl;) {
       U64 info_off      = 0;
-      U64 info_off_size = str8_deserial_read_dwarf_uint(section_data, cursor, format, &info_off);
+      U64 info_off_size = dw_str8_deserial_read_fmt_uint(section_data, cursor, format, &info_off);
       cursor += info_off_size;
       
       if (info_off_size == 0 || info_off == 0) {
@@ -3213,11 +3091,11 @@ dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size, String8 data)
         cursor += str8_deserial_read_struct(data, cursor, &operands[0].u32);
       } break;
       case DW_ExprOp_CallRef: {
-        cursor += str8_deserial_read_dwarf_uint(data, cursor, format, &operands[0].u64);
+        cursor += dw_str8_deserial_read_fmt_uint(data, cursor, format, &operands[0].u64);
       } break;
       case DW_ExprOp_ImplicitPointer:
       case DW_ExprOp_GNU_ImplicitPointer: {
-        cursor += str8_deserial_read_dwarf_uint(data, cursor, format, &operands[0].u64);
+        cursor += dw_str8_deserial_read_fmt_uint(data, cursor, format, &operands[0].u64);
         cursor += str8_deserial_read_sleb128(data, cursor, &operands[1].s64);
       } break;
       case DW_ExprOp_Convert:
@@ -3350,13 +3228,13 @@ dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc
   DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
   
   U64 length      = 0;
-  U64 length_size = str8_deserial_read_dwarf_packed_size(data, off, &length);
+  U64 length_size = dw_str8_deserial_read_packed_size(data, off, &length);
   if (length_size == 0) { goto exit; }
   
   Rng1U64 entry_range = rng_1u64(off, off + length_size + length);
   String8 entry_data  = str8_substr(data, entry_range);
   U64 id = 0;
-  U64 id_size = str8_deserial_read_dwarf_uint(entry_data, length_size, format, &id);
+  U64 id_size = dw_str8_deserial_read_fmt_uint(entry_data, length_size, format, &id);
   if (id_size == 0) { goto exit; }
   
   U64 id_type = format == DW_Format_32Bit ? max_U32 : max_U64;
@@ -3377,7 +3255,7 @@ dw_parse_cie(String8 data, DW_Format format, Arch arch, DW_CIE *cie_out)
   U64 cursor    = format == DW_Format_32Bit ? 4 : 12;
   
   U64 cie_id      = 0;
-  U64 cie_id_size = str8_deserial_read_dwarf_uint(data, cursor, format, &cie_id);
+  U64 cie_id_size = dw_str8_deserial_read_fmt_uint(data, cursor, format, &cie_id);
   if (cie_id_size == 0) { goto exit; }
   cursor += cie_id_size;
   
@@ -3447,7 +3325,7 @@ dw_parse_fde(String8 data, DW_Format format, DW_CIE *cie, DW_FDE *fde_out)
   
   // extract CIE pointer
   U64 cie_pointer      = 0;
-  U64 cie_pointer_size = str8_deserial_read_dwarf_uint(data, cursor, format, &cie_pointer);
+  U64 cie_pointer_size = dw_str8_deserial_read_fmt_uint(data, cursor, format, &cie_pointer);
   if (cie_pointer_size == 0) { goto exit; }
   cursor += cie_pointer_size;
   
@@ -3487,7 +3365,7 @@ dw_parse_cfi(String8 data, U64 fde_offset, Arch arch, DW_CIE *cie_out, DW_FDE *f
   if (fde_desc.type == DW_DescriptorEntryType_FDE) {
     U64 cie_pointer_off  = fde_desc.format == DW_Format_32Bit ? 4 : 12;
     U64 cie_pointer      = 0;
-    U64 cie_pointer_size = str8_deserial_read_dwarf_uint(data, fde_offset + cie_pointer_off, fde_desc.format, &cie_pointer);
+    U64 cie_pointer_size = dw_str8_deserial_read_fmt_uint(data, fde_offset + cie_pointer_off, fde_desc.format, &cie_pointer);
     if (cie_pointer_size) {
       DW_DescriptorEntry cie_desc = {0};
       dw_parse_descriptor_entry_header(data, cie_pointer, &cie_desc);

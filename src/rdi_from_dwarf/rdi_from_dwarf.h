@@ -113,9 +113,9 @@ internal RDI_RegCode    d2r_rdi_reg_code_from_dw_reg(Arch arch, DW_Reg v);
 internal RDIM_Type *       d2r_create_type(Arena *arena, D2R_TypeTable *type_table);
 internal RDIM_Type *       d2r_create_type_from_offset(Arena *arena, D2R_TypeTable *type_table, U64 info_off);
 internal RDIM_Type *       d2r_type_from_offset(D2R_TypeTable *type_table, U64 info_off);
-internal RDIM_Type *       d2r_type_from_attrib(D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal Rng1U64List       d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag);
-internal RDIM_Type **      d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out);
+internal RDIM_Type *       d2r_type_from_attrib(D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal Rng1U64List       d2r_range_list_from_tag(Arena *arena, DW_Raw *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag);
+internal RDIM_Type **      d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out);
 
 ////////////////////////////////
 //~ RDIM Bytecode Helpers
@@ -141,10 +141,10 @@ internal D2R_ValueType d2r_apply_usual_arithmetic_conversions(Arena *arena, D2R_
 internal void          d2r_push_arithmetic_op(Arena *arena, D2R_ValueTypeStack *stack, RDIM_EvalBytecode *bc, RDI_EvalOp op);
 internal void          d2r_push_relational_op(Arena *arena, D2R_ValueTypeStack *stack, RDIM_EvalBytecode *bc, RDI_EvalOp op);
 
-internal RDIM_EvalBytecode     d2r_bytecode_from_expression(Arena *arena, DW_Input *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, String8 expr, DW_CompUnit *cu, D2R_ValueType *result_type_out);
-internal RDIM_Location *       d2r_transpile_expression(Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr);
-internal RDIM_LocationCaseList d2r_locset_from_attrib(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *curr_scope, RDIM_LocationChunkList *locations, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind);
-internal RDIM_LocationCaseList d2r_var_locset_from_tag(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *curr_scope, RDIM_LocationChunkList *locations, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag);
+internal RDIM_EvalBytecode     d2r_bytecode_from_expression(Arena *arena, DW_Raw *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, String8 expr, DW_CompUnit *cu, D2R_ValueType *result_type_out);
+internal RDIM_Location *       d2r_transpile_expression(Arena *arena, RDIM_LocationChunkList *locations, DW_Raw *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr);
+internal RDIM_LocationCaseList d2r_locset_from_attrib(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *curr_scope, RDIM_LocationChunkList *locations, DW_Raw *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind);
+internal RDIM_LocationCaseList d2r_var_locset_from_tag(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *curr_scope, RDIM_LocationChunkList *locations, DW_Raw *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag);
 
 ////////////////////////////////
 //~ rjf: Compilation Unit / Scope Conversion Helpers
@@ -167,11 +167,11 @@ internal DW_Tag       d2r_tag_iter_parent_tag(D2R_TagIter *iter);
 internal void d2r_flag_converted_tag(DW_TagNode *tag_node);
 internal B8   d2r_is_tag_converted(DW_TagNode *tag_node);
 
-internal RDIM_Type *d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_Tag tag, DW_AttribKind kind);
+internal RDIM_Type *d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_Tag tag, DW_AttribKind kind);
 
-internal void d2r_convert_types(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_TagNode *root);
-internal void d2r_convert_udts(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_TagNode *root);
-internal void d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, U64 image_base, Arch arch, DW_TagNode *root);
+internal void d2r_convert_types(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_TagNode *root);
+internal void d2r_convert_udts(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_TagNode *root);
+internal void d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, U64 image_base, Arch arch, DW_TagNode *root);
 
 ////////////////////////////////
 //~ rjf: Main Conversion Entry Point
