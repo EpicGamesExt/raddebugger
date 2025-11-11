@@ -2,13 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal U64
-dw_hash_from_string(String8 string)
-{
-  XXH64_hash_t hash64 = XXH3_64bits(string.str, string.size);
-  return hash64;
-}
-
-internal U64
 str8_deserial_read_dwarf_packed_size(String8 string, U64 off, U64 *size_out)
 {
   U64 bytes_read = 0;
@@ -58,20 +51,16 @@ str8_deserial_read_uleb128(String8 string, U64 off, U64 *value_out)
   U64 cursor = off;
   for(;;)
   {
-    U8  byte       = 0;
+    U8 byte = 0;
     U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
-    
     if(bytes_read != sizeof(byte))
     {
       break;
     }
-    
     U8 val = byte & 0x7fu;
     value |= ((U64)val) << shift;
-    
     cursor += bytes_read;
     shift += 7u;
-    
     if((byte & 0x80u) == 0)
     {
       break;
@@ -93,19 +82,16 @@ str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out)
   U64 cursor = off;
   for(;;)
   {
-    U8 byte;
+    U8 byte = 0;
     U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
     if(bytes_read != sizeof(byte))
     {
       break;
     }
-    
     U8 val = byte & 0x7fu;
     value |= ((U64)val) << shift;
-    
     cursor += bytes_read;
     shift += 7u;
-    
     if((byte & 0x80u) == 0)
     {
       if(shift < sizeof(value) * 8 && (byte & 0x40u) != 0)
@@ -1678,7 +1664,7 @@ dw_interp_loclists_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
 internal DW_AttribClass
 dw_value_class_from_attrib(DW_CompUnit *cu, DW_Attrib *attrib)
 {
-  return dw_pick_attrib_value_class(cu->version, cu->ext, cu->relaxed, attrib->attrib_kind, attrib->form_kind);
+  return dw_pick_attrib_value_class(cu->version, cu->ext, attrib->attrib_kind, attrib->form_kind);
 }
 
 internal String8
@@ -2163,7 +2149,6 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
           U64        low_pc        = dw_interp_address(address_size, max_U64, addr_lu, low_pc_attrib->form_kind, low_pc_attrib->form);
           
           // fill out compile unit
-          cu.relaxed            = relaxed;
           cu.ext                = DW_Ext_All;
           cu.kind               = unit_kind;
           cu.version            = version;
@@ -3027,7 +3012,6 @@ dw_parsed_line_table_from_data(Arena *arena, String8 unit_data, DW_Input *input,
             //
             // See the DWARF V4 spec (June 10, 2010), page 122.
             error = 1;
-            // AssertAlways(!"UNHANDLED DEFINE FILE!!!");
           }break;
           
           case DW_ExtOpcode_SetDiscriminator:
@@ -3103,7 +3087,7 @@ dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_Sect
       String8 string = {0};
       cursor += str8_deserial_read_cstr(section_data, cursor, &string);
       
-      U64 hash       = dw_hash_from_string(string);
+      U64 hash = u64_hash_from_str8(string);
       U64 bucket_idx = hash % names_table.size;
       
       DW_PubStringsBucket *bucket = push_array(arena, DW_PubStringsBucket, 1);

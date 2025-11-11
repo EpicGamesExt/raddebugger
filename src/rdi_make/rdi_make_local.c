@@ -17,35 +17,6 @@ rdim_data_model_from_os_arch(OperatingSystem os, RDI_Arch arch)
   return data_model;
 }
 
-internal RDIM_TopLevelInfo
-rdim_make_top_level_info(String8 image_name, Arch arch, U64 exe_hash, RDIM_BinarySectionList sections)
-{
-  // convert arch
-  RDI_Arch arch_rdi = RDI_Arch_NULL;
-  switch(arch)
-  {
-    default:{}break;
-    case Arch_x64:{arch_rdi = RDI_Arch_X64;}break;
-    case Arch_x86:{arch_rdi = RDI_Arch_X86;}break;
-  }
-  
-  // find max VOFF
-  U64 exe_voff_max = 0;
-  for EachNode(sect_n, RDIM_BinarySectionNode, sections.first)
-  {
-    exe_voff_max = Max(exe_voff_max, sect_n->v.voff_opl);
-  }
-  
-  // fill out top level info
-  RDIM_TopLevelInfo top_level_info = {0};
-  top_level_info.arch              = arch_rdi;
-  top_level_info.exe_hash          = exe_hash;
-  top_level_info.voff_max          = exe_voff_max;
-  top_level_info.producer_name     = str8_lit(BUILD_TITLE_STRING_LITERAL);
-  
-  return top_level_info;
-}
-
 internal RDIM_BakeResults
 rdim_bake(Arena *arena, RDIM_BakeParams *params)
 {

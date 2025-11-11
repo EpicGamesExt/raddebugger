@@ -1782,7 +1782,7 @@ internal U64 dw_size_from_format(DW_Format format);
 
 ////////////////////////////////
 
-internal DW_AttribClass dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, B32 relaxed, DW_AttribKind attrib, DW_FormKind form_kind);
+internal DW_AttribClass dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, DW_AttribKind attrib, DW_FormKind form_kind);
 
 internal U64 dw_pick_default_lower_bound(DW_Language lang);
 

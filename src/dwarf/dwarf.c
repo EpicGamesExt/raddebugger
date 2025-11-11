@@ -73,10 +73,10 @@ internal U64
 dw_reg_count_from_arch(Arch arch)
 {
   switch (arch) {
-  default: { NotImplemented; } // fall-through
-  case Arch_Null: return 0;
-  case Arch_x86: return DW_RegX86_Last;
-  case Arch_x64: return DW_RegX64_Last;
+    default: { NotImplemented; } // fall-through
+    case Arch_Null: return 0;
+    case Arch_x86: return DW_RegX86_Last;
+    case Arch_x64: return DW_RegX64_Last;
   }
 }
 
@@ -98,10 +98,10 @@ internal U64
 dw_sp_from_arch(Arch arch)
 {
   switch (arch) {
-  default: NotImplemented;
-  case Arch_Null: return 0;
-  case Arch_x86:  return DW_RegX86_Esp;
-  case Arch_x64:  return DW_RegX64_Rsp;
+    default: NotImplemented;
+    case Arch_Null: return 0;
+    case Arch_x86:  return DW_RegX86_Esp;
+    case Arch_x64:  return DW_RegX64_Rsp;
   }
 }
 
@@ -278,58 +278,64 @@ internal B32
 dw_are_attrib_class_and_form_kind_compatible(DW_Version ver, DW_AttribClass attrib_class, DW_FormKind form_kind)
 {
   DW_AttribClass compat_flags = dw_attrib_class_from_form_kind(ver, form_kind);
-  B32            are_compat = (attrib_class & compat_flags) != 0;
+  B32 are_compat = (attrib_class & compat_flags) != 0;
   return are_compat;
 }
 
 internal String8
 dw_name_string_from_section_kind(DW_SectionKind k)
 {
-  switch (k) {
-#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_L);
+  String8 result = {0};
+  switch(k)
+  {
+#define X(_N,_L,_M,_D) case DW_Section_##_N:{result = str8_lit(_L);}break;
     DW_SectionKind_XList(X)
 #undef X
   }
-  return str8_zero();
+  return result;
 }
 
 internal String8
 dw_mach_name_string_from_section_kind(DW_SectionKind k)
 {
-  switch (k) {
-#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_M);
+  String8 result = {0};
+  switch(k)
+  {
+#define X(_N,_L,_M,_D) case DW_Section_##_N:{result = str8_lit(_M);}break;
     DW_SectionKind_XList(X)
 #undef X
   }
-  return str8_zero();
+  return result;
 }
 
 internal String8
 dw_dwo_name_string_from_section_kind(DW_SectionKind k)
 {
-  switch (k) {
-#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_D); 
+  String8 result = {0};
+  switch(k)
+  {
+#define X(_N,_L,_M,_D) case DW_Section_##_N:{result = str8_lit(_D);}break;
     DW_SectionKind_XList(X)
 #undef X
   }
-  return str8_zero();
+  return result;
 }
 
 internal U64
 dw_size_from_format(DW_Format format)
 {
   U64 result = 0;
-  switch (format) {
-    case DW_Format_Null: break;
+  switch(format)
+  {
+    default:{}break;
     case DW_Format_32Bit: result = 4; break;
     case DW_Format_64Bit: result = 8; break;
-    default: InvalidPath; break;
   }
   return result;
 }
 
 internal DW_AttribClass
-dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, B32 relaxed, DW_AttribKind attrib_kind, DW_FormKind form_kind)
+dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, DW_AttribKind attrib_kind, DW_FormKind form_kind)
 {
   // NOTE(rjf): DWARF's spec specifies two mappings:
   // (DW_AttribKind) => List(DW_AttribClass)
@@ -340,14 +346,10 @@ dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, B32 relaxed, DW_AttribKin
   
   DW_AttribClass attrib_class = dw_attrib_class_from_attrib(ver, ext, attrib_kind);
   DW_AttribClass form_class   = dw_attrib_class_from_form_kind(ver, form_kind);
-  
-  if(relaxed)
+  if(attrib_class == DW_AttribClass_Null || form_class == DW_AttribClass_Null)
   {
-    if(attrib_class == DW_AttribClass_Null || form_class == DW_AttribClass_Null)
-    {
-      attrib_class = dw_attrib_class_from_attrib(DW_Version_Last, ext, attrib_kind);
-      form_class   = dw_attrib_class_from_form_kind(DW_Version_Last, form_kind);
-    }
+    attrib_class = dw_attrib_class_from_attrib(DW_Version_Last, ext, attrib_kind);
+    form_class   = dw_attrib_class_from_form_kind(DW_Version_Last, form_kind);
   }
   
   DW_AttribClass result = DW_AttribClass_Null;
@@ -428,11 +430,11 @@ dw_operand_count_from_expr_op(DW_ExprOp op)
   switch (op) {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _OPER_COUNT;
     DW_Expr_V3_XList(X)
-    DW_Expr_V4_XList(X)
-    DW_Expr_V5_XList(X)
-    DW_Expr_GNU_XList(X)
+      DW_Expr_V4_XList(X)
+      DW_Expr_V5_XList(X)
+      DW_Expr_GNU_XList(X)
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -443,11 +445,11 @@ dw_pop_count_from_expr_op(DW_ExprOp op)
   switch (op) {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _POP_COUNT;
     DW_Expr_V3_XList(X)
-    DW_Expr_V4_XList(X)
-    DW_Expr_V5_XList(X)
-    DW_Expr_GNU_XList(X)
+      DW_Expr_V4_XList(X)
+      DW_Expr_V5_XList(X)
+      DW_Expr_GNU_XList(X)
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -458,11 +460,11 @@ dw_push_count_from_expr_op(DW_ExprOp op)
   switch (op) {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _PUSH_COUNT;
     DW_Expr_V3_XList(X)
-    DW_Expr_V4_XList(X)
-    DW_Expr_V5_XList(X)
-    DW_Expr_GNU_XList(X)
+      DW_Expr_V4_XList(X)
+      DW_Expr_V5_XList(X)
+      DW_Expr_GNU_XList(X)
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -474,7 +476,7 @@ dw_operand_count_from_cfa_opcode(DW_CFA_Opcode opcode)
 #define X(_N, _ID, ...) case _ID: { local_persist DW_CFA_OperandType t[] = { DW_CFA_OperandType_Null, __VA_ARGS__ }; return ArrayCount(t)-1; }
     DW_CFA_Kind_XList(X)
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -484,21 +486,21 @@ dw_is_cfa_expr_opcode_invalid(DW_ExprOp opcode)
 {
   B32 is_invalid = 0;
   switch (opcode) {
-  case DW_ExprOp_Addrx:
-  case DW_ExprOp_Call2:
-  case DW_ExprOp_Call4:
-  case DW_ExprOp_CallRef:
-  case DW_ExprOp_ConstType:
-  case DW_ExprOp_Constx:
-  case DW_ExprOp_Convert:
-  case DW_ExprOp_DerefType:
-  case DW_ExprOp_RegvalType:
-  case DW_ExprOp_Reinterpret:
-  case DW_ExprOp_PushObjectAddress:
-  case DW_ExprOp_CallFrameCfa: {
-    is_invalid = 1;
-  } break;
-  default: break;
+    case DW_ExprOp_Addrx:
+    case DW_ExprOp_Call2:
+    case DW_ExprOp_Call4:
+    case DW_ExprOp_CallRef:
+    case DW_ExprOp_ConstType:
+    case DW_ExprOp_Constx:
+    case DW_ExprOp_Convert:
+    case DW_ExprOp_DerefType:
+    case DW_ExprOp_RegvalType:
+    case DW_ExprOp_Reinterpret:
+    case DW_ExprOp_PushObjectAddress:
+    case DW_ExprOp_CallFrameCfa: {
+      is_invalid = 1;
+    } break;
+    default: break;
   }
   return is_invalid;
 }
@@ -508,14 +510,14 @@ dw_is_new_row_cfa_opcode(DW_CFA_Opcode opcode)
 {
   B32 is_new_row_op = 0;
   switch (opcode) {
-  case DW_CFA_SetLoc:
-  case DW_CFA_AdvanceLoc:
-  case DW_CFA_AdvanceLoc1:
-  case DW_CFA_AdvanceLoc2:
-  case DW_CFA_AdvanceLoc4: {
-    is_new_row_op = 1;
-  } break;
-  default: break;
+    case DW_CFA_SetLoc:
+    case DW_CFA_AdvanceLoc:
+    case DW_CFA_AdvanceLoc1:
+    case DW_CFA_AdvanceLoc2:
+    case DW_CFA_AdvanceLoc4: {
+      is_new_row_op = 1;
+    } break;
+    default: break;
   }
   return is_new_row_op;
 }
@@ -527,7 +529,7 @@ dw_operand_types_from_cfa_op(DW_CFA_Opcode opcode)
 #define X(_N, _ID, ...) case _ID: { local_persist DW_CFA_OperandType t[] = { DW_CFA_OperandType_Null, __VA_ARGS__ }; return &t[0] + 1; }
     DW_CFA_Kind_XList(X)
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -539,9 +541,9 @@ internal String8
 dw_string_from_format(DW_Format format)
 {
   switch (format) {
-  case DW_Format_Null:  return str8_zero();
-  case DW_Format_32Bit: return str8_lit("DWARF32");
-  case DW_Format_64Bit: return str8_lit("DWARF64");
+    case DW_Format_Null:  return str8_zero();
+    case DW_Format_32Bit: return str8_lit("DWARF32");
+    case DW_Format_64Bit: return str8_lit("DWARF64");
   }
   return str8_zero();
 }
@@ -824,7 +826,7 @@ dw_string_from_cfa_opcode(DW_CFA_Opcode opcode)
 #define X(_NAME, _ID, ...) case _ID: return str8_lit(Stringify(_NAME));
     DW_CFA_Kind_XList(X)
 #undef X
-  default: InvalidPath; break;
+    default: InvalidPath; break;
   }
   return str8_zero();
 }

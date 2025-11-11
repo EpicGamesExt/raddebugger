@@ -4,54 +4,59 @@
 #ifndef DWARF_PARSE_H
 #define DWARF_PARSE_H
 
-typedef struct DW_Section
+typedef struct DW_Section DW_Section;
+struct DW_Section
 {
   String8 name;
   String8 data;
   B32     is_dwo;
-} DW_Section;
+};
 
-typedef struct DW_Input
+typedef struct DW_Input DW_Input;
+struct DW_Input
 {
   DW_Section sec[DW_Section_Count];
   DW_Section sup[DW_Section_Count];
-} DW_Input;
+};
 
-typedef struct DW_ListUnit
+typedef struct DW_ListUnit DW_ListUnit;
+struct DW_ListUnit
 {
   DW_Version version;
-  U64        address_size;
-  U64        segment_selector_size;
-  U64        entry_size;
-  String8    entries;
-} DW_ListUnit;
+  U64 address_size;
+  U64 segment_selector_size;
+  U64 entry_size;
+  String8 entries;
+};
 
-typedef struct DW_ListUnitInput
+typedef struct DW_ListUnitInput DW_ListUnitInput;
+struct DW_ListUnitInput
 {
-  U64           addr_count;
-  U64           str_offset_count;
-  U64           rnglist_count;
-  U64           loclist_count;
-  Rng1U64Array  addr_ranges;
-  Rng1U64Array  str_offset_ranges;
-  Rng1U64Array  rnglist_ranges;
-  Rng1U64Array  loclist_ranges;
-  DW_ListUnit  *addrs;
-  DW_ListUnit  *str_offsets;
-  DW_ListUnit  *rnglists;
-  DW_ListUnit  *loclists;
-} DW_ListUnitInput;
+  U64 addr_count;
+  U64 str_offset_count;
+  U64 rnglist_count;
+  U64 loclist_count;
+  Rng1U64Array addr_ranges;
+  Rng1U64Array str_offset_ranges;
+  Rng1U64Array rnglist_ranges;
+  Rng1U64Array loclist_ranges;
+  DW_ListUnit *addrs;
+  DW_ListUnit *str_offsets;
+  DW_ListUnit *rnglists;
+  DW_ListUnit *loclists;
+};
 
-typedef struct DW_AbbrevTableEntry
+typedef struct DW_AbbrevTableEntry DW_AbbrevTableEntry;
+struct DW_AbbrevTableEntry
 {
   U64 id;
   U64 off;
-} DW_AbbrevTableEntry;
+};
 
 typedef struct DW_AbbrevTable DW_AbbrevTable;
 struct DW_AbbrevTable
 {
-  U64                  count;
+  U64 count;
   DW_AbbrevTableEntry *entries;
 };
 
@@ -63,7 +68,8 @@ typedef enum DW_AbbrevKind
   DW_Abbrev_AttribSequenceEnd,
   DW_Abbrev_DIEBegin,
   DW_Abbrev_DIEEnd,
-} DW_AbbrevKind;
+}
+DW_AbbrevKind;
 
 typedef U32 DW_AbbrevFlags;
 enum
@@ -72,14 +78,15 @@ enum
   DW_AbbrevFlag_HasChildren      = (1 << 1),
 };
 
-typedef struct DW_Abbrev
+typedef struct DW_Abbrev DW_Abbrev;
+struct DW_Abbrev
 {
-  DW_AbbrevKind  kind;
-  U64            sub_kind;
-  U64            id;
-  U64            const_value;
+  DW_AbbrevKind kind;
+  U64 sub_kind;
+  U64 id;
+  U64 const_value;
   DW_AbbrevFlags flags;
-} DW_Abbrev;
+};
 
 typedef union DW_Form
 {
@@ -100,71 +107,80 @@ typedef union DW_Form
   U64     rnglistx;
   U64     ptr;
   U64     implicit_const;
-} DW_Form;
+}
+DW_Form;
 
-typedef struct DW_Attrib
+typedef struct DW_Attrib DW_Attrib;
+struct DW_Attrib
 {
-  U64            info_off;
-  U64            abbrev_off;
-  U64            abbrev_id;
-  DW_AttribKind  attrib_kind;
-  DW_FormKind    form_kind;
-  DW_Form        form;
-} DW_Attrib;
+  U64 info_off;
+  U64 abbrev_off;
+  U64 abbrev_id;
+  DW_AttribKind attrib_kind;
+  DW_FormKind form_kind;
+  DW_Form form;
+};
 
-typedef struct DW_AttribNode
+typedef struct DW_AttribNode DW_AttribNode;
+struct DW_AttribNode
 {
-  struct DW_AttribNode *next;
-  DW_Attrib             v;
-} DW_AttribNode;
+  DW_AttribNode *next;
+  DW_Attrib v;
+};
 
-typedef struct DW_AttribList
+typedef struct DW_AttribList DW_AttribList;
+struct DW_AttribList
 {
   DW_AttribNode *first;
   DW_AttribNode *last;
-  U64            count;
-} DW_AttribList;
+  U64 count;
+};
 
-typedef struct DW_Tag
+typedef struct DW_Tag DW_Tag;
+struct DW_Tag
 {
-  B32            has_children;
-  U64            abbrev_id;
-  DW_TagKind     kind;
-  DW_AttribList  attribs;
-  U64            info_off;
-  U8             v[1];
-} DW_Tag;
+  B32 has_children;
+  U64 abbrev_id;
+  DW_TagKind kind;
+  DW_AttribList attribs;
+  U64 info_off;
+  U8 v[1];
+};
 
-typedef struct DW_TagNode
+typedef struct DW_TagNode DW_TagNode;
+struct DW_TagNode
 {
-  DW_Tag             tag;
-  struct DW_TagNode *sibling;
-  struct DW_TagNode *first_child;
-  struct DW_TagNode *last_child;
-} DW_TagNode;
+  DW_Tag tag;
+  DW_TagNode *sibling;
+  DW_TagNode *first_child;
+  DW_TagNode *last_child;
+};
 
-typedef struct DW_Loc
+typedef struct DW_Loc DW_Loc;
+struct DW_Loc
 {
   Rng1U64 range;
   String8 expr;
-} DW_Loc;
+};
 
-typedef struct DW_LocNode
+typedef struct DW_LocNode DW_LocNode;
+struct DW_LocNode
 {
-  DW_Loc             v;
-  struct DW_LocNode *next;
-} DW_LocNode;
+  DW_LocNode *next;
+  DW_Loc v;
+};
 
-typedef struct DW_LocList
+typedef struct DW_LocList DW_LocList;
+struct DW_LocList
 {
-  U64         count;
   DW_LocNode *first;
   DW_LocNode *last;
-} DW_LocList;
+  U64 count;
+};
 
-typedef struct DW_CompUnit
+typedef struct DW_CompUnit DW_CompUnit;
+struct DW_CompUnit
 {
-  B32             relaxed;
   DW_Ext          ext;
   DW_CompUnitKind kind;
   DW_Version      version;
@@ -183,7 +199,7 @@ typedef struct DW_CompUnit
   U64             dwo_id;
   DW_Tag          tag;
   HashTable      *tag_ht;
-} DW_CompUnit;
+};
 
 typedef struct DW_TagTree
 {
@@ -328,12 +344,12 @@ typedef union DW_ExprOperand
   U16 u16;
   U32 u32;
   U64 u64;
-
+  
   S8  s8;
   S16 s16;
   S32 s32;
   S64 s64;
-
+  
   String8 block;
 } DW_ExprOperand;
 
@@ -430,10 +446,6 @@ typedef struct DW_CFA_InstList
 
 #define DW_DECODE_PTR(name) U64 name(String8 data, void *ud, U64 *ptr_out)
 typedef DW_DECODE_PTR(DW_DecodePtr);
-
-// hasher
-
-internal U64 dw_hash_from_string(String8 string);
 
 // deserial helpers
 

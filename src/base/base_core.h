@@ -611,19 +611,19 @@ typedef enum Arch
   Arch_arm64,
   Arch_arm32,
   Arch_COUNT,
-#if ARCH_X64
-  Arch_CURRENT = Arch_x64,
-#elif ARCH_X86
-  Arch_CURRENT = Arch_x86,
-#elif ARCH_ARM64
-  Arch_CURRENT = Arch_arm64,
-#elif ARCH_ARM32
-  Arch_CURRENT = Arch_arm32,
-#else
-  Arch_CURRENT = Arch_Null,
-#endif
 }
 Arch;
+#if ARCH_X64
+# define Arch_CURRENT Arch_x64
+#elif ARCH_X86
+# define Arch_CURRENT Arch_x86
+#elif ARCH_ARM64
+# define Arch_CURRENT Arch_arm64
+#elif ARCH_ARM32
+# define Arch_CURRENT Arch_arm32
+#else
+# define Arch_CURRENT Arch_Null
+#endif
 
 typedef enum Compiler
 {
@@ -632,17 +632,17 @@ typedef enum Compiler
   Compiler_gcc,
   Compiler_clang,
   Compiler_COUNT,
-#if COMPILER_MSVC
-  Compiler_CURRENT = Compiler_msvc,
-#elif COMPILER_GCC
-  Compiler_CURRENT = Compiler_gcc,
-#elif COMPILER_CLANG
-  Compiler_CURRENT = Compiler_clang,
-#else
-  Compiler_CURRENT = Compiler_Null,
-#endif
 }
 Compiler;
+#if COMPILER_MSVC
+# define Compiler_CURRENT Compiler_msvc
+#elif COMPILER_GCC
+# define Compiler_CURRENT Compiler_gcc
+#elif COMPILER_CLANG
+# define Compiler_CURRENT Compiler_clang
+#else
+# define Compiler_CURRENT Compiler_Null
+#endif
 
 ////////////////////////////////
 //~ rjf: Text 2D Coordinates & Ranges

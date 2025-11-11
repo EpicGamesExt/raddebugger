@@ -22,35 +22,40 @@ struct D2R_ConvertParams
 ////////////////////////////////
 //~ rjf: Conversion Helper Types
 
-typedef struct D2R_TypeTable
+typedef struct D2R_TypeTable D2R_TypeTable;
+struct D2R_TypeTable
 {
-  HashTable           *ht;
+  HashTable *ht;
   RDIM_TypeChunkList  *types;
-  U64                  type_chunk_cap;
-  RDIM_Type          **builtin_types;
-} D2R_TypeTable;
+  U64 type_chunk_cap;
+  RDIM_Type **builtin_types;
+};
 
-typedef struct D2R_TagFrame
+typedef struct D2R_TagFrame D2R_TagFrame;
+struct D2R_TagFrame
 {
   DW_TagNode *node;
   RDIM_Scope *scope;
   struct D2R_TagFrame *next;
-} D2R_TagFrame;
+};
 
-typedef struct D2R_TagIterator
+typedef struct D2R_TagIter D2R_TagIter;
+struct D2R_TagIter
 {
   D2R_TagFrame *free_list;
   D2R_TagFrame *stack;
-  DW_TagNode   *tag_node;
-  B32           visit_children;
-} D2R_TagIterator;
+  DW_TagNode *tag_node;
+  DW_TagNode *root;
+  B32 visit_children;
+};
 
-typedef struct D2R_CompUnitContribMap
+typedef struct D2R_CompUnitContribMap D2R_CompUnitContribMap;
+struct D2R_CompUnitContribMap
 {
-  U64                    count;
-  U64                   *info_off_arr;
+  U64 count;
+  U64 *info_off_arr;
   RDIM_Rng1U64ChunkList *voff_range_arr;
-} D2R_CompUnitContribMap;
+};
 
 #define D2R_ValueType_IsSigned(x)   ((x) == D2R_ValueType_S8 || (x) == D2R_ValueType_S16 || (x) == D2R_ValueType_S32 || (x) == D2R_ValueType_S64 || (x) == D2R_ValueType_S128 || (x) == D2R_ValueType_S256 || (x) == D2R_ValueType_S512)
 #define D2R_ValueType_IsUnsigned(x) ((x) == D2R_ValueType_U8 || (x) == D2R_ValueType_U16 || (x) == D2R_ValueType_U32 || (x) == D2R_ValueType_U64 || (x) == D2R_ValueType_U128 || (x) == D2R_ValueType_U256 || (x) == D2R_ValueType_U512)
@@ -150,11 +155,11 @@ internal RDIM_Scope *d2r_push_scope(Arena *arena, RDIM_ScopeChunkList *scopes, U
 ////////////////////////////////
 //~ Tag Iterator
 
-internal D2R_TagIterator * d2r_tag_iterator_init(Arena *arena, DW_TagNode *root);
-internal void              d2r_tag_iterator_next(Arena *arena, D2R_TagIterator *iter);
-internal void              d2r_tag_iterator_skip_children(D2R_TagIterator *iter);
-internal DW_TagNode *      d2r_tag_iterator_parent_tag_node(D2R_TagIterator *iter);
-internal DW_Tag            d2r_tag_iterator_parent_tag(D2R_TagIterator *iter);
+internal D2R_TagIter *d2r_tag_iter_init(Arena *arena, DW_TagNode *root);
+internal void         d2r_tag_iter_next(Arena *arena, D2R_TagIter *iter);
+internal void         d2r_tag_iter_skip_children(D2R_TagIter *iter);
+internal DW_TagNode * d2r_tag_iter_parent_tag_node(D2R_TagIter *iter);
+internal DW_Tag       d2r_tag_iter_parent_tag(D2R_TagIter *iter);
 
 ////////////////////////////////
 //~ Type/UDT/Symbol Conversion
@@ -166,7 +171,7 @@ internal RDIM_Type *d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_t
 
 internal void d2r_convert_types(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_TagNode *root);
 internal void d2r_convert_udts(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, DW_TagNode *root);
-internal void d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, RDIM_Scope *global_scope, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, U64 image_base, Arch arch, DW_TagNode *root);
+internal void d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 arch_addr_size, U64 image_base, Arch arch, DW_TagNode *root);
 
 ////////////////////////////////
 //~ rjf: Main Conversion Entry Point

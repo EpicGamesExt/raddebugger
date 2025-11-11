@@ -161,7 +161,6 @@ struct RDIM_Shared
 global RDIM_Shared *rdim_shared = 0;
 
 internal RDIM_DataModel rdim_data_model_from_os_arch(OperatingSystem os, RDI_Arch arch);
-internal RDIM_TopLevelInfo rdim_make_top_level_info(String8 image_name, Arch arch, U64 exe_hash, RDIM_BinarySectionList sections);
 internal RDIM_BakeResults rdim_bake(Arena *arena, RDIM_BakeParams *params);
 internal RDIM_SerializedSectionBundle rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in);
 
