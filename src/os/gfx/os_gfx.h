@@ -36,6 +36,8 @@ typedef enum OS_Cursor
   OS_Cursor_UpDown,
   OS_Cursor_DownRight,
   OS_Cursor_UpRight,
+  OS_Cursor_DownLeft,
+  OS_Cursor_UpLeft,
   OS_Cursor_UpDownLeftRight,
   OS_Cursor_HandPoint,
   OS_Cursor_Disabled,

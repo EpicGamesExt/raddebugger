@@ -26,6 +26,9 @@ struct OS_LNX_Window
   XIC xic;
   XID counter_xid;
   U64 counter_value;
+  B32 custom_border;
+  F32 custom_border_title_thickness;
+  F32 custom_border_edge_thickness;
 };
 
 ////////////////////////////////
@@ -43,6 +46,12 @@ struct OS_LNX_GfxState
   Atom wm_delete_window_atom;
   Atom wm_sync_request_atom;
   Atom wm_sync_request_counter_atom;
+  Atom wm_motif_hints_atom;
+  Atom wm_move_resize_atom;
+  Atom wm_state_atom;
+  Atom wm_state_hidden_atom;
+  Atom wm_state_maximized_vert_atom, wm_state_maximized_horz_atom;
+  Atom wm_state_fullscreen_atom;
   Cursor cursors[OS_Cursor_COUNT];
   OS_Cursor last_set_cursor;
   OS_GfxInfo gfx_info;
@@ -57,5 +66,6 @@ global OS_LNX_GfxState *os_lnx_gfx_state = 0;
 //~ rjf: Helpers
 
 internal OS_LNX_Window *os_lnx_window_from_x11window(Window window);
+internal B32 os_lnx_check_x11window_states(Window window, Atom properties[], U64 num_properties);
 
 #endif // OS_GFX_LINUX_H
