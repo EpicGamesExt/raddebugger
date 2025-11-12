@@ -478,7 +478,7 @@ X(GNU_RefAlt,    DW_AttribClass_Undefined) \
 X(GNU_StrpAlt,   DW_AttribClass_String)
 
 typedef U64 DW_FormKind;
-typedef enum DW_FormEnum
+typedef enum DW_FormKindEnum
 {
   DW_Form_Null,
 #define X(_N, _ID) DW_Form_##_N = _ID,
@@ -487,7 +487,7 @@ typedef enum DW_FormEnum
     DW_Form_V5_XList(X)
     DW_Form_GNU_XList(X)
 #undef X
-} DW_FormEnum;
+} DW_FormKindEnum;
 
 //- Attributes DWARF2
 
@@ -1762,7 +1762,7 @@ internal DW_AttribClass dw_attrib_class_from_attrib_llvm (DW_AttribKind k);
 internal DW_AttribClass dw_attrib_class_from_attrib_apple(DW_AttribKind k);
 internal DW_AttribClass dw_attrib_class_from_attrib_mips (DW_AttribKind k);
 
-internal DW_AttribClass dw_attrib_class_from_attrib(DW_Version ver, DW_Ext ext, DW_AttribKind v);
+internal DW_AttribClass dw_attrib_class_from_kind(DW_Version ver, DW_Ext ext, DW_AttribKind v);
 
 //- Form Class Encodings
 

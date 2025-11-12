@@ -246,8 +246,9 @@ internal U64
 dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_FormKind form_kind, U64 implicit_const, DW2_FormVal *out)
 {
   U64 start_off = off;
-  DW2_FormVal val = {0};
+  DW2_FormVal val = {form_kind};
   {
+    //- rjf: read value bytes
     U64 bytes_to_read = 0;
     switch(form_kind)
     {
@@ -351,8 +352,7 @@ dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_FormKind form_kin
         U64 size = 0;
         U64 og_read_off = off;
         off += str8_deserial_read_uleb128(data, off, &size);
-        val.u128.u64[0] = size;
-        val.u128.u64[1] = og_read_off;
+        val.string = str8_substr(data, r1u64(off, off+size));
         off += size;
       }break;
       
@@ -362,8 +362,7 @@ dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_FormKind form_kin
         String8 string = {0};
         U64 og_read_off = off;
         off += str8_deserial_read_cstr(data, off, &string);
-        val.u128.u64[0] = og_read_off;
-        val.u128.u64[1] = og_read_off + string.size - 1;
+        val.string = string;
       }break;
       
       //- rjf: implicit constants (no reading in .debug_info; value comes from .debug_abbrev)
@@ -389,19 +388,39 @@ dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_FormKind form_kin
         val.u128.u64[0] = 1;
       }break;
     }
+    
+    //- rjf: in some cases, resolve numeric values -> strings
+    {
+      switch(form_kind)
+      {
+        default:{}break;
+        case DW_Form_Strx1:
+        case DW_Form_Strx2:
+        case DW_Form_Strx3:
+        case DW_Form_Strx4:
+        case DW_Form_Strx:
+        {
+          // TODO(rjf)
+        }break;
+        case DW_Form_LineStrp:
+        {
+          String8 string_section_data = ctx->raw->sec[DW_Section_LineStr].data;
+          val.string = str8_cstring_capped(string_section_data.str + val.u128.u64[0],
+                                           string_section_data.str + string_section_data.size);
+        }break;
+        case DW_Form_Strp:
+        case DW_Form_StrpSup:
+        {
+          String8 string_section_data = ctx->raw->sec[DW_Section_Str].data;
+          val.string = str8_cstring_capped(string_section_data.str + val.u128.u64[0],
+                                           string_section_data.str + string_section_data.size);
+        }break;
+      }
+    }
   }
   *out = val;
   U64 bytes_read = (off - start_off);
   return bytes_read;
-}
-
-internal String8
-dw2_string_from_form_val(DW2_ParseCtx *ctx, DW2_FormVal val)
-{
-  String8 section_data = ctx->raw->sec[val.section_kind].data;
-  Rng1U64 range = r1u64(val.u128.u64[0], val.u128.u64[1]);
-  String8 string = str8_substr(section_data, range);
-  return string;
 }
 
 ////////////////////////////////
@@ -490,7 +509,7 @@ dw2_read_tag(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 off, DW2_Tag *ta
         SLLQueuePush(attribs.first, attribs.last, n);
         attribs.count += 1;
         n->v.attrib_kind = attrib_kind;
-        n->v.form_kind   = attrib_form_kind;
+        n->v.val         = val;
       }
       
       // rjf: no movement, or no attrib kind -> done
@@ -509,6 +528,21 @@ dw2_read_tag(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 off, DW2_Tag *ta
   // rjf: return # of bytes read
   U64 bytes_read = (off - start_off);
   return bytes_read;
+}
+
+internal DW2_Attrib *
+dw2_attrib_from_kind(DW2_Tag *tag, DW_AttribKind kind)
+{
+  DW2_Attrib *result = &dw2_attrib_nil;
+  for EachNode(n, DW2_AttribNode, tag->attribs.first)
+  {
+    if(n->v.attrib_kind == kind)
+    {
+      result = &n->v;
+      break;
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////
@@ -695,7 +729,7 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
     case DW_Version_5:
     {
       //- rjf: read directory & file tables
-      for(B32 files = 0, dirs = 1; files <= 1; files = 1, dirs = 0)
+      for(B32 do_files = 0, do_dirs = 1; do_files <= 1; do_files += 1, do_dirs = 0)
       {
         // rjf: read header
         U8 entry_formats_count = 0;
@@ -703,7 +737,8 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
         U64 *entry_formats = push_array(scratch.arena, U64, entry_formats_count*2);
         for EachIndex(idx, entry_formats_count)
         {
-          off += str8_deserial_read_uleb128(data, off, &entry_formats[idx]);
+          off += str8_deserial_read_uleb128(data, off, &entry_formats[idx*2 + 0]);
+          off += str8_deserial_read_uleb128(data, off, &entry_formats[idx*2 + 1]);
         }
         U64 table_count = 0;
         off += str8_deserial_read_uleb128(data, off, &table_count);
@@ -731,7 +766,7 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
                 }break;
                 case DW_LNCT_Path:
                 {
-                  entry_out->file_name = dw2_string_from_form_val(ctx, form_val);
+                  entry_out->file_name = form_val.string;
                 }break;
                 case DW_LNCT_DirectoryIndex:
                 {
@@ -751,12 +786,17 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
                 }break;
                 case DW_LNCT_LLVM_Source:
                 {
-                  entry_out->source = dw2_string_from_form_val(ctx, form_val);
+                  entry_out->source = form_val.string;
                 }break;
               }
             }
           }
         }
+        
+        // rjf: store
+        if(0){}
+        else if(do_files) { files = table; }
+        else if(do_dirs)  { dirs = table; }
       }
       
     }break;

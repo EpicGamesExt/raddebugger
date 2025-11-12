@@ -299,6 +299,31 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   lane_sync();
   
   ////////////////////////////
+  //- rjf: parse each unit's line table
+  //
+  {
+    U64 unit_take_idx = 0;
+    U64 *unit_take_idx_ptr = &unit_take_idx;
+    lane_sync_u64(&unit_take_idx_ptr, 0);
+    for(;;)
+    {
+      U64 unit_idx = ins_atomic_u64_inc_eval(unit_take_idx_ptr) - 1;
+      if(unit_idx >= unit_count)
+      {
+        break;
+      }
+      DW2_ParseCtx *ctx = &unit_parse_ctxs[unit_idx];
+      DW2_Tag *unit_root_tag = &unit_root_tags[unit_idx];
+      DW2_Attrib *stmt_list = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StmtList);
+      U64 line_info_off = stmt_list->val.u128.u64[0];
+      DW2_LineTableHeader line_table_header = {0};
+      String8 line_info_data = raw->sec[DW_Section_Line].data;
+      dw2_read_line_table_header(scratch.arena, ctx, line_info_data, line_info_off, &line_table_header);
+    }
+  }
+  lane_sync();
+  
+  ////////////////////////////
   //- rjf: fill result
   //
   RDIM_BakeParams result = {0};

@@ -59,7 +59,8 @@ struct DW2_ParseCtx
 typedef struct DW2_FormVal DW2_FormVal;
 struct DW2_FormVal
 {
-  DW_SectionKind section_kind;
+  DW_FormKind kind;
+  String8 string;
   U128 u128;
 };
 
@@ -67,7 +68,6 @@ typedef struct DW2_Attrib DW2_Attrib;
 struct DW2_Attrib
 {
   DW_AttribKind attrib_kind;
-  DW_FormKind form_kind;
   DW2_FormVal val;
 };
 
@@ -155,6 +155,11 @@ struct DW2_LineTableHeader
 };
 
 ////////////////////////////////
+//~ rjf: Globals
+
+global read_only DW2_Attrib dw2_attrib_nil = {0};
+
+////////////////////////////////
 //~ rjf: Basic Parsing Helpers
 
 internal U64 dw2_read_initial_length(String8 data, U64 off, U64 *out, DW_Format *fmt_out);
@@ -174,12 +179,12 @@ internal DW2_AbbrevMap dw2_abbrev_map_from_data(Arena *arena, String8 data, U64 
 //~ rjf: Form Value Parsing
 
 internal U64 dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_FormKind form_kind, U64 implicit_const, DW2_FormVal *out);
-internal String8 dw2_string_from_form_val(DW2_ParseCtx *ctx, DW2_FormVal val);
 
 ////////////////////////////////
 //~ rjf: Tag Parsing
 
 internal U64 dw2_read_tag(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 off, DW2_Tag *tag_out);
+internal DW2_Attrib *dw2_attrib_from_kind(DW2_Tag *tag, DW_AttribKind kind);
 
 ////////////////////////////////
 //~ rjf: Line Table Parsing

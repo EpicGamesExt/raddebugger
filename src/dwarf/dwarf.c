@@ -194,7 +194,7 @@ dw_attrib_class_from_attrib_mips(DW_AttribKind k)
 }
 
 internal DW_AttribClass
-dw_attrib_class_from_attrib(DW_Version ver, DW_Ext ext, DW_AttribKind k)
+dw_attrib_class_from_kind(DW_Version ver, DW_Ext ext, DW_AttribKind k)
 {
   DW_AttribClass result = DW_AttribClass_Null;
   
@@ -344,11 +344,11 @@ dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, DW_AttribKind attrib_kind
   // This function's purpose is to find the overlapping class between an
   // DW_AttribKind and DW_FormKind.
   
-  DW_AttribClass attrib_class = dw_attrib_class_from_attrib(ver, ext, attrib_kind);
+  DW_AttribClass attrib_class = dw_attrib_class_from_kind(ver, ext, attrib_kind);
   DW_AttribClass form_class   = dw_attrib_class_from_form_kind(ver, form_kind);
   if(attrib_class == DW_AttribClass_Null || form_class == DW_AttribClass_Null)
   {
-    attrib_class = dw_attrib_class_from_attrib(DW_Version_Last, ext, attrib_kind);
+    attrib_class = dw_attrib_class_from_kind(DW_Version_Last, ext, attrib_kind);
     form_class   = dw_attrib_class_from_form_kind(DW_Version_Last, form_kind);
   }
   
