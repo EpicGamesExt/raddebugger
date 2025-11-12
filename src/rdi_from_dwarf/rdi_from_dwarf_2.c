@@ -257,24 +257,24 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   lane_sync();
   
   ////////////////////////////
-  //- rjf: build per-unit tag parsing contexts
+  //- rjf: build per-unit parsing contexts
   //
-  DW2_TagParseCtx *unit_tag_parse_ctxs = 0;
+  DW2_ParseCtx *unit_parse_ctxs = 0;
   {
     if(lane_idx() == 0)
     {
-      unit_tag_parse_ctxs = push_array(scratch.arena, DW2_TagParseCtx, unit_count);
+      unit_parse_ctxs = push_array(scratch.arena, DW2_ParseCtx, unit_count);
     }
-    lane_sync_u64(&unit_tag_parse_ctxs, 0);
+    lane_sync_u64(&unit_parse_ctxs, 0);
     Rng1U64 range = lane_range(unit_count);
     for EachInRange(unit_idx, range)
     {
       DW2_UnitHeader *hdr = &unit_headers[unit_idx];
-      DW2_TagParseCtx *ctx = &unit_tag_parse_ctxs[unit_idx];
+      DW2_ParseCtx *ctx = &unit_parse_ctxs[unit_idx];
+      ctx->raw         = raw;
       ctx->version     = hdr->version;
       ctx->format      = hdr->format;
       ctx->addr_size   = hdr->addr_size;
-      ctx->abbrev_data = raw->sec[DW_Section_Abbrev].data;
       ctx->abbrev_map  = abbrev_map_from_unit_idx_table[unit_idx];
     }
   }
@@ -293,7 +293,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     Rng1U64 range = lane_range(unit_count);
     for EachInRange(unit_idx, range)
     {
-      dw2_read_tag(scratch.arena, &unit_tag_parse_ctxs[unit_idx], raw->sec[DW_Section_Info].data, unit_info_tag_ranges[unit_idx].min, &unit_root_tags[unit_idx]);
+      dw2_read_tag(scratch.arena, &unit_parse_ctxs[unit_idx], raw->sec[DW_Section_Info].data, unit_info_tag_ranges[unit_idx].min, &unit_root_tags[unit_idx]);
     }
   }
   lane_sync();
