@@ -1978,7 +1978,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
         // compute CIE address
         U64 cie_delta_off  = fde_format == DW_Format_32Bit ? 4 : 12;
         U64 cie_delta      = 0;
-        U64 cie_delta_size = dw_str8_deserial_read_fmt_uint(fde_data, cie_delta_off, fde_format, &cie_delta);
+        U64 cie_delta_size = str8_deserial_read_dwarf_uint(fde_data, cie_delta_off, fde_format, &cie_delta);
         if (cie_delta_size == 0) { goto eh_parse_exit; }
         cie_addr = (fde_addr + cie_delta_off) - cie_delta;
       }

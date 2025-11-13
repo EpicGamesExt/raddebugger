@@ -4,7 +4,6 @@
 #include "dwarf/dwarf.c"
 #include "dwarf/dwarf_expr.c"
 #include "dwarf/dwarf_parse.c"
-#include "dwarf/dwarf_parse_2.c"
 #include "dwarf/dwarf_coff.c"
 #include "dwarf/dwarf_elf.c"
 #include "dwarf/dwarf_unwind.c"

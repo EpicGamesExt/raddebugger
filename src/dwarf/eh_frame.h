@@ -20,7 +20,7 @@ enum
   EH_PtrEnc_SData2  = 0x0A, // Signed 16-bit value
   EH_PtrEnc_SData4  = 0x0B, // Signed 32-bit value
   EH_PtrEnc_SData8  = 0x0C, // Signed 64-bit value
-  
+ 
   EH_PtrEnc_TypeMask = 0x0F,
 };
 
@@ -31,7 +31,7 @@ enum
   EH_PtrEnc_DataRel = 0x30, // Value is relative to the .got or .eh_frame_hdr section.
   EH_PtrEnc_FuncRel = 0x40, // Value is relative to the function.
   EH_PtrEnc_Aligned = 0x50, // Value is aligned to an address unit sized boundary.
-  
+                                 
   EH_PtrEnc_ModifierMask = 0x70,
 };
 
@@ -104,7 +104,7 @@ typedef struct EH_DecodePtrCtx
   EH_PtrEnc  addr_enc;
   EH_PtrCtx *ptr_ctx;
 } EH_DecodePtrCtx;
-
+   
 ////////////////////////////////
 
 internal U64         eh_parse_ptr(String8 frame_base, U64 off, U64 pc, EH_PtrCtx *ptr_ctx, EH_PtrEnc encoding, U64 *ptr_out);
@@ -123,3 +123,4 @@ internal String8 eh_string_from_ptr_enc_modifier(EH_PtrEnc modifier);
 internal String8 eh_string_from_ptr_enc(Arena *arena, EH_PtrEnc enc);
 
 #endif // EH_FRAME_H
+

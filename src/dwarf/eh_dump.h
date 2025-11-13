@@ -8,8 +8,8 @@
 //~ Dump Subset Types
 
 #define EH_DumpSubset_XList                    \
-X(EhFrameHdr, eh_frame_hdr, ".eh_frame_hdr") \
-X(EhFrame,    eh_frame,     ".eh_frame")
+  X(EhFrameHdr, eh_frame_hdr, ".eh_frame_hdr") \
+  X(EhFrame,    eh_frame,     ".eh_frame")
 
 typedef enum EH_DumpSubset {
 #define X(name, name_lower, title) EH_DumpSubset_##name,
@@ -45,3 +45,4 @@ read_only global String8 eh_name_title_from_dump_subset_table[] =
 internal String8List eh_dump_list_from_data(Arena *arena, Arch arch, U64 eh_frame_hdr_vaddr, U64 eh_frame_vaddr, String8 eh_frame_hdr, String8 eh_frame, EH_DumpSubsetFlags subset_flags);
 
 #endif // EH_FRAME_DUMP_H
+

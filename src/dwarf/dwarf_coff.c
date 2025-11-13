@@ -23,14 +23,14 @@ dw_is_dwarf_present_coff_section_table(String8 string_table, U64 section_count, 
   return is_dwarf_present;
 }
 
-internal DW_Raw
-dw_raw_from_coff_section_table(Arena              *arena,
-                               String8             raw_image,
-                               String8             string_table,
-                               U64                 section_count,
-                               COFF_SectionHeader *section_table)
+internal DW_Input
+dw_input_from_coff_section_table(Arena              *arena,
+                                 String8             raw_image,
+                                 String8             string_table,
+                                 U64                 section_count,
+                                 COFF_SectionHeader *section_table)
 {
-  DW_Raw input                              = {0};
+  DW_Input input                              = {0};
   B32      sect_status[ArrayCount(input.sec)] = {0};
   
   for (U64 i = 0; i < section_count; ++i) {
@@ -51,6 +51,7 @@ dw_raw_from_coff_section_table(Arena              *arena,
       } else {
         sect_status[s] = 1;
         DW_Section *d = &input.sec[s];
+        d->name       = push_str8_copy(arena, name);
         d->data       = str8_substr(raw_image, raw_data_range);
         d->is_dwo     = is_dwo;
       }

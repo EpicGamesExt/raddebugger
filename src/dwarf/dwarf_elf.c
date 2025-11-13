@@ -27,10 +27,10 @@ dw_is_dwarf_present_from_elf_bin(String8 data, ELF_Bin *bin)
 #define SINFL_IMPLEMENTATION
 #include "third_party/sinfl/sinfl.h"
 
-internal DW_Raw
-dw_raw_from_elf_bin(Arena *arena, String8 data, ELF_Bin *bin)
+internal DW_Input
+dw_input_from_elf_bin(Arena *arena, String8 data, ELF_Bin *bin)
 {
-  DW_Raw result = {0};
+  DW_Input result = {0};
   B32 is_section_present[ArrayCount(result.sec)] = {0};
   for(U64 section_idx = 1; section_idx < bin->shdrs.count; section_idx += 1)
   {
@@ -106,6 +106,7 @@ dw_raw_from_elf_bin(Arena *arena, String8 data, ELF_Bin *bin)
     //- rjf: store
     is_section_present[section_kind] = 1;
     DW_Section *d = &result.sec[section_kind];
+    d->name   = push_str8_copy(arena, section_name);
     d->data   = section_data__uncompressed;
     d->is_dwo = is_dwo;
   }

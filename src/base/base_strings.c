@@ -2769,14 +2769,14 @@ str8_serial_push_string(Arena *arena, String8List *srl, String8 str){
 internal U64
 str8_deserial_read(String8 string, U64 off, void *read_dst, U64 read_size, U64 granularity)
 {
-  U64 bytes_left = string.size - Min(off, string.size);
+  U64 bytes_left = string.size-Min(off, string.size);
   U64 actually_readable_size = Min(bytes_left, read_size);
   U64 legally_readable_size = actually_readable_size - actually_readable_size%granularity;
   if(legally_readable_size > 0)
   {
     MemoryCopy(read_dst, string.str+off, legally_readable_size);
   }
-  return actually_readable_size;
+  return legally_readable_size;
 }
 
 internal U64
@@ -2836,72 +2836,6 @@ str8_deserial_read_block(String8 string, U64 off, U64 size, String8 *block_out)
   Rng1U64 range = rng_1u64(off, off + size);
   *block_out = str8_substr(string, range);
   return block_out->size;
-}
-
-internal U64
-str8_deserial_read_uleb128(String8 string, U64 off, U64 *value_out)
-{
-  U64 value  = 0;
-  U64 shift  = 0;
-  U64 cursor = off;
-  for(;;)
-  {
-    U8 byte = 0;
-    U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
-    if(bytes_read != sizeof(byte))
-    {
-      break;
-    }
-    U8 val = byte & 0x7fu;
-    value |= ((U64)val) << shift;
-    cursor += bytes_read;
-    shift += 7u;
-    if((byte & 0x80u) == 0)
-    {
-      break;
-    }
-  }
-  if(value_out != 0)
-  {
-    *value_out = value;
-  }
-  U64 bytes_read = cursor - off;
-  return bytes_read;
-}
-
-internal U64
-str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out)
-{
-  U64 value  = 0;
-  U64 shift  = 0;
-  U64 cursor = off;
-  for(;;)
-  {
-    U8 byte = 0;
-    U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
-    if(bytes_read != sizeof(byte))
-    {
-      break;
-    }
-    U8 val = byte & 0x7fu;
-    value |= ((U64)val) << shift;
-    cursor += bytes_read;
-    shift += 7u;
-    if((byte & 0x80u) == 0)
-    {
-      if(shift < sizeof(value) * 8 && (byte & 0x40u) != 0)
-      {
-        value |= -(S64)(1ull << shift);
-      }
-      break;
-    }
-  }
-  if(value_out != 0)
-  {
-    *value_out = value;
-  }
-  U64 bytes_read = cursor - off;
-  return bytes_read;
 }
 
 ////////////////////////////////

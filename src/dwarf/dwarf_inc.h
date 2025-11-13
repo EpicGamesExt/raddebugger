@@ -7,7 +7,6 @@
 #include "dwarf/dwarf.h"
 #include "dwarf/dwarf_expr.h"
 #include "dwarf/dwarf_parse.h"
-#include "dwarf/dwarf_parse_2.h"
 #include "dwarf/dwarf_coff.h"
 #include "dwarf/dwarf_elf.h"
 #include "dwarf/dwarf_unwind.h"

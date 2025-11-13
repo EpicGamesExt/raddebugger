@@ -70,21 +70,21 @@ internal String8 dw_string_from_cfi_row(Arena *arena, Arch arch, U64 address_siz
 
 #if 0
 internal void dw_print_eh_frame         (Arena *arena, String8List *out, String8 indent, String8 raw_eh_frame, Arch arch, DW_Version ver, DW_Ext ext, EH_PtrCtx *ptr_ctx);
-internal void dw_print_debug_loc        (Arena *arena, String8List *out, String8 indent, DW_Raw *input, Arch arch, ExecutableImageKind image_type, B32 relaxed);
-internal void dw_print_debug_ranges     (Arena *arena, String8List *out, String8 indent, DW_Raw *input, Arch arch, ExecutableImageKind image_type, B32 relaxed);
-internal void dw_print_debug_aranges    (Arena *arena, String8List *out, String8 indent, DW_Raw *input);
-internal void dw_print_debug_addr       (Arena *arena, String8List *out, String8 indent, DW_Raw *input);
-internal void dw_print_debug_loclists   (Arena *arena, String8List *out, String8 indent, DW_Raw *input, Rng1U64Array segment_vranges, Arch arch);
-internal void dw_print_debug_rnglists   (Arena *arena, String8List *out, String8 indent, DW_Raw *input, Rng1U64Array segment_vranges);
-internal void dw_print_debug_pubnames   (Arena *arena, String8List *out, String8 indent, DW_Raw *input);
-internal void dw_print_debug_pubtypes   (Arena *arena, String8List *out, String8 indent, DW_Raw *input);
-internal void dw_print_debug_line_str   (Arena *arena, String8List *out, String8 indent, DW_Raw *input);
-internal void dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_Raw *input);
+internal void dw_print_debug_loc        (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ExecutableImageKind image_type, B32 relaxed);
+internal void dw_print_debug_ranges     (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ExecutableImageKind image_type, B32 relaxed);
+internal void dw_print_debug_aranges    (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_addr       (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_loclists   (Arena *arena, String8List *out, String8 indent, DW_Input *input, Rng1U64Array segment_vranges, Arch arch);
+internal void dw_print_debug_rnglists   (Arena *arena, String8List *out, String8 indent, DW_Input *input, Rng1U64Array segment_vranges);
+internal void dw_print_debug_pubnames   (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_pubtypes   (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_line_str   (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_Input *input);
 #endif
 
 ////////////////////////////////
 //~ rjf: Dump Entry Point
 
-internal String8List dw_dump_list_from_sections(Arena *arena, DW_Raw *input, Arch arch, DW_DumpSubsetFlags subset_flags);
+internal String8List dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, DW_DumpSubsetFlags subset_flags);
 
 #endif // DWARF_DUMP_H

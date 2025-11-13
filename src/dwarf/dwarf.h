@@ -478,7 +478,7 @@ X(GNU_RefAlt,    DW_AttribClass_Undefined) \
 X(GNU_StrpAlt,   DW_AttribClass_String)
 
 typedef U64 DW_FormKind;
-typedef enum DW_FormKindEnum
+typedef enum DW_FormEnum
 {
   DW_Form_Null,
 #define X(_N, _ID) DW_Form_##_N = _ID,
@@ -487,7 +487,7 @@ typedef enum DW_FormKindEnum
     DW_Form_V5_XList(X)
     DW_Form_GNU_XList(X)
 #undef X
-} DW_FormKindEnum;
+} DW_FormEnum;
 
 //- Attributes DWARF2
 
@@ -1582,9 +1582,9 @@ typedef enum DW_ExprOpEnum
 {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) DW_ExprOp_##_N = _ID,
   DW_Expr_V3_XList(X)
-    DW_Expr_V4_XList(X)
-    DW_Expr_V5_XList(X) 
-    DW_Expr_GNU_XList(X)
+  DW_Expr_V4_XList(X)
+  DW_Expr_V5_XList(X) 
+  DW_Expr_GNU_XList(X)
 #undef X
 } DW_ExprOpEnum;
 
@@ -1762,7 +1762,7 @@ internal DW_AttribClass dw_attrib_class_from_attrib_llvm (DW_AttribKind k);
 internal DW_AttribClass dw_attrib_class_from_attrib_apple(DW_AttribKind k);
 internal DW_AttribClass dw_attrib_class_from_attrib_mips (DW_AttribKind k);
 
-internal DW_AttribClass dw_attrib_class_from_kind(DW_Version ver, DW_Ext ext, DW_AttribKind v);
+internal DW_AttribClass dw_attrib_class_from_attrib(DW_Version ver, DW_Ext ext, DW_AttribKind v);
 
 //- Form Class Encodings
 
@@ -1782,7 +1782,7 @@ internal U64 dw_size_from_format(DW_Format format);
 
 ////////////////////////////////
 
-internal DW_AttribClass dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, DW_AttribKind attrib, DW_FormKind form_kind);
+internal DW_AttribClass dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, B32 relaxed, DW_AttribKind attrib, DW_FormKind form_kind);
 
 internal U64 dw_pick_default_lower_bound(DW_Language lang);
 
