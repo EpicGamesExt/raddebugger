@@ -137,17 +137,17 @@ static inline int sha1_cpuid(void)
 SHA1_TARGET("ssse3,sha")
 static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t count)
 {
-    // in SHA1 each round has two parts:
+    // in sha1 each round has two parts:
     // 1) calculate message schedule dwords in w[i]
     // 2) do round functions to update a/b/c/d/e state values using w[i]
 
-    // w[i] in first 16 rounds is just loaded from block bytes, as 32-bit big-endian load
+    // initial message schedule is loaded as 32-bit big-endian 16 dwords
 
     // for next rounds it is done as:
     // w[i] = ROL(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16])
     // where ROL(x) = 32-bit rotate left by 1
 
-    // this means it is possible to keep just the last 16 of w's in circular buffer
+    // this means it is possible to keep just the last 16 of w's
     // and every new w calculated will need to update 1 to 3 previous w's
 
     // unrolling round calculations by 4 we get:
@@ -156,7 +156,7 @@ static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t cou
     // w[i+2] = ROL(w[i-1] ^ w[i-6] ^ w[i-12] ^ w[i-14])
     // w[i+3] = ROL(w[i+0] ^ w[i-5] ^ w[i-11] ^ w[i-13])
 
-    // now if you store 4 w[..] values in 128-bit SSE register, then
+    // now use 4 w[..] values in 128-bit SSE register W(i), then
     // W(i) = ROL( r0 ^ r1 ^ r2 ^ r3 )
     // with caveat that r0 lane 3 depends on W(i) lane 0
 
@@ -166,43 +166,31 @@ static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t cou
     // r2 = [ w[i-11], w[i-12], w[i-13], w[i-14] ]
     // r3 = [ w[i-13], w[i-14], w[i-15], w[i-16] ]
 
-    // in each 4-round i'th step it is possible to incrementally update new W(..) value when
-    // keeping W(i) values in 4 xmm element circular buffer
+    // in each 4-round i'th step it is possible to incrementally update W's that will be
+    // used in later rounds
 
-    // rounds i>0: W(i-1) = r2 ^ r3          = _mm_sha1msg1_epu32(W(i-1), W(i))
-    // rounds i>1: W(i-2) = W(i-2) ^ r1      = _mm_xor_si128     (W(i-2), W(i))
-    // rounds i>2: W(i-3) = ROL(W(i-3) ^ r0) = _mm_sha1msg2_epu32(W(i-3), W(i))
-    // then the new W(i) can be used in round function calculations
-    // _mm_sha1msg2_epu32 correctly handles r0 lane 3 dependency on W(i) lane 0
+    // rounds i>0: m3 = r2 ^ r3      = _mm_sha1msg1_epu32(m3, m0)
+    // rounds i>1: m2 = m2 ^ r1      = _mm_xor_si128     (m2, m0)
+    // rounds i>2: m1 = ROL(m1 ^ r0) = _mm_sha1msg2_epu32(m1, m0)
+    // then the new m0 can be used in round function calculations
+    // _mm_sha1msg2_epu32 correctly handles r0 lane 3 dependency on lane 0 output
 
     // to perform round functions on two SIMD registers with state as:
-    // abcd = [a,b,c,d]
-    //   e0 = [e,0,0,0]
-    // use the following code to get next abcd/e0 state 4 rounds at a time:
-
-    //       tmp = _mm_sha1nexte_epu32(e0, W(i))      // rotates e0 and adds message dwords
-    // abcd_next = _mm_sha1rnds4_epu32(abcd, tmp, Fn) // with Fn = 0..3 round function selection
-    //   e0_next = abcd
-
-    // sha1nexte is not needed on first round, just regular add32(e0, W(i)) should be used
-    // after last round need to do extra rotation, which sha1nexte takes care when adding to last_e0
-
-    #define W(i) w[(i)%4]
+    // s0 = [a,b,c,d]
+    // s1 = [e,0,0,0]
+    // use _mm_sha1rnds4_epu32 and _mm_sha1nexte_epu32 ops and swap both state variables between rounds
 
     // 4 wide round calculations
-    #define QROUND(i) do {                                                          \
-        /* first 4 rounds load input block */                                       \
-        if (i < 4) W(i) = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[i]), bswap);     \
-        /* update message schedule */                                               \
-        if (i > 0 && i < 17) W(i-1) = _mm_sha1msg1_epu32(W(i-1), W(i));             \
-        if (i > 1 && i < 18) W(i-2) = _mm_xor_si128     (W(i-2), W(i));             \
-        if (i > 2 && i < 19) W(i-3) = _mm_sha1msg2_epu32(W(i-3), W(i));             \
-        /* calculate E plus message schedule */                                     \
-        if (i == 0) tmp = _mm_add_epi32      (e0, W(i));                            \
-        if (i != 0) tmp = _mm_sha1nexte_epu32(e0, W(i));                            \
-        /* 4 round functions */                                                     \
-        e0 = abcd;                                                                  \
-        abcd = _mm_sha1rnds4_epu32(abcd, tmp, i/5);                                 \
+    #define QROUND(i,s0,s1,m0,m1,m2,m3) do {                  \
+        /* update message schedule */                         \
+        if (i > 0 && i < 17) m3 = _mm_sha1msg1_epu32(m3, m0); \
+        if (i > 1 && i < 18) m2 = _mm_xor_si128     (m2, m0); \
+        if (i > 2 && i < 19) m1 = _mm_sha1msg2_epu32(m1, m0); \
+        /* calculate E plus message schedule */               \
+        if (i == 0) tmp = _mm_add_epi32      (s1, m0);        \
+        if (i != 0) tmp = _mm_sha1nexte_epu32(s1, m0);        \
+        /* 4 round functions */                               \
+        s1 = _mm_sha1rnds4_epu32(s0, tmp, i/5);               \
     } while(0)
 
     const __m128i* buffer = (const __m128i*)block;
@@ -213,63 +201,67 @@ static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t cou
     const __m128i bswap = _mm_setr_epi8(15,14,13,12, 11,10,9,8, 7,6,5,4, 3,2,1,0);
 
     // load initial state
-    __m128i abcd = _mm_loadu_si128((const __m128i*)state); // [d,c,b,a]
-    __m128i e0 = _mm_loadu_si32(&state[4]);                // [0,0,0,e]
+    __m128i s0 = _mm_loadu_si128((const __m128i*)state); // [d,c,b,a]
+    __m128i s1 = _mm_loadu_si32(&state[4]);              // [0,0,0,e]
 
     // flip dword order, to what sha1 instructions use
-    abcd = _mm_shuffle_epi32(abcd, _MM_SHUFFLE(0,1,2,3)); // [a,b,c,d] where a is in the top lane
-    e0 = _mm_slli_si128(e0, 12);                          // [e,0,0,0] where e is in top lane
+    s0 = _mm_shuffle_epi32(s0, _MM_SHUFFLE(0,1,2,3)); // [a,b,c,d]
+    s1 = _mm_shuffle_epi32(s1, _MM_SHUFFLE(0,1,2,3)); // [e,0,0,0]
 
     do
     {
         // remember current state
-        __m128i last_abcd = abcd;
-        __m128i last_e0 = e0;
+        __m128i last0 = s0;
+        __m128i last1 = s1;
 
-        __m128i tmp, w[4];
+        // load initial message schedule, 64-byte block
+        __m128i w0 = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[0]), bswap);
+        __m128i w1 = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[1]), bswap);
+        __m128i w2 = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[2]), bswap);
+        __m128i w3 = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[3]), bswap);
+        buffer += 4;
 
-        QROUND(0);
-        QROUND(1);
-        QROUND(2);
-        QROUND(3);
-        QROUND(4);
+        __m128i tmp;
 
-        QROUND(5);
-        QROUND(6);
-        QROUND(7);
-        QROUND(8);
-        QROUND(9);
+        QROUND( 0, s0, s1, w0, w1, w2, w3);
+        QROUND( 1, s1, s0, w1, w2, w3, w0);
+        QROUND( 2, s0, s1, w2, w3, w0, w1);
+        QROUND( 3, s1, s0, w3, w0, w1, w2);
+        QROUND( 4, s0, s1, w0, w1, w2, w3);
 
-        QROUND(10);
-        QROUND(11);
-        QROUND(12);
-        QROUND(13);
-        QROUND(14);
+        QROUND( 5, s1, s0, w1, w2, w3, w0);
+        QROUND( 6, s0, s1, w2, w3, w0, w1);
+        QROUND( 7, s1, s0, w3, w0, w1, w2);
+        QROUND( 8, s0, s1, w0, w1, w2, w3);
+        QROUND( 9, s1, s0, w1, w2, w3, w0);
 
-        QROUND(15);
-        QROUND(16);
-        QROUND(17);
-        QROUND(18);
-        QROUND(19);
+        QROUND(10, s0, s1, w2, w3, w0, w1);
+        QROUND(11, s1, s0, w3, w0, w1, w2);
+        QROUND(12, s0, s1, w0, w1, w2, w3);
+        QROUND(13, s1, s0, w1, w2, w3, w0);
+        QROUND(14, s0, s1, w2, w3, w0, w1);
+
+        QROUND(15, s1, s0, w3, w0, w1, w2);
+        QROUND(16, s0, s1, w0, w1, w2, w3);
+        QROUND(17, s1, s0, w1, w2, w3, w0);
+        QROUND(18, s0, s1, w2, w3, w0, w1);
+        QROUND(19, s1, s0, w3, w0, w1, w2);
 
         // update next state
-        abcd = _mm_add_epi32(abcd, last_abcd);
-        e0 = _mm_sha1nexte_epu32(e0, last_e0);
-
-        buffer += 4;
+        s0 = _mm_add_epi32      (s0, last0);
+        s1 = _mm_sha1nexte_epu32(s1, last1);
     }
     while (--count);
 
     // restore dword order
-    abcd = _mm_shuffle_epi32(abcd, _MM_SHUFFLE(0,1,2,3));
-    e0   = _mm_shuffle_epi32(e0,   _MM_SHUFFLE(0,1,2,3));
+    s0 = _mm_shuffle_epi32(s0, _MM_SHUFFLE(0,1,2,3));
+    s1 = _mm_shuffle_epi32(s1, _MM_SHUFFLE(0,1,2,3));
 
     // save the new state
-    _mm_storeu_si128((__m128i*)state, abcd);
-    _mm_storeu_si32(&state[4], e0);
+    _mm_storeu_si128((__m128i*)state, s0);
+    _mm_storeu_si32(&state[4], s1);
 
     #undef QROUND
-    #undef W
 }
 
 #endif // defined(__x86_64__) || defined(_M_AMD64)
@@ -343,21 +335,16 @@ static void sha1_process_arm64(uint32_t* state, const uint8_t* block, size_t cou
 {
     // code here is similar to x64 shani implementation
 
-    // message array is 16 element circular buffer
-    // each iteration updates 4 rounds at the same time
-
-    #define W(i) w[(i)%4]
-
-    #define QROUND(i,F,k) do {                                  \
-        /* update message schedule */                           \
-        if (i >= 4) W(i) = vsha1su0q_u32(W(i), W(i-3), W(i-2)); \
-        if (i >= 4) W(i) = vsha1su1q_u32(W(i), W(i-1));         \
-        /* add round constant */                                \
-        uint32x4_t tmp = vaddq_u32(W(i), k);                    \
-        /* 4 round functions */                                 \
-        uint32_t x = e0;                                        \
-        e0 = vsha1h_u32(vgetq_lane_u32(abcd, 0));               \
-        abcd = F(abcd, x, tmp);                                 \
+    #define QROUND(i,m0,m1,m2,m3,k,F) do {          \
+        /* update message schedule */               \
+        if (i >= 4) m0 = vsha1su0q_u32(m0, m1, m2); \
+        if (i >= 4) m0 = vsha1su1q_u32(m0, m3);     \
+        /* add round constant */                    \
+        uint32x4_t tmp = vaddq_u32(m0, k);          \
+        /* 4 round functions */                     \
+        uint32_t e = vgetq_lane_u32(s0, 0);         \
+        s0 = F(s0, s1, tmp);                        \
+        s1 = vsha1h_u32(e);                         \
     } while (0)
 
     const uint32x4_t k0 = vdupq_n_u32(0x5a827999);
@@ -365,64 +352,61 @@ static void sha1_process_arm64(uint32_t* state, const uint8_t* block, size_t cou
     const uint32x4_t k2 = vdupq_n_u32(0x8f1bbcdc);
     const uint32x4_t k3 = vdupq_n_u32(0xca62c1d6);
 
-    // load state - a,b,c,d,e
-    uint32x4_t abcd = vld1q_u32(state);
-    uint32_t   e0   = state[4];
+    // load initial state
+    uint32x4_t s0 = vld1q_u32(state); // [d,c,b,a]
+    uint32_t   s1 = state[4];         // e
 
     do
     {
         // remember current state
-        uint32x4_t last_abcd = abcd;
-        uint32_t   last_e0   = e0;
+        uint32x4_t last0 = s0;
+        uint32_t   last1 = s1;
 
-        // load 64-byte block and advance pointer to next block
+        // load initial message schedule, 64-byte block
         uint8x16x4_t msg = vld1q_u8_x4(block);
         block += SHA1_BLOCK_SIZE;
 
-        uint32x4_t w[4];
+        // reverse the byte order in each 32-bit lane
+        uint32x4_t w0 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[0]));
+        uint32x4_t w1 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[1]));
+        uint32x4_t w2 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[2]));
+        uint32x4_t w3 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[3]));
 
-        // for first 16 w's reverse the byte order in each 32-bit lane
-        W(0) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[0]));
-        W(1) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[1]));
-        W(2) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[2]));
-        W(3) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[3]));
+        QROUND( 0, w0, w1, w2, w3, k0, vsha1cq_u32);
+        QROUND( 1, w1, w2, w3, w0, k0, vsha1cq_u32);
+        QROUND( 2, w2, w3, w0, w1, k0, vsha1cq_u32);
+        QROUND( 3, w3, w0, w1, w2, k0, vsha1cq_u32);
+        QROUND( 4, w0, w1, w2, w3, k0, vsha1cq_u32);
 
-        QROUND( 0, vsha1cq_u32, k0);
-        QROUND( 1, vsha1cq_u32, k0);
-        QROUND( 2, vsha1cq_u32, k0);
-        QROUND( 3, vsha1cq_u32, k0);
-        QROUND( 4, vsha1cq_u32, k0);
+        QROUND( 5, w1, w2, w3, w0, k1, vsha1pq_u32);
+        QROUND( 6, w2, w3, w0, w1, k1, vsha1pq_u32);
+        QROUND( 7, w3, w0, w1, w2, k1, vsha1pq_u32);
+        QROUND( 8, w0, w1, w2, w3, k1, vsha1pq_u32);
+        QROUND( 9, w1, w2, w3, w0, k1, vsha1pq_u32);
 
-        QROUND( 5, vsha1pq_u32, k1);
-        QROUND( 6, vsha1pq_u32, k1);
-        QROUND( 7, vsha1pq_u32, k1);
-        QROUND( 8, vsha1pq_u32, k1);
-        QROUND( 9, vsha1pq_u32, k1);
+        QROUND(10, w2, w3, w0, w1, k2, vsha1mq_u32);
+        QROUND(11, w3, w0, w1, w2, k2, vsha1mq_u32);
+        QROUND(12, w0, w1, w2, w3, k2, vsha1mq_u32);
+        QROUND(13, w1, w2, w3, w0, k2, vsha1mq_u32);
+        QROUND(14, w2, w3, w0, w1, k2, vsha1mq_u32);
 
-        QROUND(10, vsha1mq_u32, k2);
-        QROUND(11, vsha1mq_u32, k2);
-        QROUND(12, vsha1mq_u32, k2);
-        QROUND(13, vsha1mq_u32, k2);
-        QROUND(14, vsha1mq_u32, k2);
-
-        QROUND(15, vsha1pq_u32, k3);
-        QROUND(16, vsha1pq_u32, k3);
-        QROUND(17, vsha1pq_u32, k3);
-        QROUND(18, vsha1pq_u32, k3);
-        QROUND(19, vsha1pq_u32, k3);
+        QROUND(15, w3, w0, w1, w2, k3, vsha1pq_u32);
+        QROUND(16, w0, w1, w2, w3, k3, vsha1pq_u32);
+        QROUND(17, w1, w2, w3, w0, k3, vsha1pq_u32);
+        QROUND(18, w2, w3, w0, w1, k3, vsha1pq_u32);
+        QROUND(19, w3, w0, w1, w2, k3, vsha1pq_u32);
 
         // update next state
-        abcd = vaddq_u32(abcd, last_abcd);
-        e0  += last_e0;
+        s0 = vaddq_u32(s0, last0);
+        s1 += last1;
     }
     while (--count);
 
     // save state
-    vst1q_u32(state, abcd);
-    state[4] = e0;
+    vst1q_u32(state, s0);
+    state[4] = s1;
 
     #undef QROUND
-    #undef W
 }
 
 #endif // defined(__aarch64__) || defined(_M_ARM64)
@@ -452,7 +436,7 @@ static void sha1_process(uint32_t* state, const uint8_t* block, size_t count)
     #define F3(x,y,z) (0x8f1bbcdc + ((x & y) | (z & (x | y))))
     #define F4(x,y,z) (0xca62c1d6 + (x ^ y ^ z))
 
-    #define W(i) w[(i)%16]
+    #define W(i) w[(i+16)%16]
 
     #define ROUND(i,a,b,c,d,e,F) do                                                     \
     {                                                                                   \

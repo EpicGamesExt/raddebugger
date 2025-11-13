@@ -167,9 +167,7 @@ static void sha256_process_shani(uint32_t* state, const uint8_t* block, size_t c
 {
     // similar way how sha1 works in with shani
 
-    // first 16 rounds loads message schedule dwords as 32-bit big endian values
-
-    // for next rounds message schedule is prepared as:
+    // rounds message schedule is updated as:
     // w[i] = SSig1(w[i-2]) + w[i-7] + SSig0(w[i-15]) + w[i-16]
 
     // unrolled by 4:
@@ -190,32 +188,22 @@ static void sha256_process_shani(uint32_t* state, const uint8_t* block, size_t c
     // r2 = [ w[i-12], w[i-13], w[i-14], w[i-15] ]
     // r3 = [ w[i-13], w[i-14], w[i-15], w[i-16] ]
 
-    // rN's can be calculated from previous W(..) values:
-    // r0 from W(i)
-    // r1 from _mm_alignr_epi8(W(i), W(i-1), 4)
-    // r2 from W(i-1) and W(i)
-    // r3 from W(i-1)
-
-    // rounds i>2: W(i-3) = _mm_sha256msg2_epu32(_mm_add_epi32( W(i-3), _mm_alignr_epi8(W(i), W(i-1), 4) ), W(i))
-    // rounds i>0: W(i-1) = _mm_sha256msg1_epu32(W(i-1), W(i))
+    // rounds i>2: m1 = _mm_sha256msg2_epu32(_mm_add_epi32(m1, _mm_alignr_epi8(m0, m3, 4) ), m0)
+    // rounds i>0: m3 = _mm_sha256msg1_epu32(m3, m0)
 
     // round functions are done with _mm_sha256rnds2_epu32 which performs it for 2 rounds
-    // thus repeat it two times, as input use W(i) + K(i) - message schedule added with sha256 constants
-
-    #define W(i) w[(i)%4]
+    // thus repeat it two times, as input use m0 + K(i) - message schedule added with sha256 constants
 
     // 4 wide round calculations
-    #define QROUND(i) do {                                                                                                  \
-        /* first 4 rounds load input block */                                                                               \
-        if (i < 4) W(i) = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[i]), bswap);                                             \
-        /* update message schedule */                                                                                       \
-        if (i > 2 && i < 15) W(i-3) = _mm_sha256msg2_epu32(_mm_add_epi32(W(i-3), _mm_alignr_epi8(W(i), W(i-1), 4)), W(i));  \
-        if (i > 0 && i < 13) W(i-1) = _mm_sha256msg1_epu32(W(i-1), W(i));                                                   \
-        /* add round constants */                                                                                           \
-        __m128i tmp = _mm_add_epi32(W(i), _mm_loadu_si128((const __m128i*)&SHA256_K[4*i]));                                 \
-        /* 4 round functions */                                                                                             \
-        state1 = _mm_sha256rnds2_epu32(state1, state0, tmp);                                                                \
-        state0 = _mm_sha256rnds2_epu32(state0, state1, _mm_shuffle_epi32(tmp, _MM_SHUFFLE(0,0,3,2)));                       \
+    #define QROUND(i,m0,m1,m2,m3) do {                                                                     \
+        /* update message schedule */                                                                      \
+        if (i > 2 && i < 15) m1 = _mm_sha256msg2_epu32(_mm_add_epi32(m1, _mm_alignr_epi8(m0, m3, 4)), m0); \
+        if (i > 0 && i < 13) m3 = _mm_sha256msg1_epu32(m3, m0);                                            \
+        /* add round constants */                                                                          \
+        __m128i tmp = _mm_add_epi32(m0, _mm_loadu_si128((const __m128i*)&SHA256_K[4*i]));                  \
+        /* 4 round functions */                                                                            \
+        s1 = _mm_sha256rnds2_epu32(s1, s0, tmp);                                                           \
+        s0 = _mm_sha256rnds2_epu32(s0, s1, _mm_shuffle_epi32(tmp, _MM_SHUFFLE(0,0,3,2)));                  \
     } while(0)
 
     const __m128i* buffer = (const __m128i*)block;
@@ -228,52 +216,57 @@ static void sha256_process_shani(uint32_t* state, const uint8_t* block, size_t c
     __m128i efgh = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&state[4]), _MM_SHUFFLE(0,1,2,3)); // [e,f,g,h]
 
     // dword order for sha256rnds2 instruction
-    __m128i state0 = _mm_unpackhi_epi64(efgh, abcd); // [a,b,e,f]
-    __m128i state1 = _mm_unpacklo_epi64(efgh, abcd); // [c,d,g,h]
+    __m128i s0 = _mm_unpackhi_epi64(efgh, abcd); // [a,b,e,f]
+    __m128i s1 = _mm_unpacklo_epi64(efgh, abcd); // [c,d,g,h]
 
     do
     {
         // remember current state
-        __m128i last0 = state0;
-        __m128i last1 = state1;
+        __m128i last0 = s0;
+        __m128i last1 = s1;
 
-        __m128i w[4];
+        // load initial message schedule, 64-byte block
+        __m128i w0 = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[0]), bswap);
+        __m128i w1 = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[1]), bswap);
+        __m128i w2 = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[2]), bswap);
+        __m128i w3 = _mm_shuffle_epi8(_mm_loadu_si128(&buffer[3]), bswap);
+        buffer += 4;
 
-        QROUND( 0);
-        QROUND( 1);
-        QROUND( 2);
-        QROUND( 3);
-        QROUND( 4);
-        QROUND( 5);
-        QROUND( 6);
-        QROUND( 7);
-        QROUND( 8);
-        QROUND( 9);
-        QROUND(10);
-        QROUND(11);
-        QROUND(12);
-        QROUND(13);
-        QROUND(14);
-        QROUND(15);
+        QROUND( 0, w0, w1, w2, w3);
+        QROUND( 1, w1, w2, w3, w0);
+        QROUND( 2, w2, w3, w0, w1);
+        QROUND( 3, w3, w0, w1, w2);
+
+        QROUND( 4, w0, w1, w2, w3);
+        QROUND( 5, w1, w2, w3, w0);
+        QROUND( 6, w2, w3, w0, w1);
+        QROUND( 7, w3, w0, w1, w2);
+
+        QROUND( 8, w0, w1, w2, w3);
+        QROUND( 9, w1, w2, w3, w0);
+        QROUND(10, w2, w3, w0, w1);
+        QROUND(11, w3, w0, w1, w2);
+
+        QROUND(12, w0, w1, w2, w3);
+        QROUND(13, w1, w2, w3, w0);
+        QROUND(14, w2, w3, w0, w1);
+        QROUND(15, w3, w0, w1, w2);
 
         // update next state
-        state0 = _mm_add_epi32(state0, last0);
-        state1 = _mm_add_epi32(state1, last1);
-
-        buffer += 4;
+        s0 = _mm_add_epi32(s0, last0);
+        s1 = _mm_add_epi32(s1, last1);
     }
     while (--count);
 
     // restore dword order
-    abcd = _mm_unpackhi_epi64(state1, state0);
-    efgh = _mm_unpacklo_epi64(state1, state0);
+    abcd = _mm_unpackhi_epi64(s1, s0);
+    efgh = _mm_unpacklo_epi64(s1, s0);
 
     // save the new state
     _mm_storeu_si128((__m128i*)&state[0], _mm_shuffle_epi32(abcd, _MM_SHUFFLE(0,1,2,3)));
     _mm_storeu_si128((__m128i*)&state[4], _mm_shuffle_epi32(efgh, _MM_SHUFFLE(0,1,2,3)));
 
     #undef QROUND
-    #undef W
 }
 
 #endif // defined(__x86_64__) || defined(_M_AMD64)
@@ -344,70 +337,71 @@ static inline int sha256_cpuid(void)
 SHA256_TARGET
 static void sha256_process_arm64(uint32_t* state, const uint8_t* block, size_t count)
 {
-    // code here is similar to x64 shani implementation
-
-    #define W(i) w[(i)%4]
-
-    #define QROUND(i) do {                                                          \
-        /* load 16 round constants */                                               \
-        if ((i % 4) == 0) rk = vld1q_u32_x4(&SHA256_K[4*i]);                        \
-        /* first 4 rounds reverse byte order in each 32-bit lane of input block */  \
-        if (i <  4) W(i) = vreinterpretq_u32_u8(vrev32q_u8(msg.val[i]));            \
-        /* update message schedule */                                               \
-        if (i >= 4) W(i) = vsha256su0q_u32(W(i), W(i-3));                           \
-        if (i >= 4) W(i) = vsha256su1q_u32(W(i), W(i-2), W(i-1));                   \
-        /* add round constants */                                                   \
-        uint32x4_t tmp = vaddq_u32(W(i), rk.val[i%4]);                              \
-        /* 4 round functions */                                                     \
-        uint32x4_t x = vstate.val[0];                                               \
-        vstate.val[0] = vsha256hq_u32(vstate.val[0], vstate.val[1], tmp);           \
-        vstate.val[1] = vsha256h2q_u32(vstate.val[1], x, tmp);                      \
+    #define QROUND(i,m0,m1,m2,m3) do {                                      \
+        /* update message schedule */                                       \
+        if (i >= 4) m0 = vsha256su1q_u32(vsha256su0q_u32(m0, m1), m2, m3);  \
+        /* add round constants */                                           \
+        uint32x4_t tmp = vaddq_u32(m0, rk.val[i%4]);                        \
+        /* 4 round functions */                                             \
+        uint32x4x2_t x = s;                                                 \
+        s.val[0] = vsha256hq_u32(x.val[0], x.val[1], tmp);                  \
+        s.val[1] = vsha256h2q_u32(x.val[1], x.val[0], tmp);                 \
     } while (0)
 
     // load initial state
-    uint32x4x2_t vstate = vld1q_u32_x2(state);
+    uint32x4x2_t s = vld1q_u32_x2(state);
 
     do
     {
         // remember current state
-        uint32x4x2_t vlast = vstate;
+        uint32x4x2_t last = s;
 
-        // load 64-byte block
+        // load initial message schedule, 64-byte block
         uint8x16x4_t msg = vld1q_u8_x4(block);
+        block += SHA256_BLOCK_SIZE;
+
+        // reverse the byte order in each 32-bit lane
+        uint32x4_t w0 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[0]));
+        uint32x4_t w1 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[1]));
+        uint32x4_t w2 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[2]));
+        uint32x4_t w3 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[3]));
 
         uint32x4x4_t rk;
-        uint32x4_t w[4];
 
-        QROUND( 0);
-        QROUND( 1);
-        QROUND( 2);
-        QROUND( 3);
-        QROUND( 4);
-        QROUND( 5);
-        QROUND( 6);
-        QROUND( 7);
-        QROUND( 8);
-        QROUND( 9);
-        QROUND(10);
-        QROUND(11);
-        QROUND(12);
-        QROUND(13);
-        QROUND(14);
-        QROUND(15);
+        rk = vld1q_u32_x4(&SHA256_K[0]);
+        QROUND( 0, w0, w1, w2, w3);
+        QROUND( 1, w1, w2, w3, w0);
+        QROUND( 2, w2, w3, w0, w1);
+        QROUND( 3, w3, w0, w1, w2);
+
+        rk = vld1q_u32_x4(&SHA256_K[16]);
+        QROUND( 4, w0, w1, w2, w3);
+        QROUND( 5, w1, w2, w3, w0);
+        QROUND( 6, w2, w3, w0, w1);
+        QROUND( 7, w3, w0, w1, w2);
+
+        rk = vld1q_u32_x4(&SHA256_K[32]);
+        QROUND( 8, w0, w1, w2, w3);
+        QROUND( 9, w1, w2, w3, w0);
+        QROUND(10, w2, w3, w0, w1);
+        QROUND(11, w3, w0, w1, w2);
+
+        rk = vld1q_u32_x4(&SHA256_K[48]);
+        QROUND(12, w0, w1, w2, w3);
+        QROUND(13, w1, w2, w3, w0);
+        QROUND(14, w2, w3, w0, w1);
+        QROUND(15, w3, w0, w1, w2);
 
         // update next state
-        vstate.val[0] = vaddq_u32(vstate.val[0], vlast.val[0]);
-        vstate.val[1] = vaddq_u32(vstate.val[1], vlast.val[1]);
-
-        block += SHA256_BLOCK_SIZE;
+        s.val[0] = vaddq_u32(s.val[0], last.val[0]);
+        s.val[1] = vaddq_u32(s.val[1], last.val[1]);
     }
     while (--count);
 
     // save the new state
-    vst1q_u32_x2(state, vstate);
+    vst1q_u32_x2(state, s);
 
     #undef QROUND
-    #undef W
 }
 
 #endif // defined(__aarch64__) || defined(_M_ARM64)
@@ -475,6 +469,7 @@ static void sha256_process(uint32_t* state, const uint8_t* block, size_t count)
         ROUND( 5, d, e, f, g, h, a, b, c);
         ROUND( 6, c, d, e, f, g, h, a, b);
         ROUND( 7, b, c, d, e, f, g, h, a);
+
         ROUND( 8, a, b, c, d, e, f, g, h);
         ROUND( 9, h, a, b, c, d, e, f, g);
         ROUND(10, g, h, a, b, c, d, e, f);
@@ -483,6 +478,7 @@ static void sha256_process(uint32_t* state, const uint8_t* block, size_t count)
         ROUND(13, d, e, f, g, h, a, b, c);
         ROUND(14, c, d, e, f, g, h, a, b);
         ROUND(15, b, c, d, e, f, g, h, a);
+
         ROUND(16, a, b, c, d, e, f, g, h);
         ROUND(17, h, a, b, c, d, e, f, g);
         ROUND(18, g, h, a, b, c, d, e, f);
@@ -491,6 +487,7 @@ static void sha256_process(uint32_t* state, const uint8_t* block, size_t count)
         ROUND(21, d, e, f, g, h, a, b, c);
         ROUND(22, c, d, e, f, g, h, a, b);
         ROUND(23, b, c, d, e, f, g, h, a);
+
         ROUND(24, a, b, c, d, e, f, g, h);
         ROUND(25, h, a, b, c, d, e, f, g);
         ROUND(26, g, h, a, b, c, d, e, f);
@@ -499,6 +496,7 @@ static void sha256_process(uint32_t* state, const uint8_t* block, size_t count)
         ROUND(29, d, e, f, g, h, a, b, c);
         ROUND(30, c, d, e, f, g, h, a, b);
         ROUND(31, b, c, d, e, f, g, h, a);
+
         ROUND(32, a, b, c, d, e, f, g, h);
         ROUND(33, h, a, b, c, d, e, f, g);
         ROUND(34, g, h, a, b, c, d, e, f);
@@ -507,6 +505,7 @@ static void sha256_process(uint32_t* state, const uint8_t* block, size_t count)
         ROUND(37, d, e, f, g, h, a, b, c);
         ROUND(38, c, d, e, f, g, h, a, b);
         ROUND(39, b, c, d, e, f, g, h, a);
+
         ROUND(40, a, b, c, d, e, f, g, h);
         ROUND(41, h, a, b, c, d, e, f, g);
         ROUND(42, g, h, a, b, c, d, e, f);
@@ -515,6 +514,7 @@ static void sha256_process(uint32_t* state, const uint8_t* block, size_t count)
         ROUND(45, d, e, f, g, h, a, b, c);
         ROUND(46, c, d, e, f, g, h, a, b);
         ROUND(47, b, c, d, e, f, g, h, a);
+
         ROUND(48, a, b, c, d, e, f, g, h);
         ROUND(49, h, a, b, c, d, e, f, g);
         ROUND(50, g, h, a, b, c, d, e, f);
@@ -523,6 +523,7 @@ static void sha256_process(uint32_t* state, const uint8_t* block, size_t count)
         ROUND(53, d, e, f, g, h, a, b, c);
         ROUND(54, c, d, e, f, g, h, a, b);
         ROUND(55, b, c, d, e, f, g, h, a);
+
         ROUND(56, a, b, c, d, e, f, g, h);
         ROUND(57, h, a, b, c, d, e, f, g);
         ROUND(58, g, h, a, b, c, d, e, f);
