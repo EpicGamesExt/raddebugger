@@ -39,6 +39,17 @@ typedef struct tm tm;
 typedef struct timespec timespec;
 
 ////////////////////////////////
+
+#define OS_LNX_RETRY_ON_EINTR(expr)          \
+  (__extension__({                           \
+  __typeof__(expr) __ret;                    \
+  do {                                       \
+  __ret = (expr);                            \
+  } while ((__ret == -1) && errno == EINTR); \
+  __ret;                                     \
+  }))
+
+////////////////////////////////
 //~ rjf: File Iterator
 
 typedef struct OS_LNX_FileIter OS_LNX_FileIter;
