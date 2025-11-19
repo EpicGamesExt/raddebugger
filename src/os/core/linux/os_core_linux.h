@@ -110,6 +110,8 @@ struct OS_LNX_State
   pthread_mutex_t entity_mutex;
   Arena *entity_arena;
   OS_LNX_Entity *entity_free;
+  U64 default_env_count;
+  char **default_env;
 };
 
 ////////////////////////////////

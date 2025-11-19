@@ -811,7 +811,7 @@ os_process_launch(OS_ProcessLaunchParams *params)
       char **envp = 0;
       if(params->inherit_env)
       {
-        envp = __environ;
+        envp = os_lnx_state.default_env;
       }
       else
       {
@@ -1443,7 +1443,7 @@ lnx_signal_handler(int sig, siginfo_t *info, void *arg)
   }
   fprintf(stderr, "\nVersion: %s%s\n\n", BUILD_VERSION_STRING_LITERAL, BUILD_GIT_HASH_STRING_LITERAL_APPEND);
   
-  _exit(0);
+  _exit(1);
 }
 
 int
@@ -1485,6 +1485,20 @@ main(int argc, char **argv)
     os_lnx_state.arena = arena_alloc();
     os_lnx_state.entity_arena = arena_alloc();
     pthread_mutex_init(&os_lnx_state.entity_mutex, 0);
+
+    // cache default environment
+    {
+      U64 env_count = 0;
+      for(; __environ[env_count] != 0; env_count += 1) {}
+      char **default_env = push_array(os_lnx_state.arena, char *, env_count+1);
+      for EachIndex(i, env_count)
+      {
+        default_env[i] = (char *)str8_copy(os_lnx_state.arena, str8_cstring(__environ[i])).str;
+      }
+      default_env[env_count] = 0;
+      os_lnx_state.default_env_count = env_count;
+      os_lnx_state.default_env       = default_env;
+    }
     
     //- rjf: grab dynamically allocated system info
     {
