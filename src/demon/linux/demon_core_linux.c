@@ -2018,6 +2018,7 @@ dmn_init(void)
   dmn_lnx_state->entities_base  = push_array(dmn_lnx_state->entities_arena, DMN_LNX_Entity, 0);
   dmn_lnx_state->tid_ht         = hash_table_init(dmn_lnx_state->arena, 0x2000);
   dmn_lnx_state->pid_ht         = hash_table_init(dmn_lnx_state->arena, 0x400);
+  dmn_lnx_state->halter_mutex   = mutex_alloc();
   dmn_lnx_entity_alloc(dmn_lnx_nil_entity, DMN_LNX_EntityKind_Root);
 }
 
@@ -2181,10 +2182,11 @@ dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process)
 internal DMN_EventList
 dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 {
+  Assert(gettid() == dmn_lnx_state->tracer_tid);
   Temp scratch = scratch_begin(&arena, 1);
-
   DMN_EventList events = {0};
-  dmn_access_open();
+
+  mutex_take(dmn_lnx_state->halter_mutex);
   
   // write traps to memory
   DMN_ActiveTrap *active_trap_first = 0, *active_trap_last = 0;
@@ -2270,8 +2272,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 
       for(DMN_LNX_Entity *thread = process->first; thread != dmn_lnx_nil_entity; thread = thread->next)
       {
-        if(thread->kind != DMN_LNX_EntityKind_Thread)                { continue; }
-        if(thread->thread_state == DMN_LNX_ThreadState_WaitForVFrok) { continue; }
+        if(thread->kind != DMN_LNX_EntityKind_Thread) { continue; }
 
         //- rjf: determine if this thread is frozen
         B32 is_frozen = 0;
@@ -2369,7 +2370,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         break;
       }
 
-      dmn_access_close();
+      mutex_drop(dmn_lnx_state->halter_mutex);
 
       // wait for a signal
       int   status  = 0;
@@ -2381,7 +2382,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         break;
       }
 
-      dmn_access_open();
+      mutex_take(dmn_lnx_state->halter_mutex);
 
       // unpack status
       int wifexited   = WIFEXITED(status);
@@ -2623,7 +2624,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     }
   }
   
-  dmn_access_close();
+  mutex_drop(dmn_lnx_state->halter_mutex);
   scratch_end(scratch);
   return events;
 }
@@ -2634,9 +2635,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 internal void
 dmn_halt(U64 code, U64 user_data)
 {
-  dmn_ctrl_exclusive_access_begin();
-
-  if(!dmn_lnx_state->is_halting && dmn_lnx_state->active_process_count > 0)
+  mutex_take(dmn_lnx_state->halter_mutex);
+  if(dmn_lnx_state->active_process_count)
   {
     dmn_lnx_state->halter_tid     = gettid();
     dmn_lnx_state->halt_code      = code;
@@ -2647,8 +2647,7 @@ dmn_halt(U64 code, U64 user_data)
       if(OS_LNX_RETRY_ON_EINTR(kill(process->id, SIGSTOP)) < 0) { Assert(0 && "failed to send SIGSTOP"); }
     }
   }
-
-  dmn_ctrl_exclusive_access_end();
+  mutex_drop(dmn_lnx_state->halter_mutex);
 }
 
 ////////////////////////////////

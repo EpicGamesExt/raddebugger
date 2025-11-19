@@ -164,7 +164,6 @@ typedef enum DMN_LNX_ThreadState
   DMN_LNX_ThreadState_Running,
   DMN_LNX_ThreadState_Stopped,
   DMN_LNX_ThreadState_Exited,
-  DMN_LNX_ThreadState_WaitForVFrok,
 } DMN_LNX_ThreadState;
 
 typedef struct DMN_LNX_Entity DMN_LNX_Entity;
@@ -288,6 +287,7 @@ struct DMN_LNX_State
   DMN_LNX_ProcessLaunchList free_pids;
 
   // halter
+  Mutex halter_mutex;
   pid_t halter_tid;
   U64   halt_code;
   U64   halt_user_data;
