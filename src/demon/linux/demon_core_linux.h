@@ -12,19 +12,6 @@
 #include <elf.h>
 
 ////////////////////////////////
-//~ SIGTRAP codes
-
-enum
-{
-  DMN_LNX_SigTrapCode_Brkpt  = 1,
-  DMN_LNX_SigTrapCode_Trace  = 2,
-  DMN_LNX_SigTrapCode_Branch = 3,
-  DMN_LNX_SigTrapCode_HwBkpt = 4,
-  DMN_LNX_SigTrapCode_Unk    = 5,
-  DMN_LNX_SigTrapCode_Perf   = 6
-} DMN_LNX_SigTrapCode;
-
-////////////////////////////////
 //~ rjf: Register Layouts
 //
 // These are defined in <sys/user.h>, but only for one architecture at a time
@@ -143,7 +130,7 @@ typedef struct DMN_LNX_PhdrInfo DMN_LNX_PhdrInfo;
 struct DMN_LNX_PhdrInfo
 {
   Rng1U64 range;
-  U64 dynamic;
+  U64     dynamic;
 };
 
 typedef struct DMN_LNX_DynamicInfo DMN_LNX_DynamicInfo;
@@ -171,39 +158,60 @@ typedef enum DMN_LNX_EntityKind
 }
 DMN_LNX_EntityKind;
 
+typedef enum DMN_LNX_ThreadState
+{
+  DMN_LNX_ThreadState_Null,
+  DMN_LNX_ThreadState_Running,
+  DMN_LNX_ThreadState_Stopped,
+  DMN_LNX_ThreadState_Exited,
+  DMN_LNX_ThreadState_WaitForVFrok,
+} DMN_LNX_ThreadState;
+
 typedef struct DMN_LNX_Entity DMN_LNX_Entity;
 struct DMN_LNX_Entity
 {
+  // entity hierarchy
   DMN_LNX_Entity *first;
   DMN_LNX_Entity *last;
   DMN_LNX_Entity *next;
   DMN_LNX_Entity *prev;
   DMN_LNX_Entity *parent;
+
+  // common
   DMN_LNX_EntityKind kind;
-  U32 gen;
-  Arch arch;
-  U64 id;
+  U32                gen;
+  Arch               arch;
+  U64                id;
 
   // process
-  Arena *arena;
-  int fd;
-  pid_t tracer_tid;
-  B32 expect_rdebug_data_breakpoint;
-  U64 rdebug_vaddr;
-  U64 rdebug_brk_vaddr;
-  ELF_Class dl_class;
-  HashTable *loaded_modules_ht;
+  Arena          *arena;
+  int             fd;
+  pid_t           tracer_tid;
+  B32             debug_subprocesses;
+  B32             expect_user_interrupt;
+  B32             expect_rdebug_data_breakpoint;
+  U64             rdebug_vaddr;
+  U64             rdebug_brk_vaddr;
+  ELF_Class       dl_class;
+  HashTable      *loaded_modules_ht;
   DMN_LNX_Probe **probes;
-  U64 probe_vaddrs[DMN_LNX_ProbeType_Count];
+  U64             probe_vaddrs[DMN_LNX_ProbeType_Count];
+  U64             main_thread_exit_code;
+  U64             thread_count;
 
   // process x64
-  U64 xcr0;
-  U64 xsave_size;
+  U64             xcr0;
+  U64             xsave_size;
   X64_XSaveLayout xsave_layout;
 
   // thread
-  B32 expecting_dummy_sigstop;
-  void *reg_block;
+  void                *reg_block;
+  B32                  expecting_dummy_sigstop;
+  B32                  is_main_thread;
+  B32                  is_reg_block_dirty;
+  B32                  pass_through_signal;
+  U64                  pass_through_signo;
+  DMN_LNX_ThreadState  thread_state;
 
   // module
   U64 base_vaddr;
@@ -217,13 +225,13 @@ typedef struct DMN_LNX_EntityNode DMN_LNX_EntityNode;
 struct DMN_LNX_EntityNode
 {
   DMN_LNX_EntityNode *next;
-  DMN_LNX_Entity *v;
+  DMN_LNX_Entity     *v;
 };
 
 typedef struct DMN_LNX_EntityList DMN_LNX_EntityList;
 struct DMN_LNX_EntityList
 {
-  U64 count;
+  U64                 count;
   DMN_LNX_EntityNode *first;
   DMN_LNX_EntityNode *last;
 };
@@ -231,38 +239,69 @@ struct DMN_LNX_EntityList
 ////////////////////////////////
 //~ rjf: Main State Bundle
 
+typedef struct DMN_LNX_ProcessLaunch DMN_LNX_ProcessLaunch;
+struct DMN_LNX_ProcessLaunch
+{
+  B32                    debug_subprocesses;
+  pid_t                  pid;
+  DMN_LNX_ProcessLaunch *next;
+  DMN_LNX_ProcessLaunch *prev;
+};
+
+typedef struct DMN_LNX_ProcessLaunchList DMN_LNX_ProcessLaunchList;
+struct DMN_LNX_ProcessLaunchList
+{
+  U64                    count;
+  DMN_LNX_ProcessLaunch *first;
+  DMN_LNX_ProcessLaunch *last;
+};
+
+typedef struct DMN_LNX_Halt
+{
+  pid_t halter_pid;
+} DMN_LNX_Halt;
+
 typedef struct DMN_LNX_State DMN_LNX_State;
 struct DMN_LNX_State
 {
   Arena *arena;
-  
+
+  pid_t tracer_tid;
+
   // rjf: access locking mechanism
   Mutex access_mutex;
-  B32 access_run_state;
-  
-  // rjf: deferred events
-  Arena *deferred_events_arena;
-  DMN_EventList deferred_events;
-  
-  // rjf: entity storage
-  Arena *entities_arena;
-  DMN_LNX_Entity *entities_base;
-  U64 entities_count;
-  DMN_LNX_Entity *free_entity;
-  
-  // rjf: halting mechanism
-  B32 has_halt_injection;
-  U64 halt_code;
-  U64 halt_user_data;
+  B32   access_run_state;
 
-  DMN_EventKind last_event_kind;
-  pid_t last_stop_pid;
-  int last_sig_code;
+  // rjf: entity storage
+  Arena          *entities_arena;
+  DMN_LNX_Entity *entities_base;
+  DMN_LNX_Entity *free_entity;
+  U64             entities_count;
+  HashTable      *tid_ht; // thread id -> thread entity
+  HashTable      *pid_ht; // process id -> process entity
+
+  // pid tracking
+  U64                       active_process_count;
+  DMN_LNX_ProcessLaunchList pending_stopsig;
+  DMN_LNX_ProcessLaunchList pending_creation;
+  DMN_LNX_ProcessLaunchList active_pids;
+  DMN_LNX_ProcessLaunchList free_pids;
+
+  // halter
+  pid_t halter_tid;
+  U64   halt_code;
+  U64   halt_user_data;
+  B32   is_halting;
 };
 
-read_only global DMN_LNX_Entity dmn_lnx_nil_entity = {&dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity};
-global DMN_LNX_State *dmn_lnx_state = 0;
-thread_static B32 dmn_lnx_ctrl_thread = 0;
+////////////////////////////////
+//~ Globals
+
+global        DMN_LNX_State *dmn_lnx_state       = 0;
+thread_static B32            dmn_lnx_ctrl_thread = 0;
+
+read_only global DMN_LNX_Entity  dmn_lnx_nil_entity_ = {&dmn_lnx_nil_entity_, &dmn_lnx_nil_entity_, &dmn_lnx_nil_entity_, &dmn_lnx_nil_entity_, &dmn_lnx_nil_entity_};
+read_only global DMN_LNX_Entity *dmn_lnx_nil_entity  = &dmn_lnx_nil_entity_;
 
 ////////////////////////////////
 //~ rjf: Helpers
@@ -298,6 +337,8 @@ internal DMN_LNX_PhdrInfo       dmn_lnx_phdr_info_from_memory(int memory_fd, ELF
 internal DMN_LNX_DynamicInfo    dmn_lnx_dynamic_info_from_memory(int memory_fd, ELF_Class elf_Class, U64 rebase, U64 dynamic_vaddr);
 internal U64                    dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vaddr);
 
+internal String8 dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base);
+
 ////////////////////////////////
 //~ rjf: Entity Functions
 
@@ -309,10 +350,10 @@ internal DMN_LNX_Entity *dmn_lnx_thread_from_pid(pid_t pid);
 
 internal U64 dmn_lnx_thread_read_ip(DMN_LNX_Entity *thread);
 internal U64 dmn_lnx_thread_read_sp(DMN_LNX_Entity *thread);
-internal B32 dmn_lnx_thread_write_ip(DMN_LNX_Entity *thread, U64 ip);
-internal B32 dmn_lnx_thread_write_sp(DMN_LNX_Entity *thread, U64 sp);
-internal B32 dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block);
-internal B32 dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block);
+internal void dmn_lnx_thread_write_ip(DMN_LNX_Entity *thread, U64 ip);
+internal void dmn_lnx_thread_write_sp(DMN_LNX_Entity *thread, U64 sp);
+internal B32 dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread);
+internal B32 dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread);
 
 ////////////////////////////////
 

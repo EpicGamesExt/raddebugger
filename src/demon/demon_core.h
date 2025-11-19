@@ -142,7 +142,7 @@ typedef struct DMN_ActiveTrap DMN_ActiveTrap;
 struct DMN_ActiveTrap
 {
   DMN_Trap *trap;
-  U8 swap_byte;
+  String8 swap_bytes;
   DMN_ActiveTrap *next;
 };
 
@@ -261,5 +261,8 @@ internal B32 dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block);
 internal void dmn_process_iter_begin(DMN_ProcessIter *iter);
 internal B32  dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info_out);
 internal void dmn_process_iter_end(DMN_ProcessIter *iter);
+
+//- arch trap
+internal String8 dmn_get_trap_inst(void);
 
 #endif // DEMON_CORE_H

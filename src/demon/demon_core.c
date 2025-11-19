@@ -206,3 +206,15 @@ dmn_process_read_raw(Arena *arena, DMN_Handle process, Rng1U64 vrange)
   }
   return buffer;
 }
+
+internal String8
+dmn_get_trap_inst(void)
+{
+#if ARCH_X64
+  local_persist U8 inst[] = { 0xcc };
+#else
+# error "trap instruction is not defined for this arch"
+#endif
+  return str8_array_fixed(inst);
+}
+
