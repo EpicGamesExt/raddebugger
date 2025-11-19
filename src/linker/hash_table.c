@@ -163,12 +163,20 @@ hash_table_push_path_raw(Arena *arena, HashTable *ht, String8 path, void *value)
 ////////////////////////////////
 
 internal BucketNode *
+hash_table_bucket_from_hash(HashTable *ht, U64 hash)
+{
+  BucketNode *bucket = 0;
+  if (ht->cap > 0) {
+    bucket = ht->buckets[hash % ht->cap].first;
+  }
+  return bucket;
+}
+
+internal BucketNode *
 hash_table_search_string(HashTable *ht, String8 key_string)
 {
-  U64         hash    = hash_table_hasher(key_string);
-  U64         ibucket = hash % ht->cap;
-  BucketList *bucket  = ht->buckets + ibucket;
-  for (BucketNode *n = bucket->first; n != 0; n = n->next) {
+  BucketNode *bucket = hash_table_bucket_from_hash(ht, hash_table_hasher(key_string));
+  for EachNode(n, BucketNode, bucket) {
     if (str8_match(n->v.key_string, key_string, 0)) {
       return n;
     }
@@ -179,10 +187,8 @@ hash_table_search_string(HashTable *ht, String8 key_string)
 internal BucketNode *
 hash_table_search_u32(HashTable *ht, U32 key_u32)
 {
-  U64         hash    = hash_table_hasher(str8_struct(&key_u32));
-  U64         ibucket = hash % ht->cap;
-  BucketList *bucket  = ht->buckets + ibucket;
-  for (BucketNode *n = bucket->first; n != 0; n = n->next) {
+  BucketNode *bucket = hash_table_bucket_from_hash(ht, hash_table_hasher(str8_struct(&key_u32)));
+  for EachNode(n, BucketNode, bucket) {
     if (n->v.key_u32 == key_u32) {
       return n;
     }
@@ -193,10 +199,8 @@ hash_table_search_u32(HashTable *ht, U32 key_u32)
 internal BucketNode *
 hash_table_search_u64(HashTable *ht, U64 key_u64)
 {
-  U64         hash    = hash_table_hasher(str8_struct(&key_u64));
-  U64         ibucket = hash % ht->cap;
-  BucketList *bucket  = ht->buckets + ibucket;
-  for (BucketNode *n = bucket->first; n != 0; n = n->next) {
+  BucketNode *bucket = hash_table_bucket_from_hash(ht, hash_table_hasher(str8_struct(&key_u64)));
+  for EachNode(n, BucketNode, bucket) {
     if (n->v.key_u64 == key_u64) {
       return n;
     }
@@ -219,10 +223,8 @@ hash_table_search_path(HashTable *ht, String8 path)
 internal BucketNode *
 hash_table_search_raw(HashTable *ht, void *key)
 {
-  U64         hash    = hash_table_hasher(str8_struct(&key));
-  U64         ibucket = hash % ht->cap;
-  BucketList *bucket  = ht->buckets + ibucket;
-  for (BucketNode *n = bucket->first; n != 0; n = n->next) {
+  BucketNode *bucket = hash_table_bucket_from_hash(ht, hash_table_hasher(str8_struct(&key)));
+  for EachNode(n, BucketNode, bucket) {
     if (n->v.key_raw == key) {
       return n;
     }
