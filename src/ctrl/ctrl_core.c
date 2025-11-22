@@ -60,6 +60,20 @@ ctrl_exception_kind_from_dmn(DMN_ExceptionKind kind)
   return result;
 }
 
+internal CTRL_TlsModel
+ctrl_dynamic_linker_type_from_dmn(DMN_TlsModel type)
+{
+  CTRL_TlsModel result = CTRL_TlsModel_Null;
+  switch(type)
+  {
+    default:{}break;
+    case DMN_TlsModel_Null:      {result = CTRL_TlsModel_Null;}break;
+    case DMN_TlsModel_WinodwsNt: {result = CTRL_TlsModel_WinodwsNt;}break;
+    case DMN_TlsModel_Gnu:       {result = CTRL_TlsModel_Gnu;}break;
+  }
+  return result;
+}
+
 internal String8
 ctrl_string_from_event_kind(CTRL_EventKind kind)
 {
@@ -616,6 +630,9 @@ ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event, U64 max)
     str8_serial_push_struct(scratch.arena, &srl, &event->exception_code);
     str8_serial_push_struct(scratch.arena, &srl, &event->rgba);
     str8_serial_push_struct(scratch.arena, &srl, &event->bp_flags);
+    str8_serial_push_struct(scratch.arena, &srl, &event->tls_model);
+    str8_serial_push_struct(scratch.arena, &srl, &event->tls_index);
+    str8_serial_push_struct(scratch.arena, &srl, &event->tls_offset);
     String8 string = event->string;
     string.size = Min(string.size, max-srl.total_size);
     str8_serial_push_struct(scratch.arena, &srl, &string.size);
@@ -649,6 +666,9 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
     read_off += str8_deserial_read_struct(string, read_off, &event.exception_code);
     read_off += str8_deserial_read_struct(string, read_off, &event.rgba);
     read_off += str8_deserial_read_struct(string, read_off, &event.bp_flags);
+    read_off += str8_deserial_read_struct(string, read_off, &event.tls_model);
+    read_off += str8_deserial_read_struct(string, read_off, &event.tls_index);
+    read_off += str8_deserial_read_struct(string, read_off, &event.tls_offset);
     read_off += str8_deserial_read_struct(string, read_off, &event.string.size);
     event.string.str = push_array_no_zero(arena, U8, event.string.size);
     read_off += str8_deserial_read(string, read_off, event.string.str, event.string.size, 1);
@@ -1249,6 +1269,7 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
       {
         CTRL_Entity *machine = ctrl_entity_from_handle(&store->ctx, ctrl_handle_make(event->entity.machine_id, dmn_handle_zero()));
         CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->arch, event->entity, (U64)event->entity_id);
+        process->tls_model = event->tls_model;
       }break;
       case CTRL_EventKind_EndProc:
       {
@@ -1370,6 +1391,8 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
         ctrl_entity_equip_string(store, module, event->string);
         module->timestamp = event->timestamp;
         module->vaddr_range = event->vaddr_rng;
+        module->tls_index = event->tls_index;
+        module->tls_offset = event->tls_offset;
         CTRL_Entity *first_module = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Module);
         if(first_module == module)
         {
@@ -1717,26 +1740,6 @@ ctrl_entry_point_voff_from_module(CTRL_Handle module_handle)
     if(ctrl_handle_match(n->module, module_handle))
     {
       result = n->entry_point_voff;
-      break;
-    }
-  }
-  return result;
-}
-
-internal Rng1U64
-ctrl_tls_vaddr_range_from_module(CTRL_Handle module_handle)
-{
-  Rng1U64 result = {0};
-  U64 hash = ctrl_hash_from_handle(module_handle);
-  U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
-  U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
-  CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
-  CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
-  MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
-  {
-    if(ctrl_handle_match(n->module, module_handle))
-    {
-      result = n->tls_vaddr_range;
       break;
     }
   }
@@ -3734,7 +3737,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   
   Arena   *arena                                 = arena_alloc();
   U64      entry_point_voff                      = 0;
-  Rng1U64  tls_vaddr_range                       = {0};
   U32      rdi_dbg_time                          = 0;
   Guid     rdi_dbg_guid                          = {0};
   String8  exe_dbg_path                          = {0};
@@ -3855,34 +3857,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
           dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + pdatas_voff_range.min, vaddr_range.min + pdatas_voff_range.max), pdatas);
         }
         
-        // rjf: extract tls header
-        PE_TLSHeader64 tls_header = {0};
-        if(data_dir_count > PE_DataDirectoryIndex_TLS)
-        {
-          PE_DataDirectory dir = {0};
-          dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, &dir);
-          Rng1U64 tls_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
-          switch(file_header.machine)
-          {
-            default:{}break;
-            case COFF_MachineType_X86:
-            {
-              PE_TLSHeader32 tls_header32 = {0};
-              dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header32);
-              tls_header.raw_data_start    = (U64)tls_header32.raw_data_start;
-              tls_header.raw_data_end      = (U64)tls_header32.raw_data_end;
-              tls_header.index_address     = (U64)tls_header32.index_address;
-              tls_header.callbacks_address = (U64)tls_header32.callbacks_address;
-              tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
-              tls_header.characteristics   = (U64)tls_header32.characteristics;
-            }break;
-            case COFF_MachineType_X64:
-            {
-              dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header);
-            }break;
-          }
-        }
-        
         // rjf: extract sections
         U64 sec_array_off = opt_ext_off_range.max;
         U64 sec_count = file_header.section_count;
@@ -3891,9 +3865,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         
         // rjf: grab entry point vaddr
         entry_point_voff = entry_point;
-        
-        // rjf: calculate TLS vaddr range
-        tls_vaddr_range = r1u64(tls_header.index_address, tls_header.index_address+sizeof(U32));
         
         // rjf: grab data about debug info
         if(data_dir_count > PE_DataDirectoryIndex_DEBUG)
@@ -4469,11 +4440,12 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     case DMN_EventKind_CreateProcess:
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
-      out_evt->kind       = CTRL_EventKind_NewProc;
-      out_evt->msg_id     = msg->msg_id;
-      out_evt->entity     = ctrl_handle_make(CTRL_MachineID_Local, event->process);
-      out_evt->arch       = event->arch;
-      out_evt->entity_id  = event->code;
+      out_evt->kind      = CTRL_EventKind_NewProc;
+      out_evt->msg_id    = msg->msg_id;
+      out_evt->entity    = ctrl_handle_make(CTRL_MachineID_Local, event->process);
+      out_evt->arch      = event->arch;
+      out_evt->entity_id = event->code;
+      out_evt->tls_model = ctrl_dynamic_linker_type_from_dmn(event->tls_model);
       ctrl_state->process_counter += 1;
     }break;
     case DMN_EventKind_CreateThread:
@@ -4508,6 +4480,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt1->rip_vaddr  = event->address;
       out_evt1->timestamp  = exe_timestamp;
       out_evt1->string     = module_path;
+      out_evt1->tls_index  = event->tls_index;
+      out_evt1->tls_offset = event->tls_offset;
       CTRL_Event *out_evt2 = ctrl_event_list_push(scratch.arena, &evts);
       String8 initial_debug_info_path = ctrl_initial_debug_info_path_from_module(scratch.arena, module_handle);
       U64 debug_info_timestamp = os_properties_from_file_path(initial_debug_info_path).modified;

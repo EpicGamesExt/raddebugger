@@ -255,6 +255,7 @@ struct DMN_W32_ImageInfo
 {
   Arch arch;
   U32 size;
+  U64 tls_index;
 };
 
 ////////////////////////////////

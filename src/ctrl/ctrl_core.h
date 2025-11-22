@@ -60,6 +60,17 @@ struct CTRL_UserBreakpointList
 };
 
 ////////////////////////////////
+//~ Dynamic Linker Types
+
+typedef U32 CTRL_TlsModel;
+enum
+{
+  CTRL_TlsModel_Null,
+  CTRL_TlsModel_WinodwsNt,
+  CTRL_TlsModel_Gnu
+};
+
+////////////////////////////////
 //~ rjf: Entity Handle Types
 
 typedef struct CTRL_Handle CTRL_Handle;
@@ -119,6 +130,9 @@ struct CTRL_Entity
   U64 timestamp;
   CTRL_UserBreakpointFlags bp_flags;
   String8 string;
+  CTRL_TlsModel tls_model;
+  U64 tls_index;
+  U64 tls_offset;
 };
 
 typedef struct CTRL_EntityNode CTRL_EntityNode;
@@ -512,11 +526,14 @@ struct CTRL_Event
   U64 rip_vaddr;
   U64 stack_base;
   U64 tls_root;
+  U64 tls_index;
+  U64 tls_offset;
   U64 timestamp;
   U32 exception_code;
   U32 rgba;
   CTRL_UserBreakpointFlags bp_flags;
   String8 string;
+  CTRL_TlsModel tls_model;
 };
 
 typedef struct CTRL_EventNode CTRL_EventNode;
@@ -603,7 +620,6 @@ struct CTRL_ModuleImageInfoCacheNode
   EH_FrameHdr eh_frame_hdr;
   EH_PtrCtx eh_ptr_ctx;
   U64 entry_point_voff;
-  Rng1U64 tls_vaddr_range;
   String8 initial_debug_info_path;
   Rng1U64 raddbg_section_voff_range;
   String8 raddbg_data;
@@ -776,6 +792,7 @@ internal U64 ctrl_hash_from_string(String8 string);
 internal U64 ctrl_hash_from_handle(CTRL_Handle handle);
 internal CTRL_EventCause ctrl_event_cause_from_dmn_event_kind(DMN_EventKind event_kind);
 internal CTRL_ExceptionKind ctrl_exception_kind_from_dmn(DMN_ExceptionKind kind);
+internal CTRL_TlsModel ctrl_dynamic_linker_type_from_dmn(DMN_TlsModel type);
 internal String8 ctrl_string_from_event_kind(CTRL_EventKind kind);
 internal String8 ctrl_string_from_msg_kind(CTRL_MsgKind kind);
 internal CTRL_EntityKind ctrl_entity_kind_from_string(String8 string);
@@ -916,7 +933,6 @@ internal B32 ctrl_thread_write_reg_block(CTRL_Handle thread, void *block);
 //- rjf: cache lookups
 internal PE_IntelPdata *ctrl_intel_pdata_from_module_voff(Arena *arena, CTRL_Handle module_handle, U64 voff);
 internal U64 ctrl_entry_point_voff_from_module(CTRL_Handle module_handle);
-internal Rng1U64 ctrl_tls_vaddr_range_from_module(CTRL_Handle module_handle);
 internal String8 ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_Handle module_handle);
 internal String8 ctrl_raddbg_data_from_module(Arena *arena, CTRL_Handle module_handle);
 

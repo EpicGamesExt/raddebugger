@@ -19,6 +19,17 @@ struct DMN_CtrlCtx
 };
 
 ////////////////////////////////
+//~ Dynamic Linker Types
+
+typedef U32 DMN_TlsModel;
+enum
+{
+  DMN_TlsModel_Null,
+  DMN_TlsModel_WinodwsNt,
+  DMN_TlsModel_Gnu
+};
+
+////////////////////////////////
 //~ rjf: Handle Types
 
 typedef union DMN_Handle DMN_Handle;
@@ -82,6 +93,9 @@ struct DMN_Event
   U64 stack_pointer;
   U64 user_data;
   B32 exception_repeated;
+  U64 tls_index;
+  U64 tls_offset;
+  DMN_TlsModel tls_model;
 };
 
 typedef struct DMN_EventNode DMN_EventNode;

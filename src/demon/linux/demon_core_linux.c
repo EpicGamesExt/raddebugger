@@ -1401,6 +1401,42 @@ dmn_lnx_handle_not_attached(Arena *arena, DMN_EventList *events)
   e->error_kind = DMN_ErrorKind_NotAttached;
 }
 
+internal DMN_LNX_Entity *
+dmn_lnx_handle_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *process, pid_t tid)
+{
+  DMN_LNX_Entity *thread = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Thread);
+  thread->id                 = tid;
+  thread->arch               = process->arch;
+  thread->reg_block          = push_array(process->arena, U8, regs_block_size_from_arch(process->arch));
+  thread->thread_state       = DMN_LNX_ThreadState_Stopped;
+  thread->is_reg_block_dirty = !dmn_lnx_thread_read_reg_block(thread);
+  hash_table_push_u64_raw(dmn_lnx_state->arena, dmn_lnx_state->tid_ht, thread->id, thread);
+
+  if(!thread->is_reg_block_dirty)
+  {
+    switch(thread->arch)
+    {
+    case Arch_Null: break;
+    case Arch_x64: thread->thread_local_base = ((REGS_RegBlockX64 *)thread->reg_block)->fsbase.u64; break;
+    case Arch_x86:
+    case Arch_arm32:
+    case Arch_arm64: { NotImplemented; } break;
+    default: { InvalidPath; } break;
+    }
+  }
+
+  DMN_Event *e = dmn_event_list_push(arena, events);
+  e->kind    = DMN_EventKind_CreateThread;
+  e->process = dmn_lnx_handle_from_entity(process);
+  e->thread  = dmn_lnx_handle_from_entity(thread);
+  e->arch    = thread->arch;
+  e->code    = thread->id;
+
+  process->thread_count += 1;
+
+  return thread;
+}
+
 internal void
 dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, pid_t pid)
 {
@@ -1529,32 +1565,17 @@ dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, pid_t pid)
   // push create process event
   {
     DMN_Event *e = dmn_event_list_push(arena, events);
-    e->kind    = DMN_EventKind_CreateProcess;
-    e->process = dmn_lnx_handle_from_entity(process);
-    e->arch    = process->arch;
-    e->code    = pid;
+    e->kind      = DMN_EventKind_CreateProcess;
+    e->process   = dmn_lnx_handle_from_entity(process);
+    e->arch      = process->arch;
+    e->code      = pid;
+    e->tls_model = DMN_TlsModel_Gnu; // TODO: use dynamic linker path to figure out correct enum here
   }
 
   //
   // init main thread
   //
-  DMN_LNX_Entity *thread  = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Thread);
-  thread->id                 = pid;
-  thread->arch               = process->arch;
-  thread->is_main_thread     = 1;
-  thread->thread_state       = DMN_LNX_ThreadState_Stopped;
-  thread->reg_block          = push_array(process->arena, U8, regs_block_size_from_arch(process->arch));
-  thread->is_reg_block_dirty = !dmn_lnx_thread_read_reg_block(thread);
-  hash_table_push_u64_raw(dmn_lnx_state->arena, dmn_lnx_state->tid_ht, thread->id, thread);
-  // push create thread event
-  {
-    DMN_Event *e = dmn_event_list_push(arena, events);
-    e->kind    = DMN_EventKind_CreateThread;
-    e->process = dmn_lnx_handle_from_entity(process);
-    e->thread  = dmn_lnx_handle_from_entity(thread);
-    e->arch    = thread->arch;
-    e->code    = thread->id;
-  }
+  DMN_LNX_Entity *thread = dmn_lnx_handle_create_thread(arena, events, process, pid);
 
   //
   // init main module
@@ -1580,6 +1601,8 @@ dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, pid_t pid)
       e->string           = dmn_lnx_read_string(arena, process->fd, auxv.execfn);
       e->elf_phdr_vrange  = r1u64(auxv.phdr, auxv.phdr + auxv.phent * auxv.phnum);
       e->elf_phdr_entsize = auxv.phent;
+      e->tls_index        = 1;
+      e->tls_offset       = 0;
     }
   }
 
@@ -1644,30 +1667,6 @@ dmn_lnx_handle_exit_process(Arena *arena, DMN_EventList *events, pid_t pid)
 }
 
 internal void
-dmn_lnx_handle_create_thread(Arena *arena, DMN_EventList *events, pid_t tid, pid_t new_tid)
-{
-  DMN_LNX_Entity *thread  = dmn_lnx_thread_from_pid(tid);
-  DMN_LNX_Entity *process = thread->parent;
-
-  DMN_LNX_Entity *new_thread = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Thread);
-  new_thread->id                 = new_tid;
-  new_thread->arch               = process->arch;
-  new_thread->reg_block          = push_array(process->arena, U8, regs_block_size_from_arch(process->arch));
-  new_thread->thread_state       = DMN_LNX_ThreadState_Stopped;
-  new_thread->is_reg_block_dirty = !dmn_lnx_thread_read_reg_block(new_thread);
-  hash_table_push_u64_raw(dmn_lnx_state->arena, dmn_lnx_state->tid_ht, new_thread->id, new_thread);
-
-  DMN_Event *e = dmn_event_list_push(arena, events);
-  e->kind    = DMN_EventKind_CreateThread;
-  e->process = dmn_lnx_handle_from_entity(process);
-  e->thread  = dmn_lnx_handle_from_entity(new_thread);
-  e->arch    = new_thread->arch;
-  e->code    = new_thread->id;
-
-  process->thread_count += 1;
-}
-
-internal void
 dmn_lnx_handle_exit_thread(Arena *arena, DMN_EventList *events, pid_t tid, U64 exit_code)
 {
   DMN_LNX_Entity *thread  = dmn_lnx_thread_from_pid(tid);
@@ -1716,14 +1715,27 @@ dmn_lnx_handle_load_module(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *
     DMN_LNX_PhdrInfo module_phdr_info  = dmn_lnx_phdr_info_from_memory(process->fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
     String8          module_name       = dmn_lnx_read_string(process->arena, process->fd, map.name_vaddr);
 
-    // fill out module
-    module             = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Module);
-    module->id         = map.name_vaddr;
-    module->base_vaddr = map.addr_vaddr;
+    // read TLS index and TLS offset
+    U64 tls_index  = max_U64;
+    U64 tls_offset = max_U64;
+    if(dmn_lnx_state->is_tls_detected)
+    {
+      Rng1U64 tls_modid_range  = r1u64(dmn_lnx_state->tls_modid_desc.offset, dmn_lnx_state->tls_modid_desc.offset + dmn_lnx_state->tls_modid_desc.bit_size / 8);
+      Rng1U64 tls_offset_range = r1u64(dmn_lnx_state->tls_offset_desc.offset, dmn_lnx_state->tls_offset_desc.offset + dmn_lnx_state->tls_offset_desc.bit_size / 8);
+      tls_modid_range  = shift_1u64(tls_modid_range, map_vaddr);
+      tls_offset_range = shift_1u64(tls_offset_range, map_vaddr);
+      if(!dmn_lnx_read(process->fd, tls_modid_range, &tls_index))   { Assert(0 && "failed to read TLS index");  }
+      if(!dmn_lnx_read(process->fd, tls_offset_range, &tls_offset)) { Assert(0 && "failed to read TLS offset"); }
+    }
 
-    // push load event
+    // fill out module
+    module                 = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Module);
+    module->id             = map.name_vaddr;
+    module->base_vaddr     = map.addr_vaddr;
+
     if(!str8_match(module_name, str8_lit("linux-vdso.so.1"), 0))
     {
+      // push load event
       DMN_Event *e = dmn_event_list_push(arena, events);
       e->kind             = DMN_EventKind_LoadModule;
       e->process          = dmn_lnx_handle_from_entity(process);
@@ -1734,6 +1746,8 @@ dmn_lnx_handle_load_module(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *
       e->string           = module_name;
       e->elf_phdr_vrange  = r1u64(module_phdr_vaddr, module_phdr_vaddr + module_ehdr.e_phentsize * module_ehdr.e_phnum);
       e->elf_phdr_entsize = module_ehdr.e_phentsize;
+      e->tls_index        = tls_index;
+      e->tls_offset       = tls_offset;
     }
 
     // create mapping for base -> module
@@ -2007,19 +2021,40 @@ internal void
 dmn_init(void)
 {
   local_persist B32 was_inited;
-  local_persist DMN_LNX_State state;
-  AssertAlways(!was_inited);
-  was_inited = 1;
+  if(!was_inited)
+  {
+    was_inited = 1;
 
-  dmn_lnx_state = &state;
-  dmn_lnx_state->arena          = arena_alloc();
-  dmn_lnx_state->access_mutex   = mutex_alloc();
-  dmn_lnx_state->entities_arena = arena_alloc(.reserve_size = GB(32), .commit_size = KB(64), .flags = ArenaFlag_NoChain);
-  dmn_lnx_state->entities_base  = push_array(dmn_lnx_state->entities_arena, DMN_LNX_Entity, 0);
-  dmn_lnx_state->tid_ht         = hash_table_init(dmn_lnx_state->arena, 0x2000);
-  dmn_lnx_state->pid_ht         = hash_table_init(dmn_lnx_state->arena, 0x400);
-  dmn_lnx_state->halter_mutex   = mutex_alloc();
-  dmn_lnx_entity_alloc(dmn_lnx_nil_entity, DMN_LNX_EntityKind_Root);
+    local_persist DMN_LNX_State state;
+    dmn_lnx_state = &state;
+
+    dmn_lnx_state->arena          = arena_alloc();
+    dmn_lnx_state->access_mutex   = mutex_alloc();
+    dmn_lnx_state->entities_arena = arena_alloc(.reserve_size = GB(32), .commit_size = KB(64), .flags = ArenaFlag_NoChain);
+    dmn_lnx_state->entities_base  = push_array(dmn_lnx_state->entities_arena, DMN_LNX_Entity, 0);
+    dmn_lnx_state->tid_ht         = hash_table_init(dmn_lnx_state->arena, 0x2000);
+    dmn_lnx_state->pid_ht         = hash_table_init(dmn_lnx_state->arena, 0x400);
+    dmn_lnx_state->halter_mutex   = mutex_alloc();
+    dmn_lnx_entity_alloc(dmn_lnx_nil_entity, DMN_LNX_EntityKind_Root);
+
+    // find offsets of TLS index and TLS offset in the link_map struct
+    // 
+    // TODO: assuming that target is using same libc version as debugger
+    {
+      DMN_LNX_DbDesc *tls_modid_desc  = dlsym(RTLD_DEFAULT, "_thread_db_link_map_l_tls_modid");
+      DMN_LNX_DbDesc *tls_offset_desc = dlsym(RTLD_DEFAULT, "_thread_db_link_map_l_tls_offset");
+      if(tls_modid_desc && tls_offset_desc)
+      {
+        if(tls_modid_desc->bit_size <= 64 && tls_offset_desc->bit_size <= 64)
+        {
+          dmn_lnx_state->tls_modid_desc  = *tls_modid_desc;
+          dmn_lnx_state->tls_offset_desc = *tls_offset_desc;
+          dmn_lnx_state->is_tls_detected = 1;
+        }
+        else { Assert(0 && "invalid TLS desc"); }
+      }
+    }
+  }
 }
 
 ////////////////////////////////
@@ -2518,7 +2553,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               pid_t new_pid;
               if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &new_pid)) >= 0)
               {
-                dmn_lnx_handle_create_thread(arena, &events, wait_id, new_pid);
+                dmn_lnx_handle_create_thread(arena, &events, dmn_lnx_thread_from_pid(wait_id), new_pid);
               }
               else { Assert(0 && "failed to get new tid"); }
             }break;
@@ -2742,7 +2777,33 @@ dmn_stack_base_vaddr_from_thread(DMN_Handle handle)
 internal U64
 dmn_tls_root_vaddr_from_thread(DMN_Handle handle)
 {
-  return 0;
+  U64 tls_root_vaddr = max_U64;
+  DMN_AccessScope
+  {
+    DMN_LNX_Entity *thread = dmn_lnx_entity_from_handle(handle);
+    switch (thread->arch)
+    {
+      case Arch_Null: {} break;
+      case Arch_x64:
+      {
+        DMN_LNX_Entity   *process   = thread->parent;
+        REGS_RegBlockX64 *reg_block = thread->reg_block;
+        U64 dtv_pointer = 0;
+        if(dmn_lnx_read_struct(process->fd, reg_block->fsbase.u64 + 8, &dtv_pointer))
+        {
+          tls_root_vaddr = dtv_pointer;
+        }
+      } break;
+      case Arch_x86:
+      case Arch_arm32:
+      case Arch_arm64:
+      {
+        NotImplemented;
+      } break;
+      default: { InvalidPath; } break;
+    }
+  }
+  return tls_root_vaddr;
 }
 
 internal B32

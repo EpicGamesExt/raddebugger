@@ -62,6 +62,15 @@ struct DMN_LNX_UserX64
 StaticAssert(sizeof(DMN_LNX_UserX64) == 912, g_dmn_lnx_user_x64_size_check);
 
 ////////////////////////////////
+
+typedef struct
+{
+  U32 bit_size;
+  U32 count;
+  U32 offset;
+} DMN_LNX_DbDesc;
+
+////////////////////////////////
 //~ SDT Probes
 
 typedef struct DMN_LNX_Probe DMN_LNX_Probe;
@@ -211,6 +220,7 @@ struct DMN_LNX_Entity
   B32                  pass_through_signal;
   U64                  pass_through_signo;
   DMN_LNX_ThreadState  thread_state;
+  U64                  thread_local_base;
 
   // module
   U64 base_vaddr;
@@ -292,6 +302,11 @@ struct DMN_LNX_State
   U64   halt_code;
   U64   halt_user_data;
   B32   is_halting;
+
+  // TLS
+  B32            is_tls_detected;
+  DMN_LNX_DbDesc tls_modid_desc;
+  DMN_LNX_DbDesc tls_offset_desc;
 };
 
 ////////////////////////////////

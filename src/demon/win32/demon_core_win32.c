@@ -465,7 +465,7 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
   U32 pe_offset = 0;
   {
     U64 dos_magic_off = base_vaddr;
-    U16 dos_magic = 0;
+    U16 dos_magic     = 0;
     dmn_w32_process_read_struct(process, dos_magic_off, &dos_magic);
     if(dos_magic == PE_DOS_MAGIC)
     {
@@ -475,56 +475,107 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
   }
   
   // rjf: get COFF header
-  B32 got_coff_header = 0;
-  U64 coff_header_off = 0;
-  COFF_FileHeader coff_header = {0};
+  B32             got_coff_header = 0;
+  U64             coff_header_off = 0;
+  COFF_FileHeader coff_header     = {0};
   if(pe_offset > 0)
   {
     U64 pe_magic_off = base_vaddr + pe_offset;
-    U32 pe_magic = 0;
+    U32 pe_magic     = 0;
     dmn_w32_process_read_struct(process, pe_magic_off, &pe_magic);
     if(pe_magic == PE_MAGIC)
     {
       coff_header_off = pe_magic_off + sizeof(pe_magic);
-      if(dmn_w32_process_read_struct(process, coff_header_off, &coff_header))
-      {
-        got_coff_header = 1;
-      }
+      got_coff_header = dmn_w32_process_read_struct(process, coff_header_off, &coff_header);
     }
   }
   
-  // rjf: get arch and size
   DMN_W32_ImageInfo result = zero_struct;
   if(got_coff_header)
   {
-    U64 optional_size_off = 0;
-    Arch arch = Arch_Null;
-    switch(coff_header.machine)
+    U64 optional_off = coff_header_off + sizeof(COFF_FileHeader);
+
+    Arch arch           = arch_from_coff_machine(coff_header.machine);
+    U64  image_size     = 0;
+    U64  data_dir_count = 0;
+    U64  data_dir_off   = max_U64;
+    U64  tls_index      = max_U64;
+
+    // parse optional header
+    if(pe_has_plus_header(coff_header.machine))
     {
-      case COFF_MachineType_X86:
+      PE_OptionalHeader32Plus opt_header = {0};
+      if(dmn_w32_process_read_struct(process, optional_off, &opt_header))
       {
-        arch = Arch_x86;
-        optional_size_off = OffsetOf(PE_OptionalHeader32, sizeof_image);
-      }break;
-      case COFF_MachineType_X64:
-      {
-        arch = Arch_x64;
-        optional_size_off = OffsetOf(PE_OptionalHeader32Plus, sizeof_image);
-      }break;
-      default:
-      {}break;
-    }
-    if(arch != Arch_Null)
-    {
-      U64 optional_off = coff_header_off + sizeof(coff_header);
-      U32 size = 0;
-      if(dmn_w32_process_read_struct(process, optional_off+optional_size_off, &size) >= sizeof(size))
-      {
-        result.arch = arch;
-        result.size = size;
+        image_size     = opt_header.sizeof_image;
+        data_dir_count = opt_header.data_dir_count;
+        data_dir_off   = optional_off + sizeof(opt_header);
       }
+      else { Assert(0 && "failed to read optional header"); }
     }
+    else
+    {
+      PE_OptionalHeader32 opt_header = {0};
+      if(dmn_w32_process_read_struct(process, optional_off, &opt_header))
+      {
+        image_size     = opt_header.sizeof_image;
+        data_dir_count = opt_header.data_dir_count;
+        data_dir_off   = optional_off + sizeof(opt_header);
+      }
+      else { Assert(0 && "failed to read optional header"); }
+    }
+
+    // extract TLS index
+    if(PE_DataDirectoryIndex_TLS < data_dir_count)
+    {
+      U64              tls_dir_vaddr = data_dir_off + PE_DataDirectoryIndex_TLS * sizeof(PE_DataDirectory);
+      PE_DataDirectory tls_dir       = {0};
+      if(dmn_w32_process_read_struct(process, tls_dir_vaddr, &tls_dir))
+      {
+        if(pe_has_plus_header(coff_header.machine))
+        {
+          if(tls_dir.virt_size == sizeof(PE_TLSHeader64))
+          {
+            PE_TLSHeader64 tls_header = {0};
+            if(dmn_w32_process_read_struct(process, base_vaddr + tls_dir.virt_off, &tls_header))
+            {
+              U64 tls_index64 = 0;
+              if(dmn_w32_process_read_struct(process, tls_header.index_address, &tls_index64))
+              {
+                tls_index = tls_index64;
+              }
+              else { Assert(0 && "failed to read TLS Index 64"); }
+            }
+            else { Assert(0 && "failed to read TLS Header 64"); }
+          }
+        }
+        else
+        {
+          if(tls_dir.virt_size == sizeof(PE_TLSHeader32))
+          {
+            PE_TLSHeader32 tls_header = {0};
+            if(dmn_w32_process_read_struct(process, base_vaddr + tls_dir.virt_off, &tls_header))
+            {
+              U32 tls_index32 = 0;
+              if(dmn_w32_process_read_struct(process, tls_header.index_address, &tls_index32))
+              {
+                tls_index = tls_index32;
+              }
+              else { Assert(0 && "failed to read TLS Index 32"); }
+            }
+            else { Assert(0 && "failed to read TLS Header32"); }
+          }
+        }
+      }
+      else { Assert(0 && "failed to read TLS directory"); }
+    }
+
+    // fill out result
+    result.arch      = arch;
+    result.size      = image_size;
+    result.tls_index = tls_index;
   }
+  else { Assert(0 && "failed to find COFF file header"); }
   
   return result;
 }
@@ -2003,10 +2054,11 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 // rjf: create process
                 {
                   DMN_Event *e = dmn_event_list_push(arena, &events);
-                  e->kind    = DMN_EventKind_CreateProcess;
-                  e->process = dmn_w32_handle_from_entity(process);
-                  e->arch    = image_info.arch;
-                  e->code    = evt.dwProcessId;
+                  e->kind      = DMN_EventKind_CreateProcess;
+                  e->process   = dmn_w32_handle_from_entity(process);
+                  e->arch      = image_info.arch;
+                  e->code      = evt.dwProcessId;
+                  e->tls_model = DMN_TlsModel_WinodwsNt;
                 }
                 
                 // rjf: create thread
@@ -2022,13 +2074,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 // rjf: load module
                 {
                   DMN_Event *e = dmn_event_list_push(arena, &events);
-                  e->kind    = DMN_EventKind_LoadModule;
-                  e->process = dmn_w32_handle_from_entity(process);
-                  e->module  = dmn_w32_handle_from_entity(module);
-                  e->arch    = image_info.arch;
-                  e->address = module_base;
-                  e->size    = image_info.size;
-                  e->string  = dmn_w32_full_path_from_module(arena, module);
+                  e->kind      = DMN_EventKind_LoadModule;
+                  e->process   = dmn_w32_handle_from_entity(process);
+                  e->module    = dmn_w32_handle_from_entity(module);
+                  e->arch      = image_info.arch;
+                  e->address   = module_base;
+                  e->size      = image_info.size;
+                  e->string    = dmn_w32_full_path_from_module(arena, module);
+                  e->tls_index = image_info.tls_index;
                 }
               }
             }break;
@@ -2195,13 +2248,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               // rjf: generate event
               {
                 DMN_Event *e = dmn_event_list_push(arena, &events);
-                e->kind = DMN_EventKind_LoadModule;
-                e->process = dmn_w32_handle_from_entity(process);
-                e->module  = dmn_w32_handle_from_entity(module);
-                e->arch    = module->arch;
-                e->address = module_base;
-                e->size    = image_info.size;
-                e->string  = dmn_w32_full_path_from_module(arena, module);
+                e->kind      = DMN_EventKind_LoadModule;
+                e->process   = dmn_w32_handle_from_entity(process);
+                e->module    = dmn_w32_handle_from_entity(module);
+                e->arch      = module->arch;
+                e->address   = module_base;
+                e->size      = image_info.size;
+                e->string    = dmn_w32_full_path_from_module(arena, module);
+                e->tls_index = image_info.tls_index;
               }
             }break;
             

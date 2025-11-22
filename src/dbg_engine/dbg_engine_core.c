@@ -984,80 +984,68 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
 {
   ProfBeginFunction();
   U64 base_vaddr = 0;
-  Temp scratch = scratch_begin(0, 0);
   if(!d_ctrl_targets_running())
   {
+    Temp scratch = scratch_begin(0, 0);
+
     //- rjf: unpack module info
-    CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-    Rng1U64 tls_vaddr_range = ctrl_tls_vaddr_range_from_module(module->handle);
-    U64 addr_size = bit_size_from_arch(process->arch)/8;
-    
-    //- rjf: read module's TLS index
-    U64 tls_index = 0;
-    if(addr_size != 0)
+    CTRL_Entity *module     = ctrl_module_from_process_vaddr(process, rip_vaddr);
+    U64          addr_size  = byte_size_from_arch(process->arch);
+
+    switch(process->tls_model)
     {
-      CTRL_ProcessMemorySlice tls_index_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, tls_vaddr_range, 0, 0);
-      if(tls_index_slice.data.size >= addr_size)
+      case CTRL_TlsModel_Null: {}break;
+      case CTRL_TlsModel_WinodwsNt:
       {
-        tls_index = *(U64 *)tls_index_slice.data.str;
-      }
-    }
-    
-    //- rjf: PE path
-    if(addr_size != 0)
-    {
-      U64 thread_info_addr = root_vaddr;
-      U64 tls_addr_off = tls_index*addr_size;
-      U64 tls_addr_array = 0;
-      CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0, 0);
-      String8 tls_addr_array_data = tls_addr_array_slice.data;
-      if(tls_addr_array_data.size >= 8)
-      {
-        MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
-      }
-      CTRL_ProcessMemorySlice result_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0, 0);
-      String8 result_data = result_slice.data;
-      if(result_data.size >= 8)
-      {
-        MemoryCopy(&base_vaddr, result_data.str, sizeof(U64));
-      }
-    }
-    
-    //- rjf: non-PE path (not implemented)
-#if 0
-    if(!bin_is_pe)
-    {
-      // TODO(rjf): not supported. old code from the prototype that Nick had sketched out:
-      // TODO(nick): This code works only if the linked c runtime library is glibc.
-      // Implement CRT detection here.
-      
-      U64 dtv_addr = UINT64_MAX;
-      demon_read_memory(process->demon_handle, &dtv_addr, thread_info_addr, addr_size);
-      
-      /*
-        union delta_thread_vector
+        // read thread local base pointer out of TEB
+        U64 thread_local_base = root_vaddr;
+        U64 tls_addr_array    = 0;
+        CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(thread_local_base, thread_local_base + addr_size), 0, 0);
+        String8                 tls_array_vaddr_data = tls_addr_array_slice.data;
+        if(tls_array_vaddr_data.size == addr_size)
         {
-          size_t counter;
-          struct
+          U64 tls_array_vaddr = 0;
+          MemoryCopyStr8(&tls_array_vaddr, tls_array_vaddr_data);
+
+          // read thread local storage pointer (array of TLS pointers, one per module)
+          U64 tls_ptr_vaddr = tls_array_vaddr + module->tls_index * addr_size;
+          CTRL_ProcessMemorySlice result_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(tls_ptr_vaddr, tls_ptr_vaddr + addr_size), 0, 0);
+          String8                 result_data  = result_slice.data;
+          if(result_data.size == addr_size)
           {
-            void *value;
-            void *to_free;
-          } pointer;
-        };
-      */
-      
-      U64 dtv_size = 16;
-      U64 dtv_count = 0;
-      demon_read_memory(process->demon_handle, &dtv_count, dtv_addr - dtv_size, addr_size);
-      
-      if (tls_index > 0 && tls_index < dtv_count)
+            MemoryCopyStr8(&base_vaddr, result_data);
+          }
+        }
+      }break;
+      case CTRL_TlsModel_Gnu:
       {
-        demon_read_memory(process->demon_handle, &result, dtv_addr + dtv_size*tls_index, addr_size);
-      }
+        if(module->tls_index > 0) // zero is reserved for the generation counter
+        {
+          // read dynamic thread vector pointer (one per dynamic module)
+          U64 dtv_base          = root_vaddr;
+          U64 dtv_size          = addr_size * 2; // union dtv { size_t counter; struct dtv_pointer { void *val, *to_free; }; };
+          U64 dtv_pointer_vaddr = dtv_base + module->tls_index * dtv_size;
+          CTRL_ProcessMemorySlice dtv_pointer_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(dtv_pointer_vaddr, dtv_pointer_vaddr + dtv_size), 0, 0);
+          String8                 dtv_pointer_data  = dtv_pointer_slice.data;
+          if(dtv_pointer_data.size == dtv_size)
+          {
+            U64 dtv_pointer = 0;
+            MemoryCopyStr8(&dtv_pointer, dtv_pointer_data);
+
+            // verify that TLS block was allocated
+            U64 tls_dtv_unallocated = addr_size == 4 ? max_U32 : max_U64;
+            if(dtv_pointer != tls_dtv_unallocated)
+            {
+              base_vaddr = dtv_pointer + module->tls_offset; // add tls_offset because DT_NEEDED modules share TLS block with the main exe
+            }
+          }
+        }
+      }break;
+      default: {InvalidPath;}break;
     }
-#endif
+
+    scratch_end(scratch);
   }
-  scratch_end(scratch);
   ProfEnd();
   return base_vaddr;
 }
