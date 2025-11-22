@@ -2479,6 +2479,10 @@ d2r_convert_symbols(Arena         *arena,
           // NOTE: due to a bug in clang in stb_sprint.h local variables
           // are declared in global scope without a name
           if (name.size == 0) { break; }
+
+          // decls do not have location info
+          B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
+          if (is_decl) { break; }
           
           U64 voff          = max_U64;
           B32 is_thread_var = 0;
