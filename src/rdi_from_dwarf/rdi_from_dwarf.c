@@ -1264,10 +1264,6 @@ d2r_bytecode_from_expression(Arena       *arena,
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_FrameOff, 0);
         d2r_value_type_stack_push(scratch.arena, stack, D2R_ValueType_Address);
       } break;
-      case DW_ExprOp_FormTlsAddress: {
-        // TODO:
-        AssertAlways(!"RDI_EvalOp_TLSOff accepts immediate");
-      } break;
       case DW_ExprOp_PushObjectAddress: {
         AssertAlways(!"sample");
       } break;
@@ -1359,6 +1355,7 @@ d2r_bytecode_from_expression(Arena       *arena,
           stack->top->type = d2r_unsigned_value_type_from_bit_size(address_size * 8);
         }
       } break;
+      case DW_ExprOp_FormTlsAddress:
       case DW_ExprOp_GNU_PushTlsAddress: {
         D2R_ValueType lhs = d2r_value_type_stack_pop(stack);
         if (!D2R_ValueType_IsInt(lhs)) {
