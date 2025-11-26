@@ -26,10 +26,10 @@ e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rdi, U64 ip_voff
           RDI_LocationKind loc_kind = *(RDI_LocationKind *)(all_location_data + block->location_data_off);
           if(loc_kind == RDI_LocationKind_ValBytecodeStream || loc_kind == RDI_LocationKind_AddrBytecodeStream)
           {
-            U8      *bytecode_ptr  = all_location_data + block->location_data_off + sizeof(RDI_LocationKind);
+            U8      *bytecode_ptr  = all_location_data + block->location_data_off;
             U8      *bytecode_opl  = all_location_data + all_location_data_size;
             U64      bytecode_size = rdi_size_from_bytecode_stream(bytecode_ptr, bytecode_opl);
-            String8  bytecode      = str8(bytecode_ptr, bytecode_size);
+            String8  bytecode      = str8(bytecode_ptr + sizeof(RDI_LocationKind), bytecode_size);
             frame_base = e_interpret(bytecode);
           }
           else if(loc_kind != RDI_LocationKind_NULL)
@@ -959,6 +959,11 @@ e_interpret(String8 bytecode)
       {
         // TODO: add support for pushing multiple values onto the stack
         NotImplemented;
+      }break;
+
+      case RDI_EvalOp_PushCfa:
+      {
+        nval.u64 = e_interpret_ctx->cfa;
       }break;
     }
     

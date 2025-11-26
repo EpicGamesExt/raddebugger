@@ -1139,6 +1139,20 @@ d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count)
 }
 
 internal U64
+d_query_cached_cfa_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count)
+{
+  U64 cfa = 0;
+  Access *access = access_open();
+  CTRL_CallStack callstack = ctrl_call_stack_from_thread(access, thread->handle, 1, 0);
+  if(callstack.concrete_frames_count != 0)
+  {
+    cfa = callstack.concrete_frames[unwind_count%callstack.concrete_frames_count]->cfa;
+  }
+  access_close(access);
+  return cfa;
+}
+
+internal U64
 d_query_cached_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr)
 {
   U64 result = 0;

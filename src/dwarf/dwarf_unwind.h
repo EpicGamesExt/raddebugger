@@ -89,7 +89,7 @@ internal DW_CFI_Unwind * dw_cfi_unwind_init(Arena *arena, Arch arch, DW_CIE *cie
 internal B32             dw_cfi_next_row(Arena *arena, DW_CFI_Unwind *uw);
 
 internal DW_CFI_Row *    dw_cfi_row_from_pc(Arena *arena, Arch arch, struct DW_CIE *cie, struct DW_FDE *fde, DW_DecodePtr *decode_ptr_func, void *decode_ptr_ctx, U64 pc);
-internal DW_UnwindStatus dw_cfi_apply_register_rules(Arch arch, DW_CIE *cie, DW_CFI_Row *row, DW_MemRead *mem_read_func, void *mem_read_ud, DW_RegRead *reg_read_func,  void *reg_read_ud, DW_RegWrite *reg_write_func, void *reg_write_ud);
+internal DW_UnwindStatus dw_cfi_apply_register_rules(Arch arch, U64 cfa, DW_CFI_Row *row, DW_MemRead *mem_read_func, void *mem_read_ud, DW_RegRead *reg_read_func,  void *reg_read_ud, DW_RegWrite *reg_write_func, void *reg_write_ud);
 
 #endif // DWARF_UNWIND_H
 

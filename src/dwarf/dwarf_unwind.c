@@ -237,18 +237,14 @@ dw_cfi_row_from_pc(Arena *arena, Arch arch, DW_CIE *cie, DW_FDE *fde, DW_DecodeP
 }
 
 internal DW_UnwindStatus
-dw_cfi_apply_register_rules(Arch         arch,
-                            DW_CIE      *cie,
-                            DW_CFI_Row  *row,
-                            DW_MemRead  *mem_read_func,  void *mem_read_ud,
-                            DW_RegRead  *reg_read_func,  void *reg_read_ud,
-                            DW_RegWrite *reg_write_func, void *reg_write_ud)
+dw_compute_cfa(Arch arch,
+               DW_CFI_Row *row,
+               DW_MemRead  *mem_read_func,  void *mem_read_ud,
+               DW_RegRead  *reg_read_func,  void *reg_read_ud,
+               U64 *cfa_out)
 {
-  Temp scratch = scratch_begin(0,0);
-  DW_UnwindStatus unwind_status = DW_UnwindStatus_Ok;
+  DW_UnwindStatus unwind_status = DW_UnwindStatus_Fail;
 
-  // establish CFA
-  U64 cfa = 0;
   switch (row->cfa.rule) {
   case DW_CFA_Rule_Null: break;
   case DW_CFA_Rule_RegOff: {
@@ -257,13 +253,28 @@ dw_cfi_apply_register_rules(Arch         arch,
     U64 reg_size = dw_reg_size_from_code(arch, row->cfa.reg);
     AssertAlways(reg_size <= sizeof(cfa_reg_value));
     unwind_status = reg_read_func(row->cfa.reg, &cfa_reg_value, reg_size, reg_read_ud);
-    if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
-    cfa = cfa_reg_value + row->cfa.off;
+    if (unwind_status != DW_UnwindStatus_Ok) { break; }
+    *cfa_out = cfa_reg_value + row->cfa.off;
   } break;
   case DW_CFA_Rule_Expression: {
     // TODO: evaluate expression
+    NotImplemented;
   } break;
   }
+
+  return unwind_status;
+}
+
+internal DW_UnwindStatus
+dw_cfi_apply_register_rules(Arch         arch,
+                            U64          cfa,
+                            DW_CFI_Row  *row,
+                            DW_MemRead  *mem_read_func,  void *mem_read_ud,
+                            DW_RegRead  *reg_read_func,  void *reg_read_ud,
+                            DW_RegWrite *reg_write_func, void *reg_write_ud)
+{
+  Temp scratch = scratch_begin(0,0);
+  DW_UnwindStatus unwind_status = DW_UnwindStatus_Ok;
 
   U64   max_reg_size = dw_reg_max_size_from_arch(arch);
   void *reg_buffer   = push_array(scratch.arena, U8, max_reg_size);

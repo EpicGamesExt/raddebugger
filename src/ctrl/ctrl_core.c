@@ -1838,7 +1838,7 @@ DW_MEM_READ(ctrl_unwind_mem_read_dwarf_x64)
   B32 is_read  = ctrl_process_memory_read(ctx->process_handle, r1u64(addr, addr + size), &is_stale, buffer, ctx->endt_us);
   
   DW_UnwindStatus status = DW_UnwindStatus_Fail;
-  if(is_stale && is_read)
+  if(is_stale)
   {
     status = DW_UnwindStatus_Maybe;
   }
@@ -1903,12 +1903,35 @@ DW_REG_WRITE(ctrl_unwind_reg_write_dwarf_x64)
 }
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us)
+ctrl_unwind_step_result_from_dwarf_status(DW_UnwindStatus s)
 {
-  Temp scratch = scratch_begin(0, 0);
-  
+  CTRL_UnwindStepResult result = {0};
+  switch(s)
+  {
+    case DW_UnwindStatus_Ok:
+    {
+      result.flags &= ~(CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale);
+    }break;
+    case DW_UnwindStatus_Fail:
+    {
+      result.flags |= CTRL_UnwindFlag_Error;
+    }break;
+    case DW_UnwindStatus_Maybe:
+    {
+      result.flags &= ~CTRL_UnwindFlag_Error;
+      result.flags |= CTRL_UnwindFlag_Stale;
+    }break;
+    default: { InvalidPath; } break;
+  }
+  return result;
+}
+
+internal CTRL_UnwindStepResult
+ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us, CTRL_FrameUnwindContext *ctx_out)
+{
+  Temp scratch = scratch_begin(&arena, 1);
   CTRL_UnwindStepResult result = { .flags = CTRL_UnwindFlag_Error };
-  
+
   // gather context for virtual stack unwinder
   U64         cfi_rebase   = 0;
   B32         is_unwind_eh = 0;
@@ -1944,9 +1967,9 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
   if(fde_addr != max_U64)
   {
     // parse call frame info
-    DW_CIE cie = {0};
-    DW_FDE fde = {0};
-    B32 is_cfi_parsed = 0;
+    DW_CIE cie           = {0};
+    DW_FDE fde           = {0};
+    B32    is_cfi_parsed = 0;
     if(is_unwind_eh)
     {
       B32 is_stale = 0;
@@ -2051,16 +2074,14 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
       }
       
       // find register rules for IP
-      DW_CFI_Row *cfi_row = dw_cfi_row_from_pc(scratch.arena, arch, &cie, &fde, decode_ptr_func, decode_ptr_ctx, ip);
+      DW_CFI_Row *cfi_row = dw_cfi_row_from_pc(arena, arch, &cie, &fde, decode_ptr_func, decode_ptr_ctx, ip);
       if(cfi_row)
       {
         // setup machine ops
         void *mem_read_ctx  = 0;
         void *reg_read_ctx  = 0;
-        void *reg_write_ctx = 0;
         DW_MemRead  *mem_read_func  = 0;
         DW_RegRead  *reg_read_func  = 0;
-        DW_RegWrite *reg_write_func = 0;
         switch(arch)
         {
           case Arch_Null: break;
@@ -2072,11 +2093,9 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
             
             mem_read_ctx   = mem_read_ctx_x64;
             reg_read_ctx   = regs;
-            reg_write_ctx  = regs;
             
             mem_read_func  = ctrl_unwind_mem_read_dwarf_x64;
             reg_read_func  = ctrl_unwind_reg_read_dwarf_x64;
-            reg_write_func = ctrl_unwind_reg_write_dwarf_x64;
           }break;
           case Arch_x86:
           case Arch_arm64:
@@ -2084,51 +2103,90 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, A
           {
             NotImplemented;
           }break;
-          default: { InvalidPath; } break;
+          default: { InvalidPath; }break;
         }
-        
-        // apply register rules to the context
-        DW_UnwindStatus cfi_uw_status = dw_cfi_apply_register_rules(arch,
-                                                                    &cie,
-                                                                    cfi_row,
-                                                                    mem_read_func,
-                                                                    mem_read_ctx,
-                                                                    reg_read_func,
-                                                                    reg_read_ctx,
-                                                                    reg_write_func,
-                                                                    reg_write_ctx);
-        
-        // last frame typically has undefined rule for IP
-        if(cfi_row->regs[cie.ret_addr_reg].rule == DW_CFI_RegisterRule_Undefined)
+
+        // compute CFA for the row
+        U64 cfa = 0;
+        DW_UnwindStatus unwind_status = dw_compute_cfa(arch, cfi_row, mem_read_func, mem_read_ctx, reg_read_func, reg_read_ctx, &cfa);
+
+        // on success fill out output
+        if(unwind_status == DW_UnwindStatus_Ok)
         {
-          regs_arch_block_write_rip(arch, regs, 0);
+          ctx_out->cfa          = cfa;
+          ctx_out->cfi_row      = cfi_row;
+          ctx_out->ret_addr_reg = cie.ret_addr_reg;
         }
-        
-        // translate unwind status code to control layer's result flags
-        switch(cfi_uw_status)
-        {
-          case DW_UnwindStatus_Ok:
-          {
-            result.flags &= ~(CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale);
-          }break;
-          case DW_UnwindStatus_Fail:
-          {
-            result.flags |= CTRL_UnwindFlag_Error;
-          }break;
-          case DW_UnwindStatus_Maybe:
-          {
-            result.flags &= ~CTRL_UnwindFlag_Error;
-            result.flags |= CTRL_UnwindFlag_Stale;
-          }break;
-          default: { InvalidPath; } break;
-        }
+
+        // translate unwind status code
+        result = ctrl_unwind_step_result_from_dwarf_status(unwind_status);
       }
     }
   }
-  else
+
+  scratch_end(scratch);
+  return result;
+}
+
+internal CTRL_UnwindStepResult
+ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, CTRL_FrameUnwindContext *frame_ctx, U64 endt_us)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  CTRL_UnwindStepResult result = { .flags = CTRL_UnwindFlag_Error };
+  
+  // setup machine ops
+  void *mem_read_ctx  = 0;
+  void *reg_read_ctx  = 0;
+  void *reg_write_ctx = 0;
+  DW_MemRead  *mem_read_func  = 0;
+  DW_RegRead  *reg_read_func  = 0;
+  DW_RegWrite *reg_write_func = 0;
+  switch(arch)
   {
-    // TODO: if IP does not have FDE, does this mean function is a leaf?
+    case Arch_Null: break;
+    case Arch_x64:
+    {
+      CTRL_MemoryReadContextDwarfX64 *mem_read_ctx_x64 = push_array(scratch.arena, CTRL_MemoryReadContextDwarfX64, 1);
+      mem_read_ctx_x64->process_handle = process_handle;
+      mem_read_ctx_x64->endt_us        = endt_us;
+      
+      mem_read_ctx   = mem_read_ctx_x64;
+      reg_read_ctx   = regs;
+      reg_write_ctx  = regs;
+      
+      mem_read_func  = ctrl_unwind_mem_read_dwarf_x64;
+      reg_read_func  = ctrl_unwind_reg_read_dwarf_x64;
+      reg_write_func = ctrl_unwind_reg_write_dwarf_x64;
+    }break;
+    case Arch_x86:
+    case Arch_arm64:
+    case Arch_arm32:
+    {
+      NotImplemented;
+    }break;
+    default: { InvalidPath; }break;
   }
+
+  // apply register rules to the context
+  DW_UnwindStatus unwind_status = dw_cfi_apply_register_rules(arch,
+                                                              frame_ctx->cfa,
+                                                              frame_ctx->cfi_row,
+                                                              mem_read_func,
+                                                              mem_read_ctx,
+                                                              reg_read_func,
+                                                              reg_read_ctx,
+                                                              reg_write_func,
+                                                              reg_write_ctx);
+
+  // last frame typically has undefined rule for IP
+  if(frame_ctx->cfi_row->regs[frame_ctx->ret_addr_reg].rule == DW_CFI_RegisterRule_Undefined)
+  {
+    regs_arch_block_write_rip(arch, regs, 0);
+  }
+  
+  // translate unwind status code
+  result = ctrl_unwind_step_result_from_dwarf_status(unwind_status);
   
   scratch_end(scratch);
   return result;
@@ -2977,23 +3035,41 @@ ctrl_unwind_step__pe_x64(CTRL_Handle process_handle, CTRL_Handle module_handle, 
 //- rjf: abstracted unwind step
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr, Arch arch, void *reg_block, U64 endt_us)
+ctrl_establish_frame_unwind_context(Arena *arena, CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us, CTRL_FrameUnwindContext *ctx_out)
 {
   CTRL_UnwindStepResult result = {0};
-  
-  result = ctrl_unwind_step__dwarf(process, module, arch, reg_block, endt_us);
-  
-  if(result.flags == CTRL_UnwindFlag_Error && ~result.flags & CTRL_UnwindFlag_Stale)
+#if OS_LINUX
+  result = ctrl_establish_frame_unwind_context__dwarf(arena, process_handle, module_handle, arch, regs, endt_us, ctx_out);
+#elif OS_WINDOWS
+  // windows does not have a concept of frame context
+#else
+# error "unwinder is not defined for current OS"
+#endif
+  return result;
+}
+
+internal CTRL_UnwindStepResult
+ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr, Arch arch, void *reg_block, CTRL_FrameUnwindContext *frame_ctx, U64 endt_us)
+{
+  CTRL_UnwindStepResult result = {0};
+#if OS_LINUX
+  result = ctrl_unwind_step__dwarf(process, module, arch, reg_block, frame_ctx, endt_us);
+#elif OS_WINDOWS
+  switch(arch)
   {
-    switch(arch)
+    case Arch_Null:{}break;
+    case Arch_x64:{result = ctrl_unwind_step__pe_x64(process, module, module_base_vaddr, reg_block, endt_us);}break;
+    case Arch_x86:
+    case Arch_arm32:
+    case Arch_arm64:
     {
-      default:{}break;
-      case Arch_x64:
-      {
-        result = ctrl_unwind_step__pe_x64(process, module, module_base_vaddr, (REGS_RegBlockX64 *)reg_block, endt_us);
-      }break;
-    }
+      NotImplemented;
+    }break;
+    default:{InvalidPath;}break;
   }
+#else
+# error "unwinder is not defined for current OS"
+#endif
   return result;
 }
 
@@ -3004,8 +3080,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
-  CTRL_Unwind unwind = {0};
-  unwind.flags |= CTRL_UnwindFlag_Error;
+  CTRL_Unwind unwind = { .flags = CTRL_UnwindFlag_Error };
   
   //- rjf: unpack args
   CTRL_Entity *thread_entity = ctrl_entity_from_handle(ctx, thread);
@@ -3023,24 +3098,25 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
   U64 frame_node_count = 0;
   if(regs_block_good)
   {
-    unwind.flags = 0;
-    for(;;)
+    for(unwind.flags = 0;;)
     {
-      // rjf: regs -> rip*module
       U64 rip = regs_rip_from_arch_block(arch, regs_block);
       U64 rsp = regs_rsp_from_arch_block(arch, regs_block);
-      CTRL_Entity *module = &ctrl_entity_nil;
-      for(CTRL_Entity *m = process_entity->first; m != &ctrl_entity_nil; m = m->next)
+
+      // rjf: cancel on 0 rip
+      if(rip == 0)
       {
-        if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, rip))
-        {
-          module = m;
-          break;
-        }
+        break;
       }
-      
-      // rjf: cancel on 0 rip/rsp
-      if(rsp == 0 && rip == 0)
+
+      // rip -> module
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process_entity, rip);
+
+      // establish frame context
+      CTRL_FrameUnwindContext frame_ctx = {0};
+      CTRL_UnwindStepResult frame_ctx_result = ctrl_establish_frame_unwind_context(scratch.arena, process_entity->handle, module->handle, arch, regs_block, endt_us, &frame_ctx);
+      unwind.flags |= frame_ctx_result.flags;
+      if(unwind.flags & (CTRL_UnwindFlag_Stale|CTRL_UnwindFlag_Error))
       {
         break;
       }
@@ -3048,19 +3124,19 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
       // rjf: valid step -> push frame
       CTRL_UnwindFrameNode *frame_node = push_array(scratch.arena, CTRL_UnwindFrameNode, 1);
       CTRL_UnwindFrame *frame = &frame_node->v;
+      frame->cfa = frame_ctx.cfa;
       frame->regs = push_array_no_zero(arena, U8, arch_reg_block_size);
       MemoryCopy(frame->regs, regs_block, arch_reg_block_size);
       DLLPushBack(first_frame_node, last_frame_node, frame_node);
       frame_node_count += 1;
       
       // rjf: unwind one step
-      CTRL_UnwindStepResult step = ctrl_unwind_step(process_entity->handle, module->handle, module->vaddr_range.min, arch, regs_block, endt_us);
+      CTRL_UnwindStepResult step = ctrl_unwind_step(process_entity->handle, module->handle, module->vaddr_range.min, arch, regs_block, &frame_ctx, endt_us);
       unwind.flags |= step.flags;
-      if(step.flags & CTRL_UnwindFlag_Error ||
-         regs_rsp_from_arch_block(arch, regs_block) == 0 ||
-         regs_rip_from_arch_block(arch, regs_block) == 0 ||
-         (regs_rsp_from_arch_block(arch, regs_block) == rsp &&
-          regs_rip_from_arch_block(arch, regs_block) == rip))
+      
+      // stop unwinding on errors or stale data
+      if(unwind.flags & (CTRL_UnwindFlag_Stale|CTRL_UnwindFlag_Error) ||
+        (regs_rsp_from_arch_block(arch, regs_block) == rsp && regs_rip_from_arch_block(arch, regs_block) == rip))
       {
         break;
       }
@@ -3133,6 +3209,7 @@ ctrl_call_stack_from_unwind(Arena *arena, CTRL_Entity *process, CTRL_Unwind *bas
         SLLQueuePush(first_frame, last_frame, dst_inline);
         dst_inline->v.unwind_count = base_frame_idx;
         dst_inline->v.regs         = src->regs;
+        dst_inline->v.cfa          = src->cfa;
         frame_count += 1;
         inline_frame_count += 1;
       }
@@ -3142,6 +3219,7 @@ ctrl_call_stack_from_unwind(Arena *arena, CTRL_Entity *process, CTRL_Unwind *bas
       SLLQueuePush(first_frame, last_frame, dst_base);
       dst_base->v.unwind_count = base_frame_idx;
       dst_base->v.regs         = src->regs;
+      dst_base->v.cfa          = src->cfa;
       frame_count += 1;
       
       // rjf: hook up inline frames to point to concrete frame, and to account for inline depth
@@ -4898,6 +4976,8 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
     ctx->frame_base    = push_array(arena, U64, 1);
     // TODO(rjf): need to compute this out here somehow... ctx->frame_base[0] = ;
     ctx->tls_base      = push_array(arena, U64, 1);
+    // TODO: compute CFA
+    ctx->cfa           = 0;
   }
   e_select_interpret_ctx(&scope->interpret_ctx, eval_dbg_infos_primary->rdi, thread_rip_voff);
   

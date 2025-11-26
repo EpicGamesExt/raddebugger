@@ -17,6 +17,7 @@ struct E_InterpretCtx
   U64 *module_base;
   U64 *frame_base;
   U64 *tls_base;
+  U64 cfa;
 };
 
 ////////////////////////////////

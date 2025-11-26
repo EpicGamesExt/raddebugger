@@ -248,6 +248,7 @@ typedef struct CTRL_UnwindFrame CTRL_UnwindFrame;
 struct CTRL_UnwindFrame
 {
   void *regs;
+  U64 cfa;
 };
 
 typedef struct CTRL_UnwindFrameNode CTRL_UnwindFrameNode;
@@ -272,6 +273,15 @@ struct CTRL_Unwind
   CTRL_UnwindFlags flags;
 };
 
+typedef struct CTRL_FrameUnwindContext CTRL_FrameUnwindContext;
+struct CTRL_FrameUnwindContext
+{
+  // DWARF
+  U64 cfa;
+  DW_CFI_Row *cfi_row;
+  U64 ret_addr_reg;
+};
+
 ////////////////////////////////
 //~ rjf: Call Stack Types
 
@@ -281,6 +291,7 @@ struct CTRL_CallStackFrame
   U64 unwind_count;
   U64 inline_depth;
   void *regs;
+  U64 cfa;
 };
 
 typedef struct CTRL_CallStack CTRL_CallStack;
@@ -948,14 +959,15 @@ internal Arch ctrl_arch_from_process_handle(CTRL_Handle process_handle);
 internal CTRL_Unwind ctrl_unwind_deep_copy(Arena *arena, Arch arch, CTRL_Unwind *src);
 
 //- DWARF
-internal CTRL_UnwindStepResult ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us);
+internal CTRL_UnwindStepResult ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us, CTRL_FrameUnwindContext *ctx_out);
+internal CTRL_UnwindStepResult ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, CTRL_FrameUnwindContext *frame_ctx, U64 endt_us);
 
 //- rjf: [x64]
 internal REGS_Reg64 *ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX64 gpr_reg);
 internal CTRL_UnwindStepResult ctrl_unwind_step__pe_x64(CTRL_Handle process_handle, CTRL_Handle module_handle, U64 module_base_vaddr, REGS_RegBlockX64 *regs, U64 endt_us);
 
 //- rjf: abstracted unwind step
-internal CTRL_UnwindStepResult ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr, Arch arch, void *reg_block, U64 endt_us);
+internal CTRL_UnwindStepResult ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr, Arch arch, void *reg_block, CTRL_FrameUnwindContext *frame_ctx, U64 endt_us);
 
 //- rjf: abstracted full unwind
 internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U64 endt_us);

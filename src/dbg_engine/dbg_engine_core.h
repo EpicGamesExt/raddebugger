@@ -418,6 +418,7 @@ internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);
 //- rjf: per-run caches
 internal U64 d_query_cached_rip_from_thread(CTRL_Entity *thread);
 internal U64 d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count);
+internal U64 d_query_cached_cfa_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count);
 internal U64 d_query_cached_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff);
 internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff);

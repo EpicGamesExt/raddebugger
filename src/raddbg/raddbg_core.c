@@ -11912,6 +11912,7 @@ rd_frame(void)
       ctx->frame_base        = push_array(scratch.arena, U64, 1);
       ctx->tls_base          = push_array(scratch.arena, U64, 1);
       ctx->tls_base[0]       = d_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
+      ctx->cfa               = d_query_cached_cfa_from_thread_unwind(thread, unwind_count);
     }
     e_select_interpret_ctx(interpret_ctx, eval_dbg_infos_primary->rdi, rip_voff);
     
