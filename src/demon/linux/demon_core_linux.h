@@ -248,11 +248,22 @@ struct DMN_LNX_EntityList
 ////////////////////////////////
 //~ rjf: Main State Bundle
 
+typedef U32 DMN_LNX_ProcessLaunchState;
+enum
+{
+  DMN_LNX_ProcessLaunchState_Null,
+  DMN_LNX_ProcessLaunchState_SigStop,
+  DMN_LNX_ProcessLaunchState_Exec,
+  DMN_LNX_ProcessLaunchState_Exit,
+};
+
 typedef struct DMN_LNX_ProcessLaunch DMN_LNX_ProcessLaunch;
 struct DMN_LNX_ProcessLaunch
 {
-  B32                    debug_subprocesses;
-  pid_t                  pid;
+  B32                        debug_subprocesses;
+  pid_t                      pid;
+  DMN_LNX_ProcessLaunchState state;
+
   DMN_LNX_ProcessLaunch *next;
   DMN_LNX_ProcessLaunch *prev;
 };
@@ -286,14 +297,13 @@ struct DMN_LNX_State
   DMN_LNX_Entity *entities_base;
   DMN_LNX_Entity *free_entity;
   U64             entities_count;
-  HashTable      *tid_ht; // thread id -> thread entity
-  HashTable      *pid_ht; // process id -> process entity
+
+  HashTable *tid_ht; // thread id -> thread entity
+  HashTable *pid_ht; // process id -> process entity
 
   // pid tracking
   U64                       active_process_count;
-  DMN_LNX_ProcessLaunchList pending_stopsig;
-  DMN_LNX_ProcessLaunchList pending_creation;
-  DMN_LNX_ProcessLaunchList active_pids;
+  DMN_LNX_ProcessLaunchList pending_procs;
   DMN_LNX_ProcessLaunchList free_pids;
 
   // halter

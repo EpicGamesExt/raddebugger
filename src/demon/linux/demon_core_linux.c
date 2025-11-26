@@ -1438,24 +1438,9 @@ dmn_lnx_handle_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Entity
 }
 
 internal void
-dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, pid_t pid)
+dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, B32 debug_subprocesses, pid_t pid)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
-  //
-  // move pid to the active list
-  //
-  B32 debug_subprocesses = 0;
-  for EachNode(n, DMN_LNX_ProcessLaunch, dmn_lnx_state->pending_creation.first)
-  {
-    if(n->pid == pid)
-    {
-      dmn_lnx_process_launch_list_remove(&dmn_lnx_state->pending_creation, n);
-      dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->free_pids, n);
-      debug_subprocesses = n->debug_subprocesses;
-      break;
-    }
-  }
 
   ELF_Hdr64           exe_ehdr         = dmn_lnx_ehdr_from_pid(pid);
   int                 memory_fd        = open((char*)str8f(scratch.arena, "/proc/%d/mem", pid).str, O_RDWR);
@@ -1559,7 +1544,6 @@ dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, pid_t pid)
   process->xcr0                          = xcr0;
   process->xsave_size                    = Max(xsave_size, sizeof(X64_XSave));
   process->xsave_layout                  = xsave_layout;
-  process->thread_count                  = 1;
   MemoryCopyTyped(&process->probe_vaddrs[0], &probe_vaddrs[0], DMN_LNX_ProbeType_Count);
   hash_table_push_u64_raw(dmn_lnx_state->arena, dmn_lnx_state->pid_ht, pid, process);
   // push create process event
@@ -2091,11 +2075,9 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
 {
   Temp scratch = scratch_begin(0, 0);
 
-  pid_t pid = 0;
-  
-  //- rjf: unpack command line
-  int    argc = (int)(params->cmd_line.node_count);
-  char **argv = push_array(scratch.arena, char *, argc+1);
+  // setup target command line 
+  U64    argc = params->cmd_line.node_count + 1;
+  char **argv = push_array(scratch.arena, char *, argc);
   {
     U64 idx = 0;
     for(String8Node *n = params->cmd_line.first; n != 0; n = n->next, idx += 1)
@@ -2103,83 +2085,79 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
       argv[idx] = (char *)push_str8_copy(scratch.arena, n->string).str;
     }
   }
-  
-  //- rjf: unpack path
-  char *path = (char *)push_str8_copy(scratch.arena, params->path).str;
-  
-  //- rjf: unpack environment
-  char **env = push_array(scratch.arena, char *, os_lnx_state.default_env_count + params->env.node_count + 1);
+   
+  // setup target environment
+  U64    envc = os_lnx_state.default_env_count + params->env.node_count + 1;
+  char **envp = push_array(scratch.arena, char *, envc);
   {
-    MemoryCopyTyped(env, os_lnx_state.default_env, os_lnx_state.default_env_count);
+    // copy default environment
+    MemoryCopyTyped(envp, os_lnx_state.default_env, os_lnx_state.default_env_count);
 
+    // copy user environment
     U64 idx = os_lnx_state.default_env_count;
     for(String8Node *n = params->env.first; n != 0; n = n->next, idx += 1)
     {
-      env[idx] = (char *)push_str8_copy(scratch.arena, n->string).str;
+      envp[idx] = (char *)push_str8_copy(scratch.arena, n->string).str;
     }
   }
 
-  //- rjf: fork
-  pid = fork();
+  // create zero-terminated work directory path
+  char *work_dir_path = (char *)push_str8_copy(scratch.arena, params->path).str;
+
+  // fork process
+  pid_t pid = fork();
 
   // child process
   if(pid == 0)
   {
-    // set current working directory to tracee
-    if(OS_LNX_RETRY_ON_EINTR(chdir(path)) < 0) { goto child_exit; }
+    // change work directory to tracee
+    if(OS_LNX_RETRY_ON_EINTR(chdir(work_dir_path)) < 0) { goto child_exit; }
 
-    // notify parent that we are going to execve
-    OS_LNX_RETRY_ON_EINTR(raise(SIGSTOP));
+    // @first_sigstop notify parent that we are going to execve
+    if(OS_LNX_RETRY_ON_EINTR(raise(SIGSTOP)) < 0) { goto child_exit; }
 
-    // replace process with target
-    OS_LNX_RETRY_ON_EINTR(execve(argv[0], argv, env));
+    // replace process with target program
+    if(OS_LNX_RETRY_ON_EINTR(execve(argv[0], argv, envp)) < 0) { goto child_exit; }
 
-    // execve failed -- exit
     child_exit:;
     abort();
   }
   // parent process
   else if(pid > 0)
   {
-    B32 kill_child_process = 1;
+    B32 failed_to_seize = 1;
 
     // try to seize child process
-    if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SEIZE, pid, 0, 0) < 0)) { Assert(0 && "failed to seize"); goto parent_exit; }
+    if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SEIZE, pid, 0, 0) < 0)) { goto parent_exit; }
 
-    if(dmn_lnx_state->tracer_tid == 0)
-    {
-      dmn_lnx_state->tracer_tid = gettid();
-    }
-    else
-    {
-      AssertAlways(dmn_lnx_state->tracer_tid == gettid());
-    }
+    // ensure tracer ops are issued on thread that sizes processes
+    if(dmn_lnx_state->tracer_tid == 0) { dmn_lnx_state->tracer_tid = gettid(); }
+    AssertAlways(dmn_lnx_state->tracer_tid == gettid());
 
-    // alloc pid node
-    DMN_LNX_ProcessLaunch *pending_stopsig = dmn_lnx_state->free_pids.first;
-    if(pending_stopsig) { dmn_lnx_process_launch_list_remove(&dmn_lnx_state->free_pids, pending_stopsig); }
-    else                { pending_stopsig = push_array(dmn_lnx_state->arena, DMN_LNX_ProcessLaunch, 1);   }
+    // alloc pending process node
+    DMN_LNX_ProcessLaunch *pending_proc = dmn_lnx_state->free_pids.first;
+    if(pending_proc) { dmn_lnx_process_launch_list_remove(&dmn_lnx_state->free_pids, pending_proc); }
+    else             { pending_proc = push_array(dmn_lnx_state->arena, DMN_LNX_ProcessLaunch, 1);   }
 
-    // add to list
-    pending_stopsig->debug_subprocesses = params->debug_subprocesses;
-    pending_stopsig->pid                = pid;
-    dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->pending_stopsig, pending_stopsig);
+    // add pending proc node to the list
+    *pending_proc = (DMN_LNX_ProcessLaunch){ params->debug_subprocesses, pid, DMN_LNX_ProcessLaunchState_SigStop };
+    dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->pending_procs, pending_proc);
 
-    // tracee was successfully sizeed
-    kill_child_process = 0;
+    // tracee was successfully seized
+    failed_to_seize = 0;
 
     parent_exit:;
-    if(kill_child_process)
+    if(failed_to_seize)
     {
       Assert(0 && "failed to ptrace child process");
-      if(OS_LNX_RETRY_ON_EINTR(kill(SIGKILL, pid)) < 0) { Assert(0 && "failed to kill child process"); }
+      OS_LNX_RETRY_ON_EINTR(kill(SIGKILL, pid));
+      OS_LNX_RETRY_ON_EINTR(waitpid(pid, 0, WNOHANG));
       pid = 0;
     }
   }
   
   scratch_end(scratch);
-  Assert(pid < max_U32);
-  return (U32)pid;
+  return pid;
 }
 
 internal B32
@@ -2394,30 +2372,29 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 
   // wait for signals from the running threads
   {
-    U64 stopped_threads = 0;
-    B32 is_halt_done    = 0;
-    do
+    B32 is_halt_done = 0;
+    for(U64 stopped_threads = 0;;)
     {
-      // do not wait if there are no processes
-      if(dmn_lnx_state->pending_stopsig.count == 0 && dmn_lnx_state->pending_creation.count == 0 && dmn_lnx_state->active_process_count == 0)
+      // do not wait if there are no pending or active processes
+      if(dmn_lnx_state->pending_procs.count == 0 && dmn_lnx_state->active_process_count == 0)
       {
         dmn_lnx_handle_not_attached(arena, &events);
         break;
       }
 
-      mutex_drop(dmn_lnx_state->halter_mutex);
-
       // wait for a signal
       int   status  = 0;
       pid_t wait_id = 0; 
-      for(;;)
       {
-        wait_id = OS_LNX_RETRY_ON_EINTR(waitpid(-1, &status, __WALL|__WNOTHREAD));
-        if(wait_id == -1) { InvalidPath; } // TODO: graceful exit
-        break;
+        mutex_drop(dmn_lnx_state->halter_mutex);
+        for(;;)
+        {
+          wait_id = OS_LNX_RETRY_ON_EINTR(waitpid(-1, &status, __WALL|__WNOTHREAD));
+          if(wait_id == -1) { InvalidPath; } // TODO: graceful exit
+          break;
+        }
+        mutex_take(dmn_lnx_state->halter_mutex);
       }
-
-      mutex_take(dmn_lnx_state->halter_mutex);
 
       // unpack status
       int wifexited   = WIFEXITED(status);
@@ -2426,32 +2403,66 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       int wstopsig    = WSTOPSIG(status);
       int event_code  = (status >> 16);
 
-      // intercept our SIGSTOP and signal tracee to continue to execve
-      if(wstopsig == SIGSTOP)
+      // intercept signals meant for the process launch sequence
       {
-        B32 is_pending_launch = 0;
-        for EachNode(n, DMN_LNX_ProcessLaunch, dmn_lnx_state->pending_stopsig.first)
+        // pid -> pending process launch
+        DMN_LNX_ProcessLaunch *pending_proc = 0;
+        for EachNode(n, DMN_LNX_ProcessLaunch, dmn_lnx_state->pending_procs.first) { if(n->pid == wait_id) { pending_proc = n; break; } }
+
+        if(pending_proc)
         {
-          if(n->pid == wait_id)
+          // process unexpectedly exited
+          if(wifexited) { pending_proc->state = DMN_LNX_ProcessLaunchState_Exit; }
+
+          if(pending_proc->state == DMN_LNX_ProcessLaunchState_Exec && wstopsig == SIGTRAP && event_code == PTRACE_EVENT_EXEC)
           {
-            // move node to the pending creation list
-            dmn_lnx_process_launch_list_remove(&dmn_lnx_state->pending_stopsig, n);
-            dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->pending_creation, n);
+            // move pending process node to the free list
+            dmn_lnx_process_launch_list_remove(&dmn_lnx_state->pending_procs, pending_proc);
+            dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->free_pids, pending_proc);
 
-            // set trace options
-            // TODO: PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFROK | PTRACE_O_TRACEVFORKDONE
-            void *trace_options = (void *)(PTRACE_O_EXITKILL | PTRACE_O_TRACEEXEC | PTRACE_O_TRACECLONE);
-            if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETOPTIONS, wait_id, 0, trace_options)) < 0) { Assert(0 && "failed to set options"); InvalidPath; }
+            // push create process events
+            dmn_lnx_handle_create_process(arena, &events, pending_proc->debug_subprocesses, wait_id);
 
-            // signal process to continue to execve
-            if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, wait_id, 0, 0)) < 0) { InvalidPath; }
+            // override event code so the main code path does not create another process
+            event_code = PTRACE_EVENT_STOP;
+          }
+          else
+          {
+            B32 shutdown_process = 1;
 
-            is_pending_launch = 1;
+            if(pending_proc->state == DMN_LNX_ProcessLaunchState_SigStop && wstopsig == SIGSTOP) // @first_sigstop
+            {
+              // set trace options and singal to proceed to the execve
+              //
+              // TODO: PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFROK | PTRACE_O_TRACEVFORKDONE
+              if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETOPTIONS, wait_id, 0, (void *)(PTRACE_O_EXITKILL | PTRACE_O_TRACEEXEC | PTRACE_O_TRACECLONE))) >= 0)
+              {
+                if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, wait_id, 0, 0)) >= 0) 
+                {
+                  // update pending process state
+                  pending_proc->state = DMN_LNX_ProcessLaunchState_Exec;
+                  shutdown_process = 0;
+                }
+              }
+            }
+            else if(pending_proc->state == DMN_LNX_ProcessLaunchState_Exit)
+            {
+              // move pending process node to the free list
+              dmn_lnx_process_launch_list_remove(&dmn_lnx_state->pending_procs, pending_proc);
+              dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->free_pids, pending_proc);
+              shutdown_process = 0;
+            }
 
-            break;
+            // exit on abnormal process init
+            if(shutdown_process)
+            {
+              OS_LNX_RETRY_ON_EINTR(kill(wait_id, SIGKILL));
+              pending_proc->state = DMN_LNX_ProcessLaunchState_Exit;
+            }
+
+            continue;
           }
         }
-        if(is_pending_launch) { continue; }
       }
 
       if(wifstopped || wifsignaled || wifexited)
@@ -2561,26 +2572,18 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               DMN_LNX_Entity *thread  = dmn_lnx_thread_from_pid(wait_id);
               DMN_LNX_Entity *process = thread->parent;
-
-              if(process == dmn_lnx_nil_entity)
+              if(process->debug_subprocesses)
               {
-                dmn_lnx_handle_create_process(arena, &events, wait_id);
+                dmn_lnx_handle_exit_thread(arena, &events, wait_id, 0);
+                dmn_lnx_handle_create_process(arena, &events, 1, wait_id);
               }
               else
               {
-                if(process->debug_subprocesses)
+                if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, wait_id, 0, 0)) >= 0)
                 {
                   dmn_lnx_handle_exit_thread(arena, &events, wait_id, 0);
-                  dmn_lnx_handle_create_process(arena, &events, wait_id);
                 }
-                else
-                {
-                  if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, wait_id, 0, 0)) >= 0)
-                  {
-                    dmn_lnx_handle_exit_thread(arena, &events, wait_id, 0);
-                  }
-                  else { Assert(0 && "failed to detach"); }
-                }
+                else { Assert(0 && "failed to detach"); }
               }
             }break;
             case PTRACE_EVENT_VFORK_DONE:
@@ -2630,7 +2633,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         }
       }
       else { Assert(0 && "unexpected stop code"); }
-    } while(stopped_threads < running_threads.count);
+
+      // do not wait if all threads are stopped and there are no launching processes
+      if(stopped_threads >= running_threads.count && dmn_lnx_state->pending_procs.count == 0)
+      {
+        break;
+      }
+    }
 
     // finalize halter state
     if(is_halt_done)
