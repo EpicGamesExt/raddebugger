@@ -1358,7 +1358,8 @@ RDI_EvalOpTable:
   {PartialValue    49      4 0 0}
   {PartialValueBit 50      8 0 0}
   {Swap            51      0 2 2} // swaps the top two entries on the stack
-  {COUNT           52      0 0 0}
+  {PushCfa         52      0 0 1} // push canonical frame address on the stack
+  {COUNT           53      0 0 0}
 }
 
 // NOTE(rjf): "ck" -> "conversion kind, when converted to type group", used in square matrix form

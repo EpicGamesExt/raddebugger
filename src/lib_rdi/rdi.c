@@ -58,7 +58,7 @@ sizeof(RDI_NameMapNode),
 sizeof(RDI_U8),
 };
 
-RDI_U16 rdi_eval_op_ctrlbits_table[53] =
+RDI_U16 rdi_eval_op_ctrlbits_table[54] =
 {
 RDI_EVAL_CTRLBITS(0, 0, 0),
 RDI_EVAL_CTRLBITS(0, 0, 0),
@@ -112,6 +112,7 @@ RDI_EVAL_CTRLBITS(4, 0, 0),
 RDI_EVAL_CTRLBITS(4, 0, 0),
 RDI_EVAL_CTRLBITS(8, 0, 0),
 RDI_EVAL_CTRLBITS(0, 2, 2),
+RDI_EVAL_CTRLBITS(0, 0, 1),
 RDI_EVAL_CTRLBITS(0, 0, 0),
 };
 

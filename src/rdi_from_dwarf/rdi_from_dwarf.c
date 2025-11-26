@@ -1261,7 +1261,7 @@ d2r_bytecode_from_expression(Arena       *arena,
         }
       } break;
       case DW_ExprOp_CallFrameCfa: {
-        rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_FrameOff, 0);
+        rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_PushCfa, 0);
         d2r_value_type_stack_push(scratch.arena, stack, D2R_ValueType_Address);
       } break;
       case DW_ExprOp_PushObjectAddress: {
