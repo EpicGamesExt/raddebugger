@@ -2113,9 +2113,6 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     // change work directory to tracee
     if(OS_LNX_RETRY_ON_EINTR(chdir(work_dir_path)) < 0) { goto child_exit; }
 
-    // @first_sigstop notify parent that we are going to execve
-    if(OS_LNX_RETRY_ON_EINTR(raise(SIGSTOP)) < 0) { goto child_exit; }
-
     // replace process with target program
     if(OS_LNX_RETRY_ON_EINTR(execve(argv[0], argv, envp)) < 0) { goto child_exit; }
 
@@ -2128,7 +2125,9 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     B32 failed_to_seize = 1;
 
     // try to seize child process
-    if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SEIZE, pid, 0, 0) < 0)) { goto parent_exit; }
+    //
+    // TODO: PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK | PTRACE_O_TRACEVFORKDONE
+    if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SEIZE, pid, 0, PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL | PTRACE_O_TRACECLONE) < 0)) { goto parent_exit; }
 
     // ensure tracer ops are issued on thread that sizes processes
     if(dmn_lnx_state->tracer_tid == 0) { dmn_lnx_state->tracer_tid = gettid(); }
@@ -2140,7 +2139,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     else             { pending_proc = push_array(dmn_lnx_state->arena, DMN_LNX_ProcessLaunch, 1);   }
 
     // add pending proc node to the list
-    *pending_proc = (DMN_LNX_ProcessLaunch){ params->debug_subprocesses, pid, DMN_LNX_ProcessLaunchState_SigStop };
+    *pending_proc = (DMN_LNX_ProcessLaunch){ params->debug_subprocesses, pid, DMN_LNX_ProcessLaunchState_Exec };
     dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->pending_procs, pending_proc);
 
     // tracee was successfully seized
@@ -2414,52 +2413,33 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           // process unexpectedly exited
           if(wifexited) { pending_proc->state = DMN_LNX_ProcessLaunchState_Exit; }
 
-          if(pending_proc->state == DMN_LNX_ProcessLaunchState_Exec && wstopsig == SIGTRAP && event_code == PTRACE_EVENT_EXEC)
+          if(pending_proc->state == DMN_LNX_ProcessLaunchState_Exec)
           {
-            // move pending process node to the free list
-            dmn_lnx_process_launch_list_remove(&dmn_lnx_state->pending_procs, pending_proc);
-            dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->free_pids, pending_proc);
-
-            // push create process events
-            dmn_lnx_handle_create_process(arena, &events, pending_proc->debug_subprocesses, wait_id);
-
-            // override event code so the main code path does not create another process
-            event_code = PTRACE_EVENT_STOP;
-          }
-          else
-          {
-            B32 shutdown_process = 1;
-
-            if(pending_proc->state == DMN_LNX_ProcessLaunchState_SigStop && wstopsig == SIGSTOP) // @first_sigstop
-            {
-              // set trace options and singal to proceed to the execve
-              //
-              // TODO: PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFROK | PTRACE_O_TRACEVFORKDONE
-              if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETOPTIONS, wait_id, 0, (void *)(PTRACE_O_EXITKILL | PTRACE_O_TRACEEXEC | PTRACE_O_TRACECLONE))) >= 0)
-              {
-                if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, wait_id, 0, 0)) >= 0) 
-                {
-                  // update pending process state
-                  pending_proc->state = DMN_LNX_ProcessLaunchState_Exec;
-                  shutdown_process = 0;
-                }
-              }
-            }
-            else if(pending_proc->state == DMN_LNX_ProcessLaunchState_Exit)
+            if(wstopsig == SIGTRAP && event_code == PTRACE_EVENT_EXEC)
             {
               // move pending process node to the free list
               dmn_lnx_process_launch_list_remove(&dmn_lnx_state->pending_procs, pending_proc);
               dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->free_pids, pending_proc);
-              shutdown_process = 0;
-            }
 
-            // exit on abnormal process init
-            if(shutdown_process)
+              // push create process events
+              dmn_lnx_handle_create_process(arena, &events, pending_proc->debug_subprocesses, wait_id);
+
+              // override event code so the main code path does not create another process
+              event_code = PTRACE_EVENT_STOP;
+            }
+            else
             {
+              // shutdown process on abnormal init
               OS_LNX_RETRY_ON_EINTR(kill(wait_id, SIGKILL));
               pending_proc->state = DMN_LNX_ProcessLaunchState_Exit;
+              continue;
             }
-
+          }
+          else if(pending_proc->state == DMN_LNX_ProcessLaunchState_Exit)
+          {
+            // move pending process node to the free list
+            dmn_lnx_process_launch_list_remove(&dmn_lnx_state->pending_procs, pending_proc);
+            dmn_lnx_process_launch_list_push_node(&dmn_lnx_state->free_pids, pending_proc);
             continue;
           }
         }

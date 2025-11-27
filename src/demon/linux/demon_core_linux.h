@@ -252,7 +252,6 @@ typedef U32 DMN_LNX_ProcessLaunchState;
 enum
 {
   DMN_LNX_ProcessLaunchState_Null,
-  DMN_LNX_ProcessLaunchState_SigStop,
   DMN_LNX_ProcessLaunchState_Exec,
   DMN_LNX_ProcessLaunchState_Exit,
 };
