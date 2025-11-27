@@ -630,6 +630,7 @@ ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event, U64 max)
     str8_serial_push_struct(scratch.arena, &srl, &event->exception_code);
     str8_serial_push_struct(scratch.arena, &srl, &event->rgba);
     str8_serial_push_struct(scratch.arena, &srl, &event->bp_flags);
+    str8_serial_push_struct(scratch.arena, &srl, &event->target_os);
     str8_serial_push_struct(scratch.arena, &srl, &event->tls_model);
     str8_serial_push_struct(scratch.arena, &srl, &event->tls_index);
     str8_serial_push_struct(scratch.arena, &srl, &event->tls_offset);
@@ -666,6 +667,7 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
     read_off += str8_deserial_read_struct(string, read_off, &event.exception_code);
     read_off += str8_deserial_read_struct(string, read_off, &event.rgba);
     read_off += str8_deserial_read_struct(string, read_off, &event.bp_flags);
+    read_off += str8_deserial_read_struct(string, read_off, &event.target_os);
     read_off += str8_deserial_read_struct(string, read_off, &event.tls_model);
     read_off += str8_deserial_read_struct(string, read_off, &event.tls_index);
     read_off += str8_deserial_read_struct(string, read_off, &event.tls_offset);
@@ -1270,6 +1272,7 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
         CTRL_Entity *machine = ctrl_entity_from_handle(&store->ctx, ctrl_handle_make(event->entity.machine_id, dmn_handle_zero()));
         CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->arch, event->entity, (U64)event->entity_id);
         process->tls_model = event->tls_model;
+        process->target_os = event->target_os;
       }break;
       case CTRL_EventKind_EndProc:
       {
@@ -2129,7 +2132,7 @@ ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_han
 }
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step__dwarf(CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, CTRL_FrameUnwindContext *frame_ctx, U64 endt_us)
+ctrl_unwind_step__dwarf(CTRL_Handle process_handle, Arch arch, void *regs, CTRL_FrameUnwindContext *frame_ctx, U64 endt_us)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -3032,47 +3035,6 @@ ctrl_unwind_step__pe_x64(CTRL_Handle process_handle, CTRL_Handle module_handle, 
   return result;
 }
 
-//- rjf: abstracted unwind step
-
-internal CTRL_UnwindStepResult
-ctrl_establish_frame_unwind_context(Arena *arena, CTRL_Handle process_handle, CTRL_Handle module_handle, Arch arch, void *regs, U64 endt_us, CTRL_FrameUnwindContext *ctx_out)
-{
-  CTRL_UnwindStepResult result = {0};
-#if OS_LINUX
-  result = ctrl_establish_frame_unwind_context__dwarf(arena, process_handle, module_handle, arch, regs, endt_us, ctx_out);
-#elif OS_WINDOWS
-  // windows does not have a concept of frame context
-#else
-# error "unwinder is not defined for current OS"
-#endif
-  return result;
-}
-
-internal CTRL_UnwindStepResult
-ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr, Arch arch, void *reg_block, CTRL_FrameUnwindContext *frame_ctx, U64 endt_us)
-{
-  CTRL_UnwindStepResult result = {0};
-#if OS_LINUX
-  result = ctrl_unwind_step__dwarf(process, module, arch, reg_block, frame_ctx, endt_us);
-#elif OS_WINDOWS
-  switch(arch)
-  {
-    case Arch_Null:{}break;
-    case Arch_x64:{result = ctrl_unwind_step__pe_x64(process, module, module_base_vaddr, reg_block, endt_us);}break;
-    case Arch_x86:
-    case Arch_arm32:
-    case Arch_arm64:
-    {
-      NotImplemented;
-    }break;
-    default:{InvalidPath;}break;
-  }
-#else
-# error "unwinder is not defined for current OS"
-#endif
-  return result;
-}
-
 //- rjf: abstracted full unwind
 
 internal CTRL_Unwind
@@ -3110,11 +3072,28 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
       }
 
       // rip -> module
-      CTRL_Entity *module = ctrl_module_from_process_vaddr(process_entity, rip);
+      CTRL_Entity *module_entity = ctrl_module_from_process_vaddr(process_entity, rip);
 
       // establish frame context
       CTRL_FrameUnwindContext frame_ctx = {0};
-      CTRL_UnwindStepResult frame_ctx_result = ctrl_establish_frame_unwind_context(scratch.arena, process_entity->handle, module->handle, arch, regs_block, endt_us, &frame_ctx);
+      CTRL_UnwindStepResult frame_ctx_result = {0};
+      switch(process_entity->target_os)
+      {
+        case OperatingSystem_Null:{}break;
+        case OperatingSystem_Windows:
+        {
+          // no concept of frame unwind context
+        }break;
+        case OperatingSystem_Linux:
+        {
+          frame_ctx_result = ctrl_establish_frame_unwind_context__dwarf(arena, process_entity->handle, module_entity->handle, arch, regs_block, endt_us, &frame_ctx);
+        }break;
+        case OperatingSystem_Mac:
+        {
+          NotImplemented;
+        }break;
+        default: { InvalidPath; }break;
+      }
       unwind.flags |= frame_ctx_result.flags;
       if(unwind.flags & (CTRL_UnwindFlag_Stale|CTRL_UnwindFlag_Error))
       {
@@ -3131,10 +3110,41 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
       frame_node_count += 1;
       
       // rjf: unwind one step
-      CTRL_UnwindStepResult step = ctrl_unwind_step(process_entity->handle, module->handle, module->vaddr_range.min, arch, regs_block, &frame_ctx, endt_us);
-      unwind.flags |= step.flags;
+      CTRL_UnwindStepResult step_result = {0};
+      switch(process_entity->target_os)
+      {
+        case OperatingSystem_Null:{}break;
+        case OperatingSystem_Windows:
+        {
+          switch(arch)
+          {
+            case Arch_Null:{}break;
+            case Arch_x64:
+            {
+              step_result = ctrl_unwind_step__pe_x64(process_entity->handle, module_entity->handle, module_entity->vaddr_range.min, regs_block, endt_us);
+            }break;
+            case Arch_x86:
+            case Arch_arm32:
+            case Arch_arm64:
+            {
+              NotImplemented;
+            }break;
+            default: { InvalidPath; } break;
+          }
+        }break;
+        case OperatingSystem_Linux:
+        {
+          step_result = ctrl_unwind_step__dwarf(process_entity->handle, arch, regs_block, &frame_ctx, endt_us);
+        }break;
+        case OperatingSystem_Mac:
+        {
+          NotImplemented;
+        }break;
+        default: { InvalidPath; }break;
+      }
       
       // stop unwinding on errors or stale data
+      unwind.flags |= step_result.flags;
       if(unwind.flags & (CTRL_UnwindFlag_Stale|CTRL_UnwindFlag_Error) ||
         (regs_rsp_from_arch_block(arch, regs_block) == rsp && regs_rip_from_arch_block(arch, regs_block) == rip))
       {
@@ -4524,6 +4534,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->arch      = event->arch;
       out_evt->entity_id = event->code;
       out_evt->tls_model = ctrl_dynamic_linker_type_from_dmn(event->tls_model);
+      out_evt->target_os = OperatingSystem_CURRENT; // TODO: operating system of the remote target machine
       ctrl_state->process_counter += 1;
     }break;
     case DMN_EventKind_CreateThread:
@@ -6945,6 +6956,10 @@ ctrl_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out,
               dst_e->timestamp        = src_e->timestamp;
               dst_e->bp_flags         = src_e->bp_flags;
               dst_e->string           = push_str8_copy(scratch.arena, src_e->string);
+              dst_e->tls_index        = src_e->tls_index;
+              dst_e->tls_offset       = src_e->tls_offset;
+              dst_e->target_os        = src_e->target_os;
+              dst_e->tls_model        = src_e->tls_model;
             }
             if(dst_parent == &ctrl_entity_nil)
             {
