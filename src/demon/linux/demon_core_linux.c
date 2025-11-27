@@ -2564,7 +2564,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               pid_t new_pid;
               if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &new_pid)) >= 0)
               {
-                dmn_lnx_handle_create_thread(arena, &events, dmn_lnx_thread_from_pid(wait_id), new_pid);
+                DMN_LNX_Entity *thread  = dmn_lnx_thread_from_pid(wait_id);
+                DMN_LNX_Entity *process = thread->parent;
+                dmn_lnx_handle_create_thread(arena, &events, process, new_pid);
               }
               else { Assert(0 && "failed to get new tid"); }
             }break;
