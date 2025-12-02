@@ -23,6 +23,13 @@ typedef struct D2R_TypeTable
   RDIM_Type          **builtin_types;
 } D2R_TypeTable;
 
+typedef DW_TagSpare D2R_TagFlags;
+enum
+{
+  D2R_TagFlags_TypeConverted = (1 << 0),
+  D2R_TagFlags_UdtConverted  = (1 << 1),
+};
+
 typedef struct D2R_TagFrame
 {
   DW_TagNode *node;

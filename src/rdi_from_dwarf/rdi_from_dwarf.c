@@ -1756,15 +1756,15 @@ d2r_tag_iterator_parent_tag(D2R_TagIterator *iter)
 }
 
 internal void
-d2r_flag_converted_tag(DW_TagNode *tag_node)
+d2r_flag_converted_type_tag(DW_TagNode *tag_node)
 {
-  tag_node->tag.v[0] = 1;
+  tag_node->tag.v |= D2R_TagFlags_TypeConverted;
 }
 
 internal B8
-d2r_is_tag_converted(DW_TagNode *tag_node)
+d2r_is_type_tag_converted(DW_TagNode *tag_node)
 {
-  return tag_node->tag.v[0];
+  return !!(tag_node->tag.v & D2R_TagFlags_TypeConverted);
 }
 
 internal RDIM_Type *
@@ -1825,12 +1825,12 @@ d2r_convert_types(Arena         *arena,
     DW_Tag      tag      = tag_node->tag;
     
     // skip converted tags
-    if (d2r_is_tag_converted(tag_node)) {
+    if (d2r_is_type_tag_converted(tag_node)) {
       d2r_tag_iterator_skip_children(it);
       continue;
     }
     // mark the tag as converted here, because during conversion we may recurse on the same tag
-    d2r_flag_converted_tag(tag_node);
+    d2r_flag_converted_type_tag(tag_node);
     
     switch (tag.kind) {
       case DW_TagKind_ClassType: {
@@ -2196,18 +2196,42 @@ d2r_convert_types(Arena         *arena,
         }
         
         RDIM_Type      *parent = d2r_type_from_offset(type_table, parent_tag.info_off);
-        if(parent->udt != 0)
-        {
-          RDIM_Type      *type   = d2r_find_or_convert_type(arena, type_table, input, cu, cu_lang, arch_addr_size, tag, DW_AttribKind_Type);
-          RDIM_UDTMember *member = rdim_udt_push_member(arena, &udts, parent->udt);
-          member->kind           = RDI_MemberKind_Base;
-          member->type           = type;
-          member->off            = safe_cast_u32(dw_const_u32_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_DataMemberLocation));
-        }
+        RDIM_Type      *type   = d2r_find_or_convert_type(arena, type_table, input, cu, cu_lang, arch_addr_size, tag, DW_AttribKind_Type);
+        RDIM_UDTMember *member = rdim_udt_push_member(arena, &udts, parent->udt);
+        member->kind           = RDI_MemberKind_Base;
+        member->type           = type;
+        member->off            = safe_cast_u32(dw_const_u32_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_DataMemberLocation));
       } break;
     }
   }
   scratch_end(scratch);
+}
+
+internal B8
+d2r_is_udt_tag_converted(DW_TagNode *tag_node)
+{
+  return !!(tag_node->tag.v & D2R_TagFlags_UdtConverted);
+}
+
+internal void
+d2r_flag_converted_udt_tag(DW_TagNode *tag_node)
+{
+  tag_node->tag.v |= D2R_TagFlags_UdtConverted;
+}
+
+internal void
+d2r_inline_anonymous_udt_member(Arena *arena, RDIM_UDT *top_udt, U64 base_off, RDIM_UDT *udt)
+{
+  for (RDIM_UDTMember *curr = udt->first_member, *prev = 0; curr != 0; prev = curr, curr = curr->next) {
+    if (curr->name.size == 0) {
+      d2r_inline_anonymous_udt_member(arena, top_udt, base_off + curr->off, curr->type->udt);
+    } else {
+      // copy member and adjust its offset relative to inlined position in the root UDT
+      RDIM_UDTMember *m = rdim_udt_push_member(arena, &udts, top_udt);
+      *m = *curr;
+      m->off += base_off;
+    }
+  }
 }
 
 internal void
@@ -2220,89 +2244,82 @@ d2r_convert_udts(Arena         *arena,
                  DW_TagNode    *root)
 {
   Temp scratch = scratch_begin(&arena, 1);
+
   for (D2R_TagIterator *it = d2r_tag_iterator_init(scratch.arena, root); it->tag_node != 0; d2r_tag_iterator_next(scratch.arena, it)) {
     DW_TagNode *tag_node = it->tag_node;
     DW_Tag      tag      = tag_node->tag;
-    switch (tag.kind) {
-      case DW_TagKind_ClassType: {
-        B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
-        if (is_decl) {
-          d2r_tag_iterator_skip_children(it);
-        } else {
-          RDIM_Type *type = d2r_type_from_offset(type_table, tag.info_off);
-          RDIM_UDT  *udt  = rdim_udt_chunk_list_push(arena, &udts, UDT_CHUNK_CAP);
-          udt->self_type = type;
-          type->udt      = udt;
-        }
-      } break;
-      case DW_TagKind_StructureType: {
-        B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
-        if (is_decl) {
-          d2r_tag_iterator_skip_children(it);
-        } else {
-          RDIM_Type *type = d2r_type_from_offset(type_table, tag.info_off);
-          RDIM_UDT  *udt  = rdim_udt_chunk_list_push(arena, &udts, UDT_CHUNK_CAP);
-          udt->self_type = type;
-          type->udt      = udt;
-        }
-      } break;
-      case DW_TagKind_UnionType: {
-        B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
-        if (is_decl) {
-          d2r_tag_iterator_skip_children(it);
-        } else {
-          RDIM_Type *type = d2r_type_from_offset(type_table, tag.info_off);
-          RDIM_UDT  *udt  = rdim_udt_chunk_list_push(arena, &udts, UDT_CHUNK_CAP);
-          udt->self_type = type;
-          type->udt      = udt;
-        }
-      } break;
-      case DW_TagKind_EnumerationType: {
-        B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
-        if (is_decl) {
-          d2r_tag_iterator_skip_children(it);
-        } else {
-          RDIM_Type *type = d2r_type_from_offset(type_table, tag.info_off);
-          RDIM_UDT  *udt  = rdim_udt_chunk_list_push(arena, &udts, UDT_CHUNK_CAP);
-          udt->self_type = type;
-          type->udt      = udt;
-        }
-      } break;
-      case DW_TagKind_Member: {
-        DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
-        B32 is_parent_udt = parent_tag.kind == DW_TagKind_StructureType ||
-          parent_tag.kind == DW_TagKind_ClassType     ||
-          parent_tag.kind == DW_TagKind_UnionType;
-        if (is_parent_udt) {
-          DW_Attrib      *data_member_location       = dw_attrib_from_tag(input, cu, tag, DW_AttribKind_DataMemberLocation);
-          DW_AttribClass  data_member_location_class = dw_value_class_from_attrib(cu, data_member_location);
-          if (data_member_location_class == DW_AttribClass_LocList) {
-            AssertAlways(!"UDT member with multiple locations are not supported");
+
+    // skip converted tags
+    if (d2r_is_udt_tag_converted(tag_node)) {
+      d2r_tag_iterator_skip_children(it);
+      continue;
+    }
+    d2r_flag_converted_udt_tag(tag_node);
+
+    if (tag.kind == DW_TagKind_ClassType || tag.kind == DW_TagKind_StructureType || tag.kind == DW_TagKind_UnionType) {
+      B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
+      if (is_decl) {
+        d2r_tag_iterator_skip_children(it);
+      } else {
+        RDIM_Type *type = d2r_type_from_offset(type_table, tag.info_off);
+        RDIM_UDT  *udt  = rdim_udt_chunk_list_push(arena, &udts, UDT_CHUNK_CAP);
+        udt->self_type = type;
+        type->udt      = udt;
+      }
+    } else if (tag.kind == DW_TagKind_EnumerationType) {
+      B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
+      if (is_decl) {
+        d2r_tag_iterator_skip_children(it);
+      } else {
+        RDIM_Type *type = d2r_type_from_offset(type_table, tag.info_off);
+        RDIM_UDT  *udt  = rdim_udt_chunk_list_push(arena, &udts, UDT_CHUNK_CAP);
+        udt->self_type = type;
+        type->udt      = udt;
+      }
+    } else if (tag.kind == DW_TagKind_Member) {
+      DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
+      B32 is_parent_udt = parent_tag.kind == DW_TagKind_StructureType ||
+                          parent_tag.kind == DW_TagKind_ClassType     ||
+                          parent_tag.kind == DW_TagKind_UnionType;
+      if (is_parent_udt) {
+        RDIM_Type *parent_type = d2r_type_from_offset(type_table, parent_tag.info_off);
+        RDIM_Type *type        = d2r_type_from_attrib(type_table, input, cu, tag, DW_AttribKind_Type);
+        String8    name        = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
+        U64        off         = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_DataMemberLocation);
+        if (name.size == 0) { // inline anonymous members
+          DW_Reference  type_ref    = dw_ref_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Type);
+          RDIM_Type    *member_type = d2r_type_from_offset(type_table, type_ref.info_off);
+          RDIM_UDT     *member_udt  = member_type->udt;
+          if (member_udt == 0) {
+            DW_Language ref_cu_lang  = dw_const_u64_from_tag_attrib_kind(input, type_ref.cu, type_ref.cu->tag, DW_AttribKind_Language);
+            DW_TagNode *ref_tag_node = dw_tag_node_from_info_off(type_ref.cu, type_ref.info_off);
+            d2r_convert_udts(arena, type_table, input, type_ref.cu, ref_cu_lang, arch_addr_size, ref_tag_node);
+            Assert(member_type->udt);
+            member_udt = member_type->udt;
           }
-          
-          RDIM_Type      *parent_type = d2r_type_from_offset(type_table, parent_tag.info_off);
-          RDIM_UDTMember *udt_member  = rdim_udt_push_member(arena, &udts, parent_type->udt);
-          udt_member->kind = RDI_MemberKind_DataField;
-          udt_member->name = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
-          udt_member->type = d2r_type_from_attrib(type_table, input, cu, tag, DW_AttribKind_Type);
-          udt_member->off  = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_DataMemberLocation);
+          d2r_inline_anonymous_udt_member(arena, parent_type->udt, off, member_udt);
         } else {
-          // TODO: error handling
-          AssertAlways(!"unexpected parent tag");
+          RDIM_UDTMember *member  = rdim_udt_push_member(arena, &udts, parent_type->udt);
+          member->kind = RDI_MemberKind_DataField;
+          member->name = name;
+          member->type = type;
+          member->off  = off;
         }
-      } break;
-      case DW_TagKind_Enumerator: {
-        DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
-        if (parent_tag.kind == DW_TagKind_EnumerationType) {
-          RDIM_Type       *parent_type = d2r_type_from_offset(type_table, parent_tag.info_off);
-          RDIM_UDTEnumVal *udt_member  = rdim_udt_push_enum_val(arena, &udts, parent_type->udt);
-          udt_member->name = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
-          udt_member->val  = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ConstValue);
-        } else {
-          // TODO: error handling
-          AssertAlways(!"unexpected parent tag");
-        }
-      } break;
+      } else {
+        // TODO: error handling
+        AssertAlways(!"unexpected parent tag");
+      }
+    } else if (tag.kind == DW_TagKind_Enumerator) {
+      DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
+      if (parent_tag.kind == DW_TagKind_EnumerationType) {
+        RDIM_Type       *parent_type = d2r_type_from_offset(type_table, parent_tag.info_off);
+        RDIM_UDTEnumVal *udt_member  = rdim_udt_push_enum_val(arena, &udts, parent_type->udt);
+        udt_member->name = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
+        udt_member->val  = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ConstValue);
+      } else {
+        // TODO: error handling
+        AssertAlways(!"unexpected parent tag");
+      }
     }
   }
   scratch_end(scratch);

@@ -125,6 +125,7 @@ typedef struct DW_AttribList
   U64            count;
 } DW_AttribList;
 
+typedef U8 DW_TagSpare;
 typedef struct DW_Tag
 {
   B32            has_children;
@@ -132,7 +133,7 @@ typedef struct DW_Tag
   DW_TagKind     kind;
   DW_AttribList  attribs;
   U64            info_off;
-  U8             v[1];
+  DW_TagSpare    v;
 } DW_Tag;
 
 typedef struct DW_TagNode
