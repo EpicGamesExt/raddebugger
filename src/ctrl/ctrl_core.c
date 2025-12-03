@@ -6934,7 +6934,7 @@ ctrl_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out,
           rec = ctrl_entity_rec_depth_first_pre(src_e, src_process);
           
           // rjf: determine if we need this entity
-          B32 need_this_entity = (ctrl_handle_match(thread_handle, src_e->handle) || src_e->kind == CTRL_EntityKind_Module || src_e->kind == CTRL_EntityKind_Process);
+          B32 need_this_entity = (ctrl_handle_match(thread_handle, src_e->handle) || src_e->kind == CTRL_EntityKind_Module || src_e->kind == CTRL_EntityKind_Process || src_e->kind == CTRL_EntityKind_DebugInfoPath);
           
           // rjf: copy this entity
           CTRL_Entity *dst_e = &ctrl_entity_nil;
