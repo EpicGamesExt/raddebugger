@@ -122,7 +122,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(themes)
     
     //- rjf: gather theme files
     {
-      String8 theme_folder = push_str8f(scratch.arena, "%S/raddbg/themes", get_process_info()->user_program_data_path);
+      String8 theme_folder = push_str8f(scratch.arena, "%S/raddbg/themes", get_process_info()->user_program_config_path);
       FileIter *it = file_iter_begin(scratch.arena, theme_folder, FileIterFlag_SkipFolders);
       for(FileInfo info = {0}; file_iter_next(scratch.arena, it, &info);)
       {
