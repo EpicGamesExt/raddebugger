@@ -1245,12 +1245,10 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
 
         if(x64_is_xsave_supported())
         {
-          U8  *xsave_raw = push_array(scratch.arena, U8, process->xsave_size);
-          int  xsave_get = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_base = xsave_raw, .iov_len = process->xsave_size }));
-          AssertAlways(xsave_get >= 0);
-
-          X64_XSave *dst = (X64_XSave *)xsave_raw;
+          U8        *xsave_raw = push_array(scratch.arena, U8, process->xsave_size);
+          X64_XSave *dst       = (X64_XSave *)xsave_raw;
           dst->fxsave = dst_fxsave;
+          dst->header.xstate_bv |= X64_XStateComponentFlag_SSE;
 
           if(process->xsave_layout.avx_offset)
           {
@@ -1262,6 +1260,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
               {
                 MemoryCopy(&avx_d[n], &zmm_s[n].v[16], sizeof(REGS_Reg128));
               }
+              dst->header.xstate_bv |= X64_XStateComponentFlag_AVX;
             }
           }
 
@@ -1275,6 +1274,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
               {
                 MemoryCopy(&kmask_d[n], &kmask_s[n], sizeof(REGS_Reg64));
               }
+              dst->header.xstate_bv |= X64_XStateComponentFlag_OPMASK;
             }
             else { Assert(0 && "invalid xsave size"); }
           }
@@ -1289,6 +1289,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
               {
                 MemoryCopy(&avx512h_d[n], &zmmh_s[n].v[32], sizeof(REGS_Reg256));
               }
+              dst->header.xstate_bv |= X64_XStateComponentFlag_ZMM_H;
             }
             else { Assert(0 && "invalid xsave size"); }
           }
@@ -1303,6 +1304,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
               {
                 MemoryCopy(&avx512_d[n], &zmm_s[n], sizeof(REGS_Reg512));
               }
+              dst->header.xstate_bv |= X64_XStateComponentFlag_ZMM;
             }
             else { Assert(0 && "invalid xsave size"); }
           }
@@ -1314,11 +1316,13 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
               REGS_Reg64 *cet_u = (REGS_Reg64 *)(xsave_raw + process->xsave_layout.cet_u_offset);
               cet_u[0] = src->cetmsr;
               cet_u[1] = src->cetssp;
+              dst->header.xstate_bv |= X64_XStateComponentFlag_CETU;
             }
             else { Assert(0 && "invalid xsave size"); }
           }
 
           // xsave
+          Assert(dst->header.xcomp_bv == 0); // must always be zero
           xsave_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, tid, (void *)NT_X86_XSTATE, &(struct iovec){ .iov_base = dst, .iov_len = process->xsave_size }));
           Assert(xsave_result >= 0);
         }
