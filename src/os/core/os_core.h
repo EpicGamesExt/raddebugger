@@ -27,7 +27,8 @@ struct OS_ProcessInfo
   B32 large_pages_allowed;
   String8 binary_path;
   String8 initial_path;
-  String8 user_program_data_path;
+  String8 user_program_state_path;
+  String8 user_program_config_path;
   String8List module_load_paths;
   String8List environment;
 };

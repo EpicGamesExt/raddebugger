@@ -1818,7 +1818,9 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
       U16 *buffer = push_array_no_zero(scratch.arena, U16, size);
       if(SUCCEEDED(SHGetFolderPathW(0, CSIDL_APPDATA, 0, 0, (WCHAR*)buffer)))
       {
-        info->user_program_data_path = str8_from_16(arena, str16_cstring(buffer));
+        String8 path = str8_from_16(arena, str16_cstring(buffer));
+        info->user_program_state_path = path;
+        info->user_program_config_path = path;
       }
       scratch_end(scratch);
     }
