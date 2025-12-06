@@ -106,8 +106,6 @@ case REGS_RegCodeX64_k6:{result = RDI_RegCodeX64_k6;}break;
 case REGS_RegCodeX64_k7:{result = RDI_RegCodeX64_k7;}break;
 case REGS_RegCodeX64_cetmsr:{result = RDI_RegCodeX64_cetmsr;}break;
 case REGS_RegCodeX64_cetssp:{result = RDI_RegCodeX64_cetssp;}break;
-case REGS_RegCodeX64_tr:{result = RDI_RegCodeX64_tr;}break;
-case REGS_RegCodeX64_ldtr:{result = RDI_RegCodeX64_ldtr;}break;
 }
 }break;
 case Arch_x86:
@@ -220,8 +218,6 @@ case RDI_RegCodeX64_k6:{result = REGS_RegCodeX64_k6;}break;
 case RDI_RegCodeX64_k7:{result = REGS_RegCodeX64_k7;}break;
 case RDI_RegCodeX64_cetmsr:{result = REGS_RegCodeX64_cetmsr;}break;
 case RDI_RegCodeX64_cetssp:{result = REGS_RegCodeX64_cetssp;}break;
-case RDI_RegCodeX64_tr:{result = REGS_RegCodeX64_tr;}break;
-case RDI_RegCodeX64_ldtr:{result = REGS_RegCodeX64_ldtr;}break;
 }
 }break;
 case Arch_x86:

@@ -379,8 +379,6 @@ RDI_RegCodeX64Table:
   {mxcsr_mask      92}
   {cetmsr          93}
   {cetssp          94}
-  {tr              95}
-  {ldtr            96}
 }
 
 @enum(RDI_U32) RDI_Arch:

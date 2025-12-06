@@ -239,8 +239,6 @@ RDI_RegCodeX64_fdp        = 91,
 RDI_RegCodeX64_mxcsr_mask = 92,
 RDI_RegCodeX64_cetmsr     = 93,
 RDI_RegCodeX64_cetssp     = 94,
-RDI_RegCodeX64_tr         = 95,
-RDI_RegCodeX64_ldtr       = 96,
 } RDI_RegCodeX64Enum;
 
 typedef RDI_U32 RDI_BinarySectionFlags;
@@ -660,8 +658,6 @@ X(fdp, 91)\
 X(mxcsr_mask, 92)\
 X(cetmsr, 93)\
 X(cetssp, 94)\
-X(tr, 95)\
-X(ldtr, 96)\
 
 #define RDI_TopLevelInfo_XList \
 X(RDI_Arch, arch)\

@@ -101,8 +101,6 @@ REGS_RegCodeX64_k6,
 REGS_RegCodeX64_k7,
 REGS_RegCodeX64_cetmsr,
 REGS_RegCodeX64_cetssp,
-REGS_RegCodeX64_tr,
-REGS_RegCodeX64_ldtr,
 REGS_RegCodeX64_COUNT,
 } REGS_RegCodeX64;
 
@@ -301,16 +299,14 @@ REGS_Reg64 k6;
 REGS_Reg64 k7;
 REGS_Reg64 cetmsr;
 REGS_Reg64 cetssp;
-REGS_Reg16 tr;
-REGS_Reg16 ldtr;
 };
 
 C_LINKAGE_BEGIN
-extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[95];
+extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[93];
 extern REGS_UsageKind regs_g_alias_code_x64_usage_kind_table[95];
-extern String8 regs_g_reg_code_x64_string_table[95];
+extern String8 regs_g_reg_code_x64_string_table[93];
 extern String8 regs_g_alias_code_x64_string_table[95];
-extern REGS_Rng regs_g_reg_code_x64_rng_table[95];
+extern REGS_Rng regs_g_reg_code_x64_rng_table[93];
 extern REGS_Slice regs_g_alias_code_x64_slice_table[95];
 
 C_LINKAGE_END
