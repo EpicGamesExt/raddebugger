@@ -582,57 +582,6 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
 
 //- rjf: threads
 
-internal U16
-dmn_w32_real_tag_word_from_xsave(XSAVE_FORMAT *fxsave)
-{
-  U16 result = 0;
-  U32 top = (fxsave->StatusWord >> 11) & 7;
-  for(U32 fpr = 0; fpr < 8; fpr += 1)
-  {
-    U32 tag = 3;
-    if(fxsave->TagWord & (1 << fpr))
-    {
-      U32 st = (fpr - top)&7;
-      
-      REGS_Reg80 *fp = (REGS_Reg80*)&fxsave->FloatRegisters[st*16];
-      U16 exponent = fp->sign1_exp15 & bitmask15;
-      U64 integer_part  = fp->int1_frac63 >> 63;
-      U64 fraction_part = fp->int1_frac63 & bitmask63;
-      
-      // tag: 0 - normal; 1 - zero; 2 - special
-      tag = 2;
-      if(exponent == 0)
-      {
-        if(integer_part == 0 && fraction_part == 0)
-        {
-          tag = 1;
-        }
-      }
-      else if(exponent != bitmask15 && integer_part != 0)
-      {
-        tag = 0;
-      }
-    }
-    result |= tag << (2 * fpr);
-  }
-  return result;
-}
-
-internal U16
-dmn_w32_xsave_tag_word_from_real_tag_word(U16 ftw)
-{
-  U16 compact = 0;
-  for(U32 fpr = 0; fpr < 8; fpr++)
-  {
-    U32 tag = (ftw >> (fpr * 2)) & 3;
-    if(tag != 3)
-    {
-      compact |= (1 << fpr);
-    }
-  }
-  return compact;
-}
-
 internal B32
 dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
 {
@@ -694,7 +643,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       dst->eflags.u32 = ctx.EFlags | 0x2;
       dst->fcw.u16 = fxsave->ControlWord;
       dst->fsw.u16 = fxsave->StatusWord;
-      dst->ftw.u16 = dmn_w32_real_tag_word_from_xsave(fxsave);
+      dst->ftw.u16 = fxsave->TagWord;
       dst->fop.u16 = fxsave->ErrorOpcode;
       dst->fip.u32 = fxsave->ErrorOffset;
       dst->fcs.u16 = fxsave->ErrorSelector;
@@ -704,7 +653,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       dst->mxcsr_mask.u32 = fxsave->MxCsr_Mask;
       {
         M128A *float_s = fxsave->FloatRegisters;
-        REGS_Reg80 *float_d = &dst->fpr0;
+        REGS_Reg80 *float_d = &dst->st0;
         for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 1)
         {
           MemoryCopy(float_d, float_s, sizeof(*float_d));
@@ -817,17 +766,15 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       dst->rflags.u64 = ctx->EFlags | 0x2;
       dst->fcw.u16 = xsave->ControlWord;
       dst->fsw.u16 = xsave->StatusWord;
-      dst->ftw.u16 = dmn_w32_real_tag_word_from_xsave(xsave);
+      dst->ftw     = xsave->TagWord;
       dst->fop.u16 = xsave->ErrorOpcode;
-      dst->fcs.u16 = xsave->ErrorSelector;
-      dst->fds.u16 = xsave->DataSelector;
-      dst->fip.u64 = xsave->ErrorOffset;
-      dst->fdp.u64 = xsave->DataOffset;
+      MemoryCopy(&dst->fip.u64, &xsave->ErrorOffset, sizeof(U64));
+      MemoryCopy(&dst->fdp.u64, &xsave->DataOffset, sizeof(U64));
       dst->mxcsr.u32 = xsave->MxCsr;
       dst->mxcsr_mask.u32 = xsave->MxCsr_Mask;
       {
         M128A *float_s = xsave->FloatRegisters;
-        REGS_Reg80 *float_d = &dst->fpr0;
+        REGS_Reg80 *float_d = &dst->st0;
         for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 1)
         {
           MemoryCopy(float_d, float_s, sizeof(*float_d));
@@ -991,7 +938,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       ctx.EFlags = src->eflags.u32;
       fxsave->ControlWord = src->fcw.u16;
       fxsave->StatusWord = src->fsw.u16;
-      fxsave->TagWord = dmn_w32_xsave_tag_word_from_real_tag_word(src->ftw.u16);
+      fxsave->TagWord = src->ftw.u16;
       fxsave->ErrorOpcode = src->fop.u16;
       fxsave->ErrorSelector = src->fcs.u16;
       fxsave->DataSelector = src->fds.u16;
@@ -1001,7 +948,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       fxsave->MxCsr_Mask = src->mxcsr_mask.u32;
       {
         M128A *float_d = fxsave->FloatRegisters;
-        REGS_Reg80 *float_s = &src->fpr0;
+        REGS_Reg80 *float_s = &src->st0;
         for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 1)
         {
           MemoryCopy(float_d, float_s, 10);
@@ -1098,15 +1045,13 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       ctx->EFlags = src->rflags.u64;
       fxsave->ControlWord = src->fcw.u16;
       fxsave->StatusWord = src->fsw.u16;
-      fxsave->TagWord = dmn_w32_xsave_tag_word_from_real_tag_word(src->ftw.u16);
+      fxsave->TagWord = src->ftw;
       fxsave->ErrorOpcode = src->fop.u16;
-      fxsave->ErrorSelector = src->fcs.u16;
-      fxsave->DataSelector = src->fds.u16;
-      fxsave->ErrorOffset = src->fip.u64;
-      fxsave->DataOffset = src->fdp.u64;
+      MemoryCopy(&fxsave->ErrorOffset, &src->fip.u64, sizeof(U64));
+      MemoryCopy(&fxsave->DataOffset, &src->fdp.u64, sizeof(U64));
       {
         M128A *float_d = fxsave->FloatRegisters;
-        REGS_Reg80 *float_s = &src->fpr0;
+        REGS_Reg80 *float_s = &src->st0;
         for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 1)
         {
           MemoryCopy(float_d, float_s, 10);

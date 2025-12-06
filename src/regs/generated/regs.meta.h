@@ -37,14 +37,6 @@ REGS_RegCodeX64_dr4,
 REGS_RegCodeX64_dr5,
 REGS_RegCodeX64_dr6,
 REGS_RegCodeX64_dr7,
-REGS_RegCodeX64_fpr0,
-REGS_RegCodeX64_fpr1,
-REGS_RegCodeX64_fpr2,
-REGS_RegCodeX64_fpr3,
-REGS_RegCodeX64_fpr4,
-REGS_RegCodeX64_fpr5,
-REGS_RegCodeX64_fpr6,
-REGS_RegCodeX64_fpr7,
 REGS_RegCodeX64_st0,
 REGS_RegCodeX64_st1,
 REGS_RegCodeX64_st2,
@@ -57,8 +49,6 @@ REGS_RegCodeX64_fcw,
 REGS_RegCodeX64_fsw,
 REGS_RegCodeX64_ftw,
 REGS_RegCodeX64_fop,
-REGS_RegCodeX64_fcs,
-REGS_RegCodeX64_fds,
 REGS_RegCodeX64_fip,
 REGS_RegCodeX64_fdp,
 REGS_RegCodeX64_mxcsr,
@@ -240,14 +230,6 @@ REGS_RegCodeX86_dr4,
 REGS_RegCodeX86_dr5,
 REGS_RegCodeX86_dr6,
 REGS_RegCodeX86_dr7,
-REGS_RegCodeX86_fpr0,
-REGS_RegCodeX86_fpr1,
-REGS_RegCodeX86_fpr2,
-REGS_RegCodeX86_fpr3,
-REGS_RegCodeX86_fpr4,
-REGS_RegCodeX86_fpr5,
-REGS_RegCodeX86_fpr6,
-REGS_RegCodeX86_fpr7,
 REGS_RegCodeX86_st0,
 REGS_RegCodeX86_st1,
 REGS_RegCodeX86_st2,
@@ -357,14 +339,6 @@ REGS_Reg64 dr4;
 REGS_Reg64 dr5;
 REGS_Reg64 dr6;
 REGS_Reg64 dr7;
-REGS_Reg80 fpr0;
-REGS_Reg80 fpr1;
-REGS_Reg80 fpr2;
-REGS_Reg80 fpr3;
-REGS_Reg80 fpr4;
-REGS_Reg80 fpr5;
-REGS_Reg80 fpr6;
-REGS_Reg80 fpr7;
 REGS_Reg80 st0;
 REGS_Reg80 st1;
 REGS_Reg80 st2;
@@ -375,10 +349,8 @@ REGS_Reg80 st6;
 REGS_Reg80 st7;
 REGS_Reg16 fcw;
 REGS_Reg16 fsw;
-REGS_Reg16 ftw;
+REGS_Reg8 ftw;
 REGS_Reg16 fop;
-REGS_Reg16 fcs;
-REGS_Reg16 fds;
 REGS_Reg64 fip;
 REGS_Reg64 fdp;
 REGS_Reg32 mxcsr;
@@ -458,14 +430,6 @@ REGS_Reg32 dr4;
 REGS_Reg32 dr5;
 REGS_Reg32 dr6;
 REGS_Reg32 dr7;
-REGS_Reg80 fpr0;
-REGS_Reg80 fpr1;
-REGS_Reg80 fpr2;
-REGS_Reg80 fpr3;
-REGS_Reg80 fpr4;
-REGS_Reg80 fpr5;
-REGS_Reg80 fpr6;
-REGS_Reg80 fpr7;
 REGS_Reg80 st0;
 REGS_Reg80 st1;
 REGS_Reg80 st2;
@@ -503,17 +467,17 @@ REGS_Reg256 ymm7;
 };
 
 C_LINKAGE_BEGIN
-extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[105];
+extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[95];
 extern REGS_UsageKind regs_g_alias_code_x64_usage_kind_table[96];
-extern String8 regs_g_reg_code_x64_string_table[105];
+extern String8 regs_g_reg_code_x64_string_table[95];
 extern String8 regs_g_alias_code_x64_string_table[96];
-extern REGS_Rng regs_g_reg_code_x64_rng_table[105];
+extern REGS_Rng regs_g_reg_code_x64_rng_table[95];
 extern REGS_Slice regs_g_alias_code_x64_slice_table[96];
-extern REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[63];
+extern REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[55];
 extern REGS_UsageKind regs_g_alias_code_x86_usage_kind_table[36];
-extern String8 regs_g_reg_code_x86_string_table[63];
+extern String8 regs_g_reg_code_x86_string_table[55];
 extern String8 regs_g_alias_code_x86_string_table[36];
-extern REGS_Rng regs_g_reg_code_x86_rng_table[63];
+extern REGS_Rng regs_g_reg_code_x86_rng_table[55];
 extern REGS_Slice regs_g_alias_code_x86_slice_table[36];
 
 C_LINKAGE_END

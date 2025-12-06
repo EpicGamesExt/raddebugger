@@ -1038,10 +1038,10 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread)
           // copy x87 registers
           dst->fcw.u16        = src->fcw;
           dst->fsw.u16        = src->fsw;
-          dst->ftw.u16        = x64_xsave_tag_word_from_real_tag_word(src->ftw);
+          dst->ftw            = src->ftw;
           dst->fop.u16        = src->fop;
-          dst->fip.u64        = src->b64.fip;
-          dst->fdp.u64        = src->b64.fdp;
+          dst->fip.u64        = src->fip;
+          dst->fdp.u64        = src->fdp;
           dst->mxcsr.u32      = src->mxcsr;
           dst->mxcsr_mask.u32 = src->mxcsr_mask;
           for EachIndex(i, 8)
@@ -1063,6 +1063,9 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread)
         // copy xsave registers
         if(xsave)
         {
+          // compact register layout is not supported
+          AssertAlways(xsave->header.xcomp_bv == 0);
+
           if(xsave->header.xstate_bv & X64_XStateComponentFlag_AVX)
           {
             AssertAlways(process->xsave_layout.avx_offset + 16*sizeof(REGS_Reg128) <= process->xsave_size);
@@ -1219,14 +1222,14 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
 
         X64_FXSave dst_fxsave = {0};
         {
-          dst_fxsave.fcw          = src->fcw.u16;
-          dst_fxsave.fsw          = src->fsw.u16;
-          dst_fxsave.ftw          = src->ftw.u16;
-          dst_fxsave.fop          = src->fop.u16;
-          dst_fxsave.b64.fip      = src->fip.u64;
-          dst_fxsave.b64.fdp      = src->fdp.u64;
-          dst_fxsave.mxcsr        = src->mxcsr.u32;
-          dst_fxsave.mxcsr_mask   = src->mxcsr_mask.u32;
+          dst_fxsave.fcw        = src->fcw.u16;
+          dst_fxsave.fsw        = src->fsw.u16;
+          dst_fxsave.ftw        = src->ftw;
+          dst_fxsave.fop        = src->fop.u16;
+          dst_fxsave.fip        = src->fip.u64;
+          dst_fxsave.fdp        = src->fdp.u64;
+          dst_fxsave.mxcsr      = src->mxcsr.u32;
+          dst_fxsave.mxcsr_mask = src->mxcsr_mask.u32;
 
           REGS_Reg128 *st_d = (REGS_Reg128 *)dst_fxsave.st_space;
           REGS_Reg80  *st_s = &src->st0;
@@ -1248,6 +1251,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
           U8        *xsave_raw = push_array(scratch.arena, U8, process->xsave_size);
           X64_XSave *dst       = (X64_XSave *)xsave_raw;
           dst->fxsave = dst_fxsave;
+          dst->header.xstate_bv |= X64_XStateComponentFlag_FP;
           dst->header.xstate_bv |= X64_XStateComponentFlag_SSE;
 
           if(process->xsave_layout.avx_offset)

@@ -20,6 +20,8 @@ REGS_UsageKind;
 typedef U8 REGS_RegCode;
 typedef U8 REGS_AliasCode;
 
+typedef U8 REGS_Reg8;
+
 typedef union REGS_Reg16 REGS_Reg16;
 union REGS_Reg16
 {
@@ -39,6 +41,7 @@ typedef union REGS_Reg64 REGS_Reg64;
 union REGS_Reg64
 {
   U8 v[8];
+  U32 u32[2];
   U64 u64;
   F64 f64;
 };

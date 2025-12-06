@@ -103,18 +103,8 @@ case Arch_x86:{result = regs_g_alias_code_x86_usage_kind_table;}break;
 return result;
 }
 C_LINKAGE_BEGIN
-REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[105] =
+REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[95] =
 {
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
@@ -312,7 +302,7 @@ REGS_UsageKind_Vector,
 REGS_UsageKind_Vector,
 };
 
-String8 regs_g_reg_code_x64_string_table[105] =
+String8 regs_g_reg_code_x64_string_table[95] =
 {
 str8_lit_comp(""),
 str8_lit_comp("rax"),
@@ -343,14 +333,6 @@ str8_lit_comp("dr4"),
 str8_lit_comp("dr5"),
 str8_lit_comp("dr6"),
 str8_lit_comp("dr7"),
-str8_lit_comp("fpr0"),
-str8_lit_comp("fpr1"),
-str8_lit_comp("fpr2"),
-str8_lit_comp("fpr3"),
-str8_lit_comp("fpr4"),
-str8_lit_comp("fpr5"),
-str8_lit_comp("fpr6"),
-str8_lit_comp("fpr7"),
 str8_lit_comp("st0"),
 str8_lit_comp("st1"),
 str8_lit_comp("st2"),
@@ -363,8 +345,6 @@ str8_lit_comp("fcw"),
 str8_lit_comp("fsw"),
 str8_lit_comp("ftw"),
 str8_lit_comp("fop"),
-str8_lit_comp("fcs"),
-str8_lit_comp("fds"),
 str8_lit_comp("fip"),
 str8_lit_comp("fdp"),
 str8_lit_comp("mxcsr"),
@@ -521,7 +501,7 @@ str8_lit_comp("mm6"),
 str8_lit_comp("mm7"),
 };
 
-REGS_Rng regs_g_reg_code_x64_rng_table[105] =
+REGS_Rng regs_g_reg_code_x64_rng_table[95] =
 {
 {0},
 {(U16)OffsetOf(REGS_RegBlockX64, rax), 8},
@@ -552,14 +532,6 @@ REGS_Rng regs_g_reg_code_x64_rng_table[105] =
 {(U16)OffsetOf(REGS_RegBlockX64, dr5), 8},
 {(U16)OffsetOf(REGS_RegBlockX64, dr6), 8},
 {(U16)OffsetOf(REGS_RegBlockX64, dr7), 8},
-{(U16)OffsetOf(REGS_RegBlockX64, fpr0), 10},
-{(U16)OffsetOf(REGS_RegBlockX64, fpr1), 10},
-{(U16)OffsetOf(REGS_RegBlockX64, fpr2), 10},
-{(U16)OffsetOf(REGS_RegBlockX64, fpr3), 10},
-{(U16)OffsetOf(REGS_RegBlockX64, fpr4), 10},
-{(U16)OffsetOf(REGS_RegBlockX64, fpr5), 10},
-{(U16)OffsetOf(REGS_RegBlockX64, fpr6), 10},
-{(U16)OffsetOf(REGS_RegBlockX64, fpr7), 10},
 {(U16)OffsetOf(REGS_RegBlockX64, st0), 10},
 {(U16)OffsetOf(REGS_RegBlockX64, st1), 10},
 {(U16)OffsetOf(REGS_RegBlockX64, st2), 10},
@@ -570,10 +542,8 @@ REGS_Rng regs_g_reg_code_x64_rng_table[105] =
 {(U16)OffsetOf(REGS_RegBlockX64, st7), 10},
 {(U16)OffsetOf(REGS_RegBlockX64, fcw), 2},
 {(U16)OffsetOf(REGS_RegBlockX64, fsw), 2},
-{(U16)OffsetOf(REGS_RegBlockX64, ftw), 2},
+{(U16)OffsetOf(REGS_RegBlockX64, ftw), 1},
 {(U16)OffsetOf(REGS_RegBlockX64, fop), 2},
-{(U16)OffsetOf(REGS_RegBlockX64, fcs), 2},
-{(U16)OffsetOf(REGS_RegBlockX64, fds), 2},
 {(U16)OffsetOf(REGS_RegBlockX64, fip), 8},
 {(U16)OffsetOf(REGS_RegBlockX64, fdp), 8},
 {(U16)OffsetOf(REGS_RegBlockX64, mxcsr), 4},
@@ -720,26 +690,18 @@ REGS_Slice regs_g_alias_code_x64_slice_table[96] =
 {REGS_RegCodeX64_zmm13, 0, 32},
 {REGS_RegCodeX64_zmm14, 0, 32},
 {REGS_RegCodeX64_zmm15, 0, 32},
-{REGS_RegCodeX64_fpr0, 0, 8},
-{REGS_RegCodeX64_fpr1, 0, 8},
-{REGS_RegCodeX64_fpr2, 0, 8},
-{REGS_RegCodeX64_fpr3, 0, 8},
-{REGS_RegCodeX64_fpr4, 0, 8},
-{REGS_RegCodeX64_fpr5, 0, 8},
-{REGS_RegCodeX64_fpr6, 0, 8},
-{REGS_RegCodeX64_fpr7, 0, 8},
+{REGS_RegCodeX64_st0, 0, 8},
+{REGS_RegCodeX64_st1, 0, 8},
+{REGS_RegCodeX64_st2, 0, 8},
+{REGS_RegCodeX64_st3, 0, 8},
+{REGS_RegCodeX64_st4, 0, 8},
+{REGS_RegCodeX64_st5, 0, 8},
+{REGS_RegCodeX64_st6, 0, 8},
+{REGS_RegCodeX64_st7, 0, 8},
 };
 
-REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[63] =
+REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[55] =
 {
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
-REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
 REGS_UsageKind_Normal,
@@ -837,7 +799,7 @@ REGS_UsageKind_Vector,
 REGS_UsageKind_Vector,
 };
 
-String8 regs_g_reg_code_x86_string_table[63] =
+String8 regs_g_reg_code_x86_string_table[55] =
 {
 str8_lit_comp(""),
 str8_lit_comp("eax"),
@@ -860,14 +822,6 @@ str8_lit_comp("dr4"),
 str8_lit_comp("dr5"),
 str8_lit_comp("dr6"),
 str8_lit_comp("dr7"),
-str8_lit_comp("fpr0"),
-str8_lit_comp("fpr1"),
-str8_lit_comp("fpr2"),
-str8_lit_comp("fpr3"),
-str8_lit_comp("fpr4"),
-str8_lit_comp("fpr5"),
-str8_lit_comp("fpr6"),
-str8_lit_comp("fpr7"),
 str8_lit_comp("st0"),
 str8_lit_comp("st1"),
 str8_lit_comp("st2"),
@@ -944,7 +898,7 @@ str8_lit_comp("mm6"),
 str8_lit_comp("mm7"),
 };
 
-REGS_Rng regs_g_reg_code_x86_rng_table[63] =
+REGS_Rng regs_g_reg_code_x86_rng_table[55] =
 {
 {0},
 {(U16)OffsetOf(REGS_RegBlockX86, eax), 4},
@@ -967,14 +921,6 @@ REGS_Rng regs_g_reg_code_x86_rng_table[63] =
 {(U16)OffsetOf(REGS_RegBlockX86, dr5), 4},
 {(U16)OffsetOf(REGS_RegBlockX86, dr6), 4},
 {(U16)OffsetOf(REGS_RegBlockX86, dr7), 4},
-{(U16)OffsetOf(REGS_RegBlockX86, fpr0), 10},
-{(U16)OffsetOf(REGS_RegBlockX86, fpr1), 10},
-{(U16)OffsetOf(REGS_RegBlockX86, fpr2), 10},
-{(U16)OffsetOf(REGS_RegBlockX86, fpr3), 10},
-{(U16)OffsetOf(REGS_RegBlockX86, fpr4), 10},
-{(U16)OffsetOf(REGS_RegBlockX86, fpr5), 10},
-{(U16)OffsetOf(REGS_RegBlockX86, fpr6), 10},
-{(U16)OffsetOf(REGS_RegBlockX86, fpr7), 10},
 {(U16)OffsetOf(REGS_RegBlockX86, st0), 10},
 {(U16)OffsetOf(REGS_RegBlockX86, st1), 10},
 {(U16)OffsetOf(REGS_RegBlockX86, st2), 10},
@@ -1041,14 +987,14 @@ REGS_Slice regs_g_alias_code_x86_slice_table[36] =
 {REGS_RegCodeX86_ymm5, 0, 16},
 {REGS_RegCodeX86_ymm6, 0, 16},
 {REGS_RegCodeX86_ymm7, 0, 16},
-{REGS_RegCodeX86_fpr0, 0, 8},
-{REGS_RegCodeX86_fpr1, 0, 8},
-{REGS_RegCodeX86_fpr2, 0, 8},
-{REGS_RegCodeX86_fpr3, 0, 8},
-{REGS_RegCodeX86_fpr4, 0, 8},
-{REGS_RegCodeX86_fpr5, 0, 8},
-{REGS_RegCodeX86_fpr6, 0, 8},
-{REGS_RegCodeX86_fpr7, 0, 8},
+{REGS_RegCodeX86_st0, 0, 8},
+{REGS_RegCodeX86_st1, 0, 8},
+{REGS_RegCodeX86_st2, 0, 8},
+{REGS_RegCodeX86_st3, 0, 8},
+{REGS_RegCodeX86_st4, 0, 8},
+{REGS_RegCodeX86_st5, 0, 8},
+{REGS_RegCodeX86_st6, 0, 8},
+{REGS_RegCodeX86_st7, 0, 8},
 };
 
 C_LINKAGE_END

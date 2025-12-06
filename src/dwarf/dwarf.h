@@ -1618,14 +1618,14 @@ X(Xmm4,   25, ymm4,   0, 16) \
 X(Xmm5,   26, ymm5,   0, 16) \
 X(Xmm6,   27, ymm6,   0, 16) \
 X(Xmm7,   28, ymm7,   0, 16) \
-X(Mm0,    29, fpr0,   0, 8)  \
-X(Mm1,    30, fpr1,   0, 8)  \
-X(Mm2,    31, fpr2,   0, 8)  \
-X(Mm3,    32, fpr3,   0, 8)  \
-X(Mm4,    33, fpr4,   0, 8)  \
-X(Mm5,    34, fpr5,   0, 8)  \
-X(Mm6,    35, fpr6,   0, 8)  \
-X(Mm7,    36, fpr7,   0, 8)  \
+X(Mm0,    29, st0,    0, 8)  \
+X(Mm1,    30, st1,    0, 8)  \
+X(Mm2,    31, st2,    0, 8)  \
+X(Mm3,    32, st3,    0, 8)  \
+X(Mm4,    33, st4,    0, 8)  \
+X(Mm5,    34, st5,    0, 8)  \
+X(Mm6,    35, st6,    0, 8)  \
+X(Mm7,    36, st7,    0, 8)  \
 X(Fcw,    37, fcw,    0, 2)  \
 X(Fsw,    38, fsw,    0, 2)  \
 X(Mxcsr,  39, mxcsr,  0, 4)  \
@@ -1635,8 +1635,8 @@ X(Ss,     42, ss,     0, 2)  \
 X(Ds,     43, ds,     0, 2)  \
 X(Fs,     44, fs,     0, 2)  \
 X(Gs,     45, gs,     0, 2)  \
-X(Tr,     48, tr,    0, 0)  \
-X(Ldtr,   49, ldtr,    0, 0)
+X(Tr,     48, tr,     0, 0)  \
+X(Ldtr,   49, ldtr,   0, 0)
 
 #define DW_Regs_X64_XList(X)  \
 X(Rax,     0,  rax,    0, 8)  \
@@ -1696,14 +1696,14 @@ X(St4,     37, st4,    0, 10) \
 X(St5,     38, st5,    0, 10) \
 X(St6,     39, st6,    0, 10) \
 X(St7,     40, st7,    0, 10) \
-X(Mm0,     41, fpr0,   0, 8)  \
-X(Mm1,     42, fpr1,   0, 8)  \
-X(Mm2,     43, fpr2,   0, 8)  \
-X(Mm3,     44, fpr3,   0, 8)  \
-X(Mm4,     45, fpr4,   0, 8)  \
-X(Mm5,     46, fpr5,   0, 8)  \
-X(Mm6,     47, fpr6,   0, 8)  \
-X(Mm7,     48, fpr7,   0, 8)  \
+X(Mm0,     41, st0,    0, 8)  \
+X(Mm1,     42, st1,    0, 8)  \
+X(Mm2,     43, st2,    0, 8)  \
+X(Mm3,     44, st3,    0, 8)  \
+X(Mm4,     45, st4,    0, 8)  \
+X(Mm5,     46, st5,    0, 8)  \
+X(Mm6,     47, st6,    0, 8)  \
+X(Mm7,     48, st7,    0, 8)  \
 X(Rflags,  49, rflags, 0, 4)  \
 X(Es,      50, es,     0, 2)  \
 X(Cs,      51, cs,     0, 2)  \

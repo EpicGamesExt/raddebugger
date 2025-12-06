@@ -35,14 +35,6 @@ REGS_RegTableX64:
   {dr5                            64   Normal}
   {dr6                            64   Normal}
   {dr7                            64   Normal}
-  {fpr0                           80   Normal}
-  {fpr1                           80   Normal}
-  {fpr2                           80   Normal}
-  {fpr3                           80   Normal}
-  {fpr4                           80   Normal}
-  {fpr5                           80   Normal}
-  {fpr6                           80   Normal}
-  {fpr7                           80   Normal}
   {st0                            80   Normal}
   {st1                            80   Normal}
   {st2                            80   Normal}
@@ -53,10 +45,8 @@ REGS_RegTableX64:
   {st7                            80   Normal}
   {fcw                            16   Normal}
   {fsw                            16   Normal}
-  {ftw                            16   Normal}
+  {ftw                            8    Normal}
   {fop                            16   Normal}
-  {fcs                            16   Normal}
-  {fds                            16   Normal}
   {fip                            64   Normal}
   {fdp                            64   Normal}
   {mxcsr                          32   Normal}
@@ -206,14 +196,14 @@ REGS_AliasTableX64:
   {ymm13           zmm13  0      256    Vector}
   {ymm14           zmm14  0      256    Vector}
   {ymm15           zmm15  0      256    Vector}
-  {mm0             fpr0   0      64     Vector}
-  {mm1             fpr1   0      64     Vector}
-  {mm2             fpr2   0      64     Vector}
-  {mm3             fpr3   0      64     Vector}
-  {mm4             fpr4   0      64     Vector}
-  {mm5             fpr5   0      64     Vector}
-  {mm6             fpr6   0      64     Vector}
-  {mm7             fpr7   0      64     Vector}
+  {mm0             st0    0      64     Vector}
+  {mm1             st1    0      64     Vector}
+  {mm2             st2    0      64     Vector}
+  {mm3             st3    0      64     Vector}
+  {mm4             st4    0      64     Vector}
+  {mm5             st5    0      64     Vector}
+  {mm6             st6    0      64     Vector}
+  {mm7             st7    0      64     Vector}
 }
 
 ////////////////////////////////
@@ -246,14 +236,6 @@ REGS_RegTableX86:
   // TODO(allen): I am suspicious of this stuff here.
   // Are fpr0-7 and st0-7 actually different things? Visual studio doesn't show
   // frp0-7. Not sure if the mm0-7 aliases are setup the right way either.
-  {fpr0                      80  Normal}
-  {fpr1                      80  Normal}
-  {fpr2                      80  Normal}
-  {fpr3                      80  Normal}
-  {fpr4                      80  Normal}
-  {fpr5                      80  Normal}
-  {fpr6                      80  Normal}
-  {fpr7                      80  Normal}
   {st0                       80  Normal}
   {st1                       80  Normal}
   {st2                       80  Normal}
@@ -322,14 +304,14 @@ REGS_AliasTableX86:
   {xmm5   ymm5   0      128   Vector}
   {xmm6   ymm6   0      128   Vector}
   {xmm7   ymm7   0      128   Vector}
-  {mm0    fpr0   0      64    Vector}
-  {mm1    fpr1   0      64    Vector}
-  {mm2    fpr2   0      64    Vector}
-  {mm3    fpr3   0      64    Vector}
-  {mm4    fpr4   0      64    Vector}
-  {mm5    fpr5   0      64    Vector}
-  {mm6    fpr6   0      64    Vector}
-  {mm7    fpr7   0      64    Vector}
+  {mm0    st0    0      64    Vector}
+  {mm1    st1    0      64    Vector}
+  {mm2    st2    0      64    Vector}
+  {mm3    st3    0      64    Vector}
+  {mm4    st4    0      64    Vector}
+  {mm5    st5    0      64    Vector}
+  {mm6    st6    0      64    Vector}
+  {mm7    st7    0      64    Vector}
 }
 
 ////////////////////////////////

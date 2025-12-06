@@ -36,22 +36,13 @@ enum
 
 typedef struct AlignType(16) X64_FXSave
 {
-  U16 fcw;
-  U16 fsw;
-  U16 ftw;
-  U16 fop;
-  union {
-    struct {
-      U64 fip;
-      U64 fdp;
-    } b64;
-    struct {
-      U32 fip;
-      U16 fcs, _pad0;
-      U32 fdp;
-      U16 fds, _pad1;
-    } b32;
-  };
+  U16  fcw;
+  U16  fsw;
+  U8   ftw;
+  U8   reserved1;
+  U16  fop;
+  U64  fip;
+  U64  fdp;
   U32  mxcsr;
   U32  mxcsr_mask;
   U128 st_space[8];

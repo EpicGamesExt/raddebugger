@@ -166,48 +166,40 @@ RDI_RegCodeX86_dr4        = 17,
 RDI_RegCodeX86_dr5        = 18,
 RDI_RegCodeX86_dr6        = 19,
 RDI_RegCodeX86_dr7        = 20,
-RDI_RegCodeX86_fpr0       = 21,
-RDI_RegCodeX86_fpr1       = 22,
-RDI_RegCodeX86_fpr2       = 23,
-RDI_RegCodeX86_fpr3       = 24,
-RDI_RegCodeX86_fpr4       = 25,
-RDI_RegCodeX86_fpr5       = 26,
-RDI_RegCodeX86_fpr6       = 27,
-RDI_RegCodeX86_fpr7       = 28,
-RDI_RegCodeX86_st0        = 29,
-RDI_RegCodeX86_st1        = 30,
-RDI_RegCodeX86_st2        = 31,
-RDI_RegCodeX86_st3        = 32,
-RDI_RegCodeX86_st4        = 33,
-RDI_RegCodeX86_st5        = 34,
-RDI_RegCodeX86_st6        = 35,
-RDI_RegCodeX86_st7        = 36,
-RDI_RegCodeX86_fcw        = 37,
-RDI_RegCodeX86_fsw        = 38,
-RDI_RegCodeX86_ftw        = 39,
-RDI_RegCodeX86_fop        = 40,
-RDI_RegCodeX86_fcs        = 41,
-RDI_RegCodeX86_fds        = 42,
-RDI_RegCodeX86_fip        = 43,
-RDI_RegCodeX86_fdp        = 44,
-RDI_RegCodeX86_mxcsr      = 45,
-RDI_RegCodeX86_mxcsr_mask = 46,
-RDI_RegCodeX86_ss         = 47,
-RDI_RegCodeX86_cs         = 48,
-RDI_RegCodeX86_ds         = 49,
-RDI_RegCodeX86_es         = 50,
-RDI_RegCodeX86_fs         = 51,
-RDI_RegCodeX86_gs         = 52,
-RDI_RegCodeX86_ymm0       = 53,
-RDI_RegCodeX86_ymm1       = 54,
-RDI_RegCodeX86_ymm2       = 55,
-RDI_RegCodeX86_ymm3       = 56,
-RDI_RegCodeX86_ymm4       = 57,
-RDI_RegCodeX86_ymm5       = 58,
-RDI_RegCodeX86_ymm6       = 59,
-RDI_RegCodeX86_ymm7       = 60,
-RDI_RegCodeX86_tr         = 61,
-RDI_RegCodeX86_ldtr       = 62,
+RDI_RegCodeX86_st0        = 21,
+RDI_RegCodeX86_st1        = 22,
+RDI_RegCodeX86_st2        = 23,
+RDI_RegCodeX86_st3        = 24,
+RDI_RegCodeX86_st4        = 25,
+RDI_RegCodeX86_st5        = 26,
+RDI_RegCodeX86_st6        = 27,
+RDI_RegCodeX86_st7        = 28,
+RDI_RegCodeX86_fcw        = 29,
+RDI_RegCodeX86_fsw        = 30,
+RDI_RegCodeX86_ftw        = 31,
+RDI_RegCodeX86_fop        = 32,
+RDI_RegCodeX86_fcs        = 33,
+RDI_RegCodeX86_fds        = 34,
+RDI_RegCodeX86_fip        = 35,
+RDI_RegCodeX86_fdp        = 36,
+RDI_RegCodeX86_mxcsr      = 37,
+RDI_RegCodeX86_mxcsr_mask = 38,
+RDI_RegCodeX86_ss         = 39,
+RDI_RegCodeX86_cs         = 40,
+RDI_RegCodeX86_ds         = 41,
+RDI_RegCodeX86_es         = 42,
+RDI_RegCodeX86_fs         = 43,
+RDI_RegCodeX86_gs         = 44,
+RDI_RegCodeX86_ymm0       = 45,
+RDI_RegCodeX86_ymm1       = 46,
+RDI_RegCodeX86_ymm2       = 47,
+RDI_RegCodeX86_ymm3       = 48,
+RDI_RegCodeX86_ymm4       = 49,
+RDI_RegCodeX86_ymm5       = 50,
+RDI_RegCodeX86_ymm6       = 51,
+RDI_RegCodeX86_ymm7       = 52,
+RDI_RegCodeX86_tr         = 53,
+RDI_RegCodeX86_ldtr       = 54,
 } RDI_RegCodeX86Enum;
 
 typedef RDI_U8 RDI_RegCodeX64;
@@ -254,70 +246,62 @@ RDI_RegCodeX64_st4        = 37,
 RDI_RegCodeX64_st5        = 38,
 RDI_RegCodeX64_st6        = 39,
 RDI_RegCodeX64_st7        = 40,
-RDI_RegCodeX64_fpr0       = 41,
-RDI_RegCodeX64_fpr1       = 42,
-RDI_RegCodeX64_fpr2       = 43,
-RDI_RegCodeX64_fpr3       = 44,
-RDI_RegCodeX64_fpr4       = 45,
-RDI_RegCodeX64_fpr5       = 46,
-RDI_RegCodeX64_fpr6       = 47,
-RDI_RegCodeX64_fpr7       = 48,
-RDI_RegCodeX64_zmm0       = 49,
-RDI_RegCodeX64_zmm1       = 50,
-RDI_RegCodeX64_zmm2       = 51,
-RDI_RegCodeX64_zmm3       = 52,
-RDI_RegCodeX64_zmm4       = 53,
-RDI_RegCodeX64_zmm5       = 54,
-RDI_RegCodeX64_zmm6       = 55,
-RDI_RegCodeX64_zmm7       = 56,
-RDI_RegCodeX64_zmm8       = 57,
-RDI_RegCodeX64_zmm9       = 58,
-RDI_RegCodeX64_zmm10      = 59,
-RDI_RegCodeX64_zmm11      = 60,
-RDI_RegCodeX64_zmm12      = 61,
-RDI_RegCodeX64_zmm13      = 62,
-RDI_RegCodeX64_zmm14      = 63,
-RDI_RegCodeX64_zmm15      = 64,
-RDI_RegCodeX64_zmm16      = 65,
-RDI_RegCodeX64_zmm17      = 66,
-RDI_RegCodeX64_zmm18      = 67,
-RDI_RegCodeX64_zmm19      = 68,
-RDI_RegCodeX64_zmm20      = 69,
-RDI_RegCodeX64_zmm21      = 70,
-RDI_RegCodeX64_zmm22      = 71,
-RDI_RegCodeX64_zmm23      = 72,
-RDI_RegCodeX64_zmm24      = 73,
-RDI_RegCodeX64_zmm25      = 74,
-RDI_RegCodeX64_zmm26      = 75,
-RDI_RegCodeX64_zmm27      = 76,
-RDI_RegCodeX64_zmm28      = 77,
-RDI_RegCodeX64_zmm29      = 78,
-RDI_RegCodeX64_zmm30      = 79,
-RDI_RegCodeX64_zmm31      = 80,
-RDI_RegCodeX64_k0         = 81,
-RDI_RegCodeX64_k1         = 82,
-RDI_RegCodeX64_k2         = 83,
-RDI_RegCodeX64_k3         = 84,
-RDI_RegCodeX64_k4         = 85,
-RDI_RegCodeX64_k5         = 86,
-RDI_RegCodeX64_k6         = 87,
-RDI_RegCodeX64_k7         = 88,
-RDI_RegCodeX64_mxcsr      = 89,
-RDI_RegCodeX64_fsbase     = 90,
-RDI_RegCodeX64_gsbase     = 91,
-RDI_RegCodeX64_fcw        = 92,
-RDI_RegCodeX64_fsw        = 93,
-RDI_RegCodeX64_ftw        = 94,
-RDI_RegCodeX64_fop        = 95,
-RDI_RegCodeX64_fcs        = 96,
-RDI_RegCodeX64_fds        = 97,
-RDI_RegCodeX64_fip        = 98,
-RDI_RegCodeX64_fdp        = 99,
-RDI_RegCodeX64_mxcsr_mask = 100,
-RDI_RegCodeX64_cetmsr     = 101,
-RDI_RegCodeX64_cetssp     = 102,
-RDI_RegCodeX64_tr         = 103,
-RDI_RegCodeX64_ldtr       = 104,
+RDI_RegCodeX64_zmm0       = 41,
+RDI_RegCodeX64_zmm1       = 42,
+RDI_RegCodeX64_zmm2       = 43,
+RDI_RegCodeX64_zmm3       = 44,
+RDI_RegCodeX64_zmm4       = 45,
+RDI_RegCodeX64_zmm5       = 46,
+RDI_RegCodeX64_zmm6       = 47,
+RDI_RegCodeX64_zmm7       = 48,
+RDI_RegCodeX64_zmm8       = 49,
+RDI_RegCodeX64_zmm9       = 50,
+RDI_RegCodeX64_zmm10      = 51,
+RDI_RegCodeX64_zmm11      = 52,
+RDI_RegCodeX64_zmm12      = 53,
+RDI_RegCodeX64_zmm13      = 54,
+RDI_RegCodeX64_zmm14      = 55,
+RDI_RegCodeX64_zmm15      = 56,
+RDI_RegCodeX64_zmm16      = 57,
+RDI_RegCodeX64_zmm17      = 58,
+RDI_RegCodeX64_zmm18      = 59,
+RDI_RegCodeX64_zmm19      = 60,
+RDI_RegCodeX64_zmm20      = 61,
+RDI_RegCodeX64_zmm21      = 62,
+RDI_RegCodeX64_zmm22      = 63,
+RDI_RegCodeX64_zmm23      = 64,
+RDI_RegCodeX64_zmm24      = 65,
+RDI_RegCodeX64_zmm25      = 66,
+RDI_RegCodeX64_zmm26      = 67,
+RDI_RegCodeX64_zmm27      = 68,
+RDI_RegCodeX64_zmm28      = 69,
+RDI_RegCodeX64_zmm29      = 70,
+RDI_RegCodeX64_zmm30      = 71,
+RDI_RegCodeX64_zmm31      = 72,
+RDI_RegCodeX64_k0         = 73,
+RDI_RegCodeX64_k1         = 74,
+RDI_RegCodeX64_k2         = 75,
+RDI_RegCodeX64_k3         = 76,
+RDI_RegCodeX64_k4         = 77,
+RDI_RegCodeX64_k5         = 78,
+RDI_RegCodeX64_k6         = 79,
+RDI_RegCodeX64_k7         = 80,
+RDI_RegCodeX64_mxcsr      = 81,
+RDI_RegCodeX64_fsbase     = 82,
+RDI_RegCodeX64_gsbase     = 83,
+RDI_RegCodeX64_fcw        = 84,
+RDI_RegCodeX64_fsw        = 85,
+RDI_RegCodeX64_ftw        = 86,
+RDI_RegCodeX64_fop        = 87,
+RDI_RegCodeX64_fcs        = 88,
+RDI_RegCodeX64_fds        = 89,
+RDI_RegCodeX64_fip        = 90,
+RDI_RegCodeX64_fdp        = 91,
+RDI_RegCodeX64_mxcsr_mask = 92,
+RDI_RegCodeX64_cetmsr     = 93,
+RDI_RegCodeX64_cetssp     = 94,
+RDI_RegCodeX64_tr         = 95,
+RDI_RegCodeX64_ldtr       = 96,
 } RDI_RegCodeX64Enum;
 
 typedef RDI_U32 RDI_BinarySectionFlags;
@@ -664,48 +648,40 @@ X(dr4, 17)\
 X(dr5, 18)\
 X(dr6, 19)\
 X(dr7, 20)\
-X(fpr0, 21)\
-X(fpr1, 22)\
-X(fpr2, 23)\
-X(fpr3, 24)\
-X(fpr4, 25)\
-X(fpr5, 26)\
-X(fpr6, 27)\
-X(fpr7, 28)\
-X(st0, 29)\
-X(st1, 30)\
-X(st2, 31)\
-X(st3, 32)\
-X(st4, 33)\
-X(st5, 34)\
-X(st6, 35)\
-X(st7, 36)\
-X(fcw, 37)\
-X(fsw, 38)\
-X(ftw, 39)\
-X(fop, 40)\
-X(fcs, 41)\
-X(fds, 42)\
-X(fip, 43)\
-X(fdp, 44)\
-X(mxcsr, 45)\
-X(mxcsr_mask, 46)\
-X(ss, 47)\
-X(cs, 48)\
-X(ds, 49)\
-X(es, 50)\
-X(fs, 51)\
-X(gs, 52)\
-X(ymm0, 53)\
-X(ymm1, 54)\
-X(ymm2, 55)\
-X(ymm3, 56)\
-X(ymm4, 57)\
-X(ymm5, 58)\
-X(ymm6, 59)\
-X(ymm7, 60)\
-X(tr, 61)\
-X(ldtr, 62)\
+X(st0, 21)\
+X(st1, 22)\
+X(st2, 23)\
+X(st3, 24)\
+X(st4, 25)\
+X(st5, 26)\
+X(st6, 27)\
+X(st7, 28)\
+X(fcw, 29)\
+X(fsw, 30)\
+X(ftw, 31)\
+X(fop, 32)\
+X(fcs, 33)\
+X(fds, 34)\
+X(fip, 35)\
+X(fdp, 36)\
+X(mxcsr, 37)\
+X(mxcsr_mask, 38)\
+X(ss, 39)\
+X(cs, 40)\
+X(ds, 41)\
+X(es, 42)\
+X(fs, 43)\
+X(gs, 44)\
+X(ymm0, 45)\
+X(ymm1, 46)\
+X(ymm2, 47)\
+X(ymm3, 48)\
+X(ymm4, 49)\
+X(ymm5, 50)\
+X(ymm6, 51)\
+X(ymm7, 52)\
+X(tr, 53)\
+X(ldtr, 54)\
 
 #define RDI_RegCodeX64_XList \
 X(nil, 0)\
@@ -749,70 +725,62 @@ X(st4, 37)\
 X(st5, 38)\
 X(st6, 39)\
 X(st7, 40)\
-X(fpr0, 41)\
-X(fpr1, 42)\
-X(fpr2, 43)\
-X(fpr3, 44)\
-X(fpr4, 45)\
-X(fpr5, 46)\
-X(fpr6, 47)\
-X(fpr7, 48)\
-X(zmm0, 49)\
-X(zmm1, 50)\
-X(zmm2, 51)\
-X(zmm3, 52)\
-X(zmm4, 53)\
-X(zmm5, 54)\
-X(zmm6, 55)\
-X(zmm7, 56)\
-X(zmm8, 57)\
-X(zmm9, 58)\
-X(zmm10, 59)\
-X(zmm11, 60)\
-X(zmm12, 61)\
-X(zmm13, 62)\
-X(zmm14, 63)\
-X(zmm15, 64)\
-X(zmm16, 65)\
-X(zmm17, 66)\
-X(zmm18, 67)\
-X(zmm19, 68)\
-X(zmm20, 69)\
-X(zmm21, 70)\
-X(zmm22, 71)\
-X(zmm23, 72)\
-X(zmm24, 73)\
-X(zmm25, 74)\
-X(zmm26, 75)\
-X(zmm27, 76)\
-X(zmm28, 77)\
-X(zmm29, 78)\
-X(zmm30, 79)\
-X(zmm31, 80)\
-X(k0, 81)\
-X(k1, 82)\
-X(k2, 83)\
-X(k3, 84)\
-X(k4, 85)\
-X(k5, 86)\
-X(k6, 87)\
-X(k7, 88)\
-X(mxcsr, 89)\
-X(fsbase, 90)\
-X(gsbase, 91)\
-X(fcw, 92)\
-X(fsw, 93)\
-X(ftw, 94)\
-X(fop, 95)\
-X(fcs, 96)\
-X(fds, 97)\
-X(fip, 98)\
-X(fdp, 99)\
-X(mxcsr_mask, 100)\
-X(cetmsr, 101)\
-X(cetssp, 102)\
-X(tr, 103)\
-X(ldtr, 104)\
+X(zmm0, 41)\
+X(zmm1, 42)\
+X(zmm2, 43)\
+X(zmm3, 44)\
+X(zmm4, 45)\
+X(zmm5, 46)\
+X(zmm6, 47)\
+X(zmm7, 48)\
+X(zmm8, 49)\
+X(zmm9, 50)\
+X(zmm10, 51)\
+X(zmm11, 52)\
+X(zmm12, 53)\
+X(zmm13, 54)\
+X(zmm14, 55)\
+X(zmm15, 56)\
+X(zmm16, 57)\
+X(zmm17, 58)\
+X(zmm18, 59)\
+X(zmm19, 60)\
+X(zmm20, 61)\
+X(zmm21, 62)\
+X(zmm22, 63)\
+X(zmm23, 64)\
+X(zmm24, 65)\
+X(zmm25, 66)\
+X(zmm26, 67)\
+X(zmm27, 68)\
+X(zmm28, 69)\
+X(zmm29, 70)\
+X(zmm30, 71)\
+X(zmm31, 72)\
+X(k0, 73)\
+X(k1, 74)\
+X(k2, 75)\
+X(k3, 76)\
+X(k4, 77)\
+X(k5, 78)\
+X(k6, 79)\
+X(k7, 80)\
+X(mxcsr, 81)\
+X(fsbase, 82)\
+X(gsbase, 83)\
+X(fcw, 84)\
+X(fsw, 85)\
+X(ftw, 86)\
+X(fop, 87)\
+X(fcs, 88)\
+X(fds, 89)\
+X(fip, 90)\
+X(fdp, 91)\
+X(mxcsr_mask, 92)\
+X(cetmsr, 93)\
+X(cetssp, 94)\
+X(tr, 95)\
+X(ldtr, 96)\
 
 #define RDI_TopLevelInfo_XList \
 X(RDI_Arch, arch)\
