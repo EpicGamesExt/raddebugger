@@ -597,90 +597,8 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
     {}break;
     case Arch_arm64:
     case Arch_arm32:
-    {NotImplemented;}break;
-    
-    ////////////////////////////
-    //- rjf: x86
-    //
     case Arch_x86:
-    {
-      REGS_RegBlockX86 *dst = (REGS_RegBlockX86 *)reg_block;
-      
-      //- rjf: get thread context
-      WOW64_CONTEXT ctx = {0};
-      ctx.ContextFlags = DMN_W32_CTX_X86_ALL;
-      if(!Wow64GetThreadContext(thread, (WOW64_CONTEXT *)&ctx))
-      {
-        break;
-      }
-      result = 1;
-      
-      //- rjf: convert WOW64_CONTEXT -> REGS_RegBlockX86
-      XSAVE_FORMAT *fxsave = (XSAVE_FORMAT *)ctx.ExtendedRegisters;
-      dst->eax.u32 = ctx.Eax;
-      dst->ebx.u32 = ctx.Ebx;
-      dst->ecx.u32 = ctx.Ecx;
-      dst->edx.u32 = ctx.Edx;
-      dst->esi.u32 = ctx.Esi;
-      dst->edi.u32 = ctx.Edi;
-      dst->esp.u32 = ctx.Esp;
-      dst->ebp.u32 = ctx.Ebp;
-      dst->eip.u32 = ctx.Eip;
-      dst->cs.u16 = ctx.SegCs;
-      dst->ds.u16 = ctx.SegDs;
-      dst->es.u16 = ctx.SegEs;
-      dst->fs.u16 = ctx.SegFs;
-      dst->gs.u16 = ctx.SegGs;
-      dst->ss.u16 = ctx.SegSs;
-      dst->dr0.u32 = ctx.Dr0;
-      dst->dr1.u32 = ctx.Dr1;
-      dst->dr2.u32 = ctx.Dr2;
-      dst->dr3.u32 = ctx.Dr3;
-      dst->dr6.u32 = ctx.Dr6;
-      dst->dr7.u32 = ctx.Dr7;
-      // NOTE(rjf): this bit is "supposed to always be 1", according to old info.
-      // may need to be investigated.
-      dst->eflags.u32 = ctx.EFlags | 0x2;
-      dst->fcw.u16 = fxsave->ControlWord;
-      dst->fsw.u16 = fxsave->StatusWord;
-      dst->ftw.u16 = fxsave->TagWord;
-      dst->fop.u16 = fxsave->ErrorOpcode;
-      dst->fip.u32 = fxsave->ErrorOffset;
-      dst->fcs.u16 = fxsave->ErrorSelector;
-      dst->fdp.u32 = fxsave->DataOffset;
-      dst->fds.u16 = fxsave->DataSelector;
-      dst->mxcsr.u32 = fxsave->MxCsr;
-      dst->mxcsr_mask.u32 = fxsave->MxCsr_Mask;
-      {
-        M128A *float_s = fxsave->FloatRegisters;
-        REGS_Reg80 *float_d = &dst->st0;
-        for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 1)
-        {
-          MemoryCopy(float_d, float_s, sizeof(*float_d));
-        }
-      }
-      {
-        M128A *xmm_s = fxsave->XmmRegisters;
-        REGS_Reg256 *xmm_d = &dst->ymm0;
-        for(U32 n = 0; n < 8; n += 1, xmm_s += 1, xmm_d += 1)
-        {
-          MemoryCopy(xmm_d, xmm_s, sizeof(*xmm_s));
-        }
-      }
-      
-      //- rjf: read FS/GS base
-      WOW64_LDT_ENTRY ldt = {0};
-      if(Wow64GetThreadSelectorEntry(thread, ctx.SegFs, &ldt))
-      {
-        U32 base = (ldt.BaseLow) | (ldt.HighWord.Bytes.BaseMid << 16) | (ldt.HighWord.Bytes.BaseHi << 24);
-        dst->fsbase.u32 = base;
-      }
-      if(Wow64GetThreadSelectorEntry(thread, ctx.SegGs, &ldt))
-      {
-        U32 base = (ldt.BaseLow) | (ldt.HighWord.Bytes.BaseMid << 16) | (ldt.HighWord.Bytes.BaseHi << 24);
-        dst->gsbase.u32 = base;
-      }
-    }break;
+    {NotImplemented;}break;
     
     ////////////////////////////
     //- rjf: x64
@@ -901,75 +819,8 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
     {}break;
     case Arch_arm64:
     case Arch_arm32:
-    {NotImplemented;}break;
-    
-    ////////////////////////////
-    //- rjf: x86
-    //
     case Arch_x86:
-    {
-      REGS_RegBlockX86 *src = (REGS_RegBlockX86 *)reg_block;
-      
-      //- rjf: convert REGS_RegBlockX86 -> WOW64_CONTEXT
-      WOW64_CONTEXT ctx = {0};
-      XSAVE_FORMAT *fxsave = (XSAVE_FORMAT*)ctx.ExtendedRegisters;
-      ctx.ContextFlags = DMN_W32_CTX_X86_ALL;
-      ctx.Eax = src->eax.u32;
-      ctx.Ebx = src->ebx.u32;
-      ctx.Ecx = src->ecx.u32;
-      ctx.Edx = src->edx.u32;
-      ctx.Esi = src->esi.u32;
-      ctx.Edi = src->edi.u32;
-      ctx.Esp = src->esp.u32;
-      ctx.Ebp = src->ebp.u32;
-      ctx.Eip = src->eip.u32;
-      ctx.SegCs = src->cs.u16;
-      ctx.SegDs = src->ds.u16;
-      ctx.SegEs = src->es.u16;
-      ctx.SegFs = src->fs.u16;
-      ctx.SegGs = src->gs.u16;
-      ctx.SegSs = src->ss.u16;
-      ctx.Dr0 = src->dr0.u32;
-      ctx.Dr1 = src->dr1.u32;
-      ctx.Dr2 = src->dr2.u32;
-      ctx.Dr3 = src->dr3.u32;
-      ctx.Dr6 = src->dr6.u32;
-      ctx.Dr7 = src->dr7.u32;
-      ctx.EFlags = src->eflags.u32;
-      fxsave->ControlWord = src->fcw.u16;
-      fxsave->StatusWord = src->fsw.u16;
-      fxsave->TagWord = src->ftw.u16;
-      fxsave->ErrorOpcode = src->fop.u16;
-      fxsave->ErrorSelector = src->fcs.u16;
-      fxsave->DataSelector = src->fds.u16;
-      fxsave->ErrorOffset = src->fip.u32;
-      fxsave->DataOffset = src->fdp.u32;
-      fxsave->MxCsr = src->mxcsr.u32 & src->mxcsr_mask.u32;
-      fxsave->MxCsr_Mask = src->mxcsr_mask.u32;
-      {
-        M128A *float_d = fxsave->FloatRegisters;
-        REGS_Reg80 *float_s = &src->st0;
-        for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 1)
-        {
-          MemoryCopy(float_d, float_s, 10);
-        }
-      }
-      {
-        M128A *xmm_d = fxsave->XmmRegisters;
-        REGS_Reg256 *xmm_s = &src->ymm0;
-        for(U32 n = 0; n < 8; n += 1, xmm_d += 1, xmm_s += 1)
-        {
-          MemoryCopy(xmm_d, xmm_s, sizeof(*xmm_d));
-        }
-      }
-      
-      //- rjf: set thread context
-      B32 result = 0;
-      if(Wow64SetThreadContext(thread, &ctx))
-      {
-        result = 1;
-      }
-    }break;
+    {NotImplemented;}break;
     
     ////////////////////////////
     //- rjf: x64
@@ -1528,16 +1379,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           {}break;
           case Arch_arm64:
           case Arch_arm32:
-          {NotImplemented;}break;
-          
-          //- rjf: x86
           case Arch_x86:
-          {
-            REGS_RegBlockX86 regs = {0};
-            dmn_thread_read_reg_block(ctrls->single_step_thread, &regs);
-            regs.eflags.u32 |= 0x100;
-            dmn_thread_write_reg_block(ctrls->single_step_thread, &regs);
-          }break;
+          {NotImplemented;}break;
           
           //- rjf: x64
           case Arch_x64:
@@ -2867,16 +2710,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           {}break;
           case Arch_arm64:
           case Arch_arm32:
+          case Arch_x86:
           {NotImplemented;}break;
           
-          //- rjf: x86/64
-          case Arch_x86:
-          {
-            REGS_RegBlockX86 regs = {0};
-            dmn_thread_read_reg_block(ctrls->single_step_thread, &regs);
-            regs.eflags.u32 &= ~0x100;
-            dmn_thread_write_reg_block(ctrls->single_step_thread, &regs);
-          }break;
           case Arch_x64:
           {
             if(!GetThreadContext(thread->handle, single_step_thread_ctx))
@@ -3137,16 +2973,12 @@ dmn_stack_base_vaddr_from_thread(DMN_Handle handle)
         {}break;
         case Arch_arm64:
         case Arch_arm32:
+        case Arch_x86:
         {NotImplemented;}break;
         case Arch_x64:
         {
           U64 stack_base_addr = tlb + 0x8;
           dmn_w32_process_read(process->handle, r1u64(stack_base_addr, stack_base_addr+8), &result);
-        }break;
-        case Arch_x86:
-        {
-          U64 stack_base_addr = tlb + 0x4;
-          dmn_w32_process_read(process->handle, r1u64(stack_base_addr, stack_base_addr+4), &result);
         }break;
       }
     }
@@ -3171,14 +3003,11 @@ dmn_tls_root_vaddr_from_thread(DMN_Handle handle)
         {}break;
         case Arch_arm64:
         case Arch_arm32:
+        case Arch_x86:
         {NotImplemented;}break;
         case Arch_x64:
         {
           result += 88;
-        }break;
-        case Arch_x86:
-        {
-          result += 44;
         }break;
       }
     }

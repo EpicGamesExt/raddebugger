@@ -2,28 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal U64
-dw_reg_size_from_code_x86(DW_Reg reg_code)
-{
-  switch (reg_code) {
-#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX86_##reg_name_dw: return reg_size;
-    DW_Regs_X86_XList(X)
-#undef X
-  }
-  return 0;
-}
-
-internal U64
-dw_reg_pos_from_code_x86(DW_Reg reg_code)
-{
-  switch (reg_code) {
-#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX86_##reg_name_dw: return reg_pos;
-    DW_Regs_X86_XList(X)
-#undef X
-  }
-  return max_U64;
-}
-
-internal U64
 dw_reg_size_from_code_x64(DW_Reg reg_code)
 {
   switch (reg_code) {
@@ -50,7 +28,6 @@ dw_reg_size_from_code(Arch arch, DW_Reg reg_code)
 {
   switch (arch) {
     case Arch_Null: break;
-    case Arch_x86: return dw_reg_size_from_code_x86(reg_code);
     case Arch_x64: return dw_reg_size_from_code_x64(reg_code);
     default: NotImplemented; break;
   }
@@ -62,7 +39,6 @@ dw_reg_pos_from_code(Arch arch, DW_Reg reg_code)
 {
   switch (arch) {
     case Arch_Null: break;
-    case Arch_x86: return dw_reg_pos_from_code_x86(reg_code);
     case Arch_x64: return dw_reg_pos_from_code_x64(reg_code);
     default: NotImplemented; break;
   }
@@ -75,7 +51,6 @@ dw_reg_count_from_arch(Arch arch)
   switch (arch) {
   default: { NotImplemented; } // fall-through
   case Arch_Null: return 0;
-  case Arch_x86: return DW_RegX86_Last;
   case Arch_x64: return DW_RegX64_Last;
   }
 }
@@ -100,7 +75,6 @@ dw_sp_from_arch(Arch arch)
   switch (arch) {
   default: NotImplemented;
   case Arch_Null: return 0;
-  case Arch_x86:  return DW_RegX86_Esp;
   case Arch_x64:  return DW_RegX64_Rsp;
   }
 }
@@ -793,13 +767,6 @@ dw_string_from_register(Arena *arena, Arch arch, U64 reg_id)
   String8 reg_str = str8_zero();
   switch (arch) {
     case Arch_Null: break;
-    case Arch_x86: {
-      switch (reg_id) {
-#define X(_N, _ID, ...) case DW_RegX86_##_N: reg_str = str8_lit(Stringify(_N)); break;
-        DW_Regs_X86_XList(X)
-#undef X
-      }
-    } break;
     case Arch_x64: {
       switch (reg_id) {
 #define X(_N, _ID, ...) case DW_RegX64_##_N: reg_str = str8_lit(Stringify(_N)); break;
@@ -809,6 +776,7 @@ dw_string_from_register(Arena *arena, Arch arch, U64 reg_id)
     } break;
     case Arch_arm32: NotImplemented; break;
     case Arch_arm64: NotImplemented; break;
+    case Arch_x86: NotImplemented; break;
     default: InvalidPath; break;
   }
   if (reg_str.size == 0) {

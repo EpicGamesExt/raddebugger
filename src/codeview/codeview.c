@@ -47,7 +47,6 @@ cv_size_from_reg(CV_Arch arch, CV_Reg reg)
 {
   switch(arch)
   {
-    case CV_Arch_8086: return cv_size_from_reg_x86(reg);
     case CV_Arch_X64 : return cv_size_from_reg_x64(reg);
     default: NotImplemented;
   }
@@ -59,21 +58,8 @@ cv_is_reg_sp(CV_Arch arch, CV_Reg reg)
 {
   switch(arch)
   {
-    case CV_Arch_8086: return reg == CV_Regx86_ESP;
     case CV_Arch_X64:  return reg == CV_Regx64_RSP;
     default: NotImplemented;
-  }
-  return 0;
-}
-
-internal U64
-cv_size_from_reg_x86(CV_Reg reg)
-{
-  switch(reg)
-  {
-#define X(NAME, CODE, RDI_NAME, BYTE_POS, BYTE_SIZE) case CV_Regx86_##NAME: return BYTE_SIZE;
-    CV_Reg_X86_XList(X)
-#undef X
   }
   return 0;
 }
@@ -111,18 +97,6 @@ cv_decode_fp_reg(CV_Arch arch, CV_EncodedFramePtrReg encoded_reg)
   CV_Reg fp_reg = 0;
   switch (arch)
   {
-    case CV_Arch_8086:
-    {
-      switch (encoded_reg)
-      {
-        case CV_EncodedFramePtrReg_None    : break;
-        case CV_EncodedFramePtrReg_StackPtr: AssertAlways(!"TODO: not tested, this is a guess");
-        fp_reg = CV_Regx86_ESP; break;
-        case CV_EncodedFramePtrReg_FramePtr: fp_reg = CV_Regx86_EBP; break;
-        case CV_EncodedFramePtrReg_BasePtr : fp_reg = CV_Regx86_EBX; break;
-        default: InvalidPath;
-      }
-    } break;
     case CV_Arch_X64:
     {
       switch (encoded_reg)
@@ -144,14 +118,6 @@ cv_map_encoded_base_pointer(CV_Arch arch, U32 encoded_frame_reg)
 {
   U32 r = 0;
   switch (arch) {
-    case CV_Arch_8086: {
-      switch (encoded_frame_reg) {
-        case 0: r = 0;                    break;
-        case 1: r = CV_AllReg_VFRAME; break;
-        case 2: r = CV_Regx86_EBP;    break;
-        case 3: r = CV_Regx86_EBX;    break;
-      }
-    } break;
     case CV_Arch_X64: {
       switch (encoded_frame_reg) {
         case 0: r = 0; break;
@@ -207,13 +173,6 @@ cv_string_from_reg_id(Arena *arena, CV_Arch arch, U32 id)
 {
   String8 result = str8_zero();
   switch (arch) {
-    case CV_Arch_8086: {
-      switch (id) {
-#define X(_N, _ID, ...) case _ID: result = str8_lit(Stringify(_N)); break;
-        CV_Reg_X86_XList(X)
-#undef X
-      }
-    } break;
     case CV_Arch_X64: {
       switch (id) {
 #define X(_N, _ID, ...) case _ID: result = str8_lit(Stringify(_N)); break;

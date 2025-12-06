@@ -65,7 +65,7 @@ regs_rip_from_arch_block(Arch arch, void *block)
   {
     default:{}break;
     case Arch_x64:{result = ((REGS_RegBlockX64 *)block)->rip.u64;}break;
-    case Arch_x86:{result = (U64)((REGS_RegBlockX86 *)block)->eip.u32;}break;
+    case Arch_x86:{NotImplemented;}break;
   }
   return result;
 }
@@ -78,7 +78,7 @@ regs_rsp_from_arch_block(Arch arch, void *block)
   {
     default:{}break;
     case Arch_x64:{result = ((REGS_RegBlockX64 *)block)->rsp.u64;}break;
-    case Arch_x86:{result = (U64)((REGS_RegBlockX86 *)block)->esp.u32;}break;
+    case Arch_x86:{NotImplemented;}break;
   }
   return result;
 }
@@ -90,7 +90,7 @@ regs_arch_block_write_rip(Arch arch, void *block, U64 rip)
   {
     default:{}break;
     case Arch_x64:{((REGS_RegBlockX64 *)block)->rip.u64 = rip;}break;
-    case Arch_x86:{((REGS_RegBlockX86 *)block)->eip.u32 = (U32)rip;}break;
+    case Arch_x86:{NotImplemented;}break;
   }
 }
 
@@ -101,6 +101,6 @@ regs_arch_block_write_rsp(Arch arch, void *block, U64 rsp)
   {
     default:{}break;
     case Arch_x64:{((REGS_RegBlockX64 *)block)->rsp.u64 = rsp;}break;
-    case Arch_x86:{((REGS_RegBlockX86 *)block)->esp.u32 = (U32)rsp;}break;
+    case Arch_x86:{NotImplemented;}break;
   }
 }

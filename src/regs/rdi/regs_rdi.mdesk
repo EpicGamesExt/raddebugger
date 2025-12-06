@@ -22,11 +22,7 @@
         `}break;`;
       `case Arch_x86:`;
       `{`;
-        `switch(code)`
-          `{`;
-          `default:{}break;`;
-          @expand(REGS_RegTableX86 a) `case REGS_RegCodeX86_$(a.name):{result = RDI_RegCodeX86_$(a.name);}break;`;
-          `}`;
+        `NotImplemented;`
         `}break;`;
       `}`;
     `return result;`;
@@ -51,11 +47,7 @@
         `}break;`;
       `case Arch_x86:`;
       `{`;
-        `switch(code)`
-          `{`;
-          `default:{}break;`;
-          @expand(REGS_RegTableX86 a) `case RDI_RegCodeX86_$(a.name):{result = REGS_RegCodeX86_$(a.name);}break;`;
-          `}`;
+        `NotImplemented;`
         `}break;`;
       `}`;
     `return result;`;

@@ -65,20 +65,6 @@ d2r_rdi_language_from_dw_language(DW_Language v)
   return result;
 }
 
-internal RDI_RegCodeX86
-d2r_rdi_reg_code_from_dw_reg_x86(DW_RegX86 v)
-{
-  RDI_RegCodeX86 result = RDI_RegCode_nil;
-  switch(v)
-  {
-    default:{}break;
-#define X(reg_dw, val_dw, reg_rdi, ...) case DW_RegX86_##reg_dw: result = RDI_RegCodeX86_##reg_rdi; break;
-    DW_Regs_X86_XList(X)
-#undef X
-  }
-  return result;
-}
-
 internal RDI_RegCodeX64
 d2r_rdi_reg_code_from_dw_reg_x64(DW_RegX64 v)
 {
@@ -99,9 +85,8 @@ d2r_rdi_reg_code_from_dw_reg(Arch arch, DW_Reg v)
   RDI_RegCode result = RDI_RegCode_nil;
   switch(arch)
   {
-    default:
-    case Arch_Null:
-    case Arch_x86:{result = d2r_rdi_reg_code_from_dw_reg_x86(v);}break;
+    default: NotImplemented; break;
+    case Arch_Null: break;
     case Arch_x64:{result = d2r_rdi_reg_code_from_dw_reg_x64(v);}break;
   }
   return result;

@@ -278,68 +278,7 @@ RDI_VMapEntryMemberTable:
 RDI_ArchTable:
 {
   {NULL    0     0}
-  {X86     1     4}
-  {X64     2     8}
-}
-
-@table(name value)
-RDI_RegCodeX86Table:
-{
-  {nil             0}
-  {eax             1}
-  {ecx             2}
-  {edx             3}
-  {ebx             4}
-  {esp             5}
-  {ebp             6}
-  {esi             7}
-  {edi             8}
-  {fsbase          9}
-  {gsbase         10}
-  {eflags         11}
-  {eip            12}
-  {dr0            13}
-  {dr1            14}
-  {dr2            15}
-  {dr3            16}
-  {dr4            17}
-  {dr5            18}
-  {dr6            19}
-  {dr7            20}
-  {st0            21}
-  {st1            22}
-  {st2            23}
-  {st3            24}
-  {st4            25}
-  {st5            26}
-  {st6            27}
-  {st7            28}
-  {fcw            29}
-  {fsw            30}
-  {ftw            31}
-  {fop            32}
-  {fcs            33}
-  {fds            34}
-  {fip            35}
-  {fdp            36}
-  {mxcsr          37}
-  {mxcsr_mask     38}
-  {ss             39}
-  {cs             40}
-  {ds             41}
-  {es             42}
-  {fs             43}
-  {gs             44}
-  {ymm0           45}
-  {ymm1           46}
-  {ymm2           47}
-  {ymm3           48}
-  {ymm4           49}
-  {ymm5           50}
-  {ymm6           51}
-  {ymm7           52}
-  {tr             53}
-  {ldtr           54}
+  {X64     1     8}
 }
 
 @table(name value)
@@ -456,19 +395,9 @@ RDI_RegCodeX64Table:
 
 @enum(RDI_U8) RDI_RegCode: {nil}
 
-@enum(RDI_U8) RDI_RegCodeX86:
-{
-  @expand(RDI_RegCodeX86Table a) `$(a.name .. =>10) = $(a.value)`
-}
-
 @enum(RDI_U8) RDI_RegCodeX64:
 {
   @expand(RDI_RegCodeX64Table a) `$(a.name .. =>10) = $(a.value)`
-}
-
-@xlist RDI_RegCodeX86_XList:
-{
-  @expand(RDI_RegCodeX86Table a) `$(a.name), $(a.value)`
 }
 
 @xlist RDI_RegCodeX64_XList:

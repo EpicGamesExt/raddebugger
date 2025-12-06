@@ -98,7 +98,6 @@ typedef struct D2R_ValueTypeStack
 //~ rjf: Enum Conversion Helpers
 
 internal RDI_Language   d2r_rdi_language_from_dw_language(DW_Language v);
-internal RDI_RegCodeX86 d2r_rdi_reg_code_from_dw_reg_x86(DW_RegX86 v);
 internal RDI_RegCodeX64 d2r_rdi_reg_code_from_dw_reg_x64(DW_RegX64 v);
 internal RDI_RegCode    d2r_rdi_reg_code_from_dw_reg(Arch arch, DW_Reg v);
 

@@ -69,7 +69,7 @@ p2r_rdi_arch_from_cv_arch(CV_Arch cv_arch)
   RDI_Arch result = 0;
   switch(cv_arch)
   {
-    case CV_Arch_8086: result = RDI_Arch_X86; break;
+    case CV_Arch_8086: NotImplemented; break;
     case CV_Arch_X64:  result = RDI_Arch_X64; break;
     //case CV_Arch_8080: break;
     //case CV_Arch_80286: break;
@@ -139,15 +139,6 @@ p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
   RDI_RegCode result = 0;
   switch(arch)
   {
-    case RDI_Arch_X86:
-    {
-      switch(reg_code)
-      {
-#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegCodeX86_##RDN; break;
-        CV_Reg_X86_XList(X)
-#undef X
-      }
-    }break;
     case RDI_Arch_X64:
     {
       switch(reg_code)
@@ -287,25 +278,6 @@ p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encod
   RDI_RegCode result = 0;
   switch(arch)
   {
-    case RDI_Arch_X86:
-    {
-      switch(encoded_reg)
-      {
-        case CV_EncodedFramePtrReg_StackPtr:
-        {
-          // TODO(allen): support CV_AllReg_VFRAME
-          // TODO(allen): error
-        }break;
-        case CV_EncodedFramePtrReg_FramePtr:
-        {
-          result = RDI_RegCodeX86_ebp;
-        }break;
-        case CV_EncodedFramePtrReg_BasePtr:
-        {
-          result = RDI_RegCodeX86_ebx;
-        }break;
-      }
-    }break;
     case RDI_Arch_X64:
     {
       switch(encoded_reg)
@@ -3762,7 +3734,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   switch(arch)
                   {
                     default:{}break;
-                    case RDI_Arch_X86:{is_stack_reg = (cv_reg == CV_Regx86_ESP || cv_reg == CV_Regx86_EBP);}break;
                     case RDI_Arch_X64:{is_stack_reg = (cv_reg == CV_Regx64_RSP || cv_reg == CV_Regx64_RBP);}break;
                   }
                   if(is_stack_reg)
@@ -3804,10 +3775,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   B32 extra_indirection_to_value = 0;
                   switch(arch)
                   {
-                    case RDI_Arch_X86:
-                    {
-                      extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 4 || !IsPow2OrZero(type->byte_size)));
-                    }break;
                     case RDI_Arch_X64:
                     {
                       extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)));

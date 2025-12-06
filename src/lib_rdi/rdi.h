@@ -132,8 +132,7 @@ typedef RDI_U32 RDI_Arch;
 typedef enum RDI_ArchEnum
 {
 RDI_Arch_NULL       = 0,
-RDI_Arch_X86        = 1,
-RDI_Arch_X64        = 2,
+RDI_Arch_X64        = 1,
 } RDI_ArchEnum;
 
 typedef RDI_U8 RDI_RegCode;
@@ -141,66 +140,6 @@ typedef enum RDI_RegCodeEnum
 {
 RDI_RegCode_nil,
 } RDI_RegCodeEnum;
-
-typedef RDI_U8 RDI_RegCodeX86;
-typedef enum RDI_RegCodeX86Enum
-{
-RDI_RegCodeX86_nil        = 0,
-RDI_RegCodeX86_eax        = 1,
-RDI_RegCodeX86_ecx        = 2,
-RDI_RegCodeX86_edx        = 3,
-RDI_RegCodeX86_ebx        = 4,
-RDI_RegCodeX86_esp        = 5,
-RDI_RegCodeX86_ebp        = 6,
-RDI_RegCodeX86_esi        = 7,
-RDI_RegCodeX86_edi        = 8,
-RDI_RegCodeX86_fsbase     = 9,
-RDI_RegCodeX86_gsbase     = 10,
-RDI_RegCodeX86_eflags     = 11,
-RDI_RegCodeX86_eip        = 12,
-RDI_RegCodeX86_dr0        = 13,
-RDI_RegCodeX86_dr1        = 14,
-RDI_RegCodeX86_dr2        = 15,
-RDI_RegCodeX86_dr3        = 16,
-RDI_RegCodeX86_dr4        = 17,
-RDI_RegCodeX86_dr5        = 18,
-RDI_RegCodeX86_dr6        = 19,
-RDI_RegCodeX86_dr7        = 20,
-RDI_RegCodeX86_st0        = 21,
-RDI_RegCodeX86_st1        = 22,
-RDI_RegCodeX86_st2        = 23,
-RDI_RegCodeX86_st3        = 24,
-RDI_RegCodeX86_st4        = 25,
-RDI_RegCodeX86_st5        = 26,
-RDI_RegCodeX86_st6        = 27,
-RDI_RegCodeX86_st7        = 28,
-RDI_RegCodeX86_fcw        = 29,
-RDI_RegCodeX86_fsw        = 30,
-RDI_RegCodeX86_ftw        = 31,
-RDI_RegCodeX86_fop        = 32,
-RDI_RegCodeX86_fcs        = 33,
-RDI_RegCodeX86_fds        = 34,
-RDI_RegCodeX86_fip        = 35,
-RDI_RegCodeX86_fdp        = 36,
-RDI_RegCodeX86_mxcsr      = 37,
-RDI_RegCodeX86_mxcsr_mask = 38,
-RDI_RegCodeX86_ss         = 39,
-RDI_RegCodeX86_cs         = 40,
-RDI_RegCodeX86_ds         = 41,
-RDI_RegCodeX86_es         = 42,
-RDI_RegCodeX86_fs         = 43,
-RDI_RegCodeX86_gs         = 44,
-RDI_RegCodeX86_ymm0       = 45,
-RDI_RegCodeX86_ymm1       = 46,
-RDI_RegCodeX86_ymm2       = 47,
-RDI_RegCodeX86_ymm3       = 48,
-RDI_RegCodeX86_ymm4       = 49,
-RDI_RegCodeX86_ymm5       = 50,
-RDI_RegCodeX86_ymm6       = 51,
-RDI_RegCodeX86_ymm7       = 52,
-RDI_RegCodeX86_tr         = 53,
-RDI_RegCodeX86_ldtr       = 54,
-} RDI_RegCodeX86Enum;
 
 typedef RDI_U8 RDI_RegCodeX64;
 typedef enum RDI_RegCodeX64Enum
@@ -623,65 +562,7 @@ X(RDI_U64, idx)\
 
 #define RDI_Arch_XList \
 X(NULL)\
-X(X86)\
 X(X64)\
-
-#define RDI_RegCodeX86_XList \
-X(nil, 0)\
-X(eax, 1)\
-X(ecx, 2)\
-X(edx, 3)\
-X(ebx, 4)\
-X(esp, 5)\
-X(ebp, 6)\
-X(esi, 7)\
-X(edi, 8)\
-X(fsbase, 9)\
-X(gsbase, 10)\
-X(eflags, 11)\
-X(eip, 12)\
-X(dr0, 13)\
-X(dr1, 14)\
-X(dr2, 15)\
-X(dr3, 16)\
-X(dr4, 17)\
-X(dr5, 18)\
-X(dr6, 19)\
-X(dr7, 20)\
-X(st0, 21)\
-X(st1, 22)\
-X(st2, 23)\
-X(st3, 24)\
-X(st4, 25)\
-X(st5, 26)\
-X(st6, 27)\
-X(st7, 28)\
-X(fcw, 29)\
-X(fsw, 30)\
-X(ftw, 31)\
-X(fop, 32)\
-X(fcs, 33)\
-X(fds, 34)\
-X(fip, 35)\
-X(fdp, 36)\
-X(mxcsr, 37)\
-X(mxcsr_mask, 38)\
-X(ss, 39)\
-X(cs, 40)\
-X(ds, 41)\
-X(es, 42)\
-X(fs, 43)\
-X(gs, 44)\
-X(ymm0, 45)\
-X(ymm1, 46)\
-X(ymm2, 47)\
-X(ymm3, 48)\
-X(ymm4, 49)\
-X(ymm5, 50)\
-X(ymm6, 51)\
-X(ymm7, 52)\
-X(tr, 53)\
-X(ldtr, 54)\
 
 #define RDI_RegCodeX64_XList \
 X(nil, 0)\

@@ -1590,54 +1590,6 @@ typedef enum DW_ExprOpEnum
 
 //- Regs
 
-#define DW_Regs_X86_XList(X) \
-X(Eax,    0,  eax,    0, 4)  \
-X(Ecx,    1,  ecx,    0, 4)  \
-X(Edx,    2,  edx,    0, 4)  \
-X(Ebx,    3,  ebx,    0, 4)  \
-X(Esp,    4,  esp,    0, 4)  \
-X(Ebp,    5,  ebp,    0, 4)  \
-X(Esi,    6,  esi,    0, 4)  \
-X(Edi,    7,  edi,    0, 4)  \
-X(Eip,    8,  eip,    0, 4)  \
-X(Eflags, 9,  eflags, 0, 4)  \
-X(Trapno, 10, nil,    0, 0)  \
-X(St0,    11, st0,    0, 10) \
-X(St1,    12, st1,    0, 10) \
-X(St2,    13, st2,    0, 10) \
-X(St3,    14, st3,    0, 10) \
-X(St4,    15, st4,    0, 10) \
-X(St5,    16, st5,    0, 10) \
-X(St6,    17, st6,    0, 10) \
-X(St7,    18, st7,    0, 10) \
-X(Xmm0,   21, ymm0,   0, 16) \
-X(Xmm1,   22, ymm1,   0, 16) \
-X(Xmm2,   23, ymm2,   0, 16) \
-X(Xmm3,   24, ymm3,   0, 16) \
-X(Xmm4,   25, ymm4,   0, 16) \
-X(Xmm5,   26, ymm5,   0, 16) \
-X(Xmm6,   27, ymm6,   0, 16) \
-X(Xmm7,   28, ymm7,   0, 16) \
-X(Mm0,    29, st0,    0, 8)  \
-X(Mm1,    30, st1,    0, 8)  \
-X(Mm2,    31, st2,    0, 8)  \
-X(Mm3,    32, st3,    0, 8)  \
-X(Mm4,    33, st4,    0, 8)  \
-X(Mm5,    34, st5,    0, 8)  \
-X(Mm6,    35, st6,    0, 8)  \
-X(Mm7,    36, st7,    0, 8)  \
-X(Fcw,    37, fcw,    0, 2)  \
-X(Fsw,    38, fsw,    0, 2)  \
-X(Mxcsr,  39, mxcsr,  0, 4)  \
-X(Es,     40, es,     0, 2)  \
-X(Cs,     41, cs,     0, 2)  \
-X(Ss,     42, ss,     0, 2)  \
-X(Ds,     43, ds,     0, 2)  \
-X(Fs,     44, fs,     0, 2)  \
-X(Gs,     45, gs,     0, 2)  \
-X(Tr,     48, tr,     0, 0)  \
-X(Ldtr,   49, ldtr,   0, 0)
-
 #define DW_Regs_X64_XList(X)  \
 X(Rax,     0,  rax,    0, 8)  \
 X(Rdx,     1,  rdx,    0, 8)  \
@@ -1718,15 +1670,6 @@ X(Ldtr,    63, ldtr,   0, 0)
 
 typedef U32 DW_Reg;
 
-typedef DW_Reg DW_RegX86;
-typedef enum DW_RegX86Enum
-{
-#define X(_N,_ID,...) DW_RegX86_##_N = _ID,
-  DW_Regs_X86_XList(X)
-#undef X
-  DW_RegX86_Last
-} DW_RegX86Enum;
-
 typedef DW_Reg DW_RegX64;
 typedef enum DW_RegX64Enum
 {
@@ -1738,8 +1681,6 @@ typedef enum DW_RegX64Enum
 
 ////////////////////////////////
 
-internal U64 dw_reg_size_from_code_x86(DW_Reg reg_code);
-internal U64 dw_reg_pos_from_code_x86(DW_Reg reg_code);
 internal U64 dw_reg_size_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_pos_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_size_from_code(Arch arch, DW_Reg reg_code);

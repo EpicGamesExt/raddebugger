@@ -26,7 +26,7 @@ rdim_make_top_level_info(String8 image_name, Arch arch, U64 exe_hash, RDIM_Binar
   {
     default:{}break;
     case Arch_x64:{arch_rdi = RDI_Arch_X64;}break;
-    case Arch_x86:{arch_rdi = RDI_Arch_X86;}break;
+    case Arch_x86:{NotImplemented;}break;
   }
   
   // find max VOFF

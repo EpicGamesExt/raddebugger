@@ -5,9 +5,9 @@ internal RDI_Arch
 rdi_arch_from_cv_arch(CV_Arch arch)
 {
   switch (arch) {
-  case CV_Arch_8086: return RDI_Arch_X86;
   case CV_Arch_X64:  return RDI_Arch_X64;
 
+  case CV_Arch_8086:
   case CV_Arch_8080: 
   case CV_Arch_80286: 
   case CV_Arch_80386: 
@@ -211,13 +211,6 @@ rdi_reg_code_from_cv(CV_Arch arch, CV_Reg reg)
 {
   RDI_RegCode result = 0;
   switch (arch) {
-  case CV_Arch_8086: {
-    switch (reg) {
-#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegCodeX86_##RDN; break;
-        CV_Reg_X86_XList(X)
-#undef X
-    }
-  } break;
   case CV_Arch_X64: {
     switch (reg) {
 #define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegCodeX64_##RDN; break;
@@ -225,6 +218,7 @@ rdi_reg_code_from_cv(CV_Arch arch, CV_Reg reg)
 #undef X
     }
   } break;
+  case CV_Arch_8086:
   default: NotImplemented;
   }
   return result;

@@ -122,10 +122,6 @@ REGS_AliasTableX64:
   {r13d            r13    0      32     Normal}
   {r14d            r14    0      32     Normal}
   {r15d            r15    0      32     Normal}
-  
-  // TODO(allen): figure this one out; visual studio disagrees
-  {eip             rip    0      32     Normal}
-  
   {eflags          rflags 0      32     Normal}
   {ax              rax    0      16     Normal}
   {cx              rcx    0      16     Normal}
@@ -207,121 +203,12 @@ REGS_AliasTableX64:
 }
 
 ////////////////////////////////
-//~ rjf: X86 Tables
-
-@table(name size usage)
-REGS_RegTableX86:
-{
-  {eax                       32  Normal}
-  {ecx                       32  Normal}
-  {edx                       32  Normal}
-  {ebx                       32  Normal}
-  {esp                       32  Normal}
-  {ebp                       32  Normal}
-  {esi                       32  Normal}
-  {edi                       32  Normal}
-  {fsbase                    32  Normal}
-  {gsbase                    32  Normal}
-  {eflags                    32  Normal}
-  {eip                       32  Normal}
-  {dr0                       32  Normal}
-  {dr1                       32  Normal}
-  {dr2                       32  Normal}
-  {dr3                       32  Normal}
-  {dr4                       32  Normal}
-  {dr5                       32  Normal}
-  {dr6                       32  Normal}
-  {dr7                       32  Normal}
-  // FSave registers
-  // TODO(allen): I am suspicious of this stuff here.
-  // Are fpr0-7 and st0-7 actually different things? Visual studio doesn't show
-  // frp0-7. Not sure if the mm0-7 aliases are setup the right way either.
-  {st0                       80  Normal}
-  {st1                       80  Normal}
-  {st2                       80  Normal}
-  {st3                       80  Normal}
-  {st4                       80  Normal}
-  {st5                       80  Normal}
-  {st6                       80  Normal}
-  {st7                       80  Normal}
-  {fcw                       16  Normal}
-  {fsw                       16  Normal}
-  {ftw                       16  Normal}
-  {fop                       16  Normal}
-  {fcs                       16  Normal}
-  {fds                       16  Normal}
-  {fip                       32  Normal}
-  {fdp                       32  Normal}
-  {mxcsr                     32  Normal}
-  // TODO(allen): I don't think this is really a "register" - think about this...
-  {mxcsr_mask                32  Normal}
-  {ss                        16  Normal}
-  {cs                        16  Normal}
-  {ds                        16  Normal}
-  {es                        16  Normal}
-  {fs                        16  Normal}
-  {gs                        16  Normal}
-  {tr                        16  Normal}
-  {ldtr                      16  Normal}
-  // SIMD REGISTERS
-  {ymm0                      256 Vector}
-  {ymm1                      256 Vector}
-  {ymm2                      256 Vector}
-  {ymm3                      256 Vector}
-  {ymm4                      256 Vector}
-  {ymm5                      256 Vector}
-  {ymm6                      256 Vector}
-  {ymm7                      256 Vector}
-}
-
-@table(name base off size usage)
-REGS_AliasTableX86:
-{
-  {ax     eax    0      16    Normal}
-  {cx     ecx    0      16    Normal}
-  {bx     ebx    0      16    Normal}
-  {dx     edx    0      16    Normal}
-  {sp     esp    0      16    Normal}
-  {bp     ebp    0      16    Normal}
-  {si     esi    0      16    Normal}
-  {di     edi    0      16    Normal}
-  {ip     eip    0      16    Normal}
-  {ah     eax    8      8     Normal}
-  {ch     ecx    8      8     Normal}
-  {dh     edx    8      8     Normal}
-  {bh     ebx    8      8     Normal}
-  {al     eax    0      8     Normal}
-  {cl     ecx    0      8     Normal}
-  {dl     edx    0      8     Normal}
-  {bl     ebx    0      8     Normal}
-  {bpl    ebp    0      8     Normal}
-  {spl    esp    0      8     Normal}
-  {xmm0   ymm0   0      128   Vector}
-  {xmm1   ymm1   0      128   Vector}
-  {xmm2   ymm2   0      128   Vector}
-  {xmm3   ymm3   0      128   Vector}
-  {xmm4   ymm4   0      128   Vector}
-  {xmm5   ymm5   0      128   Vector}
-  {xmm6   ymm6   0      128   Vector}
-  {xmm7   ymm7   0      128   Vector}
-  {mm0    st0    0      64    Vector}
-  {mm1    st1    0      64    Vector}
-  {mm2    st2    0      64    Vector}
-  {mm3    st3    0      64    Vector}
-  {mm4    st4    0      64    Vector}
-  {mm5    st5    0      64    Vector}
-  {mm6    st6    0      64    Vector}
-  {mm7    st7    0      64    Vector}
-}
-
-////////////////////////////////
 //~ rjf: Architecture Tables
 
 @table(name, name_lower)
 REGS_ArchTable:
 {
   {X64 x64}
-  {X86 x86}
 }
 
 ////////////////////////////////
@@ -381,65 +268,6 @@ regs_g_alias_code_x64_usage_kind_table:
 {
   `{0}`;
   @expand(REGS_AliasTableX64 a) `{REGS_RegCodeX64_$(a.base), $(a.off/8), $(a.size/8)}`,
-}
-
-////////////////////////////////
-//~ rjf: X86 Generators
-
-@enum REGS_RegCodeX86:
-{
-  NULL,
-  @expand(REGS_RegTableX86 a) `$(a.name)`,
-  COUNT,
-}
-
-@enum REGS_AliasCodeX86:
-{
-  NULL,
-  @expand(REGS_AliasTableX86 a) `$(a.name)`,
-  COUNT,
-}
-
-@struct REGS_RegBlockX86:
-{
-  @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name)`,
-}
-
-@data(REGS_UsageKind)
-regs_g_reg_code_x86_usage_kind_table:
-{
-  `REGS_UsageKind_Normal`;
-  @expand(REGS_RegTableX86 a) `REGS_UsageKind_$(a.usage)`;
-}
-
-@data(REGS_UsageKind) regs_g_alias_code_x86_usage_kind_table:
-{
-  `REGS_UsageKind_Normal`;
-  @expand(REGS_AliasTableX86 a) `REGS_UsageKind_$(a.usage)`;
-}
-
-@data(String8) regs_g_reg_code_x86_string_table:
-{
-  `str8_lit_comp("")`;
-  @expand(REGS_RegTableX86 a) `str8_lit_comp("$(a.name)")`;
-}
-
-@data(String8) regs_g_alias_code_x86_string_table:
-{
-  `str8_lit_comp("")`;
-  @expand(REGS_AliasTableX86 a) `str8_lit_comp("$(a.name)")`;
-}
-
-@data(REGS_Rng) regs_g_reg_code_x86_rng_table:
-{
-  `{0}`;
-  @expand(REGS_RegTableX86 a) `{(U16)OffsetOf(REGS_RegBlockX86, $(a.name)), $(a.size/8)}`,
-}
-
-@data(REGS_Slice) regs_g_alias_code_x86_slice_table:
-{
-  `{0}`;
-  @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)}`,
 }
 
 ////////////////////////////////

@@ -9,7 +9,6 @@ rdib_infer_data_model(OperatingSystem os, RDI_Arch arch)
   case OperatingSystem_Null: break;
   case OperatingSystem_Windows: {
     switch (arch) {
-    case RDI_Arch_X86:
     case RDI_Arch_X64:
       data_model = RDIB_DataModel_LLP64; break;
     default: NotImplemented;
@@ -17,14 +16,12 @@ rdib_infer_data_model(OperatingSystem os, RDI_Arch arch)
   } break;
   case OperatingSystem_Linux: {
     switch (arch) {
-    case RDI_Arch_X86: data_model = RDIB_DataModel_ILP32; break;
     case RDI_Arch_X64: data_model = RDIB_DataModel_LLP64; break;
     default: NotImplemented;
     }
   } break;
   case OperatingSystem_Mac: {
     switch (arch) {
-    case RDI_Arch_X86: NotImplemented; break;
     case RDI_Arch_X64: data_model = RDIB_DataModel_LP64; break;
     }
   } break;

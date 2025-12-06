@@ -5,9 +5,9 @@ internal RDI_Arch
 rdi_arch_from_coff_machine(COFF_MachineType machine)
 {
   switch (machine) {
-  case COFF_MachineType_X86: return RDI_Arch_X86;
   case COFF_MachineType_X64: return RDI_Arch_X64;
 
+  case COFF_MachineType_X86:
   case COFF_MachineType_Unknown:
   case COFF_MachineType_Am33:
   case COFF_MachineType_Arm:
