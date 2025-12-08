@@ -215,7 +215,6 @@ struct DMN_LNX_Entity
   // thread
   void                *reg_block;
   B32                  expecting_dummy_sigstop;
-  B32                  is_main_thread;
   B32                  is_reg_block_dirty;
   B32                  pass_through_signal;
   U64                  pass_through_signo;
@@ -253,6 +252,7 @@ enum
 {
   DMN_LNX_ProcessLaunchState_Null,
   DMN_LNX_ProcessLaunchState_Exec,
+  DMN_LNX_ProcessLaunchState_Attach,
   DMN_LNX_ProcessLaunchState_Exit,
 };
 
@@ -359,7 +359,7 @@ internal DMN_LNX_ProcessAuxv dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_clas
 //- ELF/GNU info from memory
 internal DMN_LNX_PhdrInfo       dmn_lnx_phdr_info_from_memory(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
 internal DMN_LNX_DynamicInfo    dmn_lnx_dynamic_info_from_memory(int memory_fd, ELF_Class elf_Class, U64 rebase, U64 dynamic_vaddr);
-internal U64                    dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vaddr);
+internal U64                    dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vaddr, B32 is_rebased);
 
 internal String8 dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base);
 
