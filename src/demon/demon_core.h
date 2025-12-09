@@ -155,8 +155,8 @@ struct DMN_TrapChunkList
 typedef struct DMN_ActiveTrap DMN_ActiveTrap;
 struct DMN_ActiveTrap
 {
-  DMN_Trap *trap;
-  String8 swap_bytes;
+  DMN_Trap       *trap;
+  String8        swap_bytes;
   DMN_ActiveTrap *next;
 };
 
@@ -165,12 +165,20 @@ struct DMN_RunCtrls
 {
   DMN_Handle priority_thread;
   DMN_Handle single_step_thread;
-  B8 ignore_previous_exception;
-  B8 run_entities_are_unfrozen;
-  B8 run_entities_are_processes;
   DMN_Handle *run_entities;
   U64 run_entity_count;
   DMN_TrapChunkList traps;
+  B8 ignore_previous_exception;
+  B8 run_entities_are_unfrozen;
+  B8 run_entities_are_processes;
+  struct
+  {
+    DMN_Handle process;
+    DMN_Handle thread;
+    U64 vaddr;
+    U64 old_ip;
+    U64 size;
+  } spoof;
 };
 
 ////////////////////////////////
@@ -278,5 +286,8 @@ internal void dmn_process_iter_end(DMN_ProcessIter *iter);
 
 //- arch trap
 internal String8 dmn_get_trap_inst(void);
+
+internal DMN_ActiveTrap * dmn_set_trap(Arena *arena, DMN_Trap *trap);
+internal B32 dmn_remove_trap(DMN_ActiveTrap *active_trap);
 
 #endif // DEMON_CORE_H

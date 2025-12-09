@@ -203,7 +203,8 @@ struct DMN_LNX_Entity
   ELF_Class       dl_class;
   HashTable      *loaded_modules_ht;
   DMN_LNX_Probe **probes;
-  U64             probe_vaddrs[DMN_LNX_ProbeType_Count];
+  DMN_ActiveTrap *first_probe_trap;
+  DMN_ActiveTrap *last_probe_trap;
   U64             main_thread_exit_code;
   U64             thread_count;
 
@@ -222,11 +223,14 @@ struct DMN_LNX_Entity
   U64                  thread_local_base;
 
   // module
+  U64 module_name_vaddr;
   U64 base_vaddr;
   U64 phvaddr;
   U64 phentsize;
   U64 phcount;
+  U64 name_space_id;
   B8  is_live;
+  B8  is_main;
 };
 
 typedef struct DMN_LNX_EntityNode DMN_LNX_EntityNode;
@@ -372,6 +376,10 @@ internal DMN_Handle      dmn_lnx_handle_from_entity(DMN_LNX_Entity *entity);
 internal DMN_LNX_Entity *dmn_lnx_entity_from_handle(DMN_Handle handle);
 internal DMN_LNX_Entity *dmn_lnx_thread_from_pid(pid_t pid);
 
+//- Process
+internal void dmn_lnx_process_install_probes();
+
+//- Thread
 internal U64 dmn_lnx_thread_read_ip(DMN_LNX_Entity *thread);
 internal U64 dmn_lnx_thread_read_sp(DMN_LNX_Entity *thread);
 internal void dmn_lnx_thread_write_ip(DMN_LNX_Entity *thread, U64 ip);

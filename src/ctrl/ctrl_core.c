@@ -1323,7 +1323,7 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
           }
         }
         thread->stack_base = event->stack_base;
-        ctrl_rip_from_thread(&store->ctx, event->entity);
+        //ctrl_rip_from_thread(&store->ctx, event->entity);
       }break;
       case CTRL_EventKind_EndThread:
       {
@@ -4450,6 +4450,20 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       {
         dmn_process_write(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof->new_ip_value);
       }
+
+      // copy spoof info
+      if(do_spoof)
+      {
+        run_ctrls->spoof.process = spoof->process;
+        run_ctrls->spoof.thread  = spoof->thread;
+        run_ctrls->spoof.vaddr   = spoof->vaddr;
+        run_ctrls->spoof.old_ip  = spoof_old_ip_value;
+        run_ctrls->spoof.size    = size_of_spoof;
+      }
+      else
+      {
+        MemoryZeroStruct(&run_ctrls->spoof);
+      }
       
       // rjf: run for new events
       ProfScope("run for new events")
@@ -4474,6 +4488,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
             }
           }
         }
+
         DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
         ins_atomic_u64_inc_eval(&ctrl_state->mem_gen);
         ins_atomic_u64_inc_eval(&ctrl_state->reg_gen);
@@ -5956,17 +5971,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
       Arch arch = thread->arch;
       U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
-      CTRL_Entity *module = &ctrl_entity_nil;
-      {
-        for(CTRL_Entity *m = process->first; m != &ctrl_entity_nil; m = m->next)
-        {
-          if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, thread_rip_vaddr))
-          {
-            module = m;
-            break;
-          }
-        }
-      }
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
       
       //////////////////////////
       //- rjf: extract module-dependent info
