@@ -342,12 +342,12 @@ rdi_string_from_idx(RDI_Parsed *rdi, RDI_U32 idx, RDI_U64 *len_out)
   {
     RDI_U64 string_offs_count = 0;
     RDI_U32 *string_offs = rdi_table_from_name(rdi, StringTable, &string_offs_count);
-    if(idx < string_offs_count)
+    if(idx < string_offs_count && string_offs_count > 1)
     {
       RDI_U64 string_data_size = 0;
       RDI_U8 *string_data = rdi_table_from_name(rdi, StringData, &string_data_size);
       RDI_U32 off_raw = string_offs[idx];
-      RDI_U32 opl_raw = string_offs[idx + 1];
+      RDI_U32 opl_raw = idx + 1 < string_offs_count ? string_offs[idx + 1] : string_data_size;
       RDI_U32 opl = rdi_parse__min(opl_raw, string_data_size);
       RDI_U32 off = rdi_parse__min(off_raw, opl);
       result_base = string_data + off;
