@@ -628,6 +628,7 @@ dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
       String8List parts = {0};
       for EachIndex(cursor, line.size)
       {
+        if(parts.node_count > 5)    { break; }
         if(line.str[cursor] == ' ') { continue; }
 
         // scan forward to the closing delimiter
@@ -647,7 +648,7 @@ dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
       }
 
       // was line parsed correctly?
-      if(parts.node_count > 6 || parts.node_count < 5) { Assert(0 && "failed to parse map line"); continue; }
+      if(parts.node_count < 5) { Assert(0 && "failed to parse map line"); continue; }
 
       // parse map virtual range
       String8List vaddr_list = str8_split_by_string_chars(scratch.arena, parts.first->string, str8_lit("-"), 0);
@@ -923,39 +924,6 @@ dmn_lnx_process_from_pid(pid_t pid)
     process = dmn_lnx_nil_entity;
   }
   return process;
-}
-
-internal void
-dmn_lnx_process_trap_probes(DMN_LNX_Entity *process)
-{
-  Assert(process->kind == DMN_LNX_EntityKind_Process);
-  for EachIndex(i, DMN_LNX_ProbeType_Count)
-  {
-    if(process->probes[i] == 0) { continue; }
-
-    DMN_Trap *trap = push_array(process->arena, DMN_Trap, 1);
-    trap->process = dmn_lnx_handle_from_entity(process);
-    trap->vaddr   = process->probes[i]->pc;
-    trap->id      = i;
-
-    DMN_ActiveTrap *active_trap = dmn_set_trap(process->arena, trap);
-    SLLQueuePush(process->first_probe_trap, process->last_probe_trap, active_trap);
-
-    if(BUILD_DEBUG && process->arch == Arch_x64)
-    {
-      Assert(active_trap->swap_bytes.size == 1 && active_trap->swap_bytes.str[0] == 0x90);
-    }
-  }
-}
-
-internal void
-dmn_lnx_process_untrap_probes(DMN_LNX_Entity *process)
-{
-  Assert(process->kind == DMN_LNX_EntityKind_Process);
-  for EachNode(active_trap, DMN_ActiveTrap, process->first_probe_trap)
-  {
-    dmn_remove_trap(active_trap);
-  }
 }
 
 internal U64
@@ -1591,6 +1559,25 @@ dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, B32 debug_sub
   process->xsave_layout                  = xsave_layout;
   hash_table_push_u64_raw(dmn_lnx_state->arena, dmn_lnx_state->pid_ht, pid, process);
 
+  // trap probes
+  for EachIndex(i, DMN_LNX_ProbeType_Count)
+  {
+    if(known_probes[i] == 0) { continue; }
+
+    DMN_Trap *trap = push_array(process_arena, DMN_Trap, 1);
+    trap->process = dmn_lnx_handle_from_entity(process);
+    trap->vaddr   = known_probes[i]->pc;
+    trap->id      = i;
+
+    DMN_ActiveTrap *active_trap = dmn_set_trap(process_arena, trap);
+    SLLQueuePush(process->first_probe_trap, process->last_probe_trap, active_trap);
+
+    if(BUILD_DEBUG && arch == Arch_x64)
+    {
+      Assert(active_trap->swap_bytes.size == 1 && active_trap->swap_bytes.str[0] == 0x90);
+    }
+  }
+
   // push create process event
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind      = DMN_EventKind_CreateProcess;
@@ -1850,31 +1837,40 @@ dmn_lnx_hanlde_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Entity
 }
 
 internal void
-dmn_lnx_handle_breakpoint(Arena *arena, DMN_EventList *events, HashTable *active_trap_ht, pid_t tid)
+dmn_lnx_handle_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *user_traps, pid_t tid)
 {
   DMN_LNX_Entity *thread  = dmn_lnx_thread_from_pid(tid);
   DMN_LNX_Entity *process = thread->parent;
   U64             ip      = dmn_lnx_thread_read_ip(thread);
 
   // is this user trap?
-  DMN_Trap *hit_user_trap = hash_table_search_u64_raw(active_trap_ht, ip-1);
-
-  // is this a probe trap?
-  DMN_LNX_ProbeType probe_type = DMN_LNX_ProbeType_Null;
-  for EachNode(active_trap, DMN_ActiveTrap, process->first_probe_trap)
+  DMN_ActiveTrap *hit_user_trap = 0;
   {
-    if(active_trap->trap->vaddr == ip-1)
+    DMN_Handle process_handle = dmn_lnx_handle_from_entity(process);
+    for EachNode(active_trap, DMN_ActiveTrap, user_traps)
     {
-      probe_type = active_trap->trap->id;
-      break;
+      if(MemoryCompare(&active_trap->trap->process, &process_handle, sizeof(DMN_Handle)) == 0)
+      {
+        if(active_trap->trap->vaddr == ip-1)
+        {
+          hit_user_trap = active_trap;
+          break;
+        }
+      }
     }
   }
 
-  for(U64 i = 0; i < DMN_LNX_ProbeType_Count; ++i)
+    // is this a probe trap?
+  DMN_LNX_ProbeType probe_type = DMN_LNX_ProbeType_Null;
+  if(hit_user_trap == 0)
   {
-    if(process->probes[i] != 0 && process->probes[i]->pc == ip-1)
+    for EachNode(active_trap, DMN_ActiveTrap, process->first_probe_trap)
     {
-      break;
+      if(active_trap->trap->vaddr == ip-1)
+      {
+        probe_type = active_trap->trap->id;
+        break;
+      }
     }
   }
 
@@ -2063,7 +2059,6 @@ dmn_lnx_handle_attach(Arena *arena, DMN_EventList *events, pid_t pid)
   {
     // create process
     process = dmn_lnx_handle_create_process(arena, events, 1, 1, pid);
-    dmn_lnx_process_trap_probes(process);
 
     // extract threads from /proc/pid/task
     for(;;)
@@ -2330,8 +2325,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   
   // write traps to memory
   DMN_ActiveTrap *active_trap_first = 0, *active_trap_last = 0;
-  HashTable *active_trap_ht = hash_table_init(scratch.arena, ctrls->traps.trap_count);
   {
+    HashTable *process_ht = hash_table_init(scratch.arena, dmn_lnx_state->active_process_count);
     for EachNode(n, DMN_TrapChunkNode, ctrls->traps.first)
     {
       for EachIndex(n_idx, n->count)
@@ -2339,6 +2334,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         // skip hardware breakpoints
         DMN_Trap *trap = n->v+n_idx;
         if(trap->flags) { continue; }
+
+        HashTable *active_trap_ht = hash_table_search_u64_raw(process_ht, trap->process.u64[0]);
+        if(active_trap_ht == 0)
+        {
+          active_trap_ht = hash_table_init(scratch.arena, ctrls->traps.trap_count);
+          hash_table_push_u64_raw(scratch.arena, process_ht, trap->process.u64[0], active_trap_ht);
+        }
 
         // TODO: ctrl sends down duplicate traps
         DMN_ActiveTrap *is_set = hash_table_search_u64_raw(active_trap_ht, trap->vaddr);
@@ -2483,7 +2485,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 
   // wait for signals from the running threads
   {
-    printf("----------------------------------------------\n");
     B32 is_halt_done = 0;
     for(U64 stopped_threads = 0;;)
     {
@@ -2515,8 +2516,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       int wstopsig    = WSTOPSIG(status);
       int event_code  = (status >> 16);
 
-      printf("wstopsig %d, event_code %d\n", wstopsig, event_code);
-
       // intercept signals meant for the process launch sequence
       {
         // pid -> pending process launch
@@ -2538,7 +2537,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 
               // push create process events
               DMN_LNX_Entity *process = dmn_lnx_handle_create_process(arena, &events, pending_proc->debug_subprocesses, 0, wait_id);
-              dmn_lnx_process_trap_probes(process);
 
               // override event code so the main code path does not create another process
               event_code = PTRACE_EVENT_STOP;
@@ -2648,10 +2646,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               {
                 switch(siginfo.si_code)
                 {
-                case SI_KERNEL:   { dmn_lnx_handle_breakpoint(arena, &events, active_trap_ht, wait_id); } break;
-                case TRAP_BRKPT:  { dmn_lnx_handle_breakpoint(arena, &events, active_trap_ht, wait_id); } break;
-                case TRAP_TRACE:  { dmn_lnx_handle_single_step(arena, &events, wait_id);                } break;
-                case TRAP_HWBKPT: { dmn_lnx_handle_data_breakpoint(arena, &events, wait_id);            } break;
+                case SI_KERNEL:   { dmn_lnx_handle_breakpoint(arena, &events, active_trap_first, wait_id); } break;
+                case TRAP_BRKPT:  { dmn_lnx_handle_breakpoint(arena, &events, active_trap_first, wait_id); } break;
+                case TRAP_TRACE:  { dmn_lnx_handle_single_step(arena, &events, wait_id);                   } break;
+                case TRAP_HWBKPT: { dmn_lnx_handle_data_breakpoint(arena, &events, wait_id);               } break;
                 case TRAP_BRANCH: { NotImplemented; }break;
                 case TRAP_UNK:    { NotImplemented; }break;
                 default: { InvalidPath; } break;
@@ -2662,70 +2660,68 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               // grab child pid
               pid_t child_pid;
-              if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &child_pid)) < 0)
-              {
-                AssertAlways(0 && "failed to grab child pid");
-              }
-
-              // at this point kernel cloned memory pages and writes in the child process trigger COW
-              Temp temp = temp_begin(scratch.arena);
-              int child_memory_fd = open((char*)str8f(temp.arena, "/proc/%d/mem", child_pid).str, O_RDWR);
+              if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &child_pid)) < 0) { AssertAlways(0 && "failed to grab child pid"); }
 
               // grab parent process
               DMN_LNX_Entity *parent_thread  = dmn_lnx_thread_from_pid(wait_id);
               DMN_LNX_Entity *parent_process = parent_thread->parent;
-              DMN_Handle parent_process_handle = dmn_lnx_handle_from_entity(parent_process);
-              DMN_Handle parent_thread_handle  = dmn_lnx_handle_from_entity(parent_thread);
 
-              // if debugger is steps over a line with fork we have to undo the return address spoof
-              if(MemoryCompare(&parent_process_handle, &ctrls->spoof.process, sizeof(DMN_Handle)) == 0 &&
-                 MemoryCompare(&parent_thread_handle, &ctrls->spoof.thread, sizeof(DMN_Handle)) == 0)
+              // clean up in the child process instrumentation inherited during fork
               {
-                if(!dmn_lnx_write(child_memory_fd, r1u64(ctrls->spoof.vaddr, ctrls->spoof.vaddr + ctrls->spoof.size), &ctrls->spoof.old_ip))
-                {
-                  AssertAlways(0 && "failed to undo spoof");
-                }
-              }
-
-              if(parent_process->debug_subprocesses)
-              {
-                // create child process entity
-                dmn_lnx_process_untrap_probes(parent_process);
-                DMN_LNX_Entity *child_process = dmn_lnx_handle_create_process(arena, &events, 1, 1, child_pid);
-                dmn_lnx_process_trap_probes(child_process);
-
-                // copy modules from the parent process
-                for(DMN_LNX_Entity *module = parent_process->first; module != dmn_lnx_nil_entity; module = module->next)
-                {
-                  if(module->kind != DMN_LNX_EntityKind_Module) { continue; }
-                  if(module->is_main) { continue; }
-                  dmn_lnx_load_module(arena, &events, child_process, module->name_space_id, module->module_name_vaddr, module->base_vaddr);
-                }
-              }
-              else
-              {
-                // take out probes traps from the child probess
-                dmn_lnx_process_untrap_probes(parent_process);
+                DMN_Handle parent_process_handle = dmn_lnx_handle_from_entity(parent_process);
+                DMN_Handle parent_thread_handle  = dmn_lnx_handle_from_entity(parent_thread);
                 
-                // take out traps from the child process
+                // at this point kernel cloned memory pages and writes in the child process trigger COW
+                Temp temp = temp_begin(scratch.arena);
+                int child_memory_fd = open((char*)str8f(temp.arena, "/proc/%d/mem", child_pid).str, O_RDWR);
+
+                // if debugger is stepping over a line with fork we have to undo the return address spoof
+                if(MemoryCompare(&parent_process_handle, &ctrls->spoof.process, sizeof(DMN_Handle)) == 0 &&
+                    MemoryCompare(&parent_thread_handle, &ctrls->spoof.thread, sizeof(DMN_Handle)) == 0)
+                {
+                  B32 was_spoof_removed = dmn_lnx_write(child_memory_fd, r1u64(ctrls->spoof.vaddr, ctrls->spoof.vaddr + ctrls->spoof.size), &ctrls->spoof.old_ip);
+                  AssertAlways(was_spoof_removed);
+                }
+
+                // remove probe traps from the child process
+                for EachNode(n, DMN_ActiveTrap, parent_process->first_probe_trap)
+                {
+                  B32 is_written = dmn_lnx_write(child_memory_fd, r1u64(n->trap->vaddr, n->trap->vaddr + n->swap_bytes.size), n->swap_bytes.str);
+                  AssertAlways(is_written);
+                }
+
+                // remove traps from the child process
                 for EachNode(n, DMN_ActiveTrap, active_trap_first)
                 {
-                  if(MemoryCompare(&n->trap->process, &parent_process_handle, sizeof(DMN_Handle)))
+                  if(MemoryCompare(&n->trap->process, &parent_process_handle, sizeof(DMN_Handle)) == 0)
                   {
                     B32 is_written = dmn_lnx_write(child_memory_fd, r1u64(n->trap->vaddr, n->trap->vaddr + n->swap_bytes.size), n->swap_bytes.str);
                     AssertAlways(is_written);
                   }
                 }
 
-                // detach and continue the child process
-                if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, child_pid, 0, 0) < 0))
-                {
-                  Assert(0 && "unsuccessful detach");
-                }
+                close(child_memory_fd);
+                temp_end(temp);
               }
 
-              close(child_memory_fd);
-              temp_end(temp);
+              if(parent_process->debug_subprocesses)
+              {
+                // create child process
+                DMN_LNX_Entity *child_process = dmn_lnx_handle_create_process(arena, &events, 1, 1, child_pid);
+
+                // copy modules from the parent process
+                for(DMN_LNX_Entity *mod = parent_process->first; mod != dmn_lnx_nil_entity; mod = mod->next)
+                {
+                  if(mod->kind != DMN_LNX_EntityKind_Module) { continue; }
+                  if(mod->is_main)                           { continue; }
+                  dmn_lnx_load_module(arena, &events, child_process, mod->name_space_id, mod->module_name_vaddr, mod->base_vaddr);
+                }
+              }
+              else
+              {
+                // user asked to detach from the child process
+                if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, child_pid, 0, 0) < 0)) { Assert(0 && "unsuccessful detach"); }
+              }
             }break;
             case PTRACE_EVENT_VFORK:
             {
@@ -2750,7 +2746,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               {
                 dmn_lnx_handle_exit_thread(arena, &events, wait_id, 0);
                 DMN_LNX_Entity *process = dmn_lnx_handle_create_process(arena, &events, 1, 0, wait_id);
-                dmn_lnx_process_trap_probes(process);
               }
               else
               {
