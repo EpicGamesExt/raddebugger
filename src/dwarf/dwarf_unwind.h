@@ -65,21 +65,6 @@ typedef struct DW_CFI_Unwind
   U64              reg_count;
 } DW_CFI_Unwind;
 
-typedef enum {
-  DW_UnwindStatus_Ok,
-  DW_UnwindStatus_Fail,
-  DW_UnwindStatus_Maybe
-} DW_UnwindStatus;
-
-#define DW_REG_READ(name) DW_UnwindStatus name(DW_Reg reg_id, void *buffer, U64 buffer_max, void *ud)
-typedef DW_REG_READ(DW_RegRead);
-
-#define DW_REG_WRITE(name) DW_UnwindStatus name(DW_Reg reg_id, void *value, U64 value_size, void *ud)
-typedef DW_REG_WRITE(DW_RegWrite);
-
-#define DW_MEM_READ(name) DW_UnwindStatus name(U64 addr, U64 size, void *buffer, void *ud)
-typedef DW_MEM_READ(DW_MemRead);
-
 ////////////////////////////////
 
 internal DW_CFI_Row * dw_make_cfi_row(Arena *arena, U64 reg_count);

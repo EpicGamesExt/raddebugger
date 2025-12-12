@@ -1,1442 +1,1419 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-//- analyzers
-
-#if 0
-internal DW_SimpleLoc
-dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
+internal DW_PieceNode *
+dw_piece_list_push(Arena *arena, DW_PieceList *list, DW_Piece v)
 {
-  DW_SimpleLoc result = {DW_SimpleLocKind_Empty};
-  
-  String8 expr_data = str8((U8*)data+range.min, (U8*)data+range.max);
-  
-  U8 op = 0;
-  if (str8_deserial_read_struct(expr_data, 0, &op)) {
-    // step params
-    U64 size_param = 0;
-    B32 is_signed  = 0;
-    
-    // step
-    U64 step_cursor = 1;
-    switch (op) {
-      
-      //// literal encodings ////
-      
-      case DW_ExprOp_Lit0:  case DW_ExprOp_Lit1:  case DW_ExprOp_Lit2:
-      case DW_ExprOp_Lit3:  case DW_ExprOp_Lit4:  case DW_ExprOp_Lit5:
-      case DW_ExprOp_Lit6:  case DW_ExprOp_Lit7:  case DW_ExprOp_Lit8:
-      case DW_ExprOp_Lit9:  case DW_ExprOp_Lit10: case DW_ExprOp_Lit11:
-      case DW_ExprOp_Lit12: case DW_ExprOp_Lit13: case DW_ExprOp_Lit14:
-      case DW_ExprOp_Lit15: case DW_ExprOp_Lit16: case DW_ExprOp_Lit17:
-      case DW_ExprOp_Lit18: case DW_ExprOp_Lit19: case DW_ExprOp_Lit20:
-      case DW_ExprOp_Lit21: case DW_ExprOp_Lit22: case DW_ExprOp_Lit23:
-      case DW_ExprOp_Lit24: case DW_ExprOp_Lit25: case DW_ExprOp_Lit26:
-      case DW_ExprOp_Lit27: case DW_ExprOp_Lit28: case DW_ExprOp_Lit29:
-      case DW_ExprOp_Lit30: case DW_ExprOp_Lit31:
-      {
-        U64 x = op - DW_ExprOp_Lit0;
-        result.kind = DW_SimpleLocKind_Address;
-        result.addr = x;
-      } break;
-      
-      case DW_ExprOp_Const1U:size_param = 1; goto const_n;
-      case DW_ExprOp_Const2U:size_param = 2; goto const_n;
-      case DW_ExprOp_Const4U:size_param = 4; goto const_n;
-      case DW_ExprOp_Const8U:size_param = 8; goto const_n;
-      case DW_ExprOp_Const1S:size_param = 1; is_signed = 1; goto const_n;
-      case DW_ExprOp_Const2S:size_param = 2; is_signed = 1; goto const_n;
-      case DW_ExprOp_Const4S:size_param = 4; is_signed = 1; goto const_n;
-      case DW_ExprOp_Const8S:size_param = 8; is_signed = 1; goto const_n;
-      const_n:
-      {
-        U64 x = 0;
-        step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &x);
-        
-        if (is_signed) {
-          x = extend_sign64(x, size_param);
-        }
-        
-        result.kind = DW_SimpleLocKind_Address;
-        result.addr = x;
-      } break;
-      
-      case DW_ExprOp_Addr:
-      {
-        U64 offset = 0;
-        step_cursor += dw_based_range_read(base, range, step_cursor, 8, &offset);
-        U64 x = text_section_base + offset;
-        result.kind = DW_SimpleLocKind_Address;
-        result.addr = x;
-      } break;
-      
-      case DW_ExprOp_ConstU:
-      {
-        U64 x = 0;
-        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &x);
-        result.kind = DW_SimpleLocKind_Address;
-        result.addr = x;
-      } break;
-      
-      case DW_ExprOp_ConstS:
-      {
-        U64 x = 0;
-        step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, (S64*)&x);
-        result.kind = DW_SimpleLocKind_Address;
-        result.addr = x;
-      } break;
-      
-      
-      //// register location descriptions ////
-      
-      case DW_ExprOp_Reg0:  case DW_ExprOp_Reg1:  case DW_ExprOp_Reg2:
-      case DW_ExprOp_Reg3:  case DW_ExprOp_Reg4:  case DW_ExprOp_Reg5:
-      case DW_ExprOp_Reg6:  case DW_ExprOp_Reg7:  case DW_ExprOp_Reg8:
-      case DW_ExprOp_Reg9:  case DW_ExprOp_Reg10: case DW_ExprOp_Reg11:
-      case DW_ExprOp_Reg12: case DW_ExprOp_Reg13: case DW_ExprOp_Reg14:
-      case DW_ExprOp_Reg15: case DW_ExprOp_Reg16: case DW_ExprOp_Reg17:
-      case DW_ExprOp_Reg18: case DW_ExprOp_Reg19: case DW_ExprOp_Reg20:
-      case DW_ExprOp_Reg21: case DW_ExprOp_Reg22: case DW_ExprOp_Reg23:
-      case DW_ExprOp_Reg24: case DW_ExprOp_Reg25: case DW_ExprOp_Reg26:
-      case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
-      case DW_ExprOp_Reg30: case DW_ExprOp_Reg31:
-      {
-        U64 reg_idx = op - DW_ExprOp_Reg0;
-        result.kind    = DW_SimpleLocKind_Register;
-        result.reg_idx = reg_idx;
-      } break;
-      
-      case DW_ExprOp_RegX:
-      {
-        U64 reg_idx = 0;
-        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &reg_idx);
-        result.kind    = DW_SimpleLocKind_Register;
-        result.reg_idx = reg_idx;
-      } break;
-      
-      
-      //// implicit location descriptions ////
-      
-      case DW_ExprOp_ImplicitValue:
-      {
-        U64 size = 0;
-        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &size);
-        if (step_cursor + size <= range.max) {
-          result.kind          = DW_SimpleLocKind_ValueLong;
-          result.val_long.str  = (U8*)base + range.min + step_cursor;
-          result.val_long.size = size;
-        }
-        step_cursor += size;
-      } break;
-      
-      case DW_ExprOp_StackValue:
-      {
-        // this op pops from the value stack, so if it comes first the dwarf expression is bad.
-        result.kind      = DW_SimpleLocKind_Fail;
-        result.fail_kind = DW_LocFailKind_BadData;
-      } break;
-      
-      
-      //// composite location descriptions ////
-      
-      // if the first and only op is a piece, the expression is empty
-      
-      case DW_ExprOp_Piece:
-      {
-        U64 size = 0;
-        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &size);
-        result.kind = DW_SimpleLocKind_Empty;
-      } break;
-      
-      case DW_ExprOp_BitPiece:
-      {
-        U64 bit_size = 0, bit_off = 0;
-        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &bit_size);
-        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &bit_off);
-        result.kind = DW_SimpleLocKind_Empty;
-      } break;
-      
-      
-      //// final fallback ////
-      
-      default:
-      {
-        result.kind      = DW_SimpleLocKind_Fail;
-        result.fail_kind = DW_LocFailKind_TooComplicated;
-      } break;
-    }
-    
-    // check this was the whole expression
-    if (range.min + step_cursor < range.max) {
-      result.kind      = DW_SimpleLocKind_Fail;
-      result.fail_kind = DW_LocFailKind_TooComplicated;
-    }
-  }
-  
-  return result;
+  DW_PieceNode *n = push_array(arena, DW_PieceNode, 1);
+  n->v = v;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  return n;
 }
 
-internal DW_ExprAnalysis
-dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConfig *call_config)
+internal DW_ExprValueType
+dw_expr_unsigned_value_type_from_bit_size(U64 bit_size)
 {
-  Temp scratch = scratch_begin(0, 0);
-  
-  DW_ExprAnalysis result = {0};
-  
-  // are we resolving calls?
-  B32 has_call_func = (call_config != 0 && call_config->func != 0);
-  
-  // tasks
-  DW_ExprAnalysisTask *unfinished_tasks = 0;
-  DW_ExprAnalysisTask *finished_tasks   = 0;
-  
-  // convert range input to string
-  String8 in_data = str8((U8*)in_base + in_range.min, in_range.max - in_range.min);
-  
-  // put input task onto the list
-  {
-    DW_ExprAnalysisTask *new_task = push_array(scratch.arena, DW_ExprAnalysisTask, 1);
-    new_task->p                   = max_U64;
-    new_task->data                = in_data;
-    SLLStackPush(unfinished_tasks, new_task);
+  switch (bit_size) {
+  case 8:   return DW_ExprValueType_U8;
+  case 16:  return DW_ExprValueType_U16;
+  case 32:  return DW_ExprValueType_U32;
+  case 64:  return DW_ExprValueType_U64;
+  case 128: return DW_ExprValueType_U128;
+  case 256: return DW_ExprValueType_U256;
+  case 512: return DW_ExprValueType_U512;
   }
-  
-  // state for checking implicit locations
-  B32 last_was_implicit_loc = 0;
-  
-  // task loop
-  for (;;) {
-    // get next task to handle
-    DW_ExprAnalysisTask *task = unfinished_tasks;
-    if (task == 0) {
-      break;
-    }
-    
-    String8  task_data  = task->data;
-    U8      *task_base  = task_data.str;
-    Rng1U64  task_range = rng_1u64(0, task_data.size);
-    
-    // move the task to finished now
-    SLLStackPop(unfinished_tasks);
-    SLLStackPush(finished_tasks, task);
-    
-    // analysis loop
-    for (U64 cursor = 0;;) {
-      // decode op
-      U64 op_offset = cursor;
-      U8  op        = 0;
-      if (dw_based_range_read(task_base, task_range, op_offset, 1, &op)) {
-        U64 after_op_off = cursor + 1;
-        
-        // require piece op after 'implicit' location descriptions
-        if (last_was_implicit_loc) {
-          if (op != DW_ExprOp_Piece && op != DW_ExprOp_BitPiece) {
-            result.flags |= DW_ExprFlag_BadData;
-            goto finish;
-          }
-        }
-        
-        // step params
-        U64 size_param = 0;
-        B32 is_signed  = 0;
-        
-        // step
-        U64 step_cursor = after_op_off;
-        switch (op) {
-          
-          //// literal encodings ////
-          
-          case DW_ExprOp_Lit0:  case DW_ExprOp_Lit1:  case DW_ExprOp_Lit2:
-          case DW_ExprOp_Lit3:  case DW_ExprOp_Lit4:  case DW_ExprOp_Lit5:
-          case DW_ExprOp_Lit6:  case DW_ExprOp_Lit7:  case DW_ExprOp_Lit8:
-          case DW_ExprOp_Lit9:  case DW_ExprOp_Lit10: case DW_ExprOp_Lit11:
-          case DW_ExprOp_Lit12: case DW_ExprOp_Lit13: case DW_ExprOp_Lit14:
-          case DW_ExprOp_Lit15: case DW_ExprOp_Lit16: case DW_ExprOp_Lit17:
-          case DW_ExprOp_Lit18: case DW_ExprOp_Lit19: case DW_ExprOp_Lit20:
-          case DW_ExprOp_Lit21: case DW_ExprOp_Lit22: case DW_ExprOp_Lit23:
-          case DW_ExprOp_Lit24: case DW_ExprOp_Lit25: case DW_ExprOp_Lit26:
-          case DW_ExprOp_Lit27: case DW_ExprOp_Lit28: case DW_ExprOp_Lit29:
-          case DW_ExprOp_Lit30: case DW_ExprOp_Lit31:
-          break;
-          
-          case DW_ExprOp_Const1U:size_param = 1; goto const_n;
-          case DW_ExprOp_Const2U:size_param = 2; goto const_n;
-          case DW_ExprOp_Const4U:size_param = 4; goto const_n;
-          case DW_ExprOp_Const8U:size_param = 8; goto const_n;
-          case DW_ExprOp_Const1S:size_param = 1; is_signed = 1; goto const_n;
-          case DW_ExprOp_Const2S:size_param = 2; is_signed = 1; goto const_n;
-          case DW_ExprOp_Const4S:size_param = 4; is_signed = 1; goto const_n;
-          case DW_ExprOp_Const8S:size_param = 8; is_signed = 1; goto const_n;
-          const_n:
-          {
-            U64 x = 0;
-            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, size_param, &x);
-          } break;
-          
-          case DW_ExprOp_Addr:
-          {
-            U64 offset = 0;
-            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, 8, &offset);
-            result.flags |= DW_ExprFlag_UsesTextBase;
-          } break;
-          
-          case DW_ExprOp_ConstU:
-          {
-            U64 x = 0;
-            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &x);
-          } break;
-          
-          case DW_ExprOp_ConstS:
-          {
-            U64 x = 0;
-            step_cursor += dw_based_range_read_sleb128(task_base, task_range, step_cursor, (S64*)&x);
-          } break;
-          
-          
-          //// register based addressing ////
-          
-          case DW_ExprOp_FBReg:
-          {
-            S64 offset = 0;
-            step_cursor += dw_based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
-            result.flags |= DW_ExprFlag_UsesFrameBase;
-          } break;
-          
-          case DW_ExprOp_BReg0:  case DW_ExprOp_BReg1:  case DW_ExprOp_BReg2:
-          case DW_ExprOp_BReg3:  case DW_ExprOp_BReg4:  case DW_ExprOp_BReg5:
-          case DW_ExprOp_BReg6:  case DW_ExprOp_BReg7:  case DW_ExprOp_BReg8:
-          case DW_ExprOp_BReg9:  case DW_ExprOp_BReg10: case DW_ExprOp_BReg11:
-          case DW_ExprOp_BReg12: case DW_ExprOp_BReg13: case DW_ExprOp_BReg14:
-          case DW_ExprOp_BReg15: case DW_ExprOp_BReg16: case DW_ExprOp_BReg17:
-          case DW_ExprOp_BReg18: case DW_ExprOp_BReg19: case DW_ExprOp_BReg20:
-          case DW_ExprOp_BReg21: case DW_ExprOp_BReg22: case DW_ExprOp_BReg23:
-          case DW_ExprOp_BReg24: case DW_ExprOp_BReg25: case DW_ExprOp_BReg26:
-          case DW_ExprOp_BReg27: case DW_ExprOp_BReg28: case DW_ExprOp_BReg29:
-          case DW_ExprOp_BReg30: case DW_ExprOp_BReg31:
-          {
-            S64 offset = 0;
-            step_cursor += dw_based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
-            result.flags |= DW_ExprFlag_UsesRegisters;
-          } break;
-          
-          case DW_ExprOp_BRegX:
-          {
-            U64 reg_idx = 0; S64 offset = 0;
-            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &reg_idx);
-            step_cursor += dw_based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
-            result.flags |= DW_ExprFlag_UsesRegisters;
-          } break;
-          
-          
-          //// stack operations ////
-          
-          case DW_ExprOp_Dup:
-          case DW_ExprOp_Drop:
-          break;
-          
-          case DW_ExprOp_Pick:
-          {
-            U64 idx = 0;
-            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, 1, &idx);
-          } break;
-          
-          case DW_ExprOp_Over:
-          case DW_ExprOp_Swap:
-          case DW_ExprOp_Rot:
-          break;
-          
-          case DW_ExprOp_Deref:
-          {
-            result.flags |= DW_ExprFlag_UsesMemory;
-          } break;
-          
-          case DW_ExprOp_DerefSize:
-          {
-            U64 size = 0;
-            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, 1, &size);
-            result.flags |= DW_ExprFlag_UsesMemory;
-          } break;
-          
-          case DW_ExprOp_XDeref:
-          case DW_ExprOp_XDerefSize:
-          {
-            result.flags |= DW_ExprFlag_NotSupported;
-          } goto finish;
-          
-          case DW_ExprOp_PushObjectAddress:
-          {
-            result.flags |= DW_ExprFlag_UsesObjectAddress;
-          } break;
-          
-          case DW_ExprOp_GNU_PushTlsAddress:
-          case DW_ExprOp_FormTlsAddress:
-          {
-            result.flags |= DW_ExprFlag_UsesTLSAddress;
-          } break;
-          
-          case DW_ExprOp_CallFrameCfa:
-          {
-            result.flags |= DW_ExprFlag_UsesCFA;
-          } break;
-          
-          
-          //// arithmetic and logical operations ////
-          
-          case DW_ExprOp_Abs:
-          case DW_ExprOp_And:
-          case DW_ExprOp_Div:
-          case DW_ExprOp_Minus:
-          case DW_ExprOp_Mod:
-          case DW_ExprOp_Mul:
-          case DW_ExprOp_Neg:
-          case DW_ExprOp_Not:
-          case DW_ExprOp_Or:
-          case DW_ExprOp_Plus:
-          break;
-          
-          case DW_ExprOp_PlusUConst:
-          {
-            U64 y = 0;
-            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &y);
-          } break;
-          
-          case DW_ExprOp_Shl:
-          case DW_ExprOp_Shr:
-          case DW_ExprOp_Shra:
-          case DW_ExprOp_Xor:
-          break;
-          
-          
-          //// control flow operations ////
-          
-          case DW_ExprOp_Le:
-          case DW_ExprOp_Ge:
-          case DW_ExprOp_Eq:
-          case DW_ExprOp_Lt:
-          case DW_ExprOp_Gt:
-          case DW_ExprOp_Ne:
-          break;
-          
-          case DW_ExprOp_Skip:
-          case DW_ExprOp_Bra:
-          {
-            S16 d = 0;
-            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, 2, &d);
-            result.flags |= DW_ExprFlag_NonLinearFlow;
-          } break;
-          
-          case DW_ExprOp_Call2:size_param = 2; goto callN;
-          case DW_ExprOp_Call4:size_param = 4; goto callN;
-          callN:
-          {
-            U64 p = 0;
-            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, size_param, &p);
-            result.flags |= DW_ExprFlag_UsesCallResolution|DW_ExprFlag_NonLinearFlow;
-            
-            // add to task list
-            if (has_call_func) {
-              DW_ExprAnalysisTask *existing = dw_expr__analysis_task_from_p(unfinished_tasks, p);
-              if (existing == 0) {
-                existing = dw_expr__analysis_task_from_p(finished_tasks, p);;
-              }
-              if (existing == 0) {
-                DW_ExprAnalysisTask *new_task = push_array(scratch.arena, DW_ExprAnalysisTask, 1);
-                new_task->p                   = p;
-                new_task->data                = call_config->func(call_config->user_ptr, p);
-                SLLStackPush(unfinished_tasks, new_task);
-              }
-            }
-          } break;
-          
-          case DW_ExprOp_CallRef:
-          {
-            result.flags |= DW_ExprFlag_NotSupported;
-          } goto finish;
-          
-          
-          //// special operations ////
-          
-          case DW_ExprOp_Nop:break;
-          
-          
-          //// register location descriptions ////
-          
-          case DW_ExprOp_Reg0:  case DW_ExprOp_Reg1:  case DW_ExprOp_Reg2:
-          case DW_ExprOp_Reg3:  case DW_ExprOp_Reg4:  case DW_ExprOp_Reg5:
-          case DW_ExprOp_Reg6:  case DW_ExprOp_Reg7:  case DW_ExprOp_Reg8:
-          case DW_ExprOp_Reg9:  case DW_ExprOp_Reg10: case DW_ExprOp_Reg11:
-          case DW_ExprOp_Reg12: case DW_ExprOp_Reg13: case DW_ExprOp_Reg14:
-          case DW_ExprOp_Reg15: case DW_ExprOp_Reg16: case DW_ExprOp_Reg17:
-          case DW_ExprOp_Reg18: case DW_ExprOp_Reg19: case DW_ExprOp_Reg20:
-          case DW_ExprOp_Reg21: case DW_ExprOp_Reg22: case DW_ExprOp_Reg23:
-          case DW_ExprOp_Reg24: case DW_ExprOp_Reg25: case DW_ExprOp_Reg26:
-          case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
-          case DW_ExprOp_Reg30: case DW_ExprOp_Reg31:
-          {
-            last_was_implicit_loc = 1;
-          } break;
-          
-          case DW_ExprOp_RegX:
-          {
-            U64 reg_idx = 0;
-            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, size_param, &reg_idx);
-            last_was_implicit_loc = 1;
-          } break;
-          
-          
-          //// implicit location descriptions ////
-          
-          case DW_ExprOp_ImplicitValue:
-          {
-            U64 size = 0;
-            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, size_param, &size);
-            if (step_cursor + size > task_range.max) {
-              result.flags |= DW_ExprFlag_BadData;
-              goto finish;
-            }
-            step_cursor += size;
-            last_was_implicit_loc = 1;
-          } break;
-          
-          case DW_ExprOp_StackValue:
-          {
-            last_was_implicit_loc = 1;
-          } break;
-          
-          
-          //// composite location descriptions ////
-          
-          case DW_ExprOp_Piece:
-          {
-            U64 size = 0;
-            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &size);
-            result.flags |= DW_ExprFlag_UsesComposite;
-            
-            last_was_implicit_loc = 0;
-          } break;
-          
-          case DW_ExprOp_BitPiece:
-          {
-            U64 bit_size = 0; U64 bit_off = 0;
-            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &bit_size);
-            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &bit_off);
-            result.flags |= DW_ExprFlag_UsesComposite;
-            
-            last_was_implicit_loc = 0;
-          } break;
-          
-          
-          //// final fallback ////
-          
-          default:
-          {
-            result.flags |= DW_ExprFlag_NotSupported;
-          } goto finish;
-        }
-        
-        // increment cursor
-        cursor = step_cursor;
-      }
-      
-      // check for end of task
-      if (cursor < task_data.size) {
-        goto finish_task;
-      }
-    }
-    
-    finish_task:;
-  }
-  finish:;
-  
-  scratch_end(scratch);
-  return result;
+  AssertAlways(0 && "no suitable unsigned type was found for the specified size");
+  return DW_ExprValueType_Generic;
 }
-#endif
 
-//- full eval
-
-internal DW_Location
-dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_ExprMachineConfig *config)
+internal DW_ExprValueType
+dw_expr_signed_value_type_from_bit_size(U64 bit_size)
 {
-#if 0
-  Temp scratch = scratch_begin(&arena_optional, 1);
-  
-  DW_Location result = {0};
-  
-  // setup stack
-  DW_ExprStack stack = dw_expr__stack_make(scratch.arena);
-  
-  // adjust expr range
-  void *expr_ptr  = (U8*)expr_base + expr_range.min;
-  U64   expr_size = expr_range.max - expr_range.min;
-  
-  // setup call stack
-  DW_ExprCallStack call_stack = {0};
-  dw_expr__call_push(scratch.arena, &call_stack, expr_ptr, expr_size);
-  
-  // state variables
-  DW_SimpleLoc stashed_loc = {DW_SimpleLocKind_Address};
-  
-  // run loop
-  U64 max_step_count = config->max_step_count;
-  U64 step_counter   = 0;
-  for (;;) {
-    // check top of stack
-    DW_ExprCall *call = dw_expr__call_top(&call_stack);
-    if (call == 0) {
-      goto finish;
-    }
-    
-    // grab top of stack details
-    void    *base   = call->ptr;
-    Rng1U64  range  = rng_1u64(0, call->size);
-    U64      cursor = call->cursor;
-    
-    // decode op
-    U64 op_offset = cursor;
-    U8  op        = 0;
-    if (dw_based_range_read(base, range, op_offset, 1, &op)) {
-      U64 after_op_off = cursor + 1;
-      
-      // require piece op after 'implicit' location descriptions
-      if (stashed_loc.kind != DW_SimpleLocKind_Address) {
-        if (op != DW_ExprOp_Piece && op != DW_ExprOp_BitPiece) {
-          stashed_loc.kind      = DW_SimpleLocKind_Fail;
-          stashed_loc.fail_kind = DW_LocFailKind_BadData;
-          goto finish;
-        }
-      }
-      
-      // step params
-      U64 size_param = 0;
-      B32 is_signed  = 0;
-      
-      // step
-      U64 step_cursor = after_op_off;
-      switch (op) {
-        
-        //// literal encodings ////
-        
-        case DW_ExprOp_Lit0:  case DW_ExprOp_Lit1:  case DW_ExprOp_Lit2:
-        case DW_ExprOp_Lit3:  case DW_ExprOp_Lit4:  case DW_ExprOp_Lit5:
-        case DW_ExprOp_Lit6:  case DW_ExprOp_Lit7:  case DW_ExprOp_Lit8:
-        case DW_ExprOp_Lit9:  case DW_ExprOp_Lit10: case DW_ExprOp_Lit11:
-        case DW_ExprOp_Lit12: case DW_ExprOp_Lit13: case DW_ExprOp_Lit14:
-        case DW_ExprOp_Lit15: case DW_ExprOp_Lit16: case DW_ExprOp_Lit17:
-        case DW_ExprOp_Lit18: case DW_ExprOp_Lit19: case DW_ExprOp_Lit20:
-        case DW_ExprOp_Lit21: case DW_ExprOp_Lit22: case DW_ExprOp_Lit23:
-        case DW_ExprOp_Lit24: case DW_ExprOp_Lit25: case DW_ExprOp_Lit26:
-        case DW_ExprOp_Lit27: case DW_ExprOp_Lit28: case DW_ExprOp_Lit29:
-        case DW_ExprOp_Lit30: case DW_ExprOp_Lit31:
-        {
-          U64 x = op - DW_ExprOp_Lit0;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Const1U:size_param = 1; goto const_n;
-        case DW_ExprOp_Const2U:size_param = 2; goto const_n;
-        case DW_ExprOp_Const4U:size_param = 4; goto const_n;
-        case DW_ExprOp_Const8U:size_param = 8; goto const_n;
-        case DW_ExprOp_Const1S:size_param = 1; is_signed = 1; goto const_n;
-        case DW_ExprOp_Const2S:size_param = 2; is_signed = 1; goto const_n;
-        case DW_ExprOp_Const4S:size_param = 4; is_signed = 1; goto const_n;
-        case DW_ExprOp_Const8S:size_param = 8; is_signed = 1; goto const_n;
-        const_n:
-        {
-          U64 x = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &x);
-          if (is_signed) {
-            x = extend_sign64(x, size_param);
-          }
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Addr:
-        {
-          U64 offset = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, 8, &offset);
-          
-          // earlier versions of GCC emit TLS offset with DW_ExprOp_Addr.
-          B32 is_text_relative;
-          {
-            U8 next_op = 0;
-            dw_based_range_read_struct(base, range, step_cursor, &next_op);
-            is_text_relative = (next_op != DW_ExprOp_GNU_PushTlsAddress);
-          }
-          
-          U64 addr = offset;
-          
-          if (is_text_relative) {
-            if (config->text_section_base != 0) {
-              addr += *config->text_section_base;
-            } else {
-              stashed_loc.kind = DW_SimpleLocKind_Fail;
-              stashed_loc.fail_kind = DW_LocFailKind_MissingTextBase;
-              goto finish;
-            }
-          }
-          
-          dw_expr__stack_push(scratch.arena, &stack, addr);
-        } break;
-        
-        case DW_ExprOp_ConstU:
-        {
-          U64 x = 0;
-          step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &x);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_ConstS:
-        {
-          U64 x = 0;
-          step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, (S64*)&x);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        
-        //// register based addressing ////
-        
-        case DW_ExprOp_FBReg:
-        {
-          S64 offset = 0;
-          step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, &offset);
-          if (config->frame_base != 0) {
-            U64 x = *config->frame_base + offset;
-            dw_expr__stack_push(scratch.arena, &stack, x);
-          } else {
-            stashed_loc.kind = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingFrameBase;
-            goto finish;
-          }
-        } break;
-        
-        case DW_ExprOp_BReg0:  case DW_ExprOp_BReg1:  case DW_ExprOp_BReg2:
-        case DW_ExprOp_BReg3:  case DW_ExprOp_BReg4:  case DW_ExprOp_BReg5:
-        case DW_ExprOp_BReg6:  case DW_ExprOp_BReg7:  case DW_ExprOp_BReg8:
-        case DW_ExprOp_BReg9:  case DW_ExprOp_BReg10: case DW_ExprOp_BReg11:
-        case DW_ExprOp_BReg12: case DW_ExprOp_BReg13: case DW_ExprOp_BReg14:
-        case DW_ExprOp_BReg15: case DW_ExprOp_BReg16: case DW_ExprOp_BReg17:
-        case DW_ExprOp_BReg18: case DW_ExprOp_BReg19: case DW_ExprOp_BReg20:
-        case DW_ExprOp_BReg21: case DW_ExprOp_BReg22: case DW_ExprOp_BReg23:
-        case DW_ExprOp_BReg24: case DW_ExprOp_BReg25: case DW_ExprOp_BReg26:
-        case DW_ExprOp_BReg27: case DW_ExprOp_BReg28: case DW_ExprOp_BReg29:
-        case DW_ExprOp_BReg30: case DW_ExprOp_BReg31:
-        {
-          S64 offset = 0;
-          step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, &offset);
-          U64         reg_idx = op - DW_ExprOp_BReg0;
-          DW_RegsX64 *regs    = config->regs;
-          if (regs != 0) {
-            if (reg_idx < ArrayCount(regs->r)) {
-              U64 x = regs->r[reg_idx] + offset;
-              dw_expr__stack_push(scratch.arena, &stack, x);
-            } else {
-              stashed_loc.kind      = DW_SimpleLocKind_Fail;
-              stashed_loc.fail_kind = DW_LocFailKind_BadData;
-              stashed_loc.fail_data = op_offset;
-              goto finish;
-            }
-          } else {
-            stashed_loc.kind      = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingRegisters;
-            goto finish;
-          }
-        } break;
-        
-        case DW_ExprOp_BRegX:
-        {
-          U64 reg_idx = 0; S64 offset = 0;
-          step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &reg_idx);
-          step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, &offset);
-          
-          DW_RegsX64 *regs = config->regs;
-          if (regs != 0) {
-            if (reg_idx < ArrayCount(regs->r)) {
-              U64 x = regs->r[reg_idx] + offset;
-              dw_expr__stack_push(scratch.arena, &stack, x);
-            } else {
-              stashed_loc.kind      = DW_SimpleLocKind_Fail;
-              stashed_loc.fail_kind = DW_LocFailKind_BadData;
-              stashed_loc.fail_data = op_offset;
-              goto finish;
-            }
-          } else {
-            stashed_loc.kind      = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingRegisters;
-            goto finish;
-          }
-        } break;
-        
-        
-        //// stack operations ////
-        
-        case DW_ExprOp_Dup:
-        {
-          U64 x = dw_expr__stack_pick(&stack, 0);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Drop:
-        {
-          dw_expr__stack_pop(&stack);
-        } break;
-        
-        case DW_ExprOp_Pick:
-        {
-          U64 idx = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, 1, &idx);
-          U64 x = dw_expr__stack_pick(&stack, idx);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Over:
-        {
-          U64 x = dw_expr__stack_pick(&stack, 1);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Swap:
-        {
-          U64 a = dw_expr__stack_pop(&stack);
-          U64 b = dw_expr__stack_pop(&stack);
-          dw_expr__stack_push(scratch.arena, &stack, b);
-          dw_expr__stack_push(scratch.arena, &stack, a);
-        } break;
-        
-        case DW_ExprOp_Rot:
-        {
-          U64 a = dw_expr__stack_pop(&stack);
-          U64 b = dw_expr__stack_pop(&stack);
-          U64 c = dw_expr__stack_pop(&stack);
-          dw_expr__stack_push(scratch.arena, &stack, a);
-          dw_expr__stack_push(scratch.arena, &stack, c);
-          dw_expr__stack_push(scratch.arena, &stack, b);
-        } break;
-        
-        case DW_ExprOp_Deref:
-        {
-          U64 addr = dw_expr__stack_pop(&stack);
-          
-          B32 read_success = 0;
-          if (config->read_memory) {
-            U64 x = 0;
-            if (config->read_memory(addr, sizeof(x), &x, config->read_memory_ud) == sizeof(x)) {
-              dw_expr__stack_push(scratch.arena, &stack, x);
-              read_success = 1;
-            }
-          }
-          
-          if (!read_success) {
-            stashed_loc.kind      = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingMemory;
-            stashed_loc.fail_data = addr;
-            goto finish;
-          }
-        } break;
-        
-        case DW_ExprOp_DerefSize:
-        {
-          U64 raw_size = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, 1, &raw_size);
-          
-          U64 size = ClampTop(raw_size, 8);
-          U64 addr = dw_expr__stack_pop(&stack);
-          
-          B32 read_success = 0;
-          if (config->read_memory) {
-            U64 x = 0;
-            if (config->read_memory(addr, size, &x, config->read_memory_ud) == sizeof(x)) {
-              dw_expr__stack_push(scratch.arena, &stack, x);
-              read_success = 1;
-            }
-          }
-          if (!read_success) {
-            stashed_loc.kind      = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingMemory;
-            stashed_loc.fail_data = addr;
-            goto finish;
-          }
-        } break;
-        
-        case DW_ExprOp_XDeref:
-        case DW_ExprOp_XDerefSize:
-        {
-          stashed_loc.kind      = DW_SimpleLocKind_Fail;
-          stashed_loc.fail_kind = DW_LocFailKind_NotSupported;
-          goto finish;
-        } break;
-        
-        case DW_ExprOp_PushObjectAddress:
-        {
-          if (config->object_address != 0) {
-            U64 x = *config->object_address;
-            dw_expr__stack_push(scratch.arena, &stack, x);
-          } else {
-            stashed_loc.kind      = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingObjectAddress;
-            goto finish;
-          }
-        } break;
-        
-        // NOTE: pop offset from stack, convert it to TLS address, then push it back.
-        case DW_ExprOp_GNU_PushTlsAddress:
-        case DW_ExprOp_FormTlsAddress:
-        {
-          S64 s = (S64)dw_expr__stack_pop(&stack);
-          
-          if (config->tls_address != 0) {
-            U64 x = *config->tls_address + s;
-            dw_expr__stack_push(scratch.arena, &stack, x);
-          } else {
-            stashed_loc.kind = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingTLSAddress;
-            goto finish;
-          }
-        } break;
-        
-        case DW_ExprOp_CallFrameCfa:
-        {
-          if (config->cfa != 0) {
-            U64 x = *config->cfa;
-            dw_expr__stack_push(scratch.arena, &stack, x);
-          } else {
-            stashed_loc.kind      = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingCFA;
-            goto finish;
-          }
-        } break;
-        
-        
-        //// arithmetic and logical operations ////
-        
-        case DW_ExprOp_Abs:
-        {
-          S64 s = (S64)dw_expr__stack_pop(&stack);
-          S64 x = abs_s64(s);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_And:
-        {
-          U64 x = dw_expr__stack_pop(&stack);
-          U64 y = dw_expr__stack_pop(&stack);
-          dw_expr__stack_push(scratch.arena, &stack, x&y);
-        } break;
-        
-        case DW_ExprOp_Div:
-        {
-          S64 d = (S64)dw_expr__stack_pop(&stack);
-          S64 n = (S64)dw_expr__stack_pop(&stack);
-          S64 x = (d == 0)?0:n/d;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Minus:
-        {
-          U64 b = dw_expr__stack_pop(&stack);
-          U64 a = dw_expr__stack_pop(&stack);
-          U64 x = a - b;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Mod:
-        {
-          S64 d = (S64)dw_expr__stack_pop(&stack);
-          S64 n = (S64)dw_expr__stack_pop(&stack);
-          S64 x = (d == 0)?0:n%d;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Mul:
-        {
-          U64 b = dw_expr__stack_pop(&stack);
-          U64 a = dw_expr__stack_pop(&stack);
-          U64 x = a*b;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Neg:
-        {
-          S64 s = (S64)dw_expr__stack_pop(&stack);
-          S64 x = -s;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Not:
-        {
-          U64 y = dw_expr__stack_pop(&stack);
-          U64 x = ~y;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Or:
-        {
-          U64 y = dw_expr__stack_pop(&stack);
-          U64 z = dw_expr__stack_pop(&stack);
-          U64 x = y | z;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Plus:
-        {
-          U64 y = dw_expr__stack_pop(&stack);
-          U64 z = dw_expr__stack_pop(&stack);
-          U64 x = y + z;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_PlusUConst:
-        {
-          U64 y = 0;
-          step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &y);
-          U64 z = dw_expr__stack_pop(&stack);
-          U64 x = y + z;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Shl:
-        {
-          U64 y = dw_expr__stack_pop(&stack);
-          U64 z = dw_expr__stack_pop(&stack);
-          U64 x = 0;
-          if (y < 64) {
-            x = z << y;
-          }
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Shr:
-        {
-          U64 y = dw_expr__stack_pop(&stack);
-          U64 z = dw_expr__stack_pop(&stack);
-          U64 x = 0;
-          if (y < 64) {
-            x = z >> y;
-          }
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Shra:
-        {
-          U64 y = dw_expr__stack_pop(&stack);
-          U64 z = dw_expr__stack_pop(&stack);
-          U64 x = 0;
-          if (y < 64) {
-            x = z >> y;
-            // sign extensions
-            if (y > 0 && (z & (1ull << 63))) {
-              x |= ~((1 << (64 - y)) - 1);
-            }
-          }
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Xor:
-        {
-          U64 y = dw_expr__stack_pop(&stack);
-          U64 z = dw_expr__stack_pop(&stack);
-          U64 x = y ^ z;
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        
-        //// control flow operations ////
-        
-        case DW_ExprOp_Le:
-        {
-          S64 b = (S64)dw_expr__stack_pop(&stack);
-          S64 a = (S64)dw_expr__stack_pop(&stack);
-          U64 x = (a <= b);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Ge:
-        {
-          S64 b = (S64)dw_expr__stack_pop(&stack);
-          S64 a = (S64)dw_expr__stack_pop(&stack);
-          U64 x = (a >= b);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Eq:
-        {
-          S64 b = (S64)dw_expr__stack_pop(&stack);
-          S64 a = (S64)dw_expr__stack_pop(&stack);
-          U64 x = (a == b);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Lt:
-        {
-          S64 b = (S64)dw_expr__stack_pop(&stack);
-          S64 a = (S64)dw_expr__stack_pop(&stack);
-          U64 x = (a < b);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Gt:
-        {
-          S64 b = (S64)dw_expr__stack_pop(&stack);
-          S64 a = (S64)dw_expr__stack_pop(&stack);
-          U64 x = (a > b);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Ne:
-        {
-          S64 b = (S64)dw_expr__stack_pop(&stack);
-          S64 a = (S64)dw_expr__stack_pop(&stack);
-          U64 x = (a != b);
-          dw_expr__stack_push(scratch.arena, &stack, x);
-        } break;
-        
-        case DW_ExprOp_Skip:
-        {
-          S16 d = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, 2, &d);
-          step_cursor = step_cursor + d;
-        } break;
-        
-        case DW_ExprOp_Bra:
-        {
-          S16 d = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, 2, &d);
-          U64 b = dw_expr__stack_pop(&stack);
-          if (b != 0) {
-            step_cursor = step_cursor + d;
-          }
-        } break;
-        
-        case DW_ExprOp_Call2:
-        {
-          U16 p = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, 2, &p);
-          if (config->call.func != 0) {
-            String8 sub_data = config->call.func(config->call.user_ptr, p);
-            dw_expr__call_push(scratch.arena, &call_stack, sub_data.str, sub_data.size);
-          } else {
-            stashed_loc.kind = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingCallResolution;
-            goto finish;
-          }
-        } break;
-        
-        case DW_ExprOp_Call4:
-        {
-          U32 p = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, 4, &p);
-          if (config->call.func != 0) {
-            String8 sub_data = config->call.func(config->call.user_ptr, p);
-            dw_expr__call_push(scratch.arena, &call_stack, sub_data.str, sub_data.size);
-          } else {
-            stashed_loc.kind = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingCallResolution;
-            goto finish;
-          }
-        } break;
-        
-        case DW_ExprOp_CallRef:
-        {
-          stashed_loc.kind = DW_SimpleLocKind_Fail;
-          stashed_loc.fail_kind = DW_LocFailKind_NotSupported;
-          goto finish;
-        } break;
-        
-        
-        //// special operations ////
-        
-        case DW_ExprOp_Nop:break;
-        
-        
-        //// register location descriptions ////
-        
-        case DW_ExprOp_Reg0:  case DW_ExprOp_Reg1:  case DW_ExprOp_Reg2:
-        case DW_ExprOp_Reg3:  case DW_ExprOp_Reg4:  case DW_ExprOp_Reg5:
-        case DW_ExprOp_Reg6:  case DW_ExprOp_Reg7:  case DW_ExprOp_Reg8:
-        case DW_ExprOp_Reg9:  case DW_ExprOp_Reg10: case DW_ExprOp_Reg11:
-        case DW_ExprOp_Reg12: case DW_ExprOp_Reg13: case DW_ExprOp_Reg14:
-        case DW_ExprOp_Reg15: case DW_ExprOp_Reg16: case DW_ExprOp_Reg17:
-        case DW_ExprOp_Reg18: case DW_ExprOp_Reg19: case DW_ExprOp_Reg20:
-        case DW_ExprOp_Reg21: case DW_ExprOp_Reg22: case DW_ExprOp_Reg23:
-        case DW_ExprOp_Reg24: case DW_ExprOp_Reg25: case DW_ExprOp_Reg26:
-        case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
-        case DW_ExprOp_Reg30: case DW_ExprOp_Reg31:
-        {
-          U64 reg_idx = op - DW_ExprOp_Reg0;
-          stashed_loc.kind = DW_SimpleLocKind_Register;
-          stashed_loc.reg_idx = reg_idx;
-        } break;
-        
-        case DW_ExprOp_RegX:
-        {
-          U64 reg_idx = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &reg_idx);
-          stashed_loc.kind = DW_SimpleLocKind_Register;
-          stashed_loc.reg_idx = reg_idx;
-        } break;
-        
-        
-        //// implicit location descriptions ////
-        
-        case DW_ExprOp_ImplicitValue:
-        {
-          U64 size = 0;
-          step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &size);
-          if (step_cursor + size <= range.max) {
-            void *data = (U8*)base + range.min + step_cursor;
-            stashed_loc.kind = DW_SimpleLocKind_ValueLong;
-            stashed_loc.val_long.str  = (U8*)data;
-            stashed_loc.val_long.size = size;
-          } else {
-            stashed_loc.kind = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_BadData;
-            goto finish;
-          }
-          step_cursor += size;
-        } break;
-        
-        case DW_ExprOp_StackValue:
-        {
-          U64 x = dw_expr__stack_pop(&stack);
-          stashed_loc.kind = DW_SimpleLocKind_Value;
-          stashed_loc.val = x;
-        } break;
-        
-        
-        //// composite location descriptions ////
-        
-        case DW_ExprOp_Piece:
-        case DW_ExprOp_BitPiece:
-        {
-          if (arena_optional == 0) {
-            stashed_loc.kind = DW_SimpleLocKind_Fail;
-            stashed_loc.fail_kind = DW_LocFailKind_MissingArenaForComposite;
-            goto finish;
-          } else {
-            // determine this piece's size & offset
-            U64 bit_size = 0;
-            U64 bit_off = 0;
-            B32 is_bit_loc = 0;
-            switch (op) {
-              case DW_ExprOp_Piece:
-              {
-                U64 size = 0;
-                step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &size);
-                bit_size = size*8;
-              } break;
-              case DW_ExprOp_BitPiece:
-              {
-                step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &bit_size);
-                step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &bit_off);
-                is_bit_loc = 1;
-              } break;
-            }
-            
-            // determine this piece's location information
-            DW_SimpleLoc piece_loc = stashed_loc;
-            if (piece_loc.kind == DW_SimpleLocKind_Address) {
-              if (dw_expr__stack_is_empty(&stack)) {
-                piece_loc.kind = DW_SimpleLocKind_Empty;
-              } else {
-                U64 x = dw_expr__stack_pop(&stack);
-                piece_loc.addr = x;
-              }
-            }
-            
-            // push the piece
-            DW_Piece *piece = push_array(arena_optional, DW_Piece, 1);
-            SLLQueuePush(result.first_piece, result.last_piece, piece);
-            piece->loc = piece_loc;
-            piece->bit_size = bit_size;
-            piece->bit_off  = bit_off;
-            piece->is_bit_loc = is_bit_loc;
-            
-            // zero the stached loc
-            MemoryZeroStruct(&stashed_loc);
-          }
-        } break;
-        
-        
-        //// final fallback ////
-        
-        default:
-        {
-          stashed_loc.kind = DW_SimpleLocKind_Fail;
-          stashed_loc.fail_kind = DW_LocFailKind_NotSupported;
-          goto finish;
-        } break;
-      }
-      
-      // increment cursor
-      cursor = step_cursor;
-    }
-    
-    // advance cursor or finish call
-    if (cursor < call->size) {
-      call->cursor = cursor;
+  switch (bit_size) {
+  case 8:   return DW_ExprValueType_S8;
+  case 16:  return DW_ExprValueType_S16;
+  case 32:  return DW_ExprValueType_S32;
+  case 64:  return DW_ExprValueType_S64;
+  case 128: return DW_ExprValueType_S128;
+  case 256: return DW_ExprValueType_S256;
+  case 512: return DW_ExprValueType_S512;
+  }
+  AssertAlways(0 && "no suitable signed type was found for the specified size");
+  return DW_ExprValueType_Generic;
+}
+
+internal DW_ExprValueType
+dw_expr_float_type_from_bit_size(U64 bit_size)
+{
+  switch (bit_size) {
+  case 4: return DW_ExprValueType_F32;
+  case 8: return DW_ExprValueType_F64;
+  }
+  AssertAlways(0 && "no suitable type was found for the specified size");
+  return DW_ExprValueType_Generic;
+}
+
+internal U64
+dw_expr_byte_size_from_value_type(U64 addr_size, DW_ExprValueType k)
+{
+  switch (k) {
+  default: { InvalidPath; }
+  case DW_ExprValueType_Generic: return 0;
+  case DW_ExprValueType_Addr:    return addr_size;
+  case DW_ExprValueType_U8:      return 1;
+  case DW_ExprValueType_U16:     return 2;
+  case DW_ExprValueType_U32:     return 4;
+  case DW_ExprValueType_U64:     return 8;
+  case DW_ExprValueType_U128:    return 16;
+  case DW_ExprValueType_U256:    return 32;
+  case DW_ExprValueType_U512:    return 64;
+  case DW_ExprValueType_S8:      return 1;
+  case DW_ExprValueType_S16:     return 2;
+  case DW_ExprValueType_S32:     return 4;
+  case DW_ExprValueType_S64:     return 8;
+  case DW_ExprValueType_S128:    return 16;
+  case DW_ExprValueType_S256:    return 32;
+  case DW_ExprValueType_S512:    return 64;
+  case DW_ExprValueType_F32:     return 4;
+  case DW_ExprValueType_F64:     return 8;
+  }
+}
+
+internal DW_ExprValueType
+dw_expr_pick_common_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs)
+{
+  if (lhs == rhs) {
+    return lhs;
+  }
+  // unsigned vs unsigned
+  else if (DW_ExprValueType_IsUnsigned(lhs) && DW_ExprValueType_IsUnsigned(rhs)) {
+    return Max(lhs, rhs);
+  }
+  // signed vs signed
+  else if (DW_ExprValueType_IsSigned(lhs) && DW_ExprValueType_IsSigned(rhs)) {
+    return Max(lhs, rhs);
+  }
+  // (unsigned vs signed) || (signed vs unsigned)
+  else if ((DW_ExprValueType_IsUnsigned(lhs) && DW_ExprValueType_IsSigned(rhs)) ||
+           (DW_ExprValueType_IsSigned(lhs) && DW_ExprValueType_IsUnsigned(rhs))) {
+    U64 lhs_size = dw_expr_byte_size_from_value_type(0, lhs);
+    U64 rhs_size = dw_expr_byte_size_from_value_type(0, rhs);
+    if (lhs_size < rhs_size) {
+      return rhs;
+    } else if (lhs > rhs_size) {
+      return lhs;
     } else {
-      dw_expr__call_pop(&call_stack);
-    }
-    
-    // advance step counter
-    step_counter += 1;
-    if (step_counter == max_step_count) {
-      stashed_loc.kind = DW_SimpleLocKind_Fail;
-      stashed_loc.fail_kind = DW_LocFailKind_TimeOut;
-      goto finish;
+      return dw_expr_unsigned_value_type_from_bit_size(lhs_size * 8);
     }
   }
-  
-  finish:;
-  
-  // non-piece location
-  {
-    DW_SimpleLoc loc = stashed_loc;
-    if (result.first_piece == 0) {
-      
-      // normal location resolution
-      loc = stashed_loc;
-      if (loc.kind == DW_SimpleLocKind_Address) {
-        if (dw_expr__stack_is_empty(&stack)) {
-          loc.kind = DW_SimpleLocKind_Empty;
-        } else {
-          U64 x = dw_expr__stack_pop(&stack);
-          loc.addr = x;
-        }
-      }
-    }
-    // non-piece location resolution after composite
-    else {
-      
-      // change the default kind to empty
-      if (loc.kind == DW_SimpleLocKind_Address) {
-        loc.kind = DW_SimpleLocKind_Empty;
-      }
-      
-      // the non-piece should either be empty or fail
-      if (loc.kind != DW_SimpleLocKind_Empty &&
-          loc.kind != DW_SimpleLocKind_Fail) {
-        loc.kind = DW_SimpleLocKind_Fail;
-        loc.fail_kind = DW_LocFailKind_BadData;
-      }
-    }
-    
-    result.non_piece_loc = loc;
+  // float vs int
+  else if (DW_ExprValueType_IsFloat(lhs) && DW_ExprValueType_IsInt(rhs)) {
+    return lhs;
   }
-  
-  // clear stack
-  scratch_end(scratch);
-  return result;
-#endif
-  DW_Location result = {0};
-  return result;
+  // int vs float
+  else if (DW_ExprValueType_IsInt(lhs) && DW_ExprValueType_IsFloat(rhs)) {
+    return rhs;
+  }
+  // float vs float
+  else if (DW_ExprValueType_IsFloat(lhs) && DW_ExprValueType_IsFloat(rhs)) {
+    return Max(lhs, rhs);
+  }
+  // address vs int
+  else if (lhs == DW_ExprValueType_Addr && DW_ExprValueType_IsInt(rhs)) {
+    return DW_ExprValueType_Addr;
+  }
+  // int vs address
+  else if (DW_ExprValueType_IsInt(lhs) && rhs == DW_ExprValueType_Addr) {
+    return DW_ExprValueType_Addr;
+  }
+  // address vs float
+  else if (lhs == DW_ExprValueType_Addr && DW_ExprValueType_IsFloat(rhs)) {
+    return DW_ExprValueType_Generic;
+  }
+  // float vs address
+  else if (DW_ExprValueType_IsFloat(lhs) && rhs == DW_ExprValueType_Addr) {
+    return DW_ExprValueType_Generic;
+  }
+  // no conversion for implicit value
+  else if (lhs == DW_ExprValueType_Implicit || rhs == DW_ExprValueType_Implicit) {
+    return DW_ExprValueType_Generic;
+  }
+  AssertAlways(!"undefined conversion case");
+  return DW_ExprValueType_Generic;
 }
 
-
-//- dw expr val stack
-
-internal DW_ExprStack
-dw_expr__stack_make(Arena *arena)
+internal DW_ExprValueType
+dw_expr_pick_common_comparison_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs)
 {
-  DW_ExprStack result = {0};
-  return result;
-}
-
-internal void
-dw_expr__stack_push(Arena *arena, DW_ExprStack *stack, U64 x)
-{
-  DW_ExprStackNode *node = stack->free_nodes;
-  if (node == 0) {
-    SLLStackPop(stack->free_nodes);
+  DW_ExprValueType result;
+  if (lhs == DW_ExprValueType_Generic || rhs == DW_ExprValueType_Generic) {
+    result = DW_ExprValueType_S64;
   } else {
-    node = push_array(arena, DW_ExprStackNode, 1);
+    result = dw_expr_pick_common_value_type(lhs, rhs);
   }
-  SLLStackPush(stack->stack, node);
-  node->val = x;
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_cast(DW_ExprValue value, DW_ExprValueType type)
+{
+  DW_ExprValue result = { type };
+
+#define CastTable(f, t)                                                                                                       \
+    switch (value.type) {                                                                                                     \
+    case DW_ExprValueType_Generic: { MemoryCopy(&result.##f, value.generic.str, Min(sizeof(t), value.generic.size)); } break; \
+    case DW_ExprValueType_U8:      { result.##f = (t)value.u8;  } break;                                                      \
+    case DW_ExprValueType_U16:     { result.##f = (t)value.u16; } break;                                                      \
+    case DW_ExprValueType_U32:     { result.##f = (t)value.u32; } break;                                                      \
+    case DW_ExprValueType_U64:     { result.##f = (t)value.u64; } break;                                                      \
+    case DW_ExprValueType_U128:    { NotImplemented; } break;                                                                 \
+    case DW_ExprValueType_U256:    { NotImplemented; } break;                                                                 \
+    case DW_ExprValueType_U512:    { NotImplemented; } break;                                                                 \
+    case DW_ExprValueType_S8:      { result.##f = (t)value.s8;  } break;                                                      \
+    case DW_ExprValueType_S16:     { result.##f = (t)value.s16; } break;                                                      \
+    case DW_ExprValueType_S32:     { result.##f = (t)value.s32; } break;                                                      \
+    case DW_ExprValueType_S64:     { result.##f = (t)value.s64; } break;                                                      \
+    case DW_ExprValueType_S128:    { NotImplemented; } break;                                                                 \
+    case DW_ExprValueType_S256:    { NotImplemented; } break;                                                                 \
+    case DW_ExprValueType_S512:    { NotImplemented; } break;                                                                 \
+    case DW_ExprValueType_F32:     { result.##f = (t)value.f32;  } break;                                                     \
+    case DW_ExprValueType_F64:     { result.##f = (t)value.f64;  } break;                                                     \
+    case DW_ExprValueType_Addr:    { result.##f = (t)value.addr; } break;                                                     \
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;                                                                   \
+    case DW_ExprValueType_Bool:     { result.##f = (t)value.boolean; } break;                                                 \
+    default: { InvalidPath; } break;                                                                                          \
+    }
+
+  switch (type) {
+  case DW_ExprValueType_Generic: {} break;
+  case DW_ExprValueType_U8:       { CastTable(u8, U8);               } break;
+  case DW_ExprValueType_U16:      { CastTable(u16, U16);             } break;
+  case DW_ExprValueType_U32:      { CastTable(u32, U32);             } break;
+  case DW_ExprValueType_U64:      { CastTable(u64, U64);             } break;
+  case DW_ExprValueType_U128:     { NotImplemented;                  } break;
+  case DW_ExprValueType_U256:     { NotImplemented;                  } break;
+  case DW_ExprValueType_U512:     { NotImplemented;                  } break;
+  case DW_ExprValueType_S8:       { CastTable(s8, S8);               } break;
+  case DW_ExprValueType_S16:      { CastTable(s16, S16);             } break;
+  case DW_ExprValueType_S32:      { CastTable(s32, S32);             } break;
+  case DW_ExprValueType_S64:      { CastTable(s64, S64);             } break;
+  case DW_ExprValueType_S128:     { NotImplemented;                  } break;
+  case DW_ExprValueType_S256:     { NotImplemented;                  } break;
+  case DW_ExprValueType_S512:     { NotImplemented;                  } break;
+  case DW_ExprValueType_F32:      { CastTable(f32, F32);             } break;
+  case DW_ExprValueType_F64:      { CastTable(f64, F64);             } break;
+  case DW_ExprValueType_Addr:     { CastTable(addr, U64);            } break;
+  case DW_ExprValueType_Implicit: { NotImplemented;                  } break;
+  case DW_ExprValueType_Bool:     { CastTable(boolean, DW_ExprBool); } break;
+  }
+
+#undef CastTable
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_add(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  + common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 + common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 + common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 + common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  + common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  + common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 + common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 + common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 + common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  + common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  + common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr + common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_minus(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  - common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 - common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 - common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 - common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  - common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  - common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 - common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 - common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 - common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  - common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  - common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr - common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_mul(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  * common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 * common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 * common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 * common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  * common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  * common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 * common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 * common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 * common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  * common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  * common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr * common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_div(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  / common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 / common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 / common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 / common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  / common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  / common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 / common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 / common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 / common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  / common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  / common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr / common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_mod(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  % common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 % common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 % common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 % common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  % common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  % common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 % common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 % common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 % common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { InvalidPath; } break;
+  case DW_ExprValueType_F64:  { InvalidPath; } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr % common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_eq(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_type(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  == common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 == common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 == common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 == common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  == common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  == common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 == common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 == common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 == common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  == common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  == common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr == common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_ge(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_type(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  >= common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 >= common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 >= common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 >= common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  >= common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  >= common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 >= common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 >= common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 >= common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  >= common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  >= common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >= common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_gt(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_type(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  > common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 > common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 > common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 > common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  > common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  > common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 > common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 > common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 > common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  > common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  > common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr > common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_le(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_type(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  <= common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 <= common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 <= common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 <= common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  <= common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  <= common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 <= common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 <= common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 <= common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  <= common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  <= common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr <= common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_lt(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  < common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 < common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 < common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 < common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  < common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  < common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 < common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 < common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 < common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  < common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  < common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr < common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_ne(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  != common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 != common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 != common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 != common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  != common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  != common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 != common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 != common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 != common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  != common_rhs.f32;  } break;
+  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  != common_rhs.f64;  } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr != common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_xor(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  ^ common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 ^ common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 ^ common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 ^ common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  ^ common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  ^ common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 ^ common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 ^ common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 ^ common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { InvalidPath; } break;
+  case DW_ExprValueType_F64:  { InvalidPath; } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr ^ common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_and(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  & common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 & common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 & common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 & common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  & common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  & common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 & common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 & common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 & common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { InvalidPath; } break;
+  case DW_ExprValueType_F64:  { InvalidPath; } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr & common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_or(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  | common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 | common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 | common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 | common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  | common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  | common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 | common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 | common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 | common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { InvalidPath; } break;
+  case DW_ExprValueType_F64:  { InvalidPath; } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr | common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_shl(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  << common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 << common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 << common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 << common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128:
+  case DW_ExprValueType_U256:
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  << common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  << common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 << common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 << common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 << common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { InvalidPath; } break;
+  case DW_ExprValueType_F64:  { InvalidPath; } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr << common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_shr(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  >> common_rhs.u8;  } break;
+  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 >> common_rhs.u16; } break;
+  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 >> common_rhs.u32; } break;
+  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 >> common_rhs.u64; } break;
+
+  case DW_ExprValueType_U128: { NotImplemented; } break;
+  case DW_ExprValueType_U256: { NotImplemented; } break;
+  case DW_ExprValueType_U512: { NotImplemented; } break;
+
+  case DW_ExprValueType_Bool: { InvalidPath; } break;
+  case DW_ExprValueType_S8:   { InvalidPath; } break;
+  case DW_ExprValueType_S16:  { InvalidPath; } break;
+  case DW_ExprValueType_S32:  { InvalidPath; } break;
+  case DW_ExprValueType_S64:  { InvalidPath; } break;
+  case DW_ExprValueType_S128: { InvalidPath; } break;
+  case DW_ExprValueType_S256: { InvalidPath; } break;
+  case DW_ExprValueType_S512: { InvalidPath; } break;
+
+  case DW_ExprValueType_F32:  { InvalidPath; } break;
+  case DW_ExprValueType_F64:  { InvalidPath; } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >> common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_shra(DW_ExprValue lhs, DW_ExprValue rhs)
+{
+  if (DW_ExprValueType_IsUnsigned(lhs.type)) {
+    DW_ExprValueType new_type = dw_expr_signed_value_type_from_bit_size(dw_expr_byte_size_from_value_type(0, lhs.type) * 8);
+    lhs = dw_expr_cast(lhs, new_type);
+  }
+
+  if (DW_ExprValueType_IsUnsigned(rhs.type)) {
+    DW_ExprValueType new_type = dw_expr_signed_value_type_from_bit_size(dw_expr_byte_size_from_value_type(0, rhs.type) * 8);
+    rhs = dw_expr_cast(rhs, new_type);
+  }
+
+  DW_ExprValue result = {0};
+  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+
+  DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
+  DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
+
+  switch (result.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+                                 
+  case DW_ExprValueType_U8:   { InvalidPath; } break;
+  case DW_ExprValueType_U16:  { InvalidPath; } break;
+  case DW_ExprValueType_U32:  { InvalidPath; } break;
+  case DW_ExprValueType_U64:  { InvalidPath; } break;
+  case DW_ExprValueType_U128: { InvalidPath; } break;
+  case DW_ExprValueType_U256: { InvalidPath; } break;
+  case DW_ExprValueType_U512: { InvalidPath; } break;
+
+  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  >> common_rhs.s8;  } break;
+  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  >> common_rhs.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 >> common_rhs.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 >> common_rhs.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 >> common_rhs.s64; } break;
+
+  case DW_ExprValueType_S128:
+  case DW_ExprValueType_S256:
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32:  { InvalidPath; } break;
+  case DW_ExprValueType_F64:  { InvalidPath; } break;
+  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >> common_rhs.addr; } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+
+  default: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_abs(DW_ExprValue value)
+{
+  DW_ExprValue result = value;
+
+  switch (value.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+
+  case DW_ExprValueType_U8:   {}; break;
+  case DW_ExprValueType_U16:  {}; break;
+  case DW_ExprValueType_U32:  {}; break;
+  case DW_ExprValueType_U64:  {}; break;
+  case DW_ExprValueType_U128: {}; break;
+  case DW_ExprValueType_U256: {}; break;
+  case DW_ExprValueType_U512: {}; break;
+
+  case DW_ExprValueType_S8:   { result.s8  = abs_s64(result.s8);  } break;
+  case DW_ExprValueType_S16:  { result.s16 = abs_s64(result.s16); } break;
+  case DW_ExprValueType_S32:  { result.s32 = abs_s64(result.s32); } break;
+  case DW_ExprValueType_S64:  { result.s64 = abs_s64(result.s64); } break;
+  case DW_ExprValueType_S128: { NotImplemented; } break;
+  case DW_ExprValueType_S256: { NotImplemented; } break;
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32: { result.f32 = abs_f32(result.f32); } break;
+  case DW_ExprValueType_F64: { result.f64 = abs_f64(result.f64); } break;
+
+  case DW_ExprValueType_Addr: {} break;
+  case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_neg(DW_ExprValue value)
+{
+  DW_ExprValue result = value;
+
+  switch (value.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+
+  case DW_ExprValueType_U8:   { result.u8 = -result.u8; }; break;
+  case DW_ExprValueType_U16:  { result.u16 = -result.u16; }; break;
+  case DW_ExprValueType_U32:  { result.u32 = -result.u32; }; break;
+  case DW_ExprValueType_U64:  { result.u64 = -result.u64; }; break;
+  case DW_ExprValueType_U128: { NotImplemented; }; break;
+  case DW_ExprValueType_U256: { NotImplemented; }; break;
+  case DW_ExprValueType_U512: { NotImplemented; }; break;
+
+  case DW_ExprValueType_S8:   { result.s8  = -result.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = -result.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = -result.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = -result.s64; } break;
+  case DW_ExprValueType_S128: { NotImplemented; } break;
+  case DW_ExprValueType_S256: { NotImplemented; } break;
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32: { result.f32 = -result.f32; } break;
+  case DW_ExprValueType_F64: { result.f64 = -result.f64; } break;
+
+  case DW_ExprValueType_Addr: { result.addr = -result.addr; } break;
+  case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal DW_ExprValue
+dw_expr_not(DW_ExprValue value)
+{
+  DW_ExprValue result = value;
+
+  switch (value.type) {
+  case DW_ExprValueType_Generic: { InvalidPath; } break;
+
+  case DW_ExprValueType_U8:   { result.u8  = !result.u8; }; break;
+  case DW_ExprValueType_U16:  { result.u16 = !result.u16; }; break;
+  case DW_ExprValueType_U32:  { result.u32 = !result.u32; }; break;
+  case DW_ExprValueType_U64:  { result.u64 = !result.u64; }; break;
+  case DW_ExprValueType_U128: { NotImplemented; }; break;
+  case DW_ExprValueType_U256: { NotImplemented; }; break;
+  case DW_ExprValueType_U512: { NotImplemented; }; break;
+
+  case DW_ExprValueType_S8:   { result.s8  = !result.s8;  } break;
+  case DW_ExprValueType_S16:  { result.s16 = !result.s16; } break;
+  case DW_ExprValueType_S32:  { result.s32 = !result.s32; } break;
+  case DW_ExprValueType_S64:  { result.s64 = !result.s64; } break;
+  case DW_ExprValueType_S128: { NotImplemented; } break;
+  case DW_ExprValueType_S256: { NotImplemented; } break;
+  case DW_ExprValueType_S512: { NotImplemented; } break;
+
+  case DW_ExprValueType_F32: { result.f32 = !result.f32; } break;
+  case DW_ExprValueType_F64: { result.f64 = !result.f64; } break;
+
+  case DW_ExprValueType_Addr: { result.addr = !result.addr; } break;
+  case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
+  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+  }
+
+  return result;
+}
+
+internal String8
+dw_string_from_expr_value(Arena *arena, U64 addr_size, DW_ExprValue v)
+{
+  String8 s = {0};
+  switch (v.type) {
+  case DW_ExprValueType_Generic:  { } break;
+  case DW_ExprValueType_U8:       { s = str8_struct(&v.u8);             } break;
+  case DW_ExprValueType_U16:      { s = str8_struct(&v.u16);            } break;
+  case DW_ExprValueType_U32:      { s = str8_struct(&v.u32);            } break;
+  case DW_ExprValueType_U64:      { s = str8_struct(&v.u64);            } break;
+  case DW_ExprValueType_U128:     { s = str8_struct(&v.u128);           } break;
+  case DW_ExprValueType_U256:     { s = str8_struct(&v.u256);           } break;
+  case DW_ExprValueType_U512:     { s = str8_struct(&v.u512);           } break;
+  case DW_ExprValueType_S8:       { s = str8_struct(&v.s8);             } break;
+  case DW_ExprValueType_S16:      { s = str8_struct(&v.s16);            } break;
+  case DW_ExprValueType_S32:      { s = str8_struct(&v.s32);            } break;
+  case DW_ExprValueType_S64:      { s = str8_struct(&v.s64);            } break;
+  case DW_ExprValueType_F32:      { s = str8_struct(&v.f32);            } break;
+  case DW_ExprValueType_F64:      { s = str8_struct(&v.f64);            } break;
+  case DW_ExprValueType_Addr:     { s = str8((U8 *)&v.addr, addr_size); } break;
+  case DW_ExprValueType_Implicit: { s = v.implicit;                     } break;
+  default: { NotImplemented; } break;
+  }
+  return str8_copy(arena, s);
+}
+
+internal DW_ExprValueNode *
+dw_expr_stack_push(Arena *arena, DW_ExprStack *stack, DW_ExprValue value)
+{
+  DW_ExprValueNode *n = push_array(arena, DW_ExprValueNode, 1);
+  n->v = value;
+  SLLStackPush(stack->top, n);
   stack->count += 1;
+  return n;
 }
 
-internal U64
-dw_expr__stack_pop(DW_ExprStack *stack)
+internal DW_ExprValueNode *
+dw_expr_stack_push_unsigned(Arena *arena, DW_ExprStack *stack, void *value, U64 value_size)
 {
-  U64               result = 0;
-  DW_ExprStackNode *node   = stack->stack;
-  if (node != 0) {
-    SLLStackPop(stack->stack);
-    stack->count -= 1;
-    result = node->val;
+  DW_ExprValueNode *n = 0;
+  switch (value_size) {
+  case 0: {} break;
+  case 1: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8,  .u8  = *(U8 *)value  }); } break;
+  case 2: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U16, .u16 = *(U16 *)value }); } break;
+  case 4: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U32, .u32 = *(U32 *)value }); } break;
+  case 8: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64, .u64 = *(U64 *)value }); } break;
+  default: { NotImplemented; } break;
   }
-  return result;
+  return n;
 }
 
-internal U64
-dw_expr__stack_pick(DW_ExprStack *stack, U64 idx)
+internal DW_ExprValue
+dw_expr_stack_pop(DW_ExprStack *stack)
 {
-  U64 result = 0;
+  DW_ExprValueNode *n = stack->top;
+  DW_ExprValue v = n->v;
+  SLLStackPop(stack->top);
+  return v;
+}
+
+internal DW_ExprValue
+dw_expr_stack_peek(DW_ExprStack *stack)
+{
+  return stack->top->v;
+}
+
+internal DW_ExprValueNode *
+dw_expr_stack_pick(DW_ExprStack *stack, U64 idx)
+{
+  DW_ExprValueNode *n = 0;
   if (idx < stack->count) {
-    U64               counter = idx;
-    DW_ExprStackNode *node    = stack->stack;
-    for (;node != 0 && counter > 0; node = node->next, counter -= 1);
-    if (counter == 0 && node != 0) {
-      result = node->val;
-    }
+    U64 c = idx;
+    for (n = stack->top; n != 0 && c > 0; n = n->next, c -= 1);
   }
-  return result;
+  return n;
 }
 
-internal B32
-dw_expr__stack_is_empty(DW_ExprStack *stack)
+internal DW_ExprInst *
+dw_expr_inst_from_delta(DW_ExprInst *inst, S16 delta)
 {
-  B32 result = (stack->count == 0);
-  return result;
-}
-
-//- dw expr call stack
-
-internal DW_ExprCall*
-dw_expr__call_top(DW_ExprCallStack *stack)
-{
-  DW_ExprCall *call = stack->stack;
-  return call;
-}
-
-internal void
-dw_expr__call_push(Arena *arena, DW_ExprCallStack *stack, void *ptr, U64 size)
-{
-  DW_ExprCall *call = 0;
-  if (call != 0) {
-    SLLStackPop(stack->free_calls);
-  } else {
-    call = push_array(arena, DW_ExprCall, 1);
+  B32          skip_fwd = inst->operands[0].s16 >= 0;
+  DW_ExprInst *i        = inst;
+  U16          u_delta  = abs_s64(inst->operands[0].s16);
+  U64          cursor   = 0;
+  for (i = skip_fwd ? inst : inst->prev; i != 0 && cursor < u_delta; i = skip_fwd ? inst->next : inst->prev) {
+    cursor += inst->size;
   }
-  MemoryZeroStruct(call);
-  SLLStackPush(stack->stack, call);
-  stack->depth += 1;
-}
-
-internal void
-dw_expr__call_pop(DW_ExprCallStack *stack)
-{
-  DW_ExprCall *top = stack->stack;
-  if (top != 0)
-  {
-    SLLStackPop(stack->stack);
-    SLLStackPush(stack->free_calls, top);
+  if (cursor != u_delta) {
+    i = 0;
   }
+  return i;
 }
 
-//- analysis tasks
-
-internal DW_ExprAnalysisTask*
-dw_expr__analysis_task_from_p(DW_ExprAnalysisTask *first, U64 p)
+internal DW_UnwindStatus
+dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_read, void *reg_read_ud, DW_ExprValue *value_out)
 {
-  DW_ExprAnalysisTask *result = 0;
-  for (DW_ExprAnalysisTask *task = first; task != 0; task = task->next) {
-    if (task->p == p) {
-      result = task;
+  Temp scratch = scratch_begin(&arena, 1);
+  DW_UnwindStatus result = DW_UnwindStatus_Ok;
+  DW_PieceList pieces = {0};
+  DW_ExprStack *stack = push_array(scratch.arena, DW_ExprStack, 1);
+  B32 is_ok = 1;
+
+  for EachNode(inst, DW_ExprInst, expr.first) {
+    again:;
+
+    U64 pop_count = dw_pop_count_from_expr_op(inst->opcode);
+    if (pop_count >= stack->count) {
+      Assert(0 && "not enough values on the stack to evaluate the instruction");
+      is_ok = 0;
       break;
     }
+
+    switch (inst->opcode) {
+    case DW_ExprOp_Nop: {} break;
+
+    case DW_ExprOp_Lit0:  case DW_ExprOp_Lit1:  case DW_ExprOp_Lit2:
+    case DW_ExprOp_Lit3:  case DW_ExprOp_Lit4:  case DW_ExprOp_Lit5:
+    case DW_ExprOp_Lit6:  case DW_ExprOp_Lit7:  case DW_ExprOp_Lit8:
+    case DW_ExprOp_Lit9:  case DW_ExprOp_Lit10: case DW_ExprOp_Lit11:
+    case DW_ExprOp_Lit12: case DW_ExprOp_Lit13: case DW_ExprOp_Lit14:
+    case DW_ExprOp_Lit15: case DW_ExprOp_Lit16: case DW_ExprOp_Lit17:
+    case DW_ExprOp_Lit18: case DW_ExprOp_Lit19: case DW_ExprOp_Lit20:
+    case DW_ExprOp_Lit21: case DW_ExprOp_Lit22: case DW_ExprOp_Lit23:
+    case DW_ExprOp_Lit24: case DW_ExprOp_Lit25: case DW_ExprOp_Lit26:
+    case DW_ExprOp_Lit27: case DW_ExprOp_Lit28: case DW_ExprOp_Lit29:
+    case DW_ExprOp_Lit30: case DW_ExprOp_Lit31: {
+      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8, .u8 = inst->opcode - DW_ExprOp_Lit0 });
+    } break;
+
+    case DW_ExprOp_Const1U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8,   .u8   = inst->operands[0].u8  }); } break;
+    case DW_ExprOp_Const2U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U16,  .u16  = inst->operands[0].u16 }); } break;
+    case DW_ExprOp_Const4U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U32,  .u32  = inst->operands[0].u32 }); } break;
+    case DW_ExprOp_Const8U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64,  .u64  = inst->operands[0].u64 }); } break;
+    case DW_ExprOp_Const1S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S8,   .s8   = inst->operands[0].s8  }); } break;
+    case DW_ExprOp_Const2S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S16,  .s16  = inst->operands[0].s16 }); } break;
+    case DW_ExprOp_Const4S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S32,  .s32  = inst->operands[0].s32 }); } break;
+    case DW_ExprOp_Const8S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S64,  .s64  = inst->operands[0].s64 }); } break;
+    case DW_ExprOp_ConstU:  { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64,  .u64  = inst->operands[0].u64 }); } break;
+    case DW_ExprOp_ConstS:  { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S64,  .s64  = inst->operands[0].s64 }); } break;
+    case DW_ExprOp_Addr:    { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = inst->operands[0].u64 }); } break;
+
+    case DW_ExprOp_Reg0:  case DW_ExprOp_Reg1:  case DW_ExprOp_Reg2:
+    case DW_ExprOp_Reg3:  case DW_ExprOp_Reg4:  case DW_ExprOp_Reg5:
+    case DW_ExprOp_Reg6:  case DW_ExprOp_Reg7:  case DW_ExprOp_Reg8:
+    case DW_ExprOp_Reg9:  case DW_ExprOp_Reg10: case DW_ExprOp_Reg11:
+    case DW_ExprOp_Reg12: case DW_ExprOp_Reg13: case DW_ExprOp_Reg14:
+    case DW_ExprOp_Reg15: case DW_ExprOp_Reg16: case DW_ExprOp_Reg17:
+    case DW_ExprOp_Reg18: case DW_ExprOp_Reg19: case DW_ExprOp_Reg20:
+    case DW_ExprOp_Reg21: case DW_ExprOp_Reg22: case DW_ExprOp_Reg23:
+    case DW_ExprOp_Reg24: case DW_ExprOp_Reg25: case DW_ExprOp_Reg26:
+    case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
+    case DW_ExprOp_Reg30: case DW_ExprOp_Reg31: {
+      DW_Reg  reg_id    = inst->opcode - DW_ExprOp_Reg0;
+      U64     reg_size  = dw_reg_size_from_code(ctx->arch, reg_id);
+      U8     *reg_value = push_array(scratch.arena, U8, reg_size);
+      result = reg_read(reg_id, reg_value, reg_size, reg_read_ud);
+      if (result != DW_UnwindStatus_Ok) { goto exit; }
+      dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
+    } break;
+
+    case DW_ExprOp_RegX: {
+      U64 reg_size  = dw_reg_size_from_code(ctx->arch, inst->operands[0].u64);
+      U8 *reg_value = push_array(scratch.arena, U8, reg_size);
+      result = reg_read(inst->operands[0].u64, reg_value, reg_size, reg_read_ud);
+      if (result != DW_UnwindStatus_Ok) { goto exit; }
+      dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
+    } break;
+
+    case DW_ExprOp_ImplicitValue: {
+      if (inst->operands[0].block.size <= sizeof(U512)) {
+        dw_expr_stack_push_unsigned(scratch.arena, stack, inst->operands[0].block.str, inst->operands[0].block.size);
+      } else {
+        NotImplemented;
+      }
+    } break;
+
+    case DW_ExprOp_Piece: {
+      if (stack->count) {
+        String8 value = dw_string_from_expr_value(arena, ctx->arch, dw_expr_stack_pop(stack));
+        if (inst->operands[0].u64 <= value.size) {
+          dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .value = { .ptr = value.str, .bit_size = inst->operands[0].u64 * 8 }});
+        } else {
+          Assert(0 && "out of bounds size in the piece opcode");
+          result = DW_UnwindStatus_Fail;
+        }
+      } else {
+        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .undef_bit_size = inst->operands[0].u64 * 8 });
+      }
+    } break;
+    case DW_ExprOp_BitPiece: {
+      if (stack->count) {
+        String8 value = dw_string_from_expr_value(arena, ctx->arch, dw_expr_stack_pop(stack));
+        if (inst->operands[0].u64 <= value.size * 8) {
+          dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .value = { .ptr = value.str, .bit_size = inst->operands[0].u64 }});
+        } else {
+          Assert(0 && "out of bounds size in the bit piece opcode");
+          result = DW_UnwindStatus_Fail;
+        }
+      } else {
+        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .undef_bit_size = inst->operands[0].u64 });
+      }
+    } break;
+
+    case DW_ExprOp_Pick: {
+      DW_ExprValueNode *src = dw_expr_stack_pick(stack, inst->operands[0].u8);
+      if (src) {
+        dw_expr_stack_push(scratch.arena, stack, src->v);
+      } else {
+        Assert(0 && "out of bounds stack index");
+        result = DW_UnwindStatus_Fail;
+      }
+    } break;
+
+    case DW_ExprOp_Over: {
+      DW_ExprValueNode *src = dw_expr_stack_pick(stack, 1);
+      if (src) {
+        dw_expr_stack_push(scratch.arena, stack, src->v);
+      } else {
+        Assert(0 && "out of bounds stack index");
+        result = DW_UnwindStatus_Fail;
+      }
+    } break;
+
+    case DW_ExprOp_PlusUConst: {
+      DW_ExprValue lhs = dw_expr_stack_pop(stack);
+      DW_ExprValue rhs = { .type = DW_ExprValueType_U64, .u64 = inst->operands[0].u64 };
+      DW_ExprValue sum = dw_expr_add(lhs, rhs);
+      dw_expr_stack_push(scratch.arena, stack, sum);
+    } break;
+
+    case DW_ExprOp_Skip: {
+      DW_ExprInst *i = dw_expr_inst_from_delta(inst, inst->operands[0].s16);
+
+      if (i == 0) {
+        Assert(0 && "seeking to an invalid offset");
+        result = DW_UnwindStatus_Fail;
+        break;
+      }
+
+      inst = i;
+      goto again;
+    }
+
+    case DW_ExprOp_Bra: {
+      DW_ExprValue cond = dw_expr_stack_pop(stack);
+
+      if (cond.type != DW_ExprValueType_S16) {
+        Assert(0 && "unexpected value");
+        result = DW_UnwindStatus_Fail;
+        break;
+      }
+
+      DW_ExprInst *i = dw_expr_inst_from_delta(inst, inst->operands[0].s16);
+
+      if (i == 0) {
+        Assert(0 && "seeking to an invalid offset");
+        result = DW_UnwindStatus_Fail;
+        break;
+      }
+
+      inst = i;
+      goto again;
+    }
+
+    case DW_ExprOp_Call2:
+    case DW_ExprOp_Call4:
+    case DW_ExprOp_CallRef: {
+      NotImplemented;
+    } break;
+
+    case DW_ExprOp_GNU_Convert:
+    case DW_ExprOp_Convert: {
+      if (inst->operands[0].u64 == 0) {
+        DW_ExprValue value     = dw_expr_stack_pop(stack);
+        DW_ExprValue new_value = dw_expr_cast(value, DW_ExprValueType_Generic);
+        dw_expr_stack_push(scratch.arena, stack, new_value);
+      } else {
+        NotImplemented;
+      }
+    } break;
+
+    case DW_ExprOp_Reinterpret: {
+      if (inst->operands[0].u64 == 0) {
+        DW_ExprValue value     = dw_expr_stack_pop(stack);
+        DW_ExprValue new_value = dw_expr_cast(value, DW_ExprValueType_Generic);
+        dw_expr_stack_push(scratch.arena, stack, new_value);
+      } else {
+        NotImplemented;
+      }
+    } break;
+
+    case DW_ExprOp_GNU_ParameterRef: { NotImplemented; } break;
+    case DW_ExprOp_GNU_DerefType:    { NotImplemented; } break;
+    case DW_ExprOp_DerefType:        { NotImplemented; } break;
+    case DW_ExprOp_ConstType:        { NotImplemented; } break;
+    case DW_ExprOp_GNU_ConstType:    { NotImplemented; } break;
+    case DW_ExprOp_RegvalType:       { NotImplemented; } break;
+
+    case DW_ExprOp_EntryValue:
+    case DW_ExprOp_GNU_EntryValue: {
+      DW_Expr      entry_value_expr = dw_expr_from_data(scratch.arena, ctx->format, byte_size_from_arch(ctx->arch), inst->operands[0].block);
+      DW_ExprValue entry_value;
+      result = dw_eval_expr(scratch.arena, ctx, entry_value_expr, reg_read, reg_read_ud, &entry_value);
+      if (result == DW_UnwindStatus_Ok) {
+        dw_expr_stack_push(scratch.arena, stack, entry_value);
+      }
+    } break;
+
+    case DW_ExprOp_Addrx: { NotImplemented; } break;
+
+    case DW_ExprOp_CallFrameCfa: {
+      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64, .u64 = ctx->cfa });
+    } break;
+
+    case DW_ExprOp_PushObjectAddress: { NotImplemented; } break;
+
+    case DW_ExprOp_Plus:  { dw_expr_stack_push(scratch.arena, stack, dw_expr_add(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Minus: { dw_expr_stack_push(scratch.arena, stack, dw_expr_minus(dw_expr_stack_pop(stack), dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Div:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_div(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Mul:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_mul(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Mod:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_mod(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+
+    case DW_ExprOp_Eq:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_eq(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Ge:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_ge(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Gt:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_gt(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Le:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_le(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Lt:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_lt(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Ne:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_ne(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+
+    case DW_ExprOp_Xor:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_xor(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_And:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_and(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Or:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_or(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Shl:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_shl(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Shr:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_shr(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Shra:  { dw_expr_stack_push(scratch.arena, stack, dw_expr_shra(dw_expr_stack_pop(stack),  dw_expr_stack_pop(stack))); } break;
+
+    case DW_ExprOp_Abs: { dw_expr_stack_push(scratch.arena, stack, dw_expr_abs(dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Neg: { dw_expr_stack_push(scratch.arena, stack, dw_expr_neg(dw_expr_stack_pop(stack))); } break;
+    case DW_ExprOp_Not: { dw_expr_stack_push(scratch.arena, stack, dw_expr_not(dw_expr_stack_pop(stack))); } break;
+
+    case DW_ExprOp_Dup: {
+      dw_expr_stack_push(scratch.arena, stack, dw_expr_stack_peek(stack));
+    } break;
+
+    case DW_ExprOp_Rot: {
+      DW_ExprValue first  = dw_expr_stack_pop(stack);
+      DW_ExprValue second = dw_expr_stack_pop(stack);
+      DW_ExprValue third  = dw_expr_stack_pop(stack);
+      dw_expr_stack_push(scratch.arena, stack, first);  // -> third
+      dw_expr_stack_push(scratch.arena, stack, third);  // -> second
+      dw_expr_stack_push(scratch.arena, stack, second); // -> first
+    } break;
+
+    case DW_ExprOp_Swap: {
+      DW_ExprValue first  = dw_expr_stack_pop(stack);
+      DW_ExprValue second = dw_expr_stack_pop(stack);
+      dw_expr_stack_push(scratch.arena, stack, first);  // -> second
+      dw_expr_stack_push(scratch.arena, stack, second); // -> first
+    } break;
+
+    case DW_ExprOp_Drop: {
+      dw_expr_stack_pop(stack);
+    } break;
+
+    case DW_ExprOp_StackValue: {
+      stack->top->v.type = dw_expr_unsigned_value_type_from_bit_size(byte_size_from_arch(ctx->arch) * 8);
+    } break;
+
+    case DW_ExprOp_GNU_PushTlsAddress:
+    case DW_ExprOp_FormTlsAddress: {
+      DW_ExprValue tls_off  = dw_expr_stack_pop(stack);
+      DW_ExprValue tls_base = { .type = DW_ExprValueType_Addr, .addr = ctx->tls_base };
+      DW_ExprValue tls_addr = dw_expr_add(tls_base, tls_off);
+      dw_expr_stack_push(scratch.arena, stack, tls_addr);
+    } break;
+    }
   }
+
+exit:;
+  scratch_end(scratch);
   return result;
 }
 

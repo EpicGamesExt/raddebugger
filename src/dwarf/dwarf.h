@@ -1682,6 +1682,23 @@ typedef enum DW_RegX64Enum
 
 ////////////////////////////////
 
+typedef enum {
+  DW_UnwindStatus_Ok,
+  DW_UnwindStatus_Fail,
+  DW_UnwindStatus_Maybe
+} DW_UnwindStatus;
+
+#define DW_REG_READ(name) DW_UnwindStatus name(DW_Reg reg_id, void *buffer, U64 buffer_max, void *ud)
+typedef DW_REG_READ(DW_RegRead);
+
+#define DW_REG_WRITE(name) DW_UnwindStatus name(DW_Reg reg_id, void *value, U64 value_size, void *ud)
+typedef DW_REG_WRITE(DW_RegWrite);
+
+#define DW_MEM_READ(name) DW_UnwindStatus name(U64 addr, U64 size, void *buffer, void *ud)
+typedef DW_MEM_READ(DW_MemRead);
+
+////////////////////////////////
+
 internal U64 dw_reg_size_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_pos_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_size_from_code(Arch arch, DW_Reg reg_code);
