@@ -130,7 +130,7 @@ internal U64 dw_expr_byte_size_from_value_type(U64 addr_size, DW_ExprValueType k
 
 // typer
 internal DW_ExprValueType dw_expr_pick_common_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs);
-internal DW_ExprValueType dw_expr_pick_common_comparison_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs);
+internal DW_ExprValueType dw_expr_pick_common_compar_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs);
 internal DW_ExprValue     dw_expr_cast(DW_ExprValue value, DW_ExprValueType type);
 
 // arithmetic operators

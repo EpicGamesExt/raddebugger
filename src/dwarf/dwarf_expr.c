@@ -144,7 +144,7 @@ dw_expr_pick_common_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs)
 }
 
 internal DW_ExprValueType
-dw_expr_pick_common_comparison_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs)
+dw_expr_pick_common_compar_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs)
 {
   DW_ExprValueType result;
   if (lhs == DW_ExprValueType_Generic || rhs == DW_ExprValueType_Generic) {
@@ -160,29 +160,29 @@ dw_expr_cast(DW_ExprValue value, DW_ExprValueType type)
 {
   DW_ExprValue result = { type };
 
-#define CastTable(f, t)                                                                                                       \
-    switch (value.type) {                                                                                                     \
-    case DW_ExprValueType_Generic: { MemoryCopy(&result.##f, value.generic.str, Min(sizeof(t), value.generic.size)); } break; \
-    case DW_ExprValueType_U8:      { result.##f = (t)value.u8;  } break;                                                      \
-    case DW_ExprValueType_U16:     { result.##f = (t)value.u16; } break;                                                      \
-    case DW_ExprValueType_U32:     { result.##f = (t)value.u32; } break;                                                      \
-    case DW_ExprValueType_U64:     { result.##f = (t)value.u64; } break;                                                      \
-    case DW_ExprValueType_U128:    { NotImplemented; } break;                                                                 \
-    case DW_ExprValueType_U256:    { NotImplemented; } break;                                                                 \
-    case DW_ExprValueType_U512:    { NotImplemented; } break;                                                                 \
-    case DW_ExprValueType_S8:      { result.##f = (t)value.s8;  } break;                                                      \
-    case DW_ExprValueType_S16:     { result.##f = (t)value.s16; } break;                                                      \
-    case DW_ExprValueType_S32:     { result.##f = (t)value.s32; } break;                                                      \
-    case DW_ExprValueType_S64:     { result.##f = (t)value.s64; } break;                                                      \
-    case DW_ExprValueType_S128:    { NotImplemented; } break;                                                                 \
-    case DW_ExprValueType_S256:    { NotImplemented; } break;                                                                 \
-    case DW_ExprValueType_S512:    { NotImplemented; } break;                                                                 \
-    case DW_ExprValueType_F32:     { result.##f = (t)value.f32;  } break;                                                     \
-    case DW_ExprValueType_F64:     { result.##f = (t)value.f64;  } break;                                                     \
-    case DW_ExprValueType_Addr:    { result.##f = (t)value.addr; } break;                                                     \
-    case DW_ExprValueType_Implicit: { InvalidPath; } break;                                                                   \
-    case DW_ExprValueType_Bool:     { result.##f = (t)value.boolean; } break;                                                 \
-    default: { InvalidPath; } break;                                                                                          \
+#define CastTable(f, t)                                                                                                     \
+    switch (value.type) {                                                                                                   \
+    case DW_ExprValueType_Generic: { MemoryCopy(&result.f, value.generic.str, Min(sizeof(t), value.generic.size)); } break; \
+    case DW_ExprValueType_U8:      { result.f = (t)value.u8;  } break;                                                      \
+    case DW_ExprValueType_U16:     { result.f = (t)value.u16; } break;                                                      \
+    case DW_ExprValueType_U32:     { result.f = (t)value.u32; } break;                                                      \
+    case DW_ExprValueType_U64:     { result.f = (t)value.u64; } break;                                                      \
+    case DW_ExprValueType_U128:    { NotImplemented; } break;                                                               \
+    case DW_ExprValueType_U256:    { NotImplemented; } break;                                                               \
+    case DW_ExprValueType_U512:    { NotImplemented; } break;                                                               \
+    case DW_ExprValueType_S8:      { result.f = (t)value.s8;  } break;                                                      \
+    case DW_ExprValueType_S16:     { result.f = (t)value.s16; } break;                                                      \
+    case DW_ExprValueType_S32:     { result.f = (t)value.s32; } break;                                                      \
+    case DW_ExprValueType_S64:     { result.f = (t)value.s64; } break;                                                      \
+    case DW_ExprValueType_S128:    { NotImplemented; } break;                                                               \
+    case DW_ExprValueType_S256:    { NotImplemented; } break;                                                               \
+    case DW_ExprValueType_S512:    { NotImplemented; } break;                                                               \
+    case DW_ExprValueType_F32:     { result.f = (t)value.f32;  } break;                                                     \
+    case DW_ExprValueType_F64:     { result.f = (t)value.f64;  } break;                                                     \
+    case DW_ExprValueType_Addr:    { result.f = (t)value.addr; } break;                                                     \
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;                                                                 \
+    case DW_ExprValueType_Bool:     { result.f = (t)value.boolean; } break;                                                 \
+    default: { InvalidPath; } break;                                                                                        \
     }
 
   switch (type) {
@@ -380,7 +380,7 @@ internal DW_ExprValue
 dw_expr_mod(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -421,7 +421,7 @@ internal DW_ExprValue
 dw_expr_eq(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_type(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -463,7 +463,7 @@ internal DW_ExprValue
 dw_expr_ge(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_type(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -505,7 +505,7 @@ internal DW_ExprValue
 dw_expr_gt(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_type(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -547,7 +547,7 @@ internal DW_ExprValue
 dw_expr_le(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_type(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -589,7 +589,7 @@ internal DW_ExprValue
 dw_expr_lt(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -631,7 +631,7 @@ internal DW_ExprValue
 dw_expr_ne(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -673,7 +673,7 @@ internal DW_ExprValue
 dw_expr_xor(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -715,7 +715,7 @@ internal DW_ExprValue
 dw_expr_and(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -757,7 +757,7 @@ internal DW_ExprValue
 dw_expr_or(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -799,7 +799,7 @@ internal DW_ExprValue
 dw_expr_shl(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -841,7 +841,7 @@ internal DW_ExprValue
 dw_expr_shr(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
@@ -892,7 +892,7 @@ dw_expr_shra(DW_ExprValue lhs, DW_ExprValue rhs)
   }
 
   DW_ExprValue result = {0};
-  result.type = dw_expr_pick_common_comparsion_value_kind(lhs.type, rhs.type);
+  result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
 
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
