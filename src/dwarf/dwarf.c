@@ -400,11 +400,11 @@ internal U64
 dw_operand_count_from_expr_op(DW_ExprOp op)
 {
   switch (op) {
-#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _OPER_COUNT;
-    DW_Expr_V3_XList(X)
-    DW_Expr_V4_XList(X)
-    DW_Expr_V5_XList(X)
-    DW_Expr_GNU_XList(X)
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _OPER_COUNT;
+    DW_Expr_V3_XList
+    DW_Expr_V4_XList
+    DW_Expr_V5_XList
+    DW_Expr_GNU_XList
 #undef X
   default: { NotImplemented; } break;
   }
@@ -415,11 +415,11 @@ internal U64
 dw_pop_count_from_expr_op(DW_ExprOp op)
 {
   switch (op) {
-#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _POP_COUNT;
-    DW_Expr_V3_XList(X)
-    DW_Expr_V4_XList(X)
-    DW_Expr_V5_XList(X)
-    DW_Expr_GNU_XList(X)
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _POP_COUNT;
+    DW_Expr_V3_XList
+    DW_Expr_V4_XList
+    DW_Expr_V5_XList
+    DW_Expr_GNU_XList
 #undef X
   default: { NotImplemented; } break;
   }
@@ -430,11 +430,25 @@ internal U64
 dw_push_count_from_expr_op(DW_ExprOp op) 
 {
   switch (op) {
-#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT) case _ID: return _PUSH_COUNT;
-    DW_Expr_V3_XList(X)
-    DW_Expr_V4_XList(X)
-    DW_Expr_V5_XList(X)
-    DW_Expr_GNU_XList(X)
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _PUSH_COUNT;
+    DW_Expr_V3_XList
+    DW_Expr_V4_XList
+    DW_Expr_V5_XList
+    DW_Expr_GNU_XList
+#undef X
+  default: { NotImplemented; } break;
+  }
+  return 0;
+}
+
+internal DW_ExprOperandType *
+dw_operand_types_from_expr_opcode(DW_ExprOp op)
+{
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, _OPER_TYPE0, _OPER_TYPE1) case _ID: { local_persist DW_ExprOperandType t[] = { DW_ExprOperandType_##_OPER_TYPE0, DW_ExprOperandType_##_OPER_TYPE1  }; return t; }
+  switch (op) {
+  DW_Expr_V3_XList
+  DW_Expr_V4_XList
+  DW_Expr_V5_XList
 #undef X
   default: { NotImplemented; } break;
   }
@@ -528,26 +542,26 @@ dw_string_from_expr_op(Arena *arena, DW_Version ver, DW_Ext ext, DW_ExprOp op)
 #define X(_N,...) case DW_ExprOp_##_N: result = str8_lit(Stringify(_N)); goto exit;
   if (ext & DW_Ext_GNU) {
     switch (op) {
-      DW_Expr_GNU_XList(X); 
+      DW_Expr_GNU_XList;
     }
   }
   
   switch (ver) {
     case DW_Version_5: {
       switch (op) {
-        DW_Expr_V5_XList(X)
+        DW_Expr_V5_XList
       }
     } // fall-through
     case DW_Version_4: {
       switch (op) {
-        DW_Expr_V4_XList(X)
+        DW_Expr_V4_XList
       }
     } // fall-through
     case DW_Version_3:
     case DW_Version_2:
     case DW_Version_1: {
       switch (op) {
-        DW_Expr_V3_XList(X)
+        DW_Expr_V3_XList
       }
     } // fall-through
     case DW_Version_Null:

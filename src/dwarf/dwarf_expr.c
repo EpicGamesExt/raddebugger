@@ -1417,3 +1417,104 @@ exit:;
   return result;
 }
 
+internal String8
+dw_encode_expr(Arena *arena, DW_Format format, U64 addr_size, DW_ExprEnc *encs, U64 encs_count)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List *srl = push_array(scratch.arena, String8List, 1);
+  str8_serial_begin(scratch.arena, srl);
+
+  for EachIndex(i, encs_count) {
+    DW_ExprEnc *e = &encs[i];
+
+    switch (e->type) {
+    case DW_ExprEncType_Op: {
+      str8_serial_push_struct(scratch.arena, srl, &e->op);
+    } break;
+    case DW_ExprEncType_U8: {
+      str8_serial_push_struct(scratch.arena, srl, &e->u8);
+    } break;
+    case DW_ExprEncType_U16: {
+      str8_serial_push_struct(scratch.arena, srl, &e->u16);
+    } break;
+    case DW_ExprEncType_U32: {
+      str8_serial_push_struct(scratch.arena, srl, &e->u32);
+    } break;
+    case DW_ExprEncType_U64: {
+      str8_serial_push_struct(scratch.arena, srl, &e->u64);
+    } break;
+    case DW_ExprEncType_S8: {
+      str8_serial_push_struct(scratch.arena, srl, &e->s8);
+    } break;
+    case DW_ExprEncType_S16: {
+      str8_serial_push_struct(scratch.arena, srl, &e->s16);
+    } break;
+    case DW_ExprEncType_S32: {
+      str8_serial_push_struct(scratch.arena, srl, &e->s32);
+    } break;
+    case DW_ExprEncType_S64: {
+      str8_serial_push_struct(scratch.arena, srl, &e->s64);
+    } break;
+    case DW_ExprEncType_ULEB128: {
+      U64 buffer_size = 0;
+      U8  buffer[10];
+      for (U64 value = e->u64; value != 0; ) {
+        U8 byte = value & 0x7f;
+        value >>= 7;
+        if (value != 0) {
+          byte |= 0x80;
+        }
+        Assert(buffer_size < sizeof(buffer));
+        buffer[buffer_size++] = byte;
+      }
+      str8_serial_push_string(scratch.arena, srl, str8(buffer, buffer_size));
+    } break;
+    case DW_ExprEncType_SLEB128: {
+      U64 buffer_size = 0;
+      U8  buffer[10];
+      for (S64 value = e->s64, more = 1; more != 0; ) {
+        U8 byte = value & 0x7f;
+        value >>= 7;
+        U8 sign_bit = byte & 0x40;
+        if ((value == 0 && sign_bit == 0) || (value == -1 && sign_bit != 0)) {
+          more = 0;
+        } else {
+          byte |= 0x80;
+        }
+        Assert(buffer_size < sizeof(buffer));
+        buffer[buffer_size++] = byte;
+      }
+      str8_serial_push_string(scratch.arena, srl, str8(buffer, buffer_size));
+    } break;
+    case DW_ExprEncType_Addr: {
+      Assert(addr_size <= sizeof(e->addr));
+      str8_serial_push_string(scratch.arena, srl, str8((U8 *)&e->addr, addr_size));
+    } break;
+    case DW_ExprEncType_Block: {
+      Assert(e->block.size <= max_U8);
+      str8_serial_push_u8(scratch.arena, srl, (U8)e->block.size);
+      str8_serial_push_string(scratch.arena, srl, e->block);
+    } break;
+    case DW_ExprEncType_DwarfUInt: {
+      switch (format) {
+      case DW_Format_Null:  {} break;
+      case DW_Format_32Bit: { str8_serial_push_u32(scratch.arena, srl, e->u32); } break;
+      case DW_Format_64Bit: { str8_serial_push_u64(scratch.arena, srl, e->u64); } break;
+      default: { InvalidPath; } break;
+      }
+    } break;
+    case DW_ExprEncType_Label: {
+      // TODO:
+    } break;
+    case DW_ExprEncType_DeclLabel: {
+      // TODO:
+    } break;
+    default: { InvalidPath; } break;
+    }
+  }
+
+  String8 expr = str8_serial_end(arena, srl);
+  scratch_end(scratch);
+  return expr;
+}
+

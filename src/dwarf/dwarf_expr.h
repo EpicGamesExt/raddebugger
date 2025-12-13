@@ -4,6 +4,9 @@
 #ifndef DWARF_EXPR_H
 #define DWARF_EXPR_H
 
+////////////////////////////////
+// evaluator
+
 typedef struct DW_ExprContext
 {
   Arch      arch;
@@ -116,6 +119,66 @@ typedef struct DW_ExprResult
 } DW_ExprResult;
 
 ////////////////////////////////
+// encoder
+
+typedef enum
+{
+  DW_ExprEncType_Null,
+  DW_ExprEncType_Op,
+  DW_ExprEncType_U8,
+  DW_ExprEncType_U16,
+  DW_ExprEncType_U32,
+  DW_ExprEncType_U64,
+  DW_ExprEncType_S8,
+  DW_ExprEncType_S16,
+  DW_ExprEncType_S32,
+  DW_ExprEncType_S64,
+  DW_ExprEncType_ULEB128,
+  DW_ExprEncType_SLEB128,
+  DW_ExprEncType_Addr,
+  DW_ExprEncType_Block,
+  DW_ExprEncType_DwarfUInt,
+  DW_ExprEncType_Label,
+  DW_ExprEncType_DeclLabel,
+} DW_ExprEncType;
+
+typedef struct DW_ExprEnc
+{
+  DW_ExprEncType type;
+  union {
+    DW_ExprOp op;
+    U8        u8;
+    U16       u16;
+    U32       u32;
+    U64       u64;
+    S8        s8;
+    S16       s16;
+    S32       s32;
+    S64       s64;
+    U64       addr;
+    String8   block;
+    char     *label;
+  };
+} DW_ExprEnc;
+
+#define DW_ExprEnc_Op(v)        { .type = DW_ExprEncType_Op,        .op    = DW_ExprOp_##v }
+#define DW_ExprEnc_U8(v)        { .type = DW_ExprEncType_U8,        .u8    = v             }
+#define DW_ExprEnc_U16(v)       { .type = DW_ExprEncType_U16,       .u16   = v             }
+#define DW_ExprEnc_U32(v)       { .type = DW_ExprEncType_U32,       .u32   = v             }
+#define DW_ExprEnc_U64(v)       { .type = DW_ExprEncType_U64,       .u64   = v             }
+#define DW_ExprEnc_S8(v)        { .type = DW_ExprEncType_S8,        .s8    = v             }
+#define DW_ExprEnc_S16(v)       { .type = DW_ExprEncType_S16,       .s16   = v             }
+#define DW_ExprEnc_S32(v)       { .type = DW_ExprEncType_S32,       .s32   = v             }
+#define DW_ExprEnc_S64(v)       { .type = DW_ExprEncType_S64,       .s64   = v             }
+#define DW_ExprEnc_ULEB128(v)   { .type = DW_ExprEncType_ULEB128,   .u64   = v             }
+#define DW_ExprEnc_SLEB128(v)   { .type = DW_ExprEncType_SLEB128,   .s64   = v             }
+#define DW_ExprEnc_Addr(v)      { .type = DW_ExprEncType_Addr,      .addr  = v             }
+#define DW_ExprEnc_Block(v)     { .type = DW_ExprEncType_Block,     .block = v             }
+#define DW_ExprEnc_UInt(v)      { .type = DW_ExprEncType_DwarfUInt, .u64   = v             }
+#define DW_ExprEnc_Label(v)     { .type = DW_ExprEncType_Label,     .label = v             }
+#define DW_ExprEnc_DeclLabel(v) { .type = DW_ExprEncType_DeclLabel, .label = v             }
+
+////////////////////////////////
 
 // pieces
 internal DW_PieceNode * dw_piece_list_push(Arena *arena, DW_PieceList *list, DW_Piece v);
@@ -173,6 +236,9 @@ internal String8 dw_string_from_expr_value(Arena *arena, U64 addr_size, DW_ExprV
 
 // evaluator
 internal DW_UnwindStatus dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_read, void *reg_read_ud, DW_ExprValue *value_out);
+
+// encoder
+internal String8 dw_encode_expr(Arena *arena, DW_Format format, U64 addr_size, DW_ExprEnc *encs, U64 encs_count);
 
 #endif //DWARF_EXPR_H
 
