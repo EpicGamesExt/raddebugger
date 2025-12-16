@@ -176,7 +176,7 @@ dw_section_kind_from_string(String8 string)
 #define X(_K,_L,_M,_W)                                        \
 if (str8_match_lit(_L, string, 0)) { s = DW_Section_##_K; } \
 if (str8_match_lit(_M, string, 0)) { s = DW_Section_##_K; }
-  DW_SectionKind_XList(X)
+  DW_SectionKind_XList
 #undef X
   return s;
 }
@@ -187,7 +187,7 @@ dw_section_dwo_kind_from_string(String8 string)
   DW_SectionKind s = DW_Section_Null;
 #define X(_K,_L,_M,_W)                                        \
 if (str8_match_lit(_W, string, 0)) { s = DW_Section_##_K; }
-  DW_SectionKind_XList(X)
+  DW_SectionKind_XList
 #undef X
   return s;
 }

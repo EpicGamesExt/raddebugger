@@ -1127,23 +1127,30 @@ dw_expr_inst_from_delta(DW_ExprInst *inst, S16 delta)
   return i;
 }
 
-internal DW_UnwindStatus
-dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_read, void *reg_read_ud, DW_ExprValue *value_out)
+internal DW_ExprEvalResult
+dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 cfa, U64 tls, U64 exec_op_limit, DW_Expr expr, MachineOp_RegRead *reg_read, void *reg_read_ud, DW_ExprValue *value_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  DW_UnwindStatus result = DW_UnwindStatus_Ok;
-  DW_PieceList pieces = {0};
-  DW_ExprStack *stack = push_array(scratch.arena, DW_ExprStack, 1);
-  B32 is_ok = 1;
+
+  DW_ExprEvalResult  result        = DW_ExprEvalResult_Fail;
+  DW_PieceList       pieces        = {0};
+  DW_ExprStack      *stack         = push_array(scratch.arena, DW_ExprStack, 1);
+  U64                exec_op_count = 0;
 
   for EachNode(inst, DW_ExprInst, expr.first) {
     again:;
+    
+    exec_op_count += 1;
+    if (exec_op_count > exec_op_limit) {
+      Assert(0 && "reached opcode exec limit on the expression");
+      result = DW_ExprEvalResult_ExecOpLimitReached;
+      goto exit;
+    }
 
     U64 pop_count = dw_pop_count_from_expr_op(inst->opcode);
-    if (pop_count >= stack->count) {
+    if (pop_count > stack->count) {
       Assert(0 && "not enough values on the stack to evaluate the instruction");
-      is_ok = 0;
-      break;
+      goto exit;
     }
 
     switch (inst->opcode) {
@@ -1187,18 +1194,18 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
     case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
     case DW_ExprOp_Reg30: case DW_ExprOp_Reg31: {
       DW_Reg  reg_id    = inst->opcode - DW_ExprOp_Reg0;
-      U64     reg_size  = dw_reg_size_from_code(ctx->arch, reg_id);
+      U64     reg_size  = dw_reg_size_from_code(arch, reg_id);
       U8     *reg_value = push_array(scratch.arena, U8, reg_size);
-      result = reg_read(reg_id, reg_value, reg_size, reg_read_ud);
-      if (result != DW_UnwindStatus_Ok) { goto exit; }
+      MachineOpResult reg_read_result = reg_read(reg_id, reg_value, reg_size, reg_read_ud);
+      if (reg_read_result != MachineOpResult_Ok) { goto exit; }
       dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
     } break;
 
     case DW_ExprOp_RegX: {
-      U64 reg_size  = dw_reg_size_from_code(ctx->arch, inst->operands[0].u64);
+      U64 reg_size  = dw_reg_size_from_code(arch, inst->operands[0].u64);
       U8 *reg_value = push_array(scratch.arena, U8, reg_size);
-      result = reg_read(inst->operands[0].u64, reg_value, reg_size, reg_read_ud);
-      if (result != DW_UnwindStatus_Ok) { goto exit; }
+      MachineOpResult reg_read_result = reg_read(inst->operands[0].u64, reg_value, reg_size, reg_read_ud);
+      if (reg_read_result != MachineOpResult_Ok) { goto exit; }
       dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
     } break;
 
@@ -1212,12 +1219,12 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
 
     case DW_ExprOp_Piece: {
       if (stack->count) {
-        String8 value = dw_string_from_expr_value(arena, ctx->arch, dw_expr_stack_pop(stack));
+        String8 value = dw_string_from_expr_value(arena, arch, dw_expr_stack_pop(stack));
         if (inst->operands[0].u64 <= value.size) {
           dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .value = { .ptr = value.str, .bit_size = inst->operands[0].u64 * 8 }});
         } else {
           Assert(0 && "out of bounds size in the piece opcode");
-          result = DW_UnwindStatus_Fail;
+          goto exit;
         }
       } else {
         dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .undef_bit_size = inst->operands[0].u64 * 8 });
@@ -1225,12 +1232,12 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
     } break;
     case DW_ExprOp_BitPiece: {
       if (stack->count) {
-        String8 value = dw_string_from_expr_value(arena, ctx->arch, dw_expr_stack_pop(stack));
+        String8 value = dw_string_from_expr_value(arena, arch, dw_expr_stack_pop(stack));
         if (inst->operands[0].u64 <= value.size * 8) {
           dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .value = { .ptr = value.str, .bit_size = inst->operands[0].u64 }});
         } else {
           Assert(0 && "out of bounds size in the bit piece opcode");
-          result = DW_UnwindStatus_Fail;
+          goto exit;
         }
       } else {
         dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .undef_bit_size = inst->operands[0].u64 });
@@ -1243,7 +1250,7 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
         dw_expr_stack_push(scratch.arena, stack, src->v);
       } else {
         Assert(0 && "out of bounds stack index");
-        result = DW_UnwindStatus_Fail;
+        goto exit;
       }
     } break;
 
@@ -1253,7 +1260,7 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
         dw_expr_stack_push(scratch.arena, stack, src->v);
       } else {
         Assert(0 && "out of bounds stack index");
-        result = DW_UnwindStatus_Fail;
+        goto exit;
       }
     } break;
 
@@ -1269,8 +1276,7 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
 
       if (i == 0) {
         Assert(0 && "seeking to an invalid offset");
-        result = DW_UnwindStatus_Fail;
-        break;
+        goto exit;
       }
 
       inst = i;
@@ -1282,16 +1288,14 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
 
       if (cond.type != DW_ExprValueType_S16) {
         Assert(0 && "unexpected value");
-        result = DW_UnwindStatus_Fail;
-        break;
+        goto exit;
       }
 
       DW_ExprInst *i = dw_expr_inst_from_delta(inst, inst->operands[0].s16);
 
       if (i == 0) {
         Assert(0 && "seeking to an invalid offset");
-        result = DW_UnwindStatus_Fail;
-        break;
+        goto exit;
       }
 
       inst = i;
@@ -1334,18 +1338,17 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
 
     case DW_ExprOp_EntryValue:
     case DW_ExprOp_GNU_EntryValue: {
-      DW_Expr      entry_value_expr = dw_expr_from_data(scratch.arena, ctx->format, byte_size_from_arch(ctx->arch), inst->operands[0].block);
+      DW_Expr      entry_value_expr = dw_expr_from_data(scratch.arena, format, byte_size_from_arch(arch), inst->operands[0].block);
       DW_ExprValue entry_value;
-      result = dw_eval_expr(scratch.arena, ctx, entry_value_expr, reg_read, reg_read_ud, &entry_value);
-      if (result == DW_UnwindStatus_Ok) {
-        dw_expr_stack_push(scratch.arena, stack, entry_value);
-      }
+      result = dw_eval_expr(scratch.arena, arch, format, cfa, tls, exec_op_limit, entry_value_expr, reg_read, reg_read_ud, &entry_value);
+      if (result != DW_ExprEvalResult_Ok) { goto exit; }
+      dw_expr_stack_push(scratch.arena, stack, entry_value);
     } break;
 
     case DW_ExprOp_Addrx: { NotImplemented; } break;
 
     case DW_ExprOp_CallFrameCfa: {
-      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64, .u64 = ctx->cfa });
+      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64, .u64 = cfa });
     } break;
 
     case DW_ExprOp_PushObjectAddress: { NotImplemented; } break;
@@ -1399,35 +1402,43 @@ dw_eval_expr(Arena *arena, DW_ExprContext *ctx, DW_Expr expr, DW_RegRead *reg_re
     } break;
 
     case DW_ExprOp_StackValue: {
-      stack->top->v.type = dw_expr_unsigned_value_type_from_bit_size(byte_size_from_arch(ctx->arch) * 8);
+      stack->top->v.type = dw_expr_unsigned_value_type_from_bit_size(bit_size_from_arch(arch));
     } break;
 
     case DW_ExprOp_GNU_PushTlsAddress:
     case DW_ExprOp_FormTlsAddress: {
       DW_ExprValue tls_off  = dw_expr_stack_pop(stack);
-      DW_ExprValue tls_base = { .type = DW_ExprValueType_Addr, .addr = ctx->tls_base };
+      DW_ExprValue tls_base = { .type = DW_ExprValueType_Addr, .addr = tls };
       DW_ExprValue tls_addr = dw_expr_add(tls_base, tls_off);
       dw_expr_stack_push(scratch.arena, stack, tls_addr);
     } break;
     }
   }
 
+  result = DW_ExprEvalResult_Ok;
 exit:;
   scratch_end(scratch);
   return result;
 }
 
 internal String8
-dw_encode_expr(Arena *arena, DW_Format format, U64 addr_size, DW_ExprEnc *encs, U64 encs_count)
+dw_encode_expr(Arena *arena, Arch arch, DW_Format format, DW_ExprEnc *encs, U64 encs_count)
 {
   Temp scratch = scratch_begin(&arena, 1);
+
   String8List *srl = push_array(scratch.arena, String8List, 1);
   str8_serial_begin(scratch.arena, srl);
+
+  HashTable *label_map = hash_table_init(scratch.arena, 128);
+
+  struct Fixup { U64 offset; String8 label; struct Fixup *next; };
+  struct Fixup *first_fixup = 0, *last_fixup = 0;
 
   for EachIndex(i, encs_count) {
     DW_ExprEnc *e = &encs[i];
 
     switch (e->type) {
+    case DW_ExprEncType_Null: {} break;
     case DW_ExprEncType_Op: {
       str8_serial_push_struct(scratch.arena, srl, &e->op);
     } break;
@@ -1487,6 +1498,7 @@ dw_encode_expr(Arena *arena, DW_Format format, U64 addr_size, DW_ExprEnc *encs, 
       str8_serial_push_string(scratch.arena, srl, str8(buffer, buffer_size));
     } break;
     case DW_ExprEncType_Addr: {
+      U64 addr_size = byte_size_from_arch(arch);
       Assert(addr_size <= sizeof(e->addr));
       str8_serial_push_string(scratch.arena, srl, str8((U8 *)&e->addr, addr_size));
     } break;
@@ -1504,16 +1516,39 @@ dw_encode_expr(Arena *arena, DW_Format format, U64 addr_size, DW_ExprEnc *encs, 
       }
     } break;
     case DW_ExprEncType_Label: {
-      // TODO:
+      struct Fixup *fixup = push_array(scratch.arena, struct Fixup, 1);
+      fixup->offset = srl->total_size;
+      fixup->label  = e->label;
+      SLLQueuePush(first_fixup, last_fixup, fixup);
+
+      S16 delta_placeholder = 0;
+      str8_serial_push_struct(scratch.arena, srl, &delta_placeholder);
     } break;
     case DW_ExprEncType_DeclLabel: {
-      // TODO:
+      hash_table_push_string_u64(scratch.arena, label_map, e->label, srl->total_size);
     } break;
     default: { InvalidPath; } break;
     }
   }
 
+  // finalize expression
   String8 expr = str8_serial_end(arena, srl);
+
+  // apply fixups
+  for EachNode(fixup, struct Fixup, first_fixup) {
+    U64 label_offset;
+    if (!hash_table_search_string_u64(label_map, fixup->label, &label_offset)) {
+      Assert(0 && "undefined label");
+      continue;
+    }
+
+    S64 delta = (S64)label_offset - (S64)fixup->offset;
+    AssertAlways(min_S16 <= delta && delta <= max_S16);
+
+    S16 *delta_ptr = (S16 *)(expr.str + fixup->offset);
+    *delta_ptr = delta;
+  }
+
   scratch_end(scratch);
   return expr;
 }

@@ -73,7 +73,7 @@ d2r_rdi_reg_code_from_dw_reg_x64(DW_RegX64 v)
   {
     default:{}break;
 #define X(reg_dw, val_dw, reg_rdi, off, size) case DW_RegX64_##reg_dw:{result = RDI_RegCodeX64_##reg_rdi;}break;
-    DW_Regs_X64_XList(X)
+    DW_Regs_X64_XList
 #undef X
   }
   return result;
