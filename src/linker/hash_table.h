@@ -57,6 +57,8 @@ internal BucketNode * hash_table_push(Arena *arena, HashTable *ht, U64 hash,    
 internal BucketNode * hash_table_push_u32_string   (Arena *arena, HashTable *ht, U32     key,  String8       value);
 internal BucketNode * hash_table_push_u64_string   (Arena *arena, HashTable *ht, U64     key,  String8       value);
 internal BucketNode * hash_table_push_string_string(Arena *arena, HashTable *ht, String8 key,  String8       value);
+internal BucketNode * hash_table_push_string_raw   (Arena *arena, HashTable *ht, String8 key,  void         *value);
+internal BucketNode * hash_table_push_string_u64   (Arena *arena, HashTable *ht, String8 key,  U64           value);
 internal BucketNode * hash_table_push_path_string  (Arena *arena, HashTable *ht, String8 key,  String8       value);
 internal BucketNode * hash_table_push_u32_raw      (Arena *arena, HashTable *ht, U32     key,  void         *value);
 internal BucketNode * hash_table_push_u64_raw      (Arena *arena, HashTable *ht, U64     key,  void         *value);
