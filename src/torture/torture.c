@@ -17,28 +17,38 @@
 
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "linker/base_ext/base_core.h"
+#include "linker/base_ext/base_arena.h"
+#include "linker/base_ext/base_arrays.h"
+#include "linker/hash_table.h"
 #include "coff/coff.h"
 #include "coff/coff_parse.h"
 #include "coff/coff_obj_writer.h"
 #include "coff/coff_lib_writer.h"
 #include "pe/pe.h"
 #include "pe/pe_section_flags.h"
-#include "linker/base_ext/base_core.h"
-#include "linker/base_ext/base_arena.h"
-#include "linker/base_ext/base_arrays.h"
-#include "linker/hash_table.h"
+#include "elf/elf.h"
+#include "elf/elf_parse.h"
+#include "dwarf/dwarf_inc.h"
+#include "regs/regs.h"
+#include "regs/dwarf/regs_dwarf.h"
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "linker/hash_table.c"
+#include "linker/base_ext/base_core.c"
+#include "linker/base_ext/base_arena.c"
+#include "linker/base_ext/base_arrays.c"
 #include "coff/coff.c"
 #include "coff/coff_parse.c"
 #include "coff/coff_obj_writer.c"
 #include "coff/coff_lib_writer.c"
 #include "pe/pe.c"
-#include "linker/hash_table.c"
-#include "linker/base_ext/base_core.c"
-#include "linker/base_ext/base_arena.c"
-#include "linker/base_ext/base_arrays.c"
+#include "elf/elf.c"
+#include "elf/elf_parse.c"
+#include "dwarf/dwarf_inc.c"
+#include "regs/regs.c"
+#include "regs/dwarf/regs_dwarf.c"
 
 #include "linker/lnk_cmd_line.h"
 #include "linker/lnk_cmd_line.c"
@@ -4942,6 +4952,33 @@ exit:;
   return result;
 }
 
+internal T_Result
+t_value_in_register(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  T_Result result = T_Result_Fail;
+
+  REGS_RegBlockX64 regs      = {0};
+  REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, DW_ExprOp_Reg3 - DW_ExprOp_Reg0);
+  Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+  U64 value = 0xc0ffee;
+  MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
+
+  DW_ExprEnc        expr_encs[] = { DW_ExprEnc_Op(Reg3) };
+  String8           expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr           expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  DW_ExprValue      expr_value;
+  DW_ExprEvalResult expr_eval   = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, &expr_value);
+
+  if (expr_eval != DW_ExprEvalResult_Ok) { goto exit; }
+
+  // TODO: validate value
+
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -4952,75 +4989,79 @@ entry_point(CmdLine *cmdline)
   //
   // Test Targets
   //
-  static struct {
-    char *label; T_Result (*r)(void);
-  } target_array[] = {
-    { "simple_link_test",                  t_simple_link_test                  },
-    { "machine_compat_check",              t_machine_compat_check              },
-    { "out_of_bounds_section_number",      t_out_of_bounds_section_number      },
-    { "merge",                             t_merge                             },
-    { "undef_section",                     t_undef_section                     },
-    { "undef_reloc_section",               t_undef_reloc_section               },
-    { "link_undef",                        t_link_undef                        },
-    { "link_unref_undef",                  t_link_unref_undef                  },
-    { "weak_lib_vs_weak_lib",              t_weak_lib_vs_weak_lib              },
-    { "weak_lib_vs_weak_nolib",            t_weak_lib_vs_weak_nolib            },
-    { "weak_lib_vs_weak_alias",            t_weak_lib_vs_weak_alias            },
-    { "weak_lib_vs_weak_antidep",          t_weak_lib_vs_weak_antidep          },
-    { "weak_alias_vs_weak_alias",          t_weak_alias_vs_weak_alias          },
-    { "weak_alias_vs_weak_lib",            t_weak_alias_vs_weak_lib            },
-    { "weak_alias_vs_weak_nolib",          t_weak_alias_vs_weak_nolib          },
-    { "weak_alias_vs_weak_antidep",        t_weak_alias_vs_weak_antidep        },
-    { "weak_nolib_vs_weak_nolib",          t_weak_nolib_vs_weak_nolib          },
-    { "weak_nolib_vs_weak_lib",            t_weak_nolib_vs_weak_lib            },
-    { "weak_nolib_vs_weak_alias",          t_weak_nolib_vs_weak_alias          },
-    { "weak_nolib_vs_weak_antidep",        t_weak_nolib_vs_weak_antidep        },
-    { "weak_antidep_vs_weak_antidep",      t_weak_antidep_vs_weak_antidep      },
-    { "weak_antidep_vs_weak_nolib",        t_weak_antidep_vs_weak_nolib        },
-    { "weak_antidep_vs_weak_lib",          t_weak_antidep_vs_weak_lib          },
-    { "weak_antidep_vs_weak_alias",        t_weak_antidep_vs_weak_alias        },
-    { "weak_vs_common",                    t_weak_vs_common                    },
-    { "abs_vs_weak",                       t_abs_vs_weak                       },
-    { "abs_vs_regular",                    t_abs_vs_regular                    },
-    { "abs_vs_common",                     t_abs_vs_common                     },
-    { "abs_vs_abs",                        t_abs_vs_abs                        },
-    { "undef_weak_lib",                    t_undef_weak_lib                    },
-    { "undef_weak_search_alias",           t_undef_weak_search_alias           },
-    { "sect_symbol",                       t_sect_symbol                       },
-    { "weak_cycle",                        t_weak_cycle                        },
-    { "weak_tag",                          t_weak_tag                          },
-    { "find_merged_pdata",                 t_find_merged_pdata                 },
-    { "section_sort",                      t_section_sort                      },
-    { "flag_conf",                         t_flag_conf                         },
-    { "invalid_bss",                       t_invalid_bss                       },
-    { "common_block",                      t_common_block                      },
-    { "base_relocs",                       t_base_relocs                       },
-    { "simple_lib_test",                   t_simple_lib_test                   },
-    { "sect_align",                        t_sect_align                        },
-    { "image_base",                        t_image_base                        },
-    { "comdat_any",                        t_comdat_any                        },
-    { "comdat_no_duplicates",              t_comdat_no_duplicates              },
-    { "comdat_same_size",                  t_comdat_same_size                  },
-    { "comdat_exact_match",                t_comdat_exact_match                },
-    { "comdat_largest",                    t_comdat_largest                    },
-    { "comdat_associative",                t_comdat_associative                },
-    { "comdat_associative_loop",           t_comdat_associative_loop           },
-    { "comdat_associative_non_comdat",     t_comdat_associative_non_comdat     },
-    { "comdat_associative_out_of_bounds",  t_comdat_associative_out_of_bounds  },
-    { "comdat_with_offset",                t_comdat_with_offset                },
-    { "reloc_against_removed_comdat",      t_reloc_against_removed_comdat      },
-    { "alt_name",                          t_alt_name                          },
-    { "include",                           t_include                           },
-    { "communal_var_vs_regular_comdat",    t_communal_var_vs_regular_comdat    },
-    { "communal_var_vs_regular",           t_communal_var_vs_regular           },
-    { "import_kernel32",                   t_import_kernel32                   },
-    { "delay_import_user32",               t_delay_import_user32               },
-    { "delay_import",                      t_delay_import                      },
-    { "empty_section",                     t_empty_section                     },
-    { "removed_section",                   t_removed_section                   },
-    { "function_pad_min",                  t_function_pad_min                  },
-    { "first_member_header",               t_first_member_header               },
-    { "second_member_header",              t_second_member_header              },
+  static struct { char *label; T_Result (*r)(void); } target_array[] = {
+#define T(x) { Stringify(x), t_##x }
+    // Linker Tests
+    T(simple_link_test),
+    T(machine_compat_check),
+    T(out_of_bounds_section_number),
+    T(merge),
+    T(undef_section),
+    T(undef_reloc_section),
+    T(link_undef),
+    T(link_unref_undef),
+    T(weak_lib_vs_weak_lib),
+    T(weak_lib_vs_weak_nolib),
+    T(weak_lib_vs_weak_alias),
+    T(weak_lib_vs_weak_antidep),
+    T(weak_alias_vs_weak_alias),
+    T(weak_alias_vs_weak_lib),
+    T(weak_alias_vs_weak_nolib),
+    T(weak_alias_vs_weak_antidep),
+    T(weak_nolib_vs_weak_nolib),
+    T(weak_nolib_vs_weak_lib),
+    T(weak_nolib_vs_weak_alias),
+    T(weak_nolib_vs_weak_antidep),
+    T(weak_antidep_vs_weak_antidep),
+    T(weak_antidep_vs_weak_nolib),
+    T(weak_antidep_vs_weak_lib),
+    T(weak_antidep_vs_weak_alias),
+    T(weak_vs_common),
+    T(abs_vs_weak),
+    T(abs_vs_regular),
+    T(abs_vs_common),
+    T(abs_vs_abs),
+    T(undef_weak_lib),
+    T(undef_weak_search_alias),
+    T(sect_symbol),
+    T(weak_cycle),
+    T(weak_tag),
+    T(find_merged_pdata),
+    T(section_sort),
+    T(flag_conf),
+    T(invalid_bss),
+    T(common_block),
+    T(base_relocs),
+    T(simple_lib_test),
+    T(sect_align),
+    T(image_base),
+    T(comdat_any),
+    T(comdat_no_duplicates),
+    T(comdat_same_size),
+    T(comdat_exact_match),
+    T(comdat_largest),
+    T(comdat_associative),
+    T(comdat_associative_loop),
+    T(comdat_associative_non_comdat),
+    T(comdat_associative_out_of_bounds),
+    T(comdat_with_offset),
+    T(reloc_against_removed_comdat),
+    T(alt_name),
+    T(include),
+    T(communal_var_vs_regular_comdat),
+    T(communal_var_vs_regular),
+    T(import_kernel32),
+    T(delay_import_user32),
+    T(delay_import),
+    T(empty_section),
+    T(removed_section),
+    T(function_pad_min),
+    T(first_member_header),
+    T(second_member_header),
+
+    // DWARF Expression Tests
+    //T(value_in_register),
+#undef T
   };
 
   //
