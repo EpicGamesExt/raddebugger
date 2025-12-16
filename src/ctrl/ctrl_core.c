@@ -1833,93 +1833,42 @@ typedef struct
 } CTRL_MemoryReadContextDwarfX64;
 
 internal
-DW_MEM_READ(ctrl_unwind_mem_read_dwarf_x64)
+MACHINE_OP_MEM_READ(ctrl_machine_mem_read)
 {
   CTRL_MemoryReadContextDwarfX64 *ctx = ud;
   
   B32 is_stale = 0;
-  B32 is_read  = ctrl_process_memory_read(ctx->process_handle, r1u64(addr, addr + size), &is_stale, buffer, ctx->endt_us);
+  B32 is_read  = ctrl_process_memory_read(ctx->process_handle, r1u64(addr, addr + buffer_size), &is_stale, buffer, ctx->endt_us);
   
-  DW_UnwindStatus status = DW_UnwindStatus_Fail;
+  MachineOpResult status = MachineOpResult_Fail;
   if(is_stale)
   {
-    status = DW_UnwindStatus_Maybe;
+    status = MachineOpResult_Maybe;
   }
   else if(is_read)
   {
-    status = DW_UnwindStatus_Ok;
-  }
-  
-  return status;
-}
-
-internal
-DW_REG_READ(ctrl_unwind_reg_read_dwarf_x64)
-{
-  // map DWARF register to -> the internal register
-  REGS_RegBlockX64 *regs = ud;
-  U64 reg_size = 0; void *reg_bytes = 0;
-  switch(reg_id)
-  {
-#define X(_N, _ID, _MAP_N, ...) case _ID: { reg_size = sizeof(regs->_MAP_N); reg_bytes = &regs->_MAP_N; } break;
-    DW_Regs_X64_XList(X)
-#undef X
-    default: { InvalidPath; } break;
-  }
-  
-  // copy out register value
-  DW_UnwindStatus status = DW_UnwindStatus_Fail;
-  if(reg_size > 0)
-  {
-    AssertAlways(reg_size == buffer_max);
-    MemoryCopy(buffer, reg_bytes, reg_size);
-    status = DW_UnwindStatus_Ok;
-  }
-  
-  return status;
-}
-
-internal
-DW_REG_WRITE(ctrl_unwind_reg_write_dwarf_x64)
-{
-  // map DWARF register to -> the internal register
-  REGS_RegBlockX64 *regs = ud;
-  U64 reg_size = 0; void *reg_bytes = 0;
-  switch(reg_id)
-  {
-#define X(_N, _ID, _MAP_N, ...) case _ID: { reg_size = sizeof(regs->_MAP_N); reg_bytes = &regs->_MAP_N; } break;
-    DW_Regs_X64_XList(X)
-#undef X
-    default: { InvalidPath; } break;
-  }
-  
-  // write value to the register
-  DW_UnwindStatus status = DW_UnwindStatus_Fail;
-  if(reg_size > 0)
-  {
-    AssertAlways(value_size <= reg_size);
-    MemoryCopy(reg_bytes, value, value_size);
-    status = DW_UnwindStatus_Ok;
+    status = MachineOpResult_Ok;
   }
   
   return status;
 }
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step_result_from_dwarf_status(DW_UnwindStatus s)
+ctrl_unwind_step_result_from_machine_op_result(MachineOpResult s)
 {
   CTRL_UnwindStepResult result = {0};
   switch(s)
   {
-    case DW_UnwindStatus_Ok:
+    case MachineOpResult_Null: {} break;
+    case MachineOpResult_Ok:
     {
       result.flags &= ~(CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale);
     }break;
-    case DW_UnwindStatus_Fail:
+    case MachineOpResult_Fail:
     {
       result.flags |= CTRL_UnwindFlag_Error;
     }break;
-    case DW_UnwindStatus_Maybe:
+    case MachineOpResult_Maybe:
     {
       result.flags &= ~CTRL_UnwindFlag_Error;
       result.flags |= CTRL_UnwindFlag_Stale;
@@ -2083,8 +2032,8 @@ ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_han
         // setup machine ops
         void *mem_read_ctx  = 0;
         void *reg_read_ctx  = 0;
-        DW_MemRead  *mem_read_func  = 0;
-        DW_RegRead  *reg_read_func  = 0;
+        MachineOp_MemRead *mem_read_func  = 0;
+        MachineOp_RegRead *reg_read_func  = 0;
         switch(arch)
         {
           case Arch_Null: break;
@@ -2094,11 +2043,11 @@ ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_han
             mem_read_ctx_x64->process_handle = process_handle;
             mem_read_ctx_x64->endt_us        = endt_us;
             
-            mem_read_ctx   = mem_read_ctx_x64;
-            reg_read_ctx   = regs;
+            mem_read_ctx = mem_read_ctx_x64;
+            reg_read_ctx = regs;
             
-            mem_read_func  = ctrl_unwind_mem_read_dwarf_x64;
-            reg_read_func  = ctrl_unwind_reg_read_dwarf_x64;
+            mem_read_func = ctrl_machine_mem_read;
+            reg_read_func = regs_read_dwarf_x64;
           }break;
           case Arch_x86:
           case Arch_arm64:
@@ -2111,10 +2060,10 @@ ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_han
 
         // compute CFA for the row
         U64 cfa = 0;
-        DW_UnwindStatus unwind_status = dw_compute_cfa(arch, cfi_row, mem_read_func, mem_read_ctx, reg_read_func, reg_read_ctx, &cfa);
+        MachineOpResult unwind_status = dw_compute_cfa(arch, cfi_row, mem_read_func, mem_read_ctx, reg_read_func, reg_read_ctx, &cfa);
 
         // on success fill out output
-        if(unwind_status == DW_UnwindStatus_Ok)
+        if(unwind_status == MachineOpResult_Ok)
         {
           ctx_out->cfa          = cfa;
           ctx_out->cfi_row      = cfi_row;
@@ -2122,7 +2071,7 @@ ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_han
         }
 
         // translate unwind status code
-        result = ctrl_unwind_step_result_from_dwarf_status(unwind_status);
+        result = ctrl_unwind_step_result_from_machine_op_result(unwind_status);
       }
     }
   }
@@ -2142,9 +2091,9 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, Arch arch, void *regs, CTRL_
   void *mem_read_ctx  = 0;
   void *reg_read_ctx  = 0;
   void *reg_write_ctx = 0;
-  DW_MemRead  *mem_read_func  = 0;
-  DW_RegRead  *reg_read_func  = 0;
-  DW_RegWrite *reg_write_func = 0;
+  MachineOp_MemRead  *mem_read_func  = 0;
+  MachineOp_RegRead  *reg_read_func  = 0;
+  MachineOp_RegWrite *reg_write_func = 0;
   switch(arch)
   {
     case Arch_Null: break;
@@ -2158,9 +2107,9 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, Arch arch, void *regs, CTRL_
       reg_read_ctx   = regs;
       reg_write_ctx  = regs;
       
-      mem_read_func  = ctrl_unwind_mem_read_dwarf_x64;
-      reg_read_func  = ctrl_unwind_reg_read_dwarf_x64;
-      reg_write_func = ctrl_unwind_reg_write_dwarf_x64;
+      mem_read_func  = ctrl_machine_mem_read;
+      reg_read_func  = regs_read_dwarf_x64;
+      reg_write_func = regs_write_dwarf_x64;
     }break;
     case Arch_x86:
     case Arch_arm64:
@@ -2172,7 +2121,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, Arch arch, void *regs, CTRL_
   }
 
   // apply register rules to the context
-  DW_UnwindStatus unwind_status = dw_cfi_apply_register_rules(arch,
+  MachineOpResult unwind_status = dw_cfi_apply_register_rules(arch,
                                                               frame_ctx->cfa,
                                                               frame_ctx->cfi_row,
                                                               mem_read_func,
@@ -2189,7 +2138,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, Arch arch, void *regs, CTRL_
   }
   
   // translate unwind status code
-  result = ctrl_unwind_step_result_from_dwarf_status(unwind_status);
+  result = ctrl_unwind_step_result_from_machine_op_result(unwind_status);
   
   scratch_end(scratch);
   return result;
@@ -3812,10 +3761,10 @@ ctrl_thread__append_program_defined_bp_traps(Arena *arena, CTRL_Entity *bp, DMN_
 //- rjf: module lifetime open/close work
 
 internal
-DW_MEM_READ(ctrl_dmn_mem_read)
+MACHINE_OP_MEM_READ(ctrl_dmn_mem_read)
 {
-  U64 read = dmn_process_read(((CTRL_Handle *)ud)->dmn_handle, r1u64(addr, addr + size), buffer);
-  return read == size ? DW_UnwindStatus_Ok : DW_UnwindStatus_Fail;
+  U64 read = dmn_process_read(((CTRL_Handle *)ud)->dmn_handle, r1u64(addr, addr + buffer_size), buffer);
+  return read == buffer_size ? MachineOpResult_Ok : MachineOpResult_Fail;
 }
 
 internal void

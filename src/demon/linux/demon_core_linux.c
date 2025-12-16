@@ -117,6 +117,12 @@ dmn_lnx_read_string(Arena *arena, int memory_fd, U64 vaddr)
   return dmn_lnx_read_string_capped(arena, memory_fd, vaddr, 4096);
 }
 
+internal
+MACHINE_OP_MEM_READ(dmn_lnx_machine_op_mem_read)
+{
+  return dmn_lnx_read(((DMN_LNX_Entity *)ud)->fd, r1u64(addr, addr + buffer_size), buffer);
+}
+
 internal int
 dmn_lnx_ptrace_seize(pid_t pid)
 {
@@ -671,12 +677,6 @@ dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
   scratch_end(scratch);
   Assert(dl_path.size);
   return dl_path;
-}
-
-internal
-GNU_MEM_READ(dmn_lnx_gnu_mem_read)
-{
-  return dmn_lnx_read(((DMN_LNX_Entity *)ud)->fd, r1u64(addr, addr + size), buffer);
 }
 
 ////////////////////////////////
@@ -1799,9 +1799,9 @@ dmn_lnx_hanlde_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Entity
 
   // mark live modules
   B32 is_64bit = process->dl_class == ELF_Class_64;
-  GNU_RDebugInfoList rdebug_list = gnu_parse_rdebug(scratch.arena, is_64bit, rdebug_vaddr, dmn_lnx_gnu_mem_read, process);
+  GNU_RDebugInfoList rdebug_list = gnu_parse_rdebug(scratch.arena, is_64bit, rdebug_vaddr, dmn_lnx_machine_op_mem_read, process);
   for EachNode(rdebug_n, GNU_RDebugInfoNode, rdebug_list.first) {
-    GNU_LinkMapList link_map_list = gnu_parse_link_map_list(scratch.arena, is_64bit, rdebug_n->v.r_map, dmn_lnx_gnu_mem_read, process);
+    GNU_LinkMapList link_map_list = gnu_parse_link_map_list(scratch.arena, is_64bit, rdebug_n->v.r_map, dmn_lnx_machine_op_mem_read, process);
     for EachNode(link_map_n, GNU_LinkMapNode, link_map_list.first) {
       DMN_LNX_Entity *module = hash_table_search_u64_raw(process->loaded_modules_ht, link_map_n->v.addr_vaddr);
       module->is_live = 1;
@@ -2078,7 +2078,7 @@ dmn_lnx_handle_attach(Arena *arena, DMN_EventList *events, pid_t pid)
 
     // extract modules from r_debug
     B32                is_64bit      = process->dl_class == ELF_Class_64;
-    GNU_RDebugInfoList rdebug_list   = gnu_parse_rdebug(scratch.arena, is_64bit, process->rdebug_vaddr, dmn_lnx_gnu_mem_read, process);
+    GNU_RDebugInfoList rdebug_list   = gnu_parse_rdebug(scratch.arena, is_64bit, process->rdebug_vaddr, dmn_lnx_machine_op_mem_read, process);
     U64                name_space_id = 0;
     for EachNode(rdebug_n, GNU_RDebugInfoNode, rdebug_list.first)
     {

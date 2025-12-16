@@ -236,14 +236,14 @@ dw_cfi_row_from_pc(Arena *arena, Arch arch, DW_CIE *cie, DW_FDE *fde, DW_DecodeP
   return result;
 }
 
-internal DW_UnwindStatus
+internal MachineOpResult
 dw_compute_cfa(Arch arch,
                DW_CFI_Row *row,
-               DW_MemRead  *mem_read_func,  void *mem_read_ud,
-               DW_RegRead  *reg_read_func,  void *reg_read_ud,
+               MachineOp_MemRead *mem_read_func,  void *mem_read_ud,
+               MachineOp_RegRead *reg_read_func,  void *reg_read_ud,
                U64 *cfa_out)
 {
-  DW_UnwindStatus unwind_status = DW_UnwindStatus_Fail;
+  MachineOpResult unwind_status = MachineOpResult_Fail;
 
   switch (row->cfa.rule) {
   case DW_CFA_Rule_Null: break;
@@ -253,7 +253,7 @@ dw_compute_cfa(Arch arch,
     U64 reg_size = dw_reg_size_from_code(arch, row->cfa.reg);
     AssertAlways(reg_size <= sizeof(cfa_reg_value));
     unwind_status = reg_read_func(row->cfa.reg, &cfa_reg_value, reg_size, reg_read_ud);
-    if (unwind_status != DW_UnwindStatus_Ok) { break; }
+    if (unwind_status != MachineOpResult_Ok) { break; }
     *cfa_out = cfa_reg_value + row->cfa.off;
   } break;
   case DW_CFA_Rule_Expression: {
@@ -265,16 +265,16 @@ dw_compute_cfa(Arch arch,
   return unwind_status;
 }
 
-internal DW_UnwindStatus
+internal MachineOpResult
 dw_cfi_apply_register_rules(Arch         arch,
                             U64          cfa,
                             DW_CFI_Row  *row,
-                            DW_MemRead  *mem_read_func,  void *mem_read_ud,
-                            DW_RegRead  *reg_read_func,  void *reg_read_ud,
-                            DW_RegWrite *reg_write_func, void *reg_write_ud)
+                            MachineOp_MemRead  *mem_read_func,  void *mem_read_ud,
+                            MachineOp_RegRead  *reg_read_func,  void *reg_read_ud,
+                            MachineOp_RegWrite *reg_write_func, void *reg_write_ud)
 {
   Temp scratch = scratch_begin(0,0);
-  DW_UnwindStatus unwind_status = DW_UnwindStatus_Ok;
+  MachineOpResult unwind_status = MachineOpResult_Ok;
 
   U64   max_reg_size = dw_reg_max_size_from_arch(arch);
   void *reg_buffer   = push_array(scratch.arena, U8, max_reg_size);
@@ -289,12 +289,12 @@ dw_cfi_apply_register_rules(Arch         arch,
       // read register value from memory
       U64 addr     = cfa + reg->n;
       U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
-      unwind_status = mem_read_func(addr, reg_size, reg_buffer, mem_read_ud);
-      if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
+      unwind_status = mem_read_func(addr, reg_buffer, reg_size, mem_read_ud);
+      if (unwind_status != MachineOpResult_Ok) { goto exit; }
 
       // write register value to the thread context
       unwind_status = reg_write_func(reg_idx, reg_buffer, reg_size, reg_write_ud);
-      if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
+      if (unwind_status != MachineOpResult_Ok) { goto exit; }
     } break;
     case DW_CFI_RegisterRule_ValOffset: {
       // compute register value
@@ -303,17 +303,17 @@ dw_cfi_apply_register_rules(Arch         arch,
       // write register value to the thread context
       U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
       unwind_status = reg_write_func(reg_idx, &reg_value, reg_size, reg_write_ud);
-      if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
+      if (unwind_status != MachineOpResult_Ok) { goto exit; }
     } break;
     case DW_CFI_RegisterRule_Register: {
       // read register value from another register
       U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
       unwind_status = reg_read_func(reg->n, reg_buffer, reg_size, reg_read_ud);
-      if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
+      if (unwind_status != MachineOpResult_Ok) { goto exit; }
 
       // write register value to the thread context
       unwind_status = reg_write_func(reg_idx, reg_buffer, reg_size, reg_write_ud);
-      if (unwind_status != DW_UnwindStatus_Ok) { goto exit; }
+      if (unwind_status != MachineOpResult_Ok) { goto exit; }
     } break;
     case DW_CFI_RegisterRule_Expression: {
       // TODO: evaluate expression
