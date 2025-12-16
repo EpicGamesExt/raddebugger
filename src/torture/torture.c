@@ -4958,22 +4958,28 @@ t_value_in_register(void)
   Temp scratch = scratch_begin(0, 0);
   T_Result result = T_Result_Fail;
 
+  // setup register context
   REGS_RegBlockX64 regs      = {0};
   REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, DW_ExprOp_Reg3 - DW_ExprOp_Reg0);
   Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
   U64 value = 0xc0ffee;
   MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
 
+  // compile a simple program which reads the value from register 3
   DW_ExprEnc        expr_encs[] = { DW_ExprEnc_Op(Reg3) };
   String8           expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
   DW_Expr           expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  
+  // evaluate the program
   DW_ExprValue      expr_value;
   DW_ExprEvalResult expr_eval   = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, &expr_value);
 
-  if (expr_eval != DW_ExprEvalResult_Ok) { goto exit; }
+  // validate eval result
+  if (expr_eval != DW_ExprEvalResult_Ok)       { goto exit; }
+  if (expr_value.type != DW_ExprValueType_U64) { goto exit; }
+  if (expr_value.u64 != value)                 { goto exit; }
 
-  // TODO: validate value
-
+  result = T_Result_Pass;
 exit:;
   scratch_end(scratch);
   return result;
@@ -5060,7 +5066,7 @@ entry_point(CmdLine *cmdline)
     T(second_member_header),
 
     // DWARF Expression Tests
-    //T(value_in_register),
+    T(value_in_register),
 #undef T
   };
 

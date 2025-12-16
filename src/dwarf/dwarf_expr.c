@@ -1415,6 +1415,10 @@ dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 cfa, U64 tls, U64 ex
     }
   }
 
+  if (stack->top) {
+    *value_out = stack->top->v;
+  }
+
   result = DW_ExprEvalResult_Ok;
 exit:;
   scratch_end(scratch);
