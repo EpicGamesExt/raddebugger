@@ -1128,7 +1128,17 @@ dw_expr_inst_from_delta(DW_ExprInst *inst, S16 delta)
 }
 
 internal DW_ExprEvalResult
-dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 cfa, U64 tls, U64 exec_op_limit, DW_Expr expr, MachineOp_RegRead *reg_read, void *reg_read_ud, DW_ExprValue *value_out)
+dw_eval_expr(Arena     *arena,
+             Arch       arch,
+             DW_Format  format,
+             U64        frame_base,
+             U64        cfa,
+             U64        tls,
+             U64        exec_op_limit,
+             DW_Expr    expr,
+             MachineOp_RegRead *reg_read, void *reg_read_ud,
+             MachineOp_MemRead *mem_read, void *mem_read_ud,
+             DW_ExprValue *value_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -1201,12 +1211,53 @@ dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 cfa, U64 tls, U64 ex
       dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
     } break;
 
+    case DW_ExprOp_BReg0:  case DW_ExprOp_BReg1:  case DW_ExprOp_BReg2:
+    case DW_ExprOp_BReg3:  case DW_ExprOp_BReg4:  case DW_ExprOp_BReg5:
+    case DW_ExprOp_BReg6:  case DW_ExprOp_BReg7:  case DW_ExprOp_BReg8:
+    case DW_ExprOp_BReg9:  case DW_ExprOp_BReg10: case DW_ExprOp_BReg11:
+    case DW_ExprOp_BReg12: case DW_ExprOp_BReg13: case DW_ExprOp_BReg14:
+    case DW_ExprOp_BReg15: case DW_ExprOp_BReg16: case DW_ExprOp_BReg17:
+    case DW_ExprOp_BReg18: case DW_ExprOp_BReg19: case DW_ExprOp_BReg20:
+    case DW_ExprOp_BReg21: case DW_ExprOp_BReg22: case DW_ExprOp_BReg23:
+    case DW_ExprOp_BReg24: case DW_ExprOp_BReg25: case DW_ExprOp_BReg26:
+    case DW_ExprOp_BReg27: case DW_ExprOp_BReg28: case DW_ExprOp_BReg29:
+    case DW_ExprOp_BReg30: case DW_ExprOp_BReg31: {
+      DW_Reg  reg_id    = inst->opcode - DW_ExprOp_BReg0;
+      U64     reg_size  = dw_reg_size_from_code(arch, reg_id);
+      AssertAlways(reg_size <= byte_size_from_arch(arch));
+
+      U64             reg_value;
+      MachineOpResult reg_read_result = reg_read(reg_id, &reg_value, reg_size, reg_read_ud);
+      if (reg_read_result != MachineOpResult_Ok) { goto exit; }
+      
+      U64 addr = (U64)((S64)reg_value + inst->operands[0].s64);
+      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
+    } break;
+
     case DW_ExprOp_RegX: {
       U64 reg_size  = dw_reg_size_from_code(arch, inst->operands[0].u64);
       U8 *reg_value = push_array(scratch.arena, U8, reg_size);
       MachineOpResult reg_read_result = reg_read(inst->operands[0].u64, reg_value, reg_size, reg_read_ud);
       if (reg_read_result != MachineOpResult_Ok) { goto exit; }
       dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
+    } break;
+
+    case DW_ExprOp_BRegX: {
+      DW_Reg  reg_id    = (DW_Reg)inst->operands[0].u64;
+      U64     reg_size  = dw_reg_size_from_code(arch, reg_id);
+      AssertAlways(reg_size <= byte_size_from_arch(arch));
+
+      U64             reg_value;
+      MachineOpResult reg_read_result = reg_read(reg_id, &reg_value, reg_size, reg_read_ud);
+      if (reg_read_result != MachineOpResult_Ok) { goto exit; }
+      
+      U64 addr = (U64)((S64)reg_value + inst->operands[1].s64);
+      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
+    } break;
+
+    case DW_ExprOp_FBReg: {
+      U64 addr = frame_base + inst->operands[0].s64;
+      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
     } break;
 
     case DW_ExprOp_ImplicitValue: {
@@ -1340,7 +1391,7 @@ dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 cfa, U64 tls, U64 ex
     case DW_ExprOp_GNU_EntryValue: {
       DW_Expr      entry_value_expr = dw_expr_from_data(scratch.arena, format, byte_size_from_arch(arch), inst->operands[0].block);
       DW_ExprValue entry_value;
-      result = dw_eval_expr(scratch.arena, arch, format, cfa, tls, exec_op_limit, entry_value_expr, reg_read, reg_read_ud, &entry_value);
+      result = dw_eval_expr(scratch.arena, arch, format, frame_base, cfa, tls, exec_op_limit, entry_value_expr, reg_read, reg_read_ud, mem_read, mem_read_ud, &entry_value);
       if (result != DW_ExprEvalResult_Ok) { goto exit; }
       dw_expr_stack_push(scratch.arena, stack, entry_value);
     } break;
@@ -1399,6 +1450,25 @@ dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 cfa, U64 tls, U64 ex
 
     case DW_ExprOp_Drop: {
       dw_expr_stack_pop(stack);
+    } break;
+
+    case DW_ExprOp_Deref: {
+      DW_ExprValue value = dw_expr_stack_pop(stack);
+
+      // expression must be of an integral type
+      if (!DW_ExprValueType_IsInt(value.type)) { goto exit; }
+
+      // treat value as an address
+      DW_ExprValue addr = dw_expr_cast(value, DW_ExprValueType_Addr);
+
+      // read pointer size from the address
+      U64              addr_size     = byte_size_from_arch(arch);
+      U8              *generic_value = push_array(scratch.arena, U8, addr_size);
+      MachineOpResult  read_result   = mem_read(addr.addr, generic_value, addr_size, mem_read_ud);
+      if (read_result != MachineOpResult_Ok) { goto exit; }
+
+      // push generic data
+      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Generic, .generic = str8(generic_value, addr_size) });
     } break;
 
     case DW_ExprOp_StackValue: {

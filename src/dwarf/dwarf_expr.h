@@ -235,7 +235,7 @@ internal DW_ExprValueNode * dw_expr_stack_pick(DW_ExprStack *stack, U64 idx);
 internal String8 dw_string_from_expr_value(Arena *arena, U64 addr_size, DW_ExprValue v);
 
 // evaluator
-internal DW_ExprEvalResult dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 cfa, U64 tls_base, U64 op_limit, DW_Expr expr, MachineOp_RegRead *reg_read, void *reg_read_ud, DW_ExprValue *value_out);
+internal DW_ExprEvalResult dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 frame_base, U64 cfa, U64 tls_base, U64 op_limit, DW_Expr expr, MachineOp_RegRead *reg_read, void *reg_read_ud, MachineOp_MemRead *mem_read, void *mem_read_ud, DW_ExprValue *value_out);
 
 // encoder
 internal String8 dw_encode_expr(Arena *arena, Arch arch, DW_Format format, DW_ExprEnc *encs, U64 encs_count);

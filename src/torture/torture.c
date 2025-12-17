@@ -4966,13 +4966,13 @@ t_value_in_register(void)
   MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
 
   // compile a simple program which reads the value from register 3
-  DW_ExprEnc        expr_encs[] = { DW_ExprEnc_Op(Reg3) };
-  String8           expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr           expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Reg3) };
+  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   // evaluate the program
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval   = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
 
   // validate eval result
   if (expr_eval != DW_ExprEvalResult_Ok)       { goto exit; }
@@ -4981,6 +4981,184 @@ t_value_in_register(void)
 
   result = T_Result_Pass;
 exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_value_in_x_register(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  T_Result result = T_Result_Fail;
+
+  // setup register context
+  REGS_RegBlockX64 regs      = {0};
+  REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, DW_RegX64_FsBase);
+  Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+  U64 value = 0xc0ffee;
+  MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
+
+  // compile a simple program which reads the value from register 3
+  DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(RegX), DW_ExprEnc_ULEB128(DW_RegX64_FsBase) };
+  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+
+  // evaluate the program
+  DW_ExprValue      expr_value;
+  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+
+  // validate eval result
+  if (expr_eval != DW_ExprEvalResult_Ok)       { goto exit; }
+  if (expr_value.type != DW_ExprValueType_U64) { goto exit; }
+  if (expr_value.u64 != value)                 { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_address_of_value(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  T_Result result = T_Result_Fail;
+
+  // compile a simple program which reads address
+  U64 addr = 0xdeadbeef;
+  DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Addr), DW_ExprEnc_U64(addr) };
+  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+
+  // evaluate the program
+  DW_ExprValue      expr_value;
+  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, 0, 0, &expr_value);
+
+  // validate eval result
+  if (expr_eval != DW_ExprEvalResult_Ok)        { goto exit; }
+  if (expr_value.type != DW_ExprValueType_Addr) { goto exit; }
+  if (expr_value.addr != addr)                  { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_register_relative_variable(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  T_Result result = T_Result_Fail;
+
+  // setup register context
+  REGS_RegBlockX64 regs      = {0};
+  REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, DW_ExprOp_BReg11 - DW_ExprOp_BReg0);
+  Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+  U64 value = 1;
+  MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
+
+  DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(BReg11), DW_ExprEnc_SLEB128(44) };
+  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+
+  DW_ExprValue      expr_value;
+  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+
+  // validate eval result
+  if (expr_eval != DW_ExprEvalResult_Ok)        { goto exit; }
+  if (expr_value.type != DW_ExprValueType_Addr) { goto exit; }
+  if (expr_value.addr != (1 + 44))              { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_frame_relative_variable(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  T_Result result = T_Result_Fail;
+
+  DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(FBReg), DW_ExprEnc_SLEB128(-50) };
+  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+
+  U64               frame_base = 123;
+  DW_ExprValue      expr_value;
+  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, frame_base, 0, 0, max_U64, expr, 0, 0, 0, 0, &expr_value);
+
+  if (expr_eval != DW_ExprEvalResult_Ok)        { goto exit; }
+  if (expr_value.type != DW_ExprValueType_Addr) { goto exit; }
+  if (expr_value.addr != frame_base -50)        { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal
+MACHINE_OP_MEM_READ(t_machine_op_mem_read)
+{
+  MemoryCopy(buffer, PtrFromInt(addr), buffer_size);
+  return MachineOpResult_Ok;
+}
+
+internal T_Result
+t_call_by_reference(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  T_Result result = T_Result_Fail;
+
+  U8 *memory = push_array(scratch.arena, U8, 128);
+  U64 value = 0xc0ffee;
+  MemoryCopy(memory + 32, &value, sizeof(value));
+
+  REGS_RegBlockX64 regs      = {0};
+  REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, 58); // fsbase
+  Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+  U64 memory_ptr = IntFromPtr(memory);
+  MemoryCopy((U8 *)&regs + reg_range.min, &memory_ptr, sizeof(memory_ptr));
+
+  DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(BRegX), DW_ExprEnc_ULEB128(58), DW_ExprEnc_SLEB128(32), DW_ExprEnc_Op(Deref) };
+  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+
+  DW_ExprValue      expr_value;
+  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, t_machine_op_mem_read, 0, &expr_value);
+
+  if (expr_value.type != DW_ExprValueType_Generic) { goto exit; }
+  if (expr_value.generic.size != sizeof(U64))      { goto exit; }
+  if (*(U64 *)expr_value.generic.str != value)     { goto exit; }
+
+  result = T_Result_Pass;
+  exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_plus_uconst(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  T_Result result = T_Result_Fail;
+
+  U64 struct_addr = 0x123;
+  DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Addr), DW_ExprEnc_Addr(struct_addr), DW_ExprEnc_Op(PlusUConst), DW_ExprEnc_ULEB128(4) };
+  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+
+  DW_ExprValue      expr_value;
+  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, t_machine_op_mem_read, 0, &expr_value);
+
+  if (expr_value.type != DW_ExprValueType_Addr) { goto exit; }
+  if (expr_value.addr != 0x123 + 4)             { goto exit; }
+
+  result = T_Result_Pass;
+  exit:;
   scratch_end(scratch);
   return result;
 }
@@ -5067,6 +5245,12 @@ entry_point(CmdLine *cmdline)
 
     // DWARF Expression Tests
     T(value_in_register),
+    T(value_in_x_register),
+    T(address_of_value),
+    T(register_relative_variable),
+    T(frame_relative_variable),
+    T(call_by_reference),
+    T(plus_uconst),
 #undef T
   };
 

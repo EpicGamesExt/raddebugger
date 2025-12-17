@@ -1675,8 +1675,8 @@ typedef enum DW_ExprOpEnum
   X(Ds,      53, ds,     0, 2)  \
   X(Fs,      54, fs,     0, 2)  \
   X(Gs,      55, gs,     0, 2)  \
-  X(FsBase,  58, fsbase, 0, 0)  \
-  X(GsBase,  59, gsbase, 0, 0)
+  X(FsBase,  58, fsbase, 0, 8)  \
+  X(GsBase,  59, gsbase, 0, 8)
   // privileged registers:
   // X(Tr,      62, nil,    0, 0)  \
   // X(Ldtr,    63, nil,    0, 0)
