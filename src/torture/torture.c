@@ -5163,6 +5163,40 @@ t_plus_uconst(void)
   return result;
 }
 
+internal T_Result
+t_reg_split_spill(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  T_Result result = T_Result_Fail;
+
+  // setup register context
+  REGS_RegBlockX64 regs      = {0};
+  {
+    REGS_RegCode reg_code  = reg_code_from_dw_reg(Arch_x64, DW_ExprOp_BReg3 - DW_ExprOp_BReg0);
+    Rng1U64      reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+    U64          value     = 0xaaaa;
+    MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
+  }
+  {
+    REGS_RegCode reg_code  = reg_code_from_dw_reg(Arch_x64, DW_ExprOp_BReg10 - DW_ExprOp_BReg0);
+    Rng1U64      reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+    U64          value     = 0xbbbb;
+    MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
+  }
+
+  DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Reg3), DW_ExprEnc_Op(Piece), DW_ExprEnc_ULEB128(4), DW_ExprEnc_Op(Reg10), DW_ExprEnc_Op(Piece), DW_ExprEnc_ULEB128(2) };
+  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+
+  DW_ExprValue      expr_value;
+  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+  
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -5251,6 +5285,7 @@ entry_point(CmdLine *cmdline)
     T(frame_relative_variable),
     T(call_by_reference),
     T(plus_uconst),
+    //T(reg_split_spill),
 #undef T
   };
 

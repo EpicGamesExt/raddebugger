@@ -1548,7 +1548,7 @@ typedef enum
   X(RegX,              0x90, 1, 0, 1, ULEB128,  Null)    \
   X(FBReg,             0x91, 1, 0, 1, SLEB128,  Null)    \
   X(BRegX,             0x92, 2, 0, 1, ULEB128,  SLEB128) \
-  X(Piece,             0x93, 1, 0, 0, ULEB128,  Null)    \
+  X(Piece,             0x93, 1, 1, 0, ULEB128,  Null)    \
   X(DerefSize,         0x94, 1, 1, 1, U8,       Null)    \
   X(XDerefSize,        0x95, 1, 2, 1, U8,       Null)    \
   X(Nop,               0x96, 0, 0, 0, Null,     Null)    \
@@ -1558,7 +1558,7 @@ typedef enum
   X(CallRef,           0x9a, 1, 0, 0, DwarfUInt,Null)    \
   X(FormTlsAddress,    0x9b, 0, 0, 1, Null,     Null)    \
   X(CallFrameCfa,      0x9c, 0, 0, 1, Null,     Null)    \
-  X(BitPiece,          0x9d, 2, 0, 0, ULEB128,  ULEB128)
+  X(BitPiece,          0x9d, 2, 1, 0, ULEB128,  ULEB128)
 
 #define DW_Expr_V4_XList                       \
   X(ImplicitValue, 0x9e, 2, 0, 1, Block, Null) \

@@ -40,6 +40,8 @@ typedef S8 DW_ExprBool;
 typedef struct DW_ExprValue
 {
   DW_ExprValueType type;
+  Rng1U64Array     ranges;
+  U64             *offsets;
   union {
     U8          u8;
     U16         u16;
@@ -77,13 +79,8 @@ typedef enum
 typedef struct DW_Piece
 {
   DW_PieceKind kind;
-  union {
-    U64 undef_bit_size;
-    struct {
-      U64   bit_size;
-      void *ptr;
-    } value;
-  };
+  U64          bit_size;
+  U8          *value;
 } DW_Piece;
 
 typedef struct DW_PieceNode
@@ -104,11 +101,6 @@ typedef struct DW_ExprStack
   U64               count;
   DW_ExprValueNode *top;
 } DW_ExprStack;
-
-typedef struct DW_ExprResult
-{
-  int x;
-} DW_ExprResult;
 
 typedef enum
 {

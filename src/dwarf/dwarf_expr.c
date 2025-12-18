@@ -1269,29 +1269,44 @@ dw_eval_expr(Arena     *arena,
     } break;
 
     case DW_ExprOp_Piece: {
-      if (stack->count) {
-        String8 value = dw_string_from_expr_value(arena, arch, dw_expr_stack_pop(stack));
-        if (inst->operands[0].u64 <= value.size) {
-          dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .value = { .ptr = value.str, .bit_size = inst->operands[0].u64 * 8 }});
-        } else {
-          Assert(0 && "out of bounds size in the piece opcode");
-          goto exit;
-        }
+      B32 is_undefined = stack->count == 0 || (inst->prev && inst->prev->opcode == DW_ExprOp_Piece);
+      if (is_undefined) {
+        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .bit_size = inst->operands[0].u64 * 8 });
       } else {
-        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .undef_bit_size = inst->operands[0].u64 * 8 });
+        DW_ExprValue top = dw_expr_stack_pop(stack);
+
+        String8 value;
+
+        // piece is a memory reference
+        if (top.type == DW_ExprValueType_Addr) {
+          U64              value_size   = inst->operands[0].u64;
+          U8              *value_buffer = push_array(arena, U8, value_size);
+          MachineOpResult  read_result  = mem_read(top.addr, value_buffer, value_size, mem_read_ud);
+          if (read_result != MachineOpResult_Ok) { Assert(0 && "failed to read piece memory referece"); goto exit; }
+        }
+        // piece is a value
+        else {
+          value = dw_string_from_expr_value(arena, arch, top);
+        }
+
+        if (inst->operands[0].u64 > value.size) { Assert(0 && "out of bounds size in the piece opcode"); goto exit; }
+        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .bit_size = inst->operands[0].u64 * 8, .value = value.str });
       }
     } break;
+
     case DW_ExprOp_BitPiece: {
-      if (stack->count) {
-        String8 value = dw_string_from_expr_value(arena, arch, dw_expr_stack_pop(stack));
-        if (inst->operands[0].u64 <= value.size * 8) {
-          dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .value = { .ptr = value.str, .bit_size = inst->operands[0].u64 }});
-        } else {
-          Assert(0 && "out of bounds size in the bit piece opcode");
-          goto exit;
-        }
+      B32 is_undefined = stack->count == 0 || (inst->prev && inst->prev->opcode == DW_ExprOp_Piece);
+      if (is_undefined) {
+        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .bit_size = inst->operands[0].u64 });
       } else {
-        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .undef_bit_size = inst->operands[0].u64 });
+        String8 value;
+        if (dw_expr_stack_peek(stack).type == DW_ExprValueType_Addr) {
+          NotImplemented;
+        } else {
+          value = dw_string_from_expr_value(arena, arch, dw_expr_stack_pop(stack));
+        }
+        if (inst->operands[0].u64 > value.size * 8) { Assert(0 && "out of bounds size in piece opcode"); goto exit; }
+        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .bit_size = inst->operands[0].u64, .value = value.str });
       }
     } break;
 
@@ -1485,8 +1500,60 @@ dw_eval_expr(Arena     *arena,
     }
   }
 
-  if (stack->top) {
-    *value_out = stack->top->v;
+  // composite value
+  if (pieces.count > 0) {
+#if 0
+    U64 total_bit_size = 0;
+    for EachNode (n, DW_PieceNode, pieces.first) {
+      total_bit_size += n->v.bit_size;
+    }
+
+    U64      value_size   = CeilIntegerDiv(total_bit_size, 8);
+    U8      *value        = push_array(arena, U8, value_size);
+    Rng1U64 *ranges       = push_array(arena, Rng1U64, pieces.count);
+    U64     *offsets      = push_array(arena, U64, pieces.count);
+    U64      value_idx    = 0;
+    U64      value_cursor = 0;
+    U64      piece_cursor = 0;
+    for EachNode(n, DW_PieceNode, pieces.first) {
+      if (n->v.kind == DW_PieceKind_Value) {
+        ranges[value_idx]  = r1u64(piece_cursor, piece_cursor + n->v.bit_size);
+        offsets[value_idx] = value_cursor;
+        for (U64 i = 0; i < n->v.bit_size; i += 8) {
+          U64 to_copy = Min(8, n->v.bit_size - i);
+          if (value_cursor % 8 == 0) {
+            value[value_cursor / 8] = n->v.value[i];
+          } else {
+            value[value_cursor / 8]               |= n->v.value[i] << (value_cursor % 8);
+            value[AlignPow2(value_cursor / 8, 8)] |= n->v.value[i] >> (value_cursor % 8);
+          }
+          value_cursor += to_copy;
+        }
+        value_idx += 1;
+      }
+      piece_cursor += n->v.bit_size;
+    }
+
+    value_out->type    = DW_ExprValueType_Generic;
+    value_out->ranges  = (Rng1U64Array){ .count = pieces.count, .v = ranges };
+    value_out->offsets = offsets;
+    value_out->generic = str8(value, value_size);
+#else
+    NotImplemented;
+#endif
+  }
+  // scalar
+  else {
+    if (stack->top) {
+      *value_out = stack->top->v;
+
+      Rng1U64 *range = push_array(arena, Rng1U64, 1);
+      *range = r1u64(0, max_U64);
+      value_out->ranges  = (Rng1U64Array){ .count = 1, .v = range };
+      value_out->offsets = push_array(arena, U64, 1);
+    } else {
+      MemoryZeroStruct(value_out);
+    }
   }
 
   result = DW_ExprEvalResult_Ok;
