@@ -69,7 +69,7 @@ MACHINE_OP_REG_WRITE(regs_write_dwarf_x64)
   if (reg_size > 0) {
     AssertAlways(value_size <= reg_size);
     MemoryCopy(reg_bytes, value, value_size);
-    status = MachineOpResult_Fail;
+    status = MachineOpResult_Ok;
   }
   
   return status;
