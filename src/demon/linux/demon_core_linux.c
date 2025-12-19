@@ -532,7 +532,7 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
 
     if(phdr.p_type == ELF_PType_Dynamic)
     {
-      dynamic_vaddr = rebase + phdr.p_offset;
+      dynamic_vaddr = rebase + phdr.p_vaddr;
       break;
     }
   }
