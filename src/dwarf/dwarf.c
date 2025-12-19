@@ -449,6 +449,7 @@ dw_operand_types_from_expr_opcode(DW_ExprOp op)
   DW_Expr_V3_XList
   DW_Expr_V4_XList
   DW_Expr_V5_XList
+  DW_Expr_GNU_XList
 #undef X
   default: { NotImplemented; } break;
   }
