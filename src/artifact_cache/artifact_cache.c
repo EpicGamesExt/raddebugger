@@ -18,8 +18,8 @@ ac_init(void)
     ac_shared->req_batches[idx].mutex = mutex_alloc();
     ac_shared->req_batches[idx].arena = arena_alloc();
   }
-  ac_shared->cancel_thread = thread_launch(ac_cancel_thread_entry_point, 0);
   ac_shared->cancel_thread_semaphore = semaphore_alloc(0, 1, str8_zero());
+  ac_shared->cancel_thread = thread_launch(ac_cancel_thread_entry_point, 0);
 }
 
 ////////////////////////////////
