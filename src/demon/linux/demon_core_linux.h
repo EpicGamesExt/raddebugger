@@ -63,12 +63,13 @@ StaticAssert(sizeof(DMN_LNX_UserX64) == 912, g_dmn_lnx_user_x64_size_check);
 
 ////////////////////////////////
 
-typedef struct
+typedef struct DMN_LNX_DbDesc DMN_LNX_DbDesc;
+struct DMN_LNX_DbDesc
 {
   U32 bit_size;
   U32 count;
   U32 offset;
-} DMN_LNX_DbDesc;
+};
 
 ////////////////////////////////
 //~ SDT Probes
@@ -173,6 +174,7 @@ typedef enum DMN_LNX_ThreadState
   DMN_LNX_ThreadState_Running,
   DMN_LNX_ThreadState_Stopped,
   DMN_LNX_ThreadState_Exited,
+  DMN_LNX_ThreadState_PendingCreation,
 } DMN_LNX_ThreadState;
 
 typedef struct DMN_LNX_Entity DMN_LNX_Entity;
@@ -308,6 +310,8 @@ struct DMN_LNX_State
   U64                       active_process_count;
   DMN_LNX_ProcessLaunchList pending_procs;
   DMN_LNX_ProcessLaunchList free_pids;
+
+  U64 threads_pending_creation;
 
   // halter
   Mutex halter_mutex;

@@ -1430,11 +1430,9 @@ dmn_lnx_handle_not_attached(Arena *arena, DMN_EventList *events)
   e->error_kind = DMN_ErrorKind_NotAttached;
 }
 
-internal DMN_LNX_Entity *
-dmn_lnx_handle_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *process, pid_t tid)
+internal void
+dmn_lnx_init_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *process, DMN_LNX_Entity *thread)
 {
-  DMN_LNX_Entity *thread = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Thread);
-  thread->id                 = tid;
   thread->arch               = process->arch;
   thread->reg_block          = push_array(process->arena, U8, regs_block_size_from_arch(process->arch));
   thread->thread_state       = DMN_LNX_ThreadState_Stopped;
@@ -1462,7 +1460,14 @@ dmn_lnx_handle_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Entity
   e->code    = thread->id;
 
   process->thread_count += 1;
+}
 
+internal DMN_LNX_Entity *
+dmn_lnx_handle_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *process, pid_t tid)
+{
+  DMN_LNX_Entity *thread = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Thread);
+  thread->id = tid;
+  dmn_lnx_init_create_thread(arena, events, process, thread);
   return thread;
 }
 
@@ -1786,7 +1791,7 @@ dmn_lnx_handle_load_module(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *
 }
 
 internal void
-dmn_lnx_hanlde_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *process, U64 name_space_id, U64 rdebug_vaddr)
+dmn_lnx_handle_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Entity *process, U64 name_space_id, U64 rdebug_vaddr)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -1917,7 +1922,7 @@ dmn_lnx_handle_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *u
     if(!stap_read_arg_u(probe->args.v[0], process->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &name_space_id)) { goto unmap_complete_exit; }
     if(!stap_read_arg_u(probe->args.v[1], process->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &rdebug_vaddr))  { goto unmap_complete_exit; }
 
-    dmn_lnx_hanlde_unload_module(arena, events, process, name_space_id, rdebug_vaddr);
+    dmn_lnx_handle_unload_module(arena, events, process, name_space_id, rdebug_vaddr);
 
     is_unmap_completed = 1;
     unmap_complete_exit:;
@@ -2573,38 +2578,40 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       if(wifstopped || wifsignaled || wifexited)
       {
         DMN_LNX_Entity *thread = dmn_lnx_thread_from_pid(wait_id);
-
-        // kernel may send multiple stop signals for the same thread,
-        // so count first stop signal and ignore subsequent signals
-        B32 is_first_thread_to_stop = 0;
-        if(thread->thread_state == DMN_LNX_ThreadState_Running)
+        if(thread->thread_state != DMN_LNX_ThreadState_PendingCreation)
         {
-          is_first_thread_to_stop = (stopped_threads == 0);
-          stopped_threads += 1;
-        }
-
-        // update thread state
-        if(thread != dmn_lnx_nil_entity)
-        {
-          if(wifstopped && !wifsignaled && !wifexited)
+          // kernel may send multiple stop signals for the same thread,
+          // so count first stop signal and ignore subsequent signals
+          B32 is_first_thread_to_stop = 0;
+          if(thread->thread_state == DMN_LNX_ThreadState_Running)
           {
-            thread->thread_state = DMN_LNX_ThreadState_Stopped;
+            is_first_thread_to_stop = (stopped_threads == 0);
+            stopped_threads += 1;
           }
-          else if(!wifstopped && (wifsignaled || wifexited))
-          {
-            thread->thread_state = DMN_LNX_ThreadState_Exited;
-          }
-          else { InvalidPath; }
-        }
 
-        // stop all other threads
-        if(is_first_thread_to_stop)
-        {
-          for EachNode(thread, DMN_LNX_EntityNode, running_threads.first)
+          // update thread state
+          if(thread != dmn_lnx_nil_entity)
           {
-            if(thread->v->thread_state == DMN_LNX_ThreadState_Running)
+            if(wifstopped && !wifsignaled && !wifexited)
             {
-              if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_INTERRUPT, thread->v->id, 0, 0)) < 0) { Assert(0 && "failed to interrupt process"); }
+              thread->thread_state = DMN_LNX_ThreadState_Stopped;
+            }
+            else if(!wifstopped && (wifsignaled || wifexited))
+            {
+              thread->thread_state = DMN_LNX_ThreadState_Exited;
+            }
+            else { InvalidPath; }
+          }
+
+          // stop all other threads
+          if(is_first_thread_to_stop)
+          {
+            for EachNode(thread, DMN_LNX_EntityNode, running_threads.first)
+            {
+              if(thread->v->thread_state == DMN_LNX_ThreadState_Running)
+              {
+                if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_INTERRUPT, thread->v->id, 0, 0)) < 0) { Assert(0 && "failed to interrupt process"); }
+              }
             }
           }
         }
@@ -2627,7 +2634,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         // read thread registers
         {
           DMN_LNX_Entity *thread = dmn_lnx_thread_from_pid(wait_id);
-          if(thread != dmn_lnx_nil_entity)
+          if(thread != dmn_lnx_nil_entity && thread->thread_state != DMN_LNX_ThreadState_PendingCreation)
           {
             thread->is_reg_block_dirty = !dmn_lnx_thread_read_reg_block(thread);
             Assert(!thread->is_reg_block_dirty);
@@ -2729,12 +2736,26 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }break;
             case PTRACE_EVENT_CLONE:
             {
+              // kernel stopped the parent just before scheduling the child to
+              // give us a chance to prepare to trace it; next event for the child
+              // will be a PTRACE_EVENT_STOP
+
               pid_t new_pid;
               if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &new_pid)) >= 0)
               {
                 DMN_LNX_Entity *thread  = dmn_lnx_thread_from_pid(wait_id);
                 DMN_LNX_Entity *process = thread->parent;
-                dmn_lnx_handle_create_thread(arena, &events, process, new_pid);
+
+                // create a new partially inited thread
+                DMN_LNX_Entity *new_thread = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Thread);
+                new_thread->id           = new_pid;
+                new_thread->thread_state = DMN_LNX_ThreadState_PendingCreation;
+
+                // create mapping from tid -> new thread
+                hash_table_push_u64_raw(dmn_lnx_state->arena, dmn_lnx_state->tid_ht, new_thread->id, new_thread);
+
+                // do not exit the wait loop before new threads are inited
+                dmn_lnx_state->threads_pending_creation += 1;
               }
               else { Assert(0 && "failed to get new tid"); }
             }break;
@@ -2770,12 +2791,25 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }break;
             case PTRACE_EVENT_STOP:
             {
-              DMN_LNX_Entity *thread = dmn_lnx_thread_from_pid(wait_id);
+              DMN_LNX_Entity *thread  = dmn_lnx_thread_from_pid(wait_id);
               DMN_LNX_Entity *process = thread->parent;
-              if(process->expect_user_interrupt)
+
+              if(thread->thread_state == DMN_LNX_ThreadState_PendingCreation)
               {
-                process->expect_user_interrupt = 0;
-                dmn_lnx_handle_halt(arena, &events);
+                // finish thread init
+                dmn_lnx_init_create_thread(arena, &events, process, thread);
+
+                // update global thread counter
+                AssertAlways(dmn_lnx_state->threads_pending_creation > 0);
+                dmn_lnx_state->threads_pending_creation -= 1;
+              }
+              else
+              {
+                if(process->expect_user_interrupt)
+                {
+                  process->expect_user_interrupt = 0;
+                  dmn_lnx_handle_halt(arena, &events);
+                }
               }
             }break;
             default: { Assert(0 && "unexpected ptrace code"); } break;
@@ -2804,8 +2838,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       else { Assert(0 && "unexpected stop code"); }
 
-      // do not wait if all threads are stopped and there are no launching processes
-      if(stopped_threads >= running_threads.count && dmn_lnx_state->pending_procs.count == 0)
+      // do not wait if all threads are stopped, there are no launching processes, and all threads were created
+      if(stopped_threads >= running_threads.count && dmn_lnx_state->pending_procs.count == 0 && dmn_lnx_state->threads_pending_creation == 0)
       {
         break;
       }
