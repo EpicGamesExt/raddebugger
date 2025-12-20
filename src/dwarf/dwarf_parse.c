@@ -3419,6 +3419,7 @@ dw_parse_cfa_inst(String8        data,
     U32 delta = 0;
     U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
     if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+    cursor += delta_size;
     operands[0].u64 = delta * code_align_factor;
   } break;
   case DW_CFA_DefCfa: {
