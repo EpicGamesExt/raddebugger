@@ -841,4 +841,13 @@ internal Arch arch_from_elf_machine(ELF_MachineKind machine);
 internal U64 elf_phdr_size_from_class(ELF_Class elf_class);
 internal U64 elf_dyn_size_from_class(ELF_Class elf_class);
 
+////////////////////////////////
+//~ Compat Readers
+
+internal MachineOpResult elf_read_ehdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Hdr64 *ehdr_out);
+internal MachineOpResult elf_read_phdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Phdr64 *phdr_out);
+internal MachineOpResult elf_read_shdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Shdr64 *shdr_out);
+internal MachineOpResult elf_read_dyn   (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Dyn64  *dyn_out);
+internal MachineOpResult elf_read_symbol(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Sym64  *symbol_out);
+
 #endif // ELF_H

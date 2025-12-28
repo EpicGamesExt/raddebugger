@@ -201,4 +201,10 @@ internal String8 gnu_string_from_abi_tag(GNU_AbiTag abi_tag);
 internal String8 gnu_string_from_note_type(GNU_NoteType note_type);
 internal String8 gnu_string_from_property_x86(GNU_PropertyX86 prop);
 
+////////////////////////////////
+//~ Compat Readers
+
+internal MachineOpResult gnu_read_link_map(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, B32 is_64bit, GNU_LinkMap64 *link_map_out);
+internal MachineOpResult gnu_read_r_debug (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, Arch arch, GNU_RDebugInfo64 *rdebug_out);
+
 #endif // GNU_H

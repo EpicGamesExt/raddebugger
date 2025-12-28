@@ -179,3 +179,115 @@ elf_dyn_size_from_class(ELF_Class elf_class)
   return result;
 }
 
+////////////////////////////////
+
+internal MachineOpResult
+elf_read_ehdr(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Hdr64 *ehdr_out)
+{
+  U8 e_ident[ELF_Identifier_Max] = {0};
+  MachineOpResult result = mem_read(addr, &e_ident, sizeof(e_ident), mem_read_ud);
+  if (result == MachineOpResult_Ok) {
+    if (str8_match(str8_prefix(str8_array_fixed(e_ident), elf_magic_string.size), elf_magic_string, 0)) {
+      switch (e_ident[ELF_Identifier_Class]) {
+      default: { InvalidPath; }break;
+      case ELF_Class_None: { }break;
+      case ELF_Class_32: {
+        ELF_Hdr32 ehdr32 = {0};
+        result = mem_read(addr, &ehdr32, sizeof(ehdr32), mem_read_ud);
+        if (result == MachineOpResult_Ok) {
+          *ehdr_out = elf_hdr64_from_hdr32(ehdr32);
+        }
+      } break;
+      case ELF_Class_64: {
+        result = mem_read(addr, ehdr_out, sizeof(*ehdr_out), mem_read_ud);
+      } break;
+      }
+    }
+  }
+  return result;
+}
+
+internal MachineOpResult
+elf_read_phdr(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Phdr64 *phdr_out)
+{
+  MachineOpResult result = MachineOpResult_Fail;
+  switch (elf_class) {
+  case ELF_Class_None: break;
+  case ELF_Class_32: {
+    ELF_Phdr32 phdr32 = {0};
+    result = mem_read(addr, &phdr32, sizeof(phdr32), mem_read_ud);
+    if (result == MachineOpResult_Ok) {
+      *phdr_out = elf_phdr64_from_phdr32(phdr32);
+    }
+  } break;
+  case ELF_Class_64: {
+    result = mem_read(addr, phdr_out, sizeof(*phdr_out), mem_read_ud);
+  } break;
+  default: { NotImplemented; } break;
+  }
+  return result;
+}
+
+internal MachineOpResult
+elf_read_shdr(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Shdr64 *shdr_out)
+{
+  MachineOpResult result = MachineOpResult_Fail;
+  switch (elf_class) {
+  case ELF_Class_None: break;
+  case ELF_Class_32: {
+    ELF_Shdr32 shdr32 = {0};
+    result = mem_read(addr, &shdr32, sizeof(shdr32), mem_read_ud);
+    if (result == MachineOpResult_Ok) {
+      *shdr_out = elf_shdr64_from_shdr32(shdr32);
+    }
+  } break;
+  case ELF_Class_64: {
+    result = mem_read(addr, shdr_out, sizeof(*shdr_out), mem_read_ud);
+  } break;
+  default: { NotImplemented; } break;
+  }
+  return result;
+}
+
+internal MachineOpResult
+elf_read_dyn(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Dyn64 *dyn_out)
+{
+  MachineOpResult result = MachineOpResult_Fail;
+  switch (elf_class) {
+  case ELF_Class_None: {} break;
+  case ELF_Class_32: {
+    ELF_Dyn32 dyn32 = {0};
+    result = mem_read(addr, &dyn32, sizeof(dyn32), mem_read_ud);
+    if (result == MachineOpResult_Fail) {
+      *dyn_out = elf_dyn64_from_dyn32(dyn32);
+    }
+  } break;
+  case ELF_Class_64: {
+    result = mem_read(addr, dyn_out, sizeof(*dyn_out), mem_read_ud);
+  } break;
+  default: { NotImplemented; } break;
+  }
+  return result;
+}
+
+internal MachineOpResult
+elf_read_symbol(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Sym64 *symbol_out)
+{
+  MachineOpResult result = MachineOpResult_Fail;
+  switch (elf_class) {
+  case ELF_Class_None: {} break;
+  case ELF_Class_32: {
+    ELF_Sym32 symbol32 = {0};
+    result = mem_read(addr, &symbol32, sizeof(symbol32), mem_read_ud);
+    if (result == MachineOpResult_Ok) {
+      *symbol_out = elf_sym64_from_sym32(symbol32);
+    }
+  }break;
+  case ELF_Class_64: {
+    result = mem_read(addr, symbol_out, sizeof(*symbol_out), mem_read_ud);
+  }break;
+  default: { NotImplemented; } break;
+  }
+  return result;
+}
+

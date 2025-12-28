@@ -276,3 +276,40 @@ gnu_string_from_property_flags_x86(Arena *arena, GNU_PropertyX86 prop, U32 flags
   return result;
 }
 
+internal MachineOpResult
+gnu_read_link_map(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, B32 is_64bit, GNU_LinkMap64 *link_map_out)
+{
+  MachineOpResult result = MachineOpResult_Fail;
+  if (is_64bit) {
+    result = mem_read(addr, link_map_out, sizeof(*link_map_out), mem_read_ud);
+  } else {
+    GNU_LinkMap32 link_map_32 = {0};
+    result = mem_read(addr, &link_map_32, sizeof(link_map_32), mem_read_ud);
+    if (result == MachineOpResult_Ok) {
+      *link_map_out = gnu_linkmap64_from_linkmap32(link_map_32);
+    }
+  }
+  return result;
+}
+
+internal MachineOpResult
+gnu_read_r_debug(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, Arch arch, GNU_RDebugInfo64 *rdebug_out)
+{
+  MachineOpResult result = MachineOpResult_Fail;
+  switch (gnu_rdebug_info_size_from_arch(arch)) {
+  case 0: {} break;
+  case sizeof(GNU_RDebugInfo32): {
+    GNU_RDebugInfo32 rdebug32 = {0};
+    result = mem_read(addr, &rdebug32, sizeof(rdebug32), mem_read_ud);
+    if (result == MachineOpResult_Ok) {
+      *rdebug_out = gnu_rdebug_info64_from_rdebug_info32(rdebug32);
+    }
+  } break;
+  case sizeof(GNU_RDebugInfo64): {
+    result = mem_read(addr, rdebug_out, sizeof(*rdebug_out), mem_read_ud);
+  } break;
+  default: { InvalidPath; } break;
+  }
+  return result;
+}
+

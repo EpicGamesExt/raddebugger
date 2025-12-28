@@ -136,13 +136,6 @@ struct DMN_LNX_ProcessAuxv
   U64 pagesz;
 };
 
-typedef struct DMN_LNX_PhdrInfo DMN_LNX_PhdrInfo;
-struct DMN_LNX_PhdrInfo
-{
-  Rng1U64 range;
-  U64     dynamic;
-};
-
 typedef struct DMN_LNX_DynamicInfo DMN_LNX_DynamicInfo;
 struct DMN_LNX_DynamicInfo
 {
@@ -341,58 +334,42 @@ read_only global DMN_LNX_Entity *dmn_lnx_nil_entity  = &dmn_lnx_nil_entity_;
 internal DMN_LNX_EntityNode * dmn_lnx_entity_list_push(Arena *arena, DMN_LNX_EntityList *list, DMN_LNX_Entity *v);
 
 //- rjf: file descriptor memory reading/writing helpers
-internal U64 dmn_lnx_read(int memory_fd, Rng1U64 range, void *dst);
-internal B32 dmn_lnx_write(int memory_fd, Rng1U64 range, void *src);
-#define dmn_lnx_read_struct(fd, vaddr, ptr) dmn_lnx_read((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
-#define dmn_lnx_write_struct(fd, vaddr, ptr) dmn_lnx_write((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
+internal U64     dmn_lnx_read(int memory_fd, Rng1U64 range, void *dst);
+internal B32     dmn_lnx_write(int memory_fd, Rng1U64 range, void *src);
 internal String8 dmn_lnx_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_size);
 internal String8 dmn_lnx_read_string(Arena *arena, int memory_fd, U64 base_vaddr);
-
-////////////////////////////////
-//~ Runtime Struct Helpers
-
-internal B32 dmn_lnx_read_ehdr(int memory_fd, U64 addr, ELF_Hdr64 *ehdr_out);
-internal B32 dmn_lnx_read_phdr(int memory_fd, U64 addr, ELF_Class elf_class, ELF_Phdr64 *phdr_out);
-internal B32 dmn_lnx_read_shdr(int memory_fd, U64 addr, ELF_Class elf_class, ELF_Shdr64 *shdr_out);
-internal B32 dmn_lnx_read_linkmap(int memory_fd, U64 addr, ELF_Class elf_class, GNU_LinkMap64 *link_map_out);
-internal B32 dmn_lnx_read_dynamic(int memory_fd, U64 addr, ELF_Class elf_class, ELF_Dyn64 *dyn_out);
-internal B32 dmn_lnx_read_symbol(int memory_fd, U64 addr, ELF_Class elf_class, ELF_Sym64 *symbol_out);
-internal B32 dmn_lnx_read_r_debug(int memory_fd, U64 addr, Arch arch, GNU_RDebugInfo64 *rdebug_out);
+#define dmn_lnx_read_struct(fd, vaddr, ptr)  dmn_lnx_read((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
+#define dmn_lnx_write_struct(fd, vaddr, ptr) dmn_lnx_write((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
 
 //- rjf: pid => info extraction
 internal String8             dmn_lnx_exe_path_from_pid(Arena *arena, pid_t pid);
+internal String8             dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base);
 internal ELF_Hdr64           dmn_lnx_ehdr_from_pid(pid_t pid);
 internal DMN_LNX_ProcessAuxv dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_class);
 
 //- ELF/GNU info from memory
-internal DMN_LNX_PhdrInfo       dmn_lnx_phdr_info_from_memory(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
-internal DMN_LNX_DynamicInfo    dmn_lnx_dynamic_info_from_memory(int memory_fd, ELF_Class elf_Class, U64 rebase, U64 dynamic_vaddr);
-internal U64                    dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vaddr, B32 is_rebased);
-
-internal String8 dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base);
+internal DMN_LNX_DynamicInfo dmn_lnx_dynamic_info_from_memory(int memory_fd, ELF_Class elf_Class, U64 rebase, U64 dynamic_vaddr);
+internal U64                 dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vaddr, B32 is_rebased);
 
 ////////////////////////////////
 //~ rjf: Entity Functions
 
-internal DMN_LNX_Entity *dmn_lnx_entity_alloc(DMN_LNX_Entity *parent, DMN_LNX_EntityKind kind);
-internal void            dmn_lnx_entity_release(DMN_LNX_Entity *entity);
-internal DMN_Handle      dmn_lnx_handle_from_entity(DMN_LNX_Entity *entity);
-internal DMN_LNX_Entity *dmn_lnx_entity_from_handle(DMN_Handle handle);
-internal DMN_LNX_Entity *dmn_lnx_thread_from_pid(pid_t pid);
+internal DMN_LNX_Entity * dmn_lnx_entity_alloc(DMN_LNX_Entity *parent, DMN_LNX_EntityKind kind);
+internal void             dmn_lnx_entity_release(DMN_LNX_Entity *entity);
+internal DMN_Handle       dmn_lnx_handle_from_entity(DMN_LNX_Entity *entity);
+internal DMN_LNX_Entity * dmn_lnx_entity_from_handle(DMN_Handle handle);
+internal DMN_LNX_Entity * dmn_lnx_thread_from_pid(pid_t pid);
 
 //- Process
 internal void dmn_lnx_process_install_probes();
 
 //- Thread
-internal U64 dmn_lnx_thread_read_ip(DMN_LNX_Entity *thread);
-internal U64 dmn_lnx_thread_read_sp(DMN_LNX_Entity *thread);
+internal U64  dmn_lnx_thread_read_ip(DMN_LNX_Entity *thread);
+internal U64  dmn_lnx_thread_read_sp(DMN_LNX_Entity *thread);
 internal void dmn_lnx_thread_write_ip(DMN_LNX_Entity *thread, U64 ip);
 internal void dmn_lnx_thread_write_sp(DMN_LNX_Entity *thread, U64 sp);
-internal B32 dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread);
-internal B32 dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread);
-
-////////////////////////////////
-
-internal B32 dmn_lnx_set_single_step_flag(DMN_LNX_Entity *thread, B32 is_on);
+internal B32  dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread);
+internal B32  dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread);
+internal B32  dmn_lnx_set_single_step_flag(DMN_LNX_Entity *thread, B32 is_on);
 
 #endif // DEMON_CORE_LINUX_H
