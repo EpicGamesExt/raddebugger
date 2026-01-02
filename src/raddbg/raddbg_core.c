@@ -9327,7 +9327,9 @@ rd_theme_tree_from_name(Arena *arena, Access *access, String8 theme_name)
       }
       U128 hash = fs_hash_from_path_range(path, r1u64(0, max_U64), endt_us);
       String8 data = c_data_from_hash(access, hash);
-      theme_tree = md_tree_from_string(arena, data);
+      if (data.size != 0) {
+          theme_tree = md_tree_from_string(arena, data);
+      }
     }
   }
   scratch_end(scratch);
