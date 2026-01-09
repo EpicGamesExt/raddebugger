@@ -10,7 +10,7 @@ internal Arena *
 arena_alloc_(ArenaParams *params)
 {
   // rjf: round up reserve/commit sizes
-  U64 reserve_size = params->reserve_size;
+  U64 reserve_size = params->reserve_size + ARENA_HEADER_SIZE;
   U64 commit_size = params->commit_size;
   if(params->flags & ArenaFlag_LargePages)
   {
@@ -260,3 +260,4 @@ temp_end(Temp temp)
 {
   arena_pop_to(temp.arena, temp.pos);
 }
+
