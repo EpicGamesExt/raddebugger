@@ -141,10 +141,7 @@ struct DMN_LNX_Entity
   int             fd;
   pid_t           tracer_tid;
   B32             debug_subprocesses;
-  B32             expect_user_interrupt;
-  B32             expect_rdebug_data_breakpoint;
   U64             rdebug_vaddr;
-  U64             rdebug_brk_vaddr;
   ELF_Class       dl_class;
   HashTable      *loaded_modules_ht;
   DMN_LNX_Probe **probes;

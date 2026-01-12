@@ -1300,7 +1300,6 @@ dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, B32 debug_sub
   DMN_LNX_ProcessAuxv auxv             = dmn_lnx_auxv_from_pid(pid, exe_ehdr.e_ident[ELF_Identifier_Class]);
   Arch                arch             = arch_from_elf_machine(exe_ehdr.e_machine);
   U64                 rdebug_vaddr     = dmn_lnx_rdebug_vaddr_from_memory(memory_fd, auxv.base, is_rebased);
-  U64                 rdebug_brk_vaddr = rdebug_vaddr + gnu_r_brk_offset_from_arch(arch);
   U64                 base_vaddr       = (auxv.phdr & ~(auxv.pagesz-1));
   U64                 rebase           = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
   Rng1U64             image_vrange     = dmn_lnx_compute_image_vrange(memory_fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
@@ -1370,8 +1369,6 @@ dmn_lnx_handle_create_process(Arena *arena, DMN_EventList *events, B32 debug_sub
   process->tracer_tid                    = gettid();
   process->debug_subprocesses            = debug_subprocesses;
   process->rdebug_vaddr                  = rdebug_vaddr;
-  process->rdebug_brk_vaddr              = rdebug_brk_vaddr;
-  process->expect_rdebug_data_breakpoint = rdebug_vaddr != 0;
   process->dl_class                      = dl_class;
   process->arena                         = process_arena;
   process->loaded_modules_ht             = hash_table_init(process_arena, 0x1000);
@@ -2612,13 +2609,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               DMN_LNX_Entity *process = thread->parent;
 
               AssertAlways(thread->thread_state == DMN_LNX_ThreadState_PendingCreation || thread->thread_state == DMN_LNX_ThreadState_Stopped);
-
-              if(process->expect_user_interrupt)
-              {
-                process->expect_user_interrupt = 0;
-                dmn_lnx_handle_halt(arena, &events);
-                break;
-              }
 
               if(thread->thread_state == DMN_LNX_ThreadState_PendingCreation)
               {
