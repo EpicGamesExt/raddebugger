@@ -794,38 +794,38 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread)
       //- rjf: read GPR
       B32 got_gpr = 0;
       {
-        DMN_LNX_UserX64 ctx = {0};
-        int ptrace_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_len = sizeof(ctx), .iov_base = &ctx }));
-        if(ptrace_result != -1)
+        OS_LNX_GprsX64 src;
+        int ptrace_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_len = sizeof(src), .iov_base = &src }));
+        if(ptrace_result >= 0)
         {
           got_gpr = 1;
-          DMN_LNX_UserX64 *src = &ctx;
-          dst->rax.u64    = src->regs.rax;
-          dst->rcx.u64    = src->regs.rcx;
-          dst->rdx.u64    = src->regs.rdx;
-          dst->rbx.u64    = src->regs.rbx;
-          dst->rsp.u64    = src->regs.rsp;
-          dst->rbp.u64    = src->regs.rbp;
-          dst->rsi.u64    = src->regs.rsi;
-          dst->rdi.u64    = src->regs.rdi;
-          dst->r8.u64     = src->regs.r8;
-          dst->r9.u64     = src->regs.r9;
-          dst->r10.u64    = src->regs.r10;
-          dst->r11.u64    = src->regs.r11;
-          dst->r12.u64    = src->regs.r12;
-          dst->r13.u64    = src->regs.r13;
-          dst->r14.u64    = src->regs.r14;
-          dst->r15.u64    = src->regs.r15;
-          dst->cs.u16     = src->regs.cs;
-          dst->ds.u16     = src->regs.ds;
-          dst->es.u16     = src->regs.es;
-          dst->fs.u16     = src->regs.fs;
-          dst->gs.u16     = src->regs.gs;
-          dst->ss.u16     = src->regs.ss;
-          dst->fsbase.u64 = src->regs.fsbase;
-          dst->gsbase.u64 = src->regs.gsbase;
-          dst->rip.u64    = src->regs.rip;
-          dst->rflags.u64 = src->regs.rflags;
+          dst->r15.u64     = src.r15;
+          dst->r14.u64     = src.r14;
+          dst->r13.u64     = src.r13;
+          dst->r12.u64     = src.r12;
+          dst->rbp.u64     = src.rbp;
+          dst->rbx.u64     = src.rbx;
+          dst->r11.u64     = src.r11;
+          dst->r10.u64     = src.r10;
+          dst->r9.u64      = src.r9;
+          dst->r8.u64      = src.r8;
+          dst->rax.u64     = src.rax;
+          dst->rcx.u64     = src.rcx;
+          dst->rdx.u64     = src.rdx;
+          dst->rsi.u64     = src.rsi;
+          dst->rdi.u64     = src.rdi;
+          dst->rip.u64     = src.rip;
+          dst->cs.u16      = src.cs;
+          dst->rflags.u64  = src.rflags;
+          dst->rsp.u64     = src.rsp;
+          dst->ss.u16      = src.ss;
+          dst->fsbase.u64  = src.fsbase;
+          dst->gsbase.u64  = src.gsbase;
+          dst->ds.u16      = src.ds;
+          dst->es.u16      = src.es;
+          dst->fs.u16      = src.fs;
+          dst->gs.u16      = src.gs;
+          thread->orig_rax = src.orig_rax;
         }
         else { Assert(0 && "failed to get gprs"); }
       }
@@ -967,7 +967,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread)
         {
           if(n != 4 && n != 5)
           {
-            U64 offset = OffsetOf(DMN_LNX_UserX64, u_debugreg[n]);
+            U64 offset = OffsetOf(OS_LNX_UserX64, u_debugreg[n]);
             errno = 0;
             long peek_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_PEEKUSER, tid, PtrFromInt(offset), 0));
             if(errno == 0)
@@ -1017,33 +1017,34 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
       //- rjf: write GPR
       B32 did_gpr = 0;
       {
-        DMN_LNX_UserX64 dst = {0};
-        dst.regs.rax    = src->rax.u64;
-        dst.regs.rcx    = src->rcx.u64;
-        dst.regs.rdx    = src->rdx.u64;
-        dst.regs.rbx    = src->rbx.u64;
-        dst.regs.rsp    = src->rsp.u64;
-        dst.regs.rbp    = src->rbp.u64;
-        dst.regs.rsi    = src->rsi.u64;
-        dst.regs.rdi    = src->rdi.u64;
-        dst.regs.r8     = src->r8.u64;
-        dst.regs.r9     = src->r9.u64;
-        dst.regs.r10    = src->r10.u64;
-        dst.regs.r11    = src->r11.u64;
-        dst.regs.r12    = src->r12.u64;
-        dst.regs.r13    = src->r13.u64;
-        dst.regs.r14    = src->r14.u64;
-        dst.regs.r15    = src->r15.u64;
-        dst.regs.cs     = src->cs.u16;
-        dst.regs.ds     = src->ds.u16;
-        dst.regs.es     = src->es.u16;
-        dst.regs.fs     = src->fs.u16;
-        dst.regs.gs     = src->gs.u16;
-        dst.regs.ss     = src->ss.u16;
-        dst.regs.fsbase = src->fsbase.u64;
-        dst.regs.gsbase = src->gsbase.u64;
-        dst.regs.rip    = src->rip.u64;
-        dst.regs.rflags = src->rflags.u64;
+        OS_LNX_GprsX64 dst;
+        dst.r15      = src->r15.u64;
+        dst.r14      = src->r14.u64;
+        dst.r13      = src->r13.u64;
+        dst.r12      = src->r12.u64;
+        dst.rbp      = src->rbp.u64;
+        dst.rbx      = src->rbx.u64;
+        dst.r11      = src->r11.u64;
+        dst.r10      = src->r10.u64;
+        dst.r9       = src->r9.u64;
+        dst.r8       = src->r8.u64;
+        dst.rax      = src->rax.u64;
+        dst.rcx      = src->rcx.u64;
+        dst.rdx      = src->rdx.u64;
+        dst.rsi      = src->rsi.u64;
+        dst.rdi      = src->rdi.u64;
+        dst.orig_rax = thread->orig_rax;
+        dst.rip      = src->rip.u64;
+        dst.cs       = src->cs.u16;
+        dst.rflags   = src->rflags.u64;
+        dst.rsp      = src->rsp.u64;
+        dst.ss       = src->ss.u16;
+        dst.fsbase   = src->fsbase.u64;
+        dst.gsbase   = src->gsbase.u64;
+        dst.ds       = src->ds.u16;
+        dst.es       = src->es.u16;
+        dst.fs       = src->fs.u16;
+        dst.gs       = src->gs.u16;
         did_gpr = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_base = &dst, .iov_len = sizeof(dst) }) >= 0);
       }
       
@@ -1192,7 +1193,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread)
         {
           if(n != 4 && n != 5)
           {
-            U64 offset = OffsetOf(DMN_LNX_UserX64, u_debugreg[n]);
+            U64 offset = OffsetOf(OS_LNX_UserX64, u_debugreg[n]);
             int poke_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_POKEUSER, tid, PtrFromInt(offset), (void*)(uintptr_t)dr_s[n].u64));
             if(poke_result < 0)
             {

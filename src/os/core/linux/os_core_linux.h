@@ -50,6 +50,66 @@ typedef struct timespec timespec;
   }))
 
 ////////////////////////////////
+//~ rjf: Register Layouts
+//
+// These are defined in <sys/user.h>, but only for one architecture at a time
+
+typedef struct OS_LNX_GprsX64 OS_LNX_GprsX64;
+struct OS_LNX_GprsX64
+{
+  U64 r15;
+  U64 r14;
+  U64 r13;
+  U64 r12;
+  U64 rbp;
+  U64 rbx;
+  U64 r11;
+  U64 r10;
+  U64 r9;
+  U64 r8;
+  U64 rax;
+  U64 rcx;
+  U64 rdx;
+  U64 rsi;
+  U64 rdi;
+  U64 orig_rax;
+  U64 rip;
+  U64 cs;
+  U64 rflags;
+  U64 rsp;
+  U64 ss;
+  U64 fsbase;
+  U64 gsbase;
+  U64 ds;
+  U64 es;
+  U64 fs;
+  U64 gs;
+};
+
+typedef struct OS_LNX_UserX64 OS_LNX_UserX64;
+struct OS_LNX_UserX64
+{
+  OS_LNX_GprsX64 regs;
+  S32 u_fpvalid;
+  U32 _pad0;
+  X64_FXSave i387;
+  U64 u_tsize;
+  U64 u_dsize;
+  U64 u_ssize;
+  U64 start_code;
+  U64 start_stack;
+  U64 signal;
+  U32 reserved;
+  U32 _pad1;
+  U64 u_ar0;
+  U64 u_fpstate;
+  U64 magic;
+  U8  u_comm[32];
+  U64 u_debugreg[8];
+};
+StaticAssert(sizeof(OS_LNX_UserX64) == 912, g_os_lnx_user_x64_size_check);
+
+////////////////////////////////
 //~ rjf: File Iterator
 
 typedef struct OS_LNX_FileIter OS_LNX_FileIter;

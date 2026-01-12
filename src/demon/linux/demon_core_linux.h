@@ -12,56 +12,6 @@
 #include <elf.h>
 
 ////////////////////////////////
-//~ rjf: Register Layouts
-//
-// These are defined in <sys/user.h>, but only for one architecture at a time
-
-typedef struct DMN_LNX_UserX64 DMN_LNX_UserX64;
-struct DMN_LNX_UserX64
-{
-  struct
-  {
-    U64 r15;
-    U64 r14;
-    U64 r13;
-    U64 r12;
-    U64 rbp;
-    U64 rbx;
-    U64 r11;
-    U64 r10;
-    U64 r9;
-    U64 r8;
-    U64 rax;
-    U64 rcx;
-    U64 rdx;
-    U64 rsi;
-    U64 rdi;
-    U64 orig_rax;
-    U64 rip;
-    U64 cs;
-    U64 rflags;
-    U64 rsp;
-    U64 ss;
-    U64 fsbase;
-    U64 gsbase;
-    U64 ds;
-    U64 es;
-    U64 fs;
-    U64 gs;
-  } regs;
-  S32 u_fpvalid, _pad0;
-  X64_FXSave i387;
-  U64 u_tsize, u_dsize, u_ssize, start_code, start_stack;
-  U64 signal;
-  S32 reserved, _pad1;
-  U64 u_ar0, u_fpstate;
-  U64 magic;
-  U8  u_comm[32];
-  U64 u_debugreg[8];
-};
-StaticAssert(sizeof(DMN_LNX_UserX64) == 912, g_dmn_lnx_user_x64_size_check);
-
-////////////////////////////////
 
 typedef struct DMN_LNX_DbDesc DMN_LNX_DbDesc;
 struct DMN_LNX_DbDesc
@@ -216,6 +166,7 @@ struct DMN_LNX_Entity
   U64                  pass_through_signo;
   DMN_LNX_ThreadState  thread_state;
   U64                  thread_local_base;
+  U64                  orig_rax;
 
   // module
   U64 module_name_vaddr;
