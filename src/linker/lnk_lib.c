@@ -142,6 +142,7 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
   lib_out->member_offsets    = member_offsets;
   lib_out->symbol_indices    = symbol_indices;
   lib_out->member_links      = push_array(arena, LNK_Symbol *, member_count);
+  lib_out->member_flags      = push_array(arena, LNK_LibMemberFlags, member_count); 
   lib_out->symbol_names      = symbol_names;
   lib_out->long_names        = parse.long_names;
   lib_out->input_idx         = input_idx;
@@ -224,15 +225,21 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U
 internal B32
 lnk_lib_set_link_symbol(LNK_Lib *lib, U32 member_idx, LNK_Symbol *link_symbol)
 {
-  local_persist LNK_Symbol null_symbol;
-
-  LNK_Symbol *slot = ins_atomic_ptr_eval_assign(&lib->member_links[member_idx], &null_symbol);
-
-  B32 was_linked = (slot == 0);
+  B32 was_linked;
+  if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
+    U8 member_flags = ins_atomic_u8_or(&lib->member_flags[member_idx], LNK_LibMemberFlag_LinkedImp);
+    was_linked = !!(~member_flags & LNK_LibMemberFlag_LinkedImp);
+  } else {
+    U8 flag = LNK_LibMemberFlag_LinkedRegular;
+    U8 member_flags = ins_atomic_u8_or(&lib->member_flags[member_idx], LNK_LibMemberFlag_LinkedRegular);
+    was_linked = !!(~member_flags & LNK_LibMemberFlag_LinkedRegular);
+  }
 
   for (LNK_Symbol *leader = link_symbol;;) {
+    LNK_Symbol *slot = ins_atomic_ptr_eval_assign(&lib->member_links[member_idx], 0);
+
     // update slot symbol if it is empty or link symbol comes before symbol in the slot
-    if (slot && slot != &null_symbol) {
+    if (slot) {
       if (lnk_symbol_is_before(slot, leader)) {
         leader = slot;
       }
@@ -241,15 +248,12 @@ lnk_lib_set_link_symbol(LNK_Lib *lib, U32 member_idx, LNK_Symbol *link_symbol)
     }
 
     // try to insert back updated slot symbol
-    LNK_Symbol *swap = ins_atomic_ptr_eval_cond_assign(&lib->member_links[member_idx], leader, &null_symbol);
+    LNK_Symbol *swap = ins_atomic_ptr_eval_cond_assign(&lib->member_links[member_idx], leader, 0);
 
     // exit if slot symbol was null
-    if (swap == &null_symbol) {
+    if (swap == 0) {
       break;
     }
-
-    // reload slot symbol
-    slot = ins_atomic_ptr_eval_assign(&lib->member_links[member_idx], &null_symbol);
   }
 
   return was_linked;

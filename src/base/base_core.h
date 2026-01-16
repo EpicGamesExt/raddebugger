@@ -266,6 +266,7 @@
 #  define ins_atomic_u32_eval_cond_assign(x,k,c)  InterlockedCompareExchange((LONG *)(x),(k),(c))
 #  define ins_atomic_u32_add_eval(x,c)            InterlockedAdd((LONG *)(x), (c))
 #  define ins_atomic_u8_eval_assign(x,c)          InterlockedExchange8((CHAR *)(x), (c))
+#  define ins_atomic_u8_or(x,c)                   InterlockedOr8((char *)(x), (char)c)
 # else
 #  error Atomic intrinsics not defined for this compiler / architecture combination.
 # endif
@@ -284,6 +285,7 @@
 #  define ins_atomic_u32_eval_assign(x,c)         __atomic_exchange_n((x), (c), __ATOMIC_SEQ_CST)
 #  define ins_atomic_u32_eval_cond_assign(x,k,c)  ({ U32 _new = (c); __atomic_compare_exchange_n((U32 *)(x),&_new,(k),0,__ATOMIC_SEQ_CST,__ATOMIC_SEQ_CST); _new; })
 #  define ins_atomic_u8_eval_assign(x,c)          __atomic_exchange_n((x), (c), __ATOMIC_SEQ_CST)
+#  define ins_atomic_u8_or(x,c)                   __atomic_fetch_or((U8 *)(x), (U8)(c), __ATOMIC_SEQ_CST)
 #else
 #  error Atomic intrinsics not defined for this compiler / architecture.
 #endif

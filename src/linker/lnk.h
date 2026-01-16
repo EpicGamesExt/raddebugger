@@ -7,8 +7,9 @@
 
 typedef struct LNK_LibMemberRef
 {
-  LNK_Lib *lib;
-  U32      member_idx;
+  LNK_Lib    *lib;
+  U32         member_idx;
+  LNK_Symbol *link_symbol;
   struct LNK_LibMemberRef *next;
 } LNK_LibMemberRef;
 
@@ -183,6 +184,7 @@ typedef struct
 {
   B32                   search_anti_deps;
   LNK_SymbolTable      *symtab;
+  LNK_Symbol           *import_stub;
   LNK_Lib              *lib;
   LNK_LibMemberRefList *member_ref_lists;
 } LNK_SearchLibTask;

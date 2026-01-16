@@ -1486,8 +1486,9 @@ lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Sym
   B32 was_linked = lnk_lib_set_link_symbol(lib, member_idx, link_symbol);
   if (was_linked) {
     LNK_LibMemberRef *member_ref = push_array(arena, LNK_LibMemberRef, 1);
-    member_ref->lib        = lib;
-    member_ref->member_idx = member_idx;
+    member_ref->lib         = lib;
+    member_ref->member_idx  = member_idx;
+    member_ref->link_symbol = link_symbol;
     lnk_lib_member_ref_list_push_node(queued_members, member_ref);
   }
 }
@@ -1583,7 +1584,7 @@ lnk_link_inputs(TP_Context      *tp,
 
             LNK_LibMemberRef *member_ref  = member_refs[i];
             LNK_Lib          *lib         = member_ref->lib;
-            LNK_Symbol       *link_symbol = lib->member_links[member_ref->member_idx];
+            LNK_Symbol       *link_symbol = member_ref->link_symbol;
 
             COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_ref->member_idx]);
             COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
@@ -1612,35 +1613,21 @@ lnk_link_inputs(TP_Context      *tp,
 
           switch (member_type) {
           case COFF_DataType_Import: {
-            LNK_Symbol *link_symbol = lib->member_links[member_idx];
+            // find import stub
+            LNK_Symbol *import_stub = lnk_symbol_table_search(symtab, str8_lit(LNK_IMPORT_STUB));
 
-            LNK_Symbol *import_symbols[2] = {0};
-            if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
-              import_symbols[0] = link_symbol;
-              import_symbols[1] = lnk_symbol_table_search(symtab, str8_skip(link_symbol->name, str8_lit("__imp_").size));
-            } else {
-              Temp temp = temp_begin(scratch.arena);
-              String8 imp_name = push_str8f(temp.arena, "__imp_%S", link_symbol->name);
-              import_symbols[0] = lnk_symbol_table_search(symtab, imp_name);
-              import_symbols[1] = link_symbol;
-              temp_end(temp);
-            }
+            // same import symbol must never be queued more than once, if it is, there is a bug in the link set logic
+            AssertAlways(member_ref->link_symbol->refs != import_stub->refs);
 
-            for EachIndex(i, ArrayCount(import_symbols)) {
-              LNK_Symbol *import_symbol = import_symbols[i];
-              if (import_symbol == 0) { continue; }
-
-              LNK_Symbol *import_stub = lnk_symbol_table_search(symtab, str8_lit(LNK_IMPORT_STUB));
-
-              // same import symbol must never be queued more than once, if it is, there is a bug in the link set logic
-              AssertAlways(import_symbol->refs != import_stub->refs);
-
-              // replace the import symbol with a stub, which is later replaced with the real import symbol once import obj is ready
-              import_symbol->refs = import_stub->refs;
-            }
+            // replace the import symbol with a stub, which is later replaced with the real import symbol once import obj is ready
+            member_ref->link_symbol->refs = import_stub->refs;
 
             // push import member for import obj generation
-            lnk_lib_member_ref_list_push_node(&link->imports, member_ref);
+            LNK_LibMemberFlags member_flags  = lib->member_flags[member_ref->member_idx];
+            B32                is_first_link = member_flags != (LNK_LibMemberFlag_LinkedRegular | LNK_LibMemberFlag_LinkedImp);
+            if (is_first_link) {
+              lnk_lib_member_ref_list_push_node(&link->imports, member_ref);
+            }
           } break;
           case COFF_DataType_BigObj:
           case COFF_DataType_Obj: {

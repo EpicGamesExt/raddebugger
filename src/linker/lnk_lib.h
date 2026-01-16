@@ -3,6 +3,13 @@
 
 #pragma once
 
+typedef U8 LNK_LibMemberFlags;
+enum
+{
+  LNK_LibMemberFlag_LinkedRegular = (1 << 0),
+  LNK_LibMemberFlag_LinkedImp     = (1 << 1),
+};
+
 typedef struct LNK_Lib
 {
   String8              path;
@@ -13,6 +20,7 @@ typedef struct LNK_Lib
   U32                 *member_offsets;
   U16                 *symbol_indices;
   LNK_Symbol         **member_links;
+  LNK_LibMemberFlags  *member_flags;
   String8Array         symbol_names;
   String8              long_names;
   U64                  input_idx;
