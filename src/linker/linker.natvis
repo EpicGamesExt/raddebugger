@@ -102,6 +102,27 @@
 		</Expand>
 	</Type>
 
+  <Type Name="LNK_ObjSymbolRefNode">
+    <Expand>
+      <ExpandedItem>v</ExpandedItem>
+    </Expand>
+  </Type>
+
+	<Type Name="LNK_Symbol">
+		<Expand>
+      <Item Name="name">name</Item>
+      <CustomListItems MaxItemsPerView="5000">
+        <Variable Name="node" InitialValue="refs"/>
+        <Variable Name="idx" InitialValue="0"/>
+        <Loop>
+          <Break Condition="node == 0"/>
+          <Item>node</Item>
+          <Exec>node = node->next</Exec>
+        </Loop>
+      </CustomListItems>
+		</Expand>
+	</Type>
+
 	<Type Name="LNK_SymbolHashTrieChunkList">
 		<Expand>
       <Item Name="[chunk count]">count</Item>
