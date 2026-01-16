@@ -48,6 +48,7 @@ typedef enum
   LNK_CmdSwitch_D2,
   LNK_CmdSwitch_Entry,
   LNK_CmdSwitch_ErrorReport,
+  LNK_CmdSwitch_Experimental,
   LNK_CmdSwitch_Export,
   LNK_CmdSwitch_FastFail,
   LNK_CmdSwitch_FileAlign,

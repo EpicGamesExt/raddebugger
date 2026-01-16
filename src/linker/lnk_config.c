@@ -40,6 +40,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_ErrorReport,        0, "ERRORREPORT",          "", "Deprecated starting Windows Vista."                                                                    },
   { LNK_CmdSwitch_Export,             1, "EXPORT",               ":SYMBOL", ""                                                                                               },
   { LNK_CmdSwitch_NotImplemented,     0, "EXPORTADMIN",          "", ""                                                                                                      },
+  { LNK_CmdSwitch_Experimental,       0, "EXPERIMENTAL",         "Not supported."                                                                                            },
   { LNK_CmdSwitch_FastFail,           0, "FASTFAIL",             "", "Not used."                                                                                             },
   { LNK_CmdSwitch_NotImplemented,     0, "FASTGENPROFILE",       "", ""                                                                                                      },
   { LNK_CmdSwitch_FailIfMismatch,     1, "FAILIFMISMATCH",       "", ""                                                                                                      },
@@ -1348,6 +1349,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
        }
       }
     }
+  } break;
+
+  case LNK_CmdSwitch_Experimental: {
+    // not supported
   } break;
 
   case LNK_CmdSwitch_FastFail: {
