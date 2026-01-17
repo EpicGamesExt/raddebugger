@@ -3638,42 +3638,57 @@ THREAD_POOL_TASK_FUNC(lnk_gather_base_reloc_pages_task)
 }
 
 internal
+THREAD_POOL_TASK_FUNC(lnk_filter_out_duplicate_base_reloc_entries_task)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+
+  LNK_BaseRelocsTask *task = raw_task;
+
+  HashTable *voff_ht = hash_table_init(scratch.arena, task->page_size);
+  for EachInRange(page_idx, task->serialize.ranges[task_id]) {
+    LNK_BaseRelocPage *page = &task->serialize.pages.v[page_idx];
+
+    U64List unique_entries32 = {0};
+    U64List unique_entries64 = {0};
+
+    // filter out duplicate 32-bit virtual offsets
+    for (U64Node *curr = page->entries_addr32->first, *next; curr != 0; curr = next) {
+      next = curr->next;
+      if (hash_table_search_u64(voff_ht, curr->data)) { continue; }
+      hash_table_push_u64_u64(scratch.arena, voff_ht, curr->data, 0);
+      u64_list_push_node(&unique_entries32, curr);
+    }
+
+    // filter out duplicate 64-bit virtual offsets
+    for (U64Node *curr = page->entries_addr64->first, *next; curr != 0; curr = next) {
+      next = curr->next;
+      if (hash_table_search_u64(voff_ht, curr->data)) { continue; }
+      hash_table_push_u64_u64(scratch.arena, voff_ht, curr->data, 0);
+      u64_list_push_node(&unique_entries64, curr);
+    }
+
+    *page->entries_addr32 = unique_entries32;
+    *page->entries_addr64 = unique_entries64;
+
+    // purge hash table for the next run
+    hash_table_purge(voff_ht);
+  }
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal
 THREAD_POOL_TASK_FUNC(lnk_serialize_base_reloc_pages_task)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
 
-  LNK_BaseRelocsTask *task    = raw_task;
-  HashTable          *voff_ht = hash_table_init(scratch.arena, task->page_size);
-
-  U64  voffs_max = task->page_size;
-  U32 *voffs32   = push_array(scratch.arena, U32, voffs_max);
-  U64 *voffs64   = push_array(scratch.arena, U64, voffs_max);
+  LNK_BaseRelocsTask *task = raw_task;
 
   for EachInRange(page_idx, task->serialize.ranges[task_id]) {
     LNK_BaseRelocPage *page = &task->serialize.pages.v[page_idx];
-
-    // filter out duplicate 32-bit virtual offsets
-    U64 voff_count32 = 0;
-    for EachNode(voff_n, U64Node, page->entries_addr32->first) {
-      if (hash_table_search_u64(voff_ht, voff_n->data)) { continue; }
-      hash_table_push_u64_u64(scratch.arena, voff_ht, voff_n->data, 0);
-      voffs32[voff_count32] = voff_n->data;
-      voff_count32 += 1;
-    }
-
-    // filter out duplicate 64-bit virtual offsets
-    U64 voff_count64 = 0;
-    for EachNode(voff_n, U64Node, page->entries_addr64->first) {
-      if (hash_table_search_u64(voff_ht, voff_n->data)) { continue; }
-      hash_table_push_u64_u64(scratch.arena, voff_ht, voff_n->data, 0);
-      voffs64[voff_count64] = voff_n->data;
-      voff_count64 += 1;
-    }
-
-    // gather step is not deterministic
-    radsort(voffs32, voff_count32, u32_is_before);
-    radsort(voffs64, voff_count64, u64_is_before);
 
     // find block bytes in the buffer
     void *block = task->serialize.buffer + page->buffer_offset;
@@ -3685,18 +3700,22 @@ THREAD_POOL_TASK_FUNC(lnk_serialize_base_reloc_pages_task)
     U16 *reloc_arr_ptr = reloc_arr_base;
 
     // write 32-bit relocation entries
-    for EachIndex(i, voff_count32) {
-      U64 rel_off = voffs32[i] - page->voff;
+    U16 *reloc_entries32 = reloc_arr_ptr;
+    for EachNode(n, U64Node, page->entries_addr32->first) {
+      U64 rel_off = n->data - page->voff;
       *reloc_arr_ptr = PE_BaseRelocMake(PE_BaseRelocKind_HIGHLOW, rel_off);
       reloc_arr_ptr += 1;
     }
+    radsort(reloc_entries32, page->entries_addr32->count, u16_is_before);
 
     // write 64-bit relocation entries
-    for EachIndex(i, voff_count64) {
-      U64 rel_off = voffs64[i] - page->voff;
+    U16 *reloc_entries64 = reloc_arr_ptr;
+    for EachNode(n, U64Node, page->entries_addr64->first) {
+      U64 rel_off = n->data - page->voff;
       *reloc_arr_ptr = PE_BaseRelocMake(PE_BaseRelocKind_DIR64, rel_off);
       reloc_arr_ptr += 1;
     }
+    radsort(reloc_entries64, page->entries_addr64->count, u16_is_before);
 
     // compute block size
     U64 reloc_arr_size     = IntFromPtr(reloc_arr_ptr - reloc_arr_base) * sizeof(reloc_arr_ptr[0]);
@@ -3710,9 +3729,6 @@ THREAD_POOL_TASK_FUNC(lnk_serialize_base_reloc_pages_task)
     // write page header
     *page_voff_ptr  = safe_cast_u32(page->voff);
     *block_size_ptr = safe_cast_u32(block_size_aligned);
-
-    // purge hash table for the next run
-    hash_table_purge(voff_ht);
   }
 
   scratch_end(scratch);
@@ -3786,6 +3802,10 @@ lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U6
   
   String8 base_relocs = {0};
   {
+    task.serialize.pages       = pages;
+    task.serialize.ranges      = tp_divide_work(scratch.arena, pages.count, tp->worker_count);
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_filter_out_duplicate_base_reloc_entries_task, &task);
+
     ProfBegin("Compute Buffer Size");
     U64 buffer_size = 0;
     for EachIndex(page_idx, pages.count) {
@@ -3804,8 +3824,6 @@ lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U6
 
     task.serialize.buffer_size = buffer_size;
     task.serialize.buffer      = buffer;
-    task.serialize.pages       = pages;
-    task.serialize.ranges      = tp_divide_work(scratch.arena, pages.count, tp->worker_count);
     tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_serialize_base_reloc_pages_task, &task, "Serialize");
 
     base_relocs = str8(task.serialize.buffer, task.serialize.buffer_size);

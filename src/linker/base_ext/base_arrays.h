@@ -30,6 +30,7 @@ typedef struct VoidNode
 
 ////////////////////////////////
 
+internal void      u64_list_push_node(U64List *list, U64Node *n);
 internal U64Node * u64_list_push(Arena *arena, U64List *list, U64 data);
 internal void      u64_list_concat_in_place(U64List *list, U64List *to_concat);
 internal U64Array  u64_array_from_list(Arena *arena, U64List *list);
