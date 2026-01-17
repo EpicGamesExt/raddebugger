@@ -208,7 +208,11 @@ internal B32
 os_commit(void *ptr, U64 size)
 {
   B32 result = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
-  w32_rio_functions.RIODeregisterBuffer(w32_rio_functions.RIORegisterBuffer(ptr, size));
+  if (w32_rio_functions.RIORegisterBuffer)
+  {
+    // wine does not implement these functions
+    w32_rio_functions.RIODeregisterBuffer(w32_rio_functions.RIORegisterBuffer(ptr, size));
+  }
   return result;
 }
 
@@ -1565,7 +1569,43 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
 #else
 #  error Arch not supported!
 #endif
-          
+
+#if BUILD_CONSOLE_INTERFACE
+          buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nCreate a new issue with this report at %S.\n\n", BUILD_ISSUES_LINK_STRING_LITERAL);
+#else
+          buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen,
+              L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue at\n"
+              L"<a href=\"%S\">%S</a>\n\n", BUILD_ISSUES_LINK_STRING_LITERAL, BUILD_ISSUES_LINK_STRING_LITERAL);
+#endif
+          buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"Call stack:\n");
+
+          U64 frame_offset = 0;
+
+          if (frame.AddrPC.Offset == 0)
+          {
+            // if IP address is 0 then most likely we have called indirectly on NULL function pointer
+            // which means no useful stack unwinding will happen, because there's no unwind info for address 0
+            // but we can try reading 8 bytes of return address from stack, and start unwinding there
+
+            ULONG_PTR hi, lo;
+            GetCurrentThreadStackLimits(&lo, &hi);
+            if (frame.AddrStack.Offset >= lo && frame.AddrStack.Offset <= hi - sizeof(void*))
+            {
+              frame.AddrPC.Offset = *(DWORD64*)frame.AddrStack.Offset - 1;
+              frame.AddrStack.Offset += sizeof(void*);
+#if defined(_M_AMD64)
+              context->Rip = frame.AddrPC.Offset;
+              context->Rsp = frame.AddrStack.Offset;
+#elif defined(_M_ARM64)
+              context->Pc = frame.AddrPC.Offset;
+              context->Sp = frame.AddrStack.Offset;
+#endif
+            }
+
+            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"1. [NULL]\n");
+            frame_offset = 1;
+          }
+
           for(U32 idx=0; ;idx++)
           {
             const U32 max_frames = 32;
@@ -1586,19 +1626,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
               break;
             }
             
-            if(idx==0)
-            {
-#if BUILD_CONSOLE_INTERFACE
-              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nCreate a new issue with this report at %S.\n\n", BUILD_ISSUES_LINK_STRING_LITERAL);
-#else
-              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen,
-                                   L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue at\n"
-                                   L"<a href=\"%S\">%S</a>\n\n", BUILD_ISSUES_LINK_STRING_LITERAL, BUILD_ISSUES_LINK_STRING_LITERAL);
-#endif
-              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"Call stack:\n");
-            }
-            
-            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"%u. [0x%I64x]", idx + 1, address);
+            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"%u. [0x%I64x]", frame_offset + idx + 1, address);
             
             struct {
               SYMBOL_INFOW info;
