@@ -8,6 +8,7 @@ enum
 {
   LNK_LibMemberFlag_LinkedRegular = (1 << 0),
   LNK_LibMemberFlag_LinkedImp     = (1 << 1),
+  LNK_LibMemberFlag_WasQueued     = (1 << 2),
 };
 
 typedef struct LNK_Lib

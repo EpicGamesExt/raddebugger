@@ -1623,9 +1623,8 @@ lnk_link_inputs(TP_Context      *tp,
             member_ref->link_symbol->refs = import_stub->refs;
 
             // push import member for import obj generation
-            LNK_LibMemberFlags member_flags  = lib->member_flags[member_ref->member_idx];
-            B32                is_first_link = member_flags != (LNK_LibMemberFlag_LinkedRegular | LNK_LibMemberFlag_LinkedImp);
-            if (is_first_link) {
+            if (!(lib->member_flags[member_ref->member_idx] & LNK_LibMemberFlag_WasQueued)) {
+              lib->member_flags[member_ref->member_idx] |= LNK_LibMemberFlag_WasQueued;
               lnk_lib_member_ref_list_push_node(&link->imports, member_ref);
             }
           } break;
