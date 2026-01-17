@@ -2084,9 +2084,9 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   config->build_imp_lib             = 1;
   config->build_exp                 = 1;
   config->heap_reserve              = MB(1);
-  config->heap_commit               = KB(1);
+  config->heap_commit               = KB(4);
   config->stack_reserve             = MB(1);
-  config->stack_commit              = KB(1);
+  config->stack_commit              = KB(4);
   config->pdb_hash_type_names       = LNK_TypeNameHashMode_None;
   config->pdb_hash_type_name_length = 8;
   config->data_dir_count            = PE_DataDirectoryIndex_COUNT;
