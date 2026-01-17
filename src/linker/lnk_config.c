@@ -1259,9 +1259,9 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     } else {
       String8 value = value_strings.first->string;
       if (str8_match_lit("unload", value, StringMatchFlag_CaseInsensitive)) {
-        config->import_table_emit_uiat = 1;
+        config->import_table_emit_uiat = LNK_SwitchState_Yes;
       } else if (str8_match_lit("nobind", value, StringMatchFlag_CaseInsensitive)) {
-        config->import_table_emit_biat = 0;
+        config->import_table_emit_biat = LNK_SwitchState_No;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown parameter \"%S\"", value);
       }
@@ -2151,6 +2151,13 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   // don't emit bind table with /ALLOWBIND:NO
   if (config->dll_characteristics & PE_DllCharacteristic_NO_BIND) {
     config->import_table_emit_biat = LNK_SwitchState_No;
+  }
+
+  if (config->import_table_emit_biat == LNK_SwitchState_Null) {
+    config->import_table_emit_biat = LNK_SwitchState_Yes;
+  }
+  if (config->import_table_emit_uiat == LNK_SwitchState_Null) {
+    config->import_table_emit_uiat = LNK_SwitchState_Yes;
   }
   
   // set flags for /OPT
