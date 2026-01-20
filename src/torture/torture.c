@@ -4871,6 +4871,65 @@ exit:;
 }
 
 internal T_Result
+t_defer_impl_link_to_second_search_pass(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  String8 imp_ref_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = { 0xc3 };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("entry"), 0, sect);
+    coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_foo"));
+    coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("func")); // force linker to pull obj from the lib
+    imp_ref_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 impl_ref_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = { 0xc3 };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("func"), 0, sect);
+    coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("foo")); // on a second search pass force linker to look up same import
+    impl_ref_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 impl_ref_lib;
+  {
+    COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
+    coff_lib_writer_push_obj(lib_writer, str8_lit("impl_ref.obj"), impl_ref_obj);
+    impl_ref_lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
+    coff_lib_writer_release(&lib_writer);
+  }
+
+  String8 foo_lib;
+  {
+    COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
+    coff_lib_writer_push_import(lib_writer, COFF_MachineType_X64, ~0u, str8_lit("foo.dll"), COFF_ImportBy_Name, str8_lit("foo"), 0, COFF_ImportHeader_Code);
+    foo_lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
+    coff_lib_writer_release(&lib_writer);
+  }
+
+  if (!t_write_file(str8_lit("imp_ref.obj"), imp_ref_obj))   { goto exit; }
+  if (!t_write_file(str8_lit("impl_ref.lib"), impl_ref_lib)) { goto exit; }
+  if (!t_write_file(str8_lit("foo.lib"), foo_lib))           { goto exit; }
+  if (!t_write_file(str8_lit("foo2.lib"), foo_lib))          { goto exit; }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe foo.lib foo2.lib imp_ref.obj impl_ref.lib");
+  if (linker_exit_code != 0) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
 t_opt_ref_dangling_section(void)
 {
   Temp scratch = scratch_begin(0,0);
@@ -5276,6 +5335,7 @@ entry_point(CmdLine *cmdline)
     T(function_pad_min),
     T(first_member_header),
     T(second_member_header),
+    T(defer_impl_link_to_second_search_pass),
 
     // DWARF Expression Tests
     T(value_in_register),
