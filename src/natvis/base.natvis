@@ -153,6 +153,7 @@
     <AlternativeType Name="DW_LocList"/>
     <AlternativeType Name="COFF_LibWriterSymbolList"/>
     <AlternativeType Name="COFF_LibWriterMemberList"/>
+    <AlternativeType Name="PE_BaseRelocBlockList"/>
     <DisplayString>{{ count={count} first={first} }} </DisplayString>
     <Expand>
 			<Item Name="[count]">count</Item>
