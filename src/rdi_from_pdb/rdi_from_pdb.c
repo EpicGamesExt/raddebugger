@@ -3437,6 +3437,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           B32 defrange_target_is_param = 0;
           U64 procedure_num = 0;
           U64 procedure_base_voff = 0;
+          U64 regrel_idx = 0;
+          RDIM_Symbol *curr_proc_symbol = 0;
           CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges + sym_rec_range.min;
           CV_RecRange *rec_ranges_opl   = sym->sym_ranges.ranges + sym_rec_range.max;
           typedef struct P2R_ScopeNode P2R_ScopeNode;
@@ -3675,17 +3677,17 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 // rjf: build procedure symbol
                 if(params->subset_flags & (RDIM_SubsetFlag_Procedures|RDIM_SubsetFlag_ProcedureNameMap))
                 {
-                  RDIM_Symbol *procedure_symbol = rdim_symbol_chunk_list_push(arena, sym_procedures, sym_procedures_chunk_cap);
-                  procedure_symbol->is_extern        = (kind == CV_SymKind_GPROC32);
-                  procedure_symbol->name             = name;
-                  procedure_symbol->link_name        = link_name;
-                  procedure_symbol->type             = type;
-                  procedure_symbol->container_symbol = container_symbol;
-                  procedure_symbol->container_type   = container_type;
-                  procedure_symbol->root_scope       = procedure_root_scope;
+                  curr_proc_symbol = rdim_symbol_chunk_list_push(arena, sym_procedures, sym_procedures_chunk_cap);
+                  curr_proc_symbol->is_extern        = (kind == CV_SymKind_GPROC32);
+                  curr_proc_symbol->name             = name;
+                  curr_proc_symbol->link_name        = link_name;
+                  curr_proc_symbol->type             = type;
+                  curr_proc_symbol->container_symbol = container_symbol;
+                  curr_proc_symbol->container_type   = container_type;
+                  curr_proc_symbol->root_scope       = procedure_root_scope;
                   if(procedure_root_scope != 0)
                   {
-                    procedure_root_scope->symbol = procedure_symbol;
+                    procedure_root_scope->symbol = curr_proc_symbol;
                   }
                 }
                 
@@ -3701,98 +3703,104 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: increment procedure counter
                 procedure_num += 1;
+
+                // reset S_REGREL32 index
+                regrel_idx = 0;
               }break;
               
               //- rjf: REGREL32
               case CV_SymKind_REGREL32:
-              if(params->subset_flags & RDIM_SubsetFlag_Locals)
               {
-                // TODO(rjf): apparently some of the information here may end up being
-                // redundant with "better" information from  CV_SymKind_LOCAL record.
-                // we don't currently handle this, but if those cases arise then it
-                // will obviously be better to prefer the better information from both
-                // records.
-                
-                // rjf: no containing scope? -> malformed data; locals cannot be produced
-                // outside of a containing scope
-                if(top_scope_node == 0)
+                if(params->subset_flags & RDIM_SubsetFlag_Locals)
                 {
-                  break;
-                }
-                
-                // rjf: unpack sym
-                CV_SymRegrel32 *regrel32 = (CV_SymRegrel32 *)sym_header_struct_base;
-                String8 name = str8_cstring_capped(regrel32+1, sym_data_opl);
-                RDIM_Type *type = p2r_type_ptr_from_itype(regrel32->itype);
-                CV_Reg cv_reg = regrel32->reg;
-                U32 var_off = regrel32->reg_off;
-                
-                // rjf: determine if this is a parameter
-                RDI_LocalKind local_kind = RDI_LocalKind_Variable;
-                {
-                  B32 is_stack_reg = 0;
-                  switch(arch)
+                  // TODO(rjf): apparently some of the information here may end up being
+                  // redundant with "better" information from  CV_SymKind_LOCAL record.
+                  // we don't currently handle this, but if those cases arise then it
+                  // will obviously be better to prefer the better information from both
+                  // records.
+                  
+                  // rjf: no containing scope? -> malformed data; locals cannot be produced
+                  // outside of a containing scope
+                  if(top_scope_node == 0)
                   {
-                    default:{}break;
-                    case RDI_Arch_X64:{is_stack_reg = (cv_reg == CV_Regx64_RSP || cv_reg == CV_Regx64_RBP);}break;
+                    break;
                   }
-                  if(is_stack_reg)
-                  {
-                    U32 frame_size = 0xFFFFFFFF;
-                    if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num <= procedure_frameprocs_count)
-                    {
-                      CV_SymFrameproc *frameproc = procedure_frameprocs[procedure_num-1];
-                      frame_size = frameproc->frame_size;
-                    }
-                    if(var_off > frame_size)
-                    {
-                      local_kind = RDI_LocalKind_Parameter;
-                    }
-                  }
-                }
-                
-                // TODO(rjf): is this correct?
-                // rjf: redirect type, if 0, and if outside frame, to the return type of the
-                // containing procedure
-                if(local_kind == RDI_LocalKind_Parameter && regrel32->itype == 0 &&
-                   top_scope_node->scope->symbol != 0 &&
-                   top_scope_node->scope->symbol->type != 0)
-                {
-                  type = top_scope_node->scope->symbol->type->direct_type;
-                }
-                
-                // rjf: build local
-                RDIM_Scope *scope = top_scope_node->scope;
-                RDIM_Local *local = rdim_scope_push_local(arena, sym_scopes, scope);
-                local->kind = local_kind;
-                local->name = name;
-                local->type = type;
-                
-                // rjf: add location info to local
-                if(type != 0)
-                {
+                  
+                  // rjf: unpack sym
+                  CV_SymRegrel32 *regrel32 = (CV_SymRegrel32 *)sym_header_struct_base;
+                  String8 name = str8_cstring_capped(regrel32+1, sym_data_opl);
+                  RDIM_Type *type = p2r_type_ptr_from_itype(regrel32->itype);
+                  CV_Reg cv_reg = regrel32->reg;
+                  U32 var_off = regrel32->reg_off;
+                  
+                  // rjf: determine if this is a parameter
+                  RDI_LocalKind local_kind = regrel_idx < curr_proc_symbol->type->count ? RDI_LocalKind_Parameter : RDI_LocalKind_Variable;
+
                   // rjf: determine if we need an extra indirection to the value
                   B32 extra_indirection_to_value = 0;
-                  switch(arch)
+                  if(type != 0)
                   {
-                    case RDI_Arch_X64:
+                    switch(arch)
                     {
-                      extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)));
-                    }break;
+                      case RDI_Arch_X64:
+                      {
+                        extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)));
+                      }break;
+                    }
+                  }
+
+                  // If the return local does not fit in a register MSVC does not assign it a type.
+                  // So we infer the return type from the signature.
+                  //
+                  // rjf: redirect type, if 0, and if outside frame, to the return type of the
+                  // containing procedure
+                  {
+                    B32 is_stack_reg = 0;
+                    switch(arch)
+                    {
+                      default:{}break;
+                      case RDI_Arch_X64:{is_stack_reg = (cv_reg == CV_Regx64_RSP || cv_reg == CV_Regx64_RBP);}break;
+                    }
+                    if(is_stack_reg)
+                    {
+                      if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num <= procedure_frameprocs_count)
+                      {
+                        CV_SymFrameproc *frameproc = procedure_frameprocs[procedure_num-1];
+                        if(var_off > frameproc->frame_size && regrel32->itype == 0 &&
+                           top_scope_node->scope->symbol != 0 &&
+                           top_scope_node->scope->symbol->type != 0)
+                        {
+                          type = top_scope_node->scope->symbol->type->direct_type;
+                          extra_indirection_to_value = 1;
+                        }
+                      }
+                    }
                   }
                   
-                  // rjf: get raddbg register code
-                  RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(arch, cv_reg);
-                  // TODO(rjf): real byte_size & byte_pos from cv_reg goes here
-                  U32 byte_size = 8;
-                  U32 byte_pos = 0;
+                  // rjf: build local
+                  RDIM_Scope *scope = top_scope_node->scope;
+                  RDIM_Local *local = rdim_scope_push_local(arena, sym_scopes, scope);
+                  local->kind = local_kind;
+                  local->name = name;
+                  local->type = type;
                   
-                  // rjf: build location
-                  RDIM_LocationInfo loc_info = p2r_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
-                  RDIM_Location *loc2 = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
-                  RDIM_Rng1U64 voff_range = {0, max_U64};
-                  rdim_local_push_location_case(arena, sym_scopes, local, loc2, voff_range);
+                  // rjf: add location info to local
+                  {
+                    // rjf: get raddbg register code
+                    RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(arch, cv_reg);
+                    // TODO(rjf): real byte_size & byte_pos from cv_reg goes here
+                    U32 byte_size = 8;
+                    U32 byte_pos = 0;
+                    
+                    // rjf: build location
+                    RDIM_LocationInfo loc_info = p2r_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
+                    RDIM_Location *loc2 = rdim_location_chunk_list_push_new(arena, sym_locations, sym_locations_chunk_cap, &loc_info);
+                    RDIM_Rng1U64 voff_range = {0, max_U64};
+                    rdim_local_push_location_case(arena, sym_scopes, local, loc2, voff_range);
+                  }
                 }
+
+                regrel_idx += 1;
               }break;
               
               //- rjf: LTHREAD32/GTHREAD32
