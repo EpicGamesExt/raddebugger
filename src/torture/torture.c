@@ -4568,11 +4568,11 @@ t_delay_import(void)
   if (!str8_match(a_import->name, str8_lit("a.dll"), 0)) { goto exit; }
   if (a_import->module_handle_voff == 0)                 { goto exit; }
   if (a_import->name_table_voff == 0)                    { goto exit; }
-  if (a_import->bound_table_voff != 0)                   { goto exit; }
-  if (a_import->unload_table_voff != 0)                  { goto exit; }
+  if (a_import->bound_table_voff == 0)                   { goto exit; }
+  if (a_import->unload_table_voff == 0)                  { goto exit; }
   if (a_import->time_stamp != 0)                         { goto exit; }
-  if (a_import->bound_table_count != 0)                  { goto exit; }
-  if (a_import->unload_table_count != 0)                 { goto exit; }
+  if (a_import->bound_table_count != 2)                  { goto exit; }
+  if (a_import->unload_table_count != 2)                 { goto exit; }
   if (a_import->import_count != 2)                       { goto exit; }
 
   PE_ParsedImport *return_1 = &a_import->imports[0];
@@ -4590,11 +4590,11 @@ t_delay_import(void)
   if (!str8_match(b_import->name, str8_lit("b.dll"), 0)) { goto exit; }
   if (b_import->module_handle_voff == 0)                 { goto exit; }
   if (b_import->name_table_voff == 0)                    { goto exit; }
-  if (b_import->bound_table_voff != 0)                   { goto exit; }
-  if (b_import->unload_table_voff != 0)                  { goto exit; }
+  if (b_import->bound_table_voff == 0)                   { goto exit; }
+  if (b_import->unload_table_voff == 0)                  { goto exit; }
   if (b_import->time_stamp != 0)                         { goto exit; }
-  if (b_import->bound_table_count != 0)                  { goto exit; }
-  if (b_import->unload_table_count != 0)                 { goto exit; }
+  if (b_import->bound_table_count != 2)                  { goto exit; }
+  if (b_import->unload_table_count != 2)                 { goto exit; }
   if (b_import->import_count != 2)                       { goto exit; }
 
   PE_ParsedImport *return_123 = &b_import->imports[0];
