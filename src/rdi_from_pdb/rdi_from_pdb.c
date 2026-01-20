@@ -3437,6 +3437,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           B32 defrange_target_is_param = 0;
           U64 procedure_num = 0;
           U64 procedure_base_voff = 0;
+          CV_ProcFlags proc_flags = 0;
           U64 regrel_idx = 0;
           RDIM_Symbol *curr_proc_symbol = 0;
           CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges + sym_rec_range.min;
@@ -3706,12 +3707,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
 
                 // reset S_REGREL32 index
                 regrel_idx = 0;
+
+                proc_flags = proc32->flags;
               }break;
               
               //- rjf: REGREL32
               case CV_SymKind_REGREL32:
               {
-                if(params->subset_flags & RDIM_SubsetFlag_Locals)
+                if(params->subset_flags & RDIM_SubsetFlag_Locals && !(proc_flags & CV_ProcFlag_OptDbgInfo))
                 {
                   // TODO(rjf): apparently some of the information here may end up being
                   // redundant with "better" information from  CV_SymKind_LOCAL record.
