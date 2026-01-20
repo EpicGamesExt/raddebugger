@@ -1196,13 +1196,13 @@ lnk_lib_member_ref_list_concat_in_place_array(LNK_LibMemberRefList *list, LNK_Li
   SLLConcatInPlaceArray(list, to_concat_arr, count);
 }
 
+static LNK_LibMemberInfo *g_sort_lib_member_context;
+
 internal int
 lnk_lib_member_ref_is_before(void *raw_a, void *raw_b)
 {
   LNK_LibMemberRef **a = raw_a, **b = raw_b;
-  LNK_Symbol *a_pull_in_ref = (*a)->lib->member_links[(*a)->member_idx];
-  LNK_Symbol *b_pull_in_ref = (*b)->lib->member_links[(*b)->member_idx];
-  return lnk_symbol_is_before(a_pull_in_ref, b_pull_in_ref);
+  return lnk_symbol_is_before(g_sort_lib_member_context[(*a)->member_idx].link, g_sort_lib_member_context[(*b)->member_idx].link);
 }
 
 internal LNK_LibMemberRef **
@@ -1481,9 +1481,40 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
 }
 
 internal void
-lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Symbol *link_symbol, LNK_Lib *lib, U32 member_idx)
+lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Symbol *link_symbol, LNK_Lib *lib, LNK_LibMemberInfo *member_infos, U32 member_idx)
 {
-  B32 was_linked = lnk_lib_set_link_symbol(lib, member_idx, link_symbol);
+  // associate link symbol to lib member
+  for (LNK_Symbol *leader = link_symbol;;) {
+    LNK_Symbol *slot = ins_atomic_ptr_eval_assign(&member_infos[member_idx].link, 0);
+
+    // update slot symbol if it is empty or link symbol comes before symbol in the slot
+    if (slot) {
+      if (lnk_symbol_is_before(slot, leader)) {
+        leader = slot;
+      }
+    } else {
+      leader = link_symbol;
+    }
+
+    // try to insert back updated slot symbol
+    LNK_Symbol *swap = ins_atomic_ptr_eval_cond_assign(&member_infos[member_idx].link, leader, 0);
+
+    // exit if slot symbol was null
+    if (swap == 0) {
+      break;
+    }
+  }
+
+  B32 was_linked;
+  if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
+    U8 member_flags = ins_atomic_u8_or(&member_infos[member_idx].flags, LNK_LibMemberFlag_LinkedImp);
+    was_linked = !(member_flags & LNK_LibMemberFlag_LinkedImp);
+  } else {
+    U8 flag = LNK_LibMemberFlag_LinkedRegular;
+    U8 member_flags = ins_atomic_u8_or(&member_infos[member_idx].flags, LNK_LibMemberFlag_LinkedRegular);
+    was_linked = !(member_flags & LNK_LibMemberFlag_LinkedRegular);
+  }
+
   if (was_linked) {
     LNK_LibMemberRef *member_ref = push_array(arena, LNK_LibMemberRef, 1);
     member_ref->lib         = lib;
@@ -1500,6 +1531,7 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
   LNK_Lib              *lib              = task->lib;
   LNK_SymbolTable      *symtab           = task->symtab;
   B32                   search_anti_deps = task->search_anti_deps;
+  LNK_LibMemberInfo    *lib_member_infos = task->lib_member_infos;
   LNK_LibMemberRefList *member_ref_list  = &task->member_ref_lists[task_id];
 
   for EachNode(c, LNK_SymbolHashTrieChunk, symtab->search_chunks[task_id].first) {
@@ -1512,14 +1544,14 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
       if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
         U32 member_idx;
         if (lnk_search_lib(lib, symbol->name, &member_idx)) {
-          lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
+          lnk_queue_lib_member(arena, member_ref_list, symbol, lib, lib_member_infos, member_idx);
         }
       } else if (symbol_interp == COFF_SymbolValueInterp_Weak) {
         COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol_parsed, symbol_ref.obj->header.is_big_obj);
         if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
           U32 member_idx;
           if (lnk_search_lib(lib, symbol->name, &member_idx)) {
-            lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
+            lnk_queue_lib_member(arena, member_ref_list, symbol, lib, lib_member_infos, member_idx);
           }
         } else if (weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
           if (search_anti_deps) {
@@ -1530,7 +1562,7 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
               if (dep_interp == COFF_SymbolValueInterp_Weak) {
                 U32 member_idx;
                 if (lnk_search_lib(lib, symbol_parsed.name, &member_idx)) {
-                  lnk_queue_lib_member(arena, member_ref_list, symbol, lib, member_idx);
+                  lnk_queue_lib_member(arena, member_ref_list, symbol, lib, lib_member_infos, member_idx);
                 }
               }
             }
@@ -1560,13 +1592,19 @@ lnk_link_inputs(TP_Context      *tp,
     for EachNode(lib_n, LNK_LibNode, link->libs.first) {
       LNK_Lib *lib = &lib_n->data;
 
+      LNK_LibMemberInfo *lib_member_infos = hash_table_search_raw_raw(link->lib_member_infos_ht, lib);
+      if (lib_member_infos == 0) {
+        lib_member_infos = push_array(link->arena, LNK_LibMemberInfo, lib->member_count);
+        hash_table_push_raw_raw(link->arena, link->lib_member_infos_ht, lib, lib_member_infos);
+      }
+      
       ProfBeginV("Search %S", str8_skip_last_slash(lib->path));
       do {
         lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
         // search symbols in lib
         MemoryZeroTyped(member_ref_lists, tp->worker_count);
-        tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &(LNK_SearchLibTask){ .search_anti_deps = search_anti_deps, .lib = lib, .symtab = symtab, .member_ref_lists = member_ref_lists });
+        tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &(LNK_SearchLibTask){ .search_anti_deps = search_anti_deps, .lib = lib, .symtab = symtab, .lib_member_infos = lib_member_infos, .member_ref_lists = member_ref_lists });
 
         LNK_LibMemberRefList queued_members = {0};
         lnk_lib_member_ref_list_concat_in_place_array(&queued_members, member_ref_lists, tp->worker_count);
@@ -1574,6 +1612,7 @@ lnk_link_inputs(TP_Context      *tp,
         // sort library member refs to match the order of their appearance in obj symbol tables
         LNK_LibMemberRef **member_refs = lnk_array_from_lib_member_list(scratch.arena, queued_members);
         //qsort(member_refs, queued_members.count, sizeof(member_refs[0]), lnk_lib_member_ref_compar);
+        g_sort_lib_member_context = lib_member_infos;
         radsort(member_refs, queued_members.count, lnk_lib_member_ref_is_before);
 
         if (queued_members.count) {
@@ -1619,18 +1658,21 @@ lnk_link_inputs(TP_Context      *tp,
             // same import symbol must never be queued more than once, if it is, there is a bug in the link set logic
             AssertAlways(member_ref->link_symbol->refs != import_stub->refs);
 
-            // replace the import symbol with a stub, which is later replaced with the real import symbol once import obj is ready
+            // replace the import symbol with a stub, which is later replaced with the real import symbol once import obj is ready.
             member_ref->link_symbol->refs = import_stub->refs;
 
             // push import member for import obj generation
-            if (!(lib->member_flags[member_ref->member_idx] & LNK_LibMemberFlag_WasQueued)) {
-              lib->member_flags[member_ref->member_idx] |= LNK_LibMemberFlag_WasQueued;
+            if (!(lib_member_infos[member_ref->member_idx].flags & LNK_LibMemberFlag_WasGenQueued)) {
+              lib_member_infos[member_ref->member_idx].flags |= LNK_LibMemberFlag_WasGenQueued;
               lnk_lib_member_ref_list_push_node(&link->imports, member_ref);
             }
           } break;
           case COFF_DataType_BigObj:
           case COFF_DataType_Obj: {
             if (lib->type == COFF_Archive_Thin) {
+              Assert(!(lib_member_infos[member_ref->member_idx].flags & LNK_LibMemberFlag_WasGenQueued));
+              lib_member_infos[member_ref->member_idx].flags |= LNK_LibMemberFlag_WasGenQueued;
+
               // obj path in thin archive is relative to the directory with lib
               String8List obj_path_list = {0};
               str8_list_push(scratch.arena, &obj_path_list, str8_chop_last_slash(lib->path));
@@ -1696,7 +1738,7 @@ lnk_link_inputs(TP_Context      *tp,
   ProfEnd();
 }
 
-internal LNK_Link *
+internal LNK_LinkResult
 lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab)
 {
   ProfBeginFunction();
@@ -1706,11 +1748,13 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   // init link context
   //
   LNK_Link *link = push_array(arena->v[0], LNK_Link, 1);
+  link->arena                      = arena_alloc();
   link->last_symbol_input          = &link->objs.first;
   link->last_include               = &config->include_symbol_list.first;
   link->last_default_lib           = &config->input_default_lib_list.first;
   link->last_obj_lib               = &config->input_obj_lib_list.first;
   link->last_cmd_lib               = &config->input_list[LNK_Input_Lib].first;
+  link->lib_member_infos_ht        = hash_table_init(link->arena, config->input_list[LNK_Input_Lib].node_count * 2);
   link->try_to_resolve_entry_point = 1;
 
   // input :null_obj
@@ -1750,9 +1794,10 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     String8List  static_dll_names   = {0};
 
     for EachNode(member_ref, LNK_LibMemberRef, link->imports.first) {
-      LNK_Lib    *lib         = member_ref->lib;
-      U64         member_idx  = member_ref->member_idx;
-      LNK_Symbol *link_symbol = lib->member_links[member_idx];
+      LNK_Lib           *lib          = member_ref->lib;
+      U64                member_idx   = member_ref->member_idx;
+      LNK_LibMemberInfo *member_infos = hash_table_search_raw_raw(link->lib_member_infos_ht, lib);
+      LNK_Symbol        *link_symbol  = member_infos[member_idx].link;
 
       COFF_ArchiveMember             member_info   = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_idx]);
       COFF_DataType                  member_type   = coff_data_type_from_data(member_info.data);
@@ -2131,6 +2176,18 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   }
 
   //
+  // fill out result
+  //
+  LNK_LinkResult result = {0};
+  result.objs = link->objs;
+  result.libs = link->libs;
+
+  //
+  // release link context
+  //
+  arena_release(link->arena);
+
+  //
   // log
   //
   if (lnk_get_log_status(LNK_Log_InputObj)) {
@@ -2146,7 +2203,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
 
   scratch_end(scratch);
   ProfEnd();
-  return link;
+  return result;
 }
 
 internal void
@@ -4975,12 +5032,12 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   //
   // Link Image
   //
-  LNK_Link *link = lnk_link_image(tp, arena, config, inputer, symtab);
+  LNK_LinkResult link = lnk_link_image(tp, arena, config, inputer, symtab);
 
-  U64       objs_count = link->objs.count;
-  U64       libs_count = link->libs.count;
-  LNK_Obj **objs       = lnk_array_from_obj_list(scratch.arena, link->objs);
-  LNK_Lib **libs       = lnk_array_from_lib_list(scratch.arena, link->libs);
+  U64       objs_count = link.objs.count;
+  U64       libs_count = link.libs.count;
+  LNK_Obj **objs       = lnk_array_from_obj_list(scratch.arena, link.objs);
+  LNK_Lib **libs       = lnk_array_from_lib_list(scratch.arena, link.libs);
 
   //
   // Layout Image
