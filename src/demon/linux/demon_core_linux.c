@@ -208,18 +208,19 @@ internal ELF_Hdr64
 dmn_lnx_ehdr_from_pid(pid_t pid)
 {
   Temp scratch = scratch_begin(0, 0);
-  B32       is_read  = 0;
-  ELF_Hdr64 exe      = {0};
-  String8   exe_path = dmn_lnx_exe_path_from_pid(scratch.arena, pid);
-  if(exe_path.size != 0)
+
+  ELF_Hdr64 exe     = {0};
+  B32       is_read = 0;
+
+  char *exe_path = (char *)push_str8f(scratch.arena, "/proc/%d/exe", pid).str;
+  int   exe_fd   = OS_LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
+
+  if(exe_fd >= 0)
   {
-    int exe_fd = OS_LNX_RETRY_ON_EINTR(open((char *)exe_path.str, O_RDONLY));
-    if(exe_fd != -1)
-    {
-      is_read = elf_read_ehdr(dmn_lnx_machine_op_mem_read, &exe_fd, 0, &exe);
-      close(exe_fd);
-    }   
+    is_read = elf_read_ehdr(dmn_lnx_machine_op_mem_read, &exe_fd, 0, &exe);
+    OS_LNX_RETRY_ON_EINTR(close(exe_fd));
   }
+
   Assert(is_read);
   scratch_end(scratch);
   return exe;
