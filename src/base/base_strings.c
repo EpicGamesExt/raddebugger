@@ -1122,6 +1122,21 @@ str8_list_push_frontf(Arena *arena, String8List *list, char *fmt, ...)
   return result;
 }
 
+internal String8Node*
+str8_list_pop_front(String8List *list)
+{
+  String8Node *node = 0;
+  if(list->node_count)
+  {
+    node = list->first;
+    Assert(list->total_size >= list->first->string.size);
+    list->node_count -= 1;
+    list->total_size -= list->first->string.size;
+    SLLQueuePop(list->first, list->last);
+  }
+  return node;
+}
+
 internal String8List
 str8_list_copy(Arena *arena, String8List *list)
 {
