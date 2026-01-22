@@ -139,7 +139,7 @@ dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
 
   String8 dl_path = {0};
 
-  int maps_fd = open(str8f(scratch.arena, "/proc/%d/maps", pid).cstr, O_RDONLY);
+  int maps_fd = OS_LNX_RETRY_ON_EINTR(open(str8f(scratch.arena, "/proc/%d/maps", pid).cstr, O_RDONLY));
   if(maps_fd != -1)
   {
     // read entire /proc/pid/maps
@@ -195,7 +195,7 @@ dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
       }
     }
 
-    close(maps_fd);
+    OS_LNX_RETRY_ON_EINTR(close(maps_fd));
   }
   else { Assert(0 && "failed to open DL fd"); }
 
@@ -273,7 +273,7 @@ dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_class)
       }
     }
     brkloop:;
-    close(auxv_fd);
+    OS_LNX_RETRY_ON_EINTR(close(auxv_fd));
   }
   
   scratch_end(scratch);
@@ -630,7 +630,7 @@ dmn_lnx_process_alloc(pid_t pid, DMN_LNX_ProcessState state, DMN_LNX_Process *pa
 
   DMN_LNX_Process *process = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_Process)->process;
   process->pid                = pid;
-  process->fd                 = open(str8f(scratch.arena, "/proc/%d/mem", pid).cstr, O_RDWR);
+  process->fd                 = OS_LNX_RETRY_ON_EINTR(open(str8f(scratch.arena, "/proc/%d/mem", pid).cstr, O_RDWR));
   process->state              = state;
   process->debug_subprocesses = debug_subprocesses;
   process->is_cow             = is_cow;
@@ -698,13 +698,13 @@ dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased)
     Temp scratch = scratch_begin(0, 0);
 
     String8 dl_path = dmn_lnx_dl_path_from_pid(scratch.arena, process->pid, auxv.base);
-    int     dl_fd   = open(dl_path.cstr, O_RDONLY);
+    int     dl_fd   = OS_LNX_RETRY_ON_EINTR(open(dl_path.cstr, O_RDONLY));
 
     DMN_LNX_ProbeList probes = {0};
     if(dl_fd >= 0)
     {
       probes = dmn_lnx_read_probes(ctx_arena, dl_fd, 0, auxv.base);
-      close(dl_fd);
+      OS_LNX_RETRY_ON_EINTR(close(dl_fd));
     }
 
     for EachNode(n, DMN_LNX_ProbeNode, probes.first)
@@ -867,7 +867,7 @@ dmn_lnx_process_release(DMN_LNX_Process *process)
   }
 
   // close memory handle
-  if(close(process->fd) < 0) { Assert(0 && "failed to close memory descriptor"); }
+  if(OS_LNX_RETRY_ON_EINTR(close(process->fd)) < 0) { Assert(0 && "failed to close memory descriptor"); }
 
   // remove pid mapping
   hash_table_purge_u64(dmn_lnx_state->pid_ht, process->pid);
