@@ -32,7 +32,7 @@ typedef struct STAP_Arg
       B8 is_alias;
     } reg;
     struct {
-      S64        disp;
+      S64 disp;
       struct {
         U32 reg_code;
         B8 is_alias;
@@ -41,7 +41,7 @@ typedef struct STAP_Arg
         U32 reg_code;
         B8 is_alias;
       } index;
-      U64        scale;
+      U64 scale;
     } memory_ref;
   };
 } STAP_Arg;
@@ -77,6 +77,9 @@ internal B32 stap_read_arg(STAP_Arg arg, Arch arch, void *reg_block, STAP_Memory
 internal B32 stap_read_arg_u(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, U64 *u_out);
 internal B32 stap_read_arg_s(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, S64 *s_out);
 internal B32 stap_read_arg_f(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memory_read, void *memory_read_ctx, F64 *f_out);
+
+internal STAP_Arg stap_arg_copy(STAP_Arg *src);
+internal STAP_ArgArray stap_arg_array_copy(Arena *arena, STAP_ArgArray arr);
 
 #endif // STAP_PARSE_H
 

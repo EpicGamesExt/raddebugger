@@ -436,3 +436,22 @@ stap_read_arg_f(STAP_Arg arg, Arch arch, void *reg_block, STAP_MemoryRead *memor
   return stap_read_arg(arg, arch, reg_block, memory_read, memory_read_ctx, f_out);
 }
 
+internal STAP_Arg
+stap_arg_copy(STAP_Arg *src)
+{
+  return *src;
+}
+
+internal STAP_ArgArray
+stap_arg_array_copy(Arena *arena, STAP_ArgArray arr)
+{
+  STAP_ArgArray result = {0};
+  result.count = arr.count;
+  result.v     = push_array(arena, STAP_Arg, arr.count);
+  for EachIndex(arg_idx, arr.count)
+  {
+    result.v[arg_idx] = stap_arg_copy(&arr.v[arg_idx]);
+  }
+  return result;
+}
+
