@@ -4400,20 +4400,6 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
         dmn_process_write(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof->new_ip_value);
       }
 
-      // copy spoof info
-      if(do_spoof)
-      {
-        run_ctrls->spoof.process = spoof->process;
-        run_ctrls->spoof.thread  = spoof->thread;
-        run_ctrls->spoof.vaddr   = spoof->vaddr;
-        run_ctrls->spoof.old_ip  = spoof_old_ip_value;
-        run_ctrls->spoof.size    = size_of_spoof;
-      }
-      else
-      {
-        MemoryZeroStruct(&run_ctrls->spoof);
-      }
-      
       // rjf: run for new events
       ProfScope("run for new events")
       {

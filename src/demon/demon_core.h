@@ -156,7 +156,7 @@ typedef struct DMN_ActiveTrap DMN_ActiveTrap;
 struct DMN_ActiveTrap
 {
   DMN_Trap       *trap;
-  String8        swap_bytes;
+  String8         swap_bytes;
   DMN_ActiveTrap *next;
 };
 
@@ -171,14 +171,6 @@ struct DMN_RunCtrls
   B8 ignore_previous_exception;
   B8 run_entities_are_unfrozen;
   B8 run_entities_are_processes;
-  struct
-  {
-    DMN_Handle process;
-    DMN_Handle thread;
-    U64 vaddr;
-    U64 old_ip;
-    U64 size;
-  } spoof;
 };
 
 ////////////////////////////////
