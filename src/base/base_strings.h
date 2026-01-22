@@ -10,7 +10,11 @@
 typedef struct String8 String8;
 struct String8
 {
-  U8 *str;
+  union
+  {
+    U8 *str;
+    char *cstr;
+  };
   U64 size;
 };
 

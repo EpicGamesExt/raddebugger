@@ -112,7 +112,7 @@ dmn_lnx_exe_path_from_pid(Arena *arena, pid_t pid)
   for(S64 r = 0, cap = PATH_MAX; r < 4; cap *= 2, r += 1)
   {
     U8 *buffer = push_array(arena, U8, cap);
-    readlink_result = readlink((char *)exe_link_path.str, (char *)buffer, cap);
+    readlink_result = readlink(exe_link_path.cstr, (char *)buffer, cap);
 
     if(readlink_result < 0)
     {
@@ -139,7 +139,7 @@ dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
 
   String8 dl_path = {0};
 
-  int maps_fd = open((char *)str8f(scratch.arena, "/proc/%d/maps", pid).str, O_RDONLY);
+  int maps_fd = open(str8f(scratch.arena, "/proc/%d/maps", pid).cstr, O_RDONLY);
   if(maps_fd != -1)
   {
     // read entire /proc/pid/maps
@@ -212,7 +212,7 @@ dmn_lnx_ehdr_from_pid(pid_t pid)
   ELF_Hdr64 exe     = {0};
   B32       is_read = 0;
 
-  char *exe_path = (char *)push_str8f(scratch.arena, "/proc/%d/exe", pid).str;
+  char *exe_path = push_str8f(scratch.arena, "/proc/%d/exe", pid).cstr;
   int   exe_fd   = OS_LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
 
   if(exe_fd >= 0)
@@ -234,7 +234,7 @@ dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_class)
   
   // rjf: open aux data
   String8 auxv_path = push_str8f(scratch.arena, "/proc/%d/auxv", pid);
-  int     auxv_fd   = OS_LNX_RETRY_ON_EINTR(open((char*)auxv_path.str, O_RDONLY));
+  int     auxv_fd   = OS_LNX_RETRY_ON_EINTR(open(auxv_path.cstr, O_RDONLY));
   
   // rjf: scan aux data
   if(auxv_fd >= 0)
@@ -630,7 +630,7 @@ dmn_lnx_process_alloc(pid_t pid, DMN_LNX_ProcessState state, DMN_LNX_Process *pa
 
   DMN_LNX_Process *process = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_Process)->process;
   process->pid                = pid;
-  process->fd                 = open((char*)str8f(scratch.arena, "/proc/%d/mem", pid).str, O_RDWR);
+  process->fd                 = open(str8f(scratch.arena, "/proc/%d/mem", pid).cstr, O_RDWR);
   process->state              = state;
   process->debug_subprocesses = debug_subprocesses;
   process->is_cow             = is_cow;
@@ -698,7 +698,7 @@ dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased)
     Temp scratch = scratch_begin(0, 0);
 
     String8 dl_path = dmn_lnx_dl_path_from_pid(scratch.arena, process->pid, auxv.base);
-    int     dl_fd   = open((char *)dl_path.str, O_RDONLY);
+    int     dl_fd   = open(dl_path.cstr, O_RDONLY);
 
     DMN_LNX_ProbeList probes = {0};
     if(dl_fd >= 0)
@@ -2157,7 +2157,7 @@ dmn_lnx_event_attach(Arena *arena, DMN_EventList *events, pid_t pid)
   // extract threads from /proc/pid/task
   {
     String8 task_path = push_str8f(scratch.arena, "/proc/%d/task", pid);
-    DIR    *task_dirp = opendir((char *)task_path.str);
+    DIR    *task_dirp = opendir(task_path.cstr);
     if(task_dirp)
     {
       for(;;)
@@ -2279,7 +2279,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     U64 idx = 0;
     for EachNode(n, String8Node, params->cmd_line.first)
     {
-      argv[idx++] = (char *)push_str8_copy(scratch.arena, n->string).str;
+      argv[idx++] = push_str8_copy(scratch.arena, n->string).cstr;
     }
   }
    
@@ -2294,12 +2294,12 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     U64 idx = os_lnx_state.default_env_count;
     for EachNode(n, String8Node, params->env.first)
     {
-      envp[idx++] = (char *)push_str8_copy(scratch.arena, n->string).str;
+      envp[idx++] = push_str8_copy(scratch.arena, n->string).cstr;
     }
   }
 
   // create zero-terminated work directory path
-  char *work_dir_path = (char *)push_str8_copy(scratch.arena, params->path).str;
+  char *work_dir_path = push_str8_copy(scratch.arena, params->path).cstr;
 
   // fork process
   pid_t pid = fork();
