@@ -1342,7 +1342,7 @@ pe_exports_from_data(Arena *arena, U64 section_count, COFF_SectionHeader *sectio
         if (is_voff_taken && is_ordinal_free) {
           curr_exp->name      = str8_zero();
           curr_exp->voff      = voff;
-          curr_exp->ordinal   = header->ordinal_base;
+          curr_exp->ordinal   = header->ordinal_base + ordinal_nb;
           ++curr_exp;
         }
       }
