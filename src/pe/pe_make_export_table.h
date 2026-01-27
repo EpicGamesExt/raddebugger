@@ -45,11 +45,10 @@ typedef struct PE_FinalizedExports
   union {
     struct {
       PE_ExportParsePtrArray named_exports;
-      PE_ExportParsePtrArray forwarder_exports;
       PE_ExportParsePtrArray ordinal_exports;
     };
-    PE_ExportParsePtrArray exports_with_names[2];
-    PE_ExportParsePtrArray all[3];
+    PE_ExportParsePtrArray exports_with_names[1];
+    PE_ExportParsePtrArray all[2];
   };
 } PE_FinalizedExports;
 

@@ -75,36 +75,30 @@ pe_export_parse_list_concat_in_place(PE_ExportParseList *list, PE_ExportParseLis
 internal int
 pe_named_export_is_before(void *raw_a, void *raw_b)
 {
-  PE_ExportParse *a = *(PE_ExportParse **)raw_a;
-  PE_ExportParse *b = *(PE_ExportParse **)raw_b;
-  int cmp = str8_compar_case_sensitive(&a->name, &b->name);
-  return cmp < 0;
+  PE_ExportParse *a = *(PE_ExportParse **)raw_a, *b = *(PE_ExportParse **)raw_b;
+  String8 name_a = a->alias.size ? a->alias : a->name;
+  String8 name_b = b->alias.size ? b->alias : b->name;
+  return str8_compar_case_sensitive(&name_a, &name_b) < 0;
 }
 
 internal int
 pe_ordinal_export_is_before(void *raw_a, void *raw_b)
 {
-  PE_ExportParse *a = raw_a;
-  PE_ExportParse *b = raw_b;
-  return a->ordinal < b->ordinal;
+  return ((PE_ExportParse * )raw_a)->ordinal < ((PE_ExportParse *)raw_b)->ordinal;
 }
 
 internal PE_FinalizedExports
 pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
 {
-  PE_ExportParsePtrArray named_exports = {0};
+  PE_ExportParsePtrArray named_exports   = {0};
   PE_ExportParsePtrArray ordinal_exports = {0};
-  PE_ExportParsePtrArray forwarder_exports = {0};
   {
     // group exports based on flags
-    PE_ExportParseList named_exports_list = {0};
+    PE_ExportParseList named_exports_list   = {0};
     PE_ExportParseList ordinal_exports_list = {0};
-    PE_ExportParseList forwarder_exports_list = {0};
     for (PE_ExportParseNode *exp_n = export_list.first, *exp_n_next; exp_n != 0; exp_n = exp_n_next) {
       exp_n_next = exp_n->next;
-      if (exp_n->data.is_forwarder) {
-        pe_export_parse_list_push_node(&forwarder_exports_list, exp_n);
-      } else if (exp_n->data.is_noname_present) {
+      if (exp_n->data.is_noname_present) {
         AssertAlways(exp_n->data.is_ordinal_assigned);
         pe_export_parse_list_push_node(&ordinal_exports_list, exp_n);
       } else {
@@ -113,29 +107,29 @@ pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
     }
 
     // list -> array
-    named_exports = pe_array_from_export_list(arena, named_exports_list);
-    forwarder_exports = pe_array_from_export_list(arena, forwarder_exports_list);
+    named_exports   = pe_array_from_export_list(arena, named_exports_list);
     ordinal_exports = pe_array_from_export_list(arena, ordinal_exports_list);
+
+    for(int i = 0; i < ordinal_exports.count; ++i) {
+      PE_ExportParse p = *ordinal_exports.v[i];
+    }
 
     // sort exports
     radsort(named_exports.v, named_exports.count, pe_named_export_is_before);
     radsort(ordinal_exports.v, ordinal_exports.count, pe_ordinal_export_is_before);
-    radsort(forwarder_exports.v, forwarder_exports.count, pe_named_export_is_before);
 
     MemoryZeroStruct(&export_list);
     pe_export_parse_list_concat_in_place(&export_list, &named_exports_list);
-    pe_export_parse_list_concat_in_place(&export_list, &forwarder_exports_list);
     pe_export_parse_list_concat_in_place(&export_list, &ordinal_exports_list);
   }
 
   // compute max ordinal and used ordinal flag array
   U64 ordinal_low = max_U64;
   B8 *is_ordinal_used = push_array(arena, B8, max_U16);
-  for (PE_ExportParseNode *exp_n = export_list.first; exp_n != 0; exp_n = exp_n->next) {
-    PE_ExportParse *exp = &exp_n->data;
-    if (exp->is_ordinal_assigned) {
-      ordinal_low = Min(ordinal_low, exp->ordinal);
-      is_ordinal_used[exp->ordinal] = 1;
+  for EachNode(exp_n, PE_ExportParseNode, export_list.first) {
+    if (exp_n->data.is_ordinal_assigned) {
+      ordinal_low = Min(ordinal_low, exp_n->data.ordinal);
+      is_ordinal_used[exp_n->data.ordinal] = 1;
     }
   }
   if (ordinal_low == max_U64) {
@@ -147,15 +141,6 @@ pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
     U16 last_ordinal = ordinal_low;
     for (U64 exp_idx = 0; exp_idx < named_exports.count; exp_idx += 1) {
       PE_ExportParse *exp = named_exports.v[exp_idx];
-      if (!exp->is_ordinal_assigned) {
-        for (; last_ordinal < max_U16 && is_ordinal_used[last_ordinal] != 0; last_ordinal += 1);
-        exp->ordinal            = last_ordinal;
-        exp->is_ordinal_assigned = 1;
-        is_ordinal_used[last_ordinal] = 1;
-      }
-    }
-    for (U64 exp_idx = 0; exp_idx < forwarder_exports.count; exp_idx += 1) {
-      PE_ExportParse *exp = forwarder_exports.v[exp_idx];
       if (!exp->is_ordinal_assigned) {
         for (; last_ordinal < max_U16 && is_ordinal_used[last_ordinal] != 0; last_ordinal += 1);
         exp->ordinal            = last_ordinal;
@@ -179,18 +164,13 @@ pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
     for (U64 exp_idx = 0; exp_idx < named_exports.count; exp_idx += 1, hint += 1) {
       named_exports.v[exp_idx]->hint = hint;
     }
-    for (U64 exp_idx = 0; exp_idx < forwarder_exports.count; exp_idx += 1, hint += 1) {
-      forwarder_exports.v[exp_idx]->hint = hint;
-    }
   }
 
-  PE_FinalizedExports result = {0};
-  result.ordinal_low = ordinal_low;
-  result.named_exports = named_exports;
-  result.forwarder_exports = forwarder_exports;
-  result.ordinal_exports = ordinal_exports;
-
-  return result;
+  return (PE_FinalizedExports) {
+    .ordinal_low       = ordinal_low,
+    .named_exports     = named_exports,
+    .ordinal_exports   = ordinal_exports
+  };
 }
 
 internal String8
@@ -214,34 +194,34 @@ pe_make_edata_obj(Arena               *arena,
   ProfBegin("Virtual Offset Table");
   {
     B8 *is_ordinal_bound = push_array(scratch.arena, B8, max_U16);
-
-    for (U64 arr_idx = 0; arr_idx < ArrayCount(finalized_exports.all); arr_idx += 1) {
-      for (U64 exp_idx = 0; exp_idx < finalized_exports.all[arr_idx].count; exp_idx += 1) {
+    for EachElement(arr_idx, finalized_exports.all) {
+      for EachIndex(exp_idx, finalized_exports.all[arr_idx].count) {
         PE_ExportParse *exp = finalized_exports.all[arr_idx].v[exp_idx];
-        if (is_ordinal_bound[exp->ordinal] == 0) {
-          // alloc only one slot per ordinal, so it's possible to map ordinal to a virtual offset
-          is_ordinal_bound[exp->ordinal] = 1;
 
-          // create slot for the ordinal virtual offset
-          U64  voff_offset = voff_table_sect->data.total_size;
-          U32 *voff        = push_array(obj_writer->arena, U32, 1);
-          str8_list_push(obj_writer->arena, &voff_table_sect->data, str8_struct(voff));
+        // export with this ordinal was already allocated
+        if (is_ordinal_bound[exp->ordinal]) { continue; }
+        is_ordinal_bound[exp->ordinal] = 1;
 
-          COFF_ObjSymbol *exp_symbol;
-          if (exp->is_forwarder) {
-            U64     forwarder_name_offset = string_table_sect->data.total_size;
-            String8 forwarder_name_cstr   = push_cstr(obj_writer->arena, exp->name);
-            str8_list_push(obj_writer->arena, &string_table_sect->data, forwarder_name_cstr);
-            // symbol to the name string
-            exp_symbol = coff_obj_writer_push_symbol_static(obj_writer, exp->name, forwarder_name_offset, string_table_sect);
-          } else {
-            // function or global var symbol
-            exp_symbol = coff_obj_writer_push_symbol_undef(obj_writer, exp->name);
-          }
-
-          U16 ordinal_nb = exp->ordinal - finalized_exports.ordinal_low;
-          coff_obj_writer_section_push_reloc_voff(obj_writer, voff_table_sect, ordinal_nb*sizeof(U32), exp_symbol);
+        // create symbol for the export address table entry
+        COFF_ObjSymbol *exp_symbol;
+        if (exp->is_forwarder) {
+          // symbol to the forwarder string
+          U64 fwd_name_offset = string_table_sect->data.total_size;
+          str8_list_push(obj_writer->arena, &string_table_sect->data, push_cstr(obj_writer->arena, exp->name));
+          exp_symbol = coff_obj_writer_push_symbol_static(obj_writer, exp->name, fwd_name_offset, string_table_sect);
+        } else {
+          // function or data symbol
+          exp_symbol = coff_obj_writer_push_symbol_undef(obj_writer, exp->name);
         }
+
+        // create slot for the ordinal virtual offset
+        U64  voff_offset = voff_table_sect->data.total_size;
+        U32 *voff        = push_array(obj_writer->arena, U32, 1);
+        str8_list_push(obj_writer->arena, &voff_table_sect->data, str8_struct(voff));
+
+        // ordinal is an index into the export address table
+        U16 ordinal_nb = exp->ordinal - finalized_exports.ordinal_low;
+        coff_obj_writer_section_push_reloc_voff(obj_writer, voff_table_sect, ordinal_nb*sizeof(U32), exp_symbol);
       }
     }
   }
