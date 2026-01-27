@@ -439,6 +439,8 @@ C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t s
 # define this_function_name __func__
 #endif
 
+#define TryRead(func, cursor, label) do { U64 size = (func); if (size == 0) { goto label; } cursor += size; } while (0)
+
 ////////////////////////////////
 //~ rjf: Base Types
 
