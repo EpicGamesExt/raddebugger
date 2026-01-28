@@ -1,11 +1,9 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-// TODO:
-//
-// [ ] Currently converter relies on clang's -gdwarf-aranges to generate compile unit ranges,
-//     however it is optional and in case it is missing converter has to generate the ranges from scopes.
-// [ ] Error handling
+////////////////////////////////
+
+thread_static D2R_Log g_d2r_log;
 
 ////////////////////////////////
 
@@ -2092,6 +2090,8 @@ d2r_convert_types(Arena         *arena,
         type->direct_type = direct_type;
       } break;
       case DW_TagKind_ArrayType: {
+        B32 error = 1;
+
         // * DWARF vs RDI Array Type Graph *
         //
         // For example lets take following decl:
@@ -2118,15 +2118,19 @@ d2r_convert_types(Arena         *arena,
         struct SubrangeNode *subrange_stack = 0;
         for (DW_TagNode *n = tag_node->first_child; n != 0; n = n->sibling) {
           if (n->tag.kind != DW_TagKind_SubrangeType) {
-            // TODO: error handling
-            AssertAlways(!"unexpected tag");
-            continue;
+            d2r_log("[%llx] while scanning for DW_TagKind_SubrangeType found an unexpected child tag %S @ %llx\n", tag.info_off, dw_string_from_tag_kind(g_d2r_log.arena, n->tag.kind), n->tag.info_off);
+            goto array_type_exit;
           }
           
           // resolve lower bound
           U64 lower_bound = 0;
           if (dw_tag_has_attrib(input, cu, n->tag, DW_AttribKind_LowerBound)) {
-            lower_bound = dw_u64_from_attrib(input, cu, n->tag, DW_AttribKind_LowerBound);
+            B32 is_vla = dw_is_attrib_var_ref(input, cu, dw_attrib_from_tag(input, cu, n->tag, DW_AttribKind_LowerBound));
+            if (is_vla) {
+              d2r_log("[%llx] TODO: lower bound is a variable\n", n->tag.info_off);
+            } else {
+              lower_bound = dw_u64_from_attrib(input, cu, n->tag, DW_AttribKind_LowerBound);
+            }
           } else {
             lower_bound = dw_pick_default_lower_bound(cu_lang);
           }
@@ -2137,9 +2141,14 @@ d2r_convert_types(Arena         *arena,
             U64 count = dw_u64_from_attrib(input, cu, n->tag, DW_AttribKind_Count);
             upper_bound = lower_bound + count;
           } else if (dw_tag_has_attrib(input, cu, n->tag, DW_AttribKind_UpperBound)) {
-            upper_bound = dw_u64_from_attrib(input, cu, n->tag, DW_AttribKind_UpperBound);
-            // turn upper bound into exclusive range
-            upper_bound += 1;
+            B32 is_vla = dw_is_attrib_var_ref(input, cu, dw_attrib_from_tag(input, cu, n->tag, DW_AttribKind_UpperBound));
+            if (is_vla) {
+              d2r_log("[%llx] TODO: upper bound is a variable\n", n->tag.info_off);
+              goto array_type_exit;
+            } else {
+              upper_bound = dw_u64_from_attrib(input, cu, n->tag, DW_AttribKind_UpperBound);
+              upper_bound += 1; // turn upper bound into exclusive range
+            }
           } else {
             // zero sized array
           }
@@ -2167,6 +2176,15 @@ d2r_convert_types(Arena         *arena,
           direct_type = t;
         }
         
+        error = 0;
+        array_type_exit:;
+
+        // in case of an error, assign null to the array type
+        if (error) {
+          Assert(d2r_type_from_offset(type_table, tag.info_off) == 0); // this should the first time this type is being parsed
+          hash_table_push_u64_raw(arena, type_table->ht, tag.info_off, type_table->builtin_types[RDI_TypeKind_NULL]);
+        }
+
         d2r_tag_iterator_skip_children(it);
       } break;
       case DW_TagKind_SubrangeType: {
@@ -2577,6 +2595,8 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
 {
   Temp scratch = scratch_begin(&arena, 1);
   if (lane_idx() == 0) {
+    g_d2r_log.arena = arena_alloc();
+
     ////////////////////////////////
     
     ProfBegin("compute exe hash");
@@ -2786,10 +2806,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       Temp comp_temp = temp_begin(scratch.arena);
       
       DW_CompUnit *cu = &cu_arr[cu_idx];
-      
-      // parse and build tag tree
-      DW_TagTree tag_tree = dw_tag_tree_from_cu(comp_temp.arena, &input, cu);
-      
+
       // skip DWO
       {
         if (cu->dwo_id) { goto next_cu; }
@@ -2800,6 +2817,9 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         String8 gnu_dwo_name = dw_string_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_GNU_DwoName);
         if (gnu_dwo_name.size) { goto next_cu; }
       }
+      
+      // parse and build tag tree
+      DW_TagTree tag_tree = dw_tag_tree_from_cu(comp_temp.arena, &input, cu);
       
       // build (info offset -> tag) hash table to resolve tags with abstract origin
       cu->tag_ht = dw_make_tag_hash_table(comp_temp.arena, tag_tree);

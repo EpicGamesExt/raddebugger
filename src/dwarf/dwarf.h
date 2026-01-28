@@ -1724,6 +1724,8 @@ internal DW_AttribClass dw_attrib_class_from_form_kind(DW_Version ver, DW_FormKi
 
 internal B32 dw_are_attrib_class_and_form_kind_compatible(DW_Version ver, DW_AttribClass attrib_class, DW_FormKind form_kind);
 
+internal B32 dw_is_form_kind_ref(DW_Version ver, DW_Ext ext, DW_FormKind form_kind);
+
 //- Section Names
 
 internal String8 dw_name_string_from_section_kind     (DW_SectionKind k);

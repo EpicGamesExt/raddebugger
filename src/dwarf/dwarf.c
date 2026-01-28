@@ -256,6 +256,25 @@ dw_are_attrib_class_and_form_kind_compatible(DW_Version ver, DW_AttribClass attr
   return are_compat;
 }
 
+internal B32
+dw_is_form_kind_ref(DW_Version ver, DW_Ext ext, DW_FormKind form_kind)
+{
+  B32 is_ref = 0;
+  if (form_kind == DW_Form_RefAddr ||
+      form_kind == DW_Form_Ref1 ||
+      form_kind == DW_Form_Ref2 ||
+      form_kind == DW_Form_Ref4 ||
+      form_kind == DW_Form_Ref8 ||
+      form_kind == DW_Form_RefUData) {
+    is_ref = 1;
+  } else {
+    if (ext == DW_Ext_GNU) {
+      is_ref = DW_Form_GNU_RefAlt;
+    }
+  }
+  return is_ref;
+}
+
 internal String8
 dw_name_string_from_section_kind(DW_SectionKind k)
 {

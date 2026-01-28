@@ -1139,7 +1139,7 @@ dw_interp_ref(DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form f
       form_kind == DW_Form_Ref4 || form_kind == DW_Form_Ref8 ||
       form_kind == DW_Form_RefUData) {
     ref.cu = cu;
-    ref.info_off = form.ref;
+    ref.info_off = cu->info_range.min + form.ref;
   } else if (form_kind == DW_Form_RefAddr) {
     NotImplemented;
   } else if (form_kind == DW_Form_RefSig8) {
@@ -1987,7 +1987,7 @@ dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
   if (attrib_class == DW_AttribClass_Const || attrib_class == DW_AttribClass_Block) {
     if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Type)) {
       Temp scratch = scratch_begin(0,0);
-      DW_Reference type_ref       = dw_ref_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Type);
+      DW_Reference type_ref = dw_ref_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Type);
       DW_Tag type_tag = {0};
       dw_read_tag_cu(scratch.arena, input, type_ref.cu, type_ref.info_off, &type_tag);
       U64          type_byte_size = dw_byte_size_from_tag(input, cu, type_tag);
@@ -2007,6 +2007,22 @@ dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
     AssertAlways(!"unexpected attrib class");
   }
   return result;
+}
+
+internal B32
+dw_is_attrib_var_ref(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+{
+  B32 is_var_ref = 0;
+  if (dw_is_form_kind_ref(cu->version, cu->ext, attrib->form_kind)) {
+    Temp scratch = scratch_begin(0,0);
+    DW_Reference ref = dw_ref_from_attrib(input, cu, attrib);
+    DW_Tag ref_tag = {0};
+    if (dw_read_tag_cu(scratch.arena, input, ref.cu, ref.info_off, &ref_tag)) {
+      is_var_ref = ref_tag.kind == DW_TagKind_Variable; 
+    }
+    scratch_end(scratch);
+  }
+  return is_var_ref;
 }
 
 internal DW_CompUnit
@@ -2164,7 +2180,7 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
           cu.address_size       = address_size;
           cu.abbrev_off         = abbrev_base;
           cu.info_range         = range;
-          cu.first_tag_info_off = range.min + cursor;
+          cu.first_tag_info_off = cursor;
           cu.abbrev_table       = abbrev_table;
           cu.abbrev_data        = abbrev_data;
           cu.addr_lu            = addr_lu;

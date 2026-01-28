@@ -317,7 +317,7 @@ typedef struct DW_PubStringsTable
 typedef struct DW_Reference
 {
   DW_CompUnit *cu;
-  U64          info_off;
+  U64          info_off; // global .debug_info offset
 } DW_Reference;
 
 ////////////////////////////////
@@ -520,6 +520,8 @@ internal DW_LineFile * dw_file_from_tag_attrib_kind      (DW_Input *input, DW_Co
 internal DW_Reference  dw_ref_from_tag_attrib_kind       (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
 internal DW_LocList    dw_loclist_from_tag_attrib_kind   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
 internal Rng1U64List   dw_rnglist_from_tag_attrib_kind   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+
+internal B32 dw_is_attrib_var_ref(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
 
 // compile unit
 

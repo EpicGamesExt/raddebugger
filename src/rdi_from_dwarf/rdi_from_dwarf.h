@@ -3,6 +3,14 @@
 
 #pragma once
 
+typedef struct D2R_Log
+{
+  Arena       *arena;
+  String8List  v;
+} D2R_Log;
+
+#define d2r_log(...) str8_list_pushf(g_d2r_log.arena, &g_d2r_log.v, __FILE__ ":" Stringify(__LINE__) " " __VA_ARGS__)
+
 typedef struct D2R_ConvertParams D2R_ConvertParams;
 struct D2R_ConvertParams
 {
