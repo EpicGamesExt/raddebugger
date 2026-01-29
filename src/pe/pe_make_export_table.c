@@ -84,7 +84,8 @@ pe_named_export_is_before(void *raw_a, void *raw_b)
 internal int
 pe_ordinal_export_is_before(void *raw_a, void *raw_b)
 {
-  return ((PE_ExportParse * )raw_a)->ordinal < ((PE_ExportParse *)raw_b)->ordinal;
+  PE_ExportParse **a = raw_a, **b = raw_b;
+  return (*a)->ordinal < (*b)->ordinal;
 }
 
 internal PE_FinalizedExports
@@ -109,10 +110,6 @@ pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
     // list -> array
     named_exports   = pe_array_from_export_list(arena, named_exports_list);
     ordinal_exports = pe_array_from_export_list(arena, ordinal_exports_list);
-
-    for(int i = 0; i < ordinal_exports.count; ++i) {
-      PE_ExportParse p = *ordinal_exports.v[i];
-    }
 
     // sort exports
     radsort(named_exports.v, named_exports.count, pe_named_export_is_before);
