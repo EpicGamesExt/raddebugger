@@ -1546,6 +1546,9 @@ dw_eval_expr(Arena     *arena,
   else {
     if (stack->top) {
       *value_out = stack->top->v;
+      if (value_out->type == DW_ExprValueType_Generic) {
+        value_out->generic = push_str8_copy(arena, value_out->generic);
+      }
 
       Rng1U64 *range = push_array(arena, Rng1U64, 1);
       *range = r1u64(0, max_U64);
