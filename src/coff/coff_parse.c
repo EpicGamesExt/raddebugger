@@ -127,11 +127,44 @@ coff_section_table_from_data(Arena *arena, String8 data, Rng1U64 section_table_r
   U64                  section_count = dim_1u64(section_table_range) / sizeof(COFF_SectionHeader);
   COFF_SectionHeader **section_table = push_array_no_zero(arena, COFF_SectionHeader *, section_count+1);
   section_table[0] = push_array(arena, COFF_SectionHeader, 1);
-  for (U64 i = 0; i < section_count; ++i) {
-    section_table[i+1] = str8_deserial_get_raw_ptr(data, section_table_range.min + i*sizeof(COFF_SectionHeader), sizeof(COFF_SectionHeader));
+  for EachIndex(sect_idx, section_count) {
+    section_table[sect_idx + 1] = str8_deserial_get_raw_ptr(data, section_table_range.min + sect_idx*sizeof(COFF_SectionHeader), sizeof(COFF_SectionHeader));
   }
   return section_table;
 }
+
+internal COFF_SectionHeader *
+coff_section_header_from_name(String8 string_table, COFF_SectionHeader *section_table, U64 section_count, String8 name)
+{
+  for EachIndex(sect_idx, section_count) {
+    if (str8_match(coff_name_from_section_header(string_table, &section_table[sect_idx]), name, 0)) {
+      return &section_table[sect_idx];
+    }
+  }
+  return 0;
+}
+
+internal COFF_SectionHeaderArray
+coff_section_header_array_from_name(Arena *arena, String8 string_table, COFF_SectionHeader *section_table, U64 section_count, String8 name)
+{
+  U64 match_count = 0;
+  for EachIndex(sect_idx, section_count) {
+    if (str8_match(coff_name_from_section_header(string_table, &section_table[sect_idx]), name, 0)) {
+      match_count += 1;
+    }
+  }
+
+  COFF_SectionHeader *matches = push_array(arena, COFF_SectionHeader, match_count);
+  for (U64 sect_idx = 0, match_idx = 0; sect_idx < section_count; sect_idx += 1) {
+    if (str8_match(coff_name_from_section_header(string_table, &section_table[sect_idx]), name, 0)) {
+      matches[match_idx] = section_table[sect_idx];
+      match_idx += 1;
+    }
+  }
+
+  return (COFF_SectionHeaderArray){ .count = match_count, .v = matches };
+}
+
 
 internal COFF_ParsedSymbol
 coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)

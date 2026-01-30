@@ -251,14 +251,17 @@ internal COFF_FileHeaderInfo coff_file_header_info_from_data(String8 raw_coff);
 ////////////////////////////////
 // Section
 
-internal COFF_SectionHeader ** coff_section_table_from_data(Arena *arena, String8 data, Rng1U64 section_table_range);
+internal COFF_SectionHeader **   coff_section_table_from_data       (Arena *arena, String8 data, Rng1U64 section_table_range);
+internal COFF_SectionHeader *    coff_section_header_from_name      (String8 string_table, COFF_SectionHeader *section_table, U64 section_count, String8 name);
+internal COFF_SectionHeaderArray coff_section_header_array_from_name(Arena *arena, String8 string_table, COFF_SectionHeader *section_table, U64 section_count, String8 name);
+internal String8                 coff_name_from_section_header      (String8 string_table, COFF_SectionHeader *header);
 
 ////////////////////////////////
 // Symbol
 
 internal COFF_ParsedSymbol coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32);
 internal COFF_ParsedSymbol coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16);
-internal COFF_ParsedSymbol coff_parse_symbol(COFF_FileHeaderInfo header, String8 string_table, String8 symbol_table, U32 symbol_idx);
+internal COFF_ParsedSymbol coff_parse_symbol  (COFF_FileHeaderInfo header, String8 string_table, String8 symbol_table, U32 symbol_idx);
 
 internal COFF_Symbol32Array coff_symbol_array_from_data_16(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count);
 internal COFF_Symbol32Array coff_symbol_array_from_data_32(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count);
