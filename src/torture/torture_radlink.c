@@ -2236,9 +2236,9 @@ T_BeginTest(import_export)
       T_Ok(export_table.exports[7].forwarder.size == 0);
 
       // validate voffs
-      T_Ok(export_table.exports[0].voff == 0x20070);
+      T_Ok(export_table.exports[0].voff == 0x17ff0);
       T_Ok(export_table.exports[1].voff == 0x19000);
-      T_Ok(export_table.exports[2].voff == 0x20077);
+      T_Ok(export_table.exports[2].voff == 0x17ff7);
       T_Ok(export_table.exports[3].voff == 0x19000);
       T_Ok(export_table.exports[4].voff == 0x19001);
       T_Ok(export_table.exports[5].voff == 0x19002);
@@ -2284,10 +2284,10 @@ T_BeginTest(import_export)
       T_Ok(str8_match(export_table.exports[3].forwarder, str8_zero(), 0));
 
       // validate voffs
-      T_Ok(export_table.exports[0].voff == 0x2000);
-      T_Ok(export_table.exports[1].voff == 0x3000);
-      T_Ok(export_table.exports[2].voff == 0x3000);
-      T_Ok(export_table.exports[3].voff == 0x2000);
+      T_Ok(export_table.exports[0].voff == 0x3000);
+      T_Ok(export_table.exports[1].voff == 0x4000);
+      T_Ok(export_table.exports[2].voff == 0x4000);
+      T_Ok(export_table.exports[3].voff == 0x3000);
 
       // validate ordinals
       T_Ok(export_table.exports[0].ordinal == 2);
