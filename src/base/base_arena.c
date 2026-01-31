@@ -37,7 +37,12 @@ arena_alloc_(ArenaParams *params)
       base = os_reserve(reserve_size);
       os_commit(base, commit_size);
     }
+    AsanPoisonMemoryRegion(base, commit_size);
     raddbg_annotate_vaddr_range(base, reserve_size, "arena %s:%i", params->allocation_site_file, params->allocation_site_line);
+  }
+  else
+  {
+    AsanPoisonMemoryRegion(base, params->reserve_size);
   }
   
   // rjf: panic on arena creation failure
@@ -50,6 +55,7 @@ arena_alloc_(ArenaParams *params)
 #endif
   
   // rjf: extract arena header & fill
+  AsanUnpoisonMemoryRegion(base, ARENA_HEADER_SIZE);
   Arena *arena = (Arena *)base;
   arena->current = arena;
   arena->flags = params->flags;
@@ -64,8 +70,6 @@ arena_alloc_(ArenaParams *params)
 #if ARENA_FREE_LIST
   arena->free_last = 0;
 #endif
-  AsanPoisonMemoryRegion(base, commit_size);
-  AsanUnpoisonMemoryRegion(base, ARENA_HEADER_SIZE);
   return arena;
 }
 
@@ -161,6 +165,7 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
     {
       os_commit(cmt_ptr, cmt_size);
     }
+    AsanPoisonMemoryRegion(cmt_ptr, cmt_size);
     current->cmt = cmt_pst_clamped;
   }
   
