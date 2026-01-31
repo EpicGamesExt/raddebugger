@@ -42,8 +42,8 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_NotImplemented,     0, "EXPORTADMIN",          "", ""                                                                                                      },
   { LNK_CmdSwitch_Experimental,       0, "EXPERIMENTAL",         "Not supported."                                                                                            },
   { LNK_CmdSwitch_FastFail,           0, "FASTFAIL",             "", "Not used."                                                                                             },
+  { LNK_CmdSwitch_FailIfMismatch,     1, "FAILIFMISMATCH",       "{id=value}", ""                                                                                            },
   { LNK_CmdSwitch_NotImplemented,     0, "FASTGENPROFILE",       "", ""                                                                                                      },
-  { LNK_CmdSwitch_FailIfMismatch,     1, "FAILIFMISMATCH",       "", ""                                                                                                      },
   { LNK_CmdSwitch_FileAlign,          0, "FILEALIGN",            ":#", ""                                                                                                    },
   { LNK_CmdSwitch_Fixed,              0, "FIXED",                "[:NO]", ""                                                                                                 },
   { LNK_CmdSwitch_NotImplemented,     0, "FORCE",                "", ""                                                                                                      },
@@ -398,7 +398,7 @@ lnk_cmd_switch_parse_version(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse major version");
     }
   } else {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+    lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
   }
 
 exit:;
@@ -431,7 +431,7 @@ lnk_cmd_switch_parse_tuple(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8Li
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse first parameter \"%S\"", value_strings.first->string);
     }
   } else {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+    lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
   }
   return 0;
 }
@@ -595,7 +595,7 @@ lnk_cmd_switch_parse_string(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8L
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "empty string is not permitted");
     }
   } else {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+   lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
   }
   return 0;
 }
@@ -1183,7 +1183,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         }
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1240,7 +1240,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid parameter \"%S\"", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1255,7 +1255,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Delay: {
     if (value_strings.node_count == 0 || value_strings.node_count > 1) {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     } else {
       String8 value = value_strings.first->string;
       if (str8_match_lit("unload", value, StringMatchFlag_CaseInsensitive)) {
@@ -1357,6 +1357,36 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_FastFail: {
     // do nothing
+  } break;
+
+  case LNK_CmdSwitch_FailIfMismatch: {
+    if (value_strings.node_count != 1) {
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
+      break;
+    }
+
+    LNK_AltName dir;
+    if ( ! lnk_parse_alt_name_directive(value_strings.first->string, obj, &dir)) {
+      break;
+    }
+
+    LNK_AltName *current = hash_table_search_string_raw(config->fail_if_mismatch_ht, dir.from);
+    if (current) {
+      if ( ! str8_match(current->to, dir.to, 0)) {
+        lnk_error_cmd_switch(LNK_Error_FailIfMismatch, obj, cmd_switch,
+                      "'%S=%S' mismatch in:\n"
+                      "  %S: /FAILIFMISMATCH:%S=%S\n",
+                      dir.from, dir.to,
+                      lnk_loc_from_obj(scratch.arena, current->obj), current->from, current->to);
+        break;
+      }
+    } else {
+      LNK_AltName *n = push_array(config->arena, LNK_AltName, 1);
+      n->from = push_str8_copy(config->arena, dir.from);
+      n->to   = push_str8_copy(config->arena, dir.to);
+      n->obj  = obj;
+      hash_table_push_string_raw(config->arena, config->fail_if_mismatch_ht, n->from, n);
+    }
   } break;
 
   case LNK_CmdSwitch_FileAlign: {
@@ -1472,7 +1502,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown parameter \"%S\"", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1603,7 +1633,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         lnk_merge_directive_list_push(config->arena, &config->merge_list, merge);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters %d", value_strings.node_count);
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1717,7 +1747,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     if (value_strings.node_count == 0) {
       config->flags |= LNK_ConfigFlag_WriteImageChecksum;
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1766,7 +1796,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid subsystem \"%S\"", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1893,7 +1923,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid parameter: \"%S\", expected NO or QUIET", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1919,7 +1949,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         }
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters, expected 1");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1944,7 +1974,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse parameter \"%S\"", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -2095,6 +2125,7 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   config->include_symbol_ht         = hash_table_init(arena, 0x100);
   config->delay_load_ht             = hash_table_init(arena, 0x100);
   config->disallow_lib_ht           = hash_table_init(arena, 0x100);
+  config->fail_if_mismatch_ht       = hash_table_init(arena, 0x100);
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {

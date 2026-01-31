@@ -41,6 +41,16 @@ t_make_sec_defn_obj(Arena *arena, String8 payload)
 }
 
 internal String8
+t_make_obj_with_directive(Arena *arena, String8 directive)
+{
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  coff_obj_writer_push_directive(cow, directive);
+  String8 obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+  return obj;
+}
+
+internal String8
 t_make_entry_obj(Arena *arena)
 {
   /*
@@ -3853,6 +3863,49 @@ T_BeginTest(opt_ref_dangling_section)
   String8             string_table  = str8_substr(exe, pe.string_table_range);
   COFF_SectionHeader *sect          = coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".q"));
   T_Ok(sect != 0);
+}
+T_EndTest;
+
+T_BeginTest(fail_if_mismatch)
+{
+  T_Ok(t_write_entry_obj());
+
+  // ------------------------------------------------------------
+  // try linking two objs with mismatching directives
+
+  String8 a1 = t_make_obj_with_directive(scratch.arena, str8_lit("/FAILIFMISMATCH:a=1"));
+  String8 a2 = t_make_obj_with_directive(scratch.arena, str8_lit("/FAILIFMISMATCH:a=2"));
+  T_Ok(t_write_file(str8_lit("a1.obj"), a1));
+  T_Ok(t_write_file(str8_lit("a2.obj"), a2));
+
+  t_invoke_linkerf("entry.obj a1.obj a2.obj /entry:entry /subsystem:console /out:a2.exe");
+  if (t_id_linker() == T_Linker_RAD) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
+  else                               T_Ok(g_last_exit_code != 0);
+
+  // ------------------------------------------------------------
+  // happy case
+
+  T_Ok(t_write_file(str8_lit("a1_copy.obj"), a1));
+
+  t_invoke_linkerf("entry.obj a1.obj a1_copy.obj /entry:entry /subsystem:console /out:a1.exe");
+  T_Ok(g_last_exit_code == 0);
+
+  // ------------------------------------------------------------
+  // test conflicting directives in obj
+
+  String8 conf_dirs = t_make_obj_with_directive(scratch.arena, str8_lit("/FAILIFMISMATCH:a=1 /FAILIFMISMATCH:a=2"));
+  T_Ok(t_write_file(str8_lit("conf_dirs.obj"), conf_dirs));
+
+  t_invoke_linkerf("entry.obj conf_dirs.obj /entry:entry /subsystem:console /out:conf_dirs.exe");
+  if (t_id_linker() == T_Linker_RAD) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
+  else                               T_Ok(g_last_exit_code != 0);
+
+  // ------------------------------------------------------------
+  // passing switch on command line
+
+  t_invoke_linkerf("entry.obj a1.obj /FAILIFMISMATCH:a=2 /out:cmddir.exe");
+  if (t_id_linker() == T_Linker_RAD) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
+  else                               T_Ok(g_last_exit_code != 0);
 }
 T_EndTest;
 

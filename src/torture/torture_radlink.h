@@ -35,6 +35,7 @@ internal COFF_ObjSection * t_push_rdata_section(COFF_ObjWriter *obj_writer, Stri
 
 internal String8 t_make_entry_obj(Arena *arena);
 internal String8 t_make_sec_defn_obj(Arena *arena, String8 payload);
+internal String8 t_make_obj_with_directive(Arena *arena, String8 directive);
 
-internal B32     t_write_entry_obj(void);
+internal B32 t_write_entry_obj(void);
 

@@ -50,6 +50,7 @@ typedef enum
   LNK_CmdSwitch_ErrorReport,
   LNK_CmdSwitch_Experimental,
   LNK_CmdSwitch_Export,
+  LNK_CmdSwitch_FailIfMismatch,
   LNK_CmdSwitch_FastFail,
   LNK_CmdSwitch_FileAlign,
   LNK_CmdSwitch_Fixed,
@@ -107,7 +108,6 @@ typedef enum
   LNK_CmdSwitch_EmitVolatileMetadata,
   LNK_CmdSwitch_ExportAdmin,
   LNK_CmdSwitch_FastGenProfile,
-  LNK_CmdSwitch_FailIfMismatch,
   LNK_CmdSwitch_Force,
   LNK_CmdSwitch_Guard,
   LNK_CmdSwitch_GuardSym,
@@ -416,6 +416,7 @@ typedef struct LNK_Config
   HashTable                  *include_symbol_ht;
   HashTable                  *delay_load_ht;
   HashTable                  *disallow_lib_ht;
+  HashTable                  *fail_if_mismatch_ht;
   U64                         unresolved_symbol_limit;
   U64                         unresolved_symbol_ref_limit;
   LNK_SwitchState             map_lines_for_unresolved_symbols;
