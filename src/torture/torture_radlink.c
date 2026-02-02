@@ -4047,21 +4047,21 @@ T_BeginTest(same_but_different)
   // validate output
   {
     U8 expected_text[] = {
-      0xE8, 0x0B, 0x00, 0x00, 0x00, // call a
-      0xE8, 0x16, 0x00, 0x00, 0x00, // call b
-      0xC3,                        
-      0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 
-      0xE8, 0x1B, 0x00, 0x00, 0x00, // call c
-      0xC3,                         
-      0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-      0xE8, 0x1B, 0x00, 0x00, 0x00, // call d
-      0xC3,
-      0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-      0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00, // mov rax, 1
-      0xC3,
-      0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-      0x48, 0xC7, 0xC0, 0x02, 0x00, 0x00, 0x00, // mov rax, 2
-      0xC3,
+      0xe8, 0x0b, 0x00, 0x00, 0x00, // call a
+      0xe8, 0x16, 0x00, 0x00, 0x00, // call b
+      0xc3,                        
+      0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 
+      0xe8, 0x1b, 0x00, 0x00, 0x00, // call c
+      0xc3,                         
+      0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
+      0xe8, 0x1b, 0x00, 0x00, 0x00, // call d
+      0xc3,
+      0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
+      0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, // mov rax, 1
+      0xc3,
+      0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
+      0x48, 0xc7, 0xc0, 0x02, 0x00, 0x00, 0x00, // mov rax, 2
+      0xc3,
     };
 
     String8 exe = t_read_file(scratch.arena, str8_lit("a.exe"));
@@ -4210,6 +4210,130 @@ T_BeginTest(cyclic_icf)
     };
 
     String8 exe = t_read_file(scratch.arena, str8_lit("a.exe"));
+    T_Ok(exe.size);
+
+    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    String8             string_table  = str8_substr(exe, pe.string_table_range);
+    COFF_SectionHeader *text_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+
+    T_Ok(text_section);
+    T_Ok(text_section->foff + sizeof(expected_text) <= exe.size);
+
+    String8 text = str8_substr(exe, r1u64(text_section->foff, text_section->foff + text_section->vsize));
+    T_Ok(str8_match(text, str8_array_fixed(expected_text), 0));
+  }
+}
+T_EndTest;
+
+T_BeginTest(fold_with_largest_align)
+{
+  String8 a_obj;
+  {
+    U8 text[] = {
+      0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, // mov rax, 1
+      0xc3
+    };
+
+    U8 call_a_and_b[] = {
+      0xe8, 0x00, 0x00, 0x00, 0x00,
+      0xe8, 0x00, 0x00, 0x00, 0x00,
+      0xc3 
+    };
+
+    COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *entry_sect = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(call_a_and_b));
+    COFF_ObjSection *a_sect = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS | COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_Align4Bytes, str8_array_fixed(text));
+    COFF_ObjSection *b_sect = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS | COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_Align8Bytes, str8_array_fixed(text));
+
+    coff_obj_writer_push_symbol_secdef(cow, a_sect, COFF_ComdatSelect_NoDuplicates);
+    coff_obj_writer_push_symbol_secdef(cow, b_sect, COFF_ComdatSelect_NoDuplicates);
+
+    coff_obj_writer_push_symbol_extern(cow, str8_lit("entry"), 0, entry_sect);
+    COFF_ObjSymbol *a_symbol = coff_obj_writer_push_symbol_static(cow, str8_lit("a"), 0, a_sect);
+    COFF_ObjSymbol *b_symbol = coff_obj_writer_push_symbol_static(cow, str8_lit("b"), 0, b_sect);
+    coff_obj_writer_section_push_reloc_rel32(cow, entry_sect, 1, a_symbol);
+    coff_obj_writer_section_push_reloc_rel32(cow, entry_sect, 6, b_symbol);
+
+    a_obj = coff_obj_writer_serialize(scratch.arena, cow);
+    coff_obj_writer_release(&cow);
+  }
+
+  // swap sections for a and b
+  String8 b_obj;
+  {
+    U8 text[] = {
+      0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, // mov rax, 1
+      0xc3
+    };
+
+    U8 call_a_and_b[] = {
+      0xe8, 0x00, 0x00, 0x00, 0x00,
+      0xe8, 0x00, 0x00, 0x00, 0x00,
+      0xc3 
+    };
+
+    COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *entry_sect = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(call_a_and_b));
+    COFF_ObjSection *a_sect = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS | COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_Align8Bytes, str8_array_fixed(text));
+    COFF_ObjSection *b_sect = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS | COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_Align4Bytes, str8_array_fixed(text));
+
+    coff_obj_writer_push_symbol_secdef(cow, a_sect, COFF_ComdatSelect_NoDuplicates);
+    coff_obj_writer_push_symbol_secdef(cow, b_sect, COFF_ComdatSelect_NoDuplicates);
+
+    coff_obj_writer_push_symbol_extern(cow, str8_lit("entry"), 0, entry_sect);
+    COFF_ObjSymbol *a_symbol = coff_obj_writer_push_symbol_static(cow, str8_lit("a"), 0, a_sect);
+    COFF_ObjSymbol *b_symbol = coff_obj_writer_push_symbol_static(cow, str8_lit("b"), 0, b_sect);
+    coff_obj_writer_section_push_reloc_rel32(cow, entry_sect, 1, a_symbol);
+    coff_obj_writer_section_push_reloc_rel32(cow, entry_sect, 6, b_symbol);
+
+    b_obj = coff_obj_writer_serialize(scratch.arena, cow);
+    coff_obj_writer_release(&cow);
+  }
+
+  T_Ok(t_write_file(str8_lit("a.obj"), a_obj));
+  T_Ok(t_write_file(str8_lit("b.obj"), b_obj));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:b.exe b.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U8 expected_text[] = {
+    0xe8, 0x0b, 0x00, 0x00, 0x00,   
+    0xe8, 0x06, 0x00, 0x00, 0x00,   
+    0xc3,               
+    0xcc,
+    0xcc,
+    0xcc,
+    0xcc,
+    0xcc,
+    0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00,
+    0x00,
+    0xc3,
+  };
+
+  // validate output in a.exe
+  {
+    String8 exe = t_read_file(scratch.arena, str8_lit("a.exe"));
+    T_Ok(exe.size);
+
+    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    String8             string_table  = str8_substr(exe, pe.string_table_range);
+    COFF_SectionHeader *text_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+
+    T_Ok(text_section);
+    T_Ok(text_section->foff + sizeof(expected_text) <= exe.size);
+
+    String8 text = str8_substr(exe, r1u64(text_section->foff, text_section->foff + text_section->vsize));
+    T_Ok(str8_match(text, str8_array_fixed(expected_text), 0));
+  }
+
+  // validate output in b.exe
+  {
+    String8 exe = t_read_file(scratch.arena, str8_lit("b.exe"));
     T_Ok(exe.size);
 
     PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
