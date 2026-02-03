@@ -3,6 +3,67 @@
 
 #define T_Group "Dwarf"
 
+internal U64
+t_dw_test_uleb128(U64 v, U64 expected_length)
+{
+  Temp scratch = scratch_begin(0, 0);
+  B32 is_ok = 0;
+
+  U64 v0 = v;
+  String8 e = dw_write_uleb128(scratch.arena, v0);
+  if (!(expected_length == e.size)) { goto exit; }
+
+  U64 v1;
+  U64 bytes_read = str8_deserial_read_uleb128(e, 0, &v1);
+  if (!(bytes_read == e.size)) { goto exit; }
+  if (!(v0 == v1)) { goto exit; }
+
+  is_ok = 1;
+exit:;
+  scratch_end(scratch);
+  return is_ok;
+}
+
+internal U64
+t_dw_test_sleb128(U64 v, U64 expected_length)
+{
+  Temp scratch = scratch_begin(0,0);
+  B32 is_ok = 0;
+
+  U64 v0 = v;
+  String8 e = dw_write_sleb128(scratch.arena, v0);
+  if (!(expected_length == e.size)) { goto exit; }
+
+  U64 v1;
+  U64 bytes_read = str8_deserial_read_sleb128(e, 0, &v1);
+  if (!(bytes_read == e.size)) { goto exit; }
+  if (!(v0 == v1)) { goto exit; }
+
+  is_ok = 1;
+exit:;
+  scratch_end(scratch);
+  return is_ok;
+}
+
+T_BeginTest(test_leb128)
+{
+  T_Ok(t_dw_test_uleb128(0, 1));
+  T_Ok(t_dw_test_sleb128(0, 1));
+  T_Ok(t_dw_test_sleb128(-1, 1));
+
+  T_Ok(t_dw_test_uleb128(max_U64, 10));
+  T_Ok(t_dw_test_sleb128(min_S64, 10));
+  T_Ok(t_dw_test_sleb128(max_S64, 10));
+
+  for EachIndex(i, 64) {
+    T_Ok(t_dw_test_uleb128((1ull << i), 1 + (i / 7)));
+  }
+  for EachIndex(i, 64) {
+    T_Ok(t_dw_test_sleb128((1ull << i), 1 + (i + 1) / 7));
+  }
+}
+T_EndTest;
+
 T_BeginTest(value_in_register)
 {
   // setup register context
