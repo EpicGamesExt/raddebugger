@@ -1521,7 +1521,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
     {
       HANDLE process = GetCurrentProcess();
       HANDLE thread = GetCurrentThread();
-      CONTEXT* context = exception_ptrs->ContextRecord;
+      CONTEXT context = *exception_ptrs->ContextRecord;
       
       WCHAR module_path[MAX_PATH];
       GetModuleFileNameW(NULL, module_path, ArrayCount(module_path));
@@ -1552,19 +1552,19 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
           DWORD image_type;
 #if defined(_M_AMD64)
           image_type = IMAGE_FILE_MACHINE_AMD64;
-          frame.AddrPC.Offset = context->Rip;
+          frame.AddrPC.Offset = context.Rip;
           frame.AddrPC.Mode = AddrModeFlat;
-          frame.AddrFrame.Offset = context->Rbp;
+          frame.AddrFrame.Offset = context.Rbp;
           frame.AddrFrame.Mode = AddrModeFlat;
-          frame.AddrStack.Offset = context->Rsp;
+          frame.AddrStack.Offset = context.Rsp;
           frame.AddrStack.Mode = AddrModeFlat;
 #elif defined(_M_ARM64)
           image_type = IMAGE_FILE_MACHINE_ARM64;
-          frame.AddrPC.Offset = context->Pc;
+          frame.AddrPC.Offset = context.Pc;
           frame.AddrPC.Mode = AddrModeFlat;
-          frame.AddrFrame.Offset = context->Fp;
+          frame.AddrFrame.Offset = context.Fp;
           frame.AddrFrame.Mode = AddrModeFlat;
-          frame.AddrStack.Offset = context->Sp;
+          frame.AddrStack.Offset = context.Sp;
           frame.AddrStack.Mode = AddrModeFlat;
 #else
 #  error Arch not supported!
@@ -1594,11 +1594,11 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
               frame.AddrPC.Offset = *(DWORD64*)frame.AddrStack.Offset - 1;
               frame.AddrStack.Offset += sizeof(void*);
 #if defined(_M_AMD64)
-              context->Rip = frame.AddrPC.Offset;
-              context->Rsp = frame.AddrStack.Offset;
+              context.Rip = frame.AddrPC.Offset;
+              context.Rsp = frame.AddrStack.Offset;
 #elif defined(_M_ARM64)
-              context->Pc = frame.AddrPC.Offset;
-              context->Sp = frame.AddrStack.Offset;
+              context.Pc = frame.AddrPC.Offset;
+              context.Sp = frame.AddrStack.Offset;
 #endif
             }
 
@@ -1615,7 +1615,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
               break;
             }
             
-            if(!dbg_StackWalk64(image_type, process, thread, &frame, context, 0, dbg_SymFunctionTableAccess64, dbg_SymGetModuleBase64, 0))
+            if(!dbg_StackWalk64(image_type, process, thread, &frame, &context, 0, dbg_SymFunctionTableAccess64, dbg_SymGetModuleBase64, 0))
             {
               break;
             }
@@ -1692,15 +1692,33 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   
   if(dbg_MiniDumpWriteDump && generate_crash_dump)
   {
-    WCHAR desktop_path[512] = {0};
-    SHGetFolderPathW(0, CSIDL_DESKTOP, 0, 0, desktop_path);
-    WCHAR dump_file_path[512] = {0};
-    wnsprintfW(dump_file_path, ArrayCount(dump_file_path), L"%s\\raddbg_crash_dump.dmp", desktop_path);
-    SECURITY_ATTRIBUTES security_attributes = {sizeof(security_attributes), 0, 0};
-    HANDLE file = CreateFileW(dump_file_path, GENERIC_WRITE, 0, &security_attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-    BOOL dump_successful = dbg_MiniDumpWriteDump(GetCurrentProcess(), os_get_process_info()->pid, file, MiniDumpNormal, 0, 0, 0);
-    CloseHandle(file);
-    (void)dump_successful;
+    WCHAR dump_file_path[MAX_PATH] = {0};
+    SHGetFolderPathW(0, CSIDL_DESKTOP, 0, 0, dump_file_path);
+    PathAppendW(dump_file_path, L"raddbg_crash_dump.dmp");
+    HANDLE file = CreateFileW(dump_file_path, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+    if (file != INVALID_HANDLE_VALUE)
+    {
+      MINIDUMP_EXCEPTION_INFORMATION info = {0};
+      info.ThreadId = GetCurrentThreadId();
+      info.ExceptionPointers = exception_ptrs;
+      info.ClientPointers = FALSE;
+      BOOL dump_successful = dbg_MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpNormal, &info, 0, 0);
+      CloseHandle(file);
+
+      if (dump_successful)
+      {
+#if !BUILD_CONSOLE_INTERFACE
+        // opens explorer and selects file
+        SFGAOF flags = 0;
+        PIDLIST_ABSOLUTE list = 0;
+        if (SUCCEEDED(SHParseDisplayName(dump_file_path, NULL, &list, 0, &flags)))
+        {
+          SHOpenFolderAndSelectItems(list, 0, NULL, 0);
+          CoTaskMemFree(list);
+        }
+#endif
+      }
+    }
   }
   
   ExitProcess(1);
@@ -1890,6 +1908,7 @@ int wmain(int argc, WCHAR **argv)
 #else
 int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
+  CoInitializeEx(0, COINIT_APARTMENTTHREADED);
   w32_entry_point_caller(__argc, __wargv);
   return 0;
 }
