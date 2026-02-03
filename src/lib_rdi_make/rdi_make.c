@@ -2131,7 +2131,7 @@ rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
 {
   RDIM_SerializedSectionBundle bundle;
   rdim_memzero_struct(&bundle);
-  bundle.sections[RDI_SectionKind_TopLevelInfo]         = rdim_serialized_section_make_unpacked_struct(&results->top_level_info.top_level_info);
+  bundle.sections[RDI_SectionKind_TopLevelInfo]         = rdim_serialized_section_make_unpacked_struct(results->top_level_info.top_level_info);
   bundle.sections[RDI_SectionKind_StringData]           = rdim_serialized_section_make_unpacked_array(results->strings.string_data, results->strings.string_data_size);
   bundle.sections[RDI_SectionKind_StringTable]          = rdim_serialized_section_make_unpacked_array(results->strings.string_offs, results->strings.string_offs_count);
   bundle.sections[RDI_SectionKind_IndexRuns]            = rdim_serialized_section_make_unpacked_array(results->idx_runs.idx_runs, results->idx_runs.idx_count);

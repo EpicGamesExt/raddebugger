@@ -1285,7 +1285,7 @@ struct RDIM_LineRec
 typedef struct RDIM_TopLevelInfoBakeResult RDIM_TopLevelInfoBakeResult;
 struct RDIM_TopLevelInfoBakeResult
 {
-  RDI_TopLevelInfo top_level_info;
+  RDI_TopLevelInfo *top_level_info;
 };
 
 typedef struct RDIM_BinarySectionBakeResult RDIM_BinarySectionBakeResult;
