@@ -827,3 +827,42 @@ dw_string_from_cfa_opcode(DW_CFA_Opcode opcode)
   }
   return str8_zero();
 }
+
+internal String8
+dw_write_uleb128(Arena *arena, U64 v)
+{
+  U64 buffer_size = 0;
+  U8  buffer[10];
+  U64 value = v;
+  do {
+    U8 byte = value & 0x7f;
+    value >>= 7;
+    if (value != 0) {
+      byte |= 0x80;
+    }
+    Assert(buffer_size < sizeof(buffer));
+    buffer[buffer_size++] = byte;
+  } while (value > 0);
+  return str8_copy(arena, str8(buffer, buffer_size));
+}
+
+internal String8
+dw_write_sleb128(Arena *arena, S64 v)
+{
+  U64 buffer_size = 0;
+  U8  buffer[10];
+  for (S64 value = v, more = 1; more != 0; ) {
+    U8 byte = value & 0x7f;
+    value >>= 7;
+    U8 sign_bit = byte & 0x40;
+    if ((value == 0 && sign_bit == 0) || (value == -1 && sign_bit != 0)) {
+      more = 0;
+    } else {
+      byte |= 0x80;
+    }
+    Assert(buffer_size < sizeof(buffer));
+    buffer[buffer_size++] = byte;
+  }
+  return str8_copy(arena, str8(buffer, buffer_size));
+}
+

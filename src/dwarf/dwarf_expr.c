@@ -1611,35 +1611,10 @@ dw_encode_expr(Arena *arena, Arch arch, DW_Format format, DW_ExprEnc *encs, U64 
       str8_serial_push_struct(scratch.arena, srl, &e->s64);
     } break;
     case DW_ExprEncType_ULEB128: {
-      U64 buffer_size = 0;
-      U8  buffer[10];
-      for (U64 value = e->u64; value != 0; ) {
-        U8 byte = value & 0x7f;
-        value >>= 7;
-        if (value != 0) {
-          byte |= 0x80;
-        }
-        Assert(buffer_size < sizeof(buffer));
-        buffer[buffer_size++] = byte;
-      }
-      str8_serial_push_string(scratch.arena, srl, str8(buffer, buffer_size));
+      str8_serial_push_string(scratch.arena, srl, dw_write_uleb128(scratch.arena, e->u64));
     } break;
     case DW_ExprEncType_SLEB128: {
-      U64 buffer_size = 0;
-      U8  buffer[10];
-      for (S64 value = e->s64, more = 1; more != 0; ) {
-        U8 byte = value & 0x7f;
-        value >>= 7;
-        U8 sign_bit = byte & 0x40;
-        if ((value == 0 && sign_bit == 0) || (value == -1 && sign_bit != 0)) {
-          more = 0;
-        } else {
-          byte |= 0x80;
-        }
-        Assert(buffer_size < sizeof(buffer));
-        buffer[buffer_size++] = byte;
-      }
-      str8_serial_push_string(scratch.arena, srl, str8(buffer, buffer_size));
+      str8_serial_push_string(scratch.arena, srl, dw_write_sleb128(scratch.arena, e->s64));
     } break;
     case DW_ExprEncType_Addr: {
       U64 addr_size = byte_size_from_arch(arch);

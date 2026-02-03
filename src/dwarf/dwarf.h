@@ -1778,4 +1778,9 @@ internal String8 dw_string_from_rng_list_entry_kind(Arena *arena, DW_RLE kind);
 internal String8 dw_string_from_register(Arena *arena, Arch arch, U64 reg_id);
 internal String8 dw_string_from_cfa_opcode(DW_CFA_Opcode opcode);
 
+////////////////////////////////
+
+internal String8 dw_write_uleb128(Arena *arena, U64 v);
+internal String8 dw_write_sleb128(Arena *arena, S64 v);
+
 #endif // DWARF_H
