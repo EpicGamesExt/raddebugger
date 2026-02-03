@@ -16,7 +16,7 @@
 #include <Shlobj.h>
 #include <processthreadsapi.h>
 #pragma comment(lib, "user32")
-#pragma comment(lib, "winmm")
+#pragma comment(lib, "ole32")
 #pragma comment(lib, "shell32")
 #pragma comment(lib, "advapi32")
 #pragma comment(lib, "rpcrt4")
