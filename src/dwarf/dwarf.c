@@ -616,26 +616,23 @@ dw_string_from_attrib_kind(Arena *arena, DW_Version ver, DW_Ext ext, DW_AttribKi
   String8 result = {0};
   
   //- rjf: try extensions
-  if(result.size != 0)
+  while(ext)
   {
-    while(ext)
+    U64 z = 64-clz64(ext);
+    if(z == 0)
     {
-      U64 z = 64-clz64(ext);
-      if(z == 0)
-      {
-        break;
-      }
-      U64 flag = 1 << (z-1);
-      ext &= ~flag;
-      switch(flag)
-      {
-        default:{}break;
-        case DW_Ext_Null:  break;
-        case DW_Ext_GNU:   switch (kind) { DW_AttribKind_GNU_XList   } break;
-        case DW_Ext_LLVM:  switch (kind) { DW_AttribKind_LLVM_XList  } break;
-        case DW_Ext_APPLE: switch (kind) { DW_AttribKind_APPLE_XList } break;
-        case DW_Ext_MIPS:  switch (kind) { DW_AttribKind_MIPS_XList  } break;
-      }
+      break;
+    }
+    U64 flag = 1 << (z-1);
+    ext &= ~flag;
+    switch(flag)
+    {
+      default:{}break;
+      case DW_Ext_Null:  break;
+      case DW_Ext_GNU:   switch (kind) { DW_AttribKind_GNU_XList   } break;
+      case DW_Ext_LLVM:  switch (kind) { DW_AttribKind_LLVM_XList  } break;
+      case DW_Ext_APPLE: switch (kind) { DW_AttribKind_APPLE_XList } break;
+      case DW_Ext_MIPS:  switch (kind) { DW_AttribKind_MIPS_XList  } break;
     }
   }
   
