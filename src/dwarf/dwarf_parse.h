@@ -175,7 +175,6 @@ typedef struct DW_CompUnit
   Rng1U64         info_range;
   U64             first_tag_info_off;
   DW_AbbrevTable  abbrev_table;
-  String8         abbrev_data;
   DW_ListUnit    *addr_lu;
   DW_ListUnit    *str_offsets_lu;
   DW_ListUnit    *rnglists_lu;
@@ -192,6 +191,8 @@ typedef struct DW_TagTree
   U64         tag_count;
 } DW_TagTree;
 
+////////////////////////////////
+
 typedef struct DW_LineFile
 {
   String8 file_name;
@@ -202,42 +203,43 @@ typedef struct DW_LineFile
   String8 source;
 } DW_LineFile;
 
-typedef struct DW_LineVMFileNode
+typedef struct DW_LineFileNode
 {
-  struct DW_LineVMFileNode *next;
-  DW_LineFile               file;
-} DW_LineVMFileNode;
+  struct DW_LineFileNode *next;
+  DW_LineFile             file;
+} DW_LineFileNode;
 
-typedef struct DW_LineVMFileList
+typedef struct DW_LineFileList
 {
-  U64                node_count;
-  DW_LineVMFileNode *first;
-  DW_LineVMFileNode *last;
-} DW_LineVMFileList;
+  U64              node_count;
+  DW_LineFileNode *first;
+  DW_LineFileNode *last;
+} DW_LineFileList;
 
-typedef struct DW_LineVMFileArray
+typedef struct DW_LineFileArray
 {
   U64          count;
   DW_LineFile *v;
-} DW_LineVMFileArray;
+} DW_LineFileArray;
 
 typedef struct DW_LineVMHeader
 {
-  Rng1U64             unit_range;
-  DW_Version          version;
-  U8                  address_size; // Duplicates size from the compilation unit but is needed to support stripped exe that just have .debug_line and .debug_line_str.
-  U8                  segment_selector_size;
-  U64                 header_length;
-  U8                  min_inst_len;
-  U8                  max_ops_for_inst;
-  U8                  default_is_stmt;
-  S8                  line_base;
-  U8                  line_range;
-  U8                  opcode_base;
-  U64                 num_opcode_lens;
-  U8                 *opcode_lens;
-  DW_LineVMFileArray  dir_table;
-  DW_LineVMFileArray  file_table;
+  U64               unit_length;
+  DW_Version        version;
+  U8                address_size; // Duplicates size from the compilation unit but is needed to support stripped exe that just have .debug_line and .debug_line_str.
+  U8                segment_selector_size;
+  U64               header_length;
+  U8                min_inst_len;
+  U8                max_ops_for_inst;
+  U8                default_is_stmt;
+  S8                line_base;
+  U8                line_range;
+  U8                opcode_base;
+  U64               num_opcode_lens;
+  U8               *opcode_lens;
+  U64               line_program_off;
+  String8Array      dir_table;
+  DW_LineFileArray  file_table;
 } DW_LineVMHeader;
 
 typedef struct DW_LineVMState
@@ -248,10 +250,10 @@ typedef struct DW_LineVMState
   // Line table doesn't contain full path to a file, instead
   // DWARF encodes path as two indices. First index will point into a directory
   // table,  and second points into a file name table.
-  U32 file_index;
+  U64 file_index;
   
-  U32 line;
-  U32 column;
+  U64 line;
+  U64 column;
   
   B32 is_stmt;      // Indicates that "address" points to place suitable for a breakpoint.
   B32 basic_block;  // Indicates that the "address" is inside a basic block.
@@ -267,35 +269,33 @@ typedef struct DW_LineVMState
   B32 end_sequence;    // Indicates that "address" points to the first instruction in the instruction block that follows.
 } DW_LineVMState;
 
-typedef struct DW_Line
+typedef struct DW_LineVM
 {
-  U64 file_index;
-  U32 line;
-  U32 column;
-  U64 address;
-} DW_Line;
-
-typedef struct DW_LineNode
-{
-  struct DW_LineNode *next;
-  DW_Line             v;
-} DW_LineNode;
-
-typedef struct DW_LineSeqNode
-{
-  struct DW_LineSeqNode *next;
-  U64                    count;
-  DW_LineNode           *first;
-  DW_LineNode           *last;
-} DW_LineSeqNode;
-
-typedef struct DW_LineTableParseResult
-{
-  DW_LineVMHeader vm_header;
-  U64             seq_count;
-  DW_LineSeqNode *first_seq;
-  DW_LineSeqNode *last_seq;
-} DW_LineTableParseResult;
+  Arena             *arena;
+  U64                cursor;
+  String8            program;
+  DW_LineVMHeader    header;
+  B32                new_line;
+  B32                new_seq;
+  B32                skip_opcode;
+  DW_LineVMState     state;
+  U64                advance;
+  U64                opcode_off;
+  DW_StdOpcode       opcode;
+  DW_ExtOpcode       ext_opcode;
+  U64                ext_length;
+  U64                line_advance;
+  U64                addr_advance;
+  HashTable         *ext_file_ht;
+  struct {
+    union {
+      String8 string;
+      U64     u64;
+      S64     s64;
+    };
+  } operands[4];
+  String8 error;
+} DW_LineVM;
 
 ////////////////////////////////
 // .debug_pubnames and .debug_pubtypes
@@ -460,15 +460,16 @@ internal U64 dw_addr_from_list_unit  (DW_ListUnit *lu, U64 index);
 
 // abbrev table
 
-internal U64            dw_read_abbrev_tag   (String8 data, U64 offset, DW_Abbrev *out_abbrev);
-internal U64            dw_read_abbrev_attrib(String8 data, U64 offset, DW_Abbrev *out_abbrev);
-internal DW_AbbrevTable dw_make_abbrev_table(Arena *arena, String8 abbrev_data, U64 start_abbrev_off);
+internal U64 dw_read_abbrev_tag   (String8 data, U64 offset, DW_Abbrev *out_abbrev);
+internal U64 dw_read_abbrev_attrib(String8 data, U64 offset, DW_Abbrev *out_abbrev);
+
+internal DW_AbbrevTable dw_read_abbrev_table(Arena *arena, String8 abbrev_data, U64 abbrev_base);
 internal U64            dw_abbrev_offset_from_abbrev_id(DW_AbbrevTable table, U64 abbrev_id);
 
 // form and tag
 
-internal U64 dw_read_form(String8 data, U64 off, DW_Version version, DW_Format unit_format, U64 address_size, DW_FormKind form_kind, U64 implicit_const, DW_Form *form_out);
-internal U64 dw_read_tag   (Arena *arena, String8 tag_data, U64 tag_off, U64 tag_base, DW_AbbrevTable abbrev_table, String8 abbrev_data, DW_Version version, DW_Format unit_format, U64 address_size, DW_Tag *tag_out);
+internal B32 dw_read_form  (String8 data, DW_Version version, DW_Format unit_format, U64 address_size, DW_FormKind form_kind, U64 implicit_const, DW_Form *form_out, U64 *bytes_read_out);
+internal U64 dw_read_tag   (Arena *arena, DW_Input *input, DW_AbbrevTable abbrev_table, DW_Version version, DW_Format format, U64 address_size, Rng1U64 cu_info_range, U64 tag_info_off, DW_Tag *tag_out);
 internal U64 dw_read_tag_cu(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 info_off, DW_Tag *tag_out);
 
 // attrib interp
@@ -530,18 +531,15 @@ internal DW_TagTree   dw_tag_tree_from_cu(Arena *arena, DW_Input *input, DW_Comp
 internal HashTable *  dw_make_tag_hash_table(Arena *arena, DW_TagTree tag_tree);
 internal DW_TagNode * dw_tag_node_from_info_off(DW_CompUnit *cu, U64 info_off);
 
-// line info
+// line VM
 
-internal U64              dw_read_line_file(String8 line_data, U64 line_off, DW_Input *input, DW_Version unit_version, DW_Format unit_format, DW_Ext ext, U64 address_size, DW_ListUnit *str_offsets, U64 enc_count, U64 *enc_arr, DW_LineFile *line_file_out);
-internal U64              dw_read_line_vm_header(Arena *arena, String8 line_data, U64 line_off, DW_Input *input, String8 cu_dir, String8 cu_name, U8 cu_address_size, DW_ListUnit *cu_str_offsets, DW_LineVMHeader *header_out);
-internal void             dw_line_vm_reset(DW_LineVMState *state, B32 default_is_stmt);
-internal void             dw_line_vm_advance(DW_LineVMState *state, U64 advance, U64 min_inst_len, U64 max_ops_for_inst);
-internal DW_LineSeqNode * dw_push_line_seq(Arena* arena, DW_LineTableParseResult *parsed_tbl);
-internal DW_LineNode *    dw_push_line(Arena *arena, DW_LineTableParseResult *tbl, DW_LineVMState *vm_state, B32 start_of_sequence);
-internal String8          dw_path_from_file(Arena *arena, DW_LineVMHeader *vm, DW_LineFile *file);
-internal String8          dw_path_from_file_idx(Arena *arena, DW_LineVMHeader *vm, U64 file_idx);
-
-internal DW_LineTableParseResult dw_parsed_line_table_from_data(Arena *arena, String8 unit_data, DW_Input *input, String8 cu_dir, String8 cu_name, U8 cu_address_size, DW_ListUnit *cu_str_offsets);
+internal U64           dw_read_line_vm_header(Arena *arena, DW_Input *input, String8 cu_stmt_list, String8 cu_dir, String8 cu_name, U8 cu_address_size, DW_ListUnit *cu_str_offsets, DW_LineVMHeader *header_out);
+internal DW_LineVM *   dw_line_vm_init(DW_Input *input, DW_CompUnit *cu);
+internal void          dw_line_vm_release(DW_LineVM *vm);
+internal void          dw_line_vm_advance(DW_LineVM *vm, U64 advance);
+internal B32           dw_line_vm_step(DW_LineVM *vm);
+internal DW_LineFile * dw_line_vm_find_file(DW_LineVM *vm, U64 file_idx);
+internal String8       dw_path_from_file(Arena *arena, String8Array dir_table, DW_LineFile *file);
 
 // helper for .debug_pubtypes and .debug_pubnames 
 

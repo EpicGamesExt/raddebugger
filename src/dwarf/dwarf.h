@@ -151,12 +151,13 @@ typedef enum DW_InlKindEnum
   X(SetEpilogueBegin, 0x0B) \
   X(SetIsa,           0x0C) \
 
-typedef enum DW_StdOpcode
+typedef U8 DW_StdOpcode;
+typedef enum DW_StdOpcodeEnum
 {
 #define X(_N,_ID) DW_StdOpcode_##_N = _ID,
   DW_StdOpcode_XList
 #undef X
-} DW_StdOpcode;
+} DW_StdOpcodeEnum;
 
 #define DW_ExtOpcode_XList  \
   X(Undefined,        0x00) \
@@ -167,12 +168,13 @@ typedef enum DW_StdOpcode
   X(UserLo,           0x80) \
   X(UserHi,           0xff)
 
-typedef enum DW_ExtOpcode
+typedef U8 DW_ExtOpcode;
+typedef enum DW_ExtOpcodeEnum
 {
 #define X(_N,_ID) DW_ExtOpcode_##_N = _ID,
   DW_ExtOpcode_XList
 #undef X
-} DW_ExtOpcode;
+} DW_ExtOpcodeEnum;
 
 #define DW_IDCaseKind_XList \
   X(CaseSensitive,   0x00)  \
@@ -1023,39 +1025,39 @@ typedef enum DW_FormEnum
   X(GNU_Denominator,             0x2304) \
   X(GNU_Bias,                    0x2305)
 
-#define DW_AttribKind_ClassFlags_GNU_XList                 \
-  X(GNU_Vector,                  DW_AttribClass_Flag)      \
-  X(GNU_GuardedBy,               DW_AttribClass_Undefined) \
-  X(GNU_PtGuardedBy,             DW_AttribClass_Undefined) \
-  X(GNU_Guarded,                 DW_AttribClass_Undefined) \
-  X(GNU_PtGuarded,               DW_AttribClass_Undefined) \
-  X(GNU_LocksExcluded,           DW_AttribClass_Undefined) \
-  X(GNU_ExclusiveLocksRequired,  DW_AttribClass_Undefined) \
-  X(GNU_SharedLocksRequired,     DW_AttribClass_Undefined) \
-  X(GNU_OdrSignature,            DW_AttribClass_Undefined) \
-  X(GNU_TemplateName,            DW_AttribClass_Undefined) \
-  X(GNU_CallSiteValue,           DW_AttribClass_ExprLoc)   \
-  X(GNU_CallSiteDataValue,       DW_AttribClass_ExprLoc)   \
-  X(GNU_CallSiteTarget,          DW_AttribClass_ExprLoc)   \
-  X(GNU_CallSiteTargetClobbered, DW_AttribClass_ExprLoc)   \
-  X(GNU_TailCall,                DW_AttribClass_Flag)      \
-  X(GNU_AllTailCallsSites,       DW_AttribClass_Flag)      \
-  X(GNU_AllCallSites,            DW_AttribClass_Flag)      \
-  X(GNU_AllSourceCallSites,      DW_AttribClass_Flag)      \
-  X(GNU_Macros,                  DW_AttribClass_Flag)      \
-  X(GNU_Deleted,                 DW_AttribClass_Undefined) \
-  X(GNU_DwoName,                 DW_AttribClass_String)    \
-  X(GNU_DwoId,                   DW_AttribClass_Const)     \
-  X(GNU_RangesBase,              DW_AttribClass_Undefined) \
-  X(GNU_AddrBase,                DW_AttribClass_AddrPtr)   \
-  X(GNU_PubNames,                DW_AttribClass_Flag)      \
-  X(GNU_PubTypes,                DW_AttribClass_Undefined) \
-  X(GNU_Discriminator,           DW_AttribClass_Const)     \
-  X(GNU_LocViews,                DW_AttribClass_Undefined) \
-  X(GNU_EntryView,               DW_AttribClass_Undefined) \
-  X(GNU_DescriptiveType,         DW_AttribClass_Undefined) \
-  X(GNU_Numerator,               DW_AttribClass_Undefined) \
-  X(GNU_Denominator,             DW_AttribClass_Undefined) \
+#define DW_AttribKind_ClassFlags_GNU_XList                  \
+  X(GNU_Vector,                  DW_AttribClass_Flag)       \
+  X(GNU_GuardedBy,               DW_AttribClass_Undefined)  \
+  X(GNU_PtGuardedBy,             DW_AttribClass_Undefined)  \
+  X(GNU_Guarded,                 DW_AttribClass_Undefined)  \
+  X(GNU_PtGuarded,               DW_AttribClass_Undefined)  \
+  X(GNU_LocksExcluded,           DW_AttribClass_Undefined)  \
+  X(GNU_ExclusiveLocksRequired,  DW_AttribClass_Undefined)  \
+  X(GNU_SharedLocksRequired,     DW_AttribClass_Undefined)  \
+  X(GNU_OdrSignature,            DW_AttribClass_Undefined)  \
+  X(GNU_TemplateName,            DW_AttribClass_Undefined)  \
+  X(GNU_CallSiteValue,           DW_AttribClass_ExprLoc)    \
+  X(GNU_CallSiteDataValue,       DW_AttribClass_ExprLoc)    \
+  X(GNU_CallSiteTarget,          DW_AttribClass_ExprLoc)    \
+  X(GNU_CallSiteTargetClobbered, DW_AttribClass_ExprLoc)    \
+  X(GNU_TailCall,                DW_AttribClass_Flag)       \
+  X(GNU_AllTailCallsSites,       DW_AttribClass_Flag)       \
+  X(GNU_AllCallSites,            DW_AttribClass_Flag)       \
+  X(GNU_AllSourceCallSites,      DW_AttribClass_Flag)       \
+  X(GNU_Macros,                  DW_AttribClass_Flag)       \
+  X(GNU_Deleted,                 DW_AttribClass_Undefined)  \
+  X(GNU_DwoName,                 DW_AttribClass_String)     \
+  X(GNU_DwoId,                   DW_AttribClass_Const)      \
+  X(GNU_RangesBase,              DW_AttribClass_Undefined)  \
+  X(GNU_AddrBase,                DW_AttribClass_AddrPtr)    \
+  X(GNU_PubNames,                DW_AttribClass_Flag)       \
+  X(GNU_PubTypes,                DW_AttribClass_Undefined)  \
+  X(GNU_Discriminator,           DW_AttribClass_Const)      \
+  X(GNU_LocViews,                DW_AttribClass_LocListPtr) \
+  X(GNU_EntryView,               DW_AttribClass_Undefined)  \
+  X(GNU_DescriptiveType,         DW_AttribClass_Undefined)  \
+  X(GNU_Numerator,               DW_AttribClass_Undefined)  \
+  X(GNU_Denominator,             DW_AttribClass_Undefined)  \
   X(GNU_Bias,                    DW_AttribClass_Undefined)
 
 //- Attributes LLVM

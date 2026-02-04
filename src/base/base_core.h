@@ -12,6 +12,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 ////////////////////////////////
 //~ rjf: Third Party Includes
@@ -439,7 +440,7 @@ C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t s
 # define this_function_name __func__
 #endif
 
-#define TryRead(func, cursor, label) do { U64 size = (func); if (size == 0) { goto label; } cursor += size; } while (0)
+#define TryRead(func__, cursor__, label__) do { U64 size__ = (func__); if (size__ == 0) { Assert(0 && "failed read"); goto label__; } cursor__ += size__; } while (0)
 
 ////////////////////////////////
 //~ rjf: Base Types
