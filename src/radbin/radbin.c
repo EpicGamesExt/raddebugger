@@ -706,8 +706,9 @@ rb_thread_entry_point(void *p)
                 }
               }
             }
-            convert_params.subset_flags   = subset_flags;
-            convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
+            convert_params.subset_flags     = subset_flags;
+            convert_params.deterministic    = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
+            convert_params.is_parse_relaxed = 1; // TODO: switch
           }
           ProfScope("convert") dwarf_bake_params = d2r_convert(arena, &convert_params);
         }
@@ -1019,6 +1020,8 @@ rb_thread_entry_point(void *p)
         fprintf(stderr, "                                 be dumped. See below for a list of valid\n");
         fprintf(stderr, "                                 subset names.\n");
         fprintf(stderr, "\n");
+        fprintf(stderr, "--verbose                        dump more format details\n");
+        fprintf(stderr, "\n");
         
         fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
         
@@ -1036,6 +1039,8 @@ rb_thread_entry_point(void *p)
 #undef X
         fprintf(stderr, "\n");
       }
+
+      B32 verbose = cmd_line_has_flag(cmdline, str8_lit("verbose"));
       
       //- rjf: unpack dump subset flags
       RDI_DumpSubsetFlags rdi_dump_subset_flags = RDI_DumpSubsetFlag_All;
@@ -1234,7 +1239,7 @@ rb_thread_entry_point(void *p)
           }
           lane_sync();
           {
-            String8List dump = dw_dump_list_from_sections(arena, &dw, arch, dw_dump_subset_flags);
+            String8List dump = dw_dump_list_from_sections(arena, &dw, arch, dw_dump_subset_flags, verbose);
             if(lane_idx() == 0)
             {
               str8_list_concat_in_place(&output_blobs, &dump);
