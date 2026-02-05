@@ -62,7 +62,7 @@ RDI_U16 rdi_eval_op_ctrlbits_table[54] =
 {
 RDI_EVAL_CTRLBITS(0, 0, 0),
 RDI_EVAL_CTRLBITS(0, 0, 0),
-RDI_EVAL_CTRLBITS(1, 1, 0),
+RDI_EVAL_CTRLBITS(2, 1, 0),
 RDI_EVAL_CTRLBITS(2, 0, 0),
 RDI_EVAL_CTRLBITS(1, 1, 1),
 RDI_EVAL_CTRLBITS(4, 0, 1),
@@ -116,13 +116,15 @@ RDI_EVAL_CTRLBITS(0, 0, 1),
 RDI_EVAL_CTRLBITS(0, 0, 0),
 };
 
-struct {RDI_EvalConversionKind dst_typegroups[RDI_EvalTypeGroup_COUNT];} rdi_eval_typegroup_conversion_kind_matrix[6] =
+struct {RDI_EvalConversionKind dst_typegroups[RDI_EvalTypeGroup_COUNT];} rdi_eval_typegroup_conversion_kind_matrix[8] =
 {
 {{RDI_EvalConversionKind_OtherToOther, RDI_EvalConversionKind_FromOther, RDI_EvalConversionKind_FromOther, RDI_EvalConversionKind_FromOther, RDI_EvalConversionKind_FromOther}},
 {{RDI_EvalConversionKind_ToOther, RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal}},
 {{RDI_EvalConversionKind_ToOther, RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal}},
 {{RDI_EvalConversionKind_ToOther, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Legal}},
 {{RDI_EvalConversionKind_ToOther, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Noop}},
+{{RDI_EvalConversionKind_ToOther, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal}},
+{{RDI_EvalConversionKind_ToOther, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal, RDI_EvalConversionKind_Legal}},
 {{RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Noop, RDI_EvalConversionKind_Noop}},
 };
 

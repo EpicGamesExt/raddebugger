@@ -464,7 +464,9 @@ RDI_EvalTypeGroup_U                    = 1,
 RDI_EvalTypeGroup_S                    = 2,
 RDI_EvalTypeGroup_F32                  = 3,
 RDI_EvalTypeGroup_F64                  = 4,
-RDI_EvalTypeGroup_COUNT                = 5,
+RDI_EvalTypeGroup_F80                  = 5,
+RDI_EvalTypeGroup_F128                 = 6,
+RDI_EvalTypeGroup_COUNT                = 7,
 } RDI_EvalTypeGroupEnum;
 
 typedef RDI_U8 RDI_EvalConversionKind;
@@ -990,6 +992,8 @@ X(U)\
 X(S)\
 X(F32)\
 X(F64)\
+X(F80)\
+X(F128)\
 
 #define RDI_EvalConversionKind_XList \
 X(Noop)\
