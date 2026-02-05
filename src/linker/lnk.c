@@ -3892,7 +3892,7 @@ lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U6
 }
 
 internal String8List
-lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sects, U64 expected_image_header_size)
+lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sects, U64 expected_image_header_size, U64 *file_header_offset_out, String8List *string_table_out)
 {
   ProfBeginFunction();
 
@@ -3951,6 +3951,8 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
     file_header->section_count        = sects.count;
     file_header->optional_header_size = (has_pe_plus_header ? sizeof(PE_OptionalHeader32Plus) : sizeof(PE_OptionalHeader32)) + (sizeof(PE_DataDirectory) * config->data_dir_count);
     file_header->flags                = config->file_characteristics;
+
+    *file_header_offset_out = result.total_size;
     str8_list_push(arena, &result, str8_struct(file_header));
   }
 
@@ -4061,13 +4063,21 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
 
       if (coff_section->flags & COFF_SectionFlag_LnkRemove) { continue; }
 
-      // TODO: for objs we can store long name in string table and write here /offset
+      String8 section_name = sect->name;
+
+      // use string table extension to store long section names
       if (sect->name.size > sizeof(coff_section->name)) {
-        lnk_error(LNK_Warning_LongSectionName, "not enough space in COFF section header to store entire name \"%S\"", sect->name);
+        if (string_table_out->node_count == 0) {
+          U32 *string_table_size = push_array(arena, U32, 1);
+          str8_list_push_front(arena, string_table_out, str8_struct(string_table_size));
+        }
+        U64 name_offset = string_table_out->total_size;
+        str8_list_push(arena, string_table_out, push_cstr(arena, sect->name));
+        section_name = push_str8f(arena, "/%u", name_offset);
       }
 
       MemorySet(&coff_section->name[0], 0, sizeof(coff_section->name));
-      MemoryCopy(&coff_section->name[0], sect->name.str, Min(sect->name.size, sizeof(coff_section->name)));
+      MemoryCopy(&coff_section->name[0], section_name.str, Min(section_name.size, sizeof(coff_section->name)));
       coff_section->vsize       = sect->vsize;
       coff_section->voff        = sect->voff;
       coff_section->fsize       = sect->fsize;
@@ -4106,6 +4116,12 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
     }
 
     scratch_end(scratch);
+  }
+
+  // write string table size
+  if (string_table_out->total_size) {
+    U32 *string_table_size = (U32 *)string_table_out->first->string.str;
+    *string_table_size = safe_cast_u32(string_table_out->total_size);
   }
 
   Assert(result.total_size == expected_image_header_size);
@@ -4453,8 +4469,10 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   }
 
   // build win32 image header
+  U64         image_file_header_off = 0;
+  String8List image_string_table    = {0};
   {
-    String8List              image_header_data     = lnk_build_win32_header(sectab->arena, symtab, config, task.image_sects, AlignPow2(expected_image_header_size, config->file_align));
+    String8List              image_header_data     = lnk_build_win32_header(sectab->arena, symtab, config, task.image_sects, AlignPow2(expected_image_header_size, config->file_align), &image_file_header_off, &image_string_table);
     LNK_Section             *image_header_sect     = lnk_section_table_push(sectab, str8_lit(".rad_linker_image_header_section"), 0);
     LNK_SectionContribChunk *image_header_sc_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &image_header_sect->contribs, 1, str8_zero());
     LNK_SectionContrib      *image_header_sc       = lnk_section_contrib_chunk_push(image_header_sc_chunk, 1);
@@ -4471,7 +4489,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     ProfBegin("Image Fill");
 
     ProfBeginV("Alloc Image Buffer [%M]", lnk_section_table_total_fsize(sectab));
-    image_data.size = lnk_section_table_total_fsize(sectab);
+    image_data.size = lnk_section_table_total_fsize(sectab) + image_string_table.total_size;
     image_data.str  = push_array_no_zero(arena->v[0], U8, image_data.size);
     ProfEnd();
 
@@ -4521,6 +4539,17 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     task.u.image_fill.image_data = image_data;
     task.u.image_fill.fill_nodes = fill_nodes;
     tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_image_fill_task, &task, "Fill");
+
+    if (image_string_table.total_size) {
+      ProfBegin("Copy String Table");
+      String8 buffer = str8_list_join(scratch.arena, &image_string_table, 0);
+      MemoryCopy(image_data.str + (image_data.size - buffer.size), buffer.str, buffer.size);
+      ProfEnd();
+
+      // patch string table offset
+      COFF_FileHeader *file_header = (COFF_FileHeader *)(image_data.str + image_file_header_off);
+      file_header->symbol_table_foff = safe_cast_u32(image_data.size - buffer.size);
+    }
 
     temp_end(temp);
 

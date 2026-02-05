@@ -3909,6 +3909,38 @@ T_BeginTest(fail_if_mismatch)
 }
 T_EndTest;
 
+T_BeginTest(long_section_name)
+{
+  Arch arch = Arch_x64;
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  U8 text[] = { 0xc3 };
+  COFF_ObjSection *text_sect = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+  coff_obj_writer_push_section(cow, str8_lit(".debug_info"), PE_DATA_SECTION_FLAGS, str8_lit("DEBUG_INFO"));
+  coff_obj_writer_push_section(cow, str8_lit(".debug_abbrev"), PE_DATA_SECTION_FLAGS, str8_lit("DEBUG_ABBREV"));
+  coff_obj_writer_push_symbol_extern(cow, str8_lit("entry"), 0, text_sect);
+  String8 raw_coff = coff_obj_writer_serialize(scratch.arena, cow);
+  coff_obj_writer_release(&cow);
+
+  // link test.obj
+  T_Ok(t_write_file(str8_lit("test.obj"), raw_coff));
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe test.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  // load linked exe
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+
+  COFF_SectionHeader *debug_info = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".debug_info"));
+  T_Ok(debug_info);
+
+  COFF_SectionHeader *debug_abbrev = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".debug_abbrev"));
+  T_Ok(debug_abbrev);
+}
+T_EndTest;
+
 #if 0
 
 T_BeginTest(fold_two_funcs)
