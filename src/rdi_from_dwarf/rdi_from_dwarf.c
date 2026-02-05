@@ -1330,12 +1330,21 @@ d2r_bytecode_from_expression(Arena       *arena,
         d2r_value_type_stack_push(scratch.arena, stack, d2r_value_type_stack_peek(stack));
       } break;
       case DW_ExprOp_Rot:  { AssertAlways(!"no suitable conversion"); } break;
-      case DW_ExprOp_Swap: { AssertAlways(!"no suitable conversion"); } break;
-      case DW_ExprOp_Drop: { AssertAlways(!"no suitable conversion"); } break;
+      case DW_ExprOp_Swap: {
+        D2R_ValueType a = d2r_value_type_stack_pop(stack);
+        D2R_ValueType b = d2r_value_type_stack_pop(stack);
+        d2r_value_type_stack_push(scratch.arena, stack, a);
+        d2r_value_type_stack_push(scratch.arena, stack, b);
+        rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_Swap, 0);
+      } break;
+      case DW_ExprOp_Drop: {
+        d2r_value_type_stack_pop(stack);
+        rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_Pop, 0);
+      } break;
       case DW_ExprOp_StackValue: {
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_Stop, 0);
         if (stack->top->type == D2R_ValueType_Address) {
-          stack->top->type = d2r_unsigned_value_type_from_bit_size(address_size * 8);
+          stack->top->type = d2r_unsigned_value_type_from_bit_size(cu->address_size * 8);
         }
       } break;
       case DW_ExprOp_FormTlsAddress:
@@ -1349,7 +1358,9 @@ d2r_bytecode_from_expression(Arena       *arena,
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_Add, d2r_value_type_to_rdi(lhs));
         d2r_value_type_stack_push(scratch.arena, stack, D2R_ValueType_Address);
       } break;
-      
+      case DW_ExprOp_GNU_UnInit: {
+        // TODO: flag value as unitialized; this must be last opcode; possible to use with DW_ExprOp_Piece;
+      } break;
       default: InvalidPath; break;
     }
     if (!is_ok) { break; }
