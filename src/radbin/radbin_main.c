@@ -13,6 +13,7 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "linker/hash_table.h"
+#include "linker/lf_hash_table.h"
 #include "os/os_inc.h"
 #include "rdi/rdi_local.h"
 #include "rdi_make/rdi_make_local.h"
@@ -39,6 +40,7 @@
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "linker/hash_table.c"
+#include "linker/lf_hash_table.c"
 #include "os/os_inc.c"
 #include "rdi/rdi_local.c"
 #include "rdi_make/rdi_make_local.c"
