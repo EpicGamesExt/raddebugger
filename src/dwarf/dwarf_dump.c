@@ -1904,11 +1904,8 @@ dw_dump_list_from_sections(Arena              *arena,
       
       // rjf: log abbrev
       Temp temp = temp_begin(scratch.arena);
-      dumpf("abbrev: // abbrev[%I64u]\n{\n", idx);
-      dumpf("  offset:       0x%I64x\n", id_off);
-      dumpf("  id:           %I64u\n", id);
-      dumpf("  tag_kind:     %S\n", dw_string_from_tag_kind(temp.arena, tag));
-      dumpf("  has_children: %s\n", has_children ? "true" : "false");
+      dumpf("abbrev: // abbrev[%I64u] @ 0x%I64x \n{\n", idx, id_off);
+      dumpf("  id: %I64u   tag_kind: %S   has_children: %s\n", id, dw_string_from_tag_kind(temp.arena, tag), has_children ? "true" : "false");
       for(;;)
       {
         U64 attrib_off = cursor;
@@ -1918,7 +1915,7 @@ dw_dump_list_from_sections(Arena              *arena,
         if(attrib_id == 0) { break; }
         String8 attrib_str = dw_string_from_attrib_kind(temp.arena, DW_Version_Last, DW_Ext_All, attrib_id);
         String8 form_str   = dw_string_from_form_kind(temp.arena, DW_Version_Last, form_id);
-        dumpf("  attrib: { offset: 0x%I64x, kind: %S, form_kind: %S }\n", attrib_off, attrib_str, form_str);
+        dumpf("  attrib: { kind: %-8S form_kind: %-8S } // 0x%I64x\n", attrib_str, form_str, attrib_off);
       }
       dumpf("}\n");
       temp_end(temp);
