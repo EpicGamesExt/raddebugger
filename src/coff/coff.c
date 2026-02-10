@@ -455,6 +455,21 @@ arch_from_coff_machine(COFF_MachineType machine)
   return result;
 }
 
+internal COFF_MachineType
+coff_machine_from_arch(Arch arch)
+{
+  COFF_MachineType machine = COFF_MachineType_Unknown;
+  switch (arch) {
+  case Arch_Null:  machine = COFF_MachineType_Unknown; break;
+  case Arch_x86:   machine = COFF_MachineType_X86;     break;
+  case Arch_x64:   machine = COFF_MachineType_X64;     break;
+  case Arch_arm64: machine = COFF_MachineType_Arm64;   break;
+  case Arch_arm32: machine = COFF_MachineType_Arm;     break;
+  default: InvalidPath; break;
+  }
+  return machine;
+}
+
 internal U64
 coff_foff_from_voff(COFF_SectionHeader *sections, U64 section_count, U64 voff)
 {

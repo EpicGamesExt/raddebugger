@@ -628,8 +628,9 @@ internal U64 coff_word_size_from_machine       (COFF_MachineType machine);
 internal U64 coff_default_exe_base_from_machine(COFF_MachineType machine);
 internal U64 coff_default_dll_base_from_machine(COFF_MachineType machine);
 
-internal Arch arch_from_coff_machine(COFF_MachineType machine);
-internal U64  coff_foff_from_voff(COFF_SectionHeader *sections, U64 section_count, U64 voff);
+internal Arch             arch_from_coff_machine(COFF_MachineType machine);
+internal COFF_MachineType coff_machine_from_arch(Arch arch);
+internal U64              coff_foff_from_voff(COFF_SectionHeader *sections, U64 section_count, U64 voff);
 
 ////////////////////////////////
 //~ rjf: Enum <=> String
