@@ -950,4 +950,83 @@ dw_serial_push_sleb128(Arena *arena, String8List *srl, S64 v)
   return str8_serial_push_string(arena, srl, str8(buffer, buffer_size));
 }
 
+internal B32
+dw_form_match(DW_Form a, DW_Form b)
+{
+  B32 is_match = 0;
+
+  if (a.kind == b.kind) {
+    switch (a.kind) {
+    case DW_Form_Null: {} break;
+
+    case DW_Form_Addr:   { is_match = str8_match(a.addr, b.addr, 0);     } break;
+    case DW_Form_String: { is_match = str8_match(a.string, b.string, 0); } break;
+
+    case DW_Form_Block:
+    case DW_Form_Block1:
+    case DW_Form_Block2:
+    case DW_Form_Block4: {
+      is_match = str8_match(a.block, b.block, 0);
+    } break;
+
+    case DW_Form_Data1:
+    case DW_Form_Data2:
+    case DW_Form_Data4:
+    case DW_Form_Data8:  
+    case DW_Form_Data16: {
+      is_match = str8_match(a.data, b.data, 0);
+    } break;
+
+    case DW_Form_Flag:  { is_match = a.flag == b.flag;   } break;
+    case DW_Form_SData: { is_match = a.sdata == b.sdata; } break;
+    case DW_Form_UData: { is_match = a.udata == b.udata; } break;
+
+    case DW_Form_RefAddr:
+    case DW_Form_Ref1:
+    case DW_Form_Ref2:
+    case DW_Form_Ref4:
+    case DW_Form_Ref8: 
+    case DW_Form_RefUData: 
+    case DW_Form_GNU_RefAlt: {
+      is_match = a.ref == b.ref;
+    } break;
+
+    case DW_Form_Indirect: { NotImplemented; } break;
+
+    case DW_Form_SecOffset: 
+    case DW_Form_LineStrp:
+    case DW_Form_GNU_StrpAlt: {
+      is_match = a.sec_offset == b.sec_offset;
+    } break;
+
+    case DW_Form_ImplicitConst: { is_match = a.implicit_const, b.implicit_const; } break;
+
+    case DW_Form_Strx:
+    case DW_Form_Strx1:
+    case DW_Form_Strx2:
+    case DW_Form_Strx3:
+    case DW_Form_Strx4:
+    case DW_Form_Addrx:
+    case DW_Form_Addrx1:
+    case DW_Form_Addrx2:
+    case DW_Form_Addrx3:
+    case DW_Form_Addrx4:
+    case DW_Form_RngListx:
+    case DW_Form_LocListx: {
+      is_match = a.xval == b.xval;
+    } break;
+
+    case DW_Form_StrpSup: { is_match = a.strp_sup == b.strp_sup; } break;
+
+    case DW_Form_RefSup4: { NotImplemented; } break;
+    case DW_Form_RefSup8: { NotImplemented; } break;
+
+    default: { InvalidPath; } break;
+    }
+  }
+
+  return is_match;
+
+  return is_match;
+}
 
