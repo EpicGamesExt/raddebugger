@@ -1,3 +1,6 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
 #ifndef COFF_OBJ_WRITER_H
 #define COFF_OBJ_WRITER_H
 
@@ -124,6 +127,10 @@ internal COFF_ObjReloc * coff_obj_writer_section_push_reloc_addr  (COFF_ObjWrite
 internal COFF_ObjReloc * coff_obj_writer_section_push_reloc_voff  (COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol);
 
 internal void coff_obj_writer_push_directive(COFF_ObjWriter *obj_writer, String8 directive);
+
+#ifdef OBJ_H
+internal String8 coff_from_obj(Arena *arena, OBJ *obj);
+#endif
 
 #endif // COFF_OBJ_WRITER_H
 

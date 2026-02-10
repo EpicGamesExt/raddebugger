@@ -1,3 +1,6 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
 internal COFF_ObjWriter*
 coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine)
 {
@@ -5,7 +8,7 @@ coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine)
   COFF_ObjWriter *obj_writer = push_array(arena, COFF_ObjWriter, 1);
   obj_writer->arena          = arena;
   obj_writer->time_stamp     = time_stamp;
-  obj_writer->machine   = machine;
+  obj_writer->machine        = machine;
   return obj_writer;
 }
 
@@ -508,5 +511,100 @@ coff_obj_section_is_before(void *raw_a, void *raw_b)
   return (*a)->section_number < (*b)->section_number;
 }
 
+#ifdef OBJ_H
 
+internal String8
+coff_from_obj(Arena *arena, OBJ *obj)
+{
+  Temp scratch = scratch_begin(&arena, 1);
 
+  COFF_MachineType  machine    = coff_machine_from_arch(obj->arch);
+  COFF_TimeStamp    time_stamp = (COFF_TimeStamp)obj->time_stamp;
+  COFF_ObjWriter   *cow        = coff_obj_writer_alloc(time_stamp, machine);
+
+  // push sections
+  HashTable *section_remap = hash_table_init(scratch.arena, obj->symbols.count * 2);
+  for EachNode(section_n, OBJ_SectionNode, obj->sections.first) {
+    OBJ_Section *section = &section_n->v;
+
+    COFF_SectionFlags flags = 0;
+    if (section->flags & OBJ_SectionFlag_Read)      { flags |= COFF_SectionFlag_MemRead;                             }
+    if (section->flags & OBJ_SectionFlag_Write)     { flags |= COFF_SectionFlag_MemWrite;                            }
+    if (section->flags & OBJ_SectionFlag_Exec)      { flags |= COFF_SectionFlag_MemExecute|COFF_SectionFlag_CntCode; }
+    if ( ! (section->flags & OBJ_SectionFlag_Exec)) { flags |= COFF_SectionFlag_CntInitializedData;                }
+    if ( ! (section->flags & OBJ_SectionFlag_Load)) { flags |= COFF_SectionFlag_MemDiscardable;                      }
+
+    COFF_ObjSection *section_coff = coff_obj_writer_push_section(cow, section->name, flags, str8_zero());
+    section_coff->data = section->data;
+
+    // obj -> coff section
+    hash_table_push_raw_raw(scratch.arena, section_remap, section, section_coff);
+  }
+ 
+  // push symbols
+  HashTable *symbol_remap = hash_table_init(scratch.arena, obj->symbols.count * 2);
+  for EachNode(symbol_n, OBJ_SymbolNode, obj->symbols.first) {
+    OBJ_Symbol *symbol = &symbol_n->v;
+    switch (symbol->ref_kind) {
+    case OBJ_RefKind_Null: break;
+    case OBJ_RefKind_Section: {
+      OBJ_Section         *section       = symbol->ref;
+      COFF_ObjSection     *section_coff  = hash_table_search_raw_raw(section_remap, section);
+      COFF_SymbolLocation  location      = (COFF_SymbolLocation){ .type = COFF_SymbolLocation_Section, .u.section = section_coff };
+
+      COFF_SymStorageClass storage_class = COFF_SymStorageClass_Null;
+      switch (symbol->scope) {
+      case OBJ_SymbolScope_Null: break;
+      case OBJ_SymbolScope_Local:  storage_class = COFF_SymStorageClass_Static;   break;
+      case OBJ_SymbolScope_Global: storage_class = COFF_SymStorageClass_External; break;
+      }
+
+      COFF_ObjSymbol *symbol_coff  = coff_obj_writer_push_symbol(cow,
+                                                                 symbol->name,
+                                                                 0,
+                                                                 location,
+                                                                 (COFF_SymbolType){0},
+                                                                 storage_class);
+      hash_table_push_raw_raw(scratch.arena, symbol_remap, symbol, symbol_coff);
+    } break;
+    }
+  }
+
+  // push relocations
+  for EachNode(section_n, OBJ_SectionNode, obj->sections.first) {
+    OBJ_Section     *section      = &section_n->v;
+    COFF_ObjSection *section_coff = hash_table_search_raw_raw(section_remap, section);
+
+    for EachNode(reloc_n, OBJ_RelocNode, section->relocs.first) {
+      OBJ_Reloc *reloc = &reloc_n->v;
+
+      // obj -> coff reloc type
+      COFF_RelocType reloc_type_coff = 0;
+      switch (cow->machine) {
+      case COFF_MachineType_Unknown: break;
+      case COFF_MachineType_X64: {
+        switch (reloc->kind) {
+        case OBJ_RelocKind_Null: break;
+        case OBJ_RelocKind_SecRel: reloc_type_coff = COFF_Reloc_X64_SecRel; break;
+        default: InvalidPath; break;
+        }
+      } break;
+      default: InvalidPath; break;
+      }
+
+      // push reloc entry
+      COFF_ObjSymbol *symbol_coff = hash_table_search_raw_raw(symbol_remap, reloc->symbol);
+      AssertAlways(symbol_coff);
+      coff_obj_writer_section_push_reloc(cow, section_coff, reloc->offset, symbol_coff, reloc_type_coff);
+    }
+  }
+
+  String8 raw_obj = coff_obj_writer_serialize(arena, cow);
+
+  coff_obj_writer_release(&cow);
+
+  scratch_end(scratch);
+  return raw_obj;
+}
+
+#endif
