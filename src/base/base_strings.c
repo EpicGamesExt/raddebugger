@@ -2637,16 +2637,18 @@ fuzzy_match_range_list_copy(Arena *arena, FuzzyMatchRangeList *src)
 //~ NOTE(allen): Serialization Helpers
 
 internal void
-str8_serial_begin(Arena *arena, String8List *srl){
+str8_serial_begin(Arena *arena, String8List *srl)
+{
   String8Node *node = push_array(arena, String8Node, 1);
   node->string.str = push_array_no_zero(arena, U8, 0);
-  srl->first = srl->last = node;
+  srl->first      = srl->last = node;
   srl->node_count = 1;
   srl->total_size = 0;
 }
 
 internal String8
-str8_serial_end(Arena *arena, String8List *srl){
+str8_serial_end(Arena *arena, String8List *srl)
+{
   U64 size = srl->total_size;
   U8 *out = push_array_no_zero(arena, U8, size);
   str8_serial_write_to_dst(srl, out);
@@ -2655,19 +2657,20 @@ str8_serial_end(Arena *arena, String8List *srl){
 }
 
 internal void
-str8_serial_write_to_dst(String8List *srl, void *out){
+str8_serial_write_to_dst(String8List *srl, void *out)
+{
   U8 *ptr = (U8*)out;
-  for (String8Node *node = srl->first;
-       node != 0;
-       node = node->next){
-    U64 size = node->string.size;
-    MemoryCopy(ptr, node->string.str, size);
+  for EachNode(n, String8Node, srl->first)
+  {
+    U64 size = n->string.size;
+    MemoryCopy(ptr, n->string.str, size);
     ptr += size;
   }
 }
 
 internal U64
-str8_serial_push_align(Arena *arena, String8List *srl, U64 align){
+str8_serial_push_align(Arena *arena, String8List *srl, U64 align)
+{
   Assert(IsPow2(align));
   
   U64 pos = srl->total_size;
@@ -2679,11 +2682,13 @@ str8_serial_push_align(Arena *arena, String8List *srl, U64 align){
     U8 *buf = push_array(arena, U8, size);
     
     String8 *str = &srl->last->string;
-    if (str->str + str->size == buf){
+    if(str->str + str->size == buf)
+    {
       srl->last->string.size += size;
       srl->total_size += size;
     }
-    else{
+    else
+    {
       str8_list_push(arena, srl, str8(buf, size));
     }
   }
@@ -2698,11 +2703,13 @@ str8_serial_push_size(Arena *arena, String8List *srl, U64 size)
   {
     U8 *buf = push_array_no_zero(arena, U8, size);
     String8 *str = &srl->last->string;
-    if (str->str + str->size == buf){
+    if(str->str + str->size == buf)
+    {
       srl->last->string.size += size;
       srl->total_size += size;
     }
-    else{
+    else
+    {
       str8_list_push(arena, srl, str8(buf, size));
     }
     result = buf;
@@ -2711,7 +2718,8 @@ str8_serial_push_size(Arena *arena, String8List *srl, U64 size)
 }
 
 internal void *
-str8_serial_push_data(Arena *arena, String8List *srl, void *data, U64 size){
+str8_serial_push_data(Arena *arena, String8List *srl, void *data, U64 size)
+{
   void *result = str8_serial_push_size(arena, srl, size);
   if(result != 0)
   {
@@ -2721,61 +2729,50 @@ str8_serial_push_data(Arena *arena, String8List *srl, void *data, U64 size){
 }
 
 internal void
-str8_serial_push_data_list(Arena *arena, String8List *srl, String8Node *first){
-  for (String8Node *node = first;
-       node != 0;
-       node = node->next){
-    str8_serial_push_data(arena, srl, node->string.str, node->string.size);
+str8_serial_push_data_list(Arena *arena, String8List *srl, String8Node *first)
+{
+  for EachNode(n, String8Node, first)
+  {
+    str8_serial_push_data(arena, srl, n->string.str, n->string.size);
   }
 }
 
-internal void
-str8_serial_push_u64(Arena *arena, String8List *srl, U64 x){
-  U8 *buf = push_array_no_zero(arena, U8, 8);
-  MemoryCopy(buf, &x, 8);
-  String8 *str = &srl->last->string;
-  if (str->str + str->size == buf){
-    srl->last->string.size += 8;
-    srl->total_size += 8;
-  }
-  else{
-    str8_list_push(arena, srl, str8(buf, 8));
-  }
+internal void *
+str8_serial_push_u64(Arena *arena, String8List *srl, U64 x)
+{
+  return str8_serial_push_data(arena, srl, &x, sizeof(x));
 }
 
-internal void
-str8_serial_push_u32(Arena *arena, String8List *srl, U32 x){
-  U8 *buf = push_array_no_zero(arena, U8, 4);
-  MemoryCopy(buf, &x, 4);
-  String8 *str = &srl->last->string;
-  if (str->str + str->size == buf){
-    srl->last->string.size += 4;
-    srl->total_size += 4;
-  }
-  else{
-    str8_list_push(arena, srl, str8(buf, 4));
-  }
+internal void *
+str8_serial_push_u32(Arena *arena, String8List *srl, U32 x)
+{
+  return str8_serial_push_data(arena, srl, &x, sizeof(x));
 }
 
-internal void
-str8_serial_push_u16(Arena *arena, String8List *srl, U16 x){
-  str8_serial_push_data(arena, srl, &x, sizeof(x));
+internal void *
+str8_serial_push_u16(Arena *arena, String8List *srl, U16 x)
+{
+  return str8_serial_push_data(arena, srl, &x, sizeof(x));
 }
 
-internal void
-str8_serial_push_u8(Arena *arena, String8List *srl, U8 x){
-  str8_serial_push_data(arena, srl, &x, sizeof(x));
+internal void *
+str8_serial_push_u8(Arena *arena, String8List *srl, U8 x)
+{
+  return str8_serial_push_data(arena, srl, &x, sizeof(x));
 }
 
-internal void
-str8_serial_push_cstr(Arena *arena, String8List *srl, String8 str){
-  str8_serial_push_data(arena, srl, str.str, str.size);
+internal void *
+str8_serial_push_cstr(Arena *arena, String8List *srl, String8 str)
+{
+  void *ptr = str8_serial_push_data(arena, srl, str.str, str.size);
   str8_serial_push_u8(arena, srl, 0);
+  return ptr;
 }
 
-internal void
-str8_serial_push_string(Arena *arena, String8List *srl, String8 str){
-  str8_serial_push_data(arena, srl, str.str, str.size);
+internal void *
+str8_serial_push_string(Arena *arena, String8List *srl, String8 str)
+{
+  return str8_serial_push_data(arena, srl, str.str, str.size);
 }
 
 ////////////////////////////////

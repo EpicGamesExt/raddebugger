@@ -428,13 +428,12 @@ internal U64     str8_serial_push_align(Arena *arena, String8List *srl, U64 alig
 internal void *  str8_serial_push_size(Arena *arena, String8List *srl, U64 size);
 internal void *  str8_serial_push_data(Arena *arena, String8List *srl, void *data, U64 size);
 internal void    str8_serial_push_data_list(Arena *arena, String8List *srl, String8Node *first);
-internal void    str8_serial_push_u64(Arena *arena, String8List *srl, U64 x);
-internal void    str8_serial_push_u32(Arena *arena, String8List *srl, U32 x);
-internal void    str8_serial_push_u16(Arena *arena, String8List *srl, U16 x);
-internal void    str8_serial_push_u8(Arena *arena, String8List *srl, U8 x);
-internal void    str8_serial_push_cstr(Arena *arena, String8List *srl, String8 str);
-internal void    str8_serial_push_string(Arena *arena, String8List *srl, String8 str);
-internal void    str8_serial_push_cstr(Arena *arena, String8List *srl, String8 str);
+internal void *  str8_serial_push_u64(Arena *arena, String8List *srl, U64 x);
+internal void *  str8_serial_push_u32(Arena *arena, String8List *srl, U32 x);
+internal void *  str8_serial_push_u16(Arena *arena, String8List *srl, U16 x);
+internal void *  str8_serial_push_u8(Arena *arena, String8List *srl, U8 x);
+internal void *  str8_serial_push_cstr(Arena *arena, String8List *srl, String8 str);
+internal void *  str8_serial_push_string(Arena *arena, String8List *srl, String8 str);
 #define str8_serial_push_array(arena, srl, ptr, count) str8_serial_push_data(arena, srl, ptr, sizeof(*(ptr)) * (count))
 #define str8_serial_push_struct(arena, srl, ptr) str8_serial_push_array(arena, srl, ptr, 1)
 
