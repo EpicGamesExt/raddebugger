@@ -68,6 +68,15 @@ typedef enum DW_SectionKindEnum
   DW_Section_Count
 } DW_SectionKindEnum;
 
+typedef U32 DW_SectionFlags;
+enum
+{
+#define X(_N, ...) DW_SectionFlag_##_N = (1 << DW_Section_##_N),
+  DW_SectionKind_XList
+#undef X
+  DW_SectionFlag_All = 0xffffffffu,
+};
+
 #define DW_Language_XList        \
   X(Null,                0x00)   \
   X(C89,                 0x01)   \
@@ -484,6 +493,30 @@ typedef enum DW_FormEnum
   DW_Form_GNU_XList
 #undef X
 } DW_FormEnum;
+
+typedef union DW_Form
+{
+  DW_FormKind kind;
+  union {
+    String8 addr;
+    String8 block;
+    String8 data;
+    String8 string;
+    String8 exprloc;
+    B8      flag;
+    S64     sdata;
+    U64     udata;
+    U64     sec_offset;
+    U64     ref;
+    U64     strp_sup;
+    U64     xval;
+    U64     addrx;
+    U64     strx;
+    U64     rnglistx;
+    U64     ptr;
+    U64     implicit_const;
+  };
+} DW_Form;
 
 //- Attributes DWARF2
 
@@ -1695,7 +1728,33 @@ typedef enum DW_RegX64Enum
 } DW_RegX64Enum;
 
 ////////////////////////////////
+// Speced Encodings
 
+internal DW_AttribClass dw_attrib_class_from_attrib_v2(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_v3(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_v4(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_v5(DW_AttribKind k);
+
+////////////////////////////////
+// Extensions
+
+internal DW_AttribClass dw_attrib_class_from_attrib_gnu  (DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_llvm (DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_apple(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_mips (DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib(DW_Version ver, DW_Ext ext, DW_AttribKind v);
+
+////////////////////////////////
+// Form Class Encodings
+
+internal DW_AttribClass dw_attrib_class_from_form_kind(DW_Version ver, DW_FormKind k);
+internal B32 dw_are_attrib_class_and_form_kind_compatible(DW_Version ver, DW_AttribClass attrib_class, DW_FormKind form_kind);
+internal B32 dw_is_form_kind_ref(DW_Version ver, DW_Ext ext, DW_FormKind form_kind);
+
+////////////////////////////////
+// xlist helpers
+
+// regs
 internal U64 dw_reg_size_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_pos_from_code_x64(DW_Reg reg_code);
 internal U64 dw_reg_size_from_code(Arch arch, DW_Reg reg_code);
@@ -1703,58 +1762,24 @@ internal U64 dw_reg_pos_from_code(Arch arch, DW_Reg reg_code);
 internal U64 dw_reg_count_from_arch(Arch arch);
 internal U64 dw_reg_max_size_from_arch(Arch arch);
 internal U64 dw_sp_from_arch(Arch arch);
-
-//- Attrib Class Encodings
-
-// Speced Encodings
-internal DW_AttribClass dw_attrib_class_from_attrib_v2(DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_v3(DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_v4(DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_v5(DW_AttribKind k);
-
-// Extensions
-internal DW_AttribClass dw_attrib_class_from_attrib_gnu  (DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_llvm (DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_apple(DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_mips (DW_AttribKind k);
-
-internal DW_AttribClass dw_attrib_class_from_attrib(DW_Version ver, DW_Ext ext, DW_AttribKind v);
-
-//- Form Class Encodings
-
-internal DW_AttribClass dw_attrib_class_from_form_kind(DW_Version ver, DW_FormKind k);
-
-internal B32 dw_are_attrib_class_and_form_kind_compatible(DW_Version ver, DW_AttribClass attrib_class, DW_FormKind form_kind);
-
-internal B32 dw_is_form_kind_ref(DW_Version ver, DW_Ext ext, DW_FormKind form_kind);
-
-//- Section Names
-
-internal String8 dw_name_string_from_section_kind     (DW_SectionKind k);
-internal String8 dw_mach_name_string_from_section_kind(DW_SectionKind k);
-internal String8 dw_dwo_name_string_from_section_kind (DW_SectionKind k);
-
-////////////////////////////////
-
 internal U64 dw_size_from_format(DW_Format format);
 
-////////////////////////////////
-
+// attrib form -> value class
 internal DW_AttribClass dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, B32 relaxed, DW_AttribKind attrib, DW_FormKind form_kind);
 
+// lang
 internal U64 dw_pick_default_lower_bound(DW_Language lang);
 
+// expr
 internal U64                  dw_operand_count_from_expr_op(DW_ExprOp op);
 internal U64                  dw_pop_count_from_expr_op(DW_ExprOp op);
 internal U64                  dw_push_count_from_expr_op(DW_ExprOp op);
 internal DW_ExprOperandType * dw_operand_types_from_expr_opcode(DW_ExprOp op);
 
-////////////////////////////////
-//~ CFA
-
-internal U64 dw_operand_count_from_cfa_opcode(DW_CFA_Opcode opcode);
-internal B32 dw_is_cfa_expr_opcode_invalid(DW_ExprOp opcode);
-internal B32 dw_is_new_row_cfa_opcode(DW_CFA_Opcode opcode);
+// CFA
+internal U64                  dw_operand_count_from_cfa_opcode(DW_CFA_Opcode opcode);
+internal B32                  dw_is_cfa_expr_opcode_invalid(DW_ExprOp opcode);
+internal B32                  dw_is_new_row_cfa_opcode(DW_CFA_Opcode opcode);
 internal DW_CFA_OperandType * dw_operand_types_from_cfa_op(DW_CFA_Opcode opcode);
 
 ////////////////////////////////
@@ -1766,6 +1791,7 @@ internal String8 dw_string_from_tag_kind(Arena *arena, DW_TagKind kind);
 internal String8 dw_string_from_attrib_kind(Arena *arena, DW_Version ver, DW_Ext ext, DW_AttribKind kind);
 internal String8 dw_string_from_form_kind(Arena *arena, DW_Version ver, DW_FormKind kind);
 internal String8 dw_string_from_language(Arena *arena, DW_Language kind);
+internal String8 dw_string_from_comp_unit_kind(Arena *arena, DW_CompUnitKind kind);
 internal String8 dw_string_from_inl(Arena *arena, DW_InlKind kind);
 internal String8 dw_string_from_access_kind(Arena *arena, DW_AccessKind kind);
 internal String8 dw_string_from_calling_convetion(Arena *arena, DW_CallingConventionKind kind);
@@ -1777,10 +1803,24 @@ internal String8 dw_string_from_section_kind(Arena *arena, DW_SectionKind kind);
 internal String8 dw_string_from_rng_list_entry_kind(Arena *arena, DW_RLE kind);
 internal String8 dw_string_from_register(Arena *arena, Arch arch, U64 reg_id);
 internal String8 dw_string_from_cfa_opcode(DW_CFA_Opcode opcode);
+internal String8 dw_name_string_from_section_kind(DW_SectionKind k);
+internal String8 dw_mach_name_string_from_section_kind(DW_SectionKind k);
+internal String8 dw_dwo_name_string_from_section_kind (DW_SectionKind k);
 
 ////////////////////////////////
+// Serializers
+
+internal U64 dw_write_to_buffer_uleb128(U8 buffer[10], U64 v);
+internal U64 dw_write_to_buffer_sleb128(U8 buffer[10], U64 v);
 
 internal String8 dw_write_uleb128(Arena *arena, U64 v);
 internal String8 dw_write_sleb128(Arena *arena, S64 v);
+internal U64 dw_size_from_uleb128(U64 v);
+internal U64 dw_size_from_sleb128(S64 v);
+
+internal void * dw_serial_push_length(Arena *arena, String8List *srl, DW_Format format, U64 length);
+internal void * dw_serial_push_uint(Arena *arena, String8List *srl, DW_Format format, U64 v);
+internal void * dw_serial_push_uleb128(Arena *arena, String8List *srl, U64 v);
+internal void * dw_serial_push_sleb128(Arena *arena, String8List *srl, S64 v);
 
 #endif // DWARF_H

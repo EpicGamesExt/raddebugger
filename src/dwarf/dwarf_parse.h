@@ -81,34 +81,12 @@ typedef struct DW_Abbrev
   DW_AbbrevFlags flags;
 } DW_Abbrev;
 
-typedef union DW_Form
-{
-  String8 addr;
-  String8 block;
-  String8 data;
-  String8 string;
-  String8 exprloc;
-  B8      flag;
-  S64     sdata;
-  U64     udata;
-  U64     sec_offset;
-  U64     ref;
-  U64     strp_sup;
-  U64     xval;
-  U64     addrx;
-  U64     strx;
-  U64     rnglistx;
-  U64     ptr;
-  U64     implicit_const;
-} DW_Form;
-
 typedef struct DW_Attrib
 {
   U64            info_off;
   U64            abbrev_off;
   U64            abbrev_id;
   DW_AttribKind  attrib_kind;
-  DW_FormKind    form_kind;
   DW_Form        form;
 } DW_Attrib;
 

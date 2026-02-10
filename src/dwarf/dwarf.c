@@ -1,84 +1,6 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal U64
-dw_reg_size_from_code_x64(DW_Reg reg_code)
-{
-  switch (reg_code) {
-#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX64_##reg_name_dw: return reg_size;
-    DW_Regs_X64_XList
-#undef X
-  }
-  return 0;
-}
-
-internal U64
-dw_reg_pos_from_code_x64(DW_Reg reg_code)
-{
-  switch (reg_code) {
-#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX64_##reg_name_dw: return reg_pos;
-    DW_Regs_X64_XList
-#undef X
-  }
-  return max_U64;
-}
-
-internal U64
-dw_reg_size_from_code(Arch arch, DW_Reg reg_code)
-{
-  switch (arch) {
-    case Arch_Null: break;
-    case Arch_x64: return dw_reg_size_from_code_x64(reg_code);
-    default: NotImplemented; break;
-  }
-  return 0;
-}
-
-internal U64
-dw_reg_pos_from_code(Arch arch, DW_Reg reg_code)
-{
-  switch (arch) {
-    case Arch_Null: break;
-    case Arch_x64: return dw_reg_pos_from_code_x64(reg_code);
-    default: NotImplemented; break;
-  }
-  return max_U64;
-}
-
-internal U64
-dw_reg_count_from_arch(Arch arch)
-{
-  switch (arch) {
-  default: { NotImplemented; } // fall-through
-  case Arch_Null: return 0;
-  case Arch_x64: return DW_RegX64_Last;
-  }
-}
-
-internal U64
-dw_reg_max_size_from_arch(Arch arch)
-{
-  local_persist U64 max_size = 0;
-  if (max_size == 0) {
-    U64 max_idx  = dw_reg_count_from_arch(arch);
-    for EachIndex(reg_idx, max_idx) {
-      U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
-      max_size = Max(max_size, reg_size);
-    }
-  }
-  return max_size;
-}
-
-internal U64
-dw_sp_from_arch(Arch arch)
-{
-  switch (arch) {
-  default: NotImplemented;
-  case Arch_Null: return 0;
-  case Arch_x64:  return DW_RegX64_Rsp;
-  }
-}
-
 internal DW_AttribClass
 dw_attrib_class_from_attrib_v2(DW_AttribKind k)
 {
@@ -275,38 +197,84 @@ dw_is_form_kind_ref(DW_Version ver, DW_Ext ext, DW_FormKind form_kind)
   return is_ref;
 }
 
-internal String8
-dw_name_string_from_section_kind(DW_SectionKind k)
+internal U64
+dw_reg_size_from_code_x64(DW_Reg reg_code)
 {
-  switch (k) {
-#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_L);
-    DW_SectionKind_XList
+  switch (reg_code) {
+#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX64_##reg_name_dw: return reg_size;
+    DW_Regs_X64_XList
 #undef X
   }
-  return str8_zero();
+  return 0;
 }
 
-internal String8
-dw_mach_name_string_from_section_kind(DW_SectionKind k)
+internal U64
+dw_reg_pos_from_code_x64(DW_Reg reg_code)
 {
-  switch (k) {
-#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_M);
-    DW_SectionKind_XList
+  switch (reg_code) {
+#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX64_##reg_name_dw: return reg_pos;
+    DW_Regs_X64_XList
 #undef X
   }
-  return str8_zero();
+  return max_U64;
 }
 
-internal String8
-dw_dwo_name_string_from_section_kind(DW_SectionKind k)
+internal U64
+dw_reg_size_from_code(Arch arch, DW_Reg reg_code)
 {
-  switch (k) {
-#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_D); 
-    DW_SectionKind_XList
-#undef X
+  switch (arch) {
+    case Arch_Null: break;
+    case Arch_x64: return dw_reg_size_from_code_x64(reg_code);
+    default: NotImplemented; break;
   }
-  return str8_zero();
+  return 0;
 }
+
+internal U64
+dw_reg_pos_from_code(Arch arch, DW_Reg reg_code)
+{
+  switch (arch) {
+    case Arch_Null: break;
+    case Arch_x64: return dw_reg_pos_from_code_x64(reg_code);
+    default: NotImplemented; break;
+  }
+  return max_U64;
+}
+
+internal U64
+dw_reg_count_from_arch(Arch arch)
+{
+  switch (arch) {
+  default: { NotImplemented; } // fall-through
+  case Arch_Null: return 0;
+  case Arch_x64: return DW_RegX64_Last;
+  }
+}
+
+internal U64
+dw_reg_max_size_from_arch(Arch arch)
+{
+  local_persist U64 max_size = 0;
+  if (max_size == 0) {
+    U64 max_idx  = dw_reg_count_from_arch(arch);
+    for EachIndex(reg_idx, max_idx) {
+      U64 reg_size = dw_reg_size_from_code(arch, reg_idx);
+      max_size = Max(max_size, reg_size);
+    }
+  }
+  return max_size;
+}
+
+internal U64
+dw_sp_from_arch(Arch arch)
+{
+  switch (arch) {
+  default: NotImplemented;
+  case Arch_Null: return 0;
+  case Arch_x64:  return DW_RegX64_Rsp;
+  }
+}
+
 
 internal U64
 dw_size_from_format(DW_Format format)
@@ -540,14 +508,11 @@ dw_operand_types_from_cfa_op(DW_CFA_Opcode opcode)
   return 0;
 }
 
-////////////////////////////////
-//~ rjf: String <=> Enum
-
 internal String8
 dw_string_from_format(DW_Format format)
 {
   switch (format) {
-  case DW_Format_Null:  return str8_zero();
+  case DW_Format_Null:  return str8_lit("NULL");
   case DW_Format_32Bit: return str8_lit("DWARF32");
   case DW_Format_64Bit: return str8_lit("DWARF64");
   }
@@ -705,6 +670,17 @@ dw_string_from_language(Arena *arena, DW_Language kind)
 }
 
 internal String8
+dw_string_from_comp_unit_kind(Arena *arena, DW_CompUnitKind kind)
+{
+  switch (kind) {
+#define X(_N,_ID) case DW_CompUnitKind_##_N: return str8_lit(Stringify(_N));
+    DW_CompUnitKind_XList
+#undef X
+  }
+  return push_str8f(arena, "%x", kind);
+}
+
+internal String8
 dw_string_from_inl(Arena *arena, DW_InlKind kind)
 {
   switch (kind) {
@@ -829,10 +805,42 @@ dw_string_from_cfa_opcode(DW_CFA_Opcode opcode)
 }
 
 internal String8
-dw_write_uleb128(Arena *arena, U64 v)
+dw_name_string_from_section_kind(DW_SectionKind k)
+{
+  switch (k) {
+#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_L);
+    DW_SectionKind_XList
+#undef X
+  }
+  return str8_zero();
+}
+
+internal String8
+dw_mach_name_string_from_section_kind(DW_SectionKind k)
+{
+  switch (k) {
+#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_M);
+    DW_SectionKind_XList
+#undef X
+  }
+  return str8_zero();
+}
+
+internal String8
+dw_dwo_name_string_from_section_kind(DW_SectionKind k)
+{
+  switch (k) {
+#define X(_N,_L,_M,_D) case DW_Section_##_N: return str8_lit(_D); 
+    DW_SectionKind_XList
+#undef X
+  }
+  return str8_zero();
+}
+
+internal U64
+dw_write_to_buffer_uleb128(U8 buffer[10], U64 v)
 {
   U64 buffer_size = 0;
-  U8  buffer[10];
   U64 value = v;
   do {
     U8 byte = value & 0x7f;
@@ -840,17 +848,16 @@ dw_write_uleb128(Arena *arena, U64 v)
     if (value != 0) {
       byte |= 0x80;
     }
-    Assert(buffer_size < sizeof(buffer));
+    Assert(buffer_size < 10);
     buffer[buffer_size++] = byte;
   } while (value > 0);
-  return str8_copy(arena, str8(buffer, buffer_size));
+  return buffer_size;
 }
 
-internal String8
-dw_write_sleb128(Arena *arena, S64 v)
+internal U64
+dw_write_to_buffer_sleb128(U8 buffer[10], U64 v)
 {
   U64 buffer_size = 0;
-  U8  buffer[10];
   for (S64 value = v, more = 1; more != 0; ) {
     U8 byte = value & 0x7f;
     value >>= 7;
@@ -860,9 +867,87 @@ dw_write_sleb128(Arena *arena, S64 v)
     } else {
       byte |= 0x80;
     }
-    Assert(buffer_size < sizeof(buffer));
+    Assert(buffer_size < 10);
     buffer[buffer_size++] = byte;
   }
+  return buffer_size;
+}
+
+internal String8
+dw_write_uleb128(Arena *arena, U64 v)
+{
+  U8 buffer[10];
+  U64 buffer_size = dw_write_to_buffer_uleb128(buffer, v);
   return str8_copy(arena, str8(buffer, buffer_size));
 }
+
+internal String8
+dw_write_sleb128(Arena *arena, S64 v)
+{
+  U8 buffer[10];
+  U64 buffer_size = dw_write_to_buffer_sleb128(buffer, v);
+  return str8_copy(arena, str8(buffer, buffer_size));
+}
+
+internal U64
+dw_size_from_uleb128(U64 v)
+{
+  U8 buffer[10];
+  return dw_write_to_buffer_uleb128(buffer, v);
+}
+
+internal U64
+dw_size_from_sleb128(S64 v)
+{
+  U8 buffer[10];
+  return dw_write_to_buffer_sleb128(buffer, v);
+}
+
+internal void *
+dw_serial_push_length(Arena *arena, String8List *srl, DW_Format format, U64 length)
+{
+  void *result;
+  if (format == DW_Format_64Bit) {
+    U8 buffer[sizeof(U32) + sizeof(U64)];
+    MemorySet(&buffer[0], 0xff, sizeof(U32));
+    MemoryCopy(buffer + sizeof(U32), &length, sizeof(length));
+    result = str8_serial_push_string(arena, srl, str8_array_fixed(buffer));
+  } else {
+    result = str8_serial_push_string(arena, srl, str8((U8 *)&length, sizeof(U32)));
+  }
+  return result;
+}
+
+internal void *
+dw_serial_push_uint(Arena *arena, String8List *srl, DW_Format format, U64 v)
+{
+  String8 uint;
+  if (format == DW_Format_64Bit) {
+    U64 *ptr = push_array(arena, U64, 1);
+    *ptr = v;
+    uint = str8((U8 *)ptr, sizeof(*ptr));
+  } else {
+    U32 *ptr = push_array(arena, U32, 1);
+    *ptr = safe_cast_u32(v);
+    uint = str8((U8 *)ptr, sizeof(*ptr));
+  }
+  return str8_serial_push_string(arena, srl, uint);
+}
+
+internal void *
+dw_serial_push_uleb128(Arena *arena, String8List *srl, U64 v)
+{
+  U8 buffer[10];
+  U64 buffer_size = dw_write_to_buffer_uleb128(buffer, v);
+  return str8_serial_push_string(arena, srl, str8(buffer, buffer_size));
+}
+
+internal void *
+dw_serial_push_sleb128(Arena *arena, String8List *srl, S64 v)
+{
+  U8 buffer[10];
+  U64 buffer_size = dw_write_to_buffer_sleb128(buffer, v);
+  return str8_serial_push_string(arena, srl, str8(buffer, buffer_size));
+}
+
 
