@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #ifndef LF_HASH_TABLE_H
-#define LF_HAHS_TABLE_H
+#define LF_HASH_TABLE_H
 
 typedef struct LFHT_Node
 {
