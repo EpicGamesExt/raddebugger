@@ -750,7 +750,7 @@ cl = lg;                                 \
       {
         stbsp__flush_cb();
         Rng1U64 range = va_arg(va, Rng1U64);
-        bf += STB_SPRINTF_DECORATE(sprintf)(bf, "[0x%llx, 0x%llx]", range.min, range.max);
+        bf += STB_SPRINTF_DECORATE(sprintf)(bf, "[0x%llx, 0x%llx)", range.min, range.max);
       }break;
 
       //
