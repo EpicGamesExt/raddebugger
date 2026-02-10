@@ -173,7 +173,7 @@ internal DW_SectionKind
 dw_section_kind_from_string(String8 string)
 {
   DW_SectionKind s = DW_Section_Null;
-#define X(_K,_L,_M,_W)                                        \
+#define X(_K,_L,_M,_W)                                      \
 if (str8_match_lit(_L, string, 0)) { s = DW_Section_##_K; } \
 if (str8_match_lit(_M, string, 0)) { s = DW_Section_##_K; }
   DW_SectionKind_XList
@@ -185,8 +185,7 @@ internal DW_SectionKind
 dw_section_dwo_kind_from_string(String8 string)
 {
   DW_SectionKind s = DW_Section_Null;
-#define X(_K,_L,_M,_W)                                        \
-if (str8_match_lit(_W, string, 0)) { s = DW_Section_##_K; }
+#define X(_K,_L,_M,_W) if (str8_match_lit(_W, string, 0)) { s = DW_Section_##_K; }
   DW_SectionKind_XList
 #undef X
   return s;
@@ -198,26 +197,35 @@ dw_unit_ranges_from_data(Arena *arena, String8 data)
   Rng1U64List result = {0};
   
   for (U64 cursor = 0; cursor < data.size; ) {
-    // read CU size
-    U64 cu_size      = 0;
-    U64 cu_size_size = str8_deserial_read_dwarf_packed_size(data, cursor, &cu_size);
-    
-    // was read ok?
-    if (cu_size_size == 0) {
-      break;
+    U64 start = cursor;
+
+    // read unit size
+    U64 size;
+    U64 size_size = str8_deserial_read_dwarf_packed_size(data, cursor, &size);
+    if (size_size == 0) { break; }
+    cursor += size_size;
+
+    // is unit size valid?
+    if (cursor + size > data.size) { break; }
+    cursor += size;
+
+    // push unit range
+    if (size > 0) {
+      rng1u64_list_push(arena, &result, rng_1u64(start, cursor));
     }
-    
-    if (cu_size > 0) {
-      // push unit range
-      rng1u64_list_push(arena, &result, rng_1u64(cursor, cursor+cu_size+cu_size_size));
-    }
-    
-    // advance
-    cursor += cu_size_size;
-    cursor += cu_size;
   }
   
   return result;
+}
+
+internal Rng1U64Array
+dw_unit_ranges_from_data_arr(Arena *arena, String8 data)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  Rng1U64List  list = dw_unit_ranges_from_data(scratch.arena, data);
+  Rng1U64Array arr  = rng1u64_array_from_list(arena, &list);
+  scratch_end(scratch);
+  return arr;
 }
 
 internal U64
@@ -731,8 +739,9 @@ dw_read_form(String8      data,
     } break;
     default: InvalidPath; break;
   }
-  
+
   if (form_out) {
+    form.kind = form_kind;
     *form_out = form;
   }
   if (bytes_read_out) {
@@ -774,7 +783,7 @@ dw_read_tag(Arena          *arena,
   if (tag_abbrev_id > 0) {
     // map abbrev id -> .debug_abbrev offset
     U64 abbrev_cursor = dw_abbrev_offset_from_abbrev_id(abbrev_table, tag_abbrev_id);
-    if (abbrev_cursor >= abbrev_data.size) { Assert(0 && "failed to find abbrev id"); goto exit; }
+    if (abbrev_cursor >= abbrev_data.size) { log_user_errorf("failed to find abbrev id 0x%I64x for tag 0x%I64x", tag_abbrev_id, tag_info_off); goto exit; }
 
     // read tag abbrev
     DW_Abbrev tag_abbrev = {0};
@@ -817,7 +826,6 @@ dw_read_tag(Arena          *arena,
       attrib_n->v.abbrev_off   = attrib_abbrev_off;
       attrib_n->v.abbrev_id    = attrib_abbrev.id;
       attrib_n->v.attrib_kind  = attrib_kind;
-      attrib_n->v.form_kind    = form_kind;
       attrib_n->v.form         = form;
 
       // push node to list
@@ -882,31 +890,31 @@ dw_u64_from_const_value(String8 const_value)
 }
 
 internal U64
-dw_interp_sec_offset(DW_FormKind form_kind, DW_Form form)
+dw_interp_sec_offset(DW_Form form)
 {
   U64 sec_offset = 0;
-  if (form_kind == DW_Form_SecOffset) {
+  if (form.kind == DW_Form_SecOffset) {
     sec_offset = form.sec_offset;
-  } else if (form_kind != DW_Form_Null) {
+  } else if (form.kind != DW_Form_Null) {
     AssertAlways(!"unexpected form");
   }
   return sec_offset;
 }
 
 internal String8
-dw_interp_exprloc(DW_FormKind form_kind, DW_Form form)
+dw_interp_exprloc(DW_Form form)
 {
   String8 expr = {0};
-  if (form_kind == DW_Form_ExprLoc) {
+  if (form.kind == DW_Form_ExprLoc) {
     expr = form.exprloc;
-  } else if (form_kind != DW_Form_Null) {
+  } else if (form.kind != DW_Form_Null) {
     AssertAlways(!"unexpected form");
   }
   return expr;
 }
 
 internal U128
-dw_interp_const_u128(DW_FormKind form_kind, DW_Form form)
+dw_interp_const_u128(DW_Form form)
 {
   AssertAlways(form.data.size <= sizeof(U128));
   U128 result = {0};
@@ -915,10 +923,10 @@ dw_interp_const_u128(DW_FormKind form_kind, DW_Form form)
 }
 
 internal U64
-dw_interp_const64(U64 type_byte_size, DW_ATE type_encoding, DW_FormKind form_kind, DW_Form form)
+dw_interp_const64(U64 type_byte_size, DW_ATE type_encoding, DW_Form form)
 {
   U64 result = max_U64;
-  if (form_kind == DW_Form_Data1 || form_kind == DW_Form_Data2 || form_kind == DW_Form_Data4 || form_kind == DW_Form_Data8 || form_kind == DW_Form_Data16) {
+  if (form.kind == DW_Form_Data1 || form.kind == DW_Form_Data2 || form.kind == DW_Form_Data4 || form.kind == DW_Form_Data8 || form.kind == DW_Form_Data16) {
     if (form.data.size <= sizeof(result)) {
       if (!dw_try_u64_from_const_value(type_byte_size, type_encoding, form.data, &result)) {
         Assert(!"unable to decode data");
@@ -926,13 +934,13 @@ dw_interp_const64(U64 type_byte_size, DW_ATE type_encoding, DW_FormKind form_kin
     } else {
       Assert(!"unable to cast U128 to U64");
     }
-  } else if (form_kind == DW_Form_UData) {
+  } else if (form.kind == DW_Form_UData) {
     result = form.udata;
-  } else if (form_kind == DW_Form_SData) {
+  } else if (form.kind == DW_Form_SData) {
     result = form.sdata;
-  } else if (form_kind == DW_Form_ImplicitConst) {
+  } else if (form.kind == DW_Form_ImplicitConst) {
     result = form.implicit_const;
-  } else if (form_kind == DW_Form_Null) {
+  } else if (form.kind == DW_Form_Null) {
     // skip 
   } else {
     AssertAlways(!"unexpected form");
@@ -941,47 +949,47 @@ dw_interp_const64(U64 type_byte_size, DW_ATE type_encoding, DW_FormKind form_kin
 }
 
 internal U64
-dw_interp_const_u64(DW_FormKind form_kind, DW_Form form)
+dw_interp_const_u64(DW_Form form)
 {
-  return dw_interp_const64(sizeof(U64), DW_ATE_Unsigned, form_kind, form);
+  return dw_interp_const64(sizeof(U64), DW_ATE_Unsigned, form);
 }
 
 internal U32
-dw_interp_const_u32(DW_FormKind form_kind, DW_Form form)
+dw_interp_const_u32(DW_Form form)
 {
-  U64 const64 = dw_interp_const_u64(form_kind, form);
+  U64 const64 = dw_interp_const_u64(form);
   U32 const32 = safe_cast_u32(const64);
   return const32;
 }
 
 internal S64
-dw_interp_const_s64(DW_FormKind form_kind, DW_Form form)
+dw_interp_const_s64(DW_Form form)
 {
-  U64 const_u64 = dw_interp_const_u64(form_kind, form);
+  U64 const_u64 = dw_interp_const_u64(form);
   S64 const_s64 = (S64)const_u64;
   return const_s64;
 }
 
 internal S32
-dw_interp_const_s32(DW_FormKind form_kind, DW_Form form)
+dw_interp_const_s32(DW_Form form)
 {
-  U32 const_u32 = dw_interp_const_u32(form_kind, form);
+  U32 const_u32 = dw_interp_const_u32(form);
   S32 const_s32 = (S32)const_u32;
   return const_s32;
 }
 
 internal U64
-dw_interp_address(U64 address_size, U64 base_addr, DW_ListUnit *addr_lu, DW_FormKind form_kind, DW_Form form)
+dw_interp_address(U64 address_size, U64 base_addr, DW_ListUnit *addr_lu, DW_Form form)
 {
   U64 address = 0;
-  if (form_kind == DW_Form_Addr) {
+  if (form.kind == DW_Form_Addr) {
     if (!dw_try_u64_from_const_value(address_size, DW_ATE_Address, form.addr, &address)) {
       AssertAlways(!"unable to decode address");
     }
-  } else if (form_kind == DW_Form_Addrx || form_kind == DW_Form_Addrx1 || form_kind == DW_Form_Addrx2 ||
-             form_kind == DW_Form_Addrx3 || form_kind == DW_Form_Addrx4) {
+  } else if (form.kind == DW_Form_Addrx || form.kind == DW_Form_Addrx1 || form.kind == DW_Form_Addrx2 ||
+             form.kind == DW_Form_Addrx3 || form.kind == DW_Form_Addrx4) {
     address = dw_addr_from_list_unit(addr_lu, form.xval);
-  } else if (form_kind == DW_Form_SecOffset) {
+  } else if (form.kind == DW_Form_SecOffset) {
     if (addr_lu->segment_selector_size > 0) {
       AssertAlways(!"TODO: support for segmented address space");
     }
@@ -990,14 +998,14 @@ dw_interp_address(U64 address_size, U64 base_addr, DW_ListUnit *addr_lu, DW_Form
     } else {
       Assert(!"out of bounds .debug_addr offset");
     }
-  } else if (form_kind != DW_Form_Null) {
+  } else if (form.kind != DW_Form_Null) {
     AssertAlways(!"unexpected form");
   }
   return address;
 }
 
 internal String8
-dw_interp_block(DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
+dw_interp_block(DW_Input *input, DW_CompUnit *cu, DW_Form form)
 {
   NotImplemented;
   return str8_zero();
@@ -1007,24 +1015,23 @@ internal String8
 dw_interp_string(DW_Input    *input,
                  DW_Format    unit_format,
                  DW_ListUnit *str_offsets,
-                 DW_FormKind  form_kind,
                  DW_Form      form)
 {
   String8 string = {0};
-  if (form_kind == DW_Form_String) {
+  if (form.kind == DW_Form_String) {
     string = form.string;
-  } else if (form_kind == DW_Form_Strp) {
+  } else if (form.kind == DW_Form_Strp) {
     U64 bytes_read = str8_deserial_read_cstr(input->sec[DW_Section_Str].data, form.sec_offset, &string);
     Assert(bytes_read > 0);
-  } else if (form_kind == DW_Form_LineStrp) {
+  } else if (form.kind == DW_Form_LineStrp) {
     U64 bytes_read = str8_deserial_read_cstr(input->sec[DW_Section_LineStr].data, form.sec_offset, &string);
     Assert(bytes_read > 0);
-  } else if (form_kind == DW_Form_StrpSup) {
+  } else if (form.kind == DW_Form_StrpSup) {
     U64 bytes_read = str8_deserial_read_cstr(input->sec[DW_Section_Str].data, form.strp_sup, &string);
     Assert(bytes_read > 0);
-  } else if (form_kind == DW_Form_Strx || form_kind == DW_Form_Strx1 ||
-             form_kind == DW_Form_Strx2 || form_kind == DW_Form_Strx3 ||
-             form_kind == DW_Form_Strx4) {
+  } else if (form.kind == DW_Form_Strx || form.kind == DW_Form_Strx1 ||
+             form.kind == DW_Form_Strx2 || form.kind == DW_Form_Strx3 ||
+             form.kind == DW_Form_Strx4) {
     U64 sec_offset = dw_offset_from_list_unit(str_offsets, form.xval);
     if (sec_offset < input->sec[DW_Section_Str].data.size) {
       U64 bytes_read = str8_deserial_read_cstr(input->sec[DW_Section_Str].data, sec_offset, &string);
@@ -1032,78 +1039,73 @@ dw_interp_string(DW_Input    *input,
     } else {
       AssertAlways(!"unable to translate index to offset");
     }
-  } else if (form_kind == DW_Form_GNU_StrpAlt) {
+  } else if (form.kind == DW_Form_GNU_StrpAlt) {
     NotImplemented;
-  } else if (form_kind == DW_Form_GNU_StrIndex) {
+  } else if (form.kind == DW_Form_GNU_StrIndex) {
     NotImplemented;
-  } else if (form_kind != DW_Form_Null) {
+  } else if (form.kind != DW_Form_Null) {
     AssertAlways(!"unexpected form");
   }
   return string;
 }
 
 internal String8
-dw_interp_line_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_line_ptr(DW_Input *input, DW_Form form)
 {
   String8 result = {0};
-  if (form_kind == DW_Form_SecOffset) {
+  if (form.kind == DW_Form_SecOffset) {
     result = str8_skip(input->sec[DW_Section_Line].data, form.sec_offset);
-  } else if (form_kind != DW_Form_Null) {
+  } else if (form.kind != DW_Form_Null) {
     AssertAlways(!"unexpected form");
   }
   return result;
 }
 
 internal DW_LineFile *
-dw_interp_file(DW_LineVMHeader *line_vm, DW_FormKind form_kind, DW_Form form)
+dw_interp_file(DW_LineVM *line_vm, DW_Form form)
 {
-  DW_LineFile *result = 0;
-  U64 file_idx = dw_interp_const_u64(form_kind, form);
-  if (file_idx < line_vm->file_table.count) {
-    result = &line_vm->file_table.v[file_idx];
-  } else {
-    Assert(!"out of bounds file index");
-  }
+  U64          file_idx = dw_interp_const_u64(form);
+  DW_LineFile *result   = dw_line_vm_find_file(line_vm, file_idx);
   return result;
 }
 
 internal DW_Reference
-dw_interp_ref(DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
+dw_interp_ref(DW_Input *input, DW_CompUnit *cu, DW_Form form)
 {
   DW_Reference ref = {0};
-  if (form_kind == DW_Form_Ref1 || form_kind == DW_Form_Ref2 ||
-      form_kind == DW_Form_Ref4 || form_kind == DW_Form_Ref8 ||
-      form_kind == DW_Form_RefUData) {
+  if (form.kind == DW_Form_Ref1 || form.kind == DW_Form_Ref2 ||
+      form.kind == DW_Form_Ref4 || form.kind == DW_Form_Ref8 ||
+      form.kind == DW_Form_RefUData) {
     ref.cu = cu;
     ref.info_off = cu->info_range.min + form.ref;
-  } else if (form_kind == DW_Form_RefAddr) {
+  } else if (form.kind == DW_Form_RefAddr) {
     NotImplemented;
-  } else if (form_kind == DW_Form_RefSig8) {
+  } else if (form.kind == DW_Form_RefSig8) {
     NotImplemented;
-  } else if (form_kind == DW_Form_RefSup4 || form_kind == DW_Form_RefSup8) {
+  } else if (form.kind == DW_Form_RefSup4 || form.kind == DW_Form_RefSup8) {
     NotImplemented;
-  } else if (form_kind != DW_Form_Null) {
+  } else if (form.kind != DW_Form_Null) {
     AssertAlways(!"unexpected form");
   }
   return ref;
 }
 
 internal DW_LocList
-dw_interp_loclist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
+dw_interp_loclist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Form form)
 {
   DW_LocList loclist = {0};
   
   if (cu->version < DW_Version_5) {
-    if (form_kind == DW_Form_SecOffset) {
+    if (form.kind == DW_Form_SecOffset) {
       U64 sec_offset = max_U64;
-      if (form_kind == DW_Form_SecOffset) {
+      if (form.kind == DW_Form_SecOffset) {
         sec_offset = form.sec_offset;
-      } else if (form_kind == DW_Form_Data8 || form_kind == DW_Form_Data4 ||
-                 form_kind == DW_Form_Data2 || form_kind == DW_Form_Data1) {
+      } else if (form.kind == DW_Form_Data8 || form.kind == DW_Form_Data4 ||
+                 form.kind == DW_Form_Data2 || form.kind == DW_Form_Data1) {
         if (!dw_try_u64_from_const_value(form.data.size, DW_ATE_Unsigned, form.data, &sec_offset)) {
           Assert(!"unable to extract section offset");
         }
-      } else if (form_kind == DW_Form_Null) {
+      } else if (form.kind == DW_Form_Null) {
         Assert(!"unexpected form");
       }
       
@@ -1157,22 +1159,22 @@ dw_interp_loclist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind fo
           cursor += expr_size;
         }
       }
-    } else if (form_kind != DW_Form_Null) {
+    } else if (form.kind != DW_Form_Null) {
       AssertAlways(!"unexpected form");
     }
   } else {
     DW_Version version = DW_Version_Null;
     String8    raw_lle = {0};
-    if (form_kind == DW_Form_SecOffset) {
+    if (form.kind == DW_Form_SecOffset) {
       // offset is from beginning of the section
       U64 sec_offset = form.sec_offset;
       raw_lle = str8_skip(input->sec[DW_Section_LocLists].data, sec_offset);
-    } else if (form_kind == DW_Form_LocListx) {
+    } else if (form.kind == DW_Form_LocListx) {
       // offset is from beginning of the entries
       U64 entries_off = dw_offset_from_list_unit(cu->loclists_lu, form.xval);
       raw_lle         = str8_skip(cu->loclists_lu->entries, entries_off);
       version         = cu->loclists_lu->version;
-    } else if (form_kind != DW_Form_Null) {
+    } else if (form.kind != DW_Form_Null) {
       AssertAlways(!"unexpected form");
     }
     
@@ -1364,33 +1366,33 @@ dw_interp_loclist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind fo
 }
 
 internal B32
-dw_interp_flag(DW_FormKind form_kind, DW_Form form)
+dw_interp_flag(DW_Form form)
 {
   B32 flag = 0;
-  if (form_kind == DW_Form_Flag || form_kind == DW_Form_FlagPresent) {
+  if (form.kind == DW_Form_Flag || form.kind == DW_Form_FlagPresent) {
     flag = form.flag;
-  } else if (form_kind != DW_Form_Null) {
+  } else if (form.kind != DW_Form_Null) {
     AssertAlways(!"unexpected form");
   }
   return flag;
 }
 
 internal Rng1U64List
-dw_interp_rnglist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form)
+dw_interp_rnglist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Form form)
 {
   Rng1U64List rnglist = {0};
   
   if (cu->version < DW_Version_5) {
     // decode section offset
     U64 sec_offset = max_U64;
-    if (form_kind == DW_Form_SecOffset) {
+    if (form.kind == DW_Form_SecOffset) {
       sec_offset = form.sec_offset;
-    } else if (form_kind == DW_Form_Data8 || form_kind == DW_Form_Data4 ||
-               form_kind == DW_Form_Data2 || form_kind == DW_Form_Data1) {
+    } else if (form.kind == DW_Form_Data8 || form.kind == DW_Form_Data4 ||
+               form.kind == DW_Form_Data2 || form.kind == DW_Form_Data1) {
       if (!dw_try_u64_from_const_value(form.data.size, DW_ATE_Unsigned, form.data, &sec_offset)) {
         Assert(!"unable to extract section offset");
       }
-    } else if (form_kind != DW_Form_Null) {
+    } else if (form.kind != DW_Form_Null) {
       Assert(!"unexpected form");
     }
     
@@ -1428,15 +1430,15 @@ dw_interp_rnglist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind fo
     }
   } else {
     String8 raw_rle = {0};
-    if (form_kind == DW_Form_SecOffset) {
+    if (form.kind == DW_Form_SecOffset) {
       // offset is from beginning of the section
       U64 sec_offset = form.sec_offset;
       raw_rle = str8_skip(input->sec[DW_Section_RngLists].data, sec_offset);
-    } else if (form_kind == DW_Form_RngListx) {
+    } else if (form.kind == DW_Form_RngListx) {
       // offset is from beginning of the entries
       U64 sec_offset = dw_offset_from_list_unit(cu->rnglists_lu, form.xval);
       raw_rle        = str8_skip(cu->rnglists_lu->entries, sec_offset);
-    } else if (form_kind != DW_Form_Null) {
+    } else if (form.kind != DW_Form_Null) {
       AssertAlways(!"unexpected form");
     }
     
@@ -1567,47 +1569,47 @@ dw_interp_rnglist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind fo
 }
 
 internal String8
-dw_interp_secptr(DW_Input *input, DW_SectionKind section, DW_FormKind form_kind, DW_Form form)
+dw_interp_secptr(DW_Input *input, DW_SectionKind section, DW_Form form)
 {
   String8 secptr = {0};
-  if (form_kind == DW_Form_SecOffset) {
+  if (form.kind == DW_Form_SecOffset) {
     String8 sect  = input->sec[section].data;
     Rng1U64 range = rng_1u64(form.sec_offset, sect.size);
     secptr = str8_substr(sect, range);
-  } else if (form_kind != DW_Form_Null) {
+  } else if (form.kind != DW_Form_Null) {
     Assert(!"unexpected form");
   }
   return secptr;
 }
 
 internal String8
-dw_interp_addrptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_addrptr(DW_Input *input, DW_Form form)
 {
-  return dw_interp_secptr(input, DW_Section_Addr, form_kind, form);
+  return dw_interp_secptr(input, DW_Section_Addr, form);
 }
 
 internal String8
-dw_interp_str_offsets_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_str_offsets_ptr(DW_Input *input, DW_Form form)
 {
-  return dw_interp_secptr(input, DW_Section_StrOffsets, form_kind, form);
+  return dw_interp_secptr(input, DW_Section_StrOffsets, form);
 }
 
 internal String8
-dw_interp_rnglists_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_rnglists_ptr(DW_Input *input, DW_Form form)
 {
-  return dw_interp_secptr(input, DW_Section_RngLists, form_kind, form);
+  return dw_interp_secptr(input, DW_Section_RngLists, form);
 }
 
 internal String8
-dw_interp_loclists_ptr(DW_Input *input, DW_FormKind form_kind, DW_Form form)
+dw_interp_loclists_ptr(DW_Input *input, DW_Form form)
 {
-  return dw_interp_secptr(input, DW_Section_LocLists, form_kind, form);
+  return dw_interp_secptr(input, DW_Section_LocLists, form);
 }
 
 internal DW_AttribClass
 dw_value_class_from_attrib(DW_CompUnit *cu, DW_Attrib *attrib)
 {
-  return dw_pick_attrib_value_class(cu->version, cu->ext, cu->relaxed, attrib->attrib_kind, attrib->form_kind);
+  return dw_pick_attrib_value_class(cu->version, cu->ext, cu->relaxed, attrib->attrib_kind, attrib->form.kind);
 }
 
 internal String8
@@ -1615,7 +1617,7 @@ dw_exprloc_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_ExprLoc || value_class == DW_AttribClass_Block);
-  return dw_interp_exprloc(attrib->form_kind, attrib->form);
+  return dw_interp_exprloc(attrib->form);
 }
 
 internal U128
@@ -1623,7 +1625,7 @@ dw_const_u128_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
-  return dw_interp_const_u128(attrib->form_kind, attrib->form);
+  return dw_interp_const_u128(attrib->form);
 }
 
 internal U64
@@ -1631,7 +1633,7 @@ dw_const_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
-  return dw_interp_const_u64(attrib->form_kind, attrib->form);
+  return dw_interp_const_u64(attrib->form);
 }
 
 internal U32
@@ -1639,7 +1641,7 @@ dw_const_u32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
-  return dw_interp_const_u32(attrib->form_kind, attrib->form);
+  return dw_interp_const_u32(attrib->form);
 }
 
 internal S64
@@ -1647,7 +1649,7 @@ dw_const_s64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
-  return dw_interp_const_s64(attrib->form_kind, attrib->form);
+  return dw_interp_const_s64(attrib->form);
 }
 
 internal S32
@@ -1655,7 +1657,7 @@ dw_const_s32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
-  return dw_interp_const_s32(attrib->form_kind, attrib->form);
+  return dw_interp_const_s32(attrib->form);
 }
 
 internal B32
@@ -1663,7 +1665,7 @@ dw_flag_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Flag);
-  return dw_interp_flag(attrib->form_kind, attrib->form);
+  return dw_interp_flag(attrib->form);
 }
 
 internal U64
@@ -1673,22 +1675,18 @@ dw_address_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
   AssertAlways(value_class == DW_AttribClass_Null ||
                value_class == DW_AttribClass_Address ||
                value_class == DW_AttribClass_AddrPtr);
-  DW_FormKind form_kind = attrib->form_kind;
-  DW_Form     form      = attrib->form;
+  DW_Form form = attrib->form;
   if (value_class == DW_AttribClass_AddrPtr) {
-    
-    if (attrib->form_kind == DW_Form_SecOffset) {
-      
-      
+    if (attrib->form.kind == DW_Form_SecOffset) {
+      NotImplemented;
     } else {
       AssertAlways(!"unexpected form");
     }
     
-    
-    form_kind = DW_Form_Addr;
-    form.addr = dw_interp_addrptr(input, attrib->form_kind, attrib->form);
+    form.kind = DW_Form_Addr;
+    form.addr = dw_interp_addrptr(input, attrib->form);
   }
-  return dw_interp_address(cu->address_size, cu->low_pc, cu->addr_lu, form_kind, form);
+  return dw_interp_address(cu->address_size, cu->low_pc, cu->addr_lu, form);
 }
 
 internal String8
@@ -1696,7 +1694,7 @@ dw_block_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Block);
-  return dw_interp_block(input, cu, attrib->form_kind, attrib->form);
+  return dw_interp_block(input, cu, attrib->form);
 }
 
 internal String8
@@ -1704,7 +1702,7 @@ dw_string_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_String || value_class == DW_AttribClass_StrOffsetsPtr);
-  return dw_interp_string(input, cu->format, cu->str_offsets_lu, attrib->form_kind, attrib->form);
+  return dw_interp_string(input, cu->format, cu->str_offsets_lu, attrib->form);
 }
 
 internal String8
@@ -1712,15 +1710,15 @@ dw_line_ptr_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_LinePtr);
-  return dw_interp_line_ptr(input, attrib->form_kind, attrib->form);
+  return dw_interp_line_ptr(input, attrib->form);
 }
 
 internal DW_LineFile *
-dw_file_from_attrib(DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Attrib *attrib)
+dw_file_from_attrib(DW_CompUnit *cu, DW_LineVM *line_vm, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
-  return dw_interp_file(line_vm, attrib->form_kind, attrib->form);
+  return dw_interp_file(line_vm, attrib->form);
 }
 
 internal DW_Reference
@@ -1728,7 +1726,7 @@ dw_ref_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Reference);
-  return dw_interp_ref(input, cu, attrib->form_kind, attrib->form);
+  return dw_interp_ref(input, cu, attrib->form);
 }
 
 internal DW_LocList
@@ -1738,7 +1736,7 @@ dw_loclist_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib
   AssertAlways(value_class == DW_AttribClass_Null ||
                value_class == DW_AttribClass_LocList ||
                value_class == DW_AttribClass_LocListPtr);
-  return dw_interp_loclist(arena, input, cu, attrib->form_kind, attrib->form);
+  return dw_interp_loclist(arena, input, cu, attrib->form);
 }
 
 internal Rng1U64List
@@ -1747,7 +1745,7 @@ dw_rnglist_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib
   Rng1U64List rnglist = {0};
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   if (value_class == DW_AttribClass_RngListPtr || value_class == DW_AttribClass_RngList) {
-    rnglist = dw_interp_rnglist(arena, input, cu, attrib->form_kind, attrib->form);
+    rnglist = dw_interp_rnglist(arena, input, cu, attrib->form);
   } else if (value_class != DW_AttribClass_Null) {
     Assert(!"unexpected value class");
   }
@@ -1777,7 +1775,7 @@ dw_attrib_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
     if (cu && cu->tag_ht) {
       DW_Attrib *ao_attrib = dw_attrib_from_tag_(tag, DW_AttribKind_AbstractOrigin);
       if (ao_attrib->attrib_kind == DW_AttribKind_AbstractOrigin) {
-        DW_Reference  ref     = dw_interp_ref(input, cu, ao_attrib->form_kind, ao_attrib->form);
+        DW_Reference  ref     = dw_interp_ref(input, cu, ao_attrib->form);
         DW_TagNode   *ref_tag = dw_tag_node_from_info_off(ref.cu, ref.info_off);
         attrib = dw_attrib_from_tag_(ref_tag->tag, kind);
       }
@@ -1868,7 +1866,7 @@ dw_flag_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_At
 }
 
 internal DW_LineFile *
-dw_file_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Tag tag, DW_AttribKind kind)
+dw_file_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_LineVM *line_vm, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_file_from_attrib(cu, line_vm, dw_attrib_from_tag(input, cu, tag, kind));
 }
@@ -1929,11 +1927,11 @@ dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
       U64          type_byte_size = dw_byte_size_from_tag(input, cu, type_tag);
       DW_ATE       type_encoding  = dw_const_u64_from_tag_attrib_kind(input, type_ref.cu, type_tag, DW_AttribKind_Encoding);
       if (type_encoding == DW_ATE_Unsigned || type_encoding == DW_ATE_UnsignedChar) {
-        result = dw_interp_const64(type_byte_size, type_encoding, attrib->form_kind, attrib->form);
+        result = dw_interp_const64(type_byte_size, type_encoding, attrib->form);
       }
       scratch_end(scratch);
     } else {
-      result = dw_interp_const_u64(attrib->form_kind, attrib->form);
+      result = dw_interp_const_u64(attrib->form);
     }
   } else if (attrib_class == DW_AttribClass_Address) {
     result = dw_address_from_attrib(input, cu, attrib);
@@ -1949,7 +1947,7 @@ internal B32
 dw_is_attrib_var_ref(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   B32 is_var_ref = 0;
-  if (dw_is_form_kind_ref(cu->version, cu->ext, attrib->form_kind)) {
+  if (dw_is_form_kind_ref(cu->version, cu->ext, attrib->form.kind)) {
     Temp scratch = scratch_begin(0,0);
     DW_Reference ref = dw_ref_from_attrib(input, cu, attrib);
     DW_Tag ref_tag = {0};
@@ -2029,8 +2027,8 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
     dw_read_tag(arena, input, abbrev_table, version, format, address_size, info_range, cu_header_offset + header_size, &cu_tag);
     
     // TODO: handle these unit types
-    Assert(cu_tag.kind != DW_TagKind_SkeletonUnit);
-    Assert(cu_tag.kind != DW_TagKind_TypeUnit);
+    if (cu_tag.kind == DW_TagKind_SkeletonUnit) { log_user_errorf("TODO: Skeleton Unit"); }
+    if (cu_tag.kind == DW_TagKind_TypeUnit)     { log_user_errorf("TODO Type Unit");      }
 
     if (cu_tag.kind != DW_TagKind_CompileUnit && cu_tag.kind != DW_TagKind_PartialUnit) {
       // unexpected tag, release memory and exit
@@ -2045,10 +2043,10 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
     DW_Attrib *loclists_base_attrib    = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_LocListsBase  );
     
     // interp attribs as section offsets
-    U64 addr_sec_off        = dw_interp_sec_offset(addr_base_attrib->form_kind,        addr_base_attrib->form       );
-    U64 str_offsets_sec_off = dw_interp_sec_offset(str_offsets_base_attrib->form_kind, str_offsets_base_attrib->form);
-    U64 rnglists_sec_off    = dw_interp_sec_offset(rnglists_base_attrib->form_kind,    rnglists_base_attrib->form   );
-    U64 loclists_sec_off    = dw_interp_sec_offset(loclists_base_attrib->form_kind,    loclists_base_attrib->form   );
+    U64 addr_sec_off        = dw_interp_sec_offset(addr_base_attrib->form       );
+    U64 str_offsets_sec_off = dw_interp_sec_offset(str_offsets_base_attrib->form);
+    U64 rnglists_sec_off    = dw_interp_sec_offset(rnglists_base_attrib->form   );
+    U64 loclists_sec_off    = dw_interp_sec_offset(loclists_base_attrib->form   );
     
     // map section offset to unit index
     U64 addr_lu_idx        = rng_1u64_array_bsearch(lu_input.addr_ranges,       addr_sec_off       );
@@ -2064,7 +2062,7 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
     
     // find compile unit base address
     DW_Attrib *low_pc_attrib = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_LowPc);
-    U64        low_pc        = dw_interp_address(address_size, max_U64, addr_lu, low_pc_attrib->form_kind, low_pc_attrib->form);
+    U64        low_pc        = dw_interp_address(address_size, max_U64, addr_lu, low_pc_attrib->form);
     
     // fill out compile unit
     cu.relaxed            = relaxed;
@@ -2194,7 +2192,7 @@ dw_read_line_vm_header(Arena           *arena,
                        DW_LineVMHeader *header_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  
+
   // read unit length
   U64 length      = 0;
   U64 length_size = str8_deserial_read_dwarf_packed_size(cu_stmt_list, 0, &length);
@@ -2339,7 +2337,7 @@ dw_read_line_vm_header(Arena           *arena,
         U64         form_size = 0;
         if (!dw_read_form(str8_skip(data, cursor), version, format, address_size, form_kind, max_U64, &form, &form_size)) { goto exit; }
         cursor += form_size;
-        dir_table.v[i] = dw_interp_string(input, format, cu_str_offsets, form_kind, form);
+        dir_table.v[i] = dw_interp_string(input, format, cu_str_offsets, form);
       }
     }
     
@@ -2372,12 +2370,12 @@ dw_read_line_vm_header(Arena           *arena,
           cursor += form_size;
 
           switch (lnct) {
-          case DW_LNCT_Path:           { file->file_name   = dw_interp_string(input, format, cu_str_offsets, form_kind, form); } break;
-          case DW_LNCT_DirectoryIndex: { file->dir_idx     = dw_interp_const_u64(form_kind, form);                             } break;
-          case DW_LNCT_TimeStamp:      { file->modify_time = dw_interp_const_u64(form_kind, form);                             } break;
-          case DW_LNCT_Size:           { file->file_size   = dw_interp_const_u64(form_kind, form);                             } break;
-          case DW_LNCT_MD5:            { file->md5_digest  = dw_interp_const_u128(form_kind, form);                            } break;
-          case DW_LNCT_LLVM_Source:    { file->source      = dw_interp_string(input, format, cu_str_offsets, form_kind, form); } break;
+          case DW_LNCT_Path:           { file->file_name   = dw_interp_string(input, format, cu_str_offsets, form); } break;
+          case DW_LNCT_DirectoryIndex: { file->dir_idx     = dw_interp_const_u64(form);                             } break;
+          case DW_LNCT_TimeStamp:      { file->modify_time = dw_interp_const_u64(form);                             } break;
+          case DW_LNCT_Size:           { file->file_size   = dw_interp_const_u64(form);                             } break;
+          case DW_LNCT_MD5:            { file->md5_digest  = dw_interp_const_u128(form);                            } break;
+          case DW_LNCT_LLVM_Source:    { file->source      = dw_interp_string(input, format, cu_str_offsets, form); } break;
           default: {
             Assert(!"unexpected LNTC encoding");
           } break;
@@ -2424,7 +2422,11 @@ dw_line_vm_init(DW_Input *input, DW_CompUnit *cu)
 
   // read the line table header
   DW_LineVMHeader header = {0};
-  if ( ! dw_read_line_vm_header(arena, input, cu_stmt_list, cu_dir, cu_name, cu->address_size, cu->str_offsets_lu, &header)) { goto exit; }
+  if (cu_stmt_list.size) {
+    if ( ! dw_read_line_vm_header(arena, input, cu_stmt_list, cu_dir, cu_name, cu->address_size, cu->str_offsets_lu, &header)) {
+      goto exit;
+    }
+  }
 
   vm = push_array(arena, DW_LineVM, 1);
   *vm = (DW_LineVM){
