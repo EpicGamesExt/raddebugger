@@ -958,7 +958,7 @@ lnk_array_from_input_list(Arena *arena, LNK_InputList list)
 internal LNK_Inputer *
 lnk_inputer_init(void)
 {
-  Arena *arena = arena_alloc();
+  Arena *arena = arena_alloc(.name = "INPUTER");
   LNK_Inputer *inputer = push_array(arena, LNK_Inputer, 1);
   inputer->arena            = arena;
   inputer->objs_ht          = hash_table_init(arena, 0x20000);
@@ -1748,7 +1748,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   // init link context
   //
   LNK_Link *link = push_array(arena->v[0], LNK_Link, 1);
-  link->arena                      = arena_alloc();
+  link->arena                      = arena_alloc(.name = "LINK");
   link->last_symbol_input          = &link->objs.first;
   link->last_include               = &config->include_symbol_list.first;
   link->last_default_lib           = &config->input_default_lib_list.first;

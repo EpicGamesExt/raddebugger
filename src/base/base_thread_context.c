@@ -17,10 +17,19 @@ C_LINKAGE thread_static TCTX *tctx_thread_local = 0;
 internal TCTX *
 tctx_alloc(void)
 {
-  Arena *arena = arena_alloc();
-  TCTX *tctx = push_array(arena, TCTX, 1);
-  tctx->arenas[0] = arena;
-  tctx->arenas[1] = arena_alloc();
+#if PROFILE_TELEMETRY
+  thread_static static U8 name[2][1024];
+  raddbg_snprintf(name[0], sizeof(name[0]), "Scratch/0[TID:%u]", os_tid());
+  raddbg_snprintf(name[1], sizeof(name[1]), "Scratch/1[TID:%u]", os_tid());
+  Arena *arena_0 = arena_alloc(.name = name[0]);
+  Arena *arena_1 = arena_alloc(.name = name[1]);
+#else
+  Arena *arena_0 = arena_alloc();
+  Arena *arena_1 = arena_alloc();
+#endif
+  TCTX *tctx = push_array(arena_0, TCTX, 1);
+  tctx->arenas[0] = arena_0;
+  tctx->arenas[1] = arena_1;
   tctx->lane_ctx.lane_count = 1;
   return tctx;
 }

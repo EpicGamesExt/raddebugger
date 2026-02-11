@@ -4,7 +4,7 @@
 internal COFF_ObjWriter*
 coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine)
 {
-  Arena *arena = arena_alloc();
+  Arena *arena = arena_alloc(.name = "COFF OBJ WRITER");
   COFF_ObjWriter *obj_writer = push_array(arena, COFF_ObjWriter, 1);
   obj_writer->arena          = arena;
   obj_writer->time_stamp     = time_stamp;
