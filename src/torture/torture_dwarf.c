@@ -111,7 +111,7 @@ dwt_make_writer(void)
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_Last, DW_CompUnitKind_Compile, Arch_x64);
   {
     dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
-    dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit(BUILD_TITLE_STRING_LITERAL));
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
     dw_writer_push_attrib_enum(writer, DW_AttribKind_Language, DW_Language_C99);
     dw_writer_push_attrib_flag(writer, DW_AttribKind_UseUtf8, 1);
     {
@@ -226,7 +226,7 @@ T_BeginTest(dwarf_writer)
     DW_WriterAttrib *producer_attrib = comp_unit_tag->first_attrib;
     T_Ok(producer_attrib->kind == DW_AttribKind_Producer);
     T_Ok(producer_attrib->reader.form.kind == DW_Form_String);
-    T_Ok(str8_match(producer_attrib->writer.form.string, str8_lit(BUILD_TITLE_STRING_LITERAL), 0));
+    T_Ok(str8_match(producer_attrib->writer.form.string, str8_lit("RAD DWARF WRITER"), 0));
 
     DW_WriterAttrib *language_attrib = producer_attrib->next;
     T_Ok(language_attrib->kind == DW_AttribKind_Language);
@@ -247,7 +247,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(char_type_tag->parent == comp_unit_tag);
     T_Ok(char_type_tag->attrib_count == 3);
     T_Ok(char_type_tag->abbrev_id == 2);
-    T_Ok(char_type_tag->info_off == 0x4d);
+    T_Ok(char_type_tag->info_off == 0x20);
     T_Ok(char_type_tag->first_attrib != char_type_tag->last_attrib);
 
     DW_WriterAttrib *byte_size_attrib = char_type_tag->first_attrib;
@@ -275,7 +275,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(const_type_tag->parent == comp_unit_tag);
     T_Ok(const_type_tag->attrib_count == 1);
     T_Ok(const_type_tag->abbrev_id == 3);
-    T_Ok(const_type_tag->info_off == 0x55);
+    T_Ok(const_type_tag->info_off == 0x28);
     T_Ok(const_type_tag->first_attrib && const_type_tag->first_attrib == const_type_tag->last_attrib);
 
     DW_WriterAttrib *type_attrib = const_type_tag->first_attrib;
@@ -291,7 +291,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(dup_char_type_tag->parent == comp_unit_tag);
     T_Ok(dup_char_type_tag->attrib_count == 3);
     T_Ok(dup_char_type_tag->abbrev_id == 2);
-    T_Ok(dup_char_type_tag->info_off == 0x57);
+    T_Ok(dup_char_type_tag->info_off == 0x2a);
     T_Ok(dup_char_type_tag->first_attrib != dup_char_type_tag->last_attrib);
 
     DW_WriterAttrib *byte_size_attrib = dup_char_type_tag->first_attrib;
@@ -319,7 +319,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(simple_struct_tag->parent == comp_unit_tag);
     T_Ok(simple_struct_tag->attrib_count == 2);
     T_Ok(simple_struct_tag->abbrev_id == 4);
-    T_Ok(simple_struct_tag->info_off == 0x5f);
+    T_Ok(simple_struct_tag->info_off == 0x32);
 
     DW_WriterAttrib *simple_struct_name = simple_struct_tag->first_attrib;
     T_Ok(simple_struct_name->kind == DW_AttribKind_Name);
@@ -331,7 +331,7 @@ T_BeginTest(dwarf_writer)
       T_Ok(m0_tag->kind == DW_TagKind_Member);
       T_Ok(m0_tag->parent == simple_struct_tag);
       T_Ok(m0_tag->attrib_count == 3);
-      T_Ok(m0_tag->info_off == 0x68);
+      T_Ok(m0_tag->info_off == 0x3b);
       T_Ok(m0_tag->abbrev_id == 5);
 
       DW_WriterAttrib *name = m0_tag->first_attrib;
@@ -342,7 +342,7 @@ T_BeginTest(dwarf_writer)
       DW_WriterAttrib *type = name->next;
       T_Ok(type->kind == DW_AttribKind_Type);
       T_Ok(type->reader.form.kind == DW_Form_Ref1);
-      T_Ok(type->reader.form.ref == 0x4d);
+      T_Ok(type->reader.form.ref == 0x20);
 
       DW_WriterAttrib *data_loc = type->next;
       T_Ok(data_loc->kind == DW_AttribKind_DataMemberLocation);
@@ -356,7 +356,7 @@ T_BeginTest(dwarf_writer)
       T_Ok(m1_tag->kind == DW_TagKind_Member);
       T_Ok(m1_tag->parent == simple_struct_tag);
       T_Ok(m1_tag->attrib_count == 4);
-      T_Ok(m1_tag->info_off == 0x6e);
+      T_Ok(m1_tag->info_off == 0x41);
       T_Ok(m1_tag->abbrev_id == 6);
 
       DW_WriterAttrib *name = m1_tag->first_attrib;
@@ -367,7 +367,7 @@ T_BeginTest(dwarf_writer)
       DW_WriterAttrib *type = name->next;
       T_Ok(type->kind == DW_AttribKind_Type);
       T_Ok(type->reader.form.kind == DW_Form_Ref1);
-      T_Ok(type->reader.form.ref == 0x4d);
+      T_Ok(type->reader.form.ref == 0x20);
 
       DW_WriterAttrib *data_loc = type->next;
       T_Ok(data_loc->kind == DW_AttribKind_DataMemberLocation);
