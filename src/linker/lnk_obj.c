@@ -750,7 +750,7 @@ lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
   {
     for (String8Node *node = raw_debug_s.first; node != 0; node = node->next) {
       // parse & merge sub sections
-      CV_DebugS ds = cv_parse_debug_s(scratch.arena, node->string);
+      CV_DebugS ds = cv_parse_debug_s(arena, node->string);
       cv_debug_s_concat_in_place(&debug_s, &ds);
 
       // make sure there is one string table
