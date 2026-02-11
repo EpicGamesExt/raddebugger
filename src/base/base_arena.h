@@ -25,6 +25,7 @@ struct ArenaParams
   void *optional_backing_buffer;
   char *allocation_site_file;
   int allocation_site_line;
+  char *name;
 };
 
 typedef struct Arena Arena;
@@ -41,6 +42,7 @@ struct Arena
   U64 res;
   char *allocation_site_file;
   int allocation_site_line;
+  char *name;
 #if ARENA_FREE_LIST
   Arena *free_last;
 #endif
