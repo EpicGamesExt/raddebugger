@@ -2824,7 +2824,7 @@ dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size, String8 data)
     DW_ExprInst *inst = push_array(arena, DW_ExprInst, 1);
     inst->opcode   = opcode;
     inst->size     = cursor - inst_start;
-    inst->operands = push_array(arena, DW_ExprOperand, operand_count);
+    inst->operands = operand_count ? push_array(arena, DW_ExprOperand, operand_count) : 0;
     MemoryCopy(inst->operands, operands, operand_count * sizeof(DW_ExprOperand));
 
     // push instruction
