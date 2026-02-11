@@ -1424,7 +1424,6 @@ os_safe_call(ThreadEntryPointFunctionType *func, ThreadEntryPointFunctionType *f
     {
       fail_handler(ptr);
     }
-    ExitProcess(1);
   }
 }
 
