@@ -12,6 +12,7 @@
 #include "dwarf/dwarf_unwind.h"
 #include "dwarf/dwarf_dump.h"
 #include "dwarf/dwarf_help.h"
+#include "dwarf/dwarf_writer.h"
 #include "dwarf/eh_frame.h"
 #include "dwarf/eh_dump.h"
 

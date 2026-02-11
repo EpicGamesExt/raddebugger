@@ -494,7 +494,7 @@ typedef enum DW_FormEnum
 #undef X
 } DW_FormEnum;
 
-typedef union DW_Form
+typedef struct DW_Form
 {
   DW_FormKind kind;
   union {

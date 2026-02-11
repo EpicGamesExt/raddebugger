@@ -959,8 +959,9 @@ dw_form_match(DW_Form a, DW_Form b)
     switch (a.kind) {
     case DW_Form_Null: {} break;
 
-    case DW_Form_Addr:   { is_match = str8_match(a.addr, b.addr, 0);     } break;
-    case DW_Form_String: { is_match = str8_match(a.string, b.string, 0); } break;
+    case DW_Form_Addr:    { is_match = str8_match(a.addr, b.addr, 0);       } break;
+    case DW_Form_String:  { is_match = str8_match(a.string, b.string, 0);   } break;
+    case DW_Form_ExprLoc: { is_match = str8_match(a.exprloc, b.exprloc, 0); } break;
 
     case DW_Form_Block:
     case DW_Form_Block1:
@@ -1024,8 +1025,6 @@ dw_form_match(DW_Form a, DW_Form b)
     default: { InvalidPath; } break;
     }
   }
-
-  return is_match;
 
   return is_match;
 }

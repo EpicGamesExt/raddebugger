@@ -11,6 +11,7 @@
 
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "obj/obj.h"
 #include "linker/base_ext/base_core.h"
 #include "linker/base_ext/base_arena.h"
 #include "linker/base_ext/base_arrays.h"
@@ -34,6 +35,7 @@
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "obj/obj.c"
 #include "linker/hash_table.c"
 #include "linker/base_ext/base_core.c"
 #include "linker/base_ext/base_arena.c"
