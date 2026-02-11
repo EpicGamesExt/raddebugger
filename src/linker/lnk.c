@@ -1754,7 +1754,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   link->last_default_lib           = &config->input_default_lib_list.first;
   link->last_obj_lib               = &config->input_obj_lib_list.first;
   link->last_cmd_lib               = &config->input_list[LNK_Input_Lib].first;
-  link->lib_member_infos_ht        = hash_table_init(link->arena, config->input_list[LNK_Input_Lib].node_count * 2);
+  link->lib_member_infos_ht        = hash_table_init(link->arena, Max(config->input_list[LNK_Input_Lib].node_count * 2, 512));
   link->try_to_resolve_entry_point = 1;
 
   // input :null_obj
