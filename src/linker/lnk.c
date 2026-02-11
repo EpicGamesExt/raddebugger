@@ -2077,79 +2077,89 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
       radsort(unresolved_symbols, unresolved_symbols_count, lnk_symbol_ptr_is_before);
     }
 
-    for EachIndex(i, unresolved_symbols_count) {
-      LNK_Symbol *symbol = unresolved_symbols[i];
+    if (unresolved_symbols_count) {
+      Temp debug_scratch = scratch_begin(&scratch.arena, 1);
 
-      if (i > config->unresolved_symbol_limit) {
-        lnk_error(LNK_Error_UnresolvedSymbol, "too many unresolved symbol errors, stopping now");
-        break;
-      }
+      for EachIndex(i, unresolved_symbols_count) {
+        LNK_Symbol *symbol = unresolved_symbols[i];
 
-      String8List supp_info = {0};
-      {
-        U64                refs_count = 0;
-        LNK_ObjSymbolRef **refs       = lnk_ref_from_symbol_many(scratch.arena, symbol, &refs_count);
-        for EachIndex(ref_idx, refs_count) {
-          LNK_ObjSymbolRef   *ref           = refs[ref_idx];
-          LNK_Obj            *obj           = ref->obj;
-          COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(obj);
-          String8             string_table  = lnk_coff_string_table_from_obj(obj);
+        if (i > config->unresolved_symbol_limit) {
+          lnk_error(LNK_Error_UnresolvedSymbol, "too many unresolved symbol errors, stopping now");
+          break;
+        }
 
-          CV_DebugS           debug_s         = {0};
-          CV_LinesAccel      *debug_lines     = 0;
-          String8             debug_checksums = {0};
-          String8             debug_strings   = {0};
+        String8List supp_info = {0};
+        {
+          U64                refs_count = 0;
+          LNK_ObjSymbolRef **refs       = lnk_ref_from_symbol_many(scratch.arena, symbol, &refs_count);
+          for EachIndex(ref_idx, refs_count) {
+            LNK_ObjSymbolRef   *ref           = refs[ref_idx];
+            LNK_Obj            *obj           = ref->obj;
+            COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(obj);
+            String8             string_table  = lnk_coff_string_table_from_obj(obj);
 
-          for EachIndex(sect_idx, obj->header.section_count_no_null) {
-            COFF_SectionHeader *section_header = &section_table[sect_idx];
-            if (section_header->flags & LNK_SECTION_FLAG_DEBUG) { continue; }
+            Temp debug_temp = temp_begin(debug_scratch.arena);
+            CV_DebugS           debug_s         = {0};
+            CV_LinesAccel      *debug_lines     = 0;
+            String8             debug_checksums = {0};
+            String8             debug_strings   = {0};
 
-            String8             section_name   = coff_name_from_section_header(string_table, section_header);
-            U64                 section_number = sect_idx+1;
-            COFF_RelocArray     relocs         = lnk_coff_relocs_from_section_header(obj, section_header);
-            for EachIndex(reloc_idx, relocs.count) {
-              if (supp_info.node_count > config->unresolved_symbol_ref_limit) {
-                str8_list_pushf(scratch.arena, &supp_info, "too many unresolved symbol references reported, stopping now");
-                goto next_undefined_symbol;
-              }
-              COFF_Reloc *reloc = &relocs.v[reloc_idx];
-              if (reloc->isymbol == ref->symbol_idx) {
-                U64      line_matches_count = 0;
-                CV_Line *line_matches       = 0;
-                if (config->map_lines_for_unresolved_symbols == LNK_SwitchState_Yes) {
-                  if (debug_lines == 0) {
-                    debug_s = lnk_debug_s_from_obj(scratch.arena, obj);
-                    String8List raw_checksums = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
-                    String8List raw_strings   = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
-                    debug_lines     = cv_lines_accel_from_debug_s(scratch.arena, debug_s);
-                    debug_checksums = str8_list_first(&raw_checksums);
-                    debug_strings   = str8_list_first(&raw_strings);
-                  }
-                  line_matches_count = 0;
-                  line_matches      = cv_line_from_voff(debug_lines, reloc->apply_off, &line_matches_count);
+            for EachIndex(sect_idx, obj->header.section_count_no_null) {
+              COFF_SectionHeader *section_header = &section_table[sect_idx];
+              if (section_header->flags & LNK_SECTION_FLAG_DEBUG) { continue; }
+
+              String8             section_name   = coff_name_from_section_header(string_table, section_header);
+              U64                 section_number = sect_idx+1;
+              COFF_RelocArray     relocs         = lnk_coff_relocs_from_section_header(obj, section_header);
+              for EachIndex(reloc_idx, relocs.count) {
+                if (supp_info.node_count > config->unresolved_symbol_ref_limit) {
+                  str8_list_pushf(scratch.arena, &supp_info, "too many unresolved symbol references reported, stopping now");
+                  temp_end(debug_temp);
+                  goto next_undefined_symbol;
                 }
-
-                if (line_matches) {
-                  for EachIndex(i, line_matches_count) {
-                    CV_Line        line      = line_matches[i];
-                    CV_C13Checksum checksum  = {0};
-                    String8        file_name = {0};
-                    str8_deserial_read_struct(debug_checksums, line.file_off, &checksum);
-                    str8_deserial_read_cstr(debug_strings, checksum.name_off, &file_name);
-                    str8_list_pushf(scratch.arena, &supp_info, "%S: %S:%u", lnk_loc_from_obj(scratch.arena, obj), file_name, line.line_num);
+                COFF_Reloc *reloc = &relocs.v[reloc_idx];
+                if (reloc->isymbol == ref->symbol_idx) {
+                  U64      line_matches_count = 0;
+                  CV_Line *line_matches       = 0;
+                  if (config->map_lines_for_unresolved_symbols == LNK_SwitchState_Yes) {
+                    if (debug_lines == 0) {
+                      debug_s = lnk_debug_s_from_obj(debug_temp.arena, obj);
+                      String8List raw_checksums = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
+                      String8List raw_strings   = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
+                      debug_lines     = cv_lines_accel_from_debug_s(debug_temp.arena, debug_s);
+                      debug_checksums = str8_list_first(&raw_checksums);
+                      debug_strings   = str8_list_first(&raw_strings);
+                    }
+                    line_matches_count = 0;
+                    line_matches      = cv_line_from_voff(debug_lines, reloc->apply_off, &line_matches_count);
                   }
-                } else {
-                  str8_list_pushf(scratch.arena, &supp_info, "%S: %S(%llx)+%x", lnk_loc_from_obj(scratch.arena, obj), section_name, section_number, reloc->apply_off);
+
+                  if (line_matches) {
+                    for EachIndex(i, line_matches_count) {
+                      CV_Line        line      = line_matches[i];
+                      CV_C13Checksum checksum  = {0};
+                      String8        file_name = {0};
+                      str8_deserial_read_struct(debug_checksums, line.file_off, &checksum);
+                      str8_deserial_read_cstr(debug_strings, checksum.name_off, &file_name);
+                      str8_list_pushf(scratch.arena, &supp_info, "%S: %S:%u", lnk_loc_from_obj(debug_temp.arena, obj), file_name, line.line_num);
+                    }
+                  } else {
+                    str8_list_pushf(scratch.arena, &supp_info, "%S: %S(%llx)+%x", lnk_loc_from_obj(debug_temp.arena, obj), section_name, section_number, reloc->apply_off);
+                  }
                 }
               }
             }
+
+            temp_end(debug_temp);
           }
+          next_undefined_symbol:;
         }
-        next_undefined_symbol:;
+
+        lnk_error(LNK_Error_UnresolvedSymbol, "unresolved symbol %S", symbol->name);
+        lnk_supplement_error_list(supp_info);
       }
 
-      lnk_error(LNK_Error_UnresolvedSymbol, "unresolved symbol %S", symbol->name);
-      lnk_supplement_error_list(supp_info);
+      scratch_end(debug_scratch);
     }
 
     // TODO: /FORCE
