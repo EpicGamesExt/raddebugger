@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
   <Type Name="String8">
-    <DisplayString>{size,str}</DisplayString>
-    <StringView>size,str</StringView>
+    <DisplayString>{{ size={size} str={str} }}</DisplayString>
   </Type>
 
   <Type Name="String8Node">
-    <DisplayString>{{ string={string.size,string.str} next={next} }}</DisplayString>
+    <DisplayString>{{ string={string} next={next} }}</DisplayString>
   </Type>
 
 	<Type Name="String8List">
@@ -19,7 +18,7 @@
 				<Size>node_count</Size>
 				<HeadPointer>first</HeadPointer>
 				<NextPointer>next</NextPointer>
-				<ValueNode>string</ValueNode>
+				<ValueNode>this</ValueNode>
 			</LinkedListItems>
 		</Expand>
 	</Type>
@@ -206,5 +205,39 @@
       </CustomListItems>
 		</Expand>
 	</Type>
+
+  <Type Name="DW_WriterTag">
+    <Expand>
+      <Item Name="kind">kind</Item>
+      <Item Name="next">next</Item>
+      <Item Name="next">next</Item>
+      <Item Name="parent">parent</Item>
+      <Synthetic Name="[children]">
+        <DisplayString>{first_child}</DisplayString>
+        <Expand>
+          <CustomListItems MaxItemsPerView="5000">
+            <Variable Name="node" InitialValue="first_child"/>
+            <Variable Name="idx" InitialValue="0"/>
+            <Loop>
+              <Break Condition="node == 0"/>
+              <Item>node</Item>
+              <Exec>node = node->next</Exec>
+            </Loop>
+          </CustomListItems>
+        </Expand>
+      </Synthetic>
+      <Synthetic Name="[attribs]">
+        <DisplayString>count={attrib_count}, [0]={first_attrib}</DisplayString>
+        <Expand>
+          <LinkedListItems>
+            <Size>attrib_count</Size>
+            <HeadPointer>first_attrib</HeadPointer>
+            <NextPointer>next</NextPointer>
+            <ValueNode>this</ValueNode>
+          </LinkedListItems>
+        </Expand>
+      </Synthetic>
+    </Expand>
+  </Type>
 
 </AutoVisualizer>
