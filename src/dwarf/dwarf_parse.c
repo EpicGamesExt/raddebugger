@@ -487,16 +487,16 @@ dw_read_abbrev_attrib(String8 data, U64 offset, DW_Abbrev *out_abbrev)
   TryRead(str8_deserial_read_uleb128(data, cursor, &kind), cursor, exit);
   
   // read implicit const
-  U64 implicit_const = 0;
+  S64 implicit_const = 0;
   if (kind == DW_Form_ImplicitConst) {
-    TryRead(str8_deserial_read_uleb128(data, cursor, &implicit_const), cursor, exit);
+    TryRead(str8_deserial_read_sleb128(data, cursor, &implicit_const), cursor, exit);
   }
   
   if (out_abbrev != 0) {
     DW_Abbrev abbrev = { .kind = DW_Abbrev_Attrib, .sub_kind = kind, .id = id };
     if (kind == DW_Form_ImplicitConst) {
-      abbrev.flags       |= DW_AbbrevFlag_HasImplicitConst;
-      abbrev.const_value  = implicit_const;
+      abbrev.flags         |= DW_AbbrevFlag_HasImplicitConst;
+      abbrev.implicit_const = implicit_const;
     }
     *out_abbrev = abbrev;
   }
@@ -585,7 +585,7 @@ dw_read_form(String8      data,
              DW_Format    unit_format,
              U64          address_size,
              DW_FormKind  form_kind,
-             U64          implicit_const,
+             S64          implicit_const,
              DW_Form     *form_out,
              U64         *bytes_read_out)
 {
@@ -815,7 +815,7 @@ dw_read_tag(Arena          *arena,
       // read form value
       DW_Form form      = {0};
       U64     form_size = 0;
-      if (!dw_read_form(str8_skip(tag_data, tag_cursor), version, format, address_size, form_kind, attrib_abbrev.const_value, &form, &form_size)) {
+      if (!dw_read_form(str8_skip(tag_data, tag_cursor), version, format, address_size, form_kind, attrib_abbrev.implicit_const, &form, &form_size)) {
         goto exit;
       }
       tag_cursor += form_size;

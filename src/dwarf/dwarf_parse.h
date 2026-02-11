@@ -77,7 +77,7 @@ typedef struct DW_Abbrev
   DW_AbbrevKind  kind;
   U64            sub_kind;
   U64            id;
-  U64            const_value;
+  S64            implicit_const;
   DW_AbbrevFlags flags;
 } DW_Abbrev;
 
@@ -447,7 +447,7 @@ internal U64            dw_abbrev_offset_from_abbrev_id(DW_AbbrevTable table, U6
 
 // form and tag
 
-internal B32 dw_read_form  (String8 data, DW_Version version, DW_Format unit_format, U64 address_size, DW_FormKind form_kind, U64 implicit_const, DW_Form *form_out, U64 *bytes_read_out);
+internal B32 dw_read_form  (String8 data, DW_Version version, DW_Format unit_format, U64 address_size, DW_FormKind form_kind, S64 implicit_const, DW_Form *form_out, U64 *bytes_read_out);
 internal U64 dw_read_tag   (Arena *arena, DW_Input *input, DW_AbbrevTable abbrev_table, DW_Version version, DW_Format format, U64 address_size, Rng1U64 cu_info_range, U64 tag_info_off, DW_Tag *tag_out);
 internal U64 dw_read_tag_cu(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 info_off, DW_Tag *tag_out);
 

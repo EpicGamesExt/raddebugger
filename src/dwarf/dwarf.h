@@ -514,7 +514,7 @@ typedef struct DW_Form
     U64     strx;
     U64     rnglistx;
     U64     ptr;
-    U64     implicit_const;
+    S64     implicit_const;
   };
 } DW_Form;
 
