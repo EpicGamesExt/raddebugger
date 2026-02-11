@@ -354,12 +354,12 @@ t_entry_point(CmdLine *cmdline)
         crash_count += 1;
       }
 
-      if (result.status != T_RunStatus_Pass) {
+      if (result.status == T_RunStatus_Fail) {
         fprintf(stdout, "  ERROR: %s:%d: condition: \"%s\"\n", result.fail_file, result.fail_line, result.fail_cond);
       }
     }
 
-    fprintf(stdout, "---- Passed: %I64u, Failed: %I64u, Crashed: %I64u ----\n", pass_count, fail_count, crash_count);
+    fprintf(stdout, "*** Passed: %I64u, Failed: %I64u, Crashed: %I64u ***\n", pass_count, fail_count, crash_count);
 
     if (fail_count + crash_count != 0) {
       fflush(stdout);

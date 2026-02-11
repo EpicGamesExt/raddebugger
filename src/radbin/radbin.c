@@ -1025,7 +1025,7 @@ rb_thread_entry_point(void *p)
         
         fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
         
-        fprintf(stderr, "RAD DEBUG INFO SUBSET NAMES\n\n");
+        fprintf(stderr, "RDI Sections:\n");
 #define X(name, name_lower, title) fprintf(stderr, " - " #name_lower "\n");
         RDI_DumpSubset_XList
 #undef X
@@ -1033,9 +1033,9 @@ rb_thread_entry_point(void *p)
         
         fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
         
-        fprintf(stderr, "DWARF INFO SUBSET NAMES\n\n");
-#define X(name, name_lower, title) fprintf(stderr, " - " #name_lower "\n");
-        DW_DumpSubset_XList
+        fprintf(stderr, "DWARF Sections:\n");
+#define X(_N, _L, ...) fprintf(stderr, _L "\n");
+        DW_SectionKind_XList
 #undef X
         fprintf(stderr, "\n");
       }
@@ -1044,7 +1044,7 @@ rb_thread_entry_point(void *p)
       
       //- rjf: unpack dump subset flags
       RDI_DumpSubsetFlags rdi_dump_subset_flags = RDI_DumpSubsetFlag_All;
-      DW_DumpSubsetFlags  dw_dump_subset_flags  = DW_DumpSubsetFlag_All;
+      DW_SectionFlags     dw_dump_subset_flags  = DW_SectionFlag_All;
       EH_DumpSubsetFlags  eh_dump_subset_flags  = EH_DumpSubsetFlag_All;
       ELF_DumpSubsetFlags elf_dump_subset_flags = ELF_DumpSubsetFlag_All;
       {
@@ -1061,8 +1061,8 @@ rb_thread_entry_point(void *p)
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { rdi_dump_subset_flags |= RDI_DumpSubsetFlag_##name; }
           RDI_DumpSubset_XList
 #undef X
-#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { dw_dump_subset_flags |= DW_DumpSubsetFlag_##name; }
-          DW_DumpSubset_XList
+#define X(_N, _L, ...) else if(str8_match(n->string, str8_skip(str8_lit(_L), 1), 0)) { dw_dump_subset_flags |= DW_SectionFlag_##_N; }
+          DW_SectionKind_XList
 #undef X
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { eh_dump_subset_flags |= EH_DumpSubsetFlag_##name; }
           EH_DumpSubset_XList
@@ -1078,8 +1078,8 @@ rb_thread_entry_point(void *p)
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { rdi_dump_subset_flags &= ~RDI_DumpSubsetFlag_##name; }
           RDI_DumpSubset_XList
 #undef X
-#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { dw_dump_subset_flags &= ~DW_DumpSubsetFlag_##name; }
-          DW_DumpSubset_XList
+#define X(_N, _L, ...) else if(str8_match(n->string, str8_skip(str8_lit(_L), 1), 0)) { dw_dump_subset_flags &= ~DW_SectionFlag_##_N; }
+          DW_SectionKind_XList
 #undef X
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { eh_dump_subset_flags &= ~EH_DumpSubsetFlag_##name; }
           EH_DumpSubset_XList
@@ -1236,15 +1236,10 @@ rb_thread_entry_point(void *p)
           if(lane_idx() == 0)
           {
             str8_list_pushf(arena, &output_blobs, "// %S (%S) (DWARF)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+            String8List dump = dw_dump_list_from_sections(arena, &dw, arch, dw_dump_subset_flags, verbose);
+            str8_list_concat_in_place(&output_blobs, &dump);
           }
           lane_sync();
-          {
-            String8List dump = dw_dump_list_from_sections(arena, &dw, arch, dw_dump_subset_flags, verbose);
-            if(lane_idx() == 0)
-            {
-              str8_list_concat_in_place(&output_blobs, &dump);
-            }
-          }
         }
 
         if(eh_dump_subset_flags)
