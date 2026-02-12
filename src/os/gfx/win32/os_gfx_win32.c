@@ -1490,7 +1490,7 @@ os_dpi_from_monitor(OS_Handle monitor)
 internal void
 os_send_wakeup_event(void)
 {
-  PostThreadMessageA(os_w32_gfx_state->gfx_thread_tid, 0x401, 0, 0);
+  PostThreadMessageW(os_w32_gfx_state->gfx_thread_tid, 0x401, 0, 0);
 }
 
 internal OS_EventList
@@ -1499,13 +1499,13 @@ os_get_events(Arena *arena, B32 wait)
   os_w32_event_arena = arena;
   MemoryZeroStruct(&os_w32_event_list);
   MSG msg = {0};
-  if(!wait || GetMessage(&msg, 0, 0, 0))
+  if(!wait || GetMessageW(&msg, 0, 0, 0))
   {
     B32 first_wait = wait;
-    for(;first_wait || PeekMessage(&msg, 0, 0, 0, PM_REMOVE); first_wait = 0)
+    for(;first_wait || PeekMessageW(&msg, 0, 0, 0, PM_REMOVE); first_wait = 0)
     {
-      DispatchMessage(&msg);
       TranslateMessage(&msg);
+      DispatchMessageW(&msg);
       if(msg.message == WM_QUIT)
       {
         os_w32_push_event(OS_EventKind_WindowClose, 0);
@@ -1596,7 +1596,7 @@ hcursor = curs; }break;
   {
     if(hcursor != os_w32_gfx_state->hCursor)
     {
-      PostMessage(0, WM_SETCURSOR, 0, 0);
+      PostMessageW(0, WM_SETCURSOR, 0, 0);
       POINT p = {0};
       GetCursorPos(&p);
       SetCursorPos(p.x, p.y);
