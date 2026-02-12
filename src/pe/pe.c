@@ -1712,6 +1712,30 @@ pe_make_manifest_resource(Arena *arena, U32 resource_id, String8 manifest_data)
   return res;
 }
 
+internal PE_ResourcePtrArray
+pe_resource_ptr_from_array(Arena *arena, PE_ResourceArray arr)
+{
+  PE_ResourcePtrArray result = {0};
+  result.count = arr.count;
+  result.v     = push_array(arena, PE_Resource *, arr.count);
+  for EachIndex(i, arr.count) {
+    result.v[i] = &arr.v[i];
+  }
+  return result;
+}
+
+internal PE_ResourceArray
+pe_resource_from_ptr_array(Arena *arena, PE_ResourcePtrArray arr)
+{
+  PE_ResourceArray result = {0};
+  result.count = arr.count;
+  result.v     = push_array(arena, PE_Resource, arr.count);
+  for EachIndex(i, arr.count) {
+    result.v[i] = *arr.v[i];
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ Debug Directory
 

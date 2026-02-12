@@ -493,8 +493,8 @@ lnk_make_null_obj(Arena *arena)
 internal int
 lnk_res_string_id_is_before(void *raw_a, void *raw_b)
 {
-  PE_Resource *a = raw_a;
-  PE_Resource *b = raw_b;
+  PE_Resource *a = *(PE_Resource **)raw_a;
+  PE_Resource *b = *(PE_Resource **)raw_b;
   Assert(a->id.type == COFF_ResourceIDType_String);
   Assert(b->id.type == COFF_ResourceIDType_String);
   int is_before = str8_is_before_case_sensitive(&a->id.u.string, &b->id.u.string);
@@ -504,8 +504,8 @@ lnk_res_string_id_is_before(void *raw_a, void *raw_b)
 internal int
 lnk_res_number_id_is_before(void *raw_a, void *raw_b)
 {
-  PE_Resource *a = raw_a;
-  PE_Resource *b = raw_b;
+  PE_Resource *a = *(PE_Resource **)raw_a;
+  PE_Resource *b = *(PE_Resource **)raw_b;
   Assert(a->id.type == COFF_ResourceIDType_Number);
   Assert(b->id.type == COFF_ResourceIDType_Number);
   int is_before = u16_is_before(&a->id.u.number, &b->id.u.number);
@@ -576,10 +576,25 @@ lnk_serialize_pe_resource_tree(COFF_ObjWriter *obj_writer, PE_ResourceDir *root_
           dir_header->id_entry_count        = res->u.dir->id_list.count;
 
           // sort input resources
-          PE_ResourceArray named_array = pe_resource_list_to_array(scratch.arena, &res->u.dir->named_list);
-          PE_ResourceArray id_array    = pe_resource_list_to_array(scratch.arena, &res->u.dir->id_list);
-          radsort(named_array.v, named_array.count, lnk_res_string_id_is_before);
-          radsort(id_array.v,    id_array.count,    lnk_res_number_id_is_before);
+          PE_ResourceArray named_array;
+          PE_ResourceArray id_array;
+          {
+            Temp scratch2 = scratch_begin(&scratch.arena, 1);
+
+            named_array = pe_resource_list_to_array(scratch2.arena, &res->u.dir->named_list);
+            id_array    = pe_resource_list_to_array(scratch2.arena, &res->u.dir->id_list);
+
+            PE_ResourcePtrArray named_ptr_array = pe_resource_ptr_from_array(scratch2.arena, named_array);
+            PE_ResourcePtrArray id_ptr_array    = pe_resource_ptr_from_array(scratch2.arena, id_array);
+
+            radsort(named_ptr_array.v, named_ptr_array.count, lnk_res_string_id_is_before);
+            radsort(id_ptr_array.v,    id_ptr_array.count,    lnk_res_number_id_is_before);
+
+            named_array = pe_resource_from_ptr_array(scratch.arena, named_ptr_array);
+            id_array    = pe_resource_from_ptr_array(scratch.arena, id_ptr_array);
+
+            scratch_end(scratch2);
+          }
 
           // allocate COFF entries
           COFF_ResourceDirEntry *named_entries = push_array(obj_writer->arena, COFF_ResourceDirEntry, named_array.count);

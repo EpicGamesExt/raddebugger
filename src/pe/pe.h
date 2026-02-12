@@ -867,6 +867,13 @@ struct PE_ResourceArray
   U64          count;
 };
 
+typedef struct PE_ResourcePtrArray PE_ResourcePtrArray;
+struct PE_ResourcePtrArray
+{
+  PE_Resource **v;
+  U64           count;
+};
+
 typedef struct PE_ResourceDir PE_ResourceDir;
 struct PE_ResourceDir
 {
@@ -1096,6 +1103,9 @@ internal PE_ResourceArray  pe_resource_list_to_array(Arena *arena, PE_ResourceLi
 internal PE_ResourceDir *  pe_resource_table_from_directory_data(Arena *arena, String8 data);
 
 internal String8 pe_make_manifest_resource(Arena *arena, U32 resource_id, String8 manifest_data);
+
+internal PE_ResourcePtrArray pe_resource_ptr_from_array(Arena *arena, PE_ResourceArray arr);
+internal PE_ResourceArray pe_resource_from_ptr_array(Arena *arena, PE_ResourcePtrArray arr);
 
 ////////////////////////////////
 //~ Debug Directory
