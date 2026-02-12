@@ -955,7 +955,7 @@ lnk_cv_leaf_from_leaf_ref(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
   return leaf;
 }
 
-internal U128
+internal U64
 lnk_hash_from_leaf_ref(LNK_LeafHashes *hashes, LNK_LeafRef leaf_ref)
 {
   LNK_LeafLocType    loc_type;
@@ -970,7 +970,7 @@ lnk_hash_from_leaf_ref(LNK_LeafHashes *hashes, LNK_LeafRef leaf_ref)
 
   U32 loc_idx  = leaf_ref.enc_loc_idx & ~LNK_LeafRefFlag_LocIdxExternal;
   U32 leaf_idx = leaf_ref.enc_leaf_idx & ~LNK_LeafRefFlag_LeafIdxIPI;
-  U128 hash    = hashes->v[loc_type][loc_idx][ti_source].v[leaf_idx];
+  U64 hash     = hashes->v[loc_type][loc_idx][ti_source][leaf_idx];
 
   return hash;
 }
@@ -1026,10 +1026,10 @@ lnk_match_leaf_ref(LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafRef
 {
   B32 are_same = 0;
 
-  U128 a_hash = lnk_hash_from_leaf_ref(hashes, a);
-  U128 b_hash = lnk_hash_from_leaf_ref(hashes, b);
+  U64 a_hash = lnk_hash_from_leaf_ref(hashes, a);
+  U64 b_hash = lnk_hash_from_leaf_ref(hashes, b);
 
-  if (u128_match(a_hash, b_hash)) {
+  if (a_hash == b_hash) {
     CV_Leaf a_leaf = lnk_cv_leaf_from_leaf_ref(input, a);
     CV_Leaf b_leaf = lnk_cv_leaf_from_leaf_ref(input, b);
     Assert(a_leaf.kind == b_leaf.kind);
@@ -1058,10 +1058,10 @@ lnk_match_leaf_ref_deep(Arena *arena, LNK_CodeViewInput *input, LNK_LeafHashes *
 {
   B32 are_equal = 0;
 
-  U128 a_hash = lnk_hash_from_leaf_ref(hashes, a);
-  U128 b_hash = lnk_hash_from_leaf_ref(hashes, b);
+  U64 a_hash = lnk_hash_from_leaf_ref(hashes, a);
+  U64 b_hash = lnk_hash_from_leaf_ref(hashes, b);
   
-  if (u128_match(a_hash, b_hash)) {
+  if (a_hash == b_hash) {
     String8 a_raw_leaf = lnk_data_from_leaf_ref(input, a);
     String8 b_raw_leaf = lnk_data_from_leaf_ref(input, b);
 
@@ -1130,7 +1130,7 @@ skip_type_index_compare:;
   return are_equal;
 }
 
-internal U128
+internal U64
 lnk_hash_cv_leaf(Arena               *arena,
                  LNK_CodeViewInput   *input,
                  LNK_LeafHashes      *hashes,
@@ -1190,10 +1190,10 @@ lnk_hash_cv_leaf(Arena               *arena,
         LNK_LeafRef sub_leaf_ref = lnk_leaf_ref_from_loc_idx_and_ti(input, loc_type, ti_n->source, loc_idx, sub_ti);
 
         // query sub hash
-        U128 sub_hash = lnk_hash_from_leaf_ref(hashes, sub_leaf_ref);
+        U64 sub_hash = lnk_hash_from_leaf_ref(hashes, sub_leaf_ref);
 
         // make sure sub hash was computed (:zero_hash_array)
-        Assert(!u128_match(sub_hash, u128_zero()));
+        Assert(sub_hash != 0);
 
         // mix-in sub hash
         blake3_hasher_update(&hasher, &sub_hash, sizeof sub_hash);
@@ -1217,7 +1217,7 @@ lnk_hash_cv_leaf(Arena               *arena,
     }
   }
 
-  U128 hash;
+  U64 hash;
   blake3_hasher_finalize(&hasher, (U8 *) &hash, sizeof hash);
 
   return hash;
@@ -1256,7 +1256,7 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
   root_frame->ti_source    = CV_TypeIndexSource_NULL;
   MemoryZeroStruct(&root_frame->leaf);
 
-  U128Array *curr_hashes = hashes->v[loc_type][loc_idx];
+  U64 **curr_hashes = hashes->v[loc_type][loc_idx];
 
   struct stack_s *stack = root_frame;
   while (stack) {
@@ -1276,7 +1276,7 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
         U64 ti_idx = (*ti_ptr - ti_ranges[curr_ti_info->source].min);
 
         // was leaf hashed?
-        if (MemoryIsZeroStruct(&curr_hashes[curr_ti_info->source].v[ti_idx])) { // :zero_hash_array
+        if (curr_hashes[curr_ti_info->source][ti_idx] == 0) { // :zero_hash_array
           CV_Leaf leaf = cv_debug_t_get_leaf(leaves[curr_ti_info->source], ti_idx);
 
           // find index offsets
@@ -1298,15 +1298,15 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
             SLLStackPush(stack, frame);
             break;
           } else {
-            curr_hashes[curr_ti_info->source].v[ti_idx] = lnk_hash_cv_leaf(temp.arena,
-                                                                           input,
-                                                                           hashes,
-                                                                           loc_type,
-                                                                           loc_idx,
-                                                                           ti_ranges,
-                                                                           CV_TypeIndex_Max,
-                                                                           leaf,
-                                                                           sub_ti_info_list);
+            curr_hashes[curr_ti_info->source][ti_idx] = lnk_hash_cv_leaf(temp.arena,
+                                                                         input,
+                                                                         hashes,
+                                                                         loc_type,
+                                                                         loc_idx,
+                                                                         ti_ranges,
+                                                                         CV_TypeIndex_Max,
+                                                                         leaf,
+                                                                         sub_ti_info_list);
           }
         }
       }
@@ -1319,15 +1319,15 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
         // sub leaves are hashed we can now hash parent leaf
         Temp temp2 = temp_begin(temp.arena);
         U64 leaf_idx = stack->ti - ti_ranges[stack->ti_source].min;
-        curr_hashes[stack->ti_source].v[leaf_idx] = lnk_hash_cv_leaf(temp2.arena,
-                                                                     input,
-                                                                     hashes,
-                                                                     loc_type,
-                                                                     loc_idx,
-                                                                     ti_ranges,
-                                                                     CV_TypeIndex_Max,
-                                                                     stack->leaf,
-                                                                     stack->ti_info_list);
+        curr_hashes[stack->ti_source][leaf_idx] = lnk_hash_cv_leaf(temp2.arena,
+                                                                   input,
+                                                                   hashes,
+                                                                   loc_type,
+                                                                   loc_idx,
+                                                                   ti_ranges,
+                                                                   CV_TypeIndex_Max,
+                                                                   stack->leaf,
+                                                                   stack->ti_info_list);
         temp_end(temp2);
       }
 
@@ -1339,16 +1339,16 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
 }
 
 internal LNK_LeafBucket *
-lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, U128 new_hash, LNK_LeafBucket *new_bucket)
+lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, U64 new_hash, LNK_LeafBucket *new_bucket)
 {
   LNK_LeafBucket *result                 = 0;
   B32             is_inserted_or_updated = 0;
 
-  U64 best_idx = u128_mod64(new_hash, leaf_ht->cap);
+  U64 best_idx = new_hash % leaf_ht->cap;
   U64 idx      = best_idx;
 
   do {
-    retry:;
+retry:;
     LNK_LeafBucket *curr_bucket = leaf_ht->bucket_arr[idx];
 
     if (curr_bucket == 0) {
@@ -1388,13 +1388,12 @@ lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInp
       // another thread took the bucket...
       goto retry;
     }
-
+    
     // advance
-    idx = (idx + 1) % leaf_ht->cap;
+    idx = ((idx + 1) == leaf_ht->cap ? 0 : (idx + 1));
   } while (idx != best_idx);
 
   Assert(is_inserted_or_updated);
-
   return result;
 }
 
@@ -1403,8 +1402,8 @@ lnk_leaf_hash_table_search(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_
 {
   LNK_LeafBucket *match = 0;
 
-  U128 hash            = lnk_hash_from_leaf_ref(hashes, leaf_ref);
-  U64  best_bucket_idx = u128_mod64(hash, ht->cap);
+  U64  hash            = lnk_hash_from_leaf_ref(hashes, leaf_ref);
+  U64  best_bucket_idx = hash % ht->cap;
   U64  bucket_idx      = best_bucket_idx;
 
   do {
@@ -1419,7 +1418,7 @@ lnk_leaf_hash_table_search(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_
       break;
     }
 
-    bucket_idx = (bucket_idx + 1) % ht->cap;
+    bucket_idx = (bucket_idx + 1) == ht->cap ? 0 : (bucket_idx + 1);
   } while (bucket_idx != best_bucket_idx);
 
   return match;
@@ -1500,7 +1499,7 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_task)
 
   Arena     *fixed_arena = task->fixed_arenas[worker_id];
   CV_DebugT  debug_t     = task->debug_t_arr[obj_idx];
-  U128Array  out_hashes  = task->hashes->v[LNK_LeafLocType_Internal][obj_idx][CV_TypeIndexSource_TPI];
+  U64       *out_hashes  = task->hashes->v[LNK_LeafLocType_Internal][obj_idx][CV_TypeIndexSource_TPI];
 
   Rng1U64 ti_ranges[CV_TypeIndexSource_COUNT];
   for (U64 ti_source = 0; ti_source < ArrayCount(ti_ranges); ++ti_source) {
@@ -1517,15 +1516,15 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_task)
     CV_Leaf              leaf         = cv_debug_t_get_leaf(debug_t, leaf_idx);
     CV_TypeIndexInfoList ti_info_list = cv_get_leaf_type_index_offsets(temp.arena, leaf.kind, leaf.data);
 
-    out_hashes.v[leaf_idx] = lnk_hash_cv_leaf(temp.arena,
-                                              task->input,
-                                              task->hashes,
-                                              LNK_LeafLocType_Internal,
-                                              obj_idx,
-                                              ti_ranges,
-                                              curr_ti,
-                                              leaf,
-                                              ti_info_list);
+    out_hashes[leaf_idx] = lnk_hash_cv_leaf(temp.arena,
+                                            task->input,
+                                            task->hashes,
+                                            LNK_LeafLocType_Internal,
+                                            obj_idx,
+                                            ti_ranges,
+                                            curr_ti,
+                                            leaf,
+                                            ti_info_list);
 
     temp_end(temp);
   }
@@ -1589,7 +1588,7 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_internal_task)
     LNK_LeafHashTable *leaf_ht     = &task->leaf_ht_arr[ti_source];
 
     LNK_LeafRef leaf_ref  = lnk_obj_leaf_ref(obj_idx, leaf_idx);
-    U128        leaf_hash = lnk_hash_from_leaf_ref(task->hashes, leaf_ref);
+    U64         leaf_hash = lnk_hash_from_leaf_ref(task->hashes, leaf_ref);
 
     if (bucket == 0) {
       bucket = push_array_no_zero(arena, LNK_LeafBucket, 1);
@@ -1616,15 +1615,15 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_external_task)
 
   LNK_CodeViewInput *input      = task->input;
   LNK_LeafHashTable *leaf_ht    = &task->leaf_ht_arr[task->dedup_ti_source];
-  U128Array          hashes     = task->hashes->external_hashes[ts_idx][task->dedup_ti_source];
+  U64               *hashes     = task->hashes->external_hashes[ts_idx][task->dedup_ti_source];
   U64                leaf_count = dim_1u64(input->external_ti_ranges[ts_idx][task->dedup_ti_source]);
 
   LNK_LeafBucket *bucket = 0;
 
   for (U64 leaf_idx = 0; leaf_idx < leaf_count; ++leaf_idx) {
-    if (!MemoryIsZeroStruct(&hashes.v[leaf_idx])) { // :zero_hash_check
+    if (hashes[leaf_idx] != 0) { // :zero_hash_check
       LNK_LeafRef leaf_ref  = lnk_ts_leaf_ref(task->dedup_ti_source, ts_idx, leaf_idx);
-      U128        leaf_hash = lnk_hash_from_leaf_ref(task->hashes, leaf_ref);
+      U64         leaf_hash = lnk_hash_from_leaf_ref(task->hashes, leaf_ref);
 
       if (bucket == 0) {
         bucket = push_array_no_zero(arena, LNK_LeafBucket, 1);
@@ -2259,19 +2258,17 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
     // TPI and IPI leaves in .debug$T are stored in one array (we don't move them
     // to respective arrays before this point to save on memory move)
     ProfBegin("Push Internal Hash Arrays");
-    hashes->internal_hashes = push_array_no_zero(tp_temp->v[0], U128Array *, input->internal_count);
+    hashes->internal_hashes = push_array_no_zero(tp_temp->v[0], U64 **, input->internal_count);
     for (U64 obj_idx = 0; obj_idx < input->internal_count; ++obj_idx) {
       CV_DebugT debug_t = input->merged_debug_t_p_arr[obj_idx];
 
-      U128Array arr = {0};
-      arr.count     = debug_t.count;
-      arr.v         = push_array_no_zero(tp_temp->v[0], U128, debug_t.count);
+      U64 *arr = push_array_no_zero(tp_temp->v[0], U64, debug_t.count);
       // :debug_zero_hash_assert
 #if BUILD_DEBUG
-      MemoryZeroTyped(arr.v, arr.count);
+      MemoryZeroTyped(arr, debug_t.count);
 #endif
 
-      hashes->internal_hashes[obj_idx] = push_array(tp_temp->v[0], U128Array, CV_TypeIndexSource_COUNT);
+      hashes->internal_hashes[obj_idx] = push_array(tp_temp->v[0], U64 *, CV_TypeIndexSource_COUNT);
       for (U64 ti_source = 0; ti_source < CV_TypeIndexSource_COUNT; ++ti_source) {
         hashes->internal_hashes[obj_idx][ti_source] = arr;
       }
@@ -2280,13 +2277,12 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
 
     // push external hash arrays
     ProfBegin("Push External Hash Arrays");
-    hashes->external_hashes = push_array_no_zero(tp_temp->v[0], U128Array *, input->type_server_count);
+    hashes->external_hashes = push_array_no_zero(tp_temp->v[0], U64 **, input->type_server_count);
     for (U64 ts_idx = 0; ts_idx < input->type_server_count; ++ts_idx) {
-      hashes->external_hashes[ts_idx] = push_array_no_zero(tp_temp->v[0], U128Array, CV_TypeIndexSource_COUNT);
+      hashes->external_hashes[ts_idx] = push_array_no_zero(tp_temp->v[0], U64 *, CV_TypeIndexSource_COUNT);
       for (U64 ti_source = 0; ti_source < CV_TypeIndexSource_COUNT; ++ti_source) {
         U64 leaf_count = dim_1u64(input->external_ti_ranges[ts_idx][ti_source]);
-        hashes->external_hashes[ts_idx][ti_source].count = leaf_count;
-        hashes->external_hashes[ts_idx][ti_source].v     = push_array(tp_temp->v[0], U128, leaf_count); // :zero_hash_check
+        hashes->external_hashes[ts_idx][ti_source] = push_array(tp_temp->v[0], U64, leaf_count); // :zero_hash_check
       }
     }
     ProfEnd();
@@ -2339,7 +2335,7 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
       U64 bucket_cap = 0;
       bucket_cap += internal_per_source_count[ti_source];
       bucket_cap += external_per_source_count[ti_source];
-      bucket_cap  = (U64) ((F64) bucket_cap * 1.3);
+      bucket_cap  = (bucket_cap * 13) / 10; // * 1.3
 
       #if PROFILE_TELEMETRY
       tmMessage(0, TMMF_ICON_NOTE, "%.*s Bucket Count: %llu", str8_varg(cv_string_from_type_index_source(ti_source)), bucket_cap);
@@ -2438,22 +2434,6 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
   return types;
 }
 
-internal U64
-lnk_format_u128(U8 *buf, U64 buf_max, U64 length, U128 v)
-{
-  U64 size = 0;
-  if (length > 0 && buf_max > 0) {
-    if (length <= 8) {
-      U64 mask = length == 8 ? max_U64 : (1ull << (length*8)) - 1;
-      size = raddbg_snprintf((char*)buf, buf_max - 1, "%llX", (long long)(v.u64[0] & mask));
-    } else {
-      U64 mask1 = length == 16 ? max_U64 : (1ull << ((length-8)*8)) - 1;
-      size = raddbg_snprintf((char*)buf, buf_max, "%llX%llX", (long long)(v.u64[1] & mask1), (long long)v.u64[0]);
-    }
-  }
-  return size;
-}
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
 {
@@ -2472,8 +2452,8 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
     map       = &task->maps[task_id];
   }
 
-  U64 hash_max_chars = hash_length*2;
-  U8  temp[128];
+  U64  hash_max_chars = hash_length*2;
+  char temp[128];
 
   for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
     CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
@@ -2484,15 +2464,14 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
            udt_info.unique_name.size > hash_max_chars &&
            udt_info.name.size > hash_max_chars) {
         // hash unique name
-        U128 name_hash;
+        U64 name_hash;
         blake3_hasher hasher; blake3_hasher_init(&hasher);
         blake3_hasher_update(&hasher, udt_info.unique_name.str, udt_info.unique_name.size);
         blake3_hasher_finalize(&hasher, (U8*)&name_hash, sizeof(name_hash));
 
         // emit hash -> unique name map
         if (make_map) {
-          lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
-          str8_list_pushf(map_arena, map, "%s %S\n", temp, str8_varg(udt_info.unique_name));
+          str8_list_pushf(map_arena, map, "%llx %S\n", name_hash, str8_varg(udt_info.unique_name));
         }
 
         // parse leaf size
@@ -2504,7 +2483,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
         B32     is_lambda     = colon_pos != 0;
 
         if (is_lambda) {
-          U64 size = lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
+          U64 size = raddbg_snprintf(temp, sizeof(temp), "%llx", name_hash);
           Assert(size < udt_info.name.size);
           Assert(size < udt_info.unique_name.size);
           MemoryCopy(udt_info.name.str, temp, size+1);
@@ -2522,7 +2501,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
         } else {
           // replace uniuqe type name with hash
           udt_info.unique_name.str  = udt_info.name.str + udt_info.name.size + 1;
-          udt_info.unique_name.size = lnk_format_u128(udt_info.unique_name.str, udt_info.unique_name.size, hash_length, name_hash);
+          udt_info.unique_name.size = raddbg_snprintf(udt_info.unique_name.cstr, udt_info.unique_name.size, "%llx", name_hash);
 
           // update leaf header
           CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
@@ -2558,7 +2537,6 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
   }
 
   U64 hash_max_chars = hash_length*2;
-  U8  temp[128];
 
   for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
     CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
@@ -2575,19 +2553,18 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
         }
 
         // hash name
-        U128 name_hash;
+        U64 name_hash;
         blake3_hasher hasher; blake3_hasher_init(&hasher);
         blake3_hasher_update(&hasher, udt_info.name.str, udt_info.name.size);
         blake3_hasher_finalize(&hasher, (U8*)&name_hash, sizeof(name_hash));
 
         // emit hash -> name map
         if (make_map) {
-          lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
-          str8_list_pushf(map_arena, map, "%s %.*s\n", temp, str8_varg(name));
+          str8_list_pushf(map_arena, map, "%llx %S\n", name_hash, name);
         }
 
         // replace name with hash
-        udt_info.name.size = lnk_format_u128(udt_info.name.str, udt_info.name.size, hash_length, name_hash);
+        udt_info.name.size = raddbg_snprintf(udt_info.name.cstr, udt_info.name.size, "%llx", name_hash);
 
         // parse struct size
         CV_NumericParsed dummy;

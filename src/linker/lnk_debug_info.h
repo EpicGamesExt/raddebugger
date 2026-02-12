@@ -112,10 +112,10 @@ typedef struct
 typedef union
 {
   struct {
-    U128Array **internal_hashes;
-    U128Array **external_hashes;
+    U64 ***internal_hashes;
+    U64 ***external_hashes;
   };
-  U128Array **v[CV_TypeIndexSource_COUNT];
+  U64 ***v[CV_TypeIndexSource_COUNT];
 } LNK_LeafHashes;
 
 // --- Symbol Parsing Tasks ----------------------------------------------------
@@ -512,17 +512,17 @@ internal CV_TypeIndex     lnk_ti_lo_from_loc(LNK_CodeViewInput *input, LNK_LeafL
 internal CV_TypeIndex     lnk_ti_lo_from_leaf_ref(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal String8          lnk_data_from_leaf_ref(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal CV_Leaf          lnk_cv_leaf_from_leaf_ref(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
-internal U128             lnk_hash_from_leaf_ref(LNK_LeafHashes *hashes, LNK_LeafRef leaf_ref);
+internal U64              lnk_hash_from_leaf_ref(LNK_LeafHashes *hashes, LNK_LeafRef leaf_ref);
 internal LNK_LeafRef      lnk_leaf_ref_from_loc_idx_and_ti(LNK_CodeViewInput *input, LNK_LeafLocType loc_type, CV_TypeIndexSource ti_source, U64 loc_idx, CV_TypeIndex obj_ti);
 internal B32              lnk_match_leaf_ref(LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafRef a, LNK_LeafRef b);
 internal B32              lnk_match_leaf_ref_deep(Arena *arena, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafRef a, LNK_LeafRef b);
-internal U128             lnk_hash_cv_leaf(Arena *arena, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafLocType loc_type, U32 loc_idx, Rng1U64 *ti_ranges, CV_TypeIndex curr_ti, CV_Leaf leaf, CV_TypeIndexInfoList ti_info_list);
+internal U64              lnk_hash_cv_leaf(Arena *arena, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafLocType loc_type, U32 loc_idx, Rng1U64 *ti_ranges, CV_TypeIndex curr_ti, CV_Leaf leaf, CV_TypeIndexInfoList ti_info_list);
 internal void             lnk_hash_cv_leaf_deep(Arena *arena, LNK_CodeViewInput *input, Rng1U64 *ti_ranges, CV_DebugT *leaves, LNK_LeafHashes *hashes, LNK_LeafLocType loc_type, U32 loc_idx, CV_TypeIndexInfoList ti_info_list, String8 data);
-internal LNK_LeafBucket * lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, U128 hash, LNK_LeafBucket *new_bucket);
+internal LNK_LeafBucket * lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, U64 hash, LNK_LeafBucket *new_bucket);
 internal LNK_LeafBucket * lnk_leaf_hash_table_search(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafRef leaf_ref);
 
 internal void                lnk_cv_debug_t_count_leaves_per_source(TP_Context *tp, U64 count, CV_DebugT *debug_t_arr, U64 *per_source_count_arr);
-internal void                lnk_hash_debug_t_arr(TP_Context *tp, Arena *arena, U64 obj_count, CV_DebugT *debug_t_arr, U128Array *hash_arr_arr);
+internal void                lnk_hash_debug_t_arr(TP_Context *tp, Arena *arena, U64 obj_count, CV_DebugT *debug_t_arr, U64 **hash_arr_arr);
 internal LNK_LeafBucketArray lnk_present_bucket_array_from_leaf_hash_table(TP_Context *tp, Arena *arena, LNK_LeafHashTable *ht);
 internal void                lnk_leaf_bucket_array_sort_radix_subset_parallel(TP_Context *tp, U64 bucket_count, U64 loc_idx_max, LNK_LeafBucket **dst, LNK_LeafBucket **src);
 internal void                lnk_leaf_bucket_array_sort_radix_parallel(TP_Context *tp, LNK_LeafBucketArray arr, U64 obj_count, U64 type_server_count);
