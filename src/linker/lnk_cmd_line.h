@@ -28,5 +28,7 @@ internal B32             lnk_cmd_line_has_option(LNK_CmdLine cmd_line, char *str
 internal LNK_CmdOption * lnk_cmd_line_push_option(Arena *arena, LNK_CmdLine *cmd_line, char *string, char *value);
 internal LNK_CmdOption * lnk_cmd_line_push_option_if_not_present(Arena *arena, LNK_CmdLine *cmd_line, char *string, char *value);
 
+internal void lnk_cmd_line_concat_in_place(LNK_CmdLine *list, LNK_CmdLine *to_concat);
+
 internal String8List lnk_data_from_cmd_line(Arena *arena, LNK_CmdLine cmd_line);
 

@@ -1,9 +1,9 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-static LNK_ErrorMode g_error_mode_arr[LNK_Error_Count];
+static LNK_ErrorMode       g_error_mode_arr       [LNK_Error_Count];
 static LNK_ErrorCodeStatus g_error_code_status_arr[LNK_Error_Count];
-static B32 g_log_status[LNK_Log_Count];
+static B32                 g_log_status           [LNK_Log_Count];
 
 internal void
 lnk_exit(int code)
@@ -40,12 +40,7 @@ lnk_string_from_error_mode(LNK_ErrorMode mode)
 internal void
 lnk_errorfv(LNK_ErrorCode code, char *fmt, va_list args)
 {
-  if (g_error_mode_arr[code] == LNK_ErrorMode_Ignore) {
-    return;
-  }
-  if (lnk_is_error_code_ignored(code)) {
-    return;
-  }
+  if (lnk_is_error_code_ignored(code)) { return; }
   
   Temp scratch = scratch_begin(0,0);
   String8 message = push_str8fv(scratch.arena, fmt, args);
@@ -118,9 +113,15 @@ lnk_supplement_error_list(String8List list)
 }
 
 internal void
-lnk_suppress_error(LNK_ErrorCode code)
+lnk_ignore_error(LNK_ErrorCode code)
 {
   g_error_code_status_arr[code] = LNK_ErrorCodeStatus_Ignore;
+}
+
+internal void
+lnk_activate_error(LNK_ErrorCode code)
+{
+  g_error_code_status_arr[code] = LNK_ErrorCodeStatus_Active;
 }
 
 internal LNK_ErrorCodeStatus

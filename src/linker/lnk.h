@@ -74,7 +74,7 @@ typedef struct LNK_Inputer
 #define LNK_IMPORT_STUB "*** RAD_IMPORT_STUB ***"
 #define LNK_NULL_SYMBOL "*** RAD_NULL_SYMBOL ***"
 
-#define LNK_SECTION_FLAG_LIVE    (1 << 0)
+#define LNK_SECTION_FLAG_LIVE  (1 << 0)
 #define LNK_SECTION_FLAG_DEBUG (1 << 1)
 
 typedef U8 LNK_LibMemberFlags;

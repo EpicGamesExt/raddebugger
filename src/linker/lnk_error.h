@@ -126,7 +126,8 @@ internal void lnk_error(LNK_ErrorCode code, char *fmt, ...);
 internal void lnk_error_with_loc(LNK_ErrorCode code, String8 obj_path, String8 lib_path, char *fmt, ...);
 internal void lnk_supplement_error(char *fmt, ...);
 internal void lnk_supplement_error_list(String8List list);
-internal void lnk_suppress_error(LNK_ErrorCode code);
+internal void lnk_ignore_error(LNK_ErrorCode code);
+internal void lnk_activate_error(LNK_ErrorCode code);
 
 #define lnk_is_error_code_active(code)  (lnk_get_error_code_status(code) == LNK_ErrorCodeStatus_Active)
 #define lnk_is_error_code_ignored(code) (lnk_get_error_code_status(code) == LNK_ErrorCodeStatus_Ignore)

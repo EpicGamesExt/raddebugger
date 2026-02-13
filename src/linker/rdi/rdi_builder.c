@@ -2072,9 +2072,9 @@ THREAD_POOL_TASK_FUNC(rdib_string_map_radix_sort_element_idx_task)
     ProfEnd();
 
     ProfBegin("Histogram Counts -> Offsets");
-    counts_to_offsets_array_u32(ArrayCount(histo_bot), &histo_bot[0]);
-    counts_to_offsets_array_u32(ArrayCount(histo_mid), &histo_mid[0]);
-    counts_to_offsets_array_u32(ArrayCount(histo_top), &histo_top[0]);
+    u32_array_counts_to_offsets(ArrayCount(histo_bot), &histo_bot[0]);
+    u32_array_counts_to_offsets(ArrayCount(histo_mid), &histo_mid[0]);
+    u32_array_counts_to_offsets(ArrayCount(histo_top), &histo_top[0]);
     ProfEnd();
 
     ProfBegin("Sort Bot");
@@ -2140,7 +2140,7 @@ rdib_string_map_sort_buckets(TP_Context *tp, RDIB_StringMapBucket **buckets, U64
 #endif
 
   ProfBegin("Chunk Histo -> Offsets");
-  task.chunk_offsets = offsets_from_counts_array_u32(scratch.arena, task.chunk_histo, chunk_idx_opl);
+  task.chunk_offsets = u32_array_offsets_from_counts(scratch.arena, task.chunk_histo, chunk_idx_opl);
   ProfEnd();
 
   ProfBegin("Sort on chunk index");
@@ -2148,7 +2148,7 @@ rdib_string_map_sort_buckets(TP_Context *tp, RDIB_StringMapBucket **buckets, U64
   ProfEnd();
 
   ProfBegin("Sort on element index");
-  task.chunk_offsets = offsets_from_counts_array_u32(scratch.arena, task.chunk_histo, chunk_idx_opl);
+  task.chunk_offsets = u32_array_offsets_from_counts(scratch.arena, task.chunk_histo, chunk_idx_opl);
   task.ranges        = tp_divide_work(scratch.arena, chunk_idx_opl, tp->worker_count);
   tp_for_parallel(tp, 0, tp->worker_count, rdib_string_map_radix_sort_element_idx_task, &task);
   ProfEnd();
@@ -2698,9 +2698,9 @@ THREAD_POOL_TASK_FUNC(rdib_index_run_map_radix_sort_element_idx_task)
     ProfEnd();
 
     ProfBegin("Histogram Counts -> Offsets");
-    counts_to_offsets_array_u32(ArrayCount(histo_bot), &histo_bot[0]);
-    counts_to_offsets_array_u32(ArrayCount(histo_mid), &histo_mid[0]);
-    counts_to_offsets_array_u32(ArrayCount(histo_top), &histo_top[0]);
+    u32_array_counts_to_offsets(ArrayCount(histo_bot), &histo_bot[0]);
+    u32_array_counts_to_offsets(ArrayCount(histo_mid), &histo_mid[0]);
+    u32_array_counts_to_offsets(ArrayCount(histo_top), &histo_top[0]);
     ProfEnd();
 
     ProfBegin("Sort Bot");
@@ -2766,7 +2766,7 @@ rdib_index_run_map_sort_buckets(TP_Context *tp, RDIB_IndexRunBucket **buckets, U
 #endif
 
   ProfBegin("Chunk Histo -> Offsets");
-  task.chunk_offsets = offsets_from_counts_array_u32(scratch.arena, task.chunk_histo, chunk_idx_opl);
+  task.chunk_offsets = u32_array_offsets_from_counts(scratch.arena, task.chunk_histo, chunk_idx_opl);
   ProfEnd();
 
   ProfBegin("Sort on chunk index");
@@ -2774,7 +2774,7 @@ rdib_index_run_map_sort_buckets(TP_Context *tp, RDIB_IndexRunBucket **buckets, U
   ProfEnd();
 
   ProfBegin("Sort on element index");
-  task.chunk_offsets = offsets_from_counts_array_u32(scratch.arena, task.chunk_histo, chunk_idx_opl);
+  task.chunk_offsets = u32_array_offsets_from_counts(scratch.arena, task.chunk_histo, chunk_idx_opl);
   task.ranges        = tp_divide_work(scratch.arena, chunk_idx_opl, tp->worker_count);
   tp_for_parallel(tp, 0, tp->worker_count, rdib_index_run_map_radix_sort_element_idx_task, &task);
   ProfEnd();
@@ -3253,9 +3253,9 @@ rdib_sort_procs_radix_32(RDIB_Procedure **v, U64 count)
   ProfEnd();
 
   ProfBegin("Counts -> Offsets");
-  counts_to_offsets_array_u32(ArrayCount(count_8lo),  count_8lo);
-  counts_to_offsets_array_u32(ArrayCount(count_8hi),  count_8hi);
-  counts_to_offsets_array_u32(ArrayCount(count_16),   count_16 );
+  u32_array_counts_to_offsets(ArrayCount(count_8lo),  count_8lo);
+  u32_array_counts_to_offsets(ArrayCount(count_8hi),  count_8hi);
+  u32_array_counts_to_offsets(ArrayCount(count_16),   count_16 );
   ProfEnd();
 
   ProfBegin("Order 8 Lo");
@@ -3357,13 +3357,13 @@ rdib_data_from_vmap(Arena *arena, U64 range_count, RDIB_VMapRange *ranges)
       ++voff_count2[voff_digit2];
     }
 
-    counts_to_offsets_array_u32((1 << size_bit_count0), size_count0);
-    counts_to_offsets_array_u32((1 << size_bit_count1), size_count1);
-    counts_to_offsets_array_u32((1 << size_bit_count2), size_count2);
+    u32_array_counts_to_offsets((1 << size_bit_count0), size_count0);
+    u32_array_counts_to_offsets((1 << size_bit_count1), size_count1);
+    u32_array_counts_to_offsets((1 << size_bit_count2), size_count2);
 
-    counts_to_offsets_array_u32((1 << voff_bit_count0), voff_count0);
-    counts_to_offsets_array_u32((1 << voff_bit_count1), voff_count1);
-    counts_to_offsets_array_u32((1 << voff_bit_count2), voff_count2);
+    u32_array_counts_to_offsets((1 << voff_bit_count0), voff_count0);
+    u32_array_counts_to_offsets((1 << voff_bit_count1), voff_count1);
+    u32_array_counts_to_offsets((1 << voff_bit_count2), voff_count2);
 
     //
     // Sort on range size (high to low)
@@ -4517,7 +4517,7 @@ THREAD_POOL_TASK_FUNC(rdib_build_src_line_map_task)
     // than 4GiB in line table anyway.
     radsort(ln_voff_arr, ln_voff_count, pair_u32_is_before_v0);
   } else {
-    u32_pair_radix_sort(ln_voff_count, ln_voff_arr);
+    u32_pair_sort_radix(ln_voff_count, ln_voff_arr);
   }
   ProfEnd();
 

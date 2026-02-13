@@ -250,7 +250,7 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags
     // assign offsets into file buffer
     U64 *off_arr = push_array_no_zero(scratch.arena, U64, path_arr.count);
     MemoryCopyTyped(off_arr, reader.size_arr, path_arr.count);
-    counts_to_offsets_array_u64(path_arr.count, off_arr);
+    u64_array_counts_to_offsets(path_arr.count, off_arr);
 
     reader.io_flags = io_flags;
     reader.data_arr = str8_array_reserve(arena, path_arr.count);

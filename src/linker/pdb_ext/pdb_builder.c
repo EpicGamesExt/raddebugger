@@ -2350,7 +2350,7 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
   U64 buffer_size = sum_array_u64(gsi->bucket_count, serial_task.bucket_size_arr);
   serial_task.buffer         = push_array_no_zero(arena, U8, buffer_size);
   serial_task.bucket_off_arr = push_array_copy_u64(scratch.arena, serial_task.bucket_size_arr, gsi->bucket_count);
-  counts_to_offsets_array_u64(gsi->bucket_count, serial_task.bucket_off_arr);
+  u64_array_counts_to_offsets(gsi->bucket_count, serial_task.bucket_off_arr);
 
   // prepare GSI records
   serial_task.sort_record_arr_arr  = push_array_no_zero(scratch.arena, PDB_GsiSortRecord *, gsi->bucket_count);

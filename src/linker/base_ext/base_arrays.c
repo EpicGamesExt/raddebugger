@@ -5,9 +5,7 @@ internal U64
 void_list_count_nodes(VoidNode *head)
 {
   U64 node_count = 0;
-  for (VoidNode *curr = head; curr != 0; curr = curr->next) {
-    ++node_count;
-  }
+  for EachNode(curr, VoidNode, head) { node_count += 1; }
   return node_count;
 }
 
@@ -49,15 +47,33 @@ u64_list_concat_in_place(U64List *list, U64List *to_concat)
   SLLConcatInPlace(list, to_concat);
 }
 
-internal U64Array
-u64_array_from_list(Arena *arena, U64List *list)
+internal B32
+u32_array_compare(U32Array a, U32Array b)
 {
-  U64Array result;
-  result.count = 0;
-  result.v = push_array(arena, U64, list->count);
-  for (U64Node *n = list->first; n != NULL; n = n->next) {
-    result.v[result.count++] = n->data;
+  B32 are_equal = 0;
+  if (a.count == b.count) {
+    int cmp = MemoryCompare(a.v, b.v, sizeof(a.v[0]) * a.count);
+    are_equal = (cmp == 0);
   }
+  return are_equal;
+}
+
+internal void
+u32_array_counts_to_offsets(U64 count, U32 *arr)
+{
+  U32 next_offset = 0;
+  for (U64 i = 0; i < count; i += 1) {
+    U32 current_offset = next_offset;
+    next_offset += arr[i];
+    arr[i] = current_offset;
+  }
+}
+
+internal U32 *
+u32_array_offsets_from_counts(Arena *arena, U32 *v, U64 count)
+{
+  U32 *result = push_array_copy_u32(arena, v, count);
+  u32_array_counts_to_offsets(count, result);
   return result;
 }
 
@@ -68,13 +84,7 @@ u32_array_sort(U64 count, U32 *v)
 }
 
 internal void
-u64_array_sort(U64 count, U64 *v)
-{
-  radsort(v, count, u64_is_before);
-}
-
-internal void
-u32_pair_radix_sort(U64 count, PairU32 *arr)
+u32_pair_sort_radix(U64 count, PairU32 *arr)
 {
   Temp scratch = scratch_begin(0,0);
 
@@ -98,9 +108,9 @@ u32_pair_radix_sort(U64 count, PairU32 *arr)
     ++count2[digit2];
   }
 
-  counts_to_offsets_array_u32((1 << bit_count0), count0);
-  counts_to_offsets_array_u32((1 << bit_count1), count1);
-  counts_to_offsets_array_u32((1 << bit_count2), count2);
+  u32_array_counts_to_offsets((1 << bit_count0), count0);
+  u32_array_counts_to_offsets((1 << bit_count1), count1);
+  u32_array_counts_to_offsets((1 << bit_count2), count2);
 
   for (U64 i = 0; i < count; ++i) {
     U32 digit0 = (arr[i].v0 >> 0) % (1 << bit_count0);
@@ -122,15 +132,59 @@ u32_pair_radix_sort(U64 count, PairU32 *arr)
   scratch_end(scratch);
 }
 
-internal B32
-u32_array_compare(U32Array a, U32Array b)
+internal U64 *
+offsets_from_counts_array_u64(Arena *arena, U64 *v, U64 count)
 {
-  B32 are_equal = 0;
-  if (a.count == b.count) {
-    int cmp = MemoryCompare(a.v, b.v, sizeof(a.v[0]) * a.count);
-    are_equal = (cmp == 0);
+  U64 *result = push_array_copy_u64(arena, v, count);
+  u64_array_counts_to_offsets(count, result);
+  return result;
+}
+
+internal void
+u64_array_counts_to_offsets(U64 count, U64 *arr)
+{
+  U64 next_offset = 0;
+  for (U64 i = 0; i < count; i += 1) {
+    U64 current_offset = next_offset;
+    next_offset += arr[i];
+    arr[i] = current_offset;
   }
-  return are_equal;
+}
+
+internal void
+u64_array_sort(U64 count, U64 *v)
+{
+  radsort(v, count, u64_is_before);
+}
+
+internal U64
+u64_array_max(U64 count, U64 *v)
+{
+  U64 result = 0;
+  for (U64 i = 0; i < count; i += 1) {
+    result = Max(v[i], result);
+  }
+  return result;
+}
+
+internal U64
+u64_array_min(U64 count, U64 *v)
+{
+  U64 result = max_U64;
+  for (U64 i = 0; i < count; i += 1) {
+    result = Min(v[i], result);
+  }
+  return result;
+}
+
+internal U64
+sum_array_u64(U64 count, U64 *v)
+{
+  U64 result = 0;
+  for (U64 i = 0; i < count; i += 1) {
+    result += v[i];
+  }
+  return result;
 }
 
 internal U64Array
@@ -160,81 +214,35 @@ u64_array_remove_duplicates(Arena *arena, U64Array in)
   return result;
 }
 
-internal U64
-sum_array_u64(U64 count, U64 *v)
+internal void
+s64_list_push_node(S64List *list, S64Node *n)
 {
-  U64 result = 0;
-  for (U64 i = 0; i < count; i += 1) {
-    result += v[i];
-  }
-  return result;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
 }
 
-internal U64
-sum_matrix_u64(U64 rows, U64 cols, U64 **v)
+internal S64Node *
+s64_list_push(Arena *arena, S64List *list, S64 v)
 {
-  U64 result = 0;
-  for (U64 i = 0; i < rows; ++i) {
-    result += sum_array_u64(cols, v[i]);
-  }
-  return result;
-}
-
-internal U64
-max_array_u64(U64 count, U64 *v)
-{
-  U64 result = 0;
-  for (U64 i = 0; i < count; i += 1) {
-    result = Max(v[i], result);
-  }
-  return result;
-}
-
-internal U64
-min_array_u64(U64 count, U64 *v)
-{
-  U64 result = max_U64;
-  for (U64 i = 0; i < count; i += 1) {
-    result = Min(v[i], result);
-  }
-  return result;
+  S64Node *n = push_array(arena, S64Node, 1);
+  n->next = 0;
+  n->v = v;
+  s64_list_push_node(list, n);
+  return n;
 }
 
 internal void
-counts_to_offsets_array_u32(U64 count, U32 *arr)
+s64_list_concat_in_place(S64List *list, S64List *to_concat)
 {
-  U32 next_offset = 0;
-  for (U64 i = 0; i < count; i += 1) {
-    U32 current_offset = next_offset;
-    next_offset += arr[i];
-    arr[i] = current_offset;
-  }
+  SLLConcatInPlace(list, to_concat);
 }
 
-internal void
-counts_to_offsets_array_u64(U64 count, U64 *arr)
+internal S64Array
+s64_array_from_list(Arena *arena, S64List *list)
 {
-  U64 next_offset = 0;
-  for (U64 i = 0; i < count; i += 1) {
-    U64 current_offset = next_offset;
-    next_offset += arr[i];
-    arr[i] = current_offset;
-  }
-}
-
-internal U32 *
-offsets_from_counts_array_u32(Arena *arena, U32 *v, U64 count)
-{
-  U32 *result = push_array_copy_u32(arena, v, count);
-  counts_to_offsets_array_u32(count, result);
-  return result;
-}
-
-internal U64 *
-offsets_from_counts_array_u64(Arena *arena, U64 *v, U64 count)
-{
-  U64 *result = push_array_copy_u64(arena, v, count);
-  counts_to_offsets_array_u64(count, result);
+  S64Array result = {0};
+  result.v = push_array(arena, S64, list->count);
+  for EachNode(n, S64Node, list->first) { result.v[result.count++] = n->v; }
   return result;
 }
 

@@ -92,8 +92,7 @@ internal LNK_CmdOption *
 lnk_cmd_line_push_option_list(Arena *arena, LNK_CmdLine *cmd_line, String8 string, String8List value_strings)
 {
   // fill out node
-  LNK_CmdOption *opt = push_array_no_zero(arena, LNK_CmdOption, 1);
-  opt->next          = 0;
+  LNK_CmdOption *opt = push_array(arena, LNK_CmdOption, 1);
   opt->string        = string;
   opt->value_strings = value_strings;
 
@@ -124,6 +123,21 @@ lnk_cmd_line_push_option_if_not_present(Arena *arena, LNK_CmdLine *cmd_line, cha
     return lnk_cmd_line_push_option(arena, cmd_line, string, value);
   }
   return 0;
+}
+
+internal void
+lnk_cmd_line_concat_in_place(LNK_CmdLine *list, LNK_CmdLine *to_concat)
+{
+  if (list->option_count > 0) {
+    list->option_count += to_concat->option_count;
+    list->last_option->next = to_concat->first_option;
+    list->last_option = to_concat->last_option;
+    str8_list_concat_in_place(&list->input_list, &to_concat->input_list);
+    str8_list_concat_in_place(&list->raw_cmd_line, &to_concat->raw_cmd_line);
+  } else {
+    *list = *to_concat;
+  }
+  MemoryZeroStruct(to_concat);
 }
 
 internal LNK_CmdLine
