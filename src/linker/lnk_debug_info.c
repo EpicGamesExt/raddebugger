@@ -1,6 +1,17 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+static Arena *g_huge_arena = 0;
+
+internal Arena *
+lnk_get_huge_arena(void)
+{
+  if (g_huge_arena == 0) {
+    g_huge_arena = arena_alloc(.name = "HUGE");
+  }
+  return g_huge_arena;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
 {
@@ -2158,7 +2169,7 @@ internal CV_DebugT *
 lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
 {
   ProfBegin("Import Types");
-  Temp scratch = scratch_begin(tp_temp->v, tp_temp->count);
+  Temp scratch = temp_begin(lnk_get_huge_arena());
 
   U64     max_ti_list_size = sizeof(CV_TypeIndexInfo) * (max_U16 / sizeof(CV_TypeIndex));
   Arena **fixed_arenas     = alloc_fixed_size_arena_array(scratch.arena, tp->worker_count, max_ti_list_size, max_ti_list_size);
@@ -2366,7 +2377,7 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
 
   tp_for_parallel_prof(tp, 0, input->total_symbol_input_count, lnk_post_process_cv_symbols_task, &task, "Post Process CV Symbols");
 
-  scratch_end(scratch);
+  temp_end(scratch);
   ProfEnd();
   return task.types;
 }
@@ -3013,13 +3024,14 @@ lnk_build_pdb(TP_Context               *tp,
 {
   ProfBegin("PDB");
   Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
+  Temp huge_arena_temp = temp_begin(lnk_get_huge_arena());
 
   PE_BinInfo           pe                        = pe_bin_info_from_data(scratch.arena, image_data);
   COFF_SectionHeader **image_section_table       = coff_section_table_from_data(scratch.arena, image_data, pe.section_table_range);
   U64                  image_section_table_count = pe.section_count+1;
 
   ProfBegin("Setup PDB Context");
-  PDB_Context *pdb = pdb_alloc(config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid);
+  PDB_Context *pdb = pdb_alloc_(huge_arena_temp.arena, config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid);
   ProfEnd();
 
   // move patched type data
@@ -3243,6 +3255,7 @@ lnk_build_pdb(TP_Context               *tp,
   ProfEnd();
 #endif
 
+  temp_end(huge_arena_temp);
   scratch_end(scratch);
   ProfEnd();
   return page_data_list;

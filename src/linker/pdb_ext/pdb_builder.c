@@ -3516,10 +3516,10 @@ dbi_push_section(PDB_DbiContext *dbi, COFF_SectionHeader *hdr)
 ////////////////////////////////
 
 internal MSF_Context *
-pdb_alloc_msf(U64 page_size)
+pdb_alloc_msf(Arena *arena, U64 page_size)
 {
   ProfBeginFunction();
-  MSF_Context *msf = msf_alloc(page_size, MSF_DEFAULT_FPM);
+  MSF_Context *msf = msf_alloc_(arena, page_size, MSF_DEFAULT_FPM);
   MSF_StreamNumber null_sn = msf_stream_alloc(msf);
   MSF_StreamNumber info_sn = msf_stream_alloc(msf);
   MSF_StreamNumber tpi_sn = msf_stream_alloc(msf);
@@ -3535,13 +3535,12 @@ pdb_alloc_msf(U64 page_size)
 }
 
 internal PDB_Context *
-pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid)
+pdb_alloc_(Arena *arena, U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid)
 {
   ProfBeginFunction();
-  Arena *arena = arena_alloc();
   PDB_Context *pdb = push_array(arena, PDB_Context, 1);
   pdb->arena = arena;
-  pdb->msf   = pdb_alloc_msf(page_size);
+  pdb->msf   = pdb_alloc_msf(arena, page_size);
   pdb->info  = pdb_info_alloc(age, time_stamp, guid);
   pdb->dbi   = dbi_alloc(machine, age);
   pdb->gsi   = gsi_alloc();
@@ -3552,6 +3551,12 @@ pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U3
   }
   ProfEnd();
   return pdb;
+}
+
+internal PDB_Context *
+pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid)
+{
+  return pdb_alloc_(arena_alloc(.name = "PDB"), page_size, machine, time_stamp, age, guid);
 }
 
 internal PDB_Context *

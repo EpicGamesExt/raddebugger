@@ -1343,13 +1343,11 @@ msf_stream_align(MSF_Context *msf, MSF_StreamNumber sn, MSF_UInt align)
 ////////////////////////////////
 
 internal MSF_Context * 
-msf_alloc__(MSF_UInt page_size, MSF_PageNumber active_fpm)
+msf_alloc__(Arena *arena, MSF_UInt page_size, MSF_PageNumber active_fpm)
 {
   ProfBeginFunction();
   Assert(active_fpm == MSF_FPM0 || active_fpm == MSF_FPM1);
   Assert(IsPow2(page_size));
-  
-  Arena *arena = arena_alloc();
   
   MSF_Context *msf = push_array(arena, MSF_Context, 1);
   msf->arena = arena;
@@ -1361,9 +1359,9 @@ msf_alloc__(MSF_UInt page_size, MSF_PageNumber active_fpm)
 }
 
 internal MSF_Context *
-msf_alloc(MSF_UInt page_size, MSF_UInt active_fpm)
+msf_alloc_(Arena *arena, MSF_UInt page_size, MSF_UInt active_fpm)
 {
-  MSF_Context *msf = msf_alloc__(page_size, active_fpm);
+  MSF_Context *msf = msf_alloc__(arena, page_size, active_fpm);
   
   // reserve first page for header
   msf->header_page_list = msf_alloc_pages(msf, 1);
@@ -1376,6 +1374,12 @@ msf_alloc(MSF_UInt page_size, MSF_UInt active_fpm)
   Assert(msf->root_page_list.first->pn == 3);
   
   return msf;
+}
+
+internal MSF_Context *
+msf_alloc(MSF_UInt page_size, MSF_UInt active_fpm)
+{
+  return msf_alloc_(arena_alloc( .name = "MSF"), page_size, active_fpm);
 }
 
 internal MSF_StreamNode * 
@@ -1608,7 +1612,7 @@ msf_open(String8 data, MSF_Context **msf_out)
   }
 
   // allocate MSF context and don't reserve special pages
-  msf = msf_alloc__(header->page_size, header->active_fpm);
+  msf = msf_alloc__(arena_alloc(.name = "MSF"), header->page_size, header->active_fpm);
   
   // divide data into fixed size nodes (with 4KB page each node is 128MB)
   msf_set_page_data_list(msf->arena, &page_data_list, header->page_size, data);
