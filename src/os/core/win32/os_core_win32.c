@@ -213,6 +213,9 @@ os_commit(void *ptr, U64 size)
     // wine does not implement these functions
     w32_rio_functions.RIODeregisterBuffer(w32_rio_functions.RIORegisterBuffer(ptr, size));
   }
+#if PROFILE_TELEMETRY
+  tmAlloc(0, ptr, size / 1024, "Win32 Commit");
+#endif
   return result;
 }
 
@@ -220,6 +223,9 @@ internal void
 os_decommit(void *ptr, U64 size)
 {
   VirtualFree(ptr, size, MEM_DECOMMIT);
+#if PROFILE_TELEMETRY
+  tmFree(0, ptr);
+#endif
 }
 
 internal void
