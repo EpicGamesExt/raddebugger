@@ -1424,7 +1424,9 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         lnk_ignore_error(LNK_Warning_SectionFlagsConflict);
       } break;
       default: {
+        #if BUILD_DEBUG
         lnk_not_implemented("TODO: /IGNORE:%llu", error_code);
+        #endif
       } break;
       }
     }
