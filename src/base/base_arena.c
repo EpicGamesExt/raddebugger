@@ -101,6 +101,16 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
   U64 pos_pre = AlignPow2(current->pos, align);
   U64 pos_pst = pos_pre + size;
   
+  // TODO: Newly allocated arenas already have zeroed commited pages,
+  //       so this unnecessarily zeroes them again.
+  //
+  // rjf: compute the size we need to zero
+  U64 size_to_zero = 0;
+  if(zero)
+  {
+    size_to_zero = Min(current->cmt, pos_pst) - pos_pre;
+  }
+  
   // rjf: chain, if needed
   if(current->res < pos_pst && !(arena->flags & ArenaFlag_NoChain))
   {
@@ -141,6 +151,12 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
                               .flags        = current->flags,
                               .allocation_site_file = current->allocation_site_file,
                               .allocation_site_line = current->allocation_site_line);
+
+      size_to_zero = 0;
+    }
+    else
+    {
+      size_to_zero = size;
     }
     
     new_block->base_pos = current->base_pos + current->res;
@@ -149,13 +165,6 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
     current = new_block;
     pos_pre = AlignPow2(current->pos, align);
     pos_pst = pos_pre + size;
-  }
-  
-  // rjf: compute the size we need to zero
-  U64 size_to_zero = 0;
-  if(zero)
-  {
-    size_to_zero = Min(current->cmt, pos_pst) - pos_pre;
   }
   
   // rjf: commit new pages, if needed
@@ -185,10 +194,7 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
     result = (U8 *)current+pos_pre;
     current->pos = pos_pst;
     AsanUnpoisonMemoryRegion(result, size);
-    if(size_to_zero != 0)
-    {
-      MemoryZero(result, size_to_zero);
-    }
+    MemoryZero(result, size_to_zero);
   }
 
 #if PROFILE_TELEMETRY
