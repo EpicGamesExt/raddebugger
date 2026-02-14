@@ -2384,7 +2384,7 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
     if (bucket_list.count) {
       U64 word_idx = bucket_idx / gsi->word_size;
       Assert(word_idx < bitmap_count);
-      bitmap[word_idx] |= 1 << (bucket_idx % gsi->word_size);
+      bitmap[word_idx] |= 1u << (bucket_idx % gsi->word_size);
       compressed_offset_arr[compressed_offset_count] = hash_idx * sizeof(PDB_GsiHashRecordOffsetCalc); // store in-memory offset for first bucket
       compressed_offset_count += 1;
     }

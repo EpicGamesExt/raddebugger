@@ -1635,9 +1635,10 @@ lnk_link_inputs(TP_Context      *tp,
             LNK_Lib          *lib         = member_ref->lib;
             LNK_Symbol       *link_symbol = member_ref->link_symbol;
 
-            COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_ref->member_idx]);
-            COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
-            String8            member_name = coff_decode_member_name(lib->long_names, member_info.header.name);
+            U32                member_offset = memory_read32(lib->member_offsets + member_ref->member_idx);
+            COFF_ArchiveMember member_info   = coff_archive_member_from_offset(lib->data, member_offset);
+            COFF_DataType      member_type   = coff_data_type_from_data(member_info.data);
+            String8            member_name   = coff_decode_member_name(lib->long_names, member_info.header.name);
 
             U64                refs_count = 0;
             LNK_ObjSymbolRef **refs       = lnk_ref_from_symbol_many(temp.arena, link_symbol, &refs_count);
@@ -1656,9 +1657,10 @@ lnk_link_inputs(TP_Context      *tp,
           U64               member_idx = member_ref->member_idx;
 
           // parse member info
-          COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_idx]);
-          COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
-          String8            member_name = coff_decode_member_name(lib->long_names, member_info.header.name);
+          U32                member_offset = memory_read32(lib->member_offsets + member_idx);
+          COFF_ArchiveMember member_info   = coff_archive_member_from_offset(lib->data, member_offset);
+          COFF_DataType      member_type   = coff_data_type_from_data(member_info.data);
+          String8            member_name   = coff_decode_member_name(lib->long_names, member_info.header.name);
 
           switch (member_type) {
           case COFF_DataType_Import: {
@@ -1809,7 +1811,8 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
       LNK_LibMemberInfo *member_infos = hash_table_search_raw_raw(link->lib_member_infos_ht, lib);
       LNK_Symbol        *link_symbol  = member_infos[member_idx].link;
 
-      COFF_ArchiveMember             member_info   = coff_archive_member_from_offset(lib->data, lib->member_offsets[member_idx]);
+      U32                            member_offset = memory_read32(lib->member_offsets + member_idx);
+      COFF_ArchiveMember             member_info   = coff_archive_member_from_offset(lib->data, member_offset);
       COFF_DataType                  member_type   = coff_data_type_from_data(member_info.data);
       String8                        member_name   = coff_decode_member_name(lib->long_names, member_info.header.name);
       COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(member_info.data);

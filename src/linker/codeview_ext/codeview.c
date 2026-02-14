@@ -170,17 +170,18 @@ cv_deserial_leaf(String8 raw_data, U64 off, U64 align, CV_Leaf *leaf_out)
   // do we have enough bytes to read header?
   Assert(raw_data.size >= sizeof(CV_LeafHeader));
 
-  CV_LeafHeader *header = (CV_LeafHeader*)(raw_data.str + off);
+  StaticAssert(sizeof(CV_LeafHeader) == 4, g_leaf_header_size_check);
+  CV_LeafHeader header = { .v = memory_read32(raw_data.str + off) };
 
   // leaf size must have enough bytes for the kind enum
-  Assert(header->size >= sizeof(CV_LeafKind));
+  Assert(header.size >= sizeof(CV_LeafKind));
 
   // do we have enough bytes to read leaf data?
-  Assert(sizeof(CV_LeafSize) + header->size <= raw_data.size);
+  Assert(sizeof(CV_LeafSize) + header.size <= raw_data.size);
 
   // fill out leaf
-  leaf_out->kind = header->kind;
-  leaf_out->data = str8(raw_data.str + sizeof(CV_LeafHeader), header->size - sizeof(CV_LeafKind));
+  leaf_out->kind = header.kind;
+  leaf_out->data = str8(raw_data.str + sizeof(CV_LeafHeader), header.size - sizeof(CV_LeafKind));
 
   U64 leaf_size = AlignPow2(sizeof(CV_LeafHeader) + leaf_out->data.size, align);
   Assert(leaf_size <= raw_data.size);
@@ -449,12 +450,20 @@ cv_parse_debug_s_c13_list(Arena *arena, String8List raw_debug_s)
   return debug_s;
 }
 
+internal force_inline UBSAN_NO_ALIGN CV_Signature
+cv_signature_from_debug_s(String8 raw_debug_s)
+{
+  CV_Signature sig;
+  MemoryCopy(&sig, raw_debug_s.str, sizeof(sig));
+  return sig;
+}
+
 internal CV_DebugS 
 cv_parse_debug_s(Arena *arena, String8 raw_debug_s)
 {
   CV_DebugS result; MemoryZeroStruct(&result);
   if (raw_debug_s.size >= sizeof(CV_Signature)) {
-    CV_Signature sig = *(CV_Signature *)raw_debug_s.str;
+    CV_Signature sig = cv_signature_from_debug_s(raw_debug_s);
     switch (sig) {
     case CV_Signature_C13: {
       String8 raw_debug_s_past_sig = str8_substr(raw_debug_s, r1u64(sizeof(sig), raw_debug_s.size));
@@ -1130,11 +1139,9 @@ internal String8
 cv_debug_t_get_raw_leaf(CV_DebugT debug_t, U64 leaf_idx)
 {
   Assert(leaf_idx < debug_t.count);
-  U8          *leaf_ptr   = debug_t.v[leaf_idx];
-  CV_LeafSize *size_ptr   = (CV_LeafSize *)leaf_ptr;
-  CV_LeafSize  total_size = sizeof(*size_ptr) + *size_ptr;
-  String8 raw_leaf = str8(leaf_ptr, total_size);
-  return raw_leaf;
+  U8          *leaf_ptr = debug_t.v[leaf_idx];
+  CV_LeafSize  size     = memory_read16(debug_t.v[leaf_idx]);
+  return str8(leaf_ptr, sizeof(size) + size);
 }
 
 internal CV_LeafHeader *
@@ -1474,19 +1481,16 @@ cv_symbol_tree_from_symbol_list(Arena *arena, CV_SymbolList list)
 internal U64
 cv_patch_symbol_tree_offsets(CV_SymbolList list, U64 base_offset, U64 align)
 {
-  Temp scratch = scratch_begin(0, 0);
-
   struct Stack {
     struct Stack *next;
     CV_Symbol    *symbol;
     U64           offset;
   };
+  Temp scratch = scratch_begin(0, 0);
   struct Stack *stack     = 0;
   struct Stack *free_list = 0;
-
-  U64 cursor = base_offset;
-
-  for (CV_SymbolNode *symbol_n = list.first; symbol_n != 0; symbol_n = symbol_n->next) {
+  U32 cursor = safe_cast_u32(base_offset);
+  for EachNode(symbol_n, CV_SymbolNode, list.first) {
     CV_Symbol symbol = symbol_n->data;
     if (cv_is_scope_symbol(symbol.kind)) {
       // NOTE: We don't patch 'next' offset in PROC symbols because
@@ -1494,10 +1498,9 @@ cv_patch_symbol_tree_offsets(CV_SymbolList list, U64 base_offset, U64 align)
       // zeroed. LLD is on the same page.
       Assert(symbol.data.size >= sizeof(U32)*2);
 
-      // patch symbol parent
+      // patch parent symbol offset
       if (stack) {
-        U32 *parent_off_ptr = (U32 *)symbol.data.str;
-        *parent_off_ptr = stack->offset;
+        memory_write32(symbol.data.str, stack->offset);
       }
 
       // reuse/alloc frame
@@ -1516,7 +1519,7 @@ cv_patch_symbol_tree_offsets(CV_SymbolList list, U64 base_offset, U64 align)
     } else if (cv_is_end_symbol(symbol.kind)) {
       // patch symbol end
       U32 *end_off_ptr = (U32 *)stack->symbol->data.str + /* skip parent off */ 1;
-      *end_off_ptr = cursor;
+      memory_write32(end_off_ptr, cursor);
 
       // recycle frame
       struct Stack *free_frame = stack;

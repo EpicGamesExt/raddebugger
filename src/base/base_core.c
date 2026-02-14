@@ -79,19 +79,21 @@ u64_up_to_pow2(U64 x){
 }
 
 internal S32
-extend_sign32(U32 x, U32 size){
-  U32 high_bit = size * 8;
-  U32 shift = 32 - high_bit;
-  S32 result = ((S32)x << shift) >> shift;
-  return result;
+extend_sign32(U32 x, U32 size)
+{
+  U32 n = size * 8;
+  U32 m = (U32)1 << (n - 1);
+  S32 r = (S32)((x ^ m) - m);
+  return r;
 }
 
 internal S64
-extend_sign64(U64 x, U64 size){
-  U64 high_bit = size * 8;
-  U64 shift = 64 - high_bit;
-  S64 result = ((S64)x << shift) >> shift;
-  return result;
+extend_sign64(U64 x, U64 size)
+{
+  U64 n = size * 8;
+  U64 m = (U64)1 << (n - 1);
+  S64 r = (S64)((x ^ m) - m);
+  return r;
 }
 
 internal F32
@@ -283,6 +285,44 @@ memory_is_zero(void *ptr, U64 size)
   }
   
   done:;
+  return result;
+}
+
+internal void UBSAN_NO_ALIGN
+memory_write32(void *ptr, U32 v)
+{
+  MemoryCopy(ptr, &v, sizeof(v));
+}
+
+internal U8 UBSAN_NO_ALIGN
+memory_read8(void *ptr)
+{
+  U8 result;
+  MemoryCopy(&result, ptr, sizeof(result));
+  return result;
+}
+
+internal U16 UBSAN_NO_ALIGN
+memory_read16(void *ptr)
+{
+  U16 result;
+  MemoryCopy(&result, ptr, sizeof(result));
+  return result;
+}
+
+internal U32 UBSAN_NO_ALIGN
+memory_read32(void *ptr)
+{
+  U32 result;
+  MemoryCopy(&result, ptr, sizeof(result));
+  return result;
+}
+
+internal U64 UBSAN_NO_ALIGN
+memory_read64(void *ptr)
+{
+  U64 result;
+  MemoryCopy(&result, ptr, sizeof(result));
   return result;
 }
 

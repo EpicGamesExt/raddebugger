@@ -69,8 +69,8 @@ typedef enum
   LNK_LeafLocType_Count
 } LNK_LeafLocType;
 
-#define LNK_LeafRefFlag_LocIdxExternal (1 << 31)
-#define LNK_LeafRefFlag_LeafIdxIPI     (1 << 31)
+#define LNK_LeafRefFlag_LocIdxExternal (1u << 31)
+#define LNK_LeafRefFlag_LeafIdxIPI     (1u << 31)
 typedef struct
 {
   U32 enc_loc_idx;

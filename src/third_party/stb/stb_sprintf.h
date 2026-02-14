@@ -436,7 +436,7 @@ cl = lg;                                 \
         } else
 #endif
         {
-          *(stbsp__uint32 *)bf = v;
+          memory_write32(bf, v);
         }
         bf += 4;
         f += 4;

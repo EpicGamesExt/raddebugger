@@ -29,7 +29,7 @@ cv_numeric_from_data_range(U8 *first, U8 *opl)
   CV_NumericParsed result = {0};
   if(first + 2 <= opl)
   {
-    U16 x = *(U16*)first;
+    U16 x = memory_read16(first);
     if(x < 0x8000)
     {
       result.kind = CV_NumericKind_USHORT;

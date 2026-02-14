@@ -290,9 +290,9 @@ CheckNil(nil,p) ? \
 #if COMPILER_MSVC
 # if defined(__SANITIZE_ADDRESS__)
 #  define ASAN_ENABLED 1
-#  define NO_ASAN __declspec(no_sanitize_address)
+#  define ASAN_NO_ADDR __declspec(no_sanitize_address)
 # else
-#  define NO_ASAN
+#  define ASAN_NO_ADDR
 # endif
 #elif COMPILER_CLANG
 # if defined(__has_feature)
@@ -300,9 +300,9 @@ CheckNil(nil,p) ? \
 #   define ASAN_ENABLED 1
 #  endif
 # endif
-# define NO_ASAN __attribute__((no_sanitize("address")))
+# define ASAN_NO_ADDR __attribute__((no_sanitize("address")))
 #else
-# define NO_ASAN
+# define ASAN_NO_ADDR
 #endif
 
 #if ASAN_ENABLED

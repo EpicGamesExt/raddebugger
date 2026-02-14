@@ -447,7 +447,7 @@ fp_metrics_from_font(FP_Handle handle)
   return result;
 }
 
-fp_hook NO_ASAN FP_RasterResult
+fp_hook ASAN_NO_ADDR FP_RasterResult
 fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, String8 string)
 {
   ProfBeginFunction();

@@ -5,10 +5,13 @@
 
 //- Symbol and Leaf Headers
 
-typedef struct CV_LeafHeader
+typedef union CV_LeafHeader
 {
-  CV_LeafSize size;
-  CV_LeafKind kind;
+  struct {
+    CV_LeafSize size;
+    CV_LeafKind kind;
+  };
+  U32 v;
 } CV_LeafHeader;
 
 typedef struct CV_SymbolHeader
@@ -404,6 +407,7 @@ internal CV_SymbolList cv_make_proc_refs(Arena *arena, CV_ModIndex imod, CV_Symb
 
 internal CV_DebugS    cv_parse_debug_s_c13(Arena *arena, String8 raw_debug_s);
 internal CV_DebugS    cv_parse_debug_s_c13_list(Arena *arena, String8List raw_debug_s);
+internal CV_Signature cv_signature_from_debug_s(String8 raw_debug_s);
 internal CV_DebugS    cv_parse_debug_s(Arena *arena, String8 raw_debug_s);
 internal void         cv_debug_s_concat_in_place(CV_DebugS *dst, CV_DebugS *src);
 internal String8List  cv_data_c13_from_debug_s(Arena *arena, CV_DebugS *debug_s, B32 write_sig);

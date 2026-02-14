@@ -238,9 +238,9 @@ bit_array_set_bit32(U32Array bit_array, U64 idx, B32 state)
   U64 word_idx = idx / 32;
   U64 bit_idx = idx % 32;
   if (state) {
-    bit_array.v[word_idx] |= (1 << bit_idx);
+    bit_array.v[word_idx] |= (1u << bit_idx);
   } else {
-    bit_array.v[word_idx] &= ~(1 << bit_idx);
+    bit_array.v[word_idx] &= ~(1u << bit_idx);
   }
 }
 
@@ -269,7 +269,7 @@ bit_array_is_bit_set(U32Array bit_arr, U64 bit_pos)
   Assert(word_idx < bit_arr.count);
   U32 word = bit_arr.v[word_idx];
   U64 bit_idx = bit_pos % 32;
-  B32 is_set = !!(word & (1 << bit_idx));
+  B32 is_set = !!(word & (1u << bit_idx));
   return is_set;
 }
 

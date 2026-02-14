@@ -66,5 +66,5 @@ internal LNK_Lib **       lnk_array_from_lib_list(Arena *arena, LNK_LibList list
 internal void             lnk_lib_list_push_node(LNK_LibList *list, LNK_LibNode *node);
 internal LNK_LibNodeArray lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U64 inputs_count, struct LNK_Input **inputs);
 
-internal B32 lnk_search_lib(LNK_Lib *lib, String8 symbol_name, U32 *member_idx_out);
+internal force_inline B32 lnk_search_lib(LNK_Lib *lib, String8 symbol_name, U32 *member_idx_out);
 

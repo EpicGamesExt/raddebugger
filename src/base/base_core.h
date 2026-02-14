@@ -7,12 +7,13 @@
 ////////////////////////////////
 //~ rjf: Foreign Includes
 
-#include <stdio.h>
 #include <stdarg.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <inttypes.h>
 #include <math.h>
 #include <string.h>
-#include <stdint.h>
-#include <inttypes.h>
 
 ////////////////////////////////
 //~ rjf: Third Party Includes
@@ -181,8 +182,9 @@
 //~ rjf: Member Offsets
 
 #define Member(T,m)                 (((T*)0)->m)
-#define OffsetOf(T,m)               IntFromPtr(&Member(T,m))
+#define OffsetOf(T,m)               offsetof(T, m)
 #define MemberFromOffset(T,ptr,off) (T)((((U8 *)ptr)+(off)))
+#define MemberFromPtr(T,ptr,m)      (void*)((((U8 *)ptr)+OffsetOf(T,m)))
 #define CastFromMember(T,m,ptr)     (T*)(((U8*)ptr) - OffsetOf(T,m))
 
 ////////////////////////////////
@@ -366,9 +368,9 @@ CheckNil(nil,p) ? \
 #if COMPILER_MSVC
 # if defined(__SANITIZE_ADDRESS__)
 #  define ASAN_ENABLED 1
-#  define NO_ASAN __declspec(no_sanitize_address)
+#  define ASAN_NO_ADDR __declspec(no_sanitize_address)
 # else
-#  define NO_ASAN
+#  define UBSAN_NO_ALIGN
 # endif
 #elif COMPILER_CLANG
 # if defined(__has_feature)
@@ -376,9 +378,15 @@ CheckNil(nil,p) ? \
 #   define ASAN_ENABLED 1
 #  endif
 # endif
-# define NO_ASAN __attribute__((no_sanitize("address")))
-#else
-# define NO_ASAN
+# define ASAN_NO_ADDR   __attribute__((no_sanitize("address")))
+# define UBSAN_NO_ALIGN __attribute__((no_sanitize("alignment")))
+#endif
+
+#ifndef  ASAN_NO_ADDR
+# define ASAN_NO_ADDR
+#endif
+#ifndef  UBSAN_NO_ALIGN
+# define UBSAN_NO_ALIGN
 #endif
 
 #if ASAN_ENABLED
@@ -1000,6 +1008,13 @@ internal F32 sign_from_side_F32(Side side);
 //~ rjf: Memory Functions
 
 internal B32 memory_is_zero(void *ptr, U64 size);
+
+internal void memory_write32(void *ptr, U32 v);
+
+internal U8  memory_read8(void *ptr);
+internal U16 memory_read16(void *ptr);
+internal U32 memory_read32(void *ptr);
+internal U64 memory_read64(void *ptr);
 
 ////////////////////////////////
 //~ rjf: Text 2D Coordinate/Range Functions
