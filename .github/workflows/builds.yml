@@ -46,7 +46,7 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          call build radlink asan debug no_meta || exit /b 1
+          call build radlink san debug no_meta || exit /b 1
           call build torture debug no_meta || exit /b 1
           cd build
           torture -l:radlink || exit /b 1

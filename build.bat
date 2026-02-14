@@ -15,7 +15,7 @@ cd /D "%~dp0"
 :: `build raddbg`
 :: `build raddbg clang`
 :: `build raddbg release`
-:: `build raddbg asan telemetry`
+:: `build raddbg san telemetry`
 :: `build rdi_from_pdb`
 ::
 :: For a full list of possible build targets and their build command lines,
@@ -23,7 +23,7 @@ cd /D "%~dp0"
 ::
 :: Below is a list of all possible non-target command line options:
 ::
-:: - `asan`: enable address sanitizer
+:: - `san`: enable address sanitizer
 :: - `telemetry`: enable RAD telemetry profiling support
 :: - `spall`: enable spall profiling support
 
@@ -42,7 +42,7 @@ if "%~1"=="release" if "%~2"=="" echo [default mode, assuming `raddbg` build] &&
 set auto_compile_flags=
 if "%telemetry%"=="1"               set auto_compile_flags=%auto_compile_flags% -DPROFILE_TELEMETRY=1 && echo [telemetry profiling enabled]
 if "%spall%"=="1"                   set auto_compile_flags=%auto_compile_flags% -DPROFILE_SPALL=1 && echo [spall profiling enabled]
-if "%asan%"=="1"                    set auto_compile_flags=%auto_compile_flags% -fsanitize=address && echo [asan enabled]
+if "%san%"=="1"                    set auto_compile_flags=%auto_compile_flags% -fsanitize=address -fsanitize=undefined && echo [san enabled]
 if "%opengl%"=="1"                  set auto_compile_flags=%auto_compile_flags% -DR_BACKEND=R_BACKEND_OPENGL && echo [opengl render backend]
 if "%dwarf%"=="1" if "%clang%"=="1" set auto_compile_flags=%auto_compile_flags% -gdwarf && echo [dwarf debug info]
 if "%dwarf%"==""  if "%clang%"=="1" set auto_compile_flags=%auto_compile_flags% -gcodeview
