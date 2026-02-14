@@ -6,20 +6,13 @@
 #define BUILD_CONSOLE_INTERFACE 1
 #define BUILD_TITLE "Epic Games Tools (R) RAD PE/COFF Linker"
 
-// --- Arena -------------------------------------------------------------------
-
 #define ARENA_FREE_LIST 1
+#define NO_ASYNC 1
 
 // --- Third Party -------------------------------------------------------------
 
 #include "base_ext/base_blake3.h"
 #include "base_ext/base_blake3.c"
-#define XXH_INLINE_ALL
-#define XXH_IMPLEMENTATION
-#define XXH_STATIC_LINKING_ONLY
-#include "third_party/xxHash/xxhash.c"
-#include "third_party/xxHash/xxhash.h"
-#include "third_party/radsort/radsort.h"
 
 // --- Code Base ---------------------------------------------------------------
 

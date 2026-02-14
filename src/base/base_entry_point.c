@@ -94,6 +94,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   rd_init(&cmdline);
 #endif
   
+#if !NO_ASYNC
   //- rjf: launch async threads
   Thread *async_threads = 0;
   U64 lane_broadcast_val = 0;
@@ -124,10 +125,12 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
       async_threads[idx] = thread_launch(async_thread_entry_point, &lane_ctxs[idx]);
     }
   }
+#endif
   
   //- rjf: call into entry point
   entry_point(&cmdline);
   
+#if !NO_ASYNC
   //- rjf: join async threads
   ins_atomic_u32_inc_eval(&global_async_exit);
   cond_var_broadcast(async_tick_start_cond_var);
@@ -135,6 +138,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   {
     thread_join(async_threads[idx], max_U64);
   }
+#endif
   
   //- rjf: end captures
   if(capture)
