@@ -255,9 +255,9 @@ typedef struct CV_DebugS
 
 typedef struct CV_DebugT
 {
-  U64  size;
-  U64  count;
-  U8 **v;
+  U64     count;
+  String8 data;
+  U32    *offsets;
 } CV_DebugT;
 
 ////////////////////////////////
@@ -358,14 +358,6 @@ typedef struct
   CV_StringBucket **buckets;
 } CV_PackStringHashTableTask;
 
-typedef struct
-{
-  CV_DebugT    debug_t;
-  Rng1U64     *ranges;
-  String8List *lists;
-  String8Node *nodes;
-} CV_Str8ListFromDebugT;
-
 ////////////////////////////////
 
 internal CV_ObjInfo        cv_obj_info_from_symbol(CV_Symbol symbol);
@@ -421,7 +413,6 @@ internal String8                 cv_file_chksms_from_debug_s(CV_DebugS debug_s);
 ////////////////////////////////
 //~ .debug$T helpers
 
-internal CV_DebugT       cv_debug_t_from_data_arr(Arena *arena, String8Array data_arr, U64 align);
 internal CV_DebugT       cv_debug_t_from_data(Arena *arena, String8 data, U64 align);
 internal CV_Leaf         cv_debug_t_get_leaf(CV_DebugT debug_t, U64 leaf_idx);
 internal String8         cv_debug_t_get_raw_leaf(CV_DebugT debug_t, U64 leaf_idx);
@@ -429,8 +420,6 @@ internal CV_LeafHeader * cv_debug_t_get_leaf_header(CV_DebugT debug_t, U64 leaf_
 internal B32             cv_debug_t_is_pch(CV_DebugT debug_t);
 internal B32             cv_debug_t_is_type_server(CV_DebugT debug_t);
 internal U64             cv_debug_t_array_count_leaves(U64 count, CV_DebugT *arr);
-
-internal String8List cv_str8_list_from_debug_t_parallel(TP_Context *tp, Arena *arena, CV_DebugT types);
 
 ////////////////////////////////
 //~ Sub Section helpers

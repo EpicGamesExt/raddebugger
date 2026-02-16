@@ -1445,13 +1445,14 @@ internal
 THREAD_POOL_TASK_FUNC(pdb_count_udt_task)
 {
   PDB_PushLeafTask *task  = raw_task;
-  Rng1U64           range = task->ranges[task_id];
-  for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
-    CV_Leaf leaf = cv_debug_t_get_leaf(task->debug_t, leaf_idx);
+  for EachInRange(leaf_idx, task->ranges[task_id]) {
+    CV_Leaf leaf;
+    cv_deserial_leaf(str8(task->leaf_arr[leaf_idx], max_U64), 0, 1, &leaf);
+
     if (cv_is_udt(leaf.kind)) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
       if (~udt_info.props & CV_TypeProp_FwdRef) {
-        ++task->udt_counts[task_id];
+        task->udt_counts[task_id] += 1;
       }
     }
   }
@@ -1462,27 +1463,27 @@ THREAD_POOL_TASK_FUNC(pdb_push_udt_leaf_task)
 {
   PDB_PushLeafTask *task          = raw_task;
   PDB_TypeServer   *type_server   = task->type_server;
-  Rng1U64           range         = task->ranges[task_id];
   U64               bucket_cursor = task->udt_offsets[task_id];
-  CV_DebugT         debug_t       = task->debug_t;
   PDB_TypeBucket   *new_buckets   = task->udt_buckets;
 
   U64              type_ht_cap     = type_server->bucket_cap;
   PDB_TypeBucket **type_ht_buckets = type_server->buckets;
   U64              base_type_index = type_server->ti_lo + type_server->leaf_list.node_count;
 
-  for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
-    CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+  for EachInRange(leaf_idx, task->ranges[task_id]) {
+    CV_Leaf leaf;
+    cv_deserial_leaf(str8(task->leaf_arr[leaf_idx], max_U64), 0, 1, &leaf);
+
     if (cv_is_udt(leaf.kind)) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
       if (~udt_info.props & CV_TypeProp_FwdRef) {
         // hash udt and compute bucket index
-        U32 hash = pdb_hash_udt(udt_info, leaf.data);
+        U32 hash       = pdb_hash_udt(udt_info, leaf.data);
         U32 bucket_idx = hash % type_ht_cap;
 
         // fill out & insert bucket
         PDB_TypeBucket *bucket = &new_buckets[bucket_cursor++];
-        bucket->raw_leaf       = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
+        bucket->raw_leaf       = leaf.data;
         bucket->type_index     = base_type_index + leaf_idx;
         bucket->next           = ins_atomic_ptr_eval_assign(&type_ht_buckets[bucket_idx], bucket);
       }
@@ -1490,16 +1491,36 @@ THREAD_POOL_TASK_FUNC(pdb_push_udt_leaf_task)
   }
 }
 
+typedef struct
+{
+  Rng1U64      *ranges;
+  U8          **leaf_arr;
+  String8List  *lists;
+  String8Node  *nodes;
+} PDB_String8ListFromLeafArray;
+
+internal
+THREAD_POOL_TASK_FUNC(pdb_str8_list_from_leaf_array_task)
+{
+  PDB_String8ListFromLeafArray *task = raw_task;
+  for EachInRange(leaf_idx, task->ranges[task_id]) {
+    String8Node *node = &task->nodes[leaf_idx];
+    node->string = cv_raw_leaf_from_ptr(task->leaf_arr[leaf_idx]);
+    str8_list_push_node(&task->lists[task_id], node);
+  }
+}
+
 internal void
-pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *type_server, CV_DebugT debug_t)
+pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *type_server, U64 leaf_count, U8 **leaf_arr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
 
   PDB_PushLeafTask task = {0};
-  task.debug_t          = debug_t;
+  task.leaf_count       = leaf_count;
+  task.leaf_arr         = leaf_arr;
   task.type_server      = type_server;
-  task.ranges           = tp_divide_work(scratch.arena, debug_t.count, tp->worker_count);
+  task.ranges           = tp_divide_work(scratch.arena, leaf_count, tp->worker_count);
 
   ProfBegin("Count UDT");
   task.udt_counts = push_array(scratch.arena, U64, tp->worker_count);
@@ -1514,8 +1535,18 @@ pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *type_server, CV_De
   ProfEnd();
 
   ProfBegin("Append New Leaves");
-  String8List new_leaves = cv_str8_list_from_debug_t_parallel(tp, type_server->arena, debug_t);
-  str8_list_concat_in_place(&type_server->leaf_list, &new_leaves);
+  {
+    PDB_String8ListFromLeafArray task = {0};
+    task.leaf_arr = leaf_arr;
+    task.ranges   = tp_divide_work(scratch.arena, leaf_count, tp->worker_count);
+    task.lists    = push_array(scratch.arena, String8List, tp->worker_count);
+    task.nodes    = push_array_no_zero(type_server->arena, String8Node, leaf_count);
+    tp_for_parallel(tp, 0, tp->worker_count, pdb_str8_list_from_leaf_array_task, &task);
+
+    // concat output lists
+    String8List list = {0};
+    for EachIndex(task_id, tp->worker_count) { str8_list_concat_in_place(&type_server->leaf_list, &task.lists[task_id]); }
+  }
   ProfEnd();
 
   scratch_end(scratch);

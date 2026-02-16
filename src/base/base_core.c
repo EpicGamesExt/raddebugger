@@ -289,6 +289,12 @@ memory_is_zero(void *ptr, U64 size)
 }
 
 internal void UBSAN_NO_ALIGN
+memory_write16(void *ptr, U16 v)
+{
+  MemoryCopy(ptr, &v, sizeof(v));
+}
+
+internal void UBSAN_NO_ALIGN
 memory_write32(void *ptr, U32 v)
 {
   MemoryCopy(ptr, &v, sizeof(v));

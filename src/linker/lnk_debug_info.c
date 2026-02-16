@@ -113,8 +113,11 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_t_task)
   U64                      obj_idx  = task_id;
   LNK_ParseDebugTTaskData *task     = raw_task;
   String8Array             data_arr = task->data_arr_arr[obj_idx];
-  CV_DebugT               *debug_t  = &task->debug_t_arr[obj_idx];
-  *debug_t = cv_debug_t_from_data_arr(arena, data_arr, CV_LeafAlign);
+  if (data_arr.count > 0) {
+    task->debug_t_arr[obj_idx] = cv_debug_t_from_data(arena, data_arr.v[0], CV_LeafAlign);
+  } else {
+    MemoryZeroStruct(&task->debug_t_arr[obj_idx]);
+  }
   ProfEnd();
 }
 
@@ -253,8 +256,8 @@ lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj **obj_arr, CV_DebugT *debug_t
       pch->debug_p_obj_idx = debug_p_obj_idx;
 
       // [start_index, start_index+type_index_count)
-      debug_t_arr[obj_idx].count -= 1;
-      debug_t_arr[obj_idx].v     += 1;
+      debug_t_arr[obj_idx].count    -= 1;
+      debug_t_arr[obj_idx].offsets  += 1;
 
       endprecomp_arr[debug_p_obj_idx] = cv_debug_t_get_leaf_header(debug_p, precomp.leaf_count);
     } else {
@@ -2112,69 +2115,74 @@ THREAD_POOL_TASK_FUNC(lnk_unbucket_raw_leaves_task)
 {
   LNK_CvImportTypes *task = raw_task;
   for EachInRange(i, task->ranges[task_id]) {
-    task->types[task->ti_source].v[i] = lnk_data_from_leaf_ref(task->input, *task->unique_leaf_refs_arr[task->ti_source].v[i]).str;
+    LNK_LeafRef *leaf_ref_ptr = task->unique_leaf_refs_arr[task->ti_source].v[i];
+    task->merged_types.v[task->ti_source][i] = lnk_data_from_leaf_ref(task->input, *leaf_ref_ptr).str;
   }
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_post_process_cv_symbols_task)
+THREAD_POOL_TASK_FUNC(lnk_fixup_symbols_task)
 {
   LNK_CvImportTypes *task = raw_task;
 
-  CV_DebugT    ipi_types          = task->types[CV_TypeIndexSource_IPI];
-  CV_TypeIndex ipi_min_type_index = task->min_type_indices[CV_TypeIndexSource_IPI];
+  U64          leaf_count_ipi = task->merged_types.count[CV_TypeIndexSource_IPI];
+  U8         **leaf_arr_ipi   = task->merged_types.v    [CV_TypeIndexSource_IPI];
+  CV_TypeIndex min_ti_ipi     = task->min_type_indices  [CV_TypeIndexSource_IPI];
 
   for EachNode(symnode, CV_SymbolNode, task->input->symbol_inputs[task_id].symbol_list->first) {
     CV_Symbol *symbol = &symnode->data;
 
-    if (symbol->kind == CV_SymKind_LPROC32_ID || symbol->kind == CV_SymKind_GPROC32_ID || symbol->kind == CV_SymKind_LPROC32_DPC) {
-      CV_SymProc32 *proc32 = (CV_SymProc32 *) symbol->data.str;
-      if (proc32->itype >= ipi_min_type_index) {
-        if ((proc32->itype - ipi_min_type_index) < ipi_types.count) {
-          U64     leaf_idx = proc32->itype - ipi_min_type_index;
-          CV_Leaf leaf     = cv_debug_t_get_leaf(ipi_types, leaf_idx);
-
-          if (leaf.kind == CV_LeafKind_FUNC_ID) {
-            if (leaf.data.size >= sizeof(CV_LeafFuncId)) {
-              proc32->itype = ((CV_LeafFuncId *) leaf.data.str)->itype;
-            } else {
-              Assert(!"TODO: error handle corrupt leaf");
-            }
-          } else if (leaf.kind == CV_LeafKind_MFUNC_ID) {
-            if (leaf.data.size >= sizeof(CV_LeafMFuncId)) {
-              proc32->itype = ((CV_LeafMFuncId *) leaf.data.str)->itype;
-            } else {
-              Assert(!"TODO: error handle corrupt leaf");
-            }
-          } else {
-            Assert(!"TODO: erorr handle unexpected leaf type");
-          }
-        } else {
-          Assert("TODO: error handle corrupted type index");
-        }
-      } else {
-        // TODO: in some cases destructors don't have a type, need a repro
-      }
-    }
-
     // convert symbol to final type
     switch (symbol->kind) {
-    case CV_SymKind_LPROC32_ID:     symbol->kind = CV_SymKind_LPROC32;     break;
-    case CV_SymKind_GPROC32_ID:     symbol->kind = CV_SymKind_GPROC32;     break;
-    case CV_SymKind_LPROC32_DPC_ID: symbol->kind = CV_SymKind_LPROC32_DPC; break;
-    case CV_SymKind_LPROCMIPS_ID:   symbol->kind = CV_SymKind_LPROCMIPS;   break;
-    case CV_SymKind_GPROCMIPS_ID:   symbol->kind = CV_SymKind_GPROCMIPS;   break;
-    case CV_SymKind_LPROCIA64_ID:   symbol->kind = CV_SymKind_LPROCIA64;   break;
-    case CV_SymKind_GPROCIA64_ID:   symbol->kind = CV_SymKind_GPROCIA64;   break;
-    case CV_SymKind_PROC_ID_END:    symbol->kind = CV_SymKind_END;         break;
+    case CV_SymKind_LPROC32_ID:     symbol->kind = CV_SymKind_LPROC32;     goto fixup_id;
+    case CV_SymKind_GPROC32_ID:     symbol->kind = CV_SymKind_GPROC32;     goto fixup_id;
+    case CV_SymKind_LPROC32_DPC_ID: symbol->kind = CV_SymKind_LPROC32_DPC; goto fixup_id;
+    case CV_SymKind_LPROCMIPS_ID:   symbol->kind = CV_SymKind_LPROCMIPS;   goto fixup_id;
+    case CV_SymKind_GPROCMIPS_ID:   symbol->kind = CV_SymKind_GPROCMIPS;   goto fixup_id;
+    case CV_SymKind_LPROCIA64_ID:   symbol->kind = CV_SymKind_LPROCIA64;   goto fixup_id;
+    case CV_SymKind_GPROCIA64_ID:   symbol->kind = CV_SymKind_GPROCIA64;   goto fixup_id;
+    fixup_id:; {
+      CV_SymProc32 *proc32 = (CV_SymProc32 *) symbol->data.str;
+      if (proc32->itype < min_ti_ipi) {
+        // TODO: in some cases destructors don't have a type, need a repro
+        break;
+      }
+
+      if ((proc32->itype - min_ti_ipi) > leaf_count_ipi) {
+        Assert("TODO: error handle corrupted type index");
+        break;
+      }
+
+      U64     leaf_idx  = proc32->itype - min_ti_ipi;
+      String8 leaf_data = str8(leaf_arr_ipi[leaf_idx], max_U64);
+
+      CV_Leaf leaf;
+      cv_deserial_leaf(leaf_data, 0, 1, &leaf);
+
+      U64 min_leaf_size = cv_header_struct_size_from_leaf_kind(leaf.kind);
+      if (min_leaf_size > leaf.data.size) {
+        Assert(!"TODO: error handle corrupt leaf");
+        break;
+      }
+
+      if (leaf.kind == CV_LeafKind_FUNC_ID) {
+        proc32->itype = ((CV_LeafFuncId *) leaf.data.str)->itype;
+      } else if (leaf.kind == CV_LeafKind_MFUNC_ID) {
+        proc32->itype = ((CV_LeafMFuncId *) leaf.data.str)->itype;
+      } else {
+        Assert(!"TODO: erorr handle unexpected leaf type");
+        break;
+      }
+    } break;
+    case CV_SymKind_PROC_ID_END: symbol->kind = CV_SymKind_END; break;
     }
   }
 }
 
-internal CV_DebugT *
-lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
+internal LNK_MergedTypes
+lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
 {
-  ProfBegin("Import Types");
+  ProfBeginFunction();
   Temp scratch = temp_begin(lnk_get_huge_arena());
 
   U64     max_ti_list_size = sizeof(CV_TypeIndexInfo) * (max_U16 / sizeof(CV_TypeIndex));
@@ -2216,8 +2224,8 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
     for EachIndex(ts_idx, input->type_server_count) {
       task.hashes->external_hashes[ts_idx] = push_array_no_zero(scratch.arena, U64 *, CV_TypeIndexSource_COUNT);
       for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
-        U64 leaf_count = dim_1u64(input->external_ti_ranges[ts_idx][ti_source]);
-        task.hashes->external_hashes[ts_idx][ti_source] = push_array(scratch.arena, U64, leaf_count); // :zero_hash_check
+        U64 type_count = dim_1u64(input->external_ti_ranges[ts_idx][ti_source]);
+        task.hashes->external_hashes[ts_idx][ti_source] = push_array(scratch.arena, U64, type_count); // :zero_hash_check
       }
     }
     ProfEnd();
@@ -2246,12 +2254,12 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
       Temp temp = temp_begin(scratch.arena);
 
       ProfBegin("Compute Per Task Ranges");
-      U64                per_task_leaf_count  = 10000;
+      U64                per_task_type_count  = 10000;
       LNK_LeafRangeList *leaf_ranges_per_task = push_array(temp.arena, LNK_LeafRangeList, tp->worker_count);
       for (U64 i = 0, task_weight = 0, task_id = 0; i < input->internal_count; i += 1) {
         CV_DebugT *debug_t = &input->merged_debug_t_p_arr[i];
-        for (U64 k = 0; k < debug_t->count; k += per_task_leaf_count) {
-          U64 cap = per_task_leaf_count - task_weight;
+        for (U64 k = 0; k < debug_t->count; k += per_task_type_count) {
+          U64 cap = per_task_type_count - task_weight;
 
           LNK_LeafRange *leaf_range = push_array(temp.arena, LNK_LeafRange, 1);
           leaf_range->range         = rng_1u64(k, Min(k + cap, debug_t->count));
@@ -2262,7 +2270,7 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
           list->count += 1;
 
           task_weight += dim_1u64(leaf_range->range);
-          if (task_weight >= per_task_leaf_count) {
+          if (task_weight >= per_task_type_count) {
             task_id     = (task_id + 1) % tp->worker_count;
             task_weight = 0;
           }
@@ -2371,21 +2379,20 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
   }
   ProfEnd();
 
-  task.types = push_array(tp_temp->v[0], CV_DebugT, CV_TypeIndexSource_COUNT);
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
     LNK_LeafRefArray unique_leaf_refs = task.unique_leaf_refs_arr[ti_source];
-    task.ti_source              = ti_source;
-    task.types[ti_source].count = unique_leaf_refs.count;
-    task.types[ti_source].v     = push_array(tp_temp->v[0], U8 *, unique_leaf_refs.count);
-    task.ranges                 = tp_divide_work(scratch.arena, unique_leaf_refs.count, tp->worker_count);
+    task.ti_source                     = ti_source;
+    task.merged_types.count[ti_source] = unique_leaf_refs.count;
+    task.merged_types.v    [ti_source] = push_array(tp_temp->v[0], U8 *, unique_leaf_refs.count);
+    task.ranges                        = tp_divide_work(scratch.arena, unique_leaf_refs.count, tp->worker_count);
     tp_for_parallel(tp, 0, tp->worker_count, lnk_unbucket_raw_leaves_task, &task);
   }
 
-  tp_for_parallel_prof(tp, 0, input->total_symbol_input_count, lnk_post_process_cv_symbols_task, &task, "Post Process CV Symbols");
+  tp_for_parallel_prof(tp, 0, input->total_symbol_input_count, lnk_fixup_symbols_task, &task, "fixup type indices in symbols");
 
   temp_end(scratch);
   ProfEnd();
-  return task.types;
+  return task.merged_types;
 }
 
 internal
@@ -2395,7 +2402,8 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
 
   LNK_TypeNameReplacer *task        = raw_task;
   Rng1U64               range       = task->ranges[task_id];
-  CV_DebugT             debug_t     = task->debug_t;
+  U64                   leaf_count  = task->leaf_count;
+  U8                  **leaf_arr    = task->leaf_arr;
   U64                   hash_length = task->hash_length;
 
   B32          make_map  = task->make_map;
@@ -2409,8 +2417,8 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
   U64  hash_max_chars = hash_length*2;
   char temp[128];
 
-  for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
-    CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+  for EachInRange(leaf_idx, range) {
+    CV_Leaf leaf = cv_leaf_from_ptr(leaf_arr[leaf_idx]);
     if (leaf.kind == CV_LeafKind_STRUCTURE || leaf.kind == CV_LeafKind_CLASS) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
 
@@ -2446,24 +2454,28 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
           udt_info.unique_name.size = size;
 
           // update leaf header
-          CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-          header->size          = sizeof(CV_LeafKind) +
-                                  sizeof(CV_LeafStruct) +
-                                  numeric_size +
-                                  udt_info.name.size + 1 +
-                                  udt_info.unique_name.size + 1;
+          U64 new_size = sizeof(CV_LeafKind) +
+                                sizeof(CV_LeafStruct) +
+                                numeric_size +
+                                udt_info.name.size + 1 +
+                                udt_info.unique_name.size + 1;
+          CV_LeafHeader *header = (CV_LeafHeader *)leaf_arr[leaf_idx];
+          Assert(new_size <= max_U16);
+          memory_write16(MemberFromPtr(CV_LeafHeader, header, size), (U16)new_size);
         } else {
           // replace uniuqe type name with hash
           udt_info.unique_name.str  = udt_info.name.str + udt_info.name.size + 1;
           udt_info.unique_name.size = raddbg_snprintf(udt_info.unique_name.cstr, udt_info.unique_name.size, "%llx", name_hash);
 
           // update leaf header
-          CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-          header->size          = sizeof(CV_LeafKind) +
-                                  sizeof(CV_LeafStruct) +
-                                  numeric_size +
-                                  udt_info.name.size + 1 +
-                                  udt_info.unique_name.size + 1;
+          U64 new_size = sizeof(CV_LeafKind) +
+                                sizeof(CV_LeafStruct) +
+                                numeric_size +
+                                udt_info.name.size + 1 +
+                                udt_info.unique_name.size + 1;
+          CV_LeafHeader *header = (CV_LeafHeader *)leaf_arr[leaf_idx];
+          Assert(new_size <= max_U16);
+          memory_write16(MemberFromPtr(CV_LeafHeader, header, size), (U16)new_size);
         }
       }
     }
@@ -2479,7 +2491,8 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
 
   LNK_TypeNameReplacer *task        = raw_task;
   Rng1U64               range       = task->ranges[task_id];
-  CV_DebugT             debug_t     = task->debug_t;
+  U64                   leaf_count  = task->leaf_count;
+  U8                  **leaf_arr    = task->leaf_arr;
   U64                   hash_length = task->hash_length;
 
   B32          make_map  = task->make_map;
@@ -2492,8 +2505,8 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
 
   U64 hash_max_chars = hash_length*2;
 
-  for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
-    CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+  for EachInRange(leaf_idx, range) {
+    CV_Leaf leaf = cv_leaf_from_ptr(leaf_arr[leaf_idx]);
     if (leaf.kind == CV_LeafKind_STRUCTURE || leaf.kind == CV_LeafKind_CLASS) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
 
@@ -2508,7 +2521,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
 
         // hash name
         U64 name_hash;
-        blake3_hasher hasher; blake3_hasher_init(&hasher);
+        blake3_hasher hasher = {0}; blake3_hasher_init(&hasher);
         blake3_hasher_update(&hasher, udt_info.name.str, udt_info.name.size);
         blake3_hasher_finalize(&hasher, (U8*)&name_hash, sizeof(name_hash));
 
@@ -2525,8 +2538,10 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
         U64 numeric_size = cv_read_numeric(leaf.data, sizeof(CV_LeafStruct), &dummy);
 
         // update header
-        CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-        header->size          = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
+        U64            new_size = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
+        CV_LeafHeader *header   = (CV_LeafHeader *)leaf_arr[leaf_idx];
+        Assert(new_size <= max_U16);
+        memory_write16(MemberFromPtr(CV_LeafHeader, header, size), (U16)new_size);
 
         // discard unique name
         CV_LeafStruct *lf = (CV_LeafStruct *)(header + 1);
@@ -2539,15 +2554,16 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
 }
 
 internal void
-lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT debug_t, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name)
+lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   // init task context
   LNK_TypeNameReplacer task = {0};
-  task.debug_t              = debug_t;
-  task.ranges               = tp_divide_work(scratch.arena, debug_t.count, tp->worker_count);
+  task.leaf_count           = leaf_count;
+  task.leaf_arr             = leaf_arr;
+  task.ranges               = tp_divide_work(scratch.arena, leaf_count, tp->worker_count);
   task.hash_length          = Clamp(1, hash_length, 16);
 
   if (map_name.size > 0) {
@@ -3026,7 +3042,8 @@ lnk_build_pdb(TP_Context               *tp,
               U64                       total_symbol_input_count,
               LNK_CodeViewSymbolsInput *symbol_inputs,
               CV_SymbolListArray       *parsed_symbols,
-              CV_DebugT                 types[CV_TypeIndexSource_COUNT])
+              U64                       leaf_count[CV_TypeIndexSource_COUNT],
+              U8                      **leaf_arr  [CV_TypeIndexSource_COUNT])
 {
   ProfBegin("PDB");
   Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
@@ -3044,8 +3061,8 @@ lnk_build_pdb(TP_Context               *tp,
   //
   // leaf data is stored in g_file_arena which has linker's life-time
   // and this way we skip redundant leaf copy to the type server to make things faster
-  pdb_type_server_push_parallel(tp, pdb->type_servers[CV_TypeIndexSource_IPI], types[CV_TypeIndexSource_IPI]);
-  pdb_type_server_push_parallel(tp, pdb->type_servers[CV_TypeIndexSource_TPI], types[CV_TypeIndexSource_TPI]);
+  pdb_type_server_push_parallel(tp, pdb->type_servers[CV_TypeIndexSource_IPI], leaf_count[CV_TypeIndexSource_IPI], leaf_arr[CV_TypeIndexSource_IPI]);
+  pdb_type_server_push_parallel(tp, pdb->type_servers[CV_TypeIndexSource_TPI], leaf_count[CV_TypeIndexSource_TPI], leaf_arr[CV_TypeIndexSource_TPI]);
 
   ProfBegin("Collect Symbols for GSI");
   CV_SymbolList *gsi_list_arr = push_array(scratch.arena, CV_SymbolList, obj_count);
@@ -3279,84 +3296,92 @@ THREAD_POOL_TASK_FUNC(lnk_build_udt_name_hash_table_task)
   LNK_BuildUDTNameHashTableTask *task = raw_task;
 
   LNK_UDTNameBucket *new_bucket = 0;
+  for EachInRange(leaf_idx, task->ranges[task_id]) {
+    String8 leaf_data = str8(task->leaf_arr[leaf_idx], max_U64);
 
-  for (U64 leaf_idx = task->ranges[task_id].min; leaf_idx < task->ranges[task_id].max; ++leaf_idx) {
-    CV_Leaf leaf = cv_debug_t_get_leaf(task->debug_t, leaf_idx);
-    if (cv_is_udt(leaf.kind)) {
-      CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
-      if (~udt_info.props & CV_TypeProp_FwdRef) {
-        if (!cv_is_udt_name_anon(udt_info.name)) {
-          String8 name       = cv_name_from_udt_info(udt_info);
-          U64     hash       = lnk_udt_name_hash_table_hash(name);
-          U64     best_idx   = hash % task->buckets_cap;
-          U64     bucket_idx = best_idx;
+    CV_Leaf leaf;
+    cv_deserial_leaf(leaf_data, 0, 1, &leaf);
 
-          if (new_bucket == 0) {
-            new_bucket = push_array(arena, LNK_UDTNameBucket, 1);
-          }
-          new_bucket->name = name;
-          new_bucket->leaf_idx = leaf_idx;
-          
-          B32 is_inserted_or_updated = 0;
-          do {
-            retry:;
-            LNK_UDTNameBucket *curr_bucket = task->buckets[bucket_idx];
+    // is this UDT?
+    if ( ! cv_is_udt(leaf.kind)) { continue; }
 
-            if (curr_bucket == 0) {
-              LNK_UDTNameBucket *compare_bucket = ins_atomic_ptr_eval_cond_assign(&task->buckets[bucket_idx], new_bucket, curr_bucket);
+    // skip forward references
+    CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
+    if (udt_info.props & CV_TypeProp_FwdRef) { continue; }
 
-              if (compare_bucket == curr_bucket) {
-                // success, bucket was inserted
-                is_inserted_or_updated = 1;
-                break;
-              }
+    // skip anon UDT
+    if (cv_is_udt_name_anon(udt_info.name)) { continue; }
 
-              // another thread took the bucket...
-              goto retry;
-            } else if (str8_match(curr_bucket->name, name, 0)) {
-              // there is more than one UDT with identical name, pick most recent and ignore others
-              
-              if (leaf_idx < curr_bucket->leaf_idx) {
-                LNK_UDTNameBucket *compare_bucket = ins_atomic_ptr_eval_cond_assign(&task->buckets[bucket_idx], new_bucket, curr_bucket);
-                if (compare_bucket == curr_bucket) {
-                  is_inserted_or_updated = 1;
-                  break;
-                }
-              } else {
-                // don't need to update, more recent leaf is in the bucket
-                break;
-              }
+    // UDT name -> bucket index
+    String8 name       = cv_name_from_udt_info(udt_info);
+    U64     hash       = lnk_udt_name_hash_table_hash(name);
+    U64     best_idx   = hash % task->buckets_cap;
+    U64     bucket_idx = best_idx;
 
-              // another thread took the bucket...
-              goto retry;
-            }
+    // push and fill bucket
+    if (new_bucket == 0) { new_bucket = push_array(arena, LNK_UDTNameBucket, 1); }
+    new_bucket->name = name;
+    new_bucket->leaf_idx = leaf_idx;
 
-            // advance
-            bucket_idx = (bucket_idx + 1) % task->buckets_cap;
-          } while (bucket_idx != best_idx);
+    B32 is_inserted_or_updated = 0;
+    do {
+      retry:;
+      LNK_UDTNameBucket *curr_bucket = task->buckets[bucket_idx];
 
-          if (is_inserted_or_updated) {
-            new_bucket = 0;
-          }
+      if (curr_bucket == 0) {
+        LNK_UDTNameBucket *compare_bucket = ins_atomic_ptr_eval_cond_assign(&task->buckets[bucket_idx], new_bucket, curr_bucket);
+
+        if (compare_bucket == curr_bucket) {
+          // success, bucket was inserted
+          is_inserted_or_updated = 1;
+          break;
         }
+
+        // another thread took the bucket...
+        goto retry;
+      } else if (str8_match(curr_bucket->name, name, 0)) {
+        // there is more than one UDT with identical name, pick most recent and ignore others
+
+        if (leaf_idx < curr_bucket->leaf_idx) {
+          LNK_UDTNameBucket *compare_bucket = ins_atomic_ptr_eval_cond_assign(&task->buckets[bucket_idx], new_bucket, curr_bucket);
+          if (compare_bucket == curr_bucket) {
+            is_inserted_or_updated = 1;
+            break;
+          }
+        } else {
+          // don't need to update, more recent leaf is in the bucket
+          break;
+        }
+
+        // another thread took the bucket...
+        goto retry;
       }
+
+      // advance
+      bucket_idx = (bucket_idx + 1) % task->buckets_cap;
+    } while (bucket_idx != best_idx);
+
+    if (is_inserted_or_updated) {
+      new_bucket = 0;
     }
   }
 }
 
 
 internal LNK_UDTNameBucket **
-lnk_udt_name_hash_table_from_debug_t(TP_Context *tp,
+lnk_udt_name_hash_table_from_leaf_arr(TP_Context *tp,
                                      TP_Arena   *arena,
-                                     CV_DebugT   debug_t,
+                                     U64         leaf_count,
+                                     U8        **leaf_arr,
                                      U64        *buckets_cap_out)
 {
   Temp scratch = scratch_begin(&arena->v[0], 1);
   LNK_BuildUDTNameHashTableTask task = {0};
-  task.debug_t     = debug_t;
-  task.buckets_cap = (U64)((F64)debug_t.count * 1.3);
+  task.leaf_count  = leaf_count;
+  task.leaf_arr    = leaf_arr;
+  task.buckets_cap = (leaf_count * 13) / 10;
   task.buckets     = push_array(arena->v[0], LNK_UDTNameBucket *, task.buckets_cap);
-  task.ranges      = tp_divide_work(scratch.arena, debug_t.count, tp->worker_count);
+  task.ranges      = tp_divide_work(scratch.arena, leaf_count, tp->worker_count);
   tp_for_parallel(tp, arena, tp->worker_count, lnk_build_udt_name_hash_table_task, &task);
   *buckets_cap_out = task.buckets_cap;
   scratch_end(scratch);
@@ -3543,8 +3568,8 @@ lnk_rdib_type_from_itype(LNK_ConvertTypesToRDI *task, CV_TypeIndex itype)
 
     // try to resovle forward reference (defn might be missing)
     if (itype >= tpi_range.min) {
-      U64     leaf_idx = itype - tpi_range.min;
-      CV_Leaf leaf     = cv_debug_t_get_leaf(task->types[CV_TypeIndexSource_TPI], leaf_idx);
+      CV_Leaf leaf;
+      cv_deserial_leaf(str8(task->leaf_arr[CV_TypeIndexSource_TPI][itype - tpi_range.min], max_U64), 0, 1, &leaf);
       if (cv_is_udt(leaf.kind)) {
         CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
         if (udt_info.props & CV_TypeProp_FwdRef) {
@@ -3590,7 +3615,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_types_to_rdi_task)
 
   for(U64 leaf_idx = task->ranges[task_id].min; leaf_idx < task->ranges[task_id].max; ++leaf_idx) {
     U64     itype = task->itype_ranges[CV_TypeIndexSource_TPI].min + leaf_idx;
-    CV_Leaf src   = cv_debug_t_get_leaf(task->types[CV_TypeIndexSource_TPI], leaf_idx);
+    CV_Leaf src   = cv_leaf_from_ptr(task->leaf_arr[CV_TypeIndexSource_TPI][leaf_idx]);
 
     switch (src.kind) {
     case CV_LeafKind_MODIFIER: {
@@ -3613,7 +3638,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_types_to_rdi_task)
       CV_TypeIndex          next_itype;
       for (next_itype = ptr->itype; task->itype_ranges[CV_TypeIndexSource_TPI].min <= next_itype && next_itype < task->itype_ranges[CV_TypeIndexSource_TPI].max;) {
         U64     next_leaf_idx = next_itype - task->itype_ranges[CV_TypeIndexSource_TPI].min;
-        CV_Leaf next_leaf     = cv_debug_t_get_leaf(task->types[CV_TypeIndexSource_TPI], next_leaf_idx);
+        CV_Leaf next_leaf     = cv_leaf_from_ptr(task->leaf_arr[CV_TypeIndexSource_TPI][next_leaf_idx]);
         if (next_leaf.kind != CV_LeafKind_MODIFIER) {
           break;
         }
@@ -3909,7 +3934,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_types_to_rdi_task)
 
           if (contains_1u64(task->itype_ranges[CV_TypeIndexSource_TPI], method->list_itype)) {
             U64     method_list_leaf_idx = method->list_itype - task->itype_ranges[CV_TypeIndexSource_TPI].min;
-            CV_Leaf method_list_leaf     = cv_debug_t_get_leaf(task->types[CV_TypeIndexSource_TPI], method_list_leaf_idx);
+            CV_Leaf method_list_leaf     = cv_leaf_from_ptr(task->leaf_arr[CV_TypeIndexSource_TPI][method_list_leaf_idx]);
             if (method_list_leaf.kind == CV_LeafKind_METHODLIST) {
               for (U64 cursor = 0; cursor + sizeof(CV_LeafMethodListMember) <= method_list_leaf.data.size; ) {
                 // parse CodeView method overload info
@@ -5075,7 +5100,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       RDIB_Type *owner = 0;
       if (task->ipi_itype_range.min <= sym_inline_site->inlinee && sym_inline_site->inlinee < task->ipi_itype_range.max) {
         U64     leaf_idx = sym_inline_site->inlinee - task->tpi_itype_range.min;
-        CV_Leaf leaf     = cv_debug_t_get_leaf(task->ipi, leaf_idx);
+        CV_Leaf leaf     = cv_leaf_from_ptr(task->leaf_arr_ipi[leaf_idx]);
         if (leaf.kind == CV_LeafKind_MFUNC_ID) {
           if (sizeof(CV_LeafMFuncId) <= leaf.data.size) {
             CV_LeafMFuncId *mfunc_id = (CV_LeafMFuncId *) leaf.data.str;
@@ -5260,7 +5285,8 @@ lnk_build_rad_debug_info(TP_Context               *tp,
                          U64                       total_symbol_input_count,
                          LNK_CodeViewSymbolsInput *symbol_inputs,
                          CV_SymbolListArray       *parsed_symbols,
-                         CV_DebugT                 types[CV_TypeIndexSource_COUNT])
+                         U64                       leaf_count[CV_TypeIndexSource_COUNT],
+                         U8                      **leaf_arr  [CV_TypeIndexSource_COUNT])
 {
   ProfBegin("RDI");
   Temp scratch = scratch_begin(tp_arena->v,tp_arena->count);
@@ -5314,7 +5340,7 @@ lnk_build_rad_debug_info(TP_Context               *tp,
   // assing low and high type indices per source
   Rng1U64 itype_ranges[CV_TypeIndexSource_COUNT];
   for (U64 i = 0; i < ArrayCount(itype_ranges); ++i) {
-    itype_ranges[i] = rng_1u64(CV_MinComplexTypeIndex, CV_MinComplexTypeIndex + types[i].count);
+    itype_ranges[i] = rng_1u64(CV_MinComplexTypeIndex, CV_MinComplexTypeIndex + leaf_count[i]);
   }
 
   ProfBegin("Convert Types");
@@ -5337,13 +5363,14 @@ lnk_build_rad_debug_info(TP_Context               *tp,
     ProfBegin("Build UDT Name Hash Table");
     // TODO: fix memory life-time
     udt_name_buckets_cap = 0;
-    udt_name_buckets     = lnk_udt_name_hash_table_from_debug_t(tp, tp_arena, types[CV_TypeIndexSource_TPI], &udt_name_buckets_cap);
+    udt_name_buckets     = lnk_udt_name_hash_table_from_leaf_arr(tp, tp_arena, leaf_count[CV_TypeIndexSource_TPI], leaf_arr[CV_TypeIndexSource_TPI], &udt_name_buckets_cap);
     ProfEnd();
 
 
     ProfBegin("Convert CodeView types to RDIB Types");
     LNK_ConvertTypesToRDI task         = {0};
-    task.types                         = types;
+    MemoryCopyTyped(&task.leaf_count[0], &leaf_count[0], CV_TypeIndexSource_COUNT);
+    MemoryCopyTyped(&task.leaf_arr[0],   &leaf_arr[0],   CV_TypeIndexSource_COUNT);
     task.type_cap                      = input.type_cap;
     task.udt_cap                       = input.udt_cap;
     task.variadic_type_ref             = rdib_make_type_ref(scratch.arena, input.variadic_type);
@@ -5360,7 +5387,7 @@ lnk_build_rad_debug_info(TP_Context               *tp,
     task.rdib_types_params_lists       = push_array(scratch.arena, RDIB_TypeChunkList,      tp->worker_count);
     task.rdib_udt_members_lists        = push_array(scratch.arena, RDIB_UDTMemberChunkList, tp->worker_count);
     task.rdib_enum_members_lists       = push_array(scratch.arena, RDIB_UDTMemberChunkList, tp->worker_count);
-    task.ranges                        = tp_divide_work(scratch.arena, types[CV_TypeIndexSource_TPI].count, tp->worker_count);
+    task.ranges                        = tp_divide_work(scratch.arena, leaf_count[CV_TypeIndexSource_TPI], tp->worker_count);
     tp_for_parallel(tp, tp_arena, tp->worker_count, lnk_convert_types_to_rdi_task, &task);
     ProfEnd();
 
@@ -5443,7 +5470,8 @@ lnk_build_rad_debug_info(TP_Context               *tp,
     task.image_sects              = image_sects;
     task.obj_arr                  = obj_arr;
     task.debug_s_arr              = debug_s_arr;
-    task.ipi                      = types[CV_TypeIndexSource_IPI];
+    task.leaf_arr_count_ipi       = leaf_count[CV_TypeIndexSource_IPI];
+    task.leaf_arr_ipi             = leaf_arr[CV_TypeIndexSource_IPI];
     task.symbol_inputs            = symbol_inputs;
     task.parsed_symbols           = parsed_symbols;
     task.ipi_itype_range          = itype_ranges[CV_TypeIndexSource_IPI];

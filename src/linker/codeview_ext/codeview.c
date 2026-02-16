@@ -170,8 +170,10 @@ cv_deserial_leaf(String8 raw_data, U64 off, U64 align, CV_Leaf *leaf_out)
   // do we have enough bytes to read header?
   Assert(raw_data.size >= sizeof(CV_LeafHeader));
 
+  U8 *leaf_ptr = raw_data.str + off;
+
   StaticAssert(sizeof(CV_LeafHeader) == 4, g_leaf_header_size_check);
-  CV_LeafHeader header = { .v = memory_read32(raw_data.str + off) };
+  CV_LeafHeader header = { .v = memory_read32(leaf_ptr) };
 
   // leaf size must have enough bytes for the kind enum
   Assert(header.size >= sizeof(CV_LeafKind));
@@ -181,7 +183,7 @@ cv_deserial_leaf(String8 raw_data, U64 off, U64 align, CV_Leaf *leaf_out)
 
   // fill out leaf
   leaf_out->kind = header.kind;
-  leaf_out->data = str8(raw_data.str + sizeof(CV_LeafHeader), header.size - sizeof(CV_LeafKind));
+  leaf_out->data = str8(leaf_ptr + sizeof(CV_LeafHeader), header.size - sizeof(CV_LeafKind));
 
   U64 leaf_size = AlignPow2(sizeof(CV_LeafHeader) + leaf_out->data.size, align);
   Assert(leaf_size <= raw_data.size);
@@ -1070,68 +1072,36 @@ cv_dedup_symbol_ptr_array(TP_Context *tp, CV_SymbolPtrArray *symbols)
 //~ .debug$T helpers
 
 internal CV_DebugT
-cv_debug_t_from_data_arr(Arena *arena, String8Array data_arr, U64 align)
+cv_debug_t_from_data(Arena *arena, String8 data, U64 align)
 {
   ProfBegin("Upfront parse");
-  U64 max_leaf_count = 0;
-  for (U64 data_idx = 0; data_idx < data_arr.count; data_idx += 1) {
-    String8 data = data_arr.v[data_idx];
-    for (U64 cursor = 0; cursor < data.size; ) {
-      CV_Leaf leaf;
-      cursor += cv_deserial_leaf(data, cursor, align, &leaf);
-      max_leaf_count += 1;
-    }
+  U64 count = 0;
+  for (U64 cursor = 0; cursor < data.size; count += 1) {
+    CV_Leaf leaf;
+    cursor += cv_deserial_leaf(data, cursor, align, &leaf);
   }
   ProfEnd();
 
-  U8 **leaf_arr   = push_array_no_zero(arena, U8 *, max_leaf_count);
-  U64  leaf_count = 0;
-  for (U64 data_idx = 0; data_idx < data_arr.count; data_idx += 1) {
-    String8 data = data_arr.v[data_idx];
+  U32 *offsets = push_array_no_zero(arena, U32, count);
+  for (U64 cursor = 0, idx = 0; cursor < data.size;) {
+    offsets[idx++] = cursor;
 
-    U64 cursor = 0;
-    while (cursor < data.size) {
-      CV_Leaf leaf;
-      U64 read_size = cv_deserial_leaf(data, cursor, align, &leaf);
-
-      Assert(leaf_count < max_leaf_count);
-      leaf_arr[leaf_count] = str8_deserial_get_raw_ptr(data, cursor, read_size);
-      leaf_count += 1;
-
-      // advance cursor
-      cursor += read_size;
-    }
+    CV_Leaf leaf;
+    cursor += cv_deserial_leaf(data, cursor, align, &leaf);
   }
 
-  CV_DebugT debug_t = {0};
-  debug_t.count     = leaf_count;
-  debug_t.v         = leaf_arr;
-  return debug_t;
-}
-
-internal CV_DebugT
-cv_debug_t_from_data(Arena *arena, String8 data, U64 align)
-{
-  String8Array arr = {0};
-  arr.count        = 1;
-  arr.v            = &data;
-  return cv_debug_t_from_data_arr(arena, arr, align);
+  return (CV_DebugT){ .count = count, .data = data, .offsets = offsets };
 }
 
 internal CV_Leaf
 cv_debug_t_get_leaf(CV_DebugT debug_t, U64 leaf_idx)
 {
-  Assert(leaf_idx < debug_t.count);
-
-  U8 *ptr = debug_t.v[leaf_idx];
-  String8 data = str8(ptr, max_U64);
-
-  CV_Leaf leaf;
-  cv_deserial_leaf(data, 0, 1, &leaf);
-
-  U64 size = cv_header_struct_size_from_leaf_kind(leaf.kind);
-  Assert(size <= leaf.data.size);
-
+  CV_Leaf leaf = {0};
+  if (debug_t.count > 0) {
+    Assert(leaf_idx < debug_t.count);
+    cv_deserial_leaf(debug_t.data, debug_t.offsets[leaf_idx], 1, &leaf);
+    Assert(cv_header_struct_size_from_leaf_kind(leaf.kind) <= leaf.data.size);
+  }
   return leaf;
 }
 
@@ -1139,83 +1109,60 @@ internal String8
 cv_debug_t_get_raw_leaf(CV_DebugT debug_t, U64 leaf_idx)
 {
   Assert(leaf_idx < debug_t.count);
-  U8          *leaf_ptr = debug_t.v[leaf_idx];
-  CV_LeafSize  size     = memory_read16(debug_t.v[leaf_idx]);
-  return str8(leaf_ptr, sizeof(size) + size);
+  U8          *leaf_ptr  = debug_t.data.str + debug_t.offsets[leaf_idx];
+  CV_LeafSize  leaf_size = memory_read16(leaf_ptr);
+  return str8(leaf_ptr, leaf_size + sizeof(leaf_size));
 }
 
 internal CV_LeafHeader *
 cv_debug_t_get_leaf_header(CV_DebugT debug_t, U64 leaf_idx)
 {
-  Assert(leaf_idx < debug_t.count);
-  CV_LeafHeader *leaf_header = (CV_LeafHeader *) debug_t.v[leaf_idx];
-  return leaf_header;
+  CV_LeafHeader *header = 0;
+  if (leaf_idx < debug_t.count) {
+    header = (CV_LeafHeader *)(debug_t.data.str + debug_t.offsets[leaf_idx]);
+  }
+  return header;
 }
 
 internal B32
 cv_debug_t_is_pch(CV_DebugT debug_t)
 {
-  if (debug_t.count > 0) {
-    CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, 0);
-    return cv_is_leaf_pch(leaf.kind);
-  }
-  return 0;
+  return cv_is_leaf_pch(cv_debug_t_get_leaf(debug_t, 0).kind);
 }
 
 internal B32
 cv_debug_t_is_type_server(CV_DebugT debug_t)
 {
-  if (debug_t.count > 0) {
-    CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, 0);
-    return cv_is_leaf_type_server(leaf.kind);
-  }
-  return 0;
+  return cv_is_leaf_type_server(cv_debug_t_get_leaf(debug_t, 0).kind);
 }
 
 internal U64
-cv_debug_t_array_count_leaves(U64 count, CV_DebugT *arr)
+cv_debug_t_array_count_leaves(U64 count, CV_DebugT *debug_t)
 {
-  U64 total_leaf_count = 0;
-  for (U64 i = 0; i < count; i += 1) {
-    total_leaf_count += arr[i].count;
-  }
-  return total_leaf_count;
+  U64 total = 0;
+  for EachIndex(i, count) { total += debug_t[i].count; }
+  return total;
 }
 
-internal
-THREAD_POOL_TASK_FUNC(cv_str8_list_from_debug_t_task)
+internal CV_Leaf
+cv_leaf_from_ptr(U8 *ptr)
 {
-  CV_Str8ListFromDebugT *task = raw_task;
-  for (U64 leaf_idx = task->ranges[task_id].min; leaf_idx < task->ranges[task_id].max; ++leaf_idx) {
-    String8Node *node = &task->nodes[leaf_idx];
-    node->string = cv_debug_t_get_raw_leaf(task->debug_t, leaf_idx);
-    str8_list_push_node(&task->lists[task_id], node);
-  }
+  CV_Leaf leaf = {0};
+  cv_deserial_leaf(str8(ptr, max_U64), 0, 1, &leaf);
+  return leaf;
 }
 
-internal String8List
-cv_str8_list_from_debug_t_parallel(TP_Context *tp, Arena *arena, CV_DebugT debug_t)
+internal U16
+cv_leaf_size_from_ptr(U8 *ptr)
 {
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
+  CV_LeafSize size = memory_read16(ptr);
+  return size + sizeof(size);
+}
 
-  // build lists in parallel
-  CV_Str8ListFromDebugT task = {0};
-  task.debug_t = debug_t;
-  task.ranges  = tp_divide_work(scratch.arena, debug_t.count, tp->worker_count);
-  task.lists   = push_array(scratch.arena, String8List, tp->worker_count);
-  task.nodes   = push_array_no_zero(arena, String8Node, debug_t.count);
-  tp_for_parallel(tp, 0, tp->worker_count, cv_str8_list_from_debug_t_task, &task);
-
-  // concat output lists
-  String8List list = {0};
-  for (U64 task_id = 0; task_id < tp->worker_count; ++task_id) {
-    str8_list_concat_in_place(&list, &task.lists[task_id]);
-  }
-
-  scratch_end(scratch);
-  ProfEnd();
-  return list;
+internal String8
+cv_raw_leaf_from_ptr(U8 *ptr)
+{
+  return str8(ptr, cv_leaf_size_from_ptr(ptr));
 }
 
 // $$Symbols

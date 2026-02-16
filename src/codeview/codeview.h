@@ -1161,6 +1161,8 @@ struct CV_SymPub32
 
 //- (SymKind: LPROC32, GPROC32)
 
+#define CV_IsProc32(x) (x == CV_SymKind_LPROC32_ID || x == CV_SymKind_GPROC32_ID || x == CV_SymKind_LPROC32_DPC)
+
 typedef struct CV_SymProc32 CV_SymProc32;
 struct CV_SymProc32
 {

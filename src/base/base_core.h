@@ -1009,6 +1009,7 @@ internal F32 sign_from_side_F32(Side side);
 
 internal B32 memory_is_zero(void *ptr, U64 size);
 
+internal void memory_write16(void *ptr, U16 v);
 internal void memory_write32(void *ptr, U32 v);
 
 internal U8  memory_read8(void *ptr);

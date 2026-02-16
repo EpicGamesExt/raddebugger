@@ -119,7 +119,8 @@ typedef struct PDB_TypeServerParse
 
 typedef struct
 {
-  CV_DebugT       debug_t;
+  U64             leaf_count;
+  U8            **leaf_arr;
   U64            *udt_counts;
   U64            *udt_offsets;
   Rng1U64        *ranges;
@@ -474,7 +475,7 @@ internal PDB_TypeServer *        pdb_type_server_open(MSF_Context *msf, MSF_Stre
 internal void                    pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn);
 internal void                    pdb_type_server_release(PDB_TypeServer **serv_ptr);
 internal void                    pdb_type_server_push(PDB_TypeServer *ts, String8 raw_leaf);
-internal void                    pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *ts, CV_DebugT types);
+internal void                    pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *ts, U64 leaf_count, U8 **leaf_arr);
 //internal CV_LeafNode *     pdb_type_server_leaf_from_string(PDB_TypeServer *ts, String8 string);
 internal String8Node *           pdb_type_server_reserve(PDB_TypeServer *ts, U64 count);
 internal String8Node *           pdb_type_server_make_leaf(PDB_TypeServer *ts, CV_LeafKind kind, String8 data);
