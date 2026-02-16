@@ -1078,26 +1078,19 @@ str8_list_concat_in_place(String8List *list, String8List *to_push)
 }
 
 internal String8Node*
-str8_list_push_aligner(Arena *arena, String8List *list, U64 min, U64 align){
-  String8Node *node = push_array_no_zero(arena, String8Node, 1);
-  U64 new_size = list->total_size + min;
-  U64 increase_size = 0;
-  if (align > 1){
-    // NOTE(allen): assert is power of 2
-    Assert(((align - 1) & align) == 0);
-    U64 mask = align - 1;
-    new_size += mask;
-    new_size &= (~mask);
-    increase_size = new_size - list->total_size;
+str8_list_push_aligner(Arena *arena, String8List *list, U64 min, U64 align)
+{
+  read_only local_persist U8 zeroes[64] = {0};
+  Assert(IsPow2OrZero(align));
+  U64 pad = Max(min, AlignPadPow2(list->total_size, align));
+  if(pad < sizeof(zeroes))
+  {
+    return str8_list_push(arena, list, str8(zeroes, pad));
   }
-  local_persist const U8 zeroes_buffer[64] = {0};
-  Assert(increase_size <= ArrayCount(zeroes_buffer));
-  SLLQueuePush(list->first, list->last, node);
-  list->node_count += 1;
-  list->total_size = new_size;
-  node->string.str = (U8*)zeroes_buffer;
-  node->string.size = increase_size;
-  return(node);
+  else
+  {
+    return str8_list_push(arena, list, str8(push_array(arena, U8, pad), pad));
+  }
 }
 
 internal String8Node*

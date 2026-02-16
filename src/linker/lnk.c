@@ -4118,11 +4118,7 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
   }
 
   // align image headers
-  {
-    U64 image_headers_align_size = AlignPadPow2(result.total_size, config->file_align);
-    U8 *image_headers_align      = push_array(arena, U8, image_headers_align_size);
-    str8_list_push(arena, &result, str8(image_headers_align, image_headers_align_size));
-  }
+  str8_list_push_aligner(arena, &result, 0, config->file_align);
 
   //
   // entry point
