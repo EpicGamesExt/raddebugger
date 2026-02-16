@@ -4046,9 +4046,9 @@ T_BeginTest(merge_duplicate_types)
   {
     CV_Leaf ptr_leaf  = cv_debug_t_get_leaf(debug_t, 0);
     T_Ok(ptr_leaf.kind == CV_LeafKind_POINTER);
-    T_Ok(ptr_leaf.data.size == sizeof(CV_LeafPointer) + sizeof(CV_LeafHeader));
+    T_Ok(ptr_leaf.data.size == sizeof(CV_LeafPointer));
 
-    CV_LeafPointer *ptr = (CV_LeafPointer *)(ptr_leaf.data.str + sizeof(CV_LeafHeader));
+    CV_LeafPointer *ptr = (CV_LeafPointer *)ptr_leaf.data.str;
     T_Ok(ptr->itype == CV_BasicType_VOID);
     T_Ok(ptr->attribs == 0);
   }
@@ -4056,9 +4056,9 @@ T_BeginTest(merge_duplicate_types)
   {
     CV_Leaf proc_leaf = cv_debug_t_get_leaf(debug_t, 1);
     T_Ok(proc_leaf.kind == CV_LeafKind_PROCEDURE);
-    T_Ok(proc_leaf.data.size == sizeof(CV_LeafProcedure) + sizeof(CV_LeafHeader));
+    T_Ok(proc_leaf.data.size == sizeof(CV_LeafProcedure));
 
-    CV_LeafProcedure *proc = (CV_LeafProcedure *)(proc_leaf.data.str + sizeof(CV_LeafHeader));
+    CV_LeafProcedure *proc = (CV_LeafProcedure *)proc_leaf.data.str;
     T_Ok(proc->ret_itype == 0x1000);
     T_Ok(proc->call_kind == CV_CallKind_NearC);
   }
@@ -4066,9 +4066,9 @@ T_BeginTest(merge_duplicate_types)
   {
     CV_Leaf ptr_leaf  = cv_debug_t_get_leaf(debug_t, 2);
     T_Ok(ptr_leaf.kind == CV_LeafKind_POINTER);
-    T_Ok(ptr_leaf.data.size == sizeof(CV_LeafPointer) + sizeof(CV_LeafHeader));
+    T_Ok(ptr_leaf.data.size == sizeof(CV_LeafPointer));
 
-    CV_LeafPointer *ptr = (CV_LeafPointer *)(ptr_leaf.data.str + sizeof(CV_LeafHeader));
+    CV_LeafPointer *ptr = (CV_LeafPointer *)ptr_leaf.data.str;
     T_Ok(ptr->itype == CV_BasicType_SHORT);
     T_Ok(ptr->attribs == 0);
   }
@@ -4076,9 +4076,9 @@ T_BeginTest(merge_duplicate_types)
   {
     CV_Leaf proc_leaf = cv_debug_t_get_leaf(debug_t, 3);
     T_Ok(proc_leaf.kind == CV_LeafKind_PROCEDURE);
-    T_Ok(proc_leaf.data.size == sizeof(CV_LeafProcedure) + sizeof(CV_LeafHeader));
+    T_Ok(proc_leaf.data.size == sizeof(CV_LeafProcedure));
 
-    CV_LeafProcedure *proc = (CV_LeafProcedure *)(proc_leaf.data.str + sizeof(CV_LeafHeader));
+    CV_LeafProcedure *proc = (CV_LeafProcedure *)proc_leaf.data.str;
     T_Ok(proc->ret_itype == 0x1002);
     T_Ok(proc->call_kind == CV_CallKind_NearC);
   }
