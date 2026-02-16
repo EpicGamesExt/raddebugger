@@ -1144,8 +1144,7 @@ skip_type_index_compare:;
 #endif
 
 internal U64
-lnk_hash_cv_leaf(Arena               *arena,
-                 LNK_CodeViewInput   *input,
+lnk_hash_cv_leaf(LNK_CodeViewInput   *input,
                  LNK_LeafHashes      *hashes,
                  LNK_LeafLocType      loc_type,
                  U32                  loc_idx,
@@ -1157,24 +1156,32 @@ lnk_hash_cv_leaf(Arena               *arena,
   // init hasher
   blake3_hasher hasher; blake3_hasher_init(&hasher);
 
-  // hash leaf size
-  blake3_hasher_update(&hasher, &leaf.data.size, sizeof leaf.data.size);
-
-  // hash leaf kind
-  blake3_hasher_update(&hasher, &leaf.kind, sizeof leaf.kind);
+  // hash leaf header
+  {
+    CV_LeafHeader header;
+    header.size = (U16)leaf.data.size;
+    header.kind = leaf.kind;
+    blake3_hasher_update(&hasher, &header, sizeof(header));
+  }
 
   // hash bytes around indices
   {
-    Temp temp = temp_begin(arena);
-    String8Array raw_data_arr = cv_get_data_around_type_indices(temp.arena, ti_info_list, leaf.data);
-    for (U64 i = 0; i < raw_data_arr.count; ++i) {
-      blake3_hasher_update(&hasher, raw_data_arr.v[i].str, raw_data_arr.v[i].size);
+    U64 last_ti_off = 0;
+    for EachNode(ti_info, CV_TypeIndexInfo, ti_info_list.first) {
+      U8 *bytes = leaf.data.str + last_ti_off;
+      U64 size  = ti_info->offset - last_ti_off;
+      blake3_hasher_update(&hasher, bytes, size);
+      last_ti_off = ti_info->offset + sizeof(CV_TypeIndex);
     }
-    temp_end(temp);
+
+    Assert(leaf.data.size >= last_ti_off);
+    U8 *bytes = leaf.data.str + last_ti_off;
+    U64 size  = leaf.data.size - last_ti_off;
+    blake3_hasher_update(&hasher, bytes, size);
   }
 
   // mix-in sub leaf hashes
-  for (CV_TypeIndexInfo *ti_n = ti_info_list.first; ti_n != 0; ti_n = ti_n->next) {
+  for EachNode(ti_n, CV_TypeIndexInfo, ti_info_list.first) {
     CV_TypeIndex sub_ti = memory_read32(leaf.data.str + ti_n->offset);
 
     // is type index complex?
@@ -1209,7 +1216,7 @@ lnk_hash_cv_leaf(Arena               *arena,
         Assert(sub_hash != 0);
 
         // mix-in sub hash
-        blake3_hasher_update(&hasher, &sub_hash, sizeof sub_hash);
+        blake3_hasher_update(&hasher, &sub_hash, sizeof(sub_hash));
       } else {
         Temp scratch = scratch_begin(0,0);
         String8 leaf_kind_str = cv_string_from_leaf_kind(leaf.kind);
@@ -1226,12 +1233,12 @@ lnk_hash_cv_leaf(Arena               *arena,
     }
     // simple indices are stable across compile units 
     else {
-      blake3_hasher_update(&hasher, &sub_ti, sizeof sub_ti);
+      blake3_hasher_update(&hasher, &sub_ti, sizeof(sub_ti));
     }
   }
 
   U64 hash;
-  blake3_hasher_finalize(&hasher, (U8 *) &hash, sizeof hash);
+  blake3_hasher_finalize(&hasher, (U8 *) &hash, sizeof(hash));
 
   return hash;
 }
@@ -1312,8 +1319,7 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
             SLLStackPush(stack, frame);
             break;
           } else {
-            curr_hashes[curr_ti_info->source][ti_idx] = lnk_hash_cv_leaf(temp.arena,
-                                                                         input,
+            curr_hashes[curr_ti_info->source][ti_idx] = lnk_hash_cv_leaf(input,
                                                                          hashes,
                                                                          loc_type,
                                                                          loc_idx,
@@ -1331,10 +1337,8 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
 
       if (stack != root_frame) {
         // sub leaves are hashed we can now hash parent leaf
-        Temp temp2 = temp_begin(temp.arena);
         U64 leaf_idx = stack->ti - ti_ranges[stack->ti_source].min;
-        curr_hashes[stack->ti_source][leaf_idx] = lnk_hash_cv_leaf(temp2.arena,
-                                                                   input,
+        curr_hashes[stack->ti_source][leaf_idx] = lnk_hash_cv_leaf(input,
                                                                    hashes,
                                                                    loc_type,
                                                                    loc_idx,
@@ -1342,7 +1346,6 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
                                                                    CV_TypeIndex_Max,
                                                                    stack->leaf,
                                                                    stack->ti_info_list);
-        temp_end(temp2);
       }
 
       SLLStackPop(stack);
@@ -1487,8 +1490,7 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_task)
     CV_Leaf              leaf         = cv_debug_t_get_leaf(debug_t, leaf_idx);
     CV_TypeIndexInfoList ti_info_list = cv_get_leaf_type_index_offsets(temp.arena, leaf.kind, leaf.data);
 
-    out_hashes[leaf_idx] = lnk_hash_cv_leaf(temp.arena,
-                                            task->input,
+    out_hashes[leaf_idx] = lnk_hash_cv_leaf(task->input,
                                             task->hashes,
                                             LNK_LeafLocType_Internal,
                                             obj_idx,

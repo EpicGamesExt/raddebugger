@@ -468,7 +468,7 @@ internal LNK_LeafRef      lnk_leaf_ref_from_loc_idx_and_ti(LNK_CodeViewInput *in
 internal B32              lnk_match_leaf_ref              (LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafRef a, LNK_LeafRef b);
 
 // leaf hashing
-internal U64  lnk_hash_cv_leaf     (Arena *arena, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafLocType loc_type, U32 loc_idx, Rng1U64 *ti_ranges, CV_TypeIndex curr_ti, CV_Leaf leaf, CV_TypeIndexInfoList ti_info_list);
+internal U64  lnk_hash_cv_leaf     (LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafLocType loc_type, U32 loc_idx, Rng1U64 *ti_ranges, CV_TypeIndex curr_ti, CV_Leaf leaf, CV_TypeIndexInfoList ti_info_list);
 internal void lnk_hash_cv_leaf_deep(Arena *arena, LNK_CodeViewInput *input, Rng1U64 *ti_ranges, CV_DebugT *leaves, LNK_LeafHashes *hashes, LNK_LeafLocType loc_type, U32 loc_idx, CV_TypeIndexInfoList ti_info_list, String8 data);
 internal U64  lnk_hash_from_leaf_ref(LNK_LeafHashes *hashes, LNK_LeafRef leaf_ref);
 
