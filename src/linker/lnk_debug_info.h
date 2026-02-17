@@ -232,8 +232,10 @@ typedef struct
 typedef struct
 {
   U64                        total_symbol_input_count;
-  LNK_CodeViewSymbolsInput  *symbol_inputs;
   CV_SymbolListArray        *parsed_symbols;
+  U64                       *serialized_symbol_data_sizes;
+
+  LNK_CodeViewSymbolsInput  *symbol_inputs;
   PDB_DbiModule            **mod_arr;
   String8List               *symbol_data_arr;
   CV_SymbolList             *gsi_list_arr;
@@ -242,9 +244,6 @@ typedef struct
 typedef struct
 {
   CV_DebugS          *debug_s_arr;
-  MSF_Context        *msf;
-  PDB_DbiModule      **dbi_mod_arr;
-  String8List        *c13_data_arr;
   String8List        *source_file_names_list_arr;
   U64                 string_data_base_offset;
   CV_StringHashTable  string_ht;
@@ -252,12 +251,13 @@ typedef struct
 
 typedef struct
 {
-  MSF_Context    *msf;
-  PDB_DbiModule **mod_arr;
-  String8List    *symbol_data_arr;
-  String8List    *c11_data_list_arr;
-  String8List    *c13_data_list_arr;
-  String8List    *globrefs_arr;
+  MSF_Context         *msf;
+  PDB_DbiModule      **mod_arr;
+  CV_DebugS           *debug_s_arr;
+  U64                 *serialized_symbol_data_sizes;
+  CV_SymbolListArray  *parsed_symbols;
+  String8List         *globrefs_arr;
+  U32                 *mod_sizes;
 } LNK_WriteModuleDataTask;
 
 typedef struct
@@ -509,8 +509,6 @@ lnk_build_rad_debug_info(TP_Context               *tp,
 
 // --- PDB ---------------------------------------------------------------------
 
-internal LNK_ProcessedCodeViewC11Data lnk_process_c11_data      (TP_Context *tp, TP_Arena *arena, U64 obj_count, CV_DebugS *debug_s_arr, U64 string_data_base_offset, CV_StringHashTable string_ht, MSF_Context *msf, PDB_DbiModule **mod_arr);
-internal LNK_ProcessedCodeViewC13Data lnk_process_c13_data      (TP_Context *tp, TP_Arena *arena, U64 obj_count, CV_DebugS *debug_s_arr, U64 string_data_base_offset, CV_StringHashTable string_ht, MSF_Context *msf, PDB_DbiModule **mod_arr);
 internal U64 *                        lnk_hash_cv_symbol_ptr_arr(TP_Context *tp, Arena *arena, CV_SymbolPtrArray arr);
 internal CV_SymbolPtrArray            lnk_dedup_gsi_symbols     (TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 obj_count, CV_SymbolList *symbol_list_arr);
 

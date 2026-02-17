@@ -403,8 +403,11 @@ internal CV_Signature cv_signature_from_debug_s(String8 raw_debug_s);
 internal CV_DebugS    cv_parse_debug_s(Arena *arena, String8 raw_debug_s);
 internal void         cv_debug_s_concat_in_place(CV_DebugS *dst, CV_DebugS *src);
 internal String8List  cv_data_c13_from_debug_s(Arena *arena, CV_DebugS *debug_s, B32 write_sig);
+internal U64          cv_size_from_debug_s(CV_DebugS *debug_s, U64 align);
 
+internal CV_C13SubSectionKind    cv_c13_sub_section_kind_from_idx(CV_C13SubSectionIdxKind idx);
 internal CV_C13SubSectionIdxKind cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind kind);
+
 internal String8List *           cv_sub_section_ptr_from_debug_s(CV_DebugS *debug_s, CV_C13SubSectionKind kind);
 internal String8List             cv_sub_section_from_debug_s(CV_DebugS debug_s, CV_C13SubSectionKind kind);
 internal String8                 cv_string_table_from_debug_s(CV_DebugS debug_s);

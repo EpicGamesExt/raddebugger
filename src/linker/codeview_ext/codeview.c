@@ -545,6 +545,40 @@ cv_data_c13_from_debug_s(Arena *arena, CV_DebugS *debug_s, B32 write_sig)
   return srl;
 }
 
+internal U64
+cv_size_from_debug_s(CV_DebugS *debug_s, U64 align)
+{
+  U64 size = 0;
+  for EachElement(i, debug_s->data_list) {
+    if (i == CV_C13SubSectionIdxKind_Lines)    { continue; }
+    if (debug_s->data_list[i].total_size == 0) { continue; }
+    size += sizeof(CV_C13SubSectionKind) + sizeof(U32); // header
+    size += debug_s->data_list[i].total_size;
+    size  = AlignPow2(size, align);
+  }
+
+  String8List *line_data = cv_sub_section_ptr_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
+  for EachNode(line_n, String8Node, line_data->first) {
+    if (line_n->string.size == 0) { continue; }
+    size += sizeof(CV_C13SubSectionKind) + sizeof(U32); // header
+    size += line_n->string.size;
+    size  = AlignPow2(size, align);
+  }
+
+  return size;
+}
+
+internal CV_C13SubSectionKind
+cv_c13_sub_section_kind_from_idx(CV_C13SubSectionIdxKind idx)
+{
+  switch (idx) {
+#define X(n, c) case CV_C13SubSectionIdxKind_##n: return c;
+  CV_C13SubSectionKindXList(X)
+#undef X
+  }
+  return 0;
+}
+
 internal CV_C13SubSectionIdxKind
 cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind kind)
 {
@@ -1520,8 +1554,8 @@ internal CV_ChecksumList
 cv_c13_parse_checksum_data_list(Arena *arena, String8List checksum_data_list)
 {
   CV_ChecksumList result = {0};
-  for (String8Node *node = checksum_data_list.first; node != 0; node = node->next) {
-    cv_parse_checksum_data(arena, &result, node->string);
+  for EachNode(n, String8Node, checksum_data_list.first) {
+    cv_parse_checksum_data(arena, &result, n->string);
   }
   return result;
 }

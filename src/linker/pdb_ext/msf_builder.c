@@ -1335,9 +1335,16 @@ msf_stream_read_string(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn)
 internal void 
 msf_stream_align(MSF_Context *msf, MSF_StreamNumber sn, MSF_UInt align)
 {
+  local_persist U8 zeroes[64];
   MSF_UInt pos = msf_stream_get_pos(msf, sn);
-  MSF_UInt pos_aligned = AlignPow2(pos, align);
-  msf_stream_seek(msf, sn, pos_aligned);
+  MSF_UInt pad = AlignPadPow2(pos, align);
+  if (pad > 0) {
+    if (pad < sizeof(zeroes)) {
+      msf_stream_write(msf, sn, zeroes, pad);
+    } else {
+      NotImplemented;
+    }
+  }
 }
 
 ////////////////////////////////
