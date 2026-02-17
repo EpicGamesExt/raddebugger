@@ -2468,7 +2468,7 @@ cv_format_debug_sections(Arena *arena, String8List *out, String8 indent, String8
       String8             raw_sect    = str8_substr(raw_image, sect_frange);
       if (str8_match_lit(".debug$S", sect_name, 0)) {
         Temp scratch = scratch_begin(&arena, 1);
-        CV_DebugS debug_s = cv_parse_debug_s(scratch.arena, raw_sect);
+        CV_DebugS debug_s = cv_debug_s_from_data(scratch.arena, raw_sect);
         for (String8Node *string_n = debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first;
              string_n != 0 && keep_parsing; string_n = string_n->next) {
           Temp temp = temp_begin(scratch.arena);

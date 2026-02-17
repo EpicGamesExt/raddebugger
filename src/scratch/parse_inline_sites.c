@@ -290,7 +290,7 @@ entry_point(CmdLine *cmdl)
     String8       c13_data      = pdb_data_from_unit_range(msf, comp_unit, PDB_DbiCompUnitRange_C13);
     
     // parse $$
-    CV_DebugS debug_s = cv_parse_debug_s_c13(arena, c13_data);
+    CV_DebugS debug_s = cv_debug_s_from_data_c13(arena, c13_data);
     
     // find $$FILE_CKSMS
     String8 file_chksms = cv_file_chksms_from_debug_s(debug_s);

@@ -24,7 +24,7 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
 
   for (String8Node *node = sect_list.first; node != 0; node = node->next) {
     // parse & merge sub sections
-    CV_DebugS ds = cv_parse_debug_s(arena, node->string);
+    CV_DebugS ds = cv_debug_s_from_data(arena, node->string);
     cv_debug_s_concat_in_place(debug_s, &ds);
 
     // make sure there is one string table
@@ -1032,10 +1032,10 @@ lnk_match_leaf_ref(LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafRef
 
   if (a_hash == b_hash) {
     CV_Leaf a_leaf;
-    cv_deserial_leaf(lnk_data_from_leaf_ref(input, a), 0, 1, &a_leaf);
+    cv_read_leaf(lnk_data_from_leaf_ref(input, a), 0, 1, &a_leaf);
 
     CV_Leaf b_leaf;
-    cv_deserial_leaf(lnk_data_from_leaf_ref(input, b), 0, 1, &b_leaf);
+    cv_read_leaf(lnk_data_from_leaf_ref(input, b), 0, 1, &b_leaf);
 
     Assert(a_leaf.kind == b_leaf.kind);
 
@@ -2155,7 +2155,7 @@ THREAD_POOL_TASK_FUNC(lnk_fixup_symbols_task)
       String8 leaf_data = str8(leaf_arr_ipi[leaf_idx], max_U64);
 
       CV_Leaf leaf;
-      cv_deserial_leaf(leaf_data, 0, 1, &leaf);
+      cv_read_leaf(leaf_data, 0, 1, &leaf);
 
       U64 min_leaf_size = cv_header_struct_size_from_leaf_kind(leaf.kind);
       if (min_leaf_size > leaf.data.size) {
@@ -2739,7 +2739,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_module_data_task)
 
     for EachIndex(i, parsed_symbols.count) {
       for EachNode(symbol_n, CV_SymbolNode, parsed_symbols.v[i].first) {
-        U64 symbol_size = cv_compute_symbol_record_size(&symbol_n->data, PDB_SYMBOL_ALIGN);
+        U64 symbol_size = cv_size_from_symbol(&symbol_n->data, PDB_SYMBOL_ALIGN);
 
         // flush temp
         if (temp_size + symbol_size > temp_max) {
@@ -2748,7 +2748,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_module_data_task)
           temp_size = 0;
         }
 
-        U64 serial_size = cv_serialize_symbol_to_buffer(temp, temp_size, temp_max, &symbol_n->data, PDB_SYMBOL_ALIGN);
+        U64 serial_size = cv_write_symbol(temp, temp_size, temp_max, &symbol_n->data, PDB_SYMBOL_ALIGN);
         Assert(serial_size == symbol_size);
         temp_size += serial_size;
       }
@@ -3262,7 +3262,7 @@ THREAD_POOL_TASK_FUNC(lnk_build_udt_name_hash_table_task)
     String8 leaf_data = str8(task->leaf_arr[leaf_idx], max_U64);
 
     CV_Leaf leaf;
-    cv_deserial_leaf(leaf_data, 0, 1, &leaf);
+    cv_read_leaf(leaf_data, 0, 1, &leaf);
 
     // is this UDT?
     if ( ! cv_is_udt(leaf.kind)) { continue; }
@@ -3531,7 +3531,7 @@ lnk_rdib_type_from_itype(LNK_ConvertTypesToRDI *task, CV_TypeIndex itype)
     // try to resovle forward reference (defn might be missing)
     if (itype >= tpi_range.min) {
       CV_Leaf leaf;
-      cv_deserial_leaf(str8(task->leaf_arr[CV_TypeIndexSource_TPI][itype - tpi_range.min], max_U64), 0, 1, &leaf);
+      cv_read_leaf(str8(task->leaf_arr[CV_TypeIndexSource_TPI][itype - tpi_range.min], max_U64), 0, 1, &leaf);
       if (cv_is_udt(leaf.kind)) {
         CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
         if (udt_info.props & CV_TypeProp_FwdRef) {

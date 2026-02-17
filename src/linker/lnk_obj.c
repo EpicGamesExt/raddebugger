@@ -300,7 +300,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         if (str8_match(name, str8_lit(".debug$S"), 0)) {
           Temp temp = temp_begin(scratch.arena);
           String8   debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
-          CV_DebugS debug_s      = cv_parse_debug_s(temp.arena, debug_s_data);
+          CV_DebugS debug_s      = cv_debug_s_from_data(temp.arena, debug_s_data);
           for EachNode(symbols_n, String8Node, debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first) {
             CV_SymbolList symbol_list = {0};
             cv_parse_symbol_sub_section_capped(scratch.arena, &symbol_list, 0, symbols_n->string, CV_SymbolAlign, 2);
@@ -750,7 +750,7 @@ lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
   {
     for (String8Node *node = raw_debug_s.first; node != 0; node = node->next) {
       // parse & merge sub sections
-      CV_DebugS ds = cv_parse_debug_s(arena, node->string);
+      CV_DebugS ds = cv_debug_s_from_data(arena, node->string);
       cv_debug_s_concat_in_place(&debug_s, &ds);
 
       // make sure there is one string table

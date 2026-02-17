@@ -1336,7 +1336,7 @@ pdb_type_server_make_leaf(PDB_TypeServer *ts, CV_LeafKind kind, String8 data)
 {
   ProfBeginFunction();
 
-  String8      leaf = cv_serialize_raw_leaf(ts->arena, kind, data, PDB_LEAF_ALIGN);
+  String8      leaf = cv_make_leaf(ts->arena, kind, data, PDB_LEAF_ALIGN);
   String8Node *node = str8_list_push(ts->arena, &ts->leaf_list, leaf);
   
   ProfEnd();
@@ -1427,7 +1427,7 @@ pdb_type_server_push(PDB_TypeServer *ts, String8 raw_leaf)
   ProfBeginFunction();
 
   CV_Leaf leaf;
-  cv_deserial_leaf(raw_leaf, 0, 1, &leaf);
+  cv_read_leaf(raw_leaf, 0, 1, &leaf);
 
   if (cv_is_udt(leaf.kind)) {
     CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
@@ -1447,7 +1447,7 @@ THREAD_POOL_TASK_FUNC(pdb_count_udt_task)
   PDB_PushLeafTask *task  = raw_task;
   for EachInRange(leaf_idx, task->ranges[task_id]) {
     CV_Leaf leaf;
-    cv_deserial_leaf(str8(task->leaf_arr[leaf_idx], max_U64), 0, 1, &leaf);
+    cv_read_leaf(str8(task->leaf_arr[leaf_idx], max_U64), 0, 1, &leaf);
 
     if (cv_is_udt(leaf.kind)) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
@@ -1472,7 +1472,7 @@ THREAD_POOL_TASK_FUNC(pdb_push_udt_leaf_task)
 
   for EachInRange(leaf_idx, task->ranges[task_id]) {
     CV_Leaf leaf;
-    cv_deserial_leaf(str8(task->leaf_arr[leaf_idx], max_U64), 0, 1, &leaf);
+    cv_read_leaf(str8(task->leaf_arr[leaf_idx], max_U64), 0, 1, &leaf);
 
     if (cv_is_udt(leaf.kind)) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
@@ -2273,7 +2273,7 @@ THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
   PDB_GsiSerializeSymbolsTask *task        = raw_task;
   CV_SymbolList               *bucket_list = &task->bucket_arr[bucket_idx];
   for (CV_SymbolNode *node = bucket_list->first; node != 0; node = node->next) {
-    task->bucket_size_arr[bucket_idx] += cv_compute_symbol_record_size(&node->data, task->symbol_align);
+    task->bucket_size_arr[bucket_idx] += cv_size_from_symbol(&node->data, task->symbol_align);
   }
 }
 
@@ -2308,7 +2308,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
     sr->offset            = buffer_cursor;
 
     // serialize symbol
-    U64 serial_size = cv_serialize_symbol_to_buffer(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
+    U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
 
     // advance
     sort_idx      += 1;
@@ -2347,7 +2347,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
     sr->offset    = buffer_cursor;
 
     // serialize symbol
-    U64 serial_size = cv_serialize_symbol_to_buffer(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
+    U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
 
     // advance
     sort_idx      += 1;

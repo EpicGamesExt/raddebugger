@@ -27,9 +27,9 @@ lnk_make_debug_s(Arena *arena, CV_SymbolList symbol_list)
 
   CV_DebugS debug_s = {0};
   String8List *symbol_list_ptr = cv_sub_section_ptr_from_debug_s(&debug_s, CV_C13SubSectionKind_Symbols);
-  *symbol_list_ptr = cv_data_from_symbol_list(scratch.arena, symbol_list, CV_SymbolAlign);
+  *symbol_list_ptr = cv_write_symbol_list(scratch.arena, symbol_list, CV_SymbolAlign);
 
-  String8List debug_s_data_list = cv_data_c13_from_debug_s(scratch.arena, &debug_s, 1);
+  String8List debug_s_data_list = cv_data_from_debug_s_c13(scratch.arena, &debug_s, 1);
   String8     debug_s_data      = str8_list_join(arena, &debug_s_data_list, 0);
 
   scratch_end(scratch);

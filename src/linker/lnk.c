@@ -470,7 +470,7 @@ lnk_make_null_obj(Arena *arena)
   // push .debug$T sections with null leaf
   String8 null_debug_data;
   {
-    String8 raw_null_leaf = cv_serialize_raw_leaf(obj_writer->arena, CV_LeafKind_NOTYPE, str8(0,0), 1);
+    String8 raw_null_leaf = cv_make_leaf(obj_writer->arena, CV_LeafKind_NOTYPE, str8(0,0), 1);
 
     String8List srl = {0};
     str8_serial_begin(obj_writer->arena, &srl);
