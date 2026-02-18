@@ -183,8 +183,6 @@ dwt_make_writer(void)
       String8              string_table    = str8_substr(raw_coff, obj_coff_header.string_table_range);
       input = dw_input_from_coff_section_table(scratch.arena, raw_coff, string_table, section_count, section_table);
 
-      t_write_file(str8_lit("dwarf.obj"), raw_coff);
-
       obj_release(&obj);
     }
 

@@ -102,8 +102,7 @@ t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
 
   // Build Launch Options
   OS_ProcessLaunchParams launch_opts = { .path = g_wdir, .inherit_env = 1, .stdout_file = output_redirect, .stderr_file = output_redirect };
-  str8_list_push(scratch.arena, &launch_opts.cmd_line, g_linker);
-  str8_list_push(scratch.arena, &launch_opts.cmd_line, str8_lit("/nologo"));
+  str8_list_push(scratch.arena, &launch_opts.cmd_line, exe_path);
   {
     String8List parsed_cmdline = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline);
     str8_list_concat_in_place(&launch_opts.cmd_line, &parsed_cmdline);
