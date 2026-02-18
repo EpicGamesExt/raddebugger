@@ -218,6 +218,35 @@ dw_writer_tag_end(DW_Writer *writer)
 internal DW_WriterAttrib *
 dw_writer_push_attrib(DW_Writer *writer, DW_AttribKind kind, DW_WriterForm form)
 {
+  // validate attribute-form encoding
+  B32            is_enc_legal    = 0;
+  DW_AttribClass attrib_class = dw_attrib_class_from_attrib(writer->version, DW_Ext_Null, kind);
+  for (DW_AttribClass f = attrib_class; f != 0; f &= f - 1) {
+    DW_AttribClass v = f & -f;
+    switch (v) {
+    case DW_AttribClass_Null:          { is_enc_legal = (form.kind == DW_WriterFormKind_Null);                                        } break;
+    case DW_AttribClass_Undefined:     { is_enc_legal = 0;                                                                            } break;
+    case DW_AttribClass_Address:       { is_enc_legal = (form.kind == DW_WriterFormKind_Address);                                     } break;
+    case DW_AttribClass_Block:         { is_enc_legal = (form.kind == DW_WriterFormKind_Block);                                       } break;
+    case DW_AttribClass_Const:         { is_enc_legal = (form.kind == DW_WriterFormKind_SInt || form.kind == DW_WriterFormKind_UInt); } break;
+    case DW_AttribClass_ExprLoc:       { is_enc_legal = (form.kind == DW_WriterFormKind_ExprLoc);                                     } break;
+    case DW_AttribClass_Flag:          { is_enc_legal = (form.kind == DW_WriterFormKind_Flag);                                        } break;
+    case DW_AttribClass_LinePtr:       { is_enc_legal = (form.kind == DW_WriterFormKind_LinePtr);                                     } break;
+    case DW_AttribClass_LocListPtr:    { is_enc_legal = 0; /* TODO */                                                                 } break;
+    case DW_AttribClass_MacPtr:        { is_enc_legal = (form.kind == DW_WriterFormKind_MacPtr);                                      } break;
+    case DW_AttribClass_RngListPtr:    { is_enc_legal = (form.kind == DW_WriterFormKind_RngListPtr);                                  } break;
+    case DW_AttribClass_Reference:     { is_enc_legal = (form.kind == DW_WriterFormKind_Ref);                                         } break;
+    case DW_AttribClass_String:        { is_enc_legal = (form.kind == DW_WriterFormKind_String);                                      } break;
+    case DW_AttribClass_LocList:       { is_enc_legal = 0; /* TODO */                                                                 } break;
+    case DW_AttribClass_RngList:       { is_enc_legal = 0; /* TODO */                                                                 } break;
+    case DW_AttribClass_StrOffsetsPtr: { is_enc_legal = 0; /* TODO */                                                                 } break;
+    case DW_AttribClass_AddrPtr:       { is_enc_legal = 0; /* TODO */                                                                 } break;
+    default:                           { InvalidPath;                                                                                 } break;
+    }
+    if (is_enc_legal) { break; }
+  }
+  Assert(is_enc_legal);
+
   DW_WriterAttrib *attrib = dw_writer_attrib_chunk_list_push(writer->arena, &writer->attrib_chunk_list, 512);
   attrib->kind        = kind;
   attrib->writer.form = form;
