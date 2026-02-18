@@ -12,6 +12,8 @@
 #include "base/base_inc.h"
 #include "linker/hash_table.h"
 #include "os/os_inc.h"
+#include "rdi/rdi_local.h"
+#include "rdi_make/rdi_make_local.h"
 #include "obj/obj.h"
 #include "coff/coff.h"
 #include "coff/coff_parse.h"
@@ -44,6 +46,8 @@
 #include "base/base_inc.c"
 #include "linker/hash_table.c"
 #include "os/os_inc.c"
+#include "rdi/rdi_local.c"
+#include "rdi_make/rdi_make_local.c"
 #include "obj/obj.c"
 #include "coff/coff.c"
 #include "coff/coff_parse.c"
@@ -69,6 +73,7 @@
 #include "torture.c"
 #include "torture_radlink.c"
 #include "torture_dwarf.c"
+#include "torture_d2r.c"
 
 ////////////////////////////////
 
