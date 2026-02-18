@@ -280,6 +280,16 @@ dw_writer_push_attrib_string(DW_Writer *writer, DW_AttribKind kind, String8 stri
 }
 
 internal DW_WriterAttrib *
+dw_writer_push_attrib_stringf(DW_Writer *writer, DW_AttribKind kind, char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(writer->arena, fmt, args);
+  va_end(args);
+  return dw_writer_push_attrib_string(writer, kind, string);
+}
+
+internal DW_WriterAttrib *
 dw_writer_push_attrib_flag(DW_Writer *writer, DW_AttribKind kind, B8 flag)
 {
   return dw_writer_push_attrib(writer, kind, (DW_WriterForm){ .kind = DW_WriterFormKind_Flag, .flag = flag });

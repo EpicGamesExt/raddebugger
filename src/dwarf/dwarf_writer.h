@@ -189,6 +189,7 @@ internal DW_WriterAttrib * dw_writer_push_attrib_address     (DW_Writer *writer,
 internal DW_WriterAttrib * dw_writer_push_attrib_block       (DW_Writer *writer, DW_AttribKind kind, String8       block       );
 internal DW_WriterAttrib * dw_writer_push_attrib_data        (DW_Writer *writer, DW_AttribKind kind, String8       data        );
 internal DW_WriterAttrib * dw_writer_push_attrib_string      (DW_Writer *writer, DW_AttribKind kind, String8       string      );
+internal DW_WriterAttrib * dw_writer_push_attrib_stringf     (DW_Writer *writer, DW_AttribKind kind, char         *fmt, ...    );
 internal DW_WriterAttrib * dw_writer_push_attrib_flag        (DW_Writer *writer, DW_AttribKind kind, B8            flag        );
 internal DW_WriterAttrib * dw_writer_push_attrib_sint        (DW_Writer *writer, DW_AttribKind kind, S64           sint        );
 internal DW_WriterAttrib * dw_writer_push_attrib_uint        (DW_Writer *writer, DW_AttribKind kind, U64           uint        );
