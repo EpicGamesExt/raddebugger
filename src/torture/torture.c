@@ -7,6 +7,7 @@ global String8 g_wdir;
 global String8 g_out = str8_lit_comp("torture");
 global B32     g_verbose;
 global B32     g_redirect_stdout = 1;
+global B32     g_stop_on_first_fail_or_crash = 1;
 global String8 g_linker;
 
 // tests
@@ -77,6 +78,8 @@ t_run_fail_handler(void *raw_ctx)
 {
   T_RunCtx *ctx = raw_ctx;
   ctx->result.status = T_RunStatus_Crash;
+  fflush(stdout);
+  fflush(stderr);
 }
 
 internal T_RunResult
@@ -236,9 +239,11 @@ t_entry_point(CmdLine *cmdline)
     }
   }
 
-  //
+  g_verbose                     = cmd_line_has_flag(cmdline, str8_lit("verbose"));
+  g_redirect_stdout             = !cmd_line_has_flag(cmdline, str8_lit("print_stdout"));
+  g_stop_on_first_fail_or_crash = !cmd_line_has_flag(cmdline, str8_lit("keep_going"));
+
   // Handle -out
-  //
   {
     CmdLineOpt *out_opt = cmd_line_opt_from_string(cmdline, str8_lit("out"));
     if (out_opt) {
@@ -248,20 +253,6 @@ t_entry_point(CmdLine *cmdline)
         fprintf(stderr, "ERROR: -out invalid number of arguments");
       }
     }
-  }
-
-  //
-  // Handle -verbose
-  //
-  {
-    g_verbose = cmd_line_has_flag(cmdline, str8_lit("verbose"));
-  }
-
-  //
-  // Handle -print_stdout
-  //
-  {
-    g_redirect_stdout = !cmd_line_has_flag(cmdline, str8_lit("print_stdout"));
   }
 
   //
@@ -356,10 +347,15 @@ t_entry_point(CmdLine *cmdline)
       if (result.status == T_RunStatus_Fail) {
         fprintf(stdout, "  ERROR: %s:%d: condition: \"%s\"\n", result.fail_file, result.fail_line, result.fail_cond);
       }
+
+      if (result.status == T_RunStatus_Fail || result.status == T_RunStatus_Crash) {
+        if (g_stop_on_first_fail_or_crash) { goto exit; }
+      }
     }
 
     fprintf(stdout, "*** Passed: %I64u, Failed: %I64u, Crashed: %I64u ***\n", pass_count, fail_count, crash_count);
 
+    exit:;
     if (fail_count + crash_count != 0) {
       fflush(stdout);
       os_abort(fail_count + crash_count);
