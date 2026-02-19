@@ -171,8 +171,7 @@ RDI_PROC RDI_U64 *rdi_line_voffs_from_num(RDI_ParsedSourceLineMap *map, RDI_U32 
 RDI_PROC RDI_U64 rdi_vmap_idx_from_voff(RDI_VMapEntry *vmap, RDI_U64 vmap_count, RDI_U64 voff);
 
 //- name maps
-RDI_PROC RDI_NameMap *rdi_name_map_from_kind(RDI_Parsed *p, RDI_NameMapKind kind);
-RDI_PROC void rdi_name_map_parse(RDI_Parsed* p, RDI_NameMap *mapptr, RDI_ParsedNameMap *out);
+RDI_PROC void rdi_parsed_from_name_map(RDI_Parsed* p, RDI_NameMap *mapptr, RDI_ParsedNameMap *out);
 RDI_PROC RDI_NameMapNode *rdi_name_map_lookup(RDI_Parsed *p, RDI_ParsedNameMap *map, RDI_U8 *str, RDI_U64 len);
 RDI_PROC RDI_U32 *rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node, RDI_U32 *n_out);
 
