@@ -90,6 +90,8 @@ T_BeginTest(d2r_types)
       DeclBaseType(float_type,                   "float",                  Float,        4);
       DeclBaseType(double_type,                  "double",                 Float,        8);
       DeclBaseType(long_double_type,             "long double",            Float,        16);
+      DeclBaseType(int128_type,                  "__int128",               Signed,       16);
+      DeclBaseType(uint128_type,                 "__int128 unsigned",      Unsigned,     16);
       DeclBaseType(float16_type,                 "_Float16",               Float,        2);
       DeclBaseType(bfloat16_type,                "__bf16",                 Float,        2);
       DeclBaseType(float80_type,                 "__float80",              Float,        16);
@@ -162,6 +164,8 @@ T_BeginTest(d2r_types)
   TestBuiltinType("float",               4,  F32);
   TestBuiltinType("double",              8,  F64);
   TestBuiltinType("long double",         16, F128);
+  TestBuiltinType("__int128",            16, S128);
+  TestBuiltinType("__int128 unsigned",   16, U128);
   TestBuiltinType("_Float16",            2,  F16);
   TestBuiltinType("__bf16",              2,  BF16);
   TestBuiltinType("__float80",           16, F80);
