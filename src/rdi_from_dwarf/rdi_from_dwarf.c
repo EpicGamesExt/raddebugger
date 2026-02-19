@@ -1775,7 +1775,7 @@ d2r_convert_types(Arena         *arena,
               } else if (str8_match(name, str8_lit("_Float16"), 0)) {
                 kind = RDI_TypeKind_F16;
               } else if (str8_match(name, str8_lit("__bf16"), 0)) {
-                NotImplemented;
+                kind = RDI_TypeKind_BF16;
               }
               if (kind != RDI_TypeKind_NULL) { break; }
             }
@@ -1818,6 +1818,14 @@ d2r_convert_types(Arena         *arena,
               default: log_user_errorf("unexpected size"); break;
             }
           } break;
+          case DW_ATE_DecimalFloat: {
+            switch (byte_size) {
+            case 4:  kind = RDI_TypeKind_Decimal32; break;
+            case 8:  kind = RDI_TypeKind_Decimal64; break;
+            case 16: kind = RDI_TypeKind_Decimal128; break;
+            default: log_user_errorf("unexpected size"); break;
+            }
+          } break;
           case DW_ATE_ImaginaryFloat: {
             NotImplemented;
           } break;
@@ -1834,9 +1842,6 @@ d2r_convert_types(Arena         *arena,
             NotImplemented;
           } break;
           case DW_ATE_UnsignedFixed: {
-            NotImplemented;
-          } break;
-          case DW_ATE_DecimalFloat: {
             NotImplemented;
           } break;
           case DW_ATE_Ucs: {

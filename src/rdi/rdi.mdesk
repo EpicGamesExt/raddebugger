@@ -705,18 +705,22 @@ RDI_TypeKindTable:
   {S256                 0x0016     32                                            }
   {S512                 0x0017     64                                            }
   {Bool                 0x0018     1                                             }
-  {F16                  0x0019     2                                             }
-  {F32                  0x001A     4                                             }
-  {F32PP                0x001B     4                                             }
-  {F48                  0x001C     6                                             }
-  {F64                  0x001D     8                                             }
-  {F80                  0x001E     10                                            }
-  {F96                  0x001F     12                                            }
-  {F128                 0x0020     16                                            }
-  {ComplexF32           0x0021     8                                             }
-  {ComplexF64           0x0022     16                                            }
-  {ComplexF80           0x0023     20                                            }
-  {ComplexF128          0x0024     32              LastBuiltIn                   }
+  {BF16                 0x0019     2                                             }
+  {F16                  0x001A     2                                             }
+  {F32                  0x001B     4                                             }
+  {F32PP                0x001C     4                                             }
+  {F48                  0x001D     6                                             }
+  {F64                  0x001E     8                                             }
+  {F80                  0x001F     10                                            }
+  {F96                  0x0020     12                                            }
+  {F128                 0x0021     16                                            }
+  {ComplexF32           0x0022     8                                             }
+  {ComplexF64           0x0023     16                                            }
+  {ComplexF80           0x0024     20                                            }
+  {ComplexF128          0x0025     32                                            }
+  {Decimal32            0x0026     4                                             }
+  {Decimal64            0x0027     8                                             }
+  {Decimal128           0x0028    16               LastBuiltIn                   }
   //-
   {Modifier             0x1000     0               FirstConstructed              }
   {Ptr                  0x1001     0                                             }

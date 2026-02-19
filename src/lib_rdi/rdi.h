@@ -298,18 +298,22 @@ RDI_TypeKind_S128                 = 0x0015,
 RDI_TypeKind_S256                 = 0x0016,
 RDI_TypeKind_S512                 = 0x0017,
 RDI_TypeKind_Bool                 = 0x0018,
-RDI_TypeKind_F16                  = 0x0019,
-RDI_TypeKind_F32                  = 0x001A,
-RDI_TypeKind_F32PP                = 0x001B,
-RDI_TypeKind_F48                  = 0x001C,
-RDI_TypeKind_F64                  = 0x001D,
-RDI_TypeKind_F80                  = 0x001E,
-RDI_TypeKind_F96                  = 0x001F,
-RDI_TypeKind_F128                 = 0x0020,
-RDI_TypeKind_ComplexF32           = 0x0021,
-RDI_TypeKind_ComplexF64           = 0x0022,
-RDI_TypeKind_ComplexF80           = 0x0023,
-RDI_TypeKind_ComplexF128          = 0x0024,
+RDI_TypeKind_BF16                 = 0x0019,
+RDI_TypeKind_F16                  = 0x001A,
+RDI_TypeKind_F32                  = 0x001B,
+RDI_TypeKind_F32PP                = 0x001C,
+RDI_TypeKind_F48                  = 0x001D,
+RDI_TypeKind_F64                  = 0x001E,
+RDI_TypeKind_F80                  = 0x001F,
+RDI_TypeKind_F96                  = 0x0020,
+RDI_TypeKind_F128                 = 0x0021,
+RDI_TypeKind_ComplexF32           = 0x0022,
+RDI_TypeKind_ComplexF64           = 0x0023,
+RDI_TypeKind_ComplexF80           = 0x0024,
+RDI_TypeKind_ComplexF128          = 0x0025,
+RDI_TypeKind_Decimal32            = 0x0026,
+RDI_TypeKind_Decimal64            = 0x0027,
+RDI_TypeKind_Decimal128           = 0x0028,
 RDI_TypeKind_Modifier             = 0x1000,
 RDI_TypeKind_Ptr                  = 0x1001,
 RDI_TypeKind_LRef                 = 0x1002,
@@ -331,7 +335,7 @@ RDI_TypeKind_Bitfield             = 0xF000,
 RDI_TypeKind_Variadic             = 0xF001,
 RDI_TypeKind_Count                = 0xF002,
 RDI_TypeKind_FirstBuiltIn         = RDI_TypeKind_Void,
-RDI_TypeKind_LastBuiltIn          = RDI_TypeKind_ComplexF128,
+RDI_TypeKind_LastBuiltIn          = RDI_TypeKind_Decimal128,
 RDI_TypeKind_FirstConstructed     = RDI_TypeKind_Modifier,
 RDI_TypeKind_LastConstructed      = RDI_TypeKind_MemberPtr,
 RDI_TypeKind_FirstUserDefined     = RDI_TypeKind_Struct,
@@ -770,6 +774,7 @@ X(S128)\
 X(S256)\
 X(S512)\
 X(Bool)\
+X(BF16)\
 X(F16)\
 X(F32)\
 X(F32PP)\
@@ -782,6 +787,9 @@ X(ComplexF32)\
 X(ComplexF64)\
 X(ComplexF80)\
 X(ComplexF128)\
+X(Decimal32)\
+X(Decimal64)\
+X(Decimal128)\
 X(Modifier)\
 X(Ptr)\
 X(LRef)\

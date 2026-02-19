@@ -70,33 +70,36 @@ T_BeginTest(d2r_types)
         dw_writer_push_attrib_enum(writer,    DW_AttribKind_Encoding, DW_ATE_##e); \
         dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name,     n);          \
         dw_writer_tag_end(writer);
-      DeclBaseType(char_type,               "char",                   SignedChar,   1);
-      DeclBaseType(unsigned_char_type,      "unsigned char",          UnsignedChar, 1);
-      DeclBaseType(char8_type,              "char8_t",                Utf,          1);
-      DeclBaseType(char16_type,             "char16_t",               Utf,          2);
-      DeclBaseType(char32_type,             "char32_t",               Utf,          4);
-      DeclBaseType(wchar_type,              "wchar_t",                Signed,       4);
-      DeclBaseType(bool_type,               "_Bool",                  Boolean,      1);
-      DeclBaseType(short_type,              "short",                  Signed,       2);
-      DeclBaseType(unsigned_short_type,     "unsigned short",         Unsigned,     2);
-      DeclBaseType(short_unsigned_int_type, "short unsigned int",     Unsigned,     2);
-      DeclBaseType(short_int_type,          "short int",              Signed,       2);
-      DeclBaseType(unsigned_int_type,       "unsigned int",           Unsigned,     4);
-      DeclBaseType(int_type,                "int",                    Signed,       4);
-      DeclBaseType(long_int_type,           "long int",               Signed,       8);
-      DeclBaseType(long_unsigned_int_type,  "long unsigned int",      Unsigned,     8);
-      DeclBaseType(long_long_int_type,      "long long int",          Signed,       8);
-      DeclBaseType(long_long_unsigned_int,  "long long unsigned int", Unsigned,     8);
-      DeclBaseType(float_type,              "float",                  Float,        4);
-      DeclBaseType(double_type,             "double",                 Float,        8);
-      DeclBaseType(long_double_type,        "long double",            Float,        16);
-      DeclBaseType(float16_type,            "_Float16",               Float,        2);
-      DeclBaseType(float80_type,            "__float80",              Float,        16);
-      DeclBaseType(float128_type,           "_float128",              Float,        16);
-      DeclBaseType(complex_float,           "complex float",          ComplexFloat, 8);
-      DeclBaseType(complex_doulbe,          "complex double",         ComplexFloat, 16);
-      DeclBaseType(complex_long_double,     "complex long double",    ComplexFloat, 32);
-      //DeclBaseType("__bf16", Float, 2);
+      DeclBaseType(char_type,                    "char",                   SignedChar,   1);
+      DeclBaseType(unsigned_char_type,           "unsigned char",          UnsignedChar, 1);
+      DeclBaseType(char8_type,                   "char8_t",                Utf,          1);
+      DeclBaseType(char16_type,                  "char16_t",               Utf,          2);
+      DeclBaseType(char32_type,                  "char32_t",               Utf,          4);
+      DeclBaseType(wchar_type,                   "wchar_t",                Signed,       4);
+      DeclBaseType(bool_type,                    "_Bool",                  Boolean,      1);
+      DeclBaseType(short_type,                   "short",                  Signed,       2);
+      DeclBaseType(unsigned_short_type,          "unsigned short",         Unsigned,     2);
+      DeclBaseType(short_unsigned_int_type,      "short unsigned int",     Unsigned,     2);
+      DeclBaseType(short_int_type,               "short int",              Signed,       2);
+      DeclBaseType(unsigned_int_type,            "unsigned int",           Unsigned,     4);
+      DeclBaseType(int_type,                     "int",                    Signed,       4);
+      DeclBaseType(long_int_type,                "long int",               Signed,       8);
+      DeclBaseType(long_unsigned_int_type,       "long unsigned int",      Unsigned,     8);
+      DeclBaseType(long_long_int_type,           "long long int",          Signed,       8);
+      DeclBaseType(long_long_unsigned_int,       "long long unsigned int", Unsigned,     8);
+      DeclBaseType(float_type,                   "float",                  Float,        4);
+      DeclBaseType(double_type,                  "double",                 Float,        8);
+      DeclBaseType(long_double_type,             "long double",            Float,        16);
+      DeclBaseType(float16_type,                 "_Float16",               Float,        2);
+      DeclBaseType(bfloat16_type,                "__bf16",                 Float,        2);
+      DeclBaseType(float80_type,                 "__float80",              Float,        16);
+      DeclBaseType(float128_type,                "_float128",              Float,        16);
+      DeclBaseType(complex_float_type,           "complex float",          ComplexFloat, 8);
+      DeclBaseType(complex_doulbe_type,          "complex double",         ComplexFloat, 16);
+      DeclBaseType(complex_long_double_type,     "complex long double",    ComplexFloat, 32);
+      DeclBaseType(decimal32_type,               "_Decimal32",             DecimalFloat, 4);
+      DeclBaseType(decimal64_type,               "_Decimal64",             DecimalFloat, 8);
+      DeclBaseType(decimal128_type,              "_Decimal128",            DecimalFloat, 16);
 #undef DeclBaseType
 
 #define DeclStdint(n, a)                                                \
@@ -160,16 +163,18 @@ T_BeginTest(d2r_types)
   TestBuiltinType("double",              8,  F64);
   TestBuiltinType("long double",         16, F128);
   TestBuiltinType("_Float16",            2,  F16);
+  TestBuiltinType("__bf16",              2,  BF16);
   TestBuiltinType("__float80",           16, F80);
   TestBuiltinType("_float128",           16, F128);
   TestBuiltinType("complex float",       8,  ComplexF32);
   TestBuiltinType("complex double",      16, ComplexF64);
   TestBuiltinType("complex long double", 32, ComplexF128);
-  // TODO: bfloat16
-  //TestBuiltinType("__bf16",              2,  BF16);
+  TestBuiltinType("_Decimal32",          4,  Decimal32);
+  TestBuiltinType("_Decimal64",          8,  Decimal64);
+  TestBuiltinType("_Decimal128",         16, Decimal128);
 #undef TestBuiltinType
 
-#define TestStdint(n, s, t)                                                                            \
+#define TestStdint(n, s, t)                                                                             \
     do {                                                                                                \
       RDI_TypeNode *td = d2rt_type_from_name(rdi, &types_map, n);                                       \
       T_Ok(td);                                                                                         \

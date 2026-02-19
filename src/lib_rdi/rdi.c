@@ -187,6 +187,7 @@ case RDI_TypeKind_S128: {result = (RDI_U8*)"S128"; *size_out = sizeof("S128")-1;
 case RDI_TypeKind_S256: {result = (RDI_U8*)"S256"; *size_out = sizeof("S256")-1;}break;
 case RDI_TypeKind_S512: {result = (RDI_U8*)"S512"; *size_out = sizeof("S512")-1;}break;
 case RDI_TypeKind_Bool: {result = (RDI_U8*)"Bool"; *size_out = sizeof("Bool")-1;}break;
+case RDI_TypeKind_BF16: {result = (RDI_U8*)"BF16"; *size_out = sizeof("BF16")-1;}break;
 case RDI_TypeKind_F16: {result = (RDI_U8*)"F16"; *size_out = sizeof("F16")-1;}break;
 case RDI_TypeKind_F32: {result = (RDI_U8*)"F32"; *size_out = sizeof("F32")-1;}break;
 case RDI_TypeKind_F32PP: {result = (RDI_U8*)"F32PP"; *size_out = sizeof("F32PP")-1;}break;
@@ -199,6 +200,9 @@ case RDI_TypeKind_ComplexF32: {result = (RDI_U8*)"ComplexF32"; *size_out = sizeo
 case RDI_TypeKind_ComplexF64: {result = (RDI_U8*)"ComplexF64"; *size_out = sizeof("ComplexF64")-1;}break;
 case RDI_TypeKind_ComplexF80: {result = (RDI_U8*)"ComplexF80"; *size_out = sizeof("ComplexF80")-1;}break;
 case RDI_TypeKind_ComplexF128: {result = (RDI_U8*)"ComplexF128"; *size_out = sizeof("ComplexF128")-1;}break;
+case RDI_TypeKind_Decimal32: {result = (RDI_U8*)"Decimal32"; *size_out = sizeof("Decimal32")-1;}break;
+case RDI_TypeKind_Decimal64: {result = (RDI_U8*)"Decimal64"; *size_out = sizeof("Decimal64")-1;}break;
+case RDI_TypeKind_Decimal128: {result = (RDI_U8*)"Decimal128"; *size_out = sizeof("Decimal128")-1;}break;
 case RDI_TypeKind_Modifier: {result = (RDI_U8*)"Modifier"; *size_out = sizeof("Modifier")-1;}break;
 case RDI_TypeKind_Ptr: {result = (RDI_U8*)"Ptr"; *size_out = sizeof("Ptr")-1;}break;
 case RDI_TypeKind_LRef: {result = (RDI_U8*)"LRef"; *size_out = sizeof("LRef")-1;}break;
@@ -253,6 +257,7 @@ case RDI_TypeKind_S128:{result = 16;}break;
 case RDI_TypeKind_S256:{result = 32;}break;
 case RDI_TypeKind_S512:{result = 64;}break;
 case RDI_TypeKind_Bool:{result = 1;}break;
+case RDI_TypeKind_BF16:{result = 2;}break;
 case RDI_TypeKind_F16:{result = 2;}break;
 case RDI_TypeKind_F32:{result = 4;}break;
 case RDI_TypeKind_F32PP:{result = 4;}break;
@@ -265,6 +270,9 @@ case RDI_TypeKind_ComplexF32:{result = 8;}break;
 case RDI_TypeKind_ComplexF64:{result = 16;}break;
 case RDI_TypeKind_ComplexF80:{result = 20;}break;
 case RDI_TypeKind_ComplexF128:{result = 32;}break;
+case RDI_TypeKind_Decimal32:{result = 4;}break;
+case RDI_TypeKind_Decimal64:{result = 8;}break;
+case RDI_TypeKind_Decimal128:{result = 16;}break;
 }
 return result;
 }
