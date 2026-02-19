@@ -281,6 +281,50 @@ memory_is_zero(void *ptr, U64 size){
   return(result);
 }
 
+internal void UBSAN_NO_ALIGN
+memory_write16(void *ptr, U16 v)
+{
+  MemoryCopy(ptr, &v, sizeof(v));
+}
+
+internal void UBSAN_NO_ALIGN
+memory_write32(void *ptr, U32 v)
+{
+  MemoryCopy(ptr, &v, sizeof(v));
+}
+
+internal U8 UBSAN_NO_ALIGN
+memory_read8(void *ptr)
+{
+  U8 result;
+  MemoryCopy(&result, ptr, sizeof(result));
+  return result;
+}
+
+internal U16 UBSAN_NO_ALIGN
+memory_read16(void *ptr)
+{
+  U16 result;
+  MemoryCopy(&result, ptr, sizeof(result));
+  return result;
+}
+
+internal U32 UBSAN_NO_ALIGN
+memory_read32(void *ptr)
+{
+  U32 result;
+  MemoryCopy(&result, ptr, sizeof(result));
+  return result;
+}
+
+internal U64 UBSAN_NO_ALIGN
+memory_read64(void *ptr)
+{
+  U64 result;
+  MemoryCopy(&result, ptr, sizeof(result));
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Text 2D Coordinate/Range Functions
 

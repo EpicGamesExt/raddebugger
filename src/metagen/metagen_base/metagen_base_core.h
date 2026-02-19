@@ -292,7 +292,7 @@ CheckNil(nil,p) ? \
 #  define ASAN_ENABLED 1
 #  define ASAN_NO_ADDR __declspec(no_sanitize_address)
 # else
-#  define ASAN_NO_ADDR
+#  define UBSAN_NO_ALIGN
 # endif
 #elif COMPILER_CLANG
 # if defined(__has_feature)
@@ -300,9 +300,8 @@ CheckNil(nil,p) ? \
 #   define ASAN_ENABLED 1
 #  endif
 # endif
-# define ASAN_NO_ADDR __attribute__((no_sanitize("address")))
-#else
-# define ASAN_NO_ADDR
+# define ASAN_NO_ADDR   __attribute__((no_sanitize("address")))
+# define UBSAN_NO_ALIGN __attribute__((no_sanitize("alignment")))
 #endif
 
 #if ASAN_ENABLED
@@ -840,6 +839,14 @@ internal F32 sign_from_side_F32(Side side);
 //~ rjf: Memory Functions
 
 internal B32 memory_is_zero(void *ptr, U64 size);
+
+internal void memory_write16(void *ptr, U16 v);
+internal void memory_write32(void *ptr, U32 v);
+
+internal U8  memory_read8(void *ptr);
+internal U16 memory_read16(void *ptr);
+internal U32 memory_read32(void *ptr);
+internal U64 memory_read64(void *ptr);
 
 ////////////////////////////////
 //~ rjf: Text 2D Coordinate/Range Functions
