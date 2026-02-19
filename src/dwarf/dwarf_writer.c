@@ -228,7 +228,9 @@ dw_writer_push_attrib(DW_Writer *writer, DW_AttribKind kind, DW_WriterForm form)
     case DW_AttribClass_Undefined:     { is_enc_legal = 0;                                                                            } break;
     case DW_AttribClass_Address:       { is_enc_legal = (form.kind == DW_WriterFormKind_Address);                                     } break;
     case DW_AttribClass_Block:         { is_enc_legal = (form.kind == DW_WriterFormKind_Block);                                       } break;
-    case DW_AttribClass_Const:         { is_enc_legal = (form.kind == DW_WriterFormKind_SInt || form.kind == DW_WriterFormKind_UInt); } break;
+    case DW_AttribClass_Const:         { is_enc_legal = (form.kind == DW_WriterFormKind_SInt ||
+                                                         form.kind == DW_WriterFormKind_UInt ||
+                                                         form.kind == DW_WriterFormKind_Implicit);                                    } break;
     case DW_AttribClass_ExprLoc:       { is_enc_legal = (form.kind == DW_WriterFormKind_ExprLoc);                                     } break;
     case DW_AttribClass_Flag:          { is_enc_legal = (form.kind == DW_WriterFormKind_Flag);                                        } break;
     case DW_AttribClass_LinePtr:       { is_enc_legal = (form.kind == DW_WriterFormKind_LinePtr);                                     } break;
