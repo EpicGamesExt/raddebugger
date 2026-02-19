@@ -1750,6 +1750,7 @@ d2r_convert_types(Arena         *arena,
         
         // convert base type encoding to RDI version
         RDI_TypeKind kind = RDI_TypeKind_NULL;
+        #define X(t,g,s) case s: kind = RDI_TypeKind_##t; break;
         switch (encoding) {
           case DW_ATE_Null:    kind = RDI_TypeKind_NULL; break;
           case DW_ATE_Address: kind = RDI_TypeKind_Void; break;
@@ -1765,23 +1766,13 @@ d2r_convert_types(Arena         *arena,
           } break;
           case DW_ATE_Float: {
             switch (byte_size) {
-              case 2:  kind = RDI_TypeKind_F16;  break;
-              case 4:  kind = RDI_TypeKind_F32;  break;
-              case 6:  kind = RDI_TypeKind_F48;  break;
-              case 8:  kind = RDI_TypeKind_F64;  break;
-              case 16: kind = RDI_TypeKind_F128; break;
+              D2R_ValueType_Float_XList
               default: log_user_errorf("unexpected size"); break; 
             }
           } break;
           case DW_ATE_Signed: {
             switch (byte_size) {
-              case 1:  kind = RDI_TypeKind_S8;   break;
-              case 2:  kind = RDI_TypeKind_S16;  break;
-              case 4:  kind = RDI_TypeKind_S32;  break;
-              case 8:  kind = RDI_TypeKind_S64;  break;
-              case 16: kind = RDI_TypeKind_S128; break;
-              case 32: kind = RDI_TypeKind_S256; break;
-              case 64: kind = RDI_TypeKind_S512; break;
+              D2R_ValueType_Signed_XList
               default: log_user_errorf("unexpected size"); break;
             }
           } break;
@@ -1795,13 +1786,7 @@ d2r_convert_types(Arena         *arena,
           } break;
           case DW_ATE_Unsigned: {
             switch (byte_size) {
-              case 1:  kind = RDI_TypeKind_U8;   break;
-              case 2:  kind = RDI_TypeKind_U16;  break;
-              case 4:  kind = RDI_TypeKind_U32;  break;
-              case 8:  kind = RDI_TypeKind_U64;  break;
-              case 16: kind = RDI_TypeKind_U128; break;
-              case 32: kind = RDI_TypeKind_U256; break;
-              case 64: kind = RDI_TypeKind_U512; break;
+              D2R_ValueType_Unsigned_XList
               default: log_user_errorf("unexpected size"); break;
             }
           } break;
@@ -1845,6 +1830,7 @@ d2r_convert_types(Arena         *arena,
           } break;
           default: log_user_errorf("unexpected base type encoding"); break;
         }
+        #undef X
         
         RDIM_Type *type   = d2r_create_type_from_offset(arena, type_table, tag.info_off);
         type->kind        = RDI_TypeKind_Alias;
