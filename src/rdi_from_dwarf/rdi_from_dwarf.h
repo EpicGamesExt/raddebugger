@@ -241,8 +241,8 @@ internal DW_Tag            d2r_tag_iterator_parent_tag     (D2R_TagIterator *ite
 
 internal void        d2r_flag_converted_tag(DW_TagNode *tag_node);
 internal B8          d2r_is_tag_converted  (DW_TagNode *tag_node);
-internal RDIM_Type * d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, DW_Tag tag, DW_AttribKind kind);
-internal void        d2r_convert_types(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, DW_TagNode *root);
+internal RDIM_Type * d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, Arch arch, DW_Tag tag, DW_AttribKind kind);
+internal void        d2r_convert_types(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, Arch arch, DW_TagNode *root);
 
 ////////////////////////////////
 //~ UDT Conversion

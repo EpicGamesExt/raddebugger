@@ -25,10 +25,13 @@ d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
   String8 exe = t_read_file(scratch.arena, str8_lit("a.exe"));
   Assert(exe.size > 0);
 
+  B32 was_pdb_deleted = os_delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
+  Assert(was_pdb_deleted);
+
   t_invoke(str8_lit("radbin.exe"), str8_lit("-rdi a.exe"), max_U64);
   Assert(g_last_exit_code == 0);
 
-  String8 raw_rdi = t_read_file(scratch.arena, str8_lit("a.rdi"));
+  String8 raw_rdi = t_read_file(arena, str8_lit("a.rdi"));
   Assert(raw_rdi.size > 0);
 
   RDI_Parsed *rdi = push_array(arena, RDI_Parsed, 1);
@@ -39,36 +42,221 @@ d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
   return rdi;
 }
 
+internal RDI_TypeNode *
+d2rt_type_from_name(RDI_Parsed *rdi, RDI_ParsedNameMap *map, char *name)
+{
+  String8 s = str8_cstring(name);
+  RDI_NameMapNode *node = rdi_name_map_lookup(rdi, map, s.str, s.size);
+
+  U32 id_count = 0;
+  U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+
+  if (id_count == 1) {
+    return rdi_element_from_name_idx(rdi, TypeNodes, ids[0]);
+  }
+  return 0;
+}
+
+T_BeginTest(d2r_types)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+  {
+    dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+    dw_writer_push_attrib_stringf(writer, DW_AttribKind_Producer, "Test");
+
+#define DeclBaseType(tt, n, e, s)                                                  \
+        DW_WriterTag *tt = dw_writer_tag_begin(writer, DW_TagKind_BaseType);       \
+        dw_writer_push_attrib_sint(writer,    DW_AttribKind_ByteSize, s);          \
+        dw_writer_push_attrib_enum(writer,    DW_AttribKind_Encoding, DW_ATE_##e); \
+        dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name,     n);          \
+        dw_writer_tag_end(writer);
+      DeclBaseType(char_type,               "char",                   SignedChar,   1);
+      DeclBaseType(unsigned_char_type,      "unsigned char",          UnsignedChar, 1);
+      DeclBaseType(char8_type,              "char8_t",                Utf,          1);
+      DeclBaseType(char16_type,             "char16_t",               Utf,          2);
+      DeclBaseType(char32_type,             "char32_t",               Utf,          4);
+      DeclBaseType(wchar_type,              "wchar_t",                Signed,       4);
+      DeclBaseType(bool_type,               "_Bool",                  Boolean,      1);
+      DeclBaseType(short_type,              "short",                  Signed,       2);
+      DeclBaseType(unsigned_short_type,     "unsigned short",         Unsigned,     2);
+      DeclBaseType(short_unsigned_int_type, "short unsigned int",     Unsigned,     2);
+      DeclBaseType(short_int_type,          "short int",              Signed,       2);
+      DeclBaseType(unsigned_int_type,       "unsigned int",           Unsigned,     4);
+      DeclBaseType(int_type,                "int",                    Signed,       4);
+      DeclBaseType(long_int_type,           "long int",               Signed,       8);
+      DeclBaseType(long_unsigned_int_type,  "long unsigned int",      Unsigned,     8);
+      DeclBaseType(long_long_int_type,      "long long int",          Signed,       8);
+      DeclBaseType(long_long_unsigned_int,  "long long unsigned int", Unsigned,     8);
+      DeclBaseType(float_type,              "float",                  Float,        4);
+      DeclBaseType(double_type,             "double",                 Float,        8);
+      DeclBaseType(long_double_type,        "long double",            Float,        16);
+      DeclBaseType(float16_type,            "_Float16",               Float,        2);
+      DeclBaseType(float80_type,            "__float80",              Float,        16);
+      DeclBaseType(float128_type,           "_float128",              Float,        16);
+      DeclBaseType(complex_float,           "complex float",          ComplexFloat, 8);
+      DeclBaseType(complex_doulbe,          "complex double",         ComplexFloat, 16);
+      DeclBaseType(complex_long_double,     "complex long double",    ComplexFloat, 32);
+      //DeclBaseType("__bf16", Float, 2);
+#undef DeclBaseType
+
+#define DeclStdint(n, a)                                                \
+        do {                                                            \
+          dw_writer_tag_begin(writer, DW_TagKind_Typedef);              \
+          dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, n); \
+          dw_writer_push_attrib_ref(writer,     DW_AttribKind_Type, a); \
+          dw_writer_tag_end(writer);                                    \
+        } while (0)
+      DeclStdint("uint8_t",  unsigned_char_type);
+      DeclStdint("uint16_t", unsigned_short_type);
+      DeclStdint("uint32_t", unsigned_int_type);
+      DeclStdint("uint64_t", long_unsigned_int_type);
+      DeclStdint("int8_t",   char_type);
+      DeclStdint("int16_t",  short_type);
+      DeclStdint("int32_t",  int_type);
+      DeclStdint("int64_t",  long_int_type);
+#undef DeclStdInt
+
+    dw_writer_tag_end(writer);
+  }
+
+  RDI_Parsed  *rdi      = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_NameMap *types_nm = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
+  T_Ok(types_nm);
+
+  RDI_ParsedNameMap types_map = {0};
+  rdi_parsed_from_name_map(rdi, types_nm, &types_map);
+
+#define TestBuiltinType(n, bs, r)                                                                                 \
+    do {                                                                                                          \
+      RDI_TypeNode *alias = d2rt_type_from_name(rdi, &types_map, n);                                              \
+      T_Ok(alias);                                                                                                \
+      T_Ok(alias->kind == RDI_TypeKind_Alias);                                                                    \
+      T_Ok(alias->flags == 0);                                                                                    \
+      T_Ok(alias->byte_size == bs);                                                                               \
+      RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, alias->user_defined.direct_type_idx);        \
+      T_Ok(type);                                                                                                 \
+      T_Ok(type->kind == RDI_TypeKind_##r);                                                                       \
+      T_Ok(type->flags == 0);                                                                                     \
+      T_Ok(type->byte_size == alias->byte_size);                                                                  \
+      T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), str8_lit(Stringify(r)), 0)); \
+    } while (0)
+  TestBuiltinType("char",                1,  Char8);
+  TestBuiltinType("char8_t",             1,  UChar8);
+  TestBuiltinType("char16_t",            2,  UChar16);
+  TestBuiltinType("char32_t",            4,  UChar32);
+  TestBuiltinType("unsigned char",       1,  UChar8);
+  TestBuiltinType("wchar_t",             4,  Char32);
+  TestBuiltinType("_Bool",               1,  Bool);
+  TestBuiltinType("short",               2,  S16);
+  TestBuiltinType("unsigned short",      2,  U16);
+  TestBuiltinType("short unsigned int",  2,  U16);
+  TestBuiltinType("short int",           2,  S16);
+  TestBuiltinType("unsigned int",        4,  U32);
+  TestBuiltinType("int",                 4,  S32);
+  TestBuiltinType("long int",            8,  S64);
+  TestBuiltinType("long unsigned int",   8,  U64);
+  TestBuiltinType("long long int",       8,  S64);
+  TestBuiltinType("float",               4,  F32);
+  TestBuiltinType("double",              8,  F64);
+  TestBuiltinType("long double",         16, F128);
+  TestBuiltinType("_Float16",            2,  F16);
+  TestBuiltinType("__float80",           16, F80);
+  TestBuiltinType("_float128",           16, F128);
+  TestBuiltinType("complex float",       8,  ComplexF32);
+  TestBuiltinType("complex double",      16, ComplexF64);
+  TestBuiltinType("complex long double", 32, ComplexF128);
+  // TODO: bfloat16
+  //TestBuiltinType("__bf16",              2,  BF16);
+#undef TestBuiltinType
+
+#define TestStdint(n, s, t)                                                                            \
+    do {                                                                                                \
+      RDI_TypeNode *td = d2rt_type_from_name(rdi, &types_map, n);                                       \
+      T_Ok(td);                                                                                         \
+      T_Ok(td->kind == RDI_TypeKind_Alias);                                                             \
+      T_Ok(td->flags == 0);                                                                             \
+      T_Ok(td->byte_size == s);                                                                         \
+      RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, td->user_defined.direct_type_idx); \
+      T_Ok(type);                                                                                       \
+      T_Ok(type->kind == RDI_TypeKind_Alias);                                                           \
+      T_Ok(type->flags == 0);                                                                           \
+      T_Ok(type->byte_size = td->byte_size);                                                            \
+      T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), str8_lit(t), 0));  \
+    } while (0)
+  TestStdint("uint8_t",  1, "unsigned char");
+  TestStdint("uint16_t", 2,  "unsigned short");
+  TestStdint("uint32_t", 4,  "unsigned int");
+  TestStdint("uint64_t", 8,  "long unsigned int");
+  TestStdint("int8_t",   1,  "char");
+  TestStdint("int16_t",  2,  "short");
+  TestStdint("int32_t",  4,  "int");
+  TestStdint("int64_t",  8,  "long int");
+#undef TestStdint
+
+  dw_writer_end(&writer);
+}
+T_EndTest;
+
 T_BeginTest(d2r_general)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
-  dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
-  dw_writer_push_attrib_stringf(writer, DW_AttribKind_Producer, "Test");
-    // declare char type
-    DW_WriterTag *char_type = dw_writer_tag_begin(writer, DW_TagKind_BaseType);
-    dw_writer_push_attrib_sint(writer, DW_AttribKind_ByteSize, 1);
-    dw_writer_push_attrib_enum(writer, DW_AttribKind_Encoding, DW_ATE_SignedChar);
-    dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "char");
-    dw_writer_tag_end(writer);
-    // declare function
-    dw_writer_tag_begin(writer, DW_TagKind_SubProgram);
-    dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, 0x140173f9);
-    dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x14017474b);
-    dw_writer_push_attrib_flag(writer, DW_AttribKind_External, 1);
-    dw_writer_push_attrib_flag(writer, DW_AttribKind_Prototyped, 1);
-    dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "FooBar");
-      // declare variable
-      dw_writer_tag_begin(writer, DW_TagKind_Variable);
-      dw_writer_push_attrib_expression(writer, DW_AttribKind_Location, &(DW_ExprEnc)DW_ExprEnc_Op(Reg7), 1);
-      dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "TestLocal");
-      dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, char_type);
+  {
+    dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+    dw_writer_push_attrib_stringf(writer, DW_AttribKind_Producer, "Test");
+      // declare char type
+      DW_WriterTag *char_type = dw_writer_tag_begin(writer, DW_TagKind_BaseType);
+      dw_writer_push_attrib_sint(writer, DW_AttribKind_ByteSize, 1);
+      dw_writer_push_attrib_enum(writer, DW_AttribKind_Encoding, DW_ATE_SignedChar);
+      dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "char");
       dw_writer_tag_end(writer);
-    dw_writer_tag_end(writer);
+      // declare function
+      dw_writer_tag_begin(writer, DW_TagKind_SubProgram);
+      dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, 0x140173f9);
+      dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x14017474b);
+      dw_writer_push_attrib_flag(writer, DW_AttribKind_External, 1);
+      dw_writer_push_attrib_flag(writer, DW_AttribKind_Prototyped, 1);
+      dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "FooBar");
+        // declare variable
+        dw_writer_tag_begin(writer, DW_TagKind_Variable);
+        dw_writer_push_attrib_expressionv(writer, DW_AttribKind_Location, DW_ExprEnc_Op(Reg7));
+        dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "TestLocal");
+        dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, char_type);
+        dw_writer_tag_end(writer);
+      dw_writer_tag_end(writer);
+  }
 
   RDI_Parsed *rdi = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
 
-  RDI_Procedure *proc_name = rdi_procedure_from_name_cstr(rdi, "FooBar");
-  T_Ok(proc_name);
+  RDI_Procedure *proc = rdi_procedure_from_name_cstr(rdi, "FooBar");
+  T_Ok(proc);
+  T_Ok(proc->link_flags == RDI_LinkFlag_External);
+  String8 proc_name = str8_from_rdi_string_idx(rdi, proc->name_string_idx);
+  T_Ok(str8_match(proc_name, str8_lit("FooBar"), 0));
+
+  RDI_Scope *root_scope = rdi_root_scope_from_procedure(rdi, proc);
+  T_Ok(root_scope);
+  T_Ok(root_scope->local_count == 1);
+
+  RDI_Local *test_local = rdi_element_from_name_idx(rdi, Locals, root_scope->local_first + 0);
+  T_Ok(test_local);
+  T_Ok(test_local->kind == RDI_LocalKind_Variable);
+  String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
+  T_Ok(str8_match(test_local_name, str8_lit("TestLocal"), 0));
+
+  RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
+  T_Ok(test_local_type);
+  T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
+  T_Ok(test_local_type->flags == 0);
+  String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
+  T_Ok(str8_match(alias_name, str8_lit("char"), 0));
+
+  RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
+  T_Ok(char_type);
+  T_Ok(char_type->kind == RDI_TypeKind_Char8);
+  T_Ok(char_type->flags == 0);
+  T_Ok(char_type->byte_size == 1);
+  String8 char_type_name = str8_from_rdi_string_idx(rdi, char_type->built_in.name_string_idx);
+  T_Ok(str8_match(char_type_name, str8_lit("Char8"), 0));
 
   dw_writer_end(&writer);
 }
