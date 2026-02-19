@@ -304,11 +304,12 @@ RDI_TypeKind_F32PP                = 0x001B,
 RDI_TypeKind_F48                  = 0x001C,
 RDI_TypeKind_F64                  = 0x001D,
 RDI_TypeKind_F80                  = 0x001E,
-RDI_TypeKind_F128                 = 0x001F,
-RDI_TypeKind_ComplexF32           = 0x0020,
-RDI_TypeKind_ComplexF64           = 0x0021,
-RDI_TypeKind_ComplexF80           = 0x0022,
-RDI_TypeKind_ComplexF128          = 0x0023,
+RDI_TypeKind_F96                  = 0x001F,
+RDI_TypeKind_F128                 = 0x0020,
+RDI_TypeKind_ComplexF32           = 0x0021,
+RDI_TypeKind_ComplexF64           = 0x0022,
+RDI_TypeKind_ComplexF80           = 0x0023,
+RDI_TypeKind_ComplexF128          = 0x0024,
 RDI_TypeKind_Modifier             = 0x1000,
 RDI_TypeKind_Ptr                  = 0x1001,
 RDI_TypeKind_LRef                 = 0x1002,
@@ -775,6 +776,7 @@ X(F32PP)\
 X(F48)\
 X(F64)\
 X(F80)\
+X(F96)\
 X(F128)\
 X(ComplexF32)\
 X(ComplexF64)\

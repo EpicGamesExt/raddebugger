@@ -711,11 +711,12 @@ RDI_TypeKindTable:
   {F48                  0x001C     6                                             }
   {F64                  0x001D     8                                             }
   {F80                  0x001E     10                                            }
-  {F128                 0x001F     16                                            }
-  {ComplexF32           0x0020     8                                             }
-  {ComplexF64           0x0021     16                                            }
-  {ComplexF80           0x0022     20                                            }
-  {ComplexF128          0x0023     32              LastBuiltIn                   }
+  {F96                  0x001F     12                                            }
+  {F128                 0x0020     16                                            }
+  {ComplexF32           0x0021     8                                             }
+  {ComplexF64           0x0022     16                                            }
+  {ComplexF80           0x0023     20                                            }
+  {ComplexF128          0x0024     32              LastBuiltIn                   }
   //-
   {Modifier             0x1000     0               FirstConstructed              }
   {Ptr                  0x1001     0                                             }

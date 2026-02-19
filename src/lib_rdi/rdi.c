@@ -193,6 +193,7 @@ case RDI_TypeKind_F32PP: {result = (RDI_U8*)"F32PP"; *size_out = sizeof("F32PP")
 case RDI_TypeKind_F48: {result = (RDI_U8*)"F48"; *size_out = sizeof("F48")-1;}break;
 case RDI_TypeKind_F64: {result = (RDI_U8*)"F64"; *size_out = sizeof("F64")-1;}break;
 case RDI_TypeKind_F80: {result = (RDI_U8*)"F80"; *size_out = sizeof("F80")-1;}break;
+case RDI_TypeKind_F96: {result = (RDI_U8*)"F96"; *size_out = sizeof("F96")-1;}break;
 case RDI_TypeKind_F128: {result = (RDI_U8*)"F128"; *size_out = sizeof("F128")-1;}break;
 case RDI_TypeKind_ComplexF32: {result = (RDI_U8*)"ComplexF32"; *size_out = sizeof("ComplexF32")-1;}break;
 case RDI_TypeKind_ComplexF64: {result = (RDI_U8*)"ComplexF64"; *size_out = sizeof("ComplexF64")-1;}break;
@@ -258,6 +259,7 @@ case RDI_TypeKind_F32PP:{result = 4;}break;
 case RDI_TypeKind_F48:{result = 6;}break;
 case RDI_TypeKind_F64:{result = 8;}break;
 case RDI_TypeKind_F80:{result = 10;}break;
+case RDI_TypeKind_F96:{result = 12;}break;
 case RDI_TypeKind_F128:{result = 16;}break;
 case RDI_TypeKind_ComplexF32:{result = 8;}break;
 case RDI_TypeKind_ComplexF64:{result = 16;}break;
