@@ -946,183 +946,207 @@ DW_PRINTER(dw_print_line)
     DW_LineVM *vm = dw_line_vm_init(input, &cu_arr[unit_idx]);
 
     // rjf: begin logging line table
-    dw_printf("line_table: // line_table[%I64u]\n{\n", unit_idx);
-
-    // rjf: log line table header
-    DeferLoop(dw_printf("  header:\n  {\n"), dw_printf("  }\n\n"))
+    dw_printf("line_table: // line_table[%I64u]\n", unit_idx);
+    dw_printf("{\n");
+    dw_indent();
     {
-      String8List opcode_length_strings = numeric_str8_list_from_data(unit_temp.arena, 16, str8(vm->header.opcode_lens, vm->header.num_opcode_lens), 1);
-      String8 opcode_lengths_string = str8_list_join(arena, &opcode_length_strings, &(StringJoin){.sep = str8_lit(", ")});
-      dw_printf("    version:                 %u\n",        vm->header.version              );
-      dw_printf("    line_table_size:         %I64u\n",     vm->header.unit_length          );
-      dw_printf("    address_size:            %u\n",        vm->header.address_size         );
-      dw_printf("    segment_selector_size:   %u\n",        vm->header.segment_selector_size);
-      dw_printf("    header_length:           %I64u\n",     vm->header.header_length        );
-      dw_printf("    min_instruction_length:  %u\n",        vm->header.min_inst_len         );
-      dw_printf("    max_ops_for_instruction: %u\n",        vm->header.max_ops_for_inst     );
-      dw_printf("    default_is_stmt:         %u\n",        vm->header.default_is_stmt      );
-      dw_printf("    line_base:               %d\n",        vm->header.line_base            );
-      dw_printf("    line_range:              %u\n",        vm->header.line_range           );
-      dw_printf("    opcode_base:             %u\n",        vm->header.opcode_base          );
-      dw_printf("    opcode_lengths:          %S\n",        opcode_lengths_string           );
-    }
-
-    // rjf: log directory table
-    DeferLoop(dw_printf("  directory_table:\n  {\n"), dw_printf("  }\n\n"))
-    {
-      dw_printf("    // %-4s %-8s\n", "no.", "name");
-      for EachIndex(dir_idx, vm->header.dir_table.count)
+      // rjf: log line table header
+      dw_printf("header:\n");
+      dw_printf("{\n");
+      dw_indent();
       {
-        dw_printf("    {  %-4I64u %S  }\n", dir_idx, vm->header.dir_table.v[dir_idx]);
+        String8List opcode_length_strings = numeric_str8_list_from_data(unit_temp.arena, 16, str8(vm->header.opcode_lens, vm->header.num_opcode_lens), 1);
+        String8 opcode_lengths_string = str8_list_join(arena, &opcode_length_strings, &(StringJoin){.sep = str8_lit(", ")});
+        dw_printf("version:                 %u\n",        vm->header.version              );
+        dw_printf("line_table_size:         %I64u\n",     vm->header.unit_length          );
+        dw_printf("address_size:            %u\n",        vm->header.address_size         );
+        dw_printf("segment_selector_size:   %u\n",        vm->header.segment_selector_size);
+        dw_printf("header_length:           %I64u\n",     vm->header.header_length        );
+        dw_printf("min_instruction_length:  %u\n",        vm->header.min_inst_len         );
+        dw_printf("max_ops_for_instruction: %u\n",        vm->header.max_ops_for_inst     );
+        dw_printf("default_is_stmt:         %u\n",        vm->header.default_is_stmt      );
+        dw_printf("line_base:               %d\n",        vm->header.line_base            );
+        dw_printf("line_range:              %u\n",        vm->header.line_range           );
+        dw_printf("opcode_base:             %u\n",        vm->header.opcode_base          );
+        dw_printf("opcode_lengths:          { %S }\n",    opcode_lengths_string           );
       }
-    }
+      dw_unindent();
+      dw_printf("}\n");
 
-    // rjf: log file table
-    DeferLoop(dw_printf("  file_table:\n  {\n"), dw_printf("  }\n\n"))
-    {
-      dw_printf("    // %-4s %-8s %-8s %-33s %-8s %-8s\n", "no.", "dir_idx", "time", "md5", "size", "name");
-      for EachIndex(file_idx, vm->header.file_table.count)
+      // rjf: log directory table
+      dw_printf("directory_table:\n");
+      dw_printf("{\n");
+      dw_indent();
       {
-        DW_LineFile *file = &vm->header.file_table.v[file_idx];
-        dw_printf("    {  %-4I64u %-8I64u %-8I64u %016I64x-%016I64x %-8I64u %S  }\n",
-              file_idx,
-              file->dir_idx,
-              file->modify_time,
-              file->md5_digest.u64[1],
-              file->md5_digest.u64[0],
-              file->file_size,
-              file->file_name);
+        dw_printf("// %-4s %-30s\n", "no.", "name");
+        dw_printf("// ---- ------------------------------\n");
+        for EachIndex(dir_idx, vm->header.dir_table.count)
+        {
+          dw_printf("{  %-4I64u %S  }\n", dir_idx, vm->header.dir_table.v[dir_idx]);
+        }
       }
-    }
+      dw_unindent();
+      dw_printf("}\n\n");
 
-    // rjf: log opcodes
-    DeferLoop(dw_printf("  line_table:\n  {\n"), dw_printf("  }\n\n"))
-    {
-      dw_printf("    //\n");
-      dw_printf("    // %-16s %-8s %-4s %-5s %-3s %-7s %-16s\n", "Address", "Line", "Col", "File", "ISA", "Discrim", "Flags");
-      dw_printf("    // ---------------- -------- ---- ----- --- ------- ----------------\n");
-
-      for(;;)
+      // rjf: log file table
+      dw_printf("file_table:\n");
+      dw_printf("{\n");
+      dw_indent();
       {
-        U64 global_opcode_off = unit_ranges.v[unit_idx].min + vm->cursor;
-
-        if( ! dw_line_vm_step(vm)) { break; }
-
-        Temp opcode_temp = temp_begin(unit_temp.arena);
-        String8List opcode_fmt = {0};
-
-        // opcode offset
-        str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%08I64x:", global_opcode_off);
-
-        // push opcode id
-        String8 opcode_str = dw_string_from_std_opcode(opcode_temp.arena, vm->opcode);
-        str8_list_push(arena, &opcode_fmt, opcode_str);
-
-        // print operands
-        switch(vm->opcode)
+        dw_printf("// %-4s %-8s %-8s %-33s %-8s %-20s\n", "no.", "dir_idx", "time", "md5", "size", "name");
+        dw_printf("// ---- -------- -------- --------------------------------- -------- --------------------\n");
+        for EachIndex(file_idx, vm->header.file_table.count)
         {
-        default:
+          DW_LineFile *file = &vm->header.file_table.v[file_idx];
+          dw_printf("{  %-4I64u %-8I64u %-8I64u %016I64x-%016I64x %-8I64u %S  }\n",
+                file_idx,
+                file->dir_idx,
+                file->modify_time,
+                file->md5_digest.u64[1],
+                file->md5_digest.u64[0],
+                file->file_size,
+                file->file_name);
+        }
+      }
+      dw_unindent();
+      dw_printf("}\n");
+
+      // rjf: log opcodes
+      dw_printf("line_table:\n");
+      dw_printf("{\n");
+      dw_indent();
+      {
+        dw_printf("//\n");
+        dw_printf("// %-16s %-8s %-4s %-5s %-3s %-7s %-16s\n", "Address", "Line", "Col", "File", "ISA", "Discrim", "Flags");
+        dw_printf("// ---------------- -------- ---- ----- --- ------- ----------------\n");
+
+        for(;;)
         {
-          if(vm->opcode >= vm->header.opcode_base)
+          U64 global_opcode_off = unit_ranges.v[unit_idx].min + vm->cursor;
+
+          if( ! dw_line_vm_step(vm)) { break; }
+
+          Temp opcode_temp = temp_begin(unit_temp.arena);
+          String8List opcode_fmt = {0};
+
+          // opcode offset
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%08I64x:", global_opcode_off);
+
+          // push opcode id
+          String8 opcode_str = dw_string_from_std_opcode(opcode_temp.arena, vm->opcode);
+          str8_list_push(arena, &opcode_fmt, opcode_str);
+
+          // print operands
+          switch(vm->opcode)
           {
-            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance line by %I64d, advance address by %I64d", vm->line_advance, vm->addr_advance);
-          }
-          else
+          default:
           {
-            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "skipping %I64x unknown opcodes", vm->header.opcode_lens[vm->opcode - 1]);
-          }
-        }break;
-        case DW_StdOpcode_Copy:
-        {
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "Line = %I64u, Column = %I64u, Address = %#I64x", vm->state.line, vm->state.column, vm->state.address);
-        }break;
-        case DW_StdOpcode_AdvancePc:
-        {
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance %#I64x ; current address %#I64x", vm->operands[0].u64, vm->state.address);
-        }break;
-        case DW_StdOpcode_AdvanceLine:
-        {
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance %I64d ; current line %I64u", vm->operands[0].s64, vm->state.line);
-        }break;
-        case DW_StdOpcode_SetFile:
-        {
-          DW_LineFile *file = dw_line_vm_find_file(vm, vm->state.file_index);
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64u \"%S\"", vm->state.file_index, dw_path_from_file(opcode_temp.arena, vm->header.dir_table, file));
-        }break;
-        case DW_StdOpcode_SetColumn:
-        {
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64u", vm->state.column);
-        }break;
-        case DW_StdOpcode_NegateStmt:
-        {
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "is_stmt = %u", vm->state.is_stmt);
-        }break;
-        case DW_StdOpcode_SetBasicBlock:
-        {
-        }break;
-        case DW_StdOpcode_ConstAddPc:
-        {
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64d ; address %#I64x", vm->advance, vm->state.address);
-        }break;
-        case DW_StdOpcode_FixedAdvancePc:
-        {
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64u", vm->operands[0].u64);
-        }break;
-        case DW_StdOpcode_SetPrologueEnd:
-        {
-        }break;
-        case DW_StdOpcode_SetEpilogueBegin:
-        {
-        }break;
-        case DW_StdOpcode_SetIsa:
-        {
-          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64u", vm->state.isa);
-        }break;
-        case DW_StdOpcode_ExtendedOpcode:
-        {
-          str8_list_push(opcode_temp.arena, &opcode_fmt, dw_string_from_ext_opcode(opcode_temp.arena, vm->ext_opcode));
-          //str8_list_pushf(opcode_temp.arena, &opcode_fmt, "length: %u", length);
-          switch(vm->ext_opcode)
-          {
-          case DW_ExtOpcode_EndSequence:      {} break;
-          case DW_ExtOpcode_SetAddress:       { str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%#I64x", vm->operands[0].u64); } break;
-          case DW_ExtOpcode_DefineFile:       { str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%S Dir: %I64u, Time: %I64u, Size: %I64u",
-                                                                vm->operands[0].string, vm->operands[1].u64, vm->operands[2].u64, vm->operands[3].u64); } break;
-          case DW_ExtOpcode_SetDiscriminator: { str8_list_pushf(arena, &opcode_fmt, "%I64u", vm->state.discriminator); }break;
-          }
+            if(vm->opcode >= vm->header.opcode_base)
+            {
+              str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance line by %I64d, advance address by %I64d", vm->line_advance, vm->addr_advance);
+            }
+            else
+            {
+              str8_list_pushf(opcode_temp.arena, &opcode_fmt, "skipping %I64x unknown opcodes", vm->header.opcode_lens[vm->opcode - 1]);
+            }
           }break;
+          case DW_StdOpcode_Copy:
+          {
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "Line = %I64u, Column = %I64u, Address = %#I64x", vm->state.line, vm->state.column, vm->state.address);
+          }break;
+          case DW_StdOpcode_AdvancePc:
+          {
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance %#I64x ; current address %#I64x", vm->operands[0].u64, vm->state.address);
+          }break;
+          case DW_StdOpcode_AdvanceLine:
+          {
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance %I64d ; current line %I64u", vm->operands[0].s64, vm->state.line);
+          }break;
+          case DW_StdOpcode_SetFile:
+          {
+            DW_LineFile *file = dw_line_vm_find_file(vm, vm->state.file_index);
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64u \"%S\"", vm->state.file_index, dw_path_from_file(opcode_temp.arena, vm->header.dir_table, file));
+          }break;
+          case DW_StdOpcode_SetColumn:
+          {
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64u", vm->state.column);
+          }break;
+          case DW_StdOpcode_NegateStmt:
+          {
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "is_stmt = %u", vm->state.is_stmt);
+          }break;
+          case DW_StdOpcode_SetBasicBlock:
+          {
+          }break;
+          case DW_StdOpcode_ConstAddPc:
+          {
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64d ; address %#I64x", vm->advance, vm->state.address);
+          }break;
+          case DW_StdOpcode_FixedAdvancePc:
+          {
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64u", vm->operands[0].u64);
+          }break;
+          case DW_StdOpcode_SetPrologueEnd:
+          {
+          }break;
+          case DW_StdOpcode_SetEpilogueBegin:
+          {
+          }break;
+          case DW_StdOpcode_SetIsa:
+          {
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%I64u", vm->state.isa);
+          }break;
+          case DW_StdOpcode_ExtendedOpcode:
+          {
+            str8_list_push(opcode_temp.arena, &opcode_fmt, dw_string_from_ext_opcode(opcode_temp.arena, vm->ext_opcode));
+            //str8_list_pushf(opcode_temp.arena, &opcode_fmt, "length: %u", length);
+            switch(vm->ext_opcode)
+            {
+            case DW_ExtOpcode_EndSequence:      {} break;
+            case DW_ExtOpcode_SetAddress:       { str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%#I64x", vm->operands[0].u64); } break;
+            case DW_ExtOpcode_DefineFile:       { str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%S Dir: %I64u, Time: %I64u, Size: %I64u",
+                                                                  vm->operands[0].string, vm->operands[1].u64, vm->operands[2].u64, vm->operands[3].u64); } break;
+            case DW_ExtOpcode_SetDiscriminator: { str8_list_pushf(arena, &opcode_fmt, "%I64u", vm->state.discriminator); }break;
+            }
+            }break;
+          }
+
+          if(is_verbose)
+          {
+            String8 string = str8_list_join(opcode_temp.arena, &opcode_fmt, &(StringJoin){.sep=str8_lit(" ")});
+            dw_printf("// %S\n", string);
+          }
+
+          if(vm->new_line) {
+            String8List l = {0};
+            if(vm->state.is_stmt)
+            {
+              str8_list_pushf(opcode_temp.arena, &l, "is_stmt");
+            }
+            if(vm->state.end_sequence)
+            {
+              str8_list_pushf(opcode_temp.arena, &l, "end_seq");
+            }
+            String8 flags = str8_list_join(opcode_temp.arena, &l, &(StringJoin){.sep = str8_lit("|")});
+
+            dw_printf("{  %#016I64x %8I64u %4I64u %5I64u %3I64u %7I64u %-16S } %s\n", vm->state.address, vm->state.line, vm->state.column, vm->state.file_index, vm->state.isa, vm->state.discriminator, flags, vm->new_seq ? "// new seq" : "");
+          }
+
+          temp_end(opcode_temp);
         }
 
-        if(is_verbose)
+        if(vm->error.size)
         {
-          String8 string = str8_list_join(opcode_temp.arena, &opcode_fmt, &(StringJoin){.sep=str8_lit(" ")});
-          dw_printf("    // %S\n", string);
+          dw_printf("ERROR: Line VM failed stepping @ 0x%I64x\n", vm->cursor);
         }
-
-        if(vm->new_line) {
-          String8List l = {0};
-          if(vm->state.is_stmt)
-          {
-            str8_list_pushf(opcode_temp.arena, &l, "is_stmt");
-          }
-          if(vm->state.end_sequence)
-          {
-            str8_list_pushf(opcode_temp.arena, &l, "end_seq");
-          }
-          String8 flags = str8_list_join(opcode_temp.arena, &l, &(StringJoin){.sep = str8_lit("|")});
-
-          dw_printf("    {  %#016I64x %8I64u %4I64u %5I64u %3I64u %7I64u %-16S } %s\n", vm->state.address, vm->state.line, vm->state.column, vm->state.file_index, vm->state.isa, vm->state.discriminator, flags, vm->new_seq ? "// new seq" : "");
-        }
-
-        temp_end(opcode_temp);
       }
+      dw_unindent();
+      dw_printf("}\n");
 
-      if(vm->error.size)
-      {
-        dw_printf("ERROR: Line VM failed stepping @ 0x%I64x\n", vm->cursor);
-      }
+      temp_end(unit_temp);
     }
-    temp_end(unit_temp);
+    dw_unindent();
+    dw_printf("}\n");
   }
   scratch_end(scratch);
 }
@@ -2141,6 +2165,7 @@ read_only struct {
   { dw_print_info,    DW_Section_Info   },
   { dw_print_strings, DW_Section_Str    },
   { dw_print_frame,   DW_Section_Frame  },
+  { dw_print_line,    DW_Section_Line   },
 };
 
 internal String8List
