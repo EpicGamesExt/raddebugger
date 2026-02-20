@@ -65,15 +65,16 @@ typedef struct DW_WriterForm
   };
 } DW_WriterForm;
 
+typedef struct DW_WriterXForm
+{
+  DW_WriterForm writer;
+  DW_Form       reader;
+} DW_WriterXForm;
+
 typedef struct DW_WriterAttrib
 {
   DW_AttribKindEnum kind;
-  struct {
-    DW_WriterForm form;
-  } writer;
-  struct {
-    DW_Form form;
-  } reader;
+  DW_WriterXForm    form;
   struct DW_WriterAttrib *next;
 } DW_WriterAttrib;
 
@@ -123,10 +124,58 @@ typedef struct DW_WriterAttribChunkList
   DW_WriterAttribChunk *last;
 } DW_WriterAttribChunkList;
 
+typedef struct DW_WriterLine
+{
+  struct DW_WriterLine *next;
+} DW_WriterLine;
+
+typedef struct DW_WriterFile
+{
+  struct DW_WriterFile *next;
+  String8 path;
+  U64     time_stamp;
+  U64     size;
+  String8 md5;
+  String8 source;
+  U64     file_idx;
+  U64     dir_idx;
+} DW_WriterFile;
+
+typedef struct DW_LineInst
+{
+  DW_StdOpcode opcode;
+  union {
+    U64            advance_pc;
+    S64            advance_line;
+    DW_WriterFile *set_file;
+    U64            set_column;
+    U16            fixed_advance_pc;
+    U64            set_isa;
+    struct {
+      DW_ExtOpcode ext;
+      U64          set_address;
+      U64          set_discriminator;
+    };
+  };
+} DW_LineInst;
+
+typedef struct DW_LineInstNode
+{
+  DW_LineInst v;
+  struct DW_LineInstNode *next;
+} DW_LineInstNode;
+
+typedef struct DW_LineInstList
+{
+  U64            count;
+  DW_LineInstNode *first;
+  DW_LineInstNode *last;
+} DW_LineInstList;
+
 typedef struct DW_WriterFixup
 {
-  struct DW_WriterAttrib *attrib;
-  U8                     *value;
+  DW_WriterTag *tag;
+  U8           *ptr;
 } DW_WriterFixup;
 
 typedef struct DW_WriterFixupNode
@@ -151,38 +200,67 @@ typedef struct DW_WriterSection
 typedef struct DW_Writer
 {
   Arena                   *arena;
+
+  // Compile Unit
+  Arch                     arch;
+  DW_Version               version;
+  DW_Format                format;
+  DW_CompUnitKind          cu_kind;
+  U8                       address_size;
+  U8                       segsel_size;
+
+  // Abbrev
+  U64                      abbrev_base_info_off;
+  HashTable               *abbrev_id_map;
+
+  // Info
   DW_WriterTag            *root;
   DW_WriterTag            *current;
-  Arch                     arch;
-  DW_Format                format;
-  DW_Version               version;
-  DW_CompUnitKind          cu_kind;
-  U64                      address_size;
-  U64                      abbrev_base_info_off;
+
+  // Line
+  struct {
+    U8              min_inst_len;
+    U8              max_ops_per_inst;
+    U8              default_is_stmt;
+    S8              line_base;
+    U8              line_range;
+    U8              opcode_base;
+    U8             *std_op_lens;
+    DW_LineInstList line_insts;
+
+    DW_WriterFile *file;
+    U64            ln;
+    U64            col;
+    U64            addr;
+
+    U64            file_count;
+    DW_WriterFile *first_file;
+    DW_WriterFile *last_file;
+  } line;
+
+  // Emit
   DW_WriterFixupList       fixups;
-  HashTable               *abbrev_id_map;
   DW_WriterSection         sections[DW_Section_Count];
   DW_WriterAttribChunkList attrib_chunk_list;
   DW_WriterTagChunkList    tag_chunk_list;
 } DW_Writer;
 
 ////////////////////////////////
-
-internal DW_IntEnc dw_int_enc_from_sint(S64 v);
-internal DW_IntEnc dw_int_enc_from_uint(U64 v);
-
-internal U64 dw_size_from_sint(S64 v);
-internal U64 dw_size_from_uint(U64 v);
-
-internal void dw_serial_push_form(Arena *arena, String8List *srl, DW_Format format, DW_Version version, U8 address_size, DW_FormKind form_kind, DW_Form form);
-
-////////////////////////////////
+// Writer
 
 internal DW_Writer * dw_writer_begin(DW_Format format, DW_Version version, DW_CompUnitKind cu_kind, Arch arch);
-internal void        dw_writer_end(DW_Writer **writer_ptr);
+internal void        dw_writer_end  (DW_Writer **writer_ptr);
+
+////////////////////////////////
+// Form
+
+internal U64 dw_serial_push_form(Arena *arena, String8List *srl, DW_Version version, DW_Format format, U8 address_size, DW_WriterFixupList *fixups, DW_WriterXForm form);
+
+////////////////////////////////
+// Info
 
 internal DW_WriterTag * dw_writer_tag_begin(DW_Writer *writer, DW_TagKind kind);
-internal void           dw_writer_tag_end(DW_Writer *writer);
+internal void           dw_writer_tag_end  (DW_Writer *writer);
 
 internal DW_WriterAttrib * dw_writer_push_attrib             (DW_Writer *writer, DW_AttribKind kind, DW_WriterForm form        );
 internal DW_WriterAttrib * dw_writer_push_attrib_address     (DW_Writer *writer, DW_AttribKind kind, U64           address     );
@@ -201,13 +279,56 @@ internal DW_WriterAttrib * dw_writer_push_attrib_line_ptr    (DW_Writer *writer,
 internal DW_WriterAttrib * dw_writer_push_attrib_mac_ptr     (DW_Writer *writer, DW_AttribKind kind, void *        mac_ptr     );
 internal DW_WriterAttrib * dw_writer_push_attrib_rng_list_ptr(DW_Writer *writer, DW_AttribKind kind, void *        rng_list_ptr);
 internal DW_WriterAttrib * dw_writer_push_attrib_implicit    (DW_Writer *writer, DW_AttribKind kind, S64           implicit    );
-
 #define dw_writer_push_attrib_expressionv(w, k, ...) dw_writer_push_attrib_expression(w, k, (DW_ExprEnc[]){ __VA_ARGS__ }, ArrayCount(((DW_ExprEnc[]){ __VA_ARGS__ })) )
+
+////////////////////////////////
+// Line
+
+internal void              dw_line_inst_list_push_node(DW_LineInstList *list, DW_LineInstNode *node);
+internal DW_LineInstNode * dw_line_inst_list_push     (Arena *arena, DW_LineInstList *list, DW_LineInst op);
+
+// std opcodes
+#define DW_LNS_copy()               (DW_LineInst){ .opcode = DW_StdOpcode_Copy                                  }
+#define DW_LNS_advance_pc(d)        (DW_LineInst){ .opcode = DW_StdOpcode_AdvancePc,      .advance_pc   = d     }
+#define DW_LNS_advance_line(s)      (DW_LineInst){ .opcode = DW_StdOpcode_AdvanceLine,    .advance_line = s     }
+#define DW_LNS_set_file(f)          (DW_LineInst){ .opcode = DW_StdOpcode_SetFile,        .set_file     = f     }
+#define DW_LNS_set_column(c)        (DW_LineInst){ .opcode = DW_StdOpcode_SetColumn,      .set_column   = c     }
+#define DW_LNS_negate_stmt()        (DW_LineInst){ .opcode = DW_StdOpcode_NegateStmt                            }
+#define DW_LNS_set_basic_block()    (DW_LineInst){ .opcode = DW_StdOpcode_SetBasicBlock                         }
+#define DW_LNS_const_add_pc(a)      (DW_LineInst){ .opcode = DW_StdOpcode_ConstAddPc                            }
+#define DW_LNS_fixed_advance_pc(a)  (DW_LineInst){ .opcode = DW_StdOpcode_FixedAdvancePc, .fixed_advance_pc = a }
+#define DW_LNS_set_prologue_end()   (DW_LineInst){ .opcode = DW_StdOpcode_SetPrologueEnd                        }
+#define DW_LNS_set_epilogue_begin() (DW_LineInst){ .opcode = DW_StdOpcode_SetEpilogueBegin                      }
+#define DW_LNS_set_isa(i)           (DW_LineInst){ .opcode = DW_StdOpcode_SetIsa,          .set_isa = i         }
+
+// ext opcodes
+#define DW_LNE_end_sequence()       (DW_LineInst){ .opcode = DW_StdOpcode_ExtendedOpcode, .ext = DW_ExtOpcode_EndSequence                              }
+#define DW_LNE_set_address(a)       (DW_LineInst){ .opcode = DW_StdOpcode_ExtendedOpcode, .ext = DW_ExtOpcode_SetAddress,       .set_address = a       }
+#define DW_LNE_set_discriminator(d) (DW_LineInst){ .opcode = DW_StdOpcode_ExtendedOpcode, .ext = DW_ExtOpcode_SetDiscriminator, .set_discriminator = d }
+
+internal void            dw_writer_line_emit            (DW_Writer *writer, DW_WriterFile *file, U64 ln, U64 col, U64 addr);
+internal void            dw_writer_line_set_address     (DW_Writer *writer, U64 address);
+internal void            dw_writer_line_set_prologue_end(DW_Writer *writer);
+internal void            dw_writer_line_epilogue_begin  (DW_Writer *writer);
+internal void            dw_writer_line_set_isa         (DW_Writer *writer, U64 isa);
+internal DW_WriterFile * dw_writer_new_file             (DW_Writer *writer, String8 path);
+
+////////////////////////////////
+// Emit
 
 internal void dw_writer_emit(DW_Writer *writer);
 #ifdef OBJ_H
 internal void dw_writer_emit_to_obj(DW_Writer *writer, OBJ *obj);
 #endif
+
+////////////////////////////////
+// Format Helpers
+
+internal DW_IntEnc dw_int_enc_from_sint(S64 v);
+internal DW_IntEnc dw_int_enc_from_uint(U64 v);
+
+internal U64 dw_size_from_sint(S64 v);
+internal U64 dw_size_from_uint(U64 v);
 
 #endif // DWARF_WRITER_H
 

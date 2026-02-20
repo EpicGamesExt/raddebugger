@@ -166,6 +166,7 @@ typedef enum DW_StdOpcodeEnum
 #define X(_N,_ID) DW_StdOpcode_##_N = _ID,
   DW_StdOpcode_XList
 #undef X
+  DW_StdOpcode_Count,
 } DW_StdOpcodeEnum;
 
 #define DW_ExtOpcode_XList  \

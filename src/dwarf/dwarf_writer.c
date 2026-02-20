@@ -49,14 +49,6 @@ dw_size_from_uint(U64 v)
   return 0;
 }
 
-internal void
-dw_lower_form(DW_WriterFormKind  form_kind,
-              DW_WriterForm      form,
-              DW_FormKind       *form_kind_out,
-              DW_Form           *form_out)
-{
-}
-
 internal DW_WriterFixupNode *
 dw_writer_fixup_list_push(Arena *arena, DW_WriterFixupList *list, DW_WriterFixup v)
 {
@@ -110,19 +102,22 @@ dw_writer_begin(DW_Format format, DW_Version version, DW_CompUnitKind cu_kind, A
 {
   Arena *arena = arena_alloc();
   DW_Writer *writer = push_array(arena, DW_Writer, 1);
-  writer->arena         = arena;
-  writer->arch          = arch;
-  writer->format        = format;
-  writer->version       = version;
-  writer->cu_kind       = cu_kind;
-  writer->address_size  = byte_size_from_arch(arch);
-  writer->current       = 0;
-  writer->abbrev_id_map = hash_table_init(arena, 0x2000);
+  writer->arena            = arena;
+  writer->arch             = arch;
+  writer->format           = format;
+  writer->version          = version;
+  writer->cu_kind          = cu_kind;
+  writer->address_size     = byte_size_from_arch(arch);
+  writer->current          = 0;
+  writer->abbrev_id_map    = hash_table_init(arena, 0x2000);
+  writer->line.opcode_base = DW_StdOpcode_Count;
+  writer->line.line_base   = -5;
+  writer->line.line_range  = 14;
   for EachElement(i, writer->sections) {
     str8_serial_begin(arena, &writer->sections[i].srl);
   }
 
-  // write .debug_info header
+  // write info header
   {
     String8List *srl = &writer->sections[DW_Section_Info].srl;
 
@@ -158,6 +153,137 @@ dw_writer_end(DW_Writer **writer_ptr)
   *writer_ptr = 0;
 }
 
+internal U64
+dw_serial_push_form(Arena *arena, String8List *srl, DW_Version version, DW_Format format, U8 address_size, DW_WriterFixupList *fixups, DW_WriterXForm form)
+{
+  U64 start_off = srl->total_size;
+  switch (form.reader.kind) {
+  case DW_Form_Addr: {
+    str8_serial_push_string(arena, srl, form.reader.addr);
+  } break;
+  case DW_Form_Block1:
+  case DW_Form_Block2:
+  case DW_Form_Block4: {
+    str8_serial_push_string(arena, srl, form.reader.block);
+  } break;
+  case DW_Form_Data1:
+  case DW_Form_Data2:
+  case DW_Form_Data4:
+  case DW_Form_Data8: {
+    str8_serial_push_string(arena, srl, form.reader.data);
+  } break;
+  case DW_Form_String: {
+    str8_serial_push_cstr(arena, srl, form.reader.string);
+  } break;
+  case DW_Form_Flag: {
+    str8_serial_push_u8(arena, srl, form.reader.flag);
+  } break;
+  case DW_Form_SData: {
+    dw_serial_push_sleb128(arena, srl, form.reader.sdata);
+  } break;
+  case DW_Form_Strp: {
+    dw_serial_push_uint(arena, srl, format, form.reader.sec_offset);
+  } break;
+  case DW_Form_UData: {
+    dw_serial_push_uleb128(arena, srl, form.reader.udata);
+  } break;
+  case DW_Form_RefAddr: {
+    if (version < DW_Version_3) {
+      Assert(address_size <= sizeof(form.reader.ref));
+      str8_serial_push_string(arena, srl, str8((U8 *)&form.reader.ref, address_size));
+    } else {
+      dw_serial_push_uint(arena, srl, format, form.reader.ref);
+    }
+  } break;
+  case DW_Form_Ref1: {
+    str8_serial_push_u8(arena, srl, (U8)form.reader.ref);
+  } break;
+  case DW_Form_Ref2: {
+    str8_serial_push_u16(arena, srl, (U16)form.reader.ref);
+  } break;
+  case DW_Form_Ref4: {
+    str8_serial_push_u32(arena, srl, (U32)form.reader.ref);
+  } break;
+  case DW_Form_Ref8: {
+    if (form.writer.ref->info_off == 0) {
+      // reserve 8 bytes
+      void *value = str8_serial_push_u64(arena, srl, 0);
+
+      // push fixup
+      dw_writer_fixup_list_push(arena, fixups, (DW_WriterFixup){ .ptr = value, .tag = form.writer.ref });
+    }
+  } break;
+  case DW_Form_RefUData: {
+    dw_serial_push_uleb128(arena, srl, form.reader.ref);
+  } break;
+  case DW_Form_Indirect: {
+    NotImplemented;
+  } break;
+  case DW_Form_SecOffset: {
+    dw_serial_push_uint(arena, srl, format, form.reader.sec_offset);
+  } break;
+  case DW_Form_ExprLoc: {
+    dw_serial_push_uleb128(arena, srl, form.reader.exprloc.size);
+    str8_serial_push_string(arena, srl, form.reader.exprloc);
+  } break;
+  case DW_Form_FlagPresent: {
+  } break;
+  case DW_Form_RefSig8: {
+    NotImplemented;
+  } break;
+  case DW_Form_Strx:
+  case DW_Form_Addrx:
+  case DW_Form_RngListx:
+  case DW_Form_LocListx: {
+    dw_serial_push_uleb128(arena, srl, form.reader.xval);
+  } break;
+  case DW_Form_RefSup4: {
+    NotImplemented;
+  } break;
+  case DW_Form_StrpSup: {
+    dw_serial_push_uint(arena, srl, format, form.reader.strp_sup);
+  } break;
+  case DW_Form_Data16: {
+    str8_serial_push_string(arena, srl, form.reader.data);
+  } break;
+  case DW_Form_LineStrp: {
+    dw_serial_push_uint(arena, srl, format, form.reader.sec_offset);
+  } break;
+  case DW_Form_ImplicitConst: {
+    // value is stored in the abbrev entry
+  } break;
+  case DW_Form_RefSup8: {
+    NotImplemented;
+  } break;
+  case DW_Form_Strx1:
+  case DW_Form_Addrx1: {
+    str8_serial_push_u8(arena, srl, (U8)form.reader.xval);
+  } break;
+  case DW_Form_Strx2:
+  case DW_Form_Addrx2: {
+    str8_serial_push_u16(arena, srl, (U16)form.reader.xval);
+  } break;
+  case DW_Form_Strx3:
+  case DW_Form_Addrx3: {
+    str8_serial_push_string(arena, srl, str8((U8 *)&form.reader.xval, 3));
+  } break;
+  case DW_Form_Strx4:
+  case DW_Form_Addrx4: {
+    str8_serial_push_u32(arena, srl, (U32)form.reader.xval);
+  } break;
+
+  case DW_Form_GNU_StrpAlt: {
+    dw_serial_push_uint(arena, srl, format, form.reader.sec_offset);
+  } break;
+  case DW_Form_GNU_RefAlt: {
+    dw_serial_push_uint(arena, srl, format, form.reader.ref);
+  } break;
+
+  default: InvalidPath; break;
+  }
+  return srl->total_size - start_off;
+}
+
 internal String8
 dw_make_abbrev_entry(Arena *arena, DW_WriterTag *tag)
 {
@@ -174,9 +300,9 @@ dw_make_abbrev_entry(Arena *arena, DW_WriterTag *tag)
   // attrib abbrev
   for EachNode(attrib, DW_WriterAttrib, tag->first_attrib) {
     dw_serial_push_uleb128(scratch.arena, &srl, attrib->kind);
-    dw_serial_push_uleb128(scratch.arena, &srl, attrib->reader.form.kind);
-    if (attrib->reader.form.kind == DW_Form_ImplicitConst) {
-      dw_serial_push_sleb128(scratch.arena, &srl, attrib->reader.form.implicit_const);
+    dw_serial_push_uleb128(scratch.arena, &srl, attrib->form.reader.kind);
+    if (attrib->form.reader.kind == DW_Form_ImplicitConst) {
+      dw_serial_push_sleb128(scratch.arena, &srl, attrib->form.reader.implicit_const);
     }
   }
 
@@ -251,7 +377,7 @@ dw_writer_push_attrib(DW_Writer *writer, DW_AttribKind kind, DW_WriterForm form)
 
   DW_WriterAttrib *attrib = dw_writer_attrib_chunk_list_push(writer->arena, &writer->attrib_chunk_list, 512);
   attrib->kind        = kind;
-  attrib->writer.form = form;
+  attrib->form.writer = form;
   SLLQueuePush(writer->current->first_attrib, writer->current->last_attrib, attrib);
   writer->current->attrib_count += 1;
   return attrib;
@@ -359,67 +485,229 @@ dw_writer_push_attrib_implicit(DW_Writer *writer, DW_AttribKind kind, S64 implic
 }
 
 internal void
+dw_line_inst_list_push_node(DW_LineInstList *list, DW_LineInstNode *node)
+{
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
+}
+
+internal DW_LineInstNode *
+dw_line_inst_list_push(Arena *arena, DW_LineInstList *list, DW_LineInst v)
+{
+  DW_LineInstNode *node = push_array(arena, DW_LineInstNode, 1);
+  node->v = v;
+  dw_line_inst_list_push_node(list, node);
+  return node;
+}
+
+internal String8
+dw_data_from_line_insts(Arena *arena, U8 address_size, DW_LineInstList insts)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List srl = {0};
+  str8_serial_begin(scratch.arena, &srl);
+
+  for EachNode(inst_n, DW_LineInstNode, insts.first) {
+    DW_LineInst *inst = &inst_n->v;
+
+    str8_serial_push_struct(scratch.arena, &srl, &inst->opcode);
+    switch (inst->opcode) {
+    case DW_StdOpcode_Copy: {} break;
+    case DW_StdOpcode_AdvancePc: {
+      dw_serial_push_uleb128(arena, &srl, inst->advance_pc);
+    } break;
+    case DW_StdOpcode_AdvanceLine: {
+      dw_serial_push_sleb128(arena, &srl, inst->advance_line);
+    } break;
+    case DW_StdOpcode_SetFile: {
+      dw_serial_push_uleb128(arena, &srl, inst->set_file->file_idx);
+    } break;
+    case DW_StdOpcode_SetColumn: {
+      dw_serial_push_uleb128(arena, &srl, inst->set_column);
+    } break;
+    case DW_StdOpcode_NegateStmt: {} break;
+    case DW_StdOpcode_SetBasicBlock: {} break;
+    case DW_StdOpcode_ConstAddPc: {} break;
+    case DW_StdOpcode_FixedAdvancePc: {
+      str8_serial_push_u16(arena, &srl, inst->fixed_advance_pc);
+    } break;
+    case DW_StdOpcode_SetPrologueEnd: {} break;
+    case DW_StdOpcode_SetEpilogueBegin: {} break;
+    case DW_StdOpcode_SetIsa: {} break;
+    case DW_StdOpcode_ExtendedOpcode: {
+      // get ext size
+      U64 ext_size = 0;
+      switch (inst->ext) {
+      case DW_ExtOpcode_EndSequence: { ext_size = 0; } break;
+      case DW_ExtOpcode_SetAddress:  { ext_size = address_size; } break;
+      case DW_ExtOpcode_DefineFile: { 
+        NotImplemented;
+      } break;
+      case DW_ExtOpcode_SetDiscriminator: {
+        ext_size = dw_size_from_uleb128(inst->set_discriminator);
+      } break;
+      default: { InvalidPath; } break;
+      }
+
+      // write ext header
+      dw_serial_push_uleb128(arena, &srl, ext_size);
+      str8_serial_push_struct(arena, &srl, &inst->ext);
+
+      // write ext operands
+      switch (inst->ext) {
+      case DW_ExtOpcode_EndSequence: {} break;
+      case DW_ExtOpcode_SetAddress: {
+        dw_serial_push_uleb128(arena, &srl, inst->set_address);
+      } break;
+      case DW_ExtOpcode_DefineFile: {
+        NotImplemented;
+      } break;
+      case DW_ExtOpcode_SetDiscriminator: {
+        dw_serial_push_uleb128(arena, &srl, inst->set_discriminator);
+      } break;
+      default: { InvalidPath; } break;
+      }
+    } break;
+    // special opcode
+    default: {} break;
+    }
+  }
+
+  String8 data = str8_serial_end(arena, &srl);
+  scratch_end(scratch);
+  return data;
+}
+
+internal void
+dw_writer_line_emit(DW_Writer *writer, DW_WriterFile *file, U64 ln, U64 col, U64 addr)
+{
+  if (writer->line.last_file != file) {
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_file(file));
+  }
+
+  Assert(addr <= max_S64);
+  S64 addr_delta = (S64)addr - (S64)writer->line.addr;
+  if (addr_delta != 0) {
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_pc(addr_delta));
+  }
+
+  S64 ln_delta = (S64)ln - (S64)writer->line.ln;
+  if (ln_delta != 0) {
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_line(ln_delta));
+  }
+
+  S64 col_delta = (S64)col - (S64)writer->line.col;
+  if (col_delta != 0) {
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_column(col_delta));
+  }
+
+  // append row
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_copy());
+
+  writer->line.file = file;
+  writer->line.ln   = ln;
+  writer->line.col  = col;
+  writer->line.addr = addr;
+}
+
+internal void
+dw_writer_line_set_address(DW_Writer *writer, U64 address)
+{
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_set_address(address));
+}
+
+internal void
+dw_writer_line_set_prologue_end(DW_Writer *writer)
+{
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_prologue_end());
+}
+
+internal void
+dw_writer_line_epilogue_begin(DW_Writer *writer)
+{
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_epilogue_begin());
+}
+
+internal void
+dw_writer_line_set_isa(DW_Writer *writer, U64 isa)
+{
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_isa(isa));
+}
+
+internal DW_WriterFile *
+dw_writer_new_file(DW_Writer *writer, String8 path)
+{
+  DW_WriterFile *file = push_array(writer->arena, DW_WriterFile, 1);
+  file->path     = path;
+  file->file_idx = writer->line.file_count;
+
+  SLLQueuePush(writer->line.first_file, writer->line.last_file, file);
+  writer->line.file_count += 1;
+  return file;
+}
+
+internal void
 dw_lower_attrib_forms(DW_Writer *writer, DW_WriterTag *tag)
 {
   for EachNode(attrib, DW_WriterAttrib, tag->first_attrib) {
-    switch (attrib->writer.form.kind) {
+    switch (attrib->form.writer.kind) {
     case DW_WriterFormKind_Null: {} break;
     case DW_WriterFormKind_Flag: {
-      attrib->reader.form.kind = DW_Form_Flag;
-      attrib->reader.form.flag = attrib->writer.form.flag;
+      attrib->form.reader.kind = DW_Form_Flag;
+      attrib->form.reader.flag = attrib->form.writer.flag;
     } break;
     case DW_WriterFormKind_SInt: {
-      switch (dw_int_enc_from_sint(attrib->writer.form.sint)) {
-      case DW_IntEnc_Null: attrib->reader.form.kind = 0; break;
+      switch (dw_int_enc_from_sint(attrib->form.writer.sint)) {
+      case DW_IntEnc_Null: attrib->form.reader.kind = 0; break;
       case DW_IntEnc_1Byte: {
-        attrib->reader.form.kind = DW_Form_Data1;
-        attrib->reader.form.data = str8((U8 *)&attrib->writer.form.sint, sizeof(S8));
+        attrib->form.reader.kind = DW_Form_Data1;
+        attrib->form.reader.data = str8((U8 *)&attrib->form.writer.sint, sizeof(S8));
       } break;
       case DW_IntEnc_2Byte: {
-        attrib->reader.form.kind = DW_Form_Data2;
-        attrib->reader.form.data = str8((U8 *)&attrib->writer.form.sint, sizeof(S16));
+        attrib->form.reader.kind = DW_Form_Data2;
+        attrib->form.reader.data = str8((U8 *)&attrib->form.writer.sint, sizeof(S16));
       } break;
       case DW_IntEnc_4Byte: {
-        attrib->reader.form.kind = DW_Form_Data4;
-        attrib->reader.form.data = str8((U8 *)&attrib->writer.form.sint, sizeof(U32));
+        attrib->form.reader.kind = DW_Form_Data4;
+        attrib->form.reader.data = str8((U8 *)&attrib->form.writer.sint, sizeof(U32));
       } break;
       case DW_IntEnc_LEB128: {
-        attrib->reader.form.kind  = DW_Form_SData;
-        attrib->reader.form.sdata = attrib->writer.form.sint;
+        attrib->form.reader.kind  = DW_Form_SData;
+        attrib->form.reader.sdata = attrib->form.writer.sint;
       } break;
       default: InvalidPath; break;
       }
     } break;
     case DW_WriterFormKind_UInt: {
-      attrib->reader.form.kind  = DW_Form_UData;
-      attrib->reader.form.udata = attrib->writer.form.uint;
+      attrib->form.reader.kind  = DW_Form_UData;
+      attrib->form.reader.udata = attrib->form.writer.uint;
     } break;
     case DW_WriterFormKind_Address: {
-      Assert(writer->address_size <= sizeof(attrib->writer.form.address));
-      attrib->reader.form.kind = DW_Form_Addr;
-      attrib->reader.form.addr = push_str8_copy(writer->arena, str8((U8 *)&attrib->writer.form.address, writer->address_size));
+      Assert(writer->address_size <= sizeof(attrib->form.writer.address));
+      attrib->form.reader.kind = DW_Form_Addr;
+      attrib->form.reader.addr = push_str8_copy(writer->arena, str8((U8 *)&attrib->form.writer.address, writer->address_size));
     } break;
     case DW_WriterFormKind_Ref: {
-      if (attrib->writer.form.ref->info_off == 0) {
-        attrib->reader.form.kind = DW_Form_Ref8;
+      if (attrib->form.writer.ref->info_off == 0) {
+        attrib->form.reader.kind = DW_Form_Ref8;
       } else {
-        switch (dw_int_enc_from_uint(attrib->writer.form.ref->info_off)) {
+        switch (dw_int_enc_from_uint(attrib->form.writer.ref->info_off)) {
         case DW_IntEnc_Null: break;
         case DW_IntEnc_1Byte: {
-          attrib->reader.form.kind = DW_Form_Ref1;
-          attrib->reader.form.ref  = (U8)attrib->writer.form.ref->info_off;
+          attrib->form.reader.kind = DW_Form_Ref1;
+          attrib->form.reader.ref  = (U8)attrib->form.writer.ref->info_off;
         } break;
         case DW_IntEnc_2Byte: {
-          attrib->reader.form.kind = DW_Form_Ref2;
-          attrib->reader.form.ref  = (U16)attrib->writer.form.ref->info_off;
+          attrib->form.reader.kind = DW_Form_Ref2;
+          attrib->form.reader.ref  = (U16)attrib->form.writer.ref->info_off;
         } break;
         case DW_IntEnc_4Byte: {
-          attrib->reader.form.kind = DW_Form_Ref4;
-          attrib->reader.form.ref  = (U32)attrib->writer.form.ref->info_off;
+          attrib->form.reader.kind = DW_Form_Ref4;
+          attrib->form.reader.ref  = (U32)attrib->form.writer.ref->info_off;
         } break;
         case DW_IntEnc_LEB128: {
-          attrib->reader.form.kind = DW_Form_RefUData;
-          attrib->reader.form.ref  = attrib->writer.form.ref->info_off;
+          attrib->form.reader.kind = DW_Form_RefUData;
+          attrib->form.reader.ref  = attrib->form.writer.ref->info_off;
         } break;
         default: InvalidPath; break;
         }
@@ -438,26 +726,26 @@ dw_lower_attrib_forms(DW_Writer *writer, DW_WriterTag *tag)
       NotImplemented;
     } break;
     case DW_WriterFormKind_Block: {
-      attrib->reader.form.block = attrib->writer.form.block;
-      switch (attrib->writer.form.block.size) {
+      attrib->form.reader.block = attrib->form.writer.block;
+      switch (attrib->form.writer.block.size) {
       case 0 : break;
-      case 1 : attrib->reader.form.kind = DW_Form_Block1; break;
-      case 2 : attrib->reader.form.kind = DW_Form_Block2; break;
-      case 4 : attrib->reader.form.kind = DW_Form_Block4; break;
-      default: attrib->reader.form.kind = DW_Form_Block;  break;
+      case 1 : attrib->form.reader.kind = DW_Form_Block1; break;
+      case 2 : attrib->form.reader.kind = DW_Form_Block2; break;
+      case 4 : attrib->form.reader.kind = DW_Form_Block4; break;
+      default: attrib->form.reader.kind = DW_Form_Block;  break;
       }
     } break;
     case DW_WriterFormKind_String: {
-      attrib->reader.form.kind   = DW_Form_String;
-      attrib->reader.form.string = attrib->writer.form.string;
+      attrib->form.reader.kind   = DW_Form_String;
+      attrib->form.reader.string = attrib->form.writer.string;
     } break;
     case DW_WriterFormKind_ExprLoc: {
-      attrib->reader.form.kind    = DW_Form_ExprLoc;
-      attrib->reader.form.exprloc = attrib->writer.form.exprloc;
+      attrib->form.reader.kind    = DW_Form_ExprLoc;
+      attrib->form.reader.exprloc = attrib->form.writer.exprloc;
     } break;
     case DW_WriterFormKind_Implicit: {
-      attrib->reader.form.kind           = DW_Form_ImplicitConst;
-      attrib->reader.form.implicit_const = attrib->writer.form.implicit;
+      attrib->form.reader.kind           = DW_Form_ImplicitConst;
+      attrib->form.reader.implicit_const = attrib->form.writer.implicit;
     } break;
     default: { InvalidPath; } break;
     }
@@ -500,74 +788,74 @@ dw_writer_emit_tag(DW_Writer *writer, DW_WriterTag *tag)
   {
     String8List *debug_info = &writer->sections[DW_Section_Info].srl;
     for EachNode(attrib, DW_WriterAttrib, tag->first_attrib) {
-      switch (attrib->reader.form.kind) {
+      switch (attrib->form.reader.kind) {
       case DW_Form_Addr: {
-        str8_serial_push_string(writer->arena, debug_info, attrib->reader.form.addr);
+        str8_serial_push_string(writer->arena, debug_info, attrib->form.reader.addr);
       } break;
       case DW_Form_Block1:
       case DW_Form_Block2:
       case DW_Form_Block4: {
-        str8_serial_push_string(writer->arena, debug_info, attrib->reader.form.block);
+        str8_serial_push_string(writer->arena, debug_info, attrib->form.reader.block);
       } break;
       case DW_Form_Data1:
       case DW_Form_Data2:
       case DW_Form_Data4:
       case DW_Form_Data8: {
-        str8_serial_push_string(writer->arena, debug_info, attrib->reader.form.data);
+        str8_serial_push_string(writer->arena, debug_info, attrib->form.reader.data);
       } break;
       case DW_Form_String: {
-        str8_serial_push_cstr(writer->arena, debug_info, attrib->reader.form.string);
+        str8_serial_push_cstr(writer->arena, debug_info, attrib->form.reader.string);
       } break;
       case DW_Form_Flag: {
-        str8_serial_push_u8(writer->arena, debug_info, attrib->reader.form.flag);
+        str8_serial_push_u8(writer->arena, debug_info, attrib->form.reader.flag);
       } break;
       case DW_Form_SData: {
-        dw_serial_push_sleb128(writer->arena, debug_info, attrib->reader.form.sdata);
+        dw_serial_push_sleb128(writer->arena, debug_info, attrib->form.reader.sdata);
       } break;
       case DW_Form_Strp: {
-        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->reader.form.sec_offset);
+        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->form.reader.sec_offset);
       } break;
       case DW_Form_UData: {
-        dw_serial_push_uleb128(writer->arena, debug_info, attrib->reader.form.udata);
+        dw_serial_push_uleb128(writer->arena, debug_info, attrib->form.reader.udata);
       } break;
       case DW_Form_RefAddr: {
         if (writer->version < DW_Version_3) {
-          Assert(writer->address_size <= sizeof(attrib->reader.form.ref));
-          str8_serial_push_string(writer->arena, debug_info, str8((U8 *)&attrib->reader.form.ref, writer->address_size));
+          Assert(writer->address_size <= sizeof(attrib->form.reader.ref));
+          str8_serial_push_string(writer->arena, debug_info, str8((U8 *)&attrib->form.reader.ref, writer->address_size));
         } else {
-          dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->reader.form.ref);
+          dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->form.reader.ref);
         }
       } break;
       case DW_Form_Ref1: {
-        str8_serial_push_u8(writer->arena, debug_info, (U8)attrib->reader.form.ref);
+        str8_serial_push_u8(writer->arena, debug_info, (U8)attrib->form.reader.ref);
       } break;
       case DW_Form_Ref2: {
-        str8_serial_push_u16(writer->arena, debug_info, (U16)attrib->reader.form.ref);
+        str8_serial_push_u16(writer->arena, debug_info, (U16)attrib->form.reader.ref);
       } break;
       case DW_Form_Ref4: {
-        str8_serial_push_u32(writer->arena, debug_info, (U32)attrib->reader.form.ref);
+        str8_serial_push_u32(writer->arena, debug_info, (U32)attrib->form.reader.ref);
       } break;
       case DW_Form_Ref8: {
-        if (attrib->writer.form.ref->info_off == 0) {
+        if (attrib->form.writer.ref->info_off == 0) {
           // reserve 8 bytes
           void *value = str8_serial_push_u64(writer->arena, debug_info, 0);
 
           // push fixup
-          dw_writer_fixup_list_push(writer->arena, &writer->fixups, (DW_WriterFixup){ .value = value, .attrib = attrib });
+          dw_writer_fixup_list_push(writer->arena, &writer->fixups, (DW_WriterFixup){ .tag = attrib->form.writer.ref, .ptr = value });
         }
       } break;
       case DW_Form_RefUData: {
-        dw_serial_push_uleb128(writer->arena, debug_info, attrib->reader.form.ref);
+        dw_serial_push_uleb128(writer->arena, debug_info, attrib->form.reader.ref);
       } break;
       case DW_Form_Indirect: {
         NotImplemented;
       } break;
       case DW_Form_SecOffset: {
-        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->reader.form.sec_offset);
+        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->form.reader.sec_offset);
       } break;
       case DW_Form_ExprLoc: {
-        dw_serial_push_uleb128(writer->arena, debug_info, attrib->reader.form.exprloc.size);
-        str8_serial_push_string(writer->arena, debug_info, attrib->reader.form.exprloc);
+        dw_serial_push_uleb128(writer->arena, debug_info, attrib->form.reader.exprloc.size);
+        str8_serial_push_string(writer->arena, debug_info, attrib->form.reader.exprloc);
       } break;
       case DW_Form_FlagPresent: {
       } break;
@@ -578,19 +866,19 @@ dw_writer_emit_tag(DW_Writer *writer, DW_WriterTag *tag)
       case DW_Form_Addrx:
       case DW_Form_RngListx:
       case DW_Form_LocListx: {
-        dw_serial_push_uleb128(writer->arena, debug_info, attrib->reader.form.xval);
+        dw_serial_push_uleb128(writer->arena, debug_info, attrib->form.reader.xval);
       } break;
       case DW_Form_RefSup4: {
         NotImplemented;
       } break;
       case DW_Form_StrpSup: {
-        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->reader.form.strp_sup);
+        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->form.reader.strp_sup);
       } break;
       case DW_Form_Data16: {
-        str8_serial_push_string(writer->arena, debug_info, attrib->reader.form.data);
+        str8_serial_push_string(writer->arena, debug_info, attrib->form.reader.data);
       } break;
       case DW_Form_LineStrp: {
-        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->reader.form.sec_offset);
+        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->form.reader.sec_offset);
       } break;
       case DW_Form_ImplicitConst: {
         // value is stored in the abbrev entry
@@ -600,26 +888,26 @@ dw_writer_emit_tag(DW_Writer *writer, DW_WriterTag *tag)
       } break;
       case DW_Form_Strx1:
       case DW_Form_Addrx1: {
-        str8_serial_push_u8(writer->arena, debug_info, (U8)attrib->reader.form.xval);
+        str8_serial_push_u8(writer->arena, debug_info, (U8)attrib->form.reader.xval);
       } break;
       case DW_Form_Strx2:
       case DW_Form_Addrx2: {
-        str8_serial_push_u16(writer->arena, debug_info, (U16)attrib->reader.form.xval);
+        str8_serial_push_u16(writer->arena, debug_info, (U16)attrib->form.reader.xval);
       } break;
       case DW_Form_Strx3:
       case DW_Form_Addrx3: {
-        str8_serial_push_string(writer->arena, debug_info, str8((U8 *)&attrib->reader.form.xval, 3));
+        str8_serial_push_string(writer->arena, debug_info, str8((U8 *)&attrib->form.reader.xval, 3));
       } break;
       case DW_Form_Strx4:
       case DW_Form_Addrx4: {
-        str8_serial_push_u32(writer->arena, debug_info, (U32)attrib->reader.form.xval);
+        str8_serial_push_u32(writer->arena, debug_info, (U32)attrib->form.reader.xval);
       } break;
 
       case DW_Form_GNU_StrpAlt: {
-        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->reader.form.sec_offset);
+        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->form.reader.sec_offset);
       } break;
       case DW_Form_GNU_RefAlt: {
-        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->reader.form.ref);
+        dw_serial_push_uint(writer->arena, debug_info, writer->format, attrib->form.reader.ref);
       } break;
 
       default: InvalidPath; break;
@@ -641,36 +929,245 @@ dw_writer_emit_tag(DW_Writer *writer, DW_WriterTag *tag)
 internal void
 dw_writer_emit(DW_Writer *writer)
 {
-  dw_writer_emit_tag(writer, writer->root);
+  // line
+  {
+    // push line table terminator
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_end_sequence());
 
-  // null terminate .debug_abbrev
-  dw_serial_push_uleb128(writer->arena, &writer->sections[DW_Section_Abbrev].srl, 0);
-  dw_serial_push_uleb128(writer->arena, &writer->sections[DW_Section_Abbrev].srl, 0);
-
-  // fixup units lengths
-  for EachElement(i, writer->sections) {
-    if (writer->sections[i].length) {
-      if (writer->format == DW_Format_64Bit) {
-        U64 *length      = writer->sections[i].length;
-        U64  length_size = sizeof(U64) + sizeof(U32);
-        Assert(writer->sections[i].srl.total_size >= length_size);
-        *length = writer->sections[i].srl.total_size - length_size;
-      } else {
-        U32 *length      = writer->sections[i].length;
-        U32  length_size = sizeof(U32);
-        Assert(writer->sections[i].srl.total_size >= length_size);
-        *length = safe_cast_u32(writer->sections[i].srl.total_size - length_size);
+    // find comp dir in the compile unit tag
+    String8 comp_dir  = {0};
+    String8 comp_name = {0};
+    Assert(writer->root->kind == DW_TagKind_CompileUnit);
+    for EachNode(attrib, DW_WriterAttrib, writer->root->first_attrib) {
+      if (attrib->kind == DW_AttribKind_CompDir) {
+        AssertAlways(attrib->form.writer.kind == DW_WriterFormKind_String);
+        comp_dir = attrib->form.writer.string;
+      } else if (attrib->kind == DW_AttribKind_Name) {
+        AssertAlways(attrib->form.writer.kind == DW_WriterFormKind_String);
+        comp_name = attrib->form.writer.string;
       }
+    }
+
+    String8List dir_table_srl = {0};
+    str8_serial_begin(writer->arena, &dir_table_srl);
+    {
+      Temp scratch = scratch_begin(0, 0);
+      String8List *srl = &dir_table_srl;
+
+      // (13) directory_entry_format_count
+      str8_serial_push_u8(writer->arena, srl, 1);
+      // (14) directory_entry_format
+      dw_serial_push_uleb128(writer->arena, srl, DW_LNCT_Path);
+      dw_serial_push_uleb128(writer->arena, srl, DW_Form_String);
+
+      // dedup directories
+      HashTable *dir_ht = hash_table_init(scratch.arena, writer->line.file_count + 1);
+      // first entry must be compile unit directory
+      hash_table_push_string_u64(scratch.arena, dir_ht, comp_dir, dir_ht->count);
+      for EachNode(file, DW_WriterFile, writer->line.first_file) {
+        String8 path = str8_chop_last_slash(file->path);
+        if ( ! hash_table_search_string_u64(dir_ht, path, &file->dir_idx)) {
+          file->dir_idx = hash_table_push_string_u64(scratch.arena, dir_ht, path, dir_ht->count)->v.value_u64;
+        }
+      }
+      KeyValuePair *dirs_kv = key_value_pairs_from_hash_table(scratch.arena, dir_ht);
+      sort_key_value_pairs_as_string_sensitive(dirs_kv, dir_ht->count);
+
+      // (15) directories_count
+      dw_serial_push_uleb128(writer->arena, srl, dir_ht->count);
+      // (16) directories
+      for (U64 i = 1; i < dir_ht->count; i += 1) {
+        String8 dir = dirs_kv[i].key_string;
+        dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, (DW_WriterXForm) { .reader = { .kind = DW_Form_String, .string = dir } });
+      }
+
+      scratch_end(scratch);
+    }
+
+    String8List file_table_srl = {0};
+    {
+      Temp scratch = scratch_begin(0, 0);
+      String8List *srl = &file_table_srl;
+
+      struct { DW_LNCT lnct; DW_FormKind form_kind; } encs[] = {
+        { DW_LNCT_Path,           DW_Form_String },
+        { DW_LNCT_DirectoryIndex, DW_Form_UData  },
+        { DW_LNCT_TimeStamp,      DW_Form_Null   }, // DW_Form_UData
+        { DW_LNCT_Size,           DW_Form_Null   }, // DW_Form_UData
+        { DW_LNCT_MD5,            DW_Form_Null   }, // DW_Form_Block
+        { DW_LNCT_LLVM_Source,    DW_Form_Null   }  // DW_Form_String
+      };
+
+      HashTable *encs_ht = hash_table_init(scratch.arena, ArrayCount(encs) * 2);
+      for EachElement(i, encs) { hash_table_push_u64_raw(scratch.arena, encs_ht, encs[i].lnct, &encs[i].form_kind); }
+
+      // enable encodings in use
+      for EachNode(file, DW_WriterFile, writer->line.first_file) {
+        if (file->time_stamp  != 0) { *(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_TimeStamp  ) = DW_Form_UData;  }
+        if (file->size        != 0) { *(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_Size       ) = DW_Form_UData;  }
+        if (file->md5.size    != 0) { *(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_MD5        ) = DW_Form_Block;  }
+        if (file->source.size != 0) { *(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_LLVM_Source) = DW_Form_String; }
+      }
+
+      // count needed encodings
+      U64 enc_count = 0;
+      for EachElement(i, encs) { if (encs[i].form_kind != DW_Form_Null) { enc_count += 1; } }
+
+      // (17) file_name_entry_format_count
+      str8_serial_push_u16(writer->arena, srl, enc_count);
+
+      // (18) file_name_entry_format
+      for EachElement(i, encs) {
+        if (encs[i].form_kind == DW_Form_Null) { continue; }
+        dw_serial_push_uleb128(writer->arena, srl, encs[i].lnct     );
+        dw_serial_push_uleb128(writer->arena, srl, encs[i].form_kind);
+      }
+
+      // (19) file_names_count
+      dw_serial_push_uleb128(writer->arena, srl, writer->line.file_count);
+
+      // (20) file_names
+      if (comp_name.size) {
+        for (DW_WriterFile *n = writer->line.first_file, *p = 0; n != 0; p = n, n = n->next) {
+          String8 file_name = str8_skip_last_slash(n->path);
+          if (str8_match(file_name, comp_name, 0)) {
+            if (p == 0) {
+              // file is already first
+            } else {
+              // move compile unit file to be first entry in the table
+              p->next = n->next;
+              n->next = writer->line.first_file;
+              writer->line.first_file = n;
+            }
+            break;
+          }
+        }
+      }
+      for EachNode(file, DW_WriterFile, writer->line.first_file) {
+        static DW_WriterXForm null_form_udata  = { .reader = { .kind = DW_Form_UData  } };
+        static DW_WriterXForm null_form_string = { .reader = { .kind = DW_Form_String } };
+        static DW_WriterXForm null_form_block  = { .reader = { .kind = DW_Form_Block  } };
+
+        // path
+        Assert(*(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_Path) == DW_Form_String);
+        DW_WriterXForm path_form = { .reader = { .kind = DW_Form_String, .string = file->path } };
+        dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, path_form);
+
+        // directory index
+        Assert(*(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_DirectoryIndex) == DW_Form_UData);
+        DW_WriterXForm dir_idx_form = { .reader = { .kind = DW_Form_UData, .udata = file->time_stamp } };
+        dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, dir_idx_form);
+
+        // time stamp
+        if (*(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_TimeStamp) == DW_Form_UData) {
+          if (file->time_stamp) {
+            DW_WriterXForm time_stamp_form = { .reader = { .kind = DW_Form_UData, .udata = file->time_stamp } };
+            dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, time_stamp_form);
+          } else {
+            dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, null_form_udata);
+          }
+        }
+
+        // size
+        if (*(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_Size) == DW_Form_UData) {
+          if (file->size) {
+            DW_WriterXForm size_form = { .reader = { .kind = DW_Form_UData, .udata = file->size } };
+            dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, size_form);
+          } else {
+            dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, null_form_udata);
+          }
+        }
+
+        // MD5
+        if (*(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_MD5) == DW_Form_Block) {
+          if (file->md5.size) {
+            DW_WriterXForm md5_form = { .reader = { .kind = DW_Form_Block, .block = file->md5 } };
+            dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, md5_form);
+          } else {
+            dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, null_form_block);
+          }
+        }
+
+        // LLVM Source
+        if (*(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_LLVM_Source) == DW_Form_String) {
+          if (file->source.size) {
+            DW_WriterXForm source_form = { .reader = { .kind = DW_Form_String, .string = file->source } };
+            dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, source_form);
+          } else {
+            dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, null_form_string);
+          }
+        }
+      }
+
+      scratch_end(scratch);
+    }
+
+    {
+      String8List *srl = &writer->sections[DW_Section_Line].srl;
+      // (1) unit_length
+      writer->sections[DW_Section_Line].length = dw_serial_push_length(writer->arena, srl, writer->format, 0);
+      // (2) version
+      str8_serial_push_struct(writer->arena, srl, &writer->version);
+      // (3) address_size
+      str8_serial_push_struct(writer->arena, srl, &writer->address_size);
+      // (4) segment_selector_size
+      str8_serial_push_struct(writer->arena, srl, &writer->segsel_size);
+      // (5) header_length
+      U64 header_size = srl->total_size + dir_table_srl.total_size + file_table_srl.total_size;
+      dw_serial_push_uint(writer->arena, srl, writer->format, header_size);
+      // (6) minimum_instruction_length
+      str8_serial_push_struct(writer->arena, srl, &writer->line.min_inst_len);
+      // (7) maximum_operations_per_instruction
+      str8_serial_push_struct(writer->arena, srl, &writer->line.max_ops_per_inst);
+      // (8) default_is_stmt
+      str8_serial_push_struct(writer->arena, srl, &writer->line.default_is_stmt);
+      // (9) line_base
+      str8_serial_push_struct(writer->arena, srl, &writer->line.line_base);
+      // (10) line_range
+      str8_serial_push_struct(writer->arena, srl, &writer->line.line_range);
+      // (11) opcode_base
+      str8_serial_push_struct(writer->arena, srl, &writer->line.opcode_base);
+      // (12) standard_opcode_lengths
+      str8_serial_push_struct(writer->arena, srl, &writer->line.std_op_lens);
+      // directory table
+      str8_list_concat_in_place(srl, &dir_table_srl);
+      // file table
+      str8_list_concat_in_place(srl, &file_table_srl);
+      // line program
+      String8 line_program_data = dw_data_from_line_insts(writer->arena, writer->address_size, writer->line.line_insts);
+      str8_serial_push_string(writer->arena, srl, line_program_data);
     }
   }
 
-  // fixup forward references in .debug_info
-  for EachNode(fixup_n, DW_WriterFixupNode, writer->fixups.first) {
-    DW_WriterFixup *fixup = &fixup_n->v;
-    if (fixup->attrib->reader.form.kind == DW_Form_Ref8) {
-      Assert(fixup->attrib->writer.form.ref->info_off != 0);
-      MemoryCopy(fixup->value, &fixup->attrib->writer.form.ref->info_off, sizeof(U64));
-      fixup->attrib->reader.form.ref = fixup->attrib->writer.form.ref->info_off;
+  // info
+  {
+    dw_writer_emit_tag(writer, writer->root);
+
+    // null terminate .debug_abbrev
+    dw_serial_push_uleb128(writer->arena, &writer->sections[DW_Section_Abbrev].srl, 0);
+
+    // fixup units lengths
+    for EachElement(i, writer->sections) {
+      if (writer->sections[i].length) {
+        if (writer->format == DW_Format_64Bit) {
+          U64 *length      = writer->sections[i].length;
+          U64  length_size = sizeof(U64) + sizeof(U32);
+          Assert(writer->sections[i].srl.total_size >= length_size);
+          *length = writer->sections[i].srl.total_size - length_size;
+        } else {
+          U32 *length      = writer->sections[i].length;
+          U32  length_size = sizeof(U32);
+          Assert(writer->sections[i].srl.total_size >= length_size);
+          *length = safe_cast_u32(writer->sections[i].srl.total_size - length_size);
+        }
+      }
+    }
+
+    // fixup forward references in .debug_info
+    for EachNode(fixup_n, DW_WriterFixupNode, writer->fixups.first) {
+      DW_WriterFixup *fixup = &fixup_n->v;
+      Assert(fixup->tag->info_off != 0);
+      MemoryCopy(fixup->ptr, &fixup->tag->info_off, sizeof(U64));
     }
   }
 }

@@ -519,3 +519,12 @@ remove_duplicates_str8_list(Arena *arena, String8List list)
   return result;
 }
 
+internal String8 **
+str8_from_key_value_pairs(Arena *arena, KeyValuePair *v, U64 count)
+{
+  String8 **result = push_array(arena, String8 *, count);
+  for EachIndex(i, count) {
+    result[i] = &v[i].value_string;
+  }
+  return result;
+}

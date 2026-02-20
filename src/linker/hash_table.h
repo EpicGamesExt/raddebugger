@@ -94,13 +94,15 @@ internal U32 *          keys_from_hash_table_u32       (Arena *arena, HashTable 
 internal U64 *          keys_from_hash_table_u64       (Arena *arena, HashTable *ht);
 internal String8        keys_from_hash_table_str8      (Arena *arena, HashTable *ht);
 internal KeyValuePair * key_value_pairs_from_hash_table(Arena *arena, HashTable *ht);
+internal void *         keys_from_hash_table_raw       (Arena *arena, HashTable *ht);
 
-internal void * keys_from_hash_table_raw  (Arena *arena, HashTable *ht);
-internal void * values_from_hash_table_raw(Arena *arena, HashTable *ht);
+internal U64 * values_from_hash_table_u64(Arena *arena, HashTable *ht);
 
 internal void sort_key_value_pairs_as_u32             (KeyValuePair *pairs, U64 count);
 internal void sort_key_value_pairs_as_u64             (KeyValuePair *pairs, U64 count);
 internal void sort_key_value_pairs_as_string_sensitive(KeyValuePair *pairs, U64 count);
+
+internal String8 ** str8_from_key_value_pairs(Arena *arena, KeyValuePair *v, U64 count);
 
 // --- Misc --------------------------------------------------------------------
 
