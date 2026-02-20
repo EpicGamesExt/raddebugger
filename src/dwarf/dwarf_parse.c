@@ -452,8 +452,17 @@ dw_read_abbrev_tag(String8 data, U64 offset, DW_Abbrev *out_abbrev)
   U64 cursor           = offset;
   
   // read tag ID and kind
-  U64 id, kind;
+  U64 id = 0;
   TryRead(str8_deserial_read_uleb128(data, cursor, &id), cursor, exit);
+
+  // is this null terminator?
+  if (id == 0) {
+    total_bytes_read = cursor - offset;
+    MemoryZeroStruct(out_abbrev);
+    goto exit;
+  }
+
+  U64 kind = 0;
   TryRead(str8_deserial_read_uleb128(data, cursor, &kind), cursor, exit);
 
   // read child flag
