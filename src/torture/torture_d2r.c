@@ -120,6 +120,22 @@ T_BeginTest(d2r_types)
       DeclStdint("int32_t",  int_type);
       DeclStdint("int64_t",  long_int_type);
 #undef DeclStdInt
+      // TODO: @native_vector_support
+      //
+      // typedef int          __attribute__((vector_size(32))) int256
+      // typedef unsigned int __attribute__((vector_size(32))) uint256
+      // typedef int          __attribute__((vector_size(64))) int512
+      // typedef unsigned int __attribute__((vector_size(64))) uint512
+      //
+#if 0
+      dw_writer_tag_begin(writer, DW_TagKind_ArrayType);
+        dw_writer_push_attrib_flag(writer, DW_AttribKind_GNU_Vector, 1);
+        dw_writer_push_attrib_ref(writer,  DW_AttribKind_Type,       int_type);
+        dw_writer_tag_begin(writer, DW_TagKind_SubrangeType);
+          dw_writer_push_attrib_uint(writer, DW_AttribKind_UpperBound, 15);
+        dw_writer_tag_end(writer);
+      dw_writer_tag_end(writer);
+#endif
 
     dw_writer_tag_end(writer);
   }

@@ -1934,6 +1934,11 @@ d2r_convert_types(Arena         *arena,
         type->direct_type = direct_type;
       } break;
       case DW_TagKind_ArrayType: {
+        // TODO: @native_vector_support extract byte size from the base type tag
+        // and convert to U256, U512, S256 and S512
+        B32 is_vector = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_GNU_Vector);
+        if (is_vector) { NotImplemented; }
+
         B32 error = 1;
 
         // * DWARF vs RDI Array Type Graph *
