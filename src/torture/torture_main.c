@@ -6,6 +6,7 @@
 
 #define BUILD_CONSOLE_INTERFACE 1
 #define BUILD_TITLE "TORTURE"
+#define NO_ASYNC 1
 
 ////////////////////////////////
 
