@@ -2887,7 +2887,9 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             if (vm->state.file_index >= vm->header.file_table.count) { continue; }
 
             // time to flush the buffer?
-            if ((line_buffer_size >= D2R_LineBufferMax || line_buffer->file_index != vm->state.file_index) && line_buffer_size > 0) {
+            if (((vm->opcode == DW_StdOpcode_ExtendedOpcode && vm->ext_opcode == DW_ExtOpcode_EndSequence) ||
+                (line_buffer_size >= D2R_LineBufferMax || line_buffer->file_index != vm->state.file_index))
+                && line_buffer_size > 0) {
               // lookup source file
               DW_LineFile       *file     = &vm->header.file_table.v[vm->state.file_index];
               U64                hash     = d2r_hash_line_file(vm->header.dir_table.v[file->dir_idx], file);
@@ -2897,7 +2899,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               // copy line info
               U64 *voffs     = push_array_no_zero(arena, U64, line_buffer_size + 1);
               U32 *line_nums = push_array_no_zero(arena, U32, line_buffer_size);
-              voffs[line_buffer_size] = vm->state.address;
+              voffs[line_buffer_size] = vm->state.address - image_base;
               MemoryCopyTyped(voffs, line_buffer->voffs, line_buffer_size);
               MemoryCopyTyped(line_nums, line_buffer->line_nums, line_buffer_size);
 
@@ -2936,7 +2938,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             } else {
               // append line to the buffer
               line_buffer->file_index                  = vm->state.file_index;
-              line_buffer->voffs[line_buffer_size]     = vm->state.address;
+              line_buffer->voffs[line_buffer_size]     = vm->state.address - image_base;
               line_buffer->line_nums[line_buffer_size] = safe_cast_u32(vm->state.line);
               line_buffer_size += 1;
             }
