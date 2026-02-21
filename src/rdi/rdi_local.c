@@ -702,7 +702,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       StringJoin join = {0};
       join.sep = str8_lit(", ");
       String8 checksum_val_string = str8_list_join(arena, &checksum_vals, &join);
-      dumpf("\n  { file_path_node_idx: %4u, source_line_map: %4u, checksum_kind: %10S, checksum_value: %192S, path: %-192S } // source_file[%I64u]",
+      dumpf("\n  { file_path_node_idx: %4u, source_line_map: %4u, checksum_kind: %10S, checksum_value: %32S, path: %-64S } // source_file[%I64u]",
             source_file->file_path_node_idx,
             source_file->source_line_map_idx,
             checksum_kind_name,
