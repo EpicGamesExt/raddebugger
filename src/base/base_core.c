@@ -460,6 +460,38 @@ byte_size_from_arch(Arch arch)
 }
 
 internal U64
+max_ops_per_instruction_from_arch(Arch arch)
+{
+  U64 max_ops = 0;
+  switch (arch)
+  {
+    case Arch_Null: break;
+    case Arch_x64: max_ops = 1; break;
+    case Arch_x86:
+    case Arch_arm32:
+    case Arch_arm64: NotImplemented; break;
+    default: InvalidPath;
+  }
+  return max_ops;
+}
+
+internal U64
+min_instruction_size_from_arch(Arch arch)
+{
+  U64 min_instruction_size = 0;
+  switch(arch)
+  {
+    case Arch_Null: break;
+    case Arch_x64: min_instruction_size = 1; break;
+    case Arch_x86:
+    case Arch_arm32:
+    case Arch_arm64: NotImplemented; break;
+    default: InvalidPath;
+  }
+  return min_instruction_size;
+}
+
+internal U64
 max_instruction_size_from_arch(Arch arch)
 {
   // TODO(rjf): make this real
