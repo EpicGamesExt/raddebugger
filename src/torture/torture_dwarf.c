@@ -107,25 +107,40 @@ dwt_make_writer(void)
 {
   Temp scratch = scratch_begin(0, 0);
 
+  String8 comp_dir  = t_make_file_path(scratch.arena, str8_lit(""));
+  String8 comp_name = str8_lit("test_code.txt");
+  String8 test_text = str8_lit("nop\nnop\nret\n");
+  String8 test_path = t_make_file_path(scratch.arena, comp_name);
+  t_write_file(comp_name, test_text);
+
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_Last, DW_CompUnitKind_Compile, Arch_x64);
   // line
   {
-    DW_WriterFile *b_file = dw_writer_new_file(writer, str8_lit("~/devel/projects/b/b.c"));
-    DW_WriterFile *a_file = dw_writer_new_file(writer, str8_lit("~/devel/projects/a.c"));
+    DW_WriterFile *a_file = dw_writer_new_file(writer, test_path);
     dw_writer_line_set_prologue_end(writer);
-    dw_writer_line_emit(writer, b_file, 10, 0, 0x140001000);
-    dw_writer_line_emit(writer, b_file, 11, 0, 0x140001010);
-    dw_writer_line_emit(writer, a_file, 1,  0, 0x140001016);
-    dw_writer_line_emit(writer, a_file, 2,  0, 0x140001020);
+    dw_writer_line_emit(writer, a_file, 1, 0, 0x140001000);
+    dw_writer_line_emit(writer, a_file, 2, 0, 0x140001001);
+    dw_writer_line_emit(writer, a_file, 3, 0, 0x140001002);
+
+    //DW_WriterFile *b_file = dw_writer_new_file(writer, str8_lit("~/devel/projects/b/b.c"));
+    //DW_WriterFile *a_file = dw_writer_new_file(writer, str8_lit("~/devel/projects/a.c"));
+    //dw_writer_line_set_prologue_end(writer);
+    //dw_writer_line_emit(writer, b_file, 10, 0, 0x140001000);
+    //dw_writer_line_emit(writer, b_file, 11, 0, 0x140001010);
+    //dw_writer_line_emit(writer, a_file, 1,  0, 0x140001016);
+    //dw_writer_line_emit(writer, a_file, 2,  0, 0x140001020);
   }
   // info
   {
     dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
     dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
-    dw_writer_push_attrib_string(writer, DW_AttribKind_CompDir, str8_lit("~/devel/projects"));
-    dw_writer_push_attrib_string(writer, DW_AttribKind_Name, str8_lit("a.c"));
+    dw_writer_push_attrib_string(writer, DW_AttribKind_CompDir, comp_dir);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Name, comp_name);
     dw_writer_push_attrib_enum(writer, DW_AttribKind_Language, DW_Language_C99);
     dw_writer_push_attrib_flag(writer, DW_AttribKind_UseUtf8, 1);
+    dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
+    dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, 0x140001000);
+    dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x140001003);
     {
       DW_WriterTag *char_type = dw_writer_tag_begin(writer, DW_TagKind_BaseType);
       dw_writer_push_attrib_sint(writer, DW_AttribKind_ByteSize, 1);
@@ -167,8 +182,8 @@ dwt_make_writer(void)
       dw_writer_tag_begin(writer, DW_TagKind_SubProgram);
       dw_writer_push_attrib_flag(writer, DW_AttribKind_External, 1);
       dw_writer_push_attrib_flag(writer, DW_AttribKind_Prototyped, 1);
-      dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, 0x14012f2f0);
-      dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x14012f405);
+      dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, 0x140001000);
+      dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x140001003);
       dw_writer_push_attrib_string(writer, DW_AttribKind_Name, str8_lit("main"));
       dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, simple_struct_tag);
       dw_writer_push_attrib_expression(writer, DW_AttribKind_FrameBase, &(DW_ExprEnc)DW_ExprEnc_Op(Reg7), 1);
@@ -182,6 +197,8 @@ dwt_make_writer(void)
     {
       OBJ *obj = obj_alloc(0, Arch_x64);
       OBJ_Section *text_section = obj_push_section(obj, str8_lit(".text"), OBJ_SectionFlag_Read|OBJ_SectionFlag_Exec|OBJ_SectionFlag_Load);
+      str8_serial_push_u8(obj->arena, &text_section->data, 0x90);
+      str8_serial_push_u8(obj->arena, &text_section->data, 0x90);
       str8_serial_push_u8(obj->arena, &text_section->data, 0xc3);
       obj_push_symbol(obj, str8_lit("entry"), OBJ_SymbolScope_Global, OBJ_RefKind_Section, text_section);
 
@@ -194,6 +211,10 @@ dwt_make_writer(void)
       COFF_SectionHeader  *section_table   = (COFF_SectionHeader *)raw_sections.str;
       String8              string_table    = str8_substr(raw_coff, obj_coff_header.string_table_range);
       input = dw_input_from_coff_section_table(scratch.arena, raw_coff, string_table, section_count, section_table);
+
+      t_write_file(str8_lit("dwarf.obj"), raw_coff);
+
+      t_invoke(str8_lit("radlink"), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full dwarf.obj"), max_U64);
 
       obj_release(&obj);
     }

@@ -2586,10 +2586,11 @@ dw_line_vm_step(DW_LineVM *vm)
     // extended opcodes
     case DW_StdOpcode_ExtendedOpcode: {
       TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->ext_length), vm->cursor, exit);
+      String8 ext_data = str8_substr(vm->program, r1u64(vm->cursor, vm->cursor + vm->ext_length));
+      vm->cursor += vm->ext_length;
 
-      U64 extended_opl = vm->cursor + vm->ext_length;
-
-      TryRead(str8_deserial_read_struct(vm->program, vm->cursor, &vm->ext_opcode), vm->cursor, exit);
+      U64 ext_cursor = 0;
+      TryRead(str8_deserial_read_struct(ext_data, ext_cursor, &vm->ext_opcode), vm->cursor, exit);
 
       switch (vm->ext_opcode) {
       case DW_ExtOpcode_EndSequence: {
@@ -2599,16 +2600,16 @@ dw_line_vm_step(DW_LineVM *vm)
       } break;
 
       case DW_ExtOpcode_SetAddress: {
-        TryRead(str8_deserial_read(vm->program, vm->cursor, &vm->operands[0].u64, vm->header.address_size, vm->header.address_size), vm->cursor, exit);
+        TryRead(str8_deserial_read(ext_data, ext_cursor, &vm->operands[0].u64, vm->header.address_size, vm->header.address_size), vm->cursor, exit);
         vm->state.address  = vm->operands[0].u64;
         vm->state.op_index = 0;
       } break;
 
       case DW_ExtOpcode_DefineFile: {
-        TryRead(str8_deserial_read_cstr   (vm->program, vm->cursor, &vm->operands[0].string), vm->cursor, exit); // file name
-        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[1].u64),    vm->cursor, exit); // dir index
-        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[2].u64),    vm->cursor, exit); // modify time
-        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[3].u64),    vm->cursor, exit); // file size
+        TryRead(str8_deserial_read_cstr   (ext_data, ext_cursor, &vm->operands[0].string), vm->cursor, exit); // file name
+        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[1].u64),    vm->cursor, exit); // dir index
+        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[2].u64),    vm->cursor, exit); // modify time
+        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[3].u64),    vm->cursor, exit); // file size
 
         if (vm->ext_file_ht == 0) {
           vm->ext_file_ht = hash_table_init(vm->arena, 512);
@@ -2629,14 +2630,12 @@ dw_line_vm_step(DW_LineVM *vm)
       } break;
 
       case DW_ExtOpcode_SetDiscriminator: {
-        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
+        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[0].u64), vm->cursor, exit);
         vm->state.discriminator = vm->operands[0].u64;
       } break;
 
       default: { NotImplemented; } break;
       }
-
-      vm->cursor = extended_opl;
     } break;
 
     default: {

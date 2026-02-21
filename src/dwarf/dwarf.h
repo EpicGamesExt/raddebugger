@@ -1829,4 +1829,9 @@ internal void * dw_serial_push_sleb128(Arena *arena, String8List *srl, S64 v);
 
 internal B32 dw_form_match(DW_Form a, DW_Form b);
 
+////////////////////////////////
+// Line
+
+internal U64 dw_length_from_std_opcode(DW_StdOpcode opcode);
+
 #endif // DWARF_H

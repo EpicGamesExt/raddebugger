@@ -47,7 +47,7 @@ typedef struct DW_WriterForm
     union {
       struct {
         struct DW_WriterTag *ref;
-        void                *line_ptr;
+        U64                  line_ptr;
         void                *mac_ptr;
         void                *rng_list_ptr;
       };
@@ -137,6 +137,7 @@ typedef struct DW_WriterFile
   U64     size;
   String8 md5;
   String8 source;
+  // computed during line table emit step
   U64     file_idx;
   U64     dir_idx;
 } DW_WriterFile;
@@ -225,7 +226,6 @@ typedef struct DW_Writer
     S8              line_base;
     U8              line_range;
     U8              opcode_base;
-    U8             *std_op_lens;
     DW_LineInstList line_insts;
 
     DW_WriterFile *file;
@@ -275,7 +275,7 @@ internal DW_WriterAttrib * dw_writer_push_attrib_enum        (DW_Writer *writer,
 internal DW_WriterAttrib * dw_writer_push_attrib_ref         (DW_Writer *writer, DW_AttribKind kind, DW_WriterTag *ref         );
 internal DW_WriterAttrib * dw_writer_push_attrib_exprloc     (DW_Writer *writer, DW_AttribKind kind, String8       exprloc     );
 internal DW_WriterAttrib * dw_writer_push_attrib_expression  (DW_Writer *writer, DW_AttribKind kind, DW_ExprEnc *encs, U64 encs_count);
-internal DW_WriterAttrib * dw_writer_push_attrib_line_ptr    (DW_Writer *writer, DW_AttribKind kind, void *        line_ptr    );
+internal DW_WriterAttrib * dw_writer_push_attrib_line_ptr    (DW_Writer *writer, DW_AttribKind kind, U64           line_ptr    );
 internal DW_WriterAttrib * dw_writer_push_attrib_mac_ptr     (DW_Writer *writer, DW_AttribKind kind, void *        mac_ptr     );
 internal DW_WriterAttrib * dw_writer_push_attrib_rng_list_ptr(DW_Writer *writer, DW_AttribKind kind, void *        rng_list_ptr);
 internal DW_WriterAttrib * dw_writer_push_attrib_implicit    (DW_Writer *writer, DW_AttribKind kind, S64           implicit    );

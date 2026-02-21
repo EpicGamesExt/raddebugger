@@ -1029,3 +1029,25 @@ dw_form_match(DW_Form a, DW_Form b)
   return is_match;
 }
 
+internal U64
+dw_length_from_std_opcode(DW_StdOpcode opcode)
+{
+  switch (opcode) {
+  case DW_StdOpcode_ExtendedOpcode:   return 0;
+  case DW_StdOpcode_Copy:             return 0;
+  case DW_StdOpcode_AdvancePc:        return 1;
+  case DW_StdOpcode_AdvanceLine:      return 1;
+  case DW_StdOpcode_SetFile:          return 1;
+  case DW_StdOpcode_SetColumn:        return 1;
+  case DW_StdOpcode_NegateStmt:       return 0;
+  case DW_StdOpcode_SetBasicBlock:    return 0;
+  case DW_StdOpcode_ConstAddPc:       return 0;
+  case DW_StdOpcode_FixedAdvancePc:   return 1;
+  case DW_StdOpcode_SetPrologueEnd:   return 0;
+  case DW_StdOpcode_SetEpilogueBegin: return 0;
+  case DW_StdOpcode_SetIsa:           return 1;
+  default: InvalidPath; break;
+  }
+  return 0;
+}
+

@@ -102,17 +102,21 @@ dw_writer_begin(DW_Format format, DW_Version version, DW_CompUnitKind cu_kind, A
 {
   Arena *arena = arena_alloc();
   DW_Writer *writer = push_array(arena, DW_Writer, 1);
-  writer->arena            = arena;
-  writer->arch             = arch;
-  writer->format           = format;
-  writer->version          = version;
-  writer->cu_kind          = cu_kind;
-  writer->address_size     = byte_size_from_arch(arch);
-  writer->current          = 0;
-  writer->abbrev_id_map    = hash_table_init(arena, 0x2000);
-  writer->line.opcode_base = DW_StdOpcode_Count;
-  writer->line.line_base   = -5;
-  writer->line.line_range  = 14;
+  writer->arena                 = arena;
+  writer->arch                  = arch;
+  writer->format                = format;
+  writer->version               = version;
+  writer->cu_kind               = cu_kind;
+  writer->address_size          = byte_size_from_arch(arch);
+  writer->current               = 0;
+  writer->abbrev_id_map         = hash_table_init(arena, 0x2000);
+  writer->line.min_inst_len     = min_instruction_size_from_arch(arch);
+  writer->line.max_ops_per_inst = max_ops_per_instruction_from_arch(arch);
+  writer->line.default_is_stmt  = 1;
+  writer->line.line_base        = -5;
+  writer->line.line_range       = 14;
+  writer->line.opcode_base      = DW_StdOpcode_Count;
+  writer->line.ln               = 1;
   for EachElement(i, writer->sections) {
     str8_serial_begin(arena, &writer->sections[i].srl);
   }
@@ -461,7 +465,7 @@ dw_writer_push_attrib_expression(DW_Writer *writer, DW_AttribKind kind, DW_ExprE
 }
 
 internal DW_WriterAttrib *
-dw_writer_push_attrib_line_ptr(DW_Writer *writer, DW_AttribKind kind, void *line_ptr)
+dw_writer_push_attrib_line_ptr(DW_Writer *writer, DW_AttribKind kind, U64 line_ptr)
 {
   return dw_writer_push_attrib(writer, kind, (DW_WriterForm){ .kind = DW_WriterFormKind_LinePtr, .line_ptr = line_ptr });
 }
@@ -548,6 +552,7 @@ dw_data_from_line_insts(Arena *arena, U8 address_size, DW_LineInstList insts)
       } break;
       default: { InvalidPath; } break;
       }
+      ext_size += sizeof(DW_ExtOpcode);
 
       // write ext header
       dw_serial_push_uleb128(arena, &srl, ext_size);
@@ -569,7 +574,7 @@ dw_data_from_line_insts(Arena *arena, U8 address_size, DW_LineInstList insts)
       }
     } break;
     // special opcode
-    default: {} break;
+    default: { } break;
     }
   }
 
@@ -581,28 +586,26 @@ dw_data_from_line_insts(Arena *arena, U8 address_size, DW_LineInstList insts)
 internal void
 dw_writer_line_emit(DW_Writer *writer, DW_WriterFile *file, U64 ln, U64 col, U64 addr)
 {
-  if (writer->line.last_file != file) {
+  if (writer->line.file != file) {
     dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_file(file));
   }
 
   Assert(addr <= max_S64);
   S64 addr_delta = (S64)addr - (S64)writer->line.addr;
-  if (addr_delta != 0) {
-    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_pc(addr_delta));
-  }
+  S64 ln_delta   = (S64)ln   - (S64)writer->line.ln;
+  S64 col_delta  = (S64)col  - (S64)writer->line.col;
 
-  S64 ln_delta = (S64)ln - (S64)writer->line.ln;
-  if (ln_delta != 0) {
-    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_line(ln_delta));
+  if (col_delta == 0 && (ln_delta > 0 || addr_delta > 0) &&
+      writer->line.line_base <= ln_delta && ln_delta < writer->line.line_range+writer->line.line_base &&
+      addr_delta < max_U8 - writer->line.opcode_base) {
+    U8 opcode = (ln_delta - writer->line.line_base) + (writer->line.line_range * addr_delta) + writer->line.opcode_base;
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, (DW_LineInst){ .opcode = opcode });
+  } else {
+    if (addr_delta != 0) { dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_pc(addr_delta)); }
+    if (ln_delta   != 0) { dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_line(ln_delta)); }
+    if (col_delta  != 0) { dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_column(col_delta));  }
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_copy());
   }
-
-  S64 col_delta = (S64)col - (S64)writer->line.col;
-  if (col_delta != 0) {
-    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_column(col_delta));
-  }
-
-  // append row
-  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_copy());
 
   writer->line.file = file;
   writer->line.ln   = ln;
@@ -714,7 +717,8 @@ dw_lower_attrib_forms(DW_Writer *writer, DW_WriterTag *tag)
       }
     } break;
     case DW_WriterFormKind_LinePtr: {
-      NotImplemented;
+      attrib->form.reader.kind       = DW_Form_SecOffset;
+      attrib->form.reader.sec_offset = attrib->form.writer.line_ptr;
     } break;
     case DW_WriterFormKind_MacPtr: {
       NotImplemented;
@@ -960,23 +964,29 @@ dw_writer_emit(DW_Writer *writer)
       dw_serial_push_uleb128(writer->arena, srl, DW_LNCT_Path);
       dw_serial_push_uleb128(writer->arena, srl, DW_Form_String);
 
+
+
       // dedup directories
-      HashTable *dir_ht = hash_table_init(scratch.arena, writer->line.file_count + 1);
+      String8List  dirs   = {0};
+      HashTable   *dir_ht = hash_table_init(scratch.arena, writer->line.file_count + 1);
       // first entry must be compile unit directory
       hash_table_push_string_u64(scratch.arena, dir_ht, comp_dir, dir_ht->count);
+      str8_list_push(scratch.arena, &dirs, comp_dir);
       for EachNode(file, DW_WriterFile, writer->line.first_file) {
         String8 path = str8_chop_last_slash(file->path);
         if ( ! hash_table_search_string_u64(dir_ht, path, &file->dir_idx)) {
           file->dir_idx = hash_table_push_string_u64(scratch.arena, dir_ht, path, dir_ht->count)->v.value_u64;
+          str8_list_push(scratch.arena, &dirs, path);
         }
       }
       KeyValuePair *dirs_kv = key_value_pairs_from_hash_table(scratch.arena, dir_ht);
-      sort_key_value_pairs_as_string_sensitive(dirs_kv, dir_ht->count);
+      //sort_key_value_pairs_as_string_sensitive(dirs_kv, dir_ht->count);
 
       // (15) directories_count
       dw_serial_push_uleb128(writer->arena, srl, dir_ht->count);
+
       // (16) directories
-      for (U64 i = 1; i < dir_ht->count; i += 1) {
+      for (U64 i = 0; i < dir_ht->count; i += 1) {
         String8 dir = dirs_kv[i].key_string;
         dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, (DW_WriterXForm) { .reader = { .kind = DW_Form_String, .string = dir } });
       }
@@ -985,6 +995,7 @@ dw_writer_emit(DW_Writer *writer)
     }
 
     String8List file_table_srl = {0};
+    str8_serial_begin(writer->arena, &file_table_srl);
     {
       Temp scratch = scratch_begin(0, 0);
       String8List *srl = &file_table_srl;
@@ -1010,11 +1021,11 @@ dw_writer_emit(DW_Writer *writer)
       }
 
       // count needed encodings
-      U64 enc_count = 0;
+      U8 enc_count = 0;
       for EachElement(i, encs) { if (encs[i].form_kind != DW_Form_Null) { enc_count += 1; } }
 
       // (17) file_name_entry_format_count
-      str8_serial_push_u16(writer->arena, srl, enc_count);
+      str8_serial_push_u8(writer->arena, srl, enc_count);
 
       // (18) file_name_entry_format
       for EachElement(i, encs) {
@@ -1038,6 +1049,9 @@ dw_writer_emit(DW_Writer *writer)
               p->next = n->next;
               n->next = writer->line.first_file;
               writer->line.first_file = n;
+              if (writer->line.last_file == n) {
+                writer->line.last_file = p;
+              }
             }
             break;
           }
@@ -1050,12 +1064,13 @@ dw_writer_emit(DW_Writer *writer)
 
         // path
         Assert(*(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_Path) == DW_Form_String);
-        DW_WriterXForm path_form = { .reader = { .kind = DW_Form_String, .string = file->path } };
+        String8 file_name = str8_skip_last_slash(file->path);
+        DW_WriterXForm path_form = { .reader = { .kind = DW_Form_String, .string = file_name } };
         dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, path_form);
 
         // directory index
         Assert(*(DW_FormKind *)hash_table_search_u64_raw(encs_ht, DW_LNCT_DirectoryIndex) == DW_Form_UData);
-        DW_WriterXForm dir_idx_form = { .reader = { .kind = DW_Form_UData, .udata = file->time_stamp } };
+        DW_WriterXForm dir_idx_form = { .reader = { .kind = DW_Form_UData, .udata = file->dir_idx } };
         dw_serial_push_form(writer->arena, srl, writer->version, writer->format, writer->address_size, 0, dir_idx_form);
 
         // time stamp
@@ -1113,8 +1128,8 @@ dw_writer_emit(DW_Writer *writer)
       // (4) segment_selector_size
       str8_serial_push_struct(writer->arena, srl, &writer->segsel_size);
       // (5) header_length
-      U64 header_size = srl->total_size + dir_table_srl.total_size + file_table_srl.total_size;
-      dw_serial_push_uint(writer->arena, srl, writer->format, header_size);
+      void *header_length_ptr    = dw_serial_push_uint(writer->arena, srl, writer->format, 0);
+      U64   header_length_offset = srl->total_size;
       // (6) minimum_instruction_length
       str8_serial_push_struct(writer->arena, srl, &writer->line.min_inst_len);
       // (7) maximum_operations_per_instruction
@@ -1128,11 +1143,19 @@ dw_writer_emit(DW_Writer *writer)
       // (11) opcode_base
       str8_serial_push_struct(writer->arena, srl, &writer->line.opcode_base);
       // (12) standard_opcode_lengths
-      str8_serial_push_struct(writer->arena, srl, &writer->line.std_op_lens);
+      U8 *std_op_lens = push_array(writer->arena, U8, DW_StdOpcode_Count - 1);
+      for (U64 i = 1; i < DW_StdOpcode_Count; i += 1) { std_op_lens[i-1] = dw_length_from_std_opcode(i); }
+      str8_serial_push_string(writer->arena, srl, str8(std_op_lens, DW_StdOpcode_Count - 1));
       // directory table
       str8_list_concat_in_place(srl, &dir_table_srl);
       // file table
       str8_list_concat_in_place(srl, &file_table_srl);
+
+      // fixup header length
+      U64 bytes_to_line_program = srl->total_size - header_length_offset;
+      if (writer->format == DW_Format_32Bit) { *(U32 *)header_length_ptr = bytes_to_line_program; }
+      else                                   { *(U64 *)header_length_ptr = bytes_to_line_program; }
+
       // line program
       String8 line_program_data = dw_data_from_line_insts(writer->arena, writer->address_size, writer->line.line_insts);
       str8_serial_push_string(writer->arena, srl, line_program_data);
