@@ -1570,6 +1570,7 @@ RDI_PROC RDI_S32 rdim_str8_match(RDIM_String8 a, RDIM_String8 b, RDIM_StringMatc
 #define rdim_str8_struct(S)           rdim_str8((RDI_U8*)(S), sizeof(*(S)))
 #define rdim_str8_struct_array(S, C)  rdim_str8((RDI_U8*)(S), sizeof(*(S)) * (C))
 RDI_PROC RDIM_String8 rdim_lower_from_str8(RDIM_Arena *arena, RDIM_String8 string);
+RDI_PROC RDIM_String8 rdim_normalize_path_str8(RDIM_Arena *arena, RDIM_String8 path);
 
 //- rjf: string lists
 RDI_PROC void rdim_str8_list_push(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 string);

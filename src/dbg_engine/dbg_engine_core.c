@@ -771,7 +771,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
       override_n = override_n->next)
   {
     String8 file_path = override_n->string;
-    String8 file_path_normalized = lower_from_str8(scratch.arena, path_normalized_from_string(scratch.arena, file_path));
+    String8 file_path_normalized = rdim_normalize_path_str8(scratch.arena, file_path);
     
     // rjf: binary -> rdi
     RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
@@ -864,7 +864,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
       override_n = override_n->next)
   {
     String8 file_path = override_n->string;
-    String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
+    String8 file_path_normalized = rdim_normalize_path_str8(scratch.arena, file_path);
     for EachIndex(idx, dbgi_keys.count)
     {
       Access *access = access_open();
