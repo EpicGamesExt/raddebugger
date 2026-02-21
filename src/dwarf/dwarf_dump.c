@@ -5,7 +5,7 @@
 #define dw_unindent()     do { indent -= 1; } while (0)
 #define dw_print(string) dw_print_ (arena, strings, indent, string)
 #define dw_printf(...)   dw_printf_(arena, strings, indent, __VA_ARGS__)
-static char g_spaces[] = "                                                                                ";
+static char g_spaces[] = "                                                                                                                                                                ";
 
 internal void
 dw_print_(Arena *arena, String8List *out, int indent, String8 string)
@@ -849,12 +849,14 @@ dw_print_tag(Arena *arena, String8List *strings, int indent, Arch arch, DW_Input
     for EachNode(attrib_n, DW_AttribNode, tag->attribs.first)
     {
       Temp attrib_temp = temp_begin(scratch.arena);
-      attrib_name_max_size = Max(attrib_name_max_size, dw_string_from_attrib_kind(attrib_temp.arena, cu->version, cu->ext, attrib_n->v.attrib_kind).size);
-      form_kind_max_size   = Max(form_kind_max_size,   dw_string_from_form_kind(attrib_temp.arena, cu->version, attrib_n->v.form.kind).size);
+      attrib_name_max_size = Max(attrib_name_max_size, dw_string_from_attrib_kind (attrib_temp.arena, cu->version, cu->ext, attrib_n->v.attrib_kind).size);
+      form_kind_max_size   = Max(form_kind_max_size,   dw_string_from_form_kind   (attrib_temp.arena, cu->version, attrib_n->v.form.kind).size);
       value_max_size       = Max(value_max_size,       dw_string_from_attrib_value(attrib_temp.arena, input, arch, cu, line_vm, &attrib_n->v).size);
       temp_end(attrib_temp);
     }
-    value_max_size = Min(120, value_max_size);
+    attrib_name_max_size = Min(40, attrib_name_max_size);
+    form_kind_max_size   = Min(20, form_kind_max_size);
+    value_max_size       = Min(80, value_max_size);
 
     dw_printf("tag: // info_off: 0x%I64x  abbrev_id: %I64u\n", tag->info_off, tag->abbrev_id);
     dw_printf("{\n");
@@ -868,9 +870,9 @@ dw_print_tag(Arena *arena, String8List *strings, int indent, Arch arch, DW_Input
       String8 value_str       = dw_string_from_attrib_value(scratch.arena, input, arch, cu, line_vm, attrib);
 
       String8List fmt = {0};
-      str8_list_pushf(scratch.arena, &fmt, "%S%.*s", attrib_kind_str, attrib_name_max_size - attrib_kind_str.size, g_spaces);
-      str8_list_pushf(scratch.arena, &fmt, "%S%.*s", form_kind_str, form_kind_max_size - form_kind_str.size, g_spaces);
-      str8_list_pushf(scratch.arena, &fmt, "%S%.*s", value_str, value_str.size < value_max_size ? value_max_size - value_str.size: 0);
+      str8_list_pushf(scratch.arena, &fmt, "%S%.*s", attrib_kind_str, attrib_kind_str.size <= attrib_name_max_size ? attrib_name_max_size - attrib_kind_str.size : 0, g_spaces);
+      str8_list_pushf(scratch.arena, &fmt, "%S%.*s", form_kind_str,   form_kind_str.size   <= form_kind_max_size   ? form_kind_max_size   - form_kind_str.size   : 0, g_spaces);
+      str8_list_pushf(scratch.arena, &fmt, "%S%.*s", value_str,       value_str.size       <= value_max_size       ? value_max_size       - value_str.size       : 0, g_spaces);
       String8 attrib_str = str8_list_join(scratch.arena, &fmt, &(StringJoin){.sep = str8_lit("   ")});
 
       dw_printf("attrib: { %S } // info_off: 0x%I64x\n", attrib_str, attrib->info_off);
@@ -943,7 +945,8 @@ DW_PRINTER(dw_print_line)
   {
     Temp unit_temp = temp_begin(scratch.arena);
 
-    DW_LineVM *vm = dw_line_vm_init(input, &cu_arr[unit_idx]);
+    DW_CompUnit *cu = &cu_arr[unit_idx];
+    DW_LineVM   *vm = dw_line_vm_init(input, cu);
 
     // rjf: begin logging line table
     dw_printf("line_table: // line_table[%I64u]\n", unit_idx);
@@ -978,27 +981,29 @@ DW_PRINTER(dw_print_line)
       dw_printf("{\n");
       dw_indent();
       {
-        dw_printf("// %-4s %-30s\n", "no.", "name");
+        dw_printf("// %-4s %-30s\n", "No.", "Name");
         dw_printf("// ---- ------------------------------\n");
+        String8 cu_comp_dir = dw_string_from_tag_attrib_kind(input, cu, cu->tag, DW_AttribKind_CompDir);
+        dw_printf("{  %-4I64u %-30S  }\n", 0, cu_comp_dir);
         for EachIndex(dir_idx, vm->header.dir_table.count)
         {
-          dw_printf("{  %-4I64u %S  }\n", dir_idx, vm->header.dir_table.v[dir_idx]);
+          dw_printf("{  %-4I64u %-30S  }\n", dir_idx+1, vm->header.dir_table.v[dir_idx]);
         }
       }
       dw_unindent();
-      dw_printf("}\n\n");
+      dw_printf("}\n");
 
       // rjf: log file table
       dw_printf("file_table:\n");
       dw_printf("{\n");
       dw_indent();
       {
-        dw_printf("// %-4s %-8s %-8s %-33s %-8s %-20s\n", "no.", "dir_idx", "time", "md5", "size", "name");
+        dw_printf("// %-4s %-8s %-8s %-33s %-8s %-20s\n", "No.", "Dir No.", "Time", "MD5", "Size", "Name");
         dw_printf("// ---- -------- -------- --------------------------------- -------- --------------------\n");
         for EachIndex(file_idx, vm->header.file_table.count)
         {
           DW_LineFile *file = &vm->header.file_table.v[file_idx];
-          dw_printf("{  %-4I64u %-8I64u %-8I64u %016I64x-%016I64x %-8I64u %S  }\n",
+          dw_printf("{  %-4I64u %-8I64u %-8I64u %016I64x-%016I64x %-8I64u %-20S  }\n",
                 file_idx,
                 file->dir_idx,
                 file->modify_time,
