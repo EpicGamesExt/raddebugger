@@ -2564,7 +2564,7 @@ d2r_src_file_lookup_compar(void *raw_a, void *raw_b)
   String8 dir_path_b = b->vm->header.dir_table.v[file_b->dir_idx];
   int cmp = str8_compar(dir_path_a, dir_path_b, 0);
   if (cmp == 0) {
-    cmp = str8_compar(file_a->file_name, file_b->file_name, 0);
+    cmp = str8_compar(file_a->path, file_b->path, 0);
   }
   return cmp;
 }
@@ -2587,9 +2587,9 @@ d2r_hash_line_file(String8 dir_path, DW_LineFile *file)
   XXH3_state_t hasher = {0};
   XXH3_64bits_reset(&hasher);
   XXH3_64bits_update(&hasher, dir_path.str, dir_path.size);
-  XXH3_64bits_update(&hasher, file->file_name.str, file->file_name.size);
-  XXH3_64bits_update(&hasher, &file->modify_time, sizeof(file->modify_time));
-  XXH3_64bits_update(&hasher, &file->md5_digest, sizeof(file->md5_digest));
+  XXH3_64bits_update(&hasher, file->path.str, file->path.size);
+  XXH3_64bits_update(&hasher, &file->time_stamp, sizeof(file->time_stamp));
+  XXH3_64bits_update(&hasher, &file->md5, sizeof(file->md5));
   XXH64_hash_t hash = XXH3_64bits_digest(&hasher);
   return hash;
 }
@@ -2841,18 +2841,18 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         {
           String8List path_list = {0};
           str8_list_push_node(&path_list, &(String8Node){ .string = lookup->vm->header.dir_table.v[src->dir_idx] });
-          str8_list_push_node(&path_list, &(String8Node){ .string = src->file_name });
+          str8_list_push_node(&path_list, &(String8Node){ .string = src->path });
           path = str8_path_list_join_by_style(arena, &path_list, path_style);
         }
 
         // fill out source file
         dst->path = path;
-        if ( ! u128_match(src->md5_digest, u128_zero())) {
+        if ( ! u128_match(src->md5, u128_zero())) {
           dst->checksum_kind = RDI_ChecksumKind_MD5;
-          dst->checksum      = str8_copy(arena, str8_struct(&src->md5_digest));
-        } else if (src->modify_time != 0) {
+          dst->checksum      = str8_copy(arena, str8_struct(&src->md5));
+        } else if (src->time_stamp != 0) {
           dst->checksum_kind = RDI_ChecksumKind_Timestamp;
-          dst->checksum      = str8_copy(arena, str8_struct(&src->modify_time));
+          dst->checksum      = str8_copy(arena, str8_struct(&src->time_stamp));
         }
 
         lookup->src_file = dst;
@@ -2891,7 +2891,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                 (line_buffer_size >= D2R_LineBufferMax || line_buffer->file_index != vm->state.file_index))
                 && line_buffer_size > 0) {
               // lookup source file
-              DW_LineFile       *file     = &vm->header.file_table.v[vm->state.file_index];
+              DW_LineFile       *file     = &vm->header.file_table.v[line_buffer->file_index];
               U64                hash     = d2r_hash_line_file(vm->header.dir_table.v[file->dir_idx], file);
               D2R_SrcFileLookup *lookup   = lfht_search(src_file_lfht, hash, &(D2R_SrcFileLookup){ .file = file, .vm = vm }, d2r_src_file_lookup_is_equal, 0);
               RDIM_SrcFile      *src_file = lookup->src_file;

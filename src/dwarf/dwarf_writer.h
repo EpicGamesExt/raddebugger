@@ -135,7 +135,7 @@ typedef struct DW_WriterFile
   String8 path;
   U64     time_stamp;
   U64     size;
-  String8 md5;
+  U128    md5;
   String8 source;
   // computed during line table emit step
   U64     file_idx;
@@ -306,12 +306,14 @@ internal DW_LineInstNode * dw_line_inst_list_push     (Arena *arena, DW_LineInst
 #define DW_LNE_set_address(a)       (DW_LineInst){ .opcode = DW_StdOpcode_ExtendedOpcode, .ext = DW_ExtOpcode_SetAddress,       .set_address = a       }
 #define DW_LNE_set_discriminator(d) (DW_LineInst){ .opcode = DW_StdOpcode_ExtendedOpcode, .ext = DW_ExtOpcode_SetDiscriminator, .set_discriminator = d }
 
-internal void            dw_writer_line_emit            (DW_Writer *writer, DW_WriterFile *file, U64 ln, U64 col, U64 addr);
-internal void            dw_writer_line_set_address     (DW_Writer *writer, U64 address);
-internal void            dw_writer_line_set_prologue_end(DW_Writer *writer);
-internal void            dw_writer_line_epilogue_begin  (DW_Writer *writer);
-internal void            dw_writer_line_set_isa         (DW_Writer *writer, U64 isa);
-internal DW_WriterFile * dw_writer_new_file             (DW_Writer *writer, String8 path);
+internal void            dw_writer_line_emit             (DW_Writer *writer, DW_WriterFile *file, U64 ln, U64 col, U64 addr);
+internal void            dw_writer_line_set_address      (DW_Writer *writer, U64 address);
+internal void            dw_writer_line_set_discriminator(DW_Writer *writer, U64 d);
+internal void            dw_writer_line_end_sequence     (DW_Writer *writer);
+internal void            dw_writer_line_set_prologue_end (DW_Writer *writer);
+internal void            dw_writer_line_epilogue_begin   (DW_Writer *writer);
+internal void            dw_writer_line_set_isa          (DW_Writer *writer, U64 isa);
+internal DW_WriterFile * dw_writer_new_file              (DW_Writer *writer, String8 path);
 
 ////////////////////////////////
 // Emit

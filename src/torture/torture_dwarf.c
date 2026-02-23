@@ -34,7 +34,7 @@ t_dw_test_sleb128(U64 v, U64 expected_length)
   String8 e = dw_write_sleb128(scratch.arena, v0);
   if (!(expected_length == e.size)) { goto exit; }
 
-  U64 v1;
+  S64 v1;
   U64 bytes_read = str8_deserial_read_sleb128(e, 0, &v1);
   if (!(bytes_read == e.size)) { goto exit; }
   if (!(v0 == v1)) { goto exit; }
@@ -54,6 +54,8 @@ T_BeginTest(test_leb128)
   T_Ok(t_dw_test_uleb128(max_U64, 10));
   T_Ok(t_dw_test_sleb128(min_S64, 10));
   T_Ok(t_dw_test_sleb128(max_S64, 10));
+
+  T_Ok(t_dw_test_uleb128(0xDEADBEEFCAFEBABE, 10));
 
   for EachIndex(i, 64) {
     T_Ok(t_dw_test_uleb128((1ull << i), 1 + (i / 7)));
@@ -102,45 +104,419 @@ exit:;
   return is_match;
 }
 
-internal DW_Writer *
-dwt_make_writer(void)
+internal DW_Input
+dw_input_from_writer(Arena *arena, DW_Writer *writer)
 {
-  Temp scratch = scratch_begin(0, 0);
+  Temp scratch = scratch_begin(&arena, 1);
 
-  String8 comp_dir  = t_make_file_path(scratch.arena, str8_lit(""));
-  String8 comp_name = str8_lit("test_code.txt");
-  String8 test_text = str8_lit("nop\nnop\nret\n");
-  String8 test_path = t_make_file_path(scratch.arena, comp_name);
-  t_write_file(comp_name, test_text);
+  OBJ *obj = obj_alloc(0, Arch_x64);
+  OBJ_Section *text_section = obj_push_section(obj, str8_lit(".text"), OBJ_SectionFlag_Read|OBJ_SectionFlag_Exec|OBJ_SectionFlag_Load);
+  str8_serial_push_u8(obj->arena, &text_section->data, 0x90);
+  str8_serial_push_u8(obj->arena, &text_section->data, 0x90);
+  str8_serial_push_u8(obj->arena, &text_section->data, 0x90);
+  str8_serial_push_u8(obj->arena, &text_section->data, 0xc3);
+  obj_push_symbol(obj, str8_lit("entry"), OBJ_SymbolScope_Global, OBJ_RefKind_Section, text_section);
 
-  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_Last, DW_CompUnitKind_Compile, Arch_x64);
-  // line
+  dw_writer_emit_to_obj(writer, obj);
+  String8 raw_coff = coff_from_obj(scratch.arena, obj);
+
+  t_write_file(str8_lit("dwarf.obj"), raw_coff);
+  t_invoke(str8_lit("radlink"), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full dwarf.obj"), max_U64);
+  os_delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)(exe.str + pe.section_table_range.min);
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  DW_Input            input         = dw_input_from_coff_section_table(arena, exe, string_table, pe.section_count, section_table);
+
+  obj_release(&obj);
+  scratch_end(scratch);
+  return input;
+}
+
+T_BeginTest(dwarf_line_opcodes)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+  String8 comp_dir  = str8_lit("c:/devel/");
+  String8 comp_name = str8_lit("test.c");
+  U64     address   = 0xDEADBEEFCAFEBABE;
+  dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
+    dw_writer_push_attrib_string(writer, DW_AttribKind_CompDir, comp_dir);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Name, comp_name);
+    dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
+  dw_writer_tag_end(writer);
+
+  // test directory table and file table
+  DW_WriterFile *file2 = dw_writer_new_file(writer, str8_lit("d:/foobar/qwe.c"));
+  file2->time_stamp = 123;
+  file2->size       = max_U64;
+  file2->md5        = *(U128 *)&((U8[sizeof(U128)]) { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, });
+  file2->source     = str8_lit("a quick brown fox jumps over the lazy dog\n");
+  DW_WriterFile *file = dw_writer_new_file(writer, comp_name);
+  file->time_stamp = max_U64;
+  file->size       = 314;
+  file->md5        = *(U128 *)&((U8[sizeof(U128)]) { 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, });
+  file->source     = str8_lit("int main() { return 057; }\n");
+
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_copy());
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_pc(7));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_pc(-7));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_line(4));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_line(-4));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_file(file));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_column(max_U64));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_column(0));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_negate_stmt());
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_negate_stmt());
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_basic_block());
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_const_add_pc());
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_fixed_advance_pc(max_U16));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_prologue_end());
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_epilogue_begin());
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_set_isa(max_U64));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_set_address(address));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_set_discriminator(2));
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_end_sequence());
+
+  DW_Input      input     = dw_input_from_writer(scratch.arena, writer);
+  Rng1U64Array  cu_ranges = dw_unit_ranges_from_data_arr(scratch.arena, input.sec[DW_Section_Info].data);
+  DW_CompUnit   cu        = dw_cu_from_info_off(scratch.arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
+  DW_LineVM    *line_vm   = dw_line_vm_init(&input, &cu);
+
+  T_Ok(line_vm->header.dir_table.count == 2);
+  T_Ok(line_vm->header.file_table.count == 2);
+
+  T_Ok(str8_match(line_vm->header.dir_table.v[0], str8_lit("c:/devel"), 0));
+  T_Ok(str8_match(line_vm->header.dir_table.v[1], str8_lit("d:/foobar"), 0));
+
+  DW_LineFile *file_reader = &line_vm->header.file_table.v[0];
+  T_Ok(str8_match(file_reader->path, comp_name, 0));
+  T_Ok(file_reader->dir_idx == 0);
+  T_Ok(file_reader->time_stamp == file->time_stamp);
+  T_Ok(u128_match(file_reader->md5, file->md5));
+  T_Ok(str8_match(file_reader->source, file->source, 0));
+
+  DW_LineFile *file2_reader = &line_vm->header.file_table.v[1];
+  T_Ok(str8_match(file2_reader->path, str8_lit("qwe.c"), 0));
+  T_Ok(file2_reader->dir_idx == 1);
+  T_Ok(file2_reader->time_stamp == file2->time_stamp);
+  T_Ok(u128_match(file2_reader->md5, file2->md5));
+  T_Ok(str8_match(file2_reader->source, file2->source, 0));
+
+  T_Ok(line_vm->new_line == 0);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_Copy);
+  T_Ok(line_vm->new_line == 1);
+  T_Ok(line_vm->state.discriminator == 0);
+  T_Ok(line_vm->state.basic_block == 0);
+  T_Ok(line_vm->state.prologue_end == 0);
+  T_Ok(line_vm->state.epilogue_begin == 0);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
+  T_Ok(line_vm->state.address == 7);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
+  T_Ok(line_vm->state.address == 0);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+  T_Ok(line_vm->state.line == 5);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+  T_Ok(line_vm->state.line == 1);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_SetFile);
+  T_Ok(line_vm->state.file_index == 0);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_SetColumn);
+  T_Ok(line_vm->state.column == max_U64);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_SetColumn);
+  T_Ok(line_vm->state.column == 0);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_NegateStmt);
+  T_Ok(line_vm->state.is_stmt == 0);
+
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_NegateStmt);
+  T_Ok(line_vm->state.is_stmt == 1);
+
+  T_Ok(line_vm->state.basic_block == 0);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_SetBasicBlock);
+  T_Ok(line_vm->state.basic_block == 1);
+
   {
-    DW_WriterFile *a_file = dw_writer_new_file(writer, test_path);
-    dw_writer_line_set_prologue_end(writer);
-    dw_writer_line_emit(writer, a_file, 1, 0, 0x140001000);
-    dw_writer_line_emit(writer, a_file, 2, 0, 0x140001001);
-    dw_writer_line_emit(writer, a_file, 3, 0, 0x140001002);
-
-    //DW_WriterFile *b_file = dw_writer_new_file(writer, str8_lit("~/devel/projects/b/b.c"));
-    //DW_WriterFile *a_file = dw_writer_new_file(writer, str8_lit("~/devel/projects/a.c"));
-    //dw_writer_line_set_prologue_end(writer);
-    //dw_writer_line_emit(writer, b_file, 10, 0, 0x140001000);
-    //dw_writer_line_emit(writer, b_file, 11, 0, 0x140001010);
-    //dw_writer_line_emit(writer, a_file, 1,  0, 0x140001016);
-    //dw_writer_line_emit(writer, a_file, 2,  0, 0x140001020);
+    U64 addr_before = line_vm->state.address;
+    U64 const_advance = (0xffu - line_vm->header.opcode_base) / line_vm->header.line_range;
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(!line_vm->new_line);
+    T_Ok(line_vm->state.address == addr_before + const_advance);
   }
+
+  T_Ok(line_vm->state.address == 0x11);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_FixedAdvancePc);
+  T_Ok(line_vm->state.address == max_U16 + 0x11);
+
+  T_Ok(line_vm->state.prologue_end == 0);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_SetPrologueEnd);
+  T_Ok(line_vm->state.prologue_end == 1);
+
+  T_Ok(line_vm->state.epilogue_begin == 0);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_SetEpilogueBegin);
+  T_Ok(line_vm->state.epilogue_begin == 1);
+
+  T_Ok(line_vm->state.isa == 0);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_SetIsa);
+  T_Ok(line_vm->state.isa == max_U64);
+
+  T_Ok(line_vm->state.address != address);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+  T_Ok(line_vm->ext_opcode == DW_ExtOpcode_SetAddress);
+  T_Ok(line_vm->state.address == address);
+
+  T_Ok(line_vm->state.discriminator == 0);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+  T_Ok(line_vm->ext_opcode == DW_ExtOpcode_SetDiscriminator);
+  T_Ok(line_vm->state.discriminator == 2);
+
+  T_Ok(!line_vm->state.end_sequence);
+  T_Ok(dw_line_vm_step(line_vm));
+  T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+  T_Ok(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
+  T_Ok(line_vm->state.end_sequence);
+
+  dw_writer_end(&writer);
+}
+T_EndTest;
+
+T_BeginTest(dwarf_line_emit)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+  String8 comp_dir  = str8_lit("c:/devel/");
+  String8 comp_name = str8_lit("test.c");
+  dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
+    dw_writer_push_attrib_string(writer, DW_AttribKind_CompDir, comp_dir);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Name, comp_name);
+    dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
+  dw_writer_tag_end(writer);
+
+  // test special opcode writer and reader
+  DW_WriterFile *file = dw_writer_new_file(writer, comp_name);
+
+  // init sequence
+  dw_writer_line_emit(writer, file, 10000, 0, 1000);
+
+  for EachIndex(i, abs_s64(writer->line.line_base) + 1) {
+    dw_writer_line_emit(writer, file, writer->line.ln-i, 0, writer->line.addr+1);
+
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_line(i));
+    writer->line.ln += i;
+  }
+
+  // special opcode line window underflow, must emit three instructions to advance
+  dw_writer_line_emit(writer, file, (writer->line.ln + writer->line.line_base) - 1, 0, writer->line.addr + 1);
+  dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_line(-(writer->line.line_base - 1)));
+
+  for EachIndex(i, (writer->line.line_range + writer->line.line_base) + 1) {
+    dw_writer_line_emit(writer, file, writer->line.ln+i, 0, writer->line.addr+1);
+
+    dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNS_advance_line(-i));
+    writer->line.ln -= i;
+  }
+
+  dw_writer_line_end_sequence(writer);
+  dw_writer_line_emit(writer, file, 1000, 0, writer->line.addr+1);
+
+  // test address window
+  S64 c = writer->line.line_range + writer->line.line_base;
+  U64 line_addr_count = 0;
+  for (S64 i = 0; i < c; ++i) {
+    U64 ln_delta       = i + writer->line.line_base;
+    S64 max_ln_delta   = writer->line.line_range + writer->line.line_base;
+    S64 max_addr_delta = (max_U8 - writer->line.opcode_base - (ln_delta - writer->line.line_base)) / writer->line.line_range;
+    for EachIndex(k, max_addr_delta) {
+      dw_writer_line_emit(writer, file, writer->line.ln + i, 0, writer->line.addr + k);
+      line_addr_count += 1;
+    }
+  }
+
+  DW_Input      input     = dw_input_from_writer(scratch.arena, writer);
+  Rng1U64Array  cu_ranges = dw_unit_ranges_from_data_arr(scratch.arena, input.sec[DW_Section_Info].data);
+  DW_CompUnit   cu        = dw_cu_from_info_off(scratch.arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
+  DW_LineVM    *line_vm   = dw_line_vm_init(&input, &cu);
+
+  // check init sequence
+  {
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(line_vm->opcode == DW_StdOpcode_SetFile);
+    T_Ok(line_vm->state.file_index == 0);
+    T_Ok(line_vm->new_line == 0);
+
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
+    T_Ok(line_vm->state.address == 1000);
+
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+    T_Ok(line_vm->state.line == 10000);
+    T_Ok(line_vm->new_line == 0);
+
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(line_vm->opcode == DW_StdOpcode_Copy);
+    T_Ok(line_vm->state.line == 10000);
+    T_Ok(line_vm->state.address == 1000);
+    T_Ok(line_vm->new_line == 1);
+  }
+
+  {
+    U64 pc = line_vm->state.address;
+    for EachIndex(i, abs_s64(writer->line.line_base) + 1) {
+      pc += 1;
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == 0x20 - i);
+      T_Ok(line_vm->state.line == 10000 - i);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(line_vm->new_line == 1);
+      
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      T_Ok(line_vm->state.line == 10000);
+      T_Ok(line_vm->state.address == pc);
+    }
+
+    // line window underflow check
+    {
+      pc += 1;
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
+      T_Ok(line_vm->state.line == 10000);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(!line_vm->new_line);
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      T_Ok(line_vm->state.line == 9994);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(!line_vm->new_line);
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_Copy);
+      T_Ok(line_vm->state.line == 9994);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(line_vm->new_line);
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      T_Ok(line_vm->state.line == 10000);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(!line_vm->new_line);
+    }
+
+    for EachIndex(i, writer->line.line_range + writer->line.line_base) {
+      pc += 1;
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == 0x20 + i);
+      T_Ok(line_vm->state.line == 10000 + i);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(line_vm->new_line);
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      T_Ok(line_vm->state.line == 10000);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(!line_vm->new_line);
+    }
+
+    // line window overflow check
+    {
+      pc += 1;
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
+      T_Ok(line_vm->state.line == 10000);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(!line_vm->new_line);
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      T_Ok(line_vm->state.line == 10009);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(!line_vm->new_line);
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_Copy);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(line_vm->state.line == 10009);
+      T_Ok(line_vm->new_line);
+
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      T_Ok(line_vm->state.line == 10000);
+      T_Ok(line_vm->state.address == pc);
+      T_Ok(!line_vm->new_line);
+    }
+
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+    T_Ok(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
+    T_Ok(line_vm->state.line == 10000);
+    T_Ok(line_vm->state.address == pc);
+    T_Ok(line_vm->new_line);
+  }
+
+  {
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(dw_line_vm_step(line_vm));
+
+    for EachIndex(i, line_addr_count/*first line is a noop*/-1) {
+      T_Ok(dw_line_vm_step(line_vm));
+      T_Ok(line_vm->header.opcode_base < line_vm->opcode);
+      T_Ok(line_vm->new_line);
+    }
+
+    T_Ok(dw_line_vm_step(line_vm));
+    T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+    T_Ok(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
+    T_Ok(line_vm->state.line == 1586);
+    T_Ok(line_vm->state.address == 1161);
+    T_Ok(line_vm->new_line);
+  }
+}
+T_EndTest;
+
+T_BeginTest(dwarf_writer)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   // info
   {
     dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
     dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
-    dw_writer_push_attrib_string(writer, DW_AttribKind_CompDir, comp_dir);
-    dw_writer_push_attrib_string(writer, DW_AttribKind_Name, comp_name);
     dw_writer_push_attrib_enum(writer, DW_AttribKind_Language, DW_Language_C99);
     dw_writer_push_attrib_flag(writer, DW_AttribKind_UseUtf8, 1);
-    dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
     dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, 0x140001000);
-    dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x140001003);
+    dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x140001004);
     {
       DW_WriterTag *char_type = dw_writer_tag_begin(writer, DW_TagKind_BaseType);
       dw_writer_push_attrib_sint(writer, DW_AttribKind_ByteSize, 1);
@@ -183,7 +559,7 @@ dwt_make_writer(void)
       dw_writer_push_attrib_flag(writer, DW_AttribKind_External, 1);
       dw_writer_push_attrib_flag(writer, DW_AttribKind_Prototyped, 1);
       dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, 0x140001000);
-      dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x140001003);
+      dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x140001004);
       dw_writer_push_attrib_string(writer, DW_AttribKind_Name, str8_lit("main"));
       dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, simple_struct_tag);
       dw_writer_push_attrib_expression(writer, DW_AttribKind_FrameBase, &(DW_ExprEnc)DW_ExprEnc_Op(Reg7), 1);
@@ -192,47 +568,12 @@ dwt_make_writer(void)
     dw_writer_tag_end(writer);
   }
 
-  {
-    DW_Input input;
-    {
-      OBJ *obj = obj_alloc(0, Arch_x64);
-      OBJ_Section *text_section = obj_push_section(obj, str8_lit(".text"), OBJ_SectionFlag_Read|OBJ_SectionFlag_Exec|OBJ_SectionFlag_Load);
-      str8_serial_push_u8(obj->arena, &text_section->data, 0x90);
-      str8_serial_push_u8(obj->arena, &text_section->data, 0x90);
-      str8_serial_push_u8(obj->arena, &text_section->data, 0xc3);
-      obj_push_symbol(obj, str8_lit("entry"), OBJ_SymbolScope_Global, OBJ_RefKind_Section, text_section);
+  DW_Input            input         = dw_input_from_writer(scratch.arena, writer);
+  DW_ListUnitInput    lu_input      = dw_list_unit_input_from_input(scratch.arena, &input);
+  DW_CompUnit         cu            = dw_cu_from_info_off(scratch.arena, &input, lu_input, 0, 1);
+  DW_TagTree          tag_tree      = dw_tag_tree_from_cu(scratch.arena, &input, &cu);
+  AssertAlways(dwt_tags_must_match(writer->root, tag_tree.root));
 
-      dw_writer_emit_to_obj(writer, obj);
-
-      String8              raw_coff        = coff_from_obj(scratch.arena, obj);
-      COFF_FileHeaderInfo  obj_coff_header = coff_file_header_info_from_data(raw_coff);
-      String8              raw_sections    = str8_substr(raw_coff, obj_coff_header.section_table_range);
-      U64                  section_count   = raw_sections.size / sizeof(COFF_SectionHeader);
-      COFF_SectionHeader  *section_table   = (COFF_SectionHeader *)raw_sections.str;
-      String8              string_table    = str8_substr(raw_coff, obj_coff_header.string_table_range);
-      input = dw_input_from_coff_section_table(scratch.arena, raw_coff, string_table, section_count, section_table);
-
-      t_write_file(str8_lit("dwarf.obj"), raw_coff);
-
-      t_invoke(str8_lit("radlink"), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full dwarf.obj"), max_U64);
-
-      obj_release(&obj);
-    }
-
-    DW_ListUnitInput lu_input = dw_list_unit_input_from_input(scratch.arena, &input);
-    DW_CompUnit      cu       = dw_cu_from_info_off(scratch.arena, &input, lu_input, 0, 1);
-    DW_TagTree       tag_tree = dw_tag_tree_from_cu(scratch.arena, &input, &cu);
-    AssertAlways(dwt_tags_must_match(writer->root, tag_tree.root));
-
-  }
-
-  scratch_end(scratch);
-  return writer;
-}
-
-T_BeginTest(dwarf_writer)
-{
-  DW_Writer *writer = dwt_make_writer();
 
   // validate the writer
 
@@ -250,7 +591,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(comp_unit_tag->kind == DW_TagKind_CompileUnit);
     T_Ok(comp_unit_tag->next == 0);
     T_Ok(comp_unit_tag->parent == 0);
-    T_Ok(comp_unit_tag->attrib_count == 3);
+    T_Ok(comp_unit_tag->attrib_count == 5);
     T_Ok(comp_unit_tag->abbrev_id == 1);
     T_Ok(comp_unit_tag->info_off == 0xc);
 
@@ -278,7 +619,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(char_type_tag->parent == comp_unit_tag);
     T_Ok(char_type_tag->attrib_count == 3);
     T_Ok(char_type_tag->abbrev_id == 2);
-    T_Ok(char_type_tag->info_off == 0x20);
+    T_Ok(char_type_tag->info_off == 0x30);
     T_Ok(char_type_tag->first_attrib != char_type_tag->last_attrib);
 
     DW_WriterAttrib *byte_size_attrib = char_type_tag->first_attrib;
@@ -306,7 +647,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(const_type_tag->parent == comp_unit_tag);
     T_Ok(const_type_tag->attrib_count == 1);
     T_Ok(const_type_tag->abbrev_id == 3);
-    T_Ok(const_type_tag->info_off == 0x28);
+    T_Ok(const_type_tag->info_off == 0x38);
     T_Ok(const_type_tag->first_attrib && const_type_tag->first_attrib == const_type_tag->last_attrib);
 
     DW_WriterAttrib *type_attrib = const_type_tag->first_attrib;
@@ -322,7 +663,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(dup_char_type_tag->parent == comp_unit_tag);
     T_Ok(dup_char_type_tag->attrib_count == 3);
     T_Ok(dup_char_type_tag->abbrev_id == 2);
-    T_Ok(dup_char_type_tag->info_off == 0x2a);
+    T_Ok(dup_char_type_tag->info_off == 0x3a);
     T_Ok(dup_char_type_tag->first_attrib != dup_char_type_tag->last_attrib);
 
     DW_WriterAttrib *byte_size_attrib = dup_char_type_tag->first_attrib;
@@ -350,7 +691,7 @@ T_BeginTest(dwarf_writer)
     T_Ok(simple_struct_tag->parent == comp_unit_tag);
     T_Ok(simple_struct_tag->attrib_count == 2);
     T_Ok(simple_struct_tag->abbrev_id == 4);
-    T_Ok(simple_struct_tag->info_off == 0x32);
+    T_Ok(simple_struct_tag->info_off == 0x42);
 
     DW_WriterAttrib *simple_struct_name = simple_struct_tag->first_attrib;
     T_Ok(simple_struct_name->kind == DW_AttribKind_Name);
@@ -362,7 +703,7 @@ T_BeginTest(dwarf_writer)
       T_Ok(m0_tag->kind == DW_TagKind_Member);
       T_Ok(m0_tag->parent == simple_struct_tag);
       T_Ok(m0_tag->attrib_count == 3);
-      T_Ok(m0_tag->info_off == 0x3b);
+      T_Ok(m0_tag->info_off == 0x4b);
       T_Ok(m0_tag->abbrev_id == 5);
 
       DW_WriterAttrib *name = m0_tag->first_attrib;
@@ -373,7 +714,7 @@ T_BeginTest(dwarf_writer)
       DW_WriterAttrib *type = name->next;
       T_Ok(type->kind == DW_AttribKind_Type);
       T_Ok(type->form.reader.kind == DW_Form_Ref1);
-      T_Ok(type->form.reader.ref == 0x20);
+      T_Ok(type->form.reader.ref == 0x30);
 
       DW_WriterAttrib *data_loc = type->next;
       T_Ok(data_loc->kind == DW_AttribKind_DataMemberLocation);
@@ -387,7 +728,7 @@ T_BeginTest(dwarf_writer)
       T_Ok(m1_tag->kind == DW_TagKind_Member);
       T_Ok(m1_tag->parent == simple_struct_tag);
       T_Ok(m1_tag->attrib_count == 4);
-      T_Ok(m1_tag->info_off == 0x41);
+      T_Ok(m1_tag->info_off == 0x51);
       T_Ok(m1_tag->abbrev_id == 6);
 
       DW_WriterAttrib *name = m1_tag->first_attrib;
@@ -398,7 +739,7 @@ T_BeginTest(dwarf_writer)
       DW_WriterAttrib *type = name->next;
       T_Ok(type->kind == DW_AttribKind_Type);
       T_Ok(type->form.reader.kind == DW_Form_Ref1);
-      T_Ok(type->form.reader.ref == 0x20);
+      T_Ok(type->form.reader.ref == 0x30);
 
       DW_WriterAttrib *data_loc = type->next;
       T_Ok(data_loc->kind == DW_AttribKind_DataMemberLocation);
@@ -433,13 +774,13 @@ T_BeginTest(dwarf_writer)
     T_Ok(low_pc->kind == DW_AttribKind_LowPc);
     T_Ok(low_pc->form.reader.kind == DW_Form_Addr);
     T_Ok(low_pc->form.reader.addr.size == sizeof(U64));
-    T_Ok(*(U64 *)low_pc->form.reader.addr.str == 0x14012f2f0);
+    T_Ok(*(U64 *)low_pc->form.reader.addr.str == 0x140001000);
 
     DW_WriterAttrib *high_pc = low_pc->next;
     T_Ok(high_pc->kind == DW_AttribKind_HighPc);
     T_Ok(high_pc->form.reader.kind == DW_Form_Addr);
     T_Ok(high_pc->form.reader.addr.size == sizeof(U64));
-    T_Ok(*(U64 *)high_pc->form.reader.addr.str == 0x14012f405);
+    T_Ok(*(U64 *)high_pc->form.reader.addr.str == 0x140001004);
 
     DW_WriterAttrib *name = high_pc->next;
     T_Ok(name->kind == DW_AttribKind_Name);
@@ -651,4 +992,3 @@ T_EndTest;
 #endif
 
 #undef T_Group
-

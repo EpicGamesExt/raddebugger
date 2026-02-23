@@ -173,11 +173,11 @@ typedef struct DW_TagTree
 
 typedef struct DW_LineFile
 {
-  String8 file_name;
+  String8 path;
   U64     dir_idx;
-  U64     modify_time;
-  U64     file_size;
-  U128    md5_digest;
+  U64     time_stamp;
+  U64     size;
+  U128    md5;
   String8 source;
 } DW_LineFile;
 

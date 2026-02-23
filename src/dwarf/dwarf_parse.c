@@ -2276,7 +2276,7 @@ dw_read_line_vm_header(Arena           *arena,
       // compile unit name is always first in the file table
       {
         DW_LineFileNode *node = push_array(scratch.arena, DW_LineFileNode, 1);
-        node->file.file_name    = cu_name;
+        node->file.path = cu_name;
         SLLQueuePush(file_list.first, file_list.last, node);
         file_list.node_count += 1;
       }
@@ -2288,10 +2288,10 @@ dw_read_line_vm_header(Arena           *arena,
         if (first_byte == 0) { break; }
 
         DW_LineFile file = {0};
-        TryRead(str8_deserial_read_cstr   (data, cursor, &file.file_name),   cursor, exit);
-        TryRead(str8_deserial_read_uleb128(data, cursor, &file.dir_idx),     cursor, exit);
-        TryRead(str8_deserial_read_uleb128(data, cursor, &file.modify_time), cursor, exit);
-        TryRead(str8_deserial_read_uleb128(data, cursor, &file.file_size),   cursor, exit);
+        TryRead(str8_deserial_read_cstr   (data, cursor, &file.path),       cursor, exit);
+        TryRead(str8_deserial_read_uleb128(data, cursor, &file.dir_idx),    cursor, exit);
+        TryRead(str8_deserial_read_uleb128(data, cursor, &file.time_stamp), cursor, exit);
+        TryRead(str8_deserial_read_uleb128(data, cursor, &file.size),       cursor, exit);
         
         DW_LineFileNode *node = push_array(scratch.arena, DW_LineFileNode, 1);
         node->file = file;
@@ -2309,10 +2309,10 @@ dw_read_line_vm_header(Arena           *arena,
     file_table.v     = push_array(arena, DW_LineFile, file_list.node_count);
     for EachNode(n, DW_LineFileNode, file_list.first) {
       DW_LineFile *dst = &file_table.v[file_table.count++];
-      dst->file_name   = push_str8_copy(arena, n->file.file_name);
+      dst->path        = push_str8_copy(arena, n->file.path);
       dst->dir_idx     = n->file.dir_idx;
-      dst->modify_time = n->file.modify_time;
-      dst->file_size   = n->file.file_size;
+      dst->time_stamp  = n->file.time_stamp;
+      dst->size        = n->file.size;
     }
   }
   // DWARF5
@@ -2379,12 +2379,12 @@ dw_read_line_vm_header(Arena           *arena,
           cursor += form_size;
 
           switch (lnct) {
-          case DW_LNCT_Path:           { file->file_name   = dw_interp_string(input, format, cu_str_offsets, form); } break;
-          case DW_LNCT_DirectoryIndex: { file->dir_idx     = dw_interp_const_u64(form);                             } break;
-          case DW_LNCT_TimeStamp:      { file->modify_time = dw_interp_const_u64(form);                             } break;
-          case DW_LNCT_Size:           { file->file_size   = dw_interp_const_u64(form);                             } break;
-          case DW_LNCT_MD5:            { file->md5_digest  = dw_interp_const_u128(form);                            } break;
-          case DW_LNCT_LLVM_Source:    { file->source      = dw_interp_string(input, format, cu_str_offsets, form); } break;
+          case DW_LNCT_Path:           { file->path       = dw_interp_string(input, format, cu_str_offsets, form); } break;
+          case DW_LNCT_DirectoryIndex: { file->dir_idx    = dw_interp_const_u64(form);                             } break;
+          case DW_LNCT_TimeStamp:      { file->time_stamp = dw_interp_const_u64(form);                             } break;
+          case DW_LNCT_Size:           { file->size       = dw_interp_const_u64(form);                             } break;
+          case DW_LNCT_MD5:            { file->md5        = dw_interp_const_u128(form);                            } break;
+          case DW_LNCT_LLVM_Source:    { file->source     = dw_interp_string(input, format, cu_str_offsets, form); } break;
           default: {
             Assert(!"unexpected LNTC encoding");
           } break;
@@ -2565,7 +2565,9 @@ dw_line_vm_step(DW_LineVM *vm)
     } break;
 
     case DW_StdOpcode_FixedAdvancePc: {
-      TryRead(str8_deserial_read_struct(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
+      U16 fixed_advance = 0;
+      TryRead(str8_deserial_read_struct(vm->program, vm->cursor, &fixed_advance), vm->cursor, exit);
+      vm->operands[0].u64 = fixed_advance;
       vm->state.address += vm->operands[0].u64;
       vm->state.op_index = 0;
     } break;
@@ -2590,7 +2592,7 @@ dw_line_vm_step(DW_LineVM *vm)
       vm->cursor += vm->ext_length;
 
       U64 ext_cursor = 0;
-      TryRead(str8_deserial_read_struct(ext_data, ext_cursor, &vm->ext_opcode), vm->cursor, exit);
+      TryRead(str8_deserial_read_struct(ext_data, ext_cursor, &vm->ext_opcode), ext_cursor, exit);
 
       switch (vm->ext_opcode) {
       case DW_ExtOpcode_EndSequence: {
@@ -2600,26 +2602,26 @@ dw_line_vm_step(DW_LineVM *vm)
       } break;
 
       case DW_ExtOpcode_SetAddress: {
-        TryRead(str8_deserial_read(ext_data, ext_cursor, &vm->operands[0].u64, vm->header.address_size, vm->header.address_size), vm->cursor, exit);
+        TryRead(str8_deserial_read(ext_data, ext_cursor, &vm->operands[0].u64, vm->header.address_size, vm->header.address_size), ext_cursor, exit);
         vm->state.address  = vm->operands[0].u64;
         vm->state.op_index = 0;
       } break;
 
       case DW_ExtOpcode_DefineFile: {
-        TryRead(str8_deserial_read_cstr   (ext_data, ext_cursor, &vm->operands[0].string), vm->cursor, exit); // file name
-        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[1].u64),    vm->cursor, exit); // dir index
-        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[2].u64),    vm->cursor, exit); // modify time
-        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[3].u64),    vm->cursor, exit); // file size
+        TryRead(str8_deserial_read_cstr   (ext_data, ext_cursor, &vm->operands[0].string), ext_cursor, exit); // file name
+        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[1].u64),    ext_cursor, exit); // dir index
+        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[2].u64),    ext_cursor, exit); // modify time
+        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[3].u64),    ext_cursor, exit); // file size
 
         if (vm->ext_file_ht == 0) {
           vm->ext_file_ht = hash_table_init(vm->arena, 512);
         }
 
         DW_LineFile *file = push_array(vm->arena, DW_LineFile, 1);
-        file->file_name   = vm->operands[0].string;
-        file->dir_idx     = vm->operands[1].u64;
-        file->modify_time = vm->operands[2].u64;
-        file->file_size   = vm->operands[3].u64;
+        file->path       = vm->operands[0].string;
+        file->dir_idx    = vm->operands[1].u64;
+        file->time_stamp = vm->operands[2].u64;
+        file->size       = vm->operands[3].u64;
 
         if (hash_table_search_u64_raw(vm->ext_file_ht, vm->state.file_index) == 0) {
           vm->error = push_str8f(vm->arena, "file with index %I64d was already defined", vm->state.file_index);
@@ -2630,7 +2632,7 @@ dw_line_vm_step(DW_LineVM *vm)
       } break;
 
       case DW_ExtOpcode_SetDiscriminator: {
-        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[0].u64), vm->cursor, exit);
+        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[0].u64), ext_cursor, exit);
         vm->state.discriminator = vm->operands[0].u64;
       } break;
 
@@ -2675,13 +2677,13 @@ dw_path_from_file(Arena *arena, String8Array dir_table, DW_LineFile *file)
   Assert(dir_table.count > 0);
 
   // find directory and file name associated with the file index
-  String8 dir       = dir_table.v[file->dir_idx];
-  String8 file_name = file->file_name;
+  String8 dir  = dir_table.v[file->dir_idx];
+  String8 path = file->path;
 
   // infer path style if directory is empty use file name
   PathStyle style = path_style_from_str8(dir);
   if (style == PathStyle_Null || style == PathStyle_Relative) {
-    style = path_style_from_str8(file->file_name);
+    style = path_style_from_str8(file->path);
   }
   
   String8List path_list = {0};
@@ -2697,17 +2699,17 @@ dw_path_from_file(Arena *arena, String8Array dir_table, DW_LineFile *file)
     str8_list_concat_in_place(&path_list, &dir_list);
 
     // push file name
-    str8_list_push(scratch.arena, &path_list, file->file_name);
+    str8_list_push(scratch.arena, &path_list, file->path);
 
     // resolve dots in the path
     str8_path_list_resolve_dots_in_place(&path_list, style);
   }
 
   // join path
-  String8 path = str8_path_list_join_by_style(arena, &path_list, style);
+  String8 result = str8_path_list_join_by_style(arena, &path_list, style);
   
   scratch_end(scratch);
-  return path;
+  return result;
 }
 
 internal DW_PubStringsTable
