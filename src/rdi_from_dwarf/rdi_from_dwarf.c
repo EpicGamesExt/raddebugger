@@ -2617,9 +2617,12 @@ d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Input *input, U64 image_base)
     String8 unit_data   = str8_substr(input->sec[DW_Section_ARanges].data, range_n->v);
     U64     unit_cursor = 0;
 
+    U32 first_four_bytes = 0;
+    if (str8_deserial_read_struct(input->sec[DW_Section_Info].data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { goto exit; }
+    DW_Format unit_format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
+
     U64 unit_length;
     TryRead(str8_deserial_read_dwarf_packed_size(unit_data, unit_cursor, &unit_length), unit_cursor, exit);
-    DW_Format unit_format = DW_FormatFromSize(unit_length);
 
     DW_Version version;
     TryRead(str8_deserial_read_struct(unit_data, unit_cursor, &version), unit_cursor, exit);
