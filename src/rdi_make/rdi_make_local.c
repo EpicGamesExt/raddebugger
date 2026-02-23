@@ -765,6 +765,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           U64 *arranged_voffs           = rdim_shared->baked_line_tables.line_table_voffs   + dst_line_table->voffs_base_idx;
           RDI_Line *arranged_lines      = rdim_shared->baked_line_tables.line_table_lines   + dst_line_table->lines_base_idx;
           RDI_Column *arranged_cols     = rdim_shared->baked_line_tables.line_table_columns + dst_line_table->cols_base_idx;
+          if(sorted_line_keys_count > 0)
           {
             for EachIndex(idx, sorted_line_keys_count)
             {
@@ -1031,9 +1032,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       }
     }
     
+    lane_sync();
     scratch_end(scratch);
   }
-  lane_sync();
   RDIM_BakeStringMapTight *bake_strings = &rdim_shared->bake_strings;
   
   //////////////////////////////////////////////////////////////
