@@ -1320,15 +1320,13 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
 
     // no more type indices, pop frame
     if (!stack->ti_info) {
+      // sub leaves are hashed we can now hash parent leaf
+      U64 leaf_idx = stack->ti - ti_ranges[stack->ti_source].min;
+      curr_hashes[stack->ti_source][leaf_idx] = lnk_hash_cv_leaf(input, hashes, loc_type, loc_idx, ti_ranges, CV_TypeIndex_Max, stack->leaf, stack->ti_info_list);
+      Assert(curr_hashes[stack->ti_source][leaf_idx] != 0);
+
       SLLStackPop(stack);
     }
-  }
-
-  // sub leaves are hashed we can now hash parent leaf
-  {
-    U64 leaf_idx = ti - ti_ranges[ti_source].min;
-    curr_hashes[ti_source][leaf_idx] = lnk_hash_cv_leaf(input, hashes, loc_type, loc_idx, ti_ranges, CV_TypeIndex_Max, leaf, ti_info_list);
-    Assert(curr_hashes[ti_source][leaf_idx] != 0);
   }
 
   temp_end(temp);
@@ -1492,7 +1490,7 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_deep_task)
   LNK_CvImportTypes *task      = raw_task;
   U64                ts_idx    = task_id;
   CV_TypeIndexSource ti_source = task->ti_source;
-  CV_DebugT          debug_t   = task->debug_t_arr              [ts_idx];
+  CV_DebugT          debug_t   = task->input->external_leaves   [ts_idx][ti_source];
   Rng1U64           *ti_ranges = task->input->external_ti_ranges[ts_idx];
   CV_DebugT         *leaves    = task->input->external_leaves   [ts_idx];
 
@@ -2198,23 +2196,21 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
     ProfEnd();
 
     // hash .debug$P first so we can mix in hashes for precompiled sub leaves when hashing leaves in .debug$T
-    ProfBeginDynamic("Hash .debug$P [Count: %llu]", input->internal_count);
     task.debug_t_arr = input->internal_debug_p_arr;
-    tp_for_parallel(tp, 0, input->internal_count, lnk_hash_debug_t_task, &task);
-    ProfEnd();
+    ProfScope("Hash .debug$P [Count: %llu]", input->internal_count)
+      tp_for_parallel(tp, 0, input->internal_count, lnk_hash_debug_t_task, &task);
 
-    ProfBegin("Hash .debug$T [Count: %.*s]", str8_varg(str8_from_count(scratch.arena, input->internal_count)));
     task.debug_t_arr = input->internal_debug_t_arr;
-    tp_for_parallel(tp, 0, input->internal_count, lnk_hash_debug_t_task, &task);
-    ProfEnd();
+    ProfScope("Hash .debug$T [Count: %.*s]", str8_varg(str8_from_count(scratch.arena, input->internal_count)))
+      tp_for_parallel(tp, 0, input->internal_count, lnk_hash_debug_t_task, &task);
 
-    task.ti_source   = CV_TypeIndexSource_IPI;
-    task.debug_t_arr = input->external_leaves[task.ti_source];
-    tp_for_parallel_prof(tp, 0, input->type_server_count, lnk_hash_debug_t_deep_task, &task, "Hash IPI Type Servers");
+    task.ti_source = CV_TypeIndexSource_IPI;
+    ProfScope("Hash IPI Type Servers")
+      tp_for_parallel(tp, 0, input->type_server_count, lnk_hash_debug_t_deep_task, &task);
 
-    task.ti_source   = CV_TypeIndexSource_TPI;
-    task.debug_t_arr = input->external_leaves[task.ti_source];
-    tp_for_parallel_prof(tp, 0, input->type_server_count, lnk_hash_debug_t_deep_task, &task, "Hash IPI Type Servers");
+    task.ti_source = CV_TypeIndexSource_TPI;
+    ProfScope("Hash TPI Type Servers")
+      tp_for_parallel(tp, 0, input->type_server_count, lnk_hash_debug_t_deep_task, &task);
   }
   ProfEnd();
 
