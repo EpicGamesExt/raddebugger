@@ -2216,15 +2216,17 @@ dw_read_line_vm_header(Arena           *arena,
 {
   Temp scratch = scratch_begin(&arena, 1);
 
+  U64 cursor = 0;
+
   U32 first_four_bytes = 0;
   if (str8_deserial_read_struct(cu_stmt_list, 0, &first_four_bytes) != sizeof(U32)) { goto exit; }
 
   // read unit length
   U64 length      = 0;
   U64 length_size = str8_deserial_read_dwarf_packed_size(cu_stmt_list, 0, &length);
-  
   DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
-  U64       cursor = length_size;
+  
+  cursor = length_size;
   String8   data   = str8_substr(cu_stmt_list, r1u64(0, length + length_size));
   
   // read unit version

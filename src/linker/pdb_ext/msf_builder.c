@@ -1155,9 +1155,9 @@ msf_stream_write_parallel(TP_Context *tp, MSF_Context *msf, MSF_StreamNumber sn,
   if (is_write_ok) {
     U64 expected_pos = stream->pos + buffer_size;
 
-    U64 pre_size = Min(AlignPadPow2(stream->pos, msf->page_size), buffer_size);
-    U64 mid_size = AlignDownPow2(buffer_size - pre_size, msf->page_size);
-    U64 end_size = buffer_size - (pre_size + mid_size);
+    MSF_UInt pre_size = Min(AlignPadPow2(stream->pos, msf->page_size), buffer_size);
+    MSF_UInt mid_size = AlignDownPow2(buffer_size - pre_size, msf->page_size);
+    MSF_UInt end_size = buffer_size - (pre_size + mid_size);
 
     U8 *pre_ptr = (U8*)buffer;
     U8 *mid_ptr = (U8*)buffer + pre_size;

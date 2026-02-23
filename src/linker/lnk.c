@@ -4335,7 +4335,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
         // compute .bss virtual size - this marks start of the common block
         lnk_finalize_section_layout(common_block_sect, config->file_align, config->function_pad_min);
-        U64 common_block_cursor = common_block_sect->vsize;
+        U32 common_block_cursor = common_block_sect->vsize;
 
         // compute and assign offsets into the common block
         for EachIndex(contrib_idx, common_block_contribs_count) {
