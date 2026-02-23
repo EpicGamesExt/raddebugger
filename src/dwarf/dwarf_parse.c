@@ -12,13 +12,14 @@ internal U64
 str8_deserial_read_dwarf_packed_size(String8 string, U64 off, U64 *size_out)
 {
   U64 bytes_read = 0;
-  if (str8_deserial_read(string, off, size_out, sizeof(U32), sizeof(U32))) {
-    if (*size_out == max_U32) {
-      if (str8_deserial_read_struct(string, off+sizeof(U32), size_out)) {
+  U32 first_four_bytes;
+  if (str8_deserial_read_struct(string, off, &first_four_bytes) == sizeof(first_four_bytes)) {
+    if (first_four_bytes == max_U32) {
+      if (str8_deserial_read_struct(string, off+sizeof(U32), size_out) == sizeof(U64)) {
         bytes_read = sizeof(U32) + sizeof(U64);
       }
     } else {
-      *size_out &= (U64)max_U32;
+      *size_out = first_four_bytes;
       bytes_read = sizeof(U32);
     }
   }
@@ -273,6 +274,10 @@ internal U64
 dw_read_list_unit_header_str_offsets(String8 unit_data, DW_ListUnit *lu_out)
 {
   U64 header_size = 0;
+
+  U32 first_four_bytes = 0;
+  if (str8_deserial_read_struct(unit_data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { goto exit; }
+  DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
   
   U64 unit_length      = 0;
   U64 unit_length_size = str8_deserial_read_dwarf_packed_size(unit_data, 0, &unit_length);
@@ -291,12 +296,13 @@ dw_read_list_unit_header_str_offsets(String8 unit_data, DW_ListUnit *lu_out)
         lu_out->version               = version;
         lu_out->address_size          = 0;
         lu_out->segment_selector_size = 0;
-        lu_out->entry_size            = dw_size_from_format(DW_FormatFromSize(unit_length));
+        lu_out->entry_size            = dw_size_from_format(format);
         lu_out->entries               = str8_skip(unit_data, header_size);
       }
     }
   }
   
+  exit:;
   return header_size;
 }
 
@@ -304,6 +310,10 @@ internal U64
 dw_read_list_unit_header_list(String8 unit_data, DW_ListUnit *lu_out)
 {
   U64 header_size = 0;
+
+  U32 first_four_bytes = 0;
+  if (str8_deserial_read_struct(unit_data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { goto exit; }
+  DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
   
   U64 unit_length      = 0;
   U64 unit_length_size = str8_deserial_read_dwarf_packed_size(unit_data, 0, &unit_length);
@@ -330,7 +340,7 @@ dw_read_list_unit_header_list(String8 unit_data, DW_ListUnit *lu_out)
             lu_out->version               = version;
             lu_out->address_size          = address_size;
             lu_out->segment_selector_size = segment_selector_size;
-            lu_out->entry_size            = dw_size_from_format(DW_FormatFromSize(unit_length));
+            lu_out->entry_size            = dw_size_from_format(format);
             lu_out->entries               = str8_skip(unit_data, header_size);
           }
         }
@@ -338,6 +348,7 @@ dw_read_list_unit_header_list(String8 unit_data, DW_ListUnit *lu_out)
     }
   }
   
+  exit:;
   return header_size;
 }
 
@@ -1972,6 +1983,10 @@ internal DW_CompUnit
 dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U64 cu_header_offset, B32 relaxed)
 {
   DW_CompUnit cu = {0};
+
+  U32 first_four_bytes = 0;
+  if (str8_deserial_read_struct(input->sec[DW_Section_Info].data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { goto exit; }
+  DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
   
   // read unit size in bytes
   U64 length      = 0;
@@ -1987,7 +2002,6 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
   DW_Version version;
   TryRead(str8_deserial_read_struct(info, info_cursor, &version), info_cursor, exit);
   
-  DW_Format       format       = DW_FormatFromSize(length);
   U64             abbrev_base  = max_U64;
   U8              address_size = 0;
   DW_CompUnitKind unit_kind    = DW_CompUnitKind_Reserved;
@@ -2202,11 +2216,14 @@ dw_read_line_vm_header(Arena           *arena,
 {
   Temp scratch = scratch_begin(&arena, 1);
 
+  U32 first_four_bytes = 0;
+  if (str8_deserial_read_struct(cu_stmt_list, 0, &first_four_bytes) != sizeof(U32)) { goto exit; }
+
   // read unit length
   U64 length      = 0;
   U64 length_size = str8_deserial_read_dwarf_packed_size(cu_stmt_list, 0, &length);
   
-  DW_Format format = DW_FormatFromSize(length);
+  DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
   U64       cursor = length_size;
   String8   data   = str8_substr(cu_stmt_list, r1u64(0, length + length_size));
   
@@ -2723,7 +2740,10 @@ dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_Sect
   
   String8 section_data = input->sec[section_kind].data;
   for(U64 cursor = 0; cursor < section_data.size; ) {
-    
+    U32 first_four_bytes = 0;
+    if (str8_deserial_read_struct(input->sec[DW_Section_Info].data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { break; }
+    DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
+
     U64 unit_length      = 0;
     U64 unit_length_size = str8_deserial_read_dwarf_packed_size(section_data, cursor, &unit_length);
     if (unit_length_size == 0) {
@@ -2741,8 +2761,6 @@ dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_Sect
     if (cursor >= cursor_opl) {
       break;
     }
-    
-    DW_Format format = DW_FormatFromSize(unit_length);
     
     U64 debug_info_off = 0;
     cursor += str8_deserial_read_dwarf_uint(section_data, cursor, format, &debug_info_off);

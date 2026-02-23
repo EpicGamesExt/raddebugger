@@ -135,6 +135,64 @@ dw_input_from_writer(Arena *arena, DW_Writer *writer)
   return input;
 }
 
+T_BeginTest(dwarf_32bit)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+  dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
+  dw_writer_tag_end(writer);
+
+  DW_Input input = dw_input_from_writer(scratch.arena, writer);
+
+  for EachElement(sec_idx, input.sec) {
+    if (sec_idx == DW_Section_Abbrev) continue;
+    Rng1U64Array unit_ranges = dw_unit_ranges_from_data_arr(scratch.arena, input.sec[sec_idx].data);
+    for EachIndex(range_idx, unit_ranges.count) {
+      Rng1U64 range = unit_ranges.v[range_idx];
+
+      U32 first_four_bytes = 0;
+      T_Ok(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &first_four_bytes) == sizeof(first_four_bytes));
+      T_Ok(first_four_bytes + 4 == dim_1u64(range));
+
+      U32 unit_length = 0;
+      T_Ok(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &unit_length) == sizeof(U32));
+      T_Ok(unit_length + 4 == dim_1u64(range));
+    }
+  }
+
+  dw_writer_end(&writer);
+}
+T_EndTest;
+
+T_BeginTest(dwarf_64bit)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_64Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+  dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+  dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
+  dw_writer_tag_end(writer);
+
+  DW_Input input = dw_input_from_writer(scratch.arena, writer);
+
+  for EachElement(sec_idx, input.sec) {
+    if (sec_idx == DW_Section_Abbrev) continue;
+    Rng1U64Array unit_ranges = dw_unit_ranges_from_data_arr(scratch.arena, input.sec[sec_idx].data);
+    for EachIndex(range_idx, unit_ranges.count) {
+      Rng1U64 range = unit_ranges.v[range_idx];
+
+      U32 first_four_bytes = 0;
+      T_Ok(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &first_four_bytes) == sizeof(first_four_bytes));
+      T_Ok(first_four_bytes == max_U32);
+
+      U64 unit_length = 0;
+      T_Ok(str8_deserial_read_struct(input.sec[sec_idx].data, range.min + sizeof(U32), &unit_length) == sizeof(U64));
+      T_Ok(unit_length + 12 == dim_1u64(range));
+    }
+  }
+
+  dw_writer_end(&writer);
+}
+T_EndTest;
+
 T_BeginTest(dwarf_line_opcodes)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
@@ -573,7 +631,6 @@ T_BeginTest(dwarf_writer)
   DW_CompUnit         cu            = dw_cu_from_info_off(scratch.arena, &input, lu_input, 0, 1);
   DW_TagTree          tag_tree      = dw_tag_tree_from_cu(scratch.arena, &input, &cu);
   AssertAlways(dwt_tags_must_match(writer->root, tag_tree.root));
-
 
   // validate the writer
 

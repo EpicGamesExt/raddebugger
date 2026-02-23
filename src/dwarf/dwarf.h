@@ -29,7 +29,6 @@ typedef enum DW_ExtEnum
   DW_Ext_All   = DW_Ext_GNU|DW_Ext_LLVM|DW_Ext_APPLE|DW_Ext_MIPS,
 } DW_ExtEnum;
 
-#define DW_FormatFromSize(size) ((size) >= max_U32 ? DW_Format_64Bit : DW_Format_32Bit)
 typedef enum DW_Format
 {
   DW_Format_Null,

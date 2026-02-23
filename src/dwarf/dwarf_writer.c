@@ -1212,15 +1212,15 @@ dw_writer_emit(DW_Writer *writer)
     for EachElement(i, writer->sections) {
       if (writer->sections[i].length) {
         if (writer->format == DW_Format_64Bit) {
-          U64 *length      = writer->sections[i].length;
+          U64 *length      = (U64 *)((U8 *)writer->sections[i].length + sizeof(U32));
           U64  length_size = sizeof(U64) + sizeof(U32);
           Assert(writer->sections[i].srl.total_size >= length_size);
-          *length = writer->sections[i].srl.total_size - length_size;
+          memory_write64(length, writer->sections[i].srl.total_size - length_size);
         } else {
           U32 *length      = writer->sections[i].length;
           U32  length_size = sizeof(U32);
           Assert(writer->sections[i].srl.total_size >= length_size);
-          *length = safe_cast_u32(writer->sections[i].srl.total_size - length_size);
+          memory_write32(length, safe_cast_u32(writer->sections[i].srl.total_size - length_size));
         }
       }
     }

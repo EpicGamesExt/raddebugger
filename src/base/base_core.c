@@ -300,6 +300,12 @@ memory_write32(void *ptr, U32 v)
   MemoryCopy(ptr, &v, sizeof(v));
 }
 
+internal void UBSAN_NO_ALIGN
+memory_write64(void *ptr, U64 v)
+{
+  MemoryCopy(ptr, &v, sizeof(v));
+}
+
 internal U8 UBSAN_NO_ALIGN
 memory_read8(void *ptr)
 {
