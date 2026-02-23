@@ -87,7 +87,8 @@ t_run(T_Run run)
 {
   T_RunCtx ctx = {0};
   ctx.run      = run;
-  os_safe_call(t_run_caller, t_run_fail_handler, &ctx);
+  //os_safe_call(t_run_caller, t_run_fail_handler, &ctx);
+  t_run_caller(&ctx);
   return ctx.result;
 }
 
