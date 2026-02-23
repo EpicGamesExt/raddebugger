@@ -341,6 +341,21 @@ rb_thread_entry_point(void *p)
         }
         scratch_end(scratch);
       }
+
+      if(file_format == RB_FileFormat_COFF_OBJ || file_format == RB_FileFormat_COFF_BigOBJ)
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        COFF_FileHeaderInfo coff_obj      = coff_file_header_info_from_data(file_data);
+        String8             string_table  = str8_substr(file_data, coff_obj.string_table_range);
+        U64                 section_count = coff_obj.section_count_no_null;
+        COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(file_data, coff_obj.section_table_range).str;
+        if(dw_is_dwarf_present_coff_section_table(string_table, section_count, section_table))
+        {
+          log_infof("DWARF data detected in %S (%S)\n", n->string, rb_file_format_display_name_table[file_format]);
+          file_format_flags |= RB_FileFormatFlag_HasDWARF;
+        }
+        scratch_end(scratch);
+      }
       
       //////////////////////////
       //- rjf: ELF => check if contains DWARF
@@ -1101,22 +1116,30 @@ rb_thread_entry_point(void *p)
         lane_sync();
         
         //- rjf: unpack file parses
-        Arch       arch               = Arch_Null;
-        PE_BinInfo pe                 = {0};
-        ELF_Bin    elf                = {0};
-        DW_Input   dw                 = {0};
-        U64        eh_frame_hdr_vaddr = 0;
-        U64        eh_frame_vaddr     = 0;
-        String8    eh_frame_hdr       = {0};
-        String8    eh_frame           = {0};
+        Arch                arch               = Arch_Null;
+        PE_BinInfo          pe                 = {0};
+        ELF_Bin             elf                = {0};
+        COFF_FileHeaderInfo coff_obj           = {0};
+        DW_Input            dw                 = {0};
+        U64                 eh_frame_hdr_vaddr = 0;
+        U64                 eh_frame_vaddr     = 0;
+        String8             eh_frame_hdr       = {0};
+        String8             eh_frame           = {0};
         {
           if(f->format == RB_FileFormat_PE)
           {
-            pe = pe_bin_info_from_data(arena, f->data);
+            pe   = pe_bin_info_from_data(arena, f->data);
             arch = pe.arch;
           }
-          if(f->format == RB_FileFormat_ELF32 ||
-             f->format == RB_FileFormat_ELF64)
+          else if(f->format == RB_FileFormat_COFF_OBJ || f->format == RB_FileFormat_COFF_BigOBJ)
+          {
+            coff_obj = coff_file_header_info_from_data(f->data);
+            String8             string_table  = str8_substr(f->data, coff_obj.string_table_range);
+            U64                 section_count = coff_obj.section_count_no_null;
+            COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(f->data, coff_obj.section_table_range).str;
+            dw = dw_input_from_coff_section_table(arena, f->data, string_table, section_count, section_table);
+          }
+          else if(f->format == RB_FileFormat_ELF32 || f->format == RB_FileFormat_ELF64)
           {
             elf = elf_bin_from_data(arena, f->data);
             arch = arch_from_elf_machine(elf.hdr.e_machine);

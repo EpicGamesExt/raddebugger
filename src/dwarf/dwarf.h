@@ -158,7 +158,7 @@ typedef enum DW_InlKindEnum
   X(FixedAdvancePc,   0x09) \
   X(SetPrologueEnd,   0x0A) \
   X(SetEpilogueBegin, 0x0B) \
-  X(SetIsa,           0x0C) \
+  X(SetIsa,           0x0C)
 
 typedef U8 DW_StdOpcode;
 typedef enum DW_StdOpcodeEnum

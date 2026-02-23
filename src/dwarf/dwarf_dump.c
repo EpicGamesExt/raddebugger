@@ -960,18 +960,18 @@ DW_PRINTER(dw_print_line)
       {
         String8List opcode_length_strings = numeric_str8_list_from_data(unit_temp.arena, 16, str8(vm->header.opcode_lens, vm->header.num_opcode_lens), 1);
         String8 opcode_lengths_string = str8_list_join(arena, &opcode_length_strings, &(StringJoin){.sep = str8_lit(", ")});
-        dw_printf("version:                 %u\n",        vm->header.version              );
-        dw_printf("line_table_size:         %I64u\n",     vm->header.unit_length          );
-        dw_printf("address_size:            %u\n",        vm->header.address_size         );
-        dw_printf("segment_selector_size:   %u\n",        vm->header.segment_selector_size);
-        dw_printf("header_length:           %I64u\n",     vm->header.header_length        );
-        dw_printf("min_instruction_length:  %u\n",        vm->header.min_inst_len         );
-        dw_printf("max_ops_for_instruction: %u\n",        vm->header.max_ops_for_inst     );
-        dw_printf("default_is_stmt:         %u\n",        vm->header.default_is_stmt      );
-        dw_printf("line_base:               %d\n",        vm->header.line_base            );
-        dw_printf("line_range:              %u\n",        vm->header.line_range           );
-        dw_printf("opcode_base:             %u\n",        vm->header.opcode_base          );
-        dw_printf("opcode_lengths:          { %S }\n",    opcode_lengths_string           );
+        dw_printf("version:                 %u\n",         vm->header.version              );
+        dw_printf("line_table_size:         %I64u\n",      vm->header.unit_length          );
+        dw_printf("address_size:            %u\n",         vm->header.address_size         );
+        dw_printf("segment_selector_size:   %u\n",         vm->header.segment_selector_size);
+        dw_printf("header_length:           %I64u\n",      vm->header.header_length        );
+        dw_printf("min_instruction_length:  %u\n",         vm->header.min_inst_len         );
+        dw_printf("max_ops_for_instruction: %u\n",         vm->header.max_ops_for_inst     );
+        dw_printf("default_is_stmt:         %u\n",         vm->header.default_is_stmt      );
+        dw_printf("line_base:               %d\n",         vm->header.line_base            );
+        dw_printf("line_range:              %u\n",         vm->header.line_range           );
+        dw_printf("opcode_base:             %u\n",         vm->header.opcode_base          );
+        dw_printf("opcode_lengths:          { %S }\n",     opcode_lengths_string           );
       }
       dw_unindent();
       dw_printf("}\n");
@@ -983,11 +983,9 @@ DW_PRINTER(dw_print_line)
       {
         dw_printf("// %-4s %-30s\n", "No.", "Name");
         dw_printf("// ---- ------------------------------\n");
-        String8 cu_comp_dir = dw_string_from_tag_attrib_kind(input, cu, cu->tag, DW_AttribKind_CompDir);
-        dw_printf("{  %-4I64u %-30S  }\n", 0, cu_comp_dir);
         for EachIndex(dir_idx, vm->header.dir_table.count)
         {
-          dw_printf("{  %-4I64u %-30S  }\n", dir_idx+1, vm->header.dir_table.v[dir_idx]);
+          dw_printf("{  %-4I64u %-30S  }\n", dir_idx, vm->header.dir_table.v[dir_idx]);
         }
       }
       dw_unindent();
@@ -998,7 +996,7 @@ DW_PRINTER(dw_print_line)
       dw_printf("{\n");
       dw_indent();
       {
-        dw_printf("// %-4s %-8s %-8s %-33s %-8s %-20s\n", "No.", "Dir No.", "Time", "MD5", "Size", "Name");
+        dw_printf("// %-4s %-8s %-8s %-33s %-8s %-20s\n", "No.", "Dir No.", "Time", "MD5", "Size", "Path");
         dw_printf("// ---- -------- -------- --------------------------------- -------- --------------------\n");
         for EachIndex(file_idx, vm->header.file_table.count)
         {
@@ -1006,11 +1004,11 @@ DW_PRINTER(dw_print_line)
           dw_printf("{  %-4I64u %-8I64u %-8I64u %016I64x-%016I64x %-8I64u %-20S  }\n",
                 file_idx,
                 file->dir_idx,
-                file->modify_time,
-                file->md5_digest.u64[1],
-                file->md5_digest.u64[0],
-                file->file_size,
-                file->file_name);
+                file->time_stamp,
+                file->md5.u64[1],
+                file->md5.u64[0],
+                file->size,
+                file->path);
         }
       }
       dw_unindent();
@@ -1038,8 +1036,10 @@ DW_PRINTER(dw_print_line)
           str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%08I64x:", global_opcode_off);
 
           // push opcode id
-          String8 opcode_str = dw_string_from_std_opcode(opcode_temp.arena, vm->opcode);
-          str8_list_push(arena, &opcode_fmt, opcode_str);
+          if (vm->opcode != 0) {
+            String8 opcode_str = dw_string_from_std_opcode(opcode_temp.arena, vm->opcode);
+            str8_list_pushf(arena, &opcode_fmt, "%-11S:", opcode_str);
+          }
 
           // print operands
           switch(vm->opcode)
@@ -1103,7 +1103,7 @@ DW_PRINTER(dw_print_line)
           }break;
           case DW_StdOpcode_ExtendedOpcode:
           {
-            str8_list_push(opcode_temp.arena, &opcode_fmt, dw_string_from_ext_opcode(opcode_temp.arena, vm->ext_opcode));
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%S*", dw_string_from_ext_opcode(opcode_temp.arena, vm->ext_opcode));
             //str8_list_pushf(opcode_temp.arena, &opcode_fmt, "length: %u", length);
             switch(vm->ext_opcode)
             {
