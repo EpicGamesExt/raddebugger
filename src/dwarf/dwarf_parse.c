@@ -842,7 +842,7 @@ dw_read_tag(Arena          *arena,
 
       // fill out node
       DW_AttribNode *attrib_n  = push_array(arena, DW_AttribNode, 1);
-      attrib_n->v.info_off     = tag_info_off + attrib_tag_cursor;
+      attrib_n->v.info_off     = cu_info_range.min + attrib_tag_cursor;
       attrib_n->v.abbrev_off   = attrib_abbrev_off;
       attrib_n->v.abbrev_id    = attrib_abbrev.id;
       attrib_n->v.attrib_kind  = attrib_kind;
