@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
   <Type Name="String8">
-    <DisplayString>{{ size={size} str={str} }}</DisplayString>
+    <DisplayString>{{ size={size} str={str,[size]} }}</DisplayString>
   </Type>
 
   <Type Name="String8Node">
