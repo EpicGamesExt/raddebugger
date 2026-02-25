@@ -414,7 +414,7 @@ rdi_parsed_from_line_table(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_Parse
 RDI_PROC RDI_U64
 rdi_line_info_idx_range_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff, RDI_U64 *n_out)
 {
-  RDI_U64 result = 0;
+  RDI_U64 result = max_U64;
   RDI_U64 n = 0;
   if(line_info->count > 0 && line_info->voffs[0] <= voff && voff < line_info->voffs[line_info->count - 1])
   {
