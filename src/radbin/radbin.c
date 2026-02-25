@@ -536,7 +536,7 @@ rb_thread_entry_point(void *p)
       fprintf(stderr, "--breakpad       Specifies that the utility should convert debug information\n");
       fprintf(stderr, "                 data to the textual Breakpad format.\n\n");
 
-      fprintf(stderr, "--VOff2Line      Specifies that the utility should map virtual offset to source line.\n\n");
+      fprintf(stderr, "--voff2line      Specifies that the utility should map virtual offset to source line.\n\n");
       
       fprintf(stderr, "--out:<path>     Specifies the path to which output data should be written. If\n");
       fprintf(stderr, "                 not specified, the utility will choose a fallback. If dumping\n");

@@ -222,24 +222,26 @@ T_BeginTest(d2r_types)
 }
 T_EndTest;
 
-#if 0
 T_BeginTest(d2r_line_table)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
-  String8 comp_dir  = str8_lit("c:/devel/");
+  String8 comp_dir  = str8_lit("c:/DEVEL/");
   String8 comp_name = str8_lit("test.c");
 
-  DW_WriterFile *file = dw_writer_new_file(writer, comp_name);
-  file->md5 = *(U128 *)&(U8[]){ 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc };
+  DW_WriterFile *foo_file  = dw_writer_new_file(writer, str8_lit("/mnt/C/Devel/foo.c"));
+  DW_WriterFile *comp_file = dw_writer_new_file(writer, str8f(scratch.arena, "%S%S", comp_dir, comp_name));
 
   struct {
     DW_WriterFile *file; U64 ln; U64 line_size; U64 voff;
   } test_table[] = {
-    { file, 6, 1 },
-    { file, 4, 2 },
-    { file, 2, 3 },
-    { file, 1, 4 },
-    { file, 8, 5 },
+    { comp_file, 6, 1 },
+    { comp_file, 4, 2 },
+    { comp_file, 2, 3 },
+    { comp_file, 1, 4 },
+    { comp_file, 8, 5 },
+    { foo_file, 1, 3 },
+    { foo_file, 100, 1 },
+    { comp_file, max_U32 - 0x100, 10 },
   };
 
   U64 exe_base = coff_default_exe_base_from_machine(COFF_MachineType_X64);
@@ -249,6 +251,13 @@ T_BeginTest(d2r_line_table)
     dw_writer_line_emit(writer, test_table[i].file, test_table[i].ln, 0, exe_base + voff);
     voff += test_table[i].line_size;
   }
+
+  // emit one past last line
+  dw_writer_line_emit(writer,
+                      test_table[ArrayCount(test_table) - 1].file,
+                      test_table[ArrayCount(test_table) - 1].ln,
+                      0,
+                      exe_base + voff);
 
   dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
     dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
@@ -263,18 +272,17 @@ T_BeginTest(d2r_line_table)
 
   for EachElement(i, test_table) {
     for EachIndex(k, test_table[i].line_size) {
-      String8 cmd_line = str8f(scratch.arena, "-voff2line -voff:%llx, a.rdi", test_table[i].voff + k);
+      String8 cmd_line = str8f(scratch.arena, "-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
       String8 output = {0};
-      t_invoke_(str8_lit("radbin.exe"), cmd_line, max_U64, scratch.arena, &output);
+      t_invoke_(t_radbin_path(), cmd_line, max_U64, scratch.arena, &output);
       T_Ok(g_last_exit_code == 0);
-      T_MatchLinef(&output, "%S:/%llu", test_table[i].file->path, test_table[i].ln);
+      T_MatchLinef(&output, "%S:%llu", test_table[i].file->path, test_table[i].ln);
     }
   }
 
   dw_writer_end(&writer);
 }
 T_EndTest;
-#endif
 
 T_BeginTest(d2r_general)
 {

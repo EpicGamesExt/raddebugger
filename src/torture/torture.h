@@ -75,6 +75,7 @@ extern T_Test g_torture_tests[0xffffff];
   }
 
 #define T_Ok(c) do { if (!(c)) { result.fail_file = __FILE__; result.fail_line = __LINE__; result.fail_cond = Stringify(c); goto exit__; } } while(0)
+#define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
 
 ////////////////////////////////
 

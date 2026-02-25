@@ -213,6 +213,36 @@ t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
   return t_invoke_(exe_path, cmdline, timeout, 0, 0);
 }
 
+internal B32
+t_match_line(String8 *output, String8 expected_line)
+{
+  U64     new_line_pos = str8_find_needle(*output, 0, str8_lit("\n"), 0);
+  String8 line         = str8_prefix(*output, new_line_pos);
+  if (str8_ends_with(line, str8_lit("\r"), 0)) {
+    line = str8_chop(line, 1);
+  }
+
+  B32 is_match = str8_match(line, expected_line, 0);
+  if (is_match) {
+    *output = str8_skip(*output, new_line_pos + 1);
+  }
+
+  return is_match;
+}
+
+internal B32
+t_match_linef(String8 *output, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 expected_line = push_str8fv(scratch.arena, fmt, args);
+  B32 is_match = t_match_line(output, expected_line);
+  va_end(args);
+  scratch_end(scratch);
+  return is_match;
+}
+
 internal int
 t_test_is_before(void *raw_a, void *raw_b)
 {
