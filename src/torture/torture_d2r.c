@@ -284,6 +284,42 @@ T_BeginTest(d2r_line_table)
 }
 T_EndTest;
 
+T_BeginTest(d2r_checksums)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+
+  DW_WriterFile *foo_file  = dw_writer_new_file(writer, str8_lit("/mnt/c/devel/foo.c"));
+  DW_WriterFile *comp_file = dw_writer_new_file(writer, str8_lit("/home/main.c"));
+  foo_file->md5  = *(U128 *)&(U8[16]){ 0x04, 0x70, 0xe9, 0x6b, 0xa3, 0x05, 0x2c, 0xc8, 0x2d, 0x70, 0xc5, 0xe9, 0x80, 0x8e, 0x8a, 0x4e, };
+  comp_file->md5 = *(U128 *)&(U8[16]){ 0x82, 0x3c, 0xc6, 0x02, 0x82, 0x9e, 0xf6, 0xce, 0x53, 0xff, 0x5a, 0x93, 0xb6, 0x6e, 0x59, 0x38  };
+  comp_file->time_stamp = 123; // convert must pick MD5 checksum over time stamp
+
+  dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
+    dw_writer_push_attrib_string(writer, DW_AttribKind_CompDir, str8_chop_last_slash(comp_file->path));
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Name, str8_skip_last_slash(comp_file->path));
+    dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
+  dw_writer_tag_end(writer);
+
+  RDI_Parsed *rdi            = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  U64         checksum_count = 0;
+  RDI_MD5    *checksums      = rdi_table_from_name(rdi, MD5Checksums, &checksum_count);
+  T_Ok(checksum_count == writer->line.file_count + 1);
+
+  RDI_SourceFile *foo_src_file = rdi_source_file_from_normal_path_cstr(rdi, foo_file->path.str);
+  T_Ok(foo_src_file);
+  T_Ok(foo_src_file->checksum_kind == RDI_ChecksumKind_MD5);
+  T_Ok(MemoryMatch(&foo_file->md5, &checksums[foo_src_file->checksum_idx], sizeof(U128)));
+
+  RDI_SourceFile *comp_src_file = rdi_source_file_from_normal_path_cstr(rdi, comp_file->path.cstr);
+  T_Ok(comp_src_file);
+  T_Ok(comp_src_file->checksum_kind == RDI_ChecksumKind_MD5);
+  T_Ok(MemoryMatch(&comp_file->md5, &checksums[comp_src_file->checksum_idx], sizeof(U128)));
+
+  dw_writer_end(&writer);
+}
+T_EndTest;
+
 T_BeginTest(d2r_general)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
