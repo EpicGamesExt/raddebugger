@@ -368,35 +368,25 @@ internal U64
 os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 {
   if(os_handle_match(file, os_handle_zero())) { return 0; }
-  HANDLE handle = (HANDLE)file.u64[0];
-  
-  // rjf: clamp range by file size
-  U64 size = 0;
-  GetFileSizeEx(handle, (LARGE_INTEGER *)&size);
-  Rng1U64 rng_clamped  = r1u64(ClampTop(rng.min, size), ClampTop(rng.max, size));
-  U64 total_read_size = 0;
-  
-  // rjf: read loop
+
+  HANDLE  handle = (HANDLE)file.u64[0];
+  U8     *ptr    = out_data;
+  U64     off    = rng.min;
+  while(off != rng.max)
   {
-    U64 to_read = dim_1u64(rng_clamped);
-    for(U64 off = rng.min; total_read_size < to_read;)
+    U64        amt64      = rng.max - off;
+    U32        amt32      = (U32)Min(MB(32), amt64);
+    DWORD      read_size  = 0;
+    OVERLAPPED overlapped = { .Offset = (U32)off, .OffsetHigh = (U32)(off >> 32) };
+    if( ! ReadFile(handle, ptr, amt32, &read_size, &overlapped))
     {
-      U64 amt64 = to_read - total_read_size;
-      U32 amt32 = u32_from_u64_saturate(amt64);
-      DWORD read_size = 0;
-      OVERLAPPED overlapped = {0};
-      overlapped.Offset     = (off&0x00000000ffffffffull);
-      overlapped.OffsetHigh = (off&0xffffffff00000000ull) >> 32;
-      ReadFile(handle, (U8 *)out_data + total_read_size, amt32, &read_size, &overlapped);
-      off += read_size;
-      total_read_size += read_size;
-      if(read_size != amt32)
-      {
-        break;
-      }
+      break;
     }
+    ptr += read_size;
+    off += read_size;
   }
   
+  U64 total_read_size = off - rng.min;
   return total_read_size;
 }
 
