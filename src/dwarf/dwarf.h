@@ -130,11 +130,11 @@ typedef enum DW_LanguageEnum
   DW_Language_UserHi = 0xffff,
 } DW_LanguageEnum;
 
-#define DW_Inl_XList       \
-  X(NotInlined,         0) \
-  X(Inlined,            1) \
-  X(DeclaredNotInlined, 2) \
-  X(DeclaredInlined,    3)
+#define DW_Inl_XList          \
+  X(NotInlined,         0x00) \
+  X(Inlined,            0x01) \
+  X(DeclaredNotInlined, 0x02) \
+  X(DeclaredInlined,    0x03)
 
 typedef U32 DW_InlKind;
 typedef enum DW_InlKindEnum
@@ -198,6 +198,17 @@ typedef enum DW_IDCaseKindEnum
   DW_IDCaseKind_XList
 #undef X
 } DW_IDCaseKindEnum;
+
+#define DW_Vis_XList \
+  X(Local,     0x01) \
+  X(Exported,  0x02) \
+  X(Qualified, 0x03)
+typedef enum DW_Vis
+{
+#define X(_N, _ID) DW_Vis_##_N = _ID,
+  DW_Vis_XList
+#undef X
+} DW_Vis;
 
 #define DW_TagKind_V3_XList       \
   X(ArrayType,              0x01) \

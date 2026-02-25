@@ -320,6 +320,64 @@ T_BeginTest(d2r_checksums)
 }
 T_EndTest;
 
+#if 0
+T_BeginTest(d2r_subprogram)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+
+  U64     image_lo              = 0x1400000;
+  U64     image_hi              = 0x1500000;
+  U64     subprogram_lo         = image_lo + 0x1000;
+  U64     subprogram_hi         = subprogram_lo + 0x100;
+  U64     subprogram_entry_addr = subprogram_lo + 5;
+  String8 subprogram_link_name  = str8_lit("@FOOBAR!");
+  String8 subprogram_name       = str8_lit("foobar");
+
+  dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
+    dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc,  image_lo);
+    dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, image_hi);
+  dw_writer_tag_end(writer);
+  
+  DW_WriterTag *subroutine_type = dw_writer_tag_begin(writer, DW_TagKind_SubroutineType);
+    dw_writer_push_attrib_enum(writer, DW_AttribKind_Accessibility, DW_AccessKind_Private);
+    dw_writer_push_attrib_uint(writer, DW_AttribKind_Alignment, 16);
+
+  dw_writer_tag_end(writer);
+
+  dw_writer_tag_begin(writer, DW_TagKind_SubProgram);
+    dw_writer_push_attrib_enum(writer, DW_AttribKind_Accessibility, DW_AccessKind_Private);
+    dw_writer_push_attrib_enum(writer, DW_AttribKind_AddressClass, DW_AddrClassKind_None);
+    dw_writer_push_attrib_uint(writer, DW_AttribKind_Alignment, 32);
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_Artificial, 1);
+    dw_writer_push_attrib_enum(writer, DW_AttribKind_CallingConvention, DW_CallingConventionKind_Program);
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_Deleted, 1);
+    dw_writer_push_attrib_address(writer, DW_AttribKind_EntryPc, subprogram_entry_addr);
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_Explicit, 1);
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_External, 1);
+    dw_writer_push_attrib_expressionv(writer, DW_AttribKind_FrameBase, DW_ExprEnc_Op(Reg7));
+    dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, subprogram_hi);
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_Inline, DW_Inl_DeclaredNotInlined);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_LinkageName, subprogram_link_name);
+    dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, subprogram_lo);
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_MainSubProgram, 1);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Name, subprogram_name);
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_NoReturn, 1);
+    // TODO: DW_AttribKind_ObjectPointer
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_Prototyped, 1);
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_Pure, 1);
+    // TODO: DW_AttribKind_Ranges
+    dw_writer_push_attrib_flag(writer, DW_AttribKind_Recursive, 1);
+    // TODO: DW_AttribKind_StartScope
+    dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, subroutine_type);
+    dw_writer_push_attrib_enum(writer, DW_AttribKind_Visibility, DW_Vis_Local);
+  dw_writer_tag_end(writer);
+
+  dw_writer_end(&writer);
+}
+T_EndTest;
+#endif
+
 T_BeginTest(d2r_general)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
