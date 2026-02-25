@@ -756,6 +756,11 @@ dw_string_from_attrib_value(Arena *arena, DW_Input *input, Arch arch, DW_CompUni
         DW_ATE encoding = dw_const_u64_from_attrib(input, cu, attrib);
         enum_info = dw_string_from_attrib_type_encoding(scratch.arena, encoding);
       }break;
+      case DW_AttribKind_Visibility:
+      {
+        DW_Vis vis = dw_const_u64_from_attrib(input, cu, attrib);
+        enum_info = dw_string_from_attrib_visibility(scratch.arena, vis);
+      }break;
     }
 
     if(enum_info.size)

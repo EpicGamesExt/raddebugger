@@ -725,6 +725,17 @@ dw_string_from_attrib_type_encoding(Arena *arena, DW_ATE kind)
 }
 
 internal String8
+dw_string_from_attrib_visibility(Arena *arena, DW_Vis vis)
+{
+  switch (vis) {
+#define X(_N,_ID) case _ID: return str8_lit(Stringify(_N));
+    DW_Vis_XList
+#undef X
+  }
+  return push_str8f(arena, "%llx", vis);
+}
+
+internal String8
 dw_string_from_std_opcode(Arena *arena, DW_StdOpcode kind)
 {
   switch (kind) {

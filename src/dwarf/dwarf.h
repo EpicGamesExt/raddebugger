@@ -1807,6 +1807,7 @@ internal String8 dw_string_from_inl(Arena *arena, DW_InlKind kind);
 internal String8 dw_string_from_access_kind(Arena *arena, DW_AccessKind kind);
 internal String8 dw_string_from_calling_convetion(Arena *arena, DW_CallingConventionKind kind);
 internal String8 dw_string_from_attrib_type_encoding(Arena *arena, DW_ATE kind);
+internal String8 dw_string_from_attrib_visibility(Arena *arena, DW_Vis vis);
 internal String8 dw_string_from_std_opcode(Arena *arena, DW_StdOpcode kind);
 internal String8 dw_string_from_ext_opcode(Arena *arena, DW_ExtOpcode kind);
 internal String8 dw_string_from_loc_list_entry_kind(Arena *arena, DW_LLE kind);
