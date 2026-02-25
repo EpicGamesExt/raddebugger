@@ -1766,7 +1766,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           RDIM_BakeSrcLineMap *map = &rdim_shared->bake_src_line_maps[file_idx];
           
           // rjf: set up map
-          map->slots_count = n->v[n_idx].total_line_count;
+          map->slots_count = Max(n->v[n_idx].total_line_count, 1);
           map->slots = push_array(arena, RDIM_BakeSrcLineMapSlot, map->slots_count);
           
           // rjf: gather line-bucketed info
