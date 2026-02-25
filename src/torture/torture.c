@@ -91,25 +91,73 @@ t_run(T_Run run)
   return ctx.result;
 }
 
-internal B32
-t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
+internal String8
+t_radbin_path(void)
 {
-  Temp scratch = scratch_begin(0,0);
+  local_persist String8 path = {0};
+  if (path.size == 0) {
+    local_persist U8 buffer[4096];
+    ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
+    Arena *arena = arena_alloc_(&params);
+#if OS_WINDOWS
+    path = os_full_path_from_path(arena, str8_lit("radbin.exe"));
+#else
+    path = os_full_path_from_path(arena, str8_lit("radbin"));
+#endif
+    AssertAlways(path.size);
+  }
+  return path;
+}
+
+internal String8
+t_radlink_path(void)
+{
+  local_persist String8 path = {0};
+  if (path.size == 0) {
+    local_persist U8 buffer[4096];
+    ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
+    Arena *arena = arena_alloc_(&params);
+#if OS_WINDOWS
+    path = os_full_path_from_path(arena, str8_lit("radlink.exe"));
+#else
+    path = os_full_path_from_path(arena, str8_lit("radlink"));
+#endif
+    AssertAlways(path.size);
+  }
+  return path;
+}
+
+internal B32
+t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, String8 *output_out)
+{
+  Temp scratch = scratch_begin(&output_arena,1);
 
   B32 is_ok = 0;
 
-  OS_Handle output_redirect = {0};
-  if (g_redirect_stdout) {
-    output_redirect = os_file_open(OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, g_stdout_file_name);
+  B32 capture_output = output_out || g_redirect_stdout;
+
+  g_last_exit_code = -1;
+
+  OS_Handle read_pipe_handle = {0}, write_pipe_handle = {0};
+  if (capture_output) {
+    HANDLE read_pipe, write_pipe;
+    SECURITY_ATTRIBUTES at = { .nLength = sizeof(at), .bInheritHandle = 1 };
+    if (!CreatePipe(&read_pipe, &write_pipe, &at, 0)) {
+      AssertAlways(0 && "failed to create a pipe");
+    }
+    read_pipe_handle  = (OS_Handle){ .u64[0] = (U64)read_pipe  };
+    write_pipe_handle = (OS_Handle){ .u64[0] = (U64)write_pipe };
   }
 
   // Build Launch Options
-  OS_ProcessLaunchParams launch_opts = { .path = g_wdir, .inherit_env = 1, .stdout_file = output_redirect, .stderr_file = output_redirect };
-  str8_list_push(scratch.arena, &launch_opts.cmd_line, exe_path);
-  {
-    String8List parsed_cmdline = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline);
-    str8_list_concat_in_place(&launch_opts.cmd_line, &parsed_cmdline);
-  }
+  OS_ProcessLaunchParams launch_opts = {
+    .path        = g_wdir,
+    .inherit_env = 1,
+    .stdout_file = write_pipe_handle,
+    .stderr_file = write_pipe_handle,
+    .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline),
+  };
+  str8_list_push_front(scratch.arena, &launch_opts.cmd_line, exe_path);
 
   if (g_verbose) {
     String8 full_cmd_line = str8_list_join(scratch.arena, &launch_opts.cmd_line, &(StringJoin){ .sep = str8_lit(" ") });
@@ -117,35 +165,52 @@ t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
     fprintf(stdout, "Working Dir:  %.*s\n", str8_varg(g_wdir));
   }
 
-  // Invoke Exe
-  int exit_code = -1;
-  {
-    OS_Handle process_handle = os_process_launch(&launch_opts);
-    if (!os_handle_match(process_handle, os_handle_zero())) {
-      U64 exit_code_u64 = 0;
-      is_ok = os_process_join(process_handle, timeout, &exit_code_u64);
-      exit_code = (int)exit_code_u64;
-      if (!is_ok) {
-        os_process_kill(process_handle);
+  // invoke exe
+  OS_Handle process_handle = os_process_launch(&launch_opts);
+
+  // close handle so last to ReadFile does not block
+  os_file_close(write_pipe_handle);
+
+  if ( ! os_handle_match(process_handle, os_handle_zero())) {
+    if (capture_output) {
+      // capture process output
+      String8List  output = {0};
+      for (;;) {
+        String8 string = os_file_read_cstring(scratch.arena, read_pipe_handle, 0);
+        if (string.size == 0) { break; }
+        str8_list_push(scratch.arena, &output, string);
       }
-      os_process_detach(process_handle);
+      os_file_close(read_pipe_handle);
+
+      if (output_out) {
+        *output_out = str8_list_join(output_arena, &output, 0);
+      }
+
+      // write to the output file
+      if (g_redirect_stdout) {
+        os_write_data_list_to_file_path(g_stdout_file_name, output);
+      }
     }
-  }
 
-  // close handles
-  if (g_redirect_stdout) {
-    os_file_close(output_redirect);
-  }
+    U64 exit_code_u64 = 0;
+    if (os_process_join(process_handle, timeout, &exit_code_u64)) {
+      g_last_exit_code = (int)exit_code_u64;
+      is_ok            = 1;
+    } else {
+      os_process_kill(process_handle);
+    }
 
-  // update global exit code
-  if (is_ok) {
-    g_last_exit_code = exit_code;
-  } else {
-    g_last_exit_code = -1;
+    os_process_detach(process_handle);
   }
 
   scratch_end(scratch);
   return is_ok;
+}
+
+internal B32
+t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
+{
+  return t_invoke_(exe_path, cmdline, timeout, 0, 0);
 }
 
 internal int

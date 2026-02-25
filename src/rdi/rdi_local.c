@@ -30,6 +30,24 @@ str8_from_rdi_string_idx(RDI_Parsed *rdi, U32 idx)
   return result;
 }
 
+internal String8
+str8_from_rdi_path_node_idx(Arena *arena, RDI_Parsed *rdi, PathStyle path_style, U32 path_node_idx)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List path_parts = {0};
+  for(RDI_FilePathNode *fpn = rdi_element_from_name_idx(rdi, FilePathNodes, path_node_idx);
+      fpn != rdi_element_from_name_idx(rdi, FilePathNodes, 0);
+      fpn = rdi_element_from_name_idx(rdi, FilePathNodes, fpn->parent_path_node))
+  {
+    String8 path_part = {0};
+    path_part.str = rdi_string_from_idx(rdi, fpn->name_string_idx, &path_part.size);
+    str8_list_push_front(scratch.arena, &path_parts, path_part);
+  }
+  String8 path = str8_path_list_join_by_style(arena, &path_parts, path_style);
+  scratch_end(scratch);
+  return path;
+}
+
 ////////////////////////////////
 //~ rjf: String <=> Enum
 

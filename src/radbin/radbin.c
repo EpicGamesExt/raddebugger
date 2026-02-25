@@ -417,6 +417,7 @@ rb_thread_entry_point(void *p)
     OutputKind_RDI,
     OutputKind_Dump,
     OutputKind_Breakpad,
+    OutputKind_VOff2Line,
     OutputKind_COUNT
   }
   OutputKind;
@@ -427,10 +428,11 @@ rb_thread_entry_point(void *p)
   }
   output_kind_info[] =
   {
-    {str8_lit_comp(""),         str8_lit_comp("")},
-    {str8_lit_comp("rdi"),      str8_lit_comp("RAD Debug Info (.rdi) Conversion")},
-    {str8_lit_comp("dump"),     str8_lit_comp("Textual Dumping")},
-    {str8_lit_comp("breakpad"), str8_lit_comp("Breakpad Debug Info Conversion")},
+    {str8_lit_comp(""),          str8_lit_comp("")},
+    {str8_lit_comp("rdi"),       str8_lit_comp("RAD Debug Info (.rdi) Conversion")},
+    {str8_lit_comp("dump"),      str8_lit_comp("Textual Dumping")},
+    {str8_lit_comp("breakpad"),  str8_lit_comp("Breakpad Debug Info Conversion")},
+    {str8_lit_comp("voff2line"), str8_lit_comp("Map virtual offset to a source line")},
   };
   OutputKind output_kind = OutputKind_Null;
   String8 output_path = cmd_line_string(cmdline, str8_lit("out"));
@@ -533,6 +535,8 @@ rb_thread_entry_point(void *p)
       
       fprintf(stderr, "--breakpad       Specifies that the utility should convert debug information\n");
       fprintf(stderr, "                 data to the textual Breakpad format.\n\n");
+
+      fprintf(stderr, "--VOff2Line      Specifies that the utility should map virtual offset to source line.\n\n");
       
       fprintf(stderr, "--out:<path>     Specifies the path to which output data should be written. If\n");
       fprintf(stderr, "                 not specified, the utility will choose a fallback. If dumping\n");
@@ -587,7 +591,7 @@ rb_thread_entry_point(void *p)
         {
           fprintf(stderr, "All input files specified on the command line will be dumped. The following\n");
           fprintf(stderr, "formats are currently supported: PE, COFF, RDI, and ELF\n\n");
-        }
+        }break;
       }
       
       //- rjf: unpack subset flags
@@ -1275,6 +1279,106 @@ rb_thread_entry_point(void *p)
           lane_sync();
         }
       }
+    }break;
+
+    case OutputKind_VOff2Line:
+    {
+      if(lane_idx() != 0) { break; }
+
+      if(cmdline->inputs.node_count == 0)
+      {
+        fprintf(stderr, "ARGUMENTS\n\n");
+        fprintf(stderr, "--voff:OFFSET Map specified virtual offset to a source line.\n");
+        break;
+      }
+
+      if(cmdline->inputs.node_count > 1)
+      {
+        fprintf(stderr, "ERROR: too many input files!\n");
+        break;
+      }
+
+      if(!cmd_line_has_argument(cmdline, str8_lit("voff"))) {
+        fprintf(stderr, "ERROR: missing -voff\n");
+        break;
+      }
+
+      String8 voff_str = cmd_line_string(cmdline, str8_lit("voff"));
+      if(voff_str.size == 0)
+      {
+        fprintf(stderr, "ERROR: missing argument for -voff\n");
+        break;
+      }
+
+      U64 voff = 0;
+      if(!try_u64_from_str8_c_rules(voff_str, &voff))
+      {
+        fprintf(stderr, "ERROR: invalid argument for -voff\n");
+        break;
+      }
+
+      RB_File *f = input_files.first->v;
+      if(f->format != RB_FileFormat_RDI)
+      {
+        fprintf(stderr, "ERROR: input file must be RDI.\n");
+        break;
+      }
+
+      RDI_Parsed rdi = {0};
+      RDI_ParseStatus rdi_parse_status = rdi_parse(f->data.str, f->data.size, &rdi);
+      if(rdi_parse_status != RDI_ParseStatus_Good)
+      {
+        fprintf(stderr, "ERROR: failed to parse RDI with code %d\n", rdi_parse_status);
+        break;
+      }
+
+      RDI_Line line = rdi_line_from_voff(&rdi, voff);
+      if(line.file_idx == 0 || line.line_num == 0) 
+      {
+        fprintf(stderr, "ERROR: failed to find mapping for virtual offset 0x%llx.\n", voff);
+        break;
+      }
+
+      RDI_SourceFile *src_file = rdi_element_from_name_idx(&rdi, SourceFiles, line.file_idx);
+      if(src_file == 0)
+      {
+        fprintf(stderr, "ERROR: failed to find source file with index %u.\n", line.file_idx);
+        break;
+      }
+
+      Temp scratch = scratch_begin(0, 0);
+
+      // format inline site stack
+      {
+        RDI_Scope *voff_scope = rdi_scope_from_voff(&rdi, voff);
+        for(RDI_Scope *scope = voff_scope, *null_scope = rdi_element_from_name_idx(&rdi, Scopes, 0); scope != 0 && scope != null_scope; scope = rdi_parent_from_scope(&rdi, scope))
+        {
+          RDI_InlineSite *inline_site      = rdi_inline_site_from_scope(&rdi, scope);
+          RDI_InlineSite *null_inline_site = rdi_element_from_name_idx(&rdi, InlineSites, 0);
+          if(inline_site && inline_site != null_inline_site)
+          {
+            RDI_LineTable *inline_line_table      = rdi_element_from_name_idx(&rdi, LineTables, inline_site->line_table_idx);
+            RDI_LineTable *null_inline_line_table = rdi_element_from_name_idx(&rdi, LineTables, 0);
+            if(inline_line_table && inline_line_table != null_inline_line_table)
+            {
+              String8         inline_name          = str8_from_rdi_string_idx(&rdi, inline_site->name_string_idx);
+              RDI_Line        inline_line          = rdi_line_from_line_table_voff(&rdi, inline_line_table, voff);
+              RDI_SourceFile *inline_src_file      = rdi_element_from_name_idx(&rdi, SourceFiles, inline_line.file_idx);
+              RDI_SourceFile *null_inline_src_file = rdi_element_from_name_idx(&rdi, SourceFiles, 0);
+              if(inline_src_file && inline_src_file != null_inline_src_file)
+              {
+                String8 path = str8_from_rdi_path_node_idx(scratch.arena, &rdi, PathStyle_SystemAbsolute, src_file->file_path_node_idx);
+                fprintf(stdout, "[inlined] %.*s %.*s:%u\n", str8_varg(inline_name), str8_varg(path), inline_line.line_num);
+              }
+            }
+          }
+        }
+      }
+
+      String8 path = str8_from_rdi_path_node_idx(scratch.arena, &rdi, PathStyle_SystemAbsolute, src_file->file_path_node_idx);
+      fprintf(stdout, "%.*s:%u\n", str8_varg(path), line.line_num);
+
+      scratch_end(scratch);
     }break;
   }
   

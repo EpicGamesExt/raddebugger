@@ -73,6 +73,7 @@ internal Arch arch_from_rdi_arch(RDI_Arch arch);
 //~ rjf: Lookup Helpers
 
 internal String8 str8_from_rdi_string_idx(RDI_Parsed *rdi, U32 idx);
+internal String8 str8_from_rdi_path_node_idx(Arena *arean, RDI_Parsed *rdi, PathStyle path_style, U32 path_node_idx);
 
 ////////////////////////////////
 //~ rjf: String <=> Enum

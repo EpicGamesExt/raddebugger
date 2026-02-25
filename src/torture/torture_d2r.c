@@ -20,7 +20,7 @@ d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
   }
 
   Assert(t_write_file(str8_lit("a.obj"), raw_coff));
-  t_invoke(str8_lit("radlink.exe"), str8_lit("/subsystem:console /out:a.exe /entry:main /DEBUG:FULL /opt:noref /opt:noicf a.obj"), max_U64);
+  t_invoke(t_radlink_path(), str8_lit("/subsystem:console /out:a.exe /entry:main /DEBUG:FULL /opt:noref /opt:noicf a.obj"), max_U64);
   Assert(g_last_exit_code == 0);
   String8 exe = t_read_file(scratch.arena, str8_lit("a.exe"));
   Assert(exe.size > 0);
@@ -28,7 +28,7 @@ d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
   B32 was_pdb_deleted = os_delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
   Assert(was_pdb_deleted);
 
-  t_invoke(str8_lit("radbin.exe"), str8_lit("-rdi a.exe"), max_U64);
+  t_invoke_(t_radbin_path(), str8_lit("-rdi a.exe -out:a.rdi"), max_U64, 0, 0);
   Assert(g_last_exit_code == 0);
 
   String8 raw_rdi = t_read_file(arena, str8_lit("a.rdi"));
@@ -221,6 +221,60 @@ T_BeginTest(d2r_types)
   dw_writer_end(&writer);
 }
 T_EndTest;
+
+#if 0
+T_BeginTest(d2r_line_table)
+{
+  DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+  String8 comp_dir  = str8_lit("c:/devel/");
+  String8 comp_name = str8_lit("test.c");
+
+  DW_WriterFile *file = dw_writer_new_file(writer, comp_name);
+  file->md5 = *(U128 *)&(U8[]){ 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc };
+
+  struct {
+    DW_WriterFile *file; U64 ln; U64 line_size; U64 voff;
+  } test_table[] = {
+    { file, 6, 1 },
+    { file, 4, 2 },
+    { file, 2, 3 },
+    { file, 1, 4 },
+    { file, 8, 5 },
+  };
+
+  U64 exe_base = coff_default_exe_base_from_machine(COFF_MachineType_X64);
+  U64 voff     = 0x1000;
+  for EachElement(i, test_table) {
+    test_table[i].voff = voff;
+    dw_writer_line_emit(writer, test_table[i].file, test_table[i].ln, 0, exe_base + voff);
+    voff += test_table[i].line_size;
+  }
+
+  dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
+    dw_writer_push_attrib_string(writer, DW_AttribKind_CompDir, comp_dir);
+    dw_writer_push_attrib_string(writer, DW_AttribKind_Name, comp_name);
+    dw_writer_push_attrib_address(writer, DW_AttribKind_LowPc, exe_base);
+    dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, exe_base + voff);
+    dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
+  dw_writer_tag_end(writer);
+
+  d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+
+  for EachElement(i, test_table) {
+    for EachIndex(k, test_table[i].line_size) {
+      String8 cmd_line = str8f(scratch.arena, "-voff2line -voff:%llx, a.rdi", test_table[i].voff + k);
+      String8 output = {0};
+      t_invoke_(str8_lit("radbin.exe"), cmd_line, max_U64, scratch.arena, &output);
+      T_Ok(g_last_exit_code == 0);
+      T_MatchLinef(&output, "%S:/%llu", test_table[i].file->path, test_table[i].ln);
+    }
+  }
+
+  dw_writer_end(&writer);
+}
+T_EndTest;
+#endif
 
 T_BeginTest(d2r_general)
 {
