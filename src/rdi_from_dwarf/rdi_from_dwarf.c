@@ -2334,6 +2334,7 @@ d2r_convert_symbols(Arena         *arena,
         if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Inline)) { inl = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Inline); }
         
         switch (inl) {
+          case DW_Inl_DeclaredNotInlined:
           case DW_Inl_NotInlined: {
             U64         param_count = 0;
             RDIM_Type **params      = d2r_collect_proc_params(arena, type_table, input, cu, tag_node, &param_count);
@@ -2399,7 +2400,6 @@ d2r_convert_symbols(Arena         *arena,
             
             it->stack->scope = root_scope;
           } break;
-          case DW_Inl_DeclaredNotInlined:
           case DW_Inl_DeclaredInlined:
           case DW_Inl_Inlined: {
             d2r_tag_iterator_skip_children(it);
