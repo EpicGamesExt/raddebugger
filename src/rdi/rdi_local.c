@@ -1362,3 +1362,93 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
   ProfEnd();
   return result_strings;
 }
+
+#if 0
+internal String8
+rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_TypeNode *type)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List fmt     = {0};
+  String8List arr_fmt = {0};
+
+  for (RDI_TypeNode *i = type, *n = 0; i != 0; i = n, n = 0) {
+    if (RDI_TypeKind_FirstConstructed <= i->kind && i->kind <= RDI_TypeKind_LastConstructed) {
+      n = rdi_element_from_name_idx(rdi, TypeNodes, i->constructed.direct_type_idx);
+    }
+
+    if (i->kind == RDI_TypeKind_Variadic) {
+      str8_list_push_frontf(scratch.arena, &fmt, "...");
+    } else if (RDI_TypeKind_FirstBuiltIn <= i->kind && i->kind <= RDI_TypeKind_LastBuiltIn) {
+      String8 built_in_name = str8_from_rdi_string_idx(rdi, i->built_in.name_string_idx);
+      str8_list_push_front(scratch.arena, &fmt, built_in_name);
+    } else if (i->kind == RDI_TypeKind_Alias) {
+      String8 alias_name = str8_from_rdi_string_idx(rdi, i->user_defined.name_string_idx);
+      str8_list_push_front(scratch.arena, &fmt, alias_name);
+    } else if (i->kind == RDI_TypeKind_Modifier) {
+      for EachBit(f, i->flags) {
+        str8_list_push_front(scratch.arena, &fmt, rdi_string_from_type_modifier_flags(scratch.arena, f));
+      }
+    } else if (i->kind == RDI_TypeKind_Ptr) {
+      str8_list_push_front(scratch.arena, &fmt, str8_lit("*"));
+    } else if (i->kind == RDI_TypeKind_LRef) {
+      str8_list_push_front(scratch.arena, &fmt, str8_lit("&"));
+    } else if (i->kind == RDI_TypeKind_RRef) {
+      str8_list_push_front(scratch.arena, &fmt, str8_lit("&&"));
+    } else if (i->kind == RDI_TypeKind_Array) {
+      str8_list_push_frontf(scratch.arena, &arr_fmt, "[%llu]", i->constructed.count);
+    } else if (i->kind == RDI_TypeKind_Function) {
+      String8 *param_names = 0;
+      String8  proc_name   = {0};
+      if (proc) {
+        RDI_TypeNode *proc_type = rdi_element_from_name_idx(rdi, TypeNodes, proc->type_idx);
+        if (proc_type == i) {
+          proc_name   = str8_from_rdi_string_idx(rdi, proc->name_string_idx);
+          param_names = push_array(scratch.arena, String8, i->constructed.count);
+          RDI_Scope *root_scope = rdi_element_from_name_idx(rdi, Scopes, proc->root_scope_idx);
+          U64 param_idx = 0;
+          for (U64 local_idx = root_scope->local_first; local_idx < root_scope->local_first + root_scope->local_count; local_idx += 1) {
+            RDI_Local *local = rdi_element_from_name_idx(rdi, Locals, local_idx);
+            if (local->kind == RDI_LocalKind_Parameter) {
+              AssertAlways(param_idx < i->constructed.count);
+              param_names[param_idx++] = str8_from_rdi_string_idx(rdi, local->name_string_idx);
+            }
+          }
+        }
+      }
+
+      // format parameters
+      String8List  params_fmt  = {0};
+      U32          check_count = 0;
+      U32         *idx_run     = rdi_idx_run_from_first_count(rdi, i->constructed.param_idx_run_first, i->constructed.count, &check_count);
+      if (check_count == type->constructed.count) {
+        for EachIndex(param_idx, i->constructed.count) {
+          RDI_TypeNode *param_type   = rdi_element_from_name_idx(rdi, TypeNodes, idx_run[param_idx]);
+          String8       param_string = rdi_string_from_type(scratch.arena, rdi, 0, param_type);
+          if (param_names) {
+            str8_list_pushf(scratch.arena, &params_fmt, "%S %S", param_string, param_names[param_idx]);
+          } else {
+            str8_list_push(scratch.arena, &params_fmt, param_string);
+          }
+        }
+      } else {
+        str8_list_pushf(scratch.arena, &params_fmt, "???");
+      }
+
+      // format signature
+      String8 params = str8_list_join(scratch.arena, &params_fmt, &(StringJoin){.sep=str8_lit(", ")});
+      str8_list_pushf(scratch.arena, &fmt, "(* %S)(%S)", proc_name, params);
+    }
+
+    if (arr_fmt.node_count && i->kind != RDI_TypeKind_Array) {
+      str8_list_push_frontf(scratch.arena, &fmt, "(");
+      str8_list_concat_in_place(&fmt, &arr_fmt);
+      str8_list_pushf(scratch.arena, &fmt, ")");
+    }
+  }
+
+  String8 result = str8_list_join(arena, &fmt, 0);
+  scratch_end(scratch);
+  return result;
+}
+#endif
