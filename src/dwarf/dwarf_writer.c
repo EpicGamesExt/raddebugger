@@ -463,7 +463,7 @@ dw_writer_push_attrib_exprloc(DW_Writer *writer, DW_AttribKind kind, String8 exp
 }
 
 internal DW_WriterAttrib *
-dw_writer_push_attrib_expression(DW_Writer *writer, DW_AttribKind kind, DW_ExprEnc *encs, U64 encs_count)
+dw_writer_push_attrib_expr(DW_Writer *writer, DW_AttribKind kind, DW_ExprEnc *encs, U64 encs_count)
 {
   String8 exprloc = dw_encode_expr(writer->arena, writer->arch, writer->format, encs, encs_count);
   return dw_writer_push_attrib_exprloc(writer, kind, exprloc);

@@ -274,12 +274,12 @@ internal DW_WriterAttrib * dw_writer_push_attrib_uint        (DW_Writer *writer,
 internal DW_WriterAttrib * dw_writer_push_attrib_enum        (DW_Writer *writer, DW_AttribKind kind, S64           e           );
 internal DW_WriterAttrib * dw_writer_push_attrib_ref         (DW_Writer *writer, DW_AttribKind kind, DW_WriterTag *ref         );
 internal DW_WriterAttrib * dw_writer_push_attrib_exprloc     (DW_Writer *writer, DW_AttribKind kind, String8       exprloc     );
-internal DW_WriterAttrib * dw_writer_push_attrib_expression  (DW_Writer *writer, DW_AttribKind kind, DW_ExprEnc *encs, U64 encs_count);
+internal DW_WriterAttrib * dw_writer_push_attrib_expr        (DW_Writer *writer, DW_AttribKind kind, DW_ExprEnc *encs, U64 encs_count);
 internal DW_WriterAttrib * dw_writer_push_attrib_line_ptr    (DW_Writer *writer, DW_AttribKind kind, U64           line_ptr    );
 internal DW_WriterAttrib * dw_writer_push_attrib_mac_ptr     (DW_Writer *writer, DW_AttribKind kind, void *        mac_ptr     );
 internal DW_WriterAttrib * dw_writer_push_attrib_rng_list_ptr(DW_Writer *writer, DW_AttribKind kind, void *        rng_list_ptr);
 internal DW_WriterAttrib * dw_writer_push_attrib_implicit    (DW_Writer *writer, DW_AttribKind kind, S64           implicit    );
-#define dw_writer_push_attrib_expressionv(w, k, ...) dw_writer_push_attrib_expression(w, k, (DW_ExprEnc[]){ __VA_ARGS__ }, ArrayCount(((DW_ExprEnc[]){ __VA_ARGS__ })) )
+#define dw_writer_push_attrib_exprv(w, k, ...) dw_writer_push_attrib_expr(w, k, (DW_ExprEnc[]){ __VA_ARGS__ }, ArrayCount(((DW_ExprEnc[]){ __VA_ARGS__ })) )
 
 ////////////////////////////////
 // Line

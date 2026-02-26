@@ -620,7 +620,7 @@ T_BeginTest(dwarf_writer)
       dw_writer_push_attrib_address(writer, DW_AttribKind_HighPc, 0x140001004);
       dw_writer_push_attrib_string(writer, DW_AttribKind_Name, str8_lit("main"));
       dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, simple_struct_tag);
-      dw_writer_push_attrib_expression(writer, DW_AttribKind_FrameBase, &(DW_ExprEnc)DW_ExprEnc_Op(Reg7), 1);
+      dw_writer_push_attrib_expr(writer, DW_AttribKind_FrameBase, &(DW_ExprEnc)DW_ExprEnc_Op(Reg7), 1);
       dw_writer_tag_end(writer);
     }
     dw_writer_tag_end(writer);
