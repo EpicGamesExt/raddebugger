@@ -4411,6 +4411,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     result.procedures       = *all_procedures;
     result.scopes           = *all_scopes;
     result.inline_sites     = *all_inline_sites;
+
+    lane_sync();
   }
   
   scratch_end(scratch);
