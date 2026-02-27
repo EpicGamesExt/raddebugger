@@ -328,8 +328,29 @@ dw_make_abbrev_entry(Arena *arena, DW_WriterTag *tag)
 internal DW_WriterTag *
 dw_writer_tag_begin(DW_Writer *writer, DW_TagKind kind)
 {
+  DW_WriterTag *tag = dw_writer_tag_reserve(writer, kind);
+  dw_writer_tag_begin_reserved(writer, tag);
+  return tag;
+}
+
+internal void
+dw_writer_tag_end(DW_Writer *writer)
+{
+  // pop to parent
+  writer->current = writer->current->parent;
+}
+
+internal DW_WriterTag *
+dw_writer_tag_reserve(DW_Writer *writer, DW_TagKind kind)
+{
   DW_WriterTag *tag = dw_writer_tag_chunk_list_push(writer->arena, &writer->tag_chunk_list, 512);
   tag->kind = kind;
+  return tag;
+}
+
+internal void
+dw_writer_tag_begin_reserved(DW_Writer *writer, DW_WriterTag *tag)
+{
   tag->parent = writer->current;
 
   // add tag to the tree
@@ -339,15 +360,6 @@ dw_writer_tag_begin(DW_Writer *writer, DW_TagKind kind)
     writer->root = tag;
   }
   writer->current = tag;
-  
-  return tag;
-}
-
-internal void
-dw_writer_tag_end(DW_Writer *writer)
-{
-  // pop to parent
-  writer->current = writer->current->parent;
 }
 
 internal DW_WriterAttrib *

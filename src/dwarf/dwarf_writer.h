@@ -259,8 +259,10 @@ internal U64 dw_serial_push_form(Arena *arena, String8List *srl, DW_Version vers
 ////////////////////////////////
 // Info
 
-internal DW_WriterTag * dw_writer_tag_begin(DW_Writer *writer, DW_TagKind kind);
-internal void           dw_writer_tag_end  (DW_Writer *writer);
+internal DW_WriterTag * dw_writer_tag_reserve       (DW_Writer *writer, DW_TagKind kind);
+internal DW_WriterTag * dw_writer_tag_begin         (DW_Writer *writer, DW_TagKind kind);
+internal void           dw_writer_tag_begin_reserved(DW_Writer *writer, DW_WriterTag *tag);
+internal void           dw_writer_tag_end           (DW_Writer *writer);
 
 internal DW_WriterAttrib * dw_writer_push_attrib             (DW_Writer *writer, DW_AttribKind kind, DW_WriterForm form        );
 internal DW_WriterAttrib * dw_writer_push_attrib_address     (DW_Writer *writer, DW_AttribKind kind, U64           address     );

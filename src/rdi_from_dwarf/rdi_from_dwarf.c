@@ -1706,6 +1706,11 @@ d2r_convert_types(Arena         *arena,
           type->direct_type = enum_base_type;
         }
       } break;
+      case DW_TagKind_SubProgram: {
+        if ( ! dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Declaration)) {
+          break;
+        }
+      } // fall-through
       case DW_TagKind_SubroutineType: {
         RDIM_Type *ret_type = d2r_find_or_convert_type(arena, type_table, input, cu, cu_lang, arch, tag, DW_AttribKind_Type);
         
@@ -1721,10 +1726,13 @@ d2r_convert_types(Arena         *arena,
             log_user_errorf("unexpected tag @ .debug_info+%llx", tag.info_off);
           }
         }
+
+        DW_TagNode *parent = d2r_tag_iterator_parent_tag_node(it);
+        B32 is_method = parent->tag.kind == DW_TagKind_StructureType || parent->tag.kind == DW_TagKind_ClassType;
         
         // init proceudre type
         RDIM_Type *type     = d2r_create_type_from_offset(arena, type_table, tag.info_off);
-        type->kind          = RDI_TypeKind_Function;
+        type->kind          = is_method ? RDI_TypeKind_Method : RDI_TypeKind_Function;
         type->byte_size     = cu->address_size;
         type->direct_type   = ret_type;
         type->count         = param_list.count;
@@ -2330,6 +2338,12 @@ d2r_convert_symbols(Arena         *arena,
         d2r_tag_iterator_skip_children(it);
       } break;
       case DW_TagKind_SubProgram: {
+        // handled during type conversion step
+        if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Declaration)) {
+          d2r_tag_iterator_skip_children(it);
+          break;
+        }
+
         DW_InlKind inl = DW_Inl_NotInlined;
         if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Inline)) { inl = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Inline); }
         
@@ -2354,6 +2368,12 @@ d2r_convert_symbols(Arena         *arena,
             RDIM_Type *container_type = 0;
             if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_ContainingType)) {
               container_type = d2r_type_from_attrib(type_table, input, cu, tag, DW_AttribKind_ContainingType);
+            } else {
+              DW_TagNode *parent = d2r_tag_iterator_parent_tag_node(it);
+              container_type = d2r_type_from_offset(type_table, parent->tag.info_off);
+              if (container_type == 0) {
+                log_user_errorf("ERROR: failed to infer parent type of subprogram from .debug_info+0x%llx\n", parent->tag.info_off);
+              }
             }
             
             // get frame base expression
@@ -2380,13 +2400,19 @@ d2r_convert_symbols(Arena         *arena,
             // sub program with user-defined parent tag is a method
             DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
             if (parent_tag.kind == DW_TagKind_ClassType || parent_tag.kind == DW_TagKind_StructureType) {
-              RDI_MemberKind    member_kind = RDI_MemberKind_NULL;
-              DW_VirtualityKind virtuality  = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Virtuality);
-              switch (virtuality) {
-                case DW_VirtualityKind_None:        member_kind = RDI_MemberKind_Method;        break;
-                case DW_VirtualityKind_Virtual:     member_kind = RDI_MemberKind_VirtualMethod; break;
-                case DW_VirtualityKind_PureVirtual: member_kind = RDI_MemberKind_VirtualMethod; break; // TODO: create kind for pure virutal
-                default: { log_user_errorf("unhandled virtuality kind"); } break;
+              // DW_VirtualityKind -> RDI_MemberKind
+              RDI_MemberKind member_kind = RDI_MemberKind_NULL;
+              {
+                DW_VirtualityKind virtuality = DW_VirtualityKind_None;
+                if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Virtuality)) {
+                  virtuality = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Virtuality);
+                  switch (virtuality) {
+                  case DW_VirtualityKind_None:        member_kind = RDI_MemberKind_Method;        break;
+                  case DW_VirtualityKind_Virtual:     member_kind = RDI_MemberKind_VirtualMethod; break;
+                  case DW_VirtualityKind_PureVirtual: member_kind = RDI_MemberKind_VirtualMethod; break; // TODO: create kind for pure virutal
+                  default: { log_user_errorf("unhandled virtuality kind"); } break;
+                  }
+                }
               }
               
               RDIM_Type      *type   = d2r_type_from_offset(type_table, parent_tag.info_off);
@@ -2504,7 +2530,6 @@ d2r_convert_symbols(Arena         *arena,
           var->type             = type;
           var->offset           = voff;
           var->container_symbol = 0;
-          var->container_type   = 0; // TODO: NotImplemented;
         }
       } break;
       case DW_TagKind_FormalParameter: {

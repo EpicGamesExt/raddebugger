@@ -1363,7 +1363,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
   return result_strings;
 }
 
-#if 0
+#if SUBPROGRAM_CONVERSION_TEST
 internal String8
 rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_TypeNode *type)
 {

@@ -320,7 +320,7 @@ T_BeginTest(d2r_checksums)
 }
 T_EndTest;
 
-#if 0
+#if SUBPROGRAM_CONVERSION_TEST
 T_BeginTest(d2r_subprogram)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
@@ -404,17 +404,17 @@ T_BeginTest(d2r_subprogram)
 
     // --------------------------------------------------------------------------------
 
-    DW_WriterTag *my_struct_type = dw_writer_declare_tag(writer);
+    DW_WriterTag *my_struct_type = dw_writer_tag_reserve(writer, DW_TagKind_StructureType);
 
     DW_WriterTag *const_my_struct_type = dw_writer_tag_begin(writer, DW_TagKind_ConstType);
       dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, my_struct_type);
     dw_writer_tag_end(writer);
 
-    dw_writer_tag_begin(writer, DW_TagKind_PointerType);
+    DW_WriterTag *my_struct_ptr_type = dw_writer_tag_begin(writer, DW_TagKind_PointerType);
       dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, const_my_struct_type);
     dw_writer_tag_end(writer);
 
-    dw_writer_tag_begin_define(writer, DW_TagKind_StructureType, my_struct_type);
+    dw_writer_tag_begin_reserved(writer, my_struct_type);
       dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name,     "MyStructure");
       dw_writer_push_attrib_uint   (writer, DW_AttribKind_ByteSize, 0x100);
 
@@ -423,7 +423,7 @@ T_BeginTest(d2r_subprogram)
         dw_writer_push_attrib_ref    (writer, DW_AttribKind_Type, int_ptr_type);
 
         dw_writer_tag_begin(writer, DW_TagKind_FormalParameter);
-          dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, my_method_this_type);
+          dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, my_struct_ptr_type);
         dw_writer_tag_end(writer);
       dw_writer_tag_end(writer);
     dw_writer_tag_end(writer);
