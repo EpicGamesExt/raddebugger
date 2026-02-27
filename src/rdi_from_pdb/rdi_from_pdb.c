@@ -389,6 +389,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     
     // rjf: setup output buckets
     MSF_RawStreamTable *msf_raw_stream_table = 0;
+    U64 *msf_stream_take_counter = 0;
     if(lane_idx() == 0)
     {
       msf_raw_stream_table = msf_raw_stream_table_from_data(scratch2.arena, params->input_pdb_data);
@@ -397,18 +398,17 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       msf->page_count = msf_raw_stream_table->total_page_count;
       msf->stream_count = msf_raw_stream_table->stream_count;
       msf->streams = push_array(scratch.arena, String8, msf->stream_count);
+      msf_stream_take_counter = push_array(scratch.arena, U64, 1);
     }
     lane_sync_u64(&msf, 0);
     lane_sync_u64(&msf_raw_stream_table, 0);
     
     // rjf: do wide fill
     {
-      U64 msf_stream_take_counter = 0;
-      U64 *msf_stream_take_counter_ptr = &msf_stream_take_counter;
-      lane_sync_u64(&msf_stream_take_counter_ptr, 0);
+      lane_sync_u64(&msf_stream_take_counter, 0);
       for(;;)
       {
-        U64 stream_idx = ins_atomic_u64_inc_eval(msf_stream_take_counter_ptr) - 1;
+        U64 stream_idx = ins_atomic_u64_inc_eval(msf_stream_take_counter) - 1;
         if(stream_idx >= msf->stream_count)
         {
           break;
@@ -611,11 +611,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   ProfScope("parse all syms & c13 line info streams")
   {
     //- rjf: setup outputs
+    U64 *task_counter = 0;
     if(lane_idx() == 0)
     {
       all_syms_count = comp_units->count+1; // +1 for global symbol stream from DBI
       all_syms = push_array(scratch.arena, CV_SymParsed *, all_syms_count);
       all_c13s = push_array(scratch.arena, CV_C13Parsed *, all_syms_count);
+      task_counter = push_array(scratch.arena, U64, 1);
     }
     lane_sync_u64(&all_syms_count, 0);
     lane_sync_u64(&all_syms, 0);
@@ -623,13 +625,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     
     //- rjf: wide fill
     {
-      U64 task_counter = 0;
-      U64 *task_counter_ptr = &task_counter;
-      lane_sync_u64(&task_counter_ptr, 0);
+      lane_sync_u64(&task_counter, 0);
       U64 task_count = all_syms_count;
       for(;;)
       {
-        U64 task_idx = ins_atomic_u64_inc_eval(task_counter_ptr) - 1;
+        U64 task_idx = ins_atomic_u64_inc_eval(task_counter) - 1;
         if(task_idx >= task_count)
         {
           break;
@@ -831,14 +831,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       String8Node **hit_path_slots = push_array(scratch2.arena, String8Node *, hit_path_slots_count);
       
       //- rjf: take units across lanes, find all file paths
-      U64 sym_take_counter = 0;
-      U64 *sym_take_counter_ptr = &sym_take_counter;
-      lane_sync_u64(&sym_take_counter_ptr, 0);
+      U64 *sym_take_counter = lane_idx() == 0 ? push_array(scratch.arena, U64, 1) : 0;
+      lane_sync_u64(&sym_take_counter, 0);
       ProfScope("take units across lanes, find all file paths")
         for(;;)
       {
         //- rjf: take next unit
-        U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter_ptr) - 1;
+        U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
         if(unit_idx >= comp_units->count)
         {
           break;
@@ -1217,13 +1216,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                                RDIM_SubsetFlag_LineInfo|
                                RDIM_SubsetFlag_InlineLineInfo))
     {
-      U64 sym_take_counter = 0;
-      U64 *sym_take_counter_ptr = &sym_take_counter;
-      lane_sync_u64(&sym_take_counter_ptr, 0);
+      U64 *sym_take_counter = lane_idx() == 0 ? push_array(scratch.arena, U64, 1) : 0;
+      lane_sync_u64(&sym_take_counter, 0);
       ProfScope("wide fill") for(;;)
       {
         //- rjf: take next unit
-        U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter_ptr) - 1;
+        U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
         if(unit_idx >= comp_units->count)
         {
           break;
@@ -3333,13 +3331,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                                RDIM_SubsetFlag_LinkNameProcedureNameMap|
                                RDIM_SubsetFlag_Types))
     {
-      U64 sym_take_counter = 0;
-      U64 *sym_take_counter_ptr = &sym_take_counter;
-      lane_sync_u64(&sym_take_counter_ptr, 0);
+      U64 *sym_take_counter = lane_idx() == 0 ? push_array(scratch.arena, U64, 1) : 0;
+      lane_sync_u64(&sym_take_counter, 0);
       for(;;)
       {
         //- rjf: take next sym
-        U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter_ptr) - 1;
+        U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
         if(sym_idx >= all_syms_count)
         {
           break;
