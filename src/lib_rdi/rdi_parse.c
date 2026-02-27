@@ -2446,5 +2446,3 @@ SINTa rr_lzb_simple_encode_veryfast(rr_lzb_simple_context * fh,
 #undef DO_FAST_LAZY_MATCH
 #undef DO_FAST_2ND_HASH  
 
-//=====================================================
-// vim:noet:sw=4:ts=4
