@@ -880,8 +880,8 @@ RDI_EnumMemberTable:
     struct
     {
       RDI_U32 direct_type_idx;
-      RDI_U32 off;
-      RDI_U32 size;
+      RDI_U16 off;
+      RDI_U16 size;
     }
     bitfield;
   }
