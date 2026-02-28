@@ -776,8 +776,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
             if(RDI_TypeKind_FirstRecord <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastRecord)
             {
               // rjf: unpack name
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              String8 name = str8_from_rdi_string_idx(rdi, rdi_type->name_string_idx);
               
               // rjf: unpack UDT info
               RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, rdi_type->user_defined.udt_idx);
@@ -801,7 +800,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                     E_Member *dst = &members[member_idx-udt->member_first];
                     dst->kind     = e_member_kind_from_rdi(src->kind);
                     dst->type_key = e_type_key_ext(member_type_kind, src->type_idx, rdi_num);
-                    dst->name.str = rdi_string_from_idx(rdi, src->name_string_idx, &dst->name.size);
+                    dst->name     = str8_from_rdi_string_idx(rdi, src->name_string_idx);
                     dst->off      = (U64)src->off;
                   }
                 }
@@ -821,8 +820,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
             else if(rdi_type->kind == RDI_TypeKind_Enum)
             {
               // rjf: unpack name
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              String8 name = str8_from_rdi_string_idx(rdi, rdi_type->name_string_idx);
               
               // rjf: unpack direct type
               E_TypeKey direct_type_key = zero_struct;
@@ -847,7 +845,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                 {
                   RDI_EnumMember *src = rdi_element_from_name_idx(rdi, EnumMembers, member_idx);
                   E_EnumVal *dst = &enum_vals[member_idx-udt->member_first];
-                  dst->name.str = rdi_string_from_idx(rdi, src->name_string_idx, &dst->name.size);
+                  dst->name     = str8_from_rdi_string_idx(rdi, src->name_string_idx);
                   dst->val      = src->val;
                 }
               }
@@ -1016,8 +1014,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
             else if(rdi_type->kind == RDI_TypeKind_Alias)
             {
               // rjf: unpack name
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              String8 name = str8_from_rdi_string_idx(rdi, rdi_type->name_string_idx);
               
               // rjf: unpack direct type
               E_TypeKey direct_type_key = zero_struct;
@@ -1067,8 +1064,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
             else if(RDI_TypeKind_FirstIncomplete <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastIncomplete)
             {
               // rjf: unpack name
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              String8 name = str8_from_rdi_string_idx(rdi, rdi_type->name_string_idx);
               
               // rjf: produce
               type = push_array(arena, E_Type, 1);

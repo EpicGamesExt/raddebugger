@@ -858,6 +858,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       type_kind_str.str = rdi_string_from_type_kind(type->kind, &type_kind_str.size);
       dumpf("\n  // type[%I64u]\n  {\n", idx);
       dumpf("    kind: %S\n", type_kind_str);
+      dumpf("    name: '%S'\n", str8_from_rdi_string_idx(rdi, type->name_string_idx));
       if(type->kind == RDI_TypeKind_Function || type->kind == RDI_TypeKind_Method)
       {
         dumpf("    return_type: %u\n", type->direct_type_idx);
@@ -875,11 +876,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
         dumpf("    flags: %#x (missing stringizer path)\n", type->flags);
       }
       dumpf("    byte_size: %u\n", type->byte_size);
-      if(RDI_TypeKind_FirstBuiltIn <= type->kind && type->kind <= RDI_TypeKind_LastBuiltIn)
-      {
-        dumpf("    name: '%S'\n", str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx));
-      }
-      else if(type->kind == RDI_TypeKind_Array)
+      if(type->kind == RDI_TypeKind_Array)
       {
         dumpf("    constructed__array_count: %u\n", type->constructed.count);
       }
@@ -917,7 +914,6 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       }
       else if(RDI_TypeKind_FirstUserDefined <= type->kind && type->kind <= RDI_TypeKind_LastUserDefined)
       {
-        dumpf("    name: '%S'\n", str8_from_rdi_string_idx(rdi, type->user_defined.name_string_idx));
         dumpf("    user_defined__udt: %u\n",   type->user_defined.udt_idx);
       }
       else if(type->kind == RDI_TypeKind_Bitfield)

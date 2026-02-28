@@ -77,7 +77,7 @@
   "";
   "// \"raddbg\\0\\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 20";
+  "#define RDI_ENCODING_VERSION 21";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -761,6 +761,7 @@ RDI_TypeNodeMemberTable:
   {flags           RDI_U16      `` ""}
   {byte_size       RDI_U32      `` ""}
   {direct_type_idx RDI_U32      `` ""}
+  {name_string_idx RDI_U32      `` ""}
 }
 
 @table(name value)
@@ -847,12 +848,6 @@ RDI_EnumMemberTable:
     ```
     union
   {
-    // kind is 'built-in'
-    struct
-    {
-      RDI_U32 name_string_idx;
-    } built_in;
-    
     // kind is 'constructed'
     struct
     {
@@ -870,7 +865,6 @@ RDI_EnumMemberTable:
     // kind is 'user defined'
     struct
     {
-      RDI_U32 name_string_idx;
       RDI_U32 udt_idx;
     }
     user_defined;

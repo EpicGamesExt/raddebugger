@@ -1724,8 +1724,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
         {
           RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, element_idx);
           RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
-          String8 name = {0};
-          name.str = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name.size);
+          String8 name = str8_from_rdi_string_idx(rdi, type_node->name_string_idx);
           item_string = name;
         }break;
         case RDI_SectionKind_SourceFiles:

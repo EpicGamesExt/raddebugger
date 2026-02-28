@@ -2799,15 +2799,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           dst->flags           = (RDI_U16)src->flags; // TODO(rjf): @u32_to_u16
           dst->byte_size       = src->byte_size;
           dst->direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type);
-          
-          //- rjf: fill built-in-only type node info
-          if(RDI_TypeKind_FirstBuiltIn <= dst->kind && dst->kind <= RDI_TypeKind_LastBuiltIn)
-          {
-            dst->built_in.name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
-          }
+          dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
           
           //- rjf: fill array sizes
-          else if(dst->kind == RDI_TypeKind_Array)
+          if(dst->kind == RDI_TypeKind_Array)
           {
             U64 direct_byte_size = 1;
             if(src->direct_type && src->direct_type->byte_size > 0)
@@ -2840,7 +2835,6 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           //- rjf: fill user-defined-type info
           else if(RDI_TypeKind_FirstUserDefined <= dst->kind && dst->kind <= RDI_TypeKind_LastUserDefined)
           {
-            dst->user_defined.name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
             dst->user_defined.udt_idx         = (RDI_U32)rdim_idx_from_udt(src->udt); // TODO(rjf): @u64_to_u32
           }
           

@@ -67,7 +67,7 @@ union RDI_GUID {RDI_U8 u8[16]; RDI_U64 u64[2];};
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 20
+#define RDI_ENCODING_VERSION 21
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -821,6 +821,7 @@ X(RDI_TypeKind, kind)\
 X(RDI_U16, flags)\
 X(RDI_U32, byte_size)\
 X(RDI_U32, direct_type_idx)\
+X(RDI_U32, name_string_idx)\
 
 #define RDI_UDTFlags_XList \
 X(EnumMembers)\
@@ -1246,15 +1247,10 @@ RDI_TypeKind kind;
 RDI_U16 flags;
 RDI_U32 byte_size;
 RDI_U32 direct_type_idx;
+RDI_U32 name_string_idx;
 
     union
   {
-    // kind is 'built-in'
-    struct
-    {
-      RDI_U32 name_string_idx;
-    } built_in;
-    
     // kind is 'constructed'
     struct
     {
@@ -1272,7 +1268,6 @@ RDI_U32 direct_type_idx;
     // kind is 'user defined'
     struct
     {
-      RDI_U32 name_string_idx;
       RDI_U32 udt_idx;
     }
     user_defined;

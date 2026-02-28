@@ -1197,7 +1197,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
               {
                 RDI_UDT *udt = (RDI_UDT *)element;
                 RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
-                name.str = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name.size);
+                name = str8_from_rdi_string_idx(rdi, type_node->name_string_idx);
                 name = str8_copy(arena, name);
               }break;
               case RDI_SectionKind_SourceFiles:
