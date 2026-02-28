@@ -826,11 +826,11 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               
               // rjf: unpack direct type
               E_TypeKey direct_type_key = zero_struct;
-              if(rdi_type->user_defined.direct_type_idx < type_node_idx)
+              if(rdi_type->direct_type_idx < type_node_idx)
               {
-                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
+                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->direct_type_idx);
                 E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
-                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->user_defined.direct_type_idx, rdi_num);
+                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->direct_type_idx, rdi_num);
               }
               
               // rjf: unpack members
@@ -870,11 +870,11 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               B32 direct_type_is_good = 0;
               E_TypeKey direct_type_key = zero_struct;
               U64 direct_type_byte_size = 0;
-              if(rdi_type->constructed.direct_type_idx < type_node_idx)
+              if(rdi_type->direct_type_idx < type_node_idx)
               {
-                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.direct_type_idx);
+                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->direct_type_idx);
                 E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
-                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->constructed.direct_type_idx, rdi_num);
+                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->direct_type_idx, rdi_num);
                 direct_type_is_good = 1;
                 direct_type_byte_size = (U64)direct_type_node->byte_size;
               }
@@ -1022,11 +1022,11 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               // rjf: unpack direct type
               E_TypeKey direct_type_key = zero_struct;
               U64 direct_type_byte_size = 0;
-              if(rdi_type->user_defined.direct_type_idx < type_node_idx)
+              if(rdi_type->direct_type_idx < type_node_idx)
               {
-                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
+                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->direct_type_idx);
                 E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
-                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->user_defined.direct_type_idx, rdi_num);
+                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->direct_type_idx, rdi_num);
                 direct_type_byte_size = direct_type_node->byte_size;
               }
               
@@ -1045,11 +1045,11 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               // rjf: unpack direct type
               E_TypeKey direct_type_key = zero_struct;
               U64 direct_type_byte_size = 0;
-              if(rdi_type->bitfield.direct_type_idx < type_node_idx)
+              if(rdi_type->direct_type_idx < type_node_idx)
               {
-                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->bitfield.direct_type_idx);
+                RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->direct_type_idx);
                 E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
-                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->bitfield.direct_type_idx, rdi_num);
+                direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->direct_type_idx, rdi_num);
                 direct_type_byte_size = direct_type_node->byte_size;
               }
               

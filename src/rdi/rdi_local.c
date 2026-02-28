@@ -858,6 +858,14 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       type_kind_str.str = rdi_string_from_type_kind(type->kind, &type_kind_str.size);
       dumpf("\n  // type[%I64u]\n  {\n", idx);
       dumpf("    kind: %S\n", type_kind_str);
+      if(type->kind == RDI_TypeKind_Function || type->kind == RDI_TypeKind_Method)
+      {
+        dumpf("    return_type: %u\n", type->direct_type_idx);
+      }
+      else
+      {
+        dumpf("    direct_type: %u\n", type->direct_type_idx);
+      }
       if(type->kind == RDI_TypeKind_Modifier)
       {
         dumpf("    flags: %S\n", rdi_string_from_type_modifier_flags(scratch.arena, type->flags));
@@ -873,7 +881,6 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       }
       else if(type->kind == RDI_TypeKind_Array)
       {
-        dumpf("    constructed__direct_type: %u\n", type->constructed.direct_type_idx);
         dumpf("    constructed__array_count: %u\n", type->constructed.count);
       }
       else if(type->kind == RDI_TypeKind_Function)
@@ -887,7 +894,6 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
         }
         String8 param_idx_str = str8_list_join(scratch.arena, &param_idx_strings, &(StringJoin){.pre = str8_lit("["), .sep = str8_lit(", "), .post = str8_lit("]")});
         dumpf("    constructed__params: %S // idx_run[%u]\n", param_idx_str, type->constructed.param_idx_run_first);
-        dumpf("    return_type: %u\n", type->constructed.direct_type_idx);
       }
       else if(type->kind == RDI_TypeKind_Method)
       {
@@ -908,16 +914,10 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
         String8 param_idx_str = str8_list_join(scratch.arena, &param_idx_strings, &(StringJoin){.pre = str8_lit("["), .sep = str8_lit(", "), .post = str8_lit("]")});
         dumpf("    constructed__this_type: %S // idx_run[%u]\n", this_type_str, type->constructed.param_idx_run_first);
         dumpf("    constructed__params: %S // idx_run[%u]\n", param_idx_str, type->constructed.param_idx_run_first);
-        dumpf("    return_type: %u\n", type->constructed.direct_type_idx);
-      }
-      else if(RDI_TypeKind_FirstConstructed <= type->kind && type->kind <= RDI_TypeKind_LastConstructed)
-      {
-        dumpf("    constructed__direct_type: %u\n", type->constructed.direct_type_idx);
       }
       else if(RDI_TypeKind_FirstUserDefined <= type->kind && type->kind <= RDI_TypeKind_LastUserDefined)
       {
         dumpf("    name: '%S'\n", str8_from_rdi_string_idx(rdi, type->user_defined.name_string_idx));
-        dumpf("    user_defined__direct_type: %u\n",   type->user_defined.direct_type_idx);
         dumpf("    user_defined__udt: %u\n",   type->user_defined.udt_idx);
       }
       else if(type->kind == RDI_TypeKind_Bitfield)

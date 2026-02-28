@@ -67,7 +67,7 @@ union RDI_GUID {RDI_U8 u8[16]; RDI_U64 u64[2];};
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 19
+#define RDI_ENCODING_VERSION 20
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -820,6 +820,7 @@ X(Restrict)\
 X(RDI_TypeKind, kind)\
 X(RDI_U16, flags)\
 X(RDI_U32, byte_size)\
+X(RDI_U32, direct_type_idx)\
 
 #define RDI_UDTFlags_XList \
 X(EnumMembers)\
@@ -1244,6 +1245,7 @@ struct RDI_TypeNode
 RDI_TypeKind kind;
 RDI_U16 flags;
 RDI_U32 byte_size;
+RDI_U32 direct_type_idx;
 
     union
   {
@@ -1256,7 +1258,6 @@ RDI_U32 byte_size;
     // kind is 'constructed'
     struct
     {
-      RDI_U32 direct_type_idx;
       RDI_U32 count;
       union
       {
@@ -1272,7 +1273,6 @@ RDI_U32 byte_size;
     struct
     {
       RDI_U32 name_string_idx;
-      RDI_U32 direct_type_idx;
       RDI_U32 udt_idx;
     }
     user_defined;
@@ -1280,7 +1280,6 @@ RDI_U32 byte_size;
     // (kind = Bitfield)
     struct
     {
-      RDI_U32 direct_type_idx;
       RDI_U16 off;
       RDI_U16 size;
     }

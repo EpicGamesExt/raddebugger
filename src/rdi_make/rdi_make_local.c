@@ -2795,9 +2795,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           RDI_TypeNode *dst = &rdim_shared->baked_type_nodes.type_nodes[n->base_idx + n_idx + 1];
           
           //- rjf: fill shared type node info
-          dst->kind      = src->kind;
-          dst->flags     = (RDI_U16)src->flags; // TODO(rjf): @u32_to_u16
-          dst->byte_size = src->byte_size;
+          dst->kind            = src->kind;
+          dst->flags           = (RDI_U16)src->flags; // TODO(rjf): @u32_to_u16
+          dst->byte_size       = src->byte_size;
+          dst->direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type);
           
           //- rjf: fill built-in-only type node info
           if(RDI_TypeKind_FirstBuiltIn <= dst->kind && dst->kind <= RDI_TypeKind_LastBuiltIn)
@@ -2813,14 +2814,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             {
               direct_byte_size = src->direct_type->byte_size;
             }
-            dst->constructed.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type);
             dst->constructed.count           = src->byte_size / direct_byte_size;
           }
           
           //- rjf: fill constructed type node info
           else if(RDI_TypeKind_FirstConstructed <= dst->kind && dst->kind <= RDI_TypeKind_LastConstructed)
           {
-            dst->constructed.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
             dst->constructed.count = src->count;
             if(dst->kind == RDI_TypeKind_Function || dst->kind == RDI_TypeKind_Method)
             {
@@ -2843,13 +2842,11 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           {
             dst->user_defined.name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
             dst->user_defined.udt_idx         = (RDI_U32)rdim_idx_from_udt(src->udt); // TODO(rjf): @u64_to_u32
-            dst->user_defined.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
           }
           
           //- rjf: fill bitfield info
           else if(dst->kind == RDI_TypeKind_Bitfield)
           {
-            dst->bitfield.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
             dst->bitfield.off  = src->off;
             dst->bitfield.size = src->count;
           }
