@@ -876,6 +876,19 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                 direct_type_is_good = 1;
                 direct_type_byte_size = (U64)direct_type_node->byte_size;
               }
+
+              // unpack container type
+              B32 container_type_is_good = 0;
+              E_TypeKey container_type_key = zero_struct;
+              U64 container_type_byte_size = 0;
+              if(rdi_type->container_type_idx > 0 && rdi_type->container_type_idx < type_node_idx)
+              {
+                RDI_TypeNode *container_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->container_type_idx);
+                E_TypeKind container_type_kind = e_type_kind_from_rdi(container_type_node->kind);
+                container_type_key = e_type_key_ext(container_type_kind, rdi_type->container_type_idx, rdi_num);
+                container_type_is_good = 1;
+                container_type_byte_size = (U64)container_type_node->byte_size;
+              }
               
               // rjf: construct based on kind
               switch(rdi_type->kind)
@@ -923,16 +936,17 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                   type->byte_size       = direct_type_byte_size * type->count;
                   type->arch            = arch;
                 }break;
+                case RDI_TypeKind_Method:
                 case RDI_TypeKind_Function:
                 {
-                  U32 idx_run_first = rdi_type->param_idx_run_first;
                   U32 idx_run_count = 0;
-                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, &idx_run_count);
+                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, rdi_type->param_idx_run_first, &idx_run_count);
                   {
                     type = push_array(arena, E_Type, 1);
                     type->kind            = kind;
                     type->byte_size       = bit_size_from_arch(arch)/8;
                     type->direct_type_key = direct_type_key;
+                    type->owner_type_key  = container_type_key;
                     type->count           = idx_run_count;
                     type->param_type_keys = push_array(arena, E_TypeKey, type->count);
                     type->arch            = arch;
@@ -949,44 +963,6 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                       {
                         break;
                       }
-                    }
-                  }
-                }break;
-                case RDI_TypeKind_Method:
-                {
-                  // NOTE(rjf): for methods, the `direct` type points at the owner type.
-                  // the return type, instead of being encoded via the `direct` type, is
-                  // encoded via the first parameter.
-                  U32 idx_run_first = rdi_type->param_idx_run_first;
-                  U32 idx_run_count = 0;
-                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, &idx_run_count);
-                  {
-                    type = push_array(arena, E_Type, 1);
-                    type->kind            = kind;
-                    type->byte_size       = bit_size_from_arch(arch)/8;
-                    type->owner_type_key  = direct_type_key;
-                    type->count           = idx_run_count;
-                    type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
-                    type->arch            = arch;
-                    for(U32 idx = 0; idx < type->count; idx += 1)
-                    {
-                      U32 param_type_idx = idx_run[idx];
-                      if(param_type_idx < type_node_idx)
-                      {
-                        RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
-                        E_TypeKind param_kind = e_type_kind_from_rdi(param_type_node->kind);
-                        type->param_type_keys[idx] = e_type_key_ext(param_kind, param_type_idx, rdi_num);
-                      }
-                      else
-                      {
-                        break;
-                      }
-                    }
-                    if(type->count > 0)
-                    {
-                      type->direct_type_key = type->param_type_keys[0];
-                      type->count -= 1;
-                      type->param_type_keys += 1;
                     }
                   }
                 }break;
@@ -1728,6 +1704,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       }
     }break;
     
+    case E_TypeKind_Method:
     case E_TypeKind_Function:
     {
       if(!skip_return)
@@ -1849,6 +1826,7 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       e_type_rhs_string_from_key(arena, direct, out, 2);
     }break;
     
+    case E_TypeKind_Method:
     case E_TypeKind_Function:
     {
       E_Type *type = e_type_from_key(key);
@@ -1856,20 +1834,30 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       {
         str8_list_push(arena, out, str8_lit(")"));
       }
-      if(type->count == 0)
+
+      if(type->count == 0 || (kind == E_TypeKind_Method && type->count == 1))
       {
         str8_list_push(arena, out, str8_lit("(void)"));
       }
       else
       {
         str8_list_push(arena, out, str8_lit("("));
-        U64 param_count = type->count;
+        U64        param_idx       = 0;
+        U64        param_count     = type->count;
         E_TypeKey *param_type_keys = type->param_type_keys;
-        for(U64 param_idx = 0; param_idx < param_count; param_idx += 1)
+        if(kind == E_TypeKind_Method)
         {
-          E_TypeKey param_type_key = param_type_keys[param_idx];
-          String8 param_str = e_type_string_from_key(arena, param_type_key);
-          String8 param_str_trimmed = str8_skip_chop_whitespace(param_str);
+          // skip 'this'
+          if(param_count > 0)
+          {
+            param_idx = 1;
+          }
+        }
+        for(; param_idx < param_count; param_idx += 1)
+        {
+          E_TypeKey param_type_key    = param_type_keys[param_idx];
+          String8   param_str         = e_type_string_from_key(arena, param_type_key);
+          String8   param_str_trimmed = str8_skip_chop_whitespace(param_str);
           str8_list_push(arena, out, param_str_trimmed);
           if(param_idx+1 < param_count)
           {
