@@ -2922,12 +2922,14 @@ txt_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_ou
     shared->artifact->info      = shared->info;
   }
   lane_sync();
-  
+
+  AC_Artifact result = {0};
+  result.u64[0] = (U64)shared->artifact;
+  lane_sync();
+
   access_close(access);
   scratch_end(scratch);
   ProfEnd();
-  AC_Artifact result = {0};
-  result.u64[0] = (U64)shared->artifact;
   return result;
 }
 
