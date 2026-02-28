@@ -615,28 +615,32 @@ e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
   RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
   
   //- rjf: procedure -> udt
-  U32 udt_idx = procedure->container_idx;
-  RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, udt_idx);
+  RDI_TypeNode *procedure_type = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
+  RDI_TypeNode *container_type = rdi_element_from_name_idx(rdi, TypeNodes, procedure_type->container_type_idx);
   
   //- rjf: build blank map
   E_String2NumMap *map = push_array(arena, E_String2NumMap, 1);
   *map = e_string2num_map_make(arena, 64);
   
   //- rjf: udt -> fill member map
-  if(!(udt->flags & RDI_UDTFlag_EnumMembers))
+  if(RDI_TypeKind_FirstUserDefined <= container_type->kind && container_type->kind <= RDI_TypeKind_LastUserDefined)
   {
-    U64 data_member_num = 1;
-    for(U32 member_idx = udt->member_first;
-        member_idx < udt->member_first+udt->member_count;
-        member_idx += 1)
+    RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, container_type->udt_idx);
+    if(!(udt->flags & RDI_UDTFlag_EnumMembers))
     {
-      RDI_Member *m = rdi_element_from_name_idx(rdi, Members, member_idx);
-      if(m->kind == RDI_MemberKind_DataField)
+      U64 data_member_num = 1;
+      for(U32 member_idx = udt->member_first;
+          member_idx < udt->member_first+udt->member_count;
+          member_idx += 1)
       {
-        String8 name = {0};
-        name.str = rdi_string_from_idx(rdi, m->name_string_idx, &name.size);
-        e_string2num_map_insert(arena, map, name, data_member_num);
-        data_member_num += 1;
+        RDI_Member *m = rdi_element_from_name_idx(rdi, Members, member_idx);
+        if(m->kind == RDI_MemberKind_DataField)
+        {
+          String8 name = {0};
+          name.str = rdi_string_from_idx(rdi, m->name_string_idx, &name.size);
+          e_string2num_map_insert(arena, map, name, data_member_num);
+          data_member_num += 1;
+        }
       }
     }
   }

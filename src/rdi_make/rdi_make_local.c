@@ -2599,26 +2599,13 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         Rng1U64 range = lane_range(n->count);
         for EachInRange(n_idx, range)
         {
-          RDIM_Symbol *src = &n->v[n_idx];
+          RDIM_Symbol   *src = &n->v[n_idx];
           RDI_Procedure *dst = &rdim_shared->baked_procedures.procedures[n->base_idx + n_idx + 1];
           dst->name_string_idx      = rdim_bake_idx_from_string(bake_strings, src->name);
           dst->link_name_string_idx = rdim_bake_idx_from_string(bake_strings, src->link_name);
-          if(src->is_extern)
-          {
-            dst->link_flags |= RDI_LinkFlag_External;
-          }
-          if(src->container_type != 0)
-          {
-            dst->link_flags |= RDI_LinkFlag_TypeScoped;
-            dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
-          }
-          else if(src->container_symbol != 0)
-          {
-            dst->link_flags |= RDI_LinkFlag_ProcScoped;
-            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
-          }
-          dst->type_idx                  = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
-          dst->root_scope_idx            = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
+          dst->link_flags           = src->is_extern ? RDI_LinkFlag_External : 0;
+          dst->type_idx             = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+          dst->root_scope_idx       = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
           if(src->location_cases.count != 0)
           {
             dst->frame_base_location_first = location_block_off;
@@ -2795,11 +2782,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           RDI_TypeNode *dst = &rdim_shared->baked_type_nodes.type_nodes[n->base_idx + n_idx + 1];
           
           //- rjf: fill shared type node info
-          dst->kind            = src->kind;
-          dst->flags           = (RDI_U16)src->flags; // TODO(rjf): @u32_to_u16
-          dst->byte_size       = src->byte_size;
-          dst->direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type);
-          dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
+          dst->kind               = src->kind;
+          dst->flags              = (RDI_U16)src->flags; // TODO(rjf): @u32_to_u16
+          dst->byte_size          = src->byte_size;
+          dst->direct_type_idx    = (RDI_U32)rdim_idx_from_type(src->direct_type);
+          dst->container_type_idx = (RDI_U32)rdim_idx_from_type(src->container_type);
+          dst->name_string_idx    = rdim_bake_idx_from_string(bake_strings, src->name);
           
           //- rjf: fill array sizes
           if(dst->kind == RDI_TypeKind_Array)
@@ -2852,20 +2840,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
           dst->voff            = src->offset;
           dst->type_idx        = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
-          if(src->is_extern)
-          {
-            dst->link_flags |= RDI_LinkFlag_External;
-          }
-          if(src->container_type != 0)
-          {
-            dst->link_flags |= RDI_LinkFlag_TypeScoped;
-            dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
-          }
-          else if(src->container_symbol != 0)
-          {
-            dst->link_flags |= RDI_LinkFlag_ProcScoped;
-            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
-          }
+          dst->link_flags      = src->is_extern ? RDI_LinkFlag_External : 0;
         }
       }
     }
@@ -2883,20 +2858,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
           dst->tls_off         = (RDI_U32)src->offset; // TODO(rjf): @u64_to_u32
           dst->type_idx        = (RDI_U32)rdim_idx_from_type(src->type);
-          if(src->is_extern)
-          {
-            dst->link_flags |= RDI_LinkFlag_External;
-          }
-          if(src->container_type != 0)
-          {
-            dst->link_flags |= RDI_LinkFlag_TypeScoped;
-            dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
-          }
-          else if(src->container_symbol != 0)
-          {
-            dst->link_flags |= RDI_LinkFlag_ProcScoped;
-            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
-          }
+          dst->link_flags      = src->is_extern ? RDI_LinkFlag_External : 0;
         }
       }
     }

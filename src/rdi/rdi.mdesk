@@ -77,7 +77,7 @@
   "";
   "// \"raddbg\\0\\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 22";
+  "#define RDI_ENCODING_VERSION 23";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -757,11 +757,12 @@ RDI_TypeModifierFlagTable:
 @table(name type_lhs type_rhs desc)
 RDI_TypeNodeMemberTable:
 {
-  {kind            RDI_TypeKind `` ""}
-  {flags           RDI_U16      `` ""}
-  {byte_size       RDI_U32      `` ""}
-  {direct_type_idx RDI_U32      `` ""}
-  {name_string_idx RDI_U32      `` ""}
+  {kind               RDI_TypeKind `` ""}
+  {flags              RDI_U16      `` ""}
+  {byte_size          RDI_U32      `` ""}
+  {direct_type_idx    RDI_U32      `` ""}
+  {container_type_idx RDI_U32      `` ""}
+  {name_string_idx    RDI_U32      `` ""}
 }
 
 @table(name value)
@@ -926,8 +927,6 @@ RDI_EnumMemberTable:
 RDI_LinkFlagTable:
 {
   {External   `1<<0`}
-  {TypeScoped `1<<1`}
-  {ProcScoped `1<<2`}
 }
 
 @table(name value)
@@ -956,7 +955,6 @@ RDI_GlobalVariableMemberTable:
   {link_flags        RDI_LinkFlags         ""}
   {voff              RDI_U64               ""}
   {type_idx          RDI_U32               ""}
-  {container_idx     RDI_U32               ""}
 }
 
 @table(name type desc)
@@ -966,7 +964,6 @@ RDI_ThreadVariableMemberTable:
   {link_flags        RDI_LinkFlags              ""}
   {tls_off           RDI_U32                    ""}
   {type_idx          RDI_U32                    ""}
-  {container_idx     RDI_U32                    ""}
 }
 
 @table(name type desc)
@@ -985,7 +982,6 @@ RDI_ProcedureMemberTable:
   {link_flags                RDI_LinkFlags              ""}
   {type_idx                  RDI_U32                    ""}
   {root_scope_idx            RDI_U32                    ""}
-  {container_idx             RDI_U32                    ""}
   {frame_base_location_first RDI_U32                    ""}
   {frame_base_location_opl   RDI_U32                    ""}
 }

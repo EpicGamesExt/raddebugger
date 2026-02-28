@@ -867,6 +867,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       {
         dumpf("    direct_type: %u\n", type->direct_type_idx);
       }
+      dumpf("    container_type: %u\n", type->container_type_idx);
       if(type->kind == RDI_TypeKind_Modifier)
       {
         dumpf("    flags: %S\n", rdi_string_from_type_modifier_flags(scratch.arena, type->flags));
@@ -1004,7 +1005,6 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       dumpf("    link_flags:    `%S`\n",    rdi_string_from_link_flags(scratch.arena, gvar->link_flags));
       dumpf("    voff:          %#08x\n", gvar->voff);
       dumpf("    type_idx:      %u\n",    gvar->type_idx);
-      dumpf("    container_idx: %u\n",    gvar->container_idx);
       dumpf("  }\n");
       scratch_end(scratch);
     }
@@ -1041,7 +1041,6 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       dumpf("    link_flags:    `%S`\n",    rdi_string_from_link_flags(scratch.arena, tvar->link_flags));
       dumpf("    tls_off:       %#08x\n", tvar->tls_off);
       dumpf("    type_idx:      %u\n",    tvar->type_idx);
-      dumpf("    container_idx: %u\n",    tvar->container_idx);
       dumpf("  }\n");
       scratch_end(scratch);
     }
@@ -1082,7 +1081,6 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       dumpf("    link_flags: `%S`\n",   rdi_string_from_link_flags(scratch.arena, proc->link_flags));
       dumpf("    type_idx: %u\n",   proc->type_idx);
       dumpf("    root_scope_idx: %u\n",   proc->root_scope_idx);
-      dumpf("    container_idx: %u\n",   proc->container_idx);
       if(proc->frame_base_location_first != 0)
       {
         String8List frame_base_location_strings = rdi_strings_from_locations(scratch.arena, rdi, tli->arch, r1u64(proc->frame_base_location_first, proc->frame_base_location_opl));

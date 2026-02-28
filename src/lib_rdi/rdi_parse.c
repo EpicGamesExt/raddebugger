@@ -774,25 +774,42 @@ rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
 RDI_PROC RDI_UDT *
 rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
 {
-  RDI_U64 idx = 0;
-  if(procedure->link_flags & RDI_LinkFlag_TypeScoped)
+  U64 udt_idx = 0;
+  RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
+  if(type)
   {
-    idx = procedure->container_idx;
+    RDI_TypeNode *container_type = rdi_element_from_name_idx(rdi, TypeNodes, type->container_type_idx);
+    if(container_type)
+    {
+      if(RDI_TypeKind_FirstUserDefined <= container_type->kind && container_type->kind <= RDI_TypeKind_LastUserDefined)
+      {
+        udt_idx = container_type->udt_idx;
+      }
+    }
   }
-  RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, idx);
+  RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, udt_idx);
   return udt;
 }
 
 RDI_PROC RDI_Procedure *
 rdi_container_procedure_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
 {
-  RDI_U64 idx = 0;
-  if(procedure->link_flags & RDI_LinkFlag_ProcScoped)
+  RDI_Scope *scope_null = rdi_element_from_name_idx(rdi, Scopes, 0);
+  RDI_Scope *scope_proc = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
+  RDI_Scope *scope_parent = rdi_element_from_name_idx(rdi, Scopes, scope_proc->parent_scope_idx);
+  U64 container_proc_idx = 0;
+  for(RDI_Scope *p = scope_proc;
+      p != scope_null && p != 0;
+      p = rdi_element_from_name_idx(rdi, Scopes, p->parent_scope_idx))
   {
-    idx = procedure->container_idx;
+    if(p->proc_idx != scope_proc->proc_idx)
+    {
+      container_proc_idx = p->proc_idx;
+      break;
+    }
   }
-  RDI_Procedure *container_procedure = rdi_element_from_name_idx(rdi, Procedures, idx);
-  return container_procedure;
+  RDI_Procedure *container_proc = rdi_element_from_name_idx(rdi, Procedures, container_proc_idx);
+  return container_proc;
 }
 
 RDI_PROC RDI_U64

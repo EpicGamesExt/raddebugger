@@ -692,6 +692,7 @@ struct RDIM_Type
   RDIM_String8 name;
   RDIM_String8 link_name;
   RDIM_Type *direct_type;
+  RDIM_Type *container_type;
   RDIM_Type **param_types;
   struct RDIM_UDT *udt;
 };
@@ -888,8 +889,6 @@ struct RDIM_Symbol
   RDIM_String8 link_name;
   RDIM_Type *type;
   RDI_U64 offset;
-  RDIM_Symbol *container_symbol;
-  RDIM_Type *container_type;
   struct RDIM_Scope *root_scope;
   RDIM_LocationCaseList location_cases;
   RDIM_String8 value_data;

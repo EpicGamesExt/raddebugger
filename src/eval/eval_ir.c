@@ -2497,11 +2497,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 U64 vtable_voff = vtable_vaddr - module_base;
                 U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, vtable_voff);
                 RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, global_idx);
-                if(global_var->link_flags & RDI_LinkFlag_TypeScoped)
+                RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, global_var->type_idx);
+                RDI_TypeNode *container_type = rdi_element_from_name_idx(rdi, TypeNodes, type->container_type_idx);
+                if(RDI_TypeKind_FirstUserDefined <= container_type->kind && container_type->kind <= RDI_TypeKind_LastUserDefined)
                 {
-                  RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
-                  RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
-                  E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(type->kind), udt->self_type_idx, dbg_info_num);
+                  E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(container_type->kind), type->container_type_idx, dbg_info_num);
                   E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(arch, derived_type_key, 1, 0);
                   result.type_key = ptr_to_derived_type_key;
                 }

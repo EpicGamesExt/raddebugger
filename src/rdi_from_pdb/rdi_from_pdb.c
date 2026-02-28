@@ -3568,22 +3568,23 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_name, 0);
                     container_type = p2r_type_ptr_from_itype(cv_type_id);
                   }
-                  
-                  // rjf: unpack global's container symbol
-                  RDIM_Symbol *container_symbol = 0;
-                  if(container_type == 0 && top_scope_node != 0)
+
+                  if(type->container_type != 0)
                   {
-                    container_symbol = top_scope_node->scope->symbol;
+                    RDIM_Type *clone_type = rdim_type_chunk_list_push(arena, typedefs, 4096);
+                    RDIM_TypeChunkNode *clone_chunk = clone_type->chunk;
+                    *clone_type = *type;
+                    clone_type->chunk = clone_chunk;
+                    type = clone_type;
                   }
+                  type->container_type = container_type;
                   
                   // rjf: build symbol
                   RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, sym_global_variables, sym_global_variables_chunk_cap);
-                  symbol->is_extern        = (kind == CV_SymKind_GDATA32);
-                  symbol->name             = name;
-                  symbol->type             = type;
-                  symbol->offset           = voff;
-                  symbol->container_symbol = container_symbol;
-                  symbol->container_type   = container_type;
+                  symbol->is_extern = (kind == CV_SymKind_GDATA32);
+                  symbol->name      = name;
+                  symbol->type      = type;
+                  symbol->offset    = voff;
                 }
               }break;
               
@@ -3624,13 +3625,16 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_name, 0);
                   container_type = p2r_type_ptr_from_itype(cv_type_id);
                 }
-                
-                // rjf: unpack proc's container symbol
-                RDIM_Symbol *container_symbol = 0;
-                if(container_type == 0 && top_scope_node != 0)
+
+                if(type->container_type != 0)
                 {
-                  container_symbol = top_scope_node->scope->symbol;
+                  RDIM_Type *clone_type = rdim_type_chunk_list_push(arena, typedefs, 4096);
+                  RDIM_TypeChunkNode *clone_chunk = clone_type->chunk;
+                  *clone_type = *type;
+                  clone_type->chunk = clone_chunk;
+                  type = clone_type;
                 }
+                type->container_type = container_type;
                 
                 // rjf: build procedure's root scope
                 //
@@ -3676,13 +3680,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 if(params->subset_flags & (RDIM_SubsetFlag_Procedures|RDIM_SubsetFlag_ProcedureNameMap))
                 {
                   curr_proc_symbol = rdim_symbol_chunk_list_push(arena, sym_procedures, sym_procedures_chunk_cap);
-                  curr_proc_symbol->is_extern        = (kind == CV_SymKind_GPROC32);
-                  curr_proc_symbol->name             = name;
-                  curr_proc_symbol->link_name        = link_name;
-                  curr_proc_symbol->type             = type;
-                  curr_proc_symbol->container_symbol = container_symbol;
-                  curr_proc_symbol->container_type   = container_type;
-                  curr_proc_symbol->root_scope       = procedure_root_scope;
+                  curr_proc_symbol->is_extern  = (kind == CV_SymKind_GPROC32);
+                  curr_proc_symbol->name       = name;
+                  curr_proc_symbol->link_name  = link_name;
+                  curr_proc_symbol->type       = type;
+                  curr_proc_symbol->root_scope = procedure_root_scope;
                   if(procedure_root_scope != 0)
                   {
                     procedure_root_scope->symbol = curr_proc_symbol;
@@ -3823,22 +3825,23 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_name, 0);
                   container_type = p2r_type_ptr_from_itype(cv_type_id);
                 }
-                
-                // rjf: unpack thread variable's container symbol
-                RDIM_Symbol *container_symbol = 0;
-                if(container_type == 0 && top_scope_node != 0)
+
+                if(type->container_type != 0)
                 {
-                  container_symbol = top_scope_node->scope->symbol;
+                  RDIM_Type *clone_type = rdim_type_chunk_list_push(arena, typedefs, 4096);
+                  RDIM_TypeChunkNode *clone_chunk = clone_type->chunk;
+                  *clone_type = *type;
+                  clone_type->chunk = clone_chunk;
+                  type = clone_type;
                 }
+                type->container_type = container_type;
                 
                 // rjf: build symbol
                 RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, sym_thread_variables, sym_thread_variables_chunk_cap);
-                tvar->name             = name;
-                tvar->type             = type;
-                tvar->is_extern        = (kind == CV_SymKind_GTHREAD32);
-                tvar->offset           = tls_off;
-                tvar->container_type   = container_type;
-                tvar->container_symbol = container_symbol;
+                tvar->name      = name;
+                tvar->type      = type;
+                tvar->is_extern = (kind == CV_SymKind_GTHREAD32);
+                tvar->offset    = tls_off;
               }break;
               
               //- rjf: LOCAL

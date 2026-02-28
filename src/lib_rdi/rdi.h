@@ -67,7 +67,7 @@ union RDI_GUID {RDI_U8 u8[16]; RDI_U64 u64[2];};
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 22
+#define RDI_ENCODING_VERSION 23
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -379,8 +379,6 @@ typedef RDI_U32 RDI_LinkFlags;
 typedef enum RDI_LinkFlagsEnum
 {
 RDI_LinkFlag_External             = 1<<0,
-RDI_LinkFlag_TypeScoped           = 1<<1,
-RDI_LinkFlag_ProcScoped           = 1<<2,
 } RDI_LinkFlagsEnum;
 
 typedef RDI_U32 RDI_LocalKind;
@@ -821,6 +819,7 @@ X(RDI_TypeKind, kind)\
 X(RDI_U16, flags)\
 X(RDI_U32, byte_size)\
 X(RDI_U32, direct_type_idx)\
+X(RDI_U32, container_type_idx)\
 X(RDI_U32, name_string_idx)\
 
 #define RDI_UDTFlags_XList \
@@ -861,8 +860,6 @@ X(RDI_U64, val)\
 
 #define RDI_LinkFlags_XList \
 X(External)\
-X(TypeScoped)\
-X(ProcScoped)\
 
 #define RDI_LocalKind_XList \
 X(NULL)\
@@ -882,14 +879,12 @@ X(RDI_U32, name_string_idx)\
 X(RDI_LinkFlags, link_flags)\
 X(RDI_U64, voff)\
 X(RDI_U32, type_idx)\
-X(RDI_U32, container_idx)\
 
 #define RDI_ThreadVariable_XList \
 X(type, name_string_idx)\
 X(type, link_flags)\
 X(type, tls_off)\
 X(type, type_idx)\
-X(type, container_idx)\
 
 #define RDI_Procedure_XList \
 X(RDI_U32, name_string_idx)\
@@ -897,7 +892,6 @@ X(RDI_U32, link_name_string_idx)\
 X(RDI_LinkFlags, link_flags)\
 X(RDI_U32, type_idx)\
 X(RDI_U32, root_scope_idx)\
-X(RDI_U32, container_idx)\
 X(RDI_U32, frame_base_location_first)\
 X(RDI_U32, frame_base_location_opl)\
 
@@ -1247,6 +1241,7 @@ RDI_TypeKind kind;
 RDI_U16 flags;
 RDI_U32 byte_size;
 RDI_U32 direct_type_idx;
+RDI_U32 container_type_idx;
 RDI_U32 name_string_idx;
 
   union
@@ -1307,7 +1302,6 @@ RDI_U32 name_string_idx;
 RDI_LinkFlags link_flags;
 RDI_U64 voff;
 RDI_U32 type_idx;
-RDI_U32 container_idx;
 };
 
 typedef struct RDI_ThreadVariable RDI_ThreadVariable;
@@ -1317,7 +1311,6 @@ RDI_U32 name_string_idx;
 RDI_LinkFlags link_flags;
 RDI_U32 tls_off;
 RDI_U32 type_idx;
-RDI_U32 container_idx;
 };
 
 typedef struct RDI_Constant RDI_Constant;
@@ -1336,7 +1329,6 @@ RDI_U32 link_name_string_idx;
 RDI_LinkFlags link_flags;
 RDI_U32 type_idx;
 RDI_U32 root_scope_idx;
-RDI_U32 container_idx;
 RDI_U32 frame_base_location_first;
 RDI_U32 frame_base_location_opl;
 };

@@ -2364,6 +2364,7 @@ d2r_convert_symbols(Arena         *arena,
             proc_type->count       = param_count;
             proc_type->param_types = params;
             
+#if 0
             // get container type
             RDIM_Type *container_type = 0;
             if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_ContainingType)) {
@@ -2375,6 +2376,7 @@ d2r_convert_symbols(Arena         *arena,
                 log_user_errorf("ERROR: failed to infer parent type of subprogram from .debug_info+0x%llx\n", parent->tag.info_off);
               }
             }
+#endif
             
             // get frame base expression
             String8 frame_base_expr = dw_exprloc_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_FrameBase);
@@ -2392,8 +2394,6 @@ d2r_convert_symbols(Arena         *arena,
             proc->name             = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
             proc->link_name        = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_LinkageName);
             proc->type             = proc_type;
-            proc->container_symbol = 0;
-            proc->container_type   = container_type;
             proc->root_scope       = root_scope;
             proc->location_cases   = d2r_locset_from_attrib(arena, &g_d2r_shared.scopes, root_scope, &g_d2r_shared.locations, input, cu, image_base, arch, tag, DW_AttribKind_FrameBase);
             
@@ -2529,7 +2529,6 @@ d2r_convert_symbols(Arena         *arena,
           var->link_name        = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_LinkageName);
           var->type             = type;
           var->offset           = voff;
-          var->container_symbol = 0;
         }
       } break;
       case DW_TagKind_FormalParameter: {
