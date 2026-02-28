@@ -77,7 +77,7 @@
   "";
   "// \"raddbg\\0\\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 21";
+  "#define RDI_ENCODING_VERSION 22";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -846,36 +846,23 @@ RDI_EnumMemberTable:
 {
   @expand(RDI_TypeNodeMemberTable a) `$(a.type_lhs) $(a.name)$(a.type_rhs)`
     ```
-    union
+  union
   {
-    // kind is 'constructed'
-    struct
-    {
-      RDI_U32 count;
-      union
-      {
-        // when kind is 'Function' or 'Method'
-        RDI_U32 param_idx_run_first;
-        // when kind is 'MemberPtr'
-        RDI_U32 owner_type_idx;
-      };
-    }
-    constructed;
+    // (kind = Array)
+    RDI_U32 array_count;
+
+    // (kind = Function|Method)
+    RDI_U32 param_idx_run_first;
     
-    // kind is 'user defined'
-    struct
-    {
-      RDI_U32 udt_idx;
-    }
-    user_defined;
+    // (kind = Struct|Class|Union|Enum)
+    RDI_U32 udt_idx;
     
     // (kind = Bitfield)
     struct
     {
       RDI_U16 off;
       RDI_U16 size;
-    }
-    bitfield;
+    } bitfield;
   }
   ```
 }

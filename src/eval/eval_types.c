@@ -779,7 +779,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               String8 name = str8_from_rdi_string_idx(rdi, rdi_type->name_string_idx);
               
               // rjf: unpack UDT info
-              RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, rdi_type->user_defined.udt_idx);
+              RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, rdi_type->udt_idx);
               
               // rjf: unpack members
               E_Member *members = 0;
@@ -835,7 +835,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               E_EnumVal *enum_vals = 0;
               U32 enum_vals_count = 0;
               {
-                U32 udt_idx = rdi_type->user_defined.udt_idx;
+                U32 udt_idx = rdi_type->udt_idx;
                 RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, udt_idx);
                 enum_vals_count = udt->member_count;
                 enum_vals = push_array(arena, E_EnumVal, enum_vals_count);
@@ -919,13 +919,13 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
                   type->direct_type_key = direct_type_key;
-                  type->count           = rdi_type->constructed.count;
+                  type->count           = rdi_type->array_count;
                   type->byte_size       = direct_type_byte_size * type->count;
                   type->arch            = arch;
                 }break;
                 case RDI_TypeKind_Function:
                 {
-                  U32 idx_run_first = rdi_type->constructed.param_idx_run_first;
+                  U32 idx_run_first = rdi_type->param_idx_run_first;
                   U32 idx_run_count = 0;
                   U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, &idx_run_count);
                   {
@@ -957,7 +957,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                   // NOTE(rjf): for methods, the `direct` type points at the owner type.
                   // the return type, instead of being encoded via the `direct` type, is
                   // encoded via the first parameter.
-                  U32 idx_run_first = rdi_type->constructed.param_idx_run_first;
+                  U32 idx_run_first = rdi_type->param_idx_run_first;
                   U32 idx_run_count = 0;
                   U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, &idx_run_count);
                   {
@@ -992,6 +992,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                 }break;
                 case RDI_TypeKind_MemberPtr:
                 {
+#if 0
                   // rjf: unpack owner type
                   E_TypeKey owner_type_key = zero_struct;
                   if(rdi_type->constructed.owner_type_idx < type_node_idx)
@@ -1006,6 +1007,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                   type->owner_type_key  = owner_type_key;
                   type->direct_type_key = direct_type_key;
                   type->arch            = arch;
+#endif
                 }break;
               }
             }

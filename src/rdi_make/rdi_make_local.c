@@ -2809,33 +2809,24 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             {
               direct_byte_size = src->direct_type->byte_size;
             }
-            dst->constructed.count           = src->byte_size / direct_byte_size;
+            dst->array_count = src->byte_size / direct_byte_size;
           }
-          
-          //- rjf: fill constructed type node info
-          else if(RDI_TypeKind_FirstConstructed <= dst->kind && dst->kind <= RDI_TypeKind_LastConstructed)
+
+          else if(dst->kind == RDI_TypeKind_Function || dst->kind == RDI_TypeKind_Method)
           {
-            dst->constructed.count = src->count;
-            if(dst->kind == RDI_TypeKind_Function || dst->kind == RDI_TypeKind_Method)
+            RDI_U32 param_idx_run_count = src->count;
+            RDI_U32 *param_idx_run = rdim_push_array_no_zero(arena, RDI_U32, param_idx_run_count);
+            for(RDI_U32 idx = 0; idx < param_idx_run_count; idx += 1)
             {
-              RDI_U32 param_idx_run_count = src->count;
-              RDI_U32 *param_idx_run = rdim_push_array_no_zero(arena, RDI_U32, param_idx_run_count);
-              for(RDI_U32 idx = 0; idx < param_idx_run_count; idx += 1)
-              {
-                param_idx_run[idx] = (RDI_U32)rdim_idx_from_type(src->param_types[idx]); // TODO(rjf): @u64_to_u32
-              }
-              dst->constructed.param_idx_run_first = rdim_bake_idx_from_idx_run(bake_idx_runs, param_idx_run, param_idx_run_count);
+              param_idx_run[idx] = (RDI_U32)rdim_idx_from_type(src->param_types[idx]); // TODO(rjf): @u64_to_u32
             }
-            else if(dst->kind == RDI_TypeKind_MemberPtr)
-            {
-              // TODO(rjf): member pointers not currently supported.
-            }
+            dst->param_idx_run_first = rdim_bake_idx_from_idx_run(bake_idx_runs, param_idx_run, param_idx_run_count);
           }
-          
+
           //- rjf: fill user-defined-type info
           else if(RDI_TypeKind_FirstUserDefined <= dst->kind && dst->kind <= RDI_TypeKind_LastUserDefined)
           {
-            dst->user_defined.udt_idx         = (RDI_U32)rdim_idx_from_udt(src->udt); // TODO(rjf): @u64_to_u32
+            dst->udt_idx = (RDI_U32)rdim_idx_from_udt(src->udt); // TODO(rjf): @u64_to_u32
           }
           
           //- rjf: fill bitfield info

@@ -878,24 +878,24 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       dumpf("    byte_size: %u\n", type->byte_size);
       if(type->kind == RDI_TypeKind_Array)
       {
-        dumpf("    constructed__array_count: %u\n", type->constructed.count);
+        dumpf("    constructed__array_count: %u\n", type->array_count);
       }
       else if(type->kind == RDI_TypeKind_Function)
       {
         U32  param_idx_count = 0;
-        U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, &param_idx_count);
+        U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->param_idx_run_first, &param_idx_count);
         String8List param_idx_strings = {0};
         for(U32 param_idx = 0; param_idx < param_idx_count; param_idx += 1)
         {
           str8_list_pushf(scratch.arena, &param_idx_strings, "%u", param_idx_array[param_idx]);
         }
         String8 param_idx_str = str8_list_join(scratch.arena, &param_idx_strings, &(StringJoin){.pre = str8_lit("["), .sep = str8_lit(", "), .post = str8_lit("]")});
-        dumpf("    constructed__params: %S // idx_run[%u]\n", param_idx_str, type->constructed.param_idx_run_first);
+        dumpf("    constructed__params: %S // idx_run[%u]\n", param_idx_str, type->param_idx_run_first);
       }
       else if(type->kind == RDI_TypeKind_Method)
       {
         U32  param_idx_count = 0;
-        U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, &param_idx_count);
+        U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->param_idx_run_first, &param_idx_count);
         String8 this_type_str = str8_lit("\?\?\?");
         if(param_idx_count > 0)
         {
@@ -909,12 +909,12 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
           str8_list_pushf(scratch.arena, &param_idx_strings, "%u", param_idx_array[param_idx]);
         }
         String8 param_idx_str = str8_list_join(scratch.arena, &param_idx_strings, &(StringJoin){.pre = str8_lit("["), .sep = str8_lit(", "), .post = str8_lit("]")});
-        dumpf("    constructed__this_type: %S // idx_run[%u]\n", this_type_str, type->constructed.param_idx_run_first);
-        dumpf("    constructed__params: %S // idx_run[%u]\n", param_idx_str, type->constructed.param_idx_run_first);
+        dumpf("    constructed__this_type: %S // idx_run[%u]\n", this_type_str, type->param_idx_run_first);
+        dumpf("    constructed__params: %S // idx_run[%u]\n", param_idx_str, type->param_idx_run_first);
       }
       else if(RDI_TypeKind_FirstUserDefined <= type->kind && type->kind <= RDI_TypeKind_LastUserDefined)
       {
-        dumpf("    user_defined__udt: %u\n",   type->user_defined.udt_idx);
+        dumpf("    user_defined__udt: %u\n",   type->udt_idx);
       }
       else if(type->kind == RDI_TypeKind_Bitfield)
       {
@@ -1416,7 +1416,7 @@ rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_Typ
       // format parameters
       String8List  params_fmt  = {0};
       U32          check_count = 0;
-      U32         *idx_run     = rdi_idx_run_from_first_count(rdi, i->constructed.param_idx_run_first, i->constructed.count, &check_count);
+      U32         *idx_run     = rdi_idx_run_from_first_count(rdi, i->constructedparam_idx_run_first, i->constructed.count, &check_count);
       if (check_count == type->constructed.count) {
         for EachIndex(param_idx, i->constructed.count) {
           RDI_TypeNode *param_type   = rdi_element_from_name_idx(rdi, TypeNodes, idx_run[param_idx]);
