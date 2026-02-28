@@ -1457,89 +1457,86 @@ THREAD_POOL_TASK_FUNC(rdib_type_nodes_task)
       dst->kind                     = src->kind;
       dst->flags                    = 0;
       dst->byte_size                = src->builtin.size;
-      dst->built_in.name_string_idx = rdib_idx_from_string_map(task->string_map, src->builtin.name);
+      dst->name_string_idx = rdib_idx_from_string_map(task->string_map, src->builtin.name);
     } else if (src->kind == RDI_TypeKind_Modifier) {
-      dst->kind                        = RDI_TypeKind_Modifier;
-      dst->byte_size                   = rdib_sizeof_type(src->modifier.type_ref);
-      dst->flags                       = src->modifier.flags;
-      dst->constructed.direct_type_idx = rdib_idx_from_type(src->modifier.type_ref);
+      dst->kind            = RDI_TypeKind_Modifier;
+      dst->byte_size       = rdib_sizeof_type(src->modifier.type_ref);
+      dst->flags           = src->modifier.flags;
+      dst->direct_type_idx = rdib_idx_from_type(src->modifier.type_ref);
     } else if (src->kind == RDI_TypeKind_Ptr || src->kind == RDI_TypeKind_LRef || src->kind == RDI_TypeKind_RRef) {
-      dst->kind                        = src->kind;
-      dst->byte_size                   = src->ptr.size;
-      dst->flags                       = 0;
-      dst->constructed.direct_type_idx = rdib_idx_from_type(src->ptr.type_ref);
+      dst->kind            = src->kind;
+      dst->byte_size       = src->ptr.size;
+      dst->flags           = 0;
+      dst->direct_type_idx = rdib_idx_from_type(src->ptr.type_ref);
     } else if (src->kind == RDI_TypeKind_Method) {
       RDIB_Type *params_type = src->method.params_type;
       Assert(params_type->kind == RDI_TypeKindExt_Params);
       RDIB_IndexRunBucket *param_idx_run = task->idx_run_map->buckets[src->method.param_idx_run_bucket_idx];
 
-      dst->kind                            = RDI_TypeKind_Method;
-      dst->flags                           = 0;
-      dst->byte_size                       = 0;
-      dst->constructed.direct_type_idx     = rdib_idx_from_type(src->method.return_type);
-      dst->constructed.count               = param_idx_run->indices.count;
-      dst->constructed.param_idx_run_first = param_idx_run->index_in_output_array;
+      dst->kind                = RDI_TypeKind_Method;
+      dst->flags               = 0;
+      dst->byte_size           = 0;
+      dst->direct_type_idx     = rdib_idx_from_type(src->method.return_type);
+      dst->param_idx_run_first = param_idx_run->index_in_output_array;
     } else if (src->kind == RDI_TypeKindExt_StaticMethod) {
       RDIB_Type *params_type = src->static_method.params_type;
       Assert(params_type->kind == RDI_TypeKindExt_Params);
       RDIB_IndexRunBucket *param_idx_run = task->idx_run_map->buckets[src->static_method.param_idx_run_bucket_idx];
 
-      dst->kind                            = RDI_TypeKind_Method;
-      dst->flags                           = 0;
-      dst->byte_size                       = 0;
-      dst->constructed.direct_type_idx     = rdib_idx_from_type(src->static_method.return_type);
-      dst->constructed.count               = param_idx_run->indices.count;
-      dst->constructed.param_idx_run_first = param_idx_run->index_in_output_array;
+      dst->kind                = RDI_TypeKind_Method;
+      dst->flags               = 0;
+      dst->byte_size           = 0;
+      dst->direct_type_idx     = rdib_idx_from_type(src->static_method.return_type);
+      dst->param_idx_run_first = param_idx_run->index_in_output_array;
     } else if (src->kind == RDI_TypeKind_Function) {
       RDIB_Type *params_type = src->func.params_type;
       Assert(params_type->kind == RDI_TypeKindExt_Params);
       RDIB_IndexRunBucket *param_idx_run = task->idx_run_map->buckets[src->func.param_idx_run_bucket_idx];
 
-      dst->kind                            = RDI_TypeKind_Function;
-      dst->flags                           = 0;
-      dst->byte_size                       = 0;
-      dst->constructed.direct_type_idx     = rdib_idx_from_type(src->func.return_type);
-      dst->constructed.count               = param_idx_run->indices.count;
-      dst->constructed.param_idx_run_first = param_idx_run->index_in_output_array;
+      dst->kind                = RDI_TypeKind_Function;
+      dst->flags               = 0;
+      dst->byte_size           = 0;
+      dst->direct_type_idx     = rdib_idx_from_type(src->func.return_type);
+      dst->param_idx_run_first = param_idx_run->index_in_output_array;
     } else if (src->kind == RDI_TypeKind_Array) {
       U64 entry_size = rdib_size_from_type(src->array.entry_type);
       U64 array_size = src->array.size;
       U64 array_count = entry_size > 0 ? array_size / entry_size : 0;
 
-      dst->kind                        = src->kind;
-      dst->flags                       = 0;
-      dst->byte_size                   = array_size;
-      dst->constructed.direct_type_idx = rdib_idx_from_type(src->array.entry_type);
-      dst->constructed.count           = array_count;
+      dst->kind            = src->kind;
+      dst->flags           = 0;
+      dst->byte_size       = array_size;
+      dst->direct_type_idx = rdib_idx_from_type(src->array.entry_type);
+      dst->array_count     = array_count;
     } else if (src->kind == RDI_TypeKind_Bitfield) {
-      dst->kind                     = RDI_TypeKind_Bitfield;
-      dst->flags                    = 0;
-      dst->byte_size                = rdib_sizeof_type(src->bitfield.value_type);
-      dst->bitfield.direct_type_idx = rdib_idx_from_type(src->bitfield.value_type); 
-      dst->bitfield.off             = src->bitfield.off;
-      dst->bitfield.size            = src->bitfield.count;
+      dst->kind            = RDI_TypeKind_Bitfield;
+      dst->flags           = 0;
+      dst->byte_size       = rdib_sizeof_type(src->bitfield.value_type);
+      dst->direct_type_idx = rdib_idx_from_type(src->bitfield.value_type);
+      dst->bitfield.off    = src->bitfield.off;
+      dst->bitfield.size   = src->bitfield.count;
     } else if (src->kind == RDI_TypeKind_Struct || src->kind == RDI_TypeKind_Class ||
                src->kind == RDI_TypeKind_IncompleteStruct || src->kind == RDI_TypeKind_IncompleteClass) {
-      dst->kind                         = src->kind;
-      dst->flags                        = 0;
-      dst->byte_size                    = src->udt.struct_type.size;
-      dst->user_defined.name_string_idx = rdib_idx_from_string_map(task->string_map, src->udt.name);
-      dst->user_defined.udt_idx         = src->udt.udt_idx;
-      dst->user_defined.direct_type_idx = 0;
+      dst->kind            = src->kind;
+      dst->flags           = 0;
+      dst->byte_size       = src->udt.struct_type.size;
+      dst->name_string_idx = rdib_idx_from_string_map(task->string_map, src->udt.name);
+      dst->direct_type_idx = 0;
+      dst->udt_idx         = src->udt.udt_idx;
     } else if (src->kind == RDI_TypeKind_Union || src->kind == RDI_TypeKind_IncompleteUnion) {
-      dst->kind                         = src->kind;
-      dst->flags                        = 0;
-      dst->byte_size                    = src->udt.union_type.size;
-      dst->user_defined.name_string_idx = rdib_idx_from_string_map(task->string_map, src->udt.name);
-      dst->user_defined.udt_idx         = src->udt.udt_idx;
-      dst->user_defined.direct_type_idx = 0;
+      dst->kind            = src->kind;
+      dst->flags           = 0;
+      dst->byte_size       = src->udt.union_type.size;
+      dst->direct_type_idx = 0;
+      dst->name_string_idx = rdib_idx_from_string_map(task->string_map, src->udt.name);
+      dst->udt_idx         = src->udt.udt_idx;
     } else if (src->kind == RDI_TypeKind_Enum || src->kind == RDI_TypeKind_IncompleteEnum) {
-      dst->kind                         = RDI_TypeKind_Enum;
-      dst->flags                        = 0;
-      dst->byte_size                    = rdib_size_from_type(src->udt.enum_type.base_type);
-      dst->user_defined.name_string_idx = rdib_idx_from_string_map(task->string_map, src->udt.name);
-      dst->user_defined.udt_idx         = src->udt.udt_idx;
-      dst->user_defined.direct_type_idx = rdib_idx_from_type(src->udt.enum_type.base_type);
+      dst->kind            = RDI_TypeKind_Enum;
+      dst->flags           = 0;
+      dst->byte_size       = rdib_size_from_type(src->udt.enum_type.base_type);
+      dst->name_string_idx = rdib_idx_from_string_map(task->string_map, src->udt.name);
+      dst->direct_type_idx = rdib_idx_from_type(src->udt.enum_type.base_type);
+      dst->udt_idx         = src->udt.udt_idx;
     } else if (src->kind == RDI_TypeKind_Alias) {
       // TODO
       NotImplemented;
@@ -3884,17 +3881,6 @@ THREAD_POOL_TASK_FUNC(rdib_build_var_section_task)
       dst->voff            = voff;
       dst->type_idx        = rdib_idx_from_type(src->type);
       dst->link_flags      = src->link_flags;
-
-      if (src->container_type != 0) {
-        Assert(!src->container_proc);
-        dst->link_flags    |= RDI_LinkFlag_TypeScoped;
-        dst->container_idx  = rdib_idx_from_udt_type(src->container_type);
-      }
-      if (src->container_proc != 0) {
-        Assert(!src->container_type);
-        dst->link_flags    |= RDI_LinkFlag_ProcScoped;
-        dst->container_idx  = rdib_idx_from_procedure(src->container_proc);
-      }
     }
 
     str8_list_push(arena, &task->gvars_out[task_id], str8_array(vars, chunk->count));
@@ -3956,17 +3942,6 @@ THREAD_POOL_TASK_FUNC(rdib_build_tvar_section_task)
       dst->name_string_idx = rdib_idx_from_string_map(task->string_map, src->name);
       dst->tls_off         = tls_off;
       dst->type_idx        = rdib_idx_from_type(src->type);
-
-      if (src->container_type != 0) {
-        Assert(!src->container_proc);
-        dst->link_flags    |= RDI_LinkFlag_TypeScoped;
-        dst->container_idx  = rdib_idx_from_udt_type(src->container_type);
-      }
-      if (src->container_proc != 0) {
-        Assert(!src->container_type);
-        dst->link_flags    |= RDI_LinkFlag_ProcScoped;
-        dst->container_idx  = rdib_idx_from_procedure(src->container_proc);
-      }
     }
 
     str8_list_push(arena, &task->tvars_out[task_id], str8_array(vars, chunk->count));
@@ -4023,18 +3998,6 @@ THREAD_POOL_TASK_FUNC(rdib_build_procs_section_task)
       dst->link_flags           = src->link_flags;
       dst->type_idx             = rdib_idx_from_type(src->type);
       dst->root_scope_idx       = rdib_idx_from_scope(src->scope);
-
-      if (src->container_type != 0) {
-        AssertAlways(!src->container_proc);
-        dst->link_flags    |= RDI_LinkFlag_TypeScoped;
-        dst->container_idx  = rdib_idx_from_udt_type(src->container_type);
-      }
-
-      if (src->container_proc != 0) {
-        AssertAlways(!src->container_type);
-        dst->link_flags    |= RDI_LinkFlag_ProcScoped;
-        dst->container_idx  = rdib_idx_from_procedure(0); Assert(!"TODO"); // src->container_proc
-      }
     }
 
     str8_list_push(arena, &task->procs_out[task_id], str8_array(procs, chunk->count));
