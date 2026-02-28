@@ -879,7 +879,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       else if(type->kind == RDI_TypeKind_Function)
       {
         U32  param_idx_count = 0;
-        U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, type->constructed.count, &param_idx_count);
+        U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, &param_idx_count);
         String8List param_idx_strings = {0};
         for(U32 param_idx = 0; param_idx < param_idx_count; param_idx += 1)
         {
@@ -892,7 +892,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
       else if(type->kind == RDI_TypeKind_Method)
       {
         U32  param_idx_count = 0;
-        U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, type->constructed.count, &param_idx_count);
+        U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, &param_idx_count);
         String8 this_type_str = str8_lit("\?\?\?");
         if(param_idx_count > 0)
         {
@@ -1297,7 +1297,7 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
           else
           {
             U32  idx_count = 0;
-            U32 *idx_array = rdi_idx_run_from_first_count(rdi, node_ptr->match_idx_or_idx_run_first, node_ptr->match_count, &idx_count);
+            U32 *idx_array = rdi_idx_run_from_first_count(rdi, node_ptr->match_idx_or_idx_run_first, &idx_count);
             String8List idx_strings = {0};
             for(U32 idx_i = 0; idx_i < idx_count; idx_i += 1)
             {

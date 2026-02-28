@@ -1402,7 +1402,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           {
             for EachIndex(idx, n->count)
             {
-              map->slots_idx_counts[slot_idx] += n->v[idx].count;
+              map->slots_idx_counts[slot_idx] += n->v[idx].count + /* run count: */ 1;
             }
           }
         }
@@ -1510,7 +1510,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     if(lane_idx() == 0)
     {
       rdim_shared->baked_idx_runs.idx_count = bake_idx_runs->slots_base_idxs[bake_idx_runs->slots_count];
-      rdim_shared->baked_idx_runs.idx_runs = push_array(arena, RDI_U32, rdim_shared->baked_idx_runs.idx_count);
+      rdim_shared->baked_idx_runs.idx_runs = push_array(arena, RDI_U32, rdim_shared->baked_idx_runs.idx_count + 1);
     }
     lane_sync();
     
@@ -1525,6 +1525,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           StaticAssert(sizeof(rdim_shared->baked_idx_runs.idx_runs[0]) == sizeof(n->v[0].idxes[0]), idx_run_size_check);
           for EachIndex(n_idx, n->count)
           {
+            rdim_shared->baked_idx_runs.idx_runs[off] = safe_cast_u32(n->v[n_idx].count);
+            off += 1;
+
             rdim_memcpy(rdim_shared->baked_idx_runs.idx_runs + off, n->v[n_idx].idxes, sizeof(n->v[n_idx].idxes[0]) * n->v[n_idx].count);
             off += n->v[n_idx].count;
           }

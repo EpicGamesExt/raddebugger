@@ -361,19 +361,24 @@ rdi_string_from_idx(RDI_Parsed *rdi, RDI_U32 idx, RDI_U64 *len_out)
 //- index runs
 
 RDI_PROC RDI_U32*
-rdi_idx_run_from_first_count(RDI_Parsed *rdi, RDI_U32 raw_first, RDI_U32 raw_count, RDI_U32 *n_out)
+rdi_idx_run_from_first_count(RDI_Parsed *rdi, RDI_U32 first, RDI_U32 *n_out)
 {
-  RDI_U64 idx_run_count = 0;
-  RDI_U32 *idx_run_data = rdi_table_from_name(rdi, IndexRuns, &idx_run_count);
-  RDI_U32 raw_opl = raw_first + raw_count;
-  RDI_U32 opl = rdi_parse__min(raw_opl, idx_run_count);
-  RDI_U32 first = rdi_parse__min(raw_first, opl);
   RDI_U32 *result = 0;
-  if(first < idx_run_count)
+  *n_out = 0;
+  if(first > 0)
   {
-    result = idx_run_data + first;
+    RDI_U64  idx_run_count = 0;
+    RDI_U32 *idx_run_data  = rdi_table_from_name(rdi, IndexRuns, &idx_run_count);
+    if(first < idx_run_count)
+    {
+      RDI_U32 count = idx_run_data[first];
+      if(first + count <= idx_run_count)
+      {
+        result = idx_run_data + first + 1;
+        *n_out = count;
+      }
+    }
   }
-  *n_out = opl - first;
   return result;
 }
 
@@ -717,7 +722,7 @@ rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node, RDI_U32 *n_out)
     }
     else
     {
-      result = rdi_idx_run_from_first_count(p, node->match_idx_or_idx_run_first, node->match_count, n_out);
+      result = rdi_idx_run_from_first_count(p, node->match_idx_or_idx_run_first, n_out);
     }
   }
   return result;

@@ -1688,7 +1688,7 @@ rdim_bake_idx_run_map_loose_insert(RDIM_Arena *arena, RDIM_BakeIdxRunMapTopology
       bir->hash = hash;
       bir->count = count;
       bir->idxes = idxes;
-      map->slots_idx_counts[slot_idx] += count;
+      map->slots_idx_counts[slot_idx] += count + /* run count: */ 1;
     }
   }
 }
@@ -1715,7 +1715,7 @@ rdim_bake_idx_from_idx_run(RDIM_BakeIdxRunMap *map, RDI_U32 *idxes, RDI_U32 coun
           idx = (RDI_U32)(map->slots_base_idxs[slot_idx] + off); // TODO(rjf): @u64_to_u32
           goto end_lookup;
         }
-        off += n->v[chunk_idx].count;
+        off += n->v[chunk_idx].count + /* run count: */ 1;
       }
     }
     end_lookup:;

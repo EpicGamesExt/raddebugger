@@ -927,17 +927,15 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                 }break;
                 case RDI_TypeKind_Function:
                 {
-                  U32 count = rdi_type->constructed.count;
                   U32 idx_run_first = rdi_type->constructed.param_idx_run_first;
-                  U32 check_count = 0;
-                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, count, &check_count);
-                  if(check_count == count)
+                  U32 idx_run_count = 0;
+                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, &idx_run_count);
                   {
                     type = push_array(arena, E_Type, 1);
                     type->kind            = kind;
                     type->byte_size       = bit_size_from_arch(arch)/8;
                     type->direct_type_key = direct_type_key;
-                    type->count           = count;
+                    type->count           = idx_run_count;
                     type->param_type_keys = push_array(arena, E_TypeKey, type->count);
                     type->arch            = arch;
                     for(U32 idx = 0; idx < type->count; idx += 1)
@@ -961,17 +959,15 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
                   // NOTE(rjf): for methods, the `direct` type points at the owner type.
                   // the return type, instead of being encoded via the `direct` type, is
                   // encoded via the first parameter.
-                  U32 count = rdi_type->constructed.count;
                   U32 idx_run_first = rdi_type->constructed.param_idx_run_first;
-                  U32 check_count = 0;
-                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, count, &check_count);
-                  if(check_count == count)
+                  U32 idx_run_count = 0;
+                  U32 *idx_run = rdi_idx_run_from_first_count(rdi, idx_run_first, &idx_run_count);
                   {
                     type = push_array(arena, E_Type, 1);
                     type->kind            = kind;
                     type->byte_size       = bit_size_from_arch(arch)/8;
                     type->owner_type_key  = direct_type_key;
-                    type->count           = count;
+                    type->count           = idx_run_count;
                     type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
                     type->arch            = arch;
                     for(U32 idx = 0; idx < type->count; idx += 1)

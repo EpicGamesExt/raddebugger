@@ -158,7 +158,7 @@ internal void rdi_decompress_parsed(U8 *decompressed_data, U64 decompressed_size
 RDI_PROC RDI_U8 *rdi_string_from_idx(RDI_Parsed *rdi, RDI_U32 idx, RDI_U64 *len_out);
 
 //- index runs
-RDI_PROC RDI_U32 *rdi_idx_run_from_first_count(RDI_Parsed *rdi, RDI_U32 raw_first, RDI_U32 raw_count, RDI_U32 *n_out);
+RDI_PROC RDI_U32 *rdi_idx_run_from_first_count(RDI_Parsed *rdi, RDI_U32 raw_first, RDI_U32 *n_out);
 
 //- line info
 RDI_PROC void rdi_parsed_from_line_table(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_ParsedLineTable *out);
