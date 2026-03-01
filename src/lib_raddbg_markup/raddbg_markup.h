@@ -32,7 +32,7 @@
 # define raddbg_break_if(expr, ...)                   ((expr) ? raddbg_break__impl() : (void)0)
 # define raddbg_watch(fmt, ...)                       raddbg_watch__impl((fmt), __VA_ARGS__)
 # define raddbg_pin(expr, ...)                        /* NOTE(rjf): inspected by debugger ui - does not change program execution */
-# define raddbg_log(fmt, ...)                         raddbg_log__impl((fmt), __VA_ARGS__)
+# define raddbg_log(fmt, ...)                         raddbg_log__impl((fmt), ## __VA_ARGS__)
 # define raddbg_entry_point(...)                      raddbg_exe_data char raddbg_gen_data_id()[] = ("entry_point: \"" #__VA_ARGS__ "\"")
 # define raddbg_type_view(type, ...)                  raddbg_exe_data char raddbg_gen_data_id()[] = ("type_view: {type: ```" #type "```, expr: ```" #__VA_ARGS__ "```}")
 # define raddbg_add_breakpoint(ptr, size, r, w, x)    raddbg_add_or_remove_breakpoint__impl((ptr), (1), (size), (r), (w), (x))
