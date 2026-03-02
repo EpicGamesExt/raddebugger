@@ -3701,10 +3701,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 
                 // rjf: increment procedure counter
                 procedure_num += 1;
-
+                
                 // reset S_REGREL32 index
                 regrel_idx = 0;
-
+                
                 proc_flags = proc32->flags;
               }break;
               
@@ -3735,7 +3735,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   
                   // rjf: determine if this is a parameter
                   RDI_LocalKind local_kind = regrel_idx < curr_proc_symbol->type->count ? RDI_LocalKind_Parameter : RDI_LocalKind_Variable;
-
+                  
                   // rjf: determine if we need an extra indirection to the value
                   B32 extra_indirection_to_value = 0;
                   if(type != 0)
@@ -3748,7 +3748,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                       }break;
                     }
                   }
-
+                  
                   // If the return local does not fit in a register MSVC does not assign it a type.
                   // So we infer the return type from the signature.
                   //
@@ -3799,7 +3799,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     rdim_local_push_location_case(arena, sym_scopes, local, loc2, voff_range);
                   }
                 }
-
+                
                 regrel_idx += 1;
               }break;
               
@@ -4268,91 +4268,108 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: join all lane symbols
   //
-  RDIM_LocationChunkList *all_locations = 0;
-  RDIM_SymbolChunkList *all_procedures = 0;
-  RDIM_SymbolChunkList *all_global_variables = 0;
-  RDIM_SymbolChunkList *all_thread_variables = 0;
-  RDIM_SymbolChunkList *all_constants = 0;
-  RDIM_ScopeChunkList *all_scopes = 0;
-  RDIM_InlineSiteChunkList *all_inline_sites = 0;
-  RDIM_TypeChunkList *all_types = 0;
+  RDIM_LocationChunkList all_locations = {0};
+  RDIM_SymbolChunkList all_procedures = {0};
+  RDIM_SymbolChunkList all_global_variables = {0};
+  RDIM_SymbolChunkList all_thread_variables = {0};
+  RDIM_SymbolChunkList all_constants = {0};
+  RDIM_ScopeChunkList all_scopes = {0};
+  RDIM_InlineSiteChunkList all_inline_sites = {0};
+  RDIM_TypeChunkList all_types = {0};
   {
+    RDIM_LocationChunkList *all_locations_ptr = 0;
+    RDIM_SymbolChunkList *all_procedures_ptr = 0;
+    RDIM_SymbolChunkList *all_global_variables_ptr = 0;
+    RDIM_SymbolChunkList *all_thread_variables_ptr = 0;
+    RDIM_SymbolChunkList *all_constants_ptr = 0;
+    RDIM_ScopeChunkList *all_scopes_ptr = 0;
+    RDIM_InlineSiteChunkList *all_inline_sites_ptr = 0;
+    RDIM_TypeChunkList *all_types_ptr = 0;
     if(lane_idx() == 0)
     {
-      all_locations = push_array(scratch.arena, RDIM_LocationChunkList, 1);
-      all_procedures = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
-      all_global_variables = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
-      all_thread_variables = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
-      all_constants = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
-      all_scopes = push_array(scratch.arena, RDIM_ScopeChunkList, 1);
-      all_inline_sites = push_array(scratch.arena, RDIM_InlineSiteChunkList, 1);
-      all_types = push_array(scratch.arena, RDIM_TypeChunkList, 1);
+      all_locations_ptr = push_array(scratch.arena, RDIM_LocationChunkList, 1);
+      all_procedures_ptr = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      all_global_variables_ptr = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      all_thread_variables_ptr = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      all_constants_ptr = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      all_scopes_ptr = push_array(scratch.arena, RDIM_ScopeChunkList, 1);
+      all_inline_sites_ptr = push_array(scratch.arena, RDIM_InlineSiteChunkList, 1);
+      all_types_ptr = push_array(scratch.arena, RDIM_TypeChunkList, 1);
     }
-    lane_sync_u64(&all_locations, 0);
-    lane_sync_u64(&all_procedures, 0);
-    lane_sync_u64(&all_global_variables, 0);
-    lane_sync_u64(&all_thread_variables, 0);
-    lane_sync_u64(&all_constants, 0);
-    lane_sync_u64(&all_scopes, 0);
-    lane_sync_u64(&all_inline_sites, 0);
-    lane_sync_u64(&all_types, 0);
+    lane_sync_u64(&all_locations_ptr, 0);
+    lane_sync_u64(&all_procedures_ptr, 0);
+    lane_sync_u64(&all_global_variables_ptr, 0);
+    lane_sync_u64(&all_thread_variables_ptr, 0);
+    lane_sync_u64(&all_constants_ptr, 0);
+    lane_sync_u64(&all_scopes_ptr, 0);
+    lane_sync_u64(&all_inline_sites_ptr, 0);
+    lane_sync_u64(&all_types_ptr, 0);
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("join locations")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_location_chunk_list_concat_in_place(all_locations, &syms_locations[idx]);
+        rdim_location_chunk_list_concat_in_place(all_locations_ptr, &syms_locations[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("join procedures")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(all_procedures, &syms_procedures[idx]);
+        rdim_symbol_chunk_list_concat_in_place(all_procedures_ptr, &syms_procedures[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(2)) ProfScope("join global variables")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(all_global_variables, &syms_global_variables[idx]);
+        rdim_symbol_chunk_list_concat_in_place(all_global_variables_ptr, &syms_global_variables[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(3)) ProfScope("join thread variables")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(all_thread_variables, &syms_thread_variables[idx]);
+        rdim_symbol_chunk_list_concat_in_place(all_thread_variables_ptr, &syms_thread_variables[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(4)) ProfScope("join constants")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_symbol_chunk_list_concat_in_place(all_constants, &syms_constants[idx]);
+        rdim_symbol_chunk_list_concat_in_place(all_constants_ptr, &syms_constants[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(5)) ProfScope("join scopes")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_scope_chunk_list_concat_in_place(all_scopes, &syms_scopes[idx]);
+        rdim_scope_chunk_list_concat_in_place(all_scopes_ptr, &syms_scopes[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(6)) ProfScope("join inline sites")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_inline_site_chunk_list_concat_in_place(all_inline_sites, &syms_inline_sites[idx]);
+        rdim_inline_site_chunk_list_concat_in_place(all_inline_sites_ptr, &syms_inline_sites[idx]);
       }
     }
     if(lane_idx() == lane_from_task_idx(7)) ProfScope("join typedefs")
     {
       for EachIndex(idx, all_syms_count)
       {
-        rdim_type_chunk_list_concat_in_place(&all_types__pre_typedefs, &syms_typedefs[idx]);
+        rdim_type_chunk_list_concat_in_place(all_types__pre_typedefs_ptr, &syms_typedefs[idx]);
       }
-      *all_types = all_types__pre_typedefs;
+      *all_types_ptr = all_types__pre_typedefs;
     }
+    lane_sync();
+    all_locations = *all_locations_ptr;
+    all_procedures = *all_procedures_ptr;
+    all_global_variables = *all_global_variables_ptr;
+    all_thread_variables = *all_thread_variables_ptr;
+    all_constants = *all_constants_ptr;
+    all_scopes = *all_scopes_ptr;
+    all_inline_sites = *all_inline_sites_ptr;
+    all_types = *all_types_ptr;
   }
   lane_sync();
   
@@ -4400,19 +4417,17 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     result.top_level_info   = top_level_info;
     result.binary_sections  = binary_sections;
     result.units            = all_units;
-    result.types            = *all_types;
+    result.types            = all_types;
     result.udts             = all_udts;
     result.src_files        = all_src_files;
     result.line_tables      = all_line_tables;
-    result.locations        = *all_locations;
-    result.global_variables = *all_global_variables;
-    result.thread_variables = *all_thread_variables;
-    result.constants        = *all_constants;
-    result.procedures       = *all_procedures;
-    result.scopes           = *all_scopes;
-    result.inline_sites     = *all_inline_sites;
-
-    lane_sync();
+    result.locations        = all_locations;
+    result.global_variables = all_global_variables;
+    result.thread_variables = all_thread_variables;
+    result.constants        = all_constants;
+    result.procedures       = all_procedures;
+    result.scopes           = all_scopes;
+    result.inline_sites     = all_inline_sites;
   }
   
   scratch_end(scratch);

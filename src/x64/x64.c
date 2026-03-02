@@ -119,66 +119,66 @@ x64_set_debug_break(U64 *drs, U64 trap_idx, U64 addr, U64 size, X64_BreakpointTy
 {
   // set breakpoint address
   switch (trap_idx) {
-  case 0: { drs[0] = addr; } break;
-  case 1: { drs[1] = addr; } break;
-  case 2: { drs[2] = addr; } break;
-  case 3: { drs[3] = addr; } break;
-  default: { InvalidPath; } break;
+    case 0: { drs[0] = addr; } break;
+    case 1: { drs[1] = addr; } break;
+    case 2: { drs[2] = addr; } break;
+    case 3: { drs[3] = addr; } break;
+    default: { InvalidPath; } break;
   }
-
+  
   // enable breakpoint
   drs[7] &= ~(3 << (trap_idx * 2));
   switch (bp_type)
   {
-  case X64_BreakpointType_Null: break;
-  case X64_BreakpointType_Local:  { drs[7] |= 1 << (trap_idx * 2); } break;
-  case X64_BreakpointType_Global: { drs[7] |= 2 << (trap_idx * 2); } break;
-  default: { InvalidPath; } break;
+    case X64_BreakpointType_Null: break;
+    case X64_BreakpointType_Local:  { drs[7] |= 1 << (trap_idx * 2); } break;
+    case X64_BreakpointType_Global: { drs[7] |= 2 << (trap_idx * 2); } break;
+    default: { InvalidPath; } break;
   }
-
+  
   // set break access type
   switch (break_type) {
-  case X64_DebugBreakType_Exec:
+    case X64_DebugBreakType_Exec:
     Assert(size == 0);
-  case X64_DebugBreakType_Null: {
-    drs[7] &= ~((1u << 16) << (trap_idx * 4));
-    drs[7] &= ~((1u << 17) << (trap_idx * 4));
-  } break;
-  case X64_DebugBreakType_Write: {
-    drs[7] |=   (1u << 16) << (trap_idx * 4);
-    drs[7] &= ~((1u << 17) << (trap_idx * 4));
-  } break;
-  case X64_DebugBreakType_ReadWriteIO: {
-    drs[7] &= ~((1u << 16) << (trap_idx * 4));
-    drs[7] |=   (1u << 17) << (trap_idx * 4);
-  } break;
-  case X64_DebugBreakType_ReadWriteNoFetch: {
-    drs[7] |= (1u << 16) << (trap_idx * 4);
-    drs[7] |= (1u << 17) << (trap_idx * 4);
-  } break;
-  default: { InvalidPath; } break;
+    case X64_DebugBreakType_Null: {
+      drs[7] &= ~((1ull << 16) << (trap_idx * 4));
+      drs[7] &= ~((1ull << 17) << (trap_idx * 4));
+    } break;
+    case X64_DebugBreakType_Write: {
+      drs[7] |=   (1ull << 16) << (trap_idx * 4);
+      drs[7] &= ~((1ull << 17) << (trap_idx * 4));
+    } break;
+    case X64_DebugBreakType_ReadWriteIO: {
+      drs[7] &= ~((1ull << 16) << (trap_idx * 4));
+      drs[7] |=   (1ull << 17) << (trap_idx * 4);
+    } break;
+    case X64_DebugBreakType_ReadWriteNoFetch: {
+      drs[7] |= (1u << 16) << (trap_idx * 4);
+      drs[7] |= (1u << 17) << (trap_idx * 4);
+    } break;
+    default: { InvalidPath; } break;
   }
-
+  
   // set breakpoint size
   switch (size) {
-  case 0:
-  case 1: {
-    drs[7] &= ~((1u << 18) << (trap_idx * 4));
-    drs[7] &= ~((1u << 19) << (trap_idx * 4));
-  } break;
-  case 2: {
-    drs[7] |=   (1 << 18) << (trap_idx * 4);
-    drs[7] &= ~((1 << 19) << (trap_idx * 4));
-  } break;
-  case 4: {
-    drs[7] |= (1 << 18) << (trap_idx * 4);
-    drs[7] |= (1 << 19) << (trap_idx * 4);
-  } break;
-  case 8: {
-    drs[7] &= ~((1 << 18) << (trap_idx * 4));
-    drs[7] |=   (1 << 19) << (trap_idx * 4);
-  } break;
-  default: { InvalidPath; }
+    case 0:
+    case 1: {
+      drs[7] &= ~((1ull << 18) << (trap_idx * 4));
+      drs[7] &= ~((1ull << 19) << (trap_idx * 4));
+    } break;
+    case 2: {
+      drs[7] |=   (1 << 18) << (trap_idx * 4);
+      drs[7] &= ~((1 << 19) << (trap_idx * 4));
+    } break;
+    case 4: {
+      drs[7] |= (1 << 18) << (trap_idx * 4);
+      drs[7] |= (1 << 19) << (trap_idx * 4);
+    } break;
+    case 8: {
+      drs[7] &= ~((1 << 18) << (trap_idx * 4));
+      drs[7] |=   (1 << 19) << (trap_idx * 4);
+    } break;
+    default: { InvalidPath; }
   }
 }
 
