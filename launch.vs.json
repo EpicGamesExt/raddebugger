@@ -1,0 +1,28 @@
+{
+  "version": "0.2.1",
+  "defaults": {},
+  "configurations": [
+    {
+      "type": "cppdbg",
+      "name": "raddbg",
+      "request": "launch",
+      "project": "c://windows//system32//cmd.exe",
+      "program": "build/raddbg",
+      "args": [ "-no_stdout_buffer" ],
+      "stopAtEntry": false,
+      "cwd": ".",
+      "environment": [],
+      "externalConsole": true,
+      "pipeTransport": {
+        "pipeCwd": "${workspaceRoot}",
+        "pipeProgram": "wsl",
+        "pipeArgs": [ "${debuggerCommand}" ]
+      },
+	  "setupCommands":
+	  [
+		{ "text": "handle SIGUSR1 nostop" }
+	  ],
+      "MIMode": "gdb"
+    }
+  ]
+}
