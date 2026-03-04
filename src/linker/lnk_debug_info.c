@@ -299,7 +299,11 @@ THREAD_POOL_TASK_FUNC(lnk_msf_parsed_from_data_task)
   ProfBeginFunction();
   LNK_MsfParsedFromDataTask *task = raw_task;
   // TODO: pick Info, TPI and IPI to flattten to make sure we don't waste compute on throw-away streams
-  task->msf_parse_arr[task_id] = msf_parsed_from_data(arena, task->data_arr.v[task_id]);
+  MSF_Parsed *msf = 0;
+  if (task->data_arr.v[task_id].size > 0) {
+    msf = msf_parsed_from_data(arena, task->data_arr.v[task_id]);
+  }
+  task->msf_parse_arr[task_id] = msf;
   ProfEnd();
 }
 
