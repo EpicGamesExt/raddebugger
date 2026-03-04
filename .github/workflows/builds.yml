@@ -18,6 +18,7 @@ jobs:
           - raddbg
           - radlink
           - radbin
+          - mule_main
         compiler:
           - msvc
           - clang
