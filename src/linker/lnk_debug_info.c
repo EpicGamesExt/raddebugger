@@ -2432,7 +2432,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
         } else {
           // replace uniuqe type name with hash
           udt_info.unique_name.str  = udt_info.name.str + udt_info.name.size + 1;
-          udt_info.unique_name.size = raddbg_snprintf(udt_info.unique_name.cstr, udt_info.unique_name.size, "%llx", name_hash);
+          udt_info.unique_name.size = raddbg_snprintf((char *)udt_info.unique_name.str, udt_info.unique_name.size, "%llx", name_hash);
 
           // update leaf header
           U64 new_size = sizeof(CV_LeafKind) +
@@ -2498,7 +2498,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
         }
 
         // replace name with hash
-        udt_info.name.size = raddbg_snprintf(udt_info.name.cstr, udt_info.name.size, "%llx", name_hash);
+        udt_info.name.size = raddbg_snprintf((char *)udt_info.name.str, udt_info.name.size, "%llx", name_hash);
 
         // parse struct size
         CV_NumericParsed dummy;

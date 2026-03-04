@@ -1757,4 +1757,9 @@ RDI_PROC RDIM_SerializedSection rdim_serialized_section_make_unpacked(void *data
 RDI_PROC RDIM_SerializedSectionBundle rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results);
 RDI_PROC RDIM_String8List rdim_file_blobs_from_section_bundle(RDIM_Arena *arena, RDIM_SerializedSectionBundle *bundle);
 
+////////////////////////////////
+//~ rjf: [Serializing] Parsed RDI -> Bake Results
+
+RDI_PROC RDIM_BakeResults *rdim_bake_results_from_rdi(RDIM_Arena *arena, RDI_Parsed *rdi);
+
 #endif // RDI_MAKE_H

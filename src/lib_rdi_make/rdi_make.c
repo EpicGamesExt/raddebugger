@@ -5,51 +5,51 @@
 //~ rjf: API Implementation Helper Macros
 
 #define RDIM_IdxedChunkListPush(arena, list, chunk_type, element_type, cap_value, result, ...) \
-  element_type *result = 0;                                                                    \
-  do                                                                                           \
-  {                                                                                            \
-    chunk_type *n = list->last;                                                                \
-    if(n == 0 || n->count >= n->cap)                                                           \
-    {                                                                                          \
-      n = rdim_push_array(arena, chunk_type, 1);                                               \
-      n->cap = cap_value;                                                                      \
-      n->base_idx = list->total_count;                                                         \
-      __VA_ARGS__;                                                                             \
-      n->v = rdim_push_array_no_zero(arena, element_type, n->cap);                             \
-      RDIM_SLLQueuePush(list->first, list->last, n);                                           \
-      list->chunk_count += 1;                                                                  \
-    }                                                                                          \
-    result = &n->v[n->count];                                                                  \
-    result->chunk = n;                                                                         \
-    n->count += 1;                                                                             \
-    list->total_count += 1;                                                                    \
-  }while(0)
+element_type *result = 0;                                                                    \
+do                                                                                           \
+{                                                                                            \
+chunk_type *n = list->last;                                                                \
+if(n == 0 || n->count >= n->cap)                                                           \
+{                                                                                          \
+n = rdim_push_array(arena, chunk_type, 1);                                               \
+n->cap = cap_value;                                                                      \
+n->base_idx = list->total_count;                                                         \
+__VA_ARGS__;                                                                             \
+n->v = rdim_push_array_no_zero(arena, element_type, n->cap);                             \
+RDIM_SLLQueuePush(list->first, list->last, n);                                           \
+list->chunk_count += 1;                                                                  \
+}                                                                                          \
+result = &n->v[n->count];                                                                  \
+result->chunk = n;                                                                         \
+n->count += 1;                                                                             \
+list->total_count += 1;                                                                    \
+}while(0)
 
 #define RDIM_IdxedChunkListElementGetIdx(ptr, result)       \
-  RDI_U64 idx = 0;                                          \
-  if(ptr != 0 && ptr->chunk != 0)                           \
-  {                                                         \
-    idx = ptr->chunk->base_idx + (ptr - ptr->chunk->v) + 1; \
-  }
+RDI_U64 idx = 0;                                          \
+if(ptr != 0 && ptr->chunk != 0)                           \
+{                                                         \
+idx = ptr->chunk->base_idx + (ptr - ptr->chunk->v) + 1; \
+}
 
 #define RDIM_IdxedChunkListConcatInPlace(chunk_type, dst, to_push, ...) \
-  for(chunk_type *n = to_push->first; n != 0; n = n->next)              \
-  {                                                                     \
-    n->base_idx += dst->total_count;                                    \
-  }                                                                     \
-  if(dst->last != 0 && to_push->first != 0)                             \
-  {                                                                     \
-    dst->last->next = to_push->first;                                   \
-    dst->last = to_push->last;                                          \
-    dst->chunk_count += to_push->chunk_count;                           \
-    dst->total_count += to_push->total_count;                           \
-    __VA_ARGS__;                                                        \
-  }                                                                     \
-  else if(dst->first == 0)                                              \
-  {                                                                     \
-    rdim_memcpy_struct(dst, to_push);                                   \
-  }                                                                     \
-  rdim_memzero_struct(to_push);
+for(chunk_type *n = to_push->first; n != 0; n = n->next)              \
+{                                                                     \
+n->base_idx += dst->total_count;                                    \
+}                                                                     \
+if(dst->last != 0 && to_push->first != 0)                             \
+{                                                                     \
+dst->last->next = to_push->first;                                   \
+dst->last = to_push->last;                                          \
+dst->chunk_count += to_push->chunk_count;                           \
+dst->total_count += to_push->total_count;                           \
+__VA_ARGS__;                                                        \
+}                                                                     \
+else if(dst->first == 0)                                              \
+{                                                                     \
+rdim_memcpy_struct(dst, to_push);                                   \
+}                                                                     \
+rdim_memzero_struct(to_push);
 
 ////////////////////////////////
 //~ rjf: Basic Helpers

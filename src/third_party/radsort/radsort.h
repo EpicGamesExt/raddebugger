@@ -115,7 +115,7 @@ typedef struct RS_MAX_BUBBLE_BUF { char b[RS_SMALL_FLIP_TO_INSERTION_GT_SIZE]; }
 #if _MSC_VER
 # define radsort_break_ __debugbreak()
 #else
-# define radsort_break_ ___builtin_trap()
+# define radsort_break_ __builtin_trap()
 #endif
 
 #define radsort( start, len, is_before_func ) \

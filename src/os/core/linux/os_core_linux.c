@@ -159,7 +159,7 @@ os_get_process_start_time_unix(void)
   pid_t pid = getpid();
   String8 path = push_str8f(scratch.arena, "/proc/%u", pid);
   struct stat st;
-  int err = stat(path.cstr, &st);
+  int err = stat((char *)path.str, &st);
   if(err == 0)
   {
     start_time = st.st_mtime;
@@ -240,7 +240,7 @@ os_set_thread_name(String8 name)
   Temp scratch = scratch_begin(0, 0);
   String8 name_copy = push_str8_copy(scratch.arena, name);
   pthread_t current_thread = pthread_self();
-  pthread_setname_np(current_thread, name_copy.cstr);
+  pthread_setname_np(current_thread, (char *)name_copy.str);
   scratch_end(scratch);
 }
 
@@ -285,7 +285,7 @@ os_file_open(OS_AccessFlags flags, String8 path)
     lnx_flags |= O_CREAT;
   }
   lnx_flags |= O_CLOEXEC;
-  int fd = open(path_copy.cstr, lnx_flags, 0755);
+  int fd = open((char *)path_copy.str, lnx_flags, 0755);
   OS_Handle handle = {0};
   if(fd != -1)
   {
@@ -400,7 +400,7 @@ os_delete_file_at_path(String8 path)
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
   String8 path_copy = push_str8_copy(scratch.arena, path);
-  if(remove(path_copy.cstr) != -1)
+  if(remove((char *)path_copy.str) != -1)
   {
     result = 1;
   }
@@ -447,8 +447,8 @@ os_move_file_path(String8 dst, String8 src)
   B32 good = 0;
   Temp scratch = scratch_begin(0, 0);
   {
-    char *src_cstr = push_str8_copy(scratch.arena, src).cstr;
-    char *dst_cstr = push_str8_copy(scratch.arena, dst).cstr;
+    char *src_cstr = (char *)str8_copy(scratch.arena, src).str;
+    char *dst_cstr = (char *)str8_copy(scratch.arena, dst).str;
     int rename_result = rename(src_cstr, dst_cstr);
     good = (rename_result != -1);
   }
@@ -460,10 +460,10 @@ internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  String8 path_copy = push_str8_copy(scratch.arena, path);
+  String8 path_copy = str8_copy(scratch.arena, path);
   char buffer[PATH_MAX] = {0};
-  realpath(path_copy.cstr, buffer);
-  String8 result = push_str8_copy(arena, str8_cstring(buffer));
+  realpath((char *)path_copy.str, buffer);
+  String8 result = str8_copy(arena, str8_cstring(buffer));
   scratch_end(scratch);
   return result;
 }
@@ -473,7 +473,7 @@ os_file_path_exists(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
   String8 path_copy = push_str8_copy(scratch.arena, path);
-  int access_result = access(path_copy.cstr, F_OK);
+  int access_result = access((char *)path_copy.str, F_OK);
   B32 result = 0;
   if(access_result == 0)
   {
@@ -487,9 +487,9 @@ internal B32
 os_folder_path_exists(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
-  B32      exists    = 0;
-  String8  path_copy = push_str8_copy(scratch.arena, path);
-  DIR     *handle    = opendir(path_copy.cstr);
+  B32 exists = 0;
+  String8  path_copy = str8_copy(scratch.arena, path);
+  DIR *handle = opendir((char *)path_copy.str);
   if(handle)
   {
     closedir(handle);
@@ -503,9 +503,9 @@ internal FileProperties
 os_properties_from_file_path(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
-  String8 path_copy = push_str8_copy(scratch.arena, path);
+  String8 path_copy = str8_copy(scratch.arena, path);
   struct stat f_stat = {0};
-  int stat_result = stat(path_copy.cstr, &f_stat);
+  int stat_result = stat((char *)path_copy.str, &f_stat);
   FileProperties props = {0};
   if(stat_result != -1)
   {
@@ -564,7 +564,7 @@ os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags)
   OS_LNX_FileIter *iter = (OS_LNX_FileIter *)base_iter->memory;
   {
     String8 path_copy = push_str8_copy(arena, path);
-    iter->dir = opendir(path_copy.cstr);
+    iter->dir = opendir((char *)path_copy.str);
     iter->path = path_copy;
   }
   return base_iter;
@@ -588,7 +588,7 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
     {
       Temp scratch = scratch_begin(&arena, 1);
       String8 full_path = push_str8f(scratch.arena, "%S/%s", lnx_iter->path, lnx_iter->dp->d_name);
-      stat_result = stat(full_path.cstr, &st);
+      stat_result = stat((char *)full_path.str, &st);
       scratch_end(scratch);
     }
     
@@ -637,7 +637,7 @@ os_make_directory(String8 path)
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
   String8 path_copy = push_str8_copy(scratch.arena, path);
-  if(mkdir(path_copy.cstr, 0755) != -1)
+  if(mkdir((char *)path_copy.str, 0755) != -1)
   {
     result = 1;
   }
@@ -653,7 +653,7 @@ os_shared_memory_alloc(U64 size, String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
   String8 name_copy = push_str8_copy(scratch.arena, name);
-  int id = shm_open(name_copy.cstr, O_RDWR|O_CREAT, 0666);
+  int id = shm_open((char *)name_copy.str, O_RDWR|O_CREAT, 0666);
   ftruncate(id, size);
   OS_Handle result = {(U64)id};
   scratch_end(scratch);
@@ -665,7 +665,7 @@ os_shared_memory_open(String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
   String8 name_copy = push_str8_copy(scratch.arena, name);
-  int id = shm_open(name_copy.cstr, O_RDWR, 0);
+  int id = shm_open((char *)name_copy.str, O_RDWR, 0);
   OS_Handle result = {(U64)id};
   scratch_end(scratch);
   return result;
@@ -802,9 +802,13 @@ os_process_launch(OS_ProcessLaunchParams *params)
         str8_list_push(scratch.arena, &l, params->cmd_line.first->string);
         String8 path_to_exe = str8_path_list_join_by_style(scratch.arena, &l, PathStyle_SystemAbsolute);
         
-        argv[0] = path_to_exe.cstr;
+        argv[0] = (char *)path_to_exe.str;
         U64 arg_idx = 1;
-        for EachNode(n, String8Node, params->cmd_line.first->next) { argv[arg_idx++] = n->string.cstr; }
+        for EachNode(n, String8Node, params->cmd_line.first->next)
+        {
+          argv[arg_idx] = (char *)n->string.str;
+          arg_idx += 1;
+        }
       }
       
       // package envp
@@ -819,7 +823,8 @@ os_process_launch(OS_ProcessLaunchParams *params)
         U64 env_idx = 0;
         for EachNode(n, String8Node, params->cmd_line.first)
         {
-          envp[env_idx] = n->string.cstr;
+          envp[env_idx] = (char *)n->string.str;
+          env_idx += 1;
         }
       }
       
@@ -1170,15 +1175,17 @@ os_cond_var_broadcast(CondVar cv)
 internal Semaphore
 os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 {
+  Temp scratch = scratch_begin(0, 0);
   Semaphore result = {0};
-  if (name.size > 0)
+  if(name.size > 0)
   {
     for EachIndex(attempt_idx, 64)
     {
-      sem_t *s = sem_open(name.cstr, O_CREAT | O_EXCL, 0666, initial_count);
+      String8 name_copy = str8_copy(scratch.arena, name);
+      sem_t *s = sem_open((char *)name_copy.str, O_CREAT | O_EXCL, 0666, initial_count);
       if(s == SEM_FAILED)
       {
-        s = sem_open(name.cstr, 0);
+        s = sem_open((char *)name_copy.str, 0);
       }
       if(s != SEM_FAILED)
       {
@@ -1197,6 +1204,7 @@ os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
       result.u64[0] = (U64)s;
     }
   }
+  scratch_end(scratch);
   return result;
 }
 
@@ -1211,10 +1219,15 @@ internal Semaphore
 os_semaphore_open(String8 name)
 {
   Semaphore result = {0};
-  sem_t *s = sem_open(name.cstr, 0);
-  if(s != SEM_FAILED)
   {
-    result.u64[0] = (U64)s;
+    Temp scratch = scratch_begin(0, 0);
+    String8 name_copy = str8_copy(scratch.arena, name);
+    sem_t *s = sem_open((char *)name_copy.str, 0);
+    if(s != SEM_FAILED)
+    {
+      result.u64[0] = (U64)s;
+    }
+    scratch_end(scratch);
   }
   return result;
 }
@@ -1310,7 +1323,7 @@ internal OS_Handle
 os_library_open(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
-  char *path_cstr = push_str8_copy(scratch.arena, path).cstr;
+  char *path_cstr = (char *)str8_copy(scratch.arena, path).str;
   void *so = dlopen(path_cstr, RTLD_LAZY|RTLD_LOCAL);
   OS_Handle lib = { (U64)so };
   scratch_end(scratch);
@@ -1322,7 +1335,7 @@ os_library_load_proc(OS_Handle lib, String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
   void *so = (void *)lib.u64;
-  char *name_cstr = push_str8_copy(scratch.arena, name).cstr;
+  char *name_cstr = (char *)str8_copy(scratch.arena, name).str;
   VoidProc *proc = (VoidProc *)dlsym(so, name_cstr);
   scratch_end(scratch);
   return proc;
@@ -1485,15 +1498,15 @@ main(int argc, char **argv)
     os_lnx_state.arena = arena_alloc();
     os_lnx_state.entity_arena = arena_alloc();
     pthread_mutex_init(&os_lnx_state.entity_mutex, 0);
-
+    
     // cache default environment
     {
       U64 env_count = 0;
       for(; __environ[env_count] != 0; env_count += 1) {}
       char **default_env = push_array(os_lnx_state.arena, char *, env_count+1);
-      for EachIndex(i, env_count)
+      for EachIndex(idx, env_count)
       {
-        default_env[i] = str8_copy(os_lnx_state.arena, str8_cstring(__environ[i])).cstr;
+        default_env[idx] = (char *)str8_copy(os_lnx_state.arena, str8_cstring(__environ[idx])).str;
       }
       default_env[env_count] = 0;
       os_lnx_state.default_env_count = env_count;

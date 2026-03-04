@@ -1208,7 +1208,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     lane_sync_u64(&units_first_inline_site_line_tables, 0);
     RDIM_Unit *units = all_units_ptr->first ? all_units_ptr->first->v : 0;
     U64 units_count = all_units_ptr->first ? all_units_ptr->first->count : 0;
-    Assert(units_count == comp_units->count);
     
     //- rjf: do per-lane work
     if(params->subset_flags & (RDIM_SubsetFlag_Units|

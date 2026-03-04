@@ -46,6 +46,236 @@ rdim_make_top_level_info(String8 image_name, Arch arch, U64 exe_hash, RDIM_Binar
   return top_level_info;
 }
 
+internal RDIM_BakeParams
+rdim_loose_from_rdi(Arena *arena, RDIM_SubsetFlags subset_flags, RDI_Parsed *rdi)
+{
+  //- rjf: setup bake params
+  RDIM_BakeParams *bp = 0;
+  if(lane_idx() == 0)
+  {
+    bp = push_array(arena, RDIM_BakeParams, 1);
+    bp->subset_flags = subset_flags;
+  }
+  lane_sync_u64(&bp, 0);
+  
+  //- rjf: convert top level info
+  if(lane_idx() == 0)
+  {
+    RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+    bp->top_level_info.arch              = tli->arch;
+    bp->top_level_info.exe_name.str      = rdi_string_from_idx(rdi, tli->exe_name_string_idx, &bp->top_level_info.exe_name.size);
+    bp->top_level_info.exe_hash          = tli->exe_hash;
+    bp->top_level_info.voff_max          = tli->voff_max;
+    bp->top_level_info.guid              = tli->guid;
+    bp->top_level_info.producer_name.str = rdi_string_from_idx(rdi, tli->producer_name_string_idx, &bp->top_level_info.producer_name.size);
+  }
+  lane_sync();
+  
+  //- rjf: convert binary sections
+  if(lane_idx() == 0)
+  {
+    U64 count = 0;
+    RDI_BinarySection *v = rdi_table_from_name(rdi, BinarySections, &count);
+    for EachIndex(idx, count)
+    {
+      RDIM_BinarySection *bsec = rdim_binary_section_list_push(arena, &bp->binary_sections);
+      bsec->name.str   = rdi_string_from_idx(rdi, v[idx].name_string_idx, &bsec->name.size);
+      bsec->flags      = v[idx].flags;
+      bsec->voff_first = v[idx].voff_first;
+      bsec->voff_opl   = v[idx].voff_opl;
+      bsec->foff_first = v[idx].foff_first;
+      bsec->foff_opl   = v[idx].foff_opl;
+    }
+  }
+  lane_sync();
+  
+  //- rjf: bucket voff ranges by unit idx
+  RDIM_Rng1U64ChunkList *unit_ranges = 0;
+  if(lane_idx() == 0)
+  {
+    U64 units_count = 0;
+    rdi_table_from_name(rdi, Units, &units_count);
+    U64 unit_vmap_count = 0;
+    RDI_VMapEntry *unit_vmap = rdi_table_from_name(rdi, UnitVMap, &unit_vmap_count);
+    unit_ranges = push_array(arena, RDIM_Rng1U64ChunkList, units_count);
+    if(unit_vmap_count > 0)
+    {
+      for EachIndex(idx, unit_vmap_count-1)
+      {
+        RDIM_Rng1U64 rng = {unit_vmap[idx].voff, unit_vmap[idx+1].voff};
+        rdim_rng1u64_chunk_list_push(arena, &unit_ranges[unit_vmap[idx].idx], 256, rng);
+      }
+    }
+  }
+  lane_sync_u64(&unit_ranges, 0);
+  
+  //- rjf: convert src files
+  RDIM_SrcFileChunkList *src_files = 0;
+  RDIM_SrcFile **src_file_from_idx_table = 0;
+  {
+    U64 src_file_count = 0;
+    RDI_SourceFile *src_file_v = rdi_table_from_name(rdi, SourceFiles, &src_file_count);
+    RDIM_SrcFileChunkList *lane_srcfiles = 0;
+    if(lane_idx() == 0)
+    {
+      src_files = push_array(arena, RDIM_SrcFileChunkList, 1);
+      src_file_from_idx_table = push_array(arena, RDIM_SrcFile *, src_file_count);
+      lane_srcfiles = push_array(arena, RDIM_SrcFileChunkList, lane_count());
+    }
+    lane_sync_u64(&lane_srcfiles, 0);
+    {
+      Rng1U64 range = lane_range(src_file_count);
+      for EachInRange(idx, range)
+      {
+        RDI_SourceFile *src = &src_file_v[idx];
+        RDIM_SrcFile *dst = rdim_src_file_chunk_list_push(arena, &lane_srcfiles[lane_idx()], dim_1u64(range));
+        
+        // rjf: get checksum
+        String8 checksum = {0};
+        switch(src->checksum_kind)
+        {
+          default:{}break;
+          case RDI_ChecksumKind_MD5:      {checksum = str8(rdi_element_from_name_idx(rdi, MD5Checksums, src->checksum_idx)->u8, sizeof(RDI_MD5));}break;
+          case RDI_ChecksumKind_SHA1:     {checksum = str8(rdi_element_from_name_idx(rdi, SHA1Checksums, src->checksum_idx)->u8, sizeof(RDI_SHA1));}break;
+          case RDI_ChecksumKind_SHA256:   {checksum = str8(rdi_element_from_name_idx(rdi, SHA256Checksums, src->checksum_idx)->u8, sizeof(RDI_SHA256));}break;
+          case RDI_ChecksumKind_Timestamp:{checksum = str8((U8 *)rdi_element_from_name_idx(rdi, Timestamps, src->checksum_idx), sizeof(RDI_U64));}break;
+        }
+        
+        // rjf: fill basics
+        dst->path          = str8_from_rdi_path_node_idx(arena, rdi, PathStyle_Relative, src->file_path_node_idx);
+        dst->checksum_kind = src->checksum_kind;
+        dst->checksum      = checksum;
+        src_file_from_idx_table[idx] = dst;
+      }
+    }
+    lane_sync();
+    if(lane_idx() == 0)
+    {
+      for EachIndex(lidx, lane_count())
+      {
+        rdim_src_file_chunk_list_concat_in_place(src_files, &lane_srcfiles[lidx]);
+      }
+    }
+  }
+  lane_sync();
+  
+  //- rjf: convert units
+  RDIM_UnitChunkList *units = 0;
+  RDIM_LineTableChunkList *line_tables = 0;
+  {
+    RDIM_UnitChunkList *lane_units = 0;
+    RDIM_LineTableChunkList *lane_linetables = 0;
+    if(lane_idx() == 0)
+    {
+      lane_units = push_array(arena, RDIM_UnitChunkList, lane_count());
+      lane_linetables = push_array(arena, RDIM_LineTableChunkList, lane_count());
+      units = push_array(arena, RDIM_UnitChunkList, 1);
+      line_tables = push_array(arena, RDIM_LineTableChunkList, 1);
+    }
+    lane_sync_u64(&lane_units, 0);
+    lane_sync_u64(&lane_linetables, 0);
+    lane_sync_u64(&units, 0);
+    lane_sync_u64(&line_tables, 0);
+    U64 count = 0;
+    RDI_Unit *v = rdi_table_from_name(rdi, Units, &count);
+    U64 unit_take_idx_ = 0;
+    U64 *unit_take_idx_ptr = &unit_take_idx_;
+    lane_sync_u64(&unit_take_idx_ptr, 0);
+    for(;;)
+    {
+      U64 unit_idx = ins_atomic_u64_inc_eval(unit_take_idx_ptr)-1;
+      if(unit_idx >= count)
+      {
+        break;
+      }
+      RDI_Unit *src = &v[unit_idx];
+      
+      // rjf: convert flat top parts
+      RDIM_Unit *dst = rdim_unit_chunk_list_push(arena, &lane_units[lane_idx()], 64);
+      dst->unit_name     = str8_from_rdi_string_idx(rdi, src->unit_name_string_idx);
+      dst->compiler_name = str8_from_rdi_string_idx(rdi, src->compiler_name_string_idx);
+      dst->source_file   = str8_from_rdi_path_node_idx(arena, rdi, PathStyle_Relative, src->source_file_path_node);
+      dst->object_file   = str8_from_rdi_path_node_idx(arena, rdi, PathStyle_Relative, src->object_file_path_node);
+      dst->archive_file  = str8_from_rdi_path_node_idx(arena, rdi, PathStyle_Relative, src->archive_file_path_node);
+      dst->build_path    = str8_from_rdi_path_node_idx(arena, rdi, PathStyle_Relative, src->build_path_node);
+      dst->language      = src->language;
+      dst->voff_ranges   = unit_ranges[unit_idx];
+      
+      // rjf: convert line table
+      dst->line_table = rdim_line_table_chunk_list_push(arena, &lane_linetables[lane_idx()], 64);
+      {
+        RDI_LineTable *src_lt_unparsed = rdi_element_from_name_idx(rdi, LineTables, src->line_table_idx);
+        RDI_ParsedLineTable src_lt = {0};
+        rdi_parsed_from_line_table(rdi, src_lt_unparsed, &src_lt);
+        RDIM_LineTable *dst_lt = dst->line_table;
+        {
+          RDIM_SrcFile *seq_src_file = 0;
+          U64 seq_start_idx = 0;
+          for(U64 line_idx = 0; line_idx <= src_lt.count; line_idx += 1)
+          {
+            // rjf: get next src file
+            RDIM_SrcFile *next_src_file = 0;
+            if(line_idx < src_lt.count)
+            {
+              next_src_file = src_file_from_idx_table[src_lt.lines[line_idx].file_idx];
+            }
+            
+            // rjf: next file doesn't match current sequence? -> complete sequence
+            if(next_src_file != seq_src_file && seq_src_file != 0)
+            {
+              U64 seq_line_count = (line_idx - seq_start_idx);
+              U32 *seq_line_nums = push_array(arena, U32, seq_line_count);
+              for(U64 line_idx_2 = seq_start_idx; line_idx_2 < line_idx; line_idx_2 += 1)
+              {
+                seq_line_nums[line_idx_2] = src_lt.lines[line_idx_2].line_num;
+              }
+              rdim_line_table_push_sequence(arena, &lane_linetables[lane_idx()], dst_lt, seq_src_file,
+                                            src_lt.voffs + seq_start_idx,
+                                            seq_line_nums,
+                                            0, // TODO(rjf): column support
+                                            seq_line_count);
+            }
+            
+            // rjf: start next sequence
+            if(next_src_file != seq_src_file)
+            {
+              seq_src_file = next_src_file;
+              seq_start_idx = line_idx;
+            }
+          }
+        }
+      }
+    }
+    lane_sync();
+    if(lane_idx() == 0)
+    {
+      for EachIndex(l_idx, lane_count())
+      {
+        rdim_unit_chunk_list_concat_in_place(units, &lane_units[l_idx]);
+      }
+      for EachIndex(l_idx, lane_count())
+      {
+        rdim_line_table_chunk_list_concat_in_place(line_tables, &lane_linetables[l_idx]);
+      }
+    }
+  }
+  lane_sync();
+  
+  // TODO(rjf): convert types
+  // TODO(rjf): convert udts
+  // TODO(rjf): convert locations
+  // TODO(rjf): convert global variables
+  // TODO(rjf): convert thread variables
+  // TODO(rjf): convert constants
+  // TODO(rjf): convert procedures
+  // TODO(rjf): convert scopes
+  // TODO(rjf): convert inline sites
+  // TODO(rjf): package & return
+  
+  RDIM_BakeParams result = bp[0];
+  return result;
+}
+
 internal RDIM_BakeResults
 rdim_bake(Arena *arena, RDIM_BakeParams *params)
 {

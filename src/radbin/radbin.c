@@ -341,7 +341,7 @@ rb_thread_entry_point(void *p)
         }
         scratch_end(scratch);
       }
-
+      
       if(file_format == RB_FileFormat_COFF_OBJ || file_format == RB_FileFormat_COFF_BigOBJ)
       {
         Temp scratch = scratch_begin(&arena, 1);
@@ -432,7 +432,7 @@ rb_thread_entry_point(void *p)
     {str8_lit_comp("rdi"),       str8_lit_comp("RAD Debug Info (.rdi) Conversion")},
     {str8_lit_comp("dump"),      str8_lit_comp("Textual Dumping")},
     {str8_lit_comp("breakpad"),  str8_lit_comp("Breakpad Debug Info Conversion")},
-    {str8_lit_comp("voff2line"), str8_lit_comp("Map virtual offset to a source line")},
+    {str8_lit_comp("voff2line"), str8_lit_comp("Virtual Offset -> Line Mapping")},
   };
   OutputKind output_kind = OutputKind_Null;
   String8 output_path = cmd_line_string(cmdline, str8_lit("out"));
@@ -535,8 +535,9 @@ rb_thread_entry_point(void *p)
       
       fprintf(stderr, "--breakpad       Specifies that the utility should convert debug information\n");
       fprintf(stderr, "                 data to the textual Breakpad format.\n\n");
-
-      fprintf(stderr, "--voff2line      Specifies that the utility should map virtual offset to source line.\n\n");
+      
+      fprintf(stderr, "--voff2line      Specifies that the utility should map a virtual offset to a\n");
+      fprintf(stderr, "                 line.\n\n");
       
       fprintf(stderr, "--out:<path>     Specifies the path to which output data should be written. If\n");
       fprintf(stderr, "                 not specified, the utility will choose a fallback. If dumping\n");
@@ -554,10 +555,11 @@ rb_thread_entry_point(void *p)
     }break;
     
     ////////////////////////////
-    //- rjf: RDI, Breakpad -> conversion based on inputs
+    //- rjf: RDI, Breakpad, Debug Info Operations -> conversion based on inputs
     //
     case OutputKind_RDI:
     case OutputKind_Breakpad:
+    case OutputKind_VOff2Line:
     {
       //- rjf: no inputs => help
       if(lane_idx() == 0 && cmdline->inputs.node_count == 0) switch(output_kind)
@@ -591,6 +593,12 @@ rb_thread_entry_point(void *p)
         {
           fprintf(stderr, "All input files specified on the command line will be dumped. The following\n");
           fprintf(stderr, "formats are currently supported: PE, COFF, RDI, and ELF\n\n");
+        }break;
+        case OutputKind_VOff2Line:
+        {
+          fprintf(stderr, "ARGUMENTS\n\n");
+          fprintf(stderr, "--voff:<offset>    Specifies the virtual offset to map to a source line.\n");
+          fprintf(stderr, "\n");
         }break;
       }
       
@@ -630,12 +638,24 @@ rb_thread_entry_point(void *p)
         {
           subset_flags = (RDIM_SubsetFlag_Units|RDIM_SubsetFlag_Procedures|RDIM_SubsetFlag_Scopes|RDIM_SubsetFlag_LineInfo|RDIM_SubsetFlag_InlineLineInfo);
         }break;
+        case OutputKind_VOff2Line:
+        {
+          subset_flags = (RDIM_SubsetFlag_Units|RDIM_SubsetFlag_LineInfo|RDIM_SubsetFlag_InlineLineInfo|RDIM_SubsetFlag_Procedures);
+        }break;
       }
       
       //- rjf: convert inputs to RDI info
       B32 convert_done = 0;
       RDIM_BakeParams pdb_bake_params = {0};
       RDIM_BakeParams dwarf_bake_params = {0};
+      typedef struct RDIM_BakeParamsNode RDIM_BakeParamsNode;
+      struct RDIM_BakeParamsNode
+      {
+        RDIM_BakeParamsNode *next;
+        RDIM_BakeParams v;
+      };
+      RDIM_BakeParamsNode *first_rdi_bake_params = 0;
+      RDIM_BakeParamsNode *last_rdi_bake_params = 0;
       {
         //- rjf: PE inputs w/ DWARF, or ELF inputs => DWARF -> RDI conversion
         B32 pe_w_dwarf = (input_files_from_format_table[RB_FileFormat_PE].count != 0 &&
@@ -758,6 +778,43 @@ rb_thread_entry_point(void *p)
           }
           ProfScope("convert") pdb_bake_params = p2r_convert(arena, &convert_params);
         }
+        
+        //- rjf: RDI inputs => RDI joining
+        if(input_files_from_format_table[RB_FileFormat_RDI].count > 1)
+        {
+          convert_done = 1;
+          log_infof("RDIs specified; joining RDIs\n");
+          
+          // rjf: produce bake params for each RDI
+          for EachNode(n, RB_FileNode, input_files_from_format_table[RB_FileFormat_RDI].first)
+          {
+            RB_File *f = n->v;
+            
+            // rjf: decompress RDI
+            RDI_Parsed *rdi = 0;
+            if(lane_idx() == 0)
+            {
+              rdi = push_array(arena, RDI_Parsed, 1);
+              RDI_ParseStatus rdi_status = rdi_parse(f->data.str, f->data.size, rdi);
+              U64 decompressed_size = rdi_decompressed_size_from_parsed(rdi);
+              if(decompressed_size > rdi->raw_data_size)
+              {
+                U8 *decompressed_data = push_array_no_zero(arena, U8, decompressed_size);
+                rdi_decompress_parsed(decompressed_data, decompressed_size, rdi);
+                rdi_status = rdi_parse(decompressed_data, decompressed_size, rdi);
+              }
+            }
+            lane_sync_u64(&rdi, 0);
+            
+            // rjf: RDI -> loose
+            RDIM_BakeParams rdi_loose = rdim_loose_from_rdi(arena, subset_flags, rdi);
+            
+            // rjf: add
+            RDIM_BakeParamsNode *n = push_array(arena, RDIM_BakeParamsNode, 1);
+            n->v = rdi_loose;
+            SLLQueuePush(first_rdi_bake_params, last_rdi_bake_params, n);
+          }
+        }
       }
       lane_sync();
       
@@ -768,6 +825,10 @@ rb_thread_entry_point(void *p)
         bake_params = push_array(arena, RDIM_BakeParams, 1);
         rdim_bake_params_concat_in_place(bake_params, &pdb_bake_params);
         rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params);
+        for EachNode(n, RDIM_BakeParamsNode, first_rdi_bake_params)
+        {
+          rdim_bake_params_concat_in_place(bake_params, &n->v);
+        }
       }
       lane_sync_u64(&bake_params, 0);
       
@@ -779,24 +840,35 @@ rb_thread_entry_point(void *p)
         if(output_path__noext.size == 0) { output_path__noext = str8_chop_last_dot(rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PE])->path); }
         if(output_path__noext.size == 0) { output_path__noext = str8_chop_last_dot(rb_file_list_first(&input_files_from_format_table[RB_FileFormat_ELF64])->path); }
         if(output_path__noext.size == 0) { output_path__noext = str8_chop_last_dot(rb_file_list_first(&input_files_from_format_table[RB_FileFormat_ELF32])->path); }
+        if(output_path__noext.size == 0) { output_path__noext = str8_chop_last_dot(rb_file_list_first(&input_files_from_format_table[RB_FileFormat_RDI])->path); }
         switch(output_kind)
         {
           default:{}break;
           case OutputKind_RDI:
           {
-            output_path = push_str8f(arena, "%S.rdi", output_path__noext);
+            output_path = str8f(arena, "%S.rdi", output_path__noext);
           }break;
           case OutputKind_Breakpad:
           {
-            output_path = push_str8f(arena, "%S.psym", output_path__noext);
+            output_path = str8f(arena, "%S.psym", output_path__noext);
           }break;
         }
+      }
+      
+      //- rjf: special case: only a single RDI file passed? all conversion is trivially done, just
+      // package up RDI data as serialized section bundle, and let the rest of the paths use it.
+      B32 noop_conversion = 0;
+      if(input_files.count == 1 && rb_file_list_first(&input_files)->format == RB_FileFormat_RDI)
+      {
+        noop_conversion = 1;
+        convert_done = 1;
+        log_infof("Single RDI specified; passing through (skipping conversion)");
       }
       
       //- rjf: no viable input paths
       if(!convert_done && cmdline->inputs.node_count != 0)
       {
-        log_user_errorf("Could not load debug info from the specified inputs. You must provide either a valid PDB file or an executable image (PE, ELF) file with DWARF debug info.");
+        log_user_errorf("Could not load debug info from the specified inputs. You must provide a valid PDB file, an executable image (PE, ELF) file with DWARF debug info, or RDI file(s).");
       }
       
       //- rjf: bake
@@ -806,6 +878,41 @@ rb_thread_entry_point(void *p)
         bake_results = rdim_bake(arena, bake_params);
       }
       
+      //- rjf: serialize
+      RDIM_SerializedSectionBundle *serialized_section_bundle = 0;
+      ProfScope("serialize") if(lane_idx() == 0)
+      {
+        serialized_section_bundle = push_array(arena, RDIM_SerializedSectionBundle, 1);
+        serialized_section_bundle[0] = rdim_serialized_section_bundle_from_bake_results(&bake_results);
+      }
+      lane_sync_u64(&serialized_section_bundle, 0);
+      
+      //- rjf: special case: no-op conversion (single RDI file)
+      if(lane_idx() == 0 && noop_conversion)
+      {
+        RB_File *f = rb_file_list_first(&input_files);
+        RDI_Parsed rdi = {0};
+        RDI_ParseStatus rdi_status = rdi_parse(f->data.str, f->data.size, &rdi);
+        U64 decompressed_size = rdi_decompressed_size_from_parsed(&rdi);
+        if(decompressed_size > rdi.raw_data_size)
+        {
+          U8 *decompressed_data = push_array_no_zero(arena, U8, decompressed_size);
+          rdi_decompress_parsed(decompressed_data, decompressed_size, &rdi);
+          rdi_status = rdi_parse(decompressed_data, decompressed_size, &rdi);
+        }
+        for EachIndex(idx, rdi.sections_count)
+        {
+          if(idx < RDI_SectionKind_COUNT)
+          {
+            serialized_section_bundle->sections[idx].data          = rdi.raw_data + rdi.sections[idx].off;
+            serialized_section_bundle->sections[idx].encoded_size  = rdi.sections[idx].encoded_size;
+            serialized_section_bundle->sections[idx].unpacked_size = rdi.sections[idx].unpacked_size;
+            serialized_section_bundle->sections[idx].encoding      = rdi.sections[idx].encoding;
+          }
+        }
+      }
+      lane_sync();
+      
       //- rjf: convert done => generate output
       if(convert_done) switch(output_kind)
       {
@@ -814,15 +921,6 @@ rb_thread_entry_point(void *p)
         //- rjf: generate RDI blobs
         case OutputKind_RDI:
         {
-          // rjf: serialize
-          RDIM_SerializedSectionBundle *serialized_section_bundle = 0;
-          ProfScope("serialize") if(lane_idx() == 0)
-          {
-            serialized_section_bundle = push_array(arena, RDIM_SerializedSectionBundle, 1);
-            serialized_section_bundle[0] = rdim_serialized_section_bundle_from_bake_results(&bake_results);
-          }
-          lane_sync_u64(&serialized_section_bundle, 0);
-          
           // rjf: compress
           RDIM_SerializedSectionBundle serialized_section_bundle__compressed = serialized_section_bundle[0];
           if(cmd_line_has_flag(cmdline, str8_lit("compress"))) ProfScope("compress")
@@ -838,28 +936,36 @@ rb_thread_entry_point(void *p)
         //- rjf: generate breakpad text
         case OutputKind_Breakpad:
         {
+          //- rjf: flatten to RDI data
+          String8List rdi_blobs = rdim_file_blobs_from_section_bundle(arena, serialized_section_bundle);
+          String8 rdi_data = str8_list_join(arena, &rdi_blobs, 0);
+          RDI_Parsed rdi_ = {0};
+          RDI_Parsed *rdi = &rdi_;
+          RDI_ParseStatus rdi_status = rdi_parse(rdi_data.str, rdi_data.size, rdi);
+          
           //- rjf: set up shared state
           typedef struct P2B_Shared P2B_Shared;
           struct P2B_Shared
           {
             String8List dump;
-            String8List *lane_chunk_file_dumps;
-            String8List *lane_chunk_func_dumps;
+            String8List *lane_file_dumps;
+            String8List *lane_func_dumps;
           };
-          local_persist P2B_Shared *p2b_shared = 0;
+          P2B_Shared *p2b_shared = 0;
           if(lane_idx() == 0)
           {
             p2b_shared = push_array(arena, P2B_Shared, 1);
-            p2b_shared->lane_chunk_file_dumps = push_array(arena, String8List, lane_count()*bake_params->src_files.chunk_count);
-            p2b_shared->lane_chunk_func_dumps = push_array(arena, String8List, lane_count()*bake_params->procedures.chunk_count);
+            p2b_shared->lane_file_dumps = push_array(arena, String8List, lane_count());
+            p2b_shared->lane_func_dumps = push_array(arena, String8List, lane_count());
           }
-          lane_sync();
+          lane_sync_u64(&p2b_shared, 0);
           
           //- rjf: dump MODULE record
           if(lane_idx() == 0)
           {
             // rjf: pick name to identify module
-            String8 module_name_string = bake_params->top_level_info.exe_name;
+            RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+            String8 module_name_string = str8_from_rdi_string_idx(rdi, tli->exe_name_string_idx);
             if(module_name_string.size == 0 && input_files.first != 0)
             {
               module_name_string = input_files.first->v->path;
@@ -867,9 +973,9 @@ rb_thread_entry_point(void *p)
             
             // rjf: pick string for unique code
             String8 unique_identifier_string = {0};
-            if(unique_identifier_string.size == 0 && bake_params->top_level_info.exe_hash != 0)
+            if(unique_identifier_string.size == 0 && tli->exe_hash != 0)
             {
-              unique_identifier_string = str8f(arena, "%I64x", bake_params->top_level_info.exe_hash);
+              unique_identifier_string = str8f(arena, "%I64x", tli->exe_hash);
             }
             if(unique_identifier_string.size == 0)
             {
@@ -906,86 +1012,74 @@ rb_thread_entry_point(void *p)
           //- rjf: dump FILE records
           ProfScope("dump FILE records")
           {
-            U64 chunk_idx = 0;
-            for EachNode(n, RDIM_SrcFileChunkNode, bake_params->src_files.first)
+            U64 count = 0;
+            RDI_SourceFile *v = rdi_table_from_name(rdi, SourceFiles, &count);
+            Rng1U64 range = lane_range(count);
+            for EachInRange(idx, range)
             {
-              Rng1U64 range = lane_range(n->count);
-              for EachInRange(idx, range)
-              {
-                U64 file_idx = rdim_idx_from_src_file(&n->v[idx]);
-                String8 src_path = n->v[idx].path;
-                str8_list_pushf(arena, &p2b_shared->lane_chunk_file_dumps[lane_idx()*bake_params->src_files.chunk_count + chunk_idx], "FILE %I64u %S\n", file_idx, src_path);
-              }
-              chunk_idx += 1;
+              String8List *out = &p2b_shared->lane_file_dumps[lane_idx()];
+              Temp scratch = scratch_begin(&arena, 1);
+              String8 src_path = str8_from_rdi_path_node_idx(scratch.arena, rdi, PathStyle_Relative, v[idx].file_path_node_idx);
+              str8_list_pushf(arena, out, "FILE %I64u %S\n", idx, src_path);
+              scratch_end(scratch);
             }
           }
           
           //- rjf: dump FUNC records
           ProfScope("dump FUNC records")
           {
-            U64 chunk_idx = 0;
-            for EachNode(n, RDIM_SymbolChunkNode, bake_params->procedures.first)
+            U64 count = 0;
+            RDI_Procedure *v = rdi_table_from_name(rdi, Procedures, &count);
+            Rng1U64 range = lane_range(count);
+            for EachInRange(idx, range)
             {
-              String8List *out = &p2b_shared->lane_chunk_func_dumps[lane_idx()*bake_params->procedures.chunk_count + chunk_idx];
-              Rng1U64 range = lane_range(n->count);
-              for EachInRange(idx, range)
+              // NOTE(rjf): breakpad does not support multiple voff ranges per procedure.
+              String8List *out = &p2b_shared->lane_func_dumps[lane_idx()];
+              RDI_Procedure *proc = &v[idx];
+              RDI_Scope *root_scope = rdi_element_from_name_idx(rdi, Scopes, proc->root_scope_idx);
+              if(root_scope->voff_range_opl > root_scope->voff_range_first)
               {
-                // NOTE(rjf): breakpad does not support multiple voff ranges per procedure.
-                RDIM_Symbol *proc = &n->v[idx];
-                RDIM_Scope *root_scope = proc->root_scope;
-                if(root_scope != 0 && root_scope->voff_ranges.first != 0)
+                // rjf: dump function record
+                RDIM_Rng1U64 voff_range =
                 {
-                  // rjf: dump function record
-                  RDIM_Rng1U64 voff_range = root_scope->voff_ranges.first->v;
-                  str8_list_pushf(arena, out, "FUNC %I64x %I64x %I64x %S\n", voff_range.min, voff_range.max-voff_range.min, 0ull, proc->name);
-                  
-                  // rjf: dump function lines
-                  U64 unit_idx = rdi_vmap_idx_from_voff(bake_results.unit_vmap.vmap.vmap, bake_results.unit_vmap.vmap.count, voff_range.min);
-                  if(0 < unit_idx && unit_idx <= bake_results.units.units_count)
+                  *rdi_element_from_name_idx(rdi, ScopeVOffData, root_scope->voff_range_first),
+                  *rdi_element_from_name_idx(rdi, ScopeVOffData, root_scope->voff_range_opl - 1),
+                };
+                str8_list_pushf(arena, out, "FUNC %I64x %I64x %I64x %S\n", voff_range.min, voff_range.max-voff_range.min, 0ull, str8_from_rdi_string_idx(rdi, proc->name_string_idx));
+                
+                // rjf: dump function lines
+                U64 unit_vmap_count = 0;
+                RDI_VMapEntry *unit_vmap = rdi_table_from_name(rdi, UnitVMap, &unit_vmap_count);
+                RDI_Unit *unit = rdi_unit_from_voff(rdi, voff_range.min);
+                RDI_LineTable *line_table = rdi_line_table_from_unit(rdi, unit);
+                RDI_ParsedLineTable line_info = {0};
+                rdi_parsed_from_line_table(rdi, line_table, &line_info);
+                for(U64 voff = voff_range.min, last_voff = 0;
+                    voff < voff_range.max && voff > last_voff;)
+                {
+                  RDI_U64 line_info_idx = rdi_line_info_idx_from_voff(&line_info, voff);
+                  if(line_info_idx < line_info.count)
                   {
-                    U32 line_table_idx = bake_results.units.units[unit_idx].line_table_idx;
-                    if(0 < line_table_idx && line_table_idx <= bake_results.line_tables.line_tables_count)
+                    RDI_Line *line = &line_info.lines[line_info_idx];
+                    U64 line_voff_min = line_info.voffs[line_info_idx];
+                    U64 line_voff_opl = line_info.voffs[line_info_idx+1];
+                    if(line->file_idx != 0)
                     {
-                      // rjf: unpack unit line info
-                      RDI_LineTable *line_table = &bake_results.line_tables.line_tables[line_table_idx];
-                      RDI_ParsedLineTable line_info =
-                      {
-                        bake_results.line_tables.line_table_voffs + line_table->voffs_base_idx,
-                        bake_results.line_tables.line_table_lines + line_table->lines_base_idx,
-                        0,
-                        line_table->lines_count,
-                        0
-                      };
-                      for(U64 voff = voff_range.min, last_voff = 0;
-                          voff < voff_range.max && voff > last_voff;)
-                      {
-                        RDI_U64 line_info_idx = rdi_line_info_idx_from_voff(&line_info, voff);
-                        if(line_info_idx < line_info.count)
-                        {
-                          RDI_Line *line = &line_info.lines[line_info_idx];
-                          U64 line_voff_min = line_info.voffs[line_info_idx];
-                          U64 line_voff_opl = line_info.voffs[line_info_idx+1];
-                          if(line->file_idx != 0)
-                          {
-                            str8_list_pushf(arena, out, "%I64x %I64x %I64u %I64u\n",
-                                            line_voff_min,
-                                            line_voff_opl-line_voff_min,
-                                            (U64)line->line_num,
-                                            (U64)line->file_idx);
-                          }
-                          last_voff = voff;
-                          voff = line_voff_opl;
-                        }
-                        else
-                        {
-                          break;
-                        }
-                      }
+                      str8_list_pushf(arena, out, "%I64x %I64x %I64u %I64u\n",
+                                      line_voff_min,
+                                      line_voff_opl-line_voff_min,
+                                      (U64)line->line_num,
+                                      (U64)line->file_idx);
                     }
+                    last_voff = voff;
+                    voff = line_voff_opl;
+                  }
+                  else
+                  {
+                    break;
                   }
                 }
               }
-              chunk_idx += 1;
             }
           }
           
@@ -993,23 +1087,73 @@ rb_thread_entry_point(void *p)
           lane_sync();
           if(lane_idx() == 0)
           {
-            for EachIndex(chunk_idx, bake_params->src_files.chunk_count)
+            for EachIndex(ln_idx, lane_count())
             {
-              for EachIndex(ln_idx, lane_count())
-              {
-                str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_chunk_file_dumps[ln_idx*bake_params->src_files.chunk_count + chunk_idx]);
-              }
+              str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_file_dumps[ln_idx]);
             }
-            for EachIndex(chunk_idx, bake_params->procedures.chunk_count)
+            for EachIndex(ln_idx, lane_count())
             {
-              for EachIndex(ln_idx, lane_count())
-              {
-                str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_chunk_func_dumps[ln_idx*bake_params->procedures.chunk_count + chunk_idx]);
-              }
+              str8_list_concat_in_place(&p2b_shared->dump, &p2b_shared->lane_func_dumps[ln_idx]);
             }
           }
           lane_sync();
           output_blobs = p2b_shared->dump;
+        }break;
+        
+        //- rjf: generate voff -> line results
+        case OutputKind_VOff2Line:
+        {
+          //- rjf: unpack voff arg
+          U64 voff = 0;
+          {
+            String8 voff_str = cmd_line_string(cmdline, str8_lit("voff"));
+            try_u64_from_str8_c_rules(voff_str, &voff);
+            log_infof("User specified \"%S\" as virtual offset; parsed as 0x%I64x", voff_str, voff);
+          }
+          
+          //- rjf: flatten to RDI data
+          String8List rdi_blobs = rdim_file_blobs_from_section_bundle(arena, serialized_section_bundle);
+          String8 rdi_data = str8_list_join(arena, &rdi_blobs, 0);
+          RDI_Parsed rdi_ = {0};
+          RDI_Parsed *rdi = &rdi_;
+          RDI_ParseStatus rdi_status = rdi_parse(rdi_data.str, rdi_data.size, rdi);
+          
+          //- rjf: voff -> line
+          RDI_Line line = rdi_line_from_voff(rdi, voff);
+          RDI_SourceFile *src_file = rdi_element_from_name_idx(rdi, SourceFiles, line.file_idx);
+          
+          //- rjf: dump line info
+          {
+            Temp scratch = scratch_begin(0, 0);
+            RDI_Scope *voff_scope = rdi_scope_from_voff(rdi, voff);
+            for(RDI_Scope *scope = voff_scope, *null_scope = rdi_element_from_name_idx(rdi, Scopes, 0);
+                scope != 0 && scope != null_scope;
+                scope = rdi_parent_from_scope(rdi, scope))
+            {
+              RDI_InlineSite *inline_site = rdi_inline_site_from_scope(rdi, scope);
+              RDI_InlineSite *null_inline_site = rdi_element_from_name_idx(rdi, InlineSites, 0);
+              if(inline_site && inline_site != null_inline_site)
+              {
+                RDI_LineTable *inline_line_table = rdi_element_from_name_idx(rdi, LineTables, inline_site->line_table_idx);
+                RDI_LineTable *null_inline_line_table = rdi_element_from_name_idx(rdi, LineTables, 0);
+                if(inline_line_table && inline_line_table != null_inline_line_table)
+                {
+                  String8         inline_name          = str8_from_rdi_string_idx(rdi, inline_site->name_string_idx);
+                  RDI_Line        inline_line          = rdi_line_from_line_table_voff(rdi, inline_line_table, voff);
+                  RDI_SourceFile *inline_src_file      = rdi_element_from_name_idx(rdi, SourceFiles, inline_line.file_idx);
+                  RDI_SourceFile *null_inline_src_file = rdi_element_from_name_idx(rdi, SourceFiles, 0);
+                  if(inline_src_file && inline_src_file != null_inline_src_file)
+                  {
+                    String8 path = str8_from_rdi_path_node_idx(scratch.arena, rdi, PathStyle_SystemAbsolute, src_file->file_path_node_idx);
+                    str8_list_pushf(arena, &output_blobs, "[inlined] %S %S:%u\n", inline_name, path, inline_line.line_num);
+                  }
+                }
+              }
+            }
+            String8 path = str8_from_rdi_path_node_idx(scratch.arena, rdi, PathStyle_SystemAbsolute, src_file->file_path_node_idx);
+            str8_list_pushf(arena, &output_blobs, "%S:%u\n", path, line.line_num);
+            scratch_end(scratch);
+          }
         }break;
       }
     }break;
@@ -1058,7 +1202,7 @@ rb_thread_entry_point(void *p)
 #undef X
         fprintf(stderr, "\n");
       }
-
+      
       B32 verbose = cmd_line_has_flag(cmdline, str8_lit("verbose"));
       
       //- rjf: unpack dump subset flags
@@ -1147,7 +1291,7 @@ rb_thread_entry_point(void *p)
           {
             elf = elf_bin_from_data(arena, f->data);
             arch = arch_from_elf_machine(elf.hdr.e_machine);
-
+            
             for EachIndex(sect_idx, elf.hdr.e_shnum)
             {
               ELF_Shdr64 *shdr = &elf.shdrs.v[sect_idx];
@@ -1156,7 +1300,7 @@ rb_thread_entry_point(void *p)
               {
                 eh_frame_hdr = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
                 eh_frame_hdr_vaddr = shdr->sh_addr;
-
+                
               }
               else if(str8_match(name, str8_lit(".eh_frame"), 0))
               {
@@ -1268,7 +1412,7 @@ rb_thread_entry_point(void *p)
           }
           lane_sync();
         }
-
+        
         if(eh_dump_subset_flags)
         {
           if(lane_idx() == 0)
@@ -1279,106 +1423,6 @@ rb_thread_entry_point(void *p)
           lane_sync();
         }
       }
-    }break;
-
-    case OutputKind_VOff2Line:
-    {
-      if(lane_idx() != 0) { break; }
-
-      if(cmdline->inputs.node_count == 0)
-      {
-        fprintf(stderr, "ARGUMENTS\n\n");
-        fprintf(stderr, "--voff:OFFSET Map specified virtual offset to a source line.\n");
-        break;
-      }
-
-      if(cmdline->inputs.node_count > 1)
-      {
-        fprintf(stderr, "ERROR: too many input files!\n");
-        break;
-      }
-
-      if(!cmd_line_has_argument(cmdline, str8_lit("voff"))) {
-        fprintf(stderr, "ERROR: missing -voff\n");
-        break;
-      }
-
-      String8 voff_str = cmd_line_string(cmdline, str8_lit("voff"));
-      if(voff_str.size == 0)
-      {
-        fprintf(stderr, "ERROR: missing argument for -voff\n");
-        break;
-      }
-
-      U64 voff = 0;
-      if(!try_u64_from_str8_c_rules(voff_str, &voff))
-      {
-        fprintf(stderr, "ERROR: invalid argument for -voff\n");
-        break;
-      }
-
-      RB_File *f = input_files.first->v;
-      if(f->format != RB_FileFormat_RDI)
-      {
-        fprintf(stderr, "ERROR: input file must be RDI.\n");
-        break;
-      }
-
-      RDI_Parsed rdi = {0};
-      RDI_ParseStatus rdi_parse_status = rdi_parse(f->data.str, f->data.size, &rdi);
-      if(rdi_parse_status != RDI_ParseStatus_Good)
-      {
-        fprintf(stderr, "ERROR: failed to parse RDI with code %d\n", rdi_parse_status);
-        break;
-      }
-
-      RDI_Line line = rdi_line_from_voff(&rdi, voff);
-      if(line.file_idx == 0 || line.line_num == 0) 
-      {
-        fprintf(stderr, "ERROR: failed to find mapping for virtual offset 0x%llx.\n", voff);
-        break;
-      }
-
-      RDI_SourceFile *src_file = rdi_element_from_name_idx(&rdi, SourceFiles, line.file_idx);
-      if(src_file == 0)
-      {
-        fprintf(stderr, "ERROR: failed to find source file with index %u.\n", line.file_idx);
-        break;
-      }
-
-      Temp scratch = scratch_begin(0, 0);
-
-      // format inline site stack
-      {
-        RDI_Scope *voff_scope = rdi_scope_from_voff(&rdi, voff);
-        for(RDI_Scope *scope = voff_scope, *null_scope = rdi_element_from_name_idx(&rdi, Scopes, 0); scope != 0 && scope != null_scope; scope = rdi_parent_from_scope(&rdi, scope))
-        {
-          RDI_InlineSite *inline_site      = rdi_inline_site_from_scope(&rdi, scope);
-          RDI_InlineSite *null_inline_site = rdi_element_from_name_idx(&rdi, InlineSites, 0);
-          if(inline_site && inline_site != null_inline_site)
-          {
-            RDI_LineTable *inline_line_table      = rdi_element_from_name_idx(&rdi, LineTables, inline_site->line_table_idx);
-            RDI_LineTable *null_inline_line_table = rdi_element_from_name_idx(&rdi, LineTables, 0);
-            if(inline_line_table && inline_line_table != null_inline_line_table)
-            {
-              String8         inline_name          = str8_from_rdi_string_idx(&rdi, inline_site->name_string_idx);
-              RDI_Line        inline_line          = rdi_line_from_line_table_voff(&rdi, inline_line_table, voff);
-              RDI_SourceFile *inline_src_file      = rdi_element_from_name_idx(&rdi, SourceFiles, inline_line.file_idx);
-              RDI_SourceFile *null_inline_src_file = rdi_element_from_name_idx(&rdi, SourceFiles, 0);
-              if(inline_src_file && inline_src_file != null_inline_src_file)
-              {
-                String8 path = str8_from_rdi_path_node_idx(scratch.arena, &rdi, PathStyle_SystemAbsolute, src_file->file_path_node_idx);
-                fprintf(stdout, "[inlined] %.*s %.*s:%u\n", str8_varg(inline_name), str8_varg(path), inline_line.line_num);
-              }
-            }
-          }
-        }
-      }
-
-      String8 path = str8_from_rdi_path_node_idx(scratch.arena, &rdi, PathStyle_SystemAbsolute, src_file->file_path_node_idx);
-      fprintf(stdout, "%.*s:%u\n", str8_varg(path), line.line_num);
-
-      scratch_end(scratch);
     }break;
   }
   
