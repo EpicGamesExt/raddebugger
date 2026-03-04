@@ -1591,9 +1591,10 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
             U32 *run = rdi_matches_from_map_node(rdi, map_node, &num);
             if(num != 0)
             {
+              U64 run_idx = (num-1) - Min(index, num-1);
               lane_matches[lane_idx()].key          = dbgi_key;
               lane_matches[lane_idx()].section_kind = name_map_section_kinds[name_map_kind_idx];
-              lane_matches[lane_idx()].idx          = run[num-1];
+              lane_matches[lane_idx()].idx          = run[run_idx];
             }
           }
         }

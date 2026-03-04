@@ -263,6 +263,7 @@ struct E_Expr
   E_Value value;
   String8 string;
   String8 qualifier;
+  String8 disambiguator;
   String8 bytecode;
 };
 

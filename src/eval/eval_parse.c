@@ -113,7 +113,8 @@ e_token_array_from_text(Arena *arena, String8 text)
                 byte == '-' || byte == '=' || byte == '+' || byte == '[' ||
                 byte == ']' || byte == '{' || byte == '}' || byte == ':' ||
                 byte == ';' || byte == ',' || byte == '.' || byte == '<' ||
-                byte == '>' || byte == '/' || byte == '?' || byte == '|')
+                byte == '>' || byte == '/' || byte == '?' || byte == '|' ||
+                byte == '#')
         {
           active_token_kind = E_TokenKind_Symbol;
           active_token_start_idx = idx;
@@ -224,7 +225,8 @@ e_token_array_from_text(Arena *arena, String8 text)
            byte != '-' && byte != '=' && byte != '+' && byte != '[' &&
            byte != ']' && byte != '{' && byte != '}' && byte != ':' &&
            byte != ';' && byte != ',' && byte != '.' && byte != '<' &&
-           byte != '>' && byte != '/' && byte != '?' && byte != '|')
+           byte != '>' && byte != '/' && byte != '?' && byte != '|' &&
+           byte != '#')
         {
           advance = 0;
           token_formed = 1;
@@ -361,9 +363,10 @@ e_expr_copy(Arena *arena, E_Expr *src)
       dst->space     = t->src->space;
       dst->type_key  = t->src->type_key;
       dst->value     = t->src->value;
-      dst->string    = push_str8_copy(arena, t->src->string);
-      dst->bytecode  = push_str8_copy(arena, t->src->bytecode);
-      dst->qualifier = push_str8_copy(arena, t->src->qualifier);
+      dst->string         = str8_copy(arena, t->src->string);
+      dst->bytecode       = str8_copy(arena, t->src->bytecode);
+      dst->disambiguator  = str8_copy(arena, t->src->disambiguator);
+      dst->qualifier      = str8_copy(arena, t->src->qualifier);
       if(t->dst_parent == &e_expr_nil)
       {
         result = dst;
@@ -468,6 +471,10 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8 parent_expr_strin
     case E_ExprKind_LeafBytecode:
     case E_ExprKind_LeafIdentifier:
     {
+      if(expr->qualifier.size != 0)
+      {
+        str8_list_pushf(arena, out, "%S:", expr->qualifier);
+      }
       if(str8_match(expr->string, str8_lit("$"), 0) && parent_expr_string.size != 0)
       {
         str8_list_push(arena, out, parent_expr_string);
@@ -475,6 +482,10 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8 parent_expr_strin
       else
       {
         str8_list_push(arena, out, expr->string);
+      }
+      if(expr->disambiguator.size != 0)
+      {
+        str8_list_pushf(arena, out, "#%S", expr->disambiguator);
       }
     }break;
     case E_ExprKind_LeafStringLiteral:
@@ -1045,6 +1056,27 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
             atom->string = identifier_string;
             it += 1;
             got_new_atom = 1;
+          }
+          
+          // rjf: equip disambiguator
+          if(got_new_atom)
+          {
+            E_Token possible_hash = e_token_at_it(it, &tokens);
+            E_Token possible_numeric = e_token_at_it(it+1, &tokens);
+            String8 possible_hash_string = str8_substr(text, possible_hash.range);
+            String8 possible_numeric_string = str8_substr(text, possible_numeric.range);
+            if(possible_hash.kind == E_TokenKind_Symbol && str8_match(possible_hash_string, str8_lit("#"), 0))
+            {
+              if(possible_numeric.kind == E_TokenKind_Numeric)
+              {
+                atom->disambiguator = possible_numeric_string;
+                it += 2;
+              }
+              else
+              {
+                e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, possible_numeric.range, "Expected disambiguating number after `#`.");
+              }
+            }
           }
         }
         

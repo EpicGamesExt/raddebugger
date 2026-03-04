@@ -1696,6 +1696,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
       case E_ExprKind_LeafIdentifier:
       {
         Temp scratch = scratch_begin(&arena, 1);
+        String8 disambiguator = expr->disambiguator;
         String8 qualifier = expr->qualifier;
         String8 string = expr->string;
         String8 string__redirected = string;
@@ -1890,8 +1891,15 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               {
                 Access *access = access_open();
                 
+                // rjf: determine disambiguating index
+                U64 match_disambiguating_idx = 0;
+                if(disambiguator.size != 0)
+                {
+                  try_u64_from_str8_c_rules(disambiguator, &match_disambiguating_idx);
+                }
+                
                 // rjf: find match
-                DI_Match match = di_match_from_string(string, 0, e_base_ctx->primary_dbg_info->dbgi_key, 0);
+                DI_Match match = di_match_from_string(string, match_disambiguating_idx, e_base_ctx->primary_dbg_info->dbgi_key, 0);
                 if(match.idx == 0)
                 {
                   String8List namespaceified_strings = {0};

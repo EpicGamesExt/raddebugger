@@ -910,8 +910,6 @@ static int g_abc = 100;
 static float g_xyz = 21.f;
 static Alias1 g_kind = Kind_First;
 
-// TODO(allen): more global test types
-
 static void
 complicated_global_mutation(int *x){
   *x = (int)g_xyz;
@@ -922,8 +920,19 @@ cross_unit_global_mutation(void){
   fixed_frac_bits = 10;
 }
 
+static int
+function_with_duplicate_local_statics(void)
+{
+  static char *l_abc = "foobar";
+  static int l_xyz = 123;
+  static Kind l_kind = Kind_First;
+  int x = l_xyz + (int)(int64_t)(l_abc);
+  return x;
+}
+
 static void
-global_eval_tests(void){
+global_eval_tests(void)
+{
   g_abc = 11*11;
   g_xyz = (float)g_abc - 21.f;
   
@@ -946,6 +955,8 @@ global_eval_tests(void){
   l_abc = g_abc*2;
   l_xyz = g_xyz*2;
   l_kind = (Alias1)(g_kind + 1);
+  
+  function_with_duplicate_local_statics();
 }
 
 ////////////////////////////////
