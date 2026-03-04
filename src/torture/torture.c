@@ -371,7 +371,11 @@ t_entry_point(CmdLine *cmdline)
     radsort(g_torture_tests, g_torture_test_count, t_test_is_before);
 
     U64 max_label_size = 0;
-    for EachIndex(i, g_torture_test_count) { max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[i].label)); }
+    U64 max_group_size = 0;
+    for EachIndex(i, g_torture_test_count) {
+      max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[i].label));
+      max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[i].group));
+    }
 
     U64 dots_min = 10;
     U64 dots_size = max_label_size+dots_min;
@@ -411,8 +415,9 @@ t_entry_point(CmdLine *cmdline)
 
       // print run progress
       U64 dots_count = (max_label_size - cstring8_length((U8*)g_torture_tests[target_idx].label)) + dots_min;
+      char *spaces = "                                                                                      ";
       fprintf(stdout, "[%2I64u/%2I64u] ", i+1, target_indices_count);
-      fprintf(stdout, "(%s) %s", g_torture_tests[target_idx].group, g_torture_tests[target_idx].label);
+      fprintf(stdout, "(%s) %.*s%s", g_torture_tests[target_idx].group, (int)(max_group_size - cstring8_length((U8*)g_torture_tests[target_idx].group)), spaces, g_torture_tests[target_idx].label);
       fprintf(stdout, "%.*s", (int)dots_count, dots);
 
       // setup output directory
