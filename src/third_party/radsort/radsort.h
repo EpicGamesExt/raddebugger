@@ -438,7 +438,7 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
   if ( len <= 1 )
     return;
   
-#if _DEBUG
+#if BUILD_DEBUG
   if ( element_size > sizeof( RS_MAX_SIMPLE_BUF ) )
     __debugbreak();
 #endif

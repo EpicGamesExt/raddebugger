@@ -6,6 +6,11 @@
 ** stepping, breakpoints, evaluation, cross-module calls.
 */
 
+#if COMPILER_MSVC && _DEBUG
+#pragma comment(linker, "/nodefaultlib:libcmt")
+#pragma comment(lib, "libcmtd")
+#endif
+
 #include <string>
 #include <vector>
 #include <unordered_map>
