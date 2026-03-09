@@ -1110,6 +1110,19 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
       
+      // rjf: push strings from namespaces
+      ProfScope("namespaces")
+      {
+        for EachNode(n, RDIM_NamespaceChunkNode, params->namespaces.first)
+        {
+          Rng1U64 range = lane_range(n->count);
+          for EachInRange(n_idx, range)
+          {
+            rdim_bake_string_map_loose_insert(arena, top, lane_map, 4, n->v[n_idx].name);
+          }
+        }
+      }
+      
       // rjf: push strings from types
       ProfScope("types")
       {

@@ -807,6 +807,29 @@ rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM_UnitChunkList
 }
 
 ////////////////////////////////
+//~ rjf: [Building] Namespace Info Building
+
+RDI_PROC RDIM_Namespace *
+rdim_namespace_chunk_list_push(RDIM_Arena *arena, RDIM_NamespaceChunkList *list, RDI_U64 cap)
+{
+  RDIM_IdxedChunkListPush(arena, list, RDIM_NamespaceChunkNode, RDIM_Namespace, cap, result);
+  return result;
+}
+
+RDI_PROC RDI_U64
+rdim_idx_from_namespace(RDIM_Namespace *ns)
+{
+  RDIM_IdxedChunkListElementGetIdx(ns, idx);
+  return idx;
+}
+
+RDI_PROC void
+rdim_namespace_chunk_list_concat_in_place(RDIM_NamespaceChunkList *dst, RDIM_NamespaceChunkList *to_push)
+{
+  RDIM_IdxedChunkListConcatInPlace(RDIM_NamespaceChunkNode, dst, to_push);
+}
+
+////////////////////////////////
 //~ rjf: [Building] Type Info Building
 
 //- rjf: type nodes
@@ -2162,6 +2185,7 @@ rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
   bundle.sections[RDI_SectionKind_SourceLineMapVOffs]   = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_map_voffs, results->src_files.source_line_map_voffs_count);
   bundle.sections[RDI_SectionKind_Units]                = rdim_serialized_section_make_unpacked_array(results->units.units, results->units.units_count);
   bundle.sections[RDI_SectionKind_UnitVMap]             = rdim_serialized_section_make_unpacked_array(results->unit_vmap.vmap.vmap, results->unit_vmap.vmap.count);
+  bundle.sections[RDI_SectionKind_Namespaces]           = rdim_serialized_section_make_unpacked_array(results->namespaces.namespaces, results->namespaces.namespaces_count);
   bundle.sections[RDI_SectionKind_TypeNodes]            = rdim_serialized_section_make_unpacked_array(results->type_nodes.type_nodes, results->type_nodes.type_nodes_count);
   bundle.sections[RDI_SectionKind_UDTs]                 = rdim_serialized_section_make_unpacked_array(results->udts.udts, results->udts.udts_count);
   bundle.sections[RDI_SectionKind_Members]              = rdim_serialized_section_make_unpacked_array(results->udts.members, results->udts.members_count);

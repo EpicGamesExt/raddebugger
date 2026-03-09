@@ -666,6 +666,38 @@ struct RDIM_UnitChunkList
 };
 
 ////////////////////////////////
+//~ rjf: Namespace Types
+
+typedef struct RDIM_Namespace RDIM_Namespace;
+struct RDIM_Namespace
+{
+  struct RDIM_NamespaceChunkNode *chunk;
+  RDIM_Namespace *parent_namespace;
+  struct RDIM_Scope *parent_scope;
+  struct RDIM_UDT *parent_udt;
+  RDIM_String8 name;
+};
+
+typedef struct RDIM_NamespaceChunkNode RDIM_NamespaceChunkNode;
+struct RDIM_NamespaceChunkNode
+{
+  RDIM_NamespaceChunkNode *next;
+  RDIM_Namespace *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_NamespaceChunkList RDIM_NamespaceChunkList;
+struct RDIM_NamespaceChunkList
+{
+  RDIM_NamespaceChunkNode *first;
+  RDIM_NamespaceChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+////////////////////////////////
 //~ rjf: Type System Node Types
 
 typedef RDI_U32 RDIM_DataModel;
@@ -1010,6 +1042,7 @@ struct RDIM_BakeParams
   RDIM_TopLevelInfo top_level_info;
   RDIM_BinarySectionList binary_sections;
   RDIM_UnitChunkList units;
+  RDIM_NamespaceChunkList namespaces;
   RDIM_TypeChunkList types;
   RDIM_UDTChunkList udts;
   RDIM_SrcFileChunkList src_files;
@@ -1349,6 +1382,13 @@ struct RDIM_LineTableBakeResult
   RDI_U64 line_table_columns_count;
 };
 
+typedef struct RDIM_NamespaceBakeResult RDIM_NamespaceBakeResult;
+struct RDIM_NamespaceBakeResult
+{
+  RDI_Namespace *namespaces;
+  RDI_U64 namespaces_count;
+};
+
 typedef struct RDIM_TypeNodeBakeResult RDIM_TypeNodeBakeResult;
 struct RDIM_TypeNodeBakeResult
 {
@@ -1492,6 +1532,7 @@ struct RDIM_BakeResults
   RDIM_SrcFileBakeResult src_files;
   RDIM_ChecksumBakeResult checksums;
   RDIM_LineTableBakeResult line_tables;
+  RDIM_NamespaceBakeResult namespaces;
   RDIM_TypeNodeBakeResult type_nodes;
   RDIM_UDTBakeResult udts;
   RDIM_GlobalVariableBakeResult global_variables;
@@ -1627,6 +1668,13 @@ RDI_PROC RDI_U64 rdim_idx_from_unit(RDIM_Unit *unit);
 RDI_PROC void rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM_UnitChunkList *to_push);
 
 ////////////////////////////////
+//~ rjf: [Building] Namespace Info Building
+
+RDI_PROC RDIM_Namespace *rdim_namespace_chunk_list_push(RDIM_Arena *arena, RDIM_NamespaceChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_namespace(RDIM_Namespace *ns);
+RDI_PROC void rdim_namespace_chunk_list_concat_in_place(RDIM_NamespaceChunkList *dst, RDIM_NamespaceChunkList *to_push);
+
+////////////////////////////////
 //~ rjf: [Building] Type Info & UDT Building
 
 //- rjf: type nodes
@@ -1756,10 +1804,5 @@ RDI_PROC RDIM_SerializedSection rdim_serialized_section_make_unpacked(void *data
 #define rdim_serialized_section_make_unpacked_array(ptr, count) rdim_serialized_section_make_unpacked((ptr), sizeof(*(ptr))*(count))
 RDI_PROC RDIM_SerializedSectionBundle rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results);
 RDI_PROC RDIM_String8List rdim_file_blobs_from_section_bundle(RDIM_Arena *arena, RDIM_SerializedSectionBundle *bundle);
-
-////////////////////////////////
-//~ rjf: [Serializing] Parsed RDI -> Bake Results
-
-RDI_PROC RDIM_BakeResults *rdim_bake_results_from_rdi(RDIM_Arena *arena, RDI_Parsed *rdi);
 
 #endif // RDI_MAKE_H

@@ -123,13 +123,16 @@ for /f %%i in ('call git describe --always --dirty')   do set compile=%compile% 
 for /f %%i in ('call git rev-parse HEAD')              do set compile=%compile% -DBUILD_GIT_HASH_FULL=\"%%i\"
 
 :: --- Build & Run Metaprogram ------------------------------------------------
+pushd build
 if "%meta%"=="1" (
-  echo [doing metagen]
-  pushd build
+  echo [building metagen]
   %compile_debug% ..\src\metagen\metagen_main.c %compile_link% %out%metagen.exe || exit /b 1
-  metagen.exe || exit /b 1
-  popd
 )
+if "%no_meta%"=="" (
+  echo [running metagen]
+  metagen.exe || exit /b 1
+)
+popd
 
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
