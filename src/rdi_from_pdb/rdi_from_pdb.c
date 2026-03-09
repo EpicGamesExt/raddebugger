@@ -2601,6 +2601,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               }
             }
             
+            //- rjf: gather namespaces
+            {
+              
+            }
+            
             //- rjf: store finalized type to this itype's slot
             itype_type_ptrs[itype] = dst_type;
           }
@@ -4358,7 +4363,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       {
         rdim_type_chunk_list_concat_in_place(all_types__pre_typedefs_ptr, &syms_typedefs[idx]);
       }
-      *all_types_ptr = all_types__pre_typedefs;
+      *all_types_ptr = *all_types__pre_typedefs_ptr;
     }
     lane_sync();
     all_locations = *all_locations_ptr;
