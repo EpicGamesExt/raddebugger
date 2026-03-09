@@ -388,7 +388,7 @@ typedef RDI_U32 RDI_ContainerFlags;
 typedef enum RDI_ContainerFlagsEnum
 {
 RDI_ContainerFlag_External             = 1<<8,
-RDI_ContainerFlag_KindMask = 0xff,
+RDI_ContainerFlag_KindMask             = 0xff,
 } RDI_ContainerFlagsEnum;
 
 typedef RDI_U32 RDI_LinkFlags;
@@ -407,6 +407,15 @@ RDI_LocalKind_Parameter            = 0x1,
 RDI_LocalKind_Variable             = 0x2,
 } RDI_LocalKindEnum;
 
+typedef RDI_U8 RDI_VariableKind;
+typedef enum RDI_VariableKindEnum
+{
+RDI_VariableKind_Local                = 0x0,
+RDI_VariableKind_Param                = 0x1,
+RDI_VariableKind_Global               = 0x2,
+RDI_VariableKind_Thread               = 0x3,
+} RDI_VariableKindEnum;
+
 typedef RDI_U8 RDI_LocationKind;
 typedef enum RDI_LocationKindEnum
 {
@@ -416,6 +425,10 @@ RDI_LocationKind_ValBytecodeStream    = 0x2,
 RDI_LocationKind_AddrRegPlusU16       = 0x3,
 RDI_LocationKind_AddrAddrRegPlusU16   = 0x4,
 RDI_LocationKind_ValReg               = 0x5,
+RDI_LocationKind_ModuleOff            = 0x6,
+RDI_LocationKind_TLSOff               = 0x7,
+RDI_LocationKind_ConstantDataOff      = 0x8,
+RDI_LocationKind_List                 = 0x9,
 } RDI_LocationKindEnum;
 
 typedef RDI_U8 RDI_EvalOp;
@@ -891,11 +904,25 @@ X(ValBytecodeStream)\
 X(AddrRegPlusU16)\
 X(AddrAddrRegPlusU16)\
 X(ValReg)\
+X(ModuleOff)\
+X(TLSOff)\
+X(ConstantDataOff)\
+X(List)\
 
 #define RDI_Namespace_XList \
 X(RDI_U32, name_string_idx)\
 X(RDI_ContainerFlags, container_flags)\
 X(RDI_U32, container_idx)\
+
+#define RDI_Variable_XList \
+X(RDI_U32, name_string_idx)\
+X(RDI_ContainerFlags, container_flags)\
+X(RDI_U32, container_idx)\
+X(RDI_U32, type_idx)\
+X(RDI_VariableKind, variable_kind)\
+X(RDI_LocationKind, location_kind)\
+X(RDI_U16, padding)\
+X(RDI_U32, location_idx)\
 
 #define RDI_GlobalVariable_XList \
 X(RDI_U32, name_string_idx)\
@@ -1349,6 +1376,19 @@ struct RDI_Namespace
 RDI_U32 name_string_idx;
 RDI_ContainerFlags container_flags;
 RDI_U32 container_idx;
+};
+
+typedef struct RDI_Variable RDI_Variable;
+struct RDI_Variable
+{
+RDI_U32 name_string_idx;
+RDI_ContainerFlags container_flags;
+RDI_U32 container_idx;
+RDI_U32 type_idx;
+RDI_VariableKind variable_kind;
+RDI_LocationKind location_kind;
+RDI_U16 padding;
+RDI_U32 location_idx;
 };
 
 typedef struct RDI_GlobalVariable RDI_GlobalVariable;

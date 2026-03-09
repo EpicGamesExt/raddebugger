@@ -722,7 +722,6 @@ struct RDIM_Type
   RDI_U32 off;
   RDI_U32 count;
   RDIM_String8 name;
-  RDIM_String8 link_name;
   RDIM_Type *direct_type;
   RDIM_Type **param_types;
   struct RDIM_UDT *udt;

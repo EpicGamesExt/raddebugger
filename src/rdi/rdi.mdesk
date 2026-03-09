@@ -956,6 +956,7 @@ RDI_ContainerKindTable:
 RDI_ContainerFlagTable:
 {
   {External `1<<8`}
+  {KindMask `0xff`}
 }
 
 @table(name value)
@@ -983,6 +984,19 @@ RDI_LocationKindTable:
   {AddrRegPlusU16       0x3}
   {AddrAddrRegPlusU16   0x4}
   {ValReg               0x5}
+  {ModuleOff            0x6}
+  {TLSOff               0x7}
+  {ConstantDataOff      0x8}
+  {List                 0x9}
+}
+
+@table(name value)
+RDI_VariableKindTable:
+{
+  {Local  0x0}
+  {Param  0x1}
+  {Global 0x2}
+  {Thread 0x3}
 }
 
 @table(name type desc)
@@ -991,6 +1005,19 @@ RDI_NamespaceMemberTable:
   {name_string_idx   RDI_U32               ""}
   {container_flags   RDI_ContainerFlags    ""}
   {container_idx     RDI_U32               ""}
+}
+
+@table(name type desc)
+RDI_VariableMemberTable:
+{
+  {name_string_idx   RDI_U32               ""}
+  {container_flags   RDI_ContainerFlags    ""}
+  {container_idx     RDI_U32               ""}
+  {type_idx          RDI_U32               ""}
+  {variable_kind     RDI_VariableKind      ""}
+  {location_kind     RDI_LocationKind      ""}
+  {padding           RDI_U16               ""}
+  {location_idx      RDI_U32               ""}
 }
 
 @table(name type desc)
@@ -1108,7 +1135,6 @@ RDI_LocationRegMemberTable:
 @enum(RDI_U32) RDI_ContainerFlags:
 {
   @expand(RDI_ContainerFlagTable a) `$(a.name .. =>20) = $(a.value)`,
-  `KindMask = 0xff`,
 }
 
 @enum(RDI_U32) RDI_LinkFlags:
@@ -1119,6 +1145,11 @@ RDI_LocationRegMemberTable:
 @enum(RDI_U32) RDI_LocalKind:
 {
   @expand(RDI_LocalKindTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@enum(RDI_U8) RDI_VariableKind:
+{
+  @expand(RDI_VariableKindTable a) `$(a.name .. =>20) = $(a.value)`
 }
 
 @enum(RDI_U8) RDI_LocationKind:
@@ -1146,6 +1177,11 @@ RDI_LocationRegMemberTable:
 @xlist RDI_Namespace_XList:
 {
   @expand(RDI_NamespaceMemberTable a) `$(a.type), $(a.name)`
+}
+
+@xlist RDI_Variable_XList:
+{
+  @expand(RDI_VariableMemberTable a) `$(a.type), $(a.name)`
 }
 
 @xlist RDI_GlobalVariable_XList:
@@ -1203,6 +1239,11 @@ RDI_LocationRegMemberTable:
 @struct RDI_Namespace:
 {
   @expand(RDI_NamespaceMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_Variable:
+{
+  @expand(RDI_VariableMemberTable a) `$(a.type) $(a.name)`
 }
 
 @struct RDI_GlobalVariable:

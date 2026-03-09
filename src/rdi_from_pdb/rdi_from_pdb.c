@@ -1522,44 +1522,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   RDIM_SrcFileChunkList all_src_files = *all_src_files__sequenceless;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: gather user-defined namespaces
-  //
-  ProfScope("gather user-defined namespaces")
-  {
-    U64 *sym_take_counter = lane_idx() == 0 ? push_array(scratch.arena, U64, 1) : 0;
-    lane_sync_u64(&sym_take_counter, 0);
-    for(;;)
-    {
-      //- rjf: take next sym
-      U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
-      if(sym_idx >= all_syms_count)
-      {
-        break;
-      }
-      
-      //- rjf: unpack sym
-      Temp scratch = scratch_begin(&arena, 1);
-      CV_SymParsed *sym = all_syms[sym_idx];
-      
-      //- rjf: iterate namespaces
-      for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
-      {
-        switch(iter.kind)
-        {
-          default:{}break;
-          case CV_SymKind_UNAMESPACE:
-          {
-            String8 string = str8_cstring_capped(iter.struct_base, iter.opl);
-            // TODO(rjf)
-          }break;
-        }
-      }
-      
-      scratch_end(scratch);
-    }
-  }
-  
-  //////////////////////////////////////////////////////////////
   //- rjf: types pass 1: produce type forward resolution map
   //
   // this map is used to resolve usage of "incomplete structs" in codeview's
