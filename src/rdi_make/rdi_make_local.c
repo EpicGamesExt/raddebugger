@@ -2404,14 +2404,45 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake namespaces
   //
+  RDIM_NamespaceBakeResult *baked_namespaces = 0;
   ProfScope("bake namespaces")
   {
     // rjf: allocate
     if(lane_idx() == 0)
     {
-      
+      baked_namespaces = push_array(scratch.arena, RDIM_NamespaceBakeResult, 1);
+      baked_namespaces->namespaces_count = params->namespaces.total_count + 1;
+      baked_namespaces->namespaces = push_array(arena, RDI_Namespace, baked_namespaces->namespaces_count);
     }
-    lane_sync();
+    lane_sync_u64(&baked_namespaces, 0);
+    
+    // rjf: fill
+    for EachNode(n, RDIM_NamespaceChunkNode, params->namespaces.first)
+    {
+      Rng1U64 range = lane_range(n->count);
+      for EachInRange(n_idx, range)
+      {
+        U64 dst_idx = n->base_idx + n_idx + 1;
+        RDIM_Namespace *src = &n->v[n_idx];
+        RDI_Namespace *dst = &baked_namespaces->namespaces[dst_idx];
+        dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
+        if(src->parent_namespace != 0)
+        {
+          dst->container_flags |= RDI_ContainerKind_Namespace;
+          dst->container_idx = rdim_idx_from_namespace(src->parent_namespace);
+        }
+        else if(src->parent_scope != 0)
+        {
+          dst->container_flags |= RDI_ContainerKind_Scope;
+          dst->container_idx = rdim_idx_from_scope(src->parent_scope);
+        }
+        else if(src->parent_udt != 0)
+        {
+          dst->container_flags |= RDI_ContainerKind_Type;
+          dst->container_idx = rdim_idx_from_udt(src->parent_udt);
+        }
+      }
+    }
   }
   
   //////////////////////////////////////////////////////////////

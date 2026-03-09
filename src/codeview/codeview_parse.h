@@ -237,6 +237,18 @@ struct CV_TypeIdArray
 };
 
 ////////////////////////////////
+//~ Record Iterator
+
+typedef struct CV_RecIter CV_RecIter;
+struct CV_RecIter
+{
+  U64 num;
+  U16 kind;
+  void *struct_base;
+  void *opl;
+};
+
+////////////////////////////////
 
 //- Hasher
 
@@ -300,6 +312,9 @@ internal CV_SymParsed * cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym
 //- rjf: leaf stream parsing
 internal CV_LeafParsed * cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_TypeId first);
 internal CV_C13Parsed  * cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_SectionHeaderArray sections);
+
+//- rjf: record iterator
+internal B32 cv_rec_next(String8 data, CV_RecRangeArray *recs, B32 is_leaf, CV_RecIter *iter);
 
 #endif // CODEVIEW_PARSE_H
 

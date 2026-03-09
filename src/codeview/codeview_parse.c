@@ -1606,3 +1606,31 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
   return result;
 }
 
+//- rjf: record iterator
+
+internal B32
+cv_rec_next(String8 data, CV_RecRangeArray *recs, B32 is_leaf, CV_RecIter *iter)
+{
+  B32 result = 0;
+  {
+    U64 next_num = iter->num+1;
+    for(;1 <= next_num && next_num <= recs->count; next_num += 1)
+    {
+      CV_RecRange *rec_range = &recs->ranges[next_num-1];
+      U64 rec_off_first = rec_range->off + 2; // (skip 2 header bytes)
+      U64 rec_off_opl = rec_range->off + rec_range->hdr.size;
+      U16 kind = rec_range->hdr.kind;
+      U64 header_struct_size = (is_leaf ? cv_header_struct_size_from_leaf_kind(kind) : cv_header_struct_size_from_sym_kind(kind));
+      if(rec_off_opl <= data.size && rec_off_first + header_struct_size <= data.size)
+      {
+        result = 1;
+        iter->num = next_num;
+        iter->kind = kind;
+        iter->struct_base = data.str + rec_off_first;
+        iter->opl = data.str + rec_off_opl;
+        break;
+      }
+    }
+  }
+  return result;
+}

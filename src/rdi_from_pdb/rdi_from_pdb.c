@@ -757,33 +757,16 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     if(params->subset_flags & RDIM_SubsetFlag_Procedures)
     {
       CV_SymParsed *sym = all_syms[0];
-      CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
-      CV_RecRange *rec_ranges_opl = sym->sym_ranges.ranges + sym->sym_ranges.count;
-      for(CV_RecRange *rec_range = rec_ranges_first;
-          rec_range < rec_ranges_opl;
-          rec_range += 1)
+      for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
       {
-        //- rjf: unpack symbol range info
-        CV_SymKind kind = rec_range->hdr.kind;
-        U64 header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-        U8 *sym_first = sym->data.str + rec_range->off + 2;
-        U8 *sym_opl   = sym_first + rec_range->hdr.size;
-        
-        //- rjf: skip bad ranges
-        if(sym_opl > sym->data.str + sym->data.size || sym_first + header_struct_size > sym->data.str + sym->data.size)
-        {
-          continue;
-        }
-        
-        //- rjf: consume symbol
-        switch(kind)
+        switch(iter.kind)
         {
           default:{}break;
           case CV_SymKind_PUB32:
           {
             // rjf: unpack sym
-            CV_SymPub32 *pub32 = (CV_SymPub32 *)sym_first;
-            String8 name = str8_cstring_capped(pub32+1, sym_opl);
+            CV_SymPub32 *pub32 = (CV_SymPub32 *)iter.struct_base;
+            String8 name = str8_cstring_capped(pub32+1, iter.opl);
             COFF_SectionHeader *section = (0 < pub32->sec && pub32->sec <= coff_sections.count) ? &coff_sections.v[pub32->sec-1] : 0;
             U64 voff = 0;
             if(section != 0)
@@ -847,8 +830,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         PDB_CompUnit *unit = comp_units->units[unit_idx];
         CV_SymParsed *sym = all_syms[unit_idx+1];
         CV_C13Parsed *c13 = all_c13s[unit_idx+1];
-        CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
-        CV_RecRange *rec_ranges_opl   = sym->sym_ranges.ranges + sym->sym_ranges.count;
         
         //- rjf: produce obj name/path
         String8 obj_name = unit->obj_name;
@@ -866,34 +847,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         P2R_SrcFileStubNode *last_src_file_stub = 0;
         U64 src_file_stub_count = 0;
         U64 base_voff = 0;
-        for(CV_RecRange *rec_range = rec_ranges_first;
-            rec_range < rec_ranges_opl;
-            rec_range += 1)
+        for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
         {
-          //- rjf: rec range -> symbol info range
-          U64 sym_off_first = rec_range->off + 2;
-          U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
-          
-          //- rjf: skip invalid ranges
-          if(sym_off_opl > sym->data.size || sym_off_first > sym->data.size || sym_off_first > sym_off_opl)
-          {
-            continue;
-          }
-          
-          //- rjf: unpack symbol info
-          CV_SymKind kind = rec_range->hdr.kind;
-          U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-          void *sym_header_struct_base = sym->data.str + sym_off_first;
-          void *sym_data_opl = sym->data.str + sym_off_opl;
-          
-          //- rjf: skip bad sizes
-          if(sym_off_first + sym_header_struct_size > sym_off_opl)
-          {
-            continue;
-          }
-          
-          //- rjf: process symbol
-          switch(kind)
+          switch(iter.kind)
           {
             default:{}break;
             
@@ -901,7 +857,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             case CV_SymKind_LPROC32:
             case CV_SymKind_GPROC32:
             {
-              CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
+              CV_SymProc32 *proc32 = (CV_SymProc32 *)iter.struct_base;
               COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= coff_sections.count) ? &coff_sections.v[proc32->sec-1] : 0;
               if(section != 0)
               {
@@ -913,8 +869,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             case CV_SymKind_INLINESITE:
             {
               // rjf: unpack sym
-              CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
-              String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
+              CV_SymInlineSite *sym = (CV_SymInlineSite *)iter.struct_base;
+              String8 binary_annots = str8((U8 *)(sym+1), (U64)((U8 *)iter.opl - (U8 *)(sym+1)));
               
               // rjf: map inlinee -> parsed cv c13 inlinee line info
               CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
@@ -1331,37 +1287,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         //- rjf: build per-inline-site line tables
         if(params->subset_flags & RDIM_SubsetFlag_InlineLineInfo) ProfScope("build per-inline-site line tables")
         {
-          CV_RecRange *rec_ranges_first = src_unit_sym->sym_ranges.ranges;
-          CV_RecRange *rec_ranges_opl   = src_unit_sym->sym_ranges.ranges + src_unit_sym->sym_ranges.count;
           U64 base_voff = 0;
-          for(CV_RecRange *rec_range = rec_ranges_first;
-              rec_range < rec_ranges_opl;
-              rec_range += 1)
+          for(CV_RecIter iter = {0}; cv_rec_next(src_unit_sym->data, &src_unit_sym->sym_ranges, 0, &iter);)
           {
-            //- rjf: rec range -> symbol info range
-            U64 sym_off_first = rec_range->off + 2;
-            U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
-            
-            //- rjf: skip invalid ranges
-            if(sym_off_opl > src_unit_sym->data.size || sym_off_first > src_unit_sym->data.size || sym_off_first > sym_off_opl)
-            {
-              continue;
-            }
-            
-            //- rjf: unpack symbol info
-            CV_SymKind kind = rec_range->hdr.kind;
-            U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-            void *sym_header_struct_base = src_unit_sym->data.str + sym_off_first;
-            void *sym_data_opl = src_unit_sym->data.str + sym_off_opl;
-            
-            //- rjf: skip bad sizes
-            if(sym_off_first + sym_header_struct_size > sym_off_opl)
-            {
-              continue;
-            }
-            
-            //- rjf: process symbol
-            switch(kind)
+            switch(iter.kind)
             {
               default:{}break;
               
@@ -1369,7 +1298,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               case CV_SymKind_LPROC32:
               case CV_SymKind_GPROC32:
               {
-                CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
+                CV_SymProc32 *proc32 = (CV_SymProc32 *)iter.struct_base;
                 COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= coff_sections.count) ? &coff_sections.v[proc32->sec-1] : 0;
                 if(section != 0)
                 {
@@ -1381,8 +1310,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               case CV_SymKind_INLINESITE:
               {
                 // rjf: unpack sym
-                CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
-                String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
+                CV_SymInlineSite *sym = (CV_SymInlineSite *)iter.struct_base;
+                String8 binary_annots = str8((U8 *)(sym+1), (U64)((U8 *)iter.opl - (U8 *)(sym+1)));
                 
                 // rjf: map inlinee -> parsed cv c13 inlinee line info
                 CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
@@ -1591,6 +1520,44 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   }
   lane_sync();
   RDIM_SrcFileChunkList all_src_files = *all_src_files__sequenceless;
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: gather user-defined namespaces
+  //
+  ProfScope("gather user-defined namespaces")
+  {
+    U64 *sym_take_counter = lane_idx() == 0 ? push_array(scratch.arena, U64, 1) : 0;
+    lane_sync_u64(&sym_take_counter, 0);
+    for(;;)
+    {
+      //- rjf: take next sym
+      U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
+      if(sym_idx >= all_syms_count)
+      {
+        break;
+      }
+      
+      //- rjf: unpack sym
+      Temp scratch = scratch_begin(&arena, 1);
+      CV_SymParsed *sym = all_syms[sym_idx];
+      
+      //- rjf: iterate namespaces
+      for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
+      {
+        switch(iter.kind)
+        {
+          default:{}break;
+          case CV_SymKind_UNAMESPACE:
+          {
+            String8 string = str8_cstring_capped(iter.struct_base, iter.opl);
+            // TODO(rjf)
+          }break;
+        }
+      }
+      
+      scratch_end(scratch);
+    }
+  }
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 1: produce type forward resolution map
@@ -2601,11 +2568,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               }
             }
             
-            //- rjf: gather namespaces
-            {
-              
-            }
-            
             //- rjf: store finalized type to this itype's slot
             itype_type_ptrs[itype] = dst_type;
           }
@@ -3349,7 +3311,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         //- rjf: unpack sym
         Temp scratch = scratch_begin(&arena, 1);
         CV_SymParsed *sym = all_syms[sym_idx];
-        Rng1U64 sym_rec_range = r1u64(0, sym->sym_ranges.count);
         U64 sym_locations_chunk_cap = 4096;
         U64 sym_procedures_chunk_cap = 2048;
         U64 sym_global_variables_chunk_cap = 2048;
@@ -3370,40 +3331,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
         //
         U64 procedure_frameprocs_count = 0;
-        U64 procedure_frameprocs_cap   = dim_1u64(sym_rec_range);
+        U64 procedure_frameprocs_cap = sym->sym_ranges.count;
         CV_SymFrameproc **procedure_frameprocs = push_array_no_zero(scratch.arena, CV_SymFrameproc *, procedure_frameprocs_cap);
         ProfScope("symbols pass 1: produce procedure frame info map (procedure -> frame info)")
         {
           U64 procedure_num = 0;
-          CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges + sym_rec_range.min;
-          CV_RecRange *rec_ranges_opl   = sym->sym_ranges.ranges + sym_rec_range.max;
-          for(CV_RecRange *rec_range = rec_ranges_first;
-              rec_range < rec_ranges_opl;
-              rec_range += 1)
+          for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
           {
-            //- rjf: rec range -> symbol info range
-            U64 sym_off_first = rec_range->off + 2;
-            U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
-            
-            //- rjf: skip invalid ranges
-            if(sym_off_opl > sym->data.size || sym_off_first > sym->data.size || sym_off_first > sym_off_opl)
-            {
-              continue;
-            }
-            
-            //- rjf: unpack symbol info
-            CV_SymKind kind = rec_range->hdr.kind;
-            U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-            void *sym_header_struct_base = sym->data.str + sym_off_first;
-            
-            //- rjf: skip bad sizes
-            if(sym_off_first + sym_header_struct_size > sym_off_opl)
-            {
-              continue;
-            }
-            
-            //- rjf: consume symbol based on kind
-            switch(kind)
+            switch(iter.kind)
             {
               default:{}break;
               
@@ -3412,7 +3347,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               {
                 if(procedure_num == 0) { break; }
                 if(procedure_num > procedure_frameprocs_cap) { break; }
-                CV_SymFrameproc *frameproc = (CV_SymFrameproc*)sym_header_struct_base;
+                CV_SymFrameproc *frameproc = (CV_SymFrameproc *)iter.struct_base;
                 procedure_frameprocs[procedure_num-1] = frameproc;
                 procedure_frameprocs_count = Max(procedure_frameprocs_count, procedure_num);
               }break;
@@ -3441,8 +3376,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           CV_ProcFlags proc_flags = 0;
           U64 regrel_idx = 0;
           RDIM_Symbol *curr_proc_symbol = 0;
-          CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges + sym_rec_range.min;
-          CV_RecRange *rec_ranges_opl   = sym->sym_ranges.ranges + sym_rec_range.max;
           typedef struct P2R_ScopeNode P2R_ScopeNode;
           struct P2R_ScopeNode
           {
@@ -3452,34 +3385,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           P2R_ScopeNode *top_scope_node = 0;
           P2R_ScopeNode *free_scope_node = 0;
           RDIM_LineTable *inline_site_line_table = sym_idx > 0 ? units_first_inline_site_line_tables[sym_idx-1] : 0;
-          for(CV_RecRange *rec_range = rec_ranges_first;
-              rec_range < rec_ranges_opl;
-              rec_range += 1)
+          for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
           {
-            //- rjf: rec range -> symbol info range
-            U64 sym_off_first = rec_range->off + 2;
-            U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
-            
-            //- rjf: skip invalid ranges
-            if(sym_off_opl > sym->data.size || sym_off_first > sym->data.size || sym_off_first > sym_off_opl)
-            {
-              continue;
-            }
-            
-            //- rjf: unpack symbol info
-            CV_SymKind kind = rec_range->hdr.kind;
-            U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-            void *sym_header_struct_base = sym->data.str + sym_off_first;
-            void *sym_data_opl = sym->data.str + sym_off_opl;
-            
-            //- rjf: skip bad sizes
-            if(sym_off_first + sym_header_struct_size > sym_off_opl)
-            {
-              continue;
-            }
-            
-            //- rjf: consume symbol based on kind
-            switch(kind)
+            switch(iter.kind)
             {
               default:{}break;
               
@@ -3500,7 +3408,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               case CV_SymKind_BLOCK32:
               {
                 // rjf: unpack sym
-                CV_SymBlock32 *block32 = (CV_SymBlock32 *)sym_header_struct_base;
+                CV_SymBlock32 *block32 = (CV_SymBlock32 *)iter.struct_base;
                 
                 // rjf: build scope, insert into current parent scope
                 RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, sym_scopes, sym_scopes_chunk_cap);
@@ -3541,8 +3449,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               case CV_SymKind_GDATA32:
               {
                 // rjf: unpack sym
-                CV_SymData32 *data32 = (CV_SymData32 *)sym_header_struct_base;
-                String8 name = str8_cstring_capped(data32+1, sym_data_opl);
+                CV_SymData32 *data32 = (CV_SymData32 *)iter.struct_base;
+                String8 name = str8_cstring_capped(data32+1, iter.opl);
                 COFF_SectionHeader *section = (0 < data32->sec && data32->sec <= coff_sections.count) ? &coff_sections.v[data32->sec-1] : 0;
                 U64 voff = (section ? section->voff : 0) + data32->off;
                 
@@ -3582,7 +3490,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   
                   // rjf: build symbol
                   RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, sym_global_variables, sym_global_variables_chunk_cap);
-                  symbol->is_extern        = (kind == CV_SymKind_GDATA32);
+                  symbol->is_extern        = (iter.kind == CV_SymKind_GDATA32);
                   symbol->name             = name;
                   symbol->type             = type;
                   symbol->offset           = voff;
@@ -3597,8 +3505,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               {
                 if(params->subset_flags & (RDIM_SubsetFlag_Types|RDIM_SubsetFlag_UDTs|RDIM_SubsetFlag_TypeNameMap))
                 {
-                  CV_SymUDT *udt = (CV_SymUDT *)sym_header_struct_base;
-                  String8 name = str8_cstring_capped(udt+1, sym_data_opl);
+                  CV_SymUDT *udt = (CV_SymUDT *)iter.struct_base;
+                  String8 name = str8_cstring_capped(udt+1, iter.opl);
                   RDIM_Type *type   = rdim_type_chunk_list_push(arena, typedefs, 4096);
                   type->kind        = RDI_TypeKind_Alias;
                   type->name        = name;
@@ -3615,8 +3523,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               case CV_SymKind_GPROC32:
               {
                 // rjf: unpack sym
-                CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
-                String8 name = str8_cstring_capped(proc32+1, sym_data_opl);
+                CV_SymProc32 *proc32 = (CV_SymProc32 *)iter.struct_base;
+                String8 name = str8_cstring_capped(proc32+1, iter.opl);
                 RDIM_Type *type = p2r_type_ptr_from_itype(proc32->itype);
                 
                 // rjf: unpack proc's container type
@@ -3680,7 +3588,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 if(params->subset_flags & (RDIM_SubsetFlag_Procedures|RDIM_SubsetFlag_ProcedureNameMap))
                 {
                   curr_proc_symbol = rdim_symbol_chunk_list_push(arena, sym_procedures, sym_procedures_chunk_cap);
-                  curr_proc_symbol->is_extern        = (kind == CV_SymKind_GPROC32);
+                  curr_proc_symbol->is_extern        = (iter.kind == CV_SymKind_GPROC32);
                   curr_proc_symbol->name             = name;
                   curr_proc_symbol->link_name        = link_name;
                   curr_proc_symbol->type             = type;
@@ -3731,8 +3639,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   }
                   
                   // rjf: unpack sym
-                  CV_SymRegrel32 *regrel32 = (CV_SymRegrel32 *)sym_header_struct_base;
-                  String8 name = str8_cstring_capped(regrel32+1, sym_data_opl);
+                  CV_SymRegrel32 *regrel32 = (CV_SymRegrel32 *)iter.struct_base;
+                  String8 name = str8_cstring_capped(regrel32+1, iter.opl);
                   RDIM_Type *type = p2r_type_ptr_from_itype(regrel32->itype);
                   CV_Reg cv_reg = regrel32->reg;
                   U32 var_off = regrel32->reg_off;
@@ -3813,8 +3721,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               if(params->subset_flags & (RDIM_SubsetFlag_ThreadVariables|RDIM_SubsetFlag_ThreadVariableNameMap))
               {
                 // rjf: unpack sym
-                CV_SymThread32 *thread32 = (CV_SymThread32 *)sym_header_struct_base;
-                String8 name = str8_cstring_capped(thread32+1, sym_data_opl);
+                CV_SymThread32 *thread32 = (CV_SymThread32 *)iter.struct_base;
+                String8 name = str8_cstring_capped(thread32+1, iter.opl);
                 U32 tls_off = thread32->tls_off;
                 RDIM_Type *type = p2r_type_ptr_from_itype(thread32->itype);
                 
@@ -3839,7 +3747,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, sym_thread_variables, sym_thread_variables_chunk_cap);
                 tvar->name             = name;
                 tvar->type             = type;
-                tvar->is_extern        = (kind == CV_SymKind_GTHREAD32);
+                tvar->is_extern        = (iter.kind == CV_SymKind_GTHREAD32);
                 tvar->offset           = tls_off;
                 tvar->container_type   = container_type;
                 tvar->container_symbol = container_symbol;
@@ -3857,8 +3765,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 }
                 
                 // rjf: unpack sym
-                CV_SymLocal *slocal = (CV_SymLocal *)sym_header_struct_base;
-                String8 name = str8_cstring_capped(slocal+1, sym_data_opl);
+                CV_SymLocal *slocal = (CV_SymLocal *)iter.struct_base;
+                String8 name = str8_cstring_capped(slocal+1, iter.opl);
                 RDIM_Type *type = p2r_type_ptr_from_itype(slocal->itype);
                 
                 // rjf: determine if this symbol encodes the beginning of a global modification
@@ -3911,12 +3819,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 }
                 
                 // rjf: unpack sym
-                CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)sym_header_struct_base;
+                CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)iter.struct_base;
                 CV_Reg cv_reg = defrange_register->reg;
                 CV_LvarAddrRange *range = &defrange_register->range;
                 COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= coff_sections.count) ? &coff_sections.v[range->sec-1] : 0;
                 CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register+1);
-                U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+                U64 gap_count = ((U8*)iter.opl - (U8*)gaps) / sizeof(*gaps);
                 RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(arch, cv_reg);
                 
                 // rjf: build location
@@ -3952,11 +3860,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 }
                 
                 // rjf: unpack sym
-                CV_SymDefrangeFramepointerRel *defrange_fprel = (CV_SymDefrangeFramepointerRel*)sym_header_struct_base;
+                CV_SymDefrangeFramepointerRel *defrange_fprel = (CV_SymDefrangeFramepointerRel*)iter.struct_base;
                 CV_LvarAddrRange *range = &defrange_fprel->range;
                 COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= coff_sections.count) ? &coff_sections.v[range->sec-1] : 0;
                 CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_fprel + 1);
-                U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+                U64 gap_count = ((U8*)iter.opl - (U8*)gaps) / sizeof(*gaps);
                 
                 // rjf: select frame pointer register
                 CV_EncodedFramePtrReg encoded_fp_reg = cv_pick_fp_encoding(frameproc, defrange_target_is_param);
@@ -3985,12 +3893,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 }
                 
                 // rjf: unpack sym
-                CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)sym_header_struct_base;
+                CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)iter.struct_base;
                 CV_Reg cv_reg = defrange_subfield_register->reg;
                 CV_LvarAddrRange *range = &defrange_subfield_register->range;
                 COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= coff_sections.count) ? &coff_sections.v[range->sec-1] : 0;
                 CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_subfield_register + 1);
-                U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+                U64 gap_count = ((U8*)iter.opl - (U8*)gaps) / sizeof(*gaps);
                 RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(arch, cv_reg);
                 
                 // rjf: skip "subfield" location info - currently not supported
@@ -4032,7 +3940,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 }
                 
                 // rjf: unpack sym
-                CV_SymDefrangeFramepointerRelFullScope *defrange_fprel_full_scope = (CV_SymDefrangeFramepointerRelFullScope*)sym_header_struct_base;
+                CV_SymDefrangeFramepointerRelFullScope *defrange_fprel_full_scope = (CV_SymDefrangeFramepointerRelFullScope*)iter.struct_base;
                 CV_EncodedFramePtrReg encoded_fp_reg = cv_pick_fp_encoding(frameproc, defrange_target_is_param);
                 RDI_RegCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(arch, encoded_fp_reg);
                 
@@ -4060,13 +3968,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 }
                 
                 // rjf: unpack sym
-                CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)sym_header_struct_base;
+                CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)iter.struct_base;
                 CV_Reg cv_reg = defrange_register_rel->reg;
                 RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(arch, cv_reg);
                 CV_LvarAddrRange *range = &defrange_register_rel->range;
                 COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= coff_sections.count) ? &coff_sections.v[range->sec-1] : 0;
                 CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register_rel + 1);
-                U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+                U64 gap_count = ((U8*)iter.opl - (U8*)gaps) / sizeof(*gaps);
                 
                 // rjf: build location
                 // TODO(rjf): offset & size from cv_reg code
@@ -4084,8 +3992,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               //- rjf: FILESTATIC
               case CV_SymKind_FILESTATIC:
               {
-                CV_SymFileStatic *file_static = (CV_SymFileStatic*)sym_header_struct_base;
-                String8 name = str8_cstring_capped(file_static+1, sym_data_opl);
+                CV_SymFileStatic *file_static = (CV_SymFileStatic*)iter.struct_base;
+                String8 name = str8_cstring_capped(file_static+1, iter.opl);
                 RDIM_Type *type = p2r_type_ptr_from_itype(file_static->itype);
                 // TODO(rjf): emit a global modifier symbol
                 defrange_target = 0;
@@ -4097,13 +4005,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               if(params->subset_flags & (RDIM_SubsetFlag_Scopes))
               {
                 // rjf: unpack sym
-                CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
-                String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
+                CV_SymInlineSite *sym = (CV_SymInlineSite *)iter.struct_base;
+                String8 binary_annots = str8((U8 *)(sym+1), (U64)((U8 *)iter.opl - (U8 *)(sym+1)));
                 
                 // rjf: extract external info about inline site
-                String8    name      = str8_zero();
-                RDIM_Type *type      = 0;
-                RDIM_Type *owner     = 0;
+                String8    name = {0};
+                RDIM_Type *type = 0;
+                RDIM_Type *owner = 0;
                 if(ipi_leaf != 0 && ipi_leaf->itype_first <= sym->inlinee && sym->inlinee < ipi_leaf->itype_opl)
                 {
                   CV_RecRange rec_range = ipi_leaf->leaf_ranges.ranges[sym->inlinee - ipi_leaf->itype_first];
@@ -4230,13 +4138,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               if(params->subset_flags & RDIM_SubsetFlag_Constants)
               {
                 // rjf: unpack
-                CV_SymConstant *sym = (CV_SymConstant *)sym_header_struct_base;
+                CV_SymConstant *sym = (CV_SymConstant *)iter.struct_base;
                 RDIM_Type *type = p2r_type_ptr_from_itype(sym->itype);
                 U8 *val_ptr = (U8 *)(sym+1);
-                CV_NumericParsed val = cv_numeric_from_data_range(val_ptr, sym_data_opl);
+                CV_NumericParsed val = cv_numeric_from_data_range(val_ptr, iter.opl);
                 U64 val64 = cv_u64_from_numeric(&val);
                 U8 *name_ptr = val_ptr + val.encoded_size;
-                String8 name = str8_cstring_capped(name_ptr, sym_data_opl);
+                String8 name = str8_cstring_capped(name_ptr, iter.opl);
                 String8 val_data = str8_struct(&val64);
                 U64 container_name_opl = 0;
                 if(type != 0)
