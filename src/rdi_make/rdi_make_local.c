@@ -1710,6 +1710,17 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage build deduplicated location maps
+  //
+  RDIM_BakeStringMapTight *bake_locs__regs = 0;
+  RDIM_BakeStringMapTight *bake_locs__reg_plus_u16 = 0;
+  RDIM_BakeStringMapTight *bake_locs__bytecode = 0;
+  {
+    
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake strings
   //
   RDIM_StringBakeResult *baked_strings = 0;
@@ -3354,30 +3365,30 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   }
   lane_sync();
   
+  //////////////////////////////
+  //- rjf: gather all lists which form symbol tables
+  //
+  struct
+  {
+    RDIM_SymbolChunkList *symbols;
+  }
+  symbol_table_lists[] =
+  {
+    {&params->global_variables},
+    {&params->thread_variables},
+  };
+  
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake symbols (NEW)
   //
   ProfScope("bake symbols")
   {
     ////////////////////////////
-    //- rjf: set up all symbol table baking tasks
-    //
-    struct
-    {
-      RDIM_SymbolChunkList *symbols;
-    }
-    tasks[] =
-    {
-      {&params->global_variables},
-      {&params->thread_variables},
-    };
-    
-    ////////////////////////////
     //- rjf: bake flat symbol tables
     //
-    for EachElement(task_idx, tasks)
+    for EachElement(symbol_table_list_idx, symbol_table_lists)
     {
-      RDIM_SymbolChunkList *src_symbols = tasks[task_idx].symbols;
+      RDIM_SymbolChunkList *src_symbols = symbol_table_lists[symbol_table_list_idx].symbols;
       U64 dst_symbols_count = src_symbols->total_count + 1;
       RDI_Symbol *dst_symbols = 0;
       if(lane_idx() == 0)
@@ -3413,6 +3424,11 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           {
             dst->container_flags |= RDI_ContainerKind_Type;
             dst->container_idx = rdim_idx_from_udt(src->container_type->udt);
+          }
+          
+          // rjf: fill location
+          {
+            // TODO(rjf)
           }
         }
       }

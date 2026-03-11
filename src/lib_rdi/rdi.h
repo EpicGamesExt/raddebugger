@@ -940,13 +940,11 @@ X(RDI_U32, container_idx)\
 #define RDI_Symbol_XList \
 X(RDI_U32, name_string_idx)\
 X(RDI_SymbolFlags, symbol_flags)\
-X(RDI_LocationKind, location_kind)\
 X(RDI_ContainerFlags, container_flags)\
-X(RDI_U8, reserved_0)\
-X(RDI_U32, reserved_1)\
+X(RDI_U16, reserved_0)\
+X(RDI_Location, location)\
 X(RDI_U32, container_idx)\
 X(RDI_U32, type_idx)\
-X(RDI_U32, location_idx)\
 X(RDI_U32, root_scope_idx)\
 X(RDI_U32, link_name_string_idx)\
 
@@ -1236,6 +1234,27 @@ typedef RDI_U32_Table RDI_U32_NameMapBuckets;
 typedef RDI_U32_Table RDI_U32_NameMapNodes;
 #endif
 
+typedef RDI_U64 RDI_Location;
+#define RDI_Location_KindMask               0xff00000000000000ull
+#define RDI_Location_KindShift              56
+#define RDI_Location_OffMask                0x00ffffffffffffffull
+#define RDI_Location_OffShift               0
+#define RDI_Location_SetFirstIndexMask      0x00000000ffffffffull
+#define RDI_Location_SetFirstIndexShift     0
+#define RDI_Location_SetCountMask           0x00ffffff00000000ull
+#define RDI_Location_SetCountShift          32
+#define RDI_Location_RegCodeMask            0x00ff000000000000ull
+#define RDI_Location_RegCodeShift           48
+#define RDI_Location_RegOffMask             0x0000ffff00000000ull
+#define RDI_Location_RegOffShift            32
+#define rdi_kind_from_location(l)            ((((l) & RDI_Location_KindMask) >> RDI_Location_KindShift))
+#define rdi_voff_from_location(l)              (rdi_kind_from_location(l) == RDI_LocationKind_ModuleOff          ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)
+#define rdi_toff_from_location(l)              (rdi_kind_from_location(l) == RDI_LocationKind_TLSOff             ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)
+#define rdi_constant_data_off_from_location(l) (rdi_kind_from_location(l) == RDI_LocationKind_ConstantDataOff    ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)
+#define rdi_set_first_index_from_location(l)   (rdi_kind_from_location(l) == RDI_LocationKind_Set                ? (((l) & RDI_Location_SetFirstIndexMask)      >> RDI_Location_SetFirstIndexShift) : 0)
+#define rdi_set_count_from_location(l)         (rdi_kind_from_location(l) == RDI_LocationKind_Set                ? (((l) & RDI_Location_SetCountMask)           >> RDI_Location_SetCountShift) : 0)
+#define rdi_regcode_from_location(l)           ((((l) & RDI_Location_RegCodeMask)            >> RDI_Location_RegCodeShift))
+#define rdi_regoff_from_location(l)            ((((l) & RDI_Location_RegOffMask)             >> RDI_Location_RegOffShift))
 #define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) (((decodeN) << 8) | ((popN) << 4) | ((pushN) << 0))
 #define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   (((ctrlbits) >> 8) & 0xff)
 #define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0xf)
@@ -1451,13 +1470,11 @@ struct RDI_Symbol
 {
 RDI_U32 name_string_idx;
 RDI_SymbolFlags symbol_flags;
-RDI_LocationKind location_kind;
 RDI_ContainerFlags container_flags;
-RDI_U8 reserved_0;
-RDI_U32 reserved_1;
+RDI_U16 reserved_0;
+RDI_Location location;
 RDI_U32 container_idx;
 RDI_U32 type_idx;
-RDI_U32 location_idx;
 RDI_U32 root_scope_idx;
 RDI_U32 link_name_string_idx;
 };
