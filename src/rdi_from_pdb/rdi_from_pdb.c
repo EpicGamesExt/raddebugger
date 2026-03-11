@@ -3460,11 +3460,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     container_type = p2r_type_ptr_from_itype(cv_type_id);
                   }
                   
-                  // rjf: unpack global's container symbol
-                  RDIM_Symbol *container_symbol = 0;
+                  // rjf: unpack global's container scope
+                  RDIM_Scope *container_scope = 0;
                   if(container_type == 0 && top_scope_node != 0)
                   {
-                    container_symbol = top_scope_node->scope->symbol;
+                    container_scope = top_scope_node->scope;
                   }
                   
                   // rjf: build symbol
@@ -3473,7 +3473,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   symbol->name             = name;
                   symbol->type             = type;
                   symbol->offset           = voff;
-                  symbol->container_symbol = container_symbol;
+                  symbol->container_scope  = container_scope;
                   symbol->container_type   = container_type;
                 }
               }break;
@@ -3516,11 +3516,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   container_type = p2r_type_ptr_from_itype(cv_type_id);
                 }
                 
-                // rjf: unpack proc's container symbol
-                RDIM_Symbol *container_symbol = 0;
+                // rjf: unpack proc's container scope
+                RDIM_Scope *container_scope = 0;
                 if(container_type == 0 && top_scope_node != 0)
                 {
-                  container_symbol = top_scope_node->scope->symbol;
+                  container_scope = top_scope_node->scope;
                 }
                 
                 // rjf: build procedure's root scope
@@ -3571,7 +3571,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   curr_proc_symbol->name             = name;
                   curr_proc_symbol->link_name        = link_name;
                   curr_proc_symbol->type             = type;
-                  curr_proc_symbol->container_symbol = container_symbol;
+                  curr_proc_symbol->container_scope  = container_scope;
                   curr_proc_symbol->container_type   = container_type;
                   curr_proc_symbol->root_scope       = procedure_root_scope;
                   if(procedure_root_scope != 0)
@@ -3716,10 +3716,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 }
                 
                 // rjf: unpack thread variable's container symbol
-                RDIM_Symbol *container_symbol = 0;
+                RDIM_Scope *container_scope = 0;
                 if(container_type == 0 && top_scope_node != 0)
                 {
-                  container_symbol = top_scope_node->scope->symbol;
+                  container_scope = top_scope_node->scope;
                 }
                 
                 // rjf: build symbol
@@ -3729,7 +3729,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 tvar->is_extern        = (iter.kind == CV_SymKind_GTHREAD32);
                 tvar->offset           = tls_off;
                 tvar->container_type   = container_type;
-                tvar->container_symbol = container_symbol;
+                tvar->container_scope  = container_scope;
               }break;
               
               //- rjf: LOCAL

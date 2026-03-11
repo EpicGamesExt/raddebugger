@@ -737,9 +737,9 @@ struct RDIM_TypeNode
 typedef struct RDIM_TypeList RDIM_TypeList;
 struct RDIM_TypeList
 {
-  U64            count;
   RDIM_TypeNode *first;
   RDIM_TypeNode *last;
+  U64 count;
 };
 
 typedef struct RDIM_TypeChunkNode RDIM_TypeChunkNode;
@@ -919,7 +919,7 @@ struct RDIM_Symbol
   RDIM_String8 link_name;
   RDIM_Type *type;
   RDI_U64 offset;
-  RDIM_Symbol *container_symbol;
+  struct RDIM_Scope *container_scope;
   RDIM_Type *container_type;
   struct RDIM_Scope *root_scope;
   RDIM_LocationCaseList location_cases;

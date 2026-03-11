@@ -10,7 +10,7 @@
 #ifndef RDI_C
 #define RDI_C
 
-RDI_U16 rdi_section_element_size_table[53] =
+RDI_U16 rdi_section_element_size_table[58] =
 {
 sizeof(RDI_U8),
 sizeof(RDI_TopLevelInfo),
@@ -36,20 +36,25 @@ sizeof(RDI_UDT),
 sizeof(RDI_Member),
 sizeof(RDI_EnumMember),
 sizeof(RDI_GlobalVariable),
-sizeof(RDI_VMapEntry),
 sizeof(RDI_ThreadVariable),
 sizeof(RDI_Constant),
 sizeof(RDI_Procedure),
+sizeof(RDI_Local),
+sizeof(RDI_VMapEntry),
 sizeof(RDI_Scope),
 sizeof(RDI_U64),
 sizeof(RDI_VMapEntry),
 sizeof(RDI_InlineSite),
-sizeof(RDI_Local),
 sizeof(RDI_LocationBlock),
 sizeof(RDI_U8),
+sizeof(RDI_Symbol),
+sizeof(RDI_Symbol),
+sizeof(RDI_Symbol),
+sizeof(RDI_Symbol),
+sizeof(RDI_Symbol),
 sizeof(RDI_U8),
-sizeof(RDI_LocationRegPlusU16),
-sizeof(RDI_LocationReg),
+sizeof(RDI_RegAndOffsetU16),
+sizeof(RDI_RegCode),
 sizeof(RDI_U64),
 sizeof(RDI_U32),
 sizeof(RDI_U64),

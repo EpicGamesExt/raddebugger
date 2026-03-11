@@ -2999,10 +2999,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             dst->link_flags |= RDI_LinkFlag_TypeScoped;
             dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
           }
-          else if(src->container_symbol != 0)
+          else if(src->container_scope != 0)
           {
             dst->link_flags |= RDI_LinkFlag_ProcScoped;
-            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_scope->symbol); // TODO(rjf): @u64_to_u32
           }
           dst->type_idx                  = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
           dst->root_scope_idx            = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
@@ -3294,10 +3294,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             dst->link_flags |= RDI_LinkFlag_TypeScoped;
             dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
           }
-          else if(src->container_symbol != 0)
+          else if(src->container_scope != 0)
           {
             dst->link_flags |= RDI_LinkFlag_ProcScoped;
-            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_scope->symbol); // TODO(rjf): @u64_to_u32
           }
         }
       }
@@ -3325,10 +3325,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             dst->link_flags |= RDI_LinkFlag_TypeScoped;
             dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
           }
-          else if(src->container_symbol != 0)
+          else if(src->container_scope != 0)
           {
             dst->link_flags |= RDI_LinkFlag_ProcScoped;
-            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_scope->symbol); // TODO(rjf): @u64_to_u32
           }
         }
       }
@@ -3348,6 +3348,72 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           dst->type_idx          = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
           dst->owner_type_idx    = (RDI_U32)rdim_idx_from_type(src->owner); // TODO(rjf): @u64_to_u32
           dst->line_table_idx    = (RDI_U32)rdim_idx_from_line_table(src->line_table); // TODO(rjf): @u64_to_u32
+        }
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage bake symbols (NEW)
+  //
+  ProfScope("bake symbols")
+  {
+    ////////////////////////////
+    //- rjf: set up all symbol table baking tasks
+    //
+    struct
+    {
+      RDIM_SymbolChunkList *symbols;
+    }
+    tasks[] =
+    {
+      {&params->global_variables},
+      {&params->thread_variables},
+    };
+    
+    ////////////////////////////
+    //- rjf: bake flat symbol tables
+    //
+    for EachElement(task_idx, tasks)
+    {
+      RDIM_SymbolChunkList *src_symbols = tasks[task_idx].symbols;
+      U64 dst_symbols_count = src_symbols->total_count + 1;
+      RDI_Symbol *dst_symbols = 0;
+      if(lane_idx() == 0)
+      {
+        dst_symbols = push_array(arena, RDI_Symbol, dst_symbols_count);
+      }
+      lane_sync_u64(&dst_symbols, 0);
+      for EachNode(n, RDIM_SymbolChunkNode, src_symbols->first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_Symbol *src = &n->v[n_idx];
+          RDI_Symbol *dst = &dst_symbols[n->base_idx + n_idx + 1];
+          
+          // rjf: fill basics
+          dst->name_string_idx      = rdim_bake_idx_from_string(bake_strings, src->name);
+          dst->type_idx             = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+          dst->root_scope_idx       = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
+          dst->link_name_string_idx = rdim_bake_idx_from_string(bake_strings, src->link_name);
+          
+          // rjf: fill container info
+          if(src->is_extern)
+          {
+            dst->container_flags |= RDI_ContainerFlag_External;
+          }
+          if(src->container_scope != 0)
+          {
+            dst->container_flags |= RDI_ContainerKind_Scope;
+            dst->container_idx = rdim_idx_from_scope(src->container_scope);
+          }
+          else if(src->container_type != 0)
+          {
+            dst->container_flags |= RDI_ContainerKind_Type;
+            dst->container_idx = rdim_idx_from_udt(src->container_type->udt);
+          }
         }
       }
     }
