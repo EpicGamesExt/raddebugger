@@ -7038,40 +7038,43 @@ rd_window_frame(void)
           ui_spacer(ui_pct(1, 0));
           
           // rjf: loaded user viz
-          if(do_user_prof) UI_TagF("pop")
+          if(0)
           {
-            ui_set_next_pref_width(ui_children_sum(1));
-            ui_set_next_child_layout_axis(Axis2_X);
-            UI_Box *user_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                         UI_BoxFlag_DrawBorder|
-                                                         UI_BoxFlag_DrawBackground|
-                                                         UI_BoxFlag_DrawHotEffects|
-                                                         UI_BoxFlag_DrawActiveEffects,
-                                                         "###loaded_user_button");
-            os_window_push_custom_title_bar_client_area(ws->os, user_box->rect);
-            UI_Parent(user_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
+            if(do_user_prof) UI_TagF("pop")
             {
-              String8 user_path = rd_state->user_path;
-              user_path = str8_chop_last_dot(user_path);
-              RD_Font(RD_FontSlot_Icons)
-                UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Icons))
-                ui_label(rd_icon_kind_text_table[RD_IconKind_Person]);
-              ui_label(str8_skip_last_slash(user_path));
+              ui_set_next_pref_width(ui_children_sum(1));
+              ui_set_next_child_layout_axis(Axis2_X);
+              UI_Box *user_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                           UI_BoxFlag_DrawBorder|
+                                                           UI_BoxFlag_DrawBackground|
+                                                           UI_BoxFlag_DrawHotEffects|
+                                                           UI_BoxFlag_DrawActiveEffects,
+                                                           "###loaded_user_button");
+              os_window_push_custom_title_bar_client_area(ws->os, user_box->rect);
+              UI_Parent(user_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
+              {
+                String8 user_path = rd_state->user_path;
+                user_path = str8_chop_last_dot(user_path);
+                RD_Font(RD_FontSlot_Icons)
+                  UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Icons))
+                  ui_label(rd_icon_kind_text_table[RD_IconKind_Person]);
+                ui_label(str8_skip_last_slash(user_path));
+              }
+              UI_Signal user_sig = ui_signal_from_box(user_box);
+              if(ui_clicked(user_sig))
+              {
+                rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string);
+              }
             }
-            UI_Signal user_sig = ui_signal_from_box(user_box);
-            if(ui_clicked(user_sig))
+            
+            if(do_user_prof)
             {
-              rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string);
+              ui_spacer(ui_em(0.75f, 0));
             }
-          }
-          
-          if(do_user_prof)
-          {
-            ui_spacer(ui_em(0.75f, 0));
           }
           
           // rjf: loaded project viz
-          if(do_user_prof) UI_TagF("pop")
+          if(do_user_prof)
           {
             ui_set_next_pref_width(ui_children_sum(1));
             ui_set_next_child_layout_axis(Axis2_X);
@@ -7082,13 +7085,21 @@ rd_window_frame(void)
                                                          UI_BoxFlag_DrawActiveEffects,
                                                          "###loaded_project_button");
             os_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
-            UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
+            UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_Padding(ui_em(0.5f, 1.f))
             {
-              String8 prof_path = rd_state->project_path;
-              prof_path = str8_chop_last_dot(prof_path);
+              CFG_Node *root = cfg_node_root();
+              CFG_Node *project = cfg_node_child_from_string(root, str8_lit("project"));
+              CFG_Node *name = cfg_node_child_from_string(project, str8_lit("name"));
+              String8 project_name = name->first->string;
+              if(project_name.size == 0)
+              {
+                String8 prof_path = rd_state->project_path;
+                prof_path = str8_chop_last_dot(prof_path);
+                project_name = str8_skip_last_slash(prof_path);
+              }
               RD_Font(RD_FontSlot_Icons)
                 ui_label(rd_icon_kind_text_table[RD_IconKind_Briefcase]);
-              ui_label(str8_skip_last_slash(prof_path));
+              ui_label(project_name);
             }
             UI_Signal prof_sig = ui_signal_from_box(prof_box);
             if(ui_clicked(prof_sig))
@@ -7099,7 +7110,7 @@ rd_window_frame(void)
           
           if(do_user_prof)
           {
-            ui_spacer(ui_em(0.75f, 0));
+            // ui_spacer(ui_em(2.f, 0));
           }
           
           // rjf: close dropdown

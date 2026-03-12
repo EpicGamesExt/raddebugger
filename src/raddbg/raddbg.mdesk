@@ -312,6 +312,7 @@ RD_VocabTable:
       ```
       @expand_commands(edit_project_theme) x:
     {
+      @display_name('Project Name') 'name': string,
       @default(2) @display_name('Project Tab Width') 'tab_width': @range[1, 32] u64,
       
       //- rjf: visualizers

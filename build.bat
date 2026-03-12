@@ -128,7 +128,7 @@ if "%meta%"=="1" (
   echo [building metagen]
   %compile_debug% ..\src\metagen\metagen_main.c %compile_link% %out%metagen.exe || exit /b 1
 )
-if "%no_meta%"=="" (
+if "%no_meta%"=="" if exist metagen.exe (
   echo [running metagen]
   metagen.exe || exit /b 1
 )
