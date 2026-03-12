@@ -855,7 +855,7 @@ struct RDIM_LocationInfo
 {
   RDI_LocationKind kind;
   RDI_U8 reg_code;
-  RDI_U16 offset;
+  RDI_U64 offset;
   RDIM_EvalBytecode bytecode;
 };
 

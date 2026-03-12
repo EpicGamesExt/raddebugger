@@ -1177,8 +1177,8 @@ RDI_RegAndOffsetU16MemberTable:
 @table(name type desc)
 RDI_LocationSetElementMemberTable:
 {
-  {scope_off_first  RDI_U32                  ""}
-  {scope_off_opl    RDI_U32                  ""}
+  {voff_first       RDI_U64                  ""}
+  {voff_opl         RDI_U64                  ""}
   {location         RDI_Location             ""}
 }
 

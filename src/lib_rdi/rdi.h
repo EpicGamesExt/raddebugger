@@ -1009,8 +1009,8 @@ X(RDI_RegCode, reg_code)\
 X(RDI_U16, offset)\
 
 #define RDI_LocationSetElement_XList \
-X(RDI_U32, scope_off_first)\
-X(RDI_U32, scope_off_opl)\
+X(RDI_U64, voff_first)\
+X(RDI_U64, voff_opl)\
 X(RDI_Location, location)\
 
 #define RDI_EvalOp_XList \
@@ -1566,8 +1566,8 @@ RDI_U16 offset;
 typedef struct RDI_LocationSetElement RDI_LocationSetElement;
 struct RDI_LocationSetElement
 {
-RDI_U32 scope_off_first;
-RDI_U32 scope_off_opl;
+RDI_U64 voff_first;
+RDI_U64 voff_opl;
 RDI_Location location;
 };
 

@@ -3407,6 +3407,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     lane_sync_u64(&lane_chunk_bytecode_data_counts, 0);
     lane_sync_u64(&lane_chunk_constant_data_counts, 0);
     lane_sync_u64(&lane_chunk_set_element_counts, 0);
+    ProfScope("count indirected location data")
     {
       U64 chunk_idx = 0;
       for EachElement(symbol_table_list_idx, symbol_table_lists)
@@ -3440,80 +3441,188 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     U64 *lane_chunk_bytecode_data_offs = 0;
     U64 *lane_chunk_constant_data_offs = 0;
     U64 *lane_chunk_set_element_offs = 0;
+    U64 total_bytecode_data_count = 0;
+    U64 total_constant_data_count = 0;
+    U64 total_set_element_count = 0;
+    ProfScope("lay out indirected location data")
+    {
+      if(lane_idx() == 0)
+      {
+        U64 bytecode_data_off = 0;
+        U64 constant_data_off = 0;
+        U64 set_element_off = 0;
+        lane_chunk_bytecode_data_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
+        lane_chunk_constant_data_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
+        lane_chunk_set_element_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
+        for EachIndex(chunk_idx, chunk_count)
+        {
+          for EachIndex(l_idx, lane_count())
+          {
+            U64 slot_idx = l_idx*chunk_count + chunk_idx;
+            lane_chunk_bytecode_data_offs[slot_idx] = bytecode_data_off;
+            lane_chunk_constant_data_offs[slot_idx] = constant_data_off;
+            lane_chunk_set_element_offs[slot_idx] = set_element_off;
+            bytecode_data_off += lane_chunk_bytecode_data_counts[slot_idx];
+            constant_data_off += lane_chunk_constant_data_counts[slot_idx];
+            set_element_off += lane_chunk_set_element_counts[slot_idx];
+          }
+        }
+        total_bytecode_data_count = bytecode_data_off;
+        total_constant_data_count = constant_data_off;
+        total_set_element_count = set_element_off;
+      }
+      lane_sync_u64(&lane_chunk_bytecode_data_offs, 0);
+      lane_sync_u64(&lane_chunk_constant_data_offs, 0);
+      lane_sync_u64(&lane_chunk_set_element_offs, 0);
+      lane_sync_u64(&total_bytecode_data_count, 0);
+      lane_sync_u64(&total_constant_data_count, 0);
+      lane_sync_u64(&total_set_element_count, 0);
+    }
+    
+    ////////////////////////////
+    //- rjf: set up location outputs
+    //
+    RDI_U8 *loc_bytecode_data = 0;
+    RDI_U8 *loc_constant_data = 0;
+    RDI_LocationSetElement *loc_set_elements = 0;
     if(lane_idx() == 0)
     {
-      U64 bytecode_data_off = 0;
-      U64 constant_data_off = 0;
-      U64 set_element_off = 0;
-      lane_chunk_bytecode_data_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
-      lane_chunk_constant_data_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
-      lane_chunk_set_element_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
-      for EachIndex(chunk_idx, chunk_count)
-      {
-        for EachIndex(l_idx, lane_count())
-        {
-          U64 slot_idx = l_idx*chunk_count + chunk_idx;
-          lane_chunk_bytecode_data_offs[slot_idx] = bytecode_data_off;
-          lane_chunk_constant_data_offs[slot_idx] = constant_data_off;
-          lane_chunk_set_element_offs[slot_idx] = set_element_off;
-          bytecode_data_off += lane_chunk_bytecode_data_counts[slot_idx];
-          constant_data_off += lane_chunk_constant_data_counts[slot_idx];
-          set_element_off += lane_chunk_set_element_counts[slot_idx];
-        }
-      }
+      loc_bytecode_data = push_array(arena, RDI_U8, total_bytecode_data_count);
+      loc_constant_data = push_array(arena, RDI_U8, total_constant_data_count);
+      loc_set_elements = push_array(arena, RDI_LocationSetElement, total_set_element_count);
     }
-    lane_sync_u64(&lane_chunk_bytecode_data_offs, 0);
-    lane_sync_u64(&lane_chunk_constant_data_offs, 0);
-    lane_sync_u64(&lane_chunk_set_element_offs, 0);
+    lane_sync_u64(&loc_bytecode_data, 0);
+    lane_sync_u64(&loc_constant_data, 0);
+    lane_sync_u64(&loc_set_elements, 0);
     
     ////////////////////////////
     //- rjf: bake flat symbol tables
     //
-    for EachElement(symbol_table_list_idx, symbol_table_lists)
+    ProfScope("bake flat symbol tables")
     {
-      RDIM_SymbolChunkList *src_symbols = symbol_table_lists[symbol_table_list_idx].symbols;
-      U64 dst_symbols_count = src_symbols->total_count + 1;
-      RDI_Symbol *dst_symbols = 0;
-      if(lane_idx() == 0)
+      U64 chunk_idx = 0;
+      for EachElement(symbol_table_list_idx, symbol_table_lists)
       {
-        dst_symbols = push_array(arena, RDI_Symbol, dst_symbols_count);
-      }
-      lane_sync_u64(&dst_symbols, 0);
-      for EachNode(n, RDIM_SymbolChunkNode, src_symbols->first)
-      {
-        Rng1U64 range = lane_range(n->count);
-        for EachInRange(n_idx, range)
+        ProfBegin("table %I64u", symbol_table_list_idx);
+        RDIM_SymbolChunkList *src_symbols = symbol_table_lists[symbol_table_list_idx].symbols;
+        U64 dst_symbols_count = src_symbols->total_count + 1;
+        RDI_Symbol *dst_symbols = 0;
+        if(lane_idx() == 0)
         {
-          RDIM_Symbol *src = &n->v[n_idx];
-          RDI_Symbol *dst = &dst_symbols[n->base_idx + n_idx + 1];
-          
-          // rjf: fill basics
-          dst->name_string_idx      = rdim_bake_idx_from_string(bake_strings, src->name);
-          dst->type_idx             = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
-          dst->root_scope_idx       = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
-          dst->link_name_string_idx = rdim_bake_idx_from_string(bake_strings, src->link_name);
-          
-          // rjf: fill container info
-          if(src->is_extern)
-          {
-            dst->container_flags |= RDI_ContainerFlag_External;
-          }
-          if(src->container_scope != 0)
-          {
-            dst->container_flags |= RDI_ContainerKind_Scope;
-            dst->container_idx = rdim_idx_from_scope(src->container_scope);
-          }
-          else if(src->container_type != 0)
-          {
-            dst->container_flags |= RDI_ContainerKind_Type;
-            dst->container_idx = rdim_idx_from_udt(src->container_type->udt);
-          }
-          
-          // rjf: fill location
-          {
-            // TODO(rjf)
-          }
+          dst_symbols = push_array(arena, RDI_Symbol, dst_symbols_count);
         }
+        lane_sync_u64(&dst_symbols, 0);
+        for EachNode(n, RDIM_SymbolChunkNode, src_symbols->first)
+        {
+          U64 slot_idx = lane_idx()*chunk_count + chunk_idx;
+          U64 dst_bytecode_off = lane_chunk_bytecode_data_offs[slot_idx];
+          U64 dst_constant_off = lane_chunk_constant_data_offs[slot_idx];
+          U64 dst_set_element_idx = lane_chunk_set_element_offs[slot_idx];
+          Rng1U64 range = lane_range(n->count);
+          for EachInRange(n_idx, range)
+          {
+            RDIM_Symbol *src = &n->v[n_idx];
+            RDI_Symbol *dst = &dst_symbols[n->base_idx + n_idx + 1];
+            
+            // rjf: fill basics
+            dst->name_string_idx      = rdim_bake_idx_from_string(bake_strings, src->name);
+            dst->type_idx             = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+            dst->root_scope_idx       = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
+            dst->link_name_string_idx = rdim_bake_idx_from_string(bake_strings, src->link_name);
+            
+            // rjf: fill container info
+            if(src->is_extern)
+            {
+              dst->container_flags |= RDI_ContainerFlag_External;
+            }
+            if(src->container_scope != 0)
+            {
+              dst->container_flags |= RDI_ContainerKind_Scope;
+              dst->container_idx = rdim_idx_from_scope(src->container_scope);
+            }
+            else if(src->container_type != 0)
+            {
+              dst->container_flags |= RDI_ContainerKind_Type;
+              dst->container_idx = rdim_idx_from_udt(src->container_type->udt);
+            }
+            
+            // rjf: fill location set info, if applicable - get set elements to fill
+            RDI_LocationSetElement *dst_loc_set_elements = loc_set_elements + dst_set_element_idx; 
+            U64 dst_loc_set_elements_count = 0;
+            if(src->location_cases.count > 1)
+            {
+              dst->location |= (((U64)RDI_LocationKind_Set) << RDI_Location_KindShift);
+              dst->location |= ((src->location_cases.count << RDI_Location_SetCountShift) & RDI_Location_SetCountMask);
+              dst->location |= ((dst_set_element_idx << RDI_Location_SetFirstIndexShift) & RDI_Location_SetFirstIndexMask);
+              dst_loc_set_elements_count = src->location_cases.count;
+              dst_set_element_idx += dst_loc_set_elements_count;
+            }
+            
+            // rjf: fill virtual offset ranges of location set elements
+            U64 loc_set_element_idx = 0;
+            for EachNode(c, RDIM_LocationCase, src->location_cases.first)
+            {
+              dst_loc_set_elements[loc_set_element_idx].voff_first = c->voff_range.min;
+              dst_loc_set_elements[loc_set_element_idx].voff_opl   = c->voff_range.max;
+              loc_set_element_idx += 1;
+            }
+            
+            // rjf: fill location(s)
+            RDI_Location *dst_loc_first = &dst->location;
+            U64 dst_loc_count = 1;
+            if(dst_loc_set_elements_count > 0)
+            {
+              dst_loc_first = &dst_loc_set_elements[0].location;
+              dst_loc_count = dst_loc_set_elements_count;
+            }
+            {
+              RDI_Location *dst_loc = dst_loc_first;
+              for EachNode(c, RDIM_LocationCase, src->location_cases.first)
+              {
+                RDIM_Location *src_loc = c->location;
+                dst_loc[0] |= ((U64)src_loc->info.kind << RDI_Location_KindShift) & RDI_Location_KindMask;
+                switch(src_loc->info.kind)
+                {
+                  default:{}break;
+                  case RDI_LocationKind_AddrRegPlusU16:
+                  case RDI_LocationKind_AddrAddrRegPlusU16:
+                  {
+                    dst_loc[0] |= ((U64)src_loc->info.reg_code << RDI_Location_RegCodeShift) & RDI_Location_RegCodeMask;
+                    dst_loc[0] |= ((U64)src_loc->info.offset   << RDI_Location_RegOffShift) & RDI_Location_RegOffMask;
+                  }break;
+                  case RDI_LocationKind_ValReg:
+                  {
+                    dst_loc[0] |= ((U64)src_loc->info.reg_code << RDI_Location_RegCodeShift) & RDI_Location_RegCodeMask;
+                  }break;
+                  case RDI_LocationKind_AddrBytecodeStream:
+                  case RDI_LocationKind_ValBytecodeStream:
+                  {
+                    dst_loc[0] |= ((U64)dst_bytecode_off << RDI_Location_OffShift) & RDI_Location_OffMask;
+                    dst_bytecode_off += src_loc->info.bytecode.encoded_size;
+                    // TODO(rjf): serialize bytecode
+                  }break;
+                  case RDI_LocationKind_ModuleOff:
+                  case RDI_LocationKind_TLSOff:
+                  {
+                    dst_loc[0] |= ((U64)src_loc->info.offset << RDI_Location_OffShift) & RDI_Location_OffMask;
+                  }break;
+                  case RDI_LocationKind_ConstantDataOff:
+                  {
+                    dst_loc[0] |= ((U64)src_loc->info.offset << RDI_Location_OffShift) & RDI_Location_OffMask;
+                    // TODO(rjf): need to move constant data, currently called "value_data", into
+                    // location cases, to make this case work...
+                  }break;
+                }
+                if(c->next != 0)
+                {
+                  dst_loc = &(CastFromMember(RDI_LocationSetElement, location, dst_loc) + 1)->location;
+                }
+              }
+            }
+          }
+          chunk_idx += 1;
+        }
+        ProfEnd();
       }
     }
   }
