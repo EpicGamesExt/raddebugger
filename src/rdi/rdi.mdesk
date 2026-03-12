@@ -206,29 +206,24 @@ RDI_SectionTable:
   
   //- NOTE(rjf): vvv new story for locations
   {LocationsBytecodeData         locations_bytecode_data            RDI_U8                   0x0028   U32                                            ""}
-  {LocationsRegPlusU16           locations_reg_plus_u16             RDI_RegAndOffsetU16      0x0029   U32                                            ""}
-  {LocationsReg                  locations_reg                      RDI_RegCode              0x002A   U32                                            ""}
-  {LocationsModuleOff            locations_module_off               RDI_U64                  0x002B   U32                                            ""}
-  {LocationsTLSOff               locations_tls_off                  RDI_U32                  0x002C   U32                                            ""}
-  {LocationsConstantDataOff      locations_constant_data_off        RDI_U64                  0x002D   U32                                            ""}
-  {LocationsSet                  locations_set                      RDI_LocationSet          0x002E   U32                                            ""}
-  {LocationsSetElements          locations_set_elements             RDI_LocationSetElement   0x002F   U32                                            ""}
+  {LocationsConstantData         locations_constant_data            RDI_U8                   0x0029   U32                                            ""}
+  {LocationsSetElements          locations_set_elements             RDI_LocationSetElement   0x002A   U32                                            ""}
   
   //- TODO(rjf): vvv old story for locations (constants)
-  {ConstantValueData             constant_value_data                RDI_U8                   0x0030   U32                                            ""}
-  {ConstantValueTable            constant_value_table               RDI_U32                  0x0031   U32                                            ""}
+  {ConstantValueData             constant_value_data                RDI_U8                   0x002B   U32                                            ""}
+  {ConstantValueTable            constant_value_table               RDI_U32                  0x002C   U32                                            ""}
   
   //- rjf: checksums / timestamps
-  {MD5Checksums                  md5_checksums                      RDI_MD5                  0x0032   U32                                            ""}
-  {SHA1Checksums                 sha1_checksums                     RDI_SHA1                 0x0033   U32                                            ""}
-  {SHA256Checksums               sha256_checksums                   RDI_SHA256               0x0034   U32                                            ""}
-  {Timestamps                    timestamps                         RDI_U64                  0x0035   U32                                            ""}
+  {MD5Checksums                  md5_checksums                      RDI_MD5                  0x002D   U32                                            ""}
+  {SHA1Checksums                 sha1_checksums                     RDI_SHA1                 0x002E   U32                                            ""}
+  {SHA256Checksums               sha256_checksums                   RDI_SHA256               0x002F   U32                                            ""}
+  {Timestamps                    timestamps                         RDI_U64                  0x0030   U32                                            ""}
   
   //- rjf: name maps
-  {NameMaps                      name_maps                          RDI_NameMap              0x0036   U32                                            ""}
-  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket        0x0037   U32                                            ""}
-  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode          0x0038   U32                                            ""}
-  {COUNT                         count                              RDI_U8                   0x0039   -                                              ""}
+  {NameMaps                      name_maps                          RDI_NameMap              0x0031   U32                                            ""}
+  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket        0x0032   U32                                            ""}
+  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode          0x0033   U32                                            ""}
+  {COUNT                         count                              RDI_U8                   0x0034   -                                              ""}
 }
 
 @table(name value)
@@ -1180,21 +1175,11 @@ RDI_RegAndOffsetU16MemberTable:
 }
 
 @table(name type desc)
-RDI_LocationSetMemberTable:
-{
-  {set_element_idx_first RDI_U32 ""}
-  {set_element_idx_opl   RDI_U32 ""}
-}
-
-@table(name type desc)
 RDI_LocationSetElementMemberTable:
 {
-  {kind             RDI_LocationKind         ""}
-  {reserved_0       RDI_U8                   ""}
-  {reserved_1       RDI_U16                  ""}
-  {idx              RDI_U32                  ""}
   {scope_off_first  RDI_U32                  ""}
   {scope_off_opl    RDI_U32                  ""}
+  {location         RDI_Location             ""}
 }
 
 //- rjf: enums
@@ -1250,8 +1235,8 @@ RDI_LocationSetElementMemberTable:
   `#define rdi_constant_data_off_from_location(l) (rdi_kind_from_location(l) == RDI_LocationKind_ConstantDataOff    ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)`;
   `#define rdi_set_first_index_from_location(l)   (rdi_kind_from_location(l) == RDI_LocationKind_Set                ? (((l) & RDI_Location_SetFirstIndexMask)      >> RDI_Location_SetFirstIndexShift) : 0)`;
   `#define rdi_set_count_from_location(l)         (rdi_kind_from_location(l) == RDI_LocationKind_Set                ? (((l) & RDI_Location_SetCountMask)           >> RDI_Location_SetCountShift) : 0)`;
-  `#define rdi_regcode_from_location(l)           ((((l) & RDI_Location_RegCodeMask)            >> RDI_Location_RegCodeShift))`;
-  `#define rdi_regoff_from_location(l)            ((((l) & RDI_Location_RegOffMask)             >> RDI_Location_RegOffShift))`;
+  `#define rdi_regcode_from_location(l)           ((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusU16 || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusU16 || rdi_kind_from_location(l) == RDI_LocationKind_ValReg) ? (((l) & RDI_Location_RegCodeMask) >> RDI_Location_RegCodeShift) : 0)`;
+  `#define rdi_regoff_from_location(l)            ((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusU16 || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusU16) ? (((l) & RDI_Location_RegOffMask) >> RDI_Location_RegOffShift) : 0)`;
 }
 
 //- rjf: xlists
@@ -1336,11 +1321,6 @@ RDI_LocationSetElementMemberTable:
   @expand(RDI_RegAndOffsetU16MemberTable a) `$(a.type), $(a.name)`
 }
 
-@xlist RDI_LocationSet_XList:
-{
-  @expand(RDI_LocationSetMemberTable a) `$(a.type), $(a.name)`
-}
-
 @xlist RDI_LocationSetElement_XList:
 {
   @expand(RDI_LocationSetElementMemberTable a) `$(a.type), $(a.name)`
@@ -1416,11 +1396,6 @@ RDI_LocationSetElementMemberTable:
 @struct RDI_RegAndOffsetU16:
 {
   @expand(RDI_RegAndOffsetU16MemberTable a) `$(a.type) $(a.name)`
-}
-
-@struct RDI_LocationSet:
-{
-  @expand(RDI_LocationSetMemberTable a) `$(a.type) $(a.name)`
 }
 
 @struct RDI_LocationSetElement:

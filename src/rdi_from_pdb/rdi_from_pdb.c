@@ -69,8 +69,8 @@ p2r_rdi_arch_from_cv_arch(CV_Arch cv_arch)
   RDI_Arch result = 0;
   switch(cv_arch)
   {
-    case CV_Arch_8086: NotImplemented; break;
-    case CV_Arch_X64:  result = RDI_Arch_X64; break;
+    case CV_Arch_8086:{}break;
+    case CV_Arch_X64:{result = RDI_Arch_X64;}break;
     //case CV_Arch_8080: break;
     //case CV_Arch_80286: break;
     //case CV_Arch_80386: break;
@@ -130,7 +130,7 @@ p2r_rdi_arch_from_cv_arch(CV_Arch cv_arch)
     //case CV_Arch_ARM64: break;
     //case CV_Arch_D3D11_SHADER: break;
   }
-  return(result);
+  return result;
 }
 
 internal RDI_RegCode

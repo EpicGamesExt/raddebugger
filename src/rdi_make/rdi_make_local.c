@@ -3384,6 +3384,89 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   ProfScope("bake symbols")
   {
     ////////////////////////////
+    //- rjf: count chunks
+    //
+    U64 chunk_count = 0;
+    for EachElement(symbol_table_list_idx, symbol_table_lists)
+    {
+      chunk_count += symbol_table_lists[symbol_table_list_idx].symbols->chunk_count;
+    }
+    
+    ////////////////////////////
+    //- rjf: count indirected location data - bytecode, constants, set elements
+    //
+    U64 *lane_chunk_bytecode_data_counts = 0;
+    U64 *lane_chunk_constant_data_counts = 0;
+    U64 *lane_chunk_set_element_counts = 0;
+    if(lane_idx() == 0)
+    {
+      lane_chunk_bytecode_data_counts = push_array(scratch.arena, U64, lane_count() * chunk_count);
+      lane_chunk_constant_data_counts = push_array(scratch.arena, U64, lane_count() * chunk_count);
+      lane_chunk_set_element_counts = push_array(scratch.arena, U64, lane_count() * chunk_count);
+    }
+    lane_sync_u64(&lane_chunk_bytecode_data_counts, 0);
+    lane_sync_u64(&lane_chunk_constant_data_counts, 0);
+    lane_sync_u64(&lane_chunk_set_element_counts, 0);
+    {
+      U64 chunk_idx = 0;
+      for EachElement(symbol_table_list_idx, symbol_table_lists)
+      {
+        RDIM_SymbolChunkList *src_symbols = symbol_table_lists[symbol_table_list_idx].symbols;
+        for EachNode(n, RDIM_SymbolChunkNode, src_symbols->first)
+        {
+          U64 slot_idx = lane_idx()*chunk_count + chunk_idx;
+          Rng1U64 range = lane_range(n->count);
+          for EachInRange(n_idx, range)
+          {
+            RDIM_Symbol *s = &n->v[n_idx];
+            if(s->location_cases.count > 1)
+            {
+              lane_chunk_set_element_counts[slot_idx] += s->location_cases.count;
+            }
+            lane_chunk_constant_data_counts[slot_idx] += s->value_data.size;
+            for EachNode(case_n, RDIM_LocationCase, s->location_cases.first)
+            {
+              lane_chunk_bytecode_data_counts[slot_idx] += case_n->location->info.bytecode.encoded_size;
+            }
+          }
+          chunk_idx += 1;
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: lay out indirected location data
+    //
+    U64 *lane_chunk_bytecode_data_offs = 0;
+    U64 *lane_chunk_constant_data_offs = 0;
+    U64 *lane_chunk_set_element_offs = 0;
+    if(lane_idx() == 0)
+    {
+      U64 bytecode_data_off = 0;
+      U64 constant_data_off = 0;
+      U64 set_element_off = 0;
+      lane_chunk_bytecode_data_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
+      lane_chunk_constant_data_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
+      lane_chunk_set_element_offs = push_array(scratch.arena, U64, lane_count() * chunk_count);
+      for EachIndex(chunk_idx, chunk_count)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          U64 slot_idx = l_idx*chunk_count + chunk_idx;
+          lane_chunk_bytecode_data_offs[slot_idx] = bytecode_data_off;
+          lane_chunk_constant_data_offs[slot_idx] = constant_data_off;
+          lane_chunk_set_element_offs[slot_idx] = set_element_off;
+          bytecode_data_off += lane_chunk_bytecode_data_counts[slot_idx];
+          constant_data_off += lane_chunk_constant_data_counts[slot_idx];
+          set_element_off += lane_chunk_set_element_counts[slot_idx];
+        }
+      }
+    }
+    lane_sync_u64(&lane_chunk_bytecode_data_offs, 0);
+    lane_sync_u64(&lane_chunk_constant_data_offs, 0);
+    lane_sync_u64(&lane_chunk_set_element_offs, 0);
+    
+    ////////////////////////////
     //- rjf: bake flat symbol tables
     //
     for EachElement(symbol_table_list_idx, symbol_table_lists)
