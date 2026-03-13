@@ -3376,6 +3376,8 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   {
     {&params->global_variables},
     {&params->thread_variables},
+    {&params->procedures},
+    {&params->constants},
   };
   
   //////////////////////////////////////////////////////////////
@@ -3544,6 +3546,11 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             {
               dst->container_flags |= RDI_ContainerKind_Type;
               dst->container_idx = rdim_idx_from_udt(src->container_type->udt);
+            }
+            else if(src->container_namespace != 0)
+            {
+              dst->container_flags |= RDI_ContainerKind_Namespace;
+              dst->container_idx = rdim_idx_from_namespace(src->container_namespace);
             }
             
             // rjf: fill location set info, if applicable - get set elements to fill

@@ -9,7 +9,7 @@
 // proper flattened RDI format.
 //
 // Requires prior inclusion of the RAD Debug Info, (R)AD(D)BG(I)
-// Format Library, in rdi_format.h.
+// Format Library, in rdi.h.
 
 #ifndef RDI_MAKE_H
 #define RDI_MAKE_H
@@ -921,6 +921,7 @@ struct RDIM_Symbol
   RDI_U64 offset;
   struct RDIM_Scope *container_scope;
   RDIM_Type *container_type;
+  RDIM_Namespace *container_namespace;
   struct RDIM_Scope *root_scope;
   RDIM_LocationCaseList location_cases;
   RDIM_String8 value_data;
