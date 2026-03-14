@@ -2700,6 +2700,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake location blocks
   //
+#if 0 // TODO(rjf): @locpass
   RDIM_LocationBlockBakeResult *baked_location_blocks = 0;
   ProfScope("bake location blocks")
   {
@@ -2762,10 +2763,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       }
     }
   }
+#endif
   
   //////////////////////////////////////////////////////////////
-  //- rjf: @rdim_bake_stage bake locations
+  //- rjf: @rdim_bake_stage bake locations (OLD)
   //
+#if 0 // TODO(rjf): @locpass
   RDIM_LocationBakeResult *baked_locations = 0;
   ProfScope("bake locations")
   {
@@ -2815,6 +2818,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       }
     }
   }
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute layout for scope sub-lists (locals / voffs)
@@ -3426,10 +3430,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             {
               lane_chunk_set_element_counts[slot_idx] += s->location_cases.count;
             }
-            lane_chunk_constant_data_counts[slot_idx] += s->value_data.size;
             for EachNode(case_n, RDIM_LocationCase, s->location_cases.first)
             {
-              lane_chunk_bytecode_data_counts[slot_idx] += case_n->location->info.bytecode.encoded_size;
+              lane_chunk_constant_data_counts[slot_idx] += case_n->location.value_data.size;
+              lane_chunk_bytecode_data_counts[slot_idx] += case_n->location.bytecode.encoded_size;
             }
           }
           chunk_idx += 1;
@@ -3586,38 +3590,45 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
               RDI_Location *dst_loc = dst_loc_first;
               for EachNode(c, RDIM_LocationCase, src->location_cases.first)
               {
-                RDIM_Location *src_loc = c->location;
-                dst_loc[0] |= ((U64)src_loc->info.kind << RDI_Location_KindShift) & RDI_Location_KindMask;
-                switch(src_loc->info.kind)
+                RDIM_Location *src_loc = &c->location;
+                dst_loc[0] |= ((U64)src_loc->kind << RDI_Location_KindShift) & RDI_Location_KindMask;
+                switch(src_loc->kind)
                 {
                   default:{}break;
                   case RDI_LocationKind_AddrRegPlusU16:
                   case RDI_LocationKind_AddrAddrRegPlusU16:
                   {
-                    dst_loc[0] |= ((U64)src_loc->info.reg_code << RDI_Location_RegCodeShift) & RDI_Location_RegCodeMask;
-                    dst_loc[0] |= ((U64)src_loc->info.offset   << RDI_Location_RegOffShift) & RDI_Location_RegOffMask;
+                    dst_loc[0] |= ((U64)src_loc->reg_code << RDI_Location_RegCodeShift) & RDI_Location_RegCodeMask;
+                    dst_loc[0] |= ((U64)src_loc->offset   << RDI_Location_RegOffShift) & RDI_Location_RegOffMask;
                   }break;
                   case RDI_LocationKind_ValReg:
                   {
-                    dst_loc[0] |= ((U64)src_loc->info.reg_code << RDI_Location_RegCodeShift) & RDI_Location_RegCodeMask;
+                    dst_loc[0] |= ((U64)src_loc->reg_code << RDI_Location_RegCodeShift) & RDI_Location_RegCodeMask;
                   }break;
                   case RDI_LocationKind_AddrBytecodeStream:
                   case RDI_LocationKind_ValBytecodeStream:
                   {
                     dst_loc[0] |= ((U64)dst_bytecode_off << RDI_Location_OffShift) & RDI_Location_OffMask;
-                    dst_bytecode_off += src_loc->info.bytecode.encoded_size;
-                    // TODO(rjf): serialize bytecode
+                    for EachNode(op_node, RDIM_EvalBytecodeOp, src_loc->bytecode.first_op)
+                    {
+                      MemoryCopy(loc_bytecode_data + dst_bytecode_off, &op_node->op, 1);
+                      dst_bytecode_off += 1;
+                      MemoryCopy(loc_bytecode_data + dst_bytecode_off, &op_node->p, op_node->p_size);
+                      dst_bytecode_off += op_node->p_size;
+                    }
+                    loc_bytecode_data[dst_bytecode_off] = 0;
+                    dst_bytecode_off += 1;
                   }break;
                   case RDI_LocationKind_ModuleOff:
                   case RDI_LocationKind_TLSOff:
                   {
-                    dst_loc[0] |= ((U64)src_loc->info.offset << RDI_Location_OffShift) & RDI_Location_OffMask;
+                    dst_loc[0] |= ((U64)src_loc->offset << RDI_Location_OffShift) & RDI_Location_OffMask;
                   }break;
                   case RDI_LocationKind_ConstantDataOff:
                   {
-                    dst_loc[0] |= ((U64)src_loc->info.offset << RDI_Location_OffShift) & RDI_Location_OffMask;
-                    // TODO(rjf): need to move constant data, currently called "value_data", into
-                    // location cases, to make this case work...
+                    dst_loc[0] |= ((U64)dst_constant_off << RDI_Location_OffShift) & RDI_Location_OffMask;
+                    MemoryCopy(loc_constant_data + dst_constant_off, src_loc->value_data.str, src_loc->value_data.size);
+                    dst_constant_off += src_loc->value_data.size;
                   }break;
                 }
                 if(c->next != 0)
@@ -3756,8 +3767,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     result.file_paths             = *baked_file_paths;
     result.strings                = *baked_strings;
     result.idx_runs               = *baked_idx_runs;
+#if 0 // TODO(rjf): @locpass
     result.locations              = *baked_locations;
     result.location_blocks        = *baked_location_blocks;
+#endif
   }
   lane_sync();
   

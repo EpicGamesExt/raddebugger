@@ -1311,28 +1311,24 @@ d2r_bytecode_from_expression(Arena         *arena,
   return bc;
 }
 
-internal RDIM_Location *
-d2r_transpile_expression(Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
+internal RDIM_Location
+d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
 {
-  RDIM_Location *loc = 0;
+  RDIM_Location loc = {0};
   if (expr.size) {
     D2R_ValueType result_type = 0;
     RDIM_EvalBytecode bytecode = d2r_bytecode_from_expression(arena, input, image_base, arch, addr_lu, expr, cu, &result_type);
-    
-    RDIM_LocationInfo *loc_info = push_array(arena, RDIM_LocationInfo, 1);
-    loc_info->kind     = result_type == D2R_ValueType_Address ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
-    loc_info->bytecode = bytecode;
-    
-    loc = rdim_location_chunk_list_push_new(arena, locations, D2R_LOCATIONS_CAP, loc_info);
+    loc.kind     = result_type == D2R_ValueType_Address ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
+    loc.bytecode = bytecode;
   }
   return loc;
 }
 
-internal RDIM_Location *
-d2r_location_from_attrib(Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind)
+internal RDIM_Location
+d2r_location_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind)
 {
   String8 expr = dw_exprloc_from_tag_attrib_kind(input, cu, tag, kind);
-  RDIM_Location *location = d2r_transpile_expression(arena, locations, input, image_base, arch, cu->addr_lu, cu, expr);
+  RDIM_Location location = d2r_transpile_expression(arena, input, image_base, arch, cu->addr_lu, cu, expr);
   return location;
 }
 
@@ -1340,7 +1336,6 @@ internal RDIM_LocationCaseList
 d2r_locset_from_attrib(Arena                  *arena,
                        RDIM_ScopeChunkList    *scopes,
                        RDIM_Scope             *curr_scope,
-                       RDIM_LocationChunkList *locations,
                        DW_Input               *input,
                        DW_CompUnit            *cu,
                        U64                     image_base,
@@ -1362,9 +1357,9 @@ d2r_locset_from_attrib(Arena                  *arena,
     
     // convert location list to RDIM location set
     for EachNode(loc_n, DW_LocNode, loclist.first) {
-      RDIM_Location *location   = d2r_transpile_expression(arena, locations, input, image_base, arch, cu->addr_lu, cu, loc_n->v.expr);
-      RDIM_Rng1U64   voff_range = { .min = loc_n->v.range.min -  image_base, .max = loc_n->v.range.max - image_base };
-      rdim_push_location_case(arena, scopes, &locset, location, voff_range);
+      RDIM_Location location = d2r_transpile_expression(arena, input, image_base, arch, cu->addr_lu, cu, loc_n->v.expr);
+      RDIM_Rng1U64 voff_range = { .min = loc_n->v.range.min -  image_base, .max = loc_n->v.range.max - image_base };
+      rdim_push_location_case(arena, scopes, &locset, &location, voff_range);
     }
     
     scratch_end(scratch);
@@ -1373,9 +1368,9 @@ d2r_locset_from_attrib(Arena                  *arena,
     String8 expr = dw_exprloc_from_attrib(input, cu, attrib);
     
     // convert expression and inherit life-time ranges from enclosed scope
-    RDIM_Location *location = d2r_transpile_expression(arena, locations, input, image_base, arch, cu->addr_lu, cu, expr);
+    RDIM_Location location = d2r_transpile_expression(arena, input, image_base, arch, cu->addr_lu, cu, expr);
     for EachNode(range_n, RDIM_Rng1U64Node, curr_scope->voff_ranges.first) {
-      rdim_push_location_case(arena, scopes, &locset, location, range_n->v);
+      rdim_push_location_case(arena, scopes, &locset, &location, range_n->v);
     }
   } else if (attrib_class != DW_AttribClass_Null) {
     log_user_errorf("unexpected attrib class @ .debug_info+%llx", tag.info_off);
@@ -1388,7 +1383,6 @@ internal RDIM_LocationCaseList
 d2r_var_locset_from_tag(Arena                  *arena,
                         RDIM_ScopeChunkList    *scopes,
                         RDIM_Scope             *curr_scope,
-                        RDIM_LocationChunkList *locations,
                         DW_Input               *input,
                         DW_CompUnit            *cu,
                         U64                     image_base,
@@ -1414,17 +1408,16 @@ d2r_var_locset_from_tag(Arena                  *arena,
     rdim_bytecode_push_uconst(arena, &bc, const_value);
     
     // fill out location
-    RDIM_LocationInfo *loc_info = push_array(arena, RDIM_LocationInfo, 1);
-    loc_info->kind     = RDI_LocationKind_ValBytecodeStream;
-    loc_info->bytecode = bc;
-    RDIM_Location *loc = rdim_location_chunk_list_push_new(arena, locations, D2R_LOCATIONS_CAP, loc_info);
+    RDIM_Location loc = {0};
+    loc.kind     = RDI_LocationKind_ValBytecodeStream;
+    loc.bytecode = bc;
     
     // push location cases
     for EachNode(range_n, RDIM_Rng1U64Node, curr_scope->voff_ranges.first) {
-      rdim_push_location_case(arena, scopes, &locset, loc, range_n->v);
+      rdim_push_location_case(arena, scopes, &locset, &loc, range_n->v);
     }
   } else if (has_location) {
-    locset = d2r_locset_from_attrib(arena, scopes, curr_scope, locations, input, cu, image_base, arch, tag, DW_AttribKind_Location);
+    locset = d2r_locset_from_attrib(arena, scopes, curr_scope, input, cu, image_base, arch, tag, DW_AttribKind_Location);
   }
   
   return locset;
@@ -2395,7 +2388,7 @@ d2r_convert_symbols(Arena         *arena,
             proc->container_scope  = 0;
             proc->container_type   = container_type;
             proc->root_scope       = root_scope;
-            proc->location_cases   = d2r_locset_from_attrib(arena, &g_d2r_shared.scopes, root_scope, &g_d2r_shared.locations, input, cu, image_base, arch, tag, DW_AttribKind_FrameBase);
+            proc->location_cases   = d2r_locset_from_attrib(arena, &g_d2r_shared.scopes, root_scope, input, cu, image_base, arch, tag, DW_AttribKind_FrameBase);
             
             // sub program with user-defined parent tag is a method
             DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
@@ -2479,7 +2472,7 @@ d2r_convert_symbols(Arena         *arena,
           local->kind           = RDI_LocalKind_Variable;
           local->name           = name;
           local->type           = type;
-          local->location_cases = d2r_var_locset_from_tag(arena, &g_d2r_shared.scopes, scope, &g_d2r_shared.locations, input, cu, image_base, arch, tag);
+          local->location_cases = d2r_var_locset_from_tag(arena, &g_d2r_shared.scopes, scope, input, cu, image_base, arch, tag);
         } else {
           
           // NOTE: due to a bug in clang in stb_sprintf.h local variables
@@ -2540,7 +2533,7 @@ d2r_convert_symbols(Arena         *arena,
           param->kind           = RDI_LocalKind_Parameter;
           param->name           = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
           param->type           = d2r_type_from_attrib(type_table, input, cu, tag, DW_AttribKind_Type);
-          param->location_cases = d2r_var_locset_from_tag(arena, &g_d2r_shared.scopes, scope, &g_d2r_shared.locations, input, cu, image_base, arch, tag);
+          param->location_cases = d2r_var_locset_from_tag(arena, &g_d2r_shared.scopes, scope, input, cu, image_base, arch, tag);
         } else {
           Assert(!"this is a local variable");
           log_user_errorf(".debug_info+%llx out of scope formal parameter", tag.info_off);
@@ -3118,7 +3111,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   bake_params.udts             = g_d2r_shared.udts;
   bake_params.src_files        = g_d2r_shared.src_files;
   bake_params.line_tables      = g_d2r_shared.line_tables;
-  bake_params.locations        = g_d2r_shared.locations;
   bake_params.global_variables = g_d2r_shared.gvars;
   bake_params.thread_variables = g_d2r_shared.tvars;
   bake_params.procedures       = g_d2r_shared.procs;

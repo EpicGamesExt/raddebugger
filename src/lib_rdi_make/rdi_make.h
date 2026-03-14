@@ -850,52 +850,21 @@ struct RDIM_EvalBytecode
 
 //- rjf: location types
 
-typedef struct RDIM_LocationInfo RDIM_LocationInfo;
-struct RDIM_LocationInfo
+typedef struct RDIM_Location RDIM_Location;
+struct RDIM_Location
 {
   RDI_LocationKind kind;
   RDI_U8 reg_code;
   RDI_U64 offset;
   RDIM_EvalBytecode bytecode;
+  String8 value_data;
 };
-
-typedef struct RDIM_Location RDIM_Location;
-struct RDIM_Location
-{
-  struct RDIM_LocationChunkNode *chunk;
-  RDIM_LocationInfo info;
-  RDI_U64 relative_encoding_off;
-};
-
-typedef struct RDIM_LocationChunkNode RDIM_LocationChunkNode;
-struct RDIM_LocationChunkNode
-{
-  RDIM_LocationChunkNode *next;
-  RDIM_Location *v;
-  RDI_U64 count;
-  RDI_U64 cap;
-  RDI_U64 base_idx;
-  RDI_U64 base_encoding_off;
-  RDI_U64 encoded_size;
-};
-
-typedef struct RDIM_LocationChunkList RDIM_LocationChunkList;
-struct RDIM_LocationChunkList
-{
-  RDIM_LocationChunkNode *first;
-  RDIM_LocationChunkNode *last;
-  RDI_U64 chunk_count;
-  RDI_U64 total_count;
-  RDI_U64 total_encoded_size;
-};
-
-//- rjf: location cases
 
 typedef struct RDIM_LocationCase RDIM_LocationCase;
 struct RDIM_LocationCase
 {
   RDIM_LocationCase *next;
-  RDIM_Location *location;
+  RDIM_Location location;
   RDIM_Rng1U64 voff_range;
 };
 
@@ -1047,7 +1016,6 @@ struct RDIM_BakeParams
   RDIM_UDTChunkList udts;
   RDIM_SrcFileChunkList src_files;
   RDIM_LineTableChunkList line_tables;
-  RDIM_LocationChunkList locations;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList constants;
@@ -1707,19 +1675,12 @@ RDI_PROC void rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkLi
 ////////////////////////////////
 //~ rjf: [Building] Location Info Building
 
-//- rjf: bytecode
-RDI_PROC RDIM_EvalBytecodeOp * rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p);
+RDI_PROC RDIM_EvalBytecodeOp *rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p);
 RDI_PROC void rdim_bytecode_push_uconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_U64 x);
 RDI_PROC void rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S64 x);
 RDI_PROC void rdim_bytecode_push_convert(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
 RDI_PROC void rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed);
 RDI_PROC B32 rdim_is_bytecode_tls_dependent(RDIM_EvalBytecode bytecode);
-
-//- rjf: locations
-RDI_PROC RDI_U64 rdim_encoded_size_from_location_info(RDIM_LocationInfo *info);
-RDI_PROC RDIM_Location *rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_LocationInfo *info);
-RDI_PROC RDI_U64 rdim_off_from_location(RDIM_Location *location);
-RDI_PROC void rdim_location_chunk_list_concat_in_place(RDIM_LocationChunkList *dst, RDIM_LocationChunkList *to_push);
 
 ////////////////////////////////
 //~ rjf: [Building] Scope Info Building
