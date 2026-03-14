@@ -202,7 +202,7 @@ RDI_SectionTable:
   {ThreadVariableSymbols         thread_variable_symbols            RDI_Symbol               0x0024   U32                                            ""}
   {ConstantSymbols               constant_symbols                   RDI_Symbol               0x0025   U32                                            ""}
   {ProcedureSymbols              procedure_symbols                  RDI_Symbol               0x0026   U32                                            ""}
-  {LocalSymbols                  local_symbols                      RDI_Symbol               0x0027   U32                                            ""}
+  {LocalVariableSymbols          local_variable_symbols             RDI_Symbol               0x0027   U32                                            ""}
   
   //- NOTE(rjf): vvv new story for locations
   {LocationsBytecodeData         locations_bytecode_data            RDI_U8                   0x0028   U32                                            ""}

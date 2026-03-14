@@ -940,14 +940,7 @@ rdim_idx_from_symbol(RDIM_Symbol *symbol)
 RDI_PROC void
 rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push)
 {
-  RDIM_IdxedChunkListConcatInPlace(RDIM_SymbolChunkNode, dst, to_push, dst->total_value_data_size += to_push->total_value_data_size);
-}
-
-internal void
-rdim_symbol_push_value_data(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDIM_Symbol *symbol, RDIM_String8 data)
-{
-  symbol->value_data = rdim_str8_copy(arena, data);
-  list->total_value_data_size += data.size;
+  RDIM_IdxedChunkListConcatInPlace(RDIM_SymbolChunkNode, dst, to_push);
 }
 
 ////////////////////////////////
@@ -1080,6 +1073,16 @@ rdim_is_bytecode_tls_dependent(RDIM_EvalBytecode bytecode)
   return result;
 }
 
+RDI_PROC void
+rdim_location_case_list_push(RDIM_Arena *arena, RDIM_LocationCaseList *cases, RDIM_Location loc, RDIM_Rng1U64 range)
+{
+  RDIM_LocationCase *n = rdim_push_array(arena, RDIM_LocationCase, 1);
+  RDIM_SLLQueuePush(cases->first, cases->last, n);
+  cases->count += 1;
+  n->location = loc;
+  n->voff_range = range;
+}
+
 ////////////////////////////////
 //~ rjf: [Building] Scope Info Building
 
@@ -1102,8 +1105,7 @@ rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkL
 {
   RDIM_IdxedChunkListConcatInPlace(RDIM_ScopeChunkNode, dst, to_push,
                                    dst->scope_voff_count      += to_push->scope_voff_count,
-                                   dst->local_count           += to_push->local_count,
-                                   dst->location_case_count   += to_push->location_case_count);
+                                   dst->local_count           += to_push->local_count);
 }
 
 RDI_PROC void
@@ -1131,7 +1133,6 @@ rdim_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Loc
   list->count += 1;
   n->location = *location;
   n->voff_range = voff_range;
-  scopes->location_case_count += 1;
   return n;
 }
 

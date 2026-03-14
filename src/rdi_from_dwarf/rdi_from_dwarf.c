@@ -2521,8 +2521,10 @@ d2r_convert_symbols(Arena         *arena,
           var->name             = name;
           var->link_name        = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_LinkageName);
           var->type             = type;
-          var->offset           = voff;
           var->container_scope  = 0;
+          RDIM_Location loc = {.kind = RDI_LocationKind_ModuleOff, .offset = voff};
+          RDIM_Rng1U64 range = {0, 0xffffffffffffffffull};
+          rdim_location_case_list_push(arena, &var->location_cases, loc, range);
         }
       } break;
       case DW_TagKind_FormalParameter: {

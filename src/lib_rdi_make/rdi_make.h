@@ -887,13 +887,11 @@ struct RDIM_Symbol
   RDIM_String8 name;
   RDIM_String8 link_name;
   RDIM_Type *type;
-  RDI_U64 offset;
   struct RDIM_Scope *container_scope;
   RDIM_Type *container_type;
   RDIM_Namespace *container_namespace;
   struct RDIM_Scope *root_scope;
   RDIM_LocationCaseList location_cases;
-  RDIM_String8 value_data;
 };
 
 typedef struct RDIM_SymbolChunkNode RDIM_SymbolChunkNode;
@@ -913,7 +911,6 @@ struct RDIM_SymbolChunkList
   RDIM_SymbolChunkNode *last;
   RDI_U64 chunk_count;
   RDI_U64 total_count;
-  RDI_U64 total_value_data_size;
 };
 
 ////////////////////////////////
@@ -996,7 +993,6 @@ struct RDIM_ScopeChunkList
   RDI_U64 total_count;
   RDI_U64 scope_voff_count;
   RDI_U64 local_count;
-  RDI_U64 location_case_count;
 };
 
 ////////////////////////////////
@@ -1663,7 +1659,6 @@ RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChun
 RDI_PROC RDIM_Symbol *rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_symbol(RDIM_Symbol *symbol);
 RDI_PROC void rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push);
-internal void rdim_symbol_push_value_data(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDIM_Symbol *symbol, RDIM_String8 data);
 
 ////////////////////////////////
 //~ rjf: [Building] Inline Site Info Building
@@ -1681,6 +1676,7 @@ RDI_PROC void rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *by
 RDI_PROC void rdim_bytecode_push_convert(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
 RDI_PROC void rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed);
 RDI_PROC B32 rdim_is_bytecode_tls_dependent(RDIM_EvalBytecode bytecode);
+RDI_PROC void rdim_location_case_list_push(RDIM_Arena *arena, RDIM_LocationCaseList *cases, RDIM_Location loc, RDIM_Rng1U64 range);
 
 ////////////////////////////////
 //~ rjf: [Building] Scope Info Building

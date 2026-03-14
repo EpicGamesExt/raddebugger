@@ -423,7 +423,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         {
           U64 slot_idx = lane_idx()*params->global_variables.chunk_count + chunk_idx;
           Rng1U64 range = lane_range(n->count);
-          lane_chunk_range_counts[slot_idx] += dim_1u64(range);
+          for EachIndex(n_idx, n->count)
+          {
+            if(n->v[n_idx].location_cases.count == 1 &&
+               n->v[n_idx].location_cases.first->location.kind == RDI_LocationKind_ModuleOff)
+            {
+              lane_chunk_range_counts[slot_idx] += 1;
+            }
+          }
           chunk_idx += 1;
         }
       }
@@ -471,13 +478,17 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           Rng1U64 range = lane_range(n->count);
           for EachInRange(n_idx, range)
           {
-            RDI_U32 global_idx  = (RDI_U32)rdim_idx_from_symbol(&n->v[n_idx]); // TODO(rjf): @u64_to_u32
-            RDI_U32 global_size = (RDI_U32)(n->v[n_idx].type ? n->v[n_idx].type->byte_size : 1);
-            RDI_U64 global_voff = n->v[n_idx].offset;
-            global_vmap_records[off].key.voff = global_voff;
-            global_vmap_records[off].key.negative_size = -global_size;
-            global_vmap_records[off].idx = global_idx;
-            off += 1;
+            if(n->v[n_idx].location_cases.count == 1 &&
+               n->v[n_idx].location_cases.first->location.kind == RDI_LocationKind_ModuleOff)
+            {
+              RDI_U32 global_idx  = (RDI_U32)rdim_idx_from_symbol(&n->v[n_idx]); // TODO(rjf): @u64_to_u32
+              RDI_U32 global_size = (RDI_U32)(n->v[n_idx].type ? n->v[n_idx].type->byte_size : 1);
+              RDI_U64 global_voff = n->v[n_idx].location_cases.first->location.offset;
+              global_vmap_records[off].key.voff = global_voff;
+              global_vmap_records[off].key.negative_size = -global_size;
+              global_vmap_records[off].idx = global_idx;
+              off += 1;
+            }
           }
           chunk_idx += 1;
         }
@@ -3036,6 +3047,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute layout for constant data
   //
+#if 0 // TODO(rjf): @locpass
   typedef struct ConstantLayout ConstantLayout;
   struct ConstantLayout
   {
@@ -3088,10 +3100,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
   }
   lane_sync();
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake constants
   //
+#if 0 // TODO(rjf): @locpass
   RDIM_ConstantsBakeResult *baked_constants = 0;
   ProfScope("bake constants")
   {
@@ -3144,6 +3158,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
   }
   lane_sync();
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake units, symbols, types, UDTs
@@ -3288,6 +3303,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
     
     //- rjf: bake global variables
+#if 0 // TODO(rjf): @locpass
     ProfScope("bake global variables")
     {
       for EachNode(n, RDIM_SymbolChunkNode, params->global_variables.first)
@@ -3317,8 +3333,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
     }
+#endif
     
     //- rjf: bake thread variables
+#if 0 // TODO(rjf): @locpass
     ProfScope("bake thread variables")
     {
       for EachNode(n, RDIM_SymbolChunkNode, params->thread_variables.first)
@@ -3348,6 +3366,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
     }
+#endif
     
     //- rjf: bake inline sites
     ProfScope("bake inline sites")
@@ -3757,7 +3776,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     result.global_variables       = *baked_global_variables;
     result.global_vmap            = *baked_global_vmap;
     result.thread_variables       = *baked_thread_variables;
+#if 0 // TODO(rjf): @locpass
     result.constants              = *baked_constants;
+#endif
     result.procedures             = *baked_procedures;
     result.scopes                 = *baked_scopes;
     result.inline_sites           = *baked_inline_sites;

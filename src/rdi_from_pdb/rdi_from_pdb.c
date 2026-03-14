@@ -3468,9 +3468,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   symbol->is_extern        = (iter.kind == CV_SymKind_GDATA32);
                   symbol->name             = name;
                   symbol->type             = type;
-                  symbol->offset           = voff;
                   symbol->container_scope  = container_scope;
                   symbol->container_type   = container_type;
+                  RDIM_Location loc = {.kind = RDI_LocationKind_ModuleOff, .offset = voff};
+                  RDIM_Rng1U64 range = {0, 0xffffffffffffffffull};
+                  rdim_location_case_list_push(arena, &symbol->location_cases, loc, range);
                 }
               }break;
               
@@ -3722,9 +3724,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 tvar->name             = name;
                 tvar->type             = type;
                 tvar->is_extern        = (iter.kind == CV_SymKind_GTHREAD32);
-                tvar->offset           = tls_off;
                 tvar->container_type   = container_type;
                 tvar->container_scope  = container_scope;
+                RDIM_Location loc = {.kind = RDI_LocationKind_TLSOff, .offset = tls_off};
+                RDIM_Rng1U64 range = {0, 0xffffffffffffffffull};
+                rdim_location_case_list_push(arena, &tvar->location_cases, loc, range);
               }break;
               
               //- rjf: LOCAL
@@ -4132,7 +4136,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, sym_constants, sym_constants_chunk_cap);
                   cnst->name = name_qualified;
                   cnst->type = type;
-                  rdim_symbol_push_value_data(arena, sym_constants, cnst, val_data);
+                  RDIM_Location loc = {.kind = RDI_LocationKind_ConstantDataOff, .value_data = str8_copy(arena, val_data)};
+                  RDIM_Rng1U64 range = {0, 0xffffffffffffffffull};
+                  rdim_location_case_list_push(arena, &cnst->location_cases, loc, range);
                 }
               }break;
             }
