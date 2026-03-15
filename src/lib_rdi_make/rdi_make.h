@@ -1279,19 +1279,6 @@ struct RDIM_LineRec
 
 //- rjf: baking results
 
-typedef struct RDIM_ChecksumBakeResult RDIM_ChecksumBakeResult;
-struct RDIM_ChecksumBakeResult
-{
-  RDI_MD5 *md5s;
-  RDI_U64 md5s_count;
-  RDI_SHA1 *sha1s;
-  RDI_U64 sha1s_count;
-  RDI_SHA256 *sha256s;
-  RDI_U64 sha256s_count;
-  RDI_U64 *timestamps;
-  RDI_U64 timestamps_count;
-};
-
 typedef struct RDIM_LocationBakeResult RDIM_LocationBakeResult;
 struct RDIM_LocationBakeResult
 {
@@ -1311,12 +1298,6 @@ struct RDIM_GlobalVariableBakeResult
 {
   RDI_GlobalVariable *global_variables;
   RDI_U64 global_variables_count;
-};
-
-typedef struct RDIM_GlobalVMapBakeResult RDIM_GlobalVMapBakeResult;
-struct RDIM_GlobalVMapBakeResult
-{
-  RDIM_BakeVMap vmap;
 };
 
 typedef struct RDIM_ThreadVariableBakeResult RDIM_ThreadVariableBakeResult;
@@ -1342,22 +1323,6 @@ struct RDIM_ProcedureBakeResult
 {
   RDI_Procedure *procedures;
   RDI_U64 procedures_count;
-};
-
-typedef struct RDIM_TopLevelNameMapBakeResult RDIM_TopLevelNameMapBakeResult;
-struct RDIM_TopLevelNameMapBakeResult
-{
-  RDI_NameMap *name_maps;
-  RDI_U64 name_maps_count;
-};
-
-typedef struct RDIM_NameMapBakeResult RDIM_NameMapBakeResult;
-struct RDIM_NameMapBakeResult
-{
-  RDI_NameMapBucket *buckets;
-  RDI_U64 buckets_count;
-  RDI_NameMapNode *nodes;
-  RDI_U64 nodes_count;
 };
 
 typedef struct RDIM_SerializedSection RDIM_SerializedSection;
