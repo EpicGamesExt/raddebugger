@@ -185,7 +185,7 @@ RDI_SectionTable:
   {Constants                     constants                          RDI_Constant             0x0019   U32                                            ""}
   {Procedures                    procedures                         RDI_Procedure            0x001A   U32                                            ""}
   {Locals                        locals                             RDI_Local                0x001B   U32                                            ""}
-  {GlobalVMap                    global_vmap                        RDI_VMapEntry            0x001C   -                                              ""}
+  
   
   //- rjf: scope info
   {Scopes                        scopes                             RDI_Scope                0x001D   U32                                            ""}
@@ -199,6 +199,7 @@ RDI_SectionTable:
   
   //- NOTE(rjf): vvv new story for symbols
   {GlobalVariableSymbols         global_variable_symbols            RDI_Symbol               0x0023   U32                                            ""}
+  {GlobalVMap                    global_vmap                        RDI_VMapEntry            0x001C   -                                              ""}
   {ThreadVariableSymbols         thread_variable_symbols            RDI_Symbol               0x0024   U32                                            ""}
   {ConstantSymbols               constant_symbols                   RDI_Symbol               0x0025   U32                                            ""}
   {ProcedureSymbols              procedure_symbols                  RDI_Symbol               0x0026   U32                                            ""}

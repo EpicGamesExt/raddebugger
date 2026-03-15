@@ -883,7 +883,7 @@ rb_thread_entry_point(void *p)
       ProfScope("serialize") if(lane_idx() == 0)
       {
         serialized_section_bundle = push_array(arena, RDIM_SerializedSectionBundle, 1);
-        serialized_section_bundle[0] = rdim_serialized_section_bundle_from_bake_results(&bake_results);
+        serialized_section_bundle[0] = bake_results.section_bundle;
       }
       lane_sync_u64(&serialized_section_bundle, 0);
       

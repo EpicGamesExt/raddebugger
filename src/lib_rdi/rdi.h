@@ -103,7 +103,6 @@ RDI_SectionKind_ThreadVariables      = 0x0018,
 RDI_SectionKind_Constants            = 0x0019,
 RDI_SectionKind_Procedures           = 0x001A,
 RDI_SectionKind_Locals               = 0x001B,
-RDI_SectionKind_GlobalVMap           = 0x001C,
 RDI_SectionKind_Scopes               = 0x001D,
 RDI_SectionKind_ScopeVOffData        = 0x001E,
 RDI_SectionKind_ScopeVMap            = 0x001F,
@@ -111,6 +110,7 @@ RDI_SectionKind_InlineSites          = 0x0020,
 RDI_SectionKind_LocationBlocks       = 0x0021,
 RDI_SectionKind_LocationData         = 0x0022,
 RDI_SectionKind_GlobalVariableSymbols = 0x0023,
+RDI_SectionKind_GlobalVMap           = 0x001C,
 RDI_SectionKind_ThreadVariableSymbols = 0x0024,
 RDI_SectionKind_ConstantSymbols      = 0x0025,
 RDI_SectionKind_ProcedureSymbols     = 0x0026,
@@ -568,7 +568,6 @@ X(ThreadVariables, thread_variables, RDI_ThreadVariable)\
 X(Constants, constants, RDI_Constant)\
 X(Procedures, procedures, RDI_Procedure)\
 X(Locals, locals, RDI_Local)\
-X(GlobalVMap, global_vmap, RDI_VMapEntry)\
 X(Scopes, scopes, RDI_Scope)\
 X(ScopeVOffData, scope_voff_data, RDI_U64)\
 X(ScopeVMap, scope_vmap, RDI_VMapEntry)\
@@ -576,6 +575,7 @@ X(InlineSites, inline_sites, RDI_InlineSite)\
 X(LocationBlocks, location_blocks, RDI_LocationBlock)\
 X(LocationData, location_data, RDI_U8)\
 X(GlobalVariableSymbols, global_variable_symbols, RDI_Symbol)\
+X(GlobalVMap, global_vmap, RDI_VMapEntry)\
 X(ThreadVariableSymbols, thread_variable_symbols, RDI_Symbol)\
 X(ConstantSymbols, constant_symbols, RDI_Symbol)\
 X(ProcedureSymbols, procedure_symbols, RDI_Symbol)\
@@ -1627,7 +1627,6 @@ typedef RDI_ThreadVariable               RDI_SectionElementType_ThreadVariables;
 typedef RDI_Constant                     RDI_SectionElementType_Constants;
 typedef RDI_Procedure                    RDI_SectionElementType_Procedures;
 typedef RDI_Local                        RDI_SectionElementType_Locals;
-typedef RDI_VMapEntry                    RDI_SectionElementType_GlobalVMap;
 typedef RDI_Scope                        RDI_SectionElementType_Scopes;
 typedef RDI_U64                          RDI_SectionElementType_ScopeVOffData;
 typedef RDI_VMapEntry                    RDI_SectionElementType_ScopeVMap;
@@ -1635,6 +1634,7 @@ typedef RDI_InlineSite                   RDI_SectionElementType_InlineSites;
 typedef RDI_LocationBlock                RDI_SectionElementType_LocationBlocks;
 typedef RDI_U8                           RDI_SectionElementType_LocationData;
 typedef RDI_Symbol                       RDI_SectionElementType_GlobalVariableSymbols;
+typedef RDI_VMapEntry                    RDI_SectionElementType_GlobalVMap;
 typedef RDI_Symbol                       RDI_SectionElementType_ThreadVariableSymbols;
 typedef RDI_Symbol                       RDI_SectionElementType_ConstantSymbols;
 typedef RDI_Symbol                       RDI_SectionElementType_ProcedureSymbols;

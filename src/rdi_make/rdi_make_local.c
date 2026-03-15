@@ -284,13 +284,13 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake vmaps
   //
-  RDIM_ScopeVMapBakeResult *baked_scope_vmap = 0;
-  RDIM_UnitVMapBakeResult *baked_unit_vmap = 0;
+  RDIM_BakeVMap *baked_scope_vmap = 0;
+  RDIM_BakeVMap *baked_unit_vmap = 0;
   RDIM_GlobalVMapBakeResult *baked_global_vmap = 0;
   if(lane_idx() == 0)
   {
-    baked_scope_vmap = push_array(scratch.arena, RDIM_ScopeVMapBakeResult, 1);
-    baked_unit_vmap = push_array(scratch.arena, RDIM_UnitVMapBakeResult, 1);
+    baked_scope_vmap = push_array(scratch.arena, RDIM_BakeVMap, 1);
+    baked_unit_vmap = push_array(scratch.arena, RDIM_BakeVMap, 1);
     baked_global_vmap = push_array(scratch.arena, RDIM_GlobalVMapBakeResult, 1);
   }
   lane_sync_u64(&baked_scope_vmap, 0);
@@ -598,9 +598,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
     vmap_tasks[] =
     {
-      {str8_lit_comp("scopes"),  scope_vmap_records,   scope_vmap_records_count,  &baked_scope_vmap->vmap.vmap,  &baked_scope_vmap->vmap.count},
+      {str8_lit_comp("scopes"),  scope_vmap_records,   scope_vmap_records_count,  &baked_scope_vmap->vmap,  &baked_scope_vmap->count},
       {str8_lit_comp("globals"), global_vmap_records,  global_vmap_records_count, &baked_global_vmap->vmap.vmap, &baked_global_vmap->vmap.count},
-      {str8_lit_comp("units"),   unit_vmap_records,    unit_vmap_records_count,   &baked_unit_vmap->vmap.vmap,   &baked_unit_vmap->vmap.count},
+      {str8_lit_comp("units"),   unit_vmap_records,    unit_vmap_records_count,   &baked_unit_vmap->vmap,   &baked_unit_vmap->count},
     };
     ProfScope("sort & bake all vmaps")
     {
@@ -866,11 +866,23 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage gather all unsorted, joined, line table info; & sort
   //
+  typedef struct BakedLineTables BakedLineTables;
+  struct BakedLineTables
+  {
+    RDI_LineTable *line_tables;
+    RDI_U64 line_tables_count;
+    RDI_U64 *line_table_voffs;
+    RDI_U64 line_table_voffs_count;
+    RDI_Line *line_table_lines;
+    RDI_U64 line_table_lines_count;
+    RDI_Column *line_table_columns;
+    RDI_U64 line_table_columns_count;
+  };
   U64 line_tables_count = 0;
   RDIM_LineTable **src_line_tables = 0;
   RDIM_UnsortedJoinedLineTable *unsorted_joined_line_tables = 0;
   RDIM_SortKey **sorted_line_table_keys = 0;
-  RDIM_LineTableBakeResult *baked_line_tables = 0;
+  BakedLineTables *baked_line_tables = 0;
   ProfScope("gather all unsorted, joined, line table info; & sort")
   {
     //- rjf: set up outputs
@@ -893,7 +905,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             }
           }
         }
-        baked_line_tables = push_array(scratch.arena, RDIM_LineTableBakeResult, 1);
+        baked_line_tables = push_array(scratch.arena, BakedLineTables, 1);
         baked_line_tables->line_tables_count       = params->line_tables.total_count + 1;
         baked_line_tables->line_table_voffs_count  = params->line_tables.total_line_count + 2*params->line_tables.total_seq_count;
         baked_line_tables->line_table_lines_count  = params->line_tables.total_line_count + params->line_tables.total_seq_count;
@@ -1734,13 +1746,21 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake strings
   //
-  RDIM_StringBakeResult *baked_strings = 0;
+  typedef struct BakedStrings BakedStrings;
+  struct BakedStrings
+  {
+    RDI_U32 *string_offs;
+    RDI_U64 string_offs_count;
+    RDI_U8 *string_data;
+    RDI_U64 string_data_size;
+  };
+  BakedStrings *baked_strings = 0;
   ProfScope("bake strings")
   {
     // rjf: set up 
     if(lane_idx() == 0) ProfScope("set up; lay out strings")
     {
-      baked_strings = push_array(scratch.arena, RDIM_StringBakeResult, 1);
+      baked_strings = push_array(scratch.arena, BakedStrings, 1);
       baked_strings->string_offs_count = bake_strings->total_count + 1;
       baked_strings->string_offs = rdim_push_array(arena, RDI_U32, baked_strings->string_offs_count);
       RDI_U64 off_cursor = 0;
@@ -1786,10 +1806,16 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake idx runs
   //
-  RDIM_IndexRunBakeResult *baked_idx_runs = 0;
+  typedef struct BakedIdxRuns BakedIdxRuns;
+  struct BakedIdxRuns
+  {
+    RDI_U32 *idx_runs;
+    RDI_U64 idx_count;
+  };
+  BakedIdxRuns *baked_idx_runs = 0;
   if(lane_idx() == 0)
   {
-    baked_idx_runs = push_array(scratch.arena, RDIM_IndexRunBakeResult, 1);
+    baked_idx_runs = push_array(scratch.arena, BakedIdxRuns, 1);
   }
   lane_sync_u64(&baked_idx_runs, 0);
   if(need_index_runs) ProfScope("bake idx runs")
@@ -2262,13 +2288,27 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake src files
   //
-  RDIM_SrcFileBakeResult *baked_src_files = 0;
+  typedef struct BakedSrcFiles BakedSrcFiles;
+  struct BakedSrcFiles
+  {
+    RDI_SourceFile *source_files;
+    RDI_U64 source_files_count;
+    RDI_SourceLineMap *source_line_maps;
+    RDI_U64 source_line_maps_count;
+    RDI_U32 *source_line_map_nums;
+    RDI_U32 *source_line_map_rngs;
+    RDI_U64 *source_line_map_voffs;
+    RDI_U64 source_line_map_nums_count;
+    RDI_U64 source_line_map_rngs_count;
+    RDI_U64 source_line_map_voffs_count;
+  };
+  BakedSrcFiles *baked_src_files = 0;
   ProfScope("bake src files")
   {
     //- rjf: set up
     if(lane_idx() == 0)
     {
-      baked_src_files = push_array(scratch.arena, RDIM_SrcFileBakeResult, 1);
+      baked_src_files = push_array(scratch.arena, BakedSrcFiles, 1);
       baked_src_files->source_files_count = params->src_files.total_count+1;
       baked_src_files->source_files = push_array(arena, RDI_SourceFile, baked_src_files->source_files_count);
       baked_src_files->source_line_maps_count = params->src_files.source_line_map_count+1;
@@ -2424,13 +2464,19 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake namespaces
   //
-  RDIM_NamespaceBakeResult *baked_namespaces = 0;
+  typedef struct BakedNamespaces BakedNamespaces;
+  struct BakedNamespaces
+  {
+    RDI_Namespace *namespaces;
+    RDI_U64 namespaces_count;
+  };
+  BakedNamespaces *baked_namespaces = 0;
   ProfScope("bake namespaces")
   {
     // rjf: allocate
     if(lane_idx() == 0)
     {
-      baked_namespaces = push_array(scratch.arena, RDIM_NamespaceBakeResult, 1);
+      baked_namespaces = push_array(scratch.arena, BakedNamespaces, 1);
       baked_namespaces->namespaces_count = params->namespaces.total_count + 1;
       baked_namespaces->namespaces = push_array(arena, RDI_Namespace, baked_namespaces->namespaces_count);
     }
@@ -2532,7 +2578,17 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake UDTs
   //
-  RDIM_UDTBakeResult *baked_udts = 0;
+  typedef struct BakedUDTs BakedUDTs;
+  struct BakedUDTs
+  {
+    RDI_UDT *udts;
+    RDI_U64 udts_count;
+    RDI_Member *members;
+    RDI_U64 members_count;
+    RDI_EnumMember *enum_members;
+    RDI_U64 enum_members_count;
+  };
+  BakedUDTs *baked_udts = 0;
   ProfScope("bake UDTs")
   {
     //- rjf: set up
@@ -2540,7 +2596,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     {
       if(lane_idx() == 0)
       {
-        baked_udts = push_array(scratch.arena, RDIM_UDTBakeResult, 1);
+        baked_udts = push_array(scratch.arena, BakedUDTs, 1);
       }
       lane_sync_u64(&baked_udts, 0);
       if(lane_idx() == lane_from_task_idx(0))
@@ -2902,13 +2958,23 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake scopes
   //
-  RDIM_ScopeBakeResult *baked_scopes = 0;
+  typedef struct BakedScopes BakedScopes;
+  struct BakedScopes
+  {
+    RDI_Scope *scopes;
+    RDI_U64 scopes_count;
+    RDI_U64 *scope_voffs;
+    RDI_U64 scope_voffs_count;
+    RDI_Local *locals;
+    RDI_U64 locals_count;
+  };
+  BakedScopes *baked_scopes = 0;
   ProfScope("bake scopes")
   {
     //- rjf: setup outputs
     if(lane_idx() == 0)
     {
-      baked_scopes = push_array(scratch.arena, RDIM_ScopeBakeResult, 1);
+      baked_scopes = push_array(scratch.arena, BakedScopes, 1);
     }
     lane_sync_u64(&baked_scopes, 0);
     if(lane_idx() == lane_from_task_idx(0))
@@ -2993,6 +3059,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake procedures
   //
+#if 0 // TODO(rjf): @locpass
   RDIM_ProcedureBakeResult *baked_procedures = 0;
   ProfScope("bake procedures")
   {
@@ -3043,6 +3110,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       }
     }
   }
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute layout for constant data
@@ -3163,48 +3231,35 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake units, symbols, types, UDTs
   //
-  RDIM_UnitBakeResult *baked_units = 0;
-  RDIM_TypeNodeBakeResult *baked_type_nodes = 0;
-  RDIM_GlobalVariableBakeResult *baked_global_variables = 0;
-  RDIM_ThreadVariableBakeResult *baked_thread_variables = 0;
-  RDIM_InlineSiteBakeResult *baked_inline_sites = 0;
+  RDI_Unit *baked_units = 0;
+  U64 baked_units_count = 0;
+  RDI_TypeNode *baked_type_nodes = 0;
+  U64 baked_type_nodes_count = 0;
+  RDI_InlineSite *baked_inline_sites = 0;
+  RDI_U64 baked_inline_sites_count = 0;
   {
     //- rjf: setup outputs
     if(lane_idx() == lane_from_task_idx(0))
     {
-      baked_units = push_array(scratch.arena, RDIM_UnitBakeResult, 1);
-      baked_units->units_count = params->units.total_count+1;
-      baked_units->units = push_array(arena, RDI_Unit, baked_units->units_count);
+      baked_units_count = params->units.total_count+1;
+      baked_units = push_array(arena, RDI_Unit, baked_units_count);
     }
     if(lane_idx() == lane_from_task_idx(1))
     {
-      baked_type_nodes = push_array(scratch.arena, RDIM_TypeNodeBakeResult, 1);
-      baked_type_nodes->type_nodes_count = params->types.total_count+1;
-      baked_type_nodes->type_nodes = push_array(arena, RDI_TypeNode, baked_type_nodes->type_nodes_count);
+      baked_type_nodes_count = params->types.total_count+1;
+      baked_type_nodes = push_array(arena, RDI_TypeNode, baked_type_nodes_count);
     }
     if(lane_idx() == lane_from_task_idx(2))
     {
-      baked_global_variables = push_array(scratch.arena, RDIM_GlobalVariableBakeResult, 1);
-      baked_global_variables->global_variables_count = params->global_variables.total_count+1;
-      baked_global_variables->global_variables = push_array(arena, RDI_GlobalVariable, baked_global_variables->global_variables_count);
-    }
-    if(lane_idx() == lane_from_task_idx(3))
-    {
-      baked_thread_variables = push_array(scratch.arena, RDIM_ThreadVariableBakeResult, 1);
-      baked_thread_variables->thread_variables_count = params->thread_variables.total_count+1;
-      baked_thread_variables->thread_variables = push_array(arena, RDI_ThreadVariable, baked_thread_variables->thread_variables_count);
-    }
-    if(lane_idx() == lane_from_task_idx(4))
-    {
-      baked_inline_sites = push_array(scratch.arena, RDIM_InlineSiteBakeResult, 1);
-      baked_inline_sites->inline_sites_count = params->inline_sites.total_count+1;
-      baked_inline_sites->inline_sites = push_array(arena, RDI_InlineSite, baked_inline_sites->inline_sites_count);
+      baked_inline_sites_count = params->inline_sites.total_count+1;
+      baked_inline_sites = push_array(arena, RDI_InlineSite, baked_inline_sites_count);
     }
     lane_sync_u64(&baked_units, lane_from_task_idx(0));
+    lane_sync_u64(&baked_units_count, lane_from_task_idx(0));
     lane_sync_u64(&baked_type_nodes, lane_from_task_idx(1));
-    lane_sync_u64(&baked_global_variables, lane_from_task_idx(2));
-    lane_sync_u64(&baked_thread_variables, lane_from_task_idx(3));
-    lane_sync_u64(&baked_inline_sites, lane_from_task_idx(4));
+    lane_sync_u64(&baked_type_nodes_count, lane_from_task_idx(1));
+    lane_sync_u64(&baked_inline_sites, lane_from_task_idx(2));
+    lane_sync_u64(&baked_inline_sites_count, lane_from_task_idx(2));
     
     //- rjf: bake units
     ProfScope("bake units")
@@ -3215,7 +3270,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         for EachInRange(n_idx, range)
         {
           RDIM_Unit *src = &n->v[n_idx];
-          RDI_Unit *dst = &baked_units->units[n->base_idx + n_idx + 1];
+          RDI_Unit *dst = &baked_units[n->base_idx + n_idx + 1];
           dst->unit_name_string_idx     = rdim_bake_idx_from_string(bake_strings, src->unit_name);
           dst->compiler_name_string_idx = rdim_bake_idx_from_string(bake_strings, src->compiler_name);
           dst->source_file_path_node    = rdim_bake_path_node_idx_from_string(path_tree, src->source_file);
@@ -3237,7 +3292,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         for EachInRange(n_idx, range)
         {
           RDIM_Type *src = &n->v[n_idx];
-          RDI_TypeNode *dst = &baked_type_nodes->type_nodes[n->base_idx + n_idx + 1];
+          RDI_TypeNode *dst = &baked_type_nodes[n->base_idx + n_idx + 1];
           
           //- rjf: fill shared type node info
           dst->kind      = src->kind;
@@ -3376,7 +3431,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         Rng1U64 range = lane_range(n->count);
         for EachInRange(n_idx, range)
         {
-          RDI_InlineSite *dst = &baked_inline_sites->inline_sites[n->base_idx + n_idx + 1];
+          RDI_InlineSite *dst = &baked_inline_sites[n->base_idx + n_idx + 1];
           RDIM_InlineSite *src = &n->v[n_idx];
           dst->name_string_idx   = rdim_bake_idx_from_string(bake_strings, src->name);
           dst->type_idx          = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
@@ -3391,16 +3446,26 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: gather all lists which form symbol tables
   //
+  RDI_Symbol *baked_global_variables = 0;
+  U64 baked_global_variables_count = 0;
+  RDI_Symbol *baked_thread_variables = 0;
+  U64 baked_thread_variables_count = 0;
+  RDI_Symbol *baked_procedures = 0;
+  U64 baked_procedures_count = 0;
+  RDI_Symbol *baked_constants = 0;
+  U64 baked_constants_count = 0;
   struct
   {
     RDIM_SymbolChunkList *symbols;
+    RDI_Symbol **baked_symbols_out;
+    U64 *baked_symbols_count_out;
   }
   symbol_table_lists[] =
   {
-    {&params->global_variables},
-    {&params->thread_variables},
-    {&params->procedures},
-    {&params->constants},
+    {&params->global_variables,   &baked_global_variables, &baked_global_variables_count},
+    {&params->thread_variables,   &baked_thread_variables, &baked_thread_variables_count},
+    {&params->procedures,         &baked_procedures, &baked_procedures_count},
+    {&params->constants,          &baked_constants, &baked_constants_count},
   };
   
   //////////////////////////////////////////////////////////////
@@ -3537,6 +3602,8 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           dst_symbols = push_array(arena, RDI_Symbol, dst_symbols_count);
         }
         lane_sync_u64(&dst_symbols, 0);
+        symbol_table_lists[symbol_table_list_idx].baked_symbols_out[0] = dst_symbols;
+        symbol_table_lists[symbol_table_list_idx].baked_symbols_count_out[0] = dst_symbols_count;
         for EachNode(n, RDIM_SymbolChunkNode, src_symbols->first)
         {
           U64 slot_idx = lane_idx()*chunk_count + chunk_idx;
@@ -3668,14 +3735,20 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake file paths
   //
-  RDIM_FilePathBakeResult *baked_file_paths = 0;
+  typedef struct BakedFilePaths BakedFilePaths;
+  struct BakedFilePaths
+  {
+    RDI_FilePathNode *nodes;
+    RDI_U64 nodes_count;
+  };
+  BakedFilePaths *baked_file_paths = 0;
   RDIM_BakePathNode **baked_file_path_src_nodes = 0;
   ProfScope("bake file paths")
   {
     // rjf: set up
     if(lane_idx() == 0)
     {
-      baked_file_paths = push_array(scratch.arena, RDIM_FilePathBakeResult, 1);
+      baked_file_paths = push_array(scratch.arena, BakedFilePaths, 1);
       baked_file_paths->nodes_count = path_tree->count;
       baked_file_paths->nodes = push_array(arena, RDI_FilePathNode, baked_file_paths->nodes_count);
       baked_file_path_src_nodes = push_array(arena, RDIM_BakePathNode *, baked_file_paths->nodes_count);
@@ -3720,24 +3793,23 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage do small final baking tasks
   //
-  RDIM_TopLevelInfoBakeResult *baked_top_level_info = 0;
-  RDIM_BinarySectionBakeResult *baked_binary_sections = 0;
+  RDI_TopLevelInfo *baked_top_level_info = 0;
+  RDI_BinarySection *baked_binary_sections = 0;
+  U64 baked_binary_sections_count = 0;
   ProfScope("do small final baking tasks")
   {
     if(lane_idx() == lane_from_task_idx(0)) ProfScope("bake top level info")
     {
-      baked_top_level_info = push_array(scratch.arena, RDIM_TopLevelInfoBakeResult, 1);
-      baked_top_level_info->top_level_info                           = push_array(arena, RDI_TopLevelInfo, 1);
-      baked_top_level_info->top_level_info->arch                     = params->top_level_info.arch;
-      baked_top_level_info->top_level_info->exe_name_string_idx      = rdim_bake_idx_from_string(bake_strings, params->top_level_info.exe_name);
-      baked_top_level_info->top_level_info->exe_hash                 = params->top_level_info.exe_hash;
-      baked_top_level_info->top_level_info->voff_max                 = params->top_level_info.voff_max;
-      baked_top_level_info->top_level_info->guid                     = params->top_level_info.guid;
-      baked_top_level_info->top_level_info->producer_name_string_idx = rdim_bake_idx_from_string(bake_strings, params->top_level_info.producer_name);
+      baked_top_level_info = push_array(arena, RDI_TopLevelInfo, 1);
+      baked_top_level_info->arch                     = params->top_level_info.arch;
+      baked_top_level_info->exe_name_string_idx      = rdim_bake_idx_from_string(bake_strings, params->top_level_info.exe_name);
+      baked_top_level_info->exe_hash                 = params->top_level_info.exe_hash;
+      baked_top_level_info->voff_max                 = params->top_level_info.voff_max;
+      baked_top_level_info->guid                     = params->top_level_info.guid;
+      baked_top_level_info->producer_name_string_idx = rdim_bake_idx_from_string(bake_strings, params->top_level_info.producer_name);
     }
     if(lane_idx() == lane_from_task_idx(1)) ProfScope("bake binary sections")
     {
-      baked_binary_sections = push_array(scratch.arena, RDIM_BinarySectionBakeResult, 1);
       RDIM_BinarySectionList *src = &params->binary_sections;
       RDI_BinarySection *dst_base = rdim_push_array(arena, RDI_BinarySection, src->count+1);
       U64 dst_idx = 1;
@@ -3752,46 +3824,63 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         dst->foff_first      = src->foff_first;
         dst->foff_opl        = src->foff_opl;
       }
-      baked_binary_sections->binary_sections = dst_base;
-      baked_binary_sections->binary_sections_count = dst_idx;
+      baked_binary_sections = dst_base;
+      baked_binary_sections_count = dst_idx;
     }
   }
   lane_sync_u64(&baked_top_level_info, lane_from_task_idx(0));
   lane_sync_u64(&baked_binary_sections, lane_from_task_idx(1));
+  lane_sync_u64(&baked_binary_sections_count, lane_from_task_idx(1));
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage package results
   //
   RDIM_BakeResults result = {0};
   {
-    result.top_level_info         = *baked_top_level_info;
-    result.binary_sections        = *baked_binary_sections;
-    result.units                  = *baked_units;
-    result.unit_vmap              = *baked_unit_vmap;
-    result.src_files              = *baked_src_files;
-    result.checksums              = *baked_checksums;
-    result.line_tables            = *baked_line_tables;
-    result.type_nodes             = *baked_type_nodes;
-    result.udts                   = *baked_udts;
-    result.global_variables       = *baked_global_variables;
-    result.global_vmap            = *baked_global_vmap;
-    result.thread_variables       = *baked_thread_variables;
-#if 0 // TODO(rjf): @locpass
-    result.constants              = *baked_constants;
-#endif
-    result.procedures             = *baked_procedures;
-    result.scopes                 = *baked_scopes;
-    result.inline_sites           = *baked_inline_sites;
-    result.scope_vmap             = *baked_scope_vmap;
-    result.top_level_name_maps    = *baked_top_level_name_maps;
-    result.name_maps              = *baked_name_maps;
-    result.file_paths             = *baked_file_paths;
-    result.strings                = *baked_strings;
-    result.idx_runs               = *baked_idx_runs;
-#if 0 // TODO(rjf): @locpass
-    result.locations              = *baked_locations;
-    result.location_blocks        = *baked_location_blocks;
-#endif
+#define Map(kind, ptr, count) result.section_bundle.sections[RDI_SectionKind_##kind] = rdim_serialized_section_make_unpacked_array((ptr), (count))
+    Map(TopLevelInfo,                baked_top_level_info, 1);
+    Map(StringData,                  baked_strings->string_data, baked_strings->string_data_size);
+    Map(StringTable,                 baked_strings->string_offs, baked_strings->string_offs_count);
+    Map(IndexRuns,                   baked_idx_runs->idx_runs, baked_idx_runs->idx_count);
+    Map(BinarySections,              baked_binary_sections, baked_binary_sections_count);
+    Map(FilePathNodes,               baked_file_paths->nodes, baked_file_paths->nodes_count);
+    Map(SourceFiles,                 baked_src_files->source_files, baked_src_files->source_files_count);
+    Map(LineTables,                  baked_line_tables->line_tables, baked_line_tables->line_tables_count);
+    Map(LineInfoVOffs,               baked_line_tables->line_table_voffs, baked_line_tables->line_table_voffs_count);
+    Map(LineInfoLines,               baked_line_tables->line_table_lines, baked_line_tables->line_table_lines_count);
+    Map(LineInfoColumns,             baked_line_tables->line_table_columns, baked_line_tables->line_table_columns_count);
+    Map(SourceLineMaps,              baked_src_files->source_line_maps, baked_src_files->source_line_maps_count);
+    Map(SourceLineMapNumbers,        baked_src_files->source_line_map_nums, baked_src_files->source_line_map_nums_count);
+    Map(SourceLineMapRanges,         baked_src_files->source_line_map_rngs, baked_src_files->source_line_map_rngs_count);
+    Map(SourceLineMapVOffs,          baked_src_files->source_line_map_voffs, baked_src_files->source_line_map_voffs_count);
+    Map(Units,                       baked_units, baked_units_count);
+    Map(UnitVMap,                    baked_unit_vmap->vmap, baked_unit_vmap->count);
+    Map(Namespaces,                  baked_namespaces->namespaces, baked_namespaces->namespaces_count);
+    Map(TypeNodes,                   baked_type_nodes, baked_type_nodes_count);
+    Map(UDTs,                        baked_udts->udts, baked_udts->udts_count);
+    Map(Members,                     baked_udts->members, baked_udts->members_count);
+    Map(EnumMembers,                 baked_udts->enum_members, baked_udts->enum_members_count);
+    Map(Scopes,                      baked_scopes->scopes, baked_scopes->scopes_count);
+    Map(ScopeVOffData,               baked_scopes->scope_voffs, baked_scopes->scope_voffs_count);
+    Map(ScopeVMap,                   baked_scope_vmap->vmap, baked_scope_vmap->count);
+    Map(InlineSites,                 baked_inline_sites, baked_inline_sites_count);
+    Map(GlobalVariableSymbols,       baked_global_variables, baked_global_variables_count);
+    // Map(GlobalVMap,                  );
+    Map(ThreadVariableSymbols,       baked_thread_variables, baked_thread_variables_count);
+    Map(ConstantSymbols,             baked_constants, baked_constants_count);
+    Map(ProcedureSymbols,            baked_procedures, baked_procedures_count);
+    // Map(LocalVariableSymbols,        );
+    // Map(LocationsBytecodeData,       );
+    // Map(LocationsConstantData,       );
+    // Map(LocationsSetElements,        );
+    // Map(MD5Checksums,                );
+    // Map(SHA1Checksums,               );
+    // Map(SHA256Checksums,             );
+    // Map(Timestamps,                  );
+    // Map(NameMaps,                    );
+    // Map(NameMapBuckets,              );
+    // Map(NameMapNodes,                );
+#undef Map
   }
   lane_sync();
   

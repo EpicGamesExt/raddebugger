@@ -2096,6 +2096,7 @@ rdim_serialized_section_make_unpacked(void *data, RDI_U64 size)
   return s;
 }
 
+#if 0 // TODO(rjf): @locpass
 RDI_PROC RDIM_SerializedSectionBundle
 rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
 {
@@ -2145,6 +2146,7 @@ rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
   bundle.sections[RDI_SectionKind_NameMapNodes]         = rdim_serialized_section_make_unpacked_array(results->name_maps.nodes, results->name_maps.nodes_count);
   return bundle;
 }
+#endif
 
 RDI_PROC RDIM_String8List
 rdim_file_blobs_from_section_bundle(RDIM_Arena *arena, RDIM_SerializedSectionBundle *bundle)

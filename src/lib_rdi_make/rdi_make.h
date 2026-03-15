@@ -1279,47 +1279,6 @@ struct RDIM_LineRec
 
 //- rjf: baking results
 
-typedef struct RDIM_TopLevelInfoBakeResult RDIM_TopLevelInfoBakeResult;
-struct RDIM_TopLevelInfoBakeResult
-{
-  RDI_TopLevelInfo *top_level_info;
-};
-
-typedef struct RDIM_BinarySectionBakeResult RDIM_BinarySectionBakeResult;
-struct RDIM_BinarySectionBakeResult
-{
-  RDI_BinarySection *binary_sections;
-  RDI_U64 binary_sections_count;
-};
-
-typedef struct RDIM_UnitBakeResult RDIM_UnitBakeResult;
-struct RDIM_UnitBakeResult
-{
-  RDI_Unit *units;
-  RDI_U64 units_count;
-};
-
-typedef struct RDIM_UnitVMapBakeResult RDIM_UnitVMapBakeResult;
-struct RDIM_UnitVMapBakeResult
-{
-  RDIM_BakeVMap vmap;
-};
-
-typedef struct RDIM_SrcFileBakeResult RDIM_SrcFileBakeResult;
-struct RDIM_SrcFileBakeResult
-{
-  RDI_SourceFile *source_files;
-  RDI_U64 source_files_count;
-  RDI_SourceLineMap *source_line_maps;
-  RDI_U64 source_line_maps_count;
-  RDI_U32 *source_line_map_nums;
-  RDI_U32 *source_line_map_rngs;
-  RDI_U64 *source_line_map_voffs;
-  RDI_U64 source_line_map_nums_count;
-  RDI_U64 source_line_map_rngs_count;
-  RDI_U64 source_line_map_voffs_count;
-};
-
 typedef struct RDIM_ChecksumBakeResult RDIM_ChecksumBakeResult;
 struct RDIM_ChecksumBakeResult
 {
@@ -1331,44 +1290,6 @@ struct RDIM_ChecksumBakeResult
   RDI_U64 sha256s_count;
   RDI_U64 *timestamps;
   RDI_U64 timestamps_count;
-};
-
-typedef struct RDIM_LineTableBakeResult RDIM_LineTableBakeResult;
-struct RDIM_LineTableBakeResult
-{
-  RDI_LineTable *line_tables;
-  RDI_U64 line_tables_count;
-  RDI_U64 *line_table_voffs;
-  RDI_U64 line_table_voffs_count;
-  RDI_Line *line_table_lines;
-  RDI_U64 line_table_lines_count;
-  RDI_Column *line_table_columns;
-  RDI_U64 line_table_columns_count;
-};
-
-typedef struct RDIM_NamespaceBakeResult RDIM_NamespaceBakeResult;
-struct RDIM_NamespaceBakeResult
-{
-  RDI_Namespace *namespaces;
-  RDI_U64 namespaces_count;
-};
-
-typedef struct RDIM_TypeNodeBakeResult RDIM_TypeNodeBakeResult;
-struct RDIM_TypeNodeBakeResult
-{
-  RDI_TypeNode *type_nodes;
-  RDI_U64 type_nodes_count;
-};
-
-typedef struct RDIM_UDTBakeResult RDIM_UDTBakeResult;
-struct RDIM_UDTBakeResult
-{
-  RDI_UDT *udts;
-  RDI_U64 udts_count;
-  RDI_Member *members;
-  RDI_U64 members_count;
-  RDI_EnumMember *enum_members;
-  RDI_U64 enum_members_count;
 };
 
 typedef struct RDIM_LocationBakeResult RDIM_LocationBakeResult;
@@ -1423,30 +1344,6 @@ struct RDIM_ProcedureBakeResult
   RDI_U64 procedures_count;
 };
 
-typedef struct RDIM_ScopeBakeResult RDIM_ScopeBakeResult;
-struct RDIM_ScopeBakeResult
-{
-  RDI_Scope *scopes;
-  RDI_U64 scopes_count;
-  RDI_U64 *scope_voffs;
-  RDI_U64 scope_voffs_count;
-  RDI_Local *locals;
-  RDI_U64 locals_count;
-};
-
-typedef struct RDIM_ScopeVMapBakeResult RDIM_ScopeVMapBakeResult;
-struct RDIM_ScopeVMapBakeResult
-{
-  RDIM_BakeVMap vmap;
-};
-
-typedef struct RDIM_InlineSiteBakeResult RDIM_InlineSiteBakeResult;
-struct RDIM_InlineSiteBakeResult
-{
-  RDI_InlineSite *inline_sites;
-  RDI_U64 inline_sites_count;
-};
-
 typedef struct RDIM_TopLevelNameMapBakeResult RDIM_TopLevelNameMapBakeResult;
 struct RDIM_TopLevelNameMapBakeResult
 {
@@ -1463,62 +1360,6 @@ struct RDIM_NameMapBakeResult
   RDI_U64 nodes_count;
 };
 
-typedef struct RDIM_FilePathBakeResult RDIM_FilePathBakeResult;
-struct RDIM_FilePathBakeResult
-{
-  RDI_FilePathNode *nodes;
-  RDI_U64 nodes_count;
-};
-
-typedef struct RDIM_StringBakeResult RDIM_StringBakeResult;
-struct RDIM_StringBakeResult
-{
-  RDI_U32 *string_offs;
-  RDI_U64 string_offs_count;
-  RDI_U8 *string_data;
-  RDI_U64 string_data_size;
-};
-
-typedef struct RDIM_IndexRunBakeResult RDIM_IndexRunBakeResult;
-struct RDIM_IndexRunBakeResult
-{
-  RDI_U32 *idx_runs;
-  RDI_U64 idx_count;
-};
-
-typedef struct RDIM_BakeResults RDIM_BakeResults;
-struct RDIM_BakeResults
-{
-  RDIM_TopLevelInfoBakeResult top_level_info;
-  RDIM_BinarySectionBakeResult binary_sections;
-  RDIM_UnitBakeResult units;
-  RDIM_UnitVMapBakeResult unit_vmap;
-  RDIM_SrcFileBakeResult src_files;
-  RDIM_ChecksumBakeResult checksums;
-  RDIM_LineTableBakeResult line_tables;
-  RDIM_NamespaceBakeResult namespaces;
-  RDIM_TypeNodeBakeResult type_nodes;
-  RDIM_UDTBakeResult udts;
-  RDIM_GlobalVariableBakeResult global_variables;
-  RDIM_GlobalVMapBakeResult global_vmap;
-  RDIM_ThreadVariableBakeResult thread_variables;
-  RDIM_ConstantsBakeResult constants;
-  RDIM_ProcedureBakeResult procedures;
-  RDIM_ScopeBakeResult scopes;
-  RDIM_InlineSiteBakeResult inline_sites;
-  RDIM_ScopeVMapBakeResult scope_vmap;
-  RDIM_TopLevelNameMapBakeResult top_level_name_maps;
-  RDIM_NameMapBakeResult name_maps;
-  RDIM_FilePathBakeResult file_paths;
-  RDIM_StringBakeResult strings;
-  RDIM_IndexRunBakeResult idx_runs;
-  RDIM_LocationBakeResult locations;
-  RDIM_LocationBlockBakeResult location_blocks;
-};
-
-////////////////////////////////
-//~ rjf: Serialization Types
-
 typedef struct RDIM_SerializedSection RDIM_SerializedSection;
 struct RDIM_SerializedSection
 {
@@ -1532,6 +1373,12 @@ typedef struct RDIM_SerializedSectionBundle RDIM_SerializedSectionBundle;
 struct RDIM_SerializedSectionBundle
 {
   RDIM_SerializedSection sections[RDI_SectionKind_COUNT];
+};
+
+typedef struct RDIM_BakeResults RDIM_BakeResults;
+struct RDIM_BakeResults
+{
+  RDIM_SerializedSectionBundle section_bundle;
 };
 
 ////////////////////////////////
@@ -1759,7 +1606,9 @@ RDI_PROC void rdim_bake_section_list_concat_in_place(RDIM_BakeSectionList *dst, 
 RDI_PROC RDIM_SerializedSection rdim_serialized_section_make_unpacked(void *data, RDI_U64 size);
 #define rdim_serialized_section_make_unpacked_struct(ptr) rdim_serialized_section_make_unpacked((ptr), sizeof(*(ptr)))
 #define rdim_serialized_section_make_unpacked_array(ptr, count) rdim_serialized_section_make_unpacked((ptr), sizeof(*(ptr))*(count))
+#if 0 // TODO(rjf): @locpass
 RDI_PROC RDIM_SerializedSectionBundle rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results);
+#endif
 RDI_PROC RDIM_String8List rdim_file_blobs_from_section_bundle(RDIM_Arena *arena, RDIM_SerializedSectionBundle *bundle);
 
 #endif // RDI_MAKE_H
