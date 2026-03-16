@@ -2206,6 +2206,7 @@ T_BeginTest(import_export)
       PE_BinInfo           pe            = pe_bin_info_from_data(scratch.arena, dll);
       COFF_SectionHeader  *section_table = (COFF_SectionHeader *)str8_substr(dll, pe.section_table_range).str;
       PE_ParsedExportTable export_table  = pe_exports_from_data(scratch.arena, pe.section_count, section_table, dll, pe.data_dir_franges[PE_DataDirectoryIndex_EXPORT], pe.data_dir_vranges[PE_DataDirectoryIndex_EXPORT]);
+      COFF_SectionHeader  *data_sect     = coff_section_header_from_name(str8_zero(), section_table, pe.section_count, str8_lit(".data"));
 
       // validate header
       T_Ok(export_table.flags == 0);
@@ -2236,14 +2237,12 @@ T_BeginTest(import_export)
       T_Ok(export_table.exports[7].forwarder.size == 0);
 
       // validate voffs
-      T_Ok(export_table.exports[0].voff == 0x17ff0);
-      T_Ok(export_table.exports[1].voff == 0x19000);
-      T_Ok(export_table.exports[2].voff == 0x17ff7);
-      T_Ok(export_table.exports[3].voff == 0x19000);
-      T_Ok(export_table.exports[4].voff == 0x19001);
-      T_Ok(export_table.exports[5].voff == 0x19002);
-      T_Ok(export_table.exports[6].voff == 0x19009);
-      T_Ok(export_table.exports[7].voff == 0x1900a);
+      T_Ok(export_table.exports[1].voff == data_sect->voff + 0x0);
+      T_Ok(export_table.exports[3].voff == data_sect->voff + 0x0);
+      T_Ok(export_table.exports[4].voff == data_sect->voff + 0x1);
+      T_Ok(export_table.exports[5].voff == data_sect->voff + 0x2);
+      T_Ok(export_table.exports[6].voff == data_sect->voff + 0x9);
+      T_Ok(export_table.exports[7].voff == data_sect->voff + 0xa);
 
       // validate ordinals
       T_Ok(export_table.exports[0].ordinal == 9);
@@ -4044,7 +4043,7 @@ T_BeginTest(merge_duplicate_types)
   T_Ok(debug_t.count == type_count);
 
   {
-    CV_Leaf ptr_leaf  = cv_debug_t_get_leaf(debug_t, 0);
+    CV_Leaf ptr_leaf  = cv_debug_t_get_leaf(&debug_t, 0);
     T_Ok(ptr_leaf.kind == CV_LeafKind_POINTER);
     T_Ok(ptr_leaf.data.size == sizeof(CV_LeafPointer));
 
@@ -4054,7 +4053,7 @@ T_BeginTest(merge_duplicate_types)
   }
 
   {
-    CV_Leaf proc_leaf = cv_debug_t_get_leaf(debug_t, 1);
+    CV_Leaf proc_leaf = cv_debug_t_get_leaf(&debug_t, 1);
     T_Ok(proc_leaf.kind == CV_LeafKind_PROCEDURE);
     T_Ok(proc_leaf.data.size == sizeof(CV_LeafProcedure));
 
@@ -4064,7 +4063,7 @@ T_BeginTest(merge_duplicate_types)
   }
 
   {
-    CV_Leaf ptr_leaf  = cv_debug_t_get_leaf(debug_t, 2);
+    CV_Leaf ptr_leaf  = cv_debug_t_get_leaf(&debug_t, 2);
     T_Ok(ptr_leaf.kind == CV_LeafKind_POINTER);
     T_Ok(ptr_leaf.data.size == sizeof(CV_LeafPointer));
 
@@ -4074,7 +4073,7 @@ T_BeginTest(merge_duplicate_types)
   }
 
   {
-    CV_Leaf proc_leaf = cv_debug_t_get_leaf(debug_t, 3);
+    CV_Leaf proc_leaf = cv_debug_t_get_leaf(&debug_t, 3);
     T_Ok(proc_leaf.kind == CV_LeafKind_PROCEDURE);
     T_Ok(proc_leaf.data.size == sizeof(CV_LeafProcedure));
 
