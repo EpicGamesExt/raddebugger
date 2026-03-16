@@ -226,6 +226,7 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 internal String8Array
 lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr)
 {
+  ProfBeginFunction();
   LNK_DiskReader reader = {0};
 
   if (io_flags & LNK_IO_Flags_MemoryMapFiles) {
@@ -273,6 +274,7 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags
     }
   }
 
+  ProfEnd();
   return result;
 }
 
