@@ -5161,14 +5161,13 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
                                                       rdi_arch_from_coff_machine(config->machine),
                                                       config->image_name,
                                                       image_ctx.image_data,
-                                                      input.count,
-                                                      input.obj_arr,
+                                                      debug_info_objs_count,
+                                                      debug_info_objs,
                                                       input.debug_s_arr,
-                                                      input.total_symbol_input_count,
+                                                      input.symbol_input_count,
                                                       input.symbol_inputs,
                                                       input.parsed_symbols,
-                                                      merged_types.count,
-                                                      merged_types.v);
+                                                      merged_types);
 
       lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_data);
 
@@ -5198,14 +5197,13 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
                                            image_ctx.image_data,
                                            config,
                                            symtab,
-                                           input.count,
-                                           input.obj_arr,
+                                           debug_info_objs_count,
+                                           debug_info_objs,
                                            input.debug_s_arr,
-                                           input.total_symbol_input_count,
+                                           input.symbol_input_count,
                                            input.symbol_inputs,
                                            input.parsed_symbols,
-                                           merged_types.count,
-                                           merged_types.v);
+                                           merged_types);
 
       lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb_data);
       lnk_timer_end(LNK_Timer_Pdb);

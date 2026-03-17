@@ -396,6 +396,12 @@ cv_make_proc_refs(Arena *arena, CV_ModIndex imod, CV_SymbolList symbol_list)
   return proc_ref_list;
 }
 
+internal B32
+cv_is_obj_info(CV_Symbol symbol)
+{
+  return symbol.kind == CV_SymKind_OBJNAME;
+}
+
 internal CV_ObjInfo
 cv_obj_info_from_symbol(CV_Symbol symbol)
 {
@@ -406,12 +412,7 @@ cv_obj_info_from_symbol(CV_Symbol symbol)
     result.sig = obj_name->sig;
     str8_deserial_read_cstr(symbol.data, sizeof(CV_SymObjName), &result.name);
   } break;
-  case CV_SymKind_OBJNAME_ST: {
-    NotImplemented;
-  } break;
-  default: {
-    InvalidPath;
-  } break;
+  default: { InvalidPath; } break;
   }
   return result;
 }
@@ -1092,74 +1093,121 @@ cv_dedup_symbol_ptr_array(TP_Context *tp, CV_SymbolPtrArray *symbols)
 internal CV_DebugT
 cv_debug_t_from_data(Arena *arena, String8 data, U64 align)
 {
-  ProfBegin("Upfront parse");
-  U64 count = 0;
-  for (U64 cursor = 0; cursor < data.size; count += 1) {
-    CV_Leaf leaf;
-    cursor += cv_read_leaf(data, cursor, align, &leaf);
+  CV_DebugT debug_t = { .data = data };
+
+  ProfBegin("Upfront parse for counts");
+  for (U64 cursor = 0, prev_cursor = 0, ti = CV_MinComplexTypeIndex; cursor < data.size; ti += 1) {
+    CV_Leaf leaf = {0};
+    TryRead(cv_read_leaf(data, cursor, align, &leaf), cursor, count_stop);
+    debug_t.source_counts[cv_type_index_source_from_leaf_kind(leaf.kind)] += 1;
   }
+count_stop:
   ProfEnd();
 
-  U32 *offsets = push_array_no_zero(arena, U32, count);
+  for EachElement(i, debug_t.source_counts) { debug_t.count += debug_t.source_counts[i]; }
+
+  ProfBegin("store leaf offsets");
+  debug_t.offsets = push_array_no_zero(arena, U32, debug_t.count);
   for (U64 cursor = 0, idx = 0; cursor < data.size;) {
-    offsets[idx++] = cursor;
-
+    debug_t.offsets[idx++] = cursor;
     CV_Leaf leaf;
-    cursor += cv_read_leaf(data, cursor, align, &leaf);
+    TryRead(cv_read_leaf(data, cursor, align, &leaf), cursor, store_stop);
   }
+store_stop:
 
-  return (CV_DebugT){ .count = count, .data = data, .offsets = offsets };
+  for EachElement(i, debug_t.ti_ranges) { debug_t.ti_ranges[i] = r1u64(CV_MinComplexTypeIndex, CV_MinComplexTypeIndex + debug_t.count); }
+
+  ProfEnd();
+  return debug_t;
 }
 
 internal CV_Leaf
-cv_debug_t_get_leaf(CV_DebugT debug_t, U64 leaf_idx)
+cv_debug_t_get_leaf(CV_DebugT *debug_t, U64 leaf_idx)
 {
   CV_Leaf leaf = {0};
-  if (debug_t.count > 0) {
-    Assert(leaf_idx < debug_t.count);
-    cv_read_leaf(debug_t.data, debug_t.offsets[leaf_idx], 1, &leaf);
+  if (debug_t->count > 0) {
+    Assert(leaf_idx < debug_t->count);
+    cv_read_leaf(debug_t->data, debug_t->offsets[leaf_idx], 1, &leaf);
     Assert(cv_header_struct_size_from_leaf_kind(leaf.kind) <= leaf.data.size);
   }
   return leaf;
 }
 
-internal String8
-cv_debug_t_get_raw_leaf(CV_DebugT debug_t, U64 leaf_idx)
+internal U64
+cv_leaf_idx_from_ti(CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti)
 {
-  Assert(leaf_idx < debug_t.count);
-  U8          *leaf_ptr  = debug_t.data.str + debug_t.offsets[leaf_idx];
+  Assert(contains_1u64(debug_t->ti_ranges[source], ti)); // validate TI
+  Assert(!contains_1u64(debug_t->pch_ti_range[source], ti)); // no PCH indirection
+  U64 leaf_idx = ti;
+  Assert(leaf_idx >= debug_t->ti_ranges[source].min);
+  leaf_idx -= debug_t->ti_ranges[source].min; // strip type index range
+  Assert(leaf_idx >= dim_1u64(debug_t->pch_ti_range[source]));
+  leaf_idx -= dim_1u64(debug_t->pch_ti_range[source]); // strip PCH indirection
+  leaf_idx += debug_t->source_offsets[source];
+  Assert(leaf_idx < debug_t->count);
+  return leaf_idx;
+}
+
+internal CV_TypeIndex
+cv_ti_from_leaf_idx(CV_DebugT *debug_t, CV_TypeIndexSource source, U64 leaf_idx)
+{
+  U64          pch_count = dim_1u64(debug_t->pch_ti_range[source]);
+  CV_TypeIndex ti        = debug_t->ti_ranges[source].min + pch_count + leaf_idx;
+  return ti;
+}
+
+internal CV_Leaf
+cv_leaf_from_ti(CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti)
+{
+  U64 leaf_idx = cv_leaf_idx_from_ti(debug_t, source, ti);
+  return cv_debug_t_get_leaf(debug_t, leaf_idx);
+}
+
+internal String8
+cv_debug_t_get_raw_leaf(CV_DebugT *debug_t, U64 leaf_idx)
+{
+  Assert(leaf_idx < debug_t->count);
+  U8          *leaf_ptr  = debug_t->data.str + debug_t->offsets[leaf_idx];
   CV_LeafSize  leaf_size = memory_read16(leaf_ptr);
   return str8(leaf_ptr, leaf_size + sizeof(leaf_size));
 }
 
 internal CV_LeafHeader *
-cv_debug_t_get_leaf_header(CV_DebugT debug_t, U64 leaf_idx)
+cv_debug_t_get_leaf_header(CV_DebugT *debug_t, U64 leaf_idx)
 {
   CV_LeafHeader *header = 0;
-  if (leaf_idx < debug_t.count) {
-    header = (CV_LeafHeader *)(debug_t.data.str + debug_t.offsets[leaf_idx]);
+  if (leaf_idx < debug_t->count) {
+    header = (CV_LeafHeader *)(debug_t->data.str + debug_t->offsets[leaf_idx]);
   }
   return header;
 }
 
+internal CV_TypeIndex
+cv_debug_t_get_type_index(CV_DebugT *debug_t, CV_TypeIndexSource ti_source, U64 leaf_idx)
+{
+  CV_TypeIndex ti = debug_t->ti_ranges[ti_source].min + leaf_idx;
+  Assert(contains_1u64(debug_t->ti_ranges[ti_source], ti));
+  return ti;
+}
+
+internal U64
+cv_debug_t_get_leaf_index(CV_DebugT *debug_t, CV_TypeIndexSource ti_source, CV_TypeIndex ti)
+{
+  Assert(contains_1u64(debug_t->ti_ranges[ti_source], ti));
+  U64 leaf_idx = ti - debug_t->ti_ranges[ti_source].min;
+  return leaf_idx;
+}
+
 internal B32
-cv_debug_t_is_pch(CV_DebugT debug_t)
+cv_debug_t_is_pch(CV_DebugT *debug_t)
 {
   return cv_is_leaf_pch(cv_debug_t_get_leaf(debug_t, 0).kind);
 }
 
 internal B32
-cv_debug_t_is_type_server(CV_DebugT debug_t)
+cv_debug_t_is_type_server_ref(CV_DebugT *debug_t)
 {
   return cv_is_leaf_type_server(cv_debug_t_get_leaf(debug_t, 0).kind);
-}
-
-internal U64
-cv_debug_t_array_count_leaves(U64 count, CV_DebugT *debug_t)
-{
-  U64 total = 0;
-  for EachIndex(i, count) { total += debug_t[i].count; }
-  return total;
 }
 
 // $$Symbols

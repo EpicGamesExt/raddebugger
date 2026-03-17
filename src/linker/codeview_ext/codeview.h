@@ -253,11 +253,27 @@ typedef struct CV_DebugS
   String8List data_list[CV_C13SubSectionIdxKind_COUNT];
 } CV_DebugS;
 
+typedef struct CV_DebugH
+{
+  U64  count;
+  U64 *v;
+} CV_DebugH;
+
 typedef struct CV_DebugT
 {
-  U64     count;
-  String8 data;
-  U32    *offsets;
+  String8  data;
+  U64      count;
+  U32     *offsets;
+
+  // type server
+  U64     source_counts [CV_TypeIndexSource_COUNT];
+  U64     source_offsets[CV_TypeIndexSource_COUNT];
+  U32     ti_base       [CV_TypeIndexSource_COUNT];
+  Rng1U64 ti_ranges     [CV_TypeIndexSource_COUNT];
+
+  // PCH
+  Rng1U64 pch_ti_range[CV_TypeIndexSource_COUNT];
+  U32     pch_obj_idx;
 } CV_DebugT;
 
 ////////////////////////////////
@@ -393,6 +409,7 @@ internal CV_SymbolList cv_make_proc_refs(Arena *arena, CV_ModIndex imod, CV_Symb
 internal U64       cv_read_symbol(String8 raw_data, U64 off, U64 align, CV_Symbol *symbol_out);
 internal CV_Symbol cv_symbol_from_string(String8 raw_data);
 
+internal B32        cv_is_obj_info(CV_Symbol symbol);
 internal CV_ObjInfo cv_obj_info_from_symbol(CV_Symbol symbol);
 
 ////////////////////////////////
@@ -416,13 +433,17 @@ internal String8       cv_file_chksms_from_debug_s(CV_DebugS debug_s);
 ////////////////////////////////
 //~ .debug$T helpers
 
-internal CV_DebugT       cv_debug_t_from_data(Arena *arena, String8 data, U64 align);
-internal CV_Leaf         cv_debug_t_get_leaf(CV_DebugT debug_t, U64 leaf_idx);
-internal String8         cv_debug_t_get_raw_leaf(CV_DebugT debug_t, U64 leaf_idx);
-internal CV_LeafHeader * cv_debug_t_get_leaf_header(CV_DebugT debug_t, U64 leaf_idx);
-internal B32             cv_debug_t_is_pch(CV_DebugT debug_t);
-internal B32             cv_debug_t_is_type_server(CV_DebugT debug_t);
-internal U64             cv_debug_t_array_count_leaves(U64 count, CV_DebugT *arr);
+internal CV_DebugT       cv_debug_t_from_data         (Arena *arena, String8 data, U64 align);
+internal U64             cv_leaf_idx_from_ti          (CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti);
+internal CV_TypeIndex    cv_ti_from_leaf_idx          (CV_DebugT *debug_t, CV_TypeIndexSource source, U64 leaf_idx);
+internal CV_Leaf         cv_debug_t_get_leaf          (CV_DebugT *debug_t, U64 leaf_idx);
+internal CV_Leaf         cv_debug_t_get_leaf_from_ti  (CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti);
+internal String8         cv_debug_t_get_raw_leaf      (CV_DebugT *debug_t, U64 leaf_idx);
+internal CV_LeafHeader * cv_debug_t_get_leaf_header   (CV_DebugT *debug_t, U64 leaf_idx);
+internal CV_TypeIndex    cv_debug_t_get_type_index    (CV_DebugT *debug_t, CV_TypeIndexSource ti_source, U64 leaf_idx);
+internal U64             cv_debug_t_get_leaf_index    (CV_DebugT *debug_t, CV_TypeIndexSource ti_source, CV_TypeIndex ti);
+internal B32             cv_debug_t_is_pch            (CV_DebugT *debug_t);
+internal B32             cv_debug_t_is_type_server_ref(CV_DebugT *debug_t);
 
 ////////////////////////////////
 //~ Sub Section helpers

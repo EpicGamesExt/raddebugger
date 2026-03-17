@@ -41,6 +41,8 @@ struct MSF_Parsed
 //~ rjf: MSF Parser Functions
 
 internal MSF_RawStreamTable* msf_raw_stream_table_from_data(Arena *arena, String8 msf_data);
+internal U64                 msf_size_from_stream_number(MSF_RawStreamTable *st, MSF_StreamNumber sn);
+internal String8             msf_data_from_stream_number_ex(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn, Rng1U64 range, U64 align);
 internal String8             msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn);
 internal MSF_Parsed*         msf_parsed_from_data(Arena *arena, String8 msf_data);
 internal String8             msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn);

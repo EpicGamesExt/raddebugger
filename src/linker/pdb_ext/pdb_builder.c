@@ -946,6 +946,39 @@ pdb_type_server_parse_from_data_v80(String8 data, PDB_TypeServerParse *parse)
   return error;
 }
 
+internal B32
+pdb_extract_type_server_info(String8 raw_msf, MSF_RawStreamTable *st, MSF_StreamNumber sn, Rng1U64 *ti_range_out, Rng1U64 *leaf_range_out)
+{
+  Temp scratch = scratch_begin(0,0);
+  B32             is_ok        = 0;
+  String8         version_data = msf_data_from_stream_number_ex(scratch.arena, raw_msf, st, sn, r1u64(0, sizeof(PDB_TpiVersion)), 8);
+  PDB_TpiVersion *version      = str8_deserial_get_raw_ptr(version_data, 0, sizeof(*version));
+  if (version) {
+    switch (*version) {
+    case PDB_TpiVersion_IMPV80: {
+      String8  header_size_data = msf_data_from_stream_number_ex(scratch.arena, raw_msf, st, sn, r1u64(sizeof(*version), sizeof(*version) + sizeof(U32)), 8);
+      U32     *header_size      = str8_deserial_get_raw_ptr(header_size_data, 0, sizeof(*header_size));
+      if (header_size && *header_size >= sizeof(PDB_TpiVersion) + sizeof(U32)) {
+        String8        header_data = msf_data_from_stream_number_ex(scratch.arena, raw_msf, st, sn, r1u64(0, *header_size), 8);
+        PDB_TpiHeader *header      = str8_deserial_get_raw_ptr(header_data, 0, sizeof(*header));
+        if (*header_size + header->leaf_data_size <= st->streams[sn].size) {
+          *ti_range_out   = r1u64(header->ti_lo, header->ti_hi);
+          *leaf_range_out = r1u64(*header_size, *header_size + header->leaf_data_size);
+          is_ok = 1;
+        } else {
+          NotImplemented; // TODO: handle error
+        }
+      } else {
+        NotImplemented; // TODO: handle error
+      }
+    } break;
+    default: break;
+    }
+  }
+  scratch_end(scratch);
+  return is_ok;
+}
+
 internal PDB_OpenTypeServerError
 pdb_type_server_parse_from_data(String8 data, PDB_TypeServerParse *parse_out)
 {
@@ -1027,42 +1060,42 @@ pdb_type_server_open_v80(MSF_Context *msf, MSF_StreamNumber sn, PDB_StringTable 
   if (header.hash_vals.off + header.hash_vals.size > hash_stream_size) {
     goto exit;
   }
-  
+
   ts = pdb_type_server_alloc(header.hash_bucket_count);
-  
+
   // read & parse code view types
   String8 types_data = msf_stream_read_block(ts->arena, msf, sn, header.leaf_data_size);
   CV_DebugT debug_t = cv_debug_t_from_data(scratch.arena, types_data, PDB_LEAF_ALIGN);
-  
+
   // read hash data
   U8 *hash_buffer = push_array(scratch.arena, U8, header.hash_vals.size);
   msf_stream_seek(msf, header.hash_sn, header.hash_vals.off);
   MSF_UInt hash_buffer_size = msf_stream_read(msf, header.hash_sn, hash_buffer, header.hash_vals.size);
   Assert(hash_buffer_size == header.hash_vals.size);
-  
+
   // rebuild type buckets
   for (U64 cursor = 0, leaf_idx = 0; 
-       cursor + header.hash_key_size <= hash_buffer_size;
-       cursor += header.hash_key_size, leaf_idx += 1) {
-    String8 raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
+      cursor + header.hash_key_size <= hash_buffer_size;
+      cursor += header.hash_key_size, leaf_idx += 1) {
+    String8 raw_leaf = cv_debug_t_get_raw_leaf(&debug_t, leaf_idx);
 
     str8_list_push(ts->arena, &ts->leaf_list, raw_leaf);
-    
+
     // read out bucket hash
     U64 hash = 0;
     MemoryCopy(&hash, hash_buffer + cursor, header.hash_key_size);
-    
+
     // push bucket
     PDB_TypeBucket *bucket = push_array(ts->arena, PDB_TypeBucket, 1);
     bucket->raw_leaf   = raw_leaf;
     bucket->type_index = header.ti_lo + leaf_idx;
     SLLStackPush(ts->buckets[hash], bucket);
   }
-  
+
   // adjust type buckets
   msf_stream_seek(msf, header.hash_sn, header.hash_adj.off);
   String8 adjust_data = msf_stream_read_block(scratch.arena, msf, header.hash_sn, header.hash_adj.size);
-  
+
   // open adjust hash table
   PDB_HashTableParseError hash_adj_parse_error = pdb_hash_adj_hash_table_from_data(&ts->hash_adj, adjust_data, strtab, 0);
   if (hash_adj_parse_error == PDB_HashTableParseError_OUT_OF_BYTES) {
@@ -1075,7 +1108,7 @@ pdb_type_server_open_v80(MSF_Context *msf, MSF_StreamNumber sn, PDB_StringTable 
   String8Array key_arr   = {0};
   String8Array value_arr = {0};
   pdb_hash_table_get_present_keys_and_values(scratch.arena, &ts->hash_adj, &key_arr, &value_arr);
-  
+
   // adjust type buckets
   for (U64 i = 0; i < ts->hash_adj.count; i += 1) {
     String8      type_name  = key_arr.v[i];
@@ -1084,7 +1117,7 @@ pdb_type_server_open_v80(MSF_Context *msf, MSF_StreamNumber sn, PDB_StringTable 
     // name -> hash
     U64 hash = pdb_hash_v1(type_name);
     hash %= ts->bucket_cap;
-    
+
     // search for type bucket
     PDB_TypeBucket *curr, *prev;
     for (curr = ts->buckets[hash], prev = 0; curr != 0; prev = curr, curr = curr->next) {
@@ -1092,18 +1125,18 @@ pdb_type_server_open_v80(MSF_Context *msf, MSF_StreamNumber sn, PDB_StringTable 
         break;
       }
     }
-    
+
     // move type to the head
     if (prev && curr) {
       prev->next = curr->next;
       curr->next = ts->buckets[hash];
       ts->buckets[hash] = curr;
     }
-    
+
     Assert(curr);
   }
-  
-  exit:;
+
+exit:
   scratch_end(scratch);
   ProfEnd();
   return ts;

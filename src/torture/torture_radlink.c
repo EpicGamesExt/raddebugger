@@ -3943,6 +3943,67 @@ T_EndTest;
 T_BeginTest(merge_duplicate_types)
 {
   {
+    U32 pch_sig = 0xCAFEBABE;
+
+    String8 debug_s;
+    {
+      String8List srl;
+      str8_serial_begin(scratch.arena, &srl);
+
+      CV_Signature sig = CV_Signature_C13;
+      str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+      CV_C13SubSectionHeader *ss_header = str8_serial_push_size(scratch.arena, &srl, sizeof(*ss_header));
+      U64 ss_start_off = srl.total_size;
+
+      CV_SymObjName obj_name = {0};
+      obj_name.sig = pch_sig;
+      String8 obj_name_string = str8_lit("a.obj");
+      str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_SymKind) + sizeof(obj_name) + obj_name_string.size + 1);
+      str8_serial_push_u16(scratch.arena, &srl, CV_SymKind_OBJNAME);
+      str8_serial_push_struct(scratch.arena, &srl, &obj_name);
+      str8_serial_push_cstr(scratch.arena, &srl, obj_name_string);
+      str8_serial_push_align(scratch.arena, &srl, CV_SymbolAlign);
+
+      ss_header->kind = CV_C13SubSectionKind_Symbols;
+      ss_header->size = srl.total_size - ss_start_off;
+      str8_serial_push_align(scratch.arena, &srl, CV_C13SubSectionAlign);
+
+      debug_s = str8_serial_end(scratch.arena, &srl);
+    }
+    String8 debug_p;
+    {
+      String8List srl;
+      str8_serial_begin(scratch.arena, &srl);
+      
+      // signature
+      CV_Signature sig = CV_Signature_C13;
+      str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+      // duplicate in a.obj
+      CV_LeafPointer ptr = { .itype = CV_BasicType_VOID };
+      str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(ptr));
+      str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_POINTER);
+      str8_serial_push_struct(scratch.arena, &srl, &ptr);
+      str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+      // unique procedure type
+      CV_LeafProcedure proc = { .ret_itype = 0x1000, .call_kind = CV_CallKind_NearPascal };
+      str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(proc));
+      str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PROCEDURE);
+      str8_serial_push_struct(scratch.arena, &srl, &proc);
+      str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+      // PCH ender
+      CV_LeafEndPreComp endprecomp = { .sig = pch_sig };
+      str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(endprecomp));
+      str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_ENDPRECOMP);
+      str8_serial_push_struct(scratch.arena, &srl, &endprecomp);
+      str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+      debug_p = str8_serial_end(scratch.arena, &srl);
+    }
+
     String8 debug_t;
     {
       String8List srl;
@@ -3951,17 +4012,25 @@ T_BeginTest(merge_duplicate_types)
       CV_Signature sig = CV_Signature_C13;
       str8_serial_push_struct(scratch.arena, &srl, &sig);
 
+      CV_LeafPreComp precomp = { .start_index = CV_MinComplexTypeIndex, .count = 3, sig = pch_sig };
+      String8 pch_obj_name = str8_lit("pch.obj");
+      str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafPreComp) + pch_obj_name.size + 1);
+      str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PRECOMP);
+      str8_serial_push_struct(scratch.arena, &srl, &precomp);
+      str8_serial_push_cstr(scratch.arena, &srl, pch_obj_name);
+      str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
       CV_LeafPointer ptr = { .itype = CV_BasicType_VOID };
       str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafPointer));
       str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_POINTER);
       str8_serial_push_struct(scratch.arena, &srl, &ptr);
-      str8_serial_push_align(scratch.arena, &srl, 4);
+      str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
 
       CV_LeafProcedure proc = { .ret_itype = 0x1000, .call_kind = CV_CallKind_NearC };
       str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafProcedure));
       str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PROCEDURE);
       str8_serial_push_struct(scratch.arena, &srl, &proc);
-      str8_serial_push_align(scratch.arena, &srl, 4);
+      str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
 
       debug_t = str8_serial_end(scratch.arena, &srl);
     }
@@ -3978,15 +4047,23 @@ T_BeginTest(merge_duplicate_types)
       str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafPointer));
       str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_POINTER);
       str8_serial_push_struct(scratch.arena, &srl, &ptr);
-      str8_serial_push_align(scratch.arena, &srl, 4);
+      str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
 
       CV_LeafProcedure proc = { .ret_itype = 0x1000, .call_kind = CV_CallKind_NearC };
       str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafProcedure));
       str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PROCEDURE);
       str8_serial_push_struct(scratch.arena, &srl, &proc);
-      str8_serial_push_align(scratch.arena, &srl, 4);
+      str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
 
       same_but_different = str8_serial_end(scratch.arena, &srl);
+    }
+
+    String8 pch_obj;
+    {
+      COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+      coff_obj_writer_push_section(cow, str8_lit(".debug$P"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_p);
+      coff_obj_writer_push_section(cow, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_s);
+      pch_obj = coff_obj_writer_serialize(scratch.arena, cow);
     }
 
     String8 a_obj;
@@ -4013,11 +4090,12 @@ T_BeginTest(merge_duplicate_types)
     String8 entry_obj = t_make_entry_obj(scratch.arena);
 
     T_Ok(t_write_file(str8_lit("entry.obj"), entry_obj));
+    T_Ok(t_write_file(str8_lit("pch.obj"), pch_obj));
     T_Ok(t_write_file(str8_lit("a.obj"), a_obj));
     T_Ok(t_write_file(str8_lit("b.obj"), b_obj));
     T_Ok(t_write_file(str8_lit("c.obj"), c_obj));
 
-    t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /out:a.exe a.obj b.obj c.obj entry.obj");
+    t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /out:a.exe a.obj b.obj c.obj pch.obj entry.obj");
     T_Ok(g_last_exit_code == 0);
   }
 
