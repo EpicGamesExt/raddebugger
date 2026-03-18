@@ -6,7 +6,7 @@
 ** stepping, breakpoints, evaluation, cross-module calls.
 */
 
-#if COMPILER_MSVC && _DEBUG
+#if _WIN32 && _DEBUG
 #pragma comment(linker, "/nodefaultlib:libcmt")
 #pragma comment(lib, "libcmtd")
 #endif
