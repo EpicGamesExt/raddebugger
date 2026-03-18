@@ -2980,7 +2980,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: @rdim_bake_stage bake scopes
+  //- rjf: @rdim_bake_stage bake scopes, gather locals
   //
   typedef struct BakedScopes BakedScopes;
   struct BakedScopes
@@ -2989,8 +2989,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     RDI_U64 scopes_count;
     RDI_U64 *scope_voffs;
     RDI_U64 scope_voffs_count;
-    RDI_Symbol *locals;
-    RDI_U64 locals_count;
+    RDIM_SymbolChunkList arranged_locals;
   };
   BakedScopes *baked_scopes = 0;
   ProfScope("bake scopes")
@@ -3010,11 +3009,6 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     {
       baked_scopes->scope_voffs_count = params->scopes.scope_voff_count+1;
       baked_scopes->scope_voffs = push_array(arena, RDI_U64, baked_scopes->scope_voffs_count);
-    }
-    if(lane_idx() == lane_from_task_idx(2))
-    {
-      baked_scopes->locals_count = params->scopes.local_count+1;
-      baked_scopes->locals = push_array(arena, RDI_Symbol, baked_scopes->locals_count);
     }
     lane_sync();
     
@@ -3050,8 +3044,8 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             for EachIndex(src_local_idx, src_local_n->count)
             {
               RDIM_Symbol *src_local = &src_local_n->v[src_local_idx];
-              RDI_Symbol *dst_local = &baked_scopes->locals[chunk_local_off];
 #if 0
+              RDI_Symbol *dst_local = &baked_scopes->locals[chunk_local_off];
               dst_local->kind            = src_local->kind;
               dst_local->name_string_idx = rdim_bake_idx_from_string(bake_strings, src_local->name);
               dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
@@ -3481,6 +3475,8 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   U64 baked_procedures_count = 0;
   RDI_Symbol *baked_constants = 0;
   U64 baked_constants_count = 0;
+  RDI_Symbol *baked_locals = 0;
+  U64 baked_locals_count = 0;
   struct
   {
     RDIM_SymbolChunkList *symbols;
@@ -3489,10 +3485,11 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   }
   symbol_table_lists[] =
   {
-    {&params->global_variables,   &baked_global_variables, &baked_global_variables_count},
-    {&params->thread_variables,   &baked_thread_variables, &baked_thread_variables_count},
-    {&params->procedures,         &baked_procedures, &baked_procedures_count},
-    {&params->constants,          &baked_constants, &baked_constants_count},
+    {&params->global_variables,      &baked_global_variables, &baked_global_variables_count},
+    {&params->thread_variables,      &baked_thread_variables, &baked_thread_variables_count},
+    {&params->procedures,            &baked_procedures, &baked_procedures_count},
+    {&params->constants,             &baked_constants, &baked_constants_count},
+    {&baked_scopes->arranged_locals, &baked_locals, &baked_locals_count},
   };
   
   //////////////////////////////////////////////////////////////
@@ -3908,7 +3905,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     Map(ThreadVariableSymbols,       baked_thread_variables, baked_thread_variables_count);
     Map(ConstantSymbols,             baked_constants, baked_constants_count);
     Map(ProcedureSymbols,            baked_procedures, baked_procedures_count);
-    // Map(LocalVariableSymbols,        );
+    Map(LocalVariableSymbols,        baked_locals, baked_locals_count);
     Map(LocationsBytecodeData,       baked_location_bytecode_data, baked_location_bytecode_data_size);
     Map(LocationsConstantData,       baked_location_constant_data, baked_location_constant_data_size);
     Map(LocationsSetElements,        baked_location_set_elements, baked_location_set_elements_count);

@@ -387,9 +387,10 @@ RDI_MemberKind_NestedType                = 0x0300,
 typedef RDI_U8 RDI_ContainerKind;
 typedef enum RDI_ContainerKindEnum
 {
-RDI_ContainerKind_Type                 = 0x0,
-RDI_ContainerKind_Scope                = 0x1,
-RDI_ContainerKind_Namespace            = 0x2,
+RDI_ContainerKind_Unit                 = 0x0,
+RDI_ContainerKind_Type                 = 0x1,
+RDI_ContainerKind_Scope                = 0x2,
+RDI_ContainerKind_Namespace            = 0x3,
 } RDI_ContainerKindEnum;
 
 typedef RDI_U8 RDI_ContainerFlags;

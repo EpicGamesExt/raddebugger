@@ -25,15 +25,19 @@
 // [ ] single-line viz for pointers w/ bad (unmapped) addresses
 //
 //- namespace/locations/variables RDI pass
-// [ ] RDI_Local, RDI_GlobalVariable, RDI_ThreadVariable -> RDI_Variable
-// [ ] RDI_Variable gets RDI_ContainerFlags, and a container_idx
-// [ ] RDI_Namespace can be a container, same as types/procedures
-// [ ] If procedure-contained, then index goes to scope now, not procedure
-// [ ] Location sections -> split by location kind, fixed tables for simple locations, one catch-all table for bytecode.
-// [ ] Location kind -> can be thread-local offset, or module virtual offset, to enclose globals/tlocals cases
-// [ ] Referring to one location -> kind * index
-// [ ] Referring to many locations, based on scope offsets -> kind = BlockList; BlockList encodes a first/opl pair into Block table, each Block has scope_off_first/opl, location_kind, location_idx - but a block's location kind CANNOT BE BlockList
-// [ ] RDI_Variable has location_kind, location_idx
+// [x] RDI_Local, RDI_GlobalVariable, RDI_ThreadVariable -> RDI_Variable
+// [x] RDI_Variable gets RDI_ContainerFlags, and a container_idx
+// [x] RDI_Namespace can be a container, same as types/procedures
+// [x] If procedure-contained, then index goes to scope now, not procedure
+// [x] Location sections -> split by location kind, fixed tables for simple locations, one catch-all table for bytecode.
+// [x] Location kind -> can be thread-local offset, or module virtual offset, to enclose globals/tlocals cases
+// [x] Referring to one location -> kind * index
+// [x] Referring to many locations, based on scope offsets -> kind = BlockList; BlockList encodes a first/opl pair into Block table, each Block has scope_off_first/opl, location_kind, location_idx - but a block's location kind CANNOT BE BlockList
+// [x] RDI_Variable has location_kind, location_idx
+//
+// [ ] we keep flat tables of symbols, *but*, "sort" by containing unit. unit -> [f, opl) of procedures, globals, threadvars, constants, etc.
+// [ ] container can also be a unit, so you can also go from procedure/global/tvar -> unit
+//
 // [ ] symbols only store their *partly-qualified name*, e.g. `x` for A::B::C::x
 // [ ] default name maps look up *partly-qualified names*
 // [ ] to match a *fully qualified name*, there needs to be a second kind of different lookup - instead of string-matching, we need to match against the *fully qualified names*. the maps must be built by hashing the *fully qualified name*, but redirecting to the symbol with the *partially qualified name*. this is to allow fully-qualified lookups, but avoid storing fully-qualified names.

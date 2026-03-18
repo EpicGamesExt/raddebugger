@@ -992,9 +992,10 @@ RDI_EnumMemberTable:
 @table(name value)
 RDI_ContainerKindTable:
 {
-  {Type       0x0}
-  {Scope      0x1}
-  {Namespace  0x2}
+  {Unit       0x0}
+  {Type       0x1}
+  {Scope      0x2}
+  {Namespace  0x3}
 }
 
 @table(name value)
