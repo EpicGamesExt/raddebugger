@@ -88,7 +88,6 @@
 
 // --- Linker ------------------------------------------------------------------
 
-#include "lnk_error.h"
 #include "lnk_log.h"
 #include "lnk_timer.h"
 #include "lnk_io.h"
@@ -102,7 +101,6 @@
 #include "lnk_debug_info.h"
 #include "lnk.h"
 
-#include "lnk_error.c"
 #include "lnk_log.c"
 #include "lnk_timer.c"
 #include "lnk_io.c"
@@ -5069,10 +5067,10 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 
   if (lnk_get_log_status(LNK_Log_Debug)) {
     String8 full_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
-    fprintf(stderr, "--------------------------------------------------------------------------------\n");
-    fprintf(stderr, "Command Line: %.*s\n", str8_varg(full_cmd_line));
-    fprintf(stderr, "Work Dir    : %.*s\n", str8_varg(config->work_dir));
-    fprintf(stderr, "--------------------------------------------------------------------------------\n");
+    lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
+    lnk_fprintf(stderr, "Command Line: %.*s\n", str8_varg(full_cmd_line));
+    lnk_fprintf(stderr, "Work Dir    : %.*s\n", str8_varg(config->work_dir));
+    lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
   }
 
   //
@@ -5231,11 +5229,12 @@ internal void
 entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0,0);
-  lnk_init_error_handler();
+  lnk_log_begin();
   LNK_Config *config = lnk_config_from_argcv(scratch.arena, cmdline->argc, cmdline->argv);
   TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
   TP_Arena   *tp_arena = tp_arena_alloc(tp);
   lnk_run(tp, tp_arena, config);
+  lnk_log_end();
   scratch_end(scratch);
 }
 

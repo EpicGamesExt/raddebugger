@@ -40,7 +40,7 @@
 #include "linker/codeview_ext/codeview.h"
 #include "linker/lnk_cmd_line.h"
 #include "linker/lnk_cmd_line.c"
-#include "linker/lnk_error.h"
+#include "linker/lnk_log.h"
 #include "torture.h"
 #include "torture_radlink.h"
 

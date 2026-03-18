@@ -976,10 +976,10 @@ lnk_include_symbol(LNK_Config *config, String8 name, LNK_Obj *obj)
 internal void
 lnk_print_build_info()
 {
-  fprintf(stdout, "  Compiler: %s\n", COMPILER_STRING);
-  fprintf(stdout, "  Mode    : %s\n", BUILD_MODE_STRING);
-  fprintf(stdout, "  Date    : %s %s\n", __TIME__, __DATE__);
-  fprintf(stdout, "  Version : %s\n", BUILD_VERSION_STRING_LITERAL);
+  lnk_fprintf(stdout, "  Compiler: %s\n", COMPILER_STRING);
+  lnk_fprintf(stdout, "  Mode    : %s\n", BUILD_MODE_STRING);
+  lnk_fprintf(stdout, "  Date    : %s %s\n", __TIME__, __DATE__);
+  lnk_fprintf(stdout, "  Version : %s\n", BUILD_VERSION_STRING_LITERAL);
 }
 
 internal void
@@ -997,13 +997,13 @@ lnk_print_help(void)
     desc_max_size = Max(desc_max_size, strlen(g_cmd_switch_map[i].desc));
   }
 
-  fprintf(stdout, "--- Help -------------------------------------------------------------------------------------------------------------------\n");
-  fprintf(stdout, "  %s\n", BUILD_TITLE_STRING_LITERAL);
-  fprintf(stdout, "\n");
-  fprintf(stdout, "  Usage: radlink.exe [Options] [Files] [@rsp]\n");
-  fprintf(stdout, "\n");
+  lnk_fprintf(stdout, "--- Help -------------------------------------------------------------------------------------------------------------------\n");
+  lnk_fprintf(stdout, "  %s\n", BUILD_TITLE_STRING_LITERAL);
+  lnk_fprintf(stdout, "\n");
+  lnk_fprintf(stdout, "  Usage: radlink.exe [Options] [Files] [@rsp]\n");
+  lnk_fprintf(stdout, "\n");
 
-  fprintf(stdout, "  Options:\n");
+  lnk_fprintf(stdout, "  Options:\n");
   U64 option_indent_size   = 4;
   U64 option_name_max_size = 60;
   for EachElement(i, g_cmd_switch_map) {
@@ -1047,12 +1047,12 @@ lnk_print_help(void)
     }
 
     String8 line = str8_list_join(temp.arena, &fmt, 0);
-    fprintf(stdout, "%.*s", str8_varg(line));
+    lnk_fprintf(stdout, "%.*s", str8_varg(line));
 
     temp_end(temp);
   }
 
-  fprintf(stdout, "\n");
+  lnk_fprintf(stdout, "\n");
 
   scratch_end(scratch);
 }
@@ -2040,7 +2040,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   } break;
 
   case LNK_CmdSwitch_Rad_Version: {
-    fprintf(stdout, "%s\n", BUILD_TITLE_STRING_LITERAL);
+    lnk_fprintf(stdout, "%s\n", BUILD_TITLE_STRING_LITERAL);
     os_abort(0);
   } break;
 
