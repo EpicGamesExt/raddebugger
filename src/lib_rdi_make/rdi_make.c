@@ -1115,6 +1115,7 @@ rdim_scope_push_voff_range(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDIM_Sc
   list->scope_voff_count += 2;
 }
 
+#if 0 // TODO(rjf): @locpass
 RDI_PROC RDIM_Local *
 rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *scope)
 {
@@ -1141,6 +1142,7 @@ rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RD
 {
   return rdim_push_location_case(arena, scopes, &local->location_cases, location, voff_range);
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: [Building] Bake Parameter Joining

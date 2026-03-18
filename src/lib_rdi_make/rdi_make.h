@@ -884,6 +884,7 @@ struct RDIM_Symbol
 {
   struct RDIM_SymbolChunkNode *chunk;
   RDI_S32 is_extern;
+  RDI_S32 is_param;
   RDIM_String8 name;
   RDIM_String8 link_name;
   RDIM_Type *type;
@@ -968,10 +969,13 @@ struct RDIM_Scope
   RDIM_Scope *last_child;
   RDIM_Scope *next_sibling;
   RDIM_Rng1U64List voff_ranges;
+#if 0 // TODO(rjf): @locpass
   RDIM_Local *first_local;
   RDIM_Local *last_local;
   RDI_U32 local_count;
+#endif
   RDIM_InlineSite *inline_site;
+  RDIM_SymbolChunkList locals;
 };
 
 typedef struct RDIM_ScopeChunkNode RDIM_ScopeChunkNode;
@@ -1497,8 +1501,11 @@ RDI_PROC RDIM_Scope *rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChu
 RDI_PROC RDI_U64 rdim_idx_from_scope(RDIM_Scope *scope);
 RDI_PROC void rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkList *to_push);
 RDI_PROC void rdim_scope_push_voff_range(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDIM_Scope *scope, RDIM_Rng1U64 range);
+#if 0 // TODO(rjf): @locpass
 RDI_PROC RDIM_Local *rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *scope);
+RDI_PROC RDIM_LocationCase *rdim_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationCaseList *list, RDIM_Location *location, RDIM_Rng1U64 voff_range);
 RDI_PROC RDIM_LocationCase *rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *location, RDIM_Rng1U64 voff_range);
+#endif
 
 ////////////////////////////////
 //~ rjf: [Building] Bake Parameter Joining

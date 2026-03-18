@@ -1236,9 +1236,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           Rng1U64 range = lane_range(n->count);
           for EachInRange(n_idx, range)
           {
-            for EachNode(local, RDIM_Local, n->v[n_idx].first_local)
+            for EachNode(local_n, RDIM_SymbolChunkNode, n->v[n_idx].locals.first)
             {
-              rdim_bake_string_map_loose_insert(arena, top, lane_map, 4, local->name);
+              for EachIndex(local_n_idx, local_n->count)
+              {
+                rdim_bake_string_map_loose_insert(arena, top, lane_map, 4, local_n->v[local_n_idx].name);
+              }
             }
           }
         }
@@ -2701,6 +2704,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute lane location block layout
   //
+#if 0 // TODO(rjf): @locpass
   typedef struct LocLayout LocLayout;
   struct LocLayout
   {
@@ -2782,6 +2786,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
   }
   lane_sync();
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake location blocks
@@ -2941,7 +2946,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         Rng1U64 range = lane_range(n->count);
         for EachInRange(n_idx, range)
         {
-          num_locals_in_this_lane_and_node += n->v[n_idx].local_count;
+          num_locals_in_this_lane_and_node += n->v[n_idx].locals.total_count;
           num_voffs_in_this_lane_and_node += n->v[n_idx].voff_ranges.count*2;
         }
         scope_layout->scope_local_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_locals_in_this_lane_and_node;
@@ -2984,7 +2989,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     RDI_U64 scopes_count;
     RDI_U64 *scope_voffs;
     RDI_U64 scope_voffs_count;
-    RDI_Local *locals;
+    RDI_Symbol *locals;
     RDI_U64 locals_count;
   };
   BakedScopes *baked_scopes = 0;
@@ -3009,7 +3014,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     if(lane_idx() == lane_from_task_idx(2))
     {
       baked_scopes->locals_count = params->scopes.local_count+1;
-      baked_scopes->locals = push_array(arena, RDI_Local, baked_scopes->locals_count);
+      baked_scopes->locals = push_array(arena, RDI_Symbol, baked_scopes->locals_count);
     }
     lane_sync();
     
@@ -3022,8 +3027,6 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         U64 scope_chunk_lane_slot_idx = lane_idx()*params->scopes.chunk_count + chunk_idx;
         U64 chunk_local_off = scope_layout->scope_local_chunk_lane_offs[scope_chunk_lane_slot_idx];
         U64 chunk_voff_off = scope_layout->scope_voff_chunk_lane_offs[scope_chunk_lane_slot_idx];
-        U64 location_block_chunk_lane_slot_idx = lane_idx() * total_location_case_chunk_count + chunk_idx;
-        U64 chunk_location_block_off = loc_layout->location_case_chunk_lane_offs[location_block_chunk_lane_slot_idx];
         for EachInRange(n_idx, range)
         {
           U64 dst_idx = 1 + n->base_idx + n_idx;
@@ -3042,19 +3045,25 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           
           //- rjf: fill locals
           U64 local_idx_first = chunk_local_off;
-          for EachNode(src_local, RDIM_Local, src_scope->first_local)
+          for EachNode(src_local_n, RDIM_SymbolChunkNode, src_scope->locals.first)
           {
-            RDI_Local *dst_local = &baked_scopes->locals[chunk_local_off];
-            dst_local->kind            = src_local->kind;
-            dst_local->name_string_idx = rdim_bake_idx_from_string(bake_strings, src_local->name);
-            dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
-            if(src_local->location_cases.count != 0)
+            for EachIndex(src_local_idx, src_local_n->count)
             {
-              dst_local->location_first  = chunk_location_block_off;
-              dst_local->location_opl    = chunk_location_block_off + src_local->location_cases.count;
-              chunk_location_block_off += src_local->location_cases.count;
+              RDIM_Symbol *src_local = &src_local_n->v[src_local_idx];
+              RDI_Symbol *dst_local = &baked_scopes->locals[chunk_local_off];
+#if 0
+              dst_local->kind            = src_local->kind;
+              dst_local->name_string_idx = rdim_bake_idx_from_string(bake_strings, src_local->name);
+              dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
+              if(src_local->location_cases.count != 0)
+              {
+                dst_local->location_first  = chunk_location_block_off;
+                dst_local->location_opl    = chunk_location_block_off + src_local->location_cases.count;
+                chunk_location_block_off += src_local->location_cases.count;
+              }
+#endif
+              chunk_local_off += 1;
             }
-            chunk_local_off += 1;
           }
           U64 local_idx_opl = chunk_local_off;
           
