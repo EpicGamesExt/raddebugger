@@ -33,7 +33,7 @@ read_only global CV_TypeId cv_type_id_variadic = 0xFFFFFFFF;
 ////////////////////////////////
 //~ Aligns
 
-#define CV_LeafAlign          4
+#define CV_LeafAlign          1
 #define CV_SymbolAlign        1
 #define CV_C13SubSectionAlign 4
 #define CV_FileCheckSumsAlign 4
