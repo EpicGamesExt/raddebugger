@@ -582,7 +582,7 @@ lnk_leaf_ref_from_ti(LNK_CodeViewInput *input, U32 obj_idx, CV_TypeIndexSource s
   if (contains_1u64(debug_t->pch_ti_range[source], ti)) {
     leaf_ref = (LNK_LeafRef){
       .obj_idx  = debug_t->pch_obj_idx,
-      .leaf_idx = cv_leaf_idx_from_ti(&input->debug_t_arr[debug_t->pch_obj_idx], source, ti)
+      .leaf_idx = cv_leaf_idx_from_ti(&input->debug_p_arr[debug_t->pch_obj_idx], source, ti)
     };
   } else {
     U64 ts_idx = input->obj_to_ts[obj_idx];
