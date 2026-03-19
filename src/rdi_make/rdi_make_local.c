@@ -945,8 +945,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     //- rjf: wide bake
     ProfScope("wide bake") 
     {
-      U64 line_table_block_take_counter_ = 0;
-      U64 *line_table_block_take_counter = &line_table_block_take_counter_;
+      U64 *line_table_block_take_counter = push_array(scratch.arena, U64, 1);
       lane_sync_u64(&line_table_block_take_counter, 0);
       U64 line_table_block_size = 4096;
       U64 line_table_block_count = (line_tables_count + line_table_block_size - 1) / line_table_block_size;
@@ -2096,8 +2095,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   RDIM_SortKey **bake_src_line_map_keys = 0;
   ProfScope("sort line-bucketed src line map data")
   {
-    U64 map_take_idx_ = 0;
-    U64 *map_take_idx = &map_take_idx_;
+    U64 *map_take_idx = push_array(scratch.arena, U64, 1);
     U64 map_count = params->src_files.total_count;
     if(lane_idx() == 0)
     {
