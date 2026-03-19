@@ -368,7 +368,7 @@ internal U64
 os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 {
   if(os_handle_match(file, os_handle_zero())) { return 0; }
-
+  
   HANDLE  handle = (HANDLE)file.u64[0];
   U8     *ptr    = out_data;
   U64     off    = rng.min;
@@ -1072,6 +1072,10 @@ os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
   DWORD sleep_ms = os_w32_sleep_ms_from_endt_us(endt_us);
   DWORD result = WaitForSingleObject(process, sleep_ms);
   B32 process_joined = (result == WAIT_OBJECT_0);
+  if(process_joined)
+  {
+    CloseHandle(process);
+  }
   if(process_joined && exit_code_out)
   {
     DWORD exit_code = 0;
@@ -1564,24 +1568,24 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
 #else
 #  error Arch not supported!
 #endif
-
+          
 #if BUILD_CONSOLE_INTERFACE
           buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nCreate a new issue with this report at %S.\n\n", BUILD_ISSUES_LINK_STRING_LITERAL);
 #else
           buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen,
-              L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue at\n"
-              L"<a href=\"%S\">%S</a>\n\n", BUILD_ISSUES_LINK_STRING_LITERAL, BUILD_ISSUES_LINK_STRING_LITERAL);
+                               L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue at\n"
+                               L"<a href=\"%S\">%S</a>\n\n", BUILD_ISSUES_LINK_STRING_LITERAL, BUILD_ISSUES_LINK_STRING_LITERAL);
 #endif
           buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"Call stack:\n");
-
+          
           U64 frame_offset = 0;
-
+          
           if (frame.AddrPC.Offset == 0)
           {
             // if IP address is 0 then most likely we have called indirectly on NULL function pointer
             // which means no useful stack unwinding will happen, because there's no unwind info for address 0
             // but we can try reading 8 bytes of return address from stack, and start unwinding there
-
+            
             ULONG_PTR hi, lo;
             GetCurrentThreadStackLimits(&lo, &hi);
             if (frame.AddrStack.Offset >= lo && frame.AddrStack.Offset <= hi - sizeof(void*))
@@ -1596,11 +1600,11 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
               context.Sp = frame.AddrStack.Offset;
 #endif
             }
-
+            
             buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"1. [NULL]\n");
             frame_offset = 1;
           }
-
+          
           for(U32 idx=0; ;idx++)
           {
             const U32 max_frames = 32;
@@ -1699,7 +1703,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
       info.ClientPointers = FALSE;
       BOOL dump_successful = dbg_MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpNormal, &info, 0, 0);
       CloseHandle(file);
-
+      
       if (dump_successful)
       {
 #if !BUILD_CONSOLE_INTERFACE
