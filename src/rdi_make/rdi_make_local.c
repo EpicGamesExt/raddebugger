@@ -282,6 +282,47 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   Temp scratch = scratch_begin(&arena, 1);
   
   //////////////////////////////////////////////////////////////
+  //- rjf: @rdim_bake_stage form joined symbol lists, from all units
+  //
+  RDIM_SymbolChunkList *all_global_variables = 0;
+  RDIM_SymbolChunkList *all_thread_variables = 0;
+  RDIM_SymbolChunkList *all_constants = 0;
+  RDIM_SymbolChunkList *all_procedures = 0;
+  RDIM_ScopeChunkList *all_scopes = 0;
+  RDIM_InlineSiteChunkList *all_inline_sites = 0;
+  if(lane_idx() == 0)
+  {
+    all_global_variables = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+    all_thread_variables = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+    all_constants        = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+    all_procedures       = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+    all_scopes           = push_array(scratch.arena, RDIM_ScopeChunkList, 1);
+    all_inline_sites     = push_array(scratch.arena, RDIM_InlineSiteChunkList, 1);
+    for EachNode(unit_n, RDIM_UnitChunkNode, params->units.first)
+    {
+      for EachIndex(unit_n_idx, unit_n->count)
+      {
+        RDIM_Unit *unit = &unit_n->v[unit_n_idx];
+        RDIM_SymbolChunkList global_variables_shallow_copy = rdim_symbol_chunk_list_shallow_copy(scratch.arena, &unit->global_variables);
+        RDIM_SymbolChunkList thread_variables_shallow_copy = rdim_symbol_chunk_list_shallow_copy(scratch.arena, &unit->thread_variables);
+        RDIM_SymbolChunkList constants_shallow_copy = rdim_symbol_chunk_list_shallow_copy(scratch.arena, &unit->constants);
+        RDIM_SymbolChunkList procedures_shallow_copy = rdim_symbol_chunk_list_shallow_copy(scratch.arena, &unit->procedures);
+        rdim_symbol_chunk_list_concat_in_place(all_global_variables, &global_variables_shallow_copy);
+        rdim_symbol_chunk_list_concat_in_place(all_thread_variables, &thread_variables_shallow_copy);
+        rdim_symbol_chunk_list_concat_in_place(all_constants, &constants_shallow_copy);
+        rdim_symbol_chunk_list_concat_in_place(all_procedures, &procedures_shallow_copy);
+        // TODO(rjf): @locpass scopes, inline sites
+      }
+    }
+  }
+  lane_sync_u64(&all_global_variables, 0);
+  lane_sync_u64(&all_thread_variables, 0);
+  lane_sync_u64(&all_constants, 0);
+  lane_sync_u64(&all_procedures, 0);
+  lane_sync_u64(&all_scopes, 0);
+  lane_sync_u64(&all_inline_sites, 0);
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake vmaps
   //
   RDIM_BakeVMap *baked_scope_vmap = 0;
@@ -328,14 +369,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       U64 *lane_chunk_range_counts = 0;
       if(lane_idx() == 0)
       {
-        lane_chunk_range_counts = push_array(scratch.arena, U64, params->scopes.chunk_count * lane_count());
+        lane_chunk_range_counts = push_array(scratch.arena, U64, all_scopes->chunk_count * lane_count());
       }
       lane_sync_u64(&lane_chunk_range_counts, 0);
       {
         U64 chunk_idx = 0;
-        for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+        for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
         {
-          U64 slot_idx = lane_idx()*params->scopes.chunk_count + chunk_idx;
+          U64 slot_idx = lane_idx()*all_scopes->chunk_count + chunk_idx;
           Rng1U64 range = lane_range(n->count);
           for EachInRange(n_idx, range)
           {
@@ -351,14 +392,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       U64 total_range_count = 0;
       if(lane_idx() == 0)
       {
-        lane_chunk_range_offs = push_array(scratch.arena, U64, params->scopes.chunk_count * lane_count());
+        lane_chunk_range_offs = push_array(scratch.arena, U64, all_scopes->chunk_count * lane_count());
         U64 off = 0;
         U64 chunk_idx = 0;
-        for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+        for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
         {
           for EachIndex(l_idx, lane_count())
           {
-            U64 slot_idx = l_idx*params->scopes.chunk_count + chunk_idx;
+            U64 slot_idx = l_idx*all_scopes->chunk_count + chunk_idx;
             lane_chunk_range_offs[slot_idx] = off;
             off += lane_chunk_range_counts[slot_idx];
           }
@@ -381,9 +422,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       //- rjf: fill records
       {
         U64 chunk_idx = 0;
-        for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+        for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
         {
-          U64 slot_idx = lane_idx()*params->scopes.chunk_count + chunk_idx;
+          U64 slot_idx = lane_idx()*all_scopes->chunk_count + chunk_idx;
           U64 off = lane_chunk_range_offs[slot_idx];
           Rng1U64 range = lane_range(n->count);
           for EachInRange(n_idx, range)
@@ -414,14 +455,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       U64 *lane_chunk_range_counts = 0;
       if(lane_idx() == 0)
       {
-        lane_chunk_range_counts = push_array(scratch.arena, U64, params->global_variables.chunk_count * lane_count());
+        lane_chunk_range_counts = push_array(scratch.arena, U64, all_global_variables->chunk_count * lane_count());
       }
       lane_sync_u64(&lane_chunk_range_counts, 0);
       {
         U64 chunk_idx = 0;
-        for EachNode(n, RDIM_SymbolChunkNode, params->global_variables.first)
+        for EachNode(n, RDIM_SymbolChunkNode, all_global_variables->first)
         {
-          U64 slot_idx = lane_idx()*params->global_variables.chunk_count + chunk_idx;
+          U64 slot_idx = lane_idx()*all_global_variables->chunk_count + chunk_idx;
           Rng1U64 range = lane_range(n->count);
           for EachIndex(n_idx, n->count)
           {
@@ -441,14 +482,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       U64 total_range_count = 0;
       if(lane_idx() == 0)
       {
-        lane_chunk_range_offs = push_array(scratch.arena, U64, params->global_variables.chunk_count * lane_count());
+        lane_chunk_range_offs = push_array(scratch.arena, U64, all_global_variables->chunk_count * lane_count());
         U64 off = 0;
         U64 chunk_idx = 0;
-        for EachNode(n, RDIM_SymbolChunkNode, params->global_variables.first)
+        for EachNode(n, RDIM_SymbolChunkNode, all_global_variables->first)
         {
           for EachIndex(l_idx, lane_count())
           {
-            U64 slot_idx = l_idx*params->global_variables.chunk_count + chunk_idx;
+            U64 slot_idx = l_idx*all_global_variables->chunk_count + chunk_idx;
             lane_chunk_range_offs[slot_idx] = off;
             off += lane_chunk_range_counts[slot_idx];
           }
@@ -471,9 +512,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       //- rjf: fill records
       {
         U64 chunk_idx = 0;
-        for EachNode(n, RDIM_SymbolChunkNode, params->global_variables.first)
+        for EachNode(n, RDIM_SymbolChunkNode, all_global_variables->first)
         {
-          U64 slot_idx = lane_idx()*params->global_variables.chunk_count + chunk_idx;
+          U64 slot_idx = lane_idx()*all_global_variables->chunk_count + chunk_idx;
           U64 off = lane_chunk_range_offs[slot_idx];
           Rng1U64 range = lane_range(n->count);
           for EachInRange(n_idx, range)
@@ -1076,9 +1117,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       bake_strings = push_array(scratch.arena, RDIM_BakeStringMapTight, 1);
       top = push_array(scratch2.arena, RDIM_BakeStringMapTopology, 1);
       top->slots_count = (64 +
-                          params->procedures.total_count*1 +
-                          params->global_variables.total_count*1 +
-                          params->thread_variables.total_count*1 +
+                          all_procedures->total_count*1 +
+                          all_global_variables->total_count*1 +
+                          all_thread_variables->total_count*1 +
                           params->types.total_count/2);
       lane_maps__loose = push_array(scratch2.arena, RDIM_BakeStringMapLoose *, lane_count());
       map__loose = rdim_bake_string_map_loose_make(scratch2.arena, top);
@@ -1194,10 +1235,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       // rjf: push strings from symbols
       RDIM_SymbolChunkList *symbol_lists[] =
       {
-        &params->global_variables,
-        &params->thread_variables,
-        &params->procedures,
-        &params->constants,
+        all_global_variables,
+        all_thread_variables,
+        all_procedures,
+        all_constants,
       };
       ProfScope("symbols")
       {
@@ -1218,7 +1259,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       //- rjf: push strings from inline sites
       ProfScope("inline sites")
       {
-        for EachNode(n, RDIM_InlineSiteChunkNode, params->inline_sites.first)
+        for EachNode(n, RDIM_InlineSiteChunkNode, all_inline_sites->first)
         {
           Rng1U64 range = lane_range(n->count);
           for EachInRange(n_idx, range)
@@ -1231,7 +1272,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       //- rjf: push strings from scopes
       ProfScope("scopes")
       {
-        for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+        for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
         {
           Rng1U64 range = lane_range(n->count);
           for EachInRange(n_idx, range)
@@ -1352,11 +1393,11 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           case RDI_NameMapKind_COUNT:
           {}break;
 #define Case(name, total_count) case RDI_NameMapKind_##name:{slot_count = ((total_count) + (total_count)/4);}break
-          Case(GlobalVariables, params->global_variables.total_count);
-          Case(ThreadVariables, params->thread_variables.total_count);
-          Case(Constants, params->constants.total_count);
-          Case(Procedures, params->procedures.total_count);
-          Case(LinkNameProcedures, params->procedures.total_count);
+          Case(GlobalVariables, all_global_variables->total_count);
+          Case(ThreadVariables, all_thread_variables->total_count);
+          Case(Constants, all_constants->total_count);
+          Case(Procedures, all_procedures->total_count);
+          Case(LinkNameProcedures, all_procedures->total_count);
           Case(Types, params->types.total_count);
           Case(NormalSourcePaths, params->src_files.total_count);
 #undef Case
@@ -1383,11 +1424,11 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         case RDI_NameMapKind_NULL:
         case RDI_NameMapKind_COUNT:
         {}break;
-        case RDI_NameMapKind_GlobalVariables:   {symbols = &params->global_variables;}goto symbol_name_map_build;
-        case RDI_NameMapKind_ThreadVariables:   {symbols = &params->thread_variables;}goto symbol_name_map_build;
-        case RDI_NameMapKind_Constants:         {symbols = &params->constants;}goto symbol_name_map_build;
-        case RDI_NameMapKind_Procedures:        {symbols = &params->procedures;}goto symbol_name_map_build;
-        case RDI_NameMapKind_LinkNameProcedures:{symbols = &params->procedures; link_names = 1;}goto symbol_name_map_build;
+        case RDI_NameMapKind_GlobalVariables:   {symbols = all_global_variables;}goto symbol_name_map_build;
+        case RDI_NameMapKind_ThreadVariables:   {symbols = all_thread_variables;}goto symbol_name_map_build;
+        case RDI_NameMapKind_Constants:         {symbols = all_constants;}goto symbol_name_map_build;
+        case RDI_NameMapKind_Procedures:        {symbols = all_procedures;}goto symbol_name_map_build;
+        case RDI_NameMapKind_LinkNameProcedures:{symbols = all_procedures; link_names = 1;}goto symbol_name_map_build;
         symbol_name_map_build:;
         {
           for EachNode(n, RDIM_SymbolChunkNode, symbols->first)
@@ -1512,9 +1553,9 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     if(lane_idx() == 0) ProfScope("set up per-lane outputs")
     {
       top = push_array(scratch.arena, RDIM_BakeIdxRunMapTopology, 1);
-      top->slots_count = 64 + ((params->procedures.total_count +
-                                params->global_variables.total_count +
-                                params->thread_variables.total_count +
+      top->slots_count = 64 + ((all_procedures->total_count +
+                                all_global_variables->total_count +
+                                all_thread_variables->total_count +
                                 params->udts.total_count) * 3) / 4;
       lane_maps__loose = push_array(scratch.arena, RDIM_BakeIdxRunMapLoose *, lane_count());
       map__loose = rdim_bake_idx_run_map_loose_make(scratch.arena, top);
@@ -2713,7 +2754,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     RDI_U64 total_location_case_count;
   };
   LocLayout *loc_layout = 0;
-  U64 total_location_case_chunk_count = (params->scopes.chunk_count + params->procedures.chunk_count);
+  U64 total_location_case_chunk_count = (all_scopes->chunk_count + params->procedures.chunk_count);
   ProfScope("compute lane location block layout")
   {
     // rjf: set up
@@ -2729,7 +2770,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     {
       // rjf: count location cases in scopes
       U64 chunk_idx = 0;
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
       {
         U64 slot_idx = lane_idx() * total_location_case_chunk_count + chunk_idx;
         Rng1U64 range = lane_range(n->count);
@@ -2762,7 +2803,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     {
       U64 chunk_idx = 0;
       U64 location_case_layout_off = 1;
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
       {
         for EachIndex(l_idx, lane_count())
         {
@@ -2808,7 +2849,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     U64 chunk_idx = 0;
     ProfScope("wide fill from scopes")
     {
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
       {
         U64 layout_slot_idx = lane_idx() * total_location_case_chunk_count + chunk_idx;
         U64 layout_off = loc_layout->location_case_chunk_lane_offs[layout_slot_idx];
@@ -2929,17 +2970,17 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     if(lane_idx() == 0)
     {
       scope_layout = push_array(scratch.arena, ScopeLayout, 1);
-      scope_layout->scope_local_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
-      scope_layout->scope_local_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
-      scope_layout->scope_voff_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
-      scope_layout->scope_voff_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * params->scopes.chunk_count);
+      scope_layout->scope_local_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * all_scopes->chunk_count);
+      scope_layout->scope_local_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * all_scopes->chunk_count);
+      scope_layout->scope_voff_chunk_lane_counts = push_array(arena, RDI_U64, lane_count() * all_scopes->chunk_count);
+      scope_layout->scope_voff_chunk_lane_offs = push_array(arena, RDI_U64, lane_count() * all_scopes->chunk_count);
     }
     lane_sync_u64(&scope_layout, 0);
     
     // rjf: count per-lane-chunk
     {
       U64 chunk_idx = 0;
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
       {
         U64 num_locals_in_this_lane_and_node = 0;
         U64 num_voffs_in_this_lane_and_node = 0;
@@ -2949,8 +2990,8 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           num_locals_in_this_lane_and_node += n->v[n_idx].locals.total_count;
           num_voffs_in_this_lane_and_node += n->v[n_idx].voff_ranges.count*2;
         }
-        scope_layout->scope_local_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_locals_in_this_lane_and_node;
-        scope_layout->scope_voff_chunk_lane_counts[lane_idx()*params->scopes.chunk_count + chunk_idx] = num_voffs_in_this_lane_and_node;
+        scope_layout->scope_local_chunk_lane_counts[lane_idx()*all_scopes->chunk_count + chunk_idx] = num_locals_in_this_lane_and_node;
+        scope_layout->scope_voff_chunk_lane_counts[lane_idx()*all_scopes->chunk_count + chunk_idx] = num_voffs_in_this_lane_and_node;
         chunk_idx += 1;
       }
     }
@@ -2962,11 +3003,11 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       U64 local_layout_off = 1;
       U64 voff_layout_off = 1;
       U64 chunk_idx = 0;
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
       {
         for EachIndex(l_idx, lane_count())
         {
-          U64 slot_idx = l_idx*params->scopes.chunk_count + chunk_idx;
+          U64 slot_idx = l_idx*all_scopes->chunk_count + chunk_idx;
           scope_layout->scope_local_chunk_lane_offs[slot_idx] = local_layout_off;
           scope_layout->scope_voff_chunk_lane_offs[slot_idx] = voff_layout_off;
           local_layout_off += scope_layout->scope_local_chunk_lane_counts[slot_idx];
@@ -3002,12 +3043,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     lane_sync_u64(&baked_scopes, 0);
     if(lane_idx() == lane_from_task_idx(0))
     {
-      baked_scopes->scopes_count = params->scopes.total_count+1;
+      baked_scopes->scopes_count = all_scopes->total_count+1;
       baked_scopes->scopes = push_array(arena, RDI_Scope, baked_scopes->scopes_count);
     }
     if(lane_idx() == lane_from_task_idx(1))
     {
-      baked_scopes->scope_voffs_count = params->scopes.scope_voff_count+1;
+      baked_scopes->scope_voffs_count = all_scopes->scope_voff_count+1;
       baked_scopes->scope_voffs = push_array(arena, RDI_U64, baked_scopes->scope_voffs_count);
     }
     lane_sync();
@@ -3015,10 +3056,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     //- rjf: wide fill
     {
       U64 chunk_idx = 0;
-      for EachNode(n, RDIM_ScopeChunkNode, params->scopes.first)
+      for EachNode(n, RDIM_ScopeChunkNode, all_scopes->first)
       {
         Rng1U64 range = lane_range(n->count);
-        U64 scope_chunk_lane_slot_idx = lane_idx()*params->scopes.chunk_count + chunk_idx;
+        U64 scope_chunk_lane_slot_idx = lane_idx()*all_scopes->chunk_count + chunk_idx;
         U64 chunk_local_off = scope_layout->scope_local_chunk_lane_offs[scope_chunk_lane_slot_idx];
         U64 chunk_voff_off = scope_layout->scope_voff_chunk_lane_offs[scope_chunk_lane_slot_idx];
         for EachInRange(n_idx, range)
@@ -3096,7 +3137,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       U64 chunk_idx = 0;
       for EachNode(n, RDIM_SymbolChunkNode, params->procedures.first)
       {
-        U64 location_block_layout_slot_idx = lane_idx()*total_location_case_chunk_count + params->scopes.chunk_count + chunk_idx;
+        U64 location_block_layout_slot_idx = lane_idx()*total_location_case_chunk_count + all_scopes->chunk_count + chunk_idx;
         U64 location_block_off = loc_layout->location_case_chunk_lane_offs[location_block_layout_slot_idx];
         Rng1U64 range = lane_range(n->count);
         for EachInRange(n_idx, range)
@@ -3272,7 +3313,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(2))
     {
-      baked_inline_sites_count = params->inline_sites.total_count+1;
+      baked_inline_sites_count = all_inline_sites->total_count+1;
       baked_inline_sites = push_array(arena, RDI_InlineSite, baked_inline_sites_count);
     }
     lane_sync_u64(&baked_units, lane_from_task_idx(0));
@@ -3447,7 +3488,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     //- rjf: bake inline sites
     ProfScope("bake inline sites")
     {
-      for EachNode(n, RDIM_InlineSiteChunkNode, params->inline_sites.first)
+      for EachNode(n, RDIM_InlineSiteChunkNode, all_inline_sites->first)
       {
         Rng1U64 range = lane_range(n->count);
         for EachInRange(n_idx, range)
@@ -3485,10 +3526,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   }
   symbol_table_lists[] =
   {
-    {&params->global_variables,      &baked_global_variables, &baked_global_variables_count},
-    {&params->thread_variables,      &baked_thread_variables, &baked_thread_variables_count},
-    {&params->procedures,            &baked_procedures, &baked_procedures_count},
-    {&params->constants,             &baked_constants, &baked_constants_count},
+    {all_global_variables,      &baked_global_variables, &baked_global_variables_count},
+    {all_thread_variables,      &baked_thread_variables, &baked_thread_variables_count},
+    {all_procedures,            &baked_procedures, &baked_procedures_count},
+    {all_constants,             &baked_constants, &baked_constants_count},
     {&baked_scopes->arranged_locals, &baked_locals, &baked_locals_count},
   };
   

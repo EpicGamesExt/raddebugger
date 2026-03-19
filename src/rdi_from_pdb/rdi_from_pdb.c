@@ -1173,12 +1173,12 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   lane_sync_u64(&src_file_map, 0);
   
   //////////////////////////////////////////////////////////////
-  //- rjf: convert unit info
+  //- rjf: convert unit header info
   //
   RDIM_UnitChunkList *all_units_ptr = 0;
   RDIM_LineTableChunkList *units_line_tables = 0;
   RDIM_LineTable **units_first_inline_site_line_tables = 0;
-  ProfScope("convert unit info")
+  ProfScope("convert unit header info")
   {
     //- rjf: set up outputs
     ProfScope("set up outputs") if(lane_idx() == 0)
@@ -3259,14 +3259,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   all_udts = *all_udts_ptr;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: produce symbols from all streams
+  //- rjf: convert symbols from all units
   //
-  RDIM_SymbolChunkList *syms_procedures = 0;
-  RDIM_SymbolChunkList *syms_global_variables = 0;
-  RDIM_SymbolChunkList *syms_thread_variables = 0;
-  RDIM_SymbolChunkList *syms_constants = 0;
-  RDIM_ScopeChunkList *syms_scopes = 0;
-  RDIM_InlineSiteChunkList *syms_inline_sites = 0;
   RDIM_TypeChunkList *syms_typedefs = 0;
   ProfScope("produce symbols from all streams")
   {
@@ -3277,20 +3271,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //
     if(lane_idx() == 0)
     {
-      syms_procedures       = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      syms_global_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      syms_thread_variables = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      syms_constants        = push_array(arena, RDIM_SymbolChunkList, all_syms_count);
-      syms_scopes           = push_array(arena, RDIM_ScopeChunkList, all_syms_count);
-      syms_inline_sites     = push_array(arena, RDIM_InlineSiteChunkList, all_syms_count);
       syms_typedefs         = push_array(arena, RDIM_TypeChunkList, all_syms_count);
     }
-    lane_sync_u64(&syms_procedures, 0);
-    lane_sync_u64(&syms_global_variables, 0);
-    lane_sync_u64(&syms_thread_variables, 0);
-    lane_sync_u64(&syms_constants, 0);
-    lane_sync_u64(&syms_scopes, 0);
-    lane_sync_u64(&syms_inline_sites, 0);
     lane_sync_u64(&syms_typedefs, 0);
     
     ////////////////////////////
@@ -3329,12 +3311,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         U64 sym_constants_chunk_cap = 2048;
         U64 sym_scopes_chunk_cap = 4096;
         U64 sym_inline_sites_chunk_cap = 2048;
-        RDIM_SymbolChunkList *sym_procedures = &syms_procedures[sym_idx];
-        RDIM_SymbolChunkList *sym_global_variables = &syms_global_variables[sym_idx];
-        RDIM_SymbolChunkList *sym_thread_variables = &syms_thread_variables[sym_idx];
-        RDIM_SymbolChunkList *sym_constants = &syms_constants[sym_idx];
-        RDIM_ScopeChunkList *sym_scopes = &syms_scopes[sym_idx];
-        RDIM_InlineSiteChunkList *sym_inline_sites = &syms_inline_sites[sym_idx];
+        RDIM_Unit *sym_unit = &all_units_ptr->first->v[sym_idx];
+        RDIM_SymbolChunkList *sym_procedures = &sym_unit->procedures;
+        RDIM_SymbolChunkList *sym_global_variables = &sym_unit->global_variables;
+        RDIM_SymbolChunkList *sym_thread_variables = &sym_unit->thread_variables;
+        RDIM_SymbolChunkList *sym_constants = &sym_unit->constants;
+        RDIM_ScopeChunkList *sym_scopes = &sym_unit->scopes;
+        RDIM_InlineSiteChunkList *sym_inline_sites = &sym_unit->inline_sites;
         RDIM_TypeChunkList *typedefs = &syms_typedefs[sym_idx];
         
         //////////////////////////
@@ -4219,82 +4202,16 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: join all lane symbols
+  //- rjf: join extra types from units
   //
-  RDIM_SymbolChunkList all_procedures = {0};
-  RDIM_SymbolChunkList all_global_variables = {0};
-  RDIM_SymbolChunkList all_thread_variables = {0};
-  RDIM_SymbolChunkList all_constants = {0};
-  RDIM_ScopeChunkList all_scopes = {0};
-  RDIM_InlineSiteChunkList all_inline_sites = {0};
   RDIM_TypeChunkList all_types = {0};
   {
-    RDIM_SymbolChunkList *all_procedures_ptr = 0;
-    RDIM_SymbolChunkList *all_global_variables_ptr = 0;
-    RDIM_SymbolChunkList *all_thread_variables_ptr = 0;
-    RDIM_SymbolChunkList *all_constants_ptr = 0;
-    RDIM_ScopeChunkList *all_scopes_ptr = 0;
-    RDIM_InlineSiteChunkList *all_inline_sites_ptr = 0;
     RDIM_TypeChunkList *all_types_ptr = 0;
     if(lane_idx() == 0)
     {
-      all_procedures_ptr = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
-      all_global_variables_ptr = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
-      all_thread_variables_ptr = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
-      all_constants_ptr = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
-      all_scopes_ptr = push_array(scratch.arena, RDIM_ScopeChunkList, 1);
-      all_inline_sites_ptr = push_array(scratch.arena, RDIM_InlineSiteChunkList, 1);
       all_types_ptr = push_array(scratch.arena, RDIM_TypeChunkList, 1);
     }
-    lane_sync_u64(&all_procedures_ptr, 0);
-    lane_sync_u64(&all_global_variables_ptr, 0);
-    lane_sync_u64(&all_thread_variables_ptr, 0);
-    lane_sync_u64(&all_constants_ptr, 0);
-    lane_sync_u64(&all_scopes_ptr, 0);
-    lane_sync_u64(&all_inline_sites_ptr, 0);
     lane_sync_u64(&all_types_ptr, 0);
-    if(lane_idx() == lane_from_task_idx(1)) ProfScope("join procedures")
-    {
-      for EachIndex(idx, all_syms_count)
-      {
-        rdim_symbol_chunk_list_concat_in_place(all_procedures_ptr, &syms_procedures[idx]);
-      }
-    }
-    if(lane_idx() == lane_from_task_idx(2)) ProfScope("join global variables")
-    {
-      for EachIndex(idx, all_syms_count)
-      {
-        rdim_symbol_chunk_list_concat_in_place(all_global_variables_ptr, &syms_global_variables[idx]);
-      }
-    }
-    if(lane_idx() == lane_from_task_idx(3)) ProfScope("join thread variables")
-    {
-      for EachIndex(idx, all_syms_count)
-      {
-        rdim_symbol_chunk_list_concat_in_place(all_thread_variables_ptr, &syms_thread_variables[idx]);
-      }
-    }
-    if(lane_idx() == lane_from_task_idx(4)) ProfScope("join constants")
-    {
-      for EachIndex(idx, all_syms_count)
-      {
-        rdim_symbol_chunk_list_concat_in_place(all_constants_ptr, &syms_constants[idx]);
-      }
-    }
-    if(lane_idx() == lane_from_task_idx(5)) ProfScope("join scopes")
-    {
-      for EachIndex(idx, all_syms_count)
-      {
-        rdim_scope_chunk_list_concat_in_place(all_scopes_ptr, &syms_scopes[idx]);
-      }
-    }
-    if(lane_idx() == lane_from_task_idx(6)) ProfScope("join inline sites")
-    {
-      for EachIndex(idx, all_syms_count)
-      {
-        rdim_inline_site_chunk_list_concat_in_place(all_inline_sites_ptr, &syms_inline_sites[idx]);
-      }
-    }
     if(lane_idx() == lane_from_task_idx(7)) ProfScope("join typedefs")
     {
       for EachIndex(idx, all_syms_count)
@@ -4304,12 +4221,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       *all_types_ptr = *all_types__pre_typedefs_ptr;
     }
     lane_sync();
-    all_procedures = *all_procedures_ptr;
-    all_global_variables = *all_global_variables_ptr;
-    all_thread_variables = *all_thread_variables_ptr;
-    all_constants = *all_constants_ptr;
-    all_scopes = *all_scopes_ptr;
-    all_inline_sites = *all_inline_sites_ptr;
     all_types = *all_types_ptr;
   }
   lane_sync();
@@ -4362,12 +4273,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     result.udts             = all_udts;
     result.src_files        = all_src_files;
     result.line_tables      = all_line_tables;
-    result.global_variables = all_global_variables;
-    result.thread_variables = all_thread_variables;
-    result.constants        = all_constants;
-    result.procedures       = all_procedures;
-    result.scopes           = all_scopes;
-    result.inline_sites     = all_inline_sites;
   }
   
   scratch_end(scratch);

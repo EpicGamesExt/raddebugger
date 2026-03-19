@@ -629,43 +629,6 @@ struct RDIM_LineTableChunkList
 };
 
 ////////////////////////////////
-//~ rjf: Per-Compilation-Unit Info Types
-
-typedef struct RDIM_Unit RDIM_Unit;
-struct RDIM_Unit
-{
-  struct RDIM_UnitChunkNode *chunk;
-  RDIM_String8 unit_name;
-  RDIM_String8 compiler_name;
-  RDIM_String8 source_file;
-  RDIM_String8 object_file;
-  RDIM_String8 archive_file;
-  RDIM_String8 build_path;
-  RDI_Language language;
-  RDIM_LineTable *line_table;
-  RDIM_Rng1U64ChunkList voff_ranges;
-};
-
-typedef struct RDIM_UnitChunkNode RDIM_UnitChunkNode;
-struct RDIM_UnitChunkNode
-{
-  RDIM_UnitChunkNode *next;
-  RDIM_Unit *v;
-  RDI_U64 count;
-  RDI_U64 cap;
-  RDI_U64 base_idx;
-};
-
-typedef struct RDIM_UnitChunkList RDIM_UnitChunkList;
-struct RDIM_UnitChunkList
-{
-  RDIM_UnitChunkNode *first;
-  RDIM_UnitChunkNode *last;
-  RDI_U64 chunk_count;
-  RDI_U64 total_count;
-};
-
-////////////////////////////////
 //~ rjf: Namespace Types
 
 typedef struct RDIM_Namespace RDIM_Namespace;
@@ -1000,6 +963,49 @@ struct RDIM_ScopeChunkList
 };
 
 ////////////////////////////////
+//~ rjf: Per-Compilation-Unit Info Types
+
+typedef struct RDIM_Unit RDIM_Unit;
+struct RDIM_Unit
+{
+  struct RDIM_UnitChunkNode *chunk;
+  RDIM_String8 unit_name;
+  RDIM_String8 compiler_name;
+  RDIM_String8 source_file;
+  RDIM_String8 object_file;
+  RDIM_String8 archive_file;
+  RDIM_String8 build_path;
+  RDI_Language language;
+  RDIM_LineTable *line_table;
+  RDIM_Rng1U64ChunkList voff_ranges;
+  RDIM_SymbolChunkList global_variables;
+  RDIM_SymbolChunkList thread_variables;
+  RDIM_SymbolChunkList constants;
+  RDIM_SymbolChunkList procedures;
+  RDIM_ScopeChunkList scopes;
+  RDIM_InlineSiteChunkList inline_sites;
+};
+
+typedef struct RDIM_UnitChunkNode RDIM_UnitChunkNode;
+struct RDIM_UnitChunkNode
+{
+  RDIM_UnitChunkNode *next;
+  RDIM_Unit *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_UnitChunkList RDIM_UnitChunkList;
+struct RDIM_UnitChunkList
+{
+  RDIM_UnitChunkNode *first;
+  RDIM_UnitChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+////////////////////////////////
 //~ rjf: Baking Types
 
 //- rjf: baking parameters
@@ -1016,12 +1022,6 @@ struct RDIM_BakeParams
   RDIM_UDTChunkList udts;
   RDIM_SrcFileChunkList src_files;
   RDIM_LineTableChunkList line_tables;
-  RDIM_SymbolChunkList global_variables;
-  RDIM_SymbolChunkList thread_variables;
-  RDIM_SymbolChunkList constants;
-  RDIM_SymbolChunkList procedures;
-  RDIM_ScopeChunkList scopes;
-  RDIM_InlineSiteChunkList inline_sites;
 };
 
 //- rjf: data sections
@@ -1475,6 +1475,7 @@ RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChun
 RDI_PROC RDIM_Symbol *rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_symbol(RDIM_Symbol *symbol);
 RDI_PROC void rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push);
+RDI_PROC RDIM_SymbolChunkList rdim_symbol_chunk_list_shallow_copy(RDIM_Arena *arena, RDIM_SymbolChunkList *src);
 
 ////////////////////////////////
 //~ rjf: [Building] Inline Site Info Building
