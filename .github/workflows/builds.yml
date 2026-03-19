@@ -46,8 +46,7 @@ jobs:
           - debug
           - release
         exclude:
-          # clang runs OOM in release with ASAN
-          - { compiler: clang mode: release }
+          - { compiler: clang, mode: release } # clang runs OOM in release with ASAN
     steps:
       - name: checkout
         uses: actions/checkout@v6
