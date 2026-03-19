@@ -12,6 +12,18 @@ lnk_get_huge_arena(void)
   return g_huge_arena;
 }
 
+internal void
+lnk_discard_cv_debug_info(LNK_CodeViewInput *input, U64 obj_idx)
+{
+  // discard symbols
+  String8List *symbols_ptr = cv_sub_section_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+  MemoryZeroStruct(symbols_ptr);
+
+  // discard inline sites
+  String8List *inlineelines_ptr = cv_sub_section_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
+  MemoryZeroStruct(inlineelines_ptr);
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
 {
@@ -227,15 +239,7 @@ THREAD_POOL_TASK_FUNC(lnk_read_type_servers_task)
     // an error occurred while loading external type server, discard
     // parts debug info in dependent objs that rely on types
     for EachNode(n, U64Node, task->ts_arr.v[ts_idx].obj_indices.first) {
-      U64 obj_idx = n->data;
-
-      // discard symbols
-      String8List *symbols_ptr = cv_sub_section_ptr_from_debug_s(&task->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
-      MemoryZeroStruct(symbols_ptr);
-
-      // discard inline sites
-      String8List *inlineelines_ptr = cv_sub_section_ptr_from_debug_s(&task->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
-      MemoryZeroStruct(inlineelines_ptr);
+      lnk_discard_cv_debug_info(task, n->data);
     }
   }
 
@@ -455,8 +459,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   ProfBegin("Set up PCH indirection");
   {
     // hash_table<obj_path, obj_idx>
-    String8    work_dir      = os_get_current_path(scratch.arena);
-    HashTable *debug_p_ht    = hash_table_init(scratch.arena, obj_count);
+    String8    work_dir   = os_get_current_path(scratch.arena);
+    HashTable *debug_p_ht = hash_table_init(scratch.arena, obj_count);
     for EachIndex(i, input.debug_p_indices.count) {
       U64     obj_idx  = input.debug_p_indices.v[i];
       String8 obj_path = path_absolute_dst_from_relative_dst_src(scratch.arena, obj_arr[obj_idx]->path, work_dir);
@@ -469,19 +473,16 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
 
     for EachIndex(i, input.int_obj_indices.count) {
       U64        obj_idx = input.int_obj_indices.v[i];
-      LNK_Obj   *obj     = obj_arr[obj_idx];
       CV_DebugT *debug_t = &input.debug_t_arr[obj_idx];
 
-      // skip non-PCH objs
+      // skip objs that do not depend on PCH
       if ( ! cv_debug_t_is_pch(debug_t)) { continue; }
 
-      // get PCH ref info
-      CV_PrecompInfo precomp = cv_precomp_info_from_leaf(cv_debug_t_get_leaf(debug_t, 0));
-
       // find PCH obj
-      String8 obj_path        = path_absolute_dst_from_relative_dst_src(scratch.arena, precomp.obj_name, work_dir);
-      U64     debug_p_obj_idx = max_U64;
-      if (!hash_table_search_path_u64(debug_p_ht, obj_path, &debug_p_obj_idx)) {
+      CV_PrecompInfo precomp         = cv_precomp_info_from_leaf(cv_debug_t_get_leaf(debug_t, 0));
+      String8        obj_path        = path_absolute_dst_from_relative_dst_src(scratch.arena, precomp.obj_name, work_dir);
+      U64            debug_p_obj_idx = max_U64;
+      if ( ! hash_table_search_path_u64(debug_p_ht, obj_path, &debug_p_obj_idx)) {
         // try alternative directory for the PCH
         String8 obj_name = str8_skip_last_slash(obj_path);
         for EachNode(alt_dir_n, String8Node, alt_pch_dirs.first) {
@@ -489,8 +490,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
           if (hash_table_search_path_u64(debug_p_ht, alt_obj_path, &debug_p_obj_idx)) { break; }
         }
         if (debug_p_obj_idx == max_U64) {
-          lnk_error_obj(LNK_Error_PrecompObjNotFound, obj, "LF_PRECOMP references non-existent obj %S", obj_path);
-          lnk_exit(LNK_Error_PrecompObjNotFound);
+          lnk_error_obj(LNK_Error_PrecompObjNotFound, obj_arr[obj_idx], "LF_PRECOMP references non-existent obj %S; discarding debug info", obj_path);
+          lnk_discard_cv_debug_info(&input, obj_idx);
         }
       }
 
@@ -498,35 +499,18 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       CV_DebugT *debug_p = &input.debug_t_arr[debug_p_obj_idx];
 
       // error check LF_PRECOMP
-      if (precomp.start_index > CV_MinComplexTypeIndex) { lnk_error_obj(LNK_Warning_AtypicalStartIndex,    obj, "atypical start index 0x%x in LF_PRECOMP", precomp.start_index); }
-      if (precomp.start_index < CV_MinComplexTypeIndex) { lnk_error_obj(LNK_Error_InvalidStartIndex,       obj, "invalid start index 0x%x in LF_PRECOMP; must be >= 0x%x", precomp.start_index, CV_MinComplexTypeIndex); continue; }
-      if (precomp.leaf_count  >= debug_p->count)        { lnk_error_obj(LNK_Error_InvalidPrecompLeafCount, obj, "leaf count %u LF_PRECOMP exceeds leaf count %u in .debug$P in %S", precomp.leaf_count, debug_p->count, obj_arr[debug_p_obj_idx]->path); continue; }
+      if (precomp.start_index > CV_MinComplexTypeIndex) { lnk_error_obj(LNK_Warning_AtypicalStartIndex,    obj_arr[obj_idx], "atypical start index 0x%x in LF_PRECOMP", precomp.start_index); }
+      if (precomp.start_index < CV_MinComplexTypeIndex) { lnk_error_obj(LNK_Error_InvalidStartIndex,       obj_arr[obj_idx], "invalid start index 0x%x in LF_PRECOMP; must be >= 0x%x", precomp.start_index, CV_MinComplexTypeIndex); continue; }
+      if (precomp.leaf_count  >= debug_p->count)        { lnk_error_obj(LNK_Error_InvalidPrecompLeafCount, obj_arr[obj_idx], "leaf count %u LF_PRECOMP exceeds leaf count %u in .debug$P in %S", precomp.leaf_count, debug_p->count, obj_arr[debug_p_obj_idx]->path); continue; }
 
       // get LF_PRECOMP
       CV_Leaf            endprecomp_leaf = cv_debug_t_get_leaf(debug_p, precomp.leaf_count);
       CV_LeafEndPreComp *endprecomp      = str8_deserial_get_raw_ptr(endprecomp_leaf.data, 0, sizeof(*endprecomp));
 
       // error check LF_ENDPRECOMP
-      if (endprecomp_leaf.kind      != CV_LeafKind_ENDPRECOMP)    { lnk_error_obj(LNK_Error_EndprecompNotFound, obj, "missing LF_ENDPRECOMP [0x%x] in %S", precomp.leaf_count, obj_arr[debug_p_obj_idx]->path); continue; }
-      if (endprecomp_leaf.data.size != sizeof(CV_LeafEndPreComp)) { lnk_error_obj(LNK_Error_IllData,            obj, "invalid size 0x%x for LF_ENDPRECOMP", endprecomp_leaf.data.size); continue; }
-      if (endprecomp->sig           != precomp.sig)               { lnk_error_obj(LNK_Error_PrecompSigMismatch, obj, "PCH signature mismatch, expected 0x%x got 0x%x; PCH obj %S", precomp.sig, endprecomp->sig, obj_arr[debug_p_obj_idx]->path); continue; }
-
-      { // PCH and OBJ signatures must  match
-        String8List   symbols     = cv_sub_section_from_debug_s(input.debug_s_arr[debug_p_obj_idx], CV_C13SubSectionKind_Symbols);
-        CV_SymbolList symbol_list = {0};
-        cv_parse_symbol_sub_section_capped(scratch.arena, &symbol_list, 0, str8_list_first(&symbols), CV_SymbolAlign, 1);
-        CV_Symbol symbol = symbol_list.count ? symbol_list.first->data : (CV_Symbol){0};
-        if (cv_is_obj_info(symbol)) {
-          CV_ObjInfo obj_info = cv_obj_info_from_symbol(symbol);
-          if (obj_info.sig != 0 && obj_info.sig != precomp.sig) {
-            lnk_error_obj(LNK_Error_PrecompSigMismatch, obj, "signature mismatch between LF_PRECOMP(0x%X) and S_OBJNAME(0x%X) in %S", precomp.sig, obj_info.sig, obj_arr[debug_p_obj_idx]->path);
-            continue;
-          }
-        } else {
-          lnk_error_obj(LNK_Error_PrecompSigMismatch, obj, "missing S_OBJNAME, unable to validate PCH signature");
-          continue;
-        }
-      }
+      if (endprecomp_leaf.kind      != CV_LeafKind_ENDPRECOMP)    { lnk_error_obj(LNK_Error_EndprecompNotFound, obj_arr[obj_idx], "missing LF_ENDPRECOMP [0x%x] in %S", precomp.leaf_count, obj_arr[debug_p_obj_idx]->path); continue; }
+      if (endprecomp_leaf.data.size != sizeof(CV_LeafEndPreComp)) { lnk_error_obj(LNK_Error_IllData,            obj_arr[obj_idx], "invalid size 0x%x for LF_ENDPRECOMP", endprecomp_leaf.data.size); continue; }
+      if (endprecomp->sig           != precomp.sig)               { lnk_error_obj(LNK_Error_PrecompSigMismatch, obj_arr[obj_idx], "PCH signature mismatch, expected 0x%x got 0x%x; PCH obj %S", precomp.sig, endprecomp->sig, obj_arr[debug_p_obj_idx]->path); continue; }
 
       for (U64 i = 1; i < CV_TypeIndexSource_COUNT; i += 1) { debug_t->pch_ti_range[i] = r1u64(precomp.start_index, precomp.start_index + precomp.leaf_count); }
       debug_t->pch_obj_idx  = debug_p_obj_idx;
@@ -538,8 +522,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
 
     // remove CV_LeafKind_ENDPRECOMP from .debug$P
     for EachIndex(i, input.debug_p_indices.count) {
-      U64            debug_p_idx       = input.debug_p_indices.v[i];
-      CV_DebugT     *debug_p           = &input.debug_t_arr[debug_p_idx];
+      U64            debug_p_idx = input.debug_p_indices.v[i];
+      CV_DebugT     *debug_p     = &input.debug_t_arr[debug_p_idx];
       for EachIndex(i, debug_p->count) {
         U64            lf_idx = debug_p->count - (i + 1);
         CV_LeafHeader *lf     = cv_debug_t_get_leaf_header(debug_p, lf_idx);
@@ -555,8 +539,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
 
   // PCH and /Z7 objs have default min type index set to CV_MinComplexTypeIndex
   // but type servers can bump up the lower bound. In practice nobody does this.
-  // However, to cover all our bases loop through type servers and compute
-  // max lower bound.
+  // But to cover all our bases loop through type servers and compute max
+  // lower bound.
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) { input.min_type_indices[ti_source] = CV_MinComplexTypeIndex; }
   for EachInRange(ts_idx, input.ts_obj_range) {
     CV_DebugT *debug_t = &input.debug_t_arr[ts_idx];
