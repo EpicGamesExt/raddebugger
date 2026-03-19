@@ -370,8 +370,6 @@ CheckNil(nil,p) ? \
 # if defined(__SANITIZE_ADDRESS__)
 #  define ASAN_ENABLED 1
 #  define ASAN_NO_ADDR __declspec(no_sanitize_address)
-# else
-#  define UBSAN_NO_ALIGN
 # endif
 #elif COMPILER_CLANG
 # if defined(__has_feature)
