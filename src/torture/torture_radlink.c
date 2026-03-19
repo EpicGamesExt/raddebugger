@@ -3537,9 +3537,9 @@ T_BeginTest(delay_import_user32)
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *data_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".str"), PE_DATA_SECTION_FLAGS, str8_zero());
     U64 msg_off = data_sect->data.total_size;
-    str8_list_pushf(obj_writer->arena, &data_sect->data, "test\0");
+    str8_list_push(obj_writer->arena, &data_sect->data, push_cstr(scratch.arena, str8_lit("test")));
     U64 caption_off = data_sect->data.total_size;
-    str8_list_pushf(obj_writer->arena, &data_sect->data, "foo\0");
+    str8_list_push(obj_writer->arena, &data_sect->data, push_cstr(scratch.arena, str8_lit("foo")));
     COFF_ObjSymbol *msg_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("msg"), msg_off, data_sect);
     COFF_ObjSymbol *caption_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("caption"), caption_off, data_sect);
 
