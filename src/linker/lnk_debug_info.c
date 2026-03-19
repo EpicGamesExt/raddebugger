@@ -280,8 +280,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   }
 
   ProfBegin("Parse CodeView");
+  CV_DebugT *debug_p_arr = lnk_parse_debug_t_sections(tp, tp_arena, obj_count, obj_arr, debug_p_list_arr);
   input.debug_s_arr = lnk_parse_debug_s_sections(tp, tp_arena, obj_count, obj_arr, debug_s_list_arr);
-  input.debug_p_arr = lnk_parse_debug_t_sections(tp, tp_arena, obj_count, obj_arr, debug_p_list_arr);
   input.debug_t_arr = lnk_parse_debug_t_sections(tp, tp_arena, obj_count, obj_arr, debug_t_list_arr);
   input.debug_h_arr = push_array(tp_arena->v[0], CV_DebugH, obj_count); // TODO: collect & parse .debug$H
   ProfEnd();
@@ -324,17 +324,20 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   input.int_obj_indices.v = push_array(tp_arena->v[0], U32, obj_count);
   for EachIndex(obj_idx, obj_count) {
     CV_DebugT *debug_t = &input.debug_t_arr[obj_idx];
-    CV_DebugT *debug_p = &input.debug_p_arr[obj_idx];
+    CV_DebugT *debug_p = &debug_p_arr[obj_idx];
     U32Array  *arr_ptr;
-
-    if (debug_t->count && debug_p->count) {
-      lnk_error_obj(LNK_Warning_MultipleDebugTAndDebugP, obj_arr[obj_idx], "multiple sections with debug types detected, obj must have either .debug$T or .debug$P (using .debug$T for type server)");
-    }
-
-    if      (debug_p->count > 0)                     { arr_ptr = &input.debug_p_indices; }
-    else if (cv_debug_t_is_type_server_ref(debug_t)) { arr_ptr = &input.ext_obj_indices; }
-    else                                             { arr_ptr = &input.int_obj_indices; }
+    if      (debug_p->count > 0 && debug_t->count == 0) { arr_ptr = &input.debug_p_indices; }
+    else if (cv_debug_t_is_type_server_ref(debug_t))    { arr_ptr = &input.ext_obj_indices; }
+    else                                                { arr_ptr = &input.int_obj_indices; }
     arr_ptr->v[arr_ptr->count++] = obj_idx;
+
+    if (debug_t->count == 0 && debug_p->count > 0) {
+      *debug_t = *debug_p;
+    } else if (debug_t->count && debug_p->count) {
+      lnk_error_obj(LNK_Warning_MultipleDebugTAndDebugP, obj_arr[obj_idx], "multiple sections with debug types detected, obj must have either .debug$T or .debug$P; discarding both sections");
+      MemoryZeroStruct(debug_t);
+      MemoryZeroStruct(debug_p);
+    }
   }
 
   ProfScope("Set up type servers")
@@ -398,7 +401,6 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       input.count += ts_arr.count;
       input.obj_arr        = push_array(tp_arena->v[0], LNK_Obj *,          input.count);
       input.debug_s_arr    = push_array(tp_arena->v[0], CV_DebugS,          input.count);
-      input.debug_p_arr    = push_array(tp_arena->v[0], CV_DebugT,          input.count);
       input.debug_t_arr    = push_array(tp_arena->v[0], CV_DebugT,          input.count);
       input.debug_h_arr    = push_array(tp_arena->v[0], CV_DebugH,          input.count);
       input.parsed_symbols = push_array(tp_arena->v[0], CV_SymbolListArray, input.count);
@@ -406,7 +408,6 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
 
       MemoryCopyTyped(input.obj_arr,        prev.obj_arr,        prev.count);
       MemoryCopyTyped(input.debug_s_arr,    prev.debug_s_arr,    prev.count);
-      MemoryCopyTyped(input.debug_p_arr,    prev.debug_p_arr,    prev.count);
       MemoryCopyTyped(input.debug_t_arr,    prev.debug_t_arr,    prev.count);
       MemoryCopyTyped(input.parsed_symbols, prev.parsed_symbols, prev.count);
       MemoryCopyTyped(input.obj_to_ts,      prev.obj_to_ts,      prev.count);
@@ -494,21 +495,21 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       }
 
       // get PCH leaf data
-      CV_DebugT *debug_p = &input.debug_p_arr[debug_p_obj_idx];
+      CV_DebugT *debug_p = &input.debug_t_arr[debug_p_obj_idx];
 
       // error check LF_PRECOMP
       if (precomp.start_index > CV_MinComplexTypeIndex) { lnk_error_obj(LNK_Warning_AtypicalStartIndex,    obj, "atypical start index 0x%x in LF_PRECOMP", precomp.start_index); }
       if (precomp.start_index < CV_MinComplexTypeIndex) { lnk_error_obj(LNK_Error_InvalidStartIndex,       obj, "invalid start index 0x%x in LF_PRECOMP; must be >= 0x%x", precomp.start_index, CV_MinComplexTypeIndex); continue; }
-      if (precomp.leaf_count  > debug_p->count)         { lnk_error_obj(LNK_Error_InvalidPrecompLeafCount, obj, "leaf count %u LF_PRECOMP exceeds leaf count %u in .debug$P in %S", precomp.leaf_count, debug_p->count, obj_arr[debug_p_obj_idx]->path); continue; }
+      if (precomp.leaf_count  >= debug_p->count)        { lnk_error_obj(LNK_Error_InvalidPrecompLeafCount, obj, "leaf count %u LF_PRECOMP exceeds leaf count %u in .debug$P in %S", precomp.leaf_count, debug_p->count, obj_arr[debug_p_obj_idx]->path); continue; }
 
       // get LF_PRECOMP
-      CV_Leaf            endprecomp_leaf = cv_debug_t_get_leaf(debug_p, precomp.leaf_count-1);
+      CV_Leaf            endprecomp_leaf = cv_debug_t_get_leaf(debug_p, precomp.leaf_count);
       CV_LeafEndPreComp *endprecomp      = str8_deserial_get_raw_ptr(endprecomp_leaf.data, 0, sizeof(*endprecomp));
 
       // error check LF_ENDPRECOMP
       if (endprecomp_leaf.kind      != CV_LeafKind_ENDPRECOMP)    { lnk_error_obj(LNK_Error_EndprecompNotFound, obj, "missing LF_ENDPRECOMP [0x%x] in %S", precomp.leaf_count, obj_arr[debug_p_obj_idx]->path); continue; }
       if (endprecomp_leaf.data.size != sizeof(CV_LeafEndPreComp)) { lnk_error_obj(LNK_Error_IllData,            obj, "invalid size 0x%x for LF_ENDPRECOMP", endprecomp_leaf.data.size); continue; }
-      if (endprecomp->sig           != precomp.sig)               { lnk_error_obj(LNK_Error_PrecompSigMismatch, obj, "signature mismatch between LF_PRECOMP(0x%x) and LF_ENDPRECOMP(0x%x); precomp obj %S", precomp.sig, endprecomp->sig, obj_arr[debug_p_obj_idx]->path); continue; }
+      if (endprecomp->sig           != precomp.sig)               { lnk_error_obj(LNK_Error_PrecompSigMismatch, obj, "PCH signature mismatch, expected 0x%x got 0x%x; PCH obj %S", precomp.sig, endprecomp->sig, obj_arr[debug_p_obj_idx]->path); continue; }
 
       { // PCH and OBJ signatures must  match
         String8List   symbols     = cv_sub_section_from_debug_s(input.debug_s_arr[debug_p_obj_idx], CV_C13SubSectionKind_Symbols);
@@ -538,13 +539,13 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
     // remove CV_LeafKind_ENDPRECOMP from .debug$P
     for EachIndex(i, input.debug_p_indices.count) {
       U64            debug_p_idx       = input.debug_p_indices.v[i];
-      CV_DebugT     *debug_p           = &input.debug_p_arr[debug_p_idx];
+      CV_DebugT     *debug_p           = &input.debug_t_arr[debug_p_idx];
       for EachIndex(i, debug_p->count) {
         U64            lf_idx = debug_p->count - (i + 1);
         CV_LeafHeader *lf     = cv_debug_t_get_leaf_header(debug_p, lf_idx);
         if (lf->kind == CV_LeafKind_ENDPRECOMP) {
           memory_write16(&lf->kind, CV_LeafKind_NOTYPE);
-          memory_write16(&lf->size, 0);
+          memory_write16(&lf->size, sizeof(CV_LeafKind));
           break;
         }
       }
@@ -582,7 +583,7 @@ lnk_leaf_ref_from_ti(LNK_CodeViewInput *input, U32 obj_idx, CV_TypeIndexSource s
   if (contains_1u64(debug_t->pch_ti_range[source], ti)) {
     leaf_ref = (LNK_LeafRef){
       .obj_idx  = debug_t->pch_obj_idx,
-      .leaf_idx = cv_leaf_idx_from_ti(&input->debug_p_arr[debug_t->pch_obj_idx], source, ti)
+      .leaf_idx = cv_leaf_idx_from_ti(&input->debug_t_arr[debug_t->pch_obj_idx], source, ti)
     };
   } else {
     U64 ts_idx = input->obj_to_ts[obj_idx];
@@ -1366,17 +1367,16 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
   {
     ProfBegin("Alloc Hashes");
     U32Array indices[] = {
-      input->int_obj_indices,
       input->debug_p_indices,
-      input->type_server_indices
-      // TODO: explain
-      // input->ext_obj_indices,
+      input->int_obj_indices,
+      input->type_server_indices,
     };
     for EachElement(i, indices) {
       for EachIndex(k, indices[i].count) {
         U64        obj_idx = indices[i].v[k];
+        CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
         CV_DebugH *debug_h = &input->debug_h_arr[obj_idx];
-        debug_h->count = input->debug_t_arr[obj_idx].count;
+        debug_h->count = debug_t->count;
         debug_h->v     = push_array(scratch.arena, U64, debug_h->count);
       }
     }
@@ -1423,7 +1423,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
     for EachIndex(obj_idx, input->count) { total_count += input->debug_t_arr[obj_idx].source_counts[ti_source]; }
 
     task.leaf_ht_arr[ti_source].cap = total_count;
-    task.leaf_ht_arr[ti_source].cap = (task.leaf_ht_arr[ti_source].cap * 13) / 10; // * 1.3
+    task.leaf_ht_arr[ti_source].cap = 1 + ((task.leaf_ht_arr[ti_source].cap * 13) / 10); // * 1.3
     task.leaf_ht_arr[ti_source].bucket_arr = push_array(scratch.arena, LNK_LeafRef *, task.leaf_ht_arr[ti_source].cap);
 
 #if PROFILE_TELEMETRY

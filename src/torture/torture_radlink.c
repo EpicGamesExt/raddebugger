@@ -3940,12 +3940,323 @@ T_BeginTest(long_section_name)
 }
 T_EndTest;
 
+T_BeginTest(debug_p_sig_mismatch)
+{
+  String8 a_obj_name = str8_lit("a.obj");
+  String8 b_obj_name = str8_lit("b.obj");
+  U32     a_sig      = 0xCAFEBABE;
+  U32     b_sig      = 0xDEADBEEF;
+
+  String8 a_debug_s;
+  {
+    String8List srl;
+    str8_serial_begin(scratch.arena, &srl);
+
+    CV_Signature sig = CV_Signature_C13;
+    str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+    CV_C13SubSectionHeader *ss_header = str8_serial_push_size(scratch.arena, &srl, sizeof(*ss_header));
+    U64 ss_start_off = srl.total_size;
+
+    CV_SymObjName obj_name = {0};
+    obj_name.sig = a_sig;
+    String8 obj_name_string = a_obj_name;
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_SymKind) + sizeof(obj_name) + obj_name_string.size + 1);
+    str8_serial_push_u16(scratch.arena, &srl, CV_SymKind_OBJNAME);
+    str8_serial_push_struct(scratch.arena, &srl, &obj_name);
+    str8_serial_push_cstr(scratch.arena, &srl, obj_name_string);
+    str8_serial_push_align(scratch.arena, &srl, CV_SymbolAlign);
+
+    String8 comp3_data = cv_make_comp3(scratch.arena,
+                                       0,
+                                       CV_Language_C,
+                                       CV_Arch_X64,
+                                       /* ver_fe_major */ 0,
+                                       /* ver_fe_minor */ 0,
+                                       /* ver_fe_build */ 0,
+                                       /* ver_feqfe    */ 0,
+                                       /* ver_major    */ 14,
+                                       /* ver_minor    */ 36,
+                                       /* ver_build    */ 32537,
+                                       /* ver_qfe      */ 0,
+                                       str8_lit(BUILD_TITLE));
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_SymKind) + comp3_data.size);
+    str8_serial_push_u16(scratch.arena, &srl, CV_SymKind_COMPILE3);
+    str8_serial_push_string(scratch.arena, &srl, comp3_data);
+    str8_serial_push_align(scratch.arena, &srl, CV_SymbolAlign);
+
+    ss_header->kind = CV_C13SubSectionKind_Symbols;
+    ss_header->size = srl.total_size - ss_start_off;
+    str8_serial_push_align(scratch.arena, &srl, CV_C13SubSectionAlign);
+
+    a_debug_s = str8_serial_end(scratch.arena, &srl);
+  }
+  String8 a_debug_p;
+  {
+    String8List srl;
+    str8_serial_begin(scratch.arena, &srl);
+    
+    // signature
+    CV_Signature sig = CV_Signature_C13;
+    str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+    // duplicate in a.obj
+    CV_LeafPointer ptr = { .itype = CV_BasicType_VOID };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(ptr));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_POINTER);
+    str8_serial_push_struct(scratch.arena, &srl, &ptr);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    // unique procedure type
+    CV_LeafProcedure proc = { .ret_itype = 0x1000, .call_kind = CV_CallKind_NearPascal };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(proc));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PROCEDURE);
+    str8_serial_push_struct(scratch.arena, &srl, &proc);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    // PCH ender
+    CV_LeafEndPreComp endprecomp = { .sig = a_sig };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(endprecomp));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_ENDPRECOMP);
+    str8_serial_push_struct(scratch.arena, &srl, &endprecomp);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    a_debug_p = str8_serial_end(scratch.arena, &srl);
+  }
+
+  String8 b_debug_s;
+  {
+    String8List srl;
+    str8_serial_begin(scratch.arena, &srl);
+
+    CV_Signature sig = CV_Signature_C13;
+    str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+    CV_C13SubSectionHeader *ss_header = str8_serial_push_size(scratch.arena, &srl, sizeof(*ss_header));
+    U64 ss_start_off = srl.total_size;
+
+    CV_SymObjName obj_name = {0};
+    obj_name.sig = b_sig;
+    String8 obj_name_string = a_obj_name;
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_SymKind) + sizeof(obj_name) + obj_name_string.size + 1);
+    str8_serial_push_u16(scratch.arena, &srl, CV_SymKind_OBJNAME);
+    str8_serial_push_struct(scratch.arena, &srl, &obj_name);
+    str8_serial_push_cstr(scratch.arena, &srl, obj_name_string);
+    str8_serial_push_align(scratch.arena, &srl, CV_SymbolAlign);
+
+    String8 comp3_data = cv_make_comp3(scratch.arena,
+                                       0,
+                                       CV_Language_C,
+                                       CV_Arch_X64,
+                                       /* ver_fe_major */ 0,
+                                       /* ver_fe_minor */ 0,
+                                       /* ver_fe_build */ 0,
+                                       /* ver_feqfe    */ 0,
+                                       /* ver_major    */ 14,
+                                       /* ver_minor    */ 36,
+                                       /* ver_build    */ 32537,
+                                       /* ver_qfe      */ 0,
+                                       str8_lit(BUILD_TITLE));
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_SymKind) + comp3_data.size);
+    str8_serial_push_u16(scratch.arena, &srl, CV_SymKind_COMPILE3);
+    str8_serial_push_string(scratch.arena, &srl, comp3_data);
+    str8_serial_push_align(scratch.arena, &srl, CV_SymbolAlign);
+
+    ss_header->kind = CV_C13SubSectionKind_Symbols;
+    ss_header->size = srl.total_size - ss_start_off;
+    str8_serial_push_align(scratch.arena, &srl, CV_C13SubSectionAlign);
+
+    b_debug_s = str8_serial_end(scratch.arena, &srl);
+  }
+
+  String8 b_debug_t;
+  {
+    String8List srl;
+    str8_serial_begin(scratch.arena, &srl);
+
+    CV_Signature sig = CV_Signature_C13;
+    str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+    CV_LeafPreComp precomp = { .start_index = CV_MinComplexTypeIndex, .count = 2, sig = b_sig };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(precomp) + a_obj_name.size + 1);
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PRECOMP);
+    str8_serial_push_struct(scratch.arena, &srl, &precomp);
+    str8_serial_push_cstr(scratch.arena, &srl, a_obj_name);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    CV_LeafPointer ptr = { .itype = CV_BasicType_VOID };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafPointer));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_POINTER);
+    str8_serial_push_struct(scratch.arena, &srl, &ptr);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    CV_LeafProcedure proc = { .ret_itype = 0x1000, .call_kind = CV_CallKind_NearC };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafProcedure));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PROCEDURE);
+    str8_serial_push_struct(scratch.arena, &srl, &proc);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    b_debug_t = str8_serial_end(scratch.arena, &srl);
+  }
+
+  String8 a_obj;
+  {
+    COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$P"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, a_debug_p);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, a_debug_s);
+    a_obj = coff_obj_writer_serialize(scratch.arena, cow);
+    coff_obj_writer_release(&cow);
+  }
+
+  String8 b_obj;
+  {
+    COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, b_debug_t);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, b_debug_s);
+    b_obj = coff_obj_writer_serialize(scratch.arena, cow);
+    coff_obj_writer_release(&cow);
+  }
+
+  T_Ok(t_write_file(str8_lit("a.obj"), a_obj));
+  T_Ok(t_write_file(str8_lit("b.obj"), b_obj));
+  T_Ok(t_write_entry_obj());
+
+  String8 output = {0};
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full a.obj b.obj entry.obj"), max_U64, scratch.arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32     found_error = 0;
+  String8 a_obj_path    = t_make_file_path(scratch.arena, str8_lit("a.obj"));
+  String8 b_obj_path    = t_make_file_path(scratch.arena, str8_lit("b.obj"));
+  String8 expected_line = str8f(scratch.arena, "Error(%03d): %S: PCH signature mismatch, expected 0x%x got 0x%x; PCH obj %S", LNK_Error_PrecompSigMismatch, b_obj_path, b_sig, a_sig, a_obj_path);
+  while (output.size) {
+    String8 line = t_chop_line(&output);
+    found_error = str8_match(line, expected_line, StringMatchFlag_CaseInsensitive);
+    if (found_error) { break; }
+  }
+  T_Ok(found_error);
+}
+T_EndTest;
+
+T_BeginTest(debug_p_and_debug_t_in_obj)
+{
+  U32     pch_sig      = 0xCAFEBABE;
+  String8 pch_obj_name = str8_lit("pch.obj");
+
+  String8 pch_debug_s;
+  {
+    String8List srl;
+    str8_serial_begin(scratch.arena, &srl);
+
+    CV_Signature sig = CV_Signature_C13;
+    str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+    CV_C13SubSectionHeader *ss_header = str8_serial_push_size(scratch.arena, &srl, sizeof(*ss_header));
+    U64 ss_start_off = srl.total_size;
+
+    CV_SymObjName obj_name = {0};
+    obj_name.sig = pch_sig;
+    String8 obj_name_string = pch_obj_name;
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_SymKind) + sizeof(obj_name) + obj_name_string.size + 1);
+    str8_serial_push_u16(scratch.arena, &srl, CV_SymKind_OBJNAME);
+    str8_serial_push_struct(scratch.arena, &srl, &obj_name);
+    str8_serial_push_cstr(scratch.arena, &srl, obj_name_string);
+    str8_serial_push_align(scratch.arena, &srl, CV_SymbolAlign);
+
+    ss_header->kind = CV_C13SubSectionKind_Symbols;
+    ss_header->size = srl.total_size - ss_start_off;
+    str8_serial_push_align(scratch.arena, &srl, CV_C13SubSectionAlign);
+
+    pch_debug_s = str8_serial_end(scratch.arena, &srl);
+  }
+
+  String8 pch_debug_p;
+  {
+    String8List srl;
+    str8_serial_begin(scratch.arena, &srl);
+
+    // signature
+    CV_Signature sig = CV_Signature_C13;
+    str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+    CV_LeafPointer ptr = { .itype = CV_BasicType_VOID };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(ptr));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_POINTER);
+    str8_serial_push_struct(scratch.arena, &srl, &ptr);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    // PCH ender
+    CV_LeafEndPreComp endprecomp = { .sig = pch_sig };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(endprecomp));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_ENDPRECOMP);
+    str8_serial_push_struct(scratch.arena, &srl, &endprecomp);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    pch_debug_p = str8_serial_end(scratch.arena, &srl);
+  }
+
+  String8 pch_debug_t;
+  {
+    String8List srl;
+    str8_serial_begin(scratch.arena, &srl);
+
+    CV_Signature sig = CV_Signature_C13;
+    str8_serial_push_struct(scratch.arena, &srl, &sig);
+
+    CV_LeafPreComp precomp = { .start_index = CV_MinComplexTypeIndex, .count = 1, sig = pch_sig };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(precomp) + pch_obj_name.size + 1);
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PRECOMP);
+    str8_serial_push_struct(scratch.arena, &srl, &precomp);
+    str8_serial_push_cstr(scratch.arena, &srl, pch_obj_name);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    CV_LeafPointer ptr = { .itype = CV_BasicType_VOID };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafPointer));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_POINTER);
+    str8_serial_push_struct(scratch.arena, &srl, &ptr);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    CV_LeafProcedure proc = { .ret_itype = 0x1000, .call_kind = CV_CallKind_NearC };
+    str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_LeafKind) + sizeof(CV_LeafProcedure));
+    str8_serial_push_u16(scratch.arena, &srl, CV_LeafKind_PROCEDURE);
+    str8_serial_push_struct(scratch.arena, &srl, &proc);
+    str8_serial_push_align(scratch.arena, &srl, CV_LeafAlign);
+
+    pch_debug_t = str8_serial_end(scratch.arena, &srl);
+  }
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  coff_obj_writer_push_section(cow, str8_lit(".debug$P"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, pch_debug_p);
+  coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, pch_debug_t);
+  coff_obj_writer_push_section(cow, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, pch_debug_s);
+  String8 raw_coff = coff_obj_writer_serialize(scratch.arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("pch.obj"), raw_coff));
+  T_Ok(t_write_entry_obj());
+  String8 output = {0};
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full pch.obj entry.obj"), max_U64, scratch.arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32     found_warning = 0;
+  String8 pch_obj_path  = t_make_file_path(scratch.arena, str8_lit("pch.obj"));
+  String8 expected_line = str8f(scratch.arena, "Warning(%03d): %S: multiple sections with debug types detected, obj must have either .debug$T or .debug$P; discarding both sections", LNK_Warning_MultipleDebugTAndDebugP, pch_obj_path);
+  while (output.size) {
+    String8 line = t_chop_line(&output);
+    found_warning = str8_match(line, expected_line, StringMatchFlag_CaseInsensitive);
+    if (found_warning) { break; }
+  }
+  T_Ok(found_warning);
+}
+T_EndTest;
+
 T_BeginTest(merge_duplicate_types)
 {
   {
-    U32 pch_sig = 0xCAFEBABE;
-    String8 pch_obj_name = str8_lit("C:\\devel\\raddebugger\\build\\torture\\merge_duplicate_types\\pch.obj");
-    String8 a_obj_name   = str8_lit("C:\\devel\\raddebugger\\build\\torture\\merge_duplicate_types\\a.obj");
+    U32     pch_sig      = 0xCAFEBABE;
+    String8 pch_obj_name = str8_lit("pch.obj");
+    String8 a_obj_name   = str8_lit("a.obj");
+    String8 c_obj_name   = str8_lit("c.obj");
 
     String8 pch_debug_s;
     {
@@ -4136,7 +4447,7 @@ T_BeginTest(merge_duplicate_types)
       // S_OBJNAME
       CV_SymObjName obj_name = {0};
       obj_name.sig = pch_sig;
-      String8 obj_name_string = a_obj_name;
+      String8 obj_name_string = c_obj_name;
       str8_serial_push_u16(scratch.arena, &srl, sizeof(CV_SymKind) + sizeof(obj_name) + obj_name_string.size + 1);
       str8_serial_push_u16(scratch.arena, &srl, CV_SymKind_OBJNAME);
       str8_serial_push_struct(scratch.arena, &srl, &obj_name);
@@ -4227,7 +4538,7 @@ T_BeginTest(merge_duplicate_types)
     T_Ok(t_write_file(str8_lit("b.obj"), b_obj));
     T_Ok(t_write_file(str8_lit("c.obj"), c_obj));
 
-    t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /out:a.exe pch.obj a.obj c.obj entry.obj");
+    t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /out:a.exe pch.obj a.obj b.obj c.obj entry.obj");
     T_Ok(g_last_exit_code == 0);
   }
 
@@ -4247,7 +4558,7 @@ T_BeginTest(merge_duplicate_types)
   PDB_TpiParsed *tpi     = pdb_tpi_from_data(scratch.arena, tpi_data);
 
   U64 type_count = tpi->itype_opl - tpi->itype_first;
-  T_Ok(type_count == 4);
+  T_Ok(type_count == 5);
   
   CV_DebugT debug_t = cv_debug_t_from_data(scratch.arena, pdb_leaf_data_from_tpi(tpi), 4);
   T_Ok(debug_t.count == type_count);
@@ -4269,11 +4580,21 @@ T_BeginTest(merge_duplicate_types)
 
     CV_LeafProcedure *proc = (CV_LeafProcedure *)proc_leaf.data.str;
     T_Ok(proc->ret_itype == 0x1000);
+    T_Ok(proc->call_kind == CV_CallKind_NearPascal);
+  }
+
+  {
+    CV_Leaf proc_leaf = cv_debug_t_get_leaf(&debug_t, 2);
+    T_Ok(proc_leaf.kind == CV_LeafKind_PROCEDURE);
+    T_Ok(proc_leaf.data.size == sizeof(CV_LeafProcedure));
+
+    CV_LeafProcedure *proc = (CV_LeafProcedure *)proc_leaf.data.str;
+    T_Ok(proc->ret_itype == 0x1000);
     T_Ok(proc->call_kind == CV_CallKind_NearC);
   }
 
   {
-    CV_Leaf ptr_leaf  = cv_debug_t_get_leaf(&debug_t, 2);
+    CV_Leaf ptr_leaf  = cv_debug_t_get_leaf(&debug_t, 3);
     T_Ok(ptr_leaf.kind == CV_LeafKind_POINTER);
     T_Ok(ptr_leaf.data.size == sizeof(CV_LeafPointer));
 
@@ -4283,12 +4604,12 @@ T_BeginTest(merge_duplicate_types)
   }
 
   {
-    CV_Leaf proc_leaf = cv_debug_t_get_leaf(&debug_t, 3);
+    CV_Leaf proc_leaf = cv_debug_t_get_leaf(&debug_t, 4);
     T_Ok(proc_leaf.kind == CV_LeafKind_PROCEDURE);
     T_Ok(proc_leaf.data.size == sizeof(CV_LeafProcedure));
 
     CV_LeafProcedure *proc = (CV_LeafProcedure *)proc_leaf.data.str;
-    T_Ok(proc->ret_itype == 0x1002);
+    T_Ok(proc->ret_itype == 0x1003);
     T_Ok(proc->call_kind == CV_CallKind_NearC);
   }
 }

@@ -213,20 +213,27 @@ t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
   return t_invoke_(exe_path, cmdline, timeout, 0, 0);
 }
 
-internal B32
-t_match_line(String8 *output, String8 expected_line)
+internal String8
+t_chop_line(String8 *output)
 {
   U64     new_line_pos = str8_find_needle(*output, 0, str8_lit("\n"), 0);
   String8 line         = str8_prefix(*output, new_line_pos);
   if (str8_ends_with(line, str8_lit("\r"), 0)) {
     line = str8_chop(line, 1);
   }
+  *output = str8_skip(*output, new_line_pos + 1);
+  return line;
+}
 
-  B32 is_match = str8_match(line, expected_line, 0);
-  if (is_match) {
-    *output = str8_skip(*output, new_line_pos + 1);
+internal B32
+t_match_line(String8 *output, String8 expected_line)
+{
+  String8 before_chop = *output;
+  String8 line        = t_chop_line(output);
+  B32     is_match    = str8_match(line, expected_line, 0);
+  if ( ! is_match) {
+    *output = before_chop;
   }
-
   return is_match;
 }
 

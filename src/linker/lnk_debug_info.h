@@ -59,7 +59,6 @@ typedef struct
   U64           count;
   LNK_Obj     **obj_arr;
   CV_DebugS    *debug_s_arr;
-  CV_DebugT    *debug_p_arr;
   CV_DebugT    *debug_t_arr;
   CV_DebugH    *debug_h_arr;
   U64          *obj_to_ts;
