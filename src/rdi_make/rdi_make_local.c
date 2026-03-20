@@ -1799,17 +1799,6 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: @rdim_bake_stage build deduplicated location maps
-  //
-  RDIM_BakeStringMapTight *bake_locs__regs = 0;
-  RDIM_BakeStringMapTight *bake_locs__reg_plus_u16 = 0;
-  RDIM_BakeStringMapTight *bake_locs__bytecode = 0;
-  {
-    
-  }
-  lane_sync();
-  
-  //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake strings
   //
   typedef struct BakedStrings BakedStrings;
@@ -3196,6 +3185,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
   }
 #endif
+  
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute layout for constant data
   //

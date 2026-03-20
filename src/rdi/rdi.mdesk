@@ -77,7 +77,7 @@
   "";
   "// \"raddbg\\0\\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 20";
+  "#define RDI_ENCODING_VERSION 21";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -825,13 +825,16 @@ RDI_UDTFlagTable:
 @table(name type desc)
 RDI_UDTMemberTable:
 {
-  {self_type_idx   RDI_U32                   ""}
-  {flags           RDI_UDTFlags              ""}
-  {member_first    RDI_U32                   ""}
-  {member_count    RDI_U32                   ""}
-  {file_idx        RDI_U32                   ""}
-  {line            RDI_U32                   ""}
-  {col             RDI_U32                   ""}
+  {self_type_idx     RDI_U32                   ""}
+  {flags             RDI_UDTFlags              ""}
+  {container_flags   RDI_ContainerFlags        ""}
+  {reserved_0        RDI_U16                   ""}
+  {member_first      RDI_U32                   ""}
+  {member_count      RDI_U32                   ""}
+  {file_idx          RDI_U32                   ""}
+  {line              RDI_U32                   ""}
+  {col               RDI_U32                   ""}
+  {container_idx     RDI_U32                   ""}
 }
 
 @table(name value)
@@ -942,7 +945,7 @@ RDI_EnumMemberTable:
   ```
 }
 
-@enum(RDI_U32) RDI_UDTFlags:
+@enum(RDI_U8) RDI_UDTFlags:
 {
   @expand(RDI_UDTFlagTable a) `$(a.name .. =>20) = $(a.value)`
 }

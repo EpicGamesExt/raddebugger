@@ -67,7 +67,7 @@ union RDI_GUID {RDI_U8 u8[16]; RDI_U64 u64[2];};
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 20
+#define RDI_ENCODING_VERSION 21
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -363,7 +363,7 @@ RDI_TypeModifierFlag_Volatile             = 1<<1,
 RDI_TypeModifierFlag_Restrict             = 1<<2,
 } RDI_TypeModifierFlagsEnum;
 
-typedef RDI_U32 RDI_UDTFlags;
+typedef RDI_U8 RDI_UDTFlags;
 typedef enum RDI_UDTFlagsEnum
 {
 RDI_UDTFlag_EnumMembers          = 1<<0,
@@ -879,11 +879,14 @@ X(EnumMembers)\
 #define RDI_UDT_XList \
 X(RDI_U32, self_type_idx)\
 X(RDI_UDTFlags, flags)\
+X(RDI_ContainerFlags, container_flags)\
+X(RDI_U16, reserved_0)\
 X(RDI_U32, member_first)\
 X(RDI_U32, member_count)\
 X(RDI_U32, file_idx)\
 X(RDI_U32, line)\
 X(RDI_U32, col)\
+X(RDI_U32, container_idx)\
 
 #define RDI_MemberKind_XList \
 X(NULL)\
@@ -1427,11 +1430,14 @@ struct RDI_UDT
 {
 RDI_U32 self_type_idx;
 RDI_UDTFlags flags;
+RDI_ContainerFlags container_flags;
+RDI_U16 reserved_0;
 RDI_U32 member_first;
 RDI_U32 member_count;
 RDI_U32 file_idx;
 RDI_U32 line;
 RDI_U32 col;
+RDI_U32 container_idx;
 };
 
 typedef struct RDI_Member RDI_Member;
