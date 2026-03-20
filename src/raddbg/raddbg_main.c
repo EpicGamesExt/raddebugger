@@ -35,9 +35,9 @@
 // [x] Referring to many locations, based on scope offsets -> kind = BlockList; BlockList encodes a first/opl pair into Block table, each Block has scope_off_first/opl, location_kind, location_idx - but a block's location kind CANNOT BE BlockList
 // [x] RDI_Variable has location_kind, location_idx
 //
-// [ ] we keep flat tables of symbols, *but*, "sort" by containing unit. unit -> [f, opl) of procedures, globals, threadvars, constants, etc.
-// [ ] container can also be a unit, so you can also go from procedure/global/tvar -> unit
-// [ ] *OR*, because we can guarantee that the units themselves will be sorted from lowest -> highest in all symbol tables, we can simply binary search the unit table (small) with a symbol's index to find its corresponding unit. that way, no need to duplicate e.g. namespaces and so on across units. and actually, we have to do this, because containers can be types, and those cannot be unit-locked.
+// [x] we keep flat tables of symbols, *but*, "sort" by containing unit. unit -> [f, opl) of procedures, globals, threadvars, constants, etc.
+// [x] container can also be a unit, so you can also go from procedure/global/tvar -> unit
+// [x] *OR*, because we can guarantee that the units themselves will be sorted from lowest -> highest in all symbol tables, we can simply binary search the unit table (small) with a symbol's index to find its corresponding unit. that way, no need to duplicate e.g. namespaces and so on across units. and actually, we have to do this, because containers can be types, and those cannot be unit-locked.
 //
 // [ ] symbols only store their *partly-qualified name*, e.g. `x` for A::B::C::x
 // [ ] default name maps look up *partly-qualified names*

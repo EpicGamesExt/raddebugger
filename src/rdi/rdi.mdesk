@@ -188,18 +188,18 @@ RDI_SectionTable:
   
   
   //- rjf: scope info
-  {Scopes                        scopes                             RDI_Scope                0x001D   U32                                            ""}
-  {ScopeVOffData                 scope_voff_data                    RDI_U64                  0x001E   U32                                            ""}
-  {ScopeVMap                     scope_vmap                         RDI_VMapEntry            0x001F   -                                              ""}
-  {InlineSites                   inline_sites                       RDI_InlineSite           0x0020   U32                                            ""}
+  {Scopes                        scopes                             RDI_Scope                0x001C   U32                                            ""}
+  {ScopeVOffData                 scope_voff_data                    RDI_U64                  0x001D   U32                                            ""}
+  {ScopeVMap                     scope_vmap                         RDI_VMapEntry            0x001E   -                                              ""}
+  {InlineSites                   inline_sites                       RDI_InlineSite           0x001F   U32                                            ""}
   
   //- TODO(rjf): vvv old story for locations
-  {LocationBlocks                location_blocks                    RDI_LocationBlock        0x0021   U32                                            ""}
-  {LocationData                  location_data                      RDI_U8                   0x0022   U32                                            ""}
+  {LocationBlocks                location_blocks                    RDI_LocationBlock        0x0020   U32                                            ""}
+  {LocationData                  location_data                      RDI_U8                   0x0021   U32                                            ""}
   
   //- NOTE(rjf): vvv new story for symbols
-  {GlobalVariableSymbols         global_variable_symbols            RDI_Symbol               0x0023   U32                                            ""}
-  {GlobalVMap                    global_vmap                        RDI_VMapEntry            0x001C   -                                              ""}
+  {GlobalVariableSymbols         global_variable_symbols            RDI_Symbol               0x0022   U32                                            ""}
+  {GlobalVMap                    global_vmap                        RDI_VMapEntry            0x0023   -                                              ""}
   {ThreadVariableSymbols         thread_variable_symbols            RDI_Symbol               0x0024   U32                                            ""}
   {ConstantSymbols               constant_symbols                   RDI_Symbol               0x0025   U32                                            ""}
   {ProcedureSymbols              procedure_symbols                  RDI_Symbol               0x0026   U32                                            ""}
@@ -1000,7 +1000,7 @@ RDI_EnumMemberTable:
 @table(name value)
 RDI_ContainerKindTable:
 {
-  {Unit       0x0}
+  {NULL       0x0}
   {Type       0x1}
   {Scope      0x2}
   {Namespace  0x3}

@@ -3688,8 +3688,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     RDIM_Scope *scope = top_scope_node->scope;
                     RDIM_Symbol *local = rdim_symbol_chunk_list_push(arena, &scope->locals, 8);
                     local->is_param = is_param;
-                    local->name      = name;
-                    local->type      = type;
+                    local->name     = name;
+                    local->type     = type;
                     
                     // rjf: equip location info
                     {
