@@ -550,17 +550,18 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   String8List *strings = 0;
 #define dump(str)  str8_list_push(arena, strings, (str))
 #define dumpf(...) str8_list_pushf(arena, strings, __VA_ARGS__)
-#define DumpSubset(name) \
+#define DumpSubsetKind(kind) \
 if(lane_idx() == 0)\
 {\
 DumpSubsetOutputNode *n = push_array(scratch.arena, DumpSubsetOutputNode, 1);\
 SLLQueuePush(first_output_node, last_output_node, n);\
-n->subset = RDI_DumpSubset_##name;\
+n->subset = (kind);\
 n->lane_strings = push_array(scratch.arena, String8List, lane_count());\
 }\
 lane_sync();\
 strings = &last_output_node->lane_strings[lane_idx()];\
-lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
+lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subset_table[kind].str)
+#define DumpSubset(name) DumpSubsetKind(RDI_DumpSubset_##name)
   
   //////////////////////////////
   //- rjf: dump data sections
@@ -1104,6 +1105,45 @@ lane_sync(); if(flags & RDI_DumpSubsetFlag_##name) ProfScope(#name)
   }
   
   //////////////////////////////
+  //- rjf: dump symbols
+  //
+  struct
+  {
+    RDI_DumpSubset subset;
+    RDI_SectionKind section;
+  }
+  symbol_tables[] =
+  {
+    {RDI_DumpSubset_Procedures,      RDI_SectionKind_ProcedureSymbols},
+    {RDI_DumpSubset_GlobalVariables, RDI_SectionKind_GlobalVariableSymbols},
+    {RDI_DumpSubset_ThreadVariables, RDI_SectionKind_ThreadVariableSymbols},
+    {RDI_DumpSubset_Constants,       RDI_SectionKind_ConstantSymbols},
+  };
+  for EachElement(symbol_table_idx, symbol_tables)
+  {
+    DumpSubsetKind(symbol_tables[symbol_table_idx].subset)
+    {
+      String8 table_name = rdi_name_lowercase_from_dump_subset_table[symbol_tables[symbol_table_idx].subset];
+      RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+      U64 count = 0;
+      RDI_Symbol *v = (RDI_Symbol *)rdi_section_raw_table_from_kind(rdi, symbol_tables[symbol_table_idx].section, &count);
+      Rng1U64 range = lane_range(count);
+      for EachInRange(idx, range)
+      {
+        RDI_Symbol *symbol = &v[idx];
+        Temp scratch = scratch_begin(&arena, 1);
+        dumpf("\n  '%S': // %S[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, symbol->name_string_idx), table_name, idx);
+        dumpf("    link_name: '%S'\n", str8_from_rdi_string_idx(rdi, symbol->link_name_string_idx));
+        dumpf("    type_idx: %u\n",   symbol->type_idx);
+        dumpf("    root_scope_idx: %u\n",   symbol->root_scope_idx);
+        dumpf("    container_idx: %u\n",   symbol->container_idx);
+        dumpf("  }\n");
+        scratch_end(scratch);
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: dump scopes
   //
   DumpSubset(Scopes)
@@ -1368,15 +1408,15 @@ internal String8
 rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_TypeNode *type)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   String8List fmt     = {0};
   String8List arr_fmt = {0};
-
+  
   for (RDI_TypeNode *i = type, *n = 0; i != 0; i = n, n = 0) {
     if (RDI_TypeKind_FirstConstructed <= i->kind && i->kind <= RDI_TypeKind_LastConstructed) {
       n = rdi_element_from_name_idx(rdi, TypeNodes, i->constructed.direct_type_idx);
     }
-
+    
     if (i->kind == RDI_TypeKind_Variadic) {
       str8_list_push_frontf(scratch.arena, &fmt, "...");
     } else if (RDI_TypeKind_FirstBuiltIn <= i->kind && i->kind <= RDI_TypeKind_LastBuiltIn) {
@@ -1416,7 +1456,7 @@ rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_Typ
           }
         }
       }
-
+      
       // format parameters
       String8List  params_fmt  = {0};
       U32          check_count = 0;
@@ -1434,19 +1474,19 @@ rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_Typ
       } else {
         str8_list_pushf(scratch.arena, &params_fmt, "???");
       }
-
+      
       // format signature
       String8 params = str8_list_join(scratch.arena, &params_fmt, &(StringJoin){.sep=str8_lit(", ")});
       str8_list_pushf(scratch.arena, &fmt, "(* %S)(%S)", proc_name, params);
     }
-
+    
     if (arr_fmt.node_count && i->kind != RDI_TypeKind_Array) {
       str8_list_push_frontf(scratch.arena, &fmt, "(");
       str8_list_concat_in_place(&fmt, &arr_fmt);
       str8_list_pushf(scratch.arena, &fmt, ")");
     }
   }
-
+  
   String8 result = str8_list_join(arena, &fmt, 0);
   scratch_end(scratch);
   return result;
