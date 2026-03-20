@@ -284,12 +284,25 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage form joined symbol lists, from all units
   //
+  typedef struct UnitSymbolRanges UnitSymbolRanges;
+  struct UnitSymbolRanges
+  {
+    U64 procedures_first_idx;
+    U64 procedures_count;
+    U64 global_variables_first_idx;
+    U64 global_variables_count;
+    U64 thread_variables_first_idx;
+    U64 thread_variables_count;
+    U64 constants_first_idx;
+    U64 constants_count;
+  };
   RDIM_SymbolChunkList *all_global_variables = 0;
   RDIM_SymbolChunkList *all_thread_variables = 0;
   RDIM_SymbolChunkList *all_constants = 0;
   RDIM_SymbolChunkList *all_procedures = 0;
   RDIM_ScopeChunkList *all_scopes = 0;
   RDIM_InlineSiteChunkList *all_inline_sites = 0;
+  UnitSymbolRanges *unit_symbol_ranges = 0;
   if(lane_idx() == 0)
   {
     all_global_variables = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
@@ -298,20 +311,28 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     all_procedures       = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
     all_scopes           = push_array(scratch.arena, RDIM_ScopeChunkList, 1);
     all_inline_sites     = push_array(scratch.arena, RDIM_InlineSiteChunkList, 1);
+    unit_symbol_ranges   = push_array(scratch.arena, UnitSymbolRanges, params->units.total_count);
+    U64 unit_idx = 0;
     for EachNode(unit_n, RDIM_UnitChunkNode, params->units.first)
     {
       for EachIndex(unit_n_idx, unit_n->count)
       {
         RDIM_Unit *unit = &unit_n->v[unit_n_idx];
-        RDIM_SymbolChunkList global_variables_shallow_copy = rdim_symbol_chunk_list_shallow_copy(scratch.arena, &unit->global_variables);
-        RDIM_SymbolChunkList thread_variables_shallow_copy = rdim_symbol_chunk_list_shallow_copy(scratch.arena, &unit->thread_variables);
-        RDIM_SymbolChunkList constants_shallow_copy = rdim_symbol_chunk_list_shallow_copy(scratch.arena, &unit->constants);
-        RDIM_SymbolChunkList procedures_shallow_copy = rdim_symbol_chunk_list_shallow_copy(scratch.arena, &unit->procedures);
-        rdim_symbol_chunk_list_concat_in_place(all_global_variables, &global_variables_shallow_copy);
-        rdim_symbol_chunk_list_concat_in_place(all_thread_variables, &thread_variables_shallow_copy);
-        rdim_symbol_chunk_list_concat_in_place(all_constants, &constants_shallow_copy);
-        rdim_symbol_chunk_list_concat_in_place(all_procedures, &procedures_shallow_copy);
-        // TODO(rjf): @locpass scopes, inline sites
+        unit_symbol_ranges[unit_idx].procedures_first_idx = all_procedures->total_count + 1;
+        unit_symbol_ranges[unit_idx].procedures_count = unit->procedures.total_count;
+        unit_symbol_ranges[unit_idx].global_variables_first_idx = all_global_variables->total_count + 1;
+        unit_symbol_ranges[unit_idx].global_variables_count = unit->global_variables.total_count;
+        unit_symbol_ranges[unit_idx].thread_variables_first_idx = all_thread_variables->total_count + 1;
+        unit_symbol_ranges[unit_idx].thread_variables_count = unit->thread_variables.total_count;
+        unit_symbol_ranges[unit_idx].constants_first_idx = all_constants->total_count + 1;
+        unit_symbol_ranges[unit_idx].constants_count = unit->constants.total_count;
+        rdim_symbol_chunk_list_concat_in_place(all_global_variables, &unit->global_variables);
+        rdim_symbol_chunk_list_concat_in_place(all_thread_variables, &unit->thread_variables);
+        rdim_symbol_chunk_list_concat_in_place(all_constants, &unit->constants);
+        rdim_symbol_chunk_list_concat_in_place(all_procedures, &unit->procedures);
+        rdim_scope_chunk_list_concat_in_place(all_scopes, &unit->scopes);
+        rdim_inline_site_chunk_list_concat_in_place(all_inline_sites, &unit->inline_sites);
+        unit_idx += 1;
       }
     }
   }
@@ -321,6 +342,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync_u64(&all_procedures, 0);
   lane_sync_u64(&all_scopes, 0);
   lane_sync_u64(&all_inline_sites, 0);
+  lane_sync_u64(&unit_symbol_ranges, 0);
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage bake vmaps
@@ -3326,11 +3348,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     //- rjf: bake units
     ProfScope("bake units")
     {
+      U64 base_unit_idx = 0;
       for EachNode(n, RDIM_UnitChunkNode, params->units.first)
       {
         Rng1U64 range = lane_range(n->count);
         for EachInRange(n_idx, range)
         {
+          U64 unit_idx = base_unit_idx + n_idx;
+          UnitSymbolRanges *symbol_ranges = &unit_symbol_ranges[unit_idx];
           RDIM_Unit *src = &n->v[n_idx];
           RDI_Unit *dst = &baked_units[n->base_idx + n_idx + 1];
           dst->unit_name_string_idx     = rdim_bake_idx_from_string(bake_strings, src->unit_name);
@@ -3341,7 +3366,16 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           dst->build_path_node          = rdim_bake_path_node_idx_from_string(path_tree, src->build_path);
           dst->language                 = src->language;
           dst->line_table_idx           = (RDI_U32)rdim_idx_from_line_table(src->line_table); // TODO(rjf): @u64_to_u32
+          dst->procedures_first_idx     = (RDI_U32)symbol_ranges->procedures_first_idx; // TODO(rjf): @u64_to_u32
+          dst->procedures_count         = (RDI_U32)symbol_ranges->procedures_count; // TODO(rjf): @u64_to_u32
+          dst->global_variables_first_idx = (RDI_U32)symbol_ranges->global_variables_first_idx; // TODO(rjf): @u64_to_u32
+          dst->global_variables_count     = (RDI_U32)symbol_ranges->global_variables_count; // TODO(rjf): @u64_to_u32
+          dst->thread_variables_first_idx = (RDI_U32)symbol_ranges->thread_variables_first_idx; // TODO(rjf): @u64_to_u32
+          dst->thread_variables_count     = (RDI_U32)symbol_ranges->thread_variables_count; // TODO(rjf): @u64_to_u32
+          dst->constants_first_idx        = (RDI_U32)symbol_ranges->constants_first_idx; // TODO(rjf): @u64_to_u32
+          dst->constants_count            = (RDI_U32)symbol_ranges->constants_count; // TODO(rjf): @u64_to_u32
         }
+        base_unit_idx += n->count;
       }
     }
     

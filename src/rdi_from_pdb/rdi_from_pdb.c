@@ -3311,7 +3311,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         U64 sym_constants_chunk_cap = 2048;
         U64 sym_scopes_chunk_cap = 4096;
         U64 sym_inline_sites_chunk_cap = 2048;
-        RDIM_Unit *sym_unit = &all_units_ptr->first->v[sym_idx];
+        RDIM_Unit *sym_unit = &all_units_ptr->first->v[sym_idx > 0 ? sym_idx-1 : 0];
         RDIM_SymbolChunkList *sym_procedures = &sym_unit->procedures;
         RDIM_SymbolChunkList *sym_global_variables = &sym_unit->global_variables;
         RDIM_SymbolChunkList *sym_thread_variables = &sym_unit->thread_variables;

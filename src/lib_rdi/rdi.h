@@ -762,6 +762,14 @@ X(RDI_U32, archive_file_path_node)\
 X(RDI_U32, build_path_node)\
 X(RDI_Language, language)\
 X(RDI_U32, line_table_idx)\
+X(RDI_U32, procedures_first_idx)\
+X(RDI_U32, procedures_count)\
+X(RDI_U32, global_variables_first_idx)\
+X(RDI_U32, global_variables_count)\
+X(RDI_U32, thread_variables_first_idx)\
+X(RDI_U32, thread_variables_count)\
+X(RDI_U32, constants_first_idx)\
+X(RDI_U32, constants_count)\
 
 #define RDI_LineTable_XList \
 X(RDI_U32, voffs_base_idx)\
@@ -1319,6 +1327,14 @@ RDI_U32 archive_file_path_node;
 RDI_U32 build_path_node;
 RDI_Language language;
 RDI_U32 line_table_idx;
+RDI_U32 procedures_first_idx;
+RDI_U32 procedures_count;
+RDI_U32 global_variables_first_idx;
+RDI_U32 global_variables_count;
+RDI_U32 thread_variables_first_idx;
+RDI_U32 thread_variables_count;
+RDI_U32 constants_first_idx;
+RDI_U32 constants_count;
 };
 
 typedef struct RDI_LineTable RDI_LineTable;

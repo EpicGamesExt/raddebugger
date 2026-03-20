@@ -600,6 +600,14 @@ RDI_UnitMemberTable:
   {build_path_node               RDI_U32               ""}
   {language                      RDI_Language          ""}
   {line_table_idx                RDI_U32               ""}
+  {procedures_first_idx          RDI_U32               ""}
+  {procedures_count              RDI_U32               ""}
+  {global_variables_first_idx    RDI_U32               ""}
+  {global_variables_count        RDI_U32               ""}
+  {thread_variables_first_idx    RDI_U32               ""}
+  {thread_variables_count        RDI_U32               ""}
+  {constants_first_idx           RDI_U32               ""}
+  {constants_count               RDI_U32               ""}
 }
 
 @xlist RDI_Unit_XList:

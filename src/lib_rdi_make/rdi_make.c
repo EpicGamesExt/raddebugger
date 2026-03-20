@@ -51,23 +51,6 @@ rdim_memcpy_struct(dst, to_push);                                   \
 }                                                                     \
 rdim_memzero_struct(to_push);
 
-#define RDIM_IdxedChunkListShallowCopy(list_type, chunk_type, src, ...) \
-list_type dst = {0};\
-RDI_U64 base_idx = 0;\
-for(chunk_type *src_n = src->first; src_n != 0; src_n = src_n->next)\
-{\
-chunk_type *dst_n = rdim_push_array(arena, chunk_type, 1);\
-RDIM_SLLQueuePush(dst.first, dst.last, dst_n);\
-dst.total_count += src_n->count;\
-dst.chunk_count += 1;\
-dst_n->count = src_n->count;\
-dst_n->cap = dst_n->count;\
-dst_n->base_idx = base_idx;\
-dst_n->v = src_n->v;\
-base_idx += dst_n->count;\
-}\
-return dst;
-
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
@@ -958,12 +941,6 @@ RDI_PROC void
 rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push)
 {
   RDIM_IdxedChunkListConcatInPlace(RDIM_SymbolChunkNode, dst, to_push);
-}
-
-RDI_PROC RDIM_SymbolChunkList
-rdim_symbol_chunk_list_shallow_copy(RDIM_Arena *arena, RDIM_SymbolChunkList *src)
-{
-  RDIM_IdxedChunkListShallowCopy(RDIM_SymbolChunkList, RDIM_SymbolChunkNode, src);
 }
 
 ////////////////////////////////
