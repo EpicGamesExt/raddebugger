@@ -408,6 +408,7 @@ internal CV_SymbolList cv_make_proc_refs(Arena *arena, CV_ModIndex imod, CV_Symb
 internal U64       cv_read_symbol(String8 raw_data, U64 off, U64 align, CV_Symbol *symbol_out);
 internal CV_Symbol cv_symbol_from_string(String8 raw_data);
 
+internal B32        cv_is_lproc(CV_Symbol symbol);
 internal B32        cv_is_obj_info(CV_Symbol symbol);
 internal CV_ObjInfo cv_obj_info_from_symbol(CV_Symbol symbol);
 

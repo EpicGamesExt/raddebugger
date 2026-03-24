@@ -3,7 +3,8 @@
 
 #pragma once
 
-// --- Code View Input ---------------------------------------------------------
+////////////////////////////////
+// CodeView
 
 typedef struct
 {
@@ -48,9 +49,9 @@ typedef struct
   B32                 *is_type_server_discarded; // [ts_arr.count]
   CV_TypeIndex         min_type_indices[CV_TypeIndexSource_COUNT];
 
-  U64                     symbol_input_count;
-  struct LNK_SymbolInput *symbol_inputs;       // [symbol_input_count]
-  Rng1U64                *symbol_input_ranges; // [worker_count]
+  U64              symbol_input_count;
+  LNK_SymbolInput *symbol_inputs;       // [symbol_input_count]
+  Rng1U64         *symbol_input_ranges; // [worker_count]
 } LNK_CodeViewInput;
 
 typedef struct
@@ -60,7 +61,8 @@ typedef struct
   CV_DebugT         *out_types; // [obj_count]
 } LNK_ParseCvTypes;
 
-// --- Leaf Deduping Tasks -----------------------------------------------------
+////////////////////////////////
+// Type Merging
 
 typedef struct { U32 obj_idx; U32 leaf_idx;  } LNK_LeafRef;
 typedef struct { U64 count; LNK_LeafRef **v; } LNK_LeafRefArray;
@@ -123,7 +125,8 @@ typedef struct
   LNK_MergedTypes result;
 } LNK_MergeTypes;
 
-// --- Build PDB ---------------------------------------------
+////////////////////////////////
+// PDB
 
 typedef struct
 {
@@ -134,9 +137,10 @@ typedef struct
   PDB_Context    *pdb;
   PDB_DbiModule **mod_arr; // [obj_count]
 
-  U64 total_symbol_count;
+  Arena **fixed_arenas;
 
   // GSI symbol dedup
+  U64    global_symbol_count;
   U64    bucket_cap;
   void **buckets;      // [bucket_count]
   U64   *insert_count; // [worker_count]
@@ -146,12 +150,18 @@ typedef struct
   void   **symbol_arr;
   U32     *symbol_hashes; // [symbol_count]
 
-  U64     *proc_ref_counts; // [worker_count]
-  U64     *proc_ref_sizes;  // [worker_count]
-  U64     *proc_ref_hashes; // [total_proc_ref_count]
-  U64     *proc_ref_offs;   // [worker_count]
-  String8  proc_refs;
+  U64           *proc_ref_counts; // [worker_count]
+  U64           *proc_ref_sizes;  // [worker_count]
+  U64           *proc_ref_hashes; // [total_proc_ref_count]
+  U64           *proc_ref_offs;   // [worker_count]
+  String8        proc_refs;
+  U64            proc_ref_count;
+  CV_SymbolNode *proc_ref_nodes;  // [proc_ref_count]
+  Arena         *proc_ref_arena;
 
+  U64            *public_symbol_sizes;        // [worker_count]
+  U64            *public_symbol_offs;         // [worker_count]
+  U8             *public_symbol_buffer;
   U64            *public_symbol_node_counts;  // [worker_count]
   U64            *public_symbol_node_offsets; // [worker_count]
   CV_SymbolNode  *public_symbol_nodes;        // [public_symbol_total_count]
@@ -192,7 +202,8 @@ typedef struct
   String8List *maps;
 } LNK_TypeNameReplacer;
 
-// --- RAD Debug Info ----------------------------------------------------------
+////////////////////////////////
+// RDI
 
 typedef struct
 {
@@ -218,8 +229,6 @@ typedef struct
   LNK_UDTNameBucket **udt_name_buckets;
   CV_TypeIndex       *fwdmap;
 } LNK_BuildUDTFwdMapTask;
-
-// --- RDI Conversion Tasks ----------------------------------------------------
 
 typedef struct
 {
@@ -307,7 +316,8 @@ typedef struct
   RDIB_LineTableChunkList  *line_tables;
 } LNK_ConvertUnitToRDITask;
 
-// --- CodeView ----------------------------------------------------------------
+////////////////////////////////
+// CodeView
 
 internal LNK_CodeViewInput lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_flags, String8List lib_dir_list, String8List alt_pch_dirs, U64 objs_count, LNK_Obj **objs);
 
@@ -321,11 +331,13 @@ internal LNK_LeafRef *   lnk_leaf_hash_table_search          (LNK_LeafHashTable 
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input);
 internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);
 
-// --- PDB ---------------------------------------------------------------------
+////////////////////////////////
+// PDB
 
 internal String8List lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types);
 
-// --- RDI ---------------------------------------------------------------------
+////////////////////////////////
+// RDI
 
 internal U64                  lnk_udt_name_hash_table_hash         (String8 string);
 internal LNK_UDTNameBucket ** lnk_udt_name_hash_table_from_leaf_arr(TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, U64 *buckets_cap_out);

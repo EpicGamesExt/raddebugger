@@ -458,6 +458,25 @@ cv_make_proc_refs(Arena *arena, CV_ModIndex imod, CV_SymbolList symbol_list)
 }
 
 internal B32
+cv_is_lproc(CV_Symbol symbol)
+{
+  return symbol.kind == CV_SymKind_LPROC32        ||
+         symbol.kind == CV_SymKind_LPROCMIPS      ||
+         symbol.kind == CV_SymKind_LPROCIA64      ||
+         symbol.kind == CV_SymKind_LPROC32_ID     ||
+         symbol.kind == CV_SymKind_LPROCMIPS_ID   ||
+         symbol.kind == CV_SymKind_LPROCIA64_ID   ||
+         symbol.kind == CV_SymKind_LPROC32_DPC    ||
+         symbol.kind == CV_SymKind_LPROC32_DPC_ID ||
+         symbol.kind == CV_SymKind_LPROC16        ||
+         symbol.kind == CV_SymKind_LPROC32_16t    ||
+         symbol.kind == CV_SymKind_LPROCMIPS_16t  ||
+         symbol.kind == CV_SymKind_LPROC32_ST     ||
+         symbol.kind == CV_SymKind_LPROCMIPS_ST   ||
+         symbol.kind == CV_SymKind_LPROCIA64_ST;
+}
+
+internal B32
 cv_is_obj_info(CV_Symbol symbol)
 {
   return symbol.kind == CV_SymKind_OBJNAME;
@@ -1020,7 +1039,7 @@ cv_symbol_deduper_insert_or_update(void **buckets, U64 bucket_cap, U64 hash, voi
   U64        bucket_idx             = best_idx;
   do {
     retry:;
-    void *curr_ptr  = buckets + bucket_idx;
+    void *curr_ptr  = buckets[bucket_idx];
     Assert(curr_ptr != symbol_ptr);
 
     if (curr_ptr == 0) {
@@ -1513,9 +1532,7 @@ cv_patch_symbol_tree_offsets_new(String8List raw_symbols, U64 base_offset, U64 a
   for EachNode(n, String8Node, raw_symbols.first) {
     for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
       CV_Symbol symbol = {0};
-      U64 read_size = cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol);
-      if (read_size == 0) { break; }
-      cursor += read_size;
+      TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
 
       if (symbol.kind == CV_SymKind_SKIP) { continue; }
 
