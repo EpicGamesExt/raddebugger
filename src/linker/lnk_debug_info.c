@@ -27,16 +27,16 @@ lnk_discard_cv_debug_info(LNK_CodeViewInput *input, U64 obj_idx)
 internal
 THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
 {
-  U64                      obj_idx = task_id;
-  LNK_ParseDebugSTaskData *task    = raw_task;
+  U64                obj_idx = task_id;
+  LNK_CodeViewInput *task    = raw_task;
 
-  LNK_Obj    *obj       = task->obj_arr[obj_idx];
-  String8List sect_list = task->sect_list_arr[obj_idx];
-  CV_DebugS  *debug_s   = &task->debug_s_arr[obj_idx];
+  LNK_Obj    *obj       = task->obj_arr         [obj_idx];
+  String8List sect_list = task->debug_s_list_arr[obj_idx];
+  CV_DebugS  *debug_s   = &task->debug_s_arr    [obj_idx];
 
-  for (String8Node *node = sect_list.first; node != 0; node = node->next) {
+  for EachNode(n, String8Node, sect_list.first) {
     // parse & merge sub sections
-    CV_DebugS ds = cv_debug_s_from_data(arena, node->string);
+    CV_DebugS ds = cv_debug_s_from_data(arena, n->string);
     cv_debug_s_concat_in_place(debug_s, &ds);
 
     // make sure there is one string table
@@ -55,43 +55,24 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
   }
 }
 
-internal CV_DebugS *
-lnk_parse_debug_s_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8List *sect_list_arr)
-{
-  ProfBeginFunction();
-
-  LNK_ParseDebugSTaskData task_data = {0};
-  task_data.obj_arr                 = obj_arr;
-  task_data.sect_list_arr           = sect_list_arr;
-  task_data.debug_s_arr             = push_array(arena->v[0], CV_DebugS, obj_count);
-
-  tp_for_parallel(tp, arena, obj_count, lnk_parse_debug_s_task, &task_data);
-
-  ProfEnd();
-  return task_data.debug_s_arr;
-}
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_strip_debug_t_sig_task)
 {
-  U64                         obj_idx = task_id;
-  LNK_CheckDebugTSigTaskData *task    = raw_task;
+  U64               obj_idx = task_id;
+  LNK_ParseCvTypes *task    = raw_task;
 
-  String8Array data_arr = task->data_arr_arr[obj_idx];
-  LNK_Obj *obj = task->obj_arr[obj_idx];
-
-  for EachIndex(i, data_arr.count) {
-    String8 *d = data_arr.v + i;
+  for EachIndex(i, task->raw_types[obj_idx].count) {
+    String8 *d = task->raw_types[obj_idx].v + i;
     if (d->size == 0) { continue; }
 
     if (d->size < sizeof(CV_Signature)) {
-      lnk_error_obj(LNK_Error_IllData, obj, ".debug$T must have at least 4 bytes for CodeView signature");
+      lnk_error_obj(LNK_Error_IllData, task->input->obj_arr[obj_idx], ".debug$T must have at least 4 bytes for CodeView signature");
     }
 
     CV_Signature sig = cv_signature_from_debug_s(*d);
     switch (sig) {
     default: {
-      lnk_error_obj(LNK_Warning_IllData, obj, "unknown CodeView type signature in section (TODO: print section index)");
+      lnk_error_obj(LNK_Warning_IllData, task->input->obj_arr[obj_idx], "unknown CodeView type signature in section (TODO: print section index)");
       *d = str8(0,0);
     } break;
     case CV_Signature_C13: {
@@ -105,45 +86,13 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_parse_debug_t_task)
 {
   ProfBeginFunction();
-  LNK_ParseDebugTTaskData *task  = raw_task;
-  if (task->data_arr_arr[task_id].count > 0) {
-    task->debug_t_arr[task_id] = cv_debug_t_from_data(arena, task->data_arr_arr[task_id].v[0], CV_LeafAlign);
+  LNK_ParseCvTypes *task = raw_task;
+  if (task->raw_types[task_id].count > 0) {
+    task->out_types[task_id] = cv_debug_t_from_data(arena, task->raw_types[task_id].v[0], CV_LeafAlign);
   } else {
-    MemoryZeroStruct(&task->debug_t_arr[task_id]);
+    MemoryZeroStruct(&task->out_types[task_id]);
   }
   ProfEnd();
-}
-
-internal CV_DebugT *
-lnk_parse_debug_t_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8List *debug_t_list_arr)
-{
-  ProfBeginFunction();
-  
-  // list -> array
-  String8Array *data_arr_arr = str8_array_from_list_arr(arena->v[0], debug_t_list_arr, obj_count);
-
-  // validate signatures
-  LNK_CheckDebugTSigTaskData check_sig;
-  check_sig.obj_arr      = obj_arr;
-  check_sig.data_arr_arr = data_arr_arr;
-  tp_for_parallel(tp, 0, obj_count, lnk_strip_debug_t_sig_task, &check_sig);
-
-  // parse debug types
-  LNK_ParseDebugTTaskData parse;
-  parse.data_arr_arr = data_arr_arr;
-  parse.debug_t_arr  = push_array_no_zero(arena->v[0], CV_DebugT, obj_count);
-  tp_for_parallel(tp, arena, obj_count, lnk_parse_debug_t_task, &parse);
-
-  ProfEnd();
-  return parse.debug_t_arr;
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_parse_cv_symbols_task)
-{
-  LNK_ParseCVSymbolsTaskData *task  = raw_task;
-  LNK_SymbolInput            *input = &task->inputs[task_id];
-  cv_parse_symbol_sub_section(arena, input->symbol_list, 0, input->raw_symbols, CV_SymbolAlign);
 }
 
 internal
@@ -255,21 +204,20 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   ProfBegin("Extract CodeView");
   Temp scratch = scratch_begin(0,0);
 
-  LNK_CodeViewInput input = { .io_flags = io_flags, .count = obj_count, .obj_arr = obj_arr, .ts_obj_range = r1u64(0,0) };
+  LNK_CodeViewInput input = { .io_flags = io_flags, .obj_count = obj_count, .count = obj_count, .obj_arr = obj_arr, .ts_obj_range = r1u64(0,0) };
   
   ProfBegin("Collect CodeView");
-  // TODO: fix memory leak, we need a Temp wrapper for pool arena
-  String8List *debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0);
-  String8List *debug_p_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$P"), 0);
-  String8List *debug_t_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$T"), 0);
+  input.debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0);
+  input.debug_p_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$P"), 0);
+  input.debug_t_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$T"), 0);
   ProfEnd();
 
   if (lnk_get_log_status(LNK_Log_Debug) || PROFILE_TELEMETRY) {
     U64 total_debug_s_size = 0, total_debug_t_size = 0, total_debug_p_size = 0;
     for EachIndex(obj_idx, obj_count) {
-      for EachNode(n, String8Node, debug_s_list_arr[obj_idx].first) { total_debug_s_size += n->string.size; }
-      for EachNode(n, String8Node, debug_t_list_arr[obj_idx].first) { total_debug_t_size += n->string.size; }
-      for EachNode(n, String8Node, debug_p_list_arr[obj_idx].first) { total_debug_p_size += n->string.size; }
+      for EachNode(n, String8Node, input.debug_s_list_arr[obj_idx].first) { total_debug_s_size += n->string.size; }
+      for EachNode(n, String8Node, input.debug_t_list_arr[obj_idx].first) { total_debug_t_size += n->string.size; }
+      for EachNode(n, String8Node, input.debug_p_list_arr[obj_idx].first) { total_debug_p_size += n->string.size; }
     }
 	
     ProfNoteV("Total .debug$S Input Size: %M", total_debug_s_size);
@@ -284,41 +232,26 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   }
 
   ProfBegin("Parse CodeView");
-  CV_DebugT *debug_p_arr = lnk_parse_debug_t_sections(tp, tp_arena, obj_count, obj_arr, debug_p_list_arr);
-  input.debug_s_arr = lnk_parse_debug_s_sections(tp, tp_arena, obj_count, obj_arr, debug_s_list_arr);
-  input.debug_t_arr = lnk_parse_debug_t_sections(tp, tp_arena, obj_count, obj_arr, debug_t_list_arr);
-  input.debug_h_arr = push_array(tp_arena->v[0], CV_DebugH, obj_count); // TODO: collect & parse .debug$H
-  ProfEnd();
-
-  ProfBegin("Set up symbol parsing");
-  for EachIndex(obj_idx, obj_count) { input.symbol_input_count += cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols).node_count; }
-  input.symbol_inputs  = push_array_no_zero(tp_arena->v[0], LNK_SymbolInput,    input.symbol_input_count);
-  input.parsed_symbols = push_array_no_zero(tp_arena->v[0], CV_SymbolListArray, obj_count);
+  CV_DebugT *debug_p_arr;
   {
-    CV_SymbolList *reserved_lists = push_array(tp_arena->v[0], CV_SymbolList, input.symbol_input_count);
-    for (U64 obj_idx = 0, input_idx = 0; obj_idx < obj_count; ++obj_idx) {
-      String8List raw_symbols = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+    input.debug_s_arr = push_array(tp_arena->v[0], CV_DebugS, obj_count);
+    tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_s_task, &input, "Parse .debug$S");
 
-      // init parse output
-      if (raw_symbols.node_count > 0) {
-        input.parsed_symbols[obj_idx].count = raw_symbols.node_count;
-        input.parsed_symbols[obj_idx].v     = reserved_lists + input_idx;
-      } else {
-        input.parsed_symbols[obj_idx].count = 0;
-        input.parsed_symbols[obj_idx].v     = 0;
-      }
+    input.debug_h_arr = push_array(tp_arena->v[0], CV_DebugH, obj_count); // TODO: collect & parse .debug$H
 
-      // init worker input
-      for (String8Node *data_n = raw_symbols.first; data_n != 0; data_n = data_n->next, ++input_idx) {
-        Assert(input_idx < input.symbol_input_count);
-        LNK_SymbolInput *in = &input.symbol_inputs[input_idx];
-        in->obj_idx                  = obj_idx;
-        in->symbol_list              = &reserved_lists[input_idx];
-        in->raw_symbols              = data_n->string;
-      }
-    }
+    LNK_ParseCvTypes parse_types = { .input = &input };
 
-    tp_for_parallel_prof(tp, tp_arena, input.symbol_input_count, lnk_parse_cv_symbols_task, &(LNK_ParseCVSymbolsTaskData){ .inputs = input.symbol_inputs }, "Symbol Parse");
+    debug_p_arr = push_array(tp_arena->v[0], CV_DebugT, obj_count);
+    parse_types.raw_types = str8_array_from_list_arr(scratch.arena, input.debug_p_list_arr, obj_count);
+    parse_types.out_types = debug_p_arr;
+    tp_for_parallel_prof(tp, 0, obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$P");
+    tp_for_parallel_prof(tp, 0, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$P");
+
+    input.debug_t_arr     = push_array(tp_arena->v[0], CV_DebugT, obj_count);
+    parse_types.raw_types = str8_array_from_list_arr(scratch.arena, input.debug_t_list_arr, obj_count);
+    parse_types.out_types = input.debug_t_arr;
+    tp_for_parallel_prof(tp, 0, obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$T");
+    tp_for_parallel_prof(tp, 0, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$T");
   }
   ProfEnd();
 
@@ -344,13 +277,13 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
     }
   }
 
-  ProfScope("Set up type servers")
+  ProfScope("Set up /Zi")
   {
     input.obj_to_ts = push_array(tp_arena->v[0], U64, input.count);
     LNK_TypeServerList  ts_list = {0};
     HashTable          *ts_ht   = hash_table_init(scratch.arena, 256);
 
-    // push null so unopened type servers are resolved to this type server
+    // push null type server (slots with broken type servers are set to null)
     LNK_TypeServerNode *null_ts = push_array(scratch.arena, LNK_TypeServerNode, 1);
     SLLQueuePush(ts_list.first, ts_list.last, null_ts);
     ts_list.count += 1;
@@ -403,17 +336,15 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       LNK_CodeViewInput prev = input;
 
       input.count += ts_arr.count;
-      input.obj_arr        = push_array(tp_arena->v[0], LNK_Obj *,          input.count);
-      input.debug_s_arr    = push_array(tp_arena->v[0], CV_DebugS,          input.count);
-      input.debug_t_arr    = push_array(tp_arena->v[0], CV_DebugT,          input.count);
-      input.debug_h_arr    = push_array(tp_arena->v[0], CV_DebugH,          input.count);
-      input.parsed_symbols = push_array(tp_arena->v[0], CV_SymbolListArray, input.count);
-      input.obj_to_ts      = push_array(tp_arena->v[0], U64,                input.count);
+      input.obj_arr        = push_array(tp_arena->v[0], LNK_Obj *, input.count);
+      input.debug_s_arr    = push_array(tp_arena->v[0], CV_DebugS, input.count);
+      input.debug_t_arr    = push_array(tp_arena->v[0], CV_DebugT, input.count);
+      input.debug_h_arr    = push_array(tp_arena->v[0], CV_DebugH, input.count);
+      input.obj_to_ts      = push_array(tp_arena->v[0], U64,       input.count);
 
       MemoryCopyTyped(input.obj_arr,        prev.obj_arr,        prev.count);
       MemoryCopyTyped(input.debug_s_arr,    prev.debug_s_arr,    prev.count);
       MemoryCopyTyped(input.debug_t_arr,    prev.debug_t_arr,    prev.count);
-      MemoryCopyTyped(input.parsed_symbols, prev.parsed_symbols, prev.count);
       MemoryCopyTyped(input.obj_to_ts,      prev.obj_to_ts,      prev.count);
 
       input.ts_obj_range = r1u64(prev.count, input.count);
@@ -435,7 +366,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
     input.is_type_server_discarded = push_array(tp_arena->v[0], B32, input.ts_arr.count);
     tp_for_parallel_prof(tp, tp_arena, input.ts_arr.count, lnk_read_type_servers_task, &input, "read type servers");
 
-    // fixup null type server
+    // undiscard null type server
     input.is_type_server_discarded[0] = 0;
 
     // report bad type servers
@@ -443,7 +374,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
     for EachIndex(ts_idx, ts_arr.count) {
       if ( ! input.is_type_server_discarded[ts_idx]) { continue; }
       str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t%S\n", ts_arr.v[ts_idx].ts_path);
-      str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t\tDependent obj(s):\n");
+      str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t\tDependent objs:\n");
       for EachNode(n, U64Node, input.ts_arr.v[ts_idx].obj_indices.first) {
         str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t\t\t%S\n", obj_arr[n->data]->path);
       }
@@ -456,7 +387,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
     }
   }
  
-  ProfBegin("Set up PCH indirection");
+  ProfBegin("Set up PCH");
   {
     // hash_table<obj_path, obj_idx>
     String8    work_dir   = os_get_current_path(scratch.arena);
@@ -520,7 +451,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       debug_t->offsets  += 1;
     }
 
-    // remove CV_LeafKind_ENDPRECOMP from .debug$P
+    // remove LF_ENDPRECOMP from .debug$P
     for EachIndex(i, input.debug_p_indices.count) {
       U64            debug_p_idx = input.debug_p_indices.v[i];
       CV_DebugT     *debug_p     = &input.debug_t_arr[debug_p_idx];
@@ -537,11 +468,13 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   }
   ProfEnd();
 
+  // set default min type index
+  for EachIndex(ti_source, CV_TypeIndexSource_COUNT) { input.min_type_indices[ti_source] = CV_MinComplexTypeIndex; }
+
   // PCH and /Z7 objs have default min type index set to CV_MinComplexTypeIndex
   // but type servers can bump up the lower bound. In practice nobody does this.
   // But to cover all our bases loop through type servers and compute max
   // lower bound.
-  for EachIndex(ti_source, CV_TypeIndexSource_COUNT) { input.min_type_indices[ti_source] = CV_MinComplexTypeIndex; }
   for EachInRange(ts_idx, input.ts_obj_range) {
     CV_DebugT *debug_t = &input.debug_t_arr[ts_idx];
     for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
@@ -554,6 +487,31 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   for EachIndex(i, obj_count) { MemoryZeroStruct(cv_sub_section_ptr_from_debug_s(&input.debug_s_arr[i], CV_C13SubSectionKind_Symbols)); }
   ProfEnd();
 
+  ProfBegin("Make Symbol Inputs");
+  {
+    for EachIndex(obj_idx, input.count) {
+      String8List s = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+      input.symbol_input_count += s.node_count;
+    }
+
+    input.symbol_inputs = push_array_no_zero(tp_arena->v[0], LNK_SymbolInput, input.symbol_input_count);
+
+    U64 symbol_input_count = 0;
+    for EachIndex(obj_idx, input.count) {
+      String8List s = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+      for EachNode(block_n, String8Node, s.first) {
+        Assert(symbol_input_count < input.symbol_input_count);
+        LNK_SymbolInput *in = input.symbol_inputs + symbol_input_count;
+        in->obj_idx     = obj_idx;
+        in->raw_symbols = block_n->string;
+        symbol_input_count += 1;
+      }
+    }
+
+    input.symbol_input_ranges = tp_divide_work(tp_arena->v[0], input.symbol_input_count, tp->worker_count);
+  }
+  ProfEnd();
+
   scratch_end(scratch);
   ProfEnd();
   return input;
@@ -562,48 +520,35 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
 internal LNK_LeafRef
 lnk_leaf_ref_from_ti(LNK_CodeViewInput *input, U32 obj_idx, CV_TypeIndexSource source, CV_TypeIndex ti)
 {
-  LNK_LeafRef leaf_ref;
-  CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
+  CV_DebugT *debug_t = input->debug_t_arr + obj_idx;
+
+  // ti_range: PCH
   if (contains_1u64(debug_t->pch_ti_range[source], ti)) {
-    leaf_ref = (LNK_LeafRef){
-      .obj_idx  = debug_t->pch_obj_idx,
-      .leaf_idx = cv_leaf_idx_from_ti(&input->debug_t_arr[debug_t->pch_obj_idx], source, ti)
-    };
-  } else {
-    U64 ts_idx = input->obj_to_ts[obj_idx];
-    if (ts_idx != 0) {
-      U64 ts_obj_idx = input->ts_obj_range.min + ts_idx;
-      CV_DebugT *ts_debug_t = &input->debug_t_arr[ts_obj_idx];
-      leaf_ref = (LNK_LeafRef){
-        .obj_idx  = ts_obj_idx,
-        .leaf_idx = cv_leaf_idx_from_ti(ts_debug_t, source, ti)
-      };
-    } else {
-      leaf_ref = (LNK_LeafRef){
-        .obj_idx  = obj_idx,
-        .leaf_idx = cv_leaf_idx_from_ti(debug_t, source, ti)
-      };
-    }
+    return (LNK_LeafRef){ debug_t->pch_obj_idx,
+                          cv_leaf_idx_from_ti(&input->debug_t_arr[debug_t->pch_obj_idx], source, ti) };
   }
-  return leaf_ref;
+
+  // ti range: external type server
+  U64 ts_idx = input->obj_to_ts[obj_idx];
+  if (ts_idx) {
+    U64        ts_obj_idx = input->ts_obj_range.min + ts_idx;
+    CV_DebugT *ts_debug_t = input->debug_t_arr      + ts_obj_idx;
+    return (LNK_LeafRef){ ts_obj_idx, cv_leaf_idx_from_ti(ts_debug_t, source, ti) };
+  }
+
+  // ti range: internal type server
+  return (LNK_LeafRef){ obj_idx, cv_leaf_idx_from_ti(debug_t, source, ti) };
 }
 
 internal int
 lnk_leaf_ref_compare(LNK_LeafRef a, LNK_LeafRef b)
 {
-  int cmp = 0;
-  if (a.obj_idx < b.obj_idx) {
-    cmp = -1;
-  } else if (a.obj_idx > b.obj_idx) {
-    cmp = +1;
-  } else {
-    if (a.leaf_idx < b.leaf_idx) {
-      cmp = -1;
-    } else if (a.leaf_idx > b.leaf_idx) {
-      cmp = +1;
-    }
+  if (a.obj_idx == b.obj_idx) {
+    return a.leaf_idx < b.leaf_idx ? -1 :
+           a.leaf_idx > b.leaf_idx ? +1 : 0;
   }
-  return cmp;
+  return a.obj_idx < b.obj_idx ? -1 :
+         a.obj_idx > b.obj_idx ? +1 : 0;
 }
 
 internal int
@@ -1221,12 +1166,18 @@ THREAD_POOL_TASK_FUNC(lnk_cv_patcher_symbols_task)
 {
   ProfBeginFunction();
   LNK_MergeTypes *task = raw_task;
-  for EachInRange(i, task->ranges[task_id]) {
+  for EachInRange(i, task->input->symbol_input_ranges[task_id]) {
     LNK_SymbolInput symbols = task->input->symbol_inputs[i];
-    for EachNode(n, CV_SymbolNode, symbols.symbol_list->first) {
+
+    for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
       Temp temp = temp_begin(task->fixed_arenas[task_id]);
-      CV_TypeIndexInfoList ti_info_list = cv_get_symbol_type_index_offsets(temp.arena, n->data.kind, n->data.data);
-      lnk_fixup_cv_type_indices(task, symbols.obj_idx, n->data.data, ti_info_list);
+
+      CV_Symbol symbol = {0};
+      TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
+
+      CV_TypeIndexInfoList ti_info_list = cv_get_symbol_type_index_offsets(temp.arena, symbol.kind, symbol.data);
+      lnk_fixup_cv_type_indices(task, symbols.obj_idx, symbol.data, ti_info_list);
+
       temp_end(temp);
     }
   }
@@ -1287,52 +1238,57 @@ THREAD_POOL_TASK_FUNC(lnk_fixup_symbols_task)
   U8         **leaf_arr_ipi   = task->result.v        [CV_TypeIndexSource_IPI];
   CV_TypeIndex min_ti_ipi     = task->min_type_indices[CV_TypeIndexSource_IPI];
 
-  for EachNode(symnode, CV_SymbolNode, task->input->symbol_inputs[task_id].symbol_list->first) {
-    CV_Symbol *symbol = &symnode->data;
+  for EachInRange(i, task->input->symbol_input_ranges[task_id]) {
+    LNK_SymbolInput symbols = task->input->symbol_inputs[i];
 
-    // convert symbol to final type
-    switch (symbol->kind) {
-    case CV_SymKind_LPROC32_ID:     symbol->kind = CV_SymKind_LPROC32;     goto fixup_id;
-    case CV_SymKind_GPROC32_ID:     symbol->kind = CV_SymKind_GPROC32;     goto fixup_id;
-    case CV_SymKind_LPROC32_DPC_ID: symbol->kind = CV_SymKind_LPROC32_DPC; goto fixup_id;
-    case CV_SymKind_LPROCMIPS_ID:   symbol->kind = CV_SymKind_LPROCMIPS;   goto fixup_id;
-    case CV_SymKind_GPROCMIPS_ID:   symbol->kind = CV_SymKind_GPROCMIPS;   goto fixup_id;
-    case CV_SymKind_LPROCIA64_ID:   symbol->kind = CV_SymKind_LPROCIA64;   goto fixup_id;
-    case CV_SymKind_GPROCIA64_ID:   symbol->kind = CV_SymKind_GPROCIA64;   goto fixup_id;
-    fixup_id:; {
-      CV_SymProc32 *proc32 = (CV_SymProc32 *) symbol->data.str;
-      if (proc32->itype < min_ti_ipi) {
-        // TODO: in some cases destructors don't have a type, need a repro
-        break;
+    for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
+      CV_Symbol symbol = {0};
+      TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
+
+      // convert symbol to final type
+      switch (symbol.kind) {
+      case CV_SymKind_LPROC32_ID:     symbol.kind = CV_SymKind_LPROC32;     goto fixup_id;
+      case CV_SymKind_GPROC32_ID:     symbol.kind = CV_SymKind_GPROC32;     goto fixup_id;
+      case CV_SymKind_LPROC32_DPC_ID: symbol.kind = CV_SymKind_LPROC32_DPC; goto fixup_id;
+      case CV_SymKind_LPROCMIPS_ID:   symbol.kind = CV_SymKind_LPROCMIPS;   goto fixup_id;
+      case CV_SymKind_GPROCMIPS_ID:   symbol.kind = CV_SymKind_GPROCMIPS;   goto fixup_id;
+      case CV_SymKind_LPROCIA64_ID:   symbol.kind = CV_SymKind_LPROCIA64;   goto fixup_id;
+      case CV_SymKind_GPROCIA64_ID:   symbol.kind = CV_SymKind_GPROCIA64;   goto fixup_id;
+      fixup_id:; {
+        CV_SymProc32 *proc32 = (CV_SymProc32 *) symbol.data.str;
+        if (proc32->itype < min_ti_ipi) {
+          // TODO: in some cases destructors don't have a type, need a repro
+          break;
+        }
+
+        if ((proc32->itype - min_ti_ipi) > leaf_count_ipi) {
+          Assert("TODO: error handle corrupted type index");
+          break;
+        }
+
+        U64     leaf_idx  = proc32->itype - min_ti_ipi;
+        String8 leaf_data = str8(leaf_arr_ipi[leaf_idx], max_U64);
+
+        CV_Leaf leaf;
+        cv_read_leaf(leaf_data, 0, 1, &leaf);
+
+        U64 min_leaf_size = cv_header_struct_size_from_leaf_kind(leaf.kind);
+        if (min_leaf_size > leaf.data.size) {
+          Assert(!"TODO: error handle corrupt leaf");
+          break;
+        }
+
+        if (leaf.kind == CV_LeafKind_FUNC_ID) {
+          proc32->itype = ((CV_LeafFuncId *) leaf.data.str)->itype;
+        } else if (leaf.kind == CV_LeafKind_MFUNC_ID) {
+          proc32->itype = ((CV_LeafMFuncId *) leaf.data.str)->itype;
+        } else {
+          Assert(!"TODO: erorr handle unexpected leaf type");
+          break;
+        }
+      } break;
+      case CV_SymKind_PROC_ID_END: symbol.kind = CV_SymKind_END; break;
       }
-
-      if ((proc32->itype - min_ti_ipi) > leaf_count_ipi) {
-        Assert("TODO: error handle corrupted type index");
-        break;
-      }
-
-      U64     leaf_idx  = proc32->itype - min_ti_ipi;
-      String8 leaf_data = str8(leaf_arr_ipi[leaf_idx], max_U64);
-
-      CV_Leaf leaf;
-      cv_read_leaf(leaf_data, 0, 1, &leaf);
-
-      U64 min_leaf_size = cv_header_struct_size_from_leaf_kind(leaf.kind);
-      if (min_leaf_size > leaf.data.size) {
-        Assert(!"TODO: error handle corrupt leaf");
-        break;
-      }
-
-      if (leaf.kind == CV_LeafKind_FUNC_ID) {
-        proc32->itype = ((CV_LeafFuncId *) leaf.data.str)->itype;
-      } else if (leaf.kind == CV_LeafKind_MFUNC_ID) {
-        proc32->itype = ((CV_LeafMFuncId *) leaf.data.str)->itype;
-      } else {
-        Assert(!"TODO: erorr handle unexpected leaf type");
-        break;
-      }
-    } break;
-    case CV_SymKind_PROC_ID_END: symbol->kind = CV_SymKind_END; break;
     }
   }
 }
@@ -1780,89 +1736,251 @@ lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, U64 leaf_cou
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_filter_out_gsi_symbols_task)
+THREAD_POOL_TASK_FUNC(lnk_process_and_populate_gsi_and_psi_task)
 {
-  U64                         obj_idx        = task_id;
-  LNK_ProcessSymDataTaskData *task           = raw_task;
-  CV_SymbolList              *gsi_list       = &task->gsi_list_arr[obj_idx];
-  CV_SymbolListArray          parsed_symbols = task->parsed_symbols[obj_idx];
+  Temp scratch = scratch_begin(&arena, 1);
 
-  CV_SymbolList global_list  = {0};
-  CV_SymbolList typedef_list = {0};
-  for (U64 i = 0; i < parsed_symbols.count; ++i) {
-    CV_SymbolList *list = &parsed_symbols.v[i];
-    U64 depth = 0;
-    for (CV_SymbolNode *curr = list->first, *next; curr != 0; curr = next) {
-      next = curr->next;
+  U64             obj_idx = task_id;
+  LNK_BuildPdb   *task    = raw_task;
+  PDB_GsiContext *gsi     = task->pdb->gsi;
+  PDB_PsiContext *psi     = task->pdb->psi;
 
-      if (cv_is_global_symbol(curr->data.kind)) {
-        cv_symbol_list_remove_node(list, curr);
-        cv_symbol_list_push_node(&global_list, curr);
-      } else if (cv_is_typedef(curr->data.kind)) {
+  if (task_id == 0) {
+    task->proc_ref_sizes  = push_array(scratch.arena, U64, tp->worker_count);
+    task->proc_ref_counts = push_array(scratch.arena, U64, tp->worker_count);
+  }
+  barrier_wait(tp->barrier);
+
+  // collect global data and global typedefs
+  VoidList global_symbols = {0};
+  for EachInRange(i, task->cv->symbol_input_ranges[task_id]) {
+    LNK_SymbolInput symbols = task->cv->symbol_inputs[i];
+    for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
+      CV_Symbol symbol = {0};
+      U64 symbol_read_size = cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol);
+      if (symbol_read_size == 0) { break; }
+      cursor += symbol_read_size;
+
+      if (cv_is_global_symbol(symbol.kind)) {
+        void *ptr = cv_ptr_from_symbol(symbol);
+        void_list_push(scratch.arena, &global_symbols, ptr);
+      } else if (cv_is_typedef(symbol.kind)) {
         if (depth == 0) {
-          cv_symbol_list_remove_node(list, curr);
-          cv_symbol_list_push_node(&typedef_list, curr);
+          void *ptr = cv_ptr_from_symbol(symbol); 
+          void_list_push(scratch.arena, &global_symbols, ptr);
         }
-      }
-      // Undocumented symbol that appears only in objs.
-      //  MSVC removes these symbols from output.
-      //
-      //  LLD-link replaces symbol with S_SKIP:
-      //  https://github.com/llvm/llvm-project/blob/main/lld/COFF/PDB.cpp#L575
-      else if (curr->data.kind == 0x1176) {
-        cv_symbol_list_remove_node(list, curr);
+      } else if (symbol.kind == 0x1176) {
+        CV_SymKind *kind_ptr = cv_kind_ptr_from_symbol(symbol);
+        *kind_ptr = CV_SymKind_SKIP;
+      } else if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
+        String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
+        task->proc_ref_sizes[task_id]  += sizeof(CV_SymRef2) + name.size + 1;
+        task->proc_ref_counts[task_id] += 1;
       }
 
-      if (cv_is_scope_symbol(curr->data.kind)) {
-        ++depth;
-      } else if (cv_is_end_symbol(curr->data.kind)) {
-        Assert(depth > 0);
-        --depth;
+      if (cv_is_scope_symbol(symbol.kind)) {
+        depth += 1;
+      } else if (cv_is_end_symbol(symbol.kind)) {
+        if (depth == 0) { Assert(0 && "malformed symbol stream"); break; }
+        depth -= 1;
       }
     }
   }
- 
-  // collect GSI symbols
-  Assert(gsi_list->count == 0);
-  cv_symbol_list_concat_in_place(gsi_list, &global_list);
-  cv_symbol_list_concat_in_place(gsi_list, &typedef_list);
+  ins_atomic_u64_add_eval(&task->total_symbol_count, global_symbols.count);
+  barrier_wait(tp->barrier);
+
+  if (task_id == 0) {
+    task->bucket_cap       = (U64)((F64)task->total_symbol_count * 1.3);
+    task->buckets          = push_array(scratch.arena, void *, task->bucket_cap);
+    task->insert_count     = push_array(scratch.arena, U64, tp->worker_count);
+  }
+  barrier_wait(tp->barrier);
+
+  // insert symbols into hash table
+  for EachNode(n, VoidNode, global_symbols.first) {
+    String8  raw      = cv_raw_from_symbol(n->v);
+    U64      hash     = u64_hash_from_str8(raw);
+    void    *slot_ptr = cv_symbol_deduper_insert_or_update(task->buckets, task->bucket_cap, hash, n->v);
+    if (slot_ptr == 0) {
+      task->insert_count[task_id] += 1;
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  // compact buckets
+  for (U64 i = 1, k = 0; i < task->bucket_cap; i += 1) {
+    if (task->buckets[i] != 0 && task->buckets[i-1] == 0) {
+      while (task->buckets[k] != 0) { k += 1; }
+      task->buckets[k] = task->buckets[i];
+      task->buckets[i] = 0;
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  if (task_id == 0) {
+    task->symbol_count = sum_array_u64(tp->worker_count, task->insert_count);
+    task->symbol_arr   = task->buckets;
+
+    // divide symbol per worker
+    task->symbol_ranges = tp_divide_work(scratch.arena, task->symbol_count, tp->worker_count);
+
+    // alloc memory for hashes
+    task->symbol_hashes = push_array_no_zero(scratch.arena, U32, task->symbol_count);
+  }
+  barrier_wait(tp->barrier);
+
+  // hash symbols
+  for EachInRange(i, task->symbol_ranges[task_id]) {
+    CV_Symbol symbol = cv_symbol_from_ptr(task->symbol_arr[i]);
+    String8   name   = cv_name_from_symbol(symbol.kind, symbol.data);
+    task->symbol_hashes[i] = gsi_hash(gsi, name);
+  }
+  barrier_wait(tp->barrier);
+
+  if (task_id == 0) {
+    // prealloc symbol nodes
+    CV_SymbolNode *nodes = push_array_no_zero(gsi->arena, CV_SymbolNode, task->symbol_count);
+
+    // push symbols to GSI
+    for EachIndex(i, task->symbol_count) {
+      CV_SymbolNode *n = &nodes[i];
+      n->prev = n->next = 0;
+      n->data = cv_symbol_from_ptr(task->symbol_arr[i]);
+      gsi_push_(gsi, task->symbol_hashes[i], n);
+    }
+
+    // prealloc output buffer for the proc refs
+    task->proc_refs.size = sum_array_u64(tp->worker_count, task->proc_ref_sizes);
+    task->proc_refs.str  = push_array(gsi->arena, U8, task->proc_refs.size);
+    task->proc_ref_offs  = offsets_from_counts_array_u64(scratch.arena, task->proc_ref_sizes, tp->worker_count);
+  }
+  barrier_wait(tp->barrier);
+
+  {
+    U64    proc_refs_size = task->proc_ref_sizes[task_id];
+    U64    proc_refs_off  = task->proc_ref_offs[task_id];
+    U8    *proc_refs      = task->proc_refs.str + proc_refs_off;
+    Arena *proc_ref_arena = arena_alloc_(&(ArenaParams){ .optional_backing_buffer = proc_refs,
+                                                         .reserve_size            = proc_refs_size,
+                                                         .commit_size             = proc_refs_size
+                                                       });
+    U64 hash_idx = 0;
+    for EachInRange(i, task->cv->symbol_input_ranges[task_id]) {
+      LNK_SymbolInput *in          = &task->cv->symbol_inputs[i];
+      String8          raw_symbols = in->raw_symbols;
+      CV_ModIndex      imod        = task->mod_arr[in->obj_idx]->imod;
+      for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= raw_symbols.size; ) {
+        CV_Symbol symbol = {0};
+        U64 read_size = cv_read_symbol(raw_symbols, cursor, CV_SymbolAlign, &symbol);
+        if (read_size == 0) { break; }
+        cursor += read_size;
+        if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
+          String8   name     = cv_name_from_symbol(symbol.kind, symbol.data);
+          CV_Symbol proc_ref = cv_make_proc_ref(proc_ref_arena, imod, safe_cast_u32(symbol.offset), name, /* is_local */ 1);
+          task->proc_ref_hashes[hash_idx] = hash_from_cv_symbol(&proc_ref);
+          hash_idx += 1;
+        }
+      }
+    }
+    barrier_wait(tp->barrier);
+
+    if (task_id == 0) {
+      U64 *offsets = offsets_from_counts_array_u64(scratch.arena, task->proc_ref_sizes, tp->worker_count);
+      for EachIndex(i, tp->worker_count) {
+        CV_SymbolNode *nodes    = push_array(gsi->arena, CV_SymbolNode, task->proc_ref_counts[i]);
+        U64            node_idx = 0;
+        for (U64 cursor = offsets[i]; cursor < offsets[i+1]; ) {
+          U64 read_size = cv_read_symbol(task->proc_refs, cursor, PDB_SYMBOL_ALIGN, &nodes[node_idx].data);
+          if (read_size == 0) { break; }
+          cursor += read_size;
+          gsi_push_(gsi, task->proc_ref_hashes[node_idx], &nodes[node_idx]);
+        }
+      }
+    }
+    barrier_wait(tp->barrier);
+  }
+  
+  {
+    for EachNode(chunk, LNK_SymbolHashTrieChunk, task->symtab->chunks[task_id].first) {
+      task->public_symbol_node_counts[task_id] += chunk->count;
+    }
+    barrier_wait(tp->barrier);
+
+    if (task_id == 0) {
+      task->public_symbol_node_offsets = offsets_from_counts_array_u64(scratch.arena, task->public_symbol_node_counts, tp->worker_count);
+      U64 public_symbol_total_count  = sum_array_u64(tp->worker_count, task->public_symbol_node_offsets);
+      task->public_symbol_nodes        = push_array(psi->gsi->arena, CV_SymbolNode, public_symbol_total_count);
+      task->public_symbols             = push_array(scratch.arena, CV_SymbolList, tp->worker_count);
+      task->public_symbols             = push_array(scratch.arena, CV_SymbolList, tp->worker_count);
+    }
+    barrier_wait(tp->barrier);
+
+    for EachNode(chunk, LNK_SymbolHashTrieChunk, task->symtab->chunks[task_id].first) {
+      U64 node_idx = task->public_symbol_node_offsets[task_id];
+      for EachIndex(i, chunk->count) {
+        LNK_Symbol        *symbol        = chunk->v[i].symbol;
+        LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
+        COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
+
+        if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol_ref.obj)) { continue; }
+
+        COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+        if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
+
+        CV_Pub32Flags flags = 0;
+        if (COFF_SymbolType_IsFunc(symbol_parsed.type)) { flags |= CV_Pub32Flag_Function; }
+
+        ISectOff sc             = lnk_sc_from_symbol(symbol);
+        U16      symbol_isect16 = safe_cast_u16(sc.isect);
+        U32      symbol_off32   = safe_cast_u32(sc.off);
+
+        task->public_symbol_nodes[node_idx].data = cv_make_pub32(arena, flags, symbol_off32, symbol_isect16, symbol->name);
+        cv_symbol_list_push_node(&task->public_symbols[task_id], &task->public_symbol_nodes[node_idx]);
+        node_idx += 1;
+      }
+    }
+    barrier_wait(tp->barrier);
+
+    if (task_id == 0) {
+      task->public_symbol_hashes = push_array(scratch.arena, U32 *, tp->worker_count);
+    }
+    barrier_wait(tp->barrier);
+
+    {
+      U64 n_idx = 0;
+      task->public_symbol_hashes[task_id] = push_array(scratch.arena, U32, task->public_symbols[task_id].count);
+      for EachNode(n, CV_SymbolNode, task->public_symbols[task_id].first) {
+        String8 name = cv_name_from_symbol(n->data.kind, n->data.data);
+        task->public_symbol_hashes[task_id][n_idx] = gsi_hash(gsi, name);
+        n += 1;
+      }
+    }
+    barrier_wait(tp->barrier);
+
+    if (task_id == 0) {
+      for EachIndex(i, tp->worker_count) {
+        U64 curr_idx = 0;
+        for (CV_SymbolNode *curr = task->public_symbols[i].first, *next = 0; curr != 0; curr = next, curr_idx += 1) {
+          next = curr->next;
+          gsi_push_(psi->gsi, task->public_symbol_hashes[i][curr_idx], curr);
+        }
+      }
+    }
+    barrier_wait(tp->barrier);
+  }
+
+  scratch_end(scratch);
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_make_proc_refs_task)
+THREAD_POOL_TASK_FUNC(lnk_fixup_debug_s_task)
 {
   ProfBeginFunction();
-
-  U64                         obj_idx        = task_id;
-  LNK_ProcessSymDataTaskData *task           = raw_task;
-  PDB_DbiModule              *mod            = task->mod_arr[obj_idx];
-  CV_SymbolList              *gsi_list       = &task->gsi_list_arr[obj_idx];
-  CV_SymbolListArray          parsed_symbols = task->parsed_symbols[obj_idx];
-
-  for (U64 i = 0; i < parsed_symbols.count; ++i) {
-    CV_SymbolList list      = parsed_symbols.v[i];
-    CV_SymbolList proc_refs = cv_make_proc_refs(arena, mod->imod, list);
-    cv_symbol_list_concat_in_place(gsi_list, &proc_refs);
-  }
-
-  ProfEnd();
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_fixup_symbol_offsets_task)
-{
-  ProfBeginFunction();
-
-  LNK_ProcessSymDataTaskData *task    = raw_task;
-  CV_SymbolListArray          symbols = task->parsed_symbols[task_id];
-
-  // fixup symbol offsets and estimate symbol data size
-  U64 size = sizeof(CV_Signature);
-  for EachIndex(i, symbols.count) {
-    size += cv_patch_symbol_tree_offsets(symbols.v[i], size, PDB_SYMBOL_ALIGN);
-  }
-  task->serialized_symbol_data_sizes[task_id] = AlignPow2(size, CV_C13SubSectionAlign);
-
+  U64           obj_idx     = task_id;
+  LNK_BuildPdb *task        = raw_task;
+  String8List   raw_symbols = cv_sub_section_from_debug_s(task->cv->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+  task->symbol_sizes[obj_idx]  = sizeof(CV_Signature);
+  task->symbol_sizes[obj_idx] += cv_patch_symbol_tree_offsets_new(raw_symbols, task->symbol_sizes[obj_idx], PDB_SYMBOL_ALIGN);
   ProfEnd();
 }
 
@@ -1872,9 +1990,9 @@ THREAD_POOL_TASK_FUNC(lnk_process_c13_data_task)
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena,1);
 
-  U64                     obj_idx = task_id;
-  LNK_ProcessC13DataTask *task    = raw_task;
-  CV_DebugS               debug_s = task->debug_s_arr[obj_idx];
+  U64           obj_idx = task_id;
+  LNK_BuildPdb *task    = raw_task;
+  CV_DebugS     debug_s = task->cv->debug_s_arr[obj_idx];
 
   // parse checksum data
   String8List     checksum_data = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
@@ -1887,7 +2005,7 @@ THREAD_POOL_TASK_FUNC(lnk_process_c13_data_task)
   String8List source_file_names_list = cv_c13_collect_source_file_names(arena, checksum_list, string_data);
 
   // relocate checksum data 
-  cv_c13_patch_string_offsets_in_checksum_list(checksum_list, string_data, task->string_data_base_offset, task->string_ht);
+  cv_c13_patch_string_offsets_in_checksum_list(checksum_list, string_data, task->pdb->info->strtab.size, task->string_ht);
 
   // store for later pass
   task->source_file_names_list_arr[obj_idx] = source_file_names_list;
@@ -1897,54 +2015,58 @@ THREAD_POOL_TASK_FUNC(lnk_process_c13_data_task)
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_write_module_data_task)
+THREAD_POOL_TASK_FUNC(lnk_write_pdb_module_stream)
 {
-  LNK_WriteModuleDataTask *task = raw_task;
+  LNK_BuildPdb *task = raw_task;
 
-  U64                 obj_idx        = task_id;
-  PDB_DbiModule      *mod            = task->mod_arr                     [obj_idx];
-  CV_DebugS          *debug_s        = &task->debug_s_arr                [obj_idx];
-  CV_SymbolListArray  parsed_symbols = task->parsed_symbols              [obj_idx];
-  String8List         globrefs       = task->globrefs_arr                [obj_idx];
-  U64                 sym_data_size  = task->serialized_symbol_data_sizes[obj_idx];
-
-  MSF_UInt stream_cap = msf_stream_get_cap(task->msf, mod->sn);
+  U64                 obj_idx       = task_id;
+  PDB_DbiModule      *mod           = task->mod_arr                     [obj_idx];
+  CV_DebugS           debug_s       = task->cv->debug_s_arr             [obj_idx];
+  String8List         globrefs      = task->globrefs_arr                [obj_idx];
+  U64                 sym_data_size = task->serialized_symbol_data_sizes[obj_idx];
+  MSF_Context        *msf           = task->pdb->msf;
+  MSF_UInt            stream_cap    = msf_stream_get_cap(task->pdb->msf, mod->sn);
 
   // write symbols
   if (sym_data_size > 0) {
     Temp scratch = scratch_begin(&arena, 1);
 
-    U64 temp_max  = max_U16;
-    U64 temp_size = 0;
-    U8 *temp      = push_array(scratch.arena, U8, temp_max);
+    msf_stream_write_u32(msf, mod->sn, CV_Signature_C13);
 
-    msf_stream_write_u32(task->msf, mod->sn, CV_Signature_C13);
+    String8List  raw_symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+    U64         temp_max     = max_U16;
+    U64         temp_size    = 0;
+    U8          *temp        = push_array(scratch.arena, U8, temp_max);
+    for EachNode(n, String8Node, raw_symbols.first) {
+      for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
+        // read symbol
+        CV_Symbol symbol = {0};
+        TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
 
-    for EachIndex(i, parsed_symbols.count) {
-      for EachNode(symbol_n, CV_SymbolNode, parsed_symbols.v[i].first) {
-        U64 symbol_size = cv_size_from_symbol(&symbol_n->data, PDB_SYMBOL_ALIGN);
+        U64 symbol_size = cv_size_from_symbol(&symbol, PDB_SYMBOL_ALIGN);
 
-        // flush temp
+        // flush temp to MSF
         if (temp_size + symbol_size > temp_max) {
-          Assert(temp_size <= (stream_cap - msf_stream_get_pos(task->msf, mod->sn)));
-          msf_stream_write(task->msf, mod->sn, temp, temp_size);
+          Assert(temp_size <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+          msf_stream_write(msf, mod->sn, temp, temp_size);
           temp_size = 0;
         }
 
-        U64 serial_size = cv_write_symbol(temp, temp_size, temp_max, &symbol_n->data, PDB_SYMBOL_ALIGN);
+        // acc serialized symbols in temp
+        U64 serial_size = cv_write_symbol(temp, temp_size, temp_max, &symbol, PDB_SYMBOL_ALIGN);
         Assert(serial_size == symbol_size);
         temp_size += serial_size;
       }
     }
 
     // flush remaining temp
-    Assert(temp_size <= (stream_cap - msf_stream_get_pos(task->msf, mod->sn)));
-    msf_stream_write(task->msf, mod->sn, temp, temp_size);
-    msf_stream_align(task->msf, mod->sn, CV_C13SubSectionAlign);
+    Assert(temp_size <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+    msf_stream_write(msf, mod->sn, temp, temp_size);
+    msf_stream_align(msf, mod->sn, CV_C13SubSectionAlign);
 
-    U64 size = msf_stream_get_pos(task->msf, mod->sn);
+    U64 size = msf_stream_get_pos(msf, mod->sn);
     // assert our symbol size estimate was correct
-    Assert(sym_data_size == msf_stream_get_pos(task->msf, mod->sn));
+    Assert(sym_data_size == msf_stream_get_pos(msf, mod->sn));
 
     scratch_end(scratch);
   }
@@ -1952,41 +2074,41 @@ THREAD_POOL_TASK_FUNC(lnk_write_module_data_task)
   // write rest of c13 data
   U64 c13_data_size;
   {
-    U64 c13_start_pos = msf_stream_get_pos(task->msf, mod->sn);
+    U64 c13_start_pos = msf_stream_get_pos(msf, mod->sn);
 
-    for EachElement(layout_idx, debug_s->data_list) {
+    for EachElement(layout_idx, debug_s.data_list) {
       if (layout_idx == CV_C13SubSectionIdxKind_Lines || layout_idx == CV_C13SubSectionIdxKind_Symbols) { continue; }
 
       CV_C13SubSectionKind  kind = cv_c13_sub_section_kind_from_idx(layout_idx);
-      String8List          *data = cv_sub_section_ptr_from_debug_s(debug_s, kind);
+      String8List          *data = cv_sub_section_ptr_from_debug_s(&debug_s, kind);
       if (data->total_size == 0) { continue; }
 
-      Assert(AlignPow2(sizeof(U32)*2 + data->total_size, PDB_SYMBOL_ALIGN) <= (stream_cap - msf_stream_get_pos(task->msf, mod->sn)));
-      msf_stream_write_u32 (task->msf, mod->sn, kind);
-      msf_stream_write_u32 (task->msf, mod->sn, safe_cast_u32(data->total_size));
-      msf_stream_write_list(task->msf, mod->sn, *data);
-      msf_stream_align(task->msf, mod->sn, CV_C13SubSectionAlign);
+      Assert(AlignPow2(sizeof(U32)*2 + data->total_size, PDB_SYMBOL_ALIGN) <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+      msf_stream_write_u32 (msf, mod->sn, kind);
+      msf_stream_write_u32 (msf, mod->sn, safe_cast_u32(data->total_size));
+      msf_stream_write_list(msf, mod->sn, *data);
+      msf_stream_align(msf, mod->sn, CV_C13SubSectionAlign);
     }
 
-    String8List *line_data = cv_sub_section_ptr_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
+    String8List *line_data = cv_sub_section_ptr_from_debug_s(&debug_s, CV_C13SubSectionKind_Lines);
     for EachNode(line_n, String8Node, line_data->first) {
       if (line_n->string.size == 0) { continue; }
 
-      Assert(AlignPow2(sizeof(U32)*2 + line_n->string.size, PDB_SYMBOL_ALIGN) <= (stream_cap - msf_stream_get_pos(task->msf, mod->sn)));
-      msf_stream_write_u32   (task->msf, mod->sn, CV_C13SubSectionKind_Lines);
-      msf_stream_write_u32   (task->msf, mod->sn, safe_cast_u32(line_n->string.size));
-      msf_stream_write_string(task->msf, mod->sn, line_n->string);
-      msf_stream_align(task->msf, mod->sn, CV_C13SubSectionAlign);
+      Assert(AlignPow2(sizeof(U32)*2 + line_n->string.size, PDB_SYMBOL_ALIGN) <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+      msf_stream_write_u32   (msf, mod->sn, CV_C13SubSectionKind_Lines);
+      msf_stream_write_u32   (msf, mod->sn, safe_cast_u32(line_n->string.size));
+      msf_stream_write_string(msf, mod->sn, line_n->string);
+      msf_stream_align(msf, mod->sn, CV_C13SubSectionAlign);
     }
 
-    U64 c13_end_pos = msf_stream_get_pos(task->msf, mod->sn);
+    U64 c13_end_pos = msf_stream_get_pos(msf, mod->sn);
     c13_data_size = c13_end_pos - c13_start_pos;
-    Assert(c13_data_size == cv_size_from_debug_s(debug_s, CV_C13SubSectionAlign));
+    Assert(c13_data_size == cv_size_from_debug_s(&debug_s, CV_C13SubSectionAlign));
   }
 
   // write global refs
-  Assert(globrefs.total_size <= (stream_cap - msf_stream_get_pos(task->msf, mod->sn)));
-  msf_stream_write_list(task->msf, mod->sn, globrefs);
+  Assert(globrefs.total_size <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+  msf_stream_write_list(msf, mod->sn, globrefs);
 
   // update module data sizes
   mod->sym_data_size = safe_cast_u32(sym_data_size);
@@ -1996,34 +2118,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_module_data_task)
 
   // make stream has enough memory so it doens't trigger memory allocations in MSF
   // during multi-thread write
-  AssertAlways(task->mod_sizes[obj_idx] == msf_stream_get_pos(task->msf, mod->sn));
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_cv_symbol_ptr_array_hasher)
-{
-  LNK_CvSymbolPtrArrayHasher *task  = raw_task;
-  Rng1U64                     range = task->range_arr[task_id];
-  for (U64 symbol_idx = range.min; symbol_idx < range.max; ++symbol_idx) {
-    task->hash_arr[symbol_idx] = XXH3_64bits(task->arr[symbol_idx]->data.data.str, task->arr[symbol_idx]->data.data.size);
-  }
-}
-
-internal U64 *
-lnk_hash_cv_symbol_ptr_arr(TP_Context *tp, Arena *arena, CV_SymbolPtrArray arr)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-
-  LNK_CvSymbolPtrArrayHasher task = {0};
-  task.hash_arr                   = push_array_no_zero(arena, U64, arr.count);
-  task.arr                        = arr.v;
-  task.range_arr = tp_divide_work(scratch.arena, arr.count, tp->worker_count);
-  tp_for_parallel(tp, 0, tp->worker_count, lnk_cv_symbol_ptr_array_hasher, &task);
-
-  scratch_end(scratch);
-  ProfEnd();
-  return task.hash_arr;
+  AssertAlways(task->mod_sizes[obj_idx] == msf_stream_get_pos(msf, mod->sn));
 }
 
 internal
@@ -2033,10 +2128,10 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   // TODO: put back unused sc nodes
   // TODO: compute CRC for relocations
 
-  U64                             obj_idx = task_id;
-  LNK_PushDbiSecContribTaskData  *task    = raw_task;
-  PDB_DbiModule                  *mod     = task->mod_arr[obj_idx];
-  LNK_Obj                        *obj     = task->obj_arr[obj_idx];
+  U64            obj_idx = task_id;
+  LNK_BuildPdb  *task    = raw_task;
+  PDB_DbiModule *mod     = task->mod_arr    [obj_idx];
+  LNK_Obj       *obj     = task->cv->obj_arr[obj_idx];
 
   COFF_SectionHeader        *obj_section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
   PDB_DbiSectionContribNode *sc_arr            = push_array_no_zero(arena, PDB_DbiSectionContribNode, obj->header.section_count_no_null);
@@ -2104,8 +2199,8 @@ THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_defined_task)
 {
   ProfBeginFunction();
 
-  LNK_BuildPublicSymbolsTask *task = raw_task;
-  for (LNK_SymbolHashTrieChunk *chunk = task->chunk_lists[task_id].first; chunk != 0; chunk = chunk->next) {
+  LNK_BuildPdb *task = raw_task;
+  for EachNode(chunk, LNK_SymbolHashTrieChunk, task->symtab->chunks[task_id].first) {
     CV_SymbolNode *nodes    = push_array_no_zero(arena, CV_SymbolNode, chunk->count);
     U64            node_idx = 0;
     for EachIndex(i, chunk->count) {
@@ -2134,131 +2229,77 @@ THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_defined_task)
   ProfEnd();
 }
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_gsi_hash_cv_list_task)
-{
-  ProfBeginFunction();
-
-  LNK_BuildPublicSymbolsTask *task  = raw_task;
-  Rng1U64                     range = task->symbol_ranges[task_id];
-
-  for (U64 symbol_idx = range.min; symbol_idx < range.max; ++symbol_idx) {
-    CV_Symbol *symbol = &task->symbols.v[symbol_idx]->data;
-    String8 name = cv_name_from_symbol(symbol->kind, symbol->data);
-    task->hashes[symbol_idx] = gsi_hash(task->gsi, name);
-  }
-
-  ProfEnd();
-}
-
-internal void
-lnk_build_pdb_public_symbols(TP_Context            *tp,
-                             TP_Arena              *arena,
-                             LNK_SymbolTable       *symtab,
-                             PDB_PsiContext        *psi)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(arena->v, arena->count);
-
-  ProfBegin("Defined");
-  LNK_BuildPublicSymbolsTask task = {0};
-  task.pub_list_arr = push_array(scratch.arena, CV_SymbolList, tp->worker_count);
-  task.chunk_lists  = symtab->chunks;
-  tp_for_parallel(tp, arena, tp->worker_count, lnk_build_pdb_public_symbols_defined_task, &task);
-  ProfEnd();
-
-  CV_SymbolPtrArray symbols = cv_symbol_ptr_array_from_list(scratch.arena, tp, tp->worker_count, task.pub_list_arr);
-
-  ProfBegin("GSI Push");
-  gsi_push_many_arr(tp, psi->gsi, symbols.count, symbols.v);
-  ProfEnd();
-
-  scratch_end(scratch);
-  ProfEnd();
-}
-
 internal String8List
-lnk_build_pdb(TP_Context               *tp,
-              TP_Arena                 *tp_arena,
-              String8                   image_data,
-              LNK_Config               *config,
-              LNK_SymbolTable          *symtab,
-              U64                       obj_count,
-              LNK_Obj                 **obj_arr,
-              CV_DebugS                *debug_s_arr,
-              U64                       symbol_input_count,
-              LNK_SymbolInput          *symbol_inputs,
-              CV_SymbolListArray       *parsed_symbols,
-              LNK_MergedTypes           types)
+lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types)
 {
-  ProfBegin("PDB");
+  ProfBeginFunction();
+
   Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
   Temp huge_arena_temp = temp_begin(lnk_get_huge_arena());
 
-  PE_BinInfo           pe                        = pe_bin_info_from_data(scratch.arena, image_data);
-  COFF_SectionHeader **image_section_table       = coff_section_table_from_data(scratch.arena, image_data, pe.section_table_range);
-  U64                  image_section_table_count = pe.section_count+1;
+  U64 obj_count = cv->obj_count;
 
-  ProfBegin("Setup PDB Context");
-  PDB_Context *pdb = pdb_alloc_(huge_arena_temp.arena, config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid);
-  ProfEnd();
+  LNK_BuildPdb task = {
+    .image_data = image_data,
+    .symtab     = symtab,
+    .cv         = cv,
+    .pdb        = pdb_alloc_(huge_arena_temp.arena, config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid),
+  };
 
   // set min type indices
-  for EachElement(ti_source, types.min_type_indices) { pdb->type_servers[ti_source]->ti_lo = types.min_type_indices[ti_source]; }
-
-  // move patched type data
-  //
-  // leaf data is stored in g_file_arena which has linker's life-time
-  // and this way we skip redundant leaf copy to the type server to make things faster
-  pdb_type_server_push_parallel(tp, pdb->type_servers[CV_TypeIndexSource_IPI], types.count[CV_TypeIndexSource_IPI], types.v[CV_TypeIndexSource_IPI]);
-  pdb_type_server_push_parallel(tp, pdb->type_servers[CV_TypeIndexSource_TPI], types.count[CV_TypeIndexSource_TPI], types.v[CV_TypeIndexSource_TPI]);
-
-  ProfBegin("Collect Symbols for GSI");
-  CV_SymbolList *gsi_list_arr = push_array(scratch.arena, CV_SymbolList, obj_count);
-  {
-    LNK_ProcessSymDataTaskData task = {0};
-    task.gsi_list_arr               = gsi_list_arr;
-    task.parsed_symbols             = parsed_symbols;
-    tp_for_parallel(tp, 0, obj_count, lnk_filter_out_gsi_symbols_task, &task);
-  }
-  ProfEnd();
+  for EachElement(ti_source, cv_types.min_type_indices) { task.pdb->type_servers[ti_source]->ti_lo = cv_types.min_type_indices[ti_source]; }
 
   ProfBegin("Reserve DBI Modules");
-  PDB_DbiModule **mod_arr = push_array(tp_arena->v[0], PDB_DbiModule *, obj_count);
+  task.mod_arr = push_array(tp_arena->v[0], PDB_DbiModule *, obj_count);
   for EachIndex(obj_idx, obj_count) {
-    LNK_Obj *obj = obj_arr[obj_idx];
-    mod_arr[obj_idx] = dbi_push_module(pdb->dbi, obj->path, lnk_obj_get_lib_path(obj));
+    LNK_Obj *obj = cv->obj_arr[obj_idx];
+    task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, obj->path, lnk_obj_get_lib_path(obj));
 
     // we don't support symbol append
-    Assert(mod_arr[obj_idx]->sn == MSF_INVALID_STREAM_NUMBER);
+    Assert(task.mod_arr[obj_idx]->sn == MSF_INVALID_STREAM_NUMBER);
   }
   ProfEnd();
 
+  task.serialized_symbol_data_sizes = push_array(scratch.arena, U64, obj_count);
+  ProfScope("Make GSI/PSI")
+  {
+    ProfScope("Process & Populate GSI/PSI") tp_for_parallel(tp, 0, tp->worker_count, lnk_process_and_populate_gsi_and_psi_task, &task);
+
+    ProfBegin("Build and write GSI/PSI");
+    PDB_Context *pdb = task.pdb;
+    Assert(pdb->dbi->globals_sn == MSF_INVALID_STREAM_NUMBER &&
+           pdb->dbi->publics_sn == MSF_INVALID_STREAM_NUMBER &&
+           pdb->dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER);
+    pdb->dbi->globals_sn = msf_stream_alloc(pdb->msf);
+    pdb->dbi->publics_sn = msf_stream_alloc(pdb->msf);
+    pdb->dbi->symbols_sn = msf_stream_alloc(pdb->msf);
+    psi_build(tp, pdb->psi, pdb->msf, pdb->dbi->publics_sn, pdb->dbi->symbols_sn);
+    gsi_build(tp, pdb->gsi, pdb->msf, pdb->dbi->globals_sn, pdb->dbi->symbols_sn);
+    ProfEnd();
+
+    ProfScope("fixup_symbol_streams") tp_for_parallel(tp, tp_arena, obj_count, lnk_fixup_debug_s_task, &task);
+  }
+
   ProfBegin("Build String Table");
-  CV_StringHashTable string_ht = cv_dedup_string_tables(tp_arena, tp, obj_count, debug_s_arr);
-  cv_string_hash_table_assign_buffer_offsets(tp, string_ht);
-  U64 string_data_base_offset = pdb->info->strtab.size;
-  pdb_strtab_add_cv_string_hash_table(&pdb->info->strtab, string_ht);
+  task.string_ht = cv_dedup_string_tables(tp_arena, tp, obj_count, cv->debug_s_arr);
+  cv_string_hash_table_assign_buffer_offsets(tp, task.string_ht);
+  pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
   ProfEnd();
 
   ProfBegin("Build Source Files List");
   {
     // push source files per module info
-    LNK_ProcessC13DataTask task     = {0};
-    task.debug_s_arr                = debug_s_arr;
-    task.string_data_base_offset    = string_data_base_offset;
     task.source_file_names_list_arr = push_array_no_zero(tp_arena->v[0], String8List, obj_count);
-    task.string_ht                  = string_ht;
     tp_for_parallel(tp, tp_arena, obj_count, lnk_process_c13_data_task, &task);
 
     for EachIndex(obj_idx, obj_count) {
-      String8List source_file_list = str8_list_copy(pdb->dbi->arena, &task.source_file_names_list_arr[obj_idx]);
-      str8_list_concat_in_place(&mod_arr[obj_idx]->source_file_list, &source_file_list);
+      String8List source_file_list = str8_list_copy(task.pdb->dbi->arena, &task.source_file_names_list_arr[obj_idx]);
+      str8_list_concat_in_place(&task.mod_arr[obj_idx]->source_file_list, &source_file_list);
     }
 
     // zero out string table sub section
     for EachIndex(obj_idx, obj_count) {
-      MemoryZeroStruct(&debug_s_arr[obj_idx].data_list[CV_C13SubSectionIdxKind_StringTable]);
+      MemoryZeroStruct(&cv->debug_s_arr[obj_idx].data_list[CV_C13SubSectionIdxKind_StringTable]);
     }
   }
   ProfEnd();
@@ -2266,110 +2307,78 @@ lnk_build_pdb(TP_Context               *tp,
   ProfBegin("Build DBI Modules");
   {
     TP_Temp temp = tp_temp_begin(tp_arena);
-    {
-      ProfBegin("Fixup Symbol Offsets");
-      U64 *serialized_symbol_data_sizes = push_array(scratch.arena, U64, obj_count);
-      tp_for_parallel(tp, tp_arena, obj_count, lnk_fixup_symbol_offsets_task, &(LNK_ProcessSymDataTaskData){ .parsed_symbols = parsed_symbols, .serialized_symbol_data_sizes = serialized_symbol_data_sizes });
-      ProfEnd();
 
-      // TODO: actually collect offsets and pass them here
-      ProfBegin("Build Empty Global Reference Array");
-      String8List *globrefs_arr = push_array(tp_arena->v[0], String8List, obj_count);
-      for EachIndex(obj_idx, obj_count) {
-        String8List *globrefs = &globrefs_arr[obj_idx];
-        str8_serial_begin(tp_arena->v[0], globrefs);
-        Assert(globrefs->total_size == 0);
-        str8_serial_push_u32(tp_arena->v[0], globrefs, globrefs->total_size);
-      }
-      ProfEnd();
-
-      // reserve memory for module streams
-      ProfBegin("Reserve Modules Memory");
-      U32 *mod_sizes = push_array(scratch.arena, U32, obj_count);
-      for EachIndex(obj_idx, obj_count) {
-        // compute number of bytes needed for module data
-        U64 mod_size = 0;
-        mod_size += cv_size_from_debug_s(&debug_s_arr[obj_idx], CV_C13SubSectionAlign);
-        mod_size += serialized_symbol_data_sizes[obj_idx];
-        mod_size += globrefs_arr[obj_idx].total_size;
-
-        mod_sizes[obj_idx] = safe_cast_u32(mod_size);
-
-        // allocate stream for module
-        mod_arr[obj_idx]->sn = msf_stream_alloc_ex(pdb->msf, mod_sizes[obj_idx]);
-      }
-      ProfEnd();
-
-      // copy data to module streams
-      ProfBegin("Write Modules Data");
-      LNK_WriteModuleDataTask write_module_data_task_data = {0};
-      write_module_data_task_data.msf                          = pdb->msf;
-      write_module_data_task_data.mod_arr                      = mod_arr;
-      write_module_data_task_data.debug_s_arr                  = debug_s_arr;
-      write_module_data_task_data.serialized_symbol_data_sizes = serialized_symbol_data_sizes;
-      write_module_data_task_data.parsed_symbols               = parsed_symbols;
-      write_module_data_task_data.globrefs_arr                 = globrefs_arr;
-      write_module_data_task_data.mod_sizes                    = mod_sizes;
-      tp_for_parallel(tp, 0, obj_count, lnk_write_module_data_task, &write_module_data_task_data);
-      ProfEnd();
+    // TODO: actually collect offsets and pass them here
+    ProfBegin("Build Empty Global Reference Array");
+    task.globrefs_arr = push_array(tp_arena->v[0], String8List, obj_count);
+    for EachIndex(obj_idx, obj_count) {
+      String8List *srl = &task.globrefs_arr[obj_idx];
+      str8_serial_begin(tp_arena->v[0], srl);
+      Assert(srl->total_size == 0);
+      str8_serial_push_u32(tp_arena->v[0], srl, srl->total_size);
     }
+    ProfEnd();
+
+    // reserve memory for module streams
+    ProfBegin("Reserve Modules Memory");
+    task.mod_sizes = push_array(scratch.arena, U32, obj_count);
+    for EachIndex(obj_idx, obj_count) {
+      // compute number of bytes needed for module data
+      U64 mod_size = 0;
+      mod_size += cv_size_from_debug_s(&cv->debug_s_arr[obj_idx], CV_C13SubSectionAlign);
+      mod_size += task.serialized_symbol_data_sizes[obj_idx];
+      mod_size += task.globrefs_arr[obj_idx].total_size;
+
+      task.mod_sizes[obj_idx]     = safe_cast_u32(mod_size);
+      task.mod_arr  [obj_idx]->sn = msf_stream_alloc_ex(task.pdb->msf, task.mod_sizes[obj_idx]);
+    }
+    ProfEnd();
+
+    tp_for_parallel_prof(tp, 0, obj_count, lnk_write_pdb_module_stream, &task, "Write Module Data");
+
     tp_temp_end(temp);
   }
   ProfEnd();
-
-  ProfBegin("Make Proc Refs");
+  
+  ProfBegin("Build Section Contrib Map");
   {
-    LNK_ProcessSymDataTaskData task = {0};
-    task.mod_arr                    = mod_arr;
-    task.gsi_list_arr               = gsi_list_arr;
-    task.parsed_symbols             = parsed_symbols;
-    tp_for_parallel(tp, tp_arena, obj_count, lnk_make_proc_refs_task, &task);
-  }
-  ProfEnd();
+    task.pe                        = pe_bin_info_from_data(scratch.arena, image_data);
+    task.image_section_table       = coff_section_table_from_data(scratch.arena, image_data, task.pe.section_table_range);
+    task.image_section_table_count = task.pe.section_count+1;
 
-  ProfBegin("Push Global Symbols");
-  {
-    CV_SymbolPtrArray global_symbols = cv_symbol_ptr_array_from_list(scratch.arena, tp, obj_count, gsi_list_arr);
-    cv_dedup_symbol_ptr_array(tp, &global_symbols);
-    gsi_push_many_arr(tp, pdb->gsi, global_symbols.count, global_symbols.v);
+    ProfBegin("Build DBI Section Headers");
+    for (U64 sect_idx = 1; sect_idx < task.image_section_table_count; sect_idx += 1) {
+      dbi_push_section(task.pdb->dbi, task.image_section_table[sect_idx]);
+    }
+    ProfEnd();
+
+    task.image_section_virt_ranges.count = task.image_section_table_count;
+    task.image_section_virt_ranges.v     = push_array(scratch.arena, Rng1U64, task.image_section_table_count);
+    task.image_section_file_ranges.v     = push_array(scratch.arena, Rng1U64, task.image_section_table_count);
+    for EachIndex(i, task.image_section_table_count) {
+      COFF_SectionHeader *sect_header = task.image_section_table[i];
+      if (~sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+        task.image_section_file_ranges.v[task.image_section_file_ranges.count++] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+      }
+      task.image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
+    }
+
+    task.sc_list = push_array(scratch.arena, PDB_DbiSectionContribList, obj_count);
+    tp_for_parallel(tp, tp_arena, obj_count, lnk_push_dbi_sec_contrib_task, &task);
+
+    dbi_sec_list_concat_arr(&task.pdb->dbi->sec_contrib_list, obj_count, task.sc_list);
   }
   ProfEnd();
   
-  ProfBegin("Build DBI Section Headers");
+  ProfBegin("Make Public Symbols");
   {
-    for (U64 sect_idx = 1; sect_idx < image_section_table_count; sect_idx += 1) {
-      dbi_push_section(pdb->dbi, image_section_table[sect_idx]);
-    }
-  }
-  ProfEnd();
+    task.pub_list_arr = push_array(scratch.arena, CV_SymbolList, tp->worker_count);
+    tp_for_parallel_prof(tp, tp_arena, tp->worker_count, lnk_build_pdb_public_symbols_defined_task, &task, "Defined");
 
-  ProfBegin("Build Section Contrib Map");
-  {
-
-    Rng1U64Array image_section_file_ranges = {0};
-    image_section_file_ranges.count = 0;
-    image_section_file_ranges.v     = push_array(scratch.arena, Rng1U64, image_section_table_count);
-    Rng1U64Array image_section_virt_ranges = {0};
-    image_section_virt_ranges.count = image_section_table_count;
-    image_section_virt_ranges.v     = push_array(scratch.arena, Rng1U64, image_section_table_count);
-    for (U64 i = 0; i < image_section_table_count; i += 1) {
-      COFF_SectionHeader *sect_header = image_section_table[i];
-      if (~sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
-        image_section_file_ranges.v[image_section_file_ranges.count++] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
-      }
-      image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
-    }
-
-    LNK_PushDbiSecContribTaskData task = {0};
-    task.obj_arr                       = obj_arr;
-    task.mod_arr                       = mod_arr;
-    task.sc_list                       = push_array(scratch.arena, PDB_DbiSectionContribList, obj_count);
-    task.image_data                    = image_data;
-    task.image_section_file_ranges     = image_section_file_ranges;
-    task.image_section_virt_ranges     = image_section_virt_ranges;
-    tp_for_parallel(tp, tp_arena, obj_count, lnk_push_dbi_sec_contrib_task, &task);
-
-    dbi_sec_list_concat_arr(&pdb->dbi->sec_contrib_list, obj_count, task.sc_list);
+    ProfBegin("GSI Push");
+    CV_SymbolPtrArray symbols = cv_symbol_ptr_array_from_list(scratch.arena, tp, tp->worker_count, task.pub_list_arr);
+    gsi_push_many_arr(tp, task.pdb->psi->gsi, symbols.count, symbols.v);
+    ProfEnd();
   }
   ProfEnd();
 
@@ -2395,27 +2404,31 @@ lnk_build_pdb(TP_Context               *tp,
       }
 
       // add natvis to PDB
-      PDB_SrcError error = pdb_add_src(pdb->info, pdb->msf, natvis_file_path, natvis_file_data, PDB_SrcComp_NULL);
+      PDB_SrcError error = pdb_add_src(task.pdb->info, task.pdb->msf, natvis_file_path, natvis_file_data, PDB_SrcComp_NULL);
       if (error != PDB_SrcError_OK) {
         lnk_error(LNK_Error_Natvis, "%S", pdb_string_from_src_error(error));
       }
     }
   }
   ProfEnd();
-  
-  lnk_build_pdb_public_symbols(tp, tp_arena, symtab, pdb->psi);
-  
-  pdb_build(tp, tp_arena, pdb, string_ht);
 
-  MSF_Error msf_err = msf_build(pdb->msf);
+  // move patched type data
+  //
+  // leaf data is stored in g_file_arena which has linker's life-time
+  // and this way we skip redundant leaf copy to the type server to make things faster
+  pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_IPI], cv_types.count[CV_TypeIndexSource_IPI], cv_types.v[CV_TypeIndexSource_IPI]);
+  pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_TPI], cv_types.count[CV_TypeIndexSource_TPI], cv_types.v[CV_TypeIndexSource_TPI]);
+
+  pdb_build(tp, tp_arena, task.pdb, task.string_ht, 0);
+
+  MSF_Error msf_err = msf_build(task.pdb->msf);
   if (msf_err != MSF_Error_OK) {
     lnk_error(LNK_Error_UnableToSerializeMsf, "unable to serialize MSF: %s", msf_error_to_string(msf_err));
   }
 
   ProfBegin("Get Page Nodes");
-  String8List page_data_list = msf_get_page_data_nodes(tp_arena->v[0], pdb->msf);
+  String8List page_data_list = msf_get_page_data_nodes(tp_arena->v[0], task.pdb->msf);
   ProfEnd();
-
   
   // NOTE: linker is about to exit so we can skip memory release
   // and let windows free memory since it does this faster
@@ -3552,19 +3565,19 @@ THREAD_POOL_TASK_FUNC(lnk_find_obj_compiler_info_task)
 {
   ProfBeginFunction();
 
-  LNK_ConvertUnitToRDITask *task           = raw_task;
-  CV_SymbolListArray        parsed_symbols = task->parsed_symbols[task_id];
-  LNK_CodeViewCompilerInfo *comp_info      = &task->comp_info_arr[task_id];
+  LNK_ConvertUnitToRDITask *task      = raw_task;
+  LNK_CodeViewCompilerInfo *comp_info = &task->comp_info_arr[task_id];
 
   comp_info->arch          = (CV_Arch)~0u;
   comp_info->language      = (CV_Language)~0u;
   comp_info->compiler_name = str8_zero();
 
+  String8List symbols = cv_sub_section_from_debug_s(task->debug_s_arr[task_id], CV_C13SubSectionKind_Symbols);
+
   // infer unit compiler data from S_COMPILE* which always follows S_OBJ
-  for (U64 symbol_list_idx = 0; symbol_list_idx < parsed_symbols.count; ++symbol_list_idx) {
-    CV_SymbolList symbol_list = parsed_symbols.v[symbol_list_idx];
-    for (CV_SymbolNode *symbol_n = symbol_list.first; symbol_n != 0; symbol_n = symbol_n->next) {
-      CV_Symbol symbol = symbol_n->data;
+  for EachNode(n, String8Node, symbols.first) {
+    for (U64 cursor = 0; cursor < n->string.size; ) {
+      CV_Symbol symbol = {0}; NotImplemented; // TODO: @symbol_pass
       if (symbol.kind == CV_SymKind_COMPILE) {
         AssertAlways(sizeof(CV_SymCompile) <= symbol.data.size);
         CV_SymCompile *compile = (CV_SymCompile *)symbol.data.str;
@@ -3714,7 +3727,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
   Temp scratch = scratch_begin(&arena, 1);
 
   LNK_ConvertUnitToRDITask *task                = raw_task;
-  LNK_SymbolInput  symbols_input       = task->symbol_inputs[task_id];
+  LNK_SymbolInput           symbols_input       = task->symbol_inputs[task_id];
   LNK_Obj                  *obj                 = task->obj_arr[symbols_input.obj_idx];
   LNK_CodeViewCompilerInfo  comp_info           = task->comp_info_arr[symbols_input.obj_idx];
   CV_InlineeLinesAccel     *inlinee_lines_accel = task->inlinee_lines_accel_arr[symbols_input.obj_idx];
@@ -3748,8 +3761,9 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
   // root frame
   push_scope_frame();
 
-  for (CV_SymbolNode *symbol_n = symbols_input.symbol_list->first; symbol_n != 0; symbol_n = symbol_n->next) {
-    CV_Symbol symbol = symbol_n->data;
+  for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols_input.raw_symbols.size; ) {
+    CV_Symbol symbol = {0};
+    TryReadBreak(cv_read_symbol(symbols_input.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
 
     switch (symbol.kind) {
     case CV_SymKind_COMPILE:
@@ -3916,14 +3930,17 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       CV_SymFrameproc *frameproc = 0;
       {
         U64 depth = 1;
-        for (CV_SymbolNode *lookahead = symbol_n->next; lookahead != 0; lookahead = lookahead->next) {
-          if (lookahead->data.kind == CV_SymKind_FRAMEPROC) {
-            frameproc = (CV_SymFrameproc *) lookahead->data.data.str;
+        for (U64 lookahead_off = cursor; lookahead_off + sizeof(CV_SymbolHeader) <= symbols_input.raw_symbols.size; ) {
+          CV_Symbol lookahead = {0};
+          TryReadBreak(cv_read_symbol(symbols_input.raw_symbols, lookahead_off, CV_SymbolAlign, &lookahead), lookahead_off);
+
+          if (lookahead.kind == CV_SymKind_FRAMEPROC) {
+            frameproc = str8_deserial_get_raw_ptr(lookahead.data, 0, sizeof(*frameproc));
             break;
           }
-          if (cv_is_scope_symbol(lookahead->data.kind)) {
+          if (cv_is_scope_symbol(lookahead.kind)) {
             ++depth;
-          } else if (cv_is_end_symbol(lookahead->data.kind)) {
+          } else if (cv_is_end_symbol(lookahead.kind)) {
             --depth;
             if (depth == 0) {
               break;
@@ -3999,14 +4016,17 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       CV_SymFrameproc *frameproc = 0;
       {
         U64 depth = 1;
-        for (CV_SymbolNode *lookahead = symbol_n->next; lookahead != 0; lookahead = lookahead->next) {
-          if (lookahead->data.kind == CV_SymKind_FRAMEPROC) {
-            frameproc = (CV_SymFrameproc *) lookahead->data.data.str;
+        for (U64 lookahead_off = cursor; lookahead_off + sizeof(CV_SymbolHeader) <= symbols_input.raw_symbols.size; ) {
+          CV_Symbol lookahead = {0};
+          TryReadBreak(cv_read_symbol(symbols_input.raw_symbols, lookahead_off, CV_SymbolAlign, &lookahead), lookahead_off);
+
+          if (lookahead.kind == CV_SymKind_FRAMEPROC) {
+            frameproc = str8_deserial_get_raw_ptr(lookahead.data, 0, sizeof(*frameproc));
             break;
           }
-          if (cv_is_scope_symbol(lookahead->data.kind)) {
+          if (cv_is_scope_symbol(lookahead.kind)) {
             ++depth;
-          } else if (cv_is_end_symbol(lookahead->data.kind)) {
+          } else if (cv_is_end_symbol(lookahead.kind)) {
             --depth;
             if (depth == 0) {
               break;
@@ -4619,7 +4639,6 @@ lnk_build_rad_debug_info(TP_Context               *tp,
     task.leaf_arr_count_ipi       = types.count[CV_TypeIndexSource_IPI];
     task.leaf_arr_ipi             = types.v[CV_TypeIndexSource_IPI];
     task.symbol_inputs            = symbol_inputs;
-    task.parsed_symbols           = parsed_symbols;
     task.ipi_itype_range          = itype_ranges[CV_TypeIndexSource_IPI];
     task.tpi_itype_range          = itype_ranges[CV_TypeIndexSource_TPI];
     task.tpi_itype_map            = tpi_itype_map;

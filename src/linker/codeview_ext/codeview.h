@@ -14,10 +14,13 @@ typedef union CV_LeafHeader
   U32 v;
 } CV_LeafHeader;
 
-typedef struct CV_SymbolHeader
+typedef union CV_SymbolHeader
 {
-  CV_SymSize size;
-  CV_SymKind kind;
+  struct {
+    CV_SymSize size;
+    CV_SymKind kind;
+  };
+  U32 v;
 } CV_SymbolHeader;
 
 ////////////////////////////////
@@ -339,17 +342,6 @@ typedef struct CV_StringHashTableResult
 
 typedef struct
 {
-  U64              cap;
-  union {
-    CV_SymbolNode ***buckets;
-    CV_SymbolNode  **deref_buckets;
-  } u;
-  Rng1U64         *ranges;
-  CV_SymbolNode  **symbols;
-} CV_SymbolDeduperTask;
-
-typedef struct
-{
   CV_SymbolList  *list_arr;
   Rng1U64        *list_range_arr;
   U64            *symbol_base_arr;
@@ -397,6 +389,13 @@ internal CV_PrecompInfo    cv_precomp_info_from_leaf(CV_Leaf leaf);
 internal U64     cv_size_from_symbol(CV_Symbol *symbol, U64 align);
 internal U64     cv_write_symbol(U8 *buffer, U64 buffer_cursor, U64 buffer_size, CV_Symbol *symbol, U64 align);
 internal String8 cv_data_from_symbol(Arena *arena, CV_Symbol *symbol, U64 align);
+
+internal U64          cv_read_symbol(String8 raw_data, U64 off, U64 align, CV_Symbol *symbol_out);
+internal U8 *         cv_ptr_from_symbol(CV_Symbol symbol);
+internal CV_SymKind * cv_kind_ptr_from_symbol(CV_Symbol symbol);
+internal CV_Symbol    cv_symbol_from_ptr(U8 *ptr);
+internal String8      cv_raw_from_symbol(void *ptr);
+internal B32          cv_symbol_match(CV_Symbol a, CV_Symbol b);
 
 internal String8       cv_make_symbol(Arena *arena, CV_SymKind kind, String8 data);
 internal String8       cv_make_obj_name(Arena *arena, String8 obj_path, U32 sig);

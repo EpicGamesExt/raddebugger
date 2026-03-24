@@ -3725,7 +3725,7 @@ pdb_get_guid(PDB_Context *pdb)
 }
 
 internal void
-pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht)
+pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi)
 {
   ProfBeginFunction();
   
@@ -3735,25 +3735,27 @@ pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTa
   PDB_TypeServer  *tpi    = pdb->type_servers[CV_TypeIndexSource_TPI];
   PDB_TypeServer  *ipi    = pdb->type_servers[CV_TypeIndexSource_IPI];
   
-  if (dbi->globals_sn == MSF_INVALID_STREAM_NUMBER) {
-    dbi->globals_sn = msf_stream_alloc(pdb->msf);
-  }
-  if (dbi->publics_sn == MSF_INVALID_STREAM_NUMBER) {
-    dbi->publics_sn = msf_stream_alloc(pdb->msf);
-  }
-  if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) {
-    dbi->symbols_sn = msf_stream_alloc(pdb->msf);
-  }
-  
   pdb_type_server_build(tp, tpi, strtab, pdb->msf, PDB_FixedStream_Tpi);
   if (info->flags & PDB_FeatureFlag_HAS_ID_STREAM) {
     pdb_type_server_build(tp, ipi, strtab, pdb->msf, PDB_FixedStream_Ipi);
   }
 
-  psi_build(tp, pdb->psi, pdb->msf, dbi->publics_sn, dbi->symbols_sn);
-  gsi_build(tp, pdb->gsi, pdb->msf, dbi->globals_sn, dbi->symbols_sn);
   dbi_build(tp, pdb->dbi, pdb->msf, PDB_FixedStream_Dbi, string_ht);
   pdb_info_build(pdb->info, pdb->msf, PDB_FixedStream_Info);
+
+  if (build_gsi) {
+    if (dbi->globals_sn == MSF_INVALID_STREAM_NUMBER) {
+      dbi->globals_sn = msf_stream_alloc(pdb->msf);
+    }
+    if (dbi->publics_sn == MSF_INVALID_STREAM_NUMBER) {
+      dbi->publics_sn = msf_stream_alloc(pdb->msf);
+    }
+    if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) {
+      dbi->symbols_sn = msf_stream_alloc(pdb->msf);
+    }
+    psi_build(tp, pdb->psi, pdb->msf, dbi->publics_sn, dbi->symbols_sn);
+    gsi_build(tp, pdb->gsi, pdb->msf, dbi->globals_sn, dbi->symbols_sn);
+  }
 
   ProfEnd();
 }

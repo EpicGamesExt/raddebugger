@@ -351,7 +351,7 @@ typedef struct
 internal PDB_Context *    pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid);
 internal PDB_Context *    pdb_open(String8 data);
 internal void             pdb_release(PDB_Context **pdb_ptr);
-internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht);
+internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi);
 internal void             pdb_set_machine(PDB_Context *pdb, COFF_MachineType machine);
 internal void             pdb_set_guid(PDB_Context *pdb, Guid guid);
 internal void             pdb_set_time_stamp(PDB_Context *pdb, COFF_TimeStamp time_stamp);

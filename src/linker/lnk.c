@@ -5144,8 +5144,8 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     //
     // CodeView
     //
-    LNK_CodeViewInput input        = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, config->alt_pch_dirs, debug_info_objs_count, debug_info_objs);
-    LNK_MergedTypes   merged_types = lnk_merge_types(tp, arena, &input);
+    LNK_CodeViewInput cv       = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, config->alt_pch_dirs, debug_info_objs_count, debug_info_objs);
+    LNK_MergedTypes   cv_types = lnk_merge_types(tp, arena, &cv);
 
     //
     // RDI
@@ -5161,11 +5161,11 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
                                                       image_ctx.image_data,
                                                       debug_info_objs_count,
                                                       debug_info_objs,
-                                                      input.debug_s_arr,
-                                                      input.symbol_input_count,
-                                                      input.symbol_inputs,
-                                                      input.parsed_symbols,
-                                                      merged_types);
+                                                      cv.debug_s_arr,
+                                                      cv.symbol_input_count,
+                                                      cv.symbol_inputs,
+                                                      (CV_SymbolListArray[]){0},
+                                                      cv_types);
 
       lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_data);
 
@@ -5183,26 +5183,14 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       if (config->pdb_hash_type_names != LNK_TypeNameHashMode_Null && config->pdb_hash_type_names != LNK_TypeNameHashMode_None) {
         lnk_replace_type_names_with_hashes(tp,
                                            arena,
-                                           merged_types.count[CV_TypeIndexSource_TPI],
-                                           merged_types.v    [CV_TypeIndexSource_TPI],
+                                           cv_types.count[CV_TypeIndexSource_TPI],
+                                           cv_types.v    [CV_TypeIndexSource_TPI],
                                            config->pdb_hash_type_names,
                                            config->pdb_hash_type_name_length,
                                            config->pdb_hash_type_name_map);
       }
 
-      String8List pdb_data = lnk_build_pdb(tp,
-                                           arena,
-                                           image_ctx.image_data,
-                                           config,
-                                           symtab,
-                                           debug_info_objs_count,
-                                           debug_info_objs,
-                                           input.debug_s_arr,
-                                           input.symbol_input_count,
-                                           input.symbol_inputs,
-                                           input.parsed_symbols,
-                                           merged_types);
-
+      String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types);
       lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb_data);
       lnk_timer_end(LNK_Timer_Pdb);
     }

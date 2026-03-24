@@ -241,6 +241,67 @@ cv_data_from_symbol(Arena *arena, CV_Symbol *symbol, U64 align)
   return result;
 }
 
+internal U64
+cv_read_symbol(String8 raw_data, U64 off, U64 align, CV_Symbol *symbol_out)
+{
+  Assert(raw_data.size >= sizeof(CV_SymbolHeader));
+
+  U8 *symbol_ptr = raw_data.str + off;
+  CV_SymbolHeader header = { .v = memory_read32(symbol_ptr) };
+
+  Assert(header.size >= sizeof(CV_SymKind));
+  Assert(sizeof(CV_SymSize) + header.size <= raw_data.size);
+
+  symbol_out->kind = header.kind;
+  symbol_out->data = str8(symbol_ptr + sizeof(CV_SymbolHeader), header.size - sizeof(CV_SymKind));
+
+  U64 symbol_size = AlignPow2(sizeof(CV_SymbolHeader) + symbol_out->data.size, align);
+  Assert(symbol_size <= raw_data.size);
+  return symbol_size;
+}
+
+internal U8 *
+cv_ptr_from_symbol(CV_Symbol symbol)
+{
+  return symbol.data.str - sizeof(CV_SymbolHeader);
+}
+
+internal CV_SymKind *
+cv_kind_ptr_from_symbol(CV_Symbol symbol)
+{
+  return &((CV_SymbolHeader *)cv_ptr_from_symbol(symbol))->kind;
+}
+
+internal CV_Symbol
+cv_symbol_from_ptr(U8 *ptr)
+{
+  CV_Symbol symbol = {0};
+  cv_read_symbol(str8(ptr, max_U64), 0, 1, &symbol);
+  return symbol;
+}
+
+internal String8
+cv_raw_from_symbol(void *ptr)
+{
+  CV_SymbolHeader *header = ptr;
+  return str8(ptr, header->size + sizeof(header->size));
+}
+
+internal B32
+cv_symbol_match(CV_Symbol a, CV_Symbol b)
+{
+  B32 is_match = 0;
+
+  CV_SymbolHeader *a_ptr = (CV_SymbolHeader *)cv_ptr_from_symbol(a);
+  CV_SymbolHeader *b_ptr = (CV_SymbolHeader *)cv_ptr_from_symbol(b);
+
+  if (a_ptr->size == b_ptr->size) {
+    is_match = MemoryMatch(a_ptr + sizeof(CV_SymSize), b_ptr + sizeof(CV_SymSize), a_ptr->size);
+  }
+
+  return is_match;
+}
+
 internal String8
 cv_make_symbol(Arena *arena, CV_SymKind kind, String8 data)
 {
@@ -949,142 +1010,56 @@ cv_pack_string_hash_table(Arena *arena, TP_Context *tp, CV_StringHashTable strin
 ////////////////////////////////
 //~ Symbol Deduper
 
-internal int
-cv_symbol_deduper_is_before(void *raw_a, void *raw_b)
+internal void *
+cv_symbol_deduper_insert_or_update(void **buckets, U64 bucket_cap, U64 hash, void *symbol_ptr)
 {
-  return raw_a < raw_b;
-}
-
-internal CV_SymbolNode **
-cv_symbol_deduper_insert_or_update(CV_SymbolNode ***buckets, U64 cap, U64 hash, CV_SymbolNode **new_bucket)
-{
-  CV_SymbolNode **result                 = 0;
-  B32             is_inserted_or_updated = 0;
-
-  U64 best_idx = hash % cap;
-  U64 idx      = best_idx;
-
+  CV_Symbol  symbol                 = cv_symbol_from_ptr(symbol_ptr);
+  U8        *result                 = 0;
+  B32        is_inserted_or_updated = 0;
+  U64        best_idx               = hash % bucket_cap;
+  U64        bucket_idx             = best_idx;
   do {
     retry:;
-    CV_SymbolNode **curr_bucket = buckets[idx];
+    void *curr_ptr  = buckets + bucket_idx;
+    Assert(curr_ptr != symbol_ptr);
 
-    Assert(curr_bucket != new_bucket);
-
-    if (curr_bucket == 0) {
-      CV_SymbolNode **compare_bucket = ins_atomic_ptr_eval_cond_assign(&buckets[idx], new_bucket, curr_bucket);
-
-      if (compare_bucket == curr_bucket) {
+    if (curr_ptr == 0) {
+      U8 *cmp = ins_atomic_ptr_eval_cond_assign(&buckets[bucket_idx], symbol_ptr, curr_ptr);
+      if (cmp == curr_ptr) {
         // success, bucket was inserted
         is_inserted_or_updated = 1;
         break;
       }
-
       // another thread took the bucket...
       goto retry;
-    } else if ((*curr_bucket)->data.kind == (*new_bucket)->data.kind &&
-               (*curr_bucket)->data.data.size == (*new_bucket)->data.data.size &&
-               MemoryMatch((*curr_bucket)->data.data.str, (*new_bucket)->data.data.str, (*new_bucket)->data.data.size)) {
-      if (cv_symbol_deduper_is_before(curr_bucket, new_bucket)) {
-        result = new_bucket;
+    } else {
+      CV_Symbol curr = cv_symbol_from_ptr(curr_ptr);
 
-        is_inserted_or_updated = 1;
+      if (cv_symbol_match(curr, symbol)) {
+        if (curr_ptr < symbol_ptr) {
+          // do not update, more recent symbol is in the bucket
+          result = symbol_ptr;
+          is_inserted_or_updated = 1;
+          break;
+        }
 
-        // don't need to update, more recent leaf is in the bucket
-        break;
+        void *cmp = ins_atomic_ptr_eval_cond_assign(&buckets[bucket_idx], symbol_ptr, curr_ptr);
+        if (cmp == curr_ptr) {
+          result = cmp;
+          is_inserted_or_updated = 1;
+          break;
+        }
+
+        // another thread took the bucket...
+        goto retry;
       }
-
-      CV_SymbolNode **compare_bucket = ins_atomic_ptr_eval_cond_assign(&buckets[idx], new_bucket, curr_bucket);
-      if (compare_bucket == curr_bucket) {
-        result = compare_bucket;
-
-        is_inserted_or_updated = 1;
-        break;
-      }
-
-      // another thread took the bucket...
-      goto retry;
     }
 
     // advance
-    idx = (idx + 1) % cap;
-  } while (idx != best_idx);
-
+    bucket_idx = (bucket_idx + 1) == bucket_cap ? 0 : bucket_idx + 1;
+  } while (bucket_idx != best_idx);
   Assert(is_inserted_or_updated);
-
   return result;
-}
-
-internal
-THREAD_POOL_TASK_FUNC(cv_symbol_deduper_insert_task)
-{
-  ProfBeginFunction();
-  CV_SymbolDeduperTask *task  = raw_task;
-  Rng1U64               range = task->ranges[task_id];
-  for (U64 symbol_idx = range.min; symbol_idx < range.max; ++symbol_idx) {
-    CV_SymbolNode **symbol_node = &task->symbols[symbol_idx];
-    U64             hash        = hash_from_cv_symbol(&(*symbol_node)->data);
-    cv_symbol_deduper_insert_or_update(task->u.buckets, task->cap, hash, symbol_node);
-  }
-  ProfEnd();
-}
-
-internal
-THREAD_POOL_TASK_FUNC(cv_symbol_deduper_deref_buckets_task)
-{
-  ProfBeginFunction();
-  CV_SymbolDeduperTask *task  = raw_task;
-  Rng1U64               range = task->ranges[task_id];
-  for (U64 bucket_idx = range.min; bucket_idx < range.max; ++bucket_idx) {
-    CV_SymbolNode **bucket = task->u.buckets[bucket_idx];
-    if (bucket) {
-      task->u.deref_buckets[bucket_idx] = *bucket;
-    }
-  }
-  ProfEnd();
-}
-
-internal void
-cv_dedup_symbol_ptr_array(TP_Context *tp, CV_SymbolPtrArray *symbols)
-{
-  ProfBeginDynamic("Dedup Symbols [Count %llu]", symbols->count);
-  Temp scratch = scratch_begin(0, 0);
-
-  ProfBegin("Setup Task");
-  CV_SymbolDeduperTask task = {0};
-  task.symbols              = symbols->v;
-  task.cap                  = (U64)((F64)symbols->count * 1.3);
-  task.u.buckets            = push_array(scratch.arena, CV_SymbolNode **, task.cap);
-  ProfEnd();
-
-  ProfBegin("Dedup");
-  task.ranges = tp_divide_work(scratch.arena, symbols->count, tp->worker_count);
-  tp_for_parallel(tp, 0, tp->worker_count, cv_symbol_deduper_insert_task, &task);
-  ProfEnd();
-
-  ProfBegin("Deref Buckets");
-  task.ranges = tp_divide_work(scratch.arena, task.cap, tp->worker_count);
-  tp_for_parallel(tp, 0, tp->worker_count, cv_symbol_deduper_deref_buckets_task, &task);
-  ProfEnd();
-
-  ProfBegin("Copy Extant Buckets");
-  U64 unique_symbol_count = 0;
-  for (U64 bucket_idx = 0; bucket_idx < task.cap; ++bucket_idx) {
-    CV_SymbolNode *bucket = task.u.deref_buckets[bucket_idx];
-    if (bucket) {
-      symbols->v[unique_symbol_count++] = bucket;
-    }
-  }
-  ProfEnd();
-
-  Assert(unique_symbol_count <= symbols->count);
-  symbols->count = unique_symbol_count;
-
-  ProfBeginDynamic("Sort [Count %llu]", symbols->count);
-  radsort(symbols->v, symbols->count, cv_symbol_deduper_is_before);
-  ProfEnd();
-
-  scratch_end(scratch);
-  ProfEnd();
 }
 
 ////////////////////////////////
@@ -1526,6 +1501,68 @@ cv_patch_symbol_tree_offsets(CV_SymbolList list, U64 base_offset, U64 align)
   scratch_end(scratch);
   U64 serial_size = cursor - base_offset;
   return serial_size;
+}
+
+internal U64
+cv_patch_symbol_tree_offsets_new(String8List raw_symbols, U64 base_offset, U64 align)
+{
+  Temp scratch = scratch_begin(0, 0);
+  struct Stack { struct Stack *next; CV_Symbol symbol; U64 offset; };
+  struct Stack *stack = 0, *free_list = 0;
+  U64 symbol_offset = safe_cast_u32(base_offset);
+  for EachNode(n, String8Node, raw_symbols.first) {
+    for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
+      CV_Symbol symbol = {0};
+      U64 read_size = cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol);
+      if (read_size == 0) { break; }
+      cursor += read_size;
+
+      if (symbol.kind == CV_SymKind_SKIP) { continue; }
+
+      if (cv_is_scope_symbol(symbol.kind)) {
+        // NOTE: We don't patch 'next' offset in PROC symbols because
+        // it's not used by visual studio and MSVC leaves the offsets
+        // zeroed. LLD is on the same page.
+        Assert(symbol.data.size >= sizeof(U32)*2);
+
+        // patch parent symbol offset
+        if (stack) {
+          memory_write32(symbol.data.str, stack->offset);
+        }
+
+        // reuse/alloc frame
+        struct Stack *frame = free_list;
+        if (frame) { SLLStackPop(free_list);                                     }
+        else       { frame = push_array_no_zero(scratch.arena, struct Stack, 1); }
+
+        // push frame to the stack
+        frame->symbol = symbol;
+        frame->offset = symbol_offset;
+        SLLStackPush(stack, frame);
+
+        depth += 1;
+      } else if (cv_is_end_symbol(symbol.kind)) {
+        // patch symbol end
+        U32 *end_off_ptr = (U32 *)stack->symbol.data.str + /* skip parent off */ 1;
+        memory_write32(end_off_ptr, symbol_offset);
+
+        // recycle frame
+        struct Stack *free_frame = stack;
+        SLLStackPop(stack);
+        SLLStackPush(free_list, free_frame);
+
+        if (depth == 0) { Assert(0 && "malformed symbol stream"); goto next_block; }
+        depth -= 1;
+      }
+
+      // advance tree offset
+      symbol_offset += cv_size_from_symbol(&symbol, align);
+    }
+    next_block:;
+  }
+
+  scratch_end(scratch);
+  return symbol_offset - base_offset;
 }
 
 // $$FileChksms

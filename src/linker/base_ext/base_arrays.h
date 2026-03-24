@@ -3,49 +3,16 @@
 
 #pragma once
 
-typedef struct VoidNode
-{
-  struct VoidNode *next;
-  void            *v;
-} VoidNode;
+typedef struct VoidNode { void *v;  struct VoidNode *next; } VoidNode;
+typedef struct U32Node  { U32 data; struct U32Node  *next; } U32Node;
+typedef struct U64Node  { U64 data; struct U64Node  *next; } U64Node;
+typedef struct S64Node  { S64 v;    struct S64Node  *next; } S64Node;
 
-typedef struct U32Node
-{
-  struct U32Node *next;
-  U32             data;
-} U32Node;
+typedef struct VoidList { U64 count; VoidNode *first, *last; } VoidList;
+typedef struct U64List  { U64 count; U64Node  *first, *last; } U64List;
+typedef struct S64List  { U64 count; S64Node  *first, *last; } S64List;
 
-typedef struct U64Node
-{
-  struct U64Node *next;
-  U64             data;
-} U64Node;
-
-typedef struct U64List
-{
-  U64      count;
-  U64Node *first;
-  U64Node *last;
-} U64List;
-
-typedef struct S64Node
-{
-  S64             v;
-  struct S64Node *next;
-} S64Node;
-
-typedef struct S64List
-{
-  U64      count;
-  S64Node *first;
-  S64Node *last;
-} S64List;
-
-typedef struct S64Array
-{
-  U64  count;
-  S64 *v;
-} S64Array;
+typedef struct S64Array { U64 count; S64 *v; } S64Array;
 
 ////////////////////////////////
 
