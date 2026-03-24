@@ -8,25 +8,26 @@
 
 internal Arena *
 arena_alloc_(ArenaParams *params)
-{
-  // rjf: round up reserve/commit sizes
+{ 
   U64 reserve_size = params->reserve_size;
-  U64 commit_size = params->commit_size;
-  if(params->flags & ArenaFlag_LargePages)
-  {
-    reserve_size = AlignPow2(reserve_size, os_get_system_info()->large_page_size);
-    commit_size  = AlignPow2(commit_size,  os_get_system_info()->large_page_size);
-  }
-  else
-  {
-    reserve_size = AlignPow2(reserve_size, os_get_system_info()->page_size);
-    commit_size  = AlignPow2(commit_size,  os_get_system_info()->page_size);
-  }
-  
+  U64 commit_size  = params->commit_size;
+
   // rjf: reserve/commit initial block
   void *base = params->optional_backing_buffer;
   if(base == 0)
   {
+    // rjf: round up reserve/commit sizes
+    if(params->flags & ArenaFlag_LargePages)
+    {
+      reserve_size = AlignPow2(reserve_size, os_get_system_info()->large_page_size);
+      commit_size  = AlignPow2(commit_size,  os_get_system_info()->large_page_size);
+    }
+    else
+    {
+      reserve_size = AlignPow2(reserve_size, os_get_system_info()->page_size);
+      commit_size  = AlignPow2(commit_size,  os_get_system_info()->page_size);
+    }
+
     if(params->flags & ArenaFlag_LargePages)
     {
       base = os_reserve_large(reserve_size);
@@ -56,18 +57,18 @@ arena_alloc_(ArenaParams *params)
   
   // rjf: extract arena header & fill
   AsanUnpoisonMemoryRegion(base, ARENA_HEADER_SIZE);
-  Arena *arena = (Arena *)base;
-  arena->current = arena;
-  arena->flags = params->flags;
-  arena->cmt_size = params->commit_size;
-  arena->res_size = params->reserve_size;
-  arena->base_pos = 0;
-  arena->pos = ARENA_HEADER_SIZE;
-  arena->cmt = commit_size;
-  arena->res = reserve_size;
+  Arena *arena                = base;
+  arena->current              = arena;
+  arena->flags                = params->flags;
+  arena->cmt_size             = params->commit_size;
+  arena->res_size             = params->reserve_size;
+  arena->base_pos             = 0;
+  arena->pos                  = ARENA_HEADER_SIZE;
+  arena->cmt                  = commit_size;
+  arena->res                  = reserve_size;
   arena->allocation_site_file = params->allocation_site_file;
   arena->allocation_site_line = params->allocation_site_line;
-  arena->name = params->name;
+  arena->name                 = params->name;
 #if ARENA_FREE_LIST
   arena->free_last = 0;
 #endif
