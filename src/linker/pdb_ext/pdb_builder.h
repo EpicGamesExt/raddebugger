@@ -258,7 +258,7 @@ typedef struct PDB_DbiModule
   U64                   sym_data_size;
   U64                   c11_data_size;
   U64                   c13_data_size;
-  U64                   globrefs_size; // TODO: what is this for?
+  U64                   globrefs_size;
   String8               obj_path;
   String8               lib_path;
   String8List           source_file_list;

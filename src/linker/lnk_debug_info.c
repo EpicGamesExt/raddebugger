@@ -62,11 +62,8 @@ THREAD_POOL_TASK_FUNC(lnk_strip_debug_t_sig_task)
 
   for EachIndex(i, task->raw_types[obj_idx].count) {
     String8 *d = task->raw_types[obj_idx].v + i;
-    if (d->size == 0) { continue; }
-
-    if (d->size < sizeof(CV_Signature)) {
-      lnk_error_obj(LNK_Error_IllData, task->input->obj_arr[obj_idx], ".debug$T must have at least 4 bytes for CodeView signature");
-    }
+    if (d->size == 0)                   { continue; }
+    if (d->size < sizeof(CV_Signature)) { lnk_error_obj(LNK_Error_IllData, task->input->obj_arr[obj_idx], ".debug$T must have at least 4 bytes for CodeView signature"); continue; }
 
     CV_Signature sig = cv_signature_from_debug_s(*d);
     switch (sig) {
@@ -2002,14 +1999,17 @@ THREAD_POOL_TASK_FUNC(lnk_build_gsi_psi)
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_fixup_debug_s_task)
+THREAD_POOL_TASK_FUNC(lnk_fixup_cv_symbol_tree_offsets)
 {
   ProfBeginFunction();
   U64           obj_idx     = task_id;
   LNK_BuildPdb *task        = raw_task;
+
   String8List   raw_symbols = cv_sub_section_from_debug_s(task->cv->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
-  task->symbol_sizes[obj_idx]  = sizeof(CV_Signature);
-  task->symbol_sizes[obj_idx] += cv_patch_symbol_tree_offsets_new(raw_symbols, task->symbol_sizes[obj_idx], PDB_SYMBOL_ALIGN);
+  U64 symbol_base = sizeof(CV_Signature);
+  cv_patch_symbol_tree_offsets_new(raw_symbols, symbol_base, PDB_SYMBOL_ALIGN);
+
+
   ProfEnd();
 }
 
@@ -2044,28 +2044,200 @@ THREAD_POOL_TASK_FUNC(lnk_process_c13_data_task)
 }
 
 internal
+THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
+{
+  LNK_BuildPdb *task        = raw_task;
+  MSF_Context  *msf         = task->pdb->msf;
+  U32Array      obj_indices = task->balanced_obj_indices_arr[task_id];
+
+  CV_C13SubSectionIdxKind mod_c13_layout[] = {
+    CV_C13SubSectionIdxKind_StringTable,
+    CV_C13SubSectionIdxKind_FileChksms,
+    CV_C13SubSectionIdxKind_FrameData,
+    CV_C13SubSectionIdxKind_InlineeLines,
+    CV_C13SubSectionIdxKind_CrossScopeImports,
+    CV_C13SubSectionIdxKind_CrossScopeExports,
+    CV_C13SubSectionIdxKind_IlLines,
+    CV_C13SubSectionIdxKind_FuncMDTokenMap,
+    CV_C13SubSectionIdxKind_TypeMDTokenMap,
+    CV_C13SubSectionIdxKind_MergedAssemblyInput,
+    CV_C13SubSectionIdxKind_CoffSymbolRVA,
+    CV_C13SubSectionIdxKind_XfgHashType,
+    CV_C13SubSectionIdxKind_XfgHashVirtual,
+  };
+
+  for EachIndex(i, obj_indices.count) {
+    U64            obj_idx     = obj_indices.v[i];
+    PDB_DbiModule *mod         = task->mod_arr[obj_idx];
+    CV_DebugS      debug_s     = task->cv->debug_s_arr[obj_idx];
+    String8List    raw_symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+    U64            symbol_base = sizeof(CV_Signature);
+    mod->sym_data_size = cv_patch_symbol_tree_offsets_new(raw_symbols, symbol_base, PDB_SYMBOL_ALIGN);
+
+    U64 mod_c13_sizes[ArrayCount(mod_c13_layout)] = {0};
+    for EachElement(layout_idx, mod_c13_layout) {
+      CV_C13SubSectionIdxKind layout_kind = mod_c13_layout[layout_idx];
+
+      if (debug_s.data_list[layout_kind].total_size) {
+        mod->c13_data_size += sizeof(U32); // kind
+        mod->c13_data_size += sizeof(U32); // size
+        mod->c13_data_size += debug_s.data_list[layout_kind].total_size;
+        mod->c13_data_size  = AlignPow2(mod->c13_data_size, CV_C13SubSectionAlign);
+      }
+    }
+
+    String8List *line_data = cv_sub_section_ptr_from_debug_s(&debug_s, CV_C13SubSectionKind_Lines);
+    for EachNode(n, String8Node, line_data->first) {
+      if (n->string.size == 0) { continue; }
+
+      mod->c13_data_size += sizeof(U32); // kind
+      mod->c13_data_size += sizeof(U32); // size
+      mod->c13_data_size += n->string.size;
+      mod->c13_data_size  = AlignPow2(mod->c13_data_size, CV_C13SubSectionAlign);
+    }
+
+    mod->globrefs_size += debug_s.data_list[CV_C13SubSectionKind_GlobalRefs].total_size;
+  }
+  barrier_wait(tp->barrier);
+
+  if (task_id == 0) {
+    for EachIndex(obj_idx, task->cv->obj_count) {
+      PDB_DbiModule *mod = task->mod_arr[obj_idx];
+      U64 mod_size = mod->sym_data_size + mod->c11_data_size + mod->c13_data_size + mod->globrefs_size;
+      if (mod_size > 0) {
+        task->mod_arr[obj_idx]->sn = msf_stream_alloc_ex(msf, mod_size);
+      }
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  Temp scratch = scratch_begin(&arena, 1);
+  U64  temp_max       = max_U16;
+  U64  temp_size      = 0;
+  U8  *temp           = push_array(scratch.arena, U8, temp_max);
+
+  for EachIndex(i, obj_indices.count) {
+    U64            obj_idx = obj_indices.v[obj_idx];
+    PDB_DbiModule *mod     = task->mod_arr[obj_idx];
+    CV_DebugS      debug_s = task->cv->debug_s_arr[obj_idx];
+    U64            mod_cap = msf_stream_get_size(msf, mod->sn);
+
+    // write symbols
+    {
+      // skip empty modules
+      if (mod->sn == MSF_INVALID_STREAM_NUMBER) { continue; }
+
+      msf_stream_write_u32(msf, mod->sn, CV_Signature_C13);
+
+      String8List raw_symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+      for EachNode(n, String8Node, raw_symbols.first) {
+        for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
+          // read symbol
+          CV_Symbol symbol = {0};
+          TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
+
+          if (symbol.kind == CV_SymKind_SKIP) { continue; }
+
+          U64 symbol_size = cv_size_from_symbol(&symbol, PDB_SYMBOL_ALIGN);
+
+          // flush temp to MSF
+          if (temp_size + symbol_size > temp_max) {
+            Assert(temp_size <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
+            msf_stream_write(msf, mod->sn, temp, temp_size);
+            temp_size = 0;
+          }
+
+          // acc serialized symbols in temp
+          U64 serial_size = cv_write_symbol(temp, temp_size, temp_max, &symbol, PDB_SYMBOL_ALIGN);
+          Assert(serial_size == symbol_size);
+          temp_size += serial_size;
+        }
+      }
+
+      // flush remaining temp
+      Assert(temp_size <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
+      msf_stream_write(msf, mod->sn, temp, temp_size);
+      msf_stream_align(msf, mod->sn, CV_C13SubSectionAlign);
+
+      // assert our symbol size estimate was correct
+      Assert(mod->sym_data_size == msf_stream_get_pos(msf, mod->sn));
+    }
+
+    // write rest of c13 data
+    {
+      U64 c13_start_pos = msf_stream_get_pos(msf, mod->sn);
+
+      for EachElement(i, mod_c13_layout) {
+        String8List *data    = cv_sub_section_ptr_from_debug_s(&debug_s, mod_c13_layout[i]);
+        if (data->total_size == 0) { continue; }
+
+        Assert(AlignPow2(sizeof(U32)*2 + data->total_size, PDB_SYMBOL_ALIGN) <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
+        msf_stream_write_u32 (msf, mod->sn, mod_c13_layout[i]);
+        msf_stream_write_u32 (msf, mod->sn, safe_cast_u32(data->total_size));
+        msf_stream_write_list(msf, mod->sn, *data);
+        msf_stream_align(msf, mod->sn, CV_C13SubSectionAlign);
+      }
+
+      String8List *line_data = cv_sub_section_ptr_from_debug_s(&debug_s, CV_C13SubSectionKind_Lines);
+      for EachNode(line_n, String8Node, line_data->first) {
+        if (line_n->string.size == 0) { continue; }
+
+        Assert(AlignPow2(sizeof(U32)*2 + line_n->string.size, PDB_SYMBOL_ALIGN) <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
+        msf_stream_write_u32   (msf, mod->sn, CV_C13SubSectionKind_Lines);
+        msf_stream_write_u32   (msf, mod->sn, safe_cast_u32(line_n->string.size));
+        msf_stream_write_string(msf, mod->sn, line_n->string);
+        msf_stream_align(msf, mod->sn, CV_C13SubSectionAlign);
+      }
+
+      U64 c13_end_pos = msf_stream_get_pos(msf, mod->sn);
+      Assert(mod->c13_data_size == cv_size_from_debug_s(&debug_s, CV_C13SubSectionAlign));
+
+      // write global refs
+      String8List global_refs = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_GlobalRefs);
+      Assert(global_refs.total_size <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
+      msf_stream_write_list(msf, mod->sn, global_refs);
+    }
+
+    // make stream has enough memory so it doens't trigger memory allocations in MSF
+    // during multi-thread write
+    U64 mod_size = mod->sym_data_size + mod->c11_data_size + mod->c13_data_size + mod->globrefs_size; 
+    AssertAlways(mod_size == msf_stream_get_pos(msf, mod->sn));
+  }
+  barrier_wait(tp->barrier);
+
+  scratch_end(scratch);
+}
+
+#if 0
+internal
 THREAD_POOL_TASK_FUNC(lnk_write_pdb_module_stream)
 {
   LNK_BuildPdb *task = raw_task;
 
-  U64                 obj_idx       = task_id;
-  PDB_DbiModule      *mod           = task->mod_arr                     [obj_idx];
-  CV_DebugS           debug_s       = task->cv->debug_s_arr             [obj_idx];
-  String8List         globrefs      = task->globrefs_arr                [obj_idx];
-  U64                 sym_data_size = task->serialized_symbol_data_sizes[obj_idx];
-  MSF_Context        *msf           = task->pdb->msf;
-  MSF_UInt            stream_cap    = msf_stream_get_cap(task->pdb->msf, mod->sn);
+  U64            obj_idx = task_id;
+  CV_DebugS      debug_s = task->cv->debug_s_arr[obj_idx];
+  MSF_Context   *msf     = task->pdb->msf;
+
+  if (task_id == 0) {
+    for EachIndex(i, task->cv->obj_count) {
+      task->mod_arr[i]->sn = msf_stream_alloc_ex(msf, task->module_data[i].total_size);
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  MSF_UInt mod_cap = msf_stream_get_cap(task->pdb->msf, mod->sn);
+  Assert(task->module_data[obj_idx].total_size == mod_cap);
 
   // write symbols
-  if (sym_data_size > 0) {
+  String8List raw_symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+  if (raw_symbols.total_size) {
     Temp scratch = scratch_begin(&arena, 1);
 
     msf_stream_write_u32(msf, mod->sn, CV_Signature_C13);
 
-    String8List  raw_symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
-    U64         temp_max     = max_U16;
-    U64         temp_size    = 0;
-    U8          *temp        = push_array(scratch.arena, U8, temp_max);
+    U64  temp_max  = max_U16;
+    U64  temp_size = 0;
+    U8  *temp      = push_array(scratch.arena, U8, temp_max);
     for EachNode(n, String8Node, raw_symbols.first) {
       for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
         // read symbol
@@ -2078,7 +2250,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_module_stream)
 
         // flush temp to MSF
         if (temp_size + symbol_size > temp_max) {
-          Assert(temp_size <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+          Assert(temp_size <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
           msf_stream_write(msf, mod->sn, temp, temp_size);
           temp_size = 0;
         }
@@ -2091,13 +2263,13 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_module_stream)
     }
 
     // flush remaining temp
-    Assert(temp_size <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+    Assert(temp_size <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
     msf_stream_write(msf, mod->sn, temp, temp_size);
     msf_stream_align(msf, mod->sn, CV_C13SubSectionAlign);
 
     U64 size = msf_stream_get_pos(msf, mod->sn);
     // assert our symbol size estimate was correct
-    Assert(sym_data_size == msf_stream_get_pos(msf, mod->sn));
+    Assert(raw_symbols.total_size == msf_stream_get_pos(msf, mod->sn));
 
     scratch_end(scratch);
   }
@@ -2107,14 +2279,27 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_module_stream)
   {
     U64 c13_start_pos = msf_stream_get_pos(msf, mod->sn);
 
-    for EachElement(layout_idx, debug_s.data_list) {
-      if (layout_idx == CV_C13SubSectionIdxKind_Lines || layout_idx == CV_C13SubSectionIdxKind_Symbols) { continue; }
-
-      CV_C13SubSectionKind  kind = cv_c13_sub_section_kind_from_idx(layout_idx);
-      String8List          *data = cv_sub_section_ptr_from_debug_s(&debug_s, kind);
+    CV_C13SubSectionIdxKind c13_data_layout[] = {
+      CV_C13SubSectionIdxKind_StringTable,
+      CV_C13SubSectionIdxKind_FileChksms,
+      CV_C13SubSectionIdxKind_FrameData,
+      CV_C13SubSectionIdxKind_InlineeLines,
+      CV_C13SubSectionIdxKind_CrossScopeImports,
+      CV_C13SubSectionIdxKind_CrossScopeExports,
+      CV_C13SubSectionIdxKind_IlLines,
+      CV_C13SubSectionIdxKind_FuncMDTokenMap,
+      CV_C13SubSectionIdxKind_TypeMDTokenMap,
+      CV_C13SubSectionIdxKind_MergedAssemblyInput,
+      CV_C13SubSectionIdxKind_CoffSymbolRVA,
+      CV_C13SubSectionIdxKind_XfgHashType,
+      CV_C13SubSectionIdxKind_XfgHashVirtual,
+    };
+    for EachElement(i, c13_data_layout) {
+      CV_C13SubSectionIdxKind  kind = c13_data_layout[i];
+      String8List             *data = cv_sub_section_ptr_from_debug_s(&debug_s, kind);
       if (data->total_size == 0) { continue; }
 
-      Assert(AlignPow2(sizeof(U32)*2 + data->total_size, PDB_SYMBOL_ALIGN) <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+      Assert(AlignPow2(sizeof(U32)*2 + data->total_size, PDB_SYMBOL_ALIGN) <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
       msf_stream_write_u32 (msf, mod->sn, kind);
       msf_stream_write_u32 (msf, mod->sn, safe_cast_u32(data->total_size));
       msf_stream_write_list(msf, mod->sn, *data);
@@ -2125,7 +2310,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_module_stream)
     for EachNode(line_n, String8Node, line_data->first) {
       if (line_n->string.size == 0) { continue; }
 
-      Assert(AlignPow2(sizeof(U32)*2 + line_n->string.size, PDB_SYMBOL_ALIGN) <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
+      Assert(AlignPow2(sizeof(U32)*2 + line_n->string.size, PDB_SYMBOL_ALIGN) <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
       msf_stream_write_u32   (msf, mod->sn, CV_C13SubSectionKind_Lines);
       msf_stream_write_u32   (msf, mod->sn, safe_cast_u32(line_n->string.size));
       msf_stream_write_string(msf, mod->sn, line_n->string);
@@ -2135,22 +2320,23 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_module_stream)
     U64 c13_end_pos = msf_stream_get_pos(msf, mod->sn);
     c13_data_size = c13_end_pos - c13_start_pos;
     Assert(c13_data_size == cv_size_from_debug_s(&debug_s, CV_C13SubSectionAlign));
+
+    // write global refs
+    String8List global_refs = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_GlobalRefs);
+    Assert(global_refs.total_size <= (mod_cap - msf_stream_get_pos(msf, mod->sn)));
+    msf_stream_write_list(msf, mod->sn, global_refs);
   }
 
-  // write global refs
-  Assert(globrefs.total_size <= (stream_cap - msf_stream_get_pos(msf, mod->sn)));
-  msf_stream_write_list(msf, mod->sn, globrefs);
-
   // update module data sizes
-  mod->sym_data_size = safe_cast_u32(sym_data_size);
+  mod->sym_data_size = safe_cast_u32(raw_symbols.total_size);
   mod->c11_data_size = 0;
   mod->c13_data_size = safe_cast_u32(c13_data_size);
-  mod->globrefs_size = safe_cast_u32(globrefs.total_size);
 
   // make stream has enough memory so it doens't trigger memory allocations in MSF
   // during multi-thread write
-  AssertAlways(task->mod_sizes[obj_idx] == msf_stream_get_pos(msf, mod->sn));
+  AssertAlways(mod_size == msf_stream_get_pos(msf, mod->sn));
 }
+#endif
 
 internal
 THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
@@ -2246,18 +2432,16 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   // set min type indices
   for EachElement(ti_source, cv_types.min_type_indices) { task.pdb->type_servers[ti_source]->ti_lo = cv_types.min_type_indices[ti_source]; }
 
-  ProfBegin("Reserve DBI Modules");
+  ProfBegin("Reserve Modules");
   task.mod_arr = push_array(tp_arena->v[0], PDB_DbiModule *, obj_count);
   for EachIndex(obj_idx, obj_count) {
-    LNK_Obj *obj = cv->obj_arr[obj_idx];
-    task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, obj->path, lnk_obj_get_lib_path(obj));
-
-    // we don't support symbol append
-    Assert(task.mod_arr[obj_idx]->sn == MSF_INVALID_STREAM_NUMBER);
+    LNK_Obj *obj      = cv->obj_arr[obj_idx];
+    String8  lib_path = lnk_obj_get_lib_path(obj);
+    task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, obj->path, lib_path);
   }
   ProfEnd();
 
-  task.serialized_symbol_data_sizes = push_array(scratch.arena, U64, obj_count);
+  task.c13_symbol_sizes = push_array(scratch.arena, U64, obj_count);
   ProfScope("Make GSI/PSI")
   {
     ProfScope("Process & Populate GSI/PSI") tp_for_parallel(tp, 0, tp->worker_count, lnk_build_gsi_psi, &task);
@@ -2274,8 +2458,19 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     gsi_build(tp, pdb->gsi, pdb->msf, pdb->dbi->globals_sn, pdb->dbi->symbols_sn);
     ProfEnd();
 
-    ProfScope("fixup_symbol_streams") tp_for_parallel(tp, tp_arena, obj_count, lnk_fixup_debug_s_task, &task);
+    // TODO: actually collect offsets and pass them here
+    ProfBegin("Build Empty Global Reference Array");
+    for EachIndex(obj_idx, obj_count) {
+      CV_DebugS   *debug_s = &cv->debug_s_arr[obj_idx];
+      String8List *srl     = &debug_s->data_list[CV_C13SubSectionKind_GlobalRefs];
+      str8_serial_begin(tp_arena->v[0], srl);
+      Assert(srl->total_size == 0);
+      str8_serial_push_u32(scratch.arena, srl, srl->total_size);
+    }
+    ProfEnd();
   }
+
+  ProfScope("Write Modules") tp_for_parallel(tp, 0, obj_count, lnk_write_pdb_modules, &task);
 
   ProfBegin("Build String Table");
   task.string_ht = cv_dedup_string_tables(tp_arena, tp, obj_count, cv->debug_s_arr);
@@ -2298,42 +2493,6 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     for EachIndex(obj_idx, obj_count) {
       MemoryZeroStruct(&cv->debug_s_arr[obj_idx].data_list[CV_C13SubSectionIdxKind_StringTable]);
     }
-  }
-  ProfEnd();
-
-  ProfBegin("Build DBI Modules");
-  {
-    TP_Temp temp = tp_temp_begin(tp_arena);
-
-    // TODO: actually collect offsets and pass them here
-    ProfBegin("Build Empty Global Reference Array");
-    task.globrefs_arr = push_array(tp_arena->v[0], String8List, obj_count);
-    for EachIndex(obj_idx, obj_count) {
-      String8List *srl = &task.globrefs_arr[obj_idx];
-      str8_serial_begin(tp_arena->v[0], srl);
-      Assert(srl->total_size == 0);
-      str8_serial_push_u32(tp_arena->v[0], srl, srl->total_size);
-    }
-    ProfEnd();
-
-    // reserve memory for module streams
-    ProfBegin("Reserve Modules Memory");
-    task.mod_sizes = push_array(scratch.arena, U32, obj_count);
-    for EachIndex(obj_idx, obj_count) {
-      // compute number of bytes needed for module data
-      U64 mod_size = 0;
-      mod_size += cv_size_from_debug_s(&cv->debug_s_arr[obj_idx], CV_C13SubSectionAlign);
-      mod_size += task.serialized_symbol_data_sizes[obj_idx];
-      mod_size += task.globrefs_arr[obj_idx].total_size;
-
-      task.mod_sizes[obj_idx]     = safe_cast_u32(mod_size);
-      task.mod_arr  [obj_idx]->sn = msf_stream_alloc_ex(task.pdb->msf, task.mod_sizes[obj_idx]);
-    }
-    ProfEnd();
-
-    tp_for_parallel_prof(tp, 0, obj_count, lnk_write_pdb_module_stream, &task, "Write Module Data");
-
-    tp_temp_end(temp);
   }
   ProfEnd();
   

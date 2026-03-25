@@ -139,6 +139,8 @@ typedef struct
 
   Arena **fixed_arenas;
 
+  U32Array *balanced_obj_indices_arr; // [obj_count]
+
   // GSI symbol dedup
   U64    global_symbol_count;
   U64    bucket_cap;
@@ -168,16 +170,17 @@ typedef struct
   CV_SymbolList  *public_symbols;             // [worker_count]
   U32           **public_symbol_hashes;       // [worker_count][public_symbol.count]
 
-  U64 *symbol_sizes; // [obj_count]
-
   // process C13 data
   String8List        *source_file_names_list_arr;
   CV_StringHashTable  string_ht;
 
   // build DBI modules
-  String8List *globrefs_arr;                 // [obj_count]
-  U32         *mod_sizes;                    // [obj_count]
-  U64         *serialized_symbol_data_sizes; // [obj_count]
+  String8List *module_data; // obj_count]
+
+  U64         **module_sizes;     // [obj_count][CV_C13SubSectionIdxKind_COUNT]
+  String8List  *globrefs_arr;     // [obj_count]
+  U32          *mod_sizes;        // [obj_count]
+  U64          *c13_symbol_sizes; // [obj_count]
 
   // push DBI SC Map
   PE_BinInfo                  pe;

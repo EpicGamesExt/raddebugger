@@ -2542,7 +2542,8 @@ X(TypeMDTokenMap,      0xFB)       \
 X(MergedAssemblyInput, 0xFC)       \
 X(CoffSymbolRVA,       0xFD)       \
 X(XfgHashType,         0xFF)       \
-X(XfgHashVirtual,      0x100)
+X(XfgHashVirtual,      0x100)      \
+X(GlobalRefs,          0xCAFE)     \
 
 typedef U32 CV_C13SubSectionKind;
 typedef enum CV_C13SubSectionKindEnum
