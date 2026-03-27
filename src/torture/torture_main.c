@@ -72,6 +72,7 @@
 #include "linker/thread_pool/thread_pool.c"
 #include "linker/codeview_ext/codeview.c"
 #include "torture.c"
+#include "torture_base.c"
 #include "torture_radlink.c"
 #include "torture_dwarf.c"
 #include "torture_d2r.c"

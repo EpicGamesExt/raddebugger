@@ -1143,6 +1143,42 @@ str8_list_copy(Arena *arena, String8List *list)
   return result;
 }
 
+internal String8List
+str8_list_substr(Arena *arena, String8List list, Rng1U64 range)
+{
+  String8List result = {0};
+
+  String8Node *n = list.first;
+
+  U64 front_min = 0;
+  {
+    U64 cursor = 0;
+    for (; n != 0; cursor += n->string.size, n = n->next) {
+      if (cursor + n->string.size > range.min) {
+        front_min = range.min - cursor;
+        break;
+      }
+    }
+  }
+
+  if (front_min > 0) {
+    U64 front_max = front_min + Min(dim_1u64(range), n->string.size);
+    str8_list_push(arena, &result, str8_substr(n->string, r1u64(front_max, front_max)));
+    n = n->next;
+  }
+
+  for (; n != 0; n = n->next) {
+    if (result.total_size >= dim_1u64(range)) {
+      break;
+    }
+    U64 copy_max  = dim_1u64(range) - result.total_size;
+    U64 copy_size = Min(copy_max, n->string.size);
+    str8_list_push(arena, &result, str8_substr(n->string, r1u64(0, copy_size)));
+  }
+
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: String Splitting & Joining
 

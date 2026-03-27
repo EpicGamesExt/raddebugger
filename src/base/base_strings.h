@@ -269,6 +269,7 @@ internal String8Node* str8_list_pushf(Arena *arena, String8List *list, char *fmt
 internal String8Node* str8_list_push_frontf(Arena *arena, String8List *list, char *fmt, ...);
 internal String8Node* str8_list_pop_front(String8List *list);
 internal String8List  str8_list_copy(Arena *arena, String8List *list);
+internal String8List  str8_list_substr(Arena *arena, String8List list, Rng1U64 range);
 #define str8_list_first(list) ((list)->first ? (list)->first->string : str8_zero())
 
 ////////////////////////////////
