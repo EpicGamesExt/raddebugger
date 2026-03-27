@@ -2129,29 +2129,30 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     U64         pos = 0;
     lnk_write_debug_s_to_pdb_module(mod, debug_s, &buf, &pos);
 
-    // patch symbol offsets
-    //cv_patch_symbol_tree_offsets_new(dummy, sizeof(CV_Signature), PDB_SYMBOL_ALIGN);
+    // sub range symbol data pages and patch symbol tree offsets
+    String8List mod_symbols = str8_list_substr(temp.arena, mod_pages, r1u64(sizeof(CV_Signature), sizeof(CV_Signature) + mod->sym_data_size));
+    cv_patch_symbol_tree_offsets_new(mod_symbols, sizeof(CV_Signature), PDB_SYMBOL_ALIGN);
 
     temp_end(temp);
   }
   barrier_wait(tp->barrier);
 
-#if 0
-  // parse checksum data
-  String8List     checksum_data = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
-  CV_ChecksumList checksum_list = cv_c13_parse_checksum_data_list(scratch.arena, checksum_data);
+  for EachIndex(i, obj_indices.count) {
+    U64             obj_idx         = obj_indices.v[i];
+    CV_DebugS       debug_s         = task->cv->debug_s_arr[obj_idx];
+    String8         string_table    = cv_string_table_from_debug_s(debug_s);
+    String8List     file_chksms_raw = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
+    CV_ChecksumList file_chksms     = cv_c13_parse_checksum_data_list(scratch.arena, file_chksms_raw);
+    String8List     src_file_names  = cv_c13_collect_source_file_names(arena, file_chksms, string_table);
 
-  // get strings sub-section
-  String8 string_data = cv_string_table_from_debug_s(debug_s);
+    // collect source files module refs
+    str8_list_concat_in_place(&task->mod_arr[obj_idx]->source_file_list, &src_file_names);
 
-  // collect source file names from checksum headers
-  String8List source_file_names_list = cv_c13_collect_source_file_names(arena, checksum_list, string_data);
-  PDB_DbiModule *mod = task->mod_arr[obj_idx];
-  str8_list_concat_in_place(&mod->source_file_list, &source_file_names_list);
-
-  // relocate checksum data 
-  cv_c13_patch_string_offsets_in_checksum_list(checksum_list, string_data, task->pdb->info->strtab.size, task->string_ht);
-#endif
+    // patch path offsets in file checksum headers (in obj the offsets point to a string table in .debug$S,
+    // and because linker merges string tables the old offsets need to be fixed up)
+    cv_c13_patch_string_offsets_in_checksum_list(file_chksms, string_table, task->pdb->info->strtab.size, task->string_ht);
+  }
+  barrier_wait(tp->barrier);
 
   scratch_end(scratch);
 }
