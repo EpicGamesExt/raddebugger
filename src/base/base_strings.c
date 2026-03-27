@@ -2905,6 +2905,68 @@ str8_is_before_case_sensitive(const void *a, const void *b)
 }
 
 ////////////////////////////////
+// string buffer
+
+internal U64
+str8_buffer_write(String8Node *buf, U64 *pos, String8 data)
+{
+  U64 copy_size = 0;
+  if (buf) {
+    for (copy_size = 0; copy_size < data.size; ) {
+      U64 data_size = data.size - copy_size;
+
+      U64 available_size = buf->string.size - *pos;
+      U64 to_copy        = Min(available_size, data_size);
+      if (data.str == 0) {
+        MemorySet(buf->string.str, 0, to_copy);
+      } else {
+        U8 *data_ptr = data.str + copy_size;
+        MemoryCopy(buf->string.str, data_ptr, to_copy);
+      }
+      *pos += to_copy;
+
+      if (*pos >= buf->string.size) {
+        if (buf->next) {
+          *buf = *buf->next;
+          *pos = 0;
+        }
+      }
+
+      copy_size += to_copy;
+    }
+  } else {
+    copy_size = data.size;
+  }
+  return copy_size;
+}
+
+internal U64
+str8_buffer_write_u16(String8Node *buf, U64 *pos, U16 v)
+{
+  return str8_buffer_write(buf, pos, str8_struct(&v));
+}
+
+internal U64
+str8_buffer_write_u32(String8Node *buf, U64 *pos, U32 v)
+{
+  return str8_buffer_write(buf, pos, str8_struct(&v));
+}
+
+internal U64
+str8_buffer_write_zeroes(String8Node *buf, U64 *pos, U64 size)
+{
+  return str8_buffer_write(buf, pos, str8(0, size));
+}
+
+internal U64
+str8_buffer_write_string_list(String8Node *buf, U64 *pos, String8List list)
+{
+  U64 copy_size = 0;
+  for EachNode(n, String8Node, list.first) { copy_size += str8_buffer_write(buf, pos, n->string); }
+  return copy_size;
+}
+
+////////////////////////////////
 //~ rjf: Basic String Hashes
 
 #if !defined(XXH_IMPLEMENTATION)

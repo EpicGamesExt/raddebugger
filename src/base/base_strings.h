@@ -446,6 +446,15 @@ internal U64    str8_deserial_read_block(String8 string, U64 off, U64 size, Stri
 #define str8_deserial_read_struct(string, off, ptr)       str8_deserial_read_array(string, off, ptr, 1)
 
 ////////////////////////////////
+//~ string buffer
+
+internal U64 str8_buffer_write(String8Node *buf, U64 *pos, String8 data);
+internal U64 str8_buffer_write_u16(String8Node *buf, U64 *pos, U16 v);
+internal U64 str8_buffer_write_u32(String8Node *buf, U64 *pos, U32 v);
+internal U64 str8_buffer_write_zeroes(String8Node *buf, U64 *pos, U64 size);
+internal U64 str8_buffer_write_string_list(String8Node *buf, U64 *pos, String8List list);
+
+////////////////////////////////
 //~ rjf: Basic String Hashes
 
 internal U64 u64_hash_from_seed_str8(U64 seed, String8 string);

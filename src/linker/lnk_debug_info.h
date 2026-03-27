@@ -139,7 +139,7 @@ typedef struct
 
   Arena **fixed_arenas;
 
-  U32Array *balanced_obj_indices_arr; // [obj_count]
+  U32Array *obj_indices; // [obj_count]
 
   // GSI symbol dedup
   U64    global_symbol_count;
@@ -152,10 +152,11 @@ typedef struct
   void   **symbol_arr;
   U32     *symbol_hashes; // [symbol_count]
 
-  U64           *proc_ref_counts; // [worker_count]
-  U64           *proc_ref_sizes;  // [worker_count]
-  U64           *proc_ref_hashes; // [total_proc_ref_count]
-  U64           *proc_ref_offs;   // [worker_count]
+  U64           *proc_ref_counts;  // [worker_count]
+  U64           *proc_ref_sizes;   // [worker_count]
+  U64           *proc_ref_hashes;  // [total_proc_ref_count]
+  U64           *proc_ref_offs;    // [worker_count]
+  U64           *proc_ref_indices; // [worker_count]
   String8        proc_refs;
   U64            proc_ref_count;
   CV_SymbolNode *proc_ref_nodes;  // [proc_ref_count]
@@ -173,14 +174,6 @@ typedef struct
   // process C13 data
   String8List        *source_file_names_list_arr;
   CV_StringHashTable  string_ht;
-
-  // build DBI modules
-  String8List *module_data; // obj_count]
-
-  U64         **module_sizes;     // [obj_count][CV_C13SubSectionIdxKind_COUNT]
-  String8List  *globrefs_arr;     // [obj_count]
-  U32          *mod_sizes;        // [obj_count]
-  U64          *c13_symbol_sizes; // [obj_count]
 
   // push DBI SC Map
   PE_BinInfo                  pe;

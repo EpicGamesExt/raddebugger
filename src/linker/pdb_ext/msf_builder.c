@@ -1211,6 +1211,32 @@ msf_stream_write_string_parallel(TP_Context *tp, MSF_Context *msf, MSF_StreamNum
   return msf_stream_write_parallel(tp, msf, sn, string.str, string.size);
 }
 
+internal String8List
+msf_raw_pages_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn)
+{
+  String8List result = {0};
+
+  MSF_Stream *stream = msf_find_stream(msf, sn);
+  String8     acc    = {0};
+  for EachNode(n, MSF_PageNode, stream->page_list.first) {
+    String8 p = msf_data_from_pn(msf->page_data_list, msf->page_size, n->pn);
+    if (acc.str + acc.size == p.str) {
+      acc.size += p.size;
+    } else {
+      str8_list_push(arena, &result, acc);
+      acc = p;
+    }
+  }
+
+  if (result.node_count && result.last->string.str + result.last->string.size == acc.str) {
+    result.last->string.size += acc.size;
+  } else {
+    str8_list_push(arena, &result, acc);
+  }
+
+  return result;
+}
+
 ////////////////////////////////
 
 internal MSF_UInt
@@ -1878,6 +1904,8 @@ msf_build(MSF_Context *msf)
 internal String8List
 msf_get_page_data_nodes(Arena *arena, MSF_Context *msf)
 {
+  ProfBeginFunction();
+
   String8List list; MemoryZeroStruct(&list);
 
   U64 total_size = msf_get_save_size(msf);
@@ -1892,6 +1920,8 @@ msf_get_page_data_nodes(Arena *arena, MSF_Context *msf)
     String8 data = str8(data_node->data, to_copy);
     str8_list_push(arena, &list, data);
   }
+
+  ProfEnd();
   return list;
 }
 
