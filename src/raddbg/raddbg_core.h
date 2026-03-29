@@ -440,6 +440,7 @@ struct RD_State
   // rjf: frame parameters
   F32 frame_dt;
   Access *frame_access;
+  String8 last_window_title;
   
   // rjf: evaluation cache
   E_Cache *eval_cache;

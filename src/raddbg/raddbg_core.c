@@ -4827,7 +4827,17 @@ rd_store_view_paramf(String8 key, char *fmt, ...)
 internal String8
 rd_push_window_title(Arena *arena)
 {
-  String8 result = push_str8f(arena, "%S - %s", str8_skip_last_slash(rd_state->project_path), BUILD_TITLE " (" BUILD_VERSION_STRING_LITERAL " " BUILD_RELEASE_PHASE_STRING_LITERAL ")");
+  CFG_Node *root = cfg_node_root();
+  CFG_Node *project = cfg_node_child_from_string(root, str8_lit("project"));
+  CFG_Node *name = cfg_node_child_from_string(project, str8_lit("name"));
+  String8 project_name = name->first->string;
+  if(project_name.size == 0)
+  {
+    String8 prof_path = rd_state->project_path;
+    prof_path = str8_chop_last_dot(prof_path);
+    project_name = str8_skip_last_slash(prof_path);
+  }
+  String8 result = push_str8f(arena, "%S - %s", project_name, BUILD_TITLE " (" BUILD_VERSION_STRING_LITERAL " " BUILD_RELEASE_PHASE_STRING_LITERAL ")");
   return result;
 }
 
@@ -12542,16 +12552,6 @@ rd_frame(void)
               }
               rd_cmd(RD_CmdKind_OpenProject, .file_path = project_path);
             }
-            
-            //- rjf: update all window titles
-            if(file_is_okay)
-            {
-              String8 window_title = rd_push_window_title(scratch.arena);
-              for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
-              {
-                os_window_set_title(ws->os, window_title);
-              }
-            }
           }break;
           case RD_CmdKind_NewUser:
           case RD_CmdKind_NewProject:
@@ -16387,6 +16387,24 @@ rd_frame(void)
   if(!ctrl_handle_match(ctrl_handle_zero(), find_thread_retry))
   {
     rd_cmd(RD_CmdKind_FindThread, .thread = find_thread_retry);
+  }
+  
+  //////////////////////////////
+  //- rjf: update window titles
+  //
+  if(rd_state->frame_depth == 1)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 window_title = rd_push_window_title(scratch.arena);
+    if(!str8_match(window_title, rd_state->last_window_title, 0))
+    {
+      for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
+      {
+        os_window_set_title(ws->os, window_title);
+      }
+    }
+    rd_state->last_window_title = str8_copy(rd_frame_arena(), window_title);
+    scratch_end(scratch);
   }
   
   ////////////////////////////
