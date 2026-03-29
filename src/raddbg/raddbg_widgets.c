@@ -2226,6 +2226,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
              .expr = txt_pt_match(*cursor, *mark) ? str8_lit("query:text_pt_commands") : str8_lit("query:text_range_commands"),
              .do_implicit_root = 1,
              .do_lister = 1,
+             .activate_with_single_click = 1,
              .ui_key = ui_get_selected_state()->root->key,
              .off_px = ui_mouse(),
              .cursor = *cursor,

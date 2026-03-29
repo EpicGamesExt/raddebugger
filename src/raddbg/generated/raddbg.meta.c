@@ -454,7 +454,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[26] =
 {str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}")},
 };
 
-String8 rd_reg_slot_code_name_table[48] =
+String8 rd_reg_slot_code_name_table[49] =
 {
 {0},
 str8_lit_comp("machine"),
@@ -500,13 +500,14 @@ str8_lit_comp("do_big_rows"),
 str8_lit_comp("all_windows"),
 str8_lit_comp("non_graphical"),
 str8_lit_comp("prefer_new_tab"),
+str8_lit_comp("activate_with_single_click"),
 str8_lit_comp("dir2"),
 str8_lit_comp("string"),
 str8_lit_comp("cmd_name"),
 str8_lit_comp("os_event"),
 };
 
-Rng1U64 rd_reg_slot_range_table[48] =
+Rng1U64 rd_reg_slot_range_table[49] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -552,6 +553,7 @@ Rng1U64 rd_reg_slot_range_table[48] =
 {OffsetOf(RD_Regs, all_windows), OffsetOf(RD_Regs, all_windows) + sizeof(B32)},
 {OffsetOf(RD_Regs, non_graphical), OffsetOf(RD_Regs, non_graphical) + sizeof(B32)},
 {OffsetOf(RD_Regs, prefer_new_tab), OffsetOf(RD_Regs, prefer_new_tab) + sizeof(B32)},
+{OffsetOf(RD_Regs, activate_with_single_click), OffsetOf(RD_Regs, activate_with_single_click) + sizeof(B32)},
 {OffsetOf(RD_Regs, dir2), OffsetOf(RD_Regs, dir2) + sizeof(Dir2)},
 {OffsetOf(RD_Regs, string), OffsetOf(RD_Regs, string) + sizeof(String8)},
 {OffsetOf(RD_Regs, cmd_name), OffsetOf(RD_Regs, cmd_name) + sizeof(String8)},

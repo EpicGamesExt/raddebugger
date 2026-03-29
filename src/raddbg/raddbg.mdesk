@@ -799,6 +799,7 @@ RD_RegTable:
   {B32               all_windows      AllWindows    }
   {B32               non_graphical    NonGraphical  }
   {B32               prefer_new_tab   PreferNewTab  }
+  {B32               activate_with_single_click ActivateWithSingleClick }
   {Dir2              dir2             Dir2          }
   {String8           string           String        }
   {String8           cmd_name         CmdName       }

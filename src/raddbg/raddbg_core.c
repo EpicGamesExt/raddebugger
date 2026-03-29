@@ -1999,6 +1999,11 @@ rd_view_ui(Rng2F32 rect)
         B32 implicit_root = (cfg_node_child_from_string(cfg_node_from_id(rd_regs()->view), str8_lit("explicit_root")) == &cfg_nil_node);
         
         //////////////////////////////
+        //- rjf: decide single-click-to-activate preference
+        //
+        B32 prefer_single_click_to_activate = (cfg_node_child_from_string(cfg_node_from_id(rd_regs()->view), str8_lit("activate_with_single_click")) != &cfg_nil_node);
+        
+        //////////////////////////////
         //- rjf: determine autocompletion string
         //
         String8 autocomplete_hint_string = ui_autocomplete_string();
@@ -4201,6 +4206,7 @@ rd_view_ui(Rng2F32 rect)
                         // rjf: activation (double-click normally, or single-clicks with special buttons)
                         if((!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_double_clicked(sig)) ||
                            ((cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_clicked(sig)) ||
+                           (prefer_single_click_to_activate && ui_pressed(sig)) ||
                            sig.f & UI_SignalFlag_KeyboardPressed)
                         {
                           // rjf: kill if a double-clickable cell
@@ -14769,6 +14775,14 @@ rd_frame(void)
                 else
                 {
                   cfg_node_child_from_string_or_alloc(rd_state->cfg, view, str8_lit("lister"));
+                }
+                if(!rd_regs()->activate_with_single_click)
+                {
+                  cfg_node_release(rd_state->cfg, cfg_node_child_from_string(view, str8_lit("activate_with_single_click")));
+                }
+                else
+                {
+                  cfg_node_child_from_string_or_alloc(rd_state->cfg, view, str8_lit("activate_with_single_click"));
                 }
               }
               
