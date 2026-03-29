@@ -634,7 +634,7 @@ struct CTRL_ModuleImageInfoCacheNode
   EH_PtrCtx eh_ptr_ctx;
   U64 entry_point_voff;
   String8 initial_debug_info_path;
-  Rng1U64 raddbg_section_voff_range;
+  U64 raddbg_attached_marker_voff;
   String8 raddbg_data;
 };
 

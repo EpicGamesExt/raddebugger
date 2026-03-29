@@ -1883,7 +1883,7 @@ ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_han
 {
   Temp scratch = scratch_begin(&arena, 1);
   CTRL_UnwindStepResult result = { .flags = CTRL_UnwindFlag_Error };
-
+  
   // gather context for virtual stack unwinder
   U64         cfi_rebase   = 0;
   B32         is_unwind_eh = 0;
@@ -2057,11 +2057,11 @@ ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_han
           }break;
           default: { InvalidPath; }break;
         }
-
+        
         // compute CFA for the row
         U64 cfa = 0;
         MachineOpResult unwind_status = dw_compute_cfa(arch, cfi_row, mem_read_func, mem_read_ctx, reg_read_func, reg_read_ctx, &cfa);
-
+        
         // on success fill out output
         if(unwind_status == MachineOpResult_Ok)
         {
@@ -2069,13 +2069,13 @@ ctrl_establish_frame_unwind_context__dwarf(Arena *arena, CTRL_Handle process_han
           ctx_out->cfi_row      = cfi_row;
           ctx_out->ret_addr_reg = cie.ret_addr_reg;
         }
-
+        
         // translate unwind status code
         result = ctrl_unwind_step_result_from_machine_op_result(unwind_status);
       }
     }
   }
-
+  
   scratch_end(scratch);
   return result;
 }
@@ -2119,7 +2119,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, Arch arch, void *regs, CTRL_
     }break;
     default: { InvalidPath; }break;
   }
-
+  
   // apply register rules to the context
   MachineOpResult unwind_status = dw_cfi_apply_register_rules(arch,
                                                               frame_ctx->cfa,
@@ -2130,7 +2130,7 @@ ctrl_unwind_step__dwarf(CTRL_Handle process_handle, Arch arch, void *regs, CTRL_
                                                               reg_read_ctx,
                                                               reg_write_func,
                                                               reg_write_ctx);
-
+  
   // last frame typically has undefined rule for IP
   if(frame_ctx->cfi_row->regs[frame_ctx->ret_addr_reg].rule == DW_CFI_RegisterRule_Undefined)
   {
@@ -3013,16 +3013,16 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
     {
       U64 rip = regs_rip_from_arch_block(arch, regs_block);
       U64 rsp = regs_rsp_from_arch_block(arch, regs_block);
-
+      
       // rjf: cancel on 0 rip
       if(rip == 0)
       {
         break;
       }
-
+      
       // rip -> module
       CTRL_Entity *module_entity = ctrl_module_from_process_vaddr(process_entity, rip);
-
+      
       // establish frame context
       CTRL_FrameUnwindContext frame_ctx = {0};
       CTRL_UnwindStepResult frame_ctx_result = {0};
@@ -3095,7 +3095,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
       // stop unwinding on errors or stale data
       unwind.flags |= step_result.flags;
       if(unwind.flags & (CTRL_UnwindFlag_Stale|CTRL_UnwindFlag_Error) ||
-        (regs_rsp_from_arch_block(arch, regs_block) == rsp && regs_rip_from_arch_block(arch, regs_block) == rip))
+         (regs_rsp_from_arch_block(arch, regs_block) == rsp && regs_rip_from_arch_block(arch, regs_block) == rip))
       {
         break;
       }
@@ -3772,29 +3772,28 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
 {
   Temp scratch = scratch_begin(0,0);
   
-  Arena   *arena                                 = arena_alloc();
-  U64      entry_point_voff                      = 0;
-  U32      rdi_dbg_time                          = 0;
-  Guid     rdi_dbg_guid                          = {0};
-  String8  exe_dbg_path                          = {0};
-  String8  rdi_dbg_path                          = {0};
-  String8  raddbg_data                           = {0};
-  Rng1U64  raddbg_section_voff_range             = r1u64(0, 0);
-  Rng1U64  raddbg_is_attached_section_voff_range = r1u64(0, 0);
-  
-  PE_IntelPdata *pdatas       = 0;
-  U64            pdatas_count = 0;
-  U32            pdb_dbg_time = 0;
-  U32            pdb_dbg_age  = 0;
-  Guid           pdb_dbg_guid = {0};
-  String8        pdb_dbg_path = {0};
-  
-  U64         cfi_rebase   = 0;
-  B32         is_unwind_eh = 0;
+  //- rjf: set up per-module info
+  Arena *arena = arena_alloc();
+  U64 entry_point_voff = 0;
+  U32 rdi_dbg_time = 0;
+  Guid rdi_dbg_guid = {0};
+  String8 exe_dbg_path = {0};
+  String8 rdi_dbg_path = {0};
+  String8 raddbg_data = {0};
+  Rng1U64 raddbg_section_voff_range = {0};
+  Rng1U64 raddbg_is_attached_section_voff_range = {0};
+  PE_IntelPdata *pdatas = 0;
+  U64 pdatas_count = 0;
+  U32 pdb_dbg_time = 0;
+  U32 pdb_dbg_age  = 0;
+  Guid pdb_dbg_guid = {0};
+  String8 pdb_dbg_path = {0};
+  U64 cfi_rebase   = 0;
+  B32 is_unwind_eh = 0;
   EH_FrameHdr eh_frame_hdr = {0};
-  EH_PtrCtx   eh_ptr_ctx   = { .pc_vaddr = max_U64, .text_vaddr = max_U64, .data_vaddr = max_U64, .func_vaddr = max_U64, .ptr_align = 0 };
+  EH_PtrCtx eh_ptr_ctx   = { .pc_vaddr = max_U64, .text_vaddr = max_U64, .data_vaddr = max_U64, .func_vaddr = max_U64, .ptr_align = 0 };
   
-  // read module's signature bytes
+  //- read module's signature bytes
   U64  module_sig_size  = Max(elf_magic_string.size, sizeof(PE_DosMagic));
   U8  *module_sig_bytes = push_array(scratch.arena, U8, module_sig_size);
   dmn_process_read(process.dmn_handle, rng_1u64(vaddr_range.min, vaddr_range.min + module_sig_size), module_sig_bytes);
@@ -4004,6 +4003,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       }
     }
   }
+  
   //////////////////////////////
   //- parse ELF module
   //
@@ -4137,11 +4137,11 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   //- rjf: insert info into cache
   //
   {
-    U64                              hash       = ctrl_hash_from_handle(module);
-    U64                              slot_idx   = hash%ctrl_state->module_image_info_cache.slots_count;
-    U64                              stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
-    CTRL_ModuleImageInfoCacheSlot   *slot       = &ctrl_state->module_image_info_cache.slots[slot_idx];
-    CTRL_ModuleImageInfoCacheStripe *stripe     = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+    U64 hash = ctrl_hash_from_handle(module);
+    U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+    U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+    CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+    CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
     MutexScopeW(stripe->rw_mutex)
     {
       CTRL_ModuleImageInfoCacheNode *node = 0;
@@ -4157,16 +4157,18 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       {
         node = push_array(arena, CTRL_ModuleImageInfoCacheNode, 1);
         DLLPushBack(slot->first, slot->last, node);
-        node->module                  = module;
-        node->arena                   = arena;
-        node->pdatas                  = pdatas;
-        node->pdatas_count            = pdatas_count;
-        node->cfi_rebase              = cfi_rebase;
-        node->is_unwind_eh            = is_unwind_eh;
-        node->eh_frame_hdr            = eh_frame_hdr;
-        node->eh_ptr_ctx              = eh_ptr_ctx;
-        node->entry_point_voff        = entry_point_voff;
-        node->initial_debug_info_path = initial_debug_info_path;
+        node->module                      = module;
+        node->arena                       = arena;
+        node->pdatas                      = pdatas;
+        node->pdatas_count                = pdatas_count;
+        node->cfi_rebase                  = cfi_rebase;
+        node->is_unwind_eh                = is_unwind_eh;
+        node->eh_frame_hdr                = eh_frame_hdr;
+        node->eh_ptr_ctx                  = eh_ptr_ctx;
+        node->entry_point_voff            = entry_point_voff;
+        node->initial_debug_info_path     = initial_debug_info_path;
+        node->raddbg_attached_marker_voff = raddbg_is_attached_section_voff_range.min;
+        node->raddbg_data                 = str8_copy(arena, raddbg_data);
       }
     }
   }
@@ -4180,7 +4182,7 @@ ctrl_thread__module_close(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr
   //////////////////////////////
   //- rjf: evict module image info from cache
   //
-  Rng1U64 raddbg_section_voff_range = {0};
+  U64 raddbg_attached_marker_voff = 0;
   {
     U64 hash = ctrl_hash_from_handle(module);
     U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
@@ -4200,7 +4202,7 @@ ctrl_thread__module_close(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr
       }
       if(node)
       {
-        raddbg_section_voff_range = node->raddbg_section_voff_range;
+        raddbg_attached_marker_voff = node->raddbg_attached_marker_voff;
         DLLRemove(slot->first, slot->last, node);
         arena_release(node->arena);
       }
@@ -4208,12 +4210,12 @@ ctrl_thread__module_close(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr
   }
   
   //////////////////////////////
-  //- rjf: write 0 into first byte of raddbg data section, to signify detachment
+  //- rjf: write 0 at attachment market, to signify detachment
   //
-  if(raddbg_section_voff_range.max != raddbg_section_voff_range.min)
+  if(raddbg_attached_marker_voff != 0)
   {
     U8 new_value = 0;
-    dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_section_voff_range.min, &new_value);
+    dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_attached_marker_voff, &new_value);
   }
 }
 
@@ -4399,7 +4401,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       {
         dmn_process_write(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof->new_ip_value);
       }
-
+      
       // rjf: run for new events
       ProfScope("run for new events")
       {
@@ -4423,7 +4425,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
             }
           }
         }
-
+        
         DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
         ins_atomic_u64_inc_eval(&ctrl_state->mem_gen);
         ins_atomic_u64_inc_eval(&ctrl_state->reg_gen);
