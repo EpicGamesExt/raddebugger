@@ -375,6 +375,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       case WM_CLOSE:
       {
         os_w32_push_event(OS_EventKind_WindowClose, window);
+        PostMessage(hwnd, WM_NULL, 0, 0);
       }break;
       
       case WM_LBUTTONUP:
