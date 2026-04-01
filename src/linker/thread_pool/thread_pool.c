@@ -259,3 +259,20 @@ tp_broadcast_(TP_Context *tp, U64 task_id, void *ptr)
 
   return result;
 }
+
+internal U64
+tp_sum_u64(TP_Context *tp, U64 task_id, U64 v)
+{
+  if (task_id == 0) {
+    tp->sum = 0;
+  }
+  barrier_wait(tp->barrier);
+
+  ins_atomic_u64_add_eval(&tp->sum, v);
+  barrier_wait(tp->barrier);
+
+  U64 result = tp->sum;
+  barrier_wait(tp->barrier);
+  return result;
+}
+

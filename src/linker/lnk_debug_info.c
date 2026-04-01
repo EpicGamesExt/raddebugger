@@ -1792,15 +1792,12 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
     U64   *bucket_cap;
     void **buckets;
-    U64   *symbol_count;
     if (task_id == 0) {
       bucket_cap   = push_u64(scratch.arena, *global_symbol_count * 13 / 10);
       buckets      = push_array(scratch.arena, void *, *bucket_cap);
-      symbol_count = push_array(scratch.arena, U64, 1);
     }
     tp_broadcast(&bucket_cap);
     tp_broadcast(&buckets);
-    tp_broadcast(&symbol_count);
 
     // insert symbols into hash table
     for EachNode(n, VoidNode, global_symbols.first) {
@@ -1810,22 +1807,29 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
 
+    U64      *symbol_count;
     void    **symbol_arr;
     Rng1U64  *symbol_ranges; // [worker_count]
     U32      *symbol_hashes; // [symbol_count]
     if (task_id == 0) {
       // compact buckets
-      for (U64 i = 1; i < *bucket_cap; i += 1) {
-        if (buckets[i] != 0 && buckets[i-1] == 0) {
-          while (buckets[*symbol_count] != 0) { *symbol_count += 1; }
-          buckets[*symbol_count] = buckets[i];
-          buckets[i] = 0;
+      {
+        U64 k = 0;
+        for (U64 i = 1; i < *bucket_cap; i += 1) {
+          if (buckets[i] != 0 && buckets[i-1] == 0) {
+            while (buckets[k] != 0) { k += 1; }
+            buckets[k] = buckets[i];
+            buckets[i] = 0;
+          }
         }
+        symbol_count = push_u64(scratch.arena, k);
       }
+
       symbol_arr    = buckets;
       symbol_ranges = tp_divide_work(scratch.arena, *symbol_count, tp->worker_count);
       symbol_hashes = push_array_no_zero(scratch.arena, U32, *symbol_count);
     }
+    tp_broadcast(&symbol_count);
     tp_broadcast(&symbol_arr);
     tp_broadcast(&symbol_ranges);
     tp_broadcast(&symbol_hashes);
@@ -1854,8 +1858,8 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
   // proc refs
   //
   {
-    U64 *proc_ref_sizes;
-    U64 *proc_ref_counts;
+    U64 *proc_ref_sizes  = 0;
+    U64 *proc_ref_counts = 0;
     if (task_id == 0) {
       proc_ref_sizes  = push_array(scratch.arena, U64, tp->worker_count);
       proc_ref_counts = push_array(scratch.arena, U64, tp->worker_count);
@@ -1863,10 +1867,12 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     tp_broadcast(&proc_ref_sizes);
     tp_broadcast(&proc_ref_counts);
 
+    U64 proc_ref_size  = 0;
+    U64 proc_ref_count = 0;
     for EachIndex(i, obj_indices.count) {
-      U64         obj_idx = obj_indices.v[i];
-      CV_DebugS   debug_s = task->cv->debug_s_arr[obj_idx];
-      String8List symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+      U64         obj_idx        = obj_indices.v[i];
+      CV_DebugS   debug_s        = task->cv->debug_s_arr[obj_idx];
+      String8List symbols        = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
       for EachNode(n, String8Node, symbols.first) {
         for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
           CV_Symbol symbol = {0};
@@ -1874,22 +1880,24 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
           if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
             String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
-            proc_ref_sizes[task_id] += sizeof(CV_SymRef2);
-            proc_ref_sizes[task_id] += name.size + 1;
-            proc_ref_sizes[task_id]  = AlignPow2(proc_ref_sizes[task_id], sizeof(void *));
-            proc_ref_counts[task_id] += 1;
+            proc_ref_size  += AlignPow2(sizeof(CV_SymRef2) + name.size + 1, sizeof(void *));
+            proc_ref_count += 1;
           }
         }
       }
     }
+    proc_ref_sizes[task_id] = proc_ref_size;
+    proc_ref_counts[task_id] = proc_ref_count;
     barrier_wait(tp->barrier);
 
-    U64            *proc_ref_hashes;
-    U64            *proc_ref_indices;
-    Arena         **proc_ref_arenas;
-    CV_SymbolNode  *proc_ref_nodes;
+    U64 total_proc_ref_size  = tp_sum_u64(tp, task_id, proc_ref_size);
+    U64 total_proc_ref_count = tp_sum_u64(tp, task_id, proc_ref_count);
+
+    U64            *proc_ref_hashes  = 0;
+    U64            *proc_ref_indices = 0;
+    Arena         **proc_ref_arenas  = 0;
+    CV_SymbolNode  *proc_ref_nodes   = 0;
     if (task_id == 0) {
-      U64 total_proc_ref_count = sum_array_u64(tp->worker_count, proc_ref_counts);
       proc_ref_hashes  = push_array(scratch.arena, U64, total_proc_ref_count);
       proc_ref_indices = offsets_from_counts_array_u64(scratch.arena, proc_ref_counts, tp->worker_count);
       proc_ref_arenas  = alloc_arena_many(gsi->arena, tp->worker_count, proc_ref_sizes);
@@ -1900,8 +1908,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     tp_broadcast(&proc_ref_arenas);
     tp_broadcast(&proc_ref_nodes);
 
-    U64    proc_ref_idx   = proc_ref_indices[task_id];
-    Arena *proc_ref_arena = proc_ref_arenas[task_id];
+    U64 proc_ref_idx = proc_ref_indices[task_id];
     for EachIndex(i, obj_indices.count) {
       U64         obj_idx       = obj_indices.v[i];
       CV_DebugS   debug_s       = task->cv->debug_s_arr[obj_idx];
@@ -1916,7 +1923,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
           if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
             String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
-            proc_ref_nodes[proc_ref_idx].data = cv_make_proc_ref(proc_ref_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
+            proc_ref_nodes[proc_ref_idx].data = cv_make_proc_ref(proc_ref_arenas[task_id], imod, symbol_cursor, name, cv_is_lproc(symbol));
             proc_ref_hashes[proc_ref_idx] = hash_from_cv_symbol(&proc_ref_nodes[proc_ref_idx].data);
             proc_ref_idx += 1;
           }
@@ -1939,8 +1946,8 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
   // public symbols
   //
   {
-    U64 *public_symbol_sizes;        // [worker_count]
-    U64 *public_symbol_node_counts;  // [worker_count]
+    U64 *public_symbol_sizes       = 0;        // [worker_count]
+    U64 *public_symbol_node_counts = 0;  // [worker_count]
     if (task_id == 0) {
       public_symbol_sizes       = push_array(scratch.arena, U64, tp->worker_count);
       public_symbol_node_counts = push_array(scratch.arena, U64, tp->worker_count);
@@ -1967,10 +1974,10 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
 
-    Arena         **public_symbol_arenas;
-    Arena         **public_symbol_node_arenas;
-    CV_SymbolList  *public_symbols;             // [worker_count]
-    U32           **public_symbol_hashes;       // [worker_count][public_symbol.count]
+    Arena         **public_symbol_arenas      = 0;
+    Arena         **public_symbol_node_arenas = 0;
+    CV_SymbolList  *public_symbols            = 0; // [worker_count]
+    U32           **public_symbol_hashes      = 0; // [worker_count][public_symbol.count]
     if (task_id == 0) {
       U64 public_symbol_total_count  = sum_array_u64(tp->worker_count, public_symbol_node_counts);
       public_symbol_arenas      = alloc_arena_many(psi->gsi->arena, tp->worker_count, public_symbol_sizes);
@@ -2190,7 +2197,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       barrier_wait(tp->barrier);
     }
 
-    Arena **string_arenas;
+    Arena **string_arenas = 0;
     if (task_id == 0) {
       string_arenas = alloc_arena_array(task->pdb->dbi->arena, tp->worker_count, string_counts, String8Node);
     }

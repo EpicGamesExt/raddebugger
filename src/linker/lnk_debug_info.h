@@ -138,6 +138,8 @@ typedef struct
   PDB_DbiModule      **mod_arr;     // [obj_count]
   U32Array            *obj_indices; // [obj_count]
 
+  U64 symbol_count;
+
   // push DBI SC Map
   PE_BinInfo                  pe;
   COFF_SectionHeader        **image_section_table;

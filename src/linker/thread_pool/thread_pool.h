@@ -4,7 +4,7 @@
 #pragma once
 
 struct TP_Context;
-#define THREAD_POOL_TASK_FUNC(name) void name(Arena *arena, U64 worker_id, U64 task_id, void *raw_task, struct TP_Context *tp)
+#define THREAD_POOL_TASK_FUNC(name) void name(Arena *arena, volatile U64 worker_id, volatile U64 task_id, void *raw_task, struct TP_Context *tp)
 typedef THREAD_POOL_TASK_FUNC(TP_TaskFunc);
 
 typedef struct TP_Arena
@@ -34,6 +34,7 @@ typedef struct TP_Context
   Semaphore    main_semaphore;
   Barrier      barrier;
   void        *broadcast;
+  U64          sum;
 
   U32          worker_count;
   TP_Worker   *worker_arr;
