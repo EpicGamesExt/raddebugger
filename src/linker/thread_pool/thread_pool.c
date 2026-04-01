@@ -246,18 +246,19 @@ tp_divide_work(Arena *arena, U64 item_count, U32 worker_count)
   return range_arr;
 }
 
-internal void *
-tp_broadcast_(TP_Context *tp, U64 task_id, void *ptr)
+internal void
+tp_broadcast_(TP_Context *tp, U64 task_id, void *ptr, U64 ptr_size)
 {
   if (task_id == 0) {
-    tp->broadcast = ptr;
+    tp->broadcast      = ptr;
+    tp->broadcast_size = ptr_size;
   }
   barrier_wait(tp->barrier);
 
-  void *result = tp->broadcast;
+  if (task_id != 0) {
+    MemoryCopy(ptr, tp->broadcast, tp->broadcast_size);
+  }
   barrier_wait(tp->barrier);
-
-  return result;
 }
 
 internal U64

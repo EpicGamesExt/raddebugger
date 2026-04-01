@@ -512,7 +512,24 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       }
     }
 
-    input.symbol_input_ranges = tp_divide_work(tp_arena->v[0], input.symbol_input_count, tp->worker_count);
+    ProfBegin("Make Ranges");
+    U64 total_input_size = 0;
+    for EachIndex(i, input.symbol_input_count) { total_input_size += input.symbol_inputs[i].raw_symbols.size; }
+
+    U64 max_weight = CeilIntegerDiv(total_input_size, tp->worker_count);
+    U64 cursor     = 0;
+    input.symbol_input_ranges = push_array(tp_arena->v[0], Rng1U64, tp->worker_count);
+    for EachIndex(i, tp->worker_count) {
+      if (cursor >= input.symbol_input_count) { break; }
+      U64 begin  = cursor;
+      U64 weight = 0;
+      for (; cursor < input.symbol_input_count; cursor += 1) {
+        if (weight >= max_weight) { break; }
+        weight += input.symbol_inputs[cursor].raw_symbols.size;
+      }
+      input.symbol_input_ranges[i] = r1u64(begin, cursor);
+    }
+    ProfEnd();
   }
   ProfEnd();
 
@@ -1174,9 +1191,9 @@ THREAD_POOL_TASK_FUNC(lnk_cv_patcher_symbols_task)
 {
   ProfBeginFunction();
   LNK_MergeTypes *task = raw_task;
-  for EachInRange(i, task->input->symbol_input_ranges[task_id]) {
+  Rng1U64 range = task->input->symbol_input_ranges[task_id];
+  for EachInRange(i, range) {
     LNK_SymbolInput symbols = task->input->symbol_inputs[i];
-
     for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
       Temp temp = temp_begin(task->fixed_arenas[task_id]);
 
@@ -1199,8 +1216,9 @@ THREAD_POOL_TASK_FUNC(lnk_cv_patcher_inlines_task)
   LNK_MergeTypes *task          = raw_task;
   U64             obj_idx       = task_id;
   String8List     inlinee_lines = cv_sub_section_from_debug_s(task->input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
+  Arena          *fixed_arena   = task->fixed_arenas[worker_id];
   for EachNode(inline_data_n, String8Node, inlinee_lines.first) {
-    Temp temp = temp_begin(task->fixed_arenas[worker_id]);
+    Temp temp = temp_begin(fixed_arena);
     CV_TypeIndexInfoList ti_info_list = cv_get_inlinee_type_index_offsets(temp.arena, inline_data_n->string);
     lnk_fixup_cv_type_indices(task, obj_idx, inline_data_n->string, ti_info_list);
     temp_end(temp);
@@ -1212,9 +1230,11 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_cv_patcher_leaves_task)
 {
   ProfBeginFunction();
-  LNK_MergeTypes *task = raw_task;
-  for EachInRange(leaf_ref_idx, task->ranges[task_id]) {
-    Temp temp = temp_begin(task->fixed_arenas[task_id]);
+  LNK_MergeTypes *task        = raw_task;
+  Rng1U64         range       = task->ranges[task_id];
+  Arena          *fixed_arena = task->fixed_arenas[task_id];
+  for EachInRange(leaf_ref_idx, range) {
+    Temp temp = temp_begin(fixed_arena);
     LNK_LeafRef          *patch        = task->unique_leaf_refs_arr[task->ti_source].v[leaf_ref_idx];
     CV_DebugT            *debug_t      = &task->input->debug_t_arr[patch->obj_idx];
     CV_Leaf               leaf         = cv_debug_t_get_leaf(debug_t, patch->leaf_idx);
@@ -1229,7 +1249,8 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_unbucket_raw_leaves_task)
 {
   LNK_MergeTypes *task = raw_task;
-  for EachInRange(i, task->ranges[task_id]) {
+  Rng1U64 range = task->ranges[task_id];
+  for EachInRange(i, range) {
     LNK_LeafRef  leaf_ref = *task->unique_leaf_refs_arr[task->ti_source].v[i];
     CV_DebugT   *debug_t  = &task->input->debug_t_arr[leaf_ref.obj_idx];
     String8      raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_ref.leaf_idx);
@@ -1751,19 +1772,11 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
   PDB_PsiContext *psi         = task->pdb->psi;
   U32Array        obj_indices = task->obj_indices[task_id];
 
-  //
-  // global symbols
-  //
+  ProfBegin("Global Symbols");
   {
-    // collect global data and global typedefs
-    U64 *global_symbol_count = 0;
-    if (task_id == 0) {
-      global_symbol_count = push_array(scratch.arena, U64, 1);
-    }
-    tp_broadcast(&global_symbol_count);
-
-    VoidList global_symbols = {0};
-    for EachInRange(i, task->cv->symbol_input_ranges[task_id]) {
+    VoidList global_symbols     = {0};
+    Rng1U64  symbol_input_range = task->cv->symbol_input_ranges[task_id];
+    for EachInRange(i, symbol_input_range) {
       LNK_SymbolInput symbols = task->cv->symbol_inputs[i];
       for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
         CV_Symbol symbol = {0};
@@ -1787,47 +1800,47 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         }
       }
     }
-    ins_atomic_u64_add_eval(global_symbol_count, global_symbols.count);
-    barrier_wait(tp->barrier);
 
-    U64   *bucket_cap;
+    // collect global data and global typedefs
+    U64 global_symbol_count = tp_sum_u64(tp, task_id, global_symbols.count);
+
+    U64    bucket_cap;
     void **buckets;
     if (task_id == 0) {
-      bucket_cap   = push_u64(scratch.arena, *global_symbol_count * 13 / 10);
-      buckets      = push_array(scratch.arena, void *, *bucket_cap);
+      bucket_cap = global_symbol_count * 13 / 10;
+      buckets    = push_array(scratch.arena, void *, bucket_cap);
     }
     tp_broadcast(&bucket_cap);
     tp_broadcast(&buckets);
 
     // insert symbols into hash table
     for EachNode(n, VoidNode, global_symbols.first) {
-      String8  raw  = cv_raw_from_symbol(n->v);
-      U64      hash = u64_hash_from_str8(raw);
-      cv_symbol_deduper_insert_or_update(buckets, *bucket_cap, hash, n->v);
+      String8 raw  = cv_raw_from_symbol(n->v);
+      U64     hash = u64_hash_from_str8(raw);
+      cv_symbol_deduper_insert_or_update(buckets, bucket_cap, hash, n->v);
     }
     barrier_wait(tp->barrier);
 
-    U64      *symbol_count;
-    void    **symbol_arr;
-    Rng1U64  *symbol_ranges; // [worker_count]
-    U32      *symbol_hashes; // [symbol_count]
+    U64       symbol_count  = 0;
+    void    **symbol_arr    = 0; // [symbol_count]
+    Rng1U64  *symbol_ranges = 0; // [worker_count]
+    U32      *symbol_hashes = 0; // [symbol_count]
     if (task_id == 0) {
-      // compact buckets
+      ProfBeginV("Compact Buckets [bucket_cap %llu]", bucket_cap);
       {
-        U64 k = 0;
-        for (U64 i = 1; i < *bucket_cap; i += 1) {
-          if (buckets[i] != 0 && buckets[i-1] == 0) {
-            while (buckets[k] != 0) { k += 1; }
-            buckets[k] = buckets[i];
-            buckets[i] = 0;
+        U64 dst = 0;
+        for EachIndex(src, bucket_cap) {
+          if (buckets[src] != 0) {
+            buckets[dst++] = buckets[src];
           }
         }
-        symbol_count = push_u64(scratch.arena, k);
+        symbol_count = dst;
       }
+      ProfEnd();
 
       symbol_arr    = buckets;
-      symbol_ranges = tp_divide_work(scratch.arena, *symbol_count, tp->worker_count);
-      symbol_hashes = push_array_no_zero(scratch.arena, U32, *symbol_count);
+      symbol_ranges = tp_divide_work(scratch.arena, symbol_count, tp->worker_count);
+      symbol_hashes = push_array_no_zero(scratch.arena, U32, symbol_count);
     }
     tp_broadcast(&symbol_count);
     tp_broadcast(&symbol_arr);
@@ -1835,7 +1848,8 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     tp_broadcast(&symbol_hashes);
 
     // hash symbols
-    for EachInRange(i, symbol_ranges[task_id]) {
+    Rng1U64 symbol_range = symbol_ranges[task_id];
+    for EachInRange(i, symbol_range) {
       CV_Symbol symbol = cv_symbol_from_ptr(symbol_arr[i]);
       String8   name   = cv_name_from_symbol(symbol.kind, symbol.data);
       symbol_hashes[i] = gsi_hash(gsi, name);
@@ -1844,8 +1858,8 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
     // push global symbols
     if (task_id == 0) {
-      CV_SymbolNode *nodes = push_array_no_zero(gsi->arena, CV_SymbolNode, *symbol_count);
-      for EachIndex(i, *symbol_count) {
+      CV_SymbolNode *nodes = push_array_no_zero(gsi->arena, CV_SymbolNode, symbol_count);
+      for EachIndex(i, symbol_count) {
         CV_SymbolNode *n = &nodes[i];
         n->prev = n->next = 0;
         n->data = cv_symbol_from_ptr(symbol_arr[i]);
@@ -1853,10 +1867,9 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       }
     }
   }
+  ProfEnd();
 
-  //
-  // proc refs
-  //
+  ProfBegin("Proc Refs");
   {
     U64 *proc_ref_sizes  = 0;
     U64 *proc_ref_counts = 0;
@@ -1886,7 +1899,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         }
       }
     }
-    proc_ref_sizes[task_id] = proc_ref_size;
+    proc_ref_sizes[task_id]  = proc_ref_size;
     proc_ref_counts[task_id] = proc_ref_count;
     barrier_wait(tp->barrier);
 
@@ -1908,7 +1921,8 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     tp_broadcast(&proc_ref_arenas);
     tp_broadcast(&proc_ref_nodes);
 
-    U64 proc_ref_idx = proc_ref_indices[task_id];
+    Arena *proc_ref_arena = proc_ref_arenas[task_id];
+    U64    proc_ref_idx   = proc_ref_indices[task_id];
     for EachIndex(i, obj_indices.count) {
       U64         obj_idx       = obj_indices.v[i];
       CV_DebugS   debug_s       = task->cv->debug_s_arr[obj_idx];
@@ -1923,7 +1937,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
           if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
             String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
-            proc_ref_nodes[proc_ref_idx].data = cv_make_proc_ref(proc_ref_arenas[task_id], imod, symbol_cursor, name, cv_is_lproc(symbol));
+            proc_ref_nodes[proc_ref_idx].data = cv_make_proc_ref(proc_ref_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
             proc_ref_hashes[proc_ref_idx] = hash_from_cv_symbol(&proc_ref_nodes[proc_ref_idx].data);
             proc_ref_idx += 1;
           }
@@ -1941,13 +1955,12 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
   }
+  ProfEnd();
 
-  //
-  // public symbols
-  //
+  ProfBegin("Public Symbols");
   {
-    U64 *public_symbol_sizes       = 0;        // [worker_count]
-    U64 *public_symbol_node_counts = 0;  // [worker_count]
+    U64 *public_symbol_sizes       = 0; // [worker_count]
+    U64 *public_symbol_node_counts = 0; // [worker_count]
     if (task_id == 0) {
       public_symbol_sizes       = push_array(scratch.arena, U64, tp->worker_count);
       public_symbol_node_counts = push_array(scratch.arena, U64, tp->worker_count);
@@ -1956,7 +1969,10 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     tp_broadcast(&public_symbol_node_counts);
 
     // compute buffer size for CV public symbols
-    for EachNode(chunk, LNK_SymbolHashTrieChunk, task->symtab->chunks[task_id].first) {
+    LNK_SymbolHashTrieChunkList symbol_chunks       = task->symtab->chunks[task_id];
+    U64                         public_symbol_size  = 0;
+    U64                         public_symbol_count = 0;
+    for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
       for EachIndex(i, chunk->count) {
         LNK_Symbol        *symbol        = chunk->v[i].symbol;
         LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
@@ -1966,12 +1982,13 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
         if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
 
-        public_symbol_sizes[task_id] += sizeof(CV_SymPub32);
-        public_symbol_sizes[task_id] += symbol->name.size + 1;
-        public_symbol_sizes[task_id]  = AlignPow2(public_symbol_sizes[task_id], sizeof(void *));
+        public_symbol_size  += AlignPow2(sizeof(CV_SymPub32) + symbol->name.size + 1, sizeof(void *));
+        public_symbol_count += 1;
         public_symbol_node_counts[task_id] += 1;
       }
     }
+    public_symbol_sizes      [task_id] += public_symbol_size;
+    public_symbol_node_counts[task_id] += public_symbol_count;
     barrier_wait(tp->barrier);
 
     Arena         **public_symbol_arenas      = 0;
@@ -1991,7 +2008,10 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     tp_broadcast(&public_symbol_hashes);
 
     // make CV public symbols
-    for EachNode(chunk, LNK_SymbolHashTrieChunk, task->symtab->chunks[task_id].first) {
+    Arena         *public_symbol_arena      = public_symbol_arenas     [task_id];
+    Arena         *public_symbol_node_arena = public_symbol_node_arenas[task_id];
+    CV_SymbolList *public_symbol_list       = &public_symbols          [task_id];
+    for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
       for EachIndex(i, chunk->count) {
         LNK_Symbol        *symbol        = chunk->v[i].symbol;
         LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
@@ -2004,20 +2024,21 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
         CV_Pub32Flags flags      = COFF_SymbolType_IsFunc(symbol_parsed.type) ? CV_Pub32Flag_Function : 0;
         ISectOff      sc         = lnk_sc_from_symbol(symbol);
-        CV_Symbol     pub_symbol = cv_make_pub32(public_symbol_arenas[task_id], flags, safe_cast_u32(sc.off), safe_cast_u16(sc.isect), symbol->name);
-        cv_symbol_list_push(public_symbol_node_arenas[task_id], &public_symbols[task_id], pub_symbol);
+        CV_Symbol     pub_symbol = cv_make_pub32(public_symbol_arena, flags, safe_cast_u32(sc.off), safe_cast_u16(sc.isect), symbol->name);
+        cv_symbol_list_push(public_symbol_node_arena, public_symbol_list, pub_symbol);
       }
     }
     barrier_wait(tp->barrier);
 
     // hash public symbols
     {
-      U64 n_idx = 0;
-      public_symbol_hashes[task_id] = push_array(scratch.arena, U32, public_symbols[task_id].count);
+      U64  hash_idx = 0;
+      U32 *hashes   = push_array(scratch.arena, U32, public_symbols[task_id].count);
       for EachNode(n, CV_SymbolNode, public_symbols[task_id].first) {
         String8 name = cv_name_from_symbol(n->data.kind, n->data.data);
-        public_symbol_hashes[task_id][n_idx++] = gsi_hash(gsi, name);
+        hashes[hash_idx++] = gsi_hash(gsi, name);
       }
+      public_symbol_hashes[task_id] = hashes;
     }
     barrier_wait(tp->barrier);
 
@@ -2034,6 +2055,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
   }
+  ProfEnd();
 
   scratch_end(scratch);
 }
