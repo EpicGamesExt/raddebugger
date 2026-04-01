@@ -4636,7 +4636,7 @@ T_BeginTest(cyclic_type)
   T_Ok(t_write_entry_obj());
   T_Ok(t_write_file(str8_lit("cycle.obj"), raw_coff));
 
-  String8 cmd_line = str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full cycle.obj entry.obj");
+  String8 cmd_line = str8f(scratch.arena, "/subsystem:console /entry:entry /out:a.exe /debug:full /rad_ignore:-%u cycle.obj entry.obj", LNK_Error_InvalidTypeIndex);
   String8 output   = {0};
   t_invoke_(t_radlink_path(), cmd_line, max_U64, scratch.arena, &output);
   T_Ok(g_last_exit_code == 0);

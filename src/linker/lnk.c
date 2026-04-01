@@ -195,8 +195,9 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
   }
 #endif
 
-  // in release build ignore unknown switches
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Warning_UnknownSwitch * (BUILD_DEBUG * -1));
+  // errors that are too verbose in release build
+  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Warning_UnknownSwitch  * (BUILD_DEBUG * -1));
+  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Error_InvalidTypeIndex * (BUILD_DEBUG * -1));
 
   return cmd_line;
 }
