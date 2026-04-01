@@ -3026,8 +3026,8 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
       U64 rip = regs_rip_from_arch_block(arch, regs_block);
       U64 rsp = regs_rsp_from_arch_block(arch, regs_block);
       
-      // rjf: cancel on 0 rip
-      if(rip == 0)
+      // rjf: cancel on zero rip (except the top frame)
+      if(rip == 0 && frame_node_count > 0)
       {
         break;
       }
@@ -3074,34 +3074,22 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
       CTRL_UnwindStepResult step_result = {0};
       switch(process_entity->target_os)
       {
-        case OperatingSystem_Null:{}break;
+        default:{}break;
         case OperatingSystem_Windows:
         {
           switch(arch)
           {
-            case Arch_Null:{}break;
+            default:{}break;
             case Arch_x64:
             {
               step_result = ctrl_unwind_step__pe_x64(process_entity->handle, module_entity->handle, module_entity->vaddr_range.min, regs_block, endt_us);
             }break;
-            case Arch_x86:
-            case Arch_arm32:
-            case Arch_arm64:
-            {
-              NotImplemented;
-            }break;
-            default: { InvalidPath; } break;
           }
         }break;
         case OperatingSystem_Linux:
         {
           step_result = ctrl_unwind_step__dwarf(process_entity->handle, arch, regs_block, &frame_ctx, endt_us);
         }break;
-        case OperatingSystem_Mac:
-        {
-          NotImplemented;
-        }break;
-        default: { InvalidPath; }break;
       }
       
       // stop unwinding on errors or stale data
@@ -6983,7 +6971,7 @@ ctrl_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out,
         pre_reg_gen = ctrl_reg_gen();
         pre_mem_gen = ctrl_mem_gen();
         unwind = ctrl_unwind_from_thread(arena, entity_ctx, thread_handle, os_now_microseconds()+5000);
-        if(unwind.flags == 0)
+        if(!(unwind.flags & CTRL_UnwindFlag_Stale))
         {
           good = 1;
           call_stack[0] = ctrl_call_stack_from_unwind(arena, process, &unwind);
