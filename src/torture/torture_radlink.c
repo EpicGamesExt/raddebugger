@@ -4615,6 +4615,112 @@ T_BeginTest(merge_duplicate_types)
 }
 T_EndTest;
 
+T_BeginTest(get_msf_stream_pages)
+{
+  MSF_Context *msf = msf_alloc(MSF_DEFAULT_PAGE_SIZE, MSF_DEFAULT_FPM);
+
+  {
+    U64 stream_size = MB(150) + 1;
+
+    MSF_StreamNumber sn = msf_stream_alloc_ex(msf, stream_size);
+
+    U8 *test = push_array(scratch.arena, U8, stream_size);
+    MemorySet(test, 0xca, stream_size/2);
+    MemorySet(test + stream_size/2, 0xbe, stream_size/2);
+
+    String8List stream_data = msf_data_from_sn(scratch.arena, msf, sn);
+    T_Ok(stream_data.total_size == stream_size);
+    T_Ok(stream_data.node_count == 11);
+
+    String8Array a = str8_array_from_list(scratch.arena, &stream_data);
+    T_Ok(a.v[0].size  == 0xffd000);
+    T_Ok(a.v[1].size  == 0xffe000);
+    T_Ok(a.v[2].size  == 0xffe000);
+    T_Ok(a.v[3].size  == 0xffe000);
+    T_Ok(a.v[4].size  == 0xffe000);
+    T_Ok(a.v[5].size  == 0xffe000);
+    T_Ok(a.v[6].size  == 0xffe000);
+    T_Ok(a.v[7].size  == 0xffd000);
+    T_Ok(a.v[8].size  == 0x1000);
+    T_Ok(a.v[9].size  == 0xffe000);
+    T_Ok(a.v[10].size == 0x613001);
+
+    String8Node buf     = *stream_data.first;
+    U64         buf_pos = 0;
+    str8_buffer_write(&buf, &buf_pos, str8(test, stream_size));
+
+    String8 cmp = msf_stream_read_block(scratch.arena, msf, sn, stream_size);
+    T_Ok(cmp.size == stream_size);
+    T_Ok(MemoryCompare(cmp.str, test, stream_size) == 0);
+  }
+
+  {
+    MSF_StreamNumber sn = msf_stream_alloc_ex(msf, 1);
+    String8List stream_data = msf_data_from_sn(scratch.arena, msf, sn);
+    T_Ok(stream_data.node_count == 1);
+    T_Ok(stream_data.total_size == 1);
+    T_Ok(stream_data.first->string.size == 1);
+  }
+
+  msf_release(&msf);
+}
+T_EndTest;
+
+T_BeginTest(patch_cv_symbol_tree)
+{
+  String8List raw_symbols = {0};
+  str8_list_push(scratch.arena, &raw_symbols, cv_make_symbol(scratch.arena, CV_SymKind_OBJNAME,        cv_make_obj_name(scratch.arena, str8_lit("foo.obj"), 123)));
+  str8_list_push(scratch.arena, &raw_symbols, cv_make_symbol(scratch.arena, CV_SymKind_GPROC32,        cv_make_proc32(scratch.arena, (CV_SymProc32){0}, str8_lit("Proc"))));
+  str8_list_push(scratch.arena, &raw_symbols, cv_make_symbol(scratch.arena, CV_SymKind_INLINESITE,     cv_make_inline_site(scratch.arena, (CV_SymInlineSite){0}, str8_zero())));
+  str8_list_push(scratch.arena, &raw_symbols, cv_make_symbol(scratch.arena, CV_SymKind_INLINESITE_END, cv_make_inline_site_end(scratch.arena)));
+  str8_list_push(scratch.arena, &raw_symbols, cv_make_symbol(scratch.arena, CV_SymKind_END,            cv_make_end(scratch.arena)));
+
+  U64 tree_size = cv_patch_symbol_tree_offsets(raw_symbols, sizeof(CV_Signature), 4);
+  T_Ok(tree_size == 84);
+
+  {
+    String8Node buf     = *raw_symbols.first;
+    U64         buf_pos = 0;
+
+    CV_SymbolHeader obj_header;
+    T_Ok(str8_buffer_read(&buf, &buf_pos, sizeof(obj_header), &obj_header) == sizeof(obj_header));
+    T_Ok(obj_header.kind == CV_SymKind_OBJNAME);
+    T_Ok(str8_buffer_skip(&buf, &buf_pos, obj_header.size - sizeof(CV_SymKind)));
+
+    CV_SymbolHeader proc_header;
+    T_Ok(str8_buffer_read(&buf, &buf_pos, sizeof(proc_header), &proc_header) == sizeof(proc_header));
+    T_Ok(proc_header.kind == CV_SymKind_GPROC32);
+
+    CV_SymProc32 proc;
+    T_Ok(str8_buffer_read(&buf, &buf_pos, sizeof(proc), &proc) == sizeof(proc));
+    T_Ok(proc.end == 0x54);
+    T_Ok(str8_buffer_skip(&buf, &buf_pos, proc_header.size - sizeof(CV_SymKind) - sizeof(proc)));
+
+    CV_SymbolHeader inline_site_header;
+    T_Ok(str8_buffer_read(&buf, &buf_pos, sizeof(inline_site_header), &inline_site_header) == sizeof(inline_site_header));
+    T_Ok(inline_site_header.kind == CV_SymKind_INLINESITE);
+
+    CV_SymInlineSite inline_site;
+    T_Ok(str8_buffer_read(&buf, &buf_pos, sizeof(inline_site), &inline_site));
+    T_Ok(inline_site.parent == 0x14);
+    T_Ok(inline_site.end == 0x50);
+    T_Ok(str8_buffer_skip(&buf, &buf_pos, inline_site_header.size - sizeof(CV_SymKind) - sizeof(inline_site)));
+
+    CV_SymbolHeader inline_end_header;
+    T_Ok(str8_buffer_read(&buf, &buf_pos, sizeof(inline_end_header), &inline_end_header) == sizeof(inline_end_header));
+    T_Ok(inline_end_header.kind == CV_SymKind_INLINESITE_END);
+
+    CV_SymbolHeader proc_end_header;
+    T_Ok(str8_buffer_read(&buf, &buf_pos, sizeof(proc_end_header), &proc_end_header) == sizeof(proc_end_header));
+    T_Ok(proc_end_header.kind == CV_SymKind_END);
+
+    T_Ok(buf.string.size == 0);
+    T_Ok(buf.string.str == 0);
+    T_Ok(buf_pos == 0);
+  }
+}
+T_EndTest;
+
 #if 0
 
 T_BeginTest(fold_two_funcs)
