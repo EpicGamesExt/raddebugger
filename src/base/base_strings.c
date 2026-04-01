@@ -1163,7 +1163,7 @@ str8_list_substr(Arena *arena, String8List list, Rng1U64 range)
 
   if (front_min > 0) {
     U64 front_max = front_min + Min(dim_1u64(range), n->string.size);
-    str8_list_push(arena, &result, str8_substr(n->string, r1u64(front_max, front_max)));
+    str8_list_push(arena, &result, str8_substr(n->string, r1u64(front_min, front_max)));
     n = n->next;
   }
 
@@ -2943,6 +2943,60 @@ str8_is_before_case_sensitive(const void *a, const void *b)
 ////////////////////////////////
 // string buffer
 
+internal B32
+str8_buffer_skip(String8Node *buf, U64 *pos, U64 skip)
+{
+  S64 to_skip;
+  for (to_skip = skip; to_skip > 0;) {
+    if (buf == 0) { break; }
+
+    U64 left = Min(to_skip, buf->string.size -  *pos);
+    *pos += left;
+
+    if (*pos == buf->string.size) {
+      if (buf->next) { *buf = *buf->next;                }
+      else           { *buf = (String8Node){0}; buf = 0; }
+      *pos = 0;
+    }
+
+    to_skip -= (S64)left;
+  }
+  Assert(to_skip == 0);
+  return (to_skip == 0);
+}
+
+internal U64
+str8_buffer_read(String8Node *buf, U64 *pos, U64 read_size, void *out)
+{
+  U64 cursor = 0;
+  for (; cursor < read_size ;) {
+    if (buf == 0) { break; }
+
+    U64   copy_size = Min(read_size - cursor, (buf->string.size - *pos));
+    void *dst       = (U8 *)out + cursor;
+    void *src       = buf->string.str + *pos;
+    MemoryCopy(dst, src, copy_size);
+
+    *pos   += copy_size;
+    cursor += copy_size;
+
+    if (*pos >= buf->string.size) {
+      if (buf->next) { *buf = *buf->next;                }
+      else           { *buf = (String8Node){0}; buf = 0; }
+      *pos = 0;
+    }
+  }
+  return cursor;
+}
+
+internal U64
+str8_buffer_peek(String8Node *buf, U64 *pos, U64 read_size, void *out)
+{
+  String8Node buf_copy = *buf;
+  U64         pos_copy = *pos;
+  return str8_buffer_read(&buf_copy, &pos_copy, read_size, out);
+}
+
 internal U64
 str8_buffer_write(String8Node *buf, U64 *pos, String8 data)
 {
@@ -2954,22 +3008,24 @@ str8_buffer_write(String8Node *buf, U64 *pos, String8 data)
       U64 available_size = buf->string.size - *pos;
       U64 to_copy        = Min(available_size, data_size);
       if (data.str == 0) {
-        MemorySet(buf->string.str, 0, to_copy);
+        MemorySet(buf->string.str + *pos, 0, to_copy);
       } else {
         U8 *data_ptr = data.str + copy_size;
-        MemoryCopy(buf->string.str, data_ptr, to_copy);
+        MemoryCopy(buf->string.str + *pos, data_ptr, to_copy);
       }
-      *pos += to_copy;
+      *pos      += to_copy;
+      copy_size += to_copy;
 
       if (*pos >= buf->string.size) {
         if (buf->next) {
           *buf = *buf->next;
           *pos = 0;
+        } else {
+          break;
         }
       }
-
-      copy_size += to_copy;
     }
+    Assert(copy_size == data.size);
   } else {
     copy_size = data.size;
   }
