@@ -1896,10 +1896,10 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
           if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
             String8        name = cv_name_from_symbol(symbol.kind, symbol.data);
-            CV_SymbolNode *n    = &task->proc_ref_nodes[proc_ref_idx++];
+            CV_SymbolNode *n    = &task->proc_ref_nodes[proc_ref_idx];
             n->data = cv_make_proc_ref(proc_ref_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
-
             task->proc_ref_hashes[proc_ref_idx] = hash_from_cv_symbol(&n->data);
+            proc_ref_idx += 1;
           }
 
           symbol_cursor += cv_write_symbol_buf(0, 0, &symbol, PDB_SYMBOL_ALIGN);
