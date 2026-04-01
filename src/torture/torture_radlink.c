@@ -4615,6 +4615,43 @@ T_BeginTest(merge_duplicate_types)
 }
 T_EndTest;
 
+T_BeginTest(cyclic_type)
+{
+  String8List *debug_t = push_array(scratch.arena, String8List, 1);
+  str8_serial_begin(scratch.arena, debug_t);
+  str8_serial_push_u32(scratch.arena, debug_t, CV_Signature_C13);
+  str8_serial_push_string(scratch.arena, debug_t, cv_make_leaf(scratch.arena, CV_LeafKind_POINTER, str8_struct((&(CV_LeafPointer){ .itype = 0x1001 })), CV_LeafAlign));
+  str8_serial_push_string(scratch.arena, debug_t, cv_make_leaf(scratch.arena, CV_LeafKind_POINTER, str8_struct((&(CV_LeafPointer){ .itype = 0x1000 })), CV_LeafAlign));
+
+  CV_DebugS debug_s = {0};
+  str8_list_push(scratch.arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_make_symbol(scratch.arena, CV_SymKind_GPROC32, cv_make_proc32(scratch.arena, (CV_SymProc32){ .itype = 0x1001 }, str8_lit("foo"))));
+  String8List debug_s_string = cv_data_from_debug_s_c13(scratch.arena, &debug_s, 1);
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, str8_serial_end(scratch.arena, debug_t));
+  coff_obj_writer_push_section(cow, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, str8_list_join(scratch.arena, &debug_s_string, 0));
+  String8 raw_coff = coff_obj_writer_serialize(scratch.arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_entry_obj());
+  T_Ok(t_write_file(str8_lit("cycle.obj"), raw_coff));
+
+  String8 cmd_line = str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full cycle.obj entry.obj");
+  String8 output   = {0};
+  t_invoke_(t_radlink_path(), cmd_line, max_U64, scratch.arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32 is_cycle_detected = 0;
+  while (output.size && !is_cycle_detected) {
+    is_cycle_detected = t_match_linef(&output,
+                      "Error(043): %S: LF_POINTER(type_index: 0x1000) forward refs member type index 0x1001 (leaf struct offset: 0x0)",
+                      t_make_file_path(scratch.arena, str8_lit("cycle.obj")));
+    t_chop_line(&output);
+  }
+  T_Ok(is_cycle_detected);
+}
+T_EndTest;
+
 T_BeginTest(get_msf_stream_pages)
 {
   MSF_Context *msf = msf_alloc(MSF_DEFAULT_PAGE_SIZE, MSF_DEFAULT_FPM);
