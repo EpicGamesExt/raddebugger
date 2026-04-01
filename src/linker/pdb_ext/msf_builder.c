@@ -830,8 +830,8 @@ msf_stream_resize_ex(MSF_Context *msf, MSF_Stream *stream, MSF_UInt size)
   }
   
   // update stream
-  stream->size = Min(stream->size, stream->page_list.count * msf->page_size);
-  stream->pos = Min(stream->pos, stream->size);
+  stream->size     = size;
+  stream->pos      = Min(stream->pos, stream->size);
   stream->pos_page = 0;
 
   return 1;
@@ -1212,26 +1212,40 @@ msf_stream_write_string_parallel(TP_Context *tp, MSF_Context *msf, MSF_StreamNum
 }
 
 internal String8List
-msf_raw_pages_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn)
+msf_data_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn)
 {
   String8List result = {0};
 
   MSF_Stream *stream = msf_find_stream(msf, sn);
   String8     acc    = {0};
-  for EachNode(n, MSF_PageNode, stream->page_list.first) {
-    String8 p = msf_data_from_pn(msf->page_data_list, msf->page_size, n->pn);
-    if (acc.str + acc.size == p.str) {
-      acc.size += p.size;
+
+  MSF_PageNode *n;
+  for (n = stream->page_list.first; n != stream->page_list.last; n = n->next) {
+    String8 page = msf_data_from_pn(msf->page_data_list, msf->page_size, n->pn);
+
+    if (acc.str + acc.size != page.str) {
+      if (acc.size > 0) {
+        str8_list_push(arena, &result, acc);
+      }
+      acc = page;
     } else {
-      str8_list_push(arena, &result, acc);
-      acc = p;
+      acc.size += page.size;
     }
   }
 
-  if (result.node_count && result.last->string.str + result.last->string.size == acc.str) {
-    result.last->string.size += acc.size;
-  } else {
-    str8_list_push(arena, &result, acc);
+  if (n) {
+    String8 page = msf_data_from_pn(msf->page_data_list, msf->page_size, n->pn);
+    if (acc.str + acc.size != page.str) {
+      acc = page;
+    } else {
+      acc.size += page.size;
+    }
+
+    acc.size = Min(stream->size - result.total_size, acc.size);
+
+    if (acc.size > 0) {
+      str8_list_push(arena, &result, acc);
+    }
   }
 
   return result;

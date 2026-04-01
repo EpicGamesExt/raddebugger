@@ -202,6 +202,7 @@ cv_write_symbol_buf(String8Node *buf, U64 *buf_pos, CV_Symbol *symbol, U64 align
   CV_SymSize record_size16 = (CV_SymSize)record_size;
 
   U64 write_size = 0;
+ 
   write_size += str8_buffer_write(buf, buf_pos, str8((U8 *)&(CV_SymbolHeader){ .size = record_size16, .kind = symbol->kind }, sizeof(CV_SymbolHeader)));
   write_size += str8_buffer_write(buf, buf_pos, symbol->data);
   write_size += str8_buffer_write_zeroes(buf, buf_pos, AlignPadPow2(symbol->data.size, align));
@@ -383,6 +384,43 @@ cv_make_envblock(Arena *arena, String8List string_list)
   return result;
 }
 
+internal String8
+cv_make_proc32(Arena *arena, CV_SymProc32 proc, String8 name)
+{
+  U64           buf_size = sizeof(proc) + name.size + 1;
+  U8           *buf      = push_array(arena, U8, buf_size);
+  CV_SymProc32 *proc_dst = (CV_SymProc32 *)buf;
+  MemoryCopy(proc_dst, &proc, sizeof(proc));
+  MemoryCopy(proc_dst + 1, name.str, name.size);
+  MemorySet((U8 *)(proc_dst + 1) + name.size , 0, 1);
+  String8 result = str8(buf, buf_size);
+  return result;
+}
+
+internal String8
+cv_make_end(Arena *arena)
+{ (void)arena;
+  return str8_zero();
+}
+
+internal String8
+cv_make_inline_site(Arena *arena, CV_SymInlineSite inline_site, String8 annots)
+{
+  U64               buf_size   = sizeof(inline_site) + annots.size;
+  U8               *buf        = push_array(arena, U8, buf_size);
+  CV_SymInlineSite *inline_dst = (CV_SymInlineSite *)buf;
+  MemoryCopy(inline_dst, &inline_site, sizeof(inline_site));
+  MemoryCopy(inline_dst + 1, annots.str, annots.size);
+  String8 result = str8(buf, buf_size);
+  return result;
+}
+
+internal String8
+cv_make_inline_site_end(Arena *arena)
+{ (void)arena;
+  return str8_zero();
+}
+
 internal CV_Symbol
 cv_make_proc_ref(Arena *arena, CV_ModIndex imod, U32 stream_offset, String8 name, B32 is_local)
 {
@@ -426,27 +464,6 @@ cv_make_pub32(Arena *arena, CV_Pub32Flags flags, U32 off, U16 isect, String8 nam
   symbol.data = str8(buffer, buffer_size);
   
   return symbol;
-}
-
-internal CV_SymbolList
-cv_make_proc_refs(Arena *arena, CV_ModIndex imod, CV_SymbolList symbol_list)
-{
-  CV_SymbolList proc_ref_list = {0};
-  for (CV_SymbolNode *symbol_node = symbol_list.first; symbol_node != 0; symbol_node = symbol_node->next) {
-    CV_Symbol *symbol = &symbol_node->data;
-    if (symbol->kind == CV_SymKind_GPROC32) {
-      String8        name          = cv_name_from_symbol(symbol->kind, symbol->data);
-      CV_Symbol      ref           = cv_make_proc_ref(arena, imod, safe_cast_u32(symbol->offset), name, /* is_local: */ 0);
-      CV_SymbolNode *proc_ref_node = cv_symbol_list_push(arena, &proc_ref_list);
-      proc_ref_node->data = ref;
-    } else if (symbol->kind == CV_SymKind_LPROC32) {
-      String8        name          = cv_name_from_symbol(symbol->kind, symbol->data);
-      CV_Symbol      ref           = cv_make_proc_ref(arena, imod, safe_cast_u32(symbol->offset), name, /* is_local */ 1);
-      CV_SymbolNode *proc_ref_node = cv_symbol_list_push(arena, &proc_ref_list);
-      proc_ref_node->data = ref;
-    }
-  }
-  return proc_ref_list;
 }
 
 internal B32
@@ -1199,61 +1216,6 @@ cv_debug_t_is_type_server_ref(CV_DebugT *debug_t)
 // $$Symbols
 
 internal void
-cv_parse_symbol_sub_section_capped(Arena *arena, CV_SymbolList *list, U64 offset_base, String8 data, U64 align, U64 cap)
-{
-  U64 count = 0;
-  for (U64 cursor = 0, opl = data.size; cursor < opl && count < cap; count += 1) {
-    // read symbol header
-    CV_SymbolHeader header;
-    cursor += str8_deserial_read_struct(data, cursor, &header);
-    
-    // size from header has to be larger than 2 bytes
-    if (header.size < sizeof(header.kind)) {
-      Assert(!"TODO: error handle invalid symbol data");
-      break;
-    }
-    
-    // is there enough bytes in the range?
-    U64 symbol_opl = cursor + (header.size - sizeof(header.kind));
-    if (symbol_opl > opl) {
-      Assert(!"TODO: error handle corrupted symbol data");
-      break;
-    }
-    
-    // get symbol data
-    Rng1U64 symbol_data_range = r1u64(cursor, symbol_opl);
-    String8 symbol_data       = str8_substr(data, symbol_data_range);
-    
-    // init symbol
-    CV_SymbolNode *node = cv_symbol_list_push(arena, list);
-    node->data.offset   = offset_base + cursor;
-    node->data.kind     = header.kind;
-    node->data.data     = symbol_data;
-    
-    // advance cursor
-    cursor = symbol_opl;
-    cursor = AlignPow2(cursor, align);
-  }
-}
-
-internal void
-cv_parse_symbol_sub_section(Arena *arena, CV_SymbolList *list, U64 offset_base, String8 data, U64 align)
-{
-  cv_parse_symbol_sub_section_capped(arena, list, offset_base, data, align, max_U64);
-}
-
-internal CV_SymbolList
-cv_symbol_list_from_data_list(Arena *arena, String8List data_list, U64 align)
-{
-  CV_SymbolList symbol_list = {0};
-  U64 cursor = 0;
-  for (String8Node *sect = data_list.first; sect != 0; cursor += sect->string.size, sect = sect->next) {
-    cv_parse_symbol_sub_section(arena, &symbol_list, cursor, sect->string, align);
-  }
-  return symbol_list;
-}
-
-internal void
 cv_symbol_list_push_node(CV_SymbolList *list, CV_SymbolNode *node)
 {
   node->prev = 0;
@@ -1263,309 +1225,77 @@ cv_symbol_list_push_node(CV_SymbolList *list, CV_SymbolNode *node)
 }
 
 internal CV_SymbolNode *
-cv_symbol_list_push(Arena *arena, CV_SymbolList *list)
+cv_symbol_list_push(Arena *arena, CV_SymbolList *list, CV_Symbol v)
 {
   CV_SymbolNode *node = push_array(arena, CV_SymbolNode, 1);
+  node->data = v;
   cv_symbol_list_push_node(list, node);
   return node;
 }
 
-internal CV_SymbolNode *
-cv_symbol_list_push_data(Arena *arena, CV_SymbolList *list, CV_SymKind kind, String8 data)
-{
-  CV_SymbolNode *node = cv_symbol_list_push(arena, list);
-  node->data.kind = kind;
-  node->data.data = data;
-  return node;
-}
-
-internal CV_SymbolNode *
-cv_symbol_list_push_many(Arena *arena, CV_SymbolList *list, U64 count)
-{
-  CV_SymbolNode *node_arr = push_array_no_zero(arena, CV_SymbolNode, 1);
-  for (U64 node_idx = 0; node_idx < count; node_idx += 1) {
-    cv_symbol_list_push_node(list, &node_arr[node_idx]);
-  }
-  return node_arr;
-}
-
-internal void
-cv_symbol_list_remove_node(CV_SymbolList *list, CV_SymbolNode *node)
-{
-  Assert(list->count > 0);
-  list->count -= 1;
-  DLLRemove(list->first, list->last, node);
-}
-
-internal void
-cv_symbol_list_concat_in_place(CV_SymbolList *list, CV_SymbolList *to_concat)
-{
-  SLLConcatInPlace(list, to_concat);
-}
-
-internal void
-cv_symbol_list_concat_in_place_arr(CV_SymbolList *list, U64 count, CV_SymbolList *to_concat)
-{
-  SLLConcatInPlaceArray(list, to_concat, count);
-}
-
 internal U64
-cv_symbol_list_arr_get_count(U64 count, CV_SymbolList *list_arr)
+cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align)
 {
-  U64 result = 0;
-  for (U64 idx = 0; idx < count; idx += 1) {
-    result += list_arr[idx].count;
-  }
-  return result;
-}
-
-internal String8List
-cv_write_symbol_list(Arena *arena, CV_SymbolList symbol_list, U64 align)
-{
-  String8List data_list = {0};
-  for (CV_SymbolNode *node = symbol_list.first; node != 0; node = node->next) {
-    String8 data = cv_data_from_symbol(arena, &node->data, align);
-    str8_list_push(arena, &data_list, data);
-  }
-  return data_list;
-}
-
-internal
-THREAD_POOL_TASK_FUNC(cv_symbol_list_syncer)
-{
-  ProfBeginFunction();
-
-  CV_SymbolListSyncer *task = raw_task;
-
-  // context shortcuts
-  Rng1U64 list_range  = task->list_range_arr[task_id];
-  U64     symbol_base = task->symbol_base_arr[task_id];
-
-  for (U64 list_idx = list_range.min, symbol_idx = symbol_base; list_idx < list_range.max; list_idx += 1) {
-    // pick up assigned list
-    CV_SymbolList list = task->list_arr[list_idx];
-
-    // fill out assigned range in the symbol array
-    for (CV_SymbolNode *node = list.first; node != 0; node = node->next, symbol_idx += 1) {
-      task->symbol_arr[symbol_idx] = node;
-    }
-  }
-
-  ProfEnd();
-}
-
-internal CV_SymbolPtrArray
-cv_symbol_ptr_array_from_list(Arena *arena, TP_Context *tp, U64 count, CV_SymbolList *list_arr)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-
-  U64 total_count = cv_symbol_list_arr_get_count(count, list_arr);
-
-  CV_SymbolListSyncer task = {0};
-  task.list_arr            = list_arr;
-  task.symbol_arr          = push_array_no_zero(arena, CV_SymbolNode *, total_count);
-  task.symbol_base_arr     = push_array_no_zero(scratch.arena, U64, tp->worker_count);
-  task.list_range_arr      = tp_divide_work(scratch.arena, count, tp->worker_count);
-
-  for (U64 thread_idx = 0, symbol_base = 0; thread_idx < tp->worker_count; thread_idx += 1) {
-    task.symbol_base_arr[thread_idx] = symbol_base;
-    Rng1U64 range = task.list_range_arr[thread_idx];
-    for (U64 list_idx = range.min; list_idx < range.max; list_idx += 1) {
-      symbol_base += list_arr[list_idx].count;
-    }
-  }
-
-  tp_for_parallel(tp, 0, tp->worker_count, cv_symbol_list_syncer, &task);
-
-  CV_SymbolPtrArray result = {0};
-  result.count             = total_count;
-  result.v                 = task.symbol_arr;
-
-  scratch_end(scratch);
-  ProfEnd();
-  return result;
-}
-
-internal CV_Scope *
-cv_scope_list_push(Arena *arena, CV_ScopeList *list)
-{
-  CV_Scope *node = push_array(arena, CV_Scope, 1);
-  SLLQueuePush(list->first, list->last, node);
-  return node;
-}
-
-internal CV_SymbolList
-cv_global_scope_symbols_from_list(Arena *arena, CV_SymbolList list)
-{
-  CV_SymbolList gsym_list = {0};
-  S64 scope_depth = 0;
-  for (CV_SymbolNode *symbol_n = list.first; symbol_n != 0; symbol_n = symbol_n->next) {
-    CV_Symbol symbol = symbol_n->data;
-    if (cv_is_global_symbol(symbol.kind) && scope_depth == 0) {
-      cv_symbol_list_push_data(arena, &gsym_list, symbol.kind, symbol.data);
-    } else if (cv_is_scope_symbol(symbol.kind)) {
-      scope_depth += 1;
-    } else if (cv_is_end_symbol(symbol.kind)) {
-      scope_depth -= 1;
-      if (scope_depth < 0) {
-        break;
-      }
-    }
-  }
-  return gsym_list;
-}
-
-internal CV_ScopeList
-cv_symbol_tree_from_symbol_list(Arena *arena, CV_SymbolList list)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  CV_ScopeList root = {0};
-  
-  // setup root frame
-  CV_ScopeFrame *stack = push_array(scratch.arena, CV_ScopeFrame, 1);
-  stack->list = &root;
-  
-  for (CV_SymbolNode *symbol_node = list.first; symbol_node != 0; symbol_node = symbol_node->next) {
-    // store symbol in current scope
-    CV_Scope *scope = cv_scope_list_push(arena, stack->list);
-    scope->symbol = symbol_node->data;
-    
-    // does this symbol define a new scope?
-    if (cv_is_scope_symbol(symbol_node->data.kind)) {
-      CV_ScopeFrame *frame = push_array(scratch.arena, CV_ScopeFrame, 1);
-      frame->list = push_array(arena, CV_ScopeList, 1);
-      SLLStackPush(stack, frame);
-    }
-    // does this symbol end current scope?
-    else if (cv_is_end_symbol(symbol_node->data.kind)) {
-      CV_ScopeFrame *prev_stack_frame = stack->next;
-      if (prev_stack_frame) {
-        // set children in parent scope
-        CV_Scope *parent_scope = prev_stack_frame->list->last;
-        parent_scope->children = stack->list;
-      }
-      
-      // pop frame
-      SLLStackPop(stack);
-    }
-  }
-  
-  scratch_end(scratch);
-  return root;
-}
-
-internal U64
-cv_patch_symbol_tree_offsets(CV_SymbolList list, U64 base_offset, U64 align)
-{
-  struct Stack {
-    struct Stack *next;
-    CV_Symbol    *symbol;
-    U64           offset;
-  };
   Temp scratch = scratch_begin(0, 0);
-  struct Stack *stack     = 0;
-  struct Stack *free_list = 0;
-  U32 cursor = safe_cast_u32(base_offset);
-  for EachNode(symbol_n, CV_SymbolNode, list.first) {
-    CV_Symbol symbol = symbol_n->data;
-    if (cv_is_scope_symbol(symbol.kind)) {
+
+  struct Stack { struct Stack *next; String8Node symbol_buf; U64 symbol_pos; U64 offset; };
+  struct Stack *stack = 0, *free_list = 0;
+
+  String8Node buf           = *raw_symbols.first;
+  U64         buf_pos       = 0;
+  U64         symbol_offset = base_offset;
+  U64         depth         = 0;
+
+  for (;;) {
+    CV_SymbolHeader symbol_header;
+    if (str8_buffer_read(&buf, &buf_pos, sizeof(symbol_header), &symbol_header) != sizeof(symbol_header)) { break; }
+
+    if (cv_is_scope_symbol(symbol_header.kind)) {
       // NOTE: We don't patch 'next' offset in PROC symbols because
       // it's not used by visual studio and MSVC leaves the offsets
       // zeroed. LLD is on the same page.
-      Assert(symbol.data.size >= sizeof(U32)*2);
+      Assert(symbol_header.size >= sizeof(CV_SymKind) + sizeof(U32)*2);
 
       // patch parent symbol offset
       if (stack) {
-        memory_write32(symbol.data.str, stack->offset);
+        String8Node temp_buf = buf;
+        U64         temp_pos = buf_pos;
+        str8_buffer_write_u32(&temp_buf, &temp_pos, stack->offset);
       }
 
       // reuse/alloc frame
-      struct Stack *frame;
-      if (free_list) {
-        frame = free_list;
-        SLLStackPop(free_list);
-      } else {
-        frame = push_array_no_zero(scratch.arena, struct Stack, 1);
-      }
+      struct Stack *frame = free_list;
+      if (frame) { SLLStackPop(free_list);                                     }
+      else       { frame = push_array_no_zero(scratch.arena, struct Stack, 1); }
 
       // push frame to the stack
-      frame->symbol = &symbol_n->data;
-      frame->offset = cursor;
+      frame->symbol_buf = buf;
+      frame->symbol_pos = buf_pos;
+      frame->offset = safe_cast_u32(symbol_offset);
       SLLStackPush(stack, frame);
-    } else if (cv_is_end_symbol(symbol.kind)) {
+
+      depth += 1;
+    } else if (cv_is_end_symbol(symbol_header.kind)) {
       // patch symbol end
-      U32 *end_off_ptr = (U32 *)stack->symbol->data.str + /* skip parent off */ 1;
-      memory_write32(end_off_ptr, cursor);
+      String8Node temp_buf = stack->symbol_buf;
+      U64         temp_pos = stack->symbol_pos;
+      str8_buffer_skip(&temp_buf, &temp_pos, sizeof(U32)); // skip parent offset
+      str8_buffer_write_u32(&temp_buf, &temp_pos, symbol_offset);
 
       // recycle frame
       struct Stack *free_frame = stack;
       SLLStackPop(stack);
       SLLStackPush(free_list, free_frame);
+
+      if (depth == 0) { Assert(0 && "malformed symbol stream"); continue; }
+      depth -= 1;
     }
 
-    // advance cursor
-    cursor += cv_size_from_symbol(&symbol, align);
-  }
+    // advance symbol offset
+    symbol_offset += sizeof(CV_SymSize) + symbol_header.size;
+    symbol_offset  = AlignPow2(symbol_offset, align);
 
-  scratch_end(scratch);
-  U64 serial_size = cursor - base_offset;
-  return serial_size;
-}
-
-internal U64
-cv_patch_symbol_tree_offsets_new(String8List raw_symbols, U64 base_offset, U64 align)
-{
-  Temp scratch = scratch_begin(0, 0);
-  struct Stack { struct Stack *next; CV_Symbol symbol; U64 offset; };
-  struct Stack *stack = 0, *free_list = 0;
-  U64 symbol_offset = safe_cast_u32(base_offset);
-  for EachNode(n, String8Node, raw_symbols.first) {
-    for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-      CV_Symbol symbol = {0};
-      TryReadBreak(cv_read_symbol(n->string, cursor, align, &symbol), cursor);
-
-      if (cv_is_scope_symbol(symbol.kind)) {
-        // NOTE: We don't patch 'next' offset in PROC symbols because
-        // it's not used by visual studio and MSVC leaves the offsets
-        // zeroed. LLD is on the same page.
-        Assert(symbol.data.size >= sizeof(U32)*2);
-
-        // patch parent symbol offset
-        if (stack) {
-          memory_write32(symbol.data.str, stack->offset);
-        }
-
-        // reuse/alloc frame
-        struct Stack *frame = free_list;
-        if (frame) { SLLStackPop(free_list);                                     }
-        else       { frame = push_array_no_zero(scratch.arena, struct Stack, 1); }
-
-        // push frame to the stack
-        frame->symbol = symbol;
-        frame->offset = symbol_offset;
-        SLLStackPush(stack, frame);
-
-        depth += 1;
-      } else if (cv_is_end_symbol(symbol.kind)) {
-        // patch symbol end
-        U32 *end_off_ptr = (U32 *)stack->symbol.data.str + /* skip parent off */ 1;
-        memory_write32(end_off_ptr, symbol_offset);
-
-        // recycle frame
-        struct Stack *free_frame = stack;
-        SLLStackPop(stack);
-        SLLStackPush(free_list, free_frame);
-
-        if (depth == 0) { Assert(0 && "malformed symbol stream"); goto next_block; }
-        depth -= 1;
-      }
-
-      // advance tree offset
-      symbol_offset += cv_size_from_symbol(&symbol, align);
-    }
-    next_block:;
+    str8_buffer_skip(&buf, &buf_pos, symbol_header.size - sizeof(CV_SymKind));
   }
 
   scratch_end(scratch);
@@ -1618,13 +1348,12 @@ cv_c13_parse_checksum_data_list(Arena *arena, String8List checksum_data_list)
 internal void
 cv_c13_patch_string_offsets_in_checksum_list(CV_ChecksumList checksum_list, String8 string_data, U64 string_data_base_offset, CV_StringHashTable string_ht)
 {
-  for (CV_ChecksumNode *node = checksum_list.first; node != 0; node = node->next) {
-    CV_Checksum     *checksum = &node->data;
-    CV_C13Checksum  *header   = checksum->header;
-    String8          name     = str8_cstring_capped(string_data.str + header->name_off, string_data.str + string_data.size);
-    CV_StringBucket *bucket   = cv_string_hash_table_lookup(string_ht, name);
-
-    U64 name_off64 = string_data_base_offset + bucket->u.offset;
+  for EachNode(node, CV_ChecksumNode, checksum_list.first) {
+    CV_Checksum     *checksum   = &node->data;
+    CV_C13Checksum  *header     = checksum->header;
+    String8          name       = str8_cstring_capped(string_data.str + header->name_off, string_data.str + string_data.size);
+    CV_StringBucket *bucket     = cv_string_hash_table_lookup(string_ht, name);
+    U64              name_off64 = string_data_base_offset + bucket->u.offset;
     header->name_off = safe_cast_u32(name_off64);
   }
 }

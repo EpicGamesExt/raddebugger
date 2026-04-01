@@ -130,7 +130,7 @@ typedef struct
 
 typedef struct
 {
-  String8            image_data;
+  String8           image_data;
   LNK_SymbolTable   *symtab;
   LNK_CodeViewInput *cv;
 
@@ -155,25 +155,23 @@ typedef struct
   U64           *proc_ref_counts;  // [worker_count]
   U64           *proc_ref_sizes;   // [worker_count]
   U64           *proc_ref_hashes;  // [total_proc_ref_count]
-  U64           *proc_ref_offs;    // [worker_count]
   U64           *proc_ref_indices; // [worker_count]
   String8        proc_refs;
   U64            proc_ref_count;
   CV_SymbolNode *proc_ref_nodes;  // [proc_ref_count]
-  Arena         *proc_ref_arena;
+  Arena        **proc_ref_arenas;
 
   U64            *public_symbol_sizes;        // [worker_count]
-  U64            *public_symbol_offs;         // [worker_count]
-  U8             *public_symbol_buffer;
+  Arena         **public_symbol_arenas;
+  Arena         **public_symbol_node_arenas;
   U64            *public_symbol_node_counts;  // [worker_count]
-  U64            *public_symbol_node_offsets; // [worker_count]
-  CV_SymbolNode  *public_symbol_nodes;        // [public_symbol_total_count]
   CV_SymbolList  *public_symbols;             // [worker_count]
   U32           **public_symbol_hashes;       // [worker_count][public_symbol.count]
 
   // process C13 data
-  String8List        *source_file_names_list_arr;
   CV_StringHashTable  string_ht;
+  U64                *string_counts;
+  Arena             **string_arenas;
 
   // push DBI SC Map
   PE_BinInfo                  pe;

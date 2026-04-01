@@ -188,7 +188,7 @@ internal B32 msf_stream_write_parallel(TP_Context *tp, MSF_Context *msf, MSF_Str
 #define msf_stream_write_array(m, s, v, c) msf_stream_write(m, s, (void*)(v), sizeof(*(v)) * (c))
 #define msf_stream_write_struct(m, s, v )  msf_stream_write_array(m, s, v, 1)
 
-internal String8List msf_raw_pages_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn);
+internal String8List msf_data_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn);
 
 internal MSF_UInt       msf_count_pages(MSF_UInt page_size, U64 data_size);
 internal MSF_PageNumber msf_get_page_count_cap(MSF_PageDataList page_data_list, MSF_UInt page_size);

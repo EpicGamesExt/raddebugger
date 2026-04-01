@@ -842,16 +842,11 @@ lnk_make_linker_coff_obj(Arena            *arena,
   
   String8 debug_symbols = {0};
   {
-    CV_SymbolList symbol_list = { .signature = CV_Signature_C13 };
+    String8List symbols = {0};
     
-    // S_OBJ
-    String8 obj_data = cv_make_obj_name(scratch.arena, obj_name, 0);
-    cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_OBJNAME, obj_data);
-    
-    // S_COMPILE3
-    String8 comp3_data = lnk_make_linker_compile3(scratch.arena, machine);
-    cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_COMPILE3, comp3_data);
-    
+    str8_list_push(scratch.arena, &symbols, cv_make_symbol(scratch.arena, CV_SymKind_OBJNAME, cv_make_obj_name(scratch.arena, obj_name, 0)));
+    str8_list_push(scratch.arena, &symbols, cv_make_symbol(scratch.arena, CV_SymKind_COMPILE3, lnk_make_linker_compile3(scratch.arena, machine)));
+
     // S_ENVBLOCK
     String8List env_list = {0};
     str8_list_push(scratch.arena, &env_list, str8_lit("cwd"));
@@ -864,12 +859,12 @@ lnk_make_linker_coff_obj(Arena            *arena,
     str8_list_push(scratch.arena, &env_list, cmd_line);
     str8_list_push(scratch.arena, &env_list, str8_lit(""));
     str8_list_push(scratch.arena, &env_list, str8_lit(""));
-    cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_ENVBLOCK, cv_make_envblock(scratch.arena, env_list));
+    str8_list_push(scratch.arena, &symbols, cv_make_symbol(scratch.arena, CV_SymKind_ENVBLOCK, cv_make_envblock(scratch.arena, env_list)));
 
     // TODO: emit S_SECTION and S_COFFGROUP
     // TODO: emit S_TRAMPOLINE
     
-    debug_symbols = lnk_make_debug_s(scratch.arena, symbol_list);
+    debug_symbols = lnk_make_debug_s(scratch.arena, symbols);
   }
 
   String8 obj;
@@ -1863,8 +1858,8 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
 
       for (String8Node *dll_name_n = delayed_dll_names.first; dll_name_n != 0; dll_name_n = dll_name_n->next) {
         PE_MakeImportList *imports              = hash_table_search_path_raw(delayed_imports_ht, dll_name_n->string);
-        String8                  import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_name_n->string);
-        String8                  import_obj           = pe_make_import_dll_obj_delayed(arena->v[0], time_stamp, config->machine, dll_name_n->string, config->delay_load_helper_name, import_debug_symbols, *imports, emit_biat, emit_uiat);
+        String8            import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_name_n->string);
+        String8            import_obj           = pe_make_import_dll_obj_delayed(arena->v[0], time_stamp, config->machine, dll_name_n->string, config->delay_load_helper_name, import_debug_symbols, *imports, emit_biat, emit_uiat);
         lnk_inputer_push_obj(inputer, 0, dll_name_n->string, import_obj);
       }
 
@@ -1885,8 +1880,8 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
 
       for (String8Node *dll_name_n = static_dll_names.first; dll_name_n != 0; dll_name_n = dll_name_n->next) {
         PE_MakeImportList *imports              = hash_table_search_path_raw(static_imports_ht, dll_name_n->string);
-        String8                  import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_name_n->string);
-        String8                  import_obj           = pe_make_import_dll_obj_static(arena->v[0], time_stamp, config->machine, dll_name_n->string, import_debug_symbols, *imports);
+        String8            import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_name_n->string);
+        String8            import_obj           = pe_make_import_dll_obj_static(arena->v[0], time_stamp, config->machine, dll_name_n->string, import_debug_symbols, *imports);
         lnk_inputer_push_obj(inputer, 0, dll_name_n->string, import_obj);
       }
 

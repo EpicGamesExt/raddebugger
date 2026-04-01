@@ -302,14 +302,16 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
           String8   debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
           CV_DebugS debug_s      = cv_debug_s_from_data(temp.arena, debug_s_data);
           for EachNode(symbols_n, String8Node, debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first) {
-            CV_SymbolList symbol_list = {0};
-            cv_parse_symbol_sub_section_capped(scratch.arena, &symbol_list, 0, symbols_n->string, CV_SymbolAlign, 2);
-            if (symbol_list.first->data.kind == CV_SymKind_COMPILE3) {
-              comp_symbol = symbol_list.first->data;
-              goto found_comp_symbol;
-            } else if (symbol_list.last->data.kind == CV_SymKind_COMPILE3) {
-              comp_symbol = symbol_list.last->data;
-              goto found_comp_symbol;
+            for (U64 cursor = 0, count = 0; cursor < symbols_n->string.size && count < 2; count += 1) {
+              CV_SymbolHeader symbol_header;
+              TryReadBreak(str8_deserial_read_struct(symbols_n->string, cursor, &symbol_header), cursor);
+              if (symbol_header.kind == CV_SymKind_COMPILE3) {
+                String8 raw_symbol = str8_substr(symbols_n->string, r1u64(cursor, cursor + symbol_header.size + sizeof(CV_SymSize)));
+                comp_symbol = cv_symbol_from_ptr(raw_symbol.str);
+                goto found_comp_symbol;
+              }
+              cursor += symbol_header.size + sizeof(CV_SymSize);
+              cursor  = AlignPow2(cursor, CV_SymbolAlign);
             }
           }
           temp_end(temp);
