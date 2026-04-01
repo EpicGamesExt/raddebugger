@@ -196,8 +196,10 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
 #endif
 
   // errors that are too verbose in release build
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Warning_UnknownSwitch  * (BUILD_DEBUG * -1));
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Error_InvalidTypeIndex * (BUILD_DEBUG * -1));
+  U64 debug_opt = BUILD_DEBUG ? -1 : 1;
+  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Warning_UnknownSwitch    * debug_opt);
+  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Warning_UnknownDirective * debug_opt);
+  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Error_InvalidTypeIndex   * debug_opt);
 
   return cmd_line;
 }
