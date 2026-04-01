@@ -130,48 +130,13 @@ typedef struct
 
 typedef struct
 {
-  String8           image_data;
-  LNK_SymbolTable   *symtab;
-  LNK_CodeViewInput *cv;
-
-  PDB_Context    *pdb;
-  PDB_DbiModule **mod_arr; // [obj_count]
-
-  Arena **fixed_arenas;
-
-  U32Array *obj_indices; // [obj_count]
-
-  // GSI symbol dedup
-  U64    global_symbol_count;
-  U64    bucket_cap;
-  void **buckets;      // [bucket_count]
-  U64   *insert_count; // [worker_count]
-
-  Rng1U64 *symbol_ranges; // [worker_count]
-  U64      symbol_count;
-  void   **symbol_arr;
-  U32     *symbol_hashes; // [symbol_count]
-
-  U64           *proc_ref_counts;  // [worker_count]
-  U64           *proc_ref_sizes;   // [worker_count]
-  U64           *proc_ref_hashes;  // [total_proc_ref_count]
-  U64           *proc_ref_indices; // [worker_count]
-  String8        proc_refs;
-  U64            proc_ref_count;
-  CV_SymbolNode *proc_ref_nodes;  // [proc_ref_count]
-  Arena        **proc_ref_arenas;
-
-  U64            *public_symbol_sizes;        // [worker_count]
-  Arena         **public_symbol_arenas;
-  Arena         **public_symbol_node_arenas;
-  U64            *public_symbol_node_counts;  // [worker_count]
-  CV_SymbolList  *public_symbols;             // [worker_count]
-  U32           **public_symbol_hashes;       // [worker_count][public_symbol.count]
-
-  // process C13 data
-  CV_StringHashTable  string_ht;
-  U64                *string_counts;
-  Arena             **string_arenas;
+  String8              image_data;
+  LNK_SymbolTable     *symtab;
+  LNK_CodeViewInput   *cv;
+  PDB_Context         *pdb;
+  CV_StringHashTable   string_ht;
+  PDB_DbiModule      **mod_arr;     // [obj_count]
+  U32Array            *obj_indices; // [obj_count]
 
   // push DBI SC Map
   PE_BinInfo                  pe;
@@ -180,9 +145,6 @@ typedef struct
   Rng1U64Array                image_section_file_ranges;
   Rng1U64Array                image_section_virt_ranges;
   PDB_DbiSectionContribList  *sc_list; // [obj_count]
-
-  // make public symbols
-  CV_SymbolList *pub_list_arr;
 } LNK_BuildPdb;
 
 typedef struct
