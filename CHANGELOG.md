@@ -17,6 +17,8 @@
   `Switch`, or `Switch To Partner File`), such that they prefer creating new
   non-transient tabs, even if the target file is found within an existing
   transient tab.
+- Adjusted the source code context menu to activate commands with a single
+  press, rather than the usual double click behavior from general palettes.
 
 # v0.9.24-alpha
 
