@@ -127,7 +127,6 @@ typedef struct
 ////////////////////////////////
 
 internal MSF_Context *    msf_alloc(MSF_UInt page_size, MSF_UInt active_fpm);
-internal MSF_Error        msf_open(String8 data, MSF_Context **msf_out);
 internal void             msf_release(MSF_Context **msf_ptr);
 internal MSF_Error        msf_build(MSF_Context *msf);
 internal U64              msf_get_save_size(MSF_Context *msf);

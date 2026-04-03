@@ -61,30 +61,11 @@ typedef struct PDB_StringTable
   PDB_StringTableBucket **bucket_array;
 } PDB_StringTable;
 
-typedef enum
-{
-  PDB_StringTableOpenError_OK,
-  PDB_StringTableOpenError_BAD_MAGIC,
-  PDB_StringTableOpenError_UNKNOWN_VERSION,
-  PDB_StringTableOpenError_CORRUPTED,
-  PDB_StringTableOpenError_STRING_OFFSET_OUT_OF_BOUNDS,
-  PDB_StringTableOpenError_OFFSETS_EXCEED_BUCKET_COUNT
-} PDB_StringTableOpenError;
-
 ////////////////////////////////
 // Type Server
 
 #define PDB_TYPE_HINT_STEP 128
 #define PDB_LEAF_ALIGN PDB_NATURAL_ALIGN 
-
-typedef enum
-{
-  PDB_OpenTypeServerError_OK,
-  PDB_OpenTypeServerError_UNKNOWN,
-  PDB_OpenTypeServerError_INVALID_BUCKET_COUNT,
-  PDB_OpenTypeServerError_INVALID_TI_RANGE,
-  PDB_OpenTypeServerError_UNSUPPORTED_VERSION,
-} PDB_OpenTypeServerError;
 
 typedef struct PDB_TypeBucket
 {
@@ -349,7 +330,6 @@ typedef struct
 // PDB
 
 internal PDB_Context *    pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid);
-internal PDB_Context *    pdb_open(String8 data);
 internal void             pdb_release(PDB_Context **pdb_ptr);
 internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi);
 internal void             pdb_set_machine(PDB_Context *pdb, COFF_MachineType machine);
@@ -366,7 +346,6 @@ internal Guid             pdb_get_guid(PDB_Context *pdb);
 
 internal PDB_InfoContext * pdb_info_alloc(U32 age, COFF_TimeStamp time_stamp, Guid guid);
 internal void              pdb_info_parse_from_data(String8 data, PDB_InfoParse *parse_out);
-internal PDB_InfoContext * pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn);
 internal void              pdb_info_build(PDB_InfoContext *info, MSF_Context *msf, MSF_StreamNumber sn);
 internal void              pdb_info_release(PDB_InfoContext **info_ptr);
 internal MSF_StreamNumber  pdb_push_named_stream(PDB_HashTable *named_stream_ht, MSF_Context *msf, String8 name);
@@ -377,7 +356,6 @@ internal PDB_SrcError      pdb_add_src(PDB_InfoContext *info, MSF_Context *msf, 
 // GSI
 
 internal PDB_GsiContext *   gsi_alloc(void);
-internal PDB_GsiContext *   gsi_open(MSF_Context *msf, MSF_StreamNumber sn, String8 symbol_data);
 internal void               gsi_build(TP_Context *tp, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumber gsi_sn, MSF_StreamNumber symbols_sn);
 internal void               gsi_release(PDB_GsiContext **gsi_ptr);
 internal void               gsi_write_build_result(TP_Context *tp, PDB_GsiBuildResult build, MSF_Context *msf, MSF_StreamNumber sn, MSF_StreamNumber symbols_sn);
@@ -392,7 +370,6 @@ internal CV_SymbolNode *    gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol);
 // PSI
 
 internal PDB_PsiContext * psi_alloc(void);
-internal PDB_PsiContext * psi_open(MSF_Context *msf, MSF_StreamNumber sn, String8 symbol_data);
 internal void             psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumber sn, MSF_StreamNumber symbols_sn);
 internal void             psi_release(PDB_PsiContext **psi_ptr);
 internal CV_SymbolNode *  psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String8 name);
@@ -405,7 +382,6 @@ internal CV_SymbolNode *  psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32
 // DBI
 
 internal PDB_DbiContext *          dbi_alloc(COFF_MachineType machine, U32 age);
-internal PDB_DbiContext *          dbi_open(MSF_Context *msf, MSF_StreamNumber sn);
 internal void                      dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber dbi_sn, CV_StringHashTable string_ht);
 internal void                      dbi_release(PDB_DbiContext **dbi_ptr);
 internal PDB_DbiModule *           dbi_push_module(PDB_DbiContext *dbi, String8 obj_path, String8 lib_path);
@@ -452,7 +428,6 @@ internal String8 pdb_data_from_named_stream_ht(Arena *arena, PDB_HashTable *ht);
 // String Table
 
 internal void                     pdb_strtab_alloc(PDB_StringTable *strtab, U32 max);
-internal PDB_StringTableOpenError pdb_strtab_open(PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn);
 internal void                     pdb_strtab_build(PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn);
 internal void                     pdb_strtab_release(PDB_StringTable *strtab);
 internal PDB_StringIndex          pdb_strtab_add(PDB_StringTable *strtab, String8 string);
@@ -467,16 +442,12 @@ internal U32                      pdb_strtab_hash(PDB_StringTable *strtab, Strin
 ////////////////////////////////
 // Type Server
 
-internal PDB_OpenTypeServerError pdb_type_server_parse_from_data_v80(String8 data, PDB_TypeServerParse *parse_out);
-internal PDB_OpenTypeServerError pdb_type_server_parse_from_data(String8 data, PDB_TypeServerParse *parse_out);
 internal PDB_TypeServer *        pdb_type_server_alloc(U64 bucket_count);
 internal PDB_TypeServer *        pdb_type_server_open_v80(MSF_Context *msf, MSF_StreamNumber sn, PDB_StringTable *strtab);
-internal PDB_TypeServer *        pdb_type_server_open(MSF_Context *msf, MSF_StreamNumber sn, PDB_StringTable *strtab);
 internal void                    pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn);
 internal void                    pdb_type_server_release(PDB_TypeServer **serv_ptr);
 internal void                    pdb_type_server_push(PDB_TypeServer *ts, String8 raw_leaf);
 internal void                    pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *ts, U64 leaf_count, U8 **leaf_arr);
-//internal CV_LeafNode *     pdb_type_server_leaf_from_string(PDB_TypeServer *ts, String8 string);
 internal String8Node *           pdb_type_server_reserve(PDB_TypeServer *ts, U64 count);
 internal String8Node *           pdb_type_server_make_leaf(PDB_TypeServer *ts, CV_LeafKind kind, String8 data);
 internal void                    pdb_type_server_push_bucket(PDB_TypeServer *ts, CV_Leaf *leaf);
@@ -486,6 +457,5 @@ internal PDB_TypeHashStreamInfo  pdb_type_hash_stream_build(TP_Context *tp, PDB_
 // Enum -> String
 
 internal String8 pdb_string_from_src_error(PDB_SrcError error);
-internal String8 pdb_string_from_open_type_server_error(PDB_OpenTypeServerError error);
 
 
