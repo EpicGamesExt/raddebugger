@@ -1827,14 +1827,9 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     U32      *symbol_hashes = 0; // [symbol_count]
     if (task_id == 0) {
       ProfBeginV("Compact Buckets [bucket_cap %llu]", bucket_cap);
-      {
-        U64 dst = 0;
-        for EachIndex(src, bucket_cap) {
-          if (buckets[src] != 0) {
-            buckets[dst++] = buckets[src];
-          }
-        }
-        symbol_count = dst;
+      for EachIndex(src, bucket_cap) {
+        buckets[symbol_count] = buckets[src];
+        symbol_count += buckets[src] != 0;
       }
       ProfEnd();
 
