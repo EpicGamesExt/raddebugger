@@ -1,3 +1,25 @@
+# v0.9.25-alpha
+
+## Debugger Changes
+
+- Fixed the debugger leaking debug info conversion process handles. This
+  addresses cases where the debugger was preventing stale debug info from being
+  updated, after a rebuild.
+- Fixed the debugger not correctly using target-embedded markup data.
+- Fixed the debugger not showing full call stacks when the top instruction
+  pointer is located at a 0 address.
+- Fixed several crashes and instabilities.
+- Added optional cursor trails, to visualize cursor motion. Can be turned off
+  by toggling the `Cursor Trail` setting.
+- Added project names. When set, this name is used for displaying the project
+  instead of the project filename in the UI and window titles.
+- Adjusted the rules for explicit file location finding commands (like
+  `Switch`, or `Switch To Partner File`), such that they prefer creating new
+  non-transient tabs, even if the target file is found within an existing
+  transient tab.
+- Adjusted the source code context menu to activate commands with a single
+  press, rather than the usual double click behavior from general palettes.
+
 # v0.9.24-alpha
 
 ## Debugger Changes

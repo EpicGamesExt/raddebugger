@@ -1270,9 +1270,12 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
       case CTRL_EventKind_NewProc:
       {
         CTRL_Entity *machine = ctrl_entity_from_handle(&store->ctx, ctrl_handle_make(event->entity.machine_id, dmn_handle_zero()));
-        CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->arch, event->entity, (U64)event->entity_id);
-        process->tls_model = event->tls_model;
-        process->target_os = event->target_os;
+        if(machine != &ctrl_entity_nil)
+        {
+          CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->arch, event->entity, (U64)event->entity_id);
+          process->tls_model = event->tls_model;
+          process->target_os = event->target_os;
+        }
       }break;
       case CTRL_EventKind_EndProc:
       {
@@ -1294,35 +1297,38 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
       case CTRL_EventKind_NewThread:
       {
         CTRL_Entity *process = ctrl_entity_from_handle(&store->ctx, event->parent);
-        CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->entity, (U64)event->entity_id);
-        CTRL_Entity *first_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
-        if(first_thread == thread)
+        if(process != &ctrl_entity_nil)
         {
-          ctrl_entity_equip_string(store, thread, str8_lit("main_thread"));
-        }
-        CTRL_EntityArray pending_thread_names = ctrl_entity_array_from_kind(&store->ctx, CTRL_EntityKind_PendingThreadName);
-        for EachIndex(idx, pending_thread_names.count)
-        {
-          CTRL_Entity *entity = pending_thread_names.v[idx];
-          if(entity->id == event->entity_id)
+          CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->entity, (U64)event->entity_id);
+          CTRL_Entity *first_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
+          if(first_thread == thread)
           {
-            ctrl_entity_equip_string(store, thread, entity->string);
-            ctrl_entity_release(store, entity);
-            break;
+            ctrl_entity_equip_string(store, thread, str8_lit("main_thread"));
           }
-        }
-        CTRL_EntityArray pending_thread_colors = ctrl_entity_array_from_kind(&store->ctx, CTRL_EntityKind_PendingThreadColor);
-        for EachIndex(idx, pending_thread_colors.count)
-        {
-          CTRL_Entity *entity = pending_thread_colors.v[idx];
-          if(entity->id == event->entity_id)
+          CTRL_EntityArray pending_thread_names = ctrl_entity_array_from_kind(&store->ctx, CTRL_EntityKind_PendingThreadName);
+          for EachIndex(idx, pending_thread_names.count)
           {
-            thread->rgba = entity->rgba;
-            ctrl_entity_release(store, entity);
-            break;
+            CTRL_Entity *entity = pending_thread_names.v[idx];
+            if(entity->id == event->entity_id)
+            {
+              ctrl_entity_equip_string(store, thread, entity->string);
+              ctrl_entity_release(store, entity);
+              break;
+            }
           }
+          CTRL_EntityArray pending_thread_colors = ctrl_entity_array_from_kind(&store->ctx, CTRL_EntityKind_PendingThreadColor);
+          for EachIndex(idx, pending_thread_colors.count)
+          {
+            CTRL_Entity *entity = pending_thread_colors.v[idx];
+            if(entity->id == event->entity_id)
+            {
+              thread->rgba = entity->rgba;
+              ctrl_entity_release(store, entity);
+              break;
+            }
+          }
+          thread->stack_base = event->stack_base;
         }
-        thread->stack_base = event->stack_base;
         //ctrl_rip_from_thread(&store->ctx, event->entity);
       }break;
       case CTRL_EventKind_EndThread:
@@ -1346,7 +1352,7 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
         {
           ctrl_entity_equip_string(store, thread, event->string);
         }
-        else
+        else if(process != &ctrl_entity_nil)
         {
           CTRL_Entity *pending_name = ctrl_entity_alloc(store, process, CTRL_EntityKind_PendingThreadName, Arch_Null, ctrl_handle_zero(), event->entity_id);
           ctrl_entity_equip_string(store, pending_name, event->string);
@@ -1368,7 +1374,7 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
         {
           thread->rgba = event->rgba;
         }
-        else
+        else if(process != &ctrl_entity_nil)
         {
           CTRL_Entity *pending = ctrl_entity_alloc(store, process, CTRL_EntityKind_PendingThreadColor, Arch_Null, ctrl_handle_zero(), event->entity_id);
           pending->rgba = event->rgba;
@@ -1377,12 +1383,18 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
       case CTRL_EventKind_ThreadFrozen:
       {
         CTRL_Entity *thread = ctrl_entity_from_handle(&store->ctx, event->entity);
-        thread->is_frozen = 1;
+        if(thread != &ctrl_entity_nil)
+        {
+          thread->is_frozen = 1;
+        }
       }break;
       case CTRL_EventKind_ThreadThawed:
       {
         CTRL_Entity *thread = ctrl_entity_from_handle(&store->ctx, event->entity);
-        thread->is_frozen = 0;
+        if(thread != &ctrl_entity_nil)
+        {
+          thread->is_frozen = 0;
+        }
       }break;
       
       //- rjf: modules
@@ -3014,8 +3026,8 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
       U64 rip = regs_rip_from_arch_block(arch, regs_block);
       U64 rsp = regs_rsp_from_arch_block(arch, regs_block);
       
-      // rjf: cancel on 0 rip
-      if(rip == 0)
+      // rjf: cancel on zero rip (except the top frame)
+      if(rip == 0 && frame_node_count > 0)
       {
         break;
       }
@@ -3062,34 +3074,22 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
       CTRL_UnwindStepResult step_result = {0};
       switch(process_entity->target_os)
       {
-        case OperatingSystem_Null:{}break;
+        default:{}break;
         case OperatingSystem_Windows:
         {
           switch(arch)
           {
-            case Arch_Null:{}break;
+            default:{}break;
             case Arch_x64:
             {
               step_result = ctrl_unwind_step__pe_x64(process_entity->handle, module_entity->handle, module_entity->vaddr_range.min, regs_block, endt_us);
             }break;
-            case Arch_x86:
-            case Arch_arm32:
-            case Arch_arm64:
-            {
-              NotImplemented;
-            }break;
-            default: { InvalidPath; } break;
           }
         }break;
         case OperatingSystem_Linux:
         {
           step_result = ctrl_unwind_step__dwarf(process_entity->handle, arch, regs_block, &frame_ctx, endt_us);
         }break;
-        case OperatingSystem_Mac:
-        {
-          NotImplemented;
-        }break;
-        default: { InvalidPath; }break;
       }
       
       // stop unwinding on errors or stale data
@@ -6971,7 +6971,7 @@ ctrl_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out,
         pre_reg_gen = ctrl_reg_gen();
         pre_mem_gen = ctrl_mem_gen();
         unwind = ctrl_unwind_from_thread(arena, entity_ctx, thread_handle, os_now_microseconds()+5000);
-        if(unwind.flags == 0)
+        if(!(unwind.flags & CTRL_UnwindFlag_Stale))
         {
           good = 1;
           call_stack[0] = ctrl_call_stack_from_unwind(arena, process, &unwind);
