@@ -1313,7 +1313,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
   ProfBeginFunction();
   Temp scratch = temp_begin(lnk_get_huge_arena());
 
-  LNK_MergeTypes task = { .input = input, };
+  LNK_MergeTypes task = { .input = input };
   U64 max_ti_list_size = sizeof(CV_TypeIndexInfo) * (max_U16 / sizeof(CV_TypeIndex));
   task.fixed_arenas = alloc_fixed_size_arena_array(scratch.arena, tp->worker_count, max_ti_list_size, max_ti_list_size);
 
@@ -1761,22 +1761,16 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
   ProfBegin("Global Symbols");
   {
-    VoidList global_symbols     = {0};
-    Rng1U64  symbol_input_range = task->cv->symbol_input_ranges[task_id];
-    for EachInRange(i, symbol_input_range) {
+    VoidList global_symbols = {0};
+    for EachInRange(i, task->cv->symbol_input_ranges[task_id]) {
       LNK_SymbolInput symbols = task->cv->symbol_inputs[i];
       for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
         CV_Symbol symbol = {0};
         TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
 
-        if (cv_is_global_symbol(symbol.kind)) {
+        if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) {
           void *ptr = cv_ptr_from_symbol(symbol);
           void_list_push(scratch.arena, &global_symbols, ptr);
-        } else if (cv_is_typedef(symbol.kind)) {
-          if (depth == 0) {
-            void *ptr = cv_ptr_from_symbol(symbol); 
-            void_list_push(scratch.arena, &global_symbols, ptr);
-          }
         }
 
         if (cv_is_scope_symbol(symbol.kind)) {

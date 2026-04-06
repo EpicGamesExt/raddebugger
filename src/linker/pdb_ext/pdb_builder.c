@@ -1903,13 +1903,73 @@ THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
   }
 }
 
+force_inline int
+gsi_symbol_is_before(void *raw_a, void *raw_b)
+{
+  CV_Symbol *a = *(CV_Symbol **)raw_a;
+  CV_Symbol *b = *(CV_Symbol **)raw_b;
+
+  String8 a_name = cv_name_from_symbol(a->kind, a->data);
+  String8 b_name = cv_name_from_symbol(b->kind, b->data);
+
+  int is_before;
+  if (a_name.size != b_name.size) {
+    is_before = a_name.size < b_name.size;
+  } else {
+    is_before = str8_compar_ignore_case(&a_name, &b_name) < 0;
+  }
+
+  return is_before;
+}
+
+internal int
+gsi_pub_symbol_is_before(void *raw_a, void *raw_b)
+{
+  CV_Symbol *a = *(CV_Symbol **)raw_a;
+  CV_Symbol *b = *(CV_Symbol **)raw_b;
+
+  String8 a_name = cv_name_from_symbol(a->kind, a->data);
+  String8 b_name = cv_name_from_symbol(b->kind, b->data);
+
+  int is_before;
+  if (a_name.size != b_name.size) {
+    is_before = a_name.size < b_name.size;
+  } else {
+    int cmp = str8_compar_ignore_case(&a_name, &b_name);
+    if (cmp == 0) {
+      CV_SymPub32 *a_sym = (CV_SymPub32 *)a->data.str;
+      CV_SymPub32 *b_sym = (CV_SymPub32 *)b->data.str;
+      cmp = u16_compar(&a_sym->sec, &b_sym->sec);
+      if (cmp == 0) {
+        cmp = u32_compar(&a_sym->off, &b_sym->off);
+      }
+    }
+
+    is_before = cmp < 0;
+  }
+
+  return is_before;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+
   U64                          bucket_idx = task_id;
   PDB_GsiSerializeSymbolsTask *task       = raw_task;
 
-  CV_SymbolList      bucket_list     = task->bucket_arr[bucket_idx];
+  CV_SymbolList bucket = task->bucket_arr[bucket_idx];
+
+  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
+  {
+    U64 i = 0;
+    for EachNode(n, CV_SymbolNode, bucket.first) { symbol_arr[i++] = &n->data; }
+  }
+
+  // sort symbols within bucket
+  radsort(symbol_arr, bucket.count, gsi_pub_symbol_is_before);
+
   PDB_GsiSortRecord *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
   U64                buffer_size     = task->bucket_size_arr[bucket_idx];
   U64                buffer_base     = task->bucket_off_arr[bucket_idx];
@@ -1917,14 +1977,12 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
 
   U64 sort_idx      = 0;
   U64 buffer_cursor = 0;
+  for EachIndex(i, bucket.count) {
+    Assert(symbol_arr[i]->kind == CV_SymKind_PUB32);
 
-  for (CV_SymbolNode *node = bucket_list.first; node != 0; node = node->next) {
-    CV_Symbol *symbol = &node->data;
-    Assert(symbol->kind == CV_SymKind_PUB32);
-
-    CV_SymPub32 *pub32    = (CV_SymPub32 *)symbol->data.str;
+    CV_SymPub32 *pub32    = (CV_SymPub32 *)symbol_arr[i]->data.str;
     U8          *str_ptr  = (U8 *)(pub32 + 1);
-    U64          str_size = symbol->data.size - sizeof(*pub32);
+    U64          str_size = symbol_arr[i]->data.size - sizeof(*pub32);
     String8      name     = str8(str_ptr, str_size);
 
     // init sort record
@@ -1934,57 +1992,62 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
     sr->offset            = buffer_cursor;
 
     // serialize symbol
-    U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
+    U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol_arr[i], task->symbol_align);
 
     // advance
     sort_idx      += 1;
     buffer_cursor += serial_size;
   }
-
-  Assert(sort_idx == bucket_list.count);
+  Assert(sort_idx == bucket.count);
   Assert(buffer_cursor == buffer_size);
 
-  // sort symbols by name within bucket
-  gsi_record_sort_by_name(sort_record_arr, bucket_list.count);
+  scratch_end(scratch);
 }
 
 internal
 THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
 {
-  U64                          bucket_idx = task_id;
-  PDB_GsiSerializeSymbolsTask *task       = raw_task;
+  Temp scratch = scratch_begin(&arena, 1);
 
-  CV_SymbolList        bucket_list     = task->bucket_arr[bucket_idx];
-  PDB_GsiSortRecord   *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
-  U64                  buffer_size     = task->bucket_size_arr[bucket_idx];
-  U64                  buffer_base     = task->bucket_off_arr[bucket_idx];
-  U8                  *buffer          = task->buffer + buffer_base;
+  U64                          bucket_idx  = task_id;
+  PDB_GsiSerializeSymbolsTask *task        = raw_task;
+  CV_SymbolList                bucket = task->bucket_arr[bucket_idx];
 
-  U64 sort_idx      = 0;
-  U64 buffer_cursor = 0;
-
-  for (CV_SymbolNode *node = bucket_list.first; node != 0; node = node->next) {
-    CV_Symbol *symbol = &node->data;
-
-    // init sort record
-    PDB_GsiSortRecord *sr = &sort_record_arr[sort_idx];
-    //sr->isect_off = isect_off(0,0);
-    sr->name      = cv_name_from_symbol(symbol->kind, symbol->data);
-    sr->offset    = buffer_cursor;
-
-    // serialize symbol
-    U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
-
-    // advance
-    sort_idx      += 1;
-    buffer_cursor += serial_size;
+  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
+  {
+    U64 i = 0;
+    for EachNode(n, CV_SymbolNode, bucket.first) { symbol_arr[i++] = &n->data; }
   }
 
-  Assert(sort_idx == bucket_list.count);
-  Assert(buffer_cursor == buffer_size);
+  // sort symbols within bucket
+  radsort(symbol_arr, bucket.count, gsi_symbol_is_before);
 
-  // sort symbols by name within bucket
-  gsi_record_sort_by_name(sort_record_arr, bucket_list.count);
+  // symbol -> GSI sort record
+  {
+    PDB_GsiSortRecord   *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
+    U64                  buffer_size     = task->bucket_size_arr[bucket_idx];
+    U64                  buffer_base     = task->bucket_off_arr[bucket_idx];
+    U8                  *buffer          = task->buffer + buffer_base;
+
+    U64 sort_idx      = 0;
+    U64 buffer_cursor = 0;
+    for EachIndex(i, bucket.count) {
+      // init sort record
+      PDB_GsiSortRecord *sr = &sort_record_arr[sort_idx];
+      sr->name   = cv_name_from_symbol(symbol_arr[i]->kind, symbol_arr[i]->data);
+      sr->offset = buffer_cursor;
+      sort_idx += 1;
+
+      // serialize symbol
+      U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol_arr[i], task->symbol_align);
+      buffer_cursor += serial_size;
+    }
+
+    Assert(sort_idx == bucket.count);
+    Assert(buffer_cursor == buffer_size);
+  }
+
+  scratch_end(scratch);
 }
 
 internal PDB_GsiBuildResult
