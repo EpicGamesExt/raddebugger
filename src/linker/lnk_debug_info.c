@@ -829,65 +829,47 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
 
   LNK_LeafRef *bucket = 0;
   for EachIndex(leaf_idx, debug_t->count) {
-    // read leaf header
-    CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-
-    // read leaf kind
-    CV_LeafKind kind = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind));
-
     // alloc new bucket and assign type ref
     if (bucket == 0) { bucket = push_array_no_zero(arena, LNK_LeafRef, 1); }
+
+    // fill bucket
     *bucket = (LNK_LeafRef){ .obj_idx = obj_idx, .leaf_idx = leaf_idx };
 
-    CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);
-    LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];
+    B32 is_inserted_or_updated = 1;
 
-    {
-      B32 is_inserted_or_updated = 0;
-      U64 best_idx               = debug_h->v[leaf_idx] % leaf_ht->cap;
-      U64 idx                    = best_idx;
-      U64 loop_count = 0;
-      do {
-        retry:;
-        LNK_LeafRef *curr_bucket = leaf_ht->bucket_arr[idx];
-        if (curr_bucket == 0) {
-          LNK_LeafRef *compare_bucket = ins_atomic_ptr_eval_cond_assign(&leaf_ht->bucket_arr[idx], bucket, curr_bucket);
-          if (compare_bucket == curr_bucket) {
-            // success, bucket was inserted
-            bucket = 0;
-            is_inserted_or_updated = 1;
-            break;
-          }
-          // another thread took the bucket...
-          goto retry;
-        } else if (lnk_match_leaf_ref(task->input, *curr_bucket, *bucket)) {
-          int leaf_cmp = lnk_leaf_ref_compare(*curr_bucket, *bucket);
+    CV_LeafHeader      *header      = cv_debug_t_get_leaf_header(debug_t, leaf_idx);             // leaf index -> leaf header
+    CV_LeafKind         kind        = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind)); // leaf header -> leaf kind
+    CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
+    LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];                           // type stream -> hash table
+    U64                 best_idx    = debug_h->v[leaf_idx] % leaf_ht->cap;                       // leaf ref -> hash -> bucket index
+    U64                 idx         = best_idx;
+    do {
+      // load leaf ref
+      LNK_LeafRef *curr = ins_atomic_ptr_eval(&leaf_ht->bucket_arr[idx]);
 
-          if (leaf_cmp <= 0) {
-            // are we inserting bucket that was already inserterd?
-            Assert(leaf_cmp < 0);
-            is_inserted_or_updated = 1;
-            // don't need to update, more recent leaf is in the bucket
-            break;
-          }
-
-          LNK_LeafRef *compare_bucket = ins_atomic_ptr_eval_cond_assign(&leaf_ht->bucket_arr[idx], bucket, curr_bucket);
-          if (compare_bucket == curr_bucket) {
-            // reuse replaced bucket
-            bucket = compare_bucket;
-            is_inserted_or_updated = 1;
-            break;
-          }
-
-          // another thread took the bucket...
-          goto retry;
+      while (curr == 0 || lnk_match_leaf_ref(task->input, *curr, *bucket)) {
+        // exit if leaf ref is not recent
+        if (curr != 0 && lnk_leaf_ref_compare(*bucket, *curr) >= 0) {
+          goto exit;
         }
 
-        // advance
-        idx = ((idx + 1) == leaf_ht->cap ? 0 : (idx + 1));
-      } while (idx != best_idx);
-      Assert(is_inserted_or_updated);
-    }
+        // try to update the bucket
+        LNK_LeafRef *cmp = ins_atomic_ptr_eval_cond_assign(&leaf_ht->bucket_arr[idx], bucket, curr);
+        if (cmp == curr) {
+          bucket = 0;
+          goto exit;
+        }
+
+        // another thread updated the bucket -- retry
+        curr = cmp;
+      }
+
+      // advance to next bucket
+      idx = ((idx + 1) == leaf_ht->cap ? 0 : (idx + 1));
+    } while (idx != best_idx);
+    is_inserted_or_updated = 0;
+    exit:;
+    Assert(is_inserted_or_updated);
   }
 
   ProfEnd();
@@ -1178,6 +1160,11 @@ lnk_fixup_cv_type_indices(LNK_MergeTypes *ctx, U32 obj_idx, String8 data, CV_Typ
                                                final_leaf,
                                                final_hash);
       }
+#if BUILD_DEBUG
+      else {
+        lnk_error_obj(LNK_Error_InvalidTypeIndex, ctx->input->obj_arr[obj_idx], "no itype 0x%x", ti);
+      }
+#endif
     } else {
       Assert(0 && "invalid type index");
     }
