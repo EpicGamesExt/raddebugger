@@ -4759,6 +4759,36 @@ T_BeginTest(patch_cv_symbol_tree)
 T_EndTest;
 
 #if 0
+T_BeginTest(pdb_determ_test)
+{
+  T_Ok(os_copy_file_path(t_make_file_path(scratch.arena, str8_lit("torture_main.obj")), str8_lit("torture_main.obj")));
+
+  t_delete_file(str8_lit("a.pdb"));
+  t_delete_file(str8_lit("b.pdb"));
+
+  String8 refs_path = t_make_file_path(scratch.arena, str8_lit("b.types"));
+  t_invoke_linkerf("torture_main.obj /debug:full /rad_time_stamp:0 /rad_workers:1 /rad_store_types:%S /out:a.exe", refs_path);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(os_move_file_path(t_make_file_path(scratch.arena, str8_lit("b.pdb")), t_make_file_path(scratch.arena, str8_lit("a.pdb"))));
+  String8 b = t_read_file(scratch.arena, str8_lit("b.pdb"));
+
+  for EachIndex(i, 50) {
+    Temp temp = temp_begin(scratch.arena);
+
+    t_delete_file(str8_lit("a.pdb"));
+    t_invoke_linkerf("torture_main.obj /debug:full /rad_time_stamp:0 /out:a.exe");
+    T_Ok(g_last_exit_code == 0);
+
+    String8 a = t_read_file(temp.arena, str8_lit("a.pdb"));
+    T_Ok(str8_match(a, b, 0));
+
+    temp_end(temp);
+  }
+}
+T_EndTest;
+#endif
+
+#if 0
 
 T_BeginTest(fold_two_funcs)
 {

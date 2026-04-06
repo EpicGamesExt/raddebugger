@@ -83,6 +83,7 @@ return result_;                    \
 internal B32 t_write_file_list(String8 name, String8List data);
 internal B32 t_write_file(String8 name, String8 data);
 internal String8 t_read_file(Arena *arena, String8 name);
+internal B32     t_delete_file(String8 name);
 internal String8 t_make_file_path(Arena *arena, String8 name);
 
 // test runner

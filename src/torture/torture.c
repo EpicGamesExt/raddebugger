@@ -60,6 +60,16 @@ t_read_file(Arena *arena, String8 name)
   return data;
 }
 
+internal B32
+t_delete_file(String8 name)
+{
+  Temp scratch = scratch_begin(0,0);
+  String8 path = t_make_file_path(scratch.arena, name);
+  B32 is_deleted = os_delete_file_at_path(path);
+  scratch_end(scratch);
+  return is_deleted;
+}
+
 internal String8
 t_make_file_path(Arena *arena, String8 name)
 {
