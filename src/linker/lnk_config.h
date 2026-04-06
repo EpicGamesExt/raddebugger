@@ -85,6 +85,7 @@ typedef enum
   LNK_CmdSwitch_Time,
   LNK_CmdSwitch_TsAware,
   LNK_CmdSwitch_Version,
+  LNK_CmdSwitch_WholeArchive,
 
   LNK_CmdSwitch_Rad_Age,
   LNK_CmdSwitch_Rad_AltPchDir,
@@ -350,6 +351,8 @@ typedef struct LNK_Config
   HashTable                  *delay_load_ht;
   HashTable                  *disallow_lib_ht;
   HashTable                  *fail_if_mismatch_ht;
+  HashTable                  *whole_archive_ht;
+  B32                         whole_archive_all;
   U64                         unresolved_symbol_limit;
   U64                         unresolved_symbol_ref_limit;
   LNK_SwitchState             map_lines_for_unresolved_symbols;

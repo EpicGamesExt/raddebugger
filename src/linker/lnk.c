@@ -1603,14 +1603,34 @@ lnk_link_inputs(TP_Context      *tp,
         lib_member_infos = push_array(link->arena, LNK_LibMemberInfo, lib->member_count);
         hash_table_push_raw_raw(link->arena, link->lib_member_infos_ht, lib, lib_member_infos);
       }
-      
+
+      B32 link_whole_archive = config->whole_archive_all;
+      if ( ! link_whole_archive) {
+        String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(lib->path));
+        link_whole_archive = hash_table_search_path(config->whole_archive_ht, lib_name) != 0;
+      }
+
       ProfBeginV("Search %S", str8_skip_last_slash(lib->path));
       do {
         lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
-        // search symbols in lib
-        MemoryZeroTyped(member_ref_lists, tp->worker_count);
-        tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &(LNK_SearchLibTask){ .search_anti_deps = search_anti_deps, .lib = lib, .symtab = symtab, .lib_member_infos = lib_member_infos, .member_ref_lists = member_ref_lists });
+        if (link_whole_archive) {
+          LNK_LibMemberRef *member_refs = push_array(scratch.arena, LNK_LibMemberRef, lib->member_count);
+          for EachIndex(member_idx, lib->member_count) {
+            static LNK_Symbol *null_symbol = 0;
+            if (null_symbol == 0) {
+              null_symbol = push_array(inputer->arena, LNK_Symbol, 1);
+              null_symbol->refs  = push_array(inputer->arena, LNK_ObjSymbolRefNode, 1);
+              null_symbol->refs->v.obj = &link->objs.first->data;
+            }
+            lnk_queue_lib_member(scratch.arena, &member_ref_lists[0], null_symbol, lib, lib_member_infos, member_idx);
+          }
+        } else {
+          // search symbols in lib
+          MemoryZeroTyped(member_ref_lists, tp->worker_count);
+          LNK_SearchLibTask search_task = { .search_anti_deps = search_anti_deps, .lib = lib, .symtab = symtab, .lib_member_infos = lib_member_infos, .member_ref_lists = member_ref_lists };
+          tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &search_task);
+        }
 
         LNK_LibMemberRefList queued_members = {0};
         lnk_lib_member_ref_list_concat_in_place_array(&queued_members, member_ref_lists, tp->worker_count);
@@ -1646,7 +1666,7 @@ lnk_link_inputs(TP_Context      *tp,
             temp_end(temp);
           }
         }
-
+        
         // push inputs for lib member refs
         for EachIndex(i, queued_members.count) {
           LNK_LibMemberRef *member_ref = member_refs[i];
