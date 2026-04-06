@@ -1072,10 +1072,6 @@ os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
   DWORD sleep_ms = os_w32_sleep_ms_from_endt_us(endt_us);
   DWORD result = WaitForSingleObject(process, sleep_ms);
   B32 process_joined = (result == WAIT_OBJECT_0);
-  if(process_joined)
-  {
-    CloseHandle(process);
-  }
   if(process_joined && exit_code_out)
   {
     DWORD exit_code = 0;
@@ -1083,6 +1079,10 @@ os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
     {
       *exit_code_out = exit_code;
     }
+  }
+  if(process_joined)
+  {
+    CloseHandle(process);
   }
   return process_joined;
 }

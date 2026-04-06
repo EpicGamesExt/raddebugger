@@ -209,8 +209,6 @@ t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, S
     } else {
       os_process_kill(process_handle);
     }
-
-    os_process_detach(process_handle);
   }
 
   scratch_end(scratch);
