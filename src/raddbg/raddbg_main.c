@@ -5,18 +5,18 @@
 //~ rjf: post-0.9.20 TODO notes
 //
 //- fabian complaints / reports
-// [ ] eval: pointer casts of register space should promote to process space
+// [x] `foo, x` needs to correctly match `hex(foo)`, e.g. in application to expansions
+// [ ] broadly, need to complete memory view & fix issues
+//  [ ] dumb panel click-through thing
+//  [ ] correct type interpretations; togglable interpretations
+//  [ ] make address editable; specialized version of the cursor address editor in tab right-click menu
+// [x] eval: pointer casts of register space should promote to process space
 // [ ] simplified default layout
 // [ ] signify empty watch window "expression" slot more as a text field?
 // [ ] ambiguous parsing cases - need to re-introduce identifier resolution into eval parse. (foo *)&bar
 // [ ] more control over string visualization; specifically, when *not* to do it, even when using e.g. char *s
 // [ ] broadly, view discoverability / docs
 // [ ] memory view deserves larger spot, in default layout
-// [ ] broadly, need to complete memory view & fix issues
-//  [ ] dumb panel click-through thing
-//  [ ] correct type interpretations; togglable interpretations
-//  [ ] make address editable; specialized version of the cursor address editor in tab right-click menu
-// [ ] `foo, x` needs to correctly match `hex(foo)`, e.g. in application to expansions
 // [ ] sign bits should not display on unsigned integers?
 // [ ] fix for-loop stepping oddities, likely single-line for-loop stepping
 // [ ] source/disasm ctx menu should include options for e.g. "go to selected thread"

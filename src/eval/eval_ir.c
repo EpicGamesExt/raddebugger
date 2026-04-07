@@ -2404,9 +2404,13 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             if(str8_match(chained_expr->string, shorthand_lens_pair_table[shorthand_idx].shorthand, 0))
             {
               String8 full_name = shorthand_lens_pair_table[shorthand_idx].full_name;
+              E_Expr *lens_spec_expr = e_string2expr_map_lookup(e_ir_ctx->macro_map, full_name);
+              E_TypeKey lens_spec_type_key = lens_spec_expr->type_key;
+              E_Type *lens_spec_type = e_type_from_key(lens_spec_type_key);
               result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
                                                 .direct_key = result.type_key,
-                                                .name       = full_name);
+                                                .name       = full_name,
+                                                .flags      = lens_spec_type->flags);
               matches_shorthand = 1;
               break;
             }
