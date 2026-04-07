@@ -4923,31 +4923,40 @@ T_BeginTest(infer_asan)
 T_EndTest;
 #endif
 
-#if 0
+#if OS_WINDOWS
 T_BeginTest(determ_test)
 {
-  T_Ok(os_copy_file_path(t_make_file_path(scratch.arena, str8_lit("torture_main.obj")), str8_lit("torture_main.obj")));
+  // compile the test target (torture)
+  String8 cl_line = str8f(scratch.arena, "/fsanitize=address /c /Z7 /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
+  String8 cl_out = {0};
+  t_invoke_(t_cl_path(), cl_line, max_U64, scratch.arena, &cl_out);
+  T_Ok(g_last_exit_code == 0);
 
+  // clean up
   t_delete_file(str8_lit("a.exe"));
   t_delete_file(str8_lit("b.exe"));
   t_delete_file(str8_lit("a.pdb"));
   t_delete_file(str8_lit("b.pdb"));
 
+  // single-threaded link
   String8 refs_path = t_make_file_path(scratch.arena, str8_lit("b.types"));
-  t_invoke_linkerf("torture_main.obj /debug:full /rad_time_stamp:0 /rad_workers:1 /rad_store_types:%S /out:a.exe", refs_path);
+  t_invoke_linkerf("test.obj /debug:full /rad_time_stamp:0 /rad_workers:1 /rad_store_types:%S /out:a.exe", refs_path);
   T_Ok(g_last_exit_code == 0);
 
+  // rename a -> b
   T_Ok(os_move_file_path(t_make_file_path(scratch.arena, str8_lit("b.exe")), t_make_file_path(scratch.arena, str8_lit("a.exe"))));
   T_Ok(os_move_file_path(t_make_file_path(scratch.arena, str8_lit("b.pdb")), t_make_file_path(scratch.arena, str8_lit("a.pdb"))));
 
+  // read b
   String8 b_exe = t_read_file(scratch.arena, str8_lit("b.exe"));
   String8 b_pdb = t_read_file(scratch.arena, str8_lit("b.pdb"));
 
+  // multi-threaded links
   for EachIndex(i, 50) {
     Temp temp = temp_begin(scratch.arena);
 
     t_delete_file(str8_lit("a.pdb"));
-    t_invoke_linkerf("torture_main.obj /debug:full /rad_time_stamp:0 /out:a.exe");
+    t_invoke_linkerf("test.obj /debug:full /rad_time_stamp:0 /out:a.exe");
     T_Ok(g_last_exit_code == 0);
 
     String8 a_exe = t_read_file(temp.arena, str8_lit("a.exe"));

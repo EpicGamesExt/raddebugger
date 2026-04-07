@@ -155,6 +155,22 @@ t_radlink_path(void)
   return path;
 }
 
+internal String8
+t_src_path(void)
+{
+  local_persist U8 path[4096] = {0};
+  if (path[0] == 0) {
+    Temp scratch = scratch_begin(0, 0);
+    String8 cwd = os_get_current_path(scratch.arena);
+    cwd = str8_chop_last_slash(cwd);
+    cwd = str8f(scratch.arena, "%S/src", cwd);
+    MemoryCopyStr8(path, cwd);
+    path[cwd.size] = 0;
+    scratch_end(scratch);
+  }
+  return str8_cstring_capped(path, path+sizeof(path));
+}
+
 internal B32
 t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, String8 *output_out)
 {

@@ -94,7 +94,9 @@ internal T_RunResult t_run(T_Run run);
 internal String8 t_radbin_path(void);
 internal String8 t_cl_path(void);
 internal String8 t_radlink_path(void);
+internal String8 t_src_path(void);
 
 internal B32 t_invoke(String8 exe, String8 cmdline, U64 timeout);
 
+#define t_invoke_cl(f, ...) t_invoke_(t_cl_path(), str8f(scratch.arena, f, ## __VA_ARGS__), max_U64, 0, 0)
 
