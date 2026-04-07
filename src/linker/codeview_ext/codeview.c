@@ -289,7 +289,7 @@ cv_symbol_match(CV_Symbol a, CV_Symbol b)
   CV_SymbolHeader *b_ptr = (CV_SymbolHeader *)cv_ptr_from_symbol(b);
 
   if (a_ptr->size == b_ptr->size) {
-    is_match = MemoryMatch(a_ptr + sizeof(CV_SymSize), b_ptr + sizeof(CV_SymSize), a_ptr->size);
+    is_match = MemoryMatch((U8*)a_ptr + sizeof(CV_SymSize), (U8*)b_ptr + sizeof(CV_SymSize), a_ptr->size);
   }
 
   return is_match;
