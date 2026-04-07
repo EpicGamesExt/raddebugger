@@ -4892,6 +4892,8 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
     ctx->thread_arch         = thread->arch;
     ctx->thread_reg_space = e_space_make(CTRL_EvalSpaceKind_Entity);
     ctx->thread_reg_space.u64_0 = (U64)thread;
+    ctx->thread_process_space = e_space_make(CTRL_EvalSpaceKind_Entity);
+    ctx->thread_process_space.u64_0 = (U64)process;
     
     //- rjf: fill debug infos
     ctx->dbg_infos        = eval_dbg_infos;

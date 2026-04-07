@@ -768,6 +768,7 @@ struct E_BaseCtx
   U64 thread_ip_vaddr;
   U64 thread_ip_voff;
   E_Space thread_reg_space;
+  E_Space thread_process_space;
   Arch thread_arch;
   U64 thread_unwind_count;
   

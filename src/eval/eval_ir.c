@@ -305,6 +305,10 @@ e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_Type
   {
     result = e_irtree_mem_read_type(arena, tree, type_key);
   }
+  if(from_mode == E_Mode_Offset && e_space_match(tree->space, e_base_ctx->thread_reg_space))
+  {
+    result = e_irtree_set_space(arena, e_base_ctx->thread_process_space, result);
+  }
   if(e_type_kind_from_key(type_key) == E_TypeKind_Bitfield)
   {
     E_Type *type = e_type_from_key(type_key);
@@ -2651,6 +2655,7 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space
       {
         e_append_oplist_from_irtree(arena, child, current_space, out);
       }
+      e_oplist_push_set_space(arena, out, space);
     }break;
     
     case RDI_EvalOp_Cond:

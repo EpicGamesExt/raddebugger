@@ -11121,6 +11121,7 @@ rd_frame(void)
       ctx->thread_ip_vaddr     = rip_vaddr;
       ctx->thread_ip_voff      = rip_voff;
       ctx->thread_reg_space    = rd_eval_space_from_ctrl_entity(thread, CTRL_EvalSpaceKind_Entity);
+      ctx->thread_process_space= rd_eval_space_from_ctrl_entity(process, CTRL_EvalSpaceKind_Entity);
       ctx->thread_arch         = thread->arch;
       ctx->thread_unwind_count = unwind_count;
       
