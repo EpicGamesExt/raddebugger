@@ -16,10 +16,8 @@ typedef struct LNK_Obj
   B8                       exclude_from_debug_info;
   U32Node                **associated_sections;
   LNK_SymbolHashTrie     **symlinks;
-
   struct LNK_LibMemberRef *link_member;
-
-  struct LNK_ObjNode *node;
+  struct LNK_ObjNode      *self;
 } LNK_Obj;
 
 typedef struct LNK_ObjNode

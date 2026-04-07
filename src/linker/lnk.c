@@ -1350,7 +1350,7 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
       AssertAlways(include_obj_count == 1);
 
       if (obj_with_includes) {
-        DLLInsert(link->objs.first, link->objs.last, obj_with_includes->node, include_obj);
+        DLLInsert(link->objs.first, link->objs.last, obj_with_includes->self, include_obj);
         link->objs.count += 1;
       } else {
         lnk_obj_list_push_node(&link->objs, include_obj);
@@ -1579,6 +1579,40 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
   }
 }
 
+internal LNK_Lib *
+lnk_find_first_crt_lib(LNK_Config *config, LNK_Inputer *inputer)
+{
+  Temp scratch = scratch_begin(0, 0);
+
+  LNK_Lib *result = 0;
+
+  String8 crt_lib_names[] = {
+    str8_lit("msvcrt"),
+    str8_lit("msvcrtd"),
+    str8_lit("libcmt"),
+    str8_lit("libcmtd"),
+  };
+
+  for EachNode(n, LNK_Input, inputer->libs.first) {
+    String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(n->path));
+    for EachElement(i, crt_lib_names) {
+      if (str8_match(lib_name, crt_lib_names[i], StringMatchFlag_CaseInsensitive)) {
+        if (result == 0) {
+          result = hash_table_search_path_raw(inputer->libs_ht, n->path);
+          break;
+        } else {
+          LNK_Lib *lib = hash_table_search_path_raw(inputer->libs_ht, n->path);
+          result = lib->input_idx < result->input_idx ? lib : result;
+          break;
+        }
+      }
+    }
+  }
+
+  scratch_end(scratch);
+  return result;
+}
+
 internal void
 lnk_link_inputs(TP_Context      *tp,
                 TP_Arena         *arena,
@@ -1598,6 +1632,57 @@ lnk_link_inputs(TP_Context      *tp,
     for EachNode(lib_n, LNK_LibNode, link->libs.first) {
       LNK_Lib *lib = &lib_n->data;
 
+      if (config->machine != COFF_MachineType_Unknown) {
+        if (config->infer_asan_libs == LNK_SwitchState_Yes) {
+          if ( ! link->asan_libs_resolved) {
+            LNK_Lib *crt_lib = lnk_find_first_crt_lib(config, inputer);
+            if (crt_lib != 0) {
+              String8 crt_lib_name = str8_chop_last_dot(str8_skip_last_slash(crt_lib->path));
+
+              String8 arch_name = {0};
+              if (config->machine == COFF_MachineType_X64) {
+                arch_name = str8_lit("x86_64");
+              } else if (config->machine == COFF_MachineType_X86) {
+                arch_name = str8_lit("i386");
+              }
+
+              if (arch_name.size) {                
+                B32 link_vc_libs = lnk_symbol_table_searchf(symtab, "__you_must_link_with_VCAsan_lib")  != 0 ||
+                                   lnk_symbol_table_searchf(symtab, "___you_must_link_with_VCAsan_lib") != 0;
+                if (str8_match(crt_lib_name, str8_lit("msvcrt"), StringMatchFlag_CaseInsensitive) || str8_match(crt_lib_name, str8_lit("msvcrtd"), StringMatchFlag_CaseInsensitive)) {
+                  String8 dynamic_lib_name = str8f(inputer->arena, "clang_rt.asan_dynamic-%S.lib", arch_name);
+                  String8 thunk_lib_name   = str8f(inputer->arena, "clang_rt.asan_static_runtime_thunk-%S.lib", arch_name);
+                  lnk_whole_archive(config, thunk_lib_name);
+                  lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, dynamic_lib_name);
+                  lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, thunk_lib_name);
+                  if (link_vc_libs) {
+                    if (str8_match(crt_lib_name, str8_lit("msvcrtd"), StringMatchFlag_CaseInsensitive)) {
+                      lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, str8_lit("libvcasand.lib"));
+                    } else {
+                      lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, str8_lit("libvcasan.lib"));
+                    }
+                  }
+                } else if (str8_match(crt_lib_name, str8_lit("libcmt"), StringMatchFlag_CaseInsensitive) || str8_match(crt_lib_name, str8_lit("libcmtd"), StringMatchFlag_CaseInsensitive)) {
+                  String8 dynamic_lib_name = str8f(inputer->arena, "clang_rt.asan_dynamic-%S.lib", arch_name);
+                  String8 thunk_lib_name   = str8f(inputer->arena, "clang_rt.asan_dynamic_runtime_thunk-%S.lib", arch_name);
+                  lnk_whole_archive(config, thunk_lib_name);
+                  lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, dynamic_lib_name);
+                  lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, thunk_lib_name);
+                  if (link_vc_libs) {
+                    if (str8_match(crt_lib_name, str8_lit("libcmtd"), StringMatchFlag_CaseInsensitive)) {
+                      lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, str8_lit("vcasand.lib"));
+                    } else {
+                      lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, str8_lit("vcasan.lib"));
+                    }
+                  }
+                }
+                link->asan_libs_resolved = 1;
+              }
+            }
+          }
+        }
+      }
+
       LNK_LibMemberInfo *lib_member_infos = hash_table_search_raw_raw(link->lib_member_infos_ht, lib);
       if (lib_member_infos == 0) {
         lib_member_infos = push_array(link->arena, LNK_LibMemberInfo, lib->member_count);
@@ -1615,15 +1700,15 @@ lnk_link_inputs(TP_Context      *tp,
         lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
         if (link_whole_archive) {
+          local_persist LNK_Symbol *null_symbol = 0;
+          if (null_symbol == 0) {
+            null_symbol              = push_array(inputer->arena, LNK_Symbol, 1);
+            null_symbol->refs        = push_array(inputer->arena, LNK_ObjSymbolRefNode, 1);
+            null_symbol->refs->v.obj = &link->objs.first->data;
+          }
           LNK_LibMemberRef *member_refs = push_array(scratch.arena, LNK_LibMemberRef, lib->member_count);
           for EachIndex(member_idx, lib->member_count) {
-            static LNK_Symbol *null_symbol = 0;
-            if (null_symbol == 0) {
-              null_symbol = push_array(inputer->arena, LNK_Symbol, 1);
-              null_symbol->refs  = push_array(inputer->arena, LNK_ObjSymbolRefNode, 1);
-              null_symbol->refs->v.obj = &link->objs.first->data;
-            }
-            lnk_queue_lib_member(scratch.arena, &member_ref_lists[0], null_symbol, lib, lib_member_infos, member_idx);
+            lnk_queue_lib_member(arena->v[0], &member_ref_lists[0], null_symbol, lib, lib_member_infos, member_idx);
           }
         } else {
           // search symbols in lib

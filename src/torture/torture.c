@@ -120,6 +120,24 @@ t_radbin_path(void)
 }
 
 internal String8
+t_cl_path(void)
+{
+  local_persist String8 path = {0};
+  if (path.size == 0) {
+    local_persist U8 buffer[4096];
+    ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
+    Arena *arena = arena_alloc_(&params);
+#if OS_WINDOWS
+    path = str8_lit("cl.exe");
+#else
+    path = str8_lit("cl");
+#endif
+    AssertAlways(path.size);
+  }
+  return path;
+}
+
+internal String8
 t_radlink_path(void)
 {
   local_persist String8 path = {0};

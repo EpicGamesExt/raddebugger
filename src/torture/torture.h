@@ -91,6 +91,10 @@ internal void        t_run_caller(void *raw_ctx);
 internal void        t_run_fail_handler(void *raw_ctx);
 internal T_RunResult t_run(T_Run run);
 
+internal String8 t_radbin_path(void);
+internal String8 t_cl_path(void);
+internal String8 t_radlink_path(void);
+
 internal B32 t_invoke(String8 exe, String8 cmdline, U64 timeout);
 
 

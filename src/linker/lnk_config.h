@@ -293,6 +293,7 @@ typedef struct LNK_Config
   U64                         function_pad_min;
   U64                        *manifest_resource_id;
   B32                         no_default_libs;
+  LNK_SwitchState             infer_asan_libs;
   Version                     link_ver;
   Version                     os_ver;
   Version                     image_ver;
@@ -549,6 +550,8 @@ internal void    lnk_push_disallow_lib(LNK_Config *config, String8 path);
 internal B32     lnk_is_lib_disallowed(LNK_Config *config, String8 path);
 
 internal void lnk_include_symbol(LNK_Config *config, String8 name, struct LNK_Obj *obj);
+
+internal void lnk_whole_archive(LNK_Config *config, String8 lib_name);
 
 // --- Config ------------------------------------------------------------------
 

@@ -37,7 +37,6 @@ typedef struct LNK_Input
   B32               has_disk_read_failed;
   B32               exclude_from_debug_info;
   LNK_LibMemberRef *link_member;
-  void             *loaded_input;
 
   struct LNK_Input *next;
 } LNK_Input;
@@ -104,6 +103,7 @@ typedef struct LNK_Link
   HashTable               *lib_member_infos_ht;
   LNK_LibMemberRefList     imports;
   B32                      try_to_resolve_entry_point;
+  B32                      asan_libs_resolved;
 } LNK_Link;
 
 typedef struct LNK_LinkResult

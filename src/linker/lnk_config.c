@@ -975,6 +975,15 @@ lnk_include_symbol(LNK_Config *config, String8 name, LNK_Obj *obj)
 }
 
 internal void
+lnk_whole_archive(LNK_Config *config, String8 lib_name)
+{
+  String8Node value = { .string = lib_name };
+  String8List value_strings = {0};
+  str8_list_push_node(&value_strings, &value);
+  lnk_apply_cmd_option_to_config(config, str8_lit("wholearchive"), value_strings, 0);
+}
+
+internal void
 lnk_print_build_info()
 {
   lnk_fprintf(stdout, "  Compiler: %s\n", COMPILER_STRING);
@@ -1441,6 +1450,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     for (String8Node *value_n = value_strings.first; value_n != 0; value_n = value_n->next) {
       lnk_include_symbol(config, value_n->string, obj);
     }
+  } break;
+
+  case LNK_CmdSwitch_InferAsanLibs: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->infer_asan_libs);
   } break;
 
   case LNK_CmdSwitch_LargeAddressAware: {

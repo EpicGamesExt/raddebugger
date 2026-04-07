@@ -336,7 +336,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->exclude_from_debug_info = input->exclude_from_debug_info;
   obj->hotpatch                = hotpatch;
   obj->associated_sections     = associated_sections;
-  obj->node                    = &task->objs[task_id];
+  obj->self                    = &task->objs[task_id];
   obj->link_member             = input->link_member;
 }
 

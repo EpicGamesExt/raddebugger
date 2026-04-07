@@ -4837,19 +4837,111 @@ T_BeginTest(whole_archive)
 }
 T_EndTest;
 
+#if OS_WINDOWS
+
+internal B32
+t_radlink_validate_asan_out(String8 obj_name)
+{
+  Temp scratch = scratch_begin(0,0);
+  B32 is_ok = 0;
+
+  t_invoke_(t_radlink_path(), str8f(scratch.arena, "%S /debug:full", obj_name), max_U64, 0, 0);
+  if (g_last_exit_code != 0) { goto exit; }
+
+  String8 exe_path = t_make_file_path(scratch.arena, str8f(scratch.arena, "%S.exe", str8_chop_last_dot(obj_name)));
+  String8 out = {0};
+  t_invoke_(exe_path, str8_zero(), max_U64, scratch.arena, &out);
+  if (g_last_exit_code == 0) {
+    goto exit;
+  }
+
+  String8 s = out;
+
+  String8 header = t_chop_line(&s);
+  if ( ! str8_match(header, str8_lit("================================================================="), 0)) {
+    goto exit;
+  }
+
+  String8 cause = t_chop_line(&s);
+  if ( str8_find_needle(cause, 0, str8_lit("AddressSanitizer: heap-use-after-free on address"), 0) >= cause.size) {
+    goto exit;
+  }
+
+  is_ok = 1;
+  exit:;
+  scratch_end(scratch);
+  return is_ok;
+}
+
+T_BeginTest(infer_asan)
+{
+  char *program = 
+    "#include <stdlib.h>\n"
+    " int main(void) {\n"
+    "int *foo = malloc(sizeof(*foo));\n"
+    "free(foo);\n"
+    "*foo = 1;\n"
+    "}\n"
+    ;
+
+  // /MD
+  {
+    T_Ok(t_write_file(str8_lit("main.c"), str8_cstring(program)));
+    String8 cl_output = {0};
+    t_invoke_(t_cl_path(), str8_lit("/MD /fsanitize=address /Z7 /c /Fo:main_md.obj main.c"), max_U64, scratch.arena, &cl_output);
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(t_radlink_validate_asan_out(str8_lit("main_md.obj")));
+  }
+
+  // /MDd
+  {
+    T_Ok(t_write_file(str8_lit("main.c"), str8_cstring(program)));
+    String8 cl_output = {0};
+    t_invoke_(t_cl_path(), str8_lit("/MDd /fsanitize=address /Z7 /c /Fo:main_mdd.obj main.c"), max_U64, scratch.arena, &cl_output);
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(t_radlink_validate_asan_out(str8_lit("main_mdd.obj")));
+  }
+
+  // /MT
+  {
+    T_Ok(t_write_file(str8_lit("main.c"), str8_cstring(program)));
+    String8 cl_output = {0};
+    t_invoke_(t_cl_path(), str8_lit("/MT /fsanitize=address /Z7 /c /Fo:main_mt.obj main.c"), max_U64, scratch.arena, &cl_output);
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(t_radlink_validate_asan_out(str8_lit("main_mt.obj")));
+  }
+
+  // /MTd
+  {
+    T_Ok(t_write_file(str8_lit("main.c"), str8_cstring(program)));
+    String8 cl_output = {0};
+    t_invoke_(t_cl_path(), str8_lit("/MT /fsanitize=address /Z7 /c /Fo:main_mtd.obj main.c"), max_U64, scratch.arena, &cl_output);
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(t_radlink_validate_asan_out(str8_lit("main_mtd.obj")));
+  }
+}
+T_EndTest;
+#endif
+
 #if 0
-T_BeginTest(pdb_determ_test)
+T_BeginTest(determ_test)
 {
   T_Ok(os_copy_file_path(t_make_file_path(scratch.arena, str8_lit("torture_main.obj")), str8_lit("torture_main.obj")));
 
+  t_delete_file(str8_lit("a.exe"));
+  t_delete_file(str8_lit("b.exe"));
   t_delete_file(str8_lit("a.pdb"));
   t_delete_file(str8_lit("b.pdb"));
 
   String8 refs_path = t_make_file_path(scratch.arena, str8_lit("b.types"));
   t_invoke_linkerf("torture_main.obj /debug:full /rad_time_stamp:0 /rad_workers:1 /rad_store_types:%S /out:a.exe", refs_path);
   T_Ok(g_last_exit_code == 0);
+
+  T_Ok(os_move_file_path(t_make_file_path(scratch.arena, str8_lit("b.exe")), t_make_file_path(scratch.arena, str8_lit("a.exe"))));
   T_Ok(os_move_file_path(t_make_file_path(scratch.arena, str8_lit("b.pdb")), t_make_file_path(scratch.arena, str8_lit("a.pdb"))));
-  String8 b = t_read_file(scratch.arena, str8_lit("b.pdb"));
+
+  String8 b_exe = t_read_file(scratch.arena, str8_lit("b.exe"));
+  String8 b_pdb = t_read_file(scratch.arena, str8_lit("b.pdb"));
 
   for EachIndex(i, 50) {
     Temp temp = temp_begin(scratch.arena);
@@ -4858,8 +4950,10 @@ T_BeginTest(pdb_determ_test)
     t_invoke_linkerf("torture_main.obj /debug:full /rad_time_stamp:0 /out:a.exe");
     T_Ok(g_last_exit_code == 0);
 
-    String8 a = t_read_file(temp.arena, str8_lit("a.pdb"));
-    T_Ok(str8_match(a, b, 0));
+    String8 a_exe = t_read_file(temp.arena, str8_lit("a.exe"));
+    String8 a_pdb = t_read_file(temp.arena, str8_lit("a.pdb"));
+    T_Ok(str8_match(a_exe, b_exe, 0));
+    T_Ok(str8_match(a_pdb, b_pdb, 0));
 
     temp_end(temp);
   }
