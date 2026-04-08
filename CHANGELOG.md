@@ -2,6 +2,16 @@
 
 ## Debugger Changes
 
+- Fixed the debugger incorrectly evaluating pointer casts of registers in
+  register space, rather than promoting them to process address space
+  evaluations. This fixes cases where expressions like `(int *)rax` were not
+  displaying correctly.
+- Fixed the debugger incorrectly requiring multiple step operations when source
+  lines mapped to multiple discontiguous ranges of instructions. This most
+  notably showed up with certain styles of `for`-loops, especially with Clang
+  and other non-C/C++ languages, and function prologues in non-C/C++ languages.
+- Fixed the debugger treating the `foo, x` fastpath for `hex(foo)` differently
+  than `hex(foo)`, in that the hexadecimal setting was not being inherited.
 - Fixed the debugger leaking debug info conversion process handles. This
   addresses cases where the debugger was preventing stale debug info from being
   updated, after a rebuild.

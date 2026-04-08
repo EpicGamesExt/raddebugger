@@ -345,7 +345,9 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   log_infof("ip_vaddr: 0x%I64x\n", ip_vaddr);
   log_infof("dbgi_key: {0x%I64x, 0x%I64x}\n", dbgi_key.u64[0], dbgi_key.u64[1]);
   
-  // rjf: ip => line vaddr range
+  // rjf: ip => line info
+  String8 file_path = {0};
+  S64 line_num = 0;
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = ctrl_voff_from_vaddr(module, ip_vaddr);
@@ -354,11 +356,25 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
     if(lines.first != 0)
     {
       line_voff_rng = lines.first->v.voff_range;
+      file_path = lines.first->v.file_path;
+      line_num = lines.first->v.pt.line;
       line_vaddr_rng = ctrl_vaddr_range_from_voff_range(module, line_voff_rng);
       log_infof("line: {%S:%I64i}\n", lines.first->v.file_path, lines.first->v.pt.line);
     }
     log_infof("voff_range: {0x%I64x, 0x%I64x}\n", line_voff_rng.min, line_voff_rng.max);
     log_infof("vaddr_range: {0x%I64x, 0x%I64x}\n", line_vaddr_rng.min, line_vaddr_rng.max);
+  }
+  
+  // rjf: gather other ranges on this same textual line, which we don't want to return to
+  Rng1U64List all_vaddr_ranges_on_same_line = {0};
+  {
+    D_LineList lines = d_lines_from_dbgi_key_file_path_line_num(scratch.arena, dbgi_key, file_path, line_num);
+    for EachNode(n, D_LineNode, lines.first)
+    {
+      Rng1U64 voff_range = n->v.voff_range;
+      Rng1U64 vaddr_range = ctrl_vaddr_range_from_voff_range(module, voff_range);
+      rng1u64_list_push(scratch.arena, &all_vaddr_ranges_on_same_line, vaddr_range);
+    }
   }
   
   // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
@@ -446,6 +462,16 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
         add = 0;
       }
       
+      // rjf: omit if this jump stays inside of any range on this same textual line
+      for EachNode(n, Rng1U64Node, all_vaddr_ranges_on_same_line.first)
+      {
+        if(contains_1u64(n->v, point->jump_dest_vaddr))
+        {
+          add = 0;
+          break;
+        }
+      }
+      
       // rjf: trap @ destination, if we can - we can avoid a single-step this way.
       if(point->jump_dest_vaddr != 0)
       {
@@ -475,11 +501,28 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
     }
   }
   
-  // rjf: push trap for natural linear flow
+  // rjf: push traps for natural linear flow
   if(good_line_info && good_machine_code)
   {
-    CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, line_vaddr_rng.max};
-    ctrl_trap_list_push(arena, &result.traps, &trap);
+    U64 line_opl_vaddr = line_vaddr_rng.max;
+    for EachNode(n, Rng1U64Node, all_vaddr_ranges_on_same_line.first)
+    {
+      U64 opl = n->v.max;
+      B32 opl_in_line = 0;
+      for EachNode(n2, Rng1U64Node, all_vaddr_ranges_on_same_line.first)
+      {
+        if(n != n2 && opl == n2->v.min)
+        {
+          opl_in_line = 1;
+          break;
+        }
+      }
+      if(!opl_in_line)
+      {
+        CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, opl};
+        ctrl_trap_list_push(arena, &result.traps, &trap);
+      }
+    }
   }
   
   // rjf: store goodness
@@ -513,7 +556,9 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ip_vaddr);
   DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
   
-  // rjf: ip => line vaddr range
+  // rjf: ip => line info
+  String8 file_path = {0};
+  S64 line_num = 0;
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = ctrl_voff_from_vaddr(module, ip_vaddr);
@@ -522,7 +567,24 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
     if(lines.first != 0)
     {
       line_voff_rng = lines.first->v.voff_range;
+      file_path = lines.first->v.file_path;
+      line_num = lines.first->v.pt.line;
       line_vaddr_rng = ctrl_vaddr_range_from_voff_range(module, line_voff_rng);
+      log_infof("line: {%S:%I64i}\n", lines.first->v.file_path, lines.first->v.pt.line);
+    }
+    log_infof("voff_range: {0x%I64x, 0x%I64x}\n", line_voff_rng.min, line_voff_rng.max);
+    log_infof("vaddr_range: {0x%I64x, 0x%I64x}\n", line_vaddr_rng.min, line_vaddr_rng.max);
+  }
+  
+  // rjf: gather other ranges on this same textual line, which we don't want to return to
+  Rng1U64List all_vaddr_ranges_on_same_line = {0};
+  {
+    D_LineList lines = d_lines_from_dbgi_key_file_path_line_num(scratch.arena, dbgi_key, file_path, line_num);
+    for EachNode(n, D_LineNode, lines.first)
+    {
+      Rng1U64 voff_range = n->v.voff_range;
+      Rng1U64 vaddr_range = ctrl_vaddr_range_from_voff_range(module, voff_range);
+      rng1u64_list_push(scratch.arena, &all_vaddr_ranges_on_same_line, vaddr_range);
     }
   }
   
@@ -616,6 +678,16 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
         add = 0;
       }
       
+      // rjf: omit if this jump stays inside of any range on this same textual line
+      for EachNode(n, Rng1U64Node, all_vaddr_ranges_on_same_line.first)
+      {
+        if(contains_1u64(n->v, point->jump_dest_vaddr))
+        {
+          add = 0;
+          break;
+        }
+      }
+      
       // rjf: trap @ destination, if we can - we can avoid a single-step this way.
       if(point->jump_dest_vaddr != 0)
       {
@@ -638,11 +710,28 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
     }
   }
   
-  // rjf: push trap for natural linear flow
+  // rjf: push traps for natural linear flow
   if(good_line_info && good_machine_code)
   {
-    CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, line_vaddr_rng.max};
-    ctrl_trap_list_push(arena, &result.traps, &trap);
+    U64 line_opl_vaddr = line_vaddr_rng.max;
+    for EachNode(n, Rng1U64Node, all_vaddr_ranges_on_same_line.first)
+    {
+      U64 opl = n->v.max;
+      B32 opl_in_line = 0;
+      for EachNode(n2, Rng1U64Node, all_vaddr_ranges_on_same_line.first)
+      {
+        if(n != n2 && opl == n2->v.min)
+        {
+          opl_in_line = 1;
+          break;
+        }
+      }
+      if(!opl_in_line)
+      {
+        CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, opl};
+        ctrl_trap_list_push(arena, &result.traps, &trap);
+      }
+    }
   }
   
   // rjf: store goodness
@@ -987,11 +1076,11 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
   if(!d_ctrl_targets_running())
   {
     Temp scratch = scratch_begin(0, 0);
-
+    
     //- rjf: unpack module info
     CTRL_Entity *module     = ctrl_module_from_process_vaddr(process, rip_vaddr);
     U64          addr_size  = byte_size_from_arch(process->arch);
-
+    
     switch(process->tls_model)
     {
       case CTRL_TlsModel_Null: {}break;
@@ -1006,7 +1095,7 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
         {
           U64 tls_array_vaddr = 0;
           MemoryCopyStr8(&tls_array_vaddr, tls_array_vaddr_data);
-
+          
           // read thread local storage pointer (array of TLS pointers, one per module)
           U64 tls_ptr_vaddr = tls_array_vaddr + module->tls_index * addr_size;
           CTRL_ProcessMemorySlice result_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(tls_ptr_vaddr, tls_ptr_vaddr + addr_size), 0, 0);
@@ -1031,7 +1120,7 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
           {
             U64 dtv_pointer = 0;
             MemoryCopyStr8(&dtv_pointer, dtv_pointer_data);
-
+            
             // verify that TLS block was allocated
             U64 tls_dtv_unallocated = addr_size == 4 ? max_U32 : max_U64;
             if(dtv_pointer != tls_dtv_unallocated)
@@ -1043,7 +1132,7 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
       }break;
       default: {InvalidPath;}break;
     }
-
+    
     scratch_end(scratch);
   }
   ProfEnd();
