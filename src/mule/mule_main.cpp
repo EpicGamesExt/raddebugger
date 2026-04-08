@@ -431,6 +431,7 @@ type_coverage_eval_tests(void)
     char data[4];
   };
   SomeDataStructured *some_data = (SomeDataStructured *)&some_data_with_a_string[0];
+  char *string_ptr = &string[0];
   
   const char *const_string = "Hello, World!";
   const char const_string_array[] = "Hello, World!";

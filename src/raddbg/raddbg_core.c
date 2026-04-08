@@ -1237,10 +1237,18 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
         commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
       }
       
+      //- rjf: determine if commit string is quoted
+      B32 is_quoted = 0;
+      if(string.size >= 1 && string.str[0] == '"')
+      {
+        string = str8_skip(string, 1);
+        is_quoted = 1;
+      }
+      
       //- rjf: pointer or array to characters/integers? -> try to treat
       // new value string as textual data
       if(!got_commit_data &&
-         ((type_kind == E_TypeKind_Ptr || type_kind == E_TypeKind_Array) &&
+         (((is_quoted && type_kind == E_TypeKind_Ptr) || type_kind == E_TypeKind_Array) &&
           (direct_type_kind == E_TypeKind_Char8 ||
            direct_type_kind == E_TypeKind_Char16 ||
            direct_type_kind == E_TypeKind_Char32 ||
@@ -1250,12 +1258,6 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
            e_type_kind_is_integer(direct_type_kind))))
       {
         got_commit_data = 1;
-        B32 is_quoted = 0;
-        if(string.size >= 1 && string.str[0] == '"')
-        {
-          string = str8_skip(string, 1);
-          is_quoted = 1;
-        }
         if(string.size >= 1 && string.str[string.size-1] == '"')
         {
           string = str8_chop(string, 1);
@@ -1306,9 +1308,9 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
            src_eval_value.irtree.mode == E_Mode_Value)
         {
           got_commit_data = 1;
-          commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
-          commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(src_eval.irtree.type_key));
-          commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
+          commit_data = str8_copy(scratch.arena, str8_struct(&src_eval.value));
+          commit_data.size = Max(commit_data.size, e_type_byte_size_from_key(src_eval.irtree.type_key));
+          commit_data.size = Max(commit_data.size, e_type_byte_size_from_key(type_key));
         }
       }
     }

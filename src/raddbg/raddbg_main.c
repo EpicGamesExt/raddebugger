@@ -5,21 +5,24 @@
 //~ rjf: post-0.9.20 TODO notes
 //
 //- fabian complaints / reports
-// [x] `foo, x` needs to correctly match `hex(foo)`, e.g. in application to expansions
 // [ ] broadly, need to complete memory view & fix issues
 //  [ ] dumb panel click-through thing
 //  [ ] correct type interpretations; togglable interpretations
 //  [ ] make address editable; specialized version of the cursor address editor in tab right-click menu
-// [x] eval: pointer casts of register space should promote to process space
 // [ ] simplified default layout
-// [ ] signify empty watch window "expression" slot more as a text field?
-// [ ] ambiguous parsing cases - need to re-introduce identifier resolution into eval parse. (foo *)&bar
-// [ ] more control over string visualization; specifically, when *not* to do it, even when using e.g. char *s
-// [ ] broadly, view discoverability / docs
-// [ ] memory view deserves larger spot, in default layout
-// [ ] sign bits should not display on unsigned integers?
+//  [ ] memory view deserves larger spot, in default layout
 // [ ] fix for-loop stepping oddities, likely single-line for-loop stepping
+// [x] `foo, x` needs to correctly match `hex(foo)`, e.g. in application to expansions
+// [x] eval: pointer casts of register space should promote to process space
+// [x] more control over string visualization; specifically, when *not* to do it, even when using e.g. char *s
+// [x] sign bits should not display on unsigned integers?
+// [ ] ambiguous parsing cases - need to re-introduce identifier resolution into eval parse. (foo *)&bar
+// [ ] broadly, view discoverability / docs
 // [ ] source/disasm ctx menu should include options for e.g. "go to selected thread"
+// [ ] signify empty watch window "expression" slot more as a text field?
+//
+//- jeff viz notes
+// [ ] single-line viz for pointers w/ bad (unmapped) addresses
 //
 //- namespace/locations/variables RDI pass
 // [ ] RDI_Local, RDI_GlobalVariable, RDI_ThreadVariable -> RDI_Variable
