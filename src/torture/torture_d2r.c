@@ -140,7 +140,7 @@ dw_writer_tag_end(writer);                                    \
     dw_writer_tag_end(writer);
   }
   
-  RDI_Parsed  *rdi      = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_Parsed  *rdi      = d2r_rdi_from_dwarf_writer(arena, writer);
   RDI_NameMap *types_nm = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
   T_Ok(types_nm);
   
@@ -220,7 +220,6 @@ T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), s
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
 T_BeginTest(d2r_line_table)
 {
@@ -229,7 +228,7 @@ T_BeginTest(d2r_line_table)
   String8 comp_name = str8_lit("test.c");
   
   DW_WriterFile *foo_file  = dw_writer_new_file(writer, str8_lit("/mnt/C/Devel/foo.c"));
-  DW_WriterFile *comp_file = dw_writer_new_file(writer, str8f(scratch.arena, "%S%S", comp_dir, comp_name));
+  DW_WriterFile *comp_file = dw_writer_new_file(writer, str8f(arena, "%S%S", comp_dir, comp_name));
   
   struct {
     DW_WriterFile *file; U64 ln; U64 line_size; U64 voff;
@@ -268,13 +267,13 @@ T_BeginTest(d2r_line_table)
   dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
   dw_writer_tag_end(writer);
   
-  d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  d2r_rdi_from_dwarf_writer(arena, writer);
   
   for EachElement(i, test_table) {
     for EachIndex(k, test_table[i].line_size) {
-      String8 cmd_line = str8f(scratch.arena, "-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
+      String8 cmd_line = str8f(arena, "-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
       String8 output = {0};
-      t_invoke_(t_radbin_path(), cmd_line, max_U64, scratch.arena, &output);
+      t_invoke_(t_radbin_path(), cmd_line, max_U64, arena, &output);
       T_Ok(g_last_exit_code == 0);
       T_MatchLinef(&output, "%S:%llu", test_table[i].file->path, test_table[i].ln);
     }
@@ -282,7 +281,6 @@ T_BeginTest(d2r_line_table)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
 T_BeginTest(d2r_checksums)
 {
@@ -301,7 +299,7 @@ T_BeginTest(d2r_checksums)
   dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
   dw_writer_tag_end(writer);
   
-  RDI_Parsed *rdi            = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_Parsed *rdi            = d2r_rdi_from_dwarf_writer(arena, writer);
   U64         checksum_count = 0;
   RDI_MD5    *checksums      = rdi_table_from_name(rdi, MD5Checksums, &checksum_count);
   T_Ok(checksum_count == writer->line.file_count + 1);
@@ -318,7 +316,6 @@ T_BeginTest(d2r_checksums)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
 #if SUBPROGRAM_CONVERSION_TEST
 T_BeginTest(d2r_subprogram)
@@ -432,14 +429,13 @@ T_BeginTest(d2r_subprogram)
   
   dw_writer_tag_end(writer);
   
-  RDI_Parsed    *rdi         = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_Parsed    *rdi         = d2r_rdi_from_dwarf_writer(arena, writer);
   RDI_Procedure *proc        = rdi_procedure_from_name_cstr(rdi, (char *)subprogram_name.str);
   RDI_TypeNode  *proc_type   = rdi_element_from_name_idx(rdi, TypeNodes, proc->type_idx);
-  String8        proc_string = rdi_string_from_type(scratch.arena, rdi, proc, proc_type);
+  String8        proc_string = rdi_string_from_type(arena, rdi, proc, proc_type);
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 #endif
 
 T_BeginTest(d2r_general)
@@ -470,7 +466,7 @@ T_BeginTest(d2r_general)
     dw_writer_tag_end(writer);
   }
   
-  RDI_Parsed *rdi = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_Parsed *rdi = d2r_rdi_from_dwarf_writer(arena, writer);
   
   RDI_Procedure *proc = rdi_procedure_from_name_cstr(rdi, "FooBar");
   T_Ok(proc);
@@ -505,6 +501,5 @@ T_BeginTest(d2r_general)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
 #undef T_Group

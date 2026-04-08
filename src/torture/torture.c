@@ -79,8 +79,11 @@ t_make_file_path(Arena *arena, String8 name)
 internal void
 t_run_caller(void *raw_ctx)
 {
+  Temp scratch = scratch_begin(0,0);
   T_RunCtx *ctx = raw_ctx;  
-  ctx->result = ctx->run();
+  ctx->result.status = T_RunStatus_Pass;
+  ctx->run(scratch.arena, &ctx->result);
+  scratch_end(scratch);
 }
 
 internal void
