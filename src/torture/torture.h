@@ -40,15 +40,11 @@ typedef struct
 extern U64    g_torture_test_count;
 extern T_Test g_torture_tests[0xffffff];
 
-#define T_AddTest(name, l, ...)                                    \
-  T_RunSig(name);                                                  \
-  __VA_ARGS__ void t_add_test_##name(void)                         \
-  {                                                                \
-    g_torture_tests[g_torture_test_count].group = T_Group;         \
-    g_torture_tests[g_torture_test_count].label = Stringify(name); \
-    g_torture_tests[g_torture_test_count].r     = &t_##name;       \
-    g_torture_tests[g_torture_test_count].decl_line = l;           \
-    g_torture_test_count += 1;                                     \
+#define T_AddTest(name, l, ...)            \
+  T_RunSig(name);                          \
+  __VA_ARGS__ void t_add_test_##name(void) \
+  {                                        \
+    g_torture_tests[g_torture_test_count++] = (T_Test){ .group = T_Group, .label = Stringify(name), .r = &t_##name, .decl_line = l }; \
   }
 
 #if COMPILER_MSVC
@@ -58,8 +54,7 @@ extern T_Test g_torture_tests[0xffffff];
   __declspec(allocate(".CRT$XCU")) void(*r_##name)(void) = t_add_test_##name; \
   __pragma(comment(linker, "/include:" Stringify(r_##name)))
 #else
-# define T_BeginTest_(name) \
-  T_AddTest(name, __LINE__, __attribute__((constructor)))
+# define T_BeginTest_(name) T_AddTest(name, __LINE__, __attribute__((constructor)))
 #endif
 
 #define T_BeginTest(name) \
@@ -67,7 +62,6 @@ extern T_Test g_torture_tests[0xffffff];
   T_RunSig(name)
 
 #define T_Ok(c) do { if (!(c)) { result_out->fail_file = __FILE__; result_out->fail_line = __LINE__; result_out->fail_cond = Stringify(c); result_out->status = T_RunStatus_Fail; return; } } while(0)
-#define T_Fail() T_Ok(!(c))
 #define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
 
 ////////////////////////////////
