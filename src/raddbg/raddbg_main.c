@@ -16,9 +16,9 @@
 // [x] eval: pointer casts of register space should promote to process space
 // [x] more control over string visualization; specifically, when *not* to do it, even when using e.g. char *s
 // [x] sign bits should not display on unsigned integers?
+// [x] source/disasm ctx menu should include options for e.g. "go to selected thread"
 // [ ] ambiguous parsing cases - need to re-introduce identifier resolution into eval parse. (foo *)&bar
 // [ ] broadly, view discoverability / docs
-// [ ] source/disasm ctx menu should include options for e.g. "go to selected thread"
 // [ ] signify empty watch window "expression" slot more as a text field?
 //
 //- jeff viz notes
