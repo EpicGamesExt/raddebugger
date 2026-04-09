@@ -35,7 +35,7 @@
 # elif OS_LINUX
 #  include "os/gfx/linux/os_gfx_linux.h"
 # elif OS_MAC
-#  include "os/gfx/stub/os_gfx_stub.h"
+#  include "os/gfx/mac/os_gfx_mac.h"
 # else
 #  error OS graphical layer not implemented for this operating system.
 # endif

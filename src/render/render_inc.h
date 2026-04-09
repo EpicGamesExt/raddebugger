@@ -19,7 +19,7 @@
 #elif !defined(R_BACKEND) && OS_LINUX
 # define R_BACKEND R_BACKEND_OPENGL
 #elif !defined(R_BACKEND) && OS_MAC
-# define R_BACKEND R_BACKEND_STUB
+# define R_BACKEND R_BACKEND_OPENGL
 #endif
 
 ////////////////////////////////

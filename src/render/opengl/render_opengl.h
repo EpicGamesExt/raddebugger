@@ -80,6 +80,8 @@ typedef ptrdiff_t GLintptr;
 # include "render/opengl/win32/render_opengl_win32.h"
 #elif OS_LINUX
 # include "render/opengl/linux/render_opengl_linux.h"
+#elif OS_MAC
+# include "render/opengl/mac/render_opengl_mac.h"
 #else
 # error OS portion of OpenGL rendering backend not defined.
 #endif
@@ -129,7 +131,8 @@ X(glAttachShader, void, (GLuint program, GLuint shader))\
 X(glLinkProgram, void, (GLuint program))\
 X(glValidateProgram, void, (GLuint program))\
 X(glDeleteShader, void, (GLuint shader))\
-X(glUseProgram, void, (GLuint program))\
+X(glUseProgram, void, (GLuint program))\ 
+X(glScissor, void, (GLint x, GLint y, GLsizei width, GLsizei height))\
 X(glGetUniformLocation, GLint, (GLuint program, char *name))\
 X(glGetAttribLocation, GLint, (GLuint program, char *name))\
 X(glEnableVertexAttribArray, void, (GLuint index))\

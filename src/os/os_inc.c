@@ -24,7 +24,7 @@
 # elif OS_LINUX
 #  include "os/gfx/linux/os_gfx_linux.c"
 # elif OS_MAC
-#  include "os/gfx/stub/os_gfx_stub.c"
+#  include "os/gfx/mac/os_gfx_mac.c"
 # else
 #  error OS graphical layer not implemented for this operating system.
 # endif
