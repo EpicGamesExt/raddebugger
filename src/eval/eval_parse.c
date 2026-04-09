@@ -1578,7 +1578,7 @@ internal E_Parse
 e_push_parse_from_string(Arena *arena, String8 text)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  E_TokenArray tokens = e_token_array_from_text(scratch.arena, text);
+  E_TokenArray tokens = e_token_array_from_text(arena, text);
   E_Parse parse = e_push_parse_from_string_tokens__prec(arena, text, tokens, e_max_precedence, max_U64);
   scratch_end(scratch);
   return parse;
