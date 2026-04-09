@@ -158,14 +158,15 @@ os_mac_gfx_next_event(Arena * arena, B32 wait, OS_EventList* evts)
 
   id app = msg(id, cls("NSApplication"), "sharedApplication");
   NSInteger matchAll = -1;
-  id data = msg(id, cls("NSDate"), wait ? "distantFuture" : "distantPast");
+  id date = msg(id, cls("NSDate"), wait ? "distantFuture" : "distantPast");
   id event = msg4(
     id, app, "nextEventMatchingMask:untilDate:inMode:dequeue:", 
     NSInteger, matchAll,
-    id, data,
+    id, date,
     id, NSDefaultRunLoopMode,
     BOOL, YES
   );
+  msg(void, date, "release");
 
   if(event == 0)
   {
@@ -262,6 +263,7 @@ os_mac_gfx_next_event(Arena * arena, B32 wait, OS_EventList* evts)
             event->modifiers = os_mac_gfx_state->modifiers;
             event->character = character;
           }
+          msg(void, ns_characters, "release");
         }
       }
       break;
@@ -336,14 +338,17 @@ os_gfx_mac_did_resize_handler(id v, SEL s, id notification)
   msg1(void, window, "setViewsNeedDisplay:", BOOL, YES);
 }
 
-static BOOL os_gfx_mac_should_close_handler(id v, SEL s, id w)
+static BOOL os_gfx_mac_should_close_handler(id v, SEL s, id window)
 {
+  OS_MAC_Window* os_window = (OS_MAC_Window *)objc_getAssociatedObject(window, "rad_window");
+  DLLRemove(os_mac_gfx_state->first_window, os_mac_gfx_state->last_window, os_window);
+
   id app = msg(id, cls("NSApplication"), "sharedApplication");
   NSUInteger window_count = msg(NSUInteger, msg(id, app, "windows"), "count");
 
   if(window_count < 2)
   {
-    msg1(void, app, "terminate:", id, app);
+    os_mac_gfx_state->all_windows_closed = 1;
   }
 
   return YES;
@@ -438,7 +443,6 @@ os_get_clipboard_text(Arena *arena)
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
-
 internal OS_Handle
 os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
 {
@@ -482,6 +486,8 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   objc_setAssociatedObject(window, "rad_window", (id)os_window, OBJC_ASSOCIATION_ASSIGN);
 
   os_gfx_mac_set_window_buttons_position(os_window);
+
+  DLLPushBack(os_mac_gfx_state->first_window, os_mac_gfx_state->last_window, os_window);
 
   OS_Handle handle = {(U64)os_window};
   return handle;
@@ -746,6 +752,11 @@ os_get_events(Arena *arena, B32 wait)
 
   while(os_mac_gfx_next_event(arena, 0, &evts)) {}
 
+  if(os_mac_gfx_state->all_windows_closed)
+  {
+    os_event_list_push_new(arena, &evts, OS_EventKind_WindowClose);
+  }
+
   return evts;
 }
 
@@ -881,7 +892,9 @@ os_graphical_pick_file(Arena *arena, String8 initial_path)
     id url = msg(id, urls, "firstObject");
     id path = msg(id, url, "path");
     char* cstring = msg(char *, path, "UTF8String");
-    String8 result = str8_cstring(cstring);
+    String8 result = push_str8_copy(arena, str8_cstring(cstring));
+    msg(void, urls, "release");
+    msg(void, path, "release");
     return result;
   }
 

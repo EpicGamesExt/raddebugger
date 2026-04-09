@@ -66,6 +66,7 @@ struct OS_MAC_GfxState
   OS_MAC_KeyState keys[OS_Key_COUNT];
   OS_Modifiers modifiers;
   id cursors[OS_Cursor_COUNT];
+  B32 all_windows_closed;
   OS_GfxInfo gfx_info;
 };
 
