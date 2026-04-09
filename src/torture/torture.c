@@ -9,6 +9,7 @@ global B32     g_verbose;
 global B32     g_redirect_stdout = 1;
 global B32     g_stop_on_first_fail_or_crash = 1;
 global String8 g_linker;
+global String8 g_test_data;
 
 // tests
 U64    g_torture_test_count;
@@ -76,13 +77,28 @@ t_make_file_path(Arena *arena, String8 name)
   return push_str8f(arena, "%S\\%S", g_wdir, name);
 }
 
+internal B32
+t_make_dir(String8 name)
+{
+  Temp scratch = scratch_begin(0,0);
+  B32 is_ok = os_make_directory(t_make_file_path(scratch.arena, name));
+  scratch_end(scratch);
+  return is_ok;
+}
+
 internal void
 t_run_caller(void *raw_ctx)
 {
   Temp scratch = scratch_begin(0,0);
   T_RunCtx *ctx = raw_ctx;  
+  String8List test_out = {0};
   ctx->result.status = T_RunStatus_Pass;
-  ctx->run(scratch.arena, &ctx->result);
+  ctx->run(scratch.arena, &ctx->result, &test_out);
+  if (ctx->result.status == T_RunStatus_Fail) {
+    for EachNode(n, String8Node, test_out.first) {
+      fprintf(stderr, "%.*s", str8_varg(n->string));
+    }
+  }
   scratch_end(scratch);
 }
 
@@ -131,7 +147,9 @@ t_cl_path(void)
     ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
     Arena *arena = arena_alloc_(&params);
 #if OS_WINDOWS
-    path = str8_lit("cl.exe");
+    wchar_t full_cl_path[MAX_PATH];
+    DWORD full_cl_path_size = SearchPathW(0, L"cl.exe", 0, ArrayCount(full_cl_path), full_cl_path, 0);
+    path = str8_from_16(arena, str16((U16*)full_cl_path, full_cl_path_size));
 #else
     path = str8_lit("cl");
 #endif
@@ -159,14 +177,14 @@ t_radlink_path(void)
 }
 
 internal String8
-t_src_path(void)
+t_cwd_path(void)
 {
   local_persist U8 path[4096] = {0};
   if (path[0] == 0) {
     Temp scratch = scratch_begin(0, 0);
     String8 cwd = os_get_current_path(scratch.arena);
     cwd = str8_chop_last_slash(cwd);
-    cwd = str8f(scratch.arena, "%S/src", cwd);
+    cwd = str8f(scratch.arena, "%S", cwd);
     MemoryCopyStr8(path, cwd);
     path[cwd.size] = 0;
     scratch_end(scratch);
@@ -174,8 +192,22 @@ t_src_path(void)
   return str8_cstring_capped(path, path+sizeof(path));
 }
 
+internal String8
+t_src_path(void)
+{
+  local_persist U8 path[4096] = {0};
+  if (path[0] == 0) {
+    Temp scratch = scratch_begin(0, 0);
+    String8 src = str8f(scratch.arena, "%S/src", t_cwd_path());
+    MemoryCopyStr8(path, src);
+    path[src.size] = 0;
+    scratch_end(scratch);
+  }
+  return str8_cstring_capped(path, path+sizeof(path));
+}
+
 internal B32
-t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, String8 *output_out)
+t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout, Arena *output_arena, String8 *output_out)
 {
   Temp scratch = scratch_begin(&output_arena,1);
 
@@ -200,6 +232,7 @@ t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, S
   OS_ProcessLaunchParams launch_opts = {
     .path        = g_wdir,
     .inherit_env = 1,
+    .env         = env,
     .stdout_file = write_pipe_handle,
     .stderr_file = write_pipe_handle,
     .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline),
@@ -250,6 +283,12 @@ t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, S
 
   scratch_end(scratch);
   return is_ok;
+}
+
+internal B32
+t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, String8 *output_out)
+{
+  return t_invoke_env(exe_path, cmdline, (String8List){0}, timeout, output_arena, output_out);
 }
 
 internal B32
@@ -369,6 +408,17 @@ t_entry_point(CmdLine *cmdline)
   }
 
   //
+  // Handle -test_data
+  //
+  {
+    g_test_data = cmd_line_string(cmdline, str8_lit("test_data"));
+    if (g_test_data.size == 0) {
+      g_test_data = str8f(scratch.arena, "%S/build", t_cwd_path());
+      //fprintf(stderr, "WARNING: The test data folder path was not specified. Specify the path when running the program, assuming: %.*s --test_data:%.*s\n", str8_varg(cmdline->exe_name), str8_varg(g_test_data));
+    }
+  }
+
+  //
   // Handle optional -target
   //
   String8List target = cmdline->inputs;
@@ -389,6 +439,13 @@ t_entry_point(CmdLine *cmdline)
   g_verbose                     = cmd_line_has_flag(cmdline, str8_lit("verbose"));
   g_redirect_stdout             = !cmd_line_has_flag(cmdline, str8_lit("print_stdout"));
   g_stop_on_first_fail_or_crash = !cmd_line_has_flag(cmdline, str8_lit("keep_going"));
+
+  // default options when running under debugger
+#if OS_WINDOWS
+  if (!cmd_line_has_flag(cmdline, str8_lit("print_stdout")) && IsDebuggerPresent()) {
+    g_redirect_stdout = 0;
+  }
+#endif
 
   // Handle -out
   {

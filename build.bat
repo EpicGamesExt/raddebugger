@@ -82,7 +82,6 @@ set clang_out=     -o
 set clang_linker=  -Xlinker
 
 :: --- Per-Build Settings -----------------------------------------------------
-set link_dll=-DLL
 set link_icon=logo.res
 if "%msvc%"=="1"    set linker=%cl_linker%
 if "%clang%"=="1"   set linker=%clang_linker%
@@ -94,6 +93,8 @@ if "%msvc%"=="1"    set no_aslr=/DYNAMICBASE:NO
 if "%clang%"=="1"   set no_aslr=-Wl,/DYNAMICBASE:NO
 if "%msvc%"=="1"    set rc=call rc
 if "%clang%"=="1"   set rc=call llvm-rc
+if "%msvc%"=="1"    set link_dll=/link /DLL
+if "%clang%"=="1"   set link_dll=-Xlinker -DLL
 
 :: --- Choose Compile/Link Lines ----------------------------------------------
 if "%msvc%"=="1"      set compile_debug=%cl_debug%
@@ -147,7 +148,7 @@ if "%debugstringperf%"=="1"            set didbuild=1 && %compile% ..\src\scratc
 if "%parse_inline_sites%"=="1"         set didbuild=1 && %compile% ..\src\scratch\parse_inline_sites.c                       %compile_link% %out%parse_inline_sites.exe || exit /b 1
 if "%strip_lib_debug%"=="1"            set didbuild=1 && %compile% ..\src\strip_lib_debug\strip_lib_debug.c                  %compile_link% %out%strip_lib_debug.exe || exit /b 1
 if "%mule_main%"=="1"                  set didbuild=1 && del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp %out%mule_inline.obj && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp %out%mule_o2.obj && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %no_aslr% %out%mule_main.exe || exit /b 1
-if "%mule_module%"=="1"                set didbuild=1 && %compile% ..\src\mule\mule_module.cpp                               %compile_link% %link_dll% %out%mule_module.dll || exit /b 1
+if "%mule_module%"=="1"                set didbuild=1 && %compile% ..\src\mule\mule_module.cpp                               %link_dll% %out%mule_module.dll || exit /b 1
 if "%mule_hotload%"=="1"               set didbuild=1 && %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
 if "%torture%"=="1"                    set didbuild=1 && %compile% ..\src\torture\torture_main.c                             %compile_link% %out%torture.exe || exit /b1
 if "%dwarf_expr_test%"=="1"            set didbuild=1 && %compile% ..\src\torture\dwarf_expr_test.c                          %compile_link% %out%dwarf_expr_test.exe || exit /b1

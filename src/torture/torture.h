@@ -20,8 +20,8 @@ typedef struct
   char       *fail_cond;
 } T_RunResult;
 
-#define T_RunSig(name) void t_##name(Arena *arena, T_RunResult *result_out)
-typedef                void (*T_Run)(Arena *arena, T_RunResult *result_out);
+#define T_RunSig(name) void t_##name(Arena *arena, T_RunResult *result_out, String8List *test_out)
+typedef                void (*T_Run)(Arena *arena, T_RunResult *result_out, String8List *test_out);
 
 typedef struct
 {
@@ -63,6 +63,7 @@ extern T_Test g_torture_tests[0xffffff];
 
 #define T_Ok(c) do { if (!(c)) { result_out->fail_file = __FILE__; result_out->fail_line = __LINE__; result_out->fail_cond = Stringify(c); result_out->status = T_RunStatus_Fail; return; } } while(0)
 #define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
+#define t_outf(...) str8_list_pushf(arena, test_out, ## __VA_ARGS__)
 
 ////////////////////////////////
 
@@ -81,6 +82,7 @@ internal T_RunResult t_run(T_Run run);
 internal String8 t_radbin_path(void);
 internal String8 t_cl_path(void);
 internal String8 t_radlink_path(void);
+internal String8 t_cwd_path(void);
 internal String8 t_src_path(void);
 
 internal B32 t_invoke(String8 exe, String8 cmdline, U64 timeout);

@@ -80,6 +80,7 @@
 #include "torture_radlink.c"
 #include "torture_dwarf.c"
 #include "torture_d2r.c"
+#include "torture_p2r.c"
 
 ////////////////////////////////
 

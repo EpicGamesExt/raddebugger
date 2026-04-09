@@ -4773,10 +4773,11 @@ t_radlink_validate_asan_out(String8 obj_name)
 
   String8 exe_path = t_make_file_path(scratch.arena, str8f(scratch.arena, "%S.exe", str8_chop_last_dot(obj_name)));
   String8 out = {0};
-  t_invoke_(exe_path, str8_zero(), max_U64, scratch.arena, &out);
-  if (g_last_exit_code == 0) {
-    goto exit;
-  }
+
+  char *old_path_cstr = getenv("PATH");
+  String8List env = {0};
+  str8_list_pushf(scratch.arena, &env, "PATH=%S;%S", str8_chop_last_slash(t_cl_path()), str8_cstring(old_path_cstr));
+  t_invoke_env(exe_path, str8_zero(), env, max_U64, scratch.arena, &out);
 
   String8 s = out;
 
