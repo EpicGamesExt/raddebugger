@@ -1455,7 +1455,7 @@ internal Guid
 os_make_guid(void)
 {
   Guid guid = {0};
-  getrandom(guid.v, sizeof(guid.v), 0);
+  getentropy(guid.v, sizeof(guid.v));
   guid.data3 &= 0x0fff;
   guid.data3 |= (4 << 12);
   guid.data4[0] &= 0x3f;

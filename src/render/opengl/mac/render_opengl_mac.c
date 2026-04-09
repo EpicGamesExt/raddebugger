@@ -133,7 +133,7 @@ r_ogl_os_select_window(OS_Handle window, R_Handle r)
 
   id view = msg(id, w->win, "contentView");
 
-  if (msg(Class, view, "class") != cls("NSOpenGLView")) {
+  if (msg(id, view, "class") != cls("NSOpenGLView")) {
     CGRect rect = msg(CGRect, view, "frame");
 
     id format = msg(id, cls("NSOpenGLView"), "defaultPixelFormat");

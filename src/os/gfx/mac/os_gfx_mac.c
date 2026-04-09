@@ -98,7 +98,7 @@ NSString_fromUTF8(String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
   String8 string_copy = push_str8_copy(scratch.arena, string);
-  id result = msg1(id, cls("NSString"), "stringWithUTF8String:", const char*, string_copy.str);
+  id result = msg1(id, cls("NSString"), "stringWithUTF8String:", const char*, (const char*)string_copy.str);
   scratch_end(scratch);
   return result;
 }
@@ -524,7 +524,7 @@ os_window_focus(OS_Handle window)
 internal B32
 os_window_is_focused(OS_Handle handle)
 {
-  if(os_handle_match(handle, os_handle_zero())) {return;}
+  if(os_handle_match(handle, os_handle_zero())) {return 0;}
   OS_MAC_Window *w = (OS_MAC_Window *)handle.u64[0];
   B32 result = msg(BOOL, w->win, "isKeyWindow");
   return result;
@@ -533,7 +533,7 @@ os_window_is_focused(OS_Handle handle)
 internal B32
 os_window_is_fullscreen(OS_Handle handle)
 {
-  if(os_handle_match(handle, os_handle_zero())) {return;}
+  if(os_handle_match(handle, os_handle_zero())) {return 0;}
   OS_MAC_Window *w = (OS_MAC_Window *)handle.u64[0];
   NSInteger styleMask = msg(NSInteger, w->win, "styleMask");
   return styleMask & NSWindowStyleMaskFullScreen;
@@ -642,7 +642,7 @@ os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
 internal Rng2F32
 os_rect_from_window(OS_Handle window)
 {
-  if(os_handle_match(window, os_handle_zero())) {return;}
+  if(os_handle_match(window, os_handle_zero())) {return r2f32(v2f32(0, 0), v2f32(0, 0));}
   OS_MAC_Window *w = (OS_MAC_Window *)window.u64[0];
   
   id content_view = msg(id, w->win, "contentView");
@@ -655,7 +655,7 @@ os_rect_from_window(OS_Handle window)
 internal Rng2F32
 os_client_rect_from_window(OS_Handle window)
 {
-  if(os_handle_match(window, os_handle_zero())) {return;}
+  if(os_handle_match(window, os_handle_zero())) {return r2f32(v2f32(0, 0), v2f32(0, 0));}
   OS_MAC_Window *w = (OS_MAC_Window *)window.u64[0];
   
   id content_view = msg(id, w->win, "contentView");
@@ -841,6 +841,7 @@ os_set_cursor(OS_Cursor cursor)
       case OS_Cursor_Disabled:
         ns_cursor = msg(id, cls("NSCursor"), "operationNotAllowedCursor");
         break;
+      case OS_Cursor_COUNT: break;
     }
     os_mac_gfx_state->cursors[cursor] = ns_cursor;
   }
@@ -913,7 +914,7 @@ os_show_in_filesystem_ui(String8 path)
 
   char* args[] = {
     "--reveal",
-    path_arg.str,
+    (char *)path_arg.str,
     0,
   };
 
@@ -931,7 +932,7 @@ os_open_in_browser(String8 url)
 
   char* args[] = {
     "--url",
-    url_arg.str,
+    (char *)url_arg.str,
     0,
   };
 

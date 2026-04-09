@@ -131,14 +131,41 @@ X(glAttachShader, void, (GLuint program, GLuint shader))\
 X(glLinkProgram, void, (GLuint program))\
 X(glValidateProgram, void, (GLuint program))\
 X(glDeleteShader, void, (GLuint shader))\
-X(glUseProgram, void, (GLuint program))\ 
+X(glUseProgram, void, (GLuint program))\
 X(glScissor, void, (GLint x, GLint y, GLsizei width, GLsizei height))\
+X(glViewport, void, (GLint x, GLint y, GLsizei width, GLsizei height))\
+X(glClearColor, void, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha))\
+X(glClear, void, (GLbitfield mask))\
+X(glFlush, void, ())\
+X(glEnable, void, (GLenum cap))\
+X(glDisable, void, (GLenum cap))\
+X(glEnablei, void, (GLenum cap, GLuint index))\
+X(glDisablei, void, (GLenum cap, GLuint index))\
+X(glBindTexture, void, (GLenum target, GLuint texture))\
+X(glTexSubImage2D, void, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels))\
+X(glTextureSubImage2D, void, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels))\
+X(glTexParameterf, void, (GLenum target, GLenum pname, GLfloat param))\
+X(glTexParameteri, void, (GLenum target, GLenum pname, GLint param))\
+X(glTextureParameterf, void, (GLuint texture, GLenum pname, GLfloat param))\
+X(glTextureParameteri, void, (GLuint texture, GLenum pname, GLint param))\
+X(glTexParameterfv, void, (GLenum target, GLenum pname, const GLfloat * params))\
+X(glTexParameteriv, void, (GLenum target, GLenum pname, const GLint * params))\
+X(glTexParameterIiv, void, (GLenum target, GLenum pname, const GLint * params))\
+X(glTexParameterIuiv, void, (GLenum target, GLenum pname, const GLuint * params))\
+X(glTextureParameterfv, void, (GLuint texture, GLenum pname, const GLfloat *params))\
+X(glTextureParameteriv, void, (GLuint texture, GLenum pname, const GLint *params))\
+X(glTextureParameterIiv, void, (GLuint texture, GLenum pname, const GLint *params))\
+X(glTextureParameterIuiv, void, (GLuint texture, GLenum pname, const GLuint *params))\
+X(glTexImage2D, void, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void * data))\
+X(glGenTextures, void, (GLsizei n, GLuint * textures))\
+X(glDeleteTextures, void, (GLsizei n, const GLuint * textures))\
 X(glGetUniformLocation, GLint, (GLuint program, char *name))\
 X(glGetAttribLocation, GLint, (GLuint program, char *name))\
 X(glEnableVertexAttribArray, void, (GLuint index))\
 X(glVertexAttribPointer, void, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer))\
 X(glBufferData, void, (GLenum target, ptrdiff_t size, void *data, GLenum usage))\
 X(glBufferSubData, void, (GLenum target, ptrdiff_t offset, ptrdiff_t size, const void *data))\
+X(glBlendFunc, void, (GLenum sfactor, GLenum dfactor))\
 X(glBlendFuncSeparate, void, (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha))\
 X(glUniform1f, void, (GLint location, GLfloat v0))\
 X(glUniform2f, void, (GLint location, GLfloat v0, GLfloat v1))\
