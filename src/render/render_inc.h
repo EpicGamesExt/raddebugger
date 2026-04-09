@@ -18,6 +18,8 @@
 # define R_BACKEND R_BACKEND_D3D11
 #elif !defined(R_BACKEND) && OS_LINUX
 # define R_BACKEND R_BACKEND_OPENGL
+#elif !defined(R_BACKEND) && OS_MAC
+# define R_BACKEND R_BACKEND_STUB
 #endif
 
 ////////////////////////////////

@@ -294,7 +294,7 @@
 #  error Atomic intrinsics not defined for this compiler / architecture.
 #endif
 
-#if ARCH_64BIT
+#if ARCH_64BIT || ARCH_ARM64
 # define ins_atomic_ptr_eval_cond_assign(x,k,c) (void *)ins_atomic_u64_eval_cond_assign((U64 *)(x), (U64)(k), (U64)(c))
 # define ins_atomic_ptr_eval_assign(x,c)        (void *)ins_atomic_u64_eval_assign((U64 *)(x), (U64)(c))
 # define ins_atomic_ptr_eval(x)                 (void *)ins_atomic_u64_eval((U64 *)x)
@@ -419,6 +419,8 @@ C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t s
 # define IntFromPtr(ptr) ((U64)(ptr))
 #elif ARCH_32BIT
 # define IntFromPtr(ptr) ((U32)(ptr))
+#elif ARCH_ARM64
+# define IntFromPtr(ptr) ((U64)(ptr))
 #else
 # error Missing pointer-to-integer cast for this architecture.
 #endif

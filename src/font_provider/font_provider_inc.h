@@ -18,6 +18,8 @@
 #  define FP_BACKEND FP_BACKEND_DWRITE
 # elif OS_LINUX
 #  define FP_BACKEND FP_BACKEND_FREETYPE
+# elif OS_MAC
+#  define FP_BACKEND FP_BACKEND_FREETYPE
 # endif
 #endif
 

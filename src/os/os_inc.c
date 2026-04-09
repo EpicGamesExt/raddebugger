@@ -10,6 +10,8 @@
 # include "os/core/win32/os_core_win32.c"
 #elif OS_LINUX
 # include "os/core/linux/os_core_linux.c"
+#elif OS_MAC
+# include "os/core/mac/os_core_mac.c"
 #else
 # error OS core layer not implemented for this operating system.
 #endif
@@ -21,6 +23,8 @@
 #  include "os/gfx/win32/os_gfx_win32.c"
 # elif OS_LINUX
 #  include "os/gfx/linux/os_gfx_linux.c"
+# elif OS_MAC
+#  include "os/gfx/stub/os_gfx_stub.c"
 # else
 #  error OS graphical layer not implemented for this operating system.
 # endif
