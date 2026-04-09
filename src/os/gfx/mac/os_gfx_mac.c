@@ -103,7 +103,7 @@ NSString_fromUTF8(String8 string)
   return result;
 }
 
-internal void
+internal OS_Event *
 os_mac_gfx_event_list_push_key(Arena* arena, OS_EventList *evts, OS_MAC_Window* os_window,  OS_Key key, B32 is_down)
 {
   OS_EventKind kind = is_down ? OS_EventKind_Press : OS_EventKind_Release;
@@ -115,11 +115,12 @@ os_mac_gfx_event_list_push_key(Arena* arena, OS_EventList *evts, OS_MAC_Window* 
   {
     os_mac_gfx_state->keys[key] &= ~OS_MAC_KeyState_Down;
   }
-  OS_Event *e = os_event_list_push_new(arena, evts, kind);
+  OS_Event* e = os_event_list_push_new(arena, evts, kind);
   e->window.u64[0] = (U64)os_window;
   e->key = key;
   e->modifiers = os_mac_gfx_state->modifiers;
   e->pos = os_mouse_from_window(e->window);
+  return e;
 }
 
 internal void
@@ -204,7 +205,33 @@ os_mac_gfx_next_event(Arena * arena, B32 wait, OS_EventList* evts)
           case 2: {key = OS_Key_MiddleMouseButton;}break;
         }
 
-        os_mac_gfx_event_list_push_key(arena, evts, os_window, key, is_down);
+        OS_Event *event = os_mac_gfx_event_list_push_key(arena, evts, os_window, key, is_down);
+        
+        //- yuraiz: check if dragging the window
+        os_window->dragging_window = 0;
+        if(key == OS_Key_LeftMouseButton && is_down)
+        {
+          Vec2F32 pos_client = event->pos;
+          if(pos_client.y < os_window->custom_border_title_thickness)
+          {
+            B32 is_over_title_bar_client_area = 0;
+
+            //- yuraiz: check against title bar client areas
+            for(OS_MAC_TitleBarClientArea *area = os_window->first_title_bar_client_area;
+              area != 0;
+              area = area->next)
+            {
+              Rng2F32 rect = area->rect;
+              if(rect.x0 <= pos_client.x && pos_client.x < rect.x1 &&
+                rect.y0 <= pos_client.y && pos_client.y < rect.y1)
+                {
+                  is_over_title_bar_client_area = 1;
+                  break;
+                }
+            }
+            os_window->dragging_window = !is_over_title_bar_client_area;
+          }
+        }
       }
       break;
   
@@ -281,32 +308,10 @@ os_mac_gfx_next_event(Arena * arena, B32 wait, OS_EventList* evts)
 
     case NSEventTypeLeftMouseDragged:
     {
-      OS_Handle window_handle = {(U64)os_window};
-      Vec2F32 pos_client = os_mouse_from_window(window_handle);
-
-      if(pos_client.y < os_window->custom_border_title_thickness)
+      if(os_window->dragging_window)
       {
-        B32 is_over_title_bar_client_area = 0;
-
-        //- yuraiz: check against title bar client areas
-        for(OS_MAC_TitleBarClientArea *area = os_window->first_title_bar_client_area;
-          area != 0;
-          area = area->next)
-        {
-          Rng2F32 rect = area->rect;
-          if(rect.x0 <= pos_client.x && pos_client.x < rect.x1 &&
-            rect.y0 <= pos_client.y && pos_client.y < rect.y1)
-            {
-              is_over_title_bar_client_area = 1;
-              break;
-            }
-        }
-        if(!is_over_title_bar_client_area)
-        {
-          msg1(void, window, "performWindowDragWithEvent:", id, event);
-        }
+        msg1(void, window, "performWindowDragWithEvent:", id, event);
       }
-
     }
     break;
   }

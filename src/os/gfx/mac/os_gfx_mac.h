@@ -38,6 +38,7 @@ struct OS_MAC_Window
   id win;
   B32 custom_border;
   F32 custom_border_title_thickness;
+  B32 dragging_window;
   Arena *paint_arena;
   OS_MAC_TitleBarClientArea *first_title_bar_client_area;
   OS_MAC_TitleBarClientArea *last_title_bar_client_area;
@@ -88,7 +89,7 @@ global OS_MAC_GfxState *os_mac_gfx_state = 0;
 
 #define cls(x) ((id)objc_getClass(x))
 
-internal void
+internal OS_Event *
 os_mac_gfx_event_list_push_key(Arena* arena, OS_EventList *evts, OS_MAC_Window* os_window,  OS_Key key, B32 is_down);
 
 #endif // OS_GFX_MAC_H
