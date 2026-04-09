@@ -2836,6 +2836,72 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           good_action = 1;
         }
         
+        // rjf: copies
+        if(evt->flags & UI_EventFlag_Copy)
+        {
+          Rng1U64 range = union_1u64(r1u64(cursor_base_vaddr, cursor_base_vaddr+cursor_size),
+                                     r1u64(mark_base_vaddr, mark_base_vaddr+cursor_size));
+          range.max = Min(range.max, range.min+MB(1));
+          String8 data = {0};
+          data.size = dim_1u64(range);
+          data.str = push_array(scratch.arena, U8, data.size);
+          if(!e_space_read(eval.space, data.str, range))
+          {
+            log_user_errorf("Could not successfully read memory.");
+          }
+          else
+          {
+            String8List data_textified_parts = {0};
+            U64 column_num = 1 + (range.min - view_range.min) % num_columns;
+            for EachIndex(idx, data.size)
+            {
+              str8_list_pushf(scratch.arena, &data_textified_parts, "%02x%s", (U8)data.str[idx],
+                              idx+1 >= data.size ? "" :
+                              column_num+1 <= num_columns ? " " :
+                              "\n");
+              column_num += 1;
+              if(column_num > num_columns)
+              {
+                column_num = 1;
+              }
+            }
+            String8 data_textified = str8_list_join(scratch.arena, &data_textified_parts, 0);
+            os_set_clipboard_text(data_textified);
+          }
+          good_action = 1;
+        }
+        
+        // rjf: pastes
+        if(edit_mode && evt->flags & UI_EventFlag_Paste)
+        {
+          String8 data_textified = evt->string;
+          U8 split_chars[] = {' ', '\n', '\r'};
+          String8List byte_pieces = str8_split(scratch.arena, data_textified, split_chars, ArrayCount(split_chars), 0);
+          String8 data = {0};
+          data.size = Min(byte_pieces.node_count, MB(1));
+          data.str = push_array(scratch.arena, U8, data.size);
+          Rng1U64 range = union_1u64(r1u64(cursor_base_vaddr, cursor_base_vaddr+cursor_size),
+                                     r1u64(mark_base_vaddr, mark_base_vaddr+cursor_size));
+          U64 byte_idx = 0;
+          for EachNode(n, String8Node, byte_pieces.first)
+          {
+            if(byte_idx > data.size)
+            {
+              break;
+            }
+            String8 byte_textified = n->string;
+            U8 byte_value = (U8)u64_from_str8(byte_textified, 16);
+            data.str[byte_idx] = byte_value;
+            byte_idx += 1;
+          }
+          if(!e_space_write(eval.space, data.str, r1u64(range.min, range.min + data.size)))
+          {
+            log_user_errorf("Could not successfully write to memory.");
+          }
+          good_action = 1;
+          cell_delta.x = data.size;
+        }
+        
         // rjf: cell-granularity deletions
         if(edit_mode && !mv->cell_value_edit_in_progress && evt->flags & UI_EventFlag_Delete)
         {
@@ -2858,7 +2924,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         }
         
         // rjf: byte digit -> cell value insertion. if first digit, store, if 2nd, commit
-        if(edit_mode && evt->string.size != 0 && evt->kind == UI_EventKind_Text)
+        if(edit_mode && evt->string.size != 0 && evt->kind == UI_EventKind_Text && !(evt->flags & UI_EventFlag_Paste))
         {
           good_action = 1;
           if(!mv->cell_value_edit_in_progress)

@@ -16004,6 +16004,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind   = UI_EventKind_Text;
+            evt.flags  = UI_EventFlag_Paste;
             evt.string = os_get_clipboard_text(scratch.arena);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
           }break;
