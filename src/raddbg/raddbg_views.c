@@ -2637,6 +2637,8 @@ struct RD_MemoryViewState
   B32 center_cursor;
   B32 contain_cursor;
   B32 snap_scroll;
+  B32 cell_value_edit_in_progress;
+  U8 cell_value_edit_first_digit;
 };
 
 EV_EXPAND_RULE_INFO_FUNCTION_DEF(memory)
@@ -2652,6 +2654,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   RD_MemoryViewState *mv = rd_view_state(RD_MemoryViewState);
+  B32 edit_mode = rd_view_setting_b32_from_name(str8_lit("edit_mode"));
   
   //////////////////////////////
   //- rjf: if memory views are parameterized by a register-space evaluation,
@@ -2821,16 +2824,83 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       U64 next_mark_base_vaddr = mark_base_vaddr;
       for(UI_Event *evt = 0; ui_next_event(&evt);)
       {
+        B32 good_action = 0;
         Vec2S64 cell_delta = {0};
-        switch(evt->delta_unit)
+        B32 allow_cell_movement = 1;
+        
+        // rjf: edit mode toggling
+        if(evt->slot == UI_EventActionSlot_Edit)
+        {
+          rd_store_view_param_s64(str8_lit("edit_mode"), !edit_mode);
+          edit_mode ^= 1;
+          good_action = 1;
+        }
+        
+        // rjf: cell-granularity deletions
+        if(edit_mode && !mv->cell_value_edit_in_progress && evt->flags & UI_EventFlag_Delete)
+        {
+          Rng1U64 range = union_1u64(r1u64(cursor_base_vaddr, cursor_base_vaddr+cursor_size),
+                                     r1u64(mark_base_vaddr, mark_base_vaddr+cursor_size));
+          U8 *data = push_array(scratch.arena, U8, dim_1u64(range));
+          if(!e_space_write(eval.space, data, range))
+          {
+            log_user_errorf("Could not successfully write to memory.");
+          }
+          good_action = 1;
+        }
+        
+        // rjf: in-progress cell value edit deletions -> delete existing cell half-byte
+        if(edit_mode && mv->cell_value_edit_in_progress && evt->flags & UI_EventFlag_Delete)
+        {
+          mv->cell_value_edit_in_progress = 0;
+          allow_cell_movement = 0;
+          good_action = 1;
+        }
+        
+        // rjf: byte digit -> cell value insertion. if first digit, store, if 2nd, commit
+        if(edit_mode && evt->string.size != 0 && evt->kind == UI_EventKind_Text)
+        {
+          good_action = 1;
+          if(!mv->cell_value_edit_in_progress)
+          {
+            mv->cell_value_edit_in_progress = 1;
+            mv->cell_value_edit_first_digit = evt->string.str[0];
+          }
+          else
+          {
+            U8 digits[] = {mv->cell_value_edit_first_digit, evt->string.str[0]};
+            String8 byte_string = str8(digits, 2);
+            U8 byte_value = (U8)u64_from_str8(byte_string, 16);
+            if(!e_space_write(eval.space, &byte_value, r1u64(cursor_base_vaddr, cursor_base_vaddr+1)))
+            {
+              log_user_errorf("Could not successfully write to memory.");
+            }
+            cell_delta.x = 1;
+            mv->cell_value_edit_in_progress = 0;
+          }
+        }
+        
+        // rjf: determine cell movement delta from cell-granularity operations
+        if(allow_cell_movement) switch(evt->delta_unit)
         {
           default:{}break;
           case UI_EventDeltaUnit_Char:
           {
-            cell_delta.x = (S64)evt->delta_2s32.x;
+            cell_delta.x = (S64)evt->delta_2s32.x * cursor_size;
             cell_delta.y = (S64)evt->delta_2s32.y;
           }break;
           case UI_EventDeltaUnit_Word:
+          {
+            if(evt->delta_2s32.x < 0)
+            {
+              cell_delta.x = -cursor_size;
+            }
+            else if(evt->delta_2s32.x > 0)
+            {
+              cell_delta.x = +cursor_size;
+            }
+          }break;
+          case UI_EventDeltaUnit_Line:
           case UI_EventDeltaUnit_Page:
           {
             if(evt->delta_2s32.x < 0)
@@ -2851,37 +2921,48 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             }
           }break;
         }
-        B32 good_action = 0;
-        if(evt->delta_2s32.x != 0 || evt->delta_2s32.y != 0)
+        
+        // rjf: apply movements
         {
-          good_action = 1;
-        }
-        if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && cursor_base_vaddr != mark_base_vaddr)
-        {
-          MemoryZeroStruct(&cell_delta);
-        }
-        if(good_action)
-        {
-          cell_delta.x = ClampBot(cell_delta.x, (S64)-next_cursor_base_vaddr);
-          cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor_base_vaddr/num_columns));
-          next_cursor_base_vaddr += cell_delta.x;
-          next_cursor_base_vaddr += cell_delta.y*num_columns;
-        }
-        if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor_base_vaddr != mark_base_vaddr)
-        {
-          if(evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0)
+          if(evt->delta_2s32.x != 0 || evt->delta_2s32.y != 0)
           {
-            next_cursor_base_vaddr = Min(cursor_base_vaddr, mark_base_vaddr);
+            good_action = 1;
           }
-          else
+          if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && cursor_base_vaddr != mark_base_vaddr)
           {
-            next_cursor_base_vaddr = Max(cursor_base_vaddr, mark_base_vaddr);
+            MemoryZeroStruct(&cell_delta);
+          }
+          if(good_action)
+          {
+            cell_delta.x = ClampBot(cell_delta.x, (S64)-next_cursor_base_vaddr);
+            cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor_base_vaddr/num_columns));
+            next_cursor_base_vaddr += cell_delta.x;
+            next_cursor_base_vaddr += cell_delta.y*num_columns;
+          }
+          if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor_base_vaddr != mark_base_vaddr)
+          {
+            if(evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0)
+            {
+              next_cursor_base_vaddr = Min(cursor_base_vaddr, mark_base_vaddr);
+            }
+            else
+            {
+              next_cursor_base_vaddr = Max(cursor_base_vaddr, mark_base_vaddr);
+            }
+          }
+          if(good_action && !(evt->flags & UI_EventFlag_KeepMark))
+          {
+            next_mark_base_vaddr = next_cursor_base_vaddr;
           }
         }
-        if(good_action && !(evt->flags & UI_EventFlag_KeepMark))
+        
+        // rjf: abort cell editing on address changes
+        if(next_cursor_base_vaddr != cursor_base_vaddr)
         {
-          next_mark_base_vaddr = next_cursor_base_vaddr;
+          mv->cell_value_edit_in_progress = 0;
         }
+        
+        // rjf: take event
         if(good_action)
         {
           need_update = 1;
@@ -2999,12 +3080,19 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //
   DR_FStrList byte_fstrs[256] = {0};
   DR_FStrList byte_fstrs_selected[256] = {0};
+  DR_FStrList byte_fstrs_changed[256] = {0};
   {
     Vec4F32 selected_color = ui_color_from_name(str8_lit("text"));
+    if(edit_mode) UI_TagF("bad")
+    {
+      selected_color = ui_color_from_name(str8_lit("text"));
+    }
     Vec4F32 full_color = {0};
     UI_TagF("neutral") full_color = ui_color_from_name(str8_lit("text"));
     Vec4F32 zero_color = full_color;
     UI_TagF("weak") zero_color = ui_color_from_name(str8_lit("text"));
+    Vec4F32 changed_color = full_color;
+    UI_TagF("neutral") changed_color = ui_color_from_name(str8_lit("text"));
     for(U64 idx = 0; idx < ArrayCount(byte_fstrs); idx += 1)
     {
       U8 byte = (U8)idx;
@@ -3021,6 +3109,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, selected_color, font_size, 0, 0}};
         dr_fstrs_push(scratch.arena, &byte_fstrs_selected[idx], &fstr);
+      }
+      {
+        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, changed_color, font_size, 0, 0}};
+        dr_fstrs_push(scratch.arena, &byte_fstrs_changed[idx], &fstr);
       }
     }
   }
@@ -3387,7 +3479,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                                              UI_BoxFlag_DrawBackground|
                                              UI_BoxFlag_DrawDropShadow|
                                              UI_BoxFlag_DrawBackgroundBlur|
-                                             UI_BoxFlag_Floating, "table_header");
+                                             UI_BoxFlag_Floating|
+                                             UI_BoxFlag_Clickable, "table_header");
     UI_Parent(header_box)
       RD_Font(RD_FontSlot_Code)
       UI_FontSize(font_size)
@@ -3406,6 +3499,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       ui_spacer(ui_px(big_glyph_advance*1.5f, 1.f));
       UI_WidthFill ui_labelf("ASCII");
     }
+    ui_signal_from_box(header_box);
   }
   
   //////////////////////////////
@@ -3418,7 +3512,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     ui_set_next_fixed_y(footer_rect.y0);
     ui_set_next_fixed_width(dim_2f32(footer_rect).x);
     ui_set_next_fixed_height(dim_2f32(footer_rect).y);
-    footer_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow, "footer");
+    footer_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow, "footer");
     UI_Parent(footer_box) RD_Font(RD_FontSlot_Code)
     {
       UI_PrefWidth(ui_em(7.5f, 1.f)) UI_HeightFill UI_Column UI_TagF("weak")
@@ -3450,6 +3544,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         }
       }
     }
+    ui_signal_from_box(footer_box);
   }
   
   //////////////////////////////
@@ -3629,6 +3724,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               UI_BoxFlags cell_flags = 0;
               Vec4F32 cell_bg_rgba = {0};
               Vec4F32 cell_bd_rgba = ui_color_from_name(str8_lit("text"));
+              if(edit_mode) UI_TagF("bad")
+              {
+                cell_bd_rgba = ui_color_from_name(str8_lit("text"));
+              }
               if(global_byte_num == mouse_hover_byte_num)
               {
                 cell_flags |= UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawDropShadow;
@@ -3676,9 +3775,22 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               if(cell_bd_rgba.w != 0) { ui_set_next_border_color(cell_bd_rgba); }
               if(cell_bg_rgba.w != 0) { ui_set_next_background_color(cell_bg_rgba); }
               UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
-              if(byte_is_selected || byte_is_changed)
+              if(global_byte_idx == cursor_base_vaddr && mv->cell_value_edit_in_progress)
+              {
+                Vec4F32 color = {0};
+                UI_TagF("bad") color = ui_color_from_name(str8_lit("text"));
+                DR_FStrList fstrs = {0};
+                DR_FStr fstr = {str8f(scratch.arena, "%c", mv->cell_value_edit_first_digit), {font, font_raster_flags, color, font_size, 0, 0}};
+                dr_fstrs_push(scratch.arena, &fstrs, &fstr);
+                ui_box_equip_display_fstrs(cell_box, &fstrs);
+              }
+              else if(byte_is_selected)
               {
                 ui_box_equip_display_fstrs(cell_box, &byte_fstrs_selected[byte_value]);
+              }
+              else if(byte_is_changed)
+              {
+                ui_box_equip_display_fstrs(cell_box, &byte_fstrs_changed[byte_value]);
               }
               else
               {
@@ -3748,7 +3860,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           }
         }
         ui_spacer(ui_px(big_glyph_advance*1.5f, 1.f));
-        UI_WidthFill
+        UI_WidthFill UI_TextPadding(0)
         {
           MemoryZero(row_ascii_buffer, num_columns);
           U64 num_bytes_this_row = 0;

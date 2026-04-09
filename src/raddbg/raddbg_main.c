@@ -11,7 +11,7 @@
 //  [ ] make address editable; specialized version of the cursor address editor in tab right-click menu
 // [ ] simplified default layout
 //  [ ] memory view deserves larger spot, in default layout
-// [ ] fix for-loop stepping oddities, likely single-line for-loop stepping
+// [x] fix for-loop stepping oddities, likely single-line for-loop stepping
 // [x] `foo, x` needs to correctly match `hex(foo)`, e.g. in application to expansions
 // [x] eval: pointer casts of register space should promote to process space
 // [x] more control over string visualization; specifically, when *not* to do it, even when using e.g. char *s

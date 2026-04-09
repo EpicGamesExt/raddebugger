@@ -5,7 +5,7 @@
 - Fixed the debugger incorrectly evaluating pointer casts of registers in
   register space, rather than promoting them to process address space
   evaluations. This fixes cases where expressions like `(int *)rax` were not
-  displaying correctly.
+  evaluating correctly.
 - Fixed the debugger incorrectly requiring multiple step operations when source
   lines mapped to multiple discontiguous ranges of instructions. This most
   notably showed up with certain styles of `for`-loops, especially with Clang
