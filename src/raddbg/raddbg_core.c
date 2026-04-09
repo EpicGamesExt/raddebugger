@@ -8095,6 +8095,11 @@ rd_window_frame(void)
                 t->tab = tab;
                 t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab, 0);
                 F32 tab_width_target = dr_dim_from_fstrs(ui_top_tab_size(), &t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
+                B32 tab_is_selected = (tab == panel->selected_tab);
+                if(tab_is_selected && panel_tree.focused == panel)
+                {
+                  tab_width_target += tab_close_width_px;
+                }
                 tab_width_target = Min(max_tab_width_px, tab_width_target);
                 t->tab_width = floor_f32(ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_width_%p", tab), tab_width_target, .initial = reset ? tab_width_target : 0, .rate = rd_state->menu_animation_rate));
                 SLLQueuePush(first_tab_task, last_tab_task, t);
@@ -8236,6 +8241,38 @@ rd_window_frame(void)
                       {
                         UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
                         ui_box_equip_display_fstrs(name_box, &tab_fstrs);
+                      }
+                    }
+                    if(tab_is_selected && panel_tree.focused == panel)
+                    {
+                      UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
+                        RD_Font(RD_FontSlot_Icons)
+                        UI_FontSize(ui_top_font_size()*0.75f)
+                        UI_TagF(".") UI_TagF("tab") UI_TagF("weak") UI_TagF("implicit")
+                        UI_CornerRadius(0)
+                      {
+                        UI_Box *edit_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                                     UI_BoxFlag_DrawBorder|
+                                                                     UI_BoxFlag_DrawBackground|
+                                                                     UI_BoxFlag_DrawText|
+                                                                     UI_BoxFlag_DrawHotEffects|
+                                                                     UI_BoxFlag_DrawActiveEffects,
+                                                                     "%S###edit_view_%p", rd_icon_kind_text_table[RD_IconKind_Gear], tab);
+                        UI_Signal sig = ui_signal_from_box(edit_box);
+                        if(ui_pressed(sig))
+                        {
+                          if(ws->query_is_active &&
+                             ui_key_match(sig.box->key, ws->query_regs->ui_key))
+                          {
+                            rd_cmd(RD_CmdKind_CancelQuery);
+                          }
+                          else
+                          {
+                            rd_cmd(RD_CmdKind_PushQuery,
+                                   .ui_key       = sig.box->key,
+                                   .expr         = push_str8f(scratch.arena, "query:config.$%I64x", tab->id));
+                          }
+                        }
                       }
                     }
                     UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
@@ -11577,6 +11614,19 @@ rd_frame(void)
                                                       .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
                                                       .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
                                                     }));
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("peek_types"),
+                                    e_type_key_cons(.kind = E_TypeKind_Set,
+                                                    .flags = E_TypeFlag_EditableChildren,
+                                                    .name = str8_lit("peek_types"),
+                                                    .irext  = E_TYPE_IREXT_FUNCTION_NAME(peek_types),
+                                                    .access = E_TYPE_ACCESS_FUNCTION_NAME(peek_types),
+                                                    .expand =
+                                                    {
+                                                      .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(peek_types),
+                                                      .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(peek_types),
+                                                      .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(peek_types),
+                                                      .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(peek_types),
+                                                    }));
         e_string2typekey_map_insert(rd_frame_arena(),
                                     rd_state->meta_name2type_map,
                                     str8_lit("call_stack"),
@@ -11600,18 +11650,6 @@ rd_frame(void)
                                                       .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(cfgs_slice),
                                                       .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs_slice),
                                                       .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs_slice),
-                                                    }));
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("environment"),
-                                    e_type_key_cons(.kind = E_TypeKind_Set,
-                                                    .name = str8_lit("environment"),
-                                                    .irext  = E_TYPE_IREXT_FUNCTION_NAME(environment),
-                                                    .access = E_TYPE_ACCESS_FUNCTION_NAME(environment),
-                                                    .expand =
-                                                    {
-                                                      .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(environment),
-                                                      .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(environment),
-                                                      .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment),
-                                                      .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(environment),
                                                     }));
       }
       

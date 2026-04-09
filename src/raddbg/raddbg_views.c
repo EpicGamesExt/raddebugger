@@ -1085,9 +1085,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //
     if(!block_is_root)
     {
+      // TODO(rjf): @hack special-casing these specific hook checks... not good
       if(info.group_cfg_name.size != 0 && (block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs_slice) ||
                                            block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches) ||
-                                           block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment)))
+                                           block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment) ||
+                                           block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(peek_types)))
       {
         CFG_ID id = row->key.child_id;
         info.group_cfg_child = cfg_node_from_id(id);
@@ -2654,7 +2656,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   RD_MemoryViewState *mv = rd_view_state(RD_MemoryViewState);
-  B32 edit_mode = rd_view_setting_b32_from_name(str8_lit("edit_mode"));
+  B32 allow_edits = rd_view_setting_b32_from_name(str8_lit("allow_mutation"));
   
   //////////////////////////////
   //- rjf: if memory views are parameterized by a register-space evaluation,
@@ -2678,6 +2680,17 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   
   //////////////////////////////
+  //- rjf: unpack visual params
+  //
+  FNT_Tag font = rd_font_from_slot(RD_FontSlot_Code);
+  FNT_RasterFlags font_raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code);
+  F32 font_size = ui_top_font_size();
+  F32 big_glyph_advance = fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("H")).x;
+  F32 row_height_px = floor_f32(font_size*2.f);
+  F32 cell_width_px = floor_f32(font_size*2.f);
+  F32 address_margin_width_px = big_glyph_advance*20.f;
+  
+  //////////////////////////////
   //- rjf: unpack parameterization info
   //
   Vec4F32 main_bg_color_rgba = ui_color_from_name(str8_lit("background"));
@@ -2693,9 +2706,14 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   U64 initial_mark_base_vaddr    = mark_base_vaddr;
   U64 num_columns     = rd_view_setting_u64_from_name(str8_lit("num_columns"));
   B32 track_mark_to_cursor = rd_view_setting_b32_from_name(str8_lit("track_mark_to_cursor"));
+  B32 auto_columns = rd_view_setting_b32_from_name(str8_lit("auto_columns"));
   if(num_columns == 0)
   {
     num_columns = 16;
+  }
+  if(auto_columns)
+  {
+    num_columns = (U64)((dim_2f32(rect).x - address_margin_width_px - big_glyph_advance*4.f) / (cell_width_px + big_glyph_advance));
   }
   num_columns = ClampBot(1, num_columns);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
@@ -2738,16 +2756,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       }break;
     }
   }
-  
-  //////////////////////////////
-  //- rjf: unpack visual params
-  //
-  FNT_Tag font = rd_font_from_slot(RD_FontSlot_Code);
-  FNT_RasterFlags font_raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code);
-  F32 font_size = ui_top_font_size();
-  F32 big_glyph_advance = fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("H")).x;
-  F32 row_height_px = floor_f32(font_size*2.f);
-  F32 cell_width_px = floor_f32(font_size*2.f);
   
   //////////////////////////////
   //- rjf: calculate rectangles
@@ -2828,14 +2836,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         Vec2S64 cell_delta = {0};
         B32 allow_cell_movement = 1;
         
-        // rjf: edit mode toggling
-        if(evt->slot == UI_EventActionSlot_Edit)
-        {
-          rd_store_view_param_s64(str8_lit("edit_mode"), !edit_mode);
-          edit_mode ^= 1;
-          good_action = 1;
-        }
-        
         // rjf: copies
         if(evt->flags & UI_EventFlag_Copy)
         {
@@ -2872,7 +2872,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         }
         
         // rjf: pastes
-        if(edit_mode && evt->flags & UI_EventFlag_Paste)
+        if(allow_edits && evt->flags & UI_EventFlag_Paste)
         {
           String8 data_textified = evt->string;
           U8 split_chars[] = {' ', '\n', '\r'};
@@ -2903,7 +2903,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         }
         
         // rjf: cell-granularity deletions
-        if(edit_mode && !mv->cell_value_edit_in_progress && evt->flags & UI_EventFlag_Delete)
+        if(allow_edits && !mv->cell_value_edit_in_progress && evt->flags & UI_EventFlag_Delete)
         {
           Rng1U64 range = union_1u64(r1u64(cursor_base_vaddr, cursor_base_vaddr+cursor_size),
                                      r1u64(mark_base_vaddr, mark_base_vaddr+cursor_size));
@@ -2913,10 +2913,14 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             log_user_errorf("Could not successfully write to memory.");
           }
           good_action = 1;
+          if(cursor_base_vaddr != mark_base_vaddr)
+          {
+            allow_cell_movement = 0;
+          }
         }
         
         // rjf: in-progress cell value edit deletions -> delete existing cell half-byte
-        if(edit_mode && mv->cell_value_edit_in_progress && evt->flags & UI_EventFlag_Delete)
+        if(allow_edits && mv->cell_value_edit_in_progress && evt->flags & UI_EventFlag_Delete)
         {
           mv->cell_value_edit_in_progress = 0;
           allow_cell_movement = 0;
@@ -2924,7 +2928,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         }
         
         // rjf: byte digit -> cell value insertion. if first digit, store, if 2nd, commit
-        if(edit_mode && evt->string.size != 0 && evt->kind == UI_EventKind_Text && !(evt->flags & UI_EventFlag_Paste))
+        if(allow_edits && evt->string.size != 0 && evt->kind == UI_EventKind_Text && !(evt->flags & UI_EventFlag_Paste))
         {
           good_action = 1;
           if(!mv->cell_value_edit_in_progress)
@@ -3005,7 +3009,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             next_cursor_base_vaddr += cell_delta.x;
             next_cursor_base_vaddr += cell_delta.y*num_columns;
           }
-          if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor_base_vaddr != mark_base_vaddr)
+          if(allow_cell_movement && good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor_base_vaddr != mark_base_vaddr)
           {
             if(evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0)
             {
@@ -3016,7 +3020,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               next_cursor_base_vaddr = Max(cursor_base_vaddr, mark_base_vaddr);
             }
           }
-          if(good_action && !(evt->flags & UI_EventFlag_KeepMark))
+          if(allow_cell_movement && good_action && !(evt->flags & UI_EventFlag_KeepMark))
           {
             next_mark_base_vaddr = next_cursor_base_vaddr;
           }
@@ -3149,7 +3153,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   DR_FStrList byte_fstrs_changed[256] = {0};
   {
     Vec4F32 selected_color = ui_color_from_name(str8_lit("text"));
-    if(edit_mode) UI_TagF("bad")
+    if(!allow_edits) UI_TagF("weak")
     {
       selected_color = ui_color_from_name(str8_lit("text"));
     }
@@ -3551,14 +3555,15 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       RD_Font(RD_FontSlot_Code)
       UI_FontSize(font_size)
     {
-      UI_PrefWidth(ui_px(big_glyph_advance*20.f, 1.f)) ui_labelf("Address");
+      UI_PrefWidth(ui_px(address_margin_width_px, 1.f)) ui_labelf("Address");
       UI_PrefWidth(ui_px(cell_width_px, 1.f))
         UI_TextAlignment(UI_TextAlign_Center)
       {
-        Rng1U64 col_selection_rng = r1u64(cursor_base_vaddr%num_columns, mark_base_vaddr%num_columns);
+        Rng1U64 col_selection_rng = r1u64((cursor_base_vaddr - view_range.min) % num_columns,
+                                          (mark_base_vaddr - view_range.min) % num_columns);
         for(U64 row_off = 0; row_off < num_columns; row_off += 1)
         {
-          B32 column_is_selected = (selection.min%num_columns <= row_off && row_off <= selection.max%num_columns);
+          B32 column_is_selected = ((selection.min - view_range.min) % num_columns <= row_off && row_off <= (selection.max - view_range.min) % num_columns);
           UI_TagF(column_is_selected ? "" : "weak") ui_labelf("%I64X", row_off);
         }
       }
@@ -3650,8 +3655,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //- rjf: interact with row container
   //
   U64 mouse_hover_byte_num = 0;
+  B32 dragging_is_active = 0;
   {
     UI_Signal sig = ui_signal_from_box(row_container_box);
+    dragging_is_active = ui_dragging(sig);
     
     // rjf: calculate hovered byte
     if(ui_hovering(sig) || ui_dragging(sig))
@@ -3790,7 +3797,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               UI_BoxFlags cell_flags = 0;
               Vec4F32 cell_bg_rgba = {0};
               Vec4F32 cell_bd_rgba = ui_color_from_name(str8_lit("text"));
-              if(edit_mode) UI_TagF("bad")
+              if(!allow_edits) UI_TagF("weak")
               {
                 cell_bd_rgba = ui_color_from_name(str8_lit("text"));
               }
@@ -3898,9 +3905,9 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                   }
                 }
               }
-              if(annotation_node != 0 && mouse_hover_byte_num == global_byte_num)
+              if(annotation_node != 0 && mouse_hover_byte_num == global_byte_num && !byte_is_selected && !dragging_is_active)
               {
-                UI_Tooltip UI_FontSize(ui_top_font_size()) UI_PrefHeight(ui_px(ui_top_font_size()*1.75f, 1.f))
+                UI_Tooltip UI_PrefHeight(ui_px(ui_top_font_size()*1.75f, 1.f))
                 {
                   for(AnnotationNode *a_n = annotation_node; a_n != 0; a_n = a_n->next)
                   {
@@ -3918,6 +3925,38 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                     if(a_n->next != 0)
                     {
                       ui_spacer(ui_em(1.5f, 1.f));
+                    }
+                  }
+                }
+              }
+              if(mouse_hover_byte_num == global_byte_num && byte_is_selected && !dragging_is_active)
+              {
+                UI_Tooltip
+                {
+                  CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+                  CFG_NodePtrList peek_types = cfg_node_child_list_from_string(scratch.arena, view, str8_lit("peek_type"));
+                  for EachNode(n, CFG_NodePtrNode, peek_types.first)
+                  {
+                    String8 type_string = n->v->first->string;
+                    E_Eval type_size_eval = e_eval_from_stringf("sizeof(%S)", type_string);
+                    if(type_size_eval.msgs.max_kind == E_MsgKind_Null && dim_1u64(selection)+1 >= type_size_eval.value.u64)
+                    {
+                      String8 casted_expr = str8f(scratch.arena, "*(((%S) *)((((uint8 *)(&(%S)) + 0x%I64x))))",
+                                                  type_string,
+                                                  eval.string.size ? eval.string : str8_lit("0"),
+                                                  selection.min - view_range.min);
+                      E_Eval peek_eval = e_eval_from_string(casted_expr);
+                      UI_PrefWidth(ui_children_sum(1)) UI_Row
+                      {
+                        EV_StringParams params =
+                        {
+                          .flags = EV_StringFlag_ReadOnlyDisplayRules,
+                          .radix = 10,
+                        };
+                        String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*40.f, peek_eval);
+                        UI_TextAlignment(UI_TextAlign_Left) UI_PrefWidth(ui_em(4.f, 1.f)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), type_string);
+                        UI_PrefWidth(ui_text_dim(10, 1)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
+                      }
                     }
                   }
                 }

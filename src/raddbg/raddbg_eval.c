@@ -1249,6 +1249,120 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches)
 }
 
 ////////////////////////////////
+//~ rjf: `peek_types` Type Hooks
+
+typedef struct RD_PeekTypesAccel RD_PeekTypesAccel;
+struct RD_PeekTypesAccel
+{
+  CFG_NodePtrArray cfgs;
+};
+
+E_TYPE_IREXT_FUNCTION_DEF(peek_types)
+{
+  RD_PeekTypesAccel *accel = push_array(arena, RD_PeekTypesAccel, 1);
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_OpList oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
+    String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+    E_Interpretation interpret = e_interpret(bytecode);
+    E_Space space = interpret.space;
+    CFG_Node *target = rd_cfg_from_eval_space(space);
+    CFG_NodePtrList env_strings = {0};
+    for(CFG_Node *child = target->first; child != &cfg_nil_node; child = child->next)
+    {
+      if(str8_match(child->string, str8_lit("peek_type"), 0))
+      {
+        cfg_node_ptr_list_push(scratch.arena, &env_strings, child);
+      }
+    }
+    accel->cfgs = cfg_node_ptr_array_from_list(arena, &env_strings);
+    scratch_end(scratch);
+  }
+  E_IRExt result = {accel};
+  return result;
+}
+
+E_TYPE_ACCESS_FUNCTION_DEF(peek_types)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  if(expr->kind == E_ExprKind_ArrayIndex)
+  {
+    RD_PeekTypesAccel *accel = (RD_PeekTypesAccel *)lhs_irtree->user_data;
+    CFG_NodePtrArray *cfgs = &accel->cfgs;
+    E_Value rhs_value = e_value_from_expr(expr->first->next);
+    if(0 <= rhs_value.u64 && rhs_value.u64 < cfgs->count)
+    {
+      CFG_Node *cfg = cfgs->v[rhs_value.u64];
+      result.root      = e_irtree_set_space(arena, rd_eval_space_from_cfg(cfg), e_irtree_const_u(arena, 0));
+      result.type_key  = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), cfg->first->string.size, E_TypeFlag_IsCodeText);
+      result.mode      = E_Mode_Offset;
+    }
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(peek_types)
+{
+  RD_PeekTypesAccel *accel = (RD_PeekTypesAccel *)eval.irtree.user_data;
+  E_TypeExpandInfo result = {accel, accel->cfgs.count + 1};
+  return result;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(peek_types)
+{
+  RD_PeekTypesAccel *accel = (RD_PeekTypesAccel *)user_data;
+  Rng1U64 legal_idx_range = r1u64(0, accel->cfgs.count);
+  Rng1U64 read_range = intersect_1u64(idx_range, legal_idx_range);
+  U64 read_range_count = dim_1u64(read_range);
+  for(U64 idx = 0; idx < read_range_count; idx += 1)
+  {
+    U64 cfg_idx = read_range.min + idx;
+    if(cfg_idx < accel->cfgs.count)
+    {
+      evals_out[idx] = e_eval_wrapf(eval, "$[%I64u]", cfg_idx);
+    }
+  }
+}
+
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(peek_types)
+{
+  U64 id = 0;
+  RD_PeekTypesAccel *accel = (RD_PeekTypesAccel *)user_data;
+  if(1 <= num && num <= accel->cfgs.count)
+  {
+    U64 idx = (num-1);
+    id = accel->cfgs.v[idx]->id;
+  }
+  else if(num == accel->cfgs.count+1)
+  {
+    id = max_U64;
+  }
+  return id;
+}
+
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(peek_types)
+{
+  U64 num = 0;
+  RD_PeekTypesAccel *accel = (RD_PeekTypesAccel *)user_data;
+  if(id != 0 && id != max_U64)
+  {
+    for EachIndex(idx, accel->cfgs.count)
+    {
+      if(accel->cfgs.v[idx]->id == id)
+      {
+        num = idx+1;
+        break;
+      }
+    }
+  }
+  else if(id == max_U64)
+  {
+    num = accel->cfgs.count + 1;
+  }
+  return num;
+}
+
+////////////////////////////////
 //~ rjf: `unattached_processes` Type Hooks
 
 typedef struct RD_UnattachedProcessesAccel RD_UnattachedProcessesAccel;

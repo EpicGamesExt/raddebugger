@@ -661,7 +661,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             E_Type *lhs_type = e_type_from_key(lhs_irtree_try_chain->type_key);
             E_TypeAccessFunctionType *lhs_access = lhs_type->access;
             for(E_Type *lens_type = lhs_type;
-                lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
+                lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set || (E_TypeKind_FirstMeta <= lens_type->kind && lens_type->kind <= E_TypeKind_LastMeta);
                 lens_type = e_type_from_key(lens_type->direct_type_key))
             {
               if(lens_type->access != 0)
@@ -2444,7 +2444,9 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
     E_Type *type = e_type_from_key(result.type_key);
     {
       E_TypeIRExtFunctionType *irext = type->irext;
-      for(E_Type *t = type; t->kind == E_TypeKind_Lens || t->kind == E_TypeKind_Set; t = e_type_from_key(t->direct_type_key))
+      for(E_Type *t = type;
+          t->kind == E_TypeKind_Lens || t->kind == E_TypeKind_Set || (E_TypeKind_FirstMeta <= t->kind && t->kind <= E_TypeKind_LastMeta);
+          t = e_type_from_key(t->direct_type_key))
       {
         if(t->irext != 0)
         {

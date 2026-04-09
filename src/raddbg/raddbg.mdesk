@@ -200,6 +200,7 @@ RD_VocabTable:
   {rgba                 ""                          "RGBA"                      ""                    Palette                                        }
   {path                 ""                          "Path"                      ""                    FileOutline                                    }
   {guid                 ""                          "GUID"                      ""                    Null                                           }
+  {peek_type            _                           "Peek Type"                 _                     Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -531,7 +532,6 @@ RD_VocabTable:
         'show_symbol_names': bool,
       @no_callee_helper @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers': bool,
-      
     }
     ```
   }
@@ -540,7 +540,7 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
-      @description("An expression which refers to the base address of data which should be viewed as memory.")
+      @display_name("Base Address") @description("An expression which refers to the base address of data which should be viewed as memory.")
         'expression': expr_string,
       @display_name("Address Range Size") @description("The number of bytes of the viewed memory range.")
         'size': expr_string,
@@ -548,12 +548,16 @@ RD_VocabTable:
         'cursor': expr_string,
       @default(1) @display_name("Cursor Size") @description("The size, in bytes, of the cursor.")
         'cursor_size': @range[1, 16] u64,
-      @default(16) @description("The number of columns to build before building new rows.")
+      @expand_if("!$.auto_columns") @default(16) @description("The number of columns to build before building new rows.")
         'num_columns': @range[1, 64] u64,
       @default(1) @display_name("Track Mark To Cursor") @description("Ensures that the mark always follows the cursor, if the cursor value is updated.")
         'track_mark_to_cursor': bool,
-      @default(0) @display_name("Edit Mode") @description("Enables editing operations on memory contents.")
-        'edit_mode': bool,
+      @default(1) @display_name("Allow Mutation") @description("Allows operations which mutate memory.")
+        'allow_mutation': bool,
+      @default(0) @display_name("Automatically Size Columns") @description("Determines the number of columns based on the available space.")
+        'auto_columns': bool,
+      @display_name("Peek Types") @description("A list of types to interpret selected and hovered memory as.")
+        'peek_types': query,
     }
     ```
   }
@@ -935,7 +939,7 @@ RD_CmdTable:    //               |        |              |                |     
   {MoveView                       0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "move_view"                   "Move View"                                   "Moves a view to a new panel."                                                                                     ""                               ""                                                               }
   {TabBarTop                      1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           UpArrow               "tab_bar_top"                 "Anchor Tab Bar To Top"                       "Anchors a panel's tab bar to the top of the panel."                                                               ""                               "$tab,"                                                          }
   {TabBarBottom                   1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           DownArrow             "tab_bar_bottom"              "Anchor Tab Bar To Bottom"                    "Anchors a panel's tab bar to the bottom of the panel."                                                            ""                               "$tab,"                                                          }
-  {TabSettings                    1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Gear                  "tab_settings"                "Tab Settings"                                "Opens settings for a tab."                                                                                        ""                               ""                                                               }
+  {TabSettings                    1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Gear                  "tab_settings"                "Selected Tab Settings"                       "Opens settings for a tab."                                                                                        "view,options"                   ""                                                               }
   
   //- rjf: files
   {SetCurrentPath                 0        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "set_current_path"            "Set Current Path"                            "Sets the debugger's current path, which is used as a starting point when browsing for files."                     ""                               ""                                                               }
@@ -1241,6 +1245,7 @@ RD_DefaultBindingTable:
   { "tab_bar_top"                 Up        ctrl     shift     alt        }
   { "tab_bar_bottom"              Down      ctrl     shift     alt        }
   { "open_tab"                    T         ctrl     0         0          }
+  { "tab_settings"                T         ctrl     0         alt        }
   
   //- rjf: files
   { "open"                        O         ctrl     0         0          }
