@@ -11,16 +11,12 @@
 ////////////////////////////////
 // Hash table
 
-#define PDB_HASH_TABLE_PACK_FUNC(name) void name(Arena *arena, String8List *local_data_srl, String8List *key_value_srl, String8 key, String8 value, void *ud)
-typedef PDB_HASH_TABLE_PACK_FUNC(PDB_HashTablePackFunc);
-
-#define PDB_HASH_TABLE_UNPACK_FUNC(name) B32 name(void *ud, String8 local_data, String8 key_value_data, U64 *key_value_cursor, String8 *key_out, String8 *value_out)
-typedef PDB_HASH_TABLE_UNPACK_FUNC(PDB_HashTableUnpackFunc);
-
 typedef struct PDB_HashTableBucket
 {
   String8 key;
   String8 value;
+  U32     key_offset;
+  U32     insert_idx;
 } PDB_HashTableBucket;
 
 typedef struct PDB_HashTable
@@ -32,6 +28,12 @@ typedef struct PDB_HashTable
   U32   			         max;
   U32                  count;
 } PDB_HashTable;
+
+#define PDB_HASH_TABLE_PACK_FUNC(name) void name(Arena *arena, String8List *key_value_srl, PDB_HashTableBucket *bucket, String8 key, String8 value, void *ud)
+typedef PDB_HASH_TABLE_PACK_FUNC(PDB_HashTablePackFunc);
+
+#define PDB_HASH_TABLE_UNPACK_FUNC(name) B32 name(void *ud, String8 local_data, String8 key_value_data, U64 *key_value_cursor, String8 *key_out, String8 *value_out)
+typedef PDB_HASH_TABLE_UNPACK_FUNC(PDB_HashTableUnpackFunc);
 
 typedef enum
 {
@@ -331,7 +333,7 @@ typedef struct
 
 internal PDB_Context *    pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid);
 internal void             pdb_release(PDB_Context **pdb_ptr);
-internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi);
+internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped);
 internal void             pdb_set_machine(PDB_Context *pdb, COFF_MachineType machine);
 internal void             pdb_set_guid(PDB_Context *pdb, Guid guid);
 internal void             pdb_set_time_stamp(PDB_Context *pdb, COFF_TimeStamp time_stamp);
@@ -382,7 +384,7 @@ internal CV_SymbolNode *  psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32
 // DBI
 
 internal PDB_DbiContext *          dbi_alloc(COFF_MachineType machine, U32 age);
-internal void                      dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber dbi_sn, CV_StringHashTable string_ht);
+internal void                      dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber dbi_sn, CV_StringHashTable string_ht, B32 is_stripped);
 internal void                      dbi_release(PDB_DbiContext **dbi_ptr);
 internal PDB_DbiModule *           dbi_push_module(PDB_DbiContext *dbi, String8 obj_path, String8 lib_path);
 internal String8                   dbi_module_read_symbol_data(Arena *arena, MSF_Context *msf, PDB_DbiModule *mod);
@@ -403,7 +405,7 @@ internal void                      dbi_build_section_header_stream(PDB_DbiContex
 internal void                    pdb_hash_table_alloc(PDB_HashTable *ht, U32 max);
 internal void                    pdb_hash_table_release(PDB_HashTable *ht);
 internal PDB_HashTableParseError pdb_hash_table_from_data(PDB_HashTable *ht, String8 data, B32 has_local_data, PDB_HashTableUnpackFunc *unpack_func, void *unpack_ud, U64 *read_bytes_out);
-internal String8                 pdb_data_from_hash_table(Arena *arena, PDB_HashTable *ht, B32 has_local_data, PDB_HashTablePackFunc *pack_func, void *pack_ud);
+internal String8                 pdb_data_from_hash_table(Arena *arena, PDB_HashTable *ht, PDB_HashTablePackFunc *pack_func, void *pack_ud);
 internal void                    pdb_hash_table_set(PDB_HashTable *ht, String8 key, String8 value);
 internal B32                     pdb_hash_table_get(PDB_HashTable *ht, String8 key, String8 *value_out);
 internal void                    pdb_hash_table_delete(PDB_HashTable *ht, String8 key);
@@ -412,6 +414,7 @@ internal B32                     pdb_hash_table_is_present(PDB_HashTable *ht, U3
 internal B32                     pdb_hash_table_is_deleted(PDB_HashTable *ht, U32 k);
 internal U32                     pdb_hash_table_hash(String8 key);
 internal void                    pdb_hash_table_grow(PDB_HashTable *ht, U64 new_capacity);
+internal PDB_HashTableBucket **  pdb_hash_table_get_present_buckets(Arena *arena, PDB_HashTable *ht);
 internal void                    pdb_hash_table_get_present_keys_and_values(Arena *arena, PDB_HashTable *ht, String8Array *keys_out, String8Array *values_out);
 
 ////////////////////////////////

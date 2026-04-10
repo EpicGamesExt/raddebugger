@@ -69,4 +69,29 @@ T_BeginTest(str8_list_substr)
   }
 }
 
+T_BeginTest(bit_array)
+{
+  for (U64 start=0; start<32*3; start++) {
+    for (U64 end=start; end<32*3; end++) {
+      U32 v[3] = { 0 };
+      for (U64 i=start; i<end; i++) {
+        v[i/32] |= 1 << (i%32);
+      }
+      for (U64 lo=0; lo<32*3; lo++) {
+        for (U64 hi=0; hi<32*3; hi++) {
+          U64 expected_idx = Min(hi, end) - 1;
+          B32 expected_r = hi <= start || lo >= end || lo >= hi || start >= end ? 0 : 1;
+          U64 idx = bit_array_scan_right_to_left32((U32Array){.v=v, .count=ArrayCount(v)}, lo, hi, 1);
+          B32 r = idx < hi;
+          T_Ok(r == expected_r);
+          if (r) {
+            T_Ok(idx == expected_idx);
+
+          }
+        }
+      }
+    }
+  }
+}
+
 #undef T_Group
