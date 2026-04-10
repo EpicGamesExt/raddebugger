@@ -467,6 +467,23 @@ cv_make_pub32(Arena *arena, CV_Pub32Flags flags, U32 off, U16 isect, String8 nam
 }
 
 internal B32
+cv_is_gproc(CV_Symbol symbol)
+{
+  return symbol.kind == CV_SymKind_GPROC32        ||
+         symbol.kind == CV_SymKind_GPROCMIPS      ||
+         symbol.kind == CV_SymKind_GPROCIA64      ||
+         symbol.kind == CV_SymKind_GPROC32_ID     ||
+         symbol.kind == CV_SymKind_GPROCMIPS_ID   ||
+         symbol.kind == CV_SymKind_GPROCIA64_ID   ||
+         symbol.kind == CV_SymKind_GPROC16        ||
+         symbol.kind == CV_SymKind_GPROC32_16t    ||
+         symbol.kind == CV_SymKind_GPROCMIPS_16t  ||
+         symbol.kind == CV_SymKind_GPROC32_ST     ||
+         symbol.kind == CV_SymKind_GPROCMIPS_ST   ||
+         symbol.kind == CV_SymKind_GPROCIA64_ST;
+}
+
+internal B32
 cv_is_lproc(CV_Symbol symbol)
 {
   return symbol.kind == CV_SymKind_LPROC32        ||

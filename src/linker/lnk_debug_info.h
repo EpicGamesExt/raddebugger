@@ -27,6 +27,7 @@ typedef struct
 {
   LNK_IO_Flags io_flags;
   U64          obj_count;
+  B32          is_stripped;
 
   U64           count;
   LNK_Obj     **obj_arr;

@@ -50,8 +50,8 @@ typedef enum
   LNK_CmdSwitch_FailIfMismatch,
   LNK_CmdSwitch_FileAlign,
   LNK_CmdSwitch_Fixed,
-  LNK_CmdSwitch_FunctionPadMin,
   LNK_CmdSwitch_Force,
+  LNK_CmdSwitch_FunctionPadMin,
   LNK_CmdSwitch_Heap,
   LNK_CmdSwitch_HighEntropyVa,
   LNK_CmdSwitch_Ignore,
@@ -79,6 +79,7 @@ typedef enum
   LNK_CmdSwitch_Pdb,
   LNK_CmdSwitch_PdbAltPath,
   LNK_CmdSwitch_PdbPageSize,
+  LNK_CmdSwitch_PdbStripped,
   LNK_CmdSwitch_Release,
   LNK_CmdSwitch_Stack,
   LNK_CmdSwitch_SubSystem,
@@ -312,6 +313,7 @@ typedef struct LNK_Config
   String8List                 raw_cmd_line;
   String8                     pdb_name;
   String8                     pdb_alt_path;
+  String8                     pdb_stripped_name;
   String8                     mt_path;
   LNK_TypeNameHashMode        pdb_hash_type_names;
   String8                     pdb_hash_type_name_map;

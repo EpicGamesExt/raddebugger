@@ -53,6 +53,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Pdb,                0, "PDB",                  ":FILENAME",                      "File name of the output PDB."                                 },
   { LNK_CmdSwitch_PdbAltPath,         0, "PDBALTPATH",           ":PATH",                          "Alternative output path for the PDB."                         },
   { LNK_CmdSwitch_PdbPageSize,        0, "PDBPAGESIZE",          ":#",                             "Page size must be power of two."                              },
+  { LNK_CmdSwitch_PdbStripped,        0, "PDBSTRIPPED",          ":FILENAME",                      "Create a stripped PDB containing public symbols, a section map, and a list of object files." },
   { LNK_CmdSwitch_Release,            1, "RELEASE",              "",                               "Write image checksum."                                        },
   { LNK_CmdSwitch_Stack,              1, "STACK",                ":RESERVE[,COMMIT]",              "Set reserve and commit size for the stack."                   },
   { LNK_CmdSwitch_SubSystem,          1, "SUBSYSTEM",            ":{CONSOLE|NATIVE|WINDOWS}[,#[.##]]", "Set subsystem for the image."                             },
@@ -1718,6 +1719,13 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "page size must be >= %u bytes", MSF_MIN_PAGE_SIZE);
       }
+    }
+  } break;
+
+  case LNK_CmdSwitch_PdbStripped: {
+    String8 file_name;
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &file_name)) {
+      config->pdb_stripped_name = str8_copy(config->arena, file_name);
     }
   } break;
 

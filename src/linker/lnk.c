@@ -2123,7 +2123,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     }
 
     ProfBegin("Build * Debug Directories *");
-    if (config->debug_mode != LNK_DebugMode_None && config->debug_mode != LNK_DebugMode_Null) {
+    if (lnk_do_debug_info(config)) {
       String8 pdb_dir_obj = pe_make_debug_directory_pdb_obj(arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->pdb_alt_path);
       lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Debug Directory PDB *"), pdb_dir_obj);
     }
@@ -5296,6 +5296,77 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types);
       lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb_data);
       lnk_timer_end(LNK_Timer_Pdb);
+    }
+
+    //
+    // stripped PDB
+    //
+    if (config->pdb_stripped_name.size != 0) {
+      CV_DebugS *debug_s_arr = push_array(scratch.arena, CV_DebugS, cv.obj_count);
+      for EachIndex(obj_idx, cv.obj_count) {
+
+        CV_DebugS   *debug_s_dst = &debug_s_arr[obj_idx];
+        CV_DebugS   *debug_s_src = &cv.debug_s_arr[obj_idx];
+        String8List *dst         = &debug_s_dst->data_list[CV_C13SubSectionIdxKind_Symbols];
+        String8List *src         = &debug_s_src->data_list[CV_C13SubSectionIdxKind_Symbols];
+
+        U64 proc_count = 0;
+        U64 proc_size  = 0;
+        U64 section = 0;
+        for EachNode(n, String8Node, src->first) {
+          for (U64 cursor = 0; cursor < n->string.size; ) {
+            U64 c = cursor;
+            CV_Symbol symbol = {0};
+            TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
+            if (symbol.kind == CV_SymKind_SKIP) { continue; }
+            if (cv_is_lproc(symbol)) {
+              proc_count += 1;
+              proc_size  += AlignPow2(symbol.data.size, CV_SymbolAlign);
+            }
+          }
+          section += 1;
+        }
+
+        if (proc_count) {
+          U64 end_count     = proc_count;
+          U64 symbol_count  = proc_count + end_count;
+          U64 buffer_size   = proc_size + sizeof(CV_SymbolHeader) * symbol_count;
+          U8 *buffer        = push_array(scratch.arena, U8, buffer_size);
+          U64 buffer_cursor = 0;
+
+          for EachNode(n, String8Node, src->first) {
+            for (U64 cursor = 0; cursor < n->string.size; ) {
+              CV_Symbol symbol = {0};
+              TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
+              if (symbol.kind == CV_SymKind_SKIP) { continue; }
+              if (cv_is_lproc(symbol)) {
+                CV_SymProc32 *src_proc = (CV_SymProc32 *)symbol.data.str;
+                src_proc->itype = 0;
+
+                CV_Symbol end_symbol = { .kind = CV_SymKind_END };
+
+                buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &symbol, CV_SymbolAlign);
+                buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &end_symbol, CV_SymbolAlign);
+              }
+            }
+          }
+          Assert(buffer_cursor == buffer_size);
+
+          str8_list_push(scratch.arena, dst, str8(buffer, buffer_size));
+        }
+      }
+
+      LNK_CodeViewInput stripped_cv = {0};
+      stripped_cv.io_flags            = config->io_flags;
+      stripped_cv.is_stripped         = 1;
+      stripped_cv.obj_arr             = cv.obj_arr;
+      stripped_cv.obj_count           = cv.obj_count; 
+      stripped_cv.count               = cv.obj_count;
+      stripped_cv.debug_s_arr         = debug_s_arr;
+      stripped_cv.symbol_input_ranges = push_array(scratch.arena, Rng1U64, tp->worker_count);
+
+      String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0});
+      lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_data);
     }
 
     lnk_timer_end(LNK_Timer_Debug);
