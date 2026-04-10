@@ -114,9 +114,19 @@ t_run_fail_handler(void *raw_ctx)
 internal T_RunResult
 t_run(T_Run run)
 {
-  T_RunCtx ctx = {0};
-  ctx.run      = run;
-  os_safe_call(t_run_caller, t_run_fail_handler, &ctx);
+  T_RunCtx ctx = { .run = run };
+
+  B32 do_safe_call = 1;
+#if OS_WINDOWS
+  if (IsDebuggerPresent()) {
+    do_safe_call = 0;
+  }
+#endif
+  if (do_safe_call) {
+    os_safe_call(t_run_caller, t_run_fail_handler, &ctx);
+  } else {
+    t_run_caller(&ctx);
+  }
   return ctx.result;
 }
 

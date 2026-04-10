@@ -1453,10 +1453,9 @@ msf_find_stream(MSF_Context *msf, MSF_StreamNumber sn)
 }
 
 internal void
-msf_release(MSF_Context **msf_ptr)
+msf_release(MSF_Context *msf)
 {
-  arena_release((*msf_ptr)->arena);
-  *msf_ptr = 0;
+  arena_release(msf->arena);
 }
 
 internal String8List

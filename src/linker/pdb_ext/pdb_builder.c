@@ -200,7 +200,8 @@ pdb_hash_table_grow(PDB_HashTable *ht, U64 new_capacity)
   for (U32 i = 0; i < ht->max; ++i) {
     if (bit_array_is_bit_set(ht->present_bits, i)) {
       PDB_HashTableBucket *bucket = &ht->bucket_arr[i];
-      B32 is_set = pdb_hash_table_try_set(&new_ht, bucket->key, bucket->value);
+      PDB_HashTableBucket *is_set = pdb_hash_table_try_set(&new_ht, bucket->key, bucket->value);
+      is_set->insert_idx = bucket->insert_idx;
       Assert(is_set);
     }
   }
@@ -215,11 +216,11 @@ pdb_hash_table_hash(String8 key)
   return (U16)pdb_hash_v1(key);
 }
 
-internal B32
+internal PDB_HashTableBucket *
 pdb_hash_table_try_set(PDB_HashTable *ht, String8 key, String8 value)
 {
   ProfBeginFunction();
-  B32 is_set = 0;
+  PDB_HashTableBucket *is_set = 0;
   U32 best_ibucket = pdb_hash_table_hash(key) % ht->max;
   U32 ibucket = best_ibucket;
   do {
@@ -234,7 +235,7 @@ pdb_hash_table_try_set(PDB_HashTable *ht, String8 key, String8 value)
       bit_array_set_bit32(ht->deleted_bits, ibucket, 0);
 
       ht->count += 1;
-      is_set = 1;
+      is_set = bucket;
       break;
     }
     ibucket = (ibucket + 1) % ht->max;
@@ -255,7 +256,7 @@ pdb_hash_table_set(PDB_HashTable *ht, String8 key, String8 value)
   }
 
   // set new item
-  B32 is_set = pdb_hash_table_try_set(ht, key, value);
+  PDB_HashTableBucket *is_set = pdb_hash_table_try_set(ht, key, value);
   AssertAlways(is_set);
 
   ProfEnd();
@@ -1696,11 +1697,10 @@ gsi_alloc(void)
 }
 
 internal void
-gsi_release(PDB_GsiContext **gsi_ptr)
+gsi_release(PDB_GsiContext *gsi)
 {
   ProfBeginFunction();
-  arena_release((*gsi_ptr)->arena);
-  *gsi_ptr = NULL;
+  arena_release(gsi->arena);
   ProfEnd();
 }
 
@@ -2238,12 +2238,11 @@ psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumbe
 }
 
 internal void
-psi_release(PDB_PsiContext **psi_ptr)
+psi_release(PDB_PsiContext *psi)
 {
   ProfBeginFunction();
-  gsi_release(&(*psi_ptr)->gsi);
-  arena_release((*psi_ptr)->arena);
-  *psi_ptr = NULL;
+  gsi_release(psi->gsi);
+  arena_release(psi->arena);
   ProfEnd();
 }
 
@@ -2916,11 +2915,10 @@ dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumbe
 }
 
 internal void
-dbi_release(PDB_DbiContext **dbi_ptr)
+dbi_release(PDB_DbiContext *dbi)
 {
   ProfBeginFunction();
-  arena_release((*dbi_ptr)->arena);
-  *dbi_ptr = 0;
+  arena_release(dbi->arena);
   ProfEnd();
 }
 
@@ -3077,18 +3075,13 @@ pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U3
 }
 
 internal void
-pdb_release(PDB_Context **pdb_ptr)
+pdb_release(PDB_Context *pdb)
 {
   ProfBeginFunction();
-  PDB_Context *pdb = *pdb_ptr;
-  msf_release(&pdb->msf);
-  dbi_release(&pdb->dbi);
-  gsi_release(&pdb->gsi);
-  for (U64 i = 1; i < ArrayCount(pdb->type_servers); ++i) {
-	pdb_type_server_release(&pdb->type_servers[i]);
-  }
+  dbi_release(pdb->dbi);
+  gsi_release(pdb->gsi);
+  for (U64 i = 1; i < ArrayCount(pdb->type_servers); ++i) { pdb_type_server_release(&pdb->type_servers[i]); }
   arena_release(pdb->arena);
-  *pdb_ptr = 0;
   ProfEnd();
 }
 

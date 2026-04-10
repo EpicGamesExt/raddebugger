@@ -332,7 +332,7 @@ typedef struct
 // PDB
 
 internal PDB_Context *    pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid);
-internal void             pdb_release(PDB_Context **pdb_ptr);
+internal void             pdb_release(PDB_Context *pdb);
 internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped);
 internal void             pdb_set_machine(PDB_Context *pdb, COFF_MachineType machine);
 internal void             pdb_set_guid(PDB_Context *pdb, Guid guid);
@@ -359,7 +359,7 @@ internal PDB_SrcError      pdb_add_src(PDB_InfoContext *info, MSF_Context *msf, 
 
 internal PDB_GsiContext *   gsi_alloc(void);
 internal void               gsi_build(TP_Context *tp, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumber gsi_sn, MSF_StreamNumber symbols_sn);
-internal void               gsi_release(PDB_GsiContext **gsi_ptr);
+internal void               gsi_release(PDB_GsiContext *gsi);
 internal void               gsi_write_build_result(TP_Context *tp, PDB_GsiBuildResult build, MSF_Context *msf, MSF_StreamNumber sn, MSF_StreamNumber symbols_sn);
 internal PDB_GsiBuildResult gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_base, B32 export_symbol_ptr_arr, U64 msf_page_size);
 internal U32                gsi_hash(PDB_GsiContext *gsi, String8 input);
@@ -373,7 +373,7 @@ internal CV_SymbolNode *    gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol);
 
 internal PDB_PsiContext * psi_alloc(void);
 internal void             psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumber sn, MSF_StreamNumber symbols_sn);
-internal void             psi_release(PDB_PsiContext **psi_ptr);
+internal void             psi_release(PDB_PsiContext *psi);
 internal CV_SymbolNode *  psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String8 name);
 
 // TODO:
@@ -385,7 +385,7 @@ internal CV_SymbolNode *  psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32
 
 internal PDB_DbiContext *          dbi_alloc(COFF_MachineType machine, U32 age);
 internal void                      dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber dbi_sn, CV_StringHashTable string_ht, B32 is_stripped);
-internal void                      dbi_release(PDB_DbiContext **dbi_ptr);
+internal void                      dbi_release(PDB_DbiContext *dbi);
 internal PDB_DbiModule *           dbi_push_module(PDB_DbiContext *dbi, String8 obj_path, String8 lib_path);
 internal String8                   dbi_module_read_symbol_data(Arena *arena, MSF_Context *msf, PDB_DbiModule *mod);
 internal String8                   dbi_module_read_c11_data(Arena *arena, MSF_Context *msf, PDB_DbiModule *mod);
@@ -409,7 +409,7 @@ internal String8                 pdb_data_from_hash_table(Arena *arena, PDB_Hash
 internal void                    pdb_hash_table_set(PDB_HashTable *ht, String8 key, String8 value);
 internal B32                     pdb_hash_table_get(PDB_HashTable *ht, String8 key, String8 *value_out);
 internal void                    pdb_hash_table_delete(PDB_HashTable *ht, String8 key);
-internal B32                     pdb_hash_table_try_set(PDB_HashTable *ht, String8 key, String8 value);
+internal PDB_HashTableBucket *   pdb_hash_table_try_set(PDB_HashTable *ht, String8 key, String8 value);
 internal B32                     pdb_hash_table_is_present(PDB_HashTable *ht, U32 k);
 internal B32                     pdb_hash_table_is_deleted(PDB_HashTable *ht, U32 k);
 internal U32                     pdb_hash_table_hash(String8 key);
