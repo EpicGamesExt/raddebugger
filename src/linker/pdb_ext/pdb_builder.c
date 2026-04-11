@@ -904,8 +904,6 @@ pdb_type_hash_stream_build(TP_Context      *tp,
     ProfEnd();
   }
 
-  // write bucket adjust info
-  String8 hash_adj_data = pdb_data_from_hash_adj_hash_table(scratch.arena, &ts->hash_adj, strtab);
   
   ProfBegin("MSF Write");
 
@@ -925,10 +923,14 @@ pdb_type_hash_stream_build(TP_Context      *tp,
   hint_offs.size = sizeof(hint_arr[0]) * hint_count;
   msf_stream_write(msf, ts->hash_sn, &hint_arr[0], hint_offs.size);
   
-  PDB_OffsetSize hash_adj;
-  hash_adj.off  = msf_stream_get_pos(msf, ts->hash_sn);
-  hash_adj.size = hash_adj_data.size;
-  msf_stream_write_string(msf, ts->hash_sn, hash_adj_data);
+  PDB_OffsetSize hash_adj = {0};
+  if (ts->hash_adj.count) {
+    // write bucket adjust info
+    String8 hash_adj_data = pdb_data_from_hash_adj_hash_table(scratch.arena, &ts->hash_adj, strtab);
+    hash_adj.off  = msf_stream_get_pos(msf, ts->hash_sn);
+    hash_adj.size = hash_adj_data.size;
+    msf_stream_write_string(msf, ts->hash_sn, hash_adj_data);
+  }
 
   ProfEnd();
   
