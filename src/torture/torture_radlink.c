@@ -4901,17 +4901,17 @@ T_BeginTest(infer_asan)
 #if OS_WINDOWS
 T_BeginTest(determ_test)
 {
-  // compile the test target (torture)
-  String8 cl_line = str8f(arena, "/fsanitize=address /c /Z7 /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
-  String8 cl_out = {0};
-  t_invoke_(t_cl_path(), cl_line, max_U64, arena, &cl_out);
-  T_Ok(g_last_exit_code == 0);
-
   // clean up
   t_delete_file(str8_lit("a.exe"));
   t_delete_file(str8_lit("b.exe"));
   t_delete_file(str8_lit("a.pdb"));
   t_delete_file(str8_lit("b.pdb"));
+
+  // compile the test target (torture)
+  String8 cl_line = str8f(arena, "/fsanitize=address /c /Z7 /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
+  String8 cl_out = {0};
+  t_invoke_(t_cl_path(), cl_line, max_U64, arena, &cl_out);
+  T_Ok(g_last_exit_code == 0);
 
   // single-threaded link
   String8 refs_path = t_make_file_path(arena, str8_lit("b.types"));
@@ -4930,7 +4930,9 @@ T_BeginTest(determ_test)
   for EachIndex(i, 50) {
     Temp temp = temp_begin(arena);
 
+    t_delete_file(str8_lit("a.exe"));
     t_delete_file(str8_lit("a.pdb"));
+
     t_invoke_linkerf("test.obj /debug:full /rad_time_stamp:0 /out:a.exe");
     T_Ok(g_last_exit_code == 0);
 
