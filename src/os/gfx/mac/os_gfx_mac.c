@@ -93,7 +93,32 @@ extern id const NSDefaultRunLoopMode;
 extern id const NSImageNameCaution;
 extern id const NSImageNameInfo;
 
-id
+extern id NSPasteboardNameGeneral;
+extern id NSPasteboardNameFont;
+extern id NSPasteboardNameRuler;
+extern id NSPasteboardNameFind;
+extern id NSPasteboardNameDrag;
+
+extern id const NSPasteboardTypeString;
+extern id const NSPasteboardTypePDF;
+extern id const NSPasteboardTypeTIFF;
+extern id const NSPasteboardTypePNG;
+extern id const NSPasteboardTypeRTF;
+extern id const NSPasteboardTypeRTFD;
+extern id const NSPasteboardTypeHTML;
+extern id const NSPasteboardTypeTabularText;
+extern id const NSPasteboardTypeFont;
+extern id const NSPasteboardTypeRuler;
+extern id const NSPasteboardTypeColor;
+extern id const NSPasteboardTypeSound;
+extern id const NSPasteboardTypeMultipleTextSelection;
+extern id const NSPasteboardTypeTextFinderOptions;
+extern id const NSPasteboardTypeURL;
+extern id const NSPasteboardTypeFileURL;
+
+extern id const NSPasteboardURLReadingFileURLsOnlyKey;
+
+internal id
 NSString_fromUTF8(String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -143,7 +168,7 @@ os_gfx_max_move_window_button(id window, NSWindowButton kind, F32 title_height) 
 }
 
 internal void
-os_gfx_mac_set_window_buttons_position(OS_MAC_Window* window) {
+os_mac_gfx_set_window_buttons_position(OS_MAC_Window* window) {
   F32 title_height = window->custom_border_title_thickness;
  
   os_gfx_max_move_window_button(window->win, NSWindowCloseButton, title_height);
@@ -326,19 +351,45 @@ os_mac_gfx_next_event(Arena * arena, B32 wait, OS_EventList* evts)
   return 1;
 }
 
-static void
-os_gfx_mac_did_resize_handler(id v, SEL s, id notification)
+internal OS_EventList
+os_mac_gfx_dequeue_events(Arena * arena) {
+  OS_EventList result = {0};
+  if(os_mac_gfx_state->event_queue.count > 0)
+  {
+    result = os_event_list_copy(arena, &os_mac_gfx_state->event_queue);
+    OS_EventList empty_list = {0};
+    os_mac_gfx_state->event_queue = empty_list;
+    arena_clear(os_mac_gfx_state->event_arena);
+  }
+  return result;
+}
+
+internal void
+os_mac_gfx_did_resize_handler(id v, SEL s, id notification)
 {
   id window = msg(id, notification, "object");
   OS_MAC_Window* os_window = (OS_MAC_Window *)objc_getAssociatedObject(window, "rad_window");
-  os_gfx_mac_set_window_buttons_position(os_window);
+  os_mac_gfx_set_window_buttons_position(os_window);
 
   rd_frame();
 
   msg1(void, window, "setViewsNeedDisplay:", BOOL, YES);
 }
 
-static BOOL os_gfx_mac_should_close_handler(id v, SEL s, id window)
+internal void
+os_mac_gfx_send_dummy_event()
+{
+  CGPoint location = {0, 0};
+  SEL init_event = sel_getUid("otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:");
+  id dummy = ((id (*)(id, SEL, NSInteger, CGPoint, NSUInteger, double, NSInteger, id, short, NSInteger, NSInteger))objc_msgSend)(
+    cls("NSEvent"), init_event, NSEventTypeApplicationDefined, location, 0, 0, 0, 0, 0, 0, 0
+  );
+  id app = msg(id, cls("NSApplication"), "sharedApplication");
+  msg2(id, app, "postEvent:atStart:", id, dummy, BOOL, YES);
+}
+
+internal BOOL
+os_mac_gfx_should_close_handler(id v, SEL s, id window)
 {
   OS_MAC_Window* os_window = (OS_MAC_Window *)objc_getAssociatedObject(window, "rad_window");
   DLLRemove(os_mac_gfx_state->first_window, os_mac_gfx_state->last_window, os_window);
@@ -348,7 +399,80 @@ static BOOL os_gfx_mac_should_close_handler(id v, SEL s, id window)
 
   if(window_count < 2)
   {
-    os_mac_gfx_state->all_windows_closed = 1;
+    os_event_list_push_new(
+      os_mac_gfx_state->event_arena,
+      &os_mac_gfx_state->event_queue,
+      OS_EventKind_WindowClose
+    );
+    os_mac_gfx_send_dummy_event();
+  }
+
+  return YES;
+}
+
+internal NSUInteger
+os_mac_gfx_dragging_entered_handler(id v, SEL s, id sender) {
+  // NOTE(yuraiz): The window accepts only file dragging. So just permit the copy
+  // https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/DragandDrop/Tasks/acceptingdrags.html
+  // NSDragOperationCopy
+  return 1;
+}
+
+internal BOOL
+os_mac_gfx_perform_drag_handler(id v, SEL s, id sender) {
+  id pboard = msg(id, sender, "draggingPasteboard");
+  id window = msg(id, sender, "draggingDestinationWindow");
+
+  OS_MAC_Window* os_window = (OS_MAC_Window *)objc_getAssociatedObject(window, "rad_window");
+
+  id types = msg(id, pboard, "types");
+
+  if (msg1(BOOL, types, "containsObject:", id, NSPasteboardTypeFileURL))
+  {
+    id classes = msg1(id, cls("NSArray"), "arrayWithObject:", id, cls("NSURL"));
+    
+    id options = msg2(
+      id, cls("NSDictionary"), 
+      "dictionaryWithObject:forKey:", 
+      id, msg1(id, cls("NSNumber"), "numberWithBool:", BOOL, YES),
+      id, NSPasteboardURLReadingFileURLsOnlyKey
+    );
+    
+    id fileURLs = msg2(id, pboard, "readObjectsForClasses:options:", 
+                      id, classes, id, options);
+                      
+    NSUInteger count = msg(NSUInteger, fileURLs, "count");
+
+    Arena *event_arena = os_mac_gfx_state->event_arena;
+
+    if(count > 0)
+    {
+      OS_Event* event = os_event_list_push_new(
+        event_arena, 
+        &os_mac_gfx_state->event_queue,
+        OS_EventKind_FileDrop
+      );
+    
+      event->window.u64[0] = (U64)os_window;
+      event->pos = os_mouse_from_window(event->window);
+      for EachIndex(i, count) {
+        id url = msg1(id, fileURLs, "objectAtIndex:", NSUInteger, i);
+        id path = msg(id, url, "path");
+        char* cstring = msg(char *, path, "UTF8String");
+
+        struct stat path_stat;
+        stat(cstring, &path_stat);
+        B32 is_dir = S_ISDIR(path_stat.st_mode);
+
+        if(!is_dir)
+        {
+          String8 str8_path = str8_copy(event_arena, str8_cstring(cstring));
+          str8_list_push(event_arena, &event->strings, str8_path);
+        }
+      }
+
+      os_mac_gfx_send_dummy_event();
+    }
   }
 
   return YES;
@@ -366,6 +490,10 @@ os_gfx_init(void)
   Arena *arena = arena_alloc();
   os_mac_gfx_state = push_array(arena, OS_MAC_GfxState, 1);
   os_mac_gfx_state->arena = arena;
+
+  OS_EventList empty_list = {0};
+  os_mac_gfx_state->event_queue = empty_list;
+  os_mac_gfx_state->event_arena = arena_alloc();
 
   //- yuraiz: fill out gfx info
   os_mac_gfx_state->gfx_info.double_click_time = 0.5f;
@@ -409,10 +537,16 @@ os_gfx_init(void)
   Class win_delegate = objc_allocateClassPair((Class)cls("NSObject"), "RADWinDelegate", 0);
 
   class_addMethod(win_delegate, sel_getUid("windowDidResize:"),
-    (IMP)os_gfx_mac_did_resize_handler, "v@:@");
+    (IMP)os_mac_gfx_did_resize_handler, "v@:@");
 
   class_addMethod(win_delegate, sel_getUid("windowShouldClose:"),
-    (IMP)os_gfx_mac_should_close_handler, "v@:@");
+    (IMP)os_mac_gfx_should_close_handler, "v@:@");
+
+  class_addMethod(win_delegate, sel_getUid("draggingEntered:"),
+    (IMP)os_mac_gfx_dragging_entered_handler, "v@:@");
+  
+  class_addMethod(win_delegate, sel_getUid("performDragOperation:"),
+    (IMP)os_mac_gfx_perform_drag_handler, "v@:@");
 
   objc_registerClassPair(win_delegate);
 }
@@ -432,12 +566,23 @@ os_get_gfx_info(void)
 internal void
 os_set_clipboard_text(String8 string)
 {
+  id ns_string =  NSString_fromUTF8(string);
+  id pboard = msg(id, cls("NSPasteboard"), "generalPasteboard");
+  msg(void, pboard, "clearContents");
+  msg2(void, pboard, "setString:forType:", id, ns_string, id, NSPasteboardTypeString);
 }
 
 internal String8
 os_get_clipboard_text(Arena *arena)
 {
-  return str8_zero();
+  id pboard = msg(id, cls("NSPasteboard"), "generalPasteboard");
+  id ns_string = msg1(id, pboard, "stringForType:", id, NSPasteboardTypeString);
+
+  char* cstring = msg(char *, ns_string, "UTF8String");
+  String8 result = push_str8_copy(arena, str8_cstring(cstring));
+  msg(void, ns_string, "release");
+
+  return result;
 }
 
 ////////////////////////////////
@@ -476,6 +621,9 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   msg1(void, window, "setMovable:", BOOL, NO);
   msg(void, window, "center");
 
+  id pb_type_array = msg2(id, msg(id, cls("NSArray"), "alloc"), "initWithObjects:", id, NSPasteboardTypeFileURL, id, 0);
+  msg1(void, window, "registerForDraggedTypes:", id, pb_type_array);
+
   id win_delegate = msg(id, msg(id, cls("RADWinDelegate"), "alloc"), "init");
   msg1(void, window, "setDelegate:", id, win_delegate);
 
@@ -485,7 +633,7 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   os_window->paint_arena = arena_alloc();
   objc_setAssociatedObject(window, "rad_window", (id)os_window, OBJC_ASSOCIATION_ASSIGN);
 
-  os_gfx_mac_set_window_buttons_position(os_window);
+  os_mac_gfx_set_window_buttons_position(os_window);
 
   DLLPushBack(os_mac_gfx_state->first_window, os_mac_gfx_state->last_window, os_window);
 
@@ -614,7 +762,7 @@ os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
   if(window->custom_border_title_thickness != thickness)
   {
     window->custom_border_title_thickness = thickness;
-    os_gfx_mac_set_window_buttons_position(window);
+    os_mac_gfx_set_window_buttons_position(window);
   }
 }
 
@@ -743,19 +891,14 @@ os_send_wakeup_event(void)
 internal OS_EventList
 os_get_events(Arena *arena, B32 wait)
 {
-  OS_EventList evts = {0};
+  OS_EventList evts = os_mac_gfx_dequeue_events(arena);
 
-  if(wait)
+  if(wait && evts.count == 0)
   {
     os_mac_gfx_next_event(arena, wait, &evts);
   }
 
   while(os_mac_gfx_next_event(arena, 0, &evts)) {}
-
-  if(os_mac_gfx_state->all_windows_closed)
-  {
-    os_event_list_push_new(arena, &evts, OS_EventKind_WindowClose);
-  }
 
   return evts;
 }

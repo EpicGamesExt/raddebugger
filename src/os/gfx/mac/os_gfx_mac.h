@@ -60,13 +60,14 @@ typedef struct OS_MAC_GfxState OS_MAC_GfxState;
 struct OS_MAC_GfxState
 {
   Arena *arena;
+  Arena *event_arena;
   OS_MAC_Window *first_window;
   OS_MAC_Window *last_window;
   OS_MAC_Window *free_window;
   OS_MAC_KeyState keys[OS_Key_COUNT];
+  OS_EventList event_queue;
   OS_Modifiers modifiers;
   id cursors[OS_Cursor_COUNT];
-  B32 all_windows_closed;
   OS_GfxInfo gfx_info;
 };
 
