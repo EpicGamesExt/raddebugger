@@ -1839,6 +1839,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         CV_SymbolNode *n = &nodes[i];
         n->prev = n->next = 0;
         n->data = cv_symbol_from_ptr(symbol_arr[i]);
+        n->data.offset = i;
         gsi_push_(gsi, symbol_hashes[i], n);
       }
     }

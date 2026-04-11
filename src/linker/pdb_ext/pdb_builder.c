@@ -1827,7 +1827,11 @@ gsi_symbol_is_before(void *raw_a, void *raw_b)
   if (a_name.size != b_name.size) {
     is_before = a_name.size < b_name.size;
   } else {
-    is_before = str8_compar_ignore_case(&a_name, &b_name) < 0;
+    int cmp = str8_compar_ignore_case(&a_name, &b_name);
+    if (cmp == 0) {
+      cmp = u64_compar(&a->offset, &b->offset);
+    }
+    is_before = cmp < 0;
   }
 
   return is_before;
