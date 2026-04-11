@@ -209,6 +209,7 @@ typedef struct PDB_GsiBuildResult
 
 typedef struct PDB_GsiSerializeSymbolsTask
 {
+  U64                  symbol_data_base;
   U64                  symbol_align;
   CV_SymbolList       *bucket_arr;
   U64                 *bucket_size_arr;

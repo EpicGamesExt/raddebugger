@@ -1900,7 +1900,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
     PDB_GsiSortRecord *sr = &sort_record_arr[sort_idx];
     sr->isect_off         = isect_off(pub32->sec, pub32->off);
     sr->name              = name;
-    sr->offset            = buffer_cursor;
+    sr->offset            = task->symbol_data_base + buffer_base + buffer_cursor;
 
     // serialize symbol
     U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol_arr[i], task->symbol_align);
@@ -1946,7 +1946,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
       // init sort record
       PDB_GsiSortRecord *sr = &sort_record_arr[sort_idx];
       sr->name   = cv_name_from_symbol(symbol_arr[i]->kind, symbol_arr[i]->data);
-      sr->offset = buffer_cursor;
+      sr->offset = task->symbol_data_base + buffer_base + buffer_cursor;
       sort_idx += 1;
 
       // serialize symbol
@@ -1969,10 +1969,11 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
 
   ProfBegin("Serialize & Sort Symbols");
 
-  PDB_GsiSerializeSymbolsTask serial_task;
-  serial_task.symbol_align    = gsi->symbol_align;
-  serial_task.bucket_arr      = gsi->bucket_arr;
-  serial_task.bucket_size_arr = push_array(scratch.arena, U64, gsi->bucket_count);
+  PDB_GsiSerializeSymbolsTask serial_task = {0};
+  serial_task.symbol_data_base = symbol_data_base;
+  serial_task.symbol_align     = gsi->symbol_align;
+  serial_task.bucket_arr       = gsi->bucket_arr;
+  serial_task.bucket_size_arr  = push_array(scratch.arena, U64, gsi->bucket_count);
 
   // estimate each bucket size
   tp_for_parallel(tp, 0, gsi->bucket_count, gsi_size_buckets_task, &serial_task);
@@ -2004,12 +2005,8 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
   U32            *compressed_offset_arr   = push_array_no_zero(arena, U32, gsi->bucket_count);
   PDB_GsiHashRecord *hash_record_arr      = push_array_no_zero(arena, PDB_GsiHashRecord, hash_record_count);
 
-  // offsets for symbol stream are shifted by one to tell apart from null and zero (see GSI1::fixSymRecs) 
-  U64 offset_cursor = (1 + symbol_data_base);
-  U64 hash_idx = 0;
-
   ProfBegin("Write Bitmap & Record Offsets");
-  for (U64 bucket_idx = 0; bucket_idx < gsi->bucket_count; bucket_idx += 1) {
+  for (U64 bucket_idx = 0, hash_idx = 0; bucket_idx < gsi->bucket_count; bucket_idx += 1) {
     // set bit for each occupied bucket
     CV_SymbolList bucket_list = gsi->bucket_arr[bucket_idx];
     if (bucket_list.count) {
@@ -2024,12 +2021,9 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
     PDB_GsiSortRecord *sort_record_arr = serial_task.sort_record_arr_arr[bucket_idx];
     for (U64 sr_idx = 0; sr_idx < gsi->bucket_arr[bucket_idx].count; sr_idx += 1, hash_idx += 1) {
       PDB_GsiHashRecord *hr = &hash_record_arr[hash_idx]; 
-      hr->symbol_off = offset_cursor + sort_record_arr[sr_idx].offset;
+      hr->symbol_off = sort_record_arr[sr_idx].offset + 1; // off-by-one because 0 is reserved for null
       hr->cref       = 1;
     }
-
-    // advance offset cursor
-    offset_cursor += serial_task.bucket_size_arr[bucket_idx];
   }
   ProfEnd();
 
