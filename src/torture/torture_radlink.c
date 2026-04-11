@@ -4901,12 +4901,6 @@ T_BeginTest(infer_asan)
 #if OS_WINDOWS
 T_BeginTest(determ_test)
 {
-  // clean up
-  t_delete_file(str8_lit("a.exe"));
-  t_delete_file(str8_lit("b.exe"));
-  t_delete_file(str8_lit("a.pdb"));
-  t_delete_file(str8_lit("b.pdb"));
-
   // compile the test target (torture)
   String8 cl_line = str8f(arena, "/fsanitize=address /c /Z7 /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
   String8 cl_out = {0};

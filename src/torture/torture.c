@@ -71,6 +71,33 @@ t_delete_file(String8 name)
   return is_deleted;
 }
 
+internal void
+t_delete_dir(String8 path)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  OS_FileIter *file_iter = os_file_iter_begin(scratch.arena, path, 0);
+  for (;;) {
+    OS_FileInfo info = {0};
+    if ( ! os_file_iter_next(scratch.arena, file_iter, &info)) { break; }
+
+    if (info.props.flags & FilePropertyFlag_IsFolder) {
+      t_delete_dir(str8f(scratch.arena, "%S/%S", path, info.name));
+      continue;
+    }
+
+    String8 file_path = str8f(scratch.arena, "%S/%S", path, info.name);
+    if ( ! os_delete_file_at_path(file_path)) {
+      fprintf(stderr, "ERROR: unable to delete file %.*s\n", str8_varg(file_path));
+    }
+  }
+  os_file_iter_end(file_iter);
+
+  // TODO: delete directories
+
+  scratch_end(scratch);
+}
+
 internal String8
 t_make_file_path(Arena *arena, String8 name)
 {
@@ -542,7 +569,13 @@ t_entry_point(CmdLine *cmdline)
       // setup output directory
       g_wdir = push_str8f(scratch.arena, "%S\\%s", g_out, g_torture_tests[target_idx].label);
       g_wdir = os_full_path_from_path(scratch.arena, g_wdir);
+
+      // delete files from last run in the work directory
+      if (os_folder_path_exists(g_wdir)) {
+        t_delete_dir(g_wdir);
+      }
       os_make_directory(g_wdir);
+
       if (!os_folder_path_exists(g_out)) {
         fprintf(stderr, "ERROR: unable to create output directory for test run %.*s\n", str8_varg(g_wdir));
         continue;
