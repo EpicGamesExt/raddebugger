@@ -1651,7 +1651,7 @@ lnk_link_inputs(TP_Context      *tp,
                                    lnk_symbol_table_searchf(symtab, "___you_must_link_with_VCAsan_lib") != 0;
                 if (str8_match(crt_lib_name, str8_lit("msvcrt"), StringMatchFlag_CaseInsensitive) || str8_match(crt_lib_name, str8_lit("msvcrtd"), StringMatchFlag_CaseInsensitive)) {
                   String8 dynamic_lib_name = str8f(inputer->arena, "clang_rt.asan_dynamic-%S.lib", arch_name);
-                  String8 thunk_lib_name   = str8f(inputer->arena, "clang_rt.asan_static_runtime_thunk-%S.lib", arch_name);
+                  String8 thunk_lib_name   = str8f(inputer->arena, "clang_rt.asan_dynamic_runtime_thunk-%S.lib", arch_name);
                   lnk_whole_archive(config, thunk_lib_name);
                   lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, dynamic_lib_name);
                   lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, thunk_lib_name);
@@ -1664,7 +1664,7 @@ lnk_link_inputs(TP_Context      *tp,
                   }
                 } else if (str8_match(crt_lib_name, str8_lit("libcmt"), StringMatchFlag_CaseInsensitive) || str8_match(crt_lib_name, str8_lit("libcmtd"), StringMatchFlag_CaseInsensitive)) {
                   String8 dynamic_lib_name = str8f(inputer->arena, "clang_rt.asan_dynamic-%S.lib", arch_name);
-                  String8 thunk_lib_name   = str8f(inputer->arena, "clang_rt.asan_dynamic_runtime_thunk-%S.lib", arch_name);
+                  String8 thunk_lib_name   = str8f(inputer->arena, "clang_rt.asan_static_runtime_thunk-%S.lib", arch_name);
                   lnk_whole_archive(config, thunk_lib_name);
                   lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, dynamic_lib_name);
                   lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Obj, thunk_lib_name);
