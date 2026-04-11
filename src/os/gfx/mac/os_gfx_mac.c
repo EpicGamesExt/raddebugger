@@ -393,6 +393,7 @@ os_mac_gfx_should_close_handler(id v, SEL s, id window)
 {
   OS_MAC_Window* os_window = (OS_MAC_Window *)objc_getAssociatedObject(window, "rad_window");
   DLLRemove(os_mac_gfx_state->first_window, os_mac_gfx_state->last_window, os_window);
+  SLLStackPush(os_mac_gfx_state->free_window, os_window);
 
   id app = msg(id, cls("NSApplication"), "sharedApplication");
   NSUInteger window_count = msg(NSUInteger, msg(id, app, "windows"), "count");
@@ -490,6 +491,10 @@ os_gfx_init(void)
   Arena *arena = arena_alloc();
   os_mac_gfx_state = push_array(arena, OS_MAC_GfxState, 1);
   os_mac_gfx_state->arena = arena;
+
+  os_mac_gfx_state->first_window = 0;
+  os_mac_gfx_state->last_window = 0;
+  os_mac_gfx_state->free_window = 0;
 
   OS_EventList empty_list = {0};
   os_mac_gfx_state->event_queue = empty_list;
@@ -621,13 +626,22 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   msg1(void, window, "setMovable:", BOOL, NO);
   msg(void, window, "center");
 
-  id pb_type_array = msg2(id, msg(id, cls("NSArray"), "alloc"), "initWithObjects:", id, NSPasteboardTypeFileURL, id, 0);
+  id pb_type_array = msg1(id, cls("NSArray"), "arrayWithObject:", id, NSPasteboardTypeFileURL);
   msg1(void, window, "registerForDraggedTypes:", id, pb_type_array);
 
   id win_delegate = msg(id, msg(id, cls("RADWinDelegate"), "alloc"), "init");
   msg1(void, window, "setDelegate:", id, win_delegate);
 
-  OS_MAC_Window* os_window = push_array(os_mac_gfx_state->arena, OS_MAC_Window, 1);
+  OS_MAC_Window* os_window = os_mac_gfx_state->free_window;
+  if(os_window)
+  {
+    os_window = SLLStackPop(os_mac_gfx_state->free_window);
+  }
+  else
+  {
+    os_window = push_array(os_mac_gfx_state->arena, OS_MAC_Window, 1);
+  }
+  MemoryZeroStruct(os_window);
   os_window->win = window;
   os_window->custom_border = 1;
   os_window->paint_arena = arena_alloc();
