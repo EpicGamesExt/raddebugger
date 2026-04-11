@@ -1,123 +1,6 @@
 ////////////////////////////////
 //~ rjf: @os_hooks Helpers
 
-#include "os_gfx_mac.h"
-#include <ctype.h>
-#include <mach-o/dyld.h>
-#include <objc/runtime.h>
-
-#include "os_gfx_mac_keycode.h"
-
-////////////////////////////////
-//~ rjf: @os_hooks Helpers
-
-// AppKit enum defininitions
-
-enum {
-  NSWindowStyleMaskBorderless             = 0,
-  NSWindowStyleMaskTitled                 = 1 << 0,
-  NSWindowStyleMaskClosable               = 1 << 1,
-  NSWindowStyleMaskMiniaturizable         = 1 << 2,
-  NSWindowStyleMaskResizable              = 1 << 3,
-  NSWindowStyleMaskUnifiedTitleAndToolbar = 1 << 12,
-  NSWindowStyleMaskFullScreen             = 1 << 14,
-  NSWindowStyleMaskFullSizeContentView    = 1 << 15,
-  NSWindowStyleMaskUtilityWindow          = 1 << 4,
-  NSWindowStyleMaskDocModalWindow         = 1 << 6,
-  NSWindowStyleMaskNonactivatingPanel     = 1 << 7,
-  NSWindowStyleMaskHUDWindow              = 1 << 13
-};
-
-enum {
-  NSEventTypeLeftMouseDown                = 1,
-  NSEventTypeLeftMouseUp                  = 2,
-  NSEventTypeRightMouseDown               = 3,
-  NSEventTypeRightMouseUp                 = 4,
-  NSEventTypeMouseMoved                   = 5,
-  NSEventTypeLeftMouseDragged             = 6,
-  NSEventTypeRightMouseDragged            = 7,
-  NSEventTypeMouseEntered                 = 8,
-  NSEventTypeMouseExited                  = 9,
-  NSEventTypeKeyDown                      = 10,
-  NSEventTypeKeyUp                        = 11,
-  NSEventTypeFlagsChanged                 = 12,
-  NSEventTypeAppKitDefined                = 13,
-  NSEventTypeSystemDefined                = 14,
-  NSEventTypeApplicationDefined           = 15,
-  NSEventTypePeriodic                     = 16,
-  NSEventTypeCursorUpdate                 = 17,
-  NSEventTypeScrollWheel                  = 22,
-  NSEventTypeTabletPoint                  = 23,
-  NSEventTypeTabletProximity              = 24,
-  NSEventTypeOtherMouseDown               = 25,
-  NSEventTypeOtherMouseUp                 = 26,
-  NSEventTypeOtherMouseDragged            = 27,
-  // Introduced in macOS on 10.5.2 and later
-  NSEventTypeGesture                      = 29,
-  NSEventTypeMagnify                      = 30,
-  NSEventTypeSwipe                        = 31,
-  NSEventTypeRotate                       = 18,
-  NSEventTypeBeginGesture                 = 19,
-  NSEventTypeEndGesture                   = 20,
-  
-  NSEventTypeSmartMagnify                 = 32,
-  NSEventTypeQuickLook                    = 33,
-  
-  NSEventTypePressure                     = 34,
-  NSEventTypeDirectTouch                  = 37,
-  // Introduced in macOS Tahoe
-  NSEventTypeChangeMode                   = 38,
-};
-
-typedef NSUInteger NSEventModifierFlags;
-enum {
-    NSEventModifierFlagCapsLock           = 1 << 16, // Set if Caps Lock key is pressed.
-    NSEventModifierFlagShift              = 1 << 17, // Set if Shift key is pressed.
-    NSEventModifierFlagControl            = 1 << 18, // Set if Control key is pressed.
-    NSEventModifierFlagOption             = 1 << 19, // Set if Option or Alternate key is pressed.
-    NSEventModifierFlagCommand            = 1 << 20, // Set if Command key is pressed.
-    NSEventModifierFlagNumericPad         = 1 << 21, // Set if any key in the numeric keypad is pressed.
-    NSEventModifierFlagHelp               = 1 << 22, // Set if the Help key is pressed.
-    NSEventModifierFlagFunction           = 1 << 23, // Set if any function key is pressed.
-};
-
-typedef NSUInteger NSWindowButton;
-enum {
-  NSWindowCloseButton,
-  NSWindowMiniaturizeButton,
-  NSWindowZoomButton,
-};
-
-extern id const NSDefaultRunLoopMode;
-
-extern id const NSImageNameCaution;
-extern id const NSImageNameInfo;
-
-extern id NSPasteboardNameGeneral;
-extern id NSPasteboardNameFont;
-extern id NSPasteboardNameRuler;
-extern id NSPasteboardNameFind;
-extern id NSPasteboardNameDrag;
-
-extern id const NSPasteboardTypeString;
-extern id const NSPasteboardTypePDF;
-extern id const NSPasteboardTypeTIFF;
-extern id const NSPasteboardTypePNG;
-extern id const NSPasteboardTypeRTF;
-extern id const NSPasteboardTypeRTFD;
-extern id const NSPasteboardTypeHTML;
-extern id const NSPasteboardTypeTabularText;
-extern id const NSPasteboardTypeFont;
-extern id const NSPasteboardTypeRuler;
-extern id const NSPasteboardTypeColor;
-extern id const NSPasteboardTypeSound;
-extern id const NSPasteboardTypeMultipleTextSelection;
-extern id const NSPasteboardTypeTextFinderOptions;
-extern id const NSPasteboardTypeURL;
-extern id const NSPasteboardTypeFileURL;
-
-extern id const NSPasteboardURLReadingFileURLsOnlyKey;
-
 internal id
 NSString_fromUTF8(String8 string)
 {
@@ -126,6 +9,36 @@ NSString_fromUTF8(String8 string)
   id result = msg1(id, cls("NSString"), "stringWithUTF8String:", const char*, (const char*)string_copy.str);
   scratch_end(scratch);
   return result;
+}
+
+internal void
+os_gfx_max_move_window_button(id window, NSWindowButton kind, F32 title_height)
+{
+  id close_button = msg1(id, window, "standardWindowButton:", NSWindowButton, kind);
+
+  CGRect frame = msg(CGRect, close_button, "frame");
+  CGPoint new_origin = frame.origin;
+  
+  F32 size = frame.size.width;
+
+  F32 base_offset_x = (size + 6.0) * kind;
+  F32 base_offset_y = size + 5.2;
+  F32 offset = 0.18 * title_height;
+
+  new_origin.x = base_offset_x + offset;
+  new_origin.y = base_offset_y - offset;
+  
+  msg1(void, close_button, "setFrameOrigin:", CGPoint, new_origin);
+}
+
+internal void
+os_mac_gfx_set_window_buttons_position(OS_MAC_Window* window)
+{
+  F32 title_height = window->custom_border_title_thickness;
+ 
+  os_gfx_max_move_window_button(window->win, NSWindowCloseButton, title_height);
+  os_gfx_max_move_window_button(window->win, NSWindowMiniaturizeButton, title_height);
+  os_gfx_max_move_window_button(window->win, NSWindowZoomButton, title_height);
 }
 
 internal OS_Event *
@@ -146,34 +59,6 @@ os_mac_gfx_event_list_push_key(Arena* arena, OS_EventList *evts, OS_MAC_Window* 
   e->modifiers = os_mac_gfx_state->modifiers;
   e->pos = os_mouse_from_window(e->window);
   return e;
-}
-
-internal void
-os_gfx_max_move_window_button(id window, NSWindowButton kind, F32 title_height) {
-  id close_button = msg1(id, window, "standardWindowButton:", NSWindowButton, kind);
-
-  CGRect frame = msg(CGRect, close_button, "frame");
-  CGPoint new_origin = frame.origin;
-  
-  F32 size = frame.size.width;
-
-  F32 base_offset_x = (size + 6.0) * kind;
-  F32 base_offset_y = size + 5.2;
-  F32 offset = 0.18 * title_height;
-
-  new_origin.x = base_offset_x + offset;
-  new_origin.y = base_offset_y - offset;
-  
-  msg1(void, close_button, "setFrameOrigin:", CGPoint, new_origin);
-}
-
-internal void
-os_mac_gfx_set_window_buttons_position(OS_MAC_Window* window) {
-  F32 title_height = window->custom_border_title_thickness;
- 
-  os_gfx_max_move_window_button(window->win, NSWindowCloseButton, title_height);
-  os_gfx_max_move_window_button(window->win, NSWindowMiniaturizeButton, title_height);
-  os_gfx_max_move_window_button(window->win, NSWindowZoomButton, title_height);
 }
 
 internal B32
@@ -352,7 +237,8 @@ os_mac_gfx_next_event(Arena * arena, B32 wait, OS_EventList* evts)
 }
 
 internal OS_EventList
-os_mac_gfx_dequeue_events(Arena * arena) {
+os_mac_gfx_dequeue_events(Arena * arena)
+{
   OS_EventList result = {0};
   if(os_mac_gfx_state->event_queue.count > 0)
   {
@@ -365,6 +251,19 @@ os_mac_gfx_dequeue_events(Arena * arena) {
 }
 
 internal void
+os_mac_gfx_send_dummy_event(void)
+{
+  CGPoint location = {0, 0};
+  // NOTE(yuraiz): That's just a dummy app-defined NSEvent
+  SEL init_event = sel_getUid("otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:");
+  id dummy = ((id (*)(id, SEL, NSInteger, CGPoint, NSUInteger, double, NSInteger, id, short, NSInteger, NSInteger))objc_msgSend)(
+    cls("NSEvent"), init_event, NSEventTypeApplicationDefined, location, 0, 0, 0, 0, 0, 0, 0
+  );
+  id app = msg(id, cls("NSApplication"), "sharedApplication");
+  msg2(id, app, "postEvent:atStart:", id, dummy, BOOL, YES);
+}
+
+internal void
 os_mac_gfx_did_resize_handler(id v, SEL s, id notification)
 {
   id window = msg(id, notification, "object");
@@ -374,18 +273,6 @@ os_mac_gfx_did_resize_handler(id v, SEL s, id notification)
   rd_frame();
 
   msg1(void, window, "setViewsNeedDisplay:", BOOL, YES);
-}
-
-internal void
-os_mac_gfx_send_dummy_event()
-{
-  CGPoint location = {0, 0};
-  SEL init_event = sel_getUid("otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:");
-  id dummy = ((id (*)(id, SEL, NSInteger, CGPoint, NSUInteger, double, NSInteger, id, short, NSInteger, NSInteger))objc_msgSend)(
-    cls("NSEvent"), init_event, NSEventTypeApplicationDefined, location, 0, 0, 0, 0, 0, 0, 0
-  );
-  id app = msg(id, cls("NSApplication"), "sharedApplication");
-  msg2(id, app, "postEvent:atStart:", id, dummy, BOOL, YES);
 }
 
 internal BOOL
@@ -412,7 +299,8 @@ os_mac_gfx_should_close_handler(id v, SEL s, id window)
 }
 
 internal NSUInteger
-os_mac_gfx_dragging_entered_handler(id v, SEL s, id sender) {
+os_mac_gfx_dragging_entered_handler(id v, SEL s, id sender)
+{
   // NOTE(yuraiz): The window accepts only file dragging. So just permit the copy
   // https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/DragandDrop/Tasks/acceptingdrags.html
   // NSDragOperationCopy
@@ -420,7 +308,8 @@ os_mac_gfx_dragging_entered_handler(id v, SEL s, id sender) {
 }
 
 internal BOOL
-os_mac_gfx_perform_drag_handler(id v, SEL s, id sender) {
+os_mac_gfx_perform_drag_handler(id v, SEL s, id sender)
+{
   id pboard = msg(id, sender, "draggingPasteboard");
   id window = msg(id, sender, "draggingDestinationWindow");
 
@@ -456,7 +345,8 @@ os_mac_gfx_perform_drag_handler(id v, SEL s, id sender) {
     
       event->window.u64[0] = (U64)os_window;
       event->pos = os_mouse_from_window(event->window);
-      for EachIndex(i, count) {
+      for EachIndex(i, count)
+      {
         id url = msg1(id, fileURLs, "objectAtIndex:", NSUInteger, i);
         id path = msg(id, url, "path");
         char* cstring = msg(char *, path, "UTF8String");
