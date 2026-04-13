@@ -3656,6 +3656,11 @@ rd_cell(RD_CellParams *params, String8 string)
                                                        UI_BoxFlag_Clickable,
                                                        "%S##revert", rd_icon_kind_text_table[RD_IconKind_Undo]);
         UI_Signal sig = ui_signal_from_box(revert_box);
+        if(ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Main)
+        {
+          ui_state->tooltip_anchor_key = revert_box->key;
+          ui_label(str8_lit("Revert To Default"));
+        }
         if(ui_pressed(sig) && params->revert_out)
         {
           params->revert_out[0] = 1;

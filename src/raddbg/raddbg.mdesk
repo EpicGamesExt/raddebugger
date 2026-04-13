@@ -550,13 +550,19 @@ RD_VocabTable:
         'cursor_size': @range[1, 16] u64,
       @expand_if("!$.auto_columns") @default(16) @description("The number of columns to build before building new rows.")
         'num_columns': @range[1, 64] u64,
+      @default(16) @display_name("Default Radix") @description("The default radix with which numeric values should be displayed, when peeking.")
+        @or(2, 8, 10, 16)
+        'default_radix': u64,
       @default(1) @display_name("Track Mark To Cursor") @description("Ensures that the mark always follows the cursor, if the cursor value is updated.")
         'track_mark_to_cursor': bool,
       @default(1) @display_name("Allow Mutation") @description("Allows operations which mutate memory.")
         'allow_mutation': bool,
       @default(0) @display_name("Automatically Size Columns") @description("Determines the number of columns based on the available space.")
         'auto_columns': bool,
-      @display_name("Peek Types") @description("A list of types to interpret selected and hovered memory as.")
+      @default(1) @display_name("Peek As Unsigned") 'peek_as_unsigned': bool,
+      @default(1) @display_name("Peek As Signed") 'peek_as_signed': bool,
+      @default(1) @display_name("Peek As Float") 'peek_as_float': bool,
+      @display_name("Extra Peek Types") @description("A list of types as which to interpret selected memory.")
         'peek_types': query,
     }
     ```
@@ -979,6 +985,7 @@ RD_CmdTable:    //               |        |              |                |     
   {Edit                           1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Pencil                "edit"                        "Edit"                                        "Edits the current selection."                                                                                     ""                               ""                                                               }
   {Accept                         1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           CheckFilled           "accept"                      "Accept"                                      "Accepts current changes, or answers prompts in the affirmative."                                                  ""                               ""                                                               }
   {Cancel                         1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           X                     "cancel"                      "Cancel"                                      "Rejects current changes, exits temporary menus, or answers prompts in the negative."                              ""                               ""                                                               }
+  {FocusMenu                      1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           List                  "focus_menu"                  "Focus Menu"                                  "Focuses the menu for the selected interface, if there is one."                                                    ""                               ""                                                               }
   
   //- rjf: directional movement & text controls
   {MoveLeft                       1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "move_left"                   "Move Left"                                   "Moves the cursor or selection left."                                                                              ""                               ""                                                               }
@@ -1265,6 +1272,7 @@ RD_DefaultBindingTable:
   { "accept"                      Return    0        0         0          }
   { "accept"                      Space     0        0         0          }
   { "cancel"                      Esc       0        0         0          }
+  { "focus_menu"                  D         0        0         alt        }
   
   //- rjf: directional movement & text controls
   { "move_left"                   Left      0        0         0          }

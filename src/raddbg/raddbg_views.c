@@ -2641,6 +2641,11 @@ struct RD_MemoryViewState
   B32 snap_scroll;
   B32 cell_value_edit_in_progress;
   U8 cell_value_edit_first_digit;
+  TxtPt addrbar_cursor;
+  TxtPt addrbar_mark;
+  U8 addrbar_buffer[1024];
+  U64 addrbar_string_size;
+  B32 addrbar_is_focused;
 };
 
 EV_EXPAND_RULE_INFO_FUNCTION_DEF(memory)
@@ -2698,8 +2703,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Vec4F32 main_tx_color_rgba = ui_color_from_name(str8_lit("text"));
   Vec4F32 main_tx_color_hsva = hsva_from_rgba(main_tx_color_rgba);
   F32 main_font_size = ui_bottom_font_size();
-  U64 cursor_base_vaddr = rd_view_setting_u64_from_name(str8_lit("cursor"));
-  U64 mark_base_vaddr   = rd_view_setting_u64_from_name(str8_lit("mark"));
+  U64 cursor_base_vaddr = rd_view_setting_addr_from_name(str8_lit("cursor"));
+  U64 mark_base_vaddr   = rd_view_setting_addr_from_name(str8_lit("mark"));
   U64 cursor_size       = rd_view_setting_u64_from_name(str8_lit("cursor_size"));
   cursor_size = ClampBot(1, cursor_size);
   U64 initial_cursor_base_vaddr  = cursor_base_vaddr;
@@ -2763,9 +2768,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   F32 scroll_bar_dim = floor_f32(main_font_size*1.5f);
   Vec2F32 panel_dim = dim_2f32(rect);
   F32 footer_dim = floor_f32(main_font_size*10.f);
-  Rng2F32 header_rect = r2f32p(0, 0, panel_dim.x, row_height_px);
+  Rng2F32 addrbar_rect = r2f32p(0, 0, panel_dim.x, main_font_size*3.f);
+  Rng2F32 peekbar_rect = r2f32p(0, addrbar_rect.y1, panel_dim.x, addrbar_rect.y1 + main_font_size*3.f);
+  Rng2F32 header_rect = r2f32p(0, peekbar_rect.y1, panel_dim.x, peekbar_rect.y1 + row_height_px);
   Rng2F32 footer_rect = r2f32p(0, panel_dim.y-footer_dim, panel_dim.x-scroll_bar_dim, panel_dim.y);
-  Rng2F32 content_rect = r2f32p(0, row_height_px, panel_dim.x-scroll_bar_dim, panel_dim.y);
+  Rng2F32 content_rect = r2f32p(0, header_rect.y1, panel_dim.x-scroll_bar_dim, panel_dim.y);
   
   //////////////////////////////
   //- rjf: determine visible range of rows (occluded & non-occluded)
@@ -2814,6 +2821,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: loop: compute boundaries, take events, repeat
   //
+  B32 focus_addrbar = 0;
   B32 need_update = 1;
   Rng1U64 cursor_valid_rng = {0};
   for(;;)
@@ -2826,7 +2834,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     need_update = 0;
     
     //- rjf: take keyboard controls
-    UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
+    UI_Focus(!mv->addrbar_is_focused ? UI_FocusKind_On : UI_FocusKind_Off) if(ui_is_focus_active())
     {
       U64 next_cursor_base_vaddr = cursor_base_vaddr;
       U64 next_mark_base_vaddr = mark_base_vaddr;
@@ -2835,6 +2843,13 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         B32 good_action = 0;
         Vec2S64 cell_delta = {0};
         B32 allow_cell_movement = 1;
+        
+        // rjf: menu bar focuses
+        if(evt->slot == UI_EventActionSlot_FocusMenu)
+        {
+          good_action = 1;
+          focus_addrbar = 1;
+        }
         
         // rjf: copies
         if(evt->flags & UI_EventFlag_Copy)
@@ -3526,9 +3541,9 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   UI_Parent(container_box) UI_FontSize(main_font_size)
   {
     ui_set_next_fixed_x(content_rect.x1);
-    ui_set_next_fixed_y(0);
+    ui_set_next_fixed_y(header_rect.y0);
     ui_set_next_fixed_width(scroll_bar_dim);
-    ui_set_next_fixed_height(dim_2f32(rect).y);
+    ui_set_next_fixed_height(dim_2f32(rect).y - dim_2f32(addrbar_rect).y);
     {
       scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                    ui_px(scroll_bar_dim, 1.f),
@@ -3539,13 +3554,211 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   
   //////////////////////////////
+  //- rjf: build address bar
+  //
+  B32 commit_addrbar = 0;
+  UI_Box *addrbar_box = &ui_nil_box;
+  UI_Parent(container_box) UI_TagF("floating")
+  {
+    CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+    RD_ViewState *view_state = rd_view_state_from_cfg(view);
+    B32 query_is_open = view_state->query_is_open;
+    CFG_Node *cursor_addr = cfg_node_child_from_string(view, str8_lit("cursor"));
+    UI_Signal cell_sig = {0};
+    UI_Rect(addrbar_rect)
+      addrbar_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom|
+                                              UI_BoxFlag_DrawBackground|
+                                              UI_BoxFlag_DrawDropShadow|
+                                              UI_BoxFlag_DrawBackgroundBlur|
+                                              UI_BoxFlag_Floating|
+                                              UI_BoxFlag_Clickable, "addrbar_box");
+    UI_Parent(addrbar_box)
+      RD_Font(RD_FontSlot_Code)
+      UI_FontSize(font_size)
+    {
+      UI_Flags(UI_BoxFlag_DrawSideRight)
+        UI_TextAlignment(UI_TextAlign_Center)
+        UI_PrefWidth(ui_text_dim(10, 1))
+        UI_TagF("weak")
+        ui_labelf("Cursor Address");
+      UI_Focus(!query_is_open && mv->addrbar_is_focused ? UI_FocusKind_On : UI_FocusKind_Off)
+      {
+        UI_Key addrbar_edit_key = {0};
+        RD_CellParams cell_params = {0};
+        {
+          String8 value_string = cursor_addr->first->string;
+          DR_FStrList value_fstrs = {0};
+          {
+            DR_FStr value_fstr =
+            {
+              value_string,
+              {
+                ui_top_font(),
+                ui_top_text_raster_flags(),
+                ui_color_from_name(str8_lit("text")),
+                ui_top_font_size(),
+              }
+            };
+            dr_fstrs_push(scratch.arena, &value_fstrs, &value_fstr);
+          }
+          cell_params.flags = RD_CellFlag_NoBackground|RD_CellFlag_CodeContents|RD_CellFlag_Bindings;
+          cell_params.pre_edit_value = value_string;
+          cell_params.value_fstrs = value_fstrs;
+          cell_params.cursor = &mv->addrbar_cursor;
+          cell_params.mark = &mv->addrbar_mark;
+          cell_params.edit_buffer = mv->addrbar_buffer;
+          cell_params.edit_buffer_size = sizeof(mv->addrbar_buffer);
+          cell_params.edit_string_size_out = &mv->addrbar_string_size;
+          cell_params.line_edit_key_out = &addrbar_edit_key;
+          cell_params.bindings_name = rd_cmd_kind_info_table[RD_CmdKind_FocusMenu].string;
+        }
+        cell_sig = rd_cellf(&cell_params, "%S###cursor_addr", cursor_addr->first->string);
+        if(ui_is_focus_active())
+        {
+          rd_set_autocomp_regs(e_eval_nil, .ui_key = addrbar_edit_key, .string = str8(mv->addrbar_buffer, mv->addrbar_string_size), .cursor = mv->addrbar_cursor);
+          if(ui_slot_press(UI_EventActionSlot_Cancel))
+          {
+            mv->addrbar_is_focused = 0;
+          }
+          if(ui_slot_press(UI_EventActionSlot_Accept))
+          {
+            commit_addrbar = 1;
+          }
+        }
+      }
+    }
+    UI_Signal addrbar_sig = ui_signal_from_box(addrbar_box);
+    if(ui_pressed(addrbar_sig) || ui_pressed(cell_sig))
+    {
+      rd_cmd(RD_CmdKind_FocusPanel);
+      if(!mv->addrbar_is_focused)
+      {
+        ui_kill_action();
+        focus_addrbar = 1;
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build peekbar
+  //
+  UI_Box *peekbar_box = &ui_nil_box;
+  UI_Parent(container_box) UI_FontSize(main_font_size) UI_TagF("floating")
+  {
+    ui_set_next_fixed_x(peekbar_rect.x0);
+    ui_set_next_fixed_y(peekbar_rect.y0);
+    ui_set_next_fixed_width(dim_2f32(peekbar_rect).x);
+    ui_set_next_fixed_height(dim_2f32(peekbar_rect).y);
+    ui_set_next_child_layout_axis(Axis2_Y);
+    peekbar_box = ui_build_box_from_stringf(UI_BoxFlag_AllowOverflowX|UI_BoxFlag_ViewClampX|UI_BoxFlag_ViewScrollX|UI_BoxFlag_Clickable|UI_BoxFlag_Clip, "footer");
+    UI_Parent(peekbar_box) RD_Font(RD_FontSlot_Code) UI_TextAlignment(UI_TextAlign_Center) 
+    {
+      CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+      CFG_NodePtrList extra_peek_types = cfg_node_child_list_from_string(scratch.arena, view, str8_lit("peek_type"));
+      String8List peek_type_list = {0};
+      if(rd_view_setting_b32_from_name(str8_lit("peek_as_unsigned")))
+      {
+        str8_list_pushf(scratch.arena, &peek_type_list, "uint8");
+        str8_list_pushf(scratch.arena, &peek_type_list, "uint16");
+        str8_list_pushf(scratch.arena, &peek_type_list, "uint32");
+        str8_list_pushf(scratch.arena, &peek_type_list, "uint64");
+      }
+      if(rd_view_setting_b32_from_name(str8_lit("peek_as_signed")))
+      {
+        str8_list_pushf(scratch.arena, &peek_type_list, "int8");
+        str8_list_pushf(scratch.arena, &peek_type_list, "int16");
+        str8_list_pushf(scratch.arena, &peek_type_list, "int32");
+        str8_list_pushf(scratch.arena, &peek_type_list, "int64");
+      }
+      if(rd_view_setting_b32_from_name(str8_lit("peek_as_float")))
+      {
+        str8_list_pushf(scratch.arena, &peek_type_list, "float32");
+        str8_list_pushf(scratch.arena, &peek_type_list, "float64");
+      }
+      for EachNode(n, CFG_NodePtrNode, extra_peek_types.first)
+      {
+        str8_list_push(scratch.arena, &peek_type_list, n->v->first->string);
+      }
+      ui_set_next_pref_width(ui_children_sum(1));
+      ui_row_begin();
+      F32 x_off_px = 0;
+      F32 x_max_px = dim_2f32(rect).x - scroll_bar_dim;
+      for EachNode(n, String8Node, peek_type_list.first)
+      {
+        String8 type_string = n->string;
+        E_Eval type_eval = e_eval_from_string(type_string);
+        if(type_eval.msgs.max_kind == E_MsgKind_Null)
+        {
+          String8 casted_expr = str8f(scratch.arena, "*(((%S) *)((((uint8 *)(&(%S)) + 0x%I64x))))",
+                                      type_string,
+                                      eval.string.size ? eval.string : str8_lit("0"),
+                                      selection.min - view_range.min);
+          E_Eval peek_eval = e_eval_from_string(casted_expr);
+          if(peek_eval.msgs.max_kind == E_MsgKind_Null)
+          {
+            EV_StringParams params =
+            {
+              .flags = EV_StringFlag_ReadOnlyDisplayRules,
+              .radix = rd_view_setting_u64_from_name(str8_lit("default_radix")),
+            };
+            String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*40.f, peek_eval);
+            F32 type_string_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, type_string).x + ui_top_font_size()*0.5f;
+            F32 value_string_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, value_string).x + ui_top_font_size()*0.5f;
+            type_string_width_px = Min(type_string_width_px, ui_top_font_size()*10.f);
+            value_string_width_px = Min(value_string_width_px, ui_top_font_size()*20.f);
+            F32 padding_px = ui_top_font_size()*0.5f;
+            x_off_px += type_string_width_px + value_string_width_px + padding_px*2.f;
+            if(0 && x_off_px >= x_max_px)
+            {
+              x_off_px = 0;
+              ui_row_end();
+              ui_row_begin();
+            }
+            UI_PrefWidth(ui_children_sum(1)) UI_TagF(".") UI_TagF("implicit")
+            {
+              UI_Box *peek_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                           UI_BoxFlag_DrawBackground|
+                                                           UI_BoxFlag_DrawHotEffects|
+                                                           UI_BoxFlag_DrawActiveEffects,
+                                                           "peek_type_%I64x", u64_hash_from_str8(type_string));
+              UI_Parent(peek_box) UI_Padding(ui_px(padding_px, 1)) UI_Flags(UI_BoxFlag_DisableTruncatedHover)
+              {
+                UI_PrefWidth(ui_px(type_string_width_px, 1)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), type_string);
+                UI_PrefWidth(ui_px(value_string_width_px, 1)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
+              }
+              UI_Signal peek_sig = ui_signal_from_box(peek_box);
+              if(ui_hovering(peek_sig))
+              {
+                rd_set_hover_eval(v2f32(peek_box->rect.x0, peek_box->rect.y1-2.f), casted_expr);
+              }
+              if(ui_clicked(peek_sig))
+              {
+                rd_cmd(RD_CmdKind_PushQuery, .expr = casted_expr);
+              }
+            }
+          }
+        }
+      }
+      ui_row_end();
+    }
+    UI_Signal sig = ui_signal_from_box(peekbar_box);
+    if(ui_pressed(sig))
+    {
+      rd_cmd(RD_CmdKind_FocusPanel);
+      commit_addrbar = mv->addrbar_is_focused;
+      mv->addrbar_is_focused = 0;
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build header
   //
   UI_Box *header_box = &ui_nil_box;
   UI_Parent(container_box) UI_TagF("floating")
   {
-    UI_Rect(r2f32p(0, 0, dim_2f32(rect).x - scroll_bar_dim, row_height_px))
+    UI_Rect(header_rect)
       header_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom|
+                                             UI_BoxFlag_DrawSideTop|
                                              UI_BoxFlag_DrawBackground|
                                              UI_BoxFlag_DrawDropShadow|
                                              UI_BoxFlag_DrawBackgroundBlur|
@@ -3570,12 +3783,19 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       ui_spacer(ui_px(big_glyph_advance*1.5f, 1.f));
       UI_WidthFill ui_labelf("ASCII");
     }
-    ui_signal_from_box(header_box);
+    UI_Signal sig = ui_signal_from_box(header_box);
+    if(ui_pressed(sig))
+    {
+      rd_cmd(RD_CmdKind_FocusPanel);
+      commit_addrbar = mv->addrbar_is_focused;
+      mv->addrbar_is_focused = 0;
+    }
   }
   
   //////////////////////////////
   //- rjf: build footer
   //
+#if 0
   UI_Box *footer_box = &ui_nil_box;
   UI_Parent(container_box) UI_FontSize(main_font_size) UI_TagF("floating")
   {
@@ -3583,40 +3803,82 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     ui_set_next_fixed_y(footer_rect.y0);
     ui_set_next_fixed_width(dim_2f32(footer_rect).x);
     ui_set_next_fixed_height(dim_2f32(footer_rect).y);
+    ui_set_next_child_layout_axis(Axis2_Y);
     footer_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow, "footer");
-    UI_Parent(footer_box) RD_Font(RD_FontSlot_Code)
+    UI_Parent(footer_box) RD_Font(RD_FontSlot_Code) UI_WidthFill UI_TextAlignment(UI_TextAlign_Center) 
     {
-      UI_PrefWidth(ui_em(7.5f, 1.f)) UI_HeightFill UI_Column UI_TagF("weak")
-        UI_PrefHeight(ui_em(2.f, 0.f))
+      CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+      CFG_NodePtrList peek_types = cfg_node_child_list_from_string(scratch.arena, view, str8_lit("peek_type"));
+      ui_row_begin();
+      F32 x_off_px = 0;
+      F32 x_max_px = dim_2f32(rect).x - scroll_bar_dim;
+      for EachNode(n, CFG_NodePtrNode, peek_types.first)
       {
-        ui_labelf("Address:");
-        ui_labelf("U8:");
-        ui_labelf("U16:");
-        ui_labelf("U32:");
-        ui_labelf("U64:");
-      }
-      UI_PrefWidth(ui_em(45.f, 1.f)) UI_HeightFill UI_Column
-        UI_PrefHeight(ui_em(2.f, 0.f))
-      {
-        ui_labelf("%016I64X", cursor_base_vaddr);
+        String8 type_string = n->v->first->string;
+        E_Eval type_eval = e_eval_from_string(type_string);
+        if(type_eval.msgs.max_kind == E_MsgKind_Null)
         {
-          U64 as_u8  = 0;
-          U64 as_u16 = 0;
-          U64 as_u32 = 0;
-          U64 as_u64 = 0;
-          e_space_read(eval.space, &as_u64, r1u64(cursor_base_vaddr, cursor_base_vaddr+1));
-          as_u32 = *(U32 *)&as_u64;
-          as_u16 = *(U16 *)&as_u64;
-          as_u8  =  *(U8 *)&as_u64;
-          ui_labelf("%02X (%I64u)",  as_u8,  as_u8);
-          ui_labelf("%04X (%I64u)",  as_u16, as_u16);
-          ui_labelf("%08X (%I64u)",  as_u32, as_u32);
-          ui_labelf("%016I64X (%I64u)", as_u64, as_u64);
+          String8 casted_expr = str8f(scratch.arena, "*(((%S) *)((((uint8 *)(&(%S)) + 0x%I64x))))",
+                                      type_string,
+                                      eval.string.size ? eval.string : str8_lit("0"),
+                                      selection.min - view_range.min);
+          E_Eval peek_eval = e_eval_from_string(casted_expr);
+          if(peek_eval.msgs.max_kind == E_MsgKind_Null)
+          {
+            EV_StringParams params =
+            {
+              .flags = EV_StringFlag_ReadOnlyDisplayRules,
+              .radix = rd_view_setting_u64_from_name(str8_lit("default_radix")),
+            };
+            String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*40.f, peek_eval);
+            F32 type_string_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, type_string).x + ui_top_font_size()*0.5f;
+            F32 value_string_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, value_string).x + ui_top_font_size()*0.5f;
+            type_string_width_px = Min(type_string_width_px, ui_top_font_size()*10.f);
+            value_string_width_px = Min(value_string_width_px, ui_top_font_size()*20.f);
+            F32 padding_px = ui_top_font_size()*0.5f;
+            x_off_px += type_string_width_px + value_string_width_px + padding_px*2.f;
+            if(x_off_px >= x_max_px)
+            {
+              x_off_px = 0;
+              ui_row_end();
+              ui_row_begin();
+            }
+            UI_PrefWidth(ui_children_sum(0)) UI_TagF(".") UI_TagF("implicit")
+            {
+              UI_Box *peek_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                           UI_BoxFlag_DrawBackground|
+                                                           UI_BoxFlag_DrawHotEffects|
+                                                           UI_BoxFlag_DrawActiveEffects,
+                                                           "peek_type_%I64x", n->v->id);
+              UI_Parent(peek_box) UI_Padding(ui_px(padding_px, 0)) UI_Flags(UI_BoxFlag_DisableTruncatedHover)
+              {
+                UI_PrefWidth(ui_px(type_string_width_px, 0)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), type_string);
+                UI_PrefWidth(ui_px(value_string_width_px, 0)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
+              }
+              UI_Signal peek_sig = ui_signal_from_box(peek_box);
+              if(ui_hovering(peek_sig))
+              {
+                rd_set_hover_eval(v2f32(peek_box->rect.x0, peek_box->rect.y1-2.f), casted_expr);
+              }
+              if(ui_clicked(peek_sig))
+              {
+                rd_cmd(RD_CmdKind_PushQuery, .expr = casted_expr);
+              }
+            }
+          }
         }
       }
+      ui_row_end();
     }
-    ui_signal_from_box(footer_box);
+    UI_Signal sig = ui_signal_from_box(footer_box);
+    if(ui_pressed(sig))
+    {
+      rd_cmd(RD_CmdKind_FocusPanel);
+      commit_addrbar = mv->addrbar_is_focused;
+      mv->addrbar_is_focused = 0;
+    }
   }
+#endif
   
   //////////////////////////////
   //- rjf: build scrollable box
@@ -3691,6 +3953,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     if(ui_pressed(sig))
     {
       rd_cmd(RD_CmdKind_FocusPanel);
+      commit_addrbar = mv->addrbar_is_focused;
+      mv->addrbar_is_focused = 0;
     }
     
     // rjf: click & drag -> select
@@ -3905,7 +4169,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                   }
                 }
               }
-              if(annotation_node != 0 && mouse_hover_byte_num == global_byte_num && !byte_is_selected && !dragging_is_active)
+              if(annotation_node != 0 && mouse_hover_byte_num == global_byte_num && !dragging_is_active)
               {
                 UI_Tooltip UI_PrefHeight(ui_px(ui_top_font_size()*1.75f, 1.f))
                 {
@@ -3925,38 +4189,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                     if(a_n->next != 0)
                     {
                       ui_spacer(ui_em(1.5f, 1.f));
-                    }
-                  }
-                }
-              }
-              if(mouse_hover_byte_num == global_byte_num && byte_is_selected && !dragging_is_active)
-              {
-                UI_Tooltip
-                {
-                  CFG_Node *view = cfg_node_from_id(rd_regs()->view);
-                  CFG_NodePtrList peek_types = cfg_node_child_list_from_string(scratch.arena, view, str8_lit("peek_type"));
-                  for EachNode(n, CFG_NodePtrNode, peek_types.first)
-                  {
-                    String8 type_string = n->v->first->string;
-                    E_Eval type_size_eval = e_eval_from_stringf("sizeof(%S)", type_string);
-                    if(type_size_eval.msgs.max_kind == E_MsgKind_Null && dim_1u64(selection)+1 >= type_size_eval.value.u64)
-                    {
-                      String8 casted_expr = str8f(scratch.arena, "*(((%S) *)((((uint8 *)(&(%S)) + 0x%I64x))))",
-                                                  type_string,
-                                                  eval.string.size ? eval.string : str8_lit("0"),
-                                                  selection.min - view_range.min);
-                      E_Eval peek_eval = e_eval_from_string(casted_expr);
-                      UI_PrefWidth(ui_children_sum(1)) UI_Row
-                      {
-                        EV_StringParams params =
-                        {
-                          .flags = EV_StringFlag_ReadOnlyDisplayRules,
-                          .radix = 10,
-                        };
-                        String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*40.f, peek_eval);
-                        UI_TextAlignment(UI_TextAlign_Left) UI_PrefWidth(ui_em(4.f, 1.f)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), type_string);
-                        UI_PrefWidth(ui_text_dim(10, 1)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
-                      }
                     }
                   }
                 }
@@ -4021,6 +4253,26 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         }
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: commit addrbar changes
+  //
+  if(focus_addrbar)
+  {
+    CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+    CFG_Node *cursor_addr = cfg_node_child_from_string(view, str8_lit("cursor"));
+    mv->addrbar_is_focused = 1;
+    mv->addrbar_string_size = Min(sizeof(mv->addrbar_buffer), cursor_addr->first->string.size);
+    MemoryCopy(mv->addrbar_buffer, cursor_addr->first->string.str, mv->addrbar_string_size);
+    mv->addrbar_cursor = txt_pt(1, mv->addrbar_string_size+1);
+    mv->addrbar_mark = txt_pt(1, 1);
+  }
+  if(commit_addrbar)
+  {
+    String8 string = str8(mv->addrbar_buffer, mv->addrbar_string_size);
+    rd_store_view_param(str8_lit("cursor"), string);
+    mv->addrbar_is_focused = 0;
   }
   
   //////////////////////////////

@@ -1094,7 +1094,7 @@ e_value_eval_from_eval(E_Eval eval)
         // rjf: manually sign-extend
         switch(type_kind)
         {
-          default: break;
+          default:{}break;
           case E_TypeKind_Char8:
           case E_TypeKind_S8:  {eval.value.s64 = (S64)*((S8 *)&eval.value.u64);}break;
           case E_TypeKind_Char16:

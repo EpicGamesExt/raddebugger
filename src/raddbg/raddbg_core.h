@@ -700,6 +700,7 @@ internal E_Value rd_view_setting_value_from_name(String8 string);
 internal B32 rd_view_setting_b32_from_name(String8 string);
 internal U64 rd_view_setting_u64_from_name(String8 string);
 internal F32 rd_view_setting_f32_from_name(String8 string);
+internal U64 rd_view_setting_addr_from_name(String8 string);
 
 //- rjf: evaluation & tag (a view's 'call') parameter extraction
 internal Rng1U64 rd_space_range_from_eval(E_Eval eval);

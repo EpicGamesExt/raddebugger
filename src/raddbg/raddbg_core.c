@@ -4676,6 +4676,28 @@ rd_view_setting_f32_from_name(String8 name)
   return result;
 }
 
+internal U64
+rd_view_setting_addr_from_name(String8 name)
+{
+  U64 result = 0;
+  String8 string = rd_view_setting_from_name(name);
+  E_Eval eval = e_eval_from_string(string);
+  E_TypeKey type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  if(eval.irtree.mode == E_Mode_Offset &&
+     (type_kind == E_TypeKind_Struct ||
+      type_kind == E_TypeKind_Union ||
+      type_kind == E_TypeKind_Class))
+  {
+    result = eval.value.u64;
+  }
+  else
+  {
+    result = e_value_eval_from_eval(eval).value.u64;
+  }
+  return result;
+}
+
 //- rjf: evaluation & tag (a view's 'call') parameter extraction
 
 internal Rng1U64
@@ -15621,6 +15643,15 @@ rd_frame(void)
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Press;
             evt.slot       = UI_EventActionSlot_Cancel;
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          case RD_CmdKind_FocusMenu:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Press;
+            evt.slot       = UI_EventActionSlot_FocusMenu;
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
           }break;
           
