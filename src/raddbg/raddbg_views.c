@@ -2718,7 +2718,9 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   if(auto_columns)
   {
-    num_columns = (U64)((dim_2f32(rect).x - address_margin_width_px - big_glyph_advance*4.f) / (cell_width_px + big_glyph_advance));
+    F32 num_columns_f = ((dim_2f32(rect).x - address_margin_width_px - big_glyph_advance*4.f) / (cell_width_px + big_glyph_advance));
+    num_columns_f = ClampBot(1.f, num_columns_f);
+    num_columns = (U64)num_columns_f;
   }
   num_columns = ClampBot(1, num_columns);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
