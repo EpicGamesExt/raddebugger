@@ -731,7 +731,7 @@ str8_from_memory_size(Arena *arena, U64 size)
   {
     if(size < KB(1))
     {
-      result = push_str8f(arena, "%llu Bytes", size);
+      result = push_str8f(arena, "%llu byte%s", size, size == 1 ? "" : "s");
     }
     else if(size < MB(1))
     {
@@ -1147,9 +1147,9 @@ internal String8List
 str8_list_substr(Arena *arena, String8List list, Rng1U64 range)
 {
   String8List result = {0};
-
+  
   String8Node *n = list.first;
-
+  
   U64 front_min = 0;
   {
     U64 cursor = 0;
@@ -1160,13 +1160,13 @@ str8_list_substr(Arena *arena, String8List list, Rng1U64 range)
       }
     }
   }
-
+  
   if (front_min > 0) {
     U64 front_max = front_min + Min(dim_1u64(range), n->string.size);
     str8_list_push(arena, &result, str8_substr(n->string, r1u64(front_min, front_max)));
     n = n->next;
   }
-
+  
   for (; n != 0; n = n->next) {
     if (result.total_size >= dim_1u64(range)) {
       break;
@@ -1175,7 +1175,7 @@ str8_list_substr(Arena *arena, String8List list, Rng1U64 range)
     U64 copy_size = Min(copy_max, n->string.size);
     str8_list_push(arena, &result, str8_substr(n->string, r1u64(0, copy_size)));
   }
-
+  
   return result;
 }
 
@@ -2949,16 +2949,16 @@ str8_buffer_skip(String8Node *buf, U64 *pos, U64 skip)
   S64 to_skip;
   for (to_skip = skip; to_skip > 0;) {
     if (buf == 0) { break; }
-
+    
     U64 left = Min(to_skip, buf->string.size -  *pos);
     *pos += left;
-
+    
     if (*pos == buf->string.size) {
       if (buf->next) { *buf = *buf->next;                }
       else           { *buf = (String8Node){0}; buf = 0; }
       *pos = 0;
     }
-
+    
     to_skip -= (S64)left;
   }
   Assert(to_skip == 0);
@@ -2971,15 +2971,15 @@ str8_buffer_read(String8Node *buf, U64 *pos, U64 read_size, void *out)
   U64 cursor = 0;
   for (; cursor < read_size ;) {
     if (buf == 0) { break; }
-
+    
     U64   copy_size = Min(read_size - cursor, (buf->string.size - *pos));
     void *dst       = (U8 *)out + cursor;
     void *src       = buf->string.str + *pos;
     MemoryCopy(dst, src, copy_size);
-
+    
     *pos   += copy_size;
     cursor += copy_size;
-
+    
     if (*pos >= buf->string.size) {
       if (buf->next) { *buf = *buf->next;                }
       else           { *buf = (String8Node){0}; buf = 0; }
@@ -3004,7 +3004,7 @@ str8_buffer_write(String8Node *buf, U64 *pos, String8 data)
   if (buf) {
     for (copy_size = 0; copy_size < data.size; ) {
       U64 data_size = data.size - copy_size;
-
+      
       U64 available_size = buf->string.size - *pos;
       U64 to_copy        = Min(available_size, data_size);
       if (data.str == 0) {
@@ -3015,7 +3015,7 @@ str8_buffer_write(String8Node *buf, U64 *pos, String8 data)
       }
       *pos      += to_copy;
       copy_size += to_copy;
-
+      
       if (*pos >= buf->string.size) {
         if (buf->next) {
           *buf = *buf->next;

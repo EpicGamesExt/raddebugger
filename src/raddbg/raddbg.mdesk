@@ -540,6 +540,8 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
+      @display_name("Zoom") @description("The zoom level for displaying bytes in the memory view.")
+        @default(1) 'zoom': @range[0.25, 2] f32, 
       @display_name("Base Address") @description("An expression which refers to the base address of data which should be viewed as memory.")
         'expression': expr_string,
       @display_name("Address Range Size") @description("The number of bytes of the viewed memory range.")

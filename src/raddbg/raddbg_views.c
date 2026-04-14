@@ -2689,11 +2689,15 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //
   FNT_Tag font = rd_font_from_slot(RD_FontSlot_Code);
   FNT_RasterFlags font_raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code);
-  F32 font_size = ui_top_font_size();
-  F32 big_glyph_advance = fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("H")).x;
-  F32 row_height_px = floor_f32(font_size*2.f);
-  F32 cell_width_px = floor_f32(font_size*2.f);
-  F32 address_margin_width_px = big_glyph_advance*20.f;
+  F32 tab_font_size = ui_top_font_size();
+  F32 zoom_target = rd_view_setting_f32_from_name(str8_lit("zoom"));
+  zoom_target = Clamp(0.25f, zoom_target, 2.f);
+  F32 zoom = ui_anim(ui_key_from_stringf(ui_key_zero(), "%I64x_zoom", rd_regs()->view), zoom_target, .initial = zoom_target);
+  F32 cell_font_size = tab_font_size * zoom;
+  F32 cell_big_glyph_advance = fnt_dim_from_tag_size_string(font, cell_font_size, 0, 0, str8_lit("H")).x;
+  F32 row_height_px = floor_f32(cell_font_size*2.f);
+  F32 cell_width_px = floor_f32(cell_font_size*2.f);
+  F32 address_margin_width_px = cell_big_glyph_advance*20.f;
   
   //////////////////////////////
   //- rjf: unpack parameterization info
@@ -2702,7 +2706,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Vec4F32 main_bg_color_hsva = hsva_from_rgba(main_bg_color_rgba);
   Vec4F32 main_tx_color_rgba = ui_color_from_name(str8_lit("text"));
   Vec4F32 main_tx_color_hsva = hsva_from_rgba(main_tx_color_rgba);
-  F32 main_font_size = ui_bottom_font_size();
   U64 cursor_base_vaddr = rd_view_setting_addr_from_name(str8_lit("cursor"));
   U64 mark_base_vaddr   = rd_view_setting_addr_from_name(str8_lit("mark"));
   U64 cursor_size       = rd_view_setting_u64_from_name(str8_lit("cursor_size"));
@@ -2718,7 +2721,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   if(auto_columns)
   {
-    F32 num_columns_f = ((dim_2f32(rect).x - address_margin_width_px - big_glyph_advance*4.f) / (cell_width_px + big_glyph_advance));
+    F32 num_columns_f = ((dim_2f32(rect).x - address_margin_width_px - cell_big_glyph_advance*4.f) / (cell_width_px + cell_big_glyph_advance));
     num_columns_f = ClampBot(1.f, num_columns_f);
     num_columns = (U64)num_columns_f;
   }
@@ -2767,11 +2770,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: calculate rectangles
   //
-  F32 scroll_bar_dim = floor_f32(main_font_size*1.5f);
+  F32 scroll_bar_dim = floor_f32(ui_bottom_font_size()*1.5f);
   Vec2F32 panel_dim = dim_2f32(rect);
-  F32 footer_dim = floor_f32(main_font_size*10.f);
-  Rng2F32 addrbar_rect = r2f32p(0, 0, panel_dim.x, main_font_size*3.f);
-  Rng2F32 peekbar_rect = r2f32p(0, addrbar_rect.y1, panel_dim.x, addrbar_rect.y1 + main_font_size*3.f);
+  F32 footer_dim = floor_f32(tab_font_size*3.f);
+  Rng2F32 addrbar_rect = r2f32p(0, 0, panel_dim.x, tab_font_size*3.f);
+  Rng2F32 peekbar_rect = r2f32p(0, addrbar_rect.y1, panel_dim.x, addrbar_rect.y1 + tab_font_size*3.f);
   Rng2F32 header_rect = r2f32p(0, peekbar_rect.y1, panel_dim.x, peekbar_rect.y1 + row_height_px);
   Rng2F32 footer_rect = r2f32p(0, panel_dim.y-footer_dim, panel_dim.x-scroll_bar_dim, panel_dim.y);
   Rng2F32 content_rect = r2f32p(0, header_rect.y1, panel_dim.x-scroll_bar_dim, panel_dim.y);
@@ -3190,15 +3193,15 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         text_color.w *= 0.5f;
       }
       {
-        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, text_color, font_size, 0, 0}};
+        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, text_color, cell_font_size, 0, 0}};
         dr_fstrs_push(scratch.arena, &byte_fstrs[idx], &fstr);
       }
       {
-        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, selected_color, font_size, 0, 0}};
+        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, selected_color, cell_font_size, 0, 0}};
         dr_fstrs_push(scratch.arena, &byte_fstrs_selected[idx], &fstr);
       }
       {
-        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, changed_color, font_size, 0, 0}};
+        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, changed_color, cell_font_size, 0, 0}};
         dr_fstrs_push(scratch.arena, &byte_fstrs_changed[idx], &fstr);
       }
     }
@@ -3232,15 +3235,17 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   struct Annotation
   {
     String8 name_string;
-    String8 kind_string;
-    String8 type_string;
-    Vec4F32 color;
+    Vec4F32 bg_color;
+    Vec4F32 txt_color;
     Rng1U64 vaddr_range;
+    B32 dot_access;
+    E_TypeKey type_key;
   };
   typedef struct AnnotationNode AnnotationNode;
   struct AnnotationNode
   {
     AnnotationNode *next;
+    AnnotationNode *prev;
     Annotation *v;
   };
   typedef struct AnnotationList AnnotationList;
@@ -3260,48 +3265,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     {
       eval_process = rd_ctrl_entity_from_eval_space(eval.space);
     }
-    
-    //- rjf: fill unwind frame annotations
-    if(selected_call_stack.concrete_frames_count != 0) UI_Tag(str8_lit("weak"))
-    {
-      U64 last_stack_top = regs_rsp_from_arch_block(selected_thread->arch, selected_call_stack.concrete_frames[0]->regs);
-      for(U64 idx = 1; idx < selected_call_stack.concrete_frames_count; idx += 1)
-      {
-        CTRL_CallStackFrame *f = selected_call_stack.concrete_frames[idx];
-        U64 f_stack_top = regs_rsp_from_arch_block(selected_thread->arch, f->regs);
-        Rng1U64 frame_vaddr_range = r1u64(last_stack_top, f_stack_top);
-        Rng1U64 frame_vaddr_range_in_viz = intersect_1u64(frame_vaddr_range, viz_range_bytes);
-        last_stack_top = f_stack_top;
-        if(dim_1u64(frame_vaddr_range_in_viz) != 0)
-        {
-          Access *access = access_open();
-          U64 f_rip_vaddr = regs_rip_from_arch_block(selected_thread->arch, f->regs);
-          CTRL_Entity *module = ctrl_module_from_process_vaddr(selected_process, f_rip_vaddr);
-          U64 f_rip_voff = ctrl_voff_from_vaddr(module, f_rip_vaddr);
-          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-          RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
-          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, f_rip_voff);
-          String8 procedure_name = {0};
-          procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
-          access_close(access);
-          if(procedure_name.size != 0)
-          {
-            Annotation *annotation = push_array(scratch.arena, Annotation, 1);
-            annotation->name_string = push_str8_copy(scratch.arena, procedure_name);
-            annotation->kind_string = str8_lit("Call Stack Frame");
-            annotation->color = v4f32(0, 0, 0, 0);
-            annotation->vaddr_range = frame_vaddr_range;
-            for(U64 vaddr = frame_vaddr_range_in_viz.min; vaddr < frame_vaddr_range_in_viz.max; vaddr += 1)
-            {
-              U64 visible_byte_idx = vaddr - viz_range_bytes.min;
-              AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
-              n->v = annotation;
-              SLLQueuePush(visible_memory_annotations[visible_byte_idx].first, visible_memory_annotations[visible_byte_idx].last, n);
-            }
-          }
-        }
-      }
-    }
+    AnnotationList variable_annotations = {0};
     
     //- rjf: fill selected thread stack range annotation
     if(selected_call_stack.concrete_frames_count > 0)
@@ -3314,56 +3278,56 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         Annotation *annotation = push_array(scratch.arena, Annotation, 1);
         annotation->name_string = selected_thread->string.size ? selected_thread->string : push_str8f(scratch.arena, "TID: %I64u", selected_thread->id);
-        annotation->kind_string = str8_lit("Stack");
-        annotation->color = rd_color_from_ctrl_entity(selected_thread);
+        annotation->txt_color = rd_color_from_ctrl_entity(selected_thread);
         annotation->vaddr_range = stack_vaddr_range;
         for(U64 vaddr = stack_vaddr_range_in_viz.min; vaddr < stack_vaddr_range_in_viz.max; vaddr += 1)
         {
           U64 visible_byte_idx = vaddr - viz_range_bytes.min;
           AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
           n->v = annotation;
-          SLLQueuePush(visible_memory_annotations[visible_byte_idx].first, visible_memory_annotations[visible_byte_idx].last, n);
+          DLLPushBack(visible_memory_annotations[visible_byte_idx].first, visible_memory_annotations[visible_byte_idx].last, n);
         }
       }
     }
     
-    //- rjf: fill local variable annotations
-    if(e_space_match(rd_eval_space_from_ctrl_entity(selected_process, CTRL_EvalSpaceKind_Entity), eval.space))
+    //- rjf: fill unwind frame annotations
+    if(selected_call_stack.concrete_frames_count != 0) UI_Tag(str8_lit("weak"))
     {
-      Vec4F32 local_color = ui_color_from_name(str8_lit("code_local"));
-      Vec4F32 color_gen_table[] =
+      Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
+      U64 last_rip = regs_rip_from_arch_block(selected_thread->arch, selected_call_stack.concrete_frames[0]->regs);
+      U64 last_stack_top = regs_rsp_from_arch_block(selected_thread->arch, selected_call_stack.concrete_frames[0]->regs);
+      for(U64 idx = 1; idx < selected_call_stack.concrete_frames_count; idx += 1)
       {
-        mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.2f),
-        mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.4f),
-        mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.6f),
-        mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.8f),
-      };
-      U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
-      for(E_String2NumMapNode *n = e_ir_ctx->locals_map->first; n != 0; n = n->order_next)
-      {
-        String8 local_name = n->string;
-        E_Eval local_eval = e_eval_from_string(local_name);
-        if(local_eval.irtree.mode == E_Mode_Offset)
+        CTRL_CallStackFrame *f = selected_call_stack.concrete_frames[idx];
+        U64 f_stack_top = regs_rsp_from_arch_block(selected_thread->arch, f->regs);
+        Rng1U64 frame_vaddr_range = r1u64(last_stack_top, f_stack_top);
+        Rng1U64 frame_vaddr_range_in_viz = intersect_1u64(frame_vaddr_range, viz_range_bytes);
+        last_stack_top = f_stack_top;
+        if(dim_1u64(frame_vaddr_range_in_viz) != 0)
         {
-          E_TypeKind local_eval_type_kind = e_type_kind_from_key(local_eval.irtree.type_key);
-          U64 local_eval_type_size = e_type_byte_size_from_key(local_eval.irtree.type_key);
-          Rng1U64 vaddr_rng = r1u64(local_eval.value.u64, local_eval.value.u64+local_eval_type_size);
-          Rng1U64 vaddr_rng_in_visible = intersect_1u64(viz_range_bytes, vaddr_rng);
-          if(vaddr_rng_in_visible.max != vaddr_rng_in_visible.min)
+          Access *access = access_open();
+          U64 f_rip_vaddr = last_rip;
+          last_rip = regs_rip_from_arch_block(selected_thread->arch, f->regs);
+          CTRL_Entity *module = ctrl_module_from_process_vaddr(selected_process, f_rip_vaddr);
+          U64 f_rip_voff = ctrl_voff_from_vaddr(module, f_rip_vaddr);
+          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+          RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
+          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, f_rip_voff);
+          String8 procedure_name = {0};
+          procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
+          access_close(access);
+          if(procedure_name.size != 0)
           {
             Annotation *annotation = push_array(scratch.arena, Annotation, 1);
+            annotation->name_string = str8_copy(scratch.arena, procedure_name);
+            annotation->txt_color = symbol_color;
+            annotation->vaddr_range = frame_vaddr_range;
+            for(U64 vaddr = frame_vaddr_range_in_viz.min; vaddr < frame_vaddr_range_in_viz.max; vaddr += 1)
             {
-              annotation->name_string = push_str8_copy(scratch.arena, local_name);
-              annotation->kind_string = str8_lit("Local");
-              annotation->type_string = e_type_string_from_key(scratch.arena, local_eval.irtree.type_key);
-              annotation->color = color_gen_table[(vaddr_rng.min/7)%ArrayCount(color_gen_table)];
-              annotation->vaddr_range = vaddr_rng;
-            }
-            for(U64 vaddr = vaddr_rng_in_visible.min; vaddr < vaddr_rng_in_visible.max; vaddr += 1)
-            {
+              U64 visible_byte_idx = vaddr - viz_range_bytes.min;
               AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
               n->v = annotation;
-              SLLQueuePushFront(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
+              DLLPushBack(visible_memory_annotations[visible_byte_idx].first, visible_memory_annotations[visible_byte_idx].last, n);
             }
           }
         }
@@ -3410,15 +3374,15 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               Annotation *annotation = push_array(scratch.arena, Annotation, 1);
               {
                 annotation->name_string = push_str8_copy(scratch.arena, procedure_name);
-                annotation->kind_string = str8_lit("Procedure");
-                annotation->color = color_gen_table[(vaddr_range.min/7)%ArrayCount(color_gen_table)];
+                annotation->bg_color = color_gen_table[(vaddr_range.min/7)%ArrayCount(color_gen_table)];
+                annotation->txt_color = symbol_color;
                 annotation->vaddr_range = vaddr_range;
               }
               for(U64 vaddr = vaddr_range_in_visible.min; vaddr < vaddr_range_in_visible.max; vaddr += 1)
               {
                 AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
                 n->v = annotation;
-                SLLQueuePushFront(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
+                DLLPushBack(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
               }
             }
           }
@@ -3444,18 +3408,19 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         next_vaddr = vaddr+1;
         Access *access = access_open();
-        CTRL_Entity *module = ctrl_module_from_process_vaddr(eval_process, vaddr);
-        if(module != &ctrl_entity_nil)
+        E_Module *module = e_base_ctx->primary_module;
+        if(module != &e_module_nil)
         {
-          U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+          U64 voff = (vaddr - module->vaddr_range.min);
+          E_DbgInfo *dbg_info = e_dbg_info_from_module(module);
+          DI_Key dbgi_key = dbg_info->dbgi_key;
           RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
           RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
           if(gvar->voff != 0)
           {
             RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, gvar->type_idx);
             Rng1U64 voff_range = r1u64(gvar->voff, gvar->voff + type_node->byte_size);
-            Rng1U64 vaddr_range = ctrl_vaddr_range_from_voff_range(module, voff_range);
+            Rng1U64 vaddr_range = r1u64(voff_range.min + module->vaddr_range.min, voff_range.max + module->vaddr_range.min);
             next_vaddr = vaddr_range.max;
             next_vaddr = Max(next_vaddr, vaddr+1);
             Rng1U64 vaddr_range_in_visible = intersect_1u64(vaddr_range, viz_range_bytes);
@@ -3466,15 +3431,21 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               Annotation *annotation = push_array(scratch.arena, Annotation, 1);
               {
                 annotation->name_string = push_str8_copy(scratch.arena, gvar_name);
-                annotation->kind_string = str8_lit("Global");
-                annotation->color = color_gen_table[(vaddr_range.min/7)%ArrayCount(color_gen_table)];
+                annotation->bg_color = color_gen_table[(vaddr_range.min/7)%ArrayCount(color_gen_table)];
+                annotation->txt_color = symbol_color;
                 annotation->vaddr_range = vaddr_range;
+                annotation->type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), gvar->type_idx, module->dbg_info_num);
+              }
+              {
+                AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
+                n->v = annotation;
+                DLLPushBack(variable_annotations.first, variable_annotations.last, n);
               }
               for(U64 vaddr = vaddr_range_in_visible.min; vaddr < vaddr_range_in_visible.max; vaddr += 1)
               {
                 AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
                 n->v = annotation;
-                SLLQueuePushFront(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
+                DLLPushBack(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
               }
             }
           }
@@ -3483,9 +3454,58 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       }
     }
     
+    //- rjf: fill local variable annotations
+    if(e_space_match(rd_eval_space_from_ctrl_entity(selected_process, CTRL_EvalSpaceKind_Entity), eval.space))
+    {
+      Vec4F32 local_color = ui_color_from_name(str8_lit("code_local"));
+      Vec4F32 color_gen_table[] =
+      {
+        mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.2f),
+        mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.4f),
+        mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.6f),
+        mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.8f),
+      };
+      U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
+      for(E_String2NumMapNode *n = e_ir_ctx->locals_map->first; n != 0; n = n->order_next)
+      {
+        String8 local_name = n->string;
+        E_Eval local_eval = e_eval_from_string(local_name);
+        if(local_eval.irtree.mode == E_Mode_Offset)
+        {
+          E_TypeKind local_eval_type_kind = e_type_kind_from_key(local_eval.irtree.type_key);
+          U64 local_eval_type_size = e_type_byte_size_from_key(local_eval.irtree.type_key);
+          Rng1U64 vaddr_rng = r1u64(local_eval.value.u64, local_eval.value.u64+local_eval_type_size);
+          Rng1U64 vaddr_rng_in_visible = intersect_1u64(viz_range_bytes, vaddr_rng);
+          if(vaddr_rng_in_visible.max != vaddr_rng_in_visible.min)
+          {
+            Annotation *annotation = push_array(scratch.arena, Annotation, 1);
+            {
+              annotation->name_string = str8_copy(scratch.arena, local_name);
+              annotation->bg_color = color_gen_table[(vaddr_rng.min/7)%ArrayCount(color_gen_table)];
+              annotation->txt_color = local_color;
+              annotation->vaddr_range = vaddr_rng;
+              annotation->type_key = local_eval.irtree.type_key;
+            }
+            {
+              AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
+              n->v = annotation;
+              DLLPushBack(variable_annotations.first, variable_annotations.last, n);
+            }
+            for(U64 vaddr = vaddr_rng_in_visible.min; vaddr < vaddr_rng_in_visible.max; vaddr += 1)
+            {
+              AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
+              n->v = annotation;
+              DLLPushBack(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
+            }
+          }
+        }
+      }
+    }
+    
     //- rjf: fill debuggee-specified annotations
     if(eval_process != &ctrl_entity_nil) UI_TagF(".") UI_TagF("pop")
     {
+      Vec4F32 text_color = ui_color_from_name(str8_lit("text"));
       Vec4F32 symbol_color = ui_color_from_name(str8_lit("background"));
       Vec4F32 color_gen_table[] =
       {
@@ -3508,15 +3528,72 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           {
             annotation->name_string = push_str8_copy(scratch.arena, name);
-            annotation->kind_string = str8_lit("Annotation");
-            annotation->color = color_gen_table[(vaddr_range.min/7)%ArrayCount(color_gen_table)];
+            annotation->bg_color = color_gen_table[(vaddr_range.min/7)%ArrayCount(color_gen_table)];
+            annotation->txt_color = text_color;
             annotation->vaddr_range = vaddr_range;
           }
           for(U64 vaddr = vaddr_range_in_visible.min; vaddr < vaddr_range_in_visible.max; vaddr += 1)
           {
             AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
             n->v = annotation;
-            SLLQueuePushFront(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
+            DLLPushBack(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
+          }
+        }
+      }
+    }
+    
+    //- rjf: for any variable annotations, unpack type info, create additional annotations for
+    // structure members
+    for(AnnotationNode *n = variable_annotations.first; n != 0; n = n->next)
+    {
+      Annotation *a = n->v;
+      E_TypeKey type_key = a->type_key;
+      E_TypeKind type_kind = e_type_kind_from_key(type_key);
+      if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Class)
+      {
+        E_Type *type = e_type_from_key(type_key);
+        for EachIndex(member_idx, type->count)
+        {
+          E_Member *member = &type->members[member_idx];
+          if(member->kind != E_MemberKind_DataField)
+          {
+            continue;
+          }
+          E_TypeKey member_type_key = member->type_key;
+          E_TypeKind member_type_kind = e_type_kind_from_key(member_type_key);
+          U64 member_size = e_type_byte_size_from_key(member_type_key);
+          Rng1U64 member_vaddr_range = r1u64(a->vaddr_range.min + member->off, a->vaddr_range.min + member->off + member_size);
+          Rng1U64 member_vaddr_range_in_visible = intersect_1u64(member_vaddr_range, viz_range_bytes);
+          if(member_vaddr_range_in_visible.max > member_vaddr_range_in_visible.min)
+          {
+            // rjf: create annotation for member
+            Annotation *member_annotation = push_array(scratch.arena, Annotation, 1);
+            {
+              member_annotation->name_string = member->name;
+              member_annotation->txt_color   = a->txt_color;
+              member_annotation->bg_color    = a->bg_color;
+              member_annotation->vaddr_range = member_vaddr_range;
+              member_annotation->dot_access  = 1;
+              member_annotation->type_key    = member_type_key;
+            }
+            
+            // rjf: push member annotation to associated bytes
+            {
+              for EachInRange(vaddr, member_vaddr_range_in_visible)
+              {
+                AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
+                n->v = member_annotation;
+                DLLPushBack(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, n);
+              }
+            }
+            
+            // rjf: push this member onto the variable annotations list
+            if(member_type_kind == E_TypeKind_Struct || member_type_kind == E_TypeKind_Class)
+            {
+              AnnotationNode *n = push_array(scratch.arena, AnnotationNode, 1);
+              n->v = member_annotation;
+              DLLPushBack(variable_annotations.first, variable_annotations.last, n);
+            }
           }
         }
       }
@@ -3540,12 +3617,12 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: build scroll bar
   //
-  UI_Parent(container_box) UI_FontSize(main_font_size)
+  UI_Parent(container_box) UI_FontSize(ui_bottom_font_size())
   {
     ui_set_next_fixed_x(content_rect.x1);
     ui_set_next_fixed_y(header_rect.y0);
     ui_set_next_fixed_width(scroll_bar_dim);
-    ui_set_next_fixed_height(dim_2f32(rect).y - dim_2f32(addrbar_rect).y);
+    ui_set_next_fixed_height(dim_2f32(rect).y - dim_2f32(addrbar_rect).y - dim_2f32(peekbar_rect).y);
     {
       scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                    ui_px(scroll_bar_dim, 1.f),
@@ -3576,7 +3653,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                                               UI_BoxFlag_Clickable, "addrbar_box");
     UI_Parent(addrbar_box)
       RD_Font(RD_FontSlot_Code)
-      UI_FontSize(font_size)
+      UI_FontSize(tab_font_size)
     {
       UI_Flags(UI_BoxFlag_DrawSideRight)
         UI_TextAlignment(UI_TextAlign_Center)
@@ -3645,14 +3722,14 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //- rjf: build peekbar
   //
   UI_Box *peekbar_box = &ui_nil_box;
-  UI_Parent(container_box) UI_FontSize(main_font_size) UI_TagF("floating")
+  UI_Parent(container_box) UI_FontSize(tab_font_size) UI_TagF("floating")
   {
     ui_set_next_fixed_x(peekbar_rect.x0);
     ui_set_next_fixed_y(peekbar_rect.y0);
     ui_set_next_fixed_width(dim_2f32(peekbar_rect).x);
     ui_set_next_fixed_height(dim_2f32(peekbar_rect).y);
     ui_set_next_child_layout_axis(Axis2_Y);
-    peekbar_box = ui_build_box_from_stringf(UI_BoxFlag_AllowOverflowX|UI_BoxFlag_ViewClampX|UI_BoxFlag_ViewScrollX|UI_BoxFlag_Clickable|UI_BoxFlag_Clip, "footer");
+    peekbar_box = ui_build_box_from_stringf(UI_BoxFlag_AllowOverflowX|UI_BoxFlag_ViewClampX|UI_BoxFlag_ViewScrollX|UI_BoxFlag_Clickable|UI_BoxFlag_Clip, "peekbar");
     UI_Parent(peekbar_box) RD_Font(RD_FontSlot_Code) UI_TextAlignment(UI_TextAlign_Center) 
     {
       CFG_Node *view = cfg_node_from_id(rd_regs()->view);
@@ -3768,7 +3845,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                                              UI_BoxFlag_Clickable, "table_header");
     UI_Parent(header_box)
       RD_Font(RD_FontSlot_Code)
-      UI_FontSize(font_size)
+      UI_FontSize(cell_font_size)
     {
       UI_PrefWidth(ui_px(address_margin_width_px, 1.f)) ui_labelf("Address");
       UI_PrefWidth(ui_px(cell_width_px, 1.f))
@@ -3782,7 +3859,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           UI_TagF(column_is_selected ? "" : "weak") ui_labelf("%I64X", row_off);
         }
       }
-      ui_spacer(ui_px(big_glyph_advance*1.5f, 1.f));
+      ui_spacer(ui_px(cell_big_glyph_advance*1.5f, 1.f));
       UI_WidthFill ui_labelf("ASCII");
     }
     UI_Signal sig = ui_signal_from_box(header_box);
@@ -3797,80 +3874,110 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: build footer
   //
-#if 0
   UI_Box *footer_box = &ui_nil_box;
-  UI_Parent(container_box) UI_FontSize(main_font_size) UI_TagF("floating")
+  UI_Parent(container_box) UI_FontSize(tab_font_size) UI_TagF("floating")
   {
     ui_set_next_fixed_x(footer_rect.x0);
     ui_set_next_fixed_y(footer_rect.y0);
     ui_set_next_fixed_width(dim_2f32(footer_rect).x);
     ui_set_next_fixed_height(dim_2f32(footer_rect).y);
-    ui_set_next_child_layout_axis(Axis2_Y);
     footer_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow, "footer");
-    UI_Parent(footer_box) RD_Font(RD_FontSlot_Code) UI_WidthFill UI_TextAlignment(UI_TextAlign_Center) 
+    UI_Parent(footer_box) RD_Font(RD_FontSlot_Code)
     {
-      CFG_Node *view = cfg_node_from_id(rd_regs()->view);
-      CFG_NodePtrList peek_types = cfg_node_child_list_from_string(scratch.arena, view, str8_lit("peek_type"));
-      ui_row_begin();
-      F32 x_off_px = 0;
-      F32 x_max_px = dim_2f32(rect).x - scroll_bar_dim;
-      for EachNode(n, CFG_NodePtrNode, peek_types.first)
+      //- rjf: annotations for cursor position
+      if(contains_1u64(viz_range_bytes, cursor_base_vaddr)) UI_PrefWidth(ui_text_dim(2, 1)) UI_TextAlignment(UI_TextAlign_Center) 
       {
-        String8 type_string = n->v->first->string;
-        E_Eval type_eval = e_eval_from_string(type_string);
-        if(type_eval.msgs.max_kind == E_MsgKind_Null)
+        U64 cursor_vaddr_visible_byte_idx = cursor_base_vaddr - viz_range_bytes.min;
+        AnnotationList cursor_byte_annotations = visible_memory_annotations[cursor_vaddr_visible_byte_idx];
+        Vec4F32 divider_color = {0};
+        UI_TagF("weak") divider_color = ui_color_from_name(str8_lit("text"));
+        
+        // rjf: build fstrs for . accessed annotations
+        DR_FStrList annotation_dot_accessed_fstrs = {0};
+        AnnotationNode *first_non_dot_annotation = cursor_byte_annotations.last;
         {
-          String8 casted_expr = str8f(scratch.arena, "*(((%S) *)((((uint8 *)(&(%S)) + 0x%I64x))))",
-                                      type_string,
-                                      eval.string.size ? eval.string : str8_lit("0"),
-                                      selection.min - view_range.min);
-          E_Eval peek_eval = e_eval_from_string(casted_expr);
-          if(peek_eval.msgs.max_kind == E_MsgKind_Null)
+          for(AnnotationNode *n = cursor_byte_annotations.last; n != 0; n = n->prev)
           {
-            EV_StringParams params =
+            Annotation *a = n->v;
+            if(!a->dot_access) {break;}
+            first_non_dot_annotation = n->prev;
+            DR_FStr a_fstr =
             {
-              .flags = EV_StringFlag_ReadOnlyDisplayRules,
-              .radix = rd_view_setting_u64_from_name(str8_lit("default_radix")),
+              a->name_string,
+              {
+                ui_top_font(),
+                ui_top_text_raster_flags(),
+                a->txt_color,
+                ui_top_font_size(),
+              },
             };
-            String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*40.f, peek_eval);
-            F32 type_string_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, type_string).x + ui_top_font_size()*0.5f;
-            F32 value_string_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, value_string).x + ui_top_font_size()*0.5f;
-            type_string_width_px = Min(type_string_width_px, ui_top_font_size()*10.f);
-            value_string_width_px = Min(value_string_width_px, ui_top_font_size()*20.f);
-            F32 padding_px = ui_top_font_size()*0.5f;
-            x_off_px += type_string_width_px + value_string_width_px + padding_px*2.f;
-            if(x_off_px >= x_max_px)
+            dr_fstrs_push_front(scratch.arena, &annotation_dot_accessed_fstrs, &a_fstr);
+            DR_FStr dot_fstr =
             {
-              x_off_px = 0;
-              ui_row_end();
-              ui_row_begin();
+              str8_lit("."),
+              {
+                ui_top_font(),
+                ui_top_text_raster_flags(),
+                divider_color,
+                ui_top_font_size(),
+              },
+            };
+            dr_fstrs_push_front(scratch.arena, &annotation_dot_accessed_fstrs, &dot_fstr);
+          }
+        }
+        
+        // rjf: build fstrs for / 'accessed' annotations
+        DR_FStrList annotation_fstrs = {0};
+        {
+          for(AnnotationNode *n = first_non_dot_annotation; n != 0; n = n->prev)
+          {
+            Annotation *a = n->v;
+            DR_FStr a_fstr =
+            {
+              a->name_string,
+              {
+                ui_top_font(),
+                ui_top_text_raster_flags(),
+                a->txt_color,
+                ui_top_font_size(),
+              },
+            };
+            dr_fstrs_push(scratch.arena, &annotation_fstrs, &a_fstr);
+            if(annotation_dot_accessed_fstrs.node_count != 0)
+            {
+              dr_fstrs_concat_in_place(&annotation_fstrs, &annotation_dot_accessed_fstrs);
             }
-            UI_PrefWidth(ui_children_sum(0)) UI_TagF(".") UI_TagF("implicit")
+            if(n->prev != 0)
             {
-              UI_Box *peek_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                           UI_BoxFlag_DrawBackground|
-                                                           UI_BoxFlag_DrawHotEffects|
-                                                           UI_BoxFlag_DrawActiveEffects,
-                                                           "peek_type_%I64x", n->v->id);
-              UI_Parent(peek_box) UI_Padding(ui_px(padding_px, 0)) UI_Flags(UI_BoxFlag_DisableTruncatedHover)
+              DR_FStr slash_fstr =
               {
-                UI_PrefWidth(ui_px(type_string_width_px, 0)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), type_string);
-                UI_PrefWidth(ui_px(value_string_width_px, 0)) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
-              }
-              UI_Signal peek_sig = ui_signal_from_box(peek_box);
-              if(ui_hovering(peek_sig))
-              {
-                rd_set_hover_eval(v2f32(peek_box->rect.x0, peek_box->rect.y1-2.f), casted_expr);
-              }
-              if(ui_clicked(peek_sig))
-              {
-                rd_cmd(RD_CmdKind_PushQuery, .expr = casted_expr);
-              }
+                str8_lit(" / "),
+                {
+                  ui_top_font(),
+                  ui_top_text_raster_flags(),
+                  divider_color,
+                  ui_top_font_size(),
+                },
+              };
+              dr_fstrs_push(scratch.arena, &annotation_fstrs, &slash_fstr);
             }
           }
         }
+        
+        // rjf: build annotation label
+        UI_Box *a_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+        ui_box_equip_display_fstrs(a_box, &annotation_fstrs);
       }
-      ui_row_end();
+      
+      ui_spacer(ui_pct(1, 0));
+      
+      //- rjf: selection size
+      UI_PrefWidth(ui_text_dim(2, 1))
+      {
+        U64 selection_size = dim_1u64(selection) + 1;
+        String8 selection_size_string = str8_from_memory_size(scratch.arena, selection_size);
+        ui_labelf("%S selected", selection_size_string);
+      }
     }
     UI_Signal sig = ui_signal_from_box(footer_box);
     if(ui_pressed(sig))
@@ -3880,7 +3987,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       mv->addrbar_is_focused = 0;
     }
   }
-#endif
   
   //////////////////////////////
   //- rjf: build scrollable box
@@ -3933,7 +4039,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       // rjf: try from cells
       if(mouse_hover_byte_num == 0)
       {
-        U64 col_idx = ClampBot(mouse_rel.x-big_glyph_advance*20.f, 0)/cell_width_px;
+        U64 col_idx = ClampBot(mouse_rel.x-cell_big_glyph_advance*20.f, 0)/cell_width_px;
         if(col_idx < num_columns)
         {
           mouse_hover_byte_num = viz_range_bytes.min + row_idx*num_columns + col_idx + 1;
@@ -3943,7 +4049,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       // rjf: try from ascii
       if(mouse_hover_byte_num == 0)
       {
-        U64 col_idx = ClampBot(mouse_rel.x - (big_glyph_advance*20.f + cell_width_px*num_columns + big_glyph_advance*1.5f), 0)/big_glyph_advance;
+        U64 col_idx = ClampBot(mouse_rel.x - (cell_big_glyph_advance*20.f + cell_width_px*num_columns + cell_big_glyph_advance*1.5f), 0)/cell_big_glyph_advance;
         col_idx = ClampTop(col_idx, num_columns-1);
         mouse_hover_byte_num = viz_range_bytes.min + row_idx*num_columns + col_idx + 1;
       }
@@ -3983,11 +4089,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
           {
-            rd_cmd(RD_CmdKind_IncViewFontSize);
+            zoom_target += 0.1f;
           }
           else if(evt->delta_2f32.y > 0)
           {
-            rd_cmd(RD_CmdKind_DecViewFontSize);
+            zoom_target -= 0.1f;
           }
         }
       }
@@ -4009,7 +4115,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: build rows
   //
-  UI_Parent(row_container_box) RD_Font(RD_FontSlot_Code) UI_FontSize(font_size)
+  UI_Parent(row_container_box) RD_Font(RD_FontSlot_Code) UI_FontSize(cell_font_size)
   {
     U8 *row_ascii_buffer = push_array(scratch.arena, U8, num_columns);
     UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f))
@@ -4024,7 +4130,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       UI_Box *row = ui_build_box_from_stringf(row_flags, "row_%I64x", row_range_bytes.min);
       UI_Parent(row)
       {
-        UI_PrefWidth(ui_px(big_glyph_advance*20.f, 1.f))
+        UI_PrefWidth(ui_px(cell_big_glyph_advance*20.f, 1.f))
         {
           if(!(selection.max >= row_range_bytes.min && selection.min < row_range_bytes.max))
           {
@@ -4057,7 +4163,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               U8 byte_value = visible_memory[visible_byte_idx];
               B32 byte_is_bad = !!(visible_memory_bad_flags[visible_byte_idx/64] & (1ull<<(visible_byte_idx%64)));
               B32 byte_is_changed = !!(visible_memory_change_flags[visible_byte_idx/64] & (1ull<<(visible_byte_idx%64)));
-              AnnotationNode *annotation_node = visible_memory_annotations[visible_byte_idx].first;
+              AnnotationNode *annotation_node = visible_memory_annotations[visible_byte_idx].last;
               
               // rjf: unpack visual cell info
               UI_BoxFlags cell_flags = 0;
@@ -4074,7 +4180,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               if(annotation_node != 0)
               {
                 cell_flags |= UI_BoxFlag_DrawBackground;
-                Vec4F32 cell_bg_color_rgba = annotation_node->v->color;
+                Vec4F32 cell_bg_color_rgba = annotation_node->v->bg_color;
                 Vec4F32 cell_bg_color_hsva = hsva_from_rgba(cell_bg_color_rgba);
                 cell_bg_rgba = mix_4f32(cell_bg_color_rgba, main_bg_color_rgba, clamp_1f32(r1f32(0, 1), 1.f - abs_f32(cell_bg_color_hsva.z - main_tx_color_hsva.z)*0.5f));
               }
@@ -4119,7 +4225,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                 Vec4F32 color = {0};
                 UI_TagF("bad") color = ui_color_from_name(str8_lit("text"));
                 DR_FStrList fstrs = {0};
-                DR_FStr fstr = {str8f(scratch.arena, "%c", mv->cell_value_edit_first_digit), {font, font_raster_flags, color, font_size, 0, 0}};
+                DR_FStr fstr = {str8f(scratch.arena, "%c", mv->cell_value_edit_first_digit), {font, font_raster_flags, color, cell_font_size, 0, 0}};
                 dr_fstrs_push(scratch.arena, &fstrs, &fstr);
                 ui_box_equip_display_fstrs(cell_box, &fstrs);
               }
@@ -4136,16 +4242,19 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                 ui_box_equip_display_fstrs(cell_box, &byte_fstrs[byte_value]);
               }
               {
-                for(AnnotationNode *a_n = annotation_node; a_n != 0; a_n = a_n->next)
+                B32 did_opener = 0;
+                B32 did_closer = 0;
+                for(AnnotationNode *a_n = annotation_node; a_n != 0 && (!did_opener || !did_closer); a_n = a_n->next)
                 {
                   Annotation *a = a_n->v;
-                  if(global_byte_idx == a->vaddr_range.min) UI_Parent(row_overlay_box)
+                  if(!did_opener && global_byte_idx == a->vaddr_range.min) UI_Parent(row_overlay_box)
                   {
+                    did_opener = 1;
                     F32 size = cell_width_px/4.f + cell_width_px/8.f*ui_anim(ui_key_from_stringf(ui_active_seed_key(), "###annotation_hovered_%I64x_%I64x", a->vaddr_range.min, a->vaddr_range.max),
                                                                              (F32)!!(a->vaddr_range.min+1 <= mouse_hover_byte_num && mouse_hover_byte_num <= a->vaddr_range.max));
-                    ui_set_next_border_color(a->color);
-                    ui_set_next_fixed_x(big_glyph_advance*20.f + col_idx*cell_width_px + -size*0.5f);
-                    ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + -size*0.5f);
+                    ui_set_next_border_color(a->bg_color);
+                    ui_set_next_fixed_x(cell_big_glyph_advance*20.f + col_idx*cell_width_px + -size*0.125f);
+                    ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + -size*0.125f);
                     ui_set_next_fixed_width(size);
                     ui_set_next_fixed_height(size);
                     ui_set_next_corner_radius_00(cell_width_px/8.f);
@@ -4154,13 +4263,14 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                     ui_set_next_corner_radius_11(cell_width_px/8.f);
                     ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawDropShadow, ui_key_zero());
                   }
-                  if(global_byte_idx+1 == a->vaddr_range.max) UI_Parent(row_overlay_box)
+                  if(0 && !did_closer && global_byte_idx+1 == a->vaddr_range.max) UI_Parent(row_overlay_box)
                   {
+                    did_closer = 1;
                     F32 size = cell_width_px/4.f + cell_width_px/8.f*ui_anim(ui_key_from_stringf(ui_active_seed_key(), "###annotation_hovered_%I64x_%I64x", a->vaddr_range.min, a->vaddr_range.max),
                                                                              (F32)!!(a->vaddr_range.min+1 <= mouse_hover_byte_num && mouse_hover_byte_num <= a->vaddr_range.max));
-                    ui_set_next_border_color(a->color);
-                    ui_set_next_fixed_x(big_glyph_advance*20.f + (col_idx+1)*cell_width_px + -size*0.5f);
-                    ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + row_height_px + -size*0.5f);
+                    ui_set_next_border_color(a->bg_color);
+                    ui_set_next_fixed_x(cell_big_glyph_advance*20.f + (col_idx+1)*cell_width_px + -size*0.125f);
+                    ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + row_height_px + -size*0.125f);
                     ui_set_next_fixed_width(size);
                     ui_set_next_fixed_height(size);
                     ui_set_next_corner_radius_00(cell_width_px/8.f);
@@ -4171,6 +4281,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                   }
                 }
               }
+#if 0
               if(annotation_node != 0 && mouse_hover_byte_num == global_byte_num && !dragging_is_active)
               {
                 UI_Tooltip UI_PrefHeight(ui_px(ui_top_font_size()*1.75f, 1.f))
@@ -4195,10 +4306,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                   }
                 }
               }
+#endif
             }
           }
         }
-        ui_spacer(ui_px(big_glyph_advance*1.5f, 1.f));
+        ui_spacer(ui_px(cell_big_glyph_advance*1.5f, 1.f));
         UI_WidthFill UI_TextPadding(0)
         {
           MemoryZero(row_ascii_buffer, num_columns);
@@ -4227,9 +4339,9 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
               Vec4F32 color = selection_color;
-              dr_rect(r2f32p(text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.min+0-row_range_bytes.min)).x - font_size/8.f,
+              dr_rect(r2f32p(text_pos.x + fnt_dim_from_tag_size_string(font, cell_font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.min+0-row_range_bytes.min)).x - cell_font_size/8.f,
                              ascii_box->rect.y0,
-                             text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + font_size/4.f,
+                             text_pos.x + fnt_dim_from_tag_size_string(font, cell_font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + cell_font_size/4.f,
                              ascii_box->rect.y1),
                       color,
                       0, 0, 1.f);
@@ -4243,9 +4355,9 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
               Vec4F32 color = border_color;
-              dr_rect(r2f32p(text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num-1-row_range_bytes.min)).x - font_size/8.f,
+              dr_rect(r2f32p(text_pos.x + fnt_dim_from_tag_size_string(font, cell_font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num-1-row_range_bytes.min)).x - cell_font_size/8.f,
                              ascii_box->rect.y0,
-                             text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num+0-row_range_bytes.min)).x + font_size/4.f,
+                             text_pos.x + fnt_dim_from_tag_size_string(font, cell_font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num+0-row_range_bytes.min)).x + cell_font_size/4.f,
                              ascii_box->rect.y1),
                       color,
                       1.f, 3.f, 1.f);
@@ -4315,6 +4427,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   {
     rd_store_view_param_u64(str8_lit("mark"), mark_base_vaddr);
   }
+  rd_store_view_param_f32(str8_lit("zoom"), zoom_target);
   rd_store_view_scroll_pos(scroll_pos);
   
   scratch_end(scratch);

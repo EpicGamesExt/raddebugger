@@ -4,6 +4,15 @@
 ////////////////////////////////
 //~ rjf: post-0.9.20 TODO notes
 //
+//- memory view pass
+// [ ] scroll bar
+// [ ] horizontal scrolling?
+// [ ] toggleable ascii column
+// [ ] toggleable hierarchy column?
+// [x] cursor info at bottom? # of selected bytes, address range, cursor hierarchical location?
+// [x] clean up tooltip? it's a bit big/noisy (maybe remove it after above?)
+// [x] missing call stack frames?
+//
 //- fabian complaints / reports
 // [ ] broadly, need to complete memory view & fix issues
 //  [ ] dumb panel click-through thing

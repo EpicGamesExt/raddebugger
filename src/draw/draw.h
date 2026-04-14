@@ -117,6 +117,7 @@ internal U64 dr_hash_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: Fancy String Type Functions
 
+internal void dr_fstrs_push_front(Arena *arena, DR_FStrList *list, DR_FStr *str);
 internal void dr_fstrs_push(Arena *arena, DR_FStrList *list, DR_FStr *str);
 internal void dr_fstrs_push_new_(Arena *arena, DR_FStrList *list, DR_FStrParams *params, DR_FStrParams *overrides, String8 string);
 #define dr_fstrs_push_new(arena, list, params, string, ...) dr_fstrs_push_new_((arena), (list), (params), &(DR_FStrParams){.size = 0, __VA_ARGS__}, (string))
