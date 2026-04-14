@@ -117,7 +117,9 @@ os_mac_gfx_next_event(Arena * arena, B32 wait, OS_EventList* evts)
         }
 
         OS_Event *event = os_mac_gfx_event_list_push_key(arena, evts, os_window, key, is_down);
-        
+
+        if(os_window == 0){break;}
+
         //- yuraiz: check if dragging the window
         os_window->dragging_window = 0;
         if(key == OS_Key_LeftMouseButton && is_down)
@@ -220,7 +222,7 @@ os_mac_gfx_next_event(Arena * arena, B32 wait, OS_EventList* evts)
 
     case NSEventTypeLeftMouseDragged:
     {
-      if(os_window->dragging_window)
+      if(os_window != 0 && os_window->dragging_window)
       {
         msg1(void, window, "performWindowDragWithEvent:", id, event);
       }
@@ -916,7 +918,10 @@ os_graphical_message(B32 error, String8 title, String8 message)
   msg1(void, alert, "setInformativeText:", id, NSString_fromUTF8(message));
   msg1(void, alert, "setIcon:", id, icon);
 
-  msg1(void, msg(id, alert, "window"), "makeKeyAndOrderFront:", id, NULL);
+  msg(void, alert, "layout");
+  id alert_window = msg(id, alert, "window");
+  msg(void, alert_window, "center");
+  msg1(void, alert_window, "makeKeyAndOrderFront:", id, NULL);
   msg(void, alert, "runModal");
 }
 
