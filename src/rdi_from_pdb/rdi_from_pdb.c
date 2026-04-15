@@ -2312,15 +2312,32 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
                   U32 arglist_itypes_count = arglist->count;
                   
-                  // rjf: build param type array
-                  RDIM_Type **params = push_array(arena, RDIM_Type *, arglist_itypes_count);
+                  // rjf: count non-zero arguments
+                  U32 arglist_itypes_nonzero_count = 0;
                   for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
                   {
-                    params[idx] = p2r_type_ptr_from_itype(arglist_itypes_base[idx]);
+                    if(arglist_itypes_base[idx] != 0)
+                    {
+                      arglist_itypes_nonzero_count += 1;
+                    }
+                  }
+                  
+                  // rjf: build param type array
+                  RDIM_Type **params = push_array(arena, RDIM_Type *, arglist_itypes_nonzero_count);
+                  {
+                    U64 dst_idx = 0;
+                    for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+                    {
+                      if(arglist_itypes_base[idx] != 0)
+                      {
+                        params[dst_idx] = p2r_type_ptr_from_itype(arglist_itypes_base[idx]);
+                        dst_idx += 1;
+                      }
+                    }
                   }
                   
                   // rjf: fill dst type
-                  dst_type->count = arglist_itypes_count;
+                  dst_type->count = arglist_itypes_nonzero_count;
                   dst_type->param_types = params;
                 }break;
                 
