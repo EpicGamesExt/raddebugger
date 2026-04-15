@@ -1137,6 +1137,13 @@ store_stop:
 
   for EachElement(i, debug_t.ti_ranges) { debug_t.ti_ranges[i] = r1u64(CV_MinComplexTypeIndex, CV_MinComplexTypeIndex + debug_t.count); }
 
+  // shift upper type index bound to include precompiled types
+  CV_Leaf leaf = cv_debug_t_get_leaf(&debug_t, 0);
+  if (leaf.kind == CV_LeafKind_PRECOMP) {
+    CV_PrecompInfo precomp_info = cv_precomp_info_from_leaf(leaf);
+    for EachElement(i, debug_t.ti_ranges) { debug_t.ti_ranges[i].max += precomp_info.leaf_count; }
+  }
+
   ProfEnd();
   return debug_t;
 }
