@@ -53,6 +53,16 @@
 - Adjusted the source code context menu to activate commands with a single
   press, rather than the usual double click behavior from general palettes.
 
+## Linker Changes
+
+- Optimized debug info generation to reduce memory usage in large links by 25%.
+- Fixed a determinism issue that caused linker to write unreliable debug info.
+- Fixed over-reservetaion of PDB pages, reducing the PDB size. 
+- Implemented /INFERASANLIBS
+- Implemented /WHOLEARCHIVE
+- Implemented /PDBSTRIPPED
+- Set correct defaults for unload and bind import tables.
+
 # v0.9.24-alpha
 
 ## Debugger Changes
