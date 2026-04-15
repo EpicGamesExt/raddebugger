@@ -2,30 +2,21 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: post-0.9.20 TODO notes
+//~ rjf: post-0.9.25 TODO notes
+//
+//- evaluation space coverage pass
+// [ ] eval space reads/writes -> needs staleness/badness info - replace ctrl layer, to apply to all spaces
+// [ ] need concrete ways of referring into a space at any offset - e.g. `process.memory + 0x1234`, `file:"foo".data + 0x1234`, `thread.regs + 0x80`, etc.
+// [ ] memory view needs to take advantage of above when peeking; ensure peeking works on files etc.
 //
 //- memory view pass
-// [ ] scroll bar
-// [ ] horizontal scrolling?
 // [ ] toggleable ascii column
-// [ ] toggleable hierarchy column?
-// [x] cursor info at bottom? # of selected bytes, address range, cursor hierarchical location?
-// [x] clean up tooltip? it's a bit big/noisy (maybe remove it after above?)
-// [x] missing call stack frames?
+// [ ] toggleable annotation tree column
+// [ ] horizontal scrolling
 //
 //- fabian complaints / reports
-// [ ] broadly, need to complete memory view & fix issues
-//  [ ] dumb panel click-through thing
-//  [ ] correct type interpretations; togglable interpretations
-//  [ ] make address editable; specialized version of the cursor address editor in tab right-click menu
 // [ ] simplified default layout
 //  [ ] memory view deserves larger spot, in default layout
-// [x] fix for-loop stepping oddities, likely single-line for-loop stepping
-// [x] `foo, x` needs to correctly match `hex(foo)`, e.g. in application to expansions
-// [x] eval: pointer casts of register space should promote to process space
-// [x] more control over string visualization; specifically, when *not* to do it, even when using e.g. char *s
-// [x] sign bits should not display on unsigned integers?
-// [x] source/disasm ctx menu should include options for e.g. "go to selected thread"
 // [ ] ambiguous parsing cases - need to re-introduce identifier resolution into eval parse. (foo *)&bar
 // [ ] broadly, view discoverability / docs
 // [ ] signify empty watch window "expression" slot more as a text field?
@@ -216,6 +207,24 @@
 //     code slice params)
 // [ ] font cache eviction (both for font tags, closing fp handles, and
 //     rasterizations)
+
+////////////////////////////////
+//~ rjf: Recently Completed
+//
+// [x] fix for-loop stepping oddities, likely single-line for-loop stepping
+// [x] `foo, x` needs to correctly match `hex(foo)`, e.g. in application to expansions
+// [x] eval: pointer casts of register space should promote to process space
+// [x] more control over string visualization; specifically, when *not* to do it, even when using e.g. char *s
+// [x] sign bits should not display on unsigned integers?
+// [x] source/disasm ctx menu should include options for e.g. "go to selected thread"
+//  [x] correct type interpretations; togglable interpretations
+//  [x] make address editable; specialized version of the cursor address editor in tab right-click menu
+// [x] broadly, need to complete memory view & fix issues
+// [x] dumb panel click-through thing
+// [x] cursor info at bottom? # of selected bytes, address range, cursor hierarchical location?
+// [x] clean up tooltip? it's a bit big/noisy (maybe remove it after above?)
+// [x] missing call stack frames?
+// [x] scroll bar
 
 ////////////////////////////////
 //~ rjf: Build Options

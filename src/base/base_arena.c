@@ -11,7 +11,7 @@ arena_alloc_(ArenaParams *params)
 { 
   U64 reserve_size = params->reserve_size;
   U64 commit_size  = params->commit_size;
-
+  
   // rjf: reserve/commit initial block
   void *base = params->optional_backing_buffer;
   if(base == 0)
@@ -27,7 +27,7 @@ arena_alloc_(ArenaParams *params)
       reserve_size = AlignPow2(reserve_size, os_get_system_info()->page_size);
       commit_size  = AlignPow2(commit_size,  os_get_system_info()->page_size);
     }
-
+    
     if(params->flags & ArenaFlag_LargePages)
     {
       base = os_reserve_large(reserve_size);
@@ -39,7 +39,8 @@ arena_alloc_(ArenaParams *params)
       os_commit(base, commit_size);
     }
     AsanPoisonMemoryRegion(base, commit_size);
-    raddbg_annotate_vaddr_range(base, reserve_size, "arena %s:%i", params->allocation_site_file, params->allocation_site_line);
+    // TODO(rjf): we need to reintroduce this later when we have the ability to remove annotations...
+    // raddbg_annotate_vaddr_range(base, reserve_size, "arena %s:%i", params->allocation_site_file, params->allocation_site_line);
   }
   else
   {
@@ -85,7 +86,7 @@ arena_release(Arena *arena)
     tmPlot(0, TM_PLOT_UNITS_MEMORY, TM_PLOT_DRAW_LINE, 0, "%s/%p", base_arena->name, base_arena);
   }
 #endif
-
+  
   for(Arena *n = arena->current, *prev = 0; n != 0; n = prev)
   {
     prev = n->prev;
@@ -152,7 +153,7 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
                               .flags        = current->flags,
                               .allocation_site_file = current->allocation_site_file,
                               .allocation_site_line = current->allocation_site_line);
-
+      
       size_to_zero = 0;
     }
     else
@@ -197,7 +198,7 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
     AsanUnpoisonMemoryRegion(result, size);
     MemoryZero(result, size_to_zero);
   }
-
+  
 #if PROFILE_TELEMETRY
   if(size > KB(1))
   {
@@ -253,7 +254,7 @@ arena_pop_to(Arena *arena, U64 pos)
   AssertAlways(new_pos <= current->pos);
   AsanPoisonMemoryRegion((U8*)current + new_pos, (current->pos - new_pos));
   current->pos = new_pos;
-
+  
 #if PROFILE_TELEMETRY
   if((pos - (new_pos + current->base_pos)) > KB(1))
   {
@@ -262,7 +263,7 @@ arena_pop_to(Arena *arena, U64 pos)
     tmPlot(0, TM_PLOT_UNITS_MEMORY, TM_PLOT_DRAW_LINE, (double)(current->base_pos + current->pos) / 1024.0 / 1024.0, "%s/%p", base_arena->name, base_arena);
   }
 #endif
-
+  
 }
 
 //- rjf: arena push/pop helpers

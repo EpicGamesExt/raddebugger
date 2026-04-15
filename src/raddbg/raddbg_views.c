@@ -2691,7 +2691,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   FNT_RasterFlags font_raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code);
   F32 tab_font_size = ui_top_font_size();
   F32 zoom_target = rd_view_setting_f32_from_name(str8_lit("zoom"));
-  zoom_target = Clamp(0.25f, zoom_target, 2.f);
+  zoom_target = Clamp(0.5f, zoom_target, 2.f);
   F32 zoom = ui_anim(ui_key_from_stringf(ui_key_zero(), "%I64x_zoom", rd_regs()->view), zoom_target, .initial = zoom_target);
   F32 cell_font_size = tab_font_size * zoom;
   F32 cell_big_glyph_advance = fnt_dim_from_tag_size_string(font, cell_font_size, 0, 0, str8_lit("H")).x;
@@ -2724,6 +2724,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     F32 num_columns_f = ((dim_2f32(rect).x - address_margin_width_px - cell_big_glyph_advance*4.f) / (cell_width_px + cell_big_glyph_advance));
     num_columns_f = ClampBot(1.f, num_columns_f);
     num_columns = (U64)num_columns_f;
+    num_columns = ClampTop(128, num_columns);
   }
   num_columns = ClampBot(1, num_columns);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
@@ -2782,8 +2783,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: determine visible range of rows (occluded & non-occluded)
   //
-  S64 num_possible_visible_rows = num_possible_visible_rows = dim_2f32(rect).y/row_height_px;;
-  S64 num_possible_nonoccluded_visible_rows = (dim_2f32(content_rect).y - dim_2f32(footer_rect).y) / row_height_px;
+  S64 num_possible_visible_rows = dim_2f32(rect).y/row_height_px;
+  S64 num_possible_nonoccluded_visible_rows = (dim_2f32(content_rect).y - dim_2f32(header_rect).y - dim_2f32(footer_rect).y) / row_height_px - 1;
   
   //////////////////////////////
   //- rjf: determine legal scroll range
@@ -2804,7 +2805,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
        (mv->last_cursor_range.min != cursor_range.min ||
         mv->last_cursor_range.max != cursor_range.max))
     {
-      mv->contain_cursor = 1;
+      mv->center_cursor = 1;
       if(track_mark_to_cursor)
       {
         mark_base_vaddr = cursor_base_vaddr;
@@ -3104,7 +3105,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     {
       mv->contain_cursor = 0;
       Rng1S64 viz_range_nonoccluded_rows = {0};
-      viz_range_nonoccluded_rows.min = scroll_pos.y.idx + (S64)(content_rect.y0 / row_height_px);
+      viz_range_nonoccluded_rows.min = scroll_pos.y.idx + (S64)((content_rect.y0 - header_rect.y0) / row_height_px);
       viz_range_nonoccluded_rows.max = viz_range_nonoccluded_rows.min + num_possible_nonoccluded_visible_rows;
       viz_range_nonoccluded_rows.min = clamp_1s64(scroll_idx_rng, viz_range_nonoccluded_rows.min);
       viz_range_nonoccluded_rows.max = clamp_1s64(scroll_idx_rng, viz_range_nonoccluded_rows.max);
