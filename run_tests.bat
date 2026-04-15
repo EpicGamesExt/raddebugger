@@ -24,10 +24,10 @@ for %%c in (%CC_VALUES%) do for %%m in (%MODE_VALUES%) do (
   )
 
   rem clang does not compile with asan in release mode because it runs out of memory
-  if "%%c::%%m" neq "clang::release" (
+  if "%%c" equ "clang" (
     call build.bat meta %%c %%m %TARGET_VALUES% || exit /b 1
   ) else (
-    call build.bat asan meta %%c %%m %TARGET_VALUES% || exit /b 1
+    call build.bat meta asan %%c %%m %TARGET_VALUES% || exit /b 1
   )
 
   pushd build
