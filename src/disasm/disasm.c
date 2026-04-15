@@ -470,7 +470,10 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_o
     }
     
     //- rjf: mark dependency on data hash
-    c_hash_downstream_inc(hash);
+    if(info_arena != 0)
+    {
+      c_hash_downstream_inc(hash);
+    }
     
     //- rjf: fill result
     if(info_arena != 0)
