@@ -626,32 +626,31 @@ msf_find_max_pn_(MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageNu
   for (MSF_Int fpm_pn_idx = (MSF_Int)fpm_pn_arr.count - 1; fpm_pn_idx >= 0; fpm_pn_idx -= 1) {
     MSF_PageNumber fpm_pn = fpm_pn_arr.v[fpm_pn_idx];
     U32Array fpm_data = msf_fpm_data_from_pn(page_data_list, page_size, fpm_pn);
-    
-    // we have to work around the fact that FPM bits are always alloced
-    // and also there is a trail of unused FPM groups too
-    U32 bit_idx = max_U32;
-    for (MSF_Int i = fpm_page_count - 1; i >= 0; i -= 1) {
-      U32 fpm_lo = i * fpm_interval_wrong + 3; // skip first page bit and FPM group bits
-      U32 fpm_hi = i * fpm_interval_wrong + fpm_interval_wrong;
-      bit_idx = bit_array_scan_right_to_left32(fpm_data, fpm_lo, fpm_hi, MSF_PAGE_STATE_ALLOC);
-      if (bit_idx <= fpm_interval_correct) {
-        break;
-      }
-    }
-    
-    // check first page bit
-    if (bit_idx >= fpm_interval_correct) {
-      bit_idx = bit_array_scan_left_to_right32(fpm_data, 0, 1, MSF_PAGE_STATE_ALLOC);
-      if (bit_idx >= fpm_interval_correct) {
+
+    U64 bit_idx = max_U64;
+    U64 hi = fpm_data.count*32;
+    while (hi > 0) {
+      U64 msb_idx = bit_array_scan_right_to_left32(fpm_data, 0, hi, MSF_PAGE_STATE_ALLOC);
+
+      // FPM is empty
+      if (msb_idx >= hi) { break; }
+
+      // hit FPM page -- keep going
+      U64 k = msb_idx % fpm_interval_wrong;
+      if (k < 3) {
+        hi = msb_idx;
         continue;
       }
+
+      bit_idx = msb_idx;
+      break;
     }
-    
-    // compute max page number
-    MSF_PageNumber pn = bit_idx + (MSF_UInt)fpm_pn_idx * fpm_interval_correct;
-    max_pn = Max(max_pn, pn);
-    
-    break;
+
+    // stop if there is a page
+    if (bit_idx != max_U64) {
+      max_pn = Max(bit_idx, 2) + fpm_pn_idx * fpm_interval_correct;
+      break;
+    }
   }
   
   return max_pn;
@@ -666,6 +665,7 @@ msf_find_max_pn(MSF_PageDataList page_data_list, MSF_UInt page_size)
   MSF_PageNumber fpm0_max = msf_find_max_pn_(page_data_list, page_size, fpm0_pn_arr);
   MSF_PageNumber fpm1_max = msf_find_max_pn_(page_data_list, page_size, fpm1_pn_arr);
   MSF_PageNumber max_pn = Max(fpm0_max, fpm1_max);
+  Assert(max_pn > 1);
   scratch_end(scratch);
   return max_pn;
 }
@@ -1672,13 +1672,9 @@ msf_get_page_data_nodes(Arena *arena, MSF_Context *msf)
 internal U64
 msf_get_save_size(MSF_Context *msf)
 {
-#if 0
-  MSF_PageNumber max_pn = msf_find_max_pn(msf->page_data_list, msf->page_size);
-  U64 size = ((U64)max_pn + 1) * (U64)msf->page_size;
-  Assert(msf_count_pages(size, msf->page_size) == msf->page_count);
-#else
-  U64 size = (U64)msf->page_count * msf->page_size;
-#endif
+  MSF_PageNumber max_pn     = msf_find_max_pn(msf->page_data_list, msf->page_size);
+  U64            page_count = max_pn + 1;
+  U64            size       = page_count * msf->page_size;
   return size;
 }
 
