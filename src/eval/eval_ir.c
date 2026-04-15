@@ -228,19 +228,8 @@ e_irtree_mem_read_type(Arena *arena, E_IRNode *c, E_TypeKey type_key)
   read_node->value.u64 = byte_size;
   e_irnode_push_child(read_node, c);
   
-  // rjf: build a signed trunc node if needed
-  U64 bit_size = byte_size << 3;
-  E_IRNode *with_trunc = read_node;
-  E_TypeKind kind = e_type_kind_from_key(type_key);
-  if(bit_size < 64 && e_type_kind_is_signed(kind))
-  {
-    with_trunc = e_push_irnode(arena, RDI_EvalOp_TruncSigned);
-    with_trunc->value.u64 = bit_size;
-    e_irnode_push_child(with_trunc, read_node);
-  }
-  
   // rjf: fill
-  result = with_trunc;
+  result = read_node;
   
   return result;
 }
@@ -895,10 +884,6 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             new_tree = e_irtree_convert_lo(arena, in_tree, out_group, in_group);
           }
           if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_unwrapped_kind))
-          {
-            new_tree = e_irtree_trunc(arena, in_tree, cast_type);
-          }
-          if(e_type_kind_is_signed(cast_type_unwrapped_kind) && e_type_kind_is_integer(casted_type_unwrapped_kind) && !e_type_kind_is_signed(casted_type_unwrapped_kind))
           {
             new_tree = e_irtree_trunc(arena, in_tree, cast_type);
           }

@@ -413,6 +413,9 @@ type_coverage_eval_tests(void)
   uint32_t a = (1<<31);
   int32_t  b = (1<<31);
   
+  uint32_t abcd = 0xaabbccdd;
+  int64_t abcd64 = (int64_t)abcd;
+  
   char string[] = "Hello World!";
   char longer_text[] =
     "Suppose there was some text\n"
