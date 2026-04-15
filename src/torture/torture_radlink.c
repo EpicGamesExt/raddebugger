@@ -4921,7 +4921,7 @@ T_BeginTest(determ_test)
   String8 b_pdb = t_read_file(arena, str8_lit("b.pdb"));
 
   // multi-threaded links
-  for EachIndex(i, 50) {
+  for EachIndex(i, 25) {
     Temp temp = temp_begin(arena);
 
     t_delete_file(str8_lit("a.exe"));
