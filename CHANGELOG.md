@@ -16,11 +16,11 @@
 - Added a dedicated zoom setting for the memory view.
 - Added a setting for automatically determining the number of columns in the
   memory view based on the available space.
-- Fixed many bugs and improved visuals in the memory view.
+- Fixed many bugs and improved visuals in the memory view. (#690)
 - Fixed the debugger incorrectly evaluating pointer casts of registers in
   register space, rather than promoting them to process address space
   evaluations. This fixes cases where expressions like `(int *)rax` were not
-  evaluating correctly.
+  evaluating correctly. (#659)
 - Fixed the debugger incorrectly requiring multiple step operations when source
   lines mapped to multiple discontiguous ranges of instructions. This most
   notably showed up with certain styles of `for`-loops, especially with Clang
