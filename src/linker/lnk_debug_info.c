@@ -1906,16 +1906,25 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       String8List symbols       = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
       CV_ModIndex imod          = task->mod_arr[obj_idx]->imod;
       U64         symbol_cursor = sizeof(CV_Signature);
+      U64         scope_depth   = 0;
       for EachNode(n, String8Node, symbols.first) {
         for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
           CV_Symbol symbol = {0};
           TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-          if (symbol.kind == CV_SymKind_SKIP) { continue; }
+
+          if      (symbol.kind == CV_SymKind_SKIP)                 { continue; }
+          else if (cv_is_global_symbol(symbol.kind))               { continue; }
+          else if (cv_is_typedef(symbol.kind) && scope_depth == 0) { continue; }
+          else if (symbol.kind == 0x1176)                          { continue; }
+
+          if      (cv_is_scope_symbol(symbol.kind)) { scope_depth += 1; }
+          else if (cv_is_end_symbol(symbol.kind))   { scope_depth -= 1; }
 
           if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
             String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
-            proc_ref_nodes[proc_ref_idx].data = cv_make_proc_ref(proc_ref_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
-            proc_ref_hashes[proc_ref_idx] = hash_from_cv_symbol(&proc_ref_nodes[proc_ref_idx].data);
+            proc_ref_nodes [proc_ref_idx].data = cv_make_proc_ref(proc_ref_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
+            proc_ref_nodes [proc_ref_idx].data.offset = symbol_cursor;
+            proc_ref_hashes[proc_ref_idx] = gsi_hash(gsi, name);
             proc_ref_idx += 1;
           }
 
@@ -2061,9 +2070,9 @@ lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8No
       for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
         CV_Symbol symbol = {0};
         TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-        if (symbol.kind == CV_SymKind_SKIP) { continue; }
 
-        if      (cv_is_global_symbol(symbol.kind))               { continue; }
+        if      (symbol.kind == CV_SymKind_SKIP)                 { continue; }
+        else if (cv_is_global_symbol(symbol.kind))               { continue; }
         else if (cv_is_typedef(symbol.kind) && scope_depth == 0) { continue; }
         else if (symbol.kind == 0x1176)                          { continue; }
 
