@@ -29,11 +29,16 @@
   than `hex(foo)`, in that the hexadecimal setting was not being inherited.
 - Fixed the debugger leaking debug info conversion process handles. This
   addresses cases where the debugger was preventing stale debug info from being
-  updated, after a rebuild.
-- Fixed the debugger not correctly using target-embedded markup data.
+  updated, after a rebuild. (#736)
+- Fixed the debugger not correctly using target-embedded markup data. (#702)
 - Fixed the debugger not showing full call stacks when the top instruction
   pointer is located at a 0 address.
-- Fixed several crashes and instabilities.
+- Fixed integer casts producing incorrect values. (#754)
+- Fixed the PDB -> RDI converter's interpretation of certain empty argument
+  lists in function types in PDB. This fixes some cases where local variables
+  were being interpreted as parameters, which resulted in incorrect evaluation
+  results. (#751)
+- Fixed several crashes and instabilities. (#735)
 - Added a dedicated settings button to the focused tab. This opens the same
   menu as right-clicking the tab, but this makes this menu (and thus all
   options for all tabs and views) more discoverable.
