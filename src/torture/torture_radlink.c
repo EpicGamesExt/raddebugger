@@ -4594,7 +4594,7 @@ T_BeginTest(get_msf_stream_pages)
 
     String8List stream_data = msf_data_from_sn(arena, msf, sn);
     T_Ok(stream_data.total_size == stream_size);
-    T_Ok(stream_data.node_count == 11);
+    T_Ok(stream_data.node_count == 12);
 
     String8Array a = str8_array_from_list(arena, &stream_data);
     T_Ok(a.v[0].size  == 0xffd000);
@@ -4607,7 +4607,8 @@ T_BeginTest(get_msf_stream_pages)
     T_Ok(a.v[7].size  == 0xffd000);
     T_Ok(a.v[8].size  == 0x1000);
     T_Ok(a.v[9].size  == 0xffe000);
-    T_Ok(a.v[10].size == 0x613001);
+    T_Ok(a.v[10].size == 0x613000);
+    T_Ok(a.v[11].size == 1);
 
     String8Node buf     = *stream_data.first;
     U64         buf_pos = 0;

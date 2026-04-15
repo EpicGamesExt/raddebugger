@@ -467,8 +467,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
         U64            lf_idx = debug_p->count - (i + 1);
         CV_LeafHeader *lf     = cv_debug_t_get_leaf_header(debug_p, lf_idx);
         if (lf->kind == CV_LeafKind_ENDPRECOMP) {
+          memory_write16(&lf->size, sizeof(lf->kind));
           memory_write16(&lf->kind, CV_LeafKind_NOTYPE);
-          memory_write16(&lf->size, sizeof(CV_LeafKind));
           break;
         }
       }
@@ -602,14 +602,6 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
   // init hasher
   blake3_hasher hasher; blake3_hasher_init(&hasher);
 
-  // hash leaf header
-  {
-    CV_LeafHeader header;
-    header.size = (U16)leaf.data.size;
-    header.kind = leaf.kind;
-    blake3_hasher_update(&hasher, &header, sizeof(header));
-  }
-
   // hash bytes around indices
   {
     U64 last_ti_off = 0;
@@ -638,17 +630,23 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
     }
 
     if (sub_ti >= debug_t->ti_ranges[sub_ti_n->source].max) {
-      Temp scratch = scratch_begin(0,0);
+      // discard type
+      U32  leaf_idx    = curr_ti - debug_t->ti_ranges[curr_ti_source].min;
+      U8  *leaf_header = debug_t->data.str + debug_t->offsets[leaf_idx];
+      memory_write16(leaf_header + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
+      memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
 
-      String8 out_of_bounds_data = push_str8f(scratch.arena, "out_of_bounds_ti_%u_in_%u", sub_ti, leaf_ref.obj_idx);
-      blake3_hasher_update(&hasher, out_of_bounds_data.str, out_of_bounds_data.size);
+      // reset hasher
+      blake3_hasher_init(&hasher);
 
+      // log error
+      Temp    scratch       = scratch_begin(0,0);
       String8 leaf_kind_str = cv_string_from_leaf_kind(leaf.kind);
       String8 error_msg     = push_str8f(scratch.arena, "LF_%S(type_index: 0x%x) out of bounds type index 0x%x (leaf struct offset: 0x%llx)", leaf_kind_str, curr_ti, sub_ti, sub_ti_n->offset);
       lnk_error_obj(LNK_Error_InvalidTypeIndex, input->obj_arr[leaf_ref.obj_idx], "%S", error_msg);
-
       scratch_end(scratch);
-      continue;
+
+      break;
     }
 
     // discard type with a cyclic-ref
@@ -660,6 +658,9 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
       memory_write16(leaf_header + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
       memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
 
+      // reset hasher
+      blake3_hasher_init(&hasher);
+
       // log error
       Temp    scratch       = scratch_begin(0,0);
       String8 leaf_kind_str = cv_string_from_leaf_kind(leaf.kind);
@@ -667,7 +668,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
       lnk_error_obj(LNK_Error_InvalidTypeIndex, input->obj_arr[leaf_ref.obj_idx], "%S", error_msg);
       scratch_end(scratch);
 
-      continue;
+      break;
     }
 
     // type index -> hash
@@ -677,6 +678,10 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
     // mix-in sub-type hash
     blake3_hasher_update(&hasher, &sub_hash, sizeof(sub_hash));
   }
+
+  // hash leaf header
+  CV_LeafHeader *leaf_header = cv_debug_t_get_leaf_header(debug_t, leaf_ref.leaf_idx);
+  blake3_hasher_update(&hasher, leaf_header, sizeof(*leaf_header));
 
   U64 hash;
   blake3_hasher_finalize(&hasher, (U8 *) &hash, sizeof(hash));

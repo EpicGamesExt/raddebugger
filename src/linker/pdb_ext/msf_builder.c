@@ -1224,13 +1224,18 @@ msf_data_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn)
     String8 page = msf_data_from_pn(msf->page_data_list, msf->page_size, n->pn);
 
     if (acc.str + acc.size != page.str) {
-      if (acc.size > 0) {
+      if (acc.size) {
         str8_list_push(arena, &result, acc);
       }
       acc = page;
     } else {
       acc.size += page.size;
     }
+  }
+
+  if (acc.size) {
+    str8_list_push(arena, &result, acc);
+    MemoryZeroStruct(&acc);
   }
 
   if (n) {
@@ -1243,11 +1248,12 @@ msf_data_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn)
 
     acc.size = Min(stream->size - result.total_size, acc.size);
 
-    if (acc.size > 0) {
+    if (acc.size) {
       str8_list_push(arena, &result, acc);
     }
   }
 
+  Assert(result.total_size == stream->size);
   return result;
 }
 
