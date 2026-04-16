@@ -4,6 +4,8 @@
 ////////////////////////////////
 //~ rjf: post-0.9.25 TODO notes
 //
+// [ ] many threads hitting conditional breakpoints -> causes 0x8000003 exception!
+//
 //- evaluation space coverage pass
 // [ ] eval space reads/writes -> needs staleness/badness info - replace ctrl layer, to apply to all spaces
 // [ ] need concrete ways of referring into a space at any offset - e.g. `process.memory + 0x1234`, `file:"foo".data + 0x1234`, `thread.regs + 0x80`, etc.
@@ -21,7 +23,10 @@
 // [ ] broadly, view discoverability / docs
 // [ ] signify empty watch window "expression" slot more as a text field?
 //
-//- jeff viz notes
+//- jeff notes
+// [ ] option to prefer addresses first with string ptrs
+// [ ] focus changing on f10/f11? may be related to auto_run/auto_step - look at a bin/jeffr
+// [ ] option to turn off transient tabs altogether
 // [ ] single-line viz for pointers w/ bad (unmapped) addresses
 //
 //- namespace/locations/variables RDI pass

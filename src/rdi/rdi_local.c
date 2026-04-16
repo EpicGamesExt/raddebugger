@@ -747,12 +747,16 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       dumpf("\n  // unit[%I64u]\n  {\n", idx);
       dumpf("    unit_name: '%S'\n", str8_from_rdi_string_idx(rdi, unit->unit_name_string_idx));
       dumpf("    compiler_name: '%S'\n", str8_from_rdi_string_idx(rdi, unit->compiler_name_string_idx));
-      dumpf("    source_file_path: %u\n",   unit->source_file_path_node);
-      dumpf("    object_file_path: %u\n",   unit->object_file_path_node);
-      dumpf("    archive_file_path: %u\n",   unit->archive_file_path_node);
-      dumpf("    build_path: %u\n",   unit->build_path_node);
-      dumpf("    language: %S\n",   rdi_string_from_language(scratch.arena, unit->language));
-      dumpf("    line_table_idx: %u\n",   unit->line_table_idx);
+      dumpf("    source_file_path: %u\n", unit->source_file_path_node);
+      dumpf("    object_file_path: %u\n", unit->object_file_path_node);
+      dumpf("    archive_file_path: %u\n", unit->archive_file_path_node);
+      dumpf("    build_path: %u\n", unit->build_path_node);
+      dumpf("    language: %S\n", rdi_string_from_language(scratch.arena, unit->language));
+      dumpf("    line_table_idx: %u\n", unit->line_table_idx);
+      dumpf("    procedures_idx_range: [%u, %u)\n", unit->procedures_first_idx, unit->procedures_first_idx + unit->procedures_count);
+      dumpf("    global_variables_idx_range: [%u, %u)\n", unit->global_variables_first_idx, unit->global_variables_first_idx + unit->global_variables_count);
+      dumpf("    thread_variables_idx_range: [%u, %u)\n", unit->thread_variables_first_idx, unit->thread_variables_first_idx + unit->thread_variables_count);
+      dumpf("    constants_idx_range: [%u, %u)\n", unit->constants_first_idx, unit->constants_first_idx + unit->constants_count);
       dumpf("  }\n");
       scratch_end(scratch);
     }
@@ -996,6 +1000,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
   //////////////////////////////
   //- rjf: dump global variables
   //
+#if 0 // TODO(rjf): @locpass
   DumpSubset(GlobalVariables)
   {
     U64 count = 0;
@@ -1014,6 +1019,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       scratch_end(scratch);
     }
   }
+#endif
   
   //////////////////////////////
   //- rjf: dump global variables vmap
@@ -1033,6 +1039,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
   //////////////////////////////
   //- rjf: dump thread variables
   //
+#if 0 // TODO(rjf): @locpass
   DumpSubset(ThreadVariables)
   {
     U64 count = 0;
@@ -1051,10 +1058,12 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       scratch_end(scratch);
     }
   }
+#endif
   
   //////////////////////////////
   //- rjf: dump constants
   //
+#if 0 // TODO(rjf): @locpass
   DumpSubset(Constants)
   {
     U64 count = 0;
@@ -1068,10 +1077,12 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       dumpf("  }\n");
     }
   }
+#endif
   
   //////////////////////////////
   //- rjf: dump procedures
   //
+#if 0 // TODO(rjf): @locpass
   DumpSubset(Procedures)
   {
     RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
@@ -1103,6 +1114,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       scratch_end(scratch);
     }
   }
+#endif
   
   //////////////////////////////
   //- rjf: dump symbols
@@ -1143,7 +1155,18 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
         {
           dumpf("    root_scope_idx: %u\n", symbol->root_scope_idx);
         }
-        dumpf("    container_idx: %u\n", symbol->container_idx);
+        if(symbol->container_idx != 0 && (symbol->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Type)
+        {
+          dumpf("    container_type_idx: %u\n", symbol->container_idx);
+        }
+        if(symbol->container_idx != 0 && (symbol->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Scope)
+        {
+          dumpf("    container_scope_idx: %u\n", symbol->container_idx);
+        }
+        if(symbol->container_idx != 0 && (symbol->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Namespace)
+        {
+          dumpf("    container_namespace_idx: %u\n", symbol->container_idx);
+        }
         // TODO(rjf): location info
         dumpf("  }\n");
         scratch_end(scratch);

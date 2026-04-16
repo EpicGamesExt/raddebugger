@@ -624,14 +624,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   RDIM_Rng1U64ChunkList *unit_ranges = 0;
   ProfScope("bucket compilation unit contributions") if(lane_idx() == 0)
   {
-    unit_ranges = push_array(scratch.arena, RDIM_Rng1U64ChunkList, comp_units->count);
-    for(U64 idx = 0; idx < comp_unit_contributions->count; idx += 1)
+    unit_ranges = push_array(scratch.arena, RDIM_Rng1U64ChunkList, comp_units->count + 1);
+    for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_contributions->count; comp_unit_idx += 1)
     {
-      PDB_CompUnitContribution *contribution = &comp_unit_contributions->contributions[idx];
+      PDB_CompUnitContribution *contribution = &comp_unit_contributions->contributions[comp_unit_idx];
       if(contribution->mod < comp_units->count)
       {
         RDIM_Rng1U64 r = {contribution->voff_first, contribution->voff_opl};
-        rdim_rng1u64_chunk_list_push(arena, &unit_ranges[contribution->mod], 256, r);
+        rdim_rng1u64_chunk_list_push(arena, &unit_ranges[contribution->mod + 1], 256, r);
       }
     }
   }
@@ -833,8 +833,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: prep outputs
     ProfScope("prep outputs") if(lane_idx() == 0)
     {
-      unit_file_stubs = push_array(scratch.arena, P2R_SrcFileStubArray, comp_units->count);
-      unit_file_paths_hashes = push_array(scratch.arena, U64Array, comp_units->count);
+      unit_file_stubs = push_array(scratch.arena, P2R_SrcFileStubArray, comp_units->count + 1);
+      unit_file_paths_hashes = push_array(scratch.arena, U64Array, comp_units->count + 1);
     }
     lane_sync_u64(&unit_file_stubs, 0);
     lane_sync_u64(&unit_file_paths_hashes, 0);
@@ -856,19 +856,21 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       {
         //- rjf: take next unit
         U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
-        if(unit_idx >= comp_units->count)
+        if(unit_idx >= comp_units->count + 1)
         {
           break;
         }
         
         //- rjf: unpack unit
-        PDB_CompUnit *unit = comp_units->units[unit_idx];
-        CV_SymParsed *sym = all_syms[unit_idx+1];
-        CV_C13Parsed *c13 = all_c13s[unit_idx+1];
+        CV_SymParsed *sym = all_syms[unit_idx];
+        CV_C13Parsed *c13 = all_c13s[unit_idx];
         
         //- rjf: produce obj name/path
-        String8 obj_name = unit->obj_name;
+        String8 obj_name = str8_lit("*global*");
+        if(unit_idx > 0)
         {
+          PDB_CompUnit *comp_unit = comp_units->units[unit_idx-1];
+          obj_name = comp_unit->obj_name;
           if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
              str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
           {
@@ -1026,57 +1028,60 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
         
         // rjf: find all files in this unit's (non-inline) line info
-        ProfScope("find all files in this unit's (non-inline) line info")
-          for(CV_C13SubSectionNode *node = c13->first_sub_section;
-              node != 0;
-              node = node->next)
+        if(c13 != 0)
         {
-          if(node->kind == CV_C13SubSectionKind_Lines)
+          ProfScope("find all files in this unit's (non-inline) line info")
+            for(CV_C13SubSectionNode *node = c13->first_sub_section;
+                node != 0;
+                node = node->next)
           {
-            for(CV_C13LinesParsedNode *lines_n = node->lines_first;
-                lines_n != 0;
-                lines_n = lines_n->next)
+            if(node->kind == CV_C13SubSectionKind_Lines)
             {
-              // rjf: file name -> sanitized file path
-              String8 file_path = lines_n->v.file_name;
-              String8 file_path_sanitized = str8_copy(scratch2.arena, str8_skip_chop_whitespace(file_path));
+              for(CV_C13LinesParsedNode *lines_n = node->lines_first;
+                  lines_n != 0;
+                  lines_n = lines_n->next)
               {
-                PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
-                String8List file_path_sanitized_parts = str8_split_path(scratch2.arena, file_path_sanitized);
-                if(file_path_sanitized_style == PathStyle_Relative)
+                // rjf: file name -> sanitized file path
+                String8 file_path = lines_n->v.file_name;
+                String8 file_path_sanitized = str8_copy(scratch2.arena, str8_skip_chop_whitespace(file_path));
                 {
-                  String8List obj_folder_path_parts = str8_split_path(scratch2.arena, obj_folder_path);
-                  str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
-                  file_path_sanitized_parts = obj_folder_path_parts;
-                  file_path_sanitized_style = path_style_from_str8(obj_folder_path);
+                  PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
+                  String8List file_path_sanitized_parts = str8_split_path(scratch2.arena, file_path_sanitized);
+                  if(file_path_sanitized_style == PathStyle_Relative)
+                  {
+                    String8List obj_folder_path_parts = str8_split_path(scratch2.arena, obj_folder_path);
+                    str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
+                    file_path_sanitized_parts = obj_folder_path_parts;
+                    file_path_sanitized_style = path_style_from_str8(obj_folder_path);
+                  }
+                  str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
+                  file_path_sanitized = str8_path_list_join_by_style(scratch2.arena, &file_path_sanitized_parts, file_path_sanitized_style);
                 }
-                str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
-                file_path_sanitized = str8_path_list_join_by_style(scratch2.arena, &file_path_sanitized_parts, file_path_sanitized_style);
-              }
-              
-              // rjf: sanitized file path -> source file node
-              U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
-              U64 hit_path_slot = file_path_sanitized_hash%hit_path_slots_count;
-              String8Node *hit_path_node = 0;
-              for(String8Node *n = hit_path_slots[hit_path_slot]; n != 0; n = n->next)
-              {
-                if(str8_match(n->string, file_path_sanitized, 0))
+                
+                // rjf: sanitized file path -> source file node
+                U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
+                U64 hit_path_slot = file_path_sanitized_hash%hit_path_slots_count;
+                String8Node *hit_path_node = 0;
+                for(String8Node *n = hit_path_slots[hit_path_slot]; n != 0; n = n->next)
                 {
-                  hit_path_node = n;
-                  break;
+                  if(str8_match(n->string, file_path_sanitized, 0))
+                  {
+                    hit_path_node = n;
+                    break;
+                  }
                 }
-              }
-              if(hit_path_node == 0)
-              {
-                hit_path_node = push_array(scratch2.arena, String8Node, 1);
-                SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
-                hit_path_node->string = file_path_sanitized;
-                P2R_SrcFileStubNode *stub_n = push_array(scratch2.arena, P2R_SrcFileStubNode, 1);
-                SLLQueuePush(first_src_file_stub, last_src_file_stub, stub_n);
-                src_file_stub_count += 1;
-                stub_n->v.file_path = str8_copy(scratch.arena, file_path_sanitized);
-                stub_n->v.checksum_kind = lines_n->v.checksum_kind;
-                stub_n->v.checksum = str8_copy(scratch.arena, lines_n->v.checksum);
+                if(hit_path_node == 0)
+                {
+                  hit_path_node = push_array(scratch2.arena, String8Node, 1);
+                  SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
+                  hit_path_node->string = file_path_sanitized;
+                  P2R_SrcFileStubNode *stub_n = push_array(scratch2.arena, P2R_SrcFileStubNode, 1);
+                  SLLQueuePush(first_src_file_stub, last_src_file_stub, stub_n);
+                  src_file_stub_count += 1;
+                  stub_n->v.file_path = str8_copy(scratch.arena, file_path_sanitized);
+                  stub_n->v.checksum_kind = lines_n->v.checksum_kind;
+                  stub_n->v.checksum = str8_copy(scratch.arena, lines_n->v.checksum);
+                }
               }
             }
           }
@@ -1186,13 +1191,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       all_units_ptr = push_array(scratch.arena, RDIM_UnitChunkList, 1);
       if(params->subset_flags & RDIM_SubsetFlag_Units)
       {
-        for EachIndex(idx, comp_units->count)
+        for EachIndex(idx, comp_units->count + 1)
         {
-          rdim_unit_chunk_list_push(arena, all_units_ptr, comp_units->count);
+          rdim_unit_chunk_list_push(arena, all_units_ptr, comp_units->count + 1);
         }
       }
-      units_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, comp_units->count);
-      units_first_inline_site_line_tables = push_array(scratch.arena, RDIM_LineTable *, comp_units->count);
+      units_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, comp_units->count + 1);
+      units_first_inline_site_line_tables = push_array(scratch.arena, RDIM_LineTable *, comp_units->count + 1);
     }
     lane_sync_u64(&all_units_ptr, 0);
     lane_sync_u64(&units_line_tables, 0);
@@ -1212,42 +1217,61 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       {
         //- rjf: take next unit
         U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
-        if(unit_idx >= comp_units->count)
+        if(unit_idx >= units_count)
         {
           break;
         }
         Temp scratch = scratch_begin(&arena, 1);
         RDIM_LineTableChunkList *dst_line_tables = &units_line_tables[unit_idx];
-        PDB_CompUnit *src_unit     = comp_units->units[unit_idx];
-        CV_SymParsed *src_unit_sym = all_syms[unit_idx+1];
-        CV_C13Parsed *src_unit_c13 = all_c13s[unit_idx+1];
+        PDB_CompUnit *src_unit = (unit_idx > 0 ? comp_units->units[unit_idx-1] : 0);
+        CV_SymParsed *src_unit_sym = all_syms[unit_idx];
+        CV_C13Parsed *src_unit_c13 = all_c13s[unit_idx];
         RDIM_Unit *dst_unit = 0;
         if(params->subset_flags & RDIM_SubsetFlag_Units) { dst_unit = &units[unit_idx]; }
         
         // rjf: extract unit name
-        String8 unit_name = src_unit->obj_name;
-        if(unit_name.size != 0)
+        String8 unit_name = {0};
+        if(src_unit != 0)
         {
-          String8 unit_name_past_last_slash = str8_skip_last_slash(unit_name);
-          if(unit_name_past_last_slash.size != 0)
+          unit_name = src_unit->obj_name;
+          if(unit_name.size != 0)
           {
-            unit_name = unit_name_past_last_slash;
+            String8 unit_name_past_last_slash = str8_skip_last_slash(unit_name);
+            if(unit_name_past_last_slash.size != 0)
+            {
+              unit_name = unit_name_past_last_slash;
+            }
           }
+        }
+        else
+        {
+          unit_name = str8_lit("*global*");
         }
         
         // rjf: produce obj name/path
-        String8 obj_name = src_unit->obj_name;
-        if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
-           str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
+        String8 obj_name = {0};
+        if(src_unit != 0)
         {
-          MemoryZeroStruct(&obj_name);
+          obj_name = src_unit->obj_name;
+          if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
+             str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
+          {
+            MemoryZeroStruct(&obj_name);
+          }
         }
         String8 obj_folder_path = backslashed_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
         
-        //- rjf: main unit line table conversion
-        if(params->subset_flags & RDIM_SubsetFlag_LineInfo) ProfScope("main unit line table conversion")
+        // rjf: extract unit group name
+        String8 group_name = {0};
+        if(src_unit != 0)
         {
-          RDIM_LineTable *line_table = 0;
+          group_name = src_unit->group_name;
+        }
+        
+        //- rjf: main unit line table conversion
+        RDIM_LineTable *line_table = 0;
+        if(params->subset_flags & RDIM_SubsetFlag_LineInfo && src_unit_c13 != 0) ProfScope("main unit line table conversion")
+        {
           for(CV_C13SubSectionNode *node = src_unit_c13->first_sub_section;
               node != 0;
               node = node->next)
@@ -1305,18 +1329,18 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               }
             }
           }
-          
-          // rjf: fill unit
-          if(dst_unit != 0)
-          {
-            dst_unit->unit_name     = unit_name;
-            dst_unit->compiler_name = src_unit_sym->info.compiler_name;
-            dst_unit->object_file   = obj_name;
-            dst_unit->archive_file  = src_unit->group_name;
-            dst_unit->language      = p2r_rdi_language_from_cv_language(src_unit_sym->info.language);
-            dst_unit->line_table    = line_table;
-            dst_unit->voff_ranges   = unit_ranges[unit_idx];
-          }
+        }
+        
+        //- rjf: fill unit
+        if(dst_unit != 0)
+        {
+          dst_unit->unit_name     = unit_name;
+          dst_unit->compiler_name = src_unit_sym->info.compiler_name;
+          dst_unit->object_file   = obj_name;
+          dst_unit->archive_file  = group_name;
+          dst_unit->language      = p2r_rdi_language_from_cv_language(src_unit_sym->info.language);
+          dst_unit->line_table    = line_table;
+          dst_unit->voff_ranges   = unit_ranges[unit_idx];
         }
         
         //- rjf: build per-inline-site line tables
@@ -1526,7 +1550,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   RDIM_LineTableChunkList *all_line_tables_ptr = &all_line_tables;
   ProfScope("join all line tables") if(lane_idx() == 0)
   {
-    for EachIndex(idx, comp_units->count)
+    for EachIndex(idx, comp_units->count + 1)
     {
       rdim_line_table_chunk_list_concat_in_place(&all_line_tables, &units_line_tables[idx]);
     }
@@ -3271,7 +3295,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //
     if(lane_idx() == 0)
     {
-      syms_typedefs         = push_array(arena, RDIM_TypeChunkList, all_syms_count);
+      syms_typedefs = push_array(arena, RDIM_TypeChunkList, all_syms_count);
     }
     lane_sync_u64(&syms_typedefs, 0);
     
@@ -3311,7 +3335,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         U64 sym_constants_chunk_cap = 2048;
         U64 sym_scopes_chunk_cap = 4096;
         U64 sym_inline_sites_chunk_cap = 2048;
-        RDIM_Unit *sym_unit = &all_units_ptr->first->v[sym_idx > 0 ? sym_idx-1 : 0];
+        RDIM_Unit *sym_unit = &all_units_ptr->first->v[sym_idx];
         RDIM_SymbolChunkList *sym_procedures = &sym_unit->procedures;
         RDIM_SymbolChunkList *sym_global_variables = &sym_unit->global_variables;
         RDIM_SymbolChunkList *sym_thread_variables = &sym_unit->thread_variables;
@@ -3474,7 +3498,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   
                   // rjf: unpack global's container scope
                   RDIM_Scope *container_scope = 0;
-                  if(container_type == 0 && top_scope_node != 0)
+                  if(container_type == 0 && top_scope_node != 0 && iter.kind == CV_SymKind_LDATA32)
                   {
                     container_scope = top_scope_node->scope;
                   }

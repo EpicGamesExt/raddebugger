@@ -3323,7 +3323,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
 #endif
   
   //////////////////////////////////////////////////////////////
-  //- rjf: @rdim_bake_stage bake units, symbols, types, UDTs
+  //- rjf: @rdim_bake_stage bake units, types, inline sites
   //
   RDI_Unit *baked_units = 0;
   U64 baked_units_count = 0;
@@ -3639,6 +3639,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
     }
+    lane_sync();
     
     ////////////////////////////
     //- rjf: lay out indirected location data
@@ -3777,12 +3778,15 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             }
             
             // rjf: fill virtual offset ranges of location set elements
-            U64 loc_set_element_idx = 0;
-            for EachNode(c, RDIM_LocationCase, src->location_cases.first)
+            if(src->location_cases.count > 1)
             {
-              dst_loc_set_elements[loc_set_element_idx].voff_first = c->voff_range.min;
-              dst_loc_set_elements[loc_set_element_idx].voff_opl   = c->voff_range.max;
-              loc_set_element_idx += 1;
+              U64 loc_set_element_idx = 0;
+              for EachNode(c, RDIM_LocationCase, src->location_cases.first)
+              {
+                dst_loc_set_elements[loc_set_element_idx].voff_first = c->voff_range.min;
+                dst_loc_set_elements[loc_set_element_idx].voff_opl   = c->voff_range.max;
+                loc_set_element_idx += 1;
+              }
             }
             
             // rjf: fill location(s)
