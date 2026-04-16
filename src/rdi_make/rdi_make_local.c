@@ -3066,7 +3066,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(2))
     {
-      baked_scopes->arranged_locals_chunk.count    = scope_layout->total_local_count;
+      baked_scopes->arranged_locals_chunk.count    = scope_layout->total_local_count - 1;
       baked_scopes->arranged_locals_chunk.cap      = baked_scopes->arranged_locals_chunk.count;
       baked_scopes->arranged_locals_chunk.base_idx = 0;
       baked_scopes->arranged_locals_chunk.v        = push_array(scratch.arena, RDIM_Symbol, baked_scopes->arranged_locals_chunk.count);
@@ -3105,16 +3105,14 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             for EachIndex(src_local_idx, src_local_n->count)
             {
               RDIM_Symbol *src_local = &src_local_n->v[src_local_idx];
-              RDIM_Symbol *dst_local = &baked_scopes->arranged_locals_chunk.v[chunk_local_off];
+              RDIM_Symbol *dst_local = &baked_scopes->arranged_locals_chunk.v[chunk_local_off - 1];
               dst_local->chunk               = &baked_scopes->arranged_locals_chunk;
               dst_local->is_extern           = src_local->is_extern;
               dst_local->is_param            = src_local->is_param;
               dst_local->name                = src_local->name;
               dst_local->link_name           = src_local->link_name;
               dst_local->type                = src_local->type;
-              dst_local->container_scope     = src_local->container_scope;
-              dst_local->container_type      = src_local->container_type;
-              dst_local->container_namespace = src_local->container_namespace;
+              dst_local->container_scope     = src_scope;
               dst_local->root_scope          = src_local->root_scope;
               dst_local->location_cases      = src_local->location_cases;
               chunk_local_off += 1;

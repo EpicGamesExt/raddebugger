@@ -1134,10 +1134,16 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
         RDI_Symbol *symbol = &v[idx];
         Temp scratch = scratch_begin(&arena, 1);
         dumpf("\n  '%S': // %S[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, symbol->name_string_idx), table_name, idx);
-        dumpf("    link_name: '%S'\n", str8_from_rdi_string_idx(rdi, symbol->link_name_string_idx));
-        dumpf("    type_idx: %u\n",   symbol->type_idx);
-        dumpf("    root_scope_idx: %u\n",   symbol->root_scope_idx);
-        dumpf("    container_idx: %u\n",   symbol->container_idx);
+        dumpf("    type_idx: %u\n", symbol->type_idx);
+        if(symbol->link_name_string_idx != 0)
+        {
+          dumpf("    link_name: '%S'\n", str8_from_rdi_string_idx(rdi, symbol->link_name_string_idx));
+        }
+        if(symbol->root_scope_idx != 0)
+        {
+          dumpf("    root_scope_idx: %u\n", symbol->root_scope_idx);
+        }
+        dumpf("    container_idx: %u\n", symbol->container_idx);
         // TODO(rjf): location info
         dumpf("  }\n");
         scratch_end(scratch);
@@ -1185,7 +1191,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
         }
         
         // rjf: scope procedure -> name
-        String8 procedure_name = str8_from_rdi_string_idx(rdi, rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx)->name_string_idx);
+        String8 procedure_name = str8_from_rdi_string_idx(rdi, rdi_element_from_name_idx(rdi, ProcedureSymbols, scope->proc_idx)->name_string_idx);
         if(procedure_name.size == 0)
         {
           procedure_name = str8_lit("???");
@@ -1220,10 +1226,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
             {
               Temp scratch = scratch_begin(&arena, 1);
               RDI_Symbol *local_ptr = &locals[local_idx];
-              dumpf("%.*s    '%S': // local[%u]\n", depth*2, indent.str, str8_from_rdi_string_idx(rdi, local_ptr->name_string_idx), local_idx);
-              dumpf("%.*s    {\n", depth*2, indent.str);
-              dumpf("%.*s      type_idx: %u\n", depth*2, indent.str, local_ptr->type_idx);
-              dumpf("%.*s    }\n", depth*2, indent.str);
+              dumpf("%.*s    '%S': {type_idx: %u} // local_variable #%u\n", depth*2, indent.str, str8_from_rdi_string_idx(rdi, local_ptr->name_string_idx), local_ptr->type_idx, local_idx);
               scratch_end(scratch);
             }
           }

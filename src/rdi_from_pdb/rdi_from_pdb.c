@@ -3819,8 +3819,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   RDIM_Symbol *local = rdim_symbol_chunk_list_push(arena, &scope->locals, 8);
                   {
                     local->is_param = !!(slocal->flags & CV_LocalFlag_Param);
-                    local->name      = name;
-                    local->type      = type;
+                    local->name     = name;
+                    local->type     = type;
                   }
                   
 #if 0 // TODO(rjf): @locpass
