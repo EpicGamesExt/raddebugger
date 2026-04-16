@@ -25,6 +25,7 @@ X(UserDefinedTypes,    user_defined_types,          "USER DEFINED TYPES")\
 X(GlobalVariables,     global_variables,            "GLOBAL VARIABLES")\
 X(GlobalVariablesVMap, global_variables_vmap,       "GLOBAL VARIABLE VMAP")\
 X(ThreadVariables,     thread_variables,            "THREAD VARIABLES")\
+X(LocalVariables,      local_variables,             "LOCAL VARIABLES")\
 X(Constants,           constants,                   "CONSTANTS")\
 X(Procedures,          procedures,                  "PROCEDURES")\
 X(Scopes,              scopes,                      "SCOPES")\

@@ -1117,6 +1117,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
     {RDI_DumpSubset_Procedures,      RDI_SectionKind_ProcedureSymbols},
     {RDI_DumpSubset_GlobalVariables, RDI_SectionKind_GlobalVariableSymbols},
     {RDI_DumpSubset_ThreadVariables, RDI_SectionKind_ThreadVariableSymbols},
+    {RDI_DumpSubset_LocalVariables,  RDI_SectionKind_LocalVariableSymbols},
     {RDI_DumpSubset_Constants,       RDI_SectionKind_ConstantSymbols},
   };
   for EachElement(symbol_table_idx, symbol_tables)
@@ -1137,6 +1138,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
         dumpf("    type_idx: %u\n",   symbol->type_idx);
         dumpf("    root_scope_idx: %u\n",   symbol->root_scope_idx);
         dumpf("    container_idx: %u\n",   symbol->container_idx);
+        // TODO(rjf): location info
         dumpf("  }\n");
         scratch_end(scratch);
       }
@@ -1153,7 +1155,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
     U64 scope_voffs_count = 0;
     U64 *scope_voffs = rdi_table_from_name(rdi, ScopeVOffData,  &scope_voffs_count);
     U64 locals_count = 0;
-    RDI_Local *locals = rdi_table_from_name(rdi, Locals, &locals_count);
+    RDI_Symbol *locals = rdi_table_from_name(rdi, LocalVariableSymbols, &locals_count);
     U64 count = 0;
     RDI_Scope *v = rdi_table_from_name(rdi, Scopes, &count);
     RDI_Scope *nil = &v[0];
@@ -1217,22 +1219,10 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
             for(U32 local_idx = local_lo; local_idx < local_hi; local_idx += 1)
             {
               Temp scratch = scratch_begin(&arena, 1);
-              RDI_Local *local_ptr = &locals[local_idx];
+              RDI_Symbol *local_ptr = &locals[local_idx];
               dumpf("%.*s    '%S': // local[%u]\n", depth*2, indent.str, str8_from_rdi_string_idx(rdi, local_ptr->name_string_idx), local_idx);
               dumpf("%.*s    {\n", depth*2, indent.str);
-              dumpf("%.*s      kind: %S\n", depth*2, indent.str, rdi_string_from_local_kind(scratch.arena, local_ptr->kind));
               dumpf("%.*s      type_idx: %u\n", depth*2, indent.str, local_ptr->type_idx);
-              dumpf("%.*s      locations:\n", depth*2, indent.str);
-              dumpf("%.*s      {\n", depth*2, indent.str);
-              if(local_ptr->location_first < local_ptr->location_opl)
-              {
-                String8List locations_strings = rdi_strings_from_locations(arena, rdi, tli->arch, r1u64(local_ptr->location_first, local_ptr->location_opl));
-                for(String8Node *n = locations_strings.first; n != 0; n = n->next)
-                {
-                  dumpf("%.*s        %S\n", depth*2, indent.str, n->string);
-                }
-              }
-              dumpf("%.*s      }\n", depth*2, indent.str);
               dumpf("%.*s    }\n", depth*2, indent.str);
               scratch_end(scratch);
             }
