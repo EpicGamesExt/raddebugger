@@ -194,19 +194,13 @@ cv_precomp_info_from_leaf(CV_Leaf leaf)
 internal U64
 cv_write_symbol_buf(String8Node *buf, U64 *buf_pos, CV_Symbol *symbol, U64 align)
 {
-  U64 record_size = 0;
-  record_size += sizeof(symbol->kind);
-  record_size += AlignPow2(symbol->data.size, align);
-  
-  Assert(record_size <= CV_SymSize_Max);
-  CV_SymSize record_size16 = (CV_SymSize)record_size;
-
+  CV_SymbolHeader header = { .size = sizeof(CV_SymKind) + symbol->data.size, .kind = symbol->kind };
+  U64 pad_size = AlignPadPow2(header.size + sizeof(CV_SymSize), align);
   U64 write_size = 0;
- 
-  write_size += str8_buffer_write(buf, buf_pos, str8((U8 *)&(CV_SymbolHeader){ .size = record_size16, .kind = symbol->kind }, sizeof(CV_SymbolHeader)));
+  write_size += str8_buffer_write(buf, buf_pos, str8_struct(&header));
   write_size += str8_buffer_write(buf, buf_pos, symbol->data);
-  write_size += str8_buffer_write_zeroes(buf, buf_pos, AlignPadPow2(symbol->data.size, align));
-
+  write_size += str8_buffer_write_zeroes(buf, buf_pos, pad_size);
+  Assert(write_size == header.size + sizeof(CV_SymSize) + pad_size);
   return write_size;
 }
 
@@ -248,7 +242,7 @@ cv_read_symbol(String8 raw_data, U64 off, U64 align, CV_Symbol *symbol_out)
   symbol_out->kind = header.kind;
   symbol_out->data = str8(symbol_ptr + sizeof(CV_SymbolHeader), header.size - sizeof(CV_SymKind));
 
-  U64 symbol_size = AlignPow2(sizeof(CV_SymbolHeader) + symbol_out->data.size, align);
+  U64 symbol_size = AlignPow2(sizeof(CV_SymSize) + header.size, align);
   Assert(symbol_size <= raw_data.size);
   return symbol_size;
 }
@@ -1272,7 +1266,7 @@ cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align
 
   for (;;) {
     CV_SymbolHeader symbol_header;
-    if (str8_buffer_read(&buf, &buf_pos, sizeof(symbol_header), &symbol_header) != sizeof(symbol_header)) { break; }
+    if (str8_buffer_peek(&buf, &buf_pos, sizeof(symbol_header), &symbol_header) != sizeof(symbol_header)) { break; }
 
     if (cv_is_scope_symbol(symbol_header.kind)) {
       // NOTE: We don't patch 'next' offset in PROC symbols because
@@ -1283,7 +1277,7 @@ cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align
       // patch parent symbol offset
       if (stack) {
         String8Node temp_buf = buf;
-        U64         temp_pos = buf_pos;
+        U64         temp_pos = buf_pos + sizeof(CV_SymbolHeader);
         str8_buffer_write_u32(&temp_buf, &temp_pos, stack->offset);
       }
 
@@ -1294,7 +1288,7 @@ cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align
 
       // push frame to the stack
       frame->symbol_buf = buf;
-      frame->symbol_pos = buf_pos;
+      frame->symbol_pos = buf_pos + sizeof(CV_SymbolHeader);
       frame->offset = safe_cast_u32(symbol_offset);
       SLLStackPush(stack, frame);
 
@@ -1316,10 +1310,8 @@ cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align
     }
 
     // advance symbol offset
-    symbol_offset += sizeof(CV_SymSize) + symbol_header.size;
-    symbol_offset  = AlignPow2(symbol_offset, align);
-
-    str8_buffer_skip(&buf, &buf_pos, symbol_header.size - sizeof(CV_SymKind));
+    symbol_offset += AlignPow2(sizeof(CV_SymSize) + symbol_header.size, align);
+    str8_buffer_skip(&buf, &buf_pos, AlignPow2(symbol_header.size + sizeof(CV_SymSize), align));
   }
 
   scratch_end(scratch);
