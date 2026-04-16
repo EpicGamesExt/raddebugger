@@ -398,6 +398,43 @@ cv_make_end(Arena *arena)
 }
 
 internal String8
+cv_make_data32(Arena *arena, CV_SymData32 data, String8 name)
+{
+  U64           buf_size = sizeof(data) + name.size + 1;
+  U8           *buf      = push_array(arena, U8, buf_size);
+  CV_SymData32 *data_dst = (CV_SymData32 *)buf;
+  MemoryCopy(data_dst, &data, sizeof(data));
+  MemoryCopy(data_dst + 1, name.str, name.size);
+  buf[sizeof(data) + name.size] = 0;
+  return str8(buf, buf_size);
+}
+
+internal String8
+cv_make_const(Arena *arena, CV_SymConstant v, U16 value, String8 name)
+{
+  U64             buf_size = sizeof(v) + sizeof(value) + name.size + 1;
+  U8             *buf      = push_array(arena, U8, buf_size);
+  CV_SymConstant *data_dst = (CV_SymConstant *)buf;
+  MemoryCopy(buf, &v, sizeof(v));
+  MemoryCopy(buf + sizeof(v), &value, sizeof(value));
+  MemoryCopy(buf + sizeof(v) + sizeof(value), name.str, name.size);
+  buf[sizeof(v) + sizeof(value) + name.size] = 0;
+  return str8(buf, buf_size);
+}
+
+internal String8
+cv_make_udt(Arena *arena, CV_SymUDT v, String8 name)
+{
+  U64           buf_size = sizeof(v) + name.size + 1;
+  U8           *buf      = push_array(arena, U8, buf_size);
+  CV_SymUDT    *data_dst = (CV_SymUDT *)buf;
+  MemoryCopy(data_dst, &v, sizeof(v));
+  MemoryCopy(data_dst + 1, name.str, name.size);
+  buf[sizeof(v) + name.size] = 0;
+  return str8(buf, buf_size);
+}
+
+internal String8
 cv_make_inline_site(Arena *arena, CV_SymInlineSite inline_site, String8 annots)
 {
   U64               buf_size   = sizeof(inline_site) + annots.size;

@@ -353,13 +353,16 @@ internal CV_Symbol    cv_symbol_from_ptr(U8 *ptr);
 internal String8      cv_raw_from_symbol(void *ptr);
 internal B32          cv_symbol_match(CV_Symbol a, CV_Symbol b);
 
-internal String8       cv_make_symbol(Arena *arena, CV_SymKind kind, String8 data);
-internal String8       cv_make_obj_name(Arena *arena, String8 obj_path, U32 sig);
-internal String8       cv_make_comp3(Arena *arena, CV_Compile3Flags flags, CV_Language lang, CV_Arch arch, U16 ver_fe_major, U16 ver_fe_minor, U16 ver_fe_build, U16 ver_feqfe, U16 ver_major, U16 ver_minor, U16 ver_build, U16 ver_qfe, String8 version_string);
-internal String8       cv_make_envblock(Arena *arena, String8List string_list);
-internal String8       cv_make_end(Arena *arena);
-internal CV_Symbol     cv_make_proc_ref(Arena *arena, CV_ModIndex imod, U32 stream_offset, String8 name, B32 is_local);
-internal CV_Symbol     cv_make_pub32(Arena *arena, CV_Pub32Flags flags, U32 off, U16 isect, String8 name);
+internal String8   cv_make_symbol(Arena *arena, CV_SymKind kind, String8 data);
+internal String8   cv_make_obj_name(Arena *arena, String8 obj_path, U32 sig);
+internal String8   cv_make_comp3(Arena *arena, CV_Compile3Flags flags, CV_Language lang, CV_Arch arch, U16 ver_fe_major, U16 ver_fe_minor, U16 ver_fe_build, U16 ver_feqfe, U16 ver_major, U16 ver_minor, U16 ver_build, U16 ver_qfe, String8 version_string);
+internal String8   cv_make_envblock(Arena *arena, String8List string_list);
+internal String8   cv_make_end(Arena *arena);
+internal String8   cv_make_data32(Arena *arena, CV_SymData32 data, String8 name);
+internal String8   cv_make_const(Arena *arena, CV_SymConstant v, U16 value, String8 name);
+internal String8   cv_make_udt(Arena *arena, CV_SymUDT v, String8 name);
+internal CV_Symbol cv_make_proc_ref(Arena *arena, CV_ModIndex imod, U32 stream_offset, String8 name, B32 is_local);
+internal CV_Symbol cv_make_pub32(Arena *arena, CV_Pub32Flags flags, U32 off, U16 isect, String8 name);
 
 internal U64       cv_read_symbol(String8 raw_data, U64 off, U64 align, CV_Symbol *symbol_out);
 internal CV_Symbol cv_symbol_from_string(String8 raw_data);

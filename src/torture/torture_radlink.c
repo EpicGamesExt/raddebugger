@@ -4630,6 +4630,25 @@ TEST(get_msf_stream_pages)
   msf_release(msf);
 }
 
+internal String8
+data_from_pdb(Arena *arena, PDB_Context *pdb)
+{
+  TP_Context *tp       = tp_alloc(arena, 1, 1, str8_lit("foo"));
+  TP_Arena   *tp_arena = tp_arena_alloc(tp);
+  pdb_build(tp, tp_arena, pdb, (CV_StringHashTable){0}, 1, 0);
+
+  AssertAlways(msf_build(pdb->msf) == MSF_Error_OK);
+  String8List raw_msf_list = msf_get_page_data_nodes(arena, pdb->msf);
+  AssertAlways(t_write_file_list(str8_lit("test.pdb"), raw_msf_list));
+
+  String8 data = str8_list_join(arena, &raw_msf_list, 0);
+
+  tp_arena_release(&tp_arena);
+  tp_release(tp);
+
+  return data;
+}
+
 TEST(validate_info_stream)
 {
   COFF_TimeStamp  time_stamp = 123;
@@ -4644,16 +4663,8 @@ TEST(validate_info_stream)
     stream_numbers[i] = pdb_push_named_stream(&pdb->info->named_stream_ht, pdb->msf, str8_cstring(stream_names[i]));
     T_Ok(stream_numbers[i] != MSF_INVALID_STREAM_NUMBER);
   }
-
-  TP_Context *tp       = tp_alloc(arena, 1, 1, str8_lit("foo"));
-  TP_Arena   *tp_arena = tp_arena_alloc(tp);
-  pdb_build(tp, tp_arena, pdb, (CV_StringHashTable){0}, 1, 0);
-
-  T_Ok(msf_build(pdb->msf) == MSF_Error_OK);
-  String8List raw_msf_list = msf_get_page_data_nodes(arena, pdb->msf);
-  T_Ok(t_write_file_list(str8_lit("test.pdb"), raw_msf_list));
   
-  String8     raw_msf    = t_read_file(arena, str8_lit("test.pdb"));
+  String8     raw_msf    = data_from_pdb(arena, pdb);
   MSF_Parsed *msf_parsed = msf_parsed_from_data(arena, raw_msf);
   String8     info_data  = msf_data_from_stream(msf_parsed, PDB_FixedStream_Info);
 
@@ -4677,8 +4688,39 @@ TEST(validate_info_stream)
   T_Ok(str8_match(info_data, str8_array_fixed(expected_info_data), 0));
 
   pdb_release(pdb);
-  tp_arena_release(&tp_arena);
-  tp_release(tp);
+}
+
+TEST(validate_gsi)
+{
+  PDB_Context *pdb = pdb_alloc(MSF_DEFAULT_PAGE_SIZE, COFF_MachineType_X64, 123, 1, (Guid){ .data1 = max_U32, .data2 = max_U16 - 1, .data3 = max_U16 - 2, .data4 = { 1, 2, 3, 4, 5, 6, 7, 8 } });
+  CV_Symbol symbols[] = {
+    cv_symbol_from_ptr(cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32){ .itype = 0x41bd, .off = 0x25440, .sec = 2 }, str8_lit("__newclmap"))).str),
+    cv_symbol_from_ptr(cv_make_symbol(arena, CV_SymKind_CONSTANT, cv_make_const(arena, (CV_SymConstant){ .itype = 0x2348 }, 263, str8_lit("CV_SymKind_BLOCK16"))).str),
+    cv_symbol_from_ptr(cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32){ .itype = 0, .off = 123, .sec = 1 }, str8_lit("coffeebabe"))).str),
+    cv_symbol_from_ptr(cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32){ .itype = 0, .off = 123, .sec = 1 }, str8_lit("deadbeef"))).str),
+  };
+  for EachElement(i, symbols) { gsi_push(pdb->gsi, &symbols[i]); }
+
+  String8        raw_pdb     = data_from_pdb(arena, pdb);
+  MSF_Parsed    *msf         = msf_parsed_from_data(arena, raw_pdb);
+  String8        dbi_data    = msf_data_from_stream(msf, PDB_FixedStream_Dbi);
+  PDB_DbiParsed *dbi         = pdb_dbi_from_data(arena, dbi_data);
+  String8        gsi_data    = msf_data_from_stream(msf, dbi->gsi_sn);
+  PDB_GsiParsed *gsi         = pdb_gsi_from_data(arena, gsi_data);
+  String8        symbol_data = msf_data_from_stream(msf, dbi->sym_sn);
+
+  for EachElement(i, symbols) {
+    String8 string     = cv_name_from_symbol(symbols[i].kind, symbols[i].data);
+    U64     symbol_off = pdb_gsi_symbol_from_string(gsi, symbol_data, string);
+    T_Ok(symbol_off < symbol_data.size);
+
+    CV_Symbol test_symbol = {0};
+    U64 test_symbol_size = cv_read_symbol(str8_skip(symbol_data, symbol_off), 0, 1, &test_symbol);
+    T_Ok(test_symbol_size > 0);
+    T_Ok(cv_symbol_match(test_symbol, symbols[i]));
+  }
+
+  pdb_release(pdb);
 }
 
 TEST(patch_cv_symbol_tree)
