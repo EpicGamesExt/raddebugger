@@ -3,7 +3,7 @@
 
 #define T_Group "Base"
 
-T_BeginTest(str8_list_substr)
+TEST(str8_list_substr)
 {
   String8List zero_list = {0};
 
@@ -69,7 +69,7 @@ T_BeginTest(str8_list_substr)
   }
 }
 
-T_BeginTest(bit_array)
+TEST(bit_array)
 {
   for (U64 start=0; start<32*3; start++) {
     for (U64 end=start; end<32*3; end++) {

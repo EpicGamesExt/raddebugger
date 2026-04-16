@@ -4,7 +4,7 @@
 
 // TODO: location is not baked consistently
 #if !COMPILER_CLANG || (COMPILER_CLANG && BUILD_DEBUG)
-T_BeginTest(p2r_determ)
+TEST(p2r_determ)
 {
   U64 num_repeats_per_pdb = 32;
   String8 pdb_paths[] =

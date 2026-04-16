@@ -57,14 +57,14 @@ d2rt_type_from_name(RDI_Parsed *rdi, RDI_ParsedNameMap *map, char *name)
   return 0;
 }
 
-T_BeginTest(d2r_types)
+TEST(d2r_types)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   {
     dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
     dw_writer_push_attrib_stringf(writer, DW_AttribKind_Producer, "Test");
     
-#define DeclBaseType(tt, n, e, s)                                                  \
+#define DeclBaseType(tt, n, e, s)                                          \
 DW_WriterTag *tt = dw_writer_tag_begin(writer, DW_TagKind_BaseType);       \
 dw_writer_push_attrib_sint(writer,    DW_AttribKind_ByteSize, s);          \
 dw_writer_push_attrib_enum(writer,    DW_AttribKind_Encoding, DW_ATE_##e); \
@@ -104,8 +104,8 @@ dw_writer_tag_end(writer);
     DeclBaseType(decimal128_type,              "_Decimal128",            DecimalFloat, 16);
 #undef DeclBaseType
     
-#define DeclStdint(n, a)                                                \
-do {                                                            \
+#define DeclStdint(n, a)                                      \
+do {                                                          \
 dw_writer_tag_begin(writer, DW_TagKind_Typedef);              \
 dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, n); \
 dw_writer_push_attrib_ref(writer,     DW_AttribKind_Type, a); \
@@ -147,8 +147,8 @@ dw_writer_tag_end(writer);                                    \
   RDI_ParsedNameMap types_map = {0};
   rdi_parsed_from_name_map(rdi, types_nm, &types_map);
   
-#define TestBuiltinType(n, bs, r)                                                                                 \
-do {                                                                                                          \
+#define TestBuiltinType(n, bs, r)                                                                           \
+do {                                                                                                        \
 RDI_TypeNode *alias = d2rt_type_from_name(rdi, &types_map, n);                                              \
 T_Ok(alias);                                                                                                \
 T_Ok(alias->kind == RDI_TypeKind_Alias);                                                                    \
@@ -194,8 +194,8 @@ T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), s
   TestBuiltinType("_Decimal128",         16, Decimal128);
 #undef TestBuiltinType
   
-#define TestStdint(n, s, t)                                                                             \
-do {                                                                                                \
+#define TestStdint(n, s, t)                                                                       \
+do {                                                                                              \
 RDI_TypeNode *td = d2rt_type_from_name(rdi, &types_map, n);                                       \
 T_Ok(td);                                                                                         \
 T_Ok(td->kind == RDI_TypeKind_Alias);                                                             \
@@ -221,7 +221,7 @@ T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), s
   dw_writer_end(&writer);
 }
 
-T_BeginTest(d2r_line_table)
+TEST(d2r_line_table)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/DEVEL/");
@@ -282,7 +282,7 @@ T_BeginTest(d2r_line_table)
   dw_writer_end(&writer);
 }
 
-T_BeginTest(d2r_checksums)
+TEST(d2r_checksums)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   
@@ -318,7 +318,7 @@ T_BeginTest(d2r_checksums)
 }
 
 #if SUBPROGRAM_CONVERSION_TEST
-T_BeginTest(d2r_subprogram)
+TEST(d2r_subprogram)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   
@@ -438,7 +438,7 @@ T_BeginTest(d2r_subprogram)
 }
 #endif
 
-T_BeginTest(d2r_general)
+TEST(d2r_general)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   {

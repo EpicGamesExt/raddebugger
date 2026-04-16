@@ -48,17 +48,17 @@ extern T_Test g_torture_tests[0xffffff];
   }
 
 #if COMPILER_MSVC
-#pragma section(".CRT$XCU", read)
-# define T_BeginTest_(name)                                                   \
+# pragma section(".CRT$XCU", read)
+# define TEST_(name)                                                          \
   T_AddTest(name, __LINE__)                                                   \
   __declspec(allocate(".CRT$XCU")) void(*r_##name)(void) = t_add_test_##name; \
   __pragma(comment(linker, "/include:" Stringify(r_##name)))
 #else
-# define T_BeginTest_(name) T_AddTest(name, __LINE__, __attribute__((constructor)))
+# define TEST_(name) T_AddTest(name, __LINE__, __attribute__((constructor)))
 #endif
 
-#define T_BeginTest(name) \
-  T_BeginTest_(name)      \
+#define TEST(name) \
+  TEST_(name)      \
   T_RunSig(name)
 
 #define T_Ok(c) do { if (!(c)) { result_out->fail_file = __FILE__; result_out->fail_line = __LINE__; result_out->fail_cond = Stringify(c); result_out->status = T_RunStatus_Fail; return; } } while(0)

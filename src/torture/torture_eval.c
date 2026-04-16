@@ -1,6 +1,6 @@
 #define T_Group "eval"
 
-T_BeginTest(eval_compiler_basics)
+TEST(eval_compiler_basics)
 {
   E_Cache *eval_cache = e_cache_alloc();
   e_select_cache(eval_cache);

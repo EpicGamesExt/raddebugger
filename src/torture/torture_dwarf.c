@@ -45,7 +45,7 @@ t_dw_test_sleb128(U64 v, U64 expected_length)
   return is_ok;
 }
 
-T_BeginTest(test_leb128)
+TEST(test_leb128)
 {
   T_Ok(t_dw_test_uleb128(0, 1));
   T_Ok(t_dw_test_sleb128(0, 1));
@@ -134,7 +134,7 @@ dw_input_from_writer(Arena *arena, DW_Writer *writer)
   return input;
 }
 
-T_BeginTest(dwarf_32bit)
+TEST(dwarf_32bit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
@@ -162,7 +162,7 @@ T_BeginTest(dwarf_32bit)
   dw_writer_end(&writer);
 }
 
-T_BeginTest(dwarf_64bit)
+TEST(dwarf_64bit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_64Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
@@ -190,7 +190,7 @@ T_BeginTest(dwarf_64bit)
   dw_writer_end(&writer);
 }
 
-T_BeginTest(dwarf_line_opcodes)
+TEST(dwarf_line_opcodes)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/devel/");
@@ -359,7 +359,7 @@ T_BeginTest(dwarf_line_opcodes)
   dw_writer_end(&writer);
 }
 
-T_BeginTest(dwarf_line_emit)
+TEST(dwarf_line_emit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/devel/");
@@ -559,7 +559,7 @@ T_BeginTest(dwarf_line_emit)
   }
 }
 
-T_BeginTest(dwarf_writer)
+TEST(dwarf_writer)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   // info
@@ -859,7 +859,7 @@ T_BeginTest(dwarf_writer)
   dw_writer_end(&writer);
 }
 
-T_BeginTest(value_in_register)
+TEST(value_in_register)
 {
   // setup register context
   REGS_RegBlockX64 regs      = {0};
@@ -883,7 +883,7 @@ T_BeginTest(value_in_register)
   T_Ok(expr_value.u64 == value);
 }
 
-T_BeginTest(value_in_x_register)
+TEST(value_in_x_register)
 {
   // setup register context
   REGS_RegBlockX64 regs      = {0};
@@ -907,7 +907,7 @@ T_BeginTest(value_in_x_register)
   T_Ok(expr_value.u64 == value);
 }
 
-T_BeginTest(address_of_value)
+TEST(address_of_value)
 {
   // compile a simple program which reads address
   U64 addr = 0xdeadbeef;
@@ -925,7 +925,7 @@ T_BeginTest(address_of_value)
   T_Ok(expr_value.addr == addr);
 }
 
-T_BeginTest(register_relative_variable)
+TEST(register_relative_variable)
 {
   // setup register context
   REGS_RegBlockX64 regs      = {0};
@@ -947,7 +947,7 @@ T_BeginTest(register_relative_variable)
   T_Ok(expr_value.addr == (1 + 44));
 }
 
-T_BeginTest(frame_relative_variable)
+TEST(frame_relative_variable)
 {
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(FBReg), DW_ExprEnc_SLEB128(-50) };
   String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
@@ -969,7 +969,7 @@ MACHINE_OP_MEM_READ(t_machine_op_mem_read)
   return MachineOpResult_Ok;
 }
 
-T_BeginTest(call_by_reference)
+TEST(call_by_reference)
 {
   U8 *memory = push_array(arena, U8, 128);
   U64 value = 0xc0ffee;
@@ -993,7 +993,7 @@ T_BeginTest(call_by_reference)
   T_Ok(*(U64 *)expr_value.generic.str == value);
 }
 
-T_BeginTest(plus_uconst)
+TEST(plus_uconst)
 {
   U64 struct_addr = 0x123;
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Addr), DW_ExprEnc_Addr(struct_addr), DW_ExprEnc_Op(PlusUConst), DW_ExprEnc_ULEB128(4) };
@@ -1008,7 +1008,7 @@ T_BeginTest(plus_uconst)
 }
 
 #if 0
-T_BeginTest(reg_split_spill)
+TEST(reg_split_spill)
 {
   // setup register context
   REGS_RegBlockX64 regs      = {0};

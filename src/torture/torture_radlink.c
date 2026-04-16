@@ -82,7 +82,7 @@ t_write_entry_obj(void)
 
 #define T_Group "Linker" 
 
-T_BeginTest(machine_compat_check)
+TEST(machine_compat_check)
 {
   // unknown.obj
   {
@@ -134,7 +134,7 @@ T_BeginTest(machine_compat_check)
   T_Ok(g_last_exit_code != 0);
 }
 
-T_BeginTest(simple_link_test)
+TEST(simple_link_test)
 {
   U8 text_payload[] = { 0xC3 };
 
@@ -213,7 +213,7 @@ T_BeginTest(simple_link_test)
 }
 
 
-T_BeginTest(out_of_bounds_section_number)
+TEST(out_of_bounds_section_number)
 {
   // bad.obj
   {
@@ -254,7 +254,7 @@ T_BeginTest(out_of_bounds_section_number)
 }
 
 
-T_BeginTest(merge)
+TEST(merge)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -336,7 +336,7 @@ T_BeginTest(merge)
   }
 }
 
-T_BeginTest(link_undef)
+TEST(link_undef)
 {
   String8 undef_obj;
   {
@@ -369,7 +369,7 @@ T_BeginTest(link_undef)
   T_Ok(g_last_exit_code == LNK_Error_UnresolvedSymbol);
 }
 
-T_BeginTest(link_unref_undef)
+TEST(link_unref_undef)
 {
   String8 undef_obj;
   {
@@ -397,7 +397,7 @@ T_BeginTest(link_unref_undef)
   T_Ok(g_last_exit_code != 0);
 }
 
-T_BeginTest(weak_lib_vs_weak_lib)
+TEST(weak_lib_vs_weak_lib)
 {
   String8 a_obj;
   {
@@ -462,7 +462,7 @@ T_BeginTest(weak_lib_vs_weak_lib)
   }
 }
 
-T_BeginTest(weak_lib_vs_weak_nolib)
+TEST(weak_lib_vs_weak_nolib)
 {
   String8 a_obj;
   {
@@ -510,7 +510,7 @@ T_BeginTest(weak_lib_vs_weak_nolib)
   }
 }
 
-T_BeginTest(weak_lib_vs_weak_alias)
+TEST(weak_lib_vs_weak_alias)
 {
   String8 a_obj;
   {
@@ -545,7 +545,7 @@ T_BeginTest(weak_lib_vs_weak_alias)
   T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol);
 }
 
-T_BeginTest(weak_lib_vs_weak_antidep)
+TEST(weak_lib_vs_weak_antidep)
 {
   String8 a_obj;
   {
@@ -593,7 +593,7 @@ T_BeginTest(weak_lib_vs_weak_antidep)
   }
 }
 
-T_BeginTest(weak_alias_vs_weak_alias)
+TEST(weak_alias_vs_weak_alias)
 {
   String8 a;
   {
@@ -636,7 +636,7 @@ T_BeginTest(weak_alias_vs_weak_alias)
   T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol);
 }
 
-T_BeginTest(weak_alias_vs_weak_lib)
+TEST(weak_alias_vs_weak_lib)
 {
   String8 a_obj;
   {
@@ -684,7 +684,7 @@ T_BeginTest(weak_alias_vs_weak_lib)
   }
 }
 
-T_BeginTest(weak_alias_vs_weak_nolib)
+TEST(weak_alias_vs_weak_nolib)
 {
   String8 a_obj;
   {
@@ -732,7 +732,7 @@ T_BeginTest(weak_alias_vs_weak_nolib)
   }
 }
 
-T_BeginTest(weak_alias_vs_weak_antidep)
+TEST(weak_alias_vs_weak_antidep)
 {
   String8 a_obj;
   {
@@ -780,7 +780,7 @@ T_BeginTest(weak_alias_vs_weak_antidep)
   }
 }
 
-T_BeginTest(weak_nolib_vs_weak_nolib)
+TEST(weak_nolib_vs_weak_nolib)
 {
   String8 a_obj;
   {
@@ -827,7 +827,7 @@ T_BeginTest(weak_nolib_vs_weak_nolib)
   }
 }
 
-T_BeginTest(weak_nolib_vs_weak_lib)
+TEST(weak_nolib_vs_weak_lib)
 {
   String8 a_obj;
   {
@@ -874,7 +874,7 @@ T_BeginTest(weak_nolib_vs_weak_lib)
   }
 }
 
-T_BeginTest(weak_nolib_vs_weak_alias)
+TEST(weak_nolib_vs_weak_alias)
 {
   String8 a_obj;
   {
@@ -908,7 +908,7 @@ T_BeginTest(weak_nolib_vs_weak_alias)
   T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol);
 }
 
-T_BeginTest(weak_nolib_vs_weak_antidep)
+TEST(weak_nolib_vs_weak_antidep)
 {
   String8 a_obj;
   {
@@ -955,7 +955,7 @@ T_BeginTest(weak_nolib_vs_weak_antidep)
   }
 }
 
-T_BeginTest(weak_antidep_vs_weak_antidep)
+TEST(weak_antidep_vs_weak_antidep)
 {
   String8 a_obj;
   {
@@ -1020,7 +1020,7 @@ T_BeginTest(weak_antidep_vs_weak_antidep)
   }
 }
 
-T_BeginTest(weak_antidep_vs_weak_nolib)
+TEST(weak_antidep_vs_weak_nolib)
 {
   String8 a_obj;
   {
@@ -1067,7 +1067,7 @@ T_BeginTest(weak_antidep_vs_weak_nolib)
   }
 }
 
-T_BeginTest(weak_antidep_vs_weak_lib)
+TEST(weak_antidep_vs_weak_lib)
 {
   String8 a_obj;
   {
@@ -1114,7 +1114,7 @@ T_BeginTest(weak_antidep_vs_weak_lib)
   }
 }
 
-T_BeginTest(weak_antidep_vs_weak_alias)
+TEST(weak_antidep_vs_weak_alias)
 {
   String8 a_obj;
   {
@@ -1161,7 +1161,7 @@ T_BeginTest(weak_antidep_vs_weak_alias)
   }
 }
 
-T_BeginTest(weak_vs_common)
+TEST(weak_vs_common)
 {
   String8 weak_obj;
   {
@@ -1217,7 +1217,7 @@ T_BeginTest(weak_vs_common)
   T_Ok(bss->vsize == 2);
 }
 
-T_BeginTest(abs_vs_weak)
+TEST(abs_vs_weak)
 {
   U32 abs_value   = 0x123;
   U8  text_code[] = { 0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC3 };
@@ -1272,7 +1272,7 @@ T_BeginTest(abs_vs_weak)
   T_Ok(str8_match(imm, str8_struct(&expected_imm), 0));
 }
 
-T_BeginTest(abs_vs_regular)
+TEST(abs_vs_regular)
 {
   String8 shared_symbol_name = str8_lit("foo");
 
@@ -1322,7 +1322,7 @@ T_BeginTest(abs_vs_regular)
   T_Ok(g_last_exit_code != 0);
 }
 
-T_BeginTest(abs_vs_common)
+TEST(abs_vs_common)
 {
   String8 shared_symbol_name = str8_lit("foo");
 
@@ -1367,7 +1367,7 @@ T_BeginTest(abs_vs_common)
   }
 }
 
-T_BeginTest(abs_vs_abs)
+TEST(abs_vs_abs)
 {
   String8 a_obj;
   {
@@ -1393,7 +1393,7 @@ T_BeginTest(abs_vs_abs)
   T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol);
 }
 
-T_BeginTest(undef_weak_lib)
+TEST(undef_weak_lib)
 {
   String8 weak;
   {
@@ -1423,7 +1423,7 @@ T_BeginTest(undef_weak_lib)
   T_Ok(g_last_exit_code == LNK_Error_UnresolvedSymbol);
 }
 
-T_BeginTest(undef_weak_search_alias)
+TEST(undef_weak_search_alias)
 {
   Temp scratch = scratch_begin(0,0);
 
@@ -1477,7 +1477,7 @@ T_BeginTest(undef_weak_search_alias)
   T_Ok(g_last_exit_code == 0);
 }
 
-T_BeginTest(weak_cycle)
+TEST(weak_cycle)
 {
   String8 ab_obj_name = str8_lit("ab.obj");
   {
@@ -1514,7 +1514,7 @@ T_BeginTest(weak_cycle)
   t_invoke_linker_timeoutf(timeout, "/subsystem:console /entry:my_entry %S %S %S", entry_obj_name, ab_obj_name, ba_obj_name);
 }
 
-T_BeginTest(weak_tag)
+TEST(weak_tag)
 {
   U32     weak_tag_expected_value = 0x12345678;
   String8 weak_tag_obj_name       = str8_lit("weak_tag.obj");
@@ -1559,7 +1559,7 @@ T_BeginTest(weak_tag)
   T_Ok(str8_match(data, str8_struct(&weak_tag_expected_value), 0));
 }
 
-T_BeginTest(undef_section)
+TEST(undef_section)
 {
   String8 main_obj;
   {
@@ -1603,7 +1603,7 @@ T_BeginTest(undef_section)
   }
 }
 
-T_BeginTest(sect_symbol)
+TEST(sect_symbol)
 {
   String8 sect_payload = str8_lit("hello, world");
   String8 sect_obj_name = str8_lit("sect.obj");
@@ -1657,7 +1657,7 @@ T_BeginTest(sect_symbol)
   T_Ok(str8_match(payload_got, sect_payload, 0));
 }
 
-T_BeginTest(undef_reloc_section)
+TEST(undef_reloc_section)
 {
   String8 main_obj;
   {
@@ -1691,7 +1691,7 @@ T_BeginTest(undef_reloc_section)
   }
 }
 
-T_BeginTest(find_merged_pdata)
+TEST(find_merged_pdata)
 {
   U8 foobar_payload[] = {
     0x40, 0x57, 0x48, 0x81, 0xEC, 0x00, 0x02, 0x00, 0x00, 0x48, 0x8B, 0x05, 0x00, 0x00, 0x00, 0x00,
@@ -1744,7 +1744,7 @@ T_BeginTest(find_merged_pdata)
   T_Ok(dim_1u64(pe.data_dir_franges[PE_DataDirectoryIndex_EXCEPTIONS]) == 0xC);
 }
 
-T_BeginTest(section_sort)
+TEST(section_sort)
 {
   String8 data_obj_name = str8_lit("data.obj");
   {
@@ -1789,7 +1789,7 @@ T_BeginTest(section_sort)
   T_Ok(str8_match(data, expected_data, 0));
 }
 
-T_BeginTest(flag_conf)
+TEST(flag_conf)
 {
   COFF_SectionFlags my_sect0_flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemExecute;
   COFF_SectionFlags my_sect1_flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite;
@@ -1831,7 +1831,7 @@ T_BeginTest(flag_conf)
   T_Ok(my_sect1->flags == my_sect1_flags);
 }
 
-T_BeginTest(invalid_bss)
+TEST(invalid_bss)
 {
   COFF_SectionFlags bss_flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead;
   String8 bss_obj_name = str8_lit("bss.obj");
@@ -1871,7 +1871,7 @@ T_BeginTest(invalid_bss)
   T_Ok(str8_match(data, bss_data, 0));
 }
 
-T_BeginTest(common_block)
+TEST(common_block)
 {
   String8 a_obj_name = str8_lit("a.obj");
   U8 a_data[6] = {0};
@@ -1934,7 +1934,7 @@ T_BeginTest(common_block)
   T_Ok(*b_addr == (pe.image_base + comm_sect->voff + 0x8));
 }
 
-T_BeginTest(base_relocs)
+TEST(base_relocs)
 {
   // main.obj
   String8 entry_name = str8_lit("my_entry");
@@ -2004,7 +2004,7 @@ T_BeginTest(base_relocs)
   }
 }
 
-T_BeginTest(simple_lib_test)
+TEST(simple_lib_test)
 {
   String8 test_payload = str8_lit("The quick brown fox jumps over the lazy dog");
   String8 test_obj = {0};
@@ -2067,7 +2067,7 @@ T_BeginTest(simple_lib_test)
   T_Ok(*data_addr32nb == data_sect->voff);
 }
 
-T_BeginTest(import_export)
+TEST(import_export)
 {
   String8 export_obj;
   {
@@ -2288,7 +2288,7 @@ T_BeginTest(import_export)
   // TODO: check import table
 }
 
-T_BeginTest(image_base)
+TEST(image_base)
 {
   String8 obj_name = str8_lit("image_base.obj");
   {
@@ -2330,7 +2330,7 @@ T_BeginTest(image_base)
   T_Ok(str8_match(text_data, str8_array_fixed(expected_text), 0));
 }
 
-T_BeginTest(comdat_any)
+TEST(comdat_any)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -2393,7 +2393,7 @@ T_BeginTest(comdat_any)
   }
 }
 
-T_BeginTest(comdat_no_duplicates)
+TEST(comdat_no_duplicates)
 {
   String8 test_obj;
   {
@@ -2441,7 +2441,7 @@ T_BeginTest(comdat_no_duplicates)
   T_Ok(str8_match(data, str8_lit("a"), 0));
 }
 
-T_BeginTest(comdat_same_size)
+TEST(comdat_same_size)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -2507,7 +2507,7 @@ T_BeginTest(comdat_same_size)
   if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol); }
 }
 
-T_BeginTest(comdat_exact_match)
+TEST(comdat_exact_match)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -2572,7 +2572,7 @@ T_BeginTest(comdat_exact_match)
   }
 }
 
-T_BeginTest(comdat_largest)
+TEST(comdat_largest)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -2650,7 +2650,7 @@ T_BeginTest(comdat_largest)
   }
 }
 
-T_BeginTest(comdat_associative)
+TEST(comdat_associative)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0,COFF_MachineType_X64);
@@ -2719,7 +2719,7 @@ T_BeginTest(comdat_associative)
   T_Ok(str8_match(bbb_data, str8_lit("bbb"), 0));
 }
 
-T_BeginTest(comdat_associative_loop)
+TEST(comdat_associative_loop)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -2756,7 +2756,7 @@ T_BeginTest(comdat_associative_loop)
   if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_AssociativeLoop); }
 }
 
-T_BeginTest(comdat_associative_non_comdat)
+TEST(comdat_associative_non_comdat)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -2801,7 +2801,7 @@ T_BeginTest(comdat_associative_non_comdat)
   T_Ok(str8_match(b_data, str8_lit("b"), 0));
 }
 
-T_BeginTest(comdat_associative_out_of_bounds)
+TEST(comdat_associative_out_of_bounds)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0,COFF_MachineType_X64);
@@ -2846,7 +2846,7 @@ T_BeginTest(comdat_associative_out_of_bounds)
   if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_IllData); }
 }
 
-T_BeginTest(comdat_with_offset)
+TEST(comdat_with_offset)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -2889,7 +2889,7 @@ T_BeginTest(comdat_with_offset)
   T_Ok(g_last_exit_code == 0);
 }
 
-T_BeginTest(reloc_against_removed_comdat)
+TEST(reloc_against_removed_comdat)
 {
   String8 a_obj;
   {
@@ -2942,7 +2942,7 @@ T_BeginTest(reloc_against_removed_comdat)
   T_Ok(g_last_exit_code == LNK_Error_RelocationAgainstRemovedSection);
 }
 
-T_BeginTest(sect_align)
+TEST(sect_align)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3018,7 +3018,7 @@ T_BeginTest(sect_align)
   T_Ok(str8_match(a_8192, str8_lit("z"), 0));
 }
 
-T_BeginTest(alt_name)
+TEST(alt_name)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3100,7 +3100,7 @@ T_BeginTest(alt_name)
   T_Ok(g_last_exit_code == 0);
 }
 
-T_BeginTest(include)
+TEST(include)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3153,7 +3153,7 @@ T_BeginTest(include)
   if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_UnresolvedSymbol); }
 }
 
-T_BeginTest(communal_var_vs_regular)
+TEST(communal_var_vs_regular)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3208,7 +3208,7 @@ T_BeginTest(communal_var_vs_regular)
   }
 }
 
-T_BeginTest(communal_var_vs_regular_comdat)
+TEST(communal_var_vs_regular_comdat)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3264,7 +3264,7 @@ T_BeginTest(communal_var_vs_regular_comdat)
   }
 }
 
-T_BeginTest(import_kernel32)
+TEST(import_kernel32)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3325,7 +3325,7 @@ T_BeginTest(import_kernel32)
 #endif
 }
 
-T_BeginTest(delay_import)
+TEST(delay_import)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3472,7 +3472,7 @@ T_BeginTest(delay_import)
   T_Ok(return_321->u.name.hint == 1);
 }
 
-T_BeginTest(delay_import_user32)
+TEST(delay_import_user32)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3511,7 +3511,7 @@ T_BeginTest(delay_import_user32)
   T_Ok(g_last_exit_code == 0);
 }
 
-T_BeginTest(empty_section)
+TEST(empty_section)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3541,7 +3541,7 @@ T_BeginTest(empty_section)
   T_Ok(g_last_exit_code != 0);
 }
 
-T_BeginTest(removed_section)
+TEST(removed_section)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3572,7 +3572,7 @@ T_BeginTest(removed_section)
   T_Ok(g_last_exit_code != 0);
 }
 
-T_BeginTest(function_pad_min)
+TEST(function_pad_min)
 {
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
@@ -3609,7 +3609,7 @@ T_BeginTest(function_pad_min)
   T_Ok(str8_match(text_data, str8_array_fixed(expected_text), 0));
 }
 
-T_BeginTest(first_member_header)
+TEST(first_member_header)
 {
   String8 obj;
   {
@@ -3642,7 +3642,7 @@ T_BeginTest(first_member_header)
   T_Ok(g_last_exit_code == 0);
 }
 
-T_BeginTest(second_member_header)
+TEST(second_member_header)
 {
   String8 obj;
   {
@@ -3675,7 +3675,7 @@ T_BeginTest(second_member_header)
   T_Ok(g_last_exit_code == 0);
 }
 
-T_BeginTest(defer_impl_link_to_second_search_pass)
+TEST(defer_impl_link_to_second_search_pass)
 {
   String8 imp_ref_obj;
   {
@@ -3725,7 +3725,7 @@ T_BeginTest(defer_impl_link_to_second_search_pass)
   T_Ok(g_last_exit_code == 0);
 }
 
-T_BeginTest(opt_ref_dangling_section)
+TEST(opt_ref_dangling_section)
 {
   String8 entry_obj;
   {
@@ -3798,7 +3798,7 @@ T_BeginTest(opt_ref_dangling_section)
   T_Ok(sect != 0);
 }
 
-T_BeginTest(fail_if_mismatch)
+TEST(fail_if_mismatch)
 {
   T_Ok(t_write_entry_obj());
 
@@ -3840,7 +3840,7 @@ T_BeginTest(fail_if_mismatch)
   else                               T_Ok(g_last_exit_code != 0);
 }
 
-T_BeginTest(long_section_name)
+TEST(long_section_name)
 {
   Arch arch = Arch_x64;
 
@@ -3871,7 +3871,7 @@ T_BeginTest(long_section_name)
   T_Ok(debug_abbrev);
 }
 
-T_BeginTest(debug_p_sig_mismatch)
+TEST(debug_p_sig_mismatch)
 {
   String8 a_obj_name = str8_lit("a.obj");
   String8 b_obj_name = str8_lit("b.obj");
@@ -4068,7 +4068,7 @@ T_BeginTest(debug_p_sig_mismatch)
   T_Ok(found_error);
 }
 
-T_BeginTest(debug_p_and_debug_t_in_obj)
+TEST(debug_p_and_debug_t_in_obj)
 {
   U32     pch_sig      = 0xCAFEBABE;
   String8 pch_obj_name = str8_lit("pch.obj");
@@ -4179,7 +4179,7 @@ T_BeginTest(debug_p_and_debug_t_in_obj)
   T_Ok(found_warning);
 }
 
-T_BeginTest(merge_duplicate_types)
+TEST(merge_duplicate_types)
 {
   {
     U32     pch_sig      = 0xCAFEBABE;
@@ -4543,7 +4543,7 @@ T_BeginTest(merge_duplicate_types)
   }
 }
 
-T_BeginTest(cyclic_type)
+TEST(cyclic_type)
 {
   String8List *debug_t = push_array(arena, String8List, 1);
   str8_serial_begin(arena, debug_t);
@@ -4579,7 +4579,7 @@ T_BeginTest(cyclic_type)
   T_Ok(is_cycle_detected);
 }
 
-T_BeginTest(get_msf_stream_pages)
+TEST(get_msf_stream_pages)
 {
   MSF_Context *msf = msf_alloc(MSF_DEFAULT_PAGE_SIZE, MSF_DEFAULT_FPM);
 
@@ -4630,7 +4630,7 @@ T_BeginTest(get_msf_stream_pages)
   msf_release(msf);
 }
 
-T_BeginTest(validate_info_stream)
+TEST(validate_info_stream)
 {
   COFF_TimeStamp  time_stamp = 123;
   U32             age        = 1;
@@ -4681,7 +4681,7 @@ T_BeginTest(validate_info_stream)
   tp_release(tp);
 }
 
-T_BeginTest(patch_cv_symbol_tree)
+TEST(patch_cv_symbol_tree)
 {
   String8List raw_symbols = {0};
   str8_list_push(arena, &raw_symbols, cv_make_symbol(arena, CV_SymKind_OBJNAME,        cv_make_obj_name(arena, str8_lit("foo.obj"), 123)));
@@ -4735,7 +4735,7 @@ T_BeginTest(patch_cv_symbol_tree)
   }
 }
 
-T_BeginTest(whole_archive)
+TEST(whole_archive)
 {
   String8 a_obj;
   {
@@ -4849,7 +4849,7 @@ t_radlink_validate_asan_out(String8 obj_name)
   return is_ok;
 }
 
-T_BeginTest(infer_asan)
+TEST(infer_asan)
 {
   char *program = 
     "#include <stdlib.h>\n"
@@ -4900,7 +4900,7 @@ T_BeginTest(infer_asan)
 #endif
 
 #if OS_WINDOWS
-T_BeginTest(determ_test)
+TEST(determ_test)
 {
   // compile the test target (torture)
   String8 cl_line = str8f(arena, "/fsanitize=address /c /Z7 /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
@@ -4944,7 +4944,7 @@ T_BeginTest(determ_test)
 
 #if 0
 
-T_BeginTest(fold_two_funcs)
+TEST(fold_two_funcs)
 {
   String8 ident_funcs_obj;
   {
@@ -5013,7 +5013,7 @@ T_BeginTest(fold_two_funcs)
 }
 
 
-T_BeginTest(same_but_different)
+TEST(same_but_different)
 {
   String8 obj;
   {
@@ -5114,7 +5114,7 @@ T_BeginTest(same_but_different)
 }
 
 
-T_BeginTest(fold_diamond)
+TEST(fold_diamond)
 {
   String8 a_obj;
   {
@@ -5204,7 +5204,7 @@ T_BeginTest(fold_diamond)
 }
 
 
-T_BeginTest(cyclic_icf)
+TEST(cyclic_icf)
 {
   String8 a_obj;
   {
@@ -5259,7 +5259,7 @@ T_BeginTest(cyclic_icf)
 }
 
 
-T_BeginTest(fold_with_largest_align)
+TEST(fold_with_largest_align)
 {
   String8 a_obj;
   {
