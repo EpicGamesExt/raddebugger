@@ -3150,9 +3150,6 @@ pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTa
     pdb_type_server_build(tp, ipi, strtab, pdb->msf, PDB_FixedStream_Ipi);
   }
 
-  dbi_build(tp, pdb->dbi, pdb->msf, PDB_FixedStream_Dbi, string_ht, is_stripped);
-  pdb_info_build(pdb->info, pdb->msf, PDB_FixedStream_Info);
-
   if (build_gsi) {
     if (dbi->globals_sn == MSF_INVALID_STREAM_NUMBER) {
       dbi->globals_sn = msf_stream_alloc(pdb->msf);
@@ -3166,6 +3163,9 @@ pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTa
     psi_build(tp, pdb->psi, pdb->msf, dbi->publics_sn, dbi->symbols_sn);
     gsi_build(tp, pdb->gsi, pdb->msf, dbi->globals_sn, dbi->symbols_sn);
   }
+
+  dbi_build(tp, pdb->dbi, pdb->msf, PDB_FixedStream_Dbi, string_ht, is_stripped);
+  pdb_info_build(pdb->info, pdb->msf, PDB_FixedStream_Info);
 
   ProfEnd();
 }
