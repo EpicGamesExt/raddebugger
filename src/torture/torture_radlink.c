@@ -29,6 +29,12 @@ t_push_rdata_section(COFF_ObjWriter *obj_writer, String8 data)
   return coff_obj_writer_push_section(obj_writer, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS, data);
 }
 
+internal COFF_ObjSection *
+t_push_debug_s_section(COFF_ObjWriter *obj_writer, String8 data)
+{
+  return coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS, data);
+}
+
 internal String8
 t_make_sec_defn_obj(Arena *arena, String8 payload)
 {
@@ -4692,16 +4698,33 @@ TEST(validate_info_stream)
 
 TEST(validate_gsi)
 {
-  PDB_Context *pdb = pdb_alloc(MSF_DEFAULT_PAGE_SIZE, COFF_MachineType_X64, 123, 1, (Guid){ .data1 = max_U32, .data2 = max_U16 - 1, .data3 = max_U16 - 2, .data4 = { 1, 2, 3, 4, 5, 6, 7, 8 } });
-  CV_Symbol symbols[] = {
-    cv_symbol_from_ptr(cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32){ .itype = 0x41bd, .off = 0x25440, .sec = 2 }, str8_lit("__newclmap"))).str),
-    cv_symbol_from_ptr(cv_make_symbol(arena, CV_SymKind_CONSTANT, cv_make_const(arena, (CV_SymConstant){ .itype = 0x2348 }, 263, str8_lit("CV_SymKind_BLOCK16"))).str),
-    cv_symbol_from_ptr(cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32){ .itype = 0, .off = 123, .sec = 1 }, str8_lit("coffeebabe"))).str),
-    cv_symbol_from_ptr(cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32){ .itype = 0, .off = 123, .sec = 1 }, str8_lit("deadbeef"))).str),
+  String8 raw_symbols[] = {
+    cv_make_symbol(arena, CV_SymKind_CONSTANT, cv_make_const(arena, (CV_SymConstant){ .itype = 0 }, 263, str8_lit("CV_SymKind_BLOCK16"))),
+    cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32)  { .itype = 0, .off = 0x25440, .sec = 2 }, str8_lit("__newclmap"))),
+    cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32)  { .itype = 0, .off = 123,     .sec = 1 }, str8_lit("coffeebabe"))),
+    cv_make_symbol(arena, CV_SymKind_GDATA32, cv_make_data32(arena, (CV_SymData32)  { .itype = 0, .off = 123,     .sec = 1 }, str8_lit("deadbeef"))),
   };
-  for EachElement(i, symbols) { gsi_push(pdb->gsi, &symbols[i]); }
 
-  String8        raw_pdb     = data_from_pdb(arena, pdb);
+  CV_Symbol symbols[ArrayCount(raw_symbols)] = {0};
+  for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
+
+  CV_DebugS debug_s = {0};
+  for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+  String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
+  String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  t_push_debug_s_section(cow, raw_debug_s);
+  String8 obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("debug.obj"), obj));
+  T_Ok(t_write_entry_obj());
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /out:a.exe entry.obj debug.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8        raw_pdb     = t_read_file(arena, str8_lit("a.pdb"));
   MSF_Parsed    *msf         = msf_parsed_from_data(arena, raw_pdb);
   String8        dbi_data    = msf_data_from_stream(msf, PDB_FixedStream_Dbi);
   PDB_DbiParsed *dbi         = pdb_dbi_from_data(arena, dbi_data);
@@ -4710,6 +4733,8 @@ TEST(validate_gsi)
   String8        symbol_data = msf_data_from_stream(msf, dbi->sym_sn);
 
   for EachElement(i, symbols) {
+    CV_Symbol symbol = symbols[i];
+
     String8 string     = cv_name_from_symbol(symbols[i].kind, symbols[i].data);
     U64     symbol_off = pdb_gsi_symbol_from_string(gsi, symbol_data, string);
     T_Ok(symbol_off < symbol_data.size);
@@ -4719,8 +4744,97 @@ TEST(validate_gsi)
     T_Ok(test_symbol_size > 0);
     T_Ok(cv_symbol_match(test_symbol, symbols[i]));
   }
+}
 
-  pdb_release(pdb);
+TEST(validate_gsi_procs_and_typedefs)
+{
+  String8 raw_symbols[] = {
+    cv_make_symbol(arena, CV_SymKind_OBJNAME, cv_make_obj_name(arena, str8_lit("debug.obj"), 0x123)),
+    cv_make_symbol(arena, CV_SymKind_GPROC32_ID, cv_make_proc32(arena, (CV_SymProc32){0}, str8_lit("global_proc"))),
+    cv_make_symbol(arena, CV_SymKind_PROC_ID_END, cv_make_end(arena)),
+
+    cv_make_symbol(arena, CV_SymKind_UDT, cv_make_udt(arena, (CV_SymUDT){0}, str8_lit("global_typedef"))),
+
+    cv_make_symbol(arena, CV_SymKind_OBJNAME, cv_make_obj_name(arena, str8_lit("debug.obj"), 0x123)),
+    cv_make_symbol(arena, CV_SymKind_LPROC32_ID, cv_make_proc32(arena, (CV_SymProc32){0}, str8_lit("local_proc"))),
+    cv_make_symbol(arena, CV_SymKind_UDT, cv_make_udt(arena, (CV_SymUDT){0}, str8_lit("local_typedef"))),
+    cv_make_symbol(arena, CV_SymKind_PROC_ID_END, cv_make_end(arena)),
+  };
+
+  CV_Symbol symbols[ArrayCount(raw_symbols)] = {0};
+  for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
+
+  CV_DebugS debug_s = {0};
+  for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+  String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
+  String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  t_push_debug_s_section(cow, raw_debug_s);
+  String8 obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("debug.obj"), obj));
+  T_Ok(t_write_entry_obj());
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /out:a.exe entry.obj debug.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8        raw_pdb     = t_read_file(arena, str8_lit("a.pdb"));
+  MSF_Parsed    *msf         = msf_parsed_from_data(arena, raw_pdb);
+  String8        dbi_data    = msf_data_from_stream(msf, PDB_FixedStream_Dbi);
+  PDB_DbiParsed *dbi         = pdb_dbi_from_data(arena, dbi_data);
+  String8        gsi_data    = msf_data_from_stream(msf, dbi->gsi_sn);
+  PDB_GsiParsed *gsi         = pdb_gsi_from_data(arena, gsi_data);
+  String8        symbol_data = msf_data_from_stream(msf, dbi->sym_sn);
+
+  struct {
+    char *name;
+    B32   is_global;
+    U64   offset;
+    U64   imod;
+  } procs[] = {
+    { "global_proc", 1, 0x18, 2, },
+    { "local_proc",  0, 0x64, 2, },
+  };
+  for EachElement(i, procs) {
+    U64 symbol_off = pdb_gsi_symbol_from_string(gsi, symbol_data, str8_cstring(procs[i].name));
+    T_Ok(symbol_off < symbol_data.size);
+
+    CV_Symbol test_symbol      = {0};
+    U64       test_symbol_size = cv_read_symbol(str8_skip(symbol_data, symbol_off), 0, 1, &test_symbol);
+    String8   test_symbol_name = cv_name_from_symbol(test_symbol.kind, test_symbol.data);
+    T_Ok(test_symbol_size > 0);
+    T_Ok(str8_match(str8_cstring(procs[i].name), test_symbol_name, 0));
+    T_Ok(test_symbol.kind == (procs[i].is_global ? CV_SymKind_PROCREF : CV_SymKind_LPROCREF));
+
+    CV_SymRef2 *proc_ref = str8_deserial_get_raw_ptr(test_symbol.data, 0, sizeof(*proc_ref));
+    T_Ok(proc_ref->suc_name == 0);
+    T_Ok(proc_ref->sym_off == procs[i].offset);
+    T_Ok(proc_ref->imod == procs[i].imod);
+  }
+
+  struct {
+    char *name;
+    B32   is_global;
+  } typedefs[] = {
+    { "global_typedef", 1 },
+    { "local_typedef",  0 },
+  };
+  for EachElement(i, typedefs) {
+    U64 symbol_off = pdb_gsi_symbol_from_string(gsi, symbol_data, str8_cstring(typedefs[i].name));
+    if (typedefs[i].is_global) {
+      T_Ok(symbol_off < symbol_data.size);
+      CV_Symbol test_symbol      = {0};
+      U64       test_symbol_size = cv_read_symbol(str8_skip(symbol_data, symbol_off), 0, 1, &test_symbol);
+      String8   test_symbol_name = cv_name_from_symbol(test_symbol.kind, test_symbol.data);
+      T_Ok(test_symbol_size > 0);
+      T_Ok(str8_match(str8_cstring(typedefs[i].name), test_symbol_name, 0));
+      T_Ok(test_symbol.kind == CV_SymKind_UDT);
+    } else {
+      T_Ok(symbol_off >= symbol_data.size);
+    }
+  }
 }
 
 TEST(patch_cv_symbol_tree)
