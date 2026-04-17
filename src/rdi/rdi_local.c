@@ -1134,6 +1134,8 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
   };
   for EachElement(symbol_table_idx, symbol_tables)
   {
+    U64 all_bytecode_size = 0;
+    RDI_U8 *all_bytecode = rdi_table_from_name(rdi, LocationsBytecodeData, &all_bytecode_size);
     DumpSubsetKind(symbol_tables[symbol_table_idx].subset)
     {
       String8 table_name = rdi_name_lowercase_from_dump_subset_table[symbol_tables[symbol_table_idx].subset];
@@ -1167,7 +1169,98 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
         {
           dumpf("    container_namespace_idx: %u\n", symbol->container_idx);
         }
-        // TODO(rjf): location info
+        if(rdi_kind_from_location(symbol->location) != RDI_LocationKind_NULL)
+        {
+          RDI_Location *locations = &symbol->location;
+          RDI_LocationSetElement *locations_set_elements = 0;
+          U64 locations_count = 1;
+          U64 stride = sizeof(RDI_LocationSetElement);
+          if(rdi_kind_from_location(symbol->location) == RDI_LocationKind_Set)
+          {
+            U64 set_element_first_idx = rdi_set_first_index_from_location(symbol->location);
+            U64 set_element_count = rdi_set_count_from_location(symbol->location);
+            locations_set_elements = rdi_element_from_name_idx(rdi, LocationsSetElements, set_element_first_idx);
+            locations = &locations_set_elements[0].location;
+            locations_count = set_element_count;
+          }
+          for EachIndex(location_idx, locations_count)
+          {
+            RDI_Location location = *(RDI_Location *)((RDI_U8 *)locations + stride*location_idx);
+            Rng1U64 location_vaddr_range = r1u64(0, max_U64);
+            if(locations_set_elements)
+            {
+              location_vaddr_range = r1u64(locations_set_elements[location_idx].voff_first, locations_set_elements[location_idx].voff_opl);
+            }
+            String8 location_kind_string = {0};
+            if(0){}
+#define X(n) else if(rdi_kind_from_location(location) == RDI_LocationKind_##n) { location_kind_string = str8_lit(#n); }
+            RDI_LocationKind_XList
+#undef X
+            dumpf("    location:\n");
+            dumpf("    {\n");
+            dumpf("      kind: %S\n", location_kind_string);
+            if(location_vaddr_range.min == 0 && location_vaddr_range.max == max_U64)
+            {
+              dumpf("      range: *always*\n");
+            }
+            else
+            {
+              dumpf("      range: [0x%I64x, 0x%I64x)\n", location_vaddr_range.min, location_vaddr_range.max);
+            }
+            switch((RDI_LocationKindEnum)rdi_kind_from_location(location))
+            {
+              case RDI_LocationKind_NULL:
+              {
+                dumpf("      *invalid* // null location kind\n");
+              }break;
+              case RDI_LocationKind_Set:
+              {
+                dumpf("      *invalid* // set inside of set\n");
+              }break;
+              case RDI_LocationKind_AddrBytecodeStream:
+              case RDI_LocationKind_ValBytecodeStream:
+              {
+                U64 bytecode_data_off = rdi_bytecode_data_off_from_location(location);
+                U64 bytecode_data_opl = all_bytecode_size;
+                RDI_U8 *bytecode_ptr = rdi_element_from_name_idx(rdi, LocationsBytecodeData, bytecode_data_off);
+                String8 bytecode = str8(bytecode_ptr, bytecode_data_opl - bytecode_data_off);
+                String8 bytecode_stringification = rdi_string_from_bytecode(scratch.arena, tli->arch, bytecode);
+                dumpf("      bytecode: { %S }\n", bytecode_stringification);
+              }break;
+              case RDI_LocationKind_AddrRegPlusU16:
+              case RDI_LocationKind_AddrAddrRegPlusU16:
+              {
+                RDI_RegCode reg_code = rdi_regcode_from_location(location);
+                U64 reg_off = rdi_regoff_from_location(location);
+                String8 reg_code_string = rdi_string_from_reg_code(scratch.arena, tli->arch, reg_code);
+                dumpf("      reg: %S\n", reg_code_string);
+                dumpf("      reg_off: 0x%I64x\n", reg_off);
+              }break;
+              case RDI_LocationKind_ValReg:
+              {
+                RDI_RegCode reg_code = rdi_regcode_from_location(location);
+                String8 reg_code_string = rdi_string_from_reg_code(scratch.arena, tli->arch, reg_code);
+                dumpf("      reg: %S\n", reg_code_string);
+              }break;
+              case RDI_LocationKind_ModuleOff:
+              {
+                U64 off = rdi_voff_from_location(location);
+                dumpf("      voff: 0x%I64x\n", off);
+              }break;
+              case RDI_LocationKind_TLSOff:
+              {
+                U64 off = rdi_toff_from_location(location);
+                dumpf("      toff: 0x%I64x\n", off);
+              }break;
+              case RDI_LocationKind_ConstantDataOff:
+              {
+                U64 off = rdi_constant_data_off_from_location(location);
+                dumpf("      constant_data_off: 0x%I64x\n", off);
+              }break;
+            }
+            dumpf("    }\n");
+          }
+        }
         dumpf("  }\n");
         scratch_end(scratch);
       }

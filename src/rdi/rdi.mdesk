@@ -1248,6 +1248,7 @@ RDI_LocationSetElementMemberTable:
   `#define rdi_voff_from_location(l)              (rdi_kind_from_location(l) == RDI_LocationKind_ModuleOff          ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)`;
   `#define rdi_toff_from_location(l)              (rdi_kind_from_location(l) == RDI_LocationKind_TLSOff             ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)`;
   `#define rdi_constant_data_off_from_location(l) (rdi_kind_from_location(l) == RDI_LocationKind_ConstantDataOff    ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)`;
+  `#define rdi_bytecode_data_off_from_location(l) (rdi_kind_from_location(l) == RDI_LocationKind_AddrBytecodeStream || rdi_kind_from_location(l) == RDI_LocationKind_ValBytecodeStream ? (((l) & RDI_Location_OffMask) >> RDI_Location_OffShift) : 0)`;
   `#define rdi_set_first_index_from_location(l)   (rdi_kind_from_location(l) == RDI_LocationKind_Set                ? (((l) & RDI_Location_SetFirstIndexMask)      >> RDI_Location_SetFirstIndexShift) : 0)`;
   `#define rdi_set_count_from_location(l)         (rdi_kind_from_location(l) == RDI_LocationKind_Set                ? (((l) & RDI_Location_SetCountMask)           >> RDI_Location_SetCountShift) : 0)`;
   `#define rdi_location_voff(voff) ((((RDI_U64)RDI_LocationKind_ModuleOff << RDI_Location_KindShift) & RDI_Location_KindMask) | ((voff) & ~RDI_Location_KindMask))`;
