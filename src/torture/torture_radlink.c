@@ -4837,6 +4837,73 @@ TEST(validate_gsi_procs_and_typedefs)
   }
 }
 
+TEST(validate_psi)
+{
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  COFF_ObjSection *text = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_lit("FOOBAR"));
+  COFF_ObjSection *data = coff_obj_writer_push_section(cow, str8_lit(".data"), PE_DATA_SECTION_FLAGS, str8_lit("QWE"));
+  coff_obj_writer_push_symbol_extern_func(cow, str8_lit("global_func"), 1, text);
+  coff_obj_writer_push_symbol_extern(cow, str8_lit("global_var"), 1, data);
+  coff_obj_writer_push_symbol_static(cow, str8_lit("static_var"), 1, data);
+  String8 test_obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("test.obj"), test_obj));
+  T_Ok(t_write_entry_obj());
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj test.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8        raw_pdb      = t_read_file(arena, str8_lit("a.pdb"));
+  MSF_Parsed    *msf          = msf_parsed_from_data(arena, raw_pdb);
+  String8        dbi_data     = msf_data_from_stream(msf, PDB_FixedStream_Dbi);
+  PDB_DbiParsed *dbi          = pdb_dbi_from_data(arena, dbi_data);
+  String8        psi_data     = msf_data_from_stream(msf, dbi->psi_sn);
+  String8        psi_gsi_data = str8_range(psi_data.str + sizeof(PDB_PsiHeader), psi_data.str+psi_data.size);
+  PDB_GsiParsed *psi          = pdb_gsi_from_data(arena, psi_gsi_data);
+  String8        symbol_data  = msf_data_from_stream(msf, dbi->sym_sn);
+
+  struct {
+    char *name;
+    B32 is_global;
+    CV_Pub32Flags flags;
+  }  pubs[] = {
+    { "global_func", 1, CV_Pub32Flag_Function },
+    { "global_var", 1, 0 },
+    { "static_var", 0, 0 },
+  };
+  for EachElement(i, pubs) {
+    U64 symbol_off = pdb_gsi_symbol_from_string(psi, symbol_data, str8_cstring(pubs[i].name));
+    if (pubs[i].is_global) {
+      T_Ok(symbol_off < symbol_data.size);
+      CV_Symbol test_symbol      = {0};
+      U64       test_symbol_size = cv_read_symbol(str8_skip(symbol_data, symbol_off), 0, 1, &test_symbol);
+      String8   test_symbol_name = cv_name_from_symbol(test_symbol.kind, test_symbol.data);
+      T_Ok(test_symbol_size > 0);
+      T_Ok(str8_match(str8_cstring(pubs[i].name), test_symbol_name, 0));
+      T_Ok(test_symbol.kind == CV_SymKind_PUB32);
+      CV_SymPub32 *pub32 = str8_deserial_get_raw_ptr(test_symbol.data, 0, sizeof(*pub32));
+      T_Ok(pub32->sec > 0);
+      T_Ok(pubs[i].flags == pub32->flags);
+    } else {
+      T_Ok(symbol_off >= symbol_data.size);
+    }
+  }
+
+  U64 pub32_count = 0;
+  for EachElement(i, psi->buckets) {
+    PDB_GsiBucket bucket = psi->buckets[i];
+    for EachIndex(k, bucket.count) {
+      CV_Symbol test_symbol      = {0};
+      U64       test_symbol_size = cv_read_symbol(str8_skip(symbol_data, bucket.offs[k]), 0, 1, &test_symbol);
+      T_Ok(test_symbol_size >= sizeof(CV_SymPub32));
+      T_Ok(test_symbol.kind == CV_SymKind_PUB32);
+      pub32_count += 1;
+    }
+  }
+  T_Ok(pub32_count > 0);
+}
+
 TEST(patch_cv_symbol_tree)
 {
   String8List raw_symbols = {0};
