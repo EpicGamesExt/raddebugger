@@ -1972,7 +1972,7 @@ rd_view_ui(Rng2F32 rect)
         F32 row_height_px = ui_top_px_height();
         S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
         F32 row_string_max_size_px = dim_2f32(rect).x;
-        EV_StringFlags string_flags = EV_StringFlag_ReadOnlyDisplayRules;
+        EV_StringFlags string_flags = EV_StringFlag_ReadOnlyDisplayRules|rd_state->eval_viz_base_string_flags;
         String8 filter = rd_view_query_input();
         Vec4F32 pop_background_rgba = {0};
         UI_TagF("pop") pop_background_rgba = ui_color_from_name(str8_lit("background"));
@@ -5559,7 +5559,7 @@ rd_window_frame(void)
             {
               ui_spacer(ui_em(1.5f, 1.f));
             }
-            EV_StringParams string_params = {EV_StringFlag_ReadOnlyDisplayRules, .radix = 16};
+            EV_StringParams string_params = {EV_StringFlag_ReadOnlyDisplayRules|rd_state->eval_viz_base_string_flags, .radix = 16};
             String8 thread_handle_string = ctrl_string_from_handle(scratch.arena, ctrl_entity->handle);
             for(U64 idx = 0; idx < 16; idx += 1)
             {
@@ -5589,7 +5589,7 @@ rd_window_frame(void)
             E_Eval eval = e_eval_from_string(rd_state->drag_drop_regs->expr);
             if(eval.irtree.mode != E_Mode_Null)
             {
-              EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules, .radix = 10};
+              EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules|rd_state->eval_viz_base_string_flags, .radix = 10};
               String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &string_params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*20.f, eval);
               if(value_string.size != 0)
               {
@@ -12013,6 +12013,11 @@ rd_frame(void)
     rd_state->alt_menu_bar_enabled = rd_setting_b32_from_name(str8_lit("focus_menu_bar_with_alt"));
     rd_state->use_default_stl_type_views = rd_setting_b32_from_name(str8_lit("use_default_stl_type_views"));
     rd_state->use_default_ue_type_views = rd_setting_b32_from_name(str8_lit("use_default_ue_type_views"));
+    rd_state->eval_viz_base_string_flags = 0;
+    if(rd_setting_b32_from_name(str8_lit("display_pointer_addresses_before_contents")))
+    {
+      rd_state->eval_viz_base_string_flags |= EV_StringFlag_AddressesBeforeContent;
+    }
     
     ////////////////////////////
     //- rjf: autosave if needed

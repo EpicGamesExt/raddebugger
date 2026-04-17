@@ -1812,6 +1812,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           B32 did_prefix_content;
           B32 did_prefix_string;
           B32 did_redirect;
+          B32 did_pre_prefix_ptr;
         };
         EV_StringPtrData *ptr_data = it->top_task->user_data;
         if(ptr_data == 0)
@@ -1833,10 +1834,29 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         {
           default:{}break;
           
-          //- rjf: step 0 -> try "prefix content", which we want to print before the pointer value,
-          // like strings or symbol names
+          //- rjf: step 0: do pre-prefix pointer value if requested
           case 0:
           {
+            if(!(params->flags & EV_StringFlag_DisableAddresses) &&
+               params->flags & EV_StringFlag_AddressesBeforeContent)
+            {
+              *out_string = str8_from_u64(arena, ptr_data->value_eval.value.u64, 16, 0, 0);
+              ptr_data->did_pre_prefix_ptr = 1;
+            }
+            need_pop = 0;
+          }break;
+          
+          //- rjf: step 1 -> try "prefix content", which we want to print before the pointer value,
+          // like strings or symbol names
+          case 1:
+          {
+            // rjf: choose prefix
+            String8 pre_prefix = {0};
+            if(ptr_data->did_pre_prefix_ptr)
+            {
+              pre_prefix = str8_lit(" -> ");
+            }
+            
             // rjf: try strings
             if(!(ptr_data->type->flags & E_TypeFlag_IsNotText) &&
                !ptr_data->did_prefix_content && ptr_data->ptee_has_string &&
@@ -1899,7 +1919,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               }
               
               // rjf: report
-              *out_string = push_str8_copy(arena, string__escaped_and_quoted);
+              *out_string = str8f(arena, "%S%S", pre_prefix, string__escaped_and_quoted);
               ptr_data->did_prefix_content = 1;
               ptr_data->did_prefix_string = 1;
               
@@ -2017,11 +2037,12 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                     e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
                     str8_list_push(scratch.arena, &list, name);
                     e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
-                    *out_string = str8_list_join(arena, &list, 0);
+                    String8 joined = str8_list_join(scratch.arena, &list, 0);
+                    *out_string = str8f(arena, "%S%S", pre_prefix, joined);
                   }
                   else
                   {
-                    *out_string = push_str8_copy(arena, name);
+                    *out_string = str8f(arena, "%S%S", pre_prefix, name);
                   }
                   
                   good_symbol_match = (out_string->size != 0);
@@ -2031,7 +2052,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 // rjf: if we have a function type, but we did not generate any name, then just put a ???
                 if(out_string->size == 0 && e_type_kind_from_key(ptr_data->type->direct_type_key) == E_TypeKind_Function)
                 {
-                  *out_string = str8_lit("???");
+                  *out_string = str8f(arena, "%S???", pre_prefix);
                   good_symbol_match = 1;
                 }
               }
@@ -2048,7 +2069,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 String8 procedure_name = {0};
                 procedure_name.str = rdi_name_from_procedure(rdi, procedure, &procedure_name.size);
                 
-                *out_string = procedure_name;
+                *out_string = str8f(arena, "%S%S", pre_prefix, procedure_name);
                 good_symbol_match = (procedure_name.size != 0);
               }
               
@@ -2081,8 +2102,8 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             }
           }break;
           
-          //- rjf: step 1 -> do pointer value + descend if needed
-          case 1:
+          //- rjf: step 2 -> do pointer value + descend if needed
+          case 2:
           {
             Temp scratch = scratch_begin(&arena, 1);
             String8 ptr_value_string = str8_from_u64(scratch.arena, ptr_data->value_eval.value.u64, 16, 0, 0);
@@ -2093,7 +2114,8 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             //
             
             // rjf: [read only] if we did prefix content, do a parenthesized pointer value
-            if(!(params->flags & EV_StringFlag_DisableAddresses) && params->flags & EV_StringFlag_ReadOnlyDisplayRules &&
+            if(!ptr_data->did_pre_prefix_ptr &&
+               !(params->flags & EV_StringFlag_DisableAddresses) && params->flags & EV_StringFlag_ReadOnlyDisplayRules &&
                ptr_data->did_prefix_content)
             {
               *out_string = push_str8f(arena, " (%S)", ptr_value_string);
@@ -2101,7 +2123,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             
             // rjf: [read only] if we did *not* do any prefix content, but we have content,
             // do "<pointer value> -> " then descend
-            else if(params->flags & EV_StringFlag_ReadOnlyDisplayRules && !ptr_data->did_prefix_content && ptr_data->ptee_has_content)
+            else if(!ptr_data->did_pre_prefix_ptr && params->flags & EV_StringFlag_ReadOnlyDisplayRules && !ptr_data->did_prefix_content && ptr_data->ptee_has_content)
             {
               if(!(params->flags & EV_StringFlag_DisableAddresses))
               {
@@ -2126,7 +2148,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             }
             
             // rjf: [writeable, catchall] if we did *not* do any prefix content, do "<pointer value>"
-            else if(!ptr_data->did_prefix_content)
+            else if(!ptr_data->did_pre_prefix_ptr && !ptr_data->did_prefix_content)
             {
               *out_string = push_str8_copy(arena, ptr_value_string);
             }

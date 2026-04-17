@@ -3778,7 +3778,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           {
             EV_StringParams params =
             {
-              .flags = EV_StringFlag_ReadOnlyDisplayRules,
+              .flags = EV_StringFlag_ReadOnlyDisplayRules|rd_state->eval_viz_base_string_flags,
               .radix = rd_view_setting_u64_from_name(str8_lit("default_radix")),
             };
             String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*40.f, peek_eval);

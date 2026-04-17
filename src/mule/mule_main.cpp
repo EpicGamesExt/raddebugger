@@ -404,6 +404,15 @@ few_params1(Pair *pairs, int count, Function_No_Params_Type *no_params_type){
   
 }
 
+//
+// NOTE(rjf): this doesn't work because MSVC - despite GENERATING DEBUG INFO
+// FOR THE MyByte TYPEDEF - does not actually *reference* this typedef
+// anywhere, and instead treats all `MyByte *`s as `char *`s, thus completely
+// eliminating the point of the typedef and view. :(
+//
+typedef char MyByte;
+raddbg_type_view(MyByte *, no_string($));
+
 static void
 type_coverage_eval_tests(void)
 {
@@ -439,6 +448,8 @@ type_coverage_eval_tests(void)
   const char *const_string = "Hello, World!";
   const char const_string_array[] = "Hello, World!";
   const char *const const_ptr_const_string = "Hello, World!";
+  
+  MyByte *non_string_byte_ptr = "Hello, World!";
   
   void *pointer = &basics;
   Basics *pointer_to_basics = &basics;

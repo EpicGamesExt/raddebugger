@@ -228,8 +228,8 @@ RD_VocabTable:
 {
   //- rjf: users / projects
   {
-    user
-      ```
+    user,
+    ```
       @expand_commands(edit_user_theme) x:
     {
       //- rjf: animations
@@ -317,6 +317,8 @@ RD_VocabTable:
       @default(2) @display_name('Project Tab Width') 'tab_width': @range[1, 32] u64,
       
       //- rjf: visualizers
+      @display_name('Display Pointer Addresses Before Contents') @description("When visualizing pointers, always shows the address first, before showing contents at the pointer's address.")
+        @default(0) display_pointer_addresses_before_contents: bool,
       @display_name('Use Default C++ STL Type Visualizers') @description("Enables the built-in type views for C++ STL types.")
         @default(1) use_default_stl_type_views: bool,
       @display_name('Use Default Unreal Engine Type Visualizers') @description("Enables the built-in type views for Unreal Engine types.")
