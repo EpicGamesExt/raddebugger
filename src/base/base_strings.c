@@ -2282,24 +2282,31 @@ string_from_elapsed_time(Arena *arena, DateTime dt)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List list = {0};
-  if(dt.year)
-  {
+  if (dt.year) {
     str8_list_pushf(scratch.arena, &list, "%dy", dt.year);
     str8_list_pushf(scratch.arena, &list, "%um", dt.mon);
     str8_list_pushf(scratch.arena, &list, "%ud", dt.day);
-  }
-  else if(dt.mon)
-  {
+  } else if (dt.mon) {
     str8_list_pushf(scratch.arena, &list, "%um", dt.mon);
     str8_list_pushf(scratch.arena, &list, "%ud", dt.day);
-  }
-  else if (dt.day)
-  {
+  } else if (dt.day) {
     str8_list_pushf(scratch.arena, &list, "%ud", dt.day);
   }
-  str8_list_pushf(scratch.arena, &list, "%u:%u:%u:%u ms", dt.hour, dt.min, dt.sec, dt.msec);
-  StringJoin join = { str8_lit_comp(""), str8_lit_comp(" "), str8_lit_comp("") };
-  String8 result = str8_list_join(arena, &list, &join);
+
+  if (dt.hour) {
+    str8_list_pushf(scratch.arena, &list, "%uh %um %u.%us", dt.hour, dt.min, dt.sec, dt.msec);
+  } else if (dt.min) {
+    str8_list_pushf(scratch.arena, &list, "%um %u.%us", dt.min, dt.sec, dt.msec);
+  } else if (dt.sec) {
+    str8_list_pushf(scratch.arena, &list, "%u.%us", dt.sec, dt.msec);
+  } else if (dt.msec) {
+    str8_list_pushf(scratch.arena, &list, "%ums", dt.msec);
+  } else if (dt.micro_sec) {
+    str8_list_pushf(scratch.arena, &list, "%uus", dt.micro_sec);
+  }
+
+  String8 result = str8_list_join(arena, &list, &(StringJoin){ str8_lit_comp(""), str8_lit_comp(" "), str8_lit_comp("") });
+
   scratch_end(scratch);
   return result;
 }
