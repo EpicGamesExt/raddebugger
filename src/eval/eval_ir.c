@@ -1692,6 +1692,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         B32 string_mapped = 0;
         B32 string_is_implicit_member_name = 0;
         E_TypeKey mapped_type_key = zero_struct;
+        E_DbgInfo *mapped_dbg_info = &e_dbg_info_nil;
         E_Module *mapped_location_module = &e_module_nil;
         RDI_Location mapped_location = 0;
         E_Mode mapped_bytecode_mode = E_Mode_Offset;
@@ -1824,6 +1825,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   if(mapped_location != 0)
                   {
                     got_location_block = 1;
+                    mapped_dbg_info = dbg_info;
                     mapped_location_module = module;
                   }
                 }
@@ -1970,6 +1972,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                       string_mapped = 1;
                       mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, dbg_info_num);
                       mapped_location = location;
+                      mapped_dbg_info = dbg_info;
                       mapped_location_module = module;
                       mapped_bytecode_mode = E_Mode_Offset;
                     }break;
@@ -1980,6 +1983,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                       U64 procedure_base_voff = rdi_first_voff_from_procedure(rdi, procedure);
                       mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, dbg_info_num);
                       mapped_location = rdi_location_voff(procedure_base_voff);
+                      mapped_dbg_info = dbg_info;
                       mapped_location_module = module;
                       mapped_bytecode_mode = E_Mode_Value;
                     }break;
@@ -1988,6 +1992,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                       U32 type_idx = match.idx;
                       RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
                       mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, dbg_info_num);
+                      mapped_dbg_info = dbg_info;
                       string_mapped = 1;
                     }break;
                   }
@@ -2072,15 +2077,19 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           if(!generated && mapped_location != 0 && mapped_bytecode.size == 0)
           {
             E_Module *module = mapped_location_module;
-            E_DbgInfo *dbg_info = e_dbg_info_from_module(module);
+            E_DbgInfo *dbg_info = mapped_dbg_info;
             E_Space space = module->space;
             Arch arch = module->arch;
             RDI_Parsed *rdi = dbg_info->rdi;
             RDI_Location location = mapped_location;
             E_OpList oplist = e_oplist_from_location(scratch.arena, rdi, location);
-            // TODO(rjf): @locpass `space` needs to be set to the constant data space if needed
             mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
             mapped_bytecode_space = space;
+            if(rdi_kind_from_location(location) == RDI_LocationKind_ConstantDataOff)
+            {
+              mapped_bytecode_space = e_space_make(E_SpaceKind_DebugConstantData);
+              mapped_bytecode_space.u64s[0] = (dbg_info != &e_dbg_info_nil ? (dbg_info - e_base_ctx->dbg_infos) + 1 : 0);
+            }
             if(mapped_bytecode_mode == E_Mode_Null)
             {
               switch(rdi_kind_from_location(mapped_location))
@@ -2097,93 +2106,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 {
                   mapped_bytecode_mode = E_Mode_Offset;
                 }break;
-              }
-            }
-            
-#if 0 //~TODO(rjf): OLD vvvvvvvvvvvv
-            RDI_LocationBlock *block = mapped_location_block;
-            U64 all_location_data_size = 0;
-            U8 *all_location_data = rdi_table_from_name(rdi, LocationData, &all_location_data_size);
-            if(block->location_data_off + sizeof(RDI_LocationKind) <= all_location_data_size)
-            {
-              RDI_LocationKind loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
-              switch(loc_kind)
-              {
-                default:{}break;
-                case RDI_LocationKind_ValBytecodeStream: {mapped_bytecode_mode = E_Mode_Value;}goto bytecode_stream;
-                case RDI_LocationKind_AddrBytecodeStream:{mapped_bytecode_mode = E_Mode_Offset;}goto bytecode_stream;
-                bytecode_stream:;
+                case RDI_LocationKind_ConstantDataOff:
                 {
-                  string_mapped = 1;
-                  U64 bytecode_size = 0;
-                  U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
-                  U64 off_opl = all_location_data_size;
-                  for(U64 off = off_first, next_off = off_opl;
-                      off < all_location_data_size;
-                      off = next_off)
-                  {
-                    next_off = off_opl;
-                    U8 op = all_location_data[off];
-                    if(op == 0)
-                    {
-                      break;
-                    }
-                    U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
-                    U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
-                    bytecode_size += (1 + p_size);
-                    next_off = (off + 1 + p_size);
-                  }
-                  mapped_bytecode = str8(all_location_data + off_first, bytecode_size);
-                }break;
-                case RDI_LocationKind_AddrRegPlusU16:
-                if(block->location_data_off + sizeof(RDI_LocationRegPlusU16) <= all_location_data_size)
-                {
-                  string_mapped = 1;
-                  RDI_LocationRegPlusU16 loc = *(RDI_LocationRegPlusU16 *)(all_location_data + block->location_data_off);
-                  E_OpList oplist = {0};
-                  U64 byte_size = bit_size_from_arch(arch)/8;
-                  U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, 0);
-                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc.offset));
-                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
-                  mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
                   mapped_bytecode_mode = E_Mode_Offset;
-                  mapped_bytecode_space = space;
-                }break;
-                case RDI_LocationKind_AddrAddrRegPlusU16:
-                {
-                  string_mapped = 1;
-                  RDI_LocationRegPlusU16 loc = *(RDI_LocationRegPlusU16 *)(all_location_data + block->location_data_off);
-                  E_OpList oplist = {0};
-                  U64 byte_size = bit_size_from_arch(arch)/8;
-                  U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, 0);
-                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc.offset));
-                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
-                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, e_value_u64(bit_size_from_arch(arch)/8));
-                  mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-                  mapped_bytecode_mode = E_Mode_Offset;
-                  mapped_bytecode_space = space;
-                }break;
-                case RDI_LocationKind_ValReg:
-                if(block->location_data_off + sizeof(RDI_LocationReg) <= all_location_data_size)
-                {
-                  string_mapped = 1;
-                  RDI_LocationReg loc = *(RDI_LocationReg *)(all_location_data + block->location_data_off);
-                  REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc.reg_code);
-                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
-                  E_OpList oplist = {0};
-                  U64 byte_size = (U64)reg_rng.byte_size;
-                  U64 byte_pos = 0;
-                  U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, byte_pos);
-                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-                  mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-                  mapped_bytecode_mode = E_Mode_Value;
-                  mapped_bytecode_space = space;
                 }break;
               }
             }
-#endif
           }
           
           //- rjf: generate IR trees for bytecode

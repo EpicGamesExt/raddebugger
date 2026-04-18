@@ -107,6 +107,23 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
         access_close(access);
       }break;
       
+      //- rjf: debug info constant data
+      case E_SpaceKind_DebugConstantData:
+      {
+        U32 dbg_info_num = space.u64s[0];
+        if(1 <= dbg_info_num && dbg_info_num <= e_base_ctx->dbg_infos_count)
+        {
+          E_DbgInfo *dbg_info = &e_base_ctx->dbg_infos[dbg_info_num-1];
+          RDI_Parsed *rdi = dbg_info->rdi;
+          U64 all_constant_data_size = 0;
+          U8 *all_constant_data_ptr = rdi_table_from_name(rdi, LocationsConstantData, &all_constant_data_size);
+          String8 all_constant_data = str8(all_constant_data_ptr, all_constant_data_size);
+          String8 read_memory = str8_substr(all_constant_data, range);
+          result = (dim_1u64(range) == read_memory.size);
+          MemoryCopy(out, read_memory.str, read_memory.size);
+        }
+      }break;
+      
       //- rjf: default -> use hooks
       default:
       if(e_base_ctx->space_read != 0)
