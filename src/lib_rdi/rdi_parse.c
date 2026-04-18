@@ -728,7 +728,7 @@ rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node, RDI_U32 *n_out)
 
 //- procedures
 
-RDI_PROC RDI_Procedure *
+RDI_PROC RDI_Symbol *
 rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size)
 {
   RDI_NameMap *map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
@@ -742,35 +742,35 @@ rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size)
   {
     procedure_idx = ids[0];
   }
-  RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_idx);
+  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_idx);
   return procedure;
 }
 
-RDI_PROC RDI_Procedure *
+RDI_PROC RDI_Symbol *
 rdi_procedure_from_name_cstr(RDI_Parsed *rdi, char *cstr)
 {
-  RDI_Procedure *result = rdi_procedure_from_name(rdi, (RDI_U8 *)cstr, rdi_cstring_length(cstr));
+  RDI_Symbol *result = rdi_procedure_from_name(rdi, (RDI_U8 *)cstr, rdi_cstring_length(cstr));
   return result;
 }
 
 RDI_PROC RDI_U8 *
-rdi_name_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure, RDI_U64 *len_out)
+rdi_name_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure, RDI_U64 *len_out)
 {
   return rdi_string_from_idx(rdi, procedure->name_string_idx, len_out);
 }
 
 RDI_PROC RDI_Scope *
-rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure)
 {
   RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
   return scope;
 }
 
 RDI_PROC RDI_UDT *
-rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure)
 {
   RDI_U64 idx = 0;
-  if(procedure->link_flags & RDI_LinkFlag_TypeScoped)
+  if(procedure->container_flags & RDI_ContainerFlag_KindMask == RDI_ContainerKind_Type)
   {
     idx = procedure->container_idx;
   }
@@ -778,20 +778,20 @@ rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
   return udt;
 }
 
-RDI_PROC RDI_Procedure *
-rdi_container_procedure_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+RDI_PROC RDI_Scope *
+rdi_container_scope_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure)
 {
   RDI_U64 idx = 0;
-  if(procedure->link_flags & RDI_LinkFlag_ProcScoped)
+  if(procedure->container_flags & RDI_ContainerFlag_KindMask == RDI_ContainerKind_Scope)
   {
     idx = procedure->container_idx;
   }
-  RDI_Procedure *container_procedure = rdi_element_from_name_idx(rdi, Procedures, idx);
-  return container_procedure;
+  RDI_Scope *container_scope = rdi_element_from_name_idx(rdi, Scopes, idx);
+  return container_scope;
 }
 
 RDI_PROC RDI_U64
-rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure)
 {
   RDI_Scope *scope = rdi_root_scope_from_procedure(rdi, procedure);
   RDI_U64 result = rdi_first_voff_from_scope(rdi, scope);
@@ -799,18 +799,18 @@ rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
 }
 
 RDI_PROC RDI_U64
-rdi_opl_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+rdi_opl_voff_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure)
 {
   RDI_Scope *scope = rdi_root_scope_from_procedure(rdi, procedure);
   RDI_U64 result = rdi_opl_voff_from_scope(rdi, scope);
   return result;
 }
 
-RDI_PROC RDI_Procedure *
+RDI_PROC RDI_Symbol *
 rdi_procedure_from_voff(RDI_Parsed *rdi, RDI_U64 voff)
 {
   RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
-  RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
+  RDI_Symbol *procedure = rdi_procedure_from_scope(rdi, scope);
   return procedure;
 }
 
@@ -851,10 +851,10 @@ rdi_parent_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
   return parent;
 }
 
-RDI_PROC RDI_Procedure *
+RDI_PROC RDI_Symbol *
 rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
 {
-  RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
+  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, scope->proc_idx);
   return procedure;
 }
 
@@ -867,12 +867,47 @@ rdi_inline_site_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
 
 //- global variables
 
-RDI_PROC RDI_GlobalVariable *
+RDI_PROC RDI_Symbol *
 rdi_global_variable_from_voff(RDI_Parsed *rdi, RDI_U64 voff)
 {
   RDI_U32 idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, voff);
-  RDI_GlobalVariable *gvar = rdi_element_from_name_idx(rdi, GlobalVariables, idx);
+  RDI_Symbol *gvar = rdi_element_from_name_idx(rdi, GlobalVariableSymbols, idx);
   return gvar;
+}
+
+//- location picking
+
+RDI_PROC RDI_Location
+rdi_location_from_location_voff(RDI_Parsed *rdi, RDI_Location location, RDI_U64 voff)
+{
+  RDI_Location result = 0;
+  if(rdi_kind_from_location(location) != RDI_LocationKind_Set)
+  {
+    result = location;
+  }
+  else
+  {
+    RDI_U64 set_first_idx = rdi_set_first_index_from_location(location);
+    RDI_U64 set_count = rdi_set_count_from_location(location);
+    RDI_U64 set_opl_idx = set_first_idx + set_count;
+    RDI_U64 all_elems_count = 0;
+    RDI_LocationSetElement *all_elems = rdi_table_from_name(rdi, LocationsSetElements, &all_elems_count);
+    if(set_opl_idx > all_elems_count)
+    {
+      set_opl_idx = all_elems_count;
+    }
+    RDI_LocationSetElement *set_first = all_elems + set_first_idx;
+    RDI_LocationSetElement *set_opl = all_elems + set_opl_idx;
+    for(RDI_LocationSetElement *e = set_first; e < set_opl; e += 1)
+    {
+      if(e->voff_first <= voff && voff <= e->voff_opl)
+      {
+        result = e->location;
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 //- units

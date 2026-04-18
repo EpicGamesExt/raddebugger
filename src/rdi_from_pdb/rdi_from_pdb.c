@@ -338,41 +338,6 @@ p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code
 }
 
 internal void
-p2r_local_push_location_cases_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *loc, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
-{
-  //- rjf: extract range info
-  U64 voff_first = 0;
-  U64 voff_opl = 0;
-  if(section != 0)
-  {
-    voff_first = section->voff + range->off;
-    voff_opl = voff_first + range->len;
-  }
-  
-  //- rjf: emit location for ranges not coverd by gaps
-  CV_LvarAddrGap *gap_ptr = gaps;
-  U64 voff_cursor = voff_first;
-  for(U64 i = 0; i < gap_count; i += 1, gap_ptr += 1)
-  {
-    U64 voff_gap_first = voff_first + gap_ptr->off;
-    U64 voff_gap_opl   = voff_gap_first + gap_ptr->len;
-    if(voff_cursor < voff_gap_first)
-    {
-      RDIM_Rng1U64 voff_range = {voff_cursor, voff_gap_first};
-      rdim_local_push_location_case(arena, scopes, local, loc, voff_range);
-    }
-    voff_cursor = voff_gap_opl;
-  }
-  
-  //- rjf: emit remaining range
-  if(voff_cursor < voff_opl)
-  {
-    RDIM_Rng1U64 voff_range = {voff_cursor, voff_opl};
-    rdim_local_push_location_case(arena, scopes, local, loc, voff_range);
-  }
-}
-
-internal void
 p2r_location_case_list_push_over_lvar_addr_range(Arena *arena, RDIM_LocationCaseList *loc_cases, RDIM_Location loc, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
 {
   //- rjf: extract range info
@@ -3664,7 +3629,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   
                   // rjf: determine if this is a parameter
                   B32 is_param = (regrel_idx < curr_proc_symbol->type->count);
-                  RDI_LocalKind local_kind = is_param ? RDI_LocalKind_Parameter : RDI_LocalKind_Variable;
                   
                   // rjf: determine if we need an extra indirection to the value
                   B32 extra_indirection_to_value = 0;
@@ -3674,7 +3638,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     {
                       case RDI_Arch_X64:
                       {
-                        extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)));
+                        extra_indirection_to_value = (is_param && (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)));
                       }break;
                     }
                   }
@@ -3729,29 +3693,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                       rdim_location_case_list_push(arena, &local->location_cases, loc, voff_range);
                     }
                   }
-                  
-#if 0 // TODO(rjf): @locpass
-                  // rjf: build local
-                  RDIM_Scope *scope = top_scope_node->scope;
-                  RDIM_Local *local = rdim_scope_push_local(arena, sym_scopes, scope);
-                  local->kind = local_kind;
-                  local->name = name;
-                  local->type = type;
-                  
-                  // rjf: add location info to local
-                  {
-                    // rjf: get raddbg register code
-                    RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(arch, cv_reg);
-                    // TODO(rjf): real byte_size & byte_pos from cv_reg goes here
-                    U32 byte_size = 8;
-                    U32 byte_pos = 0;
-                    
-                    // rjf: build location
-                    RDIM_Location loc = p2r_location_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
-                    RDIM_Rng1U64 voff_range = {0, max_U64};
-                    rdim_local_push_location_case(arena, sym_scopes, local, &loc, voff_range);
-                  }
-#endif
                 }
                 
                 regrel_idx += 1;
@@ -3831,13 +3772,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 // rjf: is not a global modification -> emit a local variable
                 if(!is_global_modification)
                 {
-                  // rjf: determine local kind
-                  RDI_LocalKind local_kind = RDI_LocalKind_Variable;
-                  if(slocal->flags & CV_LocalFlag_Param)
-                  {
-                    local_kind = RDI_LocalKind_Parameter;
-                  }
-                  
                   // rjf: build local
                   RDIM_Scope *scope = top_scope_node->scope;
                   RDIM_Symbol *local = rdim_symbol_chunk_list_push(arena, &scope->locals, 8);
@@ -3846,15 +3780,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     local->name     = name;
                     local->type     = type;
                   }
-                  
-#if 0 // TODO(rjf): @locpass
-                  // rjf: build local
-                  RDIM_Scope *scope = top_scope_node->scope;
-                  RDIM_Local *local = rdim_scope_push_local(arena, sym_scopes, scope);
-                  local->kind = local_kind;
-                  local->name = name;
-                  local->type = type;
-#endif
                   
                   // rjf: save defrange target, for subsequent defrange symbols
                   defrange_target = local;

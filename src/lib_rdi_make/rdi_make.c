@@ -1115,35 +1115,6 @@ rdim_scope_push_voff_range(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDIM_Sc
   list->scope_voff_count += 2;
 }
 
-#if 0 // TODO(rjf): @locpass
-RDI_PROC RDIM_Local *
-rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *scope)
-{
-  RDIM_Local *local = rdim_push_array(arena, RDIM_Local, 1);
-  RDIM_SLLQueuePush(scope->first_local, scope->last_local, local);
-  scope->local_count += 1;
-  scopes->local_count += 1;
-  return local;
-}
-
-RDI_PROC RDIM_LocationCase *
-rdim_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationCaseList *list, RDIM_Location *location, RDIM_Rng1U64 voff_range)
-{
-  RDIM_LocationCase *n = rdim_push_array(arena, RDIM_LocationCase, 1);
-  RDIM_SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-  n->location = *location;
-  n->voff_range = voff_range;
-  return n;
-}
-
-RDI_PROC RDIM_LocationCase *
-rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *location, RDIM_Rng1U64 voff_range)
-{
-  return rdim_push_location_case(arena, scopes, &local->location_cases, location, voff_range);
-}
-#endif
-
 ////////////////////////////////
 //~ rjf: [Building] Bake Parameter Joining
 
@@ -2091,58 +2062,6 @@ rdim_serialized_section_make_unpacked(void *data, RDI_U64 size)
   s.encoding = RDI_SectionEncoding_Unpacked;
   return s;
 }
-
-#if 0 // TODO(rjf): @locpass
-RDI_PROC RDIM_SerializedSectionBundle
-rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
-{
-  RDIM_SerializedSectionBundle bundle;
-  rdim_memzero_struct(&bundle);
-  bundle.sections[RDI_SectionKind_TopLevelInfo]         = rdim_serialized_section_make_unpacked_struct(results->top_level_info.top_level_info);
-  bundle.sections[RDI_SectionKind_StringData]           = rdim_serialized_section_make_unpacked_array(results->strings.string_data, results->strings.string_data_size);
-  bundle.sections[RDI_SectionKind_StringTable]          = rdim_serialized_section_make_unpacked_array(results->strings.string_offs, results->strings.string_offs_count);
-  bundle.sections[RDI_SectionKind_IndexRuns]            = rdim_serialized_section_make_unpacked_array(results->idx_runs.idx_runs, results->idx_runs.idx_count);
-  bundle.sections[RDI_SectionKind_BinarySections]       = rdim_serialized_section_make_unpacked_array(results->binary_sections.binary_sections, results->binary_sections.binary_sections_count);
-  bundle.sections[RDI_SectionKind_FilePathNodes]        = rdim_serialized_section_make_unpacked_array(results->file_paths.nodes, results->file_paths.nodes_count);
-  bundle.sections[RDI_SectionKind_SourceFiles]          = rdim_serialized_section_make_unpacked_array(results->src_files.source_files, results->src_files.source_files_count);
-  bundle.sections[RDI_SectionKind_LineTables]           = rdim_serialized_section_make_unpacked_array(results->line_tables.line_tables, results->line_tables.line_tables_count);
-  bundle.sections[RDI_SectionKind_LineInfoVOffs]        = rdim_serialized_section_make_unpacked_array(results->line_tables.line_table_voffs, results->line_tables.line_table_voffs_count);
-  bundle.sections[RDI_SectionKind_LineInfoLines]        = rdim_serialized_section_make_unpacked_array(results->line_tables.line_table_lines, results->line_tables.line_table_lines_count);
-  bundle.sections[RDI_SectionKind_LineInfoColumns]      = rdim_serialized_section_make_unpacked_array(results->line_tables.line_table_columns, results->line_tables.line_table_columns_count);
-  bundle.sections[RDI_SectionKind_SourceLineMaps]       = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_maps, results->src_files.source_line_maps_count);
-  bundle.sections[RDI_SectionKind_SourceLineMapNumbers] = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_map_nums, results->src_files.source_line_map_nums_count);
-  bundle.sections[RDI_SectionKind_SourceLineMapRanges]  = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_map_rngs, results->src_files.source_line_map_rngs_count);
-  bundle.sections[RDI_SectionKind_SourceLineMapVOffs]   = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_map_voffs, results->src_files.source_line_map_voffs_count);
-  bundle.sections[RDI_SectionKind_Units]                = rdim_serialized_section_make_unpacked_array(results->units.units, results->units.units_count);
-  bundle.sections[RDI_SectionKind_UnitVMap]             = rdim_serialized_section_make_unpacked_array(results->unit_vmap.vmap.vmap, results->unit_vmap.vmap.count);
-  bundle.sections[RDI_SectionKind_Namespaces]           = rdim_serialized_section_make_unpacked_array(results->namespaces.namespaces, results->namespaces.namespaces_count);
-  bundle.sections[RDI_SectionKind_TypeNodes]            = rdim_serialized_section_make_unpacked_array(results->type_nodes.type_nodes, results->type_nodes.type_nodes_count);
-  bundle.sections[RDI_SectionKind_UDTs]                 = rdim_serialized_section_make_unpacked_array(results->udts.udts, results->udts.udts_count);
-  bundle.sections[RDI_SectionKind_Members]              = rdim_serialized_section_make_unpacked_array(results->udts.members, results->udts.members_count);
-  bundle.sections[RDI_SectionKind_EnumMembers]          = rdim_serialized_section_make_unpacked_array(results->udts.enum_members, results->udts.enum_members_count);
-  bundle.sections[RDI_SectionKind_GlobalVariables]      = rdim_serialized_section_make_unpacked_array(results->global_variables.global_variables, results->global_variables.global_variables_count);
-  bundle.sections[RDI_SectionKind_GlobalVMap]           = rdim_serialized_section_make_unpacked_array(results->global_vmap.vmap.vmap, results->global_vmap.vmap.count);
-  bundle.sections[RDI_SectionKind_ThreadVariables]      = rdim_serialized_section_make_unpacked_array(results->thread_variables.thread_variables, results->thread_variables.thread_variables_count);
-  bundle.sections[RDI_SectionKind_Constants]            = rdim_serialized_section_make_unpacked_array(results->constants.constants, results->constants.constants_count);
-  bundle.sections[RDI_SectionKind_Procedures]           = rdim_serialized_section_make_unpacked_array(results->procedures.procedures, results->procedures.procedures_count);
-  bundle.sections[RDI_SectionKind_Scopes]               = rdim_serialized_section_make_unpacked_array(results->scopes.scopes, results->scopes.scopes_count);
-  bundle.sections[RDI_SectionKind_ScopeVOffData]        = rdim_serialized_section_make_unpacked_array(results->scopes.scope_voffs, results->scopes.scope_voffs_count);
-  bundle.sections[RDI_SectionKind_ScopeVMap]            = rdim_serialized_section_make_unpacked_array(results->scope_vmap.vmap.vmap, results->scope_vmap.vmap.count);
-  bundle.sections[RDI_SectionKind_InlineSites]          = rdim_serialized_section_make_unpacked_array(results->inline_sites.inline_sites, results->inline_sites.inline_sites_count);
-  bundle.sections[RDI_SectionKind_Locals]               = rdim_serialized_section_make_unpacked_array(results->scopes.locals, results->scopes.locals_count);
-  bundle.sections[RDI_SectionKind_LocationBlocks]       = rdim_serialized_section_make_unpacked_array(results->location_blocks.location_blocks, results->location_blocks.location_blocks_count);
-  bundle.sections[RDI_SectionKind_LocationData]         = rdim_serialized_section_make_unpacked_array(results->locations.location_data, results->locations.location_data_size);
-  bundle.sections[RDI_SectionKind_ConstantValueData]    = rdim_serialized_section_make_unpacked_array(results->constants.constant_value_data, results->constants.constant_value_data_size);
-  bundle.sections[RDI_SectionKind_ConstantValueTable]   = rdim_serialized_section_make_unpacked_array(results->constants.constant_values, results->constants.constant_values_count);
-  bundle.sections[RDI_SectionKind_MD5Checksums]         = rdim_serialized_section_make_unpacked_array(results->checksums.md5s, results->checksums.md5s_count);
-  bundle.sections[RDI_SectionKind_SHA1Checksums]        = rdim_serialized_section_make_unpacked_array(results->checksums.sha1s, results->checksums.sha1s_count);
-  bundle.sections[RDI_SectionKind_SHA256Checksums]      = rdim_serialized_section_make_unpacked_array(results->checksums.sha256s, results->checksums.sha256s_count);
-  bundle.sections[RDI_SectionKind_NameMaps]             = rdim_serialized_section_make_unpacked_array(results->top_level_name_maps.name_maps, results->top_level_name_maps.name_maps_count);
-  bundle.sections[RDI_SectionKind_NameMapBuckets]       = rdim_serialized_section_make_unpacked_array(results->name_maps.buckets, results->name_maps.buckets_count);
-  bundle.sections[RDI_SectionKind_NameMapNodes]         = rdim_serialized_section_make_unpacked_array(results->name_maps.nodes, results->name_maps.nodes_count);
-  return bundle;
-}
-#endif
 
 RDI_PROC RDIM_String8List
 rdim_file_blobs_from_section_bundle(RDIM_Arena *arena, RDIM_SerializedSectionBundle *bundle)

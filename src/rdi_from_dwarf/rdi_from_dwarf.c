@@ -3112,13 +3112,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   bake_params.udts             = g_d2r_shared.udts;
   bake_params.src_files        = g_d2r_shared.src_files;
   bake_params.line_tables      = g_d2r_shared.line_tables;
-#if 0 // TODO(rjf): @locpass
-  bake_params.global_variables = g_d2r_shared.gvars;
-  bake_params.thread_variables = g_d2r_shared.tvars;
-  bake_params.procedures       = g_d2r_shared.procs;
-  bake_params.scopes           = g_d2r_shared.scopes;
-  bake_params.inline_sites     = g_d2r_shared.inline_sites;
-#endif
   
   scratch_end(scratch);
   return bake_params;

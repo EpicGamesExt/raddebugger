@@ -1157,17 +1157,11 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
           switch(section_kind)
           {
             default:{}break;
-            case RDI_SectionKind_Procedures:
+            case RDI_SectionKind_ProcedureSymbols:
+            case RDI_SectionKind_GlobalVariableSymbols:
+            case RDI_SectionKind_ThreadVariableSymbols:
             {
-              element_name_idx_off = OffsetOf(RDI_Procedure, name_string_idx);
-            }break;
-            case RDI_SectionKind_GlobalVariables:
-            {
-              element_name_idx_off = OffsetOf(RDI_GlobalVariable, name_string_idx);
-            }break;
-            case RDI_SectionKind_ThreadVariables:
-            {
-              element_name_idx_off = OffsetOf(RDI_ThreadVariable, name_string_idx);
+              element_name_idx_off = OffsetOf(RDI_Symbol, name_string_idx);
             }break;
             case RDI_SectionKind_UDTs:
             {
@@ -1568,10 +1562,10 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
       };
       read_only local_persist RDI_SectionKind name_map_section_kinds[] =
       {
-        RDI_SectionKind_GlobalVariables,
-        RDI_SectionKind_ThreadVariables,
-        RDI_SectionKind_Constants,
-        RDI_SectionKind_Procedures,
+        RDI_SectionKind_GlobalVariableSymbols,
+        RDI_SectionKind_ThreadVariableSymbols,
+        RDI_SectionKind_ConstantSymbols,
+        RDI_SectionKind_ProcedureSymbols,
         RDI_SectionKind_TypeNodes,
       };
       Rng1U64 range = lane_range(dbgi_keys.count);

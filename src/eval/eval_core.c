@@ -590,7 +590,7 @@ e_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
       U32 local_opl_idx = scope->local_first + scope->local_count;
       for(U32 local_idx = scope->local_first; local_idx < local_opl_idx; local_idx += 1)
       {
-        RDI_Local *local_var = rdi_element_from_name_idx(rdi, Locals, local_idx);
+        RDI_Symbol *local_var = rdi_element_from_name_idx(rdi, LocalVariableSymbols, local_idx);
         U64 local_name_size = 0;
         U8 *local_name_str = rdi_string_from_idx(rdi, local_var->name_string_idx, &local_name_size);
         String8 name = push_str8_copy(arena, str8(local_name_str, local_name_size));
@@ -612,10 +612,10 @@ e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
   
   //- rjf: tightest scope -> procedure
   U32 proc_idx = tightest_scope->proc_idx;
-  RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
+  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, proc_idx);
   
   //- rjf: procedure -> udt
-  U32 udt_idx = procedure->container_idx;
+  U32 udt_idx = procedure->container_flags & RDI_ContainerFlag_KindMask == RDI_ContainerKind_Type ? procedure->container_idx : 0;
   RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, udt_idx);
   
   //- rjf: build blank map
@@ -642,6 +642,97 @@ e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
   }
   
   return map;
+}
+
+////////////////////////////////
+//~ rjf: RDI Location Info -> Eval Op List
+
+internal E_OpList
+e_oplist_from_location(Arena *arena, RDI_Parsed *rdi, RDI_Location loc)
+{
+  E_OpList result = {0};
+  B32 need_extra_memread = 0;
+  switch((RDI_LocationKindEnum)rdi_kind_from_location(loc))
+  {
+    case RDI_LocationKind_NULL:
+    case RDI_LocationKind_Set:{}break;
+    
+    //- rjf: bytecode
+    case RDI_LocationKind_AddrBytecodeStream:
+    case RDI_LocationKind_ValBytecodeStream:
+    {
+      U64 all_bytecode_size = 0;
+      U8 *all_bytecode = rdi_table_from_name(rdi, LocationsBytecodeData, &all_bytecode_size);
+      U64 bytecode_first_idx = rdi_bytecode_data_off_from_location(loc);
+      bytecode_first_idx = Min(bytecode_first_idx, all_bytecode_size);
+      U64 bytecode_opl_idx = bytecode_first_idx;
+      for(U64 off = bytecode_first_idx, next_off = all_bytecode_size; off < all_bytecode_size; off  = next_off)
+      {
+        next_off = all_bytecode_size;
+        U8 opcode = all_bytecode[off];
+        if(opcode == 0)
+        {
+          break;
+        }
+        U16 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
+        U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+        bytecode_opl_idx += (1 + p_size);
+        next_off = (off + 1 + p_size);
+      }
+      String8 bytecode = str8(all_bytecode + bytecode_first_idx, (bytecode_opl_idx - bytecode_first_idx));
+      e_oplist_push_bytecode(arena, &result, bytecode);
+    }break;
+    
+    //- rjf: reg + off
+    case RDI_LocationKind_AddrRegPlusU16: goto reg_plus_off;
+    case RDI_LocationKind_AddrAddrRegPlusU16: need_extra_memread = 1; goto reg_plus_off;
+    reg_plus_off:;
+    {
+      RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+      Arch arch = arch_from_rdi_arch(tli->arch);
+      U64 arch_addr_bytesize = byte_size_from_arch(arch);
+      RDI_RegCode regcode = rdi_regcode_from_location(loc);
+      U64 reg_off = rdi_regoff_from_location(loc);
+      e_oplist_push_op(arena, &result, RDI_EvalOp_RegRead, e_value_u64(RDI_EncodeRegReadParam(regcode, arch_addr_bytesize, 0)));
+      e_oplist_push_uconst(arena, &result, reg_off);
+      e_oplist_push_op(arena, &result, RDI_EvalOp_Add, e_value_u64(0));
+      if(need_extra_memread)
+      {
+        e_oplist_push_op(arena, &result, RDI_EvalOp_MemRead, e_value_u64(arch_addr_bytesize));
+      }
+    }break;
+    
+    //- rjf: reg
+    case RDI_LocationKind_ValReg:
+    {
+      RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+      Arch arch = arch_from_rdi_arch(tli->arch);
+      RDI_RegCode rdi_regcode = rdi_regcode_from_location(loc);
+      REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, rdi_regcode);
+      REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
+      U64 byte_size = (U64)reg_rng.byte_size;
+      U64 byte_pos = 0;
+      e_oplist_push_op(arena, &result, RDI_EvalOp_RegRead, e_value_u64(RDI_EncodeRegReadParam(rdi_regcode, byte_size, byte_pos)));
+    }break;
+    
+    //- rjf: space offsets
+    case RDI_LocationKind_ModuleOff:
+    {
+      U64 voff = rdi_voff_from_location(loc);
+      e_oplist_push_op(arena, &result, RDI_EvalOp_ModuleOff, e_value_u64(voff));
+    }break;
+    case RDI_LocationKind_TLSOff:
+    {
+      U64 toff = rdi_toff_from_location(loc);
+      e_oplist_push_op(arena, &result, RDI_EvalOp_TLSOff, e_value_u64(toff));
+    }break;
+    case RDI_LocationKind_ConstantDataOff:
+    {
+      U64 constant_data_off = rdi_constant_data_off_from_location(loc);
+      e_oplist_push_uconst(arena, &result, constant_data_off);
+    }break;
+  }
+  return result;
 }
 
 ////////////////////////////////

@@ -4329,9 +4329,9 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                     U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
                     if(id_count > 0)
                     {
-                      RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, ids[0]);
-                      U64 global_var_voff = global_var->voff;
-                      U64 global_var_vaddr = global_var->voff + module->vaddr_range.min;
+                      RDI_Symbol *global_var = rdi_element_from_name_idx(rdi, GlobalVariableSymbols, ids[0]);
+                      U64 global_var_voff = rdi_voff_from_location(global_var->location);
+                      U64 global_var_vaddr = global_var_voff + module->vaddr_range.min;
                       Arch arch = process->arch;
                       U64 addr_size = bit_size_from_arch(arch)/8;
                       dmn_process_read(ev->process, r1u64(global_var_vaddr, global_var_vaddr+addr_size), &asan_shadow_base_vaddr);
@@ -5709,7 +5709,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+            RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_id);
             U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
             if(voff != 0)
             {
@@ -5743,7 +5743,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                   procedure_id = ids[0];
                 }
               }
-              RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+              RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_id);
               U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
               if(voff != 0)
               {
@@ -5773,7 +5773,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                   procedure_id = ids[0];
                 }
               }
-              RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+              RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_id);
               U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
               if(voff != 0)
               {
@@ -5801,7 +5801,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+            RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_id);
             U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
             if(voff != 0)
             {
@@ -5835,7 +5835,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+            RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_id);
             U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
             if(voff != 0)
             {
@@ -5880,7 +5880,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+            RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_id);
             U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
             if(voff != 0)
             {

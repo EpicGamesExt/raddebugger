@@ -912,16 +912,6 @@ struct RDIM_InlineSiteChunkList
 ////////////////////////////////
 //~ rjf: Scope Info Types
 
-typedef struct RDIM_Local RDIM_Local;
-struct RDIM_Local
-{
-  RDIM_Local *next;
-  RDI_LocalKind kind;
-  RDIM_String8 name;
-  RDIM_Type *type;
-  RDIM_LocationCaseList location_cases;
-};
-
 typedef struct RDIM_Scope RDIM_Scope;
 struct RDIM_Scope
 {
@@ -932,11 +922,6 @@ struct RDIM_Scope
   RDIM_Scope *last_child;
   RDIM_Scope *next_sibling;
   RDIM_Rng1U64List voff_ranges;
-#if 0 // TODO(rjf): @locpass
-  RDIM_Local *first_local;
-  RDIM_Local *last_local;
-  RDI_U32 local_count;
-#endif
   RDIM_InlineSite *inline_site;
   RDIM_SymbolChunkList locals;
 };
@@ -1283,52 +1268,6 @@ struct RDIM_LineRec
 
 //- rjf: baking results
 
-typedef struct RDIM_LocationBakeResult RDIM_LocationBakeResult;
-struct RDIM_LocationBakeResult
-{
-  RDI_U8 *location_data;
-  RDI_U64 location_data_size;
-};
-
-typedef struct RDIM_LocationBlockBakeResult RDIM_LocationBlockBakeResult;
-struct RDIM_LocationBlockBakeResult
-{
-  RDI_LocationBlock *location_blocks;
-  RDI_U64 location_blocks_count;
-};
-
-typedef struct RDIM_GlobalVariableBakeResult RDIM_GlobalVariableBakeResult;
-struct RDIM_GlobalVariableBakeResult
-{
-  RDI_GlobalVariable *global_variables;
-  RDI_U64 global_variables_count;
-};
-
-typedef struct RDIM_ThreadVariableBakeResult RDIM_ThreadVariableBakeResult;
-struct RDIM_ThreadVariableBakeResult
-{
-  RDI_ThreadVariable *thread_variables;
-  RDI_U64 thread_variables_count;
-};
-
-typedef struct RDIM_ConstantsBakeResult RDIM_ConstantsBakeResult;
-struct RDIM_ConstantsBakeResult
-{
-  RDI_Constant *constants;
-  RDI_U64 constants_count;
-  RDI_U32 *constant_values;
-  RDI_U64 constant_values_count;
-  RDI_U8 *constant_value_data;
-  RDI_U64 constant_value_data_size;
-};
-
-typedef struct RDIM_ProcedureBakeResult RDIM_ProcedureBakeResult;
-struct RDIM_ProcedureBakeResult
-{
-  RDI_Procedure *procedures;
-  RDI_U64 procedures_count;
-};
-
 typedef struct RDIM_SerializedSection RDIM_SerializedSection;
 struct RDIM_SerializedSection
 {
@@ -1501,11 +1440,6 @@ RDI_PROC RDIM_Scope *rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChu
 RDI_PROC RDI_U64 rdim_idx_from_scope(RDIM_Scope *scope);
 RDI_PROC void rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkList *to_push);
 RDI_PROC void rdim_scope_push_voff_range(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDIM_Scope *scope, RDIM_Rng1U64 range);
-#if 0 // TODO(rjf): @locpass
-RDI_PROC RDIM_Local *rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *scope);
-RDI_PROC RDIM_LocationCase *rdim_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationCaseList *list, RDIM_Location *location, RDIM_Rng1U64 voff_range);
-RDI_PROC RDIM_LocationCase *rdim_local_push_location_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Local *local, RDIM_Location *location, RDIM_Rng1U64 voff_range);
-#endif
 
 ////////////////////////////////
 //~ rjf: [Building] Bake Parameter Joining
@@ -1578,9 +1512,6 @@ RDI_PROC void rdim_bake_section_list_concat_in_place(RDIM_BakeSectionList *dst, 
 RDI_PROC RDIM_SerializedSection rdim_serialized_section_make_unpacked(void *data, RDI_U64 size);
 #define rdim_serialized_section_make_unpacked_struct(ptr) rdim_serialized_section_make_unpacked((ptr), sizeof(*(ptr)))
 #define rdim_serialized_section_make_unpacked_array(ptr, count) rdim_serialized_section_make_unpacked((ptr), sizeof(*(ptr))*(count))
-#if 0 // TODO(rjf): @locpass
-RDI_PROC RDIM_SerializedSectionBundle rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results);
-#endif
 RDI_PROC RDIM_String8List rdim_file_blobs_from_section_bundle(RDIM_Arena *arena, RDIM_SerializedSectionBundle *bundle);
 
 #endif // RDI_MAKE_H

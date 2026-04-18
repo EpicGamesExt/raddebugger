@@ -122,13 +122,10 @@ static union
   RDI_UDT udt;
   RDI_Member member;
   RDI_EnumMember enum_member;
-  RDI_GlobalVariable global_variable;
-  RDI_ThreadVariable thread_variable;
-  RDI_Procedure procedure;
+  RDI_Symbol symbol;
   RDI_Scope scope;
   RDI_U64 voff;
-  RDI_LocationBlock location_block;
-  RDI_Local local;
+  RDI_LocationSetElement location_set_element;
 }
 rdi_nil_element_union = {0};
 static RDI_Parsed rdi_parsed_nil = {0};
@@ -179,26 +176,29 @@ RDI_PROC RDI_U32 *rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node
 //~ High-Level Composite Lookup Functions
 
 //- procedures
-RDI_PROC RDI_Procedure *rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size);
-RDI_PROC RDI_Procedure *rdi_procedure_from_name_cstr(RDI_Parsed *rdi, char *cstr);
-RDI_PROC RDI_U8 *rdi_name_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure, RDI_U64 *len_out);
-RDI_PROC RDI_Scope *rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
-RDI_PROC RDI_UDT *rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
-RDI_PROC RDI_Procedure *rdi_container_procedure_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
-RDI_PROC RDI_U64 rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
-RDI_PROC RDI_U64 rdi_opl_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
-RDI_PROC RDI_Procedure *rdi_procedure_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+RDI_PROC RDI_Symbol *rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size);
+RDI_PROC RDI_Symbol *rdi_procedure_from_name_cstr(RDI_Parsed *rdi, char *cstr);
+RDI_PROC RDI_U8 *rdi_name_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure, RDI_U64 *len_out);
+RDI_PROC RDI_Scope *rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure);
+RDI_PROC RDI_UDT *rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure);
+RDI_PROC RDI_Scope *rdi_container_scope_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure);
+RDI_PROC RDI_U64 rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure);
+RDI_PROC RDI_U64 rdi_opl_voff_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure);
+RDI_PROC RDI_Symbol *rdi_procedure_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 
 //- scopes
 RDI_PROC RDI_U64 rdi_first_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 RDI_PROC RDI_U64 rdi_opl_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 RDI_PROC RDI_Scope *rdi_scope_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 RDI_PROC RDI_Scope *rdi_parent_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
-RDI_PROC RDI_Procedure *rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
+RDI_PROC RDI_Symbol *rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 RDI_PROC RDI_InlineSite *rdi_inline_site_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 
 //- global variables
-RDI_PROC RDI_GlobalVariable *rdi_global_variable_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+RDI_PROC RDI_Symbol *rdi_global_variable_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+
+//- location picking
+RDI_PROC RDI_Location rdi_location_from_location_voff(RDI_Parsed *rdi, RDI_Location location, RDI_U64 voff);
 
 //- units
 RDI_PROC RDI_Unit *rdi_unit_from_voff(RDI_Parsed *rdi, RDI_U64 voff);

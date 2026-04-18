@@ -1029,13 +1029,13 @@ rb_thread_entry_point(void *p)
           ProfScope("dump FUNC records")
           {
             U64 count = 0;
-            RDI_Procedure *v = rdi_table_from_name(rdi, Procedures, &count);
+            RDI_Symbol *v = rdi_table_from_name(rdi, ProcedureSymbols, &count);
             Rng1U64 range = lane_range(count);
             for EachInRange(idx, range)
             {
               // NOTE(rjf): breakpad does not support multiple voff ranges per procedure.
               String8List *out = &p2b_shared->lane_func_dumps[lane_idx()];
-              RDI_Procedure *proc = &v[idx];
+              RDI_Symbol *proc = &v[idx];
               RDI_Scope *root_scope = rdi_element_from_name_idx(rdi, Scopes, proc->root_scope_idx);
               if(root_scope->voff_range_opl > root_scope->voff_range_first)
               {

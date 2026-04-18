@@ -567,7 +567,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
         RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
         if(rdi != &rdi_parsed_nil)
         {
-          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, rip_voff);
+          RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, rip_voff);
           name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
           name = push_str8_copy(arena, name);
         }

@@ -6,6 +6,8 @@
 ** stepping, breakpoints, evaluation, cross-module calls.
 */
 
+#define EvalTest(expr, match)
+
 #if _WIN32 && _DEBUG
 #pragma comment(linker, "/nodefaultlib:libcmt")
 #pragma comment(lib, "libcmtd")
@@ -416,14 +418,14 @@ raddbg_type_view(MyByte *, no_string($));
 static void
 type_coverage_eval_tests(void)
 {
-  Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
+  Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001}; EvalTest(basics.a, -1);
   Basics_Stdint basics_stdint = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
   
   uint32_t a = (1<<31);
   int32_t  b = (1<<31);
   
-  uint32_t abcd = 0xaabbccdd;
-  int64_t abcd64 = (int64_t)abcd;
+  uint32_t abcd = 0xaabbccdd; EvalTest(abcd, 0xaabbccdd);
+  int64_t abcd64 = (int64_t)abcd; EvalTest(abcd64, 0xaabbccdd); EvalTest(abcd64, abcd);
   
   char string[] = "Hello World!";
   char longer_text[] =
@@ -484,6 +486,9 @@ type_coverage_eval_tests(void)
     memory_,
     6
   };
+  EvalTest(dynamic[0].i, 100); EvalTest(dynamic[0].f, 1.f);
+  EvalTest(dynamic[1].i, 101); EvalTest(dynamic[1].f, 2.f);
+  EvalTest(dynamic[2].i, 102); EvalTest(dynamic[2].f, 4.f);
   
   TemplatedDynamicArray<Pair> templated_dynamic = {dynamic.pairs, dynamic.count};
   TemplatedDynamicArray<Pair> templated_dynamics[] =

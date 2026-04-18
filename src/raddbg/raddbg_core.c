@@ -2284,12 +2284,12 @@ rd_view_ui(Rng2F32 rect)
                         String8 name = {0};
                         if(name.size == 0)
                         {
-                          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
+                          RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, voff);
                           name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
                         }
                         if(name.size == 0)
                         {
-                          RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
+                          RDI_Symbol *gvar = rdi_global_variable_from_voff(rdi, voff);
                           name.str = rdi_string_from_idx(rdi, gvar->name_string_idx, &name.size);
                         }
                         if(name.size != 0)
@@ -2370,12 +2370,12 @@ rd_view_ui(Rng2F32 rect)
                             RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
                             if(name.size == 0)
                             {
-                              RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
+                              RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, voff);
                               name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
                             }
                             if(name.size == 0)
                             {
-                              RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
+                              RDI_Symbol *gvar = rdi_global_variable_from_voff(rdi, voff);
                               name.str = rdi_string_from_idx(rdi, gvar->name_string_idx, &name.size);
                             }
                             access_close(access);
@@ -9508,9 +9508,9 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
       switch(section_kind)
       {
         default:{mapped = 0;}break;
-        case RDI_SectionKind_Procedures:
-        case RDI_SectionKind_GlobalVariables:
-        case RDI_SectionKind_ThreadVariables:
+        case RDI_SectionKind_ProcedureSymbols:
+        case RDI_SectionKind_GlobalVariableSymbols:
+        case RDI_SectionKind_ThreadVariableSymbols:
         {
           color = RD_CodeColorSlot_CodeSymbol;
         }break;
@@ -14060,13 +14060,13 @@ rd_frame(void)
                 {
                   match = di_match_from_string(name, 0, di_key_zero(), rd_state->frame_eval_memread_endt_us);
                 }
-                if(match.section_kind == RDI_SectionKind_Procedures)
+                if(match.section_kind == RDI_SectionKind_ProcedureSymbols)
                 {
                   Access *access = access_open();
                   {
                     name_resolved = 1;
                     RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);
-                    RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, match.idx);
+                    RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, match.idx);
                     voff = rdi_first_voff_from_procedure(rdi, procedure);
                     voff_dbgi_key = match.key;
                   }

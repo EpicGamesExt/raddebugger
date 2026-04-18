@@ -3313,7 +3313,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           U64 f_rip_voff = ctrl_voff_from_vaddr(module, f_rip_vaddr);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
           RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
-          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, f_rip_voff);
+          RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, f_rip_voff);
           String8 procedure_name = {0};
           procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
           access_close(access);
@@ -3358,7 +3358,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
           RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
-          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
+          RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, voff);
           RDI_Scope *root_scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
           if(procedure->root_scope_idx != 0)
           {
@@ -3416,11 +3416,12 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           E_DbgInfo *dbg_info = e_dbg_info_from_module(module);
           DI_Key dbgi_key = dbg_info->dbgi_key;
           RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
-          RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
-          if(gvar->voff != 0)
+          RDI_Symbol *gvar = rdi_global_variable_from_voff(rdi, voff);
+          U64 gvar_voff = rdi_voff_from_location(gvar->location);
+          if(gvar_voff != 0)
           {
             RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, gvar->type_idx);
-            Rng1U64 voff_range = r1u64(gvar->voff, gvar->voff + type_node->byte_size);
+            Rng1U64 voff_range = r1u64(gvar_voff, gvar_voff + type_node->byte_size);
             Rng1U64 vaddr_range = r1u64(voff_range.min + module->vaddr_range.min, voff_range.max + module->vaddr_range.min);
             next_vaddr = vaddr_range.max;
             next_vaddr = Max(next_vaddr, vaddr+1);

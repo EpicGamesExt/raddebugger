@@ -59,7 +59,7 @@ struct E_IRState
   E_IRCtx *ctx;
   
   // rjf: unpacked ctx
-  RDI_Procedure *thread_ip_procedure;
+  RDI_Symbol *thread_ip_procedure;
   
   // rjf: overridden irtree
   E_IRTreeAndType *overridden_irtree;

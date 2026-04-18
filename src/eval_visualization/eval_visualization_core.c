@@ -2026,7 +2026,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                   Temp scratch = scratch_begin(&arena, 1);
                   RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
                   U64 proc_idx = scope->proc_idx;
-                  RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
+                  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, proc_idx);
                   RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
                   E_TypeKey type = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, dbg_info_num);
                   String8 name = {0};
@@ -2065,7 +2065,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
                 
                 // rjf: scope -> procedure / string
-                RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
+                RDI_Symbol *procedure = rdi_procedure_from_scope(rdi, scope);
                 String8 procedure_name = {0};
                 procedure_name.str = rdi_name_from_procedure(rdi, procedure, &procedure_name.size);
                 

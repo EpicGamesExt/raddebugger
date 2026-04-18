@@ -82,7 +82,6 @@ internal String8 str8_from_rdi_path_node_idx(Arena *arean, RDI_Parsed *rdi, Path
 internal String8 rdi_string_from_data_section_kind(Arena *arena, RDI_SectionKind v);
 internal String8 rdi_string_from_arch             (Arena *arena, RDI_Arch        v);
 internal String8 rdi_string_from_language         (Arena *arena, RDI_Language    v);
-internal String8 rdi_string_from_local_kind       (Arena *arena, RDI_LocalKind   v);
 #if 0 // TODO(rjf): conflicts with RDI...
 internal String8 rdi_string_from_type_kind        (Arena *arena, RDI_TypeKind    v);
 #endif
@@ -92,9 +91,7 @@ internal String8 rdi_string_from_name_map_kind(RDI_NameMapKind kind);
 internal String8 rdi_string_from_binary_section_flags(Arena *arena, RDI_BinarySectionFlags flags);
 internal String8 rdi_string_from_type_modifier_flags (Arena *arena, RDI_TypeModifierFlags  flags);
 internal String8 rdi_string_from_udt_flags           (Arena *arena, RDI_UDTFlags           flags);
-internal String8 rdi_string_from_link_flags          (Arena *arena, RDI_LinkFlags          flags);
 internal String8 rdi_string_from_bytecode(Arena *arena, RDI_Arch arch, String8 bc);
-internal String8List rdi_strings_from_locations(Arena *arena, RDI_Parsed *rdi, RDI_Arch arch, Rng1U64 location_block_range);
 
 ////////////////////////////////
 //~ rjf: RDI Dumping
@@ -104,6 +101,6 @@ internal String8List rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RD
 ////////////////////////////////
 //~ Type Formatter
 
-internal String8 rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_TypeNode *type);
+internal String8 rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Symbol *proc, RDI_TypeNode *type);
 
 #endif // RDI_FORMAT_LOCAL_H

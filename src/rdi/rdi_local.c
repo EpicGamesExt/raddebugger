@@ -93,20 +93,6 @@ rdi_string_from_language(Arena *arena, RDI_Language v)
   return result;
 }
 
-internal String8
-rdi_string_from_local_kind(Arena *arena, RDI_LocalKind v)
-{
-  String8 result = {0};
-  switch(v)
-  {
-    default:{result = push_str8f(arena, "<invalid RDI_LocalKind %u>", v);}break;
-#define X(name) case RDI_LocalKind_##name:{result = str8_lit(#name);}break;
-    RDI_LocalKind_XList
-#undef X
-  }
-  return result;
-}
-
 #if 0
 internal String8
 rdi_string_from_type_kind(Arena *arena, RDI_TypeKind v)
@@ -243,21 +229,6 @@ rdi_string_from_udt_flags(Arena *arena, RDI_UDTFlags flags)
   String8List list = {0};
 #define X(name) if (flags & RDI_UDTFlag_##name) { flags &= ~RDI_UDTFlag_##name; str8_list_push(scratch.arena, &list, str8_lit(#name)); }
   RDI_UDTFlags_XList;
-#undef X
-  StringJoin join = {.sep = str8_lit("|")};
-  String8 result = str8_list_join(arena, &list, &join);
-  if(result.size == 0) { result = str8_lit("None"); }
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8
-rdi_string_from_link_flags(Arena *arena, RDI_LinkFlags flags)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List list = {0};
-#define X(name) if (flags & RDI_LinkFlag_##name) { flags &= ~RDI_LinkFlag_##name; str8_list_push(scratch.arena, &list, str8_lit(#name)); }
-  RDI_LinkFlags_XList;
 #undef X
   StringJoin join = {.sep = str8_lit("|")};
   String8 result = str8_list_join(arena, &list, &join);
@@ -425,103 +396,6 @@ rdi_string_from_bytecode(Arena *arena, RDI_Arch arch, String8 bc)
   
   scratch_end(scratch);
   return result;
-}
-
-internal String8List
-rdi_strings_from_locations(Arena *arena, RDI_Parsed *rdi, RDI_Arch arch, Rng1U64 location_block_range)
-{
-  String8List strings = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  U64 location_block_count = 0;
-  U64 location_data_size   = 0;
-  RDI_LocationBlock *location_block_array = rdi_table_from_name(rdi, LocationBlocks, &location_block_count);
-  RDI_U8 *location_data        = rdi_table_from_name(rdi, LocationData,   &location_data_size);
-  Rng1U64 location_block_range_clamped = r1u64(ClampTop(location_block_range.min, location_block_count),
-                                               ClampTop(location_block_range.max, location_block_count));
-  for(U64 block_idx = location_block_range_clamped.min;
-      block_idx < location_block_range_clamped.max;
-      block_idx +=1)
-  {
-    String8 qualifier = {0};
-    String8 location_info = {0};
-    RDI_LocationBlock *block_ptr = &location_block_array[block_idx];
-    if(block_ptr->scope_off_first == 0 && block_ptr->scope_off_opl == max_U32)
-    {
-      qualifier = str8_lit("*always*");
-    }
-    else
-    {
-      qualifier = push_str8f(scratch.arena, "[%#08x, %#08x): ", block_ptr->scope_off_first, block_ptr->scope_off_opl);
-    }
-    if(block_ptr->location_data_off >= location_data_size)
-    {
-      location_info = push_str8f(scratch.arena, "<bad-location-data-offset %x>", block_ptr->location_data_off);
-    }
-    else
-    {
-      U8               *loc_data_opl = location_data + location_data_size;
-      U8               *loc_base_ptr = location_data + block_ptr->location_data_off;
-      RDI_LocationKind  kind         = *(RDI_LocationKind *)loc_base_ptr;
-      switch(kind)
-      {
-        default:
-        {
-          location_info = push_str8f(scratch.arena, "\?\?\? (%u)", kind);
-        }break;
-        case RDI_LocationKind_AddrBytecodeStream:
-        {
-          String8 bc     = str8_range(loc_base_ptr + 1, loc_data_opl);
-          String8 bc_str = rdi_string_from_bytecode(scratch.arena, arch, bc);
-          location_info = push_str8f(scratch.arena, "AddrBytecodeStream(%S)", bc_str);
-        }break;
-        case RDI_LocationKind_ValBytecodeStream:
-        {
-          String8 bc     = str8_range(loc_base_ptr + 1, loc_data_opl);
-          String8 bc_str = rdi_string_from_bytecode(scratch.arena, arch, bc);
-          location_info = push_str8f(scratch.arena, "ValBytecodeStream(%S)", bc_str);
-        }break;
-        case RDI_LocationKind_AddrRegPlusU16:
-        {
-          if(loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl)
-          {
-            location_info = push_str8f(scratch.arena, "AddrRegPlusU16(\?\?\?)");
-          }
-          else
-          {
-            RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
-            location_info = push_str8f(scratch.arena, "AddrRegPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
-          }
-        }break;
-        case RDI_LocationKind_AddrAddrRegPlusU16:
-        {
-          if(loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl)
-          {
-            location_info = push_str8f(scratch.arena, "AddrAddrRegPlusU16(\?\?\?)");
-          }
-          else
-          {
-            RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16 *)loc_base_ptr;
-            location_info = push_str8f(scratch.arena, "AddrAddrRegisterPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
-          }
-        }break;
-        case RDI_LocationKind_ValReg:
-        {
-          if(loc_base_ptr + sizeof(RDI_LocationReg) > loc_data_opl)
-          {
-            location_info = push_str8f(scratch.arena, "ValReg(\?\?\?)");
-          }
-          else
-          {
-            RDI_LocationReg *loc = (RDI_LocationReg*)loc_base_ptr;
-            location_info = push_str8f(scratch.arena, "ValReg(reg: %S)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code));
-          }
-        } break;
-      }
-    }
-    str8_list_pushf(arena, &strings, "%S: %S", qualifier, location_info);
-  }
-  scratch_end(scratch);
-  return strings;
 }
 
 ////////////////////////////////
@@ -998,30 +872,6 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
   }
   
   //////////////////////////////
-  //- rjf: dump global variables
-  //
-#if 0 // TODO(rjf): @locpass
-  DumpSubset(GlobalVariables)
-  {
-    U64 count = 0;
-    RDI_GlobalVariable *v = rdi_table_from_name(rdi, GlobalVariables, &count);
-    Rng1U64 range = lane_range(count);
-    for EachInRange(idx, range)
-    {
-      RDI_GlobalVariable *gvar = &v[idx];
-      Temp scratch = scratch_begin(&arena, 1);
-      dumpf("\n  '%S': // global_variable[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, gvar->name_string_idx), idx);
-      dumpf("    link_flags:    `%S`\n",    rdi_string_from_link_flags(scratch.arena, gvar->link_flags));
-      dumpf("    voff:          %#08x\n", gvar->voff);
-      dumpf("    type_idx:      %u\n",    gvar->type_idx);
-      dumpf("    container_idx: %u\n",    gvar->container_idx);
-      dumpf("  }\n");
-      scratch_end(scratch);
-    }
-  }
-#endif
-  
-  //////////////////////////////
   //- rjf: dump global variables vmap
   //
   DumpSubset(GlobalVariablesVMap)
@@ -1035,86 +885,6 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       dumpf("  {0x%I64x => %I64u}\n", v[idx].voff, v[idx].idx);
     }
   }
-  
-  //////////////////////////////
-  //- rjf: dump thread variables
-  //
-#if 0 // TODO(rjf): @locpass
-  DumpSubset(ThreadVariables)
-  {
-    U64 count = 0;
-    RDI_ThreadVariable *v = rdi_table_from_name(rdi, ThreadVariables, &count);
-    Rng1U64 range = lane_range(count);
-    for EachInRange(idx, range)
-    {
-      RDI_ThreadVariable *tvar = &v[idx];
-      Temp scratch = scratch_begin(&arena, 1);
-      dumpf("\n  '%S': // thread_variable[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, tvar->name_string_idx), idx);
-      dumpf("    link_flags:    `%S`\n",    rdi_string_from_link_flags(scratch.arena, tvar->link_flags));
-      dumpf("    tls_off:       %#08x\n", tvar->tls_off);
-      dumpf("    type_idx:      %u\n",    tvar->type_idx);
-      dumpf("    container_idx: %u\n",    tvar->container_idx);
-      dumpf("  }\n");
-      scratch_end(scratch);
-    }
-  }
-#endif
-  
-  //////////////////////////////
-  //- rjf: dump constants
-  //
-#if 0 // TODO(rjf): @locpass
-  DumpSubset(Constants)
-  {
-    U64 count = 0;
-    RDI_Constant *v = rdi_table_from_name(rdi, Constants, &count);
-    Rng1U64 range = lane_range(count);
-    for EachInRange(idx, range)
-    {
-      RDI_Constant *cnst = &v[idx];
-      dumpf("\n  '%S': // constant[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, cnst->name_string_idx), idx);
-      dumpf("    type_idx: %u\n", cnst->type_idx);
-      dumpf("  }\n");
-    }
-  }
-#endif
-  
-  //////////////////////////////
-  //- rjf: dump procedures
-  //
-#if 0 // TODO(rjf): @locpass
-  DumpSubset(Procedures)
-  {
-    RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
-    U64 count = 0;
-    RDI_Procedure *v = rdi_table_from_name(rdi, Procedures, &count);
-    Rng1U64 range = lane_range(count);
-    for EachInRange(idx, range)
-    {
-      RDI_Procedure *proc = &v[idx];
-      Temp scratch = scratch_begin(&arena, 1);
-      dumpf("\n  '%S': // procedure[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, proc->name_string_idx), idx);
-      dumpf("    link_name: '%S'\n", str8_from_rdi_string_idx(rdi, proc->link_name_string_idx));
-      dumpf("    link_flags: `%S`\n",   rdi_string_from_link_flags(scratch.arena, proc->link_flags));
-      dumpf("    type_idx: %u\n",   proc->type_idx);
-      dumpf("    root_scope_idx: %u\n",   proc->root_scope_idx);
-      dumpf("    container_idx: %u\n",   proc->container_idx);
-      if(proc->frame_base_location_first != 0)
-      {
-        String8List frame_base_location_strings = rdi_strings_from_locations(scratch.arena, rdi, tli->arch, r1u64(proc->frame_base_location_first, proc->frame_base_location_opl));
-        dumpf("    frame_base: // (first: %u, opl: %u)\n", proc->frame_base_location_first, proc->frame_base_location_opl);
-        dumpf("    {\n");
-        for(String8Node *n = frame_base_location_strings.first; n != 0; n = n->next)
-        {
-          dumpf("      %S\n", n->string);
-        }
-        dumpf("    }\n");
-      }
-      dumpf("  }\n");
-      scratch_end(scratch);
-    }
-  }
-#endif
   
   //////////////////////////////
   //- rjf: dump symbols
@@ -1514,7 +1284,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
 
 #if SUBPROGRAM_CONVERSION_TEST
 internal String8
-rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_TypeNode *type)
+rdi_string_from_type(Arena *arena, RDI_Parsed *rdi, RDI_Symbol *proc, RDI_TypeNode *type)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
