@@ -1026,6 +1026,8 @@ RDI_NamespaceMemberTable:
 {
   {name_string_idx   RDI_U32               ""}
   {container_flags   RDI_ContainerFlags    ""}
+  {padding_0         RDI_U8                ""}
+  {padding_1         RDI_U16               ""}
   {container_idx     RDI_U32               ""}
 }
 

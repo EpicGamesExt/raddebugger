@@ -896,6 +896,8 @@ X(Set)\
 #define RDI_Namespace_XList \
 X(RDI_U32, name_string_idx)\
 X(RDI_ContainerFlags, container_flags)\
+X(RDI_U8, padding_0)\
+X(RDI_U16, padding_1)\
 X(RDI_U32, container_idx)\
 
 #define RDI_Symbol_XList \
@@ -1347,6 +1349,8 @@ struct RDI_Namespace
 {
 RDI_U32 name_string_idx;
 RDI_ContainerFlags container_flags;
+RDI_U8 padding_0;
+RDI_U16 padding_1;
 RDI_U32 container_idx;
 };
 

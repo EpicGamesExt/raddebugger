@@ -2584,6 +2584,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
       }
     }
   }
+  lane_sync();
   
   //////////////////////////////////////////////////////////////
   //- rjf: @rdim_bake_stage compute lane UDT member/enum-val layouts

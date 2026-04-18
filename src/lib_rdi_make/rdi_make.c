@@ -1194,6 +1194,7 @@ rdim_bake_params_concat_in_place(RDIM_BakeParams *dst, RDIM_BakeParams *src)
     rdim_udt_chunk_list_concat_in_place(&dst->udts, &src->udts);
     rdim_src_file_chunk_list_concat_in_place(&dst->src_files, &src->src_files);
     rdim_line_table_chunk_list_concat_in_place(&dst->line_tables, &src->line_tables);
+    rdim_namespace_chunk_list_concat_in_place(&dst->namespaces, &src->namespaces);
   }
 }
 

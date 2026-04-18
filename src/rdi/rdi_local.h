@@ -32,6 +32,7 @@ X(Scopes,              scopes,                      "SCOPES")\
 X(ScopeVMap,           scope_vmap,                  "SCOPE VMAP")\
 X(InlineSites,         inline_sites,                "INLINE SITES")\
 X(NameMaps,            name_maps,                   "NAME MAPS")\
+X(Namespaces,          namespaces,                  "NAMESPACES")\
 X(Strings,             strings,                     "STRINGS")\
 
 typedef enum RDI_DumpSubset

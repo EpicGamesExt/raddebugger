@@ -1237,6 +1237,39 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
   }
   
   //////////////////////////////
+  //- rjf: dump namespaces
+  //
+  DumpSubset(Namespaces)
+  {
+    U64 count = 0;
+    RDI_Namespace *v = rdi_table_from_name(rdi, Namespaces, &count);
+    Rng1U64 range = lane_range(count);
+    for EachInRange(idx, range)
+    {
+      RDI_Namespace *ns = &v[idx];
+      String8 container_kind_name = str8_lit("container_idx");
+      switch(ns->container_flags & RDI_ContainerFlag_KindMask)
+      {
+        default:{}break;
+        case RDI_ContainerKind_Type:
+        {
+          container_kind_name = str8_lit("container_udt_idx");
+        }break;
+        case RDI_ContainerKind_Namespace:
+        {
+          container_kind_name = str8_lit("container_namespace_idx");
+        }break;
+        case RDI_ContainerKind_Scope:
+        {
+          container_kind_name = str8_lit("container_scope_idx");
+        }break;
+      }
+      dumpf("\n  '%S': {%S: %I64u} // namespaces[%I64u]", str8_from_rdi_string_idx(rdi, ns->name_string_idx), container_kind_name, ns->container_idx, idx);
+    }
+    if(lane_idx() == lane_count()-1) { dumpf("\n"); }
+  }
+  
+  //////////////////////////////
   //- rjf: dump strings
   //
   DumpSubset(Strings)
