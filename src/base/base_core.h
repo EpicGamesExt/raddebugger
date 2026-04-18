@@ -1069,5 +1069,6 @@ internal U64 u64_array_bsearch(U64 *arr, U64 count, U64 value);
 
 internal U64 index_of_zero_u32(U32 *ptr, U64 count);
 internal U64 index_of_zero_u64(U64 *ptr, U64 count);
+internal U64 count_digits_u64(U64 v, U64 radix);
 
 #endif // BASE_CORE_H

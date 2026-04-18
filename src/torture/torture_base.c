@@ -94,4 +94,14 @@ TEST(bit_array)
   }
 }
 
+TEST(count_digits)
+{
+  T_Ok(count_digits_u64(0, 10) == 1);
+  T_Ok(count_digits_u64(99, 10) == 2);
+  T_Ok(count_digits_u64(999, 10) == 3);
+  T_Ok(count_digits_u64(9999, 10) == 4);
+  T_Ok(count_digits_u64(99999, 10) == 5);
+  T_Ok(count_digits_u64(999999, 10) == 6);
+}
+
 #undef T_Group

@@ -516,18 +516,6 @@ t_entry_point(CmdLine *cmdline)
   {
     radsort(g_torture_tests, g_torture_test_count, t_test_is_before);
 
-    U64 max_label_size = 0;
-    U64 max_group_size = 0;
-    for EachIndex(i, g_torture_test_count) {
-      max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[i].label));
-      max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[i].group));
-    }
-
-    U64 dots_min = 10;
-    U64 dots_size = max_label_size+dots_min;
-    U8 *dots      = push_array(scratch.arena, U8, dots_size);
-    MemorySet(dots, '.', dots_size);
-
     U64  target_indices_count;
     U64 *target_indices;
     if (target.node_count == 0) {
@@ -553,16 +541,33 @@ t_entry_point(CmdLine *cmdline)
       }
     }
 
+    U64 max_label_size = 0;
+    U64 max_group_size = 0;
+    for EachIndex(i, target_indices_count) {
+      U64 test_idx = target_indices[i];
+      max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[test_idx].label));
+      max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[test_idx].group));
+    }
+
+    U64 dots_min = 15;
+    U64 dots_size = max_label_size+dots_min;
+    U8 *dots      = push_array(scratch.arena, U8, dots_size);
+    MemorySet(dots, '.', dots_size);
+
     U64 pass_count  = 0;
     U64 fail_count  = 0;
     U64 crash_count = 0;
+    U64 max_digit_count = count_digits_u64(target_indices_count, 10);
+    U64 total_time_start = os_now_microseconds();
     for EachIndex(i, target_indices_count) {
       U64 target_idx = target_indices[i];
 
       // print run progress
       U64 dots_count = (max_label_size - cstring8_length((U8*)g_torture_tests[target_idx].label)) + dots_min;
       char *spaces = "                                                                                      ";
-      fprintf(stdout, "[%2I64u/%2I64u] ", i+1, target_indices_count);
+      U64 curr_digit_count = count_digits_u64(i+1, 10);
+      int idx_align_space_count = (int)(max_digit_count - curr_digit_count);
+      fprintf(stdout, "[%.*s%I64u/%I64u] ", idx_align_space_count, spaces, i+1, target_indices_count);
       fprintf(stdout, "(%s) %.*s%s", g_torture_tests[target_idx].group, (int)(max_group_size - cstring8_length((U8*)g_torture_tests[target_idx].group)), spaces, g_torture_tests[target_idx].label);
       fprintf(stdout, "%.*s", (int)dots_count, dots);
 
@@ -582,19 +587,29 @@ t_entry_point(CmdLine *cmdline)
       }
 
       // run test
+      U64 run_start_time = os_now_microseconds();
       T_RunResult result = t_run(g_torture_tests[target_idx].r);
+      U64 run_end_time = os_now_microseconds();
 
       // print result
       if (result.status == T_RunStatus_Pass) {
-        fprintf(stdout, "\x1b[32m" "%s" "\x1b[0m" "\n", t_string_from_result(result.status));
+        fprintf(stdout, "\x1b[32m" "%s" "\x1b[0m", t_string_from_result(result.status));
         pass_count += 1;
       } else if (result.status == T_RunStatus_Fail) {
-        fprintf(stdout, "\x1b[31m" "%s" "\x1b[0m" "\n", t_string_from_result(result.status));
+        fprintf(stdout, "\x1b[31m" "%s" "\x1b[0m", t_string_from_result(result.status));
         fail_count += 1;
       } else if (result.status == T_RunStatus_Crash) {
-        fprintf(stdout, "\x1b[33m" "%s" "\x1b[0m" "\n", t_string_from_result(result.status));
+        fprintf(stdout, "\x1b[33m" "%s" "\x1b[0m", t_string_from_result(result.status));
         crash_count += 1;
       }
+
+      if (result.status == T_RunStatus_Pass) {
+        U64      d = run_end_time - run_start_time;
+        DateTime t = date_time_from_micro_seconds(d);
+        String8  s = string_from_elapsed_time(scratch.arena, t);
+        fprintf(stdout, " | %.*s", str8_varg(s));
+      }
+      fprintf(stdout, "\n");
 
       if (result.status == T_RunStatus_Fail) {
         fprintf(stdout, "  ERROR: %s:%d: condition: \"%s\"\n", result.fail_file, result.fail_line, result.fail_cond);
@@ -604,8 +619,11 @@ t_entry_point(CmdLine *cmdline)
         if (g_stop_on_first_fail_or_crash) { goto exit; }
       }
     }
+    U64 total_time_end = os_now_microseconds();
 
-    fprintf(stdout, "*** Passed: %I64u, Failed: %I64u, Crashed: %I64u ***\n", pass_count, fail_count, crash_count);
+    U64 total_time_dt = total_time_end - total_time_start;
+    String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
+    fprintf(stdout, "*** Passed: %I64u, Failed: %I64u, Crashed: %I64u, Time: %.*s***\n", pass_count, fail_count, crash_count, str8_varg(total_time_str));
 
     exit:;
     if (fail_count + crash_count != 0) {

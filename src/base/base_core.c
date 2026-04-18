@@ -714,6 +714,15 @@ index_of_zero_u64(U64 *ptr, U64 count)
   return max_U64;
 }
 
+internal U64
+count_digits_u64(U64 v, U64 radix)
+{
+  if (v == 0) { return 1; }
+  U64 count = 0;
+  for (U64 x = v; x > 0; x /= radix) { count += 1; }
+  return count;
+}
+
 ////////////////////////////////
 //~ rjf: Third Party Includes
 
