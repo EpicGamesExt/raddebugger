@@ -5320,7 +5320,8 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
             if (symbol.kind == CV_SymKind_SKIP) { continue; }
             if (cv_is_lproc(symbol)) {
               proc_count += 1;
-              proc_size  += AlignPow2(symbol.data.size, CV_SymbolAlign);
+              proc_size += AlignPow2(sizeof(CV_SymbolHeader) + symbol.data.size, CV_SymbolAlign);
+              proc_size += AlignPow2(sizeof(CV_SymbolHeader), CV_SymbolAlign); // S_END
             }
           }
           section += 1;
@@ -5329,7 +5330,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
         if (proc_count) {
           U64 end_count     = proc_count;
           U64 symbol_count  = proc_count + end_count;
-          U64 buffer_size   = proc_size + sizeof(CV_SymbolHeader) * symbol_count;
+          U64 buffer_size   = proc_size;
           U8 *buffer        = push_array(scratch.arena, U8, buffer_size);
           U64 buffer_cursor = 0;
 
@@ -5339,13 +5340,10 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
               TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
               if (symbol.kind == CV_SymKind_SKIP) { continue; }
               if (cv_is_lproc(symbol)) {
-                CV_SymProc32 *src_proc = (CV_SymProc32 *)symbol.data.str;
-                src_proc->itype = 0;
-
-                CV_Symbol end_symbol = { .kind = CV_SymKind_END };
-
+                CV_SymProc32 *src_proc = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*src_proc));
+                memory_write32(&src_proc->itype, 0); // strip type index
                 buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &symbol, CV_SymbolAlign);
-                buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &end_symbol, CV_SymbolAlign);
+                buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &(CV_Symbol){ .kind = CV_SymKind_END }, CV_SymbolAlign);
               }
             }
           }

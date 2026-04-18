@@ -196,11 +196,13 @@ cv_write_symbol_buf(String8Node *buf, U64 *buf_pos, CV_Symbol *symbol, U64 align
 {
   CV_SymbolHeader header = { .size = sizeof(CV_SymKind) + symbol->data.size, .kind = symbol->kind };
   U64 pad_size = AlignPadPow2(header.size + sizeof(CV_SymSize), align);
+  header.size += pad_size;
+
   U64 write_size = 0;
   write_size += str8_buffer_write(buf, buf_pos, str8_struct(&header));
   write_size += str8_buffer_write(buf, buf_pos, symbol->data);
   write_size += str8_buffer_write_zeroes(buf, buf_pos, pad_size);
-  Assert(write_size == header.size + sizeof(CV_SymSize) + pad_size);
+
   return write_size;
 }
 

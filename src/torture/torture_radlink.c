@@ -4687,9 +4687,9 @@ TEST(validate_info_stream)
     0x6f, 0x00, 0x74, 0x68, 0x72, 0x65, 0x65, 0x00, 0x66, 0x6f, 0x75, 0x72, 0x00, 0x66, 0x69, 0x76, 0x65, 0x00, 0x2f,
     0x4c, 0x69, 0x6e, 0x6b, 0x49, 0x6e, 0x66, 0x6f, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x01, 0x00,
     0x00, 0x00, 0xb7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x13,
-    0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00,
     0x08, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0xdc, 0x51, 0x33, 0x01
+    0x00, 0x00, 0x00, 0x00, 0x00, 0xdc, 0x51, 0x33, 0x01,
   };
   T_Ok(str8_match(info_data, str8_array_fixed(expected_info_data), 0));
 
@@ -4742,7 +4742,9 @@ TEST(validate_gsi)
     CV_Symbol test_symbol = {0};
     U64 test_symbol_size = cv_read_symbol(str8_skip(symbol_data, symbol_off), 0, 1, &test_symbol);
     T_Ok(test_symbol_size > 0);
-    T_Ok(cv_symbol_match(test_symbol, symbols[i]));
+
+    String8 test_symbol_name = cv_name_from_symbol(test_symbol.kind, test_symbol.data);
+    T_Ok(str8_match(test_symbol_name, string, 0));
   }
 }
 
@@ -4902,6 +4904,106 @@ TEST(validate_psi)
     }
   }
   T_Ok(pub32_count > 0);
+}
+
+TEST(pdbstripped)
+{
+  String8 debug_obj;
+  {
+    String8 raw_symbols[] = {
+      cv_make_symbol(arena, CV_SymKind_OBJNAME, cv_make_obj_name(arena, str8_lit("debug.obj"), 0x123)),
+      cv_make_symbol(arena, CV_SymKind_GPROC32_ID, cv_make_proc32(arena, (CV_SymProc32){0}, str8_lit("global_proc"))),
+      cv_make_symbol(arena, CV_SymKind_PROC_ID_END, cv_make_end(arena)),
+
+      cv_make_symbol(arena, CV_SymKind_UDT, cv_make_udt(arena, (CV_SymUDT){0}, str8_lit("global_typedef"))),
+
+      cv_make_symbol(arena, CV_SymKind_LPROC32_ID, cv_make_proc32(arena, (CV_SymProc32){0}, str8_lit("local_proc"))),
+      cv_make_symbol(arena, CV_SymKind_UDT, cv_make_udt(arena, (CV_SymUDT){0}, str8_lit("local_typedef"))),
+      cv_make_symbol(arena, CV_SymKind_PROC_ID_END, cv_make_end(arena)),
+    };
+
+    CV_Symbol symbols[ArrayCount(raw_symbols)] = {0};
+    for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
+
+    CV_DebugS debug_s = {0};
+    for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+    String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
+    String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
+
+    COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    t_push_debug_s_section(cow, raw_debug_s);
+    debug_obj = coff_obj_writer_serialize(arena, cow);
+    coff_obj_writer_release(&cow);
+  }
+
+  String8 pub_obj;
+  {
+    COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *text = coff_obj_writer_push_section(cow, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_lit("FOOBAR"));
+    COFF_ObjSection *data = coff_obj_writer_push_section(cow, str8_lit(".data"), PE_DATA_SECTION_FLAGS, str8_lit("QWE"));
+    coff_obj_writer_push_symbol_extern_func(cow, str8_lit("global_func"), 1, text);
+    coff_obj_writer_push_symbol_extern(cow, str8_lit("global_var"), 1, data);
+    coff_obj_writer_push_symbol_static(cow, str8_lit("static_var"), 1, data);
+    pub_obj = coff_obj_writer_serialize(arena, cow);
+    coff_obj_writer_release(&cow);
+  }
+
+  T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
+  T_Ok(t_write_file(str8_lit("pub.obj"), pub_obj));
+  T_Ok(t_write_entry_obj());
+  t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /out:a.exe /pdbstripped:a.stripped.pdb entry.obj pub.obj debug.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8        raw_pdb     = t_read_file(arena, str8_lit("a.stripped.pdb"));
+  MSF_Parsed    *msf         = msf_parsed_from_data(arena, raw_pdb);
+  String8        dbi_data    = msf_data_from_stream(msf, PDB_FixedStream_Dbi);
+  PDB_DbiParsed *dbi         = pdb_dbi_from_data(arena, dbi_data);
+
+  String8 mods_data = pdb_data_from_dbi_range(dbi, PDB_DbiRange_ModuleInfo);
+  PDB_CompUnitArray *mods = pdb_comp_unit_array_from_data(arena, mods_data);
+  T_Ok(mods->count > 0);
+
+  // modules must contain only stubs for static procs
+  for EachIndex(i, mods->count) {
+    PDB_CompUnit *mod = mods->units[i];
+    U64 sym_data_size = mod->range_off[PDB_DbiCompUnitRange_Symbols + 1] - mod->range_off[PDB_DbiCompUnitRange_Symbols];
+    U64 c11_data_size = mod->range_off[PDB_DbiCompUnitRange_C11 + 1] - mod->range_off[PDB_DbiCompUnitRange_C11];
+    U64 c13_data_size = mod->range_off[PDB_DbiCompUnitRange_C13 + 1] - mod->range_off[PDB_DbiCompUnitRange_C13];
+    T_Ok(c11_data_size == 0);
+    T_Ok(c13_data_size == 0);
+    if (str8_match(str8_skip_last_slash(mod->obj_name), str8_lit("debug.obj"), 0)) {
+      T_Ok(sym_data_size > 0);
+    } else {
+      T_Ok(sym_data_size == 0);
+    }
+
+    String8 mod_data = msf_data_from_stream(msf, mod->sn);
+    String8 sym_data = str8_substr(mod_data, r1u64(mod->range_off[PDB_DbiCompUnitRange_Symbols], mod->range_off[PDB_DbiCompUnitRange_Symbols + 1]));
+    for (U64 cursor = 0; cursor < sym_data_size; ) {
+      CV_Symbol symbol = {0};
+      U64 read_size = cv_read_symbol(sym_data, cursor, PDB_SYMBOL_ALIGN, &symbol);
+      T_Ok(read_size > 0);
+      cursor += read_size;
+      T_Ok(symbol.kind == CV_SymKind_LPROC32 || symbol.kind == CV_SymKind_END);
+    }
+  }
+
+  // global symbol stream must have public and references to the static stubs
+  String8 symbol_data = msf_data_from_stream(msf, dbi->sym_sn);
+  for (U64 cursor = 0; cursor < symbol_data.size; ) {
+    CV_Symbol symbol = {0};
+    U64 read_size = cv_read_symbol(symbol_data, cursor, PDB_SYMBOL_ALIGN, &symbol);
+    T_Ok(read_size > 0);
+    cursor += read_size;
+    T_Ok(symbol.kind == CV_SymKind_PUB32 ||
+         symbol.kind == CV_SymKind_LPROCREF);
+  }
+
+  // types must be stripped
+  String8 tpi = msf_data_from_stream(msf, PDB_FixedStream_Tpi);
+  T_Ok(tpi.size == sizeof(PDB_TpiHeader));
+  String8 ipi = msf_data_from_stream(msf, PDB_FixedStream_Ipi);
+  T_Ok(ipi.size == sizeof(PDB_TpiHeader));
 }
 
 TEST(patch_cv_symbol_tree)

@@ -3135,6 +3135,24 @@ pdb_get_guid(PDB_Context *pdb)
 }
 
 internal void
+pdb_build_gsi_psi(TP_Context *tp, PDB_Context *pdb)
+{
+  PDB_DbiContext *dbi = pdb->dbi;
+
+  if (pdb->psi->gsi->symbol_count) {
+    if (dbi->publics_sn == MSF_INVALID_STREAM_NUMBER) { dbi->publics_sn = msf_stream_alloc(pdb->msf); }
+    if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) { dbi->symbols_sn = msf_stream_alloc(pdb->msf); }
+    psi_build(tp, pdb->psi, pdb->msf, dbi->publics_sn, dbi->symbols_sn);
+  }
+
+  if (pdb->gsi->symbol_count) {
+    if (dbi->globals_sn == MSF_INVALID_STREAM_NUMBER) { dbi->globals_sn = msf_stream_alloc(pdb->msf); }
+    if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) { dbi->symbols_sn = msf_stream_alloc(pdb->msf); }
+    gsi_build(tp, pdb->gsi, pdb->msf, dbi->globals_sn, dbi->symbols_sn);
+  }
+}
+
+internal void
 pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped)
 {
   ProfBeginFunction();
@@ -3151,17 +3169,7 @@ pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTa
   }
 
   if (build_gsi) {
-    if (dbi->globals_sn == MSF_INVALID_STREAM_NUMBER) {
-      dbi->globals_sn = msf_stream_alloc(pdb->msf);
-    }
-    if (dbi->publics_sn == MSF_INVALID_STREAM_NUMBER) {
-      dbi->publics_sn = msf_stream_alloc(pdb->msf);
-    }
-    if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) {
-      dbi->symbols_sn = msf_stream_alloc(pdb->msf);
-    }
-    psi_build(tp, pdb->psi, pdb->msf, dbi->publics_sn, dbi->symbols_sn);
-    gsi_build(tp, pdb->gsi, pdb->msf, dbi->globals_sn, dbi->symbols_sn);
+    pdb_build_gsi_psi(tp, pdb);
   }
 
   dbi_build(tp, pdb->dbi, pdb->msf, PDB_FixedStream_Dbi, string_ht, is_stripped);

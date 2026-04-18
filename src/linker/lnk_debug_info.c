@@ -2411,18 +2411,19 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   cv_string_hash_table_assign_buffer_offsets(tp, task.string_ht);
   ProfEnd();
 
-  ProfScope ("Alloc Modules") for EachIndex(obj_idx, cv->obj_count) { task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx])); }
-  ProfScope("Move Global Symbols")  tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
-  {
-    PDB_Context    *pdb = task.pdb;
-    PDB_DbiContext *dbi = pdb->dbi;
-    dbi->globals_sn = msf_stream_alloc(pdb->msf);
-    dbi->publics_sn = msf_stream_alloc(pdb->msf);
-    dbi->symbols_sn = msf_stream_alloc(pdb->msf);
-    psi_build(tp, pdb->psi, pdb->msf, dbi->publics_sn, dbi->symbols_sn);
-    gsi_build(tp, pdb->gsi, pdb->msf, dbi->globals_sn, dbi->symbols_sn);
-  }
-  ProfScope("Write Modules") tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
+  ProfScope ("Alloc Modules")
+    for EachIndex(obj_idx, cv->obj_count) {
+      task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
+    }
+
+  ProfScope("Move Global Symbols")
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
+
+  ProfScope("Build GSI and PSI")
+    pdb_build_gsi_psi(tp, task.pdb);
+
+  ProfScope("Write Modules")
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
 
   ProfBegin("Add string tables");
   pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
