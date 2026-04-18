@@ -3541,12 +3541,12 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     Map(ScopeVOffData,               baked_scopes->scope_voffs, baked_scopes->scope_voffs_count);
     Map(ScopeVMap,                   baked_scope_vmap->vmap, baked_scope_vmap->count);
     Map(InlineSites,                 baked_inline_sites, baked_inline_sites_count);
-    Map(GlobalVariableSymbols,       baked_global_variables, baked_global_variables_count);
+    Map(GlobalVariables,             baked_global_variables, baked_global_variables_count);
     Map(GlobalVMap,                  baked_global_vmap->vmap, baked_global_vmap->count);
-    Map(ThreadVariableSymbols,       baked_thread_variables, baked_thread_variables_count);
-    Map(ConstantSymbols,             baked_constants, baked_constants_count);
-    Map(ProcedureSymbols,            baked_procedures, baked_procedures_count);
-    Map(LocalVariableSymbols,        baked_locals, baked_locals_count);
+    Map(ThreadVariables,             baked_thread_variables, baked_thread_variables_count);
+    Map(Constants,                   baked_constants, baked_constants_count);
+    Map(Procedures,                  baked_procedures, baked_procedures_count);
+    Map(LocalVariables,              baked_locals, baked_locals_count);
     Map(LocationsBytecodeData,       baked_location_bytecode_data, baked_location_bytecode_data_size);
     Map(LocationsConstantData,       baked_location_constant_data, baked_location_constant_data_size);
     Map(LocationsSetElements,        baked_location_set_elements, baked_location_set_elements_count);

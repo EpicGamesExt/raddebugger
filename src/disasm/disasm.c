@@ -419,7 +419,7 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_o
             {
               RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
               RDI_U32 procedure_idx = scope->proc_idx;
-              RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_idx);
+              RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_idx);
               String8 procedure_name = {0};
               procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
               if(procedure_name.size != 0)

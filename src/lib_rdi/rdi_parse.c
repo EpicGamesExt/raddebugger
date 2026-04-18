@@ -742,7 +742,7 @@ rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size)
   {
     procedure_idx = ids[0];
   }
-  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, procedure_idx);
+  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_idx);
   return procedure;
 }
 
@@ -854,7 +854,7 @@ rdi_parent_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
 RDI_PROC RDI_Symbol *
 rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
 {
-  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, scope->proc_idx);
+  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
   return procedure;
 }
 
@@ -871,7 +871,7 @@ RDI_PROC RDI_Symbol *
 rdi_global_variable_from_voff(RDI_Parsed *rdi, RDI_U64 voff)
 {
   RDI_U32 idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, voff);
-  RDI_Symbol *gvar = rdi_element_from_name_idx(rdi, GlobalVariableSymbols, idx);
+  RDI_Symbol *gvar = rdi_element_from_name_idx(rdi, GlobalVariables, idx);
   return gvar;
 }
 

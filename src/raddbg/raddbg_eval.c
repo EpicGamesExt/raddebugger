@@ -1751,10 +1751,10 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
     E_TypeKey lhs_type_key = eval.irtree.type_key;
     E_Type *lhs_type = e_type_from_key(lhs_type_key);
     if(0){}
-    else if(str8_match(lhs_type->name, str8_lit("procedures"), 0))       {section = RDI_SectionKind_ProcedureSymbols;}
-    else if(str8_match(lhs_type->name, str8_lit("globals"), 0))          {section = RDI_SectionKind_GlobalVariableSymbols;}
-    else if(str8_match(lhs_type->name, str8_lit("thread_locals"), 0))    {section = RDI_SectionKind_ThreadVariableSymbols;}
-    else if(str8_match(lhs_type->name, str8_lit("constants"), 0))        {section = RDI_SectionKind_ConstantSymbols;}
+    else if(str8_match(lhs_type->name, str8_lit("procedures"), 0))       {section = RDI_SectionKind_Procedures;}
+    else if(str8_match(lhs_type->name, str8_lit("globals"), 0))          {section = RDI_SectionKind_GlobalVariables;}
+    else if(str8_match(lhs_type->name, str8_lit("thread_locals"), 0))    {section = RDI_SectionKind_ThreadVariables;}
+    else if(str8_match(lhs_type->name, str8_lit("constants"), 0))        {section = RDI_SectionKind_Constants;}
     else if(str8_match(lhs_type->name, str8_lit("types"), 0))            {section = RDI_SectionKind_UDTs;}
     else if(str8_match(lhs_type->name, str8_lit("source_files"), 0))     {section = RDI_SectionKind_SourceFiles;}
   }
@@ -1806,10 +1806,10 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
       switch(accel->section)
       {
         default:{}break;
-        case RDI_SectionKind_ProcedureSymbols:
-        case RDI_SectionKind_GlobalVariableSymbols:
-        case RDI_SectionKind_ThreadVariableSymbols:
-        case RDI_SectionKind_ConstantSymbols:
+        case RDI_SectionKind_Procedures:
+        case RDI_SectionKind_GlobalVariables:
+        case RDI_SectionKind_ThreadVariables:
+        case RDI_SectionKind_Constants:
         {
           RDI_Symbol *symbol = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, accel->section, element_idx);
           String8 symbol_name = {0};

@@ -102,12 +102,12 @@ RDI_SectionKind_Scopes               = 0x0017,
 RDI_SectionKind_ScopeVOffData        = 0x0018,
 RDI_SectionKind_ScopeVMap            = 0x0019,
 RDI_SectionKind_InlineSites          = 0x001A,
-RDI_SectionKind_GlobalVariableSymbols = 0x001B,
+RDI_SectionKind_GlobalVariables      = 0x001B,
 RDI_SectionKind_GlobalVMap           = 0x001C,
-RDI_SectionKind_ThreadVariableSymbols = 0x001D,
-RDI_SectionKind_ConstantSymbols      = 0x001E,
-RDI_SectionKind_ProcedureSymbols     = 0x001F,
-RDI_SectionKind_LocalVariableSymbols = 0x0020,
+RDI_SectionKind_ThreadVariables      = 0x001D,
+RDI_SectionKind_Constants            = 0x001E,
+RDI_SectionKind_Procedures           = 0x001F,
+RDI_SectionKind_LocalVariables       = 0x0020,
 RDI_SectionKind_LocationsBytecodeData = 0x0021,
 RDI_SectionKind_LocationsConstantData = 0x0022,
 RDI_SectionKind_LocationsSetElements = 0x0023,
@@ -543,12 +543,12 @@ X(Scopes, scopes, RDI_Scope)\
 X(ScopeVOffData, scope_voff_data, RDI_U64)\
 X(ScopeVMap, scope_vmap, RDI_VMapEntry)\
 X(InlineSites, inline_sites, RDI_InlineSite)\
-X(GlobalVariableSymbols, global_variable_symbols, RDI_Symbol)\
+X(GlobalVariables, global_variables, RDI_Symbol)\
 X(GlobalVMap, global_vmap, RDI_VMapEntry)\
-X(ThreadVariableSymbols, thread_variable_symbols, RDI_Symbol)\
-X(ConstantSymbols, constant_symbols, RDI_Symbol)\
-X(ProcedureSymbols, procedure_symbols, RDI_Symbol)\
-X(LocalVariableSymbols, local_variable_symbols, RDI_Symbol)\
+X(ThreadVariables, thread_variables, RDI_Symbol)\
+X(Constants, constants, RDI_Symbol)\
+X(Procedures, procedures, RDI_Symbol)\
+X(LocalVariables, local_variables, RDI_Symbol)\
 X(LocationsBytecodeData, locations_bytecode_data, RDI_U8)\
 X(LocationsConstantData, locations_constant_data, RDI_U8)\
 X(LocationsSetElements, locations_set_elements, RDI_LocationSetElement)\
@@ -1045,11 +1045,11 @@ typedef struct RDI_U32_EnumMembers                 { RDI_U32 v; } RDI_U32_EnumMe
 typedef struct RDI_U32_Scopes                      { RDI_U32 v; } RDI_U32_Scopes;
 typedef struct RDI_U32_ScopeVOffData               { RDI_U32 v; } RDI_U32_ScopeVOffData;
 typedef struct RDI_U32_InlineSites                 { RDI_U32 v; } RDI_U32_InlineSites;
-typedef struct RDI_U32_GlobalVariableSymbols       { RDI_U32 v; } RDI_U32_GlobalVariableSymbols;
-typedef struct RDI_U32_ThreadVariableSymbols       { RDI_U32 v; } RDI_U32_ThreadVariableSymbols;
-typedef struct RDI_U32_ConstantSymbols             { RDI_U32 v; } RDI_U32_ConstantSymbols;
-typedef struct RDI_U32_ProcedureSymbols            { RDI_U32 v; } RDI_U32_ProcedureSymbols;
-typedef struct RDI_U32_LocalVariableSymbols        { RDI_U32 v; } RDI_U32_LocalVariableSymbols;
+typedef struct RDI_U32_GlobalVariables             { RDI_U32 v; } RDI_U32_GlobalVariables;
+typedef struct RDI_U32_ThreadVariables             { RDI_U32 v; } RDI_U32_ThreadVariables;
+typedef struct RDI_U32_Constants                   { RDI_U32 v; } RDI_U32_Constants;
+typedef struct RDI_U32_Procedures                  { RDI_U32 v; } RDI_U32_Procedures;
+typedef struct RDI_U32_LocalVariables              { RDI_U32 v; } RDI_U32_LocalVariables;
 typedef struct RDI_U32_LocationsBytecodeData       { RDI_U32 v; } RDI_U32_LocationsBytecodeData;
 typedef struct RDI_U32_LocationsConstantData       { RDI_U32 v; } RDI_U32_LocationsConstantData;
 typedef struct RDI_U32_LocationsSetElements        { RDI_U32 v; } RDI_U32_LocationsSetElements;
@@ -1085,11 +1085,11 @@ typedef RDI_U32_Table RDI_U32_EnumMembers;
 typedef RDI_U32_Table RDI_U32_Scopes;
 typedef RDI_U32_Table RDI_U32_ScopeVOffData;
 typedef RDI_U32_Table RDI_U32_InlineSites;
-typedef RDI_U32_Table RDI_U32_GlobalVariableSymbols;
-typedef RDI_U32_Table RDI_U32_ThreadVariableSymbols;
-typedef RDI_U32_Table RDI_U32_ConstantSymbols;
-typedef RDI_U32_Table RDI_U32_ProcedureSymbols;
-typedef RDI_U32_Table RDI_U32_LocalVariableSymbols;
+typedef RDI_U32_Table RDI_U32_GlobalVariables;
+typedef RDI_U32_Table RDI_U32_ThreadVariables;
+typedef RDI_U32_Table RDI_U32_Constants;
+typedef RDI_U32_Table RDI_U32_Procedures;
+typedef RDI_U32_Table RDI_U32_LocalVariables;
 typedef RDI_U32_Table RDI_U32_LocationsBytecodeData;
 typedef RDI_U32_Table RDI_U32_LocationsConstantData;
 typedef RDI_U32_Table RDI_U32_LocationsSetElements;
@@ -1445,12 +1445,12 @@ typedef RDI_Scope                        RDI_SectionElementType_Scopes;
 typedef RDI_U64                          RDI_SectionElementType_ScopeVOffData;
 typedef RDI_VMapEntry                    RDI_SectionElementType_ScopeVMap;
 typedef RDI_InlineSite                   RDI_SectionElementType_InlineSites;
-typedef RDI_Symbol                       RDI_SectionElementType_GlobalVariableSymbols;
+typedef RDI_Symbol                       RDI_SectionElementType_GlobalVariables;
 typedef RDI_VMapEntry                    RDI_SectionElementType_GlobalVMap;
-typedef RDI_Symbol                       RDI_SectionElementType_ThreadVariableSymbols;
-typedef RDI_Symbol                       RDI_SectionElementType_ConstantSymbols;
-typedef RDI_Symbol                       RDI_SectionElementType_ProcedureSymbols;
-typedef RDI_Symbol                       RDI_SectionElementType_LocalVariableSymbols;
+typedef RDI_Symbol                       RDI_SectionElementType_ThreadVariables;
+typedef RDI_Symbol                       RDI_SectionElementType_Constants;
+typedef RDI_Symbol                       RDI_SectionElementType_Procedures;
+typedef RDI_Symbol                       RDI_SectionElementType_LocalVariables;
 typedef RDI_U8                           RDI_SectionElementType_LocationsBytecodeData;
 typedef RDI_U8                           RDI_SectionElementType_LocationsConstantData;
 typedef RDI_LocationSetElement           RDI_SectionElementType_LocationsSetElements;

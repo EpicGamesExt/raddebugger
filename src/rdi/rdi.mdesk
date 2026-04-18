@@ -186,12 +186,12 @@ RDI_SectionTable:
   {InlineSites                   inline_sites                       RDI_InlineSite           0x001A   U32                                            ""}
   
   //- rjf: symbols
-  {GlobalVariableSymbols         global_variable_symbols            RDI_Symbol               0x001B   U32                                            ""}
+  {GlobalVariables               global_variables                   RDI_Symbol               0x001B   U32                                            ""}
   {GlobalVMap                    global_vmap                        RDI_VMapEntry            0x001C   -                                              ""}
-  {ThreadVariableSymbols         thread_variable_symbols            RDI_Symbol               0x001D   U32                                            ""}
-  {ConstantSymbols               constant_symbols                   RDI_Symbol               0x001E   U32                                            ""}
-  {ProcedureSymbols              procedure_symbols                  RDI_Symbol               0x001F   U32                                            ""}
-  {LocalVariableSymbols          local_variable_symbols             RDI_Symbol               0x0020   U32                                            ""}
+  {ThreadVariables               thread_variables                   RDI_Symbol               0x001D   U32                                            ""}
+  {Constants                     constants                          RDI_Symbol               0x001E   U32                                            ""}
+  {Procedures                    procedures                         RDI_Symbol               0x001F   U32                                            ""}
+  {LocalVariables                local_variables                    RDI_Symbol               0x0020   U32                                            ""}
   
   //- rjf: locations
   {LocationsBytecodeData         locations_bytecode_data            RDI_U8                   0x0021   U32                                            ""}

@@ -590,7 +590,7 @@ e_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
       U32 local_opl_idx = scope->local_first + scope->local_count;
       for(U32 local_idx = scope->local_first; local_idx < local_opl_idx; local_idx += 1)
       {
-        RDI_Symbol *local_var = rdi_element_from_name_idx(rdi, LocalVariableSymbols, local_idx);
+        RDI_Symbol *local_var = rdi_element_from_name_idx(rdi, LocalVariables, local_idx);
         U64 local_name_size = 0;
         U8 *local_name_str = rdi_string_from_idx(rdi, local_var->name_string_idx, &local_name_size);
         String8 name = push_str8_copy(arena, str8(local_name_str, local_name_size));
@@ -612,7 +612,7 @@ e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
   
   //- rjf: tightest scope -> procedure
   U32 proc_idx = tightest_scope->proc_idx;
-  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, ProcedureSymbols, proc_idx);
+  RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
   
   //- rjf: procedure -> udt
   U32 udt_idx = procedure->container_flags & RDI_ContainerFlag_KindMask == RDI_ContainerKind_Type ? procedure->container_idx : 0;

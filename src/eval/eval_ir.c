@@ -1810,7 +1810,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               U64 local_num = e_num_from_string(e_ir_ctx->locals_map, string__redirected);
               if(local_num != 0)
               {
-                RDI_Symbol *local = rdi_element_from_name_idx(rdi, LocalVariableSymbols, local_num-1);
+                RDI_Symbol *local = rdi_element_from_name_idx(rdi, LocalVariables, local_num-1);
                 
                 // rjf: extract local's type key
                 RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, local->type_idx);
@@ -1958,9 +1958,9 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   switch(match.section_kind)
                   {
                     default:{}break;
-                    case RDI_SectionKind_GlobalVariableSymbols:
-                    case RDI_SectionKind_ThreadVariableSymbols:
-                    case RDI_SectionKind_ConstantSymbols:
+                    case RDI_SectionKind_GlobalVariables:
+                    case RDI_SectionKind_ThreadVariables:
+                    case RDI_SectionKind_Constants:
                     {
                       RDI_Symbol *symbol = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, match.section_kind, match.idx);
                       U64 ip_voff = e_base_ctx->thread_ip_voff;
@@ -1973,7 +1973,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                       mapped_location_module = module;
                       mapped_bytecode_mode = E_Mode_Offset;
                     }break;
-                    case RDI_SectionKind_ProcedureSymbols:
+                    case RDI_SectionKind_Procedures:
                     {
                       RDI_Symbol *procedure = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, match.section_kind, match.idx);
                       RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
@@ -2479,7 +2479,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               {
                 U64 vtable_voff = vtable_vaddr - module_base;
                 U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, vtable_voff);
-                RDI_Symbol *global_var = rdi_element_from_name_idx(rdi, GlobalVariableSymbols, global_idx);
+                RDI_Symbol *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, global_idx);
                 if(global_var->container_flags & RDI_ContainerFlag_KindMask == RDI_ContainerKind_Type)
                 {
                   RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);

@@ -1029,7 +1029,7 @@ rb_thread_entry_point(void *p)
           ProfScope("dump FUNC records")
           {
             U64 count = 0;
-            RDI_Symbol *v = rdi_table_from_name(rdi, ProcedureSymbols, &count);
+            RDI_Symbol *v = rdi_table_from_name(rdi, Procedures, &count);
             Rng1U64 range = lane_range(count);
             for EachInRange(idx, range)
             {

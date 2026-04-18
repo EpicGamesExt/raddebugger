@@ -896,11 +896,11 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
   }
   symbol_tables[] =
   {
-    {RDI_DumpSubset_Procedures,      RDI_SectionKind_ProcedureSymbols},
-    {RDI_DumpSubset_GlobalVariables, RDI_SectionKind_GlobalVariableSymbols},
-    {RDI_DumpSubset_ThreadVariables, RDI_SectionKind_ThreadVariableSymbols},
-    {RDI_DumpSubset_LocalVariables,  RDI_SectionKind_LocalVariableSymbols},
-    {RDI_DumpSubset_Constants,       RDI_SectionKind_ConstantSymbols},
+    {RDI_DumpSubset_Procedures,      RDI_SectionKind_Procedures},
+    {RDI_DumpSubset_GlobalVariables, RDI_SectionKind_GlobalVariables},
+    {RDI_DumpSubset_ThreadVariables, RDI_SectionKind_ThreadVariables},
+    {RDI_DumpSubset_LocalVariables,  RDI_SectionKind_LocalVariables},
+    {RDI_DumpSubset_Constants,       RDI_SectionKind_Constants},
   };
   for EachElement(symbol_table_idx, symbol_tables)
   {
@@ -1047,7 +1047,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
     U64 scope_voffs_count = 0;
     U64 *scope_voffs = rdi_table_from_name(rdi, ScopeVOffData,  &scope_voffs_count);
     U64 locals_count = 0;
-    RDI_Symbol *locals = rdi_table_from_name(rdi, LocalVariableSymbols, &locals_count);
+    RDI_Symbol *locals = rdi_table_from_name(rdi, LocalVariables, &locals_count);
     U64 count = 0;
     RDI_Scope *v = rdi_table_from_name(rdi, Scopes, &count);
     RDI_Scope *nil = &v[0];
@@ -1077,7 +1077,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
         }
         
         // rjf: scope procedure -> name
-        String8 procedure_name = str8_from_rdi_string_idx(rdi, rdi_element_from_name_idx(rdi, ProcedureSymbols, scope->proc_idx)->name_string_idx);
+        String8 procedure_name = str8_from_rdi_string_idx(rdi, rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx)->name_string_idx);
         if(procedure_name.size == 0)
         {
           procedure_name = str8_lit("???");
