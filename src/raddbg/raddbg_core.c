@@ -4390,6 +4390,12 @@ rd_view_ui(Rng2F32 rect)
                           {
                             rd_cmd(RD_CmdKind_PushQuery, .expr = e_full_expr_string_from_key(scratch.arena, cell->eval.key));
                           }
+                          
+                          // rjf: is file eval? -> switch to file
+                          else if(cell_info.file_path.size != 0)
+                          {
+                            rd_cmd(RD_CmdKind_Switch, .cfg = 0, .file_path = cell_info.file_path);
+                          }
                         }
                         
                         // rjf: hovering with inheritance string -> show tooltip
