@@ -1810,10 +1810,10 @@ rdim_bake_name_map_insert(RDIM_Arena *arena, RDIM_BakeNameMapTopology *map_topol
     RDI_S32 is_duplicate = 0;
     for(RDIM_BakeNameChunkNode *n = slot->first; n != 0; n = n->next)
     {
-      for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+      for(RDI_U64 n_idx = 0; n_idx < n->count; n_idx += 1)
       {
-        if(rdim_str8_match(n->v[idx].string, string, 0) &&
-           n->v[idx].idx == idx)
+        if(rdim_str8_match(n->v[n_idx].string, string, 0) &&
+           n->v[n_idx].idx == idx)
         {
           is_duplicate = 1;
           goto break_all;
