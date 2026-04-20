@@ -2296,13 +2296,13 @@ d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 imag
 internal void
 d2r_convert_symbols(Arena         *arena,
                     D2R_TypeTable *type_table,
-                    RDIM_Scope    *global_scope,
                     DW_Input      *input,
                     DW_CompUnit   *cu,
                     DW_Language    cu_lang,
                     U64            image_base,
                     Arch           arch,
-                    DW_TagNode    *root)
+                    DW_TagNode    *root,
+                    RDIM_Unit     *unit_rdi)
 {
   Temp scratch = scratch_begin(&arena, 1);
   for (D2R_TagIterator *it = d2r_tag_iterator_init(scratch.arena, root); it->tag_node != 0; d2r_tag_iterator_next(scratch.arena, it)) {
@@ -2373,11 +2373,11 @@ d2r_convert_symbols(Arena         *arena,
             String8 frame_base_expr = dw_exprloc_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_FrameBase);
             
             // get proc container symbol
-            RDIM_Symbol *proc = rdim_symbol_chunk_list_push(arena, &g_d2r_shared.procs, D2R_PROC_CHUNK_CAP);
+            RDIM_Symbol *proc = rdim_symbol_chunk_list_push(arena, &unit_rdi->procedures, D2R_PROC_CHUNK_CAP);
             
             // make scope
             Rng1U64List  ranges     = d2r_range_list_from_tag(scratch.arena, input, cu, image_base, tag);
-            RDIM_Scope  *root_scope = d2r_push_scope(arena, &g_d2r_shared.scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
+            RDIM_Scope  *root_scope = d2r_push_scope(arena, &unit_rdi->scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
             root_scope->symbol      = proc;
             
             // fill out proc
@@ -2388,7 +2388,7 @@ d2r_convert_symbols(Arena         *arena,
             proc->container_scope  = 0;
             proc->container_type   = container_type;
             proc->root_scope       = root_scope;
-            proc->location_cases   = d2r_locset_from_attrib(arena, &g_d2r_shared.scopes, root_scope, input, cu, image_base, arch, tag, DW_AttribKind_FrameBase);
+            proc->location_cases   = d2r_locset_from_attrib(arena, &unit_rdi->scopes, root_scope, input, cu, image_base, arch, tag, DW_AttribKind_FrameBase);
             
             // sub program with user-defined parent tag is a method
             DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
@@ -2456,7 +2456,7 @@ d2r_convert_symbols(Arena         *arena,
         
         // make scope
         Rng1U64List  ranges     = d2r_range_list_from_tag(scratch.arena, input, cu, image_base, tag);
-        RDIM_Scope  *root_scope = d2r_push_scope(arena, &g_d2r_shared.scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
+        RDIM_Scope  *root_scope = d2r_push_scope(arena, &unit_rdi->scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
         root_scope->inline_site = inline_site;
       } break;
       case DW_TagKind_Variable: {
@@ -2471,7 +2471,7 @@ d2r_convert_symbols(Arena         *arena,
           RDIM_Symbol *local = rdim_symbol_chunk_list_push(arena, &scope->locals, 8);
           local->name = name;
           local->type = type;
-          local->location_cases = d2r_var_locset_from_tag(arena, &g_d2r_shared.scopes, scope, input, cu, image_base, arch, tag);
+          local->location_cases = d2r_var_locset_from_tag(arena, &unit_rdi->scopes, scope, input, cu, image_base, arch, tag);
         } else {
           
           // NOTE: due to a bug in clang in stb_sprintf.h local variables
@@ -2534,7 +2534,7 @@ d2r_convert_symbols(Arena         *arena,
           param->is_param = 1;
           param->name = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
           param->type = d2r_type_from_attrib(type_table, input, cu, tag, DW_AttribKind_Type);
-          param->location_cases = d2r_var_locset_from_tag(arena, &g_d2r_shared.scopes, scope, input, cu, image_base, arch, tag);
+          param->location_cases = d2r_var_locset_from_tag(arena, &unit_rdi->scopes, scope, input, cu, image_base, arch, tag);
         } else {
           Assert(!"this is a local variable");
           log_user_errorf(".debug_info+%llx out of scope formal parameter", tag.info_off);
@@ -2546,7 +2546,7 @@ d2r_convert_symbols(Arena         *arena,
             parent_tag.kind == DW_TagKind_InlinedSubroutine ||
             parent_tag.kind == DW_TagKind_LexicalBlock) {
           Rng1U64List ranges = d2r_range_list_from_tag(scratch.arena, input, cu, image_base, tag);
-          d2r_push_scope(arena, &g_d2r_shared.scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
+          d2r_push_scope(arena, &unit_rdi->scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
         }
       } break;
       case DW_TagKind_CallSite: {
@@ -3002,10 +3002,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     }
     ProfEnd();
     
-    ////////////////////////////////
-    
-    RDIM_Scope *global_scope = rdim_scope_chunk_list_push(arena, &g_d2r_shared.scopes, D2R_SCOPE_CHUNK_CAP);
-    
     //////////////////////////////// 
     
     RDIM_Type *builtin_types[RDI_TypeKind_Count] = {0};
@@ -3058,32 +3054,26 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       String8     cu_dir  = dw_string_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_CompDir);
       String8     cu_prod = dw_string_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_Producer);
       DW_Language cu_lang = dw_const_u64_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_Language);
-      
+
       // init type table
       D2R_TypeTable *type_table   = push_array(comp_temp.arena, D2R_TypeTable, 1);
       type_table->ht              = hash_table_init(comp_temp.arena, 0x4000);
       type_table->types           = &g_d2r_shared.types;
       type_table->type_chunk_cap  = D2R_TYPE_CHUNK_CAP;
       type_table->builtin_types   = builtin_types;
-      
-      // convert debug info
-      d2r_convert_types(arena, type_table, &input, cu, cu_lang, arch, tag_tree.root);
-      d2r_convert_udts(arena, type_table, &input, cu, cu_lang, tag_tree.root);
-      d2r_convert_symbols(arena, type_table, global_scope, &input, cu, cu_lang, image_base, arch, tag_tree.root);
-      
-      RDIM_Rng1U64ChunkList cu_voff_ranges = {0};
-      if (cu_idx < cu_contrib_map.count) {
-        cu_voff_ranges = d2r_voff_ranges_from_cu_info_off(cu_contrib_map, cu_ranges.v[cu_idx].min);
-      } else {
-        Rng1U64List range_list  = d2r_range_list_from_tag(scratch.arena, &input, cu, image_base, cu->tag);
-        for EachNode(n, Rng1U64Node, range_list.first) {
-          rdim_rng1u64_chunk_list_push(arena, &cu_voff_ranges, 512, (RDIM_Rng1U64){ .min = n->v.min, .max = n->v.max });
-        }
-      }
-      
+
       // convert compile unit
+      RDIM_Unit *unit     = rdim_unit_chunk_list_push(arena, &g_d2r_shared.units, D2R_UNIT_CHUNK_CAP);
       {
-        RDIM_Unit *unit     = rdim_unit_chunk_list_push(arena, &g_d2r_shared.units, D2R_UNIT_CHUNK_CAP);
+        RDIM_Rng1U64ChunkList cu_voff_ranges = {0};
+        if (cu_idx < cu_contrib_map.count) {
+          cu_voff_ranges = d2r_voff_ranges_from_cu_info_off(cu_contrib_map, cu_ranges.v[cu_idx].min);
+        } else {
+          Rng1U64List range_list  = d2r_range_list_from_tag(scratch.arena, &input, cu, image_base, cu->tag);
+          for EachNode(n, Rng1U64Node, range_list.first) {
+            rdim_rng1u64_chunk_list_push(arena, &cu_voff_ranges, 512, (RDIM_Rng1U64){ .min = n->v.min, .max = n->v.max });
+          }
+        } 
         unit->unit_name     = cu_name;
         unit->compiler_name = cu_prod;
         unit->source_file   = str8_zero(); // TODO
@@ -3094,6 +3084,11 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         unit->line_table    = cu_line_tables_rdi[cu_idx];
         unit->voff_ranges   = cu_voff_ranges;
       }
+
+      // convert debug info
+      d2r_convert_types(arena, type_table, &input, cu, cu_lang, arch, tag_tree.root);
+      d2r_convert_udts(arena, type_table, &input, cu, cu_lang, tag_tree.root);
+      d2r_convert_symbols(arena, type_table, &input, cu, cu_lang, image_base, arch, tag_tree.root, unit); 
       
       next_cu:;
       temp_end(comp_temp);

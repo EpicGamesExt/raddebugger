@@ -457,10 +457,16 @@ TEST(d2r_general)
     dw_writer_push_attrib_flag(writer, DW_AttribKind_External, 1);
     dw_writer_push_attrib_flag(writer, DW_AttribKind_Prototyped, 1);
     dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "FooBar");
-    // declare variable
+    // declare local
     dw_writer_tag_begin(writer, DW_TagKind_Variable);
     dw_writer_push_attrib_exprv(writer, DW_AttribKind_Location, DW_ExprEnc_Op(Reg7));
     dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "TestLocal");
+    dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, char_type);
+    dw_writer_tag_end(writer);
+    // declare param
+    dw_writer_tag_begin(writer, DW_TagKind_FormalParameter);
+    dw_writer_push_attrib_exprv(writer, DW_AttribKind_Location, DW_ExprEnc_Op(Reg7));
+    dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "TestParam");
     dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, char_type);
     dw_writer_tag_end(writer);
     dw_writer_tag_end(writer);
@@ -475,28 +481,53 @@ TEST(d2r_general)
   
   RDI_Scope *root_scope = rdi_root_scope_from_procedure(rdi, proc);
   T_Ok(root_scope);
-  T_Ok(root_scope->local_count == 1);
+  T_Ok(root_scope->local_count == 2);
   
-  RDI_Symbol *test_local = rdi_element_from_name_idx(rdi, LocalVariables, root_scope->local_first + 0);
-  T_Ok(test_local);
-  T_Ok(test_local->symbol_flags & RDI_SymbolFlag_IsParam);
-  String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
-  T_Ok(str8_match(test_local_name, str8_lit("TestLocal"), 0));
-  
-  RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
-  T_Ok(test_local_type);
-  T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
-  T_Ok(test_local_type->flags == 0);
-  String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
-  T_Ok(str8_match(alias_name, str8_lit("char"), 0));
-  
-  RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
-  T_Ok(char_type);
-  T_Ok(char_type->kind == RDI_TypeKind_Char8);
-  T_Ok(char_type->flags == 0);
-  T_Ok(char_type->byte_size == 1);
-  String8 char_type_name = str8_from_rdi_string_idx(rdi, char_type->built_in.name_string_idx);
-  T_Ok(str8_match(char_type_name, str8_lit("Char8"), 0));
+  {
+    RDI_Symbol *test_local = rdi_element_from_name_idx(rdi, LocalVariables, root_scope->local_first + 0);
+    T_Ok(test_local);
+    T_Ok((test_local->symbol_flags & RDI_SymbolFlag_IsParam) == 0);
+    String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
+    T_Ok(str8_match(test_local_name, str8_lit("TestLocal"), 0));
+
+    RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
+    T_Ok(test_local_type);
+    T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
+    T_Ok(test_local_type->flags == 0);
+    String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
+    T_Ok(str8_match(alias_name, str8_lit("char"), 0));
+
+    RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
+    T_Ok(char_type);
+    T_Ok(char_type->kind == RDI_TypeKind_Char8);
+    T_Ok(char_type->flags == 0);
+    T_Ok(char_type->byte_size == 1);
+    String8 char_type_name = str8_from_rdi_string_idx(rdi, char_type->built_in.name_string_idx);
+    T_Ok(str8_match(char_type_name, str8_lit("Char8"), 0));
+  }
+
+  {
+    RDI_Symbol *test_local = rdi_element_from_name_idx(rdi, LocalVariables, root_scope->local_first + 1);
+    T_Ok(test_local);
+    T_Ok((test_local->symbol_flags & RDI_SymbolFlag_IsParam) != 0);
+    String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
+    T_Ok(str8_match(test_local_name, str8_lit("TestParam"), 0));
+
+    RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
+    T_Ok(test_local_type);
+    T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
+    T_Ok(test_local_type->flags == 0);
+    String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
+    T_Ok(str8_match(alias_name, str8_lit("char"), 0));
+
+    RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
+    T_Ok(char_type);
+    T_Ok(char_type->kind == RDI_TypeKind_Char8);
+    T_Ok(char_type->flags == 0);
+    T_Ok(char_type->byte_size == 1);
+    String8 char_type_name = str8_from_rdi_string_idx(rdi, char_type->built_in.name_string_idx);
+    T_Ok(str8_match(char_type_name, str8_lit("Char8"), 0));
+  }
   
   dw_writer_end(&writer);
 }

@@ -42,8 +42,6 @@ typedef struct D2R_Shared
   RDIM_LineTableChunkList  line_tables;
   RDIM_SymbolChunkList     gvars;
   RDIM_SymbolChunkList     tvars;
-  RDIM_SymbolChunkList     procs;
-  RDIM_ScopeChunkList      scopes;
   RDIM_InlineSiteChunkList inline_sites;
 } D2R_Shared;
 
@@ -257,7 +255,7 @@ internal void d2r_convert_udts(Arena *arena, D2R_TypeTable *type_table, DW_Input
 internal RDIM_Scope * d2r_push_scope         (Arena *arena, RDIM_ScopeChunkList *scopes, U64 scope_chunk_cap, D2R_TagFrame *tag_stack, Rng1U64List ranges);
 internal RDIM_Type ** d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out);
 internal Rng1U64List  d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag);
-internal void         d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, RDIM_Scope *global_scope, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 image_base, Arch arch, DW_TagNode *root);
+internal void         d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 image_base, Arch arch, DW_TagNode *root, RDIM_Unit *unit_rdi);
 
 ////////////////////////////////
 //~ Line Table Conversion
