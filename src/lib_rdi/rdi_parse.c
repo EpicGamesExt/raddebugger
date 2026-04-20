@@ -769,13 +769,25 @@ rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure)
 RDI_PROC RDI_UDT *
 rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure)
 {
-  return 0;
+  RDI_U64 idx = 0;
+  if((procedure->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Type)
+  {
+    idx = procedure->container_idx;
+  }
+  RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, idx);
+  return udt;
 }
 
 RDI_PROC RDI_Scope *
 rdi_container_scope_from_procedure(RDI_Parsed *rdi, RDI_Symbol *procedure)
 {
-  return 0;
+  RDI_U64 idx = 0;
+  if((procedure->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Scope)
+  {
+    idx = procedure->container_idx;
+  }
+  RDI_Scope *container_scope = rdi_element_from_name_idx(rdi, Scopes, idx);
+  return container_scope;
 }
 
 RDI_PROC RDI_U64
