@@ -25,7 +25,7 @@ typedef struct LNK_SymbolInput
 
 typedef struct
 {
-  LNK_IO_Flags io_flags;
+  LNK_Config  *config;
   U64          obj_count;
   B32          is_stripped;
 
@@ -39,6 +39,7 @@ typedef struct
   String8List *debug_s_list_arr;
   String8List *debug_p_list_arr;
   String8List *debug_t_list_arr;
+  String8List *debug_h_list_arr;
 
   U32Array int_obj_indices;
   U32Array ext_obj_indices;
@@ -278,7 +279,7 @@ typedef struct
 ////////////////////////////////
 // CodeView
 
-internal LNK_CodeViewInput lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_flags, String8List lib_dir_list, String8List alt_pch_dirs, U64 objs_count, LNK_Obj **objs);
+internal LNK_CodeViewInput lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U64 objs_count, LNK_Obj **objs);
 
 internal int             lnk_leaf_ref_compare                (LNK_LeafRef a, LNK_LeafRef b);
 internal int             lnk_leaf_ref_is_before              (void *raw_a, void *raw_b);

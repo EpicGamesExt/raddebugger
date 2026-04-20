@@ -5006,6 +5006,257 @@ TEST(pdbstripped)
   T_Ok(ipi.size == sizeof(PDB_TpiHeader));
 }
 
+TEST(ghash_check_corrupt)
+{
+  String8List t = {0}; str8_serial_begin(arena, &t);
+    str8_serial_push_u32(arena, &t, CV_Signature_C13);
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_STRUCTURE, str8_struct(&(CV_LeafStruct){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_UNION, str8_struct(&(CV_LeafUnion){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_ENUM, str8_struct(&(CV_LeafEnum){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+  String8 debug_t = str8_serial_end(arena, &t);
+
+  String8List h = {0}; str8_serial_begin(arena, &h);
+  String8 debug_h = str8_serial_end(arena, &h);
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS, debug_t);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$H"), PE_DEBUG_SECTION_FLAGS, debug_h);
+    String8 debug_obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
+  T_Ok(t_write_entry_obj());
+
+  String8 output = {0};
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32 is_warning_found = 0;
+  String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
+  String8 expected_line = str8f(arena, "Warning(%03u): %S: .debug$H section is too small to contain the header", LNK_Warning_GHash, debug_obj_path, LLVM_GHash_Magic);
+  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+    String8 line = t_chop_line(&i);
+    is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
+  }
+  T_Ok(is_warning_found);
+}
+
+TEST(ghash_check_magic)
+{
+  String8List t = {0}; str8_serial_begin(arena, &t);
+    str8_serial_push_u32(arena, &t, CV_Signature_C13);
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_STRUCTURE, str8_struct(&(CV_LeafStruct){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_UNION, str8_struct(&(CV_LeafUnion){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_ENUM, str8_struct(&(CV_LeafEnum){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+  String8 debug_t = str8_serial_end(arena, &t);
+
+#if 0
+  U64 *hashes = push_array(arena, U64, t.node_count);
+  U64 i = 0;
+  for EachNode(n, String8Node, t.first->next) {
+    blake3(&hashes[i], sizeof(hashes[i]), n->string.str, n->string.size);
+    i += 1;
+  }
+#endif
+  String8List h = {0}; str8_serial_begin(arena, &h);
+    str8_serial_push_struct(arena, &h, (&(LLVM_GHash){ .magic = 123, .hash_alg = LLVM_GHashAlg_BLAKE3, .version = LLVM_GHash_CurrentVersion }));
+    str8_serial_push_u64(arena, &h, 0x6ebacae08af4fda5ull);
+    str8_serial_push_u64(arena, &h, 0xc385876694f9769aull);
+    str8_serial_push_u64(arena, &h, 0x7ea8a529a89b2288ull);
+  String8 debug_h = str8_serial_end(arena, &h);
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS, debug_t);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$H"), PE_DEBUG_SECTION_FLAGS, debug_h);
+    String8 debug_obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
+  T_Ok(t_write_entry_obj());
+
+  String8 output = {0};
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32 is_warning_found = 0;
+  String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
+  String8 expected_line = str8f(arena, "Warning(%03u): %S: .debug$H contains invalid magic: got 0x7b, expected 0x%x", LNK_Warning_GHash, debug_obj_path, LLVM_GHash_Magic);
+  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+    String8 line = t_chop_line(&i);
+    is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
+  }
+  T_Ok(is_warning_found);
+}
+
+TEST(ghash_check_version)
+{
+  String8List t = {0}; str8_serial_begin(arena, &t);
+    str8_serial_push_u32(arena, &t, CV_Signature_C13);
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_STRUCTURE, str8_struct(&(CV_LeafStruct){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_UNION, str8_struct(&(CV_LeafUnion){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_ENUM, str8_struct(&(CV_LeafEnum){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+  String8 debug_t = str8_serial_end(arena, &t);
+
+#if 0
+  U64 *hashes = push_array(arena, U64, t.node_count);
+  U64 i = 0;
+  for EachNode(n, String8Node, t.first->next) {
+    blake3(&hashes[i], sizeof(hashes[i]), n->string.str, n->string.size);
+    i += 1;
+  }
+#endif
+  String8List h = {0}; str8_serial_begin(arena, &h);
+    str8_serial_push_struct(arena, &h, (&(LLVM_GHash){ .magic = LLVM_GHash_Magic, .hash_alg = LLVM_GHashAlg_BLAKE3, .version = 0xbeef }));
+    str8_serial_push_u64(arena, &h, 0x6ebacae08af4fda5ull);
+    str8_serial_push_u64(arena, &h, 0xc385876694f9769aull);
+    str8_serial_push_u64(arena, &h, 0x7ea8a529a89b2288ull);
+  String8 debug_h = str8_serial_end(arena, &h);
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS, debug_t);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$H"), PE_DEBUG_SECTION_FLAGS, debug_h);
+    String8 debug_obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
+  T_Ok(t_write_entry_obj());
+
+  String8 output = {0};
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32 is_warning_found = 0;
+  String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
+  String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H version: got %u, expected %u", LNK_Warning_GHash, debug_obj_path, 0xbeef, LLVM_GHash_CurrentVersion);
+  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+    String8 line = t_chop_line(&i);
+    is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
+  }
+  T_Ok(is_warning_found);
+}
+
+TEST(ghash_check_hash_alg)
+{
+  String8List t = {0}; str8_serial_begin(arena, &t);
+    str8_serial_push_u32(arena, &t, CV_Signature_C13);
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_STRUCTURE, str8_struct(&(CV_LeafStruct){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_UNION, str8_struct(&(CV_LeafUnion){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_ENUM, str8_struct(&(CV_LeafEnum){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+  String8 debug_t = str8_serial_end(arena, &t);
+
+  String8List h = {0}; str8_serial_begin(arena, &h);
+    str8_serial_push_struct(arena, &h, (&(LLVM_GHash){ .magic = LLVM_GHash_Magic, .hash_alg = LLVM_GHashAlg_SHA1_8, .version = LLVM_GHash_CurrentVersion }));
+    str8_serial_push_u64(arena, &h, 0x6ebacae08af4fda5ull);
+    str8_serial_push_u64(arena, &h, 0xc385876694f9769aull);
+    str8_serial_push_u64(arena, &h, 0x7ea8a529a89b2288ull);
+  String8 debug_h = str8_serial_end(arena, &h);
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS, debug_t);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$H"), PE_DEBUG_SECTION_FLAGS, debug_h);
+    String8 debug_obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
+  T_Ok(t_write_entry_obj());
+
+  String8 output = {0};
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32 is_warning_found = 0;
+  String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
+  String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash algorithm: got SHA1_8, expected BALK3", LNK_Warning_GHash, debug_obj_path);
+  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+    String8 line = t_chop_line(&i);
+    is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
+  }
+  T_Ok(is_warning_found);
+}
+
+TEST(ghash_match_debug_t)
+{
+  String8List t = {0}; str8_serial_begin(arena, &t);
+    str8_serial_push_u32(arena, &t, CV_Signature_C13);
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_STRUCTURE, str8_struct(&(CV_LeafStruct){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_UNION, str8_struct(&(CV_LeafUnion){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    //str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_ENUM, str8_struct(&(CV_LeafEnum){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+  String8 debug_t = str8_serial_end(arena, &t);
+
+  String8List h = {0}; str8_serial_begin(arena, &h);
+    str8_serial_push_struct(arena, &h, (&(LLVM_GHash){ .magic = LLVM_GHash_Magic, .hash_alg = LLVM_GHashAlg_BLAKE3, .version = LLVM_GHash_CurrentVersion }));
+    str8_serial_push_u64(arena, &h, 0x6ebacae08af4fda5ull);
+    str8_serial_push_u64(arena, &h, 0xc385876694f9769aull);
+    str8_serial_push_u64(arena, &h, 0x7ea8a529a89b2288ull);
+  String8 debug_h = str8_serial_end(arena, &h);
+
+  COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS, debug_t);
+    coff_obj_writer_push_section(cow, str8_lit(".debug$H"), PE_DEBUG_SECTION_FLAGS, debug_h);
+    String8 debug_obj = coff_obj_writer_serialize(arena, cow);
+  coff_obj_writer_release(&cow);
+
+  T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
+  T_Ok(t_write_entry_obj());
+
+  String8 output = {0};
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32 is_warning_found = 0;
+  String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
+  String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash count and type count: got 3 hashes for 2 types", LNK_Warning_GHash, debug_obj_path);
+  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+    String8 line = t_chop_line(&i);
+    is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
+  }
+  T_Ok(is_warning_found);
+}
+
+#if 0
+TEST(ghash_basic)
+{
+  String8 a_obj;
+  {
+    String8List t = {0}; str8_serial_begin(arena, &t);
+      str8_serial_push_u32(arena, &t, CV_Signature_C13);
+      str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_STRUCTURE, str8_struct(&(CV_LeafStruct){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+      str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_UNION, str8_struct(&(CV_LeafUnion){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+      str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_ENUM, str8_struct(&(CV_LeafEnum){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    String8 debug_t = str8_serial_end(arena, &t);
+
+    String8List h = {0}; str8_serial_begin(arena, &h);
+      str8_serial_push_struct(arena, &h, (&(LLVM_GHash){ .magic = LLVM_GHash_Magic, .hash_alg = LLVM_GHashAlg_BLAKE3, .version = LLVM_GHash_CurrentVersion }));
+      str8_serial_push_u64(arena, &h, 1);
+      str8_serial_push_u64(arena, &h, 2);
+      str8_serial_push_u64(arena, &h, 3);
+    String8 debug_h = str8_serial_end(arena, &h);
+
+    COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+      coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS, debug_t);
+      coff_obj_writer_push_section(cow, str8_lit(".debug$H"), PE_DEBUG_SECTION_FLAGS, debug_h);
+      a_obj = coff_obj_writer_serialize(arena, cow);
+    coff_obj_writer_release(&cow);
+  }
+
+  T_Ok(t_write_file(str8_lit("a.obj"), a_obj));
+  T_Ok(t_write_entry_obj());
+
+  String8 output = {0};
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj a.obj"), max_U64, arena, &output);
+  T_Ok(g_last_exit_code == 0);
+
+  B32 is_warning_found = 0;
+  String8 a_obj_path = t_make_file_path(arena, str8_lit("a.obj"));
+  String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash count and type count: got 3 hashes for 2 types", LNK_Warning_GHash, a_obj_path);
+  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+    String8 line = t_chop_line(&i);
+    is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
+  }
+  T_Ok(is_warning_found);
+}
+#endif
+
 TEST(patch_cv_symbol_tree)
 {
   String8List raw_symbols = {0};

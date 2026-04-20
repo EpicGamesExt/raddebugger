@@ -34,6 +34,7 @@
 #include "msf/msf_parse.h"
 #include "pdb/pdb.h"
 #include "msvc_crt/msvc_crt.h"
+#include "llvm/llvm.h"
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
@@ -52,6 +53,7 @@
 #include "msf/msf_parse.c"
 #include "pdb/pdb.c"
 #include "msvc_crt/msvc_crt.c"
+#include "llvm/llvm.c"
 
 // --- RDI ---------------------------------------------------------------------
 
@@ -120,7 +122,7 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
 {
   LNK_CmdLine cmd_line = {0};
 
-  // setup default flags
+  // default flags
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Align,     "%u", KB(4));
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Debug,     "none");
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_FileAlign, "%u", 512);
@@ -136,6 +138,7 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
   if (!lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Brepro)) {
     lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp, "%u", os_get_process_start_time_unix());
   }
+  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_TypeHashAlg,             "BLAKE3");
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_Age,                     "%u", 1);
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll, "");
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_DoMerge,                 "");
@@ -5246,7 +5249,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     //
     // CodeView
     //
-    LNK_CodeViewInput cv       = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, config->alt_pch_dirs, debug_info_objs_count, debug_info_objs);
+    LNK_CodeViewInput cv       = lnk_make_code_view_input(tp, arena, config, debug_info_objs_count, debug_info_objs);
     LNK_MergedTypes   cv_types = lnk_merge_types(tp, arena, &cv);
 
     //
@@ -5354,7 +5357,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       }
 
       LNK_CodeViewInput stripped_cv = {0};
-      stripped_cv.io_flags            = config->io_flags;
+      stripped_cv.config              = config;
       stripped_cv.is_stripped         = 1;
       stripped_cv.obj_arr             = cv.obj_arr;
       stripped_cv.obj_count           = cv.obj_count; 

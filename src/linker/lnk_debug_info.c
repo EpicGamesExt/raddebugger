@@ -58,6 +58,76 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
 }
 
 internal
+THREAD_POOL_TASK_FUNC(lnk_parse_debug_h_task)
+{
+  U64                obj_idx = task_id;
+  LNK_CodeViewInput *task    = raw_task;
+
+  String8List  sect_list =  task->debug_h_list_arr[obj_idx];
+  CV_DebugH   *debug_h   = &task->debug_h_arr     [obj_idx];
+
+  if (sect_list.node_count > 0) {
+    if (sect_list.node_count > 1) {
+      lnk_error_obj(LNK_Warning_GHash, task->obj_arr[obj_idx],
+                    "obj contains multiple .debug$H sections; using first one");
+    }
+
+    // select first .debug$H
+    String8    raw_debug_h     = sect_list.first->string;
+    LLVM_GHash ghash           = {0};
+    U64        ghash_read_size = str8_deserial_read_struct(raw_debug_h, 0, &ghash);
+
+    // was header read completely?
+    if (ghash_read_size != sizeof(ghash)) {
+      lnk_error_obj(LNK_Warning_GHash, task->obj_arr[obj_idx],
+                    ".debug$H section is too small to contain the header");
+      goto exit;
+    }
+
+    // validate magic
+    if (ghash.magic != LLVM_GHash_Magic) {
+      lnk_error_obj(LNK_Warning_GHash, task->obj_arr[obj_idx],
+                    ".debug$H contains invalid magic: got 0x%x, expected 0x%x", ghash.magic, LLVM_GHash_Magic);
+      goto exit;
+    }
+
+    // validate version
+    if (ghash.version != LLVM_GHash_CurrentVersion) {
+      lnk_error_obj(LNK_Warning_GHash, task->obj_arr[obj_idx],
+                    "mismatched .debug$H version: got %u, expected %u",
+                    ghash.version, LLVM_GHash_CurrentVersion);
+      goto exit;
+    }
+
+    // validate hashing algorithm
+    if (ghash.hash_alg != task->config->type_hash_alg) {
+      lnk_error_obj(LNK_Warning_GHash, task->obj_arr[obj_idx],
+                    "mismatched .debug$H hash algorithm: got %S, expected %S",
+                    llvm_string_from_ghash_alg(ghash.hash_alg),
+                    llvm_string_from_ghash_alg(task->config->type_hash_alg));
+      goto exit;
+    }
+
+    // input.debug_h_arr must be 1:1 with input.debug_t_arr
+    U64 hash_size  = llvm_hash_size_from_alg(ghash.hash_alg);
+    U64 hash_count = (raw_debug_h.size - sizeof(ghash)) / hash_size;
+    if (hash_count != task->debug_t_arr[obj_idx].count) {
+      lnk_error_obj(LNK_Warning_GHash, task->obj_arr[obj_idx],
+                    "mismatched .debug$H hash count and type count: got %llu hashes for %llu types",
+                    hash_count, task->debug_t_arr[obj_idx].count);
+      goto exit;
+    }
+
+    // load hashes
+    String8 hashes = str8_substr(raw_debug_h, r1u64(sizeof(ghash), raw_debug_h.size));
+    debug_h->count = hash_count;
+    debug_h->v     = (U64 *)hashes.str;
+
+    exit:;
+  }
+}
+
+internal
 THREAD_POOL_TASK_FUNC(lnk_strip_debug_t_sig_task)
 {
   U64               obj_idx = task_id;
@@ -106,7 +176,7 @@ THREAD_POOL_TASK_FUNC(lnk_read_type_servers_task)
   LNK_TypeServer *ts                 = &task->ts_arr.v[ts_idx];
 
   // read PDB from disk
-  String8 msf_data = lnk_read_data_from_file_path(scratch.arena, task->io_flags, ts->ts_path);
+  String8 msf_data = lnk_read_data_from_file_path(scratch.arena, task->config->io_flags, ts->ts_path);
 
   // check magic
   if (!msf_check_magic_70(msf_data) && msf_check_magic_20(msf_data)) { goto exit; }
@@ -198,48 +268,49 @@ THREAD_POOL_TASK_FUNC(lnk_read_type_servers_task)
 }
 
 internal LNK_CodeViewInput
-lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_flags, String8List lib_dir_list, String8List alt_pch_dirs, U64 obj_count, LNK_Obj **obj_arr)
+lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U64 obj_count, LNK_Obj **obj_arr)
 {
   ProfBegin("Extract CodeView");
   Temp scratch = scratch_begin(0,0);
 
-  LNK_CodeViewInput input = { .io_flags = io_flags, .obj_count = obj_count, .count = obj_count, .obj_arr = obj_arr, .ts_obj_range = r1u64(0,0) };
+  LNK_CodeViewInput input = { .config = config, .obj_count = obj_count, .count = obj_count, .obj_arr = obj_arr, .ts_obj_range = r1u64(0,0) };
   
   ProfBegin("Collect CodeView");
   input.debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0);
   input.debug_p_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$P"), 0);
   input.debug_t_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$T"), 0);
+  input.debug_h_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$H"), 0);
   ProfEnd();
 
   if (lnk_get_log_status(LNK_Log_Debug) || PROFILE_TELEMETRY) {
-    U64 total_debug_s_size = 0, total_debug_t_size = 0, total_debug_p_size = 0;
+    U64 total_debug_s_size = 0, total_debug_t_size = 0, total_debug_p_size = 0, total_debug_h_size = 0;
     for EachIndex(obj_idx, obj_count) {
       for EachNode(n, String8Node, input.debug_s_list_arr[obj_idx].first) { total_debug_s_size += n->string.size; }
       for EachNode(n, String8Node, input.debug_t_list_arr[obj_idx].first) { total_debug_t_size += n->string.size; }
       for EachNode(n, String8Node, input.debug_p_list_arr[obj_idx].first) { total_debug_p_size += n->string.size; }
+      for EachNode(n, String8Node, input.debug_h_list_arr[obj_idx].first) { total_debug_h_size += n->string.size; }
     }
 	
     ProfNoteV("Total .debug$S Input Size: %M", total_debug_s_size);
     ProfNoteV("Total .debug$T Input Size: %M", total_debug_t_size);
     ProfNoteV("Total .debug$P Input Size: %M", total_debug_p_size);
+    ProfNoteV("Total .debug$H Input Size: %M", total_debug_H_size);
 	
     if (lnk_get_log_status(LNK_Log_Debug)) {
       lnk_log(LNK_Log_Debug, "[Total .debug$S Input Size %M]", total_debug_s_size);
       lnk_log(LNK_Log_Debug, "[Total .debug$T Input Size %M]", total_debug_t_size);
       lnk_log(LNK_Log_Debug, "[Total .debug$P Input Size %M]", total_debug_p_size);
+      lnk_log(LNK_Log_Debug, "[Total .debug$H Input Size %M]", total_debug_h_size);
     }
   }
 
   ProfBegin("Parse CodeView");
   CV_DebugT *debug_p_arr;
   {
-    input.debug_s_arr = push_array(tp_arena->v[0], CV_DebugS, obj_count);
+    input.debug_s_arr = push_array(tp_arena->v[0], CV_DebugS, input.obj_count);
     tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_s_task, &input, "Parse .debug$S");
 
-    input.debug_h_arr = push_array(tp_arena->v[0], CV_DebugH, obj_count); // TODO: collect & parse .debug$H
-
     LNK_ParseCvTypes parse_types = { .input = &input };
-
     debug_p_arr = push_array(tp_arena->v[0], CV_DebugT, obj_count);
     parse_types.raw_types = str8_array_from_list_arr(scratch.arena, input.debug_p_list_arr, obj_count);
     parse_types.out_types = debug_p_arr;
@@ -251,6 +322,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
     parse_types.out_types = input.debug_t_arr;
     tp_for_parallel_prof(tp, 0,        obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$T");
     tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$T");
+
+    input.debug_h_arr = push_array(tp_arena->v[0], CV_DebugH, input.obj_count);
+    tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_h_task, &input, "Parse .debug$H");
   }
   ProfEnd();
 
@@ -297,7 +371,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       CV_DebugT         *debug_t = &input.debug_t_arr[obj_idx];
       CV_Leaf            leaf    = cv_debug_t_get_leaf(debug_t, 0);
       CV_TypeServerInfo  ts_info = cv_type_server_info_from_leaf(leaf);
-      String8            ts_path = lnk_find_first_file(scratch.arena, lib_dir_list, ts_info.name);
+      String8            ts_path = lnk_find_first_file(scratch.arena, config->lib_dir_list, ts_info.name);
 
       if (ts_path.size == 0) {
         lnk_discard_cv_debug_info(&input, obj_idx);
@@ -424,7 +498,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       if ( ! hash_table_search_path_u64(debug_p_ht, obj_path, &debug_p_obj_idx)) {
         // try alternative directory for the PCH
         String8 obj_name = str8_skip_last_slash(obj_path);
-        for EachNode(alt_dir_n, String8Node, alt_pch_dirs.first) {
+        for EachNode(alt_dir_n, String8Node, config->alt_pch_dirs.first) {
           String8 alt_obj_path = str8f(scratch.arena, "%S/%S", alt_dir_n->string, obj_name);
           if (hash_table_search_path_u64(debug_p_ht, alt_obj_path, &debug_p_obj_idx)) { break; }
         }
@@ -1325,36 +1399,47 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
   ProfBegin("Produce Hashes");
   {
     ProfBegin("Alloc Hashes");
-    U32Array indices[] = {
-      input->debug_p_indices,
-      input->int_obj_indices,
-      input->type_server_indices,
+    struct HashTarget {
+      TP_TaskFunc *hasher_task;
+      U32Array     indices;
+      U32Array     hash_indices;
+    } hash_targets[] = {
+      { lnk_hash_debug_t_task,      input->debug_p_indices     }, // hash .debug$P first so we can mix in hashes for precompiled sub leaves when hashing leaves in .debug$T
+      { lnk_hash_debug_t_task,      input->int_obj_indices     },
+      { lnk_hash_debug_t_deep_task, input->type_server_indices },
     };
-    for EachElement(i, indices) {
-      for EachIndex(k, indices[i].count) {
-        U64        obj_idx = indices[i].v[k];
-        CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
+
+    for EachElement(i, hash_targets) {
+      // reserve array for obj indices that need hashing
+      U32Array *h = &hash_targets[i].hash_indices;
+      h->count = 0;
+      h->v     = push_array(scratch.arena, U32, hash_targets[i].indices.count);
+
+      for EachIndex(k, hash_targets[i].indices.count) {
+        U32        obj_idx = hash_targets[i].indices.v[k];
         CV_DebugH *debug_h = &input->debug_h_arr[obj_idx];
-        debug_h->count = debug_t->count;
-        debug_h->v     = push_array(scratch.arena, U64, debug_h->count);
+
+        if (debug_h->count == 0) {
+          // alloc hashes
+          CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
+          debug_h->count = debug_t->count;
+          debug_h->v     = push_array(scratch.arena, U64, debug_h->count);
+
+          // schedule obj types to be hashed
+          h->v[h->count++] = obj_idx;
+        } else {
+          // hash was loaded from .debug$H
+        }
       }
     }
     ProfEnd();
-       
-    // hash .debug$P first so we can mix in hashes for precompiled sub leaves when hashing leaves in .debug$T
-    ProfBegin("Hash");
-    task.indices = input->debug_p_indices;
-    ProfScope(".debug$P [Count: %llu]", input->debug_p_indices.count)
-      tp_for_parallel(tp, 0, task.indices.count, lnk_hash_debug_t_task, &task);
 
-    task.indices = input->int_obj_indices;
-    ProfScope(".debug$T [Count: %.*s]", str8_varg(str8_from_count(scratch.arena, task.indices.count)))
-      tp_for_parallel(tp, 0, task.indices.count, lnk_hash_debug_t_task, &task);
-
-    task.indices = input->type_server_indices;
-    ProfScope("Type Servers [Count: %.*s]", str8_varg(str8_from_count(scratch.arena, task.indices.count)))
-      tp_for_parallel(tp, 0, task.indices.count, lnk_hash_debug_t_deep_task, &task);
-    ProfEnd();
+    for EachElement(i, hash_targets) {
+      task.indices = hash_targets[i].hash_indices;
+      ProfBegin("Hash [Count: %.*s]", str8_varg(str8_from_count(scratch.arena, task.indices.count)));
+      tp_for_parallel(tp, 0, hash_targets[i].indices.count, hash_targets[i].hasher_task, &task);
+      ProfEnd();
+    }
 
 #if BUILD_DEBUG
     for EachIndex(i, input->count) {

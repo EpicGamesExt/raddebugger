@@ -92,6 +92,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_Ignore,                       0, "RAD_IGNORE",                           ":#",        "Ignore the specified RAD linker warning."                                         },
   { LNK_CmdSwitch_Rad_WriteTempFiles,               0, "RAD_WRITE_TEMP_FILES",                 "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
   { LNK_CmdSwitch_Rad_TimeStamp,                    0, "RAD_TIME_STAMP",                       ":#",        "Time stamp embeded in EXE and PDB."                                               },
+  { LNK_CmdSwitch_Rad_TypeHashAlg,                  0, "RAD_TPYE_HASH_ALG",                    ":{BLAKE3}", "Sets hashing algorithm for type merging."                                         },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,        0, "RAD_UNRESOLVED_SYMBOL_LIMIT",          ":#",        "Limits number of unresolved symbol errors linker reports."                        },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,     0, "RAD_UNRESOLVED_SYMBOL_REF_LIMIT",      ":#",        "Limit number of unresolved symbol references linker reports."                     },
   { LNK_CmdSwitch_Rad_Version,                      0, "RAD_VERSION",                          "",          "Print version and exit."                                                          },
@@ -2063,6 +2064,17 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Rad_TimeStamp: {
     lnk_cmd_switch_parse_u32(obj, cmd_switch, value_strings, &config->time_stamp, 0);
+  } break;
+
+  case LNK_CmdSwitch_Rad_TypeHashAlg: {
+    String8 alg = {0};
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &alg)) {
+      if (str8_match(alg, str8_lit("BLAKE3"), StringMatchFlag_CaseInsensitive)) {
+        config->type_hash_alg = LLVM_GHashAlg_BLAKE3;
+      } else {
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown hash alg: %S", alg);
+      }
+    }
   } break;
 
   case LNK_CmdSwitch_Rad_UnresolvedSymbolLimit: {

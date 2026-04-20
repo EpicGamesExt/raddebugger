@@ -119,6 +119,7 @@ typedef enum
   LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,
   LNK_CmdSwitch_Rad_Ignore,
   LNK_CmdSwitch_Rad_TimeStamp,
+  LNK_CmdSwitch_Rad_TypeHashAlg,
   LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,
   LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,
   LNK_CmdSwitch_Rad_Version,
@@ -360,6 +361,7 @@ typedef struct LNK_Config
   U64                         unresolved_symbol_ref_limit;
   LNK_SwitchState             map_lines_for_unresolved_symbols;
   String8List                 alt_pch_dirs;
+  LLVM_GHashAlg               type_hash_alg;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
