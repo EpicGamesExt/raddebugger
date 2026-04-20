@@ -881,7 +881,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
     }
-    
+    lane_sync();
     scratch_end(scratch);
   }
   lane_sync();
@@ -3202,7 +3202,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             for EachNode(case_n, RDIM_LocationCase, s->location_cases.first)
             {
               lane_chunk_constant_data_counts[slot_idx] += case_n->location.value_data.size;
-              lane_chunk_bytecode_data_counts[slot_idx] += case_n->location.bytecode.encoded_size;
+              lane_chunk_bytecode_data_counts[slot_idx] += case_n->location.bytecode.encoded_size + 1; // NOTE(rjf): +1 for the `stop` op
             }
           }
           chunk_idx += 1;

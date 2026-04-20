@@ -4837,6 +4837,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     result.line_tables      = all_line_tables;
   }
   
+  lane_sync();
   scratch_end(scratch);
   return result;
 }
