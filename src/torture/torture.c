@@ -196,6 +196,40 @@ t_cl_path(void)
 }
 
 internal String8
+t_cl_version(void)
+{
+  local_persist String8 version;
+
+  if ( ! version.size) {
+    Temp scratch = scratch_begin(0, 0);
+
+    String8 output = {0};
+    t_invoke_(t_cl_path(), str8_zero(), max_U64, scratch.arena, &output);
+    AssertAlways(g_last_exit_code == 0);
+
+    String8 needle = str8_lit("Version");
+    U64 version_lo = str8_find_needle(output, 0, needle, 0);
+    version_lo += needle.size + 1;
+    AssertAlways(version_lo < output.size);
+
+    U64 version_hi = str8_find_needle(output, version_lo, str8_lit(" "), 0);
+    AssertAlways(version_hi < output.size);
+
+    version = str8_substr(output, r1u64(version_lo, version_hi));
+    AssertAlways(version.size > 0);
+
+    local_persist U8 buffer[4096];
+    ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
+    Arena *arena = arena_alloc_(&params);
+    version = str8_copy(arena, version);
+
+    scratch_end(scratch);
+  }
+
+  return version;
+}
+
+internal String8
 t_radlink_path(void)
 {
   local_persist String8 path = {0};
@@ -387,14 +421,26 @@ t_entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0,0);
 
+  U64 dashes_size = 9999;
+  U8 *dashes = push_array(scratch.arena, U8, dashes_size);
+  MemorySet(dashes, '-', dashes_size);
+
+  U64 dots_size = 9999;
+  U8 *dots      = push_array(scratch.arena, U8, dots_size);
+  MemorySet(dots, '.', dots_size);
+
+  char *spaces = "                                                                                      ";
+
+#define PrintHeader(p) fprintf(stderr, "--- %s %.*s\n", p, Max((80-4) - (int)strlen(p), 3), dashes)
+
   //
   // Handle -help
   //
   {
     B32 print_help = cmd_line_has_flag(cmdline, str8_lit("help")) ||
                      cmd_line_has_flag(cmdline, str8_lit("h"));
-     if (print_help) {
-      fprintf(stderr, "--- Help -----------------------------------------------------------------------\n");
+    if (print_help) {
+      PrintHeader("Help");
       fprintf(stderr, " %s\n\n", BUILD_TITLE_STRING_LITERAL);
       fprintf(stderr, " Usage: torture [Options] [Files]\n\n");
       fprintf(stderr, " Options:\n");
@@ -409,19 +455,43 @@ t_entry_point(CmdLine *cmdline)
     }
   }
 
+#if 0
+  //
+  // config
+  //
+  {
+    DateTime start_time_uni = os_now_universal_time();
+    DateTime start_time_loc = os_local_time_from_universal(&start_time_uni);
+    PrintHeader("Config");
+    fprintf(stderr, "  Build   %s\n", BUILD_TITLE_STRING_LITERAL);
+    fprintf(stderr, "  Start   %.*s\n", str8_varg(string_from_date_time(scratch.arena, &start_time_loc)));
+    fprintf(stderr, "\n");
+    fprintf(stderr, "  Tools\n");
+#if OS_WINDOWS
+    AssertAlways(t_cl_path().size && t_cl_version().size);
+    fprintf(stderr, "    MSVC    %.*s\n", str8_varg(t_cl_version()));
+    fprintf(stderr, "            %.*s\n", str8_varg(t_cl_path()));
+#endif
+    fprintf(stderr, "    radlink %.*s\n", str8_varg(t_radlink_version()));
+    fprintf(stderr, "            %.*s\n", str8_varg(t_radlink_path()));
+    fprintf(stderr, "    radbin  %.*s\n", str8_varg(t_radbin_version()));
+    fprintf(stderr, "            %.*s\n", str8_varg(t_radbin_path()));
+    fprintf(stderr, "\n");
+  }
+#endif
+
   //
   // Handle -list
   //
   {
     if (cmd_line_has_flag(cmdline, str8_lit("list"))) {
-      fprintf(stdout, "--- Tests --------------------------------------------------------------------\n");
+      PrintHeader("Tests");
       for EachIndex(i, g_torture_test_count) {
         fprintf(stdout, "  %s\n", g_torture_tests[i].label);
       }
       os_abort(0);
     }
   }
-
 
   //
   // Handle -linker
@@ -549,27 +619,26 @@ t_entry_point(CmdLine *cmdline)
       max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[test_idx].group));
     }
 
-    U64 dots_min = 15;
-    U64 dots_size = max_label_size+dots_min;
-    U8 *dots      = push_array(scratch.arena, U8, dots_size);
-    MemorySet(dots, '.', dots_size);
-
+    PrintHeader("Tests");
     U64 pass_count  = 0;
     U64 fail_count  = 0;
     U64 crash_count = 0;
     U64 max_digit_count = count_digits_u64(target_indices_count, 10);
     U64 total_time_start = os_now_microseconds();
+    typedef struct { U64 target_idx, d; } Slowest;
+    Slowest slowest[5] = {0};
+    for EachElement(i, slowest) { slowest[i].target_idx = max_U64; }
     for EachIndex(i, target_indices_count) {
       U64 target_idx = target_indices[i];
 
       // print run progress
+      U64 dots_min = 10;
       U64 dots_count = (max_label_size - cstring8_length((U8*)g_torture_tests[target_idx].label)) + dots_min;
-      char *spaces = "                                                                                      ";
       U64 curr_digit_count = count_digits_u64(i+1, 10);
       int idx_align_space_count = (int)(max_digit_count - curr_digit_count);
       fprintf(stdout, "[%.*s%I64u/%I64u] ", idx_align_space_count, spaces, i+1, target_indices_count);
-      fprintf(stdout, "(%s) %.*s%s", g_torture_tests[target_idx].group, (int)(max_group_size - cstring8_length((U8*)g_torture_tests[target_idx].group)), spaces, g_torture_tests[target_idx].label);
-      fprintf(stdout, "%.*s", (int)dots_count, dots);
+      fprintf(stdout, "%s %.*s:: %s", g_torture_tests[target_idx].group, (int)(max_group_size - cstring8_length((U8*)g_torture_tests[target_idx].group)), spaces, g_torture_tests[target_idx].label);
+      fprintf(stdout, " %.*s ", (int)dots_count, dots);
 
       // setup output directory
       g_wdir = push_str8f(scratch.arena, "%S\\%s", g_out, g_torture_tests[target_idx].label);
@@ -607,7 +676,22 @@ t_entry_point(CmdLine *cmdline)
         U64      d = run_end_time - run_start_time;
         DateTime t = date_time_from_micro_seconds(d);
         String8  s = string_from_elapsed_time(scratch.arena, t);
-        fprintf(stdout, " | %.*s", str8_varg(s));
+        fprintf(stdout, " %.*s", str8_varg(s));
+
+        U64 insert_idx = max_U64;
+        for EachElement(i, slowest) {
+          if (d > slowest[i].d) {
+            insert_idx = i;
+            break;
+          }
+        }
+        if (insert_idx < ArrayCount(slowest)) {
+          for (U64 i = ArrayCount(slowest) - 1; i > insert_idx; i -= 1) {
+            slowest[i] = slowest[i - 1];
+          }
+          slowest[insert_idx].target_idx = target_idx;
+          slowest[insert_idx].d          = d;
+        }
       }
       fprintf(stdout, "\n");
 
@@ -619,11 +703,43 @@ t_entry_point(CmdLine *cmdline)
         if (g_stop_on_first_fail_or_crash) { goto exit; }
       }
     }
+    fprintf(stderr, "\n");
     U64 total_time_end = os_now_microseconds();
 
+    PrintHeader("Summary");
     U64 total_time_dt = total_time_end - total_time_start;
     String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
-    fprintf(stdout, "*** Passed: %I64u, Failed: %I64u, Crashed: %I64u, Time: %.*s***\n", pass_count, fail_count, crash_count, str8_varg(total_time_str));
+    fprintf(stderr, "  Passed   %u\n", (int)pass_count);
+    fprintf(stderr, "  Failed   %u\n", (int)fail_count);
+    fprintf(stderr, "  Crashed  %u\n", (int)crash_count);
+    fprintf(stderr, "  Time     %.*s\n", str8_varg(total_time_str));
+    fprintf(stderr, "\n");
+
+    {
+      fprintf(stderr, "  Slow Tests\n");
+      U64 label_max = 0;
+      U64 group_max = 0;
+      for EachElement(i, slowest) {
+        Slowest s = slowest[i];
+        if (s.target_idx >= g_torture_test_count) { break; }
+        label_max = Max(strlen(g_torture_tests[s.target_idx].label), label_max);
+        group_max = Max(strlen(g_torture_tests[s.target_idx].group), group_max);
+      }
+
+      for EachElement(i, slowest) {
+        Slowest s = slowest[i];
+        if (s.target_idx >= g_torture_test_count) { break; }
+        String8 elapsed_time = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(s.d));
+        fprintf(stderr, "    %s %.*s:: %s %.*s %.*s\n",
+                g_torture_tests[s.target_idx].group,
+                (int)(group_max - strlen(g_torture_tests[s.target_idx].group)), spaces,
+                g_torture_tests[s.target_idx].label,
+                (int)(label_max - strlen(g_torture_tests[s.target_idx].label)) + 4, dots,
+                str8_varg(elapsed_time));
+      }
+
+      fprintf(stderr, "\n");
+    }
 
     exit:;
     if (fail_count + crash_count != 0) {

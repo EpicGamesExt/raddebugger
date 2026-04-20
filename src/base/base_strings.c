@@ -2305,6 +2305,10 @@ string_from_elapsed_time(Arena *arena, DateTime dt)
     str8_list_pushf(scratch.arena, &list, "%uus", dt.micro_sec);
   }
 
+  if (list.node_count == 0) {
+    str8_list_pushf(scratch.arena, &list, "0");
+  }
+
   String8 result = str8_list_join(arena, &list, &(StringJoin){ str8_lit_comp(""), str8_lit_comp(" "), str8_lit_comp("") });
 
   scratch_end(scratch);
