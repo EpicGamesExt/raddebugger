@@ -486,7 +486,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         {
           U64 slot_idx = lane_idx()*all_global_variables->chunk_count + chunk_idx;
           Rng1U64 range = lane_range(n->count);
-          for EachIndex(n_idx, n->count)
+          for EachInRange(n_idx, range)
           {
             if(n->v[n_idx].location_cases.count == 1 &&
                n->v[n_idx].location_cases.first->location.kind == RDI_LocationKind_ModuleOff)

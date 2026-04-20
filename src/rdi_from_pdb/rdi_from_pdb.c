@@ -3010,7 +3010,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     {
       for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
       {
-        raddbg_log("%S%s\n", n->string, n->corresponds_to_scope ? " (is scope)" : n->type != 0 ? " (is type)" : "");
+        // raddbg_log("%S%s\n", n->string, n->corresponds_to_scope ? " (is scope)" : n->type != 0 ? " (is type)" : "");
         if(n->corresponds_to_scope || n->scope != 0 || n->type != 0) { continue; }
         String8 string = n->string;
         RDIM_Namespace *ns = rdim_namespace_chunk_list_push(arena, &lane_namespaces, 32);
