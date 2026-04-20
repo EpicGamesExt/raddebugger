@@ -2805,7 +2805,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           }
           trail_color.w *= 0.25f;
           dr_rect(cursor_rect, cursor_color, 1.f, 0, 0.f);
-          if(do_cursor_trail)
+          if(do_cursor_trail && !ui_key_match(ui_active_key(UI_MouseButtonKind_Left), text_container_box->key))
           {
             R_Rect2DInst *trail_inst = dr_rect(trail_rect, trail_color, ui_top_font_size()*0.2f, 0, 1.f);
             trail_inst->shear = cursor_y - cursor_y__animated;
@@ -4157,7 +4157,7 @@ rd_cell(RD_CellParams *params, String8 string)
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = params->cursor[0];
       draw_data->mark = params->mark[0];
-      draw_data->trail = do_cursor_trail;
+      draw_data->trail = do_cursor_trail && !ui_dragging(sig);
       ui_box_equip_custom_draw(text_box, ui_line_edit_draw, draw_data);
       Vec2F32 text2mouse = sub_2f32(ui_mouse(), ui_box_text_position(text_box));
       FNT_Tag font = ui_top_font();
