@@ -40,6 +40,19 @@ struct P2R_LinkNameMap
   U64 link_name_count;
 };
 
+//- rjf: deduplicated namespace map type
+
+typedef struct P2R_NamespaceNode P2R_NamespaceNode;
+struct P2R_NamespaceNode
+{
+  P2R_NamespaceNode *next;
+  String8 string;
+  B32 corresponds_to_scope;
+  RDIM_Scope *scope;
+  RDIM_Type *type;
+  RDIM_Namespace *ns;
+};
+
 //- rjf: normalized file path -> source file map
 
 typedef struct P2R_SrcFileStub P2R_SrcFileStub;
@@ -92,6 +105,7 @@ struct P2R_TypeIdChain
 
 internal U64 p2r_end_of_cplusplus_container_name(String8 str);
 internal U64 p2r_hash_from_voff(U64 voff);
+internal int p2r_namespace_node_is_before(P2R_NamespaceNode **a, P2R_NamespaceNode **b);
 
 ////////////////////////////////
 //~ rjf: COFF => RDI Canonical Conversions

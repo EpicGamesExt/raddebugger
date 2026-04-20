@@ -39,6 +39,12 @@ p2r_hash_from_voff(U64 voff)
   return hash;
 }
 
+internal int
+p2r_namespace_node_is_before(P2R_NamespaceNode **a, P2R_NamespaceNode **b)
+{
+  return (str8_compar(a[0]->string, b[0]->string, 0) < 0);
+}
+
 ////////////////////////////////
 //~ rjf: COFF <-> RDI Canonical Conversions
 
@@ -2018,17 +2024,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 3: gather all unique namespaces from types
   //
-  typedef struct NamespaceNode NamespaceNode;
-  struct NamespaceNode
-  {
-    NamespaceNode *next;
-    String8 string;
-    B32 corresponds_to_scope;
-    RDIM_Scope *scope;
-    RDIM_Type *type;
-    RDIM_Namespace *ns;
-  };
-  NamespaceNode **all_namespace_slots = 0;
+  P2R_NamespaceNode **all_namespace_slots = 0;
   U64 all_namespace_slots_count = 0;
   ProfScope("gather all unique namespaces from types")
   {
@@ -2112,6 +2108,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         String8 namespace_fully_qualified_name = str8_substr(name_before_templates, r1u64(0, scope_resolution_operator_pos));
         if(namespace_fully_qualified_name.size != 0)
         {
+          namespace_count += 1;
           U64 hash = u64_hash_from_str8(namespace_fully_qualified_name);
           U64 slot_idx = hash%namespace_slots_count;
           B32 already_exists = 0;
@@ -2128,7 +2125,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             String8Node *node = push_array(scratch2.arena, String8Node, 1);
             SLLStackPush(namespace_slots[slot_idx], node);
             node->string = namespace_fully_qualified_name;
-            namespace_count += 1;
           }
         }
       }
@@ -2161,7 +2157,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       if(lane_idx() == 0)
       {
         all_namespace_slots_count = *total_namespace_count_ptr / 3;
-        all_namespace_slots = push_array(scratch.arena, NamespaceNode *, all_namespace_slots_count);
+        all_namespace_slots = push_array(scratch.arena, P2R_NamespaceNode *, all_namespace_slots_count);
         for EachIndex(l_idx, lane_count())
         {
           LaneNamespaceTable *tbl = &lane_namespace_tables[l_idx];
@@ -2172,7 +2168,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               U64 hash = u64_hash_from_str8(n->string);
               U64 dst_slot_idx = hash%all_namespace_slots_count;
               B32 already_exists = 0;
-              for(NamespaceNode *dst_n = all_namespace_slots[dst_slot_idx]; dst_n != 0; dst_n = dst_n->next)
+              for(P2R_NamespaceNode *dst_n = all_namespace_slots[dst_slot_idx]; dst_n != 0; dst_n = dst_n->next)
               {
                 if(str8_match(dst_n->string, n->string, 0))
                 {
@@ -2182,7 +2178,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               }
               if(!already_exists)
               {
-                NamespaceNode *dst_n = push_array(scratch.arena, NamespaceNode, 1);
+                P2R_NamespaceNode *dst_n = push_array(scratch.arena, P2R_NamespaceNode, 1);
                 dst_n->string = n->string;
                 SLLStackPush(all_namespace_slots[dst_slot_idx], dst_n);
               }
@@ -2777,7 +2773,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     Rng1U64 range = lane_range(all_namespace_slots_count);
     for EachInRange(slot_idx, range)
     {
-      for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+      for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
       {
         String8 container_string = n->string;
         CV_TypeId container_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_string, 0);
@@ -2829,7 +2825,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             String8 name = str8_cstring_capped(proc32+1, iter.opl);
             U64 hash = u64_hash_from_str8(name);
             U64 slot_idx = hash%all_namespace_slots_count;
-            for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+            for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
             {
               if(str8_match(n->string, name, 0))
               {
@@ -2907,7 +2903,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         if(!already_exists)
         {
           U64 slot_idx = container_name_hash%all_namespace_slots_count;
-          for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+          for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
           {
             if(str8_match(n->string, container_name, 0))
             {
@@ -2975,7 +2971,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               U64 hash = u64_hash_from_str8(n->string);
               U64 dst_slot_idx = hash%all_namespace_slots_count;
               B32 already_exists = 0;
-              for(NamespaceNode *dst_n = all_namespace_slots[dst_slot_idx]; dst_n != 0; dst_n = dst_n->next)
+              for(P2R_NamespaceNode *dst_n = all_namespace_slots[dst_slot_idx]; dst_n != 0; dst_n = dst_n->next)
               {
                 if(str8_match(dst_n->string, n->string, 0))
                 {
@@ -2985,7 +2981,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               }
               if(!already_exists)
               {
-                NamespaceNode *dst_n = push_array(scratch.arena, NamespaceNode, 1);
+                P2R_NamespaceNode *dst_n = push_array(scratch.arena, P2R_NamespaceNode, 1);
                 dst_n->string = n->string;
                 SLLStackPush(all_namespace_slots[dst_slot_idx], dst_n);
               }
@@ -3008,8 +3004,25 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     Rng1U64 range = lane_range(all_namespace_slots_count);
     for EachInRange(slot_idx, range)
     {
-      for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+      Temp scratch = scratch_begin(&arena, 1);
+      
+      // rjf: gather nodes, sort
+      U64 node_count = 0;
+      for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next) { node_count += 1; }
+      P2R_NamespaceNode **nodes = push_array(scratch.arena, P2R_NamespaceNode *, node_count);
       {
+        U64 idx = 0;
+        for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next, idx += 1)
+        {
+          nodes[idx] = n;
+        }
+      }
+      radsort(nodes, node_count, p2r_namespace_node_is_before);
+      
+      // rjf: build namespaces for this slot
+      for EachIndex(node_in_slot_idx, node_count)
+      {
+        P2R_NamespaceNode *n = nodes[node_in_slot_idx];
         // raddbg_log("%S%s\n", n->string, n->corresponds_to_scope ? " (is scope)" : n->type != 0 ? " (is type)" : "");
         if(n->corresponds_to_scope || n->scope != 0 || n->type != 0) { continue; }
         String8 string = n->string;
@@ -3017,6 +3030,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         ns->name = string;
         n->ns = ns;
       }
+      scratch_end(scratch);
     }
     
     // rjf: combine all per-lane namespaces
@@ -3290,7 +3304,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   {
                     U64 hash = u64_hash_from_str8(container_name);
                     U64 slot_idx = hash%all_namespace_slots_count;
-                    for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+                    for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
                     {
                       if(str8_match(container_name, n->string, 0) &&
                          n->ns != 0)
@@ -3369,7 +3383,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   U64 hash = u64_hash_from_str8(container_name);
                   U64 slot_idx = hash%all_namespace_slots_count;
-                  for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+                  for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
                   {
                     if(str8_match(container_name, n->string, 0) &&
                        n->ns != 0)
@@ -3452,7 +3466,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 {
                   U64 hash = u64_hash_from_str8(name);
                   U64 slot_idx = hash%all_namespace_slots_count;
-                  for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+                  for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
                   {
                     if(str8_match(n->string, name, 0))
                     {
@@ -4036,7 +4050,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       {
         U64 hash = u64_hash_from_str8(scope_n->string);
         U64 slot_idx = hash%all_namespace_slots_count;
-        for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+        for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
         {
           n->scope = scope_n->scope;
         }
@@ -4724,11 +4738,11 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
           String8 container_name = str8_chop(str8_prefix(udt_name, p2r_end_of_cplusplus_container_name(udt_name)), 2);
           
           // rjf: look up namespace node associated with namespace
-          NamespaceNode *ns_node = 0;
+          P2R_NamespaceNode *ns_node = 0;
           {
             U64 hash = u64_hash_from_str8(container_name);
             U64 slot_idx = hash%all_namespace_slots_count;
-            for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+            for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
             {
               if(str8_match(n->string, container_name, 0))
               {
