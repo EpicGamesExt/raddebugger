@@ -19,16 +19,17 @@ p2r_end_of_cplusplus_container_name(String8 str)
   U64 result = 0;
   if(str.size >= 2)
   {
-    for(U64 i = str.size; i >= 2; i -= 1)
+    String8 str_before_templates = str8_prefix(str, str8_find_needle(str, 0, str8_lit("<"), 0));
+    for(U64 i = str_before_templates.size; i >= 2; i -= 1)
     {
-      if(str.str[i - 2] == ':' && str.str[i - 1] == ':')
+      if(str_before_templates.str[i - 2] == ':' && str_before_templates.str[i - 1] == ':')
       {
         result = i;
         break;
       }
     }
   }
-  return(result);
+  return result;
 }
 
 internal U64
@@ -2022,10 +2023,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   {
     NamespaceNode *next;
     String8 string;
+    B32 corresponds_to_scope;
     RDIM_Scope *scope;
+    RDIM_Type *type;
+    RDIM_Namespace *ns;
   };
-  NamespaceNode **all_type_namespace_slots = 0;
-  U64 all_type_namespace_slots_count = 0;
+  NamespaceNode **all_namespace_slots = 0;
+  U64 all_namespace_slots_count = 0;
   ProfScope("gather all unique namespaces from types")
   {
     Temp scratch2 = scratch_begin(&scratch.arena, 1);
@@ -2156,8 +2160,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       // rjf: combine
       if(lane_idx() == 0)
       {
-        all_type_namespace_slots_count = *total_namespace_count_ptr / 3;
-        all_type_namespace_slots = push_array(scratch.arena, NamespaceNode *, all_type_namespace_slots_count);
+        all_namespace_slots_count = *total_namespace_count_ptr / 3;
+        all_namespace_slots = push_array(scratch.arena, NamespaceNode *, all_namespace_slots_count);
         for EachIndex(l_idx, lane_count())
         {
           LaneNamespaceTable *tbl = &lane_namespace_tables[l_idx];
@@ -2166,9 +2170,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             for(String8Node *n = tbl->slots[slot_idx]; n != 0; n = n->next)
             {
               U64 hash = u64_hash_from_str8(n->string);
-              U64 dst_slot_idx = hash%all_type_namespace_slots_count;
+              U64 dst_slot_idx = hash%all_namespace_slots_count;
               B32 already_exists = 0;
-              for(NamespaceNode *dst_n = all_type_namespace_slots[dst_slot_idx]; dst_n != 0; dst_n = dst_n->next)
+              for(NamespaceNode *dst_n = all_namespace_slots[dst_slot_idx]; dst_n != 0; dst_n = dst_n->next)
               {
                 if(str8_match(dst_n->string, n->string, 0))
                 {
@@ -2180,14 +2184,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               {
                 NamespaceNode *dst_n = push_array(scratch.arena, NamespaceNode, 1);
                 dst_n->string = n->string;
-                SLLStackPush(all_type_namespace_slots[dst_slot_idx], dst_n);
+                SLLStackPush(all_namespace_slots[dst_slot_idx], dst_n);
               }
             }
           }
         }
       }
-      lane_sync_u64(&all_type_namespace_slots_count, 0);
-      lane_sync_u64(&all_type_namespace_slots, 0);
+      lane_sync_u64(&all_namespace_slots_count, 0);
+      lane_sync_u64(&all_namespace_slots, 0);
     }
     scratch_end(scratch2);
   }
@@ -2765,6 +2769,282 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   all_types__pre_typedefs = *all_types__pre_typedefs_ptr;
   
   //////////////////////////////////////////////////////////////
+  //- rjf: upgrade namespace nodes with type info, if they match a type
+  //
+  ProfScope("upgrade namespace nodes with type info, if they match a type")
+  {
+#define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < tpi_leaf->itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
+    Rng1U64 range = lane_range(all_namespace_slots_count);
+    for EachInRange(slot_idx, range)
+    {
+      for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+      {
+        String8 container_string = n->string;
+        CV_TypeId container_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_string, 0);
+        if(container_type_id != 0)
+        {
+          n->type = p2r_type_ptr_from_itype(container_type_id);
+        }
+      }
+    }
+#undef p2r_type_ptr_from_itype
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: set bit in all namespace nodes that correspond to scopes
+  //
+  if(params->subset_flags & (RDIM_SubsetFlag_Procedures|
+                             RDIM_SubsetFlag_GlobalVariables|
+                             RDIM_SubsetFlag_ThreadVariables|
+                             RDIM_SubsetFlag_Scopes|
+                             RDIM_SubsetFlag_Locals|
+                             RDIM_SubsetFlag_GlobalVariableNameMap|
+                             RDIM_SubsetFlag_ThreadVariableNameMap|
+                             RDIM_SubsetFlag_ProcedureNameMap|
+                             RDIM_SubsetFlag_ConstantNameMap|
+                             RDIM_SubsetFlag_LinkNameProcedureNameMap|
+                             RDIM_SubsetFlag_Types))
+    ProfScope("determine which namespace nodes correspond to scopes")
+  {
+    U64 *sym_take_counter = lane_idx() == 0 ? push_array(scratch.arena, U64, 1) : 0;
+    lane_sync_u64(&sym_take_counter, 0);
+    for(;;)
+    {
+      U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
+      if(sym_idx >= all_syms_count)
+      {
+        break;
+      }
+      CV_SymParsed *sym = all_syms[sym_idx];
+      for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
+      {
+        switch(iter.kind)
+        {
+          default:{}break;
+          case CV_SymKind_LPROC32:
+          case CV_SymKind_GPROC32:
+          {
+            CV_SymProc32 *proc32 = (CV_SymProc32 *)iter.struct_base;
+            String8 name = str8_cstring_capped(proc32+1, iter.opl);
+            U64 hash = u64_hash_from_str8(name);
+            U64 slot_idx = hash%all_namespace_slots_count;
+            for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+            {
+              if(str8_match(n->string, name, 0))
+              {
+                ins_atomic_u32_eval_assign(&n->corresponds_to_scope, 1);
+                break;
+              }
+            }
+          }break;
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: gather all namespaces which are only encoded in symbols (not found in types)
+  //
+  if(params->subset_flags & (RDIM_SubsetFlag_Procedures|
+                             RDIM_SubsetFlag_GlobalVariables|
+                             RDIM_SubsetFlag_ThreadVariables|
+                             RDIM_SubsetFlag_Scopes|
+                             RDIM_SubsetFlag_Locals|
+                             RDIM_SubsetFlag_GlobalVariableNameMap|
+                             RDIM_SubsetFlag_ThreadVariableNameMap|
+                             RDIM_SubsetFlag_ProcedureNameMap|
+                             RDIM_SubsetFlag_ConstantNameMap|
+                             RDIM_SubsetFlag_LinkNameProcedureNameMap|
+                             RDIM_SubsetFlag_Types))
+    ProfScope("gather all namespaces which are only encoded in symbols (not found in types)")
+  {
+    Temp scratch2 = scratch_begin(&scratch.arena, 1);
+    U64 lane_namespace_slots_count = 4096;
+    String8Node **lane_namespace_slots = push_array(scratch2.arena, String8Node *, lane_namespace_slots_count);
+    
+    //- rjf: gather from syms
+    U64 *sym_take_counter = lane_idx() == 0 ? push_array(scratch2.arena, U64, 1) : 0;
+    lane_sync_u64(&sym_take_counter, 0);
+    for(;;)
+    {
+      U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
+      if(sym_idx >= all_syms_count)
+      {
+        break;
+      }
+      CV_SymParsed *sym = all_syms[sym_idx];
+      for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
+      {
+        // rjf: get global symbol name
+        String8 symbol_name = {0};
+        switch(iter.kind)
+        {
+          default:{}break;
+          case CV_SymKind_GDATA32:
+          {
+            CV_SymData32 *data32 = (CV_SymData32 *)iter.struct_base;
+            symbol_name = str8_cstring_capped(data32+1, iter.opl);
+          }break;
+          case CV_SymKind_GPROC32:
+          {
+            CV_SymProc32 *proc32 = (CV_SymProc32 *)iter.struct_base;
+            symbol_name = str8_cstring_capped(proc32+1, iter.opl);
+          }break;
+          case CV_SymKind_GTHREAD32:
+          {
+            CV_SymThread32 *thread32 = (CV_SymThread32 *)iter.struct_base;
+            symbol_name = str8_cstring_capped(thread32+1, iter.opl);
+          }break;
+        }
+        
+        // rjf: symbol name -> container name
+        String8 container_name = str8_chop(str8_prefix(symbol_name, p2r_end_of_cplusplus_container_name(symbol_name)), 2);
+        U64 container_name_hash = u64_hash_from_str8(container_name);
+        
+        // rjf: first, check if this container already showed up from type info
+        B32 already_exists = 0;
+        if(!already_exists)
+        {
+          U64 slot_idx = container_name_hash%all_namespace_slots_count;
+          for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+          {
+            if(str8_match(n->string, container_name, 0))
+            {
+              already_exists = 1;
+              break;
+            }
+          }
+        }
+        
+        // rjf: next, check if we've already gathered this namespace for this lane
+        if(!already_exists)
+        {
+          U64 slot_idx = container_name_hash%lane_namespace_slots_count;
+          for(String8Node *n = lane_namespace_slots[slot_idx]; n != 0; n = n->next)
+          {
+            if(str8_match(n->string, container_name, 0))
+            {
+              already_exists = 1;
+              break;
+            }
+          }
+        }
+        
+        // rjf: if we didn't find this namespace in either those from types, or already found in this lane, then gather
+        if(!already_exists)
+        {
+          U64 slot_idx = container_name_hash%lane_namespace_slots_count;
+          String8Node *n = push_array(scratch2.arena, String8Node, 1);
+          SLLStackPush(lane_namespace_slots[slot_idx], n);
+          n->string = container_name;
+        }
+      }
+    }
+    lane_sync();
+    
+    //- rjf: combine + fold into the all_namespaces table
+    {
+      // rjf: gather lane maps
+      typedef struct LaneNamespaceTable LaneNamespaceTable;
+      struct LaneNamespaceTable
+      {
+        String8Node **slots;
+        U64 slots_count;
+      };
+      LaneNamespaceTable *lane_namespace_tables = 0;
+      if(lane_idx() == 0)
+      {
+        lane_namespace_tables = push_array(scratch2.arena, LaneNamespaceTable, lane_count());
+      }
+      lane_sync_u64(&lane_namespace_tables, 0);
+      lane_namespace_tables[lane_idx()].slots = lane_namespace_slots;
+      lane_namespace_tables[lane_idx()].slots_count = lane_namespace_slots_count;
+      lane_sync();
+      
+      // rjf: combine
+      if(lane_idx() == 0)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          LaneNamespaceTable *tbl = &lane_namespace_tables[l_idx];
+          for EachIndex(slot_idx, tbl->slots_count)
+          {
+            for(String8Node *n = tbl->slots[slot_idx]; n != 0; n = n->next)
+            {
+              U64 hash = u64_hash_from_str8(n->string);
+              U64 dst_slot_idx = hash%all_namespace_slots_count;
+              B32 already_exists = 0;
+              for(NamespaceNode *dst_n = all_namespace_slots[dst_slot_idx]; dst_n != 0; dst_n = dst_n->next)
+              {
+                if(str8_match(dst_n->string, n->string, 0))
+                {
+                  already_exists = 1;
+                  break;
+                }
+              }
+              if(!already_exists)
+              {
+                NamespaceNode *dst_n = push_array(scratch.arena, NamespaceNode, 1);
+                dst_n->string = n->string;
+                SLLStackPush(all_namespace_slots[dst_slot_idx], dst_n);
+              }
+            }
+          }
+        }
+      }
+    }
+    lane_sync();
+    scratch_end(scratch2);
+  }
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: build namespaces, that are not scopes, nor types
+  //
+  RDIM_NamespaceChunkList all_namespaces = {0};
+  {
+    // rjf: gather all per-lane namespaces
+    RDIM_NamespaceChunkList lane_namespaces = {0};
+    Rng1U64 range = lane_range(all_namespace_slots_count);
+    for EachInRange(slot_idx, range)
+    {
+      for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+      {
+        raddbg_log("%S%s\n", n->string, n->corresponds_to_scope ? " (is scope)" : n->type != 0 ? " (is type)" : "");
+        if(n->corresponds_to_scope || n->scope != 0 || n->type != 0) { continue; }
+        String8 string = n->string;
+        RDIM_Namespace *ns = rdim_namespace_chunk_list_push(arena, &lane_namespaces, 32);
+        ns->name = string;
+        n->ns = ns;
+      }
+    }
+    
+    // rjf: combine all per-lane namespaces
+    RDIM_NamespaceChunkList *lanes_namespaces = 0;
+    if(lane_idx() == 0)
+    {
+      lanes_namespaces = push_array(scratch.arena, RDIM_NamespaceChunkList, lane_count());
+    }
+    lane_sync_u64(&lanes_namespaces, 0);
+    lanes_namespaces[lane_idx()] = lane_namespaces;
+    lane_sync();
+    
+    // rjf: join all per-lane namespaces
+    RDIM_NamespaceChunkList *all_namespaces_ptr = &all_namespaces;
+    lane_sync_u64(&all_namespaces_ptr, 0);
+    if(lane_idx() == 0)
+    {
+      for EachIndex(l_idx, lane_count())
+      {
+        rdim_namespace_chunk_list_concat_in_place(all_namespaces_ptr, &lanes_namespaces[l_idx]);
+      }
+    }
+    lane_sync();
+    all_namespaces = *all_namespaces_ptr;
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: convert symbols from all units
   //
   typedef struct ScopeNamespaceNode ScopeNamespaceNode;
@@ -2985,29 +3265,50 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   RDIM_Type *type = p2r_type_ptr_from_itype(data32->itype);
                   
                   // rjf: unpack global's container type
+                  B32 got_container = 0;
                   RDIM_Type *container_type = 0;
                   U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
-                  if(container_name_opl > 2)
+                  String8 container_name = str8_chop(str8_prefix(name, container_name_opl), 2);
+                  if(!got_container && container_name.size != 0)
                   {
-                    String8 container_name = str8(name.str, container_name_opl - 2);
                     CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_name, 0);
                     container_type = p2r_type_ptr_from_itype(cv_type_id);
+                    got_container = (container_type != 0);
                   }
                   
                   // rjf: unpack global's container scope
                   RDIM_Scope *container_scope = 0;
-                  if(container_type == 0 && top_scope_node != 0 && iter.kind == CV_SymKind_LDATA32)
+                  if(!got_container && top_scope_node != 0 && iter.kind == CV_SymKind_LDATA32)
                   {
                     container_scope = top_scope_node->scope;
+                    got_container = (container_scope != 0);
+                  }
+                  
+                  // rjf: unpack global's container namespace
+                  RDIM_Namespace *container_namespace = 0;
+                  if(!got_container && container_name.size != 0)
+                  {
+                    U64 hash = u64_hash_from_str8(container_name);
+                    U64 slot_idx = hash%all_namespace_slots_count;
+                    for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+                    {
+                      if(str8_match(container_name, n->string, 0) &&
+                         n->ns != 0)
+                      {
+                        container_namespace = n->ns;
+                        break;
+                      }
+                    }
                   }
                   
                   // rjf: build symbol
                   RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, sym_global_variables, sym_global_variables_chunk_cap);
-                  symbol->is_extern        = (iter.kind == CV_SymKind_GDATA32);
-                  symbol->name             = name;
-                  symbol->type             = type;
-                  symbol->container_scope  = container_scope;
-                  symbol->container_type   = container_type;
+                  symbol->is_extern           = (iter.kind == CV_SymKind_GDATA32);
+                  symbol->name                = name;
+                  symbol->type                = type;
+                  symbol->container_scope     = container_scope;
+                  symbol->container_type      = container_type;
+                  symbol->container_namespace = container_namespace;
                   RDIM_Location loc = {.kind = RDI_LocationKind_ModuleOff, .offset = voff};
                   RDIM_Rng1U64 range = {0, 0xffffffffffffffffull};
                   rdim_location_case_list_push(arena, &symbol->location_cases, loc, range);
@@ -3043,20 +3344,40 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 RDIM_Type *type = p2r_type_ptr_from_itype(proc32->itype);
                 
                 // rjf: unpack proc's container type
+                B32 got_container = 0;
                 RDIM_Type *container_type = 0;
                 U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
-                if(container_name_opl > 2 && tpi_hash != 0 && tpi_leaf != 0)
+                String8 container_name = str8_chop(str8_prefix(name, container_name_opl), 2);
+                if(!got_container && container_name.size != 0 && tpi_hash != 0 && tpi_leaf != 0)
                 {
-                  String8 container_name = str8(name.str, container_name_opl - 2);
                   CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_name, 0);
                   container_type = p2r_type_ptr_from_itype(cv_type_id);
+                  got_container = (container_type != 0);
                 }
                 
                 // rjf: unpack proc's container scope
                 RDIM_Scope *container_scope = 0;
-                if(container_type == 0 && top_scope_node != 0)
+                if(!got_container && top_scope_node != 0)
                 {
                   container_scope = top_scope_node->scope;
+                  got_container = 1;
+                }
+                
+                // rjf: unpack proc's container namespace
+                RDIM_Namespace *container_namespace = 0;
+                if(!got_container && container_name.size != 0)
+                {
+                  U64 hash = u64_hash_from_str8(container_name);
+                  U64 slot_idx = hash%all_namespace_slots_count;
+                  for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+                  {
+                    if(str8_match(container_name, n->string, 0) &&
+                       n->ns != 0)
+                    {
+                      container_namespace = n->ns;
+                      break;
+                    }
+                  }
                 }
                 
                 // rjf: build procedure's root scope
@@ -3130,8 +3451,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 if(procedure_root_scope != 0)
                 {
                   U64 hash = u64_hash_from_str8(name);
-                  U64 slot_idx = hash%all_type_namespace_slots_count;
-                  for(NamespaceNode *n = all_type_namespace_slots[slot_idx]; n != 0; n = n->next)
+                  U64 slot_idx = hash%all_namespace_slots_count;
+                  for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
                   {
                     if(str8_match(n->string, name, 0))
                     {
@@ -3714,57 +4035,13 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       for(ScopeNamespaceNode *scope_n = scopes_that_are_namespaces->first; scope_n != 0; scope_n = scope_n->next)
       {
         U64 hash = u64_hash_from_str8(scope_n->string);
-        U64 slot_idx = hash%all_type_namespace_slots_count;
-        for(NamespaceNode *n = all_type_namespace_slots[slot_idx]; n != 0; n = n->next)
+        U64 slot_idx = hash%all_namespace_slots_count;
+        for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
         {
           n->scope = scope_n->scope;
         }
       }
     }
-  }
-  lane_sync();
-  
-  //////////////////////////////////////////////////////////////
-  //- rjf: build namespaces, that are not scopes, nor types
-  //
-  RDIM_NamespaceChunkList all_namespaces = {0};
-  {
-    // rjf: gather all per-lane namespaces
-    RDIM_NamespaceChunkList lane_namespaces = {0};
-    Rng1U64 range = lane_range(all_type_namespace_slots_count);
-    for EachInRange(slot_idx, range)
-    {
-      for(NamespaceNode *n = all_type_namespace_slots[slot_idx]; n != 0; n = n->next)
-      {
-        if(n->scope != 0) { continue; }
-        String8 string = n->string;
-        RDIM_Namespace *ns = rdim_namespace_chunk_list_push(arena, &lane_namespaces, 32);
-        ns->name = string;
-      }
-    }
-    
-    // rjf: combine all per-lane namespaces
-    RDIM_NamespaceChunkList *lanes_namespaces = 0;
-    if(lane_idx() == 0)
-    {
-      lanes_namespaces = push_array(scratch.arena, RDIM_NamespaceChunkList, lane_count());
-    }
-    lane_sync_u64(&lanes_namespaces, 0);
-    lanes_namespaces[lane_idx()] = lane_namespaces;
-    lane_sync();
-    
-    // rjf: join all per-lane namespaces
-    RDIM_NamespaceChunkList *all_namespaces_ptr = &all_namespaces;
-    lane_sync_u64(&all_namespaces_ptr, 0);
-    if(lane_idx() == 0)
-    {
-      for EachIndex(l_idx, lane_count())
-      {
-        rdim_namespace_chunk_list_concat_in_place(all_namespaces_ptr, &lanes_namespaces[l_idx]);
-      }
-    }
-    lane_sync();
-    all_namespaces = *all_namespaces_ptr;
   }
   lane_sync();
   
@@ -3832,6 +4109,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
         
         //- rjf: build UDT
+        String8 udt_name = {0};
         CV_TypeId field_itype = 0;
         switch(kind)
         {
@@ -3849,6 +4127,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               break;
             }
             field_itype = lf->field_itype;
+            U8 *numeric_ptr = (U8*)(lf + 1);
+            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+            U8 *name_ptr = numeric_ptr + size.encoded_size;
+            udt_name = str8_cstring_capped(name_ptr, itype_leaf_opl);
           }goto equip_members;
           case CV_LeafKind_UNION:
           {
@@ -3858,6 +4140,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
               break;
             }
             field_itype = lf->field_itype;
+            U8 *numeric_ptr = (U8*)(lf + 1);
+            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+            U8 *name_ptr = numeric_ptr + size.encoded_size;
+            udt_name = str8_cstring_capped(name_ptr, itype_leaf_opl);
           }goto equip_members;
           case CV_LeafKind_CLASS2:
           case CV_LeafKind_STRUCT2:
@@ -3867,6 +4153,10 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             {
               break;
             }
+            U8 *numeric_ptr = (U8*)(lf + 1);
+            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+            U8 *name_ptr = numeric_ptr + size.encoded_size;
+            udt_name = str8_cstring_capped(name_ptr, itype_leaf_opl);
             field_itype = lf->field_itype;
           }goto equip_members;
           equip_members:
@@ -4286,6 +4576,8 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             {
               break;
             }
+            U8 *name_ptr = (U8 *)(lf + 1);
+            udt_name = str8_cstring_capped(name_ptr, itype_leaf_opl);
             field_itype = lf->field_itype;
           }goto equip_enum_vals;
           equip_enum_vals:;
@@ -4423,6 +4715,46 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             
             scratch_end(scratch);
           }break;
+        }
+        
+        //- rjf: find container, given name's namespaces
+        if(dst_type != 0 && dst_type->udt != 0 && udt_name.size != 0)
+        {
+          // rjf: unpack fully qualified namespace from udt name
+          String8 container_name = str8_chop(str8_prefix(udt_name, p2r_end_of_cplusplus_container_name(udt_name)), 2);
+          
+          // rjf: look up namespace node associated with namespace
+          NamespaceNode *ns_node = 0;
+          {
+            U64 hash = u64_hash_from_str8(container_name);
+            U64 slot_idx = hash%all_namespace_slots_count;
+            for(NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+            {
+              if(str8_match(n->string, container_name, 0))
+              {
+                ns_node = n;
+                break;
+              }
+            }
+          }
+          
+          // rjf: equip container info to udt
+          if(ns_node != 0)
+          {
+            RDIM_UDT *udt = dst_type->udt;
+            if(ns_node->scope != 0)
+            {
+              udt->container_scope = ns_node->scope;
+            }
+            else if(ns_node->ns != 0)
+            {
+              udt->container_namespace = ns_node->ns;
+            }
+            else if(ns_node->type != 0)
+            {
+              udt->container_type = ns_node->type;
+            }
+          }
         }
       }
     }

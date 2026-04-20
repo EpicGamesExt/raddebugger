@@ -2713,6 +2713,23 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           dst_udt->line = src_udt->line;
           dst_udt->col  = src_udt->col;
           
+          //- rjf: fill container info
+          if(src_udt->container_scope != 0)
+          {
+            dst_udt->container_flags |= (RDI_ContainerKind_Scope & RDI_ContainerFlag_KindMask);
+            dst_udt->container_idx = (RDI_U32)rdim_idx_from_scope(src_udt->container_scope); // TODO(rjf): @u64_to_u32
+          }
+          else if(src_udt->container_namespace != 0)
+          {
+            dst_udt->container_flags |= (RDI_ContainerKind_Namespace & RDI_ContainerFlag_KindMask);
+            dst_udt->container_idx = (RDI_U32)rdim_idx_from_namespace(src_udt->container_namespace); // TODO(rjf): @u64_to_u32
+          }
+          else if(src_udt->container_type != 0)
+          {
+            dst_udt->container_flags |= (RDI_ContainerKind_Type & RDI_ContainerFlag_KindMask);
+            dst_udt->container_idx = (RDI_U32)rdim_idx_from_udt(src_udt->container_type->udt); // TODO(rjf): @u64_to_u32
+          }
+          
           //- rjf: fill member info
           if(src_udt->first_member != 0)
           {

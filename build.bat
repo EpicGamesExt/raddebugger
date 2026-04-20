@@ -73,12 +73,14 @@ set cl_debug=      call cl /Od /Ob1 /DBUILD_DEBUG=1 %cl_common% %auto_compile_fl
 set cl_release=    call cl /O2 /DBUILD_DEBUG=0 %cl_common% %auto_compile_flags%
 set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /pdbaltpath:%%%%_PDB%%%% /NATVIS:"%~dp0\src\natvis\base.natvis" /noexp /nocoffgrpinfo /opt:ref /opt:icf
 set cl_out=        /out:
+set cl_obj_out=    /Fo:
 set cl_linker=     
 set clang_common=  -I..\src\ -I..\local\ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-unused-parameter -Wno-writable-strings -Wno-missing-field-initializers -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Wno-initializer-overrides -Wno-incompatible-pointer-types-discards-qualifiers -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -ferror-limit=10000 -mcx16 -msha
 set clang_debug=   call clang -g -O0 -DBUILD_DEBUG=1 -D_DEBUG %clang_common% %auto_compile_flags%
 set clang_release= call clang -g -O2 -DBUILD_DEBUG=0 -DNDEBUG %clang_common% %auto_compile_flags%
 set clang_link=    -fuse-ld=lld -Xlinker /MANIFEST:EMBED -Xlinker /pdbaltpath:%%%%_PDB%%%% -Xlinker /NATVIS:"%~dp0\src\natvis\base.natvis" -Xlinker /opt:ref -Xlinker /opt:noicf
 set clang_out=     -o
+set clang_obj_out= -o
 set clang_linker=  -Xlinker
 
 :: --- Per-Build Settings -----------------------------------------------------
@@ -101,10 +103,12 @@ if "%msvc%"=="1"      set compile_debug=%cl_debug%
 if "%msvc%"=="1"      set compile_release=%cl_release%
 if "%msvc%"=="1"      set compile_link=%cl_link%
 if "%msvc%"=="1"      set out=%cl_out%
+if "%msvc%"=="1"      set obj_out=%cl_obj_out%
 if "%clang%"=="1"     set compile_debug=%clang_debug%
 if "%clang%"=="1"     set compile_release=%clang_release%
 if "%clang%"=="1"     set compile_link=%clang_link%
 if "%clang%"=="1"     set out=%clang_out%
+if "%clang%"=="1"     set obj_out=%clang_obj_out%
 if "%debug%"=="1"     set compile=%compile_debug%
 if "%release%"=="1"   set compile=%compile_release%
 
@@ -146,7 +150,7 @@ if "%convertperf%"=="1"                set didbuild=1 && %compile% ..\src\scratc
 if "%debugstringperf%"=="1"            set didbuild=1 && %compile% ..\src\scratch\debugstringperf.c                          %compile_link% %out%debugstringperf.exe || exit /b 1
 if "%parse_inline_sites%"=="1"         set didbuild=1 && %compile% ..\src\scratch\parse_inline_sites.c                       %compile_link% %out%parse_inline_sites.exe || exit /b 1
 if "%strip_lib_debug%"=="1"            set didbuild=1 && %compile% ..\src\strip_lib_debug\strip_lib_debug.c                  %compile_link% %out%strip_lib_debug.exe || exit /b 1
-if "%mule_main%"=="1"                  set didbuild=1 && del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %no_aslr% %out%mule_main.exe || exit /b 1
+if "%mule_main%"=="1"                  set didbuild=1 && del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp %obj_out%mule_inline.obj && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp %obj_out%mule_o2.obj && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %no_aslr% %out%mule_main.exe || exit /b 1
 if "%mule_module%"=="1"                set didbuild=1 && %compile% ..\src\mule\mule_module.cpp                               %link_dll% %out%mule_module.dll || exit /b 1
 if "%mule_hotload%"=="1"               set didbuild=1 && %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
 if "%torture%"=="1"                    set didbuild=1 && %compile% ..\src\torture\torture_main.c                             %compile_link% %out%torture.exe || exit /b1

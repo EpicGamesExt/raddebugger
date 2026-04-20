@@ -828,6 +828,18 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       dumpf("\n  // udt[%I64u]\n  {\n", idx);
       dumpf("    self_type: %u\n", udt->self_type_idx);
       dumpf("    flags: `%S`\n", rdi_string_from_udt_flags(scratch.arena, udt->flags));
+      if(udt->container_idx != 0 && (udt->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Type)
+      {
+        dumpf("    container_type_idx: %u\n", udt->container_idx);
+      }
+      if(udt->container_idx != 0 && (udt->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Scope)
+      {
+        dumpf("    container_scope_idx: %u\n", udt->container_idx);
+      }
+      if(udt->container_idx != 0 && (udt->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Namespace)
+      {
+        dumpf("    container_namespace_idx: %u\n", udt->container_idx);
+      }
       if(udt->file_idx != 0)
       {
         dumpf("    loc: {file: %u, line: %u, col: %u}\n", udt->file_idx, udt->line, udt->col);
@@ -1264,7 +1276,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
           container_kind_name = str8_lit("container_scope_idx");
         }break;
       }
-      dumpf("\n  '%S': {%S: %I64u} // namespaces[%I64u]", str8_from_rdi_string_idx(rdi, ns->name_string_idx), container_kind_name, ns->container_idx, idx);
+      dumpf("\n  '%S': {%S: %u} // namespaces[%I64u]", str8_from_rdi_string_idx(rdi, ns->name_string_idx), container_kind_name, ns->container_idx, idx);
     }
     if(lane_idx() == lane_count()-1) { dumpf("\n"); }
   }

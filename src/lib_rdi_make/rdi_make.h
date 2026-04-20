@@ -765,6 +765,9 @@ struct RDIM_UDT
   RDIM_SrcFile *src_file;
   RDI_U32 line;
   RDI_U32 col;
+  struct RDIM_Scope *container_scope;
+  RDIM_Namespace *container_namespace;
+  RDIM_Type *container_type;
 };
 
 typedef struct RDIM_UDTChunkNode RDIM_UDTChunkNode;
