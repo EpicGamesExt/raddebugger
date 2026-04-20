@@ -266,6 +266,7 @@ typedef struct LNK_Config
   Arena                      *arena;
   LNK_ConfigFlags             flags;
   LNK_DebugMode               debug_mode;
+  B32                         ghash;
   LNK_SwitchState             opt_ref;
   LNK_SwitchState             opt_icf;
   LNK_SwitchState             opt_lbr;

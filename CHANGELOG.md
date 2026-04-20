@@ -1,3 +1,9 @@
+# v0.9.26-alpha
+
+## Linker Changes
+
+- Implemented /DEBUG:GHASH
+
 # v0.9.25-alpha
 
 ## Debugger Changes

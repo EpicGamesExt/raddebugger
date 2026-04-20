@@ -279,7 +279,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   input.debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0);
   input.debug_p_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$P"), 0);
   input.debug_t_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$T"), 0);
-  input.debug_h_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$H"), 0);
+  if (config->ghash) {
+    input.debug_h_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$H"), 0);
+  }
   ProfEnd();
 
   if (lnk_get_log_status(LNK_Log_Debug) || PROFILE_TELEMETRY) {
@@ -288,7 +290,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       for EachNode(n, String8Node, input.debug_s_list_arr[obj_idx].first) { total_debug_s_size += n->string.size; }
       for EachNode(n, String8Node, input.debug_t_list_arr[obj_idx].first) { total_debug_t_size += n->string.size; }
       for EachNode(n, String8Node, input.debug_p_list_arr[obj_idx].first) { total_debug_p_size += n->string.size; }
-      for EachNode(n, String8Node, input.debug_h_list_arr[obj_idx].first) { total_debug_h_size += n->string.size; }
+      if (config->ghash) {
+        for EachNode(n, String8Node, input.debug_h_list_arr[obj_idx].first) { total_debug_h_size += n->string.size; }
+      }
     }
 	
     ProfNoteV("Total .debug$S Input Size: %M", total_debug_s_size);
@@ -324,7 +328,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$T");
 
     input.debug_h_arr = push_array(tp_arena->v[0], CV_DebugH, input.obj_count);
-    tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_h_task, &input, "Parse .debug$H");
+    if (config->ghash) {
+      tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_h_task, &input, "Parse .debug$H");
+    }
   }
   ProfEnd();
 
@@ -426,6 +432,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       MemoryCopyTyped(input.obj_arr,        prev.obj_arr,        prev.count);
       MemoryCopyTyped(input.debug_s_arr,    prev.debug_s_arr,    prev.count);
       MemoryCopyTyped(input.debug_t_arr,    prev.debug_t_arr,    prev.count);
+      MemoryCopyTyped(input.debug_h_arr,    prev.debug_h_arr,    prev.count);
       MemoryCopyTyped(input.obj_to_ts,      prev.obj_to_ts,      prev.count);
       MemorySet(input.obj_to_ts + input.obj_count, 0xff, ts_arr.count * sizeof(input.obj_to_ts[0]));
 
@@ -1437,15 +1444,14 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
     for EachElement(i, hash_targets) {
       task.indices = hash_targets[i].hash_indices;
       ProfBegin("Hash [Count: %.*s]", str8_varg(str8_from_count(scratch.arena, task.indices.count)));
-      tp_for_parallel(tp, 0, hash_targets[i].indices.count, hash_targets[i].hasher_task, &task);
+      tp_for_parallel(tp, 0, task.indices.count, hash_targets[i].hasher_task, &task);
       ProfEnd();
     }
 
 #if BUILD_DEBUG
     for EachIndex(i, input->count) {
       for EachIndex(k, input->debug_h_arr[i].count) {
-        Assert(input->debug_h_arr[i].v[k] != 0 &&
-               input->debug_h_arr[i].v[k] != 1);
+        Assert(input->debug_h_arr[i].v[k] != 0);
       }
     }
 #endif
