@@ -18,12 +18,13 @@ typedef enum LLVM_GHashAlgEnum
 typedef struct LLVM_GHash
 {
   U32           magic;
-  LLVM_GHashAlg hash_alg;
   U16           version;
+  LLVM_GHashAlg hash_alg;
   // * hashes[]
 } LLVM_GHash;
 
 internal String8 llvm_string_from_ghash_alg(LLVM_GHashAlg v);
+internal U64     llvm_hash_size_from_alg(LLVM_GHashAlg v);
 
 #endif // LLVM_H
 

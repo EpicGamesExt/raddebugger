@@ -5028,7 +5028,7 @@ TEST(ghash_check_corrupt)
   T_Ok(t_write_entry_obj());
 
   String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
   T_Ok(g_last_exit_code == 0);
 
   B32 is_warning_found = 0;
@@ -5075,7 +5075,7 @@ TEST(ghash_check_magic)
   T_Ok(t_write_entry_obj());
 
   String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
   T_Ok(g_last_exit_code == 0);
 
   B32 is_warning_found = 0;
@@ -5122,7 +5122,7 @@ TEST(ghash_check_version)
   T_Ok(t_write_entry_obj());
 
   String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
   T_Ok(g_last_exit_code == 0);
 
   B32 is_warning_found = 0;
@@ -5161,7 +5161,7 @@ TEST(ghash_check_hash_alg)
   T_Ok(t_write_entry_obj());
 
   String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
   T_Ok(g_last_exit_code == 0);
 
   B32 is_warning_found = 0;
@@ -5200,7 +5200,7 @@ TEST(ghash_match_debug_t)
   T_Ok(t_write_entry_obj());
 
   String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
   T_Ok(g_last_exit_code == 0);
 
   B32 is_warning_found = 0;
@@ -5213,7 +5213,6 @@ TEST(ghash_match_debug_t)
   T_Ok(is_warning_found);
 }
 
-#if 0
 TEST(ghash_basic)
 {
   String8 a_obj;
@@ -5239,23 +5238,57 @@ TEST(ghash_basic)
     coff_obj_writer_release(&cow);
   }
 
+  String8 b_obj;
+  {
+    String8List t = {0}; str8_serial_begin(arena, &t);
+      str8_serial_push_u32(arena, &t, CV_Signature_C13);
+      str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_STRUCTURE, str8_struct(&(CV_LeafStruct){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+      str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_UNION, str8_struct(&(CV_LeafUnion){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+      str8_serial_push_string(arena, &t, cv_make_leaf(arena, CV_LeafKind_ENUM, str8_struct(&(CV_LeafEnum){ .props = CV_TypeProp_FwdRef }), CV_LeafAlign));
+    String8 debug_t = str8_serial_end(arena, &t);
+
+    String8List h = {0}; str8_serial_begin(arena, &h);
+      str8_serial_push_struct(arena, &h, (&(LLVM_GHash){ .magic = LLVM_GHash_Magic, .hash_alg = LLVM_GHashAlg_BLAKE3, .version = LLVM_GHash_CurrentVersion }));
+      str8_serial_push_u64(arena, &h, 4);
+      str8_serial_push_u64(arena, &h, 5);
+      str8_serial_push_u64(arena, &h, 6);
+    String8 debug_h = str8_serial_end(arena, &h);
+
+    COFF_ObjWriter *cow = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+      coff_obj_writer_push_section(cow, str8_lit(".debug$T"), PE_DEBUG_SECTION_FLAGS, debug_t);
+      coff_obj_writer_push_section(cow, str8_lit(".debug$H"), PE_DEBUG_SECTION_FLAGS, debug_h);
+      b_obj = coff_obj_writer_serialize(arena, cow);
+    coff_obj_writer_release(&cow);
+  }
+
   T_Ok(t_write_file(str8_lit("a.obj"), a_obj));
+  T_Ok(t_write_file(str8_lit("b.obj"), b_obj));
   T_Ok(t_write_entry_obj());
 
-  String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj a.obj"), max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj a.obj b.obj");
   T_Ok(g_last_exit_code == 0);
 
-  B32 is_warning_found = 0;
-  String8 a_obj_path = t_make_file_path(arena, str8_lit("a.obj"));
-  String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash count and type count: got 3 hashes for 2 types", LNK_Warning_GHash, a_obj_path);
-  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
-    String8 line = t_chop_line(&i);
-    is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
+  {
+    String8        raw_pdb    = t_read_file(arena, str8_lit("a.pdb"));
+    MSF_Parsed    *msf_parsed = msf_parsed_from_data(arena, raw_pdb);
+    String8        raw_tpi    = msf_data_from_stream(msf_parsed, PDB_FixedStream_Tpi);
+    PDB_TpiParsed *tpi        = pdb_tpi_from_data(arena, raw_tpi);
+    U64 leaf_count = tpi->itype_opl - tpi->itype_first;
+    T_Ok(leaf_count == 6);
   }
-  T_Ok(is_warning_found);
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full entry.obj a.obj b.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  {
+    String8        raw_pdb    = t_read_file(arena, str8_lit("a.pdb"));
+    MSF_Parsed    *msf_parsed = msf_parsed_from_data(arena, raw_pdb);
+    String8        raw_tpi    = msf_data_from_stream(msf_parsed, PDB_FixedStream_Tpi);
+    PDB_TpiParsed *tpi        = pdb_tpi_from_data(arena, raw_tpi);
+    U64 leaf_count = tpi->itype_opl - tpi->itype_first;
+    T_Ok(leaf_count == 3);
+  }
 }
-#endif
 
 TEST(patch_cv_symbol_tree)
 {

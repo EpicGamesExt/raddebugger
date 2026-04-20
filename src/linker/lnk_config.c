@@ -1237,7 +1237,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       LNK_DebugMode debug_mode = lnk_debug_mode_from_string(value_strings.first->string);
       if (debug_mode == LNK_DebugMode_GHash) {
         config->debug_mode = LNK_DebugMode_Full;
-        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "GHASH is not supported, switching to FULL");
+        config->ghash = 1;
       } else if (debug_mode == LNK_DebugMode_FastLink) {
         config->debug_mode = LNK_DebugMode_Full;
         lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "FASTLINK is not supported, switching to FULL");
