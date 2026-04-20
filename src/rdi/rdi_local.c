@@ -830,7 +830,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       dumpf("    flags: `%S`\n", rdi_string_from_udt_flags(scratch.arena, udt->flags));
       if(udt->container_idx != 0 && (udt->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Type)
       {
-        dumpf("    container_type_idx: %u\n", udt->container_idx);
+        dumpf("    container_udt_idx: %u\n", udt->container_idx);
       }
       if(udt->container_idx != 0 && (udt->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Scope)
       {
@@ -941,7 +941,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
         }
         if(symbol->container_idx != 0 && (symbol->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Type)
         {
-          dumpf("    container_type_idx: %u\n", symbol->container_idx);
+          dumpf("    container_udt_idx: %u\n", symbol->container_idx);
         }
         if(symbol->container_idx != 0 && (symbol->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Scope)
         {

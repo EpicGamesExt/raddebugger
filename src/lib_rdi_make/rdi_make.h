@@ -637,7 +637,7 @@ struct RDIM_Namespace
   struct RDIM_NamespaceChunkNode *chunk;
   RDIM_Namespace *parent_namespace;
   struct RDIM_Scope *parent_scope;
-  struct RDIM_UDT *parent_udt;
+  struct RDIM_Type *parent_type;
   RDIM_String8 name;
 };
 

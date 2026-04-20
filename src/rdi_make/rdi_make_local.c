@@ -2576,10 +2576,10 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           dst->container_flags |= RDI_ContainerKind_Scope;
           dst->container_idx = rdim_idx_from_scope(src->parent_scope);
         }
-        else if(src->parent_udt != 0)
+        else if(src->parent_type != 0 && src->parent_type->udt != 0)
         {
           dst->container_flags |= RDI_ContainerKind_Type;
-          dst->container_idx = rdim_idx_from_udt(src->parent_udt);
+          dst->container_idx = rdim_idx_from_udt(src->parent_type->udt);
         }
       }
     }

@@ -2765,29 +2765,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   all_types__pre_typedefs = *all_types__pre_typedefs_ptr;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: upgrade namespace nodes with type info, if they match a type
-  //
-  ProfScope("upgrade namespace nodes with type info, if they match a type")
-  {
-#define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < tpi_leaf->itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
-    Rng1U64 range = lane_range(all_namespace_slots_count);
-    for EachInRange(slot_idx, range)
-    {
-      for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
-      {
-        String8 container_string = n->string;
-        CV_TypeId container_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_string, 0);
-        if(container_type_id != 0)
-        {
-          n->type = p2r_type_ptr_from_itype(container_type_id);
-        }
-      }
-    }
-#undef p2r_type_ptr_from_itype
-  }
-  lane_sync();
-  
-  //////////////////////////////////////////////////////////////
   //- rjf: set bit in all namespace nodes that correspond to scopes
   //
   if(params->subset_flags & (RDIM_SubsetFlag_Procedures|
@@ -2995,6 +2972,29 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   }
   
   //////////////////////////////////////////////////////////////
+  //- rjf: upgrade namespace nodes with type info, if they match a type
+  //
+  ProfScope("upgrade namespace nodes with type info, if they match a type")
+  {
+#define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < tpi_leaf->itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
+    Rng1U64 range = lane_range(all_namespace_slots_count);
+    for EachInRange(slot_idx, range)
+    {
+      for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+      {
+        String8 container_string = n->string;
+        CV_TypeId container_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_string, 0);
+        if(container_type_id != 0)
+        {
+          n->type = p2r_type_ptr_from_itype(container_type_id);
+        }
+      }
+    }
+#undef p2r_type_ptr_from_itype
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: build namespaces, that are not scopes, nor types
   //
   RDIM_NamespaceChunkList all_namespaces = {0};
@@ -3023,13 +3023,14 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       for EachIndex(node_in_slot_idx, node_count)
       {
         P2R_NamespaceNode *n = nodes[node_in_slot_idx];
-        // raddbg_log("%S%s\n", n->string, n->corresponds_to_scope ? " (is scope)" : n->type != 0 ? " (is type)" : "");
+        raddbg_log("%S%s\n", n->string, n->corresponds_to_scope ? " (is scope)" : n->type != 0 ? " (is type)" : "");
         if(n->corresponds_to_scope || n->scope != 0 || n->type != 0) { continue; }
         String8 string = n->string;
         RDIM_Namespace *ns = rdim_namespace_chunk_list_push(arena, &lane_namespaces, 32);
         ns->name = string;
         n->ns = ns;
       }
+      
       scratch_end(scratch);
     }
     
@@ -4053,6 +4054,32 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
         {
           n->scope = scope_n->scope;
+        }
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: upgrade namespaces with container info
+  //
+  for EachNode(n, RDIM_NamespaceChunkNode, all_namespaces.first)
+  {
+    Rng1U64 range = lane_range(n->count);
+    for EachInRange(n_idx, range)
+    {
+      RDIM_Namespace *ns = &n->v[n_idx];
+      String8 container_name = str8_chop(str8_prefix(ns->name, p2r_end_of_cplusplus_container_name(ns->name)), 2);
+      U64 hash = u64_hash_from_str8(container_name);
+      U64 slot_idx = hash%all_namespace_slots_count;
+      for(P2R_NamespaceNode *ns_n = all_namespace_slots[slot_idx]; ns_n != 0; ns_n = ns_n->next)
+      {
+        if(str8_match(ns_n->string, container_name, 0))
+        {
+          ns->parent_scope     = ns_n->scope;
+          ns->parent_type      = ns_n->type;
+          ns->parent_namespace = ns_n->ns;
+          break;
         }
       }
     }
