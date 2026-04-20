@@ -203,7 +203,7 @@ THREAD_POOL_TASK_FUNC(lnk_read_type_servers_task)
     goto exit;
   }
 
-  MSF_StreamNumber type_streams[CV_TypeIndexSource_COUNT] = {};
+  MSF_StreamNumber type_streams[CV_TypeIndexSource_COUNT] = {0};
   type_streams[CV_TypeIndexSource_TPI] = PDB_FixedStream_Tpi;
   type_streams[CV_TypeIndexSource_IPI] = PDB_FixedStream_Ipi;
 
