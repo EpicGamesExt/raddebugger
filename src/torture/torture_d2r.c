@@ -468,9 +468,8 @@ TEST(d2r_general)
   
   RDI_Parsed *rdi = d2r_rdi_from_dwarf_writer(arena, writer);
   
-  RDI_Procedure *proc = rdi_procedure_from_name_cstr(rdi, "FooBar");
+  RDI_Symbol *proc = rdi_procedure_from_name_cstr(rdi, "FooBar");
   T_Ok(proc);
-  T_Ok(proc->link_flags == RDI_LinkFlag_External);
   String8 proc_name = str8_from_rdi_string_idx(rdi, proc->name_string_idx);
   T_Ok(str8_match(proc_name, str8_lit("FooBar"), 0));
   
@@ -478,9 +477,9 @@ TEST(d2r_general)
   T_Ok(root_scope);
   T_Ok(root_scope->local_count == 1);
   
-  RDI_Local *test_local = rdi_element_from_name_idx(rdi, Locals, root_scope->local_first + 0);
+  RDI_Symbol *test_local = rdi_element_from_name_idx(rdi, LocalVariables, root_scope->local_first + 0);
   T_Ok(test_local);
-  T_Ok(test_local->kind == RDI_LocalKind_Variable);
+  T_Ok(test_local->symbol_flags & RDI_SymbolFlag_IsParam);
   String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
   T_Ok(str8_match(test_local_name, str8_lit("TestLocal"), 0));
   

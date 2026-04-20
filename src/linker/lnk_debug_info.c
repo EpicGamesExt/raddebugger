@@ -4001,7 +4001,6 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
 
       // push new node
       RDIB_Variable *gvar  = rdib_variable_chunk_list_push(arena, var_chunk_list, task->symbol_chunk_cap);
-      gvar->link_flags     = symbol.kind == CV_SymKind_GDATA32 ? RDI_LinkFlag_External : 0;
       gvar->name           = name;
       gvar->link_name      = link_name;
       gvar->type           = type;
@@ -4035,7 +4034,6 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       RDIB_Variable          *tvar      = rdib_variable_chunk_list_push(arena, tvar_list, task->symbol_chunk_cap);
 
       // fill out thread variable
-      tvar->link_flags     = symbol.kind == CV_SymKind_GTHREAD32 ? RDI_LinkFlag_External : 0;
       tvar->name           = name;
       tvar->link_name      = str8(0,0);
       tvar->type           = type;
@@ -4110,7 +4108,6 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       rng1u64_list_push(arena, &root_scope->ranges, virt_range);
 
       // fill out procedure
-      proc->link_flags     = symbol.kind == CV_SymKind_GPROC32 ? RDI_LinkFlag_External : 0;
       proc->name           = name;
       proc->link_name      = link_name;
       proc->type           = type;
@@ -4213,10 +4210,8 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
         String8         name     = str8_cstring_capped(regrel32 + 1, symbol.data.str + symbol.data.size);
         RDIB_Type      *type     = lnk_type_from_itype(regrel32->itype, task->tpi_itype_range, task->tpi_itype_map, obj, symbol.kind, symbol.offset);
 
-        RDI_LocalKind local_kind = RDI_LocalKind_Variable;
         B32           is_ref     = 0;
         if (scope_stack->regrel32_idx < scope_stack->param_count) {
-          local_kind = RDI_LocalKind_Parameter;
           if (type != 0) { 
             U64 byte_size = rdib_size_from_type(type);
             switch (comp_info.arch) {
@@ -4233,9 +4228,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
         ++scope_stack->scope->local_count;
 
         // fill out local
-        local->link_flags = 0;
         local->name       = name;
-        local->kind       = local_kind;
         local->type       = type;
 
         // encode location
@@ -4268,8 +4261,6 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       ++scope_stack->scope->local_count;
 
       // fill out local
-      local->link_flags = 0;
-      local->kind       = sym_local->flags & CV_LocalFlag_Param ? RDI_LocalKind_Parameter : RDI_LocalKind_Variable;
       local->name       = name;
       local->type       = type;
 
@@ -4286,8 +4277,6 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       ++scope_stack->scope->local_count;
 
       // fill out local
-      local->link_flags = 0;
-      local->kind       = RDI_LocalKind_Variable;
       local->name       = name;
       local->type       = type;
 
@@ -4325,7 +4314,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       CV_LvarAddrGap                *gaps           = (CV_LvarAddrGap *) (defrange_fprel + 1);
       U64                            gap_count      = (symbol.data.size - sizeof(*defrange_fprel)) / sizeof(gaps[0]);
 
-      B32                   is_local_param = scope_stack->defrange_target->kind == RDI_LocalKind_Parameter;
+      B32                   is_local_param = 0;
       CV_EncodedFramePtrReg encoded_fp_reg = cv_pick_fp_encoding(scope_stack->frameproc, is_local_param);
       CV_Reg                fp_reg         = cv_decode_fp_reg(comp_info.arch, encoded_fp_reg);
       RDI_RegCode           fp_reg_rdi     = rdi_reg_code_from_cv(comp_info.arch, fp_reg);
@@ -4364,7 +4353,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       }
 
       CV_SymDefrangeFramepointerRelFullScope *defrange_fprelfs = (CV_SymDefrangeFramepointerRelFullScope *) symbol.data.str; 
-      B32                                     is_local_param   = scope_stack->defrange_target->kind == RDI_LocalKind_Parameter;
+      B32                                     is_local_param   = 0; //scope_stack->defrange_target->kind == RDI_LocalKind_Parameter;
       CV_EncodedFramePtrReg                   encoded_fp_reg   = cv_pick_fp_encoding(scope_stack->frameproc, is_local_param);
       CV_Reg                                  fp_reg           = cv_decode_fp_reg(comp_info.arch, encoded_fp_reg);
       RDI_RegCode                             fp_reg_rdi       = rdi_reg_code_from_cv(comp_info.arch, fp_reg);

@@ -615,7 +615,7 @@ e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
   RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
   
   //- rjf: procedure -> udt
-  U32 udt_idx = procedure->container_flags & RDI_ContainerFlag_KindMask == RDI_ContainerKind_Type ? procedure->container_idx : 0;
+  U32 udt_idx = (procedure->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Type ? procedure->container_idx : 0;
   RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, udt_idx);
   
   //- rjf: build blank map

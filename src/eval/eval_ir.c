@@ -2408,7 +2408,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 U64 vtable_voff = vtable_vaddr - module_base;
                 U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, vtable_voff);
                 RDI_Symbol *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, global_idx);
-                if(global_var->container_flags & RDI_ContainerFlag_KindMask == RDI_ContainerKind_Type)
+                if((global_var->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Type)
                 {
                   RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
                   RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);

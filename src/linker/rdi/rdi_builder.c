@@ -3866,11 +3866,11 @@ THREAD_POOL_TASK_FUNC(rdib_build_var_section_task)
 
   for (U64 chunk_idx = task->ranges[task_id].min; chunk_idx < task->ranges[task_id].max; ++chunk_idx) {
     RDIB_VariableChunk *chunk = task->gvars_rdib[chunk_idx];
-    RDI_GlobalVariable *vars  = push_array_no_zero(arena, RDI_GlobalVariable, chunk->count);
+    RDI_Symbol *vars  = push_array_no_zero(arena, RDI_Symbol, chunk->count);
 
     for (U64 i = 0; i < chunk->count; ++i) {
-      RDIB_Variable      *src = &chunk->v[i];
-      RDI_GlobalVariable *dst = &vars[i];
+      RDIB_Variable *src = &chunk->v[i];
+      RDI_Symbol    *dst = &vars[i];
 
       // TODO: temporary hack while we don't have bytecode eval in RDI_GlobalVariable
       U64 voff = 0;
@@ -3881,18 +3881,14 @@ THREAD_POOL_TASK_FUNC(rdib_build_var_section_task)
       }
 
       dst->name_string_idx = rdib_idx_from_string_map(task->string_map, src->name);
-      dst->voff            = voff;
       dst->type_idx        = rdib_idx_from_type(src->type);
-      dst->link_flags      = src->link_flags;
 
       if (src->container_type != 0) {
         Assert(!src->container_proc);
-        dst->link_flags    |= RDI_LinkFlag_TypeScoped;
         dst->container_idx  = rdib_idx_from_udt_type(src->container_type);
       }
       if (src->container_proc != 0) {
         Assert(!src->container_type);
-        dst->link_flags    |= RDI_LinkFlag_ProcScoped;
         dst->container_idx  = rdib_idx_from_procedure(src->container_proc);
       }
     }
@@ -3940,11 +3936,11 @@ THREAD_POOL_TASK_FUNC(rdib_build_tvar_section_task)
 
   for (U64 chunk_idx = task->ranges[task_id].min; chunk_idx < task->ranges[task_id].max; ++chunk_idx) {
     RDIB_VariableChunk *chunk = task->tvars_rdib[chunk_idx];
-    RDI_ThreadVariable *vars  = push_array_no_zero(arena, RDI_ThreadVariable, chunk->count);
+    RDI_Symbol         *vars  = push_array_no_zero(arena, RDI_Symbol, chunk->count);
 
     for (U64 i = 0; i < chunk->count; ++i) {
-      RDIB_Variable      *src = &chunk->v[i];
-      RDI_ThreadVariable *dst = &vars[i];
+      RDIB_Variable *src = &chunk->v[i];
+      RDI_Symbol    *dst = &vars[i];
 
       U32 tls_off = 0;
       if (src->locations.first != 0) {
@@ -3954,17 +3950,14 @@ THREAD_POOL_TASK_FUNC(rdib_build_tvar_section_task)
       }
 
       dst->name_string_idx = rdib_idx_from_string_map(task->string_map, src->name);
-      dst->tls_off         = tls_off;
       dst->type_idx        = rdib_idx_from_type(src->type);
 
       if (src->container_type != 0) {
         Assert(!src->container_proc);
-        dst->link_flags    |= RDI_LinkFlag_TypeScoped;
         dst->container_idx  = rdib_idx_from_udt_type(src->container_type);
       }
       if (src->container_proc != 0) {
         Assert(!src->container_type);
-        dst->link_flags    |= RDI_LinkFlag_ProcScoped;
         dst->container_idx  = rdib_idx_from_procedure(src->container_proc);
       }
     }
@@ -4012,27 +4005,24 @@ THREAD_POOL_TASK_FUNC(rdib_build_procs_section_task)
 
   for (U64 chunk_idx = task->ranges[task_id].min; chunk_idx < task->ranges[task_id].max; ++chunk_idx) {
     RDIB_ProcedureChunk *chunk = task->procs_rdib[chunk_idx];
-    RDI_Procedure       *procs = push_array_no_zero(arena, RDI_Procedure, chunk->count);
+    RDI_Symbol          *procs = push_array_no_zero(arena, RDI_Symbol, chunk->count);
 
     for (U64 i = 0; i < chunk->count; ++i) {
       RDIB_Procedure *src = &chunk->v[i];
-      RDI_Procedure  *dst = &procs[i];
+      RDI_Symbol     *dst = &procs[i];
 
       dst->name_string_idx      = rdib_idx_from_string_map(task->string_map, src->name);
       dst->link_name_string_idx = rdib_idx_from_string_map(task->string_map, src->link_name);
-      dst->link_flags           = src->link_flags;
       dst->type_idx             = rdib_idx_from_type(src->type);
       dst->root_scope_idx       = rdib_idx_from_scope(src->scope);
 
       if (src->container_type != 0) {
         AssertAlways(!src->container_proc);
-        dst->link_flags    |= RDI_LinkFlag_TypeScoped;
         dst->container_idx  = rdib_idx_from_udt_type(src->container_type);
       }
 
       if (src->container_proc != 0) {
         AssertAlways(!src->container_type);
-        dst->link_flags    |= RDI_LinkFlag_ProcScoped;
         dst->container_idx  = rdib_idx_from_procedure(0); Assert(!"TODO"); // src->container_proc
       }
     }
@@ -4094,11 +4084,11 @@ THREAD_POOL_TASK_FUNC(rdib_count_scopes_task)
             task->loc_data_sizes[task_id] += loc_n->v.bytecode.size + /* stream ender: */ 1;
           } break;
           case RDI_LocationKind_ValReg: {
-            task->loc_data_sizes[task_id] += sizeof(RDI_LocationReg);
+            //task->loc_data_sizes[task_id] += sizeof(RDI_LocationReg);
           } break;
           case RDI_LocationKind_AddrRegPlusU16:
           case RDI_LocationKind_AddrAddrRegPlusU16: {
-            task->loc_data_sizes[task_id] += sizeof(RDI_LocationRegPlusU16);
+            //task->loc_data_sizes[task_id] += sizeof(RDI_LocationRegPlusU16);
           } break;
           default: InvalidPath;
           }
@@ -4115,6 +4105,7 @@ THREAD_POOL_TASK_FUNC(rdib_count_scopes_task)
 internal
 THREAD_POOL_TASK_FUNC(rdib_build_scopes_task)
 {
+#if 0
   RDIB_BuildSymbolSectionTask *task = raw_task;
   ProfBeginDynamic("Scopes [Chunk Count: %llu]", task->ranges[task_id].max - task->ranges[task_id].min);
 
@@ -4126,7 +4117,7 @@ THREAD_POOL_TASK_FUNC(rdib_build_scopes_task)
   // local fill info
   U64 local_cursor  = task->local_offsets[task_id];
   U64 local_max     = task->local_offsets[task_id] + task->local_counts[task_id];
-  RDI_Local *locals = task->locals_rdi;
+  RDI_Symbol *locals = task->locals_rdi;
 
   // location data fill info
   U64  loc_data_max    = task->loc_data_offsets[task_id] + task->loc_data_sizes[task_id];
@@ -4136,7 +4127,7 @@ THREAD_POOL_TASK_FUNC(rdib_build_scopes_task)
   // location block fill info
   U64                loc_block_cursor = task->loc_block_offsets[task_id];
   U64                loc_block_max    = task->loc_block_offsets[task_id] + task->loc_block_counts[task_id];
-  RDI_LocationBlock *loc_blocks       = task->loc_blocks_rdi;
+  void              *loc_blocks       = task->loc_blocks_rdi;
 
   for (U64 ichunk = task->ranges[task_id].min; ichunk < task->ranges[task_id].max; ++ichunk) {
     RDIB_ScopeChunk *chunk = task->scopes_rdib[ichunk];
@@ -4258,6 +4249,7 @@ THREAD_POOL_TASK_FUNC(rdib_build_scopes_task)
   Assert(loc_data_cursor == loc_data_max);
 
   ProfEnd();
+#endif
 }
 
 internal void
@@ -4299,8 +4291,8 @@ rdib_data_sections_from_scopes(TP_Context            *tp,
   ProfBegin("Push");
   task.scope_voffs_rdi = push_array_no_zero(arena->v[0], U64,               total_scope_voff_count);
   task.scopes_rdi      = push_array_no_zero(arena->v[0], RDI_Scope,         total_scope_count     );
-  task.locals_rdi      = push_array_no_zero(arena->v[0], RDI_Local,         total_local_count     );
-  task.loc_blocks_rdi  = push_array_no_zero(arena->v[0], RDI_LocationBlock, total_loc_block_count );
+  //task.locals_rdi      = push_array_no_zero(arena->v[0], RDI_Local,         total_local_count     );
+  //task.loc_blocks_rdi  = push_array_no_zero(arena->v[0], RDI_LocationBlock, total_loc_block_count );
   task.loc_data_rdi    = push_array_no_zero(arena->v[0], U8,                total_loc_data_size   );
   ProfEnd();
 
@@ -4309,14 +4301,14 @@ rdib_data_sections_from_scopes(TP_Context            *tp,
 
   RDIB_DataSection scopes_sect      = { .tag = RDI_SectionKind_Scopes         };
   RDIB_DataSection scope_voffs_sect = { .tag = RDI_SectionKind_ScopeVOffData  };
-  RDIB_DataSection locals_sect      = { .tag = RDI_SectionKind_Locals         };
-  RDIB_DataSection loc_blocks_sect  = { .tag = RDI_SectionKind_LocationBlocks };
-  RDIB_DataSection loc_data_sect    = { .tag = RDI_SectionKind_LocationData   };
+  RDIB_DataSection locals_sect      = { .tag = RDI_SectionKind_NULL           };
+  RDIB_DataSection loc_blocks_sect  = { .tag = RDI_SectionKind_NULL           };
+  RDIB_DataSection loc_data_sect    = { .tag = RDI_SectionKind_NULL           };
 
   str8_list_push(arena->v[0], &scopes_sect.data,      str8_array(task.scopes_rdi,      total_scope_count     ));
   str8_list_push(arena->v[0], &scope_voffs_sect.data, str8_array(task.scope_voffs_rdi, total_scope_voff_count));
   str8_list_push(arena->v[0], &locals_sect.data,      str8_array(task.locals_rdi,      total_local_count     ));
-  str8_list_push(arena->v[0], &loc_blocks_sect.data,  str8_array(task.loc_blocks_rdi,  total_loc_block_count ));
+  //str8_list_push(arena->v[0], &loc_blocks_sect.data,  str8_array(task.loc_blocks_rdi,  total_loc_block_count ));
   str8_list_push(arena->v[0], &loc_data_sect.data,    str8_array(task.loc_data_rdi,    total_loc_data_size   ));
 
   rdib_data_section_list_push(arena->v[0], sect_list, scopes_sect     );
@@ -4998,12 +4990,10 @@ rdib_init_input(Arena *arena)
     null_proc->scope = null_scope;
 
     // Global Var
-    null_gvar->link_flags = RDI_LinkFlag_External;
     null_gvar->type       = null_type;
     null_gvar->locations  = null_loc_list;
 
     // Thread Var
-    null_tvar->link_flags = RDI_LinkFlag_External;
     null_tvar->type       = null_type;
     null_tvar->locations  = null_loc_list;
 
