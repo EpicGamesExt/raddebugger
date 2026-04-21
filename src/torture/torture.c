@@ -535,8 +535,27 @@ t_entry_point(CmdLine *cmdline)
       target_opt = cmd_line_opt_from_string(cmdline, str8_lit("t"));
     }
     if (target_opt) {
+      HashTable *ht = hash_table_init(scratch.arena, g_torture_test_count*2);
       if (target_opt->value_strings.node_count > 0) {
-        str8_list_concat_in_place(&target, &target_opt->value_strings);
+        for EachNode(pattern_n, String8Node, target_opt->value_strings.first) {
+          for EachIndex(test_idx, g_torture_test_count) {
+            String8 name = str8f(scratch.arena, "%s::%s", g_torture_tests[test_idx].group, g_torture_tests[test_idx].label);
+            if (str8_match_wildcard(name, pattern_n->string, 0)) {
+              if ( ! hash_table_search_string(ht, name)) {
+                hash_table_push_string_raw(scratch.arena, ht, name, 0);
+                str8_list_push(scratch.arena, &target, str8_cstring(g_torture_tests[test_idx].label));
+              }
+            }
+          }
+        }
+
+        if (ht->count == 0) {
+          fprintf(stderr, "ERROR: -target matches not found for the following patterns: ");
+          for EachNode(n, String8Node, target_opt->value_strings.first) {
+            fprintf(stderr, "\"%.*s\"\n", str8_varg(n->string));
+          }
+          os_abort(1);
+        }
       } else {
         fprintf(stderr, "ERROR: -target has invalid number of arguments\n");
       }
