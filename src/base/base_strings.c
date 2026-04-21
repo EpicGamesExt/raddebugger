@@ -325,6 +325,76 @@ str8_match(String8 a, String8 b, StringMatchFlags flags)
   return result;
 }
 
+internal B32
+str8_char_match(U8 a, U8 b, StringMatchFlags flags)
+{
+  U8 at = a;
+  U8 bt = b;
+  if (flags & StringMatchFlag_CaseInsensitive) {
+    at = upper_from_char(at);
+    bt = upper_from_char(bt);
+  }
+  if (flags & StringMatchFlag_SlashInsensitive) {
+    if (at == '\\') { at = '/'; }
+    if (bt == '\\') { bt = '/'; }
+  }
+  return (at == bt);
+}
+
+internal B32
+str8_match_wildcard(String8 string, String8 pattern, StringMatchFlags flags)
+{
+  B32 matched = 0;
+
+  U64 pattern_cursor = 0;
+  U64 string_cursor  = 0;
+
+  U64 pattern_start = max_U64;
+  U64 string_start  = 0;
+
+  for (;;) {
+    if (pattern_cursor == pattern.size) {
+      if (string_cursor == string.size || (flags & StringMatchFlag_RightSideSloppy)) {
+        matched = 1;
+        break;
+      }
+    }
+
+    if (string_cursor == string.size) {
+      while (pattern_cursor < pattern.size && pattern.str[pattern_cursor] == '*') {
+        pattern_cursor += 1;
+      }
+      matched = (pattern_cursor == pattern.size);
+      break;
+    }
+
+    if (pattern_cursor < pattern.size && pattern.str[pattern_cursor] == '*') {
+      pattern_start = pattern_cursor;
+      string_start = string_cursor;
+      pattern_cursor += 1;
+      continue;
+    }
+
+
+    if (pattern_cursor < pattern.size && (pattern.str[pattern_cursor] == '?' || str8_char_match(string.str[string_cursor], pattern.str[pattern_cursor], flags))) {
+      string_cursor  += 1;
+      pattern_cursor += 1;
+      continue;
+    }
+
+    if (pattern_start != max_U64) {
+      pattern_cursor = pattern_start + 1;
+      string_start += 1;
+      string_cursor = string_start;
+      continue;
+    }
+
+    break;
+  }
+
+  return matched;
+}
+
 internal U64
 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags)
 {

@@ -104,4 +104,76 @@ TEST(count_digits)
   T_Ok(count_digits_u64(999999, 10) == 6);
 }
 
+TEST(match_wildcard)
+{
+  // empty strings
+  T_Ok(str8_match_wildcard(str8_lit(""),  str8_lit(""),   0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit(""),  str8_lit("*"),  0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit(""),  str8_lit("**"), 0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit(""),  str8_lit("?"),  0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit(""),  str8_lit("*?"), 0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit(""),  str8_lit("?*"), 0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit("a"), str8_lit(""),   0) == 0);
+
+  // exact
+  T_Ok(str8_match_wildcard(str8_lit("a"), str8_lit("a"), 0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("a"), str8_lit("A"), 0) == 0);
+
+  // ?
+  T_Ok(str8_match_wildcard(str8_lit("a"),  str8_lit("?"),    0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit(""),   str8_lit("?"),    0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit("ab"), str8_lit("?"),    0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit("ab"), str8_lit("a?"),   0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("ab"), str8_lit("?b"),   0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("ab"), str8_lit("??"),   0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("a?c"), 0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("ab"), str8_lit("???"),  0) == 0);
+
+  // *
+  T_Ok(str8_match_wildcard(str8_lit(""),    str8_lit("*"),      0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("a"),   str8_lit("*"),      0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("*"),      0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("a*"),     0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("*c"),     0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("*b*"),    0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("a*c"),    0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("b*"),     0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("**"),     0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("a**c"),   0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("a*b*c"),  0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("*a*d*"),  0) == 0);
+
+  T_Ok(str8_match_wildcard(str8_lit("abcd"),              str8_lit("a*d"),        0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abefcdgiescdfimde"), str8_lit("ab*cd?i*de"), 0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("mississippi"),       str8_lit("m*iss*ppi"),  0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"),               str8_lit("*b"),         0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit("a"),                 str8_lit("aa"),         0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit("aa"),                str8_lit("a"),          0) == 0);
+
+  // case insensitive
+  T_Ok(str8_match_wildcard(str8_lit("a"),      str8_lit("A"),      StringMatchFlag_CaseInsensitive) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("FooBar"), str8_lit("foobar"), StringMatchFlag_CaseInsensitive) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("Foobar"), str8_lit("foo*"),   StringMatchFlag_CaseInsensitive) == 1);
+
+  // right side sloppy
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("ab"), StringMatchFlag_RightSideSloppy) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit(""),   StringMatchFlag_RightSideSloppy) == 1);
+  T_Ok(str8_match_wildcard(str8_lit(""),    str8_lit("a"),  StringMatchFlag_RightSideSloppy) == 0);
+
+  // slash insensitive
+  T_Ok(str8_match_wildcard(str8_lit("a/b"),   str8_lit("a\\b"),    0)                                == 0);
+  T_Ok(str8_match_wildcard(str8_lit("a/b"),   str8_lit("a\\b"),    StringMatchFlag_SlashInsensitive) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("a/b/c"), str8_lit("a\\*\\c"), StringMatchFlag_SlashInsensitive) == 1);
+
+  // combined
+  T_Ok(str8_match_wildcard(str8_lit("Ab\\Cde"), str8_lit("ab/*e"), StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive) == 1);
+
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("*?*"), 0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("a"),   str8_lit("*?*"), 0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit(""),    str8_lit("*?*"), 0) == 0);
+  T_Ok(str8_match_wildcard(str8_lit("abc"), str8_lit("?*?"), 0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("ab"),  str8_lit("?*?"), 0) == 1);
+  T_Ok(str8_match_wildcard(str8_lit("a"),   str8_lit("?*?"), 0) == 0);
+}
+
 #undef T_Group
