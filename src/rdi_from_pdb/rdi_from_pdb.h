@@ -105,7 +105,7 @@ struct P2R_TypeIdChain
 
 internal U64 p2r_end_of_cplusplus_container_name(String8 str);
 internal U64 p2r_hash_from_voff(U64 voff);
-internal int p2r_namespace_node_is_before(P2R_NamespaceNode **a, P2R_NamespaceNode **b);
+internal int p2r_namespace_node_is_before(void *raw_a, void *raw_b);
 
 ////////////////////////////////
 //~ rjf: COFF => RDI Canonical Conversions
