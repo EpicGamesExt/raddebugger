@@ -1525,10 +1525,16 @@ ctrl_init(void)
   ctrl_state->c2u_ring_cv = cond_var_alloc();
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 user_program_data_path = os_get_process_info()->user_program_data_path;
-    String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
-    os_make_directory(user_data_folder);
-    ctrl_state->ctrl_thread_log_path = push_str8f(ctrl_state->arena, "%S/ctrl_thread.raddbg_log", user_data_folder);
+
+    String8 user_program_state_path = os_get_process_info()->user_program_state_path;
+
+    String8 user_log_folder = push_str8f(scratch.arena, "%S/raddbg", user_program_state_path);
+    os_make_directory(user_log_folder);
+
+    user_log_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_state_path);
+    os_make_directory(user_log_folder);
+
+    ctrl_state->ctrl_thread_log_path = push_str8f(ctrl_state->arena, "%S/ctrl_thread.raddbg_log", user_log_folder);
     os_write_data_to_file_path(ctrl_state->ctrl_thread_log_path, str8_zero());
     scratch_end(scratch);
   }

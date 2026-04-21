@@ -1459,6 +1459,22 @@ lnx_signal_handler(int sig, siginfo_t *info, void *arg)
   _exit(1);
 }
 
+String8
+getenv_or_append_to_home(char *env, char *or)
+{
+  char *env_str = getenv(env);
+  if (env_str == 0 || cstring8_length((U8 *)env_str) == 0) {
+    char *home = getenv("HOME");
+
+    String8 or_str = push_str8f(os_lnx_state.arena, "%S/%S",
+                                              str8_cstring(home),
+                                              str8_cstring(or));
+    return or_str;
+  } else {
+    return str8_cstring(env_str);
+  }
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1584,10 +1600,9 @@ main(int argc, char **argv)
         info->initial_path = os_get_current_path(os_lnx_state.arena);
       }
       
-      // rjf: grab home directory
       {
-        char *home = getenv("HOME");
-        info->user_program_data_path = str8_cstring(home);
+        info->user_program_state_path = getenv_or_append_to_home("XDG_STATE_HOME", ".local/state");
+        info->user_program_config_path = getenv_or_append_to_home("XDG_CONFIG_HOME", ".config");
       }
       
       scratch_end(scratch);
