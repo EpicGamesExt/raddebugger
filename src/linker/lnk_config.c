@@ -1768,9 +1768,11 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       PE_WindowsSubsystem subsystem = pe_subsystem_from_string(value_strings.first->string);
       if (subsystem != PE_WindowsSubsystem_UNKNOWN) {
         if (config->subsystem != PE_WindowsSubsystem_UNKNOWN) {
-          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "overriding subystem \"%S\" with \"%S\"",
-                               pe_string_from_subsystem(config->subsystem),
-                               pe_string_from_subsystem(subsystem));
+          if (config->subsystem != subsystem) {
+            lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "overriding subystem \"%S\" with \"%S\"",
+                                 pe_string_from_subsystem(config->subsystem),
+                                 pe_string_from_subsystem(subsystem));
+          }
         }
         config->subsystem = subsystem;
 
