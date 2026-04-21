@@ -49,8 +49,9 @@ p2r_hash_from_voff(U64 voff)
 }
 
 internal int
-p2r_namespace_node_is_before(P2R_NamespaceNode **a, P2R_NamespaceNode **b)
+p2r_namespace_node_is_before(void *raw_a, void *raw_b)
 {
+  P2R_NamespaceNode **a = (P2R_NamespaceNode **)raw_a, **b = (P2R_NamespaceNode **)raw_b;
   return (str8_compar(a[0]->string, b[0]->string, 0) < 0);
 }
 
