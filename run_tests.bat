@@ -13,7 +13,7 @@ for /f "tokens=*" %%i in ('where clang') do set clang_path=%%~dpi
 rem parse out clang version number out of --version to build path to the folder with ASAN DLL
 for /f "tokens=3 delims=. " %%v in ('clang -v 2^>^&1 ^| findstr version') do set clang_version=%%v
 
-for %%c in (%CC_VALUES%) do for %%m in (%MODE_VALUES%) do (
+for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
   setlocal
 
   echo --------------------------------------------------------------------------------
