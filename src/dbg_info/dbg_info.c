@@ -1152,27 +1152,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
           void *table_base = rdi_section_raw_table_from_kind(rdi, section_kind, &element_count);
           U64 element_size = rdi_section_element_size_table[section_kind];
           
-          // rjf: determine name string index offset, depending on table kind
-          U64 element_name_idx_off = 0;
-          switch(section_kind)
-          {
-            default:{}break;
-            case RDI_SectionKind_Procedures:
-            case RDI_SectionKind_GlobalVariables:
-            case RDI_SectionKind_ThreadVariables:
-            {
-              element_name_idx_off = OffsetOf(RDI_Symbol, name_string_idx);
-            }break;
-            case RDI_SectionKind_UDTs:
-            {
-              // NOTE(rjf): name must be determined from self_type_idx
-            }break;
-            case RDI_SectionKind_SourceFiles:
-            {
-              // NOTE(rjf): name must be determined from file path node chain
-            }break;
-          }
-          
+          // rjf: do search
           Rng1U64 range = lane_range(element_count);
           for EachInRange(idx, range)
           {
@@ -1191,8 +1171,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
               {
                 RDI_UDT *udt = (RDI_UDT *)element;
                 RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
-                name.str = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name.size);
-                name = str8_copy(arena, name);
+                name = fully_qualified_from_rdi_string_and_container(arena, rdi, type_node->user_defined.name_string_idx, udt->container_idx, udt->container_flags);
               }break;
               case RDI_SectionKind_SourceFiles:
               {
@@ -1214,10 +1193,8 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
               }break;
               default:
               {
-                U32 name_idx = *(U32 *)((U8 *)element + element_name_idx_off);
-                U64 name_size = 0;
-                U8 *name_base = rdi_string_from_idx(rdi, name_idx, &name_size);
-                name = str8(name_base, name_size);
+                RDI_Symbol *symbol = (RDI_Symbol *)element;
+                name = fully_qualified_str8_from_rdi_symbol(arena, rdi, symbol);
               }break;
             }
             if(name.size == 0) { continue; }

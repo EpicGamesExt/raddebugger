@@ -1812,17 +1812,12 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
         case RDI_SectionKind_Constants:
         {
           RDI_Symbol *symbol = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, accel->section, element_idx);
-          String8 symbol_name = {0};
-          symbol_name.str = rdi_string_from_idx(rdi, symbol->name_string_idx, &symbol_name.size);
-          item_string = symbol_name;
+          item_string = fully_qualified_str8_from_rdi_symbol(scratch.arena, rdi, symbol);
         }break;
         case RDI_SectionKind_UDTs:
         {
           RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, element_idx);
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
-          String8 name = {0};
-          name.str = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name.size);
-          item_string = name;
+          item_string = fully_qualified_str8_from_rdi_udt(scratch.arena, rdi, udt);
         }break;
         case RDI_SectionKind_SourceFiles:
         {
