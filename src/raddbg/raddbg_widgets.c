@@ -2347,7 +2347,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           
           // rjf: token -> token color
           RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
-          RD_CodeColorSlot lookup_color_slot = preceded_by_dot ? token_color_slot : rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+          RD_CodeColorSlot lookup_color_slot = preceded_by_dot ? token_color_slot : rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string, 0, 0);
           Vec4F32 token_color = rd_rgba_from_code_color_slot(token_color_slot);
           if(lookup_color_slot != RD_CodeColorSlot_CodeDefault)
           {
@@ -3224,9 +3224,10 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
       case TXT_TokenKind_Keyword:
       {
         RD_CodeColorSlot lookup_theme_color_slot = RD_CodeColorSlot_CodeDefault;
+        B32 is_called = (token+1 < tokens_opl && token[1].kind == TXT_TokenKind_Symbol && str8_match(str8_substr(string, token[1].range), str8_lit("("), 0));
         if(!preceded_by_dot)
         {
-          lookup_theme_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+          lookup_theme_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string, 1, is_called);
         }
         if(lookup_theme_color_slot != RD_CodeColorSlot_CodeDefault)
         {

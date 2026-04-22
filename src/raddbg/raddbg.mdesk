@@ -226,7 +226,7 @@ RD_VocabTable:
 
 @table(name schema) RD_SchemaTable:
 {
-  //- rjf: users / projects
+  //- rjf: @schema users
   {
     user,
     ```
@@ -253,7 +253,7 @@ RD_VocabTable:
         @description("The user's theme, which describes all colors used throughout the UI.")
         'theme': string,
       @no_expand @display_name('User Theme')
-        'theme_colors': query,
+        'theme_colors': set,
       
       //- rjf: autocompletion
       @display_name('Autocompletion Lister') @description("Enables the autocompletion lister while typing expressions.") @default(1)
@@ -305,9 +305,12 @@ RD_VocabTable:
     ```
   }
   
+  //- rjf: @schema project
+  //
   // TODO(rjf): the control codes could be fed from the D_ExceptionCodeKindTable, but
   // we do not support that in this generator - we'd need a way to form a table-generated
   // string and put it into a table cell...
+  //
   {
     project
       ```
@@ -328,7 +331,7 @@ RD_VocabTable:
       @default("None") @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
         'theme': string,
       @no_expand @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
-        'theme_colors': query,
+        'theme_colors': set,
       
       //- rjf: exception settings
       @default(1) @display_name("Break On Win32 Control-C Exceptions") @description("Code: 0x40010005")
@@ -409,7 +412,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: theme colors
+  //- rjf: @schema theme_color
   {
     theme_color,
     ```
@@ -423,7 +426,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: windows
+  //- rjf: @schema window
   {
     window,
     ```
@@ -454,7 +457,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: tabs
+  //- rjf: @schema tab
   {
     tab,
     ```
@@ -467,21 +470,49 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: views
-  {
-    watch,
-    ```
-      @inherit(tab) x:
-    {
-      @override @display_name('Tab Row Height') @description("Controls the tab's row height, in multiples of the font size.")
-        'row_height': @range[1.75f, 5.f] f32,
-      'label': code_string,
-      @description("The root expression which is evaluated to produce the watch window.")
-        'expression': expr_string,
-      @no_expand 'watches': query,
-    }
-    ```
-  }
+  //- rjf: @schema bin
+  {bin ```x:{ @description('An expression to which the 2-radix display should apply.') 'expression': expr_string }```}
+  
+  //- rjf: @schema oct
+  {oct ```x:{ @description('An expression to which the 8-radix display should apply.') 'expression': expr_string }```}
+  
+  //- rjf: @schema hex
+  {hex ```x:{ @description('An expression to which the 16-radix display should apply.') 'expression': expr_string }```}
+  
+  //- rjf: @schema digits
+  {digits ```x:{ @description('An expression to which the digit display should apply.') 'expression': expr_string, @description('The minimum number of digits to display.') 'digit_count': u64 }```}
+  
+  //- rjf: @schema no_string
+  {no_string ```x:{ @description('The expression for which string visualization should be disabled.') 'expression': expr_string}```}
+  
+  //- rjf: @schema no_char
+  {no_char ```x:{ @description('The expression for which character visualization should be disabled.') 'expression': expr_string}```}
+  
+  //- rjf: @schema no_addr
+  {no_addr ```x:{ @description('The expression for which address visualization should be disabled.') 'expression': expr_string}```}
+  
+  //- rjf: @schema sequence
+  {sequence ```x:{ @description('The number of expansions to generate.') 'count': expr_string}```}
+  
+  //- rjf: @schema rows
+  {rows ```x:{ @description('The expression for which rows should be generated.') 'expression': expr_string, @description('A list of expressions which will be used to generate rows.') '...'}```}
+  
+  //- rjf: @schema columns
+  {columns ```x:{ @description('The expression for whose expansions columns should be generated.') 'expression': expr_string, @description('A list of expressions which will be used to generate columns for each expansion from `expression`.') '...'}```}
+  
+  //- rjf: @schema omit
+  {omit ```x:{ @description('The expression for which certain members should be omitted.') 'expression': expr_string, @description('A list of member names to omit from the expansion.') '...'}```}
+  
+  //- rjf: @schema range1
+  {range1 ```x:{ @description('The expression which should be bounded by `min` and `max`.') 'expression': expr_string, @description('The lower bound.') min, @description('The upper bound.') max}```}
+  
+  //- rjf: @schema array
+  {array ```x:{ @description('An expression of the base address of the array.') 'base_address': expr_string, @description('The number of elements in the array.') count}```}
+  
+  //- rjf: @schema slice
+  {slice ```x:{ @description('An expression of a structure that is to be interpreted as a slice.') 'expression': expr_string}```}
+  
+  //- rjf: @schema list
   {
     list,
     ```
@@ -494,6 +525,24 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema watch
+  {
+    watch,
+    ```
+      @inherit(tab) x:
+    {
+      @override @display_name('Tab Row Height') @description("Controls the tab's row height, in multiples of the font size.")
+        'row_height': @range[1.75f, 5.f] f32,
+      'label': code_string,
+      @description("The root expression which is evaluated to produce the watch window.")
+        'expression': expr_string,
+      @no_expand 'watches': set,
+    }
+    ```
+  }
+  
+  //- rjf: @schema text
   {
     text,
     ```
@@ -514,6 +563,8 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema disasm
   {
     disasm,
     ```
@@ -537,6 +588,8 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema memory
   {
     memory,
     ```
@@ -567,10 +620,12 @@ RD_VocabTable:
       @default(1) @display_name("Peek As Signed") 'peek_as_signed': bool,
       @default(1) @display_name("Peek As Float") 'peek_as_float': bool,
       @display_name("Extra Peek Types") @description("A list of types as which to interpret selected memory.")
-        'peek_types': query,
+        'peek_types': set,
     }
     ```
   }
+  
+  //- rjf: @schema bitmap
   {
     bitmap,
     ```
@@ -585,6 +640,8 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema color
   {
     color,
     ```
@@ -595,6 +652,8 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema geo3d
   {
     geo3d,
     ```
@@ -612,7 +671,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: getting started
+  //- rjf: @schema getting_started
   {
     getting_started,
     ```
@@ -622,7 +681,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: targets
+  //- rjf: @schema target
   {
     target,
     ```
@@ -638,14 +697,14 @@ RD_VocabTable:
       'stdout_path':        @no_relativize path,
       'stderr_path':        @no_relativize path,
       'stdin_path':         @no_relativize path,
-      'environment':        query,
+      'environment':        set,
       'debug_subprocesses': bool,
       @no_revert @no_expand @default(0) 'enabled': bool,
     }
     ```,
   }
   
-  //- rjf: breakpoints
+  //- rjf: @schema breakpoint
   {
     breakpoint,
     ```
@@ -667,7 +726,7 @@ RD_VocabTable:
     ```,
   }
   
-  //- rjf: watch pins
+  //- rjf: @schema watch_pin
   {
     watch_pin,
     ```
@@ -682,7 +741,7 @@ RD_VocabTable:
     ```,
   }
   
-  //- rjf: debug infos
+  //- rjf: @schema debug_info
   {
     debug_info,
     ```
@@ -697,46 +756,52 @@ RD_VocabTable:
     ```,
   }
   
-  //- rjf: file path maps
+  //- rjf: @schema file_path_map
   {
     file_path_map,
     ```@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @no_relativize path, 'dest': @no_relativize path}```,
   }
   
-  //- rjf: type views
+  //- rjf: @schema type_view
   {
     type_view,
     ```@collection_commands(add_type_view) @row_commands(remove_cfg) x:{'type':expr_string, 'expr':expr_string}```,
   }
   
-  //- rjf: recent projects
+  //- rjf: @schema recent_project
   {
     recent_project,
     ```x:{'path':path}```,
   }
   
-  //- rjf: recent files
+  //- rjf: @schema recent_file
   {
     recent_file,
     ```x:{'path':path}```,
   }
   
-  //- rjf: control entities
+  //- rjf: @schema machine
   {
     machine,
-    ```x:{'label':code_string, @no_expand 'active':bool, 'unattached_processes':query, 'processes':query}```,
+    ```x:{'label':code_string, @no_expand 'active':bool, 'unattached_processes':set, 'processes':set}```,
   }
+  
+  //- rjf: @schema process
   {
     process,
-    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'modules':query, 'threads':query}```,
+    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'modules':set, 'threads':set}```,
   }
+  
+  //- rjf: @schema module
   {
     module,
     ```x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}```,
   }
+  
+  //- rjf: @schema thread
   {
     thread,
-    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}```,
+    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':set}```,
   }
 }
 

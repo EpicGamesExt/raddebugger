@@ -361,7 +361,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         child_type_key = e_type_key_cons(.kind = E_TypeKind_Struct, .name = str8_lit("vaddr_range"), .count = vaddr_range_members.count, .members = vaddr_range_members.v);
         scratch_end(scratch);
       }
-      else if(str8_match(child_schema->first->string, str8_lit("query"), 0))
+      else if(str8_match(child_schema->first->string, str8_lit("set"), 0))
       {
         child_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, child_schema->string);
       }

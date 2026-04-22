@@ -6014,7 +6014,7 @@ rd_window_frame(void)
                         UI_TagF("weak") ui_label(display_name);
                       }
                     }
-                    UI_TagF("weak") ui_label(desc);
+                    UI_TagF("weak") rd_label(desc);
                   }
                 }
               }
@@ -9345,7 +9345,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       MD_Node *arg_schema = &md_nil_node;
       if(callee_expr.size != 0)
       {
-        E_Eval callee_eval = e_eval_from_string(callee_expr);
+        E_Eval callee_eval = e_eval_from_stringf("view:%S", callee_expr);
         E_Type *callee_type = e_type_from_key(callee_eval.irtree.type_key);
         if(callee_type->kind == E_TypeKind_LensSpec)
         {
@@ -9375,7 +9375,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       cursor_info.list_expr = push_str8_copy(ws->autocomp_arena, list_expr);
       cursor_info.filter = push_str8_copy(ws->autocomp_arena, filter);
       cursor_info.replaced_range = replaced_range;
-      cursor_info.callee_expr = push_str8_copy(ws->autocomp_arena, callee_expr);
+      cursor_info.callee_expr = str8f(ws->autocomp_arena, "view:%S", callee_expr);
       cursor_info.arg_schema = arg_schema;
       
       scratch_end(scratch);
@@ -9454,7 +9454,7 @@ rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind)
 }
 
 internal RD_CodeColorSlot
-rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string)
+rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string, B32 allow_macros, B32 is_called)
 {
   RD_CodeColorSlot color = RD_CodeColorSlot_CodeDefault;
   if(kind == TXT_TokenKind_Identifier || kind == TXT_TokenKind_Keyword)
@@ -9502,6 +9502,17 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
       {
         mapped = 1;
         color = RD_CodeColorSlot_CodeRegister;
+      }
+    }
+    
+    // rjf: try to map as macro
+    if((!mapped || is_called) && allow_macros)
+    {
+      E_Expr *expr = e_string2expr_map_lookup(e_ir_ctx->macro_map, string);
+      if(expr != &e_expr_nil)
+      {
+        mapped = 1;
+        color = RD_CodeColorSlot_CodeMeta;
       }
     }
     
@@ -11615,7 +11626,7 @@ rd_frame(void)
       }
       
       
-      //- rjf: add types for queries
+      //- rjf: add types for sets
       {
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("environment"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
