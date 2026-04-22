@@ -299,14 +299,13 @@
 #include "stap/stap_parse.h"
 #include "demon/demon_inc.h"
 #include "eval/eval_inc.h"
+#include "dbg_engine/dbg_engine_inc.h"
 #include "eval_visualization/eval_visualization_inc.h"
-#include "ctrl/ctrl_inc.h"
 #include "font_provider/font_provider_inc.h"
 #include "render/render_inc.h"
 #include "font_cache/font_cache.h"
 #include "draw/draw.h"
 #include "ui/ui_inc.h"
-#include "dbg_engine/dbg_engine_inc.h"
 #include "raddbg/raddbg_inc.h"
 
 //- rjf: [c]
@@ -354,14 +353,13 @@
 #include "stap/stap_parse.c"
 #include "demon/demon_inc.c"
 #include "eval/eval_inc.c"
+#include "dbg_engine/dbg_engine_inc.c"
 #include "eval_visualization/eval_visualization_inc.c"
-#include "ctrl/ctrl_inc.c"
 #include "font_provider/font_provider_inc.c"
 #include "render/render_inc.c"
 #include "font_cache/font_cache.c"
 #include "draw/draw.c"
 #include "ui/ui_inc.c"
-#include "dbg_engine/dbg_engine_inc.c"
 #include "raddbg/raddbg_inc.c"
 
 ////////////////////////////////
