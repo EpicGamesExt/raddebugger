@@ -74,6 +74,7 @@ e_token_array_from_text(Arena *arena, String8 text)
   B32 active_token_kind_started_with_tick = 0;
   B32 escaped = 0;
   B32 exp = 0;
+  B32 comment_is_explicit_ender = 0;
   for(U64 idx = 0, advance = 0; idx <= text.size; idx += advance)
   {
     U8 byte      = (idx+0 < text.size) ? text.str[idx+0] : 0;
@@ -114,10 +115,22 @@ e_token_array_from_text(Arena *arena, String8 text)
                 byte == ']' || byte == '{' || byte == '}' || byte == ':' ||
                 byte == ';' || byte == ',' || byte == '.' || byte == '<' ||
                 byte == '>' || byte == '/' || byte == '?' || byte == '|' ||
-                byte == '#')
+                byte == '#' || byte == '@')
         {
           active_token_kind = E_TokenKind_Symbol;
           active_token_start_idx = idx;
+        }
+        else if(byte == '/' && byte_next == '/')
+        {
+          active_token_kind = E_TokenKind_Comment;
+          active_token_start_idx = idx;
+          comment_is_explicit_ender = 0;
+        }
+        else if(byte == '/' && byte_next == '*')
+        {
+          active_token_kind = E_TokenKind_Comment;
+          active_token_start_idx = idx;
+          comment_is_explicit_ender = 1;
         }
       }break;
       
@@ -226,10 +239,22 @@ e_token_array_from_text(Arena *arena, String8 text)
            byte != ']' && byte != '{' && byte != '}' && byte != ':' &&
            byte != ';' && byte != ',' && byte != '.' && byte != '<' &&
            byte != '>' && byte != '/' && byte != '?' && byte != '|' &&
-           byte != '#')
+           byte != '#' && byte != '@')
         {
           advance = 0;
           token_formed = 1;
+        }
+      }break;
+      case E_TokenKind_Comment:
+      {
+        if(byte == 0)
+        {
+          token_formed = 1;
+        }
+        else if(comment_is_explicit_ender && byte == '*' && byte_next == '/')
+        {
+          token_formed = 1;
+          advance = 2;
         }
       }break;
     }
@@ -651,97 +676,6 @@ e_type_key_from_expr(E_Expr *expr)
 }
 
 internal E_Parse
-e_push_type_parse_from_text_tokens(Arena *arena, String8 text, E_TokenArray tokens)
-{
-  E_Parse parse = {tokens, 0, &e_expr_nil, &e_expr_nil};
-  E_Token *token_it = tokens.v;
-  
-  //- rjf: parse unsigned marker
-  B32 unsigned_marker = 0;
-  {
-    E_Token token = e_token_at_it(token_it, &tokens);
-    if(token.kind == E_TokenKind_Identifier)
-    {
-      String8 token_string = str8_substr(text, token.range);
-      if(str8_match(token_string, str8_lit("unsigned"), 0))
-      {
-        token_it += 1;
-        unsigned_marker = 1;
-      }
-    }
-  }
-  
-  //- rjf: parse base type
-  {
-    E_Token token = e_token_at_it(token_it, &tokens);
-    if(token.kind == E_TokenKind_Identifier)
-    {
-      String8 token_string = str8_substr(text, token.range);
-      if(token_string.size >= 2 &&
-         token_string.str[0] == '`' &&
-         token_string.str[token_string.size-1] == '`')
-      {
-        token_string = str8_substr(token_string, r1u64(1, token_string.size-1));
-      }
-      E_TypeKey type_key = e_leaf_type_key_from_name(token_string);
-      if(!e_type_key_match(e_type_key_zero(), type_key))
-      {
-        token_it += 1;
-        
-        // rjf: apply unsigned marker to base type
-        if(unsigned_marker) switch(e_type_kind_from_key(type_key))
-        {
-          default:{}break;
-          case E_TypeKind_Char8: {type_key = e_type_key_basic(E_TypeKind_UChar8);}break;
-          case E_TypeKind_Char16:{type_key = e_type_key_basic(E_TypeKind_UChar16);}break;
-          case E_TypeKind_Char32:{type_key = e_type_key_basic(E_TypeKind_UChar32);}break;
-          case E_TypeKind_S8:  {type_key = e_type_key_basic(E_TypeKind_U8);}break;
-          case E_TypeKind_S16: {type_key = e_type_key_basic(E_TypeKind_U16);}break;
-          case E_TypeKind_S32: {type_key = e_type_key_basic(E_TypeKind_U32);}break;
-          case E_TypeKind_S64: {type_key = e_type_key_basic(E_TypeKind_U64);}break;
-          case E_TypeKind_S128:{type_key = e_type_key_basic(E_TypeKind_U128);}break;
-          case E_TypeKind_S256:{type_key = e_type_key_basic(E_TypeKind_U256);}break;
-          case E_TypeKind_S512:{type_key = e_type_key_basic(E_TypeKind_U512);}break;
-        }
-        
-        // rjf: construct leaf type
-        parse.expr = e_push_expr(arena, E_ExprKind_TypeIdent, token.range);
-        parse.expr->type_key = type_key;
-      }
-    }
-  }
-  
-  //- rjf: parse extensions
-  if(parse.expr != &e_expr_nil)
-  {
-    for(;;)
-    {
-      E_Token token = e_token_at_it(token_it, &tokens);
-      if(token.kind != E_TokenKind_Symbol)
-      {
-        break;
-      }
-      String8 token_string = str8_substr(text, token.range);
-      if(str8_match(token_string, str8_lit("*"), 0))
-      {
-        token_it += 1;
-        E_Expr *ptee = parse.expr;
-        parse.expr = e_push_expr(arena, E_ExprKind_Ptr, token.range);
-        e_expr_push_child(parse.expr, ptee);
-      }
-      else
-      {
-        break;
-      }
-    }
-  }
-  
-  //- rjf: fill parse & end
-  parse.last_token = token_it;
-  return parse;
-}
-
-internal E_Parse
 e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray tokens, S64 max_precedence, U64 max_chain_count)
 {
   ProfBeginFunction();
@@ -847,14 +781,14 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         }
         
         // rjf: try 'unsigned' marker
-        if(str8_match(token_string, str8_lit("unsigned"), 0))
+        if(token.kind == E_TokenKind_Identifier && str8_match(token_string, str8_lit("unsigned"), 0))
         {
           prefix_unary_kind = E_ExprKind_Unsigned;
           prefix_unary_precedence = 2;
         }
         
         // rjf: try explicit cast
-        if(str8_match(token_string, str8_lit("cast"), 0))
+        if(token.kind == E_TokenKind_Identifier && str8_match(token_string, str8_lit("cast"), 0))
         {
           // rjf: consume cast & open paren
           E_Token open_paren_maybe = e_token_at_it(it+1, &tokens);
@@ -923,14 +857,28 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         {
           E_Token token = e_token_at_it(it, &tokens);
           String8 token_string = str8_substr(text, token.range);
-          if(token.kind == E_TokenKind_Identifier)
+          if(token.kind == E_TokenKind_Identifier || token.kind == E_TokenKind_StringLiteral)
           {
-            E_Token next_token = e_token_at_it(it+1, &tokens);
-            String8 next_token_string = str8_substr(text, next_token.range);
-            if(next_token.range.min == token.range.max && next_token.kind == E_TokenKind_Symbol && str8_match(next_token_string, str8_lit(":"), 0))
+            // rjf: look for extensions - for qualifiers of the form `foo.dll!bar`
+            U64 token_ext_count = 0;
+            E_Token dot_maybe_token = e_token_at_it(it+1, &tokens);
+            String8 dot_maybe_token_string = str8_substr(text, dot_maybe_token.range);
+            E_Token ext_maybe_token = e_token_at_it(it+2, &tokens);
+            String8 ext_maybe_token_string = str8_substr(text, ext_maybe_token.range);
+            if(dot_maybe_token.kind == E_TokenKind_Symbol &&
+               ext_maybe_token.kind == E_TokenKind_Identifier &&
+               str8_match(dot_maybe_token_string, str8_lit("."), 0))
             {
-              it += 2;
-              resolution_qualifier = token_string;
+              token_ext_count = 2;
+            }
+            
+            // rjf: look for : or !
+            E_Token next_token = e_token_at_it(it+1+token_ext_count, &tokens);
+            String8 next_token_string = str8_substr(text, next_token.range);
+            if(next_token.kind == E_TokenKind_Symbol && (str8_match(next_token_string, str8_lit(":"), 0) || str8_match(next_token_string, str8_lit("!"), 0)))
+            {
+              it += 2 + token_ext_count;
+              resolution_qualifier = str8_substr(text, union_1u64(token.range, r1u64(token.range.min, next_token.range.min)));
             }
           }
         }

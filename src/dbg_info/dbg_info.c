@@ -1659,10 +1659,12 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
             U32 *matches = rdi_matches_from_map_node(rdi, map_node, &matches_count);
             
             // rjf: do we have a container? -> filter matches according to container string also
+            U32 *filtered_matches = matches;
+            U32 filtered_matches_count = matches_count;
             if(container_part_of_name.size != 0)
             {
-              U32 *filtered_matches = push_array(scratch.arena, U32, matches_count);
-              U32 filtered_matches_count = 0;
+              filtered_matches = push_array(scratch.arena, U32, matches_count);
+              filtered_matches_count = 0;
               for EachIndex(match_idx, matches_count)
               {
                 Temp scratch = scratch_begin(0, 0);
@@ -1699,17 +1701,23 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
                 }
                 scratch_end(scratch);
               }
-              matches = filtered_matches;
-              matches_count = filtered_matches_count;
             }
             
-            // rjf: given matches, pick selected & return as result
-            if(matches_count != 0)
+            // rjf: do we have a specific unit queried? -> filter matches according to containing unit
+#if 0
+            if(target_unit_index != 0)
             {
-              U64 selected_match_idx = (matches_count-1) - Min(index, matches_count-1);
+              
+            }
+#endif
+            
+            // rjf: given matches, pick selected & return as result
+            if(filtered_matches_count != 0)
+            {
+              U64 selected_match_idx = (filtered_matches_count-1) - Min(index, filtered_matches_count-1);
               lane_matches[lane_idx()].key          = dbgi_key;
               lane_matches[lane_idx()].section_kind = name_map_section_kinds[name_map_kind_idx];
-              lane_matches[lane_idx()].idx          = matches[selected_match_idx];
+              lane_matches[lane_idx()].idx          = filtered_matches[selected_match_idx];
             }
           }
         }
@@ -1753,14 +1761,14 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
 }
 
 internal DI_Match
-di_match_from_string(String8 string, U64 index, DI_Key preferred_dbgi_key, U64 endt_us)
+di_match_from_string(String8 string, U64 match_index, DI_Key preferred_dbgi_key, U64 endt_us)
 {
   DI_Match result = {0};
   Access *access = access_open();
   Temp scratch = scratch_begin(0, 0);
   {
     String8List key_parts = {0};
-    str8_list_push(scratch.arena, &key_parts, str8_struct(&index));
+    str8_list_push(scratch.arena, &key_parts, str8_struct(&match_index));
     str8_list_push(scratch.arena, &key_parts, str8_struct(&preferred_dbgi_key));
     str8_list_push(scratch.arena, &key_parts, str8_struct(&string.size));
     str8_list_push(scratch.arena, &key_parts, string);
