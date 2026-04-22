@@ -9,12 +9,11 @@
 #define BUILD_CONSOLE_INTERFACE 1
 #define OS_FEATURE_GRAPHICAL 1
 #define DMN_INIT_MANUAL 1
-#define CTRL_INIT_MANUAL 1
+#define D_INIT_MANUAL 1
 #define OS_GFX_INIT_MANUAL 1
 #define FP_INIT_MANUAL 1
 #define R_INIT_MANUAL 1
 #define FNT_INIT_MANUAL 1
-#define D_INIT_MANUAL 1
 #define RD_INIT_MANUAL 1
 #define NO_ASYNC 1
 
@@ -69,14 +68,13 @@
 #include "stap/stap_parse.h"
 #include "demon/demon_inc.h"
 #include "eval/eval_inc.h"
+#include "dbg_engine/dbg_engine_inc.h"
 #include "eval_visualization/eval_visualization_inc.h"
-#include "ctrl/ctrl_inc.h"
 #include "font_provider/font_provider_inc.h"
 #include "render/render_inc.h"
 #include "font_cache/font_cache.h"
 #include "draw/draw.h"
 #include "ui/ui_inc.h"
-#include "dbg_engine/dbg_engine_inc.h"
 #include "raddbg/raddbg_inc.h"
 #include "linker/base_ext/base_crc32.h"
 #include "linker/base_ext/base_core.h"
@@ -142,14 +140,13 @@
 #include "stap/stap_parse.c"
 #include "demon/demon_inc.c"
 #include "eval/eval_inc.c"
+#include "dbg_engine/dbg_engine_inc.c"
 #include "eval_visualization/eval_visualization_inc.c"
-#include "ctrl/ctrl_inc.c"
 #include "font_provider/font_provider_inc.c"
 #include "render/render_inc.c"
 #include "font_cache/font_cache.c"
 #include "draw/draw.c"
 #include "ui/ui_inc.c"
-#include "dbg_engine/dbg_engine_inc.c"
 #include "raddbg/raddbg_inc.c"
 #include "linker/base_ext/base_core.c"
 #include "linker/base_ext/base_arena.c"

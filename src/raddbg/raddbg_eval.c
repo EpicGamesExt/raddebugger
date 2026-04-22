@@ -205,7 +205,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(locals)
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(registers)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
+  CTRL_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
   Arch arch = thread->arch;
   U64 reg_count     = regs_reg_code_count_from_arch(arch);
   String8 *reg_strings   = regs_reg_code_string_table_from_arch(arch);
@@ -659,7 +659,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(control)
      str8_match(str8_prefix(rhs->string, 1), str8_lit("$"), 0))
   {
     CTRL_Handle handle = ctrl_handle_from_string(rhs->string);
-    CTRL_Entity *entity = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, handle);
+    CTRL_Entity *entity = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, handle);
     E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
     result.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
     result.type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ctrl_entity_kind_code_name_table[entity->kind]);
@@ -978,7 +978,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(call_stack)
     CTRL_CallStack *call_stack = &accel->call_stack;
     if(0 <= rhs_value.u64 && rhs_value.u64 < call_stack->frames_count)
     {
-      CTRL_Entity *process = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, accel->process);
+      CTRL_Entity *process = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, accel->process);
       CTRL_CallStackFrame *f = &call_stack->frames[rhs_value.u64];
       result.root = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(process, CTRL_EvalSpaceKind_Entity), e_irtree_const_u(arena, regs_rip_from_arch_block(accel->arch, f->regs)));
       result.type_key = e_type_key_cons(.arch = process->arch, .kind = E_TypeKind_Ptr, .direct_key = e_type_key_basic(E_TypeKind_Function), .count = 1, .depth = f->inline_depth);
@@ -1438,7 +1438,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
     }
     else
     {
-      machines = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Machine);
+      machines = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, CTRL_EntityKind_Machine);
     }
     
     //- rjf: gather system processes from this machine
@@ -1535,7 +1535,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(ctrl_entities)
       {
         String8 rhs_name = expr->first->next->string;
         CTRL_Handle handle = ctrl_handle_from_string(rhs_name);
-        entity = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, handle);
+        entity = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, handle);
       }break;
       case E_ExprKind_ArrayIndex:
       {
@@ -1543,7 +1543,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(ctrl_entities)
         CTRL_EntityKind kind = ctrl_entity_kind_from_string(rd_singular_from_code_name_plural(type->name));
         E_Value rhs_value = e_value_from_expr(expr->first->next);
         U64 rhs_idx = rhs_value.u64;
-        CTRL_EntityArray entities = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, kind);
+        CTRL_EntityArray entities = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, kind);
         if(0 <= rhs_idx && rhs_idx < entities.count)
         {
           entity = entities.v[rhs_idx];
@@ -1585,7 +1585,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
     CTRL_EntityArray array = {0};
     if(scoping_entity == &ctrl_entity_nil)
     {
-      array = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, entity_kind);
+      array = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, entity_kind);
     }
     else
     {

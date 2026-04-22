@@ -263,8 +263,8 @@ typedef CTRL_WAKEUP_FUNCTION_DEF(CTRL_WakeupFunctionType);
 ////////////////////////////////
 //~ rjf: Main State Types
 
-typedef struct CTRL_State CTRL_State;
-struct CTRL_State
+typedef struct D_CtrlState D_CtrlState;
+struct D_CtrlState
 {
   Arena *arena;
   CTRL_WakeupFunctionType *wakeup_hook;
@@ -327,7 +327,7 @@ struct CTRL_State
 ////////////////////////////////
 //~ rjf: Globals
 
-global CTRL_State *ctrl_state = 0;
+global D_CtrlState *d_ctrl_state = 0;
 read_only global CTRL_Entity ctrl_entity_nil =
 {
   &ctrl_entity_nil,
@@ -470,11 +470,6 @@ internal CTRL_Entity *ctrl_thread_from_id(CTRL_EntityCtx *ctx, U64 id);
 
 //- rjf: applying events to entity caches
 internal void ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *list);
-
-////////////////////////////////
-//~ rjf: Main Layer Initialization
-
-internal void ctrl_init(void);
 
 ////////////////////////////////
 //~ rjf: Wakeup Callback Registration

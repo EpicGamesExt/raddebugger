@@ -399,4 +399,9 @@ struct D_TrapNet
   B32 good_read;
 };
 
+////////////////////////////////
+//~ rjf: Layer Initialization
+
+internal void d_init(void);
+
 #endif // DBG_ENGINE_CORE_H

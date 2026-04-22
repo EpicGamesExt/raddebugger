@@ -332,8 +332,8 @@ struct CTRL_EventList
 ////////////////////////////////
 //~ rjf: Main State Types
 
-typedef struct D_State D_State;
-struct D_State
+typedef struct D_UserState D_UserState;
+struct D_UserState
 {
   // rjf: top-level state
   Arena *arena;
@@ -382,7 +382,7 @@ struct D_State
 ////////////////////////////////
 //~ rjf: Globals
 
-global D_State *d_state = 0;
+global D_UserState *d_user_state = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -480,7 +480,6 @@ internal B32 d_next_cmd(D_Cmd **cmd);
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void d_init(void);
 internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64]);
 
 #endif // DBG_ENGINE_USER_H

@@ -72,8 +72,8 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();
 #endif
-#if defined(CTRL_CORE_H) && !defined(CTRL_INIT_MANUAL)
-  ctrl_init();
+#if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)
+  d_init();
 #endif
 #if defined(OS_GFX_H) && !defined(OS_GFX_INIT_MANUAL)
   os_gfx_init();
@@ -86,9 +86,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #endif
 #if defined(FONT_CACHE_H) && !defined(FNT_INIT_MANUAL)
   fnt_init();
-#endif
-#if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)
-  d_init();
 #endif
 #if defined(RADDBG_CORE_H) && !defined(RD_INIT_MANUAL)
   rd_init(&cmdline);
