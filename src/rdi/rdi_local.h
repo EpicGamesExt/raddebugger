@@ -75,7 +75,12 @@ internal Arch arch_from_rdi_arch(RDI_Arch arch);
 //~ rjf: Lookup Helpers
 
 internal String8 str8_from_rdi_string_idx(RDI_Parsed *rdi, U32 idx);
-internal String8 str8_from_rdi_path_node_idx(Arena *arean, RDI_Parsed *rdi, PathStyle path_style, U32 path_node_idx);
+internal String8 str8_from_rdi_path_node_idx(Arena *arena, RDI_Parsed *rdi, PathStyle path_style, U32 path_node_idx);
+internal String8 fully_qualified_from_rdi_string_and_container(Arena *arena, RDI_Parsed *rdi, U32 name_string_idx, U32 start_container_idx, RDI_ContainerFlags start_container_flags);
+#define fully_qualified_str8_from_rdi_symbol(arena, rdi, symbol) fully_qualified_from_rdi_string_and_container((arena), (rdi), (symbol)->name_string_idx, (symbol)->container_idx, (symbol)->container_flags)
+#define fully_qualified_str8_from_rdi_udt(arena, rdi, udt) fully_qualified_from_rdi_string_and_container((arena), (rdi), rdi_element_from_name_idx((rdi), TypeNodes, (udt)->self_type_idx)->user_defined.name_string_idx, (udt)->container_idx, (udt)->container_flags)
+#define fully_qualified_str8_from_rdi_type(arena, rdi, type) fully_qualified_from_rdi_string_and_container((arena), (rdi), (type)->user_defined.name_string_idx, rdi_element_from_name_idx((rdi), UDTs, (type)->user_defined.udt_idx)->container_idx, rdi_element_from_name_idx((rdi), UDTs, (type)->user_defined.udt_idx)->container_flags)
+#define fully_qualified_str8_from_rdi_namespace(arena, rdi, ns) fully_qualified_from_rdi_string_and_container((arena), (rdi), (ns)->name_string_idx, (ns)->container_idx, (ns)->container_flags)
 
 ////////////////////////////////
 //~ rjf: String <=> Enum

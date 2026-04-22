@@ -19,13 +19,22 @@ p2r_end_of_cplusplus_container_name(String8 str)
   U64 result = 0;
   if(str.size >= 2)
   {
-    String8 str_before_templates = str8_prefix(str, str8_find_needle(str, 0, str8_lit("<"), 0));
-    for(U64 i = str_before_templates.size; i >= 2; i -= 1)
+    S64 template_nest_depth = 0;
+    for(U64 i = str.size; i >= 2; i -= 1)
     {
-      if(str_before_templates.str[i - 2] == ':' && str_before_templates.str[i - 1] == ':')
+      if(template_nest_depth == 0 && str.str[i - 2] == ':' && str.str[i - 1] == ':')
       {
         result = i;
         break;
+      }
+      if(str.str[i-1] == '>')
+      {
+        template_nest_depth += 1;
+      }
+      else if(str.str[i-1] == '<')
+      {
+        template_nest_depth -= 1;
+        template_nest_depth = ClampBot(template_nest_depth, 0);
       }
     }
   }
@@ -2873,44 +2882,49 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         
         // rjf: symbol name -> container name
         String8 container_name = str8_chop(str8_prefix(symbol_name, p2r_end_of_cplusplus_container_name(symbol_name)), 2);
-        U64 container_name_hash = u64_hash_from_str8(container_name);
         
-        // rjf: first, check if this container already showed up from type info
-        B32 already_exists = 0;
-        if(!already_exists)
+        // rjf: non-empty container name -> gather
+        if(container_name.size != 0)
         {
-          U64 slot_idx = container_name_hash%all_namespace_slots_count;
-          for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+          U64 container_name_hash = u64_hash_from_str8(container_name);
+          
+          // rjf: first, check if this container already showed up from type info
+          B32 already_exists = 0;
+          if(!already_exists)
           {
-            if(str8_match(n->string, container_name, 0))
+            U64 slot_idx = container_name_hash%all_namespace_slots_count;
+            for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
             {
-              already_exists = 1;
-              break;
+              if(str8_match(n->string, container_name, 0))
+              {
+                already_exists = 1;
+                break;
+              }
             }
           }
-        }
-        
-        // rjf: next, check if we've already gathered this namespace for this lane
-        if(!already_exists)
-        {
-          U64 slot_idx = container_name_hash%lane_namespace_slots_count;
-          for(String8Node *n = lane_namespace_slots[slot_idx]; n != 0; n = n->next)
+          
+          // rjf: next, check if we've already gathered this namespace for this lane
+          if(!already_exists)
           {
-            if(str8_match(n->string, container_name, 0))
+            U64 slot_idx = container_name_hash%lane_namespace_slots_count;
+            for(String8Node *n = lane_namespace_slots[slot_idx]; n != 0; n = n->next)
             {
-              already_exists = 1;
-              break;
+              if(str8_match(n->string, container_name, 0))
+              {
+                already_exists = 1;
+                break;
+              }
             }
           }
-        }
-        
-        // rjf: if we didn't find this namespace in either those from types, or already found in this lane, then gather
-        if(!already_exists)
-        {
-          U64 slot_idx = container_name_hash%lane_namespace_slots_count;
-          String8Node *n = push_array(scratch2.arena, String8Node, 1);
-          SLLStackPush(lane_namespace_slots[slot_idx], n);
-          n->string = container_name;
+          
+          // rjf: if we didn't find this namespace in either those from types, or already found in this lane, then gather
+          if(!already_exists)
+          {
+            U64 slot_idx = container_name_hash%lane_namespace_slots_count;
+            String8Node *n = push_array(scratch2.arena, String8Node, 1);
+            SLLStackPush(lane_namespace_slots[slot_idx], n);
+            n->string = container_name;
+          }
         }
       }
     }
@@ -3023,7 +3037,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       for EachIndex(node_in_slot_idx, node_count)
       {
         P2R_NamespaceNode *n = nodes[node_in_slot_idx];
-        raddbg_log("%S%s\n", n->string, n->corresponds_to_scope ? " (is scope)" : n->type != 0 ? " (is type)" : "");
         if(n->corresponds_to_scope || n->scope != 0 || n->type != 0) { continue; }
         String8 string = n->string;
         RDIM_Namespace *ns = rdim_namespace_chunk_list_push(arena, &lane_namespaces, 32);
@@ -3316,10 +3329,17 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                     }
                   }
                   
+                  // rjf: un-namespaceify the symbol name
+                  String8 name__maybe_partially_qualified = name;
+                  if(got_container)
+                  {
+                    name__maybe_partially_qualified = str8_skip(name, container_name_opl);
+                  }
+                  
                   // rjf: build symbol
                   RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, sym_global_variables, sym_global_variables_chunk_cap);
                   symbol->is_extern           = (iter.kind == CV_SymKind_GDATA32);
-                  symbol->name                = name;
+                  symbol->name                = name__maybe_partially_qualified;
                   symbol->type                = type;
                   symbol->container_scope     = container_scope;
                   symbol->container_type      = container_type;
@@ -3435,12 +3455,19 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   }
                 }
                 
+                // rjf: un-namespaceify the symbol name
+                String8 name__maybe_partially_qualified = name;
+                if(got_container)
+                {
+                  name__maybe_partially_qualified = str8_skip(name, container_name_opl);
+                }
+                
                 // rjf: build procedure symbol
                 if(params->subset_flags & (RDIM_SubsetFlag_Procedures|RDIM_SubsetFlag_ProcedureNameMap))
                 {
                   curr_proc_symbol = rdim_symbol_chunk_list_push(arena, sym_procedures, sym_procedures_chunk_cap);
                   curr_proc_symbol->is_extern        = (iter.kind == CV_SymKind_GPROC32);
-                  curr_proc_symbol->name             = name;
+                  curr_proc_symbol->name             = name__maybe_partially_qualified;
                   curr_proc_symbol->link_name        = link_name;
                   curr_proc_symbol->type             = type;
                   curr_proc_symbol->container_scope  = container_scope;
@@ -3564,6 +3591,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   {
                     RDIM_Scope *scope = top_scope_node->scope;
                     RDIM_Symbol *local = rdim_symbol_chunk_list_push(arena, &scope->locals, 8);
+                    local->container_scope = scope;
                     local->is_param = is_param;
                     local->name     = name;
                     local->type     = type;
@@ -3599,29 +3627,57 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                 RDIM_Type *type = p2r_type_ptr_from_itype(thread32->itype);
                 
                 // rjf: unpack thread variable's container type
+                B32 got_container = 0;
                 RDIM_Type *container_type = 0;
                 U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
-                if(container_name_opl > 2)
+                String8 container_name = str8_chop(str8_prefix(name, container_name_opl), 2);
+                if(!got_container && container_name.size != 0)
                 {
-                  String8 container_name = str8(name.str, container_name_opl - 2);
                   CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, container_name, 0);
                   container_type = p2r_type_ptr_from_itype(cv_type_id);
+                  got_container = (container_type != 0);
                 }
                 
                 // rjf: unpack thread variable's container symbol
                 RDIM_Scope *container_scope = 0;
-                if(container_type == 0 && top_scope_node != 0)
+                if(!got_container && top_scope_node != 0)
                 {
+                  got_container = 1;
                   container_scope = top_scope_node->scope;
+                }
+                
+                // rjf: unpack proc's container namespace
+                RDIM_Namespace *container_namespace = 0;
+                if(!got_container && container_name.size != 0)
+                {
+                  U64 hash = u64_hash_from_str8(container_name);
+                  U64 slot_idx = hash%all_namespace_slots_count;
+                  for(P2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
+                  {
+                    if(str8_match(container_name, n->string, 0) &&
+                       n->ns != 0)
+                    {
+                      container_namespace = n->ns;
+                      break;
+                    }
+                  }
+                }
+                
+                // rjf: un-namespaceify the symbol name
+                String8 name__maybe_partially_qualified = name;
+                if(got_container)
+                {
+                  name__maybe_partially_qualified = str8_skip(name, container_name_opl);
                 }
                 
                 // rjf: build symbol
                 RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, sym_thread_variables, sym_thread_variables_chunk_cap);
-                tvar->name             = name;
-                tvar->type             = type;
-                tvar->is_extern        = (iter.kind == CV_SymKind_GTHREAD32);
-                tvar->container_type   = container_type;
-                tvar->container_scope  = container_scope;
+                tvar->name                = name__maybe_partially_qualified;
+                tvar->type                = type;
+                tvar->is_extern           = (iter.kind == CV_SymKind_GTHREAD32);
+                tvar->container_type      = container_type;
+                tvar->container_scope     = container_scope;
+                tvar->container_namespace = container_namespace;
                 RDIM_Location loc = {.kind = RDI_LocationKind_TLSOff, .offset = tls_off};
                 RDIM_Rng1U64 range = {0, 0xffffffffffffffffull};
                 rdim_location_case_list_push(arena, &tvar->location_cases, loc, range);
@@ -3665,6 +3721,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                   RDIM_Scope *scope = top_scope_node->scope;
                   RDIM_Symbol *local = rdim_symbol_chunk_list_push(arena, &scope->locals, 8);
                   {
+                    local->container_scope = scope;
                     local->is_param = !!(slocal->flags & CV_LocalFlag_Param);
                     local->name     = name;
                     local->type     = type;
@@ -4061,7 +4118,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: upgrade namespaces with container info
+  //- rjf: upgrade namespaces with container info; trim off container names
   //
   for EachNode(n, RDIM_NamespaceChunkNode, all_namespaces.first)
   {
@@ -4069,18 +4126,24 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     for EachInRange(n_idx, range)
     {
       RDIM_Namespace *ns = &n->v[n_idx];
-      String8 container_name = str8_chop(str8_prefix(ns->name, p2r_end_of_cplusplus_container_name(ns->name)), 2);
-      U64 hash = u64_hash_from_str8(container_name);
-      U64 slot_idx = hash%all_namespace_slots_count;
-      for(P2R_NamespaceNode *ns_n = all_namespace_slots[slot_idx]; ns_n != 0; ns_n = ns_n->next)
+      U64 container_name_opl = p2r_end_of_cplusplus_container_name(ns->name);
+      String8 container_name = str8_chop(str8_prefix(ns->name, container_name_opl), 2);
+      if(container_name.size != 0)
       {
-        if(str8_match(ns_n->string, container_name, 0))
+        String8 leaf_name = str8_skip(ns->name, container_name_opl);
+        U64 hash = u64_hash_from_str8(container_name);
+        U64 slot_idx = hash%all_namespace_slots_count;
+        for(P2R_NamespaceNode *ns_n = all_namespace_slots[slot_idx]; ns_n != 0; ns_n = ns_n->next)
         {
-          ns->parent_scope     = ns_n->scope;
-          ns->parent_type      = ns_n->type;
-          ns->parent_namespace = ns_n->ns;
-          break;
+          if(str8_match(ns_n->string, container_name, 0))
+          {
+            ns->parent_scope     = ns_n->scope;
+            ns->parent_type      = ns_n->type;
+            ns->parent_namespace = ns_n->ns;
+            break;
+          }
         }
+        ns->name = leaf_name;
       }
     }
   }
@@ -4762,7 +4825,9 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         if(dst_type != 0 && dst_type->udt != 0 && udt_name.size != 0)
         {
           // rjf: unpack fully qualified namespace from udt name
-          String8 container_name = str8_chop(str8_prefix(udt_name, p2r_end_of_cplusplus_container_name(udt_name)), 2);
+          U64 container_name_opl = p2r_end_of_cplusplus_container_name(udt_name);
+          String8 container_name = str8_chop(str8_prefix(udt_name, container_name_opl), 2);
+          String8 leaf_name = str8_skip(udt_name, container_name_opl);
           
           // rjf: look up namespace node associated with namespace
           P2R_NamespaceNode *ns_node = 0;
@@ -4779,7 +4844,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             }
           }
           
-          // rjf: equip container info to udt
+          // rjf: equip container info to udt, equip partial name to type
           if(ns_node != 0)
           {
             RDIM_UDT *udt = dst_type->udt;
@@ -4795,6 +4860,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
             {
               udt->container_type = ns_node->type;
             }
+            dst_type->name = leaf_name;
           }
         }
       }

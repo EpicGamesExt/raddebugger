@@ -1887,6 +1887,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 
                 // rjf: find match
                 DI_Match match = di_match_from_string(string, match_disambiguating_idx, e_base_ctx->primary_dbg_info->dbgi_key, 0);
+                
+#if 0
+                //~ TODO(rjf): vvvvv this used to be used for namespaceifying partially-qualified strings.
+                // now, the debugger just stores partially-qualified strings, so we instead need to do the
+                // reverse: given a fully-qualified name, try to parse out the leaf, and look up the partial
+                // qualified name.
                 if(match.idx == 0)
                 {
                   String8List namespaceified_strings = {0};
@@ -1923,6 +1929,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                     }
                   }
                 }
+#endif
                 
                 // rjf: match -> RDI
                 RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);

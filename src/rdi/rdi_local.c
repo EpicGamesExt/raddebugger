@@ -48,6 +48,59 @@ str8_from_rdi_path_node_idx(Arena *arena, RDI_Parsed *rdi, PathStyle path_style,
   return path;
 }
 
+internal String8
+fully_qualified_from_rdi_string_and_container(Arena *arena, RDI_Parsed *rdi, U32 name_string_idx, U32 start_container_idx, RDI_ContainerFlags start_container_flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List parts = {0};
+  {
+    str8_list_push(scratch.arena, &parts, str8_from_rdi_string_idx(rdi, name_string_idx));
+    RDI_ContainerFlags container_flags = start_container_flags;
+    RDI_ContainerFlags next_container_flags = 0;
+    for(U32 container_idx = start_container_idx, next_container_idx = 0;
+        container_idx != 0;
+        container_idx = next_container_idx, container_flags = next_container_flags)
+    {
+      next_container_idx = 0;
+      next_container_flags = 0;
+      switch(container_flags & RDI_ContainerFlag_KindMask)
+      {
+        default:{}break;
+        case RDI_ContainerKind_Type:
+        {
+          RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, container_idx);
+          RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
+          String8 type_name = str8_from_rdi_string_idx(rdi, type->user_defined.name_string_idx);
+          str8_list_push_front(scratch.arena, &parts, type_name);
+          next_container_idx = udt->container_idx;
+          next_container_flags = udt->container_flags;
+        }break;
+        case RDI_ContainerKind_Scope:
+        {
+          RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, container_idx);
+          RDI_Symbol *symbol = rdi_procedure_from_scope(rdi, scope);
+          String8 name = str8_from_rdi_string_idx(rdi, symbol->name_string_idx);
+          str8_list_push_front(scratch.arena, &parts, name);
+          next_container_idx = symbol->container_idx;
+          next_container_flags = symbol->container_flags;
+        }break;
+        case RDI_ContainerKind_Namespace:
+        {
+          RDI_Namespace *ns = rdi_element_from_name_idx(rdi, Namespaces, container_idx);
+          String8 name = str8_from_rdi_string_idx(rdi, ns->name_string_idx);
+          str8_list_push_front(scratch.arena, &parts, name);
+          next_container_idx = ns->container_idx;
+          next_container_flags = ns->container_flags;
+        }break;
+      }
+    }
+  }
+  StringJoin join = {.sep = str8_lit("::")};
+  String8 result = str8_list_join(arena, &parts, &join);
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: String <=> Enum
 
@@ -795,7 +848,8 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       }
       else if(RDI_TypeKind_FirstUserDefined <= type->kind && type->kind <= RDI_TypeKind_LastUserDefined)
       {
-        dumpf("    name: '%S'\n", str8_from_rdi_string_idx(rdi, type->user_defined.name_string_idx));
+        String8 fully_qualified_name = fully_qualified_str8_from_rdi_type(scratch.arena, rdi, type);
+        dumpf("    name: '%S'\n", fully_qualified_name);
         dumpf("    user_defined__direct_type: %u\n",   type->user_defined.direct_type_idx);
         dumpf("    user_defined__udt: %u\n",   type->user_defined.udt_idx);
       }
@@ -825,7 +879,8 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
     {
       RDI_UDT *udt = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
-      dumpf("\n  // udt[%I64u]\n  {\n", idx);
+      String8 fully_qualified_name = fully_qualified_str8_from_rdi_udt(scratch.arena, rdi, udt);
+      dumpf("\n  // udt[%I64u]\n  '%S':\n  {\n", idx, fully_qualified_name);
       dumpf("    self_type: %u\n", udt->self_type_idx);
       dumpf("    flags: `%S`\n", rdi_string_from_udt_flags(scratch.arena, udt->flags));
       if(udt->container_idx != 0 && (udt->container_flags & RDI_ContainerFlag_KindMask) == RDI_ContainerKind_Type)
@@ -929,7 +984,8 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       {
         RDI_Symbol *symbol = &v[idx];
         Temp scratch = scratch_begin(&arena, 1);
-        dumpf("\n  '%S': // %S[%I64u]\n  {\n", str8_from_rdi_string_idx(rdi, symbol->name_string_idx), table_name, idx);
+        String8 fully_qualified_name = fully_qualified_str8_from_rdi_symbol(scratch.arena, rdi, symbol);
+        dumpf("\n  '%S': // %S[%I64u]\n  {\n", fully_qualified_name, table_name, idx);
         dumpf("    type_idx: %u\n", symbol->type_idx);
         if(symbol->link_name_string_idx != 0)
         {
@@ -1258,6 +1314,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
     Rng1U64 range = lane_range(count);
     for EachInRange(idx, range)
     {
+      Temp scratch = scratch_begin(&arena, 1);
       RDI_Namespace *ns = &v[idx];
       String8 container_kind_name = str8_lit("container_idx");
       switch(ns->container_flags & RDI_ContainerFlag_KindMask)
@@ -1276,7 +1333,9 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
           container_kind_name = str8_lit("container_scope_idx");
         }break;
       }
-      dumpf("\n  '%S': {%S: %u} // namespaces[%I64u]", str8_from_rdi_string_idx(rdi, ns->name_string_idx), container_kind_name, ns->container_idx, idx);
+      String8 fully_qualified_name = fully_qualified_str8_from_rdi_namespace(scratch.arena, rdi, ns);
+      dumpf("\n  '%S': {%S: %u} // namespaces[%I64u]", fully_qualified_name, container_kind_name, ns->container_idx, idx);
+      scratch_end(scratch);
     }
     if(lane_idx() == lane_count()-1) { dumpf("\n"); }
   }
