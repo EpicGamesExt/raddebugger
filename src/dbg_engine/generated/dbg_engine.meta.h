@@ -126,12 +126,12 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
 C_LINKAGE_BEGIN
-extern String8 ctrl_entity_kind_code_name_table[12];
-extern String8 ctrl_entity_kind_display_string_table[12];
-extern U32 ctrl_exception_code_kind_code_table[38];
-extern String8 ctrl_exception_code_kind_display_string_table[38];
-extern String8 ctrl_exception_code_kind_lowercase_code_string_table[38];
-extern B8 ctrl_exception_code_kind_default_enable_table[38];
+extern String8 d_entity_kind_code_name_table[12];
+extern String8 d_entity_kind_display_string_table[12];
+extern U32 d_exception_code_kind_code_table[38];
+extern String8 d_exception_code_kind_display_string_table[38];
+extern String8 d_exception_code_kind_lowercase_code_string_table[38];
+extern B8 d_exception_code_kind_default_enable_table[38];
 
 C_LINKAGE_END
 

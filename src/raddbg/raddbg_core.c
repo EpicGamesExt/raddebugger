@@ -621,8 +621,8 @@ rd_color_from_ctrl_entity(D_Entity *entity)
     default:{}break;
     case D_EntityKind_Thread:
     {
-      D_Entity *process = ctrl_entity_ancestor_from_kind(entity, D_EntityKind_Process);
-      D_Entity *main_thread = ctrl_entity_child_from_kind(process, D_EntityKind_Thread);
+      D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
+      D_Entity *main_thread = d_entity_child_from_kind(process, D_EntityKind_Thread);
       if(main_thread != entity)
       {
         result = ui_color_from_name(str8_lit("thread_1"));
@@ -689,7 +689,7 @@ rd_ctrl_entity_from_eval_space(E_Space space)
     D_Handle handle;
     handle.machine_id = space.u64s[0];
     handle.dmn_handle.u64[0] = space.u64s[1];
-    entity = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, handle);
+    entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, handle);
   }
   return entity;
 }
@@ -726,7 +726,7 @@ rd_eval_space_gen(E_Space space)
   {
     default:
     {
-      result = ctrl_eval_space_gen(space);
+      result = d_ctrl_eval_space_gen(space);
     }break;
     case RD_EvalSpaceKind_MetaCfg:
     case RD_EvalSpaceKind_MetaQuery:
@@ -746,7 +746,7 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
   {
     default:
     {
-      result = ctrl_eval_space_read(space, out, range);
+      result = d_ctrl_eval_space_read(space, out, range);
     }break;
     
     //- rjf: interior control entity reads (inside process address space or thread register block)
@@ -758,7 +758,7 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
         default:{}break;
         case D_EntityKind_Process:
         {
-          D_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, range, 0, rd_state->frame_eval_memread_endt_us);
+          D_ProcessMemorySlice slice = d_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, range, 0, rd_state->frame_eval_memread_endt_us);
           String8 data = slice.data;
           if(data.size == dim_1u64(range))
           {
@@ -769,7 +769,7 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
         case D_EntityKind_Thread:
         {
           Access *access = access_open();
-          D_CallStack call_stack = ctrl_call_stack_from_thread(access, entity->handle, 1, rd_state->frame_eval_memread_endt_us);
+          D_CallStack call_stack = d_call_stack_from_thread(access, entity->handle, 1, rd_state->frame_eval_memread_endt_us);
           U64 concrete_frame_idx = e_interpret_ctx->reg_unwind_count;
           if(concrete_frame_idx < call_stack.concrete_frames_count)
           {
@@ -935,7 +935,7 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
       String8 read_data = {0};
       if(child_key.size != 0)
       {
-        MD_NodePtrList schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, ctrl_entity_kind_code_name_table[entity->kind]);
+        MD_NodePtrList schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, d_entity_kind_code_name_table[entity->kind]);
         MD_Node *child_schema = &md_nil_node;
         for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
         {
@@ -948,7 +948,7 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
         }
         else if(str8_match(child_schema->string, str8_lit("dbg"), 0))
         {
-          read_data = ctrl_entity_child_from_kind(entity, D_EntityKind_DebugInfoPath)->string;
+          read_data = d_entity_child_from_kind(entity, D_EntityKind_DebugInfoPath)->string;
         }
         else if(str8_match(child_schema->string, str8_lit("vaddr_range"), 0))
         {
@@ -960,7 +960,7 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
         }
         else if(str8_match(child_schema->string, str8_lit("active"), 0))
         {
-          B32 is_frozen = ctrl_entity_tree_is_frozen(entity);
+          B32 is_frozen = d_entity_tree_is_frozen(entity);
           B32 is_active = !is_frozen;
           read_data = push_str8_copy(scratch.arena, str8_struct(&is_active));
         }
@@ -998,7 +998,7 @@ rd_eval_space_write(E_Space space, void *in, Rng1U64 range)
         default:{}break;
         case D_EntityKind_Process:
         {
-          result = ctrl_process_write(entity->handle, range, in);
+          result = d_process_write(entity->handle, range, in);
         }break;
         case D_EntityKind_Thread:
         {
@@ -1007,9 +1007,9 @@ rd_eval_space_write(E_Space space, void *in, Rng1U64 range)
           Rng1U64 legal_range = r1u64(0, regs_size);
           Rng1U64 write_range = intersect_1u64(legal_range, range);
           U64 write_size = dim_1u64(write_range);
-          void *new_regs = ctrl_reg_block_from_thread(scratch.arena, &d_user_state->ctrl_entity_store->ctx, entity->handle);
+          void *new_regs = d_reg_block_from_thread(scratch.arena, &d_user_state->ctrl_entity_store->ctx, entity->handle);
           MemoryCopy((U8 *)new_regs + write_range.min, in, write_size);
-          result = ctrl_thread_write_reg_block(entity->handle, new_regs);
+          result = d_thread_write_reg_block(entity->handle, new_regs);
           scratch_end(scratch);
         }break;
       }
@@ -1081,7 +1081,7 @@ rd_eval_space_write(E_Space space, void *in, Rng1U64 range)
       // rjf: perform write, based on child name in schema
       if(child_key.size != 0)
       {
-        MD_NodePtrList schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, ctrl_entity_kind_code_name_table[entity->kind]);
+        MD_NodePtrList schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, d_entity_kind_code_name_table[entity->kind]);
         MD_Node *child_schema = &md_nil_node;
         for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
         {
@@ -1090,7 +1090,7 @@ rd_eval_space_write(E_Space space, void *in, Rng1U64 range)
         if(str8_match(child_schema->string, str8_lit("label"), 0))
         {
           result = 1;
-          ctrl_entity_equip_string(d_user_state->ctrl_entity_store, entity, write_string);
+          d_entity_equip_string(d_user_state->ctrl_entity_store, entity, write_string);
           rd_cmd(D_CmdKind_SetEntityName, .ctrl_entity = entity->handle, .string = write_string);
         }
         else if(str8_match(child_schema->string, str8_lit("dbg"), 0))
@@ -1144,7 +1144,7 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
       D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       if(entity->kind == D_EntityKind_Process)
       {
-        result = ctrl_key_from_process_vaddr_range(entity->handle, range, zero_terminated, 0, 0, 0);
+        result = d_key_from_process_vaddr_range(entity->handle, range, zero_terminated, 0, 0, 0);
       }
     }break;
   }
@@ -1703,7 +1703,7 @@ rd_view_ui(Rng2F32 rect)
         UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
       {
         CFG_NodePtrList targets = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("target"));
-        D_EntityArray processes = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+        D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
         
         //- rjf: icon & info
         UI_Padding(ui_em(2.f, 1.f)) UI_TagF("weak")
@@ -2268,9 +2268,9 @@ rd_view_ui(Rng2F32 rect)
                       {
                         U64 vaddr = eval.value.u64;
                         D_Entity *process = rd_ctrl_entity_from_eval_space(eval.space);
-                        D_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                        dbgi_key = ctrl_dbgi_key_from_module(module);
-                        voff = ctrl_voff_from_vaddr(module, vaddr);
+                        D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+                        dbgi_key = d_dbgi_key_from_module(module);
+                        voff = d_voff_from_vaddr(module, vaddr);
                       }
                       else
                       {
@@ -2361,10 +2361,10 @@ rd_view_ui(Rng2F32 rect)
                         String8 name = {0};
                         {
                           U64 vaddr = eval.value.u64;
-                          D_Entity *process = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->process);
-                          D_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-                          U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+                          D_Entity *process = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->process);
+                          D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+                          DI_Key dbgi_key = d_dbgi_key_from_module(module);
+                          U64 voff = d_voff_from_vaddr(module, vaddr);
                           {
                             Access *access = access_open();
                             RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
@@ -2432,7 +2432,7 @@ rd_view_ui(Rng2F32 rect)
                       case RD_EvalSpaceKind_MetaCtrlEntity:
                       {
                         D_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-                        rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:control.%S", ctrl_string_from_handle(scratch.arena, entity->handle)));
+                        rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:control.%S", d_string_from_handle(scratch.arena, entity->handle)));
                       }break;
                     }
                     if(did_cmd)
@@ -3644,7 +3644,7 @@ rd_view_ui(Rng2F32 rect)
                             D_Entity *space_entity = rd_ctrl_entity_from_eval_space(cell->eval.space);
                             if(cell->eval.space.kind == D_EvalSpaceKind_Entity && space_entity->kind == D_EntityKind_Process)
                             {
-                              D_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, cell_vaddr_rng, 0, rd_state->frame_eval_memread_endt_us);
+                              D_ProcessMemorySlice slice = d_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, cell_vaddr_rng, 0, rd_state->frame_eval_memread_endt_us);
                               for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                               {
                                 if(slice.byte_changed_flags[idx] != 0)
@@ -3719,7 +3719,7 @@ rd_view_ui(Rng2F32 rect)
                           rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
                           cell_background_color_override = rgba;
                         }
-                        else if(ctrl_handle_match(cell_info.entity->handle, rd_get_hover_regs()->ctrl_entity) &&
+                        else if(d_handle_match(cell_info.entity->handle, rd_get_hover_regs()->ctrl_entity) &&
                                 rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity)
                         {
                           D_Entity *entity = cell_info.entity;
@@ -3854,7 +3854,7 @@ rd_view_ui(Rng2F32 rect)
                         {
                           UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%I64x_%I64x", cell_id, row_hash);
                           sig = ui_signal_from_box(box);
-                          if(ctrl_handle_match(row_info->callstack_thread->handle, rd_base_regs()->thread) &&
+                          if(d_handle_match(row_info->callstack_thread->handle, rd_base_regs()->thread) &&
                              row_info->callstack_unwind_index == rd_base_regs()->unwind_count &&
                              row_info->callstack_inline_depth == rd_base_regs()->inline_depth)
                           {
@@ -4332,13 +4332,13 @@ rd_view_ui(Rng2F32 rect)
                           else if(cell->eval.space.kind == D_EvalSpaceKind_Entity)
                           {
                             D_Entity *entity = rd_ctrl_entity_from_eval_space(cell->eval.space);
-                            D_Entity *process = ctrl_process_from_entity(entity);
+                            D_Entity *process = d_process_from_entity(entity);
                             if(process != &d_entity_nil)
                             {
                               U64 vaddr = cell->eval.value.u64;
-                              D_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                              DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-                              U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+                              D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+                              DI_Key dbgi_key = d_dbgi_key_from_module(module);
+                              U64 voff = d_voff_from_vaddr(module, vaddr);
                               D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
                               String8 file_path = {0};
                               TxtPt pt = {0};
@@ -4737,10 +4737,10 @@ rd_arch_from_eval(E_Eval eval)
 {
   // rjf: try implicitly from either `eval` itself, or from context
   D_Entity *ctrl_entity = rd_ctrl_entity_from_eval_space(eval.space);
-  D_Entity *process = ctrl_process_from_entity(ctrl_entity);
+  D_Entity *process = d_process_from_entity(ctrl_entity);
   if(process == &d_entity_nil)
   {
-    process = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->process);
+    process = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->process);
   }
   Arch arch = process->arch;
   if(arch == Arch_Null)
@@ -5498,11 +5498,11 @@ rd_window_frame(void)
         ////////////////////////
         //- rjf: control entity tooltips
         //
-        case RD_RegSlot_Machine:   {ctrl_entity = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->machine);     }goto ctrl_entity_tooltip;
-        case RD_RegSlot_Process:   {ctrl_entity = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->process);     }goto ctrl_entity_tooltip;
-        case RD_RegSlot_Module:    {ctrl_entity = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->module);      }goto ctrl_entity_tooltip;
-        case RD_RegSlot_Thread:    {ctrl_entity = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->thread);      }goto ctrl_entity_tooltip;
-        case RD_RegSlot_CtrlEntity:{ctrl_entity = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->ctrl_entity); }goto ctrl_entity_tooltip;
+        case RD_RegSlot_Machine:   {ctrl_entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->machine);     }goto ctrl_entity_tooltip;
+        case RD_RegSlot_Process:   {ctrl_entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->process);     }goto ctrl_entity_tooltip;
+        case RD_RegSlot_Module:    {ctrl_entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->module);      }goto ctrl_entity_tooltip;
+        case RD_RegSlot_Thread:    {ctrl_entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->thread);      }goto ctrl_entity_tooltip;
+        case RD_RegSlot_CtrlEntity:{ctrl_entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, regs->ctrl_entity); }goto ctrl_entity_tooltip;
         ctrl_entity_tooltip:;
         UI_Tooltip
         {
@@ -5534,8 +5534,8 @@ rd_window_frame(void)
           if(ctrl_entity->kind == D_EntityKind_Module) UI_TagF("weak")
           {
             Access *access = access_open();
-            D_Entity *dbg_info_entity = ctrl_entity_child_from_kind(ctrl_entity, D_EntityKind_DebugInfoPath);
-            DI_Key dbgi_key = ctrl_dbgi_key_from_module(ctrl_entity);
+            D_Entity *dbg_info_entity = d_entity_child_from_kind(ctrl_entity, D_EntityKind_DebugInfoPath);
+            DI_Key dbgi_key = d_dbgi_key_from_module(ctrl_entity);
             RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
             if(rdi->raw_data_size != 0)
             {
@@ -5558,15 +5558,15 @@ rd_window_frame(void)
             Access *access = access_open();
             Vec4F32 code_color = ui_color_from_name(str8_lit("code_default"));
             Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
-            D_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, D_EntityKind_Process);
-            B32 call_stack_high_priority = ctrl_handle_match(ctrl_entity->handle, rd_base_regs()->thread);
-            D_CallStack call_stack = ctrl_call_stack_from_thread(access, ctrl_entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+            D_Entity *process = d_entity_ancestor_from_kind(ctrl_entity, D_EntityKind_Process);
+            B32 call_stack_high_priority = d_handle_match(ctrl_entity->handle, rd_base_regs()->thread);
+            D_CallStack call_stack = d_call_stack_from_thread(access, ctrl_entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
             if(call_stack.frames_count != 0)
             {
               ui_spacer(ui_em(1.5f, 1.f));
             }
             EV_StringParams string_params = {EV_StringFlag_ReadOnlyDisplayRules|rd_state->eval_viz_base_string_flags, .radix = 16};
-            String8 thread_handle_string = ctrl_string_from_handle(scratch.arena, ctrl_entity->handle);
+            String8 thread_handle_string = d_string_from_handle(scratch.arena, ctrl_entity->handle);
             for(U64 idx = 0; idx < 16; idx += 1)
             {
               E_Eval rip_eval = e_eval_from_stringf("query:control.%S.call_stack[%I64u]", thread_handle_string, idx);
@@ -5767,8 +5767,8 @@ rd_window_frame(void)
             avg_ui_hash_chain_length = chain_length_sum / chain_count;
           }
           ui_labelf("Target Hz: %.2f", 1.f/rd_state->frame_dt);
-          ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
-          ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
+          ui_labelf("Ctrl Run Index: %I64u", d_run_gen());
+          ui_labelf("Ctrl Mem Gen Index: %I64u", d_mem_gen());
           ui_labelf("Window %p", w);
           ui_set_next_pref_width(ui_children_sum(1));
           ui_set_next_pref_height(ui_children_sum(1));
@@ -7037,7 +7037,7 @@ rd_window_frame(void)
         {
           Temp scratch = scratch_begin(0, 0);
           CFG_NodePtrList targets = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("target"));
-          D_EntityArray processes = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+          D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
           B32 can_send_signal = !d_ctrl_targets_running();
           typedef struct CenterButtonTask CenterButtonTask;
           struct CenterButtonTask
@@ -9565,9 +9565,9 @@ rd_string_from_exception_code(U32 code)
   String8 string = {0};
   for EachNonZeroEnumVal(D_ExceptionCodeKind, k)
   {
-    if(code == ctrl_exception_code_kind_code_table[k])
+    if(code == d_exception_code_kind_code_table[k])
     {
-      string = ctrl_exception_code_kind_display_string_table[k];
+      string = d_exception_code_kind_display_string_table[k];
       break;
     }
   }
@@ -9577,7 +9577,7 @@ rd_string_from_exception_code(U32 code)
 internal DR_FStrList
 rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, D_Event *event)
 {
-  D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, event->entity);
+  D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, event->entity);
   DR_FStrList thread_fstrs = rd_title_fstrs_from_ctrl_entity(arena, thread, 0);
   DR_FStrList fstrs = {0};
   DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
@@ -11102,14 +11102,14 @@ rd_frame(void)
     //- rjf: unpack basic evaluation context
     //
     ProfBegin("unpack eval-dependent info");
-    D_Entity *process = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->process);
-    D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+    D_Entity *process = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->process);
+    D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
     Arch arch = thread->arch;
     U64 unwind_count = rd_regs()->unwind_count;
     U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-    D_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-    U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
-    U64 tls_root_vaddr = ctrl_tls_root_vaddr_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
+    D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
+    U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
+    U64 tls_root_vaddr = d_tls_root_vaddr_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
     ProfEnd();
     
     ////////////////////////////
@@ -11132,7 +11132,7 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: produce all eval modules
     //
-    D_EntityArray all_modules = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Module);
+    D_EntityArray all_modules = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Module);
     U64 eval_modules_count = Max(1, all_modules.count);
     E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
     E_Module *eval_modules_primary = &eval_modules[0];
@@ -11142,7 +11142,7 @@ rd_frame(void)
       for EachIndex(eval_module_idx, all_modules.count)
       {
         D_Entity *m = all_modules.v[eval_module_idx];
-        DI_Key dbgi_key = ctrl_dbgi_key_from_module(m);
+        DI_Key dbgi_key = d_dbgi_key_from_module(m);
         
         // rjf: dbgi key -> eval dbg info num
         U32 dbg_info_num = 0;
@@ -11163,7 +11163,7 @@ rd_frame(void)
         eval_modules[eval_module_idx].vaddr_range  = m->vaddr_range;
         eval_modules[eval_module_idx].arch         = m->arch;
         eval_modules[eval_module_idx].dbg_info_num = dbg_info_num;
-        eval_modules[eval_module_idx].space        = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, D_EntityKind_Process), D_EvalSpaceKind_Entity);
+        eval_modules[eval_module_idx].space        = rd_eval_space_from_ctrl_entity(d_entity_ancestor_from_kind(m, D_EntityKind_Process), D_EvalSpaceKind_Entity);
         if(module == m)
         {
           eval_modules_primary = &eval_modules[eval_module_idx];
@@ -11513,8 +11513,8 @@ rd_frame(void)
       for EachElement(idx, evallable_ctrl_names)
       {
         String8 name = evallable_ctrl_names[idx];
-        D_EntityKind kind = ctrl_entity_kind_from_string(name);
-        D_EntityArray array = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, kind);
+        D_EntityKind kind = d_entity_kind_from_string(name);
+        D_EntityArray array = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, kind);
         E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
         for EachIndex(idx, array.count)
         {
@@ -11532,15 +11532,15 @@ rd_frame(void)
           {
             e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("local_machine"), expr);
           }
-          if(kind == D_EntityKind_Thread && ctrl_handle_match(rd_base_regs()->thread, entity->handle))
+          if(kind == D_EntityKind_Thread && d_handle_match(rd_base_regs()->thread, entity->handle))
           {
             e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_thread"), expr);
           }
-          if(kind == D_EntityKind_Process && ctrl_handle_match(rd_base_regs()->process, entity->handle))
+          if(kind == D_EntityKind_Process && d_handle_match(rd_base_regs()->process, entity->handle))
           {
             e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_process"), expr);
           }
-          if(kind == D_EntityKind_Module && ctrl_handle_match(rd_base_regs()->module, entity->handle))
+          if(kind == D_EntityKind_Module && d_handle_match(rd_base_regs()->module, entity->handle))
           {
             e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_module"), expr);
           }
@@ -11880,13 +11880,13 @@ rd_frame(void)
     //- rjf: gather config from loaded modules
     //
     CFG_NodePtrList immediate_type_views = {0};
-    D_EntityArray modules = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Module);
+    D_EntityArray modules = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Module);
     ProfScope("gather config from loaded modules")
     {
       for EachIndex(idx, modules.count)
       {
         D_Entity *module = modules.v[idx];
-        String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, module->handle);
+        String8 raddbg_data = d_raddbg_data_from_module(scratch.arena, module->handle);
         U8 split_char = 0;
         String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
         U64 cfg_idx = 0;
@@ -11894,7 +11894,7 @@ rd_frame(void)
         {
           String8 text = text_n->string;
           CFG_NodePtrList cfgs = cfg_node_ptr_list_from_string(scratch.arena, rd_state->cfg, rd_state->cfg_schema_table, str8_zero(), text);
-          String8 module_name = ctrl_string_from_handle(scratch.arena, module->handle);
+          String8 module_name = d_string_from_handle(scratch.arena, module->handle);
           for(CFG_NodePtrNode *n = cfgs.first; n != 0; n = n->next, cfg_idx += 1)
           {
             CFG_Node *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfg_%I64x", module_name, cfg_idx);
@@ -11984,8 +11984,8 @@ rd_frame(void)
     E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
     {
       E_IRCtx *ctx = ir_ctx;
-      ctx->regs_map       = ctrl_string2reg_from_arch(eval_base_ctx->primary_module->arch);
-      ctx->reg_alias_map  = ctrl_string2alias_from_arch(eval_base_ctx->primary_module->arch);
+      ctx->regs_map       = d_string2reg_from_arch(eval_base_ctx->primary_module->arch);
+      ctx->reg_alias_map  = d_string2alias_from_arch(eval_base_ctx->primary_module->arch);
       ctx->locals_map     = d_query_cached_locals_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
       ctx->member_map     = d_query_cached_member_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
       ctx->macro_map      = macro_map;
@@ -12072,7 +12072,7 @@ rd_frame(void)
           case RD_CmdKind_Restart:
           {
             // rjf: reset hit counts
-            D_EntityArray processes = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+            D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
             if(processes.count == 0 || kind == RD_CmdKind_Restart)
             {
               CFG_NodePtrList bps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
@@ -12292,7 +12292,7 @@ rd_frame(void)
           {
             // rjf: if control processes are live, but this is not force-confirmed, then
             // get confirmation from user
-            D_EntityArray processes = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+            D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
             UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
             if(processes.count != 0 && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
             {
@@ -13679,19 +13679,19 @@ rd_frame(void)
           //- rjf: source <-> disasm
           case RD_CmdKind_GoToDisassembly:
           {
-            D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+            D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
             U64 vaddr = 0;
             for(D_LineNode *n = rd_regs()->lines.first; n != 0; n = n->next)
             {
-              D_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
-              D_Entity *module = ctrl_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
+              D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
+              D_Entity *module = d_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
               if(module != &d_entity_nil)
               {
-                vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+                vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
                 break;
               }
             }
-            rd_cmd(RD_CmdKind_FindCodeLocation, .process = ctrl_entity_ancestor_from_kind(thread, D_EntityKind_Process)->handle, .vaddr = vaddr, .prefer_disasm = 1);
+            rd_cmd(RD_CmdKind_FindCodeLocation, .process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process)->handle, .vaddr = vaddr, .prefer_disasm = 1);
           }break;
           case RD_CmdKind_GoToSource:
           {
@@ -13701,7 +13701,7 @@ rd_frame(void)
                      .file_path = rd_regs()->lines.first->v.file_path,
                      .cursor    = rd_regs()->lines.first->v.pt,
                      .vaddr     = 0,
-                     .process   = ctrl_handle_zero(),
+                     .process   = d_handle_zero(),
                      .prefer_disasm = 0);
             }
           }break;
@@ -13967,15 +13967,15 @@ rd_frame(void)
             Access *access = access_open();
             
             //- rjf: unpack thread info
-            D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+            D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
             U64 unwind_index = rd_regs()->unwind_count;
             U64 inline_depth = rd_regs()->inline_depth;
             U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_index);
-            D_Entity *process = ctrl_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            D_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
+            DI_Key dbgi_key = d_dbgi_key_from_module(module);
             RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
-            U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+            U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
             D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, rip_voff);
             D_Line line = {0};
             {
@@ -14031,7 +14031,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_FindSelectedThread:
           {
-            D_Entity *selected_thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
+            D_Entity *selected_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
             rd_cmd(RD_CmdKind_FindThread,
                    .thread       = selected_thread->handle,
                    .unwind_count = rd_base_regs()->unwind_count,
@@ -14140,9 +14140,9 @@ rd_frame(void)
                 {
                   D_Entity *process = &d_entity_nil;
                   U64 vaddr = 0;
-                  D_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, voff_dbgi_key);
-                  D_Entity *module = ctrl_entity_list_first(&modules);
-                  process = ctrl_entity_ancestor_from_kind(module, D_EntityKind_Process);
+                  D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, voff_dbgi_key);
+                  D_Entity *module = d_entity_list_first(&modules);
+                  process = d_entity_ancestor_from_kind(module, D_EntityKind_Process);
                   if(process != &d_entity_nil)
                   {
                     vaddr = module->vaddr_range.min + lines.first->v.voff_range.min;
@@ -14220,8 +14220,8 @@ rd_frame(void)
             {
               file_path      = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
               point          = rd_regs()->cursor;
-              thread         = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
-              process        = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->process);
+              thread         = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+              process        = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->process);
               vaddr          = rd_regs()->vaddr;
               prefer_new_tab = rd_regs()->prefer_new_tab;
               if(file_path.size == 0)
@@ -14237,9 +14237,9 @@ rd_frame(void)
               D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, point.line);
               for(D_LineNode *n = lines.first; n != 0; n = n->next)
               {
-                D_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
-                D_Entity *module = ctrl_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
-                vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+                D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
+                D_Entity *module = d_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
+                vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
                 break;
               }
             }
@@ -15441,7 +15441,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_SetNextStatement:
           {
-            D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+            D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
             String8 file_path = rd_regs()->file_path;
             U64 new_rip_vaddr = rd_regs()->vaddr_range.min;
             if(file_path.size != 0)
@@ -15449,11 +15449,11 @@ rd_frame(void)
               D_LineList *lines = &rd_regs()->lines;
               for(D_LineNode *n = lines->first; n != 0; n = n->next)
               {
-                D_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
-                D_Entity *module = ctrl_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
+                D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
+                D_Entity *module = d_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
                 if(module != &d_entity_nil)
                 {
-                  new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+                  new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
                   break;
                 }
               }
@@ -15566,10 +15566,10 @@ rd_frame(void)
           }break;
           case RD_CmdKind_SelectThread:
           {
-            D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
-            D_Entity *process = ctrl_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            D_Entity *module = ctrl_module_from_process_vaddr(process, ctrl_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle));
-            D_Entity *machine = ctrl_entity_ancestor_from_kind(process, D_EntityKind_Machine);
+            D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            D_Entity *module = d_module_from_process_vaddr(process, d_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle));
+            D_Entity *machine = d_entity_ancestor_from_kind(process, D_EntityKind_Machine);
             rd_state->base_regs.v.unwind_count = 0;
             rd_state->base_regs.v.inline_depth = 0;
             rd_state->base_regs.v.thread  = thread->handle;
@@ -15581,12 +15581,12 @@ rd_frame(void)
           case RD_CmdKind_SelectUnwind:
           {
             Access *access = access_open();
-            D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-            D_CallStack call_stack = ctrl_call_stack_from_thread(access, thread->handle, 1, os_now_microseconds()+10000);
-            D_CallStackFrame *frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
+            D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
+            D_CallStack call_stack = d_call_stack_from_thread(access, thread->handle, 1, os_now_microseconds()+10000);
+            D_CallStackFrame *frame = d_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
             if(frame == 0)
             {
-              frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, 0);
+              frame = d_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, 0);
             }
             if(frame)
             {
@@ -15600,9 +15600,9 @@ rd_frame(void)
           case RD_CmdKind_DownOneFrame:
           {
             Access *access = access_open();
-            D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-            D_CallStack call_stack = ctrl_call_stack_from_thread(access, thread->handle, 1, os_now_microseconds()+10000);
-            D_CallStackFrame *current_frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
+            D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
+            D_CallStack call_stack = d_call_stack_from_thread(access, thread->handle, 1, os_now_microseconds()+10000);
+            D_CallStackFrame *current_frame = d_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
             D_CallStackFrame *next_frame = current_frame;
             if(current_frame != 0) switch(kind)
             {
@@ -16304,7 +16304,7 @@ rd_frame(void)
     {
       for EachNonZeroEnumVal(D_ExceptionCodeKind, k)
       {
-        String8 name = ctrl_exception_code_kind_lowercase_code_string_table[k];
+        String8 name = d_exception_code_kind_lowercase_code_string_table[k];
         B32 setting = rd_setting_b32_from_name(name);
         if(setting)
         {
@@ -16331,8 +16331,8 @@ rd_frame(void)
         default:{}break;
         case D_EventKind_NewModule:
         {
-          D_Entity *module = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, evt->entity);
-          D_Entity *debug_info_path = ctrl_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+          D_Entity *module = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, evt->entity);
+          D_Entity *debug_info_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
           String8 new_path = debug_info_path->string;
           if(new_path.size != 0 && os_file_path_exists(new_path))
           {
@@ -16369,7 +16369,7 @@ rd_frame(void)
         case D_EventKind_EndProc:
         if(rd_state->quit_after_success)
         {
-          D_EntityArray processes = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+          D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
           if(evt->u64_code == 0 && processes.count == 0)
           {
             rd_cmd(RD_CmdKind_Exit);
@@ -16382,12 +16382,12 @@ rd_frame(void)
         case D_EventKind_Stopped:
         {
           B32 need_refocus = (evt->cause != D_EventCause_InterruptedByHalt || !soft_halt_issued);
-          D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, evt->entity);
+          D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, evt->entity);
           U64 vaddr = evt->rip_vaddr;
-          D_Entity *process = ctrl_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-          D_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-          U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-          U64 test_cached_vaddr = ctrl_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
+          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+          D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+          U64 voff = d_voff_from_vaddr(module, vaddr);
+          U64 test_cached_vaddr = d_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
           
           // rjf: valid stop thread? -> select & snap
           if(need_refocus && thread != &d_entity_nil && evt->cause != D_EventCause_InterruptedByHalt)
@@ -16396,7 +16396,7 @@ rd_frame(void)
           }
           
           // rjf: no stop-causing thread, but have selected thread? -> snap to selected
-          D_Entity *selected_thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
+          D_Entity *selected_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
           if(need_refocus && (evt->cause == D_EventCause_InterruptedByHalt || thread == &d_entity_nil) && selected_thread != &d_entity_nil)
           {
             rd_cmd(RD_CmdKind_SelectThread, .thread = selected_thread->handle);
@@ -16405,8 +16405,8 @@ rd_frame(void)
           // rjf: no stop-causing thread, but don't have selected thread? -> snap to first available thread
           if(need_refocus && thread == &d_entity_nil && selected_thread == &d_entity_nil)
           {
-            D_EntityArray threads = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Thread);
-            D_Entity *first_available_thread = ctrl_entity_array_first(&threads);
+            D_EntityArray threads = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Thread);
+            D_Entity *first_available_thread = d_entity_array_first(&threads);
             rd_cmd(RD_CmdKind_SelectThread, .thread = first_available_thread->handle);
           }
           
@@ -16469,7 +16469,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: retry find-thread
   //
-  if(!ctrl_handle_match(ctrl_handle_zero(), find_thread_retry))
+  if(!d_handle_match(d_handle_zero(), find_thread_retry))
   {
     rd_cmd(RD_CmdKind_FindThread, .thread = find_thread_retry);
   }

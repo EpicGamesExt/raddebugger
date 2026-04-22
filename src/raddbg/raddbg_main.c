@@ -545,7 +545,7 @@ entry_point(CmdLine *cmd_line)
         r_init(cmd_line);
         fnt_init();
         rd_init(cmd_line);
-        ctrl_set_wakeup_hook(wakeup_hook_ctrl);
+        d_set_wakeup_hook(wakeup_hook_ctrl);
       }
       
       //- rjf: set up shared resources for ipc to this instance; launch IPC signaler thread

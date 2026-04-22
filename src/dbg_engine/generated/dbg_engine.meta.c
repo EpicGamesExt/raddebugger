@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 ctrl_entity_kind_code_name_table[12] =
+String8 d_entity_kind_code_name_table[12] =
 {
 {0},
 str8_lit_comp("root"),
@@ -20,7 +20,7 @@ str8_lit_comp("breakpoint"),
 str8_lit_comp("address_range_annotation"),
 };
 
-String8 ctrl_entity_kind_display_string_table[12] =
+String8 d_entity_kind_display_string_table[12] =
 {
 {0},
 str8_lit_comp("Root"),
@@ -36,7 +36,7 @@ str8_lit_comp("Breakpoint"),
 str8_lit_comp("AddressRangeAnnotation"),
 };
 
-U32 ctrl_exception_code_kind_code_table[38] =
+U32 d_exception_code_kind_code_table[38] =
 {
 0,
 0x40010005,
@@ -78,7 +78,7 @@ U32 ctrl_exception_code_kind_code_table[38] =
 0x0000087a,
 };
 
-String8 ctrl_exception_code_kind_display_string_table[38] =
+String8 d_exception_code_kind_display_string_table[38] =
 {
 {0},
 str8_lit_comp("(Win32) Control-C"),
@@ -120,7 +120,7 @@ str8_lit_comp("(Win32) Sanitizer Raw Access Violation"),
 str8_lit_comp("(Win32) DirectX Debug Layer"),
 };
 
-String8 ctrl_exception_code_kind_lowercase_code_string_table[38] =
+String8 d_exception_code_kind_lowercase_code_string_table[38] =
 {
 {0},
 str8_lit_comp("win32_ctrl_c"),
@@ -162,7 +162,7 @@ str8_lit_comp("win32_sanitizer_raw_access_violation"),
 str8_lit_comp("win32_directx_debug_layer"),
 };
 
-B8 ctrl_exception_code_kind_default_enable_table[38] =
+B8 d_exception_code_kind_default_enable_table[38] =
 {
 0,
 1,

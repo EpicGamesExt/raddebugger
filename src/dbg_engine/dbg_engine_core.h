@@ -179,14 +179,14 @@ struct D_EntityHashSlot
   D_EntityHashNode *last;
 };
 
-typedef struct CTRL_EntityStringChunkNode CTRL_EntityStringChunkNode;
-struct CTRL_EntityStringChunkNode
+typedef struct D_EntityStringChunkNode D_EntityStringChunkNode;
+struct D_EntityStringChunkNode
 {
-  CTRL_EntityStringChunkNode *next;
+  D_EntityStringChunkNode *next;
   U64 size;
 };
 
-read_only global U64 ctrl_entity_string_bucket_chunk_sizes[] =
+read_only global U64 d_entity_string_bucket_chunk_sizes[] =
 {
   16,
   64,
@@ -215,7 +215,7 @@ struct D_EntityCtxRWStore
   D_EntityCtx ctx;
   D_Entity *free;
   D_EntityHashNode *hash_node_free;
-  CTRL_EntityStringChunkNode *free_string_chunks[ArrayCount(ctrl_entity_string_bucket_chunk_sizes)];
+  D_EntityStringChunkNode *free_string_chunks[ArrayCount(d_entity_string_bucket_chunk_sizes)];
 };
 
 typedef struct D_EntityCtxLookupAccel D_EntityCtxLookupAccel;

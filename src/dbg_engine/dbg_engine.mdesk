@@ -115,13 +115,13 @@ D_EntityKindTable:
   COUNT,
 }
 
-@data(String8) ctrl_entity_kind_code_name_table:
+@data(String8) d_entity_kind_code_name_table:
 {
   `{0}`,
   @expand(D_EntityKindTable a) `str8_lit_comp("$(a.code_name)")`
 }
 
-@data(String8) ctrl_entity_kind_display_string_table:
+@data(String8) d_entity_kind_display_string_table:
 {
   `{0}`,
   @expand(D_EntityKindTable a) `str8_lit_comp("$(a.display_name)")`
@@ -179,25 +179,25 @@ D_ExceptionCodeKindTable:
   COUNT,
 }
 
-@data(U32) ctrl_exception_code_kind_code_table:
+@data(U32) d_exception_code_kind_code_table:
 {
   `0`;
   @expand(D_ExceptionCodeKindTable a) `$(a.code)`;
 }
 
-@data(String8) ctrl_exception_code_kind_display_string_table:
+@data(String8) d_exception_code_kind_display_string_table:
 {
   `{0}`;
   @expand(D_ExceptionCodeKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@data(String8) ctrl_exception_code_kind_lowercase_code_string_table:
+@data(String8) d_exception_code_kind_lowercase_code_string_table:
 {
   `{0}`;
   @expand(D_ExceptionCodeKindTable a) `str8_lit_comp("$(a.lower_name)")`;
 }
 
-@data(B8) ctrl_exception_code_kind_default_enable_table:
+@data(B8) d_exception_code_kind_default_enable_table:
 {
   `0`;
   @expand(D_ExceptionCodeKindTable a) `$(a.default)`;

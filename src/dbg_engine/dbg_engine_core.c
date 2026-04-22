@@ -71,7 +71,7 @@ d_init(void)
       scratch_end(scratch);
     }
     d_ctrl_state->ctrl_thread_entity_ctx_rw_mutex = rw_mutex_alloc();
-    d_ctrl_state->ctrl_thread_entity_store = ctrl_entity_ctx_rw_store_alloc();
+    d_ctrl_state->ctrl_thread_entity_store = d_entity_ctx_rw_store_alloc();
     d_ctrl_state->ctrl_thread_eval_cache = e_cache_alloc();
     d_ctrl_state->ctrl_thread_msg_process_arena = arena_alloc();
     d_ctrl_state->dmn_event_arena = arena_alloc();
@@ -79,13 +79,13 @@ d_init(void)
     d_ctrl_state->dbg_dir_arena = arena_alloc();
     for(D_ExceptionCodeKind k = (D_ExceptionCodeKind)0; k < D_ExceptionCodeKind_COUNT; k = (D_ExceptionCodeKind)(k+1))
     {
-      if(ctrl_exception_code_kind_default_enable_table[k])
+      if(d_exception_code_kind_default_enable_table[k])
       {
         d_ctrl_state->exception_code_filters[k/64] |= 1ull<<(k%64);
       }
     }
     d_ctrl_state->ctrl_thread_log = log_alloc();
-    d_ctrl_state->ctrl_thread = thread_launch(ctrl_thread__entry_point, 0);
+    d_ctrl_state->ctrl_thread = thread_launch(d_ctrl_thread__entry_point, 0);
   }
   
   //- rjf: set up user state
@@ -96,7 +96,7 @@ d_init(void)
     d_user_state->cmds_arena = arena_alloc();
     d_user_state->output_log_key = c_key_make(c_root_alloc(), c_id_make(0, 0));
     c_submit_data(d_user_state->output_log_key, 0, str8_zero());
-    d_user_state->ctrl_entity_store = ctrl_entity_ctx_rw_store_alloc();
+    d_user_state->ctrl_entity_store = d_entity_ctx_rw_store_alloc();
     d_user_state->ctrl_stop_arena = arena_alloc();
     d_user_state->ctrl_msg_arena = arena_alloc();
     
