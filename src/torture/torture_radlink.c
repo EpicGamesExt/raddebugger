@@ -35,6 +35,790 @@ t_push_debug_s_section(COFF_ObjWriter *obj_writer, String8 data)
   return coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS, data);
 }
 
+////////////////////////////////
+// string -> COFF
+
+typedef enum T_COFF_TokenKind
+{
+  T_COFF_TokenKind_Null,
+  T_COFF_TokenKind_EOF,
+  T_COFF_TokenKind_String,
+  T_COFF_TokenKind_Number,
+  T_COFF_TokenKind_Ident,
+  T_COFF_TokenKind_Punct,
+} T_COFF_TokenKind;
+
+typedef struct T_COFF_Token
+{
+  T_COFF_TokenKind kind;
+  String8          string;
+  U8               punct;
+} T_COFF_Token;
+
+typedef struct T_COFF_Parser
+{
+  String8      source;
+  U64          off;
+  T_COFF_Token token;
+} T_COFF_Parser;
+
+typedef struct T_COFF_IdNode
+{
+  struct T_COFF_IdNode *next;
+  String8               id;
+  void                 *ptr;
+} T_COFF_IdNode;
+
+typedef struct T_COFF_IdMap
+{
+  Arena         *arena;
+  T_COFF_IdNode *first;
+  T_COFF_IdNode *last;
+} T_COFF_IdMap;
+
+typedef struct T_COFF_ObjParseCtx
+{
+  Arena          *arena;
+  COFF_ObjWriter *writer;
+  T_COFF_IdMap    sections;
+  T_COFF_IdMap    symbols;
+  struct T_COFF_PendingRelocNode *pending_reloc_first;
+  struct T_COFF_PendingRelocNode *pending_reloc_last;
+} T_COFF_ObjParseCtx;
+
+typedef struct T_COFF_PendingRelocNode
+{
+  struct T_COFF_PendingRelocNode *next;
+  T_COFF_Parser                   parser;
+  String8                         section_id;
+} T_COFF_PendingRelocNode;
+
+internal B32
+t_coff_is_ident_start(U8 c)
+{
+  return char_is_alpha(c) || c == '_';
+}
+
+internal B32
+t_coff_is_ident_continue(U8 c)
+{
+  return char_is_alpha(c) || char_is_digit(c, 10) || c == '_';
+}
+
+internal void
+t_coff_parser_skip_ws(T_COFF_Parser *parser)
+{
+  for (;;) {
+    while (parser->off < parser->source.size && char_is_space(parser->source.str[parser->off])) {
+      parser->off += 1;
+    }
+
+    if (parser->off + 1 < parser->source.size &&
+        parser->source.str[parser->off] == '/' &&
+        parser->source.str[parser->off + 1] == '/') {
+      parser->off += 2;
+      while (parser->off < parser->source.size) {
+        U8 c = parser->source.str[parser->off];
+        parser->off += 1;
+        if (c == '\n') {
+          break;
+        }
+      }
+      continue;
+    }
+
+    break;
+  }
+}
+
+internal void
+t_coff_parser_next(T_COFF_Parser *parser)
+{
+  t_coff_parser_skip_ws(parser);
+  if (parser->off >= parser->source.size) {
+    parser->token.kind = T_COFF_TokenKind_EOF;
+    parser->token.string = str8_zero();
+    parser->token.punct = 0;
+    return;
+  }
+
+  U64 start = parser->off;
+  U8 c = parser->source.str[parser->off];
+  if (c == '\'') {
+    parser->off += 1;
+    start = parser->off;
+    while (parser->off < parser->source.size && parser->source.str[parser->off] != '\'') {
+      parser->off += 1;
+    }
+    AssertAlways(parser->off < parser->source.size);
+    parser->token.kind = T_COFF_TokenKind_String;
+    parser->token.string = str8_substr(parser->source, rng_1u64(start, parser->off));
+    parser->token.punct = 0;
+    parser->off += 1;
+    return;
+  }
+
+  if (char_is_digit(c, 10)) {
+    parser->off += 1;
+    while (parser->off < parser->source.size) {
+      U8 d = parser->source.str[parser->off];
+      if (!(char_is_alpha(d) || char_is_digit(d, 10) || d == '_')) {
+        break;
+      }
+      parser->off += 1;
+    }
+    parser->token.kind = T_COFF_TokenKind_Number;
+    parser->token.string = str8_substr(parser->source, rng_1u64(start, parser->off));
+    parser->token.punct = 0;
+    return;
+  }
+
+  if (t_coff_is_ident_start(c)) {
+    parser->off += 1;
+    while (parser->off < parser->source.size && t_coff_is_ident_continue(parser->source.str[parser->off])) {
+      parser->off += 1;
+    }
+    parser->token.kind = T_COFF_TokenKind_Ident;
+    parser->token.string = str8_substr(parser->source, rng_1u64(start, parser->off));
+    parser->token.punct = 0;
+    return;
+  }
+
+  switch (c) {
+  case '{': case '}': case '[': case ']': case ':': case ',': {
+    parser->token.kind = T_COFF_TokenKind_Punct;
+    parser->token.string = str8_zero();
+    parser->token.punct = c;
+    parser->off += 1;
+  } break;
+  default: {
+    InvalidPath;
+  } break;
+  }
+}
+
+internal B32
+t_coff_parser_accept_punct(T_COFF_Parser *parser, U8 punct)
+{
+  if (parser->token.kind == T_COFF_TokenKind_Punct && parser->token.punct == punct) {
+    t_coff_parser_next(parser);
+    return 1;
+  }
+  return 0;
+}
+
+internal void
+t_coff_parser_require_punct(T_COFF_Parser *parser, U8 punct)
+{
+  AssertAlways(t_coff_parser_accept_punct(parser, punct));
+}
+
+internal String8
+t_coff_parser_require_name(T_COFF_Parser *parser)
+{
+  AssertAlways(parser->token.kind == T_COFF_TokenKind_String || parser->token.kind == T_COFF_TokenKind_Ident);
+  String8 result = parser->token.string;
+  t_coff_parser_next(parser);
+  return result;
+}
+
+internal U64
+t_coff_parser_require_u64(T_COFF_Parser *parser)
+{
+  AssertAlways(parser->token.kind == T_COFF_TokenKind_Number || parser->token.kind == T_COFF_TokenKind_String);
+  U64 result = 0;
+  AssertAlways(try_u64_from_str8_c_rules(parser->token.string, &result));
+  t_coff_parser_next(parser);
+  return result;
+}
+
+internal void
+t_coff_parse_object_begin(T_COFF_Parser *parser)
+{
+  t_coff_parser_require_punct(parser, '{');
+}
+
+internal B32
+t_coff_parse_object_next(T_COFF_Parser *parser, String8 *key_out)
+{
+  if (t_coff_parser_accept_punct(parser, '}')) {
+    return 0;
+  }
+  *key_out = t_coff_parser_require_name(parser);
+  t_coff_parser_require_punct(parser, ':');
+  return 1;
+}
+
+internal void
+t_coff_parse_object_finish_field(T_COFF_Parser *parser)
+{
+  if (!(parser->token.kind == T_COFF_TokenKind_Punct && parser->token.punct == '}')) {
+    t_coff_parser_require_punct(parser, ',');
+  }
+}
+
+internal void
+t_coff_parse_array_begin(T_COFF_Parser *parser)
+{
+  t_coff_parser_require_punct(parser, '[');
+}
+
+internal B32
+t_coff_parse_array_next(T_COFF_Parser *parser)
+{
+  if (t_coff_parser_accept_punct(parser, ']')) {
+    return 0;
+  }
+  return 1;
+}
+
+internal void
+t_coff_parse_array_finish_item(T_COFF_Parser *parser)
+{
+  if (!(parser->token.kind == T_COFF_TokenKind_Punct && parser->token.punct == ']')) {
+    t_coff_parser_require_punct(parser, ',');
+  }
+}
+
+internal void
+t_coff_skip_value(T_COFF_Parser *parser)
+{
+  if (parser->token.kind == T_COFF_TokenKind_Punct && parser->token.punct == '{') {
+    t_coff_parse_object_begin(parser);
+    for (String8 key = {0}; t_coff_parse_object_next(parser, &key);) {
+      t_coff_skip_value(parser);
+      t_coff_parse_object_finish_field(parser);
+    }
+  } else if (parser->token.kind == T_COFF_TokenKind_Punct && parser->token.punct == '[') {
+    t_coff_parse_array_begin(parser);
+    for (;;) {
+      if (!t_coff_parse_array_next(parser)) break;
+      t_coff_skip_value(parser);
+      t_coff_parse_array_finish_item(parser);
+    }
+  } else {
+    t_coff_parser_next(parser);
+  }
+}
+
+internal void
+t_coff_id_map_insert(T_COFF_IdMap *map, String8 id, void *ptr)
+{
+  T_COFF_IdNode *node = push_array(map->arena, T_COFF_IdNode, 1);
+  node->id = push_str8_copy(map->arena, id);
+  node->ptr = ptr;
+  SLLQueuePush(map->first, map->last, node);
+}
+
+internal void *
+t_coff_id_map_find(T_COFF_IdMap *map, String8 id)
+{
+  for (T_COFF_IdNode *node = map->first; node != 0; node = node->next) {
+    if (str8_match(node->id, id, 0)) {
+      return node->ptr;
+    }
+  }
+  return 0;
+}
+
+internal String8
+t_coff_parse_data_bytes(Arena *arena, T_COFF_Parser *parser)
+{
+  T_COFF_Parser probe = *parser;
+  U64 byte_count = 0;
+  t_coff_parse_array_begin(&probe);
+  for (;;) {
+    if (!t_coff_parse_array_next(&probe)) {
+      break;
+    }
+    U64 value = t_coff_parser_require_u64(&probe);
+    AssertAlways(value <= max_U8);
+    byte_count += 1;
+    t_coff_parse_array_finish_item(&probe);
+  }
+
+  U8 *buffer = push_array(arena, U8, byte_count);
+  U64 idx = 0;
+  t_coff_parse_array_begin(parser);
+  for (;;) {
+    if (!t_coff_parse_array_next(parser)) {
+      break;
+    }
+    U64 value = t_coff_parser_require_u64(parser);
+    AssertAlways(value <= max_U8);
+    buffer[idx] = (U8)value;
+    idx += 1;
+    t_coff_parse_array_finish_item(parser);
+  }
+  AssertAlways(idx == byte_count);
+  return str8(buffer, byte_count);
+}
+
+internal COFF_SectionFlags
+t_coff_section_flag_from_name(String8 string)
+{
+  if (str8_match(string, str8_lit("type_no_pad"), 0))     return COFF_SectionFlag_TypeNoPad;
+  if (str8_match(string, str8_lit("cnt_code"), 0))        return COFF_SectionFlag_CntCode;
+  if (str8_match(string, str8_lit("cnt_init_data"), 0))   return COFF_SectionFlag_CntInitializedData;
+  if (str8_match(string, str8_lit("cnt_uninit_data"), 0)) return COFF_SectionFlag_CntUninitializedData;
+  if (str8_match(string, str8_lit("lnk_other"), 0))       return COFF_SectionFlag_LnkOther;
+  if (str8_match(string, str8_lit("lnk_info"), 0))        return COFF_SectionFlag_LnkInfo;
+  if (str8_match(string, str8_lit("lnk_remove"), 0))      return COFF_SectionFlag_LnkRemove;
+  if (str8_match(string, str8_lit("lnk_comdat"), 0))      return COFF_SectionFlag_LnkCOMDAT;
+  if (str8_match(string, str8_lit("gp_rel"), 0))          return COFF_SectionFlag_GpRel;
+  if (str8_match(string, str8_lit("mem_16bit"), 0))       return COFF_SectionFlag_Mem16Bit;
+  if (str8_match(string, str8_lit("mem_locked"), 0))      return COFF_SectionFlag_MemLocked;
+  if (str8_match(string, str8_lit("mem_preload"), 0))     return COFF_SectionFlag_MemPreload;
+  if (str8_match(string, str8_lit("align_1"), 0))         return COFF_SectionFlag_Align1Bytes;
+  if (str8_match(string, str8_lit("align_2"), 0))         return COFF_SectionFlag_Align2Bytes;
+  if (str8_match(string, str8_lit("align_4"), 0))         return COFF_SectionFlag_Align4Bytes;
+  if (str8_match(string, str8_lit("align_8"), 0))         return COFF_SectionFlag_Align8Bytes;
+  if (str8_match(string, str8_lit("align_16"), 0))        return COFF_SectionFlag_Align16Bytes;
+  if (str8_match(string, str8_lit("align_32"), 0))        return COFF_SectionFlag_Align32Bytes;
+  if (str8_match(string, str8_lit("align_64"), 0))        return COFF_SectionFlag_Align64Bytes;
+  if (str8_match(string, str8_lit("align_128"), 0))       return COFF_SectionFlag_Align128Bytes;
+  if (str8_match(string, str8_lit("align_256"), 0))       return COFF_SectionFlag_Align256Bytes;
+  if (str8_match(string, str8_lit("align_512"), 0))       return COFF_SectionFlag_Align512Bytes;
+  if (str8_match(string, str8_lit("align_1024"), 0))      return COFF_SectionFlag_Align1024Bytes;
+  if (str8_match(string, str8_lit("align_2048"), 0))      return COFF_SectionFlag_Align2048Bytes;
+  if (str8_match(string, str8_lit("align_4096"), 0))      return COFF_SectionFlag_Align4096Bytes;
+  if (str8_match(string, str8_lit("align_8192"), 0))      return COFF_SectionFlag_Align8192Bytes;
+  if (str8_match(string, str8_lit("lnk_nreloc_ovfl"), 0)) return COFF_SectionFlag_LnkNRelocOvfl;
+  if (str8_match(string, str8_lit("mem_discardable"), 0)) return COFF_SectionFlag_MemDiscardable;
+  if (str8_match(string, str8_lit("mem_not_cached"), 0))  return COFF_SectionFlag_MemNotCached;
+  if (str8_match(string, str8_lit("mem_not_paged"), 0))   return COFF_SectionFlag_MemNotPaged;
+  if (str8_match(string, str8_lit("mem_shared"), 0))      return COFF_SectionFlag_MemShared;
+  if (str8_match(string, str8_lit("mem_execute"), 0))     return COFF_SectionFlag_MemExecute;
+  if (str8_match(string, str8_lit("mem_read"), 0))        return COFF_SectionFlag_MemRead;
+  if (str8_match(string, str8_lit("mem_write"), 0))       return COFF_SectionFlag_MemWrite;
+  InvalidPath;
+  return 0;
+}
+
+internal COFF_SectionFlags
+t_coff_parse_section_flags(T_COFF_Parser *parser)
+{
+  if (parser->token.kind == T_COFF_TokenKind_Number) {
+    return safe_cast_u32(t_coff_parser_require_u64(parser));
+  }
+  if (parser->token.kind == T_COFF_TokenKind_String || parser->token.kind == T_COFF_TokenKind_Ident) {
+    String8 name = t_coff_parser_require_name(parser);
+    if (str8_match(name, str8_lit("code"), 0))  return PE_TEXT_SECTION_FLAGS | COFF_SectionFlag_Align1Bytes;
+    if (str8_match(name, str8_lit("data"), 0))  return PE_DATA_SECTION_FLAGS;
+    if (str8_match(name, str8_lit("rdata"), 0)) return PE_RDATA_SECTION_FLAGS;
+    if (str8_match(name, str8_lit("bss"), 0))   return PE_BSS_SECTION_FLAGS;
+    return t_coff_section_flag_from_name(name);
+  }
+
+  COFF_SectionFlags flags = 0;
+  t_coff_parse_array_begin(parser);
+  for (;;) {
+    if (!t_coff_parse_array_next(parser)) {
+      break;
+    }
+    flags |= t_coff_section_flag_from_name(t_coff_parser_require_name(parser));
+    t_coff_parse_array_finish_item(parser);
+  }
+  return flags;
+}
+
+internal COFF_ComdatSelectType
+t_coff_comdat_select_from_string(String8 string)
+{
+  if (str8_match(string, str8_lit("null"), 0))          return COFF_ComdatSelect_Null;
+  if (str8_match(string, str8_lit("no_duplicates"), 0)) return COFF_ComdatSelect_NoDuplicates;
+  if (str8_match(string, str8_lit("any"), 0))           return COFF_ComdatSelect_Any;
+  if (str8_match(string, str8_lit("same_size"), 0))     return COFF_ComdatSelect_SameSize;
+  if (str8_match(string, str8_lit("exact_match"), 0))   return COFF_ComdatSelect_ExactMatch;
+  if (str8_match(string, str8_lit("associative"), 0))   return COFF_ComdatSelect_Associative;
+  if (str8_match(string, str8_lit("largest"), 0))       return COFF_ComdatSelect_Largest;
+  InvalidPath;
+  return 0;
+}
+
+internal COFF_WeakExtType
+t_coff_weak_type_from_string(String8 string)
+{
+  if (str8_match(string, str8_lit("null"), 0))            return COFF_WeakExt_Null;
+  if (str8_match(string, str8_lit("no_library"), 0))      return COFF_WeakExt_NoLibrary;
+  if (str8_match(string, str8_lit("search_library"), 0))  return COFF_WeakExt_SearchLibrary;
+  if (str8_match(string, str8_lit("search_alias"), 0))    return COFF_WeakExt_SearchAlias;
+  if (str8_match(string, str8_lit("anti_dependency"), 0)) return COFF_WeakExt_AntiDependency;
+  InvalidPath;
+  return 0;
+}
+
+internal COFF_SymStorageClass
+t_coff_storage_class_from_string(String8 string)
+{
+  if (str8_match(string, str8_lit("external"), 0))      return COFF_SymStorageClass_External;
+  if (str8_match(string, str8_lit("static"), 0))        return COFF_SymStorageClass_Static;
+  if (str8_match(string, str8_lit("section"), 0))       return COFF_SymStorageClass_Section;
+  if (str8_match(string, str8_lit("weak_external"), 0)) return COFF_SymStorageClass_WeakExternal;
+  InvalidPath;
+  return 0;
+}
+
+internal COFF_ImportByType
+t_coff_import_by_from_string(String8 string)
+{
+  if (str8_match(string, str8_lit("ordinal"), 0))        return COFF_ImportBy_Ordinal;
+  if (str8_match(string, str8_lit("name"), 0))           return COFF_ImportBy_Name;
+  if (str8_match(string, str8_lit("name_no_prefix"), 0)) return COFF_ImportBy_NameNoPrefix;
+  if (str8_match(string, str8_lit("undecorate"), 0))     return COFF_ImportBy_Undecorate;
+  InvalidPath;
+  return 0;
+}
+
+internal COFF_RelocType
+t_coff_x64_reloc_type_from_string(String8 string)
+{
+  if (str8_match(string, str8_lit("abs"), 0))      return COFF_Reloc_X64_Abs;
+  if (str8_match(string, str8_lit("addr64"), 0))   return COFF_Reloc_X64_Addr64;
+  if (str8_match(string, str8_lit("addr32"), 0))   return COFF_Reloc_X64_Addr32;
+  if (str8_match(string, str8_lit("addr32nb"), 0)) return COFF_Reloc_X64_Addr32Nb;
+  if (str8_match(string, str8_lit("rel"), 0) || str8_match(string, str8_lit("rel32"), 0)) return COFF_Reloc_X64_Rel32;
+  if (str8_match(string, str8_lit("section"), 0))  return COFF_Reloc_X64_Section;
+  if (str8_match(string, str8_lit("secrel"), 0))   return COFF_Reloc_X64_SecRel;
+  if (str8_match(string, str8_lit("token"), 0))    return COFF_Reloc_X64_Token;
+  if (str8_match(string, str8_lit("pair"), 0))     return COFF_Reloc_X64_Pair;
+  InvalidPath;
+  return 0;
+}
+
+internal COFF_ObjSection *
+t_coff_require_section(T_COFF_IdMap *map, String8 id)
+{
+  COFF_ObjSection *section = t_coff_id_map_find(map, id);
+  AssertAlways(section != 0);
+  return section;
+}
+
+internal COFF_ObjSymbol *
+t_coff_require_symbol(T_COFF_IdMap *map, String8 id)
+{
+  COFF_ObjSymbol *symbol = t_coff_id_map_find(map, id);
+  AssertAlways(symbol != 0);
+  return symbol;
+}
+
+internal void
+t_coff_enqueue_section_relocs(T_COFF_ObjParseCtx *ctx, T_COFF_Parser parser, String8 section_id)
+{
+  T_COFF_PendingRelocNode *node = push_array(ctx->arena, T_COFF_PendingRelocNode, 1);
+  node->parser = parser;
+  node->section_id = push_str8_copy(ctx->arena, section_id);
+  SLLQueuePush(ctx->pending_reloc_first, ctx->pending_reloc_last, node);
+}
+
+internal void
+t_coff_parse_obj_section(T_COFF_ObjParseCtx *ctx, T_COFF_Parser *parser)
+{
+  String8           id            = {0};
+  String8           name          = {0};
+  String8           data          = {0};
+  COFF_SectionFlags flags         = 0;
+  T_COFF_Parser     relocs_parser = {0};
+  B32               has_relocs    = 0;
+
+  t_coff_parse_object_begin(parser);
+  for (String8 key = {0}; t_coff_parse_object_next(parser, &key); t_coff_parse_object_finish_field(parser)) {
+    if      (str8_match(key, str8_lit("id"),     0)) { id    = t_coff_parser_require_name(parser);          }
+    else if (str8_match(key, str8_lit("name"),   0)) { name  = t_coff_parser_require_name(parser);          }
+    else if (str8_match(key, str8_lit("flags"),  0)) { flags = t_coff_parse_section_flags(parser);          }
+    else if (str8_match(key, str8_lit("data"),   0)) { data  = t_coff_parse_data_bytes(ctx->arena, parser); }
+    else if (str8_match(key, str8_lit("relocs"), 0)) {
+      relocs_parser = *parser;
+      t_coff_skip_value(parser);
+      has_relocs = 1;
+    }
+    else { InvalidPath; }
+  }
+
+  // must be defined:
+  AssertAlways(name.size);
+  AssertAlways(id.size);
+
+  t_coff_id_map_insert(&ctx->sections, id, coff_obj_writer_push_section(ctx->writer, name, flags, data));
+  if (has_relocs) {
+    t_coff_enqueue_section_relocs(ctx, relocs_parser, id);
+  }
+}
+
+internal void
+t_coff_parse_obj_symbol(T_COFF_ObjParseCtx *ctx, T_COFF_Parser *parser, String8 default_kind)
+{
+  String8               kind            = default_kind;
+  String8               name            = {0};
+  String8               section_id      = {0};
+  String8               head            = {0};
+  String8               associate       = {0};
+  String8               tag             = {0};
+  U32                   value           = 0;
+  U32                   size            = 0;
+  COFF_ComdatSelectType selection       = COFF_ComdatSelect_Null;
+  COFF_WeakExtType      characteristics = COFF_WeakExt_Null;
+  COFF_SymStorageClass  storage_class   = COFF_SymStorageClass_External;
+
+  t_coff_parse_object_begin(parser);
+  for (String8 key = {0}; t_coff_parse_object_next(parser, &key);) {
+    if      (str8_match(key, str8_lit("kind"),            0 )) { kind            = t_coff_parser_require_name(parser);                                   }
+    else if (str8_match(key, str8_lit("name"),            0 )) { name            = t_coff_parser_require_name(parser);                                   }
+    else if (str8_match(key, str8_lit("value"),           0 )) { value           = safe_cast_u32(t_coff_parser_require_u64(parser));                     }
+    else if (str8_match(key, str8_lit("size"),            0 )) { size            = safe_cast_u32(t_coff_parser_require_u64(parser));                     }
+    else if (str8_match(key, str8_lit("section"),         0 )) { section_id      = t_coff_parser_require_name(parser);                                   }
+    else if (str8_match(key, str8_lit("head"),            0 )) { head            = t_coff_parser_require_name(parser);                                   }
+    else if (str8_match(key, str8_lit("associate"),       0 )) { associate       = t_coff_parser_require_name(parser);                                   }
+    else if (str8_match(key, str8_lit("selection"),       0 )) { selection       = t_coff_comdat_select_from_string(t_coff_parser_require_name(parser)); }
+    else if (str8_match(key, str8_lit("characteristics"), 0 )) { characteristics = t_coff_weak_type_from_string(t_coff_parser_require_name(parser));     }
+    else if (str8_match(key, str8_lit("tag"),             0 )) { tag             = t_coff_parser_require_name(parser);                                   }
+    else if (str8_match(key, str8_lit("storage_class"),   0 )) { storage_class   = t_coff_storage_class_from_string(t_coff_parser_require_name(parser)); }
+    else InvalidPath;
+    t_coff_parse_object_finish_field(parser);
+  }
+
+  COFF_ObjSymbol *symbol = 0;
+  if      (str8_match(kind, str8_lit("extern_func"), 0 )) { symbol = coff_obj_writer_push_symbol_extern_func(ctx->writer, name, value, t_coff_require_section(&ctx->sections, section_id));                                 }
+  else if (str8_match(kind, str8_lit("extern"),      0 )) { symbol = coff_obj_writer_push_symbol_extern     (ctx->writer, name, value, t_coff_require_section(&ctx->sections, section_id));                                 }
+  else if (str8_match(kind, str8_lit("static"),      0 )) { symbol = coff_obj_writer_push_symbol_static     (ctx->writer, name, value, t_coff_require_section(&ctx->sections, section_id));                                 }
+  else if (str8_match(kind, str8_lit("secdef"),      0 )) { symbol = coff_obj_writer_push_symbol_secdef     (ctx->writer, t_coff_require_section(&ctx->sections, section_id), selection);                                   }
+  else if (str8_match(kind, str8_lit("associative"), 0 )) { symbol = coff_obj_writer_push_symbol_associative(ctx->writer, t_coff_require_section(&ctx->sections, head), t_coff_require_section(&ctx->sections, associate)); }
+  else if (str8_match(kind, str8_lit("weak"),        0 )) { symbol = coff_obj_writer_push_symbol_weak       (ctx->writer, name, characteristics, t_coff_require_symbol(&ctx->symbols, tag));                                }
+  else if (str8_match(kind, str8_lit("abs"),         0 )) { symbol = coff_obj_writer_push_symbol_abs        (ctx->writer, name, value, storage_class);                                                                      }
+  else if (str8_match(kind, str8_lit("undef"),       0 )) { symbol = coff_obj_writer_push_symbol_undef      (ctx->writer, name);                                                                                            }
+  else if (str8_match(kind, str8_lit("undef_func"),  0 )) { symbol = coff_obj_writer_push_symbol_undef_func (ctx->writer, name);                                                                                            }
+  else if (str8_match(kind, str8_lit("undef_sect"),  0 )) { symbol = coff_obj_writer_push_symbol_undef_sect (ctx->writer, name, value);                                                                                     }
+  else if (str8_match(kind, str8_lit("sect"),        0 )) { symbol = coff_obj_writer_push_symbol_sect       (ctx->writer, name, t_coff_require_section(&ctx->sections, section_id));                                        }
+  else if (str8_match(kind, str8_lit("common"),      0 )) { symbol = coff_obj_writer_push_symbol_common     (ctx->writer, name, size);                                                                                      }
+  else { InvalidPath; }
+
+  if (name.size) {
+    t_coff_id_map_insert(&ctx->symbols, name, symbol);
+  }
+}
+
+internal void
+t_coff_parse_obj_reloc(T_COFF_ObjParseCtx *ctx, T_COFF_Parser *parser, String8 default_kind, String8 implicit_section_id)
+{
+  String8 kind       = default_kind;
+  String8 section_id = implicit_section_id;
+  String8 symbol_id  = {0};
+  String8 type_name  = {0};
+  U32     apply_off  = 0;
+  t_coff_parse_object_begin(parser);
+  for (String8 key = {0}; t_coff_parse_object_next(parser, &key); t_coff_parse_object_finish_field(parser)) {
+    if      (str8_match(key, str8_lit("kind"),      0)) { kind       = t_coff_parser_require_name(parser);               }
+    else if (str8_match(key, str8_lit("section"),   0)) { section_id = t_coff_parser_require_name(parser);               }
+    else if (str8_match(key, str8_lit("symbol"),    0)) { symbol_id  = t_coff_parser_require_name(parser);               }
+    else if (str8_match(key, str8_lit("apply_off"), 0)) { apply_off  = safe_cast_u32(t_coff_parser_require_u64(parser)); }
+    else if (str8_match(key, str8_lit("type"),      0)) { type_name  = t_coff_parser_require_name(parser);               }
+    else { InvalidPath; }
+  }
+
+  switch (ctx->writer->machine) {
+  case COFF_MachineType_Unknown: break;
+  case COFF_MachineType_X64: {
+    COFF_ObjSection *section = t_coff_require_section(&ctx->sections, section_id);
+    COFF_ObjSymbol *symbol = t_coff_require_symbol(&ctx->symbols, symbol_id);
+    if (str8_match(kind, str8_lit("generic"), 0) || str8_match(kind, str8_lit("reloc"), 0)) {
+      coff_obj_writer_section_push_reloc(ctx->writer, section, apply_off, symbol, t_coff_x64_reloc_type_from_string(type_name));
+    } else if (str8_match(kind, str8_lit("rel32"), 0)) {
+      coff_obj_writer_section_push_reloc_rel32(ctx->writer, section, apply_off, symbol);
+    } else if (str8_match(kind, str8_lit("addr32"), 0)) {
+      coff_obj_writer_section_push_reloc_addr32(ctx->writer, section, apply_off, symbol);
+    } else if (str8_match(kind, str8_lit("addr"), 0) || str8_match(kind, str8_lit("addr64"), 0)) {
+      coff_obj_writer_section_push_reloc_addr(ctx->writer, section, apply_off, symbol);
+    } else if (str8_match(kind, str8_lit("voff"), 0) || str8_match(kind, str8_lit("addr32nb"), 0)) {
+      coff_obj_writer_section_push_reloc_voff(ctx->writer, section, apply_off, symbol);
+    } else {
+      InvalidPath;
+    }
+  } break;
+  }
+}
+
+internal void
+t_coff_parse_obj_directive(T_COFF_ObjParseCtx *ctx, T_COFF_Parser *parser)
+{
+  String8 value = {0};
+  if (parser->token.kind == T_COFF_TokenKind_String || parser->token.kind == T_COFF_TokenKind_Ident) {
+    value = t_coff_parser_require_name(parser);
+  } else {
+    t_coff_parse_object_begin(parser);
+    for (;;) {
+      String8 key = {0};
+      if (!t_coff_parse_object_next(parser, &key)) break;
+      if (str8_match(key, str8_lit("value"), 0)) value = t_coff_parser_require_name(parser);
+      else InvalidPath;
+      t_coff_parse_object_finish_field(parser);
+    }
+  }
+  coff_obj_writer_push_directive(ctx->writer, value);
+}
+
+internal void
+t_coff_parse_obj_sections(T_COFF_ObjParseCtx *ctx, T_COFF_Parser *parser)
+{
+  t_coff_parse_array_begin(parser);
+  for (;;) {
+    if (!t_coff_parse_array_next(parser)) break;
+    t_coff_parse_obj_section(ctx, parser);
+    t_coff_parse_array_finish_item(parser);
+  }
+}
+
+internal void
+t_coff_parse_obj_symbols(T_COFF_ObjParseCtx *ctx, T_COFF_Parser *parser)
+{
+  t_coff_parse_array_begin(parser);
+  for (;;) {
+    if (!t_coff_parse_array_next(parser)) break;
+    t_coff_parse_obj_symbol(ctx, parser, str8_zero());
+    t_coff_parse_array_finish_item(parser);
+  }
+}
+
+internal void
+t_coff_parse_obj_directives(T_COFF_ObjParseCtx *ctx, T_COFF_Parser *parser)
+{
+  t_coff_parse_array_begin(parser);
+  for (;;) {
+    if (!t_coff_parse_array_next(parser)) break;
+    t_coff_parse_obj_directive(ctx, parser);
+    t_coff_parse_array_finish_item(parser);
+  }
+}
+
+internal String8
+t_coff_parse_obj(Arena *arena, T_COFF_Parser *parser)
+{
+  T_COFF_ObjParseCtx ctx = {
+    .arena          = arena,
+    .writer         = coff_obj_writer_alloc(0, COFF_MachineType_Unknown),
+    .sections.arena = arena,
+    .symbols.arena  = arena
+  };
+
+  t_coff_parse_object_begin(parser);
+  for (String8 key = {0}; t_coff_parse_object_next(parser, &key); t_coff_parse_object_finish_field(parser)) {
+    if      (str8_match(key, str8_lit("machine"),    0)) { ctx.writer->machine = coff_machine_from_string(t_coff_parser_require_name(parser)); }
+    else if (str8_match(key, str8_lit("time_stamp"), 0)) { ctx.writer->time_stamp = safe_cast_u32(t_coff_parser_require_u64(parser));          }
+    else if (str8_match(key, str8_lit("sections"),   0)) { t_coff_parse_obj_sections(&ctx, parser);                                            }
+    else if (str8_match(key, str8_lit("symbols"),    0)) { t_coff_parse_obj_symbols(&ctx, parser);                                             }
+    else if (str8_match(key, str8_lit("directives"), 0)) { t_coff_parse_obj_directives(&ctx, parser);                                          }
+    else { InvalidPath; }
+  }
+
+  String8 result = coff_obj_writer_serialize(arena, ctx.writer);
+  coff_obj_writer_release(&ctx.writer);
+  return result;
+}
+
+internal String8
+t_coff_parse_lib(Arena *arena, T_COFF_Parser *parser)
+{
+  COFF_TimeStamp  time_stamp         = 0;
+  U16             mode               = 0;
+  B32             emit_second_member = 1;
+  COFF_LibWriter *writer             = coff_lib_writer_alloc();
+
+  t_coff_parse_object_begin(parser);
+  for (String8 key = {0}; t_coff_parse_object_next(parser, &key); t_coff_parse_object_finish_field(parser)) {
+    if (str8_match(key, str8_lit("time_stamp"), 0)) {
+      time_stamp = safe_cast_u32(t_coff_parser_require_u64(parser));
+    } else if (str8_match(key, str8_lit("mode"), 0)) {
+      mode = safe_cast_u16(t_coff_parser_require_u64(parser));
+    } else if (str8_match(key, str8_lit("emit_second_member"), 0)) {
+      emit_second_member = !!t_coff_parser_require_u64(parser);
+    } else if (str8_match(key, str8_lit("import"), 0)) {
+      String8           dll_name        = {0};
+      String8           name            = {0};
+      COFF_ImportByType import_by       = COFF_ImportBy_Name;
+      U16               hint_or_ordinal = 0;
+      COFF_ImportType   type            = COFF_ImportHeader_Code;
+      t_coff_parse_object_begin(parser);
+      for (String8 field = {0}; t_coff_parse_object_next(parser, &field); t_coff_parse_object_finish_field(parser)) {
+        if      (str8_match(field, str8_lit("dll_name"),        0)) { dll_name        = t_coff_parser_require_name(parser);                                      }
+        else if (str8_match(field, str8_lit("name"),            0)) { name            = t_coff_parser_require_name(parser);                                      }
+        else if (str8_match(field, str8_lit("import_by"),       0)) { import_by       = t_coff_import_by_from_string(t_coff_parser_require_name(parser));        }
+        else if (str8_match(field, str8_lit("hint_or_ordinal"), 0)) { hint_or_ordinal = safe_cast_u16(t_coff_parser_require_u64(parser));                        }
+        else if (str8_match(field, str8_lit("type"),            0)) { type            = coff_import_header_type_from_string(t_coff_parser_require_name(parser)); }
+        else { InvalidPath; }
+      }
+      coff_lib_writer_push_import(writer, COFF_MachineType_X64, time_stamp, dll_name, import_by, name, hint_or_ordinal, type);
+    } else if (str8_match(key, str8_lit("obj"), 0)) {
+      String8 path = {0};
+      String8 data = {0};
+      t_coff_parse_object_begin(parser);
+      for (String8 field = {0}; t_coff_parse_object_next(parser, &field); t_coff_parse_object_finish_field(parser)) {
+        if (str8_match(field, str8_lit("path"), 0)) path = t_coff_parser_require_name(parser);
+        else if (str8_match(field, str8_lit("data"), 0)) data = t_coff_parse_obj(arena, parser);
+        else InvalidPath;
+      }
+      coff_lib_writer_push_obj(writer, path, data);
+    }  else {
+      InvalidPath;
+    }
+  }
+
+  String8 result = coff_lib_writer_serialize(arena, writer, time_stamp, mode, emit_second_member);
+  coff_lib_writer_release(&writer);
+  return result;
+}
+
+internal String8
+t_coff_parse_root(Arena *arena, T_COFF_Parser *parser)
+{
+  String8 root_name = t_coff_parser_require_name(parser);
+  t_coff_parser_require_punct(parser, ':');
+  if (str8_match(root_name, str8_lit("obj"), 0)) { return t_coff_parse_obj(arena, parser); }
+  if (str8_match(root_name, str8_lit("lib"), 0)) { return t_coff_parse_lib(arena, parser); }
+  return str8_zero();
+}
+
+internal String8
+t_coff_from_string(Arena *arena, String8 string)
+{
+  T_COFF_Parser parser = { .source = string };
+  t_coff_parser_next(&parser);
+  String8 result = t_coff_parse_root(arena, &parser);
+  if (parser.token.kind == T_COFF_TokenKind_Punct && parser.token.punct == '}') {
+    t_coff_parser_next(&parser);
+  }
+  AssertAlways(parser.token.kind == T_COFF_TokenKind_EOF);
+  return result;
+}
+
+internal String8
+t_coff_lib_from_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  str8_list_pushf(scratch.arena, &list, "'lib': {");
+  str8_list_push(scratch.arena, &list, string);
+  str8_list_pushf(scratch.arena, &list, "}");
+  String8 wrapped = str8_list_join(scratch.arena, &list, &(StringJoin){ .sep = str8_lit("\n") });
+  String8 result = t_coff_from_string(arena, wrapped);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+t_coff_obj_from_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  str8_list_pushf(scratch.arena, &list, "'obj': {");
+  str8_list_push(scratch.arena, &list, string);
+  str8_list_pushf(scratch.arena, &list, "}");
+  String8 wrapped = str8_list_join(scratch.arena, &list, &(StringJoin){ .sep = str8_lit("\n") });
+  String8 result = t_coff_from_string(arena, wrapped);
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+
 internal String8
 t_make_sec_defn_obj(Arena *arena, String8 payload)
 {
@@ -3681,6 +4465,72 @@ TEST(second_member_header)
   T_Ok(g_last_exit_code == 0);
 }
 
+#if 0
+TEST(multibyte)
+{
+  String8 a_obj = t_coff_obj_from_string(arena, str8_lit("'machine': 'x64',                                                                  \n\
+                                                          'sections': [                                                                      \n\
+                                                             {                                                                               \n\
+                                                               'id': 'text',                                                                 \n\
+                                                               'name': '.text',                                                              \n\
+                                                               'flags': 'code',                                                              \n\
+                                                               'data': [ 0xff, 0x25, 0x00, 0x00, 0x00, 0x00,                                 \n\
+                                                                         0xff, 0x25, 0x00, 0x00, 0x00, 0x00 ],                               \n\
+                                                               'relocs': [                                                                   \n\
+                                                                 { 'kind': 'rel32', 'apply_off': 2, 'symbol': 'foo' },                       \n\
+                                                               ],                                                                            \n\
+                                                             },                                                                              \n\
+                                                          ],                                                                                 \n\
+                                                          'symbols': [                                                                       \n\
+                                                            { 'kind': 'extern_func', 'name': 'use_imports', 'value': 0, 'section': 'text' }, \n\
+                                                            { 'kind': 'undef',       'name': 'foo' },                                        \n\
+                                                          ]"));
+
+  String8 aa_obj = t_coff_obj_from_string(arena, str8_lit("'machine': 'x64',                                                                 \n\
+                                                          'sections': [                                                                      \n\
+                                                             {                                                                               \n\
+                                                               'id': 'text',                                                                 \n\
+                                                               'name': '.text',                                                              \n\
+                                                               'flags': 'code',                                                              \n\
+                                                               'data': [ 0xff, 0x25, 0x00, 0x00, 0x00, 0x00,                                 \n\
+                                                                         0xff, 0x25, 0x00, 0x00, 0x00, 0x00 ],                               \n\
+                                                               'relocs': [                                                                   \n\
+                                                                 { 'kind': 'rel32', 'apply_off': 2, 'symbol': '__imp_foo' },                 \n\
+                                                               ],                                                                            \n\
+                                                             },                                                                              \n\
+                                                          ],                                                                                 \n\
+                                                          'symbols': [                                                                       \n\
+                                                            { 'kind': 'extern_func', 'name': 'use_imports', 'value': 0, 'section': 'text' }, \n\
+                                                            { 'kind': 'undef',       'name': '__imp_foo' },                                  \n\
+                                                          ]"));
+
+  String8 b_lib = t_coff_lib_from_string(arena, str8_lit("'import': {             \n\
+                                                           'dll_name': 'foo.dll', \n\
+                                                           'name': 'foo',         \n\
+                                                           'import_by': 'name',   \n\
+                                                           'hint_or_ordinal': 0,  \n\
+                                                           'type': 'code',        \n\
+                                                         }"));
+
+  String8 c_lib = t_coff_lib_from_string(arena, str8_lit("'import': {             \n\
+                                                           'dll_name': 'foo.dll', \n\
+                                                           'name': '__imp_foo',   \n\
+                                                           'import_by': 'name',   \n\
+                                                           'hint_or_ordinal': 0,  \n\
+                                                           'type': 'code',        \n\
+                                                         }"));
+
+  T_Ok(t_write_file(str8_lit("a.obj"), a_obj));
+  T_Ok(t_write_file(str8_lit("aa.obj"), aa_obj));
+  T_Ok(t_write_file(str8_lit("b.lib"), b_lib));
+  T_Ok(t_write_file(str8_lit("c.lib"), c_lib));
+  T_Ok(t_write_entry_obj());
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.lib c.lib entry.obj /include:use_imports");
+  T_Ok(g_last_exit_code == 0);
+}
+#endif
+
 TEST(defer_impl_link_to_second_search_pass)
 {
   String8 imp_ref_obj;
@@ -5994,4 +6844,3 @@ TEST(fold_with_largest_align)
 #endif
 
 #undef T_Group
-
