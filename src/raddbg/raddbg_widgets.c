@@ -2327,6 +2327,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         TXT_Token *line_tokens_first = line_tokens->v;
         TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
+        B32 preceded_by_dot = 0;
         for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
         {
           // rjf: token -> token string
@@ -2346,7 +2347,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           
           // rjf: token -> token color
           RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
-          RD_CodeColorSlot lookup_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+          RD_CodeColorSlot lookup_color_slot = preceded_by_dot ? token_color_slot : rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
           Vec4F32 token_color = rd_rgba_from_code_color_slot(token_color_slot);
           if(lookup_color_slot != RD_CodeColorSlot_CodeDefault)
           {
@@ -2370,6 +2371,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           
           // rjf: push fancy string
           dr_fstrs_push_new(scratch.arena, &fstrs, &fstr_params, token_string, .color = token_color);
+          
+          // rjf: . -> mark next token as preceded by dot
+          preceded_by_dot = (token->kind == TXT_TokenKind_Symbol && str8_match(token_string, str8_lit("."), 0));
         }
       }
       lines_fstrs[line_idx] = fstrs;
@@ -3190,6 +3194,7 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
   TXT_Token *tokens_opl = tokens.v+tokens.count;
   S32 indirection_counter = 0;
   indirection_size_change = 0;
+  B32 preceded_by_dot = 0;
   for(TXT_Token *token = tokens.v; token < tokens_opl; token += 1)
   {
     RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
@@ -3218,7 +3223,11 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
       case TXT_TokenKind_Identifier:
       case TXT_TokenKind_Keyword:
       {
-        RD_CodeColorSlot lookup_theme_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+        RD_CodeColorSlot lookup_theme_color_slot = RD_CodeColorSlot_CodeDefault;
+        if(!preceded_by_dot)
+        {
+          lookup_theme_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+        }
         if(lookup_theme_color_slot != RD_CodeColorSlot_CodeDefault)
         {
           Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_theme_color_slot);
@@ -3345,6 +3354,14 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
         }
         
       }break;
+    }
+    if(token->kind == TXT_TokenKind_Symbol && str8_match(token_string, str8_lit("."), 0))
+    {
+      preceded_by_dot = 1;
+    }
+    else
+    {
+      preceded_by_dot = 0;
     }
     if(str8_match(token_string, str8_lit("}"), 0)) { indirection_counter -= 1; }
     if(str8_match(token_string, str8_lit("]"), 0)) { indirection_counter -= 1; }
