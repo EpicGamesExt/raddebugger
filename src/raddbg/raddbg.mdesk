@@ -305,7 +305,7 @@ RD_VocabTable:
     ```
   }
   
-  // TODO(rjf): the control codes could be fed from the CTRL_ExceptionCodeKindTable, but
+  // TODO(rjf): the control codes could be fed from the D_ExceptionCodeKindTable, but
   // we do not support that in this generator - we'd need a way to form a table-generated
   // string and put it into a table cell...
   {
@@ -758,11 +758,11 @@ RD_VocabTable:
 RD_RegTable:
 {
   // rjf: ctrl entities
-  {CTRL_Handle       machine          Machine       }
-  {CTRL_Handle       module           Module        }
-  {CTRL_Handle       process          Process       }
-  {CTRL_Handle       thread           Thread        }
-  {CTRL_Handle       ctrl_entity      CtrlEntity    }
+  {D_Handle          machine          Machine       }
+  {D_Handle          module           Module        }
+  {D_Handle          process          Process       }
+  {D_Handle          thread           Thread        }
+  {D_Handle          ctrl_entity      CtrlEntity    }
   
   // rjf: cfgs
   {CFG_ID            window           Window        }
@@ -788,7 +788,7 @@ RD_RegTable:
   {C_Key             text_key         TextKey       }
   {TXT_LangKind      lang_kind        LangKind      }
   {D_LineList        lines            Lines         }
-  {DI_Key           dbgi_key         DbgiKey       }
+  {DI_Key            dbgi_key         DbgiKey       }
   {U64               vaddr            Vaddr         }
   {U64               voff             Voff          }
   {Rng1U64           vaddr_range      VaddrRange    }
@@ -1163,7 +1163,7 @@ RD_CmdTable:    //               |        |              |                |     
   `RD_RegSlot slot`;
   `String8 expr`;
   `String8 view_name`;
-  `CTRL_EntityKind ctrl_entity_kind`;
+  `D_EntityKind ctrl_entity_kind`;
 }
 
 @struct RD_CmdKindInfo:
@@ -1180,9 +1180,9 @@ RD_CmdTable:    //               |        |              |                |     
 {
   `{0}`,
   @expand(D_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis))|(RD_CmdKindFlag_ListInTextPt*$(a.text_pt_vis))|(RD_CmdKindFlag_ListInTextRng*$(a.text_rng_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis))|(RD_CmdKindFlag_ListInTextPt*$(a.text_pt_vis))|(RD_CmdKindFlag_ListInTextRng*$(a.text_rng_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), D_EntityKind_$(a.q_ctrl_ent_kind)}}```;
   @expand(RD_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis))|(RD_CmdKindFlag_ListInTextPt*$(a.text_pt_vis))|(RD_CmdKindFlag_ListInTextRng*$(a.text_rng_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis))|(RD_CmdKindFlag_ListInTextPt*$(a.text_pt_vis))|(RD_CmdKindFlag_ListInTextRng*$(a.text_rng_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), D_EntityKind_$(a.q_ctrl_ent_kind)}}```;
   @expand(RD_WatchTabFastPathTable, a)
     ```{ str8_lit_comp("$(a.name_lower)"), str8_lit_comp("Opens a $(a.display_name) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs|RD_CmdKindFlag_ListInTab}```;
   @expand(RD_ViewTabFastPathTable, a)

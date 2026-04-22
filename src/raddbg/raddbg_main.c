@@ -437,7 +437,7 @@ ipc_signaler_thread__entry_point(void *p)
 ////////////////////////////////
 //~ rjf: Ctrl -> Main Thread Wakeup Hook
 
-internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
+internal D_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
 {
   os_send_wakeup_event();
 }

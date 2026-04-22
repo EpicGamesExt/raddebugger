@@ -35,18 +35,18 @@ d_init(void)
       }
     }
     d_ctrl_state->thread_reg_cache.slots_count = 1024;
-    d_ctrl_state->thread_reg_cache.slots = push_array(arena, CTRL_ThreadRegCacheSlot, d_ctrl_state->thread_reg_cache.slots_count);
+    d_ctrl_state->thread_reg_cache.slots = push_array(arena, D_ThreadRegCacheSlot, d_ctrl_state->thread_reg_cache.slots_count);
     d_ctrl_state->thread_reg_cache.stripes_count = os_get_system_info()->logical_processor_count;
-    d_ctrl_state->thread_reg_cache.stripes = push_array(arena, CTRL_ThreadRegCacheStripe, d_ctrl_state->thread_reg_cache.stripes_count);
+    d_ctrl_state->thread_reg_cache.stripes = push_array(arena, D_ThreadRegCacheStripe, d_ctrl_state->thread_reg_cache.stripes_count);
     for(U64 idx = 0; idx < d_ctrl_state->thread_reg_cache.stripes_count; idx += 1)
     {
       d_ctrl_state->thread_reg_cache.stripes[idx].arena = arena_alloc();
       d_ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = rw_mutex_alloc();
     }
     d_ctrl_state->module_image_info_cache.slots_count = 1024;
-    d_ctrl_state->module_image_info_cache.slots = push_array(arena, CTRL_ModuleImageInfoCacheSlot, d_ctrl_state->module_image_info_cache.slots_count);
+    d_ctrl_state->module_image_info_cache.slots = push_array(arena, D_ModuleImageInfoCacheSlot, d_ctrl_state->module_image_info_cache.slots_count);
     d_ctrl_state->module_image_info_cache.stripes_count = os_get_system_info()->logical_processor_count;
-    d_ctrl_state->module_image_info_cache.stripes = push_array(arena, CTRL_ModuleImageInfoCacheStripe, d_ctrl_state->module_image_info_cache.stripes_count);
+    d_ctrl_state->module_image_info_cache.stripes = push_array(arena, D_ModuleImageInfoCacheStripe, d_ctrl_state->module_image_info_cache.stripes_count);
     for(U64 idx = 0; idx < d_ctrl_state->module_image_info_cache.stripes_count; idx += 1)
     {
       d_ctrl_state->module_image_info_cache.stripes[idx].arena = arena_alloc();
@@ -77,7 +77,7 @@ d_init(void)
     d_ctrl_state->dmn_event_arena = arena_alloc();
     d_ctrl_state->user_entry_point_arena = arena_alloc();
     d_ctrl_state->dbg_dir_arena = arena_alloc();
-    for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
+    for(D_ExceptionCodeKind k = (D_ExceptionCodeKind)0; k < D_ExceptionCodeKind_COUNT; k = (D_ExceptionCodeKind)(k+1))
     {
       if(ctrl_exception_code_kind_default_enable_table[k])
       {

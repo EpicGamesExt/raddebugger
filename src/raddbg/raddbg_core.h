@@ -10,7 +10,7 @@
 typedef U64 RD_EvalSpaceKind;
 enum
 {
-  RD_EvalSpaceKind_MetaQuery = CTRL_EvalSpaceKind_FirstUserDefined,
+  RD_EvalSpaceKind_MetaQuery = D_EvalSpaceKind_FirstUserDefined,
   RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaCmd,
   RD_EvalSpaceKind_MetaTheme,
@@ -638,8 +638,8 @@ internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 
 ////////////////////////////////
 //~ rjf: Control Entity Info Extraction
 
-internal Vec4F32 rd_color_from_ctrl_entity(CTRL_Entity *entity);
-internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
+internal Vec4F32 rd_color_from_ctrl_entity(D_Entity *entity);
+internal String8 rd_name_from_ctrl_entity(Arena *arena, D_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
@@ -649,8 +649,8 @@ internal CFG_Node *rd_cfg_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_cfg(CFG_Node *cfg);
 
 //- rjf: ctrl entity <-> eval space
-internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
-internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
+internal D_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
+internal E_Space rd_eval_space_from_ctrl_entity(D_Entity *entity, E_SpaceKind kind);
 
 //- rjf: command name <-> eval space
 internal String8 rd_cmd_name_from_eval(E_Eval eval);
@@ -766,7 +766,7 @@ internal FNT_RasterFlags rd_raster_flags_from_slot(RD_FontSlot slot);
 //~ rjf: Process Control Info Stringification
 
 internal String8 rd_string_from_exception_code(U32 code);
-internal DR_FStrList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event);
+internal DR_FStrList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, D_Event *event);
 
 ////////////////////////////////
 //~ rjf: Vocab Info Lookups

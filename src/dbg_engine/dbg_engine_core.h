@@ -7,40 +7,40 @@
 ////////////////////////////////
 //~ rjf: ID Types
 
-typedef U64 CTRL_MsgID;
-typedef U64 CTRL_MachineID;
+typedef U64 D_MsgID;
+typedef U64 D_MachineID;
 
-#define CTRL_MachineID_Local (1)
+#define D_MachineID_Local (1)
 
 ////////////////////////////////
 //~ rjf: Entity Handle Types
 
-typedef struct CTRL_Handle CTRL_Handle;
-struct CTRL_Handle
+typedef struct D_Handle D_Handle;
+struct D_Handle
 {
-  CTRL_MachineID machine_id;
+  D_MachineID machine_id;
   DMN_Handle dmn_handle;
 };
 
-typedef struct CTRL_HandleNode CTRL_HandleNode;
-struct CTRL_HandleNode
+typedef struct D_HandleNode D_HandleNode;
+struct D_HandleNode
 {
-  CTRL_HandleNode *next;
-  CTRL_Handle v;
+  D_HandleNode *next;
+  D_Handle v;
 };
 
-typedef struct CTRL_HandleList CTRL_HandleList;
-struct CTRL_HandleList
+typedef struct D_HandleList D_HandleList;
+struct D_HandleList
 {
-  CTRL_HandleNode *first;
-  CTRL_HandleNode *last;
+  D_HandleNode *first;
+  D_HandleNode *last;
   U64 count;
 };
 
-typedef struct CTRL_HandleArray CTRL_HandleArray;
-struct CTRL_HandleArray
+typedef struct D_HandleArray D_HandleArray;
+struct D_HandleArray
 {
-  CTRL_Handle *v;
+  D_Handle *v;
   U64 count;
 };
 
@@ -52,12 +52,12 @@ struct CTRL_HandleArray
 ////////////////////////////////
 //~ rjf: User Breakpoint Types
 
-typedef U32 CTRL_UserBreakpointFlags;
+typedef U32 D_BreakpointFlags;
 enum
 {
-  CTRL_UserBreakpointFlag_BreakOnWrite   = (1<<0),
-  CTRL_UserBreakpointFlag_BreakOnRead    = (1<<1),
-  CTRL_UserBreakpointFlag_BreakOnExecute = (1<<2),
+  D_BreakpointFlag_BreakOnWrite   = (1<<0),
+  D_BreakpointFlag_BreakOnRead    = (1<<1),
+  D_BreakpointFlag_BreakOnExecute = (1<<2),
 };
 
 typedef enum CTRL_UserBreakpointKind
@@ -73,7 +73,7 @@ typedef struct CTRL_UserBreakpoint CTRL_UserBreakpoint;
 struct CTRL_UserBreakpoint
 {
   CTRL_UserBreakpointKind kind;
-  CTRL_UserBreakpointFlags flags;
+  D_BreakpointFlags flags;
   U64 id;
   String8 string;
   TxtPt pt;
@@ -99,86 +99,86 @@ struct CTRL_UserBreakpointList
 ////////////////////////////////
 //~ Dynamic Linker Types
 
-typedef U32 CTRL_TlsModel;
+typedef U32 D_TlsModel;
 enum
 {
-  CTRL_TlsModel_Null,
-  CTRL_TlsModel_WinodwsNt,
-  CTRL_TlsModel_Gnu
+  D_TlsModel_Null,
+  D_TlsModel_WinodwsNt,
+  D_TlsModel_Gnu
 };
 
 ////////////////////////////////
 //~ rjf: Entity Types
 
-typedef struct CTRL_Entity CTRL_Entity;
-struct CTRL_Entity
+typedef struct D_Entity D_Entity;
+struct D_Entity
 {
-  CTRL_Entity *first;
-  CTRL_Entity *last;
-  CTRL_Entity *next;
-  CTRL_Entity *prev;
-  CTRL_Entity *parent;
-  CTRL_EntityKind kind;
+  D_Entity *first;
+  D_Entity *last;
+  D_Entity *next;
+  D_Entity *prev;
+  D_Entity *parent;
+  D_EntityKind kind;
   Arch arch;
   B32 is_frozen;
   B32 is_soloed;
   U32 rgba;
-  CTRL_Handle handle;
+  D_Handle handle;
   U64 id;
   Rng1U64 vaddr_range;
   U64 stack_base;
   U64 timestamp;
-  CTRL_UserBreakpointFlags bp_flags;
+  D_BreakpointFlags bp_flags;
   String8 string;
-  CTRL_TlsModel tls_model;
+  D_TlsModel tls_model;
   U64 tls_index;
   U64 tls_offset;
   OperatingSystem target_os;
 };
 
-typedef struct CTRL_EntityNode CTRL_EntityNode;
-struct CTRL_EntityNode
+typedef struct D_EntityNode D_EntityNode;
+struct D_EntityNode
 {
-  CTRL_EntityNode *next;
-  CTRL_Entity *v;
+  D_EntityNode *next;
+  D_Entity *v;
 };
 
-typedef struct CTRL_EntityList CTRL_EntityList;
-struct CTRL_EntityList
+typedef struct D_EntityList D_EntityList;
+struct D_EntityList
 {
-  CTRL_EntityNode *first;
-  CTRL_EntityNode *last;
+  D_EntityNode *first;
+  D_EntityNode *last;
   U64 count;
 };
 
-typedef struct CTRL_EntityArray CTRL_EntityArray;
-struct CTRL_EntityArray
+typedef struct D_EntityArray D_EntityArray;
+struct D_EntityArray
 {
-  CTRL_Entity **v;
+  D_Entity **v;
   U64 count;
 };
 
-typedef struct CTRL_EntityRec CTRL_EntityRec;
-struct CTRL_EntityRec
+typedef struct D_EntityRec D_EntityRec;
+struct D_EntityRec
 {
-  CTRL_Entity *next;
+  D_Entity *next;
   S32 push_count;
   S64 pop_count;
 };
 
-typedef struct CTRL_EntityHashNode CTRL_EntityHashNode;
-struct CTRL_EntityHashNode
+typedef struct D_EntityHashNode D_EntityHashNode;
+struct D_EntityHashNode
 {
-  CTRL_EntityHashNode *next;
-  CTRL_EntityHashNode *prev;
-  CTRL_Entity *entity;
+  D_EntityHashNode *next;
+  D_EntityHashNode *prev;
+  D_Entity *entity;
 };
 
-typedef struct CTRL_EntityHashSlot CTRL_EntityHashSlot;
-struct CTRL_EntityHashSlot
+typedef struct D_EntityHashSlot D_EntityHashSlot;
+struct D_EntityHashSlot
 {
-  CTRL_EntityHashNode *first;
-  CTRL_EntityHashNode *last;
+  D_EntityHashNode *first;
+  D_EntityHashNode *last;
 };
 
 typedef struct CTRL_EntityStringChunkNode CTRL_EntityStringChunkNode;
@@ -200,33 +200,33 @@ read_only global U64 ctrl_entity_string_bucket_chunk_sizes[] =
   0xffffffffffffffffull,
 };
 
-typedef struct CTRL_EntityCtx CTRL_EntityCtx;
-struct CTRL_EntityCtx
+typedef struct D_EntityCtx D_EntityCtx;
+struct D_EntityCtx
 {
-  CTRL_Entity *root;
+  D_Entity *root;
   U64 hash_slots_count;
-  CTRL_EntityHashSlot *hash_slots;
-  U64 entity_kind_counts[CTRL_EntityKind_COUNT];
-  U64 entity_kind_alloc_gens[CTRL_EntityKind_COUNT];
+  D_EntityHashSlot *hash_slots;
+  U64 entity_kind_counts[D_EntityKind_COUNT];
+  U64 entity_kind_alloc_gens[D_EntityKind_COUNT];
 };
 
-typedef struct CTRL_EntityCtxRWStore CTRL_EntityCtxRWStore;
-struct CTRL_EntityCtxRWStore
+typedef struct D_EntityCtxRWStore D_EntityCtxRWStore;
+struct D_EntityCtxRWStore
 {
   Arena *arena;
-  CTRL_EntityCtx ctx;
-  CTRL_Entity *free;
-  CTRL_EntityHashNode *hash_node_free;
+  D_EntityCtx ctx;
+  D_Entity *free;
+  D_EntityHashNode *hash_node_free;
   CTRL_EntityStringChunkNode *free_string_chunks[ArrayCount(ctrl_entity_string_bucket_chunk_sizes)];
 };
 
-typedef struct CTRL_EntityCtxLookupAccel CTRL_EntityCtxLookupAccel;
-struct CTRL_EntityCtxLookupAccel
+typedef struct D_EntityCtxLookupAccel D_EntityCtxLookupAccel;
+struct D_EntityCtxLookupAccel
 {
   Arena *arena;
-  Arena *entity_kind_arrays_arenas[CTRL_EntityKind_COUNT];
-  CTRL_EntityArray entity_kind_arrays[CTRL_EntityKind_COUNT];
-  U64 entity_kind_arrays_gens[CTRL_EntityKind_COUNT];
+  Arena *entity_kind_arrays_arenas[D_EntityKind_COUNT];
+  D_EntityArray entity_kind_arrays[D_EntityKind_COUNT];
+  U64 entity_kind_arrays_gens[D_EntityKind_COUNT];
 };
 
 ////////////////////////////////
@@ -251,14 +251,6 @@ struct D_TargetArray
 {
   D_Target *v;
   U64 count;
-};
-
-typedef U32 D_BreakpointFlags;
-enum
-{
-  D_BreakpointFlag_BreakOnWrite   = (1<<0),
-  D_BreakpointFlag_BreakOnRead    = (1<<1),
-  D_BreakpointFlag_BreakOnExecute = (1<<2),
 };
 
 typedef struct D_Breakpoint D_Breakpoint;
@@ -295,92 +287,42 @@ struct D_PathMapArray
 };
 
 ////////////////////////////////
-//~ rjf: Tick Output Types
-
-typedef enum D_EventKind
-{
-  D_EventKind_Null,
-  D_EventKind_ModuleLoad,
-  D_EventKind_ProcessEnd,
-  D_EventKind_Stop,
-  D_EventKind_COUNT
-}
-D_EventKind;
-
-typedef enum D_EventCause
-{
-  D_EventCause_Null,
-  D_EventCause_UserBreakpoint,
-  D_EventCause_Halt,
-  D_EventCause_SoftHalt,
-  D_EventCause_COUNT
-}
-D_EventCause;
-
-typedef struct D_Event D_Event;
-struct D_Event
-{
-  D_EventKind kind;
-  D_EventCause cause;
-  CTRL_Handle module;
-  CTRL_Handle thread;
-  U64 vaddr;
-  U64 code;
-  U64 id;
-};
-
-typedef struct D_EventNode D_EventNode;
-struct D_EventNode
-{
-  D_EventNode *next;
-  D_Event v;
-};
-
-typedef struct D_EventList D_EventList;
-struct D_EventList
-{
-  D_EventNode *first;
-  D_EventNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Trap Types
 
-typedef U32 CTRL_TrapFlags;
+typedef U32 D_TrapFlags;
 enum
 {
-  CTRL_TrapFlag_IgnoreStackPointerCheck = (1<<0),
-  CTRL_TrapFlag_SingleStepAfterHit      = (1<<1),
-  CTRL_TrapFlag_SaveStackPointer        = (1<<2),
-  CTRL_TrapFlag_BeginSpoofMode          = (1<<3),
-  CTRL_TrapFlag_EndStepping             = (1<<4),
+  D_TrapFlag_IgnoreStackPointerCheck = (1<<0),
+  D_TrapFlag_SingleStepAfterHit      = (1<<1),
+  D_TrapFlag_SaveStackPointer        = (1<<2),
+  D_TrapFlag_BeginSpoofMode          = (1<<3),
+  D_TrapFlag_EndStepping             = (1<<4),
 };
 
-typedef struct CTRL_Trap CTRL_Trap;
-struct CTRL_Trap
+typedef struct D_Trap D_Trap;
+struct D_Trap
 {
-  CTRL_TrapFlags flags;
+  D_TrapFlags flags;
   U64 vaddr;
 };
 
-typedef struct CTRL_TrapNode CTRL_TrapNode;
-struct CTRL_TrapNode
+typedef struct D_TrapNode D_TrapNode;
+struct D_TrapNode
 {
-  CTRL_TrapNode *next;
-  CTRL_Trap v;
+  D_TrapNode *next;
+  D_Trap v;
 };
 
-typedef struct CTRL_TrapList CTRL_TrapList;
-struct CTRL_TrapList
+typedef struct D_TrapList D_TrapList;
+struct D_TrapList
 {
-  CTRL_TrapNode *first;
-  CTRL_TrapNode *last;
+  D_TrapNode *first;
+  D_TrapNode *last;
   U64 count;
 };
 
-typedef struct CTRL_Spoof CTRL_Spoof;
-struct CTRL_Spoof
+typedef struct D_Spoof D_Spoof;
+struct D_Spoof
 {
   DMN_Handle process;
   DMN_Handle thread;
@@ -394,7 +336,7 @@ struct CTRL_Spoof
 typedef struct D_TrapNet D_TrapNet;
 struct D_TrapNet
 {
-  CTRL_TrapList traps;
+  D_TrapList traps;
   B32 good_line_info;
   B32 good_read;
 };

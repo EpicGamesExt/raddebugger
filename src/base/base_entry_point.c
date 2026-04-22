@@ -97,7 +97,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   U64 lane_broadcast_val = 0;
   {
     U64 num_main_threads = 1;
-#if defined(CTRL_CORE_H)
+#if defined(DBG_ENGINE_CORE_H)
     num_main_threads += 1;
 #endif
     U64 num_async_threads = os_get_system_info()->logical_processor_count;

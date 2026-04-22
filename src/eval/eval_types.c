@@ -2599,7 +2599,7 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
   
   //- rjf: unpack key
   // TODO(rjf): this needs to take any `E_Space`, once eval has been upgraded.
-  CTRL_Handle process = {0};
+  D_Handle process = {0};
   U64 base_off = 0;
   U64 member_element_off = 0;
   U64 member_size = 0;
@@ -2824,7 +2824,7 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
 #pragma pack(push, 1)
     struct
     {
-      CTRL_Handle process;
+      D_Handle process;
       U64 base_off;
       U64 member_element_off;
       U64 member_size;

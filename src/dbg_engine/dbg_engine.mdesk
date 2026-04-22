@@ -93,7 +93,7 @@ D_DevToggleTable:
 //~ rjf: Entity Kinds
 
 @table(name  code_name  display_string)
-CTRL_EntityKindTable:
+D_EntityKindTable:
 {
   {Root                      root                      "Root"                      }
   {Machine                   machine                   "Machine"                   }
@@ -108,30 +108,30 @@ CTRL_EntityKindTable:
   {AddressRangeAnnotation    address_range_annotation  "Address Range Annotation"  }
 }
 
-@enum CTRL_EntityKind:
+@enum D_EntityKind:
 {
   Null,
-  @expand(CTRL_EntityKindTable a) `$(a.name)`,
+  @expand(D_EntityKindTable a) `$(a.name)`,
   COUNT,
 }
 
 @data(String8) ctrl_entity_kind_code_name_table:
 {
   `{0}`,
-  @expand(CTRL_EntityKindTable a) `str8_lit_comp("$(a.code_name)")`
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.code_name)")`
 }
 
 @data(String8) ctrl_entity_kind_display_string_table:
 {
   `{0}`,
-  @expand(CTRL_EntityKindTable a) `str8_lit_comp("$(a.display_name)")`
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.display_name)")`
 }
 
 ////////////////////////////////
 //~ rjf: Exception Codes
 
 @table(name lower_name code default display_string)
-CTRL_ExceptionCodeKindTable:
+D_ExceptionCodeKindTable:
 {
   {Win32CtrlC                          win32_ctrl_c                                0x40010005  1  "(Win32) Control-C"                                              }
   {Win32CtrlBreak                      win32_ctrl_break                            0x40010008  1  "(Win32) Control-Break"                                          }
@@ -172,42 +172,42 @@ CTRL_ExceptionCodeKindTable:
   {Win32DirectXDebugLayer              win32_directx_debug_layer                   0x0000087a  1  "(Win32) DirectX Debug Layer"                                    }
 }
 
-@enum CTRL_ExceptionCodeKind:
+@enum D_ExceptionCodeKind:
 {
   Null,
-  @expand(CTRL_ExceptionCodeKindTable a) `$(a.name)`,
+  @expand(D_ExceptionCodeKindTable a) `$(a.name)`,
   COUNT,
 }
 
 @data(U32) ctrl_exception_code_kind_code_table:
 {
   `0`;
-  @expand(CTRL_ExceptionCodeKindTable a) `$(a.code)`;
+  @expand(D_ExceptionCodeKindTable a) `$(a.code)`;
 }
 
 @data(String8) ctrl_exception_code_kind_display_string_table:
 {
   `{0}`;
-  @expand(CTRL_ExceptionCodeKindTable a) `str8_lit_comp("$(a.display_string)")`;
+  @expand(D_ExceptionCodeKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
 @data(String8) ctrl_exception_code_kind_lowercase_code_string_table:
 {
   `{0}`;
-  @expand(CTRL_ExceptionCodeKindTable a) `str8_lit_comp("$(a.lower_name)")`;
+  @expand(D_ExceptionCodeKindTable a) `str8_lit_comp("$(a.lower_name)")`;
 }
 
 @data(B8) ctrl_exception_code_kind_default_enable_table:
 {
   `0`;
-  @expand(CTRL_ExceptionCodeKindTable a) `$(a.default)`;
+  @expand(D_ExceptionCodeKindTable a) `$(a.default)`;
 }
 
 ////////////////////////////////
 //~ rjf: Exception Sub-Codes
 
 @table(name, value)
-CTRL_ExceptionSubCodeKindTable:
+DL_ExceptionSubCodeKindTable:
 {
   { W32_FAST_FAIL_LEGACY_GS_VIOLATION               0 }
   { W32_FAST_FAIL_VTGUARD_CHECK_FAILURE             1 }

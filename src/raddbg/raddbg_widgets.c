@@ -102,13 +102,13 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
     //- rjf: [breakpoints] push hit marker
     if(str8_match(cfg->string, str8_lit("breakpoint"), 0))
     {
-      CTRL_Event stop_event = d_ctrl_last_stop_event();
-      if(stop_event.cause == CTRL_EventCause_UserBreakpoint)
+      D_Event stop_event = d_ctrl_last_stop_event();
+      if(stop_event.cause == D_EventCause_UserBreakpoint)
       {
         CFG_Node *bp = cfg_node_from_id(stop_event.u64_code);
         if(bp == cfg)
         {
-          CTRL_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
+          D_Entity *thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
           Vec4F32 thread_color = rd_color_from_ctrl_entity(thread);
           if(thread_color.w == 0)
           {
@@ -445,7 +445,7 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
 }
 
 internal DR_FStrList
-rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras)
+rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extras)
 {
   DR_FStrList result = {0};
   
@@ -467,10 +467,10 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   switch(entity->kind)
   {
     default:{}break;
-    case CTRL_EntityKind_Machine: {icon_kind = RD_IconKind_Machine;}break;
-    case CTRL_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
-    case CTRL_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
-    case CTRL_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
+    case D_EntityKind_Machine: {icon_kind = RD_IconKind_Machine;}break;
+    case D_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
+    case D_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
+    case D_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
   }
   
   //- rjf: set up drawing params
@@ -484,9 +484,9 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   }
   
   //- rjf: push frozen icon, if frozen
-  if((entity->kind == CTRL_EntityKind_Machine ||
-      entity->kind == CTRL_EntityKind_Process ||
-      entity->kind == CTRL_EntityKind_Thread) &&
+  if((entity->kind == D_EntityKind_Machine ||
+      entity->kind == D_EntityKind_Process ||
+      entity->kind == D_EntityKind_Thread) &&
      ctrl_entity_tree_is_frozen(entity))
     UI_TagF("bad")
   {
@@ -495,7 +495,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   }
   
   //- rjf: push selected icon, if selected thread
-  if(entity->kind == CTRL_EntityKind_Thread)
+  if(entity->kind == D_EntityKind_Thread)
   {
     B32 is_selected = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
     if(is_selected)
@@ -506,13 +506,13 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   }
   
   //- rjf: push containing process prefix
-  if(entity->kind == CTRL_EntityKind_Thread ||
-     entity->kind == CTRL_EntityKind_Module)
+  if(entity->kind == D_EntityKind_Thread ||
+     entity->kind == D_EntityKind_Module)
   {
-    CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
+    D_EntityArray processes = ctrl_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
     if(processes.count > 1)
     {
-      CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+      D_Entity *process = ctrl_entity_ancestor_from_kind(entity, D_EntityKind_Process);
       String8 process_name = rd_name_from_ctrl_entity(arena, process);
       Vec4F32 process_color = rd_color_from_ctrl_entity(process);
       if(process_color.w == 0)
@@ -536,30 +536,30 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
                     .color        = color);
   
   //- rjf: push PID
-  if(entity->kind == CTRL_EntityKind_Process)
+  if(entity->kind == D_EntityKind_Process)
   {
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
     dr_fstrs_push_new(arena, &result, &params, push_str8f(arena, " (PID: %I64u)", entity->id), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = secondary_color, .size = ui_top_font_size()*0.85f);
   }
   
   //- rjf: threads get callstack extras
-  if(entity->kind == CTRL_EntityKind_Thread && include_extras)
+  if(entity->kind == D_EntityKind_Thread && include_extras)
   {
     Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
     Access *access = access_open();
-    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+    D_Entity *process = ctrl_entity_ancestor_from_kind(entity, D_EntityKind_Process);
     Arch arch = entity->arch;
     B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
-    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+    D_CallStack call_stack = ctrl_call_stack_from_thread(access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
     B32 did_first_known = 0;
     for(U64 idx = 0, limit = 10;
         idx < call_stack.frames_count && idx < limit;
         idx += 1)
     {
-      CTRL_CallStackFrame *f = &call_stack.frames[call_stack.frames_count - 1 - idx];
+      D_CallStackFrame *f = &call_stack.frames[call_stack.frames_count - 1 - idx];
       U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
-      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+      D_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
       String8 name = {0};
       {
@@ -594,7 +594,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   }
   
   //- rjf: modules get debug info status extras
-  if(entity->kind == CTRL_EntityKind_Module && include_extras)
+  if(entity->kind == D_EntityKind_Module && include_extras)
   {
     Access *access = access_open();
     DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
@@ -1254,12 +1254,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   RD_CodeSliceSignal result = {0};
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  CTRL_Entity *selected_thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
-  CTRL_Entity *selected_thread_process = ctrl_entity_ancestor_from_kind(selected_thread, CTRL_EntityKind_Process);
+  D_Entity *selected_thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+  D_Entity *selected_thread_process = ctrl_entity_ancestor_from_kind(selected_thread, D_EntityKind_Process);
   U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
-  CTRL_Entity *selected_thread_module = ctrl_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
-  CTRL_Event stop_event = d_ctrl_last_stop_event();
-  CTRL_Entity *stopper_thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
+  D_Entity *selected_thread_module = ctrl_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
+  D_Event stop_event = d_ctrl_last_stop_event();
+  D_Entity *stopper_thread = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
   B32 ctrlified = (os_get_modifiers() & OS_Modifier_Ctrl);
   Vec4F32 code_line_bgs[] =
@@ -1314,7 +1314,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //
   B32 drop_can_hit_lines = 0;
   CFG_Node *drop_cfg = &cfg_nil_node;
-  CTRL_Entity *drop_thread = &ctrl_entity_nil;
+  D_Entity *drop_thread = &d_entity_nil;
   String8 drop_expr = {0};
   Vec4F32 drop_color = pop_color;
   UI_Key drop_site_key = ui_key_from_stringf(top_container_box->key, "drop_site");
@@ -1368,10 +1368,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num < params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        CTRL_EntityList threads = params->line_ips[line_idx];
-        for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
+        D_EntityList threads = params->line_ips[line_idx];
+        for(D_EntityNode *n = threads.first; n != 0; n = n->next)
         {
-          if(n->v == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
+          if(n->v == stopper_thread && (stop_event.cause == D_EventCause_InterruptedByTrap || stop_event.cause == D_EventCause_InterruptedByException))
           {
             line_bg_colors[line_idx] = ui_color_from_name(str8_lit("background"));
           }
@@ -1404,24 +1404,24 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        CTRL_EntityList line_ips  = params->line_ips[line_idx];
+        D_EntityList line_ips  = params->line_ips[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
-          for(CTRL_EntityNode *n = line_ips.first; n != 0; n = n->next)
+          for(D_EntityNode *n = line_ips.first; n != 0; n = n->next)
           {
             // rjf: unpack thread
-            CTRL_Entity *thread = n->v;
+            D_Entity *thread = n->v;
             if(thread != selected_thread)
             {
               continue;
             }
             U64 unwind_count = (thread == selected_thread) ? rd_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
+            D_Entity *process = ctrl_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            D_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
@@ -1437,9 +1437,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 color = ui_color_from_name(str8_lit("thread_unwound"));
               }
               else if(thread == stopper_thread &&
-                      (stop_event.cause == CTRL_EventCause_InterruptedByHalt ||
-                       stop_event.cause == CTRL_EventCause_InterruptedByTrap ||
-                       stop_event.cause == CTRL_EventCause_InterruptedByException))
+                      (stop_event.cause == D_EventCause_InterruptedByHalt ||
+                       stop_event.cause == D_EventCause_InterruptedByTrap ||
+                       stop_event.cause == D_EventCause_InterruptedByException))
               {
                 color = ui_color_from_name(str8_lit("thread_error"));
               }
@@ -1557,7 +1557,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        CTRL_EntityList line_ips = params->line_ips[line_idx];
+        D_EntityList line_ips = params->line_ips[line_idx];
         CFG_NodePtrList line_bps = params->line_bps[line_idx];
         CFG_NodePtrList line_pins = params->line_pins[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -1566,18 +1566,18 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
-          for(CTRL_EntityNode *n = line_ips.first; n != 0; n = n->next)
+          for(D_EntityNode *n = line_ips.first; n != 0; n = n->next)
           {
             // rjf: unpack thread
-            CTRL_Entity *thread = n->v;
+            D_Entity *thread = n->v;
             if(thread == selected_thread)
             {
               continue;
             }
             U64 unwind_count = (thread == selected_thread) ? rd_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
+            D_Entity *process = ctrl_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            D_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
@@ -1593,9 +1593,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 color = ui_color_from_name(str8_lit("thread_unwound"));
               }
               else if(thread == stopper_thread &&
-                      (stop_event.cause == CTRL_EventCause_InterruptedByHalt ||
-                       stop_event.cause == CTRL_EventCause_InterruptedByTrap ||
-                       stop_event.cause == CTRL_EventCause_InterruptedByException))
+                      (stop_event.cause == D_EventCause_InterruptedByHalt ||
+                       stop_event.cause == D_EventCause_InterruptedByTrap ||
+                       stop_event.cause == D_EventCause_InterruptedByException))
               {
                 color = ui_color_from_name(str8_lit("thread_error"));
               }
@@ -2260,21 +2260,21 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);
       }
-      if(drop_thread != &ctrl_entity_nil)
+      if(drop_thread != &d_entity_nil)
       {
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;
         U64 line_vaddr = params->line_vaddrs[line_idx];
-        CTRL_Entity *thread = drop_thread;
+        D_Entity *thread = drop_thread;
         U64 new_rip_vaddr = line_vaddr;
         if(params->line_vaddrs[line_idx] == 0)
         {
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
-            CTRL_Entity *module = ctrl_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
-            if(module != &ctrl_entity_nil)
+            D_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
+            D_Entity *module = ctrl_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
+            if(module != &d_entity_nil)
             {
               new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
               break;
@@ -2486,13 +2486,13 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num < params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
-      CTRL_EntityList threads = params->line_ips[line_idx];
-      for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
+      D_EntityList threads = params->line_ips[line_idx];
+      for(D_EntityNode *n = threads.first; n != 0; n = n->next)
       {
-        CTRL_Entity *thread = n->v;
+        D_Entity *thread = n->v;
         if(thread == stopper_thread &&
-           (stop_event.cause == CTRL_EventCause_InterruptedByException ||
-            stop_event.cause == CTRL_EventCause_InterruptedByTrap))
+           (stop_event.cause == D_EventCause_InterruptedByException ||
+            stop_event.cause == D_EventCause_InterruptedByTrap))
         {
           DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
           UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_text_dim(10, 1)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
@@ -2575,7 +2575,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   {
     E_Eval eval = e_eval_from_string(mouse_expr);
     B32 eval_implicit_hover = (eval.irtree.mode != E_Mode_Null &&
-                               eval.space.kind == CTRL_EvalSpaceKind_Entity);
+                               eval.space.kind == D_EvalSpaceKind_Entity);
     if(eval.msgs.max_kind == E_MsgKind_Null && (eval_implicit_hover || mouse_expr_is_explicit))
     {
       U64 line_vaddr = 0;
@@ -2659,7 +2659,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     Rng1U64 hover_voff_range = hover_regs->voff_range;
     if(hover_voff_range.min == 0 && hover_voff_range.max == 0)
     {
-      CTRL_Entity *module = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, hover_regs->module);
+      D_Entity *module = ctrl_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, hover_regs->module);
       hover_voff_range = ctrl_voff_range_from_vaddr_range(module, hover_regs->vaddr_range);
     }
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
