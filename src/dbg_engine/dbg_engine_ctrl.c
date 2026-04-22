@@ -268,24 +268,25 @@ ctrl_trap_list_copy(Arena *arena, D_TrapList *src)
 //~ rjf: User Breakpoint Type Functions
 
 internal void
-ctrl_user_breakpoint_list_push(Arena *arena, CTRL_UserBreakpointList *list, CTRL_UserBreakpoint *bp)
+ctrl_user_breakpoint_list_push(Arena *arena, D_BreakpointList *list, D_Breakpoint *bp)
 {
-  CTRL_UserBreakpointNode *n = push_array(arena, CTRL_UserBreakpointNode, 1);
+  D_BreakpointNode *n = push_array(arena, D_BreakpointNode, 1);
   MemoryCopyStruct(&n->v, bp);
   SLLQueuePush(list->first, list->last, n);
   list->count += 1;
 }
 
-internal CTRL_UserBreakpointList
-ctrl_user_breakpoint_list_copy(Arena *arena, CTRL_UserBreakpointList *src)
+internal D_BreakpointList
+ctrl_user_breakpoint_list_copy(Arena *arena, D_BreakpointList *src)
 {
-  CTRL_UserBreakpointList dst = {0};
-  for(CTRL_UserBreakpointNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+  D_BreakpointList dst = {0};
+  for(D_BreakpointNode *src_n = src->first; src_n != 0; src_n = src_n->next)
   {
-    CTRL_UserBreakpoint dst_bp = zero_struct;
+    D_Breakpoint dst_bp = zero_struct;
     MemoryCopyStruct(&dst_bp, &src_n->v);
-    dst_bp.string = push_str8_copy(arena, src_n->v.string);
-    dst_bp.condition = push_str8_copy(arena, src_n->v.condition);
+    dst_bp.file_path  = str8_copy(arena, src_n->v.file_path);
+    dst_bp.vaddr_expr = str8_copy(arena, src_n->v.vaddr_expr);
+    dst_bp.condition  = str8_copy(arena, src_n->v.condition);
     ctrl_user_breakpoint_list_push(arena, &dst, &dst_bp);
   }
   return dst;
@@ -425,18 +426,19 @@ ctrl_serialized_string_from_msg_list(Arena *arena, D_MsgList *msgs)
       
       // rjf: write user breakpoint list
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->user_bps.count);
-      for(CTRL_UserBreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
+      for(D_BreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
       {
-        CTRL_UserBreakpoint *bp = &n->v;
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->kind);
+        D_Breakpoint *bp = &n->v;
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->flags);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->id);
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->string.size);
-        str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->string.str, bp->string.size);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->file_path.size);
+        str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->file_path.str, bp->file_path.size);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->pt);
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->size);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->vaddr_expr.size);
+        str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->vaddr_expr.str, bp->vaddr_expr.size);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->condition.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->condition.str, bp->condition.size);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->size);
       }
     }
   }
@@ -547,21 +549,23 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
       read_off += str8_deserial_read_struct(string, read_off, &user_bp_count);
       for(U64 idx = 0; idx < user_bp_count; idx += 1)
       {
-        CTRL_UserBreakpointNode *n = push_array(arena, CTRL_UserBreakpointNode, 1);
+        D_BreakpointNode *n = push_array(arena, D_BreakpointNode, 1);
         SLLQueuePush(msg->user_bps.first, msg->user_bps.last, n);
         msg->user_bps.count += 1;
-        CTRL_UserBreakpoint *bp = &n->v;
-        read_off += str8_deserial_read_struct(string, read_off, &bp->kind);
+        D_Breakpoint *bp = &n->v;
         read_off += str8_deserial_read_struct(string, read_off, &bp->flags);
         read_off += str8_deserial_read_struct(string, read_off, &bp->id);
-        read_off += str8_deserial_read_struct(string, read_off, &bp->string.size);
-        bp->string.str = push_array_no_zero(arena, U8, bp->string.size);
-        read_off += str8_deserial_read(string, read_off, bp->string.str, bp->string.size, 1);
+        read_off += str8_deserial_read_struct(string, read_off, &bp->file_path.size);
+        bp->file_path.str = push_array_no_zero(arena, U8, bp->file_path.size);
+        read_off += str8_deserial_read(string, read_off, bp->file_path.str, bp->file_path.size, 1);
         read_off += str8_deserial_read_struct(string, read_off, &bp->pt);
-        read_off += str8_deserial_read_struct(string, read_off, &bp->size);
+        read_off += str8_deserial_read_struct(string, read_off, &bp->vaddr_expr.size);
+        bp->vaddr_expr.str = push_array_no_zero(arena, U8, bp->vaddr_expr.size);
+        read_off += str8_deserial_read(string, read_off, bp->vaddr_expr.str, bp->vaddr_expr.size, 1);
         read_off += str8_deserial_read_struct(string, read_off, &bp->condition.size);
         bp->condition.str = push_array_no_zero(arena, U8, bp->condition.size);
         read_off += str8_deserial_read(string, read_off, bp->condition.str, bp->condition.size, 1);
+        read_off += str8_deserial_read_struct(string, read_off, &bp->size);
       }
     }
   }
@@ -3383,13 +3387,13 @@ ctrl_thread__entry_point(void *p)
         //- rjf: gather all touched symbols by user breakpoints
         {
           Temp scratch = scratch_begin(0, 0);
-          for(CTRL_UserBreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
+          for(D_BreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
           {
-            if(n->v.kind != CTRL_UserBreakpointKind_Expression)
+            if(n->v.vaddr_expr.size == 0)
             {
               continue;
             }
-            E_Parse addr_parse = e_push_parse_from_string(scratch.arena, n->v.string);
+            E_Parse addr_parse = e_push_parse_from_string(scratch.arena, n->v.vaddr_expr);
             E_Parse cnd_parse = e_push_parse_from_string(scratch.arena, n->v.condition);
             E_Expr *exprs[] = {addr_parse.expr, cnd_parse.expr};
             for EachElement(idx, exprs)
@@ -3433,18 +3437,11 @@ ctrl_thread__entry_point(void *p)
           scratch_end(scratch);
         }
         
-        
-        
-        
-        
         //- rjf: gather all touched files by user breakpoints
-        for(CTRL_UserBreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
+        for(D_BreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
         {
-          if(n->v.kind != CTRL_UserBreakpointKind_FileNameAndLineColNumber)
-          {
-            continue;
-          }
-          str8_list_push(d_ctrl_state->ctrl_thread_msg_process_arena, &d_ctrl_state->msg_user_bp_touched_files, n->v.string);
+          if(n->v.file_path.size == 0) { continue; }
+          str8_list_push(d_ctrl_state->ctrl_thread_msg_process_arena, &d_ctrl_state->msg_user_bp_touched_files, n->v.file_path);
         }
         
         //- rjf: process message
@@ -3547,7 +3544,7 @@ ctrl_thread__entry_point(void *p)
 //- rjf: breakpoint resolution
 
 internal void
-ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, D_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
+ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, D_Handle module, D_BreakpointList *user_bps, DMN_TrapChunkList *traps_out)
 {
   if(user_bps->first == 0) { return; }
   ProfBeginFunction();
@@ -3559,78 +3556,74 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *eva
   DI_Key dbgi_key = ctrl_dbgi_key_from_module(module_entity);
   RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
   U64 base_vaddr = module_entity->vaddr_range.min;
-  for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
+  for(D_BreakpointNode *n = user_bps->first; n != 0; n = n->next)
   {
-    CTRL_UserBreakpoint *bp = &n->v;
-    switch(bp->kind)
+    D_Breakpoint *bp = &n->v;
+    
+    //- rjf: file:line-based breakpoints
+    if(bp->file_path.size != 0)
     {
-      default:{}break;
-      
-      //- rjf: file:line-based breakpoints
-      case CTRL_UserBreakpointKind_FileNameAndLineColNumber:
+      // rjf: unpack & normalize
+      TxtPt pt = bp->pt;
+      String8 filename = bp->file_path;
+      String8 filename_normalized = push_str8_copy(scratch.arena, filename);
+      for(U64 idx = 0; idx < filename_normalized.size; idx += 1)
       {
-        // rjf: unpack & normalize
-        TxtPt pt = bp->pt;
-        String8 filename = bp->string;
-        String8 filename_normalized = push_str8_copy(scratch.arena, filename);
-        for(U64 idx = 0; idx < filename_normalized.size; idx += 1)
+        filename_normalized.str[idx] = lower_from_char(filename_normalized.str[idx]);
+        filename_normalized.str[idx] = correct_slash_from_char(filename_normalized.str[idx]);
+      }
+      
+      // rjf: filename -> src_id
+      U32 src_id = 0;
+      {
+        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
+        if(mapptr != 0)
         {
-          filename_normalized.str[idx] = lower_from_char(filename_normalized.str[idx]);
-          filename_normalized.str[idx] = correct_slash_from_char(filename_normalized.str[idx]);
-        }
-        
-        // rjf: filename -> src_id
-        U32 src_id = 0;
-        {
-          RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
-          if(mapptr != 0)
+          RDI_ParsedNameMap map = {0};
+          rdi_parsed_from_name_map(rdi, mapptr, &map);
+          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, filename_normalized.str, filename_normalized.size);
+          if(node != 0)
           {
-            RDI_ParsedNameMap map = {0};
-            rdi_parsed_from_name_map(rdi, mapptr, &map);
-            RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, filename_normalized.str, filename_normalized.size);
-            if(node != 0)
+            U32 id_count = 0;
+            U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+            if(id_count > 0)
             {
-              U32 id_count = 0;
-              U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-              if(id_count > 0)
-              {
-                src_id = ids[0];
-              }
+              src_id = ids[0];
             }
           }
         }
-        
-        // rjf: src_id * pt -> push
-        if(src_id != 0)
-        {
-          RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
-          RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
-          RDI_ParsedSourceLineMap line_map = {0};
-          rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
-          U32 voff_count = 0;
-          U64 *voffs = rdi_line_voffs_from_num(&line_map, pt.line, &voff_count);
-          for(U32 i = 0; i < voff_count; i += 1)
-          {
-            U64 vaddr = voffs[i] + base_vaddr;
-            DMN_Trap trap = {process.dmn_handle, vaddr, (U64)bp};
-            dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
-          }
-        }
-      }break;
+      }
       
-      //- rjf: expression-based breakpoints
-      case CTRL_UserBreakpointKind_Expression:
+      // rjf: src_id * pt -> push
+      if(src_id != 0)
       {
-        String8 expr = bp->string;
-        E_Value value = e_value_from_string(expr);
-        if(value.u64 != 0 || bp->flags != 0)
+        RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+        RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
+        RDI_ParsedSourceLineMap line_map = {0};
+        rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
+        U32 voff_count = 0;
+        U64 *voffs = rdi_line_voffs_from_num(&line_map, pt.line, &voff_count);
+        for(U32 i = 0; i < voff_count; i += 1)
         {
-          DMN_Trap trap = {process.dmn_handle, value.u64, (U64)bp};
-          trap.flags = ctrl_dmn_trap_flags_from_user_breakpoint_flags(bp->flags);
-          trap.size = bp->size;
+          U64 vaddr = voffs[i] + base_vaddr;
+          DMN_Trap trap = {process.dmn_handle, vaddr, (U64)bp};
           dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
         }
-      }break;
+      }
+    }
+    
+    //- rjf: expression-based breakpoints
+    else if(bp->vaddr_expr.size != 0)
+    {
+      String8 expr = bp->vaddr_expr;
+      E_Value value = e_value_from_string(expr);
+      if(value.u64 != 0 || bp->flags != 0)
+      {
+        DMN_Trap trap = {process.dmn_handle, value.u64, (U64)bp};
+        trap.flags = ctrl_dmn_trap_flags_from_user_breakpoint_flags(bp->flags);
+        trap.size = bp->size;
+        dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
+      }
     }
   }
   scratch_end(scratch);
@@ -3638,14 +3631,14 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *eva
 }
 
 internal void
-ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
+ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, D_BreakpointList *user_bps, DMN_TrapChunkList *traps_out)
 {
-  for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
+  for(D_BreakpointNode *n = user_bps->first; n != 0; n = n->next)
   {
-    CTRL_UserBreakpoint *bp = &n->v;
-    if(bp->kind == CTRL_UserBreakpointKind_Expression)
+    D_Breakpoint *bp = &n->v;
+    if(bp->vaddr_expr.size != 0)
     {
-      String8 expr = bp->string;
+      String8 expr = bp->vaddr_expr;
       E_Value value = e_value_from_string(expr);
       if(value.u64 != 0 || bp->flags != 0)
       {
@@ -4626,7 +4619,7 @@ ctrl_eval_space_read(E_Space space, void *out, Rng1U64 range)
 //- rjf: control thread eval scopes
 
 internal D_EvalScope *
-ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, D_Entity *thread)
+ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Entity *thread)
 {
   ProfBeginFunction();
   D_EntityCtx *entity_ctx = &d_ctrl_state->ctrl_thread_entity_store->ctx;
@@ -5914,7 +5907,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
                  trap->vaddr == event->instruction_pointer &&
                  (!dmn_handle_match(event->thread, target_thread.dmn_handle) || !target_thread_is_on_user_bp_and_trap_net_trap))
               {
-                CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)trap->id;
+                D_Breakpoint *user_bp = (D_Breakpoint *)trap->id;
                 hit_user_bp = 1;
                 if(user_bp != 0 && !(trap->id & bit64) && user_bp->condition.size != 0)
                 {
@@ -6276,7 +6269,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     {
       if(!(stop_event->user_data & bit64))
       {
-        CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)stop_event->user_data;
+        D_Breakpoint *user_bp = (D_Breakpoint *)stop_event->user_data;
         event->u64_code = user_bp->id;
       }
     }

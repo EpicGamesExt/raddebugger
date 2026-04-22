@@ -381,8 +381,8 @@ internal D_TrapList ctrl_trap_list_copy(Arena *arena, D_TrapList *src);
 ////////////////////////////////
 //~ rjf: User Breakpoint Type Functions
 
-internal void ctrl_user_breakpoint_list_push(Arena *arena, CTRL_UserBreakpointList *list, CTRL_UserBreakpoint *bp);
-internal CTRL_UserBreakpointList ctrl_user_breakpoint_list_copy(Arena *arena, CTRL_UserBreakpointList *src);
+internal void ctrl_user_breakpoint_list_push(Arena *arena, D_BreakpointList *list, D_Breakpoint *bp);
+internal D_BreakpointList ctrl_user_breakpoint_list_copy(Arena *arena, D_BreakpointList *src);
 
 ////////////////////////////////
 //~ rjf: Message Type Functions
@@ -552,8 +552,8 @@ internal D_EventList ctrl_c2u_pop_events(Arena *arena);
 internal void ctrl_thread__entry_point(void *p);
 
 //- rjf: breakpoint resolution
-internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, D_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
-internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, D_Handle module, D_BreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, D_BreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 internal void ctrl_thread__append_program_defined_bp_traps(Arena *arena, D_Entity *bp, DMN_TrapChunkList *traps_out);
 
 //- rjf: module lifetime open/close work
@@ -568,7 +568,7 @@ internal U64 ctrl_eval_space_gen(E_Space space);
 internal B32 ctrl_eval_space_read(E_Space space, void *out, Rng1U64 vaddr_range);
 
 //- rjf: control thread eval scopes
-internal D_EvalScope *ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, D_Entity *thread);
+internal D_EvalScope *ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Entity *thread);
 internal void ctrl_thread__eval_scope_end(D_EvalScope *scope);
 
 //- rjf: log flusher

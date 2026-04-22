@@ -199,7 +199,7 @@ struct D_Msg
   String8 stderr_path;
   String8 stdin_path;
   D_TrapList traps;
-  CTRL_UserBreakpointList user_bps;
+  D_BreakpointList user_bps;
 };
 
 typedef struct D_MsgNode D_MsgNode;

@@ -60,39 +60,37 @@ enum
   D_BreakpointFlag_BreakOnExecute = (1<<2),
 };
 
-typedef enum CTRL_UserBreakpointKind
+typedef struct D_Breakpoint D_Breakpoint;
+struct D_Breakpoint
 {
-  CTRL_UserBreakpointKind_Null,
-  CTRL_UserBreakpointKind_FileNameAndLineColNumber,
-  CTRL_UserBreakpointKind_Expression,
-  CTRL_UserBreakpointKind_COUNT
-}
-CTRL_UserBreakpointKind;
-
-typedef struct CTRL_UserBreakpoint CTRL_UserBreakpoint;
-struct CTRL_UserBreakpoint
-{
-  CTRL_UserBreakpointKind kind;
   D_BreakpointFlags flags;
   U64 id;
-  String8 string;
+  String8 file_path;
   TxtPt pt;
-  U64 size;
+  String8 vaddr_expr;
   String8 condition;
+  U64 size;
 };
 
-typedef struct CTRL_UserBreakpointNode CTRL_UserBreakpointNode;
-struct CTRL_UserBreakpointNode
+typedef struct D_BreakpointArray D_BreakpointArray;
+struct D_BreakpointArray
 {
-  CTRL_UserBreakpointNode *next;
-  CTRL_UserBreakpoint v;
+  D_Breakpoint *v;
+  U64 count;
 };
 
-typedef struct CTRL_UserBreakpointList CTRL_UserBreakpointList;
-struct CTRL_UserBreakpointList
+typedef struct D_BreakpointNode D_BreakpointNode;
+struct D_BreakpointNode
 {
-  CTRL_UserBreakpointNode *first;
-  CTRL_UserBreakpointNode *last;
+  D_BreakpointNode *next;
+  D_Breakpoint v;
+};
+
+typedef struct D_BreakpointList D_BreakpointList;
+struct D_BreakpointList
+{
+  D_BreakpointNode *first;
+  D_BreakpointNode *last;
   U64 count;
 };
 
@@ -250,25 +248,6 @@ typedef struct D_TargetArray D_TargetArray;
 struct D_TargetArray
 {
   D_Target *v;
-  U64 count;
-};
-
-typedef struct D_Breakpoint D_Breakpoint;
-struct D_Breakpoint
-{
-  D_BreakpointFlags flags;
-  U64 id;
-  String8 file_path;
-  TxtPt pt;
-  String8 vaddr_expr;
-  String8 condition;
-  U64 size;
-};
-
-typedef struct D_BreakpointArray D_BreakpointArray;
-struct D_BreakpointArray
-{
-  D_Breakpoint *v;
   U64 count;
 };
 

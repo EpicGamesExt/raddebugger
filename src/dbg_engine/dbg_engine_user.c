@@ -2056,27 +2056,17 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 String8List overrides = d_possible_path_overrides_from_maps_path(scratch.arena, path_maps, bp->file_path);
                 for(String8Node *n = overrides.first; n != 0; n = n->next)
                 {
-                  CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_FileNameAndLineColNumber};
-                  ctrl_user_bp.flags     = bp->flags;
-                  ctrl_user_bp.id        = bp->id;
-                  ctrl_user_bp.string    = n->string;
-                  ctrl_user_bp.pt        = bp->pt;
-                  ctrl_user_bp.condition = bp->condition;
-                  ctrl_user_bp.size      = bp->size;
-                  ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
+                  D_Breakpoint dst_bp = {0};
+                  MemoryCopyStruct(&dst_bp, bp);
+                  dst_bp.file_path = n->string;
+                  ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &dst_bp);
                 }
               }
               
-              // rjf: virtual address expression -> add expression breakpoint
-              else if(bp->vaddr_expr.size != 0)
+              // rjf: all other cases - just copy the breakpoint info
+              else
               {
-                CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_Expression};
-                ctrl_user_bp.flags     = bp->flags;
-                ctrl_user_bp.id        = bp->id;
-                ctrl_user_bp.string    = bp->vaddr_expr;
-                ctrl_user_bp.condition = bp->condition;
-                ctrl_user_bp.size      = bp->size;
-                ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
+                ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, bp);
               }
             }
           }
