@@ -330,8 +330,8 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       String8 line_info_data = raw->sec[DW_Section_Line].data;
       unit_line_table_header_sizes[unit_idx] = dw2_read_line_table_header(scratch.arena, ctx, line_info_data, line_info_off, &unit_line_table_headers[unit_idx]);
     }
+    lane_sync();
   }
-  lane_sync();
   
   ////////////////////////////
   //- rjf: deduplicate all source files
@@ -416,6 +416,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     scratch_end(scratch2);
   }
   lane_sync_u64(&all_src_files, 0);
+  lane_sync_u64(&unit_src_file_maps, 0);
   
   ////////////////////////////
   //- rjf: parse each unit's line info; produce line tables
@@ -433,8 +434,13 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       RDIM_LineSequenceNode *first_seq_node;
       RDIM_LineSequenceNode *last_seq_node;
     };
-    U64 *unit_file_seq_maps_slots_counts = 0;
-    FileSeqNode ***unit_file_seq_maps_slots = 0;
+    typedef struct FileSeqMap FileSeqMap;
+    struct FileSeqMap
+    {
+      U64 slots_count;
+      FileSeqNode **slots;
+    };
+    FileSeqMap *unit_file_seq_maps = 0;
     if(lane_idx() == 0)
     {
       all_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, 1);
@@ -443,11 +449,11 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       {
         unit_line_tables[unit_idx] = rdim_line_table_chunk_list_push(arena, all_line_tables, unit_count);
       }
-      unit_file_seq_maps_slots_counts = push_array(scratch.arena, U64, unit_count);
-      unit_file_seq_maps_slots = push_array(scratch.arena, FileSeqNode **, unit_count);
+      unit_file_seq_maps = push_array(scratch.arena, FileSeqMap, unit_count);
     }
     lane_sync_u64(&all_line_tables, 0);
     lane_sync_u64(&unit_line_tables, 0);
+    lane_sync_u64(&unit_file_seq_maps, 0);
     
     //- rjf: wide per-unit parse
     U64 unit_take_idx = 0;
@@ -470,6 +476,10 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       U64 line_info_off = stmt_list->val.u128.u64[0];
       String8 all_line_info_data = raw->sec[DW_Section_Line].data;
       String8 unit_line_table_data = str8_substr(all_line_info_data, r1u64(line_info_off + unit_line_table_header_sizes[unit_idx], line_info_off + line_table_header->unit_length));
+      
+      //- rjf: set up per-unit file sequence map
+      unit_file_seq_maps[unit_idx].slots_count = line_table_header->files.count;
+      unit_file_seq_maps[unit_idx].slots = push_array(scratch.arena, FileSeqNode *, unit_file_seq_maps[unit_idx].slots_count);
       
       //- rjf: set up vm registers
       DW2_LineVMRegs vm_regs = {0};
@@ -675,6 +685,36 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         if(emit_line)
         {
           emit_line = 0;
+          
+          // rjf: map file index -> rdim src file
+          RDIM_SrcFile *src_file = 0;
+          if(vm_regs.file_index < line_table_header->files.count)
+          {
+            src_file = unit_src_file_maps[unit_idx].v[vm_regs.file_index];
+          }
+          
+          // rjf: map src file -> file seq node
+          FileSeqNode *file_seq_n = 0;
+          {
+            U64 hash = u64_hash_from_str8(str8_struct(&src_file));
+            U64 slot_idx = hash%unit_file_seq_maps[unit_idx].slots_count;
+            for(FileSeqNode *n = unit_file_seq_maps[unit_idx].slots[slot_idx]; n != 0; n = n->next)
+            {
+              if(n->src_file == src_file)
+              {
+                file_seq_n = n;
+                break;
+              }
+            }
+            if(file_seq_n == 0)
+            {
+              file_seq_n = push_array(scratch.arena, FileSeqNode, 1);
+              SLLStackPush(unit_file_seq_maps[unit_idx].slots[slot_idx], file_seq_n);
+              file_seq_n->src_file = src_file;
+            }
+          }
+          
+          // rjf: push this line into the file sequence node
           
         }
         
