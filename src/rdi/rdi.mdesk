@@ -309,6 +309,7 @@ RDI_ArchTable:
 {
   {NULL    0     0}
   {X64     1     8}
+  {X86     2     4}
 }
 
 @table(name value)

@@ -13,6 +13,7 @@
 #include "dwarf/dwarf_dump.h"
 #include "dwarf/dwarf_help.h"
 #include "dwarf/dwarf_writer.h"
+#include "dwarf/dwarf_parse_2.h"
 #include "dwarf/eh_frame.h"
 #include "dwarf/eh_dump.h"
 

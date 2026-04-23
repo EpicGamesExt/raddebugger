@@ -299,9 +299,19 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   lane_sync();
   
   ////////////////////////////
-  //- rjf: parse each unit's line table
+  //- rjf: parse each unit's line table header
   //
+  DW2_LineTableHeader *unit_line_table_headers = 0;
+  U64 *unit_line_table_header_sizes = 0;
+  ProfScope("parse each unit's line table header")
   {
+    if(lane_idx() == 0)
+    {
+      unit_line_table_headers = push_array(scratch.arena, DW2_LineTableHeader, unit_count);
+      unit_line_table_header_sizes = push_array(scratch.arena, U64, unit_count);
+    }
+    lane_sync_u64(&unit_line_table_headers, 0);
+    lane_sync_u64(&unit_line_table_header_sizes, 0);
     U64 unit_take_idx = 0;
     U64 *unit_take_idx_ptr = &unit_take_idx;
     lane_sync_u64(&unit_take_idx_ptr, 0);
@@ -316,12 +326,172 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       DW2_Tag *unit_root_tag = &unit_root_tags[unit_idx];
       DW2_Attrib *stmt_list = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StmtList);
       U64 line_info_off = stmt_list->val.u128.u64[0];
-      DW2_LineTableHeader line_table_header = {0};
       String8 line_info_data = raw->sec[DW_Section_Line].data;
-      dw2_read_line_table_header(scratch.arena, ctx, line_info_data, line_info_off, &line_table_header);
+      unit_line_table_header_sizes[unit_idx] = dw2_read_line_table_header(scratch.arena, ctx, line_info_data, line_info_off, &unit_line_table_headers[unit_idx]);
     }
   }
   lane_sync();
+  
+  ////////////////////////////
+  //- rjf: deduplicate all source files
+  //
+  typedef struct UnitSrcFileMap UnitSrcFileMap;
+  struct UnitSrcFileMap
+  {
+    RDIM_SrcFile **v;
+  };
+  RDIM_SrcFileChunkList *all_src_files = 0;
+  UnitSrcFileMap *unit_src_file_maps = 0;
+  ProfScope("deduplicate all source files") if(lane_idx() == 0)
+  {
+    Temp scratch2 = scratch_begin(&scratch.arena, 1);
+    
+    //- rjf: count all files in all units
+    U64 total_file_count = 0;
+    for EachIndex(unit_idx, unit_count)
+    {
+      total_file_count += unit_line_table_headers[unit_idx].files.count;
+    }
+    
+    //- rjf: set up path -> src file map
+    typedef struct SrcFileNode SrcFileNode;
+    struct SrcFileNode
+    {
+      SrcFileNode *next;
+      String8 full_path;
+      RDIM_SrcFile *src_file;
+    };
+    all_src_files = push_array(scratch.arena, RDIM_SrcFileChunkList, 1);
+    U64 slots_count = 1 + (total_file_count * 3) / 4;
+    SrcFileNode **slots = push_array(scratch2.arena, SrcFileNode *, slots_count);
+    
+    //- rjf: set up unit -> src file maps
+    unit_src_file_maps = push_array(scratch.arena, UnitSrcFileMap, unit_count);
+    for EachIndex(unit_idx, unit_count)
+    {
+      unit_src_file_maps[unit_idx].v = push_array(scratch.arena, RDIM_SrcFile *, unit_line_table_headers[unit_idx].files.count);
+    }
+    
+    //- rjf: build path -> src file map
+    for EachIndex(unit_idx, unit_count)
+    {
+      DW2_LineTableHeader *hdr = &unit_line_table_headers[unit_idx];
+      for EachIndex(file_idx, hdr->files.count)
+      {
+        DW2_LineTableFile *f = &hdr->files.v[file_idx];
+        DW2_LineTableFile *dir = &hdr->dirs.v[f->dir_idx];
+        String8 full_file_path = str8f(scratch2.arena, "%S/%S", dir->file_name, f->file_name);
+        U64 hash = u64_hash_from_str8(full_file_path);
+        U64 slot_idx = hash%slots_count;
+        SrcFileNode *node = 0;
+        for(SrcFileNode *n = slots[slot_idx]; n != 0; n = n->next)
+        {
+          if(str8_match(n->full_path, full_file_path, 0))
+          {
+            node = n;
+            break;
+          }
+        }
+        if(!node)
+        {
+          node = push_array(scratch2.arena, SrcFileNode, 1);
+          node->full_path = full_file_path;
+          node->src_file = rdim_src_file_chunk_list_push(arena, all_src_files, slots_count);
+          node->src_file->path = str8_copy(arena, full_file_path);
+          if(f->flags & DW2_LineTableFileFlag_HasMD5)
+          {
+            node->src_file->checksum_kind = RDI_ChecksumKind_MD5;
+            node->src_file->checksum = str8_copy(arena, str8_struct(&f->md5));
+          }
+          else if(f->flags & DW2_LineTableFileFlag_HasModifyTime)
+          {
+            node->src_file->checksum_kind = RDI_ChecksumKind_Timestamp;
+            node->src_file->checksum = str8_copy(arena, str8_struct(&f->modify_time));
+          }
+        }
+        unit_src_file_maps[unit_idx].v[file_idx] = node->src_file;
+      }
+    }
+    scratch_end(scratch2);
+  }
+  lane_sync_u64(&all_src_files, 0);
+  
+  ////////////////////////////
+  //- rjf: parse each unit's line info; produce line tables
+  //
+  RDIM_LineTableChunkList *all_line_tables = 0;
+  RDIM_LineTable **unit_line_tables = 0;
+  ProfScope("parse each unit's line info; produce line tables")
+  {
+    //- rjf: prep all per-unit line tables
+    if(lane_idx() == 0)
+    {
+      all_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, 1);
+      unit_line_tables = push_array(scratch.arena, RDIM_LineTable *, unit_count);
+      for EachIndex(unit_idx, unit_count)
+      {
+        unit_line_tables[unit_idx] = rdim_line_table_chunk_list_push(arena, all_line_tables, unit_count);
+      }
+    }
+    lane_sync_u64(&all_line_tables, 0);
+    lane_sync_u64(&unit_line_tables, 0);
+    
+    U64 unit_take_idx = 0;
+    U64 *unit_take_idx_ptr = &unit_take_idx;
+    lane_sync_u64(&unit_take_idx_ptr, 0);
+    for(;;)
+    {
+      //- rjf: take unit
+      U64 unit_idx = ins_atomic_u64_inc_eval(unit_take_idx_ptr) - 1;
+      if(unit_idx >= unit_count)
+      {
+        break;
+      }
+      
+      //- rjf: unpack unit info
+      DW2_LineTableHeader *line_table_header = &unit_line_table_headers[unit_idx];
+      RDIM_LineTable *dst_line_table = unit_line_tables[unit_idx];
+      DW2_Tag *unit_root_tag = &unit_root_tags[unit_idx];
+      DW2_Attrib *stmt_list = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StmtList);
+      U64 line_info_off = stmt_list->val.u128.u64[0];
+      String8 all_line_info_data = raw->sec[DW_Section_Line].data;
+      String8 unit_line_table_data = str8_substr(all_line_info_data, r1u64(line_info_off + unit_line_table_header_sizes[unit_idx], line_info_off + line_table_header->unit_length));
+      
+      //- rjf: set up vm registers
+      DW2_LineVMRegs vm_regs = {0};
+      {
+        vm_regs.file_index = 1;
+        vm_regs.line = 1;
+        vm_regs.is_stmt = line_table_header->default_is_stmt;
+      }
+      
+      //- rjf: run the line opcode program
+      for(U64 off = 0, next_off = 0; off < unit_line_table_data.size; off = next_off)
+      {
+        next_off = unit_line_table_data.size;
+        
+        //- rjf: read next opcode
+        U8 opcode = 0;
+        str8_deserial_read_struct(unit_line_table_data, off, &opcode);
+        
+        //- rjf: apply "special opcodes" (DWARF v5 6.2.5.1)
+        if(opcode >= line_table_header->opcode_base)
+        {
+          U32 adjusted_opcode = (U32)(opcode - line_table_header->opcode_base);
+          U32 op_advance = adjusted_opcode / line_table_header->line_range;
+          S64 line_advance = (S64)line_table_header->line_base + (S64)adjusted_opcode%(S64)line_table_header->line_range;
+          U64 addr_advance = line_table_header->min_inst_length + (vm_regs.vliw_op_index + op_advance) / line_table_header->max_ops_per_inst;
+          vm_regs.address += addr_advance;
+          vm_regs.vliw_op_index = (vm_regs.vliw_op_index + op_advance) % line_table_header->max_ops_per_inst;
+          vm_regs.line += line_advance;
+          vm_regs.basic_block = 0;
+          vm_regs.prologue_end = 0;
+          vm_regs.epilogue_begin = 0;
+          vm_regs.discriminator = 0;
+        }
+      }
+    }
+  }
   
   ////////////////////////////
   //- rjf: fill result

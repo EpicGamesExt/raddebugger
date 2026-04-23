@@ -717,7 +717,7 @@ d2r_push_relational_op(Arena *arena, D2R_ValueTypeStack *stack, RDIM_EvalBytecod
 
 internal RDIM_EvalBytecode
 d2r_bytecode_from_expression(Arena         *arena,
-                             DW_Input      *input,
+                             DW_Raw      *input,
                              U64            image_base,
                              Arch           arch,
                              DW_ListUnit   *addr_lu,
@@ -1312,7 +1312,7 @@ d2r_bytecode_from_expression(Arena         *arena,
 }
 
 internal RDIM_Location
-d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
+d2r_transpile_expression(Arena *arena, DW_Raw *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
 {
   RDIM_Location loc = {0};
   if (expr.size) {
@@ -1325,7 +1325,7 @@ d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, Arch arc
 }
 
 internal RDIM_Location
-d2r_location_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind)
+d2r_location_from_attrib(Arena *arena, DW_Raw *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind)
 {
   String8 expr = dw_exprloc_from_tag_attrib_kind(input, cu, tag, kind);
   RDIM_Location location = d2r_transpile_expression(arena, input, image_base, arch, cu->addr_lu, cu, expr);
@@ -1336,7 +1336,7 @@ internal RDIM_LocationCaseList
 d2r_locset_from_attrib(Arena                  *arena,
                        RDIM_ScopeChunkList    *scopes,
                        RDIM_Scope             *curr_scope,
-                       DW_Input               *input,
+                       DW_Raw               *input,
                        DW_CompUnit            *cu,
                        U64                     image_base,
                        Arch                    arch,
@@ -1383,7 +1383,7 @@ internal RDIM_LocationCaseList
 d2r_var_locset_from_tag(Arena                  *arena,
                         RDIM_ScopeChunkList    *scopes,
                         RDIM_Scope             *curr_scope,
-                        DW_Input               *input,
+                        DW_Raw               *input,
                         DW_CompUnit            *cu,
                         U64                     image_base,
                         Arch                    arch,
@@ -1450,7 +1450,7 @@ d2r_type_from_offset(D2R_TypeTable *type_table, U64 info_off)
 }
 
 internal RDIM_Type *
-d2r_type_from_attrib(D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+d2r_type_from_attrib(D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   RDIM_Type *type = type_table->builtin_types[RDI_TypeKind_Void];
   
@@ -1559,7 +1559,7 @@ d2r_is_type_tag_converted(DW_TagNode *tag_node)
 }
 
 internal RDIM_Type *
-d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, Arch arch, DW_Tag tag, DW_AttribKind kind)
+d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_Language cu_lang, Arch arch, DW_Tag tag, DW_AttribKind kind)
 {
   RDIM_Type *type = type_table->builtin_types[RDI_TypeKind_Void];
   
@@ -1604,7 +1604,7 @@ d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *inpu
 internal void
 d2r_convert_types(Arena         *arena,
                   D2R_TypeTable *type_table,
-                  DW_Input      *input,
+                  DW_Raw      *input,
                   DW_CompUnit   *cu,
                   DW_Language    cu_lang,
                   Arch           arch,
@@ -2088,7 +2088,7 @@ d2r_inline_anonymous_udt_member(Arena *arena, RDIM_UDT *top_udt, U64 base_off, R
 internal void
 d2r_convert_udts(Arena         *arena,
                  D2R_TypeTable *type_table,
-                 DW_Input      *input,
+                 DW_Raw      *input,
                  DW_CompUnit   *cu,
                  DW_Language    cu_lang,
                  DW_TagNode    *root)
@@ -2205,7 +2205,7 @@ d2r_push_scope(Arena *arena, RDIM_ScopeChunkList *scopes, U64 scope_chunk_cap, D
 }
 
 internal RDIM_Type **
-d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out)
+d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Raw *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -2238,7 +2238,7 @@ d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input
 }
 
 internal Rng1U64List
-d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag)
+d2r_range_list_from_tag(Arena *arena, DW_Raw *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag)
 {
   // collect non-contiguous range
   Rng1U64List raw_ranges = dw_rnglist_from_tag_attrib_kind(arena, input, cu, tag, DW_AttribKind_Ranges);
@@ -2296,7 +2296,7 @@ d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 imag
 internal void
 d2r_convert_symbols(Arena         *arena,
                     D2R_TypeTable *type_table,
-                    DW_Input      *input,
+                    DW_Raw      *input,
                     DW_CompUnit   *cu,
                     DW_Language    cu_lang,
                     U64            image_base,
@@ -2620,7 +2620,7 @@ d2r_sort_ptrs(void **ptrs, U64 count, int (* is_before)(void *a, void *b))
 }
 
 internal D2R_CompUnitContribMap
-d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Input *input, U64 image_base)
+d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Raw *input, U64 image_base)
 {
   Temp scratch      = scratch_begin(&arena, 1);
   Temp temp         = temp_begin(arena);
@@ -2726,7 +2726,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     
     Arch      arch       = Arch_Null;
     U64       image_base = 0;
-    DW_Input  input      = {0};
+    DW_Raw  input      = {0};
     PathStyle path_style = PathStyle_Null;
     
     switch (params->exe_kind) {

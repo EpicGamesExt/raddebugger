@@ -775,6 +775,7 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
                 case DW_LNCT_TimeStamp:
                 {
                   entry_out->modify_time = form_val.u128.u64[0];
+                  entry_out->flags |= DW2_LineTableFileFlag_HasModifyTime;
                 }break;
                 case DW_LNCT_Size:
                 {
@@ -783,6 +784,7 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
                 case DW_LNCT_MD5:
                 {
                   entry_out->md5.u128 = form_val.u128;
+                  entry_out->flags |= DW2_LineTableFileFlag_HasMD5;
                 }break;
                 case DW_LNCT_LLVM_Source:
                 {

@@ -16,6 +16,7 @@ struct D2R2_ConvertParams
   U64 base_vaddr;
   RDIM_BinarySectionList binary_sections;
   DW_Raw raw;
+  PathStyle path_style;
   RDIM_SubsetFlags subset_flags;
   B32 deterministic;
 };

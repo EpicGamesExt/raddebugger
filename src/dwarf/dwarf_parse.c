@@ -199,17 +199,17 @@ dw_unit_ranges_from_data(Arena *arena, String8 data)
   
   for (U64 cursor = 0; cursor < data.size; ) {
     U64 start = cursor;
-
+    
     // read unit size
     U64 size;
     U64 size_size = str8_deserial_read_dwarf_packed_size(data, cursor, &size);
     if (size_size == 0) { break; }
     cursor += size_size;
-
+    
     // is unit size valid?
     if (cursor + size > data.size) { break; }
     cursor += size;
-
+    
     // push unit range
     if (size > 0) {
       rng1u64_list_push(arena, &result, rng_1u64(start, cursor));
@@ -274,7 +274,7 @@ internal U64
 dw_read_list_unit_header_str_offsets(String8 unit_data, DW_ListUnit *lu_out)
 {
   U64 header_size = 0;
-
+  
   U32 first_four_bytes = 0;
   if (str8_deserial_read_struct(unit_data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { goto exit; }
   DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
@@ -310,7 +310,7 @@ internal U64
 dw_read_list_unit_header_list(String8 unit_data, DW_ListUnit *lu_out)
 {
   U64 header_size = 0;
-
+  
   U32 first_four_bytes = 0;
   if (str8_deserial_read_struct(unit_data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { goto exit; }
   DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
@@ -353,7 +353,7 @@ dw_read_list_unit_header_list(String8 unit_data, DW_ListUnit *lu_out)
 }
 
 internal DW_ListUnitInput
-dw_list_unit_input_from_input(Arena *arena, DW_Input *input)
+dw_list_unit_input_from_input(Arena *arena, DW_Raw *input)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -465,17 +465,17 @@ dw_read_abbrev_tag(String8 data, U64 offset, DW_Abbrev *out_abbrev)
   // read tag ID and kind
   U64 id = 0;
   TryRead(str8_deserial_read_uleb128(data, cursor, &id), cursor, exit);
-
+  
   // is this null terminator?
   if (id == 0) {
     total_bytes_read = cursor - offset;
     MemoryZeroStruct(out_abbrev);
     goto exit;
   }
-
+  
   U64 kind = 0;
   TryRead(str8_deserial_read_uleb128(data, cursor, &kind), cursor, exit);
-
+  
   // read child flag
   U8 has_children = 0;
   if (id != 0) {
@@ -491,7 +491,7 @@ dw_read_abbrev_tag(String8 data, U64 offset, DW_Abbrev *out_abbrev)
   }
   
   total_bytes_read = cursor - offset;
-exit:;
+  exit:;
   return total_bytes_read;
 }
 
@@ -500,7 +500,7 @@ dw_read_abbrev_attrib(String8 data, U64 offset, DW_Abbrev *out_abbrev)
 {
   U64 total_bytes_read = 0;
   U64 cursor           = offset;
-
+  
   // read id and kind
   U64 id, kind;
   TryRead(str8_deserial_read_uleb128(data, cursor, &id), cursor, exit);
@@ -522,7 +522,7 @@ dw_read_abbrev_attrib(String8 data, U64 offset, DW_Abbrev *out_abbrev)
   }
   
   total_bytes_read = cursor - offset;
-exit:;
+  exit:;
   return total_bytes_read;
 }
 
@@ -532,24 +532,24 @@ dw_make_abbrev_table(Arena *arena, String8 abbrev_data, U64 abbrev_base)
   Temp           temp           = temp_begin(arena);
   DW_AbbrevTable table          = {0};
   B32            failed_to_make = 1;
-
+  
   // count abbrev tags
   for (U64 cursor = abbrev_base; cursor < abbrev_data.size; table.count += 1) {
     DW_Abbrev tag;
     TryRead(dw_read_abbrev_tag(abbrev_data, cursor, &tag), cursor, exit);
     if (tag.id == 0) { break; }
-
+    
     for (; cursor < abbrev_data.size; ) {
       DW_Abbrev attrib;
       TryRead(dw_read_abbrev_attrib(abbrev_data, cursor, &attrib), cursor, exit);
       if(attrib.id == 0) { break; }
     }
   }
-
+  
   // alloc entries
   table.entries = push_array(arena, DW_AbbrevTableEntry, table.count);
   table.count   = 0;
-
+  
   // fill out the table
   for (U64 cursor = abbrev_base; cursor < abbrev_data.size;) {
     U64 tag_abbrev_off = cursor;
@@ -571,7 +571,7 @@ dw_make_abbrev_table(Arena *arena, String8 abbrev_data, U64 abbrev_base)
   }
   
   failed_to_make = 0;
-exit:;
+  exit:;
   if (failed_to_make) { 
     MemoryZeroStruct(&table);
     temp_end(temp);
@@ -759,7 +759,7 @@ dw_read_form(String8      data,
     } break;
     default: InvalidPath; break;
   }
-
+  
   if (form_out) {
     form.kind = form_kind;
     *form_out = form;
@@ -769,14 +769,14 @@ dw_read_form(String8      data,
   }
   
   is_ok = 1;
-exit:;
+  exit:;
   Assert(is_ok);
   return is_ok;
 }
 
 internal U64
 dw_read_tag(Arena          *arena,
-            DW_Input       *input,
+            DW_Raw       *input,
             DW_AbbrevTable  abbrev_table,
             DW_Version      version,
             DW_Format       format,
@@ -786,17 +786,17 @@ dw_read_tag(Arena          *arena,
             DW_Tag         *tag_out)
 {
   U64 bytes_read = 0;
-
+  
   String8 info_data   = input->sec[DW_Section_Info].data;
   String8 abbrev_data = input->sec[DW_Section_Abbrev].data;
-
+  
   String8 tag_data   = str8_substr(info_data, cu_info_range);
   U64     tag_cursor = tag_info_off - cu_info_range.min;
   
   // read tag abbrev id
   U64 tag_abbrev_id = 0;
   TryRead(str8_deserial_read_uleb128(tag_data, tag_cursor, &tag_abbrev_id), tag_cursor, exit);
-
+  
   B32           has_children = 0;
   DW_TagKind    tag_kind     = DW_TagKind_Null;
   DW_AttribList attribs      = {0};
@@ -804,34 +804,34 @@ dw_read_tag(Arena          *arena,
     // map abbrev id -> .debug_abbrev offset
     U64 abbrev_cursor = dw_abbrev_offset_from_abbrev_id(abbrev_table, tag_abbrev_id);
     if (abbrev_cursor >= abbrev_data.size) { log_user_errorf("failed to find abbrev id 0x%I64x for tag 0x%I64x", tag_abbrev_id, tag_info_off); goto exit; }
-
+    
     // read tag abbrev
     DW_Abbrev tag_abbrev = {0};
     TryRead(dw_read_abbrev_tag(abbrev_data, abbrev_cursor, &tag_abbrev), abbrev_cursor, exit);
-
+    
     has_children = !!(tag_abbrev.flags & DW_AbbrevFlag_HasChildren);
     tag_kind     = (DW_TagKind)tag_abbrev.sub_kind;
-
+    
     // read attribs
     for (; tag_cursor < tag_data.size && abbrev_cursor < abbrev_data.size; ) {
       U64 attrib_tag_cursor = tag_cursor;
       U64 attrib_abbrev_off = abbrev_cursor;
-
+      
       // read attrib abbrev
       DW_Abbrev attrib_abbrev = {0};
       TryRead(dw_read_abbrev_attrib(abbrev_data, abbrev_cursor, &attrib_abbrev), abbrev_cursor, exit);
-
+      
       DW_AttribKind attrib_kind = (DW_AttribKind)attrib_abbrev.id;
       DW_FormKind   form_kind   = (DW_FormKind)attrib_abbrev.sub_kind;
-
+      
       // is this closing attrib?
       if (attrib_kind == DW_AttribKind_Null) { break; }
-
+      
       // special case, allows producer to embed form in .debug_info
       if (form_kind == DW_Form_Indirect) {
         TryRead(str8_deserial_read_uleb128(tag_data, tag_cursor, &form_kind), tag_cursor, exit);
       }
-
+      
       // read form value
       DW_Form form      = {0};
       U64     form_size = 0;
@@ -839,7 +839,7 @@ dw_read_tag(Arena          *arena,
         goto exit;
       }
       tag_cursor += form_size;
-
+      
       // fill out node
       DW_AttribNode *attrib_n  = push_array(arena, DW_AttribNode, 1);
       attrib_n->v.info_off     = cu_info_range.min + attrib_tag_cursor;
@@ -847,13 +847,13 @@ dw_read_tag(Arena          *arena,
       attrib_n->v.abbrev_id    = attrib_abbrev.id;
       attrib_n->v.attrib_kind  = attrib_kind;
       attrib_n->v.form         = form;
-
+      
       // push node to list
       SLLQueuePush(attribs.first, attribs.last, attrib_n);
       attribs.count += 1;
     }
   }
-
+  
   // fill out tag
   tag_out->abbrev_id    = tag_abbrev_id;
   tag_out->has_children = has_children;
@@ -862,12 +862,12 @@ dw_read_tag(Arena          *arena,
   tag_out->info_off     = tag_info_off;
   
   bytes_read = tag_cursor - (tag_info_off - cu_info_range.min);
-exit:;
+  exit:;
   return bytes_read;
 }
 
 internal U64
-dw_read_tag_cu(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 info_off, DW_Tag *tag_out)
+dw_read_tag_cu(Arena *arena, DW_Raw *input, DW_CompUnit *cu, U64 info_off, DW_Tag *tag_out)
 {
   return dw_read_tag(arena,
                      input,
@@ -1025,14 +1025,14 @@ dw_interp_address(U64 address_size, U64 base_addr, DW_ListUnit *addr_lu, DW_Form
 }
 
 internal String8
-dw_interp_block(DW_Input *input, DW_CompUnit *cu, DW_Form form)
+dw_interp_block(DW_Raw *input, DW_CompUnit *cu, DW_Form form)
 {
   NotImplemented;
   return str8_zero();
 }
 
 internal String8
-dw_interp_string(DW_Input    *input,
+dw_interp_string(DW_Raw    *input,
                  DW_Format    unit_format,
                  DW_ListUnit *str_offsets,
                  DW_Form      form)
@@ -1070,7 +1070,7 @@ dw_interp_string(DW_Input    *input,
 }
 
 internal String8
-dw_interp_line_ptr(DW_Input *input, DW_Form form)
+dw_interp_line_ptr(DW_Raw *input, DW_Form form)
 {
   String8 result = {0};
   if (form.kind == DW_Form_SecOffset) {
@@ -1090,7 +1090,7 @@ dw_interp_file(DW_LineVM *line_vm, DW_Form form)
 }
 
 internal DW_Reference
-dw_interp_ref(DW_Input *input, DW_CompUnit *cu, DW_Form form)
+dw_interp_ref(DW_Raw *input, DW_CompUnit *cu, DW_Form form)
 {
   DW_Reference ref = {0};
   if (form.kind == DW_Form_Ref1 || form.kind == DW_Form_Ref2 ||
@@ -1111,7 +1111,7 @@ dw_interp_ref(DW_Input *input, DW_CompUnit *cu, DW_Form form)
 }
 
 internal DW_LocList
-dw_interp_loclist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Form form)
+dw_interp_loclist(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Form form)
 {
   DW_LocList loclist = {0};
   
@@ -1398,7 +1398,7 @@ dw_interp_flag(DW_Form form)
 }
 
 internal Rng1U64List
-dw_interp_rnglist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Form form)
+dw_interp_rnglist(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Form form)
 {
   Rng1U64List rnglist = {0};
   
@@ -1589,7 +1589,7 @@ dw_interp_rnglist(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Form form)
 }
 
 internal String8
-dw_interp_secptr(DW_Input *input, DW_SectionKind section, DW_Form form)
+dw_interp_secptr(DW_Raw *input, DW_SectionKind section, DW_Form form)
 {
   String8 secptr = {0};
   if (form.kind == DW_Form_SecOffset) {
@@ -1603,25 +1603,25 @@ dw_interp_secptr(DW_Input *input, DW_SectionKind section, DW_Form form)
 }
 
 internal String8
-dw_interp_addrptr(DW_Input *input, DW_Form form)
+dw_interp_addrptr(DW_Raw *input, DW_Form form)
 {
   return dw_interp_secptr(input, DW_Section_Addr, form);
 }
 
 internal String8
-dw_interp_str_offsets_ptr(DW_Input *input, DW_Form form)
+dw_interp_str_offsets_ptr(DW_Raw *input, DW_Form form)
 {
   return dw_interp_secptr(input, DW_Section_StrOffsets, form);
 }
 
 internal String8
-dw_interp_rnglists_ptr(DW_Input *input, DW_Form form)
+dw_interp_rnglists_ptr(DW_Raw *input, DW_Form form)
 {
   return dw_interp_secptr(input, DW_Section_RngLists, form);
 }
 
 internal String8
-dw_interp_loclists_ptr(DW_Input *input, DW_Form form)
+dw_interp_loclists_ptr(DW_Raw *input, DW_Form form)
 {
   return dw_interp_secptr(input, DW_Section_LocLists, form);
 }
@@ -1633,7 +1633,7 @@ dw_value_class_from_attrib(DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal String8
-dw_exprloc_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_exprloc_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_ExprLoc || value_class == DW_AttribClass_Block);
@@ -1641,7 +1641,7 @@ dw_exprloc_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal U128
-dw_const_u128_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_u128_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1649,7 +1649,7 @@ dw_const_u128_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal U64
-dw_const_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_u64_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1657,7 +1657,7 @@ dw_const_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal U32
-dw_const_u32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_u32_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1665,7 +1665,7 @@ dw_const_u32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal S64
-dw_const_s64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_s64_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1673,7 +1673,7 @@ dw_const_s64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal S32
-dw_const_s32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_const_s32_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Const);
@@ -1681,7 +1681,7 @@ dw_const_s32_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal B32
-dw_flag_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_flag_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Flag);
@@ -1689,7 +1689,7 @@ dw_flag_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal U64
-dw_address_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_address_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null ||
@@ -1710,7 +1710,7 @@ dw_address_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal String8
-dw_block_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_block_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Block);
@@ -1718,7 +1718,7 @@ dw_block_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal String8
-dw_string_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_string_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_String || value_class == DW_AttribClass_StrOffsetsPtr);
@@ -1726,7 +1726,7 @@ dw_string_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal String8
-dw_line_ptr_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_line_ptr_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_LinePtr);
@@ -1742,7 +1742,7 @@ dw_file_from_attrib(DW_CompUnit *cu, DW_LineVM *line_vm, DW_Attrib *attrib)
 }
 
 internal DW_Reference
-dw_ref_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_ref_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null || value_class == DW_AttribClass_Reference);
@@ -1750,7 +1750,7 @@ dw_ref_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal DW_LocList
-dw_loclist_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_loclist_from_attrib(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
   AssertAlways(value_class == DW_AttribClass_Null ||
@@ -1760,7 +1760,7 @@ dw_loclist_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib
 }
 
 internal Rng1U64List
-dw_rnglist_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_rnglist_from_attrib(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   Rng1U64List rnglist = {0};
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
@@ -1787,7 +1787,7 @@ dw_attrib_from_tag_(DW_Tag tag, DW_AttribKind kind)
 }
 
 internal DW_Attrib *
-dw_attrib_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_attrib_from_tag(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   DW_Attrib *attrib = dw_attrib_from_tag_(tag, kind);
   
@@ -1806,7 +1806,7 @@ dw_attrib_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
 }
 
 internal B32
-dw_tag_has_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_tag_has_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   DW_Attrib *attrib = dw_attrib_from_tag(input, cu, tag, kind);
   B32 has_attrib = attrib->attrib_kind != DW_AttribKind_Null;
@@ -1814,85 +1814,85 @@ dw_tag_has_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind ki
 }
 
 internal String8
-dw_exprloc_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_exprloc_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_exprloc_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal String8
-dw_block_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_block_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_block_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal U128
-dw_const_u128_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_const_u128_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_const_u128_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal U64
-dw_const_u64_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_const_u64_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_const_u64_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal U32
-dw_const_u32_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_const_u32_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_const_u32_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal U64
-dw_address_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_address_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_address_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal String8
-dw_string_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_string_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_string_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal String8
-dw_line_ptr_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_line_ptr_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_line_ptr_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal DW_Reference
-dw_ref_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_ref_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_ref_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal DW_LocList
-dw_loclist_from_tag_attrib_kind(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_loclist_from_tag_attrib_kind(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_loclist_from_attrib(arena, input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal Rng1U64List
-dw_rnglist_from_tag_attrib_kind(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_rnglist_from_tag_attrib_kind(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_rnglist_from_attrib(arena, input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal B32
-dw_flag_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_flag_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_flag_from_attrib(input, cu, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal DW_LineFile *
-dw_file_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_LineVM *line_vm, DW_Tag tag, DW_AttribKind kind)
+dw_file_from_tag_attrib_kind(DW_Raw *input, DW_CompUnit *cu, DW_LineVM *line_vm, DW_Tag tag, DW_AttribKind kind)
 {
   return dw_file_from_attrib(cu, line_vm, dw_attrib_from_tag(input, cu, tag, kind));
 }
 
 internal B32
-dw_try_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, U64 *byte_size_out)
+dw_try_byte_size_from_tag(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, U64 *byte_size_out)
 {
   B32 has_byte_size = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_ByteSize);
   B32 has_bit_size  = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_BitSize );
@@ -1914,7 +1914,7 @@ dw_try_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, U64 *byt
 }
 
 internal U64
-dw_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
+dw_byte_size_from_tag(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag)
 {
   U64 byte_size = max_U64;
   dw_try_byte_size_from_tag(input, cu, tag, &byte_size);
@@ -1922,7 +1922,7 @@ dw_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
 }
 
 internal U32
-dw_byte_size_32_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
+dw_byte_size_32_from_tag(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag)
 {
   U32 byte_size32 = 0;
   U64 byte_size64;
@@ -1933,7 +1933,7 @@ dw_byte_size_32_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
 }
 
 internal U64
-dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
+dw_u64_from_attrib(DW_Raw *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   U64             result       = 0;
   DW_Attrib      *attrib       = dw_attrib_from_tag(input, cu, tag, kind);
@@ -1964,7 +1964,7 @@ dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
 }
 
 internal B32
-dw_is_attrib_var_ref(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
+dw_is_attrib_var_ref(DW_Raw *input, DW_CompUnit *cu, DW_Attrib *attrib)
 {
   B32 is_var_ref = 0;
   if (dw_is_form_kind_ref(cu->version, cu->ext, attrib->form.kind)) {
@@ -1980,10 +1980,10 @@ dw_is_attrib_var_ref(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib)
 }
 
 internal DW_CompUnit
-dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U64 cu_header_offset, B32 relaxed)
+dw_cu_from_info_off(Arena *arena, DW_Raw *input, DW_ListUnitInput lu_input, U64 cu_header_offset, B32 relaxed)
 {
   DW_CompUnit cu = {0};
-
+  
   U32 first_four_bytes = 0;
   if (str8_deserial_read_struct(input->sec[DW_Section_Info].data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { goto exit; }
   DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
@@ -2037,7 +2037,7 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
       is_header_ok = 1;
     } break;
   }
-
+  
   U64 header_size = info_cursor;
   
   if (is_header_ok) {
@@ -2052,13 +2052,13 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
     // TODO: handle these unit types
     if (cu_tag.kind == DW_TagKind_SkeletonUnit) { log_user_errorf("TODO: Skeleton Unit"); }
     if (cu_tag.kind == DW_TagKind_TypeUnit)     { log_user_errorf("TODO Type Unit");      }
-
+    
     if (cu_tag.kind != DW_TagKind_CompileUnit && cu_tag.kind != DW_TagKind_PartialUnit) {
       // unexpected tag, release memory and exit
       temp_end(temp);
       goto exit;
     }
-
+    
     // fetch attribs for list sections
     DW_Attrib *addr_base_attrib        = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_AddrBase      );
     DW_Attrib *str_offsets_base_attrib = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_StrOffsetsBase);
@@ -2106,12 +2106,12 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
     cu.tag                = cu_tag;
   }
   
-exit:;
+  exit:;
   return cu;
 }
 
 internal void
-dw_tag_tree_from_data(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_TagNode *parent, U64 *cursor, U64 *tag_count)
+dw_tag_tree_from_data(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_TagNode *parent, U64 *cursor, U64 *tag_count)
 {
   while (*cursor < cu->info_range.max) {
     // read tag
@@ -2138,7 +2138,7 @@ dw_tag_tree_from_data(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_TagNode
 }
 
 internal DW_TagTree
-dw_tag_tree_from_cu(Arena *arena, DW_Input *input, DW_CompUnit *cu)
+dw_tag_tree_from_cu(Arena *arena, DW_Raw *input, DW_CompUnit *cu)
 {
   DW_TagNode root      = {0};
   U64        cursor    = cu->first_tag_info_off;
@@ -2206,7 +2206,7 @@ dw_tag_node_from_info_off(DW_CompUnit *cu, U64 info_off)
 
 internal U64
 dw_read_line_vm_header(Arena           *arena,
-                       DW_Input        *input,
+                       DW_Raw        *input,
                        String8          cu_stmt_list,
                        String8          cu_dir,
                        String8          cu_name,
@@ -2215,12 +2215,12 @@ dw_read_line_vm_header(Arena           *arena,
                        DW_LineVMHeader *header_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   U64 cursor = 0;
-
+  
   U32 first_four_bytes = 0;
   if (str8_deserial_read_struct(cu_stmt_list, 0, &first_four_bytes) != sizeof(U32)) { goto exit; }
-
+  
   // read unit length
   U64 length      = 0;
   U64 length_size = str8_deserial_read_dwarf_packed_size(cu_stmt_list, 0, &length);
@@ -2247,7 +2247,7 @@ dw_read_line_vm_header(Arena           *arena,
   
   // substring header so we dont overread into the line program
   data = str8_prefix(data, cursor + header_length);
-
+  
   U8 min_inst_len = 0;
   TryRead(str8_deserial_read_struct(data, cursor, &min_inst_len), cursor, exit);
   
@@ -2259,16 +2259,16 @@ dw_read_line_vm_header(Arena           *arena,
   
   U8 default_is_stmt = 0;
   TryRead(str8_deserial_read_struct(data, cursor, &default_is_stmt), cursor, exit);
-
+  
   S8 line_base = 0;
   TryRead(str8_deserial_read_struct(data, cursor, &line_base), cursor, exit);
-
+  
   U8 line_range = 0;
   TryRead(str8_deserial_read_struct(data, cursor, &line_range), cursor, exit);
-
+  
   U8 opcode_base = 0;
   TryRead(str8_deserial_read_struct(data, cursor, &opcode_base), cursor, exit);
-
+  
   U64 num_opcode_lens = opcode_base > 0 ? opcode_base - 1 : 0;
   String8 opcode_lens;
   TryRead(str8_deserial_read_block(data, cursor, num_opcode_lens * sizeof(U8), &opcode_lens), cursor, exit);
@@ -2278,7 +2278,7 @@ dw_read_line_vm_header(Arena           *arena,
   if (version < DW_Version_5) {
     // read directory table
     String8List dir_list = {0};
-
+    
     // compile directory is always first in the table
     str8_list_push(scratch.arena, &dir_list, cu_dir);
     
@@ -2305,7 +2305,7 @@ dw_read_line_vm_header(Arena           *arena,
         U8 first_byte = 0;
         if (str8_deserial_read_struct(data, cursor, &first_byte) == 0) { goto exit; }
         if (first_byte == 0) { break; }
-
+        
         DW_LineFile file = {0};
         TryRead(str8_deserial_read_cstr   (data, cursor, &file.path),       cursor, exit);
         TryRead(str8_deserial_read_uleb128(data, cursor, &file.dir_idx),    cursor, exit);
@@ -2322,7 +2322,7 @@ dw_read_line_vm_header(Arena           *arena,
     
     // dir list -> array
     dir_table = str8_array_from_list(arena, &dir_list);
-
+    
     // file list -> array
     file_table.count = 0;
     file_table.v     = push_array(arena, DW_LineFile, file_list.node_count);
@@ -2349,7 +2349,7 @@ dw_read_line_vm_header(Arena           *arena,
       // read table count
       U64 table_count = 0;
       TryRead(str8_deserial_read_uleb128(data, cursor, &table_count), cursor, exit);
-
+      
       // validate encoding
       if (table_count > 0) {
         if (enc_count != 1)             { goto exit; }
@@ -2382,31 +2382,31 @@ dw_read_line_vm_header(Arena           *arena,
       // read table count
       U64 table_count = 0;
       TryRead(str8_deserial_read_uleb128(data, cursor, &table_count), cursor, exit);
-
+      
       file_table.count = table_count;
       file_table.v     = push_array(arena, DW_LineFile, table_count);
-
+      
       for EachIndex(i, table_count) {
         DW_LineFile *file = &file_table.v[i];
         for EachIndex(enc_idx, enc_count) {
           DW_LNCT lnct = enc_arr[enc_idx*2 + 0];
-
+          
           DW_FormKind form_kind = enc_arr[enc_idx*2 + 1];
           DW_Form     form      = {0};
           U64         form_size = 0;
           if (!dw_read_form(str8_skip(data, cursor), version, format, address_size, form_kind, max_U64, &form, &form_size)) { goto exit; }
           cursor += form_size;
-
+          
           switch (lnct) {
-          case DW_LNCT_Path:           { file->path       = dw_interp_string(input, format, cu_str_offsets, form); } break;
-          case DW_LNCT_DirectoryIndex: { file->dir_idx    = dw_interp_const_u64(form);                             } break;
-          case DW_LNCT_TimeStamp:      { file->time_stamp = dw_interp_const_u64(form);                             } break;
-          case DW_LNCT_Size:           { file->size       = dw_interp_const_u64(form);                             } break;
-          case DW_LNCT_MD5:            { file->md5        = dw_interp_const_u128(form);                            } break;
-          case DW_LNCT_LLVM_Source:    { file->source     = dw_interp_string(input, format, cu_str_offsets, form); } break;
-          default: {
-            Assert(!"unexpected LNTC encoding");
-          } break;
+            case DW_LNCT_Path:           { file->path       = dw_interp_string(input, format, cu_str_offsets, form); } break;
+            case DW_LNCT_DirectoryIndex: { file->dir_idx    = dw_interp_const_u64(form);                             } break;
+            case DW_LNCT_TimeStamp:      { file->time_stamp = dw_interp_const_u64(form);                             } break;
+            case DW_LNCT_Size:           { file->size       = dw_interp_const_u64(form);                             } break;
+            case DW_LNCT_MD5:            { file->md5        = dw_interp_const_u128(form);                            } break;
+            case DW_LNCT_LLVM_Source:    { file->source     = dw_interp_string(input, format, cu_str_offsets, form); } break;
+            default: {
+              Assert(!"unexpected LNTC encoding");
+            } break;
           }
         }
       }
@@ -2438,16 +2438,16 @@ dw_read_line_vm_header(Arena           *arena,
 }
 
 internal DW_LineVM *
-dw_line_vm_init(DW_Input *input, DW_CompUnit *cu)
+dw_line_vm_init(DW_Raw *input, DW_CompUnit *cu)
 {
   DW_LineVM *vm = 0;
-
+  
   Arena *arena = arena_alloc(.reserve_size = KB(64), .commit_size = KB(1));
-
+  
   String8 cu_stmt_list = dw_line_ptr_from_tag_attrib_kind(input, cu, cu->tag, DW_AttribKind_StmtList);
   String8 cu_dir       = dw_string_from_tag_attrib_kind(input, cu, cu->tag, DW_AttribKind_CompDir);
   String8 cu_name      = dw_string_from_tag_attrib_kind(input, cu, cu->tag, DW_AttribKind_Name);
-
+  
   // read the line table header
   DW_LineVMHeader header = {0};
   if (cu_stmt_list.size) {
@@ -2455,7 +2455,7 @@ dw_line_vm_init(DW_Input *input, DW_CompUnit *cu)
       goto exit;
     }
   }
-
+  
   vm = push_array(arena, DW_LineVM, 1);
   *vm = (DW_LineVM){
     .arena              = arena,
@@ -2464,7 +2464,7 @@ dw_line_vm_init(DW_Input *input, DW_CompUnit *cu)
     .header             = header,
     .state.end_sequence = 1,
   };
-
+  
   exit:;
   if (vm == 0) { arena_release(arena); }
   return vm;
@@ -2489,11 +2489,11 @@ internal B32
 dw_line_vm_step(DW_LineVM *vm)
 {
   B32 is_ok = 0;
-
+  
   if (vm->cursor >= vm->program.size) { goto exit; }
-
+  
   vm->new_line = 0;
-
+  
   // reset VM state
   if (vm->state.end_sequence) {
     vm->state.address         = 0;
@@ -2509,24 +2509,24 @@ dw_line_vm_step(DW_LineVM *vm)
     vm->state.isa             = 0;
     vm->state.discriminator   = 0;
   }
-
+  
   // read opcode
   TryRead(str8_deserial_read_struct(vm->program, vm->cursor, &vm->opcode), vm->cursor, exit);
-
+  
   // special opcodes
   if (vm->opcode >= vm->header.opcode_base) {
     U32 adjusted_opcode = (U32)(vm->opcode - vm->header.opcode_base);
     U32 op_advance      = adjusted_opcode / vm->header.line_range;
     S32 line_advance    = (S64)vm->header.line_base + ((S64)adjusted_opcode) % (S64)vm->header.line_range;
     U64 addr_advance    = vm->header.min_inst_len * ((vm->state.op_index + op_advance) / vm->header.max_ops_for_inst);
-
+    
     if (vm->header.line_range > 0 && vm->header.max_ops_for_inst > 0) {
       adjusted_opcode = (U32)(vm->opcode - vm->header.opcode_base);
       op_advance      = adjusted_opcode / vm->header.line_range;
       line_advance    = (S32)vm->header.line_base + ((S32)adjusted_opcode) % (S32)vm->header.line_range;
       addr_advance    = vm->header.min_inst_len * ((vm->state.op_index+op_advance) / vm->header.max_ops_for_inst);
     }
-
+    
     vm->state.address        += addr_advance;
     vm->state.op_index        = (vm->state.op_index + op_advance) % vm->header.max_ops_for_inst;
     vm->state.line            = (U64)((S64)vm->state.line + line_advance);
@@ -2534,142 +2534,142 @@ dw_line_vm_step(DW_LineVM *vm)
     vm->state.prologue_end    = 0;
     vm->state.epilogue_begin  = 0;
     vm->state.discriminator   = 0;
-
+    
     vm->line_advance = line_advance;
     vm->addr_advance = addr_advance;
     vm->new_line = 1;
   } else {
     // standard opcodes
     switch (vm->opcode) {
-    case DW_StdOpcode_Copy: {
-      vm->new_line = 1;
-
-      vm->state.discriminator   = 0;
-      vm->state.basic_block     = 0;
-      vm->state.prologue_end    = 0;
-      vm->state.epilogue_begin  = 0;
-    } break;
-
-    case DW_StdOpcode_AdvancePc: {
-      TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
-      dw_line_vm_advance(vm, vm->operands[0].u64);
-    } break;
-
-    case DW_StdOpcode_AdvanceLine: {
-      TryRead(str8_deserial_read_sleb128(vm->program, vm->cursor, &vm->operands[0].s64), vm->cursor, exit);
-      vm->state.line += vm->operands[0].s64;
-    } break;
-
-    case DW_StdOpcode_SetFile: {
-      TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
-      vm->state.file_index = vm->operands[0].u64;
-    } break;
-
-    case DW_StdOpcode_SetColumn: {
-      TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
-      vm->state.column = vm->operands[0].u64;
-    } break;
-
-    case DW_StdOpcode_NegateStmt: {
-      vm->state.is_stmt = !vm->state.is_stmt;
-    } break;
-
-    case DW_StdOpcode_SetBasicBlock: {
-      vm->state.basic_block = 1;
-    } break;
-
-    case DW_StdOpcode_ConstAddPc: {
-      U64 advance = (0xffu - vm->header.opcode_base) / vm->header.line_range;
-      dw_line_vm_advance(vm, advance);
-    } break;
-
-    case DW_StdOpcode_FixedAdvancePc: {
-      U16 fixed_advance = 0;
-      TryRead(str8_deserial_read_struct(vm->program, vm->cursor, &fixed_advance), vm->cursor, exit);
-      vm->operands[0].u64 = fixed_advance;
-      vm->state.address += vm->operands[0].u64;
-      vm->state.op_index = 0;
-    } break;
-
-    case DW_StdOpcode_SetPrologueEnd: {
-      vm->state.prologue_end = 1;
-    } break;
-
-    case DW_StdOpcode_SetEpilogueBegin: {
-      vm->state.epilogue_begin = 1;
-    } break;
-
-    case DW_StdOpcode_SetIsa: {
-      TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
-      vm->state.isa = vm->operands[0].u64;
-    } break;
-
-    // extended opcodes
-    case DW_StdOpcode_ExtendedOpcode: {
-      TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->ext_length), vm->cursor, exit);
-      String8 ext_data = str8_substr(vm->program, r1u64(vm->cursor, vm->cursor + vm->ext_length));
-      vm->cursor += vm->ext_length;
-
-      U64 ext_cursor = 0;
-      TryRead(str8_deserial_read_struct(ext_data, ext_cursor, &vm->ext_opcode), ext_cursor, exit);
-
-      switch (vm->ext_opcode) {
-      case DW_ExtOpcode_EndSequence: {
-        vm->new_seq  = 1;
+      case DW_StdOpcode_Copy: {
         vm->new_line = 1;
-        vm->state.end_sequence = 1;
+        
+        vm->state.discriminator   = 0;
+        vm->state.basic_block     = 0;
+        vm->state.prologue_end    = 0;
+        vm->state.epilogue_begin  = 0;
       } break;
-
-      case DW_ExtOpcode_SetAddress: {
-        TryRead(str8_deserial_read(ext_data, ext_cursor, &vm->operands[0].u64, vm->header.address_size, vm->header.address_size), ext_cursor, exit);
-        vm->state.address  = vm->operands[0].u64;
+      
+      case DW_StdOpcode_AdvancePc: {
+        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
+        dw_line_vm_advance(vm, vm->operands[0].u64);
+      } break;
+      
+      case DW_StdOpcode_AdvanceLine: {
+        TryRead(str8_deserial_read_sleb128(vm->program, vm->cursor, &vm->operands[0].s64), vm->cursor, exit);
+        vm->state.line += vm->operands[0].s64;
+      } break;
+      
+      case DW_StdOpcode_SetFile: {
+        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
+        vm->state.file_index = vm->operands[0].u64;
+      } break;
+      
+      case DW_StdOpcode_SetColumn: {
+        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
+        vm->state.column = vm->operands[0].u64;
+      } break;
+      
+      case DW_StdOpcode_NegateStmt: {
+        vm->state.is_stmt = !vm->state.is_stmt;
+      } break;
+      
+      case DW_StdOpcode_SetBasicBlock: {
+        vm->state.basic_block = 1;
+      } break;
+      
+      case DW_StdOpcode_ConstAddPc: {
+        U64 advance = (0xffu - vm->header.opcode_base) / vm->header.line_range;
+        dw_line_vm_advance(vm, advance);
+      } break;
+      
+      case DW_StdOpcode_FixedAdvancePc: {
+        U16 fixed_advance = 0;
+        TryRead(str8_deserial_read_struct(vm->program, vm->cursor, &fixed_advance), vm->cursor, exit);
+        vm->operands[0].u64 = fixed_advance;
+        vm->state.address += vm->operands[0].u64;
         vm->state.op_index = 0;
       } break;
-
-      case DW_ExtOpcode_DefineFile: {
-        TryRead(str8_deserial_read_cstr   (ext_data, ext_cursor, &vm->operands[0].string), ext_cursor, exit); // file name
-        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[1].u64),    ext_cursor, exit); // dir index
-        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[2].u64),    ext_cursor, exit); // modify time
-        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[3].u64),    ext_cursor, exit); // file size
-
-        if (vm->ext_file_ht == 0) {
-          vm->ext_file_ht = hash_table_init(vm->arena, 512);
-        }
-
-        DW_LineFile *file = push_array(vm->arena, DW_LineFile, 1);
-        file->path       = vm->operands[0].string;
-        file->dir_idx    = vm->operands[1].u64;
-        file->time_stamp = vm->operands[2].u64;
-        file->size       = vm->operands[3].u64;
-
-        if (hash_table_search_u64_raw(vm->ext_file_ht, vm->state.file_index) == 0) {
-          vm->error = push_str8f(vm->arena, "file with index %I64d was already defined", vm->state.file_index);
-          goto exit;
-        }
-
-        hash_table_push_u64_raw(vm->arena, vm->ext_file_ht, vm->state.file_index, file);
+      
+      case DW_StdOpcode_SetPrologueEnd: {
+        vm->state.prologue_end = 1;
       } break;
-
-      case DW_ExtOpcode_SetDiscriminator: {
-        TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[0].u64), ext_cursor, exit);
-        vm->state.discriminator = vm->operands[0].u64;
+      
+      case DW_StdOpcode_SetEpilogueBegin: {
+        vm->state.epilogue_begin = 1;
       } break;
-
-      default: { NotImplemented; } break;
-      }
-    } break;
-
-    default: {
-      // skip unknown opcode
-      if (0 == vm->opcode || vm->opcode > vm->header.num_opcode_lens) { goto exit; }
-      for EachIndex(i, vm->header.opcode_lens[vm->opcode - 1]) {
-        U64 v = 0;
-        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &v), vm->cursor, exit);
-      }
-    } break;
+      
+      case DW_StdOpcode_SetIsa: {
+        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->operands[0].u64), vm->cursor, exit);
+        vm->state.isa = vm->operands[0].u64;
+      } break;
+      
+      // extended opcodes
+      case DW_StdOpcode_ExtendedOpcode: {
+        TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &vm->ext_length), vm->cursor, exit);
+        String8 ext_data = str8_substr(vm->program, r1u64(vm->cursor, vm->cursor + vm->ext_length));
+        vm->cursor += vm->ext_length;
+        
+        U64 ext_cursor = 0;
+        TryRead(str8_deserial_read_struct(ext_data, ext_cursor, &vm->ext_opcode), ext_cursor, exit);
+        
+        switch (vm->ext_opcode) {
+          case DW_ExtOpcode_EndSequence: {
+            vm->new_seq  = 1;
+            vm->new_line = 1;
+            vm->state.end_sequence = 1;
+          } break;
+          
+          case DW_ExtOpcode_SetAddress: {
+            TryRead(str8_deserial_read(ext_data, ext_cursor, &vm->operands[0].u64, vm->header.address_size, vm->header.address_size), ext_cursor, exit);
+            vm->state.address  = vm->operands[0].u64;
+            vm->state.op_index = 0;
+          } break;
+          
+          case DW_ExtOpcode_DefineFile: {
+            TryRead(str8_deserial_read_cstr   (ext_data, ext_cursor, &vm->operands[0].string), ext_cursor, exit); // file name
+            TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[1].u64),    ext_cursor, exit); // dir index
+            TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[2].u64),    ext_cursor, exit); // modify time
+            TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[3].u64),    ext_cursor, exit); // file size
+            
+            if (vm->ext_file_ht == 0) {
+              vm->ext_file_ht = hash_table_init(vm->arena, 512);
+            }
+            
+            DW_LineFile *file = push_array(vm->arena, DW_LineFile, 1);
+            file->path       = vm->operands[0].string;
+            file->dir_idx    = vm->operands[1].u64;
+            file->time_stamp = vm->operands[2].u64;
+            file->size       = vm->operands[3].u64;
+            
+            if (hash_table_search_u64_raw(vm->ext_file_ht, vm->state.file_index) == 0) {
+              vm->error = push_str8f(vm->arena, "file with index %I64d was already defined", vm->state.file_index);
+              goto exit;
+            }
+            
+            hash_table_push_u64_raw(vm->arena, vm->ext_file_ht, vm->state.file_index, file);
+          } break;
+          
+          case DW_ExtOpcode_SetDiscriminator: {
+            TryRead(str8_deserial_read_uleb128(ext_data, ext_cursor, &vm->operands[0].u64), ext_cursor, exit);
+            vm->state.discriminator = vm->operands[0].u64;
+          } break;
+          
+          default: { NotImplemented; } break;
+        }
+      } break;
+      
+      default: {
+        // skip unknown opcode
+        if (0 == vm->opcode || vm->opcode > vm->header.num_opcode_lens) { goto exit; }
+        for EachIndex(i, vm->header.opcode_lens[vm->opcode - 1]) {
+          U64 v = 0;
+          TryRead(str8_deserial_read_uleb128(vm->program, vm->cursor, &v), vm->cursor, exit);
+        }
+      } break;
     }
   }
-
+  
   is_ok = 1;
   exit:;
   return is_ok;
@@ -2691,14 +2691,14 @@ internal String8
 dw_path_from_file(Arena *arena, String8Array dir_table, DW_LineFile *file)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   // directory table must contain at least compile unit directory
   Assert(dir_table.count > 0);
-
+  
   // find directory and file name associated with the file index
   String8 dir  = dir_table.v[file->dir_idx];
   String8 path = file->path;
-
+  
   // infer path style if directory is empty use file name
   PathStyle style = path_style_from_str8(dir);
   if (style == PathStyle_Null || style == PathStyle_Relative) {
@@ -2712,18 +2712,18 @@ dw_path_from_file(Arena *arena, String8Array dir_table, DW_LineFile *file)
       String8List comp_dir = str8_split_path(scratch.arena, dir_table.v[0]);
       str8_list_concat_in_place(&path_list, &comp_dir);
     }
-
+    
     // push directory
     String8List dir_list = str8_split_path(scratch.arena, dir);
     str8_list_concat_in_place(&path_list, &dir_list);
-
+    
     // push file name
     str8_list_push(scratch.arena, &path_list, file->path);
-
+    
     // resolve dots in the path
     str8_path_list_resolve_dots_in_place(&path_list, style);
   }
-
+  
   // join path
   String8 result = str8_path_list_join_by_style(arena, &path_list, style);
   
@@ -2732,7 +2732,7 @@ dw_path_from_file(Arena *arena, String8Array dir_table, DW_LineFile *file)
 }
 
 internal DW_PubStringsTable
-dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_SectionKind section_kind)
+dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Raw *input, DW_SectionKind section_kind)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -2745,7 +2745,7 @@ dw_v4_pub_strings_table_from_section_kind(Arena *arena, DW_Input *input, DW_Sect
     U32 first_four_bytes = 0;
     if (str8_deserial_read_struct(input->sec[DW_Section_Info].data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { break; }
     DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
-
+    
     U64 unit_length      = 0;
     U64 unit_length_size = str8_deserial_read_dwarf_packed_size(section_data, cursor, &unit_length);
     if (unit_length_size == 0) {
@@ -2823,45 +2823,45 @@ dw_expr_from_data(Arena *arena, DW_Format format, U64 addr_size, String8 data)
     for EachIndex(operand_idx, operand_count) {
       U64 operand_size = 0;
       switch (operand_types[operand_idx]) {
-      case DW_ExprOperandType_Null:      { } break;
-      case DW_ExprOperandType_U8:        { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].u8);                 } break;
-      case DW_ExprOperandType_U16:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].u16);                } break;
-      case DW_ExprOperandType_U32:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].u32);                } break;
-      case DW_ExprOperandType_U64:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].u64);                } break;
-      case DW_ExprOperandType_S8:        { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].s8);                 } break;
-      case DW_ExprOperandType_S16:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].s16);                } break;
-      case DW_ExprOperandType_S32:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].s32);                } break;
-      case DW_ExprOperandType_S64:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].s64);                } break;
-      case DW_ExprOperandType_ULEB128:   { operand_size = str8_deserial_read_uleb128(data, cursor, &operands[operand_idx].u64);               } break;
-      case DW_ExprOperandType_SLEB128:   { operand_size = str8_deserial_read_sleb128(data, cursor, &operands[operand_idx].s64);               } break;
-      case DW_ExprOperandType_Addr:      { operand_size = str8_deserial_read(data, cursor, &operands[operand_idx].u64, addr_size, addr_size); } break;
-      case DW_ExprOperandType_DwarfUInt: { operand_size = str8_deserial_read_dwarf_uint(data, cursor, format, &operands[operand_idx].u64);    } break;
-      case DW_ExprOperandType_Block: {
-        U8 block_size;
-        U64 block_size_size = str8_deserial_read_struct(data, cursor, &block_size);
-        U64 block_read_size = str8_deserial_read_block(data, cursor + block_size_size, block_size, &operands[operand_idx].block);
-        if(block_read_size == block_size_size) {
-          operand_size = block_size_size + block_read_size;
-        }
-      } break;
-      default: { InvalidPath; } break;
+        case DW_ExprOperandType_Null:      { } break;
+        case DW_ExprOperandType_U8:        { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].u8);                 } break;
+        case DW_ExprOperandType_U16:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].u16);                } break;
+        case DW_ExprOperandType_U32:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].u32);                } break;
+        case DW_ExprOperandType_U64:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].u64);                } break;
+        case DW_ExprOperandType_S8:        { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].s8);                 } break;
+        case DW_ExprOperandType_S16:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].s16);                } break;
+        case DW_ExprOperandType_S32:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].s32);                } break;
+        case DW_ExprOperandType_S64:       { operand_size = str8_deserial_read_struct(data, cursor, &operands[operand_idx].s64);                } break;
+        case DW_ExprOperandType_ULEB128:   { operand_size = str8_deserial_read_uleb128(data, cursor, &operands[operand_idx].u64);               } break;
+        case DW_ExprOperandType_SLEB128:   { operand_size = str8_deserial_read_sleb128(data, cursor, &operands[operand_idx].s64);               } break;
+        case DW_ExprOperandType_Addr:      { operand_size = str8_deserial_read(data, cursor, &operands[operand_idx].u64, addr_size, addr_size); } break;
+        case DW_ExprOperandType_DwarfUInt: { operand_size = str8_deserial_read_dwarf_uint(data, cursor, format, &operands[operand_idx].u64);    } break;
+        case DW_ExprOperandType_Block: {
+          U8 block_size;
+          U64 block_size_size = str8_deserial_read_struct(data, cursor, &block_size);
+          U64 block_read_size = str8_deserial_read_block(data, cursor + block_size_size, block_size, &operands[operand_idx].block);
+          if(block_read_size == block_size_size) {
+            operand_size = block_size_size + block_read_size;
+          }
+        } break;
+        default: { InvalidPath; } break;
       }
       if (operand_size == 0) { goto exit; }
       cursor += operand_size;
     }
-
+    
     // fill out instruction
     DW_ExprInst *inst = push_array(arena, DW_ExprInst, 1);
     inst->opcode   = opcode;
     inst->size     = cursor - inst_start;
     inst->operands = operand_count ? push_array(arena, DW_ExprOperand, operand_count) : 0;
     MemoryCopy(inst->operands, operands, operand_count * sizeof(DW_ExprOperand));
-
+    
     // push instruction
     DLLPushBack(expr.first, expr.last, inst);
     expr.count += 1;
   }
-exit:;
+  exit:;
   return expr;
 }
 
@@ -2899,25 +2899,25 @@ dw_parse_descriptor_entry_header(String8 data, U64 off, DW_DescriptorEntry *desc
   U32 first_four_bytes = 0;
   str8_deserial_read_struct(data, off, &first_four_bytes);
   DW_Format format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
-
+  
   U64 length      = 0;
   U64 length_size = str8_deserial_read_dwarf_packed_size(data, off, &length);
   if (length_size == 0) { goto exit; }
-
+  
   Rng1U64 entry_range = rng_1u64(off, off + length_size + length);
   String8 entry_data  = str8_substr(data, entry_range);
   U64 id = 0;
   U64 id_size = str8_deserial_read_dwarf_uint(entry_data, length_size, format, &id);
   if (id_size == 0) { goto exit; }
-
+  
   U64 id_type = format == DW_Format_32Bit ? max_U32 : max_U64;
   desc_out->format          = format;
   desc_out->type            = (id == id_type) ? DW_DescriptorEntryType_CIE : DW_DescriptorEntryType_FDE;
   desc_out->entry_range     = entry_range;
   desc_out->cie_pointer     = id;
   desc_out->cie_pointer_off = length_size;
-
-exit:;
+  
+  exit:;
   return length + length_size;
 }
 
@@ -2926,16 +2926,16 @@ dw_parse_cie(String8 data, DW_Format format, Arch arch, DW_CIE *cie_out)
 {
   B32 is_parsed = 0;
   U64 cursor    = format == DW_Format_32Bit ? 4 : 12;
-
+  
   U64 cie_id      = 0;
   TryRead(str8_deserial_read_dwarf_uint(data, cursor, format, &cie_id), cursor, exit);
-
+  
   U8  version      = 0;
   TryRead(str8_deserial_read_struct(data, cursor, &version), cursor, exit);
-
+  
   String8 aug_string = {0};
   TryRead(str8_deserial_read_cstr(data, cursor, &aug_string), cursor, exit);
-
+  
   U8 address_size          = 0;
   U8 segment_selector_size = 0;
   if (version >= DW_Version_4) {
@@ -2944,20 +2944,20 @@ dw_parse_cie(String8 data, DW_Format format, Arch arch, DW_CIE *cie_out)
   } else {
     address_size = byte_size_from_arch(arch);
   }
-
+  
   U64 code_align_factor = 0;
   TryRead(str8_deserial_read_uleb128(data, cursor, &code_align_factor), cursor, exit);
-
+  
   S64 data_align_factor = 0;
   TryRead(str8_deserial_read_sleb128(data, cursor, &data_align_factor), cursor, exit);
-
+  
   U64 ret_addr_reg = 0;
   U64 ret_addr_reg_size = 0;
   if (version == DW_Version_1) { TryRead(str8_deserial_read(data, cursor, &ret_addr_reg, sizeof(U8), sizeof(U8)), cursor, exit); }
   else                         { TryRead(str8_deserial_read_uleb128(data, cursor, &ret_addr_reg), cursor, exit);                 }
-
+  
   if (aug_string.size > 0) { goto exit; }
-
+  
   cie_out->insts                 = str8_skip(data, cursor);
   cie_out->aug_string            = aug_string;
   cie_out->code_align_factor     = code_align_factor;
@@ -2967,9 +2967,9 @@ dw_parse_cie(String8 data, DW_Format format, Arch arch, DW_CIE *cie_out)
   cie_out->version               = version;
   cie_out->address_size          = address_size;
   cie_out->segment_selector_size = segment_selector_size;
-
+  
   is_parsed = 1;
-exit:;
+  exit:;
   return is_parsed;
 }
 
@@ -2978,31 +2978,31 @@ dw_parse_fde(String8 data, DW_Format format, DW_CIE *cie, DW_FDE *fde_out)
 {
   B32 is_parsed = 0;
   U64 cursor    = format == DW_Format_32Bit ? 4 : 12;
-
+  
   // extract CIE pointer
   U64 cie_pointer = 0;
   TryRead(str8_deserial_read_dwarf_uint(data, cursor, format, &cie_pointer), cursor, exit);
-
+  
   // extract address of first instruction
   U64 pc_begin = 0;
   TryRead(dw_read_debug_frame_ptr(str8_skip(data, cursor), cie, &pc_begin), cursor, exit);
-
+  
   // extract instruction range size
   U64 pc_range = 0;
   TryRead(dw_read_debug_frame_ptr(str8_skip(data, cursor), cie, &pc_range), cursor, exit);
-
+  
   // parse augmentation data
   String8 aug_data = str8_substr(data, rng_1u64(cursor, cursor + cie->aug_data.size));
   cursor += cie->aug_data.size;
-
+  
   // commit values to out
   fde_out->format      = format;
   fde_out->cie_pointer = cie_pointer;
   fde_out->pc_range    = rng_1u64(pc_begin, pc_begin + pc_range);
   fde_out->insts       = str8_skip(data, cursor);
-
+  
   is_parsed = 1;
-exit:;
+  exit:;
   return is_parsed;
 }
 
@@ -3028,28 +3028,28 @@ dw_parse_cfi(String8 data, U64 fde_offset, Arch arch, DW_CIE *cie_out, DW_FDE *f
       }
     }
   }
-
+  
   return is_parsed;
 }
 
 internal DW_CFA_ParseErrorCode
 dw_parse_cfa_inst(String8        data,
-                   U64           code_align_factor,
-                   S64           data_align_factor,
-                   DW_DecodePtr *decode_ptr_func,
-                   void         *decode_ptr_ud,
-                   U64          *bytes_read_out,
-                   DW_CFA_Inst   *inst_out)
+                  U64           code_align_factor,
+                  S64           data_align_factor,
+                  DW_DecodePtr *decode_ptr_func,
+                  void         *decode_ptr_ud,
+                  U64          *bytes_read_out,
+                  DW_CFA_Inst   *inst_out)
 {
   *bytes_read_out = 0;
-
+  
   DW_CFA_ParseErrorCode error_code = DW_CFA_ParseErrorCode_End;
   U64                   cursor     = 0;
-
+  
   // read opcode
   DW_CFA_Opcode raw_opcode = 0;
   TryRead(str8_deserial_read_struct(data, cursor, &raw_opcode), cursor, exit);
-
+  
   // decode opcode implicit operand
   U64 opcode           = raw_opcode & ~DW_CFA_Mask_OpcodeHi;
   U64 implicit_operand = 0;
@@ -3057,263 +3057,263 @@ dw_parse_cfa_inst(String8        data,
     opcode           = raw_opcode & DW_CFA_Mask_OpcodeHi;
     implicit_operand = raw_opcode & DW_CFA_Mask_Operand;
   }
-
+  
   // decode operands
   DW_CFA_Operand operands[DW_CFA_OperandMax] = {0};
   switch (opcode) {
-  case DW_CFA_SetLoc: {
-    U64 address_size = decode_ptr_func(str8_skip(data, cursor), decode_ptr_ud, &operands[0].u64);
-    if (address_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += address_size;
-  } break;
-  case DW_CFA_AdvanceLoc: {
-    operands[0].u64 = implicit_operand * code_align_factor;
-  } break;
-  case DW_CFA_AdvanceLoc1: {
-    U8 delta = 0;
-    U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
-    if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += delta_size;
-    operands[0].u64 = delta * code_align_factor;
-  } break;
-  case DW_CFA_AdvanceLoc2: {
-    U16 delta = 0;
-    U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
-    if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += delta_size;
-    operands[0].u64 = delta * code_align_factor;
-  } break;
-  case DW_CFA_AdvanceLoc4: {
-    U32 delta = 0;
-    U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
-    if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += delta_size;
-    operands[0].u64 = delta * code_align_factor;
-  } break;
-  case DW_CFA_DefCfa: {
-    U64 reg = 0;
-    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
-    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += reg_size;
-
-    U64 offset = 0;
-    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = reg;
-    operands[1].u64 = offset;
-  } break;
-  case DW_CFA_DefCfaSf: {
-    U64 reg = 0;
-    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
-    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += reg_size;
-
-    S64 offset = 0;
-    U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = reg;
-    operands[1].s64 = offset * data_align_factor;
-  } break;
-  case DW_CFA_DefCfaRegister: {
-    U64 reg = 0;
-    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
-    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += reg_size;
-
-    operands[0].u64 = reg;
-  } break;
-  case DW_CFA_DefCfaOffset: {
-    U64 offset = 0;
-    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = offset;
-  } break;
-  case DW_CFA_DefCfaOffsetSf: {
-    U64 offset = 0;
-    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = offset * data_align_factor;
-  } break;
-  case DW_CFA_DefCfaExpr: {
-    U64 expr_size = 0;
-    U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
-    if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += expr_size_size;
-
-    if (cursor + expr_size > data.size) { goto exit; }
-    String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
-
-    operands[0].block = expr;
-    cursor += expr_size;
-  } break;
-  case DW_CFA_Undefined: {
-    U64 reg = 0;
-    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
-    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += reg_size;
-
-    operands[0].u64 = reg;
-  } break;
-  case DW_CFA_SameValue: {
-    U64 reg = 0;
-    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
-    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += reg_size;
-
-    operands[0].u64 = reg;
-  } break;
-  case DW_CFA_Offset: {
-    U64 offset = 0;
-    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = implicit_operand;
-    operands[1].s64 = (S64)offset * data_align_factor;
-  } break;
-  case DW_CFA_OffsetExt: {
-    U64 reg = 0;
-    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
-    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += reg_size;
-
-    U64 offset = 0;
-    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = reg;
-    operands[1].u64 = offset * data_align_factor;
-  } break;
-  case DW_CFA_OffsetExtSf: {
-    U64 reg = 0;
-    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
-    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += reg_size;
-
-    S64 offset = 0;
-    U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = reg;
-    operands[1].s64 = offset * data_align_factor;
-  } break;
-  case DW_CFA_ValOffset: {
-    U64 val = 0;
-    U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
-    if (val_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += val_size;
-
-    U64 offset = 0;
-    U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = val;
-    operands[1].u64 = offset * data_align_factor;
-  } break;
-  case DW_CFA_ValOffsetSf: {
-    U64 val = 0;
-    U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
-    if (val_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += val_size;
-
-    S64 offset = 0;
-    U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
-    if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += offset_size;
-
-    operands[0].u64 = val;
-    operands[1].s64 = offset;
-  } break;
-  case DW_CFA_Register: {
-    U64 dst_reg = 0;
-    U64 dst_reg_size = str8_deserial_read_uleb128(data, cursor, &dst_reg);
-    if (dst_reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += dst_reg_size;
-
-    U64 src_reg = 0;
-    U64 src_reg_size = str8_deserial_read_uleb128(data, cursor, &src_reg);
-    if (src_reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += src_reg_size;
-
-    operands[0].u64 = dst_reg;
-    operands[1].u64 = src_reg;
-  } break;
-  case DW_CFA_Expr: {
-    U64 reg = 0;
-    U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
-    if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += reg_size;
-
-    U64 expr_size = 0;
-    U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
-    if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += expr_size_size;
-
-    if (cursor + expr_size > data.size) { goto exit; }
-    String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
-    cursor += expr_size;
-
-    operands[0].u64   = reg;
-    operands[1].block = expr;
-  } break;
-  case DW_CFA_ValExpr: {
-    U64 val = 0;
-    U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
-    if (val_size == 0) { goto exit; }
-    cursor += val_size;
-
-    U64 expr_size = 0;
-    U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
-    if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
-    cursor += expr_size_size;
-
-    if (cursor + expr_size > data.size) { goto exit; }
-    String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
-    cursor += expr_size;
-
-    operands[0].u64 = val;
-    operands[1].block = expr;
-  } break;
-  case DW_CFA_Restore: {
-    operands[0].u64 = implicit_operand;
-  } break;
-  case DW_CFA_RestoreExt: {} break;
-  case DW_CFA_RememberState: {} break;
-  case DW_CFA_RestoreState: {} break;
-  case DW_CFA_Nop: {} break;
-  default: { NotImplemented; goto exit; } break;
+    case DW_CFA_SetLoc: {
+      U64 address_size = decode_ptr_func(str8_skip(data, cursor), decode_ptr_ud, &operands[0].u64);
+      if (address_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += address_size;
+    } break;
+    case DW_CFA_AdvanceLoc: {
+      operands[0].u64 = implicit_operand * code_align_factor;
+    } break;
+    case DW_CFA_AdvanceLoc1: {
+      U8 delta = 0;
+      U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
+      if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += delta_size;
+      operands[0].u64 = delta * code_align_factor;
+    } break;
+    case DW_CFA_AdvanceLoc2: {
+      U16 delta = 0;
+      U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
+      if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += delta_size;
+      operands[0].u64 = delta * code_align_factor;
+    } break;
+    case DW_CFA_AdvanceLoc4: {
+      U32 delta = 0;
+      U64 delta_size = str8_deserial_read_struct(data, cursor, &delta);
+      if (delta_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += delta_size;
+      operands[0].u64 = delta * code_align_factor;
+    } break;
+    case DW_CFA_DefCfa: {
+      U64 reg = 0;
+      U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+      if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += reg_size;
+      
+      U64 offset = 0;
+      U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = reg;
+      operands[1].u64 = offset;
+    } break;
+    case DW_CFA_DefCfaSf: {
+      U64 reg = 0;
+      U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+      if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += reg_size;
+      
+      S64 offset = 0;
+      U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = reg;
+      operands[1].s64 = offset * data_align_factor;
+    } break;
+    case DW_CFA_DefCfaRegister: {
+      U64 reg = 0;
+      U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+      if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += reg_size;
+      
+      operands[0].u64 = reg;
+    } break;
+    case DW_CFA_DefCfaOffset: {
+      U64 offset = 0;
+      U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = offset;
+    } break;
+    case DW_CFA_DefCfaOffsetSf: {
+      U64 offset = 0;
+      U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = offset * data_align_factor;
+    } break;
+    case DW_CFA_DefCfaExpr: {
+      U64 expr_size = 0;
+      U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
+      if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += expr_size_size;
+      
+      if (cursor + expr_size > data.size) { goto exit; }
+      String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
+      
+      operands[0].block = expr;
+      cursor += expr_size;
+    } break;
+    case DW_CFA_Undefined: {
+      U64 reg = 0;
+      U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+      if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += reg_size;
+      
+      operands[0].u64 = reg;
+    } break;
+    case DW_CFA_SameValue: {
+      U64 reg = 0;
+      U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+      if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += reg_size;
+      
+      operands[0].u64 = reg;
+    } break;
+    case DW_CFA_Offset: {
+      U64 offset = 0;
+      U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = implicit_operand;
+      operands[1].s64 = (S64)offset * data_align_factor;
+    } break;
+    case DW_CFA_OffsetExt: {
+      U64 reg = 0;
+      U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+      if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += reg_size;
+      
+      U64 offset = 0;
+      U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = reg;
+      operands[1].u64 = offset * data_align_factor;
+    } break;
+    case DW_CFA_OffsetExtSf: {
+      U64 reg = 0;
+      U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+      if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += reg_size;
+      
+      S64 offset = 0;
+      U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = reg;
+      operands[1].s64 = offset * data_align_factor;
+    } break;
+    case DW_CFA_ValOffset: {
+      U64 val = 0;
+      U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
+      if (val_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += val_size;
+      
+      U64 offset = 0;
+      U64 offset_size = str8_deserial_read_uleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = val;
+      operands[1].u64 = offset * data_align_factor;
+    } break;
+    case DW_CFA_ValOffsetSf: {
+      U64 val = 0;
+      U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
+      if (val_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += val_size;
+      
+      S64 offset = 0;
+      U64 offset_size = str8_deserial_read_sleb128(data, cursor, &offset);
+      if (offset_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += offset_size;
+      
+      operands[0].u64 = val;
+      operands[1].s64 = offset;
+    } break;
+    case DW_CFA_Register: {
+      U64 dst_reg = 0;
+      U64 dst_reg_size = str8_deserial_read_uleb128(data, cursor, &dst_reg);
+      if (dst_reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += dst_reg_size;
+      
+      U64 src_reg = 0;
+      U64 src_reg_size = str8_deserial_read_uleb128(data, cursor, &src_reg);
+      if (src_reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += src_reg_size;
+      
+      operands[0].u64 = dst_reg;
+      operands[1].u64 = src_reg;
+    } break;
+    case DW_CFA_Expr: {
+      U64 reg = 0;
+      U64 reg_size = str8_deserial_read_uleb128(data, cursor, &reg);
+      if (reg_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += reg_size;
+      
+      U64 expr_size = 0;
+      U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
+      if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += expr_size_size;
+      
+      if (cursor + expr_size > data.size) { goto exit; }
+      String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
+      cursor += expr_size;
+      
+      operands[0].u64   = reg;
+      operands[1].block = expr;
+    } break;
+    case DW_CFA_ValExpr: {
+      U64 val = 0;
+      U64 val_size = str8_deserial_read_uleb128(data, cursor, &val);
+      if (val_size == 0) { goto exit; }
+      cursor += val_size;
+      
+      U64 expr_size = 0;
+      U64 expr_size_size = str8_deserial_read_uleb128(data, cursor, &expr_size);
+      if (expr_size_size == 0) { error_code = DW_CFA_ParseErrorCode_OutOfData; goto exit; }
+      cursor += expr_size_size;
+      
+      if (cursor + expr_size > data.size) { goto exit; }
+      String8 expr = str8_prefix(str8_skip(data, cursor), expr_size);
+      cursor += expr_size;
+      
+      operands[0].u64 = val;
+      operands[1].block = expr;
+    } break;
+    case DW_CFA_Restore: {
+      operands[0].u64 = implicit_operand;
+    } break;
+    case DW_CFA_RestoreExt: {} break;
+    case DW_CFA_RememberState: {} break;
+    case DW_CFA_RestoreState: {} break;
+    case DW_CFA_Nop: {} break;
+    default: { NotImplemented; goto exit; } break;
   }
-
+  
   // fill out output
   inst_out->opcode = opcode;
   MemoryCopyTyped(&inst_out->operands[0], &operands[0], DW_CFA_OperandMax);
-
+  
   *bytes_read_out = cursor;
-
+  
   error_code = DW_CFA_ParseErrorCode_NewInst;
-
-exit:;
+  
+  exit:;
   return error_code;
 }
 
 internal DW_CFA_InstList
 dw_parse_cfa_inst_list(Arena          *arena,
-                        String8        data,
-                        U64            code_align_factor,
-                        S64            data_align_factor,
-                        DW_DecodePtr  *decode_ptr_func,
-                        void          *decode_ptr_ud)
+                       String8        data,
+                       U64            code_align_factor,
+                       S64            data_align_factor,
+                       DW_DecodePtr  *decode_ptr_func,
+                       void          *decode_ptr_ud)
 {
   U64 pos = arena_pos(arena);
   DW_CFA_InstList list = {0};

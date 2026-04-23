@@ -201,7 +201,7 @@ typedef struct DW_WriterSection
 typedef struct DW_Writer
 {
   Arena                   *arena;
-
+  
   // Compile Unit
   Arch                     arch;
   DW_Version               version;
@@ -209,15 +209,15 @@ typedef struct DW_Writer
   DW_CompUnitKind          cu_kind;
   U8                       address_size;
   U8                       segsel_size;
-
+  
   // Abbrev
   U64                      abbrev_base_info_off;
   HashTable               *abbrev_id_map;
-
+  
   // Info
   DW_WriterTag            *root;
   DW_WriterTag            *current;
-
+  
   // Line
   struct {
     U8              min_inst_len;
@@ -227,20 +227,20 @@ typedef struct DW_Writer
     U8              line_range;
     U8              opcode_base;
     DW_LineInstList line_insts;
-
+    
     DW_WriterFile *file;
     U64            ln;
     U64            col;
     U64            addr;
-
+    
     U64            file_count;
     DW_WriterFile *first_file;
     DW_WriterFile *last_file;
   } line;
-
+  
   // Emit
   DW_WriterFixupList       fixups;
-  DW_WriterSection         sections[DW_Section_Count];
+  DW_WriterSection         sections[DW_Section_COUNT];
   DW_WriterAttribChunkList attrib_chunk_list;
   DW_WriterTagChunkList    tag_chunk_list;
 } DW_Writer;

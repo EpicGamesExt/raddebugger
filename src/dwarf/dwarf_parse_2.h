@@ -100,10 +100,18 @@ struct DW2_Tag
 ////////////////////////////////
 //~ rjf: Line Info
 
+typedef U32 DW2_LineTableFileFlags;
+enum
+{
+  DW2_LineTableFileFlag_HasMD5        = (1<<0),
+  DW2_LineTableFileFlag_HasModifyTime = (1<<1),
+};
+
 typedef struct DW2_LineTableFile DW2_LineTableFile;
 struct DW2_LineTableFile
 {
   String8 file_name;
+  DW2_LineTableFileFlags flags;
   U64 dir_idx;
   U64 modify_time;
   U64 file_size;
@@ -152,6 +160,23 @@ struct DW2_LineTableHeader
   U8 *opcode_lengths;
   DW2_LineTableFileArray dirs;
   DW2_LineTableFileArray files;
+};
+
+typedef struct DW2_LineVMRegs DW2_LineVMRegs;
+struct DW2_LineVMRegs
+{
+  U64 address;
+  U64 vliw_op_index;
+  U64 file_index;
+  U64 line;
+  U64 column;
+  B32 is_stmt;
+  B32 basic_block;
+  B32 end_sequence;
+  B32 prologue_end;
+  B32 epilogue_begin;
+  U64 isa;
+  U64 discriminator;
 };
 
 ////////////////////////////////

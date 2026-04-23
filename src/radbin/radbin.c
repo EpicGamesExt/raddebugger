@@ -77,7 +77,14 @@ rb_thread_entry_point(void *p)
       //////////////////////////
       //- rjf: possibly relative -> absolute path
       //
-      String8 input_file_path = path_normalized_from_string(arena, str8f(arena, "%S/%S", working_directory, n->string));
+      String8 input_file_path = n->string;
+      {
+        PathStyle path_style = path_style_from_str8(n->string);
+        if(path_style == PathStyle_Relative)
+        {
+          input_file_path = path_normalized_from_string(arena, str8f(arena, "%S/%S", working_directory, n->string));
+        }
+      }
       
       //////////////////////////
       //- rjf: do thin analysis of file
@@ -654,6 +661,7 @@ rb_thread_entry_point(void *p)
       B32 convert_done = 0;
       RDIM_BakeParams pdb_bake_params = {0};
       RDIM_BakeParams dwarf_bake_params = {0};
+      RDIM_BakeParams dwarf_bake_params_2 = {0};
       typedef struct RDIM_BakeParamsNode RDIM_BakeParamsNode;
       struct RDIM_BakeParamsNode
       {
@@ -756,6 +764,124 @@ rb_thread_entry_point(void *p)
             convert_params.is_parse_relaxed = 1; // TODO: switch
           }
           ProfScope("convert") dwarf_bake_params = d2r_convert(arena, &convert_params);
+          
+          // rjf: convert [2]
+          D2R2_ConvertParams convert_params_2 = {0};
+          {
+            B32 got_exe = 0;
+            B32 got_dbg = 0;
+            String8 exe_name = {0};
+            String8 exe_data = {0};
+            ExecutableImageKind exe_kind = ExecutableImageKind_Null;
+            String8 dbg_name = {0};
+            String8 dbg_data = {0};
+            if(!got_exe && !got_dbg)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_PE].first; n != 0; n = n->next)
+              {
+                if(n->v->format_flags & RB_FileFormatFlag_HasDWARF)
+                {
+                  got_exe = 1;
+                  got_dbg = 1;
+                  dbg_name = n->v->path;
+                  dbg_data = n->v->data;
+                  exe_name = n->v->path;
+                  exe_data = n->v->data;
+                  exe_kind = ExecutableImageKind_CoffPe;
+                  break;
+                }
+              }
+            }
+            if(!got_exe)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_ELF32].first; n != 0; n = n->next)
+              {
+                got_exe = 1;
+                exe_name = n->v->path;
+                exe_data = n->v->data;
+                exe_kind = ExecutableImageKind_Elf32;
+                if(!(n->v->format_flags & RB_FileFormatFlag_HasDWARF))
+                {
+                  break;
+                }
+              }
+            }
+            if(!got_exe)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_ELF64].first; n != 0; n = n->next)
+              {
+                got_exe = 1;
+                exe_name = n->v->path;
+                exe_data = n->v->data;
+                exe_kind = ExecutableImageKind_Elf64;
+                if(!(n->v->format_flags & RB_FileFormatFlag_HasDWARF))
+                {
+                  break;
+                }
+              }
+            }
+            if(!got_dbg)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_ELF32].first; n != 0; n = n->next)
+              {
+                if(n->v->format_flags & RB_FileFormatFlag_HasDWARF)
+                {
+                  got_dbg = 1;
+                  dbg_name = n->v->path;
+                  dbg_data = n->v->data;
+                  break;
+                }
+              }
+            }
+            if(!got_dbg)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_ELF64].first; n != 0; n = n->next)
+              {
+                if(n->v->format_flags & RB_FileFormatFlag_HasDWARF)
+                {
+                  got_dbg = 1;
+                  dbg_name = n->v->path;
+                  dbg_data = n->v->data;
+                  break;
+                }
+              }
+            }
+            switch(exe_kind)
+            {
+              default:{}break;
+              case ExecutableImageKind_CoffPe:
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                PE_BinInfo pe = pe_bin_info_from_data(scratch.arena, exe_data);
+                String8 raw_sections  = str8_substr(exe_data, pe.section_table_range);
+                COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(raw_sections, 0, sizeof(COFF_SectionHeader) * pe.section_count);
+                String8 string_table = str8_substr(exe_data, pe.string_table_range);
+                convert_params_2.arch = pe.arch;
+                convert_params_2.base_vaddr = pe.image_base;
+                convert_params_2.raw = dw_input_from_coff_section_table(scratch.arena, exe_data, string_table, pe.section_count, section_table);
+                convert_params_2.path_style = PathStyle_WindowsAbsolute;
+                convert_params_2.binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, exe_data, string_table, pe.section_count, section_table);
+                scratch_end(scratch);
+              }break;
+              case ExecutableImageKind_Elf32:
+              case ExecutableImageKind_Elf64:
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                ELF_Bin bin = elf_bin_from_data(scratch.arena, dbg_data);
+                convert_params_2.arch = arch_from_elf_machine(bin.hdr.e_machine);
+                convert_params_2.base_vaddr = elf_base_addr_from_bin(&bin);
+                convert_params_2.raw = dw_input_from_elf_bin(scratch.arena, dbg_data, &bin);
+                convert_params_2.path_style = PathStyle_UnixAbsolute;
+                convert_params_2.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, bin.shdrs);
+                scratch_end(scratch);
+              } break;
+            }
+            convert_params_2.exe_name = exe_name;
+            convert_params_2.exe_data = exe_data;
+            convert_params_2.subset_flags  = subset_flags;
+            convert_params_2.deterministic = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
+          }
+          ProfScope("convert [2]") dwarf_bake_params_2 = d2r2_convert(arena, &convert_params_2);
         }
         
         //- rjf: PDB inputs => PDB -> RDI conversion
@@ -1277,7 +1403,7 @@ rb_thread_entry_point(void *p)
         PE_BinInfo          pe                 = {0};
         ELF_Bin             elf                = {0};
         COFF_FileHeaderInfo coff_obj           = {0};
-        DW_Input            dw                 = {0};
+        DW_Raw            dw                 = {0};
         U64                 eh_frame_hdr_vaddr = 0;
         U64                 eh_frame_vaddr     = 0;
         String8             eh_frame_hdr       = {0};

@@ -103,7 +103,7 @@ dwt_tags_must_match(DW_WriterTag *writer_tag, DW_TagNode *reader_tag)
   return is_match;
 }
 
-internal DW_Input
+internal DW_Raw
 dw_input_from_writer(Arena *arena, DW_Writer *writer)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -127,7 +127,7 @@ dw_input_from_writer(Arena *arena, DW_Writer *writer)
   PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
   COFF_SectionHeader *section_table = (COFF_SectionHeader *)(exe.str + pe.section_table_range.min);
   String8             string_table  = str8_substr(exe, pe.string_table_range);
-  DW_Input            input         = dw_input_from_coff_section_table(arena, exe, string_table, pe.section_count, section_table);
+  DW_Raw            input         = dw_input_from_coff_section_table(arena, exe, string_table, pe.section_count, section_table);
   
   obj_release(&obj);
   scratch_end(scratch);
@@ -141,7 +141,7 @@ TEST(dwarf_32bit)
   dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
   dw_writer_tag_end(writer);
   
-  DW_Input input = dw_input_from_writer(arena, writer);
+  DW_Raw input = dw_input_from_writer(arena, writer);
   
   for EachElement(sec_idx, input.sec) {
     if (sec_idx == DW_Section_Abbrev) continue;
@@ -169,7 +169,7 @@ TEST(dwarf_64bit)
   dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
   dw_writer_tag_end(writer);
   
-  DW_Input input = dw_input_from_writer(arena, writer);
+  DW_Raw input = dw_input_from_writer(arena, writer);
   
   for EachElement(sec_idx, input.sec) {
     if (sec_idx == DW_Section_Abbrev) continue;
@@ -235,7 +235,7 @@ TEST(dwarf_line_opcodes)
   dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_set_discriminator(2));
   dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_end_sequence());
   
-  DW_Input      input     = dw_input_from_writer(arena, writer);
+  DW_Raw      input     = dw_input_from_writer(arena, writer);
   Rng1U64Array  cu_ranges = dw_unit_ranges_from_data_arr(arena, input.sec[DW_Section_Info].data);
   DW_CompUnit   cu        = dw_cu_from_info_off(arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
   DW_LineVM    *line_vm   = dw_line_vm_init(&input, &cu);
@@ -411,7 +411,7 @@ TEST(dwarf_line_emit)
     }
   }
   
-  DW_Input      input     = dw_input_from_writer(arena, writer);
+  DW_Raw      input     = dw_input_from_writer(arena, writer);
   Rng1U64Array  cu_ranges = dw_unit_ranges_from_data_arr(arena, input.sec[DW_Section_Info].data);
   DW_CompUnit   cu        = dw_cu_from_info_off(arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
   DW_LineVM    *line_vm   = dw_line_vm_init(&input, &cu);
@@ -621,7 +621,7 @@ TEST(dwarf_writer)
     dw_writer_tag_end(writer);
   }
   
-  DW_Input            input         = dw_input_from_writer(arena, writer);
+  DW_Raw            input         = dw_input_from_writer(arena, writer);
   DW_ListUnitInput    lu_input      = dw_list_unit_input_from_input(arena, &input);
   DW_CompUnit         cu            = dw_cu_from_info_off(arena, &input, lu_input, 0, 1);
   DW_TagTree          tag_tree      = dw_tag_tree_from_cu(arena, &input, &cu);

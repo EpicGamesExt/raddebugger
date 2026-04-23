@@ -10,5 +10,6 @@
 #include "dwarf/dwarf_dump.c"
 #include "dwarf/dwarf_help.c"
 #include "dwarf/dwarf_writer.c"
+#include "dwarf/dwarf_parse_2.c"
 #include "dwarf/eh_frame.c"
 #include "dwarf/eh_dump.c"
