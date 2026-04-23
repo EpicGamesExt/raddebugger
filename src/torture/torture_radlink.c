@@ -4466,67 +4466,35 @@ TEST(second_member_header)
 }
 
 #if 0
-TEST(multibyte)
+TEST(defer_imp_link)
 {
-  String8 a_obj = t_coff_obj_from_string(arena, str8_lit("'machine': 'x64',                                                                  \n\
-                                                          'sections': [                                                                      \n\
-                                                             {                                                                               \n\
-                                                               'id': 'text',                                                                 \n\
-                                                               'name': '.text',                                                              \n\
-                                                               'flags': 'code',                                                              \n\
-                                                               'data': [ 0xff, 0x25, 0x00, 0x00, 0x00, 0x00,                                 \n\
-                                                                         0xff, 0x25, 0x00, 0x00, 0x00, 0x00 ],                               \n\
-                                                               'relocs': [                                                                   \n\
-                                                                 { 'kind': 'rel32', 'apply_off': 2, 'symbol': 'foo' },                       \n\
-                                                               ],                                                                            \n\
-                                                             },                                                                              \n\
-                                                          ],                                                                                 \n\
-                                                          'symbols': [                                                                       \n\
-                                                            { 'kind': 'extern_func', 'name': 'use_imports', 'value': 0, 'section': 'text' }, \n\
-                                                            { 'kind': 'undef',       'name': 'foo' },                                        \n\
-                                                          ]"));
+  String8 bar_lib = t_coff_lib_from_string(arena, str8_lit("'import': { 'dll_name': 'bar.dll', 'name': 'bar', 'import_by': 'name', 'hint_or_ordinal': 0, 'type': 'code' },                                                                            \
+                                                            'obj': {                                                                                                                                                                                  \
+                                                              'machine': 'x64',                                                                                                                                                                       \
+                                                              'sections': [ { 'id': 'text', 'name': '.text', 'flags': 'code', 'data': [ 0xff, 0x25, 0x00, 0x00, 0x00, 0x00 ], 'relocs': [ { 'kind': 'rel32', 'apply_off': 2, 'symbol': 'bar' } ] } ], \
+                                                              'symbols':  [                                                                                                                                                                           \
+                                                                { 'kind': 'undef', 'name': '__imp_bar' },                                                                                                                                             \
+                                                                { 'kind': 'extern_func', 'name': 'qwe', 'section': 'text', 'value': 0 },                                                                                                              \
+                                                              ],                                                                                                                                                                                      \
+                                                            }, \
+                                                            "));
 
-  String8 aa_obj = t_coff_obj_from_string(arena, str8_lit("'machine': 'x64',                                                                 \n\
-                                                          'sections': [                                                                      \n\
-                                                             {                                                                               \n\
-                                                               'id': 'text',                                                                 \n\
-                                                               'name': '.text',                                                              \n\
-                                                               'flags': 'code',                                                              \n\
-                                                               'data': [ 0xff, 0x25, 0x00, 0x00, 0x00, 0x00,                                 \n\
-                                                                         0xff, 0x25, 0x00, 0x00, 0x00, 0x00 ],                               \n\
-                                                               'relocs': [                                                                   \n\
-                                                                 { 'kind': 'rel32', 'apply_off': 2, 'symbol': '__imp_foo' },                 \n\
-                                                               ],                                                                            \n\
-                                                             },                                                                              \n\
-                                                          ],                                                                                 \n\
-                                                          'symbols': [                                                                       \n\
-                                                            { 'kind': 'extern_func', 'name': 'use_imports', 'value': 0, 'section': 'text' }, \n\
-                                                            { 'kind': 'undef',       'name': '__imp_foo' },                                  \n\
-                                                          ]"));
+  String8 foo_lib = t_coff_lib_from_string(arena, str8_lit("'import': { 'dll_name': 'foo.dll', 'name': 'bar', 'import_by': 'name', 'hint_or_ordinal': 0, 'type': 'code' },                                                                             \
+                                                            'obj': {                                                                                                                                                                                   \
+                                                               'machine': 'x64',                                                                                                                                                                       \
+                                                               'sections': [ { 'id': 'text', 'name': '.text', 'flags': 'code', 'data': [ 0xff, 0x25, 0x00, 0x00, 0x00, 0x00 ], 'relocs': [ { 'kind': 'rel32', 'apply_off': 2, 'symbol': 'bar' } ] } ], \
+                                                               'symbols':  [                                                                                                                                                                           \
+                                                                { 'kind': 'undef', 'name': 'bar' },                                                                                                                                                    \
+                                                                { 'kind': 'undef', 'name': 'qwe' },                                                                                                                                                    \
+                                                                { 'kind': 'extern_func', 'name': 'thunk', 'section': 'text', 'value': 0 },                                                                                                             \
+                                                               ],                                                                                                                                                                                      \
+                                                            }"));
 
-  String8 b_lib = t_coff_lib_from_string(arena, str8_lit("'import': {             \n\
-                                                           'dll_name': 'foo.dll', \n\
-                                                           'name': 'foo',         \n\
-                                                           'import_by': 'name',   \n\
-                                                           'hint_or_ordinal': 0,  \n\
-                                                           'type': 'code',        \n\
-                                                         }"));
-
-  String8 c_lib = t_coff_lib_from_string(arena, str8_lit("'import': {             \n\
-                                                           'dll_name': 'foo.dll', \n\
-                                                           'name': '__imp_foo',   \n\
-                                                           'import_by': 'name',   \n\
-                                                           'hint_or_ordinal': 0,  \n\
-                                                           'type': 'code',        \n\
-                                                         }"));
-
-  T_Ok(t_write_file(str8_lit("a.obj"), a_obj));
-  T_Ok(t_write_file(str8_lit("aa.obj"), aa_obj));
-  T_Ok(t_write_file(str8_lit("b.lib"), b_lib));
-  T_Ok(t_write_file(str8_lit("c.lib"), c_lib));
+  T_Ok(t_write_file(str8_lit("bar.lib"), bar_lib));
+  T_Ok(t_write_file(str8_lit("foo.lib"), foo_lib));
   T_Ok(t_write_entry_obj());
 
-  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.lib c.lib entry.obj /include:use_imports");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe bar.lib foo.lib entry.obj /include:thunk");
   T_Ok(g_last_exit_code == 0);
 }
 #endif
