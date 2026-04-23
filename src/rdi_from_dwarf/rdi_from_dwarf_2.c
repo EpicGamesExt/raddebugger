@@ -426,13 +426,24 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   ProfScope("parse each unit's line info; produce line tables")
   {
     //- rjf: prep outputs
+    typedef struct LineSeqChunk LineSeqChunk;
+    struct LineSeqChunk
+    {
+      LineSeqChunk *next;
+      U64 *voffs;
+      U32 *line_nums;
+      U16 *col_nums;
+      U64 line_count;
+      U64 line_cap;
+    };
     typedef struct FileSeqNode FileSeqNode;
     struct FileSeqNode
     {
       FileSeqNode *next;
       RDIM_SrcFile *src_file;
-      RDIM_LineSequenceNode *first_seq_node;
-      RDIM_LineSequenceNode *last_seq_node;
+      LineSeqChunk *first_seq_chunk;
+      LineSeqChunk *last_seq_chunk;
+      U64 total_line_count;
     };
     typedef struct FileSeqMap FileSeqMap;
     struct FileSeqMap
@@ -715,7 +726,28 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           }
           
           // rjf: push this line into the file sequence node
-          
+          {
+            LineSeqChunk *chunk = file_seq_n->last_seq_chunk;
+            if(vm_regs.end_sequence && chunk != 0)
+            {
+              chunk->voffs[chunk->line_count] = vm_regs.address;
+            }
+            if(vm_regs.end_sequence || chunk == 0 || chunk->line_count >= chunk->line_cap)
+            {
+              chunk = push_array(scratch.arena, LineSeqChunk, 1);
+              SLLQueuePush(file_seq_n->first_seq_chunk, file_seq_n->last_seq_chunk, chunk);
+              chunk->line_cap = 64;
+              chunk->voffs = push_array(scratch.arena, U64, chunk->line_cap + 1);
+              chunk->line_nums = push_array(scratch.arena, U32, chunk->line_cap);
+              chunk->col_nums = push_array(scratch.arena, U16, 2*chunk->line_cap);
+            }
+            U64 chunk_line_idx = chunk->line_count;
+            chunk->voffs[chunk_line_idx] = vm_regs.address;
+            chunk->line_nums[chunk_line_idx] = (U32)vm_regs.line;
+            chunk->col_nums[chunk_line_idx] = (U16)vm_regs.column;
+            chunk->line_count += 1;
+            file_seq_n->total_line_count += 1;
+          }
         }
         
         //- rjf: advance to next opcode
@@ -725,6 +757,11 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         }
       }
     }
+    lane_sync();
+    
+    //- rjf: collect all sequences
+    //
+    // TODO(rjf)
   }
   
   ////////////////////////////
