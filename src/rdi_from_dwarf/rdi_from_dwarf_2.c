@@ -466,13 +466,16 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       }
       
       //- rjf: run the line opcode program
+      B32 emit_line = 0;
       for(U64 off = 0, next_off = 0; off < unit_line_table_data.size; off = next_off)
       {
         next_off = unit_line_table_data.size;
         
         //- rjf: read next opcode
+        U64 op_read_off = off;
         U8 opcode = 0;
-        str8_deserial_read_struct(unit_line_table_data, off, &opcode);
+        str8_deserial_read_struct(unit_line_table_data, op_read_off, &opcode);
+        op_read_off += 1;
         
         //- rjf: apply "special opcodes" (DWARF v5 6.2.5.1)
         if(opcode >= line_table_header->opcode_base)
@@ -488,6 +491,91 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           vm_regs.prologue_end = 0;
           vm_regs.epilogue_begin = 0;
           vm_regs.discriminator = 0;
+          emit_line = 1;
+        }
+        
+        //- rjf: apply standard opcode
+        else
+        {
+          U64 op_advance = 0;
+          switch(opcode)
+          {
+            //- rjf: line emissions
+            case DW_StdOpcode_Copy:
+            {
+              emit_line = 1;
+              vm_regs.discriminator = 0;
+              vm_regs.basic_block = 0;
+              vm_regs.prologue_end = 0;
+              vm_regs.epilogue_begin = 0;
+            }break;
+            
+            //- rjf: PC advances
+            case DW_StdOpcode_AdvancePc:
+            {
+              op_read_off += str8_deserial_read_uleb128(unit_line_table_data, op_read_off, &op_advance);
+            }goto advance_pc;
+            case DW_StdOpcode_ConstAddPc:
+            {
+              op_advance = (0xffu - line_table_header->opcode_base) / line_table_header->line_range;
+            }goto advance_pc;
+            advance_pc:;
+            {
+              U64 op_index = vm_regs.vliw_op_index + op_advance;
+              vm_regs.address += line_table_header->min_inst_length * (op_index / line_table_header->max_ops_per_inst);
+              vm_regs.vliw_op_index = op_index % line_table_header->max_ops_per_inst;
+            }break;
+            
+            //- rjf: fixed PC advances
+            case DW_StdOpcode_FixedAdvancePc:
+            {
+              U16 fixed_advance = 0;
+              str8_deserial_read_struct(unit_line_table_data, op_read_off, &fixed_advance);
+              op_read_off += sizeof(U16);
+              vm_regs.address += fixed_advance;
+              vm_regs.vliw_op_index = 0;
+            }break;
+            
+            //- rjf: line number advance
+            case DW_StdOpcode_AdvanceLine:
+            {
+              S64 advance = 0;
+              op_read_off += str8_deserial_read_sleb128(unit_line_table_data, op_read_off, &advance);
+              vm_regs.line += advance;
+            }break;
+            
+            //- rjf: set file
+            case DW_StdOpcode_SetFile:
+            {
+              op_read_off += str8_deserial_read_uleb128(unit_line_table_data, op_read_off, &vm_regs.file_index);
+            }break;
+            
+            //- rjf: set column
+            case DW_StdOpcode_SetColumn:
+            {
+              op_read_off += str8_deserial_read_uleb128(unit_line_table_data, op_read_off, &vm_regs.column);
+            }break;
+            
+            //- rjf: negate statment
+            case DW_StdOpcode_NegateStmt:
+            {
+              vm_regs.is_stmt = !vm_regs.is_stmt;
+            }break;
+            
+            //- rjf: flag sets
+            case DW_StdOpcode_SetBasicBlock:
+            {
+              vm_regs.basic_block = 1;
+            }break;
+            case DW_StdOpcode_SetPrologueEnd:
+            {
+              vm_regs.prologue_end = 1;
+            }break;
+            case DW_StdOpcode_SetEpilogueBegin:
+            {
+              vm_regs.epilogue_begin = 1;
+            }break;
+          }
         }
       }
     }
