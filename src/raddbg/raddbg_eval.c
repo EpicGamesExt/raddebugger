@@ -158,6 +158,68 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(themes)
 }
 
 ////////////////////////////////
+//~ rjf: `views` Type Hooks
+
+E_TYPE_ACCESS_FUNCTION_DEF(views)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  if(expr->kind == E_ExprKind_ArrayIndex &&
+     expr->first->next->kind == E_ExprKind_LeafStringLiteral)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    String8 view_name = expr->first->next->string;
+    E_TypeKey view_type = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("view"));
+    result.type_key = view_type;
+    result.mode = E_Mode_Null;
+    result.root = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaView), e_irtree_const_u(arena, e_id_from_string(view_name)));
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(views)
+{
+  E_TypeExpandInfo result = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    //- rjf: gather cfgs
+    String8List names = {0};
+    for EachElement(idx, rd_name_schema_info_table)
+    {
+      if(rd_name_schema_info_table[idx].is_view)
+      {
+        String8 name = rd_name_schema_info_table[idx].name;
+        FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, name);
+        if(name_matches.count == name_matches.needle_part_count)
+        {
+          str8_list_push(scratch.arena, &names, name);
+        }
+      }
+    }
+    
+    //- rjf: flatten & build accelerator
+    String8Array *accel = push_array(arena, String8Array, 1);
+    *accel = str8_array_from_list(arena, &names);
+    result.user_data = accel;
+    result.expr_count = accel->count;
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(views)
+{
+  U64 out_idx = 0;
+  String8Array *accel = (String8Array *)user_data;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  {
+    String8 name = accel->v[idx];
+    evals_out[out_idx] = e_eval_from_string(name);
+  }
+}
+
+////////////////////////////////
 //~ rjf: `locals` Type Hooks
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(locals)

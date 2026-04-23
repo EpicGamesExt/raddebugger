@@ -5988,7 +5988,13 @@ rd_window_frame(void)
                 }
                 first = 0;
                 UI_Key arg_key = ui_key_from_stringf(ui_active_seed_key(), "###arg_%p", child);
-                DR_FStrList arg_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, code_default, child->string);
+                String8 arg_string = child->string;
+                B32 is_optional = md_node_has_tag(child, str8_lit("optional"), 0);
+                if(is_optional)
+                {
+                  arg_string = str8f(scratch.arena, "[%S=...]", child->string);
+                }
+                DR_FStrList arg_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, code_default, arg_string);
                 if(child == ws->autocomp_cursor_info.arg_schema)
                 {
                   ui_set_next_flags(UI_BoxFlag_DrawSideBottom);
@@ -6012,6 +6018,11 @@ rd_window_frame(void)
                       {
                         ui_spacer(ui_em(0.5f, 1.f));
                         UI_TagF("weak") ui_label(display_name);
+                      }
+                      if(is_optional)
+                      {
+                        ui_spacer(ui_em(0.5f, 1.f));
+                        UI_TagF("weak") ui_labelf("(Optional)");
                       }
                     }
                     UI_TagF("weak") rd_label(desc);
@@ -9205,7 +9216,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       // rjf: calculate most general list expression, given the dst_eval space
       B32 force_allow = 0;
       B32 expr_based_replace = 1;
-      String8 list_expr = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types, query:constants");
+      String8 list_expr = str8_lit("query:locals, query:views, query:globals, query:thread_locals, query:procedures, query:types, query:constants");
       {
         E_TypeKey maybe_enum_type = e_type_key_unwrap(dst_eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative & ~E_TypeUnwrapFlag_Enums);
         if(dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg)
@@ -11278,6 +11289,31 @@ rd_frame(void)
                                                {
                                                  .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(themes),
                                                  .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(themes),
+                                               });
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
+          expr->type_key = type_key;
+          expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+          e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
+        }
+      }
+      
+      //- rjf: add macro for views
+      {
+        String8 names[] =
+        {
+          str8_lit("views"),
+        };
+        for EachElement(idx, names)
+        {
+          String8 name = names[idx];
+          E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                               .flags = E_TypeFlag_StubSingleLineExpansion,
+                                               .name = name,
+                                               .access = E_TYPE_ACCESS_FUNCTION_NAME(views),
+                                               .expand =
+                                               {
+                                                 .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(views),
+                                                 .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(views),
                                                });
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
           expr->type_key = type_key;

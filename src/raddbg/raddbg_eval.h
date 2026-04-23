@@ -19,6 +19,13 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(themes);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(themes);
 
 ////////////////////////////////
+//~ rjf: `views` Type Hooks
+
+E_TYPE_ACCESS_FUNCTION_DEF(views);
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(views);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(views);
+
+////////////////////////////////
 //~ rjf: `locals` Type Hooks
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(locals);
