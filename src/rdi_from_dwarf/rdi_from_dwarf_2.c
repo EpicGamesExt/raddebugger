@@ -230,6 +230,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         }
         abbrev_map_from_idx_table[abbrev_map_idx] = dw2_abbrev_map_from_data(scratch.arena, abbrev_data, abbrev_map_off_from_idx_table[abbrev_map_idx]);
       }
+      lane_sync();
     }
     
     //- rjf: build unit -> abbrev map table
@@ -423,7 +424,17 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   RDIM_LineTable **unit_line_tables = 0;
   ProfScope("parse each unit's line info; produce line tables")
   {
-    //- rjf: prep all per-unit line tables
+    //- rjf: prep outputs
+    typedef struct FileSeqNode FileSeqNode;
+    struct FileSeqNode
+    {
+      FileSeqNode *next;
+      RDIM_SrcFile *src_file;
+      RDIM_LineSequenceNode *first_seq_node;
+      RDIM_LineSequenceNode *last_seq_node;
+    };
+    U64 *unit_file_seq_maps_slots_counts = 0;
+    FileSeqNode ***unit_file_seq_maps_slots = 0;
     if(lane_idx() == 0)
     {
       all_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, 1);
@@ -432,10 +443,13 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       {
         unit_line_tables[unit_idx] = rdim_line_table_chunk_list_push(arena, all_line_tables, unit_count);
       }
+      unit_file_seq_maps_slots_counts = push_array(scratch.arena, U64, unit_count);
+      unit_file_seq_maps_slots = push_array(scratch.arena, FileSeqNode **, unit_count);
     }
     lane_sync_u64(&all_line_tables, 0);
     lane_sync_u64(&unit_line_tables, 0);
     
+    //- rjf: wide per-unit parse
     U64 unit_take_idx = 0;
     U64 *unit_take_idx_ptr = &unit_take_idx;
     lane_sync_u64(&unit_take_idx_ptr, 0);
@@ -467,7 +481,8 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       
       //- rjf: run the line opcode program
       B32 emit_line = 0;
-      for(U64 off = 0, next_off = 0; off < unit_line_table_data.size; off = next_off)
+      B32 done = 0;
+      for(U64 off = 0, next_off = 0; !done && off < unit_line_table_data.size; off = next_off)
       {
         next_off = unit_line_table_data.size;
         
@@ -500,6 +515,20 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           U64 op_advance = 0;
           switch(opcode)
           {
+            //- rjf: skip unknown opcode
+            default:
+            {
+              if(opcode == 0 || opcode > line_table_header->opcode_lengths_count)
+              {
+                done = 1;
+              }
+              for EachIndex(uleb_idx, line_table_header->opcode_lengths[opcode - 1])
+              {
+                U64 v = 0;
+                op_read_off += str8_deserial_read_uleb128(unit_line_table_data, op_read_off, &v);
+              }
+            }break;
+            
             //- rjf: line emissions
             case DW_StdOpcode_Copy:
             {
@@ -575,7 +604,84 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             {
               vm_regs.epilogue_begin = 1;
             }break;
+            
+            //- rjf: isa
+            case DW_StdOpcode_SetIsa:
+            {
+              op_read_off += str8_deserial_read_uleb128(unit_line_table_data, op_read_off, &vm_regs.isa);
+            }break;
+            
+            //- rjf: extended opcode
+            case DW_StdOpcode_ExtendedOpcode:
+            {
+              // rjf: read extended opcode size
+              U64 ext_opcode_size = 0;
+              op_read_off += str8_deserial_read_uleb128(unit_line_table_data, op_read_off, &ext_opcode_size);
+              
+              // rjf: read extended opcode
+              U8 ext_opcode = 0;
+              op_read_off += str8_deserial_read_struct(unit_line_table_data, op_read_off, &ext_opcode);
+              
+              // rjf: grab truncated data for just this extended opcode
+              String8 ext_op_data = str8_prefix(unit_line_table_data, op_read_off + ext_opcode_size);
+              
+              // rjf: do extended opcode
+              switch(ext_opcode)
+              {
+                default:
+                case DW_ExtOpcode_Undefined:
+                case DW_ExtOpcode_UserLo:
+                case DW_ExtOpcode_UserHi:
+                {}break;
+                case DW_ExtOpcode_EndSequence:
+                {
+                  emit_line = 1;
+                  vm_regs.end_sequence = 1;
+                }break;
+                case DW_ExtOpcode_SetAddress:
+                {
+                  U64 addr = 0;
+                  op_read_off += str8_deserial_read(ext_op_data, op_read_off, &addr, line_table_header->addr_size, line_table_header->addr_size);
+                  vm_regs.address = addr;
+                  vm_regs.vliw_op_index = 0;
+                }break;
+                case DW_ExtOpcode_DefineFile:
+                {
+                  String8 file_name = {0};
+                  U64 dir_idx = 0;
+                  U64 modify_time = 0;
+                  U64 file_size = 0;
+                  op_read_off += str8_deserial_read_cstr(ext_op_data, op_read_off, &file_name);
+                  op_read_off += str8_deserial_read_uleb128(ext_op_data, op_read_off, &dir_idx);
+                  op_read_off += str8_deserial_read_uleb128(ext_op_data, op_read_off, &modify_time);
+                  op_read_off += str8_deserial_read_uleb128(ext_op_data, op_read_off, &file_size);
+                  //
+                  // TODO(rjf): this is a real problem, because at this point, we've already gathered & deduped
+                  // all source files, but now we're in a situation where a per-lane line info parse can produce
+                  // new source files, which may - of course - be duplicates of files defined in other unit line
+                  // info.
+                  //
+                }break;
+                case DW_ExtOpcode_SetDiscriminator:
+                {
+                  op_read_off += str8_deserial_read_uleb128(ext_op_data, op_read_off, &vm_regs.discriminator);
+                }break;
+              }
+            }break;
           }
+        }
+        
+        //- rjf: emit lines / sequences
+        if(emit_line)
+        {
+          emit_line = 0;
+          
+        }
+        
+        //- rjf: advance to next opcode
+        if(op_read_off > off)
+        {
+          next_off = op_read_off;
         }
       }
     }
