@@ -301,6 +301,10 @@ RD_VocabTable:
       //- rjf: native filesystem dialogues
       @default(0) @display_name('Use Native File System Dialog') @description("Uses the operating system's file system dialog box, rather than the debugger's built-in UI.")
         'use_native_file_system_dialog': bool,
+      
+      //- rjf: transient tabs
+      @default(1) @display_name('Transient Tabs') @description("When snapping to source code locations, opens new files in a 'transient' tab if they are not already open. Transient tabs are replaced on subsequent snaps automatically.")
+        'transient_tabs': bool,
     }
     ```
   }

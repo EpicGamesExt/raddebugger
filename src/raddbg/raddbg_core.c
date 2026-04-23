@@ -14277,6 +14277,12 @@ rd_frame(void)
               }
             }
             
+            //- rjf: if transient tabs are turned off, always prefer new tab
+            if(!rd_setting_b32_from_name(str8_lit("transient_tabs")))
+            {
+              prefer_new_tab = 1;
+            }
+            
             //- rjf: given a src code location, if no vaddr is specified,
             // try to map the src coordinates to a vaddr via line info
             if(vaddr == 0 && file_path.size != 0)
