@@ -30,6 +30,7 @@ os_gfx_init(void)
   os_lnx_gfx_state = push_array(arena, OS_LNX_GfxState, 1);
   os_lnx_gfx_state->arena = arena;
   os_lnx_gfx_state->display = XOpenDisplay(0);
+  os_lnx_gfx_state->clipboard = str8_zero();
   
   //- rjf: calculate atoms
   os_lnx_gfx_state->wm_delete_window_atom        = XInternAtom(os_lnx_gfx_state->display, "WM_DELETE_WINDOW", 0);
@@ -85,13 +86,80 @@ os_get_gfx_info(void)
 internal void
 os_set_clipboard_text(String8 string)
 {
-  
+  os_lnx_gfx_state->clipboard = str8(malloc(string.size + 1), string.size);
+  MemoryCopy(os_lnx_gfx_state->clipboard.str, string.str, string.size);
+  os_lnx_gfx_state->clipboard.str[string.size] = '\0';
+
+  Atom sel = XInternAtom(os_lnx_gfx_state->display, "CLIPBOARD", False);
+  Atom utf8 = XInternAtom(os_lnx_gfx_state->display, "UTF8_STRING", False);
+  XSetSelectionOwner(os_lnx_gfx_state->display, sel, os_lnx_gfx_state->first_window->window, CurrentTime);
 }
 
 internal String8
 os_get_clipboard_text(Arena *arena)
 {
-  String8 result = {0};
+  String8 result = str8_zero();
+
+  // Return if we already have something in clipboard
+  if (os_lnx_gfx_state->clipboard.str) {
+    result = push_str8_copy(arena, os_lnx_gfx_state->clipboard);
+    return result;
+  }
+
+  int screen = DefaultScreen(os_lnx_gfx_state->display);
+  Window root = RootWindow(os_lnx_gfx_state->display, screen);
+
+  Atom sel = XInternAtom(os_lnx_gfx_state->display, "CLIPBOARD", False);
+  Atom utf8 = XInternAtom(os_lnx_gfx_state->display, "UTF8_STRING", False);
+
+  Window owner = XGetSelectionOwner(os_lnx_gfx_state->display, sel);
+  if (owner == None) {
+    return result;
+  }
+
+  // Dummy Window
+  Window tmpWin = XCreateSimpleWindow(os_lnx_gfx_state->display, root, -10, -10, 1, 1, 0, 0, 0);
+  // Create A New Window Property
+  Atom atomProperty = XInternAtom(os_lnx_gfx_state->display, "RADDBG_CLIPBOARD", False);
+
+  // Request The Clipboard Owner To Convert The Clipboard To UTF-8
+  XConvertSelection(os_lnx_gfx_state->display, sel, utf8, atomProperty, tmpWin, CurrentTime);
+
+  XEvent ev;
+  XSelectionEvent *sev = NULL;
+  for (;;) {
+    XNextEvent(os_lnx_gfx_state->display, &ev);
+    switch (ev.type) {
+      case SelectionNotify: {
+        sev = (XSelectionEvent*)&ev.xselection;
+        // If Property IS None, Then Conversion Failed
+        if (sev->property != None) {
+          Atom incr, actual_type_return;
+          int actual_format_return;
+          unsigned long clipboard_sz, nitems_return;
+          unsigned char *prop_ret = NULL;
+
+          // Get Size Of Clipboard String
+          XGetWindowProperty(os_lnx_gfx_state->display, tmpWin, atomProperty, 0, 0, False, AnyPropertyType, &actual_type_return, &actual_format_return, &nitems_return, &clipboard_sz, &prop_ret);
+          XFree(prop_ret);
+
+          incr = XInternAtom(os_lnx_gfx_state->display, "INCR", False);
+          // TODO(pegvin) - Implement INCR Protocol To Allow Large Data Transfers
+          if (actual_type_return != incr) {
+            XGetWindowProperty(os_lnx_gfx_state->display, tmpWin, atomProperty, 0, clipboard_sz, False, AnyPropertyType, &actual_type_return, &actual_format_return, &nitems_return, &clipboard_sz, &prop_ret);
+            String8 tmp = str8_cstring((char*)prop_ret);
+            result = push_str8_copy(arena, tmp);
+            XFree(prop_ret);
+          }
+        }
+        goto end;
+      }break;
+    }
+  }
+
+end:
+  XDeleteProperty(os_lnx_gfx_state->display, tmpWin, atomProperty);
+  XDestroyWindow(os_lnx_gfx_state->display, tmpWin);
   return result;
 }
 
@@ -615,6 +683,55 @@ os_get_events(Arena *arena, B32 wait)
             XSyncIntToValue(&value, window->counter_value);
             XSyncSetCounter(os_lnx_gfx_state->display, window->counter_xid, value);
           }
+        }
+      }break;
+
+      //- pegvin: clipboard events
+      case SelectionClear:
+      {
+        free(os_lnx_gfx_state->clipboard.str);
+        os_lnx_gfx_state->clipboard = str8_zero();
+      }break;
+      case SelectionRequest:
+      {
+        Atom sel = XInternAtom(os_lnx_gfx_state->display, "CLIPBOARD", False);
+        Atom utf8 = XInternAtom(os_lnx_gfx_state->display, "UTF8_STRING", False);
+        XSelectionRequestEvent *sev = (XSelectionRequestEvent*)&evt.xselectionrequest;
+        if (sev->target != utf8 || sev->property == None) { // Might be set to None by "obsolete" clients
+          XSelectionEvent reply;
+          char *an = XGetAtomName(os_lnx_gfx_state->display, sev->target);
+          if (an) {
+            XFree(an);
+          }
+
+          reply.type = SelectionNotify;
+          reply.requestor = sev->requestor;
+          reply.selection = sev->selection;
+          reply.target = sev->target;
+          reply.property = None;
+          reply.time = sev->time;
+
+          XSendEvent(os_lnx_gfx_state->display, sev->requestor, True, NoEventMask, (XEvent *)&reply);
+        } else {
+          // send_utf8(os_lnx_gfx_state->display, sev, utf8);
+          XSelectionEvent reply;
+          time_t now_tm = time(NULL);
+          // char *now = ctime(&now_tm);
+          char *an = XGetAtomName(os_lnx_gfx_state->display, sev->property);
+          if (an) {
+            XFree(an);
+          }
+
+          XChangeProperty(os_lnx_gfx_state->display, sev->requestor, sev->property, utf8, 8, PropModeReplace, (unsigned char *)os_lnx_gfx_state->clipboard.str, os_lnx_gfx_state->clipboard.size);
+
+          reply.type = SelectionNotify;
+          reply.requestor = sev->requestor;
+          reply.selection = sev->selection;
+          reply.target = sev->target;
+          reply.property = sev->property;
+          reply.time = sev->time;
+
+          XSendEvent(os_lnx_gfx_state->display, sev->requestor, True, NoEventMask, (XEvent *)&reply);
         }
       }break;
     }
