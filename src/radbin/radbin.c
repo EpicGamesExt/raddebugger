@@ -70,9 +70,15 @@ rb_thread_entry_point(void *p)
   //
   ProfScope("analyze & load command line input files") if(lane_idx() == 0)
   {
+    String8 working_directory = os_get_current_path(arena);
     String8List input_file_path_tasks = str8_list_copy(arena, &cmdline->inputs);
     for(String8Node *n = input_file_path_tasks.first; n != 0; n = n->next)
     {
+      //////////////////////////
+      //- rjf: possibly relative -> absolute path
+      //
+      String8 input_file_path = path_normalized_from_string(arena, str8f(arena, "%S/%S", working_directory, n->string));
+      
       //////////////////////////
       //- rjf: do thin analysis of file
       //
@@ -80,7 +86,7 @@ rb_thread_entry_point(void *p)
       RB_FileFormatFlags file_format_flags = 0;
       ProfScope("do thin analysis of file")
       {
-        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, n->string);
+        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, input_file_path);
         FileProperties props = os_properties_from_file(file);
         
         //- rjf: PDB magic -> PDB input
@@ -282,7 +288,7 @@ rb_thread_entry_point(void *p)
       String8 file_data = {0};
       if(file_format != RB_FileFormat_Null) ProfScope("load recognized file")
       {
-        file_data = os_data_from_file_path(arena, n->string);
+        file_data = os_data_from_file_path(arena, input_file_path);
       }
       
       //////////////////////////
@@ -291,7 +297,7 @@ rb_thread_entry_point(void *p)
       if(file_format == RB_FileFormat_PE) ProfScope("PE file => generate task for PDB")
       {
         Temp scratch = scratch_begin(&arena, 1);
-        String8 file_path = n->string;
+        String8 file_path = input_file_path;
         PE_BinInfo pe_bin_info = pe_bin_info_from_data(scratch.arena, file_data);
         String8 raw_debug_dir = str8_substr(file_data, pe_bin_info.data_dir_franges[PE_DataDirectoryIndex_DEBUG]);
         PE_DebugInfoList debug_dir = pe_debug_info_list_from_raw_debug_dir(scratch.arena, file_data, raw_debug_dir);
@@ -380,7 +386,7 @@ rb_thread_entry_point(void *p)
         RB_File *f = push_array(arena, RB_File, 1);
         f->format       = file_format;
         f->format_flags = file_format_flags;
-        f->path         = n->string;
+        f->path         = input_file_path;
         f->data         = file_data;
         RB_FileNode *file_n = push_array(arena, RB_FileNode, 1);
         file_n->v = f;

@@ -40,9 +40,6 @@ typedef struct D2R_Shared
   RDIM_TypeChunkList       types;
   RDIM_SrcFileChunkList    src_files;
   RDIM_LineTableChunkList  line_tables;
-  RDIM_SymbolChunkList     gvars;
-  RDIM_SymbolChunkList     tvars;
-  RDIM_InlineSiteChunkList inline_sites;
 } D2R_Shared;
 
 ////////////////////////////////

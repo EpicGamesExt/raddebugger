@@ -1373,7 +1373,7 @@ d2r_locset_from_attrib(Arena                  *arena,
       rdim_location_case_list_push(arena, &locset, location, range_n->v);
     }
   } else if (attrib_class != DW_AttribClass_Null) {
-    log_user_errorf("unexpected attrib class @ .debug_info+%llx", tag.info_off);
+    log_infof("unexpected attrib class @ .debug_info+%llx", tag.info_off);
   }
   
   return locset;
@@ -1395,7 +1395,7 @@ d2r_var_locset_from_tag(Arena                  *arena,
   B32 has_location    = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Location);
   
   if (has_const_value && has_location) {
-    log_user_errorf("unexpected variable encoding @ .debug_info+%llx", tag.info_off);
+    log_infof("unexpected variable encoding @ .debug_info+%llx", tag.info_off);
     return locset;
   }
   
@@ -1472,7 +1472,7 @@ d2r_type_from_attrib(D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu
         NotImplemented;
       }
     } else {
-      log_user_errorf("unexpected attrib class @ .debug_info+%llx", tag.info_off);
+      log_infof("unexpected attrib class @ .debug_info+%llx", tag.info_off);
     }
   }
   
@@ -1594,7 +1594,7 @@ d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *inpu
         NotImplemented;
       }
     } else {
-      log_user_errorf("unexpected attrib class @ .debug_info+%llx", tag.info_off);
+      log_infof("unexpected attrib class @ .debug_info+%llx", tag.info_off);
     }
   }
   
@@ -1651,7 +1651,7 @@ d2r_convert_types(Arena         *arena,
           if (tag_node->first_child) {
             d2r_tag_iterator_skip_children(it);
           } else {
-            log_user_errorf("childless struct @ .debug_info+%llx", tag.info_off);
+            log_infof("childless struct @ .debug_info+%llx", tag.info_off);
           }
         } else {
           RDIM_Type *type = d2r_create_type_from_offset(arena, type_table, tag.info_off);
@@ -1670,7 +1670,7 @@ d2r_convert_types(Arena         *arena,
           if (tag_node->first_child) {
             d2r_tag_iterator_skip_children(it);
           } else {
-            log_user_errorf("childless union @ .debug_info+%llx", tag.info_off);
+            log_infof("childless union @ .debug_info+%llx", tag.info_off);
           }
         } else {
           RDIM_Type *type = d2r_create_type_from_offset(arena, type_table, tag.info_off);
@@ -1688,7 +1688,7 @@ d2r_convert_types(Arena         *arena,
           if (tag_node->first_child) {
             d2r_tag_iterator_skip_children(it);
           } else {
-            log_user_errorf("childless enum @ .debug_info+%llx", tag.info_off);
+            log_infof("childless enum @ .debug_info+%llx", tag.info_off);
           }
         } else {
           RDIM_Type *enum_base_type = d2r_find_or_convert_type(arena, type_table, input, cu, cu_lang, arch, tag, DW_AttribKind_Type);
@@ -1716,7 +1716,7 @@ d2r_convert_types(Arena         *arena,
           } else if (n->tag.kind == DW_TagKind_UnspecifiedParameters) {
             rdim_type_list_push(scratch.arena, &param_list, type_table->builtin_types[RDI_TypeKind_Variadic]);
           } else {
-            log_user_errorf("unexpected tag @ .debug_info+%llx", tag.info_off);
+            log_infof("unexpected tag @ .debug_info+%llx", tag.info_off);
           }
         }
         
@@ -1763,7 +1763,7 @@ d2r_convert_types(Arena         *arena,
               case 16: kind = RDI_TypeKind_ComplexF64;  break;
               case 24: kind = RDI_TypeKind_ComplexF80;  break;
               case 32: kind = RDI_TypeKind_ComplexF128; break;
-              default: log_user_errorf("unexpected size"); break;
+              default: log_infof("unexpected size"); break;
             }
           } break;
           case DW_ATE_Float: {
@@ -1783,7 +1783,7 @@ d2r_convert_types(Arena         *arena,
             
             switch (byte_size) {
               D2R_ValueType_Float_XList
-                default: log_user_errorf("unexpected size"); break; 
+                default: log_infof("unexpected size"); break; 
             }
           } break;
           case DW_ATE_Signed: {
@@ -1792,7 +1792,7 @@ d2r_convert_types(Arena         *arena,
             
             switch (byte_size) {
               D2R_ValueType_Signed_XList
-                default: log_user_errorf("unexpected size"); break;
+                default: log_infof("unexpected size"); break;
             }
           } break;
           do_signed_char:;
@@ -1801,13 +1801,13 @@ d2r_convert_types(Arena         *arena,
               case 1: kind = RDI_TypeKind_Char8;  break;
               case 2: kind = RDI_TypeKind_Char16; break;
               case 4: kind = RDI_TypeKind_Char32; break;
-              default: log_user_errorf("unexpected size"); break;
+              default: log_infof("unexpected size"); break;
             }
           } break;
           case DW_ATE_Unsigned: {
             switch (byte_size) {
               D2R_ValueType_Unsigned_XList
-                default: log_user_errorf("unexpected size"); break;
+                default: log_infof("unexpected size"); break;
             }
           } break;
           case DW_ATE_Utf:
@@ -1816,7 +1816,7 @@ d2r_convert_types(Arena         *arena,
               case 1: kind = RDI_TypeKind_UChar8;  break;
               case 2: kind = RDI_TypeKind_UChar16; break;
               case 4: kind = RDI_TypeKind_UChar32; break;
-              default: log_user_errorf("unexpected size"); break;
+              default: log_infof("unexpected size"); break;
             }
           } break;
           case DW_ATE_DecimalFloat: {
@@ -1824,7 +1824,7 @@ d2r_convert_types(Arena         *arena,
               case 4:  kind = RDI_TypeKind_Decimal32; break;
               case 8:  kind = RDI_TypeKind_Decimal64; break;
               case 16: kind = RDI_TypeKind_Decimal128; break;
-              default: log_user_errorf("unexpected size"); break;
+              default: log_infof("unexpected size"); break;
             }
           } break;
           case DW_ATE_ImaginaryFloat: {
@@ -1851,7 +1851,7 @@ d2r_convert_types(Arena         *arena,
           case DW_ATE_Ascii: {
             NotImplemented;
           } break;
-          default: log_user_errorf("unexpected base type encoding"); break;
+          default: log_infof("unexpected base type encoding"); break;
         }
 #undef X
         
@@ -1968,7 +1968,7 @@ d2r_convert_types(Arena         *arena,
         struct SubrangeNode *subrange_stack = 0;
         for (DW_TagNode *n = tag_node->first_child; n != 0; n = n->sibling) {
           if (n->tag.kind != DW_TagKind_SubrangeType) {
-            log_user_errorf("[%llx] while scanning for DW_TagKind_SubrangeType found an unexpected child tag %S @ %llx\n", tag.info_off, dw_string_from_tag_kind(scratch.arena, n->tag.kind), n->tag.info_off);
+            log_infof("[%llx] while scanning for DW_TagKind_SubrangeType found an unexpected child tag %S @ %llx\n", tag.info_off, dw_string_from_tag_kind(scratch.arena, n->tag.kind), n->tag.info_off);
             goto array_type_exit;
           }
           
@@ -1977,7 +1977,7 @@ d2r_convert_types(Arena         *arena,
           if (dw_tag_has_attrib(input, cu, n->tag, DW_AttribKind_LowerBound)) {
             B32 is_vla = dw_is_attrib_var_ref(input, cu, dw_attrib_from_tag(input, cu, n->tag, DW_AttribKind_LowerBound));
             if (is_vla) {
-              log_user_errorf("[%llx] TODO: lower bound is a variable\n", n->tag.info_off);
+              log_infof("[%llx] TODO: lower bound is a variable\n", n->tag.info_off);
             } else {
               lower_bound = dw_u64_from_attrib(input, cu, n->tag, DW_AttribKind_LowerBound);
             }
@@ -1993,7 +1993,7 @@ d2r_convert_types(Arena         *arena,
           } else if (dw_tag_has_attrib(input, cu, n->tag, DW_AttribKind_UpperBound)) {
             B32 is_vla = dw_is_attrib_var_ref(input, cu, dw_attrib_from_tag(input, cu, n->tag, DW_AttribKind_UpperBound));
             if (is_vla) {
-              log_user_errorf("[%llx] TODO: upper bound is a variable\n", n->tag.info_off);
+              log_infof("[%llx] TODO: upper bound is a variable\n", n->tag.info_off);
               goto array_type_exit;
             } else {
               upper_bound = dw_u64_from_attrib(input, cu, n->tag, DW_AttribKind_UpperBound);
@@ -2038,7 +2038,7 @@ d2r_convert_types(Arena         *arena,
         d2r_tag_iterator_skip_children(it);
       } break;
       case DW_TagKind_SubrangeType: {
-        log_user_errorf("unexpected tag");
+        log_infof("unexpected tag");
       } break;
       case DW_TagKind_Inheritance: {
         DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
@@ -2050,7 +2050,7 @@ d2r_convert_types(Arena         *arena,
           member->type           = type;
           member->off            = safe_cast_u32(dw_const_u32_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_DataMemberLocation));
         } else {
-          log_user_errorf("unexpected parent tag");
+          log_infof("unexpected parent tag");
         }
       } break;
     }
@@ -2156,7 +2156,7 @@ d2r_convert_udts(Arena         *arena,
           member->off  = off;
         }
       } else {
-        log_user_errorf("unexpected parent tag @ .debug_info+%llx", tag.info_off);
+        log_infof("unexpected parent tag @ .debug_info+%llx", tag.info_off);
       }
     } else if (tag.kind == DW_TagKind_Enumerator) {
       DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
@@ -2166,7 +2166,7 @@ d2r_convert_udts(Arena         *arena,
         udt_member->name = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
         udt_member->val  = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ConstValue);
       } else {
-        log_user_errorf("unexpected parent tag @ .debug_info+%llx", tag.info_off);
+        log_infof("unexpected parent tag @ .debug_info+%llx", tag.info_off);
       }
     }
   }
@@ -2279,14 +2279,14 @@ d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 imag
         if (lo_pc < hi_pc) {
           rng1u64_list_push(arena, &ranges, rng_1u64(lo_pc - image_base, hi_pc - image_base));
         } else {
-          log_user_errorf("invalid range @ .debug_info+%llx", tag.info_off);
+          log_infof("invalid range @ .debug_info+%llx", tag.info_off);
         }
       } else {
         // invalid low and hi PC are likely are caused by an optimization pass during linking
       }
     } else if ((lo_pc_attrib->attrib_kind == DW_AttribKind_Null && hi_pc_attrib->attrib_kind != DW_AttribKind_Null) ||
                (lo_pc_attrib->attrib_kind != DW_AttribKind_Null && hi_pc_attrib->attrib_kind == DW_AttribKind_Null)) {
-      log_user_errorf("invalid range @ .debug_info+%llx", tag.info_off);
+      log_infof("invalid range @ .debug_info+%llx", tag.info_off);
     }
   }
   
@@ -2365,7 +2365,7 @@ d2r_convert_symbols(Arena         *arena,
               DW_TagNode *parent = d2r_tag_iterator_parent_tag_node(it);
               container_type = d2r_type_from_offset(type_table, parent->tag.info_off);
               if (container_type == 0) {
-                log_user_errorf("ERROR: failed to infer parent type of subprogram from .debug_info+0x%llx\n", parent->tag.info_off);
+                log_infof("ERROR: failed to infer parent type of subprogram from .debug_info+0x%llx\n", parent->tag.info_off);
               }
             }
             
@@ -2403,7 +2403,7 @@ d2r_convert_symbols(Arena         *arena,
                     case DW_VirtualityKind_None:        member_kind = RDI_MemberKind_Method;        break;
                     case DW_VirtualityKind_Virtual:     member_kind = RDI_MemberKind_VirtualMethod; break;
                     case DW_VirtualityKind_PureVirtual: member_kind = RDI_MemberKind_VirtualMethod; break; // TODO: create kind for pure virutal
-                    default: { log_user_errorf("unhandled virtuality kind"); } break;
+                    default: { log_infof("unhandled virtuality kind"); } break;
                   }
                 }
               }
@@ -2414,7 +2414,7 @@ d2r_convert_symbols(Arena         *arena,
               member->type           = type;
               member->name           = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
             } else if (parent_tag.kind != DW_TagKind_CompileUnit) {
-              log_user_errorf("unexpected tag @ .debug_info+%llx", tag.info_off);
+              log_infof("unexpected tag @ .debug_info+%llx", tag.info_off);
             }
             
             it->stack->scope = root_scope;
@@ -2448,7 +2448,7 @@ d2r_convert_symbols(Arena         *arena,
         }
         
         // fill out inline site
-        RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, &g_d2r_shared.inline_sites, D2R_INLINE_SITE_CHUNK_CAP);
+        RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, &unit_rdi->inline_sites, D2R_INLINE_SITE_CHUNK_CAP);
         inline_site->name            = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
         inline_site->type            = proc_type;
         inline_site->owner           = owner;
@@ -2499,7 +2499,7 @@ d2r_convert_symbols(Arena         *arena,
                 B32 is_static = rdim_is_eval_bytecode_static(bc);
                 if (is_static) {
                   if (!rdim_static_eval_bytecode_to_voff(bc, image_base, &voff)) {
-                    log_user_errorf("failed to evalute byte code to virtual offset @ .debug_info+%llx", tag.info_off);
+                    log_infof("failed to evalute byte code to virtual offset @ .debug_info+%llx", tag.info_off);
                   }
                 }
               }
@@ -2512,8 +2512,8 @@ d2r_convert_symbols(Arena         *arena,
           }
           
           RDIM_SymbolChunkList *var_chunks; U64 var_chunks_cap;
-          if (is_thread_var) { var_chunks = &g_d2r_shared.tvars; var_chunks_cap = D2R_TVAR_CHUNK_CAP; }
-          else               { var_chunks = &g_d2r_shared.gvars; var_chunks_cap = D2R_GVAR_CHUNK_CAP; }
+          if (is_thread_var) { var_chunks = &unit_rdi->thread_variables; var_chunks_cap = D2R_TVAR_CHUNK_CAP; }
+          else               { var_chunks = &unit_rdi->global_variables; var_chunks_cap = D2R_GVAR_CHUNK_CAP; }
           
           RDIM_Symbol *var = rdim_symbol_chunk_list_push(arena, var_chunks, var_chunks_cap);
           var->is_extern        = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_External);
@@ -2521,7 +2521,7 @@ d2r_convert_symbols(Arena         *arena,
           var->link_name        = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_LinkageName);
           var->type             = type;
           var->container_scope  = 0;
-          RDIM_Location loc = {.kind = RDI_LocationKind_ModuleOff, .offset = voff};
+          RDIM_Location loc = {.kind = is_thread_var ? RDI_LocationKind_TLSOff : RDI_LocationKind_ModuleOff, .offset = voff};
           RDIM_Rng1U64 range = {0, 0xffffffffffffffffull};
           rdim_location_case_list_push(arena, &var->location_cases, loc, range);
         }
@@ -2537,7 +2537,7 @@ d2r_convert_symbols(Arena         *arena,
           param->location_cases = d2r_var_locset_from_tag(arena, &unit_rdi->scopes, scope, input, cu, image_base, arch, tag);
         } else {
           Assert(!"this is a local variable");
-          log_user_errorf(".debug_info+%llx out of scope formal parameter", tag.info_off);
+          log_infof(".debug_info+%llx out of scope formal parameter", tag.info_off);
         }
       } break;
       case DW_TagKind_LexicalBlock: {
@@ -2647,7 +2647,7 @@ d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Input *input, U64 image_base)
     TryRead(str8_deserial_read_struct(unit_data, unit_cursor, &version), unit_cursor, exit);
     
     if (version != DW_Version_2) {
-      log_user_errorf("unknown .debug_aranges version %u @ 0x%llx", version, range_n->v.min);
+      log_infof("unknown .debug_aranges version %u @ 0x%llx", version, range_n->v.min);
       continue;
     }
     
@@ -2678,7 +2678,7 @@ d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Input *input, U64 image_base)
         if (address == 0) { continue; }
         
         if (address < image_base) {
-          log_user_errorf("invalid address 0x%llx in .debug_aranges+%llx", range_n->v.min + unit_cursor);
+          log_infof("invalid address 0x%llx in .debug_aranges+%llx", range_n->v.min + unit_cursor);
           continue;
         }
         
@@ -3054,14 +3054,14 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       String8     cu_dir  = dw_string_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_CompDir);
       String8     cu_prod = dw_string_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_Producer);
       DW_Language cu_lang = dw_const_u64_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_Language);
-
+      
       // init type table
       D2R_TypeTable *type_table   = push_array(comp_temp.arena, D2R_TypeTable, 1);
       type_table->ht              = hash_table_init(comp_temp.arena, 0x4000);
       type_table->types           = &g_d2r_shared.types;
       type_table->type_chunk_cap  = D2R_TYPE_CHUNK_CAP;
       type_table->builtin_types   = builtin_types;
-
+      
       // convert compile unit
       RDIM_Unit *unit     = rdim_unit_chunk_list_push(arena, &g_d2r_shared.units, D2R_UNIT_CHUNK_CAP);
       {
@@ -3084,7 +3084,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         unit->line_table    = cu_line_tables_rdi[cu_idx];
         unit->voff_ranges   = cu_voff_ranges;
       }
-
+      
       // convert debug info
       d2r_convert_types(arena, type_table, &input, cu, cu_lang, arch, tag_tree.root);
       d2r_convert_udts(arena, type_table, &input, cu, cu_lang, tag_tree.root);
