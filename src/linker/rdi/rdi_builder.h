@@ -325,7 +325,7 @@ typedef struct RDIB_UDT
 
 enum
 {
-  RDI_TypeKindExt_Lo = RDI_TypeKind_Count,
+  RDI_TypeKindExt_Lo = RDI_TypeKind_COUNT,
   RDI_TypeKindExt_VirtualTable,
   RDI_TypeKindExt_StaticMethod,
   RDI_TypeKindExt_Members,

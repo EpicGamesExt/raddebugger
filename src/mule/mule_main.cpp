@@ -416,6 +416,12 @@ typedef char MyByte;
 raddbg_type_view(MyByte *, no_string($));
 
 static void
+variadic_params(char *fmt, ...)
+{
+  int x = 0;
+}
+
+static void
 type_coverage_eval_tests(void)
 {
   Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001}; EvalTest(basics.a, -1);
@@ -708,6 +714,8 @@ type_coverage_eval_tests(void)
   dynamic_array_vector.push_back(dynamic);
   
   SizedKind sized_kind = SizedKind_C;
+  
+  variadic_params("foo", 123, 456);
   
   int x = (int)(Anonymous_D);
 }

@@ -3004,7 +3004,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     
     //////////////////////////////// 
     
-    RDIM_Type *builtin_types[RDI_TypeKind_Count] = {0};
+    RDIM_Type *builtin_types[RDI_TypeKind_COUNT] = {0};
     for (RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn; type_kind <= RDI_TypeKind_LastBuiltIn; type_kind += 1) {
       RDIM_Type *type = rdim_type_chunk_list_push(arena, &g_d2r_shared.types, D2R_TYPE_CHUNK_CAP);
       type->kind      = type_kind;

@@ -759,7 +759,8 @@ RDI_TypeKindTable:
   {ComplexF128          0x0025     32                                            }
   {Decimal32            0x0026     4                                             }
   {Decimal64            0x0027     8                                             }
-  {Decimal128           0x0028    16               LastBuiltIn                   }
+  {Decimal128           0x0028    16                                             }
+  {Variadic             0x0029     0               LastBuiltIn                   }
   //-
   {Modifier             0x1000     0               FirstConstructed              }
   {Ptr                  0x1001     0                                             }
@@ -781,8 +782,7 @@ RDI_TypeKindTable:
   {IncompleteEnum       0x2008     0               LastIncomplete LastUserDefined}
   //-
   {Bitfield             0xF000     0                                             }
-  {Variadic             0xF001     0                                             }
-  {Count                0xF002     0                                             }
+  {COUNT                0xF002     0                                             }
 }
 
 @table(name value)

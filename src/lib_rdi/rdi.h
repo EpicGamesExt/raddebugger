@@ -315,6 +315,7 @@ RDI_TypeKind_ComplexF128          = 0x0025,
 RDI_TypeKind_Decimal32            = 0x0026,
 RDI_TypeKind_Decimal64            = 0x0027,
 RDI_TypeKind_Decimal128           = 0x0028,
+RDI_TypeKind_Variadic             = 0x0029,
 RDI_TypeKind_Modifier             = 0x1000,
 RDI_TypeKind_Ptr                  = 0x1001,
 RDI_TypeKind_LRef                 = 0x1002,
@@ -333,10 +334,9 @@ RDI_TypeKind_IncompleteUnion      = 0x2006,
 RDI_TypeKind_IncompleteClass      = 0x2007,
 RDI_TypeKind_IncompleteEnum       = 0x2008,
 RDI_TypeKind_Bitfield             = 0xF000,
-RDI_TypeKind_Variadic             = 0xF001,
-RDI_TypeKind_Count                = 0xF002,
+RDI_TypeKind_COUNT                = 0xF002,
 RDI_TypeKind_FirstBuiltIn         = RDI_TypeKind_Void,
-RDI_TypeKind_LastBuiltIn          = RDI_TypeKind_Decimal128,
+RDI_TypeKind_LastBuiltIn          = RDI_TypeKind_Variadic,
 RDI_TypeKind_FirstConstructed     = RDI_TypeKind_Modifier,
 RDI_TypeKind_LastConstructed      = RDI_TypeKind_MemberPtr,
 RDI_TypeKind_FirstUserDefined     = RDI_TypeKind_Struct,
@@ -810,6 +810,7 @@ X(ComplexF128)\
 X(Decimal32)\
 X(Decimal64)\
 X(Decimal128)\
+X(Variadic)\
 X(Modifier)\
 X(Ptr)\
 X(LRef)\
@@ -828,8 +829,7 @@ X(IncompleteUnion)\
 X(IncompleteClass)\
 X(IncompleteEnum)\
 X(Bitfield)\
-X(Variadic)\
-X(Count)\
+X(COUNT)\
 
 #define RDI_TypeModifierFlags_XList \
 X(Const)\

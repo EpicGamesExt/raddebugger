@@ -203,6 +203,7 @@ case RDI_TypeKind_ComplexF128: {result = (RDI_U8*)"ComplexF128"; *size_out = siz
 case RDI_TypeKind_Decimal32: {result = (RDI_U8*)"Decimal32"; *size_out = sizeof("Decimal32")-1;}break;
 case RDI_TypeKind_Decimal64: {result = (RDI_U8*)"Decimal64"; *size_out = sizeof("Decimal64")-1;}break;
 case RDI_TypeKind_Decimal128: {result = (RDI_U8*)"Decimal128"; *size_out = sizeof("Decimal128")-1;}break;
+case RDI_TypeKind_Variadic: {result = (RDI_U8*)"Variadic"; *size_out = sizeof("Variadic")-1;}break;
 case RDI_TypeKind_Modifier: {result = (RDI_U8*)"Modifier"; *size_out = sizeof("Modifier")-1;}break;
 case RDI_TypeKind_Ptr: {result = (RDI_U8*)"Ptr"; *size_out = sizeof("Ptr")-1;}break;
 case RDI_TypeKind_LRef: {result = (RDI_U8*)"LRef"; *size_out = sizeof("LRef")-1;}break;
@@ -221,8 +222,7 @@ case RDI_TypeKind_IncompleteUnion: {result = (RDI_U8*)"IncompleteUnion"; *size_o
 case RDI_TypeKind_IncompleteClass: {result = (RDI_U8*)"IncompleteClass"; *size_out = sizeof("IncompleteClass")-1;}break;
 case RDI_TypeKind_IncompleteEnum: {result = (RDI_U8*)"IncompleteEnum"; *size_out = sizeof("IncompleteEnum")-1;}break;
 case RDI_TypeKind_Bitfield: {result = (RDI_U8*)"Bitfield"; *size_out = sizeof("Bitfield")-1;}break;
-case RDI_TypeKind_Variadic: {result = (RDI_U8*)"Variadic"; *size_out = sizeof("Variadic")-1;}break;
-case RDI_TypeKind_Count: {result = (RDI_U8*)"Count"; *size_out = sizeof("Count")-1;}break;
+case RDI_TypeKind_COUNT: {result = (RDI_U8*)"COUNT"; *size_out = sizeof("COUNT")-1;}break;
 }
 return result;
 }

@@ -489,7 +489,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       unit_line_tables[unit_idx] = dst_line_table;
       
       //- rjf: set up per-unit file sequence map
-      unit_file_seq_maps[unit_idx].slots_count = line_table_header->files.count;
+      unit_file_seq_maps[unit_idx].slots_count = line_table_header->files.count + 1;
       unit_file_seq_maps[unit_idx].slots = push_array(scratch.arena, FileSeqNode *, unit_file_seq_maps[unit_idx].slots_count);
       
       //- rjf: set up vm registers
@@ -705,7 +705,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         }
         
         //- rjf: sequence ended explicitly, or file change, or end of stream? -> push to line table
-        if(vm_regs.end_sequence || (src_file != line_seq_src_file && first_line_seq_chunk != 0) || off >= unit_line_table_data.size)
+        if(line_seq_src_file != 0 && (vm_regs.end_sequence || (src_file != line_seq_src_file && first_line_seq_chunk != 0) || off >= unit_line_table_data.size))
         {
           // rjf: combine voffs/lines/cols
           U64 seq_line_count = total_line_seq_count;
@@ -840,6 +840,30 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   lane_sync_u64(&all_line_tables, 0);
   
   ////////////////////////////
+  //- rjf: build built-in types
+  //
+  RDIM_TypeChunkList *builtin_types = 0;
+  RDIM_Type **builtin_type_from_kind_map = 0; // [RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn + 1]
+  U64 builtin_type_count = RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn + 1;
+  ProfScope("build built-in types") if(lane_idx() == 0)
+  {
+    builtin_types = push_array(scratch.arena, RDIM_TypeChunkList, 1);
+    builtin_type_from_kind_map = push_array(scratch.arena, RDIM_Type *, builtin_type_count);
+    for(RDI_TypeKind k = RDI_TypeKind_FirstBuiltIn; k <= RDI_TypeKind_LastBuiltIn; k += 1)
+    {
+      RDIM_Type *type = rdim_type_chunk_list_push(arena, builtin_types, builtin_type_count);
+      type->kind = k;
+      type->name.str = rdi_string_from_type_kind(k, &type->name.size);
+      type->byte_size = rdi_size_from_basic_type_kind(k);
+      if(type->byte_size == max_U32) { type->byte_size = byte_size_from_arch(arch); }
+      builtin_type_from_kind_map[k - RDI_TypeKind_FirstBuiltIn] = type;
+    }
+  }
+  lane_sync_u64(&builtin_types, 0);
+  lane_sync_u64(&builtin_type_from_kind_map, 0);
+#define d2r2_type_from_builtin_kind(k) ((RDI_TypeKind_FirstBuiltIn <= (k) && (k) <= RDI_TypeKind_LastBuiltIn) ? builtin_types[k - RDI_TypeKind_FirstBuiltIn] : 0)
+  
+  ////////////////////////////
   //- rjf: fill result
   //
   RDIM_BakeParams result = {0};
@@ -847,6 +871,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     // TODO(rjf)
   }
   
+#undef d2r2_type_from_builtin_kind
   scratch_end(scratch);
   return result;
 }
