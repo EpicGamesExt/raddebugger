@@ -22,6 +22,11 @@ struct D2R2_ConvertParams
 };
 
 ////////////////////////////////
+//~ rjf: Helpers
+
+internal U64 d2r2_hash_from_seed_tag(U64 seed, DW2_Tag *tag);
+
+////////////////////////////////
 //~ rjf: Main Conversion Entry Point (New)
 
 internal RDIM_BakeParams d2r2_convert(Arena *arena, D2R2_ConvertParams *params);

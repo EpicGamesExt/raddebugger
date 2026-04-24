@@ -2,6 +2,25 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Helpers
+
+internal U64
+d2r2_hash_from_seed_tag(U64 seed, DW2_Tag *tag)
+{
+  U64 result = seed;
+  result = u64_hash_from_seed_str8(result, str8_struct(&tag->kind));
+  for EachNode(n, DW2_AttribNode, tag->attribs.first)
+  {
+    DW2_Attrib *attrib = &n->v;
+    result = u64_hash_from_seed_str8(result, str8_struct(&attrib->attrib_kind));
+    result = u64_hash_from_seed_str8(result, str8_struct(&attrib->val.kind));
+    result = u64_hash_from_seed_str8(result, attrib->val.string);
+    result = u64_hash_from_seed_str8(result, str8_struct(&attrib->val.u128));
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Main Conversion Entry Point (New)
 
 internal RDIM_BakeParams
@@ -862,6 +881,228 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   lane_sync_u64(&builtin_types, 0);
   lane_sync_u64(&builtin_type_from_kind_map, 0);
 #define d2r2_type_from_builtin_kind(k) ((RDI_TypeKind_FirstBuiltIn <= (k) && (k) <= RDI_TypeKind_LastBuiltIn) ? builtin_types[k - RDI_TypeKind_FirstBuiltIn] : 0)
+  
+  ////////////////////////////
+  //- rjf: predict the total number of tags in all units
+  //
+  U64 total_tag_count_estimate = 1;
+  {
+    U64 tag_size_estimate = 32;
+    for EachIndex(unit_idx, unit_info_ranges->count)
+    {
+      total_tag_count_estimate += dim_1u64(unit_info_ranges->v[unit_idx]) / tag_size_estimate;
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: gather all unique type tags across all units
+  //
+  typedef struct UniqueTypeTagNode UniqueTypeTagNode;
+  struct UniqueTypeTagNode
+  {
+    UniqueTypeTagNode *next;
+    U64 hash;
+    U64 unit_idx;
+    U64 info_off;
+  };
+  typedef struct UnitTypeNode UnitTypeNode;
+  struct UnitTypeNode
+  {
+    UnitTypeNode *next;
+    U64 src_info_off;
+    U64 dst_hash;
+  };
+  typedef struct UnitTypeMap UnitTypeMap;
+  struct UnitTypeMap
+  {
+    UnitTypeNode **slots;
+    U64 slots_count;
+  };
+  UniqueTypeTagNode **unique_type_tag_slots = 0;
+  U64 unique_type_tag_slots_count = total_tag_count_estimate/8 + 1;
+  UnitTypeMap *unit_type_maps = 0;
+  {
+    if(lane_idx() == 0)
+    {
+      unique_type_tag_slots = push_array(scratch.arena, UniqueTypeTagNode *, unique_type_tag_slots_count);
+      unit_type_maps = push_array(scratch.arena, UnitTypeMap, unit_count);
+    }
+    lane_sync_u64(&unique_type_tag_slots, 0);
+    lane_sync_u64(&unit_type_maps, 0);
+    U64 unit_take_idx_ = 0;
+    U64 *unit_take_idx_ptr = &unit_take_idx_;
+    lane_sync_u64(&unit_take_idx_ptr, 0);
+    for(;;)
+    {
+      //- rjf: take next unit
+      U64 unit_idx = ins_atomic_u64_inc_eval(unit_take_idx_ptr) - 1;
+      if(unit_idx >= unit_count)
+      {
+        break;
+      }
+      
+      //- rjf: unpack unit
+      DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[unit_idx];
+      Rng1U64 unit_info_range = unit_info_ranges->v[unit_idx];
+      
+      //- rjf: set up type map for this unit
+      unit_type_maps[unit_idx].slots_count = dim_1u64(unit_info_range) / 256 + 1;
+      unit_type_maps[unit_idx].slots = push_array(scratch.arena, UnitTypeNode *, unit_type_maps[unit_idx].slots_count);
+      
+      //- rjf: find all type tags in this unit
+      for(U64 off = unit_info_range.min; off < unit_info_range.max;)
+      {
+        Temp scratch2 = scratch_begin(&scratch.arena, 1);
+        U64 start_off = off;
+        
+        // rjf: read next tag
+        DW2_Tag tag = {0};
+        off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &tag);
+        
+        // rjf: if offset not advanced -> increment
+        if(off == start_off)
+        {
+          off += 1;
+        }
+        
+        // rjf: if type tag -> read full tree, hash, gather
+        switch(tag.kind)
+        {
+          default:{}break;
+          case DW_TagKind_ArrayType:
+          case DW_TagKind_ClassType:
+          case DW_TagKind_EnumerationType:
+          case DW_TagKind_PointerType:
+          case DW_TagKind_ReferenceType:
+          case DW_TagKind_StringType:
+          case DW_TagKind_StructureType:
+          case DW_TagKind_SubroutineType:
+          case DW_TagKind_Typedef:
+          case DW_TagKind_UnionType:
+          case DW_TagKind_PtrToMemberType:
+          case DW_TagKind_SetType:
+          case DW_TagKind_SubrangeType:
+          case DW_TagKind_BaseType:
+          case DW_TagKind_ConstType:
+          case DW_TagKind_FileType:
+          case DW_TagKind_PackedType:
+          case DW_TagKind_VolatileType:
+          case DW_TagKind_RestrictType:
+          case DW_TagKind_InterfaceType:
+          case DW_TagKind_UnspecifiedType:
+          case DW_TagKind_SharedType:
+          case DW_TagKind_RValueReferenceType:
+          case DW_TagKind_CoarrayType:
+          case DW_TagKind_DynamicType:
+          case DW_TagKind_AtomicType:
+          case DW_TagKind_ImmutableType:
+          {
+            // rjf: form hash from top-level tag
+            U64 hash = d2r2_hash_from_seed_tag(5381, &tag);
+            
+            // rjf: if this tag has children -> hash all children, combine into `hash`
+            if(tag.has_children)
+            {
+              U64 depth = 1;
+              for(;off < unit_info_range.max && depth > 0;)
+              {
+                Temp temp = temp_begin(scratch2.arena);
+                U64 start_off_2 = off;
+                
+                // rjf: read descendant tag
+                DW2_Tag descendant_tag = {0};
+                off += dw2_read_tag(temp.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &descendant_tag);
+                
+                // rjf: if offset not advanced -> increment
+                if(off == start_off_2)
+                {
+                  off += 1;
+                }
+                
+                // rjf: combine hash of descendant tag to main hash
+                hash = d2r2_hash_from_seed_tag(hash, &descendant_tag);
+                
+                // rjf: navigate the tree
+                if(descendant_tag.kind == DW_TagKind_Null)
+                {
+                  depth -= 1;
+                }
+                else if(descendant_tag.has_children)
+                {
+                  depth += 1;
+                }
+                
+                temp_end(temp);
+              }
+            }
+            
+            // rjf: atomically gather this hash if not already gathered
+            {
+              B32 gathered = 0;
+              U64 slot_idx = hash%unique_type_tag_slots_count;
+              for(;!gathered;)
+              {
+                // rjf: read existing slot head pointer *before* we lookup / insert
+                U64 slot_head_val = ins_atomic_u64_eval(&unique_type_tag_slots[slot_idx]);
+                
+                // rjf: determine if this hash has been gathered
+                for(UniqueTypeTagNode *n = (UniqueTypeTagNode *)slot_head_val; n != 0; n = n->next)
+                {
+                  if(n->hash == hash)
+                  {
+                    gathered = 1;
+                    break;
+                  }
+                }
+                
+                // rjf: if this hash has *not* been gathered, try an insert. we:
+                //
+                //  1. allocate/fill a node
+                //  2. set it up to point to the old head
+                //  3. compare/exchange the old head with the new head - IFF the head matches what we expect from above
+                //  4. if we fail, another thread has touched this slot, we pop the allocated node & try again
+                //     (we may find that another thread has filled this hash, so we'll just be done)
+                //
+                if(!gathered)
+                {
+                  Temp insert_temp = temp_begin(scratch.arena);
+                  UniqueTypeTagNode *n = push_array(scratch.arena, UniqueTypeTagNode, 1);
+                  n->next = (UniqueTypeTagNode *)slot_head_val;
+                  n->hash = hash;
+                  n->unit_idx = unit_idx;
+                  n->info_off = start_off;
+                  U64 new_head_val = (U64)n;
+                  if(slot_head_val == ins_atomic_u64_eval_cond_assign(&unique_type_tag_slots[slot_idx], slot_head_val, new_head_val))
+                  {
+                    gathered = 1;
+                  }
+                  else
+                  {
+                    temp_end(insert_temp);
+                  }
+                }
+              }
+            }
+            
+            // rjf: record this (info_off -> hash) mapping, so that when we have
+            // later references to this type, we can redirect to the deduplicated
+            // type with the right hash later.
+            {
+              U64 info_off_hash = u64_hash_from_str8(str8_struct(&start_off));
+              U64 info_off_slot_idx = info_off_hash%unit_type_maps[unit_idx].slots_count;
+              UnitTypeNode *n = push_array(scratch.arena, UnitTypeNode, 1);
+              n->src_info_off = start_off;
+              n->dst_hash = hash;
+              SLLStackPush(unit_type_maps[unit_idx].slots[info_off_slot_idx], n);
+            }
+          }break;
+        }
+        
+        scratch_end(scratch2);
+      }
+    }
+    lane_sync();
+  }
   
   ////////////////////////////
   //- rjf: fill result
