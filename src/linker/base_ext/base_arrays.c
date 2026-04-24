@@ -247,6 +247,15 @@ s64_list_concat_in_place(S64List *list, S64List *to_concat)
   SLLConcatInPlace(list, to_concat);
 }
 
+internal U64Array
+u64_array_from_list(Arena *arena, U64List *list)
+{
+  U64Array result = {0};
+  result.v = push_array(arena, U64, list->count);
+  for EachNode(n, U64Node, list->first) { result.v[result.count++] = n->data; }
+  return result;
+}
+
 internal S64Array
 s64_array_from_list(Arena *arena, S64List *list)
 {

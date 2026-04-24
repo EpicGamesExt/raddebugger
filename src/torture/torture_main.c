@@ -40,6 +40,7 @@
 #include "coff/coff_lib_writer.h"
 #include "pe/pe.h"
 #include "pe/pe_section_flags.h"
+#include "pe/pe_make_import_table.h"
 #include "elf/elf.h"
 #include "gnu/gnu.h"
 #include "gnu/gnu_parse.h"
@@ -90,6 +91,7 @@
 #include "linker/lnk_cmd_line.h"
 #include "linker/lnk_cmd_line.c"
 #include "linker/lnk_log.h"
+#include "linker/lnk_debug_helper.h"
 #include "torture.h"
 #include "torture_radlink.h"
 
@@ -113,6 +115,7 @@
 #include "coff/coff_obj_writer.c"
 #include "coff/coff_lib_writer.c"
 #include "pe/pe.c"
+#include "pe/pe_make_import_table.c"
 #include "elf/elf.c"
 #include "gnu/gnu.c"
 #include "gnu/gnu_parse.c"
@@ -160,6 +163,7 @@
 #include "linker/pdb_ext/pdb.c"
 #include "linker/pdb_ext/pdb_helpers.c"
 #include "linker/pdb_ext/pdb_builder.c"
+#include "linker/lnk_debug_helper.c"
 
 #include "torture.c"
 #include "torture_base.c"

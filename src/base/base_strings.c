@@ -2811,7 +2811,7 @@ str8_serial_push_size(Arena *arena, String8List *srl, U64 size)
   void *result = 0;
   if(size != 0)
   {
-    U8 *buf = push_array_no_zero(arena, U8, size);
+    U8 *buf = push_array(arena, U8, size);
     String8 *str = &srl->last->string;
     if(str->str + str->size == buf)
     {

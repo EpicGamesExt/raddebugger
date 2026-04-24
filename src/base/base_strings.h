@@ -162,6 +162,7 @@ internal U64 cstring32_length(U32 *c);
 
 #define str8_lit(S)  str8((U8*)(S), sizeof(S) - 1)
 #define str8_lit_comp(S) {(U8*)(S), sizeof(S) - 1,}
+#define str8_lit_cstr(S) str8((U8*)(S), sizeof(S))
 #define str8_varg(S) (int)((S).size), ((S).str)
 
 #define str8_array(S,C) str8((U8*)(S), sizeof(*(S))*(C))

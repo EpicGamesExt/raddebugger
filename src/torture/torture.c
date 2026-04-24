@@ -18,6 +18,12 @@ T_Test g_torture_tests[0xffffff];
 // invoke
 global int g_last_exit_code;
 
+internal String8
+t_test_name_from_idx(Arena *arena, U64 test_idx)
+{
+  return str8f(arena, "%s::%s", g_torture_tests[test_idx].group, g_torture_tests[test_idx].label);
+}
+
 internal char *
 t_string_from_result(T_RunStatus v)
 {
@@ -416,6 +422,84 @@ t_test_is_before(void *raw_a, void *raw_b)
   return cmp < 0;
 }
 
+internal String8List
+t_file_paths_from_dir(Arena *arena, String8 dir)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List dirs = {0};
+  String8List files = {0};
+
+  OS_FileIter *iter = os_file_iter_begin(scratch.arena, dir, 0);
+  OS_FileInfo file;
+  while (os_file_iter_next(scratch.arena, iter, &file)) {
+    if (file.props.flags & FilePropertyFlag_IsFolder) {
+      str8_list_pushf(scratch.arena, &dirs, "%S/%S", dir, file.name);
+    } else {
+      str8_list_pushf(arena, &files, "%S/%S", dir, file.name);
+    }
+  }
+  os_file_iter_end(iter);
+
+  String8List result = {0};
+  for EachNode(n, String8Node, dirs.first) {
+    String8List sub_result = t_file_paths_from_dir(arena, n->string);
+    str8_list_concat_in_place(&result, &sub_result);
+  }
+
+  scratch_end(scratch);
+  //str8_list_concat_in_place(&result, &dirs);
+  str8_list_concat_in_place(&result, &files);
+  return result;
+}
+
+internal int str8_is_before_case_ignore_case(void *a, void *b) { return str8_compar_ignore_case(a, b) < 0; }
+internal void t_sort_str8_array(String8Array a) { radsort(a.v, a.count, str8_is_before_case_ignore_case); }
+
+internal B32
+t_match_folders(String8 a, String8 b)
+{
+  Temp scratch = scratch_begin(0,0);
+  String8List files_a = t_file_paths_from_dir(scratch.arena, a);
+  //for EachNode(n, String8Node, files_a.first) printf("%.*s\n", str8_varg(n->string));
+  String8List files_b = t_file_paths_from_dir(scratch.arena, b);
+  B32 is_match = 0;
+
+  String8Array sorted_a = str8_array_from_list(scratch.arena, &files_a);
+  String8Array sorted_b = str8_array_from_list(scratch.arena, &files_b);
+  t_sort_str8_array(sorted_a);
+  t_sort_str8_array(sorted_b);
+
+  if (sorted_a.count == sorted_b.count) {
+    for EachIndex(i, sorted_a.count) {
+      Temp temp = temp_begin(scratch.arena);
+      String8 ext_a = str8_skip_last_dot(str8_skip_last_slash(sorted_a.v[i]));
+      String8 ext_b = str8_skip_last_dot(str8_skip_last_slash(sorted_b.v[i]));
+      if (str8_match(ext_a, ext_b, 0)) {
+        if (str8_match(ext_a, str8_lit("obj"), StringMatchFlag_CaseInsensitive) ||
+            str8_match(ext_a, str8_lit("lib"), StringMatchFlag_CaseInsensitive)) {
+          String8 data_a = os_data_from_file_path(temp.arena, sorted_a.v[i]);
+          String8 data_b = os_data_from_file_path(temp.arena, sorted_b.v[i]);
+          is_match = str8_match(data_a, data_b, 0);
+          if ( ! is_match) {
+            OS_Handle h;
+            h = os_cmd_line_launchf("dumpbin /all %S /out:a.txt", sorted_a.v[i]);
+            os_process_join(h, max_U64, 0);
+            h = os_cmd_line_launchf("dumpbin /all %S /out:b.txt", sorted_b.v[i]);
+            os_process_join(h, max_U64, 0);
+          }
+          Assert(is_match);
+          if (!is_match) { break; }
+        }
+      }
+      else { InvalidPath; }
+      temp_end(temp);
+    }
+  }
+
+  scratch_end(scratch);
+  return is_match;
+}
+
 internal void
 t_entry_point(CmdLine *cmdline)
 {
@@ -446,6 +530,7 @@ t_entry_point(CmdLine *cmdline)
       fprintf(stderr, " Options:\n");
       fprintf(stderr, "   -linker:{path}        Path to PE/COFF linker\n");
       fprintf(stderr, "   -target:{name[,name]} Selects targets to test\n");
+      fprintf(stderr, "   -skip:{name[,name]}   Selects targets to skip\n");
       fprintf(stderr, "   -list                 Print available test targets and exit\n");
       fprintf(stderr, "   -out:{path}           Directory path for test outputs (default \"%.*s\")\n", str8_varg(g_out));
       fprintf(stderr, "   -verbose              Enable verbose mode\n");
@@ -542,7 +627,7 @@ t_entry_point(CmdLine *cmdline)
           for EachIndex(test_idx, g_torture_test_count) {
             String8 name = str8_cstring(g_torture_tests[test_idx].label);
             if (do_namespace) {
-              name = str8f(scratch.arena, "%s::%s", g_torture_tests[test_idx].group, g_torture_tests[test_idx].label);
+              name = t_test_name_from_idx(scratch.arena, test_idx);
             }
             if (str8_match_wildcard(name, pattern_n->string, 0)) {
               if ( ! hash_table_search_string(ht, name)) {
@@ -609,21 +694,15 @@ t_entry_point(CmdLine *cmdline)
   {
     radsort(g_torture_tests, g_torture_test_count, t_test_is_before);
 
-    U64  target_indices_count;
-    U64 *target_indices;
+    U64List target_indices_list = {0};
     if (target.node_count == 0) {
-      target_indices_count = g_torture_test_count;
-      target_indices       = push_array(scratch.arena, U64, g_torture_test_count);
-      for EachIndex(i, target_indices_count) { target_indices[i] = i; }
+      for EachIndex(i, g_torture_test_count) { u64_list_push(scratch.arena, &target_indices_list, i); }
     } else {
-      target_indices_count = 0;
-      target_indices       = push_array(scratch.arena, U64, target.node_count);
-
       for EachNode(target_n, String8Node, target.first) {
         B32 is_target_unknown = 1;
         for EachIndex(i, g_torture_test_count) {
           if (str8_match(str8_cstring(g_torture_tests[i].label), target_n->string, 0)) {
-            target_indices[target_indices_count++] = i;
+            u64_list_push(scratch.arena, &target_indices_list, i);
             is_target_unknown = 0;
             break;
           }
@@ -634,10 +713,36 @@ t_entry_point(CmdLine *cmdline)
       }
     }
 
+    //
+    // -skip
+    //
+    U64List final_target_list = {0};
+    CmdLineOpt *skip_opt   = cmd_line_opt_from_string(cmdline, str8_lit("skip"));
+    CmdLineOpt *s_opt      = cmd_line_opt_from_string(cmdline, str8_lit("s"));
+    String8List skip_list = skip_opt ? skip_opt->value_strings : s_opt ? s_opt->value_strings : (String8List){0};
+    for EachNode(n, U64Node, target_indices_list.first) {
+      // should test be skipped?
+      B32 include_test = 1;
+      String8 test_name = t_test_name_from_idx(scratch.arena, n->data);
+      for EachNode(pattern_n, String8Node, skip_list.first) {
+        if (str8_match_wildcard(test_name, pattern_n->string, 0)) {
+          include_test = 0;
+          break;
+        }
+      }
+
+      if (include_test) {
+        u64_list_push(scratch.arena, &final_target_list, n->data);
+      }
+    }
+
+    U64 skip_count = target_indices_list.count - final_target_list.count;
+    U64Array target_indices = u64_array_from_list(scratch.arena, &final_target_list);
+
     U64 max_label_size = 0;
     U64 max_group_size = 0;
-    for EachIndex(i, target_indices_count) {
-      U64 test_idx = target_indices[i];
+    for EachIndex(i, target_indices.count) {
+      U64 test_idx = target_indices.v[i];
       max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[test_idx].label));
       max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[test_idx].group));
     }
@@ -646,20 +751,20 @@ t_entry_point(CmdLine *cmdline)
     U64 pass_count  = 0;
     U64 fail_count  = 0;
     U64 crash_count = 0;
-    U64 max_digit_count = count_digits_u64(target_indices_count, 10);
+    U64 max_digit_count = count_digits_u64(target_indices.count, 10);
     U64 total_time_start = os_now_microseconds();
     typedef struct { U64 target_idx, d; } Slowest;
     Slowest slowest[5] = {0};
     for EachElement(i, slowest) { slowest[i].target_idx = max_U64; }
-    for EachIndex(i, target_indices_count) {
-      U64 target_idx = target_indices[i];
+    for EachIndex(i, target_indices.count) {
+      U64 target_idx = target_indices.v[i];
 
       // print run progress
       U64 dots_min = 10;
       U64 dots_count = (max_label_size - cstring8_length((U8*)g_torture_tests[target_idx].label)) + dots_min;
       U64 curr_digit_count = count_digits_u64(i+1, 10);
       int idx_align_space_count = (int)(max_digit_count - curr_digit_count);
-      fprintf(stdout, "[%.*s%I64u/%I64u] ", idx_align_space_count, spaces, i+1, target_indices_count);
+      fprintf(stdout, "[%.*s%I64u/%I64u] ", idx_align_space_count, spaces, i+1, target_indices.count);
       fprintf(stdout, "%s %.*s:: %s", g_torture_tests[target_idx].group, (int)(max_group_size - cstring8_length((U8*)g_torture_tests[target_idx].group)), spaces, g_torture_tests[target_idx].label);
       fprintf(stdout, " %.*s ", (int)dots_count, dots);
 
@@ -732,9 +837,10 @@ t_entry_point(CmdLine *cmdline)
     PrintHeader("Summary");
     U64 total_time_dt = total_time_end - total_time_start;
     String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
-    fprintf(stderr, "  Passed   %u\n", (int)pass_count);
-    fprintf(stderr, "  Failed   %u\n", (int)fail_count);
-    fprintf(stderr, "  Crashed  %u\n", (int)crash_count);
+    fprintf(stderr, "  Passed   %llu\n", pass_count);
+    fprintf(stderr, "  Failed   %llu\n", fail_count);
+    fprintf(stderr, "  Crashed  %llu\n", crash_count);
+    fprintf(stderr, "  Skipped  %llu\n", skip_count);
     fprintf(stderr, "  Time     %.*s\n", str8_varg(total_time_str));
     fprintf(stderr, "\n");
 
