@@ -538,8 +538,12 @@ t_entry_point(CmdLine *cmdline)
       HashTable *ht = hash_table_init(scratch.arena, g_torture_test_count*2);
       if (target_opt->value_strings.node_count > 0) {
         for EachNode(pattern_n, String8Node, target_opt->value_strings.first) {
+          B32 do_namespace = str8_find_needle(pattern_n->string, 0, str8_lit("::"), 0) < pattern_n->string.size;
           for EachIndex(test_idx, g_torture_test_count) {
-            String8 name = str8f(scratch.arena, "%s::%s", g_torture_tests[test_idx].group, g_torture_tests[test_idx].label);
+            String8 name = str8_cstring(g_torture_tests[test_idx].label);
+            if (do_namespace) {
+              name = str8f(scratch.arena, "%s::%s", g_torture_tests[test_idx].group, g_torture_tests[test_idx].label);
+            }
             if (str8_match_wildcard(name, pattern_n->string, 0)) {
               if ( ! hash_table_search_string(ht, name)) {
                 hash_table_push_string_raw(scratch.arena, ht, name, 0);
