@@ -88,6 +88,7 @@ typedef enum
   LNK_CmdSwitch_Version,
   LNK_CmdSwitch_WholeArchive,
 
+
   LNK_CmdSwitch_Rad_Age,
   LNK_CmdSwitch_Rad_AltPchDir,
   LNK_CmdSwitch_Rad_BuildInfo,
@@ -100,6 +101,8 @@ typedef enum
   LNK_CmdSwitch_Rad_EnvLib,
   LNK_CmdSwitch_Rad_Exe,
   LNK_CmdSwitch_Rad_Guid,
+  LNK_CmdSwitch_Rad_Ignore,
+  LNK_CmdSwitch_Rad_ImageAltPath,
   LNK_CmdSwitch_Rad_LargePages,
   LNK_CmdSwitch_Rad_LinkVer, 
   LNK_CmdSwitch_Rad_Log,
@@ -117,7 +120,6 @@ typedef enum
   LNK_CmdSwitch_Rad_RemoveSection,
   LNK_CmdSwitch_Rad_SharedThreadPool,
   LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,
-  LNK_CmdSwitch_Rad_Ignore,
   LNK_CmdSwitch_Rad_TimeStamp,
   LNK_CmdSwitch_Rad_TypeHashAlg,
   LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,
@@ -125,7 +127,6 @@ typedef enum
   LNK_CmdSwitch_Rad_Version,
   LNK_CmdSwitch_Rad_Workers,
   LNK_CmdSwitch_Rad_WriteTempFiles,
-
   LNK_CmdSwitch_Help,
 
   LNK_CmdSwitch_Count
@@ -310,7 +311,8 @@ typedef struct LNK_Config
   PathStyle                   path_style;
   LNK_ManifestOpt             manifest_opt;
   String8                     work_dir;
-  String8                     image_name;
+  String8                     out_path;
+  String8                     image_alt_path;
   String8                     imp_lib_name;
   String8List                 raw_cmd_line;
   String8                     pdb_name;
@@ -343,7 +345,7 @@ typedef struct LNK_Config
   B32                         build_imp_lib;
   B32                         build_exp;
   LNK_SwitchState             write_temp_files;
-  String8                     temp_image_name;
+  String8                     temp_out_path;
   String8                     temp_pdb_name;
   String8                     temp_rad_debug_name;
   String8                     temp_rad_chunk_map_name;

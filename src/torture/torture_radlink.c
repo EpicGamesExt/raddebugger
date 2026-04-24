@@ -6335,34 +6335,39 @@ TEST(determ_test)
   t_invoke_(t_cl_path(), cl_line, max_U64, arena, &cl_out);
   T_Ok(g_last_exit_code == 0);
 
+  U64 run_count = 25;
+  T_Ok(run_count > 1);
+  String8 test_path = t_make_file_path(arena, str8_lit("test.obj"));
+
   // single-threaded link
-  String8 refs_path = t_make_file_path(arena, str8_lit("b.types"));
-  t_invoke_linkerf("test.obj /debug:full /rad_time_stamp:0 /rad_workers:1 /rad_store_types:%S /out:a.exe", refs_path);
+  t_invoke_linkerf("%S /debug:full /rad_time_stamp:0 /rad_workers:1 /pdbaltpath:main.pdb /rad_log:-all /rad_ignore:74 /out:main.exe", test_path);
   T_Ok(g_last_exit_code == 0);
 
-  // rename a -> b
-  T_Ok(os_move_file_path(t_make_file_path(arena, str8_lit("b.exe")), t_make_file_path(arena, str8_lit("a.exe"))));
-  T_Ok(os_move_file_path(t_make_file_path(arena, str8_lit("b.pdb")), t_make_file_path(arena, str8_lit("a.pdb"))));
-
   // read b
-  String8 b_exe = t_read_file(arena, str8_lit("b.exe"));
-  String8 b_pdb = t_read_file(arena, str8_lit("b.pdb"));
+  String8 main_exe = t_read_file(arena, str8_lit("main.exe"));
+  String8 main_pdb = t_read_file(arena, str8_lit("main.pdb"));
 
   // multi-threaded links
-  for EachIndex(i, 25) {
+  OS_HandleList linkers = {0};
+  for EachIndex(i, run_count) {
+    String8 out_path = t_make_file_path(arena, str8f(arena, "%llu.exe", i));
+    String8 cmdl = str8f(arena, "%S %S /debug:full /rad_time_stamp:0 /rad_imagealtpath:main.exe /pdbaltpath:main.pdb /rad_log:-all /rad_ignore:74 /out:%S", t_radlink_path(), test_path, out_path);
+    OS_Handle process_handle = os_cmd_line_launch(cmdl);
+    T_Ok(!os_handle_match(os_handle_zero(), process_handle));
+    os_handle_list_push(arena, &linkers, process_handle);
+  }
+
+  // wait for linkers
+  for EachNode(n, OS_HandleNode, linkers.first) { os_process_join(n->v, max_U64, 0); }
+
+  for EachIndex(i, run_count) {
     Temp temp = temp_begin(arena);
-
-    t_delete_file(str8_lit("a.exe"));
-    t_delete_file(str8_lit("a.pdb"));
-
-    t_invoke_linkerf("test.obj /debug:full /rad_time_stamp:0 /out:a.exe");
-    T_Ok(g_last_exit_code == 0);
-
-    String8 a_exe = t_read_file(temp.arena, str8_lit("a.exe"));
-    String8 a_pdb = t_read_file(temp.arena, str8_lit("a.pdb"));
-    T_Ok(str8_match(a_exe, b_exe, 0));
-    T_Ok(str8_match(a_pdb, b_pdb, 0));
-
+    String8 exe = t_read_file(temp.arena, str8f(temp.arena, "%llu.exe", i));
+    String8 pdb = t_read_file(temp.arena, str8f(temp.arena, "%llu.pdb", i));
+    T_Ok(exe.size);
+    T_Ok(pdb.size);
+    T_Ok(str8_match(main_exe, exe, 0));
+    T_Ok(str8_match(main_pdb, pdb, 0));
     temp_end(temp);
   }
 }

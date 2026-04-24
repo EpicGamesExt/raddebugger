@@ -2044,7 +2044,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     }
 
     PE_FinalizedExports finalized_exports = pe_finalize_export_list(scratch.arena, resolved_exports);
-    String8             edata_obj         = pe_make_edata_obj(arena->v[0], str8_skip_last_slash(config->image_name), COFF_TimeStamp_Max, config->machine, finalized_exports);
+    String8             edata_obj         = pe_make_edata_obj(arena->v[0], lnk_get_image_name(config), COFF_TimeStamp_Max, config->machine, finalized_exports);
     lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Exports *"), edata_obj);
 
     ProfEnd();
@@ -2119,7 +2119,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
       ProfBegin("Build * Linker * Obj");
       String8 obj_name     = str8_lit("* Linker *");
       String8 raw_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ str8_lit_comp(""),  str8_lit_comp(" "), str8_lit_comp("") });
-      String8 obj_data     = lnk_make_linker_coff_obj(arena->v[0], config->time_stamp, config->machine, config->work_dir, config->image_name, config->pdb_name, raw_cmd_line, obj_name);
+      String8 obj_data     = lnk_make_linker_coff_obj(arena->v[0], config->time_stamp, config->machine, config->work_dir, lnk_get_image_name(config), config->pdb_name, raw_cmd_line, obj_name);
       lnk_inputer_push_obj_linkgen(inputer, 0, obj_name, obj_data);
       ProfEnd();
     }
@@ -5205,8 +5205,8 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 
   // Write image in the background
   LNK_WriteThreadContext *image_write_ctx = push_array(scratch.arena, LNK_WriteThreadContext, 1);
-  image_write_ctx->path      = config->image_name;
-  image_write_ctx->temp_path = config->temp_image_name;
+  image_write_ctx->path      = config->out_path;
+  image_write_ctx->temp_path = config->temp_out_path;
   image_write_ctx->data      = image_ctx.image_data;
   Thread image_write_thread = thread_launch(lnk_write_thread, image_write_ctx);
 
@@ -5225,7 +5225,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     ProfBegin("Build Import Library");
     lnk_timer_begin(LNK_Timer_Lib);
     String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);
-    String8 lib                  = pe_make_import_lib(arena->v[0], config->machine, config->time_stamp, str8_skip_last_slash(config->image_name), linker_debug_symbols, config->export_symbol_list);
+    String8 lib                  = pe_make_import_lib(arena->v[0], config->machine, config->time_stamp, lnk_get_image_name(config), linker_debug_symbols, config->export_symbol_list);
     lnk_write_data_to_file_path(config->imp_lib_name, str8_zero(), lib);
     lnk_timer_end(LNK_Timer_Lib);
     ProfEnd();
@@ -5262,7 +5262,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
                                                       arena,
                                                       OperatingSystem_Windows,
                                                       rdi_arch_from_coff_machine(config->machine),
-                                                      config->image_name,
+                                                      lnk_get_image_name(config),
                                                       image_ctx.image_data,
                                                       debug_info_objs_count,
                                                       debug_info_objs,

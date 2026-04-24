@@ -90,6 +90,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_SharedThreadPool,             0, "RAD_SHARED_THREAD_POOL",               "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                               },
   { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,   0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS",   ":#",        "Set maximum number of workers in a thread pool."                                  },
   { LNK_CmdSwitch_Rad_Ignore,                       0, "RAD_IGNORE",                           ":#",        "Ignore the specified RAD linker warning."                                         },
+  { LNK_CmdSwitch_Rad_ImageAltPath,                 0, "RAD_IMAGEALTPATH",                     ":FILENAME", "Alternative name for the image"                                                   },
   { LNK_CmdSwitch_Rad_WriteTempFiles,               0, "RAD_WRITE_TEMP_FILES",                 "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
   { LNK_CmdSwitch_Rad_TimeStamp,                    0, "RAD_TIME_STAMP",                       ":#",        "Time stamp embeded in EXE and PDB."                                               },
   { LNK_CmdSwitch_Rad_TypeHashAlg,                  0, "RAD_TPYE_HASH_ALG",                    ":{BLAKE3}", "Sets hashing algorithm for type merging."                                         },
@@ -752,9 +753,8 @@ lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_Me
 internal String8
 lnk_get_image_name(LNK_Config *config)
 {
-  String8 image_name = config->image_name;
+  String8 image_name = config->image_alt_path.size ? config->image_alt_path : config->out_path;
   image_name = str8_skip_last_slash(image_name);
-  image_name = str8_chop_last_dot(image_name);
   return image_name;
 }
 
@@ -1696,7 +1696,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   } break;
 
   case LNK_CmdSwitch_Out: {
-    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->image_name);
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->out_path);
   } break;
 
   case LNK_CmdSwitch_Pdb: {
@@ -1934,19 +1934,27 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Rad_Log: {
     if (value_strings.node_count == 1) {
-      if (str8_match_lit("all", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
+      String8 value = value_strings.first->string;
+      
+      B32 status = 1;
+      if (str8_starts_with(value, str8_lit("-"))) {
+        value = str8_skip(value, 1);
+        status = 0;
+      }
+
+      if (str8_match_lit("all", value, StringMatchFlag_CaseInsensitive)) {
         for (U64 ilog = 0; ilog < LNK_Log_Count; ilog += 1) {
-          lnk_set_log_status((LNK_LogType)ilog, 1);
+          lnk_set_log_status((LNK_LogType)ilog, status);
         }
-      } else if (str8_match_lit("io", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
-        lnk_set_log_status(LNK_Log_IO_Read, 1);
-        lnk_set_log_status(LNK_Log_IO_Write, 1);
+      } else if (str8_match_lit("io", value, StringMatchFlag_CaseInsensitive)) {
+        lnk_set_log_status(LNK_Log_IO_Read, status);
+        lnk_set_log_status(LNK_Log_IO_Write, status);
       } else {
-        LNK_LogType log_type = lnk_log_type_from_string(value_strings.first->string);
+        LNK_LogType log_type = lnk_log_type_from_string(value);
         if (log_type == LNK_Log_Null) {
-          lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown parameter \"%S\"", value_strings.first->string);
+          lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown parameter \"%S\"", value);
         } else {
-          lnk_set_log_status(log_type, 1);
+          lnk_set_log_status(log_type, status);
         }
       }
     } else {
@@ -2058,6 +2066,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         lnk_activate_error(abs_s64(code));
       }
     }
+  } break;
+
+  case LNK_CmdSwitch_Rad_ImageAltPath: {
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->image_alt_path);
   } break;
 
   case LNK_CmdSwitch_Rad_WriteTempFiles: {
@@ -2266,33 +2278,33 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
 
   // handle empty /OUT
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Out)) {
-    String8 name      = str8_list_first(&config->input_list[LNK_Input_Obj]);
-    String8 ext       = (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) ? str8_lit("dll") : str8_lit("exe");
-    config->image_name = path_replace_file_extension(scratch.arena, name, ext);
+    String8 name     = str8_list_first(&config->input_list[LNK_Input_Obj]);
+    String8 ext      = (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) ? str8_lit("dll") : str8_lit("exe");
+    config->out_path = path_replace_file_extension(scratch.arena, name, ext);
   }
 
   // handle empty /PDB
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Pdb)) {
-    config->pdb_name = path_replace_file_extension(scratch.arena, config->image_name, str8_lit("pdb"));
+    config->pdb_name = path_replace_file_extension(scratch.arena, config->out_path, str8_lit("pdb"));
   }
 
   // handle empty /RAD_DEBUG_NAME
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_DebugName)) {
-    config->rad_debug_name = path_replace_file_extension(scratch.arena, config->image_name, str8_lit("rdi"));
+    config->rad_debug_name = path_replace_file_extension(scratch.arena, config->out_path, str8_lit("rdi"));
   }
 
   // handle empty /IMPLIB
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_ImpLib)) {
-    config->imp_lib_name = path_replace_file_extension(scratch.arena, config->image_name, str8_lit("lib"));
+    config->imp_lib_name = path_replace_file_extension(scratch.arena, config->out_path, str8_lit("lib"));
   }
 
   // handle empty /MANIFESTFILE
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_ManifestFile)) {
-    config->manifest_name = push_str8f(scratch.arena, "%S.manifest", config->image_name);
+    config->manifest_name = push_str8f(scratch.arena, "%S.manifest", config->out_path);
   }
 
   // convert to full paths
-  config->image_name     = os_full_path_from_path(arena, config->image_name);
+  config->out_path     = os_full_path_from_path(arena, config->out_path);
   config->pdb_name       = os_full_path_from_path(arena, config->pdb_name);
   config->rad_debug_name = os_full_path_from_path(arena, config->rad_debug_name);
   config->imp_lib_name   = os_full_path_from_path(arena, config->imp_lib_name);
@@ -2322,7 +2334,7 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
 
   // define linker env vars
   hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_pdb"),          str8_skip_last_slash(config->pdb_name));
-  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_ext"),          str8_skip_last_dot(config->image_name));
+  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_ext"),          str8_skip_last_dot(config->out_path));
   hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_pdb_path"), config->pdb_name);
   hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_rdi"),      str8_skip_last_slash(config->rad_debug_name));
   hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_rdi_path"), config->rad_debug_name);
@@ -2353,7 +2365,7 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   // create temporary files names
   if (config->write_temp_files == LNK_SwitchState_Yes) {
     config->temp_rad_chunk_map_name = push_str8f(arena, "%S.tmp%x", config->rad_chunk_map_name, config->time_stamp);
-    config->temp_image_name         = push_str8f(arena, "%S.tmp%x", config->image_name,         config->time_stamp);
+    config->temp_out_path           = push_str8f(arena, "%S.tmp%x", config->out_path  ,         config->time_stamp);
     config->temp_pdb_name           = push_str8f(arena, "%S.tmp%x", config->pdb_name,           config->time_stamp);
     config->temp_rad_debug_name     = push_str8f(arena, "%S.tmp%x", config->rad_debug_name,     config->time_stamp);
   }
