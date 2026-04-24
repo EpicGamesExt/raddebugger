@@ -421,7 +421,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   ////////////////////////////
   //- rjf: parse each unit's line info; produce line tables
   //
-  RDIM_LineTableChunkList *all_line_tables = 0;
+  RDIM_LineTableChunkList *unit_line_table_chunk_lists = 0;
   RDIM_LineTable **unit_line_tables = 0;
   ProfScope("parse each unit's line info; produce line tables")
   {
@@ -441,9 +441,8 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     {
       FileSeqNode *next;
       RDIM_SrcFile *src_file;
-      LineSeqChunk *first_seq_chunk;
-      LineSeqChunk *last_seq_chunk;
-      U64 total_line_count;
+      RDIM_SrcFileLineMapFragment *first_line_map_fragment;
+      RDIM_SrcFileLineMapFragment *last_line_map_fragment;
     };
     typedef struct FileSeqMap FileSeqMap;
     struct FileSeqMap
@@ -454,15 +453,11 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     FileSeqMap *unit_file_seq_maps = 0;
     if(lane_idx() == 0)
     {
-      all_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, 1);
+      unit_line_table_chunk_lists = push_array(scratch.arena, RDIM_LineTableChunkList, unit_count);
       unit_line_tables = push_array(scratch.arena, RDIM_LineTable *, unit_count);
-      for EachIndex(unit_idx, unit_count)
-      {
-        unit_line_tables[unit_idx] = rdim_line_table_chunk_list_push(arena, all_line_tables, unit_count);
-      }
       unit_file_seq_maps = push_array(scratch.arena, FileSeqMap, unit_count);
     }
-    lane_sync_u64(&all_line_tables, 0);
+    lane_sync_u64(&unit_line_table_chunk_lists, 0);
     lane_sync_u64(&unit_line_tables, 0);
     lane_sync_u64(&unit_file_seq_maps, 0);
     
@@ -478,15 +473,20 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       {
         break;
       }
+      Temp scratch2 = scratch_begin(&scratch.arena, 1);
       
       //- rjf: unpack unit info
       DW2_LineTableHeader *line_table_header = &unit_line_table_headers[unit_idx];
-      RDIM_LineTable *dst_line_table = unit_line_tables[unit_idx];
+      RDIM_LineTableChunkList *dst_line_tables = &unit_line_table_chunk_lists[unit_idx];
       DW2_Tag *unit_root_tag = &unit_root_tags[unit_idx];
       DW2_Attrib *stmt_list = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StmtList);
       U64 line_info_off = stmt_list->val.u128.u64[0];
       String8 all_line_info_data = raw->sec[DW_Section_Line].data;
       String8 unit_line_table_data = str8_substr(all_line_info_data, r1u64(line_info_off + unit_line_table_header_sizes[unit_idx], line_info_off + line_table_header->unit_length));
+      
+      //- rjf: build unit's line table
+      RDIM_LineTable *dst_line_table = rdim_line_table_chunk_list_push(arena, dst_line_tables, 1);
+      unit_line_tables[unit_idx] = dst_line_table;
       
       //- rjf: set up per-unit file sequence map
       unit_file_seq_maps[unit_idx].slots_count = line_table_header->files.count;
@@ -502,8 +502,11 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       
       //- rjf: run the line opcode program
       B32 emit_line = 0;
-      B32 done = 0;
-      for(U64 off = 0, next_off = 0; !done && off < unit_line_table_data.size; off = next_off)
+      RDIM_SrcFile *line_seq_src_file = 0;
+      LineSeqChunk *first_line_seq_chunk = 0;
+      LineSeqChunk *last_line_seq_chunk = 0;
+      U64 total_line_seq_count = 0;
+      for(U64 off = 0, next_off = 0; off <= unit_line_table_data.size; off = next_off)
       {
         next_off = unit_line_table_data.size;
         
@@ -539,10 +542,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             //- rjf: skip unknown opcode
             default:
             {
-              if(opcode == 0 || opcode > line_table_header->opcode_lengths_count)
-              {
-                done = 1;
-              }
               for EachIndex(uleb_idx, line_table_header->opcode_lengths[opcode - 1])
               {
                 U64 v = 0;
@@ -692,26 +691,54 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           }
         }
         
-        //- rjf: emit lines / sequences
-        if(emit_line)
+        //- rjf: advance to next op
+        if(op_read_off > off)
         {
-          emit_line = 0;
-          
-          // rjf: map file index -> rdim src file
-          RDIM_SrcFile *src_file = 0;
-          if(vm_regs.file_index < line_table_header->files.count)
+          next_off = op_read_off;
+        }
+        
+        //- rjf: map file index -> rdim src file
+        RDIM_SrcFile *src_file = 0;
+        if(vm_regs.file_index < line_table_header->files.count)
+        {
+          src_file = unit_src_file_maps[unit_idx].v[vm_regs.file_index];
+        }
+        
+        //- rjf: sequence ended explicitly, or file change, or end of stream? -> push to line table
+        if(vm_regs.end_sequence || (src_file != line_seq_src_file && first_line_seq_chunk != 0) || off >= unit_line_table_data.size)
+        {
+          // rjf: combine voffs/lines/cols
+          U64 seq_line_count = total_line_seq_count;
+          U64 *seq_voffs = push_array(arena, U64, seq_line_count+1);
+          U32 *seq_lines = push_array(arena, U32, seq_line_count);
+          U16 *seq_cols = push_array(arena, U16, 2*seq_line_count);
           {
-            src_file = unit_src_file_maps[unit_idx].v[vm_regs.file_index];
+            U64 voff_idx = 0;
+            U64 line_idx = 0;
+            U64 col_idx = 0;
+            for(LineSeqChunk *c = first_line_seq_chunk; c != 0; c = c->next)
+            {
+              MemoryCopy(seq_voffs + voff_idx, c->voffs, sizeof(c->voffs[0]) * c->line_count);
+              MemoryCopy(seq_lines + line_idx, c->line_nums, sizeof(c->line_nums[0]) * c->line_count);
+              MemoryCopy(seq_cols + col_idx, c->col_nums, sizeof(c->col_nums[0]) * 2 * c->line_count);
+              voff_idx += c->line_count;
+              line_idx += c->line_count;
+              col_idx += 2*c->line_count;
+            }
+            seq_voffs[seq_line_count] = vm_regs.address - base_vaddr;
           }
+          
+          // rjf: push sequence to line table
+          RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, dst_line_tables, dst_line_table, line_seq_src_file, seq_voffs, seq_lines, seq_cols, seq_line_count);
           
           // rjf: map src file -> file seq node
           FileSeqNode *file_seq_n = 0;
           {
-            U64 hash = u64_hash_from_str8(str8_struct(&src_file));
+            U64 hash = u64_hash_from_str8(str8_struct(&line_seq_src_file));
             U64 slot_idx = hash%unit_file_seq_maps[unit_idx].slots_count;
             for(FileSeqNode *n = unit_file_seq_maps[unit_idx].slots[slot_idx]; n != 0; n = n->next)
             {
-              if(n->src_file == src_file)
+              if(n->src_file == line_seq_src_file)
               {
                 file_seq_n = n;
                 break;
@@ -725,44 +752,92 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             }
           }
           
-          // rjf: push this line into the file sequence node
+          // rjf: record sequence in file seq node
           {
-            LineSeqChunk *chunk = file_seq_n->last_seq_chunk;
-            if(vm_regs.end_sequence && chunk != 0)
-            {
-              chunk->voffs[chunk->line_count] = vm_regs.address;
-            }
-            if(vm_regs.end_sequence || chunk == 0 || chunk->line_count >= chunk->line_cap)
-            {
-              chunk = push_array(scratch.arena, LineSeqChunk, 1);
-              SLLQueuePush(file_seq_n->first_seq_chunk, file_seq_n->last_seq_chunk, chunk);
-              chunk->line_cap = 64;
-              chunk->voffs = push_array(scratch.arena, U64, chunk->line_cap + 1);
-              chunk->line_nums = push_array(scratch.arena, U32, chunk->line_cap);
-              chunk->col_nums = push_array(scratch.arena, U16, 2*chunk->line_cap);
-            }
-            U64 chunk_line_idx = chunk->line_count;
-            chunk->voffs[chunk_line_idx] = vm_regs.address;
-            chunk->line_nums[chunk_line_idx] = (U32)vm_regs.line;
-            chunk->col_nums[chunk_line_idx] = (U16)vm_regs.column;
-            chunk->line_count += 1;
-            file_seq_n->total_line_count += 1;
+            RDIM_SrcFileLineMapFragment *f = push_array(scratch.arena, RDIM_SrcFileLineMapFragment, 1);
+            SLLQueuePush(file_seq_n->first_line_map_fragment, file_seq_n->last_line_map_fragment, f);
+            f->seq = seq;
           }
+          
+          // rjf: reset
+          first_line_seq_chunk = last_line_seq_chunk = 0;
+          total_line_seq_count = 0;
+          line_seq_src_file = 0;
+          MemoryZeroStruct(&vm_regs);
+          vm_regs.file_index = 1;
+          vm_regs.line = 1;
+          vm_regs.is_stmt = line_table_header->default_is_stmt;
         }
         
-        //- rjf: advance to next opcode
-        if(op_read_off > off)
+        //- rjf: emit lines
+        if(emit_line)
         {
-          next_off = op_read_off;
+          emit_line = 0;
+          LineSeqChunk *chunk = last_line_seq_chunk;
+          if(chunk == 0 || chunk->line_count >= chunk->line_cap)
+          {
+            chunk = push_array(scratch.arena, LineSeqChunk, 1);
+            SLLQueuePush(first_line_seq_chunk, last_line_seq_chunk, chunk);
+            chunk->line_cap = 64;
+            chunk->voffs = push_array(scratch.arena, U64, chunk->line_cap + 1);
+            chunk->line_nums = push_array(scratch.arena, U32, chunk->line_cap);
+            chunk->col_nums = push_array(scratch.arena, U16, 2*chunk->line_cap);
+          }
+          U64 chunk_line_idx = chunk->line_count;
+          chunk->voffs[chunk_line_idx] = vm_regs.address - base_vaddr;
+          chunk->line_nums[chunk_line_idx] = (U32)vm_regs.line;
+          chunk->col_nums[chunk_line_idx] = (U16)vm_regs.column;
+          chunk->line_count += 1;
+          total_line_seq_count += 1;
+          line_seq_src_file = src_file;
+        }
+      }
+      
+      scratch_end(scratch2);
+    }
+    lane_sync();
+    
+    //- rjf: equip source files with their fragments
+    //
+    // TODO(rjf): this can *almost* be wide, but we are relying on a few top-level
+    // summations inside the RDIM_SrcFileChunkList when we push a sequence to a src
+    // file. if we just summed those later when baking (probably fine), then this
+    // could go wide across all src files, which would be very nice. just lane-0ing
+    // for now. when possible, we can probably do the same thing in PDB too.
+    //
+    if(lane_idx() == 0)
+    {
+      for EachIndex(unit_idx, unit_count)
+      {
+        FileSeqMap *file_seq_map = &unit_file_seq_maps[unit_idx];
+        for EachIndex(slot_idx, file_seq_map->slots_count)
+        {
+          for(FileSeqNode *n = file_seq_map->slots[slot_idx]; n != 0; n = n->next)
+          {
+            for(RDIM_SrcFileLineMapFragment *f = n->first_line_map_fragment; f != 0; f = f->next)
+            {
+              rdim_src_file_push_line_sequence(arena, all_src_files, n->src_file, f->seq);
+            }
+          }
         }
       }
     }
     lane_sync();
-    
-    //- rjf: collect all sequences
-    //
-    // TODO(rjf)
   }
+  
+  ////////////////////////////
+  //- rjf: join all line tables
+  //
+  RDIM_LineTableChunkList *all_line_tables = 0;
+  if(lane_idx() == 0)
+  {
+    all_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, 1);
+    for EachIndex(unit_idx, unit_count)
+    {
+      rdim_line_table_chunk_list_concat_in_place(all_line_tables, &unit_line_table_chunk_lists[unit_idx]);
+    }
+  }
+  lane_sync_u64(&all_line_tables, 0);
   
   ////////////////////////////
   //- rjf: fill result
