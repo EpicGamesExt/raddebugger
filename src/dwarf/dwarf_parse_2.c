@@ -399,8 +399,19 @@ dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_FormKind form_kin
         case DW_Form_Strx3:
         case DW_Form_Strx4:
         case DW_Form_Strx:
+        if(ctx->str_offsets_table != 0)
         {
-          // TODO(rjf)
+          U64 entry_idx = val.u128.u64[0];
+          if(entry_idx < ctx->str_offsets_table->entries_count)
+          {
+            U64 entry_size = ctx->str_offsets_table->entry_size;
+            U64 entry_off = entry_idx * entry_size;
+            U64 string_data_off = 0;
+            MemoryCopy(&string_data_off, (U8 *)ctx->str_offsets_table->entries + entry_off, entry_size);
+            String8 string_section_data = ctx->raw->sec[DW_Section_Str].data;
+            val.string = str8_cstring_capped(string_section_data.str + string_data_off,
+                                             string_section_data.str + string_section_data.size);
+          }
         }break;
         case DW_Form_LineStrp:
         {
@@ -541,6 +552,25 @@ dw2_attrib_from_kind(DW2_Tag *tag, DW_AttribKind kind)
       result = &n->v;
       break;
     }
+  }
+  return result;
+}
+
+internal U64
+dw2_reference_info_off_from_form_val(DW2_ParseCtx *ctx, DW2_FormVal *v)
+{
+  U64 result = 0;
+  switch(v->kind)
+  {
+    default:{}break;
+    case DW_Form_Ref1:
+    case DW_Form_Ref2:
+    case DW_Form_Ref4:
+    case DW_Form_Ref8:
+    {
+      result = v->u128.u64[0];
+    }break;
+    // TODO(rjf): DW_Form_RefAddr, DW_Form_RefUData, DW_Form_RefSig8, DW_Form_RefSup8, etc.
   }
   return result;
 }
@@ -829,5 +859,44 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
   
   U64 bytes_read = (off - start_off);
   scratch_end(scratch);
+  return bytes_read;
+}
+
+////////////////////////////////
+//~ rjf: String Offset Table Parsing (.debug_str_offsets)
+
+internal U64
+dw2_read_str_offsets_table(String8 data, U64 off, DW2_StrOffsetsTable *out)
+{
+  U64 start_off = off;
+  {
+    // rjf: read data length / format
+    U64 unit_data_length = 0;
+    DW_Format format = DW_Format_Null;
+    off += dw2_read_initial_length(data, off, &unit_data_length, &format);
+    U64 unit_data_off_opl = off + unit_data_length;
+    
+    // rjf: read version
+    DW_Version version = DW_Version_Null;
+    off += str8_deserial_read_struct(data, off, &version);
+    
+    // rjf: version 5: read rest (this section only exists in 5+)
+    if(version == DW_Version_5)
+    {
+      // rjf: skip padding
+      off += sizeof(U16);
+      
+      // rjf: fill table info
+      out->format        = format;
+      out->version       = version;
+      out->entry_size    = dw_size_from_format(format);
+      out->entries_count = (unit_data_off_opl - off) / out->entry_size;
+      out->entries       = data.str + off;
+      
+      // rjf: skip table
+      off = unit_data_off_opl;
+    }
+  }
+  U64 bytes_read = (off - start_off);
   return bytes_read;
 }

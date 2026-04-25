@@ -245,9 +245,9 @@ internal U64
 dw_reg_count_from_arch(Arch arch)
 {
   switch (arch) {
-  default: { NotImplemented; } // fall-through
-  case Arch_Null: return 0;
-  case Arch_x64: return DW_RegX64_Last;
+    default: { NotImplemented; } // fall-through
+    case Arch_Null: return 0;
+    case Arch_x64: return DW_RegX64_Last;
   }
 }
 
@@ -269,9 +269,9 @@ internal U64
 dw_sp_from_arch(Arch arch)
 {
   switch (arch) {
-  default: NotImplemented;
-  case Arch_Null: return 0;
-  case Arch_x64:  return DW_RegX64_Rsp;
+    default: NotImplemented;
+    case Arch_Null: return 0;
+    case Arch_x64:  return DW_RegX64_Rsp;
   }
 }
 
@@ -280,11 +280,11 @@ internal U64
 dw_size_from_format(DW_Format format)
 {
   U64 result = 0;
-  switch (format) {
-    case DW_Format_Null: break;
-    case DW_Format_32Bit: result = 4; break;
-    case DW_Format_64Bit: result = 8; break;
-    default: InvalidPath; break;
+  switch(format)
+  {
+    case DW_Format_Null:{}break;
+    case DW_Format_32Bit:{result = 4;}break;
+    case DW_Format_64Bit:{result = 8;}break;
   }
   return result;
 }
@@ -389,11 +389,11 @@ dw_operand_count_from_expr_op(DW_ExprOp op)
   switch (op) {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _OPER_COUNT;
     DW_Expr_V3_XList
-    DW_Expr_V4_XList
-    DW_Expr_V5_XList
-    DW_Expr_GNU_XList
+      DW_Expr_V4_XList
+      DW_Expr_V5_XList
+      DW_Expr_GNU_XList
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -404,11 +404,11 @@ dw_pop_count_from_expr_op(DW_ExprOp op)
   switch (op) {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _POP_COUNT;
     DW_Expr_V3_XList
-    DW_Expr_V4_XList
-    DW_Expr_V5_XList
-    DW_Expr_GNU_XList
+      DW_Expr_V4_XList
+      DW_Expr_V5_XList
+      DW_Expr_GNU_XList
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -419,11 +419,11 @@ dw_push_count_from_expr_op(DW_ExprOp op)
   switch (op) {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _PUSH_COUNT;
     DW_Expr_V3_XList
-    DW_Expr_V4_XList
-    DW_Expr_V5_XList
-    DW_Expr_GNU_XList
+      DW_Expr_V4_XList
+      DW_Expr_V5_XList
+      DW_Expr_GNU_XList
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -433,12 +433,12 @@ dw_operand_types_from_expr_opcode(DW_ExprOp op)
 {
 #define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, _OPER_TYPE0, _OPER_TYPE1) case _ID: { local_persist DW_ExprOperandType t[] = { DW_ExprOperandType_##_OPER_TYPE0, DW_ExprOperandType_##_OPER_TYPE1  }; return t; }
   switch (op) {
-  DW_Expr_V3_XList
-  DW_Expr_V4_XList
-  DW_Expr_V5_XList
-  DW_Expr_GNU_XList
+    DW_Expr_V3_XList
+      DW_Expr_V4_XList
+      DW_Expr_V5_XList
+      DW_Expr_GNU_XList
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -450,7 +450,7 @@ dw_operand_count_from_cfa_opcode(DW_CFA_Opcode opcode)
 #define X(_N, _ID, ...) case _ID: { local_persist DW_CFA_OperandType t[] = { DW_CFA_OperandType_Null, __VA_ARGS__ }; return ArrayCount(t)-1; }
     DW_CFA_Kind_XList
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -460,21 +460,21 @@ dw_is_cfa_expr_opcode_invalid(DW_ExprOp opcode)
 {
   B32 is_invalid = 0;
   switch (opcode) {
-  case DW_ExprOp_Addrx:
-  case DW_ExprOp_Call2:
-  case DW_ExprOp_Call4:
-  case DW_ExprOp_CallRef:
-  case DW_ExprOp_ConstType:
-  case DW_ExprOp_Constx:
-  case DW_ExprOp_Convert:
-  case DW_ExprOp_DerefType:
-  case DW_ExprOp_RegvalType:
-  case DW_ExprOp_Reinterpret:
-  case DW_ExprOp_PushObjectAddress:
-  case DW_ExprOp_CallFrameCfa: {
-    is_invalid = 1;
-  } break;
-  default: break;
+    case DW_ExprOp_Addrx:
+    case DW_ExprOp_Call2:
+    case DW_ExprOp_Call4:
+    case DW_ExprOp_CallRef:
+    case DW_ExprOp_ConstType:
+    case DW_ExprOp_Constx:
+    case DW_ExprOp_Convert:
+    case DW_ExprOp_DerefType:
+    case DW_ExprOp_RegvalType:
+    case DW_ExprOp_Reinterpret:
+    case DW_ExprOp_PushObjectAddress:
+    case DW_ExprOp_CallFrameCfa: {
+      is_invalid = 1;
+    } break;
+    default: break;
   }
   return is_invalid;
 }
@@ -484,14 +484,14 @@ dw_is_new_row_cfa_opcode(DW_CFA_Opcode opcode)
 {
   B32 is_new_row_op = 0;
   switch (opcode) {
-  case DW_CFA_SetLoc:
-  case DW_CFA_AdvanceLoc:
-  case DW_CFA_AdvanceLoc1:
-  case DW_CFA_AdvanceLoc2:
-  case DW_CFA_AdvanceLoc4: {
-    is_new_row_op = 1;
-  } break;
-  default: break;
+    case DW_CFA_SetLoc:
+    case DW_CFA_AdvanceLoc:
+    case DW_CFA_AdvanceLoc1:
+    case DW_CFA_AdvanceLoc2:
+    case DW_CFA_AdvanceLoc4: {
+      is_new_row_op = 1;
+    } break;
+    default: break;
   }
   return is_new_row_op;
 }
@@ -503,7 +503,7 @@ dw_operand_types_from_cfa_op(DW_CFA_Opcode opcode)
 #define X(_N, _ID, ...) case _ID: { local_persist DW_CFA_OperandType t[] = { DW_CFA_OperandType_Null, __VA_ARGS__ }; return &t[0] + 1; }
     DW_CFA_Kind_XList
 #undef X
-  default: { NotImplemented; } break;
+    default: { NotImplemented; } break;
   }
   return 0;
 }
@@ -512,9 +512,9 @@ internal String8
 dw_string_from_format(DW_Format format)
 {
   switch (format) {
-  case DW_Format_Null:  return str8_lit("NULL");
-  case DW_Format_32Bit: return str8_lit("DWARF32");
-  case DW_Format_64Bit: return str8_lit("DWARF64");
+    case DW_Format_Null:  return str8_lit("NULL");
+    case DW_Format_32Bit: return str8_lit("DWARF32");
+    case DW_Format_64Bit: return str8_lit("DWARF64");
   }
   return str8_zero();
 }
@@ -810,7 +810,7 @@ dw_string_from_cfa_opcode(DW_CFA_Opcode opcode)
 #define X(_NAME, _ID, ...) case _ID: return str8_lit(Stringify(_NAME));
     DW_CFA_Kind_XList
 #undef X
-  default: InvalidPath; break;
+    default: InvalidPath; break;
   }
   return str8_zero();
 }
@@ -965,78 +965,78 @@ internal B32
 dw_form_match(DW_Form a, DW_Form b)
 {
   B32 is_match = 0;
-
+  
   if (a.kind == b.kind) {
     switch (a.kind) {
-    case DW_Form_Null: {} break;
-
-    case DW_Form_Addr:    { is_match = str8_match(a.addr, b.addr, 0);       } break;
-    case DW_Form_String:  { is_match = str8_match(a.string, b.string, 0);   } break;
-    case DW_Form_ExprLoc: { is_match = str8_match(a.exprloc, b.exprloc, 0); } break;
-
-    case DW_Form_Block:
-    case DW_Form_Block1:
-    case DW_Form_Block2:
-    case DW_Form_Block4: {
-      is_match = str8_match(a.block, b.block, 0);
-    } break;
-
-    case DW_Form_Data1:
-    case DW_Form_Data2:
-    case DW_Form_Data4:
-    case DW_Form_Data8:  
-    case DW_Form_Data16: {
-      is_match = str8_match(a.data, b.data, 0);
-    } break;
-
-    case DW_Form_Flag:  { is_match = a.flag == b.flag;   } break;
-    case DW_Form_SData: { is_match = a.sdata == b.sdata; } break;
-    case DW_Form_UData: { is_match = a.udata == b.udata; } break;
-
-    case DW_Form_RefAddr:
-    case DW_Form_Ref1:
-    case DW_Form_Ref2:
-    case DW_Form_Ref4:
-    case DW_Form_Ref8: 
-    case DW_Form_RefUData: 
-    case DW_Form_GNU_RefAlt: {
-      is_match = a.ref == b.ref;
-    } break;
-
-    case DW_Form_Indirect: { NotImplemented; } break;
-
-    case DW_Form_SecOffset: 
-    case DW_Form_LineStrp:
-    case DW_Form_GNU_StrpAlt: {
-      is_match = a.sec_offset == b.sec_offset;
-    } break;
-
-    case DW_Form_ImplicitConst: { is_match = a.implicit_const, b.implicit_const; } break;
-
-    case DW_Form_Strx:
-    case DW_Form_Strx1:
-    case DW_Form_Strx2:
-    case DW_Form_Strx3:
-    case DW_Form_Strx4:
-    case DW_Form_Addrx:
-    case DW_Form_Addrx1:
-    case DW_Form_Addrx2:
-    case DW_Form_Addrx3:
-    case DW_Form_Addrx4:
-    case DW_Form_RngListx:
-    case DW_Form_LocListx: {
-      is_match = a.xval == b.xval;
-    } break;
-
-    case DW_Form_StrpSup: { is_match = a.strp_sup == b.strp_sup; } break;
-
-    case DW_Form_RefSup4: { NotImplemented; } break;
-    case DW_Form_RefSup8: { NotImplemented; } break;
-
-    default: { InvalidPath; } break;
+      case DW_Form_Null: {} break;
+      
+      case DW_Form_Addr:    { is_match = str8_match(a.addr, b.addr, 0);       } break;
+      case DW_Form_String:  { is_match = str8_match(a.string, b.string, 0);   } break;
+      case DW_Form_ExprLoc: { is_match = str8_match(a.exprloc, b.exprloc, 0); } break;
+      
+      case DW_Form_Block:
+      case DW_Form_Block1:
+      case DW_Form_Block2:
+      case DW_Form_Block4: {
+        is_match = str8_match(a.block, b.block, 0);
+      } break;
+      
+      case DW_Form_Data1:
+      case DW_Form_Data2:
+      case DW_Form_Data4:
+      case DW_Form_Data8:  
+      case DW_Form_Data16: {
+        is_match = str8_match(a.data, b.data, 0);
+      } break;
+      
+      case DW_Form_Flag:  { is_match = a.flag == b.flag;   } break;
+      case DW_Form_SData: { is_match = a.sdata == b.sdata; } break;
+      case DW_Form_UData: { is_match = a.udata == b.udata; } break;
+      
+      case DW_Form_RefAddr:
+      case DW_Form_Ref1:
+      case DW_Form_Ref2:
+      case DW_Form_Ref4:
+      case DW_Form_Ref8: 
+      case DW_Form_RefUData: 
+      case DW_Form_GNU_RefAlt: {
+        is_match = a.ref == b.ref;
+      } break;
+      
+      case DW_Form_Indirect: { NotImplemented; } break;
+      
+      case DW_Form_SecOffset: 
+      case DW_Form_LineStrp:
+      case DW_Form_GNU_StrpAlt: {
+        is_match = a.sec_offset == b.sec_offset;
+      } break;
+      
+      case DW_Form_ImplicitConst: { is_match = a.implicit_const, b.implicit_const; } break;
+      
+      case DW_Form_Strx:
+      case DW_Form_Strx1:
+      case DW_Form_Strx2:
+      case DW_Form_Strx3:
+      case DW_Form_Strx4:
+      case DW_Form_Addrx:
+      case DW_Form_Addrx1:
+      case DW_Form_Addrx2:
+      case DW_Form_Addrx3:
+      case DW_Form_Addrx4:
+      case DW_Form_RngListx:
+      case DW_Form_LocListx: {
+        is_match = a.xval == b.xval;
+      } break;
+      
+      case DW_Form_StrpSup: { is_match = a.strp_sup == b.strp_sup; } break;
+      
+      case DW_Form_RefSup4: { NotImplemented; } break;
+      case DW_Form_RefSup8: { NotImplemented; } break;
+      
+      default: { InvalidPath; } break;
     }
   }
-
+  
   return is_match;
 }
 
@@ -1044,20 +1044,20 @@ internal U64
 dw_length_from_std_opcode(DW_StdOpcode opcode)
 {
   switch (opcode) {
-  case DW_StdOpcode_ExtendedOpcode:   return 0;
-  case DW_StdOpcode_Copy:             return 0;
-  case DW_StdOpcode_AdvancePc:        return 1;
-  case DW_StdOpcode_AdvanceLine:      return 1;
-  case DW_StdOpcode_SetFile:          return 1;
-  case DW_StdOpcode_SetColumn:        return 1;
-  case DW_StdOpcode_NegateStmt:       return 0;
-  case DW_StdOpcode_SetBasicBlock:    return 0;
-  case DW_StdOpcode_ConstAddPc:       return 0;
-  case DW_StdOpcode_FixedAdvancePc:   return 1;
-  case DW_StdOpcode_SetPrologueEnd:   return 0;
-  case DW_StdOpcode_SetEpilogueBegin: return 0;
-  case DW_StdOpcode_SetIsa:           return 1;
-  default: InvalidPath; break;
+    case DW_StdOpcode_ExtendedOpcode:   return 0;
+    case DW_StdOpcode_Copy:             return 0;
+    case DW_StdOpcode_AdvancePc:        return 1;
+    case DW_StdOpcode_AdvanceLine:      return 1;
+    case DW_StdOpcode_SetFile:          return 1;
+    case DW_StdOpcode_SetColumn:        return 1;
+    case DW_StdOpcode_NegateStmt:       return 0;
+    case DW_StdOpcode_SetBasicBlock:    return 0;
+    case DW_StdOpcode_ConstAddPc:       return 0;
+    case DW_StdOpcode_FixedAdvancePc:   return 1;
+    case DW_StdOpcode_SetPrologueEnd:   return 0;
+    case DW_StdOpcode_SetEpilogueBegin: return 0;
+    case DW_StdOpcode_SetIsa:           return 1;
+    default: InvalidPath; break;
   }
   return 0;
 }

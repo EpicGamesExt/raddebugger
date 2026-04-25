@@ -2072,16 +2072,16 @@ dw_cu_from_info_off(Arena *arena, DW_Raw *input, DW_ListUnitInput lu_input, U64 
     U64 loclists_sec_off    = dw_interp_sec_offset(loclists_base_attrib->form   );
     
     // map section offset to unit index
-    U64 addr_lu_idx        = rng_1u64_array_bsearch(lu_input.addr_ranges,       addr_sec_off       );
-    U64 str_offsets_lu_idx = rng_1u64_array_bsearch(lu_input.str_offset_ranges, str_offsets_sec_off);
-    U64 rnglists_lu_idx    = rng_1u64_array_bsearch(lu_input.rnglist_ranges,    rnglists_sec_off   );
-    U64 loclists_lu_idx    = rng_1u64_array_bsearch(lu_input.loclist_ranges,    loclists_sec_off   );
+    U64 addr_lu_num        = rng1u64_array_num_from_value__binary_search(&lu_input.addr_ranges,       addr_sec_off       );
+    U64 str_offsets_lu_num = rng1u64_array_num_from_value__binary_search(&lu_input.str_offset_ranges, str_offsets_sec_off);
+    U64 rnglists_lu_num    = rng1u64_array_num_from_value__binary_search(&lu_input.rnglist_ranges,    rnglists_sec_off   );
+    U64 loclists_lu_num    = rng1u64_array_num_from_value__binary_search(&lu_input.loclist_ranges,    loclists_sec_off   );
     
     // map index to unit
-    DW_ListUnit *addr_lu        = addr_lu_idx        < lu_input.addr_count       ? &lu_input.addrs[addr_lu_idx]              : 0;
-    DW_ListUnit *str_offsets_lu = str_offsets_lu_idx < lu_input.str_offset_count ? &lu_input.str_offsets[str_offsets_lu_idx] : 0;
-    DW_ListUnit *rnglists_lu    = rnglists_lu_idx    < lu_input.rnglist_count    ? &lu_input.rnglists[rnglists_lu_idx]       : 0;
-    DW_ListUnit *loclists_lu    = loclists_lu_idx    < lu_input.loclist_count    ? &lu_input.loclists[loclists_lu_idx]       : 0;
+    DW_ListUnit *addr_lu        = 0 < (addr_lu_num && addr_lu_num <= lu_input.addr_count)                     ? &lu_input.addrs[addr_lu_num-1]              : 0;
+    DW_ListUnit *str_offsets_lu = 0 < (str_offsets_lu_num && str_offsets_lu_num <= lu_input.str_offset_count) ? &lu_input.str_offsets[str_offsets_lu_num-1] : 0;
+    DW_ListUnit *rnglists_lu    = 0 < (rnglists_lu_num && rnglists_lu_num <= lu_input.rnglist_count)          ? &lu_input.rnglists[rnglists_lu_num-1]       : 0;
+    DW_ListUnit *loclists_lu    = 0 < (loclists_lu_num && loclists_lu_num <= lu_input.loclist_count)          ? &lu_input.loclists[loclists_lu_num-1]       : 0;
     
     // find compile unit base address
     DW_Attrib *low_pc_attrib = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_LowPc);

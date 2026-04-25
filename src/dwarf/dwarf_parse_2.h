@@ -37,6 +37,19 @@ struct DW2_AbbrevMap
 };
 
 ////////////////////////////////
+//~ rjf: String Offset Table (.debug_str_offsets)
+
+typedef struct DW2_StrOffsetsTable DW2_StrOffsetsTable;
+struct DW2_StrOffsetsTable
+{
+  DW_Format format;
+  DW_Version version;
+  U64 entry_size;
+  U64 entries_count;
+  void *entries;
+};
+
+////////////////////////////////
 //~ rjf: Parsing Context Bundle
 
 typedef struct DW2_ParseCtx DW2_ParseCtx;
@@ -49,6 +62,7 @@ struct DW2_ParseCtx
   DW_Format format;
   U64 addr_size;
   DW2_AbbrevMap *abbrev_map;
+  DW2_StrOffsetsTable *str_offsets_table;
   String8 unit_dir;
   String8 unit_file;
 };
@@ -210,10 +224,16 @@ internal U64 dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_Form
 
 internal U64 dw2_read_tag(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 off, DW2_Tag *tag_out);
 internal DW2_Attrib *dw2_attrib_from_kind(DW2_Tag *tag, DW_AttribKind kind);
+internal U64 dw2_reference_info_off_from_form_val(DW2_ParseCtx *ctx, DW2_FormVal *v);
 
 ////////////////////////////////
 //~ rjf: Line Table Parsing
 
 internal U64 dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 off, DW2_LineTableHeader *out);
+
+////////////////////////////////
+//~ rjf: String Offset Table Parsing (.debug_str_offsets)
+
+internal U64 dw2_read_str_offsets_table(String8 data, U64 off, DW2_StrOffsetsTable *out);
 
 #endif // DWARF_PARSE_2_H

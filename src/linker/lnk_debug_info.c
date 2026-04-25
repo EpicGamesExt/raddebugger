@@ -2415,7 +2415,8 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
       if (obj_sect_header->vsize == 0) {
         continue;
       }
-      sect_number = rng_1u64_array_bsearch(task->image_section_virt_ranges, obj_sect_header->voff);
+      U64 sect_num = rng1u64_array_num_from_value__binary_search(&task->image_section_virt_ranges, obj_sect_header->voff);
+      sect_number = sect_num-1;
       Assert(sect_number < task->image_section_virt_ranges.count);
       sect_data   = str8_zero();
       sect_off    = obj_sect_header->voff - task->image_section_virt_ranges.v[sect_number].min;
@@ -2424,7 +2425,8 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
       if (obj_sect_header->fsize == 0) {
         continue;
       }
-      sect_number = rng_1u64_array_bsearch(task->image_section_file_ranges, obj_sect_header->foff);
+      U64 sect_num = rng1u64_array_num_from_value__binary_search(&task->image_section_file_ranges, obj_sect_header->foff);
+      sect_number = sect_num-1;
       Assert(sect_number < task->image_section_file_ranges.count);
       sect_data   = str8_substr(task->image_data, rng_1u64(obj_sect_header->foff, obj_sect_header->foff + obj_sect_header->fsize));
       sect_off    = obj_sect_header->foff - task->image_section_file_ranges.v[sect_number].min;

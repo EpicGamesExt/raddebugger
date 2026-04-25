@@ -758,34 +758,32 @@ rng1u64_array_from_list(Arena *arena, Rng1U64List *list)
 }
 
 internal U64
-rng_1u64_array_bsearch(Rng1U64Array arr, U64 value)
+rng1u64_array_num_from_value__binary_search(Rng1U64Array *array, U64 value)
 {
-  if(arr.count > 0 && arr.v[0].min < value && value < arr.v[arr.count-1].max)
+  U64 result = 0;
+  if(array->count > 0 && array->v[0].min <= value && value < array->v[array->count-1].max)
   {
-    U64 l = 0;
-    U64 r = arr.count - 1;
-    for(; l <= r; )
+    U64 min_idx = 0;
+    U64 max_idx = array->count - 1;
+    for(;min_idx <= max_idx;)
     {
-      U64 m = l + (r - l) / 2;
-      if(contains_1u64(arr.v[m], value))
+      U64 mid_idx = min_idx + (max_idx - min_idx) / 2;
+      if(contains_1u64(array->v[mid_idx], value))
       {
-        return m;
+        result = mid_idx+1;
+        break;
       }
-      else if(arr.v[m].min < value)
+      else if(array->v[mid_idx].min < value)
       {
-        l = m + 1;
+        min_idx = mid_idx + 1;
       }
       else
       {
-        r = m - 1;
+        max_idx = mid_idx - 1;
       }
     }
   }
-  else if(arr.count == 1 && contains_1u64(arr.v[0], value))
-  {
-    return 0;
-  }
-  return max_U64;
+  return result;
 }
 
 internal void
