@@ -1073,6 +1073,10 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         // parsing/hashing tags, in order to find the full comprehensive hash
         // for each type tag.
         //
+        // importantly, doing this can cause cycles in principle, so we also
+        // record which tags we visited, & order them, so we can just hash the
+        // order index, instead of doing a full recursion.
+        //
         B32 is_type_tag_tree = 0;
         U64 hash = 0;
         {
@@ -1082,23 +1086,33 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             TypeTagTask *next;
             U64 unit_idx;
             U64 off;
+            U64 order_idx;
           };
           TypeTagTask start_task = {0, origin_unit_idx, off};
-          TypeTagTask *first_task = &start_task;
-          TypeTagTask *last_task = first_task;
+          TypeTagTask *top_task = &start_task;
           TypeTagTask *free_task = 0;
-          for(TypeTagTask *t = first_task; t != 0; t = t->next)
+          U64 seen_task_slots_count = 16;
+          TypeTagTask **seen_task_slots = push_array(scratch2.arena, TypeTagTask *, seen_task_slots_count);
+          for(TypeTagTask *t = top_task, *next = 0; t != 0; t = next)
           {
+            next = 0;
             U64 t_off = t->off;
             
+            // rjf: record this task in our seen task table
+            {
+              U64 hash = u64_hash_from_str8(str8_struct(&t->off));
+              U64 slot_idx = hash%seen_task_slots_count;
+              SLLStackPush(seen_task_slots[slot_idx], t);
+            }
+            
             // rjf: unpack unit
-            Rng1U64 unit_info_range = unit_info_ranges->v[t->unit_idx];
+            Rng1U64 unit_info_tag_range = unit_info_tag_ranges[t->unit_idx];
             DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[t->unit_idx];
             
             // rjf: read/hash the full tag tree at `t_off`; kick off additional
             // tasks for referenced dependency types
             U64 depth = 0;
-            for(;unit_info_range.min <= t_off && t_off < unit_info_range.max;)
+            for(;unit_info_tag_range.min <= t_off && t_off < unit_info_tag_range.max;)
             {
               U64 t_start_off = t_off;
               
@@ -1136,6 +1150,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                 // referenced dependency types, kick them off
                 for(DW2_AttribNode *n = tag.attribs.first; n != 0; n = n->next)
                 {
+                  // rjf: non-reference? -> combine attribute value info
                   if(n->v.val.kind != DW_Form_RefAddr &&
                      n->v.val.kind != DW_Form_Ref1 &&
                      n->v.val.kind != DW_Form_Ref2 &&
@@ -1149,26 +1164,61 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                     hash = u64_hash_from_seed_str8(hash, str8_struct(&n->v.val.u128));
                     hash = u64_hash_from_seed_str8(hash, n->v.val.string);
                   }
+                  
+                  // rjf: type reference? -> if seen, combine the order; if not, recurse
                   if(n->v.attrib_kind == DW_AttribKind_Type)
                   {
-                    TypeTagTask *dependency_task = free_task;
-                    if(dependency_task != 0)
+                    // rjf: unpack reference
+                    U64 ref_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &n->v.val);
+                    
+                    // rjf: determine if we've seen this reference
+                    B32 already_seen = 0;
+                    U64 already_seen_order_idx = 0;
                     {
-                      SLLStackPop(free_task);
-                    }
-                    else
-                    {
-                      dependency_task = push_array(scratch2.arena, TypeTagTask, 1);
-                    }
-                    dependency_task->off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &n->v.val);
-                    dependency_task->unit_idx = t->unit_idx;
-                    if(!contains_1u64(unit_info_range, dependency_task->off))
-                    {
-                      U64 new_unit_num = rng1u64_array_num_from_value__binary_search(unit_info_ranges, dependency_task->off);
-                      if(0 < new_unit_num && new_unit_num <= unit_count)
+                      U64 off_hash = u64_hash_from_str8(str8_struct(&ref_info_off));
+                      U64 off_slot_idx = off_hash%seen_task_slots_count;
+                      for(TypeTagTask *t = seen_task_slots[off_slot_idx]; t != 0; t = t->next)
                       {
-                        dependency_task->unit_idx = new_unit_num-1;
+                        if(t->off == ref_info_off)
+                        {
+                          already_seen = 1;
+                          already_seen_order_idx = t->order_idx;
+                          break;
+                        }
                       }
+                    }
+                    
+                    // rjf: if we've seen -> hash the order
+                    if(already_seen)
+                    {
+                      hash = u64_hash_from_seed_str8(hash, str8_struct(&already_seen_order_idx));
+                    }
+                    
+                    // rjf: if we've not seen -> descend
+                    if(!already_seen)
+                    {
+                      TypeTagTask *dependency_task = free_task;
+                      if(dependency_task != 0)
+                      {
+                        SLLStackPop(free_task);
+                      }
+                      else
+                      {
+                        dependency_task = push_array(scratch2.arena, TypeTagTask, 1);
+                      }
+                      next = dependency_task;
+                      dependency_task->off = ref_info_off;
+                      dependency_task->unit_idx = t->unit_idx;
+                      if(!contains_1u64(unit_info_tag_range, dependency_task->off))
+                      {
+                        Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+                        U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, dependency_task->off);
+                        if(0 < new_unit_num && new_unit_num <= unit_count)
+                        {
+                          dependency_task->unit_idx = new_unit_num-1;
+                        }
+                      }
+                      dependency_task->order_idx = t->order_idx+1;
                     }
                   }
                 }
@@ -1338,13 +1388,15 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       
       // rjf: unpack unit
       DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[unit_idx];
-      Rng1U64 unit_info_range = unit_info_ranges->v[unit_idx];
+      Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
       
       // rjf: parse this type's tag
       DW2_Tag tag = {0};
       dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, info_off, &tag);
       
       // rjf: find direct type, if one exists
+      U64 direct_type_info_off = 0;
+      U64 direct_type_unit_idx = 0;
       switch(tag.kind)
       {
         default:{}break;
@@ -1359,9 +1411,41 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         case DW_TagKind_Typedef:
         {
           DW2_Attrib *direct_type_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Type);
-          U64 direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
-          
+          direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
+          direct_type_unit_idx = unit_idx;
+          if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
+          {
+            Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+            U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
+            if(0 < new_unit_num && new_unit_num <= unit_count)
+            {
+              direct_type_unit_idx = new_unit_num-1;
+            }
+          }
         }break;
+      }
+      
+      // rjf: look up hash for direct type
+      U64 direct_type_hash = 0;
+      {
+        U64 off_hash = u64_hash_from_str8(str8_struct(&direct_type_info_off));
+        U64 off_slot_idx = off_hash%unit_type_maps[direct_type_unit_idx].slots_count;
+        for(UnitTypeNode *n = unit_type_maps[direct_type_unit_idx].slots[off_slot_idx]; n != 0; n = n->next)
+        {
+          if(n->src_info_off == direct_type_info_off)
+          {
+            direct_type_hash = n->dst_hash;
+            break;
+          }
+        }
+      }
+      
+      // rjf: if we got a hash -> record as dependency
+      if(direct_type_hash != 0)
+      {
+        TypeDepChain *chain = push_array(scratch.arena, TypeDepChain, 1);
+        chain->hash = direct_type_hash;
+        SLLStackPush(type_dep_chains[type_idx], chain);
       }
       
       scratch_end(scratch2);
