@@ -212,6 +212,8 @@ dmn_get_trap_inst(void)
 {
 #if ARCH_X64
   local_persist U8 inst[] = { 0xcc };
+#elif ARCH_ARM64
+  local_persist U8 inst[] = { 0x00, 0x00, 0x20, 0xd4 };
 #else
 # error "trap instruction is not defined for this arch"
 #endif

@@ -6640,17 +6640,29 @@ rd_window_frame(void)
           ui_set_next_flags(UI_BoxFlag_Clip|UI_BoxFlag_ViewScrollX|UI_BoxFlag_ViewClamp);
           UI_WidthFill UI_NamedRow(str8_lit("###menu_bar"))
           {
-            //- rjf: icon
-            UI_Padding(ui_em(0.5f, 1.f))
+            if(OS_MAC)
             {
-              UI_PrefWidth(ui_px(dim_2f32(top_bar_rect).y - ui_top_font_size()*0.8f, 1.f))
+              //- rjf: space for the titlebar buttons
+              if(!os_window_is_fullscreen(ws->os))
+              {
+                F32 top_bar_height = dim_2f32(top_bar_rect).y;
+                ui_spacer(ui_px(top_bar_height * 0.5 + 120.0, 0));
+              }
+            }
+            else
+            {
+              //- rjf: icon
+              UI_Padding(ui_em(0.5f, 1.f))
+              {
+                UI_PrefWidth(ui_px(dim_2f32(top_bar_rect).y - ui_top_font_size()*0.8f, 1.f))
                 UI_Column
                 UI_Padding(ui_em(0.4f, 1.f))
                 UI_HeightFill
-              {
-                R_Handle texture = rd_state->icon_texture;
-                Vec2S32 texture_dim = r_size_from_tex2d(texture);
-                ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+                {
+                  R_Handle texture = rd_state->icon_texture;
+                  Vec2S32 texture_dim = r_size_from_tex2d(texture);
+                  ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+                }
               }
             }
             
@@ -7174,6 +7186,7 @@ rd_window_frame(void)
           }
           
           // rjf: min/max/close buttons
+          if(!OS_MAC)
           {
             UI_Signal min_sig = {0};
             UI_Signal max_sig = {0};

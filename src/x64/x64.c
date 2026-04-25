@@ -1,6 +1,12 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+// Stubs for intirnsics
+#if OS_MAC && ARCH_ARM64
+# define __get_cpuid
+# define __get_cpuid_count
+#endif
+
 internal void
 x64_cpuid(U32 leaf, U32 *eax, U32 *ebx, U32 *ecx, U32 *edx)
 {

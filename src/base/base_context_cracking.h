@@ -240,7 +240,7 @@
 #if ARCH_X86
 # error You tried to build in x86 (32 bit) mode, but currently, only building in x64 (64 bit) mode is supported.
 #endif
-#if !ARCH_X64
+#if !ARCH_X64 && !ARCH_ARM64
 # error You tried to build with an unsupported architecture. Currently, only building in x64 mode is supported.
 #endif
 
