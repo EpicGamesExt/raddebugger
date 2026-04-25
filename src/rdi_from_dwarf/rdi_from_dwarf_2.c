@@ -1221,7 +1221,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           for(;!gathered;)
           {
             // rjf: read existing slot head pointer *before* we lookup / insert
-            U64 slot_head_val = ins_atomic_u64_eval(&unique_type_tag_slots[slot_idx]);
+            U64 slot_head_val = (U64)ins_atomic_u64_eval(&unique_type_tag_slots[slot_idx]);
             
             // rjf: determine if this hash has been gathered
             for(UniqueTypeTagNode *n = (UniqueTypeTagNode *)slot_head_val; n != 0; n = n->next)

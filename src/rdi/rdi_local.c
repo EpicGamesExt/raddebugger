@@ -14,6 +14,7 @@ arch_from_rdi_arch(RDI_Arch arch)
   switch((RDI_ArchEnum)arch)
   {
     case RDI_Arch_NULL:{}break;
+    case RDI_Arch_X86:{result = Arch_x86;}break;
     case RDI_Arch_X64:{result = Arch_x64;}break;
   }
   return result;

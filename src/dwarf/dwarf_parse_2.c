@@ -329,7 +329,7 @@ dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_FormKind form_kin
       //- rjf: sleb128 reads
       case DW_Form_SData:
       {
-        off += str8_deserial_read_sleb128(data, off, &val.u128.u64[0]);
+        off += str8_deserial_read_sleb128(data, off, (S64 *)(&val.u128.u64[0]));
       }break;
       
       //- rjf: fixed-size uint reads / skips
