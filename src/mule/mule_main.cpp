@@ -6,6 +6,8 @@
 ** stepping, breakpoints, evaluation, cross-module calls.
 */
 
+#define EvalTest(expr, match)
+
 #if _WIN32 && _DEBUG
 #pragma comment(linker, "/nodefaultlib:libcmt")
 #pragma comment(lib, "libcmtd")
@@ -404,14 +406,26 @@ few_params1(Pair *pairs, int count, Function_No_Params_Type *no_params_type){
   
 }
 
+//
+// NOTE(rjf): this doesn't work because MSVC - despite GENERATING DEBUG INFO
+// FOR THE MyByte TYPEDEF - does not actually *reference* this typedef
+// anywhere, and instead treats all `MyByte *`s as `char *`s, thus completely
+// eliminating the point of the typedef and view. :(
+//
+typedef char MyByte;
+raddbg_type_view(MyByte *, no_string($));
+
 static void
 type_coverage_eval_tests(void)
 {
-  Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
+  Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001}; EvalTest(basics.a, -1);
   Basics_Stdint basics_stdint = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
   
   uint32_t a = (1<<31);
   int32_t  b = (1<<31);
+  
+  uint32_t abcd = 0xaabbccdd; EvalTest(abcd, 0xaabbccdd);
+  int64_t abcd64 = (int64_t)abcd; EvalTest(abcd64, 0xaabbccdd); EvalTest(abcd64, abcd);
   
   char string[] = "Hello World!";
   char longer_text[] =
@@ -431,10 +445,13 @@ type_coverage_eval_tests(void)
     char data[4];
   };
   SomeDataStructured *some_data = (SomeDataStructured *)&some_data_with_a_string[0];
+  char *string_ptr = &string[0];
   
   const char *const_string = "Hello, World!";
   const char const_string_array[] = "Hello, World!";
   const char *const const_ptr_const_string = "Hello, World!";
+  
+  MyByte *non_string_byte_ptr = "Hello, World!";
   
   void *pointer = &basics;
   Basics *pointer_to_basics = &basics;
@@ -469,6 +486,9 @@ type_coverage_eval_tests(void)
     memory_,
     6
   };
+  EvalTest(dynamic[0].i, 100); EvalTest(dynamic[0].f, 1.f);
+  EvalTest(dynamic[1].i, 101); EvalTest(dynamic[1].f, 2.f);
+  EvalTest(dynamic[2].i, 102); EvalTest(dynamic[2].f, 4.f);
   
   TemplatedDynamicArray<Pair> templated_dynamic = {dynamic.pairs, dynamic.count};
   TemplatedDynamicArray<Pair> templated_dynamics[] =

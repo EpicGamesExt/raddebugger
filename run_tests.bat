@@ -1,21 +1,42 @@
 @echo off
-setlocal
-cd /D "%~dp0"
+setlocal enabledelayedexpansion
 
-echo --- getting test data folder path ---------------------------------------------
-if not exist .\local\test_data_path.txt (
-  echo error: You must first store the full path of your test data folder inside of `local/test_data_path.txt`.
-  goto :EOF
+rem Make sure that your VS install does not have LLVM included otherwise this script will use VS clang
+
+set TARGET_VALUES=raddbg radlink radbin mule_main mule_module torture
+set CC_VALUES=msvc clang
+set MODE_VALUES=debug release
+
+rem find path to clang
+for /f "tokens=*" %%i in ('where clang') do set clang_path=%%~dpi
+
+rem parse out clang version number out of --version to build path to the folder with ASAN DLL
+for /f "tokens=3 delims=. " %%v in ('clang -v 2^>^&1 ^| findstr version') do set clang_version=%%v
+
+for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
+  setlocal
+
+  echo --------------------------------------------------------------------------------
+  echo Build %%c+%%m
+
+  rem nuke artifacts from last run
+  rmdir /s /q build\torture
+
+  if "%%c" equ "clang" (
+     set PATH=%clang_path%..\lib\clang\%clang_version%\lib\windows;!PATH!
+  )
+
+  rem clang does not compile with asan in release mode because it runs out of memory
+  if "%%c" equ "clang" (
+    call build.bat meta %%c %%m %TARGET_VALUES% || exit /b 1
+  ) else (
+    call build.bat meta asan %%c %%m %TARGET_VALUES% || exit /b 1
+  )
+
+  pushd build
+  torture %* || exit /b 1
+  popd
+
+  endlocal
 )
-set /p test_data_folder=<.\local\test_data_path.txt	
-echo test data path: %test_data_folder%
-echo:
 
-echo --- building all testing executables ------------------------------------------
-call build rdi_from_pdb rdi_dump raddbg radlink tester
-echo:
-
-echo --- running tests -------------------------------------------------------------
-pushd build
-call tester.exe --test_data:%test_data_folder%
-popd

@@ -24,6 +24,16 @@ void_node_concat_atomic(VoidNode **head, VoidNode *node)
   node->next = ins_atomic_ptr_eval_assign(head, node);
 }
 
+internal VoidNode *
+void_list_push(Arena *arena, VoidList *list, void *v)
+{
+  VoidNode *n = push_array(arena, VoidNode, 1);
+  n->v = v;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  return n;
+}
+
 internal void
 u64_list_push_node(U64List *list, U64Node *n)
 {

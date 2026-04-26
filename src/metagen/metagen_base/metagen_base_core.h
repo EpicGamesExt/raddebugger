@@ -291,8 +291,6 @@ CheckNil(nil,p) ? \
 # if defined(__SANITIZE_ADDRESS__)
 #  define ASAN_ENABLED 1
 #  define ASAN_NO_ADDR __declspec(no_sanitize_address)
-# else
-#  define UBSAN_NO_ALIGN
 # endif
 #elif COMPILER_CLANG
 # if defined(__has_feature)
@@ -304,8 +302,14 @@ CheckNil(nil,p) ? \
 # define UBSAN_NO_ALIGN __attribute__((no_sanitize("alignment")))
 #endif
 
+#ifndef  ASAN_NO_ADDR
+# define ASAN_NO_ADDR
+#endif
+#ifndef  UBSAN_NO_ALIGN
+# define UBSAN_NO_ALIGN
+#endif
+
 #if ASAN_ENABLED
-#pragma comment(lib, "clang_rt.asan-x86_64.lib")
 C_LINKAGE void __asan_poison_memory_region(void const volatile *addr, size_t size);
 C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 # define AsanPoisonMemoryRegion(addr, size)   __asan_poison_memory_region((addr), (size))

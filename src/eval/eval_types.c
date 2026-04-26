@@ -714,7 +714,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
             type = push_array(arena, E_Type, 1);
             type->kind               = e_type_kind_from_key(node->key);
             type->flags              = node->params.flags;
-            type->name               = push_str8_copy(arena, node->params.name);
+            type->name               = str8_copy(arena, node->params.name);
             type->direct_type_key    = node->params.direct_key;
             type->count              = node->params.count;
             type->depth              = node->params.depth;
@@ -775,9 +775,10 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
             //- rjf: record types => unpack name * members & produce
             if(RDI_TypeKind_FirstRecord <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastRecord)
             {
+              Temp scratch = scratch_begin(&arena, 1);
+              
               // rjf: unpack name
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              String8 name = fully_qualified_str8_from_rdi_type(scratch.arena, rdi, rdi_type);
               
               // rjf: unpack UDT info
               RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, rdi_type->user_defined.udt_idx);
@@ -810,19 +811,22 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               // rjf: produce
               type = push_array(arena, E_Type, 1);
               type->kind       = kind;
-              type->name       = push_str8_copy(arena, name);
+              type->name       = str8_copy(arena, name);
               type->byte_size  = (U64)rdi_type->byte_size;
               type->count      = members_count;
               type->arch       = arch;
               type->members    = members;
+              
+              scratch_end(scratch);
             }
             
             //- rjf: enum types => unpack name * values & produce
             else if(rdi_type->kind == RDI_TypeKind_Enum)
             {
+              Temp scratch = scratch_begin(&arena, 1);
+              
               // rjf: unpack name
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              String8 name = fully_qualified_str8_from_rdi_type(scratch.arena, rdi, rdi_type);
               
               // rjf: unpack direct type
               E_TypeKey direct_type_key = zero_struct;
@@ -861,6 +865,8 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               type->arch            = arch;
               type->enum_vals       = enum_vals;
               type->direct_type_key = direct_type_key;
+              
+              scratch_end(scratch);
             }
             
             //- rjf: constructed types
@@ -1019,9 +1025,10 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
             //- rjf: alias types
             else if(rdi_type->kind == RDI_TypeKind_Alias)
             {
+              Temp scratch = scratch_begin(&arena, 1);
+              
               // rjf: unpack name
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              String8 name = fully_qualified_str8_from_rdi_type(scratch.arena, rdi, rdi_type);
               
               // rjf: unpack direct type
               E_TypeKey direct_type_key = zero_struct;
@@ -1041,6 +1048,8 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
               type->byte_size       = direct_type_byte_size;
               type->direct_type_key = direct_type_key;
               type->arch            = arch;
+              
+              scratch_end(scratch);
             }
             
             //- rjf: bitfields
@@ -1070,17 +1079,19 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
             //- rjf: incomplete types
             else if(RDI_TypeKind_FirstIncomplete <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastIncomplete)
             {
+              Temp scratch = scratch_begin(&arena, 1);
+              
               // rjf: unpack name
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
+              String8 name = fully_qualified_str8_from_rdi_type(scratch.arena, rdi, rdi_type);
               
               // rjf: produce
               type = push_array(arena, E_Type, 1);
               type->kind            = kind;
               type->name            = push_str8_copy(arena, name);
               type->arch            = arch;
+              
+              scratch_end(scratch);
             }
-            
           }
         }
       }break;
@@ -2588,7 +2599,7 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
   
   //- rjf: unpack key
   // TODO(rjf): this needs to take any `E_Space`, once eval has been upgraded.
-  CTRL_Handle process = {0};
+  D_Handle process = {0};
   U64 base_off = 0;
   U64 member_element_off = 0;
   U64 member_size = 0;
@@ -2672,7 +2683,7 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
       
       //- rjf: read next offset, advance
       B32 read_stale = 0;
-      B32 read_good = ctrl_process_memory_read(process, r1u64(off + member_element_off, off + member_element_off + member_size), &read_stale, &next_off, 0);
+      B32 read_good = d_process_memory_read(process, r1u64(off + member_element_off, off + member_element_off + member_size), &read_stale, &next_off, 0);
       if(read_stale)
       {
         retry = 1;
@@ -2813,7 +2824,7 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
 #pragma pack(push, 1)
     struct
     {
-      CTRL_Handle process;
+      D_Handle process;
       U64 base_off;
       U64 member_element_off;
       U64 member_size;

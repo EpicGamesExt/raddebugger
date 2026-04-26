@@ -136,6 +136,7 @@ enum
   E_SpaceKind_File,
   E_SpaceKind_FileSystem,
   E_SpaceKind_HashStoreKey,
+  E_SpaceKind_DebugConstantData,
   E_SpaceKind_FirstUserDefined,
 };
 
@@ -768,6 +769,7 @@ struct E_BaseCtx
   U64 thread_ip_vaddr;
   U64 thread_ip_voff;
   E_Space thread_reg_space;
+  E_Space thread_process_space;
   Arch thread_arch;
   U64 thread_unwind_count;
   
@@ -1074,7 +1076,7 @@ struct E_Cache
   E_CacheParentNode *free_parent_node;
   
   //- rjf: unpacked context
-  RDI_Procedure *thread_ip_procedure;
+  RDI_Symbol *thread_ip_procedure;
   
   //- rjf: [types] JIT-constructed types tables
   U64 cons_id_gen;
@@ -1206,6 +1208,11 @@ internal void e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_Au
 
 internal E_String2NumMap *e_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
 internal E_String2NumMap *e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
+
+////////////////////////////////
+//~ rjf: RDI Location Info -> Eval Op List
+
+internal E_OpList e_oplist_from_location(Arena *arena, RDI_Parsed *rdi, RDI_Location loc);
 
 ////////////////////////////////
 //~ rjf: Cache Creation & Selection

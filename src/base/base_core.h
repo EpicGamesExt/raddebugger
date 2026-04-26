@@ -207,7 +207,6 @@
 #define MemoryCopy(dst, src, size)    memmove((dst), (src), (size))
 #define MemorySet(dst, byte, size)    memset((dst), (byte), (size))
 #define MemoryCompare(a, b, size)     memcmp((a), (b), (size))
-#define MemoryStrlen(ptr)             strlen(ptr)
 
 #define MemoryCopyStruct(d,s)  MemoryCopy((d),(s),sizeof(*(d)))
 #define MemoryCopyArray(d,s)   MemoryCopy((d),(s),sizeof(d))
@@ -224,9 +223,6 @@
 #define MemoryMatchArray(a,b)   MemoryMatch((a),(b),sizeof(a))
 
 #define MemoryIsZeroStruct(ptr) memory_is_zero((ptr), sizeof(*(ptr)))
-
-#define MemoryRead(T,p,e)    ( ((p)+sizeof(T)<=(e))?(*(T*)(p)):(0) )
-#define MemoryConsume(T,p,e) ( ((p)+sizeof(T)<=(e))?((p)+=sizeof(T),*(T*)((p)-sizeof(T))):((p)=(e),0) )
 
 ////////////////////////////////
 //~ rjf: Asserts
@@ -370,8 +366,6 @@ CheckNil(nil,p) ? \
 # if defined(__SANITIZE_ADDRESS__)
 #  define ASAN_ENABLED 1
 #  define ASAN_NO_ADDR __declspec(no_sanitize_address)
-# else
-#  define UBSAN_NO_ALIGN
 # endif
 #elif COMPILER_CLANG
 # if defined(__has_feature)
@@ -450,6 +444,7 @@ C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t s
 #endif
 
 #define TryRead(func__, cursor__, label__) do { U64 size__ = (func__); if (size__ == 0) { Assert(0 && "failed read"); goto label__; } cursor__ += size__; } while (0)
+#define TryReadBreak(func__, cursor__)     { U64 size__ = (func__); if (size__ == 0) { Assert(0 && "failed read"); break; } cursor__ += size__; }
 
 ////////////////////////////////
 //~ rjf: Base Types
@@ -503,29 +498,29 @@ union U512
 typedef struct U16Array U16Array;
 struct U16Array
 {
-  U64  count;
   U16 *v;
+  U64 count;
 };
 
 typedef struct U32Array U32Array;
 struct U32Array
 {
-  U64  count;
   U32 *v;
+  U64 count;
 };
 
 typedef struct U64Array U64Array;
 struct U64Array
 {
-  U64  count;
   U64 *v;
+  U64 count;
 };
 
 typedef struct U128Array U128Array;
 struct U128Array
 {
-  U64   count;
   U128 *v;
+  U64 count;
 };
 
 ////////////////////////////////
@@ -1070,5 +1065,6 @@ internal U64 u64_array_bsearch(U64 *arr, U64 count, U64 value);
 
 internal U64 index_of_zero_u32(U32 *ptr, U64 count);
 internal U64 index_of_zero_u64(U64 *ptr, U64 count);
+internal U64 count_digits_u64(U64 v, U64 radix);
 
 #endif // BASE_CORE_H

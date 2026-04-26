@@ -14,6 +14,7 @@ E_TokenKind_Numeric,
 E_TokenKind_StringLiteral,
 E_TokenKind_CharLiteral,
 E_TokenKind_Symbol,
+E_TokenKind_Comment,
 E_TokenKind_COUNT,
 } E_TokenKind;
 
@@ -168,7 +169,7 @@ E_InterpretationCode_COUNT,
 } E_InterpretationCode;
 
 C_LINKAGE_BEGIN
-extern String8 e_token_kind_strings[6];
+extern String8 e_token_kind_strings[7];
 extern String8 e_type_kind_basic_string_table[61];
 extern U8 e_type_kind_basic_byte_size_table[61];
 extern String8 e_expr_kind_strings[50];

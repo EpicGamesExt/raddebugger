@@ -50,8 +50,8 @@ typedef enum
   LNK_CmdSwitch_FailIfMismatch,
   LNK_CmdSwitch_FileAlign,
   LNK_CmdSwitch_Fixed,
-  LNK_CmdSwitch_FunctionPadMin,
   LNK_CmdSwitch_Force,
+  LNK_CmdSwitch_FunctionPadMin,
   LNK_CmdSwitch_Heap,
   LNK_CmdSwitch_HighEntropyVa,
   LNK_CmdSwitch_Ignore,
@@ -79,12 +79,14 @@ typedef enum
   LNK_CmdSwitch_Pdb,
   LNK_CmdSwitch_PdbAltPath,
   LNK_CmdSwitch_PdbPageSize,
+  LNK_CmdSwitch_PdbStripped,
   LNK_CmdSwitch_Release,
   LNK_CmdSwitch_Stack,
   LNK_CmdSwitch_SubSystem,
   LNK_CmdSwitch_Time,
   LNK_CmdSwitch_TsAware,
   LNK_CmdSwitch_Version,
+  LNK_CmdSwitch_WholeArchive,
 
   LNK_CmdSwitch_Rad_Age,
   LNK_CmdSwitch_Rad_AltPchDir,
@@ -117,6 +119,7 @@ typedef enum
   LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,
   LNK_CmdSwitch_Rad_Ignore,
   LNK_CmdSwitch_Rad_TimeStamp,
+  LNK_CmdSwitch_Rad_TypeHashAlg,
   LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,
   LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,
   LNK_CmdSwitch_Rad_Version,
@@ -263,6 +266,7 @@ typedef struct LNK_Config
   Arena                      *arena;
   LNK_ConfigFlags             flags;
   LNK_DebugMode               debug_mode;
+  B32                         ghash;
   LNK_SwitchState             opt_ref;
   LNK_SwitchState             opt_icf;
   LNK_SwitchState             opt_lbr;
@@ -292,6 +296,7 @@ typedef struct LNK_Config
   U64                         function_pad_min;
   U64                        *manifest_resource_id;
   B32                         no_default_libs;
+  LNK_SwitchState             infer_asan_libs;
   Version                     link_ver;
   Version                     os_ver;
   Version                     image_ver;
@@ -310,6 +315,7 @@ typedef struct LNK_Config
   String8List                 raw_cmd_line;
   String8                     pdb_name;
   String8                     pdb_alt_path;
+  String8                     pdb_stripped_name;
   String8                     mt_path;
   LNK_TypeNameHashMode        pdb_hash_type_names;
   String8                     pdb_hash_type_name_map;
@@ -350,10 +356,13 @@ typedef struct LNK_Config
   HashTable                  *delay_load_ht;
   HashTable                  *disallow_lib_ht;
   HashTable                  *fail_if_mismatch_ht;
+  HashTable                  *whole_archive_ht;
+  B32                         whole_archive_all;
   U64                         unresolved_symbol_limit;
   U64                         unresolved_symbol_ref_limit;
   LNK_SwitchState             map_lines_for_unresolved_symbols;
   String8List                 alt_pch_dirs;
+  LLVM_GHashAlg               type_hash_alg;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
@@ -546,6 +555,8 @@ internal void    lnk_push_disallow_lib(LNK_Config *config, String8 path);
 internal B32     lnk_is_lib_disallowed(LNK_Config *config, String8 path);
 
 internal void lnk_include_symbol(LNK_Config *config, String8 name, struct LNK_Obj *obj);
+
+internal void lnk_whole_archive(LNK_Config *config, String8 lib_name);
 
 // --- Config ------------------------------------------------------------------
 

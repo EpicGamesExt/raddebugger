@@ -10,6 +10,7 @@ E_TokenKindTable:
   {StringLiteral}
   {CharLiteral}
   {Symbol}
+  {Comment}
 }
 
 @table(name                 basic_string          basic_byte_size)

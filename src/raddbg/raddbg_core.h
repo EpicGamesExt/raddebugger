@@ -10,7 +10,7 @@
 typedef U64 RD_EvalSpaceKind;
 enum
 {
-  RD_EvalSpaceKind_MetaQuery = CTRL_EvalSpaceKind_FirstUserDefined,
+  RD_EvalSpaceKind_MetaQuery = D_EvalSpaceKind_FirstUserDefined,
   RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaCmd,
   RD_EvalSpaceKind_MetaTheme,
@@ -403,6 +403,7 @@ struct RD_State
   B32 alt_menu_bar_enabled;
   B32 use_default_stl_type_views;
   B32 use_default_ue_type_views;
+  EV_StringFlags eval_viz_base_string_flags;
   
   // rjf: animation rates
   F32 catchall_animation_rate;
@@ -637,8 +638,8 @@ internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 
 ////////////////////////////////
 //~ rjf: Control Entity Info Extraction
 
-internal Vec4F32 rd_color_from_ctrl_entity(CTRL_Entity *entity);
-internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
+internal Vec4F32 rd_color_from_ctrl_entity(D_Entity *entity);
+internal String8 rd_name_from_ctrl_entity(Arena *arena, D_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
@@ -648,8 +649,8 @@ internal CFG_Node *rd_cfg_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_cfg(CFG_Node *cfg);
 
 //- rjf: ctrl entity <-> eval space
-internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
-internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
+internal D_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
+internal E_Space rd_eval_space_from_ctrl_entity(D_Entity *entity, E_SpaceKind kind);
 
 //- rjf: command name <-> eval space
 internal String8 rd_cmd_name_from_eval(E_Eval eval);
@@ -700,6 +701,7 @@ internal E_Value rd_view_setting_value_from_name(String8 string);
 internal B32 rd_view_setting_b32_from_name(String8 string);
 internal U64 rd_view_setting_u64_from_name(String8 string);
 internal F32 rd_view_setting_f32_from_name(String8 string);
+internal U64 rd_view_setting_addr_from_name(String8 string);
 
 //- rjf: evaluation & tag (a view's 'call') parameter extraction
 internal Rng1U64 rd_space_range_from_eval(E_Eval eval);
@@ -753,7 +755,7 @@ internal void rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs);
 internal MD_Node *rd_theme_tree_from_name(Arena *arena, Access *access, String8 theme_name);
 internal Vec4F32 rd_rgba_from_code_color_slot(RD_CodeColorSlot slot);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind);
-internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
+internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string, B32 allow_macros, B32 is_called);
 
 //- rjf: fonts
 internal F32 rd_font_size(void);
@@ -764,7 +766,7 @@ internal FNT_RasterFlags rd_raster_flags_from_slot(RD_FontSlot slot);
 //~ rjf: Process Control Info Stringification
 
 internal String8 rd_string_from_exception_code(U32 code);
-internal DR_FStrList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event);
+internal DR_FStrList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, D_Event *event);
 
 ////////////////////////////////
 //~ rjf: Vocab Info Lookups

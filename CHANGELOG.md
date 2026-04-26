@@ -1,14 +1,53 @@
+# v0.9.26-alpha
+
+## Linker Changes
+
+- Implemented /DEBUG:GHASH
+
 # v0.9.25-alpha
 
 ## Debugger Changes
 
+- Added a dedicated cursor address bar to the memory view. This can be focused
+  with the keyboard with the `Focus Menu` command. By default, this command is
+  bound to `Alt + D`, but if you have existing configuration, you may need to
+  bind it yourself manually (this can be done in the palette). This address bar
+  accepts any expression, and controls the cursor's address. All other
+  configuration options are still available in the memory view settings.
+- Added "Peek Types" to the memory view. These control the set of types which
+  are used to interpret bytes at the cursor. Options exist for basic cases,
+  like integers and floats, but the view also supports entering a list of
+  full type expressions, which can include user-defined types like structures.
+- Added annotations for members of structure variables to the memory view.
+- Added a dedicated zoom setting for the memory view.
+- Added a setting for automatically determining the number of columns in the
+  memory view based on the available space.
+- Fixed many bugs and improved visuals in the memory view. (#690)
+- Fixed the debugger incorrectly evaluating pointer casts of registers in
+  register space, rather than promoting them to process address space
+  evaluations. This fixes cases where expressions like `(int *)rax` were not
+  evaluating correctly. (#659)
+- Fixed the debugger incorrectly requiring multiple step operations when source
+  lines mapped to multiple discontiguous ranges of instructions. This most
+  notably showed up with certain styles of `for`-loops, especially with Clang
+  and other non-C/C++ languages, and function prologues in non-C/C++ languages.
+- Fixed the debugger treating the `foo, x` fastpath for `hex(foo)` differently
+  than `hex(foo)`, in that the hexadecimal setting was not being inherited.
 - Fixed the debugger leaking debug info conversion process handles. This
   addresses cases where the debugger was preventing stale debug info from being
-  updated, after a rebuild.
-- Fixed the debugger not correctly using target-embedded markup data.
+  updated, after a rebuild. (#736)
+- Fixed the debugger not correctly using target-embedded markup data. (#702)
 - Fixed the debugger not showing full call stacks when the top instruction
   pointer is located at a 0 address.
-- Fixed several crashes and instabilities.
+- Fixed integer casts producing incorrect values. (#754)
+- Fixed the PDB -> RDI converter's interpretation of certain empty argument
+  lists in function types in PDB. This fixes some cases where local variables
+  were being interpreted as parameters, which resulted in incorrect evaluation
+  results. (#751)
+- Fixed several crashes and instabilities. (#735)
+- Added a dedicated settings button to the focused tab. This opens the same
+  menu as right-clicking the tab, but this makes this menu (and thus all
+  options for all tabs and views) more discoverable.
 - Added optional cursor trails, to visualize cursor motion. Can be turned off
   by toggling the `Cursor Trail` setting.
 - Added project names. When set, this name is used for displaying the project
@@ -19,6 +58,16 @@
   transient tab.
 - Adjusted the source code context menu to activate commands with a single
   press, rather than the usual double click behavior from general palettes.
+
+## Linker Changes
+
+- Optimized debug info generation to reduce memory usage in large links by 25%.
+- Fixed a determinism issue that caused linker to write unreliable debug info.
+- Fixed over-reservetaion of PDB pages, reducing the PDB size. 
+- Implemented /INFERASANLIBS
+- Implemented /WHOLEARCHIVE
+- Implemented /PDBSTRIPPED
+- Set correct defaults for unload and bind import tables.
 
 # v0.9.24-alpha
 

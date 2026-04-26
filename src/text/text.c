@@ -2731,6 +2731,10 @@ txt_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_ou
       Rng1U64 range = lane_range(data.size);
       for EachInRange(idx, range)
       {
+        if(idx%1000 == 0 && ins_atomic_u32_eval(cancel_signal))
+        {
+          break;
+        }
         if(data.str[idx] == '\n')
         {
           lane_line_count += 1;
@@ -2753,6 +2757,10 @@ txt_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_ou
       U64 line_start_idx = 0;
       for(U64 idx = 0; idx <= data.size; idx += 1)
       {
+        if(idx%1000 == 0 && ins_atomic_u32_eval(cancel_signal))
+        {
+          break;
+        }
         if(idx == data.size || data.str[idx] == '\n')
         {
           Rng1U64 line_range = r1u64(line_start_idx, idx);
@@ -2838,6 +2846,10 @@ txt_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_ou
         U64 scope_idx = 0;
         for EachIndex(token_idx, tokens.count)
         {
+          if(token_idx%1000 == 0 && ins_atomic_u32_eval(cancel_signal))
+          {
+            break;
+          }
           if(tokens.v[token_idx].kind == TXT_TokenKind_Symbol)
           {
             String8 token_string = str8_substr(data, tokens.v[token_idx].range);
@@ -2910,8 +2922,18 @@ txt_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_ou
     lane_sync();
   }
   
+  //- rjf: cancel -> release
+  if(lane_idx() == 0 && ins_atomic_u32_eval(cancel_signal))
+  {
+    arena_release(shared->arena);
+    shared->arena = 0;
+  }
+  
   //- rjf: mark dependency on hash
-  c_hash_downstream_inc(hash);
+  if(lane_idx() == 0 && shared->arena != 0)
+  {
+    c_hash_downstream_inc(hash);
+  }
   
   //- rjf: package as artifact
   if(lane_idx() == 0 && shared->arena != 0)

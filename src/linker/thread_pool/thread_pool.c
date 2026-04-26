@@ -15,7 +15,7 @@ tp_run_tasks(TP_Context *pool, TP_Worker *worker)
     // run task
     Arena *arena   = pool->task_arena ? pool->task_arena->v[worker->id] : 0;
     U64    task_id = pool->task_count - (task_left+1);
-    pool->task_func(arena, worker->id, task_id, pool->task_data);
+    pool->task_func(arena, worker->id, task_id, pool->task_data, pool);
 
     // cache task count so we dont touch pool memory after atomic inc
     U64 task_count = pool->task_count;
@@ -85,6 +85,7 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
   pool->exec_semaphore = exec_semaphore;
   pool->task_semaphore = task_semaphore;
   pool->main_semaphore = main_semaphore;
+  pool->barrier        = barrier_alloc(worker_count);
   pool->is_live        = 1;
   pool->worker_count   = worker_count;
   pool->worker_arr     = push_array(arena, TP_Worker, worker_count);
@@ -113,11 +114,11 @@ tp_release(TP_Context *pool)
 
   B32 is_shared = pool->exec_semaphore.u64[0] != 0;
   if (is_shared) {
-    for (U64 i = 0; i < pool->worker_count; ++i) {
+    for EachIndex(i, pool->worker_count) {
       semaphore_drop(pool->exec_semaphore);
     }
   }
-  for (U64 i = 0; i < pool->worker_count; ++i) {
+  for EachIndex(i, pool->worker_count) {
     semaphore_drop(pool->task_semaphore);
   }
   for (U64 i = 1; i < pool->worker_count; i += 1) {
@@ -126,6 +127,7 @@ tp_release(TP_Context *pool)
   if (is_shared) {
     semaphore_release(pool->exec_semaphore);
   }
+  barrier_release(pool->barrier);
   semaphore_release(pool->task_semaphore);
   semaphore_release(pool->main_semaphore);
 
@@ -243,3 +245,35 @@ tp_divide_work(Arena *arena, U64 item_count, U32 worker_count)
 
   return range_arr;
 }
+
+internal void
+tp_broadcast_(TP_Context *tp, U64 task_id, void *ptr, U64 ptr_size)
+{
+  if (task_id == 0) {
+    tp->broadcast      = ptr;
+    tp->broadcast_size = ptr_size;
+  }
+  barrier_wait(tp->barrier);
+
+  if (task_id != 0) {
+    MemoryCopy(ptr, tp->broadcast, tp->broadcast_size);
+  }
+  barrier_wait(tp->barrier);
+}
+
+internal U64
+tp_sum_u64(TP_Context *tp, U64 task_id, U64 v)
+{
+  if (task_id == 0) {
+    tp->sum = 0;
+  }
+  barrier_wait(tp->barrier);
+
+  ins_atomic_u64_add_eval(&tp->sum, v);
+  barrier_wait(tp->barrier);
+
+  U64 result = tp->sum;
+  barrier_wait(tp->barrier);
+  return result;
+}
+

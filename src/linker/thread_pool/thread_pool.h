@@ -3,7 +3,8 @@
 
 #pragma once
 
-#define THREAD_POOL_TASK_FUNC(name) void name(Arena *arena, U64 worker_id, U64 task_id, void *raw_task)
+struct TP_Context;
+#define THREAD_POOL_TASK_FUNC(name) void name(Arena *arena, U64 worker_id, U64 task_id, void *raw_task, struct TP_Context *tp)
 typedef THREAD_POOL_TASK_FUNC(TP_TaskFunc);
 
 typedef struct TP_Arena
@@ -31,6 +32,10 @@ typedef struct TP_Context
   Semaphore    exec_semaphore;
   Semaphore    task_semaphore;
   Semaphore    main_semaphore;
+  Barrier      barrier;
+  void        *broadcast;
+  U64          broadcast_size;
+  U64          sum;
 
   U32          worker_count;
   TP_Worker   *worker_arr;
@@ -52,4 +57,5 @@ internal void         tp_temp_end(TP_Temp temp);
 #define tp_for_parallel_prof(pool, arena, task_count, task_func, task_data, zone_name) ProfBegin(zone_name); tp_for_parallel(pool, arena, task_count, task_func, task_data); ProfEnd();
 internal void         tp_for_parallel(TP_Context *pool, TP_Arena *arena, U64 task_count, TP_TaskFunc *task_func, void *task_data);
 internal Rng1U64 *    tp_divide_work(Arena *arena, U64 item_count, U32 worker_count);
+#define tp_broadcast(p) tp_broadcast_(tp, task_id, p, sizeof(*p))
 

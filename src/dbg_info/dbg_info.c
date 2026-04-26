@@ -1152,33 +1152,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
           void *table_base = rdi_section_raw_table_from_kind(rdi, section_kind, &element_count);
           U64 element_size = rdi_section_element_size_table[section_kind];
           
-          // rjf: determine name string index offset, depending on table kind
-          U64 element_name_idx_off = 0;
-          switch(section_kind)
-          {
-            default:{}break;
-            case RDI_SectionKind_Procedures:
-            {
-              element_name_idx_off = OffsetOf(RDI_Procedure, name_string_idx);
-            }break;
-            case RDI_SectionKind_GlobalVariables:
-            {
-              element_name_idx_off = OffsetOf(RDI_GlobalVariable, name_string_idx);
-            }break;
-            case RDI_SectionKind_ThreadVariables:
-            {
-              element_name_idx_off = OffsetOf(RDI_ThreadVariable, name_string_idx);
-            }break;
-            case RDI_SectionKind_UDTs:
-            {
-              // NOTE(rjf): name must be determined from self_type_idx
-            }break;
-            case RDI_SectionKind_SourceFiles:
-            {
-              // NOTE(rjf): name must be determined from file path node chain
-            }break;
-          }
-          
+          // rjf: do search
           Rng1U64 range = lane_range(element_count);
           for EachInRange(idx, range)
           {
@@ -1197,8 +1171,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
               {
                 RDI_UDT *udt = (RDI_UDT *)element;
                 RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
-                name.str = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name.size);
-                name = str8_copy(arena, name);
+                name = fully_qualified_from_rdi_string_and_container(arena, rdi, type_node->user_defined.name_string_idx, udt->container_idx, udt->container_flags);
               }break;
               case RDI_SectionKind_SourceFiles:
               {
@@ -1220,10 +1193,8 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
               }break;
               default:
               {
-                U32 name_idx = *(U32 *)((U8 *)element + element_name_idx_off);
-                U64 name_size = 0;
-                U8 *name_base = rdi_string_from_idx(rdi, name_idx, &name_size);
-                name = str8(name_base, name_size);
+                RDI_Symbol *symbol = (RDI_Symbol *)element;
+                name = fully_qualified_str8_from_rdi_symbol(arena, rdi, symbol);
               }break;
             }
             if(name.size == 0) { continue; }
@@ -1537,6 +1508,77 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
     key_read_off += str8_deserial_read(key, key_read_off, name.str, name.size, 1);
   }
   
+  //- rjf: find split point between container part of name & "leaf"
+  U64 container_part_opl = 0;
+  U64 leaf_part_first = 0;
+  for(U64 off = 0; off+1 < name.size; off += 1)
+  {
+    if(name.str[off] == '.')
+    {
+      container_part_opl = off;
+      leaf_part_first = off+1;
+    }
+    else if(name.str[off] == ':' && name.str[off+1] == ':')
+    {
+      container_part_opl = off;
+      leaf_part_first = off+2;
+    }
+  }
+  
+  //- rjf: unpack container/leaf
+  String8 container_part_of_name = str8_prefix(name, container_part_opl);
+  String8 leaf_part_of_name = str8_skip(name, leaf_part_first);
+  
+  //- rjf: produce the fully qualified name, sanitize the container part (convert all `.`s to `::`s)
+  String8 fully_qualified_name = name;
+  if(container_part_of_name.size != 0)
+  {
+    // rjf: gather parts of container
+    String8List parts = {0};
+    for(U64 off = 0, next_off = 0; off < container_part_of_name.size; off = next_off)
+    {
+      // rjf: find the next separator
+      U64 next_separator_pos = container_part_of_name.size;
+      U64 next_separator_size = 0;
+      {
+        S64 template_nest_depth = 0;
+        for(U64 off2 = off; off2+1 < container_part_of_name.size; off2 += 1)
+        {
+          if(template_nest_depth == 0 && container_part_of_name.str[off2] == '.')
+          {
+            next_separator_pos = off2;
+            next_separator_size = 1;
+            break;
+          }
+          else if(template_nest_depth == 0 && container_part_of_name.str[off2] == ':' && container_part_of_name.str[off2+1] == ':')
+          {
+            next_separator_pos = off2;
+            next_separator_size = 2;
+            break;
+          }
+          else if(container_part_of_name.str[off2] == '<')
+          {
+            template_nest_depth += 1;
+          }
+          else if(container_part_of_name.str[off2] == '>')
+          {
+            template_nest_depth -= 1;
+            template_nest_depth = ClampBot(0, template_nest_depth);
+          }
+        }
+      }
+      
+      // rjf: gather portions of container
+      str8_list_push(scratch.arena, &parts, str8_substr(container_part_of_name, r1u64(off, next_separator_pos)));
+      next_off = next_separator_pos + next_separator_size;
+    }
+    
+    // rjf: add leaf & join
+    str8_list_push(scratch.arena, &parts, leaf_part_of_name);
+    StringJoin join = {.sep = str8_lit("::")};
+    fully_qualified_name = str8_list_join(scratch.arena, &parts, &join);
+  }
+  
   //- rjf: get all loaded keys
   DI_KeyArray dbgi_keys = di_push_all_loaded_keys(scratch.arena);
   
@@ -1583,18 +1625,76 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
           RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
           for EachElement(name_map_kind_idx, name_map_kinds)
           {
+            // rjf: unpack name map
             RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kinds[name_map_kind_idx]);
             RDI_ParsedNameMap parsed_name_map = {0};
             rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-            RDI_NameMapNode *map_node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
-            U32 num = 0;
-            U32 *run = rdi_matches_from_map_node(rdi, map_node, &num);
-            if(num != 0)
+            
+            // rjf: find matches for (possibly leaf) name
+            RDI_NameMapNode *map_node = rdi_name_map_lookup(rdi, &parsed_name_map, leaf_part_of_name.str, leaf_part_of_name.size);
+            U32 matches_count = 0;
+            U32 *matches = rdi_matches_from_map_node(rdi, map_node, &matches_count);
+            
+            // rjf: do we have a container? -> filter matches according to container string also
+            U32 *filtered_matches = matches;
+            U32 filtered_matches_count = matches_count;
+            if(container_part_of_name.size != 0)
             {
-              U64 run_idx = (num-1) - Min(index, num-1);
+              filtered_matches = push_array(scratch.arena, U32, matches_count);
+              filtered_matches_count = 0;
+              for EachIndex(match_idx, matches_count)
+              {
+                Temp scratch = scratch_begin(0, 0);
+                String8 match_fully_qualified_name = {0};
+                switch(name_map_section_kinds[name_map_kind_idx])
+                {
+                  default:{}break;
+                  case RDI_SectionKind_GlobalVariables:
+                  case RDI_SectionKind_ThreadVariables:
+                  case RDI_SectionKind_Constants:
+                  case RDI_SectionKind_Procedures:
+                  {
+                    RDI_Symbol *symbol = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, name_map_section_kinds[name_map_kind_idx], matches[match_idx]);
+                    String8 match_fully_qualified_name = fully_qualified_str8_from_rdi_symbol(scratch.arena, rdi, symbol);
+                    if(str8_match(match_fully_qualified_name, fully_qualified_name, 0))
+                    {
+                      filtered_matches[filtered_matches_count] = matches[match_idx];
+                      filtered_matches_count += 1;
+                    }
+                  }break;
+                  case RDI_SectionKind_TypeNodes:
+                  {
+                    RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, match_idx);
+                    if(RDI_TypeKind_FirstUserDefined <= type_node->kind && type_node->kind <= RDI_TypeKind_LastUserDefined)
+                    {
+                      String8 match_fully_qualified_name = fully_qualified_str8_from_rdi_type(scratch.arena, rdi, type_node);
+                      if(str8_match(match_fully_qualified_name, fully_qualified_name, 0))
+                      {
+                        filtered_matches[filtered_matches_count] = matches[match_idx];
+                        filtered_matches_count += 1;
+                      }
+                    }
+                  }break;
+                }
+                scratch_end(scratch);
+              }
+            }
+            
+            // rjf: do we have a specific unit queried? -> filter matches according to containing unit
+#if 0
+            if(target_unit_index != 0)
+            {
+              
+            }
+#endif
+            
+            // rjf: given matches, pick selected & return as result
+            if(filtered_matches_count != 0)
+            {
+              U64 selected_match_idx = (filtered_matches_count-1) - Min(index, filtered_matches_count-1);
               lane_matches[lane_idx()].key          = dbgi_key;
               lane_matches[lane_idx()].section_kind = name_map_section_kinds[name_map_kind_idx];
-              lane_matches[lane_idx()].idx          = run[run_idx];
+              lane_matches[lane_idx()].idx          = filtered_matches[selected_match_idx];
             }
           }
         }
@@ -1638,14 +1738,14 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
 }
 
 internal DI_Match
-di_match_from_string(String8 string, U64 index, DI_Key preferred_dbgi_key, U64 endt_us)
+di_match_from_string(String8 string, U64 match_index, DI_Key preferred_dbgi_key, U64 endt_us)
 {
   DI_Match result = {0};
   Access *access = access_open();
   Temp scratch = scratch_begin(0, 0);
   {
     String8List key_parts = {0};
-    str8_list_push(scratch.arena, &key_parts, str8_struct(&index));
+    str8_list_push(scratch.arena, &key_parts, str8_struct(&match_index));
     str8_list_push(scratch.arena, &key_parts, str8_struct(&preferred_dbgi_key));
     str8_list_push(scratch.arena, &key_parts, str8_struct(&string.size));
     str8_list_push(scratch.arena, &key_parts, string);

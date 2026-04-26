@@ -626,32 +626,31 @@ msf_find_max_pn_(MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageNu
   for (MSF_Int fpm_pn_idx = (MSF_Int)fpm_pn_arr.count - 1; fpm_pn_idx >= 0; fpm_pn_idx -= 1) {
     MSF_PageNumber fpm_pn = fpm_pn_arr.v[fpm_pn_idx];
     U32Array fpm_data = msf_fpm_data_from_pn(page_data_list, page_size, fpm_pn);
-    
-    // we have to work around the fact that FPM bits are always alloced
-    // and also there is a trail of unused FPM groups too
-    U32 bit_idx = max_U32;
-    for (MSF_Int i = fpm_page_count - 1; i >= 0; i -= 1) {
-      U32 fpm_lo = i * fpm_interval_wrong + 3; // skip first page bit and FPM group bits
-      U32 fpm_hi = i * fpm_interval_wrong + fpm_interval_wrong;
-      bit_idx = bit_array_scan_right_to_left32(fpm_data, fpm_lo, fpm_hi, MSF_PAGE_STATE_ALLOC);
-      if (bit_idx <= fpm_interval_correct) {
-        break;
-      }
-    }
-    
-    // check first page bit
-    if (bit_idx >= fpm_interval_correct) {
-      bit_idx = bit_array_scan_left_to_right32(fpm_data, 0, 1, MSF_PAGE_STATE_ALLOC);
-      if (bit_idx >= fpm_interval_correct) {
+
+    U64 bit_idx = max_U64;
+    U64 hi = fpm_data.count*32;
+    while (hi > 0) {
+      U64 msb_idx = bit_array_scan_right_to_left32(fpm_data, 0, hi, MSF_PAGE_STATE_ALLOC);
+
+      // FPM is empty
+      if (msb_idx >= hi) { break; }
+
+      // hit FPM page -- keep going
+      U64 k = msb_idx % fpm_interval_wrong;
+      if (k < 3) {
+        hi = msb_idx;
         continue;
       }
+
+      bit_idx = msb_idx;
+      break;
     }
-    
-    // compute max page number
-    MSF_PageNumber pn = bit_idx + (MSF_UInt)fpm_pn_idx * fpm_interval_correct;
-    max_pn = Max(max_pn, pn);
-    
-    break;
+
+    // stop if there is a page
+    if (bit_idx != max_U64) {
+      max_pn = Max(bit_idx, 2) + fpm_pn_idx * fpm_interval_correct;
+      break;
+    }
   }
   
   return max_pn;
@@ -666,6 +665,7 @@ msf_find_max_pn(MSF_PageDataList page_data_list, MSF_UInt page_size)
   MSF_PageNumber fpm0_max = msf_find_max_pn_(page_data_list, page_size, fpm0_pn_arr);
   MSF_PageNumber fpm1_max = msf_find_max_pn_(page_data_list, page_size, fpm1_pn_arr);
   MSF_PageNumber max_pn = Max(fpm0_max, fpm1_max);
+  Assert(max_pn > 1);
   scratch_end(scratch);
   return max_pn;
 }
@@ -830,8 +830,8 @@ msf_stream_resize_ex(MSF_Context *msf, MSF_Stream *stream, MSF_UInt size)
   }
   
   // update stream
-  stream->size = Min(stream->size, stream->page_list.count * msf->page_size);
-  stream->pos = Min(stream->pos, stream->size);
+  stream->size     = size;
+  stream->pos      = Min(stream->pos, stream->size);
   stream->pos_page = 0;
 
   return 1;
@@ -1211,6 +1211,52 @@ msf_stream_write_string_parallel(TP_Context *tp, MSF_Context *msf, MSF_StreamNum
   return msf_stream_write_parallel(tp, msf, sn, string.str, string.size);
 }
 
+internal String8List
+msf_data_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn)
+{
+  String8List result = {0};
+
+  MSF_Stream *stream = msf_find_stream(msf, sn);
+  String8     acc    = {0};
+
+  MSF_PageNode *n;
+  for (n = stream->page_list.first; n != stream->page_list.last; n = n->next) {
+    String8 page = msf_data_from_pn(msf->page_data_list, msf->page_size, n->pn);
+
+    if (acc.str + acc.size != page.str) {
+      if (acc.size) {
+        str8_list_push(arena, &result, acc);
+      }
+      acc = page;
+    } else {
+      acc.size += page.size;
+    }
+  }
+
+  if (acc.size) {
+    str8_list_push(arena, &result, acc);
+    MemoryZeroStruct(&acc);
+  }
+
+  if (n) {
+    String8 page = msf_data_from_pn(msf->page_data_list, msf->page_size, n->pn);
+    if (acc.str + acc.size != page.str) {
+      acc = page;
+    } else {
+      acc.size += page.size;
+    }
+
+    acc.size = Min(stream->size - result.total_size, acc.size);
+
+    if (acc.size) {
+      str8_list_push(arena, &result, acc);
+    }
+  }
+
+  Assert(result.total_size == stream->size);
+  return result;
+}
+
 ////////////////////////////////
 
 internal MSF_UInt
@@ -1412,280 +1458,10 @@ msf_find_stream(MSF_Context *msf, MSF_StreamNumber sn)
   return data;
 }
 
-internal MSF_Error
-msf_open_header(Arena *arena, MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageList *page_list)
-{
-  ProfBeginFunction();
-  msf_page_list_push_extant_page(arena, page_list, page_data_list, page_size, 0);
-  ProfEnd();
-  return MSF_Error_OK;
-}
-
-internal MSF_Error
-msf_open_root(Arena *arena, MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageNumber root_pn, MSF_UInt stream_table_size, MSF_PageList *page_list)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  MSF_PageNumber st_page_count = msf_count_pages(page_size, stream_table_size);
-  MSF_UInt st_pn_size = sizeof(MSF_PageNumber) * st_page_count;
-  MSF_PageNumber root_pn_count = msf_count_pages(page_size, st_pn_size);
-  MSF_PageNumber *root_pn_arr = push_array(scratch.arena, MSF_PageNumber, root_pn_count);
-  for (MSF_UInt i = 0; i < root_pn_count; i += 1) {
-    root_pn_arr[i] = root_pn + i;
-  }
-  msf_page_list_push_extant_page_arr(arena, page_list, page_data_list, page_size, root_pn_arr, root_pn_count);
-  scratch_end(scratch);
-  ProfEnd();
-  return MSF_Error_OK;
-}
-
-internal MSF_Error
-msf_open_stream_table_page_list(Arena *arena, MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageList root_page_list, MSF_UInt stream_table_size, MSF_PageList *page_list)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  MSF_Error error = MSF_Error_OK; 
-  MSF_UInt st_pn_count = msf_count_pages(page_size, stream_table_size);
-  MSF_UInt st_pn_size = st_pn_count * sizeof(MSF_PageNumber);
-  MSF_PageNumber *st_pn_arr = push_array(scratch.arena, MSF_PageNumber, st_pn_count);
-  MSF_UInt st_pn_read_size = msf_read(page_data_list, page_size, root_page_list, 0, st_pn_arr, st_pn_size);
-  if (st_pn_read_size == st_pn_size) {
-    msf_page_list_push_extant_page_arr(arena, page_list, page_data_list, page_size, st_pn_arr, st_pn_count);
-  } else {
-    error = MSF_OpenError_UNABLE_TO_READ_STREAM_TABLE_PAGE_NUMBERS; 
-  }
-  scratch_end(scratch);
-  ProfEnd();
-  return error;
-}
-
-internal MSF_Error
-msf_open_stream_table(Arena *arena, MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageList st_page_list, MSF_UInt stream_table_size, MSF_StreamList *stream_list)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  MSF_Error error = MSF_Error_OK;
-  
-  // read out entire stream table
-  U8 *st_buffer = push_array(scratch.arena, U8, stream_table_size);
-  MSF_UInt st_read_size = msf_read(page_data_list, page_size, st_page_list, 0, st_buffer, stream_table_size);
-  if (st_read_size != stream_table_size) {
-    error = MSF_OpenError_INVALID_STREAM_TABLE;
-    goto exit;
-  }
-  
-  // setup buffer reader
-  String8 st_data = str8(st_buffer, st_read_size);
-  U64 st_cursor = 0;
-  
-  MSF_UInt stream_count = 0;
-  st_cursor += str8_deserial_read_struct(st_data, st_cursor, &stream_count);
-  
-  // stream count is a 32-bit but stream number is 16-bit?!
-  if (stream_count > MSF_STREAM_NUMBER_MAX) {
-    error = MSF_OpenError_STREAM_COUNT_OVERFLOW;
-    goto exit;
-  }
-  
-  // is there enoguh bytes to read streams sizes?
-  U64 size_arr_end = st_cursor + (U64)stream_count * sizeof(MSF_UInt);
-  if (size_arr_end > st_data.size) {
-    error = MSF_OpenError_UNABLE_TO_READ_STREAM_SIZES;
-    goto exit;
-  }
-  
-  // make pointer to stream sizes array
-  MSF_UInt *stream_size_arr = (MSF_UInt*)(st_buffer + st_cursor);
-  st_cursor += sizeof(stream_size_arr[0]) * stream_count;
-  
-  U64 arena_pos_before_stream_allocations = arena_pos(arena);
-  
-  // open streams
-  for (MSF_UInt stream_idx = 0; stream_idx < stream_count; stream_idx += 1) {
-    MSF_UInt stream_size = stream_size_arr[stream_idx];
-    B32 is_present = stream_size != MSF_DELETED_STREAM_STAMP;
-    if (is_present) {
-      MSF_PageNumber pn_count = msf_count_pages(page_size, stream_size);
-      
-      // is there enough bytes in buffer to build stream page list?
-      MSF_UInt st_pn_end = st_cursor + pn_count * sizeof(MSF_PageNumber);
-      if (st_pn_end > stream_table_size) {
-        break;
-      }
-      
-      // setup page number array
-      MSF_PageNumber *pn_arr = (MSF_PageNumber*)(st_buffer + st_cursor);
-      st_cursor += sizeof(pn_arr[0]) * pn_count;
-      
-      // build stream page list
-      MSF_PageList page_list = {0};
-      msf_page_list_push_extant_page_arr(arena, &page_list, page_data_list, page_size, pn_arr, pn_count);
-      
-      // alloc stream with opened pages
-      MSF_StreamNode *stream_node = msf_stream_alloc_(arena, stream_list);
-      stream_node->data.size = stream_size;
-      stream_node->data.page_list = page_list;
-    }
-    // stream was deleted but slot was kept to be reused in subsequent allocations
-    else {
-      MSF_StreamNode *stream_node = msf_stream_alloc_(arena, stream_list);
-      stream_node->data.size = stream_size;
-    }
-  }
-  
-  if (stream_list->count != stream_count) {
-    arena_pop_to(arena, arena_pos_before_stream_allocations);
-    error = MSF_OpenError_INVALID_STREAM_TABLE;
-    goto exit;
-  }
-  
-exit:;
-  scratch_end(scratch);
-  ProfEnd();
-  return error;
-}
-
-internal MSF_Error
-msf_open(String8 data, MSF_Context **msf_out)
-{
-  ProfBeginFunction();
-
-  MSF_Error error = MSF_Error_OK;
-  MSF_Context *msf = 0;
-  MSF_PageDataList page_data_list = {0};
-
-  // are there enough bytes for header?
-  if (sizeof(MSF_Header70) > data.size) {
-    error = MSF_OpenError_NOT_ENOUGH_BYTES_TO_READ_HEADER;
-    goto exit;
-  }
-  
-  // is this MSF 7.0?
-  MSF_Header70 *header = (MSF_Header70*)data.str;
-  if (MemoryCompare(header->magic, msf_msf70_magic, sizeof(msf_msf70_magic)) != 0) {
-    error = MSF_OpenError_INVALID_MAGIC; 
-    goto exit;
-  }
-  
-  // validate page size
-  if (!IsPow2(header->page_size)) {
-    error = MSF_OpenError_PAGE_SIZE_IS_NOT_POW2;
-    goto exit;
-  }
-  
-  // validate page count
-  MSF_UInt file_page_count = msf_count_pages(header->page_size, data.size);
-  if (file_page_count != header->page_count) {
-    error = MSF_OpenError_PAGE_COUNT_DOESNT_MATCH_DATA_SIZE;
-    goto exit;
-  }
-  
-  // validate FPM
-  if (header->page_size < MSF_MIN_PAGE_SIZE) {
-    error = MSF_OpenError_INVALID_PAGE_SIZE;
-    goto exit;
-  }
-  if (header->page_size > MSF_MAX_PAGE_SIZE) {
-    error = MSF_OpenError_INVALID_PAGE_SIZE;
-    goto exit;
-  }
-  
-  // is there enough bytes to initialize PDB?
-  MSF_UInt check_size = header->page_size*3 + header->stream_table_size;
-  if (check_size > data.size) { 
-    error = MSF_OpenError_NOT_ENOUGH_PAGES_TO_INIT;
-    goto exit;
-  }
-  
-  // validate FPM
-  if (header->active_fpm != MSF_FPM0 && header->active_fpm != MSF_FPM1) {
-    error = MSF_OpenError_INVALID_ACTIVE_FPM;
-    goto exit;
-  }
-  
-  // is there enough bytes to initialize root stream?
-  MSF_UInt root_pn_offset = OffsetOf(MSF_Header70, root_pn);
-  if (root_pn_offset + header->stream_table_size > data.size) {
-    error = MSF_OpenError_INVALID_ROOT_STREAM_PAGE_NUMBER;
-    goto exit;
-  }
-  
-  // validate root directory
-  MSF_UInt root_directory_page_count = msf_count_pages(header->page_size, header->stream_table_size);
-  MSF_UInt root_directory_max_page_count = header->page_size / sizeof(MSF_UInt);
-  if (root_directory_page_count > root_directory_max_page_count) {
-    error = MSF_Error_STREAM_TABLE_HAS_TOO_MANY_PAGES;
-    goto exit;
-  }
-
-  // allocate MSF context and don't reserve special pages
-  msf = msf_alloc__(arena_alloc(.name = "MSF"), header->page_size, header->active_fpm);
-  
-  // divide data into fixed size nodes (with 4KB page each node is 128MB)
-  msf_set_page_data_list(msf->arena, &page_data_list, header->page_size, data);
-  
-  do {
-    MSF_PageList header_page_list = {0};
-    error = msf_open_header(msf->arena, page_data_list, header->page_size, &header_page_list);
-    if (error != MSF_Error_OK) {
-      break;
-    }
-    
-    MSF_PageList root_page_list = {0};
-    error = msf_open_root(msf->arena, page_data_list, header->page_size, header->root_pn, header->stream_table_size, &root_page_list);
-    if (error != MSF_Error_OK) { 
-      break;
-    }
-    
-    MSF_PageList st_page_list = {0};
-    error = msf_open_stream_table_page_list(msf->arena, page_data_list, header->page_size, root_page_list, header->stream_table_size, &st_page_list);
-    if (error != MSF_Error_OK) {
-      break;
-    }
-    
-    MSF_StreamList stream_list = {0};
-    error = msf_open_stream_table(msf->arena, page_data_list, header->page_size, st_page_list, header->stream_table_size, &stream_list);
-    if (error != MSF_Error_OK) {
-      break;
-    }
-    
-    Assert(msf->page_size == header->page_size);
-    Assert(msf->active_fpm == header->active_fpm);
-    msf->page_count       = header->page_count;
-    msf->page_data_list   = page_data_list;
-    msf->header_page_list = header_page_list;
-    msf->root_page_list   = root_page_list;
-    msf->st_page_list     = st_page_list;
-    msf->sectab               = stream_list;
-    
-    *msf_out = msf;
-    
-#if LNK_PARANOID
-    msf_check_fpm_bits_for_page_list(page_data_list, msf->page_size, msf->active_fpm, header_page_list, MSF_PAGE_STATE_ALLOC);
-    msf_check_fpm_bits_for_page_list(page_data_list, msf->page_size, msf->active_fpm, root_page_list, MSF_PAGE_STATE_ALLOC);
-    msf_check_fpm_bits_for_page_list(page_data_list, msf->page_size, msf->active_fpm, st_page_list, MSF_PAGE_STATE_ALLOC);
-    for (MSF_StreamNode *stream_node = stream_list.first; stream_node != 0; stream_node = stream_node->next) {
-      msf_check_fpm_bits_for_page_list(page_data_list, msf->page_size, msf->active_fpm, stream_node->data.page_list, MSF_PAGE_STATE_ALLOC);
-    }
-#endif
-  } while(0);
-  
-exit:;
-  if (error != MSF_Error_OK) {
-    if (msf) {
-      msf_release(&msf);
-    }
-  }
-
-  ProfEnd();
-  return error;
-}
-
 internal void
-msf_release(MSF_Context **msf_ptr)
+msf_release(MSF_Context *msf)
 {
-  arena_release((*msf_ptr)->arena);
-  *msf_ptr = 0;
+  arena_release(msf->arena);
 }
 
 internal String8List
@@ -1878,6 +1654,8 @@ msf_build(MSF_Context *msf)
 internal String8List
 msf_get_page_data_nodes(Arena *arena, MSF_Context *msf)
 {
+  ProfBeginFunction();
+
   String8List list; MemoryZeroStruct(&list);
 
   U64 total_size = msf_get_save_size(msf);
@@ -1892,19 +1670,17 @@ msf_get_page_data_nodes(Arena *arena, MSF_Context *msf)
     String8 data = str8(data_node->data, to_copy);
     str8_list_push(arena, &list, data);
   }
+
+  ProfEnd();
   return list;
 }
 
 internal U64
 msf_get_save_size(MSF_Context *msf)
 {
-#if 0
-  MSF_PageNumber max_pn = msf_find_max_pn(msf->page_data_list, msf->page_size);
-  U64 size = ((U64)max_pn + 1) * (U64)msf->page_size;
-  Assert(msf_count_pages(size, msf->page_size) == msf->page_count);
-#else
-  U64 size = (U64)msf->page_count * msf->page_size;
-#endif
+  MSF_PageNumber max_pn     = msf_find_max_pn(msf->page_data_list, msf->page_size);
+  U64            page_count = max_pn + 1;
+  U64            size       = page_count * msf->page_size;
   return size;
 }
 

@@ -227,49 +227,61 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
 }
 
 internal String8
-msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn)
+msf_data_from_stream_number_ex(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn, Rng1U64 range, U64 align)
 {
   ProfBeginFunction();
   String8 result = {0};
   if(sn < st->stream_count)
   {
-    MSF_RawStream stream = st->streams[sn];
-    U8 *stream_buf     = push_array_no_zero(arena, U8, stream.size);
-    U8 *stream_out_ptr = stream_buf;
-    for (U32 i = 0; i < stream.page_count; ++i) {
-      U64 page_idx;
-      if (st->index_size == 4) {
-        page_idx = stream.u.page_indices_u32[i];
-      } else {
-        page_idx = stream.u.page_indices_u16[i];
+    MSF_RawStream stream        = st->streams[sn];
+    Rng1U64       range_clamped = { .min = Min(range.min, stream.size), .max = Min(range.max, stream.size) };
+    U64           page_count    = CeilIntegerDiv(dim_1u64(range_clamped), st->page_size);
+    U64           pn_base       = range_clamped.min / st->page_size;
+
+    result = (String8){ .str = push_array_aligned(arena, U8, dim_1u64(range_clamped), align) };
+
+    for EachIndex(page_idx, page_count) {
+      U64 pn_begin;
+      if (st->index_size == 4) { pn_begin = stream.u.page_indices_u32[pn_base + page_idx]; }
+      else                     { pn_begin = stream.u.page_indices_u16[pn_base + page_idx]; }
+
+      U64 pn_end = pn_begin;
+      for (; page_idx+1 < page_count; page_idx += 1) {
+        U64 next_pn = 0;
+        if (st->index_size == 4) { next_pn = stream.u.page_indices_u32[pn_base + page_idx + 1]; }
+        else                     { next_pn = stream.u.page_indices_u16[pn_base + page_idx + 1]; }
+        if ((pn_end + 1) != next_pn) { break; }
+        pn_end = next_pn;
       }
-      
-      U64 stream_page_off = (U64)page_idx * st->page_size;
-      if (stream_page_off + st->page_size > msf_data.size) {
-        break;
-      }
-      
-      U8 *stream_page_base = msf_data.str + stream_page_off;
-      
-      // clamp copy size by end of stream
-      U32 stream_pos     = (U32) (stream_out_ptr - stream_buf);
-      U32 remaining_size = stream.size - stream_pos;
-      U32 copy_size      = ClampTop(st->page_size, remaining_size);
-      
+      pn_end += 1;
+
+      U64 read_off  = result.size + range_clamped.min;
+      U64 to_read   = dim_1u64(range_clamped) - result.size;
+      U64 read_size = Min(to_read, (pn_end - pn_begin) * st->page_size - (read_off % st->page_size));
+
+      U64     page_off  = (pn_begin * st->page_size) + (read_off % st->page_size);
+      String8 page      = str8_substr(msf_data, r1u64(page_off, page_off + read_size));
+      if (page.size != read_size) { break; }
+
       // copy page data
-      MemoryCopy(stream_out_ptr, stream_page_base, copy_size);
-      stream_out_ptr += copy_size;
+      Assert(result.size + read_size <= dim_1u64(range_clamped));
+      U8 *ptr = result.str + result.size;
+      MemoryCopy(ptr, page.str, read_size);
+      result.size += read_size;
     }
-    
-    U64 copy_size = (U64)(stream_out_ptr - stream_buf);
-    
-    U64 unused_buf_size = stream.size - copy_size;
+
+    // release unused bytes
+    U64 unused_buf_size = dim_1u64(range_clamped) - result.size;
     arena_pop(arena, unused_buf_size);
-    
-    result = str8(stream_buf, copy_size);
   }
   ProfEnd();
   return result;
+}
+
+internal String8
+msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn)
+{
+  return msf_data_from_stream_number_ex(arena, msf_data, st, sn, r1u64(0, max_U64), 8);
 }
 
 internal MSF_Parsed *

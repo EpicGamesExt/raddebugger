@@ -2,18 +2,48 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: post-0.9.20 TODO notes
+//~ rjf: post-0.9.25 TODO notes
+//
+// [ ] many threads hitting conditional breakpoints -> causes 0x8000003 exception!
+//
+//- evaluation space coverage pass
+// [ ] eval space reads/writes -> needs staleness/badness info - replace ctrl layer, to apply to all spaces
+// [ ] need concrete ways of referring into a space at any offset - e.g. `process.memory + 0x1234`, `file:"foo".data + 0x1234`, `thread.regs + 0x80`, etc.
+// [ ] memory view needs to take advantage of above when peeking; ensure peeking works on files etc.
+//
+//- memory view pass
+// [ ] toggleable ascii column
+// [ ] toggleable annotation tree column
+// [ ] horizontal scrolling
+//
+//- fabian complaints / reports
+// [ ] simplified default layout
+//  [ ] memory view deserves larger spot, in default layout
+// [ ] ambiguous parsing cases - need to re-introduce identifier resolution into eval parse. (foo *)&bar
+// [ ] broadly, view discoverability / docs
+// [ ] signify empty watch window "expression" slot more as a text field?
+//
+//- jeff notes
+// [ ] option to prefer addresses first with string ptrs
+// [ ] focus changing on f10/f11? may be related to auto_run/auto_step - look at a bin/jeffr
+// [ ] option to turn off transient tabs altogether
+// [ ] single-line viz for pointers w/ bad (unmapped) addresses
 //
 //- namespace/locations/variables RDI pass
-// [ ] RDI_Local, RDI_GlobalVariable, RDI_ThreadVariable -> RDI_Variable
-// [ ] RDI_Variable gets RDI_ContainerFlags, and a container_idx
-// [ ] RDI_Namespace can be a container, same as types/procedures
-// [ ] If procedure-contained, then index goes to scope now, not procedure
-// [ ] Location sections -> split by location kind, fixed tables for simple locations, one catch-all table for bytecode.
-// [ ] Location kind -> can be thread-local offset, or module virtual offset, to enclose globals/tlocals cases
-// [ ] Referring to one location -> kind * index
-// [ ] Referring to many locations, based on scope offsets -> kind = BlockList; BlockList encodes a first/opl pair into Block table, each Block has scope_off_first/opl, location_kind, location_idx - but a block's location kind CANNOT BE BlockList
-// [ ] RDI_Variable has location_kind, location_idx
+// [x] RDI_Local, RDI_GlobalVariable, RDI_ThreadVariable -> RDI_Variable
+// [x] RDI_Variable gets RDI_ContainerFlags, and a container_idx
+// [x] RDI_Namespace can be a container, same as types/procedures
+// [x] If procedure-contained, then index goes to scope now, not procedure
+// [x] Location sections -> split by location kind, fixed tables for simple locations, one catch-all table for bytecode.
+// [x] Location kind -> can be thread-local offset, or module virtual offset, to enclose globals/tlocals cases
+// [x] Referring to one location -> kind * index
+// [x] Referring to many locations, based on scope offsets -> kind = BlockList; BlockList encodes a first/opl pair into Block table, each Block has scope_off_first/opl, location_kind, location_idx - but a block's location kind CANNOT BE BlockList
+// [x] RDI_Variable has location_kind, location_idx
+//
+// [x] we keep flat tables of symbols, *but*, "sort" by containing unit. unit -> [f, opl) of procedures, globals, threadvars, constants, etc.
+// [x] container can also be a unit, so you can also go from procedure/global/tvar -> unit
+// [x] *OR*, because we can guarantee that the units themselves will be sorted from lowest -> highest in all symbol tables, we can simply binary search the unit table (small) with a symbol's index to find its corresponding unit. that way, no need to duplicate e.g. namespaces and so on across units. and actually, we have to do this, because containers can be types, and those cannot be unit-locked.
+//
 // [ ] symbols only store their *partly-qualified name*, e.g. `x` for A::B::C::x
 // [ ] default name maps look up *partly-qualified names*
 // [ ] to match a *fully qualified name*, there needs to be a second kind of different lookup - instead of string-matching, we need to match against the *fully qualified names*. the maps must be built by hashing the *fully qualified name*, but redirecting to the symbol with the *partially qualified name*. this is to allow fully-qualified lookups, but avoid storing fully-qualified names.
@@ -189,18 +219,35 @@
 //     rasterizations)
 
 ////////////////////////////////
+//~ rjf: Recently Completed
+//
+// [x] fix for-loop stepping oddities, likely single-line for-loop stepping
+// [x] `foo, x` needs to correctly match `hex(foo)`, e.g. in application to expansions
+// [x] eval: pointer casts of register space should promote to process space
+// [x] more control over string visualization; specifically, when *not* to do it, even when using e.g. char *s
+// [x] sign bits should not display on unsigned integers?
+// [x] source/disasm ctx menu should include options for e.g. "go to selected thread"
+//  [x] correct type interpretations; togglable interpretations
+//  [x] make address editable; specialized version of the cursor address editor in tab right-click menu
+// [x] broadly, need to complete memory view & fix issues
+// [x] dumb panel click-through thing
+// [x] cursor info at bottom? # of selected bytes, address range, cursor hierarchical location?
+// [x] clean up tooltip? it's a bit big/noisy (maybe remove it after above?)
+// [x] missing call stack frames?
+// [x] scroll bar
+
+////////////////////////////////
 //~ rjf: Build Options
 
 #define BUILD_TITLE "The RAD Debugger"
 #define OS_FEATURE_GRAPHICAL 1
 
 #define DMN_INIT_MANUAL 1
-#define CTRL_INIT_MANUAL 1
+#define D_INIT_MANUAL 1
 #define OS_GFX_INIT_MANUAL 1
 #define FP_INIT_MANUAL 1
 #define R_INIT_MANUAL 1
 #define FNT_INIT_MANUAL 1
-#define D_INIT_MANUAL 1
 #define RD_INIT_MANUAL 1
 
 ////////////////////////////////
@@ -211,6 +258,7 @@
 #include "x64/x64.h"
 #include "linker/hash_table.h"
 #include "linker/lf_hash_table.h"
+#include "linker/base_ext/base_bit_array.h"
 #include "os/os_inc.h"
 #include "artifact_cache/artifact_cache.h"
 #include "rdi/rdi_local.h"
@@ -250,14 +298,13 @@
 #include "stap/stap_parse.h"
 #include "demon/demon_inc.h"
 #include "eval/eval_inc.h"
+#include "dbg_engine/dbg_engine_inc.h"
 #include "eval_visualization/eval_visualization_inc.h"
-#include "ctrl/ctrl_inc.h"
 #include "font_provider/font_provider_inc.h"
 #include "render/render_inc.h"
 #include "font_cache/font_cache.h"
 #include "draw/draw.h"
 #include "ui/ui_inc.h"
-#include "dbg_engine/dbg_engine_inc.h"
 #include "raddbg/raddbg_inc.h"
 
 //- rjf: [c]
@@ -265,6 +312,7 @@
 #include "x64/x64.c"
 #include "linker/hash_table.c"
 #include "linker/lf_hash_table.c"
+#include "linker/base_ext/base_bit_array.c"
 #include "os/os_inc.c"
 #include "artifact_cache/artifact_cache.c"
 #include "rdi/rdi_local.c"
@@ -304,14 +352,13 @@
 #include "stap/stap_parse.c"
 #include "demon/demon_inc.c"
 #include "eval/eval_inc.c"
+#include "dbg_engine/dbg_engine_inc.c"
 #include "eval_visualization/eval_visualization_inc.c"
-#include "ctrl/ctrl_inc.c"
 #include "font_provider/font_provider_inc.c"
 #include "render/render_inc.c"
 #include "font_cache/font_cache.c"
 #include "draw/draw.c"
 #include "ui/ui_inc.c"
-#include "dbg_engine/dbg_engine_inc.c"
 #include "raddbg/raddbg_inc.c"
 
 ////////////////////////////////
@@ -390,7 +437,7 @@ ipc_signaler_thread__entry_point(void *p)
 ////////////////////////////////
 //~ rjf: Ctrl -> Main Thread Wakeup Hook
 
-internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
+internal D_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
 {
   os_send_wakeup_event();
 }
@@ -492,14 +539,13 @@ entry_point(CmdLine *cmd_line)
       //- rjf: manual layer initialization
       {
         dmn_init();
-        ctrl_init();
+        d_init();
         os_gfx_init();
         fp_init();
         r_init(cmd_line);
         fnt_init();
-        d_init();
         rd_init(cmd_line);
-        ctrl_set_wakeup_hook(wakeup_hook_ctrl);
+        d_set_wakeup_hook(wakeup_hook_ctrl);
       }
       
       //- rjf: set up shared resources for ipc to this instance; launch IPC signaler thread

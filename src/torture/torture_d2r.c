@@ -57,14 +57,14 @@ d2rt_type_from_name(RDI_Parsed *rdi, RDI_ParsedNameMap *map, char *name)
   return 0;
 }
 
-T_BeginTest(d2r_types)
+TEST(d2r_types)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   {
     dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
     dw_writer_push_attrib_stringf(writer, DW_AttribKind_Producer, "Test");
     
-#define DeclBaseType(tt, n, e, s)                                                  \
+#define DeclBaseType(tt, n, e, s)                                          \
 DW_WriterTag *tt = dw_writer_tag_begin(writer, DW_TagKind_BaseType);       \
 dw_writer_push_attrib_sint(writer,    DW_AttribKind_ByteSize, s);          \
 dw_writer_push_attrib_enum(writer,    DW_AttribKind_Encoding, DW_ATE_##e); \
@@ -104,8 +104,8 @@ dw_writer_tag_end(writer);
     DeclBaseType(decimal128_type,              "_Decimal128",            DecimalFloat, 16);
 #undef DeclBaseType
     
-#define DeclStdint(n, a)                                                \
-do {                                                            \
+#define DeclStdint(n, a)                                      \
+do {                                                          \
 dw_writer_tag_begin(writer, DW_TagKind_Typedef);              \
 dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, n); \
 dw_writer_push_attrib_ref(writer,     DW_AttribKind_Type, a); \
@@ -140,15 +140,15 @@ dw_writer_tag_end(writer);                                    \
     dw_writer_tag_end(writer);
   }
   
-  RDI_Parsed  *rdi      = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_Parsed  *rdi      = d2r_rdi_from_dwarf_writer(arena, writer);
   RDI_NameMap *types_nm = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
   T_Ok(types_nm);
   
   RDI_ParsedNameMap types_map = {0};
   rdi_parsed_from_name_map(rdi, types_nm, &types_map);
   
-#define TestBuiltinType(n, bs, r)                                                                                 \
-do {                                                                                                          \
+#define TestBuiltinType(n, bs, r)                                                                           \
+do {                                                                                                        \
 RDI_TypeNode *alias = d2rt_type_from_name(rdi, &types_map, n);                                              \
 T_Ok(alias);                                                                                                \
 T_Ok(alias->kind == RDI_TypeKind_Alias);                                                                    \
@@ -194,8 +194,8 @@ T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), s
   TestBuiltinType("_Decimal128",         16, Decimal128);
 #undef TestBuiltinType
   
-#define TestStdint(n, s, t)                                                                             \
-do {                                                                                                \
+#define TestStdint(n, s, t)                                                                       \
+do {                                                                                              \
 RDI_TypeNode *td = d2rt_type_from_name(rdi, &types_map, n);                                       \
 T_Ok(td);                                                                                         \
 T_Ok(td->kind == RDI_TypeKind_Alias);                                                             \
@@ -220,16 +220,15 @@ T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), s
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
-T_BeginTest(d2r_line_table)
+TEST(d2r_line_table)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/DEVEL/");
   String8 comp_name = str8_lit("test.c");
   
   DW_WriterFile *foo_file  = dw_writer_new_file(writer, str8_lit("/mnt/C/Devel/foo.c"));
-  DW_WriterFile *comp_file = dw_writer_new_file(writer, str8f(scratch.arena, "%S%S", comp_dir, comp_name));
+  DW_WriterFile *comp_file = dw_writer_new_file(writer, str8f(arena, "%S%S", comp_dir, comp_name));
   
   struct {
     DW_WriterFile *file; U64 ln; U64 line_size; U64 voff;
@@ -268,13 +267,13 @@ T_BeginTest(d2r_line_table)
   dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
   dw_writer_tag_end(writer);
   
-  d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  d2r_rdi_from_dwarf_writer(arena, writer);
   
   for EachElement(i, test_table) {
     for EachIndex(k, test_table[i].line_size) {
-      String8 cmd_line = str8f(scratch.arena, "-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
+      String8 cmd_line = str8f(arena, "-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
       String8 output = {0};
-      t_invoke_(t_radbin_path(), cmd_line, max_U64, scratch.arena, &output);
+      t_invoke_(t_radbin_path(), cmd_line, max_U64, arena, &output);
       T_Ok(g_last_exit_code == 0);
       T_MatchLinef(&output, "%S:%llu", test_table[i].file->path, test_table[i].ln);
     }
@@ -282,9 +281,8 @@ T_BeginTest(d2r_line_table)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
-T_BeginTest(d2r_checksums)
+TEST(d2r_checksums)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   
@@ -301,7 +299,7 @@ T_BeginTest(d2r_checksums)
   dw_writer_push_attrib_line_ptr(writer, DW_AttribKind_StmtList, 0);
   dw_writer_tag_end(writer);
   
-  RDI_Parsed *rdi            = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_Parsed *rdi            = d2r_rdi_from_dwarf_writer(arena, writer);
   U64         checksum_count = 0;
   RDI_MD5    *checksums      = rdi_table_from_name(rdi, MD5Checksums, &checksum_count);
   T_Ok(checksum_count == writer->line.file_count + 1);
@@ -318,10 +316,9 @@ T_BeginTest(d2r_checksums)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
 #if SUBPROGRAM_CONVERSION_TEST
-T_BeginTest(d2r_subprogram)
+TEST(d2r_subprogram)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   
@@ -432,17 +429,16 @@ T_BeginTest(d2r_subprogram)
   
   dw_writer_tag_end(writer);
   
-  RDI_Parsed    *rdi         = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_Parsed    *rdi         = d2r_rdi_from_dwarf_writer(arena, writer);
   RDI_Procedure *proc        = rdi_procedure_from_name_cstr(rdi, (char *)subprogram_name.str);
   RDI_TypeNode  *proc_type   = rdi_element_from_name_idx(rdi, TypeNodes, proc->type_idx);
-  String8        proc_string = rdi_string_from_type(scratch.arena, rdi, proc, proc_type);
+  String8        proc_string = rdi_string_from_type(arena, rdi, proc, proc_type);
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 #endif
 
-T_BeginTest(d2r_general)
+TEST(d2r_general)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   {
@@ -461,50 +457,79 @@ T_BeginTest(d2r_general)
     dw_writer_push_attrib_flag(writer, DW_AttribKind_External, 1);
     dw_writer_push_attrib_flag(writer, DW_AttribKind_Prototyped, 1);
     dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "FooBar");
-    // declare variable
+    // declare local
     dw_writer_tag_begin(writer, DW_TagKind_Variable);
     dw_writer_push_attrib_exprv(writer, DW_AttribKind_Location, DW_ExprEnc_Op(Reg7));
     dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "TestLocal");
     dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, char_type);
     dw_writer_tag_end(writer);
+    // declare param
+    dw_writer_tag_begin(writer, DW_TagKind_FormalParameter);
+    dw_writer_push_attrib_exprv(writer, DW_AttribKind_Location, DW_ExprEnc_Op(Reg7));
+    dw_writer_push_attrib_stringf(writer, DW_AttribKind_Name, "TestParam");
+    dw_writer_push_attrib_ref(writer, DW_AttribKind_Type, char_type);
+    dw_writer_tag_end(writer);
     dw_writer_tag_end(writer);
   }
   
-  RDI_Parsed *rdi = d2r_rdi_from_dwarf_writer(scratch.arena, writer);
+  RDI_Parsed *rdi = d2r_rdi_from_dwarf_writer(arena, writer);
   
-  RDI_Procedure *proc = rdi_procedure_from_name_cstr(rdi, "FooBar");
+  RDI_Symbol *proc = rdi_procedure_from_name_cstr(rdi, "FooBar");
   T_Ok(proc);
-  T_Ok(proc->link_flags == RDI_LinkFlag_External);
   String8 proc_name = str8_from_rdi_string_idx(rdi, proc->name_string_idx);
   T_Ok(str8_match(proc_name, str8_lit("FooBar"), 0));
   
   RDI_Scope *root_scope = rdi_root_scope_from_procedure(rdi, proc);
   T_Ok(root_scope);
-  T_Ok(root_scope->local_count == 1);
+  T_Ok(root_scope->local_count == 2);
   
-  RDI_Local *test_local = rdi_element_from_name_idx(rdi, Locals, root_scope->local_first + 0);
-  T_Ok(test_local);
-  T_Ok(test_local->kind == RDI_LocalKind_Variable);
-  String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
-  T_Ok(str8_match(test_local_name, str8_lit("TestLocal"), 0));
-  
-  RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
-  T_Ok(test_local_type);
-  T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
-  T_Ok(test_local_type->flags == 0);
-  String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
-  T_Ok(str8_match(alias_name, str8_lit("char"), 0));
-  
-  RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
-  T_Ok(char_type);
-  T_Ok(char_type->kind == RDI_TypeKind_Char8);
-  T_Ok(char_type->flags == 0);
-  T_Ok(char_type->byte_size == 1);
-  String8 char_type_name = str8_from_rdi_string_idx(rdi, char_type->built_in.name_string_idx);
-  T_Ok(str8_match(char_type_name, str8_lit("Char8"), 0));
+  {
+    RDI_Symbol *test_local = rdi_element_from_name_idx(rdi, LocalVariables, root_scope->local_first + 0);
+    T_Ok(test_local);
+    T_Ok((test_local->symbol_flags & RDI_SymbolFlag_IsParam) == 0);
+    String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
+    T_Ok(str8_match(test_local_name, str8_lit("TestLocal"), 0));
+
+    RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
+    T_Ok(test_local_type);
+    T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
+    T_Ok(test_local_type->flags == 0);
+    String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
+    T_Ok(str8_match(alias_name, str8_lit("char"), 0));
+
+    RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
+    T_Ok(char_type);
+    T_Ok(char_type->kind == RDI_TypeKind_Char8);
+    T_Ok(char_type->flags == 0);
+    T_Ok(char_type->byte_size == 1);
+    String8 char_type_name = str8_from_rdi_string_idx(rdi, char_type->built_in.name_string_idx);
+    T_Ok(str8_match(char_type_name, str8_lit("Char8"), 0));
+  }
+
+  {
+    RDI_Symbol *test_local = rdi_element_from_name_idx(rdi, LocalVariables, root_scope->local_first + 1);
+    T_Ok(test_local);
+    T_Ok((test_local->symbol_flags & RDI_SymbolFlag_IsParam) != 0);
+    String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
+    T_Ok(str8_match(test_local_name, str8_lit("TestParam"), 0));
+
+    RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
+    T_Ok(test_local_type);
+    T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
+    T_Ok(test_local_type->flags == 0);
+    String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
+    T_Ok(str8_match(alias_name, str8_lit("char"), 0));
+
+    RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
+    T_Ok(char_type);
+    T_Ok(char_type->kind == RDI_TypeKind_Char8);
+    T_Ok(char_type->flags == 0);
+    T_Ok(char_type->byte_size == 1);
+    String8 char_type_name = str8_from_rdi_string_idx(rdi, char_type->built_in.name_string_idx);
+    T_Ok(str8_match(char_type_name, str8_lit("Char8"), 0));
+  }
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
 #undef T_Group

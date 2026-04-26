@@ -45,7 +45,7 @@ t_dw_test_sleb128(U64 v, U64 expected_length)
   return is_ok;
 }
 
-T_BeginTest(test_leb128)
+TEST(test_leb128)
 {
   T_Ok(t_dw_test_uleb128(0, 1));
   T_Ok(t_dw_test_sleb128(0, 1));
@@ -64,7 +64,6 @@ T_BeginTest(test_leb128)
     T_Ok(t_dw_test_sleb128((1ull << i), 1 + (i + 1) / 7));
   }
 }
-T_EndTest;
 
 internal B32
 dwt_tags_must_match(DW_WriterTag *writer_tag, DW_TagNode *reader_tag)
@@ -135,18 +134,18 @@ dw_input_from_writer(Arena *arena, DW_Writer *writer)
   return input;
 }
 
-T_BeginTest(dwarf_32bit)
+TEST(dwarf_32bit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
   dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
   dw_writer_tag_end(writer);
   
-  DW_Input input = dw_input_from_writer(scratch.arena, writer);
+  DW_Input input = dw_input_from_writer(arena, writer);
   
   for EachElement(sec_idx, input.sec) {
     if (sec_idx == DW_Section_Abbrev) continue;
-    Rng1U64Array unit_ranges = dw_unit_ranges_from_data_arr(scratch.arena, input.sec[sec_idx].data);
+    Rng1U64Array unit_ranges = dw_unit_ranges_from_data_arr(arena, input.sec[sec_idx].data);
     for EachIndex(range_idx, unit_ranges.count) {
       Rng1U64 range = unit_ranges.v[range_idx];
       
@@ -162,20 +161,19 @@ T_BeginTest(dwarf_32bit)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
-T_BeginTest(dwarf_64bit)
+TEST(dwarf_64bit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_64Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
   dw_writer_push_attrib_string(writer, DW_AttribKind_Producer, str8_lit("RAD DWARF WRITER"));
   dw_writer_tag_end(writer);
   
-  DW_Input input = dw_input_from_writer(scratch.arena, writer);
+  DW_Input input = dw_input_from_writer(arena, writer);
   
   for EachElement(sec_idx, input.sec) {
     if (sec_idx == DW_Section_Abbrev) continue;
-    Rng1U64Array unit_ranges = dw_unit_ranges_from_data_arr(scratch.arena, input.sec[sec_idx].data);
+    Rng1U64Array unit_ranges = dw_unit_ranges_from_data_arr(arena, input.sec[sec_idx].data);
     for EachIndex(range_idx, unit_ranges.count) {
       Rng1U64 range = unit_ranges.v[range_idx];
       
@@ -191,9 +189,8 @@ T_BeginTest(dwarf_64bit)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
-T_BeginTest(dwarf_line_opcodes)
+TEST(dwarf_line_opcodes)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/devel/");
@@ -238,9 +235,9 @@ T_BeginTest(dwarf_line_opcodes)
   dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_set_discriminator(2));
   dw_line_inst_list_push(writer->arena, &writer->line.line_insts, DW_LNE_end_sequence());
   
-  DW_Input      input     = dw_input_from_writer(scratch.arena, writer);
-  Rng1U64Array  cu_ranges = dw_unit_ranges_from_data_arr(scratch.arena, input.sec[DW_Section_Info].data);
-  DW_CompUnit   cu        = dw_cu_from_info_off(scratch.arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
+  DW_Input      input     = dw_input_from_writer(arena, writer);
+  Rng1U64Array  cu_ranges = dw_unit_ranges_from_data_arr(arena, input.sec[DW_Section_Info].data);
+  DW_CompUnit   cu        = dw_cu_from_info_off(arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
   DW_LineVM    *line_vm   = dw_line_vm_init(&input, &cu);
   
   T_Ok(line_vm->header.dir_table.count == 2);
@@ -361,9 +358,8 @@ T_BeginTest(dwarf_line_opcodes)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
-T_BeginTest(dwarf_line_emit)
+TEST(dwarf_line_emit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/devel/");
@@ -415,9 +411,9 @@ T_BeginTest(dwarf_line_emit)
     }
   }
   
-  DW_Input      input     = dw_input_from_writer(scratch.arena, writer);
-  Rng1U64Array  cu_ranges = dw_unit_ranges_from_data_arr(scratch.arena, input.sec[DW_Section_Info].data);
-  DW_CompUnit   cu        = dw_cu_from_info_off(scratch.arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
+  DW_Input      input     = dw_input_from_writer(arena, writer);
+  Rng1U64Array  cu_ranges = dw_unit_ranges_from_data_arr(arena, input.sec[DW_Section_Info].data);
+  DW_CompUnit   cu        = dw_cu_from_info_off(arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
   DW_LineVM    *line_vm   = dw_line_vm_init(&input, &cu);
   
   // check init sequence
@@ -562,9 +558,8 @@ T_BeginTest(dwarf_line_emit)
     T_Ok(line_vm->new_line);
   }
 }
-T_EndTest;
 
-T_BeginTest(dwarf_writer)
+TEST(dwarf_writer)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   // info
@@ -626,10 +621,10 @@ T_BeginTest(dwarf_writer)
     dw_writer_tag_end(writer);
   }
   
-  DW_Input            input         = dw_input_from_writer(scratch.arena, writer);
-  DW_ListUnitInput    lu_input      = dw_list_unit_input_from_input(scratch.arena, &input);
-  DW_CompUnit         cu            = dw_cu_from_info_off(scratch.arena, &input, lu_input, 0, 1);
-  DW_TagTree          tag_tree      = dw_tag_tree_from_cu(scratch.arena, &input, &cu);
+  DW_Input            input         = dw_input_from_writer(arena, writer);
+  DW_ListUnitInput    lu_input      = dw_list_unit_input_from_input(arena, &input);
+  DW_CompUnit         cu            = dw_cu_from_info_off(arena, &input, lu_input, 0, 1);
+  DW_TagTree          tag_tree      = dw_tag_tree_from_cu(arena, &input, &cu);
   AssertAlways(dwt_tags_must_match(writer->root, tag_tree.root));
   
   // validate the writer
@@ -852,7 +847,7 @@ T_BeginTest(dwarf_writer)
     DW_WriterAttrib *frame_base = type->next;
     T_Ok(frame_base->kind == DW_AttribKind_FrameBase);
     T_Ok(frame_base->form.reader.kind == DW_Form_ExprLoc);
-    DW_Expr frame_base_expr = dw_expr_from_data(scratch.arena, writer->format, writer->address_size, frame_base->form.reader.exprloc);
+    DW_Expr frame_base_expr = dw_expr_from_data(arena, writer->format, writer->address_size, frame_base->form.reader.exprloc);
     T_Ok(frame_base_expr.count == 1);
     T_Ok(frame_base_expr.first->opcode == DW_ExprOp_Reg7);
     T_Ok(frame_base_expr.first->operands == 0);
@@ -863,9 +858,8 @@ T_BeginTest(dwarf_writer)
   
   dw_writer_end(&writer);
 }
-T_EndTest;
 
-T_BeginTest(value_in_register)
+TEST(value_in_register)
 {
   // setup register context
   REGS_RegBlockX64 regs      = {0};
@@ -876,21 +870,20 @@ T_BeginTest(value_in_register)
   
   // compile a simple program which reads the value from register 3
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Reg3) };
-  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   // evaluate the program
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
   
   // validate eval result
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
   T_Ok(expr_value.type == DW_ExprValueType_U64);
   T_Ok(expr_value.u64 == value);
 }
-T_EndTest;
 
-T_BeginTest(value_in_x_register)
+TEST(value_in_x_register)
 {
   // setup register context
   REGS_RegBlockX64 regs      = {0};
@@ -901,40 +894,38 @@ T_BeginTest(value_in_x_register)
   
   // compile a simple program which reads the value from register 3
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(RegX), DW_ExprEnc_ULEB128(DW_RegX64_FsBase) };
-  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   // evaluate the program
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
   
   // validate eval result
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
   T_Ok(expr_value.type == DW_ExprValueType_U64);
   T_Ok(expr_value.u64 == value);
 }
-T_EndTest;
 
-T_BeginTest(address_of_value)
+TEST(address_of_value)
 {
   // compile a simple program which reads address
   U64 addr = 0xdeadbeef;
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Addr), DW_ExprEnc_U64(addr) };
-  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   // evaluate the program
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, 0, 0, &expr_value);
   
   // validate eval result
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
   T_Ok(expr_value.type == DW_ExprValueType_Addr);
   T_Ok(expr_value.addr == addr);
 }
-T_EndTest;
 
-T_BeginTest(register_relative_variable)
+TEST(register_relative_variable)
 {
   // setup register context
   REGS_RegBlockX64 regs      = {0};
@@ -944,34 +935,32 @@ T_BeginTest(register_relative_variable)
   MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
   
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(BReg11), DW_ExprEnc_SLEB128(44) };
-  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
   
   // validate eval result
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
   T_Ok(expr_value.type == DW_ExprValueType_Addr);
   T_Ok(expr_value.addr == (1 + 44));
 }
-T_EndTest;
 
-T_BeginTest(frame_relative_variable)
+TEST(frame_relative_variable)
 {
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(FBReg), DW_ExprEnc_SLEB128(-50) };
-  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   U64               frame_base = 123;
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, frame_base, 0, 0, max_U64, expr, 0, 0, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, frame_base, 0, 0, max_U64, expr, 0, 0, 0, 0, &expr_value);
   
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
   T_Ok(expr_value.type == DW_ExprValueType_Addr);
   T_Ok(expr_value.addr == frame_base -50);
 }
-T_EndTest;
 
 internal
 MACHINE_OP_MEM_READ(t_machine_op_mem_read)
@@ -980,9 +969,9 @@ MACHINE_OP_MEM_READ(t_machine_op_mem_read)
   return MachineOpResult_Ok;
 }
 
-T_BeginTest(call_by_reference)
+TEST(call_by_reference)
 {
-  U8 *memory = push_array(scratch.arena, U8, 128);
+  U8 *memory = push_array(arena, U8, 128);
   U64 value = 0xc0ffee;
   MemoryCopy(memory + 32, &value, sizeof(value));
   
@@ -993,35 +982,33 @@ T_BeginTest(call_by_reference)
   MemoryCopy((U8 *)&regs + reg_range.min, &memory_ptr, sizeof(memory_ptr));
   
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(BRegX), DW_ExprEnc_ULEB128(58), DW_ExprEnc_SLEB128(32), DW_ExprEnc_Op(Deref) };
-  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   DW_ExprValue      expr_value = { 0 };
-  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, t_machine_op_mem_read, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, t_machine_op_mem_read, 0, &expr_value);
   
   T_Ok(expr_value.type == DW_ExprValueType_Generic);
   T_Ok(expr_value.generic.size == sizeof(U64));
   T_Ok(*(U64 *)expr_value.generic.str == value);
 }
-T_EndTest;
 
-T_BeginTest(plus_uconst)
+TEST(plus_uconst)
 {
   U64 struct_addr = 0x123;
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Addr), DW_ExprEnc_Addr(struct_addr), DW_ExprEnc_Op(PlusUConst), DW_ExprEnc_ULEB128(4) };
-  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, t_machine_op_mem_read, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, t_machine_op_mem_read, 0, &expr_value);
   
   T_Ok(expr_value.type == DW_ExprValueType_Addr);
   T_Ok(expr_value.addr == 0x123 + 4);
 }
-T_EndTest;
 
 #if 0
-T_BeginTest(reg_split_spill)
+TEST(reg_split_spill)
 {
   // setup register context
   REGS_RegBlockX64 regs      = {0};
@@ -1039,13 +1026,12 @@ T_BeginTest(reg_split_spill)
   }
   
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Reg3), DW_ExprEnc_Op(Piece), DW_ExprEnc_ULEB128(4), DW_ExprEnc_Op(Reg10), DW_ExprEnc_Op(Piece), DW_ExprEnc_ULEB128(2) };
-  String8    expr_data   = dw_encode_expr(scratch.arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
-  DW_Expr    expr        = dw_expr_from_data(scratch.arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
+  String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
+  DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(scratch.arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
 }
-T_EndTest;
 #endif
 
 #undef T_Group

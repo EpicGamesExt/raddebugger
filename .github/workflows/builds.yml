@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-windows-2022:
-    runs-on: windows-2022
+    runs-on: windows-2025
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +27,7 @@ jobs:
           - release
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
       - name: build (vs 2022)
         shell: cmd
         run: |
@@ -35,18 +35,37 @@ jobs:
           call build meta "${{ matrix.target }}" "${{ matrix.compiler }}" "${{ matrix.mode }}" || exit /b 1
 
   run-torture:
-    runs-on: windows-2022
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - msvc
+          - clang
+        mode:
+          - debug
+          - release
+        exclude:
+          - { compiler: clang, mode: release } # clang runs OOM in release with ASAN
     steps:
-      # - name: Install ASAN
-      #   shell: cmd
-      #   run: |
-      #     "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" --quiet --force --norestart --add Microsoft.VisualStudio.Component.VC.ASAN
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
       - name: run-torture
         shell: cmd
         run: |
+          rem find path to clang
+          for /f "tokens=*" %%i in ('where clang') do set clang_path=%%~dpi
+
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          call build asan debug torture radlink radbin || exit /b 1
+
+          rem set clang path before MSVC's clang path
+          set PATH=%clang_path%;%PATH%
+
+          rem parse out clang version number out of --version to build path to the folder with ASAN DLL
+          for /f "tokens=3 delims=. " %%v in ('clang -v 2^>^&1 ^| findstr version') do set clang_version=%%v
+          if "${{matrix.compiler}}" == "clang" set PATH=%clang_path%..\lib\clang\%clang_version%\lib\windows;%PATH%
+
+          call build asan meta torture radlink radbin mule_main mule_module "${{matrix.mode}}" "${{matrix.compiler}}" || exit /b 1
           cd build
           torture || exit /b 1
+

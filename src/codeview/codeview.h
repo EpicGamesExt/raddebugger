@@ -33,7 +33,7 @@ read_only global CV_TypeId cv_type_id_variadic = 0xFFFFFFFF;
 ////////////////////////////////
 //~ Aligns
 
-#define CV_LeafAlign          4
+#define CV_LeafAlign          1
 #define CV_SymbolAlign        1
 #define CV_C13SubSectionAlign 4
 #define CV_FileCheckSumsAlign 4
@@ -2542,7 +2542,8 @@ X(TypeMDTokenMap,      0xFB)       \
 X(MergedAssemblyInput, 0xFC)       \
 X(CoffSymbolRVA,       0xFD)       \
 X(XfgHashType,         0xFF)       \
-X(XfgHashVirtual,      0x100)
+X(XfgHashVirtual,      0x100)      \
+X(GlobalRefs,          0xCAFE)     \
 
 typedef U32 CV_C13SubSectionKind;
 typedef enum CV_C13SubSectionKindEnum

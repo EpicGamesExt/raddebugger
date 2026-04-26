@@ -14,10 +14,13 @@ typedef union CV_LeafHeader
   U32 v;
 } CV_LeafHeader;
 
-typedef struct CV_SymbolHeader
+typedef union CV_SymbolHeader
 {
-  CV_SymSize size;
-  CV_SymKind kind;
+  struct {
+    CV_SymSize size;
+    CV_SymKind kind;
+  };
+  U32 v;
 } CV_SymbolHeader;
 
 ////////////////////////////////
@@ -39,12 +42,6 @@ typedef struct CV_SymbolNode
   CV_Symbol             data;
 } CV_SymbolNode;
 
-typedef struct CV_SymbolPtrNode
-{
-  struct CV_SymbolPtrNode *next;
-  CV_Symbol               *data;
-} CV_SymbolPtrNode;
-
 typedef struct CV_SymbolList
 {
   U64            count;
@@ -58,36 +55,6 @@ typedef struct CV_SymbolListArray
   U64            count;
   CV_SymbolList *v;
 } CV_SymbolListArray;
-
-typedef struct CV_SymbolPtrArray
-{
-  U64             count;
-  CV_SymbolNode **v;
-} CV_SymbolPtrArray;
-
-typedef struct CV_Scope
-{
-  struct CV_ScopeList *children;
-  struct CV_Scope     *next;
-  struct CV_Scope     *prev;
-  CV_Symbol            symbol;
-} CV_Scope;
-
-typedef struct CV_ScopeList
-{
-  CV_Scope *first;
-  CV_Scope *last;
-} CV_ScopeList;
-
-typedef struct CV_ScopeFrame
-{
-  struct        CV_ScopeFrame *next;
-  CV_ScopeList *list;
-  CV_Scope     *curr;
-  U64           symbol_off;
-  U32          *parent_off_ptr;
-  U32          *end_off_ptr;
-} CV_ScopeFrame;
 
 //- $$FileChksms
 
@@ -253,11 +220,27 @@ typedef struct CV_DebugS
   String8List data_list[CV_C13SubSectionIdxKind_COUNT];
 } CV_DebugS;
 
+typedef struct CV_DebugH
+{
+  U64  count;
+  U64 *v;
+} CV_DebugH;
+
 typedef struct CV_DebugT
 {
-  U64     count;
-  String8 data;
-  U32    *offsets;
+  String8  data;
+  U64      count;
+  U32     *offsets;
+
+  // type server
+  U64     source_counts [CV_TypeIndexSource_COUNT];
+  U64     source_offsets[CV_TypeIndexSource_COUNT];
+  U32     ti_base       [CV_TypeIndexSource_COUNT];
+  Rng1U64 ti_ranges     [CV_TypeIndexSource_COUNT];
+
+  // PCH
+  Rng1U64 pch_ti_range[CV_TypeIndexSource_COUNT];
+  U32     pch_obj_idx;
 } CV_DebugT;
 
 ////////////////////////////////
@@ -323,25 +306,6 @@ typedef struct CV_StringHashTableResult
 
 typedef struct
 {
-  U64              cap;
-  union {
-    CV_SymbolNode ***buckets;
-    CV_SymbolNode  **deref_buckets;
-  } u;
-  Rng1U64         *ranges;
-  CV_SymbolNode  **symbols;
-} CV_SymbolDeduperTask;
-
-typedef struct
-{
-  CV_SymbolList  *list_arr;
-  Rng1U64        *list_range_arr;
-  U64            *symbol_base_arr;
-  CV_SymbolNode **symbol_arr;
-} CV_SymbolListSyncer;
-
-typedef struct
-{
   CV_DebugS            *arr;
   CV_StringTableRange **range_lists;
   U64                  *string_counts;
@@ -382,17 +346,30 @@ internal U64     cv_size_from_symbol(CV_Symbol *symbol, U64 align);
 internal U64     cv_write_symbol(U8 *buffer, U64 buffer_cursor, U64 buffer_size, CV_Symbol *symbol, U64 align);
 internal String8 cv_data_from_symbol(Arena *arena, CV_Symbol *symbol, U64 align);
 
-internal String8       cv_make_symbol(Arena *arena, CV_SymKind kind, String8 data);
-internal String8       cv_make_obj_name(Arena *arena, String8 obj_path, U32 sig);
-internal String8       cv_make_comp3(Arena *arena, CV_Compile3Flags flags, CV_Language lang, CV_Arch arch, U16 ver_fe_major, U16 ver_fe_minor, U16 ver_fe_build, U16 ver_feqfe, U16 ver_major, U16 ver_minor, U16 ver_build, U16 ver_qfe, String8 version_string);
-internal String8       cv_make_envblock(Arena *arena, String8List string_list);
-internal CV_Symbol     cv_make_proc_ref(Arena *arena, CV_ModIndex imod, U32 stream_offset, String8 name, B32 is_local);
-internal CV_Symbol     cv_make_pub32(Arena *arena, CV_Pub32Flags flags, U32 off, U16 isect, String8 name);
-internal CV_SymbolList cv_make_proc_refs(Arena *arena, CV_ModIndex imod, CV_SymbolList symbol_list);
+internal U64          cv_read_symbol(String8 raw_data, U64 off, U64 align, CV_Symbol *symbol_out);
+internal U8 *         cv_ptr_from_symbol(CV_Symbol symbol);
+internal CV_SymKind * cv_kind_ptr_from_symbol(CV_Symbol symbol);
+internal CV_Symbol    cv_symbol_from_ptr(U8 *ptr);
+internal String8      cv_raw_from_symbol(void *ptr);
+internal B32          cv_symbol_match(CV_Symbol a, CV_Symbol b);
+
+internal String8   cv_make_symbol(Arena *arena, CV_SymKind kind, String8 data);
+internal String8   cv_make_obj_name(Arena *arena, String8 obj_path, U32 sig);
+internal String8   cv_make_comp3(Arena *arena, CV_Compile3Flags flags, CV_Language lang, CV_Arch arch, U16 ver_fe_major, U16 ver_fe_minor, U16 ver_fe_build, U16 ver_feqfe, U16 ver_major, U16 ver_minor, U16 ver_build, U16 ver_qfe, String8 version_string);
+internal String8   cv_make_envblock(Arena *arena, String8List string_list);
+internal String8   cv_make_end(Arena *arena);
+internal String8   cv_make_data32(Arena *arena, CV_SymData32 data, String8 name);
+internal String8   cv_make_const(Arena *arena, CV_SymConstant v, U16 value, String8 name);
+internal String8   cv_make_udt(Arena *arena, CV_SymUDT v, String8 name);
+internal CV_Symbol cv_make_proc_ref(Arena *arena, CV_ModIndex imod, U32 stream_offset, String8 name, B32 is_local);
+internal CV_Symbol cv_make_pub32(Arena *arena, CV_Pub32Flags flags, U32 off, U16 isect, String8 name);
 
 internal U64       cv_read_symbol(String8 raw_data, U64 off, U64 align, CV_Symbol *symbol_out);
 internal CV_Symbol cv_symbol_from_string(String8 raw_data);
 
+internal B32        cv_is_gproc(CV_Symbol symbol);
+internal B32        cv_is_lproc(CV_Symbol symbol);
+internal B32        cv_is_obj_info(CV_Symbol symbol);
 internal CV_ObjInfo cv_obj_info_from_symbol(CV_Symbol symbol);
 
 ////////////////////////////////
@@ -416,33 +393,26 @@ internal String8       cv_file_chksms_from_debug_s(CV_DebugS debug_s);
 ////////////////////////////////
 //~ .debug$T helpers
 
-internal CV_DebugT       cv_debug_t_from_data(Arena *arena, String8 data, U64 align);
-internal CV_Leaf         cv_debug_t_get_leaf(CV_DebugT debug_t, U64 leaf_idx);
-internal String8         cv_debug_t_get_raw_leaf(CV_DebugT debug_t, U64 leaf_idx);
-internal CV_LeafHeader * cv_debug_t_get_leaf_header(CV_DebugT debug_t, U64 leaf_idx);
-internal B32             cv_debug_t_is_pch(CV_DebugT debug_t);
-internal B32             cv_debug_t_is_type_server(CV_DebugT debug_t);
-internal U64             cv_debug_t_array_count_leaves(U64 count, CV_DebugT *arr);
+internal CV_DebugT       cv_debug_t_from_data         (Arena *arena, String8 data, U64 align);
+internal U64             cv_leaf_idx_from_ti          (CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti);
+internal CV_TypeIndex    cv_ti_from_leaf_idx          (CV_DebugT *debug_t, CV_TypeIndexSource source, U64 leaf_idx);
+internal CV_Leaf         cv_debug_t_get_leaf          (CV_DebugT *debug_t, U64 leaf_idx);
+internal CV_Leaf         cv_debug_t_get_leaf_from_ti  (CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti);
+internal String8         cv_debug_t_get_raw_leaf      (CV_DebugT *debug_t, U64 leaf_idx);
+internal CV_LeafHeader * cv_debug_t_get_leaf_header   (CV_DebugT *debug_t, U64 leaf_idx);
+internal CV_TypeIndex    cv_debug_t_get_type_index    (CV_DebugT *debug_t, CV_TypeIndexSource ti_source, U64 leaf_idx);
+internal U64             cv_debug_t_get_leaf_index    (CV_DebugT *debug_t, CV_TypeIndexSource ti_source, CV_TypeIndex ti);
+internal B32             cv_debug_t_is_pch            (CV_DebugT *debug_t);
+internal B32             cv_debug_t_is_type_server_ref(CV_DebugT *debug_t);
 
 ////////////////////////////////
 //~ Sub Section helpers
 
 // $$Symbols
-internal void              cv_parse_symbol_sub_section_capped(Arena *arena, CV_SymbolList *list, U64 offset_base, String8 data, U64 align, U64 cap);
-internal void              cv_parse_symbol_sub_section(Arena *arena, CV_SymbolList *list, U64 offset_base, String8 data, U64 align);
+internal void            cv_symbol_list_push_node(CV_SymbolList *list, CV_SymbolNode *node);
+internal CV_SymbolNode * cv_symbol_list_push(Arena *arena, CV_SymbolList *list, CV_Symbol v);
 
-internal void              cv_symbol_list_push_node(CV_SymbolList *list, CV_SymbolNode *node);
-internal CV_SymbolNode *   cv_symbol_list_push(Arena *arena, CV_SymbolList *list);
-internal CV_SymbolNode *   cv_symbol_list_push_data(Arena *arena, CV_SymbolList *list, CV_SymKind kind, String8 data);
-internal CV_SymbolNode *   cv_symbol_list_push_many(Arena *arena, CV_SymbolList *list, U64 count);
-internal void              cv_symbol_list_remove_node(CV_SymbolList *list, CV_SymbolNode *node);
-internal void              cv_symbol_list_concat_in_place(CV_SymbolList *list, CV_SymbolList *to_concat);
-internal void              cv_symbol_list_concat_in_place_arr(CV_SymbolList *list, U64 count, CV_SymbolList *to_concat);
-internal U64               cv_symbol_list_arr_get_count(U64 count, CV_SymbolList *list_arr);
-
-internal String8List       cv_write_symbol_list(Arena *arena, CV_SymbolList symbol_list, U64 align);
-internal CV_SymbolList     cv_global_scope_symbols_from_list(Arena *arena, CV_SymbolList list);
-internal CV_SymbolPtrArray cv_symbol_ptr_array_from_list(Arena *arena, TP_Context *tp, U64 count, CV_SymbolList *symbol_list_arr);
+internal U64 cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align);
 
 // $$FileChksms
 #define CV_MAP_STRING_TO_OFFSET_FUNC(name) U64 name(void *ud, String8 string)

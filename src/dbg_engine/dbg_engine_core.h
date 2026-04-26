@@ -5,28 +5,52 @@
 #define DBG_ENGINE_CORE_H
 
 ////////////////////////////////
-//~ rjf: Tick Input Types
+//~ rjf: ID Types
 
-typedef struct D_Target D_Target;
-struct D_Target
+typedef U64 D_MsgID;
+typedef U64 D_MachineID;
+
+#define D_MachineID_Local (1)
+
+////////////////////////////////
+//~ rjf: Entity Handle Types
+
+typedef struct D_Handle D_Handle;
+struct D_Handle
 {
-  String8 exe;
-  String8 args;
-  String8 working_directory;
-  String8 custom_entry_point_name;
-  String8 stdout_path;
-  String8 stderr_path;
-  String8 stdin_path;
-  B32 debug_subprocesses;
-  String8List env;
+  D_MachineID machine_id;
+  DMN_Handle dmn_handle;
 };
 
-typedef struct D_TargetArray D_TargetArray;
-struct D_TargetArray
+typedef struct D_HandleNode D_HandleNode;
+struct D_HandleNode
 {
-  D_Target *v;
+  D_HandleNode *next;
+  D_Handle v;
+};
+
+typedef struct D_HandleList D_HandleList;
+struct D_HandleList
+{
+  D_HandleNode *first;
+  D_HandleNode *last;
   U64 count;
 };
+
+typedef struct D_HandleArray D_HandleArray;
+struct D_HandleArray
+{
+  D_Handle *v;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/dbg_engine.meta.h"
+
+////////////////////////////////
+//~ rjf: User Breakpoint Types
 
 typedef U32 D_BreakpointFlags;
 enum
@@ -55,6 +79,178 @@ struct D_BreakpointArray
   U64 count;
 };
 
+typedef struct D_BreakpointNode D_BreakpointNode;
+struct D_BreakpointNode
+{
+  D_BreakpointNode *next;
+  D_Breakpoint v;
+};
+
+typedef struct D_BreakpointList D_BreakpointList;
+struct D_BreakpointList
+{
+  D_BreakpointNode *first;
+  D_BreakpointNode *last;
+  U64 count;
+};
+
+////////////////////////////////
+//~ Dynamic Linker Types
+
+typedef U32 D_TlsModel;
+enum
+{
+  D_TlsModel_Null,
+  D_TlsModel_WinodwsNt,
+  D_TlsModel_Gnu
+};
+
+////////////////////////////////
+//~ rjf: Entity Types
+
+typedef struct D_Entity D_Entity;
+struct D_Entity
+{
+  D_Entity *first;
+  D_Entity *last;
+  D_Entity *next;
+  D_Entity *prev;
+  D_Entity *parent;
+  D_EntityKind kind;
+  Arch arch;
+  B32 is_frozen;
+  B32 is_soloed;
+  U32 rgba;
+  D_Handle handle;
+  U64 id;
+  Rng1U64 vaddr_range;
+  U64 stack_base;
+  U64 timestamp;
+  D_BreakpointFlags bp_flags;
+  String8 string;
+  D_TlsModel tls_model;
+  U64 tls_index;
+  U64 tls_offset;
+  OperatingSystem target_os;
+};
+
+typedef struct D_EntityNode D_EntityNode;
+struct D_EntityNode
+{
+  D_EntityNode *next;
+  D_Entity *v;
+};
+
+typedef struct D_EntityList D_EntityList;
+struct D_EntityList
+{
+  D_EntityNode *first;
+  D_EntityNode *last;
+  U64 count;
+};
+
+typedef struct D_EntityArray D_EntityArray;
+struct D_EntityArray
+{
+  D_Entity **v;
+  U64 count;
+};
+
+typedef struct D_EntityRec D_EntityRec;
+struct D_EntityRec
+{
+  D_Entity *next;
+  S32 push_count;
+  S64 pop_count;
+};
+
+typedef struct D_EntityHashNode D_EntityHashNode;
+struct D_EntityHashNode
+{
+  D_EntityHashNode *next;
+  D_EntityHashNode *prev;
+  D_Entity *entity;
+};
+
+typedef struct D_EntityHashSlot D_EntityHashSlot;
+struct D_EntityHashSlot
+{
+  D_EntityHashNode *first;
+  D_EntityHashNode *last;
+};
+
+typedef struct D_EntityStringChunkNode D_EntityStringChunkNode;
+struct D_EntityStringChunkNode
+{
+  D_EntityStringChunkNode *next;
+  U64 size;
+};
+
+read_only global U64 d_entity_string_bucket_chunk_sizes[] =
+{
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536,
+  0xffffffffffffffffull,
+};
+
+typedef struct D_EntityCtx D_EntityCtx;
+struct D_EntityCtx
+{
+  D_Entity *root;
+  U64 hash_slots_count;
+  D_EntityHashSlot *hash_slots;
+  U64 entity_kind_counts[D_EntityKind_COUNT];
+  U64 entity_kind_alloc_gens[D_EntityKind_COUNT];
+};
+
+typedef struct D_EntityCtxRWStore D_EntityCtxRWStore;
+struct D_EntityCtxRWStore
+{
+  Arena *arena;
+  D_EntityCtx ctx;
+  D_Entity *free;
+  D_EntityHashNode *hash_node_free;
+  D_EntityStringChunkNode *free_string_chunks[ArrayCount(d_entity_string_bucket_chunk_sizes)];
+};
+
+typedef struct D_EntityCtxLookupAccel D_EntityCtxLookupAccel;
+struct D_EntityCtxLookupAccel
+{
+  Arena *arena;
+  Arena *entity_kind_arrays_arenas[D_EntityKind_COUNT];
+  D_EntityArray entity_kind_arrays[D_EntityKind_COUNT];
+  U64 entity_kind_arrays_gens[D_EntityKind_COUNT];
+};
+
+////////////////////////////////
+//~ rjf: Tick Input Types
+
+typedef struct D_Target D_Target;
+struct D_Target
+{
+  String8 exe;
+  String8 args;
+  String8 working_directory;
+  String8 custom_entry_point_name;
+  String8 stdout_path;
+  String8 stderr_path;
+  String8 stdin_path;
+  B32 debug_subprocesses;
+  String8List env;
+};
+
+typedef struct D_TargetArray D_TargetArray;
+struct D_TargetArray
+{
+  D_Target *v;
+  U64 count;
+};
+
 typedef struct D_PathMap D_PathMap;
 struct D_PathMap
 {
@@ -70,370 +266,63 @@ struct D_PathMapArray
 };
 
 ////////////////////////////////
+//~ rjf: Trap Types
+
+typedef U32 D_TrapFlags;
+enum
+{
+  D_TrapFlag_IgnoreStackPointerCheck = (1<<0),
+  D_TrapFlag_SingleStepAfterHit      = (1<<1),
+  D_TrapFlag_SaveStackPointer        = (1<<2),
+  D_TrapFlag_BeginSpoofMode          = (1<<3),
+  D_TrapFlag_EndStepping             = (1<<4),
+};
+
+typedef struct D_Trap D_Trap;
+struct D_Trap
+{
+  D_TrapFlags flags;
+  U64 vaddr;
+};
+
+typedef struct D_TrapNode D_TrapNode;
+struct D_TrapNode
+{
+  D_TrapNode *next;
+  D_Trap v;
+};
+
+typedef struct D_TrapList D_TrapList;
+struct D_TrapList
+{
+  D_TrapNode *first;
+  D_TrapNode *last;
+  U64 count;
+};
+
+typedef struct D_Spoof D_Spoof;
+struct D_Spoof
+{
+  DMN_Handle process;
+  DMN_Handle thread;
+  U64 vaddr;
+  U64 new_ip_value;
+};
+
+////////////////////////////////
 //~ rjf: Trap Nets
 
 typedef struct D_TrapNet D_TrapNet;
 struct D_TrapNet
 {
-  CTRL_TrapList traps;
+  D_TrapList traps;
   B32 good_line_info;
   B32 good_read;
 };
 
 ////////////////////////////////
-//~ rjf: Tick Output Types
-
-typedef enum D_EventKind
-{
-  D_EventKind_Null,
-  D_EventKind_ModuleLoad,
-  D_EventKind_ProcessEnd,
-  D_EventKind_Stop,
-  D_EventKind_COUNT
-}
-D_EventKind;
-
-typedef enum D_EventCause
-{
-  D_EventCause_Null,
-  D_EventCause_UserBreakpoint,
-  D_EventCause_Halt,
-  D_EventCause_SoftHalt,
-  D_EventCause_COUNT
-}
-D_EventCause;
-
-typedef struct D_Event D_Event;
-struct D_Event
-{
-  D_EventKind kind;
-  D_EventCause cause;
-  CTRL_Handle module;
-  CTRL_Handle thread;
-  U64 vaddr;
-  U64 code;
-  U64 id;
-};
-
-typedef struct D_EventNode D_EventNode;
-struct D_EventNode
-{
-  D_EventNode *next;
-  D_Event v;
-};
-
-typedef struct D_EventList D_EventList;
-struct D_EventList
-{
-  D_EventNode *first;
-  D_EventNode *last;
-  U64 count;
-};
-
-////////////////////////////////
-//~ rjf: Line Info Types
-
-typedef struct D_Line D_Line;
-struct D_Line
-{
-  String8 file_path;
-  TxtPt pt;
-  Rng1U64 voff_range;
-  DI_Key dbgi_key;
-};
-
-typedef struct D_LineNode D_LineNode;
-struct D_LineNode
-{
-  D_LineNode *next;
-  D_Line v;
-};
-
-typedef struct D_LineList D_LineList;
-struct D_LineList
-{
-  D_LineNode *first;
-  D_LineNode *last;
-  U64 count;
-};
-
-typedef struct D_LineListArray D_LineListArray;
-struct D_LineListArray
-{
-  D_LineList *v;
-  U64 count;
-  DI_KeyList dbgi_keys;
-};
-
-////////////////////////////////
-//~ rjf: Debug Engine Control Communication Types
-
-typedef enum D_RunKind
-{
-  D_RunKind_Run,
-  D_RunKind_SingleStep,
-  D_RunKind_Step,
-  D_RunKind_COUNT
-}
-D_RunKind;
-
-////////////////////////////////
-//~ rjf: Generated Code
-
-#include "dbg_engine/generated/dbg_engine.meta.h"
-
-////////////////////////////////
-//~ rjf: Command Types
-
-typedef struct D_CmdParams D_CmdParams;
-struct D_CmdParams
-{
-  CTRL_Handle machine;
-  CTRL_Handle process;
-  CTRL_Handle thread;
-  CTRL_Handle entity;
-  String8 string;
-  String8 file_path;
-  TxtPt cursor;
-  U64 vaddr;
-  B32 prefer_disasm;
-  U32 pid;
-  U32 rgba;
-  D_TargetArray targets;
-  U64 retry_idx;
-};
-
-typedef struct D_Cmd D_Cmd;
-struct D_Cmd
-{
-  D_CmdKind kind;
-  D_CmdParams params;
-};
-
-typedef struct D_CmdNode D_CmdNode;
-struct D_CmdNode
-{
-  D_CmdNode *next;
-  D_CmdNode *prev;
-  D_Cmd cmd;
-};
-
-typedef struct D_CmdList D_CmdList;
-struct D_CmdList
-{
-  D_CmdNode *first;
-  D_CmdNode *last;
-  U64 count;
-};
-
-////////////////////////////////
-//~ rjf: Main State Caches
-
-//- rjf: per-run tls-base-vaddr cache
-
-typedef struct D_RunTLSBaseCacheNode D_RunTLSBaseCacheNode;
-struct D_RunTLSBaseCacheNode
-{
-  D_RunTLSBaseCacheNode *hash_next;
-  CTRL_Handle process;
-  U64 root_vaddr;
-  U64 rip_vaddr;
-  U64 tls_base_vaddr;
-};
-
-typedef struct D_RunTLSBaseCacheSlot D_RunTLSBaseCacheSlot;
-struct D_RunTLSBaseCacheSlot
-{
-  D_RunTLSBaseCacheNode *first;
-  D_RunTLSBaseCacheNode *last;
-};
-
-typedef struct D_RunTLSBaseCache D_RunTLSBaseCache;
-struct D_RunTLSBaseCache
-{
-  Arena *arena;
-  U64 slots_count;
-  D_RunTLSBaseCacheSlot *slots;
-};
-
-//- rjf: per-run locals cache
-
-typedef struct D_RunLocalsCacheNode D_RunLocalsCacheNode;
-struct D_RunLocalsCacheNode
-{
-  D_RunLocalsCacheNode *hash_next;
-  DI_Key dbgi_key;
-  U64 voff;
-  E_String2NumMap *locals_map;
-};
-
-typedef struct D_RunLocalsCacheSlot D_RunLocalsCacheSlot;
-struct D_RunLocalsCacheSlot
-{
-  D_RunLocalsCacheNode *first;
-  D_RunLocalsCacheNode *last;
-};
-
-typedef struct D_RunLocalsCache D_RunLocalsCache;
-struct D_RunLocalsCache
-{
-  Arena *arena;
-  U64 table_size;
-  D_RunLocalsCacheSlot *table;
-};
-
-////////////////////////////////
-//~ rjf: Main State Types
-
-typedef struct D_State D_State;
-struct D_State
-{
-  // rjf: top-level state
-  Arena *arena;
-  U64 frame_index;
-  
-  // rjf: commands
-  Arena *cmds_arena;
-  D_CmdList cmds;
-  
-  // rjf: output log key
-  C_Key output_log_key;
-  
-  // rjf: per-run caches
-  U64 tls_base_cache_reggen_idx;
-  U64 tls_base_cache_memgen_idx;
-  D_RunTLSBaseCache tls_base_caches[2];
-  U64 tls_base_cache_gen;
-  U64 locals_cache_reggen_idx;
-  D_RunLocalsCache locals_caches[2];
-  U64 locals_cache_gen;
-  U64 member_cache_reggen_idx;
-  D_RunLocalsCache member_caches[2];
-  U64 member_cache_gen;
-  
-  // rjf: user -> ctrl driving state
-  Arena *ctrl_last_run_arena;
-  D_RunKind ctrl_last_run_kind;
-  U64 ctrl_last_run_frame_idx;
-  CTRL_Handle ctrl_last_run_thread_handle;
-  CTRL_RunFlags ctrl_last_run_flags;
-  CTRL_TrapList ctrl_last_run_traps;
-  D_BreakpointArray ctrl_last_run_extra_bps;
-  U128 ctrl_last_run_param_state_hash;
-  B32 ctrl_is_running;
-  B32 ctrl_thread_run_state;
-  B32 ctrl_soft_halt_issued;
-  Arena *ctrl_msg_arena;
-  CTRL_MsgList ctrl_msgs;
-  
-  // rjf: ctrl -> user reading state
-  CTRL_EntityCtxRWStore *ctrl_entity_store;
-  Arena *ctrl_stop_arena;
-  CTRL_Event ctrl_last_stop_event;
-};
-
-////////////////////////////////
-//~ rjf: Globals
-
-global D_State *d_state = 0;
-
-////////////////////////////////
-//~ rjf: Basic Helpers
-
-internal U64 d_hash_from_seed_string(U64 seed, String8 string);
-internal U64 d_hash_from_string(String8 string);
-internal U64 d_hash_from_seed_string__case_insensitive(U64 seed, String8 string);
-internal U64 d_hash_from_string__case_insensitive(String8 string);
-
-////////////////////////////////
-//~ rjf: Breakpoints
-
-internal D_BreakpointArray d_breakpoint_array_copy(Arena *arena, D_BreakpointArray *src);
-
-////////////////////////////////
-//~ rjf: Path Map Application
-
-internal String8List d_possible_path_overrides_from_maps_path(Arena *arena, D_PathMapArray *path_maps, String8 file_path);
-
-////////////////////////////////
-//~ rjf: Debug Info Extraction Type Pure Functions
-
-internal D_LineList d_line_list_copy(Arena *arena, D_LineList *list);
-
-////////////////////////////////
-//~ rjf: Command Type Functions
-
-//- rjf: command parameters
-internal D_CmdParams d_cmd_params_copy(Arena *arena, D_CmdParams *src);
-
-//- rjf: command lists
-internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *params);
-
-////////////////////////////////
-//~ rjf: Stepping "Trap Net" Builders
-
-internal D_TrapNet d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread);
-internal D_TrapNet d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread);
-internal D_TrapNet d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread);
-
-////////////////////////////////
-//~ rjf: Debug Info Lookups
-
-//- rjf: voff -> line info
-internal D_LineList d_lines_from_dbgi_key_voff(Arena *arena, DI_Key dbgi_key, U64 voff);
-
-//- rjf: file:line -> line info
-// TODO(rjf): this depends on file path maps, needs to move
-// TODO(rjf): need to clean this up & dedup
-internal D_LineListArray d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, String8 file_path, Rng1S64 line_num_range);
-internal D_LineListArray d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range);
-internal D_LineList d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 file_path, S64 line_num);
-internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num);
-
-////////////////////////////////
-//~ rjf: Process/Thread/Module Info Lookups
-
-internal U64 d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
-
-////////////////////////////////
-//~ rjf: Target Controls
-
-//- rjf: stopped info from the control thread
-internal CTRL_Event d_ctrl_last_stop_event(void);
-
-////////////////////////////////
-//~ rjf: Main State Accessors/Mutators
-
-//- rjf: frame data
-internal U64 d_frame_index(void);
-
-//- rjf: control state
-internal D_RunKind d_ctrl_last_run_kind(void);
-internal U64 d_ctrl_last_run_frame_idx(void);
-internal B32 d_ctrl_targets_running(void);
-
-//- rjf: active entity based queries
-internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);
-
-//- rjf: per-run caches
-internal U64 d_query_cached_rip_from_thread(CTRL_Entity *thread);
-internal U64 d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count);
-internal U64 d_query_cached_cfa_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count);
-internal U64 d_query_cached_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
-internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff);
-internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff);
-
-//- rjf: top-level command dispatch
-internal void d_push_cmd(D_CmdKind kind, D_CmdParams *params);
-#define d_cmd(kind, ...) d_push_cmd((kind), &(D_CmdParams){.thread = {0}, __VA_ARGS__})
-
-//- rjf: command iteration
-internal B32 d_next_cmd(D_Cmd **cmd);
-
-////////////////////////////////
-//~ rjf: Main Layer Top-Level Calls
+//~ rjf: Layer Initialization
 
 internal void d_init(void);
-internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64]);
 
 #endif // DBG_ENGINE_CORE_H

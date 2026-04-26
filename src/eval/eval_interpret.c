@@ -12,43 +12,22 @@ e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rdi, U64 ip_voff
   // compute and apply frame base
   if(primary_rdi != 0)
   {
-    E_Interpretation frame_base = { .code = ~0 };
-    
-    RDI_Procedure *proc = rdi_procedure_from_voff(primary_rdi, ip_voff);
-    for(U64 loc_block_idx = proc->frame_base_location_first; loc_block_idx < proc->frame_base_location_opl; loc_block_idx += 1)
+    Temp scratch = scratch_begin(0, 0);
+    RDI_Symbol *proc = rdi_procedure_from_voff(primary_rdi, ip_voff);
+    RDI_Location location = rdi_location_from_location_voff(primary_rdi, proc->location, ip_voff);
+    E_OpList oplist = e_oplist_from_location(scratch.arena, primary_rdi, location);
+    String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+    E_Interpretation frame_base_interpretation = e_interpret(bytecode);
+    U64 frame_base = frame_base_interpretation.value.u64;
+    if(frame_base_interpretation.code == E_InterpretationCode_Good)
     {
-      RDI_LocationBlock *block = rdi_element_from_name_idx(primary_rdi, LocationBlocks, loc_block_idx);
-      if (block->scope_off_first <= ip_voff && ip_voff < block->scope_off_opl) {
-        U64  all_location_data_size = 0;
-        U8  *all_location_data      = rdi_table_from_name(primary_rdi, LocationData, &all_location_data_size);
-        if(block->location_data_off + sizeof(RDI_LocationKind) <= all_location_data_size)
-        {
-          RDI_LocationKind loc_kind = *(RDI_LocationKind *)(all_location_data + block->location_data_off);
-          if(loc_kind == RDI_LocationKind_ValBytecodeStream || loc_kind == RDI_LocationKind_AddrBytecodeStream)
-          {
-            U8      *bytecode_ptr  = all_location_data + block->location_data_off;
-            U8      *bytecode_opl  = all_location_data + all_location_data_size;
-            U64      bytecode_size = rdi_size_from_bytecode_stream(bytecode_ptr, bytecode_opl);
-            String8  bytecode      = str8(bytecode_ptr + sizeof(RDI_LocationKind), bytecode_size);
-            frame_base = e_interpret(bytecode);
-          }
-          else if(loc_kind != RDI_LocationKind_NULL)
-          {
-            NotImplemented;
-          }
-        }
-        break;
-      }
-    }
-    
-    if(frame_base.code == E_InterpretationCode_Good)
-    {
-      *ctx->frame_base = frame_base.value.u64;
+      *ctx->frame_base = frame_base;
     }
     else
     {
       ctx->frame_base = 0;
     }
+    scratch_end(scratch);
   }
 }
 
@@ -126,6 +105,23 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
           }
         }
         access_close(access);
+      }break;
+      
+      //- rjf: debug info constant data
+      case E_SpaceKind_DebugConstantData:
+      {
+        U32 dbg_info_num = space.u64s[0];
+        if(1 <= dbg_info_num && dbg_info_num <= e_base_ctx->dbg_infos_count)
+        {
+          E_DbgInfo *dbg_info = &e_base_ctx->dbg_infos[dbg_info_num-1];
+          RDI_Parsed *rdi = dbg_info->rdi;
+          U64 all_constant_data_size = 0;
+          U8 *all_constant_data_ptr = rdi_table_from_name(rdi, LocationsConstantData, &all_constant_data_size);
+          String8 all_constant_data = str8(all_constant_data_ptr, all_constant_data_size);
+          String8 read_memory = str8_substr(all_constant_data, range);
+          result = (dim_1u64(range) == read_memory.size);
+          MemoryCopy(out, read_memory.str, read_memory.size);
+        }
       }break;
       
       //- rjf: default -> use hooks
@@ -960,7 +956,7 @@ e_interpret(String8 bytecode)
         // TODO: add support for pushing multiple values onto the stack
         NotImplemented;
       }break;
-
+      
       case RDI_EvalOp_PushCfa:
       {
         nval.u64 = e_interpret_ctx->cfa;

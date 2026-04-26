@@ -883,7 +883,7 @@ rb_thread_entry_point(void *p)
       ProfScope("serialize") if(lane_idx() == 0)
       {
         serialized_section_bundle = push_array(arena, RDIM_SerializedSectionBundle, 1);
-        serialized_section_bundle[0] = rdim_serialized_section_bundle_from_bake_results(&bake_results);
+        serialized_section_bundle[0] = bake_results.section_bundle;
       }
       lane_sync_u64(&serialized_section_bundle, 0);
       
@@ -1029,13 +1029,13 @@ rb_thread_entry_point(void *p)
           ProfScope("dump FUNC records")
           {
             U64 count = 0;
-            RDI_Procedure *v = rdi_table_from_name(rdi, Procedures, &count);
+            RDI_Symbol *v = rdi_table_from_name(rdi, Procedures, &count);
             Rng1U64 range = lane_range(count);
             for EachInRange(idx, range)
             {
               // NOTE(rjf): breakpad does not support multiple voff ranges per procedure.
               String8List *out = &p2b_shared->lane_func_dumps[lane_idx()];
-              RDI_Procedure *proc = &v[idx];
+              RDI_Symbol *proc = &v[idx];
               RDI_Scope *root_scope = rdi_element_from_name_idx(rdi, Scopes, proc->root_scope_idx);
               if(root_scope->voff_range_opl > root_scope->voff_range_first)
               {
@@ -1253,13 +1253,16 @@ rb_thread_entry_point(void *p)
         }
       }
       
-      //- rjf: dump input files in order
+      //- rjf: dump input files in ordere
       for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
       {
         RB_File *f = n->v;
         if(lane_idx() == 0)
         {
-          str8_list_pushf(arena, &output_blobs, "// %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+          if(!deterministic)
+          {
+            str8_list_pushf(arena, &output_blobs, "// %S (%S)\n\n", f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+          }
         }
         lane_sync();
         

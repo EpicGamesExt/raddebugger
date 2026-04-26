@@ -127,8 +127,7 @@ typedef struct
 ////////////////////////////////
 
 internal MSF_Context *    msf_alloc(MSF_UInt page_size, MSF_UInt active_fpm);
-internal MSF_Error        msf_open(String8 data, MSF_Context **msf_out);
-internal void             msf_release(MSF_Context **msf_ptr);
+internal void             msf_release(MSF_Context *msf_ptr);
 internal MSF_Error        msf_build(MSF_Context *msf);
 internal U64              msf_get_save_size(MSF_Context *msf);
 internal String8List      msf_get_page_data_nodes(Arena *arena, MSF_Context *msf);
@@ -187,6 +186,8 @@ internal B32 msf_stream_write_s64(MSF_Context *msf, MSF_StreamNumber sn, S64 val
 internal B32 msf_stream_write_parallel(TP_Context *tp, MSF_Context *msf, MSF_StreamNumber sn, void *buffer, MSF_UInt buffer_size);
 #define msf_stream_write_array(m, s, v, c) msf_stream_write(m, s, (void*)(v), sizeof(*(v)) * (c))
 #define msf_stream_write_struct(m, s, v )  msf_stream_write_array(m, s, v, 1)
+
+internal String8List msf_data_from_sn(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn);
 
 internal MSF_UInt       msf_count_pages(MSF_UInt page_size, U64 data_size);
 internal MSF_PageNumber msf_get_page_count_cap(MSF_PageDataList page_data_list, MSF_UInt page_size);

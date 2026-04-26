@@ -98,6 +98,9 @@ struct BitfieldType64
   uint64_t is_free : 1;
 };
 
+static int mut_xarray[4] = {100, 101, 102, 103};
+static float mut_farray[4] = {100.5f, 101.5f, 102.5f, 103.5f};
+
 void
 c_type_with_bitfield_usage(void)
 {
@@ -113,5 +116,11 @@ c_type_with_bitfield_usage(void)
   BitfieldType64 b64 = {0};
   b64.size = 524288;
   b64.is_free = 1;
-  int abc = 0;
+  int abc = mut_xarray[0];
+  mut_xarray[0] += 1;
+  abc += mut_xarray[0];
+  abc += mut_xarray[1];
+  abc += mut_xarray[2];
+  float f = mut_farray[0] + mut_farray[1] + mut_farray[2] + mut_farray[3];
+  int w = 0;
 }

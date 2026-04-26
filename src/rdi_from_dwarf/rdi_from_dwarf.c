@@ -395,7 +395,7 @@ rdim_static_eval_bytecode_to_voff(RDIM_EvalBytecode bc, U64 image_base, U64 *vof
   }
   
   is_ok = 1;
-exit:;
+  exit:;
   scratch_end(scratch);
   return is_ok;
 }
@@ -563,13 +563,13 @@ d2r_size_from_value_type(U64 addr_size, D2R_ValueType value_type)
   if (value_type == D2R_ValueType_Address) {
     return addr_size;
   }
-
+  
   switch (value_type) {
 #define X(_N, _AT, _S) case D2R_ValueType_##_N: return _S;
     D2R_ValueType_XList
 #undef X
   }
-
+  
   return 0;
 }
 
@@ -642,19 +642,19 @@ d2r_value_type_to_rdi(D2R_ValueType v)
   if (v == D2R_ValueType_Generic) {
     return RDI_EvalTypeGroup_Other;
   }
-
+  
   if (v == D2R_ValueType_Address) {
     return RDI_EvalTypeGroup_U;
   }
-
+  
   if (d2r_is_value_type_unsigned(v)) {
     return RDI_EvalTypeGroup_U;
   }
-
+  
   if (d2r_is_value_type_signed(v)) {
     return RDI_EvalTypeGroup_S;
   }
-
+  
   if (d2r_is_value_type_float(v)) {
     if      (v == D2R_ValueType_F16)  { NotImplemented;                }
     else if (v == D2R_ValueType_F32)  { return RDI_EvalTypeGroup_F32;  }
@@ -665,7 +665,7 @@ d2r_value_type_to_rdi(D2R_ValueType v)
     else if (v == D2R_ValueType_F128) { return RDI_EvalTypeGroup_F128; }
     else { InvalidPath; }
   }
-
+  
   InvalidPath;
   return RDI_EvalTypeGroup_Other;
 }
@@ -728,7 +728,7 @@ d2r_bytecode_from_expression(Arena         *arena,
   Temp scratch = scratch_begin(&arena, 1);
   Temp temp    = temp_begin(arena);
   B32  is_ok   = 0;
-
+  
   RDIM_EvalBytecode bc = {0};
   
   DW_Expr               expr            = dw_expr_from_data(scratch.arena, cu->format, cu->address_size, raw_expr);
@@ -805,7 +805,7 @@ d2r_bytecode_from_expression(Arena         *arena,
           Assert(!"invalid address");
           goto exit;
         }
-
+        
         U64 voff = inst->operands[0].u64 - image_base;
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_ModuleOff, voff);
         d2r_value_type_stack_push(scratch.arena, stack, D2R_ValueType_Address);
@@ -914,7 +914,7 @@ d2r_bytecode_from_expression(Arena         *arena,
           cursor += i->size;
           inst_count += 1;
         }
-
+        
         if (cursor != delta)      { Assert(!"skip landed in middle of an instruction"); goto exit; }
         if (inst_count > min_S16) { Assert(!"operand overflow");                        goto exit; }
         if (inst_idx > max_U32)   { Assert(!"index overflow");                          goto exit; }
@@ -931,11 +931,11 @@ d2r_bytecode_from_expression(Arena         *arena,
           cursor += i->size;
           inst_count += 1;
         }
-
+        
         if (cursor != delta)      { Assert(!"cond landed in middle of an instruction"); goto exit; }
         if (inst_count > min_S16) { Assert(!"operand overflow");                        goto exit; }
         if (inst_idx > max_U32)   { Assert(!"index overflow");                          goto exit; }
-
+        
         U64 imm = Compose64Bit(inst_idx, skip_fwd ? inst_count : (U16)(-(S16)inst_count));
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_Cond, imm);
       } break;
@@ -1042,38 +1042,38 @@ d2r_bytecode_from_expression(Arena         *arena,
             Assert(!"invalid .debug_info offset");
             goto exit;
           }
-
+          
           DW_Tag tag = tag_node->tag;
           if (tag.kind == DW_TagKind_BaseType) {
             // extract encoding attribute
             DW_ATE encoding = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Encoding);
-
+            
             // DW_ATE -> RDI_EvalTypeGroup
             switch (encoding) {
-            case DW_ATE_Null: {
-              out = D2R_ValueType_Generic;
-            } break;
-            case DW_ATE_Address: {
-              out = D2R_ValueType_Address;
-            } break;
-            case DW_ATE_Boolean: {
-              out = D2R_ValueType_S8;
-            } break;
-            case DW_ATE_SignedChar:
-            case DW_ATE_Signed: {
-              U64 byte_size = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ByteSize);
-              out = d2r_signed_value_type_from_bit_size(byte_size * 8);
-            } break;
-            case DW_ATE_UnsignedChar:
-            case DW_ATE_Unsigned: {
-              U64 byte_size = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ByteSize);
-              out = d2r_unsigned_value_type_from_bit_size(byte_size * 8);
-            } break;
-            case DW_ATE_Float: {
-              U64 byte_size = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ByteSize);
-              out = d2r_float_type_from_bit_size(byte_size * 8);
-            } break;
-            default: InvalidPath; break;
+              case DW_ATE_Null: {
+                out = D2R_ValueType_Generic;
+              } break;
+              case DW_ATE_Address: {
+                out = D2R_ValueType_Address;
+              } break;
+              case DW_ATE_Boolean: {
+                out = D2R_ValueType_S8;
+              } break;
+              case DW_ATE_SignedChar:
+              case DW_ATE_Signed: {
+                U64 byte_size = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ByteSize);
+                out = d2r_signed_value_type_from_bit_size(byte_size * 8);
+              } break;
+              case DW_ATE_UnsignedChar:
+              case DW_ATE_Unsigned: {
+                U64 byte_size = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ByteSize);
+                out = d2r_unsigned_value_type_from_bit_size(byte_size * 8);
+              } break;
+              case DW_ATE_Float: {
+                U64 byte_size = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_ByteSize);
+                out = d2r_float_type_from_bit_size(byte_size * 8);
+              } break;
+              default: InvalidPath; break;
             }
           } else {
             Assert(!"unexpected tag");
@@ -1300,9 +1300,9 @@ d2r_bytecode_from_expression(Arena         *arena,
   if (result_type_out) {
     *result_type_out = d2r_value_type_stack_peek(stack);
   }
-
+  
   is_ok = 1;
-exit:;
+  exit:;
   if (!is_ok) {
     MemoryZeroStruct(&bc);
     temp_end(temp);
@@ -1311,28 +1311,24 @@ exit:;
   return bc;
 }
 
-internal RDIM_Location *
-d2r_transpile_expression(Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
+internal RDIM_Location
+d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
 {
-  RDIM_Location *loc = 0;
+  RDIM_Location loc = {0};
   if (expr.size) {
     D2R_ValueType result_type = 0;
     RDIM_EvalBytecode bytecode = d2r_bytecode_from_expression(arena, input, image_base, arch, addr_lu, expr, cu, &result_type);
-    
-    RDIM_LocationInfo *loc_info = push_array(arena, RDIM_LocationInfo, 1);
-    loc_info->kind     = result_type == D2R_ValueType_Address ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
-    loc_info->bytecode = bytecode;
-    
-    loc = rdim_location_chunk_list_push_new(arena, locations, D2R_LOCATIONS_CAP, loc_info);
+    loc.kind     = result_type == D2R_ValueType_Address ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
+    loc.bytecode = bytecode;
   }
   return loc;
 }
 
-internal RDIM_Location *
-d2r_location_from_attrib(Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind)
+internal RDIM_Location
+d2r_location_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind)
 {
   String8 expr = dw_exprloc_from_tag_attrib_kind(input, cu, tag, kind);
-  RDIM_Location *location = d2r_transpile_expression(arena, locations, input, image_base, arch, cu->addr_lu, cu, expr);
+  RDIM_Location location = d2r_transpile_expression(arena, input, image_base, arch, cu->addr_lu, cu, expr);
   return location;
 }
 
@@ -1340,7 +1336,6 @@ internal RDIM_LocationCaseList
 d2r_locset_from_attrib(Arena                  *arena,
                        RDIM_ScopeChunkList    *scopes,
                        RDIM_Scope             *curr_scope,
-                       RDIM_LocationChunkList *locations,
                        DW_Input               *input,
                        DW_CompUnit            *cu,
                        U64                     image_base,
@@ -1362,9 +1357,9 @@ d2r_locset_from_attrib(Arena                  *arena,
     
     // convert location list to RDIM location set
     for EachNode(loc_n, DW_LocNode, loclist.first) {
-      RDIM_Location *location   = d2r_transpile_expression(arena, locations, input, image_base, arch, cu->addr_lu, cu, loc_n->v.expr);
-      RDIM_Rng1U64   voff_range = { .min = loc_n->v.range.min -  image_base, .max = loc_n->v.range.max - image_base };
-      rdim_push_location_case(arena, scopes, &locset, location, voff_range);
+      RDIM_Location location = d2r_transpile_expression(arena, input, image_base, arch, cu->addr_lu, cu, loc_n->v.expr);
+      RDIM_Rng1U64 voff_range = { .min = loc_n->v.range.min -  image_base, .max = loc_n->v.range.max - image_base };
+      rdim_location_case_list_push(arena, &locset, location, voff_range);
     }
     
     scratch_end(scratch);
@@ -1373,9 +1368,9 @@ d2r_locset_from_attrib(Arena                  *arena,
     String8 expr = dw_exprloc_from_attrib(input, cu, attrib);
     
     // convert expression and inherit life-time ranges from enclosed scope
-    RDIM_Location *location = d2r_transpile_expression(arena, locations, input, image_base, arch, cu->addr_lu, cu, expr);
+    RDIM_Location location = d2r_transpile_expression(arena, input, image_base, arch, cu->addr_lu, cu, expr);
     for EachNode(range_n, RDIM_Rng1U64Node, curr_scope->voff_ranges.first) {
-      rdim_push_location_case(arena, scopes, &locset, location, range_n->v);
+      rdim_location_case_list_push(arena, &locset, location, range_n->v);
     }
   } else if (attrib_class != DW_AttribClass_Null) {
     log_user_errorf("unexpected attrib class @ .debug_info+%llx", tag.info_off);
@@ -1388,7 +1383,6 @@ internal RDIM_LocationCaseList
 d2r_var_locset_from_tag(Arena                  *arena,
                         RDIM_ScopeChunkList    *scopes,
                         RDIM_Scope             *curr_scope,
-                        RDIM_LocationChunkList *locations,
                         DW_Input               *input,
                         DW_CompUnit            *cu,
                         U64                     image_base,
@@ -1414,17 +1408,16 @@ d2r_var_locset_from_tag(Arena                  *arena,
     rdim_bytecode_push_uconst(arena, &bc, const_value);
     
     // fill out location
-    RDIM_LocationInfo *loc_info = push_array(arena, RDIM_LocationInfo, 1);
-    loc_info->kind     = RDI_LocationKind_ValBytecodeStream;
-    loc_info->bytecode = bc;
-    RDIM_Location *loc = rdim_location_chunk_list_push_new(arena, locations, D2R_LOCATIONS_CAP, loc_info);
+    RDIM_Location loc = {0};
+    loc.kind     = RDI_LocationKind_ValBytecodeStream;
+    loc.bytecode = bc;
     
     // push location cases
     for EachNode(range_n, RDIM_Rng1U64Node, curr_scope->voff_ranges.first) {
-      rdim_push_location_case(arena, scopes, &locset, loc, range_n->v);
+      rdim_location_case_list_push(arena, &locset, loc, range_n->v);
     }
   } else if (has_location) {
-    locset = d2r_locset_from_attrib(arena, scopes, curr_scope, locations, input, cu, image_base, arch, tag, DW_AttribKind_Location);
+    locset = d2r_locset_from_attrib(arena, scopes, curr_scope, input, cu, image_base, arch, tag, DW_AttribKind_Location);
   }
   
   return locset;
@@ -1584,13 +1577,13 @@ d2r_find_or_convert_type(Arena *arena, D2R_TypeTable *type_table, DW_Input *inpu
       if (ref.cu == cu) {
         // find type
         type = d2r_type_from_offset(type_table, ref.info_off);
-
+        
         // was type converted?
         if (type == 0) {
           // issue type conversion
           DW_TagNode *ref_node = dw_tag_node_from_info_off(cu, ref.info_off);
           d2r_convert_types(arena, type_table, input, cu, cu_lang, arch, ref_node);
-
+          
           // if we do not have a converted type at this point then debug info is malformed
           type = d2r_type_from_offset(type_table, ref.info_off);
           if (type == 0) {
@@ -1726,7 +1719,7 @@ d2r_convert_types(Arena         *arena,
             log_user_errorf("unexpected tag @ .debug_info+%llx", tag.info_off);
           }
         }
-
+        
         DW_TagNode *parent = d2r_tag_iterator_parent_tag_node(it);
         B32 is_method = parent->tag.kind == DW_TagKind_StructureType || parent->tag.kind == DW_TagKind_ClassType;
         
@@ -1759,7 +1752,7 @@ d2r_convert_types(Arena         *arena,
         
         // convert base type encoding to RDI version
         RDI_TypeKind kind = RDI_TypeKind_NULL;
-        #define X(t,g,s) case s: kind = RDI_TypeKind_##t; break;
+#define X(t,g,s) case s: kind = RDI_TypeKind_##t; break;
         switch (encoding) {
           case DW_ATE_Null:    kind = RDI_TypeKind_NULL; break;
           case DW_ATE_Address: kind = RDI_TypeKind_Void; break;
@@ -1787,19 +1780,19 @@ d2r_convert_types(Arena         *arena,
               }
               if (kind != RDI_TypeKind_NULL) { break; }
             }
-
+            
             switch (byte_size) {
               D2R_ValueType_Float_XList
-            default: log_user_errorf("unexpected size"); break; 
+                default: log_user_errorf("unexpected size"); break; 
             }
           } break;
           case DW_ATE_Signed: {
             String8 name = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
             if (str8_match(name, str8_lit("wchar_t"), 0)) { goto do_signed_char; }
-
+            
             switch (byte_size) {
               D2R_ValueType_Signed_XList
-              default: log_user_errorf("unexpected size"); break;
+                default: log_user_errorf("unexpected size"); break;
             }
           } break;
           do_signed_char:;
@@ -1814,7 +1807,7 @@ d2r_convert_types(Arena         *arena,
           case DW_ATE_Unsigned: {
             switch (byte_size) {
               D2R_ValueType_Unsigned_XList
-              default: log_user_errorf("unexpected size"); break;
+                default: log_user_errorf("unexpected size"); break;
             }
           } break;
           case DW_ATE_Utf:
@@ -1828,10 +1821,10 @@ d2r_convert_types(Arena         *arena,
           } break;
           case DW_ATE_DecimalFloat: {
             switch (byte_size) {
-            case 4:  kind = RDI_TypeKind_Decimal32; break;
-            case 8:  kind = RDI_TypeKind_Decimal64; break;
-            case 16: kind = RDI_TypeKind_Decimal128; break;
-            default: log_user_errorf("unexpected size"); break;
+              case 4:  kind = RDI_TypeKind_Decimal32; break;
+              case 8:  kind = RDI_TypeKind_Decimal64; break;
+              case 16: kind = RDI_TypeKind_Decimal128; break;
+              default: log_user_errorf("unexpected size"); break;
             }
           } break;
           case DW_ATE_ImaginaryFloat: {
@@ -1860,7 +1853,7 @@ d2r_convert_types(Arena         *arena,
           } break;
           default: log_user_errorf("unexpected base type encoding"); break;
         }
-        #undef X
+#undef X
         
         RDIM_Type *type   = d2r_create_type_from_offset(arena, type_table, tag.info_off);
         type->kind        = RDI_TypeKind_Alias;
@@ -1946,9 +1939,9 @@ d2r_convert_types(Arena         *arena,
         // and convert to U256, U512, S256 and S512
         B32 is_vector = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_GNU_Vector);
         if (is_vector) { NotImplemented; }
-
+        
         B32 error = 1;
-
+        
         // * DWARF vs RDI Array Type Graph *
         //
         // For example lets take following decl:
@@ -2035,13 +2028,13 @@ d2r_convert_types(Arena         *arena,
         
         error = 0;
         array_type_exit:;
-
+        
         // in case of an error, assign null to the array type
         if (error) {
           Assert(d2r_type_from_offset(type_table, tag.info_off) == 0); // this should the first time this type is being parsed
           hash_table_push_u64_raw(arena, type_table->ht, tag.info_off, type_table->builtin_types[RDI_TypeKind_NULL]);
         }
-
+        
         d2r_tag_iterator_skip_children(it);
       } break;
       case DW_TagKind_SubrangeType: {
@@ -2101,18 +2094,18 @@ d2r_convert_udts(Arena         *arena,
                  DW_TagNode    *root)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   for (D2R_TagIterator *it = d2r_tag_iterator_init(scratch.arena, root); it->tag_node != 0; d2r_tag_iterator_next(scratch.arena, it)) {
     DW_TagNode *tag_node = it->tag_node;
     DW_Tag      tag      = tag_node->tag;
-
+    
     // skip converted tags
     if (d2r_is_udt_tag_converted(tag_node)) {
       d2r_tag_iterator_skip_children(it);
       continue;
     }
     d2r_flag_converted_udt_tag(tag_node);
-
+    
     if (tag.kind == DW_TagKind_ClassType || tag.kind == DW_TagKind_StructureType || tag.kind == DW_TagKind_UnionType) {
       B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
       if (is_decl) {
@@ -2136,8 +2129,8 @@ d2r_convert_udts(Arena         *arena,
     } else if (tag.kind == DW_TagKind_Member) {
       DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
       B32 is_parent_udt = parent_tag.kind == DW_TagKind_StructureType ||
-                          parent_tag.kind == DW_TagKind_ClassType     ||
-                          parent_tag.kind == DW_TagKind_UnionType;
+        parent_tag.kind == DW_TagKind_ClassType     ||
+        parent_tag.kind == DW_TagKind_UnionType;
       if (is_parent_udt) {
         RDIM_Type *parent_type = d2r_type_from_offset(type_table, parent_tag.info_off);
         RDIM_Type *type        = d2r_type_from_attrib(type_table, input, cu, tag, DW_AttribKind_Type);
@@ -2293,7 +2286,7 @@ d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 imag
       }
     } else if ((lo_pc_attrib->attrib_kind == DW_AttribKind_Null && hi_pc_attrib->attrib_kind != DW_AttribKind_Null) ||
                (lo_pc_attrib->attrib_kind != DW_AttribKind_Null && hi_pc_attrib->attrib_kind == DW_AttribKind_Null)) {
-        log_user_errorf("invalid range @ .debug_info+%llx", tag.info_off);
+      log_user_errorf("invalid range @ .debug_info+%llx", tag.info_off);
     }
   }
   
@@ -2303,13 +2296,13 @@ d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 imag
 internal void
 d2r_convert_symbols(Arena         *arena,
                     D2R_TypeTable *type_table,
-                    RDIM_Scope    *global_scope,
                     DW_Input      *input,
                     DW_CompUnit   *cu,
                     DW_Language    cu_lang,
                     U64            image_base,
                     Arch           arch,
-                    DW_TagNode    *root)
+                    DW_TagNode    *root,
+                    RDIM_Unit     *unit_rdi)
 {
   Temp scratch = scratch_begin(&arena, 1);
   for (D2R_TagIterator *it = d2r_tag_iterator_init(scratch.arena, root); it->tag_node != 0; d2r_tag_iterator_next(scratch.arena, it)) {
@@ -2343,7 +2336,7 @@ d2r_convert_symbols(Arena         *arena,
           d2r_tag_iterator_skip_children(it);
           break;
         }
-
+        
         DW_InlKind inl = DW_Inl_NotInlined;
         if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Inline)) { inl = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Inline); }
         
@@ -2380,11 +2373,11 @@ d2r_convert_symbols(Arena         *arena,
             String8 frame_base_expr = dw_exprloc_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_FrameBase);
             
             // get proc container symbol
-            RDIM_Symbol *proc = rdim_symbol_chunk_list_push(arena, &g_d2r_shared.procs, D2R_PROC_CHUNK_CAP);
+            RDIM_Symbol *proc = rdim_symbol_chunk_list_push(arena, &unit_rdi->procedures, D2R_PROC_CHUNK_CAP);
             
             // make scope
             Rng1U64List  ranges     = d2r_range_list_from_tag(scratch.arena, input, cu, image_base, tag);
-            RDIM_Scope  *root_scope = d2r_push_scope(arena, &g_d2r_shared.scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
+            RDIM_Scope  *root_scope = d2r_push_scope(arena, &unit_rdi->scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
             root_scope->symbol      = proc;
             
             // fill out proc
@@ -2392,10 +2385,10 @@ d2r_convert_symbols(Arena         *arena,
             proc->name             = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
             proc->link_name        = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_LinkageName);
             proc->type             = proc_type;
-            proc->container_symbol = 0;
+            proc->container_scope  = 0;
             proc->container_type   = container_type;
             proc->root_scope       = root_scope;
-            proc->location_cases   = d2r_locset_from_attrib(arena, &g_d2r_shared.scopes, root_scope, &g_d2r_shared.locations, input, cu, image_base, arch, tag, DW_AttribKind_FrameBase);
+            proc->location_cases   = d2r_locset_from_attrib(arena, &unit_rdi->scopes, root_scope, input, cu, image_base, arch, tag, DW_AttribKind_FrameBase);
             
             // sub program with user-defined parent tag is a method
             DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
@@ -2407,10 +2400,10 @@ d2r_convert_symbols(Arena         *arena,
                 if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Virtuality)) {
                   virtuality = dw_const_u64_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Virtuality);
                   switch (virtuality) {
-                  case DW_VirtualityKind_None:        member_kind = RDI_MemberKind_Method;        break;
-                  case DW_VirtualityKind_Virtual:     member_kind = RDI_MemberKind_VirtualMethod; break;
-                  case DW_VirtualityKind_PureVirtual: member_kind = RDI_MemberKind_VirtualMethod; break; // TODO: create kind for pure virutal
-                  default: { log_user_errorf("unhandled virtuality kind"); } break;
+                    case DW_VirtualityKind_None:        member_kind = RDI_MemberKind_Method;        break;
+                    case DW_VirtualityKind_Virtual:     member_kind = RDI_MemberKind_VirtualMethod; break;
+                    case DW_VirtualityKind_PureVirtual: member_kind = RDI_MemberKind_VirtualMethod; break; // TODO: create kind for pure virutal
+                    default: { log_user_errorf("unhandled virtuality kind"); } break;
                   }
                 }
               }
@@ -2463,7 +2456,7 @@ d2r_convert_symbols(Arena         *arena,
         
         // make scope
         Rng1U64List  ranges     = d2r_range_list_from_tag(scratch.arena, input, cu, image_base, tag);
-        RDIM_Scope  *root_scope = d2r_push_scope(arena, &g_d2r_shared.scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
+        RDIM_Scope  *root_scope = d2r_push_scope(arena, &unit_rdi->scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
         root_scope->inline_site = inline_site;
       } break;
       case DW_TagKind_Variable: {
@@ -2475,17 +2468,16 @@ d2r_convert_symbols(Arena         *arena,
             parent_tag.kind == DW_TagKind_InlinedSubroutine ||
             parent_tag.kind == DW_TagKind_LexicalBlock) {
           RDIM_Scope *scope = it->stack->next->scope;
-          RDIM_Local *local = rdim_scope_push_local(arena, &g_d2r_shared.scopes, scope);
-          local->kind           = RDI_LocalKind_Variable;
-          local->name           = name;
-          local->type           = type;
-          local->location_cases = d2r_var_locset_from_tag(arena, &g_d2r_shared.scopes, scope, &g_d2r_shared.locations, input, cu, image_base, arch, tag);
+          RDIM_Symbol *local = rdim_symbol_chunk_list_push(arena, &scope->locals, 8);
+          local->name = name;
+          local->type = type;
+          local->location_cases = d2r_var_locset_from_tag(arena, &unit_rdi->scopes, scope, input, cu, image_base, arch, tag);
         } else {
           
           // NOTE: due to a bug in clang in stb_sprintf.h local variables
           // are declared in global scope without a name
           if (name.size == 0) { break; }
-
+          
           // decls do not have location info
           B32 is_decl = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Declaration);
           if (is_decl) { break; }
@@ -2528,19 +2520,21 @@ d2r_convert_symbols(Arena         *arena,
           var->name             = name;
           var->link_name        = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_LinkageName);
           var->type             = type;
-          var->offset           = voff;
-          var->container_symbol = 0;
+          var->container_scope  = 0;
+          RDIM_Location loc = {.kind = RDI_LocationKind_ModuleOff, .offset = voff};
+          RDIM_Rng1U64 range = {0, 0xffffffffffffffffull};
+          rdim_location_case_list_push(arena, &var->location_cases, loc, range);
         }
       } break;
       case DW_TagKind_FormalParameter: {
         DW_Tag parent_tag = d2r_tag_iterator_parent_tag(it);
         if (parent_tag.kind == DW_TagKind_SubProgram || parent_tag.kind == DW_TagKind_InlinedSubroutine) {
           RDIM_Scope *scope = it->stack->next->scope;
-          RDIM_Local *param = rdim_scope_push_local(arena, &g_d2r_shared.scopes, scope);
-          param->kind           = RDI_LocalKind_Parameter;
-          param->name           = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
-          param->type           = d2r_type_from_attrib(type_table, input, cu, tag, DW_AttribKind_Type);
-          param->location_cases = d2r_var_locset_from_tag(arena, &g_d2r_shared.scopes, scope, &g_d2r_shared.locations, input, cu, image_base, arch, tag);
+          RDIM_Symbol *param = rdim_symbol_chunk_list_push(arena, &scope->locals, 4);
+          param->is_param = 1;
+          param->name = dw_string_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_Name);
+          param->type = d2r_type_from_attrib(type_table, input, cu, tag, DW_AttribKind_Type);
+          param->location_cases = d2r_var_locset_from_tag(arena, &unit_rdi->scopes, scope, input, cu, image_base, arch, tag);
         } else {
           Assert(!"this is a local variable");
           log_user_errorf(".debug_info+%llx out of scope formal parameter", tag.info_off);
@@ -2552,7 +2546,7 @@ d2r_convert_symbols(Arena         *arena,
             parent_tag.kind == DW_TagKind_InlinedSubroutine ||
             parent_tag.kind == DW_TagKind_LexicalBlock) {
           Rng1U64List ranges = d2r_range_list_from_tag(scratch.arena, input, cu, image_base, tag);
-          d2r_push_scope(arena, &g_d2r_shared.scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
+          d2r_push_scope(arena, &unit_rdi->scopes, D2R_SCOPE_CHUNK_CAP, it->stack, ranges);
         }
       } break;
       case DW_TagKind_CallSite: {
@@ -2641,14 +2635,14 @@ d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Input *input, U64 image_base)
   for EachNode(range_n, Rng1U64Node, unit_range_list.first) {
     String8 unit_data   = str8_substr(input->sec[DW_Section_ARanges].data, range_n->v);
     U64     unit_cursor = 0;
-
+    
     U32 first_four_bytes = 0;
     if (str8_deserial_read_struct(input->sec[DW_Section_Info].data, 0, &first_four_bytes) != sizeof(first_four_bytes)) { goto exit; }
     DW_Format unit_format = first_four_bytes == max_U32 ? DW_Format_64Bit : DW_Format_32Bit;
-
+    
     U64 unit_length;
     TryRead(str8_deserial_read_dwarf_packed_size(unit_data, unit_cursor, &unit_length), unit_cursor, exit);
-
+    
     DW_Version version;
     TryRead(str8_deserial_read_struct(unit_data, unit_cursor, &version), unit_cursor, exit);
     
@@ -2656,10 +2650,10 @@ d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Input *input, U64 image_base)
       log_user_errorf("unknown .debug_aranges version %u @ 0x%llx", version, range_n->v.min);
       continue;
     }
-
+    
     U64 cu_info_off;
     TryRead(str8_deserial_read_dwarf_uint(unit_data, unit_cursor, unit_format, &cu_info_off), unit_cursor, exit);
-
+    
     U8 address_size = 0;
     TryRead(str8_deserial_read_struct(unit_data, unit_cursor, &address_size), unit_cursor, exit);
     
@@ -2726,7 +2720,7 @@ internal RDIM_BakeParams
 d2r_convert(Arena *arena, D2R_ConvertParams *params)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   if (lane_idx() == 0) {
     ////////////////////////////////
     
@@ -2742,30 +2736,30 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         String8             raw_sections  = str8_substr(params->exe_data, pe.section_table_range);
         COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(raw_sections, 0, sizeof(COFF_SectionHeader) * pe.section_count);
         String8             string_table  = str8_substr(params->exe_data, pe.string_table_range);
-
+        
         arch       = pe.arch;
         image_base = pe.image_base;
         input      = dw_input_from_coff_section_table(scratch.arena, params->exe_data, string_table, pe.section_count, section_table);
         path_style = PathStyle_WindowsAbsolute;
-
+        
         g_d2r_shared.binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, params->exe_data, string_table, pe.section_count, section_table);
       } break;
       case ExecutableImageKind_Elf32:
       case ExecutableImageKind_Elf64: {
         ELF_Bin bin = elf_bin_from_data(scratch.arena, params->dbg_data);
-
+        
         arch       = arch_from_elf_machine(bin.hdr.e_machine);
         image_base = elf_base_addr_from_bin(&bin);
         input      = dw_input_from_elf_bin(scratch.arena, params->dbg_data, &bin);
         path_style = PathStyle_UnixAbsolute;
-
+        
         g_d2r_shared.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, bin.shdrs);
       } break;
       default: { InvalidPath; } break;
     }
     
     ////////////////////////////////
-
+    
     ProfBegin("compute exe hash");
     U64 exe_hash = rdi_hash(params->exe_data.str, params->exe_data.size);
     ProfEnd();
@@ -2797,12 +2791,12 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     ProfEnd();
     
     ////////////////////////////////
-
+    
     ProfBeginV("Convert Line Tables [Count: %llu]", cu_ranges.count);
     RDIM_LineTable **cu_line_tables_rdi = push_array(scratch.arena, RDIM_LineTable *, cu_ranges.count);
     {
       Temp temp = temp_begin(scratch.arena);
-
+      
       // TODO: per thread task
       ProfBegin("Up front parse line VM headers");
       DW_LineVM **line_vms = push_array(temp.arena, DW_LineVM *, cu_ranges.count);
@@ -2810,18 +2804,18 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         line_vms[cu_idx] = dw_line_vm_init(&input, &cu_arr[cu_idx]);
       }
       ProfEnd();
-
+      
       // TODO: sync
       //
       // sum all source files (including duplicates)
       U64 total_file_count = 0;
       for EachIndex(cu_idx, cu_ranges.count) { total_file_count += line_vms[cu_idx]->header.file_table.count; }
-
+      
       // TODO: sync
       ProfBeginV("Dedup source files [Count: %llu]", total_file_count);
       LFHT_NodeChunkList *src_file_lfht_nodes = push_array(temp.arena, LFHT_NodeChunkList, lane_count());
       LFHT_Node          *src_file_lfht       = 0;
-
+      
       // TODO: per thread
       {
         D2R_SrcFileLookup *lookup = 0;
@@ -2829,11 +2823,11 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           DW_LineVM *vm = line_vms[cu_idx];
           for EachIndex(file_idx, vm->header.file_table.count) {
             DW_LineFile *file = &vm->header.file_table.v[file_idx];
-
+            
             if (lookup == 0) { lookup = push_array(temp.arena, D2R_SrcFileLookup, 1); }
             lookup->vm   = vm;
             lookup->file = file;
-
+            
             LFHT_NodeChunkList *node_chunks  = &src_file_lfht_nodes[lane_idx()];
             U64                 hash         = d2r_hash_line_file(vm->header.dir_table.v[file->dir_idx], file);
             B32                 was_inserted = lfht_insert(temp.arena, node_chunks, &src_file_lfht, hash, lookup, d2r_src_file_lookup_is_equal, 0);
@@ -2844,26 +2838,26 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         }
       }
       ProfEnd();
-
+      
       // TODO: sync
       ProfBegin("Extract source file lookups");
       U64    unique_file_count = lfht_total_count_from_node_chunk_lists(lane_count(), src_file_lfht_nodes);
       void **lookups           = lfht_data_from_node_chunk_lists(temp.arena, unique_file_count, lane_count(), src_file_lfht_nodes);
       ProfEnd();
-
+      
       // TODO: sync
       ProfBeginV("Sort unique source files [Count: %llu]", unique_file_count);
       d2r_sort_ptrs(lookups, unique_file_count, d2r_src_file_lfht_key_value_is_before);
       ProfEnd();
-
+      
       // TODO: per thread task
       ProfBegin("Convert source files");
       for EachIndex(i, unique_file_count) {
         D2R_SrcFileLookup *lookup = lookups[i];
-
+        
         DW_LineFile  *src = lookup->file;
         RDIM_SrcFile *dst = rdim_src_file_chunk_list_push(arena, &g_d2r_shared.src_files, D2R_SRC_FILE_CAP);
-
+        
         // make file path
         String8 path;
         {
@@ -2872,7 +2866,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           str8_list_push_node(&path_list, &(String8Node){ .string = src->path });
           path = str8_path_list_join_by_style(arena, &path_list, path_style);
         }
-
+        
         // fill out source file
         dst->path = path;
         if ( ! u128_match(src->md5, u128_zero())) {
@@ -2882,30 +2876,30 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           dst->checksum_kind = RDI_ChecksumKind_Timestamp;
           dst->checksum      = str8_copy(arena, str8_struct(&src->time_stamp));
         }
-
+        
         lookup->src_file = dst;
       }
       ProfEnd();
       
       // TODO: sync
       RDIM_LineTableChunkList *lane_line_table_chunks = push_array(temp.arena, RDIM_LineTableChunkList, lane_count());
-
+      
       // TODO: per thread task
       ProfBegin("Convert line sequences");
       U64 *line_seq_counts_per_lane = push_array(scratch.arena, U64, lane_count());
       for EachIndex(cu_idx, cu_ranges.count) {
         RDIM_LineTableChunkList *lane_line_table_chunk_list = &lane_line_table_chunks[lane_idx()];
-
+        
         // push new line table for the compile unit
         RDIM_LineTable *line_table = rdim_line_table_chunk_list_push(arena, lane_line_table_chunk_list, D2R_LINE_TABLE_CAP);
         cu_line_tables_rdi[cu_idx] = line_table;
-
+        
         // push line buffer
 #define D2R_LineBufferMax 1024
         struct LineBuffer { U64 file_index; U64 voffs[D2R_LineBufferMax]; U32 line_nums[D2R_LineBufferMax]; U32 col_nums[D2R_LineBufferMax]; } LineBuffer;
         struct LineBuffer *line_buffer      = push_array(temp.arena, struct LineBuffer, 1);
         U64                line_buffer_size = 0;
-
+        
         // decode line sequences
         DW_LineVM *vm                       = line_vms[cu_idx];
         U64       *line_seq_counts_per_file = push_array(temp.arena, U64, vm->header.file_table.count);
@@ -2913,32 +2907,32 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           if (vm->new_line) {
             // lazy defined files are not supported
             if (vm->state.file_index >= vm->header.file_table.count) { continue; }
-
+            
             // time to flush the buffer?
             if (((vm->opcode == DW_StdOpcode_ExtendedOpcode && vm->ext_opcode == DW_ExtOpcode_EndSequence) ||
-                (line_buffer_size >= D2R_LineBufferMax || line_buffer->file_index != vm->state.file_index))
+                 (line_buffer_size >= D2R_LineBufferMax || line_buffer->file_index != vm->state.file_index))
                 && line_buffer_size > 0) {
               // lookup source file
               DW_LineFile       *file     = &vm->header.file_table.v[line_buffer->file_index];
               U64                hash     = d2r_hash_line_file(vm->header.dir_table.v[file->dir_idx], file);
               D2R_SrcFileLookup *lookup   = lfht_search(src_file_lfht, hash, &(D2R_SrcFileLookup){ .file = file, .vm = vm }, d2r_src_file_lookup_is_equal, 0);
               RDIM_SrcFile      *src_file = lookup->src_file;
-
+              
               // copy line info
               U64 *voffs     = push_array_no_zero(arena, U64, line_buffer_size + 1);
               U32 *line_nums = push_array_no_zero(arena, U32, line_buffer_size);
               voffs[line_buffer_size] = vm->state.address - image_base;
               MemoryCopyTyped(voffs, line_buffer->voffs, line_buffer_size);
               MemoryCopyTyped(line_nums, line_buffer->line_nums, line_buffer_size);
-
+              
               RDIM_LineSequence *line_seq = rdim_line_table_push_sequence(arena, lane_line_table_chunk_list, line_table, src_file, voffs, line_nums, 0, line_buffer_size);
-
+              
               // atomic implementation of @rdim_src_file_push_line_sequence
               {
                 // associate line fragment with source file
                 RDIM_SrcFileLineMapFragment *line_frag = push_array(arena, RDIM_SrcFileLineMapFragment, 1);
                 line_frag->seq = line_seq;
-
+                
                 // insert line fragment node
                 for (;;) {
                   RDIM_SrcFileLineMapFragment *next = src_file->first_line_map_fragment;
@@ -2949,18 +2943,18 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                   }
                   if (curr == next) { break; }
                 }
-
+                
                 // accumulate line sequence counts per file
                 line_seq_counts_per_file[vm->state.file_index] += line_seq->line_count;
-
+                
                 // accumulate line sequence counts per lane
                 line_seq_counts_per_lane[lane_idx()] += line_seq->line_count;
               }
-
+              
               // reset line buffer size tracker
               line_buffer_size = 0;
             }
-
+            
             if (line_buffer_size > 0 && line_buffer->voffs[line_buffer_size - 1] == vm->state.address) {
               line_buffer->line_nums[line_buffer_size - 1] = Min(line_buffer->line_nums[line_buffer_size - 1], safe_cast_u32(vm->state.line));
             } else {
@@ -2972,7 +2966,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             }
           }
         }
-
+        
         // update line sequence counts per source file @rdim_src_file_push_line_sequence
         for EachIndex(file_idx, vm->header.file_table.count) {
           if (line_seq_counts_per_file[file_idx] > 0) {
@@ -2984,33 +2978,29 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           }
         }
       }
-
+      
       // TODO: sync
       //
       // update total line sequences count in shared @rdim_src_file_push_line_sequence
       for EachIndex(i, lane_count()) {
         g_d2r_shared.src_files.total_line_count += line_seq_counts_per_lane[i];
       }
-
+      
       // TODO: sync
       for EachIndex(i, lane_count()) {
         rdim_line_table_chunk_list_concat_in_place(&g_d2r_shared.line_tables, &lane_line_table_chunks[i]);
       }
-
+      
       // TODO: per thread task
       ProfBegin("Relase line VMs");
       for EachIndex(i, cu_ranges.count) {
         dw_line_vm_release(line_vms[i]);
       }
       ProfEnd();
-
+      
       temp_end(temp);
     }
     ProfEnd();
-    
-    ////////////////////////////////
-    
-    RDIM_Scope *global_scope = rdim_scope_chunk_list_push(arena, &g_d2r_shared.scopes, D2R_SCOPE_CHUNK_CAP);
     
     //////////////////////////////// 
     
@@ -3022,7 +3012,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       type->byte_size = rdi_size_from_basic_type_kind(type_kind);
       builtin_types[type_kind] = type;
     }
-
+    
     // fixup float80 size
     if (arch == Arch_x64 || arch == Arch_arm64) {
       builtin_types[RDI_TypeKind_F80]->byte_size = 16;
@@ -3041,7 +3031,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       Temp comp_temp = temp_begin(scratch.arena);
       
       DW_CompUnit *cu = &cu_arr[cu_idx];
-
+      
       // skip DWO
       {
         if (cu->dwo_id) { goto next_cu; }
@@ -3064,32 +3054,26 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       String8     cu_dir  = dw_string_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_CompDir);
       String8     cu_prod = dw_string_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_Producer);
       DW_Language cu_lang = dw_const_u64_from_tag_attrib_kind(&input, cu, cu->tag, DW_AttribKind_Language);
-      
+
       // init type table
       D2R_TypeTable *type_table   = push_array(comp_temp.arena, D2R_TypeTable, 1);
       type_table->ht              = hash_table_init(comp_temp.arena, 0x4000);
       type_table->types           = &g_d2r_shared.types;
       type_table->type_chunk_cap  = D2R_TYPE_CHUNK_CAP;
       type_table->builtin_types   = builtin_types;
-      
-      // convert debug info
-      d2r_convert_types(arena, type_table, &input, cu, cu_lang, arch, tag_tree.root);
-      d2r_convert_udts(arena, type_table, &input, cu, cu_lang, tag_tree.root);
-      d2r_convert_symbols(arena, type_table, global_scope, &input, cu, cu_lang, image_base, arch, tag_tree.root);
-      
-      RDIM_Rng1U64ChunkList cu_voff_ranges = {0};
-      if (cu_idx < cu_contrib_map.count) {
-        cu_voff_ranges = d2r_voff_ranges_from_cu_info_off(cu_contrib_map, cu_ranges.v[cu_idx].min);
-      } else {
-        Rng1U64List range_list  = d2r_range_list_from_tag(scratch.arena, &input, cu, image_base, cu->tag);
-        for EachNode(n, Rng1U64Node, range_list.first) {
-          rdim_rng1u64_chunk_list_push(arena, &cu_voff_ranges, 512, (RDIM_Rng1U64){ .min = n->v.min, .max = n->v.max });
-        }
-      }
-      
+
       // convert compile unit
+      RDIM_Unit *unit     = rdim_unit_chunk_list_push(arena, &g_d2r_shared.units, D2R_UNIT_CHUNK_CAP);
       {
-        RDIM_Unit *unit     = rdim_unit_chunk_list_push(arena, &g_d2r_shared.units, D2R_UNIT_CHUNK_CAP);
+        RDIM_Rng1U64ChunkList cu_voff_ranges = {0};
+        if (cu_idx < cu_contrib_map.count) {
+          cu_voff_ranges = d2r_voff_ranges_from_cu_info_off(cu_contrib_map, cu_ranges.v[cu_idx].min);
+        } else {
+          Rng1U64List range_list  = d2r_range_list_from_tag(scratch.arena, &input, cu, image_base, cu->tag);
+          for EachNode(n, Rng1U64Node, range_list.first) {
+            rdim_rng1u64_chunk_list_push(arena, &cu_voff_ranges, 512, (RDIM_Rng1U64){ .min = n->v.min, .max = n->v.max });
+          }
+        } 
         unit->unit_name     = cu_name;
         unit->compiler_name = cu_prod;
         unit->source_file   = str8_zero(); // TODO
@@ -3100,6 +3084,11 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         unit->line_table    = cu_line_tables_rdi[cu_idx];
         unit->voff_ranges   = cu_voff_ranges;
       }
+
+      // convert debug info
+      d2r_convert_types(arena, type_table, &input, cu, cu_lang, arch, tag_tree.root);
+      d2r_convert_udts(arena, type_table, &input, cu, cu_lang, tag_tree.root);
+      d2r_convert_symbols(arena, type_table, &input, cu, cu_lang, image_base, arch, tag_tree.root, unit); 
       
       next_cu:;
       temp_end(comp_temp);
@@ -3118,12 +3107,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   bake_params.udts             = g_d2r_shared.udts;
   bake_params.src_files        = g_d2r_shared.src_files;
   bake_params.line_tables      = g_d2r_shared.line_tables;
-  bake_params.locations        = g_d2r_shared.locations;
-  bake_params.global_variables = g_d2r_shared.gvars;
-  bake_params.thread_variables = g_d2r_shared.tvars;
-  bake_params.procedures       = g_d2r_shared.procs;
-  bake_params.scopes           = g_d2r_shared.scopes;
-  bake_params.inline_sites     = g_d2r_shared.inline_sites;
   
   scratch_end(scratch);
   return bake_params;

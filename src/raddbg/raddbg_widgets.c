@@ -102,13 +102,13 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
     //- rjf: [breakpoints] push hit marker
     if(str8_match(cfg->string, str8_lit("breakpoint"), 0))
     {
-      CTRL_Event stop_event = d_ctrl_last_stop_event();
-      if(stop_event.cause == CTRL_EventCause_UserBreakpoint)
+      D_Event stop_event = d_ctrl_last_stop_event();
+      if(stop_event.cause == D_EventCause_UserBreakpoint)
       {
         CFG_Node *bp = cfg_node_from_id(stop_event.u64_code);
         if(bp == cfg)
         {
-          CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, stop_event.entity);
+          D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
           Vec4F32 thread_color = rd_color_from_ctrl_entity(thread);
           if(thread_color.w == 0)
           {
@@ -445,7 +445,7 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
 }
 
 internal DR_FStrList
-rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras)
+rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extras)
 {
   DR_FStrList result = {0};
   
@@ -467,10 +467,10 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   switch(entity->kind)
   {
     default:{}break;
-    case CTRL_EntityKind_Machine: {icon_kind = RD_IconKind_Machine;}break;
-    case CTRL_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
-    case CTRL_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
-    case CTRL_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
+    case D_EntityKind_Machine: {icon_kind = RD_IconKind_Machine;}break;
+    case D_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
+    case D_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
+    case D_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
   }
   
   //- rjf: set up drawing params
@@ -484,10 +484,10 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   }
   
   //- rjf: push frozen icon, if frozen
-  if((entity->kind == CTRL_EntityKind_Machine ||
-      entity->kind == CTRL_EntityKind_Process ||
-      entity->kind == CTRL_EntityKind_Thread) &&
-     ctrl_entity_tree_is_frozen(entity))
+  if((entity->kind == D_EntityKind_Machine ||
+      entity->kind == D_EntityKind_Process ||
+      entity->kind == D_EntityKind_Thread) &&
+     d_entity_tree_is_frozen(entity))
     UI_TagF("bad")
   {
     dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Locked], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_color_from_name(str8_lit("text")));
@@ -495,9 +495,9 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   }
   
   //- rjf: push selected icon, if selected thread
-  if(entity->kind == CTRL_EntityKind_Thread)
+  if(entity->kind == D_EntityKind_Thread)
   {
-    B32 is_selected = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
+    B32 is_selected = d_handle_match(entity->handle, rd_base_regs()->thread);
     if(is_selected)
     {
       dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = color);
@@ -506,13 +506,13 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   }
   
   //- rjf: push containing process prefix
-  if(entity->kind == CTRL_EntityKind_Thread ||
-     entity->kind == CTRL_EntityKind_Module)
+  if(entity->kind == D_EntityKind_Thread ||
+     entity->kind == D_EntityKind_Module)
   {
-    CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
+    D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
     if(processes.count > 1)
     {
-      CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+      D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
       String8 process_name = rd_name_from_ctrl_entity(arena, process);
       Vec4F32 process_color = rd_color_from_ctrl_entity(process);
       if(process_color.w == 0)
@@ -536,38 +536,38 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
                     .color        = color);
   
   //- rjf: push PID
-  if(entity->kind == CTRL_EntityKind_Process)
+  if(entity->kind == D_EntityKind_Process)
   {
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
     dr_fstrs_push_new(arena, &result, &params, push_str8f(arena, " (PID: %I64u)", entity->id), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = secondary_color, .size = ui_top_font_size()*0.85f);
   }
   
   //- rjf: threads get callstack extras
-  if(entity->kind == CTRL_EntityKind_Thread && include_extras)
+  if(entity->kind == D_EntityKind_Thread && include_extras)
   {
     Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
     Access *access = access_open();
-    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+    D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
     Arch arch = entity->arch;
-    B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
-    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+    B32 call_stack_high_priority = d_handle_match(entity->handle, rd_base_regs()->thread);
+    D_CallStack call_stack = d_call_stack_from_thread(access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
     B32 did_first_known = 0;
     for(U64 idx = 0, limit = 10;
         idx < call_stack.frames_count && idx < limit;
         idx += 1)
     {
-      CTRL_CallStackFrame *f = &call_stack.frames[call_stack.frames_count - 1 - idx];
+      D_CallStackFrame *f = &call_stack.frames[call_stack.frames_count - 1 - idx];
       U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
-      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-      U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+      D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
+      U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
       String8 name = {0};
       {
-        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+        DI_Key dbgi_key = d_dbgi_key_from_module(module);
         RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
         if(rdi != &rdi_parsed_nil)
         {
-          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, rip_voff);
+          RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, rip_voff);
           name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
           name = push_str8_copy(arena, name);
         }
@@ -594,10 +594,10 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   }
   
   //- rjf: modules get debug info status extras
-  if(entity->kind == CTRL_EntityKind_Module && include_extras)
+  if(entity->kind == D_EntityKind_Module && include_extras)
   {
     Access *access = access_open();
-    DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
+    DI_Key dbgi_key = d_dbgi_key_from_module(entity);
     RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
     if(rdi->raw_data_size == 0)
     {
@@ -1254,12 +1254,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   RD_CodeSliceSignal result = {0};
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  CTRL_Entity *selected_thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
-  CTRL_Entity *selected_thread_process = ctrl_entity_ancestor_from_kind(selected_thread, CTRL_EntityKind_Process);
+  D_Entity *selected_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+  D_Entity *selected_thread_process = d_entity_ancestor_from_kind(selected_thread, D_EntityKind_Process);
   U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
-  CTRL_Entity *selected_thread_module = ctrl_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
-  CTRL_Event stop_event = d_ctrl_last_stop_event();
-  CTRL_Entity *stopper_thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, stop_event.entity);
+  D_Entity *selected_thread_module = d_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
+  D_Event stop_event = d_ctrl_last_stop_event();
+  D_Entity *stopper_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
   B32 ctrlified = (os_get_modifiers() & OS_Modifier_Ctrl);
   Vec4F32 code_line_bgs[] =
@@ -1314,7 +1314,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //
   B32 drop_can_hit_lines = 0;
   CFG_Node *drop_cfg = &cfg_nil_node;
-  CTRL_Entity *drop_thread = &ctrl_entity_nil;
+  D_Entity *drop_thread = &d_entity_nil;
   String8 drop_expr = {0};
   Vec4F32 drop_color = pop_color;
   UI_Key drop_site_key = ui_key_from_stringf(top_container_box->key, "drop_site");
@@ -1336,7 +1336,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
     {
       drop_can_hit_lines = 1;
-      drop_thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_state->drag_drop_regs->thread);
+      drop_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_state->drag_drop_regs->thread);
       drop_color = rd_color_from_ctrl_entity(drop_thread);
       if(drop_color.w == 0)
       {
@@ -1368,10 +1368,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num < params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        CTRL_EntityList threads = params->line_ips[line_idx];
-        for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
+        D_EntityList threads = params->line_ips[line_idx];
+        for(D_EntityNode *n = threads.first; n != 0; n = n->next)
         {
-          if(n->v == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
+          if(n->v == stopper_thread && (stop_event.cause == D_EventCause_InterruptedByTrap || stop_event.cause == D_EventCause_InterruptedByException))
           {
             line_bg_colors[line_idx] = ui_color_from_name(str8_lit("background"));
           }
@@ -1404,26 +1404,26 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        CTRL_EntityList line_ips  = params->line_ips[line_idx];
+        D_EntityList line_ips  = params->line_ips[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
-          for(CTRL_EntityNode *n = line_ips.first; n != 0; n = n->next)
+          for(D_EntityNode *n = line_ips.first; n != 0; n = n->next)
           {
             // rjf: unpack thread
-            CTRL_Entity *thread = n->v;
+            D_Entity *thread = n->v;
             if(thread != selected_thread)
             {
               continue;
             }
             U64 unwind_count = (thread == selected_thread) ? rd_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
-            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-            U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
+            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
+            DI_Key dbgi_key = d_dbgi_key_from_module(module);
+            U64 thread_rip_voff = d_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
             Vec4F32 color = rd_color_from_ctrl_entity(thread);
@@ -1437,9 +1437,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 color = ui_color_from_name(str8_lit("thread_unwound"));
               }
               else if(thread == stopper_thread &&
-                      (stop_event.cause == CTRL_EventCause_InterruptedByHalt ||
-                       stop_event.cause == CTRL_EventCause_InterruptedByTrap ||
-                       stop_event.cause == CTRL_EventCause_InterruptedByException))
+                      (stop_event.cause == D_EventCause_InterruptedByHalt ||
+                       stop_event.cause == D_EventCause_InterruptedByTrap ||
+                       stop_event.cause == D_EventCause_InterruptedByException))
               {
                 color = ui_color_from_name(str8_lit("thread_error"));
               }
@@ -1473,7 +1473,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: custom draw
             {
               RD_Regs *hover_regs = rd_get_hover_regs();
-              B32 is_hovering = (ctrl_handle_match(hover_regs->ctrl_entity, thread->handle) &&
+              B32 is_hovering = (d_handle_match(hover_regs->ctrl_entity, thread->handle) &&
                                  rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
@@ -1520,7 +1520,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = thread_box->key,
-                     .expr   = push_str8f(scratch.arena, "query:control.%S", ctrl_string_from_handle(scratch.arena, thread->handle)));
+                     .expr   = push_str8f(scratch.arena, "query:control.%S", d_string_from_handle(scratch.arena, thread->handle)));
             }
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
             {
@@ -1557,7 +1557,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        CTRL_EntityList line_ips = params->line_ips[line_idx];
+        D_EntityList line_ips = params->line_ips[line_idx];
         CFG_NodePtrList line_bps = params->line_bps[line_idx];
         CFG_NodePtrList line_pins = params->line_pins[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -1566,20 +1566,20 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
-          for(CTRL_EntityNode *n = line_ips.first; n != 0; n = n->next)
+          for(D_EntityNode *n = line_ips.first; n != 0; n = n->next)
           {
             // rjf: unpack thread
-            CTRL_Entity *thread = n->v;
+            D_Entity *thread = n->v;
             if(thread == selected_thread)
             {
               continue;
             }
             U64 unwind_count = (thread == selected_thread) ? rd_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
-            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-            U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
+            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
+            DI_Key dbgi_key = d_dbgi_key_from_module(module);
+            U64 thread_rip_voff = d_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
             Vec4F32 color = rd_color_from_ctrl_entity(thread);
@@ -1593,9 +1593,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 color = ui_color_from_name(str8_lit("thread_unwound"));
               }
               else if(thread == stopper_thread &&
-                      (stop_event.cause == CTRL_EventCause_InterruptedByHalt ||
-                       stop_event.cause == CTRL_EventCause_InterruptedByTrap ||
-                       stop_event.cause == CTRL_EventCause_InterruptedByException))
+                      (stop_event.cause == D_EventCause_InterruptedByHalt ||
+                       stop_event.cause == D_EventCause_InterruptedByTrap ||
+                       stop_event.cause == D_EventCause_InterruptedByException))
               {
                 color = ui_color_from_name(str8_lit("thread_error"));
               }
@@ -1629,7 +1629,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: custom draw
             {
               RD_Regs *hover_regs = rd_get_hover_regs();
-              B32 is_hovering = (ctrl_handle_match(hover_regs->ctrl_entity, thread->handle) &&
+              B32 is_hovering = (d_handle_match(hover_regs->ctrl_entity, thread->handle) &&
                                  rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
@@ -1674,7 +1674,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = thread_box->key,
-                     .expr   = push_str8f(scratch.arena, "query:control.%S", ctrl_string_from_handle(scratch.arena, thread->handle)));
+                     .expr   = push_str8f(scratch.arena, "query:control.%S", d_string_from_handle(scratch.arena, thread->handle)));
             }
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
             {
@@ -2119,7 +2119,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             String8 eval_string = {0};
             if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
             {
-              EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules, .radix = 10};
+              EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules|rd_state->eval_viz_base_string_flags, .radix = 10};
               eval_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &string_params, params->font, params->font_size, params->font_size*60.f, eval);
             }
             ui_spacer(ui_em(1.5f, 1.f));
@@ -2260,23 +2260,23 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);
       }
-      if(drop_thread != &ctrl_entity_nil)
+      if(drop_thread != &d_entity_nil)
       {
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;
         U64 line_vaddr = params->line_vaddrs[line_idx];
-        CTRL_Entity *thread = drop_thread;
+        D_Entity *thread = drop_thread;
         U64 new_rip_vaddr = line_vaddr;
         if(params->line_vaddrs[line_idx] == 0)
         {
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, n->v.dbgi_key);
-            CTRL_Entity *module = ctrl_module_from_thread_candidates(&d_state->ctrl_entity_store->ctx, thread, &modules);
-            if(module != &ctrl_entity_nil)
+            D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
+            D_Entity *module = d_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
+            if(module != &d_entity_nil)
             {
-              new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+              new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
               break;
             }
           }
@@ -2327,6 +2327,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         TXT_Token *line_tokens_first = line_tokens->v;
         TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
+        B32 preceded_by_dot = 0;
         for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
         {
           // rjf: token -> token string
@@ -2346,7 +2347,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           
           // rjf: token -> token color
           RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
-          RD_CodeColorSlot lookup_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+          RD_CodeColorSlot lookup_color_slot = preceded_by_dot ? token_color_slot : rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string, 0, 0);
           Vec4F32 token_color = rd_rgba_from_code_color_slot(token_color_slot);
           if(lookup_color_slot != RD_CodeColorSlot_CodeDefault)
           {
@@ -2370,6 +2371,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           
           // rjf: push fancy string
           dr_fstrs_push_new(scratch.arena, &fstrs, &fstr_params, token_string, .color = token_color);
+          
+          // rjf: . -> mark next token as preceded by dot
+          preceded_by_dot = (token->kind == TXT_TokenKind_Symbol && str8_match(token_string, str8_lit("."), 0));
         }
       }
       lines_fstrs[line_idx] = fstrs;
@@ -2482,13 +2486,13 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num < params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
-      CTRL_EntityList threads = params->line_ips[line_idx];
-      for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
+      D_EntityList threads = params->line_ips[line_idx];
+      for(D_EntityNode *n = threads.first; n != 0; n = n->next)
       {
-        CTRL_Entity *thread = n->v;
+        D_Entity *thread = n->v;
         if(thread == stopper_thread &&
-           (stop_event.cause == CTRL_EventCause_InterruptedByException ||
-            stop_event.cause == CTRL_EventCause_InterruptedByTrap))
+           (stop_event.cause == D_EventCause_InterruptedByException ||
+            stop_event.cause == D_EventCause_InterruptedByTrap))
         {
           DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
           UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_text_dim(10, 1)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
@@ -2554,7 +2558,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     if(lines->first != 0 && (params->line_vaddrs[line_slice_idx] != 0 || lines->first->v.pt.line == mouse_pt.line))
     {
       RD_RegsScope(.process     = selected_thread_process->handle,
-                   .vaddr_range = ctrl_vaddr_range_from_voff_range(selected_thread_module, lines->first->v.voff_range),
+                   .vaddr_range = d_vaddr_range_from_voff_range(selected_thread_module, lines->first->v.voff_range),
                    .module      = selected_thread_module->handle,
                    .dbgi_key    = lines->first->v.dbgi_key,
                    .voff_range  = lines->first->v.voff_range)
@@ -2571,7 +2575,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   {
     E_Eval eval = e_eval_from_string(mouse_expr);
     B32 eval_implicit_hover = (eval.irtree.mode != E_Mode_Null &&
-                               eval.space.kind == CTRL_EvalSpaceKind_Entity);
+                               eval.space.kind == D_EvalSpaceKind_Entity);
     if(eval.msgs.max_kind == E_MsgKind_Null && (eval_implicit_hover || mouse_expr_is_explicit))
     {
       U64 line_vaddr = 0;
@@ -2655,8 +2659,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     Rng1U64 hover_voff_range = hover_regs->voff_range;
     if(hover_voff_range.min == 0 && hover_voff_range.max == 0)
     {
-      CTRL_Entity *module = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, hover_regs->module);
-      hover_voff_range = ctrl_voff_range_from_vaddr_range(module, hover_regs->vaddr_range);
+      D_Entity *module = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, hover_regs->module);
+      hover_voff_range = d_voff_range_from_vaddr_range(module, hover_regs->vaddr_range);
     }
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     UI_WidthFill
@@ -2805,7 +2809,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           }
           trail_color.w *= 0.25f;
           dr_rect(cursor_rect, cursor_color, 1.f, 0, 0.f);
-          if(do_cursor_trail)
+          if(do_cursor_trail && !ui_key_match(ui_active_key(UI_MouseButtonKind_Left), text_container_box->key))
           {
             R_Rect2DInst *trail_inst = dr_rect(trail_rect, trail_color, ui_top_font_size()*0.2f, 0, 1.f);
             trail_inst->shear = cursor_y - cursor_y__animated;
@@ -3190,6 +3194,7 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
   TXT_Token *tokens_opl = tokens.v+tokens.count;
   S32 indirection_counter = 0;
   indirection_size_change = 0;
+  B32 preceded_by_dot = 0;
   for(TXT_Token *token = tokens.v; token < tokens_opl; token += 1)
   {
     RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
@@ -3218,7 +3223,12 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
       case TXT_TokenKind_Identifier:
       case TXT_TokenKind_Keyword:
       {
-        RD_CodeColorSlot lookup_theme_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+        RD_CodeColorSlot lookup_theme_color_slot = RD_CodeColorSlot_CodeDefault;
+        B32 is_called = (token+1 < tokens_opl && token[1].kind == TXT_TokenKind_Symbol && str8_match(str8_substr(string, token[1].range), str8_lit("("), 0));
+        if(!preceded_by_dot)
+        {
+          lookup_theme_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string, 1, is_called);
+        }
         if(lookup_theme_color_slot != RD_CodeColorSlot_CodeDefault)
         {
           Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_theme_color_slot);
@@ -3345,6 +3355,14 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
         }
         
       }break;
+    }
+    if(token->kind == TXT_TokenKind_Symbol && str8_match(token_string, str8_lit("."), 0))
+    {
+      preceded_by_dot = 1;
+    }
+    else
+    {
+      preceded_by_dot = 0;
     }
     if(str8_match(token_string, str8_lit("}"), 0)) { indirection_counter -= 1; }
     if(str8_match(token_string, str8_lit("]"), 0)) { indirection_counter -= 1; }
@@ -3656,6 +3674,11 @@ rd_cell(RD_CellParams *params, String8 string)
                                                        UI_BoxFlag_Clickable,
                                                        "%S##revert", rd_icon_kind_text_table[RD_IconKind_Undo]);
         UI_Signal sig = ui_signal_from_box(revert_box);
+        if(ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Main)
+        {
+          ui_state->tooltip_anchor_key = revert_box->key;
+          ui_label(str8_lit("Revert To Default"));
+        }
         if(ui_pressed(sig) && params->revert_out)
         {
           params->revert_out[0] = 1;
@@ -4152,7 +4175,7 @@ rd_cell(RD_CellParams *params, String8 string)
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = params->cursor[0];
       draw_data->mark = params->mark[0];
-      draw_data->trail = do_cursor_trail;
+      draw_data->trail = do_cursor_trail && !ui_dragging(sig);
       ui_box_equip_custom_draw(text_box, ui_line_edit_draw, draw_data);
       Vec2F32 text2mouse = sub_2f32(ui_mouse(), ui_box_text_position(text_box));
       FNT_Tag font = ui_top_font();

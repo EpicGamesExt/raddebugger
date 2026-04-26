@@ -3,61 +3,63 @@
 
 global read_only LNK_CmdSwitch g_cmd_switch_map[] =
 {
-  { LNK_CmdSwitch_Null,               0, "",                     "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     0, "NOT_IMPLEMENTED",      "", ""                                                                                                      },
-  { LNK_CmdSwitch_Align,              0, "ALIGN",                ":#", "Set section alignment in the virtual address space."                                                 },
-  { LNK_CmdSwitch_AllowBind,          0, "ALLOWBIND",            "[:NO]", "Toggles bind bit in the image header."                                                            },
-  { LNK_CmdSwitch_AllowIsolation,     0, "ALLOWISOLATION",       "[:NO]", "Toggles isolation bit in the image header."                                                       },
-  { LNK_CmdSwitch_AlternateName,      1, "ALTERNATENAME",        ":FROM=TO", "Creates a symbol alias \"FROM=TO\"."                                                           },
-  { LNK_CmdSwitch_AppContainer,       0, "APPCONTAINER",         "[:NO]", "Toggles app container bit in the image header."                                                   },
-  { LNK_CmdSwitch_Base,               0, "BASE",                 "{ADDRESS[,SIZE]|@FILENAME,KEY}", "Set default image base address."                                         },
-  { LNK_CmdSwitch_Brepro,             0, "BREPRO",               "", "No support."                                                                                           },
-  { LNK_CmdSwitch_Debug,              0, "DEBUG",                "[:{FULL|NONE}]", "Controls debug info level."                                                              },
-  { LNK_CmdSwitch_DefaultLib,         1, "DEFAULTLIB",           ":LIBNAME", "Set default library."                                                                          },
-  { LNK_CmdSwitch_Delay,              0, "DELAY",                ":{NOBIND|UNLOAD}", "Controls emission of unload and bind tables."                                          },
-  { LNK_CmdSwitch_DelayLoad,          0, "DELAYLOAD",            ":DLL", "Delay load DLL."                                                                                   },
-  { LNK_CmdSwitch_Dll,                0, "DLL",                  "", "Link to a DLL."                                                                                        },
-  { LNK_CmdSwitch_DisallowLib,        1, "DISALLOWLIB",          ":LIBRARY", "Prevents LIBRARY from being linked.",                                                          },
-  { LNK_CmdSwitch_DynamicBase,        0, "DYNAMICBASE",          "[:NO]", "Enable random base address in the linked image."                                                  },
-  { LNK_CmdSwitch_Entry,              1, "ENTRY",                ":FUNCTION", "Name of the entry point symbol."                                                              },
-  { LNK_CmdSwitch_Export,             1, "EXPORT",               ":SYMBOL", "Create an export entry for SYMBOL."                                                             },
-  { LNK_CmdSwitch_FailIfMismatch,     1, "FAILIFMISMATCH",       "{id=value}", "Fails to link if same ids have conflicting values."                                          },
-  { LNK_CmdSwitch_FileAlign,          0, "FILEALIGN",            ":#", "Set section alignment in the file."                                                                  },
-  { LNK_CmdSwitch_Fixed,              0, "FIXED",                "[:NO]", "Load the image at the default base address."                                                      },
-  { LNK_CmdSwitch_FunctionPadMin,     0, "FUNCTIONPADMIN",       ":#", "Minimum function byte size."                                                                          },
-  { LNK_CmdSwitch_Heap,               0, "HEAP",                 "RESERVE[,COMMIT]", "Set reserve and commit size for the heap."                                             },
-  { LNK_CmdSwitch_HighEntropyVa,      0, "HIGHENTROPYVA",        "[:NO]", "Indicate that image supports full 64-bit address space ASLR."                                     },
-  { LNK_CmdSwitch_Ignore,             0, "IGNORE",               ":#", "Ignore a warning."                                                                                   },
-  { LNK_CmdSwitch_ImpLib,             0, "IMPLIB",               ":FILENAME", "Set file name for the import library."                                                        },
-  { LNK_CmdSwitch_Include,            1, "INCLUDE",              ":SYMBOL", "Force a link against SYMBOL."                                                                   },
-  { LNK_CmdSwitch_InferAsanLibs,      1, "INFERASANLIBS",        "[:NO]", "No support."                                                                                      },
-  { LNK_CmdSwitch_InferAsanLibsNo,    1, "INFERASANLIBSNO",      "", "No support.",                                                                                          },
-  { LNK_CmdSwitch_LargeAddressAware,  0, "LARGEADDRESSAWARE",    "[:NO]", "For images that can handle addresses > 2GiB."                                                     },
-  { LNK_CmdSwitch_Lib,                0, "LIB",                  "", "Turn linker into lib.exe."                                                                             },
-  { LNK_CmdSwitch_LibPath,            0, "LIBPATH",              ":DIR", "Add DIR for the linker to search for libraries."                                                   },
-  { LNK_CmdSwitch_Machine,            0, "MACHINE",              ":{X64|X86}", "Image target platform."                                                                      },
-  { LNK_CmdSwitch_Manifest,           0, "MANIFEST",             "[:{EMBED[,ID=#]|NO]", "Controls whether the linker should create a side manifest."                         },
-  { LNK_CmdSwitch_ManifestDependency, 1, "MANIFESTDEPENDENCY",   ":\"manifest dependency XML string\"", "Add a manifest dependency."                                         },
-  { LNK_CmdSwitch_ManifestFile,       0, "MANIFESTFILE",         ":FILENAME", "Specifies a manifest file."                                                                   },
-  { LNK_CmdSwitch_ManifestInput,      0, "MANIFESTINPUT",        ":FILENAME", "Manifest that is embedded in the image."                                                      },
+  { LNK_CmdSwitch_Null,               0, "",                     "", ""                                                                                           },
+  { LNK_CmdSwitch_NotImplemented,     0, "NOT_IMPLEMENTED",      "", ""                                                                                           },
+  { LNK_CmdSwitch_Align,              0, "ALIGN",                ":#",                             "Set section alignment in the virtual address space."          },
+  { LNK_CmdSwitch_AllowBind,          0, "ALLOWBIND",            "[:NO]",                          "Toggles bind bit in the image header."                        },
+  { LNK_CmdSwitch_AllowIsolation,     0, "ALLOWISOLATION",       "[:NO]",                          "Toggles isolation bit in the image header."                   },
+  { LNK_CmdSwitch_AlternateName,      1, "ALTERNATENAME",        ":FROM=TO",                       "Creates a symbol alias \"FROM=TO\"."                          },
+  { LNK_CmdSwitch_AppContainer,       0, "APPCONTAINER",         "[:NO]",                          "Toggles app container bit in the image header."               },
+  { LNK_CmdSwitch_Base,               0, "BASE",                 "{ADDRESS[,SIZE]|@FILENAME,KEY}", "Set default image base address."                              },
+  { LNK_CmdSwitch_Brepro,             0, "BREPRO",               "",                               "No support."                                                  },
+  { LNK_CmdSwitch_Debug,              0, "DEBUG",                "[:{FULL|NONE}]",                 "Controls debug info level."                                   },
+  { LNK_CmdSwitch_DefaultLib,         1, "DEFAULTLIB",           ":LIBNAME",                       "Set default library."                                         },
+  { LNK_CmdSwitch_Delay,              0, "DELAY",                ":{NOBIND|UNLOAD}",               "Controls emission of unload and bind tables."                 },
+  { LNK_CmdSwitch_DelayLoad,          0, "DELAYLOAD",            ":DLL",                           "Delay load DLL."                                              },
+  { LNK_CmdSwitch_Dll,                0, "DLL",                  "",                               "Link to a DLL."                                               },
+  { LNK_CmdSwitch_DisallowLib,        1, "DISALLOWLIB",          ":LIBRARY",                       "Prevents LIBRARY from being linked.",                         },
+  { LNK_CmdSwitch_DynamicBase,        0, "DYNAMICBASE",          "[:NO]",                          "Enable random base address in the linked image."              },
+  { LNK_CmdSwitch_Entry,              1, "ENTRY",                ":FUNCTION",                      "Name of the entry point symbol."                              },
+  { LNK_CmdSwitch_Export,             1, "EXPORT",               ":SYMBOL",                        "Create an export entry for SYMBOL."                           },
+  { LNK_CmdSwitch_FailIfMismatch,     1, "FAILIFMISMATCH",       "{id=value}",                     "Fails to link if same ids have conflicting values."           },
+  { LNK_CmdSwitch_FileAlign,          0, "FILEALIGN",            ":#",                             "Set section alignment in the file."                           },
+  { LNK_CmdSwitch_Fixed,              0, "FIXED",                "[:NO]",                          "Load the image at the default base address."                  },
+  { LNK_CmdSwitch_FunctionPadMin,     0, "FUNCTIONPADMIN",       ":#",                             "Minimum function byte size."                                  },
+  { LNK_CmdSwitch_Heap,               0, "HEAP",                 "RESERVE[,COMMIT]",               "Set reserve and commit size for the heap."                    },
+  { LNK_CmdSwitch_HighEntropyVa,      0, "HIGHENTROPYVA",        "[:NO]",                          "Indicate that image supports full 64-bit address space ASLR." },
+  { LNK_CmdSwitch_Ignore,             0, "IGNORE",               ":#",                             "Ignore a warning."                                            },
+  { LNK_CmdSwitch_ImpLib,             0, "IMPLIB",               ":FILENAME",                      "Set file name for the import library."                        },
+  { LNK_CmdSwitch_Include,            1, "INCLUDE",              ":SYMBOL",                        "Force a link against SYMBOL."                                 },
+  { LNK_CmdSwitch_InferAsanLibs,      1, "INFERASANLIBS",        "[:NO]",                          "No support."                                                  },
+  { LNK_CmdSwitch_InferAsanLibsNo,    1, "INFERASANLIBSNO",      "",                               "No support.",                                                 },
+  { LNK_CmdSwitch_LargeAddressAware,  0, "LARGEADDRESSAWARE",    "[:NO]",                          "For images that can handle addresses > 2GiB."                 },
+  { LNK_CmdSwitch_Lib,                0, "LIB",                  "",                               "Turn linker into lib.exe."                                    },
+  { LNK_CmdSwitch_LibPath,            0, "LIBPATH",              ":DIR",                           "Add DIR for the linker to search for libraries."              },
+  { LNK_CmdSwitch_Machine,            0, "MACHINE",              ":{X64|X86}",                     "Image target platform."                                       },
+  { LNK_CmdSwitch_Manifest,           0, "MANIFEST",             "[:{EMBED[,ID=#]|NO]",            "Controls whether the linker should create a side manifest."   },
+  { LNK_CmdSwitch_ManifestDependency, 1, "MANIFESTDEPENDENCY",   ":\"manifest dependency XML string\"", "Add a manifest dependency."                              },
+  { LNK_CmdSwitch_ManifestFile,       0, "MANIFESTFILE",         ":FILENAME",                      "Specifies a manifest file."                                   },
+  { LNK_CmdSwitch_ManifestInput,      0, "MANIFESTINPUT",        ":FILENAME",                      "Manifest that is embedded in the image."                      },
   { LNK_CmdSwitch_ManifestUac,        0, "MANIFESTUAC",          ":{NO|{'level'={'asInvoker'|'highestAvailable'|'requireAdministrator'} ['uiAccess'={'true'|'false'}]}}", "Controls UAC information in the manifest." },
-  { LNK_CmdSwitch_Merge,              1, "MERGE",                ":FROM=TO", "Merges sections."                                                                              },
-  { LNK_CmdSwitch_Natvis,             0, "NATVIS",               ":FILENAME", "NATVIS to embed in the PDB."                                                                  },
-  { LNK_CmdSwitch_NoDefaultLib,       1, "NODEFAULTLIB",         ":LIBNAME", "Ignore a /DEFAULTLIB."                                                                         },
-  { LNK_CmdSwitch_NoDefaultLib,       0, "NOD",                  ":LIBNAME", "Alias for /NODEFAULTLIB."                                                                      },
-  { LNK_CmdSwitch_NoExp,              0, "NOEXP",                "", "No support."                                                                                           },
-  { LNK_CmdSwitch_NoImpLib,           0, "NOIMPLIB",             "", "Do not create the import library."                                                                     },
-  { LNK_CmdSwitch_NxCompat,           0, "NXCOMPAT",             "[:NO]", "Image is compatible with data execution prevention."                                              },
-  { LNK_CmdSwitch_Opt,                0, "OPT",                  "{REF|ICF}", "Optimizations."                                                                               },
-  { LNK_CmdSwitch_Out,                0, "OUT",                  ":FILENAME", "File name of the output image."                                                               },
-  { LNK_CmdSwitch_Pdb,                0, "PDB",                  ":FILENAME", "File name of the output PDB."                                                                 },
-  { LNK_CmdSwitch_PdbAltPath,         0, "PDBALTPATH",           ":PATH", "Alternative output path for the PDB."                                                             },
-  { LNK_CmdSwitch_PdbPageSize,        0, "PDBPAGESIZE",          ":#", "Page size must be power of two."                                                                     },
-  { LNK_CmdSwitch_Release,            1, "RELEASE",              "", "Write image checksum."                                                                                 },
-  { LNK_CmdSwitch_Stack,              1, "STACK",                ":RESERVE[,COMMIT]", "Set reserve and commit size for the stack."                                           },
-  { LNK_CmdSwitch_SubSystem,          1, "SUBSYSTEM",            ":{CONSOLE|NATIVE|WINDOWS}[,#[.##]]", "Set subsystem for the image."                                        },
-  { LNK_CmdSwitch_TsAware,            0, "TSAWARE",              "[:NO]", "Image is terminal server aware."                                                                  },
-  { LNK_CmdSwitch_Version,            0, "VERSION",              "", "Image version."                                                                                        },
+  { LNK_CmdSwitch_Merge,              1, "MERGE",                ":FROM=TO",                       "Merges sections."                                             },
+  { LNK_CmdSwitch_Natvis,             0, "NATVIS",               ":FILENAME",                      "NATVIS to embed in the PDB."                                  },
+  { LNK_CmdSwitch_NoDefaultLib,       1, "NODEFAULTLIB",         ":LIBNAME",                       "Ignore a /DEFAULTLIB."                                        },
+  { LNK_CmdSwitch_NoDefaultLib,       0, "NOD",                  ":LIBNAME",                       "Alias for /NODEFAULTLIB."                                     },
+  { LNK_CmdSwitch_NoExp,              0, "NOEXP",                "",                               "No support."                                                  },
+  { LNK_CmdSwitch_NoImpLib,           0, "NOIMPLIB",             "",                               "Do not create the import library."                            },
+  { LNK_CmdSwitch_NxCompat,           0, "NXCOMPAT",             "[:NO]",                          "Image is compatible with data execution prevention."          },
+  { LNK_CmdSwitch_Opt,                0, "OPT",                  "{REF|ICF}",                      "Optimizations."                                               },
+  { LNK_CmdSwitch_Out,                0, "OUT",                  ":FILENAME",                      "File name of the output image."                               },
+  { LNK_CmdSwitch_Pdb,                0, "PDB",                  ":FILENAME",                      "File name of the output PDB."                                 },
+  { LNK_CmdSwitch_PdbAltPath,         0, "PDBALTPATH",           ":PATH",                          "Alternative output path for the PDB."                         },
+  { LNK_CmdSwitch_PdbPageSize,        0, "PDBPAGESIZE",          ":#",                             "Page size must be power of two."                              },
+  { LNK_CmdSwitch_PdbStripped,        0, "PDBSTRIPPED",          ":FILENAME",                      "Create a stripped PDB containing public symbols, a section map, and a list of object files." },
+  { LNK_CmdSwitch_Release,            1, "RELEASE",              "",                               "Write image checksum."                                        },
+  { LNK_CmdSwitch_Stack,              1, "STACK",                ":RESERVE[,COMMIT]",              "Set reserve and commit size for the stack."                   },
+  { LNK_CmdSwitch_SubSystem,          1, "SUBSYSTEM",            ":{CONSOLE|NATIVE|WINDOWS}[,#[.##]]", "Set subsystem for the image."                             },
+  { LNK_CmdSwitch_TsAware,            0, "TSAWARE",              "[:NO]",                          "Image is terminal server aware."                              },
+  { LNK_CmdSwitch_Version,            0, "VERSION",              "",                               "Image version."                                               },
+  { LNK_CmdSwitch_WholeArchive,       0, "WHOLEARCHIVE",         "[:LIBNAME]",                     "Force linker to pull in all objs from the specified lib."     },
 
   { LNK_CmdSwitch_Rad_Age,                          0, "RAD_AGE",                              ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1."    },
   { LNK_CmdSwitch_Rad_AltPchDir,                    0, "RAD_ALT_PCH_DIR",                      ":PATH",     "Alternative directory to search for PCH object files."                            },
@@ -90,6 +92,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_Ignore,                       0, "RAD_IGNORE",                           ":#",        "Ignore the specified RAD linker warning."                                         },
   { LNK_CmdSwitch_Rad_WriteTempFiles,               0, "RAD_WRITE_TEMP_FILES",                 "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
   { LNK_CmdSwitch_Rad_TimeStamp,                    0, "RAD_TIME_STAMP",                       ":#",        "Time stamp embeded in EXE and PDB."                                               },
+  { LNK_CmdSwitch_Rad_TypeHashAlg,                  0, "RAD_TPYE_HASH_ALG",                    ":{BLAKE3}", "Sets hashing algorithm for type merging."                                         },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,        0, "RAD_UNRESOLVED_SYMBOL_LIMIT",          ":#",        "Limits number of unresolved symbol errors linker reports."                        },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,     0, "RAD_UNRESOLVED_SYMBOL_REF_LIMIT",      ":#",        "Limit number of unresolved symbol references linker reports."                     },
   { LNK_CmdSwitch_Rad_Version,                      0, "RAD_VERSION",                          "",          "Print version and exit."                                                          },
@@ -974,12 +977,21 @@ lnk_include_symbol(LNK_Config *config, String8 name, LNK_Obj *obj)
 }
 
 internal void
+lnk_whole_archive(LNK_Config *config, String8 lib_name)
+{
+  String8Node value = { .string = lib_name };
+  String8List value_strings = {0};
+  str8_list_push_node(&value_strings, &value);
+  lnk_apply_cmd_option_to_config(config, str8_lit("wholearchive"), value_strings, 0);
+}
+
+internal void
 lnk_print_build_info()
 {
-  fprintf(stdout, "  Compiler: %s\n", COMPILER_STRING);
-  fprintf(stdout, "  Mode    : %s\n", BUILD_MODE_STRING);
-  fprintf(stdout, "  Date    : %s %s\n", __TIME__, __DATE__);
-  fprintf(stdout, "  Version : %s\n", BUILD_VERSION_STRING_LITERAL);
+  lnk_fprintf(stdout, "  Compiler: %s\n", COMPILER_STRING);
+  lnk_fprintf(stdout, "  Mode    : %s\n", BUILD_MODE_STRING);
+  lnk_fprintf(stdout, "  Date    : %s %s\n", __TIME__, __DATE__);
+  lnk_fprintf(stdout, "  Version : %s\n", BUILD_VERSION_STRING_LITERAL);
 }
 
 internal void
@@ -997,13 +1009,13 @@ lnk_print_help(void)
     desc_max_size = Max(desc_max_size, strlen(g_cmd_switch_map[i].desc));
   }
 
-  fprintf(stdout, "--- Help -------------------------------------------------------------------------------------------------------------------\n");
-  fprintf(stdout, "  %s\n", BUILD_TITLE_STRING_LITERAL);
-  fprintf(stdout, "\n");
-  fprintf(stdout, "  Usage: radlink.exe [Options] [Files] [@rsp]\n");
-  fprintf(stdout, "\n");
+  lnk_fprintf(stdout, "--- Help -------------------------------------------------------------------------------------------------------------------\n");
+  lnk_fprintf(stdout, "  %s\n", BUILD_TITLE_STRING_LITERAL);
+  lnk_fprintf(stdout, "\n");
+  lnk_fprintf(stdout, "  Usage: radlink.exe [Options] [Files] [@rsp]\n");
+  lnk_fprintf(stdout, "\n");
 
-  fprintf(stdout, "  Options:\n");
+  lnk_fprintf(stdout, "  Options:\n");
   U64 option_indent_size   = 4;
   U64 option_name_max_size = 60;
   for EachElement(i, g_cmd_switch_map) {
@@ -1047,12 +1059,12 @@ lnk_print_help(void)
     }
 
     String8 line = str8_list_join(temp.arena, &fmt, 0);
-    fprintf(stdout, "%.*s", str8_varg(line));
+    lnk_fprintf(stdout, "%.*s", str8_varg(line));
 
     temp_end(temp);
   }
 
-  fprintf(stdout, "\n");
+  lnk_fprintf(stdout, "\n");
 
   scratch_end(scratch);
 }
@@ -1225,7 +1237,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       LNK_DebugMode debug_mode = lnk_debug_mode_from_string(value_strings.first->string);
       if (debug_mode == LNK_DebugMode_GHash) {
         config->debug_mode = LNK_DebugMode_Full;
-        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "GHASH is not supported, switching to FULL");
+        config->ghash = 1;
       } else if (debug_mode == LNK_DebugMode_FastLink) {
         config->debug_mode = LNK_DebugMode_Full;
         lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "FASTLINK is not supported, switching to FULL");
@@ -1440,6 +1452,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     for (String8Node *value_n = value_strings.first; value_n != 0; value_n = value_n->next) {
       lnk_include_symbol(config, value_n->string, obj);
     }
+  } break;
+
+  case LNK_CmdSwitch_InferAsanLibs: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->infer_asan_libs);
   } break;
 
   case LNK_CmdSwitch_LargeAddressAware: {
@@ -1707,6 +1723,13 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     }
   } break;
 
+  case LNK_CmdSwitch_PdbStripped: {
+    String8 file_name;
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &file_name)) {
+      config->pdb_stripped_name = str8_copy(config->arena, file_name);
+    }
+  } break;
+
   case LNK_CmdSwitch_Release: {
     if (value_strings.node_count == 0) {
       config->flags |= LNK_ConfigFlag_WriteImageChecksum;
@@ -1773,6 +1796,18 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Version: {
     lnk_cmd_switch_parse_version(obj, cmd_switch, value_strings, &config->image_ver);
+  } break;
+
+  case LNK_CmdSwitch_WholeArchive: {
+    if (value_strings.node_count == 0) {
+      config->whole_archive_all = 1;
+    } else {
+      String8 lib_name;
+      if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &lib_name)) {
+        lib_name = str8_chop_last_dot(str8_skip_last_slash(lib_name));
+        hash_table_push_path_string(config->arena, config->whole_archive_ht, lib_name, str8_zero());
+      }
+    }
   } break;
 
   case LNK_CmdSwitch_Rad_Age: {
@@ -2031,6 +2066,17 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     lnk_cmd_switch_parse_u32(obj, cmd_switch, value_strings, &config->time_stamp, 0);
   } break;
 
+  case LNK_CmdSwitch_Rad_TypeHashAlg: {
+    String8 alg = {0};
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &alg)) {
+      if (str8_match(alg, str8_lit("BLAKE3"), StringMatchFlag_CaseInsensitive)) {
+        config->type_hash_alg = LLVM_GHashAlg_BLAKE3;
+      } else {
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown hash alg: %S", alg);
+      }
+    }
+  } break;
+
   case LNK_CmdSwitch_Rad_UnresolvedSymbolLimit: {
     lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->unresolved_symbol_limit, 0);
   } break;
@@ -2040,7 +2086,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   } break;
 
   case LNK_CmdSwitch_Rad_Version: {
-    fprintf(stdout, "%s\n", BUILD_TITLE_STRING_LITERAL);
+    lnk_fprintf(stdout, "%s\n", BUILD_TITLE_STRING_LITERAL);
     os_abort(0);
   } break;
 
@@ -2086,6 +2132,7 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   config->delay_load_ht             = hash_table_init(arena, 0x100);
   config->disallow_lib_ht           = hash_table_init(arena, 0x100);
   config->fail_if_mismatch_ht       = hash_table_init(arena, 0x100);
+  config->whole_archive_ht          = hash_table_init(arena, 0x100);
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {

@@ -40,11 +40,8 @@ typedef struct D2R_Shared
   RDIM_TypeChunkList       types;
   RDIM_SrcFileChunkList    src_files;
   RDIM_LineTableChunkList  line_tables;
-  RDIM_LocationChunkList   locations;
   RDIM_SymbolChunkList     gvars;
   RDIM_SymbolChunkList     tvars;
-  RDIM_SymbolChunkList     procs;
-  RDIM_ScopeChunkList      scopes;
   RDIM_InlineSiteChunkList inline_sites;
 } D2R_Shared;
 
@@ -60,39 +57,39 @@ typedef enum
 } D2R_ArithmeticType;
 
 #define D2R_ValueType_Signed_XList \
-  X(S8,   Signed,   1 )            \
-  X(S16,  Signed,   2 )            \
-  X(S32,  Signed,   4 )            \
-  X(S64,  Signed,   8 )            \
-  X(S128, Signed,   16)            \
-  X(S256, Signed,   32)            \
-  X(S512, Signed,   64)
+X(S8,   Signed,   1 )            \
+X(S16,  Signed,   2 )            \
+X(S32,  Signed,   4 )            \
+X(S64,  Signed,   8 )            \
+X(S128, Signed,   16)            \
+X(S256, Signed,   32)            \
+X(S512, Signed,   64)
 
 #define D2R_ValueType_Unsigned_XList \
-  X(U8,   Unsigned, 1 )              \
-  X(U16,  Unsigned, 2 )              \
-  X(U32,  Unsigned, 4 )              \
-  X(U64,  Unsigned, 8 )              \
-  X(U128, Unsigned, 16)              \
-  X(U256, Unsigned, 32)              \
-  X(U512, Unsigned, 64)
+X(U8,   Unsigned, 1 )              \
+X(U16,  Unsigned, 2 )              \
+X(U32,  Unsigned, 4 )              \
+X(U64,  Unsigned, 8 )              \
+X(U128, Unsigned, 16)              \
+X(U256, Unsigned, 32)              \
+X(U512, Unsigned, 64)
 
 #define D2R_ValueType_Float_XList \
-  X(F16,  Float,    2 )           \
-  X(F32,  Float,    4 )           \
-  X(F48,  Float,    6 )           \
-  X(F64,  Float,    8 )           \
-  X(F80,  Float,    10)           \
-  X(F96,  Float,    12)           \
-  X(F128, Float,    16)
+X(F16,  Float,    2 )           \
+X(F32,  Float,    4 )           \
+X(F48,  Float,    6 )           \
+X(F64,  Float,    8 )           \
+X(F80,  Float,    10)           \
+X(F96,  Float,    12)           \
+X(F128, Float,    16)
 
 #define D2R_ValueType_XList      \
-  X(Generic,       Null,     0 ) \
-  X(ImplicitValue, Null,     0 ) \
-  X(Address,       Unsigned, 0 ) \
-  D2R_ValueType_Signed_XList     \
-  D2R_ValueType_Unsigned_XList   \
-  D2R_ValueType_Float_XList
+X(Generic,       Null,     0 ) \
+X(ImplicitValue, Null,     0 ) \
+X(Address,       Unsigned, 0 ) \
+D2R_ValueType_Signed_XList     \
+D2R_ValueType_Unsigned_XList   \
+D2R_ValueType_Float_XList
 
 typedef enum
 {
@@ -214,10 +211,10 @@ internal void          d2r_push_relational_op(Arena *arena, D2R_ValueTypeStack *
 //~ Expression Conversion
 
 internal RDIM_EvalBytecode     d2r_bytecode_from_expression(Arena *arena, DW_Input *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, String8 expr, DW_CompUnit *cu, D2R_ValueType *result_type_out);
-internal RDIM_Location *       d2r_transpile_expression    (Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr);
-internal RDIM_Location *       d2r_location_from_attrib    (Arena *arena, RDIM_LocationChunkList *locations, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind);
-internal RDIM_LocationCaseList d2r_locset_from_attrib      (Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *curr_scope, RDIM_LocationChunkList *locations, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind);
-internal RDIM_LocationCaseList d2r_var_locset_from_tag     (Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *curr_scope, RDIM_LocationChunkList *locations, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag);
+internal RDIM_Location         d2r_transpile_expression    (Arena *arena, DW_Input *input, U64 image_base, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr);
+internal RDIM_Location         d2r_location_from_attrib    (Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind);
+internal RDIM_LocationCaseList d2r_locset_from_attrib      (Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *curr_scope, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind);
+internal RDIM_LocationCaseList d2r_var_locset_from_tag     (Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *curr_scope, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag);
 
 ////////////////////////////////
 //~ Type Table
@@ -258,7 +255,7 @@ internal void d2r_convert_udts(Arena *arena, D2R_TypeTable *type_table, DW_Input
 internal RDIM_Scope * d2r_push_scope         (Arena *arena, RDIM_ScopeChunkList *scopes, U64 scope_chunk_cap, D2R_TagFrame *tag_stack, Rng1U64List ranges);
 internal RDIM_Type ** d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_TagNode *cur_node, U64 *param_count_out);
 internal Rng1U64List  d2r_range_list_from_tag(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, DW_Tag tag);
-internal void         d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, RDIM_Scope *global_scope, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 image_base, Arch arch, DW_TagNode *root);
+internal void         d2r_convert_symbols(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, DW_CompUnit *cu, DW_Language cu_lang, U64 image_base, Arch arch, DW_TagNode *root, RDIM_Unit *unit_rdi);
 
 ////////////////////////////////
 //~ Line Table Conversion

@@ -227,12 +227,13 @@ struct EV_WindowedRowList
 typedef U32 EV_StringFlags;
 enum
 {
-  EV_StringFlag_ReadOnlyDisplayRules = (1<<0),
-  EV_StringFlag_PrettyNames          = (1<<1),
-  EV_StringFlag_DisableAddresses     = (1<<2),
-  EV_StringFlag_DisableStrings       = (1<<3),
-  EV_StringFlag_DisableChars         = (1<<4),
-  EV_StringFlag_DisableStringQuotes  = (1<<5),
+  EV_StringFlag_ReadOnlyDisplayRules         = (1<<0),
+  EV_StringFlag_PrettyNames                  = (1<<1),
+  EV_StringFlag_DisableAddresses             = (1<<2),
+  EV_StringFlag_DisableStrings               = (1<<3),
+  EV_StringFlag_DisableChars                 = (1<<4),
+  EV_StringFlag_DisableStringQuotes          = (1<<5),
+  EV_StringFlag_AddressesBeforeContent       = (1<<6),
 };
 
 typedef struct EV_StringParams EV_StringParams;

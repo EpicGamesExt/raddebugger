@@ -23,9 +23,9 @@ typedef enum
 ////////////////////////////////
 
 #define t_invoke_linker_timeout(c, t)       T_Ok(t_invoke(g_linker, c, t))
-#define t_invoke_linker_timeoutf(t, f, ...) t_invoke_linker_timeout(push_str8f(scratch.arena, f, ##__VA_ARGS__), t)
+#define t_invoke_linker_timeoutf(t, f, ...) t_invoke_linker_timeout(push_str8f(arena, f, ##__VA_ARGS__), t)
 #define t_invoke_linker(c)       t_invoke_linker_timeout(c, max_U64)
-#define t_invoke_linkerf(f, ...) t_invoke_linker(push_str8f(scratch.arena, f, ##__VA_ARGS__))
+#define t_invoke_linkerf(f, ...) t_invoke_linker(push_str8f(arena, f, ##__VA_ARGS__))
 
 internal T_Linker t_id_linker(void);
 

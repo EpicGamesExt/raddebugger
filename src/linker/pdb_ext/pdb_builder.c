@@ -21,7 +21,6 @@ pdb_hash_table_alloc(PDB_HashTable *ht, U32 max)
   ht->deleted_bits = bit_array_init32(ht->arena, max);
   ht->max          = max;
   ht->count        = 0;
-  bit_array_set_bit_range32(ht->deleted_bits, rng_1u64(0, max), 1);
   ProfEnd();
 }
 
@@ -148,51 +147,48 @@ pdb_hash_table_from_data(PDB_HashTable *ht,
   return error;
 }
 
+internal int
+pdb_hash_table_bucket_is_before(void *raw_a, void *raw_b)
+{
+  PDB_HashTableBucket *a = *(PDB_HashTableBucket **)raw_a, *b = *(PDB_HashTableBucket **)raw_b;
+  return a->insert_idx < b->insert_idx;
+}
+
 internal String8
-pdb_data_from_hash_table(Arena *arena,
-                         PDB_HashTable *ht,
-                         B32 has_local_data,
-                         PDB_HashTablePackFunc *pack_func,
-                         void *pack_ud)
+pdb_data_from_hash_table(Arena *arena, PDB_HashTable *ht, PDB_HashTablePackFunc *pack_func, void *pack_ud)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
 
-  String8Array key_arr   = {0};
-  String8Array value_arr = {0};
-  pdb_hash_table_get_present_keys_and_values(scratch.arena, ht, &key_arr, &value_arr);
+  String8List kv_srl = {0}; str8_serial_begin(scratch.arena, &kv_srl);
+  PDB_HashTableBucket **buckets = pdb_hash_table_get_present_buckets(scratch.arena, ht);
+  for EachIndex(i, ht->count) { pack_func(scratch.arena, &kv_srl, buckets[i], buckets[i]->key, buckets[i]->value, pack_ud); }
 
-  String8List local_data_srl = {0};
-  String8List key_value_srl = {0};
-  str8_serial_begin(scratch.arena, &local_data_srl);
-  str8_serial_begin(scratch.arena, &key_value_srl);
+  // compute count of present words that are needed
+  U64 present_word_count = 0;
+  U64 present_msb = bit_array_scan_right_to_left32(ht->present_bits, 0, ht->present_bits.count*32, 1);
+  if (present_msb < ht->present_bits.count*32) { present_word_count = present_msb / 32 + 1; }
 
-  for (U64 i = 0; i < ht->count; i += 1) {
-    String8 key   = key_arr.v[i];
-    String8 value = value_arr.v[i];
-    pack_func(scratch.arena, &local_data_srl, &key_value_srl, key, value, pack_ud);
-  }
+  // compute count of deleted words that are needed
+  U64 deleted_word_count = 0;
+  U64 deleted_msb = bit_array_scan_right_to_left32(ht->deleted_bits, 0, ht->deleted_bits.count*32, 1);
+  if (deleted_msb < ht->deleted_bits.count*32) { deleted_word_count = deleted_msb / 32 + 1; }
 
-  // serialize hash table
-  String8List srl = {0};
-  str8_serial_begin(scratch.arena, &srl);
-  if (has_local_data) {
-    U32 local_data_size32 = safe_cast_u32(local_data_srl.total_size);
-    str8_serial_push_u32(scratch.arena, &srl, local_data_size32);
-    str8_list_concat_in_place(&srl, &local_data_srl);
-  }
-  str8_serial_push_u32(scratch.arena, &srl, ht->count);
-  str8_serial_push_u32(scratch.arena, &srl, ht->max);
-  str8_serial_push_u32(scratch.arena, &srl, ht->present_bits.count);
-  str8_serial_push_array(scratch.arena, &srl, &ht->present_bits.v[0], ht->present_bits.count);
-  str8_serial_push_u32(scratch.arena, &srl, ht->deleted_bits.count);
-  str8_serial_push_array(scratch.arena, &srl, &ht->deleted_bits.v[0], ht->deleted_bits.count);
-  str8_list_concat_in_place(&srl, &key_value_srl);
-  String8 data = str8_serial_end(arena, &srl);
+  // write hash table
+  String8List ht_srl = {0}; str8_serial_begin(scratch.arena, &ht_srl);
+  str8_serial_push_u32  (scratch.arena, &ht_srl, ht->count);
+  str8_serial_push_u32  (scratch.arena, &ht_srl, ht->max);
+  str8_serial_push_u32  (scratch.arena, &ht_srl, present_word_count);
+  str8_serial_push_array(scratch.arena, &ht_srl, &ht->present_bits.v[0], present_word_count);
+  str8_serial_push_u32  (scratch.arena, &ht_srl, deleted_word_count);
+  str8_serial_push_array(scratch.arena, &ht_srl, &ht->deleted_bits.v[0], deleted_word_count);
+  str8_list_concat_in_place(&ht_srl, &kv_srl);
+
+  String8 result = str8_serial_end(arena, &ht_srl);
   
   scratch_end(scratch);
   ProfEnd();
-  return data;
+  return result;
 }
 
 internal void
@@ -204,7 +200,8 @@ pdb_hash_table_grow(PDB_HashTable *ht, U64 new_capacity)
   for (U32 i = 0; i < ht->max; ++i) {
     if (bit_array_is_bit_set(ht->present_bits, i)) {
       PDB_HashTableBucket *bucket = &ht->bucket_arr[i];
-      B32 is_set = pdb_hash_table_try_set(&new_ht, bucket->key, bucket->value);
+      PDB_HashTableBucket *is_set = pdb_hash_table_try_set(&new_ht, bucket->key, bucket->value);
+      is_set->insert_idx = bucket->insert_idx;
       Assert(is_set);
     }
   }
@@ -219,25 +216,26 @@ pdb_hash_table_hash(String8 key)
   return (U16)pdb_hash_v1(key);
 }
 
-internal B32
+internal PDB_HashTableBucket *
 pdb_hash_table_try_set(PDB_HashTable *ht, String8 key, String8 value)
 {
   ProfBeginFunction();
-  B32 is_set = 0;
+  PDB_HashTableBucket *is_set = 0;
   U32 best_ibucket = pdb_hash_table_hash(key) % ht->max;
   U32 ibucket = best_ibucket;
   do {
     B32 is_present = pdb_hash_table_is_present(ht, ibucket);
     if ( ! is_present) {
       PDB_HashTableBucket *bucket = &ht->bucket_arr[ibucket];
-      bucket->key   = push_str8_copy(ht->arena, key);
-      bucket->value = push_str8_copy(ht->arena, value);
+      bucket->key        = push_str8_copy(ht->arena, key);
+      bucket->value      = push_str8_copy(ht->arena, value);
+      bucket->insert_idx = ht->count;
 
       bit_array_set_bit32(ht->present_bits, ibucket, 1);
       bit_array_set_bit32(ht->deleted_bits, ibucket, 0);
 
       ht->count += 1;
-      is_set = 1;
+      is_set = bucket;
       break;
     }
     ibucket = (ibucket + 1) % ht->max;
@@ -254,11 +252,11 @@ pdb_hash_table_set(PDB_HashTable *ht, String8 key, String8 value)
   // should resize?
   U64 load_factor = pdb_hash_table_compute_load_factor(ht->max);
   if (ht->count + 1 >= load_factor) {
-    pdb_hash_table_grow(ht, ht->max * 2);
+    pdb_hash_table_grow(ht, load_factor * 2);
   }
 
   // set new item
-  B32 is_set = pdb_hash_table_try_set(ht, key, value);
+  PDB_HashTableBucket *is_set = pdb_hash_table_try_set(ht, key, value);
   AssertAlways(is_set);
 
   ProfEnd();
@@ -326,6 +324,21 @@ pdb_hash_table_is_deleted(PDB_HashTable *ht, U32 k)
 {
   Assert(k < ht->max);
   return bit_array_is_bit_set(ht->deleted_bits, k);
+}
+
+internal PDB_HashTableBucket **
+pdb_hash_table_get_present_buckets(Arena *arena, PDB_HashTable *ht)
+{
+  U64 result_count = 0;
+  PDB_HashTableBucket **result = push_array(arena, PDB_HashTableBucket *, ht->count);
+  for EachIndex(bucket_idx, ht->max) {
+    if (bit_array_is_bit_set(ht->present_bits, bucket_idx)) {
+      PDB_HashTableBucket *bucket = &ht->bucket_arr[bucket_idx];
+      Assert(result_count < ht->count);
+      result[result_count++] = bucket;
+    }
+  }
+  return result;
 }
 
 internal void
@@ -422,12 +435,7 @@ PDB_HASH_TABLE_PACK_FUNC(pdb_named_stream_ht_pack)
 {
   Assert(!ud);
   Assert(value.size == sizeof(U32));
-
-  U64 key_data_offset = local_data_srl->total_size;
-  str8_serial_push_cstr(arena, local_data_srl, key);
-
-  U32 key_data_offset32 = safe_cast_u32(key_data_offset);
-  str8_serial_push_u32(arena, key_value_srl, key_data_offset32);
+  str8_serial_push_u32(arena, key_value_srl, bucket->key_offset);
   str8_serial_push_string(arena, key_value_srl, value);
 }
 
@@ -436,7 +444,7 @@ PDB_HASH_TABLE_PACK_FUNC(pdb_hash_adj_ht_pack)
 {
   Assert(value.size == sizeof(CV_TypeIndex));
 
-  PDB_StringTable *strtab = (PDB_StringTable*)ud;
+  PDB_StringTable *strtab = ud;
 
   PDB_StringIndex string_idx = PDB_INVALID_STRING_INDEX;
   B32 is_found = pdb_strtab_search(strtab, key, &string_idx);
@@ -453,7 +461,7 @@ PDB_HASH_TABLE_PACK_FUNC(pdb_src_header_block_ht_pack)
 {
   Assert(value.size == sizeof(PDB_SrcHeaderBlockEntry));
 
-  PDB_StringTable *strtab = (PDB_StringTable*)ud;
+  PDB_StringTable *strtab = ud;
 
   PDB_StringIndex path_idx = 0;
   B32 is_found = pdb_strtab_search(strtab, key, &path_idx);
@@ -488,22 +496,44 @@ pdb_named_stream_ht_from_data(PDB_HashTable *ht, String8 data, U64 *read_bytes_o
 internal String8
 pdb_data_from_hash_adj_hash_table(Arena *arena, PDB_HashTable *ht, PDB_StringTable *strtab)
 {
-  String8 data = pdb_data_from_hash_table(arena, ht, 0, pdb_hash_adj_ht_pack, strtab);
-  return data;
+  return pdb_data_from_hash_table(arena, ht, pdb_hash_adj_ht_pack, strtab);
 }
 
 internal String8
 pdb_data_from_src_header_block_ht(Arena *arena, PDB_HashTable *ht, PDB_StringTable *strtab)
 {
-  String8 data = pdb_data_from_hash_table(arena, ht, 0, pdb_src_header_block_ht_pack, strtab);
-  return data;
+  return pdb_data_from_hash_table(arena, ht, pdb_src_header_block_ht_pack, strtab);
 }
 
 internal String8
 pdb_data_from_named_stream_ht(Arena *arena, PDB_HashTable *ht)
 {
-  String8 data = pdb_data_from_hash_table(arena, ht, 1, pdb_named_stream_ht_pack, 0);
-  return data;
+  Temp scratch = scratch_begin(&arena, 1);
+
+  // serialize names (layout must be in insert order)
+  String8List key_data_srl = {0}; str8_serial_begin(scratch.arena, &key_data_srl);
+  {
+    PDB_HashTableBucket **buckets = pdb_hash_table_get_present_buckets(scratch.arena, ht);
+    radsort(buckets, ht->count, pdb_hash_table_bucket_is_before);
+    for EachIndex(i, ht->count) {
+      buckets[i]->key_offset = key_data_srl.total_size;
+      str8_serial_push_cstr(scratch.arena, &key_data_srl, buckets[i]->key);
+    }
+  }
+
+  // serialize hash table
+  String8 ht_data = pdb_data_from_hash_table(arena, ht, pdb_named_stream_ht_pack, 0);
+
+  // put names and hash table together
+  String8List srl = {0}; str8_serial_begin(scratch.arena, &srl);
+  str8_serial_push_u32(scratch.arena, &srl, safe_cast_u32(key_data_srl.total_size));
+  str8_serial_push_data_list(scratch.arena, &srl, key_data_srl.first);
+  str8_serial_push_string(scratch.arena, &srl, ht_data);
+
+  String8 result = str8_serial_end(arena, &srl);
+
+  scratch_end(scratch);
+  return result;
 }
 
 ////////////////////////////////
@@ -529,130 +559,6 @@ pdb_strtab_alloc(PDB_StringTable *strtab, U32 max)
   pdb_strtab_add(strtab, str8_lit(""));
 
   ProfEnd();
-}
-
-internal PDB_StringTableOpenError
-pdb_strtab_open(PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn)
-{
-  ProfBeginFunction();
-
-  PDB_StringTableOpenError err = PDB_StringTableOpenError_OK;
-
-  Arena                  *arena = 0;
-  String8                 string_buffer;
-  U32                     bucket_max;
-  U32                     bucket_count;
-  U32                    *ibucket_array;
-  PDB_StringTableBucket **bucket_array;
-
-  PDB_StringTableHeader header = {0};
-  msf_stream_read_struct(msf, sn, &header);
-
-  if (header.magic == PDB_StringTableHeader_MAGIC) {
-    if (header.version == PDB_StringTableHeader_CurrentVersion) {
-      Temp scratch = scratch_begin(0,0);
-
-      arena = arena_alloc();
-
-      U32     string_size;
-      String8 offset_buffer;
-      
-      // read table data
-      string_size   = msf_stream_read_u32(msf, sn);
-      string_buffer = msf_stream_read_block(arena, msf, sn, string_size);
-      bucket_max    = msf_stream_read_u32(msf, sn);
-      offset_buffer = msf_stream_read_block(scratch.arena, msf, sn, bucket_max * sizeof(U32));
-      bucket_count  = msf_stream_read_u32(msf, sn);
-
-      U64 expected_size = sizeof(PDB_StringTableHeader) +
-                          string_buffer.size +
-                          sizeof(bucket_max) +
-                          offset_buffer.size +
-                          sizeof(bucket_count);
-      U64 actual_size = msf_stream_get_size(msf, sn);
-
-      if (expected_size <= actual_size &&
-          string_buffer.size == string_size &&
-          offset_buffer.size == sizeof(U32)*bucket_max &&
-          bucket_count <= bucket_max) {
-        // init string table
-        ibucket_array = push_array_no_zero(arena, U32, bucket_max);
-        bucket_array  = push_array_no_zero(arena, PDB_StringTableBucket *, bucket_max);
-
-        // open buckets
-        PDB_StringTableBucket *node_arr = push_array_no_zero(arena, PDB_StringTableBucket, bucket_count);
-        U8  *string_buffer_ptr = string_buffer.str;
-        U8  *string_buffer_opl = string_buffer.str + string_buffer.size;
-        U32 *offset_array      = (U32*)offset_buffer.str;
-        U32  bucket_read_idx   = 0;
-
-        for (U32 bucket_idx = 0; bucket_idx < bucket_max; bucket_idx += 1) {
-          U32 string_offset = offset_array[bucket_idx];
-
-          // sanity check offset
-          if (string_offset >= string_buffer.size) {
-            err = PDB_StringTableOpenError_STRING_OFFSET_OUT_OF_BOUNDS;
-            break;
-          } 
-
-          // empty bucket
-          else if (string_offset == 0) {
-            ibucket_array[bucket_idx] = 0;
-            bucket_array[bucket_idx]  = 0;
-          }
-
-          // bucket with string
-          else {
-            if (bucket_read_idx >= bucket_count) {
-              err = PDB_StringTableOpenError_OFFSETS_EXCEED_BUCKET_COUNT;
-              break;
-            }
-
-            // get bucket
-            PDB_StringTableBucket *bucket = &node_arr[bucket_read_idx];
-
-            // init bucket
-            bucket->data   = str8_cstring_capped(string_buffer_ptr + string_offset, string_buffer_opl);
-            bucket->offset = string_offset;
-            bucket->istr   = bucket_read_idx;
-
-            // assign bucket
-            bucket_array[bucket_idx]  = bucket;
-            ibucket_array[bucket_idx] = bucket_read_idx;
-
-            // advance
-            bucket_read_idx += 1;
-          }
-        }
-      } else {
-        err = PDB_StringTableOpenError_CORRUPTED;
-      }
-
-      scratch_end(scratch);
-    } else {
-      err = PDB_StringTableOpenError_UNKNOWN_VERSION;
-    }
-  } else {
-    err = PDB_StringTableOpenError_BAD_MAGIC;
-  }
-
-  if (err == PDB_StringTableOpenError_OK) {
-    strtab->arena         = arena;
-    strtab->version       = header.version;
-    strtab->size          = string_buffer.size;
-    strtab->bucket_count  = bucket_count;
-    strtab->bucket_max    = bucket_max;
-    strtab->ibucket_array = ibucket_array;
-    strtab->bucket_array  = bucket_array;
-  } else {
-    if (arena) {
-      arena_release(arena);
-    }
-  }
-
-  ProfEnd();
-
-  return err;
 }
 
 internal void
@@ -900,74 +806,39 @@ pdb_strtab_string_to_offset(PDB_StringTable *strtab, PDB_StringIndex stridx)
   return offset;
 }
 
-internal String8
-pdb_string_from_string_table_open_error(PDB_StringTableOpenError err)
-{
-  String8 result = str8(0,0);
-  switch (err) {
-  case PDB_StringTableOpenError_OK: break;
-  case PDB_StringTableOpenError_BAD_MAGIC:                   result = str8_lit("BAD_MAGIC");                   break;
-  case PDB_StringTableOpenError_UNKNOWN_VERSION:             result = str8_lit("UNKNOWN_VERSION");             break;
-  case PDB_StringTableOpenError_CORRUPTED:                   result = str8_lit("CORRUPTED");                   break;
-  case PDB_StringTableOpenError_OFFSETS_EXCEED_BUCKET_COUNT: result = str8_lit("OFFSETS_EXCEED_BUCKET_COUNT"); break;
-  case PDB_StringTableOpenError_STRING_OFFSET_OUT_OF_BOUNDS: result = str8_lit("STRING_OFFSET_OUT_OF_BOUNDS"); break;
-  }
-  return result;
-}
-
 ////////////////////////////////
 
-internal PDB_OpenTypeServerError
-pdb_type_server_parse_from_data_v80(String8 data, PDB_TypeServerParse *parse)
+internal B32
+pdb_extract_type_server_info(String8 raw_msf, MSF_RawStreamTable *st, MSF_StreamNumber sn, Rng1U64 *ti_range_out, Rng1U64 *leaf_range_out)
 {
-  ProfBeginFunction();
-
-  PDB_OpenTypeServerError error = PDB_OpenTypeServerError_UNKNOWN;
-
-  PDB_TpiHeader header; MemoryZeroStruct(&header);
-  str8_deserial_read_struct(data, 0, &header);
-  Assert(header.version == PDB_TpiVersion_IMPV80);
-
-  if (header.ti_lo >= CV_MinComplexTypeIndex &&
-      header.ti_lo <= header.ti_hi) {
-    if (header.hash_bucket_count > 0 &&
-        header.hash_bucket_count <= PDB_TYPE_SERVER_HASH_BUCKET_COUNT_MAX) {
-      parse->ti_range  = rng_1u64(header.ti_lo, header.ti_hi);
-      parse->leaf_data = str8_substr(data, rng_1u64(sizeof(PDB_TpiHeader), sizeof(PDB_TpiHeader) + header.leaf_data_size ));
-      error = PDB_OpenTypeServerError_OK;
-    } else {
-      error = PDB_OpenTypeServerError_INVALID_BUCKET_COUNT;
+  Temp scratch = scratch_begin(0,0);
+  B32             is_ok        = 0;
+  String8         version_data = msf_data_from_stream_number_ex(scratch.arena, raw_msf, st, sn, r1u64(0, sizeof(PDB_TpiVersion)), 8);
+  PDB_TpiVersion *version      = str8_deserial_get_raw_ptr(version_data, 0, sizeof(*version));
+  if (version) {
+    switch (*version) {
+    case PDB_TpiVersion_IMPV80: {
+      String8  header_size_data = msf_data_from_stream_number_ex(scratch.arena, raw_msf, st, sn, r1u64(sizeof(*version), sizeof(*version) + sizeof(U32)), 8);
+      U32     *header_size      = str8_deserial_get_raw_ptr(header_size_data, 0, sizeof(*header_size));
+      if (header_size && *header_size >= sizeof(PDB_TpiVersion) + sizeof(U32)) {
+        String8        header_data = msf_data_from_stream_number_ex(scratch.arena, raw_msf, st, sn, r1u64(0, *header_size), 8);
+        PDB_TpiHeader *header      = str8_deserial_get_raw_ptr(header_data, 0, sizeof(*header));
+        if (*header_size + header->leaf_data_size <= st->streams[sn].size) {
+          *ti_range_out   = r1u64(header->ti_lo, header->ti_hi);
+          *leaf_range_out = r1u64(*header_size, *header_size + header->leaf_data_size);
+          is_ok = 1;
+        } else {
+          NotImplemented; // TODO: handle error
+        }
+      } else {
+        NotImplemented; // TODO: handle error
+      }
+    } break;
+    default: break;
     }
-  } else {
-    error = PDB_OpenTypeServerError_INVALID_TI_RANGE;
   }
-
-  ProfEnd();
-  return error;
-}
-
-internal PDB_OpenTypeServerError
-pdb_type_server_parse_from_data(String8 data, PDB_TypeServerParse *parse_out)
-{
-  PDB_OpenTypeServerError error = PDB_OpenTypeServerError_UNKNOWN;
-
-  PDB_TpiVersion version = 0;
-  str8_deserial_read_struct(data, 0, &version);
-
-  switch (version) {
-  case PDB_TpiVersion_IMPV80:
-    error = pdb_type_server_parse_from_data_v80(data, parse_out);
-    break;
-  case PDB_TpiVersion_INTV_VC2:
-  case PDB_TpiVersion_IMPV40:
-  case PDB_TpiVersion_IMPV50_INTERIM:
-  case PDB_TpiVersion_IMPV70:
-    error = PDB_OpenTypeServerError_UNSUPPORTED_VERSION;
-  break;
-  default: Assert(!"unknown TPI version"); break;
-  }
-
-  return error;
+  scratch_end(scratch);
+  return is_ok;
 }
 
 internal PDB_TypeServer *
@@ -985,154 +856,6 @@ pdb_type_server_alloc(U64 bucket_cap)
   ts->buckets    = push_array(arena, PDB_TypeBucket *, ts->bucket_cap);
   pdb_hash_table_alloc(&ts->hash_adj, 32);
 
-  ProfEnd();
-  return ts;
-}
-
-internal PDB_TypeServer *
-pdb_type_server_open_v80(MSF_Context *msf, MSF_StreamNumber sn, PDB_StringTable *strtab)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-
-  PDB_TypeServer *ts = NULL;
-
-  PDB_TpiHeader header = {0};
-  msf_stream_seek(msf, sn, 0);
-  MSF_UInt read_header_size = msf_stream_read_struct(msf, sn, &header);
-
-  // have we read enough bytes?
-  if (read_header_size != sizeof(PDB_TpiHeader)) {
-    goto exit;
-  }
-  // is lowest non-simple type index valid?
-  if (header.ti_lo < CV_MinComplexTypeIndex) {
-    goto exit;
-  }
-  // is high non-simple type index valid?
-  if (header.ti_lo > header.ti_hi) {
-    goto exit;
-  }
-
-  // validate hash bucket count
-  if (header.hash_bucket_count == 0) {
-    goto exit;
-  }
-  if (header.hash_bucket_count > PDB_TYPE_SERVER_HASH_BUCKET_COUNT_MAX) {
-    goto exit;
-  }
-
-  // are there enough bytes in the stream to read hash values?
-  U64 hash_stream_size = msf_stream_get_size(msf, header.hash_sn);
-  if (header.hash_vals.off + header.hash_vals.size > hash_stream_size) {
-    goto exit;
-  }
-  
-  ts = pdb_type_server_alloc(header.hash_bucket_count);
-  
-  // read & parse code view types
-  String8 types_data = msf_stream_read_block(ts->arena, msf, sn, header.leaf_data_size);
-  CV_DebugT debug_t = cv_debug_t_from_data(scratch.arena, types_data, PDB_LEAF_ALIGN);
-  
-  // read hash data
-  U8 *hash_buffer = push_array(scratch.arena, U8, header.hash_vals.size);
-  msf_stream_seek(msf, header.hash_sn, header.hash_vals.off);
-  MSF_UInt hash_buffer_size = msf_stream_read(msf, header.hash_sn, hash_buffer, header.hash_vals.size);
-  Assert(hash_buffer_size == header.hash_vals.size);
-  
-  // rebuild type buckets
-  for (U64 cursor = 0, leaf_idx = 0; 
-       cursor + header.hash_key_size <= hash_buffer_size;
-       cursor += header.hash_key_size, leaf_idx += 1) {
-    String8 raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
-
-    str8_list_push(ts->arena, &ts->leaf_list, raw_leaf);
-    
-    // read out bucket hash
-    U64 hash = 0;
-    MemoryCopy(&hash, hash_buffer + cursor, header.hash_key_size);
-    
-    // push bucket
-    PDB_TypeBucket *bucket = push_array(ts->arena, PDB_TypeBucket, 1);
-    bucket->raw_leaf   = raw_leaf;
-    bucket->type_index = header.ti_lo + leaf_idx;
-    SLLStackPush(ts->buckets[hash], bucket);
-  }
-  
-  // adjust type buckets
-  msf_stream_seek(msf, header.hash_sn, header.hash_adj.off);
-  String8 adjust_data = msf_stream_read_block(scratch.arena, msf, header.hash_sn, header.hash_adj.size);
-  
-  // open adjust hash table
-  PDB_HashTableParseError hash_adj_parse_error = pdb_hash_adj_hash_table_from_data(&ts->hash_adj, adjust_data, strtab, 0);
-  if (hash_adj_parse_error == PDB_HashTableParseError_OUT_OF_BYTES) {
-    pdb_hash_table_alloc(&ts->hash_adj, 16);
-  } else {
-    Assert(hash_adj_parse_error == PDB_HashTableParseError_OK);
-  }
-
-  // grab keys and values
-  String8Array key_arr   = {0};
-  String8Array value_arr = {0};
-  pdb_hash_table_get_present_keys_and_values(scratch.arena, &ts->hash_adj, &key_arr, &value_arr);
-  
-  // adjust type buckets
-  for (U64 i = 0; i < ts->hash_adj.count; i += 1) {
-    String8      type_name  = key_arr.v[i];
-    CV_TypeIndex type_index = *(CV_TypeIndex*)value_arr.v[i].str;
-
-    // name -> hash
-    U64 hash = pdb_hash_v1(type_name);
-    hash %= ts->bucket_cap;
-    
-    // search for type bucket
-    PDB_TypeBucket *curr, *prev;
-    for (curr = ts->buckets[hash], prev = 0; curr != 0; prev = curr, curr = curr->next) {
-      if (curr->type_index == type_index) {
-        break;
-      }
-    }
-    
-    // move type to the head
-    if (prev && curr) {
-      prev->next = curr->next;
-      curr->next = ts->buckets[hash];
-      ts->buckets[hash] = curr;
-    }
-    
-    Assert(curr);
-  }
-  
-  exit:;
-  scratch_end(scratch);
-  ProfEnd();
-  return ts;
-}
-
-internal PDB_TypeServer *
-pdb_type_server_open(MSF_Context *msf, MSF_StreamNumber sn, PDB_StringTable *strtab)
-{
-  ProfBeginFunction();
-  
-  PDB_TypeServer *ts = NULL;
-  
-  PDB_TpiVersion version = 0;
-  msf_stream_seek(msf, sn, 0);
-  msf_stream_read_struct(msf, sn, &version);
-  
-  switch (version) {
-  case PDB_TpiVersion_IMPV80: {
-    ts = pdb_type_server_open_v80(msf, sn, strtab);
-  } break;
-  case PDB_TpiVersion_INTV_VC2:
-  case PDB_TpiVersion_IMPV40:
-  case PDB_TpiVersion_IMPV50_INTERIM:
-  case PDB_TpiVersion_IMPV70: {
-    NotImplemented;
-  } break;
-  default: Assert(!"unknown TPI version"); break;
-  }
-  
   ProfEnd();
   return ts;
 }
@@ -1181,8 +904,6 @@ pdb_type_hash_stream_build(TP_Context      *tp,
     ProfEnd();
   }
 
-  // write bucket adjust info
-  String8 hash_adj_data = pdb_data_from_hash_adj_hash_table(scratch.arena, &ts->hash_adj, strtab);
   
   ProfBegin("MSF Write");
 
@@ -1202,10 +923,14 @@ pdb_type_hash_stream_build(TP_Context      *tp,
   hint_offs.size = sizeof(hint_arr[0]) * hint_count;
   msf_stream_write(msf, ts->hash_sn, &hint_arr[0], hint_offs.size);
   
-  PDB_OffsetSize hash_adj;
-  hash_adj.off  = msf_stream_get_pos(msf, ts->hash_sn);
-  hash_adj.size = hash_adj_data.size;
-  msf_stream_write_string(msf, ts->hash_sn, hash_adj_data);
+  PDB_OffsetSize hash_adj = {0};
+  if (ts->hash_adj.count) {
+    // write bucket adjust info
+    String8 hash_adj_data = pdb_data_from_hash_adj_hash_table(scratch.arena, &ts->hash_adj, strtab);
+    hash_adj.off  = msf_stream_get_pos(msf, ts->hash_sn);
+    hash_adj.size = hash_adj_data.size;
+    msf_stream_write_string(msf, ts->hash_sn, hash_adj_data);
+  }
 
   ProfEnd();
   
@@ -1696,7 +1421,7 @@ pdb_info_alloc(U32 age, COFF_TimeStamp time_stamp, Guid guid)
   info->age        = age;
   info->guid       = guid;
   pdb_strtab_alloc(&info->strtab, 0x3fff);
-  pdb_hash_table_alloc(&info->named_stream_ht, 4);
+  pdb_hash_table_alloc(&info->named_stream_ht, 1);
   pdb_hash_table_alloc(&info->src_header_block_ht, 8);
   ProfEnd();
   return info;
@@ -1735,86 +1460,6 @@ pdb_info_parse_from_data(String8 data, PDB_InfoParse *parse_out)
   } break;
   default: Assert(!"invalid info stream version"); break;
   }
-}
-
-internal PDB_InfoContext *
-pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0,0);
-  
-  U64     info_size = msf_stream_get_size(msf, sn);
-  String8 info_data = msf_stream_read_block(scratch.arena, msf, sn, info_size);
-    
-  PDB_InfoParse parse = {0};
-  pdb_info_parse_from_data(info_data, &parse);
-
-  PDB_FeatureFlags flags           = 0;
-  PDB_HashTable    named_stream_ht = {0};
-  if (parse.version == PDB_InfoVersion_VC70) {
-    // open named stream hash table
-    U64 cursor = 0;
-    U64 named_stream_ht_size = 0;
-    PDB_HashTableParseError named_stream_ht_error = pdb_named_stream_ht_from_data(&named_stream_ht, parse.extra_info, &named_stream_ht_size);
-    if (named_stream_ht_error == PDB_HashTableParseError_OK) {
-      cursor += named_stream_ht_size;
-
-      // read PDB features
-      while (cursor < info_data.size) {
-        PDB_FeatureSig sig = 0;
-        cursor += str8_deserial_read_struct(parse.extra_info, cursor, &sig);
-        switch (sig) {
-        case PDB_FeatureSig_NULL: break;
-        case PDB_FeatureSig_VC140: {
-          flags |= PDB_FeatureFlag_HAS_ID_STREAM;
-        } break;
-        case PDB_FeatureSig_NO_TYPE_MERGE: {
-          flags |= PDB_FeatureFlag_NO_TYPE_MERGE;
-        } break;
-        case PDB_FeatureSig_MINIMAL_DEBUG_INFO: {
-          flags |= PDB_FeatureFlag_MINIMAL_DBG_INFO;
-        } break;
-        default: Assert(!"unknown feature sig"); break;
-        }
-      }
-    } else {
-      Assert(!"unable to open named stream hash table");
-    }
-  }
-
-  // open string table
-  PDB_StringTable strtab = {0};
-  MSF_StreamNumber strtab_sn = pdb_find_named_stream(&named_stream_ht, PDB_NAMES_STREAM_NAME);
-  if (strtab_sn != MSF_INVALID_STREAM_NUMBER) {
-    PDB_StringTableOpenError err = pdb_strtab_open(&strtab, msf, strtab_sn);
-    Assert(err == PDB_StringTableOpenError_OK);
-  }
-
-  // open injected source files
-  PDB_HashTable src_header_block_ht = {0};
-  MSF_StreamNumber src_header_block_sn = pdb_find_named_stream(&named_stream_ht, PDB_SRC_HEADER_BLOCK_STREAM_NAME);
-  if (src_header_block_sn != MSF_INVALID_STREAM_NUMBER) {
-    U64 src_header_block_stream_size = msf_stream_get_size(msf, src_header_block_sn);
-    String8 src_header_block_data = msf_stream_read_block(scratch.arena, msf, src_header_block_sn, src_header_block_stream_size);
-    PDB_HashTableParseError err = pdb_src_header_block_ht_from_data(&src_header_block_ht, src_header_block_data, &strtab, 0);
-    Assert(err == PDB_HashTableParseError_OK);
-  }
-    
-  // fill out info
-  Arena *arena = arena_alloc();
-  PDB_InfoContext *info = push_array_no_zero(arena, PDB_InfoContext, 1);
-  info->arena               = arena;
-  info->time_stamp          = parse.time_stamp;
-  info->age                 = parse.age;
-  info->guid                = parse.guid;
-  info->flags               = flags;
-  info->named_stream_ht     = named_stream_ht;
-  info->src_header_block_ht = src_header_block_ht;
-  info->strtab              = strtab;
-  
-  scratch_end(scratch);
-  ProfEnd();
-  return info;
 }
 
 internal void
@@ -1882,9 +1527,13 @@ pdb_info_build(PDB_InfoContext *info, MSF_Context *msf, MSF_StreamNumber sn)
   Temp scratch = scratch_begin(0,0);
 
   // finalize named streams
-  pdb_info_build_src_header_block(info, msf);
+  if (info->src_header_block_ht.count) {
+    pdb_info_build_src_header_block(info, msf);
+  }
   pdb_info_build_link_info(info, msf);
-  pdb_info_build_names(info, msf);
+  if (info->strtab.bucket_count > 1) {
+    pdb_info_build_names(info, msf);
+  }
 
   // serialize named streams hash table
   String8 named_stream_ht_data = pdb_data_from_named_stream_ht(scratch.arena, &info->named_stream_ht);
@@ -1901,6 +1550,7 @@ pdb_info_build(PDB_InfoContext *info, MSF_Context *msf, MSF_StreamNumber sn)
   str8_serial_begin(scratch.arena, &info_srl);
   str8_serial_push_struct(scratch.arena, &info_srl, &header);
   str8_serial_push_string(scratch.arena, &info_srl, named_stream_ht_data);
+  str8_serial_push_u32(scratch.arena, &info_srl, 0);
   if (info->flags & PDB_FeatureFlag_HAS_ID_STREAM) {
     str8_serial_push_u32(scratch.arena, &info_srl, PDB_FeatureSig_VC140);
   }
@@ -1933,12 +1583,9 @@ internal MSF_StreamNumber
 pdb_push_named_stream(PDB_HashTable *named_stream_ht, MSF_Context *msf, String8 name)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(0,0);
   MSF_StreamNumber sn = msf_stream_alloc(msf);
-  String8 name_cstr = push_cstr(scratch.arena, name);
   U32 sn32 = (U32)sn;
-  pdb_hash_table_set(named_stream_ht, name_cstr, str8_struct(&sn32));
-  scratch_end(scratch);
+  pdb_hash_table_set(named_stream_ht, name, str8_struct(&sn32));
   ProfEnd();
   return sn;
 }
@@ -2051,119 +1698,11 @@ gsi_alloc(void)
   return gsi;
 }
 
-internal PDB_GsiContext *
-gsi_open(MSF_Context *msf, MSF_StreamNumber sn, String8 symbol_data)
-{
-  ProfBeginFunction();
-  
-  PDB_GsiHeader header = {0};
-  msf_stream_read_struct(msf, sn, &header);
-  
-  Arena *arena = arena_alloc();
-  PDB_GsiContext *gsi = push_array(arena, PDB_GsiContext, 1);
-  gsi->arena        = arena;
-  gsi->word_size    = PDB_GSI_V70_WORD_SIZE;
-  gsi->symbol_align = PDB_GSI_V70_SYMBOL_ALIGN;
-  gsi->bucket_count = PDB_GSI_V70_BUCKET_COUNT;
-  gsi->bucket_arr   = push_array(gsi->arena, CV_SymbolList, gsi->bucket_count);
-  
-  if (header.signature == PDB_GsiSignature_Basic) {
-    if (header.version == PDB_GsiVersion_V70) {
-      Temp scratch = scratch_begin(0, 0);
-      
-      Assert(header.bucket_data_size >= PDB_GSI_V70_BITMAP_SIZE); // TODO: error handle
-      
-      U64 hash_record_count = header.hash_record_arr_size / sizeof(PDB_GsiHashRecord);
-      PDB_GsiHashRecord *hash_record_array = push_array(scratch.arena, PDB_GsiHashRecord, hash_record_count);
-      msf_stream_read_array(msf, sn, &hash_record_array[0], hash_record_count);
-      
-      U32 *bitmap = push_array(scratch.arena, U32, PDB_GSI_V70_BITMAP_COUNT);
-      msf_stream_read_array(msf, sn, &bitmap[0], PDB_GSI_V70_BITMAP_COUNT);
-      
-      U32 compressed_offset_count = (header.bucket_data_size - PDB_GSI_V70_BITMAP_SIZE) / sizeof(U32);
-      U32 *compressed_offset_array = push_array(scratch.arena, U32, compressed_offset_count);
-      msf_stream_read_array(msf, sn, &compressed_offset_array[0], compressed_offset_count);
-      
-      U32 *compressed_offset_ptr = &compressed_offset_array[0];
-      U32 *compressed_offset_opl = &compressed_offset_array[0] + compressed_offset_count;
-      
-      U32 compressed_offset_max = (header.bucket_data_size / sizeof(PDB_GsiHashRecord)) * sizeof(PDB_GsiHashRecordOffsetCalc);
-      
-      for (U32 imask = 0; imask < PDB_GSI_V70_BITMAP_COUNT; imask += 1) {
-        for (U32 ibit = 0; ibit < PDB_GSI_V70_WORD_SIZE; ibit += 1) {
-          B32 is_bucket_compressed = !!(bitmap[imask] & (1 << ibit));
-          if (is_bucket_compressed) {
-            Assert(compressed_offset_ptr < compressed_offset_opl);
-            
-            U32 next_compressed_offset = compressed_offset_max;
-            if (compressed_offset_ptr + 1 < compressed_offset_opl) {
-              next_compressed_offset = compressed_offset_ptr[1];
-            }
-            U32 compressed_count = (next_compressed_offset - *compressed_offset_ptr) / sizeof(PDB_GsiHashRecordOffsetCalc);
-            
-            U64 hash_record_index = *compressed_offset_ptr / sizeof(PDB_GsiHashRecordOffsetCalc);
-            Assert(hash_record_index < hash_record_count);
-            
-            for (PDB_GsiHashRecord *hash_record_ptr = &hash_record_array[hash_record_index], *hash_record_opl = hash_record_ptr + compressed_count;
-                 hash_record_ptr < hash_record_opl;
-                 hash_record_ptr += 1) {
-              Assert(hash_record_ptr->symbol_off > 0);
-              Assert(hash_record_ptr->cref > 0);
-              
-              U32 symbol_off = hash_record_ptr->symbol_off -1;
-              U8 *symbol_ptr = symbol_data.str + symbol_off;
-              U16 *size_ptr = (U16*)symbol_ptr;
-              CV_SymKind *kind_ptr = (CV_SymKind*)(size_ptr + 1);
-              U8 *data_ptr = (U8*)(kind_ptr + 1);
-              
-              if (*size_ptr >= sizeof(*kind_ptr)) {
-                CV_Symbol symbol;
-                symbol.kind = *kind_ptr;
-                symbol.data = str8(data_ptr, *size_ptr - sizeof(*kind_ptr));
-                gsi_push(gsi, &symbol);
-              } else {
-                Assert(!"invalid global codeview symbol");
-              }
-            }
-            
-            compressed_offset_ptr += 1;
-          }
-        }
-      }
-      
-      scratch_end(scratch);
-    } else {
-      Assert(!"unknown GSI version");
-    }
-  }
-  
-  // check if buckets are sorted
-#if 0
-  {
-    for (U64 i = 0; i < gsi->bucket_count; ++i) {
-      CV_SymbolList *bucket = &gsi->bucket_arr[i];
-      for (CV_SymbolNode *prev = bucket->first, *curr = bucket->first ? bucket->first->next : NULL;
-           curr != NULL;
-           prev = curr, curr = curr->next) {
-        String8 a = pdb_get_symbol_name(prev->symbol.kind, prev->symbol.data);
-        String8 b = pdb_get_symbol_name(curr->symbol.kind, curr->symbol.data);
-        int compar = string_compar(a, b, false);
-        Assert(compar >= 0);
-      }
-    }
-  }
-#endif
-  
-  ProfEnd();
-  return gsi;
-}
-
 internal void
-gsi_release(PDB_GsiContext **gsi_ptr)
+gsi_release(PDB_GsiContext *gsi)
 {
   ProfBeginFunction();
-  arena_release((*gsi_ptr)->arena);
-  *gsi_ptr = NULL;
+  arena_release(gsi->arena);
   ProfEnd();
 }
 
@@ -2277,13 +1816,77 @@ THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
   }
 }
 
+force_inline int
+gsi_symbol_is_before(void *raw_a, void *raw_b)
+{
+  CV_Symbol *a = *(CV_Symbol **)raw_a;
+  CV_Symbol *b = *(CV_Symbol **)raw_b;
+
+  String8 a_name = cv_name_from_symbol(a->kind, a->data);
+  String8 b_name = cv_name_from_symbol(b->kind, b->data);
+
+  int is_before;
+  if (a_name.size != b_name.size) {
+    is_before = a_name.size < b_name.size;
+  } else {
+    int cmp = str8_compar_ignore_case(&a_name, &b_name);
+    if (cmp == 0) {
+      cmp = u64_compar(&a->offset, &b->offset);
+    }
+    is_before = cmp < 0;
+  }
+
+  return is_before;
+}
+
+internal int
+gsi_pub_symbol_is_before(void *raw_a, void *raw_b)
+{
+  CV_Symbol *a = *(CV_Symbol **)raw_a;
+  CV_Symbol *b = *(CV_Symbol **)raw_b;
+
+  String8 a_name = cv_name_from_symbol(a->kind, a->data);
+  String8 b_name = cv_name_from_symbol(b->kind, b->data);
+
+  int is_before;
+  if (a_name.size != b_name.size) {
+    is_before = a_name.size < b_name.size;
+  } else {
+    int cmp = str8_compar_ignore_case(&a_name, &b_name);
+    if (cmp == 0) {
+      CV_SymPub32 *a_sym = (CV_SymPub32 *)a->data.str;
+      CV_SymPub32 *b_sym = (CV_SymPub32 *)b->data.str;
+      cmp = u16_compar(&a_sym->sec, &b_sym->sec);
+      if (cmp == 0) {
+        cmp = u32_compar(&a_sym->off, &b_sym->off);
+      }
+    }
+
+    is_before = cmp < 0;
+  }
+
+  return is_before;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+
   U64                          bucket_idx = task_id;
   PDB_GsiSerializeSymbolsTask *task       = raw_task;
 
-  CV_SymbolList      bucket_list     = task->bucket_arr[bucket_idx];
+  CV_SymbolList bucket = task->bucket_arr[bucket_idx];
+
+  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
+  {
+    U64 i = 0;
+    for EachNode(n, CV_SymbolNode, bucket.first) { symbol_arr[i++] = &n->data; }
+  }
+
+  // sort symbols within bucket
+  radsort(symbol_arr, bucket.count, gsi_pub_symbol_is_before);
+
   PDB_GsiSortRecord *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
   U64                buffer_size     = task->bucket_size_arr[bucket_idx];
   U64                buffer_base     = task->bucket_off_arr[bucket_idx];
@@ -2291,74 +1894,77 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
 
   U64 sort_idx      = 0;
   U64 buffer_cursor = 0;
+  for EachIndex(i, bucket.count) {
+    Assert(symbol_arr[i]->kind == CV_SymKind_PUB32);
 
-  for (CV_SymbolNode *node = bucket_list.first; node != 0; node = node->next) {
-    CV_Symbol *symbol = &node->data;
-    Assert(symbol->kind == CV_SymKind_PUB32);
-
-    CV_SymPub32 *pub32    = (CV_SymPub32 *)symbol->data.str;
+    CV_SymPub32 *pub32    = (CV_SymPub32 *)symbol_arr[i]->data.str;
     U8          *str_ptr  = (U8 *)(pub32 + 1);
-    U64          str_size = symbol->data.size - sizeof(*pub32);
+    U64          str_size = symbol_arr[i]->data.size - sizeof(*pub32);
     String8      name     = str8(str_ptr, str_size);
 
     // init sort record
     PDB_GsiSortRecord *sr = &sort_record_arr[sort_idx];
     sr->isect_off         = isect_off(pub32->sec, pub32->off);
     sr->name              = name;
-    sr->offset            = buffer_cursor;
+    sr->offset            = task->symbol_data_base + buffer_base + buffer_cursor;
 
     // serialize symbol
-    U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
+    U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol_arr[i], task->symbol_align);
 
     // advance
     sort_idx      += 1;
     buffer_cursor += serial_size;
   }
-
-  Assert(sort_idx == bucket_list.count);
+  Assert(sort_idx == bucket.count);
   Assert(buffer_cursor == buffer_size);
 
-  // sort symbols by name within bucket
-  gsi_record_sort_by_name(sort_record_arr, bucket_list.count);
+  scratch_end(scratch);
 }
 
 internal
 THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
 {
-  U64                          bucket_idx = task_id;
-  PDB_GsiSerializeSymbolsTask *task       = raw_task;
+  Temp scratch = scratch_begin(&arena, 1);
 
-  CV_SymbolList        bucket_list     = task->bucket_arr[bucket_idx];
-  PDB_GsiSortRecord   *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
-  U64                  buffer_size     = task->bucket_size_arr[bucket_idx];
-  U64                  buffer_base     = task->bucket_off_arr[bucket_idx];
-  U8                  *buffer          = task->buffer + buffer_base;
+  U64                          bucket_idx  = task_id;
+  PDB_GsiSerializeSymbolsTask *task        = raw_task;
+  CV_SymbolList                bucket = task->bucket_arr[bucket_idx];
 
-  U64 sort_idx      = 0;
-  U64 buffer_cursor = 0;
-
-  for (CV_SymbolNode *node = bucket_list.first; node != 0; node = node->next) {
-    CV_Symbol *symbol = &node->data;
-
-    // init sort record
-    PDB_GsiSortRecord *sr = &sort_record_arr[sort_idx];
-    //sr->isect_off = isect_off(0,0);
-    sr->name      = cv_name_from_symbol(symbol->kind, symbol->data);
-    sr->offset    = buffer_cursor;
-
-    // serialize symbol
-    U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
-
-    // advance
-    sort_idx      += 1;
-    buffer_cursor += serial_size;
+  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
+  {
+    U64 i = 0;
+    for EachNode(n, CV_SymbolNode, bucket.first) { symbol_arr[i++] = &n->data; }
   }
 
-  Assert(sort_idx == bucket_list.count);
-  Assert(buffer_cursor == buffer_size);
+  // sort symbols within bucket
+  radsort(symbol_arr, bucket.count, gsi_symbol_is_before);
 
-  // sort symbols by name within bucket
-  gsi_record_sort_by_name(sort_record_arr, bucket_list.count);
+  // symbol -> GSI sort record
+  {
+    PDB_GsiSortRecord   *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
+    U64                  buffer_size     = task->bucket_size_arr[bucket_idx];
+    U64                  buffer_base     = task->bucket_off_arr[bucket_idx];
+    U8                  *buffer          = task->buffer + buffer_base;
+
+    U64 sort_idx      = 0;
+    U64 buffer_cursor = 0;
+    for EachIndex(i, bucket.count) {
+      // init sort record
+      PDB_GsiSortRecord *sr = &sort_record_arr[sort_idx];
+      sr->name   = cv_name_from_symbol(symbol_arr[i]->kind, symbol_arr[i]->data);
+      sr->offset = task->symbol_data_base + buffer_base + buffer_cursor;
+      sort_idx += 1;
+
+      // serialize symbol
+      U64 serial_size = cv_write_symbol(buffer, buffer_cursor, buffer_size, symbol_arr[i], task->symbol_align);
+      buffer_cursor += serial_size;
+    }
+
+    Assert(sort_idx == bucket.count);
+    Assert(buffer_cursor == buffer_size);
+  }
+
+  scratch_end(scratch);
 }
 
 internal PDB_GsiBuildResult
@@ -2369,10 +1975,11 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
 
   ProfBegin("Serialize & Sort Symbols");
 
-  PDB_GsiSerializeSymbolsTask serial_task;
-  serial_task.symbol_align    = gsi->symbol_align;
-  serial_task.bucket_arr      = gsi->bucket_arr;
-  serial_task.bucket_size_arr = push_array(scratch.arena, U64, gsi->bucket_count);
+  PDB_GsiSerializeSymbolsTask serial_task = {0};
+  serial_task.symbol_data_base = symbol_data_base;
+  serial_task.symbol_align     = gsi->symbol_align;
+  serial_task.bucket_arr       = gsi->bucket_arr;
+  serial_task.bucket_size_arr  = push_array(scratch.arena, U64, gsi->bucket_count);
 
   // estimate each bucket size
   tp_for_parallel(tp, 0, gsi->bucket_count, gsi_size_buckets_task, &serial_task);
@@ -2404,12 +2011,8 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
   U32            *compressed_offset_arr   = push_array_no_zero(arena, U32, gsi->bucket_count);
   PDB_GsiHashRecord *hash_record_arr      = push_array_no_zero(arena, PDB_GsiHashRecord, hash_record_count);
 
-  // offsets for symbol stream are shifted by one to tell apart from null and zero (see GSI1::fixSymRecs) 
-  U64 offset_cursor = (1 + symbol_data_base);
-  U64 hash_idx = 0;
-
   ProfBegin("Write Bitmap & Record Offsets");
-  for (U64 bucket_idx = 0; bucket_idx < gsi->bucket_count; bucket_idx += 1) {
+  for (U64 bucket_idx = 0, hash_idx = 0; bucket_idx < gsi->bucket_count; bucket_idx += 1) {
     // set bit for each occupied bucket
     CV_SymbolList bucket_list = gsi->bucket_arr[bucket_idx];
     if (bucket_list.count) {
@@ -2424,12 +2027,9 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
     PDB_GsiSortRecord *sort_record_arr = serial_task.sort_record_arr_arr[bucket_idx];
     for (U64 sr_idx = 0; sr_idx < gsi->bucket_arr[bucket_idx].count; sr_idx += 1, hash_idx += 1) {
       PDB_GsiHashRecord *hr = &hash_record_arr[hash_idx]; 
-      hr->symbol_off = offset_cursor + sort_record_arr[sr_idx].offset;
+      hr->symbol_off = sort_record_arr[sr_idx].offset + 1; // off-by-one because 0 is reserved for null
       hr->cref       = 1;
     }
-
-    // advance offset cursor
-    offset_cursor += serial_task.bucket_size_arr[bucket_idx];
   }
   ProfEnd();
 
@@ -2591,26 +2191,6 @@ psi_alloc(void)
   return psi;
 }
 
-internal PDB_PsiContext *
-psi_open(MSF_Context *msf, MSF_StreamNumber sn, String8 symbol_data)
-{
-  ProfBeginFunction();
-  
-  Arena *arena = arena_alloc();
-  PDB_PsiContext *psi = push_array(arena, PDB_PsiContext, 1);
-  psi->arena = arena;
-  
-  // TODO: read out address table
-  
-  PDB_PsiHeader header = {0};
-  msf_stream_read_struct(msf, sn, &header);
-  
-  psi->gsi = gsi_open(msf, sn, symbol_data);
-  
-  ProfEnd();
-  return psi;
-}
-
 internal void
 psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumber sn, MSF_StreamNumber symbols_sn)
 {
@@ -2658,12 +2238,11 @@ psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumbe
 }
 
 internal void
-psi_release(PDB_PsiContext **psi_ptr)
+psi_release(PDB_PsiContext *psi)
 {
   ProfBeginFunction();
-  gsi_release(&(*psi_ptr)->gsi);
-  arena_release((*psi_ptr)->arena);
-  *psi_ptr = NULL;
+  gsi_release(psi->gsi);
+  arena_release(psi->arena);
   ProfEnd();
 }
 
@@ -2868,102 +2447,6 @@ dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_Db
   return sec_contrib;
 }
 
-internal PDB_StringTable
-dbi_open_ec_names(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header)
-{
-  ProfBeginFunction();
-  PDB_StringTable ec_names = {0};
-  if (dbi_header->ec_info_size >= sizeof(PDB_StringTableHeader)) {
-    MSF_UInt ec_names_pos = sizeof(PDB_DbiHeader)
-      + dbi_header->module_info_size
-      + dbi_header->sec_con_size
-      + dbi_header->sec_map_size
-      + dbi_header->file_info_size
-      + dbi_header->tsm_size;
-    msf_stream_seek(msf, sn, ec_names_pos);
-    pdb_strtab_open(&ec_names, msf, sn);
-  }
-  ProfEnd();
-  return ec_names;
-}
-
-internal void
-dbi_open_dbg_streams(MSF_StreamNumber *dbg_streams, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header)
-{
-  ProfBeginFunction();
-  Assert(dbi_header->dbg_header_size % sizeof(dbg_streams[0]) == 0); // TODO: error handle
-  MSF_UInt dbg_stream_pos = sizeof(PDB_DbiHeader) 
-    + dbi_header->module_info_size
-    + dbi_header->sec_con_size
-    + dbi_header->sec_map_size
-    + dbi_header->file_info_size
-    + dbi_header->tsm_size
-    + dbi_header->ec_info_size;
-  msf_stream_seek(msf, sn, dbg_stream_pos);
-  msf_stream_read(msf, sn, &dbg_streams[0], dbi_header->dbg_header_size);
-  ProfEnd();
-}
-
-internal PDB_DbiSectionList
-dbi_open_section_headers(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn)
-{
-  ProfBeginFunction();
-  PDB_DbiSectionList sec_list = {0};
-  U64 sec_count = msf_stream_get_size(msf, sn) / sizeof(PDB_DbiSectionNode);
-  PDB_DbiSectionNode *sec_nodes = push_array(arena, PDB_DbiSectionNode, sec_count);
-  for (U64 isec = 0; isec < sec_count; isec += 1) {
-    PDB_DbiSectionNode *sec = &sec_nodes[isec];
-    msf_stream_read_struct(msf, sn, &sec->data);
-    SLLQueuePush(sec_list.first, sec_list.last, sec);
-    sec_list.count += 1;
-  }
-  ProfEnd();
-  return sec_list;
-}
-
-internal PDB_DbiContext *
-dbi_open(MSF_Context *msf, MSF_StreamNumber sn)
-{
-  ProfBeginFunction();
-  
-  PDB_DbiHeader header = {0};
-  msf_stream_read_struct(msf, sn, &header);
-  
-  Arena *arena = arena_alloc();
-  PDB_DbiContext *dbi = push_array(arena, PDB_DbiContext, 1);
-  dbi->arena      = arena;
-  dbi->age        = header.age;
-  dbi->machine    = header.machine;
-  dbi->globals_sn = header.gsi_sn;
-  dbi->publics_sn = header.psi_sn;
-  dbi->symbols_sn = header.sym_sn;
-  
-  if (header.sig == PDB_DbiHeaderSignature_V1) {
-    switch (header.version) {
-    case PDB_DbiVersion_41: 
-    case PDB_DbiVersion_50:
-    case PDB_DbiVersion_60:
-    case PDB_DbiVersion_110: {
-      Assert(!"TODO: support for older DBI versions");
-    } break;
-    case PDB_DbiVersion_70: {
-      String8List *file_info = dbi_open_file_info(dbi->arena, msf, sn, &header);
-      dbi->module_list = dbi_open_module_info(dbi->arena, msf, sn, &header, file_info);
-      dbi->sec_contrib_list = dbi_open_sec_contrib(dbi->arena, msf, sn, &header);
-      // TODO: section map
-      //dbi->sec_map = dbi_open_sec_map(dbi->arena, msf, sn, &header);
-      dbi->ec_names = dbi_open_ec_names(dbi->arena, msf, sn, &header);
-      dbi_open_dbg_streams(&dbi->dbg_streams[0], msf, sn, &header);
-      dbi->section_list = dbi_open_section_headers(dbi->arena, msf, dbi->dbg_streams[PDB_DbiStream_SECTION_HEADER]);
-    } break;
-    }
-  }
-  
-  ProfEnd();
-  return dbi;
-
-}
-
 internal void
 dbi_build_section_header_stream(PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber sn)
 {
@@ -3092,8 +2575,6 @@ dbi_build_module_info(Arena *arena, PDB_DbiContext *dbi, MSF_Context *msf)
     // TODO: generate EC info
     header->src_file             = 0;
     header->pdb_file             = 0;
-
-    Assert(header->sn != MSF_INVALID_STREAM_NUMBER);
     
     // push module info
     str8_serial_push_struct(arena, &module_info_list, header);
@@ -3368,7 +2849,7 @@ dbi_build_dbg_header(Arena *arena, PDB_DbiContext *dbi, MSF_Context *msf)
 }
 
 internal void
-dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber dbi_sn, CV_StringHashTable string_ht)
+dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber dbi_sn, CV_StringHashTable string_ht, B32 is_stripped)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -3403,6 +2884,10 @@ dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumbe
   header.flags            = 0;
   header.machine          = dbi->machine;
   header.reserved         = 0;
+
+  if (is_stripped) {
+    header.flags |= PDB_DbiHeaderFlag_Stripped;
+  }
   
   ProfBegin("MSF Write");
 
@@ -3430,11 +2915,10 @@ dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumbe
 }
 
 internal void
-dbi_release(PDB_DbiContext **dbi_ptr)
+dbi_release(PDB_DbiContext *dbi)
 {
   ProfBeginFunction();
-  arena_release((*dbi_ptr)->arena);
-  *dbi_ptr = 0;
+  arena_release(dbi->arena);
   ProfEnd();
 }
 
@@ -3590,55 +3074,14 @@ pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U3
   return pdb_alloc_(arena_alloc(.name = "PDB"), page_size, machine, time_stamp, age, guid);
 }
 
-internal PDB_Context *
-pdb_open(String8 data)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  
-  PDB_Context *pdb = 0;
-  
-  MSF_Context *msf = 0;
-  MSF_Error msf_err = msf_open(data, &msf);
-  if (msf_err == MSF_Error_OK) {
-    Arena *arena = arena_alloc();
-    pdb = push_array(arena, PDB_Context, 1);
-    pdb->arena = arena;
-    pdb->msf = msf;
-    pdb->info = pdb_info_open(pdb->msf, PDB_FixedStream_Info);
-    pdb->dbi = dbi_open(pdb->msf, PDB_FixedStream_Dbi);
-    if (pdb->dbi) {
-      MSF_UInt sym_data_size = msf_stream_get_size(pdb->msf, pdb->dbi->symbols_sn);
-      String8 symbol_data = msf_stream_read_block(scratch.arena, pdb->msf, pdb->dbi->symbols_sn, sym_data_size);
-      pdb->gsi = gsi_open(pdb->msf, pdb->dbi->globals_sn, symbol_data);
-      pdb->psi = psi_open(pdb->msf, pdb->dbi->publics_sn, symbol_data);
-    }
-    PDB_StringTable *strtab = &pdb->info->strtab;
-    pdb->type_servers[CV_TypeIndexSource_NULL] = push_array(pdb->arena, PDB_TypeServer, 1);
-    pdb->type_servers[CV_TypeIndexSource_TPI] = pdb_type_server_open(pdb->msf, PDB_FixedStream_Tpi, strtab);
-    if (pdb->info->flags & PDB_FeatureFlag_HAS_ID_STREAM) {
-      pdb->type_servers[CV_TypeIndexSource_IPI] = pdb_type_server_open(pdb->msf, PDB_FixedStream_Ipi, strtab);
-    }
-  }
-  
-  scratch_end(scratch);
-  ProfEnd();
-  return pdb;
-}
-
 internal void
-pdb_release(PDB_Context **pdb_ptr)
+pdb_release(PDB_Context *pdb)
 {
   ProfBeginFunction();
-  PDB_Context *pdb = *pdb_ptr;
-  msf_release(&pdb->msf);
-  dbi_release(&pdb->dbi);
-  gsi_release(&pdb->gsi);
-  for (U64 i = 1; i < ArrayCount(pdb->type_servers); ++i) {
-	pdb_type_server_release(&pdb->type_servers[i]);
-  }
+  dbi_release(pdb->dbi);
+  gsi_release(pdb->gsi);
+  for (U64 i = 1; i < ArrayCount(pdb->type_servers); ++i) { pdb_type_server_release(&pdb->type_servers[i]); }
   arena_release(pdb->arena);
-  *pdb_ptr = 0;
   ProfEnd();
 }
 
@@ -3692,7 +3135,25 @@ pdb_get_guid(PDB_Context *pdb)
 }
 
 internal void
-pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht)
+pdb_build_gsi_psi(TP_Context *tp, PDB_Context *pdb)
+{
+  PDB_DbiContext *dbi = pdb->dbi;
+
+  if (pdb->psi->gsi->symbol_count) {
+    if (dbi->publics_sn == MSF_INVALID_STREAM_NUMBER) { dbi->publics_sn = msf_stream_alloc(pdb->msf); }
+    if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) { dbi->symbols_sn = msf_stream_alloc(pdb->msf); }
+    psi_build(tp, pdb->psi, pdb->msf, dbi->publics_sn, dbi->symbols_sn);
+  }
+
+  if (pdb->gsi->symbol_count) {
+    if (dbi->globals_sn == MSF_INVALID_STREAM_NUMBER) { dbi->globals_sn = msf_stream_alloc(pdb->msf); }
+    if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) { dbi->symbols_sn = msf_stream_alloc(pdb->msf); }
+    gsi_build(tp, pdb->gsi, pdb->msf, dbi->globals_sn, dbi->symbols_sn);
+  }
+}
+
+internal void
+pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped)
 {
   ProfBeginFunction();
   
@@ -3702,24 +3163,16 @@ pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTa
   PDB_TypeServer  *tpi    = pdb->type_servers[CV_TypeIndexSource_TPI];
   PDB_TypeServer  *ipi    = pdb->type_servers[CV_TypeIndexSource_IPI];
   
-  if (dbi->globals_sn == MSF_INVALID_STREAM_NUMBER) {
-    dbi->globals_sn = msf_stream_alloc(pdb->msf);
-  }
-  if (dbi->publics_sn == MSF_INVALID_STREAM_NUMBER) {
-    dbi->publics_sn = msf_stream_alloc(pdb->msf);
-  }
-  if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) {
-    dbi->symbols_sn = msf_stream_alloc(pdb->msf);
-  }
-  
   pdb_type_server_build(tp, tpi, strtab, pdb->msf, PDB_FixedStream_Tpi);
   if (info->flags & PDB_FeatureFlag_HAS_ID_STREAM) {
     pdb_type_server_build(tp, ipi, strtab, pdb->msf, PDB_FixedStream_Ipi);
   }
 
-  psi_build(tp, pdb->psi, pdb->msf, dbi->publics_sn, dbi->symbols_sn);
-  gsi_build(tp, pdb->gsi, pdb->msf, dbi->globals_sn, dbi->symbols_sn);
-  dbi_build(tp, pdb->dbi, pdb->msf, PDB_FixedStream_Dbi, string_ht);
+  if (build_gsi) {
+    pdb_build_gsi_psi(tp, pdb);
+  }
+
+  dbi_build(tp, pdb->dbi, pdb->msf, PDB_FixedStream_Dbi, string_ht, is_stripped);
   pdb_info_build(pdb->info, pdb->msf, PDB_FixedStream_Info);
 
   ProfEnd();
@@ -3737,19 +3190,6 @@ pdb_string_from_src_error(PDB_SrcError error)
   case PDB_SrcError_UNABLE_TO_WRITE_DATA:    return str8_lit("UNABLE_TO_WRITE_DATA");
   case PDB_SrcError_UNSUPPORTED_COMPRESSION: return str8_lit("UNSUPPORTED_COMPRESSION");
   case PDB_SrcError_UNKNOWN:                 return str8_lit("UNKNOWN");
-  }
-  return str8(0,0);
-}
-
-internal String8
-pdb_string_from_open_type_server_error(PDB_OpenTypeServerError error)
-{
-  switch (error) {
-  case PDB_OpenTypeServerError_OK:                    return str8_lit("OK");
-  case PDB_OpenTypeServerError_UNKNOWN:               return str8_lit("UNKNOWN");
-  case PDB_OpenTypeServerError_INVALID_BUCKET_COUNT:  return str8_lit("INVALID_BUCKET_COUNT");
-  case PDB_OpenTypeServerError_INVALID_TI_RANGE:      return str8_lit("INVALID_TI_RANGE");
-  case PDB_OpenTypeServerError_UNSUPPORTED_VERSION:   return str8_lit("UNSUPPORTED_VERSION");
   }
   return str8(0,0);
 }

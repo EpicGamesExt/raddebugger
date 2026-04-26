@@ -325,6 +325,76 @@ str8_match(String8 a, String8 b, StringMatchFlags flags)
   return result;
 }
 
+internal B32
+str8_char_match(U8 a, U8 b, StringMatchFlags flags)
+{
+  U8 at = a;
+  U8 bt = b;
+  if (flags & StringMatchFlag_CaseInsensitive) {
+    at = upper_from_char(at);
+    bt = upper_from_char(bt);
+  }
+  if (flags & StringMatchFlag_SlashInsensitive) {
+    if (at == '\\') { at = '/'; }
+    if (bt == '\\') { bt = '/'; }
+  }
+  return (at == bt);
+}
+
+internal B32
+str8_match_wildcard(String8 string, String8 pattern, StringMatchFlags flags)
+{
+  B32 matched = 0;
+
+  U64 pattern_cursor = 0;
+  U64 string_cursor  = 0;
+
+  U64 pattern_start = max_U64;
+  U64 string_start  = 0;
+
+  for (;;) {
+    if (pattern_cursor == pattern.size) {
+      if (string_cursor == string.size || (flags & StringMatchFlag_RightSideSloppy)) {
+        matched = 1;
+        break;
+      }
+    }
+
+    if (string_cursor == string.size) {
+      while (pattern_cursor < pattern.size && pattern.str[pattern_cursor] == '*') {
+        pattern_cursor += 1;
+      }
+      matched = (pattern_cursor == pattern.size);
+      break;
+    }
+
+    if (pattern_cursor < pattern.size && pattern.str[pattern_cursor] == '*') {
+      pattern_start = pattern_cursor;
+      string_start = string_cursor;
+      pattern_cursor += 1;
+      continue;
+    }
+
+
+    if (pattern_cursor < pattern.size && (pattern.str[pattern_cursor] == '?' || str8_char_match(string.str[string_cursor], pattern.str[pattern_cursor], flags))) {
+      string_cursor  += 1;
+      pattern_cursor += 1;
+      continue;
+    }
+
+    if (pattern_start != max_U64) {
+      pattern_cursor = pattern_start + 1;
+      string_start += 1;
+      string_cursor = string_start;
+      continue;
+    }
+
+    break;
+  }
+
+  return matched;
+}
+
 internal U64
 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags)
 {
@@ -731,7 +801,7 @@ str8_from_memory_size(Arena *arena, U64 size)
   {
     if(size < KB(1))
     {
-      result = push_str8f(arena, "%llu Bytes", size);
+      result = push_str8f(arena, "%llu byte%s", size, size == 1 ? "" : "s");
     }
     else if(size < MB(1))
     {
@@ -1140,6 +1210,42 @@ str8_list_copy(Arena *arena, String8List *list)
     String8 new_string = push_str8_copy(arena, node->string);
     str8_list_push_node_set_string(&result, new_node, new_string);
   }
+  return result;
+}
+
+internal String8List
+str8_list_substr(Arena *arena, String8List list, Rng1U64 range)
+{
+  String8List result = {0};
+  
+  String8Node *n = list.first;
+  
+  U64 front_min = 0;
+  {
+    U64 cursor = 0;
+    for (; n != 0; cursor += n->string.size, n = n->next) {
+      if (cursor + n->string.size > range.min) {
+        front_min = range.min - cursor;
+        break;
+      }
+    }
+  }
+  
+  if (front_min > 0) {
+    U64 front_max = front_min + Min(dim_1u64(range), n->string.size);
+    str8_list_push(arena, &result, str8_substr(n->string, r1u64(front_min, front_max)));
+    n = n->next;
+  }
+  
+  for (; n != 0; n = n->next) {
+    if (result.total_size >= dim_1u64(range)) {
+      break;
+    }
+    U64 copy_max  = dim_1u64(range) - result.total_size;
+    U64 copy_size = Min(copy_max, n->string.size);
+    str8_list_push(arena, &result, str8_substr(n->string, r1u64(0, copy_size)));
+  }
+  
   return result;
 }
 
@@ -2246,24 +2352,35 @@ string_from_elapsed_time(Arena *arena, DateTime dt)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List list = {0};
-  if(dt.year)
-  {
+  if (dt.year) {
     str8_list_pushf(scratch.arena, &list, "%dy", dt.year);
     str8_list_pushf(scratch.arena, &list, "%um", dt.mon);
     str8_list_pushf(scratch.arena, &list, "%ud", dt.day);
-  }
-  else if(dt.mon)
-  {
+  } else if (dt.mon) {
     str8_list_pushf(scratch.arena, &list, "%um", dt.mon);
     str8_list_pushf(scratch.arena, &list, "%ud", dt.day);
-  }
-  else if (dt.day)
-  {
+  } else if (dt.day) {
     str8_list_pushf(scratch.arena, &list, "%ud", dt.day);
   }
-  str8_list_pushf(scratch.arena, &list, "%u:%u:%u:%u ms", dt.hour, dt.min, dt.sec, dt.msec);
-  StringJoin join = { str8_lit_comp(""), str8_lit_comp(" "), str8_lit_comp("") };
-  String8 result = str8_list_join(arena, &list, &join);
+
+  if (dt.hour) {
+    str8_list_pushf(scratch.arena, &list, "%uh %um %u.%us", dt.hour, dt.min, dt.sec, dt.msec);
+  } else if (dt.min) {
+    str8_list_pushf(scratch.arena, &list, "%um %u.%us", dt.min, dt.sec, dt.msec);
+  } else if (dt.sec) {
+    str8_list_pushf(scratch.arena, &list, "%u.%us", dt.sec, dt.msec);
+  } else if (dt.msec) {
+    str8_list_pushf(scratch.arena, &list, "%ums", dt.msec);
+  } else if (dt.micro_sec) {
+    str8_list_pushf(scratch.arena, &list, "%uus", dt.micro_sec);
+  }
+
+  if (list.node_count == 0) {
+    str8_list_pushf(scratch.arena, &list, "0");
+  }
+
+  String8 result = str8_list_join(arena, &list, &(StringJoin){ str8_lit_comp(""), str8_lit_comp(" "), str8_lit_comp("") });
+
   scratch_end(scratch);
   return result;
 }
@@ -2902,6 +3019,124 @@ str8_is_before_case_sensitive(const void *a, const void *b)
 {
   int cmp = str8_compar_case_sensitive(a, b);
   return cmp < 0;
+}
+
+////////////////////////////////
+// string buffer
+
+internal B32
+str8_buffer_skip(String8Node *buf, U64 *pos, U64 skip)
+{
+  S64 to_skip;
+  for (to_skip = skip; to_skip > 0;) {
+    if (buf == 0) { break; }
+    
+    U64 left = Min(to_skip, buf->string.size -  *pos);
+    *pos += left;
+    
+    if (*pos == buf->string.size) {
+      if (buf->next) { *buf = *buf->next;                }
+      else           { *buf = (String8Node){0}; buf = 0; }
+      *pos = 0;
+    }
+    
+    to_skip -= (S64)left;
+  }
+  Assert(to_skip == 0);
+  return (to_skip == 0);
+}
+
+internal U64
+str8_buffer_read(String8Node *buf, U64 *pos, U64 read_size, void *out)
+{
+  U64 cursor = 0;
+  for (; cursor < read_size ;) {
+    if (buf == 0) { break; }
+    
+    U64   copy_size = Min(read_size - cursor, (buf->string.size - *pos));
+    void *dst       = (U8 *)out + cursor;
+    void *src       = buf->string.str + *pos;
+    MemoryCopy(dst, src, copy_size);
+    
+    *pos   += copy_size;
+    cursor += copy_size;
+    
+    if (*pos >= buf->string.size) {
+      if (buf->next) { *buf = *buf->next;                }
+      else           { *buf = (String8Node){0}; buf = 0; }
+      *pos = 0;
+    }
+  }
+  return cursor;
+}
+
+internal U64
+str8_buffer_peek(String8Node *buf, U64 *pos, U64 read_size, void *out)
+{
+  String8Node buf_copy = *buf;
+  U64         pos_copy = *pos;
+  return str8_buffer_read(&buf_copy, &pos_copy, read_size, out);
+}
+
+internal U64
+str8_buffer_write(String8Node *buf, U64 *pos, String8 data)
+{
+  U64 copy_size = 0;
+  if (buf) {
+    for (copy_size = 0; copy_size < data.size; ) {
+      U64 data_size = data.size - copy_size;
+      
+      U64 available_size = buf->string.size - *pos;
+      U64 to_copy        = Min(available_size, data_size);
+      if (data.str == 0) {
+        MemorySet(buf->string.str + *pos, 0, to_copy);
+      } else {
+        U8 *data_ptr = data.str + copy_size;
+        MemoryCopy(buf->string.str + *pos, data_ptr, to_copy);
+      }
+      *pos      += to_copy;
+      copy_size += to_copy;
+      
+      if (*pos >= buf->string.size) {
+        if (buf->next) {
+          *buf = *buf->next;
+          *pos = 0;
+        } else {
+          break;
+        }
+      }
+    }
+    Assert(copy_size == data.size);
+  } else {
+    copy_size = data.size;
+  }
+  return copy_size;
+}
+
+internal U64
+str8_buffer_write_u16(String8Node *buf, U64 *pos, U16 v)
+{
+  return str8_buffer_write(buf, pos, str8_struct(&v));
+}
+
+internal U64
+str8_buffer_write_u32(String8Node *buf, U64 *pos, U32 v)
+{
+  return str8_buffer_write(buf, pos, str8_struct(&v));
+}
+
+internal U64
+str8_buffer_write_zeroes(String8Node *buf, U64 *pos, U64 size)
+{
+  return str8_buffer_write(buf, pos, str8(0, size));
+}
+
+internal U64
+str8_buffer_write_string_list(String8Node *buf, U64 *pos, String8List list)
+{
+  U64 copy_size = 0;
+  for EachNode(n, String8Node, list.first) { copy_size += str8_buffer_write(buf, pos, n->string); }
+  return copy_size;
 }
 
 ////////////////////////////////

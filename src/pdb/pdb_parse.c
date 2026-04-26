@@ -476,56 +476,35 @@ pdb_gsi_from_data(Arena *arena, String8 data)
     // array offsets
     U32 bitmask_u32_count = CeilIntegerDiv(slot_count, 32);
     U32 bitmask_byte_size = bitmask_u32_count*4;
-    U32 bitmask_off = hash_record_array_off + header->hash_record_arr_size;
-    U32 offsets_off = bitmask_off + bitmask_byte_size;
+    U32 bitmask_off       = hash_record_array_off + header->hash_record_arr_size;
+    U32 offsets_off       = bitmask_off + bitmask_byte_size;
     
     // get bitmask & packed offset arrays
-    U8 *bitmasks = 0;
-    U8 *packed_offsets = 0;
+    U32Array  bitmask = {0};
+    U32      *packed_offsets      = 0;
+    U64       packed_offset_count = 0;
     if(bitmask_off + bitmask_byte_size <= data.size)
     {
-      bitmasks = (data.str + bitmask_off);
-      packed_offsets = (data.str + offsets_off);
+      bitmask        = (U32Array){ .v = (U32 *)(data.str + bitmask_off), .count = bitmask_u32_count };
+      packed_offsets = (U32 *)(data.str + offsets_off);
+      packed_offset_count = (data.size - offsets_off)/4;
     }
-    U32 packed_offset_count = (data.size - offsets_off)/4;
     
     // unpack
     U32 *unpacked_offsets = 0;
     if(packed_offsets != 0)
     {
-      unpacked_offsets = push_array(scratch.arena, U32, slot_count);
+      unpacked_offsets = push_array_no_zero(scratch.arena, U32, slot_count);
+      MemorySet(unpacked_offsets, 0xff, sizeof(unpacked_offsets[0]) * slot_count);
       
-      U32 *bitmask_ptr = (U32*)bitmasks;
-      U32 *bitmask_opl = bitmask_ptr + bitmask_u32_count;
-      U32 *src_ptr = (U32*)packed_offsets;
-      U32 *src_opl = src_ptr + packed_offset_count;
-      U32 *dst_ptr = unpacked_offsets;
-      U32 *dst_opl = dst_ptr + slot_count;
-      for(; bitmask_ptr < bitmask_opl && src_ptr < src_opl; bitmask_ptr += 1)
-      {
-        U32 bits = *bitmask_ptr;
-        U32 src_max = (U32)(src_opl - src_ptr);
-        U32 dst_max = (U32)(dst_opl - dst_ptr);
-        U32 k_max0 = ClampTop(32, dst_max);
-        U32 k_max  = ClampTop(k_max0, src_max);
-        for(U32 k = 0; k < k_max; k += 1)
-        {
-          if((bits & 1) == 1)
-          {
-            *dst_ptr = *src_ptr;
-            src_ptr += 1;
-          }
-          else
-          {
-            *dst_ptr = 0xFFFFFFFF;
-          }
-          dst_ptr += 1;
-          bits >>= 1;
-        }
-      }
-      for(; dst_ptr < dst_opl; dst_ptr += 1)
-      {
-        *dst_ptr = 0xFFFFFFFF;
+      U32 *off_ptr = (U32 *)packed_offsets;
+      U32 *off_opl = off_ptr + packed_offset_count;
+      for (U64 slot_idx = 0; ; slot_idx += 1) {
+        slot_idx = bit_array_scan_left_to_right32(bitmask, slot_idx, slot_count, 1);
+        if (slot_idx >= slot_count) { break; }
+        if (off_ptr >= off_opl)     { Assert(0 && "corrupted GSI"); break; }
+        unpacked_offsets[slot_idx] = *off_ptr;
+        off_ptr += 1;
       }
     }
     
@@ -613,7 +592,7 @@ pdb_gsi_symbol_from_string(PDB_GsiParsed *gsi, String8 symbol_data, String8 stri
           sym_opl = symbol_data.str + opl_off;
         }
         
-        Rng1U64 raw_symbol_range = rng_1u64(off + sizeof(*sym_header), off + (sym_header->size - sizeof(sym_header->kind)));
+        Rng1U64 raw_symbol_range = rng_1u64(off + sizeof(*sym_header), opl_off);
         String8 raw_symbol       = str8_substr(symbol_data, raw_symbol_range);
         String8 sym_name         = cv_name_from_symbol(sym_header->kind, raw_symbol);
         

@@ -78,10 +78,8 @@ typedef struct RDIB_LocationList
 
 typedef struct RDIB_Variable
 {
-  RDI_LinkFlags              link_flags;
   String8                    name;
   String8                    link_name;
-  RDI_LocalKind              kind;
   struct RDIB_Type          *type;
   struct RDIB_Type          *container_type;
   struct RDIB_Procedure     *container_proc;
@@ -211,7 +209,6 @@ typedef struct RDIB_SourceFileChunkList
 
 typedef struct RDIB_Procedure
 {
-  RDI_LinkFlags          link_flags;
   String8                name;
   String8                link_name;
   struct RDIB_Type      *type;
@@ -896,8 +893,8 @@ typedef struct
       U64               *loc_data_offsets;
       U64               *scope_voffs_rdi;
       RDI_Scope         *scopes_rdi;
-      RDI_Local         *locals_rdi;
-      RDI_LocationBlock *loc_blocks_rdi;
+      RDI_Symbol        *locals_rdi;
+      void              *loc_blocks_rdi;
       U8                *loc_data_rdi;
     };
   };

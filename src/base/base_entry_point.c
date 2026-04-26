@@ -72,8 +72,8 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();
 #endif
-#if defined(CTRL_CORE_H) && !defined(CTRL_INIT_MANUAL)
-  ctrl_init();
+#if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)
+  d_init();
 #endif
 #if defined(OS_GFX_H) && !defined(OS_GFX_INIT_MANUAL)
   os_gfx_init();
@@ -87,9 +87,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(FONT_CACHE_H) && !defined(FNT_INIT_MANUAL)
   fnt_init();
 #endif
-#if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)
-  d_init();
-#endif
 #if defined(RADDBG_CORE_H) && !defined(RD_INIT_MANUAL)
   rd_init(&cmdline);
 #endif
@@ -100,7 +97,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   U64 lane_broadcast_val = 0;
   {
     U64 num_main_threads = 1;
-#if defined(CTRL_CORE_H)
+#if defined(DBG_ENGINE_CORE_H)
     num_main_threads += 1;
 #endif
     U64 num_async_threads = os_get_system_info()->logical_processor_count;

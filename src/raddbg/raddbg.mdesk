@@ -200,6 +200,7 @@ RD_VocabTable:
   {rgba                 ""                          "RGBA"                      ""                    Palette                                        }
   {path                 ""                          "Path"                      ""                    FileOutline                                    }
   {guid                 ""                          "GUID"                      ""                    Null                                           }
+  {peek_type            _                           "Peek Type"                 _                     Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -225,10 +226,10 @@ RD_VocabTable:
 
 @table(name schema) RD_SchemaTable:
 {
-  //- rjf: users / projects
+  //- rjf: @schema users
   {
-    user
-      ```
+    user,
+    ```
       @expand_commands(edit_user_theme) x:
     {
       //- rjf: animations
@@ -252,7 +253,7 @@ RD_VocabTable:
         @description("The user's theme, which describes all colors used throughout the UI.")
         'theme': string,
       @no_expand @display_name('User Theme')
-        'theme_colors': query,
+        'theme_colors': set,
       
       //- rjf: autocompletion
       @display_name('Autocompletion Lister') @description("Enables the autocompletion lister while typing expressions.") @default(1)
@@ -304,9 +305,12 @@ RD_VocabTable:
     ```
   }
   
-  // TODO(rjf): the control codes could be fed from the CTRL_ExceptionCodeKindTable, but
+  //- rjf: @schema project
+  //
+  // TODO(rjf): the control codes could be fed from the D_ExceptionCodeKindTable, but
   // we do not support that in this generator - we'd need a way to form a table-generated
   // string and put it into a table cell...
+  //
   {
     project
       ```
@@ -316,6 +320,8 @@ RD_VocabTable:
       @default(2) @display_name('Project Tab Width') 'tab_width': @range[1, 32] u64,
       
       //- rjf: visualizers
+      @display_name('Display Pointer Addresses Before Contents') @description("When visualizing pointers, always shows the address first, before showing contents at the pointer's address.")
+        @default(0) display_pointer_addresses_before_contents: bool,
       @display_name('Use Default C++ STL Type Visualizers') @description("Enables the built-in type views for C++ STL types.")
         @default(1) use_default_stl_type_views: bool,
       @display_name('Use Default Unreal Engine Type Visualizers') @description("Enables the built-in type views for Unreal Engine types.")
@@ -325,7 +331,7 @@ RD_VocabTable:
       @default("None") @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
         'theme': string,
       @no_expand @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
-        'theme_colors': query,
+        'theme_colors': set,
       
       //- rjf: exception settings
       @default(1) @display_name("Break On Win32 Control-C Exceptions") @description("Code: 0x40010005")
@@ -406,7 +412,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: theme colors
+  //- rjf: @schema theme_color
   {
     theme_color,
     ```
@@ -420,7 +426,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: windows
+  //- rjf: @schema window
   {
     window,
     ```
@@ -451,7 +457,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: tabs
+  //- rjf: @schema tab
   {
     tab,
     ```
@@ -464,21 +470,49 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: views
-  {
-    watch,
-    ```
-      @inherit(tab) x:
-    {
-      @override @display_name('Tab Row Height') @description("Controls the tab's row height, in multiples of the font size.")
-        'row_height': @range[1.75f, 5.f] f32,
-      'label': code_string,
-      @description("The root expression which is evaluated to produce the watch window.")
-        'expression': expr_string,
-      @no_expand 'watches': query,
-    }
-    ```
-  }
+  //- rjf: @schema bin
+  {bin ```x:{ @description('An expression to which the 2-radix display should apply.') 'expression': expr_string }```}
+  
+  //- rjf: @schema oct
+  {oct ```x:{ @description('An expression to which the 8-radix display should apply.') 'expression': expr_string }```}
+  
+  //- rjf: @schema hex
+  {hex ```x:{ @description('An expression to which the 16-radix display should apply.') 'expression': expr_string }```}
+  
+  //- rjf: @schema digits
+  {digits ```x:{ @description('An expression to which the digit display should apply.') 'expression': expr_string, @description('The minimum number of digits to display.') 'digit_count': u64 }```}
+  
+  //- rjf: @schema no_string
+  {no_string ```x:{ @description('The expression for which string visualization should be disabled.') 'expression': expr_string}```}
+  
+  //- rjf: @schema no_char
+  {no_char ```x:{ @description('The expression for which character visualization should be disabled.') 'expression': expr_string}```}
+  
+  //- rjf: @schema no_addr
+  {no_addr ```x:{ @description('The expression for which address visualization should be disabled.') 'expression': expr_string}```}
+  
+  //- rjf: @schema sequence
+  {sequence ```x:{ @description('The number of expansions to generate.') 'count': expr_string}```}
+  
+  //- rjf: @schema rows
+  {rows ```x:{ @description('The expression for which rows should be generated.') 'expression': expr_string, @description('A list of expressions which will be used to generate rows.') '...'}```}
+  
+  //- rjf: @schema columns
+  {columns ```x:{ @description('The expression for whose expansions columns should be generated.') 'expression': expr_string, @description('A list of expressions which will be used to generate columns for each expansion from `expression`.') '...'}```}
+  
+  //- rjf: @schema omit
+  {omit ```x:{ @description('The expression for which certain members should be omitted.') 'expression': expr_string, @description('A list of member names to omit from the expansion.') '...'}```}
+  
+  //- rjf: @schema range1
+  {range1 ```x:{ @description('The expression which should be bounded by `min` and `max`.') 'expression': expr_string, @description('The lower bound.') min, @description('The upper bound.') max}```}
+  
+  //- rjf: @schema array
+  {array ```x:{ @description('An expression of the base address of the array.') 'base_address': expr_string, @description('The number of elements in the array.') count}```}
+  
+  //- rjf: @schema slice
+  {slice ```x:{ @description('An expression of a structure that is to be interpreted as a slice.') 'expression': expr_string}```}
+  
+  //- rjf: @schema list
   {
     list,
     ```
@@ -491,6 +525,24 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema watch
+  {
+    watch,
+    ```
+      @inherit(tab) x:
+    {
+      @override @display_name('Tab Row Height') @description("Controls the tab's row height, in multiples of the font size.")
+        'row_height': @range[1.75f, 5.f] f32,
+      'label': code_string,
+      @description("The root expression which is evaluated to produce the watch window.")
+        'expression': expr_string,
+      @no_expand 'watches': set,
+    }
+    ```
+  }
+  
+  //- rjf: @schema text
   {
     text,
     ```
@@ -511,6 +563,8 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema disasm
   {
     disasm,
     ```
@@ -531,30 +585,47 @@ RD_VocabTable:
         'show_symbol_names': bool,
       @no_callee_helper @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers': bool,
-      
     }
     ```
   }
+  
+  //- rjf: @schema memory
   {
     memory,
     ```
       @inherit(tab) x:
     {
-      @description("An expression which refers to the base address of data which should be viewed as memory.")
+      @display_name("Zoom") @description("The zoom level for displaying bytes in the memory view.")
+        @default(1.0) 'zoom': @range[0.5, 2] f32, 
+      @display_name("Base Address") @description("An expression which refers to the base address of data which should be viewed as memory.")
         'expression': expr_string,
       @display_name("Address Range Size") @description("The number of bytes of the viewed memory range.")
         'size': expr_string,
       @display_name("Cursor Address") @description("The address of the cursor.")
         'cursor': expr_string,
-      @display_name("Cursor Size") @description("The size, in bytes, of the cursor.")
+      @default(1) @display_name("Cursor Size") @description("The size, in bytes, of the cursor.")
         'cursor_size': @range[1, 16] u64,
-      @default(16) @description("The number of columns to build before building new rows.")
+      @expand_if("!$.auto_columns") @default(16) @description("The number of columns to build before building new rows.")
         'num_columns': @range[1, 64] u64,
+      @default(16) @display_name("Default Radix") @description("The default radix with which numeric values should be displayed, when peeking.")
+        @or(2, 8, 10, 16)
+        'default_radix': u64,
       @default(1) @display_name("Track Mark To Cursor") @description("Ensures that the mark always follows the cursor, if the cursor value is updated.")
         'track_mark_to_cursor': bool,
+      @default(1) @display_name("Allow Mutation") @description("Allows operations which mutate memory.")
+        'allow_mutation': bool,
+      @default(0) @display_name("Automatically Size Columns") @description("Determines the number of columns based on the available space.")
+        'auto_columns': bool,
+      @default(1) @display_name("Peek As Unsigned") 'peek_as_unsigned': bool,
+      @default(1) @display_name("Peek As Signed") 'peek_as_signed': bool,
+      @default(1) @display_name("Peek As Float") 'peek_as_float': bool,
+      @display_name("Extra Peek Types") @description("A list of types as which to interpret selected memory.")
+        'peek_types': set,
     }
     ```
   }
+  
+  //- rjf: @schema bitmap
   {
     bitmap,
     ```
@@ -569,6 +640,8 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema color
   {
     color,
     ```
@@ -579,6 +652,8 @@ RD_VocabTable:
     }
     ```
   }
+  
+  //- rjf: @schema geo3d
   {
     geo3d,
     ```
@@ -596,7 +671,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: getting started
+  //- rjf: @schema getting_started
   {
     getting_started,
     ```
@@ -606,7 +681,7 @@ RD_VocabTable:
     ```
   }
   
-  //- rjf: targets
+  //- rjf: @schema target
   {
     target,
     ```
@@ -622,14 +697,14 @@ RD_VocabTable:
       'stdout_path':        @no_relativize path,
       'stderr_path':        @no_relativize path,
       'stdin_path':         @no_relativize path,
-      'environment':        query,
+      'environment':        set,
       'debug_subprocesses': bool,
       @no_revert @no_expand @default(0) 'enabled': bool,
     }
     ```,
   }
   
-  //- rjf: breakpoints
+  //- rjf: @schema breakpoint
   {
     breakpoint,
     ```
@@ -651,7 +726,7 @@ RD_VocabTable:
     ```,
   }
   
-  //- rjf: watch pins
+  //- rjf: @schema watch_pin
   {
     watch_pin,
     ```
@@ -666,7 +741,7 @@ RD_VocabTable:
     ```,
   }
   
-  //- rjf: debug infos
+  //- rjf: @schema debug_info
   {
     debug_info,
     ```
@@ -681,46 +756,52 @@ RD_VocabTable:
     ```,
   }
   
-  //- rjf: file path maps
+  //- rjf: @schema file_path_map
   {
     file_path_map,
     ```@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @no_relativize path, 'dest': @no_relativize path}```,
   }
   
-  //- rjf: type views
+  //- rjf: @schema type_view
   {
     type_view,
     ```@collection_commands(add_type_view) @row_commands(remove_cfg) x:{'type':expr_string, 'expr':expr_string}```,
   }
   
-  //- rjf: recent projects
+  //- rjf: @schema recent_project
   {
     recent_project,
     ```x:{'path':path}```,
   }
   
-  //- rjf: recent files
+  //- rjf: @schema recent_file
   {
     recent_file,
     ```x:{'path':path}```,
   }
   
-  //- rjf: control entities
+  //- rjf: @schema machine
   {
     machine,
-    ```x:{'label':code_string, @no_expand 'active':bool, 'unattached_processes':query, 'processes':query}```,
+    ```x:{'label':code_string, @no_expand 'active':bool, 'unattached_processes':set, 'processes':set}```,
   }
+  
+  //- rjf: @schema process
   {
     process,
-    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'modules':query, 'threads':query}```,
+    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'modules':set, 'threads':set}```,
   }
+  
+  //- rjf: @schema module
   {
     module,
     ```x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}```,
   }
+  
+  //- rjf: @schema thread
   {
     thread,
-    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}```,
+    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':set}```,
   }
 }
 
@@ -742,11 +823,11 @@ RD_VocabTable:
 RD_RegTable:
 {
   // rjf: ctrl entities
-  {CTRL_Handle       machine          Machine       }
-  {CTRL_Handle       module           Module        }
-  {CTRL_Handle       process          Process       }
-  {CTRL_Handle       thread           Thread        }
-  {CTRL_Handle       ctrl_entity      CtrlEntity    }
+  {D_Handle          machine          Machine       }
+  {D_Handle          module           Module        }
+  {D_Handle          process          Process       }
+  {D_Handle          thread           Thread        }
+  {D_Handle          ctrl_entity      CtrlEntity    }
   
   // rjf: cfgs
   {CFG_ID            window           Window        }
@@ -772,7 +853,7 @@ RD_RegTable:
   {C_Key             text_key         TextKey       }
   {TXT_LangKind      lang_kind        LangKind      }
   {D_LineList        lines            Lines         }
-  {DI_Key           dbgi_key         DbgiKey       }
+  {DI_Key            dbgi_key         DbgiKey       }
   {U64               vaddr            Vaddr         }
   {U64               voff             Voff          }
   {Rng1U64           vaddr_range      VaddrRange    }
@@ -933,7 +1014,7 @@ RD_CmdTable:    //               |        |              |                |     
   {MoveView                       0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "move_view"                   "Move View"                                   "Moves a view to a new panel."                                                                                     ""                               ""                                                               }
   {TabBarTop                      1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           UpArrow               "tab_bar_top"                 "Anchor Tab Bar To Top"                       "Anchors a panel's tab bar to the top of the panel."                                                               ""                               "$tab,"                                                          }
   {TabBarBottom                   1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           DownArrow             "tab_bar_bottom"              "Anchor Tab Bar To Bottom"                    "Anchors a panel's tab bar to the bottom of the panel."                                                            ""                               "$tab,"                                                          }
-  {TabSettings                    1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Gear                  "tab_settings"                "Tab Settings"                                "Opens settings for a tab."                                                                                        ""                               ""                                                               }
+  {TabSettings                    1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Gear                  "tab_settings"                "Selected Tab Settings"                       "Opens settings for a tab."                                                                                        "view,options"                   ""                                                               }
   
   //- rjf: files
   {SetCurrentPath                 0        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "set_current_path"            "Set Current Path"                            "Sets the debugger's current path, which is used as a starting point when browsing for files."                     ""                               ""                                                               }
@@ -973,6 +1054,7 @@ RD_CmdTable:    //               |        |              |                |     
   {Edit                           1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Pencil                "edit"                        "Edit"                                        "Edits the current selection."                                                                                     ""                               ""                                                               }
   {Accept                         1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           CheckFilled           "accept"                      "Accept"                                      "Accepts current changes, or answers prompts in the affirmative."                                                  ""                               ""                                                               }
   {Cancel                         1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           X                     "cancel"                      "Cancel"                                      "Rejects current changes, exits temporary menus, or answers prompts in the negative."                              ""                               ""                                                               }
+  {FocusMenu                      1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           List                  "focus_menu"                  "Focus Menu"                                  "Focuses the menu for the selected interface, if there is one."                                                    ""                               ""                                                               }
   
   //- rjf: directional movement & text controls
   {MoveLeft                       1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "move_left"                   "Move Left"                                   "Moves the cursor or selection left."                                                                              ""                               ""                                                               }
@@ -1029,7 +1111,7 @@ RD_CmdTable:    //               |        |              |                |     
   
   //- rjf: thread finding
   {FindThread                     1        1              0                0               "query:threads"                                  Thread             null              Nil                     Thread     0  0  0  0  0  1  1                                                           Find                  "find_thread"                 "Find Thread"                                 "Jumps to the passed thread in either source code, disassembly, or both if they're already open."                  ""                               ""                                                               }
-  {FindSelectedThread             1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Find                  "find_selected_thread"        "Find Selected Thread"                        "Jumps to the selected thread in either source code, disassembly, or both if they're already open."                ""                               ""                                                               }
+  {FindSelectedThread             1        1              1                1               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Find                  "find_selected_thread"        "Find Selected Thread"                        "Jumps to the selected thread in either source code, disassembly, or both if they're already open."                "current,instruction"            ""                                                               }
   
   //- rjf: name finding
   {GoToName                       1        1              0                0               "query:procedures"                               String             symbol_lister     Nil                     Null       0  0  0  0  1  1  1                                                           Null                  "goto_name"                   "Go To Name"                                  "Searches for the passed string as a file, a symbol in debug info, and more, then jumps to it if possible."        ""                               "$text_pt,"                                                      }
@@ -1146,7 +1228,7 @@ RD_CmdTable:    //               |        |              |                |     
   `RD_RegSlot slot`;
   `String8 expr`;
   `String8 view_name`;
-  `CTRL_EntityKind ctrl_entity_kind`;
+  `D_EntityKind ctrl_entity_kind`;
 }
 
 @struct RD_CmdKindInfo:
@@ -1163,9 +1245,9 @@ RD_CmdTable:    //               |        |              |                |     
 {
   `{0}`,
   @expand(D_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis))|(RD_CmdKindFlag_ListInTextPt*$(a.text_pt_vis))|(RD_CmdKindFlag_ListInTextRng*$(a.text_rng_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis))|(RD_CmdKindFlag_ListInTextPt*$(a.text_pt_vis))|(RD_CmdKindFlag_ListInTextRng*$(a.text_rng_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), D_EntityKind_$(a.q_ctrl_ent_kind)}}```;
   @expand(RD_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis))|(RD_CmdKindFlag_ListInTextPt*$(a.text_pt_vis))|(RD_CmdKindFlag_ListInTextRng*$(a.text_rng_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis))|(RD_CmdKindFlag_ListInTextPt*$(a.text_pt_vis))|(RD_CmdKindFlag_ListInTextRng*$(a.text_rng_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), D_EntityKind_$(a.q_ctrl_ent_kind)}}```;
   @expand(RD_WatchTabFastPathTable, a)
     ```{ str8_lit_comp("$(a.name_lower)"), str8_lit_comp("Opens a $(a.display_name) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs|RD_CmdKindFlag_ListInTab}```;
   @expand(RD_ViewTabFastPathTable, a)
@@ -1239,6 +1321,7 @@ RD_DefaultBindingTable:
   { "tab_bar_top"                 Up        ctrl     shift     alt        }
   { "tab_bar_bottom"              Down      ctrl     shift     alt        }
   { "open_tab"                    T         ctrl     0         0          }
+  { "tab_settings"                T         ctrl     0         alt        }
   
   //- rjf: files
   { "open"                        O         ctrl     0         0          }
@@ -1258,6 +1341,7 @@ RD_DefaultBindingTable:
   { "accept"                      Return    0        0         0          }
   { "accept"                      Space     0        0         0          }
   { "cancel"                      Esc       0        0         0          }
+  { "focus_menu"                  D         0        0         alt        }
   
   //- rjf: directional movement & text controls
   { "move_left"                   Left      0        0         0          }
@@ -2534,7 +2618,7 @@ raddbg_readme:
     @p "`range1(expr, min, max)`: Expresses that `expr` is a bounded numeric value between `min` and `max`. Interpreted by the debugger to build slider UI for an evaluation.";
     @p "`array(expr, count)`: Expresses that `expr` points to `count` values, rather than 1, or the fixed size implied by a static array. When expanded, displays only that many values.";
     @p "`slice(expr)`: Expresses that `expr` evaluates to a structure type which bundles a base pointer and a count (encoding how many elements to which the base pointer points). This count can be expressed either as an integer, or as an 'end pointer'. When expanded, displays that many elements following that base pointer.";
-    @p "`table(expr, ...)`: Expresses that `expr` should be expanded normally, but interprets all post-`expr` arguments as expressions which should be used to form cells for rows which are generated by this expression's expansions. This replaces the normal cells which are generated for an expansion in a Watch table.";
+    @p "`columns(expr, ...)`: Expresses that `expr` should be expanded normally, but interprets all post-`expr` arguments as expressions which should be used to form cells for rows which are generated by this expression's expansions. This replaces the normal cells which are generated for an expansion in a Watch table.";
     @p "`text(expr, [lang = ...])`: Generates a text visualizer, interpreting `expr` as (being or pointing to) text.";
     @p "`disasm(expr, [size = ...]`: Generates a disassembly visualizer, interpreting `expr` as (being or pointing to) machine code.";
     @p "`memory(expr, [size = ...])`: Generates a memory visualizer, interpreting `expr` as (being or pointing to) raw bytes.";
