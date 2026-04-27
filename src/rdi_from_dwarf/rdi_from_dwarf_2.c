@@ -1016,6 +1016,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     U64 hash;
     U64 unit_idx;
     U64 info_off;
+    U64 order_idx;
   };
   typedef struct UnitTypeNode UnitTypeNode;
   struct UnitTypeNode
@@ -1332,7 +1333,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   }
   
   ////////////////////////////
-  //- rjf: produce [0...n) -> unique-tag-node mapping for all types
+  //- rjf: produce [0...n) <-> unique-tag-node mapping for all types
   //
   U64 type_count = 0;
   UniqueTypeTagNode **type_tag_nodes = 0;
@@ -1352,6 +1353,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       for EachNode(n, UniqueTypeTagNode, unique_type_tag_slots[slot_idx])
       {
         type_tag_nodes[idx] = n;
+        n->order_idx = idx;
         idx += 1;
       }
     }
@@ -1366,87 +1368,217 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   struct TypeDepChain
   {
     TypeDepChain *next;
-    U64 hash;
+    U64 type_idx;
   };
   TypeDepChain **type_dep_chains = 0;
+  U64 *type_dep_chains_counts = 0;
   ProfScope("gather per-type dependency chains")
   {
     if(lane_idx() == 0)
     {
       type_dep_chains = push_array(scratch.arena, TypeDepChain *, type_count);
+      type_dep_chains_counts = push_array(scratch.arena, U64, type_count);
     }
     lane_sync_u64(&type_dep_chains, 0);
+    lane_sync_u64(&type_dep_chains_counts, 0);
     Rng1U64 range = lane_range(type_count);
-    for EachInRange(type_idx, range)
+    for EachInRange(root_type_idx, range)
+    {
+      for(U64 hash = type_tag_nodes[root_type_idx]->hash, next_hash = 0;
+          hash != 0;
+          hash = next_hash)
+      {
+        Temp scratch2 = scratch_begin(&scratch.arena, 1);
+        
+        // rjf: hash -> unique type tag node
+        UniqueTypeTagNode *type_tag_node = 0;
+        {
+          U64 slot_idx = hash%unique_type_tag_slots_count;
+          for(UniqueTypeTagNode *n = unique_type_tag_slots[slot_idx]; n != 0; n = n->next)
+          {
+            if(n->hash == hash)
+            {
+              type_tag_node = n;
+              break;
+            }
+          }
+        }
+        
+        // rjf: unpack type tag node
+        U64 info_off = 0;
+        U64 unit_idx = 0;
+        if(type_tag_node != 0)
+        {
+          info_off = type_tag_node->info_off;
+          unit_idx = type_tag_node->unit_idx;
+        }
+        
+        // rjf: record this type in the dependency chain
+        if(type_tag_node != 0)
+        {
+          TypeDepChain *c = push_array(scratch.arena, TypeDepChain, 1);
+          c->type_idx = type_tag_node->order_idx;
+          SLLStackPush(type_dep_chains[type_tag_node->order_idx], c);
+          type_dep_chains_counts[type_tag_node->order_idx] += 1;
+        }
+        
+        // rjf: unpack unit
+        DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[unit_idx];
+        Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
+        
+        // rjf: parse this type's tag
+        DW2_Tag tag = {0};
+        dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, info_off, &tag);
+        
+        // rjf: find direct type, if one exists
+        U64 direct_type_info_off = 0;
+        U64 direct_type_unit_idx = 0;
+        switch(tag.kind)
+        {
+          default:{}break;
+          case DW_TagKind_PointerType:
+          case DW_TagKind_ReferenceType:
+          case DW_TagKind_RValueReferenceType:
+          case DW_TagKind_RestrictType:
+          case DW_TagKind_VolatileType:
+          case DW_TagKind_ConstType:
+          case DW_TagKind_ArrayType:
+          case DW_TagKind_SubrangeType:
+          case DW_TagKind_Typedef:
+          {
+            DW2_Attrib *direct_type_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Type);
+            direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
+            direct_type_unit_idx = unit_idx;
+            if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
+            {
+              Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+              U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
+              if(0 < new_unit_num && new_unit_num <= unit_count)
+              {
+                direct_type_unit_idx = new_unit_num-1;
+              }
+            }
+          }break;
+        }
+        
+        // rjf: look up hash for direct type
+        U64 direct_type_hash = 0;
+        {
+          U64 off_hash = u64_hash_from_str8(str8_struct(&direct_type_info_off));
+          U64 off_slot_idx = off_hash%unit_type_maps[direct_type_unit_idx].slots_count;
+          for(UnitTypeNode *n = unit_type_maps[direct_type_unit_idx].slots[off_slot_idx]; n != 0; n = n->next)
+          {
+            if(n->src_info_off == direct_type_info_off)
+            {
+              direct_type_hash = n->dst_hash;
+              break;
+            }
+          }
+        }
+        
+        // rjf: iterate to direct type's hash
+        next_hash = direct_type_hash;
+        
+        scratch_end(scratch2);
+      }
+    }
+    lane_sync();
+  }
+  
+  ////////////////////////////
+  //- rjf: build all types - build types w/ 1 dependency (leaves) first, then 2, 3, etc.,
+  // to ensure dependencies always travel backwards
+  //
+  RDIM_TypeChunkList *all_types = 0;
+  RDIM_Type **type_from_idx_map = 0;
+  {
+    if(lane_idx() == 0)
+    {
+      all_types = push_array(scratch.arena, RDIM_TypeChunkList, 1);
+      type_from_idx_map = push_array(scratch.arena, RDIM_Type *, type_count);
+    }
+    lane_sync_u64(&all_types, 0);
+    lane_sync_u64(&type_from_idx_map, 0);
+    Rng1U64 range = lane_range(type_count);
+    U64 max_chain_count = 1;
+    for(;max_chain_count < max_U64;)
     {
       Temp scratch2 = scratch_begin(&scratch.arena, 1);
       
-      // rjf: unpack type's tag node
-      UniqueTypeTagNode *type_tag_node = type_tag_nodes[type_idx];
-      U64 info_off = type_tag_node->info_off;
-      U64 unit_idx = type_tag_node->unit_idx;
-      
-      // rjf: unpack unit
-      DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[unit_idx];
-      Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
-      
-      // rjf: parse this type's tag
-      DW2_Tag tag = {0};
-      dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, info_off, &tag);
-      
-      // rjf: find direct type, if one exists
-      U64 direct_type_info_off = 0;
-      U64 direct_type_unit_idx = 0;
-      switch(tag.kind)
+      //- rjf: gather all types in this lane that fit the dependency restriction;
+      // find this lane's next dependency restriction
+      U64 next_max_chain_count = max_U64;
+      RDIM_TypeChunkList lane_types = {0};
+      for EachInRange(type_idx, range)
       {
-        default:{}break;
-        case DW_TagKind_PointerType:
-        case DW_TagKind_ReferenceType:
-        case DW_TagKind_RValueReferenceType:
-        case DW_TagKind_RestrictType:
-        case DW_TagKind_VolatileType:
-        case DW_TagKind_ConstType:
-        case DW_TagKind_ArrayType:
-        case DW_TagKind_SubrangeType:
-        case DW_TagKind_Typedef:
+        // rjf: if this type has a higher chain count than the current,
+        // but it is lower than our next maximum chain count, collect it,
+        // so we will hit 
+        if(type_dep_chains_counts[type_idx] > max_chain_count)
         {
-          DW2_Attrib *direct_type_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Type);
-          direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
-          direct_type_unit_idx = unit_idx;
-          if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
-          {
-            Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
-            U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
-            if(0 < new_unit_num && new_unit_num <= unit_count)
-            {
-              direct_type_unit_idx = new_unit_num-1;
-            }
-          }
-        }break;
+          next_max_chain_count = Min(type_dep_chains_counts[type_idx], next_max_chain_count);
+          continue;
+        }
+        Temp temp = temp_begin(scratch2.arena);
+        
+        // rjf: idx -> type tag node
+        UniqueTypeTagNode *type_tag_node = type_tag_nodes[type_idx];
+        U64 unit_idx = type_tag_node->unit_idx;
+        U64 info_off = type_tag_node->info_off;
+        
+        // rjf: unpack unit
+        Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
+        DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[unit_idx];
+        
+        // rjf: parse root-level tag
+        DW2_Tag tag = {0};
+        dw2_read_tag(temp.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, info_off, &tag);
+        
+        // rjf: convert type
+        {
+          // TODO(rjf)
+        }
+        
+        temp_end(temp);
       }
       
-      // rjf: look up hash for direct type
-      U64 direct_type_hash = 0;
+      //- rjf: combine all types from all lanes
+      RDIM_TypeChunkList *lanes_types = 0;
+      if(lane_idx() == 0)
       {
-        U64 off_hash = u64_hash_from_str8(str8_struct(&direct_type_info_off));
-        U64 off_slot_idx = off_hash%unit_type_maps[direct_type_unit_idx].slots_count;
-        for(UnitTypeNode *n = unit_type_maps[direct_type_unit_idx].slots[off_slot_idx]; n != 0; n = n->next)
+        lanes_types = push_array(scratch2.arena, RDIM_TypeChunkList, lane_count());
+      }
+      lane_sync_u64(&lanes_types, 0);
+      lanes_types[lane_idx()] = lane_types;
+      lane_sync();
+      if(lane_idx() == 0)
+      {
+        RDIM_TypeChunkList pass_lane_combined_types = {0};
+        for EachIndex(l_idx, lane_count())
         {
-          if(n->src_info_off == direct_type_info_off)
-          {
-            direct_type_hash = n->dst_hash;
-            break;
-          }
+          rdim_type_chunk_list_concat_in_place(&pass_lane_combined_types, &lanes_types[l_idx]);
+        }
+        rdim_type_chunk_list_concat_in_place(all_types, &pass_lane_combined_types);
+      }
+      lane_sync();
+      
+      //- rjf: find minimum next max chain count across all lanes, for next iteration
+      U64 *lane_next_max_chain_counts = 0;
+      if(lane_idx() == 0)
+      {
+        lane_next_max_chain_counts = push_array(scratch2.arena, U64, lane_count());
+      }
+      lane_sync_u64(&lane_next_max_chain_counts, 0);
+      lane_next_max_chain_counts[lane_idx()] = next_max_chain_count;
+      lane_sync();
+      if(lane_idx() == 0)
+      {
+        for EachIndex(l_idx, lane_count())
+        {
+          next_max_chain_count = Min(next_max_chain_count, lane_next_max_chain_counts[l_idx]);
         }
       }
-      
-      // rjf: if we got a hash -> record as dependency
-      if(direct_type_hash != 0)
-      {
-        TypeDepChain *chain = push_array(scratch.arena, TypeDepChain, 1);
-        chain->hash = direct_type_hash;
-        SLLStackPush(type_dep_chains[type_idx], chain);
-      }
+      lane_sync_u64(&next_max_chain_count, 0);
       
       scratch_end(scratch2);
     }
