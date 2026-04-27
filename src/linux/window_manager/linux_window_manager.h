@@ -46,6 +46,9 @@ struct LNX_WM_State
   Cursor cursors[WM_Cursor_COUNT];
   WM_Cursor last_set_cursor;
   WM_SystemInfo gfx_info;
+  Visual *window_visual;
+  int window_depth;
+  Colormap window_colormap;
 };
 
 ////////////////////////////////
