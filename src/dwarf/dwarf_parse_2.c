@@ -379,7 +379,7 @@ dw2_read_form_val(DW2_ParseCtx *ctx, String8 data, U64 off, DW_FormKind form_kin
         U64 bytes_read = str8_deserial_read_uleb128(data, off, &size);
         val.u128.u64[0] = og_read_off + bytes_read;
         val.u128.u64[1] = size;
-        off += bytes_read;
+        off += size + bytes_read;
       }break;
       
       //- rjf: flag present

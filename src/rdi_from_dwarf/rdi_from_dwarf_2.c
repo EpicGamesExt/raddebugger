@@ -12,6 +12,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   RDIM_BinarySectionList binary_sections = params->binary_sections;
   Arch arch = params->arch;
   U64 base_vaddr = params->base_vaddr;
+  U64 arch_addr_size = byte_size_from_arch(arch);
   
   ////////////////////////////
   //- rjf: determine acceptable address range
@@ -992,7 +993,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   }
   lane_sync_u64(&builtin_types, 0);
   lane_sync_u64(&builtin_type_from_kind_map, 0);
-#define d2r2_type_from_builtin_kind(k) ((RDI_TypeKind_FirstBuiltIn <= (k) && (k) <= RDI_TypeKind_LastBuiltIn) ? builtin_types[k - RDI_TypeKind_FirstBuiltIn] : 0)
+#define d2r2_type_from_builtin_kind(k) ((RDI_TypeKind_FirstBuiltIn <= (k) && (k) <= RDI_TypeKind_LastBuiltIn) ? builtin_type_from_kind_map[k - RDI_TypeKind_FirstBuiltIn] : builtin_type_from_kind_map[RDI_TypeKind_Void])
   
   ////////////////////////////
   //- rjf: predict the total number of tags in all units
@@ -1124,19 +1125,31 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
               // rjf: record top-level info about this tag tree
               if(t_start_off == t->off && t == &start_task)
               {
-                is_type_tag_tree = (tag.kind == DW_TagKind_ArrayType || tag.kind == DW_TagKind_ClassType ||
-                                    tag.kind == DW_TagKind_EnumerationType || tag.kind == DW_TagKind_PointerType ||
-                                    tag.kind == DW_TagKind_ReferenceType || tag.kind == DW_TagKind_StringType ||
-                                    tag.kind == DW_TagKind_StructureType || tag.kind == DW_TagKind_SubroutineType ||
-                                    tag.kind == DW_TagKind_Typedef || tag.kind == DW_TagKind_UnionType ||
-                                    tag.kind == DW_TagKind_PtrToMemberType || tag.kind == DW_TagKind_SetType ||
-                                    tag.kind == DW_TagKind_SubrangeType || tag.kind == DW_TagKind_BaseType ||
-                                    tag.kind == DW_TagKind_ConstType || tag.kind == DW_TagKind_FileType ||
-                                    tag.kind == DW_TagKind_PackedType || tag.kind == DW_TagKind_VolatileType ||
-                                    tag.kind == DW_TagKind_RestrictType || tag.kind == DW_TagKind_InterfaceType ||
-                                    tag.kind == DW_TagKind_UnspecifiedType || tag.kind == DW_TagKind_SharedType ||
-                                    tag.kind == DW_TagKind_RValueReferenceType || tag.kind == DW_TagKind_CoarrayType ||
-                                    tag.kind == DW_TagKind_DynamicType || tag.kind == DW_TagKind_AtomicType ||
+                is_type_tag_tree = (tag.kind == DW_TagKind_ArrayType ||
+                                    tag.kind == DW_TagKind_ClassType ||
+                                    tag.kind == DW_TagKind_EnumerationType ||
+                                    tag.kind == DW_TagKind_PointerType ||
+                                    tag.kind == DW_TagKind_ReferenceType ||
+                                    tag.kind == DW_TagKind_StringType ||
+                                    tag.kind == DW_TagKind_StructureType ||
+                                    tag.kind == DW_TagKind_SubroutineType ||
+                                    tag.kind == DW_TagKind_Typedef ||
+                                    tag.kind == DW_TagKind_UnionType ||
+                                    tag.kind == DW_TagKind_PtrToMemberType ||
+                                    tag.kind == DW_TagKind_SetType ||
+                                    tag.kind == DW_TagKind_BaseType ||
+                                    tag.kind == DW_TagKind_ConstType ||
+                                    tag.kind == DW_TagKind_FileType ||
+                                    tag.kind == DW_TagKind_PackedType ||
+                                    tag.kind == DW_TagKind_VolatileType ||
+                                    tag.kind == DW_TagKind_RestrictType ||
+                                    tag.kind == DW_TagKind_InterfaceType ||
+                                    tag.kind == DW_TagKind_UnspecifiedType ||
+                                    tag.kind == DW_TagKind_SharedType ||
+                                    tag.kind == DW_TagKind_RValueReferenceType ||
+                                    tag.kind == DW_TagKind_CoarrayType ||
+                                    tag.kind == DW_TagKind_DynamicType ||
+                                    tag.kind == DW_TagKind_AtomicType ||
                                     tag.kind == DW_TagKind_ImmutableType);
               }
               
@@ -1418,8 +1431,8 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         {
           TypeDepChain *c = push_array(scratch.arena, TypeDepChain, 1);
           c->type_idx = type_tag_node->order_idx;
-          SLLStackPush(type_dep_chains[type_tag_node->order_idx], c);
-          type_dep_chains_counts[type_tag_node->order_idx] += 1;
+          SLLStackPush(type_dep_chains[root_type_idx], c);
+          type_dep_chains_counts[root_type_idx] += 1;
         }
         
         // rjf: unpack unit
@@ -1489,6 +1502,29 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   //- rjf: build all types - build types w/ 1 dependency (leaves) first, then 2, 3, etc.,
   // to ensure dependencies always travel backwards
   //
+  // NOTE: * DWARF vs RDI Array Type Graph *
+  //
+  // For example lets take following decl:
+  //
+  //    int (*foo[2])[3];
+  // 
+  //  This compiles to in DWARF:
+  //  
+  //  foo -> DW_TAG_ArrayType -> (A0) DW_TAG_Subrange [2]
+  //                          \
+  //                           -> (B0) DW_TAG_PointerType -> (A1) DW_TAG_ArrayType -> DW_TAG_Subrange [3]
+  //                                                      \
+  //                                                       -> (B1) DW_TAG_BaseType (int)
+  // 
+  // RDI expects:
+  //  
+  //  foo -> Array[2] -> Pointer -> Array[3] -> int
+  //
+  // Note that DWARF forks the graph on DW_TAG_ArrayType to describe array ranges in branch A and
+  // in branch B describes array type which might be a struct, pointer, base type, or any other type tag.
+  // However, in RDI we have a simple list of type nodes and to convert we need to append type nodes from
+  // B to A.
+  //
   RDIM_TypeChunkList *all_types = 0;
   RDIM_Type **type_from_idx_map = 0;
   {
@@ -1496,6 +1532,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     {
       all_types = push_array(scratch.arena, RDIM_TypeChunkList, 1);
       type_from_idx_map = push_array(scratch.arena, RDIM_Type *, type_count);
+      rdim_type_chunk_list_concat_in_place(all_types, builtin_types);
     }
     lane_sync_u64(&all_types, 0);
     lane_sync_u64(&type_from_idx_map, 0);
@@ -1509,14 +1546,23 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       // find this lane's next dependency restriction
       U64 next_max_chain_count = max_U64;
       RDIM_TypeChunkList lane_types = {0};
+      U64 lane_types_chunk_count = 256;
       for EachInRange(type_idx, range)
       {
         // rjf: if this type has a higher chain count than the current,
         // but it is lower than our next maximum chain count, collect it,
         // so we will hit 
+        //
+        // if this type has a lower chain count than the current,
+        // we should've already built it from a previous pass.
+        //
         if(type_dep_chains_counts[type_idx] > max_chain_count)
         {
           next_max_chain_count = Min(type_dep_chains_counts[type_idx], next_max_chain_count);
+          continue;
+        }
+        else if(type_dep_chains_counts[type_idx] < max_chain_count)
+        {
           continue;
         }
         Temp temp = temp_begin(scratch2.arena);
@@ -1532,12 +1578,331 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         
         // rjf: parse root-level tag
         DW2_Tag tag = {0};
-        dw2_read_tag(temp.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, info_off, &tag);
+        U64 tag_info_size = dw2_read_tag(temp.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, info_off, &tag);
+        
+        // rjf: extract common attributes
+        DW2_Attrib *name_attrib = &dw2_attrib_nil;
+        DW2_Attrib *direct_type_attrib = &dw2_attrib_nil;
+        DW2_Attrib *bitsize_attrib = &dw2_attrib_nil;
+        DW2_Attrib *bytesize_attrib = &dw2_attrib_nil;
+        DW2_Attrib *encoding_attrib = &dw2_attrib_nil;
+        DW2_Attrib *decl_attrib = &dw2_attrib_nil;
+        //
+        // TODO(rjf): if a DW_AttribKing_GNU_Vector is found on an DW_TagKind_ArrayType,
+        // then: @native_vector_support extract byte size from the base type tag
+        // and convert to U256, U512, S256 and S512
+        //
+        for EachNode(n, DW2_AttribNode, tag.attribs.first)
+        {
+          switch(n->v.attrib_kind)
+          {
+            default:{}break;
+#define Case(dst_name, src_name) case DW_AttribKind_##src_name:{dst_name##_attrib = &n->v;}break
+            Case(name,        Name);
+            Case(direct_type, Type);
+            Case(bitsize,     BitSize);
+            Case(bytesize,    ByteSize);
+            Case(encoding,    Encoding);
+            Case(decl,        Declaration);
+#undef Case
+          }
+        }
+        
+        // rjf: unpack common attributes
+        String8 name = name_attrib->val.string;
+        DW_ATE encoding = encoding_attrib->val.u128.u64[0];
+        RDIM_Type *direct_type = d2r2_type_from_builtin_kind(RDI_TypeKind_Void);
+        U64 bitsize = 0;
+        B32 is_decl = (decl_attrib != &dw2_attrib_nil);
+        {
+          // rjf: unpack direct type
+          if(direct_type_attrib != &dw2_attrib_nil)
+          {
+            U64 direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
+            U64 direct_type_unit_idx = unit_idx;
+            if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
+            {
+              Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+              U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
+              direct_type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
+            }
+            UnitTypeMap *direct_type_unit_type_map = &unit_type_maps[direct_type_unit_idx];
+            U64 info_off_hash = u64_hash_from_str8(str8_struct(&direct_type_info_off));
+            U64 info_off_slot_idx = info_off_hash%direct_type_unit_type_map->slots_count;
+            U64 direct_type_hash = 0;
+            for(UnitTypeNode *n = direct_type_unit_type_map->slots[info_off_slot_idx]; n != 0; n = n->next)
+            {
+              if(n->src_info_off == direct_type_info_off)
+              {
+                direct_type_hash = n->dst_hash;
+                break;
+              }
+            }
+            U64 unique_type_tag_slot_idx = direct_type_hash%unique_type_tag_slots_count;
+            for(UniqueTypeTagNode *n = unique_type_tag_slots[unique_type_tag_slot_idx]; n != 0; n = n->next)
+            {
+              if(n->hash == direct_type_hash)
+              {
+                direct_type = type_from_idx_map[n->order_idx];
+                break;
+              }
+            }
+          }
+          
+          // rjf: unpack bit/byte sizes
+          if(bitsize_attrib != &dw2_attrib_nil)
+          {
+            bitsize = bitsize_attrib->val.u128.u64[0];
+          }
+          else if(bytesize_attrib != &dw2_attrib_nil)
+          {
+            bitsize = bytesize_attrib->val.u128.u64[0]*8;
+          }
+        }
         
         // rjf: convert type
+        RDIM_Type *dst_type = 0;
+        RDI_TypeKind rdi_type_kind = RDI_TypeKind_NULL;
+        RDI_TypeModifierFlags rdi_type_modifier_flags = 0;
+        switch(tag.kind)
         {
-          // TODO(rjf)
+          default:{}break;
+          case DW_TagKind_ClassType:     rdi_type_kind = is_decl ? RDI_TypeKind_IncompleteClass  : RDI_TypeKind_Class; goto struct_type;
+          case DW_TagKind_StructureType: rdi_type_kind = is_decl ? RDI_TypeKind_IncompleteStruct : RDI_TypeKind_Struct; goto struct_type;
+          case DW_TagKind_UnionType:     rdi_type_kind = is_decl ? RDI_TypeKind_IncompleteUnion  : RDI_TypeKind_Union; goto struct_type;
+          struct_type:;
+          {
+            dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
+            dst_type->kind      = rdi_type_kind;
+            dst_type->name      = name;
+            dst_type->byte_size = bitsize/8;
+          }break;
+          case DW_TagKind_EnumerationType:
+          {
+            dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
+            dst_type->kind        = is_decl ? RDI_TypeKind_IncompleteEnum : RDI_TypeKind_Enum;
+            dst_type->name        = name;
+            dst_type->direct_type = direct_type;
+            dst_type->byte_size   = (direct_type != 0 ? direct_type->byte_size : bitsize/8);
+          }break;
+          case DW_TagKind_SubroutineType:
+          {
+            
+          }break;
+          case DW_TagKind_Typedef:
+          {
+            dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
+            dst_type->kind        = RDI_TypeKind_Alias;
+            dst_type->name        = name;
+            dst_type->direct_type = direct_type;
+            dst_type->byte_size   = (direct_type ? direct_type->byte_size : 0);
+          }break;
+          case DW_TagKind_BaseType:
+          {
+            if(0){}
+#define CaseA(rdi_type_kind_, encoding_)                                  else if(encoding == (encoding_)) { rdi_type_kind = (rdi_type_kind_); }
+#define CaseB(rdi_type_kind_, encoding_, bit_size_)                       else if(encoding == (encoding_) && bitsize == (bit_size_)) { rdi_type_kind = (rdi_type_kind_); }
+#define CaseC(rdi_type_kind_, encoding_, name_) /* assumes x64/arm64 */   else if(encoding == (encoding_) && str8_match(name, str8_lit(name_), 0)) { rdi_type_kind = (rdi_type_kind_); }
+#define CaseD(rdi_type_kind_, encoding_, name_, bit_size_)                else if(encoding == (encoding_) && bitsize == (bit_size_) && str8_match(name, str8_lit(name_), 0)) { rdi_type_kind = (rdi_type_kind_); }
+            CaseA(RDI_TypeKind_NULL,        DW_ATE_Null)
+              CaseA(RDI_TypeKind_Void,        DW_ATE_Address)
+              CaseA(RDI_TypeKind_Bool,        DW_ATE_Boolean)
+              CaseB(RDI_TypeKind_ComplexF32,  DW_ATE_ComplexFloat, 32)
+              CaseB(RDI_TypeKind_ComplexF64,  DW_ATE_ComplexFloat, 64)
+              CaseB(RDI_TypeKind_ComplexF80,  DW_ATE_ComplexFloat, 80)
+              CaseB(RDI_TypeKind_ComplexF128, DW_ATE_ComplexFloat, 128)
+              CaseC(RDI_TypeKind_F80,         DW_ATE_Float,        "__float80")
+              CaseC(RDI_TypeKind_F128,        DW_ATE_Float,        "__float128")
+              CaseC(RDI_TypeKind_F16,         DW_ATE_Float,        "_Float16")
+              CaseC(RDI_TypeKind_BF16,        DW_ATE_Float,        "__bf16")
+              CaseB(RDI_TypeKind_F16,         DW_ATE_Float,        16)
+              CaseB(RDI_TypeKind_F32,         DW_ATE_Float,        32)
+              CaseB(RDI_TypeKind_F48,         DW_ATE_Float,        48)
+              CaseB(RDI_TypeKind_F64,         DW_ATE_Float,        64)
+              CaseB(RDI_TypeKind_F80,         DW_ATE_Float,        80)
+              CaseB(RDI_TypeKind_F96,         DW_ATE_Float,        96)
+              CaseB(RDI_TypeKind_F128,        DW_ATE_Float,        128)
+              CaseD(RDI_TypeKind_Char8,       DW_ATE_Signed,       "wchar_t", 8)
+              CaseD(RDI_TypeKind_Char16,      DW_ATE_Signed,       "wchar_t", 16)
+              CaseD(RDI_TypeKind_Char32,      DW_ATE_Signed,       "wchar_t", 32)
+              CaseB(RDI_TypeKind_S8,          DW_ATE_Signed,       8)
+              CaseB(RDI_TypeKind_S16,         DW_ATE_Signed,       16)
+              CaseB(RDI_TypeKind_S32,         DW_ATE_Signed,       32)
+              CaseB(RDI_TypeKind_S64,         DW_ATE_Signed,       64)
+              CaseB(RDI_TypeKind_S128,        DW_ATE_Signed,       128)
+              CaseB(RDI_TypeKind_S256,        DW_ATE_Signed,       256)
+              CaseB(RDI_TypeKind_S512,        DW_ATE_Signed,       512)
+              CaseB(RDI_TypeKind_U8,          DW_ATE_Unsigned,     8)
+              CaseB(RDI_TypeKind_U16,         DW_ATE_Unsigned,     16)
+              CaseB(RDI_TypeKind_U32,         DW_ATE_Unsigned,     32)
+              CaseB(RDI_TypeKind_U64,         DW_ATE_Unsigned,     64)
+              CaseB(RDI_TypeKind_U128,        DW_ATE_Unsigned,     128)
+              CaseB(RDI_TypeKind_U256,        DW_ATE_Unsigned,     256)
+              CaseB(RDI_TypeKind_U512,        DW_ATE_Unsigned,     512)
+              CaseB(RDI_TypeKind_UChar8,      DW_ATE_UnsignedChar, 8)
+              CaseB(RDI_TypeKind_UChar8,      DW_ATE_Utf,          8)
+              CaseB(RDI_TypeKind_UChar16,     DW_ATE_UnsignedChar, 16)
+              CaseB(RDI_TypeKind_UChar16,     DW_ATE_Utf,          16)
+              CaseB(RDI_TypeKind_UChar32,     DW_ATE_UnsignedChar, 32)
+              CaseB(RDI_TypeKind_UChar32,     DW_ATE_Utf,          32)
+              CaseB(RDI_TypeKind_Decimal32,   DW_ATE_DecimalFloat, 32)
+              CaseB(RDI_TypeKind_Decimal64,   DW_ATE_DecimalFloat, 64)
+              CaseB(RDI_TypeKind_Decimal128,  DW_ATE_DecimalFloat, 128)
+#undef CaseA
+#undef CaseB
+#undef CaseC
+#undef CaseD
+            dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
+            dst_type->kind        = RDI_TypeKind_Alias;
+            dst_type->name        = name;
+            dst_type->direct_type = d2r2_type_from_builtin_kind(rdi_type_kind);
+            dst_type->byte_size   = bitsize/8;
+          }break;
+          case DW_TagKind_PointerType:         rdi_type_kind = RDI_TypeKind_Ptr; goto ptr_or_ref_type;
+          case DW_TagKind_ReferenceType:       rdi_type_kind = RDI_TypeKind_LRef; goto ptr_or_ref_type;
+          case DW_TagKind_RValueReferenceType: rdi_type_kind = RDI_TypeKind_RRef; goto ptr_or_ref_type;
+          ptr_or_ref_type:;
+          {
+            dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
+            dst_type->kind        = rdi_type_kind;
+            dst_type->direct_type = direct_type;
+            dst_type->byte_size   = arch_addr_size;
+          }break;
+          case DW_TagKind_RestrictType:
+          {
+            rdi_type_modifier_flags = RDI_TypeModifierFlag_Restrict;
+          }goto basic_type_operators;
+          case DW_TagKind_VolatileType:
+          {
+            rdi_type_modifier_flags = RDI_TypeModifierFlag_Volatile;
+          }goto basic_type_operators;
+          case DW_TagKind_ConstType:
+          {
+            rdi_type_modifier_flags = RDI_TypeModifierFlag_Const;
+          }goto basic_type_operators;
+          basic_type_operators:;
+          {
+            dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
+            dst_type->kind        = RDI_TypeKind_Modifier;
+            dst_type->flags       = rdi_type_modifier_flags;
+            dst_type->direct_type = direct_type;
+            dst_type->byte_size   = (direct_type ? direct_type->byte_size : 0);
+          }break;
+          case DW_TagKind_ArrayType:
+          if(tag.has_children)
+          {
+            // rjf: parse array type children; extract dimensions (each one gets a SubrangeType)
+            typedef struct ArrayDimensionNode ArrayDimensionNode;
+            struct ArrayDimensionNode
+            {
+              ArrayDimensionNode *next;
+              U64 count;
+            };
+            ArrayDimensionNode *top_dimension = 0;
+            {
+              U64 tag_children_off = info_off + tag_info_size;
+              S64 depth = 1;
+              for(U64 off = tag_children_off; contains_1u64(unit_info_tag_range, off) && depth > 0;)
+              {
+                U64 start_off = off;
+                DW2_Tag child_tag = {0};
+                off += dw2_read_tag(temp.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &child_tag);
+                if(child_tag.kind == DW_TagKind_SubrangeType)
+                {
+                  // rjf: extract bounds attribs
+                  DW2_Attrib *lower_bound_attrib = &dw2_attrib_nil;
+                  DW2_Attrib *upper_bound_attrib = &dw2_attrib_nil;
+                  DW2_Attrib *count_attrib = &dw2_attrib_nil;
+                  for(DW2_AttribNode *n = child_tag.attribs.first;
+                      n != 0 && (lower_bound_attrib == &dw2_attrib_nil || (upper_bound_attrib == &dw2_attrib_nil && count_attrib == &dw2_attrib_nil));
+                      n = n->next)
+                  {
+                    if(n->v.attrib_kind == DW_AttribKind_LowerBound)
+                    {
+                      lower_bound_attrib = &n->v;
+                    }
+                    else if(n->v.attrib_kind == DW_AttribKind_UpperBound)
+                    {
+                      upper_bound_attrib = &n->v;
+                    }
+                    else if(n->v.attrib_kind == DW_AttribKind_Count)
+                    {
+                      count_attrib = &n->v;
+                    }
+                  }
+                  
+                  // rjf: resolve lower bound
+                  U64 lower_bound = 0;
+                  {
+                    if(dw_is_form_kind_ref(unit_parse_ctx->version, unit_parse_ctx->ext, lower_bound_attrib->val.kind))
+                    {
+                      log_infof("[.debug_info@%I64x] Array type lower bound is a variable; this is not currently supported.\n", start_off);
+                    }
+                    else
+                    {
+                      lower_bound = lower_bound_attrib->val.u128.u64[0];
+                    }
+                  }
+                  
+                  // rjf: resolve upper bound
+                  U64 upper_bound = 0;
+                  {
+                    if(count_attrib != &dw2_attrib_nil)
+                    {
+                      upper_bound = lower_bound + count_attrib->val.u128.u64[0];
+                    }
+                    else if(upper_bound_attrib != &dw2_attrib_nil)
+                    {
+                      if(dw_is_form_kind_ref(unit_parse_ctx->version, unit_parse_ctx->ext, upper_bound_attrib->val.kind))
+                      {
+                        log_infof("[.debug_info@%I64x] Array type upper bound is a variable; this is not currently supported.\n", start_off);
+                      }
+                      else
+                      {
+                        upper_bound = upper_bound_attrib->val.u128.u64[0];
+                        upper_bound += 1; // NOTE(rjf): turn to exclusive range
+                      }
+                    }
+                  }
+                  
+                  // rjf: push node
+                  ArrayDimensionNode *dim_n = push_array(temp.arena, ArrayDimensionNode, 1);
+                  SLLStackPush(top_dimension, dim_n);
+                  dim_n->count = (upper_bound - lower_bound);
+                }
+                if(child_tag.has_children)
+                {
+                  depth += 1;
+                }
+                else if(child_tag.kind == DW_TagKind_Null)
+                {
+                  depth -= 1;
+                }
+                if(off == start_off)
+                {
+                  break;
+                }
+              }
+            }
+            
+            // rjf: create array type operators for each dimension
+            RDIM_Type *array_direct_type = direct_type;
+            for EachNode(dim_n, ArrayDimensionNode, top_dimension)
+            {
+              RDIM_Type *array_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
+              array_type->kind = RDI_TypeKind_Array;
+              array_type->byte_size = array_direct_type ? array_direct_type->byte_size*dim_n->count : 0;
+              array_type->direct_type = array_direct_type;
+              array_direct_type = array_type;
+            }
+            
+            // rjf: final destination type -> the final array dimension type
+            dst_type = array_direct_type;
+          }break;
         }
+        
+        // rjf: store type in type-from-idx table
+        type_from_idx_map[type_idx] = dst_type;
         
         temp_end(temp);
       }
@@ -1580,7 +1945,171 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       }
       lane_sync_u64(&next_max_chain_count, 0);
       
+      //- rjf: update max chain count
+      max_chain_count = next_max_chain_count;
+      
       scratch_end(scratch2);
+    }
+  }
+  lane_sync();
+  
+  ////////////////////////////
+  //- rjf: convert all units / symbols
+  //
+  RDIM_UnitChunkList *all_units = 0;
+  RDIM_Unit **unit_from_idx_map = 0;
+  ProfScope("convert all units / symbols")
+  {
+    if(lane_idx() == 0)
+    {
+      all_units = push_array(scratch.arena, RDIM_UnitChunkList, 1);
+      unit_from_idx_map = push_array(scratch.arena, RDIM_Unit *, unit_count);
+      for EachIndex(unit_idx, unit_count)
+      {
+        unit_from_idx_map[unit_idx] = rdim_unit_chunk_list_push(arena, all_units, unit_count);
+      }
+    }
+    lane_sync_u64(&all_units, 0);
+    lane_sync_u64(&unit_from_idx_map, 0);
+    U64 unit_take_idx_ = 0;
+    U64 *unit_take_idx_ptr = &unit_take_idx_;
+    lane_sync_u64(&unit_take_idx_ptr, 0);
+    for(;;)
+    {
+      U64 unit_idx = ins_atomic_u64_inc_eval(unit_take_idx_ptr) - 1;
+      if(unit_idx >= unit_count)
+      {
+        break;
+      }
+      
+      //- rjf: unpack unit info
+      DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[unit_idx];
+      Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
+      RDIM_Unit *dst_unit = unit_from_idx_map[unit_idx];
+      
+      //- rjf: unpack unit's root tag
+      DW2_Tag *unit_root_tag = &unit_root_tags[unit_idx];
+      DW2_Attrib *name_attrib = &dw2_attrib_nil;
+      DW2_Attrib *comp_dir_attrib = &dw2_attrib_nil;
+      DW2_Attrib *producer_attrib = &dw2_attrib_nil;
+      DW2_Attrib *lang_attrib = &dw2_attrib_nil;
+      for EachNode(n, DW2_AttribNode, unit_root_tag->attribs.first)
+      {
+        switch(n->v.attrib_kind)
+        {
+          default:{}break;
+#define Case(dst, src) case DW_AttribKind_##src:{dst##_attrib = &n->v;}break
+          Case(name,     Name);
+          Case(comp_dir, CompDir);
+          Case(producer, Producer);
+          Case(lang,     Language);
+#undef Case
+        }
+      }
+      
+      //- rjf: unpack attributes
+      String8 unit_name = name_attrib->val.string;
+      String8 unit_comp_dir = comp_dir_attrib->val.string;
+      String8 unit_producer = producer_attrib->val.string;
+      RDI_Language unit_lang = RDI_Language_NULL;
+      {
+        DW_Language dw_lang = lang_attrib->val.u128.u64[0];
+        switch(dw_lang)
+        {
+          default:{}break;
+          case DW_Language_C89:
+          case DW_Language_C99:
+          case DW_Language_C11:
+          case DW_Language_C:
+          {
+            unit_lang = RDI_Language_C;
+          }break;
+          case DW_Language_CPlusPlus03:
+          case DW_Language_CPlusPlus11:
+          case DW_Language_CPlusPlus14:
+          case DW_Language_CPlusPlus:
+          {
+            unit_lang = RDI_Language_CPlusPlus;
+          }break;
+        }
+      }
+      
+      //- rjf: fill top-level unit info
+      {
+        dst_unit->unit_name     = unit_name;
+        dst_unit->compiler_name = unit_producer;
+        // TODO(rjf): dst_unit->source_file   = ???;
+        // TODO(rjf): dst_unit->object_file   = ???;
+        // TODO(rjf): dst_unit->archive_file  = ???;
+        dst_unit->build_path    = unit_comp_dir;
+        dst_unit->language      = unit_lang;
+        dst_unit->line_table    = unit_line_tables[unit_idx];
+      }
+      
+      //- rjf: produce all unit symbols
+      for(U64 off = unit_info_tag_range.min; off < unit_info_tag_range.max;)
+      {
+        Temp scratch2 = scratch_begin(&scratch.arena, 1);
+        U64 start_off = off;
+        
+        //- rjf: parse tag
+        DW2_Tag tag = {0};
+        off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &tag);
+        
+        //- rjf: gather attributes from tag
+        DW2_Attrib *name_attrib = &dw2_attrib_nil;
+        for EachNode(n, DW2_AttribNode, tag.attribs.first)
+        {
+          switch(n->v.attrib_kind)
+          {
+            default:{}break;
+#define Case(dst, src) case DW_AttribKind_##src:{dst##_attrib = &n->v;}break
+            Case(name,     Name);
+#undef Case
+          }
+        }
+        
+        //- rjf: unpack attributes
+        String8 name = name_attrib->val.string;
+        
+        //- rjf: produce symbols from tag
+        switch(tag.kind)
+        {
+          default:{}break;
+          
+          //- rjf: subprograms (procedures)
+          case DW_TagKind_SubProgram:
+          {
+            RDIM_Symbol *procedure = rdim_symbol_chunk_list_push(arena, &dst_unit->procedures, 512);
+            procedure->name = name;
+          }break;
+          
+          //- rjf: inline site
+          case DW_TagKind_InlinedSubroutine:
+          {
+            
+          }break;
+          
+          //- rjf: variables
+          case DW_TagKind_Variable:
+          case DW_TagKind_FormalParameter:
+          {
+            
+          }break;
+          
+          //- rjf: lexical blocks (scopes)
+          case DW_TagKind_LexicalBlock:
+          {
+            
+          }break;
+        }
+        
+        scratch_end(scratch2);
+        if(off == start_off)
+        {
+          break;
+        }
+      }
     }
   }
   
@@ -1589,7 +2118,13 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   //
   RDIM_BakeParams result = {0};
   {
-    // TODO(rjf)
+    result.subset_flags    = params->subset_flags;
+    // TODO(rjf): result.top_level_info  = *top_level_info;
+    // TODO(rjf): result.binary_sections = *binary_sections;
+    result.units           = *all_units;
+    result.types           = *all_types;
+    result.src_files       = *all_src_files;
+    result.line_tables     = *all_line_tables;
   }
   
 #undef d2r2_type_from_builtin_kind

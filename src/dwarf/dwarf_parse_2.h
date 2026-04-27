@@ -60,6 +60,7 @@ struct DW2_ParseCtx
   // it can from context.
   DW_Version version;
   DW_Format format;
+  DW_Ext ext;
   U64 addr_size;
   DW2_AbbrevMap *abbrev_map;
   DW2_StrOffsetsTable *str_offsets_table;
