@@ -430,7 +430,16 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       {
         DW2_LineTableFile *f = &hdr->files.v[file_idx];
         DW2_LineTableFile *dir = &hdr->dirs.v[f->dir_idx];
-        String8 full_file_path = str8f(scratch2.arena, "%S%s%S", dir->file_name, dir->file_name.size != 0 ? "/" : "", f->file_name);
+        // DWARFv5 sec 6.2.4 -- dir index 0 is the compilation directory; other dir
+        // entries may be relative to it. prepend dir 0 when the chosen dir is non-zero and
+        // relative, so module-relative source paths resolve correctly.
+        String8 comp_dir = hdr->dirs.count != 0 ? hdr->dirs.v[0].file_name : str8_zero();
+        PathStyle dir_style = path_style_from_str8(dir->file_name);
+        B32 dir_is_relative = (dir_style == PathStyle_Null || dir_style == PathStyle_Relative);
+        B32 prepend_comp_dir = (f->dir_idx != 0 && dir_is_relative && comp_dir.size != 0);
+        String8 full_file_path = prepend_comp_dir ?
+          str8f(scratch2.arena, "%S/%S%s%S", comp_dir, dir->file_name, dir->file_name.size != 0 ? "/" : "", f->file_name) :
+          str8f(scratch2.arena, "%S%s%S", dir->file_name, dir->file_name.size != 0 ? "/" : "", f->file_name);
         U64 hash = u64_hash_from_str8(full_file_path);
         U64 slot_idx = hash%slots_count;
         SrcFileNode *node = 0;
