@@ -94,6 +94,17 @@ enum
 };
 
 ////////////////////////////////
+//~ IPC
+
+typedef struct RD_IpcReply RD_IpcReply;
+struct RD_IpcReply
+{
+  MD_ParseResult parse;
+  MD_Node *root;
+  MD_Node *msg;
+};
+
+////////////////////////////////
 //~ rjf: Autocompletion Cursor Info Type
 
 typedef struct RD_AutocompCursorInfo RD_AutocompCursorInfo;
@@ -737,6 +748,7 @@ internal void rd_window_frame(void);
 //~ rjf: Eval Visualization
 
 internal String8 rd_value_string_from_eval(Arena *arena, String8 filter, EV_StringParams *params, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval);
+internal String8 rd_value_string_from_eval2(Arena *arena, String8 filter, EV_StringParams *params, U64 cap, E_Eval eval);
 
 ////////////////////////////////
 //~ rjf: Hover Eval
@@ -816,6 +828,16 @@ internal void rd_push_cmd(String8 name, RD_Regs *regs);
 //- rjf: iterating
 internal B32 rd_next_cmd(RD_Cmd **cmd);
 internal B32 rd_next_view_cmd(RD_Cmd **cmd);
+
+////////////////////////////////
+//~ IPC
+
+internal RD_IpcReply rd_ipc_mdesk_reply_from_string(Arena *arena, String8 string);
+internal B32 rd_ipc_parse_string(MD_Node *node, String8 child_name, String8 *out);
+internal B32 rd_ipc_parse_int_(MD_Node *node, String8 child_name, U64 out_size, void *out);
+#define rd_ipc_parse_int(a, b, c) rd_ipc_parse_int_(a, b, sizeof(*c), c)
+internal B32 rd_ipc_parse_b32(MD_Node *node, String8 child_name, B32 *out);
+internal B32 rd_ipc_reply_is_ok(RD_IpcReply *reply);
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls

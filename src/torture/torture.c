@@ -35,6 +35,17 @@ t_string_from_result(T_RunStatus v)
   return 0;
 }
 
+internal void
+t_break_if_debugger_present(void)
+{
+#if OS_WINDOWS
+  if(IsDebuggerPresent())
+  {
+    DebugBreak();
+  }
+#endif
+}
+
 internal B32
 t_write_file_list(String8 name, String8List data)
 {
@@ -126,7 +137,7 @@ t_run_caller(void *raw_ctx)
   T_RunCtx *ctx = raw_ctx;  
   String8List test_out = {0};
   ctx->result.status = T_RunStatus_Pass;
-  ctx->run(scratch.arena, &ctx->result, &test_out);
+  ctx->run(scratch.arena, ctx->user_data, &ctx->result, &test_out);
   if (ctx->result.status == T_RunStatus_Fail) {
     for EachNode(n, String8Node, test_out.first) {
       fprintf(stderr, "%.*s", str8_varg(n->string));
@@ -145,9 +156,9 @@ t_run_fail_handler(void *raw_ctx)
 }
 
 internal T_RunResult
-t_run(T_Run run)
+t_run(T_Run run, String8 user_data)
 {
-  T_RunCtx ctx = { .run = run };
+  T_RunCtx ctx = { .run = run, .user_data = user_data };
 
   B32 do_safe_call = 1;
 #if OS_WINDOWS
@@ -254,6 +265,24 @@ t_radlink_path(void)
 }
 
 internal String8
+t_raddbg_path(void)
+{
+  local_persist String8 path = {0};
+  if (path.size == 0) {
+    local_persist U8 buffer[4096];
+    ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
+    Arena *arena = arena_alloc_(&params);
+#if OS_WINDOWS
+    path = os_full_path_from_path(arena, str8_lit("raddbg.exe"));
+#else
+    path = os_full_path_from_path(arena, str8_lit("raddbg"));
+#endif
+    AssertAlways(path.size);
+  }
+  return path;
+}
+
+internal String8
 t_cwd_path(void)
 {
   local_persist U8 path[4096] = {0};
@@ -298,9 +327,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout, Ar
   if (capture_output) {
     HANDLE read_pipe, write_pipe;
     SECURITY_ATTRIBUTES at = { .nLength = sizeof(at), .bInheritHandle = 1 };
-    if (!CreatePipe(&read_pipe, &write_pipe, &at, 0)) {
-      AssertAlways(0 && "failed to create a pipe");
-    }
+    if (!CreatePipe(&read_pipe, &write_pipe, &at, 0)) { AssertAlways(0 && "failed to create a pipe"); }
     read_pipe_handle  = (OS_Handle){ .u64[0] = (U64)read_pipe  };
     write_pipe_handle = (OS_Handle){ .u64[0] = (U64)write_pipe };
   }
@@ -325,39 +352,40 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout, Ar
   // invoke exe
   OS_Handle process_handle = os_process_launch(&launch_opts);
 
+  if (os_handle_match(process_handle, os_handle_zero())) { goto exit; }
+
   // close handle so last to ReadFile does not block
   os_file_close(write_pipe_handle);
 
-  if ( ! os_handle_match(process_handle, os_handle_zero())) {
-    if (capture_output) {
-      // capture process output
-      String8List  output = {0};
-      for (;;) {
-        String8 string = os_file_read_cstring(scratch.arena, read_pipe_handle, 0);
-        if (string.size == 0) { break; }
-        str8_list_push(scratch.arena, &output, string);
-      }
-      os_file_close(read_pipe_handle);
-
-      if (output_out) {
-        *output_out = str8_list_join(output_arena, &output, 0);
-      }
-
-      // write to the output file
-      if (g_redirect_stdout) {
-        os_write_data_list_to_file_path(g_stdout_file_name, output);
-      }
+  if (capture_output) {
+    // capture process output
+    String8List  output = {0};
+    for (;;) {
+      String8 string = os_file_read_cstring(scratch.arena, read_pipe_handle, 0);
+      if (string.size == 0) { break; }
+      str8_list_push(scratch.arena, &output, string);
     }
 
-    U64 exit_code_u64 = 0;
-    if (os_process_join(process_handle, timeout, &exit_code_u64)) {
-      g_last_exit_code = (int)exit_code_u64;
-      is_ok            = 1;
-    } else {
-      os_process_kill(process_handle);
+    if (output_out) {
+      *output_out = str8_list_join(output_arena, &output, 0);
+    }
+
+    // write to the output file
+    if (g_redirect_stdout) {
+      os_write_data_list_to_file_path(g_stdout_file_name, output);
     }
   }
 
+  U64 exit_code_u64 = 0;
+  if (os_process_join(process_handle, timeout, &exit_code_u64)) {
+    g_last_exit_code = (int)exit_code_u64;
+  } else {
+    os_process_kill(process_handle);
+  }
+
+  is_ok = 1; // process was launched
+
+  exit:;
   scratch_end(scratch);
   return is_ok;
 }
@@ -372,6 +400,30 @@ internal B32
 t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
 {
   return t_invoke_(exe_path, cmdline, timeout, 0, 0);
+}
+
+internal void
+t_kill_all(String8 pattern)
+{
+  Temp scratch = scratch_begin(0,0);
+  DMN_ProcessIter it = {0};
+  dmn_process_iter_begin(&it);
+  DMN_ProcessInfo info = {0};
+  while (dmn_process_iter_next(scratch.arena, &it, &info)) {
+    if (str8_match_wildcard(info.name, pattern, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive)) {
+#if OS_WINDOWS
+      if (!t_invoke_(str8_lit("taskkill"), str8f(scratch.arena, "/PID %u /F", info.pid), max_U64, 0, 0)) { fprintf(stderr, "ERROR: failed to invoke taskkill\n"); }
+#elif OS_LINUX
+      NotImplemented; // TODO: test
+      if (!t_invoke_(str8_lit("kill"), str8f(scratch.arena, " -9 %u", info.pid), max_U64, 0, 0)) { fprintf(stderr, "ERROR: failed to invoke kill\n"); }
+#else
+# error NotImplemented
+#endif
+      if (g_last_exit_code != 0) { fprintf(stderr, "ERROR: failed to kill %u\n", info.pid); }
+    }
+  }
+  dmn_process_iter_end(&it);
+  scratch_end(scratch);
 }
 
 internal String8
@@ -412,14 +464,20 @@ t_match_linef(String8 *output, char *fmt, ...)
 }
 
 internal int
-t_test_is_before(void *raw_a, void *raw_b)
+t_test_compar(const void *raw_a, const void *raw_b)
 {
-  T_Test *a = raw_a, *b = raw_b;
+  const T_Test *a = raw_a, *b = raw_b;
   int cmp = str8_compar(str8_cstring(a->group), str8_cstring(b->group), 0);
   if (cmp == 0) {
     cmp = u64_compar(&a->decl_line, &b->decl_line);
   }
-  return cmp < 0;
+  return cmp;
+}
+
+internal int
+t_test_is_before(void *raw_a, void *raw_b)
+{
+  return t_test_compar(raw_a, raw_b) < 0;
 }
 
 internal String8List
@@ -540,30 +598,9 @@ t_entry_point(CmdLine *cmdline)
     }
   }
 
-#if 0
-  //
-  // config
-  //
-  {
-    DateTime start_time_uni = os_now_universal_time();
-    DateTime start_time_loc = os_local_time_from_universal(&start_time_uni);
-    PrintHeader("Config");
-    fprintf(stderr, "  Build   %s\n", BUILD_TITLE_STRING_LITERAL);
-    fprintf(stderr, "  Start   %.*s\n", str8_varg(string_from_date_time(scratch.arena, &start_time_loc)));
-    fprintf(stderr, "\n");
-    fprintf(stderr, "  Tools\n");
-#if OS_WINDOWS
-    AssertAlways(t_cl_path().size && t_cl_version().size);
-    fprintf(stderr, "    MSVC    %.*s\n", str8_varg(t_cl_version()));
-    fprintf(stderr, "            %.*s\n", str8_varg(t_cl_path()));
-#endif
-    fprintf(stderr, "    radlink %.*s\n", str8_varg(t_radlink_version()));
-    fprintf(stderr, "            %.*s\n", str8_varg(t_radlink_path()));
-    fprintf(stderr, "    radbin  %.*s\n", str8_varg(t_radbin_version()));
-    fprintf(stderr, "            %.*s\n", str8_varg(t_radbin_path()));
-    fprintf(stderr, "\n");
-  }
-#endif
+  // register debugger tests
+  String8 test_folder_path = str8f(scratch.arena, "%S/torture/dbg_tests", t_src_path());
+  t_dbg_register_script_tests(scratch.arena, test_folder_path);
 
   //
   // Handle -list
@@ -621,8 +658,12 @@ t_entry_point(CmdLine *cmdline)
     }
     if (target_opt) {
       HashTable *ht = hash_table_init(scratch.arena, g_torture_test_count*2);
-      if (target_opt->value_strings.node_count > 0) {
-        for EachNode(pattern_n, String8Node, target_opt->value_strings.first) {
+
+      String8List targets = target_opt->value_strings;
+      str8_list_concat_in_place(&targets, &cmdline->inputs);
+      
+      if (targets.node_count > 0) {
+        for EachNode(pattern_n, String8Node, targets.first) {
           B32 do_namespace = str8_find_needle(pattern_n->string, 0, str8_lit("::"), 0) < pattern_n->string.size;
           for EachIndex(test_idx, g_torture_test_count) {
             String8 name = str8_cstring(g_torture_tests[test_idx].label);
@@ -692,7 +733,8 @@ t_entry_point(CmdLine *cmdline)
   // Run tests
   //
   {
-    radsort(g_torture_tests, g_torture_test_count, t_test_is_before);
+    //radsort(g_torture_tests, g_torture_test_count, t_test_is_before);
+    qsort(g_torture_tests, g_torture_test_count, sizeof(*g_torture_tests), t_test_compar);
 
     U64List target_indices_list = {0};
     if (target.node_count == 0) {
@@ -785,7 +827,7 @@ t_entry_point(CmdLine *cmdline)
 
       // run test
       U64 run_start_time = os_now_microseconds();
-      T_RunResult result = t_run(g_torture_tests[target_idx].r);
+      T_RunResult result = t_run(g_torture_tests[target_idx].r, g_torture_tests[target_idx].user_data);
       U64 run_end_time = os_now_microseconds();
 
       // print result
@@ -879,4 +921,3 @@ t_entry_point(CmdLine *cmdline)
 
   scratch_end(scratch);
 }
-
