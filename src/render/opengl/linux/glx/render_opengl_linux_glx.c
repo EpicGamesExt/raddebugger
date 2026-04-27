@@ -50,12 +50,22 @@ r_ogl_os_init(CmdLine *cmdln)
   }
   GLXFBConfig framebuffer_config = framebuffer_configs[0];
   XFree(framebuffer_configs);
-  
-  //- rjf: construct set-window-attributes
-  XSetWindowAttributes set_window_attributes = {0};
-  set_window_attributes.background_pixmap = None;
-  set_window_attributes.border_pixel      = 0;
-  set_window_attributes.event_mask        = StructureNotifyMask;
+
+  //- extract visual/colormap from chosen fbconfig, publish to os layer
+  {
+    XVisualInfo *vi = glXGetVisualFromFBConfig(lnx_wm_state->display, framebuffer_config);
+    if(vi == 0)
+    {
+      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Could not get visual from GLX framebuffer config."));
+      abort_self(1);
+    }
+    lnx_wm_state->window_visual = vi->visual;
+    lnx_wm_state->window_depth = vi->depth;
+    lnx_wm_state->window_colormap = XCreateColormap(lnx_wm_state->display,
+                                                        XRootWindow(lnx_wm_state->display, vi->screen),
+                                                        vi->visual, AllocNone);
+    XFree(vi);
+  }
   
   //- rjf: construct context
   {
