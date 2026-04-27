@@ -94,6 +94,7 @@
 #include "linker/lnk_debug_helper.h"
 #include "torture.h"
 #include "torture_radlink.h"
+#include "torture_dbg.h"
 
 #include "base/base_inc.c"
 #include "x64/x64.c"
@@ -172,6 +173,7 @@
 #include "torture_d2r.c"
 #include "torture_p2r.c"
 #include "torture_eval.c"
+#include "torture_dbg.c"
 
 internal B32 frame(void) { return 0; }
 

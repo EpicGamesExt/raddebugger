@@ -45,6 +45,17 @@ t_id_linker(void)
   return T_Linker_Null;
 }
 
+internal void
+t_break_if_debugger_present(void)
+{
+#if OS_WINDOWS
+  if(IsDebuggerPresent())
+  {
+    DebugBreak();
+  }
+#endif
+}
+
 internal B32
 t_write_file_list(String8 name, String8List data)
 {
@@ -136,7 +147,7 @@ t_run_caller(void *raw_ctx)
   T_RunCtx *ctx = raw_ctx;  
   String8List test_out = {0};
   ctx->result.status = T_RunStatus_Pass;
-  ctx->run(scratch.arena, &ctx->result, &test_out);
+  ctx->run(scratch.arena, ctx->user_data, &ctx->result, &test_out);
   if (ctx->result.status == T_RunStatus_Fail) {
     for EachNode(n, String8Node, test_out.first) {
       fprintf(stderr, "%.*s", str8_varg(n->string));
@@ -155,10 +166,9 @@ t_run_fail_handler(void *raw_ctx)
 }
 
 internal T_RunResult
-t_run(T_Run run)
+t_run(T_Run run, String8 user_data)
 {
-  T_RunCtx ctx = { .run = run };
-  
+  T_RunCtx ctx = { .run = run, .user_data = user_data };
   B32 do_safe_call = 1;
 #if OS_WINDOWS
   if (IsDebuggerPresent()) {
@@ -257,6 +267,24 @@ t_radlink_path(void)
     path = full_path_from_path(arena, str8_lit("radlink.exe"));
 #else
     path = full_path_from_path(arena, str8_lit("radlink"));
+#endif
+    AssertAlways(path.size);
+  }
+  return path;
+}
+
+internal String8
+t_raddbg_path(void)
+{
+  local_persist String8 path = {0};
+  if (path.size == 0) {
+    local_persist U8 buffer[4096];
+    ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
+    Arena *arena = arena_alloc_(&params);
+#if OS_WINDOWS
+    path = os_full_path_from_path(arena, str8_lit("raddbg.exe"));
+#else
+    path = os_full_path_from_path(arena, str8_lit("raddbg"));
 #endif
     AssertAlways(path.size);
   }
@@ -384,6 +412,30 @@ t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
   return t_invoke_(exe_path, cmdline, timeout, 0, 0);
 }
 
+internal void
+t_kill_all(String8 pattern)
+{
+  Temp scratch = scratch_begin(0,0);
+  DMN_ProcessIter it = {0};
+  dmn_process_iter_begin(&it);
+  DMN_ProcessInfo info = {0};
+  while (dmn_process_iter_next(scratch.arena, &it, &info)) {
+    if (str8_match_wildcard(info.name, pattern, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive)) {
+#if OS_WINDOWS
+      if (!t_invoke_(str8_lit("taskkill"), str8f(scratch.arena, "/PID %u /F", info.pid), max_U64, 0, 0)) { fprintf(stderr, "ERROR: failed to invoke taskkill\n"); }
+#elif OS_LINUX
+      NotImplemented; // TODO: test
+      if (!t_invoke_(str8_lit("kill"), str8f(scratch.arena, " -9 %u", info.pid), max_U64, 0, 0)) { fprintf(stderr, "ERROR: failed to invoke kill\n"); }
+#else
+# error NotImplemented
+#endif
+      if (g_last_exit_code != 0) { fprintf(stderr, "ERROR: failed to kill %u\n", info.pid); }
+    }
+  }
+  dmn_process_iter_end(&it);
+  scratch_end(scratch);
+}
+
 internal String8
 t_chop_line(String8 *output)
 {
@@ -422,14 +474,20 @@ t_match_linef(String8 *output, char *fmt, ...)
 }
 
 internal int
-t_test_is_before(void *raw_a, void *raw_b)
+t_test_compar(const void *raw_a, const void *raw_b)
 {
-  T_Test *a = raw_a, *b = raw_b;
+  const T_Test *a = raw_a, *b = raw_b;
   int cmp = str8_compar(str8_cstring(a->group), str8_cstring(b->group), 0);
   if (cmp == 0) {
     cmp = u64_compar(&a->decl_line, &b->decl_line);
   }
-  return cmp < 0;
+  return cmp;
+}
+
+internal int
+t_test_is_before(void *raw_a, void *raw_b)
+{
+  return t_test_compar(raw_a, raw_b) < 0;
 }
 
 internal String8List
@@ -549,32 +607,9 @@ t_entry_point(CmdLine *cmdline)
       abort_self(0);
     }
   }
-  
-#if 0
-  //
-  // config
-  //
-  {
-    DateTime start_time_uni = os_now_universal_time();
-    DateTime start_time_loc = os_local_time_from_universal(&start_time_uni);
-    PrintHeader("Config");
-    fprintf(stderr, "  Build   %s\n", BUILD_TITLE_STRING_LITERAL);
-    fprintf(stderr, "  Start   %.*s\n", str8_varg(string_from_date_time(scratch.arena, &start_time_loc)));
-    fprintf(stderr, "\n");
-    fprintf(stderr, "  Tools\n");
-#if OS_WINDOWS
-    AssertAlways(t_cl_path().size && t_cl_version().size);
-    fprintf(stderr, "    MSVC    %.*s\n", str8_varg(t_cl_version()));
-    fprintf(stderr, "            %.*s\n", str8_varg(t_cl_path()));
-#endif
-    fprintf(stderr, "    radlink %.*s\n", str8_varg(t_radlink_version()));
-    fprintf(stderr, "            %.*s\n", str8_varg(t_radlink_path()));
-    fprintf(stderr, "    radbin  %.*s\n", str8_varg(t_radbin_version()));
-    fprintf(stderr, "            %.*s\n", str8_varg(t_radbin_path()));
-    fprintf(stderr, "\n");
-  }
-#endif
-  
+  // register debugger tests
+  String8 test_folder_path = str8f(scratch.arena, "%S/torture/dbg_tests", t_src_path());
+  t_dbg_register_script_tests(scratch.arena, test_folder_path);
   //
   // Handle -list
   //
@@ -631,8 +666,12 @@ t_entry_point(CmdLine *cmdline)
     }
     if (target_opt) {
       HashTable *ht = hash_table_init(scratch.arena, g_torture_test_count*2);
-      if (target_opt->value_strings.node_count > 0) {
-        for EachNode(pattern_n, String8Node, target_opt->value_strings.first) {
+
+      String8List targets = target_opt->value_strings;
+      str8_list_concat_in_place(&targets, &cmdline->inputs);
+
+      if (targets.node_count > 0) {
+        for EachNode(pattern_n, String8Node, targets.first) {
           B32 do_namespace = str8_find_needle(pattern_n->string, 0, str8_lit("::"), 0) < pattern_n->string.size;
           for EachIndex(test_idx, g_torture_test_count) {
             String8 name = str8_cstring(g_torture_tests[test_idx].label);
@@ -794,10 +833,9 @@ t_entry_point(CmdLine *cmdline)
       }
       
       // run test
-      U64 run_start_time = now_time_us();
-      T_RunResult result = t_run(g_torture_tests[target_idx].r);
-      U64 run_end_time = now_time_us();
-      
+      U64 run_start_time = os_now_microseconds();
+      T_RunResult result = t_run(g_torture_tests[target_idx].r, g_torture_tests[target_idx].user_data);
+      U64 run_end_time = os_now_microseconds();
       // print result
       if (result.status == T_RunStatus_Pass) {
         fprintf(stdout, "\x1b[32m" "%s" "\x1b[0m", t_string_from_result(result.status));
@@ -889,4 +927,3 @@ t_entry_point(CmdLine *cmdline)
   
   scratch_end(scratch);
 }
-

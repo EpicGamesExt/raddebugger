@@ -20,25 +20,30 @@ typedef struct
   char       *fail_cond;
 } T_RunResult;
 
-#define T_RunSig(name) void t_##name(Arena *arena, T_RunResult *result_out, String8List *test_out)
-typedef                void (*T_Run)(Arena *arena, T_RunResult *result_out, String8List *test_out);
+#define T_RunSig(name) void t_##name(Arena *arena, String8 user_data, T_RunResult *result_out, String8List *test_out)
+typedef                void (*T_Run)(Arena *arena, String8 user_data, T_RunResult *result_out, String8List *test_out);
 
 typedef struct
 {
   T_Run       run;
+  String8     user_data;
   T_RunResult result;
 } T_RunCtx;
 
 typedef struct
 {
-  char  *group;
-  char  *label;
-  int    decl_line;
-  T_Run  r;
+  char   *group;
+  char   *label;
+  int     decl_line;
+  T_Run   r;
+  String8 user_data;
 } T_Test;
 
 extern U64    g_torture_test_count;
 extern T_Test g_torture_tests[0xffffff];
+extern U64    g_torture_running_test_idx;
+
+internal void t_break_if_debugger_present(void);
 
 #define T_AddTest(name, l, ...)            \
   T_RunSig(name);                          \
@@ -61,7 +66,7 @@ extern T_Test g_torture_tests[0xffffff];
   TEST_(name)      \
   T_RunSig(name)
 
-#define T_Ok(c) do { if (!(c)) { result_out->fail_file = __FILE__; result_out->fail_line = __LINE__; result_out->fail_cond = Stringify(c); result_out->status = T_RunStatus_Fail; return; } } while(0)
+#define T_Ok(c) do { if (!(c)) { result_out->fail_file = __FILE__; result_out->fail_line = __LINE__; result_out->fail_cond = Stringify(c); result_out->status = T_RunStatus_Fail; t_break_if_debugger_present(); return; } } while(0)
 #define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
 #define t_outf(...) str8_list_pushf(arena, test_out, ## __VA_ARGS__)
 
@@ -77,7 +82,7 @@ internal String8 t_make_file_path(Arena *arena, String8 name);
 // test runner
 internal void        t_run_caller(void *raw_ctx);
 internal void        t_run_fail_handler(void *raw_ctx);
-internal T_RunResult t_run(T_Run run);
+internal T_RunResult t_run(T_Run run, String8 user_data);
 
 internal String8 t_radbin_path(void);
 internal String8 t_cl_path(void);
@@ -87,6 +92,5 @@ internal String8 t_src_path(void);
 
 internal B32 t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, String8 *output_out);
 internal B32 t_invoke(String8 exe, String8 cmdline, U64 timeout);
-
 #define t_invoke_cl(f, ...) t_invoke_(t_cl_path(), str8f(scratch.arena, f, ## __VA_ARGS__), max_U64, 0, 0)
-
+internal void t_kill_all(String8 pattern);
