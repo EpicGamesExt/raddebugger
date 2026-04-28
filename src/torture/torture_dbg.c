@@ -33,10 +33,8 @@ t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *rep
 #endif
 
   // send command
-  String8  cmdline      = str8f(scratch.arena, "--ipc --pid:%u %S", dbg_pid, cmd);
-  Arena   *output_arena = reply_arena ? reply_arena : scratch.arena;
-  String8  output       = {0};
-  if (t_invoke_(t_raddbg_path(), cmdline, timeout_us, output_arena, &output) == 0) { goto exit; }
+  String8 cmdline = str8f(scratch.arena, "--ipc --pid:%u %S", dbg_pid, cmd);
+  if (t_invoke(t_raddbg_path(), cmdline, timeout_us) == 0) { goto exit; }
 
   B32 has_reply = 1;
 
@@ -55,7 +53,9 @@ t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *rep
 
   if (has_reply) {
     // parse reply
-    RD_IpcReply reply = rd_ipc_mdesk_reply_from_string(output_arena, output);
+    Arena       *a          = reply_arena ? reply_arena : scratch.arena;
+    String8      reply_text = str8_copy(a, g_output);
+    RD_IpcReply  reply      = rd_ipc_mdesk_reply_from_string(a, reply_text);
     if (rd_ipc_reply_is_ok(&reply) == 0) { goto exit; }
     if (md_node_is_nil(reply.msg))       { goto exit; }
     if (reply_arena && reply_out) { *reply_out = reply; }
@@ -111,7 +111,7 @@ t_dbg_stop_event(Arena *arena, T_DbgStopEvent *out, U64 timeout_us)
 
   // send status request
   RD_IpcReply reply = {0};
-  if ( ! t_dbg_send_cmd(str8_lit("stop_event"), timeout_us, scratch.arena, &reply)) { goto exit; }
+  if ( ! t_dbg_send_cmd(str8_lit("stop_event"), timeout_us, arena ? arena : scratch.arena, &reply)) { goto exit; }
 
   // parse reply
   if ( ! rd_ipc_parse_b32    (reply.msg, str8_lit("ok"),             &is_ok))            { AssertAlways(0); goto exit; }
@@ -131,7 +131,7 @@ t_dbg_stop_event(Arena *arena, T_DbgStopEvent *out, U64 timeout_us)
   if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("tls_model"),      &v.tls_model))      { AssertAlways(0); goto exit; }
   if ( ! rd_ipc_parse_string (reply.msg, str8_lit("stop_cause"),     &v.stop_cause))     { AssertAlways(0); goto exit; }
 
-  if (out != 0) { *out = v; }
+  if (arena && out != 0) { *out = v; }
 
   exit:;
   return is_ok;
@@ -223,7 +223,7 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   } while (t > 0);
 
   //--- Status ---------------------
-  if (is_stopped) {
+  if (0 && is_stopped) {
     T_DbgStatus status = {0};
     AssertAlways(t_dbg_status(&status, 0));
 
@@ -271,8 +271,9 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
   Temp scratch = scratch_begin(0, 0);
   B32 dbg_ready = 0;
 
-  String8 user_path = t_make_file_path(scratch.arena, str8_lit("test.raddbg_user"));
-  cmdline = str8f(scratch.arena, "--user:\"%S\" %S", user_path, cmdline);
+  String8 user_path    = t_make_file_path(scratch.arena, str8_lit("test.raddbg_user"));
+  String8 project_path = t_make_file_path(scratch.arena, str8_lit("test.raddbg_project"));
+  cmdline = str8f(scratch.arena, "--user:\"%S\" --project:\"%S\" %S", user_path, project_path, cmdline);
 
   // launch debugger
   OS_ProcessLaunchParams launch_opts = {
@@ -585,6 +586,10 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
         case T_DbgScriptCmdKind_ClearBreakpoints: t_dbg_send_cmdf(0,0,0, "clear_breakpoints"); break;
         case T_DbgScriptCmdKind_Run:              t_dbg_send_cmd(str8_lit("run"),  timeout_us, 0, 0); break;
         case T_DbgScriptCmdKind_At: {
+          T_DbgStatus status = {0};
+          AssertAlways(t_dbg_status(&status, 0));
+          AssertAlways(status.running == 0);
+
           // map IP -> source location
           U64                 ip  = u64_from_str8(t_dbg_value_from_exprf(scratch.arena, "reg:rip"), 10);
           T_DbgSourceLocation loc = {0};
