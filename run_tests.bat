@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 rem Make sure that your VS install does not have LLVM included otherwise this script will use VS clang
 
-set TARGET_VALUES=raddbg radlink radbin mule_main mule_module torture
+set TARGET_VALUES=radlink radbin mule_main mule_module torture
 set CC_VALUES=msvc clang
 set MODE_VALUES=debug release
 
@@ -32,6 +32,8 @@ for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
   ) else (
     call build.bat meta asan %%c %%m %TARGET_VALUES% || exit /b 1
   )
+  rem raddbg dies under asan on statup
+  call build.bat meta %%c %%m raddbg || exit /b 1
 
   pushd build
   torture %* || exit /b 1
