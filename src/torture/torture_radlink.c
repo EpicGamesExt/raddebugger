@@ -4897,14 +4897,15 @@ TEST(debug_p_sig_mismatch)
   T_Ok(t_write_file(str8_lit("b.obj"), b_obj));
   T_Ok(t_write_entry_obj());
 
-  String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full a.obj b.obj entry.obj"), max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full a.obj b.obj entry.obj");
   T_Ok(g_last_exit_code == 0);
 
   B32     found_error = 0;
   String8 a_obj_path    = t_make_file_path(arena, str8_lit("a.obj"));
   String8 b_obj_path    = t_make_file_path(arena, str8_lit("b.obj"));
   String8 expected_line = str8f(arena, "Error(%03d): %S: PCH signature mismatch, expected 0x%x got 0x%x; PCH obj %S", LNK_Error_PrecompSigMismatch, b_obj_path, b_sig, a_sig, a_obj_path);
+
+  String8 output = g_output;
   while (output.size) {
     String8 line = t_chop_line(&output);
     found_error = str8_match(line, expected_line, StringMatchFlag_CaseInsensitive);
@@ -5010,10 +5011,10 @@ TEST(debug_p_and_debug_t_in_obj)
     }
   }));
   T_Ok(t_write_entry_obj());
-  String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full pch.obj entry.obj"), max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full pch.obj entry.obj");
   T_Ok(g_last_exit_code == 0);
 
+  String8 output        = g_output;
   B32     found_warning = 0;
   String8 pch_obj_path  = t_make_file_path(arena, str8_lit("pch.obj"));
   String8 expected_line = str8f(arena, "Warning(%03d): %S: multiple sections with debug types detected, obj must have either .debug$T or .debug$P; discarding both sections", LNK_Warning_MultipleDebugTAndDebugP, pch_obj_path);
@@ -5417,12 +5418,11 @@ TEST(cyclic_type)
   T_Ok(t_write_entry_obj());
   T_Ok(t_write_file(str8_lit("cycle.obj"), raw_coff));
 
-  String8 cmd_line = str8f(arena, "/subsystem:console /entry:entry /out:a.exe /debug:full /rad_ignore:-%u cycle.obj entry.obj", LNK_Error_InvalidTypeIndex);
-  String8 output   = {0};
-  t_invoke_(t_radlink_path(), cmd_line, max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full /rad_ignore:-%u cycle.obj entry.obj", LNK_Error_InvalidTypeIndex);
   T_Ok(g_last_exit_code == 0);
 
-  B32 is_cycle_detected = 0;
+  String8 output            = g_output;
+  B32     is_cycle_detected = 0;
   while (output.size && !is_cycle_detected) {
     is_cycle_detected = t_match_linef(&output,
                       "Error(043): %S: LF_POINTER(type_index: 0x1000) forward refs member type index 0x1001 (leaf struct offset: 0x0)",
@@ -5892,14 +5892,13 @@ TEST(ghash_check_corrupt)
   T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
   T_Ok(t_write_entry_obj());
 
-  String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj");
   T_Ok(g_last_exit_code == 0);
 
   B32 is_warning_found = 0;
   String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
   String8 expected_line = str8f(arena, "Warning(%03u): %S: .debug$H section is too small to contain the header", LNK_Warning_GHash, debug_obj_path, LLVM_GHash_Magic);
-  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -5942,14 +5941,13 @@ TEST(ghash_check_magic)
   T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
   T_Ok(t_write_entry_obj());
 
-  String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj");
   T_Ok(g_last_exit_code == 0);
 
   B32 is_warning_found = 0;
   String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
   String8 expected_line = str8f(arena, "Warning(%03u): %S: .debug$H contains invalid magic: got 0x7b, expected 0x%x", LNK_Warning_GHash, debug_obj_path, LLVM_GHash_Magic);
-  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -5992,14 +5990,13 @@ TEST(ghash_check_version)
   T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
   T_Ok(t_write_entry_obj());
 
-  String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj");
   T_Ok(g_last_exit_code == 0);
 
   B32 is_warning_found = 0;
   String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
   String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H version: got %u, expected %u", LNK_Warning_GHash, debug_obj_path, 0xbeef, LLVM_GHash_CurrentVersion);
-  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -6034,14 +6031,13 @@ TEST(ghash_check_hash_alg)
   T_Ok(t_write_file(str8_lit("debug.obj"), debug_obj));
   T_Ok(t_write_entry_obj());
 
-  String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj");
   T_Ok(g_last_exit_code == 0);
 
-  B32 is_warning_found = 0;
-  String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
-  String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash algorithm: got SHA1_8, expected BALK3", LNK_Warning_GHash, debug_obj_path);
-  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+  B32     is_warning_found = 0;
+  String8 debug_obj_path   = t_make_file_path(arena, str8_lit("debug.obj"));
+  String8 expected_line    = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash algorithm: got SHA1_8, expected BALK3", LNK_Warning_GHash, debug_obj_path);
+  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -6077,13 +6073,13 @@ TEST(ghash_match_debug_t)
   T_Ok(t_write_entry_obj());
 
   String8 output = {0};
-  t_invoke_(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj"), max_U64, arena, &output);
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:ghash entry.obj debug.obj");
   T_Ok(g_last_exit_code == 0);
 
-  B32 is_warning_found = 0;
-  String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
-  String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash count and type count: got 3 hashes for 2 types", LNK_Warning_GHash, debug_obj_path);
-  for (String8 i = output; i.size > 0 && !is_warning_found; ) {
+  B32     is_warning_found = 0;
+  String8 debug_obj_path   = t_make_file_path(arena, str8_lit("debug.obj"));
+  String8 expected_line    = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash count and type count: got 3 hashes for 2 types", LNK_Warning_GHash, debug_obj_path);
+  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -6312,18 +6308,17 @@ t_radlink_validate_asan_out(String8 obj_name)
   Temp scratch = scratch_begin(0,0);
   B32 is_ok = 0;
 
-  t_invoke_(t_radlink_path(), str8f(scratch.arena, "%S /debug:full", obj_name), max_U64, 0, 0);
+  t_invoke_linkerf("%S /debug:full", obj_name);
   if (g_last_exit_code != 0) { goto exit; }
 
   String8 exe_path = t_make_file_path(scratch.arena, str8f(scratch.arena, "%S.exe", str8_chop_last_dot(obj_name)));
-  String8 out = {0};
 
   char *old_path_cstr = getenv("PATH");
   String8List env = {0};
   str8_list_pushf(scratch.arena, &env, "PATH=%S;%S", str8_chop_last_slash(t_cl_path()), str8_cstring(old_path_cstr));
-  t_invoke_env(exe_path, str8_zero(), env, max_U64, scratch.arena, &out);
+  t_invoke_env(exe_path, str8_zero(), env, max_U64);
 
-  String8 s = out;
+  String8 s = g_output;
 
   String8 header = t_chop_line(&s);
   if ( ! str8_match(header, str8_lit("================================================================="), 0)) {
@@ -6355,8 +6350,7 @@ TEST(infer_asan)
   // /MD
   {
     T_Ok(t_write_file(str8_lit("main.c"), str8_cstring(program)));
-    String8 cl_output = {0};
-    t_invoke_(t_cl_path(), str8_lit("/MD /fsanitize=address /Z7 /c /Fo:main_md.obj main.c"), max_U64, arena, &cl_output);
+    t_invoke_cl("/MD /fsanitize=address /Z7 /c /Fo:main_md.obj main.c");
     T_Ok(g_last_exit_code == 0);
     T_Ok(t_radlink_validate_asan_out(str8_lit("main_md.obj")));
   }
@@ -6364,8 +6358,7 @@ TEST(infer_asan)
   // /MDd
   {
     T_Ok(t_write_file(str8_lit("main.c"), str8_cstring(program)));
-    String8 cl_output = {0};
-    t_invoke_(t_cl_path(), str8_lit("/MDd /fsanitize=address /Z7 /c /Fo:main_mdd.obj main.c"), max_U64, arena, &cl_output);
+    t_invoke_cl("/MDd /fsanitize=address /Z7 /c /Fo:main_mdd.obj main.c");
     T_Ok(g_last_exit_code == 0);
     T_Ok(t_radlink_validate_asan_out(str8_lit("main_mdd.obj")));
   }
@@ -6373,8 +6366,7 @@ TEST(infer_asan)
   // /MT
   {
     T_Ok(t_write_file(str8_lit("main.c"), str8_cstring(program)));
-    String8 cl_output = {0};
-    t_invoke_(t_cl_path(), str8_lit("/MT /fsanitize=address /Z7 /c /Fo:main_mt.obj main.c"), max_U64, arena, &cl_output);
+    t_invoke_cl("/MT /fsanitize=address /Z7 /c /Fo:main_mt.obj main.c");
     T_Ok(g_last_exit_code == 0);
     T_Ok(t_radlink_validate_asan_out(str8_lit("main_mt.obj")));
   }
@@ -6382,8 +6374,7 @@ TEST(infer_asan)
   // /MTd
   {
     T_Ok(t_write_file(str8_lit("main.c"), str8_cstring(program)));
-    String8 cl_output = {0};
-    t_invoke_(t_cl_path(), str8_lit("/MT /fsanitize=address /Z7 /c /Fo:main_mtd.obj main.c"), max_U64, arena, &cl_output);
+    t_invoke_cl("/MT /fsanitize=address /Z7 /c /Fo:main_mtd.obj main.c");
     T_Ok(g_last_exit_code == 0);
     T_Ok(t_radlink_validate_asan_out(str8_lit("main_mtd.obj")));
   }
@@ -6395,9 +6386,7 @@ TEST(infer_asan)
 TEST(determ_test)
 {
   // compile the test target (torture)
-  String8 cl_line = str8f(arena, "/fsanitize=address /c /Z7 /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
-  String8 cl_out = {0};
-  t_invoke_(t_cl_path(), cl_line, max_U64, arena, &cl_out);
+  t_invoke_cl("/fsanitize=address /c /Z7 /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
   T_Ok(g_last_exit_code == 0);
 
   U64 run_count = 25;

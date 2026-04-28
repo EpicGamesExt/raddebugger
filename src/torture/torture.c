@@ -2,21 +2,23 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 // command line
-global String8 g_stdout_file_name = str8_lit_comp("torture.out");
-global String8 g_wdir;
-global String8 g_out = str8_lit_comp("torture");
-global B32     g_verbose;
-global B32     g_redirect_stdout = 1;
-global B32     g_stop_on_first_fail_or_crash = 1;
-global String8 g_linker;
-global String8 g_test_data;
+global String8      g_stdout_file_name = str8_lit_comp("torture.out");
+global String8      g_wdir;
+global String8      g_out = str8_lit_comp("torture");
+global B32          g_verbose;
+global B32          g_redirect_stdout = 1;
+global B32          g_stop_on_first_fail_or_crash = 1;
+global String8      g_linker;
+global String8      g_test_data;
 
 // tests
 U64    g_torture_test_count;
 T_Test g_torture_tests[0xffffff];
 
 // invoke
-global int g_last_exit_code;
+global int          g_last_exit_code;
+global Arena       *g_output_arena;
+global String8      g_output;
 
 internal String8
 t_test_name_from_idx(Arena *arena, U64 test_idx)
@@ -171,6 +173,11 @@ t_run(T_Run run, String8 user_data)
   } else {
     t_run_caller(&ctx);
   }
+
+  if (ctx.result.status == T_RunStatus_Fail || ctx.result.status == T_RunStatus_Crash) {
+    fprintf(stderr, "Last captured output:\n%.*s\n", str8_varg(g_output));
+  }
+
   return ctx.result;
 }
 
@@ -220,25 +227,26 @@ t_cl_version(void)
   if ( ! version.size) {
     Temp scratch = scratch_begin(0, 0);
 
-    String8 output = {0};
-    t_invoke_(t_cl_path(), str8_zero(), max_U64, scratch.arena, &output);
+    t_invoke_cl("");
     AssertAlways(g_last_exit_code == 0);
 
     String8 needle = str8_lit("Version");
-    U64 version_lo = str8_find_needle(output, 0, needle, 0);
+    U64 version_lo = str8_find_needle(g_output, 0, needle, 0);
     version_lo += needle.size + 1;
-    AssertAlways(version_lo < output.size);
+    AssertAlways(version_lo < g_output.size);
 
-    U64 version_hi = str8_find_needle(output, version_lo, str8_lit(" "), 0);
-    AssertAlways(version_hi < output.size);
+    U64 version_hi = str8_find_needle(g_output, version_lo, str8_lit(" "), 0);
+    AssertAlways(version_hi < g_output.size);
 
-    version = str8_substr(output, r1u64(version_lo, version_hi));
+    version = str8_substr(g_output, r1u64(version_lo, version_hi));
     AssertAlways(version.size > 0);
 
     local_persist U8 buffer[4096];
     ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
     Arena *arena = arena_alloc_(&params);
     version = str8_copy(arena, version);
+
+    MemoryZeroStruct(&g_output);
 
     scratch_end(scratch);
   }
@@ -313,24 +321,27 @@ t_src_path(void)
 }
 
 internal B32
-t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout, Arena *output_arena, String8 *output_out)
+t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout)
 {
-  Temp scratch = scratch_begin(&output_arena,1);
+  Temp scratch = scratch_begin(&g_output_arena,1);
 
   B32 is_ok = 0;
 
-  B32 capture_output = output_out || g_redirect_stdout;
-
+  // clean up global state
+  arena_pop_to(g_output_arena, 0);
+  MemoryZeroStruct(&g_output);
   g_last_exit_code = -1;
 
+#if OS_WINDOWS
   OS_Handle read_pipe_handle = {0}, write_pipe_handle = {0};
-  if (capture_output) {
-    HANDLE read_pipe, write_pipe;
-    SECURITY_ATTRIBUTES at = { .nLength = sizeof(at), .bInheritHandle = 1 };
-    if (!CreatePipe(&read_pipe, &write_pipe, &at, 0)) { AssertAlways(0 && "failed to create a pipe"); }
-    read_pipe_handle  = (OS_Handle){ .u64[0] = (U64)read_pipe  };
-    write_pipe_handle = (OS_Handle){ .u64[0] = (U64)write_pipe };
-  }
+  HANDLE read_pipe, write_pipe;
+  SECURITY_ATTRIBUTES at = { .nLength = sizeof(at), .bInheritHandle = 1 };
+  if (!CreatePipe(&read_pipe, &write_pipe, &at, 0)) { AssertAlways(0 && "failed to create a pipe"); }
+  read_pipe_handle  = (OS_Handle){ .u64[0] = (U64)read_pipe  };
+  write_pipe_handle = (OS_Handle){ .u64[0] = (U64)write_pipe };
+#else
+# error NotImplemented
+#endif
 
   // Build Launch Options
   OS_ProcessLaunchParams launch_opts = {
@@ -351,29 +362,25 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout, Ar
 
   // invoke exe
   OS_Handle process_handle = os_process_launch(&launch_opts);
-
   if (os_handle_match(process_handle, os_handle_zero())) { goto exit; }
 
   // close handle so last to ReadFile does not block
   os_file_close(write_pipe_handle);
 
-  if (capture_output) {
-    // capture process output
-    String8List  output = {0};
-    for (;;) {
-      String8 string = os_file_read_cstring(scratch.arena, read_pipe_handle, 0);
-      if (string.size == 0) { break; }
-      str8_list_push(scratch.arena, &output, string);
-    }
+  // capture process output
+  String8List output = {0};
+  for (;;) {
+    String8 string = os_file_read_cstring(scratch.arena, read_pipe_handle, 0);
+    if (string.size == 0) { break; }
+    str8_list_push(scratch.arena, &output, string);
+  }
 
-    if (output_out) {
-      *output_out = str8_list_join(output_arena, &output, 0);
-    }
+  // update output global
+  g_output = str8_list_join(g_output_arena, &output, 0);
 
-    // write to the output file
-    if (g_redirect_stdout) {
-      os_write_data_list_to_file_path(g_stdout_file_name, output);
-    }
+  // write to the output file
+  if (g_redirect_stdout) {
+    os_write_data_list_to_file_path(g_stdout_file_name, output);
   }
 
   U64 exit_code_u64 = 0;
@@ -391,15 +398,48 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout, Ar
 }
 
 internal B32
-t_invoke_(String8 exe_path, String8 cmdline, U64 timeout, Arena *output_arena, String8 *output_out)
+t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
 {
-  return t_invoke_env(exe_path, cmdline, (String8List){0}, timeout, output_arena, output_out);
+  return t_invoke_env(exe_path, cmdline, (String8List){0}, timeout);
 }
 
 internal B32
-t_invoke(String8 exe_path, String8 cmdline, U64 timeout)
+t_invoke_cl(char *fmt, ...)
 {
-  return t_invoke_(exe_path, cmdline, timeout, 0, 0);
+  Temp scratch = scratch_begin(0,0);
+  va_list args;
+  va_start(args, fmt);
+  String8 cmdl = push_str8fv(scratch.arena, fmt, args);
+  va_end(args);
+  B32 is_ok = t_invoke(t_cl_path(), cmdl, max_U64);
+  scratch_end(scratch);
+  return is_ok;
+}
+
+internal B32
+t_invoke_linkerf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0,0);
+  va_list args;
+  va_start(args, fmt);
+  String8 cmdl = push_str8fv(scratch.arena, fmt, args);
+  va_end(args);
+  B32 is_ok = t_invoke(t_radlink_path(), cmdl, max_U64);
+  scratch_end(scratch);
+  return is_ok;
+}
+
+internal B32
+t_invoke_radbin(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0,0);
+  va_list args;
+  va_start(args, fmt);
+  String8 cmdl = push_str8fv(scratch.arena, fmt, args);
+  va_end(args);
+  B32 is_ok = t_invoke(t_radbin_path(), cmdl, max_U64);
+  scratch_end(scratch);
+  return is_ok;
 }
 
 internal void
@@ -412,10 +452,10 @@ t_kill_all(String8 pattern)
   while (dmn_process_iter_next(scratch.arena, &it, &info)) {
     if (str8_match_wildcard(info.name, pattern, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive)) {
 #if OS_WINDOWS
-      if (!t_invoke_(str8_lit("taskkill"), str8f(scratch.arena, "/PID %u /F", info.pid), max_U64, 0, 0)) { fprintf(stderr, "ERROR: failed to invoke taskkill\n"); }
+      if (!t_invoke(str8_lit("taskkill"), str8f(scratch.arena, "/PID %u /F", info.pid), max_U64)) { fprintf(stderr, "ERROR: failed to invoke taskkill\n"); }
 #elif OS_LINUX
       NotImplemented; // TODO: test
-      if (!t_invoke_(str8_lit("kill"), str8f(scratch.arena, " -9 %u", info.pid), max_U64, 0, 0)) { fprintf(stderr, "ERROR: failed to invoke kill\n"); }
+      if (!t_invoke(str8_lit("kill"), str8f(scratch.arena, " -9 %u", info.pid), max_U64)) { fprintf(stderr, "ERROR: failed to invoke kill\n"); }
 #else
 # error NotImplemented
 #endif
@@ -695,6 +735,7 @@ t_entry_point(CmdLine *cmdline)
   g_verbose                     = cmd_line_has_flag(cmdline, str8_lit("verbose"));
   g_redirect_stdout             = !cmd_line_has_flag(cmdline, str8_lit("print_stdout"));
   g_stop_on_first_fail_or_crash = !cmd_line_has_flag(cmdline, str8_lit("keep_going"));
+  g_output_arena                = arena_alloc();
 
   // default options when running under debugger
 #if OS_WINDOWS

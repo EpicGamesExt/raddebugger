@@ -28,7 +28,7 @@ d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
   B32 was_pdb_deleted = os_delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
   Assert(was_pdb_deleted);
   
-  t_invoke_(t_radbin_path(), str8_lit("-rdi a.exe -out:a.rdi"), max_U64, 0, 0);
+  t_invoke(t_radbin_path(), str8_lit("-rdi a.exe -out:a.rdi"), max_U64);
   Assert(g_last_exit_code == 0);
   
   String8 raw_rdi = t_read_file(arena, str8_lit("a.rdi"));
@@ -271,11 +271,9 @@ TEST(d2r_line_table)
   
   for EachElement(i, test_table) {
     for EachIndex(k, test_table[i].line_size) {
-      String8 cmd_line = str8f(arena, "-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
-      String8 output = {0};
-      t_invoke_(t_radbin_path(), cmd_line, max_U64, arena, &output);
+      t_invoke_radbin("-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
       T_Ok(g_last_exit_code == 0);
-      T_MatchLinef(&output, "%S:%llu", test_table[i].file->path, test_table[i].ln);
+      T_MatchLinef(&g_output, "%S:%llu", test_table[i].file->path, test_table[i].ln);
     }
   }
   
