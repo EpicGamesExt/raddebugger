@@ -148,36 +148,13 @@ t_run_caller(void *raw_ctx)
   scratch_end(scratch);
 }
 
-internal void
-t_run_fail_handler(void *raw_ctx)
-{
-  T_RunCtx *ctx = raw_ctx;
-  ctx->result.status = T_RunStatus_Crash;
-  fflush(stdout);
-  fflush(stderr);
-}
-
 internal T_RunResult
 t_run(T_Run run, String8 user_data)
 {
-  T_RunCtx ctx = { .run = run, .user_data = user_data };
-
-  B32 do_safe_call = 1;
-#if OS_WINDOWS
-  if (IsDebuggerPresent()) {
-    do_safe_call = 0;
-  }
-#endif
-  if (do_safe_call) {
-    os_safe_call(t_run_caller, t_run_fail_handler, &ctx);
-  } else {
-    t_run_caller(&ctx);
-  }
-
-  if (ctx.result.status == T_RunStatus_Fail || ctx.result.status == T_RunStatus_Crash) {
-    fprintf(stderr, "Last captured output:\n%.*s\n", str8_varg(g_output));
-  }
-
+  T_RunCtx ctx = { .run = run, .user_data = user_data, .result.status = T_RunStatus_Fail };
+  t_run_caller(&ctx);
+  fflush(stdout);
+  fflush(stderr);
   return ctx.result;
 }
 
