@@ -36,7 +36,7 @@ for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
   call build.bat meta %%c %%m raddbg || exit /b 1
 
   pushd build
-  torture %* || exit /b 1
+  torture -s:Dbg* %* || exit /b 1
   popd
 
   endlocal
