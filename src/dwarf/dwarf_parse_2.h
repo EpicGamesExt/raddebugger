@@ -37,10 +37,10 @@ struct DW2_AbbrevMap
 };
 
 ////////////////////////////////
-//~ rjf: String Offset Table (.debug_str_offsets)
+//~ rjf: Offset Tables (.debug_str_offsets, .debug_rnglists)
 
-typedef struct DW2_StrOffsetsTable DW2_StrOffsetsTable;
-struct DW2_StrOffsetsTable
+typedef struct DW2_OffsetTable DW2_OffsetTable;
+struct DW2_OffsetTable
 {
   DW_Format format;
   DW_Version version;
@@ -64,7 +64,9 @@ struct DW2_ParseCtx
   U64 addr_size;
   U64 unit_base_addr;
   DW2_AbbrevMap *abbrev_map;
-  DW2_StrOffsetsTable *str_offsets_table;
+  DW2_OffsetTable *rnglists_table;
+  DW2_OffsetTable *str_offsets_table;
+  DW2_OffsetTable *addr_table;
   String8 unit_dir;
   String8 unit_file;
 };
@@ -234,9 +236,10 @@ internal U64 dw2_reference_info_off_from_form_val(DW2_ParseCtx *ctx, DW2_FormVal
 internal U64 dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 off, DW2_LineTableHeader *out);
 
 ////////////////////////////////
-//~ rjf: String Offset Table Parsing (.debug_str_offsets)
+//~ rjf: Offset Table Parsing (.debug_str_offsets, .debug_rnglists)
 
-internal U64 dw2_read_str_offsets_table(String8 data, U64 off, DW2_StrOffsetsTable *out);
+internal U64 dw2_read_offset_table(String8 data, U64 off, DW2_OffsetTable *out);
+internal B32 dw2_try_offset_from_table_idx(DW2_OffsetTable *tbl, U64 idx, U64 *out);
 
 ////////////////////////////////
 //~ rjf: Range List Parsing (.debug_rnglists)

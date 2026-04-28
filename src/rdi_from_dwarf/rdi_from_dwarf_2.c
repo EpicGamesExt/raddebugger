@@ -416,7 +416,9 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   lane_sync();
   
   ////////////////////////////
-  //- rjf: parse all string offsets tables
+  //- rjf: parse all unit offsets tables
+  //
+  // on .debug_str_offsets, as one example:
   //
   // in an incredible twist of fate, DWARF decided to decouple these from
   // compilation units. compilation units *do* contain a
@@ -439,61 +441,90 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   // thank you, again, DWARF.
   //
   U64 str_offsets_tables_count = 0;
-  DW2_StrOffsetsTable *str_offsets_tables = 0;
+  DW2_OffsetTable *str_offsets_tables = 0;
   Rng1U64 *str_offsets_tables_ranges = 0;
-  ProfScope("parse all string offsets tables") if(lane_idx() == 0)
+  U64 rnglists_tables_count = 0;
+  DW2_OffsetTable *rnglists_tables = 0;
+  Rng1U64 *rnglists_tables_ranges = 0;
+  U64 addr_tables_count = 0;
+  DW2_OffsetTable *addr_tables = 0;
+  Rng1U64 *addr_tables_ranges = 0;
+  ProfScope("parse all offset tables (.debug_rnglists, .debug_str_offsets, .debug_addr)") if(lane_idx() == 0)
   {
-    Temp scratch2 = scratch_begin(&scratch.arena, 1);
-    
-    //- rjf: gather all tables (loose)
-    typedef struct TableNode TableNode;
-    struct TableNode
+    struct
     {
-      TableNode *next;
-      DW2_StrOffsetsTable v;
-      Rng1U64 range;
+      String8 data;
+      U64 *tables_count_out;
+      DW2_OffsetTable **tables_out;
+      Rng1U64 **tables_ranges_out;
+    }
+    tasks[] =
+    {
+      {raw->sec[DW_Section_StrOffsets].data, &str_offsets_tables_count, &str_offsets_tables, &str_offsets_tables_ranges},
+      {raw->sec[DW_Section_RngLists].data, &rnglists_tables_count, &rnglists_tables, &rnglists_tables_ranges},
+      {raw->sec[DW_Section_Addr].data, &addr_tables_count, &addr_tables, &addr_tables_ranges},
     };
-    TableNode *first_table = 0;
-    TableNode *last_table = 0;
-    U64 table_count = 0;
-    for(U64 off = 0; off < raw->sec[DW_Section_StrOffsets].data.size;)
+    for EachElement(task_idx, tasks)
     {
-      U64 start_off = off;
-      DW2_StrOffsetsTable table = {0};
-      off += dw2_read_str_offsets_table(raw->sec[DW_Section_StrOffsets].data, off, &table);
-      if(table.entries != 0)
+      Temp scratch2 = scratch_begin(&scratch.arena, 1);
+      String8 data = tasks[task_idx].data;
+      
+      //- rjf: gather all tables (loose)
+      typedef struct TableNode TableNode;
+      struct TableNode
       {
-        TableNode *n = push_array(scratch2.arena, TableNode, 1);
-        SLLQueuePush(first_table, last_table, n);
-        n->v = table;
-        n->range = r1u64(start_off, off);
-        table_count += 1;
-      }
-      if(off == start_off)
+        TableNode *next;
+        DW2_OffsetTable v;
+        Rng1U64 range;
+      };
+      TableNode *first_table = 0;
+      TableNode *last_table = 0;
+      U64 table_count = 0;
+      for(U64 off = 0; off < data.size;)
       {
-        break;
+        U64 start_off = off;
+        DW2_OffsetTable table = {0};
+        off += dw2_read_offset_table(data, off, &table);
+        if(table.entries != 0)
+        {
+          TableNode *n = push_array(scratch2.arena, TableNode, 1);
+          SLLQueuePush(first_table, last_table, n);
+          n->v = table;
+          n->range = r1u64(start_off, off);
+          table_count += 1;
+        }
+        if(off == start_off)
+        {
+          break;
+        }
       }
+      
+      //- rjf: tighten
+      tasks[task_idx].tables_count_out[0] = table_count;
+      tasks[task_idx].tables_out[0] = push_array(scratch.arena, DW2_OffsetTable, table_count);
+      tasks[task_idx].tables_ranges_out[0] = push_array(scratch.arena, Rng1U64, table_count);
+      {
+        U64 idx = 0;
+        for EachNode(n, TableNode, first_table)
+        {
+          tasks[task_idx].tables_out[0][idx] = n->v;
+          tasks[task_idx].tables_ranges_out[0][idx] = n->range;
+          idx += 1;
+        }
+      }
+      
+      scratch_end(scratch2);
     }
-    
-    //- rjf: tighten
-    str_offsets_tables_count = table_count;
-    str_offsets_tables = push_array(scratch.arena, DW2_StrOffsetsTable, str_offsets_tables_count);
-    str_offsets_tables_ranges = push_array(scratch.arena, Rng1U64, str_offsets_tables_count);
-    {
-      U64 idx = 0;
-      for EachNode(n, TableNode, first_table)
-      {
-        str_offsets_tables[idx] = n->v;
-        str_offsets_tables_ranges[idx] = n->range;
-        idx += 1;
-      }
-    }
-    
-    scratch_end(scratch2);
   }
   lane_sync_u64(&str_offsets_tables_count, 0);
   lane_sync_u64(&str_offsets_tables, 0);
   lane_sync_u64(&str_offsets_tables_ranges, 0);
+  lane_sync_u64(&rnglists_tables_count, 0);
+  lane_sync_u64(&rnglists_tables, 0);
+  lane_sync_u64(&rnglists_tables_ranges, 0);
+  lane_sync_u64(&addr_tables_count, 0);
+  lane_sync_u64(&addr_tables, 0);
+  lane_sync_u64(&addr_tables_ranges, 0);
   
   ////////////////////////////
   //- rjf: build per-unit parsing contexts
@@ -531,17 +562,19 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   // so, in another incredible twist of fate, we actually must do this *twice*. first,
   // to find *just the StrOffsetsBase*, and then, to actually fully resolve everything.
   //
-  DW2_Tag *unit_root_tags__pre_str_offsets = 0;
+  // (all of the above is also true for RngListsBase)
+  //
+  DW2_Tag *unit_root_tags__pre_offset_tables = 0;
   {
     if(lane_idx() == 0)
     {
-      unit_root_tags__pre_str_offsets = push_array(scratch.arena, DW2_Tag, unit_count);
+      unit_root_tags__pre_offset_tables = push_array(scratch.arena, DW2_Tag, unit_count);
     }
-    lane_sync_u64(&unit_root_tags__pre_str_offsets, 0);
+    lane_sync_u64(&unit_root_tags__pre_offset_tables, 0);
     Rng1U64 range = lane_range(unit_count);
     for EachInRange(unit_idx, range)
     {
-      dw2_read_tag(scratch.arena, &unit_parse_ctxs[unit_idx], raw->sec[DW_Section_Info].data, unit_info_tag_ranges[unit_idx].min, &unit_root_tags__pre_str_offsets[unit_idx]);
+      dw2_read_tag(scratch.arena, &unit_parse_ctxs[unit_idx], raw->sec[DW_Section_Info].data, unit_info_tag_ranges[unit_idx].min, &unit_root_tags__pre_offset_tables[unit_idx]);
     }
   }
   lane_sync();
@@ -553,7 +586,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     Rng1U64 range = lane_range(unit_count);
     for EachInRange(unit_idx, range)
     {
-      DW2_Tag *unit_root_tag = &unit_root_tags__pre_str_offsets[unit_idx];
+      DW2_Tag *unit_root_tag = &unit_root_tags__pre_offset_tables[unit_idx];
       DW2_Attrib *low_pc_attrib = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_LowPc);
       U64 low_pc = low_pc_attrib->val.u128.u64[0];
       unit_parse_ctxs[unit_idx].unit_base_addr = low_pc;
@@ -562,22 +595,52 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   lane_sync();
   
   ////////////////////////////
-  //- rjf: look up string offset tables for each unit (.debug_str_offsets);
+  //- rjf: look up offset tables for each unit (.debug_str_offsets, .debug_rnglists, etc.);
   // equip to per-unit parsing contexts
   //
   {
+    Rng1U64Array rnglists_tables_ranges_array = {rnglists_tables_ranges, rnglists_tables_count};
     Rng1U64Array str_offsets_tables_ranges_array = {str_offsets_tables_ranges, str_offsets_tables_count};
+    Rng1U64Array addr_tables_ranges_array = {addr_tables_ranges, addr_tables_count};
     Rng1U64 range = lane_range(unit_count);
     for EachInRange(unit_idx, range)
     {
-      DW2_Tag *unit_root_tag = &unit_root_tags__pre_str_offsets[unit_idx];
-      DW2_Attrib *str_offsets_base_off_attrib = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StrOffsetsBase);
-      U64 str_offsets_base_off = str_offsets_base_off_attrib->val.u128.u64[0];
-      U64 str_offsets_table_num = rng1u64_array_num_from_value__binary_search(&str_offsets_tables_ranges_array, str_offsets_base_off);
-      if(0 < str_offsets_table_num && str_offsets_table_num <= str_offsets_tables_ranges_array.count)
+      DW2_Tag *unit_root_tag = &unit_root_tags__pre_offset_tables[unit_idx];
+      
+      // rjf: find rnglists table
       {
-        DW2_StrOffsetsTable *table = &str_offsets_tables[str_offsets_table_num-1];
-        unit_parse_ctxs[unit_idx].str_offsets_table = table;
+        DW2_Attrib *rnglists_base_off_attrib = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_RngListsBase);
+        U64 rnglists_base_off = rnglists_base_off_attrib->val.u128.u64[0];
+        U64 rnglists_table_num = rng1u64_array_num_from_value__binary_search(&rnglists_tables_ranges_array, rnglists_base_off);
+        if(0 < rnglists_table_num && rnglists_table_num <= rnglists_tables_ranges_array.count)
+        {
+          DW2_OffsetTable *table = &rnglists_tables[rnglists_table_num-1];
+          unit_parse_ctxs[unit_idx].rnglists_table = table;
+        }
+      }
+      
+      // rjf: find str offsets table
+      {
+        DW2_Attrib *str_offsets_base_off_attrib = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StrOffsetsBase);
+        U64 str_offsets_base_off = str_offsets_base_off_attrib->val.u128.u64[0];
+        U64 str_offsets_table_num = rng1u64_array_num_from_value__binary_search(&str_offsets_tables_ranges_array, str_offsets_base_off);
+        if(0 < str_offsets_table_num && str_offsets_table_num <= str_offsets_tables_ranges_array.count)
+        {
+          DW2_OffsetTable *table = &str_offsets_tables[str_offsets_table_num-1];
+          unit_parse_ctxs[unit_idx].str_offsets_table = table;
+        }
+      }
+      
+      // rjf: find addr table
+      {
+        DW2_Attrib *addr_base_off_attrib = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_AddrBase);
+        U64 addr_base_off = addr_base_off_attrib->val.u128.u64[0];
+        U64 addr_table_num = rng1u64_array_num_from_value__binary_search(&addr_tables_ranges_array, addr_base_off);
+        if(0 < addr_table_num && addr_table_num <= addr_tables_ranges_array.count)
+        {
+          DW2_OffsetTable *table = &addr_tables[addr_table_num-1];
+          unit_parse_ctxs[unit_idx].addr_table = table;
+        }
       }
     }
   }
