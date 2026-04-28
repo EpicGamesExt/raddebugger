@@ -117,15 +117,32 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   DLLPushBack(os_lnx_gfx_state->first_window, os_lnx_gfx_state->last_window, w);
   
   //- rjf: create window & equip with x11 info
+  Visual *visual = os_lnx_gfx_state->window_visual;
+  int depth = os_lnx_gfx_state->window_depth;
+  Colormap colormap = os_lnx_gfx_state->window_colormap;
+  unsigned long attr_mask = 0;
+  XSetWindowAttributes window_attribs = {0};
+  if(visual == 0)
+  {
+    visual = (Visual *)CopyFromParent;
+    depth = CopyFromParent;
+  }
+  else
+  {
+    window_attribs.background_pixmap = None;
+    window_attribs.border_pixel = 0;
+    window_attribs.colormap = colormap;
+    attr_mask = CWBackPixmap|CWBorderPixel|CWColormap;
+  }
   w->window = XCreateWindow(os_lnx_gfx_state->display,
                             XDefaultRootWindow(os_lnx_gfx_state->display),
                             0, 0, resolution.x, resolution.y,
                             0,
-                            CopyFromParent,
+                            depth,
                             InputOutput,
-                            CopyFromParent,
-                            0,
-                            0);
+                            visual,
+                            attr_mask,
+                            &window_attribs);
   XSelectInput(os_lnx_gfx_state->display, w->window,
                ExposureMask|
                PointerMotionMask|
@@ -159,7 +176,7 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   String8 title_copy = push_str8_copy(scratch.arena, title);
   XStoreName(os_lnx_gfx_state->display, w->window, (char *)title_copy.str);
   scratch_end(scratch);
-  
+
   //- rjf: convert to handle & return
   OS_Handle handle = {(U64)w};
   return handle;
@@ -190,6 +207,7 @@ os_window_first_paint(OS_Handle handle)
   if(os_handle_match(handle, os_handle_zero())) {return;}
   OS_LNX_Window *w = (OS_LNX_Window *)handle.u64[0];
   XMapWindow(os_lnx_gfx_state->display, w->window);
+  XFlush(os_lnx_gfx_state->display);
 }
 
 internal void

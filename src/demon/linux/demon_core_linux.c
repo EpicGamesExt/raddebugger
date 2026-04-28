@@ -424,10 +424,64 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
       Assert(0 && "failed to read hash table's chain count out of HASH");
     }
   }
-  else
+  else if(dynamic_info.gnu_hash_vaddr)
   {
-    // TODO: extract count from GNU_HASH
-    NotImplemented;
+    // GNU_HASH header: u32 nbuckets, u32 symoffset, u32 bloom_size, u32 bloom_shift,
+    // followed by bloom[bloom_size] (word size = 4 on 32-bit ELF, 8 on 64-bit),
+    // buckets[nbuckets] (u32), chains[...] (u32, terminated by entry w/ LSB set).
+    U32 gnu_header[4] = {0};
+    if(dmn_lnx_read(memory_fd, r1u64(dynamic_info.gnu_hash_vaddr, dynamic_info.gnu_hash_vaddr + sizeof(gnu_header)), gnu_header) == sizeof(gnu_header))
+    {
+      U32 nbuckets    = gnu_header[0];
+      U32 symoffset   = gnu_header[1];
+      U32 bloom_size  = gnu_header[2];
+      U64 bloom_word  = (elf_class == ELF_Class_64) ? 8 : 4;
+      U64 buckets_vaddr = dynamic_info.gnu_hash_vaddr + sizeof(gnu_header) + bloom_size * bloom_word;
+      U64 chain_vaddr   = buckets_vaddr + (U64)nbuckets * sizeof(U32);
+
+      // find largest symbol index referenced by any bucket
+      U32 max_bucket = 0;
+      for(U32 b = 0; b < nbuckets; b += 1)
+      {
+        U32 entry = 0;
+        if(dmn_lnx_read(memory_fd, r1u64(buckets_vaddr + b*sizeof(U32), buckets_vaddr + (b+1)*sizeof(U32)), &entry) != sizeof(U32))
+        {
+          break;
+        }
+        if(entry > max_bucket) { max_bucket = entry; }
+      }
+
+      if(max_bucket < symoffset)
+      {
+        // no symbols in hash; total count is symoffset
+        symbol_count = symoffset;
+      }
+      else
+      {
+        // walk chain from max_bucket until terminator (entry w/ LSB set)
+        U64 idx = max_bucket;
+        for(;;)
+        {
+          U32 chain_entry = 0;
+          U64 entry_vaddr = chain_vaddr + (idx - symoffset) * sizeof(U32);
+          if(dmn_lnx_read(memory_fd, r1u64(entry_vaddr, entry_vaddr + sizeof(U32)), &chain_entry) != sizeof(U32))
+          {
+            break;
+          }
+          if(chain_entry & 1)
+          {
+            symbol_count = idx + 1;
+            break;
+          }
+          idx += 1;
+          if(idx - max_bucket > (1u<<24))
+          {
+            // sanity bound: don't loop forever on a corrupt chain
+            break;
+          }
+        }
+      }
+    }
   }
   
   // scan symbol table for the rendezvous symbol

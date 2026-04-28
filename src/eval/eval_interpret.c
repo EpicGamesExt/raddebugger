@@ -938,23 +938,45 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_CallSiteValue:
       {
-        NotImplemented;
+        // DW_OP_entry_value: requires evaluating the embedded sub-bytecode
+        // in this frame's entry-time register state (i.e. caller's state
+        // at the call instruction). that state is not currently plumbed
+        // into the eval context. interpreting in the current ctx gives
+        // wrong values for spilled args, so report BadOp instead.
+        // skip past the embedded sub-bytecode in the outer stream so the
+        // bytes are not interpreted as outer ops on resume.
+        U32 sub_size = imm.u32;
+        if(ptr + sub_size <= opl)
+        {
+          ptr += sub_size;
+        }
+        result.code = E_InterpretationCode_BadOp;
+        goto done;
       }break;
-      
+
       case RDI_EvalOp_PartialValue:
       {
-        NotImplemented;
+        // DW_OP_piece marker: top-of-stack is a piece of a composite value.
+        // we do not assemble composites; for single-piece expressions the
+        // value already on the stack is the result. for multi-piece, only
+        // the first piece is returned (stack[0] is the final result).
       }break;
-      
+
       case RDI_EvalOp_PartialValueBit:
       {
-        NotImplemented;
+        // DW_OP_bit_piece marker. same caveat as PartialValue.
       }break;
-      
+
       case RDI_EvalOp_Swap:
       {
-        // TODO: add support for pushing multiple values onto the stack
-        NotImplemented;
+        if(stack_count + 2 > stack_cap)
+        {
+          result.code = E_InterpretationCode_InsufficientStackSpace;
+          goto done;
+        }
+        stack[stack_count + 0] = svals[1];
+        stack[stack_count + 1] = svals[0];
+        stack_count += 2;
       }break;
       
       case RDI_EvalOp_PushCfa:

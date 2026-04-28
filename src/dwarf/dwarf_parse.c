@@ -2696,34 +2696,46 @@ dw_path_from_file(Arena *arena, String8Array dir_table, DW_LineFile *file)
   Assert(dir_table.count > 0);
   
   // find directory and file name associated with the file index
-  String8 dir  = dir_table.v[file->dir_idx];
-  String8 path = file->path;
-  
-  // infer path style if directory is empty use file name
-  PathStyle style = path_style_from_str8(dir);
-  if (style == PathStyle_Null || style == PathStyle_Relative) {
-    style = path_style_from_str8(file->path);
+  String8 dir       = dir_table.v[file->dir_idx];
+  String8 comp_dir  = dir_table.v[0];
+
+  // DWARFv5 sec 6.2.4: dir 0 is the current directory of the compilation;
+  // each additional dir entry is either a full path or is relative to dir 0.
+  // prepend dir 0 only when the chosen dir is non-zero and not absolute.
+  PathStyle dir_style      = path_style_from_str8(dir);
+  PathStyle comp_dir_style = path_style_from_str8(comp_dir);
+  B32 dir_is_relative      = (dir_style == PathStyle_Null || dir_style == PathStyle_Relative);
+  B32 prepend_comp_dir     = (file->dir_idx != 0 && dir_is_relative);
+
+  PathStyle style = dir_style;
+  if (prepend_comp_dir) {
+    style = comp_dir_style;
   }
-  
+  if (style == PathStyle_Null || style == PathStyle_Relative) {
+    PathStyle file_style = path_style_from_str8(file->path);
+    if (file_style != PathStyle_Null && file_style != PathStyle_Relative) {
+      style = file_style;
+    }
+  }
+
   String8List path_list = {0};
   {
-    // directories that start with ".." are relative to the compile unit directory
-    if (str8_match_lit("..", dir, StringMatchFlag_RightSideSloppy)) {
-      String8List comp_dir = str8_split_path(scratch.arena, dir_table.v[0]);
-      str8_list_concat_in_place(&path_list, &comp_dir);
+    if (prepend_comp_dir) {
+      String8List comp_dir_list = str8_split_path(scratch.arena, comp_dir);
+      str8_list_concat_in_place(&path_list, &comp_dir_list);
     }
-    
+
     // push directory
     String8List dir_list = str8_split_path(scratch.arena, dir);
     str8_list_concat_in_place(&path_list, &dir_list);
-    
+
     // push file name
     str8_list_push(scratch.arena, &path_list, file->path);
-    
+
     // resolve dots in the path
     str8_path_list_resolve_dots_in_place(&path_list, style);
   }
-  
+
   // join path
   String8 result = str8_path_list_join_by_style(arena, &path_list, style);
   
