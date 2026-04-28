@@ -900,3 +900,65 @@ dw2_read_str_offsets_table(String8 data, U64 off, DW2_StrOffsetsTable *out)
   U64 bytes_read = (off - start_off);
   return bytes_read;
 }
+
+////////////////////////////////
+//~ rjf: Range List Parsing (.debug_rnglists)
+
+internal Rng1U64List
+dw2_rnglist_from_form_val(Arena *arena, DW2_ParseCtx *ctx, DW_Raw *raw, DW2_FormVal form_val)
+{
+  Rng1U64List result = {0};
+  switch((DW_VersionEnum)ctx->version)
+  {
+    case DW_Version_Null:{}break;
+    
+    //- rjf: pre-dwarf5
+    case DW_Version_1:
+    case DW_Version_2:
+    case DW_Version_3:
+    case DW_Version_4:
+    {
+      String8 data = raw->sec[DW_Section_Ranges].data;
+      U64 ranges_off = ranges_off = form_val.u128.u64[0];;
+      U64 base_addr = ctx->unit_base_addr;
+      U64 sentinel = (ctx->addr_size == 4 ? max_U32 : max_U64);
+      for(U64 off = ranges_off; off < data.size;)
+      {
+        U64 start_off = off;
+        U64 range_min = 0;
+        U64 range_opl = 0;
+        off += str8_deserial_read(data, off, &range_min, ctx->addr_size, ctx->addr_size);
+        off += str8_deserial_read(data, off, &range_opl, ctx->addr_size, ctx->addr_size);
+        //
+        // NOTE(rjf): interpreting tuples:
+        // [0, 0) -> ending range list
+        // [max_U32/U64, depending on addr size, X) -> set new base address to X
+        // [N, M) -> new [base + N, base + M) range
+        //
+        if(range_min == 0 && range_opl == 0)
+        {
+          break;
+        }
+        else if(range_min == sentinel)
+        {
+          base_addr = range_opl;
+        }
+        else if(off == start_off)
+        {
+          break;
+        }
+        else
+        {
+          rng1u64_list_push(arena, &result, r1u64(base_addr + range_min, base_addr + range_opl));
+        }
+      }
+    }break;
+    
+    //- rjf: @dwarf5
+    case DW_Version_5:
+    {
+      // TODO(rjf)
+    }break;
+  }
+  return result;
+}

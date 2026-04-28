@@ -78,47 +78,62 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   }
   
   ////////////////////////////
-  //- rjf: gather unit ranges from .debug_info
+  //- rjf: gather unit ranges from .debug_info, .debug_aranges
   //
   Rng1U64Array *unit_info_ranges = 0;
-  ProfScope("gather unit ranges from .debug_info") if(lane_idx() == 0)
+  Rng1U64Array *unit_arange_ranges = 0;
+  ProfScope("gather unit ranges from .debug_info, .debug_aranges") if(lane_idx() == 0)
   {
-    Temp scratch2 = scratch_begin(&scratch.arena, 1);
-    String8 data = raw->sec[DW_Section_Info].data;
-    Rng1U64List unit_info_ranges_list = {0};
-    for(U64 off = 0; off < data.size;)
+    struct
     {
-      U64 start_off = off;
-      
-      // rjf: read next unit info size
-      U64 unit_info_size = 0;
-      U64 unit_info_size_size = dw2_read_initial_length(data, off, &unit_info_size, 0);
-      
-      // rjf: push
-      if(unit_info_size > 0)
-      {
-        rng1u64_list_push(scratch2.arena, &unit_info_ranges_list, r1u64(off, off + unit_info_size_size + unit_info_size));
-      }
-      
-      // rjf: advance
-      off += unit_info_size_size;
-      off += unit_info_size;
-      
-      // rjf: break if no movement
-      if(off == start_off)
-      {
-        break;
-      }
+      String8 data;
+      Rng1U64Array **dst_array;
     }
-    unit_info_ranges = push_array(scratch.arena, Rng1U64Array, 1);
-    unit_info_ranges[0] = rng1u64_array_from_list(scratch.arena, &unit_info_ranges_list);
-    scratch_end(scratch2);
+    tasks[] =
+    {
+      {raw->sec[DW_Section_Info].data,    &unit_info_ranges},
+      {raw->sec[DW_Section_ARanges].data, &unit_arange_ranges},
+    };
+    for EachElement(task_idx, tasks)
+    {
+      Temp scratch2 = scratch_begin(&scratch.arena, 1);
+      String8 data = tasks[task_idx].data;
+      Rng1U64List unit_range_list = {0};
+      for(U64 off = 0; off < data.size;)
+      {
+        U64 start_off = off;
+        
+        // rjf: read next unit size
+        U64 unit_size = 0;
+        U64 unit_size_size = dw2_read_initial_length(data, off, &unit_size, 0);
+        
+        // rjf: push
+        if(unit_size > 0)
+        {
+          rng1u64_list_push(scratch2.arena, &unit_range_list, r1u64(off, off + unit_size_size + unit_size));
+        }
+        
+        // rjf: advance
+        off += unit_size_size;
+        off += unit_size;
+        
+        // rjf: break if no movement
+        if(off == start_off)
+        {
+          break;
+        }
+      }
+      tasks[task_idx].dst_array[0] = push_array(scratch.arena, Rng1U64Array, 1);
+      tasks[task_idx].dst_array[0][0] = rng1u64_array_from_list(scratch.arena, &unit_range_list);
+      scratch_end(scratch2);
+    }
   }
   lane_sync_u64(&unit_info_ranges, 0);
+  lane_sync_u64(&unit_arange_ranges, 0);
   U64 unit_count = unit_info_ranges->count;
   
   ////////////////////////////
-  //- rjf: parse all unit headers
+  //- rjf: parse all .debug_info unit headers
   //
   DW2_UnitHeader *unit_headers = 0;
   Rng1U64 *unit_info_tag_ranges = 0;
@@ -141,6 +156,148 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       Rng1U64 unit_info_range = unit_info_ranges->v[idx];
       U64 bytes_read = dw2_read_unit_header(str8_substr(data, unit_info_range), 0, &unit_headers[idx]);
       unit_info_tag_ranges[idx] = r1u64(unit_info_range.min + bytes_read, unit_info_range.max);
+    }
+  }
+  lane_sync();
+  
+  ////////////////////////////
+  //- rjf: parse all units from .debug_aranges
+  //
+  U64 *arange_info_offs = 0;
+  RDIM_Rng1U64ChunkList *arange_voff_ranges = 0;
+  {
+    if(lane_idx() == 0)
+    {
+      arange_info_offs = push_array(scratch.arena, U64, unit_arange_ranges->count);
+      arange_voff_ranges = push_array(scratch.arena, RDIM_Rng1U64ChunkList, unit_arange_ranges->count);
+    }
+    lane_sync_u64(&arange_info_offs, 0);
+    lane_sync_u64(&arange_voff_ranges, 0);
+    U64 unit_take_idx_ = 0;
+    U64 *unit_take_idx_ptr = &unit_take_idx_;
+    lane_sync_u64(&unit_take_idx_ptr, 0);
+    String8 data = raw->sec[DW_Section_ARanges].data;
+    for(;;)
+    {
+      // rjf: take unit
+      U64 unit_idx = ins_atomic_u64_inc_eval(unit_take_idx_ptr)-1;
+      if(unit_idx >= unit_arange_ranges->count)
+      {
+        break;
+      }
+      
+      // rjf: unpack
+      Rng1U64 arange_range = unit_arange_ranges->v[unit_idx];
+      U64 off = arange_range.min;
+      
+      // rjf: read unit data size / format
+      U64 unit_size = 0;
+      DW_Format fmt = 0;
+      off += dw2_read_initial_length(data, off, &unit_size, &fmt);
+      U64 unit_opl = off + unit_size;
+      
+      // rjf: read version
+      DW_Version version = 0;
+      U64 version_off = off;
+      off += str8_deserial_read_struct(data, off, &version);
+      
+      // rjf: warn on non-version 2
+      if(version != DW_Version_2)
+      {
+        log_infof("[.debug_aranges@0x%I64x] DWARF version for unit #%I64d was expected to be 2, but it was read as %i.\n", version_off, unit_idx, (S32)version);
+      }
+      
+      // rjf: read .debug_info off for this unit
+      U64 info_off = 0;
+      off += dw2_read_fmt_u64(data, off, fmt, &info_off);
+      
+      // rjf: read address / segment selector size
+      U8 addr_size = 0;
+      U8 segment_selector_size = 0;
+      off += str8_deserial_read_struct(data, off, &addr_size);
+      off += str8_deserial_read_struct(data, off, &segment_selector_size);
+      
+      // rjf: round up past padding
+      {
+        U64 tuple_size = addr_size*2 + segment_selector_size;
+        off += tuple_size - (off%tuple_size);
+      }
+      
+      // rjf: parse ranges
+      RDIM_Rng1U64ChunkList voff_ranges = {0};
+      if(segment_selector_size != 0)
+      {
+        log_infof("[.debug_aranges@0x%I64x] Non-zero (%i) segment selector size parsed; this form of addressing is not currently supported in DWARF info.\n", off, (S32)segment_selector_size);
+      }
+      else for(;off < unit_opl;)
+      {
+        U64 start_off = off;
+        U64 base_addr = 0;
+        U64 range_size = 0;
+        off += str8_deserial_read(data, off, &base_addr, addr_size, addr_size);
+        off += str8_deserial_read(data, off, &range_size, addr_size, addr_size);
+        if(base_addr == 0 && range_size == 0)
+        {
+          break;
+        }
+        if(base_addr < base_vaddr)
+        {
+          log_infof("[.debug_aranges@0x%I64x] Address (0x%I64x) parsed which was less than the image base address (0x%I64x). Skipping.\n", start_off, base_addr, base_vaddr);
+        }
+        else
+        {
+          U64 voff_first = (base_addr - base_vaddr);
+          U64 voff_opl = voff_first + range_size;
+          RDIM_Rng1U64 range = {voff_first, voff_opl};
+          rdim_rng1u64_chunk_list_push(scratch.arena, &voff_ranges, 256, range);
+        }
+        if(off == start_off)
+        {
+          break;
+        }
+      }
+      
+      // rjf: store
+      arange_info_offs[unit_idx] = info_off;
+      arange_voff_ranges[unit_idx] = voff_ranges;
+    }
+    lane_sync();
+  }
+  
+  ////////////////////////////
+  //- rjf: produce info_off -> list(voff_range) map from aranges units;
+  // we must do this because technically we can't guarantee that unit_idxs
+  // inside of .debug_aranges are the same as unit_idxs inside of .debug_info,
+  // nor can we guarantee that they'd be in the same order, so we need to
+  // correllate via the encoded .debug_info offset from .debug_aranges.
+  //
+  // more excellence.
+  //
+  typedef struct D2R2_ARangeUnitNode D2R2_ARangeUnitNode;
+  struct D2R2_ARangeUnitNode
+  {
+    D2R2_ARangeUnitNode *next;
+    U64 info_off;
+    RDIM_Rng1U64ChunkList *ranges;
+  };
+  U64 arange_unit_from_info_off_map_slots_count = unit_arange_ranges->count;
+  D2R2_ARangeUnitNode **arange_unit_from_info_off_map_slots = 0;
+  {
+    if(lane_idx() == 0)
+    {
+      arange_unit_from_info_off_map_slots = push_array(scratch.arena, D2R2_ARangeUnitNode *, arange_unit_from_info_off_map_slots_count);
+    }
+    lane_sync_u64(&arange_unit_from_info_off_map_slots, 0);
+    for EachIndex(arange_unit_idx, unit_arange_ranges->count)
+    {
+      U64 info_off = arange_info_offs[arange_unit_idx];
+      RDIM_Rng1U64ChunkList *ranges = &arange_voff_ranges[arange_unit_idx];
+      U64 hash = u64_hash_from_str8(str8_struct(&info_off));
+      U64 slot_idx = hash%arange_unit_from_info_off_map_slots_count;
+      D2R2_ARangeUnitNode *n = push_array(scratch.arena, D2R2_ARangeUnitNode, 1);
+      SLLStackPush(arange_unit_from_info_off_map_slots[slot_idx], n);
+      n->info_off = info_off;
+      n->ranges = ranges;
     }
   }
   lane_sync();
@@ -385,6 +542,21 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     for EachInRange(unit_idx, range)
     {
       dw2_read_tag(scratch.arena, &unit_parse_ctxs[unit_idx], raw->sec[DW_Section_Info].data, unit_info_tag_ranges[unit_idx].min, &unit_root_tags__pre_str_offsets[unit_idx]);
+    }
+  }
+  lane_sync();
+  
+  ////////////////////////////
+  //- rjf: look up base addresses for each unit - equip to per-unit parsing contexts
+  //
+  {
+    Rng1U64 range = lane_range(unit_count);
+    for EachInRange(unit_idx, range)
+    {
+      DW2_Tag *unit_root_tag = &unit_root_tags__pre_str_offsets[unit_idx];
+      DW2_Attrib *low_pc_attrib = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_LowPc);
+      U64 low_pc = low_pc_attrib->val.u128.u64[0];
+      unit_parse_ctxs[unit_idx].unit_base_addr = low_pc;
     }
   }
   lane_sync();
@@ -1836,7 +2008,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                   {
                     if(dw_is_form_kind_ref(unit_parse_ctx->version, unit_parse_ctx->ext, lower_bound_attrib->val.kind))
                     {
-                      log_infof("[.debug_info@%I64x] Array type lower bound is a variable; this is not currently supported.\n", start_off);
+                      log_infof("[.debug_info@0x%I64x] Array type lower bound is a variable; this is not currently supported.\n", start_off);
                     }
                     else
                     {
@@ -1855,7 +2027,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                     {
                       if(dw_is_form_kind_ref(unit_parse_ctx->version, unit_parse_ctx->ext, upper_bound_attrib->val.kind))
                       {
-                        log_infof("[.debug_info@%I64x] Array type upper bound is a variable; this is not currently supported.\n", start_off);
+                        log_infof("[.debug_info@0x%I64x] Array type upper bound is a variable; this is not currently supported.\n", start_off);
                       }
                       else
                       {
@@ -1993,6 +2165,9 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       DW2_Attrib *comp_dir_attrib = &dw2_attrib_nil;
       DW2_Attrib *producer_attrib = &dw2_attrib_nil;
       DW2_Attrib *lang_attrib = &dw2_attrib_nil;
+      DW2_Attrib *ranges_attrib = &dw2_attrib_nil;
+      DW2_Attrib *lopc_attrib = &dw2_attrib_nil;
+      DW2_Attrib *hipc_attrib = &dw2_attrib_nil;
       for EachNode(n, DW2_AttribNode, unit_root_tag->attribs.first)
       {
         switch(n->v.attrib_kind)
@@ -2003,6 +2178,9 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           Case(comp_dir, CompDir);
           Case(producer, Producer);
           Case(lang,     Language);
+          Case(ranges,   Ranges);
+          Case(lopc,     LowPc);
+          Case(hipc,     HighPc);
 #undef Case
         }
       }
@@ -2034,6 +2212,46 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         }
       }
       
+      //- rjf: get unit's ranges from .debug_aranges parse artifacts, if we have them
+      RDIM_Rng1U64ChunkList unit_voff_ranges = {0};
+      if(arange_unit_from_info_off_map_slots_count != 0)
+      {
+        U64 unit_info_off = unit_info_ranges->v[unit_idx].min;
+        U64 hash = u64_hash_from_str8(str8_struct(&unit_info_off));
+        U64 slot_idx = hash%arange_unit_from_info_off_map_slots_count;
+        for(D2R2_ARangeUnitNode *n = arange_unit_from_info_off_map_slots[slot_idx]; n != 0; n = n->next)
+        {
+          if(n->info_off == unit_info_off)
+          {
+            unit_voff_ranges = n->ranges[0];
+            break;
+          }
+        }
+      }
+      
+      //- rjf: if we have no voff ranges from .debug_aranges, then we need to extract
+      // this info from the unit root rag instead (via ranges & low-pc/high-pc tags)
+      if(unit_voff_ranges.total_count == 0)
+      {
+        // rjf: gather ranges from a ranges attribute
+        if(ranges_attrib != &dw2_attrib_nil)
+        {
+          Rng1U64List ranges = dw2_rnglist_from_form_val(scratch.arena, unit_parse_ctx, raw, ranges_attrib->val);
+          for EachNode(n, Rng1U64Node, ranges.first)
+          {
+            rdim_rng1u64_chunk_list_push(arena, &unit_voff_ranges, 256, (RDIM_Rng1U64){n->v.min - base_vaddr, n->v.max - base_vaddr});
+          }
+        }
+        
+        // rjf: gather contiguous range from low-pc / high-pc attribute
+        if(lopc_attrib != &dw2_attrib_nil && hipc_attrib != &dw2_attrib_nil)
+        {
+          U64 voff_base = lopc_attrib->val.u128.u64[0] - base_vaddr;
+          U64 voff_opl  = hipc_attrib->val.u128.u64[0] - base_vaddr;
+          rdim_rng1u64_chunk_list_push(arena, &unit_voff_ranges, 256, (RDIM_Rng1U64){voff_base, voff_opl});
+        }
+      }
+      
       //- rjf: fill top-level unit info
       {
         dst_unit->unit_name     = unit_name;
@@ -2044,6 +2262,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         dst_unit->build_path    = unit_comp_dir;
         dst_unit->language      = unit_lang;
         dst_unit->line_table    = unit_line_tables[unit_idx];
+        dst_unit->voff_ranges   = unit_voff_ranges;
       }
       
       //- rjf: produce all unit symbols
@@ -2119,7 +2338,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   RDIM_BakeParams result = {0};
   {
     result.subset_flags    = params->subset_flags;
-    // TODO(rjf): result.top_level_info  = *top_level_info;
+    result.top_level_info  = top_level_info;
     // TODO(rjf): result.binary_sections = *binary_sections;
     result.units           = *all_units;
     result.types           = *all_types;

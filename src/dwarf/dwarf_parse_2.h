@@ -62,6 +62,7 @@ struct DW2_ParseCtx
   DW_Format format;
   DW_Ext ext;
   U64 addr_size;
+  U64 unit_base_addr;
   DW2_AbbrevMap *abbrev_map;
   DW2_StrOffsetsTable *str_offsets_table;
   String8 unit_dir;
@@ -236,5 +237,10 @@ internal U64 dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8
 //~ rjf: String Offset Table Parsing (.debug_str_offsets)
 
 internal U64 dw2_read_str_offsets_table(String8 data, U64 off, DW2_StrOffsetsTable *out);
+
+////////////////////////////////
+//~ rjf: Range List Parsing (.debug_rnglists)
+
+internal Rng1U64List dw2_rnglist_from_form_val(Arena *arena, DW2_ParseCtx *ctx, DW_Raw *raw, DW2_FormVal form_val);
 
 #endif // DWARF_PARSE_2_H

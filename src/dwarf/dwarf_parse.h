@@ -8,7 +8,7 @@ typedef struct DW_Section
 {
   String8 name;
   String8 data;
-  B32     is_dwo;
+  B32 is_dwo;
 } DW_Section;
 
 typedef struct DW_Raw

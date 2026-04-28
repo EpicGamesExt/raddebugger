@@ -872,9 +872,9 @@ rb_thread_entry_point(void *p)
                 convert_params_2.base_vaddr = elf_base_addr_from_bin(&bin);
                 convert_params_2.raw = dw_input_from_elf_bin(scratch.arena, dbg_data, &bin);
                 convert_params_2.path_style = PathStyle_UnixAbsolute;
-                convert_params_2.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, bin.shdrs);
+                convert_params_2.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, dbg_data, &bin, &bin.shdrs);
                 scratch_end(scratch);
-              } break;
+              }break;
             }
             convert_params_2.exe_name = exe_name;
             convert_params_2.exe_data = exe_data;
@@ -956,8 +956,8 @@ rb_thread_entry_point(void *p)
       {
         bake_params = push_array(arena, RDIM_BakeParams, 1);
         rdim_bake_params_concat_in_place(bake_params, &pdb_bake_params);
-        rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params);
-        // rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params_2);
+        // rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params);
+        rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params_2);
         for EachNode(n, RDIM_BakeParamsNode, first_rdi_bake_params)
         {
           rdim_bake_params_concat_in_place(bake_params, &n->v);
@@ -1404,7 +1404,7 @@ rb_thread_entry_point(void *p)
         PE_BinInfo          pe                 = {0};
         ELF_Bin             elf                = {0};
         COFF_FileHeaderInfo coff_obj           = {0};
-        DW_Raw            dw                 = {0};
+        DW_Raw              dw                 = {0};
         U64                 eh_frame_hdr_vaddr = 0;
         U64                 eh_frame_vaddr     = 0;
         String8             eh_frame_hdr       = {0};

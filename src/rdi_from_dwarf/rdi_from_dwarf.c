@@ -2753,7 +2753,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         input      = dw_input_from_elf_bin(scratch.arena, params->dbg_data, &bin);
         path_style = PathStyle_UnixAbsolute;
         
-        g_d2r_shared.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, bin.shdrs);
+        g_d2r_shared.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, params->dbg_data, &bin, &bin.shdrs);
       } break;
       default: { InvalidPath; } break;
     }

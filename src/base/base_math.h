@@ -339,9 +339,9 @@ struct Rng1U64Node
 typedef struct Rng1U64List Rng1U64List;
 struct Rng1U64List
 {
-  U64 count;
   Rng1U64Node *first;
   Rng1U64Node *last;
+  U64 count;
 };
 
 typedef struct Rng1U64Array Rng1U64Array;

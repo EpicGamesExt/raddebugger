@@ -10,22 +10,22 @@
 typedef struct ELF_Shdr64Array ELF_Shdr64Array;
 struct ELF_Shdr64Array
 {
-  U64         count;
+  U64 count;
   ELF_Shdr64 *v;
 };
 
 typedef struct ELF_Phdr64Array ELF_Phdr64Array;
 struct ELF_Phdr64Array
 {
-  U64         count;
+  U64 count;
   ELF_Phdr64 *v;
 };
 
 typedef struct ELF_Bin ELF_Bin;
 struct ELF_Bin
 {
-  ELF_Hdr64       hdr;
-  Rng1U64         sh_name_range;
+  ELF_Hdr64 hdr;
+  Rng1U64 sh_name_range;
   ELF_Shdr64Array shdrs;
   ELF_Phdr64Array phdrs;
 };
@@ -34,30 +34,30 @@ typedef struct ELF_GnuDebugLink ELF_GnuDebugLink;
 struct ELF_GnuDebugLink
 {
   String8 path;
-  U32     checksum;
+  U32 checksum;
 };
 
 typedef struct ELF_Note ELF_Note;
 struct ELF_Note
 {
-  String8      owner;
+  String8 owner;
   ELF_NoteType type;
-  String8      desc;
+  String8 desc;
 };
 
 typedef struct ELF_NoteNode ELF_NoteNode;
 struct ELF_NoteNode
 {
-  ELF_Note      v;
   ELF_NoteNode *next;
+  ELF_Note v;
 };
 
 typedef struct ELF_NoteList ELF_NoteList;
 struct ELF_NoteList
 {
-  U64           count;
   ELF_NoteNode *first;
   ELF_NoteNode *last;
+  U64 count;
 };
 
 ////////////////////////////////
