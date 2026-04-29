@@ -4905,7 +4905,7 @@ TEST(debug_p_sig_mismatch)
   String8 b_obj_path    = t_make_file_path(arena, str8_lit("b.obj"));
   String8 expected_line = str8f(arena, "Error(%03d): %S: PCH signature mismatch, expected 0x%x got 0x%x; PCH obj %S", LNK_Error_PrecompSigMismatch, b_obj_path, b_sig, a_sig, a_obj_path);
 
-  String8 output = g_output;
+  String8 output = g_errors;
   while (output.size) {
     String8 line = t_chop_line(&output);
     found_error = str8_match(line, expected_line, StringMatchFlag_CaseInsensitive);
@@ -5014,7 +5014,7 @@ TEST(debug_p_and_debug_t_in_obj)
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full pch.obj entry.obj");
   T_Ok(g_last_exit_code == 0);
 
-  String8 output        = g_output;
+  String8 output        = g_errors;
   B32     found_warning = 0;
   String8 pch_obj_path  = t_make_file_path(arena, str8_lit("pch.obj"));
   String8 expected_line = str8f(arena, "Warning(%03d): %S: multiple sections with debug types detected, obj must have either .debug$T or .debug$P; discarding both sections", LNK_Warning_MultipleDebugTAndDebugP, pch_obj_path);
@@ -5421,7 +5421,7 @@ TEST(cyclic_type)
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full /rad_ignore:-%u cycle.obj entry.obj", LNK_Error_InvalidTypeIndex);
   T_Ok(g_last_exit_code == 0);
 
-  String8 output            = g_output;
+  String8 output            = g_errors;
   B32     is_cycle_detected = 0;
   while (output.size && !is_cycle_detected) {
     is_cycle_detected = t_match_linef(&output,
@@ -5898,7 +5898,7 @@ TEST(ghash_check_corrupt)
   B32 is_warning_found = 0;
   String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
   String8 expected_line = str8f(arena, "Warning(%03u): %S: .debug$H section is too small to contain the header", LNK_Warning_GHash, debug_obj_path, LLVM_GHash_Magic);
-  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
+  for (String8 i = g_errors; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -5947,7 +5947,7 @@ TEST(ghash_check_magic)
   B32 is_warning_found = 0;
   String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
   String8 expected_line = str8f(arena, "Warning(%03u): %S: .debug$H contains invalid magic: got 0x7b, expected 0x%x", LNK_Warning_GHash, debug_obj_path, LLVM_GHash_Magic);
-  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
+  for (String8 i = g_errors; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -5996,7 +5996,7 @@ TEST(ghash_check_version)
   B32 is_warning_found = 0;
   String8 debug_obj_path = t_make_file_path(arena, str8_lit("debug.obj"));
   String8 expected_line = str8f(arena, "Warning(%03u): %S: mismatched .debug$H version: got %u, expected %u", LNK_Warning_GHash, debug_obj_path, 0xbeef, LLVM_GHash_CurrentVersion);
-  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
+  for (String8 i = g_errors; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -6037,7 +6037,7 @@ TEST(ghash_check_hash_alg)
   B32     is_warning_found = 0;
   String8 debug_obj_path   = t_make_file_path(arena, str8_lit("debug.obj"));
   String8 expected_line    = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash algorithm: got SHA1_8, expected BALK3", LNK_Warning_GHash, debug_obj_path);
-  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
+  for (String8 i = g_errors; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -6079,7 +6079,7 @@ TEST(ghash_match_debug_t)
   B32     is_warning_found = 0;
   String8 debug_obj_path   = t_make_file_path(arena, str8_lit("debug.obj"));
   String8 expected_line    = str8f(arena, "Warning(%03u): %S: mismatched .debug$H hash count and type count: got 3 hashes for 2 types", LNK_Warning_GHash, debug_obj_path);
-  for (String8 i = g_output; i.size > 0 && !is_warning_found; ) {
+  for (String8 i = g_errors; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match(expected_line, line, StringMatchFlag_CaseInsensitive);
   }
@@ -6318,7 +6318,7 @@ t_radlink_validate_asan_out(String8 obj_name)
   str8_list_pushf(scratch.arena, &env, "PATH=%S;%S", str8_chop_last_slash(t_cl_path()), str8_cstring(old_path_cstr));
   t_invoke_env(exe_path, str8_zero(), env, max_U64);
 
-  String8 s = g_output;
+  String8 s = g_errors;
 
   String8 header = t_chop_line(&s);
   if ( ! str8_match(header, str8_lit("================================================================="), 0)) {

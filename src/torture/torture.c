@@ -145,8 +145,12 @@ t_run_caller(void *raw_ctx)
     for EachNode(n, String8Node, test_out.first) {
       fprintf(stderr, "%.*s", str8_varg(n->string));
     }
-    fprintf(stderr, "STDERR:\n", str8_varg(g_errors));
-    fprintf(stderr, "STDOUT:\n", str8_varg(g_output));
+    if (g_errors.size) {
+      fprintf(stderr, "STDERR:\n", str8_varg(g_errors));
+    }
+    if (g_output.size) {
+      fprintf(stderr, "STDOUT:\n", str8_varg(g_output));
+    }
   }
   scratch_end(scratch);
 }
