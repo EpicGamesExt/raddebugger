@@ -16,9 +16,10 @@ U64    g_torture_test_count;
 T_Test g_torture_tests[0xffffff];
 
 // invoke
-global int          g_last_exit_code;
-global Arena       *g_output_arena;
-global String8      g_output;
+global U64      g_last_exit_code;
+global Arena   *g_output_arena;
+global String8  g_output;
+global String8  g_errors;
 
 internal String8
 t_test_name_from_idx(Arena *arena, U64 test_idx)
@@ -140,10 +141,12 @@ t_run_caller(void *raw_ctx)
   String8List test_out = {0};
   ctx->result.status = T_RunStatus_Pass;
   ctx->run(scratch.arena, ctx->user_data, &ctx->result, &test_out);
-  if (ctx->result.status == T_RunStatus_Fail) {
+  if (ctx->result.status == T_RunStatus_Fail || ctx->result.status == T_RunStatus_Crash) {
     for EachNode(n, String8Node, test_out.first) {
       fprintf(stderr, "%.*s", str8_varg(n->string));
     }
+    fprintf(stderr, "STDERR:\n", str8_varg(g_errors));
+    fprintf(stderr, "STDOUT:\n", str8_varg(g_output));
   }
   scratch_end(scratch);
 }
@@ -298,7 +301,7 @@ t_src_path(void)
 }
 
 internal B32
-t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout)
+t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
 {
   Temp scratch = scratch_begin(&g_output_arena,1);
 
@@ -307,15 +310,61 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout)
   // clean up global state
   arena_pop_to(g_output_arena, 0);
   MemoryZeroStruct(&g_output);
-  g_last_exit_code = -1;
+  g_last_exit_code = max_U64;
+
+  String8List stdout_parts = {0};
+  String8List stderr_parts = {0};
+  U64 stdout_idx = 0;
+  U64 stderr_idx = 1;
 
 #if OS_WINDOWS
-  OS_Handle read_pipe_handle = {0}, write_pipe_handle = {0};
-  HANDLE read_pipe, write_pipe;
-  SECURITY_ATTRIBUTES at = { .nLength = sizeof(at), .bInheritHandle = 1 };
-  if (!CreatePipe(&read_pipe, &write_pipe, &at, 0)) { AssertAlways(0 && "failed to create a pipe"); }
-  read_pipe_handle  = (OS_Handle){ .u64[0] = (U64)read_pipe  };
-  write_pipe_handle = (OS_Handle){ .u64[0] = (U64)write_pipe };
+  typedef enum {
+    Win32CaptureState_Null,
+    Win32CaptureState_Pending,
+    Win32CaptureState_EOF,
+  } Win32CaptureState;
+  typedef struct {
+    HANDLE             read_pipe_handle;
+    HANDLE             write_pipe_handle;
+    HANDLE             event;
+    OVERLAPPED         overlapped;
+    U64                buffer_size;
+    U8                *buffer;
+    U64                wait_idx;
+    String8List       *parts;
+    Win32CaptureState  state;
+  } Win32Capture;
+
+  Win32Capture captures_win32[2] = {0};
+  for EachElement(i, captures_win32) {
+    // create read pipe
+    local_persist U64 pipe_counter; ins_atomic_u64_inc_eval(&pipe_counter);
+    String8  pipe_name   = str8f(scratch.arena, "\\\\.\\pipe\\rad_torture_%u_%llu", GetCurrentProcessId(), pipe_counter);
+    String16 pipe_name16 = str16_from_8(scratch.arena, pipe_name);
+    SECURITY_ATTRIBUTES read_at  = { .nLength = sizeof(read_at),  .bInheritHandle = 0 };
+    captures_win32[i].read_pipe_handle = CreateNamedPipeW(pipe_name16.str, PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, PIPE_TYPE_BYTE | PIPE_WAIT, 1, MB(1), MB(1), 0, &read_at);
+    AssertAlways(captures_win32[i].read_pipe_handle != INVALID_HANDLE_VALUE);
+
+    // create overlapped write file
+    SECURITY_ATTRIBUTES write_at = { .nLength = sizeof(write_at), .bInheritHandle = 1 };
+    captures_win32[i].write_pipe_handle = CreateFileW(pipe_name16.str, GENERIC_WRITE, 0, &write_at, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    AssertAlways(captures_win32[i].write_pipe_handle != INVALID_HANDLE_VALUE);
+
+    // create event for overlapped
+    captures_win32[i].event = CreateEventW(0, 1, 0, 0);
+    AssertAlways(captures_win32[i].event != NULL);
+
+    // alloc capture buffer
+    captures_win32[i].buffer_size = MB(1);
+    captures_win32[i].buffer = push_array(scratch.arena, U8, captures_win32[i].buffer_size);
+  }
+  captures_win32[stdout_idx].parts = &stdout_parts;
+  captures_win32[stderr_idx].parts = &stderr_parts;
+
+  OS_Handle read_capture_handles [ArrayCount(captures_win32)] = {0};
+  OS_Handle write_capture_handles[ArrayCount(captures_win32)] = {0};
+  for EachElement(i, captures_win32) { read_capture_handles[i]  = (OS_Handle){ (U64)captures_win32[i].read_pipe_handle  }; }
+  for EachElement(i, captures_win32) { write_capture_handles[i] = (OS_Handle){ (U64)captures_win32[i].write_pipe_handle }; }
 #else
 # error NotImplemented
 #endif
@@ -325,51 +374,188 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout)
     .path        = g_wdir,
     .inherit_env = 1,
     .env         = env,
-    .stdout_file = write_pipe_handle,
-    .stderr_file = write_pipe_handle,
+    .stdout_file = write_capture_handles[stdout_idx],
+    .stderr_file = write_capture_handles[stderr_idx],
     .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline),
   };
   str8_list_push_front(scratch.arena, &launch_opts.cmd_line, exe_path);
-
-  if (g_verbose) {
-    String8 full_cmd_line = str8_list_join(scratch.arena, &launch_opts.cmd_line, &(StringJoin){ .sep = str8_lit(" ") });
-    fprintf(stdout, "Command Line: %.*s\n", str8_varg(full_cmd_line));
-    fprintf(stdout, "Working Dir:  %.*s\n", str8_varg(g_wdir));
-  }
 
   // invoke exe
   OS_Handle process_handle = os_process_launch(&launch_opts);
   if (os_handle_match(process_handle, os_handle_zero())) { goto exit; }
 
-  // close handle so last to ReadFile does not block
-  os_file_close(write_pipe_handle);
-
   // capture process output
-  String8List output = {0};
-  for (;;) {
-    String8 string = os_file_read_cstring(scratch.arena, read_pipe_handle, 0);
-    if (string.size == 0) { break; }
-    str8_list_push(scratch.arena, &output, string);
+#if OS_WINDOWS
+  {
+    // close handle so last to ReadFile does not block
+    for EachElement(i, captures_win32) {
+      CloseHandle(captures_win32[i].write_pipe_handle);
+      MemoryZeroStruct(&write_capture_handles[i]);
+    }
+
+    B32 is_process_live = 1;
+    for (U64 endt_us = ENDT_US(timeout_us);;) {
+      HANDLE wait_handles[ArrayCount(captures_win32) + 1] = {0};
+      U64    wait_handle_count = 0;
+
+      // queue process
+      if (is_process_live) {
+        wait_handles[wait_handle_count++] = (HANDLE)process_handle.u64[0];
+      }
+
+      for EachElement(i, captures_win32) {
+        while (captures_win32[i].state == Win32CaptureState_Null) {
+          // init overlapped so when child writes to capture buffer this event is signaled
+          AssertAlways(ResetEvent(captures_win32[i].event));
+          MemoryZeroStruct(&captures_win32[i].overlapped);
+          captures_win32[i].overlapped.hEvent = captures_win32[i].event;
+
+          // begin overlapped read
+          DWORD read_size = 0;
+          if (ReadFile(captures_win32[i].read_pipe_handle, captures_win32[i].buffer, captures_win32[i].buffer_size, &read_size, &captures_win32[i].overlapped)) {
+            if (read_size > 0) {
+              String8 string      = str8(captures_win32[i].buffer, read_size);
+              String8 string_copy = str8_copy(scratch.arena, string);
+              str8_list_push(scratch.arena, captures_win32[i].parts, string_copy);
+            } else {
+              captures_win32[i].state = Win32CaptureState_EOF;
+            }
+          } else {
+            DWORD error = GetLastError();
+            if (error == ERROR_IO_PENDING) {
+              captures_win32[i].state = Win32CaptureState_Pending;
+            } else {
+              AssertAlways(error == ERROR_HANDLE_EOF || error == ERROR_BROKEN_PIPE);
+              captures_win32[i].state = Win32CaptureState_EOF;
+            }
+            break;
+          }
+        }
+
+        if (captures_win32[i].state == Win32CaptureState_Pending) {
+          // event now should signal whenever pipe has data to read
+          captures_win32[i].wait_idx = wait_handle_count++;
+          wait_handles[captures_win32[i].wait_idx] = captures_win32[i].event;
+        } else {
+          captures_win32[i].wait_idx = max_U64;
+        }
+      }
+
+      // exit if there are no handles
+      if (wait_handle_count == 0) { break; }
+
+      // compute wait time
+      DWORD wait_ms = INFINITE;
+      if (timeout_us != max_U64) {
+        U64 now_us = os_now_microseconds(); 
+        wait_ms = now_us < endt_us ? ClampTop((endt_us - now_us + 999) / 1000, max_U32-1) : 0;
+      }
+
+      // wait on process and read pipes
+      DWORD wait_result = WaitForMultipleObjects(wait_handle_count, wait_handles, 0, wait_ms);
+
+      if (wait_result >= WAIT_OBJECT_0 && wait_result < WAIT_OBJECT_0 + wait_handle_count) {
+        DWORD wait_idx = wait_result - WAIT_OBJECT_0;
+
+        if (is_process_live && wait_idx == 0) {
+          DWORD exit_code = 0;
+          if(GetExitCodeProcess((HANDLE)process_handle.u64[0], &exit_code)) {
+            g_last_exit_code = exit_code;
+          }
+          is_process_live = 0;
+        } else {
+          // find signaled pipe
+          U64 pipe_idx = max_U64;
+          for EachElement(i, captures_win32) {
+            if (captures_win32[i].wait_idx == wait_idx) {
+              pipe_idx = i;
+            }
+          }
+          AssertAlways(pipe_idx != max_U64);
+
+          DWORD read_size;
+          if (GetOverlappedResult(captures_win32[pipe_idx].read_pipe_handle, &captures_win32[pipe_idx].overlapped, &read_size, 0)) {
+            if (read_size > 0) {
+              // append capture part
+              String8 string      = str8(captures_win32[pipe_idx].buffer, read_size);
+              String8 string_copy = str8_copy(scratch.arena, string);
+              str8_list_push(scratch.arena, captures_win32[pipe_idx].parts, string_copy);
+
+              // queue next overlapped read
+              captures_win32[pipe_idx].state = Win32CaptureState_Null;
+            } else {
+              captures_win32[pipe_idx].state = Win32CaptureState_EOF;
+            }
+          } else {
+            captures_win32[pipe_idx].state = Win32CaptureState_EOF;
+          }
+        }
+      } else if (wait_result == WAIT_TIMEOUT) {
+        // nothing woke up in the given timeout -- stop reading pipes and being exit
+        break;
+      }
+    }
+
+    // (timeout) kill process if alive so we can safeley cancel async IO
+    if (is_process_live) {
+      if (TerminateProcess((HANDLE)process_handle.u64[0], 999)) {
+        if (WaitForSingleObject((HANDLE)process_handle.u64[0], 10000) != WAIT_OBJECT_0) {
+          Assert(0 && "process is taking too long to exit"); 
+        }
+      } else { Assert(0 && "failed to kill process"); }
+
+      DWORD exit_code = 0;
+      if (GetExitCodeProcess((HANDLE)process_handle.u64[0], &exit_code)) {
+        g_last_exit_code = exit_code;
+      } else { Assert(0 && "failed to get process exit code"); }
+    }
+
+    // (timeout) cancel pending async IO
+    for EachElement(i, captures_win32) {
+      if (captures_win32[i].state == Win32CaptureState_Pending) {
+        BOOL  cancel_ok    = CancelIoEx(captures_win32[i].read_pipe_handle, &captures_win32[i].overlapped);
+        DWORD cancel_error = cancel_ok ? ERROR_SUCCESS : GetLastError();
+        AssertAlways(cancel_ok || cancel_error == ERROR_NOT_FOUND);
+
+        DWORD read_size = 0;
+        if (GetOverlappedResult(captures_win32[i].read_pipe_handle, &captures_win32[i].overlapped, &read_size, 1)) {
+          if (read_size > 0) {
+            String8 string      = str8(captures_win32[i].buffer, read_size);
+            String8 string_copy = str8_copy(scratch.arena, string);
+            str8_list_push(scratch.arena, captures_win32[i].parts, string_copy);
+          }
+        } else {
+          DWORD error = GetLastError();
+          AssertAlways(error == ERROR_OPERATION_ABORTED || error == ERROR_HANDLE_EOF || error == ERROR_BROKEN_PIPE);
+        }
+        captures_win32[i].state = Win32CaptureState_EOF;
+      }
+    }
+
+    // close windows specific handles
+    CloseHandle((HANDLE)process_handle.u64[0]);
+    for EachElement(i, captures_win32) {
+      CloseHandle(captures_win32[i].event);
+    }
   }
+#elif OS_LINUX
+# error NotImplemented
+#endif
+
 
   // update output global
-  g_output = str8_list_join(g_output_arena, &output, 0);
+  g_output = str8_list_join(g_output_arena, &stdout_parts, 0);
+  g_errors = str8_list_join(g_output_arena, &stderr_parts, 0);
 
   // write to the output file
   if (g_redirect_stdout) {
-    os_write_data_list_to_file_path(g_stdout_file_name, output);
+    os_write_data_to_file_path(g_stdout_file_name, g_output);
   }
 
-  U64 exit_code_u64 = 0;
-  if (os_process_join(process_handle, timeout, &exit_code_u64)) {
-    g_last_exit_code = (int)exit_code_u64;
-  } else {
-    os_process_kill(process_handle);
-  }
-
-  is_ok = 1; // process was launched
-
+  is_ok = 1; // process was launched (does not mean exited successfully)
   exit:;
+  for EachElement(i, read_capture_handles)  { os_file_close(read_capture_handles[i]);  }
+  for EachElement(i, write_capture_handles) { os_file_close(write_capture_handles[i]); }
   scratch_end(scratch);
   return is_ok;
 }

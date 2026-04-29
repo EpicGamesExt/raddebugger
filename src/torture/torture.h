@@ -70,6 +70,16 @@ internal void t_break_if_debugger_present(void);
 #define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
 #define t_outf(...) str8_list_pushf(arena, test_out, ## __VA_ARGS__)
 
+////////////////////////////////////////////////////////////////
+
+#define TIMEOUT_US(x)  (x)
+#define TIMEOUT_MS(x)  TIMEOUT_US((x)*1000ull)
+#define TIMEOUT_SEC(x) TIMEOUT_MS((x)*1000ull)
+
+#define ENDT_US(x)  (os_now_microseconds() + (x))
+#define ENDT_MS(x)  TIMEOUT_US((x)*1000ull)
+#define ENDT_SEC(x) TIMEOUT_MS((x)*1000ull)
+
 ////////////////////////////////
 
 // output directory
