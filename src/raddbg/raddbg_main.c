@@ -44,9 +44,9 @@
 // [x] container can also be a unit, so you can also go from procedure/global/tvar -> unit
 // [x] *OR*, because we can guarantee that the units themselves will be sorted from lowest -> highest in all symbol tables, we can simply binary search the unit table (small) with a symbol's index to find its corresponding unit. that way, no need to duplicate e.g. namespaces and so on across units. and actually, we have to do this, because containers can be types, and those cannot be unit-locked.
 //
-// [ ] symbols only store their *partly-qualified name*, e.g. `x` for A::B::C::x
-// [ ] default name maps look up *partly-qualified names*
-// [ ] to match a *fully qualified name*, there needs to be a second kind of different lookup - instead of string-matching, we need to match against the *fully qualified names*. the maps must be built by hashing the *fully qualified name*, but redirecting to the symbol with the *partially qualified name*. this is to allow fully-qualified lookups, but avoid storing fully-qualified names.
+// [x] symbols only store their *partly-qualified name*, e.g. `x` for A::B::C::x
+// [x] default name maps look up *partly-qualified names*
+// [x] to match a *fully qualified name*, there needs to be a second kind of different lookup - instead of string-matching, we need to match against the *fully qualified names*. the maps must be built by hashing the *fully qualified name*, but redirecting to the symbol with the *partially qualified name*. this is to allow fully-qualified lookups, but avoid storing fully-qualified names.
 //
 //- urgent fixes
 // [ ] (use msvc assert as an example) show fastfail exception info (code, name, etc.) - comes from ExceptionInformation @fastfail

@@ -1377,6 +1377,10 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
               DW2_Tag tag = {0};
               t_off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, t_off, &tag);
               
+              // rjf: determine if tag should be skipped
+              B32 should_skip_tag = (tag.kind == DW_TagKind_LexicalBlock ||
+                                     tag.kind == DW_TagKind_Variable);
+              
               // rjf: record top-level info about this tag tree
               if(t_start_off == t->off && t == &start_task)
               {
@@ -1388,6 +1392,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                                     tag.kind == DW_TagKind_StringType ||
                                     tag.kind == DW_TagKind_StructureType ||
                                     tag.kind == DW_TagKind_SubroutineType ||
+                                    tag.kind == DW_TagKind_SubProgram ||
                                     tag.kind == DW_TagKind_Typedef ||
                                     tag.kind == DW_TagKind_UnionType ||
                                     tag.kind == DW_TagKind_PtrToMemberType ||
@@ -1409,7 +1414,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
               }
               
               // rjf: is type -> combine tag's content into hash
-              if(is_type_tag_tree)
+              if(!should_skip_tag && is_type_tag_tree)
               {
                 // rjf: combine tag's kind
                 hash = u64_hash_from_seed_str8(hash, str8_struct(&tag.kind));
@@ -1427,7 +1432,18 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                      n->v.val.kind != DW_Form_Ref8 &&
                      n->v.val.kind != DW_Form_RefUData &&
                      n->v.val.kind != DW_Form_RefSup4 &&
-                     n->v.val.kind != DW_Form_RefSig8)
+                     n->v.val.kind != DW_Form_RefSig8 &&
+                     ((tag.kind != DW_TagKind_SubProgram &&
+                       tag.kind != DW_TagKind_FormalParameter) ||
+                      (n->v.attrib_kind != DW_AttribKind_Name &&
+                       n->v.attrib_kind != DW_AttribKind_DeclFile &&
+                       n->v.attrib_kind != DW_AttribKind_DeclLine &&
+                       n->v.attrib_kind != DW_AttribKind_Prototyped &&
+                       n->v.attrib_kind != DW_AttribKind_External &&
+                       n->v.attrib_kind != DW_AttribKind_FrameBase &&
+                       n->v.attrib_kind != DW_AttribKind_Location &&
+                       n->v.attrib_kind != DW_AttribKind_LowPc &&
+                       n->v.attrib_kind != DW_AttribKind_HighPc)))
                   {
                     hash = u64_hash_from_seed_str8(hash, str8_struct(&n->v.val.kind));
                     hash = u64_hash_from_seed_str8(hash, str8_struct(&n->v.val.u128));
@@ -1638,25 +1654,39 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     TypeDepChain *next;
     U64 type_idx;
   };
-  TypeDepChain **type_dep_chains = 0;
   U64 *type_dep_chains_counts = 0;
   ProfScope("gather per-type dependency chains")
   {
     if(lane_idx() == 0)
     {
-      type_dep_chains = push_array(scratch.arena, TypeDepChain *, type_count);
       type_dep_chains_counts = push_array(scratch.arena, U64, type_count);
     }
-    lane_sync_u64(&type_dep_chains, 0);
     lane_sync_u64(&type_dep_chains_counts, 0);
     Rng1U64 range = lane_range(type_count);
     for EachInRange(root_type_idx, range)
     {
-      for(U64 hash = type_tag_nodes[root_type_idx]->hash, next_hash = 0;
-          hash != 0;
-          hash = next_hash)
+      typedef struct TypeChainTask TypeChainTask;
+      struct TypeChainTask
+      {
+        TypeChainTask *next;
+        U64 hash;
+      };
+      TypeChainTask start_task = {0, type_tag_nodes[root_type_idx]->hash};
+      TypeChainTask *top_task = &start_task;
+      TypeChainTask *free_task = 0;
+      TypeChainTask *last_t = 0;
+      for(TypeChainTask *t = top_task; t != 0; (last_t = t, t = t->next))
       {
         Temp scratch2 = scratch_begin(&scratch.arena, 1);
+        
+        // rjf: recycle old tasks
+        if(last_t != 0)
+        {
+          SLLStackPush(free_task, last_t);
+        }
+        
+        // rjf: unpack task
+        U64 hash = t->hash;
         
         // rjf: hash -> unique type tag node
         UniqueTypeTagNode *type_tag_node = 0;
@@ -1681,12 +1711,9 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           unit_idx = type_tag_node->unit_idx;
         }
         
-        // rjf: record this type in the dependency chain
+        // rjf: record this type in the dependency chain count
         if(type_tag_node != 0)
         {
-          TypeDepChain *c = push_array(scratch.arena, TypeDepChain, 1);
-          c->type_idx = type_tag_node->order_idx;
-          SLLStackPush(type_dep_chains[root_type_idx], c);
           type_dep_chains_counts[root_type_idx] += 1;
         }
         
@@ -1695,12 +1722,20 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
         
         // rjf: parse this type's tag
+        U64 read_off = info_off;
         DW2_Tag tag = {0};
-        dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, info_off, &tag);
+        read_off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, read_off, &tag);
         
-        // rjf: find direct type, if one exists
-        U64 direct_type_info_off = 0;
-        U64 direct_type_unit_idx = 0;
+        // rjf: find direct types from this type tag
+        typedef struct DirectTypeNode DirectTypeNode;
+        struct DirectTypeNode
+        {
+          DirectTypeNode *next;
+          U64 info_off;
+          U64 unit_idx;
+        };
+        DirectTypeNode *first_direct_type = 0;
+        DirectTypeNode *last_direct_type = 0;
         switch(tag.kind)
         {
           default:{}break;
@@ -1713,39 +1748,115 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           case DW_TagKind_ArrayType:
           case DW_TagKind_SubrangeType:
           case DW_TagKind_Typedef:
+          case DW_TagKind_SubProgram:
+          case DW_TagKind_SubroutineType:
           {
-            DW2_Attrib *direct_type_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Type);
-            direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
-            direct_type_unit_idx = unit_idx;
-            if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
+            // rjf: gather direct type
             {
-              Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
-              U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
-              if(0 < new_unit_num && new_unit_num <= unit_count)
+              DW2_Attrib *direct_type_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Type);
+              U64 direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
+              U64 direct_type_unit_idx = unit_idx;
+              if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
               {
-                direct_type_unit_idx = new_unit_num-1;
+                Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+                U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
+                if(0 < new_unit_num && new_unit_num <= unit_count)
+                {
+                  direct_type_unit_idx = new_unit_num-1;
+                }
+              }
+              DirectTypeNode *n = push_array(scratch2.arena, DirectTypeNode, 1);
+              n->info_off = direct_type_info_off;
+              n->unit_idx = direct_type_unit_idx;
+              SLLQueuePush(first_direct_type, last_direct_type, n);
+            }
+            
+            // rjf: functions -> gather parameters
+            if(tag.has_children && (tag.kind == DW_TagKind_SubProgram || tag.kind == DW_TagKind_SubroutineType))
+            {
+              S64 depth = 1;
+              for(;depth > 0 && contains_1u64(unit_info_tag_range, read_off);)
+              {
+                U64 start_read_off = read_off;
+                
+                // rjf: read child tag
+                DW2_Tag child_tag = {0};
+                read_off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, read_off, &child_tag);
+                
+                // rjf: formal parameters -> gather direct types
+                if(child_tag.kind == DW_TagKind_FormalParameter)
+                {
+                  DW2_Attrib *direct_type_attrib = dw2_attrib_from_kind(&child_tag, DW_AttribKind_Type);
+                  U64 direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
+                  U64 direct_type_unit_idx = unit_idx;
+                  if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
+                  {
+                    Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+                    U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
+                    if(0 < new_unit_num && new_unit_num <= unit_count)
+                    {
+                      direct_type_unit_idx = new_unit_num-1;
+                    }
+                  }
+                  DirectTypeNode *n = push_array(scratch2.arena, DirectTypeNode, 1);
+                  n->info_off = direct_type_info_off;
+                  n->unit_idx = direct_type_unit_idx;
+                  SLLQueuePush(first_direct_type, last_direct_type, n);
+                }
+                
+                // rjf: tree navigations
+                if(tag.has_children)
+                {
+                  depth += 1;
+                }
+                if(tag.kind == DW_TagKind_Null)
+                {
+                  depth -= 1;
+                }
+                
+                if(read_off == start_read_off)
+                {
+                  break;
+                }
               }
             }
           }break;
         }
         
-        // rjf: look up hash for direct type
-        U64 direct_type_hash = 0;
+        // rjf: for each dependency type, look up their hash, + spawn new tasks for them
+        for EachNode(n, DirectTypeNode, first_direct_type)
         {
-          U64 off_hash = u64_hash_from_str8(str8_struct(&direct_type_info_off));
-          U64 off_slot_idx = off_hash%unit_type_maps[direct_type_unit_idx].slots_count;
-          for(UnitTypeNode *n = unit_type_maps[direct_type_unit_idx].slots[off_slot_idx]; n != 0; n = n->next)
+          U64 direct_type_info_off = n->info_off;
+          U64 direct_type_unit_idx = n->unit_idx;
+          
+          // rjf: direct type info offset -> hash
+          U64 direct_type_hash = 0;
           {
-            if(n->src_info_off == direct_type_info_off)
+            U64 off_hash = u64_hash_from_str8(str8_struct(&direct_type_info_off));
+            U64 off_slot_idx = off_hash%unit_type_maps[direct_type_unit_idx].slots_count;
+            for(UnitTypeNode *n = unit_type_maps[direct_type_unit_idx].slots[off_slot_idx]; n != 0; n = n->next)
             {
-              direct_type_hash = n->dst_hash;
-              break;
+              if(n->src_info_off == direct_type_info_off)
+              {
+                direct_type_hash = n->dst_hash;
+                break;
+              }
             }
           }
+          
+          // rjf: spawn task
+          TypeChainTask *new_task = free_task;
+          if(new_task != 0)
+          {
+            SLLStackPop(free_task);
+          }
+          else
+          {
+            new_task = push_array(scratch.arena, TypeChainTask, 1);
+          }
+          new_task->hash = direct_type_hash;
+          t->next = new_task;
         }
-        
-        // rjf: iterate to direct type's hash
-        next_hash = direct_type_hash;
         
         scratch_end(scratch2);
       }
@@ -1940,9 +2051,116 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             dst_type->direct_type = direct_type;
             dst_type->byte_size   = (direct_type != 0 ? direct_type->byte_size : bitsize/8);
           }break;
+          case DW_TagKind_SubProgram:
           case DW_TagKind_SubroutineType:
           {
+            // rjf: build type
+            dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
+            dst_type->kind        = RDI_TypeKind_Function;
+            dst_type->name        = name;
+            dst_type->direct_type = direct_type;
+            dst_type->byte_size   = arch_addr_size;
             
+            // rjf: gather all parameter types
+            typedef struct ParamNode ParamNode;
+            struct ParamNode
+            {
+              ParamNode *next;
+              U64 type_unit_idx;
+              U64 type_info_off;
+            };
+            ParamNode *first_param = 0;
+            ParamNode *last_param = 0;
+            U64 param_count = 0;
+            {
+              U64 tag_children_off = info_off + tag_info_size;
+              S64 depth = 1;
+              for(U64 off = tag_children_off; depth > 0 && contains_1u64(unit_info_tag_range, off);)
+              {
+                U64 start_off = off;
+                
+                // rjf: read child tag
+                DW2_Tag child_tag = {0};
+                off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &child_tag);
+                
+                // rjf: gather parameters
+                if(child_tag.kind == DW_TagKind_FormalParameter)
+                {
+                  DW2_Attrib *type_attrib = dw2_attrib_from_kind(&child_tag, DW_AttribKind_Type);
+                  ParamNode *n = push_array(scratch2.arena, ParamNode, 1);
+                  n->type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
+                  n->type_unit_idx = unit_idx;
+                  SLLQueuePush(first_param, last_param, n);
+                  if(!contains_1u64(unit_info_tag_range, n->type_info_off))
+                  {
+                    Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+                    U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, n->type_info_off);
+                    n->type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
+                  }
+                  param_count += 1;
+                }
+                
+                // rjf: navigate tree
+                if(child_tag.kind == DW_TagKind_Null)
+                {
+                  depth -= 1;
+                }
+                if(child_tag.has_children)
+                {
+                  depth += 1;
+                }
+                
+                if(off == start_off)
+                {
+                  break;
+                }
+              }
+            }
+            
+            // rjf: tighten parameter types
+            dst_type->count = (RDI_U32)param_count; // TODO(rjf): @u64_to_u32
+            dst_type->param_types = push_array(arena, RDIM_Type *, dst_type->count);
+            {
+              U64 param_idx = 0;
+              for(ParamNode *n = first_param; n != 0; n = n->next, param_idx += 1)
+              {
+                U64 param_type_info_off = n->type_info_off;
+                U64 param_type_unit_idx = n->type_unit_idx;
+                
+                // rjf: map info_off/unit_idx -> hash
+                U64 param_type_hash = 0;
+                {
+                  UnitTypeMap *direct_type_unit_type_map = &unit_type_maps[param_type_unit_idx];
+                  U64 info_off_hash = u64_hash_from_str8(str8_struct(&param_type_info_off));
+                  U64 info_off_slot_idx = info_off_hash%direct_type_unit_type_map->slots_count;
+                  for(UnitTypeNode *n = direct_type_unit_type_map->slots[info_off_slot_idx]; n != 0; n = n->next)
+                  {
+                    if(n->src_info_off == param_type_info_off)
+                    {
+                      param_type_hash = n->dst_hash;
+                      break;
+                    }
+                  }
+                }
+                
+                // rjf: map hash -> type
+                RDIM_Type *param_type = 0;
+                {
+                  U64 unique_type_tag_slot_idx = param_type_hash%unique_type_tag_slots_count;
+                  for(UniqueTypeTagNode *n = unique_type_tag_slots[unique_type_tag_slot_idx]; n != 0; n = n->next)
+                  {
+                    if(n->hash == param_type_hash)
+                    {
+                      param_type = type_from_idx_map[n->order_idx];
+                      break;
+                    }
+                  }
+                }
+                
+                // rjf: store
+                dst_type->param_types[param_idx] = param_type;
+              }
+            }
           }break;
           case DW_TagKind_Typedef:
           {
@@ -2458,14 +2676,23 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         RDIM_Type *type = 0;
         if(type_attrib != &dw2_attrib_nil)
         {
-          // rjf: attrib -> (info_off, unit_idx)
-          U64 type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
+          // rjf: functions need to get their type info from themselves; the type attrib
+          // only references the return type. so, in that case, we'll use the procedure's
+          // own info offset / unit index, rather than the type attribute's.
+          U64 type_info_off = start_off;
           U64 type_unit_idx = unit_idx;
-          if(!contains_1u64(unit_info_tag_range, type_info_off))
+          
+          // rjf: attrib -> (info_off, unit_idx)
+          if(tag.kind != DW_TagKind_SubProgram)
           {
-            Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
-            U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
-            type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
+            type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
+            type_unit_idx = unit_idx;
+            if(!contains_1u64(unit_info_tag_range, type_info_off))
+            {
+              Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+              U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
+              type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
+            }
           }
           
           // rjf: (info_off, unit_idx) -> hash
@@ -3137,6 +3364,93 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                 {
                   loc.kind = val_stack_top && val_stack_top->v.is_addr ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
                   loc.bytecode = dst_bytecode;
+                  
+                  // rjf: gather first few bytecodes for pattern matching
+                  RDI_EvalOp beginning_ops[5] = {0};
+                  RDIM_EvalBytecodeOp *beginning_nodes[5] = {0};
+                  {
+                    U64 idx = 0;
+                    for EachNode(n, RDIM_EvalBytecodeOp, dst_bytecode.first_op)
+                    {
+                      if(idx >= ArrayCount(beginning_ops))
+                      {
+                        break;
+                      }
+                      beginning_ops[idx] = n->op;
+                      beginning_nodes[idx] = n;
+                      idx += 1;
+                    }
+                  }
+                  
+                  // rjf: match simple register offsets
+                  if(loc.kind == RDI_LocationKind_AddrBytecodeStream &&
+                     beginning_ops[0] == RDI_EvalOp_RegRead &&
+                     (beginning_ops[1] == RDI_EvalOp_ConstU8 ||
+                      beginning_ops[1] == RDI_EvalOp_ConstU16) &&
+                     beginning_ops[2] == RDI_EvalOp_TruncSigned &&
+                     beginning_ops[3] == RDI_EvalOp_Add &&
+                     beginning_ops[4] == RDI_EvalOp_Stop)
+                  {
+                    U8 rdi_reg_code = (beginning_nodes[0]->p&0x0000FF)>>0;
+                    U8 byte_size    = (beginning_nodes[0]->p&0x00FF00)>>8;
+                    U8 byte_off     = (beginning_nodes[0]->p&0xFF0000)>>16;
+                    if(byte_off == 0 && byte_size == unit_parse_ctx->addr_size)
+                    {
+                      loc.kind = RDI_LocationKind_AddrRegPlusOff;
+                      loc.reg_code = rdi_reg_code;
+                      loc.offset   = beginning_nodes[1]->p;
+                    }
+                  }
+                  
+                  // rjf: match simple module offsets
+                  if(beginning_ops[0] == RDI_EvalOp_ModuleOff && beginning_ops[1] == RDI_EvalOp_Stop)
+                  {
+                    U64 voff = beginning_nodes[0]->p;
+                    loc.kind = RDI_LocationKind_ModuleOff;
+                    loc.offset = voff;
+                  }
+                  else if(((beginning_ops[0] == RDI_EvalOp_ModuleOff &&
+                            (beginning_ops[1] == RDI_EvalOp_ConstU8 ||
+                             beginning_ops[1] == RDI_EvalOp_ConstU16 ||
+                             beginning_ops[1] == RDI_EvalOp_ConstU32 ||
+                             beginning_ops[1] == RDI_EvalOp_ConstU64)) ||
+                           (beginning_ops[1] == RDI_EvalOp_ModuleOff &&
+                            (beginning_ops[0] == RDI_EvalOp_ConstU8 ||
+                             beginning_ops[0] == RDI_EvalOp_ConstU16 ||
+                             beginning_ops[0] == RDI_EvalOp_ConstU32 ||
+                             beginning_ops[0] == RDI_EvalOp_ConstU64))) &&
+                          beginning_ops[2] == RDI_EvalOp_Add &&
+                          beginning_ops[3] == RDI_EvalOp_Stop)
+                  {
+                    U64 voff = beginning_nodes[0]->p + beginning_nodes[1]->p;
+                    loc.kind = RDI_LocationKind_ModuleOff;
+                    loc.offset = voff;
+                  }
+                  
+                  // rjf: match simple TLS offsets
+                  if(beginning_ops[0] == RDI_EvalOp_TLSOff && beginning_ops[1] == RDI_EvalOp_Stop)
+                  {
+                    U64 toff = beginning_nodes[0]->p;
+                    loc.kind = RDI_LocationKind_TLSOff;
+                    loc.offset = toff;
+                  }
+                  else if(((beginning_ops[0] == RDI_EvalOp_TLSOff &&
+                            (beginning_ops[1] == RDI_EvalOp_ConstU8 ||
+                             beginning_ops[1] == RDI_EvalOp_ConstU16 ||
+                             beginning_ops[1] == RDI_EvalOp_ConstU32 ||
+                             beginning_ops[1] == RDI_EvalOp_ConstU64)) ||
+                           (beginning_ops[1] == RDI_EvalOp_TLSOff &&
+                            (beginning_ops[0] == RDI_EvalOp_ConstU8 ||
+                             beginning_ops[0] == RDI_EvalOp_ConstU16 ||
+                             beginning_ops[0] == RDI_EvalOp_ConstU32 ||
+                             beginning_ops[0] == RDI_EvalOp_ConstU64))) &&
+                          beginning_ops[2] == RDI_EvalOp_Add &&
+                          beginning_ops[3] == RDI_EvalOp_Stop)
+                  {
+                    U64 toff = beginning_nodes[0]->p + beginning_nodes[1]->p;
+                    loc.kind = RDI_LocationKind_TLSOff;
+                    loc.offset = toff;
+                  }
                 }
                 
                 //- rjf: collect
@@ -3174,9 +3488,11 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           {
             RDIM_Scope *root_scope = rdim_scope_chunk_list_push(arena, &dst_unit->scopes, chunk_count);
             RDIM_Symbol *procedure = rdim_symbol_chunk_list_push(arena, &dst_unit->procedures, chunk_count);
-            procedure->name = name;
-            procedure->link_name = link_name;
-            procedure->root_scope = root_scope;
+            procedure->name           = name;
+            procedure->link_name      = link_name;
+            procedure->type           = type;
+            procedure->root_scope     = root_scope;
+            procedure->location_cases = framebase_location_cases;
             root_scope->symbol = procedure;
             root_scope->voff_ranges = ranges;
             dst_unit->scopes.scope_voff_count += 2;

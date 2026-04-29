@@ -1116,7 +1116,7 @@ RDI_LocationSetElementMemberTable:
   `#define RDI_Location_RegOffShift            32`;
   `#define rdi_kind_from_location(l)            ((((l) & RDI_Location_KindMask) >> RDI_Location_KindShift))`;
   `#define rdi_regcode_from_location(l)           ((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusOff || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusOff || rdi_kind_from_location(l) == RDI_LocationKind_ValReg) ? (((l) & RDI_Location_RegCodeMask) >> RDI_Location_RegCodeShift) : 0)`;
-  `#define rdi_regoff_from_location(l)            (RDI_S64)((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusOff || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusOff) ? (((l) & RDI_Location_RegOffMask) >> RDI_Location_RegOffShift) : 0)`;
+  `#define rdi_regoff_from_location(l)            (RDI_S64)(RDI_S32)(RDI_S16)((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusOff || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusOff) ? (((l) & RDI_Location_RegOffMask) >> RDI_Location_RegOffShift) : 0)`;
   `#define rdi_voff_from_location(l)              (rdi_kind_from_location(l) == RDI_LocationKind_ModuleOff          ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)`;
   `#define rdi_toff_from_location(l)              (rdi_kind_from_location(l) == RDI_LocationKind_TLSOff             ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)`;
   `#define rdi_constant_data_off_from_location(l) (rdi_kind_from_location(l) == RDI_LocationKind_ConstantDataOff    ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)`;

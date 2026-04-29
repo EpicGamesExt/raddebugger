@@ -1073,7 +1073,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
                 S64 reg_off = rdi_regoff_from_location(location);
                 String8 reg_code_string = rdi_string_from_reg_code(scratch.arena, tli->arch, reg_code);
                 dumpf("      reg: %S\n", reg_code_string);
-                dumpf("      reg_off: 0x%I64x\n", reg_off);
+                dumpf("      reg_off: %I64d (0x%x)\n", reg_off, (U16)reg_off);
               }break;
               case RDI_LocationKind_ValReg:
               {

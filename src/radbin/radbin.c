@@ -956,8 +956,8 @@ rb_thread_entry_point(void *p)
       {
         bake_params = push_array(arena, RDIM_BakeParams, 1);
         rdim_bake_params_concat_in_place(bake_params, &pdb_bake_params);
-        rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params);
-        // rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params_2);
+        // rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params);
+        rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params_2);
         for EachNode(n, RDIM_BakeParamsNode, first_rdi_bake_params)
         {
           rdim_bake_params_concat_in_place(bake_params, &n->v);
