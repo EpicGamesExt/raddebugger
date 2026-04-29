@@ -23,7 +23,7 @@ t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *rep
 #endif
 
   // send command
-  String8 cmdline = str8f(scratch.arena, "--ipc --pid:%u %S", dbg_pid, cmd);
+  String8 cmdline = str8f(scratch.arena, "--gen_crash_dump --ipc --pid:%u %S", dbg_pid, cmd);
   if (t_invoke(t_raddbg_path(), cmdline, timeout_us) == 0) { goto exit; }
 
   B32 has_reply = 1;
@@ -242,6 +242,7 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
     printf("  Column:     %lld\n", loc.pt.column);
     printf("  Run Gen:    %llu\n", status.run_gen);
     printf("  Stop Cause: \"%.*s\"\n", str8_varg(last_stop.stop_cause));
+    fflush(stdout);
   }
   //--------------------------------
 
@@ -261,9 +262,10 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
   Temp scratch = scratch_begin(0, 0);
   B32 dbg_ready = 0;
 
-  String8 user_path    = t_make_file_path(scratch.arena, str8_lit("test.raddbg_user"));
-  String8 project_path = t_make_file_path(scratch.arena, str8_lit("test.raddbg_project"));
-  cmdline = str8f(scratch.arena, "--user:\"%S\" --project:\"%S\" %S", user_path, project_path, cmdline);
+  String8 user_path       = t_make_file_path(scratch.arena, str8_lit("test.raddbg_user"));
+  String8 project_path    = t_make_file_path(scratch.arena, str8_lit("test.raddbg_project"));
+  String8 crash_dump_path = t_make_file_path(scratch.arena, str8_lit("raddbg_crash_dump.dmp"));
+  cmdline = str8f(scratch.arena, "--gen_crash_dump --crash_dump_path:\"%S\" --user:\"%S\" --project:\"%S\" %S", crash_dump_path, user_path, project_path, cmdline);
 
   // launch debugger
   OS_ProcessLaunchParams launch_opts = {
@@ -579,7 +581,7 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
           // map IP -> source location
           U64                 ip  = u64_from_str8(t_dbg_value_from_exprf(scratch.arena, "reg:rip"), 10);
           T_DbgSourceLocation loc = {0};
-          AssertAlways(t_dbg_src_line(scratch.arena, ip, &loc, TIMEOUT_SEC(5)));
+          AssertAlways(t_dbg_src_line(scratch.arena, ip, &loc, TIMEOUT_SEC(15)));
 
           // compute line where debugger must be
           S64 at_line_s64 = (S64)(program->line - program->file->line) + cmd->at.delta;
