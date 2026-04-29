@@ -1750,6 +1750,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           case DW_TagKind_Typedef:
           case DW_TagKind_SubProgram:
           case DW_TagKind_SubroutineType:
+          case DW_TagKind_EnumerationType:
           {
             // rjf: gather direct type
             {
@@ -2425,6 +2426,191 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     }
   }
   lane_sync();
+  
+  ////////////////////////////
+  //- rjf: convert all UDTs
+  //
+  RDIM_UDTChunkList *all_udts = 0;
+  ProfScope("convert all UDTs")
+  {
+    //- rjf: produce UDTs across all lanes
+    U64 chunk_count = 512;
+    RDIM_UDTChunkList lane_udts = {0};
+    Rng1U64 range = lane_range(type_count);
+    for EachInRange(type_idx, range)
+    {
+      RDIM_Type *type = type_from_idx_map[type_idx];
+      if(type->kind == RDI_TypeKind_Struct ||
+         type->kind == RDI_TypeKind_Union ||
+         type->kind == RDI_TypeKind_Class ||
+         type->kind == RDI_TypeKind_Enum)
+      {
+        // rjf: produce UDT
+        RDIM_UDT *udt = rdim_udt_chunk_list_push(arena, &lane_udts, chunk_count);
+        type->udt = udt;
+        udt->self_type = type;
+        
+        // rjf: idx -> type tag node
+        UniqueTypeTagNode *type_tag_node = type_tag_nodes[type_idx];
+        U64 unit_idx = type_tag_node->unit_idx;
+        U64 info_off = type_tag_node->info_off;
+        
+        // rjf: unpack unit
+        Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
+        DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[unit_idx];
+        
+        // rjf: parse all tags
+        S64 depth = 0;
+        for(U64 off = info_off; contains_1u64(unit_info_tag_range, off) && (depth > 0 || off == info_off);)
+        {
+          Temp scratch2 = scratch_begin(&scratch.arena, 1);
+          U64 start_off = off;
+          
+          // rjf: parse tag
+          DW2_Tag tag = {0};
+          U64 tag_parse_off = off;
+          off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &tag);
+          
+          // rjf: unpack tag attributes
+          DW2_Attrib *name_attrib = &dw2_attrib_nil;
+          DW2_Attrib *type_attrib = &dw2_attrib_nil;
+          DW2_Attrib *off_attrib = &dw2_attrib_nil;
+          DW2_Attrib *val_attrib = &dw2_attrib_nil;
+          DW2_Attrib *declfile_attrib = &dw2_attrib_nil;
+          DW2_Attrib *declline_attrib = &dw2_attrib_nil;
+          DW2_Attrib *declcol_attrib = &dw2_attrib_nil;
+          for EachNode(n, DW2_AttribNode, tag.attribs.first)
+          {
+            switch(n->v.attrib_kind)
+            {
+              default:{}break;
+#define Case(dst, src) case DW_AttribKind_##src:{dst##_attrib = &n->v;}break
+              Case(name,     Name);
+              Case(type,     Type);
+              Case(off,      DataMemberLocation);
+              Case(val,      ConstValue);
+              Case(declfile, DeclFile);
+              Case(declline, DeclLine);
+              Case(declcol,  DeclColumn);
+#undef Case
+            }
+          }
+          
+          // rjf: unpack basic attributes
+          String8 name = name_attrib->val.string;
+          U64 off = off_attrib->val.u128.u64[0];
+          U64 val = val_attrib->val.u128.u64[0];
+          
+          // rjf: unpack type
+          RDIM_Type *type = 0;
+          {
+            // rjf: attrib -> info off / unit idx
+            U64 type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
+            U64 type_unit_idx = unit_idx;
+            if(!contains_1u64(unit_info_tag_range, type_info_off))
+            {
+              Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+              U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
+              type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
+            }
+            
+            // rjf: (info_off, unit_idx) -> hash
+            U64 type_hash = 0;
+            {
+              UnitTypeMap *type_unit_type_map = &unit_type_maps[type_unit_idx];
+              U64 info_off_hash = u64_hash_from_str8(str8_struct(&type_info_off));
+              U64 info_off_slot_idx = info_off_hash%type_unit_type_map->slots_count;
+              for(UnitTypeNode *n = type_unit_type_map->slots[info_off_slot_idx]; n != 0; n = n->next)
+              {
+                if(n->src_info_off == type_info_off)
+                {
+                  type_hash = n->dst_hash;
+                  break;
+                }
+              }
+            }
+            
+            // rjf: hash -> type
+            {
+              U64 unique_type_tag_slot_idx = type_hash%unique_type_tag_slots_count;
+              for(UniqueTypeTagNode *n = unique_type_tag_slots[unique_type_tag_slot_idx]; n != 0; n = n->next)
+              {
+                if(n->hash == type_hash)
+                {
+                  type = type_from_idx_map[n->order_idx];
+                  break;
+                }
+              }
+            }
+          }
+          
+          // rjf: root-level tag -> collect decl file/line info
+          if(tag_parse_off == start_off)
+          {
+            // TODO(rjf): we need to have gathered the source files before this!!!!!!
+            // currently, they only come from line info - we need to gather/dedup the
+            // ones that also come from tags.
+          }
+          
+          // rjf: gather children
+          switch(tag.kind)
+          {
+            default:{}break;
+            case DW_TagKind_Member:
+            {
+              RDIM_UDTMember *member = rdim_udt_push_member(arena, &lane_udts, udt);
+              member->kind = RDI_MemberKind_DataField;
+              member->name = name;
+              member->type = type;
+              member->off = (RDI_U32)off; // TODO(rjf): @u64_to_u32
+            }break;
+            case DW_TagKind_Enumerator:
+            {
+              RDIM_UDTEnumVal *enum_val = rdim_udt_push_enum_val(arena, &lane_udts, udt);
+              enum_val->name = name;
+              enum_val->val = val;
+            }break;
+          }
+          
+          // rjf: tree nav
+          if(tag.kind == DW_TagKind_Null)
+          {
+            depth -= 1;
+          }
+          if(tag.has_children)
+          {
+            depth += 1;
+          }
+          
+          scratch_end(scratch2);
+          if(off == start_off)
+          {
+            break;
+          }
+        }
+      }
+    }
+    lane_sync();
+    
+    //- rjf: combine all lanes
+    RDIM_UDTChunkList *lanes_udts = 0;
+    if(lane_idx() == 0)
+    {
+      lanes_udts = push_array(scratch.arena, RDIM_UDTChunkList, lane_count());
+    }
+    lane_sync_u64(&lanes_udts, 0);
+    lanes_udts[lane_idx()] = lane_udts;
+    lane_sync();
+    if(lane_idx() == 0)
+    {
+      all_udts = push_array(scratch.arena, RDIM_UDTChunkList, 1);
+      for EachIndex(l_idx, lane_count())
+      {
+        rdim_udt_chunk_list_concat_in_place(all_udts, &lanes_udts[l_idx]);
+      }
+    }
+    lane_sync_u64(&all_udts, 0);
+  }
   
   ////////////////////////////
   //- rjf: convert all units / symbols
@@ -3611,6 +3797,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     result.binary_sections = binary_sections;
     result.units           = *all_units;
     result.types           = *all_types;
+    result.udts            = *all_udts;
     result.src_files       = *all_src_files;
     result.line_tables     = *all_line_tables;
   }
