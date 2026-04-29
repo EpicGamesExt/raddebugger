@@ -26,14 +26,15 @@ for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
      set PATH=%clang_path%..\lib\clang\%clang_version%\lib\windows;!PATH!
   )
 
+  rem raddbg dies under asan on statup
+  call build.bat meta %%c %%m asan raddbg || exit /b 1
+
   rem clang does not compile with asan in release mode because it runs out of memory
   if "%%c" equ "clang" (
     call build.bat meta %%c %%m %TARGET_VALUES% || exit /b 1
   ) else (
     call build.bat meta asan %%c %%m %TARGET_VALUES% || exit /b 1
   )
-  rem raddbg dies under asan on statup
-  call build.bat meta %%c %%m raddbg || exit /b 1
 
   pushd build
   torture -s:Dbg* %* || exit /b 1
