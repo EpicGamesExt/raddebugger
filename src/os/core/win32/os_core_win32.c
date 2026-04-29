@@ -1453,8 +1453,9 @@ os_make_guid(void)
 #undef OS_WINDOWS // shlwapi uses its own OS_WINDOWS include inside
 #include <shlwapi.h>
 
-internal B32 win32_g_is_quiet = 0;
-internal B32 win32_g_gen_dump = 0;
+internal B32   win32_g_is_quiet = 0;
+internal B32   win32_g_gen_dump = 0;
+internal WCHAR win32_g_crash_dump_path[MAX_PATH] = {0};
 
 internal HRESULT WINAPI
 win32_dialog_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, LONG_PTR data)
@@ -1673,27 +1674,33 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   fwprintf(stderr, L"\n--- Fatal Exception ---\n");
   fwprintf(stderr, L"%s\n\n", buffer);
 #else
-  int selected_button = 0;
-  TASKDIALOG_BUTTON generate_dump = {1, L"Generate Crash Dump File"};
-  TASKDIALOGCONFIG dialog = {0};
-  dialog.cbSize = sizeof(dialog);
-  dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
-  dialog.pszMainIcon = TD_ERROR_ICON;
-  dialog.dwCommonButtons = TDCBF_CLOSE_BUTTON;
-  dialog.pszWindowTitle = L"Fatal Exception";
-  dialog.pszContent = buffer;
-  dialog.pfCallback = &win32_dialog_callback;
-  dialog.cButtons = 1;
-  dialog.pButtons = &generate_dump;
-  TaskDialogIndirect(&dialog, &selected_button, 0, 0);
-  generate_crash_dump = (selected_button == generate_dump.nButtonID);
+  if(!win32_g_gen_dump)
+  {
+    int selected_button = 0;
+    TASKDIALOG_BUTTON generate_dump = {1, L"Generate Crash Dump File"};
+    TASKDIALOGCONFIG dialog = {0};
+    dialog.cbSize = sizeof(dialog);
+    dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
+    dialog.pszMainIcon = TD_ERROR_ICON;
+    dialog.dwCommonButtons = TDCBF_CLOSE_BUTTON;
+    dialog.pszWindowTitle = L"Fatal Exception";
+    dialog.pszContent = buffer;
+    dialog.pfCallback = &win32_dialog_callback;
+    dialog.cButtons = 1;
+    dialog.pButtons = &generate_dump;
+    TaskDialogIndirect(&dialog, &selected_button, 0, 0);
+    generate_crash_dump = (selected_button == generate_dump.nButtonID);
+  }
 #endif
   
   if(dbg_MiniDumpWriteDump && generate_crash_dump)
   {
+    WCHAR module_file_name[MAX_PATH] = {0};
+    GetModuleFileNameW(0, module_file_name, ArrayCount(module_file_name));
+
     WCHAR dump_file_path[MAX_PATH] = {0};
-    SHGetFolderPathW(0, CSIDL_DESKTOP, 0, 0, dump_file_path);
-    PathAppendW(dump_file_path, L"raddbg_crash_dump.dmp");
+    wnsprintfW(dump_file_path, ArrayCount(dump_file_path), L"%s.%u.dmp", module_file_name, GetCurrentProcessId());
+
     HANDLE file = CreateFileW(dump_file_path, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
     if (file != INVALID_HANDLE_VALUE)
     {
@@ -1701,12 +1708,12 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
       info.ThreadId = GetCurrentThreadId();
       info.ExceptionPointers = exception_ptrs;
       info.ClientPointers = FALSE;
-      BOOL dump_successful = dbg_MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpNormal, &info, 0, 0);
+      BOOL dump_successful = dbg_MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpNormal|MiniDumpWithProcessThreadData, &info, 0, 0);
       CloseHandle(file);
       
-      if (dump_successful)
-      {
 #if !BUILD_CONSOLE_INTERFACE
+      if (dump_successful && !win32_g_gen_dump)
+      {
         // opens explorer and selects file
         SFGAOF flags = 0;
         PIDLIST_ABSOLUTE list = 0;
@@ -1715,8 +1722,8 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
           SHOpenFolderAndSelectItems(list, 0, NULL, 0);
           CoTaskMemFree(list);
         }
-#endif
       }
+#endif
     }
   }
   
@@ -1800,28 +1807,30 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
   }
   
   //- rjf: extract arguments
-  Arena *args_arena = arena_alloc(.reserve_size = MB(1), .commit_size = KB(32));
-  char **argv = push_array(args_arena, char *, argc);
+  Arena  *args_arena = arena_alloc(.reserve_size = MB(1), .commit_size = KB(32));
+  char  **argv       = push_array(args_arena, char *, argc);
   for(int i = 0; i < argc; i += 1)
   {
     String16 arg16 = str16_cstring((U16 *)wargv[i]);
-    String8 arg8 = str8_from_16(args_arena, arg16);
-    if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive) ||
-       str8_match(arg8, str8_lit("-quiet"), StringMatchFlag_CaseInsensitive))
+    String8  arg8  = str8_from_16(args_arena, arg16);
+    if(str8_matchi(arg8, str8_lit("--quiet")) || str8_matchi(arg8, str8_lit("-quiet")))
     {
       win32_g_is_quiet = 1;
     }
-    if(str8_match(arg8, str8_lit("--large_pages"), StringMatchFlag_CaseInsensitive) ||
-       str8_match(arg8, str8_lit("-large_pages"), StringMatchFlag_CaseInsensitive))
+    else if(str8_matchi(arg8, str8_lit("--large_pages")) || str8_matchi(arg8, str8_lit("-large_pages")))
     {
       arena_default_flags        = ArenaFlag_LargePages;
       arena_default_reserve_size = Max(MB(64), os_w32_state.system_info.large_page_size);
       arena_default_commit_size  = arena_default_reserve_size;
     }
-    if(str8_match(arg8, str8_lit("--gen_crash_dump"), StringMatchFlag_CaseInsensitive) ||
-       str8_match(arg8, str8_lit("-gen_crash_dump"), StringMatchFlag_CaseInsensitive))
+    else if(str8_matchi(arg8, str8_lit("--gen_crash_dump")) || str8_matchi(arg8, str8_lit("-gen_crash_dump")))
     {
       win32_g_gen_dump = 1;
+    }
+    else if(str8_starts_withi(arg8, str8_lit("--crash_dump_path:")) || str8_starts_withi(arg8, str8_lit("-crash_dump_path:")))
+    {
+      U64 sep_pos = str8_find_needle(arg8, 0, str8_lit(":"), 0) + 1;
+      wnsprintfW(win32_g_crash_dump_path, ArrayCount(win32_g_crash_dump_path), L"%s", wargv[i] + sep_pos);
     }
     argv[i] = (char *)arg8.str;
   }

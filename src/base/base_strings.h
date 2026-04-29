@@ -200,6 +200,8 @@ internal String8 backslashed_from_str8(Arena *arena, String8 string);
 internal B32 str8_match(String8 a, String8 b, StringMatchFlags flags);
 #define str8_matchi(a, b) str8_match(a, b, StringMatchFlag_CaseInsensitive)
 internal B32 str8_match_wildcard(String8 string, String8 pattern, StringMatchFlags flags);
+internal B32 str8_starts_with(String8 string, String8 expected_prefix);
+internal B32 str8_starts_withi(String8 string, String8 expected_prefix);
 internal U64 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
 internal U64 str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
 internal B32 str8_is_before(String8 a, String8 b);

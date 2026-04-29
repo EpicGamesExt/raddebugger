@@ -455,6 +455,10 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
         wait_ms = now_us < endt_us ? ClampTop((endt_us - now_us + 999) / 1000, max_U32-1) : 0;
       }
 
+      if (wait_ms == 0) {
+        DebugBreakProcess((HANDLE)process_handle.u64[0]);
+      }
+
       // wait on process and read pipes
       DWORD wait_result = WaitForMultipleObjects(wait_handle_count, wait_handles, 0, wait_ms);
 
@@ -560,6 +564,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
   exit:;
   for EachElement(i, read_capture_handles)  { os_file_close(read_capture_handles[i]);  }
   for EachElement(i, write_capture_handles) { os_file_close(write_capture_handles[i]); }
+  AssertAlways(is_ok);
   scratch_end(scratch);
   return is_ok;
 }

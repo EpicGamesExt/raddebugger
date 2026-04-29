@@ -1,12 +1,6 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal B32
-str8_starts_with(String8 string, String8 expected_prefix)
-{
-  return str8_match(str8_prefix(string, expected_prefix.size), expected_prefix, 0);
-}
-
 internal U64
 str8_array_bsearch(String8Array arr, String8 value)
 {

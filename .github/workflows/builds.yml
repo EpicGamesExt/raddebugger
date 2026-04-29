@@ -65,7 +65,18 @@ jobs:
           for /f "tokens=3 delims=. " %%v in ('clang -v 2^>^&1 ^| findstr version') do set clang_version=%%v
           if "${{matrix.compiler}}" == "clang" set PATH=%clang_path%..\lib\clang\%clang_version%\lib\windows;%PATH%
 
+          call build meta raddbg_non_graphical || exit /b 1
           call build asan meta torture radlink radbin mule_main mule_module "${{matrix.mode}}" "${{matrix.compiler}}" || exit /b 1
           cd build
-          torture || exit /b 1
+          torture --gen_crash_dump || exit /b 1
+      - name: upload torture crash dumps
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: torture-crash-dumps-${{ matrix.compiler }}-${{ matrix.mode }}
+          path: |
+            build/*.dmp
+            build/*.exe
+            build/*.pdb
+          if-no-files-found: ignore
 

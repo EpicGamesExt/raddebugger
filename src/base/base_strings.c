@@ -395,6 +395,18 @@ str8_match_wildcard(String8 string, String8 pattern, StringMatchFlags flags)
   return matched;
 }
 
+internal B32
+str8_starts_with(String8 string, String8 expected_prefix)
+{
+  return str8_match(str8_prefix(string, expected_prefix.size), expected_prefix, 0);
+}
+
+internal B32
+str8_starts_withi(String8 string, String8 expected_prefix)
+{
+  return str8_match(str8_prefix(string, expected_prefix.size), expected_prefix, StringMatchFlag_CaseInsensitive);
+}
+
 internal U64
 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags)
 {

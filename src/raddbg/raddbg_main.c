@@ -461,7 +461,7 @@ internal void
 entry_point(CmdLine *cmd_line)
 {
   Temp scratch = scratch_begin(0, 0);
-  
+
   //- rjf: unpack command line arguments
   ExecMode exec_mode = ExecMode_Normal;
   B32 auto_run = 0;
@@ -822,7 +822,12 @@ entry_point(CmdLine *cmd_line)
                                     "--quit_after_success (or -q)\n"
                                     "This will close the debugger automatically after all processes exit, if they all exited successfully (with code 0), and ran with no interruptions.\n\n"
                                     "--ipc <command>\n"
-                                    "This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger.\n\n"));
+                                    "This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger.\n\n"
+                                    "--gen_crash_dump\n"
+                                    "Bypass crash prompt and write dump to --crash_dump_path.\n\n"
+                                    "--crash_dump_path:<path>\n"
+                                    "Sets crash dump file path.\n\n"
+                                    ));
     }break;
   }
   
