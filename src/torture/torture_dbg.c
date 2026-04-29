@@ -641,8 +641,11 @@ T_RunSig(dbg_script_runner)
 
   // launch targets
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Launch].first) {
-    String8 cmdl = str8f(arena, "--user:%S.raddbg_user %S ", t_make_file_path(arena, str8_lit("temp")), directive->args);
-    T_Ok(t_dbg_launch(cmdl, ENDT_SEC(10)));
+    String8 cmdl = str8f(arena, "--user:%S.raddbg_user %S", t_make_file_path(arena, str8_lit("temp")), directive->args);
+    if ( ! t_dbg_launch(cmdl, ENDT_SEC(10))) {
+      t_outf("failed to launch debugger with command line \"%S %S\" work dir \"%S\"\n", t_raddbg_path(), cmdl, g_wdir);
+      T_Ok(0);
+    }
   }
 
   // debugger is ready, now call script

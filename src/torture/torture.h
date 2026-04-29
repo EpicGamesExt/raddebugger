@@ -66,7 +66,12 @@ internal void t_break_if_debugger_present(void);
   TEST_(name)      \
   T_RunSig(name)
 
-#define T_Ok(c) do { if (!(c)) { result_out->fail_file = __FILE__; result_out->fail_line = __LINE__; result_out->fail_cond = Stringify(c); result_out->status = T_RunStatus_Fail; t_break_if_debugger_present(); return; } } while(0)
+#define T_Ok(c) do { if (!(c)) {                                                                          \
+  *result_out = (T_RunResult){ .fail_file = __FILE__, .fail_line = __LINE__, .fail_cond = Stringify(c) }; \
+  t_break_if_debugger_present();                                                                          \
+  return;                                                                                                 \
+} } while(0)
+
 #define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
 #define t_outf(...) str8_list_pushf(arena, test_out, ## __VA_ARGS__)
 
