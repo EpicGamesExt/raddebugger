@@ -13,6 +13,9 @@ internal WM_SystemInfo *
 wm_get_system_info(void)
 {
   local_persist WM_SystemInfo g = {0};
+#if defined(WM_STUB_DEFAULT_REFRESH_RATE)
+  g.default_refresh_rate = WM_STUB_DEFAULT_REFRESH_RATE;
+#endif
   return &g;
 }
 

@@ -41,7 +41,7 @@ r_tex2d_release(R_Handle texture)
 r_hook R_ResourceKind
 r_kind_from_tex2d(R_Handle texture)
 {
-  return R_ResourceStatic;
+  return R_ResourceKind_Static;
 }
 
 r_hook Vec2S32
