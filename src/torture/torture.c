@@ -265,9 +265,9 @@ t_raddbg_path(void)
     ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
     Arena *arena = arena_alloc_(&params);
 #if OS_WINDOWS
-    path = os_full_path_from_path(arena, str8_lit("raddbg.exe"));
+    path = os_full_path_from_path(arena, str8_lit("raddbg_non_graphical.exe"));
 #else
-    path = os_full_path_from_path(arena, str8_lit("raddbg"));
+    path = os_full_path_from_path(arena, str8_lit("raddbg_non_graphical"));
 #endif
     AssertAlways(path.size);
   }

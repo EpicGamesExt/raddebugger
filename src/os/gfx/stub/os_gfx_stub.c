@@ -13,6 +13,9 @@ internal OS_GfxInfo *
 os_get_gfx_info(void)
 {
   local_persist OS_GfxInfo g = {0};
+#if defined(OS_GFX_STUB_DEFAULT_REFRESH_RATE)
+  g.default_refresh_rate = OS_GFX_STUB_DEFAULT_REFRESH_RATE;
+#endif
   return &g;
 }
 
