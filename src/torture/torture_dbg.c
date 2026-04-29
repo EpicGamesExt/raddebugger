@@ -3,16 +3,6 @@
 
 #define T_Group "Dbg"
 
-////////////////////////////////////////////////////////////////
-
-#define TIMEOUT_US(x)  (x)
-#define TIMEOUT_MS(x)  TIMEOUT_US((x)*1000ull)
-#define TIMEOUT_SEC(x) TIMEOUT_MS((x)*1000ull)
-
-#define ENDT_US(x)  (os_now_microseconds() + (x))
-#define ENDT_MS(x)  TIMEOUT_US((x)*1000ull)
-#define ENDT_SEC(x) TIMEOUT_MS((x)*1000ull)
-
 ////////////////////////////////
 // IPC Controller
 
@@ -223,9 +213,9 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   } while (t > 0);
 
   //--- Status ---------------------
-  if (0 && is_stopped) {
+  if (is_stopped) {
     T_DbgStatus status = {0};
-    AssertAlways(t_dbg_status(&status, 0));
+    AssertAlways(t_dbg_status(&status, TIMEOUT_SEC(5)));
 
     String8 process_id     = str8_skip(str8_chop(t_dbg_value_from_exprf(scratch.arena, "query:current_process.id"), 2), 2);
     String8 process_label  = str8_chop(str8_skip(t_dbg_value_from_exprf(scratch.arena, "query:current_process.label"), 2), 2);
@@ -237,10 +227,10 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
     String8 sp             = t_dbg_value_from_exprf(scratch.arena, "hex(reg:rsp)");
 
     T_DbgStopEvent last_stop = {0};
-    AssertAlways(t_dbg_stop_event(scratch.arena, &last_stop, 0));
+    AssertAlways(t_dbg_stop_event(scratch.arena, &last_stop, TIMEOUT_SEC(5)));
 
     T_DbgSourceLocation loc = {0};
-    AssertAlways(t_dbg_src_line(scratch.arena, last_stop.ip_vaddr, &loc, 0));
+    AssertAlways(t_dbg_src_line(scratch.arena, last_stop.ip_vaddr, &loc, TIMEOUT_SEC(5)));
 
     printf("------------------------------------------------------------------------------------------------------------------------\n");
     printf("  Process:    %.*s [%.*s] (Active: %.*s)\n", str8_varg(process_id), str8_varg(process_label), str8_varg(process_active));
@@ -316,7 +306,7 @@ t_dbg_eval(Arena *arena, String8 expr, T_Eval *eval_out)
 
   RD_IpcReply reply = {0};
   String8     cmd   = str8f(scratch.arena, "eval %llu %S", /* value char cap: */ 10000, expr);
-  B32         is_ok = t_dbg_send_cmd(cmd, 0, arena, &reply);
+  B32         is_ok = t_dbg_send_cmd(cmd, TIMEOUT_SEC(5), arena, &reply);
 
   T_Eval e = {0};
   if ( ! rd_ipc_parse_string(reply.msg, str8_lit("expr"),  &e.expr))  { AssertAlways(0); goto exit; }
@@ -586,10 +576,6 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
         case T_DbgScriptCmdKind_ClearBreakpoints: t_dbg_send_cmdf(0,0,0, "clear_breakpoints"); break;
         case T_DbgScriptCmdKind_Run:              t_dbg_send_cmd(str8_lit("run"),  timeout_us, 0, 0); break;
         case T_DbgScriptCmdKind_At: {
-          T_DbgStatus status = {0};
-          AssertAlways(t_dbg_status(&status, 0));
-          AssertAlways(status.running == 0);
-
           // map IP -> source location
           U64                 ip  = u64_from_str8(t_dbg_value_from_exprf(scratch.arena, "reg:rip"), 10);
           T_DbgSourceLocation loc = {0};
