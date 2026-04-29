@@ -3380,8 +3380,8 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
                 switch(src_loc->kind)
                 {
                   default:{}break;
-                  case RDI_LocationKind_AddrRegPlusU16:
-                  case RDI_LocationKind_AddrAddrRegPlusU16:
+                  case RDI_LocationKind_AddrRegPlusOff:
+                  case RDI_LocationKind_AddrAddrRegPlusOff:
                   {
                     dst_loc[0] |= ((U64)src_loc->reg_code << RDI_Location_RegCodeShift) & RDI_Location_RegCodeMask;
                     dst_loc[0] |= ((U64)src_loc->offset   << RDI_Location_RegOffShift) & RDI_Location_RegOffMask;

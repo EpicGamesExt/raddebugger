@@ -67,6 +67,7 @@ struct DW2_ParseCtx
   DW2_OffsetTable *rnglists_table;
   DW2_OffsetTable *str_offsets_table;
   DW2_OffsetTable *addr_table;
+  DW2_OffsetTable *loclists_table;
   String8 unit_dir;
   String8 unit_file;
 };
@@ -78,8 +79,9 @@ typedef struct DW2_FormVal DW2_FormVal;
 struct DW2_FormVal
 {
   DW_FormKind kind;
-  String8 string;
   U128 u128;
+  String8 string;
+  U64 addr;
 };
 
 typedef struct DW2_Attrib DW2_Attrib;
@@ -198,6 +200,31 @@ struct DW2_LineVMRegs
 };
 
 ////////////////////////////////
+//~ rjf: Location Lists
+
+typedef struct DW2_Loc DW2_Loc;
+struct DW2_Loc
+{
+  Rng1U64 range;
+  String8 expr;
+};
+
+typedef struct DW2_LocNode DW2_LocNode;
+struct DW2_LocNode
+{
+  DW2_LocNode *next;
+  DW2_Loc v;
+};
+
+typedef struct DW2_LocList DW2_LocList;
+struct DW2_LocList
+{
+  DW2_LocNode *first;
+  DW2_LocNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Globals
 
 global read_only DW2_Attrib dw2_attrib_nil = {0};
@@ -245,5 +272,10 @@ internal B32 dw2_try_offset_from_table_idx(DW2_OffsetTable *tbl, U64 idx, U64 *o
 //~ rjf: Range List Parsing (.debug_rnglists)
 
 internal Rng1U64List dw2_rnglist_from_form_val(Arena *arena, DW2_ParseCtx *ctx, DW_Raw *raw, DW2_FormVal form_val);
+
+////////////////////////////////
+//~ rjf: Location List Parsing (.debug_loclists)
+
+internal DW2_LocList dw2_loclist_from_form_val(Arena *arena, DW2_ParseCtx *ctx, DW_Raw *raw, DW2_FormVal form_val);
 
 #endif // DWARF_PARSE_2_H

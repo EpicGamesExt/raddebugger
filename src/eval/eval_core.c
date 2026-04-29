@@ -684,17 +684,17 @@ e_oplist_from_location(Arena *arena, RDI_Parsed *rdi, RDI_Location loc)
     }break;
     
     //- rjf: reg + off
-    case RDI_LocationKind_AddrRegPlusU16: goto reg_plus_off;
-    case RDI_LocationKind_AddrAddrRegPlusU16: need_extra_memread = 1; goto reg_plus_off;
+    case RDI_LocationKind_AddrRegPlusOff: goto reg_plus_off;
+    case RDI_LocationKind_AddrAddrRegPlusOff: need_extra_memread = 1; goto reg_plus_off;
     reg_plus_off:;
     {
       RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
       Arch arch = arch_from_rdi_arch(tli->arch);
       U64 arch_addr_bytesize = byte_size_from_arch(arch);
       RDI_RegCode regcode = rdi_regcode_from_location(loc);
-      U64 reg_off = rdi_regoff_from_location(loc);
+      S64 reg_off = rdi_regoff_from_location(loc);
       e_oplist_push_op(arena, &result, RDI_EvalOp_RegRead, e_value_u64(RDI_EncodeRegReadParam(regcode, arch_addr_bytesize, 0)));
-      e_oplist_push_uconst(arena, &result, reg_off);
+      e_oplist_push_sconst(arena, &result, reg_off);
       e_oplist_push_op(arena, &result, RDI_EvalOp_Add, e_value_u64(0));
       if(need_extra_memread)
       {

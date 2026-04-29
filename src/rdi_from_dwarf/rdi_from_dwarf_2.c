@@ -449,7 +449,10 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   U64 addr_tables_count = 0;
   DW2_OffsetTable *addr_tables = 0;
   Rng1U64 *addr_tables_ranges = 0;
-  ProfScope("parse all offset tables (.debug_rnglists, .debug_str_offsets, .debug_addr)") if(lane_idx() == 0)
+  U64 loclists_tables_count = 0;
+  DW2_OffsetTable *loclists_tables = 0;
+  Rng1U64 *loclists_tables_ranges = 0;
+  ProfScope("parse all offset tables (.debug_rnglists, .debug_str_offsets, .debug_addr, .debug_loclists)") if(lane_idx() == 0)
   {
     struct
     {
@@ -463,6 +466,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       {raw->sec[DW_Section_StrOffsets].data, &str_offsets_tables_count, &str_offsets_tables, &str_offsets_tables_ranges},
       {raw->sec[DW_Section_RngLists].data, &rnglists_tables_count, &rnglists_tables, &rnglists_tables_ranges},
       {raw->sec[DW_Section_Addr].data, &addr_tables_count, &addr_tables, &addr_tables_ranges},
+      {raw->sec[DW_Section_LocLists].data, &loclists_tables_count, &loclists_tables, &loclists_tables_ranges},
     };
     for EachElement(task_idx, tasks)
     {
@@ -525,6 +529,9 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   lane_sync_u64(&addr_tables_count, 0);
   lane_sync_u64(&addr_tables, 0);
   lane_sync_u64(&addr_tables_ranges, 0);
+  lane_sync_u64(&loclists_tables_count, 0);
+  lane_sync_u64(&loclists_tables, 0);
+  lane_sync_u64(&loclists_tables_ranges, 0);
   
   ////////////////////////////
   //- rjf: build per-unit parsing contexts
@@ -588,7 +595,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     {
       DW2_Tag *unit_root_tag = &unit_root_tags__pre_offset_tables[unit_idx];
       DW2_Attrib *low_pc_attrib = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_LowPc);
-      U64 low_pc = low_pc_attrib->val.u128.u64[0];
+      U64 low_pc = low_pc_attrib->val.addr;
       unit_parse_ctxs[unit_idx].unit_base_addr = low_pc;
     }
   }
@@ -602,6 +609,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     Rng1U64Array rnglists_tables_ranges_array = {rnglists_tables_ranges, rnglists_tables_count};
     Rng1U64Array str_offsets_tables_ranges_array = {str_offsets_tables_ranges, str_offsets_tables_count};
     Rng1U64Array addr_tables_ranges_array = {addr_tables_ranges, addr_tables_count};
+    Rng1U64Array loclist_tables_ranges_array = {loclists_tables_ranges, loclists_tables_count};
     Rng1U64 range = lane_range(unit_count);
     for EachInRange(unit_idx, range)
     {
@@ -640,6 +648,18 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         {
           DW2_OffsetTable *table = &addr_tables[addr_table_num-1];
           unit_parse_ctxs[unit_idx].addr_table = table;
+        }
+      }
+      
+      // rjf: find addr table
+      {
+        DW2_Attrib *loclist_base_off_attrib = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_LocListsBase);
+        U64 loclist_base_off = loclist_base_off_attrib->val.u128.u64[0];
+        U64 loclist_table_num = rng1u64_array_num_from_value__binary_search(&loclist_tables_ranges_array, loclist_base_off);
+        if(0 < loclist_table_num && loclist_table_num <= loclist_tables_ranges_array.count)
+        {
+          DW2_OffsetTable *table = &loclists_tables[loclist_table_num-1];
+          unit_parse_ctxs[unit_idx].loclists_table = table;
         }
       }
     }
@@ -1742,17 +1762,17 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   // For example lets take following decl:
   //
   //    int (*foo[2])[3];
-  // 
+  //
   //  This compiles to in DWARF:
-  //  
+  //
   //  foo -> DW_TAG_ArrayType -> (A0) DW_TAG_Subrange [2]
   //                          \
   //                           -> (B0) DW_TAG_PointerType -> (A1) DW_TAG_ArrayType -> DW_TAG_Subrange [3]
   //                                                      \
   //                                                       -> (B1) DW_TAG_BaseType (int)
-  // 
+  //
   // RDI expects:
-  //  
+  //
   //  foo -> Array[2] -> Pointer -> Array[3] -> int
   //
   // Note that DWARF forks the graph on DW_TAG_ArrayType to describe array ranges in branch A and
@@ -1786,7 +1806,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       {
         // rjf: if this type has a higher chain count than the current,
         // but it is lower than our next maximum chain count, collect it,
-        // so we will hit 
+        // so we will hit
         //
         // if this type has a lower chain count than the current,
         // we should've already built it from a previous pass.
@@ -2309,8 +2329,16 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         // rjf: gather contiguous range from low-pc / high-pc attribute
         if(lopc_attrib != &dw2_attrib_nil && hipc_attrib != &dw2_attrib_nil)
         {
-          U64 voff_base = lopc_attrib->val.u128.u64[0] - base_vaddr;
-          U64 voff_opl  = hipc_attrib->val.u128.u64[0] - base_vaddr;
+          U64 voff_base = lopc_attrib->val.addr - base_vaddr;
+          U64 voff_opl = 0;
+          if(dw_attrib_class_from_form_kind(unit_parse_ctx->version, hipc_attrib->val.kind) & (1<<DW_AttribClass_Address))
+          {
+            voff_opl = voff_base + hipc_attrib->val.u128.u64[0];
+          }
+          else
+          {
+            voff_opl = hipc_attrib->val.addr;
+          }
           rdim_rng1u64_chunk_list_push(arena, &unit_voff_ranges, 256, (RDIM_Rng1U64){voff_base, voff_opl});
         }
       }
@@ -2329,32 +2357,814 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       }
       
       //- rjf: produce all unit symbols
+      typedef struct D2R2_ScopeNode D2R2_ScopeNode;
+      struct D2R2_ScopeNode
+      {
+        D2R2_ScopeNode *next;
+        RDIM_Scope *scope;
+        RDIM_LocationCaseList framebase_location_cases;
+      };
+      D2R2_ScopeNode *top_scope = 0;
+      D2R2_ScopeNode *free_scope = 0;
+      U64 chunk_count = 512;
       for(U64 off = unit_info_tag_range.min; off < unit_info_tag_range.max;)
       {
         Temp scratch2 = scratch_begin(&scratch.arena, 1);
         U64 start_off = off;
         
+        ////////////////////////
         //- rjf: parse tag
+        //
         DW2_Tag tag = {0};
         off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &tag);
         
+        ////////////////////////
         //- rjf: gather attributes from tag
+        //
         DW2_Attrib *name_attrib = &dw2_attrib_nil;
+        DW2_Attrib *linkname_attrib = &dw2_attrib_nil;
+        DW2_Attrib *type_attrib = &dw2_attrib_nil;
+        DW2_Attrib *inline_attrib = &dw2_attrib_nil;
+        DW2_Attrib *ranges_attrib = &dw2_attrib_nil;
+        DW2_Attrib *lopc_attrib = &dw2_attrib_nil;
+        DW2_Attrib *hipc_attrib = &dw2_attrib_nil;
+        DW2_Attrib *constval_attrib = &dw2_attrib_nil;
+        DW2_Attrib *location_attrib = &dw2_attrib_nil;
+        DW2_Attrib *framebase_attrib = &dw2_attrib_nil;
+        DW2_Attrib *external_attrib = &dw2_attrib_nil;
         for EachNode(n, DW2_AttribNode, tag.attribs.first)
         {
           switch(n->v.attrib_kind)
           {
             default:{}break;
 #define Case(dst, src) case DW_AttribKind_##src:{dst##_attrib = &n->v;}break
-            Case(name,     Name);
+            Case(name,      Name);
+            Case(linkname,  LinkageName);
+            Case(type,      Type);
+            Case(inline,    Inline);
+            Case(ranges,    Ranges);
+            Case(lopc,      LowPc);
+            Case(hipc,      HighPc);
+            Case(constval,  ConstValue);
+            Case(location,  Location);
+            Case(framebase, FrameBase);
+            Case(external,  External);
 #undef Case
           }
         }
         
-        //- rjf: unpack attributes
+        ////////////////////////
+        //- rjf: unpack basic attributes
+        //
         String8 name = name_attrib->val.string;
+        String8 link_name = linkname_attrib->val.string;
+        DW_InlKind inl_kind = (DW_InlKind)inline_attrib->val.u128.u64[0];
+        B32 is_external = (external_attrib != &dw2_attrib_nil);
         
+        ////////////////////////
+        //- rjf: unpack ranges
+        //
+        RDIM_Rng1U64List ranges = {0};
+        {
+          if(ranges_attrib != &dw2_attrib_nil)
+          {
+            Temp temp = temp_begin(scratch2.arena);
+            Rng1U64List tag_ranges = dw2_rnglist_from_form_val(temp.arena, unit_parse_ctx, raw, ranges_attrib->val);
+            for EachNode(n, Rng1U64Node, tag_ranges.first)
+            {
+              rdim_rng1u64_list_push(arena, &ranges, (RDIM_Rng1U64){.min = n->v.min, .max = n->v.max});
+            }
+            temp_end(temp);
+          }
+          if(lopc_attrib != &dw2_attrib_nil && hipc_attrib != &dw2_attrib_nil)
+          {
+            U64 voff_base = lopc_attrib->val.addr - base_vaddr;
+            U64 voff_opl = 0;
+            if(dw_attrib_class_from_form_kind(unit_parse_ctx->version, hipc_attrib->val.kind) & (1<<DW_AttribClass_Address))
+            {
+              voff_opl = voff_base + hipc_attrib->val.u128.u64[0];
+            }
+            else
+            {
+              voff_opl = hipc_attrib->val.addr;
+            }
+            rdim_rng1u64_list_push(arena, &ranges, (RDIM_Rng1U64){voff_base, voff_opl});
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: unpack type
+        //
+        RDIM_Type *type = 0;
+        if(type_attrib != &dw2_attrib_nil)
+        {
+          // rjf: attrib -> (info_off, unit_idx)
+          U64 type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
+          U64 type_unit_idx = unit_idx;
+          if(!contains_1u64(unit_info_tag_range, type_info_off))
+          {
+            Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
+            U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
+            type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
+          }
+          
+          // rjf: (info_off, unit_idx) -> hash
+          U64 type_hash = 0;
+          {
+            UnitTypeMap *type_unit_type_map = &unit_type_maps[type_unit_idx];
+            U64 info_off_hash = u64_hash_from_str8(str8_struct(&type_info_off));
+            U64 info_off_slot_idx = info_off_hash%type_unit_type_map->slots_count;
+            for(UnitTypeNode *n = type_unit_type_map->slots[info_off_slot_idx]; n != 0; n = n->next)
+            {
+              if(n->src_info_off == type_info_off)
+              {
+                type_hash = n->dst_hash;
+                break;
+              }
+            }
+          }
+          
+          // rjf: hash -> type
+          {
+            U64 unique_type_tag_slot_idx = type_hash%unique_type_tag_slots_count;
+            for(UniqueTypeTagNode *n = unique_type_tag_slots[unique_type_tag_slot_idx]; n != 0; n = n->next)
+            {
+              if(n->hash == type_hash)
+              {
+                type = type_from_idx_map[n->order_idx];
+                break;
+              }
+            }
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: unpack location info
+        //
+        RDIM_LocationCaseList location_cases = {0};
+        RDIM_LocationCaseList framebase_location_cases = {0};
+        B32 location_is_tls_dependent = 0;
+        B32 framebase_location_is_tls_dependent = 0;
+        {
+          struct
+          {
+            DW2_Attrib *attrib;
+            RDIM_LocationCaseList *dst_locations;
+            B32 *dst_is_tls_dependent;
+          }
+          tasks[] =
+          {
+            {location_attrib, &location_cases, &location_is_tls_dependent},
+            {framebase_attrib, &framebase_location_cases, &framebase_location_is_tls_dependent},
+          };
+          for EachElement(task_idx, tasks)
+          {
+            if(tasks[task_idx].attrib == &dw2_attrib_nil)
+            {
+              continue;
+            }
+            DW2_Attrib *attrib = tasks[task_idx].attrib;
+            RDIM_LocationCaseList *dst_locations = tasks[task_idx].dst_locations;
+            B32 *dst_is_tls_dependent = tasks[task_idx].dst_is_tls_dependent;
+            
+            //////////////////////
+            //- rjf: gather DWARF location exprs
+            //
+            DW2_LocList locs = {0};
+            switch(attrib->val.kind)
+            {
+              default:{}break;
+              case DW_Form_ExprLoc:
+              {
+                U64 expr_info_off  = attrib->val.u128.u64[0];
+                U64 expr_info_size = attrib->val.u128.u64[1];
+                String8 expr = str8_substr(raw->sec[DW_Section_Info].data, r1u64(expr_info_off, expr_info_off+expr_info_size));
+                DW2_LocNode *n = push_array(scratch2.arena, DW2_LocNode, 1);
+                n->v.expr = expr;
+                n->v.range = r1u64(0, max_U64);
+                SLLQueuePush(locs.first, locs.last, n);
+                locs.count += 1;
+              }break;
+              case DW_Form_LocListx:   // NOTE(rjf): dwarf5+, loclistx -> location list offset table
+              case DW_Form_SecOffset:  // NOTE(rjf): pre-dwarf5, location section offset -> a location list
+              {
+                locs = dw2_loclist_from_form_val(scratch2.arena, unit_parse_ctx, raw, attrib->val);
+              }break;
+            }
+            
+            //////////////////////
+            //- rjf: convert DWARF location exprs -> RDIM locations
+            //
+            // we do this for each possible frame base location case - locations in DWARF
+            // refer to the frame base via a special op. in our case, we want to bake that
+            // into the location directly to reduce extra context for evaluation.
+            //
+            // if we find that a location doesn't rely on the frame base at all, we just
+            // skip the rest.
+            //
+            B32 is_tls_dependent = 0;
+            for EachNode(n, DW2_LocNode, locs.first)
+            {
+              //- rjf: unpack location
+              Rng1U64 range = n->v.range;
+              String8 expr = n->v.expr;
+              
+              //- rjf: iterate each frame base location case, or once if there are none,
+              // and convert the location in that context
+              RDIM_LocationCase nil_framebase_loc_case = {0, {0}, {0, max_U64}};
+              for(RDIM_LocationCase *framebase_loc_n = top_scope ? top_scope->framebase_location_cases.first : &nil_framebase_loc_case;
+                  framebase_loc_n != 0;
+                  framebase_loc_n = framebase_loc_n->next)
+              {
+                //- rjf: unpack framebase location
+                RDIM_Location framebase_loc = framebase_loc_n->location;
+                RDIM_Rng1U64 framebase_voff_range = framebase_loc_n->voff_range;
+                
+                //- rjf: set up type stack for type-evaluating bytecode
+                typedef struct D2R2_ExprVal D2R2_ExprVal;
+                struct D2R2_ExprVal
+                {
+                  RDI_TypeKind type_kind;
+                  B32 is_addr;
+                };
+                typedef struct D2R2_ExprValNode D2R2_ExprValNode;
+                struct D2R2_ExprValNode
+                {
+                  D2R2_ExprValNode *next;
+                  D2R2_ExprVal v;
+                };
+                D2R2_ExprValNode *val_stack_top = 0;
+                D2R2_ExprValNode *free_val = 0;
+                
+                //- rjf: process DWARF bytecode; produce RDI bytecode + mini-type-info for the expression's result
+                typedef struct JumpOpNode JumpOpNode;
+                struct JumpOpNode
+                {
+                  JumpOpNode *next;
+                  RDIM_EvalBytecodeOp *op;
+                  S64 inst_delta;
+                };
+                JumpOpNode *first_jump_op = 0;
+                JumpOpNode *last_jump_op = 0;
+                RDIM_EvalBytecode dst_bytecode = {0};
+                B32 dst_bytecode_is_good = 1;
+                B32 bytecode_is_framebase_dependent = 0;
+                for(U64 expr_off = 0; expr_off < expr.size;)
+                {
+                  U64 start_expr_off = expr_off;
+                  
+                  //- rjf: read next opcode
+                  DW_ExprOp opcode = 0;
+                  expr_off += str8_deserial_read_struct(expr, expr_off, &opcode);
+                  
+                  //- rjf: read op operands
+                  U64 operands_count = dw_operand_count_from_expr_op(opcode);
+                  DW_ExprOperandType *operands_types = dw_operand_types_from_expr_opcode(opcode);
+                  U64 operand_u64s[2] = {0};
+                  S64 operand_s64s[2] = {0};
+                  String8 operand_str8s[2] = {0};
+                  for EachIndex(operand_idx, operands_count)
+                  {
+                    switch(operands_types[operand_idx])
+                    {
+                      case DW_ExprOperandType_Null:
+                      default:{}break;
+                      case DW_ExprOperandType_U8:        {expr_off += str8_deserial_read(expr, expr_off, &operand_u64s[operand_idx], 1, 1);}break;
+                      case DW_ExprOperandType_U16:       {expr_off += str8_deserial_read(expr, expr_off, &operand_u64s[operand_idx], 2, 2);}break;
+                      case DW_ExprOperandType_U32:       {expr_off += str8_deserial_read(expr, expr_off, &operand_u64s[operand_idx], 4, 4);}break;
+                      case DW_ExprOperandType_U64:       {expr_off += str8_deserial_read(expr, expr_off, &operand_u64s[operand_idx], 8, 8);}break;
+                      case DW_ExprOperandType_S8:        {expr_off += str8_deserial_read(expr, expr_off, &operand_s64s[operand_idx], 1, 1);}break;
+                      case DW_ExprOperandType_S16:       {expr_off += str8_deserial_read(expr, expr_off, &operand_s64s[operand_idx], 2, 2);}break;
+                      case DW_ExprOperandType_S32:       {expr_off += str8_deserial_read(expr, expr_off, &operand_s64s[operand_idx], 4, 4);}break;
+                      case DW_ExprOperandType_S64:       {expr_off += str8_deserial_read(expr, expr_off, &operand_s64s[operand_idx], 8, 8);}break;
+                      case DW_ExprOperandType_ULEB128:   {expr_off += str8_deserial_read_uleb128(expr, expr_off, &operand_u64s[operand_idx]);} break;
+                      case DW_ExprOperandType_SLEB128:   {expr_off += str8_deserial_read_sleb128(expr, expr_off, &operand_s64s[operand_idx]);} break;
+                      case DW_ExprOperandType_Addr:      {expr_off += str8_deserial_read(expr, expr_off, &operand_u64s[operand_idx], unit_parse_ctx->addr_size, unit_parse_ctx->addr_size);}break;
+                      case DW_ExprOperandType_DwarfUInt: {expr_off += dw2_read_fmt_u64(expr, expr_off, unit_parse_ctx->format, &operand_u64s[operand_idx]);}break;
+                      case DW_ExprOperandType_Block:
+                      {
+                        U8 block_size = 0;
+                        expr_off += str8_deserial_read_struct(expr, expr_off, &block_size);
+                        operand_str8s[operand_idx] = str8_substr(expr, r1u64(expr_off, expr_off+block_size));
+                        expr_off += block_size;
+                      }break;
+                    }
+                  }
+                  
+                  //- rjf: pop stack values
+                  D2R2_ExprVal popped_vals[2] = {0};
+                  {
+                    U64 pop_count = dw_pop_count_from_expr_op(opcode);
+                    pop_count = Min(pop_count, ArrayCount(popped_vals));
+                    for EachIndex(pop_idx, pop_count)
+                    {
+                      if(val_stack_top != 0)
+                      {
+                        D2R2_ExprValNode *popped = val_stack_top;
+                        popped_vals[pop_idx] = popped->v;
+                        SLLStackPop(val_stack_top);
+                        SLLStackPush(free_val, popped);
+                      }
+                    }
+                  }
+                  
+                  //- rjf: exec op (produce RDI bytecode, + manipulate value stack)
+                  D2R2_ExprVal push_vals[2] = {0};
+                  U64 regcode_dw = 0;
+                  S64 regval_off = 0;
+                  B32 regread_is_addr = 0;
+                  U64 target_pick_val_idx = 0;
+                  RDI_EvalOp rdi_eval_op = 0;
+                  U64 memread_size = 0;
+                  switch(opcode)
+                  {
+                    default:{}break;
+                    
+                    //- rjf: small opcode-embedded unsigned literals
+                    case DW_ExprOp_Lit0:  case DW_ExprOp_Lit1:  case DW_ExprOp_Lit2:
+                    case DW_ExprOp_Lit3:  case DW_ExprOp_Lit4:  case DW_ExprOp_Lit5:
+                    case DW_ExprOp_Lit6:  case DW_ExprOp_Lit7:  case DW_ExprOp_Lit8:
+                    case DW_ExprOp_Lit9:  case DW_ExprOp_Lit10: case DW_ExprOp_Lit11:
+                    case DW_ExprOp_Lit12: case DW_ExprOp_Lit13: case DW_ExprOp_Lit14:
+                    case DW_ExprOp_Lit15: case DW_ExprOp_Lit16: case DW_ExprOp_Lit17:
+                    case DW_ExprOp_Lit18: case DW_ExprOp_Lit19: case DW_ExprOp_Lit20:
+                    case DW_ExprOp_Lit21: case DW_ExprOp_Lit22: case DW_ExprOp_Lit23:
+                    case DW_ExprOp_Lit24: case DW_ExprOp_Lit25: case DW_ExprOp_Lit26:
+                    case DW_ExprOp_Lit27: case DW_ExprOp_Lit28: case DW_ExprOp_Lit29:
+                    case DW_ExprOp_Lit30: case DW_ExprOp_Lit31:
+                    {
+                      U64 lit_val = (U64)(opcode - DW_ExprOp_Lit0);
+                      rdim_bytecode_push_uconst(arena, &dst_bytecode, lit_val);
+                    }break;
+                    
+                    //- rjf: small unsigned literals
+                    case DW_ExprOp_Const1U: push_vals[0].type_kind = RDI_TypeKind_U8;  goto const_u;
+                    case DW_ExprOp_Const2U: push_vals[0].type_kind = RDI_TypeKind_U16; goto const_u;
+                    case DW_ExprOp_Const4U: push_vals[0].type_kind = RDI_TypeKind_U32; goto const_u;
+                    case DW_ExprOp_Const8U: push_vals[0].type_kind = RDI_TypeKind_U64; goto const_u;
+                    case DW_ExprOp_ConstU:  push_vals[0].type_kind = RDI_TypeKind_U64; goto const_u;
+                    const_u:;
+                    {
+                      rdim_bytecode_push_uconst(arena, &dst_bytecode, operand_u64s[0]);
+                    }break;
+                    
+                    //- rjf: small signed literals
+                    case DW_ExprOp_Const1S: push_vals[0].type_kind = RDI_TypeKind_S8;  goto const_s;
+                    case DW_ExprOp_Const2S: push_vals[0].type_kind = RDI_TypeKind_S16; goto const_s;
+                    case DW_ExprOp_Const4S: push_vals[0].type_kind = RDI_TypeKind_S32; goto const_s;
+                    case DW_ExprOp_Const8S: push_vals[0].type_kind = RDI_TypeKind_S64; goto const_s;
+                    case DW_ExprOp_ConstS : push_vals[0].type_kind = RDI_TypeKind_S64; goto const_s;
+                    const_s:;
+                    {
+                      rdim_bytecode_push_sconst(arena, &dst_bytecode, operand_s64s[0]);
+                    }break;
+                    
+                    //- rjf: address (module offsets)
+                    case DW_ExprOp_Addr:
+                    {
+                      U64 voff = operand_u64s[0] - base_vaddr;
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_ModuleOff, voff);
+                      push_vals[0].type_kind = RDI_TypeKind_U64;
+                      push_vals[0].is_addr = 1;
+                    }break;
+                    case DW_ExprOp_Addrx:
+                    if(unit_parse_ctx->addr_table != 0)
+                    {
+                      U64 addr_idx = operand_u64s[0];
+                      U64 addr = 0;
+                      if(dw2_try_offset_from_table_idx(unit_parse_ctx->addr_table, addr_idx, &addr))
+                      {
+                        U64 voff = (addr > base_vaddr) ? (addr - base_vaddr) : 0;
+                        rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_ModuleOff, voff);
+                        push_vals[0].type_kind = RDI_TypeKind_U64;
+                        push_vals[0].is_addr = 1;
+                      }
+                    }break;
+                    
+                    //- rjf: register reads
+                    case DW_ExprOp_Reg0:  case DW_ExprOp_Reg1:  case DW_ExprOp_Reg2:
+                    case DW_ExprOp_Reg3:  case DW_ExprOp_Reg4:  case DW_ExprOp_Reg5:
+                    case DW_ExprOp_Reg6:  case DW_ExprOp_Reg7:  case DW_ExprOp_Reg8:
+                    case DW_ExprOp_Reg9:  case DW_ExprOp_Reg10: case DW_ExprOp_Reg11:
+                    case DW_ExprOp_Reg12: case DW_ExprOp_Reg13: case DW_ExprOp_Reg14:
+                    case DW_ExprOp_Reg15: case DW_ExprOp_Reg16: case DW_ExprOp_Reg17:
+                    case DW_ExprOp_Reg18: case DW_ExprOp_Reg19: case DW_ExprOp_Reg20:
+                    case DW_ExprOp_Reg21: case DW_ExprOp_Reg22: case DW_ExprOp_Reg23:
+                    case DW_ExprOp_Reg24: case DW_ExprOp_Reg25: case DW_ExprOp_Reg26:
+                    case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
+                    case DW_ExprOp_Reg30: case DW_ExprOp_Reg31:
+                    {
+                      regcode_dw = (U64)(opcode - DW_ExprOp_Reg0);
+                    }goto reg_read;
+                    case DW_ExprOp_RegX:
+                    {
+                      regcode_dw = operand_u64s[0];
+                    }goto reg_read;
+                    case DW_ExprOp_BReg0:  case DW_ExprOp_BReg1:  case DW_ExprOp_BReg2:
+                    case DW_ExprOp_BReg3:  case DW_ExprOp_BReg4:  case DW_ExprOp_BReg5:
+                    case DW_ExprOp_BReg6:  case DW_ExprOp_BReg7:  case DW_ExprOp_BReg8:
+                    case DW_ExprOp_BReg9:  case DW_ExprOp_BReg10: case DW_ExprOp_BReg11:
+                    case DW_ExprOp_BReg12: case DW_ExprOp_BReg13: case DW_ExprOp_BReg14:
+                    case DW_ExprOp_BReg15: case DW_ExprOp_BReg16: case DW_ExprOp_BReg17:
+                    case DW_ExprOp_BReg18: case DW_ExprOp_BReg19: case DW_ExprOp_BReg20:
+                    case DW_ExprOp_BReg21: case DW_ExprOp_BReg22: case DW_ExprOp_BReg23:
+                    case DW_ExprOp_BReg24: case DW_ExprOp_BReg25: case DW_ExprOp_BReg26:
+                    case DW_ExprOp_BReg27: case DW_ExprOp_BReg28: case DW_ExprOp_BReg29:
+                    case DW_ExprOp_BReg30: case DW_ExprOp_BReg31:
+                    {
+                      regcode_dw = (U64)(opcode - DW_ExprOp_BReg0);
+                      regval_off = operand_s64s[1];
+                      regread_is_addr = 1;
+                    }goto reg_read;
+                    case DW_ExprOp_BRegX:
+                    {
+                      regcode_dw = operand_u64s[0];
+                      regval_off = operand_s64s[1];
+                      regread_is_addr = 1;
+                    }goto reg_read;
+                    reg_read:;
+                    {
+                      // rjf: DWARF regcode -> RDI, off, size
+                      RDI_RegCode regcode_rdi = 0;
+                      U64 reg_off = 0;
+                      U64 reg_size = 0;
+                      switch((Arch)arch)
+                      {
+                        case Arch_Null:
+                        case Arch_COUNT:
+                        {}break;
+                        case Arch_arm32:
+                        case Arch_arm64:
+                        case Arch_x86:
+                        {
+                          // TODO(rjf): unsupported architectures
+                        }break;
+                        case Arch_x64:
+                        {
+                          switch(regcode_dw)
+                          {
+                            default:{}break;
+#define X(reg_dw, val_dw, reg_rdi, off, size) case DW_RegX64_##reg_dw:{regcode_rdi = RDI_RegCodeX64_##reg_rdi; reg_off = (off); reg_size = (size);}break;
+                            DW_Regs_X64_XList
+#undef X
+                          }
+                        }break;
+                      }
+                      
+                      // rjf: push op
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_RegRead, RDI_EncodeRegReadParam(regcode_rdi, reg_size, reg_off));
+                      
+                      // rjf: push add to value offset, if needed
+                      if(regval_off != 0)
+                      {
+                        rdim_bytecode_push_sconst(arena, &dst_bytecode, regval_off);
+                        rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_Add, RDI_EvalTypeGroup_S);
+                      }
+                      
+                      // rjf: choose if we're doing a float op
+                      B32 is_float_op = 0;
+                      if(arch == Arch_x64 &&
+                         (regcode_rdi == RDI_RegCodeX64_st0 ||
+                          regcode_rdi == RDI_RegCodeX64_st1 ||
+                          regcode_rdi == RDI_RegCodeX64_st2 ||
+                          regcode_rdi == RDI_RegCodeX64_st3 ||
+                          regcode_rdi == RDI_RegCodeX64_st4 ||
+                          regcode_rdi == RDI_RegCodeX64_st5 ||
+                          regcode_rdi == RDI_RegCodeX64_st6 ||
+                          regcode_rdi == RDI_RegCodeX64_st7))
+                      {
+                        is_float_op = 1;
+                      }
+                      
+                      // rjf: set up push value
+                      push_vals[0].is_addr = regread_is_addr;
+                      if(is_float_op)
+                      {
+                        switch(reg_size)
+                        {
+                          default:{}break;
+                          case 2: {push_vals[0].type_kind = RDI_TypeKind_F16;}break;
+                          case 4: {push_vals[0].type_kind = RDI_TypeKind_F32;}break;
+                          case 6: {push_vals[0].type_kind = RDI_TypeKind_F48;}break;
+                          case 8: {push_vals[0].type_kind = RDI_TypeKind_F64;}break;
+                          case 10:{push_vals[0].type_kind = RDI_TypeKind_F80;}break;
+                          case 12:{push_vals[0].type_kind = RDI_TypeKind_F96;}break;
+                          case 16:{push_vals[0].type_kind = RDI_TypeKind_F128;}break;
+                        }
+                      }
+                      else
+                      {
+                        switch(reg_size)
+                        {
+                          default:{}break;
+                          case 1:{push_vals[0].type_kind = RDI_TypeKind_U8;}break;
+                          case 2:{push_vals[0].type_kind = RDI_TypeKind_U16;}break;
+                          case 4:{push_vals[0].type_kind = RDI_TypeKind_U32;}break;
+                          case 8:{push_vals[0].type_kind = RDI_TypeKind_U64;}break;
+                        }
+                      }
+                    }break;
+                    
+                    //- rjf: implicit values
+                    case DW_ExprOp_ImplicitValue:
+                    {
+                      if(operand_str8s[0].size <= sizeof(U64))
+                      {
+                        U64 implicit_value = 0;
+                        MemoryCopy(&implicit_value, operand_str8s[0].str, Min(sizeof(U64), operand_str8s[0].size));
+                        rdim_bytecode_push_uconst(arena, &dst_bytecode, implicit_value);
+                        switch(operand_str8s[0].size)
+                        {
+                          default:{}break;
+                          case 1:{push_vals[0].type_kind = RDI_TypeKind_U8;}break;
+                          case 2:{push_vals[0].type_kind = RDI_TypeKind_U16;}break;
+                          case 4:{push_vals[0].type_kind = RDI_TypeKind_U32;}break;
+                          case 8:{push_vals[0].type_kind = RDI_TypeKind_U64;}break;
+                        }
+                      }
+                      else
+                      {
+                        log_infof("[.debug_info@0x%I64x] Implicit value DWARF expression operation (DW_ExprOp_ImplicitValue) with block size >8 (%I64u) found. This is not currently supported.\n", start_off, operand_str8s[0].size);
+                      }
+                    }break;
+                    
+                    //- rjf: pieces
+                    case DW_ExprOp_Piece:
+                    {
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_PartialValue, operand_u64s[0]);
+                    }break;
+                    case DW_ExprOp_BitPiece:
+                    {
+                      U64 size = operand_u64s[0];
+                      U64 off = operand_u64s[1];
+                      U64 partial_value = ((size<<32)|(off));
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_PartialValueBit, partial_value);
+                    }break;
+                    
+                    //- rjf: stack ops
+                    case DW_ExprOp_Over: {target_pick_val_idx = 1;}goto pick;
+                    case DW_ExprOp_Pick: {target_pick_val_idx = operand_u64s[0];}goto pick;
+                    case DW_ExprOp_Dup:  {target_pick_val_idx = 0;}goto pick;
+                    pick:;
+                    {
+                      // rjf: pick value from stack
+                      D2R2_ExprVal picked_val = {0};
+                      {
+                        U64 idx = 0;
+                        for(D2R2_ExprValNode *n = val_stack_top; n != 0; n = n->next)
+                        {
+                          if(idx == target_pick_val_idx)
+                          {
+                            picked_val = n->v;
+                            break;
+                          }
+                        }
+                      }
+                      
+                      // rjf: push opcode
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_Pick, target_pick_val_idx);
+                      
+                      // rjf: push val
+                      push_vals[0] = picked_val;
+                    }break;
+                    case DW_ExprOp_Swap:
+                    {
+                      push_vals[0] = popped_vals[1];
+                      push_vals[1] = popped_vals[0];
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_Swap, 0);
+                    }break;
+                    case DW_ExprOp_Drop:
+                    {
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_Pop, 0);
+                    }break;
+                    
+                    //- rjf: jumps
+                    case DW_ExprOp_Skip: rdi_eval_op = RDI_EvalOp_Skip; goto jumps;
+                    case DW_ExprOp_Bra:  rdi_eval_op = RDI_EvalOp_Cond; goto jumps;
+                    jumps:;
+                    {
+                      // rjf: jump delta in bytes (how the instruction is encoded) -> jump delta in instructions
+                      S64 jump_delta_bytes = operand_s64s[0];
+                      S64 jump_delta_insts = 0;
+                      {
+                        // TODO(rjf): expr op jumps bytes -> inst counts
+                      }
+                      
+                      // rjf: push incomplete op (we need to resolve inst delta -> byte delta later, once we have the full bytecode stream)
+                      RDIM_EvalBytecodeOp *op = rdim_bytecode_push_op(arena, &dst_bytecode, rdi_eval_op, 0);
+                      
+                      // rjf: gather op
+                      JumpOpNode *n = push_array(scratch2.arena, JumpOpNode, 1);
+                      SLLQueuePush(first_jump_op, last_jump_op, n);
+                      n->op = op;
+                      n->inst_delta = jump_delta_insts;
+                    }break;
+                    
+                    //- rjf: containing procedure frame offsets
+                    case DW_ExprOp_FBReg:
+                    {
+                      bytecode_is_framebase_dependent = 1;
+                      for EachNode(n, RDIM_EvalBytecodeOp, framebase_loc.bytecode.first_op)
+                      {
+                        rdim_bytecode_push_op(arena, &dst_bytecode, n->op, n->p);
+                      }
+                      rdim_bytecode_push_sconst(arena, &dst_bytecode, operand_s64s[0]);
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_Add, RDI_EvalTypeGroup_S);
+                      push_vals[0].type_kind = RDI_TypeKind_U64;
+                      push_vals[0].is_addr = 1;
+                    }break;
+                    
+                    //- rjf: memory reads
+                    case DW_ExprOp_Deref: memread_size = unit_parse_ctx->addr_size; goto deref;
+                    case DW_ExprOp_DerefSize: memread_size = operand_u64s[0]; goto deref;
+                    deref:;
+                    {
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_MemRead, memread_size);
+                      push_vals[0].is_addr = 1;
+                      push_vals[0].type_kind = RDI_TypeKind_U64;
+                    }break;
+                    
+                    //- rjf: TLS offsets
+                    case DW_ExprOp_FormTlsAddress:
+                    case DW_ExprOp_GNU_PushTlsAddress:
+                    {
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_TLSOff, 0);
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_Add, RDI_EvalTypeGroup_U);
+                      push_vals[0].is_addr = 1;
+                      push_vals[0].type_kind = RDI_TypeKind_U64;
+                      is_tls_dependent = 1;
+                    }break;
+                    
+                    //- rjf: call site value
+                    case DW_ExprOp_EntryValue:
+                    case DW_ExprOp_GNU_EntryValue:
+                    {
+                      // TODO(rjf): expr op entry value ops
+                    }break;
+                    
+                    //- rjf: fixed adds
+                    case DW_ExprOp_PlusUConst:
+                    {
+                      rdim_bytecode_push_uconst(arena, &dst_bytecode, operand_u64s[0]);
+                      rdim_bytecode_push_op(arena, &dst_bytecode, RDI_EvalOp_Add, RDI_EvalTypeGroup_U);
+                      push_vals[0].type_kind = RDI_TypeKind_U64; // TODO(rjf): do we need to adjust this based on popped value at all, even?
+                    }break;
+                    
+                    //- rjf: arithmetic ops
+                    case DW_ExprOp_Eq:     {rdi_eval_op = RDI_EvalOp_EqEq;}goto arithmetic_op;
+                    case DW_ExprOp_Ge:     {rdi_eval_op = RDI_EvalOp_GrEq;}goto arithmetic_op;
+                    case DW_ExprOp_Gt:     {rdi_eval_op = RDI_EvalOp_Grtr;}goto arithmetic_op;
+                    case DW_ExprOp_Le:     {rdi_eval_op = RDI_EvalOp_LsEq;}goto arithmetic_op;
+                    case DW_ExprOp_Lt:     {rdi_eval_op = RDI_EvalOp_Less;}goto arithmetic_op;
+                    case DW_ExprOp_Ne:     {rdi_eval_op = RDI_EvalOp_Neg;}goto arithmetic_op;
+                    case DW_ExprOp_Div:    {rdi_eval_op = RDI_EvalOp_Div;}goto arithmetic_op;
+                    case DW_ExprOp_Minus:  {rdi_eval_op = RDI_EvalOp_Sub;}goto arithmetic_op;
+                    case DW_ExprOp_Mul:    {rdi_eval_op = RDI_EvalOp_Mul;}goto arithmetic_op;
+                    case DW_ExprOp_Plus:   {rdi_eval_op = RDI_EvalOp_Add;}goto arithmetic_op;
+                    case DW_ExprOp_Xor:    {rdi_eval_op = RDI_EvalOp_BitXor;}goto arithmetic_op;
+                    case DW_ExprOp_And:    {rdi_eval_op = RDI_EvalOp_BitAnd;}goto arithmetic_op;
+                    case DW_ExprOp_Or:     {rdi_eval_op = RDI_EvalOp_BitOr;}goto arithmetic_op;
+                    case DW_ExprOp_Shl:    {rdi_eval_op = RDI_EvalOp_LShift;}goto arithmetic_op;
+                    case DW_ExprOp_Shr:    {rdi_eval_op = RDI_EvalOp_RShift;}goto arithmetic_op;
+                    case DW_ExprOp_Shra:   {rdi_eval_op = RDI_EvalOp_RShift;}goto arithmetic_op;
+                    case DW_ExprOp_Mod:    {rdi_eval_op = RDI_EvalOp_Mod;}goto arithmetic_op;
+                    case DW_ExprOp_Abs:    {rdi_eval_op = RDI_EvalOp_Abs;}goto arithmetic_op;
+                    case DW_ExprOp_Neg:    {rdi_eval_op = RDI_EvalOp_Neg;}goto arithmetic_op;
+                    case DW_ExprOp_Not:    {rdi_eval_op = RDI_EvalOp_LogNot;}goto arithmetic_op;
+                    arithmetic_op:;
+                    {
+                      // TODO(rjf): eval arithmetic conversions etc.
+                      rdim_bytecode_push_op(arena, &dst_bytecode, rdi_eval_op, RDI_EvalTypeGroup_U);
+                    }break;
+                    
+                    //- rjf: currently unsupported
+                    case DW_ExprOp_XDeref:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression XDeref operation encountered, implying multiple address spaces; this is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_XDerefSize:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression XDerefSize operation encountered, implying multiple address spaces; this is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_Call2:
+                    case DW_ExprOp_Call4:
+                    case DW_ExprOp_CallRef:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression call operation encountered. This is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_ImplicitPointer:
+                    case DW_ExprOp_GNU_ImplicitPointer:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression implicit pointer operation encountered. This is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_GNU_ParameterRef:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression GNU_ParameterRef operation encountered. This is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_DerefType:
+                    case DW_ExprOp_GNU_DerefType:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression DerefType operation encountered. This is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_ConstType:
+                    case DW_ExprOp_GNU_ConstType:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression ConstType operation encountered. This is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_RegvalType:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression RegvalType operation encountered. This is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_PushObjectAddress:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression PushObjectAddress operation encountered. This is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_Rot:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression Rot (rotate) operation encountered. This is not supported for location info.\n", start_off);
+                    }break;
+                    case DW_ExprOp_GNU_UnInit:
+                    {
+                      dst_bytecode_is_good = 0;
+                      log_infof("[.debug_info@0x%I64x] DWARF expression GNU_UnInit operation encountered. This is not supported for location info.\n", start_off);
+                      // TODO: flag value as unitialized; this must be last opcode; possible to use with DW_ExprOp_Piece;
+                    } break;
+                  }
+                  
+                  //- rjf: push values to stack
+                  {
+                    U64 push_count = dw_push_count_from_expr_op(opcode);
+                    push_count = Min(push_count, ArrayCount(push_vals));
+                    for EachIndex(push_idx, push_count)
+                    {
+                      D2R2_ExprValNode *n = free_val;
+                      if(n != 0)
+                      {
+                        SLLStackPop(free_val);
+                      }
+                      else
+                      {
+                        n = push_array(scratch2.arena, D2R2_ExprValNode, 1);
+                      }
+                      n->v = push_vals[push_idx];
+                      SLLStackPush(val_stack_top, n);
+                    }
+                  }
+                  
+                  if(expr_off == start_expr_off)
+                  {
+                    break;
+                  }
+                }
+                
+                //- rjf: apply RDI byte offsets to jump ops
+                {
+                  // TODO(rjf): apply RDI byte offsets to jump ops
+                }
+                
+                //- rjf: map bytecode -> RDIM_Location - we may want to simplify
+                RDIM_Location loc = {0};
+                {
+                  loc.kind = val_stack_top && val_stack_top->v.is_addr ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
+                  loc.bytecode = dst_bytecode;
+                }
+                
+                //- rjf: collect
+                {
+                  RDIM_Rng1U64 voff_range = {range.min - base_vaddr, range.max - base_vaddr};
+                  if(bytecode_is_framebase_dependent)
+                  {
+                    voff_range.min = Max(voff_range.min, framebase_voff_range.min);
+                    voff_range.max = Min(voff_range.max, framebase_voff_range.max);
+                  }
+                  rdim_location_case_list_push(arena, dst_locations, loc, voff_range);
+                  dst_is_tls_dependent[0] = is_tls_dependent;
+                }
+                
+                //- rjf: not frame-base dependent? -> break - don't do this per-framebase case
+                if(!bytecode_is_framebase_dependent)
+                {
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
+        ////////////////////////
         //- rjf: produce symbols from tag
+        //
+        RDIM_Scope *new_scope_open = 0;
         switch(tag.kind)
         {
           default:{}break;
@@ -2362,8 +3172,15 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           //- rjf: subprograms (procedures)
           case DW_TagKind_SubProgram:
           {
-            RDIM_Symbol *procedure = rdim_symbol_chunk_list_push(arena, &dst_unit->procedures, 512);
+            RDIM_Scope *root_scope = rdim_scope_chunk_list_push(arena, &dst_unit->scopes, chunk_count);
+            RDIM_Symbol *procedure = rdim_symbol_chunk_list_push(arena, &dst_unit->procedures, chunk_count);
             procedure->name = name;
+            procedure->link_name = link_name;
+            procedure->root_scope = root_scope;
+            root_scope->symbol = procedure;
+            root_scope->voff_ranges = ranges;
+            dst_unit->scopes.scope_voff_count += 2;
+            new_scope_open = root_scope;
           }break;
           
           //- rjf: inline site
@@ -2375,15 +3192,88 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           //- rjf: variables
           case DW_TagKind_Variable:
           case DW_TagKind_FormalParameter:
+          if(name.size != 0)
           {
-            
+            U64 var_chunk_count = chunk_count;
+            RDIM_SymbolChunkList *dst_symbols = &dst_unit->global_variables;
+            if(location_is_tls_dependent)
+            {
+              dst_symbols = &dst_unit->thread_variables;
+            }
+            else if(top_scope != 0)
+            {
+              dst_symbols = &top_scope->scope->locals;
+              var_chunk_count = 8;
+            }
+            RDIM_Symbol *var = rdim_symbol_chunk_list_push(arena, dst_symbols, var_chunk_count);
+            var->is_extern = is_external;
+            var->is_param  = (tag.kind == DW_TagKind_FormalParameter);
+            var->name      = name;
+            var->link_name = link_name;
+            var->type      = type;
+            if(top_scope != 0)
+            {
+              var->container_scope = top_scope->scope;
+            }
+            var->location_cases = location_cases;
           }break;
           
           //- rjf: lexical blocks (scopes)
           case DW_TagKind_LexicalBlock:
           {
-            
+            RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &dst_unit->scopes, chunk_count);
+            scope->voff_ranges = ranges;
+            new_scope_open = scope;
           }break;
+        }
+        
+        ////////////////////////
+        //- rjf: push scopes
+        //
+        if(new_scope_open)
+        {
+          // rjf: insert scope to parent
+          if(top_scope != 0)
+          {
+            RDIM_Scope *parent = top_scope->scope;
+            SLLQueuePush_N(parent->first_child, parent->last_child, new_scope_open, next_sibling);
+            new_scope_open->parent_scope = parent;
+            if(new_scope_open->symbol == 0)
+            {
+              new_scope_open->symbol = parent->symbol;
+            }
+          }
+          
+          // rjf: push new scope to stack
+          D2R2_ScopeNode *n = free_scope;
+          if(n != 0)
+          {
+            SLLStackPop(free_scope);
+          }
+          else
+          {
+            n = push_array(scratch.arena, D2R2_ScopeNode, 1);
+          }
+          n->scope = new_scope_open;
+          if(framebase_attrib != &dw2_attrib_nil)
+          {
+            n->framebase_location_cases = framebase_location_cases;
+          }
+          else if(top_scope != 0)
+          {
+            n->framebase_location_cases = top_scope->framebase_location_cases;
+          }
+          SLLStackPush(top_scope, n);
+        }
+        
+        ////////////////////////
+        //- rjf: pop scopes
+        //
+        if(tag.kind == DW_TagKind_Null && top_scope != 0)
+        {
+          D2R2_ScopeNode *n = top_scope;
+          SLLStackPop(top_scope);
+          SLLStackPush(free_scope, n);
         }
         
         scratch_end(scratch2);
@@ -2402,7 +3292,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   {
     result.subset_flags    = params->subset_flags;
     result.top_level_info  = top_level_info;
-    // TODO(rjf): result.binary_sections = *binary_sections;
+    result.binary_sections = binary_sections;
     result.units           = *all_units;
     result.types           = *all_types;
     result.src_files       = *all_src_files;

@@ -913,7 +913,7 @@ rdib_make_location_addr_reg_plus_u16(Rng1U64List ranges, RDI_RegCode reg_code, R
 {
   RDIB_Location loc = {0};
   loc.ranges        = ranges;
-  loc.kind          = RDI_LocationKind_AddrRegPlusU16;
+  loc.kind          = RDI_LocationKind_AddrRegPlusOff;
   loc.reg_code      = reg_code;
   loc.offset        = offset;
   return loc;
@@ -923,7 +923,7 @@ internal RDIB_Location
 rdib_make_location_addr_addr_reg_plus_u16(Rng1U64List ranges, RDI_RegCode reg_code, RDI_U16 offset)
 {
   RDIB_Location loc = {0};
-  loc.kind          = RDI_LocationKind_AddrAddrRegPlusU16;
+  loc.kind          = RDI_LocationKind_AddrAddrRegPlusOff;
   loc.ranges        = ranges;
   loc.reg_code      = reg_code;
   loc.offset        = offset;
@@ -4086,8 +4086,8 @@ THREAD_POOL_TASK_FUNC(rdib_count_scopes_task)
           case RDI_LocationKind_ValReg: {
             //task->loc_data_sizes[task_id] += sizeof(RDI_LocationReg);
           } break;
-          case RDI_LocationKind_AddrRegPlusU16:
-          case RDI_LocationKind_AddrAddrRegPlusU16: {
+          case RDI_LocationKind_AddrRegPlusOff:
+          case RDI_LocationKind_AddrAddrRegPlusOff: {
             //task->loc_data_sizes[task_id] += sizeof(RDI_LocationRegPlusU16);
           } break;
           default: InvalidPath;
@@ -4192,10 +4192,10 @@ THREAD_POOL_TASK_FUNC(rdib_build_scopes_task)
             loc_data[loc_data_cursor] = 0;
             loc_data_cursor += 1;
           } break;
-          case RDI_LocationKind_AddrRegPlusU16:
-          case RDI_LocationKind_AddrAddrRegPlusU16: {
-            Assert(loc_data_cursor + sizeof(RDI_LocationRegPlusU16) <= loc_data_max);
-            RDI_LocationRegPlusU16 *dst = (RDI_LocationRegPlusU16 *) (loc_data + loc_data_cursor);
+          case RDI_LocationKind_AddrRegPlusOff:
+          case RDI_LocationKind_AddrAddrRegPlusOff: {
+            Assert(loc_data_cursor + sizeof(RDI_LocationRegPlusOff) <= loc_data_max);
+            RDI_LocationRegPlusU16 *dst = (RDI_LocationRegPlusOff *) (loc_data + loc_data_cursor);
             dst->kind                   = loc->kind;
             dst->reg_code               = loc->reg_code;
             dst->offset                 = loc->offset;

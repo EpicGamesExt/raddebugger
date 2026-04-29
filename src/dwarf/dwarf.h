@@ -1432,7 +1432,7 @@ typedef enum DW_CFA_Enum
 ////////////////////////////////
 // Expression Opcodes
 
-typedef enum
+typedef enum DW_ExprOperandType
 {
   DW_ExprOperandType_Null,
   DW_ExprOperandType_U8,
@@ -1448,7 +1448,8 @@ typedef enum
   DW_ExprOperandType_Addr,
   DW_ExprOperandType_Block,
   DW_ExprOperandType_DwarfUInt,
-} DW_ExprOperandType;
+}
+DW_ExprOperandType;
 
 // (opcode name, opcode id, operand count, pop count, push count, operand0 type, operand1 type)
 #define DW_Expr_V3_XList                                 \

@@ -404,8 +404,8 @@ typedef enum RDI_LocationKindEnum
 RDI_LocationKind_NULL                 = 0x0,
 RDI_LocationKind_AddrBytecodeStream   = 0x1,
 RDI_LocationKind_ValBytecodeStream    = 0x2,
-RDI_LocationKind_AddrRegPlusU16       = 0x3,
-RDI_LocationKind_AddrAddrRegPlusU16   = 0x4,
+RDI_LocationKind_AddrRegPlusOff       = 0x3,
+RDI_LocationKind_AddrAddrRegPlusOff   = 0x4,
 RDI_LocationKind_ValReg               = 0x5,
 RDI_LocationKind_ModuleOff            = 0x6,
 RDI_LocationKind_TLSOff               = 0x7,
@@ -887,8 +887,8 @@ X($(a.name != COUNT -> a.name))\
 X(NULL)\
 X(AddrBytecodeStream)\
 X(ValBytecodeStream)\
-X(AddrRegPlusU16)\
-X(AddrAddrRegPlusU16)\
+X(AddrRegPlusOff)\
+X(AddrAddrRegPlusOff)\
 X(ValReg)\
 X(ModuleOff)\
 X(TLSOff)\
@@ -1120,8 +1120,8 @@ typedef RDI_U64 RDI_Location;
 #define RDI_Location_RegOffMask             0x0000ffff00000000ull
 #define RDI_Location_RegOffShift            32
 #define rdi_kind_from_location(l)            ((((l) & RDI_Location_KindMask) >> RDI_Location_KindShift))
-#define rdi_regcode_from_location(l)           ((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusU16 || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusU16 || rdi_kind_from_location(l) == RDI_LocationKind_ValReg) ? (((l) & RDI_Location_RegCodeMask) >> RDI_Location_RegCodeShift) : 0)
-#define rdi_regoff_from_location(l)            ((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusU16 || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusU16) ? (((l) & RDI_Location_RegOffMask) >> RDI_Location_RegOffShift) : 0)
+#define rdi_regcode_from_location(l)           ((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusOff || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusOff || rdi_kind_from_location(l) == RDI_LocationKind_ValReg) ? (((l) & RDI_Location_RegCodeMask) >> RDI_Location_RegCodeShift) : 0)
+#define rdi_regoff_from_location(l)            (RDI_S64)((rdi_kind_from_location(l) == RDI_LocationKind_AddrRegPlusOff || rdi_kind_from_location(l) == RDI_LocationKind_AddrAddrRegPlusOff) ? (((l) & RDI_Location_RegOffMask) >> RDI_Location_RegOffShift) : 0)
 #define rdi_voff_from_location(l)              (rdi_kind_from_location(l) == RDI_LocationKind_ModuleOff          ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)
 #define rdi_toff_from_location(l)              (rdi_kind_from_location(l) == RDI_LocationKind_TLSOff             ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)
 #define rdi_constant_data_off_from_location(l) (rdi_kind_from_location(l) == RDI_LocationKind_ConstantDataOff    ? (((l) & RDI_Location_OffMask)                >> RDI_Location_OffShift) : 0)

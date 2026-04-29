@@ -325,13 +325,13 @@ p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code
   {
     if(extra_indirection)
     {
-      result.kind = RDI_LocationKind_AddrAddrRegPlusU16;
+      result.kind = RDI_LocationKind_AddrAddrRegPlusOff;
       result.reg_code = reg_code;
       result.offset = offset;
     }
     else
     {
-      result.kind = RDI_LocationKind_AddrRegPlusU16;
+      result.kind = RDI_LocationKind_AddrRegPlusOff;
       result.reg_code = reg_code;
       result.offset = offset;
     }

@@ -1116,7 +1116,7 @@ dw_interp_loclist(Arena *arena, DW_Raw *input, DW_CompUnit *cu, DW_Form form)
   DW_LocList loclist = {0};
   
   if (cu->version < DW_Version_5) {
-    if (form.kind == DW_Form_SecOffset) {
+    if (form.kind == DW_Form_SecOffset)  {
       U64 sec_offset = max_U64;
       if (form.kind == DW_Form_SecOffset) {
         sec_offset = form.sec_offset;

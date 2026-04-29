@@ -2108,8 +2108,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   mapped_bytecode_mode = E_Mode_Value;
                 }break;
                 case RDI_LocationKind_AddrBytecodeStream:
-                case RDI_LocationKind_AddrRegPlusU16:
-                case RDI_LocationKind_AddrAddrRegPlusU16:
+                case RDI_LocationKind_AddrRegPlusOff:
+                case RDI_LocationKind_AddrAddrRegPlusOff:
                 {
                   mapped_bytecode_mode = E_Mode_Offset;
                 }break;

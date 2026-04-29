@@ -134,40 +134,47 @@ dw_attrib_class_from_attrib(DW_Version ver, DW_Ext ext, DW_AttribKind k)
 internal DW_AttribClass
 dw_attrib_class_from_form_kind(DW_Version ver, DW_FormKind k)
 {
-#define X(_N,_C) case DW_Form_##_N: return _C;
-  
-  switch (k) {
+  DW_AttribClass result = DW_AttribClass_Null;
+#define X(_N,_C) case DW_Form_##_N:{result = _C;}break;
+  switch(k)
+  {
     DW_Form_AttribClass_GNU_XList
   }
-  
-  switch (ver) {
-    case DW_Version_5: {
-      switch (k) {
+  switch(ver)
+  {
+    case DW_Version_5:
+    {
+      switch (k)
+      {
         DW_Form_AttribClass_V5_XList
       }
-    } break;
-    case DW_Version_4: {
-      switch (k) {
+    }break;
+    case DW_Version_4:
+    {
+      switch (k)
+      {
         DW_Form_AttribClass_V4_XList
       }
-    } break;
-    case DW_Version_3: {
-      switch (k) {
+    }break;
+    case DW_Version_3:
+    {
+      switch (k)
+      {
         DW_Form_AttribClass_V2_XList
       }
-    } break;
-    case DW_Version_2: {
-      switch (k) {
+    }break;
+    case DW_Version_2:
+    {
+      switch(k)
+      {
         DW_Form_AttribClass_V2_XList
       }
-    } break;
-    case DW_Version_1: {
-    } break;
-    case DW_Version_Null: break;
+    }break;
+    case DW_Version_1:{} break;
+    case DW_Version_Null:{}break;
   }
 #undef X
-  
-  return DW_AttribClass_Null;
+  return result;
 }
 
 internal B32

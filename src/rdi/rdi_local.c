@@ -1066,11 +1066,11 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
                 String8 bytecode_stringification = rdi_string_from_bytecode(scratch.arena, tli->arch, bytecode);
                 dumpf("      bytecode: { %S }\n", bytecode_stringification);
               }break;
-              case RDI_LocationKind_AddrRegPlusU16:
-              case RDI_LocationKind_AddrAddrRegPlusU16:
+              case RDI_LocationKind_AddrRegPlusOff:
+              case RDI_LocationKind_AddrAddrRegPlusOff:
               {
                 RDI_RegCode reg_code = rdi_regcode_from_location(location);
-                U64 reg_off = rdi_regoff_from_location(location);
+                S64 reg_off = rdi_regoff_from_location(location);
                 String8 reg_code_string = rdi_string_from_reg_code(scratch.arena, tli->arch, reg_code);
                 dumpf("      reg: %S\n", reg_code_string);
                 dumpf("      reg_off: 0x%I64x\n", reg_off);
