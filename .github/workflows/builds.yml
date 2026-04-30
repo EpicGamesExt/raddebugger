@@ -78,5 +78,6 @@ jobs:
             build/*.dmp
             build/*.exe
             build/*.pdb
+            build/torture
           if-no-files-found: ignore
 
