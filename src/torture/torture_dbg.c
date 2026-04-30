@@ -190,13 +190,11 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   if (t_dbg_send_cmd(cmd, max_U64, 0, 0) == 0) { Assert(0 && "failed to the command"); goto exit; }
 
   // wait for debugger to stop
-  U64 t = timeout_us;
-  do {
+  U64 t = ENDT_US(timeout_us);
+  for (;;) {
     // query debugger status
-    U64 begint_us = os_now_microseconds();
     T_DbgStatus status = {0};
     if (t_dbg_status(&status, t) == 0) { Assert(0 && "failed to acquire debugger status"); goto exit; }
-    U64 endt_us = os_now_microseconds();
 
     // did state change? -> break
     if (!status.running && status.run_gen != status_before.run_gen) {
@@ -204,13 +202,10 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
       break;
     }
 
-    U64 dt_us = (endt_us - begint_us) + TIMEOUT_MS(10);
-    if (dt_us >= t) { break; }
-    t -= dt_us;
-
     // "solve" the wait problem
+    if (os_now_microseconds() >= t) { Assert(0 && "timeout"); goto exit; }
     os_sleep_milliseconds(10);
-  } while (t > 0);
+  }
 
   //--- Status ---------------------
   if (is_stopped) {
@@ -279,22 +274,16 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
   os_process_join(g_dbg_handle, 0, 0);
 
   // now wait for debugger to init
-  U64 t = timeout_us;
-  do {
+  U64 t = ENDT_US(timeout_us);
+  for (;;) {
     // time the ping
-    U64 ping_begint_us = os_now_microseconds(); 
     dbg_ready = t_dbg_ping(t);
     if (dbg_ready) { break; }
-    U64 ping_endt_us = os_now_microseconds();
-
-    // dbg did not pong -> compute remaining timeout and loop back
-    U64 ping_dt_us = (ping_endt_us - ping_begint_us) + TIMEOUT_MS(10);
-    if (ping_dt_us >= t) { break; }
-    t -= ping_dt_us;
 
     // "solve" the wait problem
+    if (os_now_microseconds() >= t) { Assert(0 && "timeout"); break; }
     os_sleep_milliseconds(10);
-  } while (t > 0);
+  }
 
   exit:;
   scratch_end(scratch);
