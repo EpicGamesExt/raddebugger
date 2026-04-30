@@ -1893,8 +1893,8 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
       U16 *buffer = push_array_no_zero(scratch.arena, U16, size);
       DWORD length = GetModuleFileNameW(0, (WCHAR*)buffer, size);
       String8 name8 = str8_from_16(scratch.arena, str16(buffer, length));
-      String8 name_chopped = str8_chop_last_slash(name8);
-      info->binary_path = push_str8_copy(arena, name_chopped);
+      info->binary_file_path = push_str8_copy(arena, name8);
+      info->binary_path = str8_chop_last_slash(info->binary_file_path);
       scratch_end(scratch);
     }
     info->initial_path = get_current_path(arena);
