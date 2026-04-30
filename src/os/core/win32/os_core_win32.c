@@ -1857,12 +1857,12 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
     OS_ProcessInfo *info = &os_w32_state.process_info;
     {
       Temp scratch = scratch_begin(0, 0);
-      DWORD size = KB(32);
-      U16 *buffer = push_array_no_zero(scratch.arena, U16, size);
-      DWORD length = GetModuleFileNameW(0, (WCHAR*)buffer, size);
-      String8 name8 = str8_from_16(scratch.arena, str16(buffer, length));
-      String8 name_chopped = str8_chop_last_slash(name8);
-      info->binary_path = push_str8_copy(arena, name_chopped);
+      DWORD  size   = KB(32);
+      U16   *buffer = push_array_no_zero(scratch.arena, U16, size);
+      DWORD  length = GetModuleFileNameW(0, (WCHAR*)buffer, size);
+      info->binary_file_path = str8_from_16(arena, str16(buffer, length));
+      info->binary_path      = str8_chop_last_slash(info->binary_file_path);
+
       scratch_end(scratch);
     }
     info->initial_path = os_get_current_path(arena);

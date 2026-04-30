@@ -793,7 +793,7 @@ di_async_tick(void)
           params.path = os_get_process_info()->binary_path;
           params.inherit_env = 1;
           params.consoleless = 1;
-          str8_list_push(scratch.arena, &params.cmd_line, os_get_process_info()->binary_path);
+          str8_list_push(scratch.arena, &params.cmd_line, os_get_process_info()->binary_file_path);
           str8_list_pushf(scratch.arena, &params.cmd_line, "--bin");
           str8_list_pushf(scratch.arena, &params.cmd_line, "--quiet");
           if(should_compress)
