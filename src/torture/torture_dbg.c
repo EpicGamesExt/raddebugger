@@ -6,7 +6,7 @@
 ////////////////////////////////
 // IPC Controller
 
-internal OS_Handle g_dbg_handle;
+internal U32 g_dbg_pid;
 
 internal B32
 t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *reply_out)
@@ -14,16 +14,9 @@ t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *rep
   Temp scratch = scratch_begin(&reply_arena, 1);
   B32 is_sent = 0;
 
-#if OS_WINDOWS
-  U32 dbg_pid = GetProcessId((HANDLE)g_dbg_handle.u64[0]);
-#elif OS_LINUX
-  U32 dbg_pid = safe_cast_u32(handle.u64[0]);
-#else
-# error NotImplemented
-#endif
 
   // send command
-  String8 cmdline = str8f(scratch.arena, "--gen_crash_dump --ipc --pid:%u %S", dbg_pid, cmd);
+  String8 cmdline = str8f(scratch.arena, "--gen_crash_dump --ipc --pid:%u %S", g_dbg_pid, cmd);
   if (t_invoke(t_raddbg_path(), cmdline, timeout_us) == 0) { goto exit; }
 
   B32 has_reply = 1;
@@ -269,9 +262,29 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
     .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline),
   };
   str8_list_push_front(scratch.arena, &launch_opts.cmd_line, t_raddbg_path());
-  g_dbg_handle = os_process_launch(&launch_opts);
-  if (os_handle_match(g_dbg_handle, os_handle_zero())) { AssertAlways(0 && "failed to launch debugger"); goto exit; }
-  os_process_join(g_dbg_handle, 0, 0);
+  OS_Handle dbg_handle = os_process_launch(&launch_opts);
+  if (os_handle_match(dbg_handle, os_handle_zero())) { AssertAlways(0 && "failed to launch debugger"); goto exit; }
+
+#if OS_WINDOWS
+  // automatically close child processes on exit
+  {
+    HANDLE job_handle = CreateJobObjectA(0, 0);
+    AssertAlways(job_handle != 0);
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info = { .BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE };
+    AssertAlways(SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info)));
+    AssertAlways(AssignProcessToJobObject(job_handle, GetCurrentProcess()));
+  }
+
+  // cache debugger PID
+  g_dbg_pid = GetProcessId((HANDLE)dbg_handle.u64[0]);
+#elif OS_LINUX
+  g_dbg_pid = safe_cast_u32(handle.u64[0]);
+#else
+# error NotImplemented
+#endif
+
+  // close debugger handle
+  os_process_join(dbg_handle, 0, 0);
 
   // now wait for debugger to init
   U64 t = ENDT_US(timeout_us);
@@ -643,7 +656,16 @@ T_RunSig(dbg_script_runner)
   t_dbg_script_invoke(&script, ENDT_SEC(60*3));
 
   // clean up
-  os_process_kill(g_dbg_handle);
+#if OS_WINDOWS
+  HANDLE dbg_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, g_dbg_pid);
+  if (dbg_handle != 0) {
+    TerminateProcess(dbg_handle, 1);
+    CloseHandle(dbg_handle);
+  }
+#else
+  kill(g_dbg_pid, SIGKILL);
+#endif
+  g_dbg_pid = 0;
 }
 
 internal void
