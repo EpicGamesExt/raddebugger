@@ -341,7 +341,8 @@ internal U64
 dw_pick_default_lower_bound(DW_Language lang)
 {
   U64 lower_bound = max_U64;
-  switch (lang) {
+  switch(lang)
+  {
     case DW_Language_Null: break;
     case DW_Language_C89:
     case DW_Language_C:
@@ -366,8 +367,9 @@ dw_pick_default_lower_bound(DW_Language lang)
     case DW_Language_Dylan:
     case DW_Language_RenderScript:
     case DW_Language_BLISS:
-    lower_bound = 0;
-    break;
+    {
+      lower_bound = 0;
+    }break;
     case DW_Language_Ada83:
     case DW_Language_Cobol74:
     case DW_Language_Cobol85:
@@ -382,10 +384,10 @@ dw_pick_default_lower_bound(DW_Language lang)
     case DW_Language_Julia:
     case DW_Language_Fortran03:
     case DW_Language_Fortran08:
-    lower_bound = 1;
-    default:
-    NotImplemented;
-    break;
+    {
+      lower_bound = 1;
+    }break;
+    default:{}break;
   }
   return lower_bound;
 }
@@ -393,61 +395,69 @@ dw_pick_default_lower_bound(DW_Language lang)
 internal U64
 dw_operand_count_from_expr_op(DW_ExprOp op)
 {
-  switch (op) {
-#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _OPER_COUNT;
+  U64 result = 0;
+  switch(op)
+  {
+    default:{}break;
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID:{result = _OPER_COUNT;}break;
     DW_Expr_V3_XList
       DW_Expr_V4_XList
       DW_Expr_V5_XList
       DW_Expr_GNU_XList
 #undef X
-    default: { NotImplemented; } break;
   }
-  return 0;
+  return result;
 }
 
 internal U64
 dw_pop_count_from_expr_op(DW_ExprOp op)
 {
-  switch (op) {
-#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _POP_COUNT;
+  U64 result = 0;
+  switch(op)
+  {
+    default:{}break;
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID:{result = _POP_COUNT;}break;
     DW_Expr_V3_XList
       DW_Expr_V4_XList
       DW_Expr_V5_XList
       DW_Expr_GNU_XList
 #undef X
-    default: { NotImplemented; } break;
   }
-  return 0;
+  return result;
 }
 
 internal U64
 dw_push_count_from_expr_op(DW_ExprOp op) 
 {
+  U64 result = 0;
   switch (op) {
-#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID: return _PUSH_COUNT;
+    default:{}break;
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, ...) case _ID:{result = _PUSH_COUNT;}break;
     DW_Expr_V3_XList
       DW_Expr_V4_XList
       DW_Expr_V5_XList
       DW_Expr_GNU_XList
 #undef X
-    default: { NotImplemented; } break;
   }
-  return 0;
+  return result;
 }
 
 internal DW_ExprOperandType *
 dw_operand_types_from_expr_opcode(DW_ExprOp op)
 {
-#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, _OPER_TYPE0, _OPER_TYPE1) case _ID: { local_persist DW_ExprOperandType t[] = { DW_ExprOperandType_##_OPER_TYPE0, DW_ExprOperandType_##_OPER_TYPE1  }; return t; }
-  switch (op) {
+  local_persist DW_ExprOperandType nil_t[] = {DW_ExprOperandType_Null};
+  DW_ExprOperandType *result = nil_t;
+  switch(op)
+  {
+    default:{}break;
+#define X(_N, _ID, _OPER_COUNT, _POP_COUNT, _PUSH_COUNT, _OPER_TYPE0, _OPER_TYPE1) case _ID: { local_persist DW_ExprOperandType t[] = { DW_ExprOperandType_##_OPER_TYPE0, DW_ExprOperandType_##_OPER_TYPE1  }; result = t; }break;
     DW_Expr_V3_XList
       DW_Expr_V4_XList
       DW_Expr_V5_XList
       DW_Expr_GNU_XList
 #undef X
-    default: { NotImplemented; } break;
   }
-  return 0;
+  return result;
 }
 
 internal U64
@@ -466,7 +476,9 @@ internal B32
 dw_is_cfa_expr_opcode_invalid(DW_ExprOp opcode)
 {
   B32 is_invalid = 0;
-  switch (opcode) {
+  switch(opcode)
+  {
+    default:{}break;
     case DW_ExprOp_Addrx:
     case DW_ExprOp_Call2:
     case DW_ExprOp_Call4:
@@ -478,10 +490,10 @@ dw_is_cfa_expr_opcode_invalid(DW_ExprOp opcode)
     case DW_ExprOp_RegvalType:
     case DW_ExprOp_Reinterpret:
     case DW_ExprOp_PushObjectAddress:
-    case DW_ExprOp_CallFrameCfa: {
+    case DW_ExprOp_CallFrameCfa:
+    {
       is_invalid = 1;
-    } break;
-    default: break;
+    }break;
   }
   return is_invalid;
 }
@@ -490,15 +502,17 @@ internal B32
 dw_is_new_row_cfa_opcode(DW_CFA_Opcode opcode)
 {
   B32 is_new_row_op = 0;
-  switch (opcode) {
+  switch(opcode)
+  {
+    default:{}break;
     case DW_CFA_SetLoc:
     case DW_CFA_AdvanceLoc:
     case DW_CFA_AdvanceLoc1:
     case DW_CFA_AdvanceLoc2:
-    case DW_CFA_AdvanceLoc4: {
+    case DW_CFA_AdvanceLoc4:
+    {
       is_new_row_op = 1;
-    } break;
-    default: break;
+    }break;
   }
   return is_new_row_op;
 }

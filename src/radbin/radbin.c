@@ -763,7 +763,7 @@ rb_thread_entry_point(void *p)
             convert_params.deterministic    = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
             convert_params.is_parse_relaxed = 1; // TODO: switch
           }
-          ProfScope("convert") dwarf_bake_params = d2r_convert(arena, &convert_params);
+          // ProfScope("convert") dwarf_bake_params = d2r_convert(arena, &convert_params);
           
           // rjf: convert [2]
           D2R2_ConvertParams convert_params_2 = {0};

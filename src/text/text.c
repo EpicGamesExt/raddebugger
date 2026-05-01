@@ -2923,7 +2923,7 @@ txt_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_ou
   }
   
   //- rjf: cancel -> release
-  if(lane_idx() == 0 && ins_atomic_u32_eval(cancel_signal))
+  if(lane_idx() == 0 && ins_atomic_u32_eval(cancel_signal) && shared->arena != 0)
   {
     arena_release(shared->arena);
     shared->arena = 0;
