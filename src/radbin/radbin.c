@@ -355,6 +355,9 @@ rb_thread_entry_point(void *p)
         scratch_end(scratch);
       }
       
+      //////////////////////////
+      //- rjf: COFF OBJ => check if contains DWARF
+      //
       if(file_format == RB_FileFormat_COFF_OBJ || file_format == RB_FileFormat_COFF_BigOBJ)
       {
         Temp scratch = scratch_begin(&arena, 1);
@@ -382,6 +385,28 @@ rb_thread_entry_point(void *p)
         {
           log_infof("DWARF data detected in %S (%S)\n", n->string, rb_file_format_display_name_table[file_format]);
           file_format_flags |= RB_FileFormatFlag_HasDWARF;
+        }
+        scratch_end(scratch);
+      }
+      
+      //////////////////////////
+      //- rjf: ELF => check if contains EH frame info
+      //
+      if(file_format == RB_FileFormat_ELF32 ||
+         file_format == RB_FileFormat_ELF64)
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        ELF_Bin elf_bin = elf_bin_from_data(scratch.arena, file_data);
+        for EachIndex(sect_idx, elf_bin.hdr.e_shnum)
+        {
+          ELF_Shdr64 *shdr = &elf_bin.shdrs.v[sect_idx];
+          String8 name = elf_name_from_shdr64(file_data, &elf_bin, shdr);
+          if(str8_match(name, str8_lit(".eh_frame_hdr"), 0))
+          {
+            log_infof("EH frame data detected in %S (%S)\n", n->string, rb_file_format_display_name_table[file_format]);
+            file_format_flags |= RB_FileFormatFlag_HasEhFrame;
+            break;
+          }
         }
         scratch_end(scratch);
       }
@@ -1427,16 +1452,14 @@ rb_thread_entry_point(void *p)
           {
             elf = elf_bin_from_data(arena, f->data);
             arch = arch_from_elf_machine(elf.hdr.e_machine);
-            
             for EachIndex(sect_idx, elf.hdr.e_shnum)
             {
               ELF_Shdr64 *shdr = &elf.shdrs.v[sect_idx];
               String8 name = elf_name_from_shdr64(f->data, &elf, shdr);
-              if (str8_match(name, str8_lit(".eh_frame_hdr"), 0))
+              if(str8_match(name, str8_lit(".eh_frame_hdr"), 0))
               {
                 eh_frame_hdr = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
                 eh_frame_hdr_vaddr = shdr->sh_addr;
-                
               }
               else if(str8_match(name, str8_lit(".eh_frame"), 0))
               {
@@ -1537,7 +1560,7 @@ rb_thread_entry_point(void *p)
           }break;
         }
         
-        //- rjf: dump file extension info
+        //- rjf: dump DWARF file extension info
         if(f->format_flags & RB_FileFormatFlag_HasDWARF)
         {
           if(lane_idx() == 0)
@@ -1549,7 +1572,8 @@ rb_thread_entry_point(void *p)
           lane_sync();
         }
         
-        if(eh_dump_subset_flags)
+        //- rjf: dump EH frame file extension info
+        if(f->format_flags & RB_FileFormatFlag_HasEhFrame)
         {
           if(lane_idx() == 0)
           {

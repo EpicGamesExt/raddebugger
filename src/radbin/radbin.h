@@ -25,7 +25,8 @@ struct RB_ThreadParams
 typedef U32 RB_FileFormatFlags;
 enum
 {
-  RB_FileFormatFlag_HasDWARF = (1<<0),
+  RB_FileFormatFlag_HasDWARF   = (1<<0),
+  RB_FileFormatFlag_HasEhFrame = (1<<1),
 };
 
 typedef struct RB_File RB_File;
