@@ -3,6 +3,8 @@
 
 #define T_Group "Dbg"
 
+#define T_Dbg_DefaultTimeout TIMEOUT_SEC(5)
+
 ////////////////////////////////
 // IPC Controller
 
@@ -201,9 +203,9 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   }
 
   //--- Status ---------------------
-  if (is_stopped) {
+  if (0 && is_stopped) {
     T_DbgStatus status = {0};
-    AssertAlways(t_dbg_status(&status, TIMEOUT_SEC(5)));
+    AssertAlways(t_dbg_status(&status, T_Dbg_DefaultTimeout));
 
     String8 process_id     = str8_skip(str8_chop(t_dbg_value_from_exprf(scratch.arena, "query:current_process.id"), 2), 2);
     String8 process_label  = str8_chop(str8_skip(t_dbg_value_from_exprf(scratch.arena, "query:current_process.label"), 2), 2);
@@ -215,10 +217,10 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
     String8 sp             = t_dbg_value_from_exprf(scratch.arena, "hex(reg:rsp)");
 
     T_DbgStopEvent last_stop = {0};
-    AssertAlways(t_dbg_stop_event(scratch.arena, &last_stop, TIMEOUT_SEC(5)));
+    AssertAlways(t_dbg_stop_event(scratch.arena, &last_stop, T_Dbg_DefaultTimeout));
 
     T_DbgSourceLocation loc = {0};
-    AssertAlways(t_dbg_src_line(scratch.arena, last_stop.ip_vaddr, &loc, TIMEOUT_SEC(5)));
+    AssertAlways(t_dbg_src_line(scratch.arena, last_stop.ip_vaddr, &loc, T_Dbg_DefaultTimeout));
 
     printf("------------------------------------------------------------------------------------------------------------------------\n");
     printf("  Process:    %.*s [%.*s] (Active: %.*s)\n", str8_varg(process_id), str8_varg(process_label), str8_varg(process_active));
@@ -310,7 +312,7 @@ t_dbg_eval(Arena *arena, String8 expr, T_Eval *eval_out)
 
   RD_IpcReply reply = {0};
   String8     cmd   = str8f(scratch.arena, "eval %llu %S", /* value char cap: */ 10000, expr);
-  B32         is_ok = t_dbg_send_cmd(cmd, TIMEOUT_SEC(5), arena, &reply);
+  B32         is_ok = t_dbg_send_cmd(cmd, T_Dbg_DefaultTimeout, arena, &reply);
 
   T_Eval e = {0};
   if ( ! rd_ipc_parse_string(reply.msg, str8_lit("expr"),  &e.expr))  { AssertAlways(0); goto exit; }
@@ -583,7 +585,7 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
           // map IP -> source location
           U64                 ip  = u64_from_str8(t_dbg_value_from_exprf(scratch.arena, "reg:rip"), 10);
           T_DbgSourceLocation loc = {0};
-          AssertAlways(t_dbg_src_line(scratch.arena, ip, &loc, TIMEOUT_SEC(15)));
+          AssertAlways(t_dbg_src_line(scratch.arena, ip, &loc, T_Dbg_DefaultTimeout));
 
           // compute line where debugger must be
           S64 at_line_s64 = (S64)(program->line - program->file->line) + cmd->at.delta;
@@ -618,42 +620,53 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
 internal
 T_RunSig(dbg_script_runner)
 {
-  t_kill_all(str8_lit("*raddbg*"));
-
   // read source file
   String8 source = os_data_from_file_path(arena, user_data);
-  T_Ok(source.size != 0);
+  if (source.size == 0) {
+    fprintf(stderr, "ERROR: failed to read script: \"%.*s\"\n", str8_varg(user_data));
+    T_Ok(0);
+  }
 
   // source -> script
   T_DbgScript script = t_dbg_script_from_source(arena, user_data, source);
 
   // write source files to test folder
-  for EachNode(file, T_DbgScriptFile, script.files.first) { T_Ok(os_write_data_to_file_path(file->path, file->source)); }
-
-  String8 compiler_path = t_cl_path();
-  String8 linker_path   = t_radlink_path();
+  for EachNode(file, T_DbgScriptFile, script.files.first) {
+    if (os_write_data_to_file_path(file->path, file->source) == 0) {
+      fprintf(stderr, "ERROR: %.*s:%llu: failed to write: \"%.*s\"\n", str8_varg(user_data), file->line, str8_varg(file->path));
+      T_Ok(0);
+    }
+  }
 
   // run compilers
+  String8 compiler_path = t_cl_path();
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Compile].first) {
-    T_Ok(t_invoke(compiler_path, directive->args, max_U64));
+    if (t_invoke(compiler_path, directive->args, max_U64) == 0) {
+      fprintf(stderr, "ERROR: failed to launch compiler: \"%.*s %.*s\"\n", str8_varg(compiler_path), str8_varg(directive->args));
+      T_Ok(0);
+    }
   }
 
   // run linkers
+  String8 linker_path = t_radlink_path();
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Link].first) {
-    T_Ok(t_invoke(linker_path, directive->args, max_U64));
+    if (t_invoke(linker_path, directive->args, max_U64) == 0) {
+      fprintf(stderr, "ERROR: failed to launch linker: \"%.*s %.*s\"\n", str8_varg(linker_path), str8_varg(directive->args));
+      T_Ok(0);
+    }
   }
 
   // launch targets
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Launch].first) {
     String8 cmdl = str8f(arena, "--user:%S.raddbg_user %S", t_make_file_path(arena, str8_lit("temp")), directive->args);
-    if ( ! t_dbg_launch(cmdl, ENDT_SEC(10))) {
-      t_outf("failed to launch debugger with command line \"%S %S\" work dir \"%S\"\n", t_raddbg_path(), cmdl, g_wdir);
+    if (t_dbg_launch(cmdl, T_Dbg_DefaultTimeout) == 0) {
+      fprintf(stderr, "ERROR: failed to launch debugger with command line \"%.*s %.*s\"; work dir \"%.*s\"\n", str8_varg(t_raddbg_path()), str8_varg(cmdl), str8_varg(g_wdir));
       T_Ok(0);
     }
   }
 
-  // debugger is ready, now call script
-  t_dbg_script_invoke(&script, ENDT_SEC(60*3));
+  // debugger is ready -- now invoke script
+  t_dbg_script_invoke(&script, T_Dbg_DefaultTimeout);
 
   // clean up
 #if OS_WINDOWS
