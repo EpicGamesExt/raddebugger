@@ -10212,6 +10212,7 @@ rd_ipc_make_reply_status(Arena *arena)
     rd_ipc_reply_push_b32 (arena, &s, "ok",      1);
     rd_ipc_reply_push_b32 (arena, &s, "running", d_ctrl_targets_running());
     rd_ipc_reply_push_u64 (arena, &s, "run_gen", d_run_gen());
+    rd_ipc_reply_push_u64 (arena, &s, "ip",      d_ctrl_last_stop_event().rip_vaddr);
   rd_ipc_reply_block_end(arena, &s);
   scratch_end(scratch);
   return str8_list_join(arena, &s, 0);

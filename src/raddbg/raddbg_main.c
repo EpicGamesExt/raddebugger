@@ -824,9 +824,7 @@ entry_point(CmdLine *cmd_line)
                                     "--ipc <command>\n"
                                     "This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger.\n\n"
                                     "--gen_crash_dump\n"
-                                    "Bypass crash prompt and write dump to --crash_dump_path.\n\n"
-                                    "--crash_dump_path:<path>\n"
-                                    "Sets crash dump file path.\n\n"
+                                    "Generate mini dump on crash.\n\n"
                                     ));
     }break;
   }

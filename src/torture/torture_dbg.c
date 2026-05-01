@@ -40,6 +40,7 @@ t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *rep
     // parse reply
     Arena       *a          = reply_arena ? reply_arena : scratch.arena;
     String8      reply_text = str8_copy(a, g_output);
+    //fprintf(stderr, "Reply: %.*s\n", str8_varg(reply_text));
     RD_IpcReply  reply      = rd_ipc_mdesk_reply_from_string(a, reply_text);
     if (rd_ipc_reply_is_ok(&reply) == 0) { goto exit; }
     if (md_node_is_nil(reply.msg))       { goto exit; }
@@ -80,6 +81,7 @@ t_dbg_status(T_DbgStatus *status_out, U64 timeout_us)
   if ( ! rd_ipc_parse_b32(reply.msg, str8_lit("ok"),      &is_ok))          { AssertAlways(0); goto exit; }
   if ( ! rd_ipc_parse_b32(reply.msg, str8_lit("running"), &status.running)) { AssertAlways(0); goto exit; }
   if ( ! rd_ipc_parse_int(reply.msg, str8_lit("run_gen"), &status.run_gen)) { AssertAlways(0); goto exit; }
+  if ( ! rd_ipc_parse_int(reply.msg, str8_lit("ip"),      &status.ip))      { AssertAlways(0); goto exit; }
   if (status_out != 0) { *status_out = status; }
 
   exit:;
@@ -254,8 +256,7 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
 
   String8 user_path       = t_make_file_path(scratch.arena, str8_lit("test.raddbg_user"));
   String8 project_path    = t_make_file_path(scratch.arena, str8_lit("test.raddbg_project"));
-  String8 crash_dump_path = t_make_file_path(scratch.arena, str8_lit("raddbg_crash_dump.dmp"));
-  cmdline = str8f(scratch.arena, "--gen_crash_dump --crash_dump_path:\"%S\" --user:\"%S\" --project:\"%S\" %S", crash_dump_path, user_path, project_path, cmdline);
+  cmdline = str8f(scratch.arena, "--gen_crash_dump --user:\"%S\" --project:\"%S\" %S", user_path, project_path, cmdline);
 
   // launch debugger
   OS_ProcessLaunchParams launch_opts = {
@@ -268,15 +269,6 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
   if (os_handle_match(dbg_handle, os_handle_zero())) { AssertAlways(0 && "failed to launch debugger"); goto exit; }
 
 #if OS_WINDOWS
-  // automatically close child processes on exit
-  {
-    HANDLE job_handle = CreateJobObjectA(0, 0);
-    AssertAlways(job_handle != 0);
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info = { .BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE };
-    AssertAlways(SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info)));
-    AssertAlways(AssignProcessToJobObject(job_handle, GetCurrentProcess()));
-  }
-
   // cache debugger PID
   g_dbg_pid = GetProcessId((HANDLE)dbg_handle.u64[0]);
 #elif OS_LINUX
@@ -583,9 +575,16 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
         case T_DbgScriptCmdKind_Run:              t_dbg_send_cmd(str8_lit("run"),  timeout_us, 0, 0); break;
         case T_DbgScriptCmdKind_At: {
           // map IP -> source location
-          U64                 ip  = u64_from_str8(t_dbg_value_from_exprf(scratch.arena, "reg:rip"), 10);
+          U64 ip = u64_from_str8(t_dbg_value_from_exprf(scratch.arena, "reg:rip"), 10);
+          if (ip == 0) {
+            fprintf(stderr, "ERROR: invalid IP address: 0x%llx\n", (unsigned long long)ip);
+            goto exit;
+          }
           T_DbgSourceLocation loc = {0};
-          AssertAlways(t_dbg_src_line(scratch.arena, ip, &loc, T_Dbg_DefaultTimeout));
+          if (t_dbg_src_line(scratch.arena, ip, &loc, T_Dbg_DefaultTimeout) == 0) {
+            fprintf(stderr, "ERROR: failed to map IP (0x%llx) to source location\n", (unsigned long long)ip);
+            goto exit;
+          }
 
           // compute line where debugger must be
           S64 at_line_s64 = (S64)(program->line - program->file->line) + cmd->at.delta;
@@ -666,7 +665,10 @@ T_RunSig(dbg_script_runner)
   }
 
   // debugger is ready -- now invoke script
-  t_dbg_script_invoke(&script, T_Dbg_DefaultTimeout);
+  if (t_dbg_script_invoke(&script, T_Dbg_DefaultTimeout) == 0) {
+    fprintf(stderr, "ERROR: %.*s: failed to run to completion\n", str8_varg(user_data));
+    T_Ok(0);
+  }
 
   // clean up
 #if OS_WINDOWS

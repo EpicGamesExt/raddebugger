@@ -914,6 +914,15 @@ t_entry_point(CmdLine *cmdline)
   if (!cmd_line_has_flag(cmdline, str8_lit("print_stdout")) && IsDebuggerPresent()) {
     g_redirect_stdout = 0;
   }
+
+  // automatically close child processes on exit
+  {
+    HANDLE job_handle = CreateJobObjectA(0, 0);
+    AssertAlways(job_handle != 0);
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info = { .BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE };
+    AssertAlways(SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info)));
+    AssertAlways(AssignProcessToJobObject(job_handle, GetCurrentProcess()));
+  }
 #endif
 
   // Handle -out
