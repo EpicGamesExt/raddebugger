@@ -5,6 +5,19 @@
 #define RDI_FROM_DWARF_2_H
 
 ////////////////////////////////
+//~ rjf: Helper Types
+
+typedef struct D2R2_UniqueTypeTagNode D2R2_UniqueTypeTagNode;
+struct D2R2_UniqueTypeTagNode
+{
+  D2R2_UniqueTypeTagNode *next;
+  U64 hash;
+  U64 unit_idx;
+  U64 info_off;
+  U64 order_idx;
+};
+
+////////////////////////////////
 //~ rjf: Conversion Stage Inputs (New)
 
 typedef struct D2R2_ConvertParams D2R2_ConvertParams;
@@ -20,6 +33,11 @@ struct D2R2_ConvertParams
   RDIM_SubsetFlags subset_flags;
   B32 deterministic;
 };
+
+////////////////////////////////
+//~ rjf: Helpers
+
+internal int d2r2_unique_type_tag_node_is_less_than(D2R2_UniqueTypeTagNode **l, D2R2_UniqueTypeTagNode **r);
 
 ////////////////////////////////
 //~ rjf: Main Conversion Entry Point (New)
