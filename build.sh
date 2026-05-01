@@ -2,76 +2,68 @@
 set -eu
 cd "$(dirname "$0")"
 
-# --- Unpack Arguments --------------------------------------------------------
-for arg in "$@"; do declare $arg='1'; done
-if [ ! -v gcc ];     then clang=1; fi
-if [ ! -v release ]; then debug=1; fi
-if [ -v debug ];     then echo "[debug mode]"; fi
-if [ -v release ];   then echo "[release mode]"; fi
-if [ -v clang ];     then compiler="${CC:-clang}"; echo "[clang compile]"; fi
-if [ -v gcc ];       then compiler="${CC:-gcc}"; echo "[gcc compile]"; fi
-
-# --- Unpack Command Line Build Arguments -------------------------------------
-auto_compile_flags=''
-
 # --- Get Current Git Commit Id -----------------------------------------------
 git_hash=$(git describe --always --dirty)
 git_hash_full=$(git rev-parse HEAD)
 
 # --- Compile/Link Line Definitions -------------------------------------------
-clang_common="-I../src/ -I/usr/include/freetype2/ -I../local/ -D_GNU_SOURCE -g -DBUILD_GIT_HASH=\"$git_hash\" -DBUILD_GIT_HASH_FULL=\"$git_hash_full\" -Wno-unknown-warning-option -fdiagnostics-absolute-paths -Wall -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Wno-initializer-overrides -Wno-incompatible-pointer-types-discards-qualifiers -Wno-for-loop-analysis -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf"
-clang_debug="$compiler -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${auto_compile_flags}"
-clang_release="$compiler -g -O2 -DBUILD_DEBUG=0 ${clang_common} ${auto_compile_flags}"
-clang_link="-lpthread -lm -lrt -ldl"
-clang_out="-o"
-gcc_common="-I../src/ -I../local/ -g -D_GNU_SOURCE -DBUILD_GIT_HASH=\"$git_hash\" -DBUILD_GIT_HASH_FULL=\"$git_hash_full\" -Wno-unknown-warning-option -Wall -Wno-missing-braces -Wno-unused-function -Wno-attributes -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-compare-distinct-pointer-types -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf"
-gcc_debug="$compiler -g -O0 -DBUILD_DEBUG=1 ${gcc_common} ${auto_compile_flags}"
-gcc_release="$compiler -g -O2 -DBUILD_DEBUG=0 ${gcc_common} ${auto_compile_flags}"
-gcc_link="-lpthread -lm -lrt -ldl"
-gcc_out="-o"
+cc_cflags_gcc=""
+cc_cflags_clang="-fdiagnostics-absolute-paths -Wno-for-loop-analysis  -Wno-incompatible-pointer-types-discards-qualifiers -Wno-initializer-overrides -Wno-compare-distinct-pointer-types -Wno-single-bit-bitfield-constant-conversion -Wno-deprecated-declarations -Wno-writable-strings -Wno-unknown-warning-option -Wno-deprecated-register -Wno-unused-local-typedef"
+cc_common="-I../src/ -I../local/ -D_GNU_SOURCE -g -DBUILD_GIT_HASH=\"$git_hash\" -DBUILD_GIT_HASH_FULL=\"$git_hash_full\" -Wall -Wno-missing-braces -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-value -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf"
+cc_debug="-g -O0 -DBUILD_DEBUG=1 ${cc_common}"
+cc_release="-g -O2 -DBUILD_DEBUG=0 ${cc_common}"
+cc_link="-lpthread -lm -lrt -ldl"
 
 # --- Per-Build Settings ------------------------------------------------------
-link_dll="-fPIC"
-link_os_gfx="-lX11 -lXext"
-link_render="-lGL -lEGL"
-link_font_provider="-lfreetype"
+cc_link_dll="-fPIC"
+
+# --- External Libraries ------------------------------------------------------
+if [[ -x "$(command -v pkg-config)" ]]; then
+  cc_font_provider="$(pkg-config --cflags --libs freetype2)"  
+  cc_os_gfx="$(pkg-config --cflags --libs x11 xext)"
+  cc_render="$(pkg-config --cflags --libs gl egl)"
+else
+  cc_font_provider="-I/usr/include/freetype2 -lfreetype"
+  cc_os_gfx="-lX11 -lXext"
+  cc_render="-lGL -lEGL"
+fi
+
+# --- Unpack Arguments --------------------------------------------------------
+for arg in "$@"; do declare $arg='1'; done
+if [[ "$#" == "0" ]]; then raddbg='1'; fi
 
 # --- Choose Compile/Link Lines -----------------------------------------------
-if [ -v gcc ];     then compile_debug="$gcc_debug"; fi
-if [ -v gcc ];     then compile_release="$gcc_release"; fi
-if [ -v gcc ];     then compile_link="$gcc_link"; fi
-if [ -v gcc ];     then out="$gcc_out"; fi
-if [ -v clang ];   then compile_debug="$clang_debug"; fi
-if [ -v clang ];   then compile_release="$clang_release"; fi
-if [ -v clang ];   then compile_link="$clang_link"; fi
-if [ -v clang ];   then out="$clang_out"; fi
-if [ -v debug ];   then compile="$compile_debug"; fi
-if [ -v release ]; then compile="$compile_release"; fi
+if   [[ "${gcc:-0}"   == "1" ]]; then compiler="${CC:-gcc}   $cc_cflags_gcc";   echo "[gcc compile]";
+elif [[ "${clang:-1}" == "1" ]]; then compiler="${CC:-clang} $cc_cflags_clang"; echo "[clang compile]";
+fi
+if   [[ "${release:-0}" == "1" ]]; then echo "[release mode]"; compile="$compiler $cc_release";
+elif [[ "${debug:-1}"   == "1" ]]; then echo "[debug mode]";   compile="$compiler $cc_debug";
+fi
 
 # --- Prep Directories --------------------------------------------------------
-mkdir -p build
-mkdir -p local
+mkdir -p build local
 
 # --- Build & Run Metaprogram -------------------------------------------------
-if [ -v meta ]
+if [[ "${no_meta:-0}" == "0" ]]
 then
-  echo "[doing metagen]"
+  echo "[building metagen]"
   cd build
-  $compile_debug ../src/metagen/metagen_main.c $compile_link $out metagen
+  $compiler $cc_debug ../src/metagen/metagen_main.c $cc_link -o metagen
   ./metagen
   cd ..
 fi
 
 # --- Build Everything (@build_targets) ---------------------------------------
 cd build
-if [ -v raddbg ];                then didbuild=1 && $compile ../src/raddbg/raddbg_main.c                                    $compile_link $link_os_gfx $link_render $link_font_provider $out raddbg; fi
-if [ -v radbin ];                then didbuild=1 && $compile ../src/radbin/radbin_main.c                                    $compile_link $out radbin; fi
-if [ -v radlink ];               then didbuild=1 && $compile ../src/linker/lnk.c                                            $compile_link $out radlink; fi
+if [[ "${raddbg:-0}"  == "1" ]]; then didbuild=1 && $compile ../src/raddbg/raddbg_main.c $cc_link $cc_os_gfx $cc_render $cc_font_provider -o raddbg; fi
+if [[ "${radbin:-0}"  == "1" ]]; then didbuild=1 && $compile ../src/radbin/radbin_main.c $cc_link -o radbin; fi
+if [[ "${radlink:-0}" == "1" ]]; then didbuild=1 && $compile ../src/linker/lnk.c         $cc_link -o radlink; fi
 cd ..
 
 # --- Warn On No Builds -------------------------------------------------------
-if [ ! -v didbuild ]
+if [[ "${didbuild:-0}" == "0" ]]
 then
-  echo "[WARNING] no valid build target specified; must use build target names as arguments to this script, like \`./build.sh raddbg\` or \`./build.sh rdi_from_pdb\`."
+  echo "[WARNING] no valid build target specified; must use build target names as arguments to this script, like \`./build.sh raddbg\` or \`./build.sh radlink\`."
   exit 1
 fi
+
