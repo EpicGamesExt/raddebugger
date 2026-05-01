@@ -37,7 +37,7 @@ for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
   )
 
   pushd build
-  torture || exit /b 1
+  torture %* || exit /b 1
   popd
 
   endlocal
