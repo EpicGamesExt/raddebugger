@@ -249,7 +249,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           U64 voff_first = (base_addr - base_vaddr);
           U64 voff_opl = voff_first + range_size;
           RDIM_Rng1U64 range = {voff_first, voff_opl};
-          rdim_rng1u64_chunk_list_push(scratch.arena, &voff_ranges, 256, range);
+          rdim_rng1u64_chunk_list_push(arena, &voff_ranges, 256, range);
         }
         if(off == start_off)
         {
@@ -3568,6 +3568,22 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                     }
                   }
                   
+                  // rjf: match val registers
+                  if(loc.kind == RDI_LocationKind_ValBytecodeStream &&
+                     beginning_ops[0] == RDI_EvalOp_RegRead &&
+                     beginning_ops[1] == RDI_EvalOp_Stop)
+                  {
+                    U8 rdi_reg_code = (beginning_nodes[0]->p&0x0000FF)>>0;
+                    U8 byte_size    = (beginning_nodes[0]->p&0x00FF00)>>8;
+                    U8 byte_off     = (beginning_nodes[0]->p&0xFF0000)>>16;
+                    if(byte_size == unit_parse_ctx->addr_size &&
+                       byte_off == 0)
+                    {
+                      loc.kind = RDI_LocationKind_ValReg;
+                      loc.reg_code = rdi_reg_code;
+                    }
+                  }
+                  
                   // rjf: match simple register offsets
                   if(loc.kind == RDI_LocationKind_AddrBytecodeStream &&
                      beginning_ops[0] == RDI_EvalOp_RegRead &&
@@ -3681,7 +3697,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             procedure->location_cases = framebase_location_cases;
             root_scope->symbol = procedure;
             root_scope->voff_ranges = ranges;
-            dst_unit->scopes.scope_voff_count += 2;
+            dst_unit->scopes.scope_voff_count += 2*ranges.count;
             new_scope_open = root_scope;
           }break;
           
@@ -3725,6 +3741,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           {
             RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &dst_unit->scopes, chunk_count);
             scope->voff_ranges = ranges;
+            dst_unit->scopes.scope_voff_count += 2*ranges.count;
             new_scope_open = scope;
           }break;
         }

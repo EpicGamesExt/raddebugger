@@ -722,6 +722,12 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
         // rjf: gather additional files
         for(;off < off_opl;)
         {
+          U8 next_byte = 0;
+          str8_deserial_read_struct(data, off, &next_byte);
+          if(next_byte == 0)
+          {
+            break;
+          }
           String8 file_name = {0};
           U64 dir_idx = 0;
           U64 modify_time = 0;
