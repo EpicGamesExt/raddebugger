@@ -769,16 +769,28 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
         case D_EntityKind_Thread:
         {
           Access *access = access_open();
-          D_CallStack call_stack = d_call_stack_from_thread(access, entity->handle, 1, rd_state->frame_eval_memread_endt_us);
-          U64 concrete_frame_idx = e_interpret_ctx->reg_unwind_count;
-          if(concrete_frame_idx < call_stack.concrete_frames_count)
+          void *regs_block = 0;
+          if(e_interpret_ctx->reg_unwind_count == 0)
           {
-            D_CallStackFrame *f = call_stack.concrete_frames[concrete_frame_idx];
+            regs_block = d_reg_block_from_thread(scratch.arena, &d_user_state->ctrl_entity_store->ctx, entity->handle);
+          }
+          else
+          {
+            D_CallStack call_stack = d_call_stack_from_thread(access, entity->handle, 1, rd_state->frame_eval_memread_endt_us);
+            U64 concrete_frame_idx = e_interpret_ctx->reg_unwind_count;
+            if(concrete_frame_idx < call_stack.concrete_frames_count)
+            {
+              D_CallStackFrame *f = call_stack.concrete_frames[concrete_frame_idx];
+              regs_block = f->regs;
+            }
+          }
+          if(regs_block != 0)
+          {
             U64 regs_size = regs_block_size_from_arch(e_interpret_ctx->reg_arch);
             Rng1U64 legal_range = r1u64(0, regs_size);
             Rng1U64 read_range = intersect_1u64(legal_range, range);
             U64 read_size = dim_1u64(read_range);
-            MemoryCopy(out, (U8 *)f->regs + read_range.min, read_size);
+            MemoryCopy(out, (U8 *)regs_block + read_range.min, read_size);
             result = (read_size == dim_1u64(range));
           }
           access_close(access);

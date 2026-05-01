@@ -537,7 +537,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
   {
     if(lane_idx() == 0)
     {
-      dumpf("\n  // %-16s %-16s %-12s %-12s %-12s %s\n", "name", "flags", "voff_first", "voff_opl", "foff_first", "foff_opl");
+      dumpf("\n  // %-32s %-16s %-12s %-12s %-12s %s\n", "name", "flags", "voff_first", "voff_opl", "foff_first", "foff_opl");
     }
     U64 count = 0;
     RDI_BinarySection *v = rdi_table_from_name(rdi, BinarySections, &count);
@@ -548,7 +548,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subse
       RDI_BinarySection *bin_section = &v[idx];
       String8 name = str8_from_rdi_string_idx(rdi, bin_section->name_string_idx);
       String8 flags = rdi_string_from_binary_section_flags(scratch.arena, bin_section->flags);
-      dumpf("  {  %-16S %-16S 0x%-10I64x 0x%-10I64x 0x%-10I64x 0x%-10I64x  } // binary_section[%I64u]\n", 
+      dumpf("  {  %-32S %-16S 0x%-10I64x 0x%-10I64x 0x%-10I64x 0x%-10I64x  } // binary_section[%I64u]\n", 
             push_str8f(scratch.arena, "'%S'", name),
             push_str8f(scratch.arena, "`%S`", flags),
             bin_section->voff_first,
