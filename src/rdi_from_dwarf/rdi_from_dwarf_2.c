@@ -1785,7 +1785,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                 read_off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, read_off, &child_tag);
                 
                 // rjf: formal parameters -> gather direct types
-                if(child_tag.kind == DW_TagKind_FormalParameter)
+                if(depth == 1 && child_tag.kind == DW_TagKind_FormalParameter)
                 {
                   DW2_Attrib *direct_type_attrib = dw2_attrib_from_kind(&child_tag, DW_AttribKind_Type);
                   U64 direct_type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
@@ -1806,11 +1806,11 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                 }
                 
                 // rjf: tree navigations
-                if(tag.has_children)
+                if(child_tag.has_children)
                 {
                   depth += 1;
                 }
-                if(tag.kind == DW_TagKind_Null)
+                if(child_tag.kind == DW_TagKind_Null)
                 {
                   depth -= 1;
                 }
@@ -1894,6 +1894,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   //
   RDIM_TypeChunkList *all_types = 0;
   RDIM_Type **type_from_idx_map = 0;
+  ProfScope("build all types")
   {
     if(lane_idx() == 0)
     {
@@ -2085,7 +2086,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                 off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &child_tag);
                 
                 // rjf: gather parameters
-                if(child_tag.kind == DW_TagKind_FormalParameter)
+                if(depth == 1 && child_tag.kind == DW_TagKind_FormalParameter)
                 {
                   DW2_Attrib *type_attrib = dw2_attrib_from_kind(&child_tag, DW_AttribKind_Type);
                   ParamNode *n = push_array(scratch2.arena, ParamNode, 1);

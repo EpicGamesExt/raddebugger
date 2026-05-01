@@ -2792,8 +2792,8 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     
     ////////////////////////////////
     
-    ProfBeginV("Convert Line Tables [Count: %llu]", cu_ranges.count);
     RDIM_LineTable **cu_line_tables_rdi = push_array(scratch.arena, RDIM_LineTable *, cu_ranges.count);
+    ProfScope("Convert Line Tables [Count: %llu]", cu_ranges.count)
     {
       Temp temp = temp_begin(scratch.arena);
       
@@ -2812,7 +2812,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       for EachIndex(cu_idx, cu_ranges.count) { total_file_count += line_vms[cu_idx]->header.file_table.count; }
       
       // TODO: sync
-      ProfBeginV("Dedup source files [Count: %llu]", total_file_count);
+      ProfBegin("Dedup source files [Count: %llu]", total_file_count);
       LFHT_NodeChunkList *src_file_lfht_nodes = push_array(temp.arena, LFHT_NodeChunkList, lane_count());
       LFHT_Node          *src_file_lfht       = 0;
       
@@ -2846,7 +2846,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       ProfEnd();
       
       // TODO: sync
-      ProfBeginV("Sort unique source files [Count: %llu]", unique_file_count);
+      ProfBegin("Sort unique source files [Count: %llu]", unique_file_count);
       d2r_sort_ptrs(lookups, unique_file_count, d2r_src_file_lfht_key_value_is_before);
       ProfEnd();
       
@@ -3000,7 +3000,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       
       temp_end(temp);
     }
-    ProfEnd();
     
     //////////////////////////////// 
     
