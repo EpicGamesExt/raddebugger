@@ -111,6 +111,7 @@ typedef struct
 {
   B32 running;
   U64 run_gen;
+  U64 ip;
 } T_DbgStatus;
 
 typedef struct
