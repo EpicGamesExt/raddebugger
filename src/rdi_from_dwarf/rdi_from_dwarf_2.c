@@ -2268,6 +2268,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         DW2_Attrib *bytesize_attrib = &dw2_attrib_nil;
         DW2_Attrib *encoding_attrib = &dw2_attrib_nil;
         DW2_Attrib *decl_attrib = &dw2_attrib_nil;
+        DW2_Attrib *prototyped_attrib = &dw2_attrib_nil;
         //
         // TODO(rjf): if a DW_AttribKing_GNU_Vector is found on an DW_TagKind_ArrayType,
         // then: @native_vector_support extract byte size from the base type tag
@@ -2367,6 +2368,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           }break;
           case DW_TagKind_SubProgram:
           case DW_TagKind_SubroutineType:
+          ProfScope("subprogram / subroutine (%.*s)", str8_varg(name))
           {
             // rjf: build type
             dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
@@ -2386,25 +2388,27 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             ParamNode *first_param = 0;
             ParamNode *last_param = 0;
             U64 param_count = 0;
+            if(tag.has_children)
             {
               U64 tag_children_off = info_off + tag_info_size;
               S64 depth = 1;
               for(U64 off = tag_children_off; depth > 0 && contains_1u64(unit_info_tag_range, off);)
               {
+                Temp scratch3 = scratch_begin(&scratch2.arena, 1);
                 U64 start_off = off;
                 
                 // rjf: read child tag
                 DW2_Tag child_tag = {0};
-                off += dw2_read_tag(scratch2.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &child_tag);
+                off += dw2_read_tag(scratch3.arena, unit_parse_ctx, raw->sec[DW_Section_Info].data, off, &child_tag);
                 
                 // rjf: gather parameters
                 if(depth == 1 && child_tag.kind == DW_TagKind_FormalParameter)
                 {
                   DW2_Attrib *type_attrib = dw2_attrib_from_kind(&child_tag, DW_AttribKind_Type);
                   ParamNode *n = push_array(scratch2.arena, ParamNode, 1);
-                  n->type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &direct_type_attrib->val);
-                  n->type_unit_idx = unit_idx;
                   SLLQueuePush(first_param, last_param, n);
+                  n->type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
+                  n->type_unit_idx = unit_idx;
                   if(!contains_1u64(unit_info_tag_range, n->type_info_off))
                   {
                     U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, n->type_info_off);
@@ -2423,6 +2427,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                   depth += 1;
                 }
                 
+                scratch_end(scratch3);
                 if(off == start_off)
                 {
                   break;
