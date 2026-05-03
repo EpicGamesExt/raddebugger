@@ -12,7 +12,6 @@ struct D2R2_UniqueTypeTagNode
 {
   D2R2_UniqueTypeTagNode *next;
   U64 hash;
-  U64 unit_idx;
   U64 info_off;
   U64 order_idx;
 };

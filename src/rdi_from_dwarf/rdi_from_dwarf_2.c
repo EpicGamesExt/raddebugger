@@ -7,7 +7,7 @@
 internal int
 d2r2_unique_type_tag_node_is_less_than(D2R2_UniqueTypeTagNode **l, D2R2_UniqueTypeTagNode **r)
 {
-  int is_less_than = l[0]->hash < r[0]->hash;
+  int is_less_than = (l[0]->hash < r[0]->hash);
   return is_less_than;
 }
 
@@ -169,6 +169,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     }
   }
   lane_sync();
+  Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
   
   ////////////////////////////
   //- rjf: parse all units from .debug_aranges
@@ -1685,7 +1686,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                           dependency_task->unit_idx = t->unit_idx;
                           if(!contains_1u64(unit_info_tag_range, dependency_task->off))
                           {
-                            Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
                             U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, dependency_task->off);
                             if(0 < new_unit_num && new_unit_num <= unit_count)
                             {
@@ -1748,12 +1748,58 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                 U64 slot_head_val = (U64)ins_atomic_u64_eval(&unique_type_tag_slots[slot_idx]);
                 
                 // rjf: determine if this hash has been gathered
+                D2R2_UniqueTypeTagNode *already_gathered_node = 0;
                 for(D2R2_UniqueTypeTagNode *n = (D2R2_UniqueTypeTagNode *)slot_head_val; n != 0; n = n->next)
                 {
                   if(n->hash == hash)
                   {
                     gathered = 1;
+                    already_gathered_node = n;
                     break;
+                  }
+                }
+                
+                // rjf: if this hash *has* been gathered, we want to prefer a
+                // deterministic unit/info offset - so we'll just prefer the
+                // lowest unit/offset.
+                //
+                // TODO(rjf): this seems to only be necessary because of a flaw
+                // in the deduplicator logic (without this part). in theory, if we
+                // trust the hash (all experiments suggested that we should - e.g.
+                // no hash collisions w/ different data were observed), then the
+                // same hash should imply an identical type graph. this may be false
+                // for reasons I do not currently understand, or due to a mistake
+                // somewhere. but for now, I've added this, to ensure that when there
+                // are many type tag trees which map to an identical hash, we always
+                // parse the one from the lowest .debug_info offset, just to make
+                // sure it's deterministic. in a multi-threaded conversion, this
+                // is not true in general without this step; one thread which finds
+                // the same type with a higher .debug_info offset may win, and so
+                // where exactly one type hash is parsed is not deterministic. but,
+                // the theory is, that shouldn't matter - the type graphs should
+                // match nonetheless. in any case, if that turns out to be a broken
+                // theory, this should be a relatively cheap step to guarantee
+                // deterministic (hash -> .debug_info offset), which is likely a
+                // desirable property regardless. but I wanted to leave this here
+                // so that I can more closely verify what is going on later.
+                //
+                if(gathered && already_gathered_node != 0)
+                {
+                  B32 minimized = 0;
+                  for(;!minimized;)
+                  {
+                    U64 stored_info_off = ins_atomic_u64_eval(&already_gathered_node->info_off);
+                    if(start_off < stored_info_off)
+                    {
+                      if(ins_atomic_u64_eval_cond_assign(&already_gathered_node->info_off, start_off, stored_info_off) == stored_info_off)
+                      {
+                        minimized = 1;
+                      }
+                    }
+                    else
+                    {
+                      minimized = 1;
+                    }
                   }
                 }
                 
@@ -1771,7 +1817,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                   D2R2_UniqueTypeTagNode *n = push_array(scratch.arena, D2R2_UniqueTypeTagNode, 1);
                   n->next = (D2R2_UniqueTypeTagNode *)slot_head_val;
                   n->hash = hash;
-                  n->unit_idx = origin_unit_idx;
+                  // n->unit_idx = origin_unit_idx;
                   n->info_off = start_off;
                   U64 new_head_val = (U64)n;
                   if(slot_head_val == ins_atomic_u64_eval_cond_assign(&unique_type_tag_slots[slot_idx], new_head_val, slot_head_val))
@@ -1829,8 +1875,8 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           }
         }
       }
+      lane_sync();
     }
-    lane_sync();
   }
   
   ////////////////////////////
@@ -1971,7 +2017,8 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         if(type_tag_node != 0)
         {
           info_off = type_tag_node->info_off;
-          unit_idx = type_tag_node->unit_idx;
+          U64 unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, info_off);
+          unit_idx = unit_num > 0 ? unit_num-1 : 0;
         }
         
         // rjf: record this type in the dependency chain count
@@ -2009,7 +2056,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           case DW_TagKind_VolatileType:
           case DW_TagKind_ConstType:
           case DW_TagKind_ArrayType:
-          case DW_TagKind_SubrangeType:
           case DW_TagKind_Typedef:
           case DW_TagKind_SubProgram:
           case DW_TagKind_SubroutineType:
@@ -2022,7 +2068,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
               U64 direct_type_unit_idx = unit_idx;
               if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
               {
-                Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
                 U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
                 if(0 < new_unit_num && new_unit_num <= unit_count)
                 {
@@ -2055,7 +2100,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                   U64 direct_type_unit_idx = unit_idx;
                   if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
                   {
-                    Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
                     U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
                     if(0 < new_unit_num && new_unit_num <= unit_count)
                     {
@@ -2109,17 +2153,21 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           }
           
           // rjf: spawn task
-          TypeChainTask *new_task = free_task;
-          if(new_task != 0)
+          if(direct_type_hash != 0)
           {
-            SLLStackPop(free_task);
+            TypeChainTask *new_task = free_task;
+            if(new_task != 0)
+            {
+              SLLStackPop(free_task);
+            }
+            else
+            {
+              new_task = push_array(scratch.arena, TypeChainTask, 1);
+            }
+            new_task->next = t->next;
+            new_task->hash = direct_type_hash;
+            t->next = new_task;
           }
-          else
-          {
-            new_task = push_array(scratch.arena, TypeChainTask, 1);
-          }
-          new_task->hash = direct_type_hash;
-          t->next = new_task;
         }
         
         scratch_end(scratch2);
@@ -2201,8 +2249,9 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         
         // rjf: idx -> type tag node
         D2R2_UniqueTypeTagNode *type_tag_node = type_tag_nodes[type_idx];
-        U64 unit_idx = type_tag_node->unit_idx;
         U64 info_off = type_tag_node->info_off;
+        U64 unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, info_off);
+        U64 unit_idx = unit_num > 0 ? unit_num-1 : 0;
         
         // rjf: unpack unit
         Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
@@ -2254,7 +2303,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             U64 direct_type_unit_idx = unit_idx;
             if(!contains_1u64(unit_info_tag_range, direct_type_info_off))
             {
-              Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
               U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, direct_type_info_off);
               direct_type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
             }
@@ -2359,7 +2407,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                   SLLQueuePush(first_param, last_param, n);
                   if(!contains_1u64(unit_info_tag_range, n->type_info_off))
                   {
-                    Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
                     U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, n->type_info_off);
                     n->type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
                   }
@@ -2718,8 +2765,9 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         
         // rjf: idx -> type tag node
         D2R2_UniqueTypeTagNode *type_tag_node = type_tag_nodes[type_idx];
-        U64 unit_idx = type_tag_node->unit_idx;
         U64 info_off = type_tag_node->info_off;
+        U64 unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, info_off);
+        U64 unit_idx = unit_num > 0 ? unit_num-1 : 0;
         
         // rjf: unpack unit
         Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
@@ -2775,7 +2823,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             U64 type_unit_idx = unit_idx;
             if(!contains_1u64(unit_info_tag_range, type_info_off))
             {
-              Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
               U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
               type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
             }
@@ -3026,6 +3073,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         dst_unit->voff_ranges   = unit_voff_ranges;
       }
     }
+    lane_sync();
   }
   
   ////////////////////////////
@@ -3188,7 +3236,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
               type_unit_idx = unit_idx;
               if(!contains_1u64(unit_info_tag_range, type_info_off))
               {
-                Rng1U64Array unit_info_tag_ranges_array = {unit_info_tag_ranges, unit_count};
                 U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
                 type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
               }
@@ -4179,6 +4226,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   }
   
 #undef d2r2_type_from_builtin_kind
+  lane_sync();
   scratch_end(scratch);
   return result;
 }
