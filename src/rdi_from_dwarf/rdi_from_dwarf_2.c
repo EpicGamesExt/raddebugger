@@ -1817,7 +1817,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                   D2R2_UniqueTypeTagNode *n = push_array(scratch.arena, D2R2_UniqueTypeTagNode, 1);
                   n->next = (D2R2_UniqueTypeTagNode *)slot_head_val;
                   n->hash = hash;
-                  // n->unit_idx = origin_unit_idx;
                   n->info_off = start_off;
                   U64 new_head_val = (U64)n;
                   if(slot_head_val == ins_atomic_u64_eval_cond_assign(&unique_type_tag_slots[slot_idx], new_head_val, slot_head_val))
@@ -2368,7 +2367,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           }break;
           case DW_TagKind_SubProgram:
           case DW_TagKind_SubroutineType:
-          ProfScope("subprogram / subroutine (%.*s)", str8_varg(name))
           {
             // rjf: build type
             dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
