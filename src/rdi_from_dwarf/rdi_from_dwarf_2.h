@@ -22,6 +22,7 @@ struct D2R2_UniqueTagNode
   D2R2_UniqueTagKind kind;
   U64 hash;
   U64 info_off;
+  U64 container_ancestor_info_off;
   U64 order_idx;
 };
 

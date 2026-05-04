@@ -583,7 +583,7 @@ dw2_reference_info_off_from_form_val(DW2_ParseCtx *ctx, DW2_FormVal *v)
     case DW_Form_Ref4:
     case DW_Form_Ref8:
     {
-      result = v->u128.u64[0];
+      result = ctx->unit_base_info_off + v->u128.u64[0];
     }break;
     // TODO(rjf): DW_Form_RefAddr, DW_Form_RefUData, DW_Form_RefSig8, DW_Form_RefSup8, etc.
   }
