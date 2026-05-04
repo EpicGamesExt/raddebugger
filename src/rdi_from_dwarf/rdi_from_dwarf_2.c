@@ -701,16 +701,13 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   //- rjf: parse each unit's line table header
   //
   DW2_LineTableHeader *unit_line_table_headers = 0;
-  U64 *unit_line_table_header_sizes = 0;
   ProfScope("parse each unit's line table header")
   {
     if(lane_idx() == 0)
     {
       unit_line_table_headers = push_array(scratch.arena, DW2_LineTableHeader, unit_count);
-      unit_line_table_header_sizes = push_array(scratch.arena, U64, unit_count);
     }
     lane_sync_u64(&unit_line_table_headers, 0);
-    lane_sync_u64(&unit_line_table_header_sizes, 0);
     U64 unit_take_idx = 0;
     U64 *unit_take_idx_ptr = &unit_take_idx;
     lane_sync_u64(&unit_take_idx_ptr, 0);
@@ -726,7 +723,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       DW2_Attrib *stmt_list = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StmtList);
       U64 line_info_off = stmt_list->val.u128.u64[0];
       String8 line_info_data = raw->sec[DW_Section_Line].data;
-      unit_line_table_header_sizes[unit_idx] = dw2_read_line_table_header(scratch.arena, ctx, line_info_data, line_info_off, &unit_line_table_headers[unit_idx]);
+      dw2_read_line_table_header(scratch.arena, ctx, line_info_data, line_info_off, &unit_line_table_headers[unit_idx]);
     }
     lane_sync();
   }
@@ -880,7 +877,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       DW2_Attrib *stmt_list = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StmtList);
       U64 line_info_off = stmt_list->val.u128.u64[0];
       String8 all_line_info_data = raw->sec[DW_Section_Line].data;
-      String8 unit_line_table_data = str8_substr(all_line_info_data, r1u64(line_info_off + unit_line_table_header_sizes[unit_idx], line_info_off + line_table_header->unit_length));
+      String8 unit_line_table_data = str8_substr(all_line_info_data, r1u64(line_info_off + line_table_header->line_program_off, line_info_off + line_table_header->total_unit_data_size));
       
       //- rjf: build unit's line table
       RDIM_LineTable *dst_line_table = rdim_line_table_chunk_list_push(arena, dst_line_tables, 1);
@@ -920,7 +917,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           U32 adjusted_opcode = (U32)(opcode - line_table_header->opcode_base);
           U32 op_advance = adjusted_opcode / line_table_header->line_range;
           S64 line_advance = (S64)line_table_header->line_base + (S64)adjusted_opcode%(S64)line_table_header->line_range;
-          U64 addr_advance = line_table_header->min_inst_length + (vm_regs.vliw_op_index + op_advance) / line_table_header->max_ops_per_inst;
+          U64 addr_advance = line_table_header->min_inst_length * (vm_regs.vliw_op_index + op_advance) / line_table_header->max_ops_per_inst;
           vm_regs.address += addr_advance;
           vm_regs.vliw_op_index = (vm_regs.vliw_op_index + op_advance) % line_table_header->max_ops_per_inst;
           vm_regs.line += line_advance;
@@ -1168,7 +1165,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         }
         
         //- rjf: emit lines
-        if(emit_line)
+        if(emit_line && vm_regs.address != 0 && vm_regs.line != 0)
         {
           emit_line = 0;
           LineSeqChunk *chunk = last_line_seq_chunk;

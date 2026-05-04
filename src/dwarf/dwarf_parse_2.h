@@ -180,6 +180,8 @@ struct DW2_LineTableHeader
   U8 *opcode_lengths;
   DW2_LineTableFileArray dirs;
   DW2_LineTableFileArray files;
+  U64 line_program_off;
+  U64 total_unit_data_size; // NOTE(rjf): would be implied by `unit_length`, but DWARF makes that the size *past* the variable-width unit-length field itself
 };
 
 typedef struct DW2_LineVMRegs DW2_LineVMRegs;

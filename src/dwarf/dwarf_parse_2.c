@@ -597,7 +597,7 @@ internal U64
 dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 off, DW2_LineTableHeader *out)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  U64 start_off = 0;
+  U64 start_off = off;
   
   //////////////////////////////
   //- rjf: read unit length
@@ -637,6 +637,7 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
   //////////////////////////////
   //- rjf: read all remaining flat header properties
   //
+  U64 opl_header_length_off = 0;
   U64 header_length = 0;
   U8 min_inst_length = 0;
   U8 max_ops_per_inst = 1;
@@ -646,6 +647,7 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
   U8 opcode_base = 0;
   {
     off += dw2_read_fmt_u64(data, off, format, &header_length);
+    opl_header_length_off = off;
     off += str8_deserial_read_struct(data, off, &min_inst_length);
     off += str8_deserial_read_struct(data, off, &max_ops_per_inst);
     off += str8_deserial_read_struct(data, off, &default_is_stmt);
@@ -876,6 +878,8 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
     out->opcode_lengths        = opcode_lengths;
     out->dirs                  = dirs;
     out->files                 = files;
+    out->line_program_off      = opl_header_length_off + header_length;
+    out->total_unit_data_size  = (off_opl - start_off);
   }
   
   U64 bytes_read = (off - start_off);
