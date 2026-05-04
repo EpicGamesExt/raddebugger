@@ -7,10 +7,19 @@
 ////////////////////////////////
 //~ rjf: Helper Types
 
-typedef struct D2R2_UniqueTypeTagNode D2R2_UniqueTypeTagNode;
-struct D2R2_UniqueTypeTagNode
+typedef enum D2R2_UniqueTagKind
 {
-  D2R2_UniqueTypeTagNode *next;
+  D2R2_UniqueTagKind_Type,
+  D2R2_UniqueTagKind_Namespace,
+  D2R2_UniqueTagKind_COUNT
+}
+D2R2_UniqueTagKind;
+
+typedef struct D2R2_UniqueTagNode D2R2_UniqueTagNode;
+struct D2R2_UniqueTagNode
+{
+  D2R2_UniqueTagNode *next;
+  D2R2_UniqueTagKind kind;
   U64 hash;
   U64 info_off;
   U64 order_idx;
@@ -36,7 +45,7 @@ struct D2R2_ConvertParams
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal int d2r2_unique_type_tag_node_is_less_than(D2R2_UniqueTypeTagNode **l, D2R2_UniqueTypeTagNode **r);
+internal int d2r2_unique_tag_node_is_less_than(D2R2_UniqueTagNode **l, D2R2_UniqueTagNode **r);
 
 ////////////////////////////////
 //~ rjf: Main Conversion Entry Point (New)

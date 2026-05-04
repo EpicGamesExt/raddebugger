@@ -488,7 +488,7 @@ n->lane_strings = push_array(scratch.arena, String8List, lane_count());\
 }\
 lane_sync();\
 strings = &last_output_node->lane_strings[lane_idx()];\
-lane_sync(); if(flags & (1ull<<(kind))) ProfScope(rdi_name_title_from_dump_subset_table[kind].str)
+lane_sync(); if(flags & (1ull<<(kind))) ProfScope((char *)rdi_name_title_from_dump_subset_table[kind].str)
 #define DumpSubset(name) DumpSubsetKind(RDI_DumpSubset_##name)
   
   //////////////////////////////

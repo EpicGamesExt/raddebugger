@@ -272,7 +272,7 @@
 # endif
 #elif COMPILER_CLANG || COMPILER_GCC
 #  define ins_atomic_u128_eval_cond_assign(x,k,c) (B32)__atomic_compare_exchange_n((__int128 *)(x),(__int128 *)(c),*(__int128 *)(k),0,__ATOMIC_SEQ_CST,__ATOMIC_SEQ_CST)
-#  define ins_atomic_u64_eval(x)                  __atomic_load_n(x, __ATOMIC_SEQ_CST)
+#  define ins_atomic_u64_eval(x)                  __atomic_load_n((U64 *)(x), __ATOMIC_SEQ_CST)
 #  define ins_atomic_u64_inc_eval(x)              (__atomic_fetch_add((U64 *)(x), 1, __ATOMIC_SEQ_CST) + 1)
 #  define ins_atomic_u64_dec_eval(x)              (__atomic_fetch_sub((U64 *)(x), 1, __ATOMIC_SEQ_CST) - 1)
 #  define ins_atomic_u64_eval_assign(x,c)         __atomic_exchange_n(x, c, __ATOMIC_SEQ_CST)
