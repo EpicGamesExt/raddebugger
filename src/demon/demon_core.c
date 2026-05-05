@@ -221,25 +221,12 @@ dmn_get_trap_inst(void)
 internal DMN_ActiveTrap *
 dmn_set_trap(Arena *arena, DMN_Trap *trap)
 {
-  DMN_ActiveTrap *result = 0;
   String8 trap_inst = dmn_get_trap_inst();
   U8 *swap_bytes = push_array(arena, U8, trap_inst.size);
-  if(dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), swap_bytes) == trap_inst.size)
-  {
-    if(dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), trap_inst.str) == trap_inst.size)
-    {
-      result = push_array(arena, DMN_ActiveTrap, 1);
-      result->trap       = trap;
-      result->swap_bytes = str8(swap_bytes, trap_inst.size);
-    }
-  }
+  dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), swap_bytes);
+  dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), trap_inst.str);
+  DMN_ActiveTrap *result = push_array(arena, DMN_ActiveTrap, 1);
+  result->trap = trap;
+  result->swap_bytes = str8(swap_bytes, trap_inst.size);
   return result;
 }
-
-internal B32
-dmn_remove_trap(DMN_ActiveTrap *active_trap)
-{
-  B32 is_removed = dmn_process_write(active_trap->trap->process, r1u64(active_trap->trap->vaddr, active_trap->trap->vaddr + active_trap->swap_bytes.size), active_trap->swap_bytes.str);
-  return is_removed;
-}
-

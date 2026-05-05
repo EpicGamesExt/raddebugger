@@ -280,6 +280,5 @@ internal void dmn_process_iter_end(DMN_ProcessIter *iter);
 internal String8 dmn_get_trap_inst(void);
 
 internal DMN_ActiveTrap * dmn_set_trap(Arena *arena, DMN_Trap *trap);
-internal B32 dmn_remove_trap(DMN_ActiveTrap *active_trap);
 
 #endif // DEMON_CORE_H
