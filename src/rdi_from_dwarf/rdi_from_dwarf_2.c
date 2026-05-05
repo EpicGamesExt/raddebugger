@@ -3352,6 +3352,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           DW2_Attrib *location_attrib = &dw2_attrib_nil;
           DW2_Attrib *framebase_attrib = &dw2_attrib_nil;
           DW2_Attrib *external_attrib = &dw2_attrib_nil;
+          DW2_Attrib *decl_attrib = &dw2_attrib_nil;
           for EachNode(n, DW2_AttribNode, tag.attribs.first)
           {
             switch(n->v.attrib_kind)
@@ -3369,6 +3370,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
               Case(location,  Location);
               Case(framebase, FrameBase);
               Case(external,  External);
+              Case(decl,      Declaration);
 #undef Case
             }
           }
@@ -3380,6 +3382,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           String8 link_name = linkname_attrib->val.string;
           DW_InlKind inl_kind = (DW_InlKind)inline_attrib->val.u128.u64[0];
           B32 is_external = (external_attrib != &dw2_attrib_nil);
+          B32 is_decl = (decl_attrib != &dw2_attrib_nil);
           
           ////////////////////////
           //- rjf: unpack ranges
@@ -4255,6 +4258,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             
             //- rjf: subprograms (procedures)
             case DW_TagKind_SubProgram:
+            if(!is_decl)
             {
               RDIM_Scope *root_scope = rdim_scope_chunk_list_push(arena, &dst_artifacts->scopes, chunk_count);
               RDIM_Symbol *procedure = rdim_symbol_chunk_list_push(arena, &dst_artifacts->procedures, chunk_count);
