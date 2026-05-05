@@ -1972,15 +1972,12 @@ rdim_bake_path_tree_insert(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_Stri
     }
     
     // rjf: .. -> go up
-    if(sub_dir.RDIM_String8_SizeMember == 2 &&
-       sub_dir.RDIM_String8_BaseMember[0] == '.' &&
-       sub_dir.RDIM_String8_BaseMember[1] == '.')
+    if(node->parent != 0 &&
+       (sub_dir.RDIM_String8_SizeMember == 2 &&
+        sub_dir.RDIM_String8_BaseMember[0] == '.' &&
+        sub_dir.RDIM_String8_BaseMember[1] == '.'))
     {
       sub_dir_node = node->parent;
-      if(sub_dir_node == 0)
-      {
-        sub_dir_node = &tree->root;
-      }
     }
     
     // rjf: . -> stay here
