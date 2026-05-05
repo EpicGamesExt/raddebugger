@@ -155,9 +155,10 @@ struct DMN_TrapChunkList
 typedef struct DMN_ActiveTrap DMN_ActiveTrap;
 struct DMN_ActiveTrap
 {
-  DMN_Trap       *trap;
-  String8         swap_bytes;
   DMN_ActiveTrap *next;
+  B32 good;
+  DMN_Trap *trap;
+  String8 swap_bytes;
 };
 
 typedef struct DMN_RunCtrls DMN_RunCtrls;

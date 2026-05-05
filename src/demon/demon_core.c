@@ -223,9 +223,14 @@ dmn_set_trap(Arena *arena, DMN_Trap *trap)
 {
   String8 trap_inst = dmn_get_trap_inst();
   U8 *swap_bytes = push_array(arena, U8, trap_inst.size);
-  dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), swap_bytes);
-  dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), trap_inst.str);
+  B32 good_read = dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), swap_bytes);
+  B32 good_write = 0;
+  if(good_read)
+  {
+    good_write = dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), trap_inst.str);
+  }
   DMN_ActiveTrap *result = push_array(arena, DMN_ActiveTrap, 1);
+  result->good = (good_read && good_write);
   result->trap = trap;
   result->swap_bytes = str8(swap_bytes, trap_inst.size);
   return result;

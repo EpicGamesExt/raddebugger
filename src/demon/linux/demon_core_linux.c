@@ -2865,9 +2865,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       DMN_LNX_Process *process = dmn_lnx_process_from_handle(active_trap->trap->process);
       if(!process) { continue; }
       
-      if(!dmn_process_write(active_trap->trap->process, r1u64(active_trap->trap->vaddr, active_trap->trap->vaddr + active_trap->swap_bytes.size), active_trap->swap_bytes.str))
+      if(!dmn_process_write(active_trap->trap->process, r1u64(active_trap->trap->vaddr, active_trap->trap->vaddr + active_trap->swap_bytes.size), active_trap->swap_bytes.str) &&
+         active_trap->good)
       {
-        Assert(0 && "failed to restore original instruction bytes");
+        // TODO(rjf): log an error here? - we wrote the trap successfully, but we did not remove it successfully,
+        // implying a change in address mapping. this is maybe not even a bug, since the address is simply now
+        // unmapped.
       }
     }
   }
