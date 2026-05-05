@@ -922,10 +922,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           vm_regs.address += addr_advance;
           vm_regs.vliw_op_index = (vm_regs.vliw_op_index + op_advance) % line_table_header->max_ops_per_inst;
           vm_regs.line += line_advance;
-          vm_regs.basic_block = 0;
-          vm_regs.prologue_end = 0;
-          vm_regs.epilogue_begin = 0;
-          vm_regs.discriminator = 0;
           emit_line = 1;
         }
         
@@ -949,10 +945,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             case DW_StdOpcode_Copy:
             {
               emit_line = 1;
-              vm_regs.discriminator = 0;
-              vm_regs.basic_block = 0;
-              vm_regs.prologue_end = 0;
-              vm_regs.epilogue_begin = 0;
             }break;
             
             //- rjf: PC advances
@@ -1159,10 +1151,13 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           first_line_seq_chunk = last_line_seq_chunk = 0;
           total_line_seq_count = 0;
           line_seq_src_file = 0;
-          MemoryZeroStruct(&vm_regs);
-          vm_regs.file_index = 1;
-          vm_regs.line = 1;
-          vm_regs.is_stmt = line_table_header->default_is_stmt;
+          if(vm_regs.end_sequence)
+          {
+            MemoryZeroStruct(&vm_regs);
+            vm_regs.file_index = 1;
+            vm_regs.line = 1;
+            vm_regs.is_stmt = line_table_header->default_is_stmt;
+          }
         }
         
         //- rjf: emit lines
@@ -1186,6 +1181,23 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           chunk->line_count += 1;
           total_line_seq_count += 1;
           line_seq_src_file = src_file;
+          // 0x0000000000030b80    141      0    201   0             0       0  is_stmt
+          printf("0x%016I64x %6i %6i %6i %3i %13I64x %7i %s%s%s%s\n",
+                 vm_regs.address,
+                 (int)vm_regs.line,
+                 (int)vm_regs.column,
+                 (int)vm_regs.file_index,
+                 (int)vm_regs.isa,
+                 vm_regs.discriminator,
+                 (int)vm_regs.vliw_op_index,
+                 vm_regs.is_stmt ? " is_stmt" : "",
+                 vm_regs.prologue_end ? " prologue_end" : "",
+                 vm_regs.epilogue_begin ? " epilogue_begin" : "",
+                 vm_regs.end_sequence ? " end_sequence" : "");
+          vm_regs.discriminator = 0;
+          vm_regs.basic_block = 0;
+          vm_regs.prologue_end = 0;
+          vm_regs.epilogue_begin = 0;
         }
       }
       
