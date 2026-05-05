@@ -7,21 +7,20 @@
       "name": "raddbg",
       "request": "launch",
       "project": "c://windows//system32//cmd.exe",
-      "program": "build/raddbg",
-      "args": [ "-no_stdout_buffer" ],
+      "cwd": "build/",
+      "program": "torture",
+      "args": [ "basic_stepping_test-c" ],
       "stopAtEntry": false,
-      "cwd": ".",
       "environment": [],
-      "externalConsole": true,
+      "externalConsole": false,
       "pipeTransport": {
         "pipeCwd": "${workspaceRoot}",
         "pipeProgram": "wsl",
         "pipeArgs": [ "${debuggerCommand}" ]
       },
-	  "setupCommands":
-	  [
-		{ "text": "handle SIGUSR1 nostop" }
-	  ],
+      "setupCommands": [
+        { "text": "handle SIGUSR1 nostop" }
+      ],
       "MIMode": "gdb"
     }
   ]
