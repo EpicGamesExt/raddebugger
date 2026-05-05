@@ -593,9 +593,7 @@ rd_possible_overrides_from_file_path(Arena *arena, String8 file_path)
         {
           str8_list_push(scratch.arena, &candidate_parts, p->string);
         }
-        StringJoin join = {0};
-        join.sep = str8_lit("/");
-        String8 candidate_path = str8_list_join(arena, &candidate_parts, &join);
+        String8 candidate_path = str8_path_list_join_by_style(arena, &candidate_parts, src_style);
         str8_list_push(arena, &result, candidate_path);
       }
     }
