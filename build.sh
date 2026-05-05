@@ -55,9 +55,11 @@ fi
 
 # --- Build Everything (@build_targets) ---------------------------------------
 cd build
-if [[ "${raddbg:-0}"  == "1" ]]; then didbuild=1 && $compile ../src/raddbg/raddbg_main.c $cc_link $cc_os_gfx $cc_render $cc_font_provider -o raddbg; fi
-if [[ "${radbin:-0}"  == "1" ]]; then didbuild=1 && $compile ../src/radbin/radbin_main.c $cc_link -o radbin; fi
-if [[ "${radlink:-0}" == "1" ]]; then didbuild=1 && $compile ../src/linker/lnk.c         $cc_link -o radlink; fi
+if [[ "${raddbg:-0}"               == "1" ]]; then didbuild=1 && $compile ../src/raddbg/raddbg_main.c $cc_link $cc_os_gfx $cc_render $cc_font_provider -o raddbg; fi
+if [[ "${raddbg_non_graphical:-0}" == "1" ]]; then didbuild=1 && $compile ../src/raddbg/raddbg_main.c -DOS_GFX_STUB=1 -DOS_GFX_STUB_DEFAULT_REFRESH_RATE=60.f -DR_BACKEND=R_BACKEND_STUB $cc_link $cc_os_gfx $cc_render $cc_font_provider -o raddbg_non_graphical; fi
+if [[ "${radbin:-0}"               == "1" ]]; then didbuild=1 && $compile ../src/radbin/radbin_main.c   $cc_link -o radbin; fi
+if [[ "${radlink:-0}"              == "1" ]]; then didbuild=1 && $compile ../src/linker/lnk.c           $cc_link -o radlink; fi
+if [[ "${torture:-0}"              == "1" ]]; then didbuild=1 && $compile ../src/torture/torture_main.c $cc_link $cc_os_gfx $cc_render $cc_font_provider -o torture; fi
 cd ..
 
 # --- Warn On No Builds -------------------------------------------------------
