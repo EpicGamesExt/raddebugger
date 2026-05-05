@@ -1136,7 +1136,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             {
               file_seq_n = push_array(scratch.arena, FileSeqNode, 1);
               SLLStackPush(unit_file_seq_maps[unit_idx].slots[slot_idx], file_seq_n);
-              file_seq_n->src_file = src_file;
+              file_seq_n->src_file = line_seq_src_file;
             }
           }
           
