@@ -1246,22 +1246,9 @@ os_semaphore_close(Semaphore semaphore)
 internal B32
 os_semaphore_take(Semaphore semaphore, U64 endt_us)
 {
-  // TODO(rjf): we need to use `sem_timedwait` here.
-  AssertAlways(endt_us == max_U64);
-  for(;;)
-  {
-    int err = sem_wait((sem_t*)semaphore.u64[0]);
-    if(err == 0)
-    {
-      break;
-    }
-    else if(errno == EAGAIN)
-    {
-      continue;
-    }
-    break;
-  }
-  return 1;
+  struct timespec t = { .tv_sec = endt_us / 1000000, .tv_nsec = (endt_us % 1000000) * 1000 };
+  int err = OS_LNX_RETRY_ON_EINTR(sem_clockwait((sem_t*)semaphore.u64[0], CLOCK_MONOTONIC , &t));
+  return err == 0;
 }
 
 internal void
