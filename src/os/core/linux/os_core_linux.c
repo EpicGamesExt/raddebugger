@@ -874,15 +874,10 @@ os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
   B32 result = 0;
   if(endt_us == 0)
   {
-    if(kill(pid, 0) >= 0)
+    if(kill(pid, 0) == 0)
     {
-      result = (errno == ENOENT);
-      
-      if(result)
-      {
-        int status;
-        waitpid(pid, &status, 0);
-      }
+      int status;
+      waitpid(pid, &status, WNOHANG);
     }
     else { Assert(0 && "failed to get status from pid"); }
   }
