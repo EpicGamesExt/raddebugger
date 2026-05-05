@@ -771,6 +771,8 @@ os_sleep_milliseconds(U32 msec)
 internal OS_Handle
 os_process_launch(OS_ProcessLaunchParams *params)
 {
+  Temp scratch = scratch_begin(0, 0);
+      
   OS_Handle handle = {0};
   
   posix_spawn_file_actions_t file_actions = {0};
@@ -788,27 +790,30 @@ os_process_launch(OS_ProcessLaunchParams *params)
     // redirect STDIN
     int stdin_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdin_file.u64[0], STDIN_FILENO);
     Assert(stdin_code == 0);
+
+    // set work directory
+    int chdir_code = posix_spawn_file_actions_addchdir_np(&file_actions, (char*)push_cstr(scratch.arena, params->path).str);
+    Assert(chdir_code == 0);
     
     posix_spawnattr_t attr = {0};
     int attr_init_code = posix_spawnattr_init(&attr);
     if(attr_init_code == 0)
     {
-      Temp scratch = scratch_begin(0, 0);
-      
       // package argv
-      char **argv = push_array(scratch.arena, char *, params->cmd_line.node_count + 1);
+      char **argv = push_array(scratch.arena, char *, params->cmd_line.node_count + 2);
       {
-        String8List l = str8_split_path(scratch.arena, params->path);
-        str8_list_push(scratch.arena, &l, params->cmd_line.first->string);
-        String8 path_to_exe = str8_path_list_join_by_style(scratch.arena, &l, PathStyle_SystemAbsolute);
-        
-        argv[0] = (char *)path_to_exe.str;
-        U64 arg_idx = 1;
+        U64 arg_idx = 0;
+
+        String8 path_to_exe = push_cstr(scratch.arena, params->cmd_line.first->string);
+        argv[arg_idx++] = (char *)path_to_exe.str;
+
         for EachNode(n, String8Node, params->cmd_line.first->next)
         {
           argv[arg_idx] = (char *)n->string.str;
           arg_idx += 1;
         }
+
+        argv[arg_idx] = 0;
       }
       
       // package envp
@@ -841,7 +846,7 @@ os_process_launch(OS_ProcessLaunchParams *params)
       
       // spawn process
       pid_t pid = 0;
-      int spawn_code = posix_spawn(&pid, argv[0], &file_actions, &attr, argv, envp);
+      int spawn_code = posix_spawnp(&pid, argv[0], &file_actions, &attr, argv, envp);
       
       if(spawn_code == 0)
       {
@@ -851,8 +856,6 @@ os_process_launch(OS_ProcessLaunchParams *params)
       // clean up attributes
       int attr_destroy_code = posix_spawnattr_destroy(&attr);
       Assert(attr_destroy_code == 0);
-      
-      scratch_end(scratch);
     }
     
     // clean up file actions
@@ -860,6 +863,7 @@ os_process_launch(OS_ProcessLaunchParams *params)
     Assert(file_actions_destroy_code == 0);
   }
   
+  scratch_end(scratch);
   return handle;
 }
 
