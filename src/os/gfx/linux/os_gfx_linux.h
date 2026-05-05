@@ -46,6 +46,7 @@ struct OS_LNX_GfxState
   Cursor cursors[OS_Cursor_COUNT];
   OS_Cursor last_set_cursor;
   OS_GfxInfo gfx_info;
+  int wakeup_fd;
 };
 
 ////////////////////////////////

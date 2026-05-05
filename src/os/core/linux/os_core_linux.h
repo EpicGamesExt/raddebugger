@@ -15,11 +15,13 @@
 #include <fcntl.h>
 #include <features.h>
 #include <linux/limits.h>
+#include <poll.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdlib.h>
+#include <sys/eventfd.h>
 #include <sys/mman.h>
 #include <sys/random.h>
 #include <sys/sendfile.h>

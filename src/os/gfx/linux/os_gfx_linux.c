@@ -68,6 +68,10 @@ os_gfx_init(void)
       os_lnx_gfx_state->cursors[map[idx].cursor] = XCreateFontCursor(os_lnx_gfx_state->display, map[idx].id);
     }
   }
+
+  // create a wake up event for polling
+  os_lnx_gfx_state->wakeup_fd = eventfd(0, EFD_CLOEXEC);
+  Assert(os_lnx_gfx_state->wakeup_fd > 0);
 }
 
 ////////////////////////////////
@@ -398,241 +402,268 @@ os_dpi_from_monitor(OS_Handle monitor)
 internal void
 os_send_wakeup_event(void)
 {
-  // TODO(rjf)
+  U64 dummy = 1; // man says this has to be > 0
+  ssize_t size = OS_LNX_RETRY_ON_EINTR(write(os_lnx_gfx_state->wakeup_fd, &dummy, sizeof(dummy)));
+  Assert(size == sizeof(dummy));
 }
 
 internal OS_EventList
 os_get_events(Arena *arena, B32 wait)
 {
   OS_EventList evts = {0};
-  for(;XPending(os_lnx_gfx_state->display) > 0 || (wait && evts.count == 0);)
+  for(;;)
   {
-    XEvent evt = {0};
-    XNextEvent(os_lnx_gfx_state->display, &evt);
-    B32 set_mouse_cursor = 0;
-    switch(evt.type)
+    // set up poll events (display + wakeup event)
+    struct pollfd poll_fds[2] =
     {
-      default:{}break;
-      
-      //- rjf: key presses/releases
-      case KeyPress:
-      case KeyRelease:
-      {
-        // rjf: determine flags
-        OS_Modifiers modifiers = 0;
-        if(evt.xkey.state & ShiftMask)   { modifiers |= OS_Modifier_Shift; }
-        if(evt.xkey.state & ControlMask) { modifiers |= OS_Modifier_Ctrl; }
-        if(evt.xkey.state & Mod1Mask)    { modifiers |= OS_Modifier_Alt; }
-        
-        // rjf: map keycode -> keysym & codepoint
-        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xkey.window);
-        KeySym keysym = 0;
-        U8 text[256] = {0};
-        U64 text_size = Xutf8LookupString(window->xic, &evt.xkey, (char *)text, sizeof(text), &keysym, 0);
-        
-        // rjf: map keysym -> OS_Key
-        B32 is_right_sided = 0;
-        OS_Key key = OS_Key_Null;
-        switch(keysym)
-        {
-          default:
-          {
-            if(0){}
-            else if(XK_F1 <= keysym && keysym <= XK_F24) { key = (OS_Key)(OS_Key_F1 + (keysym - XK_F1)); }
-            else if('0' <= keysym && keysym <= '9')      { key = OS_Key_0 + (keysym-'0'); }
-          }break;
-          case XK_Escape:{key = OS_Key_Esc;};break;
-          case XK_BackSpace:{key = OS_Key_Backspace;}break;
-          case XK_Delete:{key = OS_Key_Delete;}break;
-          case XK_Return:{key = OS_Key_Return;}break;
-          case XK_Pause:{key = OS_Key_Pause;}break;
-          case XK_Tab:{key = OS_Key_Tab;}break;
-          case XK_Left:{key = OS_Key_Left;}break;
-          case XK_Right:{key = OS_Key_Right;}break;
-          case XK_Up:{key = OS_Key_Up;}break;
-          case XK_Down:{key = OS_Key_Down;}break;
-          case XK_Home:{key = OS_Key_Home;}break;
-          case XK_End:{key = OS_Key_End;}break;
-          case XK_Page_Up:{key = OS_Key_PageUp;}break;
-          case XK_Page_Down:{key = OS_Key_PageDown;}break;
-          case XK_Alt_L:{ key = OS_Key_Alt; }break;
-          case XK_Alt_R:{ key = OS_Key_Alt; is_right_sided = 1;}break;
-          case XK_Shift_L:{ key = OS_Key_Shift; }break;
-          case XK_Shift_R:{ key = OS_Key_Shift; is_right_sided = 1;}break;
-          case XK_Control_L:{ key = OS_Key_Ctrl; }break;
-          case XK_Control_R:{ key = OS_Key_Ctrl; is_right_sided = 1;}break;
-          case '-':{key = OS_Key_Minus;}break;
-          case '=':{key = OS_Key_Equal;}break;
-          case '[':{key = OS_Key_LeftBracket;}break;
-          case ']':{key = OS_Key_RightBracket;}break;
-          case ';':{key = OS_Key_Semicolon;}break;
-          case '\'':{key = OS_Key_Quote;}break;
-          case '.':{key = OS_Key_Period;}break;
-          case ',':{key = OS_Key_Comma;}break;
-          case '/':{key = OS_Key_Slash;}break;
-          case '\\':{key = OS_Key_BackSlash;}break;
-          case '\t':{key = OS_Key_Tab;}break;
-          case 'a':case 'A':{key = OS_Key_A;}break;
-          case 'b':case 'B':{key = OS_Key_B;}break;
-          case 'c':case 'C':{key = OS_Key_C;}break;
-          case 'd':case 'D':{key = OS_Key_D;}break;
-          case 'e':case 'E':{key = OS_Key_E;}break;
-          case 'f':case 'F':{key = OS_Key_F;}break;
-          case 'g':case 'G':{key = OS_Key_G;}break;
-          case 'h':case 'H':{key = OS_Key_H;}break;
-          case 'i':case 'I':{key = OS_Key_I;}break;
-          case 'j':case 'J':{key = OS_Key_J;}break;
-          case 'k':case 'K':{key = OS_Key_K;}break;
-          case 'l':case 'L':{key = OS_Key_L;}break;
-          case 'm':case 'M':{key = OS_Key_M;}break;
-          case 'n':case 'N':{key = OS_Key_N;}break;
-          case 'o':case 'O':{key = OS_Key_O;}break;
-          case 'p':case 'P':{key = OS_Key_P;}break;
-          case 'q':case 'Q':{key = OS_Key_Q;}break;
-          case 'r':case 'R':{key = OS_Key_R;}break;
-          case 's':case 'S':{key = OS_Key_S;}break;
-          case 't':case 'T':{key = OS_Key_T;}break;
-          case 'u':case 'U':{key = OS_Key_U;}break;
-          case 'v':case 'V':{key = OS_Key_V;}break;
-          case 'w':case 'W':{key = OS_Key_W;}break;
-          case 'x':case 'X':{key = OS_Key_X;}break;
-          case 'y':case 'Y':{key = OS_Key_Y;}break;
-          case 'z':case 'Z':{key = OS_Key_Z;}break;
-          case ' ':{key = OS_Key_Space;}break;
-        }
-        
-        // rjf: push text event
-        if(evt.type == KeyPress && text_size != 0)
-        {
-          for(U64 off = 0; off < text_size;)
-          {
-            UnicodeDecode decode = utf8_decode(text+off, text_size-off);
-            if(decode.codepoint != 0 && (decode.codepoint >= 32 || decode.codepoint == '\t'))
-            {
-              OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_Text);
-              e->window.u64[0] = (U64)window;
-              e->character = decode.codepoint;
-            }
-            if(decode.inc == 0)
-            {
-              break;
-            }
-            off += decode.inc;
-          }
-        }
-        
-        // rjf: push key event
-        {
-          OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == KeyPress ? OS_EventKind_Press : OS_EventKind_Release);
-          e->window.u64[0] = (U64)window;
-          e->modifiers = modifiers;
-          e->key = key;
-          e->right_sided = is_right_sided;
-        }
-      }break;
-      
-      //- rjf: mouse button presses/releases
-      case ButtonPress:
-      case ButtonRelease:
-      {
-        // rjf: determine flags
-        OS_Modifiers modifiers = 0;
-        if(evt.xbutton.state & ShiftMask)   { modifiers |= OS_Modifier_Shift; }
-        if(evt.xbutton.state & ControlMask) { modifiers |= OS_Modifier_Ctrl; }
-        if(evt.xbutton.state & Mod1Mask)    { modifiers |= OS_Modifier_Alt; }
-        
-        // rjf: map button -> OS_Key
-        OS_Key key = OS_Key_Null;
-        switch(evt.xbutton.button)
-        {
-          default:{}break;
-          case Button1:{key = OS_Key_LeftMouseButton;}break;
-          case Button2:{key = OS_Key_MiddleMouseButton;}break;
-          case Button3:{key = OS_Key_RightMouseButton;}break;
-        }
-        
-        // rjf: push event
-        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xbutton.window);
-        if(key != OS_Key_Null)
-        {
-          OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == ButtonPress ? OS_EventKind_Press : OS_EventKind_Release);
-          e->window.u64[0] = (U64)window;
-          e->modifiers = modifiers;
-          e->key = key;
-          e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
-        }
-        else if(evt.xbutton.button == Button4 ||
-                evt.xbutton.button == Button5)
-        {
-          OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_Scroll);
-          e->window.u64[0] = (U64)window;
-          e->modifiers = modifiers;
-          e->delta = v2f32(0, evt.xbutton.button == Button4 ? -1.f : +1.f);
-          e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
-        }
-      }break;
-      
-      //- rjf: mouse motion
-      case MotionNotify:
-      {
-        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
-        OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_MouseMove);
-        e->window.u64[0] = (U64)window;
-        e->pos.x = (F32)evt.xmotion.x;
-        e->pos.y = (F32)evt.xmotion.y;
-        set_mouse_cursor = 1;
-      }break;
-      
-      //- rjf: window focus/unfocus
-      case FocusIn:
-      {
-      }break;
-      case FocusOut:
-      {
-        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xfocus.window);
-        OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_WindowLoseFocus);
-        e->window.u64[0] = (U64)window;
-      }break;
-      
-      //- rjf: client messages
-      case ClientMessage:
-      {
-        if((Atom)evt.xclient.data.l[0] == os_lnx_gfx_state->wm_delete_window_atom)
-        {
-          OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
-          OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_WindowClose);
-          e->window.u64[0] = (U64)window;
-        }
-        else if((Atom)evt.xclient.data.l[0] == os_lnx_gfx_state->wm_sync_request_atom)
-        {
-          OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
-          if(window != 0)
-          {
-            window->counter_value = 0;
-            window->counter_value |= evt.xclient.data.l[2];
-            window->counter_value |= (evt.xclient.data.l[3] << 32);
-            XSyncValue value;
-            XSyncIntToValue(&value, window->counter_value);
-            XSyncSetCounter(os_lnx_gfx_state->display, window->counter_xid, value);
-          }
-        }
-      }break;
+      { .fd = ConnectionNumber(os_lnx_gfx_state->display), .events = POLLIN },
+      { .fd = os_lnx_gfx_state->wakeup_fd,                 .events = POLLIN },
+    };
+
+    // wait for for display or wakeup event
+    int timeout     = wait && evts.count == 0 ? -1 : 0;
+    int poll_status = poll(poll_fds, ArrayCount(poll_fds), timeout);
+    Assert(poll_status >= 0);
+
+    // wakeup requested
+    if(poll_fds[1].revents & POLLIN)
+    {
+      U64 dummy = 0;
+      read(os_lnx_gfx_state->wakeup_fd, &dummy, sizeof(dummy));
+      wait = 0;
     }
-    if(set_mouse_cursor)
+
+    while(XPending(os_lnx_gfx_state->display))
     {
-      Window root_window = 0;
-      Window child_window = 0;
-      int root_rel_x = 0;
-      int root_rel_y = 0;
-      int child_rel_x = 0;
-      int child_rel_y = 0;
-      unsigned int mask = 0;
-      if(XQueryPointer(os_lnx_gfx_state->display, XDefaultRootWindow(os_lnx_gfx_state->display), &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
+      XEvent evt = {0};
+      XNextEvent(os_lnx_gfx_state->display, &evt);
+      B32 set_mouse_cursor = 0;
+      switch(evt.type)
       {
-        XDefineCursor(os_lnx_gfx_state->display, root_window, os_lnx_gfx_state->cursors[os_lnx_gfx_state->last_set_cursor]);
-        XFlush(os_lnx_gfx_state->display);
+        default:{}break;
+        
+        //- rjf: key presses/releases
+        case KeyPress:
+        case KeyRelease:
+        {
+          // rjf: determine flags
+          OS_Modifiers modifiers = 0;
+          if(evt.xkey.state & ShiftMask)   { modifiers |= OS_Modifier_Shift; }
+          if(evt.xkey.state & ControlMask) { modifiers |= OS_Modifier_Ctrl; }
+          if(evt.xkey.state & Mod1Mask)    { modifiers |= OS_Modifier_Alt; }
+          
+          // rjf: map keycode -> keysym & codepoint
+          OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xkey.window);
+          KeySym keysym = 0;
+          U8 text[256] = {0};
+          U64 text_size = Xutf8LookupString(window->xic, &evt.xkey, (char *)text, sizeof(text), &keysym, 0);
+          
+          // rjf: map keysym -> OS_Key
+          B32 is_right_sided = 0;
+          OS_Key key = OS_Key_Null;
+          switch(keysym)
+          {
+            default:
+            {
+              if(0){}
+              else if(XK_F1 <= keysym && keysym <= XK_F24) { key = (OS_Key)(OS_Key_F1 + (keysym - XK_F1)); }
+              else if('0' <= keysym && keysym <= '9')      { key = OS_Key_0 + (keysym-'0'); }
+            }break;
+            case XK_Escape:{key = OS_Key_Esc;};break;
+            case XK_BackSpace:{key = OS_Key_Backspace;}break;
+            case XK_Delete:{key = OS_Key_Delete;}break;
+            case XK_Return:{key = OS_Key_Return;}break;
+            case XK_Pause:{key = OS_Key_Pause;}break;
+            case XK_Tab:{key = OS_Key_Tab;}break;
+            case XK_Left:{key = OS_Key_Left;}break;
+            case XK_Right:{key = OS_Key_Right;}break;
+            case XK_Up:{key = OS_Key_Up;}break;
+            case XK_Down:{key = OS_Key_Down;}break;
+            case XK_Home:{key = OS_Key_Home;}break;
+            case XK_End:{key = OS_Key_End;}break;
+            case XK_Page_Up:{key = OS_Key_PageUp;}break;
+            case XK_Page_Down:{key = OS_Key_PageDown;}break;
+            case XK_Alt_L:{ key = OS_Key_Alt; }break;
+            case XK_Alt_R:{ key = OS_Key_Alt; is_right_sided = 1;}break;
+            case XK_Shift_L:{ key = OS_Key_Shift; }break;
+            case XK_Shift_R:{ key = OS_Key_Shift; is_right_sided = 1;}break;
+            case XK_Control_L:{ key = OS_Key_Ctrl; }break;
+            case XK_Control_R:{ key = OS_Key_Ctrl; is_right_sided = 1;}break;
+            case '-':{key = OS_Key_Minus;}break;
+            case '=':{key = OS_Key_Equal;}break;
+            case '[':{key = OS_Key_LeftBracket;}break;
+            case ']':{key = OS_Key_RightBracket;}break;
+            case ';':{key = OS_Key_Semicolon;}break;
+            case '\'':{key = OS_Key_Quote;}break;
+            case '.':{key = OS_Key_Period;}break;
+            case ',':{key = OS_Key_Comma;}break;
+            case '/':{key = OS_Key_Slash;}break;
+            case '\\':{key = OS_Key_BackSlash;}break;
+            case '\t':{key = OS_Key_Tab;}break;
+            case 'a':case 'A':{key = OS_Key_A;}break;
+            case 'b':case 'B':{key = OS_Key_B;}break;
+            case 'c':case 'C':{key = OS_Key_C;}break;
+            case 'd':case 'D':{key = OS_Key_D;}break;
+            case 'e':case 'E':{key = OS_Key_E;}break;
+            case 'f':case 'F':{key = OS_Key_F;}break;
+            case 'g':case 'G':{key = OS_Key_G;}break;
+            case 'h':case 'H':{key = OS_Key_H;}break;
+            case 'i':case 'I':{key = OS_Key_I;}break;
+            case 'j':case 'J':{key = OS_Key_J;}break;
+            case 'k':case 'K':{key = OS_Key_K;}break;
+            case 'l':case 'L':{key = OS_Key_L;}break;
+            case 'm':case 'M':{key = OS_Key_M;}break;
+            case 'n':case 'N':{key = OS_Key_N;}break;
+            case 'o':case 'O':{key = OS_Key_O;}break;
+            case 'p':case 'P':{key = OS_Key_P;}break;
+            case 'q':case 'Q':{key = OS_Key_Q;}break;
+            case 'r':case 'R':{key = OS_Key_R;}break;
+            case 's':case 'S':{key = OS_Key_S;}break;
+            case 't':case 'T':{key = OS_Key_T;}break;
+            case 'u':case 'U':{key = OS_Key_U;}break;
+            case 'v':case 'V':{key = OS_Key_V;}break;
+            case 'w':case 'W':{key = OS_Key_W;}break;
+            case 'x':case 'X':{key = OS_Key_X;}break;
+            case 'y':case 'Y':{key = OS_Key_Y;}break;
+            case 'z':case 'Z':{key = OS_Key_Z;}break;
+            case ' ':{key = OS_Key_Space;}break;
+          }
+          
+          // rjf: push text event
+          if(evt.type == KeyPress && text_size != 0)
+          {
+            for(U64 off = 0; off < text_size;)
+            {
+              UnicodeDecode decode = utf8_decode(text+off, text_size-off);
+              if(decode.codepoint != 0 && (decode.codepoint >= 32 || decode.codepoint == '\t'))
+              {
+                OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_Text);
+                e->window.u64[0] = (U64)window;
+                e->character = decode.codepoint;
+              }
+              if(decode.inc == 0)
+              {
+                break;
+              }
+              off += decode.inc;
+            }
+          }
+          
+          // rjf: push key event
+          {
+            OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == KeyPress ? OS_EventKind_Press : OS_EventKind_Release);
+            e->window.u64[0] = (U64)window;
+            e->modifiers = modifiers;
+            e->key = key;
+            e->right_sided = is_right_sided;
+          }
+        }break;
+        
+        //- rjf: mouse button presses/releases
+        case ButtonPress:
+        case ButtonRelease:
+        {
+          // rjf: determine flags
+          OS_Modifiers modifiers = 0;
+          if(evt.xbutton.state & ShiftMask)   { modifiers |= OS_Modifier_Shift; }
+          if(evt.xbutton.state & ControlMask) { modifiers |= OS_Modifier_Ctrl; }
+          if(evt.xbutton.state & Mod1Mask)    { modifiers |= OS_Modifier_Alt; }
+          
+          // rjf: map button -> OS_Key
+          OS_Key key = OS_Key_Null;
+          switch(evt.xbutton.button)
+          {
+            default:{}break;
+            case Button1:{key = OS_Key_LeftMouseButton;}break;
+            case Button2:{key = OS_Key_MiddleMouseButton;}break;
+            case Button3:{key = OS_Key_RightMouseButton;}break;
+          }
+          
+          // rjf: push event
+          OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xbutton.window);
+          if(key != OS_Key_Null)
+          {
+            OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == ButtonPress ? OS_EventKind_Press : OS_EventKind_Release);
+            e->window.u64[0] = (U64)window;
+            e->modifiers = modifiers;
+            e->key = key;
+            e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
+          }
+          else if(evt.xbutton.button == Button4 ||
+                  evt.xbutton.button == Button5)
+          {
+            OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_Scroll);
+            e->window.u64[0] = (U64)window;
+            e->modifiers = modifiers;
+            e->delta = v2f32(0, evt.xbutton.button == Button4 ? -1.f : +1.f);
+            e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
+          }
+        }break;
+        
+        //- rjf: mouse motion
+        case MotionNotify:
+        {
+          OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
+          OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_MouseMove);
+          e->window.u64[0] = (U64)window;
+          e->pos.x = (F32)evt.xmotion.x;
+          e->pos.y = (F32)evt.xmotion.y;
+          set_mouse_cursor = 1;
+        }break;
+        
+        //- rjf: window focus/unfocus
+        case FocusIn:
+        {
+        }break;
+        case FocusOut:
+        {
+          OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xfocus.window);
+          OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_WindowLoseFocus);
+          e->window.u64[0] = (U64)window;
+        }break;
+        
+        //- rjf: client messages
+        case ClientMessage:
+        {
+          if((Atom)evt.xclient.data.l[0] == os_lnx_gfx_state->wm_delete_window_atom)
+          {
+            OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
+            OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_WindowClose);
+            e->window.u64[0] = (U64)window;
+          }
+          else if((Atom)evt.xclient.data.l[0] == os_lnx_gfx_state->wm_sync_request_atom)
+          {
+            OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
+            if(window != 0)
+            {
+              window->counter_value = 0;
+              window->counter_value |= evt.xclient.data.l[2];
+              window->counter_value |= (evt.xclient.data.l[3] << 32);
+              XSyncValue value;
+              XSyncIntToValue(&value, window->counter_value);
+              XSyncSetCounter(os_lnx_gfx_state->display, window->counter_xid, value);
+            }
+          }
+        }break;
+      }
+      if(set_mouse_cursor)
+      {
+        Window root_window = 0;
+        Window child_window = 0;
+        int root_rel_x = 0;
+        int root_rel_y = 0;
+        int child_rel_x = 0;
+        int child_rel_y = 0;
+        unsigned int mask = 0;
+        if(XQueryPointer(os_lnx_gfx_state->display, XDefaultRootWindow(os_lnx_gfx_state->display), &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
+        {
+          XDefineCursor(os_lnx_gfx_state->display, root_window, os_lnx_gfx_state->cursors[os_lnx_gfx_state->last_set_cursor]);
+          XFlush(os_lnx_gfx_state->display);
+        }
       }
     }
+
+    if(evts.count > 0 || (wait == 0 && evts.count == 0)) { break; }
   }
   return evts;
 }
