@@ -4,10 +4,11 @@
 ////////////////////////////////
 //~ rjf: post-0.9.25 TODO notes
 //
-// [ ] linux fixes
+// [ ] linux/dwarf fixes
 //  [ ] step-over/step-into doesn't step successfully in many cases, just causes a continue
 //  [ ] rd_frame has no type info, should be (void -> void) - type should be generated but it
 //      is not being hooked up correctly
+//  [ ] type views for `MyByte *` example do not match correctly
 //
 // [ ] many threads hitting conditional breakpoints -> causes 0x8000003 exception!
 //
