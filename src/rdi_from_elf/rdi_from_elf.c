@@ -20,14 +20,17 @@ e2r_rdi_binary_sections_from_elf_section_table(Arena *arena, String8 data, ELF_B
     if(src_section->sh_flags & ELF_Shf_Write)     { flags |= RDI_BinarySectionFlag_Write; }
     if(src_section->sh_flags & ELF_Shf_ExecInstr) { flags |= RDI_BinarySectionFlag_Execute; }
     
-    // rjf: make rdi section
-    RDIM_BinarySection *dst_section = rdim_binary_section_list_push(arena, &result);
-    dst_section->name       = name;
-    dst_section->flags      = flags;
-    dst_section->voff_first = voff_first;
-    dst_section->voff_opl   = voff_opl;
-    dst_section->foff_first = foff_first;
-    dst_section->foff_opl   = foff_opl;
+    // rjf: make rdi section if not empty
+    if(name.size != 0 || voff_opl != voff_first || foff_opl != foff_first)
+    {
+      RDIM_BinarySection *dst_section = rdim_binary_section_list_push(arena, &result);
+      dst_section->name       = name;
+      dst_section->flags      = flags;
+      dst_section->voff_first = voff_first;
+      dst_section->voff_opl   = voff_opl;
+      dst_section->foff_first = foff_first;
+      dst_section->foff_opl   = foff_opl;
+    }
   }
   return result;
 }

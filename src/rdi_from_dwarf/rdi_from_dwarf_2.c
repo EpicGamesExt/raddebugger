@@ -2455,7 +2455,6 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             // rjf: build type
             dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
             dst_type->kind        = RDI_TypeKind_Function;
-            dst_type->name        = name;
             dst_type->direct_type = direct_type;
             dst_type->byte_size   = arch_addr_size;
             
@@ -2914,7 +2913,8 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
          (type->kind == RDI_TypeKind_Struct ||
           type->kind == RDI_TypeKind_Union ||
           type->kind == RDI_TypeKind_Class ||
-          type->kind == RDI_TypeKind_Enum))
+          type->kind == RDI_TypeKind_Enum ||
+          type->kind == RDI_TypeKind_Alias))
       {
         // rjf: produce UDT
         RDIM_UDT *udt = rdim_udt_chunk_list_push(arena, &lane_udts, chunk_count);
@@ -3238,6 +3238,19 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
   ////////////////////////////
   //- rjf: convert all symbols
   //
+  typedef struct D2R2_ScopeContainerNode D2R2_ScopeContainerNode;
+  struct D2R2_ScopeContainerNode
+  {
+    D2R2_ScopeContainerNode *next;
+    U64 info_off;
+    RDIM_Scope *scope;
+  };
+  typedef struct D2R2_ScopeContainerMap D2R2_ScopeContainerMap;
+  struct D2R2_ScopeContainerMap
+  {
+    D2R2_ScopeContainerNode **slots;
+    U64 slots_count;
+  };
   typedef struct D2R2_SubUnitWorkArtifacts D2R2_SubUnitWorkArtifacts;
   struct D2R2_SubUnitWorkArtifacts
   {
@@ -3248,13 +3261,18 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
     RDIM_ScopeChunkList scopes;
     RDIM_InlineSiteChunkList inline_sites;
   };
+  D2R2_ScopeContainerMap *scope_container_map = 0;
   D2R2_SubUnitWorkArtifacts *sub_unit_work_artifacts = 0;
   ProfScope("convert all symbols")
   {
     if(lane_idx() == 0)
     {
+      scope_container_map = push_array(scratch.arena, D2R2_ScopeContainerMap, 1);
+      scope_container_map->slots_count = total_tag_count_estimate/8 + 1;
+      scope_container_map->slots = push_array(scratch.arena, D2R2_ScopeContainerNode *, scope_container_map->slots_count);
       sub_unit_work_artifacts = push_array(scratch.arena, D2R2_SubUnitWorkArtifacts, sub_unit_works_count);
     }
+    lane_sync_u64(&scope_container_map, 0);
     lane_sync_u64(&sub_unit_work_artifacts, 0);
     U64 work_take_idx_ = 0;
     U64 *work_take_idx_ptr = &work_take_idx_;
@@ -4205,9 +4223,21 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           //
           RDIM_Symbol *new_symbol = 0;
           RDIM_Scope *new_scope_open = 0;
+          B32 parent_tag_is_container_to_deduped_tags = 0;
           switch(tag.kind)
           {
             default:{}break;
+            
+            //- rjf: determine if parent tag is a container to deduplicated tags
+            case DW_TagKind_Namespace:
+            case DW_TagKind_StructureType:
+            case DW_TagKind_UnionType:
+            case DW_TagKind_ClassType:
+            case DW_TagKind_EnumerationType:
+            case DW_TagKind_Typedef:
+            {
+              parent_tag_is_container_to_deduped_tags = 1;
+            }break;
             
             //- rjf: subprograms (procedures)
             case DW_TagKind_SubProgram:
@@ -4266,6 +4296,44 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
               dst_artifacts->scopes.scope_voff_count += 2*ranges.count;
               new_scope_open = scope;
             }break;
+          }
+          
+          ////////////////////////
+          //- rjf: if we've determined that the parent tag is a container to
+          // deduplicated tags (types, namespaces), then we need to record
+          // the .debug_info offset -> scope mapping for this scope, so it
+          // can be equipped as a container later.
+          //
+          if(parent_tag_is_container_to_deduped_tags)
+          {
+            U64 info_off = 0;
+            RDIM_Scope *scope = 0;
+            for(D2R2_ParentNode *n = top_parent; n != 0; n = n->next)
+            {
+              if(n->scope != 0)
+              {
+                info_off = n->info_off;
+                scope = n->scope;
+                break;
+              }
+            }
+            if(scope != 0)
+            {
+              D2R2_ScopeContainerNode *n = push_array(scratch.arena, D2R2_ScopeContainerNode, 1);
+              n->info_off = info_off;
+              n->scope = scope;
+              U64 hash = u64_hash_from_str8(str8_struct(&info_off));
+              U64 slot_idx = hash%scope_container_map->slots_count;
+              for(B32 gathered = 0; !gathered;)
+              {
+                U64 expected_head_value = ins_atomic_u64_eval(&scope_container_map->slots[slot_idx]);
+                n->next = (D2R2_ScopeContainerNode *)expected_head_value;
+                if(expected_head_value == ins_atomic_u64_eval_cond_assign(&scope_container_map->slots[slot_idx], (U64)n, expected_head_value))
+                {
+                  gathered = 1;
+                }
+              }
+            }
           }
           
           ////////////////////////
@@ -4464,9 +4532,26 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         continue;
       }
       
+      // rjf: find container scopes
+      RDIM_Scope *container_scope = 0;
+      {
+        U64 info_off = container_ancestor_info_off;
+        U64 hash = u64_hash_from_str8(str8_struct(&info_off));
+        U64 slot_idx = hash%scope_container_map->slots_count;
+        for(D2R2_ScopeContainerNode *n = scope_container_map->slots[slot_idx]; n != 0; n = n->next)
+        {
+          if(n->info_off == info_off)
+          {
+            container_scope = n->scope;
+            break;
+          }
+        }
+      }
+      
       // rjf: find container types/namespaces
       RDIM_Type *container_type = 0;
       RDIM_Namespace *container_namespace = 0;
+      if(!container_scope)
       {
         U64 info_off = container_ancestor_info_off;
         U64 unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, info_off);
@@ -4510,6 +4595,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       }
       
       // rjf: fill
+      dst_udt->container_scope = container_scope;
       dst_udt->container_type = container_type;
       dst_udt->container_namespace = container_namespace;
     }
@@ -4532,6 +4618,22 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         continue;
       }
       
+      // rjf: find container scopes
+      RDIM_Scope *container_scope = 0;
+      {
+        U64 info_off = container_ancestor_info_off;
+        U64 hash = u64_hash_from_str8(str8_struct(&info_off));
+        U64 slot_idx = hash%scope_container_map->slots_count;
+        for(D2R2_ScopeContainerNode *n = scope_container_map->slots[slot_idx]; n != 0; n = n->next)
+        {
+          if(n->info_off == info_off)
+          {
+            container_scope = n->scope;
+            break;
+          }
+        }
+      }
+      
       // rjf: find container types/namespaces
       RDIM_Type *container_type = 0;
       RDIM_Namespace *container_namespace = 0;
@@ -4578,6 +4680,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       }
       
       // rjf: fill
+      dst_namespace->parent_scope = container_scope;
       dst_namespace->parent_type = container_type;
       dst_namespace->parent_namespace = container_namespace;
     }

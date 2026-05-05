@@ -44,6 +44,8 @@ struct DW2_OffsetTable
 {
   DW_Format format;
   DW_Version version;
+  U8 addr_size;
+  U8 segment_selector_size;
   U64 entry_size;
   U64 entries_count;
   void *entries;

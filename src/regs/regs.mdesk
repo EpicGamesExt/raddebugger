@@ -2,6 +2,15 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Architecture Tables
+
+@table(name, name_lower)
+REGS_ArchTable:
+{
+  {X64 x64}
+}
+
+////////////////////////////////
 //~ rjf: X64 Tables
 
 @table(name size usage)
@@ -199,18 +208,6 @@ REGS_AliasTableX64:
   {mm6             st6    0      64     Vector}
   {mm7             st7    0      64     Vector}
 }
-
-////////////////////////////////
-//~ rjf: Architecture Tables
-
-@table(name, name_lower)
-REGS_ArchTable:
-{
-  {X64 x64}
-}
-
-////////////////////////////////
-//~ rjf: X64 Generators
 
 @enum REGS_RegCodeX64:
 {

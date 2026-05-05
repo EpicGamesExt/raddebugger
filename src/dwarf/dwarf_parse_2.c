@@ -908,15 +908,27 @@ dw2_read_offset_table(String8 data, U64 off, DW2_OffsetTable *out)
     // rjf: version 5: read rest (this section only exists in 5+)
     if(version == DW_Version_5)
     {
-      // rjf: skip padding
-      off += sizeof(U16);
+      // rjf: read address / segment selector size (these need to be 0 in non-address offset tables)
+      U8 addr_size = 0;
+      U8 segment_selector_size = 0;
+      off += str8_deserial_read_struct(data, off, &addr_size);
+      off += str8_deserial_read_struct(data, off, &segment_selector_size);
+      
+      // rjf: determine entry size
+      U64 entry_size = dw_size_from_format(format);
+      if(addr_size != 0)
+      {
+        entry_size = addr_size + segment_selector_size;
+      }
       
       // rjf: fill table info
-      out->format        = format;
-      out->version       = version;
-      out->entry_size    = dw_size_from_format(format);
-      out->entries_count = (unit_data_off_opl - off) / out->entry_size;
-      out->entries       = data.str + off;
+      out->format                = format;
+      out->version               = version;
+      out->addr_size             = addr_size;
+      out->segment_selector_size = segment_selector_size;
+      out->entry_size            = entry_size;
+      out->entries_count         = (unit_data_off_opl - off) / out->entry_size;
+      out->entries               = data.str + off;
       
       // rjf: skip table
       off = unit_data_off_opl;
@@ -934,7 +946,21 @@ dw2_try_offset_from_table_idx(DW2_OffsetTable *tbl, U64 idx, U64 *out)
   {
     U64 entry_size = tbl->entry_size;
     U64 entry_off = idx * entry_size;
-    MemoryCopy(out, (U8 *)tbl->entries + entry_off, entry_size);
+    if(tbl->addr_size != 0)
+    {
+      U64 segment_off = entry_off;
+      U64 addr_off = entry_off + tbl->segment_selector_size;
+      U64 segment = 0;
+      U64 addr = 0;
+      MemoryCopy(&segment, (U8 *)tbl->entries + segment_off, tbl->segment_selector_size);
+      MemoryCopy(&addr, (U8 *)tbl->entries + addr_off, tbl->addr_size);
+      // TODO(rjf): @segment_based_addressing
+      *out = addr;
+    }
+    else
+    {
+      MemoryCopy(out, (U8 *)tbl->entries + entry_off, entry_size);
+    }
     result = 1;
   }
   return result;
