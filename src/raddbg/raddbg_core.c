@@ -517,13 +517,13 @@ rd_mapped_from_file_path(Arena *arena, String8 file_path)
     }
     if(best_map_dst.size != 0)
     {
+      PathStyle dst_path_style = path_style_from_str8(best_map_dst);
       String8List best_map_dst_parts = str8_split_path(scratch.arena, best_map_dst);
       for(String8Node *n = best_map_remaining_suffix_first; n != 0; n = n->next)
       {
         str8_list_push(scratch.arena, &best_map_dst_parts, n->string);
       }
-      StringJoin join = {.sep = str8_lit("/")};
-      file_path = str8_list_join(scratch.arena, &best_map_dst_parts, &join);
+      file_path = str8_path_list_join_by_style(scratch.arena, &best_map_dst_parts, dst_path_style);
     }
   }
   String8 result = push_str8_copy(arena, file_path);

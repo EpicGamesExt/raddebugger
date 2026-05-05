@@ -345,13 +345,13 @@ internal B32
 str8_match_wildcard(String8 string, String8 pattern, StringMatchFlags flags)
 {
   B32 matched = 0;
-
+  
   U64 pattern_cursor = 0;
   U64 string_cursor  = 0;
-
+  
   U64 pattern_start = max_U64;
   U64 string_start  = 0;
-
+  
   for (;;) {
     if (pattern_cursor == pattern.size) {
       if (string_cursor == string.size || (flags & StringMatchFlag_RightSideSloppy)) {
@@ -359,7 +359,7 @@ str8_match_wildcard(String8 string, String8 pattern, StringMatchFlags flags)
         break;
       }
     }
-
+    
     if (string_cursor == string.size) {
       while (pattern_cursor < pattern.size && pattern.str[pattern_cursor] == '*') {
         pattern_cursor += 1;
@@ -367,31 +367,31 @@ str8_match_wildcard(String8 string, String8 pattern, StringMatchFlags flags)
       matched = (pattern_cursor == pattern.size);
       break;
     }
-
+    
     if (pattern_cursor < pattern.size && pattern.str[pattern_cursor] == '*') {
       pattern_start = pattern_cursor;
       string_start = string_cursor;
       pattern_cursor += 1;
       continue;
     }
-
-
+    
+    
     if (pattern_cursor < pattern.size && (pattern.str[pattern_cursor] == '?' || str8_char_match(string.str[string_cursor], pattern.str[pattern_cursor], flags))) {
       string_cursor  += 1;
       pattern_cursor += 1;
       continue;
     }
-
+    
     if (pattern_start != max_U64) {
       pattern_cursor = pattern_start + 1;
       string_start += 1;
       string_cursor = string_start;
       continue;
     }
-
+    
     break;
   }
-
+  
   return matched;
 }
 
@@ -2362,7 +2362,7 @@ string_from_elapsed_time(Arena *arena, DateTime dt)
   } else if (dt.day) {
     str8_list_pushf(scratch.arena, &list, "%ud", dt.day);
   }
-
+  
   if (dt.hour) {
     str8_list_pushf(scratch.arena, &list, "%uh %um %u.%us", dt.hour, dt.min, dt.sec, dt.msec);
   } else if (dt.min) {
@@ -2374,13 +2374,13 @@ string_from_elapsed_time(Arena *arena, DateTime dt)
   } else if (dt.micro_sec) {
     str8_list_pushf(scratch.arena, &list, "%uus", dt.micro_sec);
   }
-
+  
   if (list.node_count == 0) {
     str8_list_pushf(scratch.arena, &list, "0");
   }
-
+  
   String8 result = str8_list_join(arena, &list, &(StringJoin){ str8_lit_comp(""), str8_lit_comp(" "), str8_lit_comp("") });
-
+  
   scratch_end(scratch);
   return result;
 }
