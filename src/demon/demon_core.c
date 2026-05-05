@@ -232,14 +232,6 @@ dmn_set_trap(Arena *arena, DMN_Trap *trap)
       result->trap       = trap;
       result->swap_bytes = str8(swap_bytes, trap_inst.size);
     }
-    else
-    {
-      Assert(0 && "failed to write trap instruction");
-    }
-  }
-  else
-  {
-    Assert(0 && "failed to read original byte");
   }
   return result;
 }
@@ -248,7 +240,6 @@ internal B32
 dmn_remove_trap(DMN_ActiveTrap *active_trap)
 {
   B32 is_removed = dmn_process_write(active_trap->trap->process, r1u64(active_trap->trap->vaddr, active_trap->trap->vaddr + active_trap->swap_bytes.size), active_trap->swap_bytes.str);
-  Assert(is_removed);
   return is_removed;
 }
 
