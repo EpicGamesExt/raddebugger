@@ -705,7 +705,48 @@ di_async_tick(void)
           }
           else
           {
-            rdi_path = str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(og_path));
+            // by default, write rdi next to original. but if original lives in
+            // a typically read-only system location, redirect to user cache dir.
+            B32 use_user_cache = 0;
+#if OS_LINUX
+            local_persist read_only String8 system_prefixes[] =
+            {
+              str8_lit_comp("/usr/"),
+              str8_lit_comp("/lib/"),
+              str8_lit_comp("/lib64/"),
+              str8_lit_comp("/lib32/"),
+              str8_lit_comp("/opt/"),
+              str8_lit_comp("/bin/"),
+              str8_lit_comp("/sbin/"),
+              str8_lit_comp("/etc/"),
+            };
+            for EachElement(idx, system_prefixes)
+            {
+              if(str8_match(str8_prefix(og_path, system_prefixes[idx].size), system_prefixes[idx], 0))
+              {
+                use_user_cache = 1;
+                break;
+              }
+            }
+#endif
+            if(use_user_cache)
+            {
+              String8 user_data = os_get_process_info()->user_program_data_path;
+              String8 cache_dir = push_str8f(scratch.arena, "%S/raddbg/rdi-cache", user_data);
+              os_make_directory(cache_dir);
+              Temp esc_scratch = temp_begin(scratch.arena);
+              String8 escaped = push_str8_copy(esc_scratch.arena, og_path);
+              for(U64 i = 0; i < escaped.size; i += 1)
+              {
+                if(escaped.str[i] == '/') { escaped.str[i] = '_'; }
+              }
+              rdi_path = push_str8f(scratch.arena, "%S/%S.rdi", cache_dir, str8_chop_last_dot(escaped));
+              temp_end(esc_scratch);
+            }
+            else
+            {
+              rdi_path = str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(og_path));
+            }
           }
         }
         

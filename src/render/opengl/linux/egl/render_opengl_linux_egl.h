@@ -7,6 +7,7 @@
 #define glTexImage3D glTexImage3D__static
 #define glTexSubImage3D glTexSubImage3D__static
 #define glActiveTexture glActiveTexture__static
+#include <X11/Xutil.h>
 #include <GL/gl.h>
 #include <EGL/egl.h>
 #undef glTexImage3D
