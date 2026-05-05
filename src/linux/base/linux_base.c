@@ -1227,6 +1227,12 @@ process_launch(ProcessLaunchParams *params)
   int file_actions_init_code = posix_spawn_file_actions_init(&file_actions);
   if(file_actions_init_code == 0)
   {
+    Temp scratch = scratch_begin(0, 0);
+    if(params->path.size != 0)
+    {
+      int chdir_code = posix_spawn_file_actions_addchdir_np(&file_actions, (char *)push_cstr(scratch.arena, params->path).str);
+      Assert(chdir_code == 0);
+    }
     int stdout_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdout_file.u64[0], STDOUT_FILENO);
     int stderr_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stderr_file.u64[0], STDERR_FILENO);
     int stdin_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdin_file.u64[0], STDIN_FILENO);
@@ -1234,8 +1240,6 @@ process_launch(ProcessLaunchParams *params)
     int attr_init_code = posix_spawnattr_init(&attr);
     if(attr_init_code == 0)
     {
-      Temp scratch = scratch_begin(0, 0);
-      
       // package argv
       char **argv = push_array(scratch.arena, char *, params->cmd_line.node_count + 1);
       {
@@ -1278,8 +1282,8 @@ process_launch(ProcessLaunchParams *params)
       
       // clean up attributes
       int attr_destroy_code = posix_spawnattr_destroy(&attr);
-      scratch_end(scratch);
     }
+    scratch_end(scratch);
     
     // clean up file actions
     int file_actions_destroy_code = posix_spawn_file_actions_destroy(&file_actions);
