@@ -1181,7 +1181,8 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           chunk->line_count += 1;
           total_line_seq_count += 1;
           line_seq_src_file = src_file;
-          // 0x0000000000030b80    141      0    201   0             0       0  is_stmt
+          // NOTE(rjf): use for comparing against llvm-dwarfdump --debug-line
+#if 0
           printf("0x%016I64x %6i %6i %6i %3i %13I64x %7i %s%s%s%s\n",
                  vm_regs.address,
                  (int)vm_regs.line,
@@ -1194,6 +1195,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
                  vm_regs.prologue_end ? " prologue_end" : "",
                  vm_regs.epilogue_begin ? " epilogue_begin" : "",
                  vm_regs.end_sequence ? " end_sequence" : "");
+#endif
           vm_regs.discriminator = 0;
           vm_regs.basic_block = 0;
           vm_regs.prologue_end = 0;
