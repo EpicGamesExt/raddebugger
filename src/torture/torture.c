@@ -4,7 +4,7 @@
 // command line
 global String8      g_stdout_file_name = str8_lit_comp("torture.out");
 global String8      g_wdir;
-global String8      g_out = str8_lit_comp("torture");
+global String8      g_out = str8_lit_comp("torture_artifacts");
 global B32          g_verbose;
 global B32          g_redirect_stdout = 1;
 global B32          g_stop_on_first_fail_or_crash = 1;
