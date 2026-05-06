@@ -396,7 +396,10 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   B32 good_machine_code = 0;
   if(good_line_info)
   {
-    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, now_time_us()+50000);
+    // TODO: Under WSL, memory fetch takes longer to complete. Previously, 50ms was not enough and d_process_memory_slice_from_vaddr_range
+    // would return stale memory, causing stepping alg to stop mid-source-line. If I understand correctly, 'wait_for_fresh' should
+    // guarantee successful stepping here, but even after enabling it, stale memory is returned.
+    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, now_time_us()+10000000);
     machine_code = machine_code_slice.data;
     good_machine_code = (machine_code.size >= dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
     LogInfoNamedBlockF("machine_code_slice")
