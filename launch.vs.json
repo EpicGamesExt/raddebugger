@@ -4,13 +4,33 @@
   "configurations": [
     {
       "type": "cppdbg",
-      "name": "raddbg",
+      "name": "launch - torture",
       "request": "launch",
       "project": "c://windows//system32//cmd.exe",
       "cwd": "build/",
       "program": "torture",
       "args": [ "basic_stepping_test-c" ],
       "stopAtEntry": false,
+      "environment": [],
+      "externalConsole": false,
+      "pipeTransport": {
+        "pipeCwd": "${workspaceRoot}",
+        "pipeProgram": "wsl",
+        "pipeArgs": [ "${debuggerCommand}" ]
+      },
+      "setupCommands": [
+        { "text": "handle SIGUSR1 nostop" }
+      ],
+      "MIMode": "gdb"
+    },
+    {
+      "type": "cppdbg",
+      "name": "launch - raddbg",
+      "request": "launch",
+      "project": "c://windows//system32//cmd.exe",
+      "cwd": "build/",
+      "program": "/mnt/c/devel/raddebugger/build/raddbg",
+      //"processId": "65821",
       "environment": [],
       "externalConsole": false,
       "pipeTransport": {
