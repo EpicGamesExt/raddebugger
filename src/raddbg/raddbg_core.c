@@ -10600,10 +10600,7 @@ rd_init(CmdLine *cmdln)
   log_select(rd_state->log);
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 user_program_data_path = get_process_info()->user_program_data_path;
-    String8 user_data_folder = push_str8f(scratch.arena, "%S/%Sraddbg/logs", user_program_data_path, program_data_folder_prefix_from_os(OperatingSystem_CURRENT));
-    rd_state->log_path = push_str8f(rd_state->arena, "%S/ui_thread.raddbg_log", user_data_folder);
-    make_directory(user_data_folder);
+    rd_state->log_path = push_str8f(rd_state->arena, "%S/ui_thread.raddbg_log", g_logs_folder);
     write_data_to_file_path(rd_state->log_path, str8_zero());
     scratch_end(scratch);
   }

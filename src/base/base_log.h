@@ -37,6 +37,11 @@ struct Log
 };
 
 ////////////////////////////////
+// Globals
+
+extern String8 g_logs_folder;
+
+////////////////////////////////
 //~ rjf: Log Creation/Selection
 
 internal Log *log_alloc(void);

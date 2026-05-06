@@ -532,7 +532,16 @@ entry_point(CmdLine *cmd_line)
     try_u64_from_str8_c_rules(jit_addr_string, &jit_addr);
     jit_attach = (jit_addr != 0);
   }
-  
+
+  // init log
+  g_logs_folder = cmd_line_string(cmd_line, str8_lit("logs"));
+  if(g_logs_folder.size == 0)
+  {
+    String8 user_program_data_path = get_process_info()->user_program_data_path;
+    g_logs_folder = push_str8f(scratch.arena, "%S/%Sraddbg/logs", program_data_folder_prefix_from_os(OperatingSystem_CURRENT), user_program_data_path);
+  }
+  make_directory(g_logs_folder);
+
   //- rjf: dispatch to top-level codepath based on execution mode
   switch(exec_mode)
   {
@@ -863,6 +872,8 @@ entry_point(CmdLine *cmd_line)
                                     "This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger.\n\n"
                                     "--gen_crash_dump\n"
                                     "Generate mini dump on crash.\n\n"
+                                    "--logs:<path>\n"
+                                    "Overrides default path to the folder with logs.\n"
                                     ));
     }break;
   }
