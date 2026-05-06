@@ -9,6 +9,8 @@ C_LINKAGE thread_static Log *log_active;
 C_LINKAGE thread_static Log *log_active = 0;
 #endif
 
+String8 g_logs_folder;
+
 ////////////////////////////////
 //~ rjf: Log Creation/Selection
 
