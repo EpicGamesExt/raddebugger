@@ -295,7 +295,6 @@ t_cwd_path(void)
     Temp scratch = scratch_begin(0, 0);
     String8 cwd = get_current_path(scratch.arena);
     cwd = str8_chop_last_slash(cwd);
-    cwd = str8f(scratch.arena, "%S", cwd);
     MemoryCopyStr8(path, cwd);
     path[cwd.size] = 0;
     scratch_end(scratch);
@@ -325,7 +324,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
   B32 is_ok = 0;
 
   // clean up global state
-  arena_pop_to(g_output_arena, 0);
+  arena_clear(g_output_arena);
   MemoryZeroStruct(&g_output);
   g_last_exit_code = max_U64;
 
@@ -383,12 +382,36 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
   for EachElement(i, captures_win32) { read_capture_handles[i]  = (File){ (U64)captures_win32[i].read_pipe_handle  }; }
   for EachElement(i, captures_win32) { write_capture_handles[i] = (File){ (U64)captures_win32[i].write_pipe_handle }; }
 #else
-# error NotImplemented
+  typedef struct {
+    int            fds[2];
+    String8List   *parts;
+    B32            is_live;
+    struct pollfd *poll_fd;
+  } LinuxCapture;
+
+  LinuxCapture captures_linux[2] = {0};
+  for EachElement(i, captures_linux) {
+    if (pipe2(captures_linux[i].fds, 0) != 0) {
+      fprintf(stderr, "ERROR: failed to create pipe for output capture\n");
+      goto exit;
+    }
+    captures_linux[i].is_live = 1;
+  }
+
+  captures_linux[0].parts = &stdout_parts;
+  captures_linux[1].parts = &stderr_parts;
+
+  File read_capture_handles[2] = {0}, write_capture_handles[2] = {0};
+  read_capture_handles[0].u64[0] = captures_linux[0].fds[0];
+  read_capture_handles[1].u64[0] = captures_linux[1].fds[0];
+  write_capture_handles[0].u64[0] = captures_linux[0].fds[1];
+  write_capture_handles[1].u64[0] = captures_linux[1].fds[1];
 #endif
   // Build Launch Options
   ProcessLaunchParams launch_opts = {
     .path        = g_wdir,
     .inherit_env = 1,
+    .consoleless = 1,
     .env         = env,
     .stdout_file = write_capture_handles[stdout_idx],
     .stderr_file = write_capture_handles[stderr_idx],
@@ -425,41 +448,41 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
         wait_handles[wait_handle_count++] = (HANDLE)process_handle.u64[0];
       }
 
-      for EachElement(i, captures_win32) {
-        while (captures_win32[i].state == Win32CaptureState_Null) {
+      for EachElement(capture_idx, captures_win32) {
+        while (captures_win32[capture_idx].state == Win32CaptureState_Null) {
           // init overlapped so when child writes to capture buffer this event is signaled
-          AssertAlways(ResetEvent(captures_win32[i].event));
-          MemoryZeroStruct(&captures_win32[i].overlapped);
-          captures_win32[i].overlapped.hEvent = captures_win32[i].event;
+          AssertAlways(ResetEvent(captures_win32[capture_idx].event));
+          MemoryZeroStruct(&captures_win32[capture_idx].overlapped);
+          captures_win32[capture_idx].overlapped.hEvent = captures_win32[capture_idx].event;
 
           // begin overlapped read
           DWORD read_size = 0;
-          if (ReadFile(captures_win32[i].read_pipe_handle, captures_win32[i].buffer, captures_win32[i].buffer_size, &read_size, &captures_win32[i].overlapped)) {
+          if (ReadFile(captures_win32[capture_idx].read_pipe_handle, captures_win32[capture_idx].buffer, captures_win32[capture_idx].buffer_size, &read_size, &captures_win32[capture_idx].overlapped)) {
             if (read_size > 0) {
-              String8 string      = str8(captures_win32[i].buffer, read_size);
+              String8 string      = str8(captures_win32[capture_idx].buffer, read_size);
               String8 string_copy = str8_copy(scratch.arena, string);
-              str8_list_push(scratch.arena, captures_win32[i].parts, string_copy);
+              str8_list_push(scratch.arena, captures_win32[capture_idx].parts, string_copy);
             } else {
-              captures_win32[i].state = Win32CaptureState_EOF;
+              captures_win32[capture_idx].state = Win32CaptureState_EOF;
             }
           } else {
             DWORD error = GetLastError();
             if (error == ERROR_IO_PENDING) {
-              captures_win32[i].state = Win32CaptureState_Pending;
+              captures_win32[capture_idx].state = Win32CaptureState_Pending;
             } else {
               AssertAlways(error == ERROR_HANDLE_EOF || error == ERROR_BROKEN_PIPE);
-              captures_win32[i].state = Win32CaptureState_EOF;
+              captures_win32[capture_idx].state = Win32CaptureState_EOF;
             }
             break;
           }
         }
 
-        if (captures_win32[i].state == Win32CaptureState_Pending) {
+        if (captures_win32[capture_idx].state == Win32CaptureState_Pending) {
           // event now should signal whenever pipe has data to read
-          captures_win32[i].wait_idx = wait_handle_count++;
-          wait_handles[captures_win32[i].wait_idx] = captures_win32[i].event;
+          captures_win32[capture_idx].wait_idx = wait_handle_count++;
+          wait_handles[captures_win32[capture_idx].wait_idx] = captures_win32[capture_idx].event;
         } else {
-          captures_win32[i].wait_idx = max_U64;
+          captures_win32[capture_idx].wait_idx = max_U64;
         }
       }
 
@@ -469,12 +492,8 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
       // compute wait time
       DWORD wait_ms = INFINITE;
       if (timeout_us != max_U64) {
-        U64 now_us = os_now_microseconds();
+        U64 now_us = now_time_us();
         wait_ms = now_us < endt_us ? ClampTop((endt_us - now_us + 999) / 1000, max_U32-1) : 0;
-      }
-
-      if (wait_ms == 0) {
-        DebugBreakProcess((HANDLE)process_handle.u64[0]);
       }
 
       // wait on process and read pipes
@@ -565,7 +584,117 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
     }
   }
 #elif OS_LINUX
-# error NotImplemented
+  // close handle so read(2) does not block
+  for EachElement(i, write_capture_handles) {
+    close((int)write_capture_handles[i].u64[0]);
+    MemoryZeroStruct(&write_capture_handles[i]);
+  }
+
+  pid_t pid   = (pid_t)process_handle.u64[0];
+  int   pidfd = syscall(SYS_pidfd_open, pid, 0);
+  if (pidfd < 0) {
+    fprintf(stderr, "ERROR: failed to translate pid(%d) to pidfd\n", pid);
+    goto exit;
+  }
+
+  B32  is_process_live          = 1;
+  U64  endt_us                  = ENDT_US(timeout_us);
+  U64  read_buffer_default_size = MB(1);
+  U64  read_buffer_size         = read_buffer_default_size;
+  U8  *read_buffer              = push_array(scratch.arena, U8, read_buffer_default_size);
+  for (;;) {
+    struct pollfd fds[3] = {0};
+    int           nfds   = 0;
+
+    // append process
+    if (is_process_live) {
+      fds[nfds++] = (struct pollfd){ .fd = pidfd, .events = POLLIN | POLLHUP };
+    }
+
+    // append pipes
+    for EachElement(i, captures_linux) {
+      if (captures_linux[i].is_live) {
+        captures_linux[i].poll_fd = &fds[nfds];
+        fds[nfds++] = (struct pollfd){ .fd = captures_linux[i].fds[0], .events = POLLIN | POLLHUP };
+      }
+    }
+
+    // exit if there are no more handles to poll
+    if (nfds == 0) { break; }
+
+    // compute wait time
+    int wait_ms = -1;
+    if (timeout_us != max_U64) {
+      U64 now_us = now_time_us();
+      wait_ms = now_us < endt_us ? ClampTop((endt_us - now_us + 999) / 1000, max_U32-1) : 0;
+    }
+
+    // wait for kernel to signal any of the wait handles
+    int poll_result = poll(fds, nfds, wait_ms);
+    if (poll_result < 0) {
+      fprintf(stderr, "ERROR: poll failed with errono %d\n", errno);
+      break;
+    }
+    if (poll_result == 0) {
+      fprintf(stderr, "WARNING: poll timeout\n");
+      break;
+    }
+    // handle case where process exited while waiting for a signal
+    if (is_process_live) {
+      if (fds[0].revents & POLLIN) {
+        // reap process
+        int status;
+        if (waitpid(pid, &status, 0) >= 0) {
+          g_last_exit_code = WEXITSTATUS(status);
+        } else {
+          fprintf(stderr, "ERROR: failed to reap process %d\n", pid);
+        }
+
+        // signal on process fd means exit
+        is_process_live = 0;
+      }
+    }
+
+    for EachElement(i, captures_linux) {
+      if (captures_linux[i].is_live) {
+        if (captures_linux[i].poll_fd->revents & POLLIN) {
+          for (;;) {
+            if (read_buffer_size == 0) {
+              read_buffer_size = read_buffer_default_size;
+              read_buffer      = push_array(scratch.arena, U8, read_buffer_default_size);
+            }
+
+            ssize_t read_size = OS_LNX_RETRY_ON_EINTR(read(captures_linux[i].poll_fd->fd, read_buffer, read_buffer_size));
+            if (read_size > 0) {
+              str8_list_push(scratch.arena, captures_linux[i].parts, str8(read_buffer, read_size));
+              read_buffer      += read_size;
+              read_buffer_size -= read_size;
+            } else if (read_size == 0) {
+              captures_linux[i].is_live = 0;
+              break;
+            } else {
+              if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // no more data in the pipe
+              } else {
+                fprintf(stderr, "ERROR: failed to read pipe, errno %d\n", errno);
+                captures_linux[i].is_live = 0;
+              }
+              break;
+            }
+          }
+        }
+
+        if (captures_linux[i].poll_fd->revents & POLLHUP) {
+          captures_linux[i].is_live = 0;
+        }
+      }
+    }
+  }
+
+  // close process handle
+  if (close(pidfd) < 0) {
+    fprintf(stderr, "ERROR: failed to close process handle %d\n", pidfd);
+  }
 #endif
 
   // update output global
@@ -1062,9 +1191,9 @@ t_entry_point(CmdLine *cmdline)
       }
       
       // run test
-      U64 run_start_time = os_now_microseconds();
+      U64 run_start_time = now_time_us();
       T_RunResult result = t_run(g_torture_tests[target_idx].r, g_torture_tests[target_idx].user_data);
-      U64 run_end_time = os_now_microseconds();
+      U64 run_end_time = now_time_us();
       // print result
       if (result.status == T_RunStatus_Pass) {
         fprintf(stdout, "\x1b[32m" "%s" "\x1b[0m", t_string_from_result(result.status));
