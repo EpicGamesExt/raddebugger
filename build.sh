@@ -2,13 +2,23 @@
 set -eu
 cd "$(dirname "$0")"
 
+# --- Unpack Arguments --------------------------------------------------------
+for arg in "$@"; do declare $arg='1'; done
+if [[ "$#" == "0" ]]; then raddbg='1'; fi
+
+cc_sanitize=""
+if [[ "${asan:-0}" == "1" ]]; then
+  echo "[asan enabled]"
+  cc_sanitize="-fsanitize=address"
+fi
+
 # --- Get Current Git Commit Id -----------------------------------------------
 git_hash=$(git describe --always --dirty)
 git_hash_full=$(git rev-parse HEAD)
 
 # --- Compile/Link Line Definitions -------------------------------------------
 cc_cflags_gcc=""
-cc_cflags_clang="-fdiagnostics-absolute-paths -Wno-for-loop-analysis  -Wno-incompatible-pointer-types-discards-qualifiers -Wno-initializer-overrides -Wno-compare-distinct-pointer-types -Wno-single-bit-bitfield-constant-conversion -Wno-deprecated-declarations -Wno-writable-strings -Wno-unknown-warning-option -Wno-deprecated-register -Wno-unused-local-typedef"
+cc_cflags_clang=${cc_sanitize}" -fdiagnostics-absolute-paths -Wno-for-loop-analysis  -Wno-incompatible-pointer-types-discards-qualifiers -Wno-initializer-overrides -Wno-compare-distinct-pointer-types -Wno-single-bit-bitfield-constant-conversion -Wno-deprecated-declarations -Wno-writable-strings -Wno-unknown-warning-option -Wno-deprecated-register -Wno-unused-local-typedef"
 cc_common="-I../src/ -I../local/ -D_GNU_SOURCE -g -DBUILD_GIT_HASH=\"$git_hash\" -DBUILD_GIT_HASH_FULL=\"$git_hash_full\" -Wall -Wno-missing-braces -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-value -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf"
 cc_debug="-g -O0 -DBUILD_DEBUG=1 ${cc_common}"
 cc_release="-g -O2 -DBUILD_DEBUG=0 ${cc_common}"
@@ -27,10 +37,6 @@ else
   cc_os_gfx="-lX11 -lXext"
   cc_render="-lGL -lEGL"
 fi
-
-# --- Unpack Arguments --------------------------------------------------------
-for arg in "$@"; do declare $arg='1'; done
-if [[ "$#" == "0" ]]; then raddbg='1'; fi
 
 # --- Choose Compile/Link Lines -----------------------------------------------
 if   [[ "${gcc:-0}"   == "1" ]]; then compiler="${CC:-gcc}   $cc_cflags_gcc";   echo "[gcc compile]";
