@@ -2593,10 +2593,10 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             CaseA(RDI_TypeKind_NULL,        DW_ATE_Null)
               CaseA(RDI_TypeKind_Void,        DW_ATE_Address)
               CaseA(RDI_TypeKind_Bool,        DW_ATE_Boolean)
-              CaseB(RDI_TypeKind_ComplexF32,  DW_ATE_ComplexFloat, 32)
-              CaseB(RDI_TypeKind_ComplexF64,  DW_ATE_ComplexFloat, 64)
-              CaseB(RDI_TypeKind_ComplexF80,  DW_ATE_ComplexFloat, 80)
-              CaseB(RDI_TypeKind_ComplexF128, DW_ATE_ComplexFloat, 128)
+              CaseB(RDI_TypeKind_ComplexF32,  DW_ATE_ComplexFloat, 64)
+              CaseB(RDI_TypeKind_ComplexF64,  DW_ATE_ComplexFloat, 128)
+              CaseB(RDI_TypeKind_ComplexF80,  DW_ATE_ComplexFloat, 160)
+              CaseB(RDI_TypeKind_ComplexF128, DW_ATE_ComplexFloat, 256)
               CaseC(RDI_TypeKind_F80,         DW_ATE_Float,        "__float80")
               CaseC(RDI_TypeKind_F128,        DW_ATE_Float,        "__float128")
               CaseC(RDI_TypeKind_F16,         DW_ATE_Float,        "_Float16")
@@ -2608,6 +2608,9 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
               CaseB(RDI_TypeKind_F80,         DW_ATE_Float,        80)
               CaseB(RDI_TypeKind_F96,         DW_ATE_Float,        96)
               CaseB(RDI_TypeKind_F128,        DW_ATE_Float,        128)
+              CaseB(RDI_TypeKind_Char8,       DW_ATE_SignedChar,   8)
+              CaseB(RDI_TypeKind_Char16,      DW_ATE_SignedChar,   16)
+              CaseB(RDI_TypeKind_Char32,      DW_ATE_SignedChar,   32)
               CaseD(RDI_TypeKind_Char8,       DW_ATE_Signed,       "wchar_t", 8)
               CaseD(RDI_TypeKind_Char16,      DW_ATE_Signed,       "wchar_t", 16)
               CaseD(RDI_TypeKind_Char32,      DW_ATE_Signed,       "wchar_t", 32)
@@ -2642,7 +2645,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             dst_type->kind        = RDI_TypeKind_Alias;
             dst_type->name        = name;
             dst_type->direct_type = d2r2_type_from_builtin_kind(rdi_type_kind);
-            dst_type->byte_size   = bitsize/8;
+            dst_type->byte_size   = bitsize/8; // TODO: byte size on __float80 alias mismatches byte size on direct type now
           }break;
           case DW_TagKind_PointerType:         rdi_type_kind = RDI_TypeKind_Ptr; goto ptr_or_ref_type;
           case DW_TagKind_ReferenceType:       rdi_type_kind = RDI_TypeKind_LRef; goto ptr_or_ref_type;
