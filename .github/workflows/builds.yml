@@ -9,6 +9,39 @@ on:
       - '**.md'
 
 jobs:
+  build-ubuntu-24-04:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - raddbg
+          - raddbg_non_graphical
+          - radlink
+          - radbin
+          - torture
+        compiler:
+          - clang-22
+          # TODO: - gcc
+        mode:
+          - debug
+          - release
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+      - name: install dependencies
+        shell: bash
+        run: |
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt-add-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main"
+          sudo apt-get update
+          sudo apt-get install -y clang-22 lld-22 llvm-22 gcc-14 pkg-config libfreetype6-dev libx11-dev libxext-dev libgl1-mesa-dev libegl1-mesa-dev
+          sudo ln -s /usr/bin/llvm-symbolizer-22 /usr/bin/llvm-symbolizer
+      - name: build
+        shell: bash
+        run: |
+          CC="${{ matrix.compiler }}" ./build.sh "${{ matrix.target }}" "${{ matrix.mode }}"
+
   build-windows-2022:
     runs-on: windows-2022
     strategy:
@@ -34,7 +67,47 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           call build meta "${{ matrix.target }}" "${{ matrix.compiler }}" "${{ matrix.mode }}" || exit /b 1
 
-  run-torture:
+  run-torture-ubuntu-24-04:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - clang-22
+          # TODO: - gcc
+        mode:
+          - debug
+          # TODO: - release
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+      - name: install external libraries
+        shell: bash
+        run: |
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt-add-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main"
+          sudo apt-get update
+          sudo apt-get install -y clang-22 lld-22 llvm-22 gcc-14 pkg-config libfreetype6-dev libx11-dev libxext-dev libgl1-mesa-dev libegl1-mesa-dev
+          sudo ln -s /usr/bin/llvm-symbolizer-22 /usr/bin/llvm-symbolizer
+      - name: run-torture
+        shell: bash
+        run: |
+          CC="${{ matrix.compiler }}" ./build.sh meta raddbg raddbg_non_graphical radbin radlink torture "${{ matrix.mode }}"
+          cd build
+          ./torture --gen_crash_dump
+      - name: upload torture artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: torture-crash-dumps-${{ matrix.compiler }}-${{ matrix.mode }}
+          path: |
+            build/*.core
+            build/*.exe
+            build/*.pdb
+            build/torture_artifacts/**
+          if-no-files-found: ignore
+
+  run-torture-windows-2022:
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -78,6 +151,6 @@ jobs:
             build/*.dmp
             build/*.exe
             build/*.pdb
-            build/torture
+            build/torture_artifacts/**
           if-no-files-found: ignore
 

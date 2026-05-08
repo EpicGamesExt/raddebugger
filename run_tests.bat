@@ -27,7 +27,7 @@ for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
   )
 
   rem TODO: unblock asan
-  call build.bat meta %%c %%m raddbg_non_graphical || exit /b 1
+  call build.bat meta %%c %%m raddbg raddbg_non_graphical || exit /b 1
 
   rem clang does not compile with asan in release mode because it runs out of memory
   if "%%c" equ "clang" (
