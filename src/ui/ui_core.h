@@ -705,7 +705,7 @@ struct UI_State
   UI_IconInfo icon_info;
   UI_Theme *theme;
   UI_AnimationInfo animation_info;
-  OS_Handle window;
+  OS_Window window;
   UI_EventList *events;
   Vec2F32 mouse;
   F32 animation_dt;
@@ -826,7 +826,7 @@ internal UI_State *ui_get_selected_state(void);
 
 //- rjf: per-frame info
 internal Arena *           ui_build_arena(void);
-internal OS_Handle         ui_window(void);
+internal OS_Window         ui_window(void);
 internal Vec2F32           ui_mouse(void);
 internal FNT_Tag           ui_icon_font(void);
 internal String8           ui_icon_string_from_kind(UI_IconKind icon_kind);
@@ -873,7 +873,7 @@ internal UI_Box *          ui_box_from_key(UI_Key key);
 ////////////////////////////////
 //~ rjf: Top-Level Building API
 
-internal void ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt);
+internal void ui_begin_build(OS_Window window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt);
 internal void ui_end_build(void);
 internal void ui_calc_sizes_standalone__in_place(UI_Box *root, Axis2 axis);
 internal void ui_calc_sizes_upwards_dependent__in_place(UI_Box *root, Axis2 axis);

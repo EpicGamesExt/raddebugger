@@ -2016,49 +2016,25 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               if(reg_num != 0)
               {
                 string_mapped = 1;
-                REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_base_ctx->primary_module->arch)[reg_num];
+                Arch arch = e_base_ctx->primary_module->arch;
+                ARCH_Info *arch_info = arch_info_from_arch(arch);
+                ARCH_RegCode reg_code = reg_num;
+                Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
+                U64 reg_size = dim_1u16(reg_rng);
                 E_OpList oplist = {0};
-                e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
+                e_oplist_push_uconst(arena, &oplist, reg_rng.min);
                 mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 mapped_bytecode_mode = E_Mode_Offset;
                 mapped_bytecode_space = e_base_ctx->thread_reg_space;
-                REGS_UsageKind reg_usage_kind = regs_reg_code_usage_kind_table_from_arch(e_base_ctx->primary_module->arch)[reg_num];
+                B32 is_vector = arch_info->reg_code_is_vector_table[reg_code];
                 if(0){}
-                else if(reg_usage_kind == REGS_UsageKind_Normal && reg_rng.byte_size == 1) {mapped_type_key = e_type_key_basic(E_TypeKind_U8);}
-                else if(reg_usage_kind == REGS_UsageKind_Normal && reg_rng.byte_size == 2) {mapped_type_key = e_type_key_basic(E_TypeKind_U16);}
-                else if(reg_usage_kind == REGS_UsageKind_Normal && reg_rng.byte_size == 4) {mapped_type_key = e_type_key_basic(E_TypeKind_U32);}
-                else if(reg_usage_kind == REGS_UsageKind_Normal && reg_rng.byte_size == 8) {mapped_type_key = e_type_key_basic(E_TypeKind_U64);}
+                else if(!is_vector && reg_size == 1) {mapped_type_key = e_type_key_basic(E_TypeKind_U8);}
+                else if(!is_vector && reg_size == 2) {mapped_type_key = e_type_key_basic(E_TypeKind_U16);}
+                else if(!is_vector && reg_size == 4) {mapped_type_key = e_type_key_basic(E_TypeKind_U32);}
+                else if(!is_vector && reg_size == 8) {mapped_type_key = e_type_key_basic(E_TypeKind_U64);}
                 else
                 {
-                  mapped_type_key = e_type_key_reg(e_base_ctx->primary_module->arch, reg_num);
-                }
-              }
-            }break;
-            
-            //- rjf: try register aliases
-            case E_IdentifierResolutionPath_RegisterAliases:
-            if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
-            {
-              U64 alias_num = e_num_from_string(e_ir_ctx->reg_alias_map, string);
-              if(alias_num != 0)
-              {
-                string_mapped = 1;
-                REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_base_ctx->primary_module->arch)[alias_num];
-                REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_base_ctx->primary_module->arch)[alias_slice.code];
-                E_OpList oplist = {0};
-                e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
-                mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-                mapped_bytecode_mode = E_Mode_Offset;
-                mapped_bytecode_space = e_base_ctx->thread_reg_space;
-                REGS_UsageKind reg_usage_kind = regs_alias_code_usage_kind_table_from_arch(e_base_ctx->primary_module->arch)[alias_num];
-                if(0){}
-                else if(reg_usage_kind == REGS_UsageKind_Normal && alias_slice.byte_size == 1) {mapped_type_key = e_type_key_basic(E_TypeKind_U8);}
-                else if(reg_usage_kind == REGS_UsageKind_Normal && alias_slice.byte_size == 2) {mapped_type_key = e_type_key_basic(E_TypeKind_U16);}
-                else if(reg_usage_kind == REGS_UsageKind_Normal && alias_slice.byte_size == 4) {mapped_type_key = e_type_key_basic(E_TypeKind_U32);}
-                else if(reg_usage_kind == REGS_UsageKind_Normal && alias_slice.byte_size == 8) {mapped_type_key = e_type_key_basic(E_TypeKind_U64);}
-                else
-                {
-                  mapped_type_key = e_type_key_reg_alias(e_base_ctx->primary_module->arch, alias_num);
+                  mapped_type_key = e_type_key_reg(arch, reg_code);
                 }
               }
             }break;
@@ -2185,7 +2161,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
       {
         Temp scratch = scratch_begin(&arena, 1);
         String8 file_path = expr->string;
-        FileProperties props = os_properties_from_file_path(file_path);
+        FileProperties props = properties_from_file_path(file_path);
         if(!str8_match(expr->qualifier, str8_lit("folder"), 0) && !(props.flags & FilePropertyFlag_IsFolder) && file_path.size != 0)
         {
           E_Space space = e_space_make(E_SpaceKind_FileSystem);
@@ -2196,7 +2172,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         else
         {
           String8 folder_path = str8_chop_last_slash(file_path);
-          props = os_properties_from_file_path(folder_path);
+          props = properties_from_file_path(folder_path);
           if(props.flags & FilePropertyFlag_IsFolder || folder_path.size == 0 || str8_match(folder_path, str8_lit("/"), StringMatchFlag_SlashInsensitive))
           {
             E_Space space = e_space_make(E_SpaceKind_FileSystem);

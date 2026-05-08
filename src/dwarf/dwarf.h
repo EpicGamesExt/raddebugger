@@ -1740,6 +1740,11 @@ typedef enum DW_RegX64Enum
 } DW_RegX64Enum;
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "dwarf/generated/dwarf.meta.h"
+
+////////////////////////////////
 // Speced Encodings
 
 internal DW_AttribClass dw_attrib_class_from_attrib_v2(DW_AttribKind k);

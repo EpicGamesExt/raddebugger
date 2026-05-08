@@ -25,6 +25,37 @@ enum
   OS_WindowFlag_UseDefaultPosition = (1<<1),
 };
 
+typedef struct OS_Window OS_Window;
+struct OS_Window
+{
+  U64 u64[1];
+};
+
+////////////////////////////////
+//~ rjf: External Window Types
+
+typedef struct OS_ExternalWindow OS_ExternalWindow;
+struct OS_ExternalWindow
+{
+  U64 u64[1];
+};
+
+////////////////////////////////
+//~ rjf: Monitor Types
+
+typedef struct OS_Monitor OS_Monitor;
+struct OS_Monitor
+{
+  U64 u64[1];
+};
+
+typedef struct OS_MonitorArray OS_MonitorArray;
+struct OS_MonitorArray
+{
+  OS_Monitor *v;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Cursor Types
 
@@ -81,7 +112,7 @@ struct OS_Event
   OS_Event *next;
   OS_Event *prev;
   U64 timestamp_us;
-  OS_Handle window;
+  OS_Window window;
   OS_EventKind kind;
   OS_Modifiers modifiers;
   OS_Key key;
@@ -108,6 +139,13 @@ struct OS_EventList
 internal B32 frame(void);
 
 ////////////////////////////////
+//~ rjf: Handle Type Helpers
+
+internal OS_Window os_window_zero(void);
+internal B32 os_window_match(OS_Window a, OS_Window b);
+internal B32 os_monitor_match(OS_Monitor a, OS_Monitor b);
+
+////////////////////////////////
 //~ rjf: Event Functions (Helpers, Implemented Once)
 
 internal String8 os_string_from_event_kind(OS_EventKind kind);
@@ -115,9 +153,9 @@ internal String8List os_string_list_from_modifiers(Arena *arena, OS_Modifiers fl
 internal String8 os_string_from_modifiers_key(Arena *arena, OS_Modifiers modifiers, OS_Key key);
 internal U32 os_codepoint_from_modifiers_and_key(OS_Modifiers flags, OS_Key key);
 internal void os_eat_event(OS_EventList *events, OS_Event *event);
-internal B32  os_key_press(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key);
-internal B32  os_key_release(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key);
-internal B32  os_text(OS_EventList *events, OS_Handle window, U32 character);
+internal B32  os_key_press(OS_EventList *events, OS_Window window, OS_Modifiers modifiers, OS_Key key);
+internal B32  os_key_release(OS_EventList *events, OS_Window window, OS_Modifiers modifiers, OS_Key key);
+internal B32  os_text(OS_EventList *events, OS_Window window, U32 character);
 internal OS_EventList os_event_list_copy(Arena *arena, OS_EventList *src);
 internal void os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_push);
 internal OS_Event *os_event_list_push_new(Arena *arena, OS_EventList *evts, OS_EventKind kind);
@@ -141,43 +179,43 @@ internal String8 os_get_clipboard_text(Arena *arena);
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
-internal OS_Handle      os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title);
-internal void           os_window_close(OS_Handle window);
-internal void           os_window_set_title(OS_Handle window, String8 title);
-internal void           os_window_first_paint(OS_Handle window);
-internal void           os_window_focus(OS_Handle window);
-internal B32            os_window_is_focused(OS_Handle window);
-internal B32            os_window_is_fullscreen(OS_Handle window);
-internal void           os_window_set_fullscreen(OS_Handle window, B32 fullscreen);
-internal B32            os_window_is_maximized(OS_Handle window);
-internal void           os_window_set_maximized(OS_Handle window, B32 maximized);
-internal B32            os_window_is_minimized(OS_Handle window);
-internal void           os_window_set_minimized(OS_Handle window, B32 minimized);
-internal void           os_window_bring_to_front(OS_Handle window);
-internal void           os_window_set_monitor(OS_Handle window, OS_Handle monitor);
-internal void           os_window_clear_custom_border_data(OS_Handle handle);
-internal void           os_window_push_custom_title_bar(OS_Handle handle, F32 thickness);
-internal void           os_window_push_custom_edges(OS_Handle handle, F32 thickness);
-internal void           os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect);
-internal Rng2F32        os_rect_from_window(OS_Handle window);
-internal Rng2F32        os_client_rect_from_window(OS_Handle window);
-internal F32            os_dpi_from_window(OS_Handle window);
+internal OS_Window      os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title);
+internal void           os_window_close(OS_Window window);
+internal void           os_window_set_title(OS_Window window, String8 title);
+internal void           os_window_first_paint(OS_Window window);
+internal void           os_window_focus(OS_Window window);
+internal B32            os_window_is_focused(OS_Window window);
+internal B32            os_window_is_fullscreen(OS_Window window);
+internal void           os_window_set_fullscreen(OS_Window window, B32 fullscreen);
+internal B32            os_window_is_maximized(OS_Window window);
+internal void           os_window_set_maximized(OS_Window window, B32 maximized);
+internal B32            os_window_is_minimized(OS_Window window);
+internal void           os_window_set_minimized(OS_Window window, B32 minimized);
+internal void           os_window_bring_to_front(OS_Window window);
+internal void           os_window_set_monitor(OS_Window window, OS_Monitor monitor);
+internal void           os_window_clear_custom_border_data(OS_Window handle);
+internal void           os_window_push_custom_title_bar(OS_Window handle, F32 thickness);
+internal void           os_window_push_custom_edges(OS_Window handle, F32 thickness);
+internal void           os_window_push_custom_title_bar_client_area(OS_Window handle, Rng2F32 rect);
+internal Rng2F32        os_rect_from_window(OS_Window window);
+internal Rng2F32        os_client_rect_from_window(OS_Window window);
+internal F32            os_dpi_from_window(OS_Window window);
 
 ////////////////////////////////
 //~ rjf: @os_hooks External Windows (Implemented Per-OS)
 
-internal OS_Handle      os_focused_external_window(void);
-internal void           os_focus_external_window(OS_Handle handle);
+internal OS_ExternalWindow os_focused_external_window(void);
+internal void              os_focus_external_window(OS_ExternalWindow ext_window);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Monitors (Implemented Per-OS)
 
-internal OS_HandleArray os_push_monitors_array(Arena *arena);
-internal OS_Handle      os_primary_monitor(void);
-internal OS_Handle      os_monitor_from_window(OS_Handle window);
-internal String8        os_name_from_monitor(Arena *arena, OS_Handle monitor);
-internal Vec2F32        os_dim_from_monitor(OS_Handle monitor);
-internal F32            os_dpi_from_monitor(OS_Handle monitor);
+internal OS_MonitorArray os_push_monitors_array(Arena *arena);
+internal OS_Monitor      os_primary_monitor(void);
+internal OS_Monitor      os_monitor_from_window(OS_Window window);
+internal String8         os_name_from_monitor(Arena *arena, OS_Monitor monitor);
+internal Vec2F32         os_dim_from_monitor(OS_Monitor monitor);
+internal F32             os_dpi_from_monitor(OS_Monitor monitor);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Events (Implemented Per-OS)
@@ -186,7 +224,7 @@ internal void           os_send_wakeup_event(void);
 internal OS_EventList   os_get_events(Arena *arena, B32 wait);
 internal OS_Modifiers   os_get_modifiers(void);
 internal B32            os_key_is_down(OS_Key key);
-internal Vec2F32        os_mouse_from_window(OS_Handle window);
+internal Vec2F32        os_mouse_from_window(OS_Window window);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Cursors (Implemented Per-OS)

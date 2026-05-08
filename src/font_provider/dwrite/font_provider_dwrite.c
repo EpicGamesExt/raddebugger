@@ -335,7 +335,7 @@ fp_font_open(String8 path)
   //- rjf: try to open font
   for(PathTask *t = first_task; t != 0 && font.file == 0; t = t->next)
   {
-    B32 file_exists = (os_properties_from_file_path(t->path).created != 0);
+    B32 file_exists = (properties_from_file_path(t->path).created != 0);
     String16 path16 = str16_from_8(scratch.arena, t->path);
     if(file_exists)
     {

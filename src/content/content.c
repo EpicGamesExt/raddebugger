@@ -46,7 +46,7 @@ c_init(void)
   c_shared = push_array(arena, C_Shared, 1);
   c_shared->arena = arena;
   c_shared->blob_slots_count = 16384;
-  c_shared->blob_stripes_count = Min(c_shared->blob_slots_count, os_get_system_info()->logical_processor_count);
+  c_shared->blob_stripes_count = Min(c_shared->blob_slots_count, get_system_info()->logical_processor_count);
   c_shared->blob_slots = push_array(arena, C_BlobSlot, c_shared->blob_slots_count);
   c_shared->blob_stripes = push_array(arena, C_Stripe, c_shared->blob_stripes_count);
   c_shared->blob_stripes_free_nodes = push_array(arena, C_BlobNode *, c_shared->blob_stripes_count);
@@ -58,7 +58,7 @@ c_init(void)
     stripe->cv = cond_var_alloc();
   }
   c_shared->key_slots_count = 4096;
-  c_shared->key_stripes_count = Min(c_shared->key_slots_count, os_get_system_info()->logical_processor_count);
+  c_shared->key_stripes_count = Min(c_shared->key_slots_count, get_system_info()->logical_processor_count);
   c_shared->key_slots = push_array(arena, C_KeySlot, c_shared->key_slots_count);
   c_shared->key_stripes = push_array(arena, C_Stripe, c_shared->key_stripes_count);
   c_shared->key_stripes_free_nodes = push_array(arena, C_KeyNode *, c_shared->key_stripes_count);
@@ -70,7 +70,7 @@ c_init(void)
     stripe->cv = cond_var_alloc();
   }
   c_shared->root_slots_count = 4096;
-  c_shared->root_stripes_count = Min(c_shared->root_slots_count, os_get_system_info()->logical_processor_count);
+  c_shared->root_stripes_count = Min(c_shared->root_slots_count, get_system_info()->logical_processor_count);
   c_shared->root_slots = push_array(arena, C_RootSlot, c_shared->root_slots_count);
   c_shared->root_stripes = push_array(arena, C_Stripe, c_shared->root_stripes_count);
   c_shared->root_stripes_free_nodes = push_array(arena, C_RootNode *, c_shared->root_stripes_count);

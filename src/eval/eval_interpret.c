@@ -280,13 +280,14 @@ e_interpret(String8 bytecode)
         U8 rdi_reg_code     = (imm.u64&0x0000FF)>>0;
         U8 byte_size        = (imm.u64&0x00FF00)>>8;
         U8 byte_off         = (imm.u64&0xFF0000)>>16;
-        REGS_RegCode base_reg_code = regs_reg_code_from_arch_rdi_code(e_interpret_ctx->reg_arch, rdi_reg_code);
-        REGS_Rng *rng_table = regs_reg_code_rng_table_from_arch(e_interpret_ctx->reg_arch);
+        Arch arch = e_interpret_ctx->reg_arch;
+        ARCH_Info *arch_info = arch_info_from_arch(arch);
+        ARCH_RegCode base_reg_code = arch_reg_code_from_rdi(arch, rdi_reg_code);
         B32 good_read = 0;
-        if(0 <= rdi_reg_code && rdi_reg_code < regs_reg_code_count_from_arch(e_interpret_ctx->reg_arch))
+        if(0 <= base_reg_code && base_reg_code < arch_info->reg_code_count)
         {
-          REGS_Rng rng = rng_table[base_reg_code];
-          U64 off = (U64)rng.byte_off + byte_off;
+          Rng1U16 rng = arch_info->reg_code_rng_table[base_reg_code];
+          U64 off = (U64)rng.min + byte_off;
           U64 size = (U64)byte_size;
           good_read = e_space_read(e_interpret_ctx->reg_space, &nval, r1u64(off, off+size));
         }

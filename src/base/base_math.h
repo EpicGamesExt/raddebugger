@@ -177,6 +177,28 @@ struct Mat4x4F32
 
 //- rjf: 1-range
 
+typedef union Rng1U8 Rng1U8;
+union Rng1U8
+{
+  struct
+  {
+    U8 min;
+    U8 max;
+  };
+  U8 v[2];
+};
+
+typedef union Rng1U16 Rng1U16;
+union Rng1U16
+{
+  struct
+  {
+    U16 min;
+    U16 max;
+  };
+  U16 v[2];
+};
+
 typedef union Rng1U32 Rng1U32;
 union Rng1U32
 {
@@ -545,6 +567,28 @@ internal Mat4x4F32 transpose_4x4f32(Mat4x4F32 mat);
 
 ////////////////////////////////
 //~ rjf: Range Ops
+
+#define r1u8(min, max) rng_1u8((min), (max))
+internal Rng1U8 rng_1u8(U8 min, U8 max);
+internal Rng1U8 shift_1u8(Rng1U8 r, U8 x);
+internal Rng1U8 pad_1u8(Rng1U8 r, U8 x);
+internal U8 center_1u8(Rng1U8 r);
+internal B32 contains_1u8(Rng1U8 r, U8 x);
+internal U8 dim_1u8(Rng1U8 r);
+internal Rng1U8 union_1u8(Rng1U8 a, Rng1U8 b);
+internal Rng1U8 intersect_1u8(Rng1U8 a, Rng1U8 b);
+internal U8 clamp_1u8(Rng1U8 r, U8 v);
+
+#define r1u16(min, max) rng_1u16((min), (max))
+internal Rng1U16 rng_1u16(U16 min, U16 max);
+internal Rng1U16 shift_1u16(Rng1U16 r, U16 x);
+internal Rng1U16 pad_1u16(Rng1U16 r, U16 x);
+internal U16 center_1u16(Rng1U16 r);
+internal B32 contains_1u16(Rng1U16 r, U16 x);
+internal U16 dim_1u16(Rng1U16 r);
+internal Rng1U16 union_1u16(Rng1U16 a, Rng1U16 b);
+internal Rng1U16 intersect_1u16(Rng1U16 a, Rng1U16 b);
+internal U16 clamp_1u16(Rng1U16 r, U16 v);
 
 #define r1u32(min, max) rng_1u32((min), (max))
 internal Rng1U32 rng_1u32(U32 min, U32 max);

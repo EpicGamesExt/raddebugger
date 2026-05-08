@@ -24,60 +24,60 @@ internal void
 sld_main(CmdLine *cmdl)
 {
   B32 do_help = cmd_line_has_flag(cmdl, str8_lit("help")) ||
-                cmd_line_has_flag(cmdl, str8_lit("h"))    ||
-                cmd_line_has_flag(cmdl, str8_lit("?"))    ||
-                cmdl->argc == 1;
+    cmd_line_has_flag(cmdl, str8_lit("h"))    ||
+    cmd_line_has_flag(cmdl, str8_lit("?"))    ||
+    cmdl->argc == 1;
   if (do_help) {    fprintf(stderr, "--- Help ---------------------------------------------------------------------\n");
     fprintf(stderr, " %s\n\n", BUILD_TITLE_STRING_LITERAL);
     fprintf(stderr, " Usage: strip_lib_debug [Options]\n\n");
     fprintf(stderr, " Options:\n");
     fprintf(stderr, "  -in:<path>  Path to input lib file\n");
     fprintf(stderr, "  -out:<path> Path to output lib file\n");
-    os_abort(0);
+    abort_self(0);
   }
-
+  
   Temp scratch = scratch_begin(0,0);
-
+  
   String8 in_lib_path  = cmd_line_string(cmdl, str8_lit("in"));
   String8 out_lib_path = cmd_line_string(cmdl, str8_lit("out"));
-
+  
   if (in_lib_path.size == 0) {
     fprintf(stderr, "ERROR: please provide an input path via -in:<path>\n");
-    os_abort(1);
+    abort_self(1);
   }
   if (out_lib_path.size == 0) {
     fprintf(stderr, "ERROR: please provide an output path via -out:<path>\n");
-    os_abort(1);
+    abort_self(1);
   }
-
+  
   String8 in_lib = os_data_from_file_path(scratch.arena, in_lib_path);
   if (in_lib.size == 0) {
     fprintf(stderr, "ERROR: unable to read file %.*s\n", str8_varg(in_lib_path));
-    os_abort(1);
+    abort_self(1);
   }
-
+  
   if (!coff_is_regular_archive(in_lib)) {
     fprintf(stderr, "ERROR: input lib is not COFF archive\n");
-    os_abort(1);
+    abort_self(1);
   }
-
+  
   // read & parse lib
   String8           out_lib = push_str8_copy(scratch.arena, in_lib);
   COFF_ArchiveParse parse   = coff_archive_parse_from_data(out_lib);
-
+  
   // was parse successful?
   if (parse.error.size) {
     fprintf(stderr, "ERROR: %.*s: %.*s\n", str8_varg(in_lib_path), str8_varg(parse.error));
-    os_abort(1);
+    abort_self(1);
   }
-
+  
   // convert big endian offsets
   U32  member_offsets_count = parse.first_member.symbol_count;
   U32 *member_offsets       = push_array(scratch.arena, U32, parse.first_member.member_offset_count);
   for (U32 offset_idx = 0; offset_idx < member_offsets_count; offset_idx += 1) {
     member_offsets[offset_idx] = from_be_u32(parse.first_member.member_offsets[offset_idx]);
   }
-
+  
   // fixup sections
   for (U64 member_idx = 0; member_idx < member_offsets_count; member_idx += 1) {
     COFF_ParsedArchiveMemberHeader member_header = {0};
@@ -98,13 +98,13 @@ sld_main(CmdLine *cmdl)
       }
     }
   }
-
+  
   // wirte modified library
-  if (!os_write_data_to_file_path(out_lib_path, out_lib)) {
+  if (!write_data_to_file_path(out_lib_path, out_lib)) {
     fprintf(stderr, "ERROR: unable to write output file to %.*s\n", str8_varg(out_lib_path));
-    os_abort(1);
+    abort_self(1);
   }
-
+  
   scratch_end(scratch);
 }
 

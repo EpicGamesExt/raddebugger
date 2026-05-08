@@ -784,7 +784,8 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
           }
           if(regs_block != 0)
           {
-            U64 regs_size = regs_block_size_from_arch(e_interpret_ctx->reg_arch);
+            ARCH_Info *arch_info = arch_info_from_arch(entity->arch);
+            U64 regs_size = arch_info->reg_block_size;
             Rng1U64 legal_range = r1u64(0, regs_size);
             Rng1U64 read_range = intersect_1u64(legal_range, range);
             U64 read_size = dim_1u64(read_range);
@@ -1013,7 +1014,8 @@ rd_eval_space_write(E_Space space, void *in, Rng1U64 range)
         case D_EntityKind_Thread:
         {
           Temp scratch = scratch_begin(0, 0);
-          U64 regs_size = regs_block_size_from_arch(entity->arch);
+          ARCH_Info *arch_info = arch_info_from_arch(entity->arch);
+          U64 regs_size = arch_info->reg_block_size;
           Rng1U64 legal_range = r1u64(0, regs_size);
           Rng1U64 write_range = intersect_1u64(legal_range, range);
           U64 write_size = dim_1u64(write_range);
@@ -1186,7 +1188,7 @@ rd_whole_range_from_eval_space(E_Space space)
     {
       U64 file_path_string_id = space.u64_0;
       String8 file_path = e_string_from_id(file_path_string_id);
-      FileProperties props = os_properties_from_file_path(file_path);
+      FileProperties props = properties_from_file_path(file_path);
       result = r1u64(0, props.size);
     }break;
     case D_EvalSpaceKind_Entity:
@@ -4935,7 +4937,7 @@ rd_window_state_from_cfg(CFG_Node *cfg)
     B32 has_pos = 0;
     Vec2F32 pos = {0};
     Vec2F32 size = {0};
-    OS_Handle preferred_monitor = {0};
+    OS_Monitor preferred_monitor = {0};
     {
       CFG_Node *pos_cfg = cfg_node_child_from_string(window_cfg, str8_lit("pos"));
       has_pos = (pos_cfg != &cfg_nil_node);
@@ -4945,7 +4947,7 @@ rd_window_state_from_cfg(CFG_Node *cfg)
       pos.y = (F32)f64_from_str8(pos_cfg->first->next->string);
       size.x = (F32)f64_from_str8(size_cfg->first->string);
       size.y = (F32)f64_from_str8(size_cfg->first->next->string);
-      OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
+      OS_MonitorArray monitors = os_push_monitors_array(scratch.arena);
       for EachIndex(idx, monitors.count)
       {
         String8 monitor_name = os_name_from_monitor(scratch.arena, monitors.v[idx]);
@@ -4983,8 +4985,8 @@ rd_window_state_from_cfg(CFG_Node *cfg)
     ws->hover_eval_arena = arena_alloc();
     ws->autocomp_arena = arena_alloc();
     ws->last_dpi = os_dpi_from_window(ws->os);
-    OS_Handle zero_monitor = {0};
-    if(!os_handle_match(zero_monitor, preferred_monitor))
+    OS_Monitor zero_monitor = {0};
+    if(!os_monitor_match(zero_monitor, preferred_monitor))
     {
       os_window_set_monitor(ws->os, preferred_monitor);
     }
@@ -5019,7 +5021,7 @@ rd_window_state_from_cfg(CFG_Node *cfg)
 }
 
 internal RD_WindowState *
-rd_window_state_from_os_handle(OS_Handle os)
+rd_window_state_from_os_handle(OS_Window os)
 {
   RD_WindowState *ws = &rd_nil_window_state;
   {
@@ -5027,7 +5029,7 @@ rd_window_state_from_os_handle(OS_Handle os)
         w != &rd_nil_window_state;
         w = w->order_next)
     {
-      if(os_handle_match(w->os, os))
+      if(os_window_match(w->os, os))
       {
         ws = w;
         break;
@@ -5343,7 +5345,7 @@ rd_window_frame(void)
     //- rjf: commit monitor
     if(!is_minimized)
     {
-      OS_Handle monitor = os_monitor_from_window(ws->os);
+      OS_Monitor monitor = os_monitor_from_window(ws->os);
       String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
       CFG_Node *monitor_root = cfg_node_child_from_string_or_alloc(rd_state->cfg, window, str8_lit("monitor"));
       if(!str8_match(monitor_root->first->string, monitor_name, 0))
@@ -5478,7 +5480,7 @@ rd_window_frame(void)
         case RD_RegSlot_FilePath:
         UI_Tooltip
         {
-          FileProperties props = os_properties_from_file_path(regs->file_path);
+          FileProperties props = properties_from_file_path(regs->file_path);
           ui_set_next_pref_width(ui_children_sum(1));
           UI_Row
           {
@@ -9434,11 +9436,11 @@ rd_theme_tree_from_name(Arena *arena, Access *access, String8 theme_name)
     }
     if(theme_tree == &md_nil_node)
     {
-      String8 path = push_str8f(scratch.arena, "%S/raddbg/themes/%S", os_get_process_info()->user_program_data_path, theme_name);
-      U64 endt_us = os_now_microseconds()+100;
+      String8 path = str8f(scratch.arena, "%S/raddbg/themes/%S", get_process_info()->user_program_data_path, theme_name);
+      U64 endt_us = now_time_us()+100;
       if(rd_state->frame_index <= 5)
       {
-        endt_us = os_now_microseconds()+50000;
+        endt_us = now_time_us()+50000;
       }
       U128 hash = fs_hash_from_path_range(path, r1u64(0, max_U64), endt_us);
       String8 data = c_data_from_hash(access, hash);
@@ -9509,17 +9511,6 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
     {
       U64 reg_num = e_num_from_string(e_ir_ctx->regs_map, string);
       if(reg_num != 0)
-      {
-        mapped = 1;
-        color = RD_CodeColorSlot_CodeRegister;
-      }
-    }
-    
-    // rjf: try to map as register alias
-    if(!mapped)
-    {
-      U64 alias_num = e_num_from_string(e_ir_ctx->reg_alias_map, string);
-      if(alias_num != 0)
       {
         mapped = 1;
         color = RD_CodeColorSlot_CodeRegister;
@@ -10100,11 +10091,11 @@ rd_init(CmdLine *cmdln)
   log_select(rd_state->log);
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 user_program_data_path = os_get_process_info()->user_program_data_path;
+    String8 user_program_data_path = get_process_info()->user_program_data_path;
     String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
     rd_state->log_path = push_str8f(rd_state->arena, "%S/ui_thread.raddbg_log", user_data_folder);
-    os_make_directory(user_data_folder);
-    os_write_data_to_file_path(rd_state->log_path, str8_zero());
+    make_directory(user_data_folder);
+    write_data_to_file_path(rd_state->log_path, str8_zero());
     scratch_end(scratch);
   }
   rd_state->num_frames_requested = 2;
@@ -10214,17 +10205,17 @@ rd_init(CmdLine *cmdln)
         B32 is_cfg = 0;
         if(!is_flag && !after_first_non_flag)
         {
-          OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, arg);
+          File file = file_open(AccessFlag_Read|AccessFlag_ShareRead, arg);
           U8 raddbg_cfg_magic[] = "// raddbg ";
           U8 file_magic_maybe[ArrayCount(raddbg_cfg_magic)] = {0};
-          os_file_read(file, r1u64(0, 10), file_magic_maybe);
+          file_read(file, r1u64(0, 10), file_magic_maybe);
           if(MemoryMatchArray(raddbg_cfg_magic, file_magic_maybe))
           {
             is_cfg = 1;
             U8 header_suffix_buffer[256] = {0};
             String8 header_suffix = {0};
             header_suffix.str = header_suffix_buffer;
-            header_suffix.size = os_file_read(file, r1u64(10, 10+256), header_suffix_buffer);
+            header_suffix.size = file_read(file, r1u64(10, 10+256), header_suffix_buffer);
             String8 header_type_suffix = str8_skip(header_suffix, str8_find_needle(header_suffix, 0, str8_lit(" "), 0)+1);
             if(str8_match(header_type_suffix, str8_lit("user"), StringMatchFlag_RightSideSloppy))
             {
@@ -10235,7 +10226,7 @@ rd_init(CmdLine *cmdln)
               implicit_project_arg = arg;
             }
           }
-          os_file_close(file);
+          file_close(file);
         }
         if(!is_flag)
         {
@@ -10261,7 +10252,7 @@ rd_init(CmdLine *cmdln)
           PathStyle style = path_style_from_str8(exe_name);
           if(style == PathStyle_Relative)
           {
-            String8 current_path = os_get_current_path(scratch.arena);
+            String8 current_path = get_current_path(scratch.arena);
             exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
             exe_name = path_normalized_from_string(scratch.arena, exe_name);
           }
@@ -10270,7 +10261,7 @@ rd_init(CmdLine *cmdln)
         
         // rjf: get current directory, use as working directory
         {
-          working_directory_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+          working_directory_string = path_normalized_from_string(scratch.arena, get_current_path(scratch.arena));
         }
         
         // rjf: unpack arguments
@@ -10314,17 +10305,17 @@ rd_init(CmdLine *cmdln)
     {
       if(user_path.size != 0)
       {
-        user_path = path_absolute_dst_from_relative_dst_src(scratch.arena, user_path, os_get_process_info()->initial_path);
+        user_path = path_absolute_dst_from_relative_dst_src(scratch.arena, user_path, get_process_info()->initial_path);
       }
       if(project_path.size != 0)
       {
-        project_path = path_absolute_dst_from_relative_dst_src(scratch.arena, project_path, os_get_process_info()->initial_path);
+        project_path = path_absolute_dst_from_relative_dst_src(scratch.arena, project_path, get_process_info()->initial_path);
       }
     }
     {
-      String8 user_program_data_path = os_get_process_info()->user_program_data_path;
+      String8 user_program_data_path = get_process_info()->user_program_data_path;
       String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg", user_program_data_path);
-      os_make_directory(user_data_folder);
+      make_directory(user_data_folder);
       if(user_path.size == 0)
       {
         user_path = implicit_user_arg;
@@ -10332,7 +10323,7 @@ rd_init(CmdLine *cmdln)
       if(user_path.size == 0)
       {
         String8 last_user_path = push_str8f(scratch.arena, "%S/last_user", user_data_folder);
-        user_path = os_data_from_file_path(scratch.arena, last_user_path);
+        user_path = data_from_file_path(scratch.arena, last_user_path);
       }
       if(user_path.size == 0)
       {
@@ -10837,7 +10828,7 @@ rd_frame(void)
     if(frame_time_history_avg_us < frame_time_target_cap_us)
     {
       U64 spare_time = (frame_time_target_cap_us - frame_time_history_avg_us) + 4000;
-      rd_state->frame_eval_memread_endt_us = os_now_microseconds() + spare_time;
+      rd_state->frame_eval_memread_endt_us = now_time_us() + spare_time;
     }
   }
   
@@ -10849,19 +10840,19 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: begin measuring actual per-frame work
   //
-  U64 begin_time_us = os_now_microseconds();
+  U64 begin_time_us = now_time_us();
   
   //////////////////////////////
   //- rjf: bind change
   //
   if(!rd_state->popup_active && rd_state->bind_change_active)
   {
-    if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
+    if(os_key_press(&events, os_window_zero(), 0, OS_Key_Esc))
     {
       rd_request_frame();
       rd_state->bind_change_active = 0;
     }
-    if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
+    if(os_key_press(&events, os_window_zero(), 0, OS_Key_Delete))
     {
       rd_request_frame();
       cfg_node_release(rd_state->cfg, cfg_node_from_id(rd_state->bind_change_binding_id));
@@ -12042,7 +12033,6 @@ rd_frame(void)
     {
       E_IRCtx *ctx = ir_ctx;
       ctx->regs_map       = d_string2reg_from_arch(eval_base_ctx->primary_module->arch);
-      ctx->reg_alias_map  = d_string2alias_from_arch(eval_base_ctx->primary_module->arch);
       ctx->locals_map     = d_query_cached_locals_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
       ctx->member_map     = d_query_cached_member_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
       ctx->macro_map      = macro_map;
@@ -12286,7 +12276,7 @@ rd_frame(void)
               String8 current_path_string = current_path->first->string;
               if(current_path_string.size == 0)
               {
-                current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+                current_path_string = path_normalized_from_string(scratch.arena, get_current_path(scratch.arena));
               }
               String8 file_path = os_graphical_pick_file(scratch.arena, current_path_string);
               file_path = path_normalized_from_string(scratch.arena, file_path);
@@ -12506,8 +12496,8 @@ rd_frame(void)
             
             //- rjf: load the new file's data
             String8 file_path = rd_regs()->file_path;
-            String8 file_data = os_data_from_file_path(scratch.arena, file_path);
-            FileProperties file_props = os_properties_from_file_path(file_path);
+            String8 file_data = data_from_file_path(scratch.arena, file_path);
+            FileProperties file_props = properties_from_file_path(file_path);
             
             //- rjf: determine if the file is good
             B32 file_is_okay = 0;
@@ -12593,7 +12583,7 @@ rd_frame(void)
               CFG_NodePtrList all_user_windows = cfg_node_child_list_from_string(scratch.arena, file_root, str8_lit("window"));
               if(all_user_windows.count == 0)
               {
-                OS_Handle monitor    = os_primary_monitor();
+                OS_Monitor monitor   = os_primary_monitor();
                 String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
                 Vec2F32 monitor_dim  = os_dim_from_monitor(monitor);
                 F32 monitor_dpi      = os_dpi_from_monitor(monitor);
@@ -12676,9 +12666,9 @@ rd_frame(void)
               String8 project_path = rd_path_from_cfg(recent_project);
               if(project_path.size == 0)
               {
-                String8 user_program_data_path = os_get_process_info()->user_program_data_path;
+                String8 user_program_data_path = get_process_info()->user_program_data_path;
                 String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
-                os_make_directory(user_data_folder);
+                make_directory(user_data_folder);
                 project_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
               }
               rd_cmd(RD_CmdKind_OpenProject, .file_path = project_path);
@@ -12688,7 +12678,7 @@ rd_frame(void)
           case RD_CmdKind_NewProject:
           {
             String8 new_path = rd_regs()->file_path;
-            B32 file_will_be_overwritten = (os_properties_from_file_path(new_path).created != 0);
+            B32 file_will_be_overwritten = (properties_from_file_path(new_path).created != 0);
             UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("new_config_overwrite_confirm"));
             if(file_will_be_overwritten && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
             {
@@ -12707,12 +12697,12 @@ rd_frame(void)
               default:{}break;
               case RD_CmdKind_NewUser:
               {
-                os_delete_file_at_path(new_path);
+                delete_file_at_path(new_path);
                 rd_cmd(RD_CmdKind_OpenUser, .file_path = new_path);
               }break;
               case RD_CmdKind_NewProject:
               {
-                os_delete_file_at_path(new_path);
+                delete_file_at_path(new_path);
                 rd_cmd(RD_CmdKind_OpenProject, .file_path = new_path);
               }break;
             }
@@ -12721,7 +12711,7 @@ rd_frame(void)
           case RD_CmdKind_SaveProject:
           {
             String8 new_path = rd_regs()->file_path;
-            B32 file_will_be_overwritten = (os_properties_from_file_path(new_path).created != 0);
+            B32 file_will_be_overwritten = (properties_from_file_path(new_path).created != 0);
             UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("save_config_overwrite_confirm"));
             if(file_will_be_overwritten && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
             {
@@ -12785,8 +12775,8 @@ rd_frame(void)
           case RD_CmdKind_RecordUserAsLastOpened:
           {
             String8 file_path = rd_regs()->file_path;
-            String8 last_user_path = push_str8f(scratch.arena, "%S/raddbg/last_user", os_get_process_info()->user_program_data_path);
-            os_write_data_to_file_path(last_user_path, file_path);
+            String8 last_user_path = str8f(scratch.arena, "%S/raddbg/last_user", get_process_info()->user_program_data_path);
+            write_data_to_file_path(last_user_path, file_path);
           }break;
           
           //- rjf: writing config changes
@@ -12794,7 +12784,7 @@ rd_frame(void)
           case RD_CmdKind_WriteProjectData: dst_path = rd_state->project_path; bucket_name = str8_lit("project"); goto write;
           write:;
           {
-            B32 dst_exists = (os_properties_from_file_path(dst_path).created != 0);
+            B32 dst_exists = (properties_from_file_path(dst_path).created != 0);
             String8 temp_path = push_str8f(scratch.arena, "%S.temp", dst_path);
             String8 overwritten_path = push_str8f(scratch.arena, "%S.old", dst_path);
             CFG_Node *tree_root = cfg_node_child_from_string(cfg_node_root(), bucket_name);
@@ -12805,17 +12795,17 @@ rd_frame(void)
               str8_list_push(scratch.arena, &strings, cfg_string_from_tree(scratch.arena, rd_state->cfg_schema_table, str8_chop_last_slash(dst_path), child));
             }
             String8 data = str8_list_join(scratch.arena, &strings, 0);
-            B32 temp_write_good = os_write_data_to_file_path(temp_path, data);
-            B32 old_del_good    = (temp_write_good && os_delete_file_at_path(overwritten_path));
-            B32 old_move_good   = (temp_write_good && (!dst_exists || os_move_file_path(overwritten_path, dst_path)));
-            B32 new_move_good   = (old_move_good && os_move_file_path(dst_path, temp_path));
+            B32 temp_write_good = write_data_to_file_path(temp_path, data);
+            B32 old_del_good    = (temp_write_good && delete_file_at_path(overwritten_path));
+            B32 old_move_good   = (temp_write_good && (!dst_exists || move_file_path(overwritten_path, dst_path)));
+            B32 new_move_good   = (old_move_good && move_file_path(dst_path, temp_path));
             if(new_move_good && dst_exists)
             {
-              os_delete_file_at_path(overwritten_path);
+              delete_file_at_path(overwritten_path);
             }
             else if(!new_move_good && old_move_good && dst_exists)
             {
-              os_move_file_path(dst_path, overwritten_path);
+              move_file_path(dst_path, overwritten_path);
             }
           }break;
           
@@ -13639,8 +13629,8 @@ rd_frame(void)
           //- rjf: files
           case RD_CmdKind_Open:
           {
-            String8 path = path_absolute_dst_from_relative_dst_src(scratch.arena, rd_regs()->file_path, os_get_current_path(scratch.arena));
-            FileProperties props = os_properties_from_file_path(path);
+            String8 path = path_absolute_dst_from_relative_dst_src(scratch.arena, rd_regs()->file_path, get_current_path(scratch.arena));
+            FileProperties props = properties_from_file_path(path);
             if(props.created != 0)
             {
               rd_cmd(RD_CmdKind_RecordFileInProject);
@@ -13686,9 +13676,9 @@ rd_frame(void)
             {
               if(!str8_match(partner_ext_candidates[idx], file_ext, StringMatchFlag_CaseInsensitive))
               {
-                String8 candidate = push_str8f(scratch.arena, "%S.%S", file_name, partner_ext_candidates[idx]);
-                String8 candidate_path = push_str8f(scratch.arena, "%S/%S", file_folder, candidate);
-                FileProperties candidate_props = os_properties_from_file_path(candidate_path);
+                String8 candidate = str8f(scratch.arena, "%S.%S", file_name, partner_ext_candidates[idx]);
+                String8 candidate_path = str8f(scratch.arena, "%S/%S", file_folder, candidate);
+                FileProperties candidate_props = properties_from_file_path(candidate_path);
                 if(candidate_props.modified != 0)
                 {
                   rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = candidate_path, .cursor = txt_pt(0, 0), .vaddr = 0, .prefer_new_tab = 1);
@@ -14173,7 +14163,7 @@ rd_frame(void)
                     str8_list_push(temp.arena, &try_path_parts, try_n->string);
                   }
                   String8 try_path = str8_list_join(temp.arena, &try_path_parts, &(StringJoin){.sep = str8_lit("/")});
-                  FileProperties try_props = os_properties_from_file_path(try_path);
+                  FileProperties try_props = properties_from_file_path(try_path);
                   if(try_props.modified != 0)
                   {
                     name_resolved = 1;
@@ -14934,7 +14924,7 @@ rd_frame(void)
                   String8 current_path_string = current_path->first->string;
                   if(current_path_string.size == 0)
                   {
-                    current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+                    current_path_string = path_normalized_from_string(scratch.arena, get_current_path(scratch.arena));
                   }
                   initial_input = current_path_string;
                   initial_input = push_str8f(scratch.arena, "%S/", initial_input);
@@ -15373,8 +15363,8 @@ rd_frame(void)
             String8 name = rd_regs()->string;
             if(name.size != 0)
             {
-              String8 themes_folder = push_str8f(scratch.arena, "%S/raddbg/themes", os_get_process_info()->user_program_data_path);
-              if(os_make_directory(themes_folder))
+              String8 themes_folder = str8f(scratch.arena, "%S/raddbg/themes", get_process_info()->user_program_data_path);
+              if(make_directory(themes_folder))
               {
                 String8 dst_path = push_str8f(scratch.arena, "%S/%S", themes_folder, name);
                 CFG_Node *parent = cfg_node_from_id(rd_regs()->cfg);
@@ -15385,7 +15375,7 @@ rd_frame(void)
                   str8_list_push(scratch.arena, &strings, cfg_string_from_tree(scratch.arena, rd_state->cfg_schema_table, str8_chop_last_slash(dst_path), n->v));
                 }
                 String8 data = str8_list_join(scratch.arena, &strings, 0);
-                if(os_write_data_to_file_path(dst_path, data))
+                if(write_data_to_file_path(dst_path, data))
                 {
                   if(kind == RD_CmdKind_SaveAndSetTheme)
                   {
@@ -15645,7 +15635,7 @@ rd_frame(void)
           {
             Access *access = access_open();
             D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-            D_CallStack call_stack = d_call_stack_from_thread(access, thread->handle, 1, os_now_microseconds()+10000);
+            D_CallStack call_stack = d_call_stack_from_thread(access, thread->handle, 1, now_time_us()+10000);
             D_CallStackFrame *frame = d_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
             if(frame == 0)
             {
@@ -15664,7 +15654,7 @@ rd_frame(void)
           {
             Access *access = access_open();
             D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-            D_CallStack call_stack = d_call_stack_from_thread(access, thread->handle, 1, os_now_microseconds()+10000);
+            D_CallStack call_stack = d_call_stack_from_thread(access, thread->handle, 1, now_time_us()+10000);
             D_CallStackFrame *current_frame = d_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
             D_CallStackFrame *next_frame = current_frame;
             if(current_frame != 0) switch(kind)
@@ -16397,7 +16387,7 @@ rd_frame(void)
           D_Entity *module = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, evt->entity);
           D_Entity *debug_info_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
           String8 new_path = debug_info_path->string;
-          if(new_path.size != 0 && os_file_path_exists(new_path))
+          if(new_path.size != 0 && file_path_exists(new_path))
           {
             CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
             B32 path_found = 0;
@@ -16749,7 +16739,7 @@ rd_frame(void)
   //
   if(DEV_simulate_lag)
   {
-    os_sleep_milliseconds(300);
+    sleep_ms(300);
   }
   
   //////////////////////////////
@@ -16817,7 +16807,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: determine frame time, record into history
   //
-  U64 end_time_us = os_now_microseconds();
+  U64 end_time_us = now_time_us();
   U64 frame_time_us = end_time_us-begin_time_us;
   rd_state->frame_time_us_history[rd_state->frame_index%ArrayCount(rd_state->frame_time_us_history)] = frame_time_us;
   
@@ -16855,7 +16845,7 @@ rd_frame(void)
   ProfScope("collect logs")
   {
     LogScopeResult log = log_scope_end(scratch.arena);
-    os_append_data_to_file_path(rd_state->log_path, log.strings[LogMsgKind_Info]);
+    append_data_to_file_path(rd_state->log_path, log.strings[LogMsgKind_Info]);
     if(log.strings[LogMsgKind_UserError].size != 0)
     {
       String8 error_log = log.strings[LogMsgKind_UserError];

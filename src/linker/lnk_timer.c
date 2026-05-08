@@ -6,13 +6,13 @@ global LNK_Timer g_timers[LNK_Timer_Count];
 internal void
 lnk_timer_begin(LNK_TimerType timer)
 {
-  g_timers[timer].begin = os_now_microseconds();
+  g_timers[timer].begin = now_time_us();
 }
 
 internal void
 lnk_timer_end(LNK_TimerType timer)
 {
-  g_timers[timer].end = os_now_microseconds();
+  g_timers[timer].end = now_time_us();
 }
 
 internal String8

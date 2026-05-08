@@ -73,24 +73,24 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
   U64 sep_pos = str8_find_needle(string, 0, str8_lit("@"), 0);
   if (sep_pos < string.size) {
     STAP_Arg arg = {0};
-
+    
     String8 tag  = str8_prefix(string, sep_pos + 1);
     String8 oper = str8_skip(string, tag.size);
-
+    
     STAP_ArgValueType arg_value_type       = STAP_ArgValueType_Null;
     U64               arg_value_size       = 0;
     B32               infer_arg_value_size = 1;
     U64               tag_size             = 0;
     {
       U8 *ptr = tag.str, *end = tag.str + tag.size;
-
+      
       // is signed?
       if (ptr >= end) { goto operand_parse_exit; }
       if (*ptr == '-') {
         arg_value_type = STAP_ArgValueType_S;
         ptr += 1;
       }
-
+      
       // parse optional size
       if (ptr >= end) { goto operand_parse_exit; }
       if (char_is_digit(*ptr, 10)) {
@@ -102,7 +102,7 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
         ptr += 1;
         infer_arg_value_size = 0;
       }
-
+      
       // is this float?
       if (ptr >= end) { goto operand_parse_exit; }
       if (*ptr == 'f') {
@@ -113,22 +113,22 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
         ptr += 1;
         arg_value_type = STAP_ArgValueType_F;
       }
-
+      
       // assume default value type to be unsigned
       if (arg_value_type == STAP_ArgValueType_Null) {
         arg_value_type = STAP_ArgValueType_U;
       }
-
+      
       if (ptr >= end) { goto operand_parse_exit; }
       if (*ptr != '@') {
         error = str8_lit("failed to find @");
         goto operand_parse_exit;
       }
       ptr += 1;
-
+      
       tag_size = (U64)(ptr - tag.str);
     }
-
+    
     U64 memory_ref_start = str8_find_needle_reverse(oper, 0, str8_lit("("), 0);
     // memory operand
     if (memory_ref_start > 0 && memory_ref_start < oper.size) {
@@ -141,7 +141,7 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
       //  Scale: 1|2|4|8
       //  Expr:  A small C-like infix expression
       //
-
+      
       // find closing ')'
       U64 memory_ref_end = str8_find_needle(oper, memory_ref_start+1, str8_lit(")"), 0);
       if (memory_ref_end > oper.size) {
@@ -152,7 +152,7 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
         error = str8_lit("expression does not terminate after ')'");
         goto operand_parse_exit;
       }
-
+      
       // parse displacement
       String8 disp_str = str8_skip_chop_whitespace(str8_prefix(oper, memory_ref_start-1));
       if (disp_str.size > 0 && !str8_is_integer_signed(disp_str, 10)) {
@@ -160,7 +160,7 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
         goto operand_parse_exit;
       }
       S64 disp = s64_from_str8(disp_str, 10);
-
+      
       // parse base, index, scale
       String8 base_index_scale = str8_skip_chop_whitespace(str8_substr(oper, r1u64(memory_ref_start, memory_ref_end)));
       U64     first_comma      = str8_find_needle(base_index_scale, 0, str8_lit(","), 0);
@@ -168,7 +168,7 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
       String8 base_str         = str8_skip_chop_whitespace(str8_substr(base_index_scale, r1u64(0, first_comma)));
       String8 index_str        = str8_skip_chop_whitespace(str8_substr(base_index_scale, r1u64(first_comma + 1, second_comma)));
       String8 scale_str        = str8_skip_chop_whitespace(str8_substr(base_index_scale, r1u64(second_comma + 1, memory_ref_end)));
-
+      
       // syntax check
       if(first_comma >= base_index_scale.size && base_str.size == 0) {
         error = str8_lit("missing base register");
@@ -194,11 +194,11 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
         error = str8_lit("invalid of scale (expected unsigned integral type)");
         goto operand_parse_exit;
       }
-
+      
       // stip '%' prefix
       base_str  = str8_skip(base_str, 1);
       index_str = str8_skip(index_str, 1);
-
+      
       // parse base
       B8  base_is_alias = 0;
       U32 base_reg_code = 0;
@@ -213,7 +213,7 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
           goto operand_parse_exit;
         }
       }
-
+      
       // parse index
       B8  index_is_alias = 0;
       U32 index_reg_code = 0;
@@ -237,12 +237,12 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
           goto operand_parse_exit;
         }
       }
-
+      
       if (infer_arg_value_size) {
         error = str8_lit("memory operands must have a sice");
         goto operand_parse_exit;
       }
-
+      
       // fill out memory ref portion
       arg.type                      = STAP_ArgType_MemoryRef;
       arg.memory_ref.disp           = disp;
@@ -255,36 +255,36 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
     // $imm
     else if (str8_match(str8_lit("$"), oper, StringMatchFlag_RightSideSloppy)) {
       String8 imm_str = str8_skip(oper, 1);
-
+      
       U64 imm_size = str8_find_needle(imm_str, 0, str8_lit(" "), 0);
       if (imm_size > imm_str.size ) {
         imm_size = imm_str.size;
       }
       imm_str = str8_prefix(imm_str, imm_size);
-
+      
       if (imm_str.size == 0) {
         goto operand_parse_exit;
       }
-
+      
       U64 imm       = 0;
       B32 is_parsed = 0;
       switch (arg_value_type) {
-      case STAP_ArgValueType_Null:
-      case STAP_ArgValueType_U:
-      case STAP_ArgValueType_F: {
-        is_parsed = try_u64_from_str8_c_rules(imm_str, &imm);
-      } break;
-      case STAP_ArgValueType_S: {
-        is_parsed = try_s64_from_str8_c_rules(imm_str, (S64 *)&imm);
-      } break;
-      default: { InvalidPath; } break;
+        case STAP_ArgValueType_Null:
+        case STAP_ArgValueType_U:
+        case STAP_ArgValueType_F: {
+          is_parsed = try_u64_from_str8_c_rules(imm_str, &imm);
+        } break;
+        case STAP_ArgValueType_S: {
+          is_parsed = try_s64_from_str8_c_rules(imm_str, (S64 *)&imm);
+        } break;
+        default: { InvalidPath; } break;
       }
-
+      
       if (!is_parsed) {
         error = str8_lit("failed to parse immediate");
         goto operand_parse_exit;
       }
-
+      
       arg.type = STAP_ArgType_Imm;
       arg.imm  = imm;
     }
@@ -295,7 +295,7 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
       if (reg_str.size == 0) {
         goto operand_parse_exit;
       }
-
+      
       B8  is_reg_alias = 0;
       U32 reg_code     = regs_reg_code_from_name(Arch_x64, reg_str);
       if (reg_code == 0) {
@@ -306,31 +306,31 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
         error = str8_lit("invalid register name");
         goto operand_parse_exit;
       }
-
+      
       arg.type         = STAP_ArgType_Reg;
       arg.reg.is_alias = is_reg_alias;
       arg.reg.reg_code = reg_code;
     } else {
       goto operand_parse_exit;
     }
-
+    
     // fill out value portion
     arg.value_type = arg_value_type == STAP_ArgValueType_Null ? STAP_ArgValueType_U : arg_value_type;
     arg.value_size = arg_value_size;
-
+    
     // write output
     if (arg_out) {
       *arg_out = arg;
     }
-
+    
     // clear error tracker
     error = str8_zero();
-
-operand_parse_exit:;
+    
+    operand_parse_exit:;
   } else {
     error = str8_lit("invalid argument string");
   }
-
+  
   return error;
 }
 
@@ -343,16 +343,16 @@ stap_arg_array_from_string(Arena *arena, Arch arch, String8 string)
   result.v = push_array(arena, STAP_Arg, arg_strings.node_count);
   for EachNode(n, String8Node, arg_strings.first) {
     STAP_Arg *arg = &result.v[result.count++];
-
+    
     switch (arch) {
-    case Arch_Null: {} break;
-    case Arch_x64: {
-      stap_parse_args_x64(n->string, arg);
-    } break;
-    case Arch_x86:
-    case Arch_arm32:
-    case Arch_arm64: { NotImplemented; } break;
-    default: { InvalidPath; } break;
+      case Arch_Null: {} break;
+      case Arch_x64: {
+        stap_parse_args_x64(n->string, arg);
+      } break;
+      case Arch_x86:
+      case Arch_arm32:
+      case Arch_arm64: { NotImplemented; } break;
+      default: { InvalidPath; } break;
     }
   }
   scratch_end(scratch);
@@ -368,53 +368,52 @@ stap_read_arg(STAP_Arg         arg,
               void            *raw_value)
 {
   AssertAlways(arg.value_size <= 8);
-
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
   B32 is_value_read = 0;
-
-  switch (arg.type) {
-  case STAP_ArgType_Null: break;
-  case STAP_ArgType_Imm: {
-    MemoryCopy(raw_value, &arg.imm, arg.value_size);
-    is_value_read = 1;
-  } break;
-  case STAP_ArgType_Reg: {
-    Rng1U64 range     = regs_range_from_code(arch, arg.reg.is_alias, arg.reg.reg_code);
-    U64     copy_size = Min(arg.value_size, dim_1u64(range));
-    MemoryCopy(raw_value, (U8 *)reg_block + range.min, copy_size);
-    is_value_read = 1;
-  } break;
-  case STAP_ArgType_MemoryRef: {
-    U64 base = 0;
-    if(arg.memory_ref.base.reg_code) {
-      Rng1U64 range     = regs_range_from_code(arch, arg.memory_ref.base.is_alias, arg.memory_ref.base.reg_code);
-      U64     copy_size = Min(sizeof(base), dim_1u64(range));
-      MemoryCopy(&base, (U8 *)reg_block + range.min, copy_size);
-    }
-
-    U64 index = 0;
-    if(arg.memory_ref.index.reg_code) {
-      Rng1U64 range     = regs_range_from_code(arch, arg.memory_ref.index.is_alias, arg.memory_ref.index.reg_code);
-      U64     copy_size = Min(sizeof(base), dim_1u64(range));
-      MemoryCopy(&index, (U8 *)reg_block + range.min, copy_size);
-    }
-
-    U64 addr = arg.memory_ref.disp + (base + index * arg.memory_ref.scale);
-    if (memory_read(addr, raw_value, arg.value_size, memory_read_ctx)) {
+  switch(arg.type)
+  {
+    default:{}break;
+    case STAP_ArgType_Null:{}break;
+    case STAP_ArgType_Imm:
+    {
+      MemoryCopy(raw_value, &arg.imm, arg.value_size);
       is_value_read = 1;
-    }
-  } break;
-  default: { InvalidPath; } break;
+    }break;
+    case STAP_ArgType_Reg:
+    if(0 < arg.reg.reg_code && arg.reg.reg_code < arch_info->reg_code_count)
+    {
+      is_value_read = arch_reg_block_read_range(arch_info, reg_block, arch_info->reg_code_rng_table[arg.reg.reg_code], raw_value);
+    }break;
+    case STAP_ArgType_MemoryRef:
+    {
+      U64 base = 0;
+      if(0 < arg.memory_ref.base.reg_code && arg.memory_ref.base.reg_code < arch_info->reg_code_count)
+      {
+        arch_reg_block_read_range(arch_info, reg_block, arch_info->reg_code_rng_table[arg.memory_ref.base.reg_code], &base);
+      }
+      U64 index = 0;
+      if(0 < arg.memory_ref.index.reg_code && arg.memory_ref.index.reg_code < arch_info->reg_code_count)
+      {
+        arch_reg_block_read_range(arch_info, reg_block, arch_info->reg_code_rng_table[arg.memory_ref.index.reg_code], &index);
+      }
+      U64 addr = arg.memory_ref.disp + (base + index * arg.memory_ref.scale);
+      if(memory_read(addr, raw_value, arg.value_size, memory_read_ctx))
+      {
+        is_value_read = 1;
+      }
+    }break;
   }
-
-  if (arg.value_size < 8) {
-    if (arg.value_type == STAP_ArgValueType_S) {
+  if(arg.value_size < 8)
+  {
+    if(arg.value_type == STAP_ArgValueType_S)
+    {
       *(U64 *)raw_value = extend_sign64(*(U64 *)raw_value, arg.value_size);
-    } else if (arg.value_type == STAP_ArgValueType_F) {
-      Assert(arg.value_size == 4);
+    }
+    else if(arg.value_type == STAP_ArgValueType_F && arg.value_size == 4)
+    {
       *(F64 *)raw_value = *(F32 *)raw_value;
     }
   }
-
   return is_value_read;
 }
 

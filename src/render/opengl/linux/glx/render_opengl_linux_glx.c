@@ -21,7 +21,7 @@ r_ogl_os_init(CmdLine *cmdln)
     Temp scratch = scratch_begin(0, 0);
     String8 message = push_str8f(scratch.arena, "Unsupported GLX version (%i.%i, need at least 1.3)", glx_version_major, glx_version_minor);
     os_graphical_message(1, str8_lit("Fatal Error"), message);
-    os_abort(1);
+    abort_self(1);
     scratch_end(scratch);
   }
   
@@ -46,7 +46,7 @@ r_ogl_os_init(CmdLine *cmdln)
   if(framebuffer_configs == 0)
   {
     os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Could not find a suitable framebuffer configuration."));
-    os_abort(1);
+    abort_self(1);
   }
   GLXFBConfig framebuffer_config = framebuffer_configs[0];
   XFree(framebuffer_configs);

@@ -1,6 +1,14 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+////////////////////////////////
+//~ rjf: Generated
+
+#include "x64/generated/x64.meta.c"
+
+////////////////////////////////
+//~ cpuid
+
 internal void
 x64_cpuid(U32 leaf, U32 *eax, U32 *ebx, U32 *ecx, U32 *edx)
 {
@@ -42,6 +50,9 @@ x64_cpuid_ex(U32 leaf, U32 sub_leaf, U32 *eax, U32 *ebx, U32 *ecx, U32 *edx)
 # error "cpuid_count is not defined for this compiler"
 #endif
 }
+
+////////////////////////////////
+//~ fxsave/xsave
 
 internal B32
 x64_is_xsave_supported(void)
@@ -114,6 +125,9 @@ x64_get_xsave_layout(U64 xcr0)
   return xsave_layout;
 }
 
+////////////////////////////////
+//~ Debug Control Register
+
 internal void
 x64_set_debug_break(U64 *drs, U64 trap_idx, U64 addr, U64 size, X64_BreakpointType bp_type, X64_DebugBreakType break_type)
 {
@@ -181,4 +195,3 @@ x64_set_debug_break(U64 *drs, U64 trap_idx, U64 addr, U64 size, X64_BreakpointTy
     default: { InvalidPath; }
   }
 }
-

@@ -13,7 +13,7 @@ internal void
 rb_entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0, 0);
-  U64 threads_count = os_get_system_info()->logical_processor_count;
+  U64 threads_count = get_system_info()->logical_processor_count;
   String8 threads_count_from_cmdline_string = cmd_line_string(cmdline, str8_lit("thread_count"));
   if(threads_count_from_cmdline_string.size != 0)
   {
@@ -70,7 +70,7 @@ rb_thread_entry_point(void *p)
   //
   ProfScope("analyze & load command line input files") if(lane_idx() == 0)
   {
-    String8 working_directory = os_get_current_path(arena);
+    String8 working_directory = get_current_path(arena);
     String8List input_file_path_tasks = str8_list_copy(arena, &cmdline->inputs);
     for(String8Node *n = input_file_path_tasks.first; n != 0; n = n->next)
     {
@@ -93,14 +93,14 @@ rb_thread_entry_point(void *p)
       RB_FileFormatFlags file_format_flags = 0;
       ProfScope("do thin analysis of file")
       {
-        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, input_file_path);
-        FileProperties props = os_properties_from_file(file);
+        File file = file_open(AccessFlag_Read|AccessFlag_ShareRead, input_file_path);
+        FileProperties props = properties_from_file(file);
         
         //- rjf: PDB magic -> PDB input
         if(file_format == RB_FileFormat_Null)
         {
           U8 msf20_magic_maybe[sizeof(msf_msf20_magic)] = {0};
-          os_file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
+          file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
           if(MemoryMatch(msf20_magic_maybe, msf_msf20_magic, sizeof(msf20_magic_maybe)))
           {
             file_format = RB_FileFormat_PDB;
@@ -109,7 +109,7 @@ rb_thread_entry_point(void *p)
         if(file_format == RB_FileFormat_Null)
         {
           U8 msf70_magic_maybe[sizeof(msf_msf70_magic)] = {0};
-          os_file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
+          file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
           if(MemoryMatch(msf70_magic_maybe, msf_msf70_magic, sizeof(msf70_magic_maybe)))
           {
             file_format = RB_FileFormat_PDB;
@@ -120,11 +120,11 @@ rb_thread_entry_point(void *p)
         if(file_format == RB_FileFormat_Null)
         {
           PE_DosHeader dos_header_maybe = {0};
-          os_file_read_struct(file, 0, &dos_header_maybe);
+          file_read_struct(file, 0, &dos_header_maybe);
           if(dos_header_maybe.magic == PE_DOS_MAGIC)
           {
             U32 pe_magic_maybe = 0;
-            os_file_read_struct(file, dos_header_maybe.coff_file_offset, &pe_magic_maybe);
+            file_read_struct(file, dos_header_maybe.coff_file_offset, &pe_magic_maybe);
             if(pe_magic_maybe == PE_MAGIC)
             {
               file_format = RB_FileFormat_PE;
@@ -136,7 +136,7 @@ rb_thread_entry_point(void *p)
         if(file_format == RB_FileFormat_Null)
         {
           U8 coff_archive_sig_maybe[sizeof(g_coff_archive_sig)] = {0};
-          os_file_read(file, r1u64(0, sizeof(coff_archive_sig_maybe)), coff_archive_sig_maybe);
+          file_read(file, r1u64(0, sizeof(coff_archive_sig_maybe)), coff_archive_sig_maybe);
           if(MemoryMatch(coff_archive_sig_maybe, g_coff_archive_sig, sizeof(g_coff_archive_sig)))
           {
             file_format = RB_FileFormat_COFF_Archive;
@@ -145,7 +145,7 @@ rb_thread_entry_point(void *p)
         if(file_format == RB_FileFormat_Null)
         {
           U8 coff_thin_archive_sig_maybe[sizeof(g_coff_thin_archive_sig)] = {0};
-          os_file_read(file, r1u64(0, sizeof(coff_thin_archive_sig_maybe)), coff_thin_archive_sig_maybe);
+          file_read(file, r1u64(0, sizeof(coff_thin_archive_sig_maybe)), coff_thin_archive_sig_maybe);
           if(MemoryMatch(coff_thin_archive_sig_maybe, g_coff_thin_archive_sig, sizeof(g_coff_thin_archive_sig)))
           {
             file_format = RB_FileFormat_COFF_ThinArchive;
@@ -156,7 +156,7 @@ rb_thread_entry_point(void *p)
         if(file_format == RB_FileFormat_Null)
         {
           COFF_BigObjHeader header_maybe = {0};
-          os_file_read_struct(file, 0, &header_maybe);
+          file_read_struct(file, 0, &header_maybe);
           if(header_maybe.sig1 == COFF_MachineType_Unknown &&
              header_maybe.sig2 == max_U16 &&
              header_maybe.version >= 2 &&
@@ -169,7 +169,7 @@ rb_thread_entry_point(void *p)
         {
           Temp scratch = scratch_begin(&arena, 1);
           COFF_FileHeader header_maybe = {0};
-          os_file_read_struct(file, 0, &header_maybe);
+          file_read_struct(file, 0, &header_maybe);
           U64 section_count = header_maybe.section_count;
           U64 section_hdr_opl_off = sizeof(header_maybe) + section_count*sizeof(COFF_SectionHeader);
           
@@ -202,7 +202,7 @@ rb_thread_entry_point(void *p)
             if(props.size >= section_hdr_opl_off)
             {
               COFF_SectionHeader *section_hdrs = push_array(scratch.arena, COFF_SectionHeader, section_count);
-              os_file_read(file, r1u64(sizeof(header_maybe), sizeof(header_maybe) + section_count*sizeof(COFF_SectionHeader)), section_hdrs);
+              file_read(file, r1u64(sizeof(header_maybe), sizeof(header_maybe) + section_count*sizeof(COFF_SectionHeader)), section_hdrs);
               B32 section_ranges_valid = 1;
               for EachIndex(section_hdr_idx, section_count)
               {
@@ -252,7 +252,7 @@ rb_thread_entry_point(void *p)
         if(file_format == RB_FileFormat_Null)
         {
           U8 identifier_maybe[ELF_Identifier_Max] = {0};
-          os_file_read(file, r1u64(0, sizeof(identifier_maybe)), identifier_maybe);
+          file_read(file, r1u64(0, sizeof(identifier_maybe)), identifier_maybe);
           B32 is_elf_magic = (identifier_maybe[ELF_Identifier_Mag0] == 0x7f &&
                               identifier_maybe[ELF_Identifier_Mag1] == 'E'  &&
                               identifier_maybe[ELF_Identifier_Mag2] == 'L'  &&
@@ -267,14 +267,14 @@ rb_thread_entry_point(void *p)
         if(file_format == RB_FileFormat_Null)
         {
           RDI_Header rdi_header_maybe = {0};
-          os_file_read_struct(file, 0, &rdi_header_maybe);
+          file_read_struct(file, 0, &rdi_header_maybe);
           if(rdi_header_maybe.magic == RDI_MAGIC_CONSTANT)
           {
             file_format = RB_FileFormat_RDI;
           }
         }
         
-        os_file_close(file);
+        file_close(file);
       }
       
       //////////////////////////
@@ -295,7 +295,7 @@ rb_thread_entry_point(void *p)
       String8 file_data = {0};
       if(file_format != RB_FileFormat_Null) ProfScope("load recognized file")
       {
-        file_data = os_data_from_file_path(arena, input_file_path);
+        file_data = data_from_file_path(arena, input_file_path);
       }
       
       //////////////////////////
@@ -1593,7 +1593,7 @@ rb_thread_entry_point(void *p)
   {
     if(output_path.size != 0) ProfScope("write outputs [file]")
     {
-      B32 is_written = os_write_data_list_to_file_path(output_path, output_blobs);
+      B32 is_written = write_data_list_to_file_path(output_path, output_blobs);
       if(is_written)
       {
         log_infof("Results written to %S", output_path);

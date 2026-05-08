@@ -1,0 +1,89 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@table(name code byte_size)
+DW_RegCodeTableX64:
+{
+  {rax        0         8}
+  {rdx        1         8}
+  {rcx        2         8}
+  {rbx        3         8}
+  {rsi        4         8}
+  {rdi        5         8}
+  {rbp        6         8}
+  {rsp        7         8}
+  {r8         8         8}
+  {r9         9         8}
+  {r10        10        8}
+  {r11        11        8}
+  {r12        12        8}
+  {r13        13        8}
+  {r14        14        8}
+  {r15        15        8}
+  {rip        16        8}
+  {zmm0       17        16}
+  {zmm1       18        16}
+  {zmm2       19        16}
+  {zmm3       20        16}
+  {zmm4       21        16}
+  {zmm5       22        16}
+  {zmm6       23        16}
+  {zmm7       24        16}
+  {zmm8       25        16}
+  {zmm9       26        16}
+  {zmm10      27        16}
+  {zmm11      28        16}
+  {zmm12      29        16}
+  {zmm13      30        16}
+  {zmm14      31        16}
+  {zmm15      32        16}
+  {zmm16      67        16}
+  {zmm17      68        16}
+  {zmm18      69        16}
+  {zmm19      70        16}
+  {zmm20      71        16}
+  {zmm21      72        16}
+  {zmm22      73        16}
+  {zmm23      74        16}
+  {zmm24      75        16}
+  {zmm25      76        16}
+  {zmm26      77        16}
+  {zmm27      78        16}
+  {zmm28      79        16}
+  {zmm29      80        16}
+  {zmm30      81        16}
+  {zmm31      82        16}
+  {st0        33        10}
+  {st1        34        10}
+  {st2        35        10}
+  {st3        36        10}
+  {st4        37        10}
+  {st5        38        10}
+  {st6        39        10}
+  {st7        40        10}
+  {mm0        41        8}
+  {mm1        42        8}
+  {mm2        43        8}
+  {mm3        44        8}
+  {mm4        45        8}
+  {mm5        46        8}
+  {mm6        47        8}
+  {mm7        48        8}
+  {rflags     49        4}
+  {es         50        2}
+  {cs         51        2}
+  {ss         52        2}
+  {ds         53        2}
+  {fs         54        2}
+  {gs         55        2}
+  {fsbase     58        8}
+  {gsbase     59        8}
+  // privileged registers:
+  // {Tr      62  ???}
+  // {Ldtr    63  ???}
+}
+
+@enum DW_RegCodeX64:
+{
+  @expand(DW_RegCodeTableX64 a) `$(a.name) = $(a.code)`,
+}

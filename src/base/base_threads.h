@@ -67,14 +67,33 @@ struct StripeArray
 };
 
 ////////////////////////////////
-//~ rjf: Thread Functions
+//~ rjf: Table Stripe Functions
+
+internal StripeArray stripe_array_alloc(Arena *arena);
+internal void stripe_array_release(StripeArray *stripes);
+internal Stripe *stripe_from_slot_idx(StripeArray *stripes, U64 slot_idx);
+
+////////////////////////////////
+//~ rjf: Thread Info Helpers
+
+internal void set_thread_name(String8 string);
+internal void set_thread_namef(char *fmt, ...);
+
+////////////////////////////////
+//~ rjf: @per_os_impl Current Thread Info
+
+internal U32 tid(void);
+internal void set_platform_thread_name(String8 name);
+
+////////////////////////////////
+//~ rjf: @per_os_impl Thread Functions
 
 internal Thread thread_launch(ThreadEntryPointFunctionType *f, void *p);
 internal B32 thread_join(Thread thread, U64 endt_us);
 internal void thread_detach(Thread thread);
 
 ////////////////////////////////
-//~ rjf: Synchronization Primitive Functions
+//~ rjf: @per_os_impl Synchronization Primitive Functions
 
 //- rjf: recursive mutexes
 internal Mutex mutex_alloc(void);
@@ -124,10 +143,8 @@ internal void      barrier_wait(Barrier barrier);
 #define MutexScopeRWPromote(mutex) DeferLoop((rw_mutex_drop_r(mutex), rw_mutex_take_w(mutex)), (rw_mutex_drop_w(mutex), rw_mutex_take_r(mutex)))
 
 ////////////////////////////////
-//~ rjf: Table Stripe Functions
+//~ rjf: @per_os_impl Safe Calls
 
-internal StripeArray stripe_array_alloc(Arena *arena);
-internal void stripe_array_release(StripeArray *stripes);
-internal Stripe *stripe_from_slot_idx(StripeArray *stripes, U64 slot_idx);
+internal void safe_call(ThreadEntryPointFunctionType *func, ThreadEntryPointFunctionType *fail_handler, void *ptr);
 
 #endif // BASE_THREADS_H

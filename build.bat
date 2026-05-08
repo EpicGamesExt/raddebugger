@@ -144,7 +144,6 @@ if "%radlink%"=="1"                    set didbuild=1 && %compile% ..\src\linker
 if "%radbin%"=="1"                     set didbuild=1 && %compile% ..\src\radbin\radbin_main.c                               %compile_link% %out%radbin.exe || exit /b 1
 if "%raddump%"=="1"                    set didbuild=1 && %compile% ..\src\raddump\raddump_main.c                             %compile_link% %out%raddump.exe || exit /b 1
 if "%ryan_scratch%"=="1"               set didbuild=1 && %compile% ..\src\scratch\ryan_scratch.c                             %compile_link% %out%ryan_scratch.exe || exit /b 1
-if "%eval_scratch%"=="1"               set didbuild=1 && %compile% ..\src\scratch\eval_scratch.c                             %compile_link% %out%eval_scratch.exe || exit /b 1
 if "%textperf%"=="1"                   set didbuild=1 && %compile% ..\src\scratch\textperf.c                                 %compile_link% %out%textperf.exe || exit /b 1
 if "%convertperf%"=="1"                set didbuild=1 && %compile% ..\src\scratch\convertperf.c                              %compile_link% %out%convertperf.exe || exit /b 1
 if "%debugstringperf%"=="1"            set didbuild=1 && %compile% ..\src\scratch\debugstringperf.c                          %compile_link% %out%debugstringperf.exe || exit /b 1

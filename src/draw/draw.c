@@ -226,7 +226,7 @@ dr_begin_frame(FNT_Tag icon_font)
 }
 
 internal void
-dr_submit_bucket(OS_Handle os_window, R_Handle r_window, DR_Bucket *bucket)
+dr_submit_bucket(OS_Window os_window, R_Handle r_window, DR_Bucket *bucket)
 {
   r_window_submit(os_window, r_window, &bucket->passes);
 }

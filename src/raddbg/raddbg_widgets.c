@@ -550,6 +550,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
     Access *access = access_open();
     D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
     Arch arch = entity->arch;
+    ARCH_Info *arch_info = arch_info_from_arch(entity->arch);
     B32 call_stack_high_priority = d_handle_match(entity->handle, rd_base_regs()->thread);
     D_CallStack call_stack = d_call_stack_from_thread(access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
     B32 did_first_known = 0;
@@ -558,7 +559,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
         idx += 1)
     {
       D_CallStackFrame *f = &call_stack.frames[call_stack.frames_count - 1 - idx];
-      U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
+      U64 rip_vaddr = arch_ip_from_reg_block(arch_info, f->regs);
       D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
       String8 name = {0};
@@ -653,7 +654,7 @@ rd_title_fstrs_from_file_path(Arena *arena, String8 file_path)
 {
   DR_FStrList fstrs = {0};
   String8 file_name = str8_skip_last_slash(file_path);
-  FileProperties props = os_properties_from_file_path(file_path);
+  FileProperties props = properties_from_file_path(file_path);
   RD_IconKind icon_kind = RD_IconKind_FileOutline;
   if(props.flags & FilePropertyFlag_IsFolder)
   {

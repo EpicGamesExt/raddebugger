@@ -15,13 +15,13 @@ internal DW_ExprValueType
 dw_expr_unsigned_value_type_from_bit_size(U64 bit_size)
 {
   switch (bit_size) {
-  case 8:   return DW_ExprValueType_U8;
-  case 16:  return DW_ExprValueType_U16;
-  case 32:  return DW_ExprValueType_U32;
-  case 64:  return DW_ExprValueType_U64;
-  case 128: return DW_ExprValueType_U128;
-  case 256: return DW_ExprValueType_U256;
-  case 512: return DW_ExprValueType_U512;
+    case 8:   return DW_ExprValueType_U8;
+    case 16:  return DW_ExprValueType_U16;
+    case 32:  return DW_ExprValueType_U32;
+    case 64:  return DW_ExprValueType_U64;
+    case 128: return DW_ExprValueType_U128;
+    case 256: return DW_ExprValueType_U256;
+    case 512: return DW_ExprValueType_U512;
   }
   AssertAlways(0 && "no suitable unsigned type was found for the specified size");
   return DW_ExprValueType_Generic;
@@ -31,13 +31,13 @@ internal DW_ExprValueType
 dw_expr_signed_value_type_from_bit_size(U64 bit_size)
 {
   switch (bit_size) {
-  case 8:   return DW_ExprValueType_S8;
-  case 16:  return DW_ExprValueType_S16;
-  case 32:  return DW_ExprValueType_S32;
-  case 64:  return DW_ExprValueType_S64;
-  case 128: return DW_ExprValueType_S128;
-  case 256: return DW_ExprValueType_S256;
-  case 512: return DW_ExprValueType_S512;
+    case 8:   return DW_ExprValueType_S8;
+    case 16:  return DW_ExprValueType_S16;
+    case 32:  return DW_ExprValueType_S32;
+    case 64:  return DW_ExprValueType_S64;
+    case 128: return DW_ExprValueType_S128;
+    case 256: return DW_ExprValueType_S256;
+    case 512: return DW_ExprValueType_S512;
   }
   AssertAlways(0 && "no suitable signed type was found for the specified size");
   return DW_ExprValueType_Generic;
@@ -47,8 +47,8 @@ internal DW_ExprValueType
 dw_expr_float_type_from_bit_size(U64 bit_size)
 {
   switch (bit_size) {
-  case 4: return DW_ExprValueType_F32;
-  case 8: return DW_ExprValueType_F64;
+    case 4: return DW_ExprValueType_F32;
+    case 8: return DW_ExprValueType_F64;
   }
   AssertAlways(0 && "no suitable type was found for the specified size");
   return DW_ExprValueType_Generic;
@@ -58,25 +58,25 @@ internal U64
 dw_expr_byte_size_from_value_type(U64 addr_size, DW_ExprValueType k)
 {
   switch (k) {
-  default: { InvalidPath; }
-  case DW_ExprValueType_Generic: return 0;
-  case DW_ExprValueType_Addr:    return addr_size;
-  case DW_ExprValueType_U8:      return 1;
-  case DW_ExprValueType_U16:     return 2;
-  case DW_ExprValueType_U32:     return 4;
-  case DW_ExprValueType_U64:     return 8;
-  case DW_ExprValueType_U128:    return 16;
-  case DW_ExprValueType_U256:    return 32;
-  case DW_ExprValueType_U512:    return 64;
-  case DW_ExprValueType_S8:      return 1;
-  case DW_ExprValueType_S16:     return 2;
-  case DW_ExprValueType_S32:     return 4;
-  case DW_ExprValueType_S64:     return 8;
-  case DW_ExprValueType_S128:    return 16;
-  case DW_ExprValueType_S256:    return 32;
-  case DW_ExprValueType_S512:    return 64;
-  case DW_ExprValueType_F32:     return 4;
-  case DW_ExprValueType_F64:     return 8;
+    default: { InvalidPath; }
+    case DW_ExprValueType_Generic: return 0;
+    case DW_ExprValueType_Addr:    return addr_size;
+    case DW_ExprValueType_U8:      return 1;
+    case DW_ExprValueType_U16:     return 2;
+    case DW_ExprValueType_U32:     return 4;
+    case DW_ExprValueType_U64:     return 8;
+    case DW_ExprValueType_U128:    return 16;
+    case DW_ExprValueType_U256:    return 32;
+    case DW_ExprValueType_U512:    return 64;
+    case DW_ExprValueType_S8:      return 1;
+    case DW_ExprValueType_S16:     return 2;
+    case DW_ExprValueType_S32:     return 4;
+    case DW_ExprValueType_S64:     return 8;
+    case DW_ExprValueType_S128:    return 16;
+    case DW_ExprValueType_S256:    return 32;
+    case DW_ExprValueType_S512:    return 64;
+    case DW_ExprValueType_F32:     return 4;
+    case DW_ExprValueType_F64:     return 8;
   }
 }
 
@@ -159,55 +159,55 @@ internal DW_ExprValue
 dw_expr_cast(DW_ExprValue value, DW_ExprValueType type)
 {
   DW_ExprValue result = { type };
-
+  
 #define CastTable(f, t)                                                                                                     \
-    switch (value.type) {                                                                                                   \
-    case DW_ExprValueType_Generic: { MemoryCopy(&result.f, value.generic.str, Min(sizeof(t), value.generic.size)); } break; \
-    case DW_ExprValueType_U8:      { result.f = (t)value.u8;  } break;                                                      \
-    case DW_ExprValueType_U16:     { result.f = (t)value.u16; } break;                                                      \
-    case DW_ExprValueType_U32:     { result.f = (t)value.u32; } break;                                                      \
-    case DW_ExprValueType_U64:     { result.f = (t)value.u64; } break;                                                      \
-    case DW_ExprValueType_U128:    { NotImplemented; } break;                                                               \
-    case DW_ExprValueType_U256:    { NotImplemented; } break;                                                               \
-    case DW_ExprValueType_U512:    { NotImplemented; } break;                                                               \
-    case DW_ExprValueType_S8:      { result.f = (t)value.s8;  } break;                                                      \
-    case DW_ExprValueType_S16:     { result.f = (t)value.s16; } break;                                                      \
-    case DW_ExprValueType_S32:     { result.f = (t)value.s32; } break;                                                      \
-    case DW_ExprValueType_S64:     { result.f = (t)value.s64; } break;                                                      \
-    case DW_ExprValueType_S128:    { NotImplemented; } break;                                                               \
-    case DW_ExprValueType_S256:    { NotImplemented; } break;                                                               \
-    case DW_ExprValueType_S512:    { NotImplemented; } break;                                                               \
-    case DW_ExprValueType_F32:     { result.f = (t)value.f32;  } break;                                                     \
-    case DW_ExprValueType_F64:     { result.f = (t)value.f64;  } break;                                                     \
-    case DW_ExprValueType_Addr:    { result.f = (t)value.addr; } break;                                                     \
-    case DW_ExprValueType_Implicit: { InvalidPath; } break;                                                                 \
-    case DW_ExprValueType_Bool:     { result.f = (t)value.boolean; } break;                                                 \
-    default: { InvalidPath; } break;                                                                                        \
-    }
-
+switch (value.type) {                                                                                                   \
+case DW_ExprValueType_Generic: { MemoryCopy(&result.f, value.generic.str, Min(sizeof(t), value.generic.size)); } break; \
+case DW_ExprValueType_U8:      { result.f = (t)value.u8;  } break;                                                      \
+case DW_ExprValueType_U16:     { result.f = (t)value.u16; } break;                                                      \
+case DW_ExprValueType_U32:     { result.f = (t)value.u32; } break;                                                      \
+case DW_ExprValueType_U64:     { result.f = (t)value.u64; } break;                                                      \
+case DW_ExprValueType_U128:    { NotImplemented; } break;                                                               \
+case DW_ExprValueType_U256:    { NotImplemented; } break;                                                               \
+case DW_ExprValueType_U512:    { NotImplemented; } break;                                                               \
+case DW_ExprValueType_S8:      { result.f = (t)value.s8;  } break;                                                      \
+case DW_ExprValueType_S16:     { result.f = (t)value.s16; } break;                                                      \
+case DW_ExprValueType_S32:     { result.f = (t)value.s32; } break;                                                      \
+case DW_ExprValueType_S64:     { result.f = (t)value.s64; } break;                                                      \
+case DW_ExprValueType_S128:    { NotImplemented; } break;                                                               \
+case DW_ExprValueType_S256:    { NotImplemented; } break;                                                               \
+case DW_ExprValueType_S512:    { NotImplemented; } break;                                                               \
+case DW_ExprValueType_F32:     { result.f = (t)value.f32;  } break;                                                     \
+case DW_ExprValueType_F64:     { result.f = (t)value.f64;  } break;                                                     \
+case DW_ExprValueType_Addr:    { result.f = (t)value.addr; } break;                                                     \
+case DW_ExprValueType_Implicit: { InvalidPath; } break;                                                                 \
+case DW_ExprValueType_Bool:     { result.f = (t)value.boolean; } break;                                                 \
+default: { InvalidPath; } break;                                                                                        \
+}
+  
   switch (type) {
-  case DW_ExprValueType_Generic: {} break;
-  case DW_ExprValueType_U8:       { CastTable(u8, U8);               } break;
-  case DW_ExprValueType_U16:      { CastTable(u16, U16);             } break;
-  case DW_ExprValueType_U32:      { CastTable(u32, U32);             } break;
-  case DW_ExprValueType_U64:      { CastTable(u64, U64);             } break;
-  case DW_ExprValueType_U128:     { NotImplemented;                  } break;
-  case DW_ExprValueType_U256:     { NotImplemented;                  } break;
-  case DW_ExprValueType_U512:     { NotImplemented;                  } break;
-  case DW_ExprValueType_S8:       { CastTable(s8, S8);               } break;
-  case DW_ExprValueType_S16:      { CastTable(s16, S16);             } break;
-  case DW_ExprValueType_S32:      { CastTable(s32, S32);             } break;
-  case DW_ExprValueType_S64:      { CastTable(s64, S64);             } break;
-  case DW_ExprValueType_S128:     { NotImplemented;                  } break;
-  case DW_ExprValueType_S256:     { NotImplemented;                  } break;
-  case DW_ExprValueType_S512:     { NotImplemented;                  } break;
-  case DW_ExprValueType_F32:      { CastTable(f32, F32);             } break;
-  case DW_ExprValueType_F64:      { CastTable(f64, F64);             } break;
-  case DW_ExprValueType_Addr:     { CastTable(addr, U64);            } break;
-  case DW_ExprValueType_Implicit: { NotImplemented;                  } break;
-  case DW_ExprValueType_Bool:     { CastTable(boolean, DW_ExprBool); } break;
+    case DW_ExprValueType_Generic: {} break;
+    case DW_ExprValueType_U8:       { CastTable(u8, U8);               } break;
+    case DW_ExprValueType_U16:      { CastTable(u16, U16);             } break;
+    case DW_ExprValueType_U32:      { CastTable(u32, U32);             } break;
+    case DW_ExprValueType_U64:      { CastTable(u64, U64);             } break;
+    case DW_ExprValueType_U128:     { NotImplemented;                  } break;
+    case DW_ExprValueType_U256:     { NotImplemented;                  } break;
+    case DW_ExprValueType_U512:     { NotImplemented;                  } break;
+    case DW_ExprValueType_S8:       { CastTable(s8, S8);               } break;
+    case DW_ExprValueType_S16:      { CastTable(s16, S16);             } break;
+    case DW_ExprValueType_S32:      { CastTable(s32, S32);             } break;
+    case DW_ExprValueType_S64:      { CastTable(s64, S64);             } break;
+    case DW_ExprValueType_S128:     { NotImplemented;                  } break;
+    case DW_ExprValueType_S256:     { NotImplemented;                  } break;
+    case DW_ExprValueType_S512:     { NotImplemented;                  } break;
+    case DW_ExprValueType_F32:      { CastTable(f32, F32);             } break;
+    case DW_ExprValueType_F64:      { CastTable(f64, F64);             } break;
+    case DW_ExprValueType_Addr:     { CastTable(addr, U64);            } break;
+    case DW_ExprValueType_Implicit: { NotImplemented;                  } break;
+    case DW_ExprValueType_Bool:     { CastTable(boolean, DW_ExprBool); } break;
   }
-
+  
 #undef CastTable
   return result;
 }
@@ -217,38 +217,38 @@ dw_expr_add(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  + common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 + common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 + common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 + common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  + common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  + common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 + common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 + common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 + common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  + common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  + common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr + common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  + common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 + common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 + common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 + common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  + common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  + common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 + common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 + common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 + common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  + common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  + common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr + common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
   return result;
 }
@@ -258,38 +258,38 @@ dw_expr_minus(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  - common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 - common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 - common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 - common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  - common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  - common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 - common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 - common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 - common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  - common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  - common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr - common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  - common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 - common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 - common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 - common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  - common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  - common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 - common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 - common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 - common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  - common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  - common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr - common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
   return result;
 }
@@ -299,38 +299,38 @@ dw_expr_mul(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  * common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 * common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 * common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 * common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  * common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  * common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 * common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 * common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 * common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  * common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  * common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr * common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  * common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 * common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 * common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 * common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  * common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  * common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 * common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 * common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 * common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  * common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  * common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr * common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
   return result;
 }
@@ -340,38 +340,38 @@ dw_expr_div(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  / common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 / common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 / common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 / common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  / common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  / common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 / common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 / common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 / common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  / common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  / common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr / common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  / common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 / common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 / common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 / common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  / common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  / common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 / common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 / common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 / common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  / common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  / common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr / common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
   return result;
 }
@@ -381,38 +381,38 @@ dw_expr_mod(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  % common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 % common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 % common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 % common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  % common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  % common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 % common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 % common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 % common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { InvalidPath; } break;
-  case DW_ExprValueType_F64:  { InvalidPath; } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr % common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  % common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 % common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 % common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 % common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  % common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  % common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 % common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 % common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 % common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { InvalidPath; } break;
+    case DW_ExprValueType_F64:  { InvalidPath; } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr % common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
   return result;
 }
@@ -422,40 +422,40 @@ dw_expr_eq(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  == common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 == common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 == common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 == common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  == common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  == common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 == common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 == common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 == common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  == common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  == common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr == common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  == common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 == common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 == common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 == common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  == common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  == common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 == common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 == common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 == common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  == common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  == common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr == common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -464,40 +464,40 @@ dw_expr_ge(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  >= common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 >= common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 >= common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 >= common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  >= common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  >= common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 >= common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 >= common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 >= common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  >= common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  >= common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >= common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  >= common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 >= common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 >= common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 >= common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  >= common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  >= common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 >= common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 >= common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 >= common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  >= common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  >= common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >= common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -506,40 +506,40 @@ dw_expr_gt(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  > common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 > common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 > common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 > common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  > common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  > common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 > common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 > common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 > common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  > common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  > common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr > common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  > common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 > common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 > common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 > common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  > common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  > common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 > common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 > common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 > common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  > common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  > common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr > common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -548,40 +548,40 @@ dw_expr_le(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  <= common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 <= common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 <= common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 <= common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  <= common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  <= common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 <= common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 <= common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 <= common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  <= common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  <= common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr <= common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  <= common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 <= common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 <= common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 <= common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  <= common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  <= common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 <= common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 <= common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 <= common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  <= common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  <= common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr <= common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -590,40 +590,40 @@ dw_expr_lt(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  < common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 < common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 < common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 < common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  < common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  < common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 < common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 < common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 < common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  < common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  < common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr < common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  < common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 < common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 < common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 < common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  < common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  < common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 < common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 < common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 < common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  < common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  < common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr < common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -632,40 +632,40 @@ dw_expr_ne(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  != common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 != common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 != common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 != common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  != common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  != common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 != common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 != common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 != common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  != common_rhs.f32;  } break;
-  case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  != common_rhs.f64;  } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr != common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  != common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 != common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 != common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 != common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  != common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  != common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 != common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 != common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 != common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { result.f32  = common_lhs.f32  != common_rhs.f32;  } break;
+    case DW_ExprValueType_F64:  { result.f64  = common_lhs.f64  != common_rhs.f64;  } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr != common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -674,40 +674,40 @@ dw_expr_xor(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  ^ common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 ^ common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 ^ common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 ^ common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  ^ common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  ^ common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 ^ common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 ^ common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 ^ common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { InvalidPath; } break;
-  case DW_ExprValueType_F64:  { InvalidPath; } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr ^ common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  ^ common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 ^ common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 ^ common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 ^ common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  ^ common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  ^ common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 ^ common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 ^ common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 ^ common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { InvalidPath; } break;
+    case DW_ExprValueType_F64:  { InvalidPath; } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr ^ common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -716,40 +716,40 @@ dw_expr_and(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  & common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 & common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 & common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 & common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  & common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  & common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 & common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 & common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 & common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { InvalidPath; } break;
-  case DW_ExprValueType_F64:  { InvalidPath; } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr & common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  & common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 & common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 & common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 & common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  & common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  & common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 & common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 & common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 & common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { InvalidPath; } break;
+    case DW_ExprValueType_F64:  { InvalidPath; } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr & common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -758,40 +758,40 @@ dw_expr_or(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  | common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 | common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 | common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 | common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  | common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  | common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 | common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 | common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 | common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { InvalidPath; } break;
-  case DW_ExprValueType_F64:  { InvalidPath; } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr | common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  | common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 | common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 | common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 | common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  | common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  | common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 | common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 | common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 | common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { InvalidPath; } break;
+    case DW_ExprValueType_F64:  { InvalidPath; } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr | common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -800,40 +800,40 @@ dw_expr_shl(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  << common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 << common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 << common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 << common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128:
-  case DW_ExprValueType_U256:
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  << common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  << common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 << common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 << common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 << common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { InvalidPath; } break;
-  case DW_ExprValueType_F64:  { InvalidPath; } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr << common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  << common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 << common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 << common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 << common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128:
+    case DW_ExprValueType_U256:
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  << common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  << common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 << common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 << common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 << common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { InvalidPath; } break;
+    case DW_ExprValueType_F64:  { InvalidPath; } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr << common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -842,39 +842,39 @@ dw_expr_shr(DW_ExprValue lhs, DW_ExprValue rhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  >> common_rhs.u8;  } break;
-  case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 >> common_rhs.u16; } break;
-  case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 >> common_rhs.u32; } break;
-  case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 >> common_rhs.u64; } break;
-
-  case DW_ExprValueType_U128: { NotImplemented; } break;
-  case DW_ExprValueType_U256: { NotImplemented; } break;
-  case DW_ExprValueType_U512: { NotImplemented; } break;
-
-  case DW_ExprValueType_Bool: { InvalidPath; } break;
-  case DW_ExprValueType_S8:   { InvalidPath; } break;
-  case DW_ExprValueType_S16:  { InvalidPath; } break;
-  case DW_ExprValueType_S32:  { InvalidPath; } break;
-  case DW_ExprValueType_S64:  { InvalidPath; } break;
-  case DW_ExprValueType_S128: { InvalidPath; } break;
-  case DW_ExprValueType_S256: { InvalidPath; } break;
-  case DW_ExprValueType_S512: { InvalidPath; } break;
-
-  case DW_ExprValueType_F32:  { InvalidPath; } break;
-  case DW_ExprValueType_F64:  { InvalidPath; } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >> common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:  { result.u8  = common_lhs.u8  >> common_rhs.u8;  } break;
+    case DW_ExprValueType_U16: { result.u16 = common_lhs.u16 >> common_rhs.u16; } break;
+    case DW_ExprValueType_U32: { result.u32 = common_lhs.u32 >> common_rhs.u32; } break;
+    case DW_ExprValueType_U64: { result.u64 = common_lhs.u64 >> common_rhs.u64; } break;
+    
+    case DW_ExprValueType_U128: { NotImplemented; } break;
+    case DW_ExprValueType_U256: { NotImplemented; } break;
+    case DW_ExprValueType_U512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_Bool: { InvalidPath; } break;
+    case DW_ExprValueType_S8:   { InvalidPath; } break;
+    case DW_ExprValueType_S16:  { InvalidPath; } break;
+    case DW_ExprValueType_S32:  { InvalidPath; } break;
+    case DW_ExprValueType_S64:  { InvalidPath; } break;
+    case DW_ExprValueType_S128: { InvalidPath; } break;
+    case DW_ExprValueType_S256: { InvalidPath; } break;
+    case DW_ExprValueType_S512: { InvalidPath; } break;
+    
+    case DW_ExprValueType_F32:  { InvalidPath; } break;
+    case DW_ExprValueType_F64:  { InvalidPath; } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >> common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -885,47 +885,47 @@ dw_expr_shra(DW_ExprValue lhs, DW_ExprValue rhs)
     DW_ExprValueType new_type = dw_expr_signed_value_type_from_bit_size(dw_expr_byte_size_from_value_type(0, lhs.type) * 8);
     lhs = dw_expr_cast(lhs, new_type);
   }
-
+  
   if (DW_ExprValueType_IsUnsigned(rhs.type)) {
     DW_ExprValueType new_type = dw_expr_signed_value_type_from_bit_size(dw_expr_byte_size_from_value_type(0, rhs.type) * 8);
     rhs = dw_expr_cast(rhs, new_type);
   }
-
+  
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
-
+  
   DW_ExprValue common_lhs = dw_expr_cast(lhs, result.type);
   DW_ExprValue common_rhs = dw_expr_cast(rhs, result.type);
-
+  
   switch (result.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-                                 
-  case DW_ExprValueType_U8:   { InvalidPath; } break;
-  case DW_ExprValueType_U16:  { InvalidPath; } break;
-  case DW_ExprValueType_U32:  { InvalidPath; } break;
-  case DW_ExprValueType_U64:  { InvalidPath; } break;
-  case DW_ExprValueType_U128: { InvalidPath; } break;
-  case DW_ExprValueType_U256: { InvalidPath; } break;
-  case DW_ExprValueType_U512: { InvalidPath; } break;
-
-  case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  >> common_rhs.s8;  } break;
-  case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  >> common_rhs.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 >> common_rhs.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 >> common_rhs.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 >> common_rhs.s64; } break;
-
-  case DW_ExprValueType_S128:
-  case DW_ExprValueType_S256:
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32:  { InvalidPath; } break;
-  case DW_ExprValueType_F64:  { InvalidPath; } break;
-  case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >> common_rhs.addr; } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
-
-  default: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:   { InvalidPath; } break;
+    case DW_ExprValueType_U16:  { InvalidPath; } break;
+    case DW_ExprValueType_U32:  { InvalidPath; } break;
+    case DW_ExprValueType_U64:  { InvalidPath; } break;
+    case DW_ExprValueType_U128: { InvalidPath; } break;
+    case DW_ExprValueType_U256: { InvalidPath; } break;
+    case DW_ExprValueType_U512: { InvalidPath; } break;
+    
+    case DW_ExprValueType_Bool: { result.s8  = common_lhs.s8  >> common_rhs.s8;  } break;
+    case DW_ExprValueType_S8:   { result.s8  = common_lhs.s8  >> common_rhs.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = common_lhs.s16 >> common_rhs.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = common_lhs.s32 >> common_rhs.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = common_lhs.s64 >> common_rhs.s64; } break;
+    
+    case DW_ExprValueType_S128:
+    case DW_ExprValueType_S256:
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32:  { InvalidPath; } break;
+    case DW_ExprValueType_F64:  { InvalidPath; } break;
+    case DW_ExprValueType_Addr: { result.addr = common_lhs.addr >> common_rhs.addr; } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    
+    default: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -933,34 +933,34 @@ internal DW_ExprValue
 dw_expr_abs(DW_ExprValue value)
 {
   DW_ExprValue result = value;
-
+  
   switch (value.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-
-  case DW_ExprValueType_U8:   {}; break;
-  case DW_ExprValueType_U16:  {}; break;
-  case DW_ExprValueType_U32:  {}; break;
-  case DW_ExprValueType_U64:  {}; break;
-  case DW_ExprValueType_U128: {}; break;
-  case DW_ExprValueType_U256: {}; break;
-  case DW_ExprValueType_U512: {}; break;
-
-  case DW_ExprValueType_S8:   { result.s8  = abs_s64(result.s8);  } break;
-  case DW_ExprValueType_S16:  { result.s16 = abs_s64(result.s16); } break;
-  case DW_ExprValueType_S32:  { result.s32 = abs_s64(result.s32); } break;
-  case DW_ExprValueType_S64:  { result.s64 = abs_s64(result.s64); } break;
-  case DW_ExprValueType_S128: { NotImplemented; } break;
-  case DW_ExprValueType_S256: { NotImplemented; } break;
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32: { result.f32 = abs_f32(result.f32); } break;
-  case DW_ExprValueType_F64: { result.f64 = abs_f64(result.f64); } break;
-
-  case DW_ExprValueType_Addr: {} break;
-  case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:   {}; break;
+    case DW_ExprValueType_U16:  {}; break;
+    case DW_ExprValueType_U32:  {}; break;
+    case DW_ExprValueType_U64:  {}; break;
+    case DW_ExprValueType_U128: {}; break;
+    case DW_ExprValueType_U256: {}; break;
+    case DW_ExprValueType_U512: {}; break;
+    
+    case DW_ExprValueType_S8:   { result.s8  = abs_s64(result.s8);  } break;
+    case DW_ExprValueType_S16:  { result.s16 = abs_s64(result.s16); } break;
+    case DW_ExprValueType_S32:  { result.s32 = abs_s64(result.s32); } break;
+    case DW_ExprValueType_S64:  { result.s64 = abs_s64(result.s64); } break;
+    case DW_ExprValueType_S128: { NotImplemented; } break;
+    case DW_ExprValueType_S256: { NotImplemented; } break;
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32: { result.f32 = abs_f32(result.f32); } break;
+    case DW_ExprValueType_F64: { result.f64 = abs_f64(result.f64); } break;
+    
+    case DW_ExprValueType_Addr: {} break;
+    case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -968,34 +968,34 @@ internal DW_ExprValue
 dw_expr_neg(DW_ExprValue value)
 {
   DW_ExprValue result = value;
-
+  
   switch (value.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-
-  case DW_ExprValueType_U8:   { result.u8 = -result.u8; }; break;
-  case DW_ExprValueType_U16:  { result.u16 = -result.u16; }; break;
-  case DW_ExprValueType_U32:  { result.u32 = -result.u32; }; break;
-  case DW_ExprValueType_U64:  { result.u64 = -result.u64; }; break;
-  case DW_ExprValueType_U128: { NotImplemented; }; break;
-  case DW_ExprValueType_U256: { NotImplemented; }; break;
-  case DW_ExprValueType_U512: { NotImplemented; }; break;
-
-  case DW_ExprValueType_S8:   { result.s8  = -result.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = -result.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = -result.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = -result.s64; } break;
-  case DW_ExprValueType_S128: { NotImplemented; } break;
-  case DW_ExprValueType_S256: { NotImplemented; } break;
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32: { result.f32 = -result.f32; } break;
-  case DW_ExprValueType_F64: { result.f64 = -result.f64; } break;
-
-  case DW_ExprValueType_Addr: { result.addr = -result.addr; } break;
-  case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:   { result.u8 = -result.u8; }; break;
+    case DW_ExprValueType_U16:  { result.u16 = -result.u16; }; break;
+    case DW_ExprValueType_U32:  { result.u32 = -result.u32; }; break;
+    case DW_ExprValueType_U64:  { result.u64 = -result.u64; }; break;
+    case DW_ExprValueType_U128: { NotImplemented; }; break;
+    case DW_ExprValueType_U256: { NotImplemented; }; break;
+    case DW_ExprValueType_U512: { NotImplemented; }; break;
+    
+    case DW_ExprValueType_S8:   { result.s8  = -result.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = -result.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = -result.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = -result.s64; } break;
+    case DW_ExprValueType_S128: { NotImplemented; } break;
+    case DW_ExprValueType_S256: { NotImplemented; } break;
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32: { result.f32 = -result.f32; } break;
+    case DW_ExprValueType_F64: { result.f64 = -result.f64; } break;
+    
+    case DW_ExprValueType_Addr: { result.addr = -result.addr; } break;
+    case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -1003,34 +1003,34 @@ internal DW_ExprValue
 dw_expr_not(DW_ExprValue value)
 {
   DW_ExprValue result = value;
-
+  
   switch (value.type) {
-  case DW_ExprValueType_Generic: { InvalidPath; } break;
-
-  case DW_ExprValueType_U8:   { result.u8  = !result.u8; }; break;
-  case DW_ExprValueType_U16:  { result.u16 = !result.u16; }; break;
-  case DW_ExprValueType_U32:  { result.u32 = !result.u32; }; break;
-  case DW_ExprValueType_U64:  { result.u64 = !result.u64; }; break;
-  case DW_ExprValueType_U128: { NotImplemented; }; break;
-  case DW_ExprValueType_U256: { NotImplemented; }; break;
-  case DW_ExprValueType_U512: { NotImplemented; }; break;
-
-  case DW_ExprValueType_S8:   { result.s8  = !result.s8;  } break;
-  case DW_ExprValueType_S16:  { result.s16 = !result.s16; } break;
-  case DW_ExprValueType_S32:  { result.s32 = !result.s32; } break;
-  case DW_ExprValueType_S64:  { result.s64 = !result.s64; } break;
-  case DW_ExprValueType_S128: { NotImplemented; } break;
-  case DW_ExprValueType_S256: { NotImplemented; } break;
-  case DW_ExprValueType_S512: { NotImplemented; } break;
-
-  case DW_ExprValueType_F32: { result.f32 = !result.f32; } break;
-  case DW_ExprValueType_F64: { result.f64 = !result.f64; } break;
-
-  case DW_ExprValueType_Addr: { result.addr = !result.addr; } break;
-  case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
-  case DW_ExprValueType_Implicit: { InvalidPath; } break;
+    case DW_ExprValueType_Generic: { InvalidPath; } break;
+    
+    case DW_ExprValueType_U8:   { result.u8  = !result.u8; }; break;
+    case DW_ExprValueType_U16:  { result.u16 = !result.u16; }; break;
+    case DW_ExprValueType_U32:  { result.u32 = !result.u32; }; break;
+    case DW_ExprValueType_U64:  { result.u64 = !result.u64; }; break;
+    case DW_ExprValueType_U128: { NotImplemented; }; break;
+    case DW_ExprValueType_U256: { NotImplemented; }; break;
+    case DW_ExprValueType_U512: { NotImplemented; }; break;
+    
+    case DW_ExprValueType_S8:   { result.s8  = !result.s8;  } break;
+    case DW_ExprValueType_S16:  { result.s16 = !result.s16; } break;
+    case DW_ExprValueType_S32:  { result.s32 = !result.s32; } break;
+    case DW_ExprValueType_S64:  { result.s64 = !result.s64; } break;
+    case DW_ExprValueType_S128: { NotImplemented; } break;
+    case DW_ExprValueType_S256: { NotImplemented; } break;
+    case DW_ExprValueType_S512: { NotImplemented; } break;
+    
+    case DW_ExprValueType_F32: { result.f32 = !result.f32; } break;
+    case DW_ExprValueType_F64: { result.f64 = !result.f64; } break;
+    
+    case DW_ExprValueType_Addr: { result.addr = !result.addr; } break;
+    case DW_ExprValueType_Bool: { result.boolean = abs_s64(result.boolean); } break;
+    case DW_ExprValueType_Implicit: { InvalidPath; } break;
   }
-
+  
   return result;
 }
 
@@ -1039,23 +1039,23 @@ dw_string_from_expr_value(Arena *arena, U64 addr_size, DW_ExprValue v)
 {
   String8 s = {0};
   switch (v.type) {
-  case DW_ExprValueType_Generic:  { } break;
-  case DW_ExprValueType_U8:       { s = str8_struct(&v.u8);             } break;
-  case DW_ExprValueType_U16:      { s = str8_struct(&v.u16);            } break;
-  case DW_ExprValueType_U32:      { s = str8_struct(&v.u32);            } break;
-  case DW_ExprValueType_U64:      { s = str8_struct(&v.u64);            } break;
-  case DW_ExprValueType_U128:     { s = str8_struct(&v.u128);           } break;
-  case DW_ExprValueType_U256:     { s = str8_struct(&v.u256);           } break;
-  case DW_ExprValueType_U512:     { s = str8_struct(&v.u512);           } break;
-  case DW_ExprValueType_S8:       { s = str8_struct(&v.s8);             } break;
-  case DW_ExprValueType_S16:      { s = str8_struct(&v.s16);            } break;
-  case DW_ExprValueType_S32:      { s = str8_struct(&v.s32);            } break;
-  case DW_ExprValueType_S64:      { s = str8_struct(&v.s64);            } break;
-  case DW_ExprValueType_F32:      { s = str8_struct(&v.f32);            } break;
-  case DW_ExprValueType_F64:      { s = str8_struct(&v.f64);            } break;
-  case DW_ExprValueType_Addr:     { s = str8((U8 *)&v.addr, addr_size); } break;
-  case DW_ExprValueType_Implicit: { s = v.implicit;                     } break;
-  default: { NotImplemented; } break;
+    case DW_ExprValueType_Generic:  { } break;
+    case DW_ExprValueType_U8:       { s = str8_struct(&v.u8);             } break;
+    case DW_ExprValueType_U16:      { s = str8_struct(&v.u16);            } break;
+    case DW_ExprValueType_U32:      { s = str8_struct(&v.u32);            } break;
+    case DW_ExprValueType_U64:      { s = str8_struct(&v.u64);            } break;
+    case DW_ExprValueType_U128:     { s = str8_struct(&v.u128);           } break;
+    case DW_ExprValueType_U256:     { s = str8_struct(&v.u256);           } break;
+    case DW_ExprValueType_U512:     { s = str8_struct(&v.u512);           } break;
+    case DW_ExprValueType_S8:       { s = str8_struct(&v.s8);             } break;
+    case DW_ExprValueType_S16:      { s = str8_struct(&v.s16);            } break;
+    case DW_ExprValueType_S32:      { s = str8_struct(&v.s32);            } break;
+    case DW_ExprValueType_S64:      { s = str8_struct(&v.s64);            } break;
+    case DW_ExprValueType_F32:      { s = str8_struct(&v.f32);            } break;
+    case DW_ExprValueType_F64:      { s = str8_struct(&v.f64);            } break;
+    case DW_ExprValueType_Addr:     { s = str8((U8 *)&v.addr, addr_size); } break;
+    case DW_ExprValueType_Implicit: { s = v.implicit;                     } break;
+    default: { NotImplemented; } break;
   }
   return str8_copy(arena, s);
 }
@@ -1075,12 +1075,12 @@ dw_expr_stack_push_unsigned(Arena *arena, DW_ExprStack *stack, void *value, U64 
 {
   DW_ExprValueNode *n = 0;
   switch (value_size) {
-  case 0: {} break;
-  case 1: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8,  .u8  = *(U8 *)value  }); } break;
-  case 2: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U16, .u16 = *(U16 *)value }); } break;
-  case 4: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U32, .u32 = *(U32 *)value }); } break;
-  case 8: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64, .u64 = *(U64 *)value }); } break;
-  default: { NotImplemented; } break;
+    case 0: {} break;
+    case 1: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8,  .u8  = *(U8 *)value  }); } break;
+    case 2: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U16, .u16 = *(U16 *)value }); } break;
+    case 4: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U32, .u32 = *(U32 *)value }); } break;
+    case 8: { n = dw_expr_stack_push(arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64, .u64 = *(U64 *)value }); } break;
+    default: { NotImplemented; } break;
   }
   return n;
 }
@@ -1128,25 +1128,17 @@ dw_expr_inst_from_delta(DW_ExprInst *inst, S16 delta)
 }
 
 internal DW_ExprEvalResult
-dw_eval_expr(Arena     *arena,
-             Arch       arch,
-             DW_Format  format,
-             U64        frame_base,
-             U64        cfa,
-             U64        tls,
-             U64        exec_op_limit,
-             DW_Expr    expr,
-             MachineOp_RegRead *reg_read, void *reg_read_ud,
-             MachineOp_MemRead *mem_read, void *mem_read_ud,
-             DW_ExprValue *value_out)
+dw_eval_expr(Arena *arena, Arch arch, DW_Format format, U64 frame_base, U64 cfa, U64 tls, U64 exec_op_limit, DW_Expr expr, void *reg_block, MachineOp_MemRead *mem_read, void *mem_read_ud, DW_ExprValue *value_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
+  
   DW_ExprEvalResult  result        = DW_ExprEvalResult_Fail;
   DW_PieceList       pieces        = {0};
   DW_ExprStack      *stack         = push_array(scratch.arena, DW_ExprStack, 1);
   U64                exec_op_count = 0;
-
+  
   for EachNode(inst, DW_ExprInst, expr.first) {
     again:;
     
@@ -1156,350 +1148,372 @@ dw_eval_expr(Arena     *arena,
       result = DW_ExprEvalResult_ExecOpLimitReached;
       goto exit;
     }
-
+    
     U64 pop_count = dw_pop_count_from_expr_op(inst->opcode);
     if (pop_count > stack->count) {
       Assert(0 && "not enough values on the stack to evaluate the instruction");
       goto exit;
     }
-
+    
     switch (inst->opcode) {
-    case DW_ExprOp_Nop: {} break;
-
-    case DW_ExprOp_Lit0:  case DW_ExprOp_Lit1:  case DW_ExprOp_Lit2:
-    case DW_ExprOp_Lit3:  case DW_ExprOp_Lit4:  case DW_ExprOp_Lit5:
-    case DW_ExprOp_Lit6:  case DW_ExprOp_Lit7:  case DW_ExprOp_Lit8:
-    case DW_ExprOp_Lit9:  case DW_ExprOp_Lit10: case DW_ExprOp_Lit11:
-    case DW_ExprOp_Lit12: case DW_ExprOp_Lit13: case DW_ExprOp_Lit14:
-    case DW_ExprOp_Lit15: case DW_ExprOp_Lit16: case DW_ExprOp_Lit17:
-    case DW_ExprOp_Lit18: case DW_ExprOp_Lit19: case DW_ExprOp_Lit20:
-    case DW_ExprOp_Lit21: case DW_ExprOp_Lit22: case DW_ExprOp_Lit23:
-    case DW_ExprOp_Lit24: case DW_ExprOp_Lit25: case DW_ExprOp_Lit26:
-    case DW_ExprOp_Lit27: case DW_ExprOp_Lit28: case DW_ExprOp_Lit29:
-    case DW_ExprOp_Lit30: case DW_ExprOp_Lit31: {
-      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8, .u8 = inst->opcode - DW_ExprOp_Lit0 });
-    } break;
-
-    case DW_ExprOp_Const1U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8,   .u8   = inst->operands[0].u8  }); } break;
-    case DW_ExprOp_Const2U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U16,  .u16  = inst->operands[0].u16 }); } break;
-    case DW_ExprOp_Const4U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U32,  .u32  = inst->operands[0].u32 }); } break;
-    case DW_ExprOp_Const8U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64,  .u64  = inst->operands[0].u64 }); } break;
-    case DW_ExprOp_Const1S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S8,   .s8   = inst->operands[0].s8  }); } break;
-    case DW_ExprOp_Const2S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S16,  .s16  = inst->operands[0].s16 }); } break;
-    case DW_ExprOp_Const4S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S32,  .s32  = inst->operands[0].s32 }); } break;
-    case DW_ExprOp_Const8S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S64,  .s64  = inst->operands[0].s64 }); } break;
-    case DW_ExprOp_ConstU:  { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64,  .u64  = inst->operands[0].u64 }); } break;
-    case DW_ExprOp_ConstS:  { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S64,  .s64  = inst->operands[0].s64 }); } break;
-    case DW_ExprOp_Addr:    { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = inst->operands[0].u64 }); } break;
-
-    case DW_ExprOp_Reg0:  case DW_ExprOp_Reg1:  case DW_ExprOp_Reg2:
-    case DW_ExprOp_Reg3:  case DW_ExprOp_Reg4:  case DW_ExprOp_Reg5:
-    case DW_ExprOp_Reg6:  case DW_ExprOp_Reg7:  case DW_ExprOp_Reg8:
-    case DW_ExprOp_Reg9:  case DW_ExprOp_Reg10: case DW_ExprOp_Reg11:
-    case DW_ExprOp_Reg12: case DW_ExprOp_Reg13: case DW_ExprOp_Reg14:
-    case DW_ExprOp_Reg15: case DW_ExprOp_Reg16: case DW_ExprOp_Reg17:
-    case DW_ExprOp_Reg18: case DW_ExprOp_Reg19: case DW_ExprOp_Reg20:
-    case DW_ExprOp_Reg21: case DW_ExprOp_Reg22: case DW_ExprOp_Reg23:
-    case DW_ExprOp_Reg24: case DW_ExprOp_Reg25: case DW_ExprOp_Reg26:
-    case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
-    case DW_ExprOp_Reg30: case DW_ExprOp_Reg31: {
-      DW_Reg  reg_id    = inst->opcode - DW_ExprOp_Reg0;
-      U64     reg_size  = dw_reg_size_from_code(arch, reg_id);
-      U8     *reg_value = push_array(scratch.arena, U8, reg_size);
-      MachineOpResult reg_read_result = reg_read(reg_id, reg_value, reg_size, reg_read_ud);
-      if (reg_read_result != MachineOpResult_Ok) { goto exit; }
-      dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
-    } break;
-
-    case DW_ExprOp_BReg0:  case DW_ExprOp_BReg1:  case DW_ExprOp_BReg2:
-    case DW_ExprOp_BReg3:  case DW_ExprOp_BReg4:  case DW_ExprOp_BReg5:
-    case DW_ExprOp_BReg6:  case DW_ExprOp_BReg7:  case DW_ExprOp_BReg8:
-    case DW_ExprOp_BReg9:  case DW_ExprOp_BReg10: case DW_ExprOp_BReg11:
-    case DW_ExprOp_BReg12: case DW_ExprOp_BReg13: case DW_ExprOp_BReg14:
-    case DW_ExprOp_BReg15: case DW_ExprOp_BReg16: case DW_ExprOp_BReg17:
-    case DW_ExprOp_BReg18: case DW_ExprOp_BReg19: case DW_ExprOp_BReg20:
-    case DW_ExprOp_BReg21: case DW_ExprOp_BReg22: case DW_ExprOp_BReg23:
-    case DW_ExprOp_BReg24: case DW_ExprOp_BReg25: case DW_ExprOp_BReg26:
-    case DW_ExprOp_BReg27: case DW_ExprOp_BReg28: case DW_ExprOp_BReg29:
-    case DW_ExprOp_BReg30: case DW_ExprOp_BReg31: {
-      DW_Reg  reg_id    = inst->opcode - DW_ExprOp_BReg0;
-      U64     reg_size  = dw_reg_size_from_code(arch, reg_id);
-      AssertAlways(reg_size <= byte_size_from_arch(arch));
-
-      U64             reg_value;
-      MachineOpResult reg_read_result = reg_read(reg_id, &reg_value, reg_size, reg_read_ud);
-      if (reg_read_result != MachineOpResult_Ok) { goto exit; }
+      case DW_ExprOp_Nop: {} break;
       
-      U64 addr = (U64)((S64)reg_value + inst->operands[0].s64);
-      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
-    } break;
-
-    case DW_ExprOp_RegX: {
-      U64 reg_size  = dw_reg_size_from_code(arch, inst->operands[0].u64);
-      U8 *reg_value = push_array(scratch.arena, U8, reg_size);
-      MachineOpResult reg_read_result = reg_read(inst->operands[0].u64, reg_value, reg_size, reg_read_ud);
-      if (reg_read_result != MachineOpResult_Ok) { goto exit; }
-      dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
-    } break;
-
-    case DW_ExprOp_BRegX: {
-      DW_Reg  reg_id    = (DW_Reg)inst->operands[0].u64;
-      U64     reg_size  = dw_reg_size_from_code(arch, reg_id);
-      AssertAlways(reg_size <= byte_size_from_arch(arch));
-
-      U64             reg_value;
-      MachineOpResult reg_read_result = reg_read(reg_id, &reg_value, reg_size, reg_read_ud);
-      if (reg_read_result != MachineOpResult_Ok) { goto exit; }
+      case DW_ExprOp_Lit0:  case DW_ExprOp_Lit1:  case DW_ExprOp_Lit2:
+      case DW_ExprOp_Lit3:  case DW_ExprOp_Lit4:  case DW_ExprOp_Lit5:
+      case DW_ExprOp_Lit6:  case DW_ExprOp_Lit7:  case DW_ExprOp_Lit8:
+      case DW_ExprOp_Lit9:  case DW_ExprOp_Lit10: case DW_ExprOp_Lit11:
+      case DW_ExprOp_Lit12: case DW_ExprOp_Lit13: case DW_ExprOp_Lit14:
+      case DW_ExprOp_Lit15: case DW_ExprOp_Lit16: case DW_ExprOp_Lit17:
+      case DW_ExprOp_Lit18: case DW_ExprOp_Lit19: case DW_ExprOp_Lit20:
+      case DW_ExprOp_Lit21: case DW_ExprOp_Lit22: case DW_ExprOp_Lit23:
+      case DW_ExprOp_Lit24: case DW_ExprOp_Lit25: case DW_ExprOp_Lit26:
+      case DW_ExprOp_Lit27: case DW_ExprOp_Lit28: case DW_ExprOp_Lit29:
+      case DW_ExprOp_Lit30: case DW_ExprOp_Lit31: {
+        dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8, .u8 = inst->opcode - DW_ExprOp_Lit0 });
+      } break;
       
-      U64 addr = (U64)((S64)reg_value + inst->operands[1].s64);
-      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
-    } break;
-
-    case DW_ExprOp_FBReg: {
-      U64 addr = frame_base + inst->operands[0].s64;
-      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
-    } break;
-
-    case DW_ExprOp_ImplicitValue: {
-      if (inst->operands[0].block.size <= sizeof(U512)) {
-        dw_expr_stack_push_unsigned(scratch.arena, stack, inst->operands[0].block.str, inst->operands[0].block.size);
-      } else {
-        NotImplemented;
-      }
-    } break;
-
-    case DW_ExprOp_Piece: {
-      B32 is_undefined = stack->count == 0 || (inst->prev && inst->prev->opcode == DW_ExprOp_Piece);
-      if (is_undefined) {
-        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .bit_size = inst->operands[0].u64 * 8 });
-      } else {
-        DW_ExprValue top = dw_expr_stack_pop(stack);
-
-        String8 value;
-
-        // piece is a memory reference
-        if (top.type == DW_ExprValueType_Addr) {
-          U64              value_size   = inst->operands[0].u64;
-          U8              *value_buffer = push_array(arena, U8, value_size);
-          MachineOpResult  read_result  = mem_read(top.addr, value_buffer, value_size, mem_read_ud);
-          if (read_result != MachineOpResult_Ok) { Assert(0 && "failed to read piece memory referece"); goto exit; }
+      case DW_ExprOp_Const1U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U8,   .u8   = inst->operands[0].u8  }); } break;
+      case DW_ExprOp_Const2U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U16,  .u16  = inst->operands[0].u16 }); } break;
+      case DW_ExprOp_Const4U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U32,  .u32  = inst->operands[0].u32 }); } break;
+      case DW_ExprOp_Const8U: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64,  .u64  = inst->operands[0].u64 }); } break;
+      case DW_ExprOp_Const1S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S8,   .s8   = inst->operands[0].s8  }); } break;
+      case DW_ExprOp_Const2S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S16,  .s16  = inst->operands[0].s16 }); } break;
+      case DW_ExprOp_Const4S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S32,  .s32  = inst->operands[0].s32 }); } break;
+      case DW_ExprOp_Const8S: { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S64,  .s64  = inst->operands[0].s64 }); } break;
+      case DW_ExprOp_ConstU:  { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64,  .u64  = inst->operands[0].u64 }); } break;
+      case DW_ExprOp_ConstS:  { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_S64,  .s64  = inst->operands[0].s64 }); } break;
+      case DW_ExprOp_Addr:    { dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = inst->operands[0].u64 }); } break;
+      
+      case DW_ExprOp_Reg0:  case DW_ExprOp_Reg1:  case DW_ExprOp_Reg2:
+      case DW_ExprOp_Reg3:  case DW_ExprOp_Reg4:  case DW_ExprOp_Reg5:
+      case DW_ExprOp_Reg6:  case DW_ExprOp_Reg7:  case DW_ExprOp_Reg8:
+      case DW_ExprOp_Reg9:  case DW_ExprOp_Reg10: case DW_ExprOp_Reg11:
+      case DW_ExprOp_Reg12: case DW_ExprOp_Reg13: case DW_ExprOp_Reg14:
+      case DW_ExprOp_Reg15: case DW_ExprOp_Reg16: case DW_ExprOp_Reg17:
+      case DW_ExprOp_Reg18: case DW_ExprOp_Reg19: case DW_ExprOp_Reg20:
+      case DW_ExprOp_Reg21: case DW_ExprOp_Reg22: case DW_ExprOp_Reg23:
+      case DW_ExprOp_Reg24: case DW_ExprOp_Reg25: case DW_ExprOp_Reg26:
+      case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
+      case DW_ExprOp_Reg30: case DW_ExprOp_Reg31:
+      {
+        DW_Reg reg_dw_id = inst->opcode - DW_ExprOp_Reg0;
+        U64 reg_size = dw_reg_size_from_code(arch, reg_dw_id);
+        ARCH_RegCode reg_code = arch_reg_code_from_dw(arch, reg_dw_id);
+        Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
+        U8 *reg_value = push_array(scratch.arena, U8, reg_size);
+        if(!arch_reg_block_read_range(arch_info, reg_block, r1u16(reg_rng.min, reg_rng.min + reg_size), reg_value))
+        {
+          goto exit;
         }
-        // piece is a value
-        else {
-          value = dw_string_from_expr_value(arena, arch, top);
+        dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
+      }break;
+      
+      case DW_ExprOp_BReg0:  case DW_ExprOp_BReg1:  case DW_ExprOp_BReg2:
+      case DW_ExprOp_BReg3:  case DW_ExprOp_BReg4:  case DW_ExprOp_BReg5:
+      case DW_ExprOp_BReg6:  case DW_ExprOp_BReg7:  case DW_ExprOp_BReg8:
+      case DW_ExprOp_BReg9:  case DW_ExprOp_BReg10: case DW_ExprOp_BReg11:
+      case DW_ExprOp_BReg12: case DW_ExprOp_BReg13: case DW_ExprOp_BReg14:
+      case DW_ExprOp_BReg15: case DW_ExprOp_BReg16: case DW_ExprOp_BReg17:
+      case DW_ExprOp_BReg18: case DW_ExprOp_BReg19: case DW_ExprOp_BReg20:
+      case DW_ExprOp_BReg21: case DW_ExprOp_BReg22: case DW_ExprOp_BReg23:
+      case DW_ExprOp_BReg24: case DW_ExprOp_BReg25: case DW_ExprOp_BReg26:
+      case DW_ExprOp_BReg27: case DW_ExprOp_BReg28: case DW_ExprOp_BReg29:
+      case DW_ExprOp_BReg30: case DW_ExprOp_BReg31:
+      {
+        DW_Reg reg_dw_id = inst->opcode - DW_ExprOp_BReg0;
+        U64 reg_size = dw_reg_size_from_code(arch, reg_dw_id);
+        ARCH_RegCode reg_code = arch_reg_code_from_dw(arch, reg_dw_id);
+        Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
+        AssertAlways(reg_size <= byte_size_from_arch(arch));
+        
+        U64 reg_value = 0;
+        if(!arch_reg_block_read_range(arch_info, reg_block, r1u16(reg_rng.min, reg_rng.min + reg_size), &reg_value))
+        {
+          goto exit;
         }
-
-        if (inst->operands[0].u64 > value.size) { Assert(0 && "out of bounds size in the piece opcode"); goto exit; }
-        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .bit_size = inst->operands[0].u64 * 8, .value = value.str });
-      }
-    } break;
-
-    case DW_ExprOp_BitPiece: {
-      B32 is_undefined = stack->count == 0 || (inst->prev && inst->prev->opcode == DW_ExprOp_Piece);
-      if (is_undefined) {
-        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .bit_size = inst->operands[0].u64 });
-      } else {
-        String8 value;
-        if (dw_expr_stack_peek(stack).type == DW_ExprValueType_Addr) {
-          NotImplemented;
+        
+        U64 addr = (U64)((S64)reg_value + inst->operands[0].s64);
+        dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
+      }break;
+      
+      case DW_ExprOp_RegX:
+      {
+        DW_Reg reg_dw_id = inst->operands[0].u64;
+        U64 reg_size = dw_reg_size_from_code(arch, reg_dw_id);
+        U8 *reg_value = push_array(scratch.arena, U8, reg_size);
+        ARCH_RegCode reg_code = arch_reg_code_from_dw(arch, reg_dw_id);
+        Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
+        if(!arch_reg_block_read_range(arch_info, reg_block, r1u16(reg_rng.min, reg_rng.min + reg_size), reg_value))
+        {
+          goto exit;
+        }
+        dw_expr_stack_push_unsigned(scratch.arena, stack, reg_value, reg_size);
+      }break;
+      
+      case DW_ExprOp_BRegX:
+      {
+        DW_Reg reg_dw_id = (DW_Reg)inst->operands[0].u64;
+        U64 reg_size = dw_reg_size_from_code(arch, reg_dw_id);
+        AssertAlways(reg_size <= byte_size_from_arch(arch));
+        ARCH_RegCode reg_code = arch_reg_code_from_dw(arch, reg_dw_id);
+        Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
+        
+        U64 reg_value = 0;
+        if(!arch_reg_block_read_range(arch_info, reg_block, r1u16(reg_rng.min, reg_rng.min + reg_size), &reg_value))
+        {
+          goto exit;
+        }
+        
+        U64 addr = (U64)((S64)reg_value + inst->operands[1].s64);
+        dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
+      }break;
+      
+      case DW_ExprOp_FBReg: {
+        U64 addr = frame_base + inst->operands[0].s64;
+        dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Addr, .addr = addr});
+      } break;
+      
+      case DW_ExprOp_ImplicitValue: {
+        if (inst->operands[0].block.size <= sizeof(U512)) {
+          dw_expr_stack_push_unsigned(scratch.arena, stack, inst->operands[0].block.str, inst->operands[0].block.size);
         } else {
-          value = dw_string_from_expr_value(arena, arch, dw_expr_stack_pop(stack));
+          NotImplemented;
         }
-        if (inst->operands[0].u64 > value.size * 8) { Assert(0 && "out of bounds size in piece opcode"); goto exit; }
-        dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .bit_size = inst->operands[0].u64, .value = value.str });
+      } break;
+      
+      case DW_ExprOp_Piece: {
+        B32 is_undefined = stack->count == 0 || (inst->prev && inst->prev->opcode == DW_ExprOp_Piece);
+        if (is_undefined) {
+          dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .bit_size = inst->operands[0].u64 * 8 });
+        } else {
+          DW_ExprValue top = dw_expr_stack_pop(stack);
+          
+          String8 value;
+          
+          // piece is a memory reference
+          if (top.type == DW_ExprValueType_Addr) {
+            U64              value_size   = inst->operands[0].u64;
+            U8              *value_buffer = push_array(arena, U8, value_size);
+            MachineOpResult  read_result  = mem_read(top.addr, value_buffer, value_size, mem_read_ud);
+            if (read_result != MachineOpResult_Ok) { Assert(0 && "failed to read piece memory referece"); goto exit; }
+          }
+          // piece is a value
+          else {
+            value = dw_string_from_expr_value(arena, arch, top);
+          }
+          
+          if (inst->operands[0].u64 > value.size) { Assert(0 && "out of bounds size in the piece opcode"); goto exit; }
+          dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .bit_size = inst->operands[0].u64 * 8, .value = value.str });
+        }
+      } break;
+      
+      case DW_ExprOp_BitPiece: {
+        B32 is_undefined = stack->count == 0 || (inst->prev && inst->prev->opcode == DW_ExprOp_Piece);
+        if (is_undefined) {
+          dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Undefined, .bit_size = inst->operands[0].u64 });
+        } else {
+          String8 value;
+          if (dw_expr_stack_peek(stack).type == DW_ExprValueType_Addr) {
+            NotImplemented;
+          } else {
+            value = dw_string_from_expr_value(arena, arch, dw_expr_stack_pop(stack));
+          }
+          if (inst->operands[0].u64 > value.size * 8) { Assert(0 && "out of bounds size in piece opcode"); goto exit; }
+          dw_piece_list_push(arena, &pieces, (DW_Piece){ .kind = DW_PieceKind_Value, .bit_size = inst->operands[0].u64, .value = value.str });
+        }
+      } break;
+      
+      case DW_ExprOp_Pick: {
+        DW_ExprValueNode *src = dw_expr_stack_pick(stack, inst->operands[0].u8);
+        if (src) {
+          dw_expr_stack_push(scratch.arena, stack, src->v);
+        } else {
+          Assert(0 && "out of bounds stack index");
+          goto exit;
+        }
+      } break;
+      
+      case DW_ExprOp_Over: {
+        DW_ExprValueNode *src = dw_expr_stack_pick(stack, 1);
+        if (src) {
+          dw_expr_stack_push(scratch.arena, stack, src->v);
+        } else {
+          Assert(0 && "out of bounds stack index");
+          goto exit;
+        }
+      } break;
+      
+      case DW_ExprOp_PlusUConst: {
+        DW_ExprValue lhs = dw_expr_stack_pop(stack);
+        DW_ExprValue rhs = { .type = DW_ExprValueType_U64, .u64 = inst->operands[0].u64 };
+        DW_ExprValue sum = dw_expr_add(lhs, rhs);
+        dw_expr_stack_push(scratch.arena, stack, sum);
+      } break;
+      
+      case DW_ExprOp_Skip: {
+        DW_ExprInst *i = dw_expr_inst_from_delta(inst, inst->operands[0].s16);
+        
+        if (i == 0) {
+          Assert(0 && "seeking to an invalid offset");
+          goto exit;
+        }
+        
+        inst = i;
+        goto again;
       }
-    } break;
-
-    case DW_ExprOp_Pick: {
-      DW_ExprValueNode *src = dw_expr_stack_pick(stack, inst->operands[0].u8);
-      if (src) {
-        dw_expr_stack_push(scratch.arena, stack, src->v);
-      } else {
-        Assert(0 && "out of bounds stack index");
-        goto exit;
+      
+      case DW_ExprOp_Bra: {
+        DW_ExprValue cond = dw_expr_stack_pop(stack);
+        
+        if (cond.type != DW_ExprValueType_S16) {
+          Assert(0 && "unexpected value");
+          goto exit;
+        }
+        
+        DW_ExprInst *i = dw_expr_inst_from_delta(inst, inst->operands[0].s16);
+        
+        if (i == 0) {
+          Assert(0 && "seeking to an invalid offset");
+          goto exit;
+        }
+        
+        inst = i;
+        goto again;
       }
-    } break;
-
-    case DW_ExprOp_Over: {
-      DW_ExprValueNode *src = dw_expr_stack_pick(stack, 1);
-      if (src) {
-        dw_expr_stack_push(scratch.arena, stack, src->v);
-      } else {
-        Assert(0 && "out of bounds stack index");
-        goto exit;
-      }
-    } break;
-
-    case DW_ExprOp_PlusUConst: {
-      DW_ExprValue lhs = dw_expr_stack_pop(stack);
-      DW_ExprValue rhs = { .type = DW_ExprValueType_U64, .u64 = inst->operands[0].u64 };
-      DW_ExprValue sum = dw_expr_add(lhs, rhs);
-      dw_expr_stack_push(scratch.arena, stack, sum);
-    } break;
-
-    case DW_ExprOp_Skip: {
-      DW_ExprInst *i = dw_expr_inst_from_delta(inst, inst->operands[0].s16);
-
-      if (i == 0) {
-        Assert(0 && "seeking to an invalid offset");
-        goto exit;
-      }
-
-      inst = i;
-      goto again;
-    }
-
-    case DW_ExprOp_Bra: {
-      DW_ExprValue cond = dw_expr_stack_pop(stack);
-
-      if (cond.type != DW_ExprValueType_S16) {
-        Assert(0 && "unexpected value");
-        goto exit;
-      }
-
-      DW_ExprInst *i = dw_expr_inst_from_delta(inst, inst->operands[0].s16);
-
-      if (i == 0) {
-        Assert(0 && "seeking to an invalid offset");
-        goto exit;
-      }
-
-      inst = i;
-      goto again;
-    }
-
-    case DW_ExprOp_Call2:
-    case DW_ExprOp_Call4:
-    case DW_ExprOp_CallRef: {
-      NotImplemented;
-    } break;
-
-    case DW_ExprOp_GNU_Convert:
-    case DW_ExprOp_Convert: {
-      if (inst->operands[0].u64 == 0) {
-        DW_ExprValue value     = dw_expr_stack_pop(stack);
-        DW_ExprValue new_value = dw_expr_cast(value, DW_ExprValueType_Generic);
-        dw_expr_stack_push(scratch.arena, stack, new_value);
-      } else {
+      
+      case DW_ExprOp_Call2:
+      case DW_ExprOp_Call4:
+      case DW_ExprOp_CallRef: {
         NotImplemented;
-      }
-    } break;
-
-    case DW_ExprOp_Reinterpret: {
-      if (inst->operands[0].u64 == 0) {
-        DW_ExprValue value     = dw_expr_stack_pop(stack);
-        DW_ExprValue new_value = dw_expr_cast(value, DW_ExprValueType_Generic);
-        dw_expr_stack_push(scratch.arena, stack, new_value);
-      } else {
-        NotImplemented;
-      }
-    } break;
-
-    case DW_ExprOp_GNU_ParameterRef: { NotImplemented; } break;
-    case DW_ExprOp_GNU_DerefType:    { NotImplemented; } break;
-    case DW_ExprOp_DerefType:        { NotImplemented; } break;
-    case DW_ExprOp_ConstType:        { NotImplemented; } break;
-    case DW_ExprOp_GNU_ConstType:    { NotImplemented; } break;
-    case DW_ExprOp_RegvalType:       { NotImplemented; } break;
-
-    case DW_ExprOp_EntryValue:
-    case DW_ExprOp_GNU_EntryValue: {
-      DW_Expr      entry_value_expr = dw_expr_from_data(scratch.arena, format, byte_size_from_arch(arch), inst->operands[0].block);
-      DW_ExprValue entry_value;
-      result = dw_eval_expr(scratch.arena, arch, format, frame_base, cfa, tls, exec_op_limit, entry_value_expr, reg_read, reg_read_ud, mem_read, mem_read_ud, &entry_value);
-      if (result != DW_ExprEvalResult_Ok) { goto exit; }
-      dw_expr_stack_push(scratch.arena, stack, entry_value);
-    } break;
-
-    case DW_ExprOp_Addrx: { NotImplemented; } break;
-
-    case DW_ExprOp_CallFrameCfa: {
-      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64, .u64 = cfa });
-    } break;
-
-    case DW_ExprOp_PushObjectAddress: { NotImplemented; } break;
-
-    case DW_ExprOp_Plus:  { dw_expr_stack_push(scratch.arena, stack, dw_expr_add(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Minus: { dw_expr_stack_push(scratch.arena, stack, dw_expr_minus(dw_expr_stack_pop(stack), dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Div:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_div(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Mul:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_mul(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Mod:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_mod(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
-
-    case DW_ExprOp_Eq:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_eq(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Ge:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_ge(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Gt:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_gt(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Le:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_le(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Lt:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_lt(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Ne:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_ne(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
-
-    case DW_ExprOp_Xor:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_xor(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_And:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_and(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Or:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_or(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Shl:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_shl(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Shr:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_shr(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Shra:  { dw_expr_stack_push(scratch.arena, stack, dw_expr_shra(dw_expr_stack_pop(stack),  dw_expr_stack_pop(stack))); } break;
-
-    case DW_ExprOp_Abs: { dw_expr_stack_push(scratch.arena, stack, dw_expr_abs(dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Neg: { dw_expr_stack_push(scratch.arena, stack, dw_expr_neg(dw_expr_stack_pop(stack))); } break;
-    case DW_ExprOp_Not: { dw_expr_stack_push(scratch.arena, stack, dw_expr_not(dw_expr_stack_pop(stack))); } break;
-
-    case DW_ExprOp_Dup: {
-      dw_expr_stack_push(scratch.arena, stack, dw_expr_stack_peek(stack));
-    } break;
-
-    case DW_ExprOp_Rot: {
-      DW_ExprValue first  = dw_expr_stack_pop(stack);
-      DW_ExprValue second = dw_expr_stack_pop(stack);
-      DW_ExprValue third  = dw_expr_stack_pop(stack);
-      dw_expr_stack_push(scratch.arena, stack, first);  // -> third
-      dw_expr_stack_push(scratch.arena, stack, third);  // -> second
-      dw_expr_stack_push(scratch.arena, stack, second); // -> first
-    } break;
-
-    case DW_ExprOp_Swap: {
-      DW_ExprValue first  = dw_expr_stack_pop(stack);
-      DW_ExprValue second = dw_expr_stack_pop(stack);
-      dw_expr_stack_push(scratch.arena, stack, first);  // -> second
-      dw_expr_stack_push(scratch.arena, stack, second); // -> first
-    } break;
-
-    case DW_ExprOp_Drop: {
-      dw_expr_stack_pop(stack);
-    } break;
-
-    case DW_ExprOp_Deref: {
-      DW_ExprValue value = dw_expr_stack_pop(stack);
-
-      // expression must be of an integral type
-      if (!DW_ExprValueType_IsInt(value.type)) { goto exit; }
-
-      // treat value as an address
-      DW_ExprValue addr = dw_expr_cast(value, DW_ExprValueType_Addr);
-
-      // read pointer size from the address
-      U64              addr_size     = byte_size_from_arch(arch);
-      U8              *generic_value = push_array(scratch.arena, U8, addr_size);
-      MachineOpResult  read_result   = mem_read(addr.addr, generic_value, addr_size, mem_read_ud);
-      if (read_result != MachineOpResult_Ok) { goto exit; }
-
-      // push generic data
-      dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Generic, .generic = str8(generic_value, addr_size) });
-    } break;
-
-    case DW_ExprOp_StackValue: {
-      stack->top->v.type = dw_expr_unsigned_value_type_from_bit_size(bit_size_from_arch(arch));
-    } break;
-
-    case DW_ExprOp_GNU_PushTlsAddress:
-    case DW_ExprOp_FormTlsAddress: {
-      DW_ExprValue tls_off  = dw_expr_stack_pop(stack);
-      DW_ExprValue tls_base = { .type = DW_ExprValueType_Addr, .addr = tls };
-      DW_ExprValue tls_addr = dw_expr_add(tls_base, tls_off);
-      dw_expr_stack_push(scratch.arena, stack, tls_addr);
-    } break;
+      } break;
+      
+      case DW_ExprOp_GNU_Convert:
+      case DW_ExprOp_Convert: {
+        if (inst->operands[0].u64 == 0) {
+          DW_ExprValue value     = dw_expr_stack_pop(stack);
+          DW_ExprValue new_value = dw_expr_cast(value, DW_ExprValueType_Generic);
+          dw_expr_stack_push(scratch.arena, stack, new_value);
+        } else {
+          NotImplemented;
+        }
+      } break;
+      
+      case DW_ExprOp_Reinterpret: {
+        if (inst->operands[0].u64 == 0) {
+          DW_ExprValue value     = dw_expr_stack_pop(stack);
+          DW_ExprValue new_value = dw_expr_cast(value, DW_ExprValueType_Generic);
+          dw_expr_stack_push(scratch.arena, stack, new_value);
+        } else {
+          NotImplemented;
+        }
+      } break;
+      
+      case DW_ExprOp_GNU_ParameterRef: { NotImplemented; } break;
+      case DW_ExprOp_GNU_DerefType:    { NotImplemented; } break;
+      case DW_ExprOp_DerefType:        { NotImplemented; } break;
+      case DW_ExprOp_ConstType:        { NotImplemented; } break;
+      case DW_ExprOp_GNU_ConstType:    { NotImplemented; } break;
+      case DW_ExprOp_RegvalType:       { NotImplemented; } break;
+      
+      case DW_ExprOp_EntryValue:
+      case DW_ExprOp_GNU_EntryValue:
+      {
+        DW_Expr      entry_value_expr = dw_expr_from_data(scratch.arena, format, byte_size_from_arch(arch), inst->operands[0].block);
+        DW_ExprValue entry_value;
+        result = dw_eval_expr(scratch.arena, arch, format, frame_base, cfa, tls, exec_op_limit, entry_value_expr, reg_block, mem_read, mem_read_ud, &entry_value);
+        if (result != DW_ExprEvalResult_Ok) { goto exit; }
+        dw_expr_stack_push(scratch.arena, stack, entry_value);
+      } break;
+      
+      case DW_ExprOp_Addrx: { NotImplemented; } break;
+      
+      case DW_ExprOp_CallFrameCfa: {
+        dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_U64, .u64 = cfa });
+      } break;
+      
+      case DW_ExprOp_PushObjectAddress: { NotImplemented; } break;
+      
+      case DW_ExprOp_Plus:  { dw_expr_stack_push(scratch.arena, stack, dw_expr_add(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Minus: { dw_expr_stack_push(scratch.arena, stack, dw_expr_minus(dw_expr_stack_pop(stack), dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Div:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_div(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Mul:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_mul(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Mod:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_mod(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+      
+      case DW_ExprOp_Eq:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_eq(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Ge:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_ge(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Gt:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_gt(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Le:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_le(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Lt:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_lt(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Ne:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_ne(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+      
+      case DW_ExprOp_Xor:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_xor(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_And:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_and(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Or:    { dw_expr_stack_push(scratch.arena, stack, dw_expr_or(dw_expr_stack_pop(stack),    dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Shl:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_shl(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Shr:   { dw_expr_stack_push(scratch.arena, stack, dw_expr_shr(dw_expr_stack_pop(stack),   dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Shra:  { dw_expr_stack_push(scratch.arena, stack, dw_expr_shra(dw_expr_stack_pop(stack),  dw_expr_stack_pop(stack))); } break;
+      
+      case DW_ExprOp_Abs: { dw_expr_stack_push(scratch.arena, stack, dw_expr_abs(dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Neg: { dw_expr_stack_push(scratch.arena, stack, dw_expr_neg(dw_expr_stack_pop(stack))); } break;
+      case DW_ExprOp_Not: { dw_expr_stack_push(scratch.arena, stack, dw_expr_not(dw_expr_stack_pop(stack))); } break;
+      
+      case DW_ExprOp_Dup: {
+        dw_expr_stack_push(scratch.arena, stack, dw_expr_stack_peek(stack));
+      } break;
+      
+      case DW_ExprOp_Rot: {
+        DW_ExprValue first  = dw_expr_stack_pop(stack);
+        DW_ExprValue second = dw_expr_stack_pop(stack);
+        DW_ExprValue third  = dw_expr_stack_pop(stack);
+        dw_expr_stack_push(scratch.arena, stack, first);  // -> third
+        dw_expr_stack_push(scratch.arena, stack, third);  // -> second
+        dw_expr_stack_push(scratch.arena, stack, second); // -> first
+      } break;
+      
+      case DW_ExprOp_Swap: {
+        DW_ExprValue first  = dw_expr_stack_pop(stack);
+        DW_ExprValue second = dw_expr_stack_pop(stack);
+        dw_expr_stack_push(scratch.arena, stack, first);  // -> second
+        dw_expr_stack_push(scratch.arena, stack, second); // -> first
+      } break;
+      
+      case DW_ExprOp_Drop: {
+        dw_expr_stack_pop(stack);
+      } break;
+      
+      case DW_ExprOp_Deref: {
+        DW_ExprValue value = dw_expr_stack_pop(stack);
+        
+        // expression must be of an integral type
+        if (!DW_ExprValueType_IsInt(value.type)) { goto exit; }
+        
+        // treat value as an address
+        DW_ExprValue addr = dw_expr_cast(value, DW_ExprValueType_Addr);
+        
+        // read pointer size from the address
+        U64              addr_size     = byte_size_from_arch(arch);
+        U8              *generic_value = push_array(scratch.arena, U8, addr_size);
+        MachineOpResult  read_result   = mem_read(addr.addr, generic_value, addr_size, mem_read_ud);
+        if (read_result != MachineOpResult_Ok) { goto exit; }
+        
+        // push generic data
+        dw_expr_stack_push(scratch.arena, stack, (DW_ExprValue){ .type = DW_ExprValueType_Generic, .generic = str8(generic_value, addr_size) });
+      } break;
+      
+      case DW_ExprOp_StackValue: {
+        stack->top->v.type = dw_expr_unsigned_value_type_from_bit_size(bit_size_from_arch(arch));
+      } break;
+      
+      case DW_ExprOp_GNU_PushTlsAddress:
+      case DW_ExprOp_FormTlsAddress: {
+        DW_ExprValue tls_off  = dw_expr_stack_pop(stack);
+        DW_ExprValue tls_base = { .type = DW_ExprValueType_Addr, .addr = tls };
+        DW_ExprValue tls_addr = dw_expr_add(tls_base, tls_off);
+        dw_expr_stack_push(scratch.arena, stack, tls_addr);
+      } break;
     }
   }
-
+  
   // composite value
   if (pieces.count > 0) {
 #if 0
@@ -1507,7 +1521,7 @@ dw_eval_expr(Arena     *arena,
     for EachNode (n, DW_PieceNode, pieces.first) {
       total_bit_size += n->v.bit_size;
     }
-
+    
     U64      value_size   = CeilIntegerDiv(total_bit_size, 8);
     U8      *value        = push_array(arena, U8, value_size);
     Rng1U64 *ranges       = push_array(arena, Rng1U64, pieces.count);
@@ -1533,7 +1547,7 @@ dw_eval_expr(Arena     *arena,
       }
       piece_cursor += n->v.bit_size;
     }
-
+    
     value_out->type    = DW_ExprValueType_Generic;
     value_out->ranges  = (Rng1U64Array){ .count = pieces.count, .v = ranges };
     value_out->offsets = offsets;
@@ -1549,7 +1563,7 @@ dw_eval_expr(Arena     *arena,
       if (value_out->type == DW_ExprValueType_Generic) {
         value_out->generic = push_str8_copy(arena, value_out->generic);
       }
-
+      
       Rng1U64 *range = push_array(arena, Rng1U64, 1);
       *range = r1u64(0, max_U64);
       value_out->ranges  = (Rng1U64Array){ .count = 1, .v = range };
@@ -1558,9 +1572,9 @@ dw_eval_expr(Arena     *arena,
       MemoryZeroStruct(value_out);
     }
   }
-
+  
   result = DW_ExprEvalResult_Ok;
-exit:;
+  exit:;
   scratch_end(scratch);
   return result;
 }
@@ -1569,90 +1583,90 @@ internal String8
 dw_encode_expr(Arena *arena, Arch arch, DW_Format format, DW_ExprEnc *encs, U64 encs_count)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   String8List *srl = push_array(scratch.arena, String8List, 1);
   str8_serial_begin(scratch.arena, srl);
-
+  
   HashTable *label_map = hash_table_init(scratch.arena, 128);
-
+  
   struct Fixup { U64 offset; String8 label; struct Fixup *next; };
   struct Fixup *first_fixup = 0, *last_fixup = 0;
-
+  
   for EachIndex(i, encs_count) {
     DW_ExprEnc *e = &encs[i];
-
+    
     switch (e->type) {
-    case DW_ExprEncType_Null: {} break;
-    case DW_ExprEncType_Op: {
-      str8_serial_push_struct(scratch.arena, srl, &e->op);
-    } break;
-    case DW_ExprEncType_U8: {
-      str8_serial_push_struct(scratch.arena, srl, &e->u8);
-    } break;
-    case DW_ExprEncType_U16: {
-      str8_serial_push_struct(scratch.arena, srl, &e->u16);
-    } break;
-    case DW_ExprEncType_U32: {
-      str8_serial_push_struct(scratch.arena, srl, &e->u32);
-    } break;
-    case DW_ExprEncType_U64: {
-      str8_serial_push_struct(scratch.arena, srl, &e->u64);
-    } break;
-    case DW_ExprEncType_S8: {
-      str8_serial_push_struct(scratch.arena, srl, &e->s8);
-    } break;
-    case DW_ExprEncType_S16: {
-      str8_serial_push_struct(scratch.arena, srl, &e->s16);
-    } break;
-    case DW_ExprEncType_S32: {
-      str8_serial_push_struct(scratch.arena, srl, &e->s32);
-    } break;
-    case DW_ExprEncType_S64: {
-      str8_serial_push_struct(scratch.arena, srl, &e->s64);
-    } break;
-    case DW_ExprEncType_ULEB128: {
-      str8_serial_push_string(scratch.arena, srl, dw_write_uleb128(scratch.arena, e->u64));
-    } break;
-    case DW_ExprEncType_SLEB128: {
-      str8_serial_push_string(scratch.arena, srl, dw_write_sleb128(scratch.arena, e->s64));
-    } break;
-    case DW_ExprEncType_Addr: {
-      U64 addr_size = byte_size_from_arch(arch);
-      Assert(addr_size <= sizeof(e->addr));
-      str8_serial_push_string(scratch.arena, srl, str8((U8 *)&e->addr, addr_size));
-    } break;
-    case DW_ExprEncType_Block: {
-      Assert(e->block.size <= max_U8);
-      str8_serial_push_u8(scratch.arena, srl, (U8)e->block.size);
-      str8_serial_push_string(scratch.arena, srl, e->block);
-    } break;
-    case DW_ExprEncType_DwarfUInt: {
-      switch (format) {
-      case DW_Format_Null:  {} break;
-      case DW_Format_32Bit: { str8_serial_push_u32(scratch.arena, srl, e->u32); } break;
-      case DW_Format_64Bit: { str8_serial_push_u64(scratch.arena, srl, e->u64); } break;
+      case DW_ExprEncType_Null: {} break;
+      case DW_ExprEncType_Op: {
+        str8_serial_push_struct(scratch.arena, srl, &e->op);
+      } break;
+      case DW_ExprEncType_U8: {
+        str8_serial_push_struct(scratch.arena, srl, &e->u8);
+      } break;
+      case DW_ExprEncType_U16: {
+        str8_serial_push_struct(scratch.arena, srl, &e->u16);
+      } break;
+      case DW_ExprEncType_U32: {
+        str8_serial_push_struct(scratch.arena, srl, &e->u32);
+      } break;
+      case DW_ExprEncType_U64: {
+        str8_serial_push_struct(scratch.arena, srl, &e->u64);
+      } break;
+      case DW_ExprEncType_S8: {
+        str8_serial_push_struct(scratch.arena, srl, &e->s8);
+      } break;
+      case DW_ExprEncType_S16: {
+        str8_serial_push_struct(scratch.arena, srl, &e->s16);
+      } break;
+      case DW_ExprEncType_S32: {
+        str8_serial_push_struct(scratch.arena, srl, &e->s32);
+      } break;
+      case DW_ExprEncType_S64: {
+        str8_serial_push_struct(scratch.arena, srl, &e->s64);
+      } break;
+      case DW_ExprEncType_ULEB128: {
+        str8_serial_push_string(scratch.arena, srl, dw_write_uleb128(scratch.arena, e->u64));
+      } break;
+      case DW_ExprEncType_SLEB128: {
+        str8_serial_push_string(scratch.arena, srl, dw_write_sleb128(scratch.arena, e->s64));
+      } break;
+      case DW_ExprEncType_Addr: {
+        U64 addr_size = byte_size_from_arch(arch);
+        Assert(addr_size <= sizeof(e->addr));
+        str8_serial_push_string(scratch.arena, srl, str8((U8 *)&e->addr, addr_size));
+      } break;
+      case DW_ExprEncType_Block: {
+        Assert(e->block.size <= max_U8);
+        str8_serial_push_u8(scratch.arena, srl, (U8)e->block.size);
+        str8_serial_push_string(scratch.arena, srl, e->block);
+      } break;
+      case DW_ExprEncType_DwarfUInt: {
+        switch (format) {
+          case DW_Format_Null:  {} break;
+          case DW_Format_32Bit: { str8_serial_push_u32(scratch.arena, srl, e->u32); } break;
+          case DW_Format_64Bit: { str8_serial_push_u64(scratch.arena, srl, e->u64); } break;
+          default: { InvalidPath; } break;
+        }
+      } break;
+      case DW_ExprEncType_Label: {
+        struct Fixup *fixup = push_array(scratch.arena, struct Fixup, 1);
+        fixup->offset = srl->total_size;
+        fixup->label  = e->label;
+        SLLQueuePush(first_fixup, last_fixup, fixup);
+        
+        S16 delta_placeholder = 0;
+        str8_serial_push_struct(scratch.arena, srl, &delta_placeholder);
+      } break;
+      case DW_ExprEncType_DeclLabel: {
+        hash_table_push_string_u64(scratch.arena, label_map, e->label, srl->total_size);
+      } break;
       default: { InvalidPath; } break;
-      }
-    } break;
-    case DW_ExprEncType_Label: {
-      struct Fixup *fixup = push_array(scratch.arena, struct Fixup, 1);
-      fixup->offset = srl->total_size;
-      fixup->label  = e->label;
-      SLLQueuePush(first_fixup, last_fixup, fixup);
-
-      S16 delta_placeholder = 0;
-      str8_serial_push_struct(scratch.arena, srl, &delta_placeholder);
-    } break;
-    case DW_ExprEncType_DeclLabel: {
-      hash_table_push_string_u64(scratch.arena, label_map, e->label, srl->total_size);
-    } break;
-    default: { InvalidPath; } break;
     }
   }
-
+  
   // finalize expression
   String8 expr = str8_serial_end(arena, srl);
-
+  
   // apply fixups
   for EachNode(fixup, struct Fixup, first_fixup) {
     U64 label_offset;
@@ -1660,14 +1674,14 @@ dw_encode_expr(Arena *arena, Arch arch, DW_Format format, DW_ExprEnc *encs, U64 
       Assert(0 && "undefined label");
       continue;
     }
-
+    
     S64 delta = (S64)label_offset - (S64)fixup->offset;
     AssertAlways(min_S16 <= delta && delta <= max_S16);
-
+    
     S16 *delta_ptr = (S16 *)(expr.str + fixup->offset);
     *delta_ptr = delta;
   }
-
+  
   scratch_end(scratch);
   return expr;
 }

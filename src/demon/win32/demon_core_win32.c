@@ -494,13 +494,13 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
   if(got_coff_header)
   {
     U64 optional_off = coff_header_off + sizeof(COFF_FileHeader);
-
+    
     Arch arch           = arch_from_coff_machine(coff_header.machine);
     U64  image_size     = 0;
     U64  data_dir_count = 0;
     U64  data_dir_off   = max_U64;
     U64  tls_index      = max_U64;
-
+    
     // parse optional header
     if(pe_has_plus_header(coff_header.machine))
     {
@@ -524,7 +524,7 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
       }
       else { Assert(0 && "failed to read optional header"); }
     }
-
+    
     // extract TLS index
     if(PE_DataDirectoryIndex_TLS < data_dir_count)
     {
@@ -569,7 +569,7 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
       }
       else { Assert(0 && "failed to read TLS directory"); }
     }
-
+    
     // fill out result
     result.arch      = arch;
     result.size      = image_size;
@@ -606,7 +606,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
     case Arch_x64:
     {
       Temp scratch = scratch_begin(0, 0);
-      REGS_RegBlockX64 *dst = (REGS_RegBlockX64 *)reg_block;
+      X64_RegBlock *dst = (X64_RegBlock *)reg_block;
       
       //- rjf: unpack info about available features
       U32 feature_mask = GetEnabledXStateFeatures();
@@ -648,51 +648,51 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       DWORD64 xstate_mask = 0;
       GetXStateFeaturesMask(ctx, &xstate_mask);
       
-      //- rjf: convert context -> REGS_RegBlockX64
+      //- rjf: convert context -> X64_RegBlock
       XSAVE_FORMAT *xsave = &ctx->FltSave;
-      dst->rax.u64 = ctx->Rax;
-      dst->rcx.u64 = ctx->Rcx;
-      dst->rdx.u64 = ctx->Rdx;
-      dst->rbx.u64 = ctx->Rbx;
-      dst->rsp.u64 = ctx->Rsp;
-      dst->rbp.u64 = ctx->Rbp;
-      dst->rsi.u64 = ctx->Rsi;
-      dst->rdi.u64 = ctx->Rdi;
-      dst->r8.u64  = ctx->R8;
-      dst->r9.u64  = ctx->R9;
-      dst->r10.u64 = ctx->R10;
-      dst->r11.u64 = ctx->R11;
-      dst->r12.u64 = ctx->R12;
-      dst->r13.u64 = ctx->R13;
-      dst->r14.u64 = ctx->R14;
-      dst->r15.u64 = ctx->R15;
-      dst->rip.u64 = ctx->Rip;
-      dst->cs.u16  = ctx->SegCs;
-      dst->ds.u16  = ctx->SegDs;
-      dst->es.u16  = ctx->SegEs;
-      dst->fs.u16  = ctx->SegFs;
-      dst->gs.u16  = ctx->SegGs;
-      dst->ss.u16  = ctx->SegSs;
-      dst->dr0.u64 = ctx->Dr0;
-      dst->dr1.u64 = ctx->Dr1;
-      dst->dr2.u64 = ctx->Dr2;
-      dst->dr3.u64 = ctx->Dr3;
-      dst->dr6.u64 = ctx->Dr6;
-      dst->dr7.u64 = ctx->Dr7;
+      dst->rax = ctx->Rax;
+      dst->rcx = ctx->Rcx;
+      dst->rdx = ctx->Rdx;
+      dst->rbx = ctx->Rbx;
+      dst->rsp = ctx->Rsp;
+      dst->rbp = ctx->Rbp;
+      dst->rsi = ctx->Rsi;
+      dst->rdi = ctx->Rdi;
+      dst->r8  = ctx->R8;
+      dst->r9  = ctx->R9;
+      dst->r10 = ctx->R10;
+      dst->r11 = ctx->R11;
+      dst->r12 = ctx->R12;
+      dst->r13 = ctx->R13;
+      dst->r14 = ctx->R14;
+      dst->r15 = ctx->R15;
+      dst->rip = ctx->Rip;
+      dst->cs  = ctx->SegCs;
+      dst->ds  = ctx->SegDs;
+      dst->es  = ctx->SegEs;
+      dst->fs  = ctx->SegFs;
+      dst->gs  = ctx->SegGs;
+      dst->ss  = ctx->SegSs;
+      dst->dr0 = ctx->Dr0;
+      dst->dr1 = ctx->Dr1;
+      dst->dr2 = ctx->Dr2;
+      dst->dr3 = ctx->Dr3;
+      dst->dr6 = ctx->Dr6;
+      dst->dr7 = ctx->Dr7;
       // NOTE(rjf): this bit is "supposed to always be 1", according to old info.
       // may need to be investigated.
-      dst->rflags.u64 = ctx->EFlags | 0x2;
-      dst->fcw.u16 = xsave->ControlWord;
-      dst->fsw.u16 = xsave->StatusWord;
+      dst->rflags = ctx->EFlags | 0x2;
+      dst->fcw = xsave->ControlWord;
+      dst->fsw = xsave->StatusWord;
       dst->ftw     = xsave->TagWord;
-      dst->fop.u16 = xsave->ErrorOpcode;
-      MemoryCopy(&dst->fip.u64, &xsave->ErrorOffset, sizeof(U64));
-      MemoryCopy(&dst->fdp.u64, &xsave->DataOffset, sizeof(U64));
-      dst->mxcsr.u32 = xsave->MxCsr;
-      dst->mxcsr_mask.u32 = xsave->MxCsr_Mask;
+      dst->fop = xsave->ErrorOpcode;
+      MemoryCopy(&dst->fip, &xsave->ErrorOffset, sizeof(U64));
+      MemoryCopy(&dst->fdp, &xsave->DataOffset, sizeof(U64));
+      dst->mxcsr = xsave->MxCsr;
+      dst->mxcsr_mask = xsave->MxCsr_Mask;
       {
         M128A *float_s = xsave->FloatRegisters;
-        REGS_Reg80 *float_d = &dst->st0;
+        U80 *float_d = &dst->st0;
         for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 1)
         {
           MemoryCopy(float_d, float_s, sizeof(*float_d));
@@ -702,7 +702,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       // SSE registers are always available in x64
       {
         M128A *xmm_s = xsave->XmmRegisters;
-        REGS_Reg512 *zmm_d = &dst->zmm0;
+        U512 *zmm_d = &dst->zmm0;
         for(U32 n = 0; n < 16; n += 1, xmm_s += 1, zmm_d += 1)
         {
           MemoryCopy(zmm_d, xmm_s, sizeof(*xmm_s));
@@ -713,72 +713,77 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       if(xstate_mask & XSTATE_MASK_AVX)
       {
         DWORD avx_length = 0;
-        U8* avx_s = (U8*)LocateXStateFeature(ctx, XSTATE_AVX, &avx_length);
-        Assert(avx_length == 16 * sizeof(REGS_Reg128));
-        
-        REGS_Reg512 *zmm_d = &dst->zmm0;
-        for(U32 n = 0; n < 16; n += 1, avx_s += sizeof(REGS_Reg128), zmm_d += 1)
+        U8 *avx_s = (U8*)LocateXStateFeature(ctx, XSTATE_AVX, &avx_length);
+        if(avx_length == 16 * sizeof(U128))
         {
-          MemoryCopy(&zmm_d->v[16], avx_s, sizeof(REGS_Reg128));
+          U512 *zmm_d = &dst->zmm0;
+          for(U32 n = 0; n < 16; n += 1, avx_s += sizeof(U128), zmm_d += 1)
+          {
+            MemoryCopy(&zmm_d->u8[16], avx_s, sizeof(U128));
+          }
         }
       }
       else
       {
-        REGS_Reg512 *zmm_d = &dst->zmm0;
+        U512 *zmm_d = &dst->zmm0;
         for(U32 n = 0; n < 16; n += 1, zmm_d += 1)
         {
-          MemoryZero(&zmm_d->v[16], sizeof(REGS_Reg128));
+          MemoryZero(&zmm_d->u8[16], sizeof(U128));
         }
       }
       
       // AVX-512
       if(xstate_mask & XSTATE_MASK_AVX512)
       {
+        // rjf: kmask
         DWORD kmask_length = 0;
-        U64* kmask_s = (U64*)LocateXStateFeature(ctx, XSTATE_AVX512_KMASK, &kmask_length);
-        Assert(kmask_length == 8 * sizeof(U64));
-        
-        REGS_Reg64 *kmask_d = &dst->k0;
-        for(U32 n = 0; n < 8; n += 1, kmask_s += 1, kmask_d += 1)
+        U64 *kmask_s = (U64*)LocateXStateFeature(ctx, XSTATE_AVX512_KMASK, &kmask_length);
+        if(kmask_length == 8 * sizeof(U64))
         {
-          MemoryCopy(kmask_d, kmask_s, sizeof(*kmask_s));
+          U64 *kmask_d = &dst->k0;
+          for(U32 n = 0; n < 8; n += 1, kmask_s += 1, kmask_d += 1)
+          {
+            MemoryCopy(kmask_d, kmask_s, sizeof(*kmask_s));
+          }
         }
         
+        // rjf: zmmh
         DWORD avx512h_length = 0;
-        U8* avx512h_s = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
-        Assert(avx512h_length == 16 * sizeof(REGS_Reg256));
-        
-        REGS_Reg512 *zmmh_d = &dst->zmm0;
-        for(U32 n = 0; n < 16; n += 1, avx512h_s += sizeof(REGS_Reg256), zmmh_d += 1)
+        U8 *avx512h_s = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
+        if(avx512h_length == 16 * sizeof(U256))
         {
-          MemoryCopy(&zmmh_d->v[32], avx512h_s, sizeof(REGS_Reg256));
+          U512 *zmmh_d = &dst->zmm0;
+          for(U32 n = 0; n < 16; n += 1, avx512h_s += sizeof(U256), zmmh_d += 1)
+          {
+            MemoryCopy(&zmmh_d->u8[32], avx512h_s, sizeof(U256));
+          }
         }
         
+        // rjf: zmm
         DWORD avx512_length = 0;
-        U8* avx512_s = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM, &avx512_length);
-        Assert(avx512_length == 16 * sizeof(REGS_Reg512));
-        
-        REGS_Reg512 *zmm_d = &dst->zmm16;
-        for(U32 n = 0; n < 16; n += 1, avx512_s += sizeof(REGS_Reg512), zmm_d += 1)
+        U8 *avx512_s = (U8 *)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM, &avx512_length);
+        if(avx512_length == 16 * sizeof(U512))
         {
-          MemoryCopy(zmm_d, avx512_s, sizeof(REGS_Reg512));
+          U512 *zmm_d = &dst->zmm16;
+          for(U32 n = 0; n < 16; n += 1, avx512_s += sizeof(U512), zmm_d += 1)
+          {
+            MemoryCopy(zmm_d, avx512_s, sizeof(U512));
+          }
         }
       }
       else
       {
-        REGS_Reg64 *kmask_d = &dst->k0;
+        U64 *kmask_d = &dst->k0;
         for(U32 n = 0; n < 8; n += 1, kmask_d += 1)
         {
           MemoryZero(kmask_d, sizeof(*kmask_d));
         }
-        
-        REGS_Reg512 *zmmh_d = &dst->zmm0;
+        U512 *zmmh_d = &dst->zmm0;
         for(U32 n = 0; n < 16; n += 1, zmmh_d += 1)
         {
-          MemoryZero(&zmmh_d->v[32], sizeof(REGS_Reg256));
+          MemoryZero(&zmmh_d->u8[32], sizeof(U256));
         }
-        
-        REGS_Reg512 *zmm_d = &dst->zmm16;
+        U512 *zmm_d = &dst->zmm16;
         for(U32 n = 0; n < 16; n += 1, zmm_d += 1)
         {
           MemoryZero(zmm_d, sizeof(*zmm_d));
@@ -792,8 +797,8 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
         XSAVE_CET_U_FORMAT *cet = LocateXStateFeature(ctx, XSTATE_CET_U, &cet_length);
         if (cet_length == sizeof(*cet))
         {
-          dst->cetmsr.u64 = cet->Ia32CetUMsr;
-          dst->cetssp.u64 = cet->Ia32Pl3SspMsr;
+          dst->cetmsr = cet->Ia32CetUMsr;
+          dst->cetssp = cet->Ia32Pl3SspMsr;
         }
       }
       
@@ -828,7 +833,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
     case Arch_x64:
     {
       Temp scratch = scratch_begin(0, 0);
-      REGS_RegBlockX64 *src = (REGS_RegBlockX64 *)reg_block;
+      X64_RegBlock *src = (X64_RegBlock *)reg_block;
       
       //- rjf: unpack info about available features
       U32 feature_mask = GetEnabledXStateFeatures();
@@ -860,49 +865,49 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
         break;
       }
       
-      //- rjf: convert REGS_RegBlockX64 -> CONTEXT
+      //- rjf: convert X64_RegBlock -> CONTEXT
       XSAVE_FORMAT *fxsave = &ctx->FltSave;
       ctx->ContextFlags = ctx_flags;
-      ctx->MxCsr = src->mxcsr.u32 & src->mxcsr_mask.u32;
-      ctx->Rax = src->rax.u64;
-      ctx->Rcx = src->rcx.u64;
-      ctx->Rdx = src->rdx.u64;
-      ctx->Rbx = src->rbx.u64;
-      ctx->Rsp = src->rsp.u64;
-      ctx->Rbp = src->rbp.u64;
-      ctx->Rsi = src->rsi.u64;
-      ctx->Rdi = src->rdi.u64;
-      ctx->R8  = src->r8.u64;
-      ctx->R9  = src->r9.u64;
-      ctx->R10 = src->r10.u64;
-      ctx->R11 = src->r11.u64;
-      ctx->R12 = src->r12.u64;
-      ctx->R13 = src->r13.u64;
-      ctx->R14 = src->r14.u64;
-      ctx->R15 = src->r15.u64;
-      ctx->Rip = src->rip.u64;
-      ctx->SegCs = src->cs.u16;
-      ctx->SegDs = src->ds.u16;
-      ctx->SegEs = src->es.u16;
-      ctx->SegFs = src->fs.u16;
-      ctx->SegGs = src->gs.u16;
-      ctx->SegSs = src->ss.u16;
-      ctx->Dr0 = src->dr0.u64;
-      ctx->Dr1 = src->dr1.u64;
-      ctx->Dr2 = src->dr2.u64;
-      ctx->Dr3 = src->dr3.u64;
-      ctx->Dr6 = src->dr6.u64;
-      ctx->Dr7 = src->dr7.u64;
-      ctx->EFlags = src->rflags.u64;
-      fxsave->ControlWord = src->fcw.u16;
-      fxsave->StatusWord = src->fsw.u16;
+      ctx->MxCsr = src->mxcsr & src->mxcsr_mask;
+      ctx->Rax = src->rax;
+      ctx->Rcx = src->rcx;
+      ctx->Rdx = src->rdx;
+      ctx->Rbx = src->rbx;
+      ctx->Rsp = src->rsp;
+      ctx->Rbp = src->rbp;
+      ctx->Rsi = src->rsi;
+      ctx->Rdi = src->rdi;
+      ctx->R8  = src->r8;
+      ctx->R9  = src->r9;
+      ctx->R10 = src->r10;
+      ctx->R11 = src->r11;
+      ctx->R12 = src->r12;
+      ctx->R13 = src->r13;
+      ctx->R14 = src->r14;
+      ctx->R15 = src->r15;
+      ctx->Rip = src->rip;
+      ctx->SegCs = src->cs;
+      ctx->SegDs = src->ds;
+      ctx->SegEs = src->es;
+      ctx->SegFs = src->fs;
+      ctx->SegGs = src->gs;
+      ctx->SegSs = src->ss;
+      ctx->Dr0 = src->dr0;
+      ctx->Dr1 = src->dr1;
+      ctx->Dr2 = src->dr2;
+      ctx->Dr3 = src->dr3;
+      ctx->Dr6 = src->dr6;
+      ctx->Dr7 = src->dr7;
+      ctx->EFlags = src->rflags;
+      fxsave->ControlWord = src->fcw;
+      fxsave->StatusWord = src->fsw;
       fxsave->TagWord = src->ftw;
-      fxsave->ErrorOpcode = src->fop.u16;
-      MemoryCopy(&fxsave->ErrorOffset, &src->fip.u64, sizeof(U64));
-      MemoryCopy(&fxsave->DataOffset, &src->fdp.u64, sizeof(U64));
+      fxsave->ErrorOpcode = src->fop;
+      MemoryCopy(&fxsave->ErrorOffset, &src->fip, sizeof(U64));
+      MemoryCopy(&fxsave->DataOffset, &src->fdp, sizeof(U64));
       {
         M128A *float_d = fxsave->FloatRegisters;
-        REGS_Reg80 *float_s = &src->st0;
+        U80 *float_s = &src->st0;
         for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 1)
         {
           MemoryCopy(float_d, float_s, 10);
@@ -912,7 +917,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       // SSE registers are always available in x64
       {
         M128A *xmm_d = fxsave->XmmRegisters;
-        REGS_Reg512 *zmm_s = &src->zmm0;
+        U512 *zmm_s = &src->zmm0;
         for(U32 n = 0; n < 16; n += 1, xmm_d += 1, zmm_s += 1)
         {
           MemoryCopy(xmm_d, zmm_s, sizeof(*xmm_d));
@@ -924,12 +929,13 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       {
         DWORD avx_length = 0;
         U8* avx_d = (U8*)LocateXStateFeature(ctx, XSTATE_AVX, &avx_length);
-        Assert(avx_length == 16 * sizeof(REGS_Reg128));
-        
-        REGS_Reg512 *zmm_s = &src->zmm0;
-        for(U32 n = 0; n < 16; n += 1, avx_d += sizeof(REGS_Reg128), zmm_s += 1)
+        if(avx_length == 16 * sizeof(U128))
         {
-          MemoryCopy(avx_d, &zmm_s->v[16], sizeof(REGS_Reg128));
+          U512 *zmm_s = &src->zmm0;
+          for(U32 n = 0; n < 16; n += 1, avx_d += sizeof(U128), zmm_s += 1)
+          {
+            MemoryCopy(avx_d, &zmm_s->u8[16], sizeof(U128));
+          }
         }
       }
       
@@ -938,32 +944,35 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       {
         DWORD kmask_length = 0;
         U64* kmask_d = (U64*)LocateXStateFeature(ctx, XSTATE_AVX512_KMASK, &kmask_length);
-        Assert(kmask_length == 8 * sizeof(*kmask_d));
-        
-        REGS_Reg64 *kmask_s = &src->k0;
-        for(U32 n = 0; n < 8; n += 1, kmask_s += 1, kmask_d += 1)
+        if(kmask_length == 8 * sizeof(*kmask_d))
         {
-          MemoryCopy(kmask_d, kmask_s, sizeof(*kmask_d));
+          U64 *kmask_s = &src->k0;
+          for(U32 n = 0; n < 8; n += 1, kmask_s += 1, kmask_d += 1)
+          {
+            MemoryCopy(kmask_d, kmask_s, sizeof(*kmask_d));
+          }
         }
         
         DWORD avx512h_length = 0;
         U8* avx512h_d = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
-        Assert(avx512h_length == 16 * sizeof(REGS_Reg256));
-        
-        REGS_Reg512 *zmmh_s = &src->zmm0;
-        for(U32 n = 0; n < 16; n += 1, avx512h_d += sizeof(REGS_Reg256), zmmh_s += 1)
+        if(avx512h_length == 16 * sizeof(U256))
         {
-          MemoryCopy(avx512h_d, &zmmh_s->v[32], sizeof(REGS_Reg256));
+          U512 *zmmh_s = &src->zmm0;
+          for(U32 n = 0; n < 16; n += 1, avx512h_d += sizeof(U256), zmmh_s += 1)
+          {
+            MemoryCopy(avx512h_d, &zmmh_s->u8[32], sizeof(U256));
+          }
         }
         
         DWORD avx512_length = 0;
         U8* avx512_d = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM, &avx512_length);
-        Assert(avx512_length == 16 * sizeof(REGS_Reg512));
-        
-        REGS_Reg512 *zmm_s = &src->zmm16;
-        for(U32 n = 0; n < 16; n += 1, avx512_d += sizeof(REGS_Reg512), zmm_s += 1)
+        if(avx512_length == 16 * sizeof(U512))
         {
-          MemoryCopy(avx512_d, zmm_s, sizeof(REGS_Reg512));
+          U512 *zmm_s = &src->zmm16;
+          for(U32 n = 0; n < 16; n += 1, avx512_d += sizeof(U512), zmm_s += 1)
+          {
+            MemoryCopy(avx512_d, zmm_s, sizeof(U512));
+          }
         }
       }
       
@@ -1069,7 +1078,7 @@ dmn_ctrl_exclusive_access_end(void)
 }
 
 internal U32
-dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
+dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params)
 {
   Temp scratch = scratch_begin(0, 0);
   U32 result = 0;
@@ -1133,21 +1142,21 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     }
     BOOL inherit_handles = 0;
     STARTUPINFOW startup_info = {sizeof(startup_info)};
-    if(!os_handle_match(params->stdout_file, os_handle_zero()))
+    if(!file_match(params->stdout_file, file_zero()))
     {
       HANDLE stdout_handle = (HANDLE)params->stdout_file.u64[0];
       startup_info.hStdOutput = stdout_handle;
       startup_info.dwFlags |= STARTF_USESTDHANDLES;
       inherit_handles = 1;
     }
-    if(!os_handle_match(params->stderr_file, os_handle_zero()))
+    if(!file_match(params->stderr_file, file_zero()))
     {
       HANDLE stderr_handle = (HANDLE)params->stderr_file.u64[0];
       startup_info.hStdError = stderr_handle;
       startup_info.dwFlags |= STARTF_USESTDHANDLES;
       inherit_handles = 1;
     }
-    if(!os_handle_match(params->stdin_file, os_handle_zero()))
+    if(!file_match(params->stdin_file, file_zero()))
     {
       HANDLE stdin_handle = (HANDLE)params->stdin_file.u64[0];
       startup_info.hStdInput = stdin_handle;
@@ -1502,7 +1511,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 //- rjf: x64
                 case Arch_x64:
                 {
-                  REGS_RegBlockX64 regs = {0};
+                  X64_RegBlock regs = {0};
                   dmn_w32_thread_read_reg_block(child->arch, child->handle, &regs);
                   {
                     U64 trap_idx = 0;
@@ -1511,7 +1520,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       for(U64 n_idx = 0; n_idx < n->count && trap_idx < 4; n_idx += 1, trap_idx += 1)
                       {
                         DMN_Trap *trap = &n->v[n_idx];
-                        REGS_Reg64 *addr_reg = &regs.dr0;
+                        U64 *addr_reg = &regs.dr0;
                         switch(trap_idx)
                         {
                           default:{}break;
@@ -1520,12 +1529,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           case 2:{addr_reg = &regs.dr2;}break;
                           case 3:{addr_reg = &regs.dr3;}break;
                         }
-                        addr_reg->u64 = trap->vaddr;
-                        regs.dr7.u64 |= bit9|bit10|bit11;
-                        regs.dr7.u64 |= (1ull << (trap_idx*2));
+                        addr_reg[0] = trap->vaddr;
+                        regs.dr7 |= bit9|bit10|bit11;
+                        regs.dr7 |= (1ull << (trap_idx*2));
                         // NOTE(rjf): global-enable regs.dr7.u64 |= (1ull << (trap_idx*2+1));
-                        regs.dr7.u64 &= ~((U64)(bit17|bit18|bit19|bit20) << (trap_idx*4));
-                        regs.dr7.u64 &= ~((U64)(bit15|bit16));
+                        regs.dr7 &= ~((U64)(bit17|bit18|bit19|bit20) << (trap_idx*4));
+                        regs.dr7 &= ~((U64)(bit15|bit16));
                         switch(trap->flags)
                         {
                           case DMN_TrapFlag_BreakOnExecute:
@@ -1533,14 +1542,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           case DMN_TrapFlag_BreakOnWrite:
                           case DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
                           {
-                            regs.dr7.u64 |= ((U64)bit17) << (trap_idx*4);
+                            regs.dr7 |= ((U64)bit17) << (trap_idx*4);
                           }break;
                           case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
                           case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite:
                           case DMN_TrapFlag_BreakOnRead:
                           {
-                            regs.dr7.u64 |= (((U64)bit17) << (trap_idx*4));
-                            regs.dr7.u64 |= (((U64)bit18) << (trap_idx*4));
+                            regs.dr7 |= (((U64)bit17) << (trap_idx*4));
+                            regs.dr7 |= (((U64)bit18) << (trap_idx*4));
                           }break;
                         }
                         switch(trap->size)
@@ -1549,16 +1558,16 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           default:{}break;
                           case 2:
                           {
-                            regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
+                            regs.dr7 |= (((U64)bit19) << (trap_idx*4));
                           }break;
                           case 4:
                           {
-                            regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
-                            regs.dr7.u64 |= (((U64)bit20) << (trap_idx*4));
+                            regs.dr7 |= (((U64)bit19) << (trap_idx*4));
+                            regs.dr7 |= (((U64)bit20) << (trap_idx*4));
                           }break;
                           case 8:
                           {
-                            regs.dr7.u64 |= (((U64)bit20) << (trap_idx*4));
+                            regs.dr7 |= (((U64)bit20) << (trap_idx*4));
                           }break;
                         }
                       }
@@ -1663,7 +1672,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       B32 do_threads_resume = 1;
       DMN_W32_EntityNode *first_ran_thread = 0;
       DMN_W32_EntityNode *last_ran_thread = 0;
-      U64 begin_time = os_now_microseconds();
+      U64 begin_time = now_time_us();
       String8List debug_strings = {0};
       DMN_Event *debug_strings_event = 0;
       for(B32 keep_going = 1; keep_going;)
@@ -2178,11 +2187,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   default:
                   {
                     Temp temp = temp_begin(scratch.arena);
-                    U64 regs_block_size = regs_block_size_from_arch(thread->arch);
+                    ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
+                    U64 regs_block_size = arch_info->reg_block_size;
                     void *regs_block = push_array(scratch.arena, U8, regs_block_size);
                     if(dmn_w32_thread_read_reg_block(thread->arch, thread->handle, regs_block))
                     {
-                      regs_arch_block_write_rip(thread->arch, regs_block, instruction_pointer);
+                      arch_reg_block_write_ip(arch_info, regs_block, instruction_pointer);
                       dmn_w32_thread_write_reg_block(thread->arch, thread->handle, regs_block);
                     }
                     temp_end(temp);
@@ -2287,16 +2297,16 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                         default:{NotImplemented;}break;
                         case Arch_x64:
                         {
-                          REGS_RegBlockX64 regs = {0};
+                          X64_RegBlock regs = {0};
                           dmn_w32_thread_read_reg_block(thread->arch, thread->handle, &regs);
-                          if(regs.dr6.u64 & 0xF)
+                          if(regs.dr6 & 0xF)
                           {
                             e->kind = DMN_EventKind_Breakpoint;
                             if(0){}
-                            else if(regs.dr7.u64 & (1ull<<0) && regs.dr6.u64 & (1ull<<0)) { flagged_trap_idx = 0; e->address = regs.dr0.u64; }
-                            else if(regs.dr7.u64 & (1ull<<2) && regs.dr6.u64 & (1ull<<1)) { flagged_trap_idx = 1; e->address = regs.dr1.u64; }
-                            else if(regs.dr7.u64 & (1ull<<4) && regs.dr6.u64 & (1ull<<2)) { flagged_trap_idx = 2; e->address = regs.dr2.u64; }
-                            else if(regs.dr7.u64 & (1ull<<8) && regs.dr6.u64 & (1ull<<3)) { flagged_trap_idx = 3; e->address = regs.dr3.u64; }
+                            else if(regs.dr7 & (1ull<<0) && regs.dr6 & (1ull<<0)) { flagged_trap_idx = 0; e->address = regs.dr0; }
+                            else if(regs.dr7 & (1ull<<2) && regs.dr6 & (1ull<<1)) { flagged_trap_idx = 1; e->address = regs.dr1; }
+                            else if(regs.dr7 & (1ull<<4) && regs.dr6 & (1ull<<2)) { flagged_trap_idx = 2; e->address = regs.dr2; }
+                            else if(regs.dr7 & (1ull<<8) && regs.dr6 & (1ull<<3)) { flagged_trap_idx = 3; e->address = regs.dr3; }
                           }
                         }break;
                       }
@@ -2540,7 +2550,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         ////////////////////////
         //- rjf: exit loop after a little while, so we keep pumping e.g. debug strings
         //
-        if(os_now_microseconds() >= begin_time+100000 && debug_strings.total_size != 0)
+        if(now_time_us() >= begin_time+100000 && debug_strings.total_size != 0)
         {
           keep_going = 0;
         }
@@ -2611,7 +2621,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           {
             if(thread->kind != DMN_W32_EntityKind_Thread) { continue; }
             if(thread->thread.last_name_hash == 0 ||
-               thread->thread.name_gather_time_us+1000000 <= os_now_microseconds())
+               thread->thread.name_gather_time_us+1000000 <= now_time_us())
             {
               String8 name = {0};
               {
@@ -2632,7 +2642,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 e->thread  = dmn_w32_handle_from_entity(thread);
                 e->string  = push_str8_copy(arena, name);
               }
-              thread->thread.name_gather_time_us = os_now_microseconds();
+              thread->thread.name_gather_time_us = now_time_us();
               thread->thread.last_name_hash = name_hash;
             }
           }
@@ -2684,9 +2694,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 //- rjf: x64
                 case Arch_x64:
                 {
-                  REGS_RegBlockX64 regs = {0};
+                  X64_RegBlock regs = {0};
                   dmn_w32_thread_read_reg_block(child->arch, child->handle, &regs);
-                  regs.dr7.u64 = 0;
+                  regs.dr7 = 0;
                   dmn_w32_thread_write_reg_block(child->arch, child->handle, &regs);
                 }break;
               }
@@ -2897,7 +2907,7 @@ dmn_process_memory_release(DMN_Handle process, U64 vaddr, U64 size)
 }
 
 internal void
-dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, OS_AccessFlags flags)
+dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, AccessFlags flags)
 {
   DMN_AccessScope
   {
@@ -2907,11 +2917,11 @@ dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, OS_AccessFla
     switch(flags)
     {
       default:{}break;
-      case OS_AccessFlag_Execute:{new_flags = PAGE_EXECUTE;}break;
-      case OS_AccessFlag_Execute|OS_AccessFlag_Read:{new_flags = PAGE_EXECUTE_READ;}break;
-      case OS_AccessFlag_Execute|OS_AccessFlag_Read|OS_AccessFlag_Write:{new_flags = PAGE_EXECUTE_READWRITE;}break;
-      case OS_AccessFlag_Read:{new_flags = PAGE_READONLY;}break;
-      case OS_AccessFlag_Read|OS_AccessFlag_Write:{new_flags = PAGE_READWRITE;}break;
+      case AccessFlag_Execute:{new_flags = PAGE_EXECUTE;}break;
+      case AccessFlag_Execute|AccessFlag_Read:{new_flags = PAGE_EXECUTE_READ;}break;
+      case AccessFlag_Execute|AccessFlag_Read|AccessFlag_Write:{new_flags = PAGE_EXECUTE_READWRITE;}break;
+      case AccessFlag_Read:{new_flags = PAGE_READONLY;}break;
+      case AccessFlag_Read|AccessFlag_Write:{new_flags = PAGE_READWRITE;}break;
     }
     VirtualProtectEx(process_entity->handle, (void *)vaddr, size, new_flags, &old_flags);
   }

@@ -54,11 +54,20 @@ struct OS_W32_Window
 ////////////////////////////////
 //~ rjf: Monitor Gathering Bundle
 
+typedef struct OS_W32_MonitorGatherNode OS_W32_MonitorGatherNode;
+struct OS_W32_MonitorGatherNode
+{
+  OS_W32_MonitorGatherNode *next;
+  OS_Monitor v;
+};
+
 typedef struct OS_W32_MonitorGatherBundle OS_W32_MonitorGatherBundle;
 struct OS_W32_MonitorGatherBundle
 {
   Arena *arena;
-  OS_HandleList *list;
+  OS_W32_MonitorGatherNode *first_monitor;
+  OS_W32_MonitorGatherNode *last_monitor;
+  U64 monitor_count;
 };
 
 ////////////////////////////////
@@ -95,8 +104,8 @@ internal Rng2F32 os_w32_rng2f32_from_rect(RECT rect);
 ////////////////////////////////
 //~ rjf: Windows
 
-internal OS_Handle       os_w32_handle_from_window(OS_W32_Window *window);
-internal OS_W32_Window * os_w32_window_from_handle(OS_Handle window);
+internal OS_Window       os_w32_handle_from_window(OS_W32_Window *window);
+internal OS_W32_Window * os_w32_window_from_handle(OS_Window window);
 internal OS_W32_Window * os_w32_window_from_hwnd(HWND hwnd);
 internal HWND            os_w32_hwnd_from_window(OS_W32_Window *window);
 internal OS_W32_Window * os_w32_window_alloc(void);

@@ -5,7 +5,7 @@
 #define RDI_FROM_DWARF_2_H
 
 ////////////////////////////////
-//~ rjf: Helper Types
+//~ rjf: Unique Tag Tree Deduplication Types
 
 typedef enum D2R2_UniqueTagKind
 {
@@ -24,6 +24,21 @@ struct D2R2_UniqueTagNode
   U64 info_off;
   U64 container_ancestor_info_off;
   U64 order_idx;
+};
+
+typedef struct D2R2_UnitDedupedTagNode D2R2_UnitDedupedTagNode;
+struct D2R2_UnitDedupedTagNode
+{
+  D2R2_UnitDedupedTagNode *next;
+  U64 src_info_off;
+  U64 dst_hash;
+};
+
+typedef struct D2R2_UnitDedupedTagMap D2R2_UnitDedupedTagMap;
+struct D2R2_UnitDedupedTagMap
+{
+  D2R2_UnitDedupedTagNode **slots;
+  U64 slots_count;
 };
 
 ////////////////////////////////

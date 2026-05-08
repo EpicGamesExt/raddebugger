@@ -136,7 +136,7 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_PdbAltPath,                  "%%_RAD_PDB_PATH%%");
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_PdbPageSize,                 "%u", KB(4));
   if (!lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Brepro)) {
-    lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp, "%u", os_get_process_start_time_unix());
+    lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp, "%u", get_process_start_time_unix());
   }
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_TypeHashAlg,             "BLAKE3");
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_Age,                     "%u", 1);
@@ -150,7 +150,7 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_OsVer,                   "6.0");
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_PageSize,                "%u", KB(4));
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_PathStyle,               "system");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_Workers,                 "%u", os_get_system_info()->logical_processor_count);
+  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_Workers,                 "%u", get_system_info()->logical_processor_count);
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_DebugAltPath,            "%%_RAD_RDI_PATH%%");
   lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_MemoryMapFiles,          "");
   if (BUILD_DEBUG) {
@@ -374,7 +374,7 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
   str8_list_pushf(scratch.arena, &cmd_line, "-nologo");
 
   // register input manifest files on command line
-  String8 work_dir = os_get_current_path(scratch.arena);
+  String8 work_dir = get_current_path(scratch.arena);
   for (String8Node *man_node = manifest_path_list.first;
        man_node != 0;
        man_node = man_node->next) {
@@ -390,15 +390,15 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
   }
   
   // launch mt.exe with our command line
-  OS_ProcessLaunchParams launch_opts = {0};
+  ProcessLaunchParams launch_opts = {0};
   launch_opts.cmd_line               = cmd_line;
   launch_opts.inherit_env            = 1;
   launch_opts.consoleless            = 0;
-  OS_Handle mt_handle = os_process_launch(&launch_opts);
-  if (os_handle_match(mt_handle, os_handle_zero())) {
+  Process mt_handle = process_launch(&launch_opts);
+  if (process_match(mt_handle, process_zero())) {
     lnk_error(LNK_Error_Mt, "unable to start process: %S", mt_path);
   } else {
-    os_process_join(mt_handle, max_U64, 0);
+    process_join(mt_handle, max_U64, 0);
   }
   
   scratch_end(scratch);
@@ -447,8 +447,8 @@ lnk_manifest_from_inputs(Arena       *arena,
     }
 
     // cleanup disk
-    os_delete_file_at_path(linker_manifest_path);
-    os_delete_file_at_path(merged_manifest_path);
+    delete_file_at_path(linker_manifest_path);
+    delete_file_at_path(merged_manifest_path);
 
     ProfEnd();
   } else {
@@ -804,7 +804,7 @@ lnk_make_res_obj(Arena            *arena,
   }
   
   // convert res to obj
-  OS_ProcessInfo *process_info = os_get_process_info();
+  ProcessInfo *process_info = get_process_info();
   String8List exe_path_strs = {0};
   str8_list_push(scratch.arena, &exe_path_strs, process_info->binary_path);
   String8 exe_path = str8_list_first(&exe_path_strs);
@@ -1032,7 +1032,7 @@ lnk_inputer_push_obj_thin(LNK_Inputer *inputer, LNK_LibMemberRef *link_member, S
 {
   lnk_log(LNK_Log_InputObj, "Input Obj: %S", path);
   Temp scratch = scratch_begin(0,0);
-  String8    full_path = os_full_path_from_path(scratch.arena, path);
+  String8    full_path = full_path_from_path(scratch.arena, path);
   LNK_Input *input     = lnk_inputer_push_thin(inputer->arena, &inputer->new_objs, inputer->objs_ht, full_path);
   input->link_member = link_member;
   scratch_end(scratch);
@@ -1059,7 +1059,7 @@ lnk_input_from_path(HashTable *load_ht, String8 path)
   LNK_Input *input = hash_table_search_path_raw(load_ht, path);
   if (input == 0) {
     Temp scratch = scratch_begin(0, 0);
-    String8 full_path = os_full_path_from_path(scratch.arena, path);
+    String8 full_path = full_path_from_path(scratch.arena, path);
     input = hash_table_search_path_raw(load_ht, full_path);
     scratch_end(scratch);
   }

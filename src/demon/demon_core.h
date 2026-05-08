@@ -235,7 +235,7 @@ internal DMN_CtrlCtx *dmn_ctrl_begin(void);
 internal void dmn_ctrl_exclusive_access_begin(void);
 internal void dmn_ctrl_exclusive_access_end(void);
 #define DMN_CtrlExclusiveAccessScope DeferLoop(dmn_ctrl_exclusive_access_begin(), dmn_ctrl_exclusive_access_end())
-internal U32 dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params);
+internal U32 dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params);
 internal B32 dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid);
 internal B32 dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code);
 internal B32 dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process);
@@ -259,7 +259,7 @@ internal U64 dmn_process_memory_reserve(DMN_Handle process, U64 vaddr, U64 size)
 internal void dmn_process_memory_commit(DMN_Handle process, U64 vaddr, U64 size);
 internal void dmn_process_memory_decommit(DMN_Handle process, U64 vaddr, U64 size);
 internal void dmn_process_memory_release(DMN_Handle process, U64 vaddr, U64 size);
-internal void dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, OS_AccessFlags flags);
+internal void dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, AccessFlags flags);
 internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
 internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
 #define dmn_process_read_struct(process, vaddr, ptr) dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)

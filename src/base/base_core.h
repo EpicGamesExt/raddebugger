@@ -471,6 +471,8 @@ union U128
   U16 u16[8];
   U32 u32[4];
   U64 u64[2];
+  F32 f32[4];
+  F64 f64[2];
 };
 typedef union U256 U256;
 union U256
@@ -480,6 +482,8 @@ union U256
   U32 u32[8];
   U64 u64[4];
   U128 u128[2];
+  F32 f32[8];
+  F64 f64[4];
 };
 typedef union U512 U512;
 union U512
@@ -490,7 +494,18 @@ union U512
   U64 u64[8];
   U128 u128[4];
   U256 u256[2];
+  F32 f32[16];
+  F64 f64[8];
 };
+
+#pragma pack(push, 1)
+typedef struct U80 U80;
+struct U80
+{
+  U64 int1_frac63;
+  U16 sign1_exp15;
+};
+#pragma pack(pop)
 
 ////////////////////////////////
 //~ rjf: Basic Type Structures
@@ -652,6 +667,21 @@ Compiler;
 #else
 # define Compiler_CURRENT Compiler_Null
 #endif
+
+////////////////////////////////
+//~ rjf: Access Flags
+
+typedef U32 AccessFlags;
+enum
+{
+  AccessFlag_Read        = (1<<0),
+  AccessFlag_Write       = (1<<1),
+  AccessFlag_Execute     = (1<<2),
+  AccessFlag_Append      = (1<<3),
+  AccessFlag_ShareRead   = (1<<4),
+  AccessFlag_ShareWrite  = (1<<5),
+  AccessFlag_Inherited   = (1<<6),
+};
 
 ////////////////////////////////
 //~ rjf: Text 2D Coordinates & Ranges
@@ -1043,6 +1073,21 @@ internal DenseTime dense_time_from_date_time(DateTime date_time);
 internal DateTime  date_time_from_dense_time(DenseTime time);
 internal DateTime  date_time_from_micro_seconds(U64 time);
 internal DateTime  date_time_from_unix_time(U64 unix_time);
+
+////////////////////////////////
+//~ rjf: @per_os_impl Platform Time Functions
+
+internal U64 now_time_us(void);
+internal U32 now_time_unix(void);
+internal DateTime now_time_universal(void);
+internal DateTime universal_from_local_time(DateTime *dt);
+internal DateTime local_from_universal_time(DateTime *dt);
+internal void sleep_ms(U32 ms);
+
+////////////////////////////////
+//~ rjf: @per_os_impl Platform GUID Functions
+
+internal Guid make_guid(void);
 
 ////////////////////////////////
 //~ rjf: Non-Fancy Ring Buffer Reads/Writes

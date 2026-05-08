@@ -1,41 +1,41 @@
 shared_function int
 lnk_open_file_read(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max)
 {
-  OS_Handle handle = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, str8((U8*)path, path_size));
+  File handle = file_open(AccessFlag_Read|AccessFlag_ShareRead, str8((U8*)path, path_size));
   Assert(sizeof(handle) <= handle_buffer_max);
   MemoryCopy(handle_buffer, &handle, sizeof(handle));
-  return !os_handle_match(handle, os_handle_zero());
+  return !file_match(handle, file_zero());
 }
 
 shared_function int
 lnk_open_file_write(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max)
 {
-  OS_Handle handle = os_file_open(OS_AccessFlag_Write, str8((U8*)path, path_size));
+  File handle = file_open(AccessFlag_Write, str8((U8*)path, path_size));
   Assert(sizeof(handle) <= handle_buffer_max);
   MemoryCopy(handle_buffer, &handle, sizeof(handle));
-  return !os_handle_match(handle, os_handle_zero());
+  return !file_match(handle, file_zero());
 }
 
 shared_function void
 lnk_close_file(void *raw_handle)
 {
-  OS_Handle handle = *(OS_Handle *)raw_handle;
-  os_file_close(handle);
+  File handle = *(File *)raw_handle;
+  file_close(handle);
 }
 
 shared_function uint64_t
 lnk_size_from_file(void *raw_handle)
 {
-  OS_Handle handle = *(OS_Handle *)raw_handle;
-  FileProperties props  = os_properties_from_file(handle);
+  File handle = *(File *)raw_handle;
+  FileProperties props  = properties_from_file(handle);
   return props.size;
 }
 
 shared_function uint64_t
 lnk_read_file(void *raw_handle, void *buffer, uint64_t buffer_max)
 {
-  OS_Handle handle = *(OS_Handle *)raw_handle;
-  U64 read_size = os_file_read(handle, rng_1u64(0, buffer_max), buffer);
+  File handle = *(File *)raw_handle;
+  U64 read_size = file_read(handle, rng_1u64(0, buffer_max), buffer);
   Assert(read_size == buffer_max);
   return read_size;
 }
@@ -43,8 +43,8 @@ lnk_read_file(void *raw_handle, void *buffer, uint64_t buffer_max)
 shared_function uint64_t
 lnk_write_file(void *raw_handle, uint64_t offset, void *buffer, uint64_t buffer_size)
 {
-  OS_Handle handle = *(OS_Handle*)raw_handle;
-  U64 write_size = os_file_write(handle, r1u64(offset, offset + buffer_size), buffer);
+  File handle = *(File*)raw_handle;
+  U64 write_size = file_write(handle, r1u64(offset, offset + buffer_size), buffer);
   return write_size;
 }
 
@@ -54,10 +54,10 @@ lnk_find_first_file(Arena *arena, String8List dir_list, String8 path)
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   String8 result = {0};
-  if (os_file_path_exists(path)) {
+  if (file_path_exists(path)) {
     PathStyle path_style = path_style_from_str8(path);
     if (path_style == PathStyle_Relative) {
-      String8 current_path = os_get_current_path(scratch.arena);
+      String8 current_path = get_current_path(scratch.arena);
       String8List l = {0};
       str8_list_push(scratch.arena, &l, current_path);
       str8_list_push(scratch.arena, &l, path);
@@ -69,7 +69,7 @@ lnk_find_first_file(Arena *arena, String8List dir_list, String8 path)
     String8 file_name = str8_skip_last_slash(path);
     for EachNode(n, String8Node, dir_list.first) {
       String8 full_path = push_str8f(scratch.arena, "%S/%S", n->string, file_name);
-      if (os_file_path_exists(full_path)) {
+      if (file_path_exists(full_path)) {
         result = push_str8_copy(arena, full_path);
         break;
       }
@@ -80,10 +80,10 @@ lnk_find_first_file(Arena *arena, String8List dir_list, String8 path)
   return result;
 }
 
-internal OS_Handle
+internal File
 lnk_file_open_with_rename_permissions(String8 path)
 {
-  OS_Handle file_handle = os_handle_zero();
+  File file_handle = file_zero();
 #if OS_WINDOWS
   Temp scratch = scratch_begin(0,0);
 
@@ -109,7 +109,7 @@ lnk_file_open_with_rename_permissions(String8 path)
 }
 
 internal B32
-lnk_file_set_delete_on_close(OS_Handle handle, B32 delete_file)
+lnk_file_set_delete_on_close(File handle, B32 delete_file)
 {
 #if OS_WINDOWS
   FILE_DISPOSITION_INFO file_disposition = {0};
@@ -122,7 +122,7 @@ lnk_file_set_delete_on_close(OS_Handle handle, B32 delete_file)
 }
 
 internal B32
-lnk_file_rename(OS_Handle handle, String8 new_name)
+lnk_file_rename(File handle, String8 new_name)
 {
   Temp scratch = scratch_begin(0,0);
 #if OS_WINDOWS
@@ -167,7 +167,7 @@ THREAD_POOL_TASK_FUNC(lnk_data_size_from_file_path_task)
   LNK_DiskReader *task = raw_task;
   String8         path = task->path_arr.v[task_id];
 
-  OS_Handle handle = {0};
+  File handle = {0};
   U64       size   = 0;
 
   int is_open = lnk_open_file_read((char*)path.str, path.size, &handle, sizeof(handle));
@@ -184,7 +184,7 @@ THREAD_POOL_TASK_FUNC(lnk_data_from_file_path_task)
 {
   LNK_DiskReader *task = raw_task;
 
-  OS_Handle handle      = task->handle_arr[task_id];
+  File handle      = task->handle_arr[task_id];
   U64       buffer_size = task->size_arr[task_id];
   U8       *buffer      = task->buffer + task->off_arr[task_id];
 
@@ -239,7 +239,7 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags
     Temp scratch = scratch_begin(&arena,1);
 
     reader.path_arr       = path_arr;
-    reader.handle_arr     = push_array_no_zero(scratch.arena, OS_Handle, path_arr.count);
+    reader.handle_arr     = push_array_no_zero(scratch.arena, File, path_arr.count);
     reader.size_arr       = push_array_no_zero(scratch.arena, U64, path_arr.count);
 
     // open handles and get sizes
@@ -284,7 +284,7 @@ lnk_write_data_list_to_file_path(String8 path, String8 temp_path, String8List da
   ProfBeginV("Write %M to %S", data.total_size, path);
 
   B32       open_with_rename = (temp_path.size > 0);
-  OS_Handle file_handle      = {0};
+  File file_handle      = {0};
   String8   open_file_path   = {0};
   if (open_with_rename) {
     file_handle    = lnk_file_open_with_rename_permissions(temp_path);
@@ -299,9 +299,9 @@ lnk_write_data_list_to_file_path(String8 path, String8 temp_path, String8List da
     open_file_path = path;
   }
 
-  if (!os_handle_match(file_handle, os_handle_zero())) {
+  if (!file_match(file_handle, file_zero())) {
     // try to reserve up front file size
-    if (!os_file_reserve_size(file_handle, data.total_size)) {
+    if (!file_reserve_size(file_handle, data.total_size)) {
       lnk_log(LNK_Log_IO_Write, "Failed to pre-allocate file %S with size %M", open_file_path, data.total_size);
     }
 

@@ -707,11 +707,12 @@ e_oplist_from_location(Arena *arena, RDI_Parsed *rdi, RDI_Location loc)
     {
       RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
       Arch arch = arch_from_rdi_arch(tli->arch);
+      ARCH_Info *arch_info = arch_info_from_arch(arch);
       RDI_RegCode rdi_regcode = rdi_regcode_from_location(loc);
-      REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, rdi_regcode);
-      REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
-      U64 byte_size = (U64)reg_rng.byte_size;
-      U64 byte_pos = 0;
+      ARCH_RegCode reg_code = arch_reg_code_from_rdi(arch, rdi_regcode);
+      Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
+      U64 byte_size = (U64)dim_1u16(reg_rng);
+      U64 byte_pos = reg_rng.min;
       e_oplist_push_op(arena, &result, RDI_EvalOp_RegRead, e_value_u64(RDI_EncodeRegReadParam(rdi_regcode, byte_size, byte_pos)));
     }break;
     
@@ -830,7 +831,6 @@ internal void
 e_select_ir_ctx(E_IRCtx *ctx)
 {
   if(ctx->regs_map == 0)       { ctx->regs_map = &e_string2num_map_nil; }
-  if(ctx->reg_alias_map == 0)  { ctx->reg_alias_map = &e_string2num_map_nil; }
   if(ctx->locals_map == 0)     { ctx->locals_map = &e_string2num_map_nil; }
   if(ctx->member_map == 0)     { ctx->member_map = &e_string2num_map_nil; }
   if(ctx->macro_map == 0)      { ctx->macro_map = push_array(e_cache->arena, E_String2ExprMap, 1); ctx->macro_map[0] = e_string2expr_map_make(e_cache->arena, 512); }

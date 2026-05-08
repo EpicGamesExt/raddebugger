@@ -23,7 +23,7 @@ tp_run_tasks(TP_Context *pool, TP_Worker *worker)
     // on last task ping main thread
     U64 task_done = ins_atomic_u64_inc_eval(&pool->task_done);
     if (task_done == task_count) {
-      os_semaphore_drop(pool->main_semaphore);
+      semaphore_drop(pool->main_semaphore);
     }
   }
 }
@@ -34,7 +34,7 @@ tp_worker_main(void *raw_worker)
   TP_Worker  *worker = raw_worker;
   TP_Context *pool   = worker->pool;
   for (; pool->is_live; ) {
-    if (os_semaphore_take(pool->task_semaphore, max_U64)) {
+    if (semaphore_take(pool->task_semaphore, max_U64)) {
       tp_run_tasks(pool, worker);
     }
   }
@@ -46,8 +46,8 @@ tp_worker_main_shared(void *raw_worker)
   TP_Worker  *worker = raw_worker;
   TP_Context *pool   = worker->pool;
   for (; pool->is_live; ) {
-    if (os_semaphore_take(pool->exec_semaphore, max_U64)) {
-      if (os_semaphore_take(pool->task_semaphore, max_U64)) {
+    if (semaphore_take(pool->exec_semaphore, max_U64)) {
+      if (semaphore_take(pool->task_semaphore, max_U64)) {
         tp_run_tasks(pool, worker);
       }
     }
@@ -67,13 +67,13 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
   Semaphore task_semaphore = {0};
   Semaphore exec_semaphore = {0};
   if (worker_count > 1) {
-    main_semaphore = os_semaphore_alloc(0, 1, str8_zero());
+    main_semaphore = semaphore_alloc(0, 1, str8_zero());
     if (is_shared) {
       AssertAlways(worker_count <= max_worker_count);
-      task_semaphore = os_semaphore_alloc(0, max_worker_count, name);
-      exec_semaphore = os_semaphore_alloc(0, worker_count, str8_zero());
+      task_semaphore = semaphore_alloc(0, max_worker_count, name);
+      exec_semaphore = semaphore_alloc(0, worker_count, str8_zero());
     } else {
-      task_semaphore = os_semaphore_alloc(0, worker_count, str8_zero());
+      task_semaphore = semaphore_alloc(0, worker_count, str8_zero());
     }
   }
 
@@ -213,20 +213,20 @@ tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskF
     // if we are in shared mode ping local semaphore
     if (pool->exec_semaphore.u64[0] != 0) {
       for (U64 worker_idx = 0; worker_idx < drop_count; worker_idx +=1) {
-        os_semaphore_drop(pool->exec_semaphore);
+        semaphore_drop(pool->exec_semaphore);
       }
     }
     
     // ping shared semaphore
     for (U64 worker_idx = 0; worker_idx < drop_count; worker_idx += 1) {
-      os_semaphore_drop(pool->task_semaphore);
+      semaphore_drop(pool->task_semaphore);
     }
     
     // run tasks on main worker
     tp_run_tasks(pool, &pool->worker_arr[0]);
     
     // wait for workers to finish tasks
-    os_semaphore_take(pool->main_semaphore, max_U64);
+    semaphore_take(pool->main_semaphore, max_U64);
   }
 }
 

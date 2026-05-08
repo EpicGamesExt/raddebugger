@@ -479,7 +479,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   ProfBegin("Set up PCH");
   {
     // hash_table<obj_path, obj_idx>
-    String8    work_dir   = os_get_current_path(scratch.arena);
+    String8    work_dir   = get_current_path(scratch.arena);
     HashTable *debug_p_ht = hash_table_init(scratch.arena, obj_count);
     for EachIndex(i, input.debug_p_indices.count) {
       U64     obj_idx  = input.debug_p_indices.v[i];

@@ -471,7 +471,7 @@ ui_build_arena(void)
   return result;
 }
 
-internal OS_Handle
+internal OS_Window
 ui_window(void)
 {
   return ui_state->window;
@@ -722,7 +722,7 @@ internal B32
 ui_string_hover_active(void)
 {
   return (ui_state->build_index > 0 && ui_state->string_hover_build_index >= ui_state->build_index-1 &&
-          os_now_microseconds() >= ui_state->string_hover_begin_us + 500000);
+          now_time_us() >= ui_state->string_hover_begin_us + 500000);
 }
 
 internal U64
@@ -796,7 +796,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(OS_Window window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -865,7 +865,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   {
     if(n->v.kind == UI_EventKind_MouseMove)
     {
-      ui_state->last_time_mousemoved_us = os_now_microseconds();
+      ui_state->last_time_mousemoved_us = now_time_us();
     }
   }
   
@@ -887,7 +887,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->theme = theme;
     ui_state->events = events;
     ui_state->window = window;
-    ui_state->mouse = (os_window_is_focused(window) || ui_state->last_time_mousemoved_us+500000 >= os_now_microseconds()) ? os_mouse_from_window(window) : v2f32(-100, -100);
+    ui_state->mouse = (os_window_is_focused(window) || ui_state->last_time_mousemoved_us+500000 >= now_time_us()) ? os_mouse_from_window(window) : v2f32(-100, -100);
     ui_state->animation_dt = animation_dt;
     MemoryZeroStruct(&ui_state->icon_info);
     ui_state->icon_info.icon_font = icon_info->icon_font;
@@ -1643,7 +1643,7 @@ ui_end_build(void)
                 ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
                 ui_state->string_hover_size = box->font_size;
                 ui_state->string_hover_fstrs = dr_fstrs_copy(ui_state->string_hover_arena, &b->display_fstrs);
-                ui_state->string_hover_begin_us = os_now_microseconds();
+                ui_state->string_hover_begin_us = now_time_us();
               }
               ui_state->string_hover_build_index = ui_state->build_index;
               found = 1;

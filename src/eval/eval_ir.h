@@ -18,7 +18,6 @@ typedef enum E_IdentifierResolutionPath
   E_IdentifierResolutionPath_BuiltInConstants,
   E_IdentifierResolutionPath_BuiltInTypes,
   E_IdentifierResolutionPath_Registers,
-  E_IdentifierResolutionPath_RegisterAliases,
   E_IdentifierResolutionPath_Macros,
 }
 E_IdentifierResolutionPath;
@@ -89,7 +88,6 @@ E_IdentifierResolutionPath e_default_identifier_resolution_paths[] =
   E_IdentifierResolutionPath_BuiltInTypes,
   E_IdentifierResolutionPath_DebugInfoMatch,
   E_IdentifierResolutionPath_Registers,
-  E_IdentifierResolutionPath_RegisterAliases,
   E_IdentifierResolutionPath_Macros,
 };
 E_IdentifierResolutionRule e_default_identifier_resolution_rule =
@@ -110,7 +108,6 @@ E_IdentifierResolutionPath e_callable_identifier_resolution_paths[] =
   E_IdentifierResolutionPath_BuiltInTypes,
   E_IdentifierResolutionPath_DebugInfoMatch,
   E_IdentifierResolutionPath_Registers,
-  E_IdentifierResolutionPath_RegisterAliases,
 };
 E_IdentifierResolutionRule e_callable_identifier_resolution_rule =
 {

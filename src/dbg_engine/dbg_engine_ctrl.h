@@ -269,9 +269,8 @@ struct D_CtrlState
   Arena *arena;
   D_WakeupFunctionType *wakeup_hook;
   
-  // rjf: name -> register/alias hash tables for eval
+  // rjf: name -> register hash tables for eval
   E_String2NumMap arch_string2reg_tables[Arch_COUNT];
-  E_String2NumMap arch_string2alias_tables[Arch_COUNT];
   
   // rjf: caches
   D_ThreadRegCache thread_reg_cache;
@@ -499,8 +498,8 @@ internal D_UnwindStepResult d_establish_frame_unwind_context__dwarf(Arena *arena
 internal D_UnwindStepResult d_unwind_step__dwarf(D_Handle process_handle, Arch arch, void *regs, D_FrameUnwindContext *frame_ctx, U64 endt_us);
 
 //- rjf: [x64]
-internal REGS_Reg64 *d_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX64 gpr_reg);
-internal D_UnwindStepResult d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 module_base_vaddr, REGS_RegBlockX64 *regs, U64 endt_us);
+internal U64 *d_unwind_reg_from_pe_gpr_reg__pe_x64(X64_RegBlock *regs, PE_UnwindGprRegX64 gpr_reg);
+internal D_UnwindStepResult d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 module_base_vaddr, X64_RegBlock *regs, U64 endt_us);
 
 //- rjf: abstracted full unwind
 internal D_Unwind d_unwind_from_thread(Arena *arena, D_EntityCtx *ctx, D_Handle thread, U64 endt_us);
@@ -526,7 +525,6 @@ internal U64 d_reg_gen(void);
 
 //- rjf: name -> register/alias hash tables, for eval
 internal E_String2NumMap *d_string2reg_from_arch(Arch arch);
-internal E_String2NumMap *d_string2alias_from_arch(Arch arch);
 
 ////////////////////////////////
 //~ rjf: Control-Thread Functions

@@ -71,7 +71,7 @@ di_init(CmdLine *cmdline)
   if(!try_u64_from_str8_c_rules(signal_pid_string, &signal_pid))
   {
     has_parent = 0;
-    signal_pid = os_get_process_info()->pid;
+    signal_pid = get_process_info()->pid;
   }
   U64 signal_code = 0;
   String8 signal_code_string = cmd_line_string(cmdline, str8_lit("signal_code"));
@@ -84,16 +84,16 @@ di_init(CmdLine *cmdline)
   {
     di_shared->conversion_completion_lock_semaphore = semaphore_open(di_shared->conversion_completion_lock_semaphore_name);
     di_shared->conversion_completion_signal_semaphore = semaphore_open(di_shared->conversion_completion_signal_semaphore_name);
-    di_shared->conversion_completion_shared_memory = os_shared_memory_open(di_shared->conversion_completion_shared_memory_name);
+    di_shared->conversion_completion_shared_memory = shared_memory_open(di_shared->conversion_completion_shared_memory_name);
   }
   else
   {
     di_shared->conversion_completion_lock_semaphore = semaphore_alloc(1, 1, di_shared->conversion_completion_lock_semaphore_name);
     di_shared->conversion_completion_signal_semaphore = semaphore_alloc(0, 65536, di_shared->conversion_completion_signal_semaphore_name);
-    di_shared->conversion_completion_shared_memory = os_shared_memory_alloc(KB(4), di_shared->conversion_completion_shared_memory_name);
+    di_shared->conversion_completion_shared_memory = shared_memory_alloc(KB(4), di_shared->conversion_completion_shared_memory_name);
     di_shared->conversion_completion_signal_receiver_thread = thread_launch(di_conversion_completion_signal_receiver_thread_entry_point, 0);
   }
-  di_shared->conversion_completion_shared_memory_base = (U64 *)os_shared_memory_view_open(di_shared->conversion_completion_shared_memory, r1u64(0, KB(4)));
+  di_shared->conversion_completion_shared_memory_base = (U64 *)shared_memory_view_open(di_shared->conversion_completion_shared_memory, r1u64(0, KB(4)));
   di_shared->completion_mutex = mutex_alloc();
   di_shared->completion_arena = arena_alloc();
   di_shared->event_mutex = mutex_alloc();
@@ -164,8 +164,8 @@ di_key_from_path_timestamp(String8 path, U64 min_timestamp)
       //- rjf: try to make key from file's contents
       if(!made_key)
       {
-        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, path);
-        FileProperties props = os_properties_from_file(file);
+        File file = file_open(AccessFlag_Read|AccessFlag_ShareRead, path);
+        FileProperties props = properties_from_file(file);
         if(min_timestamp <= props.modified)
         {
           //- rjf: PDB magic => use GUID for key
@@ -176,7 +176,7 @@ di_key_from_path_timestamp(String8 path, U64 min_timestamp)
             {
               read_only local_persist char msf_msf20_magic[] = "Microsoft C/C++ program database 2.00\r\n\x1aJG\0\0";
               U8 msf20_magic_maybe[sizeof(msf_msf20_magic)] = {0};
-              os_file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
+              file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
               if(MemoryMatch(msf20_magic_maybe, msf_msf20_magic, sizeof(msf20_magic_maybe)))
               {
                 is_pdb = 1;
@@ -186,7 +186,7 @@ di_key_from_path_timestamp(String8 path, U64 min_timestamp)
             {
               read_only local_persist char msf_msf70_magic[] = "Microsoft C/C++ MSF 7.00\r\n\032DS\0\0";
               U8 msf70_magic_maybe[sizeof(msf_msf70_magic)] = {0};
-              os_file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
+              file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
               if(MemoryMatch(msf70_magic_maybe, msf_msf70_magic, sizeof(msf70_magic_maybe)))
               {
                 is_pdb = 1;
@@ -198,7 +198,7 @@ di_key_from_path_timestamp(String8 path, U64 min_timestamp)
             }
           }
         }
-        os_file_close(file);
+        file_close(file);
       }
       
       //- rjf: fallback: hash from path/timestamp
@@ -323,8 +323,8 @@ di_close(DI_Key key, B32 force_closed)
   
   //- rjf: decrement this key's node's refcount; remove if needed
   B32 node_released = 0;
-  OS_Handle file = {0};
-  OS_Handle file_map = {0};
+  File file = {0};
+  FileMap file_map = {0};
   FileProperties file_props = {0};
   void *file_base = 0;
   Arena *arena = 0;
@@ -377,9 +377,9 @@ di_close(DI_Key key, B32 force_closed)
   {
     ins_atomic_u64_dec_eval(&di_shared->load_count);
     ins_atomic_u64_inc_eval(&di_shared->load_gen);
-    os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
-    os_file_map_close(file_map);
-    os_file_close(file);
+    file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
+    file_map_close(file_map);
+    file_close(file);
     if(arena != 0)
     {
       arena_release(arena);
@@ -492,7 +492,7 @@ di_rdi_from_key(Access *access, DI_Key key, B32 high_priority, U64 endt_us)
       }
       
       // rjf: found current results, or out-of-time? abort
-      if(grabbed || os_now_microseconds() >= endt_us)
+      if(grabbed || now_time_us() >= endt_us)
       {
         break;
       }
@@ -681,16 +681,16 @@ di_async_tick(void)
         if(!t->og_analyzed)
         {
           t->og_analyzed = 1;
-          OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, og_path);
-          FileProperties props = os_properties_from_file(file);
+          File file = file_open(AccessFlag_ShareRead|AccessFlag_Read, og_path);
+          FileProperties props = properties_from_file(file);
           t->og_size = props.size;
           U64 rdi_magic_maybe = 0;
-          if(os_file_read_struct(file, 0, &rdi_magic_maybe) == 8 &&
+          if(file_read_struct(file, 0, &rdi_magic_maybe) == 8 &&
              rdi_magic_maybe == RDI_MAGIC_CONSTANT)
           {
             t->og_is_rdi = 1;
           }
-          os_file_close(file);
+          file_close(file);
         }
         U64 og_size = t->og_size;
         B32 og_is_rdi = t->og_is_rdi;
@@ -713,8 +713,8 @@ di_async_tick(void)
         if(!t->rdi_analyzed)
         {
           t->rdi_analyzed = 1;
-          OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, rdi_path);
-          FileProperties props = os_properties_from_file(file);
+          File file = file_open(AccessFlag_ShareRead|AccessFlag_Read, rdi_path);
+          FileProperties props = properties_from_file(file);
           if(props.modified < og_min_timestamp)
           {
             t->rdi_is_stale = 1;
@@ -723,12 +723,12 @@ di_async_tick(void)
           {
             t->rdi_is_stale = 1;
             RDI_Header header = {0};
-            if(os_file_read_struct(file, 0, &header) == sizeof(header))
+            if(file_read_struct(file, 0, &header) == sizeof(header))
             {
               t->rdi_is_stale = (header.encoding_version != RDI_ENCODING_VERSION);
             }
           }
-          os_file_close(file);
+          file_close(file);
         }
         B32 rdi_is_stale = t->rdi_is_stale;
         
@@ -736,7 +736,7 @@ di_async_tick(void)
         if(!og_is_rdi && rdi_is_stale && t->thread_count == 0)
         {
           U64 thread_count = 1;
-          U64 max_thread_count = os_get_system_info()->logical_processor_count/2;
+          U64 max_thread_count = get_system_info()->logical_processor_count/2;
           if(priority_idx > 0)
           {
             max_thread_count = Max(1, max_thread_count/2);
@@ -756,7 +756,7 @@ di_async_tick(void)
         //- rjf: determine if there are threads available
         B32 threads_available = 0;
         {
-          U64 max_threads = os_get_system_info()->logical_processor_count/2;
+          U64 max_threads = get_system_info()->logical_processor_count/2;
           U64 current_threads = di_shared->conversion_thread_count;
           U64 needed_threads = (current_threads + t->thread_count);
           threads_available = (max_threads >= needed_threads);
@@ -789,8 +789,8 @@ di_async_tick(void)
         if(og_is_good && ready_to_launch_conversion)
         {
           B32 should_compress = 0;
-          OS_ProcessLaunchParams params = {0};
-          params.path = os_get_process_info()->binary_path;
+          ProcessLaunchParams params = {0};
+          params.path = get_process_info()->binary_path;
           params.inherit_env = 1;
           params.consoleless = 1;
           str8_list_pushf(scratch.arena, &params.cmd_line, "raddbg");
@@ -804,11 +804,11 @@ di_async_tick(void)
           str8_list_pushf(scratch.arena, &params.cmd_line, "--rdi");
           str8_list_pushf(scratch.arena, &params.cmd_line, "--out:%S", rdi_path);
           str8_list_pushf(scratch.arena, &params.cmd_line, "--thread_count:%I64u", t->thread_count);
-          str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_pid:%I64u", (U64)os_get_process_info()->pid);
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_pid:%I64u", (U64)get_process_info()->pid);
           str8_list_pushf(scratch.arena, &params.cmd_line, "--signal_code:%I64u", (U64)t);
           str8_list_pushf(scratch.arena, &params.cmd_line, "%S", og_path);
           ProfMsg("launch creation for %.*s", str8_varg(rdi_path));
-          t->process = os_process_launch(&params);
+          t->process = process_launch(&params);
           t->status = DI_LoadTaskStatus_Active;
           di_shared->conversion_process_count += 1;
           di_shared->conversion_thread_count += t->thread_count;
@@ -840,7 +840,7 @@ di_async_tick(void)
             }
             if(!task_is_done)
             {
-              task_is_done = os_process_join(t->process, 0, 0);
+              task_is_done = process_join(t->process, 0, 0);
             }
             if(task_is_done)
             {
@@ -875,7 +875,7 @@ di_async_tick(void)
         //- rjf: if task is done, retire & recycle task; gather path to load
         if(t->status == DI_LoadTaskStatus_Done)
         {
-          if(!os_handle_match(t->process, os_handle_zero())) MutexScope(di_shared->event_mutex)
+          if(!process_match(t->process, process_zero())) MutexScope(di_shared->event_mutex)
           {
             DI_EventNode *n = push_array(di_shared->event_arena, DI_EventNode, 1);
             SLLQueuePush(di_shared->events.first, di_shared->events.last, n);
@@ -937,15 +937,15 @@ di_async_tick(void)
       ProfBegin("parse %.*s", str8_varg(rdi_path));
       
       //- rjf: open file
-      OS_Handle file = {0};
-      OS_Handle file_map = {0};
+      File file = {0};
+      FileMap file_map = {0};
       FileProperties file_props = {0};
       void *file_base = 0;
       {
-        file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, rdi_path);
-        file_map = os_file_map_open(OS_AccessFlag_Read, file);
-        file_props = os_properties_from_file(file);
-        file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
+        file = file_open(AccessFlag_Read|AccessFlag_ShareRead|AccessFlag_ShareWrite, rdi_path);
+        file_map = file_map_open(AccessFlag_Read, file);
+        file_props = properties_from_file(file);
+        file_base = file_map_view_open(file_map, AccessFlag_Read, r1u64(0, file_props.size));
       }
       
       //- rjf: do initial parse of rdi
@@ -1010,9 +1010,9 @@ di_async_tick(void)
             {
               arena_release(rdi_parsed_arena);
             }
-            os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
-            os_file_map_close(file_map);
-            os_file_close(file);
+            file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
+            file_map_close(file_map);
+            file_close(file);
           }
         }
         cond_var_broadcast(stripe->cv);

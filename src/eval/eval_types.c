@@ -288,18 +288,9 @@ e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_num)
 }
 
 internal E_TypeKey
-e_type_key_reg(Arch arch, REGS_RegCode code)
+e_type_key_reg(Arch arch, ARCH_RegCode code)
 {
   E_TypeKey key = {E_TypeKeyKind_Reg};
-  key.u32[0] = (U32)arch;
-  key.u32[1] = (U32)code;
-  return key;
-}
-
-internal E_TypeKey
-e_type_key_reg_alias(Arch arch, REGS_AliasCode code)
-{
-  E_TypeKey key = {E_TypeKeyKind_RegAlias};
   key.u32[0] = (U32)arch;
   key.u32[1] = (U32)code;
   return key;
@@ -625,7 +616,6 @@ e_type_kind_from_key(E_TypeKey key)
     case E_TypeKeyKind_Ext:     {kind = (E_TypeKind)key.u32[0];}break;
     case E_TypeKeyKind_Cons:    {kind = (E_TypeKind)key.u32[0];}break;
     case E_TypeKeyKind_Reg:     {kind = E_TypeKind_Union;}break;
-    case E_TypeKeyKind_RegAlias:{kind = E_TypeKind_Union;}break;
   }
   return kind;
 }
@@ -1100,16 +1090,10 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
       case E_TypeKeyKind_Reg:
       {
         Arch arch = (Arch)key.u32[0];
-        REGS_RegCode code = (REGS_RegCode)key.u32[1];
-        REGS_Rng rng = regs_reg_code_rng_table_from_arch(arch)[code];
-        reg_byte_count = (U64)rng.byte_size;
-      }goto build_reg_type;
-      case E_TypeKeyKind_RegAlias:
-      {
-        Arch arch = (Arch)key.u32[0];
-        REGS_AliasCode code = (REGS_AliasCode)key.u32[1];
-        REGS_Slice slice = regs_alias_code_slice_table_from_arch(arch)[code];
-        reg_byte_count = (U64)slice.byte_size;
+        ARCH_Info *arch_info = arch_info_from_arch(arch);
+        ARCH_RegCode code = (ARCH_RegCode)key.u32[1];
+        Rng1U16 rng = arch_info->reg_code_rng_table[code];
+        reg_byte_count = (U64)dim_1u16(rng);
       }goto build_reg_type;
       build_reg_type:
       {
@@ -3117,23 +3101,23 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(folder)
     String8List folder_paths = {0};
     String8List file_paths = {0};
     {
-      OS_FileIter *iter = os_file_iter_begin(scratch.arena, folder_path, 0);
-      for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, iter, &info);)
+      FileIter *iter = file_iter_begin(scratch.arena, folder_path, 0);
+      for(FileInfo info = {0}; file_iter_next(scratch.arena, iter, &info);)
       {
         FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, local_filter, info.name);
         if(matches.count == matches.needle_part_count)
         {
           if(info.props.flags & FilePropertyFlag_IsFolder)
           {
-            str8_list_push(scratch.arena, &folder_paths, push_str8_copy(arena, info.name));
+            str8_list_push(scratch.arena, &folder_paths, str8_copy(arena, info.name));
           }
           else
           {
-            str8_list_push(scratch.arena, &file_paths, push_str8_copy(arena, info.name));
+            str8_list_push(scratch.arena, &file_paths, str8_copy(arena, info.name));
           }
         }
       }
-      os_file_iter_end(iter);
+      file_iter_end(iter);
     }
     
     //- rjf: build accelerator
@@ -3252,7 +3236,7 @@ E_TYPE_IREXT_FUNCTION_DEF(file)
     
     //- rjf: fill accel
     accel->file_path = push_str8_copy(arena, file_path);
-    accel->props = os_properties_from_file_path(file_path);
+    accel->props = properties_from_file_path(file_path);
     accel->fields = str8_array_from_list(arena, &fields);
     
     scratch_end(scratch);

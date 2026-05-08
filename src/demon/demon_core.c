@@ -132,10 +132,11 @@ dmn_rip_from_thread(DMN_Handle thread)
   Temp scratch = scratch_begin(0, 0);
   {
     Arch arch = dmn_arch_from_thread(thread);
-    U64 reg_block_size = regs_block_size_from_arch(arch);
+    ARCH_Info *arch_info = arch_info_from_arch(arch);
+    U64 reg_block_size = arch_info->reg_block_size;
     void *reg_block = push_array(scratch.arena, U8, reg_block_size);
     dmn_thread_read_reg_block(thread, reg_block);
-    result = regs_rip_from_arch_block(arch, reg_block);
+    result = arch_ip_from_reg_block(arch_info, reg_block);
   }
   scratch_end(scratch);
   return result;
@@ -148,10 +149,11 @@ dmn_rsp_from_thread(DMN_Handle thread)
   Temp scratch = scratch_begin(0, 0);
   {
     Arch arch = dmn_arch_from_thread(thread);
-    U64 reg_block_size = regs_block_size_from_arch(arch);
+    ARCH_Info *arch_info = arch_info_from_arch(arch);
+    U64 reg_block_size = arch_info->reg_block_size;
     void *reg_block = push_array(scratch.arena, U8, reg_block_size);
     dmn_thread_read_reg_block(thread, reg_block);
-    result = regs_rsp_from_arch_block(arch, reg_block);
+    result = arch_sp_from_reg_block(arch_info, reg_block);
   }
   scratch_end(scratch);
   return result;
@@ -165,11 +167,11 @@ dmn_process_read_cstring(Arena *arena, DMN_Handle process, U64 addr)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List block_list = {0};
-  for(U64 cursor = addr, stride = 256; ; cursor += stride)
+  for(U64 cursor = addr, stride = 256;; cursor += stride)
   {
-    U8      *raw_block = push_array_no_zero(scratch.arena, U8, stride);
-    U64      read_size = dmn_process_read(process, r1u64(cursor, cursor + stride), raw_block);
-    String8  block     = str8_cstring_capped(raw_block, raw_block + read_size);
+    U8 *raw_block = push_array_no_zero(scratch.arena, U8, stride);
+    U64 read_size = dmn_process_read(process, r1u64(cursor, cursor + stride), raw_block);
+    String8 block = str8_cstring_capped(raw_block, raw_block + read_size);
     str8_list_push(scratch.arena, &block_list, block);
     if(read_size != stride || (block.size+1 <= read_size && block.str[block.size] == 0))
     {

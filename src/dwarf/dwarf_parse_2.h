@@ -241,6 +241,11 @@ internal U64 dw2_read_initial_length(String8 data, U64 off, U64 *out, DW_Format 
 internal U64 dw2_read_fmt_u64(String8 data, U64 off, DW_Format format, U64 *out);
 
 ////////////////////////////////
+//~ rjf: Unit Range Set Parsing (Top-Level .debug_info, .debug_aranges)
+
+internal Rng1U64Array dw2_unit_ranges_from_data(Arena *arena, String8 data);
+
+////////////////////////////////
 //~ rjf: Unit Header Parsing
 
 internal U64 dw2_read_unit_header(String8 data, U64 off, DW2_UnitHeader *out);

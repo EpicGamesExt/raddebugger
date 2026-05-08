@@ -772,23 +772,13 @@ internal OS_Handle
 os_process_launch(OS_ProcessLaunchParams *params)
 {
   OS_Handle handle = {0};
-  
   posix_spawn_file_actions_t file_actions = {0};
   int file_actions_init_code = posix_spawn_file_actions_init(&file_actions);
   if(file_actions_init_code == 0)
   {
-    // redirect STDOUT 
     int stdout_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdout_file.u64[0], STDOUT_FILENO);
-    Assert(stdout_code == 0);
-    
-    // redirect STDERR
     int stderr_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stderr_file.u64[0], STDERR_FILENO);
-    Assert(stderr_code == 0);
-    
-    // redirect STDIN
     int stdin_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdin_file.u64[0], STDIN_FILENO);
-    Assert(stdin_code == 0);
-    
     posix_spawnattr_t attr = {0};
     int attr_init_code = posix_spawnattr_init(&attr);
     if(attr_init_code == 0)
@@ -801,7 +791,6 @@ os_process_launch(OS_ProcessLaunchParams *params)
         String8List l = str8_split_path(scratch.arena, params->path);
         str8_list_push(scratch.arena, &l, params->cmd_line.first->string);
         String8 path_to_exe = str8_path_list_join_by_style(scratch.arena, &l, PathStyle_SystemAbsolute);
-        
         argv[0] = (char *)path_to_exe.str;
         U64 arg_idx = 1;
         for EachNode(n, String8Node, params->cmd_line.first->next)
@@ -828,21 +817,9 @@ os_process_launch(OS_ProcessLaunchParams *params)
         }
       }
       
-      if(params->debug_subprocesses)
-      {
-        // not suported
-        InvalidPath;
-      }
-      
-      if(!params->consoleless)
-      {
-        NotImplemented;
-      }
-      
       // spawn process
       pid_t pid = 0;
       int spawn_code = posix_spawn(&pid, argv[0], &file_actions, &attr, argv, envp);
-      
       if(spawn_code == 0)
       {
         handle.u64[0] = (U64)pid;
@@ -850,16 +827,12 @@ os_process_launch(OS_ProcessLaunchParams *params)
       
       // clean up attributes
       int attr_destroy_code = posix_spawnattr_destroy(&attr);
-      Assert(attr_destroy_code == 0);
-      
       scratch_end(scratch);
     }
     
     // clean up file actions
     int file_actions_destroy_code = posix_spawn_file_actions_destroy(&file_actions);
-    Assert(file_actions_destroy_code == 0);
   }
-  
   return handle;
 }
 
@@ -873,14 +846,12 @@ os_process_join(OS_Handle handle, U64 endt_us, U64 *exit_code_out)
     if(kill(pid, 0) >= 0)
     {
       result = (errno == ENOENT);
-      
       if(result)
       {
         int status;
         waitpid(pid, &status, 0);
       }
     }
-    else { Assert(0 && "failed to get status from pid"); }
   }
   else if(endt_us == max_U64)
   {

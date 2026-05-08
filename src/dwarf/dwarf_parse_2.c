@@ -57,6 +57,43 @@ dw2_read_fmt_u64(String8 data, U64 off, DW_Format format, U64 *out)
 }
 
 ////////////////////////////////
+//~ rjf: Unit Range Set Parsing (Top-Level .debug_info, .debug_aranges)
+
+internal Rng1U64Array
+dw2_unit_ranges_from_data(Arena *arena, String8 data)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  Rng1U64List unit_range_list = {0};
+  for(U64 off = 0; off < data.size;)
+  {
+    U64 start_off = off;
+    
+    // rjf: read next unit size
+    U64 unit_size = 0;
+    U64 unit_size_size = dw2_read_initial_length(data, off, &unit_size, 0);
+    
+    // rjf: push
+    if(unit_size > 0)
+    {
+      rng1u64_list_push(scratch.arena, &unit_range_list, r1u64(off, off + unit_size_size + unit_size));
+    }
+    
+    // rjf: advance
+    off += unit_size_size;
+    off += unit_size;
+    
+    // rjf: break if no movement
+    if(off == start_off)
+    {
+      break;
+    }
+  }
+  Rng1U64Array result = rng1u64_array_from_list(arena, &unit_range_list);
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Unit Header Parsing
 
 internal U64

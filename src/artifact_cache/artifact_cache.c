@@ -108,7 +108,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
   {
     RWMutexScope(stripe->rw_mutex, 1) for(;;)
     {
-      B32 out_of_time = (os_now_microseconds() >= endt_us);
+      B32 out_of_time = (now_time_us() >= endt_us);
       
       // rjf: find node in cache
       AC_Node *node = 0;
@@ -141,7 +141,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
         node->working_count = 1;
         node->evict_threshold_us = params->evict_threshold_us;
       }
-      node->access_pt.last_time_touched_us = os_now_microseconds();
+      node->access_pt.last_time_touched_us = now_time_us();
       node->access_pt.last_update_idx_touched = update_tick_idx();
       
       // rjf: request
@@ -602,7 +602,7 @@ ac_cancel_thread_entry_point(void *p)
 {
   for(;;)
   {
-    os_sleep_milliseconds(50);
+    sleep_ms(50);
     semaphore_take(ac_shared->cancel_thread_semaphore, max_U64);
     {
       for EachIndex(cache_slot_idx, ac_shared->cache_slots_count)

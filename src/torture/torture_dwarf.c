@@ -121,7 +121,7 @@ dw_input_from_writer(Arena *arena, DW_Writer *writer)
   
   t_write_file(str8_lit("dwarf.obj"), raw_coff);
   t_invoke(str8_lit("radlink"), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full dwarf.obj"), max_U64);
-  os_delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
+  delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
   
   String8             exe           = t_read_file(arena, str8_lit("a.exe"));
   PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
@@ -862,9 +862,10 @@ TEST(dwarf_writer)
 TEST(value_in_register)
 {
   // setup register context
-  REGS_RegBlockX64 regs      = {0};
-  REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, DW_ExprOp_Reg3 - DW_ExprOp_Reg0);
-  Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+  X64_RegBlock regs = {0};
+  ARCH_Info *arch_info = arch_info_from_arch(Arch_x64);
+  ARCH_RegCode reg_code = arch_reg_code_from_dw(Arch_x64, DW_ExprOp_Reg3 - DW_ExprOp_Reg0);
+  Rng1U16 reg_range = arch_info->reg_code_rng_table[reg_code];
   U64 value = 0xc0ffee;
   MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
   
@@ -875,7 +876,7 @@ TEST(value_in_register)
   
   // evaluate the program
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, &regs, 0, 0, &expr_value);
   
   // validate eval result
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
@@ -886,9 +887,10 @@ TEST(value_in_register)
 TEST(value_in_x_register)
 {
   // setup register context
-  REGS_RegBlockX64 regs      = {0};
-  REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, DW_RegX64_FsBase);
-  Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+  X64_RegBlock regs = {0};
+  ARCH_Info *arch_info = arch_info_from_arch(Arch_x64);
+  ARCH_RegCode reg_code = arch_reg_code_from_dw(Arch_x64, DW_RegX64_FsBase);
+  Rng1U16 reg_range = arch_info->reg_code_rng_table[reg_code];
   U64 value = 0xc0ffee;
   MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
   
@@ -899,7 +901,7 @@ TEST(value_in_x_register)
   
   // evaluate the program
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, &regs, 0, 0, &expr_value);
   
   // validate eval result
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
@@ -917,7 +919,7 @@ TEST(address_of_value)
   
   // evaluate the program
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, 0, &expr_value);
   
   // validate eval result
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
@@ -927,19 +929,22 @@ TEST(address_of_value)
 
 TEST(register_relative_variable)
 {
+  ARCH_Info *arch_info = arch_info_from_arch(Arch_x64);
+  
   // setup register context
-  REGS_RegBlockX64 regs      = {0};
-  REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, DW_ExprOp_BReg11 - DW_ExprOp_BReg0);
-  Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+  X64_RegBlock regs = {0};
+  DW_Reg reg_dw_id = (DW_ExprOp_BReg11 - DW_ExprOp_BReg0);
+  ARCH_RegCode reg_code = arch_reg_code_from_dw(Arch_x64, reg_dw_id);
+  Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
   U64 value = 1;
-  MemoryCopy((U8 *)&regs + reg_range.min, &value, sizeof(value));
+  MemoryCopy((U8 *)&regs + reg_rng.min, &value, sizeof(value));
   
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(BReg11), DW_ExprEnc_SLEB128(44) };
   String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
   DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, &regs, 0, 0, &expr_value);
   
   // validate eval result
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
@@ -955,7 +960,7 @@ TEST(frame_relative_variable)
   
   U64               frame_base = 123;
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, frame_base, 0, 0, max_U64, expr, 0, 0, 0, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, frame_base, 0, 0, max_U64, expr, 0, 0, 0, &expr_value);
   
   T_Ok(expr_eval == DW_ExprEvalResult_Ok);
   T_Ok(expr_value.type == DW_ExprValueType_Addr);
@@ -975,18 +980,19 @@ TEST(call_by_reference)
   U64 value = 0xc0ffee;
   MemoryCopy(memory + 32, &value, sizeof(value));
   
-  REGS_RegBlockX64 regs      = {0};
-  REGS_RegCode     reg_code  = reg_code_from_dw_reg(Arch_x64, 58); // fsbase
-  Rng1U64          reg_range = regs_range_from_code(Arch_x64, 0, reg_code);
+  ARCH_Info *arch_info = arch_info_from_arch(Arch_x64);
+  X64_RegBlock regs = {0};
+  ARCH_RegCode reg_code = arch_reg_code_from_dw(Arch_x64, 58); // fsbase
+  Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
   U64 memory_ptr = IntFromPtr(memory);
-  MemoryCopy((U8 *)&regs + reg_range.min, &memory_ptr, sizeof(memory_ptr));
+  MemoryCopy((U8 *)&regs + reg_rng.min, &memory_ptr, sizeof(memory_ptr));
   
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(BRegX), DW_ExprEnc_ULEB128(58), DW_ExprEnc_SLEB128(32), DW_ExprEnc_Op(Deref) };
   String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
   DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   DW_ExprValue      expr_value = { 0 };
-  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, t_machine_op_mem_read, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, &regs, t_machine_op_mem_read, 0, &expr_value);
   
   T_Ok(expr_value.type == DW_ExprValueType_Generic);
   T_Ok(expr_value.generic.size == sizeof(U64));
@@ -1001,7 +1007,7 @@ TEST(plus_uconst)
   DW_Expr    expr        = dw_expr_from_data(arena, DW_Format_64Bit, byte_size_from_arch(Arch_x64), expr_data);
   
   DW_ExprValue      expr_value;
-  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, t_machine_op_mem_read, 0, &expr_value);
+  DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, t_machine_op_mem_read, 0, &expr_value);
   
   T_Ok(expr_value.type == DW_ExprValueType_Addr);
   T_Ok(expr_value.addr == 0x123 + 4);
@@ -1011,7 +1017,7 @@ TEST(plus_uconst)
 TEST(reg_split_spill)
 {
   // setup register context
-  REGS_RegBlockX64 regs      = {0};
+  X64_RegBlock regs      = {0};
   {
     REGS_RegCode reg_code  = reg_code_from_dw_reg(Arch_x64, DW_ExprOp_BReg3 - DW_ExprOp_BReg0);
     Rng1U64      reg_range = regs_range_from_code(Arch_x64, 0, reg_code);

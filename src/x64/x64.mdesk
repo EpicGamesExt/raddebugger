@@ -1,0 +1,231 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@table(name  base  off  size  is_vector  has_rdi  has_dwarf)
+X64_RegTable:
+{
+  {nil               -       0       0    - x -  }
+  {rax               -       0       8    - x x  }
+  {rcx               -       0       8    - x x  }
+  {rdx               -       0       8    - x x  }
+  {rbx               -       0       8    - x x  }
+  {rsp               -       0       8    - x x  }
+  {rbp               -       0       8    - x x  }
+  {rsi               -       0       8    - x x  }
+  {rdi               -       0       8    - x x  }
+  {r8                -       0       8    - x x  }
+  {r9                -       0       8    - x x  }
+  {r10               -       0       8    - x x  }
+  {r11               -       0       8    - x x  }
+  {r12               -       0       8    - x x  }
+  {r13               -       0       8    - x x  }
+  {r14               -       0       8    - x x  }
+  {r15               -       0       8    - x x  }
+  {fsbase            -       0       8    - x x  }
+  {gsbase            -       0       8    - x x  }
+  {rip               -       0       8    - x x  }
+  {rflags            -       0       8    - x x  }
+  {dr0               -       0       8    - x -  }
+  {dr1               -       0       8    - x -  }
+  {dr2               -       0       8    - x -  }
+  {dr3               -       0       8    - x -  }
+  {dr4               -       0       8    - x -  }
+  {dr5               -       0       8    - x -  }
+  {dr6               -       0       8    - x -  }
+  {dr7               -       0       8    - x -  }
+  {st0               -       0      10    - x x  }
+  {st1               -       0      10    - x x  }
+  {st2               -       0      10    - x x  }
+  {st3               -       0      10    - x x  }
+  {st4               -       0      10    - x x  }
+  {st5               -       0      10    - x x  }
+  {st6               -       0      10    - x x  }
+  {st7               -       0      10    - x x  }
+  {fcw               -       0       2    - x -  }
+  {fsw               -       0       2    - x -  }
+  {ftw               -       0       1    - x -  }
+  {fop               -       0       2    - x -  }
+  {fcs               -       0       2    - x -  }
+  {fds               -       0       2    - x -  }
+  {fip               -       0       8    - x -  }
+  {fdp               -       0       8    - x -  }
+  {mxcsr             -       0       4    - x -  }
+  {mxcsr_mask        -       0       4    - x -  }
+  {ss                -       0       2    - x x  }
+  {cs                -       0       2    - x x  }
+  {ds                -       0       2    - x x  }
+  {es                -       0       2    - x x  }
+  {fs                -       0       2    - x x  }
+  {gs                -       0       2    - x x  }
+  {zmm0              -       0      64    x x x  }
+  {zmm1              -       0      64    x x x  }
+  {zmm2              -       0      64    x x x  }
+  {zmm3              -       0      64    x x x  }
+  {zmm4              -       0      64    x x x  }
+  {zmm5              -       0      64    x x x  }
+  {zmm6              -       0      64    x x x  }
+  {zmm7              -       0      64    x x x  }
+  {zmm8              -       0      64    x x x  }
+  {zmm9              -       0      64    x x x  }
+  {zmm10             -       0      64    x x x  }
+  {zmm11             -       0      64    x x x  }
+  {zmm12             -       0      64    x x x  }
+  {zmm13             -       0      64    x x x  }
+  {zmm14             -       0      64    x x x  }
+  {zmm15             -       0      64    x x x  }
+  {zmm16             -       0      64    x x x  }
+  {zmm17             -       0      64    x x x  }
+  {zmm18             -       0      64    x x x  }
+  {zmm19             -       0      64    x x x  }
+  {zmm20             -       0      64    x x x  }
+  {zmm21             -       0      64    x x x  }
+  {zmm22             -       0      64    x x x  }
+  {zmm23             -       0      64    x x x  }
+  {zmm24             -       0      64    x x x  }
+  {zmm25             -       0      64    x x x  }
+  {zmm26             -       0      64    x x x  }
+  {zmm27             -       0      64    x x x  }
+  {zmm28             -       0      64    x x x  }
+  {zmm29             -       0      64    x x x  }
+  {zmm30             -       0      64    x x x  }
+  {zmm31             -       0      64    x x x  }
+  {k0                -       0       8    - x -  }
+  {k1                -       0       8    - x -  }
+  {k2                -       0       8    - x -  }
+  {k3                -       0       8    - x -  }
+  {k4                -       0       8    - x -  }
+  {k5                -       0       8    - x -  }
+  {k6                -       0       8    - x -  }
+  {k7                -       0       8    - x -  }
+  {cetmsr            -       0       8    - x -  }
+  {cetssp            -       0       8    - x -  }
+  //-
+  //- aliases
+  //-
+  {eax               rax     0       4    - - - }
+  {ecx               rcx     0       4    - - - }
+  {edx               rdx     0       4    - - - }
+  {ebx               rbx     0       4    - - - }
+  {esp               rsp     0       4    - - - }
+  {ebp               rbp     0       4    - - - }
+  {esi               rsi     0       4    - - - }
+  {edi               rdi     0       4    - - - }
+  {r8d               r8      0       4    - - - }
+  {r9d               r9      0       4    - - - }
+  {r10d              r10     0       4    - - - }
+  {r11d              r11     0       4    - - - }
+  {r12d              r12     0       4    - - - }
+  {r13d              r13     0       4    - - - }
+  {r14d              r14     0       4    - - - }
+  {r15d              r15     0       4    - - - }
+  {eflags            rflags  0       4    - - - }
+  {ax                rax     0       2    - - - }
+  {cx                rcx     0       2    - - - }
+  {dx                rdx     0       2    - - - }
+  {bx                rbx     0       2    - - - }
+  {si                rsi     0       2    - - - }
+  {di                rdi     0       2    - - - }
+  {sp                rsp     0       2    - - - }
+  {bp                rbp     0       2    - - - }
+  {ip                rip     0       2    - - - }
+  {r8w               r8      0       2    - - - }
+  {r9w               r9      0       2    - - - }
+  {r10w              r10     0       2    - - - }
+  {r11w              r11     0       2    - - - }
+  {r12w              r12     0       2    - - - }
+  {r13w              r13     0       2    - - - }
+  {r14w              r14     0       2    - - - }
+  {r15w              r15     0       2    - - - }
+  {al                rax     0       1    - - - }
+  {cl                rcx     0       1    - - - }
+  {dl                rdx     0       1    - - - }
+  {bl                rbx     0       1    - - - }
+  {sil               rsi     0       1    - - - }
+  {dil               rdi     0       1    - - - }
+  {bpl               rbp     0       1    - - - }
+  {spl               rsp     0       1    - - - }
+  {r8b               r8      0       1    - - - }
+  {r9b               r9      0       1    - - - }
+  {r10b              r10     0       1    - - - }
+  {r11b              r11     0       1    - - - }
+  {r12b              r12     0       1    - - - }
+  {r13b              r13     0       1    - - - }
+  {r14b              r14     0       1    - - - }
+  {r15b              r15     0       1    - - - }
+  {ah                rax     1       1    - - - }
+  {ch                rcx     1       1    - - - }
+  {dh                rdx     1       1    - - - }
+  {bh                rbx     1       1    - - - }
+  {xmm0              zmm0    0      16    x - - }
+  {xmm1              zmm1    0      16    x - - }
+  {xmm2              zmm2    0      16    x - - }
+  {xmm3              zmm3    0      16    x - - }
+  {xmm4              zmm4    0      16    x - - }
+  {xmm5              zmm5    0      16    x - - }
+  {xmm6              zmm6    0      16    x - - }
+  {xmm7              zmm7    0      16    x - - }
+  {xmm8              zmm8    0      16    x - - }
+  {xmm9              zmm9    0      16    x - - }
+  {xmm10             zmm10   0      16    x - - }
+  {xmm11             zmm11   0      16    x - - }
+  {xmm12             zmm12   0      16    x - - }
+  {xmm13             zmm13   0      16    x - - }
+  {xmm14             zmm14   0      16    x - - }
+  {xmm15             zmm15   0      16    x - - }
+  {ymm0              zmm0    0      32    x - - }
+  {ymm1              zmm1    0      32    x - - }
+  {ymm2              zmm2    0      32    x - - }
+  {ymm3              zmm3    0      32    x - - }
+  {ymm4              zmm4    0      32    x - - }
+  {ymm5              zmm5    0      32    x - - }
+  {ymm6              zmm6    0      32    x - - }
+  {ymm7              zmm7    0      32    x - - }
+  {ymm8              zmm8    0      32    x - - }
+  {ymm9              zmm9    0      32    x - - }
+  {ymm10             zmm10   0      32    x - - }
+  {ymm11             zmm11   0      32    x - - }
+  {ymm12             zmm12   0      32    x - - }
+  {ymm13             zmm13   0      32    x - - }
+  {ymm14             zmm14   0      32    x - - }
+  {ymm15             zmm15   0      32    x - - }
+  {mm0               st0     0       8    x - x }
+  {mm1               st1     0       8    x - x }
+  {mm2               st2     0       8    x - x }
+  {mm3               st3     0       8    x - x }
+  {mm4               st4     0       8    x - x }
+  {mm5               st5     0       8    x - x }
+  {mm6               st6     0       8    x - x }
+  {mm7               st7     0       8    x - x }
+}
+
+@enum X64_RegCode:
+{
+  @expand(X64_RegTable a) `$(a.name)`,
+  COUNT,
+}
+
+@struct X64_RegBlock:
+{
+  @expand(X64_RegTable a) `$(a.name != 'nil' && a.base == '-' -> 'U' .. a.size*8 .. ' ' .. a.name)`,
+}
+
+@data(B8) x64_reg_code_is_vector_table:
+{
+  @expand(X64_RegTable a) `$(a.is_vector == 'x' -> '1')$(a.is_vector != 'x' -> '0')`;
+}
+
+@data(String8) x64_reg_code_name_table:
+{
+  @expand(X64_RegTable a) `str8_lit_comp("$(a.name)")`;
+}
+
+@data(U8) x64_reg_code_base_table:
+{
+  @expand(X64_RegTable a) `$(a.base != '-' -> "X64_RegCode_" .. a.base)$(a.base == '-' -> 0)`;
+}
+
+@data(Rng1U16) x64_reg_code_rng_table:
+{
+  `{0}`,
+  @expand(X64_RegTable a) `$(a.name != 'nil' && a.base == '-'-> ("{(U16)OffsetOf(X64_RegBlock, " .. a.name .. "), (U16)OffsetOf(X64_RegBlock, " .. a.name .. ") + " .. a.size .. "}"))$(a.name != 'nil' && a.base != '-' -> ("{(U16)OffsetOf(X64_RegBlock, " .. a.base .. ") + " .. a.off .. ", (U16)OffsetOf(X64_RegBlock, " .. a.base .. ") + " .. a.off .. " + " .. a.size .. "}"))`,
+}

@@ -53,7 +53,7 @@ fs_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out
   FileProperties pre_props = {0};
   if(lane_idx() == 0)
   {
-    pre_props = os_properties_from_file_path(path);
+    pre_props = properties_from_file_path(path);
     file_is_good = (pre_props.modified != 0);
   }
   lane_sync_u64(&file_is_good, 0);
@@ -80,16 +80,16 @@ fs_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out
   }
   
   //- rjf: open file
-  OS_Handle file = {0};
+  File file = {0};
   if(file_is_good)
   {
     if(lane_idx() == 0)
     {
-      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+      file = file_open(AccessFlag_Read|AccessFlag_ShareRead|AccessFlag_ShareWrite, path);
     }
     lane_sync_u64(&file, 0);
   }
-  B32 file_handle_is_valid = !os_handle_match(os_handle_zero(), file);
+  B32 file_handle_is_valid = !file_match(file_zero(), file);
   
   //- rjf: do read
   U64 total_bytes_read = 0;
@@ -104,7 +104,7 @@ fs_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out
     ProfScope("read \"%.*s\" [0x%I64x, 0x%I64x)", str8_varg(path), range.min, range.max)
     {
       Rng1U64 lane_read_range = lane_range(data_buffer_size);
-      U64 bytes_read = os_file_read(file, shift_1u64(lane_read_range, range.min), data_buffer + lane_read_range.min);
+      U64 bytes_read = file_read(file, shift_1u64(lane_read_range, range.min), data_buffer + lane_read_range.min);
       ins_atomic_u64_add_eval(total_bytes_read_ptr, bytes_read);
     }
     lane_sync();
@@ -116,7 +116,7 @@ fs_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out
   {
     if(lane_idx() == 0)
     {
-      os_file_close(file);
+      file_close(file);
     }
   }
   
@@ -124,7 +124,7 @@ fs_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out
   FileProperties post_props = {0};
   if(lane_idx() == 0)
   {
-    post_props = os_properties_from_file_path(path);
+    post_props = properties_from_file_path(path);
   }
   
   //- rjf: form content key
@@ -303,7 +303,7 @@ fs_async_tick(void)
         {
           for(FS_Node *n = slot->first; n != 0; n = n->next)
           {
-            FileProperties props = os_properties_from_file_path(n->path);
+            FileProperties props = properties_from_file_path(n->path);
             if(props.modified != n->last_modified_timestamp)
             {
               found_work = 1;

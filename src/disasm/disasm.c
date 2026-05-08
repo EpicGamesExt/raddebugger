@@ -294,150 +294,142 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_o
     //- rjf: data * arch * addr * dbg -> decode artifacts
     DASM_LineChunkList line_list = {0};
     String8List inst_strings = {0};
-    switch(params.arch)
     {
-      default:{}break;
-      
-      //- rjf: x86/x64 decoding
-      case Arch_x64:
-      case Arch_x86:
+      // rjf: disassemble
+      RDI_SourceFile *last_file = &rdi_nil_element_union.source_file;
+      RDI_Line *last_line = 0;
+      for(U64 off = 0; off < data.size;)
       {
-        // rjf: disassemble
-        RDI_SourceFile *last_file = &rdi_nil_element_union.source_file;
-        RDI_Line *last_line = 0;
-        for(U64 off = 0; off < data.size;)
+        // rjf: disassemble one instruction
+        DASM_Inst inst = dasm_inst_from_code(scratch.arena, params.arch, params.vaddr+off, str8_skip(data, off), params.syntax);
+        if(inst.size == 0)
         {
-          // rjf: disassemble one instruction
-          DASM_Inst inst = dasm_inst_from_code(scratch.arena, params.arch, params.vaddr+off, str8_skip(data, off), params.syntax);
-          if(inst.size == 0)
+          break;
+        }
+        
+        // rjf: push strings derived from voff -> line info
+        if(params.style_flags & (DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines) &&
+           rdi != &rdi_parsed_nil)
+        {
+          U64 voff = (params.vaddr+off) - params.base_vaddr;
+          U32 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, voff);
+          RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+          RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
+          RDI_ParsedLineTable unit_line_info = {0};
+          rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
+          U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff);
+          if(line_info_idx < unit_line_info.count)
           {
-            break;
-          }
-          
-          // rjf: push strings derived from voff -> line info
-          if(params.style_flags & (DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines) &&
-             rdi != &rdi_parsed_nil)
-          {
-            U64 voff = (params.vaddr+off) - params.base_vaddr;
-            U32 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, voff);
-            RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
-            RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
-            RDI_ParsedLineTable unit_line_info = {0};
-            rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
-            U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff);
-            if(line_info_idx < unit_line_info.count)
+            RDI_Line *line = &unit_line_info.lines[line_info_idx];
+            RDI_SourceFile *file = rdi_element_from_name_idx(rdi, SourceFiles, line->file_idx);
+            String8 file_normalized_full_path = {0};
+            file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
+            if(file != last_file)
             {
-              RDI_Line *line = &unit_line_info.lines[line_info_idx];
-              RDI_SourceFile *file = rdi_element_from_name_idx(rdi, SourceFiles, line->file_idx);
-              String8 file_normalized_full_path = {0};
-              file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
-              if(file != last_file)
+              if(params.style_flags & DASM_StyleFlag_SourceFilesNames &&
+                 file->normal_full_path_string_idx != 0 && file_normalized_full_path.size != 0)
               {
-                if(params.style_flags & DASM_StyleFlag_SourceFilesNames &&
-                   file->normal_full_path_string_idx != 0 && file_normalized_full_path.size != 0)
-                {
-                  String8 inst_string = push_str8f(scratch.arena, "> %S", file_normalized_full_path);
-                  DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
-                                                                                                   inst_strings.total_size + inst_strings.node_count + inst_string.size)};
-                  dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
-                  str8_list_push(scratch.arena, &inst_strings, inst_string);
-                }
-                if(params.style_flags & DASM_StyleFlag_SourceFilesNames && file->normal_full_path_string_idx == 0)
-                {
-                  String8 inst_string = str8_lit(">");
-                  DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
-                                                                                                   inst_strings.total_size + inst_strings.node_count + inst_string.size)};
-                  dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
-                  str8_list_push(scratch.arena, &inst_strings, inst_string);
-                }
-                last_file = file;
+                String8 inst_string = push_str8f(scratch.arena, "> %S", file_normalized_full_path);
+                DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                                                 inst_strings.total_size + inst_strings.node_count + inst_string.size)};
+                dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
+                str8_list_push(scratch.arena, &inst_strings, inst_string);
               }
-              if(line && line != last_line && file->normal_full_path_string_idx != 0 &&
-                 params.style_flags & DASM_StyleFlag_SourceLines &&
-                 file_normalized_full_path.size != 0)
+              if(params.style_flags & DASM_StyleFlag_SourceFilesNames && file->normal_full_path_string_idx == 0)
               {
-                FileProperties props = os_properties_from_file_path(file_normalized_full_path);
-                if(props.modified != 0)
+                String8 inst_string = str8_lit(">");
+                DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                                                 inst_strings.total_size + inst_strings.node_count + inst_string.size)};
+                dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
+                str8_list_push(scratch.arena, &inst_strings, inst_string);
+              }
+              last_file = file;
+            }
+            if(line && line != last_line && file->normal_full_path_string_idx != 0 &&
+               params.style_flags & DASM_StyleFlag_SourceLines &&
+               file_normalized_full_path.size != 0)
+            {
+              FileProperties props = properties_from_file_path(file_normalized_full_path);
+              if(props.modified != 0)
+              {
+                // TODO(rjf): need redirection path - this may map to a different path on the local machine,
+                // need frontend to communicate path remapping info to this layer
+                C_Key key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64), 0);
+                TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
+                U64 endt_us = max_U64;
+                U128 hash = {0};
+                TXT_TextInfo text_info = txt_text_info_from_key_lang(access, key, lang_kind, &hash);
+                stale = (stale || u128_match(hash, u128_zero()));
+                if(0 < line->line_num && line->line_num < text_info.lines_count)
                 {
-                  // TODO(rjf): need redirection path - this may map to a different path on the local machine,
-                  // need frontend to communicate path remapping info to this layer
-                  C_Key key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64), 0);
-                  TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
-                  U64 endt_us = max_U64;
-                  U128 hash = {0};
-                  TXT_TextInfo text_info = txt_text_info_from_key_lang(access, key, lang_kind, &hash);
-                  stale = (stale || u128_match(hash, u128_zero()));
-                  if(0 < line->line_num && line->line_num < text_info.lines_count)
+                  String8 data = c_data_from_hash(access, hash);
+                  String8 line_text = str8_skip_chop_whitespace(str8_substr(data, text_info.lines_ranges[line->line_num-1]));
+                  if(line_text.size != 0)
                   {
-                    String8 data = c_data_from_hash(access, hash);
-                    String8 line_text = str8_skip_chop_whitespace(str8_substr(data, text_info.lines_ranges[line->line_num-1]));
-                    if(line_text.size != 0)
-                    {
-                      String8 inst_string = push_str8f(scratch.arena, "> %S", line_text);
-                      DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
-                                                                                                       inst_strings.total_size + inst_strings.node_count + inst_string.size)};
-                      dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
-                      str8_list_push(scratch.arena, &inst_strings, inst_string);
-                    }
+                    String8 inst_string = push_str8f(scratch.arena, "> %S", line_text);
+                    DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                                                     inst_strings.total_size + inst_strings.node_count + inst_string.size)};
+                    dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
+                    str8_list_push(scratch.arena, &inst_strings, inst_string);
                   }
                 }
-                last_line = line;
               }
+              last_line = line;
             }
           }
-          
-          // rjf: push line
-          String8 addr_part = {0};
-          if(params.style_flags & DASM_StyleFlag_Addresses)
-          {
-            addr_part = push_str8f(scratch.arena, "%s0x%016I64x  ", rdi != &rdi_parsed_nil ? "  " : "", params.vaddr+off);
-          }
-          String8 code_bytes_part = {0};
-          if(params.style_flags & DASM_StyleFlag_CodeBytes)
-          {
-            String8List code_bytes_strings = {0};
-            str8_list_push(scratch.arena, &code_bytes_strings, str8_lit("{"));
-            for(U64 byte_idx = 0; byte_idx < inst.size || byte_idx < 16; byte_idx += 1)
-            {
-              if(byte_idx < inst.size)
-              {
-                str8_list_pushf(scratch.arena, &code_bytes_strings, "%02x%s ", (U32)data.str[off+byte_idx], byte_idx == inst.size-1 ? "}" : "");
-              }
-              else if(byte_idx < 8)
-              {
-                str8_list_push(scratch.arena, &code_bytes_strings, str8_lit("   "));
-              }
-            }
-            str8_list_push(scratch.arena, &code_bytes_strings, str8_lit(" "));
-            code_bytes_part = str8_list_join(scratch.arena, &code_bytes_strings, 0);
-          }
-          String8 symbol_part = {0};
-          if(inst.jump_dest_vaddr != 0 && rdi != &rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
-          {
-            RDI_U32 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, inst.jump_dest_vaddr-params.base_vaddr);
-            if(scope_idx != 0)
-            {
-              RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
-              RDI_U32 procedure_idx = scope->proc_idx;
-              RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_idx);
-              String8 procedure_name = {0};
-              procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
-              if(procedure_name.size != 0)
-              {
-                symbol_part = push_str8f(scratch.arena, " (%S)", procedure_name);
-              }
-            }
-          }
-          String8 inst_string = push_str8f(scratch.arena, "%S%S%S%S", addr_part, code_bytes_part, inst.string, symbol_part);
-          DASM_Line line = {u32_from_u64_saturate(off), 0, inst.jump_dest_vaddr, r1u64(inst_strings.total_size + inst_strings.node_count,
-                                                                                       inst_strings.total_size + inst_strings.node_count + inst_string.size)};
-          dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &line);
-          str8_list_push(scratch.arena, &inst_strings, inst_string);
-          
-          // rjf: increment
-          off += inst.size;
         }
-      }break;
+        
+        // rjf: push line
+        String8 addr_part = {0};
+        if(params.style_flags & DASM_StyleFlag_Addresses)
+        {
+          addr_part = push_str8f(scratch.arena, "%s0x%016I64x  ", rdi != &rdi_parsed_nil ? "  " : "", params.vaddr+off);
+        }
+        String8 code_bytes_part = {0};
+        if(params.style_flags & DASM_StyleFlag_CodeBytes)
+        {
+          String8List code_bytes_strings = {0};
+          str8_list_push(scratch.arena, &code_bytes_strings, str8_lit("{"));
+          for(U64 byte_idx = 0; byte_idx < inst.size || byte_idx < 16; byte_idx += 1)
+          {
+            if(byte_idx < inst.size)
+            {
+              str8_list_pushf(scratch.arena, &code_bytes_strings, "%02x%s ", (U32)data.str[off+byte_idx], byte_idx == inst.size-1 ? "}" : "");
+            }
+            else if(byte_idx < 8)
+            {
+              str8_list_push(scratch.arena, &code_bytes_strings, str8_lit("   "));
+            }
+          }
+          str8_list_push(scratch.arena, &code_bytes_strings, str8_lit(" "));
+          code_bytes_part = str8_list_join(scratch.arena, &code_bytes_strings, 0);
+        }
+        String8 symbol_part = {0};
+        if(inst.jump_dest_vaddr != 0 && rdi != &rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
+        {
+          RDI_U32 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, inst.jump_dest_vaddr-params.base_vaddr);
+          if(scope_idx != 0)
+          {
+            RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
+            RDI_U32 procedure_idx = scope->proc_idx;
+            RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_idx);
+            String8 procedure_name = {0};
+            procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
+            if(procedure_name.size != 0)
+            {
+              symbol_part = push_str8f(scratch.arena, " (%S)", procedure_name);
+            }
+          }
+        }
+        String8 inst_string = push_str8f(scratch.arena, "%S%S%S%S", addr_part, code_bytes_part, inst.string, symbol_part);
+        DASM_Line line = {u32_from_u64_saturate(off), 0, inst.jump_dest_vaddr, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                                     inst_strings.total_size + inst_strings.node_count + inst_string.size)};
+        dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &line);
+        str8_list_push(scratch.arena, &inst_strings, inst_string);
+        
+        // rjf: increment
+        off += inst.size;
+      }
     }
     
     //- rjf: artifacts -> value bundle

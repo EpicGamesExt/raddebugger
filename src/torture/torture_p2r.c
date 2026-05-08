@@ -16,42 +16,46 @@ TEST(p2r_determ)
   {
     // rjf: unpack paths, make output directory
     String8 pdb_path = path_normalized_from_string(arena, pdb_paths[pdb_idx]);
-
+    
     // rjf: generate all RDIs
     String8List rdi_paths = {0};
     String8List dump_paths = {0};
     {
-      OS_HandleList processes = {0};
+      ProcessList processes = {0};
       for EachIndex(repeat_idx, num_repeats_per_pdb)
       {
         String8 rdi_name = push_str8f(arena, "repeat_%I64u.rdi", repeat_idx);
         String8 rdi_path = t_make_file_path(arena, rdi_name);
         str8_list_push(arena, &rdi_paths, rdi_path);
         String8 cmdl = str8f(arena, "radbin -rdi -deterministic %S -out:%S", pdb_path, rdi_path);
-        OS_Handle process_handle = os_cmd_line_launch(cmdl);
-        T_Ok(!os_handle_match(os_handle_zero(), process_handle));
-        os_handle_list_push(arena, &processes, process_handle);
+        Process process = launch_cmd_line(cmdl);
+        T_Ok(!process_match(process_zero(), process));
+        process_list_push(arena, &processes, process);
       }
-
-      // wait on the converters
-      for EachNode(n, OS_HandleNode, processes.first) { os_process_join(n->v, max_U64, 0); }
+      for EachNode(n, ProcessNode, processes.first)
+      {
+        process_join(n->v, max_U64, 0);
+      }
     }
-
+    
     // rjf: generate all dumps
     {
-      OS_HandleList processes = {0};
+      ProcessList processes = {0};
       for EachNode(n, String8Node, rdi_paths.first)
       {
         String8 rdi_path = n->string;
-        String8 dump_path = push_str8f(arena, "%S.dump", rdi_path);
+        String8 dump_path = str8f(arena, "%S.dump", rdi_path);
         str8_list_push(arena, &dump_paths, dump_path);
-        OS_Handle process_handle = os_cmd_line_launchf("radbin -dump -deterministic %S -out:%S", rdi_path, dump_path);
-        T_Ok(!os_handle_match(os_handle_zero(), process_handle));
-        os_handle_list_push(arena, &processes, process_handle);
+        Process process_handle = launch_cmd_linef("radbin -dump -deterministic %S -out:%S", rdi_path, dump_path);
+        T_Ok(!process_match(process_zero(), process_handle));
+        process_list_push(arena, &processes, process_handle);
       }
-      for EachNode(n, OS_HandleNode, processes.first) { os_process_join(n->v, max_U64, 0); }
+      for EachNode(n, ProcessNode, processes.first)
+      {
+        process_join(n->v, max_U64, 0);
+      }
     }
-
+    
     // rjf: gather all hashes/paths
     U64      rdi_hashes_count  = rdi_paths.node_count;
     U128    *rdi_hashes        = push_array(arena, U128, rdi_hashes_count);
@@ -65,11 +69,11 @@ TEST(p2r_determ)
       {
         Temp scratch = scratch_begin(0, 0);
         String8 rdi_path = n->string;
-        String8 path     = rdi_path;
+        String8 path = rdi_path;
         T_Ok(path.size);
-        String8 data     = os_data_from_file_path(scratch.arena, path);
+        String8 data = data_from_file_path(scratch.arena, path);
         T_Ok(data.size);
-        rdi_hashes     [idx] = u128_hash_from_str8(data);
+        rdi_hashes[idx] = u128_hash_from_str8(data);
         rdi_paths_array[idx] = path;
         scratch_end(scratch);
         idx += 1;
@@ -82,15 +86,15 @@ TEST(p2r_determ)
         Temp scratch = scratch_begin(0, 0);
         String8 path = n->string;
         T_Ok(path.size);
-        String8 data = os_data_from_file_path(scratch.arena, path);
+        String8 data = data_from_file_path(scratch.arena, path);
         T_Ok(data.size);
-        dump_hashes     [idx] = u128_hash_from_str8(data);
+        dump_hashes[idx] = u128_hash_from_str8(data);
         dump_paths_array[idx] = path;
         scratch_end(scratch);
         idx += 1;
       }
     }
-
+    
     // rjf: determine if all hashes match
     U64 mismatch_idx = max_U64;
     for EachIndex(idx, rdi_hashes_count)
@@ -109,7 +113,7 @@ TEST(p2r_determ)
         break;
       }
     }
-
+    
     // rjf: output bad case info
     if (mismatch_idx != max_U64) {
       U64 idx = mismatch_idx;

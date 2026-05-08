@@ -11,7 +11,7 @@ typedef struct
   LNK_IO_Flags io_flags;
   String8Array path_arr;
   String8Array data_arr;
-  OS_Handle   *handle_arr;
+  File        *handle_arr;
   U64         *size_arr;
   U64         *off_arr;
   U8          *buffer;
@@ -28,9 +28,9 @@ shared_function uint64_t lnk_write_file(void *raw_handle, uint64_t offset, void 
 
 // --- IO Functions ------------------------------------------------------------
 
-internal OS_Handle lnk_file_open_with_rename_permissions(String8 path);
-internal B32       lnk_file_set_delete_on_close(OS_Handle handle, B32 delete_file);
-internal B32       lnk_file_rename(OS_Handle handle, String8 new_name);
+internal File      lnk_file_open_with_rename_permissions(String8 path);
+internal B32       lnk_file_set_delete_on_close(File handle, B32 delete_file);
+internal B32       lnk_file_rename(File handle, String8 new_name);
 
 internal String8      lnk_read_data_from_file_path(Arena *arena, LNK_IO_Flags io_flags, String8 path);
 internal String8Array lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr);

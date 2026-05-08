@@ -6,6 +6,9 @@
 
 #include "lib_rdi/rdi.h"
 #include "lib_rdi/rdi_parse.h"
+#if defined(X64_H)
+# include "rdi/x64/rdi_x64.h"
+#endif
 
 ////////////////////////////////
 //~ rjf: RDI Dumping Flags
@@ -70,6 +73,7 @@ read_only global String8 rdi_name_title_from_dump_subset_table[] =
 //~ rjf: RDI Enum <=> Base Enum
 
 internal Arch arch_from_rdi_arch(RDI_Arch arch);
+internal RDI_Arch rdi_arch_from_arch(Arch arch);
 
 ////////////////////////////////
 //~ rjf: Lookup Helpers

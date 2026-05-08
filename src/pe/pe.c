@@ -520,10 +520,6 @@ pe_bin_info_from_data(Arena *arena, String8 data)
           reported_data_dir_offset = sizeof(*pe_optional);
           reported_data_dir_count  = pe_optional->data_dir_count;
         }
-        else
-        {
-          Assert(!"unable to read PE Optional Header");
-        }
       }break;
       case PE_PE32PLUS_MAGIC:
       {
@@ -538,10 +534,6 @@ pe_bin_info_from_data(Arena *arena, String8 data)
           file_section_align       = pe_optional->file_alignment;
           reported_data_dir_offset = sizeof(*pe_optional);
           reported_data_dir_count  = pe_optional->data_dir_count;
-        }
-        else
-        {
-          Assert(!"unable to read PE Optional Plus Header");
         }
       }break;
     }
@@ -561,10 +553,6 @@ pe_bin_info_from_data(Arena *arena, String8 data)
         U64 file_off = coff_foff_from_voff(sections, clamped_sec_count, dir.virt_off);
         data_dir_franges[dir_idx] = r1u64(file_off, file_off+dir.virt_size);
       }
-      else
-      {
-        Assert(!"unable to read data directory");
-      }
     }
     
     // export virtual directory ranges
@@ -576,10 +564,6 @@ pe_bin_info_from_data(Arena *arena, String8 data)
       if(str8_deserial_read_struct(data, dir_offset, &dir) == sizeof(dir))
       {
         data_dir_vranges[dir_idx] = r1u64(dir.virt_off, dir.virt_off+dir.virt_size);
-      }
-      else
-      {
-        Assert(!"unable to read data directory");
       }
     }
     
@@ -608,17 +592,12 @@ pe_bin_info_from_data(Arena *arena, String8 data)
           tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
           tls_header.characteristics   = (U64)tls_header32.characteristics;
         }
-        else
-        {
-          Assert(!"unable to read TLS Header 32");
-        }
       }break;
       case COFF_MachineType_X64:
       {
         if(str8_deserial_read_struct(data, tls_header_frng.min, &tls_header) != sizeof(tls_header))
         {
           MemoryZeroStruct(&tls_header);
-          Assert(!"unable to read TLS Header 64");
         }
       }break;
     }

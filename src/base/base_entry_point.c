@@ -11,6 +11,9 @@ global B32 async_loop_again_high_priority = 0;
 global B32 global_async_exit = 0;
 thread_static B32 is_async_thread = 0;
 
+// NOTE(rjf): defined by target
+internal void entry_point(CmdLine *cmdline);
+
 internal void
 main_thread_base_entry_point(int arguments_count, char **arguments)
 {
@@ -100,7 +103,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(DBG_ENGINE_CORE_H)
     num_main_threads += 1;
 #endif
-    U64 num_async_threads = os_get_system_info()->logical_processor_count;
+    U64 num_async_threads = get_system_info()->logical_processor_count;
     U64 num_main_threads_clamped = Min(num_async_threads, num_main_threads);
     num_async_threads -= num_main_threads_clamped;
     String8 num_async_threads_string = cmd_line_string(&cmdline, str8_lit("async_thread_count"));
@@ -192,7 +195,7 @@ async_thread_entry_point(void *params)
     {
       if(!ins_atomic_u32_eval(&async_loop_again))
       {
-        MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, os_now_microseconds()+1000000);
+        MutexScope(async_tick_start_mutex) cond_var_wait(async_tick_start_cond_var, async_tick_start_mutex, now_time_us()+1000000);
       }
       ins_atomic_u32_eval_assign(&async_loop_again, 0);
       ins_atomic_u32_eval_assign(&async_loop_again_high_priority, 0);

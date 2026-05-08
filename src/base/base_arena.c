@@ -19,24 +19,24 @@ arena_alloc_(ArenaParams *params)
     // rjf: round up reserve/commit sizes
     if(params->flags & ArenaFlag_LargePages)
     {
-      reserve_size = AlignPow2(reserve_size, os_get_system_info()->large_page_size);
-      commit_size  = AlignPow2(commit_size,  os_get_system_info()->large_page_size);
+      reserve_size = AlignPow2(reserve_size, get_system_info()->large_page_size);
+      commit_size  = AlignPow2(commit_size,  get_system_info()->large_page_size);
     }
     else
     {
-      reserve_size = AlignPow2(reserve_size, os_get_system_info()->page_size);
-      commit_size  = AlignPow2(commit_size,  os_get_system_info()->page_size);
+      reserve_size = AlignPow2(reserve_size, get_system_info()->page_size);
+      commit_size  = AlignPow2(commit_size,  get_system_info()->page_size);
     }
     
     if(params->flags & ArenaFlag_LargePages)
     {
-      base = os_reserve_large(reserve_size);
-      os_commit_large(base, commit_size);
+      base = reserve_memory_large(reserve_size);
+      commit_memory_large(base, commit_size);
     }
     else
     {
-      base = os_reserve(reserve_size);
-      os_commit(base, commit_size);
+      base = reserve_memory(reserve_size);
+      commit_memory(base, commit_size);
     }
     AsanPoisonMemoryRegion(base, commit_size);
     // TODO(rjf): we need to reintroduce this later when we have the ability to remove annotations...
@@ -52,7 +52,7 @@ arena_alloc_(ArenaParams *params)
   if(Unlikely(base == 0))
   {
     os_graphical_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
-    os_abort(1);
+    abort_self(1);
   }
 #endif
   
@@ -90,7 +90,7 @@ arena_release(Arena *arena)
   for(Arena *n = arena->current, *prev = 0; n != 0; n = prev)
   {
     prev = n->prev;
-    os_release(n, n->res);
+    release_memory(n, n->res);
   }
 }
 
@@ -179,11 +179,11 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
     U8 *cmt_ptr = (U8 *)current + current->cmt;
     if(current->flags & ArenaFlag_LargePages)
     {
-      os_commit_large(cmt_ptr, cmt_size);
+      commit_memory_large(cmt_ptr, cmt_size);
     }
     else
     {
-      os_commit(cmt_ptr, cmt_size);
+      commit_memory(cmt_ptr, cmt_size);
     }
     AsanPoisonMemoryRegion(cmt_ptr, cmt_size);
     current->cmt = cmt_pst_clamped;
@@ -213,7 +213,7 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
   if(Unlikely(result == 0))
   {
     os_graphical_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
-    os_abort(1);
+    abort_self(1);
   }
 #endif
   
@@ -246,7 +246,7 @@ arena_pop_to(Arena *arena, U64 pos)
   for(Arena *prev = 0; current->base_pos >= big_pos; current = prev)
   {
     prev = current->prev;
-    os_release(current, current->res);
+    release_memory(current, current->res);
   }
 #endif
   arena->current = current;

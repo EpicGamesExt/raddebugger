@@ -69,8 +69,8 @@ struct DI_Node
   DI_Key key;
   
   // rjf: value
-  OS_Handle file;
-  OS_Handle file_map;
+  File file;
+  FileMap file_map;
   void *file_base;
   FileProperties file_props;
   Arena *arena;
@@ -145,7 +145,7 @@ struct DI_LoadTask
   B32 rdi_is_stale;
   
   U64 thread_count;
-  OS_Handle process;
+  Process process;
 };
 
 typedef struct DI_LoadCompletion DI_LoadCompletion;
@@ -280,7 +280,7 @@ struct DI_Shared
   String8 conversion_completion_shared_memory_name;
   Semaphore conversion_completion_lock_semaphore;
   Semaphore conversion_completion_signal_semaphore;
-  OS_Handle conversion_completion_shared_memory;
+  SharedMemory conversion_completion_shared_memory;
   U64 *conversion_completion_shared_memory_base;
   Thread conversion_completion_signal_receiver_thread;
   

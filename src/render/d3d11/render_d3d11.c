@@ -199,7 +199,7 @@ r_init(CmdLine *cmdln)
     char buffer[256] = {0};
     raddbg_snprintf(buffer, sizeof(buffer), "D3D11 device creation failure (%lx). The process is terminating.", error);
     os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-    os_abort(1);
+    abort_self(1);
   }
   ProfEnd();
   
@@ -483,7 +483,7 @@ r_init(CmdLine *cmdln)
 //- rjf: window setup/teardown
 
 r_hook R_Handle
-r_window_equip(OS_Handle handle)
+r_window_equip(OS_Window handle)
 {
   ProfBeginFunction();
   R_Handle result = {0};
@@ -535,7 +535,7 @@ r_window_equip(OS_Handle handle)
       char buffer[256] = {0};
       raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%lx). The process is terminating.", error);
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-      os_abort(1);
+      abort_self(1);
     }
     
     r_d3d11_state->dxgi_factory->lpVtbl->MakeWindowAssociation(r_d3d11_state->dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
@@ -556,7 +556,7 @@ r_window_equip(OS_Handle handle)
 }
 
 r_hook void
-r_window_unequip(OS_Handle handle, R_Handle equip_handle)
+r_window_unequip(OS_Window handle, R_Handle equip_handle)
 {
   ProfBeginFunction();
   MutexScopeW(r_d3d11_state->device_rw_mutex)
@@ -605,13 +605,10 @@ r_tex2d_alloc(R_ResourceKind kind, Vec2S32 size, R_Tex2DFormat format, void *dat
     texture->generation += 1;
   }
   
+  //- rjf: resource kind -> d3d11 usage / cpu access flags
   D3D11_USAGE d3d11_usage = D3D11_USAGE_DEFAULT;
   UINT cpu_access_flags = 0;
   r_usage_access_flags_from_resource_kind(kind, &d3d11_usage, &cpu_access_flags);
-  if (kind == R_ResourceKind_Static)
-  {
-    Assert(data != 0 && "static texture must have initial data provided");
-  }
   
   //- rjf: format -> dxgi format
   DXGI_FORMAT dxgi_format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -714,9 +711,8 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
   MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
-    if(texture != &r_d3d11_tex2d_nil)
+    if(texture != &r_d3d11_tex2d_nil && texture->kind == R_ResourceKind_Dynamic)
     {
-      Assert(texture->kind == R_ResourceKind_Dynamic && "only dynamic texture can update region");
       U64 bytes_per_pixel = r_tex2d_format_bytes_per_pixel_table[texture->format];
       Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
       D3D11_BOX dst_box =
@@ -756,13 +752,10 @@ r_buffer_alloc(R_ResourceKind kind, U64 size, void *data)
     buffer->generation += 1;
   }
   
+  //- rjf: resource kind -> d3d11 usage / cpu access flags
   D3D11_USAGE d3d11_usage = D3D11_USAGE_DEFAULT;
   UINT cpu_access_flags = 0;
   r_usage_access_flags_from_resource_kind(kind, &d3d11_usage, &cpu_access_flags);
-  if (kind == R_ResourceKind_Static)
-  {
-    Assert(data != 0 && "static buffer must have initial data provided");
-  }
   
   //- rjf: prep initial data, if passed
   D3D11_SUBRESOURCE_DATA initial_data_ = {0};
@@ -868,7 +861,7 @@ r_end_frame(void)
 }
 
 r_hook void
-r_window_begin_frame(OS_Handle window, R_Handle window_equip)
+r_window_begin_frame(OS_Window window, R_Handle window_equip)
 {
   ProfBeginFunction();
   MutexScopeW(r_d3d11_state->device_rw_mutex)
@@ -1000,7 +993,7 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
 }
 
 r_hook void
-r_window_end_frame(OS_Handle window, R_Handle window_equip)
+r_window_end_frame(OS_Window window, R_Handle window_equip)
 {
   ProfBeginFunction();
   MutexScopeW(r_d3d11_state->device_rw_mutex)
@@ -1060,7 +1053,7 @@ r_window_end_frame(OS_Handle window, R_Handle window_equip)
       char buffer[256] = {0};
       raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%lx). The process is terminating.", error);
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-      os_abort(1);
+      abort_self(1);
     }
     d_ctx->lpVtbl->ClearState(d_ctx);
   }
@@ -1070,7 +1063,7 @@ r_window_end_frame(OS_Handle window, R_Handle window_equip)
 //- rjf: render pass submission
 
 r_hook void
-r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
+r_window_submit(OS_Window window, R_Handle window_equip, R_PassList *passes)
 {
   ProfBeginFunction();
   MutexScopeW(r_d3d11_state->device_rw_mutex)

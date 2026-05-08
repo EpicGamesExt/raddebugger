@@ -885,7 +885,7 @@ d_entity_ctx_rw_store_alloc(void)
   D_Entity *root = store->ctx.root = d_entity_alloc(store, &d_entity_nil, D_EntityKind_Root, Arch_Null, d_handle_zero(), 0);
   D_Entity *local_machine = d_entity_alloc(store, root, D_EntityKind_Machine, Arch_CURRENT, d_handle_make(D_MachineID_Local, dmn_handle_zero()), 0);
   Temp scratch = scratch_begin(0, 0);
-  String8 local_machine_name = push_str8f(scratch.arena, "This PC (%S)", os_get_system_info()->machine_name);
+  String8 local_machine_name = push_str8f(scratch.arena, "This PC (%S)", get_system_info()->machine_name);
   d_entity_equip_string(store, local_machine, local_machine_name);
   scratch_end(scratch);
   return store;
@@ -1476,7 +1476,8 @@ d_reg_block_from_thread(Arena *arena, D_EntityCtx *ctx, D_Handle handle)
   D_ThreadRegCache *cache = &d_ctrl_state->thread_reg_cache;
   D_Entity *thread_entity = d_entity_from_handle(ctx, handle);
   Arch arch = thread_entity->arch;
-  U64 reg_block_size = regs_block_size_from_arch(arch);
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
+  U64 reg_block_size = arch_info->reg_block_size;
   U64 hash = d_hash_from_handle(handle);
   U64 slot_idx = hash%cache->slots_count;
   U64 stripe_idx = slot_idx%cache->stripes_count;
@@ -1543,8 +1544,9 @@ d_rip_from_thread(D_EntityCtx *ctx, D_Handle handle)
   Temp scratch = scratch_begin(0, 0);
   D_Entity *thread_entity = d_entity_from_handle(ctx, handle);
   Arch arch = thread_entity->arch;
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
   void *block = d_reg_block_from_thread(scratch.arena, ctx, handle);
-  U64 result = regs_rip_from_arch_block(arch, block);
+  U64 result = arch_ip_from_reg_block(arch_info, block);
   scratch_end(scratch);
   return result;
 }
@@ -1555,8 +1557,9 @@ d_rsp_from_thread(D_EntityCtx *ctx, D_Handle handle)
   Temp scratch = scratch_begin(0, 0);
   D_Entity *thread_entity = d_entity_from_handle(ctx, handle);
   Arch arch = thread_entity->arch;
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
   void *block = d_reg_block_from_thread(scratch.arena, ctx, handle);
-  U64 result = regs_rsp_from_arch_block(arch, block);
+  U64 result = arch_sp_from_reg_block(arch_info, block);
   scratch_end(scratch);
   return result;
 }
@@ -1708,7 +1711,7 @@ d_raddbg_data_from_module(Arena *arena, D_Handle module_handle)
 }
 
 ////////////////////////////////
-//~ rjf: Unwinding Functions}
+//~ rjf: Unwinding Functions
 
 //- rjf: [dwarf]
 
@@ -1716,7 +1719,7 @@ typedef struct D_MemoryReadContextDwarfX64 D_MemoryReadContextDwarfX64;
 struct D_MemoryReadContextDwarfX64
 {
   D_Handle process_handle;
-  U64         endt_us;
+  U64 endt_us;
 };
 
 internal MACHINE_OP_MEM_READ(ctrl_machine_mem_read)
@@ -1765,6 +1768,7 @@ internal D_UnwindStepResult
 d_establish_frame_unwind_context__dwarf(Arena *arena, D_Handle process_handle, D_Handle module_handle, Arch arch, void *regs, U64 endt_us, D_FrameUnwindContext *ctx_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
   D_UnwindStepResult result = { .flags = D_UnwindFlag_Error };
   
   // gather context for virtual stack unwinder
@@ -1774,11 +1778,11 @@ d_establish_frame_unwind_context__dwarf(Arena *arena, D_Handle process_handle, D
   EH_FrameHdr eh_frame_hdr = {0};
   EH_PtrCtx   eh_ptr_ctx   = {0};
   {
-    U64                              hash       = d_hash_from_handle(module_handle);
-    U64                              slot_idx   = hash % d_ctrl_state->module_image_info_cache.slots_count;
-    U64                              stripe_idx = slot_idx % d_ctrl_state->module_image_info_cache.stripes_count;
-    D_ModuleImageInfoCacheSlot   *slot       = &d_ctrl_state->module_image_info_cache.slots[slot_idx];
-    D_ModuleImageInfoCacheStripe *stripe     = &d_ctrl_state->module_image_info_cache.stripes[stripe_idx];
+    U64 hash = d_hash_from_handle(module_handle);
+    U64 slot_idx = hash%d_ctrl_state->module_image_info_cache.slots_count;
+    U64 stripe_idx = slot_idx%d_ctrl_state->module_image_info_cache.stripes_count;
+    D_ModuleImageInfoCacheSlot *slot = &d_ctrl_state->module_image_info_cache.slots[slot_idx];
+    D_ModuleImageInfoCacheStripe *stripe = &d_ctrl_state->module_image_info_cache.stripes[stripe_idx];
     MutexScopeR(stripe->rw_mutex) for EachNode(n, D_ModuleImageInfoCacheNode, slot->first)
     {
       if(d_handle_match(n->module, module_handle))
@@ -1794,7 +1798,7 @@ d_establish_frame_unwind_context__dwarf(Arena *arena, D_Handle process_handle, D
   }
   
   // grab IP
-  U64 ip = regs_rip_from_arch_block(arch, regs);
+  U64 ip = arch_ip_from_reg_block(arch_info, regs);
   
   // use .eh_frame_hdr to quickly locate nearest FDE
   U64 fde_addr = eh_find_nearest_fde(eh_frame_hdr, &eh_ptr_ctx, ip);
@@ -1914,9 +1918,7 @@ d_establish_frame_unwind_context__dwarf(Arena *arena, D_Handle process_handle, D
       {
         // setup machine ops
         void *mem_read_ctx  = 0;
-        void *reg_read_ctx  = 0;
         MachineOp_MemRead *mem_read_func  = 0;
-        MachineOp_RegRead *reg_read_func  = 0;
         switch(arch)
         {
           case Arch_Null: break;
@@ -1925,12 +1927,8 @@ d_establish_frame_unwind_context__dwarf(Arena *arena, D_Handle process_handle, D
             D_MemoryReadContextDwarfX64 *mem_read_ctx_x64 = push_array(scratch.arena, D_MemoryReadContextDwarfX64, 1);
             mem_read_ctx_x64->process_handle = process_handle;
             mem_read_ctx_x64->endt_us        = endt_us;
-            
             mem_read_ctx = mem_read_ctx_x64;
-            reg_read_ctx = regs;
-            
             mem_read_func = ctrl_machine_mem_read;
-            reg_read_func = regs_read_dwarf_x64;
           }break;
           case Arch_x86:
           case Arch_arm64:
@@ -1943,7 +1941,7 @@ d_establish_frame_unwind_context__dwarf(Arena *arena, D_Handle process_handle, D
         
         // compute CFA for the row
         U64 cfa = 0;
-        MachineOpResult unwind_status = dw_compute_cfa(arch, cfi_row, mem_read_func, mem_read_ctx, reg_read_func, reg_read_ctx, &cfa);
+        MachineOpResult unwind_status = dw_compute_cfa(arch, cfi_row, regs, mem_read_func, mem_read_ctx, &cfa);
         
         // on success fill out output
         if(unwind_status == MachineOpResult_Ok)
@@ -1990,26 +1988,17 @@ d_unwind_step__dwarf(D_Handle process_handle, Arch arch, void *regs, D_FrameUnwi
       reg_read_ctx   = regs;
       reg_write_ctx  = regs;
       mem_read_func  = ctrl_machine_mem_read;
-      reg_read_func  = regs_read_dwarf_x64;
-      reg_write_func = regs_write_dwarf_x64;
     }break;
   }
   
   // apply register rules to the context
-  MachineOpResult unwind_status = dw_cfi_apply_register_rules(arch,
-                                                              frame_ctx->cfa,
-                                                              frame_ctx->cfi_row,
-                                                              mem_read_func,
-                                                              mem_read_ctx,
-                                                              reg_read_func,
-                                                              reg_read_ctx,
-                                                              reg_write_func,
-                                                              reg_write_ctx);
+  MachineOpResult unwind_status = dw_cfi_apply_register_rules(arch, frame_ctx->cfa, frame_ctx->cfi_row, regs, mem_read_func, mem_read_ctx);
   
   // last frame typically has undefined rule for IP
   if(frame_ctx->cfi_row->regs[frame_ctx->ret_addr_reg].rule == DW_CFI_RegisterRule_Undefined)
   {
-    regs_arch_block_write_rip(arch, regs, 0);
+    ARCH_Info *arch_info = arch_info_from_arch(arch);
+    arch_reg_block_write_ip(arch_info, regs, 0);
   }
   
   // translate unwind status code
@@ -2021,11 +2010,11 @@ d_unwind_step__dwarf(D_Handle process_handle, Arch arch, void *regs, D_FrameUnwi
 
 //- rjf: [x64]
 
-internal REGS_Reg64 *
-d_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX64 gpr_reg)
+internal U64 *
+d_unwind_reg_from_pe_gpr_reg__pe_x64(X64_RegBlock *regs, PE_UnwindGprRegX64 gpr_reg)
 {
-  local_persist REGS_Reg64 dummy = {0};
-  REGS_Reg64 *result = &dummy;
+  local_persist U64 dummy = {0};
+  U64 *result = &dummy;
   switch(gpr_reg)
   {
     case PE_UnwindGprRegX64_RAX:{result = &regs->rax;}break;
@@ -2049,7 +2038,7 @@ d_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX64 
 }
 
 internal D_UnwindStepResult
-d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 module_base_vaddr, REGS_RegBlockX64 *regs, U64 endt_us)
+d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 module_base_vaddr, X64_RegBlock *regs, U64 endt_us)
 {
   B32 is_stale = 0;
   B32 is_good = 1;
@@ -2058,7 +2047,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
   //////////////////////////////
   //- rjf: unpack parameters
   //
-  U64 rip_voff = regs->rip.u64 - module_base_vaddr;
+  U64 rip_voff = regs->rip - module_base_vaddr;
   
   //////////////////////////////
   //- rjf: rip_voff -> first pdata
@@ -2079,7 +2068,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
     //- rjf: set up parsing state
     B32 is_epilog = 0;
     B32 keep_parsing = 1;
-    U64 read_vaddr = regs->rip.u64;
+    U64 read_vaddr = regs->rip;
     U64 read_vaddr_opl = read_vaddr + 256;
     
     //- rjf: check first instruction
@@ -2271,7 +2260,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
   //
   if(first_pdata && has_pdata_and_in_epilog) ProfScope("pdata & in epilog -> epilog unwind")
   {
-    U64 read_vaddr = regs->rip.u64;
+    U64 read_vaddr = regs->rip;
     for(B32 keep_parsing = 1;keep_parsing != 0;)
     {
       //- rjf: assume no more parsing after this instruction
@@ -2307,7 +2296,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
         case 0x5F:
         {
           // rjf: read value at rsp
-          U64 sp = regs->rsp.u64;
+          U64 sp = regs->rsp;
           U64 value = 0;
           if(!d_process_memory_read_struct(process_handle, sp, &is_stale, &value, endt_us) ||
              is_stale)
@@ -2318,9 +2307,9 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
           
           // rjf: modify registers
           PE_UnwindGprRegX64 gpr_reg = (inst_byte - 0x58) + (rex & 1)*8;
-          REGS_Reg64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, gpr_reg);
-          reg->u64 = value;
-          regs->rsp.u64 = sp + 8;
+          U64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, gpr_reg);
+          reg[0] = value;
+          regs->rsp = sp + 8;
           
           // rjf: not a final instruction, so keep mparsing
           keep_parsing = 1;
@@ -2343,7 +2332,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
           read_vaddr += 4;
           
           // rjf: update stack pointer
-          regs->rsp.u64 = (U64)(regs->rsp.u64 + imm);
+          regs->rsp = (U64)(regs->rsp + imm);
           
           // rjf: not a final instruction; keep parsing
           keep_parsing = 1;
@@ -2366,7 +2355,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
           read_vaddr += 1;
           
           // rjf: update stack pointer
-          regs->rsp.u64 = (U64)(regs->rsp.u64 + imm);
+          regs->rsp = (U64)(regs->rsp + imm);
           
           // rjf: not a final instruction; keep parsing
           keep_parsing = 1;
@@ -2385,8 +2374,8 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
           }
           read_vaddr += 1;
           PE_UnwindGprRegX64 gpr_reg = (modrm & 7) + (rex & 1)*8;
-          REGS_Reg64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, gpr_reg);
-          U64 reg_value = reg->u64;
+          U64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, gpr_reg);
+          U64 reg_value = reg[0];
           
           // rjf: read immediate
           S32 imm = 0;
@@ -2419,7 +2408,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
           }
           
           // rjf: update stack pointer
-          regs->rsp.u64 = (U64)(reg_value + imm);
+          regs->rsp = (U64)(reg_value + imm);
           
           // rjf: not a final instruction; keep parsing
           keep_parsing = 1;
@@ -2429,7 +2418,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
         case 0xC2:
         {
           // rjf: read new ip
-          U64 sp = regs->rsp.u64;
+          U64 sp = regs->rsp;
           U64 new_ip = 0;
           if(!d_process_memory_read_struct(process_handle, sp, &is_stale, &new_ip, endt_us) ||
              is_stale)
@@ -2449,8 +2438,8 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
           U64 new_sp = sp + 8 + imm;
           
           // rjf: commit registers
-          regs->rip.u64 = new_ip;
-          regs->rsp.u64 = new_sp;
+          regs->rip = new_ip;
+          regs->rsp = new_sp;
         }break;
         
         // rjf: ret / rep; ret
@@ -2461,7 +2450,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
         case 0xC3:
         {
           // rjf: read new ip
-          U64 sp = regs->rsp.u64;
+          U64 sp = regs->rsp;
           U64 new_ip = 0;
           if(!d_process_memory_read_struct(process_handle, sp, &is_stale, &new_ip, endt_us) ||
              is_stale)
@@ -2474,8 +2463,8 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
           U64 new_sp = sp + 8;
           
           // rjf: commit registers
-          regs->rip.u64 = new_ip;
-          regs->rsp.u64 = new_sp;
+          regs->rip = new_ip;
+          regs->rsp = new_sp;
         }break;
         
         // rjf: jmp nnnn
@@ -2505,7 +2494,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
   {
     //- rjf: get frame reg
     B32 bad_frame_reg_info = 0;
-    REGS_Reg64 *frame_reg = 0;
+    U64 *frame_reg = 0;
     U64 frame_off = 0;
     {
       U64 unwind_info_off = first_pdata->voff_unwind_info;
@@ -2549,10 +2538,10 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
       }
       
       //- rjf: unpack frame base
-      U64 frame_base = regs->rsp.u64;
+      U64 frame_base = regs->rsp;
       if(frame_reg != 0)
       {
-        U64 raw_frame_base = frame_reg->u64;
+        U64 raw_frame_base = frame_reg[0];
         U64 adjusted_frame_base = raw_frame_base - frame_off*16;
         frame_base = adjusted_frame_base;
       }
@@ -2591,7 +2580,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
             case PE_UnwindOpCode_PUSH_NONVOL:
             {
               // rjf: read value from stack pointer
-              U64 rsp = regs->rsp.u64;
+              U64 rsp = regs->rsp;
               U64 value = 0;
               if(!d_process_memory_read_struct(process_handle, rsp, &is_stale, &value, endt_us) ||
                  is_stale)
@@ -2605,9 +2594,9 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
               U64 new_rsp = rsp + 8;
               
               // rjf: commit registers
-              REGS_Reg64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
-              reg->u64 = value;
-              regs->rsp.u64 = new_rsp;
+              U64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
+              reg[0] = value;
+              regs->rsp = new_rsp;
             }break;
             
             case PE_UnwindOpCode_ALLOC_LARGE:
@@ -2630,23 +2619,23 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
               }
               
               // rjf: advance stack pointer
-              U64 rsp = regs->rsp.u64;
+              U64 rsp = regs->rsp;
               U64 new_rsp = rsp + size;
               
               // rjf: advance stack pointer
-              regs->rsp.u64 = new_rsp;
+              regs->rsp = new_rsp;
             }break;
             
             case PE_UnwindOpCode_ALLOC_SMALL:
             {
               // rjf: advance stack pointer
-              regs->rsp.u64 += op_info*8 + 8;
+              regs->rsp += op_info*8 + 8;
             }break;
             
             case PE_UnwindOpCode_SET_FPREG:
             {
               // rjf: put stack pointer back to the frame base
-              regs->rsp.u64 = frame_base;
+              regs->rsp = frame_base;
             }break;
             
             case PE_UnwindOpCode_SAVE_NONVOL:
@@ -2664,8 +2653,8 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
               }
               
               // rjf: commit to register
-              REGS_Reg64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
-              reg->u64 = value;
+              U64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
+              reg[0] = value;
             }break;
             
             case PE_UnwindOpCode_SAVE_NONVOL_FAR:
@@ -2683,8 +2672,8 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
               }
               
               // rjf: commit to register
-              REGS_Reg64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
-              reg->u64 = value;
+              U64 *reg = d_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
+              reg[0] = value;
             }break;
             
             case PE_UnwindOpCode_EPILOG:
@@ -2748,7 +2737,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
               }
               
               // rjf: read values
-              U64 sp_og = regs->rsp.u64;
+              U64 sp_og = regs->rsp;
               U64 sp_adj = sp_og;
               if(op_info == 1)
               {
@@ -2791,10 +2780,10 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
               }
               
               // rjf: commit registers
-              regs->rip.u64 = ip_value;
-              regs->ss.u16 = ss_value;
-              regs->rflags.u64 = rflags_value;
-              regs->rsp.u64 = sp_value;
+              regs->rip = ip_value;
+              regs->ss = ss_value;
+              regs->rflags = rflags_value;
+              regs->rsp = sp_value;
               
               // rjf: mark machine frame
               xdata_unwind_did_machframe = 1;
@@ -2832,7 +2821,7 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
   if(!first_pdata || (!has_pdata_and_in_epilog && !xdata_unwind_did_machframe)) ProfScope("no pdata, or didn't do machframe in xdata unwind -> unwind by reading stack pointer")
   {
     // rjf: read rip from stack pointer
-    U64 rsp = regs->rsp.u64;
+    U64 rsp = regs->rsp;
     U64 new_rip = 0;
     if(!d_process_memory_read_struct(process_handle, rsp, &is_stale, &new_rip, endt_us) ||
        is_stale)
@@ -2844,8 +2833,8 @@ d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 modul
     if(is_good)
     {
       U64 new_rsp = rsp + 8;
-      regs->rip.u64 = new_rip;
-      regs->rsp.u64 = new_rsp;
+      regs->rip = new_rip;
+      regs->rsp = new_rsp;
     }
   }
   
@@ -2872,7 +2861,8 @@ d_unwind_from_thread(Arena *arena, D_EntityCtx *ctx, D_Handle thread, U64 endt_u
   D_Entity *thread_entity = d_entity_from_handle(ctx, thread);
   D_Entity *process_entity = thread_entity->parent;
   Arch arch = thread_entity->arch;
-  U64 arch_reg_block_size = regs_block_size_from_arch(arch);
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
+  U64 arch_reg_block_size = arch_info->reg_block_size;
   
   //- rjf: grab initial register block
   void *regs_block = d_reg_block_from_thread(scratch.arena, ctx, thread);
@@ -2886,8 +2876,9 @@ d_unwind_from_thread(Arena *arena, D_EntityCtx *ctx, D_Handle thread, U64 endt_u
   {
     for(unwind.flags = 0;;)
     {
-      U64 rip = regs_rip_from_arch_block(arch, regs_block);
-      U64 rsp = regs_rsp_from_arch_block(arch, regs_block);
+      ARCH_Info *arch_info = arch_info_from_arch(arch);
+      U64 rip = arch_ip_from_reg_block(arch_info, regs_block);
+      U64 rsp = arch_sp_from_reg_block(arch_info, regs_block);
       
       // rjf: cancel on zero rip (except the top frame)
       if(rip == 0 && frame_node_count > 0)
@@ -2958,7 +2949,7 @@ d_unwind_from_thread(Arena *arena, D_EntityCtx *ctx, D_Handle thread, U64 endt_u
       // stop unwinding on errors or stale data
       unwind.flags |= step_result.flags;
       if(unwind.flags & (D_UnwindFlag_Stale|D_UnwindFlag_Error) ||
-         (regs_rsp_from_arch_block(arch, regs_block) == rsp && regs_rip_from_arch_block(arch, regs_block) == rip))
+         (arch_sp_from_reg_block(arch_info, regs_block) == rsp && arch_ip_from_reg_block(arch_info, regs_block) == rip))
       {
         break;
       }
@@ -3006,8 +2997,9 @@ d_call_stack_from_unwind(Arena *arena, D_Entity *process, D_Unwind *base_unwind)
     for(U64 base_frame_idx = 0; base_frame_idx < base_unwind->frames.count; base_frame_idx += 1)
     {
       // rjf: unpack
+      ARCH_Info *arch_info = arch_info_from_arch(arch);
       D_UnwindFrame *src = &base_unwind->frames.v[base_frame_idx];
-      U64 rip_vaddr = regs_rip_from_arch_block(arch, src->regs);
+      U64 rip_vaddr = arch_ip_from_reg_block(arch_info, src->regs);
       D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
       DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -3149,12 +3141,6 @@ d_string2reg_from_arch(Arch arch)
   return &d_ctrl_state->arch_string2reg_tables[arch];
 }
 
-internal E_String2NumMap *
-d_string2alias_from_arch(Arch arch)
-{
-  return &d_ctrl_state->arch_string2alias_tables[arch];
-}
-
 ////////////////////////////////
 //~ rjf: Control-Thread Functions
 
@@ -3178,7 +3164,7 @@ d_u2c_push_msgs(D_MsgList *msgs, U64 endt_us)
       good = 1;
       break;
     }
-    if(os_now_microseconds() >= endt_us)
+    if(now_time_us() >= endt_us)
     {
       break;
     }
@@ -3243,7 +3229,7 @@ d_c2u_push_events(D_EventList *events)
           d_ctrl_state->c2u_ring_write_pos += ring_write(d_ctrl_state->c2u_ring_base, d_ctrl_state->c2u_ring_size, d_ctrl_state->c2u_ring_write_pos, event_srlzed.str, event_srlzed.size);
           break;
         }
-        cond_var_wait(d_ctrl_state->c2u_ring_cv, d_ctrl_state->c2u_ring_mutex, os_now_microseconds()+100);
+        cond_var_wait(d_ctrl_state->c2u_ring_cv, d_ctrl_state->c2u_ring_mutex, now_time_us()+100);
       }
       cond_var_broadcast(d_ctrl_state->c2u_ring_cv);
       if(d_ctrl_state->wakeup_hook != 0)
@@ -3425,7 +3411,7 @@ d_ctrl_thread__entry_point(void *p)
             {
               d_entity_equip_string(d_ctrl_state->ctrl_thread_entity_store, debug_info_path, path_normalized_from_string(scratch.arena, path));
             }
-            U64 new_dbgi_timestamp = os_properties_from_file_path(path).modified;
+            U64 new_dbgi_timestamp = properties_from_file_path(path).modified;
             debug_info_path->timestamp = new_dbgi_timestamp;
             DI_Key new_dbgi_key = di_key_from_path_timestamp(debug_info_path->string, new_dbgi_timestamp);
             di_open(new_dbgi_key);
@@ -3466,7 +3452,7 @@ d_ctrl_thread__entry_point(void *p)
     {
       D_EntityCtx *entity_ctx = &d_ctrl_state->ctrl_thread_entity_store->ctx;
       D_EntityArray threads = d_entity_array_from_kind(entity_ctx, D_EntityKind_Thread);
-      REGS_RegBlockX64 *blocks = push_array(scratch.arena, REGS_RegBlockX64, threads.count);
+      X64_RegBlock *blocks = push_array(scratch.arena, X64_RegBlock, threads.count);
       {
         for EachIndex(idx, threads.count)
         {
@@ -3978,7 +3964,7 @@ d_ctrl_thread__module_open(D_Handle process, D_Handle module, Rng1U64 vaddr_rang
     for(String8Node *n = dbg_path_candidates.first; n != 0; n = n->next)
     {
       String8 candidate_path = n->string;
-      FileProperties props = os_properties_from_file_path(candidate_path);
+      FileProperties props = properties_from_file_path(candidate_path);
       if(props.modified != 0 && props.size != 0)
       {
         initial_debug_info_path = push_str8_copy(arena, path_normalized_from_string(scratch.arena, candidate_path));
@@ -4316,12 +4302,14 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
   {
     D_Entity *thread = d_entity_from_handle(entity_ctx, d_handle_make(D_MachineID_Local, spoof->thread));
     Arch arch = thread->arch;
-    void *regs_block = push_array(scratch.arena, U8, regs_block_size_from_arch(arch));
+    ARCH_Info *arch_info = arch_info_from_arch(arch);
+    U64 arch_reg_block_size = arch_info->reg_block_size;
+    void *regs_block = push_array(scratch.arena, U8, arch_reg_block_size);
     dmn_thread_read_reg_block(spoof->thread, regs_block);
-    U64 spoof_thread_rip = regs_rip_from_arch_block(arch, regs_block);
+    U64 spoof_thread_rip = arch_ip_from_reg_block(arch_info, regs_block);
     if(spoof_thread_rip == spoof->new_ip_value)
     {
-      regs_arch_block_write_rip(arch, regs_block, spoof_old_ip_value);
+      arch_reg_block_write_ip(arch_info, regs_block, spoof_old_ip_value);
       d_thread_write_reg_block(d_handle_make(D_MachineID_Local, spoof->thread), regs_block);
     }
   }
@@ -4363,7 +4351,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       D_Handle module_handle = d_handle_make(D_MachineID_Local, event->module);
       D_Event *out_evt1 = d_event_list_push(scratch.arena, &evts);
       String8 module_path = path_normalized_from_string(scratch.arena, event->string);
-      U64 exe_timestamp = os_properties_from_file_path(module_path).modified;
+      U64 exe_timestamp = properties_from_file_path(module_path).modified;
       d_ctrl_thread__module_open(process_handle, module_handle, r1u64(event->address, event->address+event->size), module_path, event->elf_phdr_vrange, event->elf_phdr_entsize);
       out_evt1->kind       = D_EventKind_NewModule;
       out_evt1->msg_id     = msg->msg_id;
@@ -4379,7 +4367,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt1->tls_offset = event->tls_offset;
       D_Event *out_evt2 = d_event_list_push(scratch.arena, &evts);
       String8 initial_debug_info_path = d_initial_debug_info_path_from_module(scratch.arena, module_handle);
-      U64 debug_info_timestamp = os_properties_from_file_path(initial_debug_info_path).modified;
+      U64 debug_info_timestamp = properties_from_file_path(initial_debug_info_path).modified;
       out_evt2->kind       = D_EventKind_ModuleDebugInfoPathChange;
       out_evt2->msg_id     = msg->msg_id;
       out_evt2->entity     = module_handle;
@@ -4547,7 +4535,8 @@ d_ctrl_eval_space_read(E_Space space, void *out, Rng1U64 range)
         {
           Temp scratch = scratch_begin(0, 0);
           D_EntityCtx *entity_ctx = &d_ctrl_state->ctrl_thread_entity_store->ctx;
-          U64 regs_size = regs_block_size_from_arch(entity->arch);
+          ARCH_Info *arch_info = arch_info_from_arch(entity->arch);
+          U64 regs_size = arch_info->reg_block_size;
           void *regs = d_reg_block_from_thread(scratch.arena, entity_ctx, entity->handle);
           Rng1U64 legal_range = r1u64(0, regs_size);
           Rng1U64 read_range = intersect_1u64(legal_range, range);
@@ -4650,7 +4639,7 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
             else ProfScope("cache miss")
             {
               D_Entity *debug_info_path = d_entity_child_from_kind(mod, D_EntityKind_DebugInfoPath);
-              OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, debug_info_path->string);
+              File file = file_open(AccessFlag_Read|AccessFlag_ShareRead, debug_info_path->string);
               ProfScope("determine if %.*s is necessary", str8_varg(debug_info_path->string))
               {
                 //- rjf: determine if file is PDB
@@ -4658,7 +4647,7 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
                 if(!file_is_pdb)
                 {
                   U8 msf70_magic_maybe[sizeof(msf_msf70_magic)] = {0};
-                  os_file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
+                  file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
                   if(MemoryMatch(msf70_magic_maybe, msf_msf70_magic, sizeof(msf70_magic_maybe)))
                   {
                     file_is_pdb = 1;
@@ -4667,7 +4656,7 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
                 if(!file_is_pdb)
                 {
                   U8 msf20_magic_maybe[sizeof(msf_msf20_magic)] = {0};
-                  os_file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
+                  file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
                   if(MemoryMatch(msf20_magic_maybe, msf_msf20_magic, sizeof(msf20_magic_maybe)))
                   {
                     file_is_pdb = 1;
@@ -4678,18 +4667,18 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
                 // if any are found in the PDB, then this RDI is necessary.
                 if(file_is_pdb)
                 {
-                  FileProperties props = os_properties_from_file(file);
-                  OS_Handle map = os_file_map_open(OS_AccessFlag_Read, file);
-                  void *file_base = os_file_map_view_open(map, OS_AccessFlag_Read, r1u64(0, props.size));
+                  FileProperties props = properties_from_file(file);
+                  FileMap map = file_map_open(AccessFlag_Read, file);
+                  void *file_base = file_map_view_open(map, AccessFlag_Read, r1u64(0, props.size));
                   String8 file_data = str8(file_base, props.size);
                   {
                     rdi_is_necessary = pdb_has_symbol_or_file_ref(file_data, d_ctrl_state->msg_user_bp_touched_symbols, d_ctrl_state->msg_user_bp_touched_files);
                   }
-                  os_file_map_view_close(map, file_base, r1u64(0, props.size));
-                  os_file_map_close(map);
+                  file_map_view_close(map, file_base, r1u64(0, props.size));
+                  file_map_close(map);
                 }
               }
-              os_file_close(file);
+              file_close(file);
               node = push_array(d_ctrl_state->ctrl_thread_msg_process_arena, D_ModuleReqCacheNode, 1);
               node->next = slot;
               d_ctrl_state->module_req_cache_slots[slot_idx] = node;
@@ -4771,7 +4760,6 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
   {
     E_IRCtx *ctx = &scope->ir_ctx;
     ctx->regs_map      = d_string2reg_from_arch(arch);
-    ctx->reg_alias_map = d_string2alias_from_arch(arch);
     ctx->locals_map    = e_push_locals_map_from_rdi_voff(arena, eval_dbg_infos_primary->rdi, thread_rip_voff);
     ctx->member_map    = e_push_member_map_from_rdi_voff(arena, eval_dbg_infos_primary->rdi, thread_rip_voff);
     ctx->macro_map     = push_array(arena, E_String2ExprMap, 1);
@@ -4817,7 +4805,7 @@ d_ctrl_thread__end_and_flush_log(void)
 {
   Temp scratch = scratch_begin(0, 0);
   LogScopeResult log = log_scope_end(scratch.arena);
-  os_append_data_to_file_path(d_ctrl_state->ctrl_thread_log_path, log.strings[LogMsgKind_Info]);
+  append_data_to_file_path(d_ctrl_state->ctrl_thread_log_path, log.strings[LogMsgKind_Info]);
   if(log.strings[LogMsgKind_UserError].size != 0)
   {
     D_EventList evts = {0};
@@ -4842,28 +4830,28 @@ d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   String8 stderr_path = path_absolute_dst_from_relative_dst_src(scratch.arena, msg->stderr_path, msg->path);
   
   //- rjf: obtain stdout/stderr/stdin handles
-  OS_Handle stdout_handle = {0};
-  OS_Handle stderr_handle = {0};
-  OS_Handle stdin_handle  = {0};
+  File stdout_handle = {0};
+  File stderr_handle = {0};
+  File stdin_handle  = {0};
   if(stdout_path.size != 0)
   {
-    OS_Handle f = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, stdout_path);
-    os_file_close(f);
-    stdout_handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, msg->stdout_path);
+    File f = file_open(AccessFlag_Write|AccessFlag_Read, stdout_path);
+    file_close(f);
+    stdout_handle = file_open(AccessFlag_Write|AccessFlag_Append|AccessFlag_ShareRead|AccessFlag_ShareWrite|AccessFlag_Inherited, msg->stdout_path);
   }
   if(stderr_path.size != 0)
   {
-    OS_Handle f = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, stderr_path);
-    os_file_close(f);
-    stderr_handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, msg->stderr_path);
+    File f = file_open(AccessFlag_Write|AccessFlag_Read, stderr_path);
+    file_close(f);
+    stderr_handle = file_open(AccessFlag_Write|AccessFlag_Append|AccessFlag_ShareRead|AccessFlag_ShareWrite|AccessFlag_Inherited, msg->stderr_path);
   }
   if(stdin_path.size != 0)
   {
-    stdin_handle = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, stdin_path);
+    stdin_handle = file_open(AccessFlag_Read|AccessFlag_ShareRead|AccessFlag_ShareWrite|AccessFlag_Inherited, stdin_path);
   }
   
   //- rjf: launch
-  OS_ProcessLaunchParams params = {0};
+  ProcessLaunchParams params = {0};
   {
     params.cmd_line           = msg->cmd_line_string_list;
     params.path               = msg->path;
@@ -4877,9 +4865,9 @@ d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   U32 id = dmn_ctrl_launch(ctrl_ctx, &params);
   
   //- rjf: close stdout/stderr/stdin files
-  os_file_close(stdout_handle);
-  os_file_close(stderr_handle);
-  os_file_close(stdin_handle);
+  file_close(stdout_handle);
+  file_close(stderr_handle);
+  file_close(stdin_handle);
   
   //- rjf: record (id -> entry points), so that we know custom entry points for this PID
   D_EntityCtxRWStore *entity_ctx_rw_store = d_ctrl_state->ctrl_thread_entity_store;
@@ -6339,7 +6327,7 @@ d_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
     if(range_size != 0)
     {
       // rjf: set up arena
-      U64 page_size = os_get_system_info()->page_size; // TODO(rjf): @page_size_from_process
+      U64 page_size = get_system_info()->page_size; // TODO(rjf): @page_size_from_process
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
       range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
       
@@ -6676,15 +6664,15 @@ d_process_write(D_Handle process, Rng1U64 range, void *src)
   // time.
   if(result)
   {
-    U64 endt_us = os_now_microseconds()+10000;
-    U64 page_size = os_get_system_info()->page_size; // TODO(rjf): @page_size_from_process
+    U64 endt_us = now_time_us()+10000;
+    U64 page_size = get_system_info()->page_size; // TODO(rjf): @page_size_from_process
     Rng1U64 page_range = r1u64(range.min/page_size, (range.max+page_size-1)/page_size);
     for EachInRange(page_idx, page_range)
     {
       Temp scratch = scratch_begin(0, 0);
       D_ProcessMemorySlice slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process, r1u64(page_idx*page_size, (page_idx+1)*page_size), 1, endt_us);
       scratch_end(scratch);
-      if(!slice.stale || os_now_microseconds() >= endt_us)
+      if(!slice.stale || now_time_us() >= endt_us)
       {
         break;
       }
@@ -6826,7 +6814,7 @@ d_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U6
       {
         pre_reg_gen = d_reg_gen();
         pre_mem_gen = d_mem_gen();
-        unwind = d_unwind_from_thread(arena, entity_ctx, thread_handle, os_now_microseconds()+5000);
+        unwind = d_unwind_from_thread(arena, entity_ctx, thread_handle, now_time_us()+5000);
         if(!(unwind.flags & D_UnwindFlag_Stale))
         {
           good = 1;
@@ -6967,11 +6955,12 @@ d_call_stack_tree_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_ou
       D_Handle thread = threads[thread_idx];
       D_Handle process = threads_processes[thread_idx];
       Arch arch = threads_arches[thread_idx];
+      ARCH_Info *arch_info = arch_info_from_arch(arch);
       D_CallStack call_stack = call_stacks[thread_idx];
       D_CallStackTreeNode *thread_node = tree->root;
       for EachIndex(frame_idx, call_stack.frames_count)
       {
-        U64 vaddr = regs_rip_from_arch_block(arch, call_stack.frames[frame_idx].regs);
+        U64 vaddr = arch_ip_from_reg_block(arch_info, call_stack.frames[frame_idx].regs);
         U64 depth = call_stack.frames[frame_idx].inline_depth;
         D_CallStackTreeNode *next_node = &d_call_stack_tree_node_nil;
         for(D_CallStackTreeNode *child = thread_node->first; child != &d_call_stack_tree_node_nil; child = child->next)

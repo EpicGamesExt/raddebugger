@@ -300,7 +300,7 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity *thread)
   String8 machine_code = {0};
   {
     Rng1U64 rng = r1u64(ip_vaddr, ip_vaddr+max_instruction_size_from_arch(arch));
-    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, rng, 0, os_now_microseconds()+5000);
+    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, rng, 0, now_time_us()+5000);
     machine_code = machine_code_slice.data;
   }
   
@@ -393,7 +393,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   B32 good_machine_code = 0;
   if(good_line_info)
   {
-    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, os_now_microseconds()+50000);
+    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, now_time_us()+50000);
     machine_code = machine_code_slice.data;
     good_machine_code = (machine_code.size >= dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
     LogInfoNamedBlockF("machine_code_slice")
@@ -604,7 +604,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   B32 good_machine_code = 0;
   if(good_line_info)
   {
-    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, os_now_microseconds()+5000);
+    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, now_time_us()+5000);
     machine_code = machine_code_slice.data;
     good_machine_code = (machine_code.size >= dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
   }
@@ -1215,7 +1215,8 @@ d_query_cached_rip_from_thread_unwind(D_Entity *thread, U64 unwind_count)
     D_CallStack callstack = d_call_stack_from_thread(access, thread->handle, 1, 0);
     if(callstack.concrete_frames_count != 0)
     {
-      result = regs_rip_from_arch_block(thread->arch, callstack.concrete_frames[unwind_count%callstack.concrete_frames_count]->regs);
+      ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
+      result = arch_ip_from_reg_block(arch_info, callstack.concrete_frames[unwind_count%callstack.concrete_frames_count]->regs);
     }
     access_close(access);
   }
@@ -1648,7 +1649,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               String8List env                 = target->env;
               if(working_directory.size == 0)
               {
-                working_directory = os_get_current_path(scratch.arena);
+                working_directory = get_current_path(scratch.arena);
               }
               
               // rjf: build launch options
@@ -1811,12 +1812,13 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 Access *access = access_open();
                 
                 // rjf: thread => call stack
-                D_CallStack callstack = d_call_stack_from_thread(access, thread->handle, 1, os_now_microseconds()+10000);
+                D_CallStack callstack = d_call_stack_from_thread(access, thread->handle, 1, now_time_us()+10000);
                 
                 // rjf: use first unwind frame to generate trap
                 if(callstack.concrete_frames_count > 1)
                 {
-                  U64 vaddr = regs_rip_from_arch_block(thread->arch, callstack.concrete_frames[1]->regs);
+                  ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
+                  U64 vaddr = arch_ip_from_reg_block(arch_info, callstack.concrete_frames[1]->regs);
                   D_Trap trap = {D_TrapFlag_EndStepping|D_TrapFlag_IgnoreStackPointerCheck, vaddr};
                   d_trap_list_push(scratch.arena, &trap_net.traps, &trap);
                   trap_net.good_read = 1;
@@ -1875,9 +1877,10 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_SetThreadIP:
         {
           D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->thread);
+          ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
           U64 vaddr = params->vaddr;
           void *block = d_reg_block_from_thread(scratch.arena, &d_user_state->ctrl_entity_store->ctx, thread->handle);
-          regs_arch_block_write_rip(thread->arch, block, vaddr);
+          arch_reg_block_write_ip(arch_info, block, vaddr);
           B32 result = d_thread_write_reg_block(thread->handle, block);
           (void)result;
         }break;
@@ -2120,7 +2123,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         d_user_state->ctrl_soft_halt_issued = 1;
         d_halt();
       }
-      if(d_u2c_push_msgs(&d_user_state->ctrl_msgs, os_now_microseconds()+100))
+      if(d_u2c_push_msgs(&d_user_state->ctrl_msgs, now_time_us()+100))
       {
         MemoryZeroStruct(&d_user_state->ctrl_msgs);
         arena_clear(d_user_state->ctrl_msg_arena);

@@ -753,7 +753,8 @@ dmn_lnx_thread_alloc(DMN_LNX_Process *process, DMN_LNX_ThreadState thread_state,
   }
   else
   {
-    U64 reg_block_size = regs_block_size_from_arch(process->ctx->arch);
+    ARCH_Info *arch_info = arch_info_from_arch(process->ctx->arch);
+    U64 reg_block_size = arch_info->reg_block_size;
     reg_block = push_array(process->ctx->arena, U8, reg_block_size);
   }
   
@@ -1130,26 +1131,32 @@ dmn_lnx_process_untrap_probes(DMN_LNX_Process *process)
 internal U64
 dmn_lnx_thread_read_ip(DMN_LNX_Thread *thread)
 {
-  return regs_rip_from_arch_block(thread->process->ctx->arch, thread->reg_block);
+  ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
+  U64 result = arch_ip_from_reg_block(arch_info, thread->reg_block);
+  return result;
 }
 
 internal U64
 dmn_lnx_thread_read_sp(DMN_LNX_Thread *thread)
 {
-  return regs_rsp_from_arch_block(thread->process->ctx->arch, thread->reg_block);
+  ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
+  U64 result = arch_sp_from_reg_block(arch_info, thread->reg_block);
+  return result;
 }
 
 internal void
 dmn_lnx_thread_write_ip(DMN_LNX_Thread *thread, U64 ip)
 {
-  regs_arch_block_write_rip(thread->process->ctx->arch, thread->reg_block, ip);
+  ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
+  arch_reg_block_write_ip(arch_info, thread->reg_block, ip);
   thread->is_reg_block_dirty = 1;
 }
 
 internal void
 dmn_lnx_thread_write_sp(DMN_LNX_Thread *thread, U64 sp)
 {
-  regs_arch_block_write_rsp(thread->process->ctx->arch, thread->reg_block, sp);
+  ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
+  arch_reg_block_write_sp(arch_info, thread->reg_block, sp);
   thread->is_reg_block_dirty = 1;
 }
 
@@ -1166,7 +1173,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Thread *thread)
     case Arch_x64:
     {
       DMN_LNX_ProcessCtx *process_ctx = thread->process->ctx;
-      REGS_RegBlockX64   *dst         = thread->reg_block;
+      X64_RegBlock   *dst         = thread->reg_block;
       
       // general purpose registers
       {
@@ -1364,7 +1371,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Thread *thread)
     case Arch_x64:
     {
       DMN_LNX_ProcessCtx *process_ctx = thread->process->ctx;
-      REGS_RegBlockX64   *src         = thread->reg_block;
+      X64_RegBlock   *src         = thread->reg_block;
       
       // general purpose registers
       {
@@ -1555,7 +1562,7 @@ dmn_lnx_set_single_step_flag(DMN_LNX_Thread *thread, B32 is_on)
     case Arch_Null: {} break;
     case Arch_x64:
     {
-      REGS_RegBlockX64 *reg_block = thread->reg_block;
+      X64_RegBlock *reg_block = thread->reg_block;
       if(is_on) { reg_block->rflags.u64 |= X64_RFlag_Trap;  }
       else      { reg_block->rflags.u64 &= ~X64_RFlag_Trap; }
       thread->is_reg_block_dirty = 1;
@@ -2082,7 +2089,7 @@ dmn_lnx_event_data_breakpoint(Arena *arena, DMN_EventList *events, pid_t tid)
     case Arch_Null: {} break;
     case Arch_x64:
     {
-      REGS_RegBlockX64 *regs_x64 = thread->reg_block;
+      X64_RegBlock *regs_x64 = thread->reg_block;
       if(regs_x64->dr6.u64 & X64_DebugStatusFlag_B0)
       {
         address = regs_x64->dr0.u64;
@@ -3021,7 +3028,7 @@ dmn_tls_root_vaddr_from_thread(DMN_Handle thread_handle)
         case Arch_Null: {} break;
         case Arch_x64:
         {
-          REGS_RegBlockX64 *reg_block   = thread->reg_block;
+          X64_RegBlock *reg_block   = thread->reg_block;
           U64               dtv_pointer = 0;
           if(dmn_lnx_read_struct(thread->process->fd, reg_block->fsbase.u64 + 8, &dtv_pointer))
           {
@@ -3050,7 +3057,8 @@ dmn_thread_read_reg_block(DMN_Handle thread_handle, void *reg_block)
     DMN_LNX_Thread *thread = dmn_lnx_thread_from_handle(thread_handle);
     if(thread)
     {
-      U64 reg_block_size = regs_block_size_from_arch(thread->process->ctx->arch);
+      ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
+      U64 reg_block_size = arch_info->reg_block_size;
       MemoryCopy(reg_block, thread->reg_block, reg_block_size);
     }
     result = 1;
@@ -3067,7 +3075,8 @@ dmn_thread_write_reg_block(DMN_Handle thread_handle, void *reg_block)
     DMN_LNX_Thread *thread = dmn_lnx_thread_from_handle(thread_handle);
     if(thread)
     {
-      U64 reg_block_size = regs_block_size_from_arch(thread->process->ctx->arch);
+      ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
+      U64 reg_block_size = arch_info->reg_block_size;
       MemoryCopy(thread->reg_block, reg_block, reg_block_size);
       thread->is_reg_block_dirty = 1;
       result = 1;
@@ -3148,4 +3157,3 @@ dmn_process_iter_end(DMN_ProcessIter *iter)
   }
   MemoryZeroStruct(iter);
 }
-

@@ -1,0 +1,7 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@data(U8) rdi_reg_code_from_x64_table:
+{
+  @expand(X64_RegTable a) `$(a.has_rdi == 'x' -> "RDI_RegCodeX64_" .. a.name)$(a.has_rdi != 'x' -> 0)`
+}

@@ -177,29 +177,34 @@ typedef enum X64_DebugControlFlags
   X64_DebugControlFlag_L1 = (1 << 2),
   X64_DebugControlFlag_L2 = (1 << 4),
   X64_DebugControlFlag_L3 = (1 << 6),
-
+  
   X64_DebugControlFlag_G0 = (1 << 1),
   X64_DebugControlFlag_G1 = (1 << 3),
   X64_DebugControlFlag_G3 = (1 << 5),
   X64_DebugControlFlag_G4 = (1 << 7),
-
+  
   X64_DebugControlFlag_LE = (1 << 8),
   X64_DebugControlFlag_GE = (1 << 9),
-
+  
   X64_DebugControlFlag_RTM = (1 << 11),
-
+  
   X64_DebugControlFlag_GD = (1 << 13),
-
+  
   X64_DebugControlFlag_RW0 = (3 << 16),
   X64_DebugControlFlag_RW1 = (3 << 20),
   X64_DebugControlFlag_RW2 = (3 << 24),
   X64_DebugControlFlag_FW3 = (3 << 26),
-
+  
   X64_DebugControlFlag_LEN0 = (3 << 18),
   X64_DebugControlFlag_LEN1 = (3 << 22),
   X64_DebugControlFlag_LEN2 = (3 << 26),
   X64_DebugControlFlag_LEN3 = (3 << 30),
 } X64_DebugControlFlags;
+
+////////////////////////////////
+//~ rjf: Generated
+
+#include "x64/generated/x64.meta.h"
 
 ////////////////////////////////
 //~ cpuid
@@ -222,4 +227,3 @@ internal X64_XSaveLayout x64_get_xsave_layout(U64 xcr0);
 internal void x64_set_debug_break(U64 *drs, U64 trap_idx, U64 addr, U64 size, X64_BreakpointType bp_type, X64_DebugBreakType break_type);
 
 #endif // BASE_X64_H
-

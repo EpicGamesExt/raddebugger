@@ -1,13 +1,13 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#include "os/core/os_core.c"
+// #include "os/core/os_core.c"
 #if OS_FEATURE_GRAPHICAL
 # include "os/gfx/os_gfx.c"
 #endif
 
 #if OS_WINDOWS
-# include "os/core/win32/os_core_win32.c"
+// # include "os/core/win32/os_core_win32.c"
 #elif OS_LINUX
 # include "os/core/linux/os_core_linux.c"
 #else

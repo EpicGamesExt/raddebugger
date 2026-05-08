@@ -7,6 +7,30 @@
 #include "generated/os_gfx.meta.c"
 
 ////////////////////////////////
+//~ rjf: Handle Type Helpers
+
+internal OS_Window
+os_window_zero(void)
+{
+  OS_Window result = {0};
+  return result;
+}
+
+internal B32
+os_window_match(OS_Window a, OS_Window b)
+{
+  B32 result = MemoryMatchStruct(&a, &b);
+  return result;
+}
+
+internal B32
+os_monitor_match(OS_Monitor a, OS_Monitor b)
+{
+  B32 result = MemoryMatchStruct(&a, &b);
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Event Functions (Helpers, Implemented Once)
 
 internal String8
@@ -182,12 +206,12 @@ os_eat_event(OS_EventList *events, OS_Event *event)
 }
 
 internal B32
-os_key_press(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key)
+os_key_press(OS_EventList *events, OS_Window window, OS_Modifiers modifiers, OS_Key key)
 {
   B32 result = 0;
   for(OS_Event *event = events->first; event != 0; event = event->next)
   {
-    if((os_handle_match(event->window, window) || os_handle_match(window, os_handle_zero())) &&
+    if((os_window_match(event->window, window) || os_window_match(window, os_window_zero())) &&
        event->kind == OS_EventKind_Press && event->key == key && event->modifiers == modifiers)
     {
       result = 1;
@@ -199,12 +223,12 @@ os_key_press(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_
 }
 
 internal B32
-os_key_release(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key)
+os_key_release(OS_EventList *events, OS_Window window, OS_Modifiers modifiers, OS_Key key)
 {
   B32 result = 0;
   for(OS_Event *event = events->first; event != 0; event = event->next)
   {
-    if((os_handle_match(event->window, window) || os_handle_match(window, os_handle_zero())) &&
+    if((os_window_match(event->window, window) || os_window_match(window, os_window_zero())) &&
        event->kind == OS_EventKind_Release && event->key == key && event->modifiers == modifiers)
     {
       result = 1;
@@ -216,12 +240,12 @@ os_key_release(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, O
 }
 
 internal B32
-os_text(OS_EventList *events, OS_Handle window, U32 character)
+os_text(OS_EventList *events, OS_Window window, U32 character)
 {
   B32 result = 0;
   for(OS_Event *event = events->first; event != 0; event = event->next)
   {
-    if((os_handle_match(event->window, window) || os_handle_match(window, os_handle_zero())) &&
+    if((os_window_match(event->window, window) || os_window_match(window, os_window_zero())) &&
        event->kind == OS_EventKind_Text && event->character == character)
     {
       result = 1;
@@ -270,7 +294,7 @@ os_event_list_push_new(Arena *arena, OS_EventList *evts, OS_EventKind kind)
   OS_Event *evt = push_array(arena, OS_Event, 1);
   DLLPushBack(evts->first, evts->last, evt);
   evts->count += 1;
-  evt->timestamp_us = os_now_microseconds();
+  evt->timestamp_us = now_time_us();
   evt->kind = kind;
   return evt;
 }

@@ -407,6 +407,26 @@ transpose_4x4f32(Mat4x4F32 mat)
 ////////////////////////////////
 //~ rjf: Range Ops
 
+internal Rng1U8 rng_1u8(U8 min, U8 max)                         {Rng1U8 r = {min, max}; if(r.min > r.max) { Swap(U8, r.min, r.max); } return r;}
+internal Rng1U8 shift_1u8(Rng1U8 r, U8 x)                       {r.min += x; r.max += x; return r;}
+internal Rng1U8 pad_1u8(Rng1U8 r, U8 x)                         {r.min -= x; r.max += x; return r;}
+internal U8 center_1u8(Rng1U8 r)                                {U8 c = (r.min+r.max)/2; return c;}
+internal B32 contains_1u8(Rng1U8 r, U8 x)                       {B32 c = (r.min <= x && x < r.max); return c;}
+internal U8 dim_1u8(Rng1U8 r)                                   {U8 c = ((r.max > r.min) ? (r.max - r.min) : 0); return c;}
+internal Rng1U8 union_1u8(Rng1U8 a, Rng1U8 b)                   {Rng1U8 c = {Min(a.min, b.min), Max(a.max, b.max)}; return c;}
+internal Rng1U8 intersect_1u8(Rng1U8 a, Rng1U8 b)               {Rng1U8 c = {Max(a.min, b.min), Min(a.max, b.max)}; return c;}
+internal U8 clamp_1u8(Rng1U8 r, U8 v)                           {v = Clamp(r.min, v, r.max); return v;}
+
+internal Rng1U16 rng_1u16(U16 min, U16 max)                     {Rng1U16 r = {min, max}; if(r.min > r.max) { Swap(U16, r.min, r.max); } return r;}
+internal Rng1U16 shift_1u16(Rng1U16 r, U16 x)                   {r.min += x; r.max += x; return r;}
+internal Rng1U16 pad_1u16(Rng1U16 r, U16 x)                     {r.min -= x; r.max += x; return r;}
+internal U16 center_1u16(Rng1U16 r)                             {U16 c = (r.min+r.max)/2; return c;}
+internal B32 contains_1u16(Rng1U16 r, U16 x)                    {B32 c = (r.min <= x && x < r.max); return c;}
+internal U16 dim_1u16(Rng1U16 r)                                {U16 c = ((r.max > r.min) ? (r.max - r.min) : 0); return c;}
+internal Rng1U16 union_1u16(Rng1U16 a, Rng1U16 b)               {Rng1U16 c = {Min(a.min, b.min), Max(a.max, b.max)}; return c;}
+internal Rng1U16 intersect_1u16(Rng1U16 a, Rng1U16 b)           {Rng1U16 c = {Max(a.min, b.min), Min(a.max, b.max)}; return c;}
+internal U16 clamp_1u16(Rng1U16 r, U16 v)                       {v = Clamp(r.min, v, r.max); return v;}
+
 internal Rng1U32 rng_1u32(U32 min, U32 max)                     {Rng1U32 r = {min, max}; if(r.min > r.max) { Swap(U32, r.min, r.max); } return r;}
 internal Rng1U32 shift_1u32(Rng1U32 r, U32 x)                   {r.min += x; r.max += x; return r;}
 internal Rng1U32 pad_1u32(Rng1U32 r, U32 x)                     {r.min -= x; r.max += x; return r;}

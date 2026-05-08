@@ -32,15 +32,15 @@ os_w32_rng2f32_from_rect(RECT rect)
 ////////////////////////////////
 //~ rjf: Windows
 
-internal OS_Handle
+internal OS_Window
 os_w32_handle_from_window(OS_W32_Window *window)
 {
-  OS_Handle handle = {(U64)window};
+  OS_Window handle = {(U64)window};
   return handle;
 }
 
 internal OS_W32_Window *
-os_w32_window_from_handle(OS_Handle handle)
+os_w32_window_from_handle(OS_Window handle)
 {
   OS_W32_Window *window = (OS_W32_Window *)handle.u64[0];
   return window;
@@ -342,7 +342,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
   if(good)
   {
     OS_W32_Window *window = os_w32_window_from_hwnd(hwnd);
-    OS_Handle window_handle = os_w32_handle_from_window(window);
+    OS_Window window_handle = os_w32_handle_from_window(window);
     B32 release = 0;
     
     switch(uMsg)
@@ -806,8 +806,11 @@ internal BOOL
 os_w32_monitor_gather_enum_proc(HMONITOR monitor, HDC hdc, LPRECT rect, LPARAM bundle_ptr)
 {
   OS_W32_MonitorGatherBundle *bundle = (OS_W32_MonitorGatherBundle *)bundle_ptr;
-  OS_Handle handle = {(U64)monitor};
-  os_handle_list_push(bundle->arena, bundle->list, handle);
+  OS_Monitor m = {(U64)monitor};
+  OS_W32_MonitorGatherNode *n = push_array(bundle->arena, OS_W32_MonitorGatherNode, 1);
+  n->v = m;
+  SLLQueuePush(bundle->first_monitor, bundle->last_monitor, n);
+  bundle->monitor_count += 1;
   return 1;
 }
 
@@ -1052,7 +1055,7 @@ os_get_clipboard_text(Arena *arena)
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
-internal OS_Handle
+internal OS_Window
 os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
 {
   B32 custom_border = !!(flags & OS_WindowFlag_CustomBorder);
@@ -1116,19 +1119,19 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   }
   
   //- rjf: convert to handle + return
-  OS_Handle result = os_w32_handle_from_window(window);
+  OS_Window result = os_w32_handle_from_window(window);
   return result;
 }
 
 internal void
-os_window_close(OS_Handle handle)
+os_window_close(OS_Window handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   os_w32_window_release(window);
 }
 
 internal void
-os_window_set_title(OS_Handle handle, String8 title)
+os_window_set_title(OS_Window handle, String8 title)
 {
   Temp scratch = scratch_begin(0, 0);
   OS_W32_Window *window = os_w32_window_from_handle(handle);
@@ -1138,7 +1141,7 @@ os_window_set_title(OS_Handle handle, String8 title)
 }
 
 internal void
-os_window_first_paint(OS_Handle window_handle)
+os_window_first_paint(OS_Window window_handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(window_handle);
   window->first_paint_done = 1;
@@ -1150,7 +1153,7 @@ os_window_first_paint(OS_Handle window_handle)
 }
 
 internal void
-os_window_focus(OS_Handle handle)
+os_window_focus(OS_Window handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   SetForegroundWindow(window->hwnd);
@@ -1158,7 +1161,7 @@ os_window_focus(OS_Handle handle)
 }
 
 internal B32
-os_window_is_focused(OS_Handle handle)
+os_window_is_focused(OS_Window handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   HWND active_hwnd = GetActiveWindow();
@@ -1166,7 +1169,7 @@ os_window_is_focused(OS_Handle handle)
 }
 
 internal B32
-os_window_is_fullscreen(OS_Handle handle)
+os_window_is_fullscreen(OS_Window handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   DWORD window_style = GetWindowLong(window->hwnd, GWL_STYLE);
@@ -1174,7 +1177,7 @@ os_window_is_fullscreen(OS_Handle handle)
 }
 
 internal void
-os_window_set_fullscreen(OS_Handle handle, B32 fullscreen)
+os_window_set_fullscreen(OS_Window handle, B32 fullscreen)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   DWORD window_style = GetWindowLong(window->hwnd, GWL_STYLE);
@@ -1208,7 +1211,7 @@ os_window_set_fullscreen(OS_Handle handle, B32 fullscreen)
 }
 
 internal B32
-os_window_is_maximized(OS_Handle handle)
+os_window_is_maximized(OS_Window handle)
 {
   B32 result = 0;
   OS_W32_Window *window = os_w32_window_from_handle(handle);
@@ -1220,7 +1223,7 @@ os_window_is_maximized(OS_Handle handle)
 }
 
 internal void
-os_window_set_maximized(OS_Handle handle, B32 maximized)
+os_window_set_maximized(OS_Window handle, B32 maximized)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   if(window != 0)
@@ -1242,7 +1245,7 @@ os_window_set_maximized(OS_Handle handle, B32 maximized)
 }
 
 internal B32
-os_window_is_minimized(OS_Handle handle)
+os_window_is_minimized(OS_Window handle)
 {
   B32 result = 0;
   OS_W32_Window *window = os_w32_window_from_handle(handle);
@@ -1254,7 +1257,7 @@ os_window_is_minimized(OS_Handle handle)
 }
 
 internal void
-os_window_set_minimized(OS_Handle handle, B32 minimized)
+os_window_set_minimized(OS_Window handle, B32 minimized)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   if(window != 0 && minimized != os_window_is_minimized(handle))
@@ -1269,7 +1272,7 @@ os_window_set_minimized(OS_Handle handle, B32 minimized)
 }
 
 internal void
-os_window_bring_to_front(OS_Handle handle)
+os_window_bring_to_front(OS_Window handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   if(window != 0)
@@ -1279,7 +1282,7 @@ os_window_bring_to_front(OS_Handle handle)
 }
 
 internal void
-os_window_set_monitor(OS_Handle window_handle, OS_Handle monitor)
+os_window_set_monitor(OS_Window window_handle, OS_Monitor monitor)
 {
   OS_W32_Window *window = os_w32_window_from_handle(window_handle);
   HMONITOR hmonitor = (HMONITOR)monitor.u64[0];
@@ -1300,7 +1303,7 @@ os_window_set_monitor(OS_Handle window_handle, OS_Handle monitor)
 }
 
 internal void
-os_window_clear_custom_border_data(OS_Handle handle)
+os_window_clear_custom_border_data(OS_Window handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   if(window->custom_border)
@@ -1313,21 +1316,21 @@ os_window_clear_custom_border_data(OS_Handle handle)
 }
 
 internal void
-os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
+os_window_push_custom_title_bar(OS_Window handle, F32 thickness)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   window->custom_border_title_thickness = thickness;
 }
 
 internal void
-os_window_push_custom_edges(OS_Handle handle, F32 thickness)
+os_window_push_custom_edges(OS_Window handle, F32 thickness)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   window->custom_border_edge_thickness = thickness;
 }
 
 internal void
-os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
+os_window_push_custom_title_bar_client_area(OS_Window handle, Rng2F32 rect)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   if(window->custom_border)
@@ -1342,7 +1345,7 @@ os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
 }
 
 internal Rng2F32
-os_rect_from_window(OS_Handle handle)
+os_rect_from_window(OS_Window handle)
 {
   Rng2F32 r = {0};
   OS_W32_Window *window = os_w32_window_from_handle(handle);
@@ -1356,7 +1359,7 @@ os_rect_from_window(OS_Handle handle)
 }
 
 internal Rng2F32
-os_client_rect_from_window(OS_Handle handle)
+os_client_rect_from_window(OS_Window handle)
 {
   Rng2F32 r = {0};
   OS_W32_Window *window = os_w32_window_from_handle(handle);
@@ -1370,7 +1373,7 @@ os_client_rect_from_window(OS_Handle handle)
 }
 
 internal F32
-os_dpi_from_window(OS_Handle handle)
+os_dpi_from_window(OS_Window handle)
 {
   F32 result = 96.f;
   OS_W32_Window *window = os_w32_window_from_handle(handle);
@@ -1384,16 +1387,16 @@ os_dpi_from_window(OS_Handle handle)
 ////////////////////////////////
 //~ rjf: @os_hooks External Windows (Implemented Per-OS)
 
-internal OS_Handle
+internal OS_ExternalWindow
 os_focused_external_window(void)
 {
   HWND hwnd = GetForegroundWindow();
-  OS_Handle result = {(U64)hwnd};
+  OS_ExternalWindow result = {(U64)hwnd};
   return result;
 }
 
 internal void
-os_focus_external_window(OS_Handle handle)
+os_focus_external_window(OS_ExternalWindow handle)
 {
   HWND hwnd = (HWND)handle.u64[0];
   if(hwnd != 0)
@@ -1406,40 +1409,47 @@ os_focus_external_window(OS_Handle handle)
 ////////////////////////////////
 //~ rjf: @os_hooks Monitors (Implemented Per-OS)
 
-internal OS_HandleArray
+internal OS_MonitorArray
 os_push_monitors_array(Arena *arena)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  OS_HandleList list = {0};
+  OS_W32_MonitorGatherBundle bundle = {arena};
+  EnumDisplayMonitors(0, 0, os_w32_monitor_gather_enum_proc, (LPARAM)&bundle);
+  OS_MonitorArray array = {0};
+  array.count = bundle.monitor_count;
+  array.v = push_array(arena, OS_Monitor, array.count);
   {
-    OS_W32_MonitorGatherBundle bundle = {arena, &list};
-    EnumDisplayMonitors(0, 0, os_w32_monitor_gather_enum_proc, (LPARAM)&bundle);
+    U64 idx = 0;
+    for EachNode(n, OS_W32_MonitorGatherNode, bundle.first_monitor)
+    {
+      array.v[idx] = n->v;
+      idx += 1;
+    }
   }
-  OS_HandleArray array = os_handle_array_from_list(arena, &list);
   scratch_end(scratch);
   return array;
 }
 
-internal OS_Handle
+internal OS_Monitor
 os_primary_monitor(void)
 {
   POINT zero_pt = {0, 0};
   HMONITOR monitor = MonitorFromPoint(zero_pt, MONITOR_DEFAULTTOPRIMARY);
-  OS_Handle result = {(U64)monitor};
+  OS_Monitor result = {(U64)monitor};
   return result;
 }
 
-internal OS_Handle
-os_monitor_from_window(OS_Handle window)
+internal OS_Monitor
+os_monitor_from_window(OS_Window window)
 {
   OS_W32_Window *w = os_w32_window_from_handle(window);
   HMONITOR handle = MonitorFromWindow(w->hwnd, MONITOR_DEFAULTTOPRIMARY);
-  OS_Handle result = {(U64)handle};
+  OS_Monitor result = {(U64)handle};
   return result;
 }
 
 internal String8
-os_name_from_monitor(Arena *arena, OS_Handle monitor)
+os_name_from_monitor(Arena *arena, OS_Monitor monitor)
 {
   String8 result = {0};
   HMONITOR monitor_handle = (HMONITOR)monitor.u64[0];
@@ -1454,7 +1464,7 @@ os_name_from_monitor(Arena *arena, OS_Handle monitor)
 }
 
 internal Vec2F32
-os_dim_from_monitor(OS_Handle monitor)
+os_dim_from_monitor(OS_Monitor monitor)
 {
   Vec2F32 result = {0};
   HMONITOR monitor_handle = (HMONITOR)monitor.u64[0];
@@ -1469,7 +1479,7 @@ os_dim_from_monitor(OS_Handle monitor)
 }
 
 internal F32
-os_dpi_from_monitor(OS_Handle monitor)
+os_dpi_from_monitor(OS_Monitor monitor)
 {
   F32 result = 96.f;
   HMONITOR monitor_handle = (HMONITOR)monitor.u64[0];
@@ -1546,7 +1556,7 @@ os_key_is_down(OS_Key key)
 }
 
 internal Vec2F32
-os_mouse_from_window(OS_Handle handle)
+os_mouse_from_window(OS_Window handle)
 {
   ProfBeginFunction();
   Vec2F32 v = {0};

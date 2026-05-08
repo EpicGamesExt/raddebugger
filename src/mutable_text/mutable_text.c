@@ -14,7 +14,7 @@ mtx_init(void)
   mtx_shared = push_array(arena, MTX_Shared, 1);
   mtx_shared->arena = arena;
   mtx_shared->slots_count = 256;
-  mtx_shared->stripes_count = Min(mtx_shared->slots_count, os_get_system_info()->logical_processor_count);
+  mtx_shared->stripes_count = Min(mtx_shared->slots_count, get_system_info()->logical_processor_count);
   mtx_shared->slots = push_array(arena, MTX_Slot, mtx_shared->slots_count);
   mtx_shared->stripes = push_array(arena, MTX_Stripe, mtx_shared->stripes_count);
   for(U64 idx = 0; idx < mtx_shared->stripes_count; idx += 1)
@@ -22,7 +22,7 @@ mtx_init(void)
     mtx_shared->stripes[idx].arena = arena_alloc();
     mtx_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
   }
-  mtx_shared->mut_threads_count = Min(os_get_system_info()->logical_processor_count, 4);
+  mtx_shared->mut_threads_count = Min(get_system_info()->logical_processor_count, 4);
   mtx_shared->mut_threads = push_array(arena, MTX_MutThread, mtx_shared->mut_threads_count);
   for(U64 idx = 0; idx < mtx_shared->mut_threads_count; idx += 1)
   {

@@ -1115,7 +1115,7 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
       // remove "@"
       String8 name = str8_skip(curr->string, 1);
 
-      if (os_file_path_exists(name)) {
+      if (file_path_exists(name)) {
         // read rsp from disk
         String8 file = lnk_read_data_from_file_path(scratch.arena, 0, name);
         
@@ -1469,8 +1469,8 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   case LNK_CmdSwitch_LibPath: {
     String8List lib_dir_list = str8_list_copy(config->arena, &value_strings);
     for (String8Node *dir_n = lib_dir_list.first; dir_n != 0; dir_n = dir_n->next) {
-      if (!os_folder_path_exists(dir_n->string)) {
-        String8 full_path = os_full_path_from_path(scratch.arena, dir_n->string);
+      if (!folder_path_exists(dir_n->string)) {
+        String8 full_path = full_path_from_path(scratch.arena, dir_n->string);
         lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "path doesn't exist %S", full_path);
       }
     }
@@ -1827,7 +1827,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Rad_BuildInfo: {
     lnk_print_build_info();
-    os_abort(0);
+    abort_self(0);
   } break;
 
   case LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll: {
@@ -1881,7 +1881,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       if (str8_match_lit("imageblake3", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
         config->guid_type = Lnk_DebugInfoGuid_ImageBlake3;
       } else if (str8_match_lit("random", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
-        config->guid = os_make_guid();
+        config->guid = make_guid();
       } else {
         Guid guid;
         if (try_guid_from_string(value_strings.first->string, &guid)) {
@@ -1897,7 +1897,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Rad_LargePages: {
     if (value_strings.node_count == 0) {
-      OS_ProcessInfo *process_info = os_get_process_info();
+      ProcessInfo *process_info = get_process_info();
       if (process_info->large_pages_allowed) {
         arena_default_flags |= ArenaFlag_LargePages;
       } else {
@@ -1914,7 +1914,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       }
     } else if (value_strings.node_count == 1) {
       if (str8_match_lit("quiet", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
-        OS_ProcessInfo *process_info = os_get_process_info();
+        ProcessInfo *process_info = get_process_info();
         if (process_info->large_pages_allowed) {
           arena_default_flags |= ArenaFlag_LargePages;
         }
@@ -2031,7 +2031,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   } break;
 
   case LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers: {
-    OS_SystemInfo *sysinfo = os_get_system_info();
+    SystemInfo *sysinfo = get_system_info();
     if (value_strings.node_count == 0) {
       config->max_worker_count = sysinfo->logical_processor_count;
     } else {
@@ -2101,7 +2101,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Rad_Version: {
     lnk_fprintf(stdout, "%s\n", BUILD_TITLE_STRING_LITERAL);
-    os_abort(0);
+    abort_self(0);
   } break;
 
   case LNK_CmdSwitch_Rad_Workers: {
@@ -2113,7 +2113,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Help: {
     lnk_print_help();
-    os_abort(0);
+    abort_self(0);
   } break;
   }
 
@@ -2130,7 +2130,7 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   LNK_Config *config = push_array(arena, LNK_Config, 1);
   config->arena                     = arena;
   config->raw_cmd_line              = str8_list_copy(arena, &raw_cmd_line);
-  config->work_dir                  = os_get_current_path(arena);
+  config->work_dir                  = get_current_path(arena);
   config->build_imp_lib             = 1;
   config->build_exp                 = 1;
   config->heap_reserve              = MB(1);
@@ -2304,17 +2304,17 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   }
 
   // convert to full paths
-  config->out_path     = os_full_path_from_path(arena, config->out_path);
-  config->pdb_name       = os_full_path_from_path(arena, config->pdb_name);
-  config->rad_debug_name = os_full_path_from_path(arena, config->rad_debug_name);
-  config->imp_lib_name   = os_full_path_from_path(arena, config->imp_lib_name);
-  config->manifest_name  = os_full_path_from_path(arena, config->manifest_name);
+  config->out_path       = full_path_from_path(arena, config->out_path);
+  config->pdb_name       = full_path_from_path(arena, config->pdb_name);
+  config->rad_debug_name = full_path_from_path(arena, config->rad_debug_name);
+  config->imp_lib_name   = full_path_from_path(arena, config->imp_lib_name);
+  config->manifest_name  = full_path_from_path(arena, config->manifest_name);
 
   // collect env vars
   HashTable *env_vars = hash_table_init(scratch.arena, 512);
   {
 #if OS_WINDOWS
-    OS_ProcessInfo *process_info = os_get_process_info();
+    ProcessInfo *process_info = get_process_info();
     for (String8Node *node = process_info->environment.first; node != 0; node = node->next) {
       String8List list = str8_split_by_string_chars(scratch.arena, node->string, str8_lit("="), 0);
 

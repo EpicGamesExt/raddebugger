@@ -1,6 +1,11 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+////////////////////////////////
+//~ rjf: Generated Code
+
+#include "dwarf/generated/dwarf.meta.c"
+
 internal DW_AttribClass
 dw_attrib_class_from_attrib_v2(DW_AttribKind k)
 {

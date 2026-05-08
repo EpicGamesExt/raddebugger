@@ -13,3 +13,6 @@
 #include "dwarf/dwarf_parse_2.c"
 #include "dwarf/eh_frame.c"
 #include "dwarf/eh_dump.c"
+#if defined(X64_H)
+# include "dwarf/x64/dwarf_x64.c"
+#endif

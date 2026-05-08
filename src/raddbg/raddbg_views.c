@@ -1028,10 +1028,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         D_CallStack call_stack = d_call_stack_from_thread(access, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
         if(1 <= frame_num && frame_num <= call_stack.frames_count)
         {
+          ARCH_Info *arch_info = arch_info_from_arch(entity->arch);
           D_CallStackFrame *f = &call_stack.frames[frame_num-1];
           info.callstack_unwind_index = f->unwind_count;
           info.callstack_inline_depth = f->inline_depth;
-          info.callstack_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
+          info.callstack_vaddr = arch_ip_from_reg_block(arch_info, f->regs);
         }
         access_close(access);
       }
@@ -2148,7 +2149,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(access, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
   String8 data = c_data_from_hash(access, hash);
-  B32 file_is_missing = (rd_regs()->file_path.size != 0 && os_properties_from_file_path(rd_regs()->file_path).modified == 0);
+  B32 file_is_missing = (rd_regs()->file_path.size != 0 && properties_from_file_path(rd_regs()->file_path).modified == 0);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
   ProfEnd();
   
@@ -2305,7 +2306,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       }break;
       case RDI_ChecksumKind_Timestamp:
       {
-        FileProperties props = os_properties_from_file_path(rd_regs()->file_path);
+        FileProperties props = properties_from_file_path(rd_regs()->file_path);
         String8 timestamp_string = str8_struct(&props.modified);
         file_is_out_of_date = !MemoryIsZeroStruct(&props.modified) && !str8_match(timestamp_string, checksum_expected, 0);
       }break;
@@ -3271,8 +3272,9 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     //- rjf: fill selected thread stack range annotation
     if(selected_call_stack.concrete_frames_count > 0)
     {
+      ARCH_Info *arch_info = arch_info_from_arch(selected_thread->arch);
       U64 stack_base_vaddr = selected_thread->stack_base;
-      U64 stack_top_vaddr = regs_rsp_from_arch_block(selected_thread->arch, selected_call_stack.concrete_frames[0]->regs);
+      U64 stack_top_vaddr = arch_sp_from_reg_block(arch_info, selected_call_stack.concrete_frames[0]->regs);
       Rng1U64 stack_vaddr_range = r1u64(stack_base_vaddr, stack_top_vaddr);
       Rng1U64 stack_vaddr_range_in_viz = intersect_1u64(stack_vaddr_range, viz_range_bytes);
       if(dim_1u64(stack_vaddr_range_in_viz) != 0)
@@ -3294,13 +3296,14 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     //- rjf: fill unwind frame annotations
     if(selected_call_stack.concrete_frames_count != 0) UI_Tag(str8_lit("weak"))
     {
+      ARCH_Info *arch_info = arch_info_from_arch(selected_thread->arch);
       Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
-      U64 last_rip = regs_rip_from_arch_block(selected_thread->arch, selected_call_stack.concrete_frames[0]->regs);
-      U64 last_stack_top = regs_rsp_from_arch_block(selected_thread->arch, selected_call_stack.concrete_frames[0]->regs);
+      U64 last_rip = arch_ip_from_reg_block(arch_info, selected_call_stack.concrete_frames[0]->regs);
+      U64 last_stack_top = arch_sp_from_reg_block(arch_info, selected_call_stack.concrete_frames[0]->regs);
       for(U64 idx = 1; idx < selected_call_stack.concrete_frames_count; idx += 1)
       {
         D_CallStackFrame *f = selected_call_stack.concrete_frames[idx];
-        U64 f_stack_top = regs_rsp_from_arch_block(selected_thread->arch, f->regs);
+        U64 f_stack_top = arch_sp_from_reg_block(arch_info, f->regs);
         Rng1U64 frame_vaddr_range = r1u64(last_stack_top, f_stack_top);
         Rng1U64 frame_vaddr_range_in_viz = intersect_1u64(frame_vaddr_range, viz_range_bytes);
         last_stack_top = f_stack_top;
@@ -3308,7 +3311,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         {
           Access *access = access_open();
           U64 f_rip_vaddr = last_rip;
-          last_rip = regs_rip_from_arch_block(selected_thread->arch, f->regs);
+          last_rip = arch_ip_from_reg_block(arch_info, f->regs);
           D_Entity *module = d_module_from_process_vaddr(selected_process, f_rip_vaddr);
           U64 f_rip_voff = d_voff_from_vaddr(module, f_rip_vaddr);
           DI_Key dbgi_key = d_dbgi_key_from_module(module);

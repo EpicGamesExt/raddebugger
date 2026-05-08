@@ -1915,7 +1915,7 @@ TEST(weak_cycle)
     .symbols = (T_COFF_DefSymbol[]){ T_COFF_DefSymbol_Extern("my_entry", "text", 0), {0} }
   }));
 
-  U64 timeout = os_now_microseconds() + 3 * 1000 * 1000; // give a generous 3 seconds
+  U64 timeout = now_time_us() + 3 * 1000 * 1000; // give a generous 3 seconds
   t_invoke_linker_timeoutf(timeout, "/subsystem:console /entry:my_entry %S %S %S", entry_obj_name, ab_obj_name, ba_obj_name);
 }
 
@@ -3979,18 +3979,18 @@ TEST(import_kernel32)
 #if OS_WINDOWS
   {
     String8 test_file_path = push_str8f(arena, "%S/test", g_wdir);
-    os_delete_file_at_path(test_file_path);
+    delete_file_at_path(test_file_path);
 
-    OS_ProcessLaunchParams launch_opts = {0};
+    ProcessLaunchParams launch_opts = {0};
     launch_opts.inherit_env = 0;
     launch_opts.path = g_wdir;
     str8_list_pushf(arena, &launch_opts.cmd_line, "%S/a.exe", g_wdir);
-    OS_Handle handle = os_process_launch(&launch_opts);
-    AssertAlways(!os_handle_match(handle, os_handle_zero()));
+    Process handle = process_launch(&launch_opts);
+    AssertAlways(!process_match(handle, process_zero()));
     U64 exit_code = max_U64;
-    os_process_join(handle, max_U64, &exit_code);
+    process_join(handle, max_U64, &exit_code);
     T_Ok(exit_code == 0);
-    T_Ok(os_file_path_exists(test_file_path));
+    T_Ok(file_path_exists(test_file_path));
   }
 #endif
 }
@@ -6413,17 +6413,17 @@ TEST(determ_test)
   String8 main_pdb = t_read_file(arena, str8_lit("main.pdb"));
 
   // multi-threaded links
-  OS_HandleList linkers = {0};
+  ProcessList linkers = {0};
   for EachIndex(i, run_count) {
     String8 out_path = t_make_file_path(arena, str8f(arena, "%llu.exe", i));
     String8 cmdl = str8f(arena, "%S %S /debug:full /rad_time_stamp:0 /rad_imagealtpath:main.exe /pdbaltpath:main.pdb /rad_log:-all /rad_ignore:74 /out:%S", t_radlink_path(), test_path, out_path);
-    OS_Handle process_handle = os_cmd_line_launch(cmdl);
-    T_Ok(!os_handle_match(os_handle_zero(), process_handle));
-    os_handle_list_push(arena, &linkers, process_handle);
+    Process process_handle = launch_cmd_line(cmdl);
+    T_Ok(!process_match(process_zero(), process_handle));
+    process_list_push(arena, &linkers, process_handle);
   }
 
   // wait for linkers
-  for EachNode(n, OS_HandleNode, linkers.first) { os_process_join(n->v, max_U64, 0); }
+  for EachNode(n, ProcessNode, linkers.first) { process_join(n->v, max_U64, 0); }
 
   for EachIndex(i, run_count) {
     Temp temp = temp_begin(arena);

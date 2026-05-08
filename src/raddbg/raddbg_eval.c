@@ -122,18 +122,18 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(themes)
     
     //- rjf: gather theme files
     {
-      String8 theme_folder = push_str8f(scratch.arena, "%S/raddbg/themes", os_get_process_info()->user_program_data_path);
-      OS_FileIter *it = os_file_iter_begin(scratch.arena, theme_folder, OS_FileIterFlag_SkipFolders);
-      for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
+      String8 theme_folder = push_str8f(scratch.arena, "%S/raddbg/themes", get_process_info()->user_program_data_path);
+      FileIter *it = file_iter_begin(scratch.arena, theme_folder, FileIterFlag_SkipFolders);
+      for(FileInfo info = {0}; file_iter_next(scratch.arena, it, &info);)
       {
         String8 name = info.name;
         FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, name);
         if(name_matches.count == name_matches.needle_part_count)
         {
-          str8_list_push(scratch.arena, &names, push_str8_copy(arena, name));
+          str8_list_push(scratch.arena, &names, str8_copy(arena, name));
         }
       }
-      os_file_iter_end(it);
+      file_iter_end(it);
     }
     
     //- rjf: flatten & build accelerator
@@ -269,11 +269,16 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(registers)
   Temp scratch = scratch_begin(&arena, 1);
   D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
   Arch arch = thread->arch;
-  U64 reg_count     = regs_reg_code_count_from_arch(arch);
-  String8 *reg_strings   = regs_reg_code_string_table_from_arch(arch);
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
+  U64 reg_count = arch_info->reg_code_count;
+  String8 *reg_strings = arch_info->reg_code_name_table;
   String8List exprs_list = {0};
   for(U64 idx = 1; idx < reg_count; idx += 1)
   {
+    if(arch_info->reg_code_base_table[idx] != 0)
+    {
+      continue;
+    }
     FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, reg_strings[idx]);
     if(matches.count == matches.needle_part_count)
     {
@@ -1041,8 +1046,9 @@ E_TYPE_ACCESS_FUNCTION_DEF(call_stack)
     if(0 <= rhs_value.u64 && rhs_value.u64 < call_stack->frames_count)
     {
       D_Entity *process = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, accel->process);
+      ARCH_Info *arch_info = arch_info_from_arch(accel->arch);
       D_CallStackFrame *f = &call_stack->frames[rhs_value.u64];
-      result.root = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(process, D_EvalSpaceKind_Entity), e_irtree_const_u(arena, regs_rip_from_arch_block(accel->arch, f->regs)));
+      result.root = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(process, D_EvalSpaceKind_Entity), e_irtree_const_u(arena, arch_ip_from_reg_block(arch_info, f->regs)));
       result.type_key = e_type_key_cons(.arch = process->arch, .kind = E_TypeKind_Ptr, .direct_key = e_type_key_basic(E_TypeKind_Function), .count = 1, .depth = f->inline_depth);
       result.mode = E_Mode_Value;
     }

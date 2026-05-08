@@ -1613,7 +1613,7 @@ pdb_add_src(PDB_InfoContext *info, MSF_Context *msf, String8 file_path, String8 
   if (comp == PDB_SrcComp_NULL) {
     // process path so it passes VS validity checks
     String8 virt_path = file_path;
-    String8 work_dir = os_get_current_path(scratch.arena);
+    String8 work_dir = get_current_path(scratch.arena);
     virt_path = path_absolute_dst_from_relative_dst_src(scratch.arena, virt_path, work_dir);
     virt_path = lower_from_str8(scratch.arena, virt_path);
     virt_path = path_convert_slashes(scratch.arena, virt_path, PathStyle_UnixAbsolute);

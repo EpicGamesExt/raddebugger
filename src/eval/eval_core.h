@@ -165,7 +165,6 @@ typedef enum E_TypeKeyKind
   E_TypeKeyKind_Ext,
   E_TypeKeyKind_Cons,
   E_TypeKeyKind_Reg,
-  E_TypeKeyKind_RegAlias,
 }
 E_TypeKeyKind;
 
@@ -795,7 +794,6 @@ typedef struct E_IRCtx E_IRCtx;
 struct E_IRCtx
 {
   E_String2NumMap *regs_map;
-  E_String2NumMap *reg_alias_map;
   E_String2NumMap *locals_map; // (within `primary_module`)
   E_String2NumMap *member_map; // (within `primary_module`)
   E_String2ExprMap *macro_map;

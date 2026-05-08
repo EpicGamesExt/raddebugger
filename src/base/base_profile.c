@@ -24,7 +24,7 @@ spall_begin(char *fmt, ...)
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
-  spall_buffer_begin_ex(&spall_profile, &spall_buffer, string.str, string.size, os_now_microseconds(), spall_tid, spall_pid);
+  spall_buffer_begin_ex(&spall_profile, &spall_buffer, string.str, string.size, now_time_us(), spall_tid, spall_pid);
   va_end(args);
   scratch_end(scratch);
 }

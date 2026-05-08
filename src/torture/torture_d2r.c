@@ -25,7 +25,7 @@ d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
   String8 exe = t_read_file(scratch.arena, str8_lit("a.exe"));
   Assert(exe.size > 0);
   
-  B32 was_pdb_deleted = os_delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
+  B32 was_pdb_deleted = delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
   Assert(was_pdb_deleted);
   
   t_invoke_(t_radbin_path(), str8_lit("-rdi a.exe -out:a.rdi"), max_U64, 0, 0);
@@ -489,14 +489,14 @@ TEST(d2r_general)
     T_Ok((test_local->symbol_flags & RDI_SymbolFlag_IsParam) == 0);
     String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
     T_Ok(str8_match(test_local_name, str8_lit("TestLocal"), 0));
-
+    
     RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
     T_Ok(test_local_type);
     T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
     T_Ok(test_local_type->flags == 0);
     String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
     T_Ok(str8_match(alias_name, str8_lit("char"), 0));
-
+    
     RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
     T_Ok(char_type);
     T_Ok(char_type->kind == RDI_TypeKind_Char8);
@@ -505,21 +505,21 @@ TEST(d2r_general)
     String8 char_type_name = str8_from_rdi_string_idx(rdi, char_type->built_in.name_string_idx);
     T_Ok(str8_match(char_type_name, str8_lit("Char8"), 0));
   }
-
+  
   {
     RDI_Symbol *test_local = rdi_element_from_name_idx(rdi, LocalVariables, root_scope->local_first + 1);
     T_Ok(test_local);
     T_Ok((test_local->symbol_flags & RDI_SymbolFlag_IsParam) != 0);
     String8 test_local_name = str8_from_rdi_string_idx(rdi, test_local->name_string_idx);
     T_Ok(str8_match(test_local_name, str8_lit("TestParam"), 0));
-
+    
     RDI_TypeNode *test_local_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local->type_idx);
     T_Ok(test_local_type);
     T_Ok(test_local_type->kind == RDI_TypeKind_Alias);
     T_Ok(test_local_type->flags == 0);
     String8 alias_name = str8_from_rdi_string_idx(rdi, test_local_type->user_defined.name_string_idx);
     T_Ok(str8_match(alias_name, str8_lit("char"), 0));
-
+    
     RDI_TypeNode *char_type = rdi_element_from_name_idx(rdi, TypeNodes, test_local_type->user_defined.direct_type_idx);
     T_Ok(char_type);
     T_Ok(char_type->kind == RDI_TypeKind_Char8);

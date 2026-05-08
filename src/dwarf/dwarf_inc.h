@@ -16,5 +16,8 @@
 #include "dwarf/dwarf_parse_2.h"
 #include "dwarf/eh_frame.h"
 #include "dwarf/eh_dump.h"
+#if defined(X64_H)
+# include "dwarf/x64/dwarf_x64.h"
+#endif
 
 #endif // DWARF_INC_H
