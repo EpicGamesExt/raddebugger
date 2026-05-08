@@ -279,7 +279,19 @@ TEST(d2r_line_table)
     for EachIndex(k, test_table[i].line_size) {
       t_invoke_radbin("-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
       T_Ok(g_last_exit_code == 0);
-      T_MatchLinef(&g_output, "%S:%llu", test_table[i].file->path, test_table[i].ln);
+
+      if ( ! t_match_linef(&g_output, "%S:%llu", test_table[i].file->path, test_table[i].ln)) {
+
+        fprintf(stderr,
+                "ERROR: conversion produced unexpected lines for voff 0x%llx\n" \
+                "\tExpected: %.*s:%llu\n" \
+                "\tGot:      %.*s\n",
+                (unsigned long long)test_table[i].voff,
+                str8_varg(test_table[i].file->path), (unsigned long long)test_table[i].ln,
+                str8_varg(g_output));
+
+        T_Ok(0);
+      }
     }
   }
   

@@ -167,12 +167,10 @@ t_run_caller(void *raw_ctx)
       fprintf(stderr, "%.*s", str8_varg(n->string));
     }
     if (g_errors.size) {
-      fprintf(stderr, "--- STDERR ---------------------------------------------------------------------\n");
-      fprintf(stderr, "%.*s\n", str8_varg(g_errors));
+      fprintf(stderr, "stderr: \"%.*s\"\n", str8_varg(g_errors));
     }
     if (g_output.size) {
-      fprintf(stderr, "--- STDOUT ---------------------------------------------------------------------\n");
-      fprintf(stderr, "%.*s\n", str8_varg(g_output));
+      fprintf(stderr, "stdout: \"%.*s\"\n", str8_varg(g_output));
     }
   }
   scratch_end(scratch);
@@ -355,6 +353,7 @@ t_cwd_path(void)
     } else {
       cwd = str8_chop_last_slash(cwd);
     }
+
     MemoryCopyStr8(path, cwd);
     path[cwd.size] = 0;
     scratch_end(scratch);
@@ -1325,7 +1324,12 @@ t_entry_point(CmdLine *cmdline)
                 (int)(label_max - strlen(g_torture_tests[s.target_idx].label)) + 4, dots,
                 str8_varg(elapsed_time));
       }
-      
+
+      if (pass_count == target_indices.count) {
+        fprintf(stdout, "\n                          \x1b[32m" "%s" "\x1b[0m\n\n", "All Tests Passed!");
+        fprintf(stderr, "--------------------------------------------------------------------------------\n");
+      }
+
       fprintf(stderr, "\n");
     }
     

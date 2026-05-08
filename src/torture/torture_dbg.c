@@ -742,7 +742,11 @@ internal void
 t_dbg_register_script_tests(Arena *arena, String8 folder_path)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  AssertAlways(os_folder_path_exists(folder_path));
+
+  if ( ! os_folder_path_exists(folder_path)) {
+    fprintf(stderr, "ERROR: this folder does not exists: %.*s\n", str8_varg(folder_path));
+    return;
+  }
 
   // gather file paths in a folder
   String8List paths = t_file_paths_from_dir(arena, folder_path);
