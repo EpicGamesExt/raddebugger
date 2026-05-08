@@ -662,36 +662,33 @@ semaphore_open(String8 name)
 internal void
 semaphore_close(Semaphore semaphore)
 {
-  sem_t *s = (sem_t *)semaphore.u64[0];
-  sem_close(s);
+  if(semaphore.u64[0] != 0)
+  {
+    sem_t *s = (sem_t *)semaphore.u64[0];
+    sem_close(s);
+  }
 }
 
 internal B32
 semaphore_take(Semaphore semaphore, U64 endt_us)
 {
-  struct timespec t = { .tv_sec = endt_us / 1000000, .tv_nsec = (endt_us % 1000000) * 1000 };
-  int err = OS_LNX_RETRY_ON_EINTR(sem_clockwait((sem_t*)semaphore.u64[0], CLOCK_MONOTONIC, &t));
+  int err = -1;
+  if(semaphore.u64[0] != 0)
+  {
+    struct timespec t = { .tv_sec = endt_us / 1000000, .tv_nsec = (endt_us % 1000000) * 1000 };
+    err = OS_LNX_RETRY_ON_EINTR(sem_clockwait((sem_t*)semaphore.u64[0], CLOCK_MONOTONIC, &t));
+  }
   return err == 0;
 }
 
 internal void
 semaphore_drop(Semaphore semaphore)
 {
-  for(;;)
+  int err = -1;
+  if(semaphore.u64[0] != 0)
   {
-    int err = sem_post((sem_t*)semaphore.u64[0]);
-    if(err == 0)
-    {
-      break;
-    }
-    else
-    {
-      if(errno == EAGAIN)
-      {
-        continue;
-      }
-    }
-    break;
+    err = OS_LNX_RETRY_ON_EINTR(sem_post((sem_t*)semaphore.u64[0]));
+    Assert(err == 0);
   }
 }
 
