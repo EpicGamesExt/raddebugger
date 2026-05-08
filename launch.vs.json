@@ -9,7 +9,53 @@
       "project": "c://windows//system32//cmd.exe",
       "cwd": "build/",
       "program": "torture",
-      "args": [ "basic_stepping_test-c" ],
+      "args": [ "d2r_checksums" ],
+      "stopAtEntry": false,
+      "environment": [],
+      "externalConsole": false,
+      "pipeTransport": {
+        "pipeCwd": "${workspaceRoot}",
+        "pipeProgram": "wsl",
+        "pipeArgs": [ "${debuggerCommand}" ]
+      },
+      "setupCommands": [
+        { "text": "-gdb-set follow-fork-mode parent" },
+        { "text": "-gdb-set detach-on-fork on" },
+        { "text": "handle SIGUSR1 nostop" }
+      ],
+      "MIMode": "gdb"
+    },
+    {
+      "type": "cppdbg",
+      "name": "launch - radbin",
+      "request": "launch",
+      "project": "c://windows//system32//cmd.exe",
+      "cwd": "build/",
+      "program": "radbin",
+      "args": [ "-voff2line", "-voff:0x1000", "torture_artifacts/d2r_line_table/a.rdi" ],
+      "stopAtEntry": false,
+      "environment": [],
+      "externalConsole": false,
+      "pipeTransport": {
+        "pipeCwd": "${workspaceRoot}",
+        "pipeProgram": "wsl",
+        "pipeArgs": [ "${debuggerCommand}" ]
+      },
+      "setupCommands": [
+        { "text": "-gdb-set follow-fork-mode parent" },
+        { "text": "-gdb-set detach-on-fork on" },
+        { "text": "handle SIGUSR1 nostop" }
+      ],
+      "MIMode": "gdb"
+    },
+    {
+      "type": "cppdbg",
+      "name": "launch - radlink",
+      "request": "launch",
+      "project": "c://windows//system32//cmd.exe",
+      "cwd": "/mnt/c/devel/raddebugger/build/torture_artifacts/debug_p_sig_mismatch",
+      "program": "/mnt/c/devel/raddebugger/build/radlink",
+      "args": [ "/subsystem:console", "/entry:entry", "/out:a.exe", "/debug:full", "a.obj", "b.obj", "entry.obj" ],
       "stopAtEntry": false,
       "environment": [],
       "externalConsole": false,
