@@ -10375,12 +10375,6 @@ rd_ipc_parse_b32(MD_Node *node, String8 child_name, B32 *out)
   return is_ok;
 }
 
-internal B32
-rd_ipc_reply_is_ok(RD_IpcReply *reply)
-{
-  return reply->parse.msgs.worst_message_kind < MD_MsgKind_Error;
-}
-
 internal void
 rd_ipc_reply_push(Arena *arena, String8List *out, char *name, String8 value)
 {

@@ -856,7 +856,6 @@ internal B32 rd_ipc_parse_string(MD_Node *node, String8 child_name, String8 *out
 internal B32 rd_ipc_parse_int_(MD_Node *node, String8 child_name, U64 out_size, void *out);
 #define rd_ipc_parse_int(a, b, c) rd_ipc_parse_int_(a, b, sizeof(*c), c)
 internal B32 rd_ipc_parse_b32(MD_Node *node, String8 child_name, B32 *out);
-internal B32 rd_ipc_reply_is_ok(RD_IpcReply *reply);
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
