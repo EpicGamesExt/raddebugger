@@ -5134,7 +5134,7 @@ TEST(debug_p_and_debug_t_in_obj)
   String8 expected_line = str8f(arena, "Warning(%03d): %S: multiple sections with debug types detected, obj must have either .debug$T or .debug$P; discarding both sections", LNK_Warning_MultipleDebugTAndDebugP, pch_obj_path);
   while (output.size) {
     String8 line = t_chop_line(&output);
-    found_warning = str8_match(line, expected_line, StringMatchFlag_CaseInsensitive);
+    found_warning = str8_match(line, expected_line, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
     if (found_warning) { break; }
   }
   T_Ok(found_warning);

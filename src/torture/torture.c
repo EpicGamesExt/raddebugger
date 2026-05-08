@@ -137,7 +137,11 @@ t_delete_dir(String8 path)
 internal String8
 t_make_file_path(Arena *arena, String8 name)
 {
+#if OS_WINDOWS
+  return push_str8f(arena, "%S\\%S", g_wdir, name);
+#else
   return push_str8f(arena, "%S/%S", g_wdir, name);
+#endif
 }
 
 internal B32
