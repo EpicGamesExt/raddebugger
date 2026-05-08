@@ -36,11 +36,11 @@ int foo();
 int main()                     /// 1: step_into
 {                              /// 2: at
                                /// 3: step_over
-	int x = foo(123);            /// 4: at
+  int x = foo(123);            /// 4: at
                                /// 5: step_into
                                /// 10: at: -2
                                /// 11: step_over
-	printf("Hello, world!\n");   /// 12: at
+  printf("Hello, world!\n");   /// 12: at
                                /// 13: step_over
                                /// 14: run
 }
