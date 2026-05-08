@@ -909,6 +909,13 @@ id_from_file(File file)
 }
 
 internal B32
+file_reserve_size(File file, U64 size)
+{
+  int status = fallocate((int)file.u64[0], FALLOC_FL_KEEP_SIZE, 0, size);
+  return status == 0;
+}
+
+internal B32
 delete_file_at_path(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
