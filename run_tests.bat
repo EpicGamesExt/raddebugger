@@ -20,7 +20,7 @@ for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
   echo Build %%c+%%m
 
   rem nuke artifacts from last run
-  rmdir /s /q build\torture
+  rmdir /s /q build\torture_artifacts
 
   if "%%c" equ "clang" (
      set PATH=%clang_path%..\lib\clang\%clang_version%\lib\windows;!PATH!
