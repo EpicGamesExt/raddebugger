@@ -7,14 +7,6 @@
 
 typedef enum
 {
-  T_Linker_Null,
-  T_Linker_RAD,
-  T_Linker_MSVC,
-  T_Linker_LLVM
-} T_Linker;
-
-typedef enum
-{
   T_MsvcLinkExitCode_UnresolvedExternals                  = 1120,
   T_MsvcLinkExitCode_CorruptOrInvalidSymbolTable          = 1235,
   T_MsvcLinkExitCode_SectionsFoundWithDifferentAttributes = 4078,

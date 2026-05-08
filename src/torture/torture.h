@@ -39,6 +39,14 @@ typedef struct
   String8 user_data;
 } T_Test;
 
+typedef enum
+{
+  T_Linker_Null,
+  T_Linker_RAD,
+  T_Linker_MSVC,
+  T_Linker_LLVM
+} T_Linker;
+
 extern U64    g_torture_test_count;
 extern T_Test g_torture_tests[0xffffff];
 extern U64    g_torture_running_test_idx;
@@ -101,6 +109,8 @@ internal T_RunResult t_run(T_Run run, String8 user_data);
 
 internal String8 t_radbin_path(void);
 internal String8 t_cl_path(void);
+internal String8 t_clang_path(void);
+internal String8 t_gcc_path(void);
 internal String8 t_radlink_path(void);
 internal String8 t_cwd_path(void);
 internal String8 t_src_path(void);
@@ -111,7 +121,7 @@ internal B32 t_invoke_linkerf(char *fmt, ...);
 internal B32 t_invoke_radbin(char *fmt, ...);
 internal void t_kill_all(String8 pattern);
 
-#define t_invoke_linker_timeout(c, t)       T_Ok(t_invoke(g_linker, c, t))
+#define t_invoke_linker_timeout(c, t)       T_Ok(t_invoke(t_radlink_path(), c, t))
 #define t_invoke_linker_timeoutf(t, f, ...) t_invoke_linker_timeout(push_str8f(arena, f, ##__VA_ARGS__), t)
 #define t_invoke_linker(c)                  t_invoke_linker_timeout(c, max_U64)
 

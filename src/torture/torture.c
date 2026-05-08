@@ -8,7 +8,6 @@ global String8      g_out = str8_lit_comp("torture_artifacts");
 global B32          g_verbose;
 global B32          g_redirect_stdout = 1;
 global B32          g_stop_on_first_fail_or_crash = 1;
-global String8      g_linker;
 global String8      g_test_data;
 
 // tests
@@ -20,6 +19,13 @@ global U64      g_last_exit_code;
 global Arena   *g_output_arena;
 global String8  g_output;
 global String8  g_errors;
+
+// tools
+global String8 g_radbin_path;
+global String8 g_cl_path;
+global String8 g_clang_path;
+global String8 g_gcc_path;
+global String8 g_linker_path;
 
 internal String8
 t_test_name_from_idx(Arena *arena, U64 test_idx)
@@ -38,16 +44,6 @@ t_string_from_result(T_RunStatus v)
   return 0;
 }
 
-internal T_Linker
-t_id_linker(void)
-{
-  String8 name = str8_chop_last_dot(str8_skip_last_slash(g_linker));
-  if (str8_match(name, str8_lit("radlink"),  StringMatchFlag_CaseInsensitive)) { return T_Linker_RAD;  }
-  if (str8_match(name, str8_lit("link"),     StringMatchFlag_CaseInsensitive)) { return T_Linker_MSVC; }
-  if (str8_match(name, str8_lit("lld-link"), StringMatchFlag_CaseInsensitive)) { return T_Linker_LLVM; }
-  return T_Linker_Null;
-}
-
 internal void
 t_break_if_debugger_present(void)
 {
@@ -57,6 +53,16 @@ t_break_if_debugger_present(void)
     DebugBreak();
   }
 #endif
+}
+
+internal T_Linker
+t_id_linker(void)
+{
+  String8 name = str8_chop_last_dot(str8_skip_last_slash(g_linker_path));
+  if (str8_match(name, str8_lit("radlink"),  StringMatchFlag_CaseInsensitive)) { return T_Linker_RAD;  }
+  if (str8_match(name, str8_lit("link"),     StringMatchFlag_CaseInsensitive)) { return T_Linker_MSVC; }
+  if (str8_match(name, str8_lit("lld-link"), StringMatchFlag_CaseInsensitive)) { return T_Linker_LLVM; }
+  return T_Linker_Null;
 }
 
 internal B32
@@ -131,7 +137,7 @@ t_delete_dir(String8 path)
 internal String8
 t_make_file_path(Arena *arena, String8 name)
 {
-  return push_str8f(arena, "%S\\%S", g_wdir, name);
+  return push_str8f(arena, "%S/%S", g_wdir, name);
 }
 
 internal B32
@@ -156,10 +162,12 @@ t_run_caller(void *raw_ctx)
       fprintf(stderr, "%.*s", str8_varg(n->string));
     }
     if (g_errors.size) {
-      fprintf(stderr, "STDERR:\n", str8_varg(g_errors));
+      fprintf(stderr, "--- STDERR ---------------------------------------------------------------------\n");
+      fprintf(stderr, "%.*s\n", str8_varg(g_errors));
     }
     if (g_output.size) {
-      fprintf(stderr, "STDOUT:\n", str8_varg(g_output));
+      fprintf(stderr, "--- STDOUT ---------------------------------------------------------------------\n");
+      fprintf(stderr, "%.*s\n", str8_varg(g_output));
     }
   }
   scratch_end(scratch);
@@ -182,39 +190,71 @@ t_run(T_Run run, String8 user_data)
 internal String8
 t_radbin_path(void)
 {
-  local_persist String8 path = {0};
-  if (path.size == 0) {
+  if (g_radbin_path.size == 0) {
     local_persist U8 buffer[4096];
-    ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
-    Arena *arena = arena_alloc_(&params);
+    Arena *arena = arena_alloc_(&(ArenaParams){ .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer });
 #if OS_WINDOWS
-    path = full_path_from_path(arena, str8_lit("radbin.exe"));
+    g_radbin_path = full_path_from_path(arena, str8_lit("radbin.exe"));
 #else
-    path = full_path_from_path(arena, str8_lit("radbin"));
+    g_radbin_path = full_path_from_path(arena, str8_lit("radbin"));
 #endif
-    AssertAlways(path.size);
   }
-  return path;
+  AssertAlways(g_radbin_path.size);
+  return g_radbin_path;
 }
 
 internal String8
 t_cl_path(void)
 {
-  local_persist String8 path = {0};
-  if (path.size == 0) {
-    local_persist U8 buffer[4096];
-    ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
-    Arena *arena = arena_alloc_(&params);
+  if (g_cl_path.size == 0) {
 #if OS_WINDOWS
-    wchar_t full_cl_path[MAX_PATH];
-    DWORD full_cl_path_size = SearchPathW(0, L"cl.exe", 0, ArrayCount(full_cl_path), full_cl_path, 0);
-    path = str8_from_16(arena, str16((U16*)full_cl_path, full_cl_path_size));
+    local_persist U8 buffer[4096];
+    Arena *arena = arena_alloc_(&(ArenaParams){ .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer });
+    wchar_t full_path[MAX_PATH];
+    DWORD full_path_size = SearchPathW(0, L"cl.exe", 0, ArrayCount(full_path), full_path, 0);
+    g_cl_path = str8_from_16(arena, str16((U16*)full_path, full_path_size));
 #else
-    path = str8_lit("cl");
+    g_cl_path = str8_zero();
 #endif
-    AssertAlways(path.size);
   }
-  return path;
+  AssertAlways(g_cl_path.size);
+  return g_cl_path;
+}
+
+internal String8
+t_clang_path(void)
+{
+  if (g_clang_path.size == 0) {
+#if OS_WINDOWS
+    local_persist U8 buffer[4096];
+    Arena  *arena = arena_alloc_(&(ArenaParams){ .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer });
+    wchar_t full_path[MAX_PATH];
+    DWORD   full_path_size = SearchPathW(0, L"clang.exe", 0, ArrayCount(full_path), full_path, 0);
+    g_clang_path = str8_from_16(arena, str16((U16*)full_path, full_path_size));
+#else
+    g_clang_path = str8_lit("clang");
+#endif
+  }
+  AssertAlways(g_clang_path.size);
+  return g_clang_path;
+}
+
+internal String8
+t_gcc_path(void)
+{
+  if (g_gcc_path.size == 0) {
+#if OS_WINDOWS
+    local_persist U8 buffer[4096];
+    Arena  *arena = arena_alloc_(&(ArenaParams){ .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer });
+    wchar_t full_path[MAX_PATH];
+    DWORD   full_path_size = SearchPathW(0, L"gcc.exe", 0, ArrayCount(full_path), full_path, 0);
+    g_gcc_path = str8_from_16(arena, str16((U16*)full_path, full_path_size));
+#else
+    g_gcc_path = str8_lit("gcc");
+#endif
+  }
+  AssertAlways(g_gcc_path.size);
+  return g_gcc_path;
 }
 
 internal String8
@@ -255,7 +295,11 @@ internal String8
 t_radlink_path(void)
 {
   local_persist String8 path = {0};
-  if (path.size == 0) {
+  if(g_linker_path.size != 0)
+  {
+    path = g_linker_path;
+  }
+  else if (path.size == 0) {
     local_persist U8 buffer[4096];
     ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
     Arena *arena = arena_alloc_(&params);
@@ -278,9 +322,9 @@ t_raddbg_path(void)
     ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
     Arena *arena = arena_alloc_(&params);
 #if OS_WINDOWS
-    path = os_full_path_from_path(arena, str8_lit("raddbg_non_graphical.exe"));
+    path = full_path_from_path(arena, str8_lit("raddbg.exe"));
 #else
-    path = os_full_path_from_path(arena, str8_lit("raddbg_non_graphical"));
+    path = full_path_from_path(arena, str8_lit("raddbg"));
 #endif
     AssertAlways(path.size);
   }
@@ -944,12 +988,15 @@ t_entry_point(CmdLine *cmdline)
       fprintf(stderr, " %s\n\n", BUILD_TITLE_STRING_LITERAL);
       fprintf(stderr, " Usage: torture [Options] [Files]\n\n");
       fprintf(stderr, " Options:\n");
-      fprintf(stderr, "   -linker:{path}        Path to PE/COFF linker\n");
       fprintf(stderr, "   -target:{name[,name]} Selects targets to test\n");
       fprintf(stderr, "   -skip:{name[,name]}   Selects targets to skip\n");
       fprintf(stderr, "   -list                 Print available test targets and exit\n");
       fprintf(stderr, "   -out:{path}           Directory path for test outputs (default \"%.*s\")\n", str8_varg(g_out));
       fprintf(stderr, "   -verbose              Enable verbose mode\n");
+      fprintf(stderr, "   -cl:{path}            Override default cl path\n");
+      fprintf(stderr, "   -clang:{path}         Override default clang path\n");
+      fprintf(stderr, "   -gcc:{path}           Override default gcc path\n");
+      fprintf(stderr, "   -linker:{path}        Path to PE/COFF linker\n");
       fprintf(stderr, "   -print_stdout         Print to console stdout and stderr of a run\n");
       fprintf(stderr, "   -help                 Print help menu and exit\n");
       abort_self(0);
@@ -972,26 +1019,13 @@ t_entry_point(CmdLine *cmdline)
   }
   
   //
-  // Handle -linker
+  // Compiler overrides
   //
-  {
-    CmdLineOpt *linker_opt = cmd_line_opt_from_string(cmdline, str8_lit("linker"));
-    if (linker_opt == 0) {
-      linker_opt = cmd_line_opt_from_string(cmdline, str8_lit("l"));
-    }
-    if (linker_opt) {
-      if (linker_opt->value_strings.node_count == 1) {
-        g_linker = linker_opt->value_string;
-      } else {
-        fprintf(stderr, "ERROR: -linker has invalid number of arguments\n");
-        abort_self(1);
-      }
-    } else {
-      // assume default linker
-      g_linker = str8_lit("radlink");
-    }
-  }
-  
+  g_cl_path      = cmd_line_string(cmdline, str8_lit("cl"));
+  g_clang_path   = cmd_line_string(cmdline, str8_lit("clang"));
+  g_gcc_path     = cmd_line_string(cmdline, str8_lit("gcc"));
+  g_linker_path  = cmd_line_string(cmdline, str8_lit("linker"));
+
   //
   // Handle -test_data
   //
@@ -1171,14 +1205,15 @@ t_entry_point(CmdLine *cmdline)
       U64 dots_count = (max_label_size - cstring8_length((U8*)g_torture_tests[target_idx].label)) + dots_min;
       U64 curr_digit_count = count_digits_u64(i+1, 10);
       int idx_align_space_count = (int)(max_digit_count - curr_digit_count);
-      fprintf(stdout, "[%.*s%I64u/%I64u] ", idx_align_space_count, spaces, i+1, target_indices.count);
+      fprintf(stdout, "[%.*s%llu/%llu] ", idx_align_space_count, spaces, (unsigned long long)i+1, (unsigned long long)target_indices.count);
       fprintf(stdout, "%s %.*s:: %s", g_torture_tests[target_idx].group, (int)(max_group_size - cstring8_length((U8*)g_torture_tests[target_idx].group)), spaces, g_torture_tests[target_idx].label);
       fprintf(stdout, " %.*s ", (int)dots_count, dots);
-      
+      fflush(stdout);
+
       // setup output directory
-      g_wdir = push_str8f(scratch.arena, "%S\\%s", g_out, g_torture_tests[target_idx].label);
+      g_wdir = push_str8f(scratch.arena, "%S/%s", g_out, g_torture_tests[target_idx].label);
       g_wdir = full_path_from_path(scratch.arena, g_wdir);
-      
+
       // delete files from last run in the work directory
       if (folder_path_exists(g_wdir)) {
         t_delete_dir(g_wdir);
@@ -1243,10 +1278,10 @@ t_entry_point(CmdLine *cmdline)
     PrintHeader("Summary");
     U64 total_time_dt = total_time_end - total_time_start;
     String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
-    fprintf(stderr, "  Passed   %llu\n", pass_count);
-    fprintf(stderr, "  Failed   %llu\n", fail_count);
-    fprintf(stderr, "  Crashed  %llu\n", crash_count);
-    fprintf(stderr, "  Skipped  %llu\n", skip_count);
+    fprintf(stderr, "  Passed   %llu\n", (unsigned long long)pass_count);
+    fprintf(stderr, "  Failed   %llu\n", (unsigned long long)fail_count);
+    fprintf(stderr, "  Crashed  %llu\n", (unsigned long long)crash_count);
+    fprintf(stderr, "  Skipped  %llu\n", (unsigned long long)skip_count);
     fprintf(stderr, "  Time     %.*s\n", str8_varg(total_time_str));
     fprintf(stderr, "\n");
     
