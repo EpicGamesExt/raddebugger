@@ -2511,6 +2511,7 @@ TEST(simple_lib_test)
   T_Ok(*data_addr32nb == data_sect->voff);
 }
 
+#if OS_WINDOWS
 TEST(import_export)
 {
   // write objs
@@ -2705,10 +2706,8 @@ TEST(import_export)
       T_Ok(export_table.exports[2].ordinal == 4);
       T_Ok(export_table.exports[3].ordinal == 1);
     }
-
   }
 
-  #if OS_WINDOWS
   {
     T_Ok(SetDllDirectoryA((LPCSTR)g_wdir.str));
     HANDLE export_dll = LoadLibrary("export.dll");
@@ -2732,11 +2731,11 @@ TEST(import_export)
     T_Ok(GetProcAddress(export_dll, MAKEINTRESOURCE(7)));
     T_Ok(GetProcAddress(export_dll, MAKEINTRESOURCE(8)));
   }
-  #endif
 
   //T_Ok(t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /delayload:export.dll /export:entry kernel32.Lib delayimp.lib libcmt.lib export.lib import.obj entry.obj") == 0);
   // TODO: check import table
 }
+#endif
 
 TEST(image_base)
 {
@@ -3929,6 +3928,7 @@ TEST(communal_var_vs_regular_comdat)
   }
 }
 
+#if OS_WINDOWS
 TEST(import_kernel32)
 {
   T_Ok(t_write_def_obj("import.obj", (T_COFF_DefObj){
@@ -3978,7 +3978,6 @@ TEST(import_kernel32)
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /fixed import.obj kernel32.lib");
   T_Ok(g_last_exit_code == 0);
 
-#if OS_WINDOWS
   {
     String8 test_file_path = push_str8f(arena, "%S/test", g_wdir);
     delete_file_at_path(test_file_path);
@@ -3994,7 +3993,6 @@ TEST(import_kernel32)
     T_Ok(exit_code == 0);
     T_Ok(file_path_exists(test_file_path));
   }
-#endif
 }
 
 TEST(delay_import)
@@ -4209,6 +4207,8 @@ TEST(delay_import_user32)
   t_invoke_linkerf("/subsystem:console /out:a.exe /entry:entry /fixed /delayload:user32.dll kernel32.lib user32.lib libcmt.lib delayimp.lib delay_import.obj /debug:full");
   T_Ok(g_last_exit_code == 0);
 }
+
+#endif
 
 TEST(empty_section)
 {
