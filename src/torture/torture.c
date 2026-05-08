@@ -346,7 +346,15 @@ t_cwd_path(void)
   if (path[0] == 0) {
     Temp scratch = scratch_begin(0, 0);
     String8 cwd = get_current_path(scratch.arena);
-    cwd = str8_chop_last_slash(cwd);
+
+    // TODO: linux and windows return two different things, we need to settle what to do here
+    // should get_current_path return directory paths with slash or no slash
+    if ((str8_match_wildcard(cwd, str8_lit("*\\"), 0) && str8_match_wildcard(cwd, str8_lit("*/"), 0))) {
+      cwd = str8_chop_last_slash(cwd);
+      cwd = str8_chop_last_slash(cwd);
+    } else {
+      cwd = str8_chop_last_slash(cwd);
+    }
     MemoryCopyStr8(path, cwd);
     path[cwd.size] = 0;
     scratch_end(scratch);
