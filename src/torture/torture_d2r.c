@@ -151,19 +151,21 @@ dw_writer_tag_end(writer);                                    \
   RDI_ParsedNameMap types_map = {0};
   rdi_parsed_from_name_map(rdi, types_nm, &types_map);
   
-#define TestBuiltinType(n, bs, r)                                                                           \
-do {                                                                                                        \
-RDI_TypeNode *alias = d2rt_type_from_name(rdi, &types_map, n);                                              \
-T_Ok(alias);                                                                                                \
-T_Ok(alias->kind == RDI_TypeKind_Alias);                                                                    \
-T_Ok(alias->flags == 0);                                                                                    \
-T_Ok(alias->byte_size == bs);                                                                               \
-RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, alias->user_defined.direct_type_idx);        \
-T_Ok(type);                                                                                                 \
-T_Ok(type->kind == RDI_TypeKind_##r);                                                                       \
-T_Ok(type->flags == 0);                                                                                     \
-T_Ok(type->byte_size == alias->byte_size);                                                                  \
-T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), str8_lit(Stringify(r)), 0)); \
+#define TestBuiltinType(n, bs, r)                                                                                              \
+do {                                                                                                                           \
+  RDI_TypeNode *alias = d2rt_type_from_name(rdi, &types_map, n);                                                               \
+  T_Ok(alias);                                                                                                                 \
+  T_Ok(alias->kind == RDI_TypeKind_Alias);                                                                                     \
+  T_Ok(alias->flags == 0);                                                                                                     \
+  T_Ok(alias->byte_size == bs);                                                                                                \
+  RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, alias->user_defined.direct_type_idx);                         \
+  T_Ok(type);                                                                                                                  \
+  T_Ok(type->kind == RDI_TypeKind_##r);                                                                                        \
+  T_Ok(type->flags == 0);                                                                                                      \
+  T_Ok(type->byte_size == alias->byte_size);                                                                                   \
+  U64 expected_name_size = 0;                                                                                                  \
+  U8 *expected_name = rdi_string_from_type_kind(RDI_TypeKind_##r, &expected_name_size);                                        \
+  T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), str8(expected_name, expected_name_size), 0)); \
 } while (0)
   TestBuiltinType("char",                1,  Char8);
   TestBuiltinType("char8_t",             1,  UChar8);

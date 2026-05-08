@@ -120,7 +120,7 @@ dw_input_from_writer(Arena *arena, DW_Writer *writer)
   String8 raw_coff = coff_from_obj(scratch.arena, obj);
   
   t_write_file(str8_lit("dwarf.obj"), raw_coff);
-  t_invoke(str8_lit("radlink"), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full dwarf.obj"), max_U64);
+  t_invoke(t_radlink_path(), str8_lit("/subsystem:console /entry:entry /out:a.exe /debug:full dwarf.obj"), max_U64);
   delete_file_at_path(t_make_file_path(scratch.arena, str8_lit("a.pdb")));
   
   String8             exe           = t_read_file(arena, str8_lit("a.exe"));

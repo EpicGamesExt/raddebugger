@@ -41,6 +41,14 @@ typedef struct
 
 typedef enum
 {
+  T_Compiler_Null,
+  T_Compiler_Cl,
+  T_Compiler_Clang,
+  T_Compiler_Gcc,
+} T_Compiler;
+
+typedef enum
+{
   T_Linker_Null,
   T_Linker_RAD,
   T_Linker_MSVC,

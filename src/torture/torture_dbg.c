@@ -5,6 +5,8 @@
 
 #define T_Dbg_DefaultTimeout TIMEOUT_SEC(5)
 
+extern B32 g_stop_on_first_fail_or_crash;
+
 ////////////////////////////////
 // IPC Controller
 
@@ -40,10 +42,15 @@ t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *rep
     // parse reply
     Arena       *a          = reply_arena ? reply_arena : scratch.arena;
     String8      reply_text = str8_copy(a, g_output);
-    //fprintf(stderr, "Reply: %.*s\n", str8_varg(reply_text));
     RD_IpcReply  reply      = rd_ipc_mdesk_reply_from_string(a, reply_text);
-    if (rd_ipc_reply_is_ok(&reply) == 0) { goto exit; }
-    if (md_node_is_nil(reply.msg))       { goto exit; }
+
+    //fprintf(stderr, "Reply: %.*s\n", str8_varg(reply_text));
+
+    // validate reply
+    if (reply.parse.msgs.worst_message_kind >= MD_MsgKind_Error) { goto exit; }
+    if (md_node_is_nil(reply.msg))                               { goto exit; }
+    //if ( ! str8_matchi(reply.parse.root->first->string, cmd))    { Assert(0); goto exit; }
+
     if (reply_arena && reply_out) { *reply_out = reply; }
   }
 
@@ -70,21 +77,26 @@ internal B32
 t_dbg_status(T_DbgStatus *status_out, U64 timeout_us)
 {
   Temp scratch = scratch_begin(0, 0);
+
+  B32         is_ok  = 0;
   T_DbgStatus status = {0};
-  B32 is_ok = 0;
 
   // send status request
   RD_IpcReply reply = {0};
   if ( ! t_dbg_send_cmd(str8_lit("status"), timeout_us, scratch.arena, &reply)) { goto exit; }
 
   // parse reply
-  if ( ! rd_ipc_parse_b32(reply.msg, str8_lit("ok"),      &is_ok))          { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_b32(reply.msg, str8_lit("running"), &status.running)) { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int(reply.msg, str8_lit("run_gen"), &status.run_gen)) { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int(reply.msg, str8_lit("ip"),      &status.ip))      { AssertAlways(0); goto exit; }
+  if ( ! rd_ipc_parse_b32(reply.msg, str8_lit("ok"),      &is_ok))          { fprintf(stderr, "ERROR: failed to parse reply member: ok\n");      Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_b32(reply.msg, str8_lit("running"), &status.running)) { fprintf(stderr, "ERROR: failed to parse reply member: running\n"); Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_int(reply.msg, str8_lit("run_gen"), &status.run_gen)) { fprintf(stderr, "ERROR: failed to parse reply member: run_gen\n"); Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_int(reply.msg, str8_lit("ip"),      &status.ip))      { fprintf(stderr, "ERROR: failed to parse reply member: ip\n");      Assert(0); goto exit; }
   if (status_out != 0) { *status_out = status; }
 
   exit:;
+  if ( ! is_ok && reply.parse.root) {
+    fprintf(stderr, "\tReply: %.*s\n", str8_varg(reply.parse.root->raw_string));
+  }
+  scratch_end(scratch);
   return is_ok;
 }
 
@@ -230,9 +242,9 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
     printf("  IP:         %.*s\n", str8_varg(ip));
     printf("  SP:         %.*s\n", str8_varg(sp));
     printf("  File Path:  %.*s\n", str8_varg(loc.file_path));
-    printf("  Line:       %lld\n", loc.pt.line);
-    printf("  Column:     %lld\n", loc.pt.column);
-    printf("  Run Gen:    %llu\n", status.run_gen);
+    printf("  Line:       %lld\n", (long long)loc.pt.line);
+    printf("  Column:     %lld\n", (long long)loc.pt.column);
+    printf("  Run Gen:    %llu\n", (unsigned long long)status.run_gen);
     printf("  Stop Cause: \"%.*s\"\n", str8_varg(last_stop.stop_cause));
     fflush(stdout);
   }
@@ -256,15 +268,15 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
 
   String8 user_path       = t_make_file_path(scratch.arena, str8_lit("test.raddbg_user"));
   String8 project_path    = t_make_file_path(scratch.arena, str8_lit("test.raddbg_project"));
-  cmdline = str8f(scratch.arena, "--gen_crash_dump --user:\"%S\" --project:\"%S\" %S", user_path, project_path, cmdline);
+  cmdline = str8f(scratch.arena, "%S --gen_crash_dump --user:\"%S\" --project:\"%S\" --logs:\"%S\" %S", t_raddbg_path(), user_path, project_path, g_wdir, cmdline);
 
   // launch debugger
   OS_ProcessLaunchParams launch_opts = {
     .path        = g_wdir,
     .inherit_env = 1,
+    .consoleless = 1,
     .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline),
   };
-  str8_list_push_front(scratch.arena, &launch_opts.cmd_line, t_raddbg_path());
   OS_Handle dbg_handle = os_process_launch(&launch_opts);
   if (os_handle_match(dbg_handle, os_handle_zero())) { AssertAlways(0 && "failed to launch debugger"); goto exit; }
 
@@ -272,7 +284,7 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
   // cache debugger PID
   g_dbg_pid = GetProcessId((HANDLE)dbg_handle.u64[0]);
 #elif OS_LINUX
-  g_dbg_pid = safe_cast_u32(handle.u64[0]);
+  g_dbg_pid = (int)dbg_handle.u64[0];
 #else
 # error NotImplemented
 #endif
@@ -307,10 +319,10 @@ t_dbg_eval(Arena *arena, String8 expr, T_Eval *eval_out)
   B32         is_ok = t_dbg_send_cmd(cmd, T_Dbg_DefaultTimeout, arena, &reply);
 
   T_Eval e = {0};
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("expr"),  &e.expr))  { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("value"), &e.value)) { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("type"),  &e.type))  { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("error"), &e.error)) { AssertAlways(0); goto exit; }
+  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("expr"),  &e.expr))  { fprintf(stderr, "ERROR: failed to parse reply member: expr\n");  Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("value"), &e.value)) { fprintf(stderr, "ERROR: failed to parse reply member: value\n"); Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("type"),  &e.type))  { fprintf(stderr, "ERROR: failed to parse reply member: type\n");  Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("error"), &e.error)) { fprintf(stderr, "ERROR: failed to parse reply member: error\n"); Assert(0); goto exit; }
   if (eval_out) { *eval_out = e; }
 
   exit:;
@@ -511,7 +523,7 @@ t_dbg_script_from_source(Arena *arena, String8 file_path, String8 source)
           p->file  = file;
           hash_table_push_u64_raw(scratch.arena, ht, order, p);
         } else {
-          fprintf(stderr, "ERROR: duplicate order number %llu found on line %llu\n", order, p->line);
+          fprintf(stderr, "ERROR: duplicate order number %llu found on line %llu\n", (unsigned long long)order, (unsigned long long)p->line);
         }
 
         MD_Node *cmd_name = n->first;
@@ -574,12 +586,24 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
         case T_DbgScriptCmdKind_ClearBreakpoints: t_dbg_send_cmdf(0,0,0, "clear_breakpoints"); break;
         case T_DbgScriptCmdKind_Run:              t_dbg_send_cmd(str8_lit("run"),  timeout_us, 0, 0); break;
         case T_DbgScriptCmdKind_At: {
-          // map IP -> source location
+          // TODO: debugger does not populate eval cache with registers before first frame,
+          // so this racy, for now use lower level option
+#if 0
           U64 ip = u64_from_str8(t_dbg_value_from_exprf(scratch.arena, "reg:rip"), 10);
           if (ip == 0) {
             fprintf(stderr, "ERROR: invalid IP address: 0x%llx\n", (unsigned long long)ip);
             goto exit;
           }
+#else
+          T_DbgStatus temp_status = {0};
+          if ( ! t_dbg_status(&temp_status, T_Dbg_DefaultTimeout)) {
+            fprintf(stderr, "ERROR: failed to query IP\n");
+            goto exit;
+          }
+          U64 ip = temp_status.ip;
+#endif
+
+          // map IP -> source location
           T_DbgSourceLocation loc = {0};
           if (t_dbg_src_line(scratch.arena, ip, &loc, T_Dbg_DefaultTimeout) == 0) {
             fprintf(stderr, "ERROR: failed to map IP (0x%llx) to source location\n", (unsigned long long)ip);
@@ -597,8 +621,9 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
           if (mismatch) {
             fprintf(stderr, "ERROR: location check did not pass:\n");
             fprintf(stderr, "  Script  : %.*s\n",      str8_varg(script->file_path));
-            fprintf(stderr, "  Expected: %.*s:%llu\n", str8_varg(program->file->path), at_line_u64);
-            fprintf(stderr, "  Got     : %.*s:%llu\n", str8_varg(loc.file_path), loc.pt.line);
+            fprintf(stderr, "  Expected: %.*s:%llu\n", str8_varg(program->file->path), (unsigned long long)at_line_u64);
+            fprintf(stderr, "  Got     : %.*s:%llu\n", str8_varg(loc.file_path), (unsigned long long)loc.pt.line);
+            fprintf(stderr, "  IP      : 0x%llx\n",    (unsigned long long)ip);
             goto exit;
           }
         } break;
@@ -619,6 +644,11 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
 internal
 T_RunSig(dbg_script_runner)
 {
+  if ( ! os_file_path_exists(t_raddbg_path())) {
+    fprintf(stderr, "ERROR: failed to find debugger \"%.*s\"\n", str8_varg(t_raddbg_path()));
+    T_Ok(0);
+  }
+
   // read source file
   String8 source = os_data_from_file_path(arena, user_data);
   if (source.size == 0) {
@@ -632,17 +662,42 @@ T_RunSig(dbg_script_runner)
   // write source files to test folder
   for EachNode(file, T_DbgScriptFile, script.files.first) {
     if (os_write_data_to_file_path(file->path, file->source) == 0) {
-      fprintf(stderr, "ERROR: %.*s:%llu: failed to write: \"%.*s\"\n", str8_varg(user_data), file->line, str8_varg(file->path));
+      fprintf(stderr, "ERROR: %.*s:%llu: failed to write: \"%.*s\"\n", str8_varg(user_data), (unsigned long long)file->line, str8_varg(file->path));
       T_Ok(0);
     }
   }
 
   // run compilers
-  String8 compiler_path = t_cl_path();
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Compile].first) {
+    T_Compiler compiler = directive->compile.compiler;
+
+    // pick default compiler if none selected
+    if (compiler == T_Compiler_Null) {
+      switch (OperatingSystem_CURRENT) {
+      case OperatingSystem_Windows: { compiler = T_Compiler_Cl;    } break;
+      case OperatingSystem_Linux:   { compiler = T_Compiler_Clang; } break;
+      }
+    }
+
+    // get compiler path
+    String8 compiler_path = {0};
+    switch (compiler) {
+    case T_Compiler_Null: break;
+    case T_Compiler_Cl:    compiler_path = t_cl_path();    break;
+    case T_Compiler_Clang: compiler_path = t_clang_path(); break;
+    case T_Compiler_Gcc:   compiler_path = t_gcc_path();   break;
+    }
+
+    // invoke compiler with arguments from directive
     if (t_invoke(compiler_path, directive->args, max_U64) == 0) {
       fprintf(stderr, "ERROR: failed to launch compiler: \"%.*s %.*s\"\n", str8_varg(compiler_path), str8_varg(directive->args));
       T_Ok(0);
+    }
+    if (g_last_exit_code) {
+      fprintf(stderr, "ERROR: %.*s\n", str8_varg(g_output));
+      if (g_stop_on_first_fail_or_crash) {
+        T_Ok(0);
+      }
     }
   }
 
@@ -697,12 +752,12 @@ t_dbg_register_script_tests(Arena *arena, String8 folder_path)
     String8 file_path = n->string;
 
     // test files may contain dots for extensions we have to escape them when creating output folder for a test
-    String8List file_name_parts   = str8_split(scratch.arena, str8_skip_last_slash(file_path), ".", 1, 0);
+    String8List file_name_parts   = str8_split_by_string_chars(scratch.arena, str8_skip_last_slash(file_path), str8_lit("."), 0);
     String8     file_name_escaped = str8_list_join(arena, &file_name_parts, &(StringJoin){.sep=str8_lit("-"), .post = str8_lit("\0") });
 
     g_torture_tests[g_torture_test_count++] = (T_Test){
         .group     = T_Group,
-        .label     = file_name_escaped.str,
+        .label     = (char*)file_name_escaped.str,
         .r         = t_dbg_script_runner,
         .user_data = str8_copy(arena, file_path),
     };

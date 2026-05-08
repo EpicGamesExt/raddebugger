@@ -1692,7 +1692,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
         B32     is_lambda     = colon_pos != 0;
 
         if (is_lambda) {
-          U64 size = raddbg_snprintf(temp, sizeof(temp), "%llx", name_hash);
+          U64 size = raddbg_snprintf(temp, sizeof(temp), "%llx", (long long)name_hash);
           Assert(size < udt_info.name.size);
           Assert(size < udt_info.unique_name.size);
           MemoryCopy(udt_info.name.str, temp, size+1);
@@ -1712,7 +1712,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
         } else {
           // replace uniuqe type name with hash
           udt_info.unique_name.str  = udt_info.name.str + udt_info.name.size + 1;
-          udt_info.unique_name.size = raddbg_snprintf((char *)udt_info.unique_name.str, udt_info.unique_name.size, "%llx", name_hash);
+          udt_info.unique_name.size = raddbg_snprintf((char *)udt_info.unique_name.str, udt_info.unique_name.size, "%llx", (long long)name_hash);
 
           // update leaf header
           U64 new_size = sizeof(CV_LeafKind) +
@@ -1778,7 +1778,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
         }
 
         // replace name with hash
-        udt_info.name.size = raddbg_snprintf((char *)udt_info.name.str, udt_info.name.size, "%llx", name_hash);
+        udt_info.name.size = raddbg_snprintf((char *)udt_info.name.str, udt_info.name.size, "%llx", (long long)name_hash);
 
         // parse struct size
         CV_NumericParsed dummy;

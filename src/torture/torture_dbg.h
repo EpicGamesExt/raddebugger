@@ -86,6 +86,11 @@ typedef struct T_DbgScriptDirective
   T_DbgScriptDirectiveKind kind;
   U64                      line;
   String8                  args;
+  union {
+    struct {
+      T_Compiler compiler;
+    } compile;
+  };
 } T_DbgScriptDirective;
 
 typedef struct
