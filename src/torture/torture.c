@@ -21,6 +21,7 @@ global String8  g_output;
 global String8  g_errors;
 
 // tools
+global B32     g_dbg_graphical;
 global String8 g_radbin_path;
 global String8 g_cl_path;
 global String8 g_clang_path;
@@ -325,10 +326,13 @@ t_raddbg_path(void)
     local_persist U8 buffer[4096];
     ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
     Arena *arena = arena_alloc_(&params);
+    String8 raddbg_base_name = g_dbg_graphical ? str8_lit("raddbg") : str8_lit("raddbg_non_graphical");
 #if OS_WINDOWS
-    path = full_path_from_path(arena, str8_lit("raddbg.exe"));
+    Temp scratch = scratch_begin(0, 0);
+    path = full_path_from_path(arena, str8f(scratch.arena, "%S.exe", raddbg_base_name));
+    scratch_end(scratch);
 #else
-    path = full_path_from_path(arena, str8_lit("raddbg"));
+    path = full_path_from_path(arena, raddbg_base_name);
 #endif
     AssertAlways(path.size);
   }
@@ -1001,6 +1005,7 @@ t_entry_point(CmdLine *cmdline)
       fprintf(stderr, "   -clang:{path}         Override default clang path\n");
       fprintf(stderr, "   -gcc:{path}           Override default gcc path\n");
       fprintf(stderr, "   -linker:{path}        Path to PE/COFF linker\n");
+      fprintf(stderr, "   --dbg_graphical       Launch debugger with window\n");
       fprintf(stderr, "   -print_stdout         Print to console stdout and stderr of a run\n");
       fprintf(stderr, "   -help                 Print help menu and exit\n");
       abort_self(0);
@@ -1025,10 +1030,11 @@ t_entry_point(CmdLine *cmdline)
   //
   // Compiler overrides
   //
-  g_cl_path      = cmd_line_string(cmdline, str8_lit("cl"));
-  g_clang_path   = cmd_line_string(cmdline, str8_lit("clang"));
-  g_gcc_path     = cmd_line_string(cmdline, str8_lit("gcc"));
-  g_linker_path  = cmd_line_string(cmdline, str8_lit("linker"));
+  g_dbg_graphical = cmd_line_has_flag(cmdline, str8_lit("dbg_graphical"));
+  g_cl_path       = cmd_line_string(cmdline, str8_lit("cl"));
+  g_clang_path    = cmd_line_string(cmdline, str8_lit("clang"));
+  g_gcc_path      = cmd_line_string(cmdline, str8_lit("gcc"));
+  g_linker_path   = cmd_line_string(cmdline, str8_lit("linker"));
 
   //
   // Handle -test_data
