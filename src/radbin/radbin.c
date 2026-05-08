@@ -1240,13 +1240,46 @@ rb_thread_entry_point(void *p)
                   RDI_SourceFile *null_inline_src_file = rdi_element_from_name_idx(rdi, SourceFiles, 0);
                   if(inline_src_file && inline_src_file != null_inline_src_file)
                   {
-                    String8 path = str8_from_rdi_path_node_idx(scratch.arena, rdi, PathStyle_SystemAbsolute, src_file->file_path_node_idx);
+                    // TODO: remove 'path_style' from the str8_from_rdi_path_node_idx and detect
+                    // path style based on the top node "?:" -> windows, "/" -> unix
+                    String8 top_part = {0};
+                    for(RDI_FilePathNode *fpn = rdi_element_from_name_idx(rdi, FilePathNodes, src_file->file_path_node_idx);
+                        fpn != rdi_element_from_name_idx(rdi, FilePathNodes, 0);
+                        fpn = rdi_element_from_name_idx(rdi, FilePathNodes, fpn->parent_path_node))
+                    {
+                      if(fpn->parent_path_node == 0)
+                      {
+                        top_part.str = rdi_string_from_idx(rdi, fpn->name_string_idx, &top_part.size);
+                      }
+                    }
+                    PathStyle path_style = PathStyle_SystemAbsolute;
+                    if     (str8_match_wildcard(top_part, str8_lit("?:"), 0)) { path_style = PathStyle_WindowsAbsolute; }
+                    else if(str8_match(top_part, str8_lit("/"), 0))           { path_style = PathStyle_UnixAbsolute;    }
+
+                    String8 path = str8_from_rdi_path_node_idx(scratch.arena, rdi, path_style, src_file->file_path_node_idx);
                     str8_list_pushf(arena, &output_blobs, "[inlined] %S %S:%u\n", inline_name, path, inline_line.line_num);
                   }
                 }
               }
             }
-            String8 path = str8_from_rdi_path_node_idx(scratch.arena, rdi, PathStyle_SystemAbsolute, src_file->file_path_node_idx);
+
+            // TODO: remove 'path_style' from the str8_from_rdi_path_node_idx and detect
+            // path style based on the top node [c:|d:] -> windows, / -> unix
+            String8 top_part = {0};
+            for(RDI_FilePathNode *fpn = rdi_element_from_name_idx(rdi, FilePathNodes, src_file->file_path_node_idx);
+                fpn != rdi_element_from_name_idx(rdi, FilePathNodes, 0);
+                fpn = rdi_element_from_name_idx(rdi, FilePathNodes, fpn->parent_path_node))
+            {
+              if(fpn->parent_path_node == 0)
+              {
+                top_part.str = rdi_string_from_idx(rdi, fpn->name_string_idx, &top_part.size);
+              }
+            }
+            PathStyle path_style = PathStyle_SystemAbsolute;
+            if     (str8_match_wildcard(top_part, str8_lit("?:"), 0)) { path_style = PathStyle_WindowsAbsolute; }
+            else if(str8_match(top_part, str8_lit("/"), 0))           { path_style = PathStyle_UnixAbsolute;    }
+
+            String8 path = str8_from_rdi_path_node_idx(scratch.arena, rdi, path_style, src_file->file_path_node_idx);
             str8_list_pushf(arena, &output_blobs, "%S:%u\n", path, line.line_num);
             scratch_end(scratch);
           }
