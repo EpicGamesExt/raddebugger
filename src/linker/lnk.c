@@ -17,6 +17,8 @@
 // --- Code Base ---------------------------------------------------------------
 
 #include "base/base_inc.h"
+#include "x64/x64.h"
+#include "os/os_inc.h"
 #include "hash_table.h"
 #include "coff/coff.h"
 #include "coff/coff_parse.h"
@@ -36,6 +38,8 @@
 #include "llvm/llvm.h"
 
 #include "base/base_inc.c"
+#include "x64/x64.c"
+#include "os/os_inc.c"
 #include "hash_table.c"
 #include "coff/coff.c"
 #include "coff/coff_parse.c"
@@ -5471,4 +5475,3 @@ entry_point(CmdLine *cmdline)
   lnk_log_end();
   scratch_end(scratch);
 }
-
