@@ -69,6 +69,7 @@ stap_list_from_string(Arena *arena, String8 string)
 internal String8
 stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
 {
+  ARCH_Info *arch_info = arch_info_from_arch(Arch_x64);
   String8 error = str8_lit("unknown parse error");
   U64 sep_pos = str8_find_needle(string, 0, str8_lit("@"), 0);
   if (sep_pos < string.size) {
@@ -200,14 +201,9 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
       index_str = str8_skip(index_str, 1);
       
       // parse base
-      B8  base_is_alias = 0;
       U32 base_reg_code = 0;
       if (base_str.size) {
-        base_reg_code = regs_reg_code_from_name(Arch_x64, base_str);
-        if (base_reg_code == 0) {
-          base_reg_code = regs_alias_code_from_name(Arch_x64, base_str);
-          base_is_alias = base_reg_code != 0;
-        }
+        base_reg_code = arch_reg_code_from_name(arch_info, base_str);
         if (base_reg_code == 0) {
           error = str8_lit("unknown base register");
           goto operand_parse_exit;
@@ -215,14 +211,9 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
       }
       
       // parse index
-      B8  index_is_alias = 0;
       U32 index_reg_code = 0;
       if (index_str.size) {
-        index_reg_code = regs_reg_code_from_name(Arch_x64, index_str);
-        if (index_reg_code == 0) {
-          index_reg_code = regs_alias_code_from_name(Arch_x64, index_str);
-          index_is_alias = index_reg_code != 0;
-        }
+        index_reg_code = arch_reg_code_from_name(arch_info, index_str);
         if (index_reg_code == 0) {
           error = str8_lit("unknown index register");
         }
@@ -247,9 +238,7 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
       arg.type                      = STAP_ArgType_MemoryRef;
       arg.memory_ref.disp           = disp;
       arg.memory_ref.base.reg_code  = base_reg_code;
-      arg.memory_ref.base.is_alias  = base_is_alias;
       arg.memory_ref.index.reg_code = index_reg_code;
-      arg.memory_ref.index.is_alias = index_is_alias;
       arg.memory_ref.scale          = scale;
     }
     // $imm
@@ -296,19 +285,13 @@ stap_parse_args_x64(String8 string, STAP_Arg *arg_out)
         goto operand_parse_exit;
       }
       
-      B8  is_reg_alias = 0;
-      U32 reg_code     = regs_reg_code_from_name(Arch_x64, reg_str);
-      if (reg_code == 0) {
-        reg_code = regs_alias_code_from_name(Arch_x64, reg_str);
-        is_reg_alias = reg_code != 0;
-      }
+      U32 reg_code = arch_reg_code_from_name(arch_info, reg_str);
       if (reg_code == 0) {
         error = str8_lit("invalid register name");
         goto operand_parse_exit;
       }
       
       arg.type         = STAP_ArgType_Reg;
-      arg.reg.is_alias = is_reg_alias;
       arg.reg.reg_code = reg_code;
     } else {
       goto operand_parse_exit;

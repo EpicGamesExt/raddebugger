@@ -79,27 +79,27 @@ r_ogl_os_init(CmdLine *cmdln)
 }
 
 internal R_Handle
-r_ogl_os_window_equip(OS_Handle window)
+r_ogl_os_window_equip(OS_Window window)
 {
   R_Handle result = {0};
   return result;
 }
 
 internal void
-r_ogl_os_window_unequip(OS_Handle os, R_Handle r)
+r_ogl_os_window_unequip(OS_Window os, R_Handle r)
 {
   
 }
 
 internal void
-r_ogl_os_select_window(OS_Handle os, R_Handle r)
+r_ogl_os_select_window(OS_Window os, R_Handle r)
 {
   OS_LNX_Window *w = (OS_LNX_Window *)os.u64[0];
   glXMakeCurrent(os_lnx_gfx_state->display, w->window, r_ogl_lnx_ctx);
 }
 
 internal void
-r_ogl_os_window_swap(OS_Handle os, R_Handle r)
+r_ogl_os_window_swap(OS_Window os, R_Handle r)
 {
   OS_LNX_Window *w = (OS_LNX_Window *)os.u64[0];
   glXSwapBuffers(os_lnx_gfx_state->display, w->window);

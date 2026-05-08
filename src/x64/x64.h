@@ -34,7 +34,8 @@ enum
 ////////////////////////////////
 //~ fxsave/xsave
 
-typedef struct AlignType(16) X64_FXSave
+typedef struct X64_FXSave X64_FXSave;
+struct AlignType(16) X64_FXSave
 {
   U16  fcw;
   U16  fsw;
@@ -48,23 +49,25 @@ typedef struct AlignType(16) X64_FXSave
   U128 st_space[8];
   U128 xmm_space[16];
   U8   padding[96];
-} X64_FXSave;
+};
 StaticAssert(sizeof(X64_FXSave) == 512, g_x64_xsave_legacy_size_check);
 
-typedef struct X64_XSaveHeader
+typedef struct X64_XSaveHeader X64_XSaveHeader;
+struct X64_XSaveHeader
 {
   U64 xstate_bv;
   U64 xcomp_bv;
   U8  reserved[48];
-} X64_XSaveHeader;
+};
 StaticAssert(sizeof(X64_XSaveHeader) == 64, g_x64_xsave_header_size_check);
 
-typedef struct AlignType(64) X64_XSave
+typedef struct X64_XSave X64_XSave;
+struct AlignType(64) X64_XSave
 {
   X64_FXSave      fxsave;
   X64_XSaveHeader header;
   // U8 ext_area[0];
-} X64_XSave;
+};
 StaticAssert(sizeof(X64_XSave) == 576, g_x64_xsave_size_check);
 
 typedef U32 X64_XStateComponentIdx;
@@ -90,7 +93,6 @@ enum
   X64_XStateComponentIdx_TILECFG  = 17,
   X64_XStateComponentIdx_TILEDATA = 18,
 };
-
 enum
 {
   X64_XStateComponentFlag_FP       = (1 << X64_XStateComponentIdx_FP),
@@ -114,7 +116,8 @@ enum
   X64_XStateComponentFlag_TILEDATA = (1 << X64_XStateComponentIdx_TILEDATA),
 };
 
-typedef struct
+typedef struct X64_XSaveLayout X64_XSaveLayout;
+struct X64_XSaveLayout
 {
   U64 x87_offset;
   U64 sse_offset;
@@ -135,12 +138,12 @@ typedef struct
   U64 hwp_offset;
   U64 tile_cfg_offset;
   U64 tile_data_offset;
-} X64_XSaveLayout;
+};
 
 ////////////////////////////////
 //~ Debug Status Register
 
-typedef enum
+typedef enum X64_DebugStatusFlags
 {
   X64_DebugStatusFlag_B0                  = (1 << 0),
   X64_DebugStatusFlag_B1                  = (1 << 1),
@@ -151,16 +154,19 @@ typedef enum
   X64_DebugStatusFlag_SingleStep          = (1 << 14),
   X64_DebugStatusFlag_TaskSwitch          = (1 << 15),
   X64_DebugStatusFlag_RTM                 = (1 << 16),
-} X64_DebugStatusFlags;
+}
+X64_DebugStatusFlags;
 
 ////////////////////////////////
 //~ Debug Control Register
 
-typedef enum X64_BreakpointType {
+typedef enum X64_BreakpointType
+{
   X64_BreakpointType_Null,
   X64_BreakpointType_Local,
   X64_BreakpointType_Global,
-} X64_BreakpointType;
+}
+X64_BreakpointType;
 
 typedef enum X64_DebugBreakType
 {
@@ -169,7 +175,8 @@ typedef enum X64_DebugBreakType
   X64_DebugBreakType_Write,
   X64_DebugBreakType_ReadWriteIO,
   X64_DebugBreakType_ReadWriteNoFetch,
-} X64_DebugBreakType;
+}
+X64_DebugBreakType;
 
 typedef enum X64_DebugControlFlags
 {
@@ -199,7 +206,8 @@ typedef enum X64_DebugControlFlags
   X64_DebugControlFlag_LEN1 = (3 << 22),
   X64_DebugControlFlag_LEN2 = (3 << 26),
   X64_DebugControlFlag_LEN3 = (3 << 30),
-} X64_DebugControlFlags;
+}
+X64_DebugControlFlags;
 
 ////////////////////////////////
 //~ rjf: Generated

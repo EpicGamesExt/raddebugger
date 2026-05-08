@@ -5,12 +5,10 @@
 #define BUILD_CONSOLE_INTERFACE 1
 
 #include "base/base_inc.h"
-#include "os/os_inc.h"
 #include "arch/arch_inc.h"
 #include "stap/stap_parse.h"
 
 #include "base/base_inc.c"
-#include "os/os_inc.c"
 #include "arch/arch_inc.c"
 #include "stap/stap_parse.c"
 

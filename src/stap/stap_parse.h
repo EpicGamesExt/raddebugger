@@ -29,17 +29,14 @@ typedef struct STAP_Arg
     U64 imm;
     struct {
       U32 reg_code;
-      B8 is_alias;
     } reg;
     struct {
       S64 disp;
       struct {
         U32 reg_code;
-        B8 is_alias;
       } base;
       struct {
         U32 reg_code;
-        B8 is_alias;
       } index;
       U64 scale;
     } memory_ref;

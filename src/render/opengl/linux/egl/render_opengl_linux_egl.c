@@ -79,7 +79,7 @@ r_ogl_os_init(CmdLine *cmdln)
 }
 
 internal R_Handle
-r_ogl_os_window_equip(OS_Handle window)
+r_ogl_os_window_equip(OS_Window window)
 {
   OS_LNX_Window *window_os = (OS_LNX_Window *)window.u64[0];
   R_OGL_LNX_Window *w = r_ogl_lnx_state->free_window;
@@ -163,7 +163,7 @@ r_ogl_os_window_equip(OS_Handle window)
 }
 
 internal void
-r_ogl_os_window_unequip(OS_Handle os, R_Handle r)
+r_ogl_os_window_unequip(OS_Window os, R_Handle r)
 {
   R_OGL_LNX_Window *w = (R_OGL_LNX_Window *)r.u64[0];
   {
@@ -173,7 +173,7 @@ r_ogl_os_window_unequip(OS_Handle os, R_Handle r)
 }
 
 internal void
-r_ogl_os_select_window(OS_Handle os, R_Handle r)
+r_ogl_os_select_window(OS_Window os, R_Handle r)
 {
   OS_LNX_Window *w = (OS_LNX_Window *)os.u64[0];
   R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)r.u64[0];
@@ -181,7 +181,7 @@ r_ogl_os_select_window(OS_Handle os, R_Handle r)
 }
 
 internal void
-r_ogl_os_window_swap(OS_Handle os, R_Handle r)
+r_ogl_os_window_swap(OS_Window os, R_Handle r)
 {
   OS_LNX_Window *w = (OS_LNX_Window *)os.u64[0];
   R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)r.u64[0];

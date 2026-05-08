@@ -101,7 +101,7 @@ r_ogl_os_init(CmdLine *cmdline)
 }
 
 internal R_Handle
-r_ogl_os_window_equip(OS_Handle window)
+r_ogl_os_window_equip(OS_Window window)
 {
   //- rjf: unpack window
   OS_W32_Window *w = os_w32_window_from_handle(window);
@@ -155,12 +155,12 @@ r_ogl_os_window_equip(OS_Handle window)
 }
 
 internal void
-r_ogl_os_window_unequip(OS_Handle os, R_Handle r)
+r_ogl_os_window_unequip(OS_Window os, R_Handle r)
 {
 }
 
 internal void
-r_ogl_os_select_window(OS_Handle os, R_Handle r)
+r_ogl_os_select_window(OS_Window os, R_Handle r)
 {
   OS_W32_Window *w = os_w32_window_from_handle(os);
   if(w != 0)
@@ -172,7 +172,7 @@ r_ogl_os_select_window(OS_Handle os, R_Handle r)
 }
 
 internal void
-r_ogl_os_window_swap(OS_Handle os, R_Handle r)
+r_ogl_os_window_swap(OS_Window os, R_Handle r)
 {
   OS_W32_Window *w = os_w32_window_from_handle(os);
   if(w != 0)

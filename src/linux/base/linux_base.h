@@ -4,4 +4,154 @@
 #ifndef LINUX_BASE_H
 #define LINUX_BASE_H
 
+////////////////////////////////
+//~ rjf: Includes
+
+#include <dirent.h>
+#include <dlfcn.h>
+#include <dlfcn.h>
+#include <errno.h>
+#include <execinfo.h>
+#include <fcntl.h>
+#include <features.h>
+#include <linux/limits.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <signal.h>
+#include <spawn.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/random.h>
+#include <sys/sendfile.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/sysinfo.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+pid_t gettid(void);
+int pthread_setname_np(pthread_t thread, const char *name);
+int pthread_getname_np(pthread_t thread, char *name, size_t size);
+
+typedef struct tm tm;
+typedef struct timespec timespec;
+
+////////////////////////////////
+//~ rjf: Linux Call Interruption Retry Helper
+
+#define OS_LNX_RETRY_ON_EINTR(expr)          \
+(__extension__({                           \
+__typeof__(expr) __ret;                    \
+do {                                       \
+__ret = (expr);                            \
+} while ((__ret == -1) && errno == EINTR); \
+__ret;                                     \
+}))
+
+
+////////////////////////////////
+//~ rjf: File Iterator
+
+typedef struct OS_LNX_FileIter OS_LNX_FileIter;
+struct OS_LNX_FileIter
+{
+  DIR *dir;
+  struct dirent *dp;
+  String8 path;
+};
+StaticAssert(sizeof(Member(FileIter, memory)) >= sizeof(OS_LNX_FileIter), os_lnx_file_iter_size_check);
+
+////////////////////////////////
+//~ rjf: Safe Call Handler Chain
+
+typedef struct OS_LNX_SafeCallChain OS_LNX_SafeCallChain;
+struct OS_LNX_SafeCallChain
+{
+  OS_LNX_SafeCallChain *next;
+  ThreadEntryPointFunctionType *fail_handler;
+  void *ptr;
+};
+
+////////////////////////////////
+//~ rjf: Entities
+
+typedef enum OS_LNX_EntityKind
+{
+  OS_LNX_EntityKind_Thread,
+  OS_LNX_EntityKind_Mutex,
+  OS_LNX_EntityKind_RWMutex,
+  OS_LNX_EntityKind_ConditionVariable,
+  OS_LNX_EntityKind_Barrier,
+}
+OS_LNX_EntityKind;
+
+typedef struct OS_LNX_Entity OS_LNX_Entity;
+struct OS_LNX_Entity
+{
+  OS_LNX_Entity *next;
+  OS_LNX_EntityKind kind;
+  union
+  {
+    struct
+    {
+      pthread_t handle;
+      ThreadEntryPointFunctionType *func;
+      void *ptr;
+    } thread;
+    pthread_mutex_t mutex_handle;
+    pthread_rwlock_t rwmutex_handle;
+    struct
+    {
+      pthread_cond_t cond_handle;
+      pthread_mutex_t rwlock_mutex_handle;
+    } cv;
+    pthread_barrier_t barrier;
+  };
+};
+
+////////////////////////////////
+//~ rjf: State
+
+typedef struct OS_LNX_State OS_LNX_State;
+struct OS_LNX_State
+{
+  Arena *arena;
+  SystemInfo system_info;
+  ProcessInfo process_info;
+  pthread_mutex_t entity_mutex;
+  Arena *entity_arena;
+  OS_LNX_Entity *entity_free;
+  U64 default_env_count;
+  char **default_env;
+};
+
+////////////////////////////////
+//~ rjf: Globals
+
+global OS_LNX_State os_lnx_state = {0};
+thread_static OS_LNX_SafeCallChain *os_lnx_safe_call_chain = 0;
+
+////////////////////////////////
+//~ rjf: Helpers
+
+internal DateTime os_lnx_date_time_from_tm(tm in, U32 msec);
+internal tm os_lnx_tm_from_date_time(DateTime dt);
+internal timespec os_lnx_timespec_from_date_time(DateTime dt);
+internal DenseTime os_lnx_dense_time_from_timespec(timespec in);
+internal FileProperties os_lnx_file_properties_from_stat(struct stat *s);
+internal void os_lnx_safe_call_sig_handler(int x);
+
+////////////////////////////////
+//~ rjf: Entities
+
+internal OS_LNX_Entity *os_lnx_entity_alloc(OS_LNX_EntityKind kind);
+internal void os_lnx_entity_release(OS_LNX_Entity *entity);
+
+////////////////////////////////
+//~ rjf: Thread Entry Point
+
+internal void *os_lnx_thread_entry_point(void *ptr);
+
 #endif // LINUX_BASE_H

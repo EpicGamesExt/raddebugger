@@ -8,7 +8,6 @@
 // Headers
 
 #include "base/base_inc.h"
-#include "os/os_inc.h"
 #include "coff/coff.h"
 #include "coff/coff_parse.h"
 
@@ -16,7 +15,6 @@
 // Implementations
 
 #include "base/base_inc.c"
-#include "os/os_inc.c"
 #include "coff/coff.c"
 #include "coff/coff_parse.c"
 

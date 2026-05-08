@@ -201,14 +201,14 @@ r_init(CmdLine *cmdln)
 //- rjf: window setup/teardown
 
 r_hook R_Handle
-r_window_equip(OS_Handle window)
+r_window_equip(OS_Window window)
 {
   R_Handle result = r_ogl_os_window_equip(window);
   return result;
 }
 
 r_hook void
-r_window_unequip(OS_Handle window, R_Handle window_equip)
+r_window_unequip(OS_Window window, R_Handle window_equip)
 {
   r_ogl_os_window_unequip(window, window_equip);
 }
@@ -341,7 +341,7 @@ r_end_frame(void)
 }
 
 r_hook void
-r_window_begin_frame(OS_Handle os, R_Handle r)
+r_window_begin_frame(OS_Window os, R_Handle r)
 {
   r_ogl_os_select_window(os, r);
   
@@ -358,7 +358,7 @@ r_window_begin_frame(OS_Handle os, R_Handle r)
 }
 
 r_hook void
-r_window_end_frame(OS_Handle os, R_Handle r)
+r_window_end_frame(OS_Window os, R_Handle r)
 {
   for(R_OGL_FlushBuffer *flush_buffer = r_ogl_state->first_buffer_to_flush; flush_buffer != 0; flush_buffer = flush_buffer->next)
   {
@@ -372,7 +372,7 @@ r_window_end_frame(OS_Handle os, R_Handle r)
 //- rjf: render pass submission
 
 r_hook void
-r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
+r_window_submit(OS_Window window, R_Handle window_equip, R_PassList *passes)
 {
   Rng2F32 viewport_rect = os_client_rect_from_window(window);
   Vec2F32 viewport_dim = dim_2f32(viewport_rect);
