@@ -5022,7 +5022,7 @@ TEST(debug_p_sig_mismatch)
   String8 output = g_errors;
   while (output.size) {
     String8 line = t_chop_line(&output);
-    found_error = str8_match(line, expected_line, StringMatchFlag_CaseInsensitive);
+    found_error = str8_match(line, expected_line, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
     if (found_error) { break; }
   }
   T_Ok(found_error);
