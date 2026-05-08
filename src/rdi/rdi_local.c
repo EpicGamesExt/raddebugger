@@ -61,7 +61,9 @@ str8_from_rdi_path_node_idx(Arena *arena, RDI_Parsed *rdi, PathStyle path_style,
   {
     String8 path_part = {0};
     path_part.str = rdi_string_from_idx(rdi, fpn->name_string_idx, &path_part.size);
-    str8_list_push_front(scratch.arena, &path_parts, path_part);
+    String8List s = str8_split_path(scratch.arena, path_part);
+    str8_list_concat_in_place(&s, &path_parts);
+    path_parts = s;
   }
   String8 path = str8_path_list_join_by_style(arena, &path_parts, path_style);
   scratch_end(scratch);

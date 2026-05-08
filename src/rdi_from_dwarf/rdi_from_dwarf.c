@@ -2862,8 +2862,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         String8 path;
         {
           Temp temp = temp_begin(scratch.arena);
-          PathStyle path_style = PathStyle_Null;
-          path_style = path_style_from_str8(lookup->vm->header.dir_table.v[src->dir_idx]);
+          PathStyle path_style = path_style_from_str8(lookup->vm->header.dir_table.v[src->dir_idx]);
           if (path_style == PathStyle_Relative) {
             path_style = path_style_from_str8(src->path);
           }

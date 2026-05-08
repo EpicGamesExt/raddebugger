@@ -1254,7 +1254,7 @@ rb_thread_entry_point(void *p)
                     }
                     PathStyle path_style = PathStyle_SystemAbsolute;
                     if     (str8_match_wildcard(top_part, str8_lit("?:"), 0)) { path_style = PathStyle_WindowsAbsolute; }
-                    else if(str8_match(top_part, str8_lit("/"), 0))           { path_style = PathStyle_UnixAbsolute;    }
+                    else if(str8_match_wildcard(top_part, str8_lit("/*"), 0)) { path_style = PathStyle_UnixAbsolute;    }
 
                     String8 path = str8_from_rdi_path_node_idx(scratch.arena, rdi, path_style, src_file->file_path_node_idx);
                     str8_list_pushf(arena, &output_blobs, "[inlined] %S %S:%u\n", inline_name, path, inline_line.line_num);
@@ -1277,7 +1277,7 @@ rb_thread_entry_point(void *p)
             }
             PathStyle path_style = PathStyle_SystemAbsolute;
             if     (str8_match_wildcard(top_part, str8_lit("?:"), 0)) { path_style = PathStyle_WindowsAbsolute; }
-            else if(str8_match(top_part, str8_lit("/"), 0))           { path_style = PathStyle_UnixAbsolute;    }
+            else if(str8_match_wildcard(top_part, str8_lit("/*"), 0)) { path_style = PathStyle_UnixAbsolute;    }
 
             String8 path = str8_from_rdi_path_node_idx(scratch.arena, rdi, path_style, src_file->file_path_node_idx);
             str8_list_pushf(arena, &output_blobs, "%S:%u\n", path, line.line_num);
