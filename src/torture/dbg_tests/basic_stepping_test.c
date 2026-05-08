@@ -2,8 +2,8 @@
 ///   windows: {
 ///     compile: "/Od /Z7 /c main.c /Fo:main.obj"
 ///     compile: "/Od /Z7 /c foo.c /Fo:foo.obj"
-///     link: "/debug:full /dll foo.obj /out:foo.dll /implib:foo.lib"
-///     link: "/debug:full main.obj foo.lib /out:main.exe"
+///     link: "/fixed /debug:full /dll foo.obj /out:foo.dll /implib:foo.lib"
+///     link: "/fixed /debug:full main.obj foo.lib /out:main.exe"
 ///     launch: "main.exe"
 ///   }
 ///   linux: {
@@ -11,6 +11,8 @@
 ///     launch: "./main"
 ///   }
 /// }
+///
+// TODO: linux: -no-pie crashes the tracer
 
 /// file: "foo.c"
 
