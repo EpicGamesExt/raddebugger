@@ -141,6 +141,7 @@ X(glUniform1f, void, (GLint location, GLfloat v0))\
 X(glUniform2f, void, (GLint location, GLfloat v0, GLfloat v1))\
 X(glUniform3f, void, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2))\
 X(glUniform4f, void, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3))\
+X(glUniformMatrix3fv, void, (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value))\
 X(glUniformMatrix4fv, void, (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value))\
 X(glUniform1i, void, (GLint location, GLint v0))\
 X(glTexImage3D, void, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void *pixels))\

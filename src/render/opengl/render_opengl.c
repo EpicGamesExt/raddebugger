@@ -469,6 +469,7 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
               glUniformMatrix4fv(glGetUniformLocation(shader, "u_texture_sample_channel_map"), 1, 0, &texture_sample_channel_map.v[0][0]);
               glUniform2f(glGetUniformLocation(shader, "u_viewport_size_px"), viewport_dim.x, viewport_dim.y);
               glUniform1f(glGetUniformLocation(shader, "u_opacity"), 1.f - group_params->transparency);
+              glUniformMatrix3fv(glGetUniformLocation(shader, "u_xform"), 1, 0, &group_params->xform.v[0][0]);
             }
             
             //- rjf: set up scissor
@@ -499,8 +500,8 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
       case R_PassKind_Blur:
       {
         R_PassParams_Blur *params = pass->params_blur;
-        GLuint shader = r_ogl_state->shaders[R_OGL_ShaderKind_Blur];
-        // TODO(rjf): glBindVertexArrayScope(r_ogl_state->all_purpose_vao) glUseProgramScope(shader)
+        // GLuint shader = r_ogl_state->shaders[R_OGL_ShaderKind_Blur];
+        // glBindVertexArrayScope(r_ogl_state->all_purpose_vao) glUseProgramScope(shader)
         {
           // TODO(rjf)
         }

@@ -3292,7 +3292,7 @@ dw_parse_cfa_inst(String8        data,
     case DW_CFA_RememberState: {} break;
     case DW_CFA_RestoreState: {} break;
     case DW_CFA_Nop: {} break;
-    default: { NotImplemented; goto exit; } break;
+    default: { goto exit; } break;
   }
   
   // fill out output

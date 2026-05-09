@@ -68,6 +68,7 @@ out float v2p_border_thickness;
 out float v2p_softness;
 out float v2p_omit_texture;
 
+uniform mat3 u_xform;
 uniform sampler2D u_tex_color;
 uniform vec2 u_viewport_size_px;
 
@@ -84,6 +85,7 @@ void main(void)
   vec2 dst_center    = (c2v_dst_rect.zw + c2v_dst_rect.xy) / 2;
   vec2 dst_position  = vertices[gl_VertexID] * dst_half_size + dst_center;
   dst_position.y += shears[gl_VertexID];
+  dst_position = (u_xform * vec3(dst_position.x, dst_position.y, 1)).xy;
   
   // rjf: find src position
   vec2 src_half_size = (c2v_src_rect.zw - c2v_src_rect.xy) / 2;
