@@ -93,7 +93,7 @@ jobs:
       - name: run-torture
         shell: bash
         run: |
-          CC="${{ matrix.compiler }}" ./run_tests.sh "${{ matrix.compiler }}" "${{ matrix.mode }}" -- --gen_crash_dump
+          CC="${{ matrix.compiler }}" ./run.sh "${{ matrix.compiler }}" "${{ matrix.mode }}" -- --gen_crash_dump
       - name: upload torture artifacts
         if: failure()
         uses: actions/upload-artifact@v7
@@ -126,7 +126,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           where clang
           clang --version
-          call run_tests.bat ${{ matrix.compiler }} ${{ matrix.mode }} -- --gen_crash_dump || exit /b 1
+          call run.bat ${{ matrix.compiler }} ${{ matrix.mode }} -- --gen_crash_dump || exit /b 1
       - name: upload torture crash dumps
         if: failure()
         uses: actions/upload-artifact@v7
