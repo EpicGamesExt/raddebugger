@@ -14287,7 +14287,7 @@ rd_frame(void)
             // try to map the src coordinates to a vaddr via line info
             if(vaddr == 0 && file_path.size != 0)
             {
-              D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, point.line);
+              D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, point.line, max_U64);
               for(D_LineNode *n = lines.first; n != 0; n = n->next)
               {
                 D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);

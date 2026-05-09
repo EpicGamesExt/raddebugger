@@ -12,6 +12,7 @@ global B32 global_async_exit = 0;
 thread_static B32 is_async_thread = 0;
 
 // NOTE(rjf): defined by target
+raddbg_entry_point(entry_point);
 internal void entry_point(CmdLine *cmdline);
 
 internal void

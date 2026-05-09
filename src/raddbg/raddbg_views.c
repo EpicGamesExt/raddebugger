@@ -342,7 +342,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       String8 file_path = rd_regs()->file_path;
       D_Entity *module = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->module);
       DI_Key dbgi_key = d_dbgi_key_from_module(module);
-      D_LineListArray lines_array = d_lines_array_from_dbgi_key_file_path_line_range(scratch.arena, dbgi_key, file_path, visible_line_num_range);
+      D_LineListArray lines_array = d_lines_array_from_dbgi_key_file_path_line_range(scratch.arena, dbgi_key, file_path, visible_line_num_range, 8);
       if(lines_array.count != 0)
       {
         MemoryCopy(code_slice_params.line_infos, lines_array.v, sizeof(D_LineList)*lines_array.count);
@@ -2226,7 +2226,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   {
     D_Entity *module = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->module);
     DI_Key dbgi_key = d_dbgi_key_from_module(module);
-    rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, rd_regs()->file_path, rd_regs()->cursor.line);
+    rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, rd_regs()->file_path, rd_regs()->cursor.line, 8);
   }
   
   //////////////////////////////

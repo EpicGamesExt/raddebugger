@@ -725,7 +725,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       {
         DW2_LineTableFile *f = &hdr->files.v[file_idx];
         DW2_LineTableFile *dir = &hdr->dirs.v[f->dir_idx];
-        String8 full_file_path = str8f(scratch2.arena, "%S/%S", dir->file_name, f->file_name);
+        String8 full_file_path = str8f(scratch2.arena, "%S%s%S", dir->file_name, dir->file_name.size != 0 ? "/" : "", f->file_name);
         U64 hash = u64_hash_from_str8(full_file_path);
         U64 slot_idx = hash%slots_count;
         SrcFileNode *node = 0;
@@ -1112,8 +1112,27 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         if(emit_line && vm_regs.address != 0 && vm_regs.line != 0)
         {
           emit_line = 0;
+          
+          // rjf: grab the last emitted line info
+          U32 last_line = 0;
+          U16 last_col = 0;
+          if(last_line_seq_chunk != 0 && last_line_seq_chunk->line_count > 0)
+          {
+            last_line = last_line_seq_chunk->line_nums[last_line_seq_chunk->line_count-1];
+            last_col = last_line_seq_chunk->col_nums[last_line_seq_chunk->line_count-1];
+          }
+          
+          // rjf: determine if we need a new line
+          //
+          // TODO(rjf): in some cases this can trigger w/ DWARF due to columnar changes;
+          // we need to adjust this when we want to start correctly supporting columnar
+          // line info / stepping
+          //
+          B32 need_new_line = (last_line != (U32)vm_regs.line);
+          
+          // rjf: need new line -> grab chunk
           LineSeqChunk *chunk = last_line_seq_chunk;
-          if(chunk == 0 || chunk->line_count >= chunk->line_cap)
+          if(need_new_line && (chunk == 0 || chunk->line_count >= chunk->line_cap))
           {
             chunk = push_array(scratch.arena, LineSeqChunk, 1);
             SLLQueuePush(first_line_seq_chunk, last_line_seq_chunk, chunk);
@@ -1122,28 +1141,33 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
             chunk->line_nums = push_array(scratch.arena, U32, chunk->line_cap);
             chunk->col_nums = push_array(scratch.arena, U16, 2*chunk->line_cap);
           }
-          U64 chunk_line_idx = chunk->line_count;
-          chunk->voffs[chunk_line_idx] = vm_regs.address - base_vaddr;
-          chunk->line_nums[chunk_line_idx] = (U32)vm_regs.line;
-          chunk->col_nums[chunk_line_idx] = (U16)vm_regs.column;
-          chunk->line_count += 1;
-          total_line_seq_count += 1;
-          line_seq_src_file = src_file;
-          // NOTE(rjf): use for comparing against llvm-dwarfdump --debug-line
+          
+          // rjf: need new line -> push
+          if(need_new_line)
+          {
+            U64 chunk_line_idx = chunk->line_count;
+            chunk->voffs[chunk_line_idx] = vm_regs.address - base_vaddr;
+            chunk->line_nums[chunk_line_idx] = (U32)vm_regs.line;
+            chunk->col_nums[chunk_line_idx] = (U16)vm_regs.column;
+            chunk->line_count += 1;
+            total_line_seq_count += 1;
+            line_seq_src_file = src_file;
+            // NOTE(rjf): use for comparing against llvm-dwarfdump --debug-line
 #if 0
-          printf("0x%016I64x %6i %6i %6i %3i %13I64x %7i %s%s%s%s\n",
-                 vm_regs.address,
-                 (int)vm_regs.line,
-                 (int)vm_regs.column,
-                 (int)vm_regs.file_index,
-                 (int)vm_regs.isa,
-                 vm_regs.discriminator,
-                 (int)vm_regs.vliw_op_index,
-                 vm_regs.is_stmt ? " is_stmt" : "",
-                 vm_regs.prologue_end ? " prologue_end" : "",
-                 vm_regs.epilogue_begin ? " epilogue_begin" : "",
-                 vm_regs.end_sequence ? " end_sequence" : "");
+            printf("0x%016I64x %6i %6i %6i %3i %13I64x %7i %s%s%s%s\n",
+                   vm_regs.address,
+                   (int)vm_regs.line,
+                   (int)vm_regs.column,
+                   (int)vm_regs.file_index,
+                   (int)vm_regs.isa,
+                   vm_regs.discriminator,
+                   (int)vm_regs.vliw_op_index,
+                   vm_regs.is_stmt ? " is_stmt" : "",
+                   vm_regs.prologue_end ? " prologue_end" : "",
+                   vm_regs.epilogue_begin ? " epilogue_begin" : "",
+                   vm_regs.end_sequence ? " end_sequence" : "");
 #endif
+          }
           vm_regs.discriminator = 0;
           vm_regs.basic_block = 0;
           vm_regs.prologue_end = 0;

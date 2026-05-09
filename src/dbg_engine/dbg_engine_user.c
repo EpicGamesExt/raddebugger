@@ -363,7 +363,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   // rjf: gather other ranges on this same textual line, which we don't want to return to
   Rng1U64List all_vaddr_ranges_on_same_line = {0};
   {
-    D_LineList lines = d_lines_from_dbgi_key_file_path_line_num(scratch.arena, dbgi_key, file_path, line_num);
+    D_LineList lines = d_lines_from_dbgi_key_file_path_line_num(scratch.arena, dbgi_key, file_path, line_num, max_U64);
     for EachNode(n, D_LineNode, lines.first)
     {
       Rng1U64 voff_range = n->v.voff_range;
@@ -574,7 +574,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   // rjf: gather other ranges on this same textual line, which we don't want to return to
   Rng1U64List all_vaddr_ranges_on_same_line = {0};
   {
-    D_LineList lines = d_lines_from_dbgi_key_file_path_line_num(scratch.arena, dbgi_key, file_path, line_num);
+    D_LineList lines = d_lines_from_dbgi_key_file_path_line_num(scratch.arena, dbgi_key, file_path, line_num, max_U64);
     for EachNode(n, D_LineNode, lines.first)
     {
       Rng1U64 voff_range = n->v.voff_range;
@@ -838,7 +838,7 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI_Key dbgi_key, U64 voff)
 // TODO(rjf): this depends on file path maps, needs to move
 
 internal D_LineListArray
-d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, String8 file_path, Rng1S64 line_num_range)
+d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, String8 file_path, Rng1S64 line_num_range, U64 max_voffs_per_line)
 {
   D_LineListArray array = {0};
   {
@@ -896,7 +896,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
         D_LineList *list = &array.v[line_idx];
         U32 voff_count = 0;
         U64 *voffs = rdi_line_voffs_from_num(&line_map, u32_from_u64_saturate((U64)line_num), &voff_count);
-        if(lines_num_voffs[line_idx] < 8) ProfScope("iterate voffs (%i)", voff_count) for(U64 idx = 0; idx < voff_count; idx += 1)
+        if(lines_num_voffs[line_idx] < max_voffs_per_line) ProfScope("iterate voffs (%i)", voff_count) for(U64 idx = 0; idx < voff_count; idx += 1)
         {
           U64 base_voff = voffs[idx];
           U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, base_voff);
@@ -917,7 +917,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
             SLLQueuePush(list->first, list->last, n);
             list->count += 1;
             lines_num_voffs[line_idx] += 1;
-            if(lines_num_voffs[line_idx] >= 8)
+            if(lines_num_voffs[line_idx] >= max_voffs_per_line)
             {
               break;
             }
@@ -932,7 +932,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
 }
 
 internal D_LineListArray
-d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range)
+d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range, U64 max_voffs_per_line)
 {
   D_LineListArray array = {0};
   {
@@ -1037,9 +1037,9 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
 }
 
 internal D_LineList
-d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 file_path, S64 line_num)
+d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 file_path, S64 line_num, U64 max_voffs_per_line)
 {
-  D_LineListArray array = d_lines_array_from_dbgi_key_file_path_line_range(arena, dbgi_key, file_path, r1s64(line_num, line_num+1));
+  D_LineListArray array = d_lines_array_from_dbgi_key_file_path_line_range(arena, dbgi_key, file_path, r1s64(line_num, line_num+1), max_voffs_per_line);
   D_LineList list = {0};
   if(array.count != 0)
   {
@@ -1049,9 +1049,9 @@ d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 
 }
 
 internal D_LineList
-d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num)
+d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num, U64 max_voffs_per_line)
 {
-  D_LineListArray array = d_lines_array_from_file_path_line_range(arena, file_path, r1s64(line_num, line_num+1));
+  D_LineListArray array = d_lines_array_from_file_path_line_range(arena, file_path, r1s64(line_num, line_num+1), max_voffs_per_line);
   D_LineList list = {0};
   if(array.count != 0)
   {
