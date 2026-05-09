@@ -27,9 +27,9 @@ jobs:
           - debug
           - release
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v6
-      - name: install dependencies
+      - name: Install Dependencies
         shell: bash
         run: |
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
@@ -59,7 +59,7 @@ jobs:
           - debug
           - release
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v6
       - name: build (vs 2022)
         shell: cmd
@@ -67,7 +67,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           call build meta "${{ matrix.target }}" "${{ matrix.compiler }}" "${{ matrix.mode }}" || exit /b 1
 
-  run-torture-ubuntu-24-04:
+  run-ubuntu-24-04:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -79,9 +79,9 @@ jobs:
           - debug
           # TODO: - release
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v6
-      - name: install external libraries
+      - name: Install Dependencies
         shell: bash
         run: |
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
@@ -90,11 +90,11 @@ jobs:
           sudo apt-get install -y clang-22 lld-22 llvm-22 gcc-14 pkg-config libfreetype6-dev libx11-dev libxext-dev libgl1-mesa-dev libegl1-mesa-dev
           # crash callstack symbolizer depends on LLVM
           sudo ln -s /usr/bin/llvm-symbolizer-22 /usr/bin/llvm-symbolizer
-      - name: run-torture
+      - name: Run
         shell: bash
         run: |
           CC="${{ matrix.compiler }}" ./run.sh "${{ matrix.compiler }}" "${{ matrix.mode }}" -- --gen_crash_dump
-      - name: upload torture artifacts
+      - name: Upload Artifacts
         if: failure()
         uses: actions/upload-artifact@v7
         with:
@@ -106,7 +106,7 @@ jobs:
             build/torture_artifacts/**
           if-no-files-found: ignore
 
-  run-torture-windows-2022:
+  run-windows-2022:
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -118,14 +118,14 @@ jobs:
           - debug
           - release
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v6
-      - name: run-torture
+      - name: Run
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           call run.bat ${{ matrix.compiler }} ${{ matrix.mode }} -- --gen_crash_dump || exit /b 1
-      - name: upload torture crash dumps
+      - name: Upload Artifacts
         if: failure()
         uses: actions/upload-artifact@v7
         with:
