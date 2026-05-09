@@ -62,23 +62,27 @@ for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
   )
 
   :: TODO: unblock asan
-  call build.bat meta %%c %%m raddbg raddbg_non_graphical || exit /b 1
+  call build.bat meta %%c %%m raddbg raddbg_non_graphical || (endlocal exit /b 1)
 
   :: clang does not compile with asan in release mode because it runs out of memory
   if "%%c" equ "clang" (
     if /i "%%m" equ "release" (
-      call build.bat meta %%c %%m !TARGET_VALUES! || exit /b 1
+      call build.bat no_meta %%c %%m !TARGET_VALUES! || (endlocal exit /b 1)
     ) else (
-      call build.bat meta asan %%c %%m !TARGET_VALUES! || exit /b 1
+      call build.bat asan no_meta %%c %%m !TARGET_VALUES! || (endlocal exit /b 1)
     )
   ) else (
-    call build.bat meta asan %%c %%m !TARGET_VALUES! || exit /b 1
+    call build.bat asan no_meta %%c %%m !TARGET_VALUES! || (endlocal exit /b 1)
   )
 
   if "%RUN_TORTURE%" equ "1" (
     pushd build
-    torture %TORTURE_ARGS% || exit /b 1
+    torture %TORTURE_ARGS%
     popd
+    if errorlevel 1 (
+      endlocal
+      exit /b 1
+    )
   )
 
   endlocal
