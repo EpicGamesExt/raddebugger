@@ -2,17 +2,17 @@
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
 internal void
-os_gfx_init(void)
+wm_init(void)
 {
 }
 
 ////////////////////////////////
 //~ rjf: @os_hooks Graphics System Info (Implemented Per-OS)
 
-internal OS_GfxInfo *
-os_get_gfx_info(void)
+internal WM_SystemInfo *
+wm_get_system_info(void)
 {
-  local_persist OS_GfxInfo g = {0};
+  local_persist WM_SystemInfo g = {0};
   return &g;
 }
 
@@ -20,12 +20,12 @@ os_get_gfx_info(void)
 //~ rjf: @os_hooks Clipboards (Implemented Per-OS)
 
 internal void
-os_set_clipboard_text(String8 string)
+wm_set_clipboard_text(String8 string)
 {
 }
 
 internal String8
-os_get_clipboard_text(Arena *arena)
+wm_get_clipboard_text(Arena *arena)
 {
   return str8_zero();
 }
@@ -33,118 +33,118 @@ os_get_clipboard_text(Arena *arena)
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
-internal OS_Handle
-os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
+internal WM_Window
+wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
 {
-  OS_Handle handle = {1};
+  WM_Window handle = {1};
   return handle;
 }
 
 internal void
-os_window_close(OS_Handle window)
+wm_window_close(WM_Window window)
 {
 }
 
 internal void
-os_window_set_title(OS_Handle window, String8 title)
+wm_window_set_title(WM_Window window, String8 title)
 {
 }
 
 internal void
-os_window_first_paint(OS_Handle window)
+wm_window_first_paint(WM_Window window)
 {
 }
 
 internal void
-os_window_focus(OS_Handle window)
+wm_window_focus(WM_Window window)
 {
 }
 
 internal B32
-os_window_is_focused(OS_Handle window)
+wm_window_is_focused(WM_Window window)
 {
   return 0;
 }
 
 internal B32
-os_window_is_fullscreen(OS_Handle window)
+wm_window_is_fullscreen(WM_Window window)
 {
   return 0;
 }
 
 internal void
-os_window_set_fullscreen(OS_Handle window, B32 fullscreen)
+wm_window_set_fullscreen(WM_Window window, B32 fullscreen)
 {
 }
 
 internal B32
-os_window_is_maximized(OS_Handle window)
+wm_window_is_maximized(WM_Window window)
 {
   return 0;
 }
 
 internal void
-os_window_set_maximized(OS_Handle window, B32 maximized)
+wm_window_set_maximized(WM_Window window, B32 maximized)
 {
 }
 
 internal B32
-os_window_is_minimized(OS_Handle window)
+wm_window_is_minimized(WM_Window window)
 {
   return 0;
 }
 
 internal void
-os_window_set_minimized(OS_Handle window, B32 minimized)
+wm_window_set_minimized(WM_Window window, B32 minimized)
 {
 }
 
 internal void
-os_window_bring_to_front(OS_Handle window)
+wm_window_bring_to_front(WM_Window window)
 {
 }
 
 internal void
-os_window_set_monitor(OS_Handle window, OS_Handle monitor)
+wm_window_set_monitor(WM_Window window, WM_Monitor monitor)
 {
 }
 
 internal void
-os_window_clear_custom_border_data(OS_Handle handle)
+wm_window_clear_custom_border_data(WM_Window handle)
 {
 }
 
 internal void
-os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
+wm_window_push_custom_title_bar(WM_Window handle, F32 thickness)
 {
 }
 
 internal void
-os_window_push_custom_edges(OS_Handle handle, F32 thickness)
+wm_window_push_custom_edges(WM_Window handle, F32 thickness)
 {
 }
 
 internal void
-os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
+wm_window_push_custom_title_bar_client_area(WM_Window handle, Rng2F32 rect)
 {
 }
 
 internal Rng2F32
-os_rect_from_window(OS_Handle window)
+wm_rect_from_window(WM_Window window)
 {
   Rng2F32 rect = r2f32(v2f32(0, 0), v2f32(500, 500));
   return rect;
 }
 
 internal Rng2F32
-os_client_rect_from_window(OS_Handle window)
+wm_client_rect_from_window(WM_Window window)
 {
   Rng2F32 rect = r2f32(v2f32(0, 0), v2f32(500, 500));
   return rect;
 }
 
 internal F32
-os_dpi_from_window(OS_Handle window)
+wm_dpi_from_window(WM_Window window)
 {
   return 96.f;
 }
@@ -152,59 +152,57 @@ os_dpi_from_window(OS_Handle window)
 ////////////////////////////////
 //~ rjf: @os_hooks External Windows (Implemented Per-OS)
 
-internal OS_Handle
-os_focused_external_window(void)
+internal WM_ExtWindow
+wm_focused_external_window(void)
 {
-  OS_Handle result = {0};
-  // TODO(rjf)
+  WM_ExtWindow result = {0};
   return result;
 }
 
 internal void
-os_focus_external_window(OS_Handle handle)
+wm_focus_external_window(WM_ExtWindow handle)
 {
-  // TODO(rjf)
 }
 
 ////////////////////////////////
 //~ rjf: @os_hooks Monitors (Implemented Per-OS)
 
-internal OS_HandleArray
-os_push_monitors_array(Arena *arena)
+internal WM_MonitorArray
+wm_push_monitors_array(Arena *arena)
 {
-  OS_HandleArray arr = {0};
+  WM_MonitorArray arr = {0};
   return arr;
 }
 
-internal OS_Handle
-os_primary_monitor(void)
+internal WM_Monitor
+wm_primary_monitor(void)
 {
-  OS_Handle handle = {1};
+  WM_Monitor handle = {1};
   return handle;
 }
 
-internal OS_Handle
-os_monitor_from_window(OS_Handle window)
+internal WM_Monitor
+wm_monitor_from_window(WM_Window window)
 {
-  OS_Handle handle = {1};
+  WM_Monitor handle = {1};
   return handle;
 }
 
 internal String8
-os_name_from_monitor(Arena *arena, OS_Handle monitor)
+wm_name_from_monitor(Arena *arena, WM_Monitor monitor)
 {
   return str8_zero();
 }
 
 internal Vec2F32
-os_dim_from_monitor(OS_Handle monitor)
+wm_dim_from_monitor(WM_Monitor monitor)
 {
   Vec2F32 v = v2f32(1000, 1000);
   return v;
 }
 
 internal F32
-os_dpi_from_monitor(OS_Handle monitor)
+wm_dpi_from_monitor(WM_Monitor monitor)
 {
   return 96.f;
 }
@@ -213,32 +211,32 @@ os_dpi_from_monitor(OS_Handle monitor)
 //~ rjf: @os_hooks Events (Implemented Per-OS)
 
 internal void
-os_send_wakeup_event(void)
+wm_send_wakeup_event(void)
 {
 }
 
-internal OS_EventList
-os_get_events(Arena *arena, B32 wait)
+internal WM_EventList
+wm_get_events(Arena *arena, B32 wait)
 {
-  OS_EventList evts = {0};
+  WM_EventList evts = {0};
   return evts;
 }
 
-internal OS_Modifiers
-os_get_modifiers(void)
+internal WM_Modifiers
+wm_get_modifiers(void)
 {
-  OS_Modifiers f = 0;
+  WM_Modifiers f = 0;
   return f;
 }
 
 internal B32
-os_key_is_down(OS_Key key)
+wm_key_is_down(WM_Key key)
 {
   return 0;
 }
 
 internal Vec2F32
-os_mouse_from_window(OS_Handle window)
+wm_mouse_from_window(WM_Window window)
 {
   return v2f32(0, 0);
 }
@@ -247,7 +245,7 @@ os_mouse_from_window(OS_Handle window)
 //~ rjf: @os_hooks Cursors (Implemented Per-OS)
 
 internal void
-os_set_cursor(OS_Cursor cursor)
+wm_set_cursor(WM_Cursor cursor)
 {
 }
 
@@ -255,12 +253,12 @@ os_set_cursor(OS_Cursor cursor)
 //~ rjf: @os_hooks Native User-Facing Graphical Messages (Implemented Per-OS)
 
 internal void
-os_graphical_message(B32 error, String8 title, String8 message)
+wm_graphical_message(B32 error, String8 title, String8 message)
 {
 }
 
 internal String8
-os_graphical_pick_file(Arena *arena, String8 initial_path)
+wm_graphical_pick_file(Arena *arena, String8 initial_path)
 {
   return str8_zero();
 }
@@ -269,11 +267,11 @@ os_graphical_pick_file(Arena *arena, String8 initial_path)
 //~ rjf: @os_hooks Shell Operations
 
 internal void
-os_show_in_filesystem_ui(String8 path)
+wm_show_in_filesystem_ui(String8 path)
 {
 }
 
 internal void
-os_open_in_browser(String8 url)
+wm_open_in_browser(String8 url)
 {
 }

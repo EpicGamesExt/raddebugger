@@ -24,21 +24,21 @@ cfg_key_map_from_cfg(Arena *arena)
         for(CFG_Node *child = keybinding->first; child != &cfg_nil_node; child = child->next)
         {
           if(0){}
-          else if(str8_match(child->string, str8_lit("ctrl"), 0))   { binding.modifiers |= OS_Modifier_Ctrl; }
-          else if(str8_match(child->string, str8_lit("alt"), 0))    { binding.modifiers |= OS_Modifier_Alt; }
-          else if(str8_match(child->string, str8_lit("shift"), 0))  { binding.modifiers |= OS_Modifier_Shift; }
+          else if(str8_match(child->string, str8_lit("ctrl"), 0))   { binding.modifiers |= WM_Modifier_Ctrl; }
+          else if(str8_match(child->string, str8_lit("alt"), 0))    { binding.modifiers |= WM_Modifier_Alt; }
+          else if(str8_match(child->string, str8_lit("shift"), 0))  { binding.modifiers |= WM_Modifier_Shift; }
           else
           {
-            OS_Key key = OS_Key_Null;
-            for EachEnumVal(OS_Key, k)
+            WM_Key key = WM_Key_Null;
+            for EachEnumVal(WM_Key, k)
             {
-              if(str8_match(child->string, os_g_key_cfg_string_table[k], StringMatchFlag_CaseInsensitive))
+              if(str8_match(child->string, wm_key_cfg_name_table[k], StringMatchFlag_CaseInsensitive))
               {
                 key = k;
                 break;
               }
             }
-            if(key != OS_Key_Null)
+            if(key != WM_Key_Null)
             {
               binding.key = key;
             }

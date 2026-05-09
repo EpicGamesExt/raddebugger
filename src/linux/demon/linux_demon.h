@@ -1,16 +1,16 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef DEMON_CORE_LINUX_H
-#define DEMON_CORE_LINUX_H
+#ifndef LINUX_DEMON_H
+#define LINUX_DEMON_H
 
 ////////////////////////////////
 //~ rjf: Register Layouts
 //
 // These are defined in <sys/user.h>, but only for one architecture at a time
 
-typedef struct OS_LNX_GprsX64 OS_LNX_GprsX64;
-struct OS_LNX_GprsX64
+typedef struct LNX_DMN_GprsX64 LNX_DMN_GprsX64;
+struct LNX_DMN_GprsX64
 {
   U64 r15;
   U64 r14;
@@ -41,10 +41,10 @@ struct OS_LNX_GprsX64
   U64 gs;
 };
 
-typedef struct OS_LNX_UserX64 OS_LNX_UserX64;
-struct OS_LNX_UserX64
+typedef struct LNX_DMN_UserX64 LNX_DMN_UserX64;
+struct LNX_DMN_UserX64
 {
-  OS_LNX_GprsX64 regs;
+  LNX_DMN_GprsX64 regs;
   S32 u_fpvalid;
   U32 _pad0;
   X64_FXSave i387;
@@ -62,22 +62,22 @@ struct OS_LNX_UserX64
   U8  u_comm[32];
   U64 u_debugreg[8];
 };
-StaticAssert(sizeof(OS_LNX_UserX64) == 912, g_os_lnx_user_x64_size_check);
+StaticAssert(sizeof(LNX_DMN_UserX64) == 912, lnx_user_x64_size_check);
 
 ////////////////////////////////
 //~ TLS
 
-typedef struct DMN_LNX_DbDesc
+typedef struct LNX_DMN_DbDesc
 {
   U32 bit_size;
   U32 count;
   U32 offset;
-} DMN_LNX_DbDesc;
+} LNX_DMN_DbDesc;
 
 ////////////////////////////////
 //~ SDT Probes
 
-typedef struct DMN_LNX_Probe
+typedef struct LNX_DMN_Probe
 {
   String8       provider;
   String8       name;
@@ -85,22 +85,22 @@ typedef struct DMN_LNX_Probe
   STAP_ArgArray args;
   U64           pc;
   U64           semaphore;
-} DMN_LNX_Probe;
+} LNX_DMN_Probe;
 
-typedef struct DMN_LNX_ProbeNode
+typedef struct LNX_DMN_ProbeNode
 {
-  DMN_LNX_Probe v;
-  struct DMN_LNX_ProbeNode *next;
-} DMN_LNX_ProbeNode;
+  LNX_DMN_Probe v;
+  struct LNX_DMN_ProbeNode *next;
+} LNX_DMN_ProbeNode;
 
-typedef struct DMN_LNX_ProbeList
+typedef struct LNX_DMN_ProbeList
 {
   U64                count;
-  DMN_LNX_ProbeNode *first;
-  DMN_LNX_ProbeNode *last;
-} DMN_LNX_ProbeList;
+  LNX_DMN_ProbeNode *first;
+  LNX_DMN_ProbeNode *last;
+} LNX_DMN_ProbeList;
 
-#define DMN_LNX_Probe_XList             \
+#define LNX_DMN_Probe_XList             \
 X(InitStart,     2, "init_start")     \
 X(InitComplete,  2, "init_complete")  \
 X(RelocStart,    2, "reloc_start")    \
@@ -115,17 +115,17 @@ X(SetJmp,        3, "setjmp")
 
 typedef enum
 {
-  DMN_LNX_ProbeType_Null,
-#define X(_N,...) DMN_LNX_ProbeType_##_N,
-  DMN_LNX_Probe_XList
+  LNX_DMN_ProbeType_Null,
+#define X(_N,...) LNX_DMN_ProbeType_##_N,
+  LNX_DMN_Probe_XList
 #undef X
-  DMN_LNX_ProbeType_Count,
-} DMN_LNX_ProbeType;
+  LNX_DMN_ProbeType_Count,
+} LNX_DMN_ProbeType;
 
 ////////////////////////////////
 //~ Process Info
 
-typedef struct DMN_LNX_Auxv
+typedef struct LNX_DMN_Auxv
 {
   U64 base;
   U64 phnum;
@@ -133,9 +133,9 @@ typedef struct DMN_LNX_Auxv
   U64 phdr;
   U64 execfn;
   U64 pagesz;
-} DMN_LNX_Auxv;
+} LNX_DMN_Auxv;
 
-typedef struct DMN_LNX_DynamicInfo
+typedef struct LNX_DMN_DynamicInfo
 {
   U64 hash_vaddr;
   U64 gnu_hash_vaddr;
@@ -143,59 +143,59 @@ typedef struct DMN_LNX_DynamicInfo
   U64 strtab_size;
   U64 symtab_vaddr;
   U64 symtab_entry_size;
-} DMN_LNX_DynamicInfo;
+} LNX_DMN_DynamicInfo;
 
 ////////////////////////////////
 //~ Entities
 
-typedef enum DMN_LNX_EntityKind
+typedef enum LNX_DMN_EntityKind
 {
-  DMN_LNX_EntityKind_Null,
-  DMN_LNX_EntityKind_Process,
-  DMN_LNX_EntityKind_ProcessCtx,
-  DMN_LNX_EntityKind_Thread,
-  DMN_LNX_EntityKind_Module,
-} DMN_LNX_EntityKind;
+  LNX_DMN_EntityKind_Null,
+  LNX_DMN_EntityKind_Process,
+  LNX_DMN_EntityKind_ProcessCtx,
+  LNX_DMN_EntityKind_Thread,
+  LNX_DMN_EntityKind_Module,
+} LNX_DMN_EntityKind;
 
-typedef enum DMN_LNX_ThreadState
+typedef enum LNX_DMN_ThreadState
 {
-  DMN_LNX_ThreadState_Null,
-  DMN_LNX_ThreadState_Running,
-  DMN_LNX_ThreadState_Stopped,
-  DMN_LNX_ThreadState_Exited,
-  DMN_LNX_ThreadState_PendingCreation,
-} DMN_LNX_ThreadState;
+  LNX_DMN_ThreadState_Null,
+  LNX_DMN_ThreadState_Running,
+  LNX_DMN_ThreadState_Stopped,
+  LNX_DMN_ThreadState_Exited,
+  LNX_DMN_ThreadState_PendingCreation,
+} LNX_DMN_ThreadState;
 
-typedef struct DMN_LNX_Thread
+typedef struct LNX_DMN_Thread
 {
   pid_t                   tid;
-  DMN_LNX_ThreadState     state;
-  struct DMN_LNX_Process *process;
+  LNX_DMN_ThreadState     state;
+  struct LNX_DMN_Process *process;
   void                   *reg_block;
   B32                     is_reg_block_dirty;
   B32                     pass_through_signal;
   U64                     pass_through_signo;
   U64                     orig_rax;
   
-  struct DMN_LNX_Thread *next;
-  struct DMN_LNX_Thread *prev;
-} DMN_LNX_Thread;
+  struct LNX_DMN_Thread *next;
+  struct LNX_DMN_Thread *prev;
+} LNX_DMN_Thread;
 
-typedef struct DMN_LNX_ThreadPtrNode
+typedef struct LNX_DMN_ThreadPtrNode
 {
-  DMN_LNX_Thread *v;
-  struct DMN_LNX_ThreadPtrNode *next;
-  struct DMN_LNX_ThreadPtrNode *prev;
-} DMN_LNX_ThreadPtrNode;
+  LNX_DMN_Thread *v;
+  struct LNX_DMN_ThreadPtrNode *next;
+  struct LNX_DMN_ThreadPtrNode *prev;
+} LNX_DMN_ThreadPtrNode;
 
-typedef struct DMN_LNX_ThreadPtrList
+typedef struct LNX_DMN_ThreadPtrList
 {
   U64                    count;
-  DMN_LNX_ThreadPtrNode *first;
-  DMN_LNX_ThreadPtrNode *last;
-} DMN_LNX_ThreadPtrList;
+  LNX_DMN_ThreadPtrNode *first;
+  LNX_DMN_ThreadPtrNode *last;
+} LNX_DMN_ThreadPtrList;
 
-typedef struct DMN_LNX_Module
+typedef struct LNX_DMN_Module
 {
   U64 name_vaddr;
   U64 base_vaddr;
@@ -209,86 +209,86 @@ typedef struct DMN_LNX_Module
   B8  is_live;
   B8  is_main;
   
-  struct DMN_LNX_Module *next;
-  struct DMN_LNX_Module *prev;
-} DMN_LNX_Module;
+  struct LNX_DMN_Module *next;
+  struct LNX_DMN_Module *prev;
+} LNX_DMN_Module;
 
-typedef struct DMN_LNX_ModulePtrNode
+typedef struct LNX_DMN_ModulePtrNode
 {
-  DMN_LNX_Module *v;
-  struct DMN_LNX_ModulePtrNode *next;
-} DMN_LNX_ModulePtrNode;
+  LNX_DMN_Module *v;
+  struct LNX_DMN_ModulePtrNode *next;
+} LNX_DMN_ModulePtrNode;
 
-typedef struct DMN_LNX_ModulePtrList
+typedef struct LNX_DMN_ModulePtrList
 {
   U64                    count;
-  DMN_LNX_ModulePtrNode *first;
-  DMN_LNX_ModulePtrNode *last;
-} DMN_LNX_ModulePtrList;
+  LNX_DMN_ModulePtrNode *first;
+  LNX_DMN_ModulePtrNode *last;
+} LNX_DMN_ModulePtrList;
 
 typedef enum
 {
-  DMN_LNX_ProcessState_Null,
-  DMN_LNX_ProcessState_Launch,
-  DMN_LNX_ProcessState_Attach,
-  DMN_LNX_ProcessState_WaitForExec,
-  DMN_LNX_ProcessState_ExecFailedDoExit,
-  DMN_LNX_ProcessState_Normal,
-} DMN_LNX_ProcessState;
+  LNX_DMN_ProcessState_Null,
+  LNX_DMN_ProcessState_Launch,
+  LNX_DMN_ProcessState_Attach,
+  LNX_DMN_ProcessState_WaitForExec,
+  LNX_DMN_ProcessState_ExecFailedDoExit,
+  LNX_DMN_ProcessState_Normal,
+} LNX_DMN_ProcessState;
 
 typedef enum
 {
-  DMN_LNX_CreateProcessFlag_DebugSubprocesses = (1 << 0),
-  DMN_LNX_CreateProcessFlag_Rebased           = (1 << 1),
-  DMN_LNX_CreateProcessFlag_Cow               = (1 << 2),
-  DMN_LNX_CreateProcessFlag_ClonedMemory      = (1 << 3),
-} DMN_LNX_CreateProcessFlags;
+  LNX_DMN_CreateProcessFlag_DebugSubprocesses = (1 << 0),
+  LNX_DMN_CreateProcessFlag_Rebased           = (1 << 1),
+  LNX_DMN_CreateProcessFlag_Cow               = (1 << 2),
+  LNX_DMN_CreateProcessFlag_ClonedMemory      = (1 << 3),
+} LNX_DMN_CreateProcessFlags;
 
-typedef struct DMN_LNX_Process
+typedef struct LNX_DMN_Process
 {
   pid_t                      pid;
   int                        fd;
-  DMN_LNX_ProcessState       state;
+  LNX_DMN_ProcessState       state;
   B32                        debug_subprocesses;
   B32                        is_cow;
   B32                        vfork_with_spoof;
   U64                        thread_count;
-  DMN_LNX_Thread            *first_thread;
-  DMN_LNX_Thread            *last_thread;
+  LNX_DMN_Thread            *first_thread;
+  LNX_DMN_Thread            *last_thread;
   U64                        main_thread_exit_code;
-  struct DMN_LNX_Process    *parent_process;
-  struct DMN_LNX_ProcessCtx *ctx;
+  struct LNX_DMN_Process    *parent_process;
+  struct LNX_DMN_ProcessCtx *ctx;
   
   
-  struct DMN_LNX_Process *next;
-  struct DMN_LNX_Process *prev;
-} DMN_LNX_Process;
+  struct LNX_DMN_Process *next;
+  struct LNX_DMN_Process *prev;
+} LNX_DMN_Process;
 
-typedef struct DMN_LNX_ProcessPtrNode
+typedef struct LNX_DMN_ProcessPtrNode
 {
-  DMN_LNX_Process *v;
-  struct DMN_LNX_ProcessPtrNode *next;
-} DMN_LNX_ProcessPtrNode;
+  LNX_DMN_Process *v;
+  struct LNX_DMN_ProcessPtrNode *next;
+} LNX_DMN_ProcessPtrNode;
 
-typedef struct DMN_LNX_ProcessPtrList
+typedef struct LNX_DMN_ProcessPtrList
 {
   U64                     count;
-  DMN_LNX_ProcessPtrNode *first;
-  DMN_LNX_ProcessPtrNode *last;
-} DMN_LNX_ProcessPtrList;
+  LNX_DMN_ProcessPtrNode *first;
+  LNX_DMN_ProcessPtrNode *last;
+} LNX_DMN_ProcessPtrList;
 
-typedef struct DMN_LNX_ProcessCtx
+typedef struct LNX_DMN_ProcessCtx
 {
   Arena                 *arena;
   Arch                   arch;
   U64                    rdebug_vaddr;
   ELF_Class              dl_class;
   HashTable             *loaded_modules_ht;
-  DMN_LNX_Probe        **probes;
+  LNX_DMN_Probe        **probes;
   DMN_ActiveTrap        *first_probe_trap;
   DMN_ActiveTrap        *last_probe_trap;
-  DMN_LNX_Module        *first_module;
-  DMN_LNX_Module        *last_module;
+  LNX_DMN_Module        *first_module;
+  LNX_DMN_Module        *last_module;
   U64                    module_count;
   U64                    ref_count;
   
@@ -299,42 +299,42 @@ typedef struct DMN_LNX_ProcessCtx
   U64             xcr0;
   U64             xsave_size;
   X64_XSaveLayout xsave_layout;
-} DMN_LNX_ProcessCtx;
+} LNX_DMN_ProcessCtx;
 
-typedef struct DMN_LNX_Entity
+typedef struct LNX_DMN_Entity
 {
   union
   {
-    DMN_LNX_Process    process;
-    DMN_LNX_ProcessCtx process_ctx;
-    DMN_LNX_Thread     thread;
-    DMN_LNX_Module     module;
+    LNX_DMN_Process    process;
+    LNX_DMN_ProcessCtx process_ctx;
+    LNX_DMN_Thread     thread;
+    LNX_DMN_Module     module;
     struct
     {
-      struct DMN_LNX_Entity *next;
+      struct LNX_DMN_Entity *next;
     };
   };
   U32                gen;
-  DMN_LNX_EntityKind kind;
-} DMN_LNX_Entity;
+  LNX_DMN_EntityKind kind;
+} LNX_DMN_Entity;
 
-typedef struct DMN_LNX_EntityNode
+typedef struct LNX_DMN_EntityNode
 {
-  DMN_LNX_Entity *v;
-  struct DMN_LNX_EntityNode *next;
-} DMN_LNX_EntityNode;
+  LNX_DMN_Entity *v;
+  struct LNX_DMN_EntityNode *next;
+} LNX_DMN_EntityNode;
 
-typedef struct DMN_LNX_EntityList
+typedef struct LNX_DMN_EntityList
 {
   U64                 count;
-  DMN_LNX_EntityNode *first;
-  DMN_LNX_EntityNode *last;
-} DMN_LNX_EntityList;
+  LNX_DMN_EntityNode *first;
+  LNX_DMN_EntityNode *last;
+} LNX_DMN_EntityList;
 
 ////////////////////////////////
 //~ Global State
 
-typedef struct DMN_LNX_State
+typedef struct LNX_DMN_State
 {
   Arena *arena;
   
@@ -344,8 +344,8 @@ typedef struct DMN_LNX_State
   
   // rjf: entity storage
   Arena          *entities_arena;
-  DMN_LNX_Entity *entities_base;
-  DMN_LNX_Entity *free_entity;
+  LNX_DMN_Entity *entities_base;
+  LNX_DMN_Entity *free_entity;
   U64             entities_count;
   
   HashTable *tid_ht; // thread id -> thread entity
@@ -353,8 +353,8 @@ typedef struct DMN_LNX_State
   
   // process tracking
   U64              process_count;
-  DMN_LNX_Process *first_process;
-  DMN_LNX_Process *last_process;
+  LNX_DMN_Process *first_process;
+  LNX_DMN_Process *last_process;
   
   // process/thread creation tracking
   U64 process_pending_creation;
@@ -369,134 +369,133 @@ typedef struct DMN_LNX_State
   
   // TLS
   B32            is_tls_detected;
-  DMN_LNX_DbDesc tls_modid_desc;
-  DMN_LNX_DbDesc tls_offset_desc;
-} DMN_LNX_State;
+  LNX_DMN_DbDesc tls_modid_desc;
+  LNX_DMN_DbDesc tls_offset_desc;
+} LNX_DMN_State;
 
 ////////////////////////////////
 //~ Globals
 
-global B32            dmn_lnx_ctrl_thread;
-global DMN_LNX_State *dmn_lnx_state;
+global B32            lnx_dmn_ctrl_thread;
+global LNX_DMN_State *lnx_dmn_state;
 
 ////////////////////////////////
 //~ Memory R/W
 
-internal U64     dmn_lnx_read(int memory_fd, Rng1U64 range, void *dst);
-internal B32     dmn_lnx_write(int memory_fd, Rng1U64 range, void *src);
-internal String8 dmn_lnx_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_size);
-internal String8 dmn_lnx_read_string(Arena *arena, int memory_fd, U64 base_vaddr);
-#define dmn_lnx_read_struct(fd, vaddr, ptr)  dmn_lnx_read((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
-#define dmn_lnx_write_struct(fd, vaddr, ptr) dmn_lnx_write((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
+internal U64     lnx_dmn_read(int memory_fd, Rng1U64 range, void *dst);
+internal B32     lnx_dmn_write(int memory_fd, Rng1U64 range, void *src);
+internal String8 lnx_dmn_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_size);
+internal String8 lnx_dmn_read_string(Arena *arena, int memory_fd, U64 base_vaddr);
+#define lnx_dmn_read_struct(fd, vaddr, ptr)  lnx_dmn_read((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
+#define lnx_dmn_write_struct(fd, vaddr, ptr) lnx_dmn_write((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
 
 ////////////////////////////////
 //~ ELF/GNU info
 
-internal Rng1U64             dmn_lnx_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
-internal DMN_LNX_DynamicInfo dmn_lnx_dynamic_info_from_memory(int memory_fd, ELF_Class elf_Class, U64 rebase, U64 dynamic_vaddr);
-internal U64                 dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vaddr, B32 is_rebased);
+internal Rng1U64             lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
+internal LNX_DMN_DynamicInfo lnx_dmn_dynamic_info_from_memory(int memory_fd, ELF_Class elf_Class, U64 rebase, U64 dynamic_vaddr);
+internal U64                 lnx_dmn_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vaddr, B32 is_rebased);
 
 ////////////////////////////////
 //~ Process Info
 
-internal String8           dmn_lnx_exe_path_from_pid(Arena *arena, pid_t pid);
-internal String8           dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base);
-internal ELF_Hdr64         dmn_lnx_ehdr_from_pid(pid_t pid);
-internal DMN_LNX_Auxv      dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_class);
-internal DMN_LNX_Thread *  dmn_lnx_thread_from_pid(pid_t pid);
-internal DMN_LNX_Process * dmn_lnx_process_from_pid(pid_t pid);
+internal String8           lnx_dmn_exe_path_from_pid(Arena *arena, pid_t pid);
+internal String8           lnx_dmn_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base);
+internal ELF_Hdr64         lnx_dmn_ehdr_from_pid(pid_t pid);
+internal LNX_DMN_Auxv      lnx_dmn_auxv_from_pid(pid_t pid, ELF_Class elf_class);
+internal LNX_DMN_Thread *  lnx_dmn_thread_from_pid(pid_t pid);
+internal LNX_DMN_Process * lnx_dmn_process_from_pid(pid_t pid);
 
 ////////////////////////////////
 //~ Entity
 
 // alloc
-internal DMN_LNX_Entity *     dmn_lnx_entity_alloc(DMN_LNX_EntityKind kind);
-internal DMN_LNX_Process *    dmn_lnx_process_alloc(pid_t pid, DMN_LNX_ProcessState state, DMN_LNX_Process *parent_process, B32 debug_subprocess, B32 is_cow);
-internal DMN_LNX_ProcessCtx * dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased);
-internal DMN_LNX_Thread *     dmn_lnx_thread_alloc(DMN_LNX_Process *process, DMN_LNX_ThreadState thread_state, pid_t tid);
-internal DMN_LNX_Module *     dmn_lnx_module_alloc(DMN_LNX_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main);
+internal LNX_DMN_Entity *     lnx_dmn_entity_alloc(LNX_DMN_EntityKind kind);
+internal LNX_DMN_Process *    lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *parent_process, B32 debug_subprocess, B32 is_cow);
+internal LNX_DMN_ProcessCtx * lnx_dmn_process_ctx_alloc(LNX_DMN_Process *process, B32 is_rebased);
+internal LNX_DMN_Thread *     lnx_dmn_thread_alloc(LNX_DMN_Process *process, LNX_DMN_ThreadState thread_state, pid_t tid);
+internal LNX_DMN_Module *     lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main);
 
 // release
-internal void dmn_lnx_entity_release(DMN_LNX_Entity *entity);
-internal void dmn_lnx_process_release(DMN_LNX_Process *process);
-internal void dmn_lnx_process_ctx_release(DMN_LNX_ProcessCtx *process_ctx);
-internal void dmn_lnx_thread_release(DMN_LNX_Thread *thread);
-internal void dmn_lnx_module_release(DMN_LNX_ProcessCtx *ctx, DMN_LNX_Module *module);
+internal void lnx_dmn_entity_release(LNX_DMN_Entity *entity);
+internal void lnx_dmn_process_release(LNX_DMN_Process *process);
+internal void lnx_dmn_process_ctx_release(LNX_DMN_ProcessCtx *process_ctx);
+internal void lnx_dmn_thread_release(LNX_DMN_Thread *thread);
+internal void lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module);
 
 // clone
-internal DMN_LNX_ProcessCtx * dmn_lnx_process_ctx_clone(DMN_LNX_Process *process, DMN_LNX_ProcessCtx *ctx);
-internal DMN_LNX_Module *     dmn_lnx_module_clone(DMN_LNX_ProcessCtx *process_ctx, DMN_LNX_Module *module);
+internal LNX_DMN_ProcessCtx * lnx_dmn_process_ctx_clone(LNX_DMN_Process *process, LNX_DMN_ProcessCtx *ctx);
+internal LNX_DMN_Module *     lnx_dmn_module_clone(LNX_DMN_ProcessCtx *process_ctx, LNX_DMN_Module *module);
 
 // entity -> handle
-internal DMN_Handle dmn_lnx_handle_from_entity(DMN_LNX_Entity *entity);
-internal DMN_Handle dmn_lnx_handle_from_process(DMN_LNX_Process *process);
-internal DMN_Handle dmn_lnx_handle_from_process_ctx(DMN_LNX_ProcessCtx *process_ctx);
-internal DMN_Handle dmn_lnx_handle_from_thread(DMN_LNX_Thread *thread);
-internal DMN_Handle dmn_lnx_handle_from_module(DMN_LNX_Module *module);
+internal DMN_Handle lnx_dmn_handle_from_entity(LNX_DMN_Entity *entity);
+internal DMN_Handle lnx_dmn_handle_from_process(LNX_DMN_Process *process);
+internal DMN_Handle lnx_dmn_handle_from_process_ctx(LNX_DMN_ProcessCtx *process_ctx);
+internal DMN_Handle lnx_dmn_handle_from_thread(LNX_DMN_Thread *thread);
+internal DMN_Handle lnx_dmn_handle_from_module(LNX_DMN_Module *module);
 
 // handle -> entity
-internal DMN_LNX_Entity *     dmn_lnx_entity_from_handle(DMN_Handle handle, DMN_LNX_EntityKind expected_kind);
-internal DMN_LNX_Process *    dmn_lnx_process_from_handle(DMN_Handle process_handle);
-internal DMN_LNX_ProcessCtx * dmn_lnx_process_ctx_from_handle(DMN_Handle process_ctx_handle);
-internal DMN_LNX_Thread *     dmn_lnx_thread_from_handle(DMN_Handle thread_handle);
-internal DMN_LNX_Module *     dmn_lnx_module_from_handle(DMN_Handle module_handle);
+internal LNX_DMN_Entity *     lnx_dmn_entity_from_handle(DMN_Handle handle, LNX_DMN_EntityKind expected_kind);
+internal LNX_DMN_Process *    lnx_dmn_process_from_handle(DMN_Handle process_handle);
+internal LNX_DMN_ProcessCtx * lnx_dmn_process_ctx_from_handle(DMN_Handle process_ctx_handle);
+internal LNX_DMN_Thread *     lnx_dmn_thread_from_handle(DMN_Handle thread_handle);
+internal LNX_DMN_Module *     lnx_dmn_module_from_handle(DMN_Handle module_handle);
 
 ////////////////////////////////
 //~ Process Helpers
 
-internal void dmn_lnx_process_trap_probes(DMN_LNX_Process *process);
-internal void dmn_lnx_process_untrap_probes(DMN_LNX_Process *process);
+internal void lnx_dmn_process_trap_probes(LNX_DMN_Process *process);
+internal void lnx_dmn_process_untrap_probes(LNX_DMN_Process *process);
 
 ////////////////////////////////
 //~ Thread Helpers
 
-internal U64  dmn_lnx_thread_read_ip(DMN_LNX_Thread *thread);
-internal U64  dmn_lnx_thread_read_sp(DMN_LNX_Thread *thread);
-internal void dmn_lnx_thread_write_ip(DMN_LNX_Thread *thread, U64 ip);
-internal void dmn_lnx_thread_write_sp(DMN_LNX_Thread *thread, U64 sp);
-internal B32  dmn_lnx_thread_read_reg_block(DMN_LNX_Thread *thread);
-internal B32  dmn_lnx_thread_write_reg_block(DMN_LNX_Thread *thread);
-internal B32  dmn_lnx_set_single_step_flag(DMN_LNX_Thread *thread, B32 is_on);
+internal U64  lnx_dmn_thread_read_ip(LNX_DMN_Thread *thread);
+internal U64  lnx_dmn_thread_read_sp(LNX_DMN_Thread *thread);
+internal void lnx_dmn_thread_write_ip(LNX_DMN_Thread *thread, U64 ip);
+internal void lnx_dmn_thread_write_sp(LNX_DMN_Thread *thread, U64 sp);
+internal B32  lnx_dmn_thread_read_reg_block(LNX_DMN_Thread *thread);
+internal B32  lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread);
+internal B32  lnx_dmn_set_single_step_flag(LNX_DMN_Thread *thread, B32 is_on);
 
 ////////////////////////////////
 //~ List Helpers
 
-internal void                     dmn_lnx_thread_ptr_list_push_node(DMN_LNX_ThreadPtrList *list, DMN_LNX_ThreadPtrNode *n);
-internal DMN_LNX_ThreadPtrNode *  dmn_lnx_thread_ptr_list_push(Arena *arena, DMN_LNX_ThreadPtrList *list, DMN_LNX_Thread *v);
-internal DMN_LNX_ModulePtrNode *  dmn_lnx_module_ptr_list_push(Arena *arena, DMN_LNX_ModulePtrList *list, DMN_LNX_Module *v);
-internal DMN_LNX_ProcessPtrNode * dmn_lnx_process_ptr_list_push(Arena *arena, DMN_LNX_ProcessPtrList *list, DMN_LNX_Process *v);
+internal void                     lnx_dmn_thread_ptr_list_push_node(LNX_DMN_ThreadPtrList *list, LNX_DMN_ThreadPtrNode *n);
+internal LNX_DMN_ThreadPtrNode *  lnx_dmn_thread_ptr_list_push(Arena *arena, LNX_DMN_ThreadPtrList *list, LNX_DMN_Thread *v);
+internal LNX_DMN_ModulePtrNode *  lnx_dmn_module_ptr_list_push(Arena *arena, LNX_DMN_ModulePtrList *list, LNX_DMN_Module *v);
+internal LNX_DMN_ProcessPtrNode * lnx_dmn_process_ptr_list_push(Arena *arena, LNX_DMN_ProcessPtrList *list, LNX_DMN_Process *v);
 
 ////////////////////////////////
 //~ Debug Event Pushers
 
-internal void dmn_lnx_push_event_create_process(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process);
-internal void dmn_lnx_push_event_exit_process(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process);
-internal void dmn_lnx_push_event_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread);
-internal void dmn_lnx_push_event_exit_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, U64 exit_code);
-internal void dmn_lnx_push_event_load_module(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, DMN_LNX_Module *module);
-internal void dmn_lnx_push_event_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process, DMN_LNX_Module *module);
-internal void dmn_lnx_push_event_handshake_complete(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process);
-internal void dmn_lnx_push_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, U64 address);
-internal void dmn_lnx_push_event_single_step(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread);
-internal void dmn_lnx_push_event_exception(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, U64 signo);
-internal void dmn_lnx_push_event_halt(Arena *arena, DMN_EventList *events);
-internal void dmn_lnx_push_event_not_attached(Arena *arena, DMN_EventList *events);
+internal void lnx_dmn_push_event_create_process(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process);
+internal void lnx_dmn_push_event_exit_process(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process);
+internal void lnx_dmn_push_event_create_thread(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread);
+internal void lnx_dmn_push_event_exit_thread(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 exit_code);
+internal void lnx_dmn_push_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, LNX_DMN_Module *module);
+internal void lnx_dmn_push_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, LNX_DMN_Module *module);
+internal void lnx_dmn_push_event_handshake_complete(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process);
+internal void lnx_dmn_push_event_breakpoint(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 address);
+internal void lnx_dmn_push_event_single_step(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread);
+internal void lnx_dmn_push_event_exception(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 signo);
+internal void lnx_dmn_push_event_halt(Arena *arena, DMN_EventList *events);
+internal void lnx_dmn_push_event_not_attached(Arena *arena, DMN_EventList *events);
 
 ////////////////////////////////
 //~ Debug Event
 
-internal DMN_LNX_Thread *  dmn_lnx_event_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process, pid_t tid);
-internal void              dmn_lnx_event_exit_thread(Arena *arena, DMN_EventList *events, pid_t tid, U64 exit_code);
-internal DMN_LNX_Process * dmn_lnx_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, DMN_LNX_Process *parent_process, DMN_LNX_CreateProcessFlags flags);
-internal void              dmn_lnx_event_exit_process(Arena *arena, DMN_EventList *events, pid_t pid);
-internal void              dmn_lnx_event_load_module(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr);
-internal void              dmn_lnx_event_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process, U64 rdebug_vaddr);
-internal void              dmn_lnx_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *user_traps, pid_t tid);
-internal void              dmn_lnx_event_data_breakpoint(Arena *arena, DMN_EventList *events, pid_t tid);
-internal void              dmn_lnx_event_halt(Arena *arena, DMN_EventList *events);
-internal void              dmn_lnx_event_single_step(Arena *arena, DMN_EventList *events, pid_t tid);
-internal void              dmn_lnx_event_exception(Arena *arena, DMN_EventList *events, pid_t tid, U64 signo);
-internal DMN_LNX_Process * dmn_lnx_event_attach(Arena *arena, DMN_EventList *events, pid_t pid);
+internal LNX_DMN_Thread *  lnx_dmn_event_create_thread(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, pid_t tid);
+internal void              lnx_dmn_event_exit_thread(Arena *arena, DMN_EventList *events, pid_t tid, U64 exit_code);
+internal LNX_DMN_Process * lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX_DMN_Process *parent_process, LNX_DMN_CreateProcessFlags flags);
+internal void              lnx_dmn_event_exit_process(Arena *arena, DMN_EventList *events, pid_t pid);
+internal void              lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr);
+internal void              lnx_dmn_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, U64 rdebug_vaddr);
+internal void              lnx_dmn_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *user_traps, pid_t tid);
+internal void              lnx_dmn_event_data_breakpoint(Arena *arena, DMN_EventList *events, pid_t tid);
+internal void              lnx_dmn_event_halt(Arena *arena, DMN_EventList *events);
+internal void              lnx_dmn_event_single_step(Arena *arena, DMN_EventList *events, pid_t tid);
+internal void              lnx_dmn_event_exception(Arena *arena, DMN_EventList *events, pid_t tid, U64 signo);
+internal LNX_DMN_Process * lnx_dmn_event_attach(Arena *arena, DMN_EventList *events, pid_t pid);
 
-#endif // DEMON_CORE_LINUX_H
-
+#endif // LINUX_DEMON_H

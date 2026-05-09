@@ -233,7 +233,7 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
   if(event->flags & UI_EventFlag_Paste)
   {
     range = txt_rng(cursor, mark);
-    replace = os_get_clipboard_text(arena);
+    replace = wm_get_clipboard_text(arena);
     next_cursor = next_mark = txt_pt(cursor.line, cursor.column+replace.size);
   }
   
@@ -471,7 +471,7 @@ ui_build_arena(void)
   return result;
 }
 
-internal OS_Window
+internal WM_Window
 ui_window(void)
 {
   return ui_state->window;
@@ -523,25 +523,25 @@ ui_next_event(UI_Event **ev)
       if(!(perms & UI_PermissionFlag_ClicksLeft) &&
          (n->v.kind == UI_EventKind_Press ||
           n->v.kind == UI_EventKind_Release) &&
-         (n->v.key == OS_Key_LeftMouseButton))
+         (n->v.key == WM_Key_LeftMouseButton))
       {
         good = 0;
       }
       if(!(perms & UI_PermissionFlag_ClicksMiddle) &&
          (n->v.kind == UI_EventKind_Press ||
           n->v.kind == UI_EventKind_Release) &&
-         (n->v.key == OS_Key_MiddleMouseButton))
+         (n->v.key == WM_Key_MiddleMouseButton))
       {
         good = 0;
       }
       if(!(perms & UI_PermissionFlag_ClicksRight) &&
          (n->v.kind == UI_EventKind_Press ||
           n->v.kind == UI_EventKind_Release) &&
-         (n->v.key == OS_Key_RightMouseButton))
+         (n->v.key == WM_Key_RightMouseButton))
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers == OS_Modifier_Shift))
+      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers == WM_Modifier_Shift))
       {
         good = 0;
       }
@@ -553,9 +553,9 @@ ui_next_event(UI_Event **ev)
           n->v.kind == UI_EventKind_Release ||
           n->v.kind == UI_EventKind_Navigate ||
           n->v.kind == UI_EventKind_Edit) &&
-         (n->v.key != OS_Key_LeftMouseButton &&
-          n->v.key != OS_Key_MiddleMouseButton &&
-          n->v.key != OS_Key_RightMouseButton))
+         (n->v.key != WM_Key_LeftMouseButton &&
+          n->v.key != WM_Key_MiddleMouseButton &&
+          n->v.key != WM_Key_RightMouseButton))
       {
         if((perms & UI_PermissionFlag_Keyboard) == UI_PermissionFlag_KeyboardSecondary)
         {
@@ -594,7 +594,7 @@ ui_eat_event(UI_Event *ev)
 //- rjf: event consumption helpers
 
 internal B32
-ui_key_press(OS_Modifiers mods, OS_Key key)
+ui_key_press(WM_Modifiers mods, WM_Key key)
 {
   B32 result = 0;
   for(UI_Event *evt = 0; ui_next_event(&evt);)
@@ -610,7 +610,7 @@ ui_key_press(OS_Modifiers mods, OS_Key key)
 }
 
 internal B32
-ui_key_release(OS_Modifiers mods, OS_Key key)
+ui_key_release(WM_Modifiers mods, WM_Key key)
 {
   B32 result = 0;
   for(UI_Event *evt = 0; ui_next_event(&evt);)
@@ -796,7 +796,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_Window window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(WM_Window window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -872,11 +872,11 @@ ui_begin_build(OS_Window window, UI_EventList *events, UI_IconInfo *icon_info, U
   //- rjf: detect external press & holds
   for EachEnumVal(UI_MouseButtonKind, k)
   {
-    if(ui_key_match(ui_state->active_box_key[k], ui_key_zero()) && os_key_is_down(OS_Key_LeftMouseButton+k))
+    if(ui_key_match(ui_state->active_box_key[k], ui_key_zero()) && wm_key_is_down(WM_Key_LeftMouseButton+k))
     {
       ui_state->active_box_key[k] = ui_state->external_key;
     }
-    else if(ui_key_match(ui_state->active_box_key[k], ui_state->external_key) && !os_key_is_down(OS_Key_LeftMouseButton+k))
+    else if(ui_key_match(ui_state->active_box_key[k], ui_state->external_key) && !wm_key_is_down(WM_Key_LeftMouseButton+k))
     {
       ui_state->active_box_key[k] = ui_key_zero();
     }
@@ -887,7 +887,7 @@ ui_begin_build(OS_Window window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->theme = theme;
     ui_state->events = events;
     ui_state->window = window;
-    ui_state->mouse = (os_window_is_focused(window) || ui_state->last_time_mousemoved_us+500000 >= now_time_us()) ? os_mouse_from_window(window) : v2f32(-100, -100);
+    ui_state->mouse = (wm_window_is_focused(window) || ui_state->last_time_mousemoved_us+500000 >= now_time_us()) ? wm_mouse_from_window(window) : v2f32(-100, -100);
     ui_state->animation_dt = animation_dt;
     MemoryZeroStruct(&ui_state->icon_info);
     ui_state->icon_info.icon_font = icon_info->icon_font;
@@ -921,11 +921,11 @@ ui_begin_build(OS_Window window, UI_EventList *events, UI_IconInfo *icon_info, U
             B32 nav_next = 0;
             B32 nav_prev = 0;
             Axis2 axis_lock = Axis2_Invalid;
-            if(ui_key_press(0, OS_Key_Tab))
+            if(ui_key_press(0, WM_Key_Tab))
             {
               nav_next = 1;
             }
-            if(ui_key_press(OS_Modifier_Shift, OS_Key_Tab))
+            if(ui_key_press(WM_Modifier_Shift, WM_Key_Tab))
             {
               nav_prev = 1;
             }
@@ -1123,7 +1123,7 @@ ui_begin_build(OS_Window window, UI_EventList *events, UI_IconInfo *icon_info, U
   
   //- rjf: build top-level root
   {
-    Rng2F32 window_rect = os_client_rect_from_window(window);
+    Rng2F32 window_rect = wm_client_rect_from_window(window);
     Vec2F32 window_rect_size = dim_2f32(window_rect);
     ui_set_next_fixed_width(window_rect_size.x);
     ui_set_next_fixed_height(window_rect_size.y);
@@ -1306,7 +1306,7 @@ ui_end_build(void)
     UI_Box *root = floating_roots[idx];
     if(!ui_box_is_nil(root))
     {
-      Rng2F32 window_rect = os_client_rect_from_window(ui_window());
+      Rng2F32 window_rect = wm_client_rect_from_window(ui_window());
       Vec2F32 window_dim = dim_2f32(window_rect);
       Rng2F32 root_rect = root->rect;
       Vec2F32 shift_down =
@@ -1538,7 +1538,7 @@ ui_end_build(void)
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
       if(evt->kind == UI_EventKind_Press &&
-         (evt->key == OS_Key_LeftMouseButton || evt->key == OS_Key_RightMouseButton))
+         (evt->key == WM_Key_LeftMouseButton || evt->key == WM_Key_RightMouseButton))
       {
         ui_ctx_menu_close();
       }
@@ -1551,14 +1551,14 @@ ui_end_build(void)
     UI_Box *hot = ui_box_from_key(ui_state->hot_box_key);
     UI_Box *active = ui_box_from_key(ui_state->active_box_key[UI_MouseButtonKind_Left]);
     UI_Box *box = ui_box_is_nil(active) ? hot : active;
-    OS_Cursor cursor = box->hover_cursor;
+    WM_Cursor cursor = box->hover_cursor;
     if(box->flags & UI_BoxFlag_Disabled && box->flags & UI_BoxFlag_Clickable)
     {
-      cursor = OS_Cursor_Disabled;
+      cursor = WM_Cursor_Disabled;
     }
-    if(os_window_is_focused(ui_state->window) || !ui_box_is_nil(active))
+    if(wm_window_is_focused(ui_state->window) || !ui_box_is_nil(active))
     {
-      os_set_cursor(cursor);
+      wm_set_cursor(cursor);
     }
   }
   
@@ -1583,7 +1583,7 @@ ui_end_build(void)
         StringJoin join = {0};
         join.sep = str8_lit(" ");
         String8 string = str8_list_join(scratch.arena, &strs, &join);
-        os_set_clipboard_text(string);
+        wm_set_clipboard_text(string);
       }
       scratch_end(scratch);
     }
@@ -2451,7 +2451,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->first = box->last = box->next = box->prev = box->parent = &ui_nil_box;
     box->child_count = 0;
     box->flags = 0;
-    box->hover_cursor = OS_Cursor_Pointer;
+    box->hover_cursor = WM_Cursor_Pointer;
     MemoryZeroArray(box->pref_size);
     MemoryZeroStruct(&box->draw_bucket);
   }
@@ -2809,7 +2809,7 @@ ui_signal_from_box(UI_Box *box)
 {
   B32 is_focus_hot = box->flags & UI_BoxFlag_FocusHot && !(box->flags & UI_BoxFlag_FocusHotDisabled);
   UI_Signal sig = {box};
-  sig.event_flags |= os_get_modifiers();
+  sig.event_flags |= wm_get_modifiers();
   
   //////////////////////////////
   //- rjf: calculate possibly-clipped box rectangle
@@ -2858,13 +2858,13 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: unpack event
     Vec2F32 evt_mouse = evt->pos;
     B32 evt_mouse_in_bounds = !contains_2f32(blacklist_rect, evt_mouse) && contains_2f32(rect, evt_mouse);
-    UI_MouseButtonKind evt_mouse_button_kind = (evt->key == OS_Key_LeftMouseButton   ? UI_MouseButtonKind_Left :
-                                                evt->key == OS_Key_MiddleMouseButton ? UI_MouseButtonKind_Middle :
-                                                evt->key == OS_Key_RightMouseButton  ? UI_MouseButtonKind_Right :
+    UI_MouseButtonKind evt_mouse_button_kind = (evt->key == WM_Key_LeftMouseButton   ? UI_MouseButtonKind_Left :
+                                                evt->key == WM_Key_MiddleMouseButton ? UI_MouseButtonKind_Middle :
+                                                evt->key == WM_Key_RightMouseButton  ? UI_MouseButtonKind_Right :
                                                 UI_MouseButtonKind_Left);
-    B32 evt_key_is_mouse = (evt->key == OS_Key_LeftMouseButton ||
-                            evt->key == OS_Key_MiddleMouseButton ||
-                            evt->key == OS_Key_RightMouseButton);
+    B32 evt_key_is_mouse = (evt->key == WM_Key_LeftMouseButton ||
+                            evt->key == WM_Key_MiddleMouseButton ||
+                            evt->key == WM_Key_RightMouseButton);
     sig.event_flags |= evt->modifiers;
     
     //- rjf: mouse presses in box -> set hot/active; mark signal accordingly
@@ -2878,14 +2878,14 @@ ui_signal_from_box(UI_Box *box)
       sig.f |= (UI_SignalFlag_LeftPressed<<evt_mouse_button_kind);
       ui_state->drag_start_mouse = evt->pos;
       if(ui_key_match(box->key, ui_state->press_key_history[evt_mouse_button_kind][0]) &&
-         evt->timestamp_us-ui_state->press_timestamp_history_us[evt_mouse_button_kind][0] <= 1000000*os_get_gfx_info()->double_click_time)
+         evt->timestamp_us-ui_state->press_timestamp_history_us[evt_mouse_button_kind][0] <= 1000000*wm_get_system_info()->double_click_time)
       {
         sig.f |= (UI_SignalFlag_LeftDoubleClicked<<evt_mouse_button_kind);
       }
       if(ui_key_match(box->key, ui_state->press_key_history[evt_mouse_button_kind][0]) &&
          ui_key_match(box->key, ui_state->press_key_history[evt_mouse_button_kind][1]) &&
-         evt->timestamp_us-ui_state->press_timestamp_history_us[evt_mouse_button_kind][0] <= 1000000*os_get_gfx_info()->double_click_time &&
-         ui_state->press_timestamp_history_us[evt_mouse_button_kind][0] - ui_state->press_timestamp_history_us[evt_mouse_button_kind][1] <= 1000000*os_get_gfx_info()->double_click_time)
+         evt->timestamp_us-ui_state->press_timestamp_history_us[evt_mouse_button_kind][0] <= 1000000*wm_get_system_info()->double_click_time &&
+         ui_state->press_timestamp_history_us[evt_mouse_button_kind][0] - ui_state->press_timestamp_history_us[evt_mouse_button_kind][1] <= 1000000*wm_get_system_info()->double_click_time)
       {
         sig.f |= (UI_SignalFlag_LeftTripleClicked<<evt_mouse_button_kind);
       }
@@ -2980,11 +2980,11 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: scrolling
     if(box->flags & UI_BoxFlag_Scroll &&
        evt->kind == UI_EventKind_Scroll &&
-       (evt->modifiers == 0 || evt->modifiers == OS_Modifier_Shift) &&
+       (evt->modifiers == 0 || evt->modifiers == WM_Modifier_Shift) &&
        evt_mouse_in_bounds)
     {
       Vec2F32 delta = evt->delta_2f32;
-      if(evt->modifiers & OS_Modifier_Shift)
+      if(evt->modifiers & WM_Modifier_Shift)
       {
         Swap(F32, delta.x, delta.y);
       }
@@ -3001,11 +3001,11 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: view scrolling
     if(box->flags & UI_BoxFlag_ViewScroll && box->first_touched_build_index != box->last_touched_build_index &&
        evt->kind == UI_EventKind_Scroll &&
-       (evt->modifiers == 0 || evt->modifiers == OS_Modifier_Shift) &&
+       (evt->modifiers == 0 || evt->modifiers == WM_Modifier_Shift) &&
        evt_mouse_in_bounds)
     {
       Vec2F32 delta = evt->delta_2f32;
-      if(evt->modifiers & OS_Modifier_Shift)
+      if(evt->modifiers & WM_Modifier_Shift)
       {
         Swap(F32, delta.x, delta.y);
       }
@@ -3077,7 +3077,7 @@ ui_signal_from_box(UI_Box *box)
       if(sig.f & (UI_SignalFlag_LeftDragging<<k) &&
          ui_key_match(ui_state->press_key_history[k][0], box->key) &&
          ui_key_match(ui_state->press_key_history[k][1], box->key) &&
-         ui_state->press_timestamp_history_us[k][0] - ui_state->press_timestamp_history_us[k][1] <= 1000000*os_get_gfx_info()->double_click_time &&
+         ui_state->press_timestamp_history_us[k][0] - ui_state->press_timestamp_history_us[k][1] <= 1000000*wm_get_system_info()->double_click_time &&
          length_2f32(sub_2f32(ui_state->press_pos_history[k][0], ui_state->press_pos_history[k][1])) < 10.f)
       {
         sig.f |= (UI_SignalFlag_LeftDoubleDragging<<k);
@@ -3096,8 +3096,8 @@ ui_signal_from_box(UI_Box *box)
          ui_key_match(ui_state->press_key_history[k][0], box->key) &&
          ui_key_match(ui_state->press_key_history[k][1], box->key) &&
          ui_key_match(ui_state->press_key_history[k][2], box->key) &&
-         ui_state->press_timestamp_history_us[k][0] - ui_state->press_timestamp_history_us[k][1] <= 1000000*os_get_gfx_info()->double_click_time &&
-         ui_state->press_timestamp_history_us[k][1] - ui_state->press_timestamp_history_us[k][2] <= 1000000*os_get_gfx_info()->double_click_time &&
+         ui_state->press_timestamp_history_us[k][0] - ui_state->press_timestamp_history_us[k][1] <= 1000000*wm_get_system_info()->double_click_time &&
+         ui_state->press_timestamp_history_us[k][1] - ui_state->press_timestamp_history_us[k][2] <= 1000000*wm_get_system_info()->double_click_time &&
          length_2f32(sub_2f32(ui_state->press_pos_history[k][0], ui_state->press_pos_history[k][1])) < 10.f &&
          length_2f32(sub_2f32(ui_state->press_pos_history[k][1], ui_state->press_pos_history[k][2])) < 10.f)
       {

@@ -44,7 +44,7 @@ UI_StackTable:
   { Squish                             squish                        F32                   0                                  }
   
   //- rjf: hover cursor
-  { HoverCursor                        hover_cursor                  OS_Cursor             OS_Cursor_Pointer                  }
+  { HoverCursor                        hover_cursor                  WM_Cursor             WM_Cursor_Pointer                  }
   
   //- rjf: font
   { Font                               font                          FNT_Tag               `fnt_tag_zero()`                   }

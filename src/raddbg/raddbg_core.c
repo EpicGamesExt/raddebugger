@@ -2625,7 +2625,7 @@ rd_view_ui(Rng2F32 rect)
                     // rjf: copy
                     if(op.flags & UI_TxtOpFlag_Copy && selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y)
                     {
-                      os_set_clipboard_text(op.copy);
+                      wm_set_clipboard_text(op.copy);
                     }
                     
                     // rjf: any valid *additive* op & autocomplete hint? -> perform autocomplete first, then re-compute op
@@ -2776,7 +2776,7 @@ rd_view_ui(Rng2F32 rect)
                 }
               }
               String8 string = str8_list_join(scratch.arena, &strs, 0);
-              os_set_clipboard_text(string);
+              wm_set_clipboard_text(string);
             }
             
             //////////////////////////
@@ -3221,7 +3221,7 @@ rd_view_ui(Rng2F32 rect)
                                                 boundary_start_idx*row_height_px,
                                                 next_cell_x_px + ui_top_font_size()*0.4f,
                                                 idx*row_height_px);
-                          UI_Rect(rect) UI_HoverCursor(OS_Cursor_LeftRight)
+                          UI_Rect(rect) UI_HoverCursor(WM_Cursor_LeftRight)
                           {
                             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_Floating, "boundary_%I64x_%I64x", row_hash, cell_id);
                             UI_Signal sig = ui_signal_from_box(box);
@@ -4381,7 +4381,7 @@ rd_view_ui(Rng2F32 rect)
                               U64 value = e_value_from_string(loc.expr).u64;
                               rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = value);
                             }
-                            else if(str8_match(cfg->string, str8_lit("target"), 0) && sig.event_flags & OS_Modifier_Ctrl)
+                            else if(str8_match(cfg->string, str8_lit("target"), 0) && sig.event_flags & WM_Modifier_Ctrl)
                             {
                               rd_cmd(RD_CmdKind_EnableCfg, .cfg = cfg->id);
                             }
@@ -4937,7 +4937,7 @@ rd_window_state_from_cfg(CFG_Node *cfg)
     B32 has_pos = 0;
     Vec2F32 pos = {0};
     Vec2F32 size = {0};
-    OS_Monitor preferred_monitor = {0};
+    WM_Monitor preferred_monitor = {0};
     {
       CFG_Node *pos_cfg = cfg_node_child_from_string(window_cfg, str8_lit("pos"));
       has_pos = (pos_cfg != &cfg_nil_node);
@@ -4947,10 +4947,10 @@ rd_window_state_from_cfg(CFG_Node *cfg)
       pos.y = (F32)f64_from_str8(pos_cfg->first->next->string);
       size.x = (F32)f64_from_str8(size_cfg->first->string);
       size.y = (F32)f64_from_str8(size_cfg->first->next->string);
-      OS_MonitorArray monitors = os_push_monitors_array(scratch.arena);
+      WM_MonitorArray monitors = wm_push_monitors_array(scratch.arena);
       for EachIndex(idx, monitors.count)
       {
-        String8 monitor_name = os_name_from_monitor(scratch.arena, monitors.v[idx]);
+        String8 monitor_name = wm_name_from_monitor(scratch.arena, monitors.v[idx]);
         if(str8_match(monitor_name, monitor_cfg->first->string, StringMatchFlag_CaseInsensitive))
         {
           preferred_monitor = monitors.v[idx];
@@ -4976,7 +4976,7 @@ rd_window_state_from_cfg(CFG_Node *cfg)
     ws->arena = arena_alloc();
     {
       String8 title = rd_push_window_title(scratch.arena);
-      ws->os = os_window_open(r2f32p(pos.x, pos.y, pos.x+size.x, pos.y+size.y), (!has_pos*OS_WindowFlag_UseDefaultPosition)|OS_WindowFlag_CustomBorder, title);
+      ws->os = wm_window_open(r2f32p(pos.x, pos.y, pos.x+size.x, pos.y+size.y), (!has_pos*WM_WindowFlag_UseDefaultPosition)|WM_WindowFlag_CustomBorder, title);
     }
     ws->r = r_window_equip(ws->os);
     ws->ui = ui_state_alloc();
@@ -4984,19 +4984,19 @@ rd_window_state_from_cfg(CFG_Node *cfg)
     ws->query_arena = arena_alloc();
     ws->hover_eval_arena = arena_alloc();
     ws->autocomp_arena = arena_alloc();
-    ws->last_dpi = os_dpi_from_window(ws->os);
-    OS_Monitor zero_monitor = {0};
-    if(!os_monitor_match(zero_monitor, preferred_monitor))
+    ws->last_dpi = wm_dpi_from_window(ws->os);
+    WM_Monitor zero_monitor = {0};
+    if(!wm_monitor_match(zero_monitor, preferred_monitor))
     {
-      os_window_set_monitor(ws->os, preferred_monitor);
+      wm_window_set_monitor(ws->os, preferred_monitor);
     }
     if(cfg_node_child_from_string(window_cfg, str8_lit("fullscreen")) != &cfg_nil_node)
     {
-      os_window_set_fullscreen(ws->os, 1);
+      wm_window_set_fullscreen(ws->os, 1);
     }
     if(cfg_node_child_from_string(window_cfg, str8_lit("maximized")) != &cfg_nil_node)
     {
-      os_window_set_maximized(ws->os, 1);
+      wm_window_set_maximized(ws->os, 1);
     }
     
     // rjf: hook up window links
@@ -5021,7 +5021,7 @@ rd_window_state_from_cfg(CFG_Node *cfg)
 }
 
 internal RD_WindowState *
-rd_window_state_from_os_handle(OS_Window os)
+rd_window_state_from_os_handle(WM_Window os)
 {
   RD_WindowState *ws = &rd_nil_window_state;
   {
@@ -5029,7 +5029,7 @@ rd_window_state_from_os_handle(OS_Window os)
         w != &rd_nil_window_state;
         w = w->order_next)
     {
-      if(os_window_match(w->os, os))
+      if(wm_window_match(w->os, os))
       {
         ws = w;
         break;
@@ -5055,7 +5055,7 @@ rd_window_frame(void)
   CFG_Node *window          = cfg_node_from_id(rd_regs()->window);
   RD_WindowState *ws      = rd_window_state_from_cfg(cfg_node_from_id(rd_regs()->window));
   CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, window);
-  B32 window_is_focused   = (os_window_is_focused(ws->os) || ws->window_temporarily_focused_ipc);
+  B32 window_is_focused   = (wm_window_is_focused(ws->os) || ws->window_temporarily_focused_ipc);
   B32 popup_is_open       = (rd_state->popup_active);
   B32 query_is_open       = (ws->query_is_active);
   U64 hover_eval_open_delay_us = 400000;
@@ -5258,9 +5258,9 @@ rd_window_frame(void)
   //
   {
     Temp scratch = scratch_begin(0, 0);
-    B32 is_fullscreen = os_window_is_fullscreen(ws->os);
-    B32 is_maximized = os_window_is_maximized(ws->os);
-    B32 is_minimized = os_window_is_minimized(ws->os);
+    B32 is_fullscreen = wm_window_is_fullscreen(ws->os);
+    B32 is_maximized = wm_window_is_maximized(ws->os);
+    B32 is_minimized = wm_window_is_minimized(ws->os);
     if(is_fullscreen)
     {
       cfg_node_child_from_string_or_alloc(rd_state->cfg, window, str8_lit("fullscreen"));
@@ -5279,7 +5279,7 @@ rd_window_frame(void)
     }
     
     //- rjf: DPI changes -> xform font size / window size
-    F32 dpi = os_dpi_from_window(ws->os);
+    F32 dpi = wm_dpi_from_window(ws->os);
     if(dpi != ws->last_dpi)
     {
       fnt_reset();
@@ -5292,7 +5292,7 @@ rd_window_frame(void)
     }
     
     //- rjf: commit position
-    Rng2F32 window_rect = os_rect_from_window(ws->os);
+    Rng2F32 window_rect = wm_rect_from_window(ws->os);
     if(!is_fullscreen && !is_maximized && !is_minimized)
     {
       Vec2F32 pos = window_rect.p0;
@@ -5345,8 +5345,8 @@ rd_window_frame(void)
     //- rjf: commit monitor
     if(!is_minimized)
     {
-      OS_Monitor monitor = os_monitor_from_window(ws->os);
-      String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
+      WM_Monitor monitor = wm_monitor_from_window(ws->os);
+      String8 monitor_name = wm_name_from_monitor(scratch.arena, monitor);
       CFG_Node *monitor_root = cfg_node_child_from_string_or_alloc(rd_state->cfg, window, str8_lit("monitor"));
       if(!str8_match(monitor_root->first->string, monitor_name, 0))
       {
@@ -5422,13 +5422,13 @@ rd_window_frame(void)
     ////////////////////////////
     //- rjf: @window_ui_part calculate top-level rectangles/sizes
     //
-    Rng2F32 window_rect = os_client_rect_from_window(ws->os);
+    Rng2F32 window_rect = wm_client_rect_from_window(ws->os);
     Vec2F32 window_rect_dim = dim_2f32(window_rect);
     F32 top_bar_dim_px = floor_f32(ui_top_font_size()*3.f);
     Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x+1, window_rect.y0+top_bar_dim_px);
     Rng2F32 bottom_bar_rect = r2f32p(window_rect.x0, window_rect_dim.y - top_bar_dim_px, window_rect.x0+window_rect_dim.x, window_rect.y0+window_rect_dim.y);
     Rng2F32 content_rect = r2f32p(window_rect.x0, top_bar_rect.y1, window_rect.x0+window_rect_dim.x, bottom_bar_rect.y0);
-    F32 window_edge_px = os_dpi_from_window(ws->os)*0.035f;
+    F32 window_edge_px = wm_dpi_from_window(ws->os)*0.035f;
     content_rect = pad_2f32(content_rect, -window_edge_px);
     
     ////////////////////////////
@@ -6436,7 +6436,7 @@ rd_window_frame(void)
         if(t->force_inside_window_x || t->force_inside_window_y)
         {
           B32 axis_mask[] = {t->force_inside_window_x, t->force_inside_window_y};
-          Rng2F32 window_rect = os_client_rect_from_window(ws->os);
+          Rng2F32 window_rect = wm_client_rect_from_window(ws->os);
           for EachEnumVal(Axis2, axis)
           {
             if(!axis_mask[axis]) { continue; }
@@ -6497,7 +6497,7 @@ rd_window_frame(void)
             for(UI_Event *evt = 0; ui_next_event(&evt);)
             {
               if(evt->kind == UI_EventKind_Press &&
-                 evt->key == OS_Key_LeftMouseButton)
+                 evt->key == WM_Key_LeftMouseButton)
               {
                 if(contains_2f32(container->rect, evt->pos))
                 {
@@ -6645,9 +6645,9 @@ rd_window_frame(void)
     //
     ProfScope("build top bar")
     {
-      os_window_clear_custom_border_data(ws->os);
-      os_window_push_custom_edges(ws->os, window_edge_px);
-      os_window_push_custom_title_bar(ws->os, dim_2f32(top_bar_rect).y);
+      wm_window_clear_custom_border_data(ws->os);
+      wm_window_push_custom_edges(ws->os, window_edge_px);
+      wm_window_push_custom_title_bar(ws->os, dim_2f32(top_bar_rect).y);
       ui_set_next_flags(UI_BoxFlag_DefaultFocusNav|UI_BoxFlag_DisableFocusOverlay);
       UI_Focus((ws->menu_bar_focused && window_is_focused && !ui_any_ctx_menu_is_open()) ? UI_FocusKind_On : UI_FocusKind_Null)
         UI_TagF("menu_bar")
@@ -6911,7 +6911,7 @@ rd_window_frame(void)
                   if(key_map_nodes.first != 0)
                   {
                     binding = key_map_nodes.first->v->binding;
-                    binding_str = os_string_from_modifiers_key(scratch.arena, binding.modifiers, binding.key);
+                    binding_str = wm_string_from_modifiers_key(scratch.arena, binding.modifiers, binding.key);
                   }
                   UI_TagF(".")
                     UI_Row
@@ -6945,7 +6945,7 @@ rd_window_frame(void)
                     UI_Signal sig = ui_button(str8_lit("Submit request, issue, or bug report"));
                     if(ui_clicked(sig))
                     {
-                      os_open_in_browser(url);
+                      wm_open_in_browser(url);
                     }
                   }
                   ui_spacer(ui_em(0.5f, 1.f));
@@ -6959,18 +6959,18 @@ rd_window_frame(void)
                   {
                     String8 name;
                     U32 codepoint;
-                    OS_Key key;
+                    WM_Key key;
                     UI_Key menu_key;
                   }
                   items[] =
                   {
-                    {str8_lit("File"),     'f', OS_Key_F, file_menu_key},
-                    {str8_lit("Window"),   'w', OS_Key_W, window_menu_key},
-                    {str8_lit("Panel"),    'p', OS_Key_P, panel_menu_key},
-                    {str8_lit("Tab"),      'b', OS_Key_V, tab_menu_key},
-                    {str8_lit("Targets"),  't', OS_Key_T, targets_menu_key},
-                    {str8_lit("Control"),  'c', OS_Key_C, ctrl_menu_key},
-                    {str8_lit("Help"),     'h', OS_Key_H, help_menu_key},
+                    {str8_lit("File"),     'f', WM_Key_F, file_menu_key},
+                    {str8_lit("Window"),   'w', WM_Key_W, window_menu_key},
+                    {str8_lit("Panel"),    'p', WM_Key_P, panel_menu_key},
+                    {str8_lit("Tab"),      'b', WM_Key_V, tab_menu_key},
+                    {str8_lit("Targets"),  't', WM_Key_T, targets_menu_key},
+                    {str8_lit("Control"),  'c', WM_Key_C, ctrl_menu_key},
+                    {str8_lit("Help"),     'h', WM_Key_H, help_menu_key},
                   };
                   
                   // rjf: determine if one of the menus is already open
@@ -7016,7 +7016,7 @@ rd_window_frame(void)
                   {
                     ui_set_next_fastpath_codepoint(items[idx].codepoint);
                     B32 alt_fastpath_key = 0;
-                    if(rd_setting_b32_from_name(str8_lit("focus_menu_bar_with_alt")) && ui_key_press(OS_Modifier_Alt, items[idx].key))
+                    if(rd_setting_b32_from_name(str8_lit("focus_menu_bar_with_alt")) && ui_key_press(WM_Modifier_Alt, items[idx].key))
                     {
                       alt_fastpath_key = 1;
                     }
@@ -7025,7 +7025,7 @@ rd_window_frame(void)
                       ui_set_next_flags(UI_BoxFlag_DrawTextFastpathCodepoint);
                     }
                     UI_Signal sig = rd_menu_bar_button(items[idx].name);
-                    os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
+                    wm_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
                     if(menu_open)
                     {
                       if((ui_hovering(sig) && !ui_ctx_menu_is_open(items[idx].menu_key)) || (open_menu_idx_prime == idx && open_menu_idx_prime != open_menu_idx))
@@ -7086,7 +7086,7 @@ rd_window_frame(void)
           {
             String8 cmd_name = center_button_tasks[idx].cmd_name;
             UI_Signal sig = ui_button(rd_icon_kind_text_table[rd_icon_kind_from_code_name(cmd_name)]);
-            os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
+            wm_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
             if(ui_hovering(sig))
             {
               RD_RegsScope(.cmd_name = cmd_name, .ui_key = sig.box->key) rd_set_hover_regs(RD_RegSlot_CmdName);
@@ -7119,7 +7119,7 @@ rd_window_frame(void)
                                                            UI_BoxFlag_DrawHotEffects|
                                                            UI_BoxFlag_DrawActiveEffects,
                                                            "###loaded_user_button");
-              os_window_push_custom_title_bar_client_area(ws->os, user_box->rect);
+              wm_window_push_custom_title_bar_client_area(ws->os, user_box->rect);
               UI_Parent(user_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
               {
                 String8 user_path = rd_state->user_path;
@@ -7153,7 +7153,7 @@ rd_window_frame(void)
                                                          UI_BoxFlag_DrawHotEffects|
                                                          UI_BoxFlag_DrawActiveEffects,
                                                          "###loaded_project_button");
-            os_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
+            wm_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
             UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_Padding(ui_em(0.5f, 1.f))
             {
               CFG_Node *root = cfg_node_root();
@@ -7207,7 +7207,7 @@ rd_window_frame(void)
               UI_FontSize(ui_top_font_size()*0.75f)
             {
               min_sig = rd_icon_buttonf(RD_IconKind_WindowMinimize,  0, "##minimize");
-              max_sig = rd_icon_buttonf(os_window_is_maximized(ws->os) ? RD_IconKind_WindowRestore : RD_IconKind_Window, 0, "##maximize");
+              max_sig = rd_icon_buttonf(wm_window_is_maximized(ws->os) ? RD_IconKind_WindowRestore : RD_IconKind_Window, 0, "##maximize");
             }
             UI_PrefWidth(ui_px(button_dim, 1.f))
               UI_TagF("bad_pop")
@@ -7216,11 +7216,11 @@ rd_window_frame(void)
             }
             if(ui_clicked(min_sig))
             {
-              os_window_set_minimized(ws->os, 1);
+              wm_window_set_minimized(ws->os, 1);
             }
             if(ui_clicked(max_sig))
             {
-              os_window_set_maximized(ws->os, !os_window_is_maximized(ws->os));
+              wm_window_set_maximized(ws->os, !wm_window_is_maximized(ws->os));
             }
             if(ui_clicked(cls_sig))
             {
@@ -7234,9 +7234,9 @@ rd_window_frame(void)
                 rd_cmd(RD_CmdKind_Exit);
               }
             }
-            os_window_push_custom_title_bar_client_area(ws->os, min_sig.box->rect);
-            os_window_push_custom_title_bar_client_area(ws->os, max_sig.box->rect);
-            os_window_push_custom_title_bar_client_area(ws->os, pad_2f32(cls_sig.box->rect, 2.f));
+            wm_window_push_custom_title_bar_client_area(ws->os, min_sig.box->rect);
+            wm_window_push_custom_title_bar_client_area(ws->os, max_sig.box->rect);
+            wm_window_push_custom_title_bar_client_area(ws->os, pad_2f32(cls_sig.box->rect, 2.f));
           }
         }
       }
@@ -7629,7 +7629,7 @@ rd_window_frame(void)
         
         UI_Rect(boundary_rect)
         {
-          ui_set_next_hover_cursor(split_axis == Axis2_X ? OS_Cursor_LeftRight : OS_Cursor_UpDown);
+          ui_set_next_hover_cursor(split_axis == Axis2_X ? WM_Cursor_LeftRight : WM_Cursor_UpDown);
           UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%p_%p", min_child->cfg, max_child->cfg);
           UI_Signal sig = ui_signal_from_box(box);
           if(ui_double_clicked(sig))
@@ -8569,7 +8569,7 @@ rd_window_frame(void)
     //
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
-      if(evt->kind == UI_EventKind_Scroll && evt->modifiers == OS_Modifier_Ctrl)
+      if(evt->kind == UI_EventKind_Scroll && evt->modifiers == WM_Modifier_Ctrl)
       {
         ui_eat_event(evt);
         if(evt->delta_2f32.y < 0)
@@ -8614,7 +8614,7 @@ rd_window_frame(void)
   {
     Temp scratch = scratch_begin(0, 0);
     F32 box_squish_epsilon = 0.001f;
-    Rng2F32 window_rect = os_client_rect_from_window(ws->os);
+    Rng2F32 window_rect = wm_client_rect_from_window(ws->os);
     
     //- rjf: unpack settings
     F32 rounded_corner_amount = rd_setting_f32_from_name(str8_lit("rounded_corner_amount"));
@@ -8634,7 +8634,7 @@ rd_window_frame(void)
     U64 heatmap_bucket_count = 0;
     if(DEV_draw_ui_box_heatmap)
     {
-      Rng2F32 rect = os_client_rect_from_window(ws->os);
+      Rng2F32 rect = wm_client_rect_from_window(ws->os);
       Vec2F32 size = dim_2f32(rect);
       Vec2S32 buckets_dim = {(S32)(size.x/heatmap_bucket_size), (S32)(size.y/heatmap_bucket_size)};
       heatmap_bucket_pitch = buckets_dim.x;
@@ -8644,12 +8644,12 @@ rd_window_frame(void)
     
     //- rjf: draw background color
     {
-      dr_rect(os_client_rect_from_window(ws->os), base_background_color, 0, 0, 0);
+      dr_rect(wm_client_rect_from_window(ws->os), base_background_color, 0, 0, 0);
     }
     
     //- rjf: draw window border
     {
-      dr_rect(os_client_rect_from_window(ws->os), base_border_color, 0, 1.f, border_softness*0.5f);
+      dr_rect(wm_client_rect_from_window(ws->os), base_border_color, 0, 1.f, border_softness*0.5f);
     }
     
     //- rjf: recurse & draw
@@ -9117,7 +9117,7 @@ rd_window_frame(void)
     {
       Vec4F32 color = ui_color_from_name(str8_lit("text"));
       color.w *= ws->error_t;
-      Rng2F32 rect = os_client_rect_from_window(ws->os);
+      Rng2F32 rect = wm_client_rect_from_window(ws->os);
       dr_rect(pad_2f32(rect, 24.f), color, 0, 16.f, 12.f);
       dr_rect(rect, v4f32(color.x, color.y, color.z, color.w*0.025f), 0, 0, 0);
     }
@@ -9126,7 +9126,7 @@ rd_window_frame(void)
     if(rd_state->bind_change_active) UI_TagF("pop")
     {
       Vec4F32 color = ui_color_from_name(str8_lit("background"));
-      Rng2F32 rect = os_client_rect_from_window(ws->os);
+      Rng2F32 rect = wm_client_rect_from_window(ws->os);
       dr_rect(pad_2f32(rect, 24.f), color, 0, 16.f, 12.f);
       dr_rect(rect, v4f32(color.x, color.y, color.z, color.w*0.025f), 0, 0, 0);
     }
@@ -9138,7 +9138,7 @@ rd_window_frame(void)
   //- rjf: @window_frame_part update per-window frame counters/info
   //
   ws->frames_alive += 1;
-  ws->last_window_rect = os_client_rect_from_window(ws->os);
+  ws->last_window_rect = wm_client_rect_from_window(ws->os);
   
   ProfEnd();
   scratch_end(scratch);
@@ -10707,7 +10707,7 @@ rd_frame(void)
     B32 any_window_is_focused = 0;
     for(RD_WindowState *w = rd_state->first_window_state; w != &rd_nil_window_state; w = w->order_next)
     {
-      if(os_window_is_focused(w->os))
+      if(wm_window_is_focused(w->os))
       {
         any_window_is_focused = 1;
         break;
@@ -10757,10 +10757,10 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: get events from the OS
   //
-  OS_EventList events = {0};
+  WM_EventList events = {0};
   if(rd_state->frame_depth == 1)
   {
-    events = os_get_events(scratch.arena, rd_state->num_frames_requested == 0 && !DEV_always_refresh);
+    events = wm_get_events(scratch.arena, rd_state->num_frames_requested == 0 && !DEV_always_refresh);
   }
   
   //////////////////////////////
@@ -10794,7 +10794,7 @@ rd_frame(void)
   //
   // TODO(rjf): maximize target, given all windows and their monitors
   //
-  F32 target_hz = os_get_gfx_info()->default_refresh_rate;
+  F32 target_hz = wm_get_system_info()->default_refresh_rate;
   if(rd_state->frame_index > 32)
   {
     F32 possible_alternate_hz_targets[] = {target_hz, 60.f, 75.f, 120.f, 144.f, 165.f, 240.f, 360.f};
@@ -10847,30 +10847,30 @@ rd_frame(void)
   //
   if(!rd_state->popup_active && rd_state->bind_change_active)
   {
-    if(os_key_press(&events, os_window_zero(), 0, OS_Key_Esc))
+    if(wm_key_press(&events, wm_window_zero(), 0, WM_Key_Esc))
     {
       rd_request_frame();
       rd_state->bind_change_active = 0;
     }
-    if(os_key_press(&events, os_window_zero(), 0, OS_Key_Delete))
+    if(wm_key_press(&events, wm_window_zero(), 0, WM_Key_Delete))
     {
       rd_request_frame();
       cfg_node_release(rd_state->cfg, cfg_node_from_id(rd_state->bind_change_binding_id));
       rd_state->bind_change_active = 0;
     }
-    for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
+    for(WM_Event *event = events.first, *next = 0; event != 0; event = next)
     {
-      if(event->kind == OS_EventKind_Press &&
-         event->key != OS_Key_Esc &&
-         event->key != OS_Key_Return &&
-         event->key != OS_Key_Backspace &&
-         event->key != OS_Key_Delete &&
-         event->key != OS_Key_LeftMouseButton &&
-         event->key != OS_Key_RightMouseButton &&
-         event->key != OS_Key_MiddleMouseButton &&
-         event->key != OS_Key_Ctrl &&
-         event->key != OS_Key_Alt &&
-         event->key != OS_Key_Shift)
+      if(event->kind == WM_EventKind_Press &&
+         event->key != WM_Key_Esc &&
+         event->key != WM_Key_Return &&
+         event->key != WM_Key_Backspace &&
+         event->key != WM_Key_Delete &&
+         event->key != WM_Key_LeftMouseButton &&
+         event->key != WM_Key_RightMouseButton &&
+         event->key != WM_Key_MiddleMouseButton &&
+         event->key != WM_Key_Ctrl &&
+         event->key != WM_Key_Alt &&
+         event->key != WM_Key_Shift)
       {
         rd_state->bind_change_active = 0;
         CFG_Node *binding = cfg_node_from_id(rd_state->bind_change_binding_id);
@@ -10882,13 +10882,13 @@ rd_frame(void)
         }
         cfg_node_release_all_children(rd_state->cfg, binding);
         cfg_node_new(rd_state->cfg, binding, rd_state->bind_change_cmd_name);
-        cfg_node_new(rd_state->cfg, binding, os_g_key_cfg_string_table[event->key]);
-        if(event->modifiers & OS_Modifier_Ctrl)  { cfg_node_new(rd_state->cfg, binding, str8_lit("ctrl")); }
-        if(event->modifiers & OS_Modifier_Shift) { cfg_node_new(rd_state->cfg, binding, str8_lit("shift")); }
-        if(event->modifiers & OS_Modifier_Alt)   { cfg_node_new(rd_state->cfg, binding, str8_lit("alt")); }
-        U32 codepoint = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
-        os_text(&events, event->window, codepoint);
-        os_eat_event(&events, event);
+        cfg_node_new(rd_state->cfg, binding, wm_key_cfg_name_table[event->key]);
+        if(event->modifiers & WM_Modifier_Ctrl)  { cfg_node_new(rd_state->cfg, binding, str8_lit("ctrl")); }
+        if(event->modifiers & WM_Modifier_Shift) { cfg_node_new(rd_state->cfg, binding, str8_lit("shift")); }
+        if(event->modifiers & WM_Modifier_Alt)   { cfg_node_new(rd_state->cfg, binding, str8_lit("alt")); }
+        U32 codepoint = wm_codepoint_from_modifiers_and_key(event->modifiers, event->key);
+        wm_text(&events, event->window, codepoint);
+        wm_eat_event(&events, event);
         rd_request_frame();
         break;
       }
@@ -10928,7 +10928,7 @@ rd_frame(void)
   //
   ProfScope("consume events")
   {
-    for(OS_Event *event = events.first, *next = 0;
+    for(WM_Event *event = events.first, *next = 0;
         event != 0;
         event = next)
       RD_RegsScope()
@@ -10948,13 +10948,13 @@ rd_frame(void)
       B32 take = 0;
       
       //- rjf: try drag/drop drop-kickoff
-      if(rd_drag_is_active() && event->kind == OS_EventKind_Release && event->key == OS_Key_LeftMouseButton)
+      if(rd_drag_is_active() && event->kind == WM_EventKind_Release && event->key == WM_Key_LeftMouseButton)
       {
         rd_state->drag_drop_state = RD_DragDropState_Dropping;
       }
       
       //- rjf: try window close
-      if(!take && event->kind == OS_EventKind_WindowClose && ws != 0)
+      if(!take && event->kind == WM_EventKind_WindowClose && ws != 0)
       {
         take = 1;
         rd_cmd(RD_CmdKind_Exit);
@@ -10963,7 +10963,7 @@ rd_frame(void)
       //- rjf: try menu bar operations
       if(rd_state->alt_menu_bar_enabled)
       {
-        if(!take && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
+        if(!take && event->kind == WM_EventKind_Press && event->key == WM_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
@@ -10971,26 +10971,26 @@ rd_frame(void)
           ws->menu_bar_key_held = 1;
           ws->menu_bar_focus_press_started = 1;
         }
-        if(!take && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
+        if(!take && event->kind == WM_EventKind_Release && event->key == WM_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
           ws->menu_bar_key_held = 0;
         }
-        if(ws->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
+        if(ws->menu_bar_focused && event->kind == WM_EventKind_Press && event->key == WM_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
           ws->menu_bar_focused = 0;
         }
-        else if(ws->menu_bar_focus_press_started && !ws->menu_bar_focused && event->kind == OS_EventKind_Release && event->modifiers == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
+        else if(ws->menu_bar_focus_press_started && !ws->menu_bar_focused && event->kind == WM_EventKind_Release && event->modifiers == 0 && event->key == WM_Key_Alt && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
           ws->menu_bar_focused = !ws->menu_bar_focused_on_press;
           ws->menu_bar_focus_press_started = 0;
         }
-        else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && ws->menu_bar_focused && !ui_any_ctx_menu_is_open())
+        else if(event->kind == WM_EventKind_Press && event->key == WM_Key_Esc && ws->menu_bar_focused && !ui_any_ctx_menu_is_open())
         {
           take = 1;
           rd_request_frame();
@@ -10999,13 +10999,13 @@ rd_frame(void)
       }
       
       //- rjf: try hotkey presses
-      if(!take && event->kind == OS_EventKind_Press)
+      if(!take && event->kind == WM_EventKind_Press)
       {
         CFG_Binding binding = {event->key, event->modifiers};
         CFG_KeyMapNodePtrList key_map_nodes = cfg_key_map_node_ptr_list_from_binding(scratch.arena, rd_state->key_map, binding);
         if(key_map_nodes.first != 0)
         {
-          U32 hit_char = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
+          U32 hit_char = wm_codepoint_from_modifiers_and_key(event->modifiers, event->key);
           if(hit_char == 0 || allow_text_hotkeys)
           {
             String8 cmd_name = key_map_nodes.first->v->name;
@@ -11019,17 +11019,17 @@ rd_frame(void)
             rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_name);
             if(allow_text_hotkeys)
             {
-              os_text(&events, event->window, hit_char);
+              wm_text(&events, event->window, hit_char);
               next = event->next;
             }
             take = 1;
-            if(event->modifiers & OS_Modifier_Alt)
+            if(event->modifiers & WM_Modifier_Alt)
             {
               ws->menu_bar_focus_press_started = 0;
             }
           }
         }
-        else if(OS_Key_F1 <= event->key && event->key <= OS_Key_F19)
+        else if(WM_Key_F1 <= event->key && event->key <= WM_Key_F19)
         {
           ws->menu_bar_focus_press_started = 0;
         }
@@ -11037,14 +11037,14 @@ rd_frame(void)
       }
       
       //- rjf: try text events
-      if(!take && event->kind == OS_EventKind_Text)
+      if(!take && event->kind == WM_EventKind_Text)
       {
         String32 insertion32 = str32(&event->character, 1);
         String8 insertion8 = str8_from_32(scratch.arena, insertion32);
         rd_cmd(RD_CmdKind_InsertText, .string = insertion8);
         rd_request_frame();
         take = 1;
-        if(event->modifiers & OS_Modifier_Alt)
+        if(event->modifiers & WM_Modifier_Alt)
         {
           ws->menu_bar_focus_press_started = 0;
         }
@@ -11054,13 +11054,13 @@ rd_frame(void)
       if(!take)
       {
         take = 1;
-        rd_cmd(RD_CmdKind_OSEvent, .os_event = event);
+        rd_cmd(RD_CmdKind_WMEvent, .wm_event = event);
       }
       
       //- rjf: take
       if(take)
       {
-        os_eat_event(&events, event);
+        wm_eat_event(&events, event);
       }
     }
   }
@@ -12146,7 +12146,7 @@ rd_frame(void)
             // rjf: run -> refocus pre-stop focused window
             if(kind == RD_CmdKind_Run)
             {
-              os_focus_external_window(rd_state->prestop_focused_window);
+              wm_focus_external_window(rd_state->prestop_focused_window);
             }
             
             // rjf: run -> no active targets, no processes, but we only have one target? -> just launch it, then select it
@@ -12278,7 +12278,7 @@ rd_frame(void)
               {
                 current_path_string = path_normalized_from_string(scratch.arena, get_current_path(scratch.arena));
               }
-              String8 file_path = os_graphical_pick_file(scratch.arena, current_path_string);
+              String8 file_path = wm_graphical_pick_file(scratch.arena, current_path_string);
               file_path = path_normalized_from_string(scratch.arena, file_path);
               if(file_path.size != 0)
               {
@@ -12418,7 +12418,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
             if(ws != &rd_nil_window_state)
             {
-              os_window_set_fullscreen(ws->os, !os_window_is_fullscreen(ws->os));
+              wm_window_set_fullscreen(ws->os, !wm_window_is_fullscreen(ws->os));
             }
           }break;
           case RD_CmdKind_BringToFront:
@@ -12431,8 +12431,8 @@ rd_frame(void)
             }
             if(last_focused_ws != &rd_nil_window_state)
             {
-              os_window_set_minimized(last_focused_ws->os, 0);
-              os_window_focus(last_focused_ws->os);
+              wm_window_set_minimized(last_focused_ws->os, 0);
+              wm_window_focus(last_focused_ws->os);
             }
           }break;
           
@@ -12468,10 +12468,10 @@ rd_frame(void)
               CFG_Binding binding = rd_default_binding_table[idx].binding;
               CFG_Node *binding_root = cfg_node_new(rd_state->cfg, keybindings, str8_zero());
               cfg_node_new(rd_state->cfg, binding_root, name);
-              cfg_node_new(rd_state->cfg, binding_root, os_g_key_cfg_string_table[binding.key]);
-              if(binding.modifiers & OS_Modifier_Ctrl)  {cfg_node_newf(rd_state->cfg, binding_root, "ctrl");}
-              if(binding.modifiers & OS_Modifier_Shift) {cfg_node_newf(rd_state->cfg, binding_root, "shift");}
-              if(binding.modifiers & OS_Modifier_Alt)   {cfg_node_newf(rd_state->cfg, binding_root, "alt");}
+              cfg_node_new(rd_state->cfg, binding_root, wm_key_cfg_name_table[binding.key]);
+              if(binding.modifiers & WM_Modifier_Ctrl)  {cfg_node_newf(rd_state->cfg, binding_root, "ctrl");}
+              if(binding.modifiers & WM_Modifier_Shift) {cfg_node_newf(rd_state->cfg, binding_root, "shift");}
+              if(binding.modifiers & WM_Modifier_Alt)   {cfg_node_newf(rd_state->cfg, binding_root, "alt");}
             }
           }break;
           
@@ -12583,10 +12583,10 @@ rd_frame(void)
               CFG_NodePtrList all_user_windows = cfg_node_child_list_from_string(scratch.arena, file_root, str8_lit("window"));
               if(all_user_windows.count == 0)
               {
-                OS_Monitor monitor   = os_primary_monitor();
-                String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
-                Vec2F32 monitor_dim  = os_dim_from_monitor(monitor);
-                F32 monitor_dpi      = os_dpi_from_monitor(monitor);
+                WM_Monitor monitor   = wm_primary_monitor();
+                String8 monitor_name = wm_name_from_monitor(scratch.arena, monitor);
+                Vec2F32 monitor_dim  = wm_dim_from_monitor(monitor);
+                F32 monitor_dpi      = wm_dpi_from_monitor(monitor);
                 Vec2F32 window_dim   = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
                 if(window_dim.x == 0 || window_dim.y == 0)
                 {
@@ -13546,7 +13546,7 @@ rd_frame(void)
             CFG_Node *tab = cfg_node_from_id(rd_regs()->tab);
             String8 expr = rd_expr_from_cfg(tab);
             String8 full_path = rd_file_path_from_eval_string(scratch.arena, expr);
-            os_set_clipboard_text(full_path);
+            wm_set_clipboard_text(full_path);
           }break;
           case RD_CmdKind_CloseTab:
           {
@@ -13720,7 +13720,7 @@ rd_frame(void)
           if(rd_regs()->file_path.size != 0)
           {
             String8 full_path = rd_regs()->file_path;
-            os_show_in_filesystem_ui(full_path);
+            wm_show_in_filesystem_ui(full_path);
           }break;
           
           //- rjf: source <-> disasm
@@ -15580,34 +15580,34 @@ rd_frame(void)
           }break;
           
           //- rjf: os event passthrough
-          case RD_CmdKind_OSEvent:
+          case RD_CmdKind_WMEvent:
           {
-            OS_Event *os_event = rd_regs()->os_event;
-            RD_WindowState *ws = rd_window_state_from_os_handle(os_event->window);
-            if(os_event != 0 && ws != &rd_nil_window_state)
+            WM_Event *wm_event = rd_regs()->wm_event;
+            RD_WindowState *ws = rd_window_state_from_os_handle(wm_event->window);
+            if(wm_event != 0 && ws != &rd_nil_window_state)
             {
               UI_Event ui_event = zero_struct;
               UI_EventKind kind = UI_EventKind_Null;
               {
-                switch(os_event->kind)
+                switch(wm_event->kind)
                 {
                   default:{}break;
-                  case OS_EventKind_Press:     {kind = UI_EventKind_Press;}break;
-                  case OS_EventKind_Release:   {kind = UI_EventKind_Release;}break;
-                  case OS_EventKind_MouseMove: {kind = UI_EventKind_MouseMove;}break;
-                  case OS_EventKind_Text:      {kind = UI_EventKind_Text;}break;
-                  case OS_EventKind_Scroll:    {kind = UI_EventKind_Scroll;}break;
-                  case OS_EventKind_FileDrop:  {kind = UI_EventKind_FileDrop;}break;
+                  case WM_EventKind_Press:     {kind = UI_EventKind_Press;}break;
+                  case WM_EventKind_Release:   {kind = UI_EventKind_Release;}break;
+                  case WM_EventKind_MouseMove: {kind = UI_EventKind_MouseMove;}break;
+                  case WM_EventKind_Text:      {kind = UI_EventKind_Text;}break;
+                  case WM_EventKind_Scroll:    {kind = UI_EventKind_Scroll;}break;
+                  case WM_EventKind_FileDrop:  {kind = UI_EventKind_FileDrop;}break;
                 }
               }
               ui_event.kind         = kind;
-              ui_event.key          = os_event->key;
-              ui_event.modifiers    = os_event->modifiers;
-              ui_event.string       = os_event->character ? str8_from_32(ui_build_arena(), str32(&os_event->character, 1)) : str8_zero();
-              ui_event.paths        = str8_list_copy(ui_build_arena(), &os_event->strings);
-              ui_event.pos          = os_event->pos;
-              ui_event.delta_2f32   = os_event->delta;
-              ui_event.timestamp_us = os_event->timestamp_us;
+              ui_event.key          = wm_event->key;
+              ui_event.modifiers    = wm_event->modifiers;
+              ui_event.string       = wm_event->character ? str8_from_32(ui_build_arena(), str32(&wm_event->character, 1)) : str8_zero();
+              ui_event.paths        = str8_list_copy(ui_build_arena(), &wm_event->strings);
+              ui_event.pos          = wm_event->pos;
+              ui_event.delta_2f32   = wm_event->delta;
+              ui_event.timestamp_us = wm_event->timestamp_us;
               ui_event_list_push(scratch.arena, &ws->ui_events, &ui_event);
             }
           }break;
@@ -16138,7 +16138,7 @@ rd_frame(void)
             UI_Event evt = zero_struct;
             evt.kind   = UI_EventKind_Text;
             evt.flags  = UI_EventFlag_Paste;
-            evt.string = os_get_clipboard_text(scratch.arena);
+            evt.string = wm_get_clipboard_text(scratch.arena);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
           }break;
           case RD_CmdKind_InsertText:
@@ -16483,7 +16483,7 @@ rd_frame(void)
             B32 any_window_is_focused = 0;
             for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
             {
-              if(os_window_is_focused(ws->os))
+              if(wm_window_is_focused(ws->os))
               {
                 any_window_is_focused = 1;
                 break;
@@ -16499,10 +16499,10 @@ rd_frame(void)
               }
               if(ws != &rd_nil_window_state)
               {
-                rd_state->prestop_focused_window = os_focused_external_window();
-                os_window_set_minimized(ws->os, 0);
-                os_window_bring_to_front(ws->os);
-                os_window_focus(ws->os);
+                rd_state->prestop_focused_window = wm_focused_external_window();
+                wm_window_set_minimized(ws->os, 0);
+                wm_window_bring_to_front(ws->os);
+                wm_window_focus(ws->os);
               }
             }
           }
@@ -16538,7 +16538,7 @@ rd_frame(void)
     {
       for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
       {
-        os_window_set_title(ws->os, window_title);
+        wm_window_set_title(ws->os, window_title);
       }
     }
     rd_state->last_window_title = str8_copy(rd_frame_arena(), window_title);
@@ -16689,7 +16689,7 @@ rd_frame(void)
     {
       CFG_Node *window = n->v;
       RD_WindowState *w = rd_window_state_from_cfg(window);
-      B32 window_is_focused = os_window_is_focused(w->os);
+      B32 window_is_focused = wm_window_is_focused(w->os);
       if(window_is_focused)
       {
         rd_state->last_focused_window = w->cfg_id;
@@ -16720,7 +16720,7 @@ rd_frame(void)
         {
           ui_state_release(ws->ui);
           r_window_unequip(ws->os, ws->r);
-          os_window_close(ws->os);
+          wm_window_close(ws->os);
           arena_release(ws->drop_completion_arena);
           arena_release(ws->query_arena);
           arena_release(ws->hover_eval_arena);
@@ -16800,7 +16800,7 @@ rd_frame(void)
     {
       CFG_Node *window = cfg_node_from_id(n->v);
       RD_WindowState *ws = rd_window_state_from_cfg(window);
-      os_window_first_paint(ws->os);
+      wm_window_first_paint(ws->os);
     }
   }
   

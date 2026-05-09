@@ -29,7 +29,7 @@ typedef struct UI_BackgroundColorNode UI_BackgroundColorNode; struct UI_Backgrou
 typedef struct UI_TextColorNode UI_TextColorNode; struct UI_TextColorNode{UI_TextColorNode *next; Vec4F32 v;};
 typedef struct UI_BorderColorNode UI_BorderColorNode; struct UI_BorderColorNode{UI_BorderColorNode *next; Vec4F32 v;};
 typedef struct UI_SquishNode UI_SquishNode; struct UI_SquishNode{UI_SquishNode *next; F32 v;};
-typedef struct UI_HoverCursorNode UI_HoverCursorNode; struct UI_HoverCursorNode{UI_HoverCursorNode *next; OS_Cursor v;};
+typedef struct UI_HoverCursorNode UI_HoverCursorNode; struct UI_HoverCursorNode{UI_HoverCursorNode *next; WM_Cursor v;};
 typedef struct UI_FontNode UI_FontNode; struct UI_FontNode{UI_FontNode *next; FNT_Tag v;};
 typedef struct UI_FontSizeNode UI_FontSizeNode; struct UI_FontSizeNode{UI_FontSizeNode *next; F32 v;};
 typedef struct UI_TextRasterFlagsNode UI_TextRasterFlagsNode; struct UI_TextRasterFlagsNode{UI_TextRasterFlagsNode *next; FNT_RasterFlags v;};
@@ -104,7 +104,7 @@ state->background_color_nil_stack_top.v = v4f32(0, 0, 0, 0);\
 state->text_color_nil_stack_top.v = v4f32(0, 0, 0, 0);\
 state->border_color_nil_stack_top.v = v4f32(0, 0, 0, 0);\
 state->squish_nil_stack_top.v = 0;\
-state->hover_cursor_nil_stack_top.v = OS_Cursor_Pointer;\
+state->hover_cursor_nil_stack_top.v = WM_Cursor_Pointer;\
 state->font_nil_stack_top.v = fnt_tag_zero();\
 state->font_size_nil_stack_top.v = 24.f;\
 state->text_raster_flags_nil_stack_top.v = FNT_RasterFlag_Hinted;\
@@ -143,7 +143,7 @@ struct { UI_BackgroundColorNode *top; Vec4F32 bottom_val; UI_BackgroundColorNode
 struct { UI_TextColorNode *top; Vec4F32 bottom_val; UI_TextColorNode *free; U64 gen; B32 auto_pop; } text_color_stack;\
 struct { UI_BorderColorNode *top; Vec4F32 bottom_val; UI_BorderColorNode *free; U64 gen; B32 auto_pop; } border_color_stack;\
 struct { UI_SquishNode *top; F32 bottom_val; UI_SquishNode *free; U64 gen; B32 auto_pop; } squish_stack;\
-struct { UI_HoverCursorNode *top; OS_Cursor bottom_val; UI_HoverCursorNode *free; U64 gen; B32 auto_pop; } hover_cursor_stack;\
+struct { UI_HoverCursorNode *top; WM_Cursor bottom_val; UI_HoverCursorNode *free; U64 gen; B32 auto_pop; } hover_cursor_stack;\
 struct { UI_FontNode *top; FNT_Tag bottom_val; UI_FontNode *free; U64 gen; B32 auto_pop; } font_stack;\
 struct { UI_FontSizeNode *top; F32 bottom_val; UI_FontSizeNode *free; U64 gen; B32 auto_pop; } font_size_stack;\
 struct { UI_TextRasterFlagsNode *top; FNT_RasterFlags bottom_val; UI_TextRasterFlagsNode *free; U64 gen; B32 auto_pop; } text_raster_flags_stack;\
@@ -180,7 +180,7 @@ state->background_color_stack.top = &state->background_color_nil_stack_top; stat
 state->text_color_stack.top = &state->text_color_nil_stack_top; state->text_color_stack.bottom_val = v4f32(0, 0, 0, 0); state->text_color_stack.free = 0; state->text_color_stack.auto_pop = 0;\
 state->border_color_stack.top = &state->border_color_nil_stack_top; state->border_color_stack.bottom_val = v4f32(0, 0, 0, 0); state->border_color_stack.free = 0; state->border_color_stack.auto_pop = 0;\
 state->squish_stack.top = &state->squish_nil_stack_top; state->squish_stack.bottom_val = 0; state->squish_stack.free = 0; state->squish_stack.auto_pop = 0;\
-state->hover_cursor_stack.top = &state->hover_cursor_nil_stack_top; state->hover_cursor_stack.bottom_val = OS_Cursor_Pointer; state->hover_cursor_stack.free = 0; state->hover_cursor_stack.auto_pop = 0;\
+state->hover_cursor_stack.top = &state->hover_cursor_nil_stack_top; state->hover_cursor_stack.bottom_val = WM_Cursor_Pointer; state->hover_cursor_stack.free = 0; state->hover_cursor_stack.auto_pop = 0;\
 state->font_stack.top = &state->font_nil_stack_top; state->font_stack.bottom_val = fnt_tag_zero(); state->font_stack.free = 0; state->font_stack.auto_pop = 0;\
 state->font_size_stack.top = &state->font_size_nil_stack_top; state->font_size_stack.bottom_val = 24.f; state->font_size_stack.free = 0; state->font_size_stack.auto_pop = 0;\
 state->text_raster_flags_stack.top = &state->text_raster_flags_nil_stack_top; state->text_raster_flags_stack.bottom_val = FNT_RasterFlag_Hinted; state->text_raster_flags_stack.free = 0; state->text_raster_flags_stack.auto_pop = 0;\
@@ -253,7 +253,7 @@ internal Vec4F32                    ui_top_background_color(void);
 internal Vec4F32                    ui_top_text_color(void);
 internal Vec4F32                    ui_top_border_color(void);
 internal F32                        ui_top_squish(void);
-internal OS_Cursor                  ui_top_hover_cursor(void);
+internal WM_Cursor                  ui_top_hover_cursor(void);
 internal FNT_Tag                    ui_top_font(void);
 internal F32                        ui_top_font_size(void);
 internal FNT_RasterFlags            ui_top_text_raster_flags(void);
@@ -288,7 +288,7 @@ internal Vec4F32                    ui_bottom_background_color(void);
 internal Vec4F32                    ui_bottom_text_color(void);
 internal Vec4F32                    ui_bottom_border_color(void);
 internal F32                        ui_bottom_squish(void);
-internal OS_Cursor                  ui_bottom_hover_cursor(void);
+internal WM_Cursor                  ui_bottom_hover_cursor(void);
 internal FNT_Tag                    ui_bottom_font(void);
 internal F32                        ui_bottom_font_size(void);
 internal FNT_RasterFlags            ui_bottom_text_raster_flags(void);
@@ -323,7 +323,7 @@ internal Vec4F32                    ui_push_background_color(Vec4F32 v);
 internal Vec4F32                    ui_push_text_color(Vec4F32 v);
 internal Vec4F32                    ui_push_border_color(Vec4F32 v);
 internal F32                        ui_push_squish(F32 v);
-internal OS_Cursor                  ui_push_hover_cursor(OS_Cursor v);
+internal WM_Cursor                  ui_push_hover_cursor(WM_Cursor v);
 internal FNT_Tag                    ui_push_font(FNT_Tag v);
 internal F32                        ui_push_font_size(F32 v);
 internal FNT_RasterFlags            ui_push_text_raster_flags(FNT_RasterFlags v);
@@ -358,7 +358,7 @@ internal Vec4F32                    ui_pop_background_color(void);
 internal Vec4F32                    ui_pop_text_color(void);
 internal Vec4F32                    ui_pop_border_color(void);
 internal F32                        ui_pop_squish(void);
-internal OS_Cursor                  ui_pop_hover_cursor(void);
+internal WM_Cursor                  ui_pop_hover_cursor(void);
 internal FNT_Tag                    ui_pop_font(void);
 internal F32                        ui_pop_font_size(void);
 internal FNT_RasterFlags            ui_pop_text_raster_flags(void);
@@ -393,7 +393,7 @@ internal Vec4F32                    ui_set_next_background_color(Vec4F32 v);
 internal Vec4F32                    ui_set_next_text_color(Vec4F32 v);
 internal Vec4F32                    ui_set_next_border_color(Vec4F32 v);
 internal F32                        ui_set_next_squish(F32 v);
-internal OS_Cursor                  ui_set_next_hover_cursor(OS_Cursor v);
+internal WM_Cursor                  ui_set_next_hover_cursor(WM_Cursor v);
 internal FNT_Tag                    ui_set_next_font(FNT_Tag v);
 internal F32                        ui_set_next_font_size(F32 v);
 internal FNT_RasterFlags            ui_set_next_text_raster_flags(FNT_RasterFlags v);

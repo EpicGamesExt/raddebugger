@@ -212,7 +212,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   B32 is_focus_active_disabled = (!is_focus_active && ui_top_focus_active() == UI_FocusKind_On);
   
   //- rjf: build top-level box
-  ui_set_next_hover_cursor(is_focus_active ? OS_Cursor_IBar : OS_Cursor_Pointer);
+  ui_set_next_hover_cursor(is_focus_active ? WM_Cursor_IBar : WM_Cursor_Pointer);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
                                       UI_BoxFlag_DrawBorder|
                                       UI_BoxFlag_MouseClickable|
@@ -252,7 +252,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
       // rjf: perform copy
       if(op.flags & UI_TxtOpFlag_Copy)
       {
-        os_set_clipboard_text(op.copy);
+        wm_set_clipboard_text(op.copy);
       }
       
       // rjf: commit op's changed cursor & mark to caller-provided state
@@ -436,7 +436,7 @@ ui_imagef(R_Handle texture, R_Tex2DSampleKind sample_kind, Rng2F32 region, Vec4F
 internal UI_Signal
 ui_expander(B32 is_expanded, String8 string)
 {
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+  ui_set_next_hover_cursor(WM_Cursor_HandPoint);
   ui_set_next_text_alignment(UI_TextAlign_Center);
   ui_set_next_font(ui_icon_font());
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable|UI_BoxFlag_DrawText, string);
@@ -462,7 +462,7 @@ internal UI_Signal
 ui_sort_header(B32 sorting, B32 ascending, String8 string)
 {
   ui_set_next_child_layout_axis(Axis2_X);
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+  ui_set_next_hover_cursor(WM_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, string);
   ui_push_parent(box);
   
@@ -649,7 +649,7 @@ internal UI_Signal
 ui_sat_val_picker(F32 hue, F32 *out_sat, F32 *out_val, String8 string)
 {
   // rjf: build & interact
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+  ui_set_next_hover_cursor(WM_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable, string);
   UI_SatValDrawData *user = push_array(ui_build_arena(), UI_SatValDrawData, 1);
   ui_box_equip_custom_draw(box, ui_sat_val_picker_draw, user);
@@ -758,7 +758,7 @@ internal UI_Signal
 ui_hue_picker(F32 *out_hue, F32 sat, F32 val, String8 string)
 {
   // rjf: build & interact
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+  ui_set_next_hover_cursor(WM_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable, string);
   UI_HueDrawData *user = push_array(ui_build_arena(), UI_HueDrawData, 1);
   ui_box_equip_custom_draw(box, ui_hue_picker_draw, user);
@@ -845,7 +845,7 @@ internal UI_Signal
 ui_alpha_picker(F32 *out_alpha, String8 string)
 {
   // rjf: build & interact
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+  ui_set_next_hover_cursor(WM_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable, string);
   UI_AlphaDrawData *user = push_array(ui_build_arena(), UI_AlphaDrawData, 1);
   ui_box_equip_custom_draw(box, ui_alpha_picker_draw, user);
@@ -1006,7 +1006,7 @@ ui_table_begin(U64 column_pct_count, F32 **column_pcts, String8 string)
     // rjf: make column boundary widget
     UI_Rect(rect)
     {
-      ui_set_next_hover_cursor(OS_Cursor_LeftRight);
+      ui_set_next_hover_cursor(WM_Cursor_LeftRight);
       UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%S_boundary_%I64u", table->string, column_idx);
       
       F32 *left_pct_ptr  = column_idx < ui_ts_col_pct_count ? column_pcts[column_idx-1] : 0;

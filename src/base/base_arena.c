@@ -51,7 +51,7 @@ arena_alloc_(ArenaParams *params)
 #if OS_FEATURE_GRAPHICAL
   if(Unlikely(base == 0))
   {
-    os_graphical_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
+    wm_graphical_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
     abort_self(1);
   }
 #endif
@@ -212,7 +212,7 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
 #if OS_FEATURE_GRAPHICAL
   if(Unlikely(result == 0))
   {
-    os_graphical_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
+    wm_graphical_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
     abort_self(1);
   }
 #endif

@@ -831,68 +831,68 @@ RD_VocabTable:
 RD_RegTable:
 {
   // rjf: ctrl entities
-  {D_Handle          machine          Machine       }
-  {D_Handle          module           Module        }
-  {D_Handle          process          Process       }
-  {D_Handle          thread           Thread        }
-  {D_Handle          ctrl_entity      CtrlEntity    }
+  {D_Handle          machine                          Machine                                 }
+  {D_Handle          module                           Module                                  }
+  {D_Handle          process                          Process                                 }
+  {D_Handle          thread                           Thread                                  }
+  {D_Handle          ctrl_entity                      CtrlEntity                              }
   
   // rjf: cfgs
-  {CFG_ID            window           Window        }
-  {CFG_ID            panel            Panel         }
-  {CFG_ID            tab              Tab           }
-  {CFG_ID            view             View          }
-  {CFG_ID            prev_tab         PrevTab       }
-  {CFG_ID            dst_panel        DstPanel      }
-  {CFG_ID            cfg              Cfg           }
-  {CFG_IDList        cfg_list         CfgList       }
+  {CFG_ID            window                           Window                                  }
+  {CFG_ID            panel                            Panel                                   }
+  {CFG_ID            tab                              Tab                                     }
+  {CFG_ID            view                             View                                    }
+  {CFG_ID            prev_tab                         PrevTab                                 }
+  {CFG_ID            dst_panel                        DstPanel                                }
+  {CFG_ID            cfg                              Cfg                                     }
+  {CFG_IDList        cfg_list                         CfgList                                 }
   
   // rjf: evaluation space
-  {E_Space           eval_space       EvalSpace     }
+  {E_Space           eval_space                       EvalSpace                               }
   
   // rjf: frame selection
-  {U64               unwind_count     UnwindCount   }
-  {U64               inline_depth     InlineDepth   }
+  {U64               unwind_count                     UnwindCount                             }
+  {U64               inline_depth                     InlineDepth                             }
   
   // rjf: code / address location info
-  {String8           file_path        FilePath      }
-  {TxtPt             cursor           Cursor        }
-  {TxtPt             mark             Mark          }
-  {C_Key             text_key         TextKey       }
-  {TXT_LangKind      lang_kind        LangKind      }
-  {D_LineList        lines            Lines         }
-  {DI_Key            dbgi_key         DbgiKey       }
-  {U64               vaddr            Vaddr         }
-  {U64               voff             Voff          }
-  {Rng1U64           vaddr_range      VaddrRange    }
-  {Rng1U64           voff_range       VoffRange     }
+  {String8           file_path                        FilePath                                }
+  {TxtPt             cursor                           Cursor                                  }
+  {TxtPt             mark                             Mark                                    }
+  {C_Key             text_key                         TextKey                                 }
+  {TXT_LangKind      lang_kind                        LangKind                                }
+  {D_LineList        lines                            Lines                                   }
+  {DI_Key            dbgi_key                         DbgiKey                                 }
+  {U64               vaddr                            Vaddr                                   }
+  {U64               voff                             Voff                                    }
+  {Rng1U64           vaddr_range                      VaddrRange                              }
+  {Rng1U64           voff_range                       VoffRange                               }
   
   // rjf: evaluation
-  {String8           expr             Expr          }
+  {String8           expr                             Expr                                    }
   
   // rjf: ui context
-  {UI_Key            ui_key           UIKey         }
-  {UI_Key            src_ui_key       SrcUIKey      }
-  {Vec2F32           off_px           OffPx         }
-  {RD_RegSlot        reg_slot         RegSlot       }
+  {UI_Key            ui_key                           UIKey                                   }
+  {UI_Key            src_ui_key                       SrcUIKey                                }
+  {Vec2F32           off_px                           OffPx                                   }
+  {RD_RegSlot        reg_slot                         RegSlot                                 }
   
   // rjf: general parameters
-  {U32               pid              PID           }
-  {B32               force_confirm    ForceConfirm  }
-  {B32               force_focus      ForceFocus    }
-  {B32               prefer_disasm    PreferDisasm  }
-  {B32               no_rich_tooltip  NoRichTooltip }
-  {B32               do_implicit_root DoImplicitRoot}
-  {B32               do_lister        DoLister      }
-  {B32               do_big_rows      DoBigRows     }
-  {B32               all_windows      AllWindows    }
-  {B32               non_graphical    NonGraphical  }
-  {B32               prefer_new_tab   PreferNewTab  }
-  {B32               activate_with_single_click ActivateWithSingleClick }
-  {Dir2              dir2             Dir2          }
-  {String8           string           String        }
-  {String8           cmd_name         CmdName       }
-  {`OS_Event *`      os_event         OSEvent       }
+  {U32               pid                              PID                                     }
+  {B32               force_confirm                    ForceConfirm                            }
+  {B32               force_focus                      ForceFocus                              }
+  {B32               prefer_disasm                    PreferDisasm                            }
+  {B32               no_rich_tooltip                  NoRichTooltip                           }
+  {B32               do_implicit_root                 DoImplicitRoot                          }
+  {B32               do_lister                        DoLister                                }
+  {B32               do_big_rows                      DoBigRows                               }
+  {B32               all_windows                      AllWindows                              }
+  {B32               non_graphical                    NonGraphical                            }
+  {B32               prefer_new_tab                   PreferNewTab                            }
+  {B32               activate_with_single_click       ActivateWithSingleClick                 }
+  {Dir2              dir2                             Dir2                                    }
+  {String8           string                           String                                  }
+  {String8           cmd_name                         CmdName                                 }
+  {`WM_Event *`      wm_event                         WMEvent                                 }
 }
 
 @enum RD_RegSlot:
@@ -945,7 +945,7 @@ RD_CmdTable:    //               |        |              |                |     
   {RunExternalDriverTextCommand   0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  1  1                                                           Null                  "run_ext_driver_text_command" "Run External Driver Text Command"            ""                                                                                                                 ""                               ""                                                               }
   
   //- rjf: os event passthrough
-  {OSEvent                        0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "os_event"                    "OS Event"                                    ""                                                                                                                 ""                               ""                                                               }
+  {WMEvent                        0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "wm_event"                    "OS Event"                                    ""                                                                                                                 ""                               ""                                                               }
   
   //- rjf: thread/frame selection
   {SelectThread                   1        1              0                0               "query:threads"                                  Thread             null              Nil                     Thread     0  0  0  0  0  1  1                                                           Thread                "select_thread"               "Select Thread"                               "Selects a thread."                                                                                                ""                               ""                                                               }
@@ -1437,7 +1437,7 @@ RD_DefaultBindingTable:
 
 @data(`struct {String8 string; CFG_Binding binding;}`) @c_file rd_default_binding_table:
 {
-  @expand(RD_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_Modifier_Ctrl`) $(a.shift != 0 -> `|OS_Modifier_Shift`) $(a.alt != 0 -> `|OS_Modifier_Alt`)}}```;
+  @expand(RD_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {WM_Key_$(a.key), 0 $(a.ctrl != 0 -> `|WM_Modifier_Ctrl`) $(a.shift != 0 -> `|WM_Modifier_Shift`) $(a.alt != 0 -> `|WM_Modifier_Alt`)}}```;
 }
 
 ////////////////////////////////

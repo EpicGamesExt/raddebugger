@@ -39,10 +39,10 @@ frame(void)
   ProfBeginFunction();
   B32 quit = 0;
   Temp scratch = scratch_begin(0, 0);
-  OS_EventList events = os_get_events(scratch.arena, 0);
-  for(OS_Event *evt = events.first; evt != 0; evt = evt->next)
+  WM_EventList events = wm_get_events(scratch.arena, 0);
+  for(WM_Event *evt = events.first; evt != 0; evt = evt->next)
   {
-    if(evt->kind == OS_EventKind_WindowClose)
+    if(evt->kind == WM_EventKind_WindowClose)
     {
       quit = 1;
       break;
@@ -54,7 +54,7 @@ frame(void)
   DR_Bucket *bucket = dr_bucket_make();
   DR_BucketScope(bucket) ProfScope("draw")
   {
-    Vec2F32 mouse = os_mouse_from_window(os_window);
+    Vec2F32 mouse = wm_mouse_from_window(os_window);
     FNT_Tag font = fnt_tag_from_path(str8_lit("C:/devel/raddebugger/data/Inconsolata-Regular.ttf"));
     for(F32 x = 0; x < 500; x += 5.f)
     {
@@ -75,8 +75,8 @@ frame(void)
 internal void
 entry_point(CmdLine *cmdline)
 {
-  os_window = os_window_open(r2f32p(0, 0, 1600, 900), OS_WindowFlag_UseDefaultPosition, str8_lit("textperf"));
+  os_window = wm_window_open(r2f32p(0, 0, 1600, 900), WM_WindowFlag_UseDefaultPosition, str8_lit("textperf"));
   r_window = r_window_equip(os_window);
-  os_window_first_paint(os_window);
+  wm_window_first_paint(os_window);
   for(;!update(););
 }

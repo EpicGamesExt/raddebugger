@@ -62,7 +62,7 @@ internal Vec4F32 ui_top_background_color(void) { UI_StackTopImpl(ui_state, Backg
 internal Vec4F32 ui_top_text_color(void) { UI_StackTopImpl(ui_state, TextColor, text_color) }
 internal Vec4F32 ui_top_border_color(void) { UI_StackTopImpl(ui_state, BorderColor, border_color) }
 internal F32 ui_top_squish(void) { UI_StackTopImpl(ui_state, Squish, squish) }
-internal OS_Cursor ui_top_hover_cursor(void) { UI_StackTopImpl(ui_state, HoverCursor, hover_cursor) }
+internal WM_Cursor ui_top_hover_cursor(void) { UI_StackTopImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_top_font(void) { UI_StackTopImpl(ui_state, Font, font) }
 internal F32 ui_top_font_size(void) { UI_StackTopImpl(ui_state, FontSize, font_size) }
 internal FNT_RasterFlags ui_top_text_raster_flags(void) { UI_StackTopImpl(ui_state, TextRasterFlags, text_raster_flags) }
@@ -96,7 +96,7 @@ internal Vec4F32 ui_bottom_background_color(void) { UI_StackBottomImpl(ui_state,
 internal Vec4F32 ui_bottom_text_color(void) { UI_StackBottomImpl(ui_state, TextColor, text_color) }
 internal Vec4F32 ui_bottom_border_color(void) { UI_StackBottomImpl(ui_state, BorderColor, border_color) }
 internal F32 ui_bottom_squish(void) { UI_StackBottomImpl(ui_state, Squish, squish) }
-internal OS_Cursor ui_bottom_hover_cursor(void) { UI_StackBottomImpl(ui_state, HoverCursor, hover_cursor) }
+internal WM_Cursor ui_bottom_hover_cursor(void) { UI_StackBottomImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_bottom_font(void) { UI_StackBottomImpl(ui_state, Font, font) }
 internal F32 ui_bottom_font_size(void) { UI_StackBottomImpl(ui_state, FontSize, font_size) }
 internal FNT_RasterFlags ui_bottom_text_raster_flags(void) { UI_StackBottomImpl(ui_state, TextRasterFlags, text_raster_flags) }
@@ -130,7 +130,7 @@ internal Vec4F32 ui_push_background_color(Vec4F32 v) { UI_StackPushImpl(ui_state
 internal Vec4F32 ui_push_text_color(Vec4F32 v) { UI_StackPushImpl(ui_state, TextColor, text_color, Vec4F32, v) }
 internal Vec4F32 ui_push_border_color(Vec4F32 v) { UI_StackPushImpl(ui_state, BorderColor, border_color, Vec4F32, v) }
 internal F32 ui_push_squish(F32 v) { UI_StackPushImpl(ui_state, Squish, squish, F32, v) }
-internal OS_Cursor ui_push_hover_cursor(OS_Cursor v) { UI_StackPushImpl(ui_state, HoverCursor, hover_cursor, OS_Cursor, v) }
+internal WM_Cursor ui_push_hover_cursor(WM_Cursor v) { UI_StackPushImpl(ui_state, HoverCursor, hover_cursor, WM_Cursor, v) }
 internal FNT_Tag ui_push_font(FNT_Tag v) { UI_StackPushImpl(ui_state, Font, font, FNT_Tag, v) }
 internal F32 ui_push_font_size(F32 v) { UI_StackPushImpl(ui_state, FontSize, font_size, F32, v) }
 internal FNT_RasterFlags ui_push_text_raster_flags(FNT_RasterFlags v) { UI_StackPushImpl(ui_state, TextRasterFlags, text_raster_flags, FNT_RasterFlags, v) }
@@ -164,7 +164,7 @@ internal Vec4F32 ui_pop_background_color(void) { UI_StackPopImpl(ui_state, Backg
 internal Vec4F32 ui_pop_text_color(void) { UI_StackPopImpl(ui_state, TextColor, text_color) }
 internal Vec4F32 ui_pop_border_color(void) { UI_StackPopImpl(ui_state, BorderColor, border_color) }
 internal F32 ui_pop_squish(void) { UI_StackPopImpl(ui_state, Squish, squish) }
-internal OS_Cursor ui_pop_hover_cursor(void) { UI_StackPopImpl(ui_state, HoverCursor, hover_cursor) }
+internal WM_Cursor ui_pop_hover_cursor(void) { UI_StackPopImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_pop_font(void) { UI_StackPopImpl(ui_state, Font, font) }
 internal F32 ui_pop_font_size(void) { UI_StackPopImpl(ui_state, FontSize, font_size) }
 internal FNT_RasterFlags ui_pop_text_raster_flags(void) { UI_StackPopImpl(ui_state, TextRasterFlags, text_raster_flags) }
@@ -198,7 +198,7 @@ internal Vec4F32 ui_set_next_background_color(Vec4F32 v) { UI_StackSetNextImpl(u
 internal Vec4F32 ui_set_next_text_color(Vec4F32 v) { UI_StackSetNextImpl(ui_state, TextColor, text_color, Vec4F32, v) }
 internal Vec4F32 ui_set_next_border_color(Vec4F32 v) { UI_StackSetNextImpl(ui_state, BorderColor, border_color, Vec4F32, v) }
 internal F32 ui_set_next_squish(F32 v) { UI_StackSetNextImpl(ui_state, Squish, squish, F32, v) }
-internal OS_Cursor ui_set_next_hover_cursor(OS_Cursor v) { UI_StackSetNextImpl(ui_state, HoverCursor, hover_cursor, OS_Cursor, v) }
+internal WM_Cursor ui_set_next_hover_cursor(WM_Cursor v) { UI_StackSetNextImpl(ui_state, HoverCursor, hover_cursor, WM_Cursor, v) }
 internal FNT_Tag ui_set_next_font(FNT_Tag v) { UI_StackSetNextImpl(ui_state, Font, font, FNT_Tag, v) }
 internal F32 ui_set_next_font_size(F32 v) { UI_StackSetNextImpl(ui_state, FontSize, font_size, F32, v) }
 internal FNT_RasterFlags ui_set_next_text_raster_flags(FNT_RasterFlags v) { UI_StackSetNextImpl(ui_state, TextRasterFlags, text_raster_flags, FNT_RasterFlags, v) }

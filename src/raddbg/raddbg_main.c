@@ -250,7 +250,7 @@
 
 #define DMN_INIT_MANUAL 1
 #define D_INIT_MANUAL 1
-#define OS_GFX_INIT_MANUAL 1
+#define WM_INIT_MANUAL 1
 #define FP_INIT_MANUAL 1
 #define R_INIT_MANUAL 1
 #define FNT_INIT_MANUAL 1
@@ -430,7 +430,7 @@ ipc_signaler_thread__entry_point(void *p)
           cond_var_wait(ipc_s2m_ring_cv, ipc_s2m_ring_mutex, max_U64);
         }
         cond_var_broadcast(ipc_s2m_ring_cv);
-        os_send_wakeup_event();
+        wm_send_wakeup_event();
         ipc_info->msg_size = 0;
         semaphore_drop(ipc_sender2main_lock_semaphore);
       }
@@ -443,7 +443,7 @@ ipc_signaler_thread__entry_point(void *p)
 
 internal D_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
 {
-  os_send_wakeup_event();
+  wm_send_wakeup_event();
 }
 
 ////////////////////////////////
@@ -544,7 +544,7 @@ entry_point(CmdLine *cmd_line)
       {
         dmn_init();
         d_init();
-        os_gfx_init();
+        wm_init();
         fp_init();
         r_init(cmd_line);
         fnt_init();
@@ -621,7 +621,7 @@ entry_point(CmdLine *cmd_line)
               RD_WindowState *dst_ws = rd_state->first_window_state;
               for(RD_WindowState *ws = dst_ws; ws != &rd_nil_window_state; ws = ws->order_next)
               {
-                if(os_window_is_focused(ws->os))
+                if(wm_window_is_focused(ws->os))
                 {
                   dst_ws = ws;
                   break;
@@ -810,7 +810,7 @@ entry_point(CmdLine *cmd_line)
     //- rjf: help message box
     case ExecMode_Help:
     {
-      os_graphical_message(0,
+      wm_graphical_message(0,
                            str8_lit("The RAD Debugger - Help"),
                            str8_lit("The following options may be used when starting the RAD Debugger from the command line:\n\n"
                                     "--user:<path>\n"

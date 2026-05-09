@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 os_g_key_display_string_table[143] =
+String8 wm_key_display_name_table[143] =
 {
 str8_lit_comp("Invalid Key"),
 str8_lit_comp("Escape"),
@@ -151,7 +151,7 @@ str8_lit_comp("Middle Mouse Button"),
 str8_lit_comp("Right Mouse Button"),
 };
 
-String8 os_g_key_cfg_string_table[143] =
+String8 wm_key_cfg_name_table[143] =
 {
 str8_lit_comp("null"),
 str8_lit_comp("esc"),

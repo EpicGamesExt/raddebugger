@@ -6,7 +6,7 @@
 
 #include "config_core.h"
 #include "config_panels.h"
-#if defined(OS_GFX_H)
+#if defined(WINDOW_MANAGER_H)
 # include "config_bindings.h"
 #endif
 

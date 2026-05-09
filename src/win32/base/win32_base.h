@@ -28,8 +28,8 @@
 ////////////////////////////////
 //~ rjf: File Iterator Types
 
-typedef struct OS_W32_FileIter OS_W32_FileIter;
-struct OS_W32_FileIter
+typedef struct W32_FileIter W32_FileIter;
+struct W32_FileIter
 {
   HANDLE handle;
   WIN32_FIND_DATAW find_data;
@@ -37,27 +37,27 @@ struct OS_W32_FileIter
   String8Array drive_strings;
   U64 drive_strings_iter_idx;
 };
-StaticAssert(sizeof(Member(FileIter, memory)) >= sizeof(OS_W32_FileIter), file_iter_memory_size);
+StaticAssert(sizeof(Member(FileIter, memory)) >= sizeof(W32_FileIter), file_iter_memory_size);
 
 ////////////////////////////////
 //~ rjf: Entity Types
 
-typedef enum OS_W32_EntityKind
+typedef enum W32_EntityKind
 {
-  OS_W32_EntityKind_Null,
-  OS_W32_EntityKind_Thread,
-  OS_W32_EntityKind_Mutex,
-  OS_W32_EntityKind_RWMutex,
-  OS_W32_EntityKind_ConditionVariable,
-  OS_W32_EntityKind_Barrier,
+  W32_EntityKind_Null,
+  W32_EntityKind_Thread,
+  W32_EntityKind_Mutex,
+  W32_EntityKind_RWMutex,
+  W32_EntityKind_ConditionVariable,
+  W32_EntityKind_Barrier,
 }
-OS_W32_EntityKind;
+W32_EntityKind;
 
-typedef struct OS_W32_Entity OS_W32_Entity;
-struct OS_W32_Entity
+typedef struct W32_Entity W32_Entity;
+struct W32_Entity
 {
-  OS_W32_Entity *next;
-  OS_W32_EntityKind kind;
+  W32_Entity *next;
+  W32_EntityKind kind;
   union
   {
     struct
@@ -77,8 +77,8 @@ struct OS_W32_Entity
 ////////////////////////////////
 //~ rjf: State
 
-typedef struct OS_W32_State OS_W32_State;
-struct OS_W32_State
+typedef struct W32_State W32_State;
+struct W32_State
 {
   Arena *arena;
   
@@ -90,37 +90,37 @@ struct OS_W32_State
   // rjf: entity storage
   CRITICAL_SECTION entity_mutex;
   Arena *entity_arena;
-  OS_W32_Entity *entity_free;
+  W32_Entity *entity_free;
 };
 
 ////////////////////////////////
 //~ rjf: Globals
 
-global OS_W32_State os_w32_state = {0};
+global W32_State w32_state = {0};
 
 ////////////////////////////////
 //~ rjf: File Info Conversion Helpers
 
-internal FilePropertyFlags os_w32_file_property_flags_from_dwFileAttributes(DWORD dwFileAttributes);
-internal void os_w32_file_properties_from_attribute_data(FileProperties *properties, WIN32_FILE_ATTRIBUTE_DATA *attributes);
+internal FilePropertyFlags w32_file_property_flags_from_dwFileAttributes(DWORD dwFileAttributes);
+internal void w32_file_properties_from_attribute_data(FileProperties *properties, WIN32_FILE_ATTRIBUTE_DATA *attributes);
 
 ////////////////////////////////
 //~ rjf: Time Conversion Helpers
 
-internal void os_w32_date_time_from_system_time(DateTime *out, SYSTEMTIME *in);
-internal void os_w32_system_time_from_date_time(SYSTEMTIME *out, DateTime *in);
-internal void os_w32_dense_time_from_file_time(DenseTime *out, FILETIME *in);
-internal U32 os_w32_sleep_ms_from_endt_us(U64 endt_us);
+internal void w32_date_time_from_system_time(DateTime *out, SYSTEMTIME *in);
+internal void w32_system_time_from_date_time(SYSTEMTIME *out, DateTime *in);
+internal void w32_dense_time_from_file_time(DenseTime *out, FILETIME *in);
+internal U32 w32_sleep_ms_from_endt_us(U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Entity Functions
 
-internal OS_W32_Entity *os_w32_entity_alloc(OS_W32_EntityKind kind);
-internal void os_w32_entity_release(OS_W32_Entity *entity);
+internal W32_Entity *w32_entity_alloc(W32_EntityKind kind);
+internal void w32_entity_release(W32_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Thread Entry Point
 
-internal DWORD os_w32_thread_entry_point(void *ptr);
+internal DWORD w32_thread_entry_point(void *ptr);
 
 #endif // WIN32_BASE_H

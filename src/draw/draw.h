@@ -134,7 +134,7 @@ internal Vec2F32 dr_dim_from_fstrs(F32 tab_size_px, DR_FStrList *fstrs);
 // (Frame boundaries & bucket submission)
 
 internal void dr_begin_frame(FNT_Tag icon_font);
-internal void dr_submit_bucket(OS_Window os_window, R_Handle r_window, DR_Bucket *bucket);
+internal void dr_submit_bucket(WM_Window os_window, R_Handle r_window, DR_Bucket *bucket);
 
 ////////////////////////////////
 //~ rjf: Bucket Construction & Selection API

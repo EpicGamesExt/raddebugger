@@ -78,8 +78,8 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)
   d_init();
 #endif
-#if defined(OS_GFX_H) && !defined(OS_GFX_INIT_MANUAL)
-  os_gfx_init();
+#if defined(WINDOW_MANAGER_H) && !defined(WM_INIT_MANUAL)
+  wm_init();
 #endif
 #if defined(FONT_PROVIDER_H) && !defined(FP_INIT_MANUAL)
   fp_init();

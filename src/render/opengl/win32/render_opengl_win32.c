@@ -101,10 +101,10 @@ r_ogl_os_init(CmdLine *cmdline)
 }
 
 internal R_Handle
-r_ogl_os_window_equip(OS_Window window)
+r_ogl_os_window_equip(WM_Window window)
 {
   //- rjf: unpack window
-  OS_W32_Window *w = os_w32_window_from_handle(window);
+  W32_WM_Window *w = w32_wm_window_from_handle(window);
   HWND hwnd = w->hwnd;
   HDC hdc = w->hdc;
   
@@ -155,14 +155,14 @@ r_ogl_os_window_equip(OS_Window window)
 }
 
 internal void
-r_ogl_os_window_unequip(OS_Window os, R_Handle r)
+r_ogl_os_window_unequip(WM_Window os, R_Handle r)
 {
 }
 
 internal void
-r_ogl_os_select_window(OS_Window os, R_Handle r)
+r_ogl_os_select_window(WM_Window os, R_Handle r)
 {
-  OS_W32_Window *w = os_w32_window_from_handle(os);
+  W32_WM_Window *w = w32_wm_window_from_handle(os);
   if(w != 0)
   {
     HWND hwnd = w->hwnd;
@@ -172,9 +172,9 @@ r_ogl_os_select_window(OS_Window os, R_Handle r)
 }
 
 internal void
-r_ogl_os_window_swap(OS_Window os, R_Handle r)
+r_ogl_os_window_swap(WM_Window os, R_Handle r)
 {
-  OS_W32_Window *w = os_w32_window_from_handle(os);
+  W32_WM_Window *w = w32_wm_window_from_handle(os);
   if(w != 0)
   {
     HDC dc = w->hdc;

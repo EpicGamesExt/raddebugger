@@ -5,7 +5,7 @@
 //~ rjf: Tables
 
 @table(name, display_string, cfg_string)
-OS_KeyTable:
+WM_KeyTable:
 {
   {Null                 "Invalid Key"            "null"                                }
   {Esc                  "Escape"                 "esc"                                 }
@@ -155,18 +155,18 @@ OS_KeyTable:
 ////////////////////////////////
 //~ rjf: Generators
 
-@enum OS_Key:
+@enum WM_Key:
 {
-  @expand(OS_KeyTable a) `$(a.name)`,
+  @expand(WM_KeyTable a) `$(a.name)`,
   COUNT,
 }
 
-@data(String8) os_g_key_display_string_table:
+@data(String8) wm_key_display_name_table:
 {
-  @expand(OS_KeyTable a) `str8_lit_comp("$(a.display_string)")`;
+  @expand(WM_KeyTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@data(String8) os_g_key_cfg_string_table:
+@data(String8) wm_key_cfg_name_table:
 {
-  @expand(OS_KeyTable a) `str8_lit_comp("$(a.cfg_string)")`;
+  @expand(WM_KeyTable a) `str8_lit_comp("$(a.cfg_string)")`;
 }

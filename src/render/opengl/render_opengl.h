@@ -224,9 +224,9 @@ internal void r_ogl_debug_message_callback(GLenum source, GLenum type, GLuint id
 
 internal VoidProc *r_ogl_os_load_procedure(char *name);
 internal void r_ogl_os_init(CmdLine *cmdln);
-internal R_Handle r_ogl_os_window_equip(OS_Window window);
-internal void r_ogl_os_window_unequip(OS_Window os, R_Handle r);
-internal void r_ogl_os_select_window(OS_Window os, R_Handle r);
-internal void r_ogl_os_window_swap(OS_Window os, R_Handle r);
+internal R_Handle r_ogl_os_window_equip(WM_Window window);
+internal void r_ogl_os_window_unequip(WM_Window os, R_Handle r);
+internal void r_ogl_os_select_window(WM_Window os, R_Handle r);
+internal void r_ogl_os_window_swap(WM_Window os, R_Handle r);
 
 #endif // RENDER_OPENGL_H

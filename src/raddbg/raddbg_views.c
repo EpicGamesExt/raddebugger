@@ -641,7 +641,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     }
     
     //- rjf: ctrl+pressed? -> go to name
-    if(ui_pressed(sig.base) && sig.base.event_flags & OS_Modifier_Ctrl)
+    if(ui_pressed(sig.base) && sig.base.event_flags & WM_Modifier_Ctrl)
     {
       ui_kill_action();
       rd_cmd(RD_CmdKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
@@ -792,7 +792,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     {
       for(UI_Event *evt = 0; ui_next_event(&evt);)
       {
-        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_Modifier_Ctrl && evt->modifiers & OS_Modifier_Shift)
+        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & WM_Modifier_Ctrl && evt->modifiers & WM_Modifier_Shift)
         {
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
@@ -2888,7 +2888,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               }
             }
             String8 data_textified = str8_list_join(scratch.arena, &data_textified_parts, 0);
-            os_set_clipboard_text(data_textified);
+            wm_set_clipboard_text(data_textified);
           }
           good_action = 1;
         }
@@ -4089,7 +4089,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     {
       for(UI_Event *evt = 0; ui_next_event(&evt);)
       {
-        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_Modifier_Ctrl)
+        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & WM_Modifier_Ctrl)
         {
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)

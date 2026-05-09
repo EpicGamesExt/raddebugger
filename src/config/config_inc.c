@@ -3,6 +3,6 @@
 
 #include "config_core.c"
 #include "config_panels.c"
-#if defined(OS_GFX_H)
+#if defined(WINDOW_MANAGER_H)
 # include "config_bindings.c"
 #endif

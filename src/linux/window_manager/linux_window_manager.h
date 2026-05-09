@@ -17,11 +17,11 @@
 ////////////////////////////////
 //~ rjf: Window State
 
-typedef struct OS_LNX_Window OS_LNX_Window;
-struct OS_LNX_Window
+typedef struct LNX_WM_Window LNX_WM_Window;
+struct LNX_WM_Window
 {
-  OS_LNX_Window *next;
-  OS_LNX_Window *prev;
+  LNX_WM_Window *next;
+  LNX_WM_Window *prev;
   Window window;
   XIC xic;
   XID counter_xid;
@@ -31,31 +31,31 @@ struct OS_LNX_Window
 ////////////////////////////////
 //~ rjf: State Bundle
 
-typedef struct OS_LNX_GfxState OS_LNX_GfxState;
-struct OS_LNX_GfxState
+typedef struct LNX_WM_GfxState LNX_WM_GfxState;
+struct LNX_WM_GfxState
 {
   Arena *arena;
   Display *display;
   XIM xim;
-  OS_LNX_Window *first_window;
-  OS_LNX_Window *last_window;
-  OS_LNX_Window *free_window;
+  LNX_WM_Window *first_window;
+  LNX_WM_Window *last_window;
+  LNX_WM_Window *free_window;
   Atom wm_delete_window_atom;
   Atom wm_sync_request_atom;
   Atom wm_sync_request_counter_atom;
-  Cursor cursors[OS_Cursor_COUNT];
-  OS_Cursor last_set_cursor;
-  OS_GfxInfo gfx_info;
+  Cursor cursors[WM_Cursor_COUNT];
+  WM_Cursor last_set_cursor;
+  WM_SystemInfo gfx_info;
 };
 
 ////////////////////////////////
 //~ rjf: Globals
 
-global OS_LNX_GfxState *os_lnx_gfx_state = 0;
+global LNX_WM_GfxState *os_lnx_gfx_state = 0;
 
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal OS_LNX_Window *os_lnx_window_from_x11window(Window window);
+internal LNX_WM_Window *os_lnx_window_from_x11window(Window window);
 
 #endif // OS_GFX_LINUX_H

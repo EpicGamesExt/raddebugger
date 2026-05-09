@@ -198,7 +198,7 @@ r_init(CmdLine *cmdln)
   {
     char buffer[256] = {0};
     raddbg_snprintf(buffer, sizeof(buffer), "D3D11 device creation failure (%lx). The process is terminating.", error);
-    os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+    wm_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     abort_self(1);
   }
   ProfEnd();
@@ -370,7 +370,7 @@ r_init(CmdLine *cmdln)
       {
         errors = str8((U8 *)vshad_source_errors->lpVtbl->GetBufferPointer(vshad_source_errors),
                       (U64)vshad_source_errors->lpVtbl->GetBufferSize(vshad_source_errors));
-        os_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), errors);
+        wm_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), errors);
       }
       else
       {
@@ -425,7 +425,7 @@ r_init(CmdLine *cmdln)
       {
         errors = str8((U8 *)pshad_source_errors->lpVtbl->GetBufferPointer(pshad_source_errors),
                       (U64)pshad_source_errors->lpVtbl->GetBufferSize(pshad_source_errors));
-        os_graphical_message(1, str8_lit("Pixel Shader Compilation Failure"), errors);
+        wm_graphical_message(1, str8_lit("Pixel Shader Compilation Failure"), errors);
       }
       else
       {
@@ -483,7 +483,7 @@ r_init(CmdLine *cmdln)
 //- rjf: window setup/teardown
 
 r_hook R_Handle
-r_window_equip(OS_Window handle)
+r_window_equip(WM_Window handle)
 {
   ProfBeginFunction();
   R_Handle result = {0};
@@ -509,8 +509,8 @@ r_window_equip(OS_Window handle)
     //- rjf: map os window handle -> hwnd
     HWND hwnd = {0};
     {
-      OS_W32_Window *w32_layer_window = os_w32_window_from_handle(handle);
-      hwnd = os_w32_hwnd_from_window(w32_layer_window);
+      W32_WM_Window *w32_layer_window = w32_wm_window_from_handle(handle);
+      hwnd = w32_wm_hwnd_from_window(w32_layer_window);
     }
     
     //- rjf: create swapchain
@@ -534,7 +534,7 @@ r_window_equip(OS_Window handle)
     {
       char buffer[256] = {0};
       raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%lx). The process is terminating.", error);
-      os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      wm_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       abort_self(1);
     }
     
@@ -556,7 +556,7 @@ r_window_equip(OS_Window handle)
 }
 
 r_hook void
-r_window_unequip(OS_Window handle, R_Handle equip_handle)
+r_window_unequip(WM_Window handle, R_Handle equip_handle)
 {
   ProfBeginFunction();
   MutexScopeW(r_d3d11_state->device_rw_mutex)
@@ -861,7 +861,7 @@ r_end_frame(void)
 }
 
 r_hook void
-r_window_begin_frame(OS_Window window, R_Handle window_equip)
+r_window_begin_frame(WM_Window window, R_Handle window_equip)
 {
   ProfBeginFunction();
   MutexScopeW(r_d3d11_state->device_rw_mutex)
@@ -870,7 +870,7 @@ r_window_begin_frame(OS_Window window, R_Handle window_equip)
     ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
     
     //- rjf: get resolution
-    Rng2F32 client_rect = os_client_rect_from_window(window);
+    Rng2F32 client_rect = wm_client_rect_from_window(window);
     Vec2S32 resolution = {(S32)(client_rect.x1 - client_rect.x0), (S32)(client_rect.y1 - client_rect.y0)};
     
     //- rjf: resolution change
@@ -993,7 +993,7 @@ r_window_begin_frame(OS_Window window, R_Handle window_equip)
 }
 
 r_hook void
-r_window_end_frame(OS_Window window, R_Handle window_equip)
+r_window_end_frame(WM_Window window, R_Handle window_equip)
 {
   ProfBeginFunction();
   MutexScopeW(r_d3d11_state->device_rw_mutex)
@@ -1052,7 +1052,7 @@ r_window_end_frame(OS_Window window, R_Handle window_equip)
     {
       char buffer[256] = {0};
       raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%lx). The process is terminating.", error);
-      os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      wm_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       abort_self(1);
     }
     d_ctx->lpVtbl->ClearState(d_ctx);
@@ -1063,7 +1063,7 @@ r_window_end_frame(OS_Window window, R_Handle window_equip)
 //- rjf: render pass submission
 
 r_hook void
-r_window_submit(OS_Window window, R_Handle window_equip, R_PassList *passes)
+r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
 {
   ProfBeginFunction();
   MutexScopeW(r_d3d11_state->device_rw_mutex)

@@ -7,8 +7,8 @@
 typedef struct CFG_Binding CFG_Binding;
 struct CFG_Binding
 {
-  OS_Key key;
-  OS_Modifiers modifiers;
+  WM_Key key;
+  WM_Modifiers modifiers;
 };
 
 typedef struct CFG_KeyMapNode CFG_KeyMapNode;

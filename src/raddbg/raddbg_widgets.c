@@ -783,9 +783,9 @@ rd_cmd_binding_buttons(String8 name, String8 filter, B32 add_new)
     //- rjf: form binding string
     String8 keybinding_str = {0};
     {
-      if(binding.key != OS_Key_Null)
+      if(binding.key != WM_Key_Null)
       {
-        keybinding_str = os_string_from_modifiers_key(scratch.arena, binding.modifiers, binding.key);
+        keybinding_str = wm_string_from_modifiers_key(scratch.arena, binding.modifiers, binding.key);
       }
       else
       {
@@ -820,7 +820,7 @@ rd_cmd_binding_buttons(String8 name, String8 filter, B32 add_new)
       // rjf: click => toggle activity
       if(!rd_state->bind_change_active && ui_clicked(sig))
       {
-        if((binding.key == OS_Key_Esc || binding.key == OS_Key_Delete) && binding.modifiers == 0)
+        if((binding.key == WM_Key_Esc || binding.key == WM_Key_Delete) && binding.modifiers == 0)
         {
           log_user_error(str8_lit("Cannot rebind; this command uses a reserved keybinding."));
         }
@@ -1262,7 +1262,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   D_Event stop_event = d_ctrl_last_stop_event();
   D_Entity *stopper_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
-  B32 ctrlified = (os_get_modifiers() & OS_Modifier_Ctrl);
+  B32 ctrlified = (wm_get_modifiers() & WM_Modifier_Ctrl);
   Vec4F32 code_line_bgs[] =
   {
     ui_color_from_name(str8_lit("line_info_0")),
@@ -1406,7 +1406,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num += 1, line_idx += 1)
       {
         D_EntityList line_ips  = params->line_ips[line_idx];
-        ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+        ui_set_next_hover_cursor(WM_Cursor_HandPoint);
         UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
         {
@@ -1455,7 +1455,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             }
             
             // rjf: build thread box
-            ui_set_next_hover_cursor(OS_Cursor_UpDownLeftRight);
+            ui_set_next_hover_cursor(WM_Cursor_UpDownLeftRight);
             ui_set_next_font(rd_font_from_slot(RD_FontSlot_Icons));
             ui_set_next_font_size(params->font_size);
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
@@ -1561,7 +1561,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         D_EntityList line_ips = params->line_ips[line_idx];
         CFG_NodePtrList line_bps = params->line_bps[line_idx];
         CFG_NodePtrList line_pins = params->line_pins[line_idx];
-        ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+        ui_set_next_hover_cursor(WM_Cursor_HandPoint);
         ui_set_next_background_color(v4f32(0, 0, 0, 0));
         UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
@@ -1611,7 +1611,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             }
             
             // rjf: build thread box
-            ui_set_next_hover_cursor(OS_Cursor_UpDownLeftRight);
+            ui_set_next_hover_cursor(WM_Cursor_UpDownLeftRight);
             ui_set_next_font(rd_font_from_slot(RD_FontSlot_Icons));
             ui_set_next_font_size(params->font_size);
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
@@ -1760,7 +1760,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             }
             
             // rjf: shift+click => enable breakpoint
-            if(ui_clicked(bp_sig) && bp_sig.event_flags & OS_Modifier_Shift)
+            if(ui_clicked(bp_sig) && bp_sig.event_flags & WM_Modifier_Shift)
             {
               rd_cmd(bp_is_disabled ? RD_CmdKind_EnableCfg : RD_CmdKind_DisableCfg, .cfg = bp->id);
             }
@@ -1914,7 +1914,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   UI_Box *text_container_box = &ui_nil_box;
   UI_Parent(top_container_box) UI_Focus(UI_FocusKind_Off)
   {
-    ui_set_next_hover_cursor(ctrlified ? OS_Cursor_HandPoint : OS_Cursor_IBar);
+    ui_set_next_hover_cursor(ctrlified ? WM_Cursor_HandPoint : WM_Cursor_IBar);
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     text_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable), str8_lit("text_container"));
   }
@@ -3049,7 +3049,7 @@ rd_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
     if(evt->flags & UI_EventFlag_Copy)
     {
       String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(*cursor, *mark));
-      os_set_clipboard_text(text);
+      wm_set_clipboard_text(text);
       taken = 1;
     }
     
@@ -3447,7 +3447,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //
   if(is_focus_active || is_focus_active_disabled)
   {
-    ui_set_next_hover_cursor(OS_Cursor_IBar);
+    ui_set_next_hover_cursor(WM_Cursor_IBar);
   }
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
                                       (!!build_lhs_name_desc*UI_BoxFlag_DisableFocusBorder)|
@@ -3807,7 +3807,7 @@ rd_cell(RD_CellParams *params, String8 string)
     {
       F32 extratoggler_padding_px = floor_f32(ui_top_font_size()*0.35f);
       F32 toggler_size_px = ceil_f32(height_px - extratoggler_padding_px*2.f) - 1.f;
-      ui_set_next_hover_cursor(OS_Cursor_LeftRight);
+      ui_set_next_hover_cursor(WM_Cursor_LeftRight);
       UI_Box *slider_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "slider");
       UI_Parent(slider_box) UI_TagF("pop")
       {
@@ -3883,7 +3883,7 @@ rd_cell(RD_CellParams *params, String8 string)
     {
       if(evt->flags & UI_EventFlag_Copy)
       {
-        os_set_clipboard_text(params->pre_edit_value);
+        wm_set_clipboard_text(params->pre_edit_value);
       }
       if(evt->flags & UI_EventFlag_Delete)
       {
@@ -4003,7 +4003,7 @@ rd_cell(RD_CellParams *params, String8 string)
       // rjf: perform copy
       if(op.flags & UI_TxtOpFlag_Copy)
       {
-        os_set_clipboard_text(op.copy);
+        wm_set_clipboard_text(op.copy);
       }
       
       // rjf: commit op's changed cursor & mark to caller-provided state

@@ -283,7 +283,7 @@ struct RD_WindowState
   
   // rjf: top-level info & handles
   Arena *arena;
-  OS_Window os;
+  WM_Window os;
   R_Handle r;
   UI_State *ui;
   F32 last_dpi;
@@ -543,7 +543,7 @@ struct RD_State
   String8 bind_change_cmd_name;
   
   // rjf: pre-stop focused window
-  OS_ExternalWindow prestop_focused_window;
+  WM_ExtWindow prestop_focused_window;
 };
 
 ////////////////////////////////
@@ -730,7 +730,7 @@ internal void rd_store_view_paramf(String8 key, char *fmt, ...);
 internal String8 rd_push_window_title(Arena *arena);
 internal CFG_Node *rd_window_from_cfg(CFG_Node *cfg);
 internal RD_WindowState *rd_window_state_from_cfg(CFG_Node *cfg);
-internal RD_WindowState *rd_window_state_from_os_handle(OS_Window os);
+internal RD_WindowState *rd_window_state_from_os_handle(WM_Window os);
 internal void rd_window_frame(void);
 
 ////////////////////////////////

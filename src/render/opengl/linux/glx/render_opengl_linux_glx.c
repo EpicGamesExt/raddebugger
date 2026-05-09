@@ -20,7 +20,7 @@ r_ogl_os_init(CmdLine *cmdln)
   {
     Temp scratch = scratch_begin(0, 0);
     String8 message = push_str8f(scratch.arena, "Unsupported GLX version (%i.%i, need at least 1.3)", glx_version_major, glx_version_minor);
-    os_graphical_message(1, str8_lit("Fatal Error"), message);
+    wm_graphical_message(1, str8_lit("Fatal Error"), message);
     abort_self(1);
     scratch_end(scratch);
   }
@@ -45,7 +45,7 @@ r_ogl_os_init(CmdLine *cmdln)
   GLXFBConfig *framebuffer_configs = glXChooseFBConfig(os_lnx_gfx_state->display, DefaultScreen(os_lnx_gfx_state->display), framebuffer_config_options, &framebuffer_configs_count);
   if(framebuffer_configs == 0)
   {
-    os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Could not find a suitable framebuffer configuration."));
+    wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Could not find a suitable framebuffer configuration."));
     abort_self(1);
   }
   GLXFBConfig framebuffer_config = framebuffer_configs[0];
@@ -79,28 +79,28 @@ r_ogl_os_init(CmdLine *cmdln)
 }
 
 internal R_Handle
-r_ogl_os_window_equip(OS_Window window)
+r_ogl_os_window_equip(WM_Window window)
 {
   R_Handle result = {0};
   return result;
 }
 
 internal void
-r_ogl_os_window_unequip(OS_Window os, R_Handle r)
+r_ogl_os_window_unequip(WM_Window os, R_Handle r)
 {
   
 }
 
 internal void
-r_ogl_os_select_window(OS_Window os, R_Handle r)
+r_ogl_os_select_window(WM_Window os, R_Handle r)
 {
-  OS_LNX_Window *w = (OS_LNX_Window *)os.u64[0];
+  LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
   glXMakeCurrent(os_lnx_gfx_state->display, w->window, r_ogl_lnx_ctx);
 }
 
 internal void
-r_ogl_os_window_swap(OS_Window os, R_Handle r)
+r_ogl_os_window_swap(WM_Window os, R_Handle r)
 {
-  OS_LNX_Window *w = (OS_LNX_Window *)os.u64[0];
+  LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
   glXSwapBuffers(os_lnx_gfx_state->display, w->window);
 }

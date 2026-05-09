@@ -41,7 +41,7 @@ typedef struct timespec timespec;
 ////////////////////////////////
 //~ rjf: Linux Call Interruption Retry Helper
 
-#define OS_LNX_RETRY_ON_EINTR(expr)          \
+#define LNX_RETRY_ON_EINTR(expr)          \
 (__extension__({                           \
 __typeof__(expr) __ret;                    \
 do {                                       \
@@ -54,22 +54,22 @@ __ret;                                     \
 ////////////////////////////////
 //~ rjf: File Iterator
 
-typedef struct OS_LNX_FileIter OS_LNX_FileIter;
-struct OS_LNX_FileIter
+typedef struct LNX_FileIter LNX_FileIter;
+struct LNX_FileIter
 {
   DIR *dir;
   struct dirent *dp;
   String8 path;
 };
-StaticAssert(sizeof(Member(FileIter, memory)) >= sizeof(OS_LNX_FileIter), os_lnx_file_iter_size_check);
+StaticAssert(sizeof(Member(FileIter, memory)) >= sizeof(LNX_FileIter), os_lnx_file_iter_size_check);
 
 ////////////////////////////////
 //~ rjf: Safe Call Handler Chain
 
-typedef struct OS_LNX_SafeCallChain OS_LNX_SafeCallChain;
-struct OS_LNX_SafeCallChain
+typedef struct LNX_SafeCallChain LNX_SafeCallChain;
+struct LNX_SafeCallChain
 {
-  OS_LNX_SafeCallChain *next;
+  LNX_SafeCallChain *next;
   ThreadEntryPointFunctionType *fail_handler;
   void *ptr;
 };
@@ -77,21 +77,21 @@ struct OS_LNX_SafeCallChain
 ////////////////////////////////
 //~ rjf: Entities
 
-typedef enum OS_LNX_EntityKind
+typedef enum LNX_EntityKind
 {
-  OS_LNX_EntityKind_Thread,
-  OS_LNX_EntityKind_Mutex,
-  OS_LNX_EntityKind_RWMutex,
-  OS_LNX_EntityKind_ConditionVariable,
-  OS_LNX_EntityKind_Barrier,
+  LNX_EntityKind_Thread,
+  LNX_EntityKind_Mutex,
+  LNX_EntityKind_RWMutex,
+  LNX_EntityKind_ConditionVariable,
+  LNX_EntityKind_Barrier,
 }
-OS_LNX_EntityKind;
+LNX_EntityKind;
 
-typedef struct OS_LNX_Entity OS_LNX_Entity;
-struct OS_LNX_Entity
+typedef struct LNX_Entity LNX_Entity;
+struct LNX_Entity
 {
-  OS_LNX_Entity *next;
-  OS_LNX_EntityKind kind;
+  LNX_Entity *next;
+  LNX_EntityKind kind;
   union
   {
     struct
@@ -114,15 +114,15 @@ struct OS_LNX_Entity
 ////////////////////////////////
 //~ rjf: State
 
-typedef struct OS_LNX_State OS_LNX_State;
-struct OS_LNX_State
+typedef struct LNX_State LNX_State;
+struct LNX_State
 {
   Arena *arena;
   SystemInfo system_info;
   ProcessInfo process_info;
   pthread_mutex_t entity_mutex;
   Arena *entity_arena;
-  OS_LNX_Entity *entity_free;
+  LNX_Entity *entity_free;
   U64 default_env_count;
   char **default_env;
 };
@@ -130,8 +130,8 @@ struct OS_LNX_State
 ////////////////////////////////
 //~ rjf: Globals
 
-global OS_LNX_State os_lnx_state = {0};
-thread_static OS_LNX_SafeCallChain *os_lnx_safe_call_chain = 0;
+global LNX_State os_lnx_state = {0};
+thread_static LNX_SafeCallChain *os_lnx_safe_call_chain = 0;
 
 ////////////////////////////////
 //~ rjf: Helpers
@@ -146,8 +146,8 @@ internal void os_lnx_safe_call_sig_handler(int x);
 ////////////////////////////////
 //~ rjf: Entities
 
-internal OS_LNX_Entity *os_lnx_entity_alloc(OS_LNX_EntityKind kind);
-internal void os_lnx_entity_release(OS_LNX_Entity *entity);
+internal LNX_Entity *os_lnx_entity_alloc(LNX_EntityKind kind);
+internal void os_lnx_entity_release(LNX_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Thread Entry Point

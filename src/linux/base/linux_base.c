@@ -71,7 +71,7 @@ os_lnx_file_properties_from_stat(struct stat *s)
 internal void
 os_lnx_safe_call_sig_handler(int x)
 {
-  OS_LNX_SafeCallChain *chain = os_lnx_safe_call_chain;
+  LNX_SafeCallChain *chain = os_lnx_safe_call_chain;
   if(chain != 0 && chain->fail_handler != 0)
   {
     chain->fail_handler(chain->ptr);
@@ -82,10 +82,10 @@ os_lnx_safe_call_sig_handler(int x)
 ////////////////////////////////
 //~ rjf: Entities
 
-internal OS_LNX_Entity *
-os_lnx_entity_alloc(OS_LNX_EntityKind kind)
+internal LNX_Entity *
+os_lnx_entity_alloc(LNX_EntityKind kind)
 {
-  OS_LNX_Entity *entity = 0;
+  LNX_Entity *entity = 0;
   DeferLoop(pthread_mutex_lock(&os_lnx_state.entity_mutex),
             pthread_mutex_unlock(&os_lnx_state.entity_mutex))
   {
@@ -96,7 +96,7 @@ os_lnx_entity_alloc(OS_LNX_EntityKind kind)
     }
     else
     {
-      entity = push_array_no_zero(os_lnx_state.entity_arena, OS_LNX_Entity, 1);
+      entity = push_array_no_zero(os_lnx_state.entity_arena, LNX_Entity, 1);
     }
   }
   MemoryZeroStruct(entity);
@@ -105,7 +105,7 @@ os_lnx_entity_alloc(OS_LNX_EntityKind kind)
 }
 
 internal void
-os_lnx_entity_release(OS_LNX_Entity *entity)
+os_lnx_entity_release(LNX_Entity *entity)
 {
   DeferLoop(pthread_mutex_lock(&os_lnx_state.entity_mutex),
             pthread_mutex_unlock(&os_lnx_state.entity_mutex))
@@ -120,7 +120,7 @@ os_lnx_entity_release(OS_LNX_Entity *entity)
 internal void *
 os_lnx_thread_entry_point(void *ptr)
 {
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)ptr;
+  LNX_Entity *entity = (LNX_Entity *)ptr;
   ThreadEntryPointFunctionType *func = entity->thread.func;
   void *thread_ptr = entity->thread.ptr;
   supplement_thread_base_entry_point(func, thread_ptr);
@@ -353,7 +353,7 @@ set_platform_thread_name(String8 name)
 internal Thread
 thread_launch(ThreadEntryPointFunctionType *f, void *p)
 {
-  OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Thread);
+  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_Thread);
   entity->thread.func = f;
   entity->thread.ptr = p;
   {
@@ -372,7 +372,7 @@ internal B32
 thread_join(Thread thread, U64 endt_us)
 {
   if(MemoryIsZeroStruct(&thread)) { return 0; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)thread.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)thread.u64[0];
   int join_result = pthread_join(entity->thread.handle, 0);
   B32 result = (join_result == 0);
   os_lnx_entity_release(entity);
@@ -383,7 +383,7 @@ internal void
 thread_detach(Thread thread)
 {
   if(MemoryIsZeroStruct(&thread)) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)thread.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)thread.u64[0];
   os_lnx_entity_release(entity);
 }
 
@@ -395,7 +395,7 @@ thread_detach(Thread thread)
 internal Mutex
 mutex_alloc(void)
 {
-  OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Mutex);
+  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_Mutex);
   int init_result = pthread_mutex_init(&entity->mutex_handle, 0);
   if(init_result == -1)
   {
@@ -410,7 +410,7 @@ internal void
 mutex_release(Mutex mutex)
 {
   if(MemoryIsZeroStruct(&mutex)) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)mutex.u64[0];
   pthread_mutex_destroy(&entity->mutex_handle);
   os_lnx_entity_release(entity);
 }
@@ -419,7 +419,7 @@ internal void
 mutex_take(Mutex mutex)
 {
   if(MemoryIsZeroStruct(&mutex)) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)mutex.u64[0];
   pthread_mutex_lock(&entity->mutex_handle);
 }
 
@@ -427,7 +427,7 @@ internal void
 mutex_drop(Mutex mutex)
 {
   if(MemoryIsZeroStruct(&mutex)) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)mutex.u64[0];
   pthread_mutex_unlock(&entity->mutex_handle);
 }
 
@@ -436,7 +436,7 @@ mutex_drop(Mutex mutex)
 internal RWMutex
 rw_mutex_alloc(void)
 {
-  OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_RWMutex);
+  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_RWMutex);
   int init_result = pthread_rwlock_init(&entity->rwmutex_handle, 0);
   if(init_result == -1)
   {
@@ -451,7 +451,7 @@ internal void
 rw_mutex_release(RWMutex mutex)
 {
   if(MemoryIsZeroStruct(&mutex)) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)mutex.u64[0];
   pthread_rwlock_destroy(&entity->rwmutex_handle);
   os_lnx_entity_release(entity);
 }
@@ -460,7 +460,7 @@ internal void
 rw_mutex_take(RWMutex mutex, B32 write_mode)
 {
   if(MemoryIsZeroStruct(&mutex)) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)mutex.u64[0];
   if(write_mode)
   {
     pthread_rwlock_wrlock(&entity->rwmutex_handle);
@@ -475,7 +475,7 @@ internal void
 rw_mutex_drop(RWMutex mutex, B32 write_mode)
 {
   if(MemoryIsZeroStruct(&mutex)) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)mutex.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)mutex.u64[0];
   pthread_rwlock_unlock(&entity->rwmutex_handle);
 }
 
@@ -484,7 +484,7 @@ rw_mutex_drop(RWMutex mutex, B32 write_mode)
 internal CondVar
 cond_var_alloc(void)
 {
-  OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_ConditionVariable);
+  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_ConditionVariable);
   int init_result = pthread_cond_init(&entity->cv.cond_handle, 0);
   if(init_result == -1)
   {
@@ -510,7 +510,7 @@ internal void
 cond_var_release(CondVar cv)
 {
   if(MemoryIsZeroStruct(&cv)) { return; }
-  OS_LNX_Entity *entity = (OS_LNX_Entity *)cv.u64[0];
+  LNX_Entity *entity = (LNX_Entity *)cv.u64[0];
   pthread_cond_destroy(&entity->cv.cond_handle);
   pthread_mutex_destroy(&entity->cv.rwlock_mutex_handle);
   os_lnx_entity_release(entity);
@@ -521,8 +521,8 @@ cond_var_wait(CondVar cv, Mutex mutex, U64 endt_us)
 {
   if(MemoryIsZeroStruct(&cv)) { return 0; }
   if(MemoryIsZeroStruct(&mutex)) { return 0; }
-  OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
-  OS_LNX_Entity *mutex_entity = (OS_LNX_Entity *)mutex.u64[0];
+  LNX_Entity *cv_entity = (LNX_Entity *)cv.u64[0];
+  LNX_Entity *mutex_entity = (LNX_Entity *)mutex.u64[0];
   struct timespec endt_timespec;
   endt_timespec.tv_sec = endt_us/Million(1);
   endt_timespec.tv_nsec = Thousand(1) * (endt_us - (endt_us/Million(1))*Million(1));
@@ -540,8 +540,8 @@ cond_var_wait_rw(CondVar cv, RWMutex mutex_rw, B32 write_mode, U64 endt_us)
   //
   if(MemoryIsZeroStruct(&cv)) { return 0; }
   if(MemoryIsZeroStruct(&mutex_rw)) { return 0; }
-  OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
-  OS_LNX_Entity *rw_mutex_entity = (OS_LNX_Entity *)mutex_rw.u64[0];
+  LNX_Entity *cv_entity = (LNX_Entity *)cv.u64[0];
+  LNX_Entity *rw_mutex_entity = (LNX_Entity *)mutex_rw.u64[0];
   struct timespec endt_timespec;
   endt_timespec.tv_sec = endt_us/Million(1);
   endt_timespec.tv_nsec = Thousand(1) * (endt_us - (endt_us/Million(1))*Million(1));
@@ -585,7 +585,7 @@ internal void
 cond_var_signal(CondVar cv)
 {
   if(MemoryIsZeroStruct(&cv)) { return; }
-  OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
+  LNX_Entity *cv_entity = (LNX_Entity *)cv.u64[0];
   pthread_cond_signal(&cv_entity->cv.cond_handle);
 }
 
@@ -593,7 +593,7 @@ internal void
 cond_var_broadcast(CondVar cv)
 {
   if(MemoryIsZeroStruct(&cv)) { return; }
-  OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
+  LNX_Entity *cv_entity = (LNX_Entity *)cv.u64[0];
   pthread_cond_broadcast(&cv_entity->cv.cond_handle);
 }
 
@@ -713,7 +713,7 @@ semaphore_drop(Semaphore semaphore)
 internal Barrier
 barrier_alloc(U64 count)
 {
-  OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Barrier);
+  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_Barrier);
   if(entity != 0)
   {
     pthread_barrier_init(&entity->barrier, 0, count);
@@ -725,7 +725,7 @@ barrier_alloc(U64 count)
 internal void
 barrier_release(Barrier barrier)
 {
-  OS_LNX_Entity *entity = (OS_LNX_Entity*)PtrFromInt(barrier.u64[0]);
+  LNX_Entity *entity = (LNX_Entity*)PtrFromInt(barrier.u64[0]);
   if(entity != 0)
   {
     pthread_barrier_destroy(&entity->barrier);
@@ -736,7 +736,7 @@ barrier_release(Barrier barrier)
 internal void
 barrier_wait(Barrier barrier)
 {
-  OS_LNX_Entity *entity = (OS_LNX_Entity*)PtrFromInt(barrier.u64[0]);
+  LNX_Entity *entity = (LNX_Entity*)PtrFromInt(barrier.u64[0]);
   if(entity != 0)
   {
     pthread_barrier_wait(&entity->barrier);
@@ -750,7 +750,7 @@ internal void
 safe_call(ThreadEntryPointFunctionType *func, ThreadEntryPointFunctionType *fail_handler, void *ptr)
 {
   // rjf: push handler to chain
-  OS_LNX_SafeCallChain chain = {0};
+  LNX_SafeCallChain chain = {0};
   SLLStackPush(os_lnx_safe_call_chain, &chain);
   chain.fail_handler = fail_handler;
   chain.ptr = ptr;
@@ -1088,7 +1088,7 @@ file_iter_begin(Arena *arena, String8 path, FileIterFlags flags)
 {
   FileIter *base_iter = push_array(arena, FileIter, 1);
   base_iter->flags = flags;
-  OS_LNX_FileIter *iter = (OS_LNX_FileIter *)base_iter->memory;
+  LNX_FileIter *iter = (LNX_FileIter *)base_iter->memory;
   {
     String8 path_copy = push_str8_copy(arena, path);
     iter->dir = opendir((char *)path_copy.str);
@@ -1101,7 +1101,7 @@ internal B32
 file_iter_next(Arena *arena, FileIter *iter, FileInfo *info_out)
 {
   B32 good = 0;
-  OS_LNX_FileIter *lnx_iter = (OS_LNX_FileIter *)iter->memory;
+  LNX_FileIter *lnx_iter = (LNX_FileIter *)iter->memory;
   for(;lnx_iter->dir != 0;)
   {
     // rjf: get next entry
@@ -1152,7 +1152,7 @@ file_iter_next(Arena *arena, FileIter *iter, FileInfo *info_out)
 internal void
 file_iter_end(FileIter *iter)
 {
-  OS_LNX_FileIter *lnx_iter = (OS_LNX_FileIter *)iter->memory;
+  LNX_FileIter *lnx_iter = (LNX_FileIter *)iter->memory;
   closedir(lnx_iter->dir);
 }
 

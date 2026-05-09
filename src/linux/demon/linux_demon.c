@@ -11,13 +11,13 @@
 ////////////////////////////////
 
 internal U64
-dmn_lnx_size_from_fd(int memory_fd, U64 cap)
+lnx_dmn_size_from_fd(int memory_fd, U64 cap)
 {
   U8 temp[4096];
   size_t cursor = 0;
   while(cursor < cap)
   {
-    ssize_t actual_read = OS_LNX_RETRY_ON_EINTR(pread(memory_fd, temp, sizeof(temp), cursor));
+    ssize_t actual_read = LNX_RETRY_ON_EINTR(pread(memory_fd, temp, sizeof(temp), cursor));
     if(actual_read <= 0) { break; }
     cursor += (U64)actual_read;
   }
@@ -25,13 +25,13 @@ dmn_lnx_size_from_fd(int memory_fd, U64 cap)
 }
 
 internal U64
-dmn_lnx_read(int memory_fd, Rng1U64 range, void *dst)
+lnx_dmn_read(int memory_fd, Rng1U64 range, void *dst)
 {
   size_t cursor = 0, size = dim_1u64(range);
   while(cursor < size)
   {
     size_t  to_read     = size - cursor;
-    ssize_t actual_read = OS_LNX_RETRY_ON_EINTR(pread(memory_fd, (U8 *)dst + cursor, to_read, range.min + cursor));
+    ssize_t actual_read = LNX_RETRY_ON_EINTR(pread(memory_fd, (U8 *)dst + cursor, to_read, range.min + cursor));
     if(actual_read < 0) { break; }
     if(actual_read == 0) { break; }
     cursor += actual_read;
@@ -40,13 +40,13 @@ dmn_lnx_read(int memory_fd, Rng1U64 range, void *dst)
 }
 
 internal B32
-dmn_lnx_write(int memory_fd, Rng1U64 range, void *src)
+lnx_dmn_write(int memory_fd, Rng1U64 range, void *src)
 {
   size_t cursor = 0, size = dim_1u64(range);
   while(cursor < size)
   {
     size_t to_write = size - cursor;
-    ssize_t actual_write = OS_LNX_RETRY_ON_EINTR(pwrite(memory_fd, (U8 *)src + cursor, to_write, range.min + cursor));
+    ssize_t actual_write = LNX_RETRY_ON_EINTR(pwrite(memory_fd, (U8 *)src + cursor, to_write, range.min + cursor));
     if(actual_write <= 0) { break; }
     cursor += actual_write;
   }
@@ -55,14 +55,14 @@ dmn_lnx_write(int memory_fd, Rng1U64 range, void *src)
 }
 
 internal String8
-dmn_lnx_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_size)
+lnx_dmn_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_size)
 {
   String8 result = {0};
   U64 string_size = 0;
   for(U64 vaddr = base_vaddr; string_size < cap_size; vaddr += 1, string_size += 1)
   {
     char byte = 0;
-    if(OS_LNX_RETRY_ON_EINTR(pread(memory_fd, &byte, sizeof(byte), vaddr) <= 0))
+    if(LNX_RETRY_ON_EINTR(pread(memory_fd, &byte, sizeof(byte), vaddr) <= 0))
     {
       break;
     }
@@ -74,7 +74,7 @@ dmn_lnx_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_
   if(string_size != 0)
   {
     char *buf = push_array_no_zero(arena, char, string_size+1);
-    OS_LNX_RETRY_ON_EINTR(pread(memory_fd, buf, string_size, base_vaddr));
+    LNX_RETRY_ON_EINTR(pread(memory_fd, buf, string_size, base_vaddr));
     buf[string_size] = '\0';
     result = str8((U8 *)buf, string_size);
   }
@@ -82,27 +82,27 @@ dmn_lnx_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_
 }
 
 internal String8
-dmn_lnx_read_string(Arena *arena, int memory_fd, U64 vaddr)
+lnx_dmn_read_string(Arena *arena, int memory_fd, U64 vaddr)
 {
-  return dmn_lnx_read_string_capped(arena, memory_fd, vaddr, 4096);
+  return lnx_dmn_read_string_capped(arena, memory_fd, vaddr, 4096);
 }
 
 internal
-MACHINE_OP_MEM_READ(dmn_lnx_machine_op_mem_read)
+MACHINE_OP_MEM_READ(lnx_dmn_machine_op_mem_read)
 {
-  U64 read_size = dmn_lnx_read(*(int *)ud, r1u64(addr, addr + buffer_size), buffer);
+  U64 read_size = lnx_dmn_read(*(int *)ud, r1u64(addr, addr + buffer_size), buffer);
   return read_size == buffer_size ? MachineOpResult_Ok : MachineOpResult_Fail;
 }
 
 internal int
-dmn_lnx_ptrace_seize(pid_t pid)
+lnx_dmn_ptrace_seize(pid_t pid)
 {
   // TODO: PTRACE_O_TRACEVFORK | PTRACE_O_TRACEVFORKDONE | PTRACE_O_TRACEFORK
-  return OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SEIZE, pid, 0, PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL | PTRACE_O_TRACECLONE));
+  return LNX_RETRY_ON_EINTR(ptrace(PTRACE_SEIZE, pid, 0, PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL | PTRACE_O_TRACECLONE));
 }
 
 internal String8
-dmn_lnx_exe_path_from_pid(Arena *arena, pid_t pid)
+lnx_dmn_exe_path_from_pid(Arena *arena, pid_t pid)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -133,19 +133,19 @@ dmn_lnx_exe_path_from_pid(Arena *arena, pid_t pid)
 }
 
 internal String8
-dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
+lnx_dmn_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
   String8 dl_path = {0};
   
-  int maps_fd = OS_LNX_RETRY_ON_EINTR(open((char *)str8f(scratch.arena, "/proc/%d/maps", pid).str, O_RDONLY));
+  int maps_fd = LNX_RETRY_ON_EINTR(open((char *)str8f(scratch.arena, "/proc/%d/maps", pid).str, O_RDONLY));
   if(maps_fd != -1)
   {
     // read entire /proc/pid/maps
-    U64  maps_size = dmn_lnx_size_from_fd(maps_fd, MB(1));
+    U64  maps_size = lnx_dmn_size_from_fd(maps_fd, MB(1));
     U8  *maps_ptr  = push_array(scratch.arena, U8, maps_size);
-    U64  read_size = dmn_lnx_read(maps_fd, r1u64(0, maps_size), maps_ptr);
+    U64  read_size = lnx_dmn_read(maps_fd, r1u64(0, maps_size), maps_ptr);
     
     // split map file on lines
     String8List lines = str8_split_by_string_chars(scratch.arena, str8(maps_ptr, maps_size), str8_lit("\n"), 0);
@@ -195,7 +195,7 @@ dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
       }
     }
     
-    OS_LNX_RETRY_ON_EINTR(close(maps_fd));
+    LNX_RETRY_ON_EINTR(close(maps_fd));
   }
   else { Assert(0 && "failed to open DL fd"); }
   
@@ -205,7 +205,7 @@ dmn_lnx_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
 }
 
 internal ELF_Hdr64
-dmn_lnx_ehdr_from_pid(pid_t pid)
+lnx_dmn_ehdr_from_pid(pid_t pid)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -213,12 +213,12 @@ dmn_lnx_ehdr_from_pid(pid_t pid)
   B32       is_read = 0;
   
   char *exe_path = (char *)str8f(scratch.arena, "/proc/%d/exe", pid).str;
-  int   exe_fd   = OS_LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
+  int   exe_fd   = LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
   
   if(exe_fd >= 0)
   {
-    is_read = elf_read_ehdr(dmn_lnx_machine_op_mem_read, &exe_fd, 0, &exe);
-    OS_LNX_RETRY_ON_EINTR(close(exe_fd));
+    is_read = elf_read_ehdr(lnx_dmn_machine_op_mem_read, &exe_fd, 0, &exe);
+    LNX_RETRY_ON_EINTR(close(exe_fd));
   }
   
   Assert(is_read);
@@ -226,15 +226,15 @@ dmn_lnx_ehdr_from_pid(pid_t pid)
   return exe;
 }
 
-internal DMN_LNX_Auxv
-dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_class)
+internal LNX_DMN_Auxv
+lnx_dmn_auxv_from_pid(pid_t pid, ELF_Class elf_class)
 {
   Temp scratch = scratch_begin(0, 0);
-  DMN_LNX_Auxv result = {0};
+  LNX_DMN_Auxv result = {0};
   
   // rjf: open aux data
   String8 auxv_path = str8f(scratch.arena, "/proc/%d/auxv", pid);
-  int auxv_fd = OS_LNX_RETRY_ON_EINTR(open((char *)auxv_path.str, O_RDONLY));
+  int auxv_fd = LNX_RETRY_ON_EINTR(open((char *)auxv_path.str, O_RDONLY));
   
   // rjf: scan aux data
   if(auxv_fd >= 0)
@@ -273,34 +273,34 @@ dmn_lnx_auxv_from_pid(pid_t pid, ELF_Class elf_class)
       }
     }
     brkloop:;
-    OS_LNX_RETRY_ON_EINTR(close(auxv_fd));
+    LNX_RETRY_ON_EINTR(close(auxv_fd));
   }
   
   scratch_end(scratch);
   return result;
 }
 
-internal DMN_LNX_Thread *
-dmn_lnx_thread_from_pid(pid_t tid)
+internal LNX_DMN_Thread *
+lnx_dmn_thread_from_pid(pid_t tid)
 {
-  return hash_table_search_u64_raw(dmn_lnx_state->tid_ht, tid);
+  return hash_table_search_u64_raw(lnx_dmn_state->tid_ht, tid);
 }
 
-internal DMN_LNX_Process *
-dmn_lnx_process_from_pid(pid_t pid)
+internal LNX_DMN_Process *
+lnx_dmn_process_from_pid(pid_t pid)
 {
-  return hash_table_search_u64_raw(dmn_lnx_state->pid_ht, pid);
+  return hash_table_search_u64_raw(lnx_dmn_state->pid_ht, pid);
 }
 
 internal Rng1U64
-dmn_lnx_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
+lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
 { 
   Rng1U64 result = { .min = max_U64 };
   
   for(U64 ph_cursor = e_phaddr, ph_opl = (e_phaddr + e_phentsize * e_phnum); ph_cursor < ph_opl; ph_cursor += e_phentsize)
   {
     ELF_Phdr64 phdr = {0};
-    if(elf_read_phdr(dmn_lnx_machine_op_mem_read, &memory_fd, ph_cursor, elf_class, &phdr) != MachineOpResult_Ok)
+    if(elf_read_phdr(lnx_dmn_machine_op_mem_read, &memory_fd, ph_cursor, elf_class, &phdr) != MachineOpResult_Ok)
     {
       Assert(0 && "unable to read a program header");
     }
@@ -317,15 +317,15 @@ dmn_lnx_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64
   return result;
 }
 
-internal DMN_LNX_DynamicInfo
-dmn_lnx_dynamic_info_from_memory(int memory_fd, ELF_Class elf_class, U64 rebase, U64 dynamic_vaddr)
+internal LNX_DMN_DynamicInfo
+lnx_dmn_dynamic_info_from_memory(int memory_fd, ELF_Class elf_class, U64 rebase, U64 dynamic_vaddr)
 {
-  DMN_LNX_DynamicInfo dynamic_info = {0};
+  LNX_DMN_DynamicInfo dynamic_info = {0};
   for(U64 dynamic_cursor = dynamic_vaddr; ; dynamic_cursor += elf_dyn_size_from_class(elf_class))
   {
     // rjf: read next dyn entry
     ELF_Dyn64 dyn = {0};
-    if(elf_read_dyn(dmn_lnx_machine_op_mem_read, &memory_fd, dynamic_cursor, elf_class, &dyn) != MachineOpResult_Ok) { Assert(0 && "unable to read dynamic"); }
+    if(elf_read_dyn(lnx_dmn_machine_op_mem_read, &memory_fd, dynamic_cursor, elf_class, &dyn) != MachineOpResult_Ok) { Assert(0 && "unable to read dynamic"); }
     
     // rjf: break on zero
     if(dyn.tag == ELF_DynTag_Null) { break; }
@@ -360,14 +360,14 @@ dmn_lnx_dynamic_info_from_memory(int memory_fd, ELF_Class elf_class, U64 rebase,
 }
 
 internal U64
-dmn_lnx_find_dynamic_phdr(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
+lnx_dmn_find_dynamic_phdr(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
 {
   U64 result = max_U64;
   
   for(U64 ph_cursor = e_phaddr, ph_opl = (e_phaddr + e_phentsize * e_phnum); ph_cursor < ph_opl; ph_cursor += e_phentsize)
   {
     ELF_Phdr64 phdr = {0};
-    if(elf_read_phdr(dmn_lnx_machine_op_mem_read, &memory_fd, ph_cursor, elf_class, &phdr) != MachineOpResult_Ok)
+    if(elf_read_phdr(lnx_dmn_machine_op_mem_read, &memory_fd, ph_cursor, elf_class, &phdr) != MachineOpResult_Ok)
     {
       Assert(0 && "unable to read a program header");
     }
@@ -383,7 +383,7 @@ dmn_lnx_find_dynamic_phdr(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_
 }
 
 internal U64
-dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased)
+lnx_dmn_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -391,18 +391,18 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
   
   // load DL's header
   ELF_Hdr64 ehdr = {0};
-  if(elf_read_ehdr(dmn_lnx_machine_op_mem_read, &memory_fd, loader_vbase, &ehdr) != MachineOpResult_Ok) { Assert(0 && "failed to read interp's header"); goto exit; }
+  if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &memory_fd, loader_vbase, &ehdr) != MachineOpResult_Ok) { Assert(0 && "failed to read interp's header"); goto exit; }
   
   U64       rebase    = ehdr.e_type == ELF_Type_Dyn ? loader_vbase : 0;
   ELF_Class elf_class = ehdr.e_ident[ELF_Identifier_Class];
   
   // find dynamic program header
   U64 phdr_vaddr    = loader_vbase + ehdr.e_phoff;
-  U64 dynamic_vaddr = dmn_lnx_find_dynamic_phdr(memory_fd, elf_class, rebase, phdr_vaddr, ehdr.e_phentsize, ehdr.e_phentsize);
+  U64 dynamic_vaddr = lnx_dmn_find_dynamic_phdr(memory_fd, elf_class, rebase, phdr_vaddr, ehdr.e_phentsize, ehdr.e_phentsize);
   
   // extract necessary info out of dynamic program header
   U64                 dynamic_info_rebase = is_rebased ? 0 : rebase;
-  DMN_LNX_DynamicInfo dynamic_info        = dmn_lnx_dynamic_info_from_memory(memory_fd, elf_class, dynamic_info_rebase, dynamic_vaddr);
+  LNX_DMN_DynamicInfo dynamic_info        = lnx_dmn_dynamic_info_from_memory(memory_fd, elf_class, dynamic_info_rebase, dynamic_vaddr);
   
   // extract symbol table count from available options
   U64 symbol_count = 0;
@@ -415,7 +415,7 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
     }
     
     U64 chain_count = 0;
-    if(dmn_lnx_read(memory_fd, r1u64(dynamic_info.hash_vaddr, dynamic_info.hash_vaddr + hash_entry_size), &chain_count) == hash_entry_size)
+    if(lnx_dmn_read(memory_fd, r1u64(dynamic_info.hash_vaddr, dynamic_info.hash_vaddr + hash_entry_size), &chain_count) == hash_entry_size)
     {
       symbol_count = chain_count;
     }
@@ -436,7 +436,7 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
     for EachIndex(symbol_idx, symbol_count)
     {
       ELF_Sym64 symbol = {0};
-      if(elf_read_symbol(dmn_lnx_machine_op_mem_read, &memory_fd, dynamic_info.symtab_vaddr + symbol_idx * dynamic_info.symtab_entry_size, elf_class, &symbol) != MachineOpResult_Ok)
+      if(elf_read_symbol(lnx_dmn_machine_op_mem_read, &memory_fd, dynamic_info.symtab_vaddr + symbol_idx * dynamic_info.symtab_entry_size, elf_class, &symbol) != MachineOpResult_Ok)
       {
         Assert(0 && "failed to read symbol table");
         break;
@@ -448,7 +448,7 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
       if(symbol.st_name < dynamic_info.strtab_size)
       {
         U64 cap = dynamic_info.strtab_size - symbol.st_name;
-        symbol_name = dmn_lnx_read_string_capped(temp.arena, memory_fd, dynamic_info.strtab_vaddr + symbol.st_name, cap);
+        symbol_name = lnx_dmn_read_string_capped(temp.arena, memory_fd, dynamic_info.strtab_vaddr + symbol.st_name, cap);
       }
       
       if(str8_match(symbol_name, str8_lit("_r_debug"), 0))
@@ -470,19 +470,19 @@ dmn_lnx_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
   return rdebug_vaddr;
 }
 
-internal DMN_LNX_ProbeList
-dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
+internal LNX_DMN_ProbeList
+lnx_dmn_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
-  DMN_LNX_ProbeList probes = {0};
+  LNX_DMN_ProbeList probes = {0};
   
   ELF_Hdr64 ehdr = {0};
-  if(elf_read_ehdr(dmn_lnx_machine_op_mem_read, &fd, offset, &ehdr) != MachineOpResult_Ok) { goto exit; }
+  if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &fd, offset, &ehdr) != MachineOpResult_Ok) { goto exit; }
   
   U64        strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
   ELF_Shdr64 strtab_shdr        = {0};
-  if(elf_read_shdr(dmn_lnx_machine_op_mem_read, &fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr) != MachineOpResult_Ok) { goto exit; }
+  if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr) != MachineOpResult_Ok) { goto exit; }
   
   B32 found_probes      = 0;
   B32 found_probes_base = 0;
@@ -493,13 +493,13 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
       shdr_off < shdr_opl;
       shdr_off += ehdr.e_shentsize) {
     ELF_Shdr64 shdr = {0};
-    if(elf_read_shdr(dmn_lnx_machine_op_mem_read, &fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr) != MachineOpResult_Ok) { goto exit; }
+    if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr) != MachineOpResult_Ok) { goto exit; }
     
     if(shdr.sh_type == ELF_ShType_Note)
     {
       U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
       U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
-      String8 name        = dmn_lnx_read_string_capped(scratch.arena, fd, name_offset, name_cap);
+      String8 name        = lnx_dmn_read_string_capped(scratch.arena, fd, name_offset, name_cap);
       
       if(str8_match(name, str8_lit(".note.stapsdt"), 0))
       {
@@ -511,7 +511,7 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
     {
       U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
       U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
-      String8 name        = dmn_lnx_read_string_capped(scratch.arena, fd, name_offset, name_cap);
+      String8 name        = lnx_dmn_read_string_capped(scratch.arena, fd, name_offset, name_cap);
       
       if(str8_match(name, str8_lit(".stapsdt.base"), 0))
       {
@@ -532,7 +532,7 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
   
   Rng1U64  note_range     = shift_1u64(r1u64(stapsdt_shdr.sh_offset, stapsdt_shdr.sh_offset + stapsdt_shdr.sh_size), offset);
   void    *raw_note       = push_array(arena, U8, stapsdt_shdr.sh_size);
-  U64      note_read_size = dmn_lnx_read(fd, note_range, raw_note);
+  U64      note_read_size = lnx_dmn_read(fd, note_range, raw_note);
   if(note_read_size != dim_1u64(note_range)) { goto exit; }
   
   Arch         arch = arch_from_elf_machine(ehdr.e_machine);
@@ -544,7 +544,7 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
     if(!str8_match(note->owner, str8_lit("stapsdt"), 0)) { continue; }
     if(note->type != ELF_NoteType_STapSdt)               { continue; }
     
-    DMN_LNX_Probe probe = {0};
+    LNX_DMN_Probe probe = {0};
     {
       U64 cursor    = 0;
       U64 addr_size = ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64 ? 8 : 4;
@@ -585,7 +585,7 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
       probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
     }
     
-    DMN_LNX_ProbeNode *n = push_array(arena, DMN_LNX_ProbeNode, 1);
+    LNX_DMN_ProbeNode *n = push_array(arena, LNX_DMN_ProbeNode, 1);
     n->v = probe;
     SLLQueuePush(probes.first, probes.last, n);
     probes.count += 1;
@@ -597,25 +597,25 @@ dmn_lnx_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
 }
 
 internal
-STAP_MEMORY_READ(dmn_lnx_stap_memory_read)
+STAP_MEMORY_READ(lnx_dmn_stap_memory_read)
 {
-  DMN_LNX_Process *process = raw_ctx;
-  U64 bytes_read = dmn_lnx_read(process->fd, r1u64(addr, addr + read_size), buffer);
+  LNX_DMN_Process *process = raw_ctx;
+  U64 bytes_read = lnx_dmn_read(process->fd, r1u64(addr, addr + read_size), buffer);
   return bytes_read == read_size;
 }
 
-internal DMN_LNX_Entity *
-dmn_lnx_entity_alloc(DMN_LNX_EntityKind kind)
+internal LNX_DMN_Entity *
+lnx_dmn_entity_alloc(LNX_DMN_EntityKind kind)
 {
-  DMN_LNX_Entity *entity = dmn_lnx_state->free_entity;
+  LNX_DMN_Entity *entity = lnx_dmn_state->free_entity;
   if(entity != 0)
   {
-    SLLStackPop(dmn_lnx_state->free_entity);
+    SLLStackPop(lnx_dmn_state->free_entity);
   }
   else
   {
-    entity = push_array(dmn_lnx_state->entities_arena, DMN_LNX_Entity, 1);
-    dmn_lnx_state->entities_count += 1;
+    entity = push_array(lnx_dmn_state->entities_arena, LNX_DMN_Entity, 1);
+    lnx_dmn_state->entities_count += 1;
   }
   U32 gen = entity->gen;
   entity->gen += 1;
@@ -623,54 +623,54 @@ dmn_lnx_entity_alloc(DMN_LNX_EntityKind kind)
   return entity;
 }
 
-internal DMN_LNX_Process *
-dmn_lnx_process_alloc(pid_t pid, DMN_LNX_ProcessState state, DMN_LNX_Process *parent_process, B32 debug_subprocesses, B32 is_cow)
+internal LNX_DMN_Process *
+lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *parent_process, B32 debug_subprocesses, B32 is_cow)
 {
   Temp scratch = scratch_begin(0, 0);
   
-  DMN_LNX_Process *process = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_Process)->process;
+  LNX_DMN_Process *process = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Process)->process;
   process->pid                = pid;
-  process->fd                 = OS_LNX_RETRY_ON_EINTR(open((char *)str8f(scratch.arena, "/proc/%d/mem", pid).str, O_RDWR));
+  process->fd                 = LNX_RETRY_ON_EINTR(open((char *)str8f(scratch.arena, "/proc/%d/mem", pid).str, O_RDWR));
   process->state              = state;
   process->debug_subprocesses = debug_subprocesses;
   process->is_cow             = is_cow;
   process->parent_process     = parent_process;
   
   // update pending process tracker
-  if(state != DMN_LNX_ProcessState_Normal)
+  if(state != LNX_DMN_ProcessState_Normal)
   {
-    dmn_lnx_state->process_pending_creation += 1;
+    lnx_dmn_state->process_pending_creation += 1;
   }
   
   // add process to the list
-  DLLPushBack(dmn_lnx_state->first_process, dmn_lnx_state->last_process, process);
-  dmn_lnx_state->process_count += 1;
+  DLLPushBack(lnx_dmn_state->first_process, lnx_dmn_state->last_process, process);
+  lnx_dmn_state->process_count += 1;
   
-  // push pid -> DMN_LNX_Process mapping
-  hash_table_push_u64_raw(dmn_lnx_state->arena, dmn_lnx_state->pid_ht, pid, process);
+  // push pid -> LNX_DMN_Process mapping
+  hash_table_push_u64_raw(lnx_dmn_state->arena, lnx_dmn_state->pid_ht, pid, process);
   
   scratch_end(scratch);
   return process;
 }
 
-internal DMN_LNX_ProcessCtx *
-dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased)
+internal LNX_DMN_ProcessCtx *
+lnx_dmn_process_ctx_alloc(LNX_DMN_Process *process, B32 is_rebased)
 {
-  DMN_LNX_ProcessCtx *ctx = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_ProcessCtx)->process_ctx;
+  LNX_DMN_ProcessCtx *ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
   
-  ELF_Hdr64     exe_ehdr     = dmn_lnx_ehdr_from_pid(process->pid);
-  DMN_LNX_Auxv  auxv         = dmn_lnx_auxv_from_pid(process->pid, exe_ehdr.e_ident[ELF_Identifier_Class]);
+  ELF_Hdr64     exe_ehdr     = lnx_dmn_ehdr_from_pid(process->pid);
+  LNX_DMN_Auxv  auxv         = lnx_dmn_auxv_from_pid(process->pid, exe_ehdr.e_ident[ELF_Identifier_Class]);
   Arch          arch         = arch_from_elf_machine(exe_ehdr.e_machine);
-  U64           rdebug_vaddr = dmn_lnx_rdebug_vaddr_from_memory(process->fd, auxv.base, is_rebased);
+  U64           rdebug_vaddr = lnx_dmn_rdebug_vaddr_from_memory(process->fd, auxv.base, is_rebased);
   U64           base_vaddr   = (auxv.phdr & ~(auxv.pagesz-1));
   U64           rebase       = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-  Rng1U64       image_vrange = dmn_lnx_compute_image_vrange(process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
+  Rng1U64       image_vrange = lnx_dmn_compute_image_vrange(process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
   Arena        *ctx_arena    = arena_alloc();
   
   ELF_Class dl_class;
   {
     ELF_Hdr64 ehdr = {0};
-    if(elf_read_ehdr(dmn_lnx_machine_op_mem_read, &process->fd, auxv.base, &ehdr) != MachineOpResult_Ok) { Assert(0 && "failed to read interp's header"); }
+    if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &process->fd, auxv.base, &ehdr) != MachineOpResult_Ok) { Assert(0 && "failed to read interp's header"); }
     dl_class = ehdr.e_ident[ELF_Identifier_Class];
   }
   
@@ -681,7 +681,7 @@ dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased)
   if(arch == Arch_x64)
   {
     X64_XSave xsave = {0};
-    if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, process->pid, (void *)NT_X86_XSTATE, &(struct iovec){.iov_base = &xsave, .iov_len = sizeof(xsave) }) >= 0))
+    if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, process->pid, (void *)NT_X86_XSTATE, &(struct iovec){.iov_base = &xsave, .iov_len = sizeof(xsave) }) >= 0))
     {
       // Linux stores xcr0 bits in fxstate padding,
       // see https://github.com/torvalds/linux/blob/6548d364a3e850326831799d7e3ea2d7bb97ba08/arch/x86/include/asm/user.h#L25
@@ -693,27 +693,27 @@ dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased)
   }
   
   // gather probes
-  DMN_LNX_Probe **known_probes = push_array(ctx_arena, DMN_LNX_Probe *, DMN_LNX_ProbeType_Count);
+  LNX_DMN_Probe **known_probes = push_array(ctx_arena, LNX_DMN_Probe *, LNX_DMN_ProbeType_Count);
   {
     Temp scratch = scratch_begin(0, 0);
     
-    String8 dl_path = dmn_lnx_dl_path_from_pid(scratch.arena, process->pid, auxv.base);
-    int dl_fd = OS_LNX_RETRY_ON_EINTR(open((char *)dl_path.str, O_RDONLY));
+    String8 dl_path = lnx_dmn_dl_path_from_pid(scratch.arena, process->pid, auxv.base);
+    int dl_fd = LNX_RETRY_ON_EINTR(open((char *)dl_path.str, O_RDONLY));
     
-    DMN_LNX_ProbeList probes = {0};
+    LNX_DMN_ProbeList probes = {0};
     if(dl_fd >= 0)
     {
-      probes = dmn_lnx_read_probes(ctx_arena, dl_fd, 0, auxv.base);
-      OS_LNX_RETRY_ON_EINTR(close(dl_fd));
+      probes = lnx_dmn_read_probes(ctx_arena, dl_fd, 0, auxv.base);
+      LNX_RETRY_ON_EINTR(close(dl_fd));
     }
     
-    for EachNode(n, DMN_LNX_ProbeNode, probes.first)
+    for EachNode(n, LNX_DMN_ProbeNode, probes.first)
     {
-      DMN_LNX_Probe *p = &n->v;
+      LNX_DMN_Probe *p = &n->v;
       if(str8_match(p->provider, str8_lit("rtld"), 0))
       {
-#define X(_N,_A,_S) if(str8_match(p->name, str8_lit(_S), 0)) { AssertAlways(p->args.count == _A); known_probes[DMN_LNX_ProbeType_##_N] = p; continue ; }
-        DMN_LNX_Probe_XList
+#define X(_N,_A,_S) if(str8_match(p->name, str8_lit(_S), 0)) { AssertAlways(p->args.count == _A); known_probes[LNX_DMN_ProbeType_##_N] = p; continue ; }
+        LNX_DMN_Probe_XList
 #undef X
       }
     }
@@ -721,7 +721,7 @@ dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased)
     scratch_end(scratch);
   }
   
-  ctx = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_ProcessCtx)->process_ctx;
+  ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
   ctx->arena             = arena_alloc();
   ctx->arch              = arch;
   ctx->rdebug_vaddr      = rdebug_vaddr;
@@ -733,7 +733,7 @@ dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased)
   ctx->xsave_layout      = xsave_layout;
   
   // create main module
-  DMN_LNX_Module *main_module = dmn_lnx_module_alloc(ctx, process->fd, base_vaddr, auxv.execfn, 1, 1);
+  LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, process->fd, base_vaddr, auxv.execfn, 1, 1);
   
   // glibc has a shortcut mapping for the main module
   hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, 0, main_module);
@@ -741,8 +741,8 @@ dmn_lnx_process_ctx_alloc(DMN_LNX_Process *process, B32 is_rebased)
   return ctx;
 }
 
-internal DMN_LNX_Thread *
-dmn_lnx_thread_alloc(DMN_LNX_Process *process, DMN_LNX_ThreadState thread_state, pid_t tid)
+internal LNX_DMN_Thread *
+lnx_dmn_thread_alloc(LNX_DMN_Process *process, LNX_DMN_ThreadState thread_state, pid_t tid)
 {
   void *reg_block;
   if(process->ctx->free_reg_blocks.node_count)
@@ -758,14 +758,14 @@ dmn_lnx_thread_alloc(DMN_LNX_Process *process, DMN_LNX_ThreadState thread_state,
     reg_block = push_array(process->ctx->arena, U8, reg_block_size);
   }
   
-  DMN_LNX_Thread *thread = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_Thread)->thread;
+  LNX_DMN_Thread *thread = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Thread)->thread;
   thread->tid       = tid;
   thread->state     = thread_state;
   thread->process   = process;
   thread->reg_block = reg_block;
-  if(thread_state == DMN_LNX_ThreadState_Stopped)
+  if(thread_state == LNX_DMN_ThreadState_Stopped)
   {
-    thread->is_reg_block_dirty = !dmn_lnx_thread_read_reg_block(thread);
+    thread->is_reg_block_dirty = !lnx_dmn_thread_read_reg_block(thread);
   }
   
   // add thread to the list
@@ -773,31 +773,31 @@ dmn_lnx_thread_alloc(DMN_LNX_Process *process, DMN_LNX_ThreadState thread_state,
   process->thread_count += 1;
   
   // push tid -> thread mapping
-  hash_table_push_u64_raw(dmn_lnx_state->arena, dmn_lnx_state->tid_ht, thread->tid, thread);
+  hash_table_push_u64_raw(lnx_dmn_state->arena, lnx_dmn_state->tid_ht, thread->tid, thread);
   
   // update global thread counter
-  if(thread_state == DMN_LNX_ThreadState_PendingCreation)
+  if(thread_state == LNX_DMN_ThreadState_PendingCreation)
   {
-    dmn_lnx_state->threads_pending_creation += 1;
+    lnx_dmn_state->threads_pending_creation += 1;
   }
   
   return thread;
 }
 
-internal DMN_LNX_Module *
-dmn_lnx_module_alloc(DMN_LNX_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main)
+internal LNX_DMN_Module *
+lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main)
 {
-  DMN_LNX_Module *module = hash_table_search_u64_raw(ctx->loaded_modules_ht, base_vaddr);
+  LNX_DMN_Module *module = hash_table_search_u64_raw(ctx->loaded_modules_ht, base_vaddr);
   if(module) { goto exit; }
   
   // parse out module's ELF header
   ELF_Hdr64 module_ehdr = {0};
-  if(elf_read_ehdr(dmn_lnx_machine_op_mem_read, &memory_fd, base_vaddr, &module_ehdr) != MachineOpResult_Ok) { goto exit; }
+  if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &memory_fd, base_vaddr, &module_ehdr) != MachineOpResult_Ok) { goto exit; }
   
   // gather info about module
   U64     module_rebase     = module_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
   U64     module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
-  Rng1U64 module_vrange     = dmn_lnx_compute_image_vrange(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
+  Rng1U64 module_vrange     = lnx_dmn_compute_image_vrange(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
   
   // read TLS index and TLS offset
   U64 tls_index  = max_U64;
@@ -809,18 +809,18 @@ dmn_lnx_module_alloc(DMN_LNX_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   }
   else
   {
-    if(dmn_lnx_state->is_tls_detected)
+    if(lnx_dmn_state->is_tls_detected)
     {
-      Rng1U64 tls_modid_range  = r1u64(dmn_lnx_state->tls_modid_desc.offset, dmn_lnx_state->tls_modid_desc.offset + dmn_lnx_state->tls_modid_desc.bit_size / 8);
-      Rng1U64 tls_offset_range = r1u64(dmn_lnx_state->tls_offset_desc.offset, dmn_lnx_state->tls_offset_desc.offset + dmn_lnx_state->tls_offset_desc.bit_size / 8);
+      Rng1U64 tls_modid_range  = r1u64(lnx_dmn_state->tls_modid_desc.offset, lnx_dmn_state->tls_modid_desc.offset + lnx_dmn_state->tls_modid_desc.bit_size / 8);
+      Rng1U64 tls_offset_range = r1u64(lnx_dmn_state->tls_offset_desc.offset, lnx_dmn_state->tls_offset_desc.offset + lnx_dmn_state->tls_offset_desc.bit_size / 8);
       tls_modid_range  = shift_1u64(tls_modid_range, base_vaddr);
       tls_offset_range = shift_1u64(tls_offset_range, base_vaddr);
-      if(!dmn_lnx_read(memory_fd, tls_modid_range, &tls_index))   { Assert(0 && "failed to read TLS index");  }
-      if(!dmn_lnx_read(memory_fd, tls_offset_range, &tls_offset)) { Assert(0 && "failed to read TLS offset"); }
+      if(!lnx_dmn_read(memory_fd, tls_modid_range, &tls_index))   { Assert(0 && "failed to read TLS index");  }
+      if(!lnx_dmn_read(memory_fd, tls_offset_range, &tls_offset)) { Assert(0 && "failed to read TLS offset"); }
     }
   }
   
-  module = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_Module)->module;
+  module = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Module)->module;
   module->base_vaddr    = base_vaddr;
   module->name_vaddr    = name_vaddr;
   module->name_space_id = name_space_id;
@@ -844,47 +844,47 @@ dmn_lnx_module_alloc(DMN_LNX_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
 }
 
 internal void
-dmn_lnx_entity_release(DMN_LNX_Entity *entity)
+lnx_dmn_entity_release(LNX_DMN_Entity *entity)
 {
   U32 gen = entity->gen + 1;
   MemoryZeroStruct(entity);
   entity->gen = gen;
-  SLLStackPush(dmn_lnx_state->free_entity, entity);
+  SLLStackPush(lnx_dmn_state->free_entity, entity);
 }
 
 internal void
-dmn_lnx_process_release(DMN_LNX_Process *process)
+lnx_dmn_process_release(LNX_DMN_Process *process)
 {
   // update global state
-  AssertAlways(dmn_lnx_state->process_count > 0);
-  DLLRemove(dmn_lnx_state->first_process, dmn_lnx_state->last_process, process);
-  dmn_lnx_state->process_count -= 1;
+  AssertAlways(lnx_dmn_state->process_count > 0);
+  DLLRemove(lnx_dmn_state->first_process, lnx_dmn_state->last_process, process);
+  lnx_dmn_state->process_count -= 1;
   
   // update pending process tracker
-  if(process->state != DMN_LNX_ProcessState_Normal)
+  if(process->state != LNX_DMN_ProcessState_Normal)
   {
-    Assert(dmn_lnx_state->process_pending_creation > 0);
-    dmn_lnx_state->process_pending_creation -= 1;
+    Assert(lnx_dmn_state->process_pending_creation > 0);
+    lnx_dmn_state->process_pending_creation -= 1;
   }
   
   // close memory handle
-  if(OS_LNX_RETRY_ON_EINTR(close(process->fd)) < 0) { Assert(0 && "failed to close memory descriptor"); }
+  if(LNX_RETRY_ON_EINTR(close(process->fd)) < 0) { Assert(0 && "failed to close memory descriptor"); }
   
   // remove pid mapping
-  hash_table_purge_u64(dmn_lnx_state->pid_ht, process->pid);
+  hash_table_purge_u64(lnx_dmn_state->pid_ht, process->pid);
   
   // release the context
   if(process->ctx)
   {
-    dmn_lnx_process_ctx_release(process->ctx);
+    lnx_dmn_process_ctx_release(process->ctx);
   }
   
   // release process entity
-  dmn_lnx_entity_release((DMN_LNX_Entity *)process);
+  lnx_dmn_entity_release((LNX_DMN_Entity *)process);
 }
 
 internal void
-dmn_lnx_process_ctx_release(DMN_LNX_ProcessCtx *ctx)
+lnx_dmn_process_ctx_release(LNX_DMN_ProcessCtx *ctx)
 {
   Assert(ctx->ref_count > 0);
   ctx->ref_count -= 1;
@@ -892,23 +892,23 @@ dmn_lnx_process_ctx_release(DMN_LNX_ProcessCtx *ctx)
   if(ctx->ref_count == 0)
   {
     arena_release(ctx->arena);
-    dmn_lnx_entity_release((DMN_LNX_Entity *)ctx);
+    lnx_dmn_entity_release((LNX_DMN_Entity *)ctx);
   }
 }
 
 internal void
-dmn_lnx_thread_release(DMN_LNX_Thread *thread)
+lnx_dmn_thread_release(LNX_DMN_Thread *thread)
 {
-  DMN_LNX_Process *process = thread->process;
+  LNX_DMN_Process *process = thread->process;
   
   // purge tid mapping
-  hash_table_purge_u64(dmn_lnx_state->tid_ht, thread->tid);
+  hash_table_purge_u64(lnx_dmn_state->tid_ht, thread->tid);
   
   // update global thread counter
-  if(thread->state == DMN_LNX_ThreadState_PendingCreation)
+  if(thread->state == LNX_DMN_ThreadState_PendingCreation)
   {
-    AssertAlways(dmn_lnx_state->threads_pending_creation > 0);
-    dmn_lnx_state->threads_pending_creation -= 1;
+    AssertAlways(lnx_dmn_state->threads_pending_creation > 0);
+    lnx_dmn_state->threads_pending_creation -= 1;
   }
   
   // remove thread from the list
@@ -929,11 +929,11 @@ dmn_lnx_thread_release(DMN_LNX_Thread *thread)
   reg_block_node->string = str8(thread->reg_block, 0);
   str8_list_push_node(&process->ctx->free_reg_blocks, reg_block_node);
   
-  dmn_lnx_entity_release((DMN_LNX_Entity *)thread);
+  lnx_dmn_entity_release((LNX_DMN_Entity *)thread);
 }
 
 internal void
-dmn_lnx_module_release(DMN_LNX_ProcessCtx *ctx, DMN_LNX_Module *module)
+lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module)
 {
   // remove module from the list
   Assert(ctx->module_count > 0);
@@ -943,13 +943,13 @@ dmn_lnx_module_release(DMN_LNX_ProcessCtx *ctx, DMN_LNX_Module *module)
   // purge base addr -> module mapping
   hash_table_purge_u64(ctx->loaded_modules_ht, module->base_vaddr);
   
-  dmn_lnx_entity_release((DMN_LNX_Entity *)module);
+  lnx_dmn_entity_release((LNX_DMN_Entity *)module);
 }
 
-internal DMN_LNX_ProcessCtx *
-dmn_lnx_process_ctx_clone(DMN_LNX_Process *new_owner, DMN_LNX_ProcessCtx *ctx)
+internal LNX_DMN_ProcessCtx *
+lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
 {
-  DMN_LNX_ProcessCtx *result = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_ProcessCtx)->process_ctx;
+  LNX_DMN_ProcessCtx *result = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
   
   result->arena             = arena_alloc();
   result->arch              = ctx->arch;
@@ -961,11 +961,11 @@ dmn_lnx_process_ctx_clone(DMN_LNX_Process *new_owner, DMN_LNX_ProcessCtx *ctx)
   result->xsave_layout      = ctx->xsave_layout;
   
   // clone probes
-  result->probes = push_array(result->arena, DMN_LNX_Probe *, DMN_LNX_ProbeType_Count);
-  for EachIndex(probe_idx, DMN_LNX_ProbeType_Count)
+  result->probes = push_array(result->arena, LNX_DMN_Probe *, LNX_DMN_ProbeType_Count);
+  for EachIndex(probe_idx, LNX_DMN_ProbeType_Count)
   {
-    DMN_LNX_Probe *dst = result->probes[probe_idx];
-    DMN_LNX_Probe *src = ctx->probes[probe_idx];
+    LNX_DMN_Probe *dst = result->probes[probe_idx];
+    LNX_DMN_Probe *src = ctx->probes[probe_idx];
     
     dst->provider    = str8_copy(result->arena, src->provider);
     dst->name        = str8_copy(result->arena, src->name);
@@ -980,7 +980,7 @@ dmn_lnx_process_ctx_clone(DMN_LNX_Process *new_owner, DMN_LNX_ProcessCtx *ctx)
   {
     DMN_Trap *src_trap = src->trap;
     DMN_Trap *dst_trap = push_array(result->arena, DMN_Trap, 1);
-    dst_trap->process = dmn_lnx_handle_from_process(new_owner);
+    dst_trap->process = lnx_dmn_handle_from_process(new_owner);
     dst_trap->vaddr   = src_trap->vaddr;
     dst_trap->id      = src_trap->id;
     dst_trap->flags   = src_trap->flags;
@@ -994,18 +994,18 @@ dmn_lnx_process_ctx_clone(DMN_LNX_Process *new_owner, DMN_LNX_ProcessCtx *ctx)
   }
   
   // clone modules
-  for EachNode(module, DMN_LNX_Module, ctx->first_module)
+  for EachNode(module, LNX_DMN_Module, ctx->first_module)
   {
-    dmn_lnx_module_clone(result, module);
+    lnx_dmn_module_clone(result, module);
   }
   
   return result;
 }
 
-internal DMN_LNX_Module *
-dmn_lnx_module_clone(DMN_LNX_ProcessCtx *process_ctx, DMN_LNX_Module *module)
+internal LNX_DMN_Module *
+lnx_dmn_module_clone(LNX_DMN_ProcessCtx *process_ctx, LNX_DMN_Module *module)
 {
-  DMN_LNX_Module *result = &dmn_lnx_entity_alloc(DMN_LNX_EntityKind_Module)->module;
+  LNX_DMN_Module *result = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Module)->module;
   *result = *module;
   result->next = result->prev = 0;
   
@@ -1020,10 +1020,10 @@ dmn_lnx_module_clone(DMN_LNX_ProcessCtx *process_ctx, DMN_LNX_Module *module)
 }
 
 internal DMN_Handle
-dmn_lnx_handle_from_entity(DMN_LNX_Entity *entity)
+lnx_dmn_handle_from_entity(LNX_DMN_Entity *entity)
 {
   DMN_Handle handle = {0};
-  U64 index = IntFromPtr(entity - dmn_lnx_state->entities_base);
+  U64 index = IntFromPtr(entity - lnx_dmn_state->entities_base);
   if(index <= max_U32)
   {
     handle.u32[0] = index;
@@ -1037,78 +1037,78 @@ dmn_lnx_handle_from_entity(DMN_LNX_Entity *entity)
 }
 
 internal DMN_Handle
-dmn_lnx_handle_from_process(DMN_LNX_Process *process)
+lnx_dmn_handle_from_process(LNX_DMN_Process *process)
 {
-  return dmn_lnx_handle_from_entity((DMN_LNX_Entity *)process);
+  return lnx_dmn_handle_from_entity((LNX_DMN_Entity *)process);
 }
 
 internal DMN_Handle
-dmn_lnx_handle_from_process_ctx(DMN_LNX_ProcessCtx *process_ctx)
+lnx_dmn_handle_from_process_ctx(LNX_DMN_ProcessCtx *process_ctx)
 {
-  return dmn_lnx_handle_from_entity((DMN_LNX_Entity *)process_ctx);
+  return lnx_dmn_handle_from_entity((LNX_DMN_Entity *)process_ctx);
 }
 
 internal DMN_Handle
-dmn_lnx_handle_from_thread(DMN_LNX_Thread *thread)
+lnx_dmn_handle_from_thread(LNX_DMN_Thread *thread)
 {
-  return dmn_lnx_handle_from_entity((DMN_LNX_Entity *)thread);
+  return lnx_dmn_handle_from_entity((LNX_DMN_Entity *)thread);
 }
 
 internal DMN_Handle
-dmn_lnx_handle_from_module(DMN_LNX_Module *module)
+lnx_dmn_handle_from_module(LNX_DMN_Module *module)
 {
-  return dmn_lnx_handle_from_entity((DMN_LNX_Entity *)module);
+  return lnx_dmn_handle_from_entity((LNX_DMN_Entity *)module);
 }
 
-internal DMN_LNX_Entity *
-dmn_lnx_entity_from_handle(DMN_Handle handle, DMN_LNX_EntityKind expected_kind)
+internal LNX_DMN_Entity *
+lnx_dmn_entity_from_handle(DMN_Handle handle, LNX_DMN_EntityKind expected_kind)
 {
-  DMN_LNX_Entity *result = 0;
+  LNX_DMN_Entity *result = 0;
   U32 index = handle.u32[0];
   U32 gen   = handle.u32[1];
-  if(index < dmn_lnx_state->entities_count && dmn_lnx_state->entities_base[index].gen == gen)
+  if(index < lnx_dmn_state->entities_count && lnx_dmn_state->entities_base[index].gen == gen)
   {
-    if(dmn_lnx_state->entities_base[index].kind == expected_kind)
+    if(lnx_dmn_state->entities_base[index].kind == expected_kind)
     {
-      result = &dmn_lnx_state->entities_base[index];
+      result = &lnx_dmn_state->entities_base[index];
     }
   }
   return result;
 }
 
-internal DMN_LNX_Process *
-dmn_lnx_process_from_handle(DMN_Handle process_handle)
+internal LNX_DMN_Process *
+lnx_dmn_process_from_handle(DMN_Handle process_handle)
 {
-  return (DMN_LNX_Process *)dmn_lnx_entity_from_handle(process_handle, DMN_LNX_EntityKind_Process);
+  return (LNX_DMN_Process *)lnx_dmn_entity_from_handle(process_handle, LNX_DMN_EntityKind_Process);
 }
 
-internal DMN_LNX_ProcessCtx *
-dmn_lnx_process_ctx_from_handle(DMN_Handle process_ctx_handle)
+internal LNX_DMN_ProcessCtx *
+lnx_dmn_process_ctx_from_handle(DMN_Handle process_ctx_handle)
 {
-  return (DMN_LNX_ProcessCtx *)dmn_lnx_entity_from_handle(process_ctx_handle, DMN_LNX_EntityKind_ProcessCtx);
+  return (LNX_DMN_ProcessCtx *)lnx_dmn_entity_from_handle(process_ctx_handle, LNX_DMN_EntityKind_ProcessCtx);
 }
 
-internal DMN_LNX_Thread *
-dmn_lnx_thread_from_handle(DMN_Handle thread_handle)
+internal LNX_DMN_Thread *
+lnx_dmn_thread_from_handle(DMN_Handle thread_handle)
 {
-  return (DMN_LNX_Thread *)dmn_lnx_entity_from_handle(thread_handle, DMN_LNX_EntityKind_Thread);
+  return (LNX_DMN_Thread *)lnx_dmn_entity_from_handle(thread_handle, LNX_DMN_EntityKind_Thread);
 }
 
-internal DMN_LNX_Module *
-dmn_lnx_module_from_handle(DMN_Handle module_handle)
+internal LNX_DMN_Module *
+lnx_dmn_module_from_handle(DMN_Handle module_handle)
 {
-  return (DMN_LNX_Module *)dmn_lnx_entity_from_handle(module_handle, DMN_LNX_EntityKind_Module);
+  return (LNX_DMN_Module *)lnx_dmn_entity_from_handle(module_handle, LNX_DMN_EntityKind_Module);
 }
 
 internal void
-dmn_lnx_process_trap_probes(DMN_LNX_Process *process)
+lnx_dmn_process_trap_probes(LNX_DMN_Process *process)
 {
-  for EachIndex(i, DMN_LNX_ProbeType_Count)
+  for EachIndex(i, LNX_DMN_ProbeType_Count)
   {
     if(process->ctx->probes[i] == 0) { continue; }
     
     DMN_Trap *trap = push_array(process->ctx->arena, DMN_Trap, 1);
-    trap->process = dmn_lnx_handle_from_process(process);
+    trap->process = lnx_dmn_handle_from_process(process);
     trap->vaddr   = process->ctx->probes[i]->pc;
     trap->id      = i;
     
@@ -1123,13 +1123,13 @@ dmn_lnx_process_trap_probes(DMN_LNX_Process *process)
 }
 
 internal void
-dmn_lnx_process_untrap_probes(DMN_LNX_Process *process)
+lnx_dmn_process_untrap_probes(LNX_DMN_Process *process)
 {
   NotImplemented;
 }
 
 internal U64
-dmn_lnx_thread_read_ip(DMN_LNX_Thread *thread)
+lnx_dmn_thread_read_ip(LNX_DMN_Thread *thread)
 {
   ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
   U64 result = arch_ip_from_reg_block(arch_info, thread->reg_block);
@@ -1137,7 +1137,7 @@ dmn_lnx_thread_read_ip(DMN_LNX_Thread *thread)
 }
 
 internal U64
-dmn_lnx_thread_read_sp(DMN_LNX_Thread *thread)
+lnx_dmn_thread_read_sp(LNX_DMN_Thread *thread)
 {
   ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
   U64 result = arch_sp_from_reg_block(arch_info, thread->reg_block);
@@ -1145,7 +1145,7 @@ dmn_lnx_thread_read_sp(DMN_LNX_Thread *thread)
 }
 
 internal void
-dmn_lnx_thread_write_ip(DMN_LNX_Thread *thread, U64 ip)
+lnx_dmn_thread_write_ip(LNX_DMN_Thread *thread, U64 ip)
 {
   ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
   arch_reg_block_write_ip(arch_info, thread->reg_block, ip);
@@ -1153,7 +1153,7 @@ dmn_lnx_thread_write_ip(DMN_LNX_Thread *thread, U64 ip)
 }
 
 internal void
-dmn_lnx_thread_write_sp(DMN_LNX_Thread *thread, U64 sp)
+lnx_dmn_thread_write_sp(LNX_DMN_Thread *thread, U64 sp)
 {
   ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
   arch_reg_block_write_sp(arch_info, thread->reg_block, sp);
@@ -1161,23 +1161,23 @@ dmn_lnx_thread_write_sp(DMN_LNX_Thread *thread, U64 sp)
 }
 
 internal B32
-dmn_lnx_thread_read_reg_block(DMN_LNX_Thread *thread)
+lnx_dmn_thread_read_reg_block(LNX_DMN_Thread *thread)
 {
   B32 is_reg_block_read = 0;
-  if(thread->state == DMN_LNX_ThreadState_Stopped)
+  if(thread->state == LNX_DMN_ThreadState_Stopped)
   {
     switch(thread->process->ctx->arch)
     {
       default:{}break;
       case Arch_x64:
       {
-        DMN_LNX_ProcessCtx *process_ctx = thread->process->ctx;
+        LNX_DMN_ProcessCtx *process_ctx = thread->process->ctx;
         X64_RegBlock *dst = thread->reg_block;
         
         // general purpose registers
         {
-          OS_LNX_GprsX64 src;
-          int ptrace_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, thread->tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_len = sizeof(src), .iov_base = &src }));
+          LNX_DMN_GprsX64 src;
+          int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, thread->tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_len = sizeof(src), .iov_base = &src }));
           if(ptrace_result < 0) { goto exit;  }
           
           dst->r15     = src.r15;
@@ -1220,7 +1220,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Thread *thread)
           if(x64_is_xsave_supported())
           {
             void *xsave_raw = push_array(scratch.arena, U8, process_ctx->xsave_size);
-            int ptrace_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, thread->tid, (void *)NT_X86_XSTATE, &(struct iovec){ .iov_len = process_ctx->xsave_size, .iov_base = xsave_raw }));
+            int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, thread->tid, (void *)NT_X86_XSTATE, &(struct iovec){ .iov_len = process_ctx->xsave_size, .iov_base = xsave_raw }));
             if(ptrace_result < 0) { goto exit; }
             xsave  = xsave_raw;
             fxsave = &xsave->fxsave;
@@ -1230,7 +1230,7 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Thread *thread)
           if(fxsave == 0)
           {
             fxsave = push_array(scratch.arena, X64_FXSave, 1);
-            int ptrace_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, thread->tid, (void *)NT_FPREGSET, &(struct iovec){ .iov_len = sizeof(*fxsave), .iov_base = fxsave }));
+            int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, thread->tid, (void *)NT_FPREGSET, &(struct iovec){ .iov_len = sizeof(*fxsave), .iov_base = fxsave }));
             if(ptrace_result < 0) { goto exit; }
             fxsave = 0;
           }
@@ -1334,9 +1334,9 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Thread *thread)
           {
             if(n != 4 && n != 5)
             {
-              U64 offset = OffsetOf(OS_LNX_UserX64, u_debugreg[n]);
+              U64 offset = OffsetOf(LNX_DMN_UserX64, u_debugreg[n]);
               errno = 0;
-              long peek_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_PEEKUSER, thread->tid, PtrFromInt(offset), 0));
+              long peek_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_PEEKUSER, thread->tid, PtrFromInt(offset), 0));
               if(errno != 0) { goto exit; }
               dr_d[n] = peek_result;
             }
@@ -1352,9 +1352,9 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Thread *thread)
 }
 
 internal B32
-dmn_lnx_thread_write_reg_block(DMN_LNX_Thread *thread)
+lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread)
 {
-  AssertAlways(thread->state == DMN_LNX_ThreadState_Stopped);
+  AssertAlways(thread->state == LNX_DMN_ThreadState_Stopped);
   
   B32 is_reg_block_written = 0;
   
@@ -1363,12 +1363,12 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Thread *thread)
     case Arch_Null: {} break;
     case Arch_x64:
     {
-      DMN_LNX_ProcessCtx *process_ctx = thread->process->ctx;
+      LNX_DMN_ProcessCtx *process_ctx = thread->process->ctx;
       X64_RegBlock   *src         = thread->reg_block;
       
       // general purpose registers
       {
-        OS_LNX_GprsX64 dst;
+        LNX_DMN_GprsX64 dst;
         dst.r15      = src->r15;
         dst.r14      = src->r14;
         dst.r13      = src->r13;
@@ -1396,7 +1396,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Thread *thread)
         dst.es       = src->es;
         dst.fs       = src->fs;
         dst.gs       = src->gs;
-        int ptrace_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, thread->tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_base = &dst, .iov_len = sizeof(dst) }));
+        int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, thread->tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_base = &dst, .iov_len = sizeof(dst) }));
         if(ptrace_result < 0) { goto exit; }
       }
       
@@ -1511,7 +1511,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Thread *thread)
           
           // xsave
           Assert(dst->header.xcomp_bv == 0); // must always be zero
-          int ptrace_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, thread->tid, (void *)NT_X86_XSTATE, &(struct iovec){ .iov_base = dst, .iov_len = process_ctx->xsave_size }));
+          int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, thread->tid, (void *)NT_X86_XSTATE, &(struct iovec){ .iov_base = dst, .iov_len = process_ctx->xsave_size }));
           if(ptrace_result < 0) { goto exit; }
         }
         
@@ -1527,8 +1527,8 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Thread *thread)
         {
           if(n != 4 && n != 5)
           {
-            U64 offset = OffsetOf(OS_LNX_UserX64, u_debugreg[n]);
-            int ptrace_result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_POKEUSER, thread->tid, PtrFromInt(offset), (void*)(uintptr_t)dr_s[n]));
+            U64 offset = OffsetOf(LNX_DMN_UserX64, u_debugreg[n]);
+            int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_POKEUSER, thread->tid, PtrFromInt(offset), (void*)(uintptr_t)dr_s[n]));
             if(ptrace_result < 0) { goto exit; }
           }
         }
@@ -1547,7 +1547,7 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Thread *thread)
 }
 
 internal B32
-dmn_lnx_set_single_step_flag(DMN_LNX_Thread *thread, B32 is_on)
+lnx_dmn_set_single_step_flag(LNX_DMN_Thread *thread, B32 is_on)
 {
   B32 is_flag_set = 0;
   switch(thread->process->ctx->arch)
@@ -1571,42 +1571,42 @@ dmn_lnx_set_single_step_flag(DMN_LNX_Thread *thread, B32 is_on)
 }
 
 internal void
-dmn_lnx_thread_ptr_list_push_node(DMN_LNX_ThreadPtrList *list, DMN_LNX_ThreadPtrNode *n)
+lnx_dmn_thread_ptr_list_push_node(LNX_DMN_ThreadPtrList *list, LNX_DMN_ThreadPtrNode *n)
 {
   DLLPushBack(list->first, list->last, n);
   list->count += 1;
 }
 
-internal DMN_LNX_ThreadPtrNode *
-dmn_lnx_thread_ptr_list_push(Arena *arena, DMN_LNX_ThreadPtrList *list, DMN_LNX_Thread *v)
+internal LNX_DMN_ThreadPtrNode *
+lnx_dmn_thread_ptr_list_push(Arena *arena, LNX_DMN_ThreadPtrList *list, LNX_DMN_Thread *v)
 {
-  DMN_LNX_ThreadPtrNode *n = push_array(arena, DMN_LNX_ThreadPtrNode, 1);
+  LNX_DMN_ThreadPtrNode *n = push_array(arena, LNX_DMN_ThreadPtrNode, 1);
   n->v = v;
-  dmn_lnx_thread_ptr_list_push_node(list, n);
+  lnx_dmn_thread_ptr_list_push_node(list, n);
   return n;
 }
 
 internal void
-dmn_lnx_thread_ptr_list_remove(DMN_LNX_ThreadPtrList *list, DMN_LNX_ThreadPtrNode *n)
+lnx_dmn_thread_ptr_list_remove(LNX_DMN_ThreadPtrList *list, LNX_DMN_ThreadPtrNode *n)
 {
   DLLRemove(list->first, list->last, n);
   list->count -= 1;
 }
 
-internal DMN_LNX_ModulePtrNode *
-dmn_lnx_module_ptr_list_push(Arena *arena, DMN_LNX_ModulePtrList *list, DMN_LNX_Module *v)
+internal LNX_DMN_ModulePtrNode *
+lnx_dmn_module_ptr_list_push(Arena *arena, LNX_DMN_ModulePtrList *list, LNX_DMN_Module *v)
 {
-  DMN_LNX_ModulePtrNode *n = push_array(arena, DMN_LNX_ModulePtrNode, 1);
+  LNX_DMN_ModulePtrNode *n = push_array(arena, LNX_DMN_ModulePtrNode, 1);
   n->v = v;
   SLLQueuePush(list->first, list->last, n);
   list->count += 1;
   return n;
 }
 
-internal DMN_LNX_ProcessPtrNode *
-dmn_lnx_process_ptr_list_push(Arena *arena, DMN_LNX_ProcessPtrList *list, DMN_LNX_Process *v)
+internal LNX_DMN_ProcessPtrNode *
+lnx_dmn_process_ptr_list_push(Arena *arena, LNX_DMN_ProcessPtrList *list, LNX_DMN_Process *v)
 {
-  DMN_LNX_ProcessPtrNode *n = push_array(arena, DMN_LNX_ProcessPtrNode, 1);
+  LNX_DMN_ProcessPtrNode *n = push_array(arena, LNX_DMN_ProcessPtrNode, 1);
   n->v = v;
   SLLQueuePush(list->first, list->last, n);
   list->count += 1;
@@ -1614,59 +1614,59 @@ dmn_lnx_process_ptr_list_push(Arena *arena, DMN_LNX_ProcessPtrList *list, DMN_LN
 }
 
 internal void
-dmn_lnx_push_event_create_process(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process)
+lnx_dmn_push_event_create_process(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process)
 {
   // push create process event
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind      = DMN_EventKind_CreateProcess;
-  e->process   = dmn_lnx_handle_from_process(process);
+  e->process   = lnx_dmn_handle_from_process(process);
   e->arch      = process->ctx->arch;
   e->code      = process->pid;
   e->tls_model = DMN_TlsModel_Gnu; // TODO: use dynamic linker path to figure out correct enum here
 }
 
 internal void
-dmn_lnx_push_event_exit_process(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process)
+lnx_dmn_push_event_exit_process(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind    = DMN_EventKind_ExitProcess;
-  e->process = dmn_lnx_handle_from_process(process);
+  e->process = lnx_dmn_handle_from_process(process);
   e->code    = process->main_thread_exit_code;
 }
 
 internal void
-dmn_lnx_push_event_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread)
+lnx_dmn_push_event_create_thread(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind    = DMN_EventKind_CreateThread;
-  e->process = dmn_lnx_handle_from_process(thread->process);
-  e->thread  = dmn_lnx_handle_from_thread(thread);
+  e->process = lnx_dmn_handle_from_process(thread->process);
+  e->thread  = lnx_dmn_handle_from_thread(thread);
   e->arch    = thread->process->ctx->arch;
   e->code    = thread->tid;
 }
 
 internal void
-dmn_lnx_push_event_exit_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, U64 exit_code)
+lnx_dmn_push_event_exit_thread(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 exit_code)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind    = DMN_EventKind_ExitThread;
-  e->process = dmn_lnx_handle_from_process(thread->process);
-  e->thread  = dmn_lnx_handle_from_thread(thread);
+  e->process = lnx_dmn_handle_from_process(thread->process);
+  e->thread  = lnx_dmn_handle_from_thread(thread);
   e->code    = exit_code;
 }
 
 internal void
-dmn_lnx_push_event_load_module(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, DMN_LNX_Module *module)
+lnx_dmn_push_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, LNX_DMN_Module *module)
 {
   // TODO: reporting this module breaks ctrl thread
-  String8 module_name = dmn_lnx_read_string(arena, thread->process->fd, module->name_vaddr);
+  String8 module_name = lnx_dmn_read_string(arena, thread->process->fd, module->name_vaddr);
   if(!str8_match(module_name, str8_lit("linux-vdso.so.1"), 0))
   {
     DMN_Event *e = dmn_event_list_push(arena, events);
     e->kind             = DMN_EventKind_LoadModule;
-    e->process          = dmn_lnx_handle_from_process(thread->process);
-    e->thread           = dmn_lnx_handle_from_thread(thread);
-    e->module           = dmn_lnx_handle_from_module(module);
+    e->process          = lnx_dmn_handle_from_process(thread->process);
+    e->thread           = lnx_dmn_handle_from_thread(thread);
+    e->module           = lnx_dmn_handle_from_module(module);
     e->arch             = thread->process->ctx->arch;
     e->address          = module->base_vaddr;
     e->size             = module->size;
@@ -1679,46 +1679,46 @@ dmn_lnx_push_event_load_module(Arena *arena, DMN_EventList *events, DMN_LNX_Thre
 }
 
 internal void
-dmn_lnx_push_event_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process, DMN_LNX_Module *module)
+lnx_dmn_push_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, LNX_DMN_Module *module)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind    = DMN_EventKind_UnloadModule;
-  e->process = dmn_lnx_handle_from_process(process);
-  e->module  = dmn_lnx_handle_from_module(module);
+  e->process = lnx_dmn_handle_from_process(process);
+  e->module  = lnx_dmn_handle_from_module(module);
 }
 
 internal void
-dmn_lnx_push_event_handshake_complete(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process)
+lnx_dmn_push_event_handshake_complete(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind    = DMN_EventKind_HandshakeComplete;
-  e->process = dmn_lnx_handle_from_process(process);
-  e->thread  = dmn_lnx_handle_from_thread(process->first_thread);
+  e->process = lnx_dmn_handle_from_process(process);
+  e->thread  = lnx_dmn_handle_from_thread(process->first_thread);
   e->arch    = process->ctx->arch;
 }
 
 internal void
-dmn_lnx_push_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, U64 address)
+lnx_dmn_push_event_breakpoint(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 address)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind                = DMN_EventKind_Breakpoint;
-  e->process             = dmn_lnx_handle_from_process(thread->process);
-  e->thread              = dmn_lnx_handle_from_thread(thread);
+  e->process             = lnx_dmn_handle_from_process(thread->process);
+  e->thread              = lnx_dmn_handle_from_thread(thread);
   e->instruction_pointer = address;
 }
 
 internal void
-dmn_lnx_push_event_single_step(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread)
+lnx_dmn_push_event_single_step(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind                = DMN_EventKind_SingleStep;
-  e->process             = dmn_lnx_handle_from_process(thread->process);
-  e->thread              = dmn_lnx_handle_from_thread(thread);
-  e->instruction_pointer = dmn_lnx_thread_read_ip(thread);
+  e->process             = lnx_dmn_handle_from_process(thread->process);
+  e->thread              = lnx_dmn_handle_from_thread(thread);
+  e->instruction_pointer = lnx_dmn_thread_read_ip(thread);
 }
 
 internal void
-dmn_lnx_push_event_exception(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, U64 signo)
+lnx_dmn_push_event_exception(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 signo)
 {
   local_persist B8 is_repeatable[] =
   {
@@ -1759,48 +1759,48 @@ dmn_lnx_push_event_exception(Arena *arena, DMN_EventList *events, DMN_LNX_Thread
   
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind                = DMN_EventKind_Exception;
-  e->process             = dmn_lnx_handle_from_process(thread->process);
-  e->thread              = dmn_lnx_handle_from_thread(thread);
-  e->instruction_pointer = dmn_lnx_thread_read_ip(thread);
+  e->process             = lnx_dmn_handle_from_process(thread->process);
+  e->thread              = lnx_dmn_handle_from_thread(thread);
+  e->instruction_pointer = lnx_dmn_thread_read_ip(thread);
   e->signo               = signo;
   e->exception_repeated  = signo < ArrayCount(is_repeatable) ? is_repeatable[signo] : 0;
   
   if(signo == SIGSEGV)
   {
     siginfo_t si = {0};
-    OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETSIGINFO, thread->tid, 0, &si));
+    LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETSIGINFO, thread->tid, 0, &si));
     e->address = (U64)si.si_addr;
   }
 }
 
 internal void
-dmn_lnx_push_event_halt(Arena *arena, DMN_EventList *events)
+lnx_dmn_push_event_halt(Arena *arena, DMN_EventList *events)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind = DMN_EventKind_Halt;
 }
 
 internal void
-dmn_lnx_push_event_not_attached(Arena *arena, DMN_EventList *events)
+lnx_dmn_push_event_not_attached(Arena *arena, DMN_EventList *events)
 {
   DMN_Event *e = dmn_event_list_push(arena, events);
   e->kind       = DMN_EventKind_Error;
   e->error_kind = DMN_ErrorKind_NotAttached;
 }
 
-internal DMN_LNX_Thread *
-dmn_lnx_event_create_thread(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process, pid_t tid)
+internal LNX_DMN_Thread *
+lnx_dmn_event_create_thread(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, pid_t tid)
 {
-  DMN_LNX_Thread *thread = dmn_lnx_thread_alloc(process, DMN_LNX_ThreadState_Stopped, tid);
-  dmn_lnx_push_event_create_thread(arena, events, thread);
+  LNX_DMN_Thread *thread = lnx_dmn_thread_alloc(process, LNX_DMN_ThreadState_Stopped, tid);
+  lnx_dmn_push_event_create_thread(arena, events, thread);
   return thread;
 }
 
 internal void
-dmn_lnx_event_exit_thread(Arena *arena, DMN_EventList *events, pid_t tid, U64 exit_code)
+lnx_dmn_event_exit_thread(Arena *arena, DMN_EventList *events, pid_t tid, U64 exit_code)
 {
-  DMN_LNX_Thread  *thread  = dmn_lnx_thread_from_pid(tid);
-  DMN_LNX_Process *process = thread->process;
+  LNX_DMN_Thread  *thread  = lnx_dmn_thread_from_pid(tid);
+  LNX_DMN_Process *process = thread->process;
   
   // store main thread's exit code
   if(thread->tid == thread->process->pid)
@@ -1809,139 +1809,139 @@ dmn_lnx_event_exit_thread(Arena *arena, DMN_EventList *events, pid_t tid, U64 ex
   }
   
   // push exit event
-  dmn_lnx_push_event_exit_thread(arena, events, thread, exit_code);
+  lnx_dmn_push_event_exit_thread(arena, events, thread, exit_code);
   
   // release entity
-  dmn_lnx_thread_release(thread);
+  lnx_dmn_thread_release(thread);
   
   // auto exit process on last thread
   if(process->thread_count == 0)
   {
-    dmn_lnx_event_exit_process(arena, events, process->pid);
+    lnx_dmn_event_exit_process(arena, events, process->pid);
   }
 }
 
-internal DMN_LNX_Process *
-dmn_lnx_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, DMN_LNX_Process *parent_process, DMN_LNX_CreateProcessFlags flags)
+internal LNX_DMN_Process *
+lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX_DMN_Process *parent_process, LNX_DMN_CreateProcessFlags flags)
 {
-  DMN_LNX_Process *process = dmn_lnx_process_alloc(pid, DMN_LNX_ProcessState_Normal, parent_process, !!(flags & DMN_LNX_CreateProcessFlag_DebugSubprocesses), !!(flags & DMN_LNX_CreateProcessFlag_Cow));
+  LNX_DMN_Process *process = lnx_dmn_process_alloc(pid, LNX_DMN_ProcessState_Normal, parent_process, !!(flags & LNX_DMN_CreateProcessFlag_DebugSubprocesses), !!(flags & LNX_DMN_CreateProcessFlag_Cow));
   
-  if(flags & DMN_LNX_CreateProcessFlag_ClonedMemory)
+  if(flags & LNX_DMN_CreateProcessFlag_ClonedMemory)
   {
     process->ctx = parent_process->ctx;
   }
   else
   {
-    process->ctx = dmn_lnx_process_ctx_alloc(process, !!(flags & DMN_LNX_CreateProcessFlag_Rebased));
+    process->ctx = lnx_dmn_process_ctx_alloc(process, !!(flags & LNX_DMN_CreateProcessFlag_Rebased));
   }
   process->ctx->ref_count += 1;
   
   // install probes in a process that does not have a cloned memory
-  if(!(flags & DMN_LNX_CreateProcessFlag_ClonedMemory))
+  if(!(flags & LNX_DMN_CreateProcessFlag_ClonedMemory))
   {
-    dmn_lnx_process_trap_probes(process);
+    lnx_dmn_process_trap_probes(process);
   }
   
   // create main thread
-  dmn_lnx_thread_alloc(process, DMN_LNX_ThreadState_Stopped, pid);
+  lnx_dmn_thread_alloc(process, LNX_DMN_ThreadState_Stopped, pid);
   
   // push events
-  dmn_lnx_push_event_create_process(arena, events, process);
-  for EachNode(thread, DMN_LNX_Thread, process->first_thread)
+  lnx_dmn_push_event_create_process(arena, events, process);
+  for EachNode(thread, LNX_DMN_Thread, process->first_thread)
   {
-    dmn_lnx_push_event_create_thread(arena, events, thread);
+    lnx_dmn_push_event_create_thread(arena, events, thread);
   }
-  for EachNode(module, DMN_LNX_Module, process->ctx->first_module)
+  for EachNode(module, LNX_DMN_Module, process->ctx->first_module)
   {
-    dmn_lnx_push_event_load_module(arena, events, process->first_thread, module);
+    lnx_dmn_push_event_load_module(arena, events, process->first_thread, module);
   }
-  dmn_lnx_push_event_handshake_complete(arena, events, process);
+  lnx_dmn_push_event_handshake_complete(arena, events, process);
   
   return process;
 }
 
 internal void
-dmn_lnx_event_exit_process(Arena *arena, DMN_EventList *events, pid_t pid)
+lnx_dmn_event_exit_process(Arena *arena, DMN_EventList *events, pid_t pid)
 {
-  DMN_LNX_Process *process = dmn_lnx_process_from_pid(pid);
+  LNX_DMN_Process *process = lnx_dmn_process_from_pid(pid);
   AssertAlways(process->thread_count == 0);
   
   // push module events
-  for EachNode(module, DMN_LNX_Module, process->ctx->first_module)
+  for EachNode(module, LNX_DMN_Module, process->ctx->first_module)
   {
-    dmn_lnx_push_event_unload_module(arena, events, process, module);
+    lnx_dmn_push_event_unload_module(arena, events, process, module);
   }
   
   // push process exit event
-  dmn_lnx_push_event_exit_process(arena, events, process);
+  lnx_dmn_push_event_exit_process(arena, events, process);
   
   // release process
-  dmn_lnx_process_release(process);
+  lnx_dmn_process_release(process);
 }
 
 internal void
-dmn_lnx_event_load_module(Arena *arena, DMN_EventList *events, DMN_LNX_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr)
+lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr)
 {
-  DMN_LNX_Process *process = thread->process;
+  LNX_DMN_Process *process = thread->process;
   
   GNU_LinkMap64 map = {0};
   for(U64 map_vaddr = new_link_map_vaddr; map_vaddr != 0; map_vaddr = map.next_vaddr)
   {
     // read out new link map item
-    if(gnu_read_link_map(dmn_lnx_machine_op_mem_read, &process->fd, map_vaddr, process->ctx->dl_class, &map) != MachineOpResult_Ok) { break; }
+    if(gnu_read_link_map(lnx_dmn_machine_op_mem_read, &process->fd, map_vaddr, process->ctx->dl_class, &map) != MachineOpResult_Ok) { break; }
     
     // was module already loaded?
-    DMN_LNX_Module *module = hash_table_search_u64_raw(process->ctx->loaded_modules_ht, map.addr_vaddr);
+    LNX_DMN_Module *module = hash_table_search_u64_raw(process->ctx->loaded_modules_ht, map.addr_vaddr);
     if(module) { continue; }
     
     // clone process ctx
     if(process->is_cow)
     {
       process->is_cow = 0;
-      process->ctx    = dmn_lnx_process_ctx_clone(process, process->ctx);
+      process->ctx    = lnx_dmn_process_ctx_clone(process, process->ctx);
     }
     
     // alloc module
-    module = dmn_lnx_module_alloc(process->ctx, process->fd, map.addr_vaddr, map.name_vaddr, name_space_id, 0);
+    module = lnx_dmn_module_alloc(process->ctx, process->fd, map.addr_vaddr, map.name_vaddr, name_space_id, 0);
     
     // push load module event
-    dmn_lnx_push_event_load_module(arena, events, thread, module);
+    lnx_dmn_push_event_load_module(arena, events, thread, module);
   }
 }
 
 internal void
-dmn_lnx_event_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Process *process, U64 rdebug_vaddr)
+lnx_dmn_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, U64 rdebug_vaddr)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
-  DMN_LNX_ProcessCtx *ctx = process->ctx;
+  LNX_DMN_ProcessCtx *ctx = process->ctx;
   
   // flag every module as inactive
-  for EachNode(module, DMN_LNX_Module, ctx->first_module)
+  for EachNode(module, LNX_DMN_Module, ctx->first_module)
   {
     module->is_live = 0;
   }
   
   // mark live modules
   B32                is_64bit    = ctx->dl_class == ELF_Class_64;
-  GNU_RDebugInfoList rdebug_list = gnu_parse_rdebug(scratch.arena, is_64bit, rdebug_vaddr, dmn_lnx_machine_op_mem_read, &process->fd);
+  GNU_RDebugInfoList rdebug_list = gnu_parse_rdebug(scratch.arena, is_64bit, rdebug_vaddr, lnx_dmn_machine_op_mem_read, &process->fd);
   for EachNode(rdebug_n, GNU_RDebugInfoNode, rdebug_list.first)
   {
-    GNU_LinkMapList link_map_list = gnu_parse_link_map_list(scratch.arena, is_64bit, rdebug_n->v.r_map, dmn_lnx_machine_op_mem_read, &process->fd);
+    GNU_LinkMapList link_map_list = gnu_parse_link_map_list(scratch.arena, is_64bit, rdebug_n->v.r_map, lnx_dmn_machine_op_mem_read, &process->fd);
     for EachNode(link_map_n, GNU_LinkMapNode, link_map_list.first)
     {
-      DMN_LNX_Module *module = hash_table_search_u64_raw(ctx->loaded_modules_ht, link_map_n->v.addr_vaddr);
+      LNX_DMN_Module *module = hash_table_search_u64_raw(ctx->loaded_modules_ht, link_map_n->v.addr_vaddr);
       module->is_live = 1;
     }
   }
   
   // collect unloaded modules
-  DMN_LNX_ModulePtrList to_release = {0};
-  for EachNode(module, DMN_LNX_Module, ctx->first_module)
+  LNX_DMN_ModulePtrList to_release = {0};
+  for EachNode(module, LNX_DMN_Module, ctx->first_module)
   {
     if(!module->is_live)
     {
-      dmn_lnx_module_ptr_list_push(scratch.arena, &to_release, module);
+      lnx_dmn_module_ptr_list_push(scratch.arena, &to_release, module);
     }
   }
   
@@ -1951,31 +1951,31 @@ dmn_lnx_event_unload_module(Arena *arena, DMN_EventList *events, DMN_LNX_Process
     if(process->is_cow)
     {
       process->is_cow = 0;
-      process->ctx    = dmn_lnx_process_ctx_clone(process, process->ctx);
+      process->ctx    = lnx_dmn_process_ctx_clone(process, process->ctx);
     }
   }
   
   // push events and clean up unloaded modules
-  for EachNode(module_n, DMN_LNX_ModulePtrNode, to_release.first)
+  for EachNode(module_n, LNX_DMN_ModulePtrNode, to_release.first)
   {
-    dmn_lnx_push_event_unload_module(arena, events, process, module_n->v);
-    dmn_lnx_module_release(process->ctx, module_n->v);
+    lnx_dmn_push_event_unload_module(arena, events, process, module_n->v);
+    lnx_dmn_module_release(process->ctx, module_n->v);
   }
   
   scratch_end(scratch);
 }
 
 internal void
-dmn_lnx_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *user_traps, pid_t tid)
+lnx_dmn_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *user_traps, pid_t tid)
 {
-  DMN_LNX_Thread  *thread  = dmn_lnx_thread_from_pid(tid);
-  DMN_LNX_Process *process = thread->process;
-  U64              ip      = dmn_lnx_thread_read_ip(thread);
+  LNX_DMN_Thread  *thread  = lnx_dmn_thread_from_pid(tid);
+  LNX_DMN_Process *process = thread->process;
+  U64              ip      = lnx_dmn_thread_read_ip(thread);
   
   // is this user trap?
   DMN_ActiveTrap *hit_user_trap = 0;
   {
-    DMN_Handle process_handle = dmn_lnx_handle_from_process(process);
+    DMN_Handle process_handle = lnx_dmn_handle_from_process(process);
     for EachNode(active_trap, DMN_ActiveTrap, user_traps)
     {
       if(MemoryCompare(&active_trap->trap->process, &process_handle, sizeof(DMN_Handle)) == 0)
@@ -1990,7 +1990,7 @@ dmn_lnx_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *us
   }
   
   // is this a probe trap?
-  DMN_LNX_ProbeType probe_type = DMN_LNX_ProbeType_Null;
+  LNX_DMN_ProbeType probe_type = LNX_DMN_ProbeType_Null;
   if(hit_user_trap == 0)
   {
     for EachNode(active_trap, DMN_ActiveTrap, process->ctx->first_probe_trap)
@@ -2003,77 +2003,77 @@ dmn_lnx_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *us
     }
   }
   
-  if(probe_type == DMN_LNX_ProbeType_InitComplete)
+  if(probe_type == LNX_DMN_ProbeType_InitComplete)
   {
     B32 is_init_completed = 0;
     
-    DMN_LNX_Probe *probe = process->ctx->probes[DMN_LNX_ProbeType_InitComplete];
+    LNX_DMN_Probe *probe = process->ctx->probes[LNX_DMN_ProbeType_InitComplete];
     U64 name_space_id = 0, rdebug_addr = 0;
-    if(!stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &name_space_id)) { goto init_complete_exit; }
-    if(!stap_read_arg_u(probe->args.v[1], process->ctx->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &rdebug_addr))   { goto init_complete_exit; }
+    if(!stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &name_space_id)) { goto init_complete_exit; }
+    if(!stap_read_arg_u(probe->args.v[1], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &rdebug_addr))   { goto init_complete_exit; }
     
     GNU_RDebugInfo64 rdebug = {0};
-    if(gnu_read_r_debug(dmn_lnx_machine_op_mem_read, &process->fd, rdebug_addr, process->ctx->arch, &rdebug) != MachineOpResult_Ok) { goto init_complete_exit; }
+    if(gnu_read_r_debug(lnx_dmn_machine_op_mem_read, &process->fd, rdebug_addr, process->ctx->arch, &rdebug) != MachineOpResult_Ok) { goto init_complete_exit; }
     if(rdebug.r_version < 1) { goto init_complete_exit; }
     
-    dmn_lnx_event_load_module(arena, events, thread, name_space_id, rdebug.r_map);
+    lnx_dmn_event_load_module(arena, events, thread, name_space_id, rdebug.r_map);
     
     is_init_completed = 1;
     init_complete_exit:;
     AssertAlways(is_init_completed);
   }
-  else if(probe_type == DMN_LNX_ProbeType_RelocComplete)
+  else if(probe_type == LNX_DMN_ProbeType_RelocComplete)
   {
     B32 is_reloc_completed = 0;
     
-    DMN_LNX_Probe *probe = process->ctx->probes[DMN_LNX_ProbeType_RelocComplete];
+    LNX_DMN_Probe *probe = process->ctx->probes[LNX_DMN_ProbeType_RelocComplete];
     U64 name_space_id = 0, new_link_map_addr = 0;
-    if(!stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &name_space_id))     { goto reloc_complete_exit; }
-    if(!stap_read_arg_u(probe->args.v[2], process->ctx->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &new_link_map_addr)) { goto reloc_complete_exit; }
+    if(!stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &name_space_id))     { goto reloc_complete_exit; }
+    if(!stap_read_arg_u(probe->args.v[2], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &new_link_map_addr)) { goto reloc_complete_exit; }
     
-    dmn_lnx_event_load_module(arena, events, thread, name_space_id, new_link_map_addr);
+    lnx_dmn_event_load_module(arena, events, thread, name_space_id, new_link_map_addr);
     
     is_reloc_completed = 1;
     reloc_complete_exit:;
     AssertAlways(is_reloc_completed);
   }
-  else if(probe_type == DMN_LNX_ProbeType_UnmapComplete)
+  else if(probe_type == LNX_DMN_ProbeType_UnmapComplete)
   {
     B32 is_unmap_completed = 0;
     
-    DMN_LNX_Probe *probe = process->ctx->probes[DMN_LNX_ProbeType_UnmapComplete];
+    LNX_DMN_Probe *probe = process->ctx->probes[LNX_DMN_ProbeType_UnmapComplete];
     U64 name_space_id = 0, rdebug_vaddr = 0;
-    if(!stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &name_space_id)) { goto unmap_complete_exit; }
-    if(!stap_read_arg_u(probe->args.v[1], process->ctx->arch, thread->reg_block, dmn_lnx_stap_memory_read, process, &rdebug_vaddr))  { goto unmap_complete_exit; }
+    if(!stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &name_space_id)) { goto unmap_complete_exit; }
+    if(!stap_read_arg_u(probe->args.v[1], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &rdebug_vaddr))  { goto unmap_complete_exit; }
     
-    dmn_lnx_event_unload_module(arena, events, process, rdebug_vaddr);
+    lnx_dmn_event_unload_module(arena, events, process, rdebug_vaddr);
     
     is_unmap_completed = 1;
     unmap_complete_exit:;
     AssertAlways(is_unmap_completed);
   }
   
-  if(probe_type == DMN_LNX_ProbeType_Null)
+  if(probe_type == LNX_DMN_ProbeType_Null)
   {
     // rollback IP on user traps
     if(hit_user_trap)
     {
-      U64 ip = dmn_lnx_thread_read_ip(thread);
-      dmn_lnx_thread_write_ip(thread, ip - 1);
+      U64 ip = lnx_dmn_thread_read_ip(thread);
+      lnx_dmn_thread_write_ip(thread, ip - 1);
     }
     
     DMN_Event *e = dmn_event_list_push(arena, events);
     e->kind                = DMN_EventKind_Breakpoint;
-    e->process             = dmn_lnx_handle_from_process(process);
-    e->thread              = dmn_lnx_handle_from_thread(thread);
-    e->instruction_pointer = dmn_lnx_thread_read_ip(thread);
+    e->process             = lnx_dmn_handle_from_process(process);
+    e->thread              = lnx_dmn_handle_from_thread(thread);
+    e->instruction_pointer = lnx_dmn_thread_read_ip(thread);
   }
 }
 
 internal void
-dmn_lnx_event_data_breakpoint(Arena *arena, DMN_EventList *events, pid_t tid)
+lnx_dmn_event_data_breakpoint(Arena *arena, DMN_EventList *events, pid_t tid)
 {
-  DMN_LNX_Thread *thread = dmn_lnx_thread_from_pid(tid);
+  LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(tid);
   
   B32 is_valid = 1;
   U64 address  = 0;
@@ -2108,46 +2108,46 @@ dmn_lnx_event_data_breakpoint(Arena *arena, DMN_EventList *events, pid_t tid)
   
   if(is_valid)
   {
-    dmn_lnx_push_event_breakpoint(arena, events, thread, address);
+    lnx_dmn_push_event_breakpoint(arena, events, thread, address);
   }
 }
 
 internal void
-dmn_lnx_event_halt(Arena *arena, DMN_EventList *events)
+lnx_dmn_event_halt(Arena *arena, DMN_EventList *events)
 {
-  dmn_lnx_push_event_halt(arena, events);
+  lnx_dmn_push_event_halt(arena, events);
 }
 
 internal void
-dmn_lnx_event_single_step(Arena *arena, DMN_EventList *events, pid_t tid)
+lnx_dmn_event_single_step(Arena *arena, DMN_EventList *events, pid_t tid)
 {
-  DMN_LNX_Thread *thread = dmn_lnx_thread_from_pid(tid);
+  LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(tid);
   
   // clear single step flag
-  dmn_lnx_set_single_step_flag(thread, 0);
+  lnx_dmn_set_single_step_flag(thread, 0);
   
   // push event
-  dmn_lnx_push_event_single_step(arena, events, thread);
+  lnx_dmn_push_event_single_step(arena, events, thread);
 }
 
 internal void
-dmn_lnx_event_exception(Arena *arena, DMN_EventList *events, pid_t tid, U64 signo)
+lnx_dmn_event_exception(Arena *arena, DMN_EventList *events, pid_t tid, U64 signo)
 {
-  DMN_LNX_Thread *thread = dmn_lnx_thread_from_pid(tid);
+  LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(tid);
   
   thread->pass_through_signal = 1;
   thread->pass_through_signo  = signo;
   
-  dmn_lnx_push_event_exception(arena, events, thread, signo);
+  lnx_dmn_push_event_exception(arena, events, thread, signo);
 }
 
-internal DMN_LNX_Process *
-dmn_lnx_event_attach(Arena *arena, DMN_EventList *events, pid_t pid)
+internal LNX_DMN_Process *
+lnx_dmn_event_attach(Arena *arena, DMN_EventList *events, pid_t pid)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
   // create process
-  DMN_LNX_Process *process = dmn_lnx_event_create_process(arena, events, pid, 0, DMN_LNX_CreateProcessFlag_DebugSubprocesses|DMN_LNX_CreateProcessFlag_Rebased);
+  LNX_DMN_Process *process = lnx_dmn_event_create_process(arena, events, pid, 0, LNX_DMN_CreateProcessFlag_DebugSubprocesses|LNX_DMN_CreateProcessFlag_Rebased);
   
   // extract threads from /proc/pid/task
   {
@@ -2167,27 +2167,27 @@ dmn_lnx_event_attach(Arena *arena, DMN_EventList *events, pid_t pid)
         AssertAlways(tid == tid_64);
         
         if(tid == pid) { continue; } // main thread was created during create process sequence
-        dmn_lnx_event_create_thread(arena, events, process, tid);
+        lnx_dmn_event_create_thread(arena, events, process, tid);
       }
       
-      OS_LNX_RETRY_ON_EINTR(closedir(task_dirp));
+      LNX_RETRY_ON_EINTR(closedir(task_dirp));
     }
   }
   
   // extract modules from r_debug
   {
     B32                is_64bit      = process->ctx->dl_class == ELF_Class_64;
-    GNU_RDebugInfoList rdebug_list   = gnu_parse_rdebug(scratch.arena, is_64bit, process->ctx->rdebug_vaddr, dmn_lnx_machine_op_mem_read, &process->fd);
+    GNU_RDebugInfoList rdebug_list   = gnu_parse_rdebug(scratch.arena, is_64bit, process->ctx->rdebug_vaddr, lnx_dmn_machine_op_mem_read, &process->fd);
     U64                name_space_id = 0;
     for EachNode(rdebug_n, GNU_RDebugInfoNode, rdebug_list.first)
     {
-      dmn_lnx_event_load_module(arena, events, process->first_thread, name_space_id, rdebug_n->v.r_map);
+      lnx_dmn_event_load_module(arena, events, process->first_thread, name_space_id, rdebug_n->v.r_map);
       name_space_id += 1;
     }
   }
   
   // handshake complete
-  dmn_lnx_push_event_handshake_complete(arena, events, process);
+  lnx_dmn_push_event_handshake_complete(arena, events, process);
   
   scratch_end(scratch);
   return process;
@@ -2199,33 +2199,33 @@ dmn_lnx_event_attach(Arena *arena, DMN_EventList *events, pid_t pid)
 internal void
 dmn_init(void)
 {
-  if(dmn_lnx_state == 0)
+  if(lnx_dmn_state == 0)
   {
-    local_persist DMN_LNX_State state;
-    dmn_lnx_state = &state;
+    local_persist LNX_DMN_State state;
+    lnx_dmn_state = &state;
     
-    dmn_lnx_state->arena          = arena_alloc();
-    dmn_lnx_state->access_mutex   = mutex_alloc();
-    dmn_lnx_state->entities_arena = arena_alloc(.reserve_size = GB(32), .commit_size = KB(64), .flags = ArenaFlag_NoChain);
-    dmn_lnx_state->entities_base  = push_array(dmn_lnx_state->entities_arena, DMN_LNX_Entity, 0);
-    dmn_lnx_state->tid_ht         = hash_table_init(dmn_lnx_state->arena, 0x2000);
-    dmn_lnx_state->pid_ht         = hash_table_init(dmn_lnx_state->arena, 0x400);
-    dmn_lnx_state->halter_mutex   = mutex_alloc();
-    dmn_lnx_entity_alloc(DMN_LNX_EntityKind_Null);
+    lnx_dmn_state->arena          = arena_alloc();
+    lnx_dmn_state->access_mutex   = mutex_alloc();
+    lnx_dmn_state->entities_arena = arena_alloc(.reserve_size = GB(32), .commit_size = KB(64), .flags = ArenaFlag_NoChain);
+    lnx_dmn_state->entities_base  = push_array(lnx_dmn_state->entities_arena, LNX_DMN_Entity, 0);
+    lnx_dmn_state->tid_ht         = hash_table_init(lnx_dmn_state->arena, 0x2000);
+    lnx_dmn_state->pid_ht         = hash_table_init(lnx_dmn_state->arena, 0x400);
+    lnx_dmn_state->halter_mutex   = mutex_alloc();
+    lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Null);
     
     // find offsets of TLS index and TLS offset in the link_map struct
     // 
     // TODO: assuming that target is using same libc version as debugger
     {
-      DMN_LNX_DbDesc *tls_modid_desc  = dlsym(RTLD_DEFAULT, "_thread_db_link_map_l_tls_modid");
-      DMN_LNX_DbDesc *tls_offset_desc = dlsym(RTLD_DEFAULT, "_thread_db_link_map_l_tls_offset");
+      LNX_DMN_DbDesc *tls_modid_desc  = dlsym(RTLD_DEFAULT, "_thread_db_link_map_l_tls_modid");
+      LNX_DMN_DbDesc *tls_offset_desc = dlsym(RTLD_DEFAULT, "_thread_db_link_map_l_tls_offset");
       if(tls_modid_desc && tls_offset_desc)
       {
         if(tls_modid_desc->bit_size <= 64 && tls_offset_desc->bit_size <= 64)
         {
-          dmn_lnx_state->tls_modid_desc  = *tls_modid_desc;
-          dmn_lnx_state->tls_offset_desc = *tls_offset_desc;
-          dmn_lnx_state->is_tls_detected = 1;
+          lnx_dmn_state->tls_modid_desc  = *tls_modid_desc;
+          lnx_dmn_state->tls_offset_desc = *tls_offset_desc;
+          lnx_dmn_state->is_tls_detected = 1;
         }
         else { Assert(0 && "invalid TLS desc"); }
       }
@@ -2240,25 +2240,25 @@ internal DMN_CtrlCtx *
 dmn_ctrl_begin(void)
 {
   DMN_CtrlCtx *ctx = (DMN_CtrlCtx *)1;
-  dmn_lnx_ctrl_thread = 1;
+  lnx_dmn_ctrl_thread = 1;
   return ctx;
 }
 
 internal void
 dmn_ctrl_exclusive_access_begin(void)
 {
-  MutexScope(dmn_lnx_state->access_mutex)
+  MutexScope(lnx_dmn_state->access_mutex)
   {
-    dmn_lnx_state->access_run_state = 1;
+    lnx_dmn_state->access_run_state = 1;
   }
 }
 
 internal void
 dmn_ctrl_exclusive_access_end(void)
 {
-  MutexScope(dmn_lnx_state->access_mutex)
+  MutexScope(lnx_dmn_state->access_mutex)
   {
-    dmn_lnx_state->access_run_state = 0;
+    lnx_dmn_state->access_run_state = 0;
   }
 }
 
@@ -2305,13 +2305,13 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params)
   if(pid == 0)
   {
     // wait for seize
-    if(OS_LNX_RETRY_ON_EINTR(raise(SIGSTOP)) < 0) { goto child_exit; }
+    if(LNX_RETRY_ON_EINTR(raise(SIGSTOP)) < 0) { goto child_exit; }
     
     // change work directory to tracee
-    if(OS_LNX_RETRY_ON_EINTR(chdir(work_dir_path)) < 0) { goto child_exit; }
+    if(LNX_RETRY_ON_EINTR(chdir(work_dir_path)) < 0) { goto child_exit; }
     
     // replace process with target program
-    if(OS_LNX_RETRY_ON_EINTR(execve(argv[0], argv, envp)) < 0) { goto child_exit; }
+    if(LNX_RETRY_ON_EINTR(execve(argv[0], argv, envp)) < 0) { goto child_exit; }
     
     child_exit:;
     exit(0);
@@ -2320,16 +2320,16 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params)
   else if(pid > 0)
   {
     // try to seize child process
-    if(dmn_lnx_ptrace_seize(pid) >= 0)
+    if(lnx_dmn_ptrace_seize(pid) >= 0)
     {
       // tracee was successfully seized, create process
-      dmn_lnx_process_alloc(pid, DMN_LNX_ProcessState_Launch, 0, params->debug_subprocesses, 0);
+      lnx_dmn_process_alloc(pid, LNX_DMN_ProcessState_Launch, 0, params->debug_subprocesses, 0);
     }
     else
     {
       Assert(0 && "failed to ptrace child process");
-      OS_LNX_RETRY_ON_EINTR(kill(SIGKILL, pid));
-      OS_LNX_RETRY_ON_EINTR(waitpid(pid, 0, WNOHANG));
+      LNX_RETRY_ON_EINTR(kill(SIGKILL, pid));
+      LNX_RETRY_ON_EINTR(waitpid(pid, 0, WNOHANG));
       pid = 0;
     }
   }
@@ -2342,16 +2342,16 @@ internal B32
 dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid)
 {
   B32 is_attached = 0;
-  if(dmn_lnx_ptrace_seize(pid) >= 0)
+  if(lnx_dmn_ptrace_seize(pid) >= 0)
   {
-    if(OS_LNX_RETRY_ON_EINTR(kill(pid, SIGSTOP)) >= 0)
+    if(LNX_RETRY_ON_EINTR(kill(pid, SIGSTOP)) >= 0)
     {
-      dmn_lnx_process_alloc(pid, DMN_LNX_ProcessState_Attach, 0, 1, 0);
+      lnx_dmn_process_alloc(pid, LNX_DMN_ProcessState_Attach, 0, 1, 0);
       is_attached = 1;
     }
     else
     {
-      OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, pid, 0, 0));
+      LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, pid, 0, 0));
     }
   }
   return is_attached;
@@ -2361,13 +2361,13 @@ internal B32
 dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process_handle, U32 exit_code)
 {
   B32 result = 0;
-  mutex_take(dmn_lnx_state->halter_mutex);
-  DMN_LNX_Process *process = dmn_lnx_process_from_handle(process_handle);
+  mutex_take(lnx_dmn_state->halter_mutex);
+  LNX_DMN_Process *process = lnx_dmn_process_from_handle(process_handle);
   if(process)
   {
-    result = OS_LNX_RETRY_ON_EINTR(kill(process->pid, SIGKILL)) >= 0;
+    result = LNX_RETRY_ON_EINTR(kill(process->pid, SIGKILL)) >= 0;
   }
-  mutex_drop(dmn_lnx_state->halter_mutex);
+  mutex_drop(lnx_dmn_state->halter_mutex);
   return result;
 }
 
@@ -2375,13 +2375,13 @@ internal B32
 dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process_handle)
 {
   B32 result = 0;
-  mutex_take(dmn_lnx_state->halter_mutex);
-  DMN_LNX_Process *process = dmn_lnx_process_from_handle(process_handle);
+  mutex_take(lnx_dmn_state->halter_mutex);
+  LNX_DMN_Process *process = lnx_dmn_process_from_handle(process_handle);
   if(process)
   {
-    result = OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, process->pid, 0, 0)) >= 0;
+    result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, process->pid, 0, 0)) >= 0;
   }
-  mutex_drop(dmn_lnx_state->halter_mutex);
+  mutex_drop(lnx_dmn_state->halter_mutex);
   return result;
 }
 
@@ -2391,15 +2391,15 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   Temp scratch = scratch_begin(&arena, 1);
   DMN_EventList events = {0};
   
-  mutex_take(dmn_lnx_state->halter_mutex);
+  mutex_take(lnx_dmn_state->halter_mutex);
   
   // wait for signals from the running threads
-  if(dmn_lnx_state->process_count > 0)
+  if(lnx_dmn_state->process_count > 0)
   {
     // write traps to memory
     DMN_ActiveTrap *active_trap_first = 0, *active_trap_last = 0;
     {
-      HashTable *process_ht = hash_table_init(scratch.arena, dmn_lnx_state->process_count);
+      HashTable *process_ht = hash_table_init(scratch.arena, lnx_dmn_state->process_count);
       for EachNode(n, DMN_TrapChunkNode, ctrls->traps.first)
       {
         for EachIndex(n_idx, n->count)
@@ -2420,7 +2420,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           if(is_set) { continue; }
           
           // TODO: ctrl sends down traps for exited process
-          DMN_LNX_Process *process = dmn_lnx_process_from_handle(trap->process);
+          LNX_DMN_Process *process = lnx_dmn_process_from_handle(trap->process);
           if(!process) { continue; }
           
           // trap instruction
@@ -2438,10 +2438,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     // enable single stepping
     if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero()))
     {
-      DMN_LNX_Thread *single_step_thread = dmn_lnx_thread_from_handle(ctrls->single_step_thread);
+      LNX_DMN_Thread *single_step_thread = lnx_dmn_thread_from_handle(ctrls->single_step_thread);
       if(single_step_thread)
       {
-        dmn_lnx_set_single_step_flag(single_step_thread, 1);
+        lnx_dmn_set_single_step_flag(single_step_thread, 1);
       }
       else
       {
@@ -2450,9 +2450,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     }
     
     // schedule threads to run
-    DMN_LNX_ThreadPtrList running_threads = {0};
+    LNX_DMN_ThreadPtrList running_threads = {0};
     {
-      for EachNode(process, DMN_LNX_Process, dmn_lnx_state->first_process)
+      for EachNode(process, LNX_DMN_Process, lnx_dmn_state->first_process)
       {
         //- rjf: determine if this process is frozen
         B32 process_is_frozen = 0;
@@ -2460,7 +2460,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         {
           for EachIndex(idx, ctrls->run_entity_count)
           {
-            if(dmn_handle_match(ctrls->run_entities[idx], dmn_lnx_handle_from_process(process)))
+            if(dmn_handle_match(ctrls->run_entities[idx], lnx_dmn_handle_from_process(process)))
             {
               process_is_frozen = 1;
               break;
@@ -2468,7 +2468,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           }
         }
         
-        for EachNode(thread, DMN_LNX_Thread, process->first_thread)
+        for EachNode(thread, LNX_DMN_Thread, process->first_thread)
         {
           //- rjf: determine if this thread is frozen
           B32 is_frozen = 0;
@@ -2484,7 +2484,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               for EachIndex(idx, ctrls->run_entity_count)
               {
-                if(dmn_handle_match(ctrls->run_entities[idx], dmn_lnx_handle_from_thread(thread)))
+                if(dmn_handle_match(ctrls->run_entities[idx], lnx_dmn_handle_from_thread(thread)))
                 {
                   is_frozen = 1;
                   break;
@@ -2499,18 +2499,18 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           // rjf: single-step? freeze if not the single-step thread.
           else
           {
-            is_frozen = !dmn_handle_match(dmn_lnx_handle_from_thread(thread), ctrls->single_step_thread);
+            is_frozen = !dmn_handle_match(lnx_dmn_handle_from_thread(thread), ctrls->single_step_thread);
           }
           
           // resume thread
           if(!is_frozen)
           {
-            AssertAlways(thread->state == DMN_LNX_ThreadState_Stopped);
+            AssertAlways(thread->state == LNX_DMN_ThreadState_Stopped);
             
             // write registers
             if(thread->is_reg_block_dirty)
             {
-              thread->is_reg_block_dirty = !dmn_lnx_thread_write_reg_block(thread);
+              thread->is_reg_block_dirty = !lnx_dmn_thread_write_reg_block(thread);
             }
             
             // pass signal to the child process
@@ -2525,11 +2525,11 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }
             
             // resume thread
-            if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, thread->tid, 0, sig_code)) >= 0)
+            if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, thread->tid, 0, sig_code)) >= 0)
             {
-              thread->state              = DMN_LNX_ThreadState_Running;
+              thread->state              = LNX_DMN_ThreadState_Running;
               thread->is_reg_block_dirty = 1;
-              dmn_lnx_thread_ptr_list_push(scratch.arena, &running_threads, thread);
+              lnx_dmn_thread_ptr_list_push(scratch.arena, &running_threads, thread);
             }
             else
             {
@@ -2555,27 +2555,27 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     
     // hash running threads tids
     HashTable *running_threads_ht = hash_table_init(scratch.arena, running_threads.count * 2);
-    for EachNode(n, DMN_LNX_ThreadPtrNode, running_threads.first)
+    for EachNode(n, LNX_DMN_ThreadPtrNode, running_threads.first)
     {
       hash_table_push_u64_raw(scratch.arena, running_threads_ht, n->v->tid, n);
     }
     
     B32                   is_halt_done    = 0;
-    DMN_LNX_ThreadPtrList stopped_threads = {0};
+    LNX_DMN_ThreadPtrList stopped_threads = {0};
     do
     {
       // wait for a signal
       int   status  = 0;
       pid_t wait_id = 0; 
       {
-        mutex_drop(dmn_lnx_state->halter_mutex);
+        mutex_drop(lnx_dmn_state->halter_mutex);
         for(;;)
         {
-          wait_id = OS_LNX_RETRY_ON_EINTR(waitpid(-1, &status, __WALL|__WNOTHREAD));
+          wait_id = LNX_RETRY_ON_EINTR(waitpid(-1, &status, __WALL|__WNOTHREAD));
           if(wait_id == -1) { InvalidPath; } // TODO: graceful exit
           break;
         }
-        mutex_take(dmn_lnx_state->halter_mutex);
+        mutex_take(lnx_dmn_state->halter_mutex);
       }
       
       // unpack status
@@ -2587,57 +2587,57 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       
       // intercept initing processes
       {
-        DMN_LNX_Process *process = dmn_lnx_process_from_pid(wait_id);
+        LNX_DMN_Process *process = lnx_dmn_process_from_pid(wait_id);
         
-        if(process && process->state != DMN_LNX_ProcessState_Normal)
+        if(process && process->state != LNX_DMN_ProcessState_Normal)
         {
           switch(process->state)
           {
-            case DMN_LNX_ProcessState_Null:
-            case DMN_LNX_ProcessState_Normal:
+            case LNX_DMN_ProcessState_Null:
+            case LNX_DMN_ProcessState_Normal:
             {
               InvalidPath;
             } break;
-            case DMN_LNX_ProcessState_Launch:
+            case LNX_DMN_ProcessState_Launch:
             {
               if(wstopsig == SIGSTOP)
               {
-                if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, process->pid, 0, 0)) >= 0)
+                if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, process->pid, 0, 0)) >= 0)
                 {
-                  process->state = DMN_LNX_ProcessState_WaitForExec;
+                  process->state = LNX_DMN_ProcessState_WaitForExec;
                   goto wait_for_signal;
                 }
                 else { Assert(0 && "failed to resume tracee"); }
               }
               // else { Assert(0 && "unexpected signal"); }
             } break;
-            case DMN_LNX_ProcessState_WaitForExec:
+            case LNX_DMN_ProcessState_WaitForExec:
             {
               if(wstopsig == SIGTRAP && event_code == PTRACE_EVENT_EXEC)
               {
-                DMN_LNX_CreateProcessFlags create_flags = process->debug_subprocesses ? DMN_LNX_CreateProcessFlag_DebugSubprocesses : 0;
-                dmn_lnx_process_release(process);
-                dmn_lnx_event_create_process(arena, &events, wait_id, 0, create_flags);
+                LNX_DMN_CreateProcessFlags create_flags = process->debug_subprocesses ? LNX_DMN_CreateProcessFlag_DebugSubprocesses : 0;
+                lnx_dmn_process_release(process);
+                lnx_dmn_event_create_process(arena, &events, wait_id, 0, create_flags);
                 goto wait_for_signal;
               }
               //else { Assert(0 && "unexpected signal"); }
             } break;
-            case DMN_LNX_ProcessState_ExecFailedDoExit:
+            case LNX_DMN_ProcessState_ExecFailedDoExit:
             {
               if(wifexited)
               {
-                dmn_lnx_process_release(process);
+                lnx_dmn_process_release(process);
                 goto wait_for_signal;
               }
               else { Assert(0 && "unexpected signal"); }
             } break;
-            case DMN_LNX_ProcessState_Attach:
+            case LNX_DMN_ProcessState_Attach:
             {
               if(wstopsig == SIGSTOP)
               {
-                DMN_LNX_CreateProcessFlags create_flags = process->debug_subprocesses ? DMN_LNX_CreateProcessFlag_DebugSubprocesses : 0;
-                dmn_lnx_process_release(process);
-                dmn_lnx_event_create_process(arena, &events, wait_id, 0, create_flags);
+                LNX_DMN_CreateProcessFlags create_flags = process->debug_subprocesses ? LNX_DMN_CreateProcessFlag_DebugSubprocesses : 0;
+                lnx_dmn_process_release(process);
+                lnx_dmn_event_create_process(arena, &events, wait_id, 0, create_flags);
                 goto wait_for_signal;
               }
               else { Assert(0 && "unexpected signal"); }
@@ -2646,14 +2646,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           
           // shutdown process
           {
-            if(OS_LNX_RETRY_ON_EINTR(kill(wait_id, SIGKILL)) >= 0)
+            if(LNX_RETRY_ON_EINTR(kill(wait_id, SIGKILL)) >= 0)
             {
-              process->state = DMN_LNX_ProcessState_ExecFailedDoExit;
+              process->state = LNX_DMN_ProcessState_ExecFailedDoExit;
             }
             else
             {
               //Assert(0 && "failed to send kill signal to the tracee");
-              dmn_lnx_process_release(process);
+              lnx_dmn_process_release(process);
             }
           }
           
@@ -2664,36 +2664,36 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       
       if(wifstopped || wifsignaled || wifexited)
       {
-        DMN_LNX_ThreadPtrNode *thread_n = hash_table_search_u64_raw(running_threads_ht, wait_id);
+        LNX_DMN_ThreadPtrNode *thread_n = hash_table_search_u64_raw(running_threads_ht, wait_id);
         if(thread_n)
         {
-          DMN_LNX_Thread *thread = thread_n->v;
-          AssertAlways(thread->state == DMN_LNX_ThreadState_Running);
+          LNX_DMN_Thread *thread = thread_n->v;
+          AssertAlways(thread->state == LNX_DMN_ThreadState_Running);
           
           // remove mapping
           hash_table_purge_u64(running_threads_ht, thread->tid);
           
           // move thread to the stopped list
-          dmn_lnx_thread_ptr_list_remove(&running_threads, thread_n);
-          dmn_lnx_thread_ptr_list_push_node(&stopped_threads, thread_n);
+          lnx_dmn_thread_ptr_list_remove(&running_threads, thread_n);
+          lnx_dmn_thread_ptr_list_push_node(&stopped_threads, thread_n);
           
           // update thread state
           if(wifstopped && !wifsignaled && !wifexited)
           {
-            thread->state = DMN_LNX_ThreadState_Stopped;
+            thread->state = LNX_DMN_ThreadState_Stopped;
           }
           else if(!wifstopped && (wifsignaled || wifexited))
           {
-            thread->state = DMN_LNX_ThreadState_Exited;
+            thread->state = LNX_DMN_ThreadState_Exited;
           }
           else { InvalidPath; }
           
           // stop all other threads
           if(stopped_threads.count == 1)
           {
-            for EachNode(n, DMN_LNX_ThreadPtrNode, running_threads.first)
+            for EachNode(n, LNX_DMN_ThreadPtrNode, running_threads.first)
             {
-              if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_INTERRUPT, n->v->tid, 0, 0)) < 0) { Assert(0 && "failed to interrupt process"); }
+              if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_INTERRUPT, n->v->tid, 0, 0)) < 0) { Assert(0 && "failed to interrupt process"); }
             }
           }
         }
@@ -2702,23 +2702,23 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       // normal child exit via _exit or exit()
       if(wifexited)
       {
-        dmn_lnx_event_exit_thread(arena, &events, wait_id, WEXITSTATUS(status));
+        lnx_dmn_event_exit_thread(arena, &events, wait_id, WEXITSTATUS(status));
       }
       
       // exit because child did not handle a signal
       else if(wifsignaled)
       {
-        dmn_lnx_event_exit_thread(arena, &events, wait_id, WTERMSIG(status));
+        lnx_dmn_event_exit_thread(arena, &events, wait_id, WTERMSIG(status));
       }
       // thread or group stop
       else if(wifstopped)
       {
         // read thread registers
         {
-          DMN_LNX_Thread *thread = dmn_lnx_thread_from_pid(wait_id);
-          if(thread && thread->state != DMN_LNX_ThreadState_PendingCreation)
+          LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(wait_id);
+          if(thread && thread->state != LNX_DMN_ThreadState_PendingCreation)
           {
-            thread->is_reg_block_dirty = !dmn_lnx_thread_read_reg_block(thread);
+            thread->is_reg_block_dirty = !lnx_dmn_thread_read_reg_block(thread);
             Assert(!thread->is_reg_block_dirty);
           }
         }
@@ -2731,14 +2731,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               // translate signal code to DEMON event
               siginfo_t siginfo = {0};
-              if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETSIGINFO, wait_id, 0, &siginfo)) >= 0)
+              if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETSIGINFO, wait_id, 0, &siginfo)) >= 0)
               {
                 switch(siginfo.si_code)
                 {
-                  case SI_KERNEL:   { dmn_lnx_event_breakpoint(arena, &events, active_trap_first, wait_id); } break;
-                  case TRAP_BRKPT:  { dmn_lnx_event_breakpoint(arena, &events, active_trap_first, wait_id); } break;
-                  case TRAP_TRACE:  { dmn_lnx_event_single_step(arena, &events, wait_id);                   } break;
-                  case TRAP_HWBKPT: { dmn_lnx_event_data_breakpoint(arena, &events, wait_id);               } break;
+                  case SI_KERNEL:   { lnx_dmn_event_breakpoint(arena, &events, active_trap_first, wait_id); } break;
+                  case TRAP_BRKPT:  { lnx_dmn_event_breakpoint(arena, &events, active_trap_first, wait_id); } break;
+                  case TRAP_TRACE:  { lnx_dmn_event_single_step(arena, &events, wait_id);                   } break;
+                  case TRAP_HWBKPT: { lnx_dmn_event_data_breakpoint(arena, &events, wait_id);               } break;
                   case TRAP_BRANCH: { NotImplemented; }break;
                   case TRAP_UNK:    { NotImplemented; }break;
                   default: { InvalidPath; } break;
@@ -2764,29 +2764,29 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               // will be a PTRACE_EVENT_STOP
               
               pid_t new_tid;
-              if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &new_tid)) >= 0)
+              if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &new_tid)) >= 0)
               {
-                DMN_LNX_Thread *thread = dmn_lnx_thread_from_pid(wait_id);
+                LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(wait_id);
                 
                 // create a new partially inited thread
-                dmn_lnx_thread_alloc(thread->process, DMN_LNX_ThreadState_PendingCreation, new_tid);
+                lnx_dmn_thread_alloc(thread->process, LNX_DMN_ThreadState_PendingCreation, new_tid);
               }
               else { Assert(0 && "failed to get new tid"); }
             }break;
             case PTRACE_EVENT_EXEC:
             {
-              DMN_LNX_Thread  *thread  = dmn_lnx_thread_from_pid(wait_id);
-              DMN_LNX_Process *process = thread->process;
+              LNX_DMN_Thread  *thread  = lnx_dmn_thread_from_pid(wait_id);
+              LNX_DMN_Process *process = thread->process;
               if(process->debug_subprocesses)
               {
-                dmn_lnx_event_exit_thread(arena, &events, wait_id, 0);
-                dmn_lnx_event_create_process(arena, &events, wait_id, 0, DMN_LNX_CreateProcessFlag_DebugSubprocesses);
+                lnx_dmn_event_exit_thread(arena, &events, wait_id, 0);
+                lnx_dmn_event_create_process(arena, &events, wait_id, 0, LNX_DMN_CreateProcessFlag_DebugSubprocesses);
               }
               else
               {
-                if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, wait_id, 0, 0)) >= 0)
+                if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, wait_id, 0, 0)) >= 0)
                 {
-                  dmn_lnx_event_exit_thread(arena, &events, wait_id, 0);
+                  lnx_dmn_event_exit_thread(arena, &events, wait_id, 0);
                 }
                 else { Assert(0 && "failed to detach"); }
               }
@@ -2801,16 +2801,16 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }break;
             case PTRACE_EVENT_STOP:
             {
-              DMN_LNX_Thread *thread = dmn_lnx_thread_from_pid(wait_id);
-              if(thread->state == DMN_LNX_ThreadState_PendingCreation)
+              LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(wait_id);
+              if(thread->state == LNX_DMN_ThreadState_PendingCreation)
               {
-                DMN_LNX_Process *process = thread->process;
-                dmn_lnx_thread_release(thread);
-                thread = dmn_lnx_event_create_thread(arena, &events, process, wait_id);
+                LNX_DMN_Process *process = thread->process;
+                lnx_dmn_thread_release(thread);
+                thread = lnx_dmn_event_create_thread(arena, &events, process, wait_id);
               }
               else
               {
-                AssertAlways(thread->state == DMN_LNX_ThreadState_Stopped);
+                AssertAlways(thread->state == LNX_DMN_ThreadState_Stopped);
               }
             }break;
             default: { Assert(0 && "unexpected ptrace code"); } break;
@@ -2819,10 +2819,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         else if(wstopsig == SIGSTOP)
         {
           siginfo_t siginfo = {0};
-          if(OS_LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETSIGINFO, wait_id, 0, &siginfo)) >= 0)
+          if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETSIGINFO, wait_id, 0, &siginfo)) >= 0)
           {
             // finish halting if this is our SIGSTOP
-            if(siginfo.si_pid == dmn_lnx_state->halter_tid)
+            if(siginfo.si_pid == lnx_dmn_state->halter_tid)
             {
               is_halt_done = 1;
             }
@@ -2834,30 +2834,30 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         }
         else
         {
-          dmn_lnx_event_exception(arena, &events, wait_id, wstopsig);
+          lnx_dmn_event_exception(arena, &events, wait_id, wstopsig);
         }
       }
       else { Assert(0 && "unexpected stop code"); }
-    } while(running_threads.count > 0 || dmn_lnx_state->process_pending_creation > 0 || dmn_lnx_state->threads_pending_creation > 0);
+    } while(running_threads.count > 0 || lnx_dmn_state->process_pending_creation > 0 || lnx_dmn_state->threads_pending_creation > 0);
     
     // finalize halter state
     if(is_halt_done)
     {
       // push event
-      dmn_lnx_event_halt(arena, &events);
+      lnx_dmn_event_halt(arena, &events);
       
       // reset state
-      dmn_lnx_state->halter_tid     = 0;
-      dmn_lnx_state->halt_code      = 0;
-      dmn_lnx_state->halt_user_data = 0;
-      dmn_lnx_state->is_halting     = 0;
+      lnx_dmn_state->halter_tid     = 0;
+      lnx_dmn_state->halt_code      = 0;
+      lnx_dmn_state->halt_user_data = 0;
+      lnx_dmn_state->is_halting     = 0;
     }
     
     // restore original instruction bytes
     for EachNode(active_trap, DMN_ActiveTrap, active_trap_first)
     {
       // skip process that exited during the wait
-      DMN_LNX_Process *process = dmn_lnx_process_from_handle(active_trap->trap->process);
+      LNX_DMN_Process *process = lnx_dmn_process_from_handle(active_trap->trap->process);
       if(!process) { continue; }
       
       if(!dmn_process_write(active_trap->trap->process, r1u64(active_trap->trap->vaddr, active_trap->trap->vaddr + active_trap->swap_bytes.size), active_trap->swap_bytes.str) &&
@@ -2870,12 +2870,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     }
   }
   
-  if(events.count == 0 && dmn_lnx_state->process_count == 0)
+  if(events.count == 0 && lnx_dmn_state->process_count == 0)
   {
-    dmn_lnx_push_event_not_attached(arena, &events);
+    lnx_dmn_push_event_not_attached(arena, &events);
   }
   
-  mutex_drop(dmn_lnx_state->halter_mutex);
+  mutex_drop(lnx_dmn_state->halter_mutex);
   scratch_end(scratch);
   return events;
 }
@@ -2886,18 +2886,18 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 internal void
 dmn_halt(U64 code, U64 user_data)
 {
-  mutex_take(dmn_lnx_state->halter_mutex);
-  if(dmn_lnx_state->process_count)
+  mutex_take(lnx_dmn_state->halter_mutex);
+  if(lnx_dmn_state->process_count)
   {
-    dmn_lnx_state->halter_tid     = gettid();
-    dmn_lnx_state->halt_code      = code;
-    dmn_lnx_state->halt_user_data = user_data;
-    for EachNode(process, DMN_LNX_Process, dmn_lnx_state->first_process)
+    lnx_dmn_state->halter_tid     = gettid();
+    lnx_dmn_state->halt_code      = code;
+    lnx_dmn_state->halt_user_data = user_data;
+    for EachNode(process, LNX_DMN_Process, lnx_dmn_state->first_process)
     {
-      if(OS_LNX_RETRY_ON_EINTR(kill(process->pid, SIGSTOP)) < 0) { Assert(0 && "failed to send SIGSTOP"); }
+      if(LNX_RETRY_ON_EINTR(kill(process->pid, SIGSTOP)) < 0) { Assert(0 && "failed to send SIGSTOP"); }
     }
   }
-  mutex_drop(dmn_lnx_state->halter_mutex);
+  mutex_drop(lnx_dmn_state->halter_mutex);
 }
 
 ////////////////////////////////
@@ -2909,14 +2909,14 @@ internal B32
 dmn_access_open(void)
 {
   B32 result = 0;
-  if(dmn_lnx_ctrl_thread)
+  if(lnx_dmn_ctrl_thread)
   {
     result = 1;
   }
   else
   {
-    mutex_take(dmn_lnx_state->access_mutex);
-    result = !dmn_lnx_state->access_run_state;
+    mutex_take(lnx_dmn_state->access_mutex);
+    result = !lnx_dmn_state->access_run_state;
   }
   return result;
 }
@@ -2924,9 +2924,9 @@ dmn_access_open(void)
 internal void
 dmn_access_close(void)
 {
-  if(!dmn_lnx_ctrl_thread)
+  if(!lnx_dmn_ctrl_thread)
   {
-    mutex_drop(dmn_lnx_state->access_mutex);
+    mutex_drop(lnx_dmn_state->access_mutex);
   }
 }
 
@@ -2961,11 +2961,11 @@ dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, AccessFlags 
 internal U64
 dmn_process_read(DMN_Handle process_handle, Rng1U64 range, void *dst)
 {
-  DMN_LNX_Process *process = dmn_lnx_process_from_handle(process_handle);
+  LNX_DMN_Process *process = lnx_dmn_process_from_handle(process_handle);
   U64 result = 0;
   if(process)
   {
-    result = dmn_lnx_read(process->fd, range, dst);
+    result = lnx_dmn_read(process->fd, range, dst);
   }
   return result;
 }
@@ -2973,11 +2973,11 @@ dmn_process_read(DMN_Handle process_handle, Rng1U64 range, void *dst)
 internal B32
 dmn_process_write(DMN_Handle process_handle, Rng1U64 range, void *src)
 {
-  DMN_LNX_Process *process = dmn_lnx_process_from_handle(process_handle);
+  LNX_DMN_Process *process = lnx_dmn_process_from_handle(process_handle);
   B32 result = 0;
   if(process)
   {
-    result = dmn_lnx_write(process->fd, range, src);
+    result = lnx_dmn_write(process->fd, range, src);
   }
   return result;
 }
@@ -2988,7 +2988,7 @@ internal Arch
 dmn_arch_from_thread(DMN_Handle thread_handle)
 {
   Arch arch = Arch_Null;
-  DMN_LNX_Thread *thread = dmn_lnx_thread_from_handle(thread_handle);
+  LNX_DMN_Thread *thread = lnx_dmn_thread_from_handle(thread_handle);
   if(thread)
   {
     arch = thread->process->ctx->arch;
@@ -3008,7 +3008,7 @@ dmn_tls_root_vaddr_from_thread(DMN_Handle thread_handle)
   U64 tls_root_vaddr = max_U64;
   DMN_AccessScope
   {
-    DMN_LNX_Thread *thread = dmn_lnx_thread_from_handle(thread_handle);
+    LNX_DMN_Thread *thread = lnx_dmn_thread_from_handle(thread_handle);
     if(thread)
     {
       switch(thread->process->ctx->arch)
@@ -3018,7 +3018,7 @@ dmn_tls_root_vaddr_from_thread(DMN_Handle thread_handle)
         {
           X64_RegBlock *reg_block   = thread->reg_block;
           U64               dtv_pointer = 0;
-          if(dmn_lnx_read_struct(thread->process->fd, reg_block->fsbase + 8, &dtv_pointer))
+          if(lnx_dmn_read_struct(thread->process->fd, reg_block->fsbase + 8, &dtv_pointer))
           {
             tls_root_vaddr = dtv_pointer;
           }
@@ -3042,7 +3042,7 @@ dmn_thread_read_reg_block(DMN_Handle thread_handle, void *reg_block)
   B32 result = 0;
   DMN_AccessScope
   {
-    DMN_LNX_Thread *thread = dmn_lnx_thread_from_handle(thread_handle);
+    LNX_DMN_Thread *thread = lnx_dmn_thread_from_handle(thread_handle);
     if(thread)
     {
       ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
@@ -3060,7 +3060,7 @@ dmn_thread_write_reg_block(DMN_Handle thread_handle, void *reg_block)
   B32 result = 0;
   DMN_AccessScope
   {
-    DMN_LNX_Thread *thread = dmn_lnx_thread_from_handle(thread_handle);
+    LNX_DMN_Thread *thread = lnx_dmn_thread_from_handle(thread_handle);
     if(thread)
     {
       ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
@@ -3122,7 +3122,7 @@ dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info
   if(got_pid)
   {
     pid_t pid = u64_from_str8(pid_string, 10);
-    String8 name = dmn_lnx_exe_path_from_pid(arena, pid);
+    String8 name = lnx_dmn_exe_path_from_pid(arena, pid);
     if(name.size == 0)
     {
       name = str8_lit("(unknown process)");

@@ -23,7 +23,7 @@ r_ogl_os_init(CmdLine *cmdln)
     r_ogl_lnx_state->display = eglGetDisplay((EGLNativeDisplayType)os_lnx_gfx_state->display);
     if(r_ogl_lnx_state->display == EGL_NO_DISPLAY)
     {
-      os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Failed to get EGL display."));
+      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Failed to get EGL display."));
       abort_self(1);
     }
   }
@@ -33,14 +33,14 @@ r_ogl_os_init(CmdLine *cmdln)
   EGLint egl_version_minor = 0;
   if(!eglInitialize(r_ogl_lnx_state->display, &egl_version_major, &egl_version_minor))
   {
-    os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't initialize EGL display."));
+    wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't initialize EGL display."));
     abort_self(1);
   }
   if(egl_version_major < 1 || (egl_version_major == 1 && egl_version_minor < 5))
   {
     Temp scratch = scratch_begin(0, 0);
     String8 message = push_str8f(scratch.arena, "Unsupported EGL version (%i.%i, need at least 1.5)", egl_version_major, egl_version_minor);
-    os_graphical_message(1, str8_lit("Fatal Error"), message);
+    wm_graphical_message(1, str8_lit("Fatal Error"), message);
     abort_self(1);
     scratch_end(scratch);
   }
@@ -48,7 +48,7 @@ r_ogl_os_init(CmdLine *cmdln)
   //- rjf: pick GL API
   if(!eglBindAPI(EGL_OPENGL_API))
   {
-    os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't initialize EGL API to OpenGL."));
+    wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't initialize EGL API to OpenGL."));
     abort_self(1);
   }
   
@@ -69,7 +69,7 @@ r_ogl_os_init(CmdLine *cmdln)
     r_ogl_lnx_state->context = eglCreateContext(r_ogl_lnx_state->display, 0, EGL_NO_CONTEXT, options);
     if(r_ogl_lnx_state->context == EGL_NO_CONTEXT)
     {
-      os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create OpenGL context with EGL."));
+      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create OpenGL context with EGL."));
       abort_self(1);
     }
   }
@@ -79,9 +79,9 @@ r_ogl_os_init(CmdLine *cmdln)
 }
 
 internal R_Handle
-r_ogl_os_window_equip(OS_Window window)
+r_ogl_os_window_equip(WM_Window window)
 {
-  OS_LNX_Window *window_os = (OS_LNX_Window *)window.u64[0];
+  LNX_WM_Window *window_os = (LNX_WM_Window *)window.u64[0];
   R_OGL_LNX_Window *w = r_ogl_lnx_state->free_window;
   if(w != 0)
   {
@@ -120,7 +120,7 @@ r_ogl_os_window_equip(OS_Window window)
         };
         if(!eglChooseConfig(r_ogl_lnx_state->display, options, configs, ArrayCount(configs), &configs_count) || configs_count == 0)
         {
-          os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't choose EGL configuration."));
+          wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't choose EGL configuration."));
           abort_self(1);
         }
       }
@@ -143,7 +143,7 @@ r_ogl_os_window_equip(OS_Window window)
         }
         if(r_ogl_lnx_state->config == 0)
         {
-          os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find a suitable EGL configuration."));
+          wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find a suitable EGL configuration."));
           abort_self(1);
         }
       }
@@ -154,7 +154,7 @@ r_ogl_os_window_equip(OS_Window window)
     }
     if(w->surface == EGL_NO_SURFACE)
     {
-      os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create EGL surface."));
+      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create EGL surface."));
       abort_self(1);
     }
   }
@@ -163,7 +163,7 @@ r_ogl_os_window_equip(OS_Window window)
 }
 
 internal void
-r_ogl_os_window_unequip(OS_Window os, R_Handle r)
+r_ogl_os_window_unequip(WM_Window os, R_Handle r)
 {
   R_OGL_LNX_Window *w = (R_OGL_LNX_Window *)r.u64[0];
   {
@@ -173,17 +173,17 @@ r_ogl_os_window_unequip(OS_Window os, R_Handle r)
 }
 
 internal void
-r_ogl_os_select_window(OS_Window os, R_Handle r)
+r_ogl_os_select_window(WM_Window os, R_Handle r)
 {
-  OS_LNX_Window *w = (OS_LNX_Window *)os.u64[0];
+  LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
   R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)r.u64[0];
   eglMakeCurrent(r_ogl_lnx_state->display, w_r->surface, w_r->surface, r_ogl_lnx_state->context);
 }
 
 internal void
-r_ogl_os_window_swap(OS_Window os, R_Handle r)
+r_ogl_os_window_swap(WM_Window os, R_Handle r)
 {
-  OS_LNX_Window *w = (OS_LNX_Window *)os.u64[0];
+  LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
   R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)r.u64[0];
   eglSwapBuffers(r_ogl_lnx_state->display, w_r->surface);
 }
