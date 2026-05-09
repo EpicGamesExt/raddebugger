@@ -1492,6 +1492,7 @@ d2r_tag_iterator_init(Arena *arena, DW_TagNode *root)
   iter->stack->node->sibling = 0;
   iter->visit_children       = 1;
   iter->tag_node             = root;
+  iter->null_tag_node        = push_array(arena, DW_TagNode, 1);
   return iter;
 }
 
@@ -1536,7 +1537,7 @@ d2r_tag_iterator_skip_children(D2R_TagIterator *iter)
 internal DW_TagNode *
 d2r_tag_iterator_parent_tag_node(D2R_TagIterator *iter)
 {
-  return iter->stack->next->node;
+  return iter->stack == 0 || iter->stack->next == 0 ? iter->null_tag_node : iter->stack->next->node;
 }
 
 internal DW_Tag
@@ -1938,7 +1939,8 @@ d2r_convert_types(Arena         *arena,
         // TODO: @native_vector_support extract byte size from the base type tag
         // and convert to U256, U512, S256 and S512
         B32 is_vector = dw_flag_from_tag_attrib_kind(input, cu, tag, DW_AttribKind_GNU_Vector);
-        if (is_vector) { NotImplemented; }
+        // TODO:
+        //if (is_vector) { NotImplemented; }
         
         B32 error = 1;
         
@@ -2862,13 +2864,32 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         String8 path;
         {
           Temp temp = temp_begin(scratch.arena);
-          PathStyle path_style = path_style_from_str8(lookup->vm->header.dir_table.v[src->dir_idx]);
-          if (path_style == PathStyle_Relative) {
-            path_style = path_style_from_str8(src->path);
+
+          String8 comp_dir = lookup->vm->header.dir_table.v[0];
+          
+          PathStyle comp_path_style = path_style_from_str8(comp_dir);
+          PathStyle dir_path_style  = path_style_from_str8(lookup->vm->header.dir_table.v[src->dir_idx]);
+          PathStyle file_path_style = path_style_from_str8(src->path);
+
+          String8List dir_path_list  = str8_split_path(temp.arena, lookup->vm->header.dir_table.v[src->dir_idx]);
+          String8List file_path_list = str8_split_path(temp.arena, src->path);
+
+          String8List path_list = {0};
+          if (dir_path_style == PathStyle_Relative) {
+            String8List comp_dir_list = str8_split_path(temp.arena, comp_dir);
+            str8_list_concat_in_place(&path_list, &comp_dir_list);
           }
-          String8List path_list = str8_split_path(temp.arena, lookup->vm->header.dir_table.v[src->dir_idx]);
-          str8_list_push_node(&path_list, &(String8Node){ .string = src->path });
+          str8_list_concat_in_place(&path_list, &dir_path_list);
+          str8_list_concat_in_place(&path_list, &file_path_list);
+
+          PathStyle path_style      = PathStyle_SystemAbsolute;
+          if      (dir_path_style  != PathStyle_Relative) { path_style = dir_path_style;  }
+          else if (file_path_style != PathStyle_Relative) { path_style = file_path_style; }
+          else if (comp_path_style != PathStyle_Relative) { path_style = comp_path_style; }
+
+          str8_path_list_resolve_dots_in_place(&path_list, path_style);
           path = str8_path_list_join_by_style(arena, &path_list, path_style);
+
           temp_end(temp);
         }
         

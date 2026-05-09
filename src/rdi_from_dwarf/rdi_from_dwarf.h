@@ -141,6 +141,7 @@ typedef struct D2R_TagIterator
 {
   D2R_TagFrame *free_list;
   D2R_TagFrame *stack;
+  DW_TagNode   *null_tag_node;
   DW_TagNode   *tag_node;
   B32           visit_children;
 } D2R_TagIterator;
