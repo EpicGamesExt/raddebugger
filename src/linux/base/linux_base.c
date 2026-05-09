@@ -1285,37 +1285,34 @@ process_launch(ProcessLaunchParams *params)
 internal B32
 process_join(Process process, U64 endt_us, U64 *exit_code_out)
 {
-  pid_t pid = (pid_t)process.u64[0];
   B32 result = 0;
-  if(endt_us == 0)
+
+  pid_t pid = (pid_t)process.u64[0];
+  for(;;)
   {
-    if(kill(pid, 0) == 0)
+    int status = 0;
+    pid_t wait_result = OS_LNX_RETRY_ON_EINTR(waitpid(pid, &status, (endt_us == max_U64) ? 0 : WNOHANG));
+
+    if((wait_result == pid) && (WIFEXITED(status) || WIFSIGNALED(status)))
     {
-      int status;
-      waitpid(pid, &status, WNOHANG);
-    }
-    else { Assert(0 && "failed to get status from pid"); }
-  }
-  else if(endt_us == max_U64)
-  {
-    for(;;)
-    {
-      int status = 0;
-      int w = waitpid(pid, &status, 0);
-      if(w == -1)
+      result = 1;
+      if(exit_code_out != 0)
       {
-        break;
+        if     (WIFEXITED(status))   { *exit_code_out = WEXITSTATUS(status); }
+        else if(WIFSIGNALED(status)) { *exit_code_out = WTERMSIG(status) + 128; }
       }
-      if(WIFEXITED(status) || WIFSTOPPED(status) || WIFSIGNALED(status))
-      {
-        result = 1;
-        break;
-      }
+      break;
     }
-  }
-  else
-  {
-    NotImplemented;
+
+    if(wait_result == -1) { break; }
+    if(endt_us == 0)      { break; }
+
+    U64 now_us = now_time_us();
+    if(now_us >= endt_us) { break; }
+
+    U64 left_us  = endt_us - now_us;
+    U64 sleep_us = Min(left_us, Thousand(1));
+    usleep((useconds_t)sleep_us);
   }
   return result;
 }
