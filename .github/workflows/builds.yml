@@ -124,8 +124,6 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          where clang
-          clang --version
           call run.bat ${{ matrix.compiler }} ${{ matrix.mode }} -- --gen_crash_dump || exit /b 1
       - name: upload torture crash dumps
         if: failure()
