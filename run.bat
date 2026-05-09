@@ -9,14 +9,14 @@ set TORTURE_ARGS=
 set RUN_TORTURE=1
 
 :parse_args
-if "%~1" == "" goto parse_done
+if "%~1" == ""   goto parse_done
 if "%~1" == "--" goto parse_torture_args
 if /i "%~1" == "msvc"       set CC_VALUES=msvc      && shift /1 && goto parse_args
 if /i "%~1" == "clang"      set CC_VALUES=clang     && shift /1 && goto parse_args
 if /i "%~1" == "debug"      set MODE_VALUES=debug   && shift /1 && goto parse_args
 if /i "%~1" == "release"    set MODE_VALUES=release && shift /1 && goto parse_args
 if /i "%~1" == "no_torture" set RUN_TORTURE=0       && shift /1 && goto parse_args
-echo usage: run_tests.bat [msvc^|clang] [debug^|release] [no_torture] [-- <torture args>]
+echo usage: %~nx0 [msvc^|clang] [debug^|release] [no_torture] [-- torture-args]
 exit /b 1
 
 :parse_torture_args

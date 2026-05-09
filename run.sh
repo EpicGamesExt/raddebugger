@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      echo "usage: $0 [clang|clang-*|gcc|gcc-*] [debug|release] [no_torture] [-- <torture args>]"
+      echo "usage: $0 [clang|clang-*|gcc|gcc-*] [debug|release] [no_torture] [-- torture-args]"
       exit 1
       ;;
   esac
