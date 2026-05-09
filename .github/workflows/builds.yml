@@ -88,13 +88,12 @@ jobs:
           sudo apt-add-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main"
           sudo apt-get update
           sudo apt-get install -y clang-22 lld-22 llvm-22 gcc-14 pkg-config libfreetype6-dev libx11-dev libxext-dev libgl1-mesa-dev libegl1-mesa-dev
+          # crash callstack symbolizer depends on LLVM
           sudo ln -s /usr/bin/llvm-symbolizer-22 /usr/bin/llvm-symbolizer
       - name: run-torture
         shell: bash
         run: |
-          CC="${{ matrix.compiler }}" ./build.sh meta raddbg raddbg_non_graphical radbin radlink torture "${{ matrix.mode }}"
-          cd build
-          ./torture --gen_crash_dump
+          CC="${{ matrix.compiler }}" ./run_tests.sh "${{ matrix.compiler }}" "${{ matrix.mode }}" -- --gen_crash_dump
       - name: upload torture artifacts
         if: failure()
         uses: actions/upload-artifact@v7
