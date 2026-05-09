@@ -11,6 +11,7 @@
 //  [ ] type views for `MyByte *` example do not match correctly
 //
 // [ ] many threads hitting conditional breakpoints -> causes 0x8000003 exception!
+// [ ] string conditional breakpoints -> size != 0 check seems to fail, can test w/ "rd_init" subprogram type gen in d2r2
 //
 //- evaluation space coverage pass
 // [ ] eval space reads/writes -> needs staleness/badness info - replace ctrl layer, to apply to all spaces

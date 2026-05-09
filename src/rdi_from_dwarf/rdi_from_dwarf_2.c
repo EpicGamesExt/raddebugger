@@ -3381,7 +3381,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
           //- rjf: unpack type
           //
           RDIM_Type *type = 0;
-          if(type_attrib != &dw2_attrib_nil)
+          if(type_attrib != &dw2_attrib_nil || tag.kind == DW_TagKind_SubProgram)
           {
             // rjf: functions need to get their type info from themselves; the type attrib
             // only references the return type. so, in that case, we'll use the procedure's
