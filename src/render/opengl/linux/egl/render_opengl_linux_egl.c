@@ -189,15 +189,16 @@ r_ogl_os_window_unequip(WM_Window os, R_Handle r)
 internal void
 r_ogl_os_select_window(WM_Window os, R_Handle r)
 {
-  LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
-  R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)r.u64[0];
+  // r is the outer R_OGL_Window* wrapper; the os-layer handle is .os
+  R_OGL_Window *outer = (R_OGL_Window *)r.u64[0];
+  R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)outer->os.u64[0];
   eglMakeCurrent(r_ogl_lnx_state->display, w_r->surface, w_r->surface, r_ogl_lnx_state->context);
 }
 
 internal void
 r_ogl_os_window_swap(WM_Window os, R_Handle r)
 {
-  LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
-  R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)r.u64[0];
+  R_OGL_Window *outer = (R_OGL_Window *)r.u64[0];
+  R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)outer->os.u64[0];
   eglSwapBuffers(r_ogl_lnx_state->display, w_r->surface);
 }
