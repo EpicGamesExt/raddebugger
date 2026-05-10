@@ -106,6 +106,9 @@ r_ogl_os_select_window(WM_Window os, R_Handle r)
 {
   LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
   glXMakeCurrent(lnx_wm_state->display, w->window, r_ogl_lnx_ctx);
+  // ensure default framebuffer writes target the back buffer; on some drivers
+  // GL_DRAW_BUFFER stays GL_NONE if a context was first made current without a drawable.
+  glDrawBuffer(GL_BACK);
 }
 
 internal void
