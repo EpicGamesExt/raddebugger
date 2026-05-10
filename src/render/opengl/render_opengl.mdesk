@@ -240,7 +240,7 @@ void main(void)
   vec2 rect_half_size = vec2((rect.z-rect.x)/2, (rect.w-rect.y)/2);
   
   gl_Position = vec4(vertex_position_scr.x, -vertex_position_scr.y, 0.f, 1.f);
-  texcoord = vertex_position_pct;
+  texcoord = vec2(vertex_position_pct.x, 1-vertex_position_pct.y);
   sdf_sample_pos = (2.f * cornercoords_pct - 1.f) * rect_half_size;
   rect_half_size = rect_half_size - 2.f;
   corner_radius = corner_radii_px[gl_VertexID];
@@ -273,7 +273,6 @@ void main(void)
 {
   // rjf: blend weighted texture samples into color
   vec3 color = kernel[0].x * texture(tex, texcoord).rgb;
-  
   for(int i = 1; i < blur_count; i += 1)
   {
     float weight = kernel[i].x;
@@ -284,7 +283,7 @@ void main(void)
   
   // rjf: sample for corners
   float corner_sdf_s = rect_sdf(sdf_sample_pos, rect_half_size, corner_radius);
-  float corner_sdf_t = 1-smoothstep(0, 2, corner_sdf_s);
+  float corner_sdf_t = smoothstep(0, 2, corner_sdf_s);
   
   // rjf: weight output color by sdf
   // this is doing alpha testing, leave blurring only where mostly opaque pixels are

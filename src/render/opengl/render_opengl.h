@@ -11,8 +11,45 @@ typedef char GLchar;
 typedef ptrdiff_t GLsizeiptr;
 typedef ptrdiff_t GLintptr;
 
+#define GL_FRAMEBUFFER                    0x8D40
 #define GL_FRAMEBUFFER_SRGB               0x8DB9
 #define GL_TEXTURE_MAX_LEVEL              0x813D
+
+#define GL_READ_FRAMEBUFFER               0x8CA8
+#define GL_DRAW_FRAMEBUFFER               0x8CA9
+
+#define GL_COLOR_ATTACHMENT0              0x8CE0
+#define GL_COLOR_ATTACHMENT1              0x8CE1
+#define GL_COLOR_ATTACHMENT2              0x8CE2
+#define GL_COLOR_ATTACHMENT3              0x8CE3
+#define GL_COLOR_ATTACHMENT4              0x8CE4
+#define GL_COLOR_ATTACHMENT5              0x8CE5
+#define GL_COLOR_ATTACHMENT6              0x8CE6
+#define GL_COLOR_ATTACHMENT7              0x8CE7
+#define GL_COLOR_ATTACHMENT8              0x8CE8
+#define GL_COLOR_ATTACHMENT9              0x8CE9
+#define GL_COLOR_ATTACHMENT10             0x8CEA
+#define GL_COLOR_ATTACHMENT11             0x8CEB
+#define GL_COLOR_ATTACHMENT12             0x8CEC
+#define GL_COLOR_ATTACHMENT13             0x8CED
+#define GL_COLOR_ATTACHMENT14             0x8CEE
+#define GL_COLOR_ATTACHMENT15             0x8CEF
+#define GL_COLOR_ATTACHMENT16             0x8CF0
+#define GL_COLOR_ATTACHMENT17             0x8CF1
+#define GL_COLOR_ATTACHMENT18             0x8CF2
+#define GL_COLOR_ATTACHMENT19             0x8CF3
+#define GL_COLOR_ATTACHMENT20             0x8CF4
+#define GL_COLOR_ATTACHMENT21             0x8CF5
+#define GL_COLOR_ATTACHMENT22             0x8CF6
+#define GL_COLOR_ATTACHMENT23             0x8CF7
+#define GL_COLOR_ATTACHMENT24             0x8CF8
+#define GL_COLOR_ATTACHMENT25             0x8CF9
+#define GL_COLOR_ATTACHMENT26             0x8CFA
+#define GL_COLOR_ATTACHMENT27             0x8CFB
+#define GL_COLOR_ATTACHMENT28             0x8CFC
+#define GL_COLOR_ATTACHMENT29             0x8CFD
+#define GL_COLOR_ATTACHMENT30             0x8CFE
+#define GL_COLOR_ATTACHMENT31             0x8CFF
 
 #define GL_R8                             0x8229
 
@@ -117,6 +154,8 @@ X(glBindBuffer, void, (GLenum target, GLuint buffer))\
 X(glDeleteBuffers, void, (GLsizei n, GLuint *buffers))\
 X(glGenVertexArrays, void, (GLsizei n, GLuint *arrays))\
 X(glBindVertexArray, void, (GLuint array))\
+X(glGenFramebuffers, void, (GLsizei n, GLuint *fbos))\
+X(glDeleteFramebuffers, void, (GLsizei n, GLuint *fbos))\
 X(glCreateProgram, GLuint, (void))\
 X(glCreateShader, GLuint, (GLenum type))\
 X(glShaderSource, void, (GLuint shader, GLsizei count, char **string, GLint *length))\
@@ -141,6 +180,7 @@ X(glUniform1f, void, (GLint location, GLfloat v0))\
 X(glUniform2f, void, (GLint location, GLfloat v0, GLfloat v1))\
 X(glUniform3f, void, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2))\
 X(glUniform4f, void, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3))\
+X(glUniform4fv, void, (GLint location, GLsizei count, const GLfloat *value))\
 X(glUniformMatrix3fv, void, (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value))\
 X(glUniformMatrix4fv, void, (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value))\
 X(glUniform1i, void, (GLint location, GLint v0))\
@@ -149,10 +189,13 @@ X(glTexSubImage3D, void, (GLenum target, GLint level, GLint xoffset, GLint yoffs
 X(glGenerateMipmap, void, (GLenum target))\
 X(glBindAttribLocation, void, (GLuint programObj, GLuint index, char *name))\
 X(glBindFragDataLocation, void, (GLuint program, GLuint color, char *name))\
+X(glBindFramebuffer, void, (GLenum target, GLuint fbo))\
 X(glActiveTexture, void, (GLenum texture))\
 X(glVertexAttribDivisor, void, (GLuint index, GLuint divisor))\
 X(glDrawArraysInstanced, void, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount))\
 X(glDebugMessageCallback, void, (void (*)(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam), void *user_data))\
+X(glFramebufferTexture2D, void, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level))\
+X(glBlitFramebuffer, void, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter))\
 
 #define X(name, r, p) typedef r name##_FunctionType p;
 R_OGL_ProcedureXList
@@ -189,10 +232,28 @@ struct R_OGL_FlushBuffer
   GLuint id;
 };
 
+typedef struct R_OGL_RenderTarget R_OGL_RenderTarget;
+struct R_OGL_RenderTarget
+{
+  GLuint fbo;
+  GLuint color_texture;
+};
+
+typedef struct R_OGL_Window R_OGL_Window;
+struct R_OGL_Window
+{
+  R_OGL_Window *next;
+  R_Handle os;
+  Vec2F32 last_client_rect_dim;
+  R_OGL_RenderTarget stage_target;
+  R_OGL_RenderTarget stage_scratch_target;
+};
+
 typedef struct R_OGL_State R_OGL_State;
 struct R_OGL_State
 {
   Arena *arena;
+  R_OGL_Window *free_window;
   R_OGL_Tex2D *free_tex2d;
   GLuint shaders[R_OGL_ShaderKind_COUNT];
   GLuint all_purpose_vao;
@@ -219,6 +280,9 @@ internal void r_ogl_debug_message_callback(GLenum source, GLenum type, GLuint id
 
 #define glUseProgramScope(...) DeferLoop(glUseProgram(__VA_ARGS__), glUseProgram(0))
 #define glBindVertexArrayScope(...) DeferLoop(glBindVertexArray(__VA_ARGS__), glBindVertexArray(0))
+#define glBindFramebufferScope(target, ...) DeferLoop(glBindFramebuffer((target), __VA_ARGS__), glBindFramebuffer((target), 0))
+#define glBindTextureScope(target, ...) DeferLoop(glBindTexture((target), __VA_ARGS__), glBindTexture((target), 0))
+#define glEnableScope(...) DeferLoop(glEnable(__VA_ARGS__), glDisable(__VA_ARGS__))
 
 ////////////////////////////////
 //~ rjf: OS-Specific Hooks

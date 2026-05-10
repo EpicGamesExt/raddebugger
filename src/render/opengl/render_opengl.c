@@ -172,15 +172,28 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: set up built-in resources
-  glGenVertexArrays(1, &r_ogl_state->all_purpose_vao);
-  glGenBuffers(1, &r_ogl_state->scratch_buffer_64kb);
-  glBindBuffer(GL_ARRAY_BUFFER, r_ogl_state->scratch_buffer_64kb);
-  glBufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-  glGenTextures(1, &r_ogl_state->white_texture);
-  glBindTexture(GL_TEXTURE_2D, r_ogl_state->white_texture);
-  U32 white_pixel = 0xffffffff;
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &white_pixel);
+  {
+    // rjf: all-purpose VAO
+    glGenVertexArrays(1, &r_ogl_state->all_purpose_vao);
+    
+    // rjf: scratch buffer
+    {
+      glGenBuffers(1, &r_ogl_state->scratch_buffer_64kb);
+      glBindBuffer(GL_ARRAY_BUFFER, r_ogl_state->scratch_buffer_64kb);
+      glBufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
+      glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+    
+    // rjf: white texture
+    {
+      glGenTextures(1, &r_ogl_state->white_texture);
+      glBindTexture(GL_TEXTURE_2D, r_ogl_state->white_texture);
+      U32 white_pixel = 0xffffffff;
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &white_pixel);
+    }
+  }
+  
+  //- rjf: set up options
   glEnable(GL_FRAMEBUFFER_SRGB);
   
   //- rjf: set up buffer flush state
@@ -203,14 +216,27 @@ r_init(CmdLine *cmdln)
 r_hook R_Handle
 r_window_equip(WM_Window window)
 {
-  R_Handle result = r_ogl_os_window_equip(window);
+  R_OGL_Window *w = r_ogl_state->free_window;
+  if(w != 0)
+  {
+    SLLStackPop(r_ogl_state->free_window);
+  }
+  else
+  {
+    w = push_array(r_ogl_state->arena, R_OGL_Window, 1);
+  }
+  MemoryZeroStruct(w);
+  w->os = r_ogl_os_window_equip(window);
+  R_Handle result = {(U64)w};
   return result;
 }
 
 r_hook void
 r_window_unequip(WM_Window window, R_Handle window_equip)
 {
-  r_ogl_os_window_unequip(window, window_equip);
+  R_OGL_Window *w = (R_OGL_Window *)window_equip.u64[0];
+  r_ogl_os_window_unequip(window, w->os);
+  SLLStackPush(r_ogl_state->free_window, w);
 }
 
 //- rjf: textures
@@ -337,21 +363,68 @@ r_begin_frame(void)
 r_hook void
 r_end_frame(void)
 {
-  // TODO(rjf)
+  for(R_OGL_FlushBuffer *flush_buffer = r_ogl_state->first_buffer_to_flush; flush_buffer != 0; flush_buffer = flush_buffer->next)
+  {
+    glDeleteBuffers(1, &flush_buffer->id);
+  }
+  arena_clear(r_ogl_state->buffer_flush_arena);
+  r_ogl_state->first_buffer_to_flush = r_ogl_state->last_buffer_to_flush = 0;
 }
 
 r_hook void
 r_window_begin_frame(WM_Window os, R_Handle r)
 {
   r_ogl_os_select_window(os, r);
+  R_OGL_Window *window = (R_OGL_Window *)r.u64[0];
   
   //- rjf: unpack window viewport info
   Rng2F32 client_rect = wm_client_rect_from_window(os);
   Vec2F32 client_rect_dim = dim_2f32(client_rect);
   
+  //- rjf: set up targets if needed
+  if(client_rect_dim.x != window->last_client_rect_dim.x || client_rect_dim.y != window->last_client_rect_dim.y)
+  {
+    window->last_client_rect_dim = client_rect_dim;
+    R_OGL_RenderTarget *targets[] =
+    {
+      &window->stage_target,
+      &window->stage_scratch_target,
+    };
+    for EachElement(idx, targets)
+    {
+      if(targets[idx]->fbo != 0)
+      {
+        glDeleteFramebuffers(1, &targets[idx]->fbo);
+        glDeleteTextures(1, &targets[idx]->color_texture);
+      }
+      glGenFramebuffers(1, &targets[idx]->fbo);
+      glGenTextures(1, &targets[idx]->color_texture);
+      glBindFramebufferScope(GL_FRAMEBUFFER, targets[idx]->fbo)
+        glBindTextureScope(GL_TEXTURE_2D, targets[idx]->color_texture)
+      {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (S32)client_rect_dim.x, (S32)client_rect_dim.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, targets[idx]->color_texture, 0);  
+      }
+    }
+  }
+  
   //- rjf: clear and reset state
-  glClearColor(0, 0, 0, 0);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  {
+    GLuint fbos[] =
+    {
+      window->stage_target.fbo,
+      window->stage_scratch_target.fbo,
+      0,
+    };
+    for EachElement(idx, fbos)
+    {
+      glBindFramebufferScope(GL_FRAMEBUFFER, fbos[idx])
+      {
+        glClearColor(0, 0, 0, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      }
+    }
+  }
   glViewport(0, 0, (S32)client_rect_dim.x, (S32)client_rect_dim.y);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -360,12 +433,18 @@ r_window_begin_frame(WM_Window os, R_Handle r)
 r_hook void
 r_window_end_frame(WM_Window os, R_Handle r)
 {
-  for(R_OGL_FlushBuffer *flush_buffer = r_ogl_state->first_buffer_to_flush; flush_buffer != 0; flush_buffer = flush_buffer->next)
+  R_OGL_Window *window = (R_OGL_Window *)r.u64[0];
+  
+  //- rjf: blit window's main staging frame buffer to window frame buffer
+  glBindFramebufferScope(GL_READ_FRAMEBUFFER, window->stage_target.fbo) glBindFramebufferScope(GL_DRAW_FRAMEBUFFER, 0)
   {
-    glDeleteBuffers(1, &flush_buffer->id);
+    glBlitFramebuffer(0, 0, (S32)window->last_client_rect_dim.x, (S32)window->last_client_rect_dim.y,
+                      0, 0, (S32)window->last_client_rect_dim.x, (S32)window->last_client_rect_dim.y,
+                      GL_COLOR_BUFFER_BIT,
+                      GL_NEAREST);
   }
-  arena_clear(r_ogl_state->buffer_flush_arena);
-  r_ogl_state->first_buffer_to_flush = r_ogl_state->last_buffer_to_flush = 0;
+  
+  //- rjf: swap buffers
   r_ogl_os_window_swap(os, r);
 }
 
@@ -374,6 +453,7 @@ r_window_end_frame(WM_Window os, R_Handle r)
 r_hook void
 r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
 {
+  R_OGL_Window *w = (R_OGL_Window *)window_equip.u64[0];
   Rng2F32 viewport_rect = wm_client_rect_from_window(window);
   Vec2F32 viewport_dim = dim_2f32(viewport_rect);
   for(R_PassNode *pass_n = passes->first; pass_n != 0; pass_n = pass_n->next)
@@ -394,7 +474,9 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
         
         //- rjf: draw each batch group
         GLuint shader = r_ogl_state->shaders[R_OGL_ShaderKind_Rect];
-        glBindVertexArrayScope(r_ogl_state->all_purpose_vao) glUseProgramScope(shader)
+        glUseProgramScope(shader)
+          glBindVertexArrayScope(r_ogl_state->all_purpose_vao)
+          glBindFramebufferScope(GL_FRAMEBUFFER, w->stage_target.fbo)
         {
           for(R_BatchGroup2DNode *group_n = rect_batch_groups->first; group_n != 0; group_n = group_n->next)
           {
@@ -500,10 +582,103 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
       case R_PassKind_Blur:
       {
         R_PassParams_Blur *params = pass->params_blur;
-        // GLuint shader = r_ogl_state->shaders[R_OGL_ShaderKind_Blur];
-        // glBindVertexArrayScope(r_ogl_state->all_purpose_vao) glUseProgramScope(shader)
+        GLuint shader = r_ogl_state->shaders[R_OGL_ShaderKind_Blur];
+        glUseProgramScope(shader)
+          glBindVertexArrayScope(r_ogl_state->all_purpose_vao)
         {
-          // TODO(rjf)
+          //- rjf: form blur sampling kernel
+          Vec4F32 kernel[32] = {0};
+          U64 blur_count = 0;
+          {
+            //
+            // TODO(rjf): adopted from martins' d3d11 impl, should dedup in common render helpers
+            //
+            F32 weights[ArrayCount(kernel)*2] = {0};
+            F32 blur_size = Min(params->blur_size, ArrayCount(weights));
+            blur_count = (U64)round_f32(blur_size);
+            F32 stdev = (blur_size-1.f)/2.f;
+            F32 one_over_root_2pi_stdev2 = 1/sqrt_f32(2*pi32*stdev*stdev);
+            F32 euler32 = 2.718281828459045f;
+            weights[0] = 1.f;
+            if(stdev > 0.f)
+            {
+              for(U64 idx = 0; idx < blur_count; idx += 1)
+              {
+                F32 kernel_x = (F32)idx;
+                weights[idx] = one_over_root_2pi_stdev2*pow_f32(euler32, -kernel_x*kernel_x/(2.f*stdev*stdev)); 
+              }
+            }
+            if(weights[0] > 1.f)
+            {
+              MemoryZeroArray(weights);
+              weights[0] = 1.f;
+            }
+            else
+            {
+              // prepare weights & offsets for bilinear lookup
+              // blur filter wants to calculate w0*pixel[pos] + w1*pixel[pos+1] + ...
+              // with bilinear filter we can do this calulation by doing only w*sample(pos+t) = w*((1-t)*pixel[pos] + t*pixel[pos+1])
+              // we can see w0=w*(1-t) and w1=w*t
+              // thus w=w0+w1 and t=w1/w
+              for(U64 idx = 1; idx < blur_count; idx += 2)
+              {
+                F32 w0 = weights[idx + 0];
+                F32 w1 = weights[idx + 1];
+                F32 w = w0 + w1;
+                F32 t = w1 / w;
+                
+                // each kernel element is float2(weight, offset)
+                // weights & offsets are adjusted for bilinear sampling
+                // zw elements are not used, a bit of waste but it allows for simpler shader code
+                kernel[(idx+1)/2] = v4f32(w, (F32)idx + t, 0, 0);
+              }
+            }
+            kernel[0].x = weights[0];
+          }
+          
+          //- rjf: set up uniforms
+          glUniform4fv(glGetUniformLocation(shader, "rect"), 1, (F32 *)(&params->rect));
+          glUniform4fv(glGetUniformLocation(shader, "corner_radii_px"), 1, params->corner_radii);
+          glUniform2f(glGetUniformLocation(shader, "viewport_size"), viewport_dim.x, viewport_dim.y);
+          glUniform1i(glGetUniformLocation(shader, "blur_count"), blur_count);
+          glUniform4fv(glGetUniformLocation(shader, "kernel"), ArrayCount(kernel), (F32 *)&kernel[0]);
+          glActiveTexture(GL_TEXTURE0);
+          
+          //- rjf: set up scissor
+          if(params->clip.x0 != 0 ||
+             params->clip.x1 != 0 ||
+             params->clip.y0 != 0 ||
+             params->clip.y1 != 0)
+          {
+            Rng2F32 clip = params->clip;
+            glScissor(clip.x0, viewport_dim.y - clip.y1, (clip.x1-clip.x0) + 1, (clip.y1-clip.y0)+1);
+            glEnable(GL_SCISSOR_TEST);
+          }
+          
+          //- rjf: pass 1: stage -(horizontal)-> stage_scratch
+          glBindFramebufferScope(GL_FRAMEBUFFER, w->stage_scratch_target.fbo)
+            glBindTextureScope(GL_TEXTURE_2D, w->stage_target.color_texture)
+          {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glUniform2f(glGetUniformLocation(shader, "direction"), 1.f/viewport_dim.x, 0);
+            glUniform1i(glGetUniformLocation(shader, "tex"), 0);
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+          }
+          
+          //- rjf: pass 2: stage_scratch -(vertical)-> stage
+          glBindFramebufferScope(GL_FRAMEBUFFER, w->stage_target.fbo)
+            glBindTextureScope(GL_TEXTURE_2D, w->stage_scratch_target.color_texture)
+          {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glUniform2f(glGetUniformLocation(shader, "direction"), 0, 1.f/viewport_dim.y);
+            glUniform1i(glGetUniformLocation(shader, "tex"), 0);
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+          }
+          
+          //- rjf: unset scissor
+          glDisable(GL_SCISSOR_TEST);
         }
       }break;
       
