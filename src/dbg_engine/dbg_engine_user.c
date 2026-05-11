@@ -758,6 +758,7 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
     D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
     D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
     DI_Key dbgi_key = d_dbgi_key_from_module(module);
+    D_CallStack callstack = d_call_stack_from_thread(access, thread->handle, 1, read_endt_us);
     
     // rjf: ip => enclosing scope's list(voff_range)
     Rng1U64List scope_voff_rngs = {0};
@@ -786,6 +787,7 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
       D_ProcessMemorySlice code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, vaddr_range, 0, read_endt_us);
       if(!code_slice.any_byte_bad)
       {
+        result.good_read = 1;
         String8 code = code_slice.data;
         DASM_CtrlFlowInfo ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena, DASM_InstFlag_Branch|DASM_InstFlag_UnconditionalJump|DASM_InstFlag_Return, arch, vaddr_range.min, code);
         
@@ -796,7 +798,7 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
           B32 jump_dest_vaddr_is_out_of_scope = 1;
           for EachNode(scope_n, Rng1U64Node, scope_voff_rngs.first)
           {
-            if(contains_1u64(scope_n->v, jump_dest_vaddr))
+            if(contains_1u64(scope_n->v, d_voff_from_vaddr(module, jump_dest_vaddr)))
             {
               jump_dest_vaddr_is_out_of_scope = 0;
               break;
@@ -815,7 +817,7 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
           B32 opl_vaddr_is_out_of_scope = 1;
           for EachNode(scope_n, Rng1U64Node, scope_voff_rngs.first)
           {
-            if(contains_1u64(scope_n->v, opl_vaddr))
+            if(contains_1u64(scope_n->v, d_voff_from_vaddr(module, opl_vaddr)))
             {
               opl_vaddr_is_out_of_scope = 0;
               break;
@@ -833,6 +835,19 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
         result.good_read = 0;
         break;
       }
+    }
+    
+    // rjf: use first unwind frame to generate trap
+    if(result.good_read && callstack.concrete_frames_count > 1)
+    {
+      ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
+      U64 vaddr = arch_ip_from_reg_block(arch_info, callstack.concrete_frames[1]->regs);
+      D_Trap trap = {D_TrapFlag_EndStepping|D_TrapFlag_IgnoreStackPointerCheck, vaddr};
+      d_trap_list_push(arena, &result.traps, &trap);
+    }
+    else
+    {
+      result.good_read = 0;
     }
     
     access_close(access);
@@ -1909,33 +1924,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               case D_CmdKind_StepOverInst: {trap_net = d_trap_net_from_thread__step_over_inst(scratch.arena, thread);}break;
               case D_CmdKind_StepIntoLine: {trap_net = d_trap_net_from_thread__step_into_line(scratch.arena, thread);}break;
               case D_CmdKind_StepOverLine: {trap_net = d_trap_net_from_thread__step_over_line(scratch.arena, thread);}break;
-#if 0
               case D_CmdKind_StepOut:      {trap_net = d_trap_net_from_thread__step_out_scope(scratch.arena, thread);}break;
-#else
-              case D_CmdKind_StepOut:
-              {
-                Access *access = access_open();
-                
-                // rjf: thread => call stack
-                D_CallStack callstack = d_call_stack_from_thread(access, thread->handle, 1, now_time_us()+10000);
-                
-                // rjf: use first unwind frame to generate trap
-                if(callstack.concrete_frames_count > 1)
-                {
-                  ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
-                  U64 vaddr = arch_ip_from_reg_block(arch_info, callstack.concrete_frames[1]->regs);
-                  D_Trap trap = {D_TrapFlag_EndStepping|D_TrapFlag_IgnoreStackPointerCheck, vaddr};
-                  d_trap_list_push(scratch.arena, &trap_net.traps, &trap);
-                  trap_net.good_read = 1;
-                }
-                else
-                {
-                  log_user_error(str8_lit("Could not find the return address of the current callstack frame successfully."));
-                }
-                
-                access_close(access);
-              }break;
-#endif
             }
             B32 good_trap_net = (trap_net.good_read || !trap_net.good_line_info);
             if(good_trap_net && trap_net.traps.count != 0)

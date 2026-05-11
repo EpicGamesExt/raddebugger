@@ -852,7 +852,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
                 SLLStackPush(top_range, r);
                 r->voff_range = voff_range;
                 r->idx = idx;
-                if(voff_range.min != last_recorded_voff || (vmap_ptr->idx != idx && vmap_ptr->idx != 0))
+                if(voff_range.min != last_recorded_voff)
                 {
                   vmap_ptr += 1;
                 }

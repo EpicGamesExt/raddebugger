@@ -681,6 +681,14 @@ type_coverage_eval_tests(void)
     OutputDebugStringA("\n");
   }
   
+  if(1)
+  {
+    OutputDebugStringA("this is inside a branch!\n");
+    OutputDebugStringA("foo");
+    OutputDebugStringA("bar");
+    OutputDebugStringA("baz");
+  }
+  
   const int32_t x1 = 3;
   const int32_t y1 = -10;
   const int32_t z1 = x1 + y1;
