@@ -2,13 +2,32 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Global Arena Table
+
+#if ARENA_TABLE_DEBUG
+typedef struct ArenaTableNode ArenaTableNode;
+struct ArenaTableNode
+{
+  ArenaTableNode *next;
+  Arena *arena;
+};
+global U64 arena_table_take_init = 0;
+global U64 arena_table_inited = 0;
+global U64 arena_table_lock = 0;
+global ArenaTableNode *arena_table = 0;
+global U64 arena_table_count = 0;
+global U64 arena_table_cap = 0;
+global ArenaTableNode *free_arena_table_node = 0;
+#endif
+
+////////////////////////////////
 //~ rjf: Arena Functions
 
 //- rjf: arena creation/destruction
 
 internal Arena *
 arena_alloc_(ArenaParams *params)
-{ 
+{
   U64 reserve_size = params->reserve_size;
   U64 commit_size  = params->commit_size;
   
@@ -73,6 +92,47 @@ arena_alloc_(ArenaParams *params)
 #if ARENA_FREE_LIST
   arena->free_last = 0;
 #endif
+  
+  // rjf: store in global arena table
+#if ARENA_TABLE_DEBUG
+  if(ins_atomic_u64_eval_cond_assign(&arena_table_take_init, 1, 0) == 0)
+  {
+    arena_table = reserve_memory(GB(256));
+    arena_table_cap = 4096;
+    commit_memory(arena_table, arena_table_cap * sizeof(arena_table[0]));
+    ins_atomic_u64_inc_eval(&arena_table_inited);
+  }
+  for(;!ins_atomic_u64_eval(&arena_table_inited);) {}
+  for(;;)
+  {
+    B32 got_lock = (ins_atomic_u64_eval_cond_assign(&arena_table_lock, 1, 0) == 0);
+    if(got_lock)
+    {
+      ArenaTableNode *node = free_arena_table_node;
+      if(node != 0)
+      {
+        SLLStackPop(free_arena_table_node);
+      }
+      else
+      {
+        node = &arena_table[arena_table_count];
+        if(arena_table_count >= arena_table_cap)
+        {
+          U64 arena_table_cap__pre_grow = arena_table_cap;
+          arena_table_cap *= 2;
+          U64 arena_table_cap__post_grow = arena_table_cap;
+          commit_memory(arena_table + arena_table_cap__pre_grow, sizeof(arena_table[0]) * (arena_table_cap__post_grow - arena_table_cap__pre_grow));
+        }
+        arena_table_count += 1;
+      }
+      node->arena = arena;
+      arena->table_node = node;
+      ins_atomic_u64_eval_assign(&arena_table_lock, 0);
+      break;
+    }
+  }
+#endif
+  
   return arena;
 }
 
@@ -84,6 +144,24 @@ arena_release(Arena *arena)
     Arena *base_arena = arena;
     while (base_arena->prev) base_arena = base_arena->prev;
     tmPlot(0, TM_PLOT_UNITS_MEMORY, TM_PLOT_DRAW_LINE, 0, "%s/%p", base_arena->name, base_arena);
+  }
+#endif
+  
+#if ARENA_TABLE_DEBUG
+  for(Arena *n = arena->current; n != 0; n = n->prev)
+  {
+    for(;;)
+    {
+      B32 got_lock = (ins_atomic_u64_eval_cond_assign(&arena_table_lock, 1, 0) == 0);
+      if(got_lock)
+      {
+        ArenaTableNode *table_node = n->table_node;
+        MemoryZeroStruct(table_node);
+        SLLStackPush(free_arena_table_node, table_node);
+        ins_atomic_u64_eval_assign(&arena_table_lock, 0);
+        break;
+      }
+    }
   }
 #endif
   

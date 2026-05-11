@@ -6820,7 +6820,7 @@ d_call_stack_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U6
           good = 1;
           call_stack[0] = d_call_stack_from_unwind(arena, process, &unwind);
         }
-        if(unwind.flags & D_UnwindFlag_Stale)
+        else
         {
           retry = 1;
         }

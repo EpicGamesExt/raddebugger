@@ -46,6 +46,9 @@ struct Arena
 #if ARENA_FREE_LIST
   Arena *free_last;
 #endif
+#if ARENA_TABLE_DEBUG
+  struct ArenaTableNode *table_node;
+#endif
 };
 StaticAssert(sizeof(Arena) <= ARENA_HEADER_SIZE, arena_header_size_check);
 

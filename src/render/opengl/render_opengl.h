@@ -278,11 +278,11 @@ internal R_OGL_FormatInfo r_ogl_format_info_from_tex2dformat(R_Tex2DFormat fmt);
 internal GLuint r_ogl_instance_buffer_from_size(U64 size);
 internal void r_ogl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam);
 
-#define glUseProgramScope(...) DeferLoop(glUseProgram(__VA_ARGS__), glUseProgram(0))
-#define glBindVertexArrayScope(...) DeferLoop(glBindVertexArray(__VA_ARGS__), glBindVertexArray(0))
+#define glUseProgramScope(...)              DeferLoop(glUseProgram(__VA_ARGS__), glUseProgram(0))
+#define glBindVertexArrayScope(...)         DeferLoop(glBindVertexArray(__VA_ARGS__), glBindVertexArray(0))
 #define glBindFramebufferScope(target, ...) DeferLoop(glBindFramebuffer((target), __VA_ARGS__), glBindFramebuffer((target), 0))
-#define glBindTextureScope(target, ...) DeferLoop(glBindTexture((target), __VA_ARGS__), glBindTexture((target), 0))
-#define glEnableScope(...) DeferLoop(glEnable(__VA_ARGS__), glDisable(__VA_ARGS__))
+#define glBindTextureScope(target, ...)     DeferLoop(glBindTexture((target), __VA_ARGS__), glBindTexture((target), 0))
+#define glEnableScope(...)                  DeferLoop(glEnable(__VA_ARGS__), glDisable(__VA_ARGS__))
 
 ////////////////////////////////
 //~ rjf: OS-Specific Hooks

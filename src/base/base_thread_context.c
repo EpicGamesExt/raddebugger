@@ -19,8 +19,8 @@ tctx_alloc(void)
 {
 #if PROFILE_TELEMETRY
   thread_static static char name[2][1024];
-  raddbg_snprintf(name[0], sizeof(name[0]), "Scratch/0[TID:%u]", os_tid());
-  raddbg_snprintf(name[1], sizeof(name[1]), "Scratch/1[TID:%u]", os_tid());
+  raddbg_snprintf(name[0], sizeof(name[0]), "Scratch/0[TID:%u]", tid());
+  raddbg_snprintf(name[1], sizeof(name[1]), "Scratch/1[TID:%u]", tid());
   Arena *arena_0 = arena_alloc(.name = name[0]);
   Arena *arena_1 = arena_alloc(.name = name[1]);
 #else
