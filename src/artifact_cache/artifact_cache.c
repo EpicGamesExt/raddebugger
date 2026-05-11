@@ -422,12 +422,13 @@ ac_async_tick(void)
             {
               if(str8_match(n->key, r->key, 0))
               {
-                // rjf: eliminate existing values, if nay
-                if(cache->destroy && ins_atomic_u64_eval(&n->completion_count) > 0) for(;;)
+                // rjf: eliminate existing values, if any, if they do not match the current
+                if(!MemoryMatchStruct(&n->val, &val) && ins_atomic_u64_eval(&n->completion_count) > 0) for(;;)
                 {
                   if(access_pt_is_expired(&n->access_pt, .time = 0, .update_idxs = 0))
                   {
                     cache->destroy(n->val);
+                    MemoryZeroStruct(&n->val);
                     break;
                   }
                   cond_var_wait_rw(stripe->cv, stripe->rw_mutex, 1, max_U64);
@@ -543,12 +544,13 @@ ac_async_tick(void)
             {
               if(str8_match(n->key, r->key, 0))
               {
-                // rjf: eliminate existing values, if nay
-                if(cache->destroy && ins_atomic_u64_eval(&n->completion_count) > 0) for(;;)
+                // rjf: eliminate existing values, if any, if they do not match the current
+                if(!MemoryMatchStruct(&n->val, &val) && ins_atomic_u64_eval(&n->completion_count) > 0) for(;;)
                 {
                   if(access_pt_is_expired(&n->access_pt, .time = 0, .update_idxs = 0))
                   {
                     cache->destroy(n->val);
+                    MemoryZeroStruct(&n->val);
                     break;
                   }
                   cond_var_wait_rw(stripe->cv, stripe->rw_mutex, 1, max_U64);

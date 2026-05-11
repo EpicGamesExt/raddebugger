@@ -169,10 +169,13 @@ d_cmd_params_copy(Arena *arena, D_CmdParams *src)
   for(U64 idx = 0; idx < dst.targets.count; idx += 1)
   {
     D_Target *target = &dst.targets.v[idx];
-    target->exe = push_str8_copy(arena, target->exe);
-    target->args = push_str8_copy(arena, target->args);
-    target->working_directory = push_str8_copy(arena, target->working_directory);
-    target->custom_entry_point_name = push_str8_copy(arena, target->custom_entry_point_name);
+    target->exe = str8_copy(arena, target->exe);
+    target->args = str8_copy(arena, target->args);
+    target->working_directory = str8_copy(arena, target->working_directory);
+    target->custom_entry_point_name = str8_copy(arena, target->custom_entry_point_name);
+    target->stdout_path = str8_copy(arena, target->stdout_path);
+    target->stderr_path = str8_copy(arena, target->stderr_path);
+    target->stdin_path = str8_copy(arena, target->stdin_path);
     target->env = str8_list_copy(arena, &target->env);
   }
   return dst;
@@ -736,6 +739,105 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   }
   
   scratch_end(scratch);
+  return result;
+}
+
+internal D_TrapNet
+d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
+{
+  D_TrapNet result = {0};
+  {
+    U64 read_endt_us = now_time_us() + 1000000;
+    Temp scratch = scratch_begin(&arena, 1);
+    Access *access = access_open();
+    D_EntityCtx *entity_ctx = &d_user_state->ctrl_entity_store->ctx;
+    
+    // rjf: unpack thread
+    Arch arch = thread->arch;
+    U64 ip_vaddr = d_rip_from_thread(entity_ctx, thread->handle);
+    D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+    D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
+    DI_Key dbgi_key = d_dbgi_key_from_module(module);
+    
+    // rjf: ip => enclosing scope's list(voff_range)
+    Rng1U64List scope_voff_rngs = {0};
+    {
+      U64 ip_voff = d_voff_from_vaddr(module, ip_vaddr);
+      RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
+      if(rdi != &rdi_parsed_nil)
+      {
+        result.good_line_info = 1;
+        RDI_Scope *scope = rdi_scope_from_voff(rdi, ip_voff);
+        U64 all_scope_voffs_count = 0;
+        U64 *all_scope_voffs = rdi_table_from_name(rdi, ScopeVOffData, &all_scope_voffs_count);
+        for(U64 voff_idx = scope->voff_range_first; voff_idx+1 < scope->voff_range_opl; voff_idx += 1)
+        {
+          Rng1U64 voff_range = r1u64(all_scope_voffs[voff_idx], all_scope_voffs[voff_idx+1]);
+          rng1u64_list_push(scratch.arena, &scope_voff_rngs, voff_range);
+        }
+      }
+    }
+    
+    // rjf: place traps at all possible exit points of all scope's ranges
+    for EachNode(n, Rng1U64Node, scope_voff_rngs.first)
+    {
+      Rng1U64 voff_range = n->v;
+      Rng1U64 vaddr_range = d_vaddr_range_from_voff_range(module, voff_range);
+      D_ProcessMemorySlice code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, vaddr_range, 0, read_endt_us);
+      if(!code_slice.any_byte_bad)
+      {
+        String8 code = code_slice.data;
+        DASM_CtrlFlowInfo ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena, DASM_InstFlag_Branch|DASM_InstFlag_UnconditionalJump|DASM_InstFlag_Return, arch, vaddr_range.min, code);
+        
+        // rjf: add traps at all jump destinations which do *not* fall into any of the scope's ranges
+        for EachNode(exit_pt_n, DASM_CtrlFlowPointNode, ctrl_flow_info.exit_points.first)
+        {
+          U64 jump_dest_vaddr = exit_pt_n->v.jump_dest_vaddr;
+          B32 jump_dest_vaddr_is_out_of_scope = 1;
+          for EachNode(scope_n, Rng1U64Node, scope_voff_rngs.first)
+          {
+            if(contains_1u64(scope_n->v, jump_dest_vaddr))
+            {
+              jump_dest_vaddr_is_out_of_scope = 0;
+              break;
+            }
+          }
+          if(jump_dest_vaddr_is_out_of_scope)
+          {
+            D_Trap trap = {D_TrapFlag_EndStepping|D_TrapFlag_IgnoreStackPointerCheck, jump_dest_vaddr};
+            d_trap_list_push(arena, &result.traps, &trap);
+          }
+        }
+        
+        // rjf: add trap at natural exit point of scope
+        {
+          U64 opl_vaddr = vaddr_range.max;
+          B32 opl_vaddr_is_out_of_scope = 1;
+          for EachNode(scope_n, Rng1U64Node, scope_voff_rngs.first)
+          {
+            if(contains_1u64(scope_n->v, opl_vaddr))
+            {
+              opl_vaddr_is_out_of_scope = 0;
+              break;
+            }
+          }
+          if(opl_vaddr_is_out_of_scope)
+          {
+            D_Trap trap = {D_TrapFlag_EndStepping|D_TrapFlag_IgnoreStackPointerCheck, opl_vaddr};
+            d_trap_list_push(arena, &result.traps, &trap);
+          }
+        }
+      }
+      else
+      {
+        result.good_read = 0;
+        break;
+      }
+    }
+    
+    access_close(access);
+    scratch_end(scratch);
+  }
   return result;
 }
 
@@ -1684,11 +1786,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               {
                 D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
                 msg->kind = D_MsgKind_Launch;
-                msg->path = working_directory;
-                msg->cmd_line_string_list = cmdln_strings;
-                msg->stdout_path = stdout_path;
-                msg->stderr_path = stderr_path;
-                msg->stdin_path  = stdin_path;
+                msg->path = str8_copy(scratch.arena, working_directory);
+                msg->cmd_line_string_list = str8_list_copy(scratch.arena, &cmdln_strings);
+                msg->stdout_path = str8_copy(scratch.arena, stdout_path);
+                msg->stderr_path = str8_copy(scratch.arena, stderr_path);
+                msg->stdin_path = str8_copy(scratch.arena, stdin_path);
                 msg->debug_subprocesses = target->debug_subprocesses;
                 msg->env_inherit = 1;
                 MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
@@ -1807,6 +1909,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               case D_CmdKind_StepOverInst: {trap_net = d_trap_net_from_thread__step_over_inst(scratch.arena, thread);}break;
               case D_CmdKind_StepIntoLine: {trap_net = d_trap_net_from_thread__step_into_line(scratch.arena, thread);}break;
               case D_CmdKind_StepOverLine: {trap_net = d_trap_net_from_thread__step_over_line(scratch.arena, thread);}break;
+#if 0
+              case D_CmdKind_StepOut:      {trap_net = d_trap_net_from_thread__step_out_scope(scratch.arena, thread);}break;
+#else
               case D_CmdKind_StepOut:
               {
                 Access *access = access_open();
@@ -1830,6 +1935,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 
                 access_close(access);
               }break;
+#endif
             }
             B32 good_trap_net = (trap_net.good_read || !trap_net.good_line_info);
             if(good_trap_net && trap_net.traps.count != 0)

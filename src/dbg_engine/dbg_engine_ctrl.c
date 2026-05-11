@@ -288,7 +288,7 @@ internal void
 d_msg_deep_copy(Arena *arena, D_Msg *dst, D_Msg *src)
 {
   MemoryCopyStruct(dst, src);
-  dst->path                 = push_str8_copy(arena, src->path);
+  dst->path                 = str8_copy(arena, src->path);
   dst->entry_points         = str8_list_copy(arena, &src->entry_points);
   dst->cmd_line_string_list = str8_list_copy(arena, &src->cmd_line_string_list);
   dst->env_string_list      = str8_list_copy(arena, &src->env_string_list);

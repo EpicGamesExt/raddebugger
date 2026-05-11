@@ -10488,9 +10488,14 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: do per-frame resets
   //
-  arena_clear(rd_frame_arena());
-  rd_state->top_regs = &rd_state->base_regs;
-  rd_regs_copy_contents(rd_frame_arena(), &rd_state->top_regs->v, &rd_state->top_regs->v);
+  {
+    Temp scratch = scratch_begin(0, 0);
+    rd_state->top_regs = &rd_state->base_regs;
+    rd_regs_copy_contents(scratch.arena, &rd_state->top_regs->v, &rd_state->top_regs->v);
+    arena_clear(rd_frame_arena());
+    rd_regs_copy_contents(rd_frame_arena(), &rd_state->top_regs->v, &rd_state->top_regs->v);
+    scratch_end(scratch);
+  }
   if(rd_state->next_hover_regs != 0)
   {
     rd_state->hover_regs = rd_regs_copy(rd_frame_arena(), rd_state->next_hover_regs);

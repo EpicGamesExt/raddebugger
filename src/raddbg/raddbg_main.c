@@ -10,6 +10,13 @@
 // [ ] memory_size(...) view for quickly evaluating memory sizes
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
 //
+// [ ] asan pass
+// [ ] policy for closing debug info which is no longer relevant?
+// [ ] codebase-internal barrier impl (win7/linux support)
+// [ ] external window focusing bugs
+// [ ] PDB -> RDI conversion memory usage
+// [x] killing/restarting thread performance (#780)
+//
 // [ ] project/user file improvements
 //  [ ] "default" -> "untitled"
 //  [ ] should clear default project data every time the program starts
@@ -17,12 +24,6 @@
 //      by default go to "untitled" in default user path
 //  [ ] more things should move to user data, but project-tagged - like
 //      recent files, watches?, etc.
-//
-// [ ] killing/restarting thread performance (#780)
-// [ ] codebase-internal barrier impl (win7/linux support)
-// [ ] PDB -> RDI conversion memory usage
-// [ ] policy for closing debug info which is no longer relevant?
-// [ ] external window focusing bugs
 //
 // [ ] linux/dwarf fixes
 //  [ ] excessive CPU usage on async threads - barrier impl?

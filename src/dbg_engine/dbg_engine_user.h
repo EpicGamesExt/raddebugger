@@ -422,6 +422,7 @@ internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind,
 internal D_TrapNet d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity *thread);
 internal D_TrapNet d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread);
 internal D_TrapNet d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread);
+internal D_TrapNet d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread);
 
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
