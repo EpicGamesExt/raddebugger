@@ -1,4 +1,4 @@
-@echo off
+@echo on
 setlocal enabledelayedexpansion
 
 set TARGET_VALUES=radlink radbin mule_main mule_module torture
