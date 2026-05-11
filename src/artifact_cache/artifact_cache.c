@@ -423,7 +423,7 @@ ac_async_tick(void)
               if(str8_match(n->key, r->key, 0))
               {
                 // rjf: eliminate existing values, if any, if they do not match the current
-                if(!MemoryMatchStruct(&n->val, &val) && ins_atomic_u64_eval(&n->completion_count) > 0) for(;;)
+                if(cache->destroy != 0 && !MemoryMatchStruct(&n->val, &val) && ins_atomic_u64_eval(&n->completion_count) > 0) for(;;)
                 {
                   if(access_pt_is_expired(&n->access_pt, .time = 0, .update_idxs = 0))
                   {
@@ -545,7 +545,7 @@ ac_async_tick(void)
               if(str8_match(n->key, r->key, 0))
               {
                 // rjf: eliminate existing values, if any, if they do not match the current
-                if(!MemoryMatchStruct(&n->val, &val) && ins_atomic_u64_eval(&n->completion_count) > 0) for(;;)
+                if(cache->destroy != 0 && !MemoryMatchStruct(&n->val, &val) && ins_atomic_u64_eval(&n->completion_count) > 0) for(;;)
                 {
                   if(access_pt_is_expired(&n->access_pt, .time = 0, .update_idxs = 0))
                   {
