@@ -301,14 +301,17 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity *thread)
   
   // rjf: ip => machine code
   String8 machine_code = {0};
+  B32 good_machine_code = 0;
   {
     Rng1U64 rng = r1u64(ip_vaddr, ip_vaddr+max_instruction_size_from_arch(arch));
-    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, rng, 0, now_time_us()+5000);
+    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, rng, 1, now_time_us()+10000);
     machine_code = machine_code_slice.data;
+    good_machine_code = (machine_code.size != 0 && !machine_code_slice.any_byte_bad && !machine_code_slice.stale);
   }
+  result.good_line_info = 1;
   
   // rjf: build traps if machine code was read successfully
-  if(machine_code.size != 0)
+  if(good_machine_code)
   {
     result.good_read = 1;
     
@@ -396,12 +399,9 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   B32 good_machine_code = 0;
   if(good_line_info)
   {
-    // TODO: Under WSL, memory fetch takes longer to complete. Previously, 50ms was not enough and d_process_memory_slice_from_vaddr_range
-    // would return stale memory, causing stepping alg to stop mid-source-line. If I understand correctly, 'wait_for_fresh' should
-    // guarantee successful stepping here, but even after enabling it, stale memory is returned.
-    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, now_time_us()+10000000);
+    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 1, now_time_us()+10000);
     machine_code = machine_code_slice.data;
-    good_machine_code = (machine_code.size >= dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
+    good_machine_code = (machine_code.size >= dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad && !machine_code_slice.stale);
     LogInfoNamedBlockF("machine_code_slice")
     {
       log_infof("stale: %i\n", machine_code_slice.stale);
@@ -527,7 +527,6 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   }
   
   // rjf: store goodness
-  if(good_machine_code)
   {
     result.good_line_info = good_line_info;
     result.good_read = good_machine_code;
@@ -610,9 +609,9 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   B32 good_machine_code = 0;
   if(good_line_info)
   {
-    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 0, now_time_us()+5000);
+    D_ProcessMemorySlice machine_code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, 1, now_time_us()+10000);
     machine_code = machine_code_slice.data;
-    good_machine_code = (machine_code.size >= dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
+    good_machine_code = (machine_code.size >= dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad && !machine_code_slice.stale);
   }
   
   // rjf: machine code => ctrl flow analysis
