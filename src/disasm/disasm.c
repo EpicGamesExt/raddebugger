@@ -39,11 +39,22 @@ dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Synta
       
       // rjf: analyze
       DASM_InstFlags flags = 0;
-      U64 jump_dest_vaddr = 0;
+      U64 dst_vaddr = 0;
       {
         ZydisDecodedOperand *first_visible_op = (zinst.info.operand_count_visible > 0 ? &zinst.operands[0] : 0);
         ZydisDecodedOperand *first_op = (zinst.info.operand_count > 0 ? &zinst.operands[0] : 0);
         ZydisDecodedOperand *second_op = (zinst.info.operand_count > 1 ? &zinst.operands[1] : 0);
+        
+        if(first_op != 0 &&
+           first_op->actions & ZYDIS_OPERAND_ACTION_WRITE)
+        {
+          // TODO(rjf): need to pass back register + offset
+        }
+        if(second_op != 0 &&
+           second_op->actions & ZYDIS_OPERAND_ACTION_READ)
+        {
+          // TODO(rjf): need to pass back register + offset
+        }
         if(first_visible_op != 0 && 
            (first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM8 ||
             first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM16 ||
@@ -53,7 +64,7 @@ dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Synta
             first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM32_32_64 ||
             first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM16_32_32))
         {
-          ZydisCalcAbsoluteAddress(&zinst.info, first_visible_op, vaddr, &jump_dest_vaddr);
+          ZydisCalcAbsoluteAddress(&zinst.info, first_visible_op, vaddr, &dst_vaddr);
         }
         if(first_op != 0 && second_op != 0 && first_op->type == ZYDIS_OPERAND_TYPE_REGISTER &&
            (first_op->reg.value == ZYDIS_REGISTER_RSP ||
@@ -136,8 +147,9 @@ dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Synta
       {
         inst.flags           = flags;
         inst.size            = zinst.info.length;
-        inst.string          = push_str8_copy(arena, str8_cstring(zinst.text));
-        inst.jump_dest_vaddr = jump_dest_vaddr;
+        inst.string          = str8_copy(arena, str8_cstring(zinst.text));
+        inst.dst_vaddr       = dst_vaddr;
+        inst.src_vaddr       = src_vaddr;
       }
     }break;
   }
@@ -163,7 +175,7 @@ dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_point
       DASM_CtrlFlowPoint point = {0};
       point.inst_flags = inst.flags;
       point.vaddr = inst_vaddr;
-      point.jump_dest_vaddr = inst.jump_dest_vaddr;
+      point.jump_dest_vaddr = inst.dst_vaddr;
       DASM_CtrlFlowPointNode *node = push_array(arena, DASM_CtrlFlowPointNode, 1);
       node->v = point;
       SLLQueuePush(info.exit_points.first, info.exit_points.last, node);
@@ -405,9 +417,9 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_o
           code_bytes_part = str8_list_join(scratch.arena, &code_bytes_strings, 0);
         }
         String8 symbol_part = {0};
-        if(inst.jump_dest_vaddr != 0 && rdi != &rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
+        if(inst.dst_vaddr != 0 && rdi != &rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
         {
-          RDI_U32 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, inst.jump_dest_vaddr-params.base_vaddr);
+          RDI_U32 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, inst.dst_vaddr-params.base_vaddr);
           if(scope_idx != 0)
           {
             RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
@@ -422,8 +434,8 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_o
           }
         }
         String8 inst_string = push_str8f(scratch.arena, "%S%S%S%S", addr_part, code_bytes_part, inst.string, symbol_part);
-        DASM_Line line = {u32_from_u64_saturate(off), 0, inst.jump_dest_vaddr, r1u64(inst_strings.total_size + inst_strings.node_count,
-                                                                                     inst_strings.total_size + inst_strings.node_count + inst_string.size)};
+        DASM_Line line = {u32_from_u64_saturate(off), 0, inst.dst_vaddr, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                               inst_strings.total_size + inst_strings.node_count + inst_string.size)};
         dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &line);
         str8_list_push(scratch.arena, &inst_strings, inst_string);
         

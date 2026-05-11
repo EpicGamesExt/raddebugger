@@ -37,7 +37,11 @@ struct DASM_Inst
   DASM_InstFlags flags;
   U32 size;
   String8 string;
-  U64 jump_dest_vaddr;
+  U64 dst_vaddr;
+  ARCH_RegCode dst_base_reg;
+  U64 dst_off;
+  ARCH_RegCode src_base_reg;
+  U64 src_off;
 };
 
 ////////////////////////////////
