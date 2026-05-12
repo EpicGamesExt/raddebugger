@@ -16448,20 +16448,20 @@ rd_frame(void)
           U64 test_cached_vaddr = d_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
           
           // rjf: valid stop thread? -> select & snap
-          if(need_refocus && thread != &d_entity_nil && evt->cause != D_EventCause_InterruptedByHalt)
+          if(need_refocus && thread->kind == D_EntityKind_Thread && evt->cause != D_EventCause_InterruptedByHalt)
           {
             rd_cmd(RD_CmdKind_SelectThread, .thread = thread->handle);
           }
           
           // rjf: no stop-causing thread, but have selected thread? -> snap to selected
           D_Entity *selected_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-          if(need_refocus && (evt->cause == D_EventCause_InterruptedByHalt || thread == &d_entity_nil) && selected_thread != &d_entity_nil)
+          if(need_refocus && (evt->cause == D_EventCause_InterruptedByHalt || thread->kind != D_EntityKind_Thread) && selected_thread != &d_entity_nil)
           {
             rd_cmd(RD_CmdKind_SelectThread, .thread = selected_thread->handle);
           }
           
           // rjf: no stop-causing thread, but don't have selected thread? -> snap to first available thread
-          if(need_refocus && thread == &d_entity_nil && selected_thread == &d_entity_nil)
+          if(need_refocus && thread->kind != D_EntityKind_Thread && selected_thread == &d_entity_nil)
           {
             D_EntityArray threads = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Thread);
             D_Entity *first_available_thread = d_entity_array_first(&threads);
