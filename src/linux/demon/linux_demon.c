@@ -2280,14 +2280,14 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params)
   }
   
   // setup target environment
-  U64    envc = os_lnx_state.default_env_count + params->env.node_count + 1;
+  U64    envc = lnx_state.default_env_count + params->env.node_count + 1;
   char **envp = push_array(scratch.arena, char *, envc);
   {
     // copy default environment
-    MemoryCopyTyped(envp, os_lnx_state.default_env, os_lnx_state.default_env_count);
+    MemoryCopyTyped(envp, lnx_state.default_env, lnx_state.default_env_count);
     
     // copy user environment
-    U64 idx = os_lnx_state.default_env_count;
+    U64 idx = lnx_state.default_env_count;
     for EachNode(n, String8Node, params->env.first)
     {
       envp[idx] = (char *)str8_copy(scratch.arena, n->string).str;

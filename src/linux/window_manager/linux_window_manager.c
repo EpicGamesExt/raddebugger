@@ -5,10 +5,10 @@
 //~ rjf: Helpers
 
 internal LNX_WM_Window *
-os_lnx_window_from_x11window(Window window)
+lnx_window_from_x11window(Window window)
 {
   LNX_WM_Window *result = 0;
-  for(LNX_WM_Window *w = os_lnx_gfx_state->first_window; w != 0; w = w->next)
+  for(LNX_WM_Window *w = lnx_wm_state->first_window; w != 0; w = w->next)
   {
     if(w->window == window)
     {
@@ -27,22 +27,22 @@ wm_init(void)
 {
   //- rjf: initialize basics
   Arena *arena = arena_alloc();
-  os_lnx_gfx_state = push_array(arena, LNX_WM_GfxState, 1);
-  os_lnx_gfx_state->arena = arena;
-  os_lnx_gfx_state->display = XOpenDisplay(0);
+  lnx_wm_state = push_array(arena, LNX_WM_State, 1);
+  lnx_wm_state->arena = arena;
+  lnx_wm_state->display = XOpenDisplay(0);
   
   //- rjf: calculate atoms
-  os_lnx_gfx_state->wm_delete_window_atom        = XInternAtom(os_lnx_gfx_state->display, "WM_DELETE_WINDOW", 0);
-  os_lnx_gfx_state->wm_sync_request_atom         = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_SYNC_REQUEST", 0);
-  os_lnx_gfx_state->wm_sync_request_counter_atom = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
+  lnx_wm_state->wm_delete_window_atom        = XInternAtom(lnx_wm_state->display, "WM_DELETE_WINDOW", 0);
+  lnx_wm_state->wm_sync_request_atom         = XInternAtom(lnx_wm_state->display, "_NET_WM_SYNC_REQUEST", 0);
+  lnx_wm_state->wm_sync_request_counter_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
   
   //- rjf: open im
-  os_lnx_gfx_state->xim = XOpenIM(os_lnx_gfx_state->display, 0, 0, 0);
+  lnx_wm_state->xim = XOpenIM(lnx_wm_state->display, 0, 0, 0);
   
   //- rjf: fill out gfx info
-  os_lnx_gfx_state->gfx_info.double_click_time = 0.5f;
-  os_lnx_gfx_state->gfx_info.caret_blink_time = 0.5f;
-  os_lnx_gfx_state->gfx_info.default_refresh_rate = 60.f;
+  lnx_wm_state->gfx_info.double_click_time = 0.5f;
+  lnx_wm_state->gfx_info.caret_blink_time = 0.5f;
+  lnx_wm_state->gfx_info.default_refresh_rate = 60.f;
   
   //- rjf: fill out cursors
   {
@@ -65,7 +65,7 @@ wm_init(void)
     };
     for EachElement(idx, map)
     {
-      os_lnx_gfx_state->cursors[map[idx].cursor] = XCreateFontCursor(os_lnx_gfx_state->display, map[idx].id);
+      lnx_wm_state->cursors[map[idx].cursor] = XCreateFontCursor(lnx_wm_state->display, map[idx].id);
     }
   }
 }
@@ -76,7 +76,7 @@ wm_init(void)
 internal WM_SystemInfo *
 wm_get_system_info(void)
 {
-  return &os_lnx_gfx_state->gfx_info;
+  return &lnx_wm_state->gfx_info;
 }
 
 ////////////////////////////////
@@ -104,21 +104,21 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
   Vec2F32 resolution = dim_2f32(rect);
   
   //- rjf: allocate window
-  LNX_WM_Window *w = os_lnx_gfx_state->free_window;
+  LNX_WM_Window *w = lnx_wm_state->free_window;
   if(w)
   {
-    SLLStackPop(os_lnx_gfx_state->free_window);
+    SLLStackPop(lnx_wm_state->free_window);
   }
   else
   {
-    w = push_array_no_zero(os_lnx_gfx_state->arena, LNX_WM_Window, 1);
+    w = push_array_no_zero(lnx_wm_state->arena, LNX_WM_Window, 1);
   }
   MemoryZeroStruct(w);
-  DLLPushBack(os_lnx_gfx_state->first_window, os_lnx_gfx_state->last_window, w);
+  DLLPushBack(lnx_wm_state->first_window, lnx_wm_state->last_window, w);
   
   //- rjf: create window & equip with x11 info
-  w->window = XCreateWindow(os_lnx_gfx_state->display,
-                            XDefaultRootWindow(os_lnx_gfx_state->display),
+  w->window = XCreateWindow(lnx_wm_state->display,
+                            XDefaultRootWindow(lnx_wm_state->display),
                             0, 0, resolution.x, resolution.y,
                             0,
                             CopyFromParent,
@@ -126,7 +126,7 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
                             CopyFromParent,
                             0,
                             0);
-  XSelectInput(os_lnx_gfx_state->display, w->window,
+  XSelectInput(lnx_wm_state->display, w->window,
                ExposureMask|
                PointerMotionMask|
                ButtonPressMask|
@@ -136,19 +136,19 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
                FocusChangeMask);
   Atom protocols[] =
   {
-    os_lnx_gfx_state->wm_delete_window_atom,
-    os_lnx_gfx_state->wm_sync_request_atom,
+    lnx_wm_state->wm_delete_window_atom,
+    lnx_wm_state->wm_sync_request_atom,
   };
-  XSetWMProtocols(os_lnx_gfx_state->display, w->window, protocols, ArrayCount(protocols));
+  XSetWMProtocols(lnx_wm_state->display, w->window, protocols, ArrayCount(protocols));
   {
     XSyncValue initial_value;
     XSyncIntToValue(&initial_value, 0);
-    w->counter_xid = XSyncCreateCounter(os_lnx_gfx_state->display, initial_value);
+    w->counter_xid = XSyncCreateCounter(lnx_wm_state->display, initial_value);
   }
-  XChangeProperty(os_lnx_gfx_state->display, w->window, os_lnx_gfx_state->wm_sync_request_counter_atom, XA_CARDINAL, 32, PropModeReplace, (U8 *)&w->counter_xid, 1);
+  XChangeProperty(lnx_wm_state->display, w->window, lnx_wm_state->wm_sync_request_counter_atom, XA_CARDINAL, 32, PropModeReplace, (U8 *)&w->counter_xid, 1);
   
   //- rjf: create xic
-  w->xic = XCreateIC(os_lnx_gfx_state->xim,
+  w->xic = XCreateIC(lnx_wm_state->xim,
                      XNInputStyle, XIMPreeditNothing|XIMStatusNothing,
                      XNClientWindow, w->window,
                      XNFocusWindow, w->window,
@@ -157,7 +157,7 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
   //- rjf: attach name
   Temp scratch = scratch_begin(0, 0);
   String8 title_copy = push_str8_copy(scratch.arena, title);
-  XStoreName(os_lnx_gfx_state->display, w->window, (char *)title_copy.str);
+  XStoreName(lnx_wm_state->display, w->window, (char *)title_copy.str);
   scratch_end(scratch);
   
   //- rjf: convert to handle & return
@@ -170,7 +170,7 @@ wm_window_close(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
-  XDestroyWindow(os_lnx_gfx_state->display, w->window);
+  XDestroyWindow(lnx_wm_state->display, w->window);
 }
 
 internal void
@@ -180,7 +180,7 @@ wm_window_set_title(WM_Window handle, String8 title)
   Temp scratch = scratch_begin(0, 0);
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
   String8 title_copy = push_str8_copy(scratch.arena, title);
-  XStoreName(os_lnx_gfx_state->display, w->window, (char *)title_copy.str);
+  XStoreName(lnx_wm_state->display, w->window, (char *)title_copy.str);
   scratch_end(scratch);
 }
 
@@ -189,7 +189,7 @@ wm_window_first_paint(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
-  XMapWindow(os_lnx_gfx_state->display, w->window);
+  XMapWindow(lnx_wm_state->display, w->window);
 }
 
 internal void
@@ -197,7 +197,7 @@ wm_window_focus(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
-  XSetInputFocus(os_lnx_gfx_state->display, w->window, RevertToNone, CurrentTime);
+  XSetInputFocus(lnx_wm_state->display, w->window, RevertToNone, CurrentTime);
 }
 
 internal B32
@@ -207,7 +207,7 @@ wm_window_is_focused(WM_Window handle)
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
   Window focused_window = 0;
   int revert_to = 0;
-  XGetInputFocus(os_lnx_gfx_state->display, &focused_window, &revert_to);
+  XGetInputFocus(lnx_wm_state->display, &focused_window, &revert_to);
   B32 result = (w->window == focused_window);
   return result;
 }
@@ -305,7 +305,7 @@ wm_rect_from_window(WM_Window handle)
   if(wm_window_match(handle, wm_window_zero())) {return r2f32p(0, 0, 0, 0);}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
   XWindowAttributes atts = {0};
-  Status s = XGetWindowAttributes(os_lnx_gfx_state->display, w->window, &atts);
+  Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
   Rng2F32 result = r2f32p((F32)atts.x, (F32)atts.y, (F32)atts.x + (F32)atts.width, (F32)atts.y + (F32)atts.height);
   return result;
 }
@@ -315,7 +315,7 @@ wm_client_rect_from_window(WM_Window handle)
 {
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
   XWindowAttributes atts = {0};
-  Status s = XGetWindowAttributes(os_lnx_gfx_state->display, w->window, &atts);
+  Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
   Rng2F32 result = r2f32p(0, 0, (F32)atts.width, (F32)atts.height);
   return result;
 }
@@ -405,10 +405,10 @@ internal WM_EventList
 wm_get_events(Arena *arena, B32 wait)
 {
   WM_EventList evts = {0};
-  for(;XPending(os_lnx_gfx_state->display) > 0 || (wait && evts.count == 0);)
+  for(;XPending(lnx_wm_state->display) > 0 || (wait && evts.count == 0);)
   {
     XEvent evt = {0};
-    XNextEvent(os_lnx_gfx_state->display, &evt);
+    XNextEvent(lnx_wm_state->display, &evt);
     B32 set_mouse_cursor = 0;
     switch(evt.type)
     {
@@ -425,7 +425,7 @@ wm_get_events(Arena *arena, B32 wait)
         if(evt.xkey.state & Mod1Mask)    { modifiers |= WM_Modifier_Alt; }
         
         // rjf: map keycode -> keysym & codepoint
-        LNX_WM_Window *window = os_lnx_window_from_x11window(evt.xkey.window);
+        LNX_WM_Window *window = lnx_window_from_x11window(evt.xkey.window);
         KeySym keysym = 0;
         U8 text[256] = {0};
         U64 text_size = Xutf8LookupString(window->xic, &evt.xkey, (char *)text, sizeof(text), &keysym, 0);
@@ -552,7 +552,7 @@ wm_get_events(Arena *arena, B32 wait)
         }
         
         // rjf: push event
-        LNX_WM_Window *window = os_lnx_window_from_x11window(evt.xbutton.window);
+        LNX_WM_Window *window = lnx_window_from_x11window(evt.xbutton.window);
         if(key != WM_Key_Null)
         {
           WM_Event *e = wm_event_list_push_new(arena, &evts, evt.type == ButtonPress ? WM_EventKind_Press : WM_EventKind_Release);
@@ -575,7 +575,7 @@ wm_get_events(Arena *arena, B32 wait)
       //- rjf: mouse motion
       case MotionNotify:
       {
-        LNX_WM_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
+        LNX_WM_Window *window = lnx_window_from_x11window(evt.xclient.window);
         WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_MouseMove);
         e->window.u64[0] = (U64)window;
         e->pos.x = (F32)evt.xmotion.x;
@@ -589,7 +589,7 @@ wm_get_events(Arena *arena, B32 wait)
       }break;
       case FocusOut:
       {
-        LNX_WM_Window *window = os_lnx_window_from_x11window(evt.xfocus.window);
+        LNX_WM_Window *window = lnx_window_from_x11window(evt.xfocus.window);
         WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_WindowLoseFocus);
         e->window.u64[0] = (U64)window;
       }break;
@@ -597,15 +597,15 @@ wm_get_events(Arena *arena, B32 wait)
       //- rjf: client messages
       case ClientMessage:
       {
-        if((Atom)evt.xclient.data.l[0] == os_lnx_gfx_state->wm_delete_window_atom)
+        if((Atom)evt.xclient.data.l[0] == lnx_wm_state->wm_delete_window_atom)
         {
-          LNX_WM_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
+          LNX_WM_Window *window = lnx_window_from_x11window(evt.xclient.window);
           WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_WindowClose);
           e->window.u64[0] = (U64)window;
         }
-        else if((Atom)evt.xclient.data.l[0] == os_lnx_gfx_state->wm_sync_request_atom)
+        else if((Atom)evt.xclient.data.l[0] == lnx_wm_state->wm_sync_request_atom)
         {
-          LNX_WM_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
+          LNX_WM_Window *window = lnx_window_from_x11window(evt.xclient.window);
           if(window != 0)
           {
             window->counter_value = 0;
@@ -613,7 +613,7 @@ wm_get_events(Arena *arena, B32 wait)
             window->counter_value |= (evt.xclient.data.l[3] << 32);
             XSyncValue value;
             XSyncIntToValue(&value, window->counter_value);
-            XSyncSetCounter(os_lnx_gfx_state->display, window->counter_xid, value);
+            XSyncSetCounter(lnx_wm_state->display, window->counter_xid, value);
           }
         }
       }break;
@@ -627,10 +627,10 @@ wm_get_events(Arena *arena, B32 wait)
       int child_rel_x = 0;
       int child_rel_y = 0;
       unsigned int mask = 0;
-      if(XQueryPointer(os_lnx_gfx_state->display, XDefaultRootWindow(os_lnx_gfx_state->display), &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
+      if(XQueryPointer(lnx_wm_state->display, XDefaultRootWindow(lnx_wm_state->display), &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
       {
-        XDefineCursor(os_lnx_gfx_state->display, root_window, os_lnx_gfx_state->cursors[os_lnx_gfx_state->last_set_cursor]);
-        XFlush(os_lnx_gfx_state->display);
+        XDefineCursor(lnx_wm_state->display, root_window, lnx_wm_state->cursors[lnx_wm_state->last_set_cursor]);
+        XFlush(lnx_wm_state->display);
       }
     }
   }
@@ -665,7 +665,7 @@ wm_mouse_from_window(WM_Window handle)
     int child_rel_x = 0;
     int child_rel_y = 0;
     unsigned int mask = 0;
-    if(XQueryPointer(os_lnx_gfx_state->display, w->window, &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
+    if(XQueryPointer(lnx_wm_state->display, w->window, &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
     {
       result.x = child_rel_x;
       result.y = child_rel_y;
@@ -680,7 +680,7 @@ wm_mouse_from_window(WM_Window handle)
 internal void
 wm_set_cursor(WM_Cursor cursor)
 {
-  os_lnx_gfx_state->last_set_cursor = cursor;
+  lnx_wm_state->last_set_cursor = cursor;
 }
 
 ////////////////////////////////

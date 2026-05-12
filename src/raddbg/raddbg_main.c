@@ -10,12 +10,13 @@
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
 // [x] step out of scopes / loops
 //
-// [ ] codebase-internal barrier impl (win7/linux support)
 // [ ] asan pass
 // [ ] external window focusing bugs
-// [ ] PDB -> RDI conversion memory usage
+// [x] codebase-internal barrier impl (win7/linux support)
 // [x] policy for closing debug info which is no longer relevant?
 // [x] killing/restarting thread performance (#780)
+//
+// [ ] PDB -> RDI conversion memory usage
 //
 // [ ] project/user file improvements
 //  [ ] "default" -> "untitled"

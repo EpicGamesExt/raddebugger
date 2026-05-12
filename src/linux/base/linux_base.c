@@ -5,7 +5,7 @@
 //~ rjf: Helpers
 
 internal DateTime
-os_lnx_date_time_from_tm(tm in, U32 msec)
+lnx_date_time_from_tm(tm in, U32 msec)
 {
   DateTime dt = {0};
   dt.sec  = in.tm_sec;
@@ -19,7 +19,7 @@ os_lnx_date_time_from_tm(tm in, U32 msec)
 }
 
 internal tm
-os_lnx_tm_from_date_time(DateTime dt)
+lnx_tm_from_date_time(DateTime dt)
 {
   tm result = {0};
   result.tm_sec = dt.sec;
@@ -32,9 +32,9 @@ os_lnx_tm_from_date_time(DateTime dt)
 }
 
 internal timespec
-os_lnx_timespec_from_date_time(DateTime dt)
+lnx_timespec_from_date_time(DateTime dt)
 {
-  tm tm_val = os_lnx_tm_from_date_time(dt);
+  tm tm_val = lnx_tm_from_date_time(dt);
   time_t seconds = timegm(&tm_val);
   timespec result = {0};
   result.tv_sec = seconds;
@@ -42,25 +42,25 @@ os_lnx_timespec_from_date_time(DateTime dt)
 }
 
 internal DenseTime
-os_lnx_dense_time_from_timespec(timespec in)
+lnx_dense_time_from_timespec(timespec in)
 {
   DenseTime result = 0;
   {
     struct tm tm_time = {0};
     gmtime_r(&in.tv_sec, &tm_time);
-    DateTime date_time = os_lnx_date_time_from_tm(tm_time, in.tv_nsec/Million(1));
+    DateTime date_time = lnx_date_time_from_tm(tm_time, in.tv_nsec/Million(1));
     result = dense_time_from_date_time(date_time);
   }
   return result;
 }
 
 internal FileProperties
-os_lnx_file_properties_from_stat(struct stat *s)
+lnx_file_properties_from_stat(struct stat *s)
 {
   FileProperties props = {0};
   props.size     = s->st_size;
-  props.created  = os_lnx_dense_time_from_timespec(s->st_ctim);
-  props.modified = os_lnx_dense_time_from_timespec(s->st_mtim);
+  props.created  = lnx_dense_time_from_timespec(s->st_ctim);
+  props.modified = lnx_dense_time_from_timespec(s->st_mtim);
   if(s->st_mode & S_IFDIR)
   {
     props.flags |= FilePropertyFlag_IsFolder;
@@ -69,9 +69,9 @@ os_lnx_file_properties_from_stat(struct stat *s)
 }
 
 internal void
-os_lnx_safe_call_sig_handler(int x)
+lnx_safe_call_sig_handler(int x)
 {
-  LNX_SafeCallChain *chain = os_lnx_safe_call_chain;
+  LNX_SafeCallChain *chain = lnx_safe_call_chain;
   if(chain != 0 && chain->fail_handler != 0)
   {
     chain->fail_handler(chain->ptr);
@@ -83,20 +83,20 @@ os_lnx_safe_call_sig_handler(int x)
 //~ rjf: Entities
 
 internal LNX_Entity *
-os_lnx_entity_alloc(LNX_EntityKind kind)
+lnx_entity_alloc(LNX_EntityKind kind)
 {
   LNX_Entity *entity = 0;
-  DeferLoop(pthread_mutex_lock(&os_lnx_state.entity_mutex),
-            pthread_mutex_unlock(&os_lnx_state.entity_mutex))
+  DeferLoop(pthread_mutex_lock(&lnx_state.entity_mutex),
+            pthread_mutex_unlock(&lnx_state.entity_mutex))
   {
-    entity = os_lnx_state.entity_free;
+    entity = lnx_state.entity_free;
     if(entity)
     {
-      SLLStackPop(os_lnx_state.entity_free);
+      SLLStackPop(lnx_state.entity_free);
     }
     else
     {
-      entity = push_array_no_zero(os_lnx_state.entity_arena, LNX_Entity, 1);
+      entity = push_array_no_zero(lnx_state.entity_arena, LNX_Entity, 1);
     }
   }
   MemoryZeroStruct(entity);
@@ -105,12 +105,12 @@ os_lnx_entity_alloc(LNX_EntityKind kind)
 }
 
 internal void
-os_lnx_entity_release(LNX_Entity *entity)
+lnx_entity_release(LNX_Entity *entity)
 {
-  DeferLoop(pthread_mutex_lock(&os_lnx_state.entity_mutex),
-            pthread_mutex_unlock(&os_lnx_state.entity_mutex))
+  DeferLoop(pthread_mutex_lock(&lnx_state.entity_mutex),
+            pthread_mutex_unlock(&lnx_state.entity_mutex))
   {
-    SLLStackPush(os_lnx_state.entity_free, entity);
+    SLLStackPush(lnx_state.entity_free, entity);
   }
 }
 
@@ -118,7 +118,7 @@ os_lnx_entity_release(LNX_Entity *entity)
 //~ rjf: Thread Entry Point
 
 internal void *
-os_lnx_thread_entry_point(void *ptr)
+lnx_thread_entry_point(void *ptr)
 {
   LNX_Entity *entity = (LNX_Entity *)ptr;
   ThreadEntryPointFunctionType *func = entity->thread.func;
@@ -153,7 +153,7 @@ now_time_universal(void)
   time(&t);
   struct tm universal_tm = {0};
   gmtime_r(&t, &universal_tm);
-  DateTime result = os_lnx_date_time_from_tm(universal_tm, 0);
+  DateTime result = lnx_date_time_from_tm(universal_tm, 0);
   return result;
 }
 
@@ -161,14 +161,14 @@ internal DateTime
 universal_from_local_time(DateTime *dt)
 {
   // rjf: local DateTime -> universal time_t
-  tm local_tm = os_lnx_tm_from_date_time(*dt);
+  tm local_tm = lnx_tm_from_date_time(*dt);
   local_tm.tm_isdst = -1;
   time_t universal_t = mktime(&local_tm);
   
   // rjf: universal time_t -> DateTime
   tm universal_tm = {0};
   gmtime_r(&universal_t, &universal_tm);
-  DateTime result = os_lnx_date_time_from_tm(universal_tm, 0);
+  DateTime result = lnx_date_time_from_tm(universal_tm, 0);
   return result;
 }
 
@@ -176,14 +176,14 @@ internal DateTime
 local_from_universal_time(DateTime *dt)
 {
   // rjf: universal DateTime -> local time_t
-  tm universal_tm = os_lnx_tm_from_date_time(*dt);
+  tm universal_tm = lnx_tm_from_date_time(*dt);
   universal_tm.tm_isdst = -1;
   time_t universal_t = timegm(&universal_tm);
   tm local_tm = {0};
   localtime_r(&universal_t, &local_tm);
   
   // rjf: local tm -> DateTime
-  DateTime result = os_lnx_date_time_from_tm(local_tm, 0);
+  DateTime result = lnx_date_time_from_tm(local_tm, 0);
   return result;
 }
 
@@ -324,7 +324,7 @@ shared_memory_view_close(SharedMemory handle, void *ptr, Rng1U64 range)
 internal SystemInfo *
 get_system_info(void)
 {
-  return &os_lnx_state.system_info;
+  return &lnx_state.system_info;
 }
 
 ////////////////////////////////
@@ -353,14 +353,14 @@ set_platform_thread_name(String8 name)
 internal Thread
 thread_launch(ThreadEntryPointFunctionType *f, void *p)
 {
-  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_Thread);
+  LNX_Entity *entity = lnx_entity_alloc(LNX_EntityKind_Thread);
   entity->thread.func = f;
   entity->thread.ptr = p;
   {
-    int pthread_result = pthread_create(&entity->thread.handle, 0, os_lnx_thread_entry_point, entity);
+    int pthread_result = pthread_create(&entity->thread.handle, 0, lnx_thread_entry_point, entity);
     if(pthread_result == -1)
     {
-      os_lnx_entity_release(entity);
+      lnx_entity_release(entity);
       entity = 0;
     }
   }
@@ -375,7 +375,7 @@ thread_join(Thread thread, U64 endt_us)
   LNX_Entity *entity = (LNX_Entity *)thread.u64[0];
   int join_result = pthread_join(entity->thread.handle, 0);
   B32 result = (join_result == 0);
-  os_lnx_entity_release(entity);
+  lnx_entity_release(entity);
   return result;
 }
 
@@ -384,7 +384,7 @@ thread_detach(Thread thread)
 {
   if(MemoryIsZeroStruct(&thread)) { return; }
   LNX_Entity *entity = (LNX_Entity *)thread.u64[0];
-  os_lnx_entity_release(entity);
+  lnx_entity_release(entity);
 }
 
 ////////////////////////////////
@@ -395,11 +395,11 @@ thread_detach(Thread thread)
 internal Mutex
 mutex_alloc(void)
 {
-  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_Mutex);
+  LNX_Entity *entity = lnx_entity_alloc(LNX_EntityKind_Mutex);
   int init_result = pthread_mutex_init(&entity->mutex_handle, 0);
   if(init_result == -1)
   {
-    os_lnx_entity_release(entity);
+    lnx_entity_release(entity);
     entity = 0;
   }
   Mutex handle = {(U64)entity};
@@ -412,7 +412,7 @@ mutex_release(Mutex mutex)
   if(MemoryIsZeroStruct(&mutex)) { return; }
   LNX_Entity *entity = (LNX_Entity *)mutex.u64[0];
   pthread_mutex_destroy(&entity->mutex_handle);
-  os_lnx_entity_release(entity);
+  lnx_entity_release(entity);
 }
 
 internal void
@@ -436,11 +436,11 @@ mutex_drop(Mutex mutex)
 internal RWMutex
 rw_mutex_alloc(void)
 {
-  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_RWMutex);
+  LNX_Entity *entity = lnx_entity_alloc(LNX_EntityKind_RWMutex);
   int init_result = pthread_rwlock_init(&entity->rwmutex_handle, 0);
   if(init_result == -1)
   {
-    os_lnx_entity_release(entity);
+    lnx_entity_release(entity);
     entity = 0;
   }
   RWMutex handle = {(U64)entity};
@@ -453,7 +453,7 @@ rw_mutex_release(RWMutex mutex)
   if(MemoryIsZeroStruct(&mutex)) { return; }
   LNX_Entity *entity = (LNX_Entity *)mutex.u64[0];
   pthread_rwlock_destroy(&entity->rwmutex_handle);
-  os_lnx_entity_release(entity);
+  lnx_entity_release(entity);
 }
 
 internal void
@@ -484,11 +484,11 @@ rw_mutex_drop(RWMutex mutex, B32 write_mode)
 internal CondVar
 cond_var_alloc(void)
 {
-  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_ConditionVariable);
+  LNX_Entity *entity = lnx_entity_alloc(LNX_EntityKind_ConditionVariable);
   int init_result = pthread_cond_init(&entity->cv.cond_handle, 0);
   if(init_result == -1)
   {
-    os_lnx_entity_release(entity);
+    lnx_entity_release(entity);
     entity = 0;
   }
   int init2_result = 0;
@@ -499,7 +499,7 @@ cond_var_alloc(void)
   if(init2_result == -1)
   {
     pthread_cond_destroy(&entity->cv.cond_handle);
-    os_lnx_entity_release(entity);
+    lnx_entity_release(entity);
     entity = 0;
   }
   CondVar handle = {(U64)entity};
@@ -513,7 +513,7 @@ cond_var_release(CondVar cv)
   LNX_Entity *entity = (LNX_Entity *)cv.u64[0];
   pthread_cond_destroy(&entity->cv.cond_handle);
   pthread_mutex_destroy(&entity->cv.rwlock_mutex_handle);
-  os_lnx_entity_release(entity);
+  lnx_entity_release(entity);
 }
 
 internal B32
@@ -713,7 +713,7 @@ semaphore_drop(Semaphore semaphore)
 internal Barrier
 barrier_alloc(U64 count)
 {
-  LNX_Entity *entity = os_lnx_entity_alloc(LNX_EntityKind_Barrier);
+  LNX_Entity *entity = lnx_entity_alloc(LNX_EntityKind_Barrier);
   if(entity != 0)
   {
     pthread_barrier_init(&entity->barrier, 0, count);
@@ -729,7 +729,7 @@ barrier_release(Barrier barrier)
   if(entity != 0)
   {
     pthread_barrier_destroy(&entity->barrier);
-    os_lnx_entity_release(entity);
+    lnx_entity_release(entity);
   }
 }
 
@@ -751,13 +751,13 @@ safe_call(ThreadEntryPointFunctionType *func, ThreadEntryPointFunctionType *fail
 {
   // rjf: push handler to chain
   LNX_SafeCallChain chain = {0};
-  SLLStackPush(os_lnx_safe_call_chain, &chain);
+  SLLStackPush(lnx_safe_call_chain, &chain);
   chain.fail_handler = fail_handler;
   chain.ptr = ptr;
   
   // rjf: set up sig handler info
   struct sigaction new_act = {0};
-  new_act.sa_handler = os_lnx_safe_call_sig_handler;
+  new_act.sa_handler = lnx_safe_call_sig_handler;
   int signals_to_handle[] =
   {
     SIGILL, SIGFPE, SIGSEGV, SIGBUS, SIGTRAP,
@@ -883,7 +883,7 @@ file_set_times(File file, DateTime date_time)
 {
   if(file_match(file, file_zero())) { return 0; }
   int fd = (int)file.u64[0];
-  timespec time = os_lnx_timespec_from_date_time(date_time);
+  timespec time = lnx_timespec_from_date_time(date_time);
   timespec times[2] = {time, time};
   int futimens_result = futimens(fd, times);
   B32 good = (futimens_result != -1);
@@ -900,7 +900,7 @@ properties_from_file(File file)
   FileProperties props = {0};
   if(fstat_result != -1)
   {
-    props = os_lnx_file_properties_from_stat(&fd_stat);
+    props = lnx_file_properties_from_stat(&fd_stat);
   }
   return props;
 }
@@ -1036,7 +1036,7 @@ properties_from_file_path(String8 path)
   FileProperties props = {0};
   if(stat_result != -1)
   {
-    props = os_lnx_file_properties_from_stat(&f_stat);
+    props = lnx_file_properties_from_stat(&f_stat);
   }
   scratch_end(scratch);
   return props;
@@ -1135,7 +1135,7 @@ file_iter_next(Arena *arena, FileIter *iter, FileInfo *info_out)
       info_out->name = push_str8_copy(arena, str8_cstring(lnx_iter->dp->d_name));
       if(stat_result != -1)
       {
-        info_out->props = os_lnx_file_properties_from_stat(&st);
+        info_out->props = lnx_file_properties_from_stat(&st);
       }
       break;
     }
@@ -1187,7 +1187,7 @@ abort_self(S32 exit_code)
 internal ProcessInfo *
 get_process_info(void)
 {
-  return &os_lnx_state.process_info;
+  return &lnx_state.process_info;
 }
 
 internal String8
@@ -1255,7 +1255,7 @@ process_launch(ProcessLaunchParams *params)
       char **envp = 0;
       if(params->inherit_env)
       {
-        envp = os_lnx_state.default_env;
+        envp = lnx_state.default_env;
       }
       else
       {
@@ -1453,14 +1453,14 @@ main(int argc, char **argv)
   {
     //- rjf: get statically-allocated system/process info
     {
-      SystemInfo *info = &os_lnx_state.system_info;
+      SystemInfo *info = &lnx_state.system_info;
       info->logical_processor_count = (U32)get_nprocs();
       info->page_size               = (U64)getpagesize();
       info->large_page_size         = MB(2);
       info->allocation_granularity  = info->page_size;
     }
     {
-      ProcessInfo *info = &os_lnx_state.process_info;
+      ProcessInfo *info = &lnx_state.process_info;
       info->pid = (U32)getpid();
     }
     
@@ -1469,28 +1469,28 @@ main(int argc, char **argv)
     tctx_select(tctx);
     
     //- rjf: set up dynamically allocated state
-    os_lnx_state.arena = arena_alloc();
-    os_lnx_state.entity_arena = arena_alloc();
-    pthread_mutex_init(&os_lnx_state.entity_mutex, 0);
+    lnx_state.arena = arena_alloc();
+    lnx_state.entity_arena = arena_alloc();
+    pthread_mutex_init(&lnx_state.entity_mutex, 0);
     
     // cache default environment
     {
       U64 env_count = 0;
       for(; __environ[env_count] != 0; env_count += 1) {}
-      char **default_env = push_array(os_lnx_state.arena, char *, env_count+1);
+      char **default_env = push_array(lnx_state.arena, char *, env_count+1);
       for EachIndex(idx, env_count)
       {
-        default_env[idx] = (char *)str8_copy(os_lnx_state.arena, str8_cstring(__environ[idx])).str;
+        default_env[idx] = (char *)str8_copy(lnx_state.arena, str8_cstring(__environ[idx])).str;
       }
       default_env[env_count] = 0;
-      os_lnx_state.default_env_count = env_count;
-      os_lnx_state.default_env       = default_env;
+      lnx_state.default_env_count = env_count;
+      lnx_state.default_env       = default_env;
     }
     
     //- rjf: grab dynamically allocated system info
     {
       Temp scratch = scratch_begin(0, 0);
-      SystemInfo *info = &os_lnx_state.system_info;
+      SystemInfo *info = &lnx_state.system_info;
       
       // rjf: get machine name
       B32 got_final_result = 0;
@@ -1513,7 +1513,7 @@ main(int argc, char **argv)
       if(got_final_result && size > 0)
       {
         info->machine_name.size = size;
-        info->machine_name.str = push_array_no_zero(os_lnx_state.arena, U8, info->machine_name.size + 1);
+        info->machine_name.str = push_array_no_zero(lnx_state.arena, U8, info->machine_name.size + 1);
         MemoryCopy(info->machine_name.str, buffer, info->machine_name.size);
         info->machine_name.str[info->machine_name.size] = 0;
       }
@@ -1524,7 +1524,7 @@ main(int argc, char **argv)
     //- rjf: grab dynamically allocated process info
     {
       Temp scratch = scratch_begin(0, 0);
-      ProcessInfo *info = &os_lnx_state.process_info;
+      ProcessInfo *info = &lnx_state.process_info;
       
       // rjf: grab binary path
       {
@@ -1549,13 +1549,13 @@ main(int argc, char **argv)
         {
           String8 full_name = str8(buffer, size);
           String8 name_chopped = str8_chop_last_slash(full_name);
-          info->binary_path = push_str8_copy(os_lnx_state.arena, name_chopped);
+          info->binary_path = push_str8_copy(lnx_state.arena, name_chopped);
         }
       }
       
       // rjf: grab initial directory
       {
-        info->initial_path = get_current_path(os_lnx_state.arena);
+        info->initial_path = get_current_path(lnx_state.arena);
       }
       
       // rjf: grab home directory

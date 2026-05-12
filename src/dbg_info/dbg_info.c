@@ -205,8 +205,11 @@ di_key_from_path_timestamp(String8 path, U64 min_timestamp)
       if(!made_key)
       {
         made_key = 1;
-        U128 hash = u128_hash_from_seed_str8(min_timestamp, path);
-        MemoryCopy(&key, &hash, Min(sizeof(hash), sizeof(key)));
+        if(path.size != 0)
+        {
+          U128 hash = u128_hash_from_seed_str8(min_timestamp, path);
+          MemoryCopy(&key, &hash, Min(sizeof(hash), sizeof(key)));
+        }
       }
       
       //- rjf: made key -> store in (key -> path/timestamp) table
@@ -698,6 +701,7 @@ di_async_tick(void)
         
         //- rjf: compute key's RDI path
         String8 rdi_path = {0};
+        if(og_path.size != 0)
         {
           if(og_is_rdi)
           {

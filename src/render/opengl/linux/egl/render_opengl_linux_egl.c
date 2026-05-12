@@ -20,7 +20,7 @@ r_ogl_os_init(CmdLine *cmdln)
   
   //- rjf: get EGL display
   {
-    r_ogl_lnx_state->display = eglGetDisplay((EGLNativeDisplayType)os_lnx_gfx_state->display);
+    r_ogl_lnx_state->display = eglGetDisplay((EGLNativeDisplayType)lnx_wm_state->display);
     if(r_ogl_lnx_state->display == EGL_NO_DISPLAY)
     {
       wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Failed to get EGL display."));

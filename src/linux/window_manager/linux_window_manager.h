@@ -31,8 +31,8 @@ struct LNX_WM_Window
 ////////////////////////////////
 //~ rjf: State Bundle
 
-typedef struct LNX_WM_GfxState LNX_WM_GfxState;
-struct LNX_WM_GfxState
+typedef struct LNX_WM_State LNX_WM_State;
+struct LNX_WM_State
 {
   Arena *arena;
   Display *display;
@@ -51,11 +51,11 @@ struct LNX_WM_GfxState
 ////////////////////////////////
 //~ rjf: Globals
 
-global LNX_WM_GfxState *os_lnx_gfx_state = 0;
+global LNX_WM_State *lnx_wm_state = 0;
 
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal LNX_WM_Window *os_lnx_window_from_x11window(Window window);
+internal LNX_WM_Window *lnx_window_from_x11window(Window window);
 
 #endif // LINUX_WINDOW_MANAGER_H

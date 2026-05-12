@@ -14,7 +14,7 @@ r_ogl_os_init(CmdLine *cmdln)
   //- rjf: require GLX 1.3+
   int glx_version_major = 0;
   int glx_version_minor = 0;
-  if(!glXQueryVersion(os_lnx_gfx_state->display, &glx_version_major, &glx_version_minor) ||
+  if(!glXQueryVersion(lnx_wm_state->display, &glx_version_major, &glx_version_minor) ||
      (glx_version_major == 1 && glx_version_minor < 3) ||
      glx_version_major < 1)
   {
@@ -42,7 +42,7 @@ r_ogl_os_init(CmdLine *cmdln)
     None
   };
   int framebuffer_configs_count = 0;
-  GLXFBConfig *framebuffer_configs = glXChooseFBConfig(os_lnx_gfx_state->display, DefaultScreen(os_lnx_gfx_state->display), framebuffer_config_options, &framebuffer_configs_count);
+  GLXFBConfig *framebuffer_configs = glXChooseFBConfig(lnx_wm_state->display, DefaultScreen(lnx_wm_state->display), framebuffer_config_options, &framebuffer_configs_count);
   if(framebuffer_configs == 0)
   {
     wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Could not find a suitable framebuffer configuration."));
@@ -72,10 +72,10 @@ r_ogl_os_init(CmdLine *cmdln)
       GLX_CONTEXT_FLAGS_ARB,         !!debug_mode*GLX_CONTEXT_DEBUG_BIT_ARB,
       None
     };
-    r_ogl_lnx_ctx = glXCreateContextAttribsARB(os_lnx_gfx_state->display, framebuffer_config, 0, 1, context_options);
+    r_ogl_lnx_ctx = glXCreateContextAttribsARB(lnx_wm_state->display, framebuffer_config, 0, 1, context_options);
   }
   
-  glXMakeCurrent(os_lnx_gfx_state->display, 0, r_ogl_lnx_ctx);
+  glXMakeCurrent(lnx_wm_state->display, 0, r_ogl_lnx_ctx);
 }
 
 internal R_Handle
@@ -95,12 +95,12 @@ internal void
 r_ogl_os_select_window(WM_Window os, R_Handle r)
 {
   LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
-  glXMakeCurrent(os_lnx_gfx_state->display, w->window, r_ogl_lnx_ctx);
+  glXMakeCurrent(lnx_wm_state->display, w->window, r_ogl_lnx_ctx);
 }
 
 internal void
 r_ogl_os_window_swap(WM_Window os, R_Handle r)
 {
   LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
-  glXSwapBuffers(os_lnx_gfx_state->display, w->window);
+  glXSwapBuffers(lnx_wm_state->display, w->window);
 }

@@ -61,7 +61,7 @@ struct LNX_FileIter
   struct dirent *dp;
   String8 path;
 };
-StaticAssert(sizeof(Member(FileIter, memory)) >= sizeof(LNX_FileIter), os_lnx_file_iter_size_check);
+StaticAssert(sizeof(Member(FileIter, memory)) >= sizeof(LNX_FileIter), lnx_file_iter_size_check);
 
 ////////////////////////////////
 //~ rjf: Safe Call Handler Chain
@@ -130,28 +130,28 @@ struct LNX_State
 ////////////////////////////////
 //~ rjf: Globals
 
-global LNX_State os_lnx_state = {0};
-thread_static LNX_SafeCallChain *os_lnx_safe_call_chain = 0;
+global LNX_State lnx_state = {0};
+thread_static LNX_SafeCallChain *lnx_safe_call_chain = 0;
 
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal DateTime os_lnx_date_time_from_tm(tm in, U32 msec);
-internal tm os_lnx_tm_from_date_time(DateTime dt);
-internal timespec os_lnx_timespec_from_date_time(DateTime dt);
-internal DenseTime os_lnx_dense_time_from_timespec(timespec in);
-internal FileProperties os_lnx_file_properties_from_stat(struct stat *s);
-internal void os_lnx_safe_call_sig_handler(int x);
+internal DateTime lnx_date_time_from_tm(tm in, U32 msec);
+internal tm lnx_tm_from_date_time(DateTime dt);
+internal timespec lnx_timespec_from_date_time(DateTime dt);
+internal DenseTime lnx_dense_time_from_timespec(timespec in);
+internal FileProperties lnx_file_properties_from_stat(struct stat *s);
+internal void lnx_safe_call_sig_handler(int x);
 
 ////////////////////////////////
 //~ rjf: Entities
 
-internal LNX_Entity *os_lnx_entity_alloc(LNX_EntityKind kind);
-internal void os_lnx_entity_release(LNX_Entity *entity);
+internal LNX_Entity *lnx_entity_alloc(LNX_EntityKind kind);
+internal void lnx_entity_release(LNX_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Thread Entry Point
 
-internal void *os_lnx_thread_entry_point(void *ptr);
+internal void *lnx_thread_entry_point(void *ptr);
 
 #endif // LINUX_BASE_H
