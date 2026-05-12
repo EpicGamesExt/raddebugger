@@ -18,7 +18,6 @@
 
 #include "base/base_inc.h"
 #include "x64/x64.h"
-#include "os/os_inc.h"
 #include "hash_table.h"
 #include "coff/coff.h"
 #include "coff/coff_parse.h"
@@ -36,10 +35,11 @@
 #include "pdb/pdb.h"
 #include "msvc_crt/msvc_crt.h"
 #include "llvm/llvm.h"
+#include "dwarf/dwarf.h"
+#include "dwarf/x64/dwarf_x64.h"
 
 #include "base/base_inc.c"
 #include "x64/x64.c"
-#include "os/os_inc.c"
 #include "hash_table.c"
 #include "coff/coff.c"
 #include "coff/coff_parse.c"
@@ -56,11 +56,14 @@
 #include "pdb/pdb.c"
 #include "msvc_crt/msvc_crt.c"
 #include "llvm/llvm.c"
+#include "dwarf/x64/dwarf_x64.c"
 
 // --- RDI ---------------------------------------------------------------------
 
 #include "rdi/rdi_local.h"
+#include "arch/arch_inc.h"
 #include "rdi/rdi_local.c"
+#include "arch/arch_inc.c"
 
 // --- Code Base Extensions ----------------------------------------------------
 

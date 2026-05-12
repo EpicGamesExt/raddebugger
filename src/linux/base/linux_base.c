@@ -676,7 +676,7 @@ semaphore_take(Semaphore semaphore, U64 endt_us)
   if(semaphore.u64[0] != 0)
   {
     struct timespec t = { .tv_sec = endt_us / 1000000, .tv_nsec = (endt_us % 1000000) * 1000 };
-    err = OS_LNX_RETRY_ON_EINTR(sem_clockwait((sem_t*)semaphore.u64[0], CLOCK_MONOTONIC, &t));
+    err = LNX_RETRY_ON_EINTR(sem_clockwait((sem_t*)semaphore.u64[0], CLOCK_MONOTONIC, &t));
   }
   return err == 0;
 }
@@ -687,7 +687,7 @@ semaphore_drop(Semaphore semaphore)
   int err = -1;
   if(semaphore.u64[0] != 0)
   {
-    err = OS_LNX_RETRY_ON_EINTR(sem_post((sem_t*)semaphore.u64[0]));
+    err = LNX_RETRY_ON_EINTR(sem_post((sem_t*)semaphore.u64[0]));
     Assert(err == 0);
   }
 }
@@ -1234,14 +1234,11 @@ process_launch(ProcessLaunchParams *params)
       // package argv
       char **argv = push_array(scratch.arena, char *, params->cmd_line.node_count + 1);
       {
-        String8List l = str8_split_path(scratch.arena, params->path);
-        str8_list_push(scratch.arena, &l, params->cmd_line.first->string);
-        String8 path_to_exe = str8_path_list_join_by_style(scratch.arena, &l, PathStyle_SystemAbsolute);
-        argv[0] = (char *)path_to_exe.str;
+        argv[0] = (char *)push_cstr(scratch.arena, params->cmd_line.first->string).str;
         U64 arg_idx = 1;
         for EachNode(n, String8Node, params->cmd_line.first->next)
         {
-          argv[arg_idx] = (char *)n->string.str;
+          argv[arg_idx] = (char *)push_cstr(scratch.arena, n->string).str;
           arg_idx += 1;
         }
       }
@@ -1265,7 +1262,7 @@ process_launch(ProcessLaunchParams *params)
       
       // spawn process
       pid_t pid = 0;
-      int spawn_code = posix_spawn(&pid, argv[0], &file_actions, &attr, argv, envp);
+      int spawn_code = posix_spawnp(&pid, argv[0], &file_actions, &attr, argv, envp);
       if(spawn_code == 0)
       {
         handle.u64[0] = (U64)pid;
@@ -1291,7 +1288,7 @@ process_join(Process process, U64 endt_us, U64 *exit_code_out)
   for(;;)
   {
     int status = 0;
-    pid_t wait_result = OS_LNX_RETRY_ON_EINTR(waitpid(pid, &status, (endt_us == max_U64) ? 0 : WNOHANG));
+    pid_t wait_result = LNX_RETRY_ON_EINTR(waitpid(pid, &status, (endt_us == max_U64) ? 0 : WNOHANG));
 
     if((wait_result == pid) && (WIFEXITED(status) || WIFSIGNALED(status)))
     {

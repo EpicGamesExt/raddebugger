@@ -11,8 +11,9 @@ global B32          g_stop_on_first_fail_or_crash = 1;
 global String8      g_test_data;
 
 // tests
-U64    g_torture_test_count;
-T_Test g_torture_tests[0xffffff];
+U64      g_torture_test_count;
+T_Test **g_torture_tests;
+T_Test   g_torture_tests_[0xffffff];
 
 // invoke
 global U64      g_last_exit_code;
@@ -31,7 +32,7 @@ global String8 g_linker_path;
 internal String8
 t_test_name_from_idx(Arena *arena, U64 test_idx)
 {
-  return str8f(arena, "%s::%s", g_torture_tests[test_idx].group, g_torture_tests[test_idx].label);
+  return str8f(arena, "%s::%s", g_torture_tests[test_idx]->group, g_torture_tests[test_idx]->label);
 }
 
 internal char *
@@ -723,7 +724,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
               read_buffer      = push_array(scratch.arena, U8, read_buffer_default_size);
             }
 
-            ssize_t read_size = OS_LNX_RETRY_ON_EINTR(read(captures_linux[i].poll_fd->fd, read_buffer, read_buffer_size));
+            ssize_t read_size = LNX_RETRY_ON_EINTR(read(captures_linux[i].poll_fd->fd, read_buffer, read_buffer_size));
             if (read_size > 0) {
               str8_list_push(scratch.arena, captures_linux[i].parts, str8(read_buffer, read_size));
               read_buffer      += read_size;
@@ -891,10 +892,16 @@ t_test_compar(const void *raw_a, const void *raw_b)
   return cmp;
 }
 
-internal int
+force_inline int
 t_test_is_before(void *raw_a, void *raw_b)
 {
   return t_test_compar(raw_a, raw_b) < 0;
+}
+
+force_inline int
+t_test_ptr_is_before(void *raw_a, void *raw_b)
+{
+  return t_test_compar(*((T_Test * const *)raw_a), *((T_Test * const *)raw_b)) < 0;
 }
 
 internal String8List
@@ -1018,9 +1025,19 @@ t_entry_point(CmdLine *cmdline)
       abort_self(0);
     }
   }
-  // register debugger tests
-  String8 test_folder_path = str8f(scratch.arena, "%S/torture/dbg_tests", t_src_path());
-  t_dbg_register_script_tests(scratch.arena, test_folder_path);
+
+  // Gather tests
+  {
+    // register debugger tests
+    String8 test_folder_path = str8f(scratch.arena, "%S/torture/dbg_tests", t_src_path());
+    t_dbg_register_script_tests(scratch.arena, test_folder_path);
+
+    // sort tests
+    g_torture_tests = push_array(scratch.arena, T_Test *, g_torture_test_count);
+    for EachIndex(i, g_torture_test_count) { g_torture_tests[i] = &g_torture_tests_[i]; }
+    radsort(g_torture_tests, g_torture_test_count, t_test_ptr_is_before);
+  }
+
   //
   // Handle -list
   //
@@ -1028,7 +1045,7 @@ t_entry_point(CmdLine *cmdline)
     if (cmd_line_has_flag(cmdline, str8_lit("list"))) {
       PrintHeader("Tests");
       for EachIndex(i, g_torture_test_count) {
-        fprintf(stdout, "  %s\n", g_torture_tests[i].label);
+        fprintf(stdout, "  %s\n", g_torture_tests[i]->label);
       }
       abort_self(0);
     }
@@ -1073,14 +1090,14 @@ t_entry_point(CmdLine *cmdline)
         for EachNode(pattern_n, String8Node, targets.first) {
           B32 do_namespace = str8_find_needle(pattern_n->string, 0, str8_lit("::"), 0) < pattern_n->string.size;
           for EachIndex(test_idx, g_torture_test_count) {
-            String8 name = str8_cstring(g_torture_tests[test_idx].label);
+            String8 name = str8_cstring(g_torture_tests[test_idx]->label);
             if (do_namespace) {
               name = t_test_name_from_idx(scratch.arena, test_idx);
             }
             if (str8_match_wildcard(name, pattern_n->string, 0)) {
               if ( ! hash_table_search_string(ht, name)) {
                 hash_table_push_string_raw(scratch.arena, ht, name, 0);
-                str8_list_push(scratch.arena, &target, str8_cstring(g_torture_tests[test_idx].label));
+                str8_list_push(scratch.arena, &target, str8_cstring(g_torture_tests[test_idx]->label));
               }
             }
           }
@@ -1149,9 +1166,7 @@ t_entry_point(CmdLine *cmdline)
   //
   // Run tests
   //
-  {
-    radsort(g_torture_tests, g_torture_test_count, t_test_is_before);
-    
+  {  
     U64List target_indices_list = {0};
     if (target.node_count == 0) {
       for EachIndex(i, g_torture_test_count) { u64_list_push(scratch.arena, &target_indices_list, i); }
@@ -1159,7 +1174,7 @@ t_entry_point(CmdLine *cmdline)
       for EachNode(target_n, String8Node, target.first) {
         B32 is_target_unknown = 1;
         for EachIndex(i, g_torture_test_count) {
-          if (str8_match(str8_cstring(g_torture_tests[i].label), target_n->string, 0)) {
+          if (str8_match(str8_cstring(g_torture_tests[i]->label), target_n->string, 0)) {
             u64_list_push(scratch.arena, &target_indices_list, i);
             is_target_unknown = 0;
             break;
@@ -1201,8 +1216,8 @@ t_entry_point(CmdLine *cmdline)
     U64 max_group_size = 0;
     for EachIndex(i, target_indices.count) {
       U64 test_idx = target_indices.v[i];
-      max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[test_idx].label));
-      max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[test_idx].group));
+      max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[test_idx]->label));
+      max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[test_idx]->group));
     }
     
     PrintHeader("Tests");
@@ -1216,19 +1231,20 @@ t_entry_point(CmdLine *cmdline)
     for EachElement(i, slowest) { slowest[i].target_idx = max_U64; }
     for EachIndex(i, target_indices.count) {
       U64 target_idx = target_indices.v[i];
+      T_Test *test = g_torture_tests[target_idx];
       
       // print run progress
       U64 dots_min = 10;
-      U64 dots_count = (max_label_size - cstring8_length((U8*)g_torture_tests[target_idx].label)) + dots_min;
+      U64 dots_count = (max_label_size - cstring8_length((U8*)test->label)) + dots_min;
       U64 curr_digit_count = count_digits_u64(i+1, 10);
       int idx_align_space_count = (int)(max_digit_count - curr_digit_count);
       fprintf(stdout, "[%.*s%llu/%llu] ", idx_align_space_count, spaces, (unsigned long long)i+1, (unsigned long long)target_indices.count);
-      fprintf(stdout, "%s %.*s:: %s", g_torture_tests[target_idx].group, (int)(max_group_size - cstring8_length((U8*)g_torture_tests[target_idx].group)), spaces, g_torture_tests[target_idx].label);
+      fprintf(stdout, "%s %.*s:: %s", test->group, (int)(max_group_size - cstring8_length((U8*)test->group)), spaces, test->label);
       fprintf(stdout, " %.*s ", (int)dots_count, dots);
       fflush(stdout);
 
       // setup output directory
-      g_wdir = push_str8f(scratch.arena, "%S/%s", g_out, g_torture_tests[target_idx].label);
+      g_wdir = push_str8f(scratch.arena, "%S/%s", g_out, test->label);
       g_wdir = full_path_from_path(scratch.arena, g_wdir);
 
       // delete files from last run in the work directory
@@ -1244,7 +1260,7 @@ t_entry_point(CmdLine *cmdline)
       
       // run test
       U64 run_start_time = now_time_us();
-      T_RunResult result = t_run(g_torture_tests[target_idx].r, g_torture_tests[target_idx].user_data);
+      T_RunResult result = t_run(test->r, test->user_data);
       U64 run_end_time = now_time_us();
       // print result
       if (result.status == T_RunStatus_Pass) {
@@ -1309,8 +1325,8 @@ t_entry_point(CmdLine *cmdline)
       for EachElement(i, slowest) {
         Slowest s = slowest[i];
         if (s.target_idx >= g_torture_test_count) { break; }
-        label_max = Max(strlen(g_torture_tests[s.target_idx].label), label_max);
-        group_max = Max(strlen(g_torture_tests[s.target_idx].group), group_max);
+        label_max = Max(strlen(g_torture_tests[s.target_idx]->label), label_max);
+        group_max = Max(strlen(g_torture_tests[s.target_idx]->group), group_max);
       }
       
       for EachElement(i, slowest) {
@@ -1318,10 +1334,10 @@ t_entry_point(CmdLine *cmdline)
         if (s.target_idx >= g_torture_test_count) { break; }
         String8 elapsed_time = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(s.d));
         fprintf(stderr, "    %s %.*s:: %s %.*s %.*s\n",
-                g_torture_tests[s.target_idx].group,
-                (int)(group_max - strlen(g_torture_tests[s.target_idx].group)), spaces,
-                g_torture_tests[s.target_idx].label,
-                (int)(label_max - strlen(g_torture_tests[s.target_idx].label)) + 4, dots,
+                g_torture_tests[s.target_idx]->group,
+                (int)(group_max - strlen(g_torture_tests[s.target_idx]->group)), spaces,
+                g_torture_tests[s.target_idx]->label,
+                (int)(label_max - strlen(g_torture_tests[s.target_idx]->label)) + 4, dots,
                 str8_varg(elapsed_time));
       }
 

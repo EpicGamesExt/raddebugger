@@ -212,8 +212,8 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
     }
 
     // "solve" the wait problem
-    if (os_now_microseconds() >= t) { Assert(0 && "timeout"); goto exit; }
-    os_sleep_milliseconds(10);
+    if (now_time_us() >= t) { Assert(0 && "timeout"); goto exit; }
+    sleep_ms(10);
   }
 
   //--- Status ---------------------
@@ -271,14 +271,14 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
   cmdline = str8f(scratch.arena, "%S --gen_crash_dump --user:\"%S\" --project:\"%S\" --logs:\"%S\" %S", t_raddbg_path(), user_path, project_path, g_wdir, cmdline);
 
   // launch debugger
-  OS_ProcessLaunchParams launch_opts = {
+  ProcessLaunchParams launch_opts = {
     .path        = g_wdir,
     .inherit_env = 1,
     .consoleless = 1,
     .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline),
   };
-  OS_Handle dbg_handle = os_process_launch(&launch_opts);
-  if (os_handle_match(dbg_handle, os_handle_zero())) { AssertAlways(0 && "failed to launch debugger"); goto exit; }
+  Process dbg_handle = process_launch(&launch_opts);
+  if (process_match(dbg_handle, process_zero())) { AssertAlways(0 && "failed to launch debugger"); goto exit; }
 
 #if OS_WINDOWS
   // cache debugger PID
@@ -290,7 +290,7 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
 #endif
 
   // close debugger handle
-  os_process_join(dbg_handle, 0, 0);
+  process_detach(dbg_handle);
 
   // now wait for debugger to init
   U64 t = ENDT_US(timeout_us);
@@ -300,8 +300,8 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
     if (dbg_ready) { break; }
 
     // "solve" the wait problem
-    if (os_now_microseconds() >= t) { Assert(0 && "timeout"); break; }
-    os_sleep_milliseconds(10);
+    if (now_time_us() >= t) { Assert(0 && "timeout"); break; }
+    sleep_ms(10);
   }
 
   exit:;
@@ -644,13 +644,13 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
 internal
 T_RunSig(dbg_script_runner)
 {
-  if ( ! os_file_path_exists(t_raddbg_path())) {
+  if ( ! file_path_exists(t_raddbg_path())) {
     fprintf(stderr, "ERROR: failed to find debugger \"%.*s\"\n", str8_varg(t_raddbg_path()));
     T_Ok(0);
   }
 
   // read source file
-  String8 source = os_data_from_file_path(arena, user_data);
+  String8 source = data_from_file_path(arena, user_data);
   if (source.size == 0) {
     fprintf(stderr, "ERROR: failed to read script: \"%.*s\"\n", str8_varg(user_data));
     T_Ok(0);
@@ -661,7 +661,7 @@ T_RunSig(dbg_script_runner)
 
   // write source files to test folder
   for EachNode(file, T_DbgScriptFile, script.files.first) {
-    if (os_write_data_to_file_path(file->path, file->source) == 0) {
+    if (write_data_to_file_path(file->path, file->source) == 0) {
       fprintf(stderr, "ERROR: %.*s:%llu: failed to write: \"%.*s\"\n", str8_varg(user_data), (unsigned long long)file->line, str8_varg(file->path));
       T_Ok(0);
     }
@@ -750,7 +750,7 @@ t_dbg_register_script_tests(Arena *arena, String8 folder_path)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  if ( ! os_folder_path_exists(folder_path)) {
+  if ( ! folder_path_exists(folder_path)) {
     fprintf(stderr, "ERROR: this folder does not exists: %.*s\n", str8_varg(folder_path));
     return;
   }
@@ -766,7 +766,7 @@ t_dbg_register_script_tests(Arena *arena, String8 folder_path)
     String8List file_name_parts   = str8_split_by_string_chars(scratch.arena, str8_skip_last_slash(file_path), str8_lit("."), 0);
     String8     file_name_escaped = str8_list_join(arena, &file_name_parts, &(StringJoin){.sep=str8_lit("-"), .post = str8_lit("\0") });
 
-    g_torture_tests[g_torture_test_count++] = (T_Test){
+    g_torture_tests_[g_torture_test_count++] = (T_Test){
         .group     = T_Group,
         .label     = (char*)file_name_escaped.str,
         .r         = t_dbg_script_runner,

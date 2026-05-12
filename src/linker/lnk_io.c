@@ -103,7 +103,7 @@ lnk_file_open_with_rename_permissions(String8 path)
 
   scratch_end(scratch);
 #else
-# error "TODO: file rename"
+  file_handle = file_open(AccessFlag_Read|AccessFlag_Write, path);
 #endif
   return file_handle;
 }
@@ -369,4 +369,3 @@ lnk_write_data_to_file_path(String8 path, String8 temp_path, String8 data)
   lnk_write_data_list_to_file_path(path, temp_path, data_list);
   scratch_end(scratch);
 }
-

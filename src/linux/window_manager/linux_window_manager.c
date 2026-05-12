@@ -403,7 +403,7 @@ internal void
 wm_send_wakeup_event(void)
 {
   U64 dummy = 1;
-  ssize_t size = OS_LNX_RETRY_ON_EINTR(write(os_lnx_gfx_state->wakeup_fd, &dummy, sizeof(dummy)));
+  ssize_t size = LNX_RETRY_ON_EINTR(write(os_lnx_gfx_state->wakeup_fd, &dummy, sizeof(dummy)));
   Assert(size == sizeof(dummy));
 }
 

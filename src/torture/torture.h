@@ -55,9 +55,9 @@ typedef enum
   T_Linker_LLVM
 } T_Linker;
 
-extern U64    g_torture_test_count;
-extern T_Test g_torture_tests[0xffffff];
-extern U64    g_torture_running_test_idx;
+extern U64      g_torture_test_count;
+extern T_Test **g_torture_tests;
+extern T_Test   g_torture_tests_[0xffffff];
 
 internal void t_break_if_debugger_present(void);
 
@@ -65,7 +65,7 @@ internal void t_break_if_debugger_present(void);
   T_RunSig(name);                          \
   __VA_ARGS__ void t_add_test_##name(void) \
   {                                        \
-    g_torture_tests[g_torture_test_count++] = (T_Test){ .group = T_Group, .label = Stringify(name), .r = &t_##name, .decl_line = l }; \
+    g_torture_tests_[g_torture_test_count++] = (T_Test){ .group = T_Group, .label = Stringify(name), .r = &t_##name, .decl_line = l }; \
   }
 
 #if COMPILER_MSVC
@@ -97,7 +97,7 @@ internal void t_break_if_debugger_present(void);
 #define TIMEOUT_MS(x)  TIMEOUT_US((x)*1000ull)
 #define TIMEOUT_SEC(x) TIMEOUT_MS((x)*1000ull)
 
-#define ENDT_US(x)  (os_now_microseconds() + (x))
+#define ENDT_US(x)  (now_time_us() + (x))
 #define ENDT_MS(x)  TIMEOUT_US((x)*1000ull)
 #define ENDT_SEC(x) TIMEOUT_MS((x)*1000ull)
 
@@ -132,4 +132,3 @@ internal void t_kill_all(String8 pattern);
 #define t_invoke_linker_timeout(c, t)       T_Ok(t_invoke(t_radlink_path(), c, t))
 #define t_invoke_linker_timeoutf(t, f, ...) t_invoke_linker_timeout(push_str8f(arena, f, ##__VA_ARGS__), t)
 #define t_invoke_linker(c)                  t_invoke_linker_timeout(c, max_U64)
-

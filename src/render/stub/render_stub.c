@@ -11,7 +11,7 @@ r_init(CmdLine *cmdln)
 //- rjf: window setup/teardown
 
 r_hook R_Handle
-r_window_equip(OS_Handle window)
+r_window_equip(WM_Window window)
 {
   R_Handle handle = {0};
   handle.u64[0] = 1;
@@ -19,7 +19,7 @@ r_window_equip(OS_Handle window)
 }
 
 r_hook void
-r_window_unequip(OS_Handle window, R_Handle window_equip)
+r_window_unequip(WM_Window window, R_Handle window_equip)
 {
 }
 
@@ -89,18 +89,18 @@ r_end_frame(void)
 }
 
 r_hook void
-r_window_begin_frame(OS_Handle window, R_Handle window_equip)
+r_window_begin_frame(WM_Window window, R_Handle window_equip)
 {
 }
 
 r_hook void
-r_window_end_frame(OS_Handle window, R_Handle window_equip)
+r_window_end_frame(WM_Window window, R_Handle window_equip)
 {
 }
 
 //- rjf: render pass submission
 
 r_hook void
-r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
+r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
 {
 }
