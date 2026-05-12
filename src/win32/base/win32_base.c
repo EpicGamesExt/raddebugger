@@ -1772,6 +1772,11 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
     w32_InitializeSynchronizationBarrier_func = (W32_InitializeSynchronizationBarrier_Type *)GetProcAddress(module, "InitializeSynchronizationBarrier");
     w32_DeleteSynchronizationBarrier_func = (W32_DeleteSynchronizationBarrier_Type *)GetProcAddress(module, "DeleteSynchronizationBarrier");
     w32_EnterSynchronizationBarrier_func = (W32_EnterSynchronizationBarrier_Type *)GetProcAddress(module, "EnterSynchronizationBarrier");
+    if(w32_InitializeSynchronizationBarrier_func == 0)
+    {
+      w32_DeleteSynchronizationBarrier_func = 0;
+      w32_EnterSynchronizationBarrier_func = 0;
+    }
     FreeLibrary(module);
   }
   
