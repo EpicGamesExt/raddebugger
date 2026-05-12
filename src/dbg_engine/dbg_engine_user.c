@@ -377,6 +377,23 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
       rng1u64_list_push(scratch.arena, &all_vaddr_ranges_on_same_line, vaddr_range);
     }
   }
+
+  // extend trap-net range across contiguous same-source-line, possibly unsorted, ranges
+  //
+  // TODO: @ns: converter should never produce these ranges in the first place,
+  //       once fixed, assert this invariant
+  for(B32 changed = 1; changed;)
+  {
+    changed = 0;
+    for EachNode(n, Rng1U64Node, all_vaddr_ranges_on_same_line.first)
+    {
+      if(n->v.min <= line_vaddr_rng.max && line_vaddr_rng.max < n->v.max)
+      {
+        line_vaddr_rng.max = n->v.max;
+        changed = 1;
+      }
+    }
+  }
   
   // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
   //
