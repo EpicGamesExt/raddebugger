@@ -53,6 +53,16 @@ typedef enum W32_EntityKind
 }
 W32_EntityKind;
 
+typedef struct W32_SYNCHRONIZATION_BARRIER W32_SYNCHRONIZATION_BARRIER;
+struct W32_SYNCHRONIZATION_BARRIER
+{
+  U32 reserved_0;
+  U32 reserved_1;
+  U64 reserved_2[2];
+  U32 reserved_3;
+  U32 reserved_4;
+};
+
 typedef struct W32_Entity W32_Entity;
 struct W32_Entity
 {
@@ -70,7 +80,7 @@ struct W32_Entity
     CRITICAL_SECTION mutex;
     SRWLOCK rw_mutex;
     CONDITION_VARIABLE cv;
-    SYNCHRONIZATION_BARRIER sb;
+    W32_SYNCHRONIZATION_BARRIER sb;
   };
 };
 

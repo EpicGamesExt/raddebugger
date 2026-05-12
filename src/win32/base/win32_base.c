@@ -8,6 +8,12 @@
 
 typedef HRESULT W32_SetThreadDescription_Type(HANDLE hThread, PCWSTR lpThreadDescription);
 global W32_SetThreadDescription_Type *w32_SetThreadDescription_func = 0;
+typedef BOOL W32_InitializeSynchronizationBarrier_Type(W32_SYNCHRONIZATION_BARRIER *lpBarrier, LONG lTotalThreads, LONG lSpinCount);
+global W32_InitializeSynchronizationBarrier_Type *w32_InitializeSynchronizationBarrier_func = 0;
+typedef BOOL W32_DeleteSynchronizationBarrier_Type(W32_SYNCHRONIZATION_BARRIER *lpBarrier);
+global W32_DeleteSynchronizationBarrier_Type *w32_DeleteSynchronizationBarrier_func = 0;
+typedef BOOL W32_EnterSynchronizationBarrier_Type(W32_SYNCHRONIZATION_BARRIER *lpBarrier, DWORD dwFlags);
+global W32_EnterSynchronizationBarrier_Type *w32_EnterSynchronizationBarrier_func = 0;
 global RIO_EXTENSION_FUNCTION_TABLE w32_rio_functions = {0};
 
 ////////////////////////////////
@@ -42,10 +48,10 @@ w32_date_time_from_system_time(DateTime *out, SYSTEMTIME *in)
   out->year    = in->wYear;
   out->mon     = in->wMonth - 1;
   out->wday    = in->wDayOfWeek;
-	out->day     = in->wDay;
-	out->hour    = in->wHour;
-	out->min     = in->wMinute;
-	out->sec     = in->wSecond;
+  out->day     = in->wDay;
+  out->hour    = in->wHour;
+  out->min     = in->wMinute;
+  out->sec     = in->wSecond;
   out->msec    = in->wMilliseconds;
 }
 
@@ -681,34 +687,56 @@ semaphore_drop(Semaphore semaphore)
 internal Barrier
 barrier_alloc(U64 count)
 {
-  W32_Entity *entity = w32_entity_alloc(W32_EntityKind_Barrier);
-  if(entity != 0)
+  Barrier result = {0};
+  if(w32_InitializeSynchronizationBarrier_func != 0)
   {
-    BOOL init_good = InitializeSynchronizationBarrier(&entity->sb, count, -1);
-    (void)init_good;
+    W32_Entity *entity = w32_entity_alloc(W32_EntityKind_Barrier);
+    if(entity != 0)
+    {
+      BOOL init_good = w32_InitializeSynchronizationBarrier_func(&entity->sb, count, -1);
+      (void)init_good;
+    }
+    result.u64[0] = IntFromPtr(entity);
   }
-  Barrier result = {IntFromPtr(entity)};
+  else
+  {
+    result = slow_barrier_alloc(count);
+  }
   return result;
 }
 
 internal void
 barrier_release(Barrier barrier)
 {
-  W32_Entity *entity = (W32_Entity*)PtrFromInt(barrier.u64[0]);
-  if(entity != 0)
+  if(w32_InitializeSynchronizationBarrier_func != 0)
   {
-    DeleteSynchronizationBarrier(&entity->sb);
-    w32_entity_release(entity);
+    W32_Entity *entity = (W32_Entity*)PtrFromInt(barrier.u64[0]);
+    if(entity != 0)
+    {
+      w32_DeleteSynchronizationBarrier_func(&entity->sb);
+      w32_entity_release(entity);
+    }
+  }
+  else
+  {
+    slow_barrier_release(barrier);
   }
 }
 
 internal void
 barrier_wait(Barrier barrier)
 {
-  W32_Entity *entity = (W32_Entity*)PtrFromInt(barrier.u64[0]);
-  if(entity != 0)
+  if(w32_InitializeSynchronizationBarrier_func != 0)
   {
-    EnterSynchronizationBarrier(&entity->sb, 0);
+    W32_Entity *entity = (W32_Entity*)PtrFromInt(barrier.u64[0]);
+    if(entity != 0)
+    {
+      w32_EnterSynchronizationBarrier_func(&entity->sb, 0);
+    }
+  }
+  else
+  {
+    slow_barrier_wait(barrier);
   }
 }
 
@@ -1741,6 +1769,9 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
   {
     HMODULE module = LoadLibraryA("kernel32.dll");
     w32_SetThreadDescription_func = (W32_SetThreadDescription_Type *)GetProcAddress(module, "SetThreadDescription");
+    w32_InitializeSynchronizationBarrier_func = (W32_InitializeSynchronizationBarrier_Type *)GetProcAddress(module, "InitializeSynchronizationBarrier");
+    w32_DeleteSynchronizationBarrier_func = (W32_DeleteSynchronizationBarrier_Type *)GetProcAddress(module, "DeleteSynchronizationBarrier");
+    w32_EnterSynchronizationBarrier_func = (W32_EnterSynchronizationBarrier_Type *)GetProcAddress(module, "EnterSynchronizationBarrier");
     FreeLibrary(module);
   }
   

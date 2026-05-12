@@ -56,6 +56,28 @@ rb_thread_entry_point(void *p)
   log_select(log);
   log_scope_begin();
   
+#if 0
+  ProfScope("work")
+  {
+    for(int i = 0; i < 5; i += 1)
+    {
+      int sum = 0;
+      ProfScope("do work")
+      {
+        for(int x = 0; x < 10000; x += 1)
+        {
+          for(int y = 0; y < 10000; y += 1)
+          {
+            sum += x*y + x-y;
+          }
+        }
+      }
+      lane_sync();
+    }
+  }
+  abort_self(0);
+#endif
+  
   //////////////////////////////
   //- rjf: set up shared state
   //

@@ -253,13 +253,13 @@
 # include <intrin.h>
 # if ARCH_X64
 #  define ins_atomic_u128_eval_cond_assign(x,k,c) (B32)InterlockedCompareExchange128((__int64 *)(x), ((__int64 *)&(k))[1], ((__int64 *)&(k))[0], (__int64 *)c)
-#  define ins_atomic_u64_eval(x)                  *((volatile U64 *)(x))
+#  define ins_atomic_u64_eval(x)                  InterlockedAdd64((__int64 *)(x), 0)
 #  define ins_atomic_u64_inc_eval(x)              InterlockedIncrement64((__int64 *)(x))
 #  define ins_atomic_u64_dec_eval(x)              InterlockedDecrement64((__int64 *)(x))
 #  define ins_atomic_u64_eval_assign(x,c)         InterlockedExchange64((__int64 *)(x),(c))
 #  define ins_atomic_u64_add_eval(x,c)            InterlockedAdd64((__int64 *)(x), c)
 #  define ins_atomic_u64_eval_cond_assign(x,k,c)  InterlockedCompareExchange64((__int64 *)(x),(k),(c))
-#  define ins_atomic_u32_eval(x)                  *((volatile U32 *)(x))
+#  define ins_atomic_u32_eval(x)                  InterlockedAdd((LONG *)(x), 0)
 #  define ins_atomic_u32_inc_eval(x)              InterlockedIncrement((LONG *)(x))
 #  define ins_atomic_u32_dec_eval(x)              InterlockedDecrement((LONG *)(x))
 #  define ins_atomic_u32_eval_assign(x,c)         InterlockedExchange((LONG *)(x),(c))

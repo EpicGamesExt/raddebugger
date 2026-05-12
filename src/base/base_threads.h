@@ -131,9 +131,9 @@ internal B32       semaphore_take(Semaphore semaphore, U64 endt_us);
 internal void      semaphore_drop(Semaphore semaphore);
 
 //- rjf: barriers
-internal Barrier   barrier_alloc(U64 count);
-internal void      barrier_release(Barrier barrier);
-internal void      barrier_wait(Barrier barrier);
+internal Barrier barrier_alloc(U64 count);
+internal void barrier_release(Barrier barrier);
+internal void barrier_wait(Barrier barrier);
 
 //- rjf: scope macros
 #define MutexScope(mutex) DeferLoop(mutex_take(mutex), mutex_drop(mutex))
@@ -141,6 +141,14 @@ internal void      barrier_wait(Barrier barrier);
 #define MutexScopeR(mutex) DeferLoop(rw_mutex_take_r(mutex), rw_mutex_drop_r(mutex))
 #define MutexScopeW(mutex) DeferLoop(rw_mutex_take_w(mutex), rw_mutex_drop_w(mutex))
 #define MutexScopeRWPromote(mutex) DeferLoop((rw_mutex_drop_r(mutex), rw_mutex_take_w(mutex)), (rw_mutex_drop_w(mutex), rw_mutex_take_r(mutex)))
+
+////////////////////////////////
+//~ rjf: Platform-Abstracted Synchronization Primitive Functions
+
+//- rjf: slow barriers
+internal Barrier   slow_barrier_alloc(U64 count);
+internal void      slow_barrier_release(Barrier barrier);
+internal void      slow_barrier_wait(Barrier barrier);
 
 ////////////////////////////////
 //~ rjf: @per_os_impl Safe Calls
