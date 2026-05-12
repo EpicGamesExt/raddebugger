@@ -95,6 +95,22 @@ r_ogl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum sever
   fprintf(stderr, "[OpenGL] %.*s\n", (int)length, message);
 }
 
+internal B32
+r_ogl_scissor(Rng2F32 clip, Vec2F32 viewport_dim)
+{
+  S32 x0 = Clamp(0, (S32)floor_f32(clip.x0), (S32)viewport_dim.x);
+  S32 y0 = Clamp(0, (S32)floor_f32(clip.y0), (S32)viewport_dim.y);
+  S32 x1 = Clamp(0, (S32)ceil_f32(clip.x1), (S32)viewport_dim.x);
+  S32 y1 = Clamp(0, (S32)ceil_f32(clip.y1), (S32)viewport_dim.y);
+  S32 width = x1 - x0;
+  S32 height = y1 - y0;
+  if(width > 0 && height > 0)
+  {
+    glScissor(x0, (S32)viewport_dim.y - y1, width, height);
+  }
+  return width > 0 && height > 0;
+}
+
 ////////////////////////////////
 //~ rjf: Backend Hooks
 
@@ -560,9 +576,10 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
                group_params->clip.y0 != 0 ||
                group_params->clip.y1 != 0)
             {
-              Rng2F32 clip = group_params->clip;
-              glScissor(clip.x0, viewport_dim.y - clip.y1, (clip.x1-clip.x0) + 1, (clip.y1-clip.y0)+1);
-              glEnable(GL_SCISSOR_TEST);
+              if(r_ogl_scissor(group_params->clip, viewport_dim))
+              {
+                glEnable(GL_SCISSOR_TEST);
+              }
             }
             
             //- rjf: draw
@@ -650,9 +667,10 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
              params->clip.y0 != 0 ||
              params->clip.y1 != 0)
           {
-            Rng2F32 clip = params->clip;
-            glScissor(clip.x0, viewport_dim.y - clip.y1, (clip.x1-clip.x0) + 1, (clip.y1-clip.y0)+1);
-            glEnable(GL_SCISSOR_TEST);
+            if(r_ogl_scissor(params->clip, viewport_dim))
+            {
+              glEnable(GL_SCISSOR_TEST);
+            }
           }
           
           //- rjf: pass 1: stage -(horizontal)-> stage_scratch

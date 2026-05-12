@@ -226,23 +226,23 @@ void main(void)
                                         rect.xy,
                                         rect.zw,
                                         rect.zy);
-  float corner_radii_px[] = float[](corner_radii_px.y,
-                                    corner_radii_px.x,
-                                    corner_radii_px.w,
-                                    corner_radii_px.z);
+  float corner_radii[] = float[](corner_radii_px.y,
+                                 corner_radii_px.x,
+                                 corner_radii_px.w,
+                                 corner_radii_px.z);
   vec2 cornercoords_pct = vec2((gl_VertexID >> 1) != 0 ? 1.f : 0.f,
                                (gl_VertexID & 1) != 0  ? 0.f : 1.f);
   
   vec2 vertex_position_pct = vertex_positions_scrn[gl_VertexID] / viewport_size;
   vec2 vertex_position_scr = 2.f * vertex_position_pct - 1.f;
   
-  vec2 rect_half_size = vec2((rect.z-rect.x)/2, (rect.w-rect.y)/2);
+  vec2 rect_half_size_local = vec2((rect.z-rect.x)/2, (rect.w-rect.y)/2);
   
   gl_Position = vec4(vertex_position_scr.x, -vertex_position_scr.y, 0.f, 1.f);
   texcoord = vec2(vertex_position_pct.x, 1-vertex_position_pct.y);
-  sdf_sample_pos = (2.f * cornercoords_pct - 1.f) * rect_half_size;
-  rect_half_size = rect_half_size - 2.f;
-  corner_radius = corner_radii_px[gl_VertexID];
+  sdf_sample_pos = (2.f * cornercoords_pct - 1.f) * rect_half_size_local;
+  rect_half_size = rect_half_size_local - 2.f;
+  corner_radius = corner_radii[gl_VertexID];
 }
 ```
 
