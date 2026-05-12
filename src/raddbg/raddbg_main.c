@@ -6,13 +6,13 @@
 //
 // [ ] "autos" collection, which can be evaluated
 // [ ] show "autos" inline in source code near thread?
-// [ ] step out of scopes / loops
 // [ ] memory_size(...) view for quickly evaluating memory sizes
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
+// [x] step out of scopes / loops
 //
-// [ ] asan pass
-// [ ] policy for closing debug info which is no longer relevant?
+// [x] policy for closing debug info which is no longer relevant?
 // [ ] codebase-internal barrier impl (win7/linux support)
+// [ ] asan pass
 // [ ] external window focusing bugs
 // [ ] PDB -> RDI conversion memory usage
 // [x] killing/restarting thread performance (#780)
