@@ -730,7 +730,89 @@ rb_thread_entry_point(void *p)
           else if(elf_w_dwarf) { log_infof("ELFs specified; converting DWARF data to RDI\n"); }
           
           // rjf: convert
-          D2R2_ConvertParams convert_params = {0};
+          D2R_ConvertParams convert_params = {0};
+          {
+            B32 got_exe = 0;
+            B32 got_dbg = 0;
+            if(!got_exe && !got_dbg)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_PE].first; n != 0; n = n->next)
+              {
+                if(n->v->format_flags & RB_FileFormatFlag_HasDWARF)
+                {
+                  got_exe = 1;
+                  got_dbg = 1;
+                  convert_params.dbg_name = n->v->path;
+                  convert_params.dbg_data = n->v->data;
+                  convert_params.exe_name = n->v->path;
+                  convert_params.exe_data = n->v->data;
+                  convert_params.exe_kind = ExecutableImageKind_CoffPe;
+                  break;
+                }
+              }
+            }
+            if(!got_exe)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_ELF32].first; n != 0; n = n->next)
+              {
+                got_exe = 1;
+                convert_params.exe_name = n->v->path;
+                convert_params.exe_data = n->v->data;
+                convert_params.exe_kind = ExecutableImageKind_Elf32;
+                if(!(n->v->format_flags & RB_FileFormatFlag_HasDWARF))
+                {
+                  break;
+                }
+              }
+            }
+            if(!got_exe)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_ELF64].first; n != 0; n = n->next)
+              {
+                got_exe = 1;
+                convert_params.exe_name = n->v->path;
+                convert_params.exe_data = n->v->data;
+                convert_params.exe_kind = ExecutableImageKind_Elf64;
+                if(!(n->v->format_flags & RB_FileFormatFlag_HasDWARF))
+                {
+                  break;
+                }
+              }
+            }
+            if(!got_dbg)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_ELF32].first; n != 0; n = n->next)
+              {
+                if(n->v->format_flags & RB_FileFormatFlag_HasDWARF)
+                {
+                  got_dbg = 1;
+                  convert_params.dbg_name = n->v->path;
+                  convert_params.dbg_data = n->v->data;
+                  break;
+                }
+              }
+            }
+            if(!got_dbg)
+            {
+              for(RB_FileNode *n = input_files_from_format_table[RB_FileFormat_ELF64].first; n != 0; n = n->next)
+              {
+                if(n->v->format_flags & RB_FileFormatFlag_HasDWARF)
+                {
+                  got_dbg = 1;
+                  convert_params.dbg_name = n->v->path;
+                  convert_params.dbg_data = n->v->data;
+                  break;
+                }
+              }
+            }
+            convert_params.subset_flags     = subset_flags;
+            convert_params.deterministic    = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
+            convert_params.is_parse_relaxed = 1; // TODO: switch
+          }
+#if DWARF_2
+          
+          // rjf: convert [2]
+          D2R2_ConvertParams convert_params_2 = {0};
           {
             B32 got_exe = 0;
             B32 got_dbg = 0;
@@ -845,7 +927,10 @@ rb_thread_entry_point(void *p)
             convert_params.subset_flags  = subset_flags;
             convert_params.deterministic = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
-          ProfScope("convert") dwarf_bake_params = d2r2_convert(arena, &convert_params);
+          ProfScope("convert [2]") dwarf_bake_params_2 = d2r2_convert(arena, &convert_params_2);
+#else
+          ProfScope("convert") dwarf_bake_params = d2r_convert(arena, &convert_params);
+#endif
         }
         
         //- rjf: PDB inputs => PDB -> RDI conversion
@@ -920,7 +1005,11 @@ rb_thread_entry_point(void *p)
       {
         bake_params = push_array(arena, RDIM_BakeParams, 1);
         rdim_bake_params_concat_in_place(bake_params, &pdb_bake_params);
+#if DWARF_2
+        rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params_2);
+#else
         rdim_bake_params_concat_in_place(bake_params, &dwarf_bake_params);
+#endif
         for EachNode(n, RDIM_BakeParamsNode, first_rdi_bake_params)
         {
           rdim_bake_params_concat_in_place(bake_params, &n->v);
