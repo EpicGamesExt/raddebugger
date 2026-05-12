@@ -149,7 +149,7 @@ dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Synta
         inst.size            = zinst.info.length;
         inst.string          = str8_copy(arena, str8_cstring(zinst.text));
         inst.dst_vaddr       = dst_vaddr;
-        inst.src_vaddr       = src_vaddr;
+        // inst.src_vaddr       = src_vaddr;
       }
     }break;
   }
