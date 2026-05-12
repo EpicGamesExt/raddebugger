@@ -12,7 +12,17 @@
 ///   }
 /// }
 ///
+
 // TODO: linux: -no-pie crashes the tracer
+//
+// TODO: crashes
+//     compile: "-O0 -g foo.c -fPIC -shared -o libfoo.so"
+//     compile: "-O0 -g main.c -L. -lfoo -o main -Wl,-rpath,%CWD%"
+// ...
+// dw_compute_cfa dwarf_unwind.c:261:5
+// d_establish_frame_unwind_context__dwarf dbg_engine_ctrl.c:1946:25
+// d_unwind_from_thread dbg_engine_ctrl.c:2913:30
+// ...
 
 /// file: "foo.c"
 

@@ -32,3 +32,5 @@ internal void lnk_cmd_line_concat_in_place(LNK_CmdLine *list, LNK_CmdLine *to_co
 
 internal String8List lnk_data_from_cmd_line(Arena *arena, LNK_CmdLine cmd_line);
 
+internal String8 lnk_expand_env_vars_windows(Arena *arena, HashTable *env_vars, String8 string);
+

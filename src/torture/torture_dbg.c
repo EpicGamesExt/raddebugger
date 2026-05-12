@@ -667,6 +667,10 @@ T_RunSig(dbg_script_runner)
     }
   }
 
+  // compiler vars
+  HashTable *script_vars = hash_table_init(arena, 1000);
+  hash_table_push_path_string(arena, script_vars, str8_lit("CWD"), g_wdir);
+
   // run compilers
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Compile].first) {
     T_Compiler compiler = directive->compile.compiler;
@@ -689,8 +693,9 @@ T_RunSig(dbg_script_runner)
     }
 
     // invoke compiler with arguments from directive
-    if (t_invoke(compiler_path, directive->args, max_U64) == 0) {
-      fprintf(stderr, "ERROR: failed to launch compiler: \"%.*s %.*s\"\n", str8_varg(compiler_path), str8_varg(directive->args));
+    String8 expanded_args = lnk_expand_env_vars_windows(arena, script_vars, directive->args);
+    if (t_invoke(compiler_path, expanded_args, max_U64) == 0) {
+      fprintf(stderr, "ERROR: failed to launch compiler: \"%.*s %.*s\"\n", str8_varg(compiler_path), str8_varg(expanded_args));
       T_Ok(0);
     }
     if (g_last_exit_code) {
@@ -704,15 +709,17 @@ T_RunSig(dbg_script_runner)
   // run linkers
   String8 linker_path = t_radlink_path();
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Link].first) {
-    if (t_invoke(linker_path, directive->args, max_U64) == 0) {
-      fprintf(stderr, "ERROR: failed to launch linker: \"%.*s %.*s\"\n", str8_varg(linker_path), str8_varg(directive->args));
+    String8 expanded_args = lnk_expand_env_vars_windows(arena, script_vars, directive->args);
+    if (t_invoke(linker_path, expanded_args, max_U64) == 0) {
+      fprintf(stderr, "ERROR: failed to launch linker: \"%.*s %.*s\"\n", str8_varg(linker_path), str8_varg(expanded_args));
       T_Ok(0);
     }
   }
 
   // launch targets
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Launch].first) {
-    String8 cmdl = str8f(arena, "--user:%S.raddbg_user %S", t_make_file_path(arena, str8_lit("temp")), directive->args);
+    String8 expanded_args = lnk_expand_env_vars_windows(arena, script_vars, directive->args);
+    String8 cmdl = str8f(arena, "--user:%S.raddbg_user %S", t_make_file_path(arena, str8_lit("temp")), expanded_args);
     if (t_dbg_launch(cmdl, T_Dbg_DefaultTimeout) == 0) {
       fprintf(stderr, "ERROR: failed to launch debugger with command line \"%.*s %.*s\"; work dir \"%.*s\"\n", str8_varg(t_raddbg_path()), str8_varg(cmdl), str8_varg(g_wdir));
       T_Ok(0);

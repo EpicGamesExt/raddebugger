@@ -1069,39 +1069,6 @@ lnk_print_help(void)
   scratch_end(scratch);
 }
 
-internal String8
-lnk_expand_env_vars_windows(Arena *arena, HashTable *env_vars, String8 string)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-
-  String8List list = {0};
-  for (U64 i = 0; i < string.size; ) {
-    U64 open  = str8_find_needle(string, i,      str8_lit("%"), 0);
-    U64 close = str8_find_needle(string, open+1, str8_lit("%"), 0);
-
-    String8 text = str8_substr(string, rng_1u64(i, open));
-    str8_list_push(scratch.arena, &list, text);
-    i += text.size;
-
-    if (open < close) {
-      String8     env_var_name = str8_substr(string, rng_1u64(open+1, close));
-      BucketNode *match        = hash_table_search_path(env_vars, env_var_name);
-      if (match) {
-        str8_list_push(scratch.arena, &list, match->v.value_string);
-        i = close+1;
-      } else {
-        str8_list_pushf(scratch.arena, &list, "%%%S", env_var_name);
-        i = close;
-      }
-    }
-  }
-
-  String8 result = str8_list_join(arena, &list, 0);
-
-  scratch_end(scratch);
-  return result;
-}
-
 internal String8List
 lnk_unwrap_rsp(Arena *arena, String8List arg_list)
 {
