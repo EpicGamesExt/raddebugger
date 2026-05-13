@@ -16329,6 +16329,7 @@ rd_frame(void)
           D_EntityArray all_processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
           if(all_processes.count == 1)
           {
+            MemoryZeroStruct(&rd_state->prestop_focused_window);
             CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
             for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
             {
