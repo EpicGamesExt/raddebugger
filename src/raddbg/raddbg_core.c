@@ -10220,11 +10220,11 @@ rd_init(CmdLine *cmdln)
             String8 header_type_suffix = str8_skip(header_suffix, str8_find_needle(header_suffix, 0, str8_lit(" "), 0)+1);
             if(str8_match(header_type_suffix, str8_lit("user"), StringMatchFlag_RightSideSloppy))
             {
-              implicit_user_arg = arg;
+              implicit_user_arg = path_absolute_dst_from_relative_dst_src(scratch.arena, arg, get_process_info()->initial_path);
             }
             else if(str8_match(header_type_suffix, str8_lit("project"), StringMatchFlag_RightSideSloppy))
             {
-              implicit_project_arg = arg;
+              implicit_project_arg = path_absolute_dst_from_relative_dst_src(scratch.arena, arg, get_process_info()->initial_path);
             }
           }
           file_close(file);
@@ -10341,7 +10341,7 @@ rd_init(CmdLine *cmdln)
       rd_state->project_path = push_str8_copy(rd_state->project_path_arena, project_path);
     }
     
-    // rjf: do initial load of user (project will be loaded by the initial user load if not specified)
+    // rjf: do initial load of user/project
     rd_cmd(RD_CmdKind_OpenUser, .file_path = user_path, .non_graphical = 1);
     if(project_path.size != 0)
     {
