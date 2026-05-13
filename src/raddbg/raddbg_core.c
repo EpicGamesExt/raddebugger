@@ -1633,9 +1633,10 @@ rd_view_ui(Rng2F32 rect)
     {
       if(cmd_name.size != 0)
       {
+        ui_spacer(ui_em(0.5f, 1.f));
         UI_TextAlignment(UI_TextAlign_Center)
           UI_Transparency(1-search_row_open_t)
-          UI_PrefWidth(ui_em(2.5f, 1.f))
+          UI_PrefWidth(ui_em(3.f, 1.f))
           UI_TagF("weak")
           RD_Font(RD_FontSlot_Icons)
           ui_label(rd_icon_kind_text_table[icon == RD_IconKind_Null ? RD_IconKind_Find : icon]);
@@ -6692,16 +6693,16 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_Open].string,
                     rd_cmd_kind_info_table[RD_CmdKind_Switch].string,
                     {0},//-
-                    rd_cmd_kind_info_table[RD_CmdKind_NewUser].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_SaveUser].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_UserSettings].string,
-                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_NewProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenRecentProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_SaveProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ProjectSettings].string,
+                    {0},//-
+                    rd_cmd_kind_info_table[RD_CmdKind_NewUser].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_SaveUser].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_UserSettings].string,
                     {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_Exit].string,
                   };
@@ -6710,16 +6711,16 @@ rd_window_frame(void)
                     'o',
                     'i',
                     0,//-
-                    'w',
-                    'u',
-                    's',
-                    'e',
-                    0,//-
                     'j',
                     'p',
                     'r',
                     'a',
                     't',
+                    0,//-
+                    'w',
+                    'u',
+                    's',
+                    'e',
                     0,//-
                     'x',
                   };
@@ -7165,6 +7166,10 @@ rd_window_frame(void)
                 String8 prof_path = rd_state->project_path;
                 prof_path = str8_chop_last_dot(prof_path);
                 project_name = str8_skip_last_slash(prof_path);
+              }
+              if(project_name.size == 0)
+              {
+                project_name = str8_lit("Untitled Project");
               }
               RD_Font(RD_FontSlot_Icons)
                 ui_label(rd_icon_kind_text_table[RD_IconKind_Briefcase]);
@@ -12563,12 +12568,12 @@ rd_frame(void)
                 case RD_CmdKind_OpenUser:
                 {
                   arena_clear(rd_state->user_path_arena);
-                  rd_state->user_path = push_str8_copy(rd_state->user_path_arena, file_path);
+                  rd_state->user_path = str8_copy(rd_state->user_path_arena, file_path);
                 }break;
                 case RD_CmdKind_OpenProject:
                 {
                   arena_clear(rd_state->project_path_arena);
-                  rd_state->project_path = push_str8_copy(rd_state->project_path_arena, file_path);
+                  rd_state->project_path = str8_copy(rd_state->project_path_arena, file_path);
                 }break;
               }
             }
@@ -12660,57 +12665,14 @@ rd_frame(void)
                 }
               }
             }
-            
-            //- rjf: if we've just loaded the user, and we do not have a project path,
-            // then we should try to look at the user's data for recent projects and
-            // load one of those, *or* just the default.
-            if(file_is_okay && kind == RD_CmdKind_OpenUser && rd_state->project_path.size == 0)
-            {
-              CFG_Node *user = cfg_node_child_from_string(cfg_node_root(), str8_lit("user"));
-              CFG_Node *recent_project = cfg_node_child_from_string(user, str8_lit("recent_project"));
-              String8 project_path = rd_path_from_cfg(recent_project);
-              if(project_path.size == 0)
-              {
-                String8 user_program_data_path = get_process_info()->user_program_data_path;
-                String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
-                make_directory(user_data_folder);
-                project_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
-              }
-              rd_cmd(RD_CmdKind_OpenProject, .file_path = project_path);
-            }
           }break;
           case RD_CmdKind_NewUser:
+          {
+            rd_cmd(RD_CmdKind_OpenUser, .file_path = str8_zero());
+          }break;
           case RD_CmdKind_NewProject:
           {
-            String8 new_path = rd_regs()->file_path;
-            B32 file_will_be_overwritten = (properties_from_file_path(new_path).created != 0);
-            UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("new_config_overwrite_confirm"));
-            if(file_will_be_overwritten && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
-            {
-              rd_state->popup_key = key;
-              rd_state->popup_active = 1;
-              arena_clear(rd_state->popup_arena);
-              MemoryZeroStruct(&rd_state->popup_cmds);
-              rd_state->popup_title = push_str8f(rd_state->popup_arena, "Are you sure you want to save to this path?");
-              rd_state->popup_desc = push_str8f(rd_state->popup_arena, "The existing file at '%S' will be overwritten.", new_path);
-              RD_Regs *regs = rd_regs_copy(rd_frame_arena(), rd_regs());
-              regs->force_confirm = 1;
-              rd_cmd_list_push_new(rd_state->popup_arena, &rd_state->popup_cmds, rd_cmd_kind_info_table[kind].string, regs);
-            }
-            else switch(kind)
-            {
-              default:{}break;
-              case RD_CmdKind_NewUser:
-              {
-                delete_file_at_path(new_path);
-                rd_cmd(RD_CmdKind_OpenUser, .file_path = new_path);
-              }break;
-              case RD_CmdKind_NewProject:
-              {
-                delete_file_at_path(new_path);
-                rd_cmd(RD_CmdKind_OpenProject, .file_path = new_path);
-              }break;
-            }
+            rd_cmd(RD_CmdKind_OpenProject, .file_path = str8_zero());
           }break;
           case RD_CmdKind_SaveUser:
           case RD_CmdKind_SaveProject:
@@ -12788,6 +12750,7 @@ rd_frame(void)
           case RD_CmdKind_WriteUserData:    dst_path = rd_state->user_path; bucket_name = str8_lit("user"); goto write;
           case RD_CmdKind_WriteProjectData: dst_path = rd_state->project_path; bucket_name = str8_lit("project"); goto write;
           write:;
+          if(dst_path.size != 0)
           {
             B32 dst_exists = (properties_from_file_path(dst_path).created != 0);
             String8 temp_path = push_str8f(scratch.arena, "%S.temp", dst_path);

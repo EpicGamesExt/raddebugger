@@ -10,8 +10,8 @@
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
 // [x] step out of scopes / loops
 //
-// [ ] asan pass
 // [ ] external window focusing bugs
+// [x] asan pass
 // [x] codebase-internal barrier impl (win7/linux support)
 // [x] policy for closing debug info which is no longer relevant?
 // [x] killing/restarting thread performance (#780)

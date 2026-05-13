@@ -678,8 +678,8 @@ RD_CmdKindInfo rd_cmd_kind_info_table[249] =
 { str8_lit_comp("go_to_disassembly"), str8_lit_comp("Goes to the disassembly, if any, for a given source code line."), str8_lit_comp("code,source,disassembly,disasm"), str8_lit_comp("$text_pt,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*1)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("go_to_source"), str8_lit_comp("Goes to the source code, if any, for a given disassembly line."), str8_lit_comp("code,source,disassembly,disasm"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("set_file_replacement_path"), str8_lit_comp("Sets the path which should be used as the replacement for the passed file."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
-{ str8_lit_comp("new_user"), str8_lit_comp("Creates a new user file, and sets the current user path as that file's path."), str8_lit_comp("new,user,project,layout"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\""), str8_lit_comp(""), D_EntityKind_Null}},
-{ str8_lit_comp("new_project"), str8_lit_comp("Creates a new project file, and sets the current project path as that file's path."), str8_lit_comp("new,user,project,layout"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\""), str8_lit_comp(""), D_EntityKind_Null}},
+{ str8_lit_comp("new_user"), str8_lit_comp("Creates a new user file, and sets the current user path as that file's path."), str8_lit_comp("new,user,project,layout"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
+{ str8_lit_comp("new_project"), str8_lit_comp("Creates a new project file, and sets the current project path as that file's path."), str8_lit_comp("new,user,project,layout"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("open_user"), str8_lit_comp("Opens a user file path, immediately loading it, and begins autosaving to it."), str8_lit_comp("load,user,project,layout"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("open_project"), str8_lit_comp("Opens a project file path, immediately loading it, and begins autosaving to it."), str8_lit_comp("project,project,session"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("open_recent_project"), str8_lit_comp("Opens a recently used project file."), str8_lit_comp("project,project,session"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:recent_projects"), str8_lit_comp(""), D_EntityKind_Null}},
@@ -829,7 +829,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[249] =
 { str8_lit_comp("geo3d"), str8_lit_comp("Opens a Geometry (3D) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs|RD_CmdKindFlag_ListInTab},
 };
 
-struct {String8 string; CFG_Binding binding;} rd_default_binding_table[118] =
+struct {String8 string; CFG_Binding binding;} rd_default_binding_table[114] =
 {
 {str8_lit_comp("kill_all"), {WM_Key_F5, 0  |WM_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {WM_Key_F11, 0   |WM_Modifier_Alt}},
@@ -845,7 +845,6 @@ struct {String8 string; CFG_Binding binding;} rd_default_binding_table[118] =
 {str8_lit_comp("set_next_statement"), {WM_Key_F10, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift }},
 {str8_lit_comp("inc_window_font_size"), {WM_Key_Equal, 0   |WM_Modifier_Alt}},
 {str8_lit_comp("dec_window_font_size"), {WM_Key_Minus, 0   |WM_Modifier_Alt}},
-{str8_lit_comp("window"), {WM_Key_N, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift }},
 {str8_lit_comp("toggle_fullscreen"), {WM_Key_Return, 0 |WM_Modifier_Ctrl  }},
 {str8_lit_comp("new_panel_right"), {WM_Key_P, 0 |WM_Modifier_Ctrl  }},
 {str8_lit_comp("new_panel_down"), {WM_Key_Minus, 0 |WM_Modifier_Ctrl  }},
@@ -875,11 +874,8 @@ struct {String8 string; CFG_Binding binding;} rd_default_binding_table[118] =
 {str8_lit_comp("open"), {WM_Key_O, 0 |WM_Modifier_Ctrl  }},
 {str8_lit_comp("switch"), {WM_Key_I, 0 |WM_Modifier_Ctrl  }},
 {str8_lit_comp("switch_to_partner_file"), {WM_Key_O, 0   |WM_Modifier_Alt}},
-{str8_lit_comp("open_user"), {WM_Key_N, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift |WM_Modifier_Alt}},
-{str8_lit_comp("open_project"), {WM_Key_N, 0 |WM_Modifier_Ctrl  |WM_Modifier_Alt}},
-{str8_lit_comp("open_user"), {WM_Key_O, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift |WM_Modifier_Alt}},
-{str8_lit_comp("open_project"), {WM_Key_O, 0 |WM_Modifier_Ctrl  |WM_Modifier_Alt}},
-{str8_lit_comp("save_user"), {WM_Key_S, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift |WM_Modifier_Alt}},
+{str8_lit_comp("new_project"), {WM_Key_N, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift }},
+{str8_lit_comp("open_project"), {WM_Key_O, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift }},
 {str8_lit_comp("save_project"), {WM_Key_S, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift }},
 {str8_lit_comp("edit"), {WM_Key_F2, 0   }},
 {str8_lit_comp("accept"), {WM_Key_Return, 0   }},
