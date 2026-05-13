@@ -2356,7 +2356,7 @@ txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range
       if(contains_1u64(token->range, off))
       {
         Rng1U64 token_range_clamped = intersect_1u64(line_range, token->range);
-        String8 token_string = str8_substr(line_text, r1u64(token_range_clamped.max - line_range.min, token_range_clamped.max - line_range.min));
+        String8 token_string = str8_substr(line_text, r1u64(token_range_clamped.min - line_range.min, token_range_clamped.max - line_range.min));
         B32 token_ender = 0;
         switch(token->kind)
         {
@@ -2366,6 +2366,7 @@ txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range
             token_ender = (str8_match(token_string, str8_lit("]"), 0));
           }break;
           case TXT_TokenKind_Identifier:
+          case TXT_TokenKind_Numeric:
           case TXT_TokenKind_Keyword:
           case TXT_TokenKind_Meta:
           {
@@ -2377,6 +2378,26 @@ txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range
           pt_token = token;
         }
         break;
+      }
+    }
+    
+    // rjf: walk forward from pt_token - consume closing braces
+    if(pt_token != 0)
+    {
+      for(TXT_Token *wf_token = pt_token+1;
+          wf_token < line_tokens_opl;
+          wf_token += 1)
+      {
+        Rng1U64 wf_token_range_clamped = intersect_1u64(line_range, wf_token->range);
+        String8 wf_token_string = str8_substr(line_text, r1u64(wf_token_range_clamped.min - line_range.min, wf_token_range_clamped.max - line_range.min));
+        if(wf_token->kind == TXT_TokenKind_Symbol && str8_match(wf_token_string, str8_lit("]"), 0))
+        {
+          pt_token = wf_token;
+        }
+        else
+        {
+          break;
+        }
       }
     }
     
@@ -2420,6 +2441,7 @@ txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range
             }
           }break;
           case TXT_TokenKind_Identifier:
+          case TXT_TokenKind_Numeric:
           {
             include_wb_token = 1;
           }break;
@@ -2433,6 +2455,12 @@ txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range
           walkback_done = 1;
         }
       }
+    }
+    
+    // rjf: exclude standalone numerics
+    if(pt_token != 0 && pt_token->kind == TXT_TokenKind_Numeric && result.min == pt_token->range.min && result.max == pt_token->range.max)
+    {
+      MemoryZeroStruct(&result);
     }
   }
   scratch_end(scratch);

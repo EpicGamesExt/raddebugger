@@ -2600,7 +2600,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: hover eval
   //
-  if(!ui_dragging(text_container_sig) && text_container_sig.event_flags == 0 && mouse_expr.size != 0)
+  if(!ui_dragging(text_container_sig) && text_container_sig.event_flags == 0 && mouse_expr.size != 0) E_ParentKey(e_key_zero())
   {
     E_Eval eval = e_eval_from_string(mouse_expr);
     B32 eval_implicit_hover = (eval.irtree.mode != E_Mode_Null &&
