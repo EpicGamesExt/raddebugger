@@ -1813,6 +1813,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           B32 did_prefix_string;
           B32 did_redirect;
           B32 did_pre_prefix_ptr;
+          B32 addr_is_good;
         };
         EV_StringPtrData *ptr_data = it->top_task->user_data;
         if(ptr_data == 0)
@@ -1825,6 +1826,13 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           ptr_data->ptee_has_string  = ((E_TypeKind_Char8 <= ptr_data->direct_type->kind && ptr_data->direct_type->kind <= E_TypeKind_UChar32) ||
                                         ptr_data->direct_type->kind == E_TypeKind_S8 ||
                                         ptr_data->direct_type->kind == E_TypeKind_U8);
+          U8 byte = 0;
+          U64 byte_bad_flags = 0;
+          E_SpaceRangeInfo range_info = {.byte_bad_flags = &byte_bad_flags};
+          if(e_space_read(ptr_data->value_eval.space, &byte, &range_info, r1u64(ptr_data->value_eval.value.u64, ptr_data->value_eval.value.u64+1)))
+          {
+            ptr_data->addr_is_good = !(byte_bad_flags & 1);
+          }
         }
         if(ptr_data->did_redirect)
         {
@@ -1837,13 +1845,22 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           //- rjf: step 0: do pre-prefix pointer value if requested
           case 0:
           {
-            if(!(params->flags & EV_StringFlag_DisableAddresses) &&
-               params->flags & EV_StringFlag_AddressesBeforeContent)
+            if(!ptr_data->addr_is_good ||
+               (!(params->flags & EV_StringFlag_DisableAddresses) &&
+                params->flags & EV_StringFlag_AddressesBeforeContent))
             {
-              *out_string = str8_from_u64(arena, ptr_data->value_eval.value.u64, 16, 0, 0);
+              Temp scratch = scratch_begin(&arena, 1);
+              String8 ptr_value_string = str8_from_u64(scratch.arena, ptr_data->value_eval.value.u64,
+                                                       ptr_data->value_eval.value.u64 != 0 ? 16 : 10, 0, 0);
+              if(ptr_data->value_eval.value.u64 != 0 && !ptr_data->addr_is_good && params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+              {
+                ptr_value_string = str8f(scratch.arena, "%S (unmapped)", ptr_value_string);
+              }
+              *out_string = str8_copy(arena, ptr_value_string);
               ptr_data->did_pre_prefix_ptr = 1;
+              scratch_end(scratch);
             }
-            need_pop = 0;
+            need_pop = !ptr_data->addr_is_good;
           }break;
           
           //- rjf: step 1 -> try "prefix content", which we want to print before the pointer value,
@@ -2005,6 +2022,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                     {
                       Temp scratch = scratch_begin(&arena, 1);
                       String8List list = {0};
+                      str8_list_push(scratch.arena, &list, pre_prefix);
                       str8_list_pushf(scratch.arena, &list, "[inlined] ");
                       e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
                       str8_list_push(scratch.arena, &list, name);
@@ -2040,7 +2058,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                     String8 joined = str8_list_join(scratch.arena, &list, 0);
                     *out_string = str8f(arena, "%S%S", pre_prefix, joined);
                   }
-                  else
+                  else if(name.size != 0)
                   {
                     *out_string = str8f(arena, "%S%S", pre_prefix, name);
                   }
@@ -2068,8 +2086,10 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 RDI_Symbol *procedure = rdi_procedure_from_scope(rdi, scope);
                 String8 procedure_name = {0};
                 procedure_name.str = rdi_name_from_procedure(rdi, procedure, &procedure_name.size);
-                
-                *out_string = str8f(arena, "%S%S", pre_prefix, procedure_name);
+                if(procedure_name.size != 0)
+                {
+                  *out_string = str8f(arena, "%S%S", pre_prefix, procedure_name);
+                }
                 good_symbol_match = (procedure_name.size != 0);
               }
               
@@ -2106,21 +2126,10 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           case 2:
           {
             Temp scratch = scratch_begin(&arena, 1);
-            String8 ptr_value_string = str8_from_u64(scratch.arena, ptr_data->value_eval.value.u64, 16, 0, 0);
-            if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+            String8 ptr_value_string = str8_from_u64(scratch.arena, ptr_data->value_eval.value.u64, ptr_data->value_eval.value.u64 != 0 ? 16 : 10, 0, 0);
+            if(params->flags & EV_StringFlag_ReadOnlyDisplayRules && ptr_data->value_eval.value.u64 != 0 && !ptr_data->addr_is_good)
             {
-              U8 byte = 0;
-              B32 addr_is_good = 0;
-              U64 byte_bad_flags = 0;
-              E_SpaceRangeInfo range_info = {.byte_bad_flags = &byte_bad_flags};
-              if(e_space_read(ptr_data->value_eval.space, &byte, &range_info, r1u64(ptr_data->value_eval.value.u64, ptr_data->value_eval.value.u64+1)))
-              {
-                addr_is_good = !(byte_bad_flags & 1);
-              }
-              if(!addr_is_good)
-              {
-                ptr_value_string = str8f(scratch.arena, "%S (unmapped)", ptr_value_string);
-              }
+              ptr_value_string = str8f(scratch.arena, "%S (unmapped)", ptr_value_string);
             }
             //
             // NOTE(rjf): currently, we are not using the string-generation radix parameter when

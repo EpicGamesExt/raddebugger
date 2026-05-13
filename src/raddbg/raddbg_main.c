@@ -12,7 +12,6 @@
 // [ ] external window focusing bugs
 //
 // [ ] PDB -> RDI conversion memory usage
-//
 // [ ] more things should move to user data, but project-tagged - like
 //     recent files, watches?, etc.
 //
@@ -22,7 +21,6 @@
 //
 // [ ] many threads hitting conditional breakpoints -> causes 0x8000003 exception!
 // [ ] string conditional breakpoints -> size != 0 check seems to fail, can test w/ "rd_init" subprogram type gen in d2r2
-// [ ] no selected thread -> causing evaluation failures, e.g. with go-to-definition
 //
 //- evaluation space coverage pass
 // [ ] need concrete ways of referring into a space at any offset - e.g. `process.memory + 0x1234`, `file:"foo".data + 0x1234`, `thread.regs + 0x80`, etc.
@@ -46,7 +44,6 @@
 //
 //- jeff notes
 // [ ] focus changing on f10/f11? may be related to auto_run/auto_step - look at a bin/jeffr
-// [ ] single-line viz for pointers w/ bad (unmapped) addresses
 // [ ] option to prefer addresses first with string ptrs
 //
 //- urgent fixes
@@ -270,6 +267,8 @@
 //  [x] memory view mutation controls
 //  [x] step-over/step-into doesn't step successfully in many cases, just causes a continue
 // [x] eval space reads/writes -> needs staleness/badness info - replace ctrl layer, to apply to all spaces
+// [x] no selected thread -> causing evaluation failures, e.g. with go-to-definition
+// [x] single-line viz for pointers w/ bad (unmapped) addresses
 
 ////////////////////////////////
 //~ rjf: Build Options
