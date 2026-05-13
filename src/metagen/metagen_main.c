@@ -10,14 +10,12 @@
 //~ rjf: Includes
 
 //- rjf: headers
-#include "metagen/metagen_base/metagen_base_inc.h"
-#include "metagen/metagen_os/metagen_os_inc.h"
+#include "base/base_inc.h"
 #include "mdesk/mdesk.h"
 #include "metagen.h"
 
 //- rjf: impls
-#include "metagen/metagen_base/metagen_base_inc.c"
-#include "metagen/metagen_os/metagen_os_inc.c"
+#include "base/base_inc.c"
 #include "mdesk/mdesk.c"
 #include "metagen.c"
 
@@ -39,9 +37,9 @@ entry_point(CmdLine *cmdline)
   //////////////////////////////
   //- rjf: extract paths
   //
-  String8 build_dir_path   = os_get_process_info()->binary_path;
+  String8 build_dir_path   = get_process_info()->binary_path;
   String8 project_dir_path = str8_chop_last_slash(build_dir_path);
-  String8 code_dir_path    = push_str8f(mg_arena, "%S/src", project_dir_path);
+  String8 code_dir_path    = str8f(mg_arena, "%S/src", project_dir_path);
   
   //////////////////////////////
   //- rjf: search code directories for all files to consider
@@ -60,8 +58,8 @@ entry_point(CmdLine *cmdline)
     Task *last_task = &start_task;
     for(Task *task = first_task; task != 0; task = task->next)
     {
-      OS_FileIter *it = os_file_iter_begin(mg_arena, task->path, 0);
-      for(OS_FileInfo info = {0}; os_file_iter_next(mg_arena, it, &info);)
+      FileIter *it = file_iter_begin(mg_arena, task->path, 0);
+      for(FileInfo info = {0}; file_iter_next(mg_arena, it, &info);)
       {
         String8 file_path = push_str8f(mg_arena, "%S/%S", task->path, info.name);
         if(info.props.flags & FilePropertyFlag_IsFolder)
@@ -75,7 +73,7 @@ entry_point(CmdLine *cmdline)
           str8_list_push(mg_arena, &file_paths, file_path);
         }
       }
-      os_file_iter_end(it);
+      file_iter_end(it);
     }
   }
   
@@ -91,7 +89,7 @@ entry_point(CmdLine *cmdline)
       String8 file_ext = str8_skip_last_dot(file_path);
       if(str8_match(file_ext, str8_lit("mdesk"), 0))
       {
-        String8 data = os_data_from_file_path(mg_arena, file_path);
+        String8 data = data_from_file_path(mg_arena, file_path);
         MD_TokenizeResult tokenize = md_tokenize_from_text(mg_arena, data);
         MD_ParseResult parse = md_parse_from_text_tokens(mg_arena, file_path, data, tokenize.tokens);
         for(MD_Msg *m = parse.msgs.first; m != 0; m = m->next)
@@ -421,7 +419,7 @@ entry_point(CmdLine *cmdline)
       {
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
-        String8 data = os_data_from_file_path(mg_arena, node->first->string);
+        String8 data = data_from_file_path(mg_arena, node->first->string);
         String8 embed_string = mg_c_array_literal_contents_from_data(data);
         str8_list_pushf(mg_arena, &layer->h_tables, "read_only global U8 %S__data[] =\n{\n", node->string);
         str8_list_push (mg_arena, &layer->h_tables, embed_string);
@@ -517,7 +515,7 @@ entry_point(CmdLine *cmdline)
           String8 gen_folder = str8_lit("generated");
           layer_generated_folder = push_str8f(mg_arena, "%S/%S/%S", code_dir_path, layer->key, gen_folder);
         }
-        if(os_make_directory(layer_generated_folder))
+        if(make_directory(layer_generated_folder))
         {
           String8List layer_key_parts = str8_split_path(mg_arena, layer->key);
           StringJoin join = {0};
