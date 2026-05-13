@@ -11173,8 +11173,7 @@ rd_frame(void)
     D_EntityArray all_modules = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Module);
     U64 eval_modules_count = Max(1, all_modules.count);
     E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
-    E_Module *eval_modules_primary = &eval_modules[0];
-    eval_modules_primary->vaddr_range = r1u64(0, max_U64);
+    E_Module *eval_modules_primary = &e_module_nil;
     ProfScope("produce all eval modules")
     {
       for EachIndex(eval_module_idx, all_modules.count)

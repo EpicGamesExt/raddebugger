@@ -77,6 +77,18 @@ e_oplist_push_set_space(Arena *arena, E_OpList *list, E_Space space)
 }
 
 internal void
+e_oplist_push_set_base_off(Arena *arena, E_OpList *list, U64 off)
+{
+  E_Op *node = push_array_no_zero(arena, E_Op, 1);
+  node->opcode = E_IRExtKind_SetBaseOff;
+  StaticAssert(sizeof(node->value) >= sizeof(off), node_value_size_check);
+  MemoryCopy(&node->value, &off, sizeof(off));
+  SLLQueuePush(list->first, list->last, node);
+  list->op_count += 1;
+  list->encoded_size += 1 + sizeof(off);
+}
+
+internal void
 e_oplist_push_string_literal(Arena *arena, E_OpList *list, String8 string)
 {
   RDI_EvalOp opcode = RDI_EvalOp_ConstString;
@@ -2065,8 +2077,14 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             Arch arch = module->arch;
             RDI_Parsed *rdi = dbg_info->rdi;
             RDI_Location location = mapped_location;
+            E_OpList base_off_adjusted_oplist = {0};
+            if(module != e_base_ctx->primary_module)
+            {
+              e_oplist_push_set_base_off(scratch.arena, &base_off_adjusted_oplist, module->vaddr_range.min);
+            }
             E_OpList oplist = e_oplist_from_location(scratch.arena, rdi, location);
-            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+            e_oplist_concat_in_place(&base_off_adjusted_oplist, &oplist);
+            mapped_bytecode = e_bytecode_from_oplist(arena, &base_off_adjusted_oplist);
             mapped_bytecode_space = space;
             if(rdi_kind_from_location(location) == RDI_LocationKind_ConstantDataOff)
             {
@@ -2540,6 +2558,11 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space
       e_oplist_push_set_space(arena, out, space);
     }break;
     
+    case E_IRExtKind_SetBaseOff:
+    {
+      e_oplist_push_set_base_off(arena, out, root->value.u64);
+    }break;
+    
     case RDI_EvalOp_Cond:
     {
       // rjf: generate oplists for each child
@@ -2678,6 +2701,21 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         // rjf: fill bytecode
         ptr[0] = opcode;
         MemoryCopy(ptr + 1, &op->value.u128, extra_byte_count);
+        
+        // rjf: advance
+        ptr = next_ptr;
+      }break;
+      
+      case E_IRExtKind_SetBaseOff:
+      {
+        // rjf: compute bytecode advance
+        U64 extra_byte_count = sizeof(U64);
+        U8 *next_ptr = ptr + 1 + extra_byte_count;
+        Assert(next_ptr <= opl);
+        
+        // rjf: fill bytecode
+        ptr[0] = opcode;
+        MemoryCopy(ptr + 1, &op->value.u64, extra_byte_count);
         
         // rjf: advance
         ptr = next_ptr;

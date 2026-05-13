@@ -4575,12 +4575,10 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
   //
   U64 eval_modules_count = Max(1, entity_ctx->entity_kind_counts[D_EntityKind_Module]);
   E_Module *eval_modules = push_array(arena, E_Module, eval_modules_count);
-  E_Module *eval_modules_primary = &eval_modules[0];
-  eval_modules_primary->vaddr_range = r1u64(0, max_U64);
+  E_Module *eval_modules_primary = &e_module_nil;
   U64 eval_dbg_infos_count = Max(1, entity_ctx->entity_kind_counts[D_EntityKind_Module]);
   E_DbgInfo *eval_dbg_infos = push_array(arena, E_DbgInfo, eval_dbg_infos_count);
-  E_DbgInfo *eval_dbg_infos_primary = &eval_dbg_infos[0];
-  MemoryCopyStruct(eval_dbg_infos_primary, &e_dbg_info_nil);
+  E_DbgInfo *eval_dbg_infos_primary = &e_dbg_info_nil;
   {
     U64 eval_module_idx = 0;
     U64 eval_dbg_info_idx = 0;

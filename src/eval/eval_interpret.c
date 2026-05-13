@@ -173,6 +173,11 @@ e_interpret(String8 bytecode)
   {
     selected_space = e_interpret_ctx->primary_space;
   }
+  U64 base_off = 0;
+  if(e_interpret_ctx->module_base != 0)
+  {
+    base_off = e_interpret_ctx->module_base[0];
+  }
   
   //- rjf: iterate bytecode & perform ops
   U8 *ptr = bytecode.str;
@@ -189,6 +194,7 @@ e_interpret(String8 bytecode)
     else switch(op)
     {
       case E_IRExtKind_SetSpace:{ctrlbits = RDI_EVAL_CTRLBITS(32, 0, 0);}break;
+      case E_IRExtKind_SetBaseOff:{ctrlbits = RDI_EVAL_CTRLBITS(8, 0, 0);}break;
       default:
       {
         result.code = E_InterpretationCode_BadOp;
@@ -240,6 +246,10 @@ e_interpret(String8 bytecode)
       case E_IRExtKind_SetSpace:
       {
         MemoryCopy(&selected_space, &imm, sizeof(selected_space));
+      }break;
+      case E_IRExtKind_SetBaseOff:
+      {
+        base_off = imm.u64;
       }break;
       
       case RDI_EvalOp_Stop:
@@ -325,15 +335,7 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_ModuleOff:
       {
-        if(e_interpret_ctx->module_base != 0)
-        {
-          nval.u64 = *e_interpret_ctx->module_base + imm.u64;
-        }
-        else
-        {
-          result.code = E_InterpretationCode_BadModuleBase;
-          goto done;
-        }
+        nval.u64 = base_off + imm.u64;
       }break;
       
       case RDI_EvalOp_TLSOff:
