@@ -1783,7 +1783,7 @@ psi_addr_map_compar_is_before(void *raw_a, void *raw_b)
   } else if (a->isect_off.off != b->isect_off.off) {
     is_before = a->isect_off.off < b->isect_off.off;
   } else {
-    is_before = str8_compar_case_sensitive(&a->name, &b->name);
+    is_before = str8_compar_case_sensitive(&a->name, &b->name) < 0;
   }
 
   return is_before;
@@ -1832,6 +1832,12 @@ gsi_symbol_is_before(void *raw_a, void *raw_b)
     int cmp = str8_compar_ignore_case(&a_name, &b_name);
     if (cmp == 0) {
       cmp = u64_compar(&a->offset, &b->offset);
+      if (cmp == 0) {
+        cmp = a->kind < b->kind ? -1 : a->kind > b->kind ? +1 : 0;
+        if (cmp == 0) {
+          cmp = str8_compar(a->data, b->data, 0);
+        }
+      }
     }
     is_before = cmp < 0;
   }
@@ -1859,6 +1865,9 @@ gsi_pub_symbol_is_before(void *raw_a, void *raw_b)
       cmp = u16_compar(&a_sym->sec, &b_sym->sec);
       if (cmp == 0) {
         cmp = u32_compar(&a_sym->off, &b_sym->off);
+        if (cmp == 0) {
+          cmp = str8_compar(a->data, b->data, 0);
+        }
       }
     }
 
@@ -3193,4 +3202,3 @@ pdb_string_from_src_error(PDB_SrcError error)
   }
   return str8(0,0);
 }
-
