@@ -264,6 +264,8 @@ RD_VocabTable:
       //- rjf: scope decorations
       @default(1) @display_name('Cursor Scope Lines') @description("Controls whether or not scopes containing the cursor in text views are drawn.")
         'cursor_scope_lines': bool,
+      @default(1) @display_name('Cursor Scope End Annotations') @description("Controls whether or not ending annotations for scopes containing the cursor are drawn.")
+        'cursor_scope_end_annotations': bool,
       
       //- rjf: cursor decorations
       @default(1) @display_name('Cursor Trail') @description("Controls whether or not a movement trail of the cursor is drawn.")
