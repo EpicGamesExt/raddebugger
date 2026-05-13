@@ -46,7 +46,7 @@ e_space_gen(E_Space space)
 }
 
 internal B32
-e_space_read(E_Space space, void *out, Rng1U64 range)
+e_space_read(E_Space space, void *out, E_SpaceRangeInfo *out_range_info, Rng1U64 range)
 {
   ProfBeginFunction();
   B32 result = 0;
@@ -77,6 +77,8 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
       //- rjf: file reads
       case E_SpaceKind_File:
       {
+        Access *access = access_open();
+        
         // rjf: unpack space/path
         U64 file_path_string_id = space.u64_0;
         String8 file_path = e_string_from_id(file_path_string_id);
@@ -88,22 +90,70 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
         containing_range.max += chunk_size-1;
         containing_range.max -= containing_range.max%chunk_size;
         
-        // rjf: map to hash
+        // rjf: map to hashes
         C_Key key = fs_key_from_path_range(file_path, containing_range, 0);
-        U128 hash = c_hash_from_key(key, 0);
-        
-        // rjf: look up from hash store
-        Access *access = access_open();
+        U128 hash = {0};
+        U128 prev_hash = {0};
+        U64 desired_hash_count = 1;
+        if(out_range_info != 0 && out_range_info->byte_changed_flags != 0)
         {
-          String8 data = c_data_from_hash(access, hash);
-          Rng1U64 legal_range = r1u64(containing_range.min, containing_range.min + data.size);
-          Rng1U64 read_range = intersect_1u64(range, legal_range);
-          if(read_range.min < read_range.max)
+          desired_hash_count = 2;
+        }
+        {
+          U64 hashes_count = 0;
+          U128 hashes[2] = {0};
+          for(U64 rewind_idx = 0; rewind_idx < C_KEY_HASH_HISTORY_COUNT && hashes_count < ArrayCount(hashes) && hashes_count < desired_hash_count; rewind_idx += 1)
           {
-            result = 1;
-            MemoryCopy(out, data.str + read_range.min - containing_range.min, dim_1u64(read_range));
+            U128 h = c_hash_from_key(key, rewind_idx);
+            if(!u128_match(u128_zero(), h))
+            {
+              hashes[hashes_count] = h;
+              hashes_count += 1;
+            }
+          }
+          hash = hashes[0];
+          prev_hash = hashes[1];
+        }
+        
+        // rjf: unpack hashes
+        String8 data = c_data_from_hash(access, hash);
+        String8 prev_data = c_data_from_hash(access, prev_hash);
+        
+        // rjf: unpack read range
+        Rng1U64 legal_range = r1u64(containing_range.min, containing_range.min + data.size);
+        Rng1U64 read_range = intersect_1u64(range, legal_range);
+        
+        // rjf: fill out byte bad flags
+        if(out_range_info != 0 && out_range_info->byte_bad_flags != 0)
+        {
+          // TODO(rjf): need to know whole space range here
+        }
+        
+        // rjf: fill out byte changed flags
+        if(out_range_info != 0 && out_range_info->byte_changed_flags != 0)
+        {
+          U64 num_bytes_read = dim_1u64(read_range);
+          if(data.size >= num_bytes_read && data.size == prev_data.size)
+          {
+            U64 byte_base_idx = read_range.min - containing_range.min;
+            for(U64 byte_idx = 0; byte_idx < num_bytes_read; byte_idx += 1)
+            {
+              if(data.str[byte_base_idx + byte_idx] != prev_data.str[byte_base_idx + byte_idx])
+              {
+                out_range_info->byte_changed_flags[byte_idx/64] |= (1ull<<(byte_idx%64));
+                out_range_info->flags |= E_SpaceRangeFlag_AnyByteChanged;
+              }
+            }
           }
         }
+        
+        // rjf: fill output data from data
+        if(read_range.min < read_range.max)
+        {
+          result = 1;
+          MemoryCopy(out, data.str + read_range.min - containing_range.min, dim_1u64(read_range));
+        }
+        
         access_close(access);
       }break;
       
@@ -128,7 +178,7 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
       default:
       if(e_base_ctx->space_read != 0)
       {
-        result = e_base_ctx->space_read(space, out, range);
+        result = e_base_ctx->space_read(space, out, out_range_info, range);
       }break;
     }
   }
@@ -277,7 +327,7 @@ e_interpret(String8 bytecode)
       {
         U64 addr = svals[0].u64;
         U64 size = imm.u64;
-        B32 good_read = e_space_read(selected_space, &nval, r1u64(addr, addr+size));
+        B32 good_read = e_space_read(selected_space, &nval, 0, r1u64(addr, addr+size));
         if(!good_read)
         {
           result.code = E_InterpretationCode_BadMemRead;
@@ -299,7 +349,7 @@ e_interpret(String8 bytecode)
           Rng1U16 rng = arch_info->reg_code_rng_table[base_reg_code];
           U64 off = (U64)rng.min + byte_off;
           U64 size = (U64)byte_size;
-          good_read = e_space_read(e_interpret_ctx->reg_space, &nval, r1u64(off, off+size));
+          good_read = e_space_read(e_interpret_ctx->reg_space, &nval, 0, r1u64(off, off+size));
         }
         if(!good_read)
         {
@@ -312,7 +362,7 @@ e_interpret(String8 bytecode)
       {
         U64 off  = svals[0].u64;
         U64 size = bit_size_from_arch(e_interpret_ctx->reg_arch)/8;
-        B32 good_read = e_space_read(e_interpret_ctx->reg_space, &nval, r1u64(off, off+size));
+        B32 good_read = e_space_read(e_interpret_ctx->reg_space, &nval, 0, r1u64(off, off+size));
         if(!good_read)
         {
           result.code = E_InterpretationCode_BadRegRead;

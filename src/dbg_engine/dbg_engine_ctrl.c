@@ -4512,7 +4512,7 @@ d_ctrl_eval_space_gen(E_Space space)
 }
 
 internal B32
-d_ctrl_eval_space_read(E_Space space, void *out, Rng1U64 range)
+d_ctrl_eval_space_read(E_Space space, void *out, E_SpaceRangeInfo *out_range_info, Rng1U64 range)
 {
   B32 result = 0;
   switch(space.kind)

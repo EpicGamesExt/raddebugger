@@ -1164,7 +1164,7 @@ e_value_eval_from_eval(E_Eval eval)
       MemoryZeroStruct(&eval.value);
       if(!e_type_key_match(type_key, e_type_key_zero()) &&
          type_byte_size <= sizeof(E_Value) &&
-         e_space_read(eval.space, &eval.value, value_vaddr_range))
+         e_space_read(eval.space, &eval.value, 0, value_vaddr_range))
       {
         eval.irtree.mode = E_Mode_Value;
         

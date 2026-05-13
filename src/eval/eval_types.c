@@ -2587,7 +2587,7 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U
   U64 base_off = 0;
   U64 member_element_off = 0;
   U64 member_size = 0;
-  E_SpaceRWFunction *space_read = 0;
+  E_SpaceReadFunction *space_read = 0;
   {
     U64 key_read_off = 0;
     key_read_off += str8_deserial_read_struct(key, key_read_off, &process);
@@ -2812,7 +2812,7 @@ E_TYPE_IREXT_FUNCTION_DEF(list)
       U64 base_off;
       U64 member_element_off;
       U64 member_size;
-      E_SpaceRWFunction *space_read;
+      E_SpaceReadFunction *space_read;
     }
     key_data =
     {

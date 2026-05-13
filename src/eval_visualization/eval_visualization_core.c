@@ -1880,7 +1880,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 U64 string_memory_addr = ptr_data->value_eval.value.u64;
                 for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
                 {
-                  B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
+                  B32 read_good = e_space_read(eval.space, string_buffer, 0, r1u64(string_memory_addr, string_memory_addr+try_size));
                   if(read_good)
                   {
                     break;
@@ -2107,6 +2107,21 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           {
             Temp scratch = scratch_begin(&arena, 1);
             String8 ptr_value_string = str8_from_u64(scratch.arena, ptr_data->value_eval.value.u64, 16, 0, 0);
+            if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+            {
+              U8 byte = 0;
+              B32 addr_is_good = 0;
+              U64 byte_bad_flags = 0;
+              E_SpaceRangeInfo range_info = {.byte_bad_flags = &byte_bad_flags};
+              if(e_space_read(ptr_data->value_eval.space, &byte, &range_info, r1u64(ptr_data->value_eval.value.u64, ptr_data->value_eval.value.u64+1)))
+              {
+                addr_is_good = !(byte_bad_flags & 1);
+              }
+              if(!addr_is_good)
+              {
+                ptr_value_string = str8f(scratch.arena, "%S (unmapped)", ptr_value_string);
+              }
+            }
             //
             // NOTE(rjf): currently, we are not using the string-generation radix parameter when
             // generating a pointer value - it is weird to want to change pointer value visualization

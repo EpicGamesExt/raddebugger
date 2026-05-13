@@ -757,8 +757,25 @@ struct E_AutoHookParams
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
+typedef U32 E_SpaceRangeFlags;
+enum
+{
+  E_SpaceRangeFlag_AnyByteBad     = (1<<0),
+  E_SpaceRangeFlag_AnyByteChanged = (1<<1),
+  E_SpaceRangeFlag_Stale          = (1<<2),
+};
+
+typedef struct E_SpaceRangeInfo E_SpaceRangeInfo;
+struct E_SpaceRangeInfo
+{
+  U64 *byte_bad_flags;
+  U64 *byte_changed_flags;
+  E_SpaceRangeFlags flags;
+};
+
 typedef U64 E_SpaceGenFunction(E_Space space);
-typedef B32 E_SpaceRWFunction(E_Space space, void *out, Rng1U64 offset_range);
+typedef B32 E_SpaceReadFunction(E_Space space, void *out, E_SpaceRangeInfo *out_range_info, Rng1U64 offset_range);
+typedef B32 E_SpaceWriteFunction(E_Space space, void *out, Rng1U64 offset_range);
 
 //- rjf: base context
 
@@ -785,8 +802,8 @@ struct E_BaseCtx
   
   // rjf: space hooks
   E_SpaceGenFunction *space_gen;
-  E_SpaceRWFunction *space_read;
-  E_SpaceRWFunction *space_write;
+  E_SpaceReadFunction *space_read;
+  E_SpaceWriteFunction *space_write;
 };
 
 //- rjf: ir generation context

@@ -554,7 +554,7 @@ internal DMN_Event *d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctr
 
 //- rjf: eval helpers
 internal U64 d_ctrl_eval_space_gen(E_Space space);
-internal B32 d_ctrl_eval_space_read(E_Space space, void *out, Rng1U64 vaddr_range);
+internal B32 d_ctrl_eval_space_read(E_Space space, void *out, E_SpaceRangeInfo *out_range_info, Rng1U64 vaddr_range);
 
 //- rjf: control thread eval scopes
 internal D_EvalScope *d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Entity *thread);

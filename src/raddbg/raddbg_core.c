@@ -736,7 +736,7 @@ rd_eval_space_gen(E_Space space)
 }
 
 internal B32
-rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
+rd_eval_space_read(E_Space space, void *out, E_SpaceRangeInfo *out_range_info, Rng1U64 range)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
@@ -744,7 +744,7 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
   {
     default:
     {
-      result = d_ctrl_eval_space_read(space, out, range);
+      result = d_ctrl_eval_space_read(space, out, out_range_info, range);
     }break;
     
     //- rjf: interior control entity reads (inside process address space or thread register block)
@@ -762,6 +762,20 @@ rd_eval_space_read(E_Space space, void *out, Rng1U64 range)
           {
             result = 1;
             MemoryCopy(out, data.str, data.size);
+            if(out_range_info != 0 && out_range_info->byte_bad_flags)
+            {
+              MemoryCopy(out_range_info->byte_bad_flags, slice.byte_bad_flags, sizeof(U64) * (dim_1u64(range)+63)/64);
+            }
+            if(out_range_info != 0 && out_range_info->byte_changed_flags)
+            {
+              MemoryCopy(out_range_info->byte_changed_flags, slice.byte_changed_flags, sizeof(U64) * ((dim_1u64(range)+63)/64));
+            }
+            if(out_range_info != 0)
+            {
+              out_range_info->flags |= E_SpaceRangeFlag_Stale*!!slice.stale;
+              out_range_info->flags |= E_SpaceRangeFlag_AnyByteChanged*!!slice.any_byte_changed;
+              out_range_info->flags |= E_SpaceRangeFlag_AnyByteBad*!!slice.any_byte_bad;
+            }
           }
         }break;
         case D_EntityKind_Thread:

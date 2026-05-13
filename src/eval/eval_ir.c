@@ -2386,7 +2386,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             U64 class_base_vaddr = interpret.value.u64;
             U64 vtable_vaddr = 0;
             U64 addr_size = e_type_byte_size_from_key(type_key);
-            if(e_space_read(interpret.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
+            if(e_space_read(interpret.space, &vtable_vaddr, 0, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
             {
               Arch arch = e_base_ctx->primary_module->arch;
               U32 dbg_info_num = 0;

@@ -658,7 +658,7 @@ internal String8 rd_cmd_name_from_eval(E_Eval eval);
 
 //- rjf: eval space reads/writes
 internal U64 rd_eval_space_gen(E_Space space);
-internal B32 rd_eval_space_read(E_Space space, void *out, Rng1U64 range);
+internal B32 rd_eval_space_read(E_Space space, void *out, E_SpaceRangeInfo *out_range_info, Rng1U64 range);
 internal B32 rd_eval_space_write(E_Space space, void *in, Rng1U64 range);
 
 //- rjf: asynchronous streamed reads -> hashes from spaces

@@ -4,9 +4,6 @@
 ////////////////////////////////
 //~ rjf: post-0.9.26 TODO notes
 //
-// [ ] single-line bad address visualization
-// [ ] memory view show unmapped memory as non-zeros
-//
 // [ ] "autos" collection, which can be evaluated
 // [ ] show "autos" inline in source code near thread?
 // [ ] memory_size(...) view for quickly evaluating memory sizes
@@ -28,7 +25,6 @@
 // [ ] no selected thread -> causing evaluation failures, e.g. with go-to-definition
 //
 //- evaluation space coverage pass
-// [ ] eval space reads/writes -> needs staleness/badness info - replace ctrl layer, to apply to all spaces
 // [ ] need concrete ways of referring into a space at any offset - e.g. `process.memory + 0x1234`, `file:"foo".data + 0x1234`, `thread.regs + 0x80`, etc.
 // [ ] memory view needs to take advantage of above when peeking; ensure peeking works on files etc.
 // [ ] need to eliminate accelerators from evaluation context, and build them on the fly instead -
@@ -273,6 +269,7 @@
 //      by default go to "untitled" in default user path
 //  [x] memory view mutation controls
 //  [x] step-over/step-into doesn't step successfully in many cases, just causes a continue
+// [x] eval space reads/writes -> needs staleness/badness info - replace ctrl layer, to apply to all spaces
 
 ////////////////////////////////
 //~ rjf: Build Options

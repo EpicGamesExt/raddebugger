@@ -2869,7 +2869,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           String8 data = {0};
           data.size = dim_1u64(range);
           data.str = push_array(scratch.arena, U8, data.size);
-          if(!e_space_read(eval.space, data.str, range))
+          if(!e_space_read(eval.space, data.str, 0, range))
           {
             log_user_errorf("Could not successfully read memory.");
           }
@@ -3224,17 +3224,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   U64 *visible_memory_change_flags = push_array(scratch.arena, U64, (visible_memory_size+63)/64);
   U64 *visible_memory_bad_flags = push_array(scratch.arena, U64, (visible_memory_size+63)/64);
   {
-    e_space_read(eval.space, visible_memory, viz_range_bytes);
-  }
-  if(eval.space.kind == D_EvalSpaceKind_Entity)
-  {
-    D_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-    if(entity->kind == D_EntityKind_Process)
-    {
-      D_ProcessMemorySlice slice = d_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, viz_range_bytes, 0, 0);
-      visible_memory_change_flags = slice.byte_changed_flags;
-      visible_memory_bad_flags = slice.byte_bad_flags;
-    }
+    E_SpaceRangeInfo range_info = {visible_memory_bad_flags, visible_memory_change_flags};
+    e_space_read(eval.space, visible_memory, &range_info, viz_range_bytes);
   }
   
   //////////////////////////////
