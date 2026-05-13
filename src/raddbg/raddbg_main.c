@@ -8,29 +8,17 @@
 // [ ] show "autos" inline in source code near thread?
 // [ ] memory_size(...) view for quickly evaluating memory sizes
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
-// [x] step out of scopes / loops
 //
 // [ ] external window focusing bugs
-// [x] asan pass
-// [x] codebase-internal barrier impl (win7/linux support)
-// [x] policy for closing debug info which is no longer relevant?
-// [x] killing/restarting thread performance (#780)
 //
 // [ ] PDB -> RDI conversion memory usage
 //
-// [ ] project/user file improvements
-//  [ ] "default" -> "untitled"
-//  [ ] should clear default project data every time the program starts
-//  [ ] new project / user should not require picking a path; should just
-//      by default go to "untitled" in default user path
-//  [ ] more things should move to user data, but project-tagged - like
-//      recent files, watches?, etc.
+// [ ] more things should move to user data, but project-tagged - like
+//     recent files, watches?, etc.
 //
 // [ ] linux/dwarf fixes
 //  [ ] excessive CPU usage on async threads - barrier impl?
 //  [ ] step-over/step-into doesn't step successfully in many cases, just causes a continue
-//  [x] rd_frame has no type info, should be (void -> void) - type should be generated but it
-//      is not being hooked up correctly
 //  [ ] type views for `MyByte *` example do not match correctly
 //
 // [ ] many threads hitting conditional breakpoints -> causes 0x8000003 exception!
@@ -62,26 +50,6 @@
 // [ ] focus changing on f10/f11? may be related to auto_run/auto_step - look at a bin/jeffr
 // [ ] single-line viz for pointers w/ bad (unmapped) addresses
 // [ ] option to prefer addresses first with string ptrs
-// [x] option to turn off transient tabs altogether
-//
-//- namespace/locations/variables RDI pass
-// [x] RDI_Local, RDI_GlobalVariable, RDI_ThreadVariable -> RDI_Variable
-// [x] RDI_Variable gets RDI_ContainerFlags, and a container_idx
-// [x] RDI_Namespace can be a container, same as types/procedures
-// [x] If procedure-contained, then index goes to scope now, not procedure
-// [x] Location sections -> split by location kind, fixed tables for simple locations, one catch-all table for bytecode.
-// [x] Location kind -> can be thread-local offset, or module virtual offset, to enclose globals/tlocals cases
-// [x] Referring to one location -> kind * index
-// [x] Referring to many locations, based on scope offsets -> kind = BlockList; BlockList encodes a first/opl pair into Block table, each Block has scope_off_first/opl, location_kind, location_idx - but a block's location kind CANNOT BE BlockList
-// [x] RDI_Variable has location_kind, location_idx
-//
-// [x] we keep flat tables of symbols, *but*, "sort" by containing unit. unit -> [f, opl) of procedures, globals, threadvars, constants, etc.
-// [x] container can also be a unit, so you can also go from procedure/global/tvar -> unit
-// [x] *OR*, because we can guarantee that the units themselves will be sorted from lowest -> highest in all symbol tables, we can simply binary search the unit table (small) with a symbol's index to find its corresponding unit. that way, no need to duplicate e.g. namespaces and so on across units. and actually, we have to do this, because containers can be types, and those cannot be unit-locked.
-//
-// [x] symbols only store their *partly-qualified name*, e.g. `x` for A::B::C::x
-// [x] default name maps look up *partly-qualified names*
-// [x] to match a *fully qualified name*, there needs to be a second kind of different lookup - instead of string-matching, we need to match against the *fully qualified names*. the maps must be built by hashing the *fully qualified name*, but redirecting to the symbol with the *partially qualified name*. this is to allow fully-qualified lookups, but avoid storing fully-qualified names.
 //
 //- urgent fixes
 // [ ] (use msvc assert as an example) show fastfail exception info (code, name, etc.) - comes from ExceptionInformation @fastfail
@@ -91,7 +59,6 @@
 // [ ] target ui entry point should override built-in entry point
 // [ ] list of all tabs in palette
 // [ ] u64 + (ptr - ptr) seems to produce unexpected results - double check with C rules?
-// [x] hardware breakpoints regression (global eval in ctrl)
 //
 //- flow notes
 // [ ] "skip breakpoint, run to source", when stopped at a non-source location
@@ -103,8 +70,6 @@
 // [ ] have smaller visible range than entire memory space, within some bounds (e.g. 64KB)
 // [ ] dynamically expand memory space, based on scrolling
 // [ ] disambiguate . character in ASCII columns
-// [x] fix type intepretations of cursor in bottom pane
-// [x] fix clicking through occluded panels etc.
 //
 //- watch improvements
 // [ ] *ALL* expressions in watch windows need to be editable.
@@ -233,7 +198,6 @@
 // [ ] memory view
 //  [ ] memory view user-made annotations
 //  [ ] memory view searching
-//  [x] memory view mutation controls
 // [ ] disasm view
 //  [ ] visualize jump destinations in disasm
 //
@@ -270,6 +234,42 @@
 // [x] clean up tooltip? it's a bit big/noisy (maybe remove it after above?)
 // [x] missing call stack frames?
 // [x] scroll bar
+//
+// [x] fix type intepretations of cursor in bottom pane
+// [x] fix clicking through occluded panels etc.
+// [x] hardware breakpoints regression (global eval in ctrl)
+// [x] RDI_Local, RDI_GlobalVariable, RDI_ThreadVariable -> RDI_Variable
+// [x] RDI_Variable gets RDI_ContainerFlags, and a container_idx
+// [x] RDI_Namespace can be a container, same as types/procedures
+// [x] If procedure-contained, then index goes to scope now, not procedure
+// [x] Location sections -> split by location kind, fixed tables for simple locations, one catch-all table for bytecode.
+// [x] Location kind -> can be thread-local offset, or module virtual offset, to enclose globals/tlocals cases
+// [x] Referring to one location -> kind * index
+// [x] Referring to many locations, based on scope offsets -> kind = BlockList; BlockList encodes a first/opl pair into Block table, each Block has scope_off_first/opl, location_kind, location_idx - but a block's location kind CANNOT BE BlockList
+// [x] RDI_Variable has location_kind, location_idx
+//
+// [x] we keep flat tables of symbols, *but*, "sort" by containing unit. unit -> [f, opl) of procedures, globals, threadvars, constants, etc.
+// [x] container can also be a unit, so you can also go from procedure/global/tvar -> unit
+// [x] *OR*, because we can guarantee that the units themselves will be sorted from lowest -> highest in all symbol tables, we can simply binary search the unit table (small) with a symbol's index to find its corresponding unit. that way, no need to duplicate e.g. namespaces and so on across units. and actually, we have to do this, because containers can be types, and those cannot be unit-locked.
+//
+// [x] symbols only store their *partly-qualified name*, e.g. `x` for A::B::C::x
+// [x] default name maps look up *partly-qualified names*
+// [x] to match a *fully qualified name*, there needs to be a second kind of different lookup - instead of string-matching, we need to match against the *fully qualified names*. the maps must be built by hashing the *fully qualified name*, but redirecting to the symbol with the *partially qualified name*. this is to allow fully-qualified lookups, but avoid storing fully-qualified names.
+//
+// [x] option to turn off transient tabs altogether
+// [x] step out of scopes / loops
+// [x] asan pass
+// [x] codebase-internal barrier impl (win7/linux support)
+// [x] policy for closing debug info which is no longer relevant?
+// [x] killing/restarting thread performance (#780)
+//  [x] rd_frame has no type info, should be (void -> void) - type should be generated but it
+//      is not being hooked up correctly
+// [x] project/user file improvements
+//  [x] "default" -> "untitled"
+//  [x] should clear default project data every time the program starts
+//  [x] new project / user should not require picking a path; should just
+//      by default go to "untitled" in default user path
+//  [x] memory view mutation controls
 
 ////////////////////////////////
 //~ rjf: Build Options
