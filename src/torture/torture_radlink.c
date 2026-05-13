@@ -4396,90 +4396,6 @@ TEST(second_member_header)
   T_Ok(g_last_exit_code == 0);
 }
 
-#if 0
-TEST(defer_imp_link)
-{
-  T_COFF_DefLib bar_lib_any = {
-    .members = (T_COFF_DefLibMember[]){
-      {
-        .type = T_COFF_DefLibMember_DllImportStatic,
-        .dll_import = { .name = "bar.dll" }
-      },
-      {
-        .type = T_COFF_DefLibMember_Import,
-        .import = { "bar.dll", "bar", COFF_ImportBy_Name, COFF_ImportHeader_Code, .hit_or_ordinal = 0 }
-      },
-      {
-        .type = T_COFF_DefLibMember_Obj,
-        .obj = {
-          .machine  = T_COFF_DefSetMachine(X64),
-          .sections = (T_COFF_DefSection[]){
-            {
-              "text", ".text", str8_lit_comp("\xff\x25\x00\x00\x00\x00"), .flags = "rx:code"
-            },
-            {0}
-          },
-          .symbols  = (T_COFF_DefSymbol[]){
-            T_COFF_DefSymbol_Undef("__imp_bar"),
-            T_COFF_DefSymbol_ExternFunc("qwe", "text", 0),
-            {0},
-          }
-        }
-      },
-      {0}
-    }
-  };
-
-  T_COFF_DefLib foo_lib_any = {
-    .members = (T_COFF_DefLibMember[]){
-      {
-        .type = T_COFF_DefLibMember_DllImportStatic,
-        .dll_import = { .name = "foo.dll" }
-      },
-      {
-        .type = T_COFF_DefLibMember_Import,
-        .import = { "foo.dll", "bar", COFF_ImportBy_Name, COFF_ImportHeader_Code, .hit_or_ordinal = 0 }
-      },
-      {
-        .type = T_COFF_DefLibMember_Obj,
-        .obj = {
-          .machine  = T_COFF_DefSetMachine(X64),
-          .sections = (T_COFF_DefSection[]){
-            {
-              "text", ".text",
-              str8_lit_comp("\xff\x25\x00\x00\x00\x00"),
-              .flags = "rx:code",
-              .relocs = (T_COFF_DefReloc[]){
-                T_COFF_DefReloc(X64_Rel32, 2, "bar"),
-                {0}
-              }
-            },
-            {0}
-          },
-          .symbols  = (T_COFF_DefSymbol[]){
-            T_COFF_DefSymbol_Undef("bar"),
-            T_COFF_DefSymbol_Undef("qwe"),
-            T_COFF_DefSymbol_ExternFunc("thunk", "text", 0),
-            {0},
-          }
-        }
-      },
-      {0}
-    }
-  };
-
-  String8 bar_lib = t_coff_from_def_lib(arena, bar_lib_any);
-  String8 foo_lib = t_coff_from_def_lib(arena, foo_lib_any);
-
-  T_Ok(t_write_file(str8_lit("bar.lib"), bar_lib));
-  T_Ok(t_write_file(str8_lit("foo.lib"), foo_lib));
-  T_Ok(t_write_entry_obj());
-
-  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe bar.lib foo.lib entry.obj /include:thunk");
-  T_Ok(g_last_exit_code == 0);
-}
-#endif
-
 TEST(defer_impl_link_to_second_search_pass)
 {
   T_Ok(t_write_def_obj("imp_ref.obj", (T_COFF_DefObj){
@@ -6994,6 +6910,90 @@ TEST(fold_with_largest_align)
   }
 }
 
+#endif
+
+#if 0
+TEST(defer_imp_link)
+{
+  T_COFF_DefLib bar_lib_any = {
+    .members = (T_COFF_DefLibMember[]){
+      {
+        .type = T_COFF_DefLibMember_DllImportStatic,
+        .dll_import = { .name = "bar.dll" }
+      },
+      {
+        .type = T_COFF_DefLibMember_Import,
+        .import = { "bar.dll", "bar", COFF_ImportBy_Name, COFF_ImportHeader_Code, .hit_or_ordinal = 0 }
+      },
+      {
+        .type = T_COFF_DefLibMember_Obj,
+        .obj = {
+          .machine  = T_COFF_DefSetMachine(X64),
+          .sections = (T_COFF_DefSection[]){
+            {
+              "text", ".text", str8_lit_comp("\xff\x25\x00\x00\x00\x00"), .flags = "rx:code"
+            },
+            {0}
+          },
+          .symbols  = (T_COFF_DefSymbol[]){
+            T_COFF_DefSymbol_Undef("__imp_bar"),
+            T_COFF_DefSymbol_ExternFunc("qwe", "text", 0),
+            {0},
+          }
+        }
+      },
+      {0}
+    }
+  };
+
+  T_COFF_DefLib foo_lib_any = {
+    .members = (T_COFF_DefLibMember[]){
+      {
+        .type = T_COFF_DefLibMember_DllImportStatic,
+        .dll_import = { .name = "foo.dll" }
+      },
+      {
+        .type = T_COFF_DefLibMember_Import,
+        .import = { "foo.dll", "bar", COFF_ImportBy_Name, COFF_ImportHeader_Code, .hit_or_ordinal = 0 }
+      },
+      {
+        .type = T_COFF_DefLibMember_Obj,
+        .obj = {
+          .machine  = T_COFF_DefSetMachine(X64),
+          .sections = (T_COFF_DefSection[]){
+            {
+              "text", ".text",
+              str8_lit_comp("\xff\x25\x00\x00\x00\x00"),
+              .flags = "rx:code",
+              .relocs = (T_COFF_DefReloc[]){
+                T_COFF_DefReloc(X64_Rel32, 2, "bar"),
+                {0}
+              }
+            },
+            {0}
+          },
+          .symbols  = (T_COFF_DefSymbol[]){
+            T_COFF_DefSymbol_Undef("bar"),
+            T_COFF_DefSymbol_Undef("qwe"),
+            T_COFF_DefSymbol_ExternFunc("thunk", "text", 0),
+            {0},
+          }
+        }
+      },
+      {0}
+    }
+  };
+
+  String8 bar_lib = t_coff_from_def_lib(arena, bar_lib_any);
+  String8 foo_lib = t_coff_from_def_lib(arena, foo_lib_any);
+
+  T_Ok(t_write_file(str8_lit("bar.lib"), bar_lib));
+  T_Ok(t_write_file(str8_lit("foo.lib"), foo_lib));
+  T_Ok(t_write_entry_obj());
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe bar.lib foo.lib entry.obj /include:thunk");
+  T_Ok(g_last_exit_code == 0);
+}
 #endif
 
 #if 0

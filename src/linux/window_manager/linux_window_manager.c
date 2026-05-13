@@ -201,7 +201,17 @@ wm_window_focus(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
-  XSetInputFocus(lnx_wm_state->display, w->window, RevertToNone, CurrentTime);
+  // 
+  // TODO: if the target is lightweight, the debugger may launch it even before the first frame is drawn;
+  //       this is a problem because XSetInputFocus is now called before XMapWindow, we need a guard
+  //       to prevent an X server error:
+  //
+  //         X Error of failed request:  BadMatch (invalid parameter attributes)
+  //            Major opcode of failed request:  42 (X_SetInputFocus)
+  //            Serial number of failed request:  373
+  //            Current serial number in output stream:  374
+  //        
+  XSetInputFocus(os_lnx_gfx_state->display, w->window, RevertToNone, CurrentTime);
 }
 
 internal B32
