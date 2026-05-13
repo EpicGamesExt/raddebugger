@@ -1159,6 +1159,11 @@ make_directory(String8 path)
   {
     result = 1;
   }
+  else
+  {
+    // match windows behavior
+    result = file_path_exists(path);
+  }
   scratch_end(scratch);
   return result;
 }
