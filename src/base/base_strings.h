@@ -160,6 +160,8 @@ internal U64 cstring32_length(U32 *c);
 ////////////////////////////////
 //~ rjf: String Constructors
 
+#define s(S) str8_lit(S)
+
 #define str8_lit(S)  str8((U8*)(S), sizeof(S) - 1)
 #define str8_lit_comp(S) {(U8*)(S), sizeof(S) - 1,}
 #define str8_lit_cstr(S) str8((U8*)(S), sizeof(S))

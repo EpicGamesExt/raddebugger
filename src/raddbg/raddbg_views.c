@@ -3172,6 +3172,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: produce fancy strings for all possible byte values in all cells
   //
+  DR_FStrList unmapped_byte_fstrs = {0};
   DR_FStrList byte_fstrs[256] = {0};
   DR_FStrList byte_fstrs_selected[256] = {0};
   DR_FStrList byte_fstrs_changed[256] = {0};
@@ -3187,6 +3188,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     UI_TagF("weak") zero_color = ui_color_from_name(str8_lit("text"));
     Vec4F32 changed_color = full_color;
     UI_TagF("neutral") changed_color = ui_color_from_name(str8_lit("text"));
+    {
+      DR_FStr fstr = {str8_lit("x"), {font, font_raster_flags, zero_color, cell_font_size, 0, 0}};
+      dr_fstrs_push(scratch.arena, &unmapped_byte_fstrs, &fstr);
+    }
     for(U64 idx = 0; idx < ArrayCount(byte_fstrs); idx += 1)
     {
       U8 byte = (U8)idx;
@@ -3602,6 +3607,27 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               DLLPushBack(variable_annotations.first, variable_annotations.last, n);
             }
           }
+        }
+      }
+    }
+    
+    //- rjf: fill unmapped annotations
+    {
+      Annotation *bad_annotation = push_array(scratch.arena, Annotation, 1);
+      AnnotationNode *bad_annotation_node = push_array(scratch.arena, AnnotationNode, 1);
+      bad_annotation_node->v = bad_annotation;
+      UI_TagF("bad")
+      {
+        bad_annotation->name_string = s("(unmapped address)");
+        bad_annotation->txt_color = ui_color_from_name(s("text"));
+      }
+      for(U64 vaddr = viz_range_bytes.min; vaddr < viz_range_bytes.max; vaddr += 1)
+      {
+        U64 visible_byte_idx = vaddr - viz_range_bytes.min;
+        B32 byte_is_bad = !!(visible_memory_bad_flags[visible_byte_idx/64] & (1ull<<(visible_byte_idx%64)));
+        if(byte_is_bad)
+        {
+          visible_memory_annotations[visible_byte_idx].first = visible_memory_annotations[visible_byte_idx].last = bad_annotation_node;
         }
       }
     }
@@ -4235,6 +4261,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                 DR_FStr fstr = {str8f(scratch.arena, "%c", mv->cell_value_edit_first_digit), {font, font_raster_flags, color, cell_font_size, 0, 0}};
                 dr_fstrs_push(scratch.arena, &fstrs, &fstr);
                 ui_box_equip_display_fstrs(cell_box, &fstrs);
+              }
+              else if(byte_is_bad)
+              {
+                ui_box_equip_display_fstrs(cell_box, &unmapped_byte_fstrs);
               }
               else if(byte_is_selected)
               {
