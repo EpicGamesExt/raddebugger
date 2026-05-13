@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: post-0.9.25 TODO notes
+//~ rjf: post-0.9.26 TODO notes
 //
 // [ ] "autos" collection, which can be evaluated
 // [ ] show "autos" inline in source code near thread?
@@ -18,7 +18,6 @@
 //
 // [ ] linux/dwarf fixes
 //  [ ] excessive CPU usage on async threads - barrier impl?
-//  [ ] step-over/step-into doesn't step successfully in many cases, just causes a continue
 //  [ ] type views for `MyByte *` example do not match correctly
 //
 // [ ] many threads hitting conditional breakpoints -> causes 0x8000003 exception!
@@ -270,6 +269,7 @@
 //  [x] new project / user should not require picking a path; should just
 //      by default go to "untitled" in default user path
 //  [x] memory view mutation controls
+//  [x] step-over/step-into doesn't step successfully in many cases, just causes a continue
 
 ////////////////////////////////
 //~ rjf: Build Options

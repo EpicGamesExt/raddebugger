@@ -152,7 +152,7 @@ internal B32
 rd_cfg_is_project_filtered(CFG_Node *cfg)
 {
   CFG_Node *project = cfg_node_child_from_string(cfg, str8_lit("project"));
-  B32 result = (project != &cfg_nil_node && !path_match_normalized(rd_state->project_path, project->first->string));
+  B32 result = (project != &cfg_nil_node && project->first->string.size != 0 && !path_match_normalized(rd_state->project_path, project->first->string));
   return result;
 }
 
@@ -2412,11 +2412,7 @@ rd_view_ui(Rng2F32 rect)
                       case RD_EvalSpaceKind_MetaCfg:
                       {
                         CFG_Node *cfg = rd_cfg_from_eval_space(eval.space);
-                        if(str8_match(cfg->string, str8_lit("recent_file"), 0))
-                        {
-                          rd_cmd(RD_CmdKind_Switch, .cfg = cfg->id);
-                        }
-                        else if(str8_match(cfg->string, str8_lit("recent_project"), 0))
+                        if(str8_match(cfg->string, str8_lit("recent_project"), 0))
                         {
                           rd_cmd(RD_CmdKind_OpenRecentProject, .cfg = cfg->id);
                         }
@@ -10346,7 +10342,7 @@ rd_init(CmdLine *cmdln)
     }
     
     // rjf: do initial load of user (project will be loaded by the initial user load if not specified)
-    rd_cmd(RD_CmdKind_OpenUser, .file_path = user_path);
+    rd_cmd(RD_CmdKind_OpenUser, .file_path = user_path, .non_graphical = 1);
     if(project_path.size != 0)
     {
       rd_cmd(RD_CmdKind_OpenProject, .file_path = project_path);
@@ -10557,6 +10553,12 @@ rd_frame(void)
     CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
     for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
     {
+      // rjf: skip debug infos for other projects
+      if(rd_cfg_is_project_filtered(n->v))
+      {
+        continue;
+      }
+      
       // rjf: unpack debug info config
       CFG_Node *di = n->v;
       String8 path = rd_path_from_cfg(di);
@@ -11103,6 +11105,7 @@ rd_frame(void)
       for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
       {
         CFG_Node *di = n->v;
+        if(rd_cfg_is_project_filtered(di)) { continue; }
         String8 path = rd_path_from_cfg(di);
         CFG_Node *timestamp_node = cfg_node_child_from_string(di, str8_lit("timestamp"));
         U64 timestamp = 0;
@@ -11385,7 +11388,6 @@ rd_frame(void)
         str8_lit("file_path_map"),
         str8_lit("type_view"),
         str8_lit("recent_project"),
-        str8_lit("recent_file"),
       };
       for EachElement(cfg_name_idx, evallable_cfg_names)
       {
@@ -11491,6 +11493,10 @@ rd_frame(void)
         CFG_Node *watch_tab = n->v;
         for(CFG_Node *child = watch_tab->first; child != &cfg_nil_node; child = child->next)
         {
+          if(rd_cfg_is_project_filtered(child))
+          {
+            continue;
+          }
           if(str8_match(child->string, str8_lit("watch"), 0))
           {
             CFG_Node *watch = child;
@@ -12248,7 +12254,6 @@ rd_frame(void)
               }
               str8_list_pushf(scratch.arena, &exprs, "query:targets");
               str8_list_pushf(scratch.arena, &exprs, "query:breakpoints");
-              str8_list_pushf(scratch.arena, &exprs, "query:recent_files");
               str8_list_pushf(scratch.arena, &exprs, "query:recent_projects");
               str8_list_pushf(scratch.arena, &exprs, "query:machines");
               str8_list_pushf(scratch.arena, &exprs, "query:processes");
@@ -12630,7 +12635,7 @@ rd_frame(void)
             }
             
             //- rjf: record last-opened user in config directory
-            if(file_is_okay && kind == RD_CmdKind_OpenUser)
+            if(file_is_okay && kind == RD_CmdKind_OpenUser && !rd_regs()->non_graphical)
             {
               rd_cmd(RD_CmdKind_RecordUserAsLastOpened);
             }
@@ -12652,15 +12657,17 @@ rd_frame(void)
                 {
                   if(rd_cfg_is_project_filtered(panel->selected_tab))
                   {
+                    CFG_Node *fallback_tab = &cfg_nil_node;
                     for(CFG_NodePtrNode *tab_n = panel->tabs.first; tab_n != 0; tab_n = tab_n->next)
                     {
                       CFG_Node *tab = tab_n->v;
                       if(!rd_cfg_is_project_filtered(tab))
                       {
-                        rd_cmd(RD_CmdKind_FocusTab, .tab = tab->id);
+                        fallback_tab = tab;
                         break;
                       }
                     }
+                    rd_cmd(RD_CmdKind_FocusTab, .tab = fallback_tab->id);
                   }
                 }
               }
@@ -12712,6 +12719,7 @@ rd_frame(void)
             }
           }break;
           case RD_CmdKind_RecordProjectInUser:
+          if(rd_regs()->file_path.size != 0)
           {
             String8 file_path = rd_regs()->file_path;
             CFG_Node *user = cfg_node_child_from_string(cfg_node_root(), str8_lit("user"));
@@ -13601,7 +13609,6 @@ rd_frame(void)
             FileProperties props = properties_from_file_path(path);
             if(props.created != 0)
             {
-              rd_cmd(RD_CmdKind_RecordFileInProject);
               rd_cmd(RD_CmdKind_BuildTab, .string = str8_lit("pending"), .expr = rd_eval_string_from_file_path(scratch.arena, path));
             }
             else
@@ -13611,17 +13618,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_Switch:
           {
-            String8 path = {0};
-            if(path.size == 0)
-            {
-              CFG_Node *recent_file = cfg_node_from_id(rd_regs()->cfg);
-              CFG_Node *path_root = cfg_node_child_from_string(recent_file, str8_lit("path"));
-              path = path_root->first->string;
-            }
-            if(path.size == 0)
-            {
-              path = rd_regs()->file_path;
-            }
+            String8 path = rd_regs()->file_path;
             rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0, .force_focus = 1, .prefer_new_tab = 1);
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
@@ -13653,35 +13650,6 @@ rd_frame(void)
                   break;
                 }
               }
-            }
-          }break;
-          case RD_CmdKind_RecordFileInProject:
-          if(rd_regs()->file_path.size != 0)
-          {
-            String8 path = rd_regs()->file_path;
-            CFG_Node *project = cfg_node_child_from_string(cfg_node_root(), str8_lit("project"));
-            CFG_NodePtrList recent_files = cfg_node_child_list_from_string(scratch.arena, project, str8_lit("recent_file"));
-            CFG_Node *recent_file = &cfg_nil_node;
-            for(CFG_NodePtrNode *n = recent_files.first; n != 0; n = n->next)
-            {
-              if(path_match_normalized(rd_path_from_cfg(n->v), path))
-              {
-                recent_file = n->v;
-                break;
-              }
-            }
-            if(recent_file == &cfg_nil_node)
-            {
-              recent_file = cfg_node_new(rd_state->cfg, project, str8_lit("recent_file"));
-              CFG_Node *path_root = cfg_node_new(rd_state->cfg, recent_file, str8_lit("path"));
-              cfg_node_new(rd_state->cfg, path_root, path);
-            }
-            cfg_node_unhook(rd_state->cfg, project, recent_file);
-            cfg_node_insert_child(rd_state->cfg, project, &cfg_nil_node, recent_file);
-            recent_files = cfg_node_child_list_from_string(scratch.arena, project, str8_lit("recent_file"));
-            if(recent_files.count > 256)
-            {
-              cfg_node_release(rd_state->cfg, recent_files.last->v);
             }
           }break;
           case RD_CmdKind_ShowFileInExplorer:
@@ -14728,6 +14696,7 @@ rd_frame(void)
                   cfg_node_new_replace(rd_state->cfg, cfg_node_child_from_string_or_alloc(rd_state->cfg, dst_tab, str8_lit("cursor_column")), str8_lit("1"));
                   cfg_node_new_replace(rd_state->cfg, cfg_node_child_from_string_or_alloc(rd_state->cfg, dst_tab, str8_lit("mark_line")), str8_lit("1"));
                   cfg_node_new_replace(rd_state->cfg, cfg_node_child_from_string_or_alloc(rd_state->cfg, dst_tab, str8_lit("mark_column")), str8_lit("1"));
+                  cfg_node_new_replace(rd_state->cfg, cfg_node_child_from_string_or_alloc(rd_state->cfg, dst_tab, str8_lit("project")), rd_state->project_path);
                 }
                 else if(dst_panel != &cfg_nil_panel_node && dst_tab == &cfg_nil_node)
                 {
@@ -14739,6 +14708,7 @@ rd_frame(void)
                     CFG_Node *auto_root = cfg_node_new(rd_state->cfg, dst_tab, str8_lit("auto"));
                     cfg_node_new(rd_state->cfg, auto_root, str8_lit("1"));
                   }
+                  cfg_node_new_replace(rd_state->cfg, cfg_node_child_from_string_or_alloc(rd_state->cfg, dst_tab, str8_lit("project")), rd_state->project_path);
                 }
                 
                 // rjf: determine if we need a contain or center
@@ -14765,9 +14735,6 @@ rd_frame(void)
                   }
                   rd_cmd(cursor_snap_kind);
                 }
-                
-                // rjf: record
-                rd_cmd(RD_CmdKind_RecordFileInProject, .file_path = file_path);
               }
               
               // rjf: snap to disasm
@@ -15242,10 +15209,12 @@ rd_frame(void)
           //- rjf: debug infos
           case RD_CmdKind_LoadDebugInfo:
           {
-            CFG_Node *project = cfg_node_child_from_string(cfg_node_root(), str8_lit("project"));
-            CFG_Node *di = cfg_node_new(rd_state->cfg, project, str8_lit("debug_info"));
+            CFG_Node *user = cfg_node_child_from_string(cfg_node_root(), str8_lit("user"));
+            CFG_Node *di = cfg_node_new(rd_state->cfg, user, str8_lit("debug_info"));
             CFG_Node *path = cfg_node_new(rd_state->cfg, di, str8_lit("path"));
             cfg_node_new(rd_state->cfg, path, rd_regs()->file_path);
+            CFG_Node *project = cfg_node_new(rd_state->cfg, di, str8_lit("project"));
+            cfg_node_new(rd_state->cfg, project, rd_state->project_path);
           }break;
           case RD_CmdKind_UnloadDebugInfo:
           {
@@ -15411,6 +15380,10 @@ rd_frame(void)
             CFG_Node *existing_watch = &cfg_nil_node;
             for(CFG_Node *child = watch_tab->first; child != &cfg_nil_node; child = child->next)
             {
+              if(rd_cfg_is_project_filtered(child))
+              {
+                continue;
+              }
               if(str8_match(child->string, str8_lit("watch"), 0) && str8_match(child->first->string, rd_regs()->string, 0))
               {
                 existing_watch = child;
@@ -16358,6 +16331,10 @@ rd_frame(void)
             CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
             for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
             {
+              if(rd_cfg_is_project_filtered(n->v))
+              {
+                continue;
+              }
               cfg_node_release(rd_state->cfg, n->v);
             }
           }
@@ -16375,6 +16352,10 @@ rd_frame(void)
             for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
             {
               CFG_Node *di = n->v;
+              if(rd_cfg_is_project_filtered(di))
+              {
+                continue;
+              }
               String8 path = rd_path_from_cfg(di);
               if(str8_match(path, new_path, 0))
               {
@@ -16385,12 +16366,14 @@ rd_frame(void)
             }
             if(!path_found)
             {
-              CFG_Node *project = cfg_node_child_from_string(cfg_node_root(), str8_lit("project"));
-              CFG_Node *di = cfg_node_new(rd_state->cfg, project, str8_lit("debug_info"));
+              CFG_Node *user = cfg_node_child_from_string(cfg_node_root(), str8_lit("user"));
+              CFG_Node *di = cfg_node_new(rd_state->cfg, user, str8_lit("debug_info"));
               CFG_Node *path_root = cfg_node_new(rd_state->cfg, di, str8_lit("path"));
               CFG_Node *timestamp_root = cfg_node_new(rd_state->cfg, di, str8_lit("timestamp"));
+              CFG_Node *project_root = cfg_node_new(rd_state->cfg, di, str8_lit("project"));
               cfg_node_new(rd_state->cfg, path_root, new_path);
               cfg_node_newf(rd_state->cfg, timestamp_root, "%I64u", debug_info_path->timestamp);
+              cfg_node_new(rd_state->cfg, project_root, rd_state->project_path);
             }
             else
             {

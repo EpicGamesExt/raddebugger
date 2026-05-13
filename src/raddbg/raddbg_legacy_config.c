@@ -43,8 +43,7 @@ rd_cfg_tree_list_from_string__pre_0_9_16(Arena *arena, String8 file_path, String
         }
         
         //- rjf: recent files / projects
-        if(str8_match(tln->string, str8_lit("recent_file"), 0) ||
-           str8_match(tln->string, str8_lit("recent_project"), 0))
+        if(str8_match(tln->string, str8_lit("recent_project"), 0))
         {
           CFG_Node *dst_root = cfg_node_new(rd_state->cfg, &cfg_nil_node, tln->string);
           cfg_node_ptr_list_push(arena, &result, dst_root);

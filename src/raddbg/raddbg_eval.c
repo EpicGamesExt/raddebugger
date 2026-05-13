@@ -760,7 +760,18 @@ E_TYPE_IREXT_FUNCTION_DEF(cfgs_slice)
     String8 cfg_name = rd_singular_from_code_name_plural(type->name);
     
     //- rjf: gather cfgs
-    CFG_NodePtrList cfgs_list = cfg_node_top_level_list_from_string(scratch.arena, cfg_name);
+    CFG_NodePtrList cfgs_list = {0};
+    {
+      CFG_NodePtrList cfgs_list__all = cfg_node_top_level_list_from_string(scratch.arena, cfg_name);
+      for EachNode(n, CFG_NodePtrNode, cfgs_list__all.first)
+      {
+        if(rd_cfg_is_project_filtered(n->v))
+        {
+          continue;
+        }
+        cfg_node_ptr_list_push(scratch.arena, &cfgs_list, n->v);
+      }
+    }
     
     //- rjf: gather commands
     String8List cmds_list = {0};
@@ -851,6 +862,10 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_slice)
       for EachIndex(idx, ext->cfgs.count)
       {
         CFG_Node *cfg = ext->cfgs.v[idx];
+        if(rd_cfg_is_project_filtered(cfg))
+        {
+          continue;
+        }
         DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, cfg, 1);
         String8 string = dr_string_from_fstrs(scratch.arena, &fstrs);
         FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, filter, string);
@@ -1198,15 +1213,16 @@ E_TYPE_IREXT_FUNCTION_DEF(watches)
     E_Interpretation interpret = e_interpret(bytecode);
     E_Space space = interpret.space;
     CFG_Node *target = rd_cfg_from_eval_space(space);
-    CFG_NodePtrList env_strings = {0};
+    CFG_NodePtrList cfgs = {0};
     for(CFG_Node *child = target->first; child != &cfg_nil_node; child = child->next)
     {
+      if(rd_cfg_is_project_filtered(child)) {continue;}
       if(str8_match(child->string, str8_lit("watch"), 0))
       {
-        cfg_node_ptr_list_push(scratch.arena, &env_strings, child);
+        cfg_node_ptr_list_push(scratch.arena, &cfgs, child);
       }
     }
-    accel->cfgs = cfg_node_ptr_array_from_list(arena, &env_strings);
+    accel->cfgs = cfg_node_ptr_array_from_list(arena, &cfgs);
     scratch_end(scratch);
   }
   E_IRExt result = {accel};
