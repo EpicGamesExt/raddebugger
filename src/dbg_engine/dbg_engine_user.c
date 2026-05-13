@@ -767,7 +767,6 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
       RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
       if(rdi != &rdi_parsed_nil)
       {
-        result.good_line_info = 1;
         RDI_Scope *scope = rdi_scope_from_voff(rdi, ip_voff);
         U64 all_scope_voffs_count = 0;
         U64 *all_scope_voffs = rdi_table_from_name(rdi, ScopeVOffData, &all_scope_voffs_count);
@@ -780,6 +779,7 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
     }
     
     // rjf: place traps at all possible exit points of all scope's ranges
+    result.good_read = 1;
     for EachNode(n, Rng1U64Node, scope_voff_rngs.first)
     {
       Rng1U64 voff_range = n->v;
@@ -850,6 +850,10 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
       result.good_read = 0;
     }
     
+    // NOTE(rjf): we always want to support missing line info for "step out", because
+    // we should always be able to fall back to just using the unwind, so just always
+    // mark this bit as a success.
+    result.good_line_info = 1;
     access_close(access);
     scratch_end(scratch);
   }
