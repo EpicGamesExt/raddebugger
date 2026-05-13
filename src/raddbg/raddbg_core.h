@@ -618,6 +618,7 @@ internal Vec4F32 rd_color_from_cfg(CFG_Node *cfg);
 
 internal B32 rd_disabled_from_cfg(CFG_Node *cfg);
 internal RD_Location rd_location_from_cfg(CFG_Node *cfg);
+internal String8 rd_name_from_cfg(CFG_Node *cfg);
 internal String8 rd_label_from_cfg(CFG_Node *cfg);
 internal String8 rd_expr_from_cfg(CFG_Node *cfg);
 internal String8 rd_path_from_cfg(CFG_Node *cfg);

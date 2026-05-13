@@ -779,7 +779,7 @@ RD_VocabTable:
   //- rjf: @schema recent_project
   {
     recent_project, 0,
-    ```x:{'path':path}```,
+    ```x:{'path':path, 'name':string}```,
   }
   
   //- rjf: @schema machine

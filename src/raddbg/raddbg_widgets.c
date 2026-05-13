@@ -15,6 +15,7 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
     B32 is_disabled = rd_disabled_from_cfg(cfg);
     RD_Location loc = rd_location_from_cfg(cfg);
     D_Target target = rd_target_from_cfg(scratch.arena, cfg);
+    String8 name_string = rd_name_from_cfg(cfg);
     String8 label_string = rd_label_from_cfg(cfg);
     String8 expr_string = rd_expr_from_cfg(cfg);
     String8 collection_name = {0};
@@ -163,10 +164,10 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
       }
     }
     
-    //- rjf: push label
-    if(label_string.size != 0)
+    //- rjf: push name
+    if(name_string.size != 0)
     {
-      dr_fstrs_push_new(arena, &result, &params, label_string, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
+      dr_fstrs_push_new(arena, &result, &params, name_string);
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }

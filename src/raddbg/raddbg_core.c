@@ -228,6 +228,14 @@ rd_location_from_cfg(CFG_Node *cfg)
 }
 
 internal String8
+rd_name_from_cfg(CFG_Node *cfg)
+{
+  CFG_Node *name_root = cfg_node_child_from_string(cfg, str8_lit("name"));
+  String8 result = name_root->first->string;
+  return result;
+}
+
+internal String8
 rd_label_from_cfg(CFG_Node *cfg)
 {
   CFG_Node *label_root = cfg_node_child_from_string(cfg, str8_lit("label"));
@@ -12688,6 +12696,16 @@ rd_frame(void)
                 }
               }
             }
+            
+            //- rjf: if just opened project -> set new current path
+            if(kind == RD_CmdKind_OpenProject)
+            {
+              String8 new_current_dir = str8_chop_last_slash(rd_regs()->file_path);
+              if(new_current_dir.size != 0)
+              {
+                rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = new_current_dir);
+              }
+            }
           }break;
           case RD_CmdKind_NewUser:
           {
@@ -12754,6 +12772,13 @@ rd_frame(void)
               recent_project = cfg_node_new(rd_state->cfg, user, str8_lit("recent_project"));
               CFG_Node *path_root = cfg_node_new(rd_state->cfg, recent_project, str8_lit("path"));
               cfg_node_new(rd_state->cfg, path_root, file_path);
+            }
+            {
+              CFG_Node *root = cfg_node_root();
+              CFG_Node *project = cfg_node_child_from_string(root, s("project"));
+              CFG_Node *name = cfg_node_child_from_string(project, s("name"));
+              CFG_Node *recent_project_name_root = cfg_node_child_from_string_or_alloc(rd_state->cfg, recent_project, s("name"));
+              cfg_node_new_replace(rd_state->cfg, recent_project_name_root, name->first->string);
             }
             cfg_node_unhook(rd_state->cfg, user, recent_project);
             cfg_node_insert_child(rd_state->cfg, user, &cfg_nil_node, recent_project);

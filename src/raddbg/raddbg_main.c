@@ -9,8 +9,6 @@
 // [ ] memory_size(...) view for quickly evaluating memory sizes
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
 //
-// [ ] external window focusing bugs
-//
 // [ ] PDB -> RDI conversion memory usage
 // [ ] more things should move to user data, but project-tagged - like
 //     recent files, watches?, etc.
@@ -44,7 +42,7 @@
 //
 //- jeff notes
 // [ ] focus changing on f10/f11? may be related to auto_run/auto_step - look at a bin/jeffr
-// [ ] option to prefer addresses first with string ptrs
+//     auto_step, launching terminal, terminal steals focus from debugger...
 //
 //- urgent fixes
 // [ ] (use msvc assert as an example) show fastfail exception info (code, name, etc.) - comes from ExceptionInformation @fastfail
@@ -59,7 +57,6 @@
 // [ ] "skip breakpoint, run to source", when stopped at a non-source location
 // [ ] adjust menu bar rendering when not focused
 // [ ] treat int 0x29 similarly to int3
-// [ ] auto_step, launching terminal, terminal steals focus from debugger...
 //
 //- memory view
 // [ ] have smaller visible range than entire memory space, within some bounds (e.g. 64KB)
@@ -269,6 +266,8 @@
 // [x] eval space reads/writes -> needs staleness/badness info - replace ctrl layer, to apply to all spaces
 // [x] no selected thread -> causing evaluation failures, e.g. with go-to-definition
 // [x] single-line viz for pointers w/ bad (unmapped) addresses
+// [x] option to prefer addresses first with string ptrs
+// [x] external window focusing bugs
 
 ////////////////////////////////
 //~ rjf: Build Options

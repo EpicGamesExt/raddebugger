@@ -460,7 +460,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("debug_info"), 0, str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(load_debug_info)\nx:\n{\n  'path': @no_relativize path,\n  @query 'guid': string,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("file_path_map"), 0, str8_lit_comp("@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @no_relativize path, 'dest': @no_relativize path}")},
 {str8_lit_comp("type_view"), 0, str8_lit_comp("@collection_commands(add_type_view) @row_commands(remove_cfg) x:{'type':expr_string, 'expr':expr_string}")},
-{str8_lit_comp("recent_project"), 0, str8_lit_comp("x:{'path':path}")},
+{str8_lit_comp("recent_project"), 0, str8_lit_comp("x:{'path':path, 'name':string}")},
 {str8_lit_comp("machine"), 0, str8_lit_comp("x:{'label':code_string, @no_expand 'active':bool, 'unattached_processes':set, 'processes':set}")},
 {str8_lit_comp("process"), 0, str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'modules':set, 'threads':set}")},
 {str8_lit_comp("module"), 0, str8_lit_comp("x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}")},
