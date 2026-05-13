@@ -68,6 +68,10 @@ wm_init(void)
       lnx_wm_state->cursors[map[idx].cursor] = XCreateFontCursor(lnx_wm_state->display, map[idx].id);
     }
   }
+
+  // create wakeup event for polling
+  os_lnx_gfx_state->wakeup_fd = eventfd(0, EFD_CLOEXEC);
+  Assert(os_lnx_gfx_state->wakeup_fd > 0);
 }
 
 ////////////////////////////////
@@ -398,21 +402,42 @@ wm_dpi_from_monitor(WM_Monitor monitor)
 internal void
 wm_send_wakeup_event(void)
 {
-  // TODO(rjf)
+  U64 dummy = 1;
+  ssize_t size = OS_LNX_RETRY_ON_EINTR(write(os_lnx_gfx_state->wakeup_fd, &dummy, sizeof(dummy)));
+  Assert(size == sizeof(dummy));
 }
 
 internal WM_EventList
 wm_get_events(Arena *arena, B32 wait)
 {
   WM_EventList evts = {0};
-  for(;XPending(lnx_wm_state->display) > 0 || (wait && evts.count == 0);)
+  for(;;)
   {
-    XEvent evt = {0};
-    XNextEvent(lnx_wm_state->display, &evt);
-    B32 set_mouse_cursor = 0;
-    switch(evt.type)
+    if(XPending(os_lnx_gfx_state->display) == 0)
     {
-      default:{}break;
+      struct pollfd poll_fds[2] =
+      {
+        { .fd = ConnectionNumber(os_lnx_gfx_state->display), .events = POLLIN },
+        { .fd = os_lnx_gfx_state->wakeup_fd,                 .events = POLLIN },
+      };
+      int timeout = wait && evts.count == 0 ? -1 : 0;
+      int poll_status = poll(poll_fds, ArrayCount(poll_fds), timeout);
+      Assert(poll_status >= 0);
+      if(poll_fds[1].revents & POLLIN)
+      {
+        U64 dummy = 0;
+        read(os_lnx_gfx_state->wakeup_fd, &dummy, sizeof(dummy));
+        wait = 0;
+      }
+    }
+    while(XPending(os_lnx_gfx_state->display))
+    {
+      XEvent evt = {0};
+      XNextEvent(os_lnx_gfx_state->display, &evt);
+      B32 set_mouse_cursor = 0;
+      switch(evt.type)
+      {
+        default:{}break;
       
       //- rjf: key presses/releases
       case KeyPress:
@@ -617,20 +642,22 @@ wm_get_events(Arena *arena, B32 wait)
           }
         }
       }break;
-    }
-    if(set_mouse_cursor)
-    {
-      Window root_window = 0;
-      Window child_window = 0;
-      int root_rel_x = 0;
-      int root_rel_y = 0;
-      int child_rel_x = 0;
-      int child_rel_y = 0;
-      unsigned int mask = 0;
-      if(XQueryPointer(lnx_wm_state->display, XDefaultRootWindow(lnx_wm_state->display), &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
+      }
+      
+      if(set_mouse_cursor)
       {
-        XDefineCursor(lnx_wm_state->display, root_window, lnx_wm_state->cursors[lnx_wm_state->last_set_cursor]);
-        XFlush(lnx_wm_state->display);
+        Window root_window = 0;
+        Window child_window = 0;
+        int root_rel_x = 0;
+        int root_rel_y = 0;
+        int child_rel_x = 0;
+        int child_rel_y = 0;
+        unsigned int mask = 0;
+        if(XQueryPointer(os_lnx_gfx_state->display, XDefaultRootWindow(os_lnx_gfx_state->display), &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
+        {
+          XDefineCursor(os_lnx_gfx_state->display, root_window, os_lnx_gfx_state->cursors[os_lnx_gfx_state->last_set_cursor]);
+          XFlush(os_lnx_gfx_state->display);
+        }
       }
     }
   }

@@ -13,6 +13,8 @@
 #include <X11/extensions/sync.h>
 #include <X11/keysym.h>
 #include <X11/keysymdef.h>
+#include <poll.h>
+#include <sys/eventfd.h>
 
 ////////////////////////////////
 //~ rjf: Window State
@@ -46,6 +48,7 @@ struct LNX_WM_State
   Cursor cursors[WM_Cursor_COUNT];
   WM_Cursor last_set_cursor;
   WM_SystemInfo gfx_info;
+  int wakeup_fd;
 };
 
 ////////////////////////////////
