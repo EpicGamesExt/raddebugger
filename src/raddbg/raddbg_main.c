@@ -4,6 +4,9 @@
 ////////////////////////////////
 //~ rjf: post-0.9.26 TODO notes
 //
+// [ ] single-line bad address visualization
+// [ ] memory view show unmapped memory as non-zeros
+//
 // [ ] "autos" collection, which can be evaluated
 // [ ] show "autos" inline in source code near thread?
 // [ ] memory_size(...) view for quickly evaluating memory sizes

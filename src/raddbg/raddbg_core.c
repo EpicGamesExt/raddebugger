@@ -12142,6 +12142,7 @@ rd_frame(void)
               CFG_NodePtrList bps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
               for(CFG_NodePtrNode *n = bps.first; n != 0; n = n->next)
               {
+                if(rd_cfg_is_project_filtered(n->v)){ continue; }
                 CFG_Node *hit_count = cfg_node_child_from_string_or_alloc(rd_state->cfg, n->v, str8_lit("hit_count"));
                 cfg_node_new_replace(rd_state->cfg, hit_count, str8_lit("0"));
               }
@@ -15110,6 +15111,7 @@ rd_frame(void)
               CFG_NodePtrList bps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
               for(CFG_NodePtrNode *n = bps.first; n != 0; n = n->next)
               {
+                if(rd_cfg_is_project_filtered(n->v)){ continue; }
                 CFG_Node *bp = n->v;
                 CFG_Node *cnd = cfg_node_child_from_string(bp, str8_lit("condition"));
                 RD_Location loc = rd_location_from_cfg(bp);
@@ -15127,8 +15129,10 @@ rd_frame(void)
               }
               if(!already_exists)
               {
-                CFG_Node *project = cfg_node_child_from_string(cfg_node_root(), str8_lit("project"));
-                CFG_Node *bp = cfg_node_new(rd_state->cfg, project, str8_lit("breakpoint"));
+                CFG_Node *user = cfg_node_child_from_string(cfg_node_root(), str8_lit("user"));
+                CFG_Node *bp = cfg_node_new(rd_state->cfg, user, str8_lit("breakpoint"));
+                CFG_Node *project = cfg_node_new(rd_state->cfg, bp, str8_lit("project"));
+                cfg_node_new(rd_state->cfg, project, rd_state->project_path);
                 rd_cmd(RD_CmdKind_RelocateCfg, .cfg = bp->id);
                 if(rd_regs()->do_lister && !rd_regs()->non_graphical)
                 {
@@ -15151,6 +15155,7 @@ rd_frame(void)
             CFG_NodePtrList bps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
             for(CFG_NodePtrNode *n = bps.first; n != 0; n = n->next)
             {
+              if(rd_cfg_is_project_filtered(n->v)){ continue; }
               cfg_node_release(rd_state->cfg, n->v);
             }
           }break;
@@ -15159,6 +15164,7 @@ rd_frame(void)
             CFG_NodePtrList list = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
             for(CFG_NodePtrNode *n = list.first; n != 0; n = n->next)
             {
+              if(rd_cfg_is_project_filtered(n->v)){ continue; }
               String8 string = cfg_string_from_tree(rd_state->cmd_output_arena, rd_state->cfg_schema_table, str8_zero(), n->v);
               str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, string);
             }
@@ -16156,6 +16162,7 @@ rd_frame(void)
       U64 idx = 0;
       for(CFG_NodePtrNode *n = bp_cfgs.first; n != 0; n = n->next)
       {
+        if(rd_cfg_is_project_filtered(n->v)){ continue; }
         CFG_Node *src_bp = n->v;
         B32 src_bp_is_disabled = rd_disabled_from_cfg(src_bp);
         if(src_bp_is_disabled)

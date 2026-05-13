@@ -255,6 +255,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       CFG_NodePtrList bps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
       for(CFG_NodePtrNode *n = bps.first; n != 0; n = n->next)
       {
+        if(rd_cfg_is_project_filtered(n->v)){ continue; }
         CFG_Node *bp = n->v;
         RD_Location loc = rd_location_from_cfg(bp);
         if(visible_line_num_range.min <= loc.pt.line && loc.pt.line <= visible_line_num_range.max)
@@ -379,6 +380,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       CFG_NodePtrList bps = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
       for(CFG_NodePtrNode *n = bps.first; n != 0; n = n->next)
       {
+        if(rd_cfg_is_project_filtered(n->v)){ continue; }
         CFG_Node *bp = n->v;
         RD_Location loc = rd_location_from_cfg(bp);
         E_Value loc_value = e_value_from_string(loc.expr);
