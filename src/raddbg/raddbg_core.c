@@ -10553,6 +10553,7 @@ rd_frame(void)
       CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, window);
       for(CFG_PanelNode *p = panel_tree.root; p != &cfg_nil_panel_node; p = cfg_panel_node_rec__depth_first_pre(panel_tree.root, p).next)
       {
+        CFG_Node *first_unfiltered_tab = &cfg_nil_node;
         for(CFG_NodePtrNode *n = p->tabs.first; n != 0; n = n->next)
         {
           CFG_Node *tab = n->v;
@@ -10560,7 +10561,15 @@ rd_frame(void)
           {
             continue;
           }
+          if(first_unfiltered_tab == &cfg_nil_node)
+          {
+            first_unfiltered_tab = tab;
+          }
           rd_view_state_from_cfg(tab);
+        }
+        if(p->selected_tab == &cfg_nil_node)
+        {
+          rd_cmd(RD_CmdKind_FocusTab, .panel = p->cfg->id, .tab = first_unfiltered_tab->id);
         }
       }
     }
@@ -12691,7 +12700,7 @@ rd_frame(void)
                         break;
                       }
                     }
-                    rd_cmd(RD_CmdKind_FocusTab, .tab = fallback_tab->id);
+                    rd_cmd(RD_CmdKind_FocusTab, .panel = panel->cfg->id, .tab = fallback_tab->id);
                   }
                 }
               }
@@ -13408,6 +13417,10 @@ rd_frame(void)
           {
             CFG_Node *tab = cfg_node_from_id(rd_regs()->tab);
             CFG_Node *panel = tab->parent;
+            if(panel == &cfg_nil_node)
+            {
+              panel = cfg_node_from_id(rd_regs()->panel);
+            }
             CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, panel);
             CFG_PanelNode *panel_node = cfg_panel_node_from_tree_cfg(panel_tree.root, panel);
             CFG_Node *selection_cfg = &cfg_nil_node;
@@ -13417,6 +13430,7 @@ rd_frame(void)
               if(selection_cfg == &cfg_nil_node)
               {
                 selection_cfg = tab_selection_cfg;
+                cfg_node_unhook(rd_state->cfg, n->v, selection_cfg);
               }
               else for(CFG_Node *s = tab_selection_cfg; s != &cfg_nil_node; s = cfg_node_child_from_string(n->v, str8_lit("selected")))
               {
@@ -13428,7 +13442,14 @@ rd_frame(void)
               selection_cfg = cfg_node_alloc(rd_state->cfg);
               cfg_node_equip_string(rd_state->cfg, selection_cfg, str8_lit("selected"));
             }
-            cfg_node_insert_child(rd_state->cfg, tab, &cfg_nil_node, selection_cfg);
+            if(tab != &cfg_nil_node)
+            {
+              cfg_node_insert_child(rd_state->cfg, tab, &cfg_nil_node, selection_cfg);
+            }
+            else
+            {
+              cfg_node_release(rd_state->cfg, selection_cfg);
+            }
           }break;
           case RD_CmdKind_NextTab:
           {

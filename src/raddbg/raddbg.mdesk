@@ -140,6 +140,7 @@ RD_VocabTable:
   {vtx                  _                           "Vertex Buffer"             _                     Null                                           }
   {vtx_size             _                           "Vertex Buffer Size"        _                     Null                                           }
   {label                _                           "Label"                     _                     Null                                           }
+  {name                 _                           "Name"                      _                     Null                                           }
   {thread               _                           "Thread"                    _                     Thread                                         }
   {threads              ""                          "Threads"                   ""                    Threads                                        }
   {process              processes                   "Process"                   "Processes"           Scheduler                                      }
