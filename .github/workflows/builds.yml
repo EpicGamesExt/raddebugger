@@ -94,7 +94,7 @@ jobs:
       - name: Run
         shell: bash
         run: |
-          CC="${{ matrix.compiler }}" ./run.sh "${{ matrix.compiler }}" "${{ matrix.mode }}" -- --gen_crash_dump
+          CC="${{ matrix.compiler }}" ./run.sh clang "${{ matrix.mode }}" -- --gen_crash_dump
       - name: Upload Artifacts
         if: failure()
         uses: actions/upload-artifact@v7
