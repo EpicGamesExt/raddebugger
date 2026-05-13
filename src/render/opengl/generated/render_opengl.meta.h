@@ -190,7 +190,7 @@ str8_lit_comp(
 "uniform vec4 rect;\n"
 "uniform vec4 corner_radii_px;\n"
 "uniform vec2 viewport_size;\n"
-"uniform uint blur_count;\n"
+"uniform int blur_count;\n"
 "\n"
 "out vec2 texcoord;\n"
 "out vec2 sdf_sample_pos;\n"
