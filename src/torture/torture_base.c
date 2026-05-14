@@ -176,4 +176,169 @@ TEST(match_wildcard)
   T_Ok(str8_match_wildcard(str8_lit("a"),   str8_lit("?*?"), 0) == 0);
 }
 
+TEST(hash_map)
+{
+  {
+    HashMap hm = {0};
+
+    U64 test_count = 256;
+    for EachIndex(i, test_count) { hash_map_push_u64_u64(arena, &hm, i, i*2); }
+
+    // test tombstone reuse
+    for (U64 i = 10; i < test_count; ++i) {
+      HashMapNode *test_node = hash_map_search(&hm, hash_map_hasher(str8_struct(&i)), (HashMapKey){ .key_u64 = i }, hash_map_match_u64);
+      T_Ok(hash_map_purge_u64(&hm, i) == 1);
+      T_Ok(hash_map_push_u64_u64(arena, &hm, i, 10) == test_node);
+    }
+
+    // delete some items and after search them
+    for (U64 i = 0; i < 10; ++i) {
+      T_Ok(hash_map_purge_u64(&hm, i));
+    }
+    T_Ok(hm.tombstone_count == 10);
+    for (U64 i = 0; i < 10; ++i) {
+      T_Ok(hash_map_search_u64_raw(&hm, i) == 0);
+    }
+
+    // extract pairs and test sorting
+    HashMapKeyValue *pairs = key_value_from_hash_map(arena, &hm);
+    sort_hash_map_key_value_u64(pairs, hm.count);
+    for (U64 i = 1; i < hm.count; ++i) {
+      T_Ok(pairs[i-1].key.key_u64 < pairs[i].key.key_u64);
+    }
+
+    // did purge put all the nodes on free list?
+    hash_map_purge(&hm);
+    U64 free_list_count = 0;
+    for (HashMapNode *n = hm.free_list; n != 0; n = n->next) { free_list_count += 1; }
+    T_Ok(free_list_count == test_count);
+  }
+
+  // test search through tombstones
+  {
+    HashMap hm = {0};
+
+    U64 hash = 12345;
+
+    hash_map_push(arena, &hm, hash, (HashMapKeyValue){ .key = { .key_u64 = 1 }, .value = { .value_u64 = 10 } }, hash_map_match_u64);
+    hash_map_push(arena, &hm, hash, (HashMapKeyValue){ .key = { .key_u64 = 2 }, .value = { .value_u64 = 20 } }, hash_map_match_u64);
+    hash_map_push(arena, &hm, hash, (HashMapKeyValue){ .key = { .key_u64 = 3 }, .value = { .value_u64 = 30 } }, hash_map_match_u64);
+
+    T_Ok(hash_map_purge_u64(&hm, 1));
+
+    T_Ok(hash_map_search(&hm, hash, (HashMapKey){ .key_u64 = 2 }, hash_map_match_u64)->v.value.value_u64 == 20);
+    T_Ok(hash_map_search(&hm, hash, (HashMapKey){ .key_u64 = 3 }, hash_map_match_u64)->v.value.value_u64 == 30);
+  }
+
+  // interleaved purges
+  {
+    HashMap hm = {0};
+    for EachIndex(round, 100) {
+      for EachIndex(i, 256) { hash_map_push_u64_u64(arena, &hm, i, round); }
+      for (U64 i = 0; i < 256; i += 2) { hash_map_purge_u64(&hm, i); }
+      for (U64 i = 0; i < 256; i += 2) { hash_map_push_u64_u64(arena, &hm, i, round + 1); }
+
+      T_Ok(hm.count == 256);
+      T_Ok(hm.tombstone_count == 0);
+    }
+
+    for EachIndex(i, 100) {
+      T_Ok(hash_map_purge_u64(&hm, 123123123 + i) == 0);
+    }
+  }
+
+  // empty hash map test
+  {
+    HashMap hm = {0};
+
+    T_Ok(hash_map_search_u64_raw(&hm, 123) == 0);
+    T_Ok(hash_map_purge_u64(&hm, 123) == 0);
+
+    HashMapKeyValue *pairs = key_value_from_hash_map(arena, &hm);
+    T_Ok(pairs == 0 || hm.count == 0);
+
+    hash_map_purge(&hm);
+    T_Ok(hm.count == 0);
+    T_Ok(hm.tombstone_count == 0);
+  }
+
+  // heavy collision
+  {
+    HashMap hm = {0};
+
+    U64 hash = 12345;
+    U64 count = 1024;
+
+    for EachIndex(i, count) {
+      hash_map_push(arena, &hm, hash, (HashMapKeyValue){ .key = { .key_u64 = i }, .value = { .value_u64 = i*3 } }, hash_map_match_u64);
+    }
+
+    for EachIndex(i, count) {
+      T_Ok(hash_map_search(&hm, hash, (HashMapKey){ .key_u64 = i }, hash_map_match_u64)->v.value.value_u64 == i*3);
+    }
+  }
+
+  // duplicate key test
+  {
+    HashMap hm = {0};
+
+    U64 a = 1;
+    U64 b = 2;
+
+    HashMapNode *n0 = hash_map_push_u64_u64(arena, &hm, 1, a);
+    HashMapNode *n1 = hash_map_push_u64_u64(arena, &hm, 1, b);
+
+    T_Ok(hm.count == 1);
+    T_Ok(n0 == n1);
+    U64 test = *hash_map_search_u64_u64(&hm, 1);
+    T_Ok(test != b);
+  }
+
+  // test paths
+  {
+    HashMap hm = {0};
+
+    U64 foo = 0;
+    U64 bar = 1;
+
+    hash_map_push_path_raw(arena, &hm, str8_lit("c:/DEVEL/test"),   &foo);
+    hash_map_push_path_raw(arena, &hm, str8_lit("c:\\DEVEL\\test"), &foo);
+    hash_map_push_path_raw(arena, &hm, str8_lit("c:/devel\\test"),  &foo);
+
+    hash_map_push_path_raw(arena, &hm, str8_lit("/mnt/devel"), &bar);
+    hash_map_push_path_raw(arena, &hm, str8_lit("/MNT/devel"), &bar);
+
+    T_Ok(hm.count == 2);
+
+    T_Ok(hash_map_search_path_raw(&hm, str8_lit("c:/devel/test"))   == &foo);
+    T_Ok(hash_map_search_path_raw(&hm, str8_lit("c:\\devel\\TEST")) == &foo);
+    T_Ok(hash_map_search_path_raw(&hm, str8_lit("/mnt/devel")) == &bar);
+    T_Ok(hash_map_search_path_raw(&hm, str8_lit("/MNT/DEVEL")) == &bar);
+  }
+
+  // test strings
+  {
+    HashMap hm = {0};
+
+    U64 foo = 0;
+    U64 bar = 1;
+
+    hash_map_push_string_raw(arena, &hm, str8_lit("c:/DEVEL/test"),   &foo);
+    hash_map_push_string_raw(arena, &hm, str8_lit("c:\\DEVEL\\test"), &foo);
+    hash_map_push_string_raw(arena, &hm, str8_lit("c:/devel\\test"),  &foo);
+
+    hash_map_push_string_raw(arena, &hm, str8_lit("/mnt/devel"), &bar);
+    hash_map_push_string_raw(arena, &hm, str8_lit("/MNT/devel"), &bar);
+
+    T_Ok(hm.count == 5);
+
+    T_Ok(hash_map_search_string_raw(&hm, str8_lit("c:/DEVEL/test"))   == &foo);
+    T_Ok(hash_map_search_string_raw(&hm, str8_lit("c:\\DEVEL\\test")) == &foo);
+    T_Ok(hash_map_search_string_raw(&hm, str8_lit("c:/devel\\test"))  == &foo);
+
+    T_Ok(hash_map_search_string_raw(&hm, str8_lit("/mnt/devel")) == &bar);
+    T_Ok(hash_map_search_string_raw(&hm, str8_lit("/MNT/devel")) == &bar);
+  }
+}
+
 #undef T_Group
