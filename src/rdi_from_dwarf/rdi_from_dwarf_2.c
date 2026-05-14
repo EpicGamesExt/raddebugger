@@ -826,7 +826,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       DW2_Attrib *stmt_list = dw2_attrib_from_kind(unit_root_tag, DW_AttribKind_StmtList);
       U64 line_info_off = stmt_list->val.u128.u64[0];
       String8 all_line_info_data = raw->sec[DW_Section_Line].data;
-      String8 unit_line_table_data = str8_substr(all_line_info_data, r1u64(line_info_off + line_table_header->line_program_off, line_info_off + line_table_header->total_unit_data_size));
+      String8 unit_line_table_data = str8_substr(all_line_info_data, r1u64(line_table_header->line_program_off, line_info_off + line_table_header->total_unit_data_size));
       
       //- rjf: build unit's line table
       RDIM_LineTable *dst_line_table = rdim_line_table_chunk_list_push(arena, dst_line_tables, 1);
