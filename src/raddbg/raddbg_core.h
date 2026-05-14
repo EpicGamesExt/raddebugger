@@ -795,6 +795,11 @@ internal RD_VocabInfo *rd_vocab_info_from_code_name_plural(String8 code_name_plu
 #define rd_singular_from_code_name_plural(code_name_plural) (rd_vocab_info_from_code_name_plural(code_name_plural)->code_name)
 
 ////////////////////////////////
+//~ rjf: Auto Watch Computation
+
+internal String8Array rd_gather_auto_exprs(Arena *arena);
+
+////////////////////////////////
 //~ rjf: Continuous Frame Requests
 
 internal void rd_request_frame(void);

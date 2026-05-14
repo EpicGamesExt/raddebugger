@@ -255,6 +255,10 @@ RD_VocabTable:
       @no_expand @display_name('User Theme')
         'theme_colors': set,
       
+      //- rjf: auto eval
+      @display_name('Show Auto Watches In Source / Disassembly') @description("Enables the display of auto watch expressions inline in source and disassembly views.") @default(1)
+        'show_autos_in_src_and_disasm': bool,
+      
       //- rjf: autocompletion
       @display_name('Autocompletion Lister') @description("Enables the autocompletion lister while typing expressions.") @default(1)
         'autocompletion_lister': bool,
