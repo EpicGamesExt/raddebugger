@@ -758,6 +758,19 @@ hash_map_push_path_raw(Arena *arena, HashMap *hm, String8 path, void *value)
 ////////////////////////////////
 
 internal void *
+hash_map_search_stringf_raw(HashMap *hm, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0,0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  void *raw = hash_map_search_string_raw(hm, string); 
+  va_end(args);
+  scratch_end(scratch);
+  return raw;
+}
+
+internal void *
 hash_map_search_string_raw(HashMap *hm, String8 key)
 {
   HashMapNode *n = hash_map_search(hm, hash_map_hasher(key), (HashMapKey){ .key_string = key }, hash_map_match_string);

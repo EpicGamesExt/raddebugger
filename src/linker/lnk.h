@@ -99,7 +99,7 @@ typedef struct LNK_Link
   String8Node            **last_cmd_lib;
   String8Node            **last_default_lib;
   String8Node            **last_obj_lib;
-  HashTable               *lib_member_infos_ht;
+  HashMap                  lib_member_infos_hm;
   LNK_LibMemberRefList     imports;
   B32                      try_to_resolve_entry_point;
   B32                      asan_libs_resolved;
@@ -204,6 +204,8 @@ typedef struct LNK_BaseRelocPageArray
 typedef struct
 {
   B32                   search_anti_deps;
+  LNK_Link             *link;
+  HashMap              *imports_hm;
   LNK_SymbolTable      *symtab;
   LNK_Symbol           *import_stub;
   LNK_Lib              *lib;

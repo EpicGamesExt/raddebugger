@@ -1,15 +1,17 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal T_Linker
-t_id_linker(void)
-{
-  String8 name = str8_chop_last_dot(str8_skip_last_slash(g_linker));
-  if (str8_match(name, str8_lit("radlink"),  StringMatchFlag_CaseInsensitive)) { return T_Linker_RAD;  }
-  if (str8_match(name, str8_lit("link"),     StringMatchFlag_CaseInsensitive)) { return T_Linker_MSVC; }
-  if (str8_match(name, str8_lit("lld-link"), StringMatchFlag_CaseInsensitive)) { return T_Linker_LLVM; }
-  return T_Linker_Null;
-}
+// TODO:
+//  [x] defer_duplicate_imp_link
+//  [ ] opt_ref_comdat_undef_section
+//  [ ] opt_ref_weak_alias_comdat
+//  [ ] reloc_apply_off_out_of_bounds
+//  [ ] lib_member_reloc_apply_off_out_of_bounds
+//  [ ] fold_two_funcs
+//  [ ] same_but_different
+//  [ ] fold_diamond
+//  [ ] cyclic_icf
+//  [ ] fold_with_largest_align
 
 ////////////////////////////////
 // Def -> COFF
@@ -4553,6 +4555,118 @@ TEST(defer_impl_link_to_second_search_pass)
   T_Ok(g_last_exit_code == 0);
 }
 
+TEST(defer_duplicate_imp_link)
+{
+  T_COFF_DefLib bar_lib_any = {
+    .members = (T_COFF_DefLibMember[]){
+      {
+        .type = T_COFF_DefLibMember_DllImportStatic,
+        .dll_import = { .name = "bar.dll" }
+      },
+      {
+        .type = T_COFF_DefLibMember_Import,
+        .import = { "bar.dll", "bar", COFF_ImportBy_Name, COFF_ImportHeader_Code, .hit_or_ordinal = 0 }
+      },
+      {
+        .type = T_COFF_DefLibMember_Obj,
+        .obj = {
+          .machine  = T_COFF_DefSetMachine(X64),
+          .sections = (T_COFF_DefSection[]){
+            {
+              "text", ".text", str8_lit_comp("\xff\x25\x00\x00\x00\x00"), .flags = "rx:code"
+            },
+            {0}
+          },
+          .symbols  = (T_COFF_DefSymbol[]){
+            T_COFF_DefSymbol_Undef("__imp_bar"),
+            T_COFF_DefSymbol_ExternFunc("qwe", "text", 0),
+            {0},
+          }
+        }
+      },
+      {0}
+    }
+  };
+
+  T_COFF_DefLib foo_lib_any = {
+    .members = (T_COFF_DefLibMember[]){
+      {
+        .type = T_COFF_DefLibMember_DllImportStatic,
+        .dll_import = { .name = "foo.dll" }
+      },
+      {
+        .type = T_COFF_DefLibMember_Import,
+        .import = { "foo.dll", "bar", COFF_ImportBy_Name, COFF_ImportHeader_Code, .hit_or_ordinal = 0 }
+      },
+      {
+        .type = T_COFF_DefLibMember_Obj,
+        .obj = {
+          .machine  = T_COFF_DefSetMachine(X64),
+          .sections = (T_COFF_DefSection[]){
+            {
+              "text", ".text",
+              str8_lit_comp("\xff\x25\x00\x00\x00\x00"),
+              .flags = "rx:code",
+              .relocs = (T_COFF_DefReloc[]){
+                T_COFF_DefReloc(X64_Rel32, 2, "bar"),
+                {0}
+              }
+            },
+            {0}
+          },
+          .symbols  = (T_COFF_DefSymbol[]){
+            T_COFF_DefSymbol_Undef("bar"),
+            T_COFF_DefSymbol_Undef("qwe"),
+            T_COFF_DefSymbol_ExternFunc("thunk", "text", 0),
+            {0},
+          }
+        }
+      },
+      {0}
+    }
+  };
+
+  String8 bar_lib = t_coff_from_def_lib(arena, bar_lib_any);
+  String8 foo_lib = t_coff_from_def_lib(arena, foo_lib_any);
+
+  T_Ok(t_write_file(str8_lit("bar.lib"), bar_lib));
+  T_Ok(t_write_file(str8_lit("foo.lib"), foo_lib));
+  T_Ok(t_write_entry_obj());
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe bar.lib foo.lib entry.obj /include:thunk");
+  T_Ok(g_last_exit_code == 0);
+
+  String8                     exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo                  pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader         *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  PE_ParsedStaticImportTable  static_imptab = pe_static_imports_from_data(arena, pe.is_pe32, pe.section_count, section_table, exe, pe.data_dir_franges[PE_DataDirectoryIndex_IMPORT]);
+  COFF_SectionHeader         *data_sect     = coff_section_header_from_name(str8_zero(), section_table, pe.section_count, str8_lit(".data"));
+
+  T_Ok(static_imptab.count == 1);
+
+  PE_ParsedStaticDLLImport *dll = &static_imptab.v[0];
+  T_Ok(str8_matchi(dll->name, str8_lit("foo.dll")));
+
+  T_Ok(dll->import_count == 1);
+  PE_ParsedImport *imp = &dll->imports[0];
+  T_Ok(imp->type == PE_ParsedImport_Name);
+  T_Ok(str8_match(imp->u.name.string, str8_lit("bar"), 0));
+
+  U64 iat_foff = pe_foff_from_voff(exe, &pe, dll->import_address_table_voff);
+  U64 ilt_foff = pe_foff_from_voff(exe, &pe, dll->import_name_table_voff);
+
+  U64 bar_idx      = 0;
+  U64 bar_iat_addr = 0;
+  U64 bar_ilt_addr = 0;
+  str8_deserial_read_struct(exe, iat_foff + bar_idx * sizeof(U64), &bar_iat_addr);
+  str8_deserial_read_struct(exe, ilt_foff + bar_idx * sizeof(U64), &bar_ilt_addr);
+
+  T_Ok(bar_iat_addr != 0);
+  T_Ok(bar_ilt_addr != 0);
+  T_Ok(bar_iat_addr == bar_ilt_addr);
+  T_Ok(data_sect->voff <= bar_iat_addr && bar_iat_addr < data_sect->voff + data_sect->vsize);
+}
+
 TEST(opt_ref_dangling_section)
 {
   T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
@@ -6891,6 +7005,196 @@ TEST(fold_with_largest_align)
   }
 }
 
+#endif
+
+#if 0
+TEST(reloc_apply_off_out_of_bounds)
+{
+  T_Ok(t_write_def_obj("bad.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {
+        "text", ".text", str8_lit_comp("\x00\x00\x00\x00"), .flags = "rx:code@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32, max_U32, "target"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_AbsStatic("target", 0),
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe bad.obj");
+  T_Ok(g_last_exit_code != 0);
+}
+#endif
+
+#if 0
+TEST(lib_member_reloc_apply_off_out_of_bounds)
+{
+  T_Ok(t_write_def_lib("bad.lib", (T_COFF_DefLib){
+    .emit_second_member = 1,
+    .members = (T_COFF_DefLibMember[]){
+      {
+        .type = T_COFF_DefLibMember_Obj,
+        .obj = {
+          .path = str8_lit("bad_member.obj"),
+          .machine = T_COFF_DefSetMachine(X64),
+          .sections = (T_COFF_DefSection[]){
+            {
+              "data", ".data", str8_lit_comp("\x00\x00\x00\x00"), .flags = "rw:data@1",
+              .relocs = (T_COFF_DefReloc[]){
+                T_COFF_DefReloc(X64_Addr32, max_U32, "target"),
+                {0}
+              }
+            },
+            {0}
+          },
+          .symbols = (T_COFF_DefSymbol[]){
+            T_COFF_DefSymbol_AbsStatic("target", 0),
+            T_COFF_DefSymbol_Extern("bad", "data", 0),
+            {0}
+          }
+        }
+      },
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "text", ".text", str8_lit_comp("\xC3"), .flags = "rx:code@1" },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /include:bad entry.obj bad.lib");
+  T_Ok(g_last_exit_code != 0);
+}
+#endif
+
+#if 0
+TEST(opt_ref_comdat_undef_section)
+{
+  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {
+        "text", ".text", str8_lit_comp("\x48\xC7\xC0\x00\x00\x00\x00\xC3"), .flags = "rx:code@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, 3, "caller"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      T_COFF_DefSymbol_Undef("caller"),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("caller.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {
+        "caller", ".caller", str8_lit_comp("\x00\x00\x00\x00"), .flags = "rw:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, 0, ".target"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("caller", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("caller", "caller", 0),
+      T_COFF_DefSymbol_UndefSec(".target", COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("target.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "target", ".target", str8_lit("target"), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("target", COFF_ComdatSelect_Any),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj caller.obj target.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *target_sect   = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".target"));
+  T_Ok(target_sect != 0);
+}
+#endif
+
+#if 0
+TEST(opt_ref_weak_alias_comdat)
+{
+  T_Ok(t_write_def_obj("weak.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "target", ".target", str8_lit("target"), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("target", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("target", "target", 0),
+      T_COFF_DefSymbol_Weak("weak_target", COFF_WeakExt_SearchAlias, "target"),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {
+        "text", ".text", str8_lit_comp("\x48\xC7\xC0\x00\x00\x00\x00\xC3"), .flags = "rx:code@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, 3, "weak_target"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      T_COFF_DefSymbol_Undef("weak_target"),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj weak.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *target_sect   = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".target"));
+  T_Ok(target_sect != 0);
+}
 #endif
 
 #undef T_Group

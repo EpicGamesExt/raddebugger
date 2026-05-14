@@ -175,6 +175,7 @@ internal HashMapNode * hash_map_push_path_u64     (Arena *arena, HashMap *hm, St
 internal HashMapNode * hash_map_push_path_string  (Arena *arena, HashMap *hm, String8 path, String8  value);
 internal HashMapNode * hash_map_push_path_raw     (Arena *arena, HashMap *hm, String8 path, void    *value);
 
+internal void * hash_map_search_stringf_raw(HashMap *hm, char *fmt, ...);
 internal void * hash_map_search_string_raw(HashMap *hm, String8 key);
 internal U32 *  hash_map_search_string_u32(HashMap *hm, String8 key);
 internal U64 *  hash_map_search_string_u64(HashMap *hm, String8 key);

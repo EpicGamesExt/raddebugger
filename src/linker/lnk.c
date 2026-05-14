@@ -1487,7 +1487,14 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
 }
 
 internal void
-lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Symbol *link_symbol, LNK_Lib *lib, LNK_LibMemberInfo *member_infos, U32 member_idx)
+lnk_queue_lib_member(Arena                *arena,
+                     HashMap              *imports_hm,
+                     HashMap               lib_member_info_hm,
+                     LNK_LibMemberRefList *queued_members,
+                     LNK_Symbol           *link_symbol,
+                     LNK_Lib              *lib,
+                     LNK_LibMemberInfo    *member_infos,
+                     U32                   member_idx)
 {
   // associate link symbol to lib member
   for (LNK_Symbol *leader = link_symbol;;) {
@@ -1511,22 +1518,42 @@ lnk_queue_lib_member(Arena *arena, LNK_LibMemberRefList *queued_members, LNK_Sym
     }
   }
 
-  B32 was_linked;
+  LNK_LibMemberRef *is_thunk_import;
+  LNK_LibMemberRef *is_addr_import;
   if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
-    U8 member_flags = ins_atomic_u8_or(&member_infos[member_idx].flags, LNK_LibMemberFlag_LinkedImp);
-    was_linked = !(member_flags & LNK_LibMemberFlag_LinkedImp);
+    is_thunk_import  = hash_map_search_string_raw(imports_hm, str8_skip(link_symbol->name, 6));
+    is_addr_import   = hash_map_search_string_raw(imports_hm, link_symbol->name);
   } else {
-    U8 flag = LNK_LibMemberFlag_LinkedRegular;
-    U8 member_flags = ins_atomic_u8_or(&member_infos[member_idx].flags, LNK_LibMemberFlag_LinkedRegular);
-    was_linked = !(member_flags & LNK_LibMemberFlag_LinkedRegular);
+    is_thunk_import  = hash_map_search_string_raw(imports_hm, link_symbol->name);
+    is_addr_import   = hash_map_search_stringf_raw(imports_hm, "__imp_%S", link_symbol->name);
   }
 
-  if (was_linked) {
-    LNK_LibMemberRef *member_ref = push_array(arena, LNK_LibMemberRef, 1);
-    member_ref->lib         = lib;
-    member_ref->member_idx  = member_idx;
-    member_ref->link_symbol = link_symbol;
-    lnk_lib_member_ref_list_push_node(queued_members, member_ref);
+  LNK_LibMemberRef *is_queued_import = is_thunk_import ? is_thunk_import :
+                                       is_addr_import  ? is_addr_import  : 0;
+
+  if (is_queued_import) {
+    // do not queue second import member link -- flag member and continue
+    U8                 flag                = str8_starts_with(link_symbol->name, str8_lit("__imp_")) ? LNK_LibMemberFlag_LinkedImp : LNK_LibMemberFlag_LinkedRegular;
+    LNK_LibMemberInfo *import_member_infos = hash_map_search_raw_raw(&lib_member_info_hm, is_queued_import->lib);
+    ins_atomic_u8_or(&import_member_infos[member_idx].flags, flag);
+  } else {
+    B32 do_queue;
+    if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
+      U8 member_flags = ins_atomic_u8_or(&member_infos[member_idx].flags, LNK_LibMemberFlag_LinkedImp);
+      do_queue = !(member_flags & LNK_LibMemberFlag_LinkedImp);
+    } else {
+      U8 flag = LNK_LibMemberFlag_LinkedRegular;
+      U8 member_flags = ins_atomic_u8_or(&member_infos[member_idx].flags, LNK_LibMemberFlag_LinkedRegular);
+      do_queue = !(member_flags & LNK_LibMemberFlag_LinkedRegular);
+    }
+
+    if (do_queue) {
+      LNK_LibMemberRef *member_ref = push_array(arena, LNK_LibMemberRef, 1);
+      member_ref->lib         = lib;
+      member_ref->member_idx  = member_idx;
+      member_ref->link_symbol = link_symbol;
+      lnk_lib_member_ref_list_push_node(queued_members, member_ref);
+    }
   }
 }
 
@@ -1550,14 +1577,14 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
       if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
         U32 member_idx;
         if (lnk_search_lib(lib, symbol->name, &member_idx)) {
-          lnk_queue_lib_member(arena, member_ref_list, symbol, lib, lib_member_infos, member_idx);
+          lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
         }
       } else if (symbol_interp == COFF_SymbolValueInterp_Weak) {
         COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol_parsed, symbol_ref.obj->header.is_big_obj);
         if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
           U32 member_idx;
           if (lnk_search_lib(lib, symbol->name, &member_idx)) {
-            lnk_queue_lib_member(arena, member_ref_list, symbol, lib, lib_member_infos, member_idx);
+            lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
           }
         } else if (weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
           if (search_anti_deps) {
@@ -1568,7 +1595,7 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
               if (dep_interp == COFF_SymbolValueInterp_Weak) {
                 U32 member_idx;
                 if (lnk_search_lib(lib, symbol_parsed.name, &member_idx)) {
-                  lnk_queue_lib_member(arena, member_ref_list, symbol, lib, lib_member_infos, member_idx);
+                  lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
                 }
               }
             }
@@ -1623,6 +1650,8 @@ lnk_link_inputs(TP_Context      *tp,
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
+
+  HashMap imports_hm = {0};
 
   LNK_LibMemberRefList *member_ref_lists = push_array(scratch.arena, LNK_LibMemberRefList, tp->worker_count);
   B32                   search_anti_deps = 0;
@@ -1683,10 +1712,10 @@ lnk_link_inputs(TP_Context      *tp,
         }
       }
 
-      LNK_LibMemberInfo *lib_member_infos = hash_table_search_raw_raw(link->lib_member_infos_ht, lib);
+      LNK_LibMemberInfo *lib_member_infos = hash_map_search_raw_raw(&link->lib_member_infos_hm, lib);
       if (lib_member_infos == 0) {
         lib_member_infos = push_array(link->arena, LNK_LibMemberInfo, lib->member_count);
-        hash_table_push_raw_raw(link->arena, link->lib_member_infos_ht, lib, lib_member_infos);
+        hash_map_push_raw_raw(link->arena, &link->lib_member_infos_hm, lib, lib_member_infos);
       }
 
       B32 link_whole_archive = config->whole_archive_all;
@@ -1708,12 +1737,20 @@ lnk_link_inputs(TP_Context      *tp,
           }
           LNK_LibMemberRef *member_refs = push_array(scratch.arena, LNK_LibMemberRef, lib->member_count);
           for EachIndex(member_idx, lib->member_count) {
-            lnk_queue_lib_member(arena->v[0], &member_ref_lists[0], null_symbol, lib, lib_member_infos, member_idx);
+            lnk_queue_lib_member(arena->v[0], &imports_hm, link->lib_member_infos_hm, &member_ref_lists[0], null_symbol, lib, lib_member_infos, member_idx);
           }
         } else {
           // search symbols in lib
           MemoryZeroTyped(member_ref_lists, tp->worker_count);
-          LNK_SearchLibTask search_task = { .search_anti_deps = search_anti_deps, .lib = lib, .symtab = symtab, .lib_member_infos = lib_member_infos, .member_ref_lists = member_ref_lists };
+          LNK_SearchLibTask search_task = {
+            .search_anti_deps = search_anti_deps,
+            .link             = link,
+            .imports_hm       = &imports_hm,
+            .lib              = lib,
+            .symtab           = symtab,
+            .lib_member_infos = lib_member_infos,
+            .member_ref_lists = member_ref_lists
+          };
           tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &search_task);
         }
 
@@ -1765,6 +1802,25 @@ lnk_link_inputs(TP_Context      *tp,
 
           switch (member_type) {
           case COFF_DataType_Import: {
+            {
+              LNK_LibMemberRef *is_thunk_import;
+              LNK_LibMemberRef *is_addr_import;
+              if (str8_starts_with(member_ref->link_symbol->name, str8_lit("__imp_"))) {
+                is_thunk_import  = hash_map_search_string_raw(&imports_hm, str8_skip(member_ref->link_symbol->name, 6));
+                is_addr_import   = hash_map_search_string_raw(&imports_hm, member_ref->link_symbol->name);
+              } else {
+                is_thunk_import  = hash_map_search_string_raw(&imports_hm, member_ref->link_symbol->name);
+                is_addr_import   = hash_map_search_stringf_raw(&imports_hm, "__imp_%S", member_ref->link_symbol->name);
+              }
+              if (is_thunk_import != 0 || is_addr_import != 0) {
+                lnk_invalid_path("duplicate import member queue detected");
+                break;
+              }
+            }
+
+            // store lib member ref to import
+            hash_map_push_string_raw(scratch.arena, &imports_hm, member_ref->link_symbol->name, member_ref);
+
             // find import stub
             LNK_Symbol *import_stub = lnk_symbol_table_search(symtab, str8_lit(LNK_IMPORT_STUB));
 
@@ -1775,10 +1831,8 @@ lnk_link_inputs(TP_Context      *tp,
             member_ref->link_symbol->refs = import_stub->refs;
 
             // push import member for import obj generation
-            if (!(lib_member_infos[member_ref->member_idx].flags & LNK_LibMemberFlag_WasGenQueued)) {
-              lib_member_infos[member_ref->member_idx].flags |= LNK_LibMemberFlag_WasGenQueued;
-              lnk_lib_member_ref_list_push_node(&link->imports, member_ref);
-            }
+            lnk_lib_member_ref_list_push_node(&link->imports, member_ref);
+            lib_member_infos[member_ref->member_idx].flags |= LNK_LibMemberFlag_WasGenQueued;
           } break;
           case COFF_DataType_BigObj:
           case COFF_DataType_Obj: {
@@ -1867,7 +1921,6 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   link->last_default_lib           = &config->input_default_lib_list.first;
   link->last_obj_lib               = &config->input_obj_lib_list.first;
   link->last_cmd_lib               = &config->input_list[LNK_Input_Lib].first;
-  link->lib_member_infos_ht        = hash_table_init(link->arena, Max(config->input_list[LNK_Input_Lib].node_count * 2, 1024));
   link->try_to_resolve_entry_point = 1;
 
   // input :null_obj
@@ -1909,7 +1962,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     for EachNode(member_ref, LNK_LibMemberRef, link->imports.first) {
       LNK_Lib           *lib          = member_ref->lib;
       U64                member_idx   = member_ref->member_idx;
-      LNK_LibMemberInfo *member_infos = hash_table_search_raw_raw(link->lib_member_infos_ht, lib);
+      LNK_LibMemberInfo *member_infos = hash_map_search_raw_raw(&link->lib_member_infos_hm, lib);
       LNK_Symbol        *link_symbol  = member_infos[member_idx].link;
 
       U32                            member_offset = memory_read32(lib->member_offsets + member_idx);
@@ -1944,13 +1997,8 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
         hash_table_push_path_raw(scratch.arena, imports_ht, import_header.dll_name, import_symbols);
       }
 
-      B32 make_jump_thunk = 1;
-      if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
-        LNK_Symbol *thunk_symbol = lnk_symbol_table_search(symtab, str8_skip(link_symbol->name, str8_lit("__imp_").size));
-        make_jump_thunk = thunk_symbol != 0;
-      }
-
       // push make import info
+      B32 make_jump_thunk = !!(member_infos[member_idx].flags & LNK_LibMemberFlag_LinkedRegular);
       pe_make_import_header_list_push(scratch.arena, import_symbols, (PE_MakeImport){ .header = member_info.data, .make_jump_thunk = make_jump_thunk });
     }
     AssertAlways(delayed_dll_names.node_count == delayed_imports_ht->count);
