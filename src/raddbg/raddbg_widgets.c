@@ -172,6 +172,14 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
       start_secondary();
     }
     
+    //- rjf: push label
+    if(label_string.size != 0)
+    {
+      dr_fstrs_push_new(arena, &result, &params, label_string, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      start_secondary();
+    }
+    
     //- rjf: push collection name
     if(collection_name.size != 0)
     {

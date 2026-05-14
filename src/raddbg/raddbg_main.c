@@ -7,8 +7,6 @@
 // [ ] symbol server
 // [ ] core dump saving/loading
 //
-// [ ] "autos" collection, which can be evaluated
-// [ ] show "autos" inline in source code near thread?
 // [ ] memory_size(...) view for quickly evaluating memory sizes
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
 //
@@ -269,6 +267,8 @@
 // [x] single-line viz for pointers w/ bad (unmapped) addresses
 // [x] option to prefer addresses first with string ptrs
 // [x] external window focusing bugs
+// [x] "autos" collection, which can be evaluated
+// [x] show "autos" inline in source code near thread?
 
 ////////////////////////////////
 //~ rjf: Build Options
