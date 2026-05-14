@@ -1539,7 +1539,7 @@ main(int argc, char **argv)
         if(got_final_result && size > 0)
         {
           String8 full_name = str8(buffer, size);
-          info->binary_file_path = push_str8_copy(os_lnx_state.arena, full_name);
+          info->binary_file_path = push_str8_copy(lnx_state.arena, full_name);
           info->binary_path = str8_chop_last_slash(info->binary_file_path);
         }
       }

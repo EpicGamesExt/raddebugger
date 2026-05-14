@@ -70,8 +70,8 @@ wm_init(void)
   }
 
   // create wakeup event for polling
-  os_lnx_gfx_state->wakeup_fd = eventfd(0, EFD_CLOEXEC);
-  Assert(os_lnx_gfx_state->wakeup_fd > 0);
+  lnx_wm_state->wakeup_fd = eventfd(0, EFD_CLOEXEC);
+  Assert(lnx_wm_state->wakeup_fd > 0);
 }
 
 ////////////////////////////////
@@ -211,7 +211,7 @@ wm_window_focus(WM_Window handle)
   //            Serial number of failed request:  373
   //            Current serial number in output stream:  374
   //        
-  XSetInputFocus(os_lnx_gfx_state->display, w->window, RevertToNone, CurrentTime);
+  XSetInputFocus(lnx_wm_state->display, w->window, RevertToNone, CurrentTime);
 }
 
 internal B32
@@ -413,7 +413,7 @@ internal void
 wm_send_wakeup_event(void)
 {
   U64 dummy = 1;
-  ssize_t size = LNX_RETRY_ON_EINTR(write(os_lnx_gfx_state->wakeup_fd, &dummy, sizeof(dummy)));
+  ssize_t size = LNX_RETRY_ON_EINTR(write(lnx_wm_state->wakeup_fd, &dummy, sizeof(dummy)));
   Assert(size == sizeof(dummy));
 }
 
@@ -423,12 +423,12 @@ wm_get_events(Arena *arena, B32 wait)
   WM_EventList evts = {0};
   for(;;)
   {
-    if(XPending(os_lnx_gfx_state->display) == 0)
+    if(XPending(lnx_wm_state->display) == 0)
     {
       struct pollfd poll_fds[2] =
       {
-        { .fd = ConnectionNumber(os_lnx_gfx_state->display), .events = POLLIN },
-        { .fd = os_lnx_gfx_state->wakeup_fd,                 .events = POLLIN },
+        { .fd = ConnectionNumber(lnx_wm_state->display), .events = POLLIN },
+        { .fd = lnx_wm_state->wakeup_fd,                 .events = POLLIN },
       };
       int timeout = wait && evts.count == 0 ? -1 : 0;
       int poll_status = poll(poll_fds, ArrayCount(poll_fds), timeout);
@@ -436,14 +436,14 @@ wm_get_events(Arena *arena, B32 wait)
       if(poll_fds[1].revents & POLLIN)
       {
         U64 dummy = 0;
-        read(os_lnx_gfx_state->wakeup_fd, &dummy, sizeof(dummy));
+        read(lnx_wm_state->wakeup_fd, &dummy, sizeof(dummy));
         wait = 0;
       }
     }
-    while(XPending(os_lnx_gfx_state->display))
+    while(XPending(lnx_wm_state->display))
     {
       XEvent evt = {0};
-      XNextEvent(os_lnx_gfx_state->display, &evt);
+      XNextEvent(lnx_wm_state->display, &evt);
       B32 set_mouse_cursor = 0;
       switch(evt.type)
       {
@@ -663,12 +663,16 @@ wm_get_events(Arena *arena, B32 wait)
         int child_rel_x = 0;
         int child_rel_y = 0;
         unsigned int mask = 0;
-        if(XQueryPointer(os_lnx_gfx_state->display, XDefaultRootWindow(os_lnx_gfx_state->display), &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
+        if(XQueryPointer(lnx_wm_state->display, XDefaultRootWindow(lnx_wm_state->display), &root_window, &child_window, &root_rel_x, &root_rel_y, &child_rel_x, &child_rel_y, &mask))
         {
-          XDefineCursor(os_lnx_gfx_state->display, root_window, os_lnx_gfx_state->cursors[os_lnx_gfx_state->last_set_cursor]);
-          XFlush(os_lnx_gfx_state->display);
+          XDefineCursor(lnx_wm_state->display, root_window, lnx_wm_state->cursors[lnx_wm_state->last_set_cursor]);
+          XFlush(lnx_wm_state->display);
         }
       }
+    }
+    if(evts.count > 0 || (wait == 0 && evts.count == 0))
+    {
+      break;
     }
   }
   return evts;

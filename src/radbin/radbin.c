@@ -56,28 +56,6 @@ rb_thread_entry_point(void *p)
   log_select(log);
   log_scope_begin();
   
-#if 0
-  ProfScope("work")
-  {
-    for(int i = 0; i < 5; i += 1)
-    {
-      int sum = 0;
-      ProfScope("do work")
-      {
-        for(int x = 0; x < 10000; x += 1)
-        {
-          for(int y = 0; y < 10000; y += 1)
-          {
-            sum += x*y + x-y;
-          }
-        }
-      }
-      lane_sync();
-    }
-  }
-  abort_self(0);
-#endif
-  
   //////////////////////////////
   //- rjf: set up shared state
   //
@@ -708,6 +686,7 @@ rb_thread_entry_point(void *p)
       B32 convert_done = 0;
       RDIM_BakeParams pdb_bake_params = {0};
       RDIM_BakeParams dwarf_bake_params = {0};
+      RDIM_BakeParams dwarf_bake_params_2 = {0};
       typedef struct RDIM_BakeParamsNode RDIM_BakeParamsNode;
       struct RDIM_BakeParamsNode
       {
@@ -902,11 +881,11 @@ rb_thread_entry_point(void *p)
                 String8 raw_sections  = str8_substr(exe_data, pe.section_table_range);
                 COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(raw_sections, 0, sizeof(COFF_SectionHeader) * pe.section_count);
                 String8 string_table = str8_substr(exe_data, pe.string_table_range);
-                convert_params.arch = pe.arch;
-                convert_params.base_vaddr = pe.image_base;
-                convert_params.raw = dw_input_from_coff_section_table(scratch.arena, exe_data, string_table, pe.section_count, section_table);
-                convert_params.path_style = PathStyle_WindowsAbsolute;
-                convert_params.binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, exe_data, string_table, pe.section_count, section_table);
+                convert_params_2.arch = pe.arch;
+                convert_params_2.base_vaddr = pe.image_base;
+                convert_params_2.raw = dw_input_from_coff_section_table(scratch.arena, exe_data, string_table, pe.section_count, section_table);
+                convert_params_2.path_style = PathStyle_WindowsAbsolute;
+                convert_params_2.binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, exe_data, string_table, pe.section_count, section_table);
                 scratch_end(scratch);
               }break;
               case ExecutableImageKind_Elf32:
@@ -914,18 +893,18 @@ rb_thread_entry_point(void *p)
               {
                 Temp scratch = scratch_begin(&arena, 1);
                 ELF_Bin bin = elf_bin_from_data(scratch.arena, dbg_data);
-                convert_params.arch = arch_from_elf_machine(bin.hdr.e_machine);
-                convert_params.base_vaddr = elf_base_addr_from_bin(&bin);
-                convert_params.raw = dw_input_from_elf_bin(scratch.arena, dbg_data, &bin);
-                convert_params.path_style = PathStyle_UnixAbsolute;
-                convert_params.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, dbg_data, &bin, &bin.shdrs);
+                convert_params_2.arch = arch_from_elf_machine(bin.hdr.e_machine);
+                convert_params_2.base_vaddr = elf_base_addr_from_bin(&bin);
+                convert_params_2.raw = dw_input_from_elf_bin(scratch.arena, dbg_data, &bin);
+                convert_params_2.path_style = PathStyle_UnixAbsolute;
+                convert_params_2.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, dbg_data, &bin, &bin.shdrs);
                 scratch_end(scratch);
               }break;
             }
-            convert_params.exe_name = exe_name;
-            convert_params.exe_data = exe_data;
-            convert_params.subset_flags  = subset_flags;
-            convert_params.deterministic = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
+            convert_params_2.exe_name = exe_name;
+            convert_params_2.exe_data = exe_data;
+            convert_params_2.subset_flags  = subset_flags;
+            convert_params_2.deterministic = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
           ProfScope("convert [2]") dwarf_bake_params_2 = d2r2_convert(arena, &convert_params_2);
 #else
