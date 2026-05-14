@@ -1829,7 +1829,11 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           U8 byte = 0;
           U64 byte_bad_flags = 0;
           E_SpaceRangeInfo range_info = {.byte_bad_flags = &byte_bad_flags};
-          if(e_space_read(ptr_data->value_eval.space, &byte, &range_info, r1u64(ptr_data->value_eval.value.u64, ptr_data->value_eval.value.u64+1)))
+          if(ptr_data->value_eval.space.kind == E_SpaceKind_Null)
+          {
+            ptr_data->addr_is_good = 1;
+          }
+          else if(e_space_read(ptr_data->value_eval.space, &byte, &range_info, r1u64(ptr_data->value_eval.value.u64, ptr_data->value_eval.value.u64+1)))
           {
             ptr_data->addr_is_good = !(byte_bad_flags & 1);
           }

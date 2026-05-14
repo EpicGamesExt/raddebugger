@@ -214,7 +214,6 @@ void main(void)
 uniform vec4 rect;
 uniform vec4 corner_radii_px;
 uniform vec2 viewport_size;
-uniform uint blur_count;
 
 out vec2 texcoord;
 out vec2 sdf_sample_pos;
