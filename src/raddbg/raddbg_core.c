@@ -13217,6 +13217,8 @@ rd_frame(void)
             //- rjf: unpack
             String8 src_path = rd_regs()->string;
             String8 dst_path = rd_regs()->file_path;
+            PathStyle src_style = path_style_from_str8(src_path);
+            PathStyle dst_style = path_style_from_str8(dst_path);
             String8List src_path_parts = str8_split_path(scratch.arena, src_path);
             String8List dst_path_parts = str8_split_path(scratch.arena, dst_path);
             
@@ -13259,9 +13261,8 @@ rd_frame(void)
             {
               str8_list_push_front(scratch.arena, &map_dst_parts, n->string);
             }
-            StringJoin map_join = {.sep = str8_lit("/")};
-            String8 map_src = str8_list_join(scratch.arena, &map_src_parts, &map_join);
-            String8 map_dst = str8_list_join(scratch.arena, &map_dst_parts, &map_join);
+            String8 map_src = str8_path_list_join_by_style(scratch.arena, &map_src_parts, src_style);
+            String8 map_dst = str8_path_list_join_by_style(scratch.arena, &map_dst_parts, dst_style);
             
             //- rjf: store as file path map cfg
             CFG_Node *user = cfg_node_child_from_string(cfg_node_root(), str8_lit("user"));
