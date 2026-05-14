@@ -38,10 +38,10 @@ struct DASM_Inst
   U32 size;
   String8 string;
   U64 dst_vaddr;
-  ARCH_RegCode dst_base_reg;
-  U64 dst_off;
-  ARCH_RegCode src_base_reg;
-  U64 src_off;
+  ARCH_RegCode dst_reg_code;
+  S64 dst_reg_off;
+  ARCH_RegCode src_reg_code;
+  S64 src_reg_off;
 };
 
 ////////////////////////////////

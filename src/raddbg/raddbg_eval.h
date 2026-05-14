@@ -38,6 +38,13 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(registers);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(registers);
 
 ////////////////////////////////
+//~ rjf: `autos` Type Hooks
+
+E_TYPE_IREXT_FUNCTION_DEF(autos);
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(autos);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(autos);
+
+////////////////////////////////
 //~ rjf: Schema Type Hooks
 
 E_TYPE_IREXT_FUNCTION_DEF(schema);

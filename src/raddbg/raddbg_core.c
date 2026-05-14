@@ -11782,15 +11782,19 @@ rd_frame(void)
         struct
         {
           String8 name;
+          E_TypeIRExtFunctionType *irext;
           E_TypeExpandInfoFunctionType *info;
           E_TypeExpandRangeFunctionType *range;
         }
         collection_infos[] =
         {
-#define Collection(name) {str8_lit_comp(#name), E_TYPE_EXPAND_INFO_FUNCTION_NAME(name), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name)}
-          Collection(locals),
-          Collection(registers),
-#undef Collection
+#define Collection1(name) {str8_lit_comp(#name), 0, E_TYPE_EXPAND_INFO_FUNCTION_NAME(name), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name)}
+#define Collection2(name) {str8_lit_comp(#name), E_TYPE_IREXT_FUNCTION_NAME(name), E_TYPE_EXPAND_INFO_FUNCTION_NAME(name), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name)}
+          Collection1(locals),
+          Collection1(registers),
+          Collection2(autos),
+#undef Collection1
+#undef Collection2
         };
         for EachElement(idx, collection_infos)
         {
@@ -11798,6 +11802,7 @@ rd_frame(void)
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
           expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set,
                                            .name = collection_name,
+                                           .irext = collection_infos[idx].irext,
                                            .expand =
                                            {
                                              .info  = collection_infos[idx].info,
@@ -16538,6 +16543,28 @@ rd_frame(void)
                 wm_window_focus(ws->os);
               }
             }
+          }
+          
+          // rjf: update the autos-determining code range
+          {
+            D_Handle new_thread_handle = thread->handle;
+            U64 new_sp = d_rsp_from_thread(&d_user_state->ctrl_entity_store->ctx, new_thread_handle);
+            if(thread == &d_entity_nil)
+            {
+              new_thread_handle = selected_thread->handle;
+            }
+            if(d_handle_match(new_thread_handle, rd_state->last_stop_selected_thread) &&
+               new_sp == rd_state->last_stop_selected_thread_sp)
+            {
+              rd_state->autos_determining_vaddr_range = r1u64(rd_state->last_stop_selected_thread_ip, vaddr);
+            }
+            else
+            {
+              MemoryZeroStruct(&rd_state->autos_determining_vaddr_range);
+            }
+            rd_state->last_stop_selected_thread = new_thread_handle;
+            rd_state->last_stop_selected_thread_ip = vaddr;
+            rd_state->last_stop_selected_thread_sp = new_sp;
           }
         }break;
       }

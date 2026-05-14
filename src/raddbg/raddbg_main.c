@@ -4,6 +4,9 @@
 ////////////////////////////////
 //~ rjf: post-0.9.26 TODO notes
 //
+// [ ] symbol server
+// [ ] core dump saving/loading
+//
 // [ ] "autos" collection, which can be evaluated
 // [ ] show "autos" inline in source code near thread?
 // [ ] memory_size(...) view for quickly evaluating memory sizes
@@ -173,7 +176,6 @@
 //
 //- control improvements
 // [ ] debug info overrides (both path-based AND module-based)
-// [ ] symbol server
 // [ ] can it ignore stepping into _RTC_CheckStackVars generated functions?
 // [ ] jump table thunks, on code w/o /INCREMENTAL:NO
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
@@ -195,7 +197,6 @@
 //
 //- longer-term future features
 // [ ] long-term future notes from martins
-//  [ ] core dump saving/loading
 //  [ ] parallel call stacks view
 //  [ ] parallel watch view
 //  [ ] mixed native/interpreted/jit debugging
@@ -328,7 +329,7 @@
 #include "radbin/radbin.h"
 #include "arch/arch_inc.h"
 #include "dbg_info/dbg_info.h"
-#include "disasm/disasm.h"
+#include "disasm/disasm_inc.h"
 #include "stap/stap_parse.h"
 #include "demon/demon_inc.h"
 #include "eval/eval_inc.h"
@@ -381,7 +382,7 @@
 #include "radbin/radbin.c"
 #include "arch/arch_inc.c"
 #include "dbg_info/dbg_info.c"
-#include "disasm/disasm.c"
+#include "disasm/disasm_inc.c"
 #include "stap/stap_parse.c"
 #include "demon/demon_inc.c"
 #include "eval/eval_inc.c"

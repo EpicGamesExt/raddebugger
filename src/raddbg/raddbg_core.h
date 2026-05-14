@@ -495,6 +495,19 @@ struct RD_State
   RD_Regs *next_hover_regs;
   RD_RegSlot next_hover_regs_slot;
   
+  // rjf: autos-determining code range
+  //
+  // NOTE(rjf): this includes only instructions that we've observed the
+  // selected thread passed. autos are *also* computed from disassembling
+  // the line at which any thread sits, but we only want to collect autos
+  // from larger ranges of instructions when we directly observer this
+  // on a particular selected thread within a single function.
+  //
+  D_Handle last_stop_selected_thread;
+  U64 last_stop_selected_thread_ip;
+  U64 last_stop_selected_thread_sp;
+  Rng1U64 autos_determining_vaddr_range;
+  
   // rjf: icon texture
   R_Handle icon_texture;
   

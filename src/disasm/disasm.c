@@ -7,11 +7,6 @@
 ////////////////////////////////
 //~ rjf: Instruction Decoding/Disassembling Type Functions
 
-#if !defined(ZYDIS_H)
-#include "third_party/zydis/zydis.h"
-#include "third_party/zydis/zydis.c"
-#endif
-
 internal DASM_Inst
 dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Syntax syntax)
 {
@@ -19,139 +14,12 @@ dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Synta
   switch(arch)
   {
     default:{}break;
-    
-    //- rjf: x86/x64 disassembly
-    case Arch_x86:
+#if defined(X64_H)
     case Arch_x64:
     {
-      // rjf: determine zydis formatter style
-      ZydisFormatterStyle style = ZYDIS_FORMATTER_STYLE_INTEL;
-      switch(syntax)
-      {
-        default:{}break;
-        case DASM_Syntax_Intel:{style = ZYDIS_FORMATTER_STYLE_INTEL;}break;
-        case DASM_Syntax_ATT:  {style = ZYDIS_FORMATTER_STYLE_ATT;}break;
-      }
-      
-      // rjf: disassemble one instruction
-      ZydisDisassembledInstruction zinst = {0};
-      ZyanStatus status = ZydisDisassemble(ZYDIS_MACHINE_MODE_LONG_64, vaddr, code.str, code.size, &zinst, style);
-      
-      // rjf: analyze
-      DASM_InstFlags flags = 0;
-      U64 dst_vaddr = 0;
-      {
-        ZydisDecodedOperand *first_visible_op = (zinst.info.operand_count_visible > 0 ? &zinst.operands[0] : 0);
-        ZydisDecodedOperand *first_op = (zinst.info.operand_count > 0 ? &zinst.operands[0] : 0);
-        ZydisDecodedOperand *second_op = (zinst.info.operand_count > 1 ? &zinst.operands[1] : 0);
-        
-        if(first_op != 0 &&
-           first_op->actions & ZYDIS_OPERAND_ACTION_WRITE)
-        {
-          // TODO(rjf): need to pass back register + offset
-        }
-        if(second_op != 0 &&
-           second_op->actions & ZYDIS_OPERAND_ACTION_READ)
-        {
-          // TODO(rjf): need to pass back register + offset
-        }
-        if(first_visible_op != 0 && 
-           (first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM8 ||
-            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM16 ||
-            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM32 ||
-            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM64 ||
-            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM16_32_64 ||
-            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM32_32_64 ||
-            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM16_32_32))
-        {
-          ZydisCalcAbsoluteAddress(&zinst.info, first_visible_op, vaddr, &dst_vaddr);
-        }
-        if(first_op != 0 && second_op != 0 && first_op->type == ZYDIS_OPERAND_TYPE_REGISTER &&
-           (first_op->reg.value == ZYDIS_REGISTER_RSP ||
-            first_op->reg.value == ZYDIS_REGISTER_ESP ||
-            first_op->reg.value == ZYDIS_REGISTER_SP))
-        {
-          flags |= DASM_InstFlag_ChangesStackPointer;
-          if(second_op->type != ZYDIS_OPERAND_TYPE_IMMEDIATE)
-          {
-            flags |= DASM_InstFlag_ChangesStackPointerVariably;
-          }
-        }
-        if(zinst.info.attributes & (ZYDIS_ATTRIB_HAS_REP|
-                                    ZYDIS_ATTRIB_HAS_REPE|
-                                    ZYDIS_ATTRIB_HAS_REPZ|
-                                    ZYDIS_ATTRIB_HAS_REPNZ|
-                                    ZYDIS_ATTRIB_HAS_REPNE))
-        {
-          flags |= DASM_InstFlag_Repeats;
-        }
-        switch(zinst.info.mnemonic)
-        {
-          case ZYDIS_MNEMONIC_CALL:
-          {
-            flags |= DASM_InstFlag_Call;
-          }break;
-          
-          case ZYDIS_MNEMONIC_JB:
-          case ZYDIS_MNEMONIC_JBE:
-          case ZYDIS_MNEMONIC_JCXZ:
-          case ZYDIS_MNEMONIC_JECXZ:
-          case ZYDIS_MNEMONIC_JKNZD:
-          case ZYDIS_MNEMONIC_JKZD:
-          case ZYDIS_MNEMONIC_JL:
-          case ZYDIS_MNEMONIC_JLE:
-          case ZYDIS_MNEMONIC_JNB:
-          case ZYDIS_MNEMONIC_JNBE:
-          case ZYDIS_MNEMONIC_JNL:
-          case ZYDIS_MNEMONIC_JNLE:
-          case ZYDIS_MNEMONIC_JNO:
-          case ZYDIS_MNEMONIC_JNP:
-          case ZYDIS_MNEMONIC_JNS:
-          case ZYDIS_MNEMONIC_JNZ:
-          case ZYDIS_MNEMONIC_JO:
-          case ZYDIS_MNEMONIC_JP:
-          case ZYDIS_MNEMONIC_JRCXZ:
-          case ZYDIS_MNEMONIC_JS:
-          case ZYDIS_MNEMONIC_JZ:
-          case ZYDIS_MNEMONIC_LOOP:
-          case ZYDIS_MNEMONIC_LOOPE:
-          case ZYDIS_MNEMONIC_LOOPNE:
-          {
-            flags |= DASM_InstFlag_Branch;
-          }break;
-          
-          case ZYDIS_MNEMONIC_JMP:
-          {
-            flags |= DASM_InstFlag_UnconditionalJump;
-          }break;
-          
-          case ZYDIS_MNEMONIC_RET:
-          {
-            flags |= DASM_InstFlag_Return;
-          }break;
-          
-          case ZYDIS_MNEMONIC_PUSH:
-          case ZYDIS_MNEMONIC_POP:
-          {
-            flags |= DASM_InstFlag_ChangesStackPointer;
-          }break;
-          
-          default:
-          {
-            flags |= DASM_InstFlag_NonFlow;
-          }break;
-        }
-      }
-      
-      // rjf: convert
-      {
-        inst.flags           = flags;
-        inst.size            = zinst.info.length;
-        inst.string          = str8_copy(arena, str8_cstring(zinst.text));
-        inst.dst_vaddr       = dst_vaddr;
-        // inst.src_vaddr       = src_vaddr;
-      }
+      inst = x64_dasm_inst_from_code(arena, vaddr, code, syntax);
     }break;
+#endif
   }
   return inst;
 }
