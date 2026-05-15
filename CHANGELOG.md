@@ -3,6 +3,10 @@
 ## Linker Changes
 
 - Implemented /DEBUG:GHASH
+- Fixed an issue where an import thunk or import address could be linked from the currently searched library
+  instead of the library where the first import reference was found. For example, if the first pass finds the import
+  thunk in foo.lib and the second pass resolves symbol to the import address in bar.lib, the linker now always linkes
+  the import thunk and import address members from the library where the first reference was found.
 
 # v0.9.25-alpha
 
