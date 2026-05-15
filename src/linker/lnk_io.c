@@ -198,8 +198,8 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 {
   LNK_DiskReader *task = raw_task;
-#if OS_WINDOWS
   Temp scratch = scratch_begin(&arena, 1);
+#if OS_WINDOWS
   String16 path16      = str16_from_8(scratch.arena, task->path_arr.v[task_id]);
   HANDLE   file_handle = CreateFileW(path16.str, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
   if (file_handle != INVALID_HANDLE_VALUE) {
@@ -209,18 +209,28 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
       GetFileSizeEx(file_handle, &file_size);
       void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_COPY, 0, 0, file_size.QuadPart);
       if (file_data) {
-        // asan crashes for an unknown reason on memory-mapped files, even though the allocation is perfectly fine
-        AsanUnpoisonMemoryRegion(file_data, file_size.QuadPart);
         task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
       }
       CloseHandle(mapping_handle);
     }
     CloseHandle(file_handle);
   }
-  scratch_end(scratch);
+#elif OS_LINUX
+  int fd = open((char *)push_cstr(scratch.arena, task->path_arr.v[task_id]).str, O_RDONLY);
+  if (fd != -1) {
+    struct stat st = {0};
+    if (fstat(fd, &st) == 0) {
+      void *file_data = mmap(0, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+      if (file_data != MAP_FAILED) {
+        task->data_arr.v[task_id] = str8(file_data, st.st_size);
+      }
+    }
+    close(fd);
+  }
 #else
 # error "memory mapping files is not supported on this platform"
 #endif
+  scratch_end(scratch);
 }
 
 internal String8Array
