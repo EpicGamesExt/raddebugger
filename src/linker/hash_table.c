@@ -726,6 +726,18 @@ hash_map_push_u64_u64(Arena *arena, HashMap *hm, U64 key, U64 value)
 }
 
 internal HashMapNode *
+hash_map_push_raw_raw(Arena *arena, HashMap *hm, void *key, void *value)
+{
+  return hash_map_push(arena, hm, hash_map_hasher(str8_struct(&key)), (HashMapKeyValue){ .key = { .key_raw = key }, .value = { .value_raw = value } }, hash_map_match_raw);
+}
+
+internal HashMapNode *
+hash_map_push_raw_u64(Arena *arena, HashMap *hm, void *key, U64 value)
+{
+  return hash_map_push(arena, hm, hash_map_hasher(str8_struct(&key)), (HashMapKeyValue){ .key = { .key_raw = key }, .value = { .value_u64 = value } }, hash_map_match_u64);
+}
+
+internal HashMapNode *
 hash_map_push_path_u64(Arena *arena, HashMap *hm, String8 path, U64 value)
 {
   return hash_map_push(arena, hm, hash_map_hasher(path), (HashMapKeyValue){ .key = { .key_string = path }, .value = { .value_u64 = value } }, hash_map_match_path);
@@ -792,6 +804,13 @@ hash_map_search_raw_raw(HashMap *hm, void *key)
 {
   HashMapNode *n = hash_map_search(hm, hash_map_hasher(str8_struct(&key)), (HashMapKey){ .key_raw = key }, hash_map_match_raw);
   return n ? n->v.value.value_raw : 0;
+}
+
+internal U64 *
+hash_map_search_raw_u64(HashMap *hm, void *key)
+{
+  HashMapNode *n = hash_map_search(hm, hash_map_hasher(str8_struct(&key)), (HashMapKey){ .key_raw = key }, hash_map_match_raw);
+  return n ? &n->v.value.value_u64 : 0;
 }
 
 ////////////////////////////////

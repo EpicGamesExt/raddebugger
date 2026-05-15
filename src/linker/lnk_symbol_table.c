@@ -708,6 +708,52 @@ exit:;
   return is_resolved;
 }
 
+internal B32
+lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymbolRef *symbol_out)
+{
+  B32                        is_resolved   = 1;
+  COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
+  COFF_SymbolValueInterpType symbol_interp = coff_interp_symbol(symbol_parsed.section_number, symbol_parsed.value, symbol_parsed.storage_class);
+  switch (symbol_interp) {
+  case COFF_SymbolValueInterp_Regular: { 
+    LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(symbol.obj, symbol_parsed.section_number);
+    *symbol_out = symlink ? lnk_ref_from_symbol(symlink) : symbol;
+  } break;
+  case COFF_SymbolValueInterp_Weak: {
+    LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, symbol_parsed.name);
+    COFF_ParsedSymbol           defn_parsed = lnk_parsed_from_symbol(defn);
+    COFF_SymbolValueInterpType  defn_interp = lnk_interp_from_symbol(defn);
+    if (defn_interp != COFF_SymbolValueInterp_Undefined) {
+      *symbol_out = lnk_ref_from_symbol(defn);
+    } else {
+      is_resolved = 0;
+    }
+  } break;
+  case COFF_SymbolValueInterp_Undefined: {
+    LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
+    if (defn) {
+      *symbol_out = lnk_ref_from_symbol(defn);
+    } else {
+      is_resolved = 0;
+    }
+  } break;
+  case COFF_SymbolValueInterp_Common: {
+    LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
+    *symbol_out = lnk_ref_from_symbol(defn);
+  } break;
+  case COFF_SymbolValueInterp_Abs: {
+    if (symbol_parsed.storage_class == COFF_SymStorageClass_External) { 
+      LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
+      *symbol_out = lnk_ref_from_symbol(defn);
+    } else {
+      *symbol_out = symbol;
+    }
+  } break;
+  case COFF_SymbolValueInterp_Debug: { *symbol_out = symbol; } break;
+  }
+  return is_resolved;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
 {

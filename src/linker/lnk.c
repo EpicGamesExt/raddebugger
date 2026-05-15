@@ -1968,7 +1968,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
         PE_MakeImportList *imports              = hash_table_search_path_raw(delayed_imports_ht, dll_name_n->string);
         String8            import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_name_n->string);
         String8            import_obj           = pe_make_import_dll_obj_delayed(arena->v[0], time_stamp, config->machine, dll_name_n->string, config->delay_load_helper_name, import_debug_symbols, *imports, emit_biat, emit_uiat);
-        lnk_inputer_push_obj(inputer, 0, dll_name_n->string, import_obj);
+        lnk_inputer_push_obj(inputer, 0, str8f(inputer->arena, "Import:%S", dll_name_n->string), import_obj);
       }
 
       String8 linker_debug_symbols = lnk_make_linker_debug_symbols(arena->v[0], config->machine);
@@ -1990,7 +1990,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
         PE_MakeImportList *imports              = hash_table_search_path_raw(static_imports_ht, dll_name_n->string);
         String8            import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_name_n->string);
         String8            import_obj           = pe_make_import_dll_obj_static(arena->v[0], time_stamp, config->machine, dll_name_n->string, import_debug_symbols, *imports);
-        lnk_inputer_push_obj(inputer, 0, dll_name_n->string, import_obj);
+        lnk_inputer_push_obj(inputer, 0, str8f(inputer->arena, "Import:%S", dll_name_n->string), import_obj);
       }
 
       String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);
@@ -2395,133 +2395,272 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(0,0);
+
+  Temp scratch  = scratch_begin(0,0);
+  Temp scratch2 = scratch_begin(&scratch.arena, 1);
 
   LNK_OptRefTask  *task   = raw_task;
   LNK_SymbolTable *symtab = task->symtab;
+  LNK_Config      *config = task->config;
+  LNK_ObjList      objs   = task->objs;
 
-  LNK_RelocRefsList free_list = {0};
+  U8               **is_live             = 0;
+  U64               *active_thread_count = 0;
+  LNK_RelocRefsList *ref_queue           = 0;
+  LNK_RelocRefsList  free_list           = {0};
+  if (task_id == 0) {
+    active_thread_count = push_array(scratch.arena, U64,               1);
+    ref_queue           = push_array(scratch.arena, LNK_RelocRefsList, 1);
+
+    // alloc live flags for each section
+    is_live = push_array_no_zero(scratch.arena, U8 *, objs.count);
+    {
+      U64 obj_idx = 0;
+      for EachNode(n, LNK_ObjNode, task->objs.first) {
+        is_live[obj_idx] = push_array(scratch.arena, U8, n->data.header.section_count_no_null + 1);
+
+        COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(&n->data);
+        for EachIndex(sect_idx, n->data.header.section_count_no_null) {
+          COFF_SectionHeader *header = &section_table[sect_idx];
+          is_live[obj_idx][sect_idx + 1] = !(header->flags & COFF_SectionFlag_LnkCOMDAT);
+        }
+
+        obj_idx += 1;
+      }
+    }
+
+    // define roots
+    {
+      // tls
+      LNK_Symbol *tls_symbol = lnk_symbol_table_searchf(symtab, MSCRT_TLS_SYMBOL_NAME);
+      if (tls_symbol) {
+        lnk_include_symbol(config, str8_lit(MSCRT_TLS_SYMBOL_NAME), 0);
+      }
+
+      // push tasks for each root symbol
+      for EachNode(root_n, LNK_IncludeSymbolNode, config->include_symbol_list.first) {
+        LNK_Symbol       *root     = lnk_symbol_table_search(symtab, root_n->v.name);
+        LNK_ObjSymbolRef  root_ref = lnk_ref_from_symbol(root);
+
+        LNK_RelocRefs *r = push_array(scratch.arena, LNK_RelocRefs, 1);
+        r->obj                 = root_ref.obj;
+        r->relocs.count        = 1;
+        r->relocs.v            = push_array(scratch.arena, COFF_Reloc, 1);
+        r->relocs.v[0].isymbol = root_ref.symbol_idx;
+
+        lnk_reloc_refs_list_push(scratch.arena, ref_queue, r);
+      }
+
+      // push task for every non-COMDAT section
+      for EachNode(obj_n, LNK_ObjNode, objs.first) {
+        LNK_Obj *obj = &obj_n->data;
+        for EachIndex(sect_idx, obj->header.section_count_no_null) {
+          U32                 section_number = sect_idx+1;
+          COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
+
+          // is section eligible for walking?
+          if (section_header->flags & COFF_SectionFlag_LnkRemove)  { continue; }
+          if (section_header->flags & COFF_SectionFlag_LnkCOMDAT)  { continue; }
+          if (section_header->flags & COFF_SectionFlag_LnkInfo)    { continue; }
+          if (section_header->flags & LNK_SECTION_FLAG_DEBUG)      { continue; }
+
+          // divide relocs and push task for each reloc block
+          COFF_RelocArray  relocs         = lnk_coff_reloc_info_from_section_number(obj, section_number);
+          U64              new_task_count = CeilIntegerDiv(relocs.count, LNK_RELOCS_PER_TASK);
+          LNK_RelocRefs   *new_tasks      = push_array(scratch.arena, LNK_RelocRefs, new_task_count);
+          for EachIndex(new_task_idx, new_task_count) {
+            LNK_RelocRefs *r = new_tasks + new_task_idx;
+            r->obj          = obj;
+            r->relocs.count = Min(LNK_RELOCS_PER_TASK, relocs.count - (new_task_idx * LNK_RELOCS_PER_TASK));
+            r->relocs.v     = relocs.v + (new_task_idx * LNK_RELOCS_PER_TASK);
+
+            lnk_reloc_refs_list_push(scratch.arena, ref_queue, r);
+          }
+        }
+      }
+    }
+  }
+  tp_broadcast(&is_live);
+  tp_broadcast(&ref_queue);
+  tp_broadcast(&active_thread_count);
+
   for (;;) {
     // update active thread count
-    ins_atomic_u32_inc_eval(&task->active_thread_count);
+    ins_atomic_u32_inc_eval(active_thread_count);
 
     for (;;) {
       // pop head node
-      LNK_RelocRefsNode *node = lnk_reloc_refs_list_pop_node_atomic(task->reloc_refs);
+      LNK_RelocRefsNode *node = lnk_reloc_refs_list_pop_node_atomic(ref_queue);
       if (!node) { break; }
 
       LNK_RelocRefs *reloc_refs = node->v;
-
       LNK_RelocRefsNode *first_node = 0, *last_node = 0;
+
       for EachIndex(reloc_idx, reloc_refs->relocs.count) {
-        COFF_Reloc                 *reloc        = &reloc_refs->relocs.v[reloc_idx];
-        LNK_ObjSymbolRef            reloc_defn   = (LNK_ObjSymbolRef){ .obj = reloc_refs->obj, .symbol_idx = reloc->isymbol };
-        COFF_ParsedSymbol           reloc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(reloc_defn.obj, reloc_defn.symbol_idx);
-        COFF_SymbolValueInterpType  reloc_interp = coff_interp_from_parsed_symbol(reloc_parsed);
+        COFF_Reloc *reloc = &reloc_refs->relocs.v[reloc_idx];
 
-        LNK_ObjSymbolRef ref_symbol = reloc_defn;
-        for (;;) {
-          COFF_ParsedSymbol          ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
-          COFF_SymbolValueInterpType ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
-
-          LNK_ObjSymbolRef next_ref = {0};
-          if (ref_interp == COFF_SymbolValueInterp_Regular) {
-            LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(ref_symbol.obj, ref_parsed.section_number);
-            if (symlink) {
-              ref_symbol = lnk_ref_from_symbol(symlink);
-            }
-            break;
-          } else if (ref_interp == COFF_SymbolValueInterp_Undefined) {
-            if (reloc_parsed.storage_class == COFF_SymStorageClass_External) {
-              LNK_Symbol *defn = lnk_symbol_table_search(symtab, ref_parsed.name);
-              next_ref = lnk_ref_from_symbol(defn);
+        // reloc -> symbol
+        LNK_ObjSymbolRef ref_symbol = (LNK_ObjSymbolRef){ .obj = reloc_refs->obj, .symbol_idx = reloc->isymbol };
+        {
+          Temp    temp         = temp_begin(scratch2.arena);
+          HashMap seen_hm      = {0};
+          B32     keep_walking = 1;
+          do {
+            // detect cyclic chains
+            U64 symbol_key = ((U64)ref_symbol.obj->input_idx << 32ull) | (U64)ref_symbol.symbol_idx;
+            if (hash_map_search_u64_u64(&seen_hm, symbol_key) == 0) {
+              hash_map_push_u64_u64(temp.arena, &seen_hm, symbol_key, 1);
             } else {
+              COFF_ParsedSymbol reloc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(reloc_refs->obj, reloc->isymbol);
+              lnk_error_obj(LNK_Warning_CyclicSymbol, reloc_refs->obj, "symbol %S forms a cyclic chain (/OPT:REF)", reloc_parsed.name);
               MemoryZeroStruct(&ref_symbol);
               break;
             }
-          } else if (ref_interp == COFF_SymbolValueInterp_Weak) {
-            LNK_Symbol *defn = lnk_symbol_table_search(symtab, ref_parsed.name);
-            next_ref = lnk_ref_from_symbol(defn);
-          } else {
-            break;
-          }
 
-          if (MemoryMatchStruct(&next_ref, &ref_symbol)) {
-            MemoryZeroStruct(&ref_symbol);
-            break;
-          }
-          ref_symbol = next_ref;
+            // unpack symbol
+            COFF_ParsedSymbol          ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
+            COFF_SymbolValueInterpType ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
+
+            // resolve symbol
+            LNK_ObjSymbolRef next_ref = {0};
+            if (lnk_resolve_symbol(symtab, ref_symbol, &next_ref)) {
+              keep_walking = (ref_interp == COFF_SymbolValueInterp_Weak || ref_interp == COFF_SymbolValueInterp_Undefined);
+              ref_symbol   = next_ref;
+            } else {
+              keep_walking = 0;
+            }
+          } while (keep_walking);
+          temp_end(temp);
         }
 
         // skip unresolved symbol
         if (ref_symbol.obj == 0) { continue; }
 
+        // unpack resolved symbol
         COFF_ParsedSymbol           ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
         COFF_SymbolValueInterpType  ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
-        LNK_Obj                    *ref_obj    = ref_symbol.obj;
 
         if (ref_interp == COFF_SymbolValueInterp_Regular) {
-          // make section number list (reloc section + associates)
-          U32Node *section_number_list = push_array(scratch.arena, U32Node, 1);
-          section_number_list->data    = ref_parsed.section_number;
-          section_number_list->next    = ref_obj->associated_sections[ref_parsed.section_number];
+          Temp temp = temp_begin(scratch2.arena);
 
-          // push section headers relocations to the task stack
-          for EachNode(section_number_n, U32Node, section_number_list) {
-            COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(ref_obj, section_number_n->data);
+          HashMap visited_sections_hm = {0};
+          U32Node *stack = push_array(temp.arena, U32Node, 1);
+          stack->data    = ref_parsed.section_number;
+          do {
+            U32 section_number = stack->data;
+            SLLStackPop(stack);
+
+            // is section number valid?
+            if (section_number == 0 || section_number > ref_symbol.obj->header.section_count_no_null) { continue; }
+
+            // detect cyclic associative sections
+            if (hash_map_search_u64_u64(&visited_sections_hm, section_number)) { continue; }
+            hash_map_push_u64_u64(temp.arena, &visited_sections_hm, section_number, 1);
+
+            // push associated section
+            for EachNode(associated_n, U32Node, ref_symbol.obj->associated_sections[section_number]) {
+              if (hash_map_search_u64_u64(&visited_sections_hm, associated_n->data)) { continue; }
+              U32Node *stack_n = push_array(temp.arena, U32Node, 1);
+              stack_n->data = associated_n->data;
+              SLLStackPush(stack, stack_n);
+            }
+
+            COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(ref_symbol.obj, section_number);
 
             // is section eligible for walking?
             if (section_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
             if (section_header->flags & COFF_SectionFlag_LnkInfo)   { continue; }
             if (section_header->flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
-            if (section_header->flags & LNK_SECTION_FLAG_LIVE)      { continue; }
 
-            // mark section live
-            section_header->flags |= LNK_SECTION_FLAG_LIVE;
+            // on first section visit set live flag and queue new section to walk
+            U8 was_visited = ins_atomic_u8_eval_assign(&is_live[ref_symbol.obj->input_idx][section_number], 1);
+            if (was_visited) { continue; }
 
             LNK_RelocRefsNode *node;
             if (free_list.head.node) {
               node = lnk_reloc_refs_list_pop_node(&free_list);
             } else {
               node    = push_array(scratch.arena, LNK_RelocRefsNode, 1);
-              node->v = push_array(scratch.arena, LNK_RelocRefs, 1);
+              node->v = push_array(scratch.arena, LNK_RelocRefs,     1);
             }
 
-            node->v->obj    = ref_obj;
-            node->v->relocs = lnk_coff_reloc_info_from_section_number(ref_obj, section_number_n->data);
+            node->v->obj    = ref_symbol.obj;
+            node->v->relocs = lnk_coff_reloc_info_from_section_number(ref_symbol.obj, section_number);
 
             if (first_node == 0) {
-              first_node = node;
-              last_node  = node;
+              first_node = node, last_node = node;
             } else {
               node->next = first_node;
               first_node = node;
             }
-          }
+          } while (stack);
+
+          temp_end(temp);
         }
       }
 
+      // free walk node
       lnk_reloc_refs_list_push_node(&free_list, node);
 
+      // queue new walks
       if (first_node && last_node) {
-        lnk_reloc_refs_list_concat_in_place(task->reloc_refs, first_node, last_node);
+        lnk_reloc_refs_list_concat_in_place(ref_queue, first_node, last_node);
       }
     }
 
     // are all threads done walking?
-    U32 active_thread_count = ins_atomic_u32_dec_eval(&task->active_thread_count);
-    if (active_thread_count == 0 && ins_atomic_ptr_eval(&task->reloc_refs->head.node) == 0) {
-      break;
+    {
+      U32 c = ins_atomic_u32_dec_eval(active_thread_count);
+      if (c == 0 && ins_atomic_ptr_eval(&ref_queue->head.node) == 0) {
+        break;
+      }
     }
 
     // comprehensive solution to the waiting problem
-    for (; ins_atomic_ptr_eval(&task->reloc_refs->head.node) == 0; ) {
+    for (; ins_atomic_ptr_eval(&ref_queue->head.node) == 0; ) {
       // was signaled to exit?
-      if (ins_atomic_u64_eval(&task->active_thread_count) == 0) { goto exit; }
+      if (ins_atomic_u32_eval(active_thread_count) == 0) { goto exit; }
     }
   }
   exit:;
+  barrier_wait(tp->barrier);
 
+  // TODO: thread
+  if (task_id == 0) {
+    ProfBegin("Remove Unreachable Sections");
+
+    U64 discard_vsize = 0;
+    U64 discard_fsize = 0;
+    U64 discard_count = 0;
+
+    for EachNode(obj_n, LNK_ObjNode, objs.first) {
+      LNK_Obj *obj = &obj_n->data;
+
+      for EachIndex(sect_idx, obj->header.section_count_no_null) {
+        U32 section_number = sect_idx+1;
+        if (is_live[obj->input_idx][section_number]) { continue; }
+
+        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
+        section_header->flags |= COFF_SectionFlag_LnkRemove;
+
+        if (section_header->flags & COFF_SectionFlag_CntUninitializedData) {
+          discard_vsize += section_header->vsize;
+        } else {
+          discard_fsize += section_header->fsize;
+        }
+        discard_count += 1;
+      }
+    }
+
+    lnk_log(LNK_Log_Debug, "/OPT:REF total virt size discard: %M",   (unsigned long long)discard_vsize);
+    lnk_log(LNK_Log_Debug, "/OPT:REF total file size discard: %M",   (unsigned long long)discard_fsize);
+    lnk_log(LNK_Log_Debug, "/OPT:REF total section discard  : %llu", (unsigned long long)discard_count);
+
+    ProfEnd();
+  }
+  barrier_wait(tp->barrier);
+
+  scratch_end(scratch2);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -2529,161 +2668,12 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
 internal void
 lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_ObjList objs)
 {
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0,0);
-
-  LNK_RelocRefsList reloc_refs = {0};
-
-  //
-  // reset live flag on sections
-  //
-  for EachNode(obj_n, LNK_ObjNode, objs.first) {
-    for EachIndex(sect_idx, obj_n->data.header.section_count_no_null) {
-      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(&obj_n->data, sect_idx+1);
-      section_header->flags &= ~LNK_SECTION_FLAG_LIVE;
-    }
-  }
-
-  //
-  // define roots
-  //
-  {
-    // tls
-    LNK_Symbol *tls_symbol = lnk_symbol_table_searchf(symtab, MSCRT_TLS_SYMBOL_NAME);
-    if (tls_symbol) {
-      lnk_include_symbol(config, str8_lit(MSCRT_TLS_SYMBOL_NAME), 0);
-    }
-
-    // push tasks for each root symbol
-    for EachNode(root_n, LNK_IncludeSymbolNode, config->include_symbol_list.first) {
-      LNK_Symbol       *root     = lnk_symbol_table_search(symtab, root_n->v.name);
-      LNK_ObjSymbolRef  root_ref = lnk_ref_from_symbol(root);
-
-      LNK_RelocRefs *r = push_array(scratch.arena, LNK_RelocRefs, 1);
-      r->obj                 = root_ref.obj;
-      r->relocs.count        = 1;
-      r->relocs.v            = push_array(scratch.arena, COFF_Reloc, 1);
-      r->relocs.v[0].isymbol = root_ref.symbol_idx;
-
-      lnk_reloc_refs_list_push(scratch.arena, &reloc_refs, r);
-    }
-
-    // push task for every non-COMDAT section
-    for EachNode(obj_n, LNK_ObjNode, objs.first) {
-      LNK_Obj *obj = &obj_n->data;
-      for EachIndex(sect_idx, obj->header.section_count_no_null) {
-        U32                 section_number = sect_idx+1;
-        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
-
-        // is section eligible for walking?
-        if (section_header->flags & COFF_SectionFlag_LnkRemove)  { continue; }
-        if (section_header->flags & COFF_SectionFlag_LnkCOMDAT)  { continue; }
-        if (section_header->flags & COFF_SectionFlag_LnkInfo)    { continue; }
-        if (section_header->flags & LNK_SECTION_FLAG_DEBUG)      { continue; }
-
-        // divide relocs and push task for each reloc block
-        COFF_RelocArray  relocs         = lnk_coff_reloc_info_from_section_number(obj, section_number);
-        U64              new_task_count = CeilIntegerDiv(relocs.count, LNK_RELOCS_PER_TASK);
-        LNK_RelocRefs   *new_tasks      = push_array(scratch.arena, LNK_RelocRefs, new_task_count);
-        for EachIndex(new_task_idx, new_task_count) {
-          LNK_RelocRefs *r = new_tasks + new_task_idx;
-          r->obj          = obj;
-          r->relocs.count = Min(LNK_RELOCS_PER_TASK, relocs.count - (new_task_idx * LNK_RELOCS_PER_TASK));
-          r->relocs.v     = relocs.v + (new_task_idx * LNK_RELOCS_PER_TASK);
-
-          lnk_reloc_refs_list_push(scratch.arena, &reloc_refs, r);
-        }
-      }
-    }
-  }
-
-  //
-  // walk relocations and mark referenced sections with live flag
-  //
-  LNK_OptRefTask task = {0};
-  task.symtab         = symtab;
-  task.reloc_refs     = &reloc_refs;
-  tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_walk_relocs_and_mark_ref_sections_task, &task, "Mark Live Sections");
-
-  ProfBegin("Remove Unreachable Sections");
-  for EachNode(obj_n, LNK_ObjNode, objs.first) {
-    LNK_Obj *obj = &obj_n->data;
-
-    for EachIndex(sect_idx, obj->header.section_count_no_null) {
-      U32                 section_number = sect_idx+1;
-      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
-
-      if (section_header->flags & LNK_SECTION_FLAG_DEBUG) { continue; }
-
-      // remove unreferenced sections
-      if (~section_header->flags & LNK_SECTION_FLAG_LIVE && section_header->flags & COFF_SectionFlag_LnkCOMDAT) {
-        section_header->flags |= COFF_SectionFlag_LnkRemove;
-      }
-
-      // remove associated sections
-      if (section_header->flags & COFF_SectionFlag_LnkRemove) {
-        for EachNode(section_number_n, U32Node, obj->associated_sections[section_number]) {
-          COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number_n->data);
-          section_header->flags |= COFF_SectionFlag_LnkRemove;
-        }
-      }
-      
-      // TODO: Reset reserved flag so it does not get propagated to the image sections.
-      // We need to mask out reserved flags when gathering section definitions to actually
-      // prevent propagation.
-      section_header->flags &= ~LNK_SECTION_FLAG_LIVE;
-    }
-  }
-  ProfEnd();
-
-  scratch_end(scratch);
-  ProfEnd();
-}
-
-internal B32
-lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymbolRef *symbol_out)
-{
-  B32                        is_resolved   = 1;
-  COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
-  COFF_SymbolValueInterpType symbol_interp = coff_interp_symbol(symbol_parsed.section_number, symbol_parsed.value, symbol_parsed.storage_class);
-  switch (symbol_interp) {
-  case COFF_SymbolValueInterp_Regular: { 
-    LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(symbol.obj, symbol_parsed.section_number);
-    *symbol_out = symlink ? lnk_ref_from_symbol(symlink) : symbol;
-  } break;
-  case COFF_SymbolValueInterp_Weak: {
-    LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, symbol_parsed.name);
-    COFF_ParsedSymbol           defn_parsed = lnk_parsed_from_symbol(defn);
-    COFF_SymbolValueInterpType  defn_interp = lnk_interp_from_symbol(defn);
-    if (defn_interp != COFF_SymbolValueInterp_Undefined) {
-      *symbol_out = lnk_ref_from_symbol(defn);
-    } else {
-      is_resolved = 0;
-    }
-  } break;
-  case COFF_SymbolValueInterp_Undefined: {
-    LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
-    if (defn) {
-      *symbol_out = lnk_ref_from_symbol(defn);
-    } else {
-      is_resolved = 0;
-    }
-  } break;
-  case COFF_SymbolValueInterp_Common: {
-    LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
-    *symbol_out = lnk_ref_from_symbol(defn);
-  } break;
-  case COFF_SymbolValueInterp_Abs: {
-    if (symbol_parsed.storage_class == COFF_SymStorageClass_External) { 
-      LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
-      *symbol_out = lnk_ref_from_symbol(defn);
-    } else {
-      *symbol_out = symbol;
-    }
-  } break;
-  case COFF_SymbolValueInterp_Debug: { *symbol_out = symbol; } break;
-  }
-  return is_resolved;
+  ProfScope("Mark Live Sections")
+    tp_for_parallel(tp,
+                    0,
+                    tp->worker_count,
+                    lnk_walk_relocs_and_mark_ref_sections_task,
+                    &(LNK_OptRefTask){ .symtab = symtab, .config = config, .objs = objs });
 }
 
 internal
@@ -3728,8 +3718,26 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
     if (interp == COFF_SymbolValueInterp_Undefined) {
       if (symbol.storage_class == COFF_SymStorageClass_Section) {
+        B32 is_referenced = 0;
+        COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(obj);
+        for EachIndex(sect_idx, obj->header.section_count_no_null) {
+          COFF_SectionHeader *section_header = &section_table[sect_idx];
+          if (section_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
+          if (section_header->flags & COFF_SectionFlag_LnkInfo)   { continue; }
+          if (section_header->flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
+          COFF_RelocArray relocs = lnk_coff_relocs_from_section_header(obj, section_header);
+          for EachIndex(reloc_idx, relocs.count) {
+            if (relocs.v[reloc_idx].isymbol == symbol_idx) {
+              is_referenced = 1;
+              break;
+            }
+          }
+          if (is_referenced) { break; }
+        }
+        if (!is_referenced) { continue; }
+
         LNK_Section *sect = lnk_section_table_search(task->sectab, symbol.name, symbol.value);
-        if (sect) {
+        if (sect && (~sect->flags & COFF_SectionFlag_LnkRemove)) {
           if (~sect->flags & COFF_SectionFlag_MemDiscardable) {
             LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
             if (obj->header.is_big_obj) {
@@ -3747,7 +3755,32 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
             lnk_error_obj(LNK_Error_SectRefsDiscardedMemory, obj, "symbol %S (No. 0x%llx) references section with discard flag", symbol.name, symbol_idx);
           }
         } else {
-          lnk_error_obj(LNK_Error_UnresolvedSymbol, obj, "undefined section symbol %S (No 0x%llx) refers to an image section that doesn't exist", symbol.name, symbol_idx);
+          U64 fallback_voff = 0;
+          U64 fallback_align = Max(task->sect_align, KB(4));
+          for EachIndex(sect_idx, task->image_sects.count) {
+            LNK_Section *image_sect = task->image_sects.v[sect_idx];
+            U64 image_sect_size = AlignPow2(Max(image_sect->vsize, image_sect->fsize), fallback_align);
+            if (image_sect_size == 0) { image_sect_size = fallback_align; }
+            fallback_voff = Max(fallback_voff, image_sect->voff + image_sect_size);
+          }
+          fallback_voff = AlignPow2(fallback_voff, fallback_align);
+
+          LNK_Section *fallback_sect = task->image_sects.v[task->image_sects.count-1];
+          U32 fallback_section_number = safe_cast_u32(fallback_sect->sect_idx + 1);
+          U32 fallback_section_offset = safe_cast_u32(fallback_voff - fallback_sect->voff);
+          if (obj->header.is_big_obj) {
+            COFF_Symbol32 *symbol32 = symbol.raw_symbol;
+            symbol32->section_number = fallback_section_number;
+            symbol32->value          = fallback_section_offset;
+            symbol32->storage_class  = COFF_SymStorageClass_Static;
+          } else {
+            COFF_Symbol16 *symbol16 = symbol.raw_symbol;
+            symbol16->section_number = safe_cast_u16(fallback_section_number);
+            symbol16->value          = fallback_section_offset;
+            symbol16->storage_class  = COFF_SymStorageClass_Static;
+          }
+
+          lnk_error_obj(LNK_Warning_UndefinedSectionSymbol, obj, "undefined section symbol %S (No. 0x%llx) refers to an image section that doesn't exist; patching to %#llx", symbol.name, symbol_idx, fallback_voff);
         }
       }
     }
@@ -4275,6 +4308,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     .objs             = objs,
     .function_pad_min = config->function_pad_min,
     .default_align    = coff_default_align_from_machine(config->machine),
+    .sect_align       = config->sect_align,
     .null_sc          = push_array(arena->v[0], LNK_SectionContrib, 1),
   };
 

@@ -2407,14 +2407,16 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
     if (obj_sect_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
     if (obj_sect_header->flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
 
+    String8 header_name = str8_cstring_capped(obj_sect_header->name, obj_sect_header->name + sizeof(obj_sect_header->name));
+    if (str8_match(header_name, str8_lit(".pdata"), 0)) { continue; }
+
     U64     sect_number;
     String8 sect_data;
     U32     sect_off;
     U32     data_crc;
     if (obj_sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
-      if (obj_sect_header->vsize == 0) {
-        continue;
-      }
+      if (obj_sect_header->vsize == 0) { continue; }
+
       U64 sect_num = rng1u64_array_num_from_value__binary_search(&task->image_section_virt_ranges, obj_sect_header->voff);
       sect_number = sect_num-1;
       Assert(sect_number < task->image_section_virt_ranges.count);
@@ -2422,9 +2424,8 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
       sect_off    = obj_sect_header->voff - task->image_section_virt_ranges.v[sect_number].min;
       data_crc    = 0;
     } else {
-      if (obj_sect_header->fsize == 0) {
-        continue;
-      }
+      if (obj_sect_header->fsize == 0) { continue; }
+
       U64 sect_num = rng1u64_array_num_from_value__binary_search(&task->image_section_file_ranges, obj_sect_header->foff);
       sect_number = sect_num-1;
       Assert(sect_number < task->image_section_file_ranges.count);

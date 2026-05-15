@@ -73,8 +73,7 @@ typedef struct LNK_Inputer
 #define LNK_IMPORT_STUB "*** RAD_IMPORT_STUB ***"
 #define LNK_NULL_SYMBOL "*** RAD_NULL_SYMBOL ***"
 
-#define LNK_SECTION_FLAG_LIVE  (1 << 0)
-#define LNK_SECTION_FLAG_DEBUG (1 << 1)
+#define LNK_SECTION_FLAG_DEBUG (1 << 0)
 
 typedef U8 LNK_LibMemberFlags;
 enum
@@ -214,9 +213,9 @@ typedef struct
 
 typedef struct
 {
-  LNK_SymbolTable   *symtab;
-  U32                active_thread_count;
-  LNK_RelocRefsList *reloc_refs;
+  LNK_SymbolTable *symtab;
+  LNK_Config      *config;
+  LNK_ObjList      objs;
 } LNK_OptRefTask;
 
 typedef struct
@@ -263,6 +262,7 @@ typedef struct
   LNK_Obj                  **objs;
   U64                        function_pad_min;
   U64                        default_align;
+  U64                        sect_align;
   LNK_SectionContrib        *null_sc;
   LNK_SectionContrib      ***sect_map;
   HashTable                 *contribs_ht;

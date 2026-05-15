@@ -169,6 +169,8 @@ internal HashMapNode * hash_map_push_u32_string   (Arena *arena, HashMap *hm, U3
 internal HashMapNode * hash_map_push_u64_raw      (Arena *arena, HashMap *hm, U64 key,      void    *value);
 internal HashMapNode * hash_map_push_u64_string   (Arena *arena, HashMap *hm, U64 key,      String8  value);
 internal HashMapNode * hash_map_push_u64_u64      (Arena *arena, HashMap *hm, U64 key,      U64      value);
+internal HashMapNode * hash_map_push_raw_raw      (Arena *arena, HashMap *hm, void *key,    void    *value);
+internal HashMapNode * hash_map_push_raw_u64      (Arena *arena, HashMap *hm, void *key,    U64      value);
 internal HashMapNode * hash_map_push_path_u64     (Arena *arena, HashMap *hm, String8 path, U64      value);
 internal HashMapNode * hash_map_push_path_string  (Arena *arena, HashMap *hm, String8 path, String8  value);
 internal HashMapNode * hash_map_push_path_raw     (Arena *arena, HashMap *hm, String8 path, void    *value);
@@ -180,6 +182,7 @@ internal void * hash_map_search_path_raw  (HashMap *hm, String8 key);
 internal void * hash_map_search_u64_raw   (HashMap *hm, U64     key);
 internal U64 *  hash_map_search_u64_u64   (HashMap *hm, U64     key);
 internal void * hash_map_search_raw_raw   (HashMap *hm, void   *key);
+internal U64 *  hash_map_search_raw_u64   (HashMap *hm, void   *key);
 
 internal HashMapKeyValue * key_value_from_hash_map  (Arena *arena, HashMap *hm);
 internal U32 *             keys_from_hash_map_u32   (Arena *arena, HashMap *hm);

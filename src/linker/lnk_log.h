@@ -109,6 +109,8 @@ typedef enum
   LNK_Warning_TryingToExportEntryPoint,
   LNK_Warning_InferAsanFail,
   LNK_Warning_GHash,
+  LNK_Warning_UndefinedSectionSymbol,
+  LNK_Warning_CyclicSymbol,
   LNK_Warning_Last,
   
   LNK_Error_Count
