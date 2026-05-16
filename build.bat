@@ -155,6 +155,7 @@ if "%mule_module%"=="1"                set didbuild=1 && %compile% ..\src\mule\m
 if "%mule_hotload%"=="1"               set didbuild=1 && %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
 if "%torture%"=="1"                    set didbuild=1 && %compile% ..\src\torture\torture_main.c                             %compile_link% %out%torture.exe || exit /b1
 if "%dwarf_expr_test%"=="1"            set didbuild=1 && %compile% ..\src\torture\dwarf_expr_test.c                          %compile_link% %out%dwarf_expr_test.exe || exit /b1
+if "%unit_sizes_from_pdb%"=="1"        set didbuild=1 && %compile% ..\src\scratch\unit_sizes_from_pdb.c                      %compile_link% %out%unit_sizes_from_pdb.exe || exit /b1
 if "%mule_peb_trample%"=="1" (
   set didbuild=1
   if exist mule_peb_trample.exe move mule_peb_trample.exe mule_peb_trample_old_%random%.exe
