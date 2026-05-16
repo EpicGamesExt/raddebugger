@@ -844,28 +844,17 @@ t_kill_all(String8 pattern)
   scratch_end(scratch);
 }
 
+// TODO: obsolete
 internal String8
-t_chop_line(String8 *output)
+t_chop_line(String8 *string)
 {
-  U64     new_line_pos = str8_find_needle(*output, 0, str8_lit("\n"), 0);
-  String8 line         = str8_prefix(*output, new_line_pos);
-  if (str8_ends_with(line, str8_lit("\r"), 0)) {
-    line = str8_chop(line, 1);
-  }
-  *output = str8_skip(*output, new_line_pos + 1);
-  return line;
+  return str8_chop_line(string);
 }
-
+// TODO: obsolete
 internal B32
 t_match_line(String8 *output, String8 expected_line)
 {
-  String8 before_chop = *output;
-  String8 line        = t_chop_line(output);
-  B32     is_match    = str8_match(line, expected_line, 0);
-  if ( ! is_match) {
-    *output = before_chop;
-  }
-  return is_match;
+  return str8_match_wildcard(t_chop_line(output), expected_line, 0);
 }
 
 internal B32
@@ -1220,16 +1209,19 @@ t_entry_point(CmdLine *cmdline)
       max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[test_idx]->group));
     }
     
-    PrintHeader("Tests");
-    U64 pass_count  = 0;
-    U64 fail_count  = 0;
-    U64 crash_count = 0;
-    U64 max_digit_count = count_digits_u64(target_indices.count, 10);
+    U64 pass_count       = 0;
+    U64 fail_count       = 0;
+    U64 crash_count      = 0;
+    U64 max_digit_count  = count_digits_u64(target_indices.count, 10);
     U64 total_time_start = now_time_us();
+
     typedef struct { U64 target_idx, d; } Slowest;
     Slowest slowest[5] = {0};
     for EachElement(i, slowest) { slowest[i].target_idx = max_U64; }
+
     for EachIndex(i, target_indices.count) {
+      if (i == 0) { PrintHeader("Tests"); }
+
       U64 target_idx = target_indices.v[i];
       T_Test *test = g_torture_tests[target_idx];
       
@@ -1279,6 +1271,8 @@ t_entry_point(CmdLine *cmdline)
         DateTime t = date_time_from_micro_seconds(d);
         String8  s = string_from_elapsed_time(scratch.arena, t);
         fprintf(stdout, " %.*s", str8_varg(s));
+
+        fflush(stdout);
         
         U64 insert_idx = max_U64;
         for EachElement(i, slowest) {
@@ -1305,48 +1299,48 @@ t_entry_point(CmdLine *cmdline)
         if (g_stop_on_first_fail_or_crash) { goto exit; }
       }
     }
-    fprintf(stderr, "\n");
     U64 total_time_end = now_time_us();
     
-    PrintHeader("Summary");
-    U64 total_time_dt = total_time_end - total_time_start;
-    String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
-    fprintf(stderr, "  Passed   %llu\n", (unsigned long long)pass_count);
-    fprintf(stderr, "  Failed   %llu\n", (unsigned long long)fail_count);
-    fprintf(stderr, "  Crashed  %llu\n", (unsigned long long)crash_count);
-    fprintf(stderr, "  Skipped  %llu\n", (unsigned long long)skip_count);
-    fprintf(stderr, "  Time     %.*s\n", str8_varg(total_time_str));
-    fprintf(stderr, "\n");
-    
-    {
-      fprintf(stderr, "  Slow Tests\n");
-      U64 label_max = 0;
-      U64 group_max = 0;
-      for EachElement(i, slowest) {
-        Slowest s = slowest[i];
-        if (s.target_idx >= g_torture_test_count) { break; }
-        label_max = Max(strlen(g_torture_tests[s.target_idx]->label), label_max);
-        group_max = Max(strlen(g_torture_tests[s.target_idx]->group), group_max);
-      }
-      
-      for EachElement(i, slowest) {
-        Slowest s = slowest[i];
-        if (s.target_idx >= g_torture_test_count) { break; }
-        String8 elapsed_time = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(s.d));
-        fprintf(stderr, "    %s %.*s:: %s %.*s %.*s\n",
-                g_torture_tests[s.target_idx]->group,
-                (int)(group_max - strlen(g_torture_tests[s.target_idx]->group)), spaces,
-                g_torture_tests[s.target_idx]->label,
-                (int)(label_max - strlen(g_torture_tests[s.target_idx]->label)) + 4, dots,
-                str8_varg(elapsed_time));
-      }
-
-      if (pass_count == target_indices.count) {
-        fprintf(stdout, "\n                          \x1b[32m" "%s" "\x1b[0m\n\n", "All Tests Passed!");
-        fprintf(stderr, "--------------------------------------------------------------------------------\n");
-      }
-
+    if (target_indices.count > 0 && (pass_count > 0 || fail_count > 0 || crash_count > 0 || skip_count > 0)) {
       fprintf(stderr, "\n");
+      PrintHeader("Summary");
+      U64 total_time_dt = total_time_end - total_time_start;
+      String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
+      fprintf(stderr, "  Passed   %llu\n", (unsigned long long)pass_count);
+      fprintf(stderr, "  Failed   %llu\n", (unsigned long long)fail_count);
+      fprintf(stderr, "  Crashed  %llu\n", (unsigned long long)crash_count);
+      fprintf(stderr, "  Skipped  %llu\n", (unsigned long long)skip_count);
+      fprintf(stderr, "  Time     %.*s\n", str8_varg(total_time_str));
+    
+      U64 slow_count = 0;
+      for EachElement(i, slowest) {
+        Slowest s = slowest[i];
+        if (s.target_idx >= g_torture_test_count) { break; }
+        slow_count += 1;
+      }
+
+      if (slow_count > 3) {
+        U64 label_max = 0;
+        U64 group_max = 0;
+        for EachElement(i, slowest) {
+          Slowest s = slowest[i];
+          label_max = Max(strlen(g_torture_tests[s.target_idx]->label), label_max);
+          group_max = Max(strlen(g_torture_tests[s.target_idx]->group), group_max);
+        }
+
+        fprintf(stderr, "  Slow Tests\n");
+        for EachElement(i, slowest) {
+          Slowest s = slowest[i];
+          if (s.target_idx >= g_torture_test_count) { break; }
+          String8 elapsed_time = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(s.d));
+          fprintf(stderr, "    %s %.*s:: %s %.*s %.*s\n",
+                  g_torture_tests[s.target_idx]->group,
+                  (int)(group_max - strlen(g_torture_tests[s.target_idx]->group)), spaces,
+                  g_torture_tests[s.target_idx]->label,
+                  (int)(label_max - strlen(g_torture_tests[s.target_idx]->label)) + 4, dots,
+                  str8_varg(elapsed_time));
+        }
+      }
     }
     
     exit:;

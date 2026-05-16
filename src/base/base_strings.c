@@ -537,6 +537,18 @@ str8_chop(String8 str, U64 amt)
 }
 
 internal String8
+str8_chop_line(String8 *str)
+{
+  U64     new_line_pos = str8_find_needle(*str, 0, str8_lit("\n"), 0);
+  String8 line         = str8_prefix(*str, new_line_pos);
+  if (str8_ends_with(line, str8_lit("\r"), 0)) {
+    line = str8_chop(line, 1);
+  }
+  *str = str8_skip(*str, new_line_pos + 1);
+  return line;
+}
+
+internal String8
 str8_skip_chop_whitespace(String8 string)
 {
   U8 *first = string.str;
