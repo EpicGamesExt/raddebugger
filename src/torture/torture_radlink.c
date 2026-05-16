@@ -12,6 +12,7 @@
 //  [ ] fold_diamond
 //  [ ] cyclic_icf
 //  [ ] fold_with_largest_align
+//  [ ] relocate_undefined_section_symbol
 
 ////////////////////////////////
 // Def -> COFF
@@ -4669,6 +4670,136 @@ TEST(opt_ref_dangling_section)
   T_Ok(sect != 0);
 }
 
+// TODO: relocations against undefined section symbols
+#if 1
+TEST(relocate_undefined_section_symbol)
+{
+  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {
+        "text", ".text", str8_lit_comp("\x48\xC7\xC0\x00\x00\x00\x00\xC3"), .flags = "rx:code@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, 3, "caller"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      T_COFF_DefSymbol_Undef("caller"),
+      {0}
+    }
+  }));
+
+  U64 target_count = 25;
+
+  String8           caller_data    = str8(
+                                     push_array(arena, U8,               target_count * 4), target_count * 4);
+  T_COFF_DefReloc  *caller_relocs  = push_array(arena, T_COFF_DefReloc,  target_count + 1);
+  T_COFF_DefSymbol *caller_symbols = push_array(arena, T_COFF_DefSymbol, target_count + 3);
+
+  caller_symbols[0] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Secdef("caller", COFF_ComdatSelect_Any);
+  caller_symbols[1] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Extern("caller", "caller", 0);
+
+  String8List targets = {0};
+
+  for EachIndex(i, target_count) {
+    char *obj_name    = (char *)str8f(arena, "target%u.obj", i).str;
+    char *target_name = (char *)str8f(arena, "target%u", i).str;
+    char *sect_name   = (char *)str8f(arena, ".target%u", i).str;
+    T_Ok(t_write_def_obj(obj_name, (T_COFF_DefObj){
+      .machine = T_COFF_DefSetMachine(X64),
+      .sections = (T_COFF_DefSection[]){
+        { target_name, sect_name, target_name, .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+        {0}
+      },
+      .symbols = (T_COFF_DefSymbol[]){
+        T_COFF_DefSymbol_Secdef(target_name, COFF_ComdatSelect_Any),
+        T_COFF_DefSymbol_Extern(target_name, target_name, 0),
+        {0}
+      }
+    }));
+
+    caller_relocs[i]      = (T_COFF_DefReloc)T_COFF_DefReloc(X64_Addr32Nb, i * 4, sect_name);
+    caller_symbols[i + 2] = (T_COFF_DefSymbol)T_COFF_DefSymbol_UndefSec(sect_name, COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead);
+
+    str8_list_pushf(arena, &targets, obj_name);
+  }
+
+  T_Ok(t_write_def_obj("caller.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+        { "caller", ".caller", caller_data, .flags = "rw:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = caller_relocs},
+        {0}
+      },
+    .symbols = caller_symbols,
+  }));
+
+  String8 target_paths = str8_list_join(arena, &targets, &(StringJoin){.sep=str8_lit(" ")});
+  T_Ok(t_invoke_linkerf("/subsystem:console /entry:entry /opt:ref /out:a.exe entry.obj caller.obj %S", target_paths) && g_last_exit_code == 0);
+
+  String8 output      = g_errors;
+  U64     match_count = 0;
+  while (output.size) {
+    if (t_match_line(&output, str8_lit("WARNING(*): *: relocation * in section *+* points to an undefined symbol *(*)"))) {
+      match_count += 1;
+    }
+  }
+  //T_Ok(match_count > 0);
+}
+#endif
+
+#if 1
+TEST(opt_ref_weak_alias_comdat)
+{
+  T_Ok(t_write_def_obj("weak.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "target", ".target", str8_lit("target"), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("target", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("target", "target", 0),
+      T_COFF_DefSymbol_Weak("weak_target", COFF_WeakExt_SearchAlias, "target"),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {
+        "text", ".text", str8_lit_comp("\x48\xC7\xC0\x00\x00\x00\x00\xC3"), .flags = "rx:code@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, 3, "weak_target"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      T_COFF_DefSymbol_Undef("weak_target"),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /opt:ref /out:a.exe entry.obj weak.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *target_sect   = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".target"));
+  T_Ok(target_sect != 0);
+}
+#endif
+
+
 TEST(fail_if_mismatch)
 {
   T_Ok(t_write_entry_obj());
@@ -7069,120 +7200,6 @@ TEST(lib_member_reloc_apply_off_out_of_bounds)
 
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /include:bad entry.obj bad.lib");
   T_Ok(g_last_exit_code != 0);
-}
-#endif
-
-#if 0
-TEST(opt_ref_comdat_undef_section)
-{
-  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
-    .machine = T_COFF_DefSetMachine(X64),
-    .sections = (T_COFF_DefSection[]){
-      {
-        "text", ".text", str8_lit_comp("\x48\xC7\xC0\x00\x00\x00\x00\xC3"), .flags = "rx:code@1",
-        .relocs = (T_COFF_DefReloc[]){
-          T_COFF_DefReloc(X64_Addr32Nb, 3, "caller"),
-          {0}
-        }
-      },
-      {0}
-    },
-    .symbols = (T_COFF_DefSymbol[]){
-      T_COFF_DefSymbol_Extern("entry", "text", 0),
-      T_COFF_DefSymbol_Undef("caller"),
-      {0}
-    }
-  }));
-
-  T_Ok(t_write_def_obj("caller.obj", (T_COFF_DefObj){
-    .machine = T_COFF_DefSetMachine(X64),
-    .sections = (T_COFF_DefSection[]){
-      {
-        "caller", ".caller", str8_lit_comp("\x00\x00\x00\x00"), .flags = "rw:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
-        .relocs = (T_COFF_DefReloc[]){
-          T_COFF_DefReloc(X64_Addr32Nb, 0, ".target"),
-          {0}
-        }
-      },
-      {0}
-    },
-    .symbols = (T_COFF_DefSymbol[]){
-      T_COFF_DefSymbol_Secdef("caller", COFF_ComdatSelect_Any),
-      T_COFF_DefSymbol_Extern("caller", "caller", 0),
-      T_COFF_DefSymbol_UndefSec(".target", COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead),
-      {0}
-    }
-  }));
-
-  T_Ok(t_write_def_obj("target.obj", (T_COFF_DefObj){
-    .machine = T_COFF_DefSetMachine(X64),
-    .sections = (T_COFF_DefSection[]){
-      { "target", ".target", str8_lit("target"), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
-      {0}
-    },
-    .symbols = (T_COFF_DefSymbol[]){
-      T_COFF_DefSymbol_Secdef("target", COFF_ComdatSelect_Any),
-      {0}
-    }
-  }));
-
-  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj caller.obj target.obj");
-  T_Ok(g_last_exit_code == 0);
-
-  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
-  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
-  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
-  String8             string_table  = str8_substr(exe, pe.string_table_range);
-  COFF_SectionHeader *target_sect   = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".target"));
-  T_Ok(target_sect != 0);
-}
-#endif
-
-#if 0
-TEST(opt_ref_weak_alias_comdat)
-{
-  T_Ok(t_write_def_obj("weak.obj", (T_COFF_DefObj){
-    .machine = T_COFF_DefSetMachine(X64),
-    .sections = (T_COFF_DefSection[]){
-      { "target", ".target", str8_lit("target"), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
-      {0}
-    },
-    .symbols = (T_COFF_DefSymbol[]){
-      T_COFF_DefSymbol_Secdef("target", COFF_ComdatSelect_Any),
-      T_COFF_DefSymbol_Extern("target", "target", 0),
-      T_COFF_DefSymbol_Weak("weak_target", COFF_WeakExt_SearchAlias, "target"),
-      {0}
-    }
-  }));
-
-  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
-    .machine = T_COFF_DefSetMachine(X64),
-    .sections = (T_COFF_DefSection[]){
-      {
-        "text", ".text", str8_lit_comp("\x48\xC7\xC0\x00\x00\x00\x00\xC3"), .flags = "rx:code@1",
-        .relocs = (T_COFF_DefReloc[]){
-          T_COFF_DefReloc(X64_Addr32Nb, 3, "weak_target"),
-          {0}
-        }
-      },
-      {0}
-    },
-    .symbols = (T_COFF_DefSymbol[]){
-      T_COFF_DefSymbol_Extern("entry", "text", 0),
-      T_COFF_DefSymbol_Undef("weak_target"),
-      {0}
-    }
-  }));
-
-  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj weak.obj");
-  T_Ok(g_last_exit_code == 0);
-
-  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
-  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
-  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
-  String8             string_table  = str8_substr(exe, pe.string_table_range);
-  COFF_SectionHeader *target_sect   = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".target"));
-  T_Ok(target_sect != 0);
 }
 #endif
 
