@@ -100,14 +100,14 @@ typedef struct MDMP_LocationDescriptor32 MDMP_LocationDescriptor32;
 struct MDMP_LocationDescriptor32
 {
   U32 data_size;
-  U32 voff;
+  U32 foff;
 };
 
 typedef struct MDMP_LocationDescriptor64 MDMP_LocationDescriptor64;
 struct MDMP_LocationDescriptor64
 {
   U64 data_size;
-  U64 voff;
+  U64 foff;
 };
 
 typedef struct MDMP_Directory MDMP_Directory;
@@ -168,7 +168,7 @@ struct MDMP_Module
   U32 image_size;
   U32 checksum;
   U32 time_date_stamp;
-  U32 module_name_voff;
+  U32 module_name_foff;
   MDMP_FixedFileInfo version_info;
   MDMP_LocationDescriptor32 cv_record;
   MDMP_LocationDescriptor32 misc_record;
@@ -195,6 +195,35 @@ struct MDMP_ExceptionStream
   U32 padding;
   MDMP_Exception exception;
   MDMP_LocationDescriptor32 thread_context;
+};
+
+typedef U16 MDMP_Arch;
+typedef enum MDMP_ArchEnum
+{
+  MDMP_Arch_x86  = 0,
+  MDMP_Arch_Arm  = 5,
+  MDMP_Arch_IA64 = 6,
+  MDMP_Arch_x64  = 9,
+  MDMP_Arch_Unknown = 0xffff,
+}
+MDMP_ArchEnum;
+
+typedef struct MDMP_SystemInfo MDMP_SystemInfo;
+struct MDMP_SystemInfo
+{
+  MDMP_Arch processor_architecture;
+  U16 processor_level;
+  U16 processor_revision;
+  U8 number_of_processors;
+  U8 product_type;
+  U32 major_version;
+  U32 minor_version;
+  U32 build_number;
+  U32 platform_id;
+  U32 csd_version_rva;
+  U16 suite_mask;
+  U16 padding;
+  // CPU_INFORMATION Cpu; (architecture dependent)
 };
 
 #endif // MINIDUMP_H

@@ -43,7 +43,7 @@ d_exception_kind_from_dmn(DMN_ExceptionKind kind)
 }
 
 internal D_TlsModel
-d_dynamic_linker_type_from_dmn(DMN_TlsModel type)
+d_tls_model_from_dmn(DMN_TlsModel type)
 {
   D_TlsModel result = D_TlsModel_Null;
   switch(type)
@@ -241,6 +241,18 @@ d_handle_from_dmn(D_MachineID machine_id, DMN_Handle handle)
     result.machine_id = machine_id;
     result.controller_kind = D_ControllerKind_Demon;
     result.entity_id = handle.u64[0];
+  }
+  return result;
+}
+
+internal D_Handle
+d_dump_handle_make(D_MachineID machine_id, U64 id)
+{
+  D_Handle result = {0};
+  {
+    result.machine_id = machine_id;
+    result.controller_kind = D_ControllerKind_Dump;
+    result.entity_id = id;
   }
   return result;
 }
@@ -4346,7 +4358,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->entity    = d_handle_from_dmn(D_MachineID_Local, event->process);
       out_evt->arch      = event->arch;
       out_evt->entity_id = event->code;
-      out_evt->tls_model = d_dynamic_linker_type_from_dmn(event->tls_model);
+      out_evt->tls_model = d_tls_model_from_dmn(event->tls_model);
       out_evt->target_os = OperatingSystem_CURRENT; // TODO: operating system of the remote target machine
       d_ctrl_state->process_counter += 1;
     }break;
@@ -4967,15 +4979,136 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   void *base = file_map_view_open(map, AccessFlag_Read, r1u64(0, props.size));
   String8 data = str8(base, base ? props.size : 0);
   {
+    Temp scratch = scratch_begin(0, 0);
+    D_EventList evts = {0};
+    
     //- rjf: try minidump parse -> construct events for entity creation
     {
       MDMP_Header header = {0};
       str8_deserial_read_struct(data, 0, &header);
       if(header.magic == MDMP_MAGIC)
       {
-        U64 directories_foff = header.stream_directory_foff;
-        U64 directories_count = header.number_of_streams;
-        // MDMP_Directory *directories = 
+        // rjf: extract directories
+        U64 directories_count = 0;
+        MDMP_Directory *directories = 0;
+        {
+          U64 directories_foff = header.stream_directory_foff;
+          if(directories_foff < data.size)
+          {
+            U64 max_directories_count = (data.size - directories_foff) / sizeof(MDMP_Directory);
+            directories_count = Min(header.number_of_streams, max_directories_count);
+            directories = (MDMP_Directory *)(data.str + directories_foff);
+          }
+        }
+        
+        // rjf: gather specific directories
+        MDMP_SystemInfo *system_info = 0;
+        MDMP_Thread *threads = 0;
+        U64 threads_count = 0;
+        MDMP_Module *modules = 0;
+        U64 modules_count = 0;
+        {
+          for EachIndex(idx, directories_count)
+          {
+            MDMP_Directory *dir = &directories[idx];
+            switch(dir->stream_kind)
+            {
+              default:{}break;
+              case MDMP_StreamKind_SystemInfo:
+              if(data.str + dir->location.foff + dir->location.data_size < data.str + data.size)
+              {
+                system_info = (MDMP_SystemInfo *)(data.str + dir->location.foff);
+              }break;
+              case MDMP_StreamKind_ThreadList:
+              {
+                U32 threads_count_32 = 0;
+                U64 off = dir->location.foff;
+                off += str8_deserial_read_struct(data, off, &threads_count_32);
+                U64 threads_count_max = (data.size - off) / sizeof(MDMP_Thread);
+                threads = (MDMP_Thread *)(data.str + off);
+                threads_count = Min(threads_count_32, threads_count_max);
+              }break;
+              case MDMP_StreamKind_ModuleList:
+              {
+                U32 modules_count_32 = 0;
+                U64 off = dir->location.foff;
+                off += str8_deserial_read_struct(data, off, &modules_count_32);
+                U64 modules_count_max = (data.size - off) / sizeof(MDMP_Module);
+                modules = (MDMP_Module *)(data.str + off);
+                modules_count = Min(modules_count_32, modules_count_max);
+              }break;
+            }
+          }
+        }
+        
+        // rjf: system info -> arch
+        Arch arch = Arch_Null;
+        if(system_info != 0) switch(system_info->processor_architecture)
+        {
+          default:{}break;
+          case MDMP_Arch_x86:{arch = Arch_x86;}break;
+          case MDMP_Arch_x64:{arch = Arch_x64;}break;
+        }
+        
+        // rjf: process creation
+        U64 handle_id_gen = 1;
+        D_Handle process = d_dump_handle_make(D_MachineID_Local, handle_id_gen);
+        handle_id_gen += 1;
+        {
+          D_Event *evt = d_event_list_push(scratch.arena, &evts);
+          evt->kind      = D_EventKind_NewProc;
+          evt->msg_id    = msg->msg_id;
+          evt->entity    = process;
+          evt->arch      = arch;
+        }
+        
+        // rjf: thread creation
+        for EachIndex(idx, threads_count)
+        {
+          MDMP_Thread *thread = &threads[idx];
+          D_Event *evt = d_event_list_push(scratch.arena, &evts);
+          evt->kind       = D_EventKind_NewThread;
+          evt->msg_id     = msg->msg_id;
+          evt->entity     = d_dump_handle_make(D_MachineID_Local, handle_id_gen);
+          evt->parent     = process;
+          evt->arch       = arch;
+          evt->entity_id  = thread->id;
+          // TODO(rjf): evt->stack_base = ; (use thread->stack)
+          // TODO(rjf): evt->tls_root   = ; (use thread->thread_context)
+          handle_id_gen += 1;
+        }
+        
+        // rjf: module loads
+        for EachIndex(idx, modules_count)
+        {
+          MDMP_Module *module = &modules[idx];
+          String8 module_name = {0};
+          {
+            U64 module_name_off = module->module_name_foff;
+            U64 off = module_name_off;
+            U32 module_name_size = 0;
+            off += str8_deserial_read_struct(data, off, &module_name_size);
+            String8 module_name_raw_data = str8_prefix(str8_skip(data, off), module_name_size);
+            String16 module_name_16 = str16((U16 *)module_name_raw_data.str, module_name_raw_data.size / sizeof(U16));
+            module_name = str8_from_16(scratch.arena, module_name_16);
+          }
+          D_Event *evt = d_event_list_push(scratch.arena, &evts);
+          evt->kind       = D_EventKind_NewModule;
+          evt->msg_id     = msg->msg_id;
+          evt->entity     = d_dump_handle_make(D_MachineID_Local, handle_id_gen);
+          evt->parent     = process;
+          evt->arch       = arch;
+          evt->vaddr_rng  = r1u64(module->image_base_vaddr, module->image_base_vaddr + module->image_size);
+          evt->string     = module_name;
+          // TODO(rjf): evt->stack_base = ; (use thread->stack)
+          // TODO(rjf): evt->tls_root   = ; (use thread->thread_context)
+          handle_id_gen += 1;
+        }
+        
+        // rjf: push events
+        d_c2u_push_events(&evts);
+        
+        scratch_end(scratch);
       }
     }
   }

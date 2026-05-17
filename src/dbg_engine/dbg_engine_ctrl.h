@@ -351,7 +351,7 @@ thread_static D_EntityCtxLookupAccel *d_entity_ctx_lookup_accel = 0;
 internal U64 d_hash_from_handle(D_Handle handle);
 internal D_EventCause d_event_cause_from_dmn_event_kind(DMN_EventKind event_kind);
 internal D_ExceptionKind d_exception_kind_from_dmn(DMN_ExceptionKind kind);
-internal D_TlsModel d_dynamic_linker_type_from_dmn(DMN_TlsModel type);
+internal D_TlsModel d_tls_model_from_dmn(DMN_TlsModel type);
 internal String8 d_string_from_event_kind(D_EventKind kind);
 internal String8 d_string_from_msg_kind(D_MsgKind kind);
 internal D_EntityKind d_entity_kind_from_string(String8 string);
@@ -370,6 +370,7 @@ internal String8 d_string_from_handle(Arena *arena, D_Handle handle);
 internal D_Handle d_handle_from_string(String8 string);
 internal DMN_Handle d_dmn_from_handle(D_Handle handle);
 internal D_Handle d_handle_from_dmn(D_MachineID machine_id, DMN_Handle handle);
+internal D_Handle d_dump_handle_make(D_MachineID machine_id, U64 id);
 
 ////////////////////////////////
 //~ rjf: Trap Type Functions
