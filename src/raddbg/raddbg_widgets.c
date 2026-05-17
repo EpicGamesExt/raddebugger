@@ -2516,7 +2516,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_spacer(ui_em(1.5f, 1.f));
             ui_set_next_pref_width(ui_children_sum(1));
             UI_Key pin_box_key = ui_key_from_stringf(ui_key_zero(), "###pin_%p", pin);
-            UI_Box *pin_box = ui_build_box_from_key(UI_BoxFlag_AnimatePos, pin_box_key);
+            UI_Box *pin_box = ui_build_box_from_key(0, pin_box_key);
             F32 pin_t = ui_anim(pin_box_key, 1.f, .rate = rd_state->catchall_animation_rate);
             UI_Parent(pin_box) UI_PrefWidth(ui_text_dim(1, 1))
             {

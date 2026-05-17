@@ -649,13 +649,13 @@ cfg_node_release(CFG_State *state, CFG_Node *node)
   for(CFG_NodePtrNode *n = nodes.first; n != 0; n = n->next)
   {
     CFG_Node *c = n->v;
+    U64 hash = u64_hash_from_str8(str8_struct(&c->id));
+    U64 slot_idx = hash%state->ctx.id_slots_count;
     cfg_string_release(state, c->string);
     SLLStackPush(state->free, c);
     c->first = c->last = c->prev = c->parent = 0;
     c->id = 0;
     c->string = str8_zero();
-    U64 hash = u64_hash_from_str8(str8_struct(&c->id));
-    U64 slot_idx = hash%state->ctx.id_slots_count;
     for(CFG_NodePtrNode *n = state->ctx.id_slots[slot_idx].first; n != 0; n = n->next)
     {
       if(n->v == c)

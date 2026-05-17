@@ -2063,12 +2063,12 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_FreezeLocalMachine:
         {
           D_MachineID machine_id = D_MachineID_Local;
-          d_cmd(D_CmdKind_FreezeMachine, .entity = d_handle_make(machine_id, dmn_handle_zero()));
+          d_cmd(D_CmdKind_FreezeMachine, .entity = d_handle_from_dmn(machine_id, dmn_handle_zero()));
         }break;
         case D_CmdKind_ThawLocalMachine:
         {
           D_MachineID machine_id = D_MachineID_Local;
-          d_cmd(D_CmdKind_ThawMachine, .entity = d_handle_make(machine_id, dmn_handle_zero()));
+          d_cmd(D_CmdKind_ThawMachine, .entity = d_handle_from_dmn(machine_id, dmn_handle_zero()));
         }break;
         case D_CmdKind_FreezeEntity:
         case D_CmdKind_ThawEntity:
@@ -2118,6 +2118,16 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             msg->entity_id = pid;
             MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
           }
+        }break;
+        
+        //- rjf: opening crash dumps
+        case D_CmdKind_OpenCrashDump:
+        {
+          String8 file_path = params->file_path;
+          D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
+          msg->kind      = D_MsgKind_OpenCrashDump;
+          msg->path      = str8_copy(scratch.arena, file_path);
+          MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
         }break;
       }
       

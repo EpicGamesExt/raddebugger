@@ -362,13 +362,14 @@ internal D_BreakpointFlags d_breakpoint_flags_from_dmn_trap_flags(DMN_TrapFlags 
 //~ rjf: Handle Type Functions
 
 internal D_Handle d_handle_zero(void);
-internal D_Handle d_handle_make(D_MachineID machine_id, DMN_Handle dmn_handle);
 internal B32 d_handle_match(D_Handle a, D_Handle b);
 internal void d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle *pair);
 internal D_HandleList d_handle_list_copy(Arena *arena, D_HandleList *src);
 internal D_HandleArray d_handle_array_from_list(Arena  *arena, D_HandleList *src);
 internal String8 d_string_from_handle(Arena *arena, D_Handle handle);
 internal D_Handle d_handle_from_string(String8 string);
+internal DMN_Handle d_dmn_from_handle(D_Handle handle);
+internal D_Handle d_handle_from_dmn(D_MachineID machine_id, DMN_Handle handle);
 
 ////////////////////////////////
 //~ rjf: Trap Type Functions
@@ -566,6 +567,7 @@ internal void d_ctrl_thread__end_and_flush_log(void);
 //- rjf: msg kind implementations
 internal void d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
+internal void d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);

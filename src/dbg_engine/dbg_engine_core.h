@@ -8,7 +8,13 @@
 //~ rjf: ID Types
 
 typedef U64 D_MsgID;
-typedef U64 D_MachineID;
+typedef U32 D_MachineID;
+typedef U32 D_ControllerKind;
+enum
+{
+  D_ControllerKind_Demon,
+  D_ControllerKind_Dump,
+};
 
 #define D_MachineID_Local (1)
 
@@ -19,7 +25,8 @@ typedef struct D_Handle D_Handle;
 struct D_Handle
 {
   D_MachineID machine_id;
-  DMN_Handle dmn_handle;
+  D_ControllerKind controller_kind;
+  U64 entity_id;
 };
 
 typedef struct D_HandleNode D_HandleNode;
@@ -225,6 +232,21 @@ struct D_EntityCtxLookupAccel
   Arena *entity_kind_arrays_arenas[D_EntityKind_COUNT];
   D_EntityArray entity_kind_arrays[D_EntityKind_COUNT];
   U64 entity_kind_arrays_gens[D_EntityKind_COUNT];
+};
+
+////////////////////////////////
+//~ rjf: Opened Dump Cache Types
+
+typedef struct D_DumpNode D_DumpNode;
+struct D_DumpNode
+{
+  D_DumpNode *next;
+  D_DumpNode *prev;
+  D_Handle process;
+  File file;
+  FileProperties props;
+  FileMap map;
+  void *base;
 };
 
 ////////////////////////////////

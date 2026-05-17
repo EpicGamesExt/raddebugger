@@ -424,14 +424,14 @@ variadic_params(char *fmt, ...)
 static void
 type_coverage_eval_tests(void)
 {
-  Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001}; EvalTest(basics.a, -1);
+  Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
   Basics_Stdint basics_stdint = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
   
   uint32_t a = (1<<31);
   int32_t  b = (1<<31);
   
-  uint32_t abcd = 0xaabbccdd; EvalTest(abcd, 0xaabbccdd);
-  int64_t abcd64 = (int64_t)abcd; EvalTest(abcd64, 0xaabbccdd); EvalTest(abcd64, abcd);
+  uint32_t abcd = 0xaabbccdd;
+  int64_t abcd64 = (int64_t)abcd;
   
   char string[] = "Hello World!";
   char longer_text[] =

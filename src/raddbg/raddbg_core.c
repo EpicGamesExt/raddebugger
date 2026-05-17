@@ -693,8 +693,9 @@ rd_ctrl_entity_from_eval_space(E_Space space)
      space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
   {
     D_Handle handle;
-    handle.machine_id = space.u64s[0];
-    handle.dmn_handle.u64[0] = space.u64s[1];
+    handle.machine_id      = (U32)((space.u64s[0] & 0xffffffff00000000ull) >> 32);
+    handle.controller_kind = (U32)((space.u64s[0] & 0x00000000ffffffffull) >> 0);
+    handle.entity_id       = space.u64s[1];
     entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, handle);
   }
   return entity;
@@ -704,8 +705,8 @@ internal E_Space
 rd_eval_space_from_ctrl_entity(D_Entity *entity, E_SpaceKind kind)
 {
   E_Space space = e_space_make(kind);
-  space.u64s[0] = entity->handle.machine_id;
-  space.u64s[1] = entity->handle.dmn_handle.u64[0];
+  space.u64s[0] = (((U64)entity->handle.machine_id) << 32) | (((U64)entity->handle.controller_kind) << 0);
+  space.u64s[1] = entity->handle.entity_id;
   return space;
 }
 
@@ -5755,7 +5756,7 @@ rd_window_frame(void)
           ID(panel);
           ID(view);
 #undef ID
-#define Handle(name) ui_labelf("%s: [0x%I64x, 0x%I64x]", #name, (regs->name).machine_id, (regs->name).dmn_handle.u64[0])
+#define Handle(name) ui_labelf("%s: [0x%x, 0x%x, 0x%I64x]", #name, (regs->name).machine_id, (regs->name).controller_kind, (regs->name).entity_id)
           Handle(machine);
           Handle(process);
           Handle(module);

@@ -159,6 +159,7 @@ typedef enum D_MsgKind
   D_MsgKind_Null,
   D_MsgKind_Launch,
   D_MsgKind_Attach,
+  D_MsgKind_OpenCrashDump,
   D_MsgKind_Kill,
   D_MsgKind_KillAll,
   D_MsgKind_Detach,
