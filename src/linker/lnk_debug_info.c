@@ -298,7 +298,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     ProfNoteV("Total .debug$S Input Size: %M", total_debug_s_size);
     ProfNoteV("Total .debug$T Input Size: %M", total_debug_t_size);
     ProfNoteV("Total .debug$P Input Size: %M", total_debug_p_size);
-    ProfNoteV("Total .debug$H Input Size: %M", total_debug_H_size);
+    ProfNoteV("Total .debug$H Input Size: %M", total_debug_h_size);
 	
     if (lnk_get_log_status(LNK_Log_Debug)) {
       lnk_log(LNK_Log_Debug, "[Total .debug$S Input Size %M]", total_debug_s_size);

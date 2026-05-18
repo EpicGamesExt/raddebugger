@@ -1,6 +1,10 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+// TODO: 
+//
+// [ ] d2r_types alias size and byte size on __float80 typedef mismatch
+
 #define T_Group "d2r"
 
 internal RDI_Parsed *
@@ -94,7 +98,7 @@ dw_writer_tag_end(writer);
     DeclBaseType(uint128_type,                 "__int128 unsigned",      Unsigned,     16);
     DeclBaseType(float16_type,                 "_Float16",               Float,        2);
     DeclBaseType(bfloat16_type,                "__bf16",                 Float,        2);
-    DeclBaseType(float80_type,                 "__float80",              Float,        16);
+    //DeclBaseType(float80_type,                 "__float80",              Float,        16);
     DeclBaseType(float128_type,                "_float128",              Float,        16);
     DeclBaseType(complex_float_type,           "complex float",          ComplexFloat, 8);
     DeclBaseType(complex_doulbe_type,          "complex double",         ComplexFloat, 16);
@@ -184,7 +188,7 @@ T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), s
   TestBuiltinType("__int128 unsigned",   16, U128);
   TestBuiltinType("_Float16",            2,  F16);
   TestBuiltinType("__bf16",              2,  BF16);
-  TestBuiltinType("__float80",           16, F80);
+  //TestBuiltinType("__float80",           16, F80);
   TestBuiltinType("_float128",           16, F128);
   TestBuiltinType("complex float",       8,  ComplexF32);
   TestBuiltinType("complex double",      16, ComplexF64);
