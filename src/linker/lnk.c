@@ -1813,7 +1813,7 @@ lnk_link_inputs(TP_Context      *tp,
                 is_addr_import   = hash_map_search_stringf_raw(&imports_hm, "__imp_%S", member_ref->link_symbol->name);
               }
               if (is_thunk_import != 0 || is_addr_import != 0) {
-                lnk_invalid_path("duplicate import member queue detected");
+                lnk_log(LNK_Log_Debug, "duplicate import %S member queue detected", member_ref->link_symbol->name);
                 break;
               }
             }
@@ -2379,62 +2379,53 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
 }
 
 internal void
-lnk_reloc_refs_list_push_node(LNK_RelocRefsList *list, LNK_RelocRefsNode *node)
+lnk_reloc_ref_batch_list_push_node(LNK_RelocRefsBatchList *list, LNK_RelocRefsBatch *node)
 {
-  LNK_RelocRefsPointer old_head = list->head;
+  LNK_RelocRefsBatchPointer old_head = list->head;
   node->next = old_head.node;
-  list->head = (LNK_RelocRefsPointer){ .node = node, .tag = old_head.tag + 1 };
+  list->head = (LNK_RelocRefsBatchPointer){ .node = node, .tag = old_head.tag + 1 };
 }
 
-internal LNK_RelocRefsNode *
-lnk_reloc_refs_list_pop_node(LNK_RelocRefsList *list)
+internal void
+lnk_reloc_ref_batch_list_push(Arena *arena, LNK_RelocRefsBatchList *list, LNK_RelocRefs v)
 {
-  LNK_RelocRefsPointer old_head = list->head;
+  LNK_RelocRefsBatch *batch = list->head.node;
+  if (list->head.node == 0 || list->head.node->count >= ArrayCount(list->head.node->v)) {
+    batch = push_array(arena, LNK_RelocRefsBatch, 1);
+    lnk_reloc_ref_batch_list_push_node(list, batch);
+  }
+  batch->v[batch->count++] = v;
+}
+
+internal LNK_RelocRefsBatch *
+lnk_reloc_ref_batch_list_pop(LNK_RelocRefsBatchList *list)
+{
+  LNK_RelocRefsBatchPointer old_head = list->head;
   if (old_head.node) {
-    list->head = (LNK_RelocRefsPointer){ .node = old_head.node->next, .tag = old_head.tag + 1};
+    list->head = (LNK_RelocRefsBatchPointer){ .node = old_head.node->next, .tag = old_head.tag + 1};
   }
   return old_head.node;
 }
 
-internal LNK_RelocRefsNode *
-lnk_reloc_refs_list_push(Arena *arena, LNK_RelocRefsList *list, LNK_RelocRefs *v)
+internal LNK_RelocRefsBatch *
+lnk_reloc_ref_batch_list_pop_atomic(LNK_RelocRefsBatchList *list)
 {
-  LNK_RelocRefsNode *node = push_array(arena, LNK_RelocRefsNode, 1);
-  node->v = v;
-  lnk_reloc_refs_list_push_node(list, node);
-  return node;
-}
-
-internal LNK_RelocRefsNode *
-lnk_reloc_refs_list_pop_node_atomic(LNK_RelocRefsList *list)
-{
-  LNK_RelocRefsPointer old_head = { .node = ins_atomic_ptr_eval(&list->head.node), .tag = ins_atomic_u64_eval(&list->head.tag) };
+  LNK_RelocRefsBatchPointer old_head = { .node = ins_atomic_ptr_eval(&list->head.node), .tag = ins_atomic_u64_eval(&list->head.tag) };
   for (;;) {
     if (old_head.node == 0) { break; }
-    LNK_RelocRefsPointer new_head = { .node = old_head.node->next, .tag = old_head.tag + 1 };
+    LNK_RelocRefsBatchPointer new_head = { .node = old_head.node->next, .tag = old_head.tag + 1 };
     if (ins_atomic_u128_eval_cond_assign(&list->head, &new_head, &old_head)) { break; }
   }
   return old_head.node;
 }
 
 internal void
-lnk_reloc_refs_list_push_node_atomic(LNK_RelocRefsList *list, LNK_RelocRefsNode *node)
+lnk_reloc_ref_batch_list_concat_in_place_atomic(LNK_RelocRefsBatchList *list, LNK_RelocRefsBatch *first, LNK_RelocRefsBatch *last)
 {
-  LNK_RelocRefsPointer old_head = { .node = ins_atomic_ptr_eval(&list->head.node), .tag = ins_atomic_u64_eval(&list->head.tag) };
-  for (;;) {
-    node->next = old_head.node;
-    LNK_RelocRefsPointer new_head = { .node = node, .tag = old_head.tag + 1 };
-    if (ins_atomic_u128_eval_cond_assign(&list->head, &new_head, &old_head)) { break; }
-  }
-}
-
-internal void
-lnk_reloc_refs_list_concat_in_place(LNK_RelocRefsList *list, LNK_RelocRefsNode *first, LNK_RelocRefsNode *last)
-{
-  LNK_RelocRefsPointer old_head = { .node = ins_atomic_ptr_eval(&list->head.node), .tag = ins_atomic_u64_eval(&list->head.tag) };
+  LNK_RelocRefsBatchPointer old_head = { .node = ins_atomic_ptr_eval(&list->head.node), .tag = ins_atomic_u64_eval(&list->head.tag) };
   for (;;) {
     last->next = old_head.node;
-    LNK_RelocRefsPointer new_head = { .node = first, .tag = old_head.tag + 1 };
+    LNK_RelocRefsBatchPointer new_head = { .node = first, .tag = old_head.tag + 1 };
     if (ins_atomic_u128_eval_cond_assign(&list->head, &new_head, &old_head)) { break; }
   }
 }
@@ -2452,13 +2443,12 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
   LNK_Config      *config = task->config;
   LNK_ObjList      objs   = task->objs;
 
-  U8               **is_live             = 0;
-  U64               *active_thread_count = 0;
-  LNK_RelocRefsList *ref_queue           = 0;
-  LNK_RelocRefsList  free_list           = {0};
+  U8                    **is_live             = 0;
+  U64                    *active_thread_count = 0;
+  LNK_RelocRefsBatchList  *global_batch_list   = 0;
   if (task_id == 0) {
-    active_thread_count = push_array(scratch.arena, U64,               1);
-    ref_queue           = push_array(scratch.arena, LNK_RelocRefsList, 1);
+    active_thread_count = push_array(scratch.arena, U64,                   1);
+    global_batch_list   = push_array(scratch.arena, LNK_RelocRefsBatchList, 1);
 
     // alloc live flags for each section
     is_live = push_array_no_zero(scratch.arena, U8 *, objs.count);
@@ -2490,13 +2480,13 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
         LNK_Symbol       *root     = lnk_symbol_table_search(symtab, root_n->v.name);
         LNK_ObjSymbolRef  root_ref = lnk_ref_from_symbol(root);
 
-        LNK_RelocRefs *r = push_array(scratch.arena, LNK_RelocRefs, 1);
-        r->obj                 = root_ref.obj;
-        r->relocs.count        = 1;
-        r->relocs.v            = push_array(scratch.arena, COFF_Reloc, 1);
-        r->relocs.v[0].isymbol = root_ref.symbol_idx;
+        LNK_RelocRefs r = {0};
+        r.obj                 = root_ref.obj;
+        r.relocs.count        = 1;
+        r.relocs.v            = push_array(scratch.arena, COFF_Reloc, 1);
+        r.relocs.v[0].isymbol = root_ref.symbol_idx;
 
-        lnk_reloc_refs_list_push(scratch.arena, ref_queue, r);
+        lnk_reloc_ref_batch_list_push(scratch.arena, global_batch_list, r);
       }
 
       // push task for every non-COMDAT section
@@ -2513,159 +2503,161 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
           if (section_header->flags & LNK_SECTION_FLAG_DEBUG)      { continue; }
 
           // divide relocs and push task for each reloc block
-          COFF_RelocArray  relocs         = lnk_coff_reloc_info_from_section_number(obj, section_number);
-          U64              new_task_count = CeilIntegerDiv(relocs.count, LNK_RELOCS_PER_TASK);
-          LNK_RelocRefs   *new_tasks      = push_array(scratch.arena, LNK_RelocRefs, new_task_count);
+          COFF_RelocArray  relocs           = lnk_coff_reloc_info_from_section_number(obj, section_number);
+          U64              relocs_per_batch = 1000;
+          U64              new_task_count   = CeilIntegerDiv(relocs.count, relocs_per_batch);
           for EachIndex(new_task_idx, new_task_count) {
-            LNK_RelocRefs *r = new_tasks + new_task_idx;
-            r->obj          = obj;
-            r->relocs.count = Min(LNK_RELOCS_PER_TASK, relocs.count - (new_task_idx * LNK_RELOCS_PER_TASK));
-            r->relocs.v     = relocs.v + (new_task_idx * LNK_RELOCS_PER_TASK);
-
-            lnk_reloc_refs_list_push(scratch.arena, ref_queue, r);
+            LNK_RelocRefs r = {0};
+            r.obj          = obj;
+            r.relocs.count = Min(relocs_per_batch, relocs.count - (new_task_idx * relocs_per_batch));
+            r.relocs.v     = relocs.v + (new_task_idx * relocs_per_batch);
+            lnk_reloc_ref_batch_list_push(scratch.arena, global_batch_list, r);
           }
         }
       }
     }
   }
   tp_broadcast(&is_live);
-  tp_broadcast(&ref_queue);
+  tp_broadcast(&global_batch_list);
   tp_broadcast(&active_thread_count);
 
+  LNK_RelocRefsBatchList free_list = {0};
   for (;;) {
     // update active thread count
     ins_atomic_u32_inc_eval(active_thread_count);
 
     for (;;) {
-      // pop head node
-      LNK_RelocRefsNode *node = lnk_reloc_refs_list_pop_node_atomic(ref_queue);
-      if (!node) { break; }
+      // pop batch
+      LNK_RelocRefsBatch *batch = lnk_reloc_ref_batch_list_pop_atomic(global_batch_list);
+      if (!batch) { break; }
 
-      LNK_RelocRefs *reloc_refs = node->v;
-      LNK_RelocRefsNode *first_node = 0, *last_node = 0;
+      // walk batch relocations
+      LNK_RelocRefsBatch *first_batch = 0, *last_batch = 0;
+      for EachIndex(i, batch->count) {
+        for EachIndex(reloc_idx, batch->v[i].relocs.count) {
+          COFF_Reloc *reloc = &batch->v[i].relocs.v[reloc_idx];
 
-      for EachIndex(reloc_idx, reloc_refs->relocs.count) {
-        COFF_Reloc *reloc = &reloc_refs->relocs.v[reloc_idx];
+          // reloc -> symbol
+          LNK_ObjSymbolRef ref_symbol = (LNK_ObjSymbolRef){ .obj = batch->v[i].obj, .symbol_idx = reloc->isymbol };
+          {
+            Temp    temp         = temp_begin(scratch2.arena);
+            HashMap seen_hm      = {0};
+            B32     keep_walking = 1;
+            do {
+              // detect cyclic chains
+              U64 symbol_key = ((U64)ref_symbol.obj->input_idx << 32ull) | (U64)ref_symbol.symbol_idx;
+              if (hash_map_search_u64_u64(&seen_hm, symbol_key) == 0) {
+                hash_map_push_u64_u64(temp.arena, &seen_hm, symbol_key, 1);
+              } else {
+                COFF_ParsedSymbol reloc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(batch->v[i].obj, reloc->isymbol);
+                lnk_error_obj(LNK_Warning_CyclicSymbol, batch->v[i].obj, "symbol %S forms a cyclic chain (/OPT:REF)", reloc_parsed.name);
+                MemoryZeroStruct(&ref_symbol);
+                break;
+              }
 
-        // reloc -> symbol
-        LNK_ObjSymbolRef ref_symbol = (LNK_ObjSymbolRef){ .obj = reloc_refs->obj, .symbol_idx = reloc->isymbol };
-        {
-          Temp    temp         = temp_begin(scratch2.arena);
-          HashMap seen_hm      = {0};
-          B32     keep_walking = 1;
-          do {
-            // detect cyclic chains
-            U64 symbol_key = ((U64)ref_symbol.obj->input_idx << 32ull) | (U64)ref_symbol.symbol_idx;
-            if (hash_map_search_u64_u64(&seen_hm, symbol_key) == 0) {
-              hash_map_push_u64_u64(temp.arena, &seen_hm, symbol_key, 1);
-            } else {
-              COFF_ParsedSymbol reloc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(reloc_refs->obj, reloc->isymbol);
-              lnk_error_obj(LNK_Warning_CyclicSymbol, reloc_refs->obj, "symbol %S forms a cyclic chain (/OPT:REF)", reloc_parsed.name);
-              MemoryZeroStruct(&ref_symbol);
-              break;
-            }
+              // unpack symbol
+              COFF_ParsedSymbol          ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
+              COFF_SymbolValueInterpType ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
 
-            // unpack symbol
-            COFF_ParsedSymbol          ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
-            COFF_SymbolValueInterpType ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
+              // resolve symbol
+              LNK_ObjSymbolRef next_ref = {0};
+              if (lnk_resolve_symbol(symtab, ref_symbol, &next_ref)) {
+                keep_walking = (ref_interp == COFF_SymbolValueInterp_Weak || ref_interp == COFF_SymbolValueInterp_Undefined);
+                ref_symbol   = next_ref;
+              } else {
+                keep_walking = 0;
+              }
+            } while (keep_walking);
+            temp_end(temp);
+          }
 
-            // resolve symbol
-            LNK_ObjSymbolRef next_ref = {0};
-            if (lnk_resolve_symbol(symtab, ref_symbol, &next_ref)) {
-              keep_walking = (ref_interp == COFF_SymbolValueInterp_Weak || ref_interp == COFF_SymbolValueInterp_Undefined);
-              ref_symbol   = next_ref;
-            } else {
-              keep_walking = 0;
-            }
-          } while (keep_walking);
-          temp_end(temp);
-        }
+          // skip unresolved symbol
+          if (ref_symbol.obj == 0) { continue; }
 
-        // skip unresolved symbol
-        if (ref_symbol.obj == 0) { continue; }
+          // unpack resolved symbol
+          COFF_ParsedSymbol           ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
+          COFF_SymbolValueInterpType  ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
 
-        // unpack resolved symbol
-        COFF_ParsedSymbol           ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
-        COFF_SymbolValueInterpType  ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
+          if (ref_interp == COFF_SymbolValueInterp_Regular) {
+            Temp temp = temp_begin(scratch2.arena);
 
-        if (ref_interp == COFF_SymbolValueInterp_Regular) {
-          Temp temp = temp_begin(scratch2.arena);
+            HashMap visited_sections_hm = {0};
+            U32Node *stack = push_array(temp.arena, U32Node, 1);
+            stack->data    = ref_parsed.section_number;
+            do {
+              U32 section_number = stack->data;
+              SLLStackPop(stack);
 
-          HashMap visited_sections_hm = {0};
-          U32Node *stack = push_array(temp.arena, U32Node, 1);
-          stack->data    = ref_parsed.section_number;
-          do {
-            U32 section_number = stack->data;
-            SLLStackPop(stack);
+              // is section number valid?
+              if (section_number == 0 || section_number > ref_symbol.obj->header.section_count_no_null) { continue; }
 
-            // is section number valid?
-            if (section_number == 0 || section_number > ref_symbol.obj->header.section_count_no_null) { continue; }
+              // detect cyclic associative sections
+              if (hash_map_search_u64_u64(&visited_sections_hm, section_number)) { continue; }
+              hash_map_push_u64_u64(temp.arena, &visited_sections_hm, section_number, 1);
 
-            // detect cyclic associative sections
-            if (hash_map_search_u64_u64(&visited_sections_hm, section_number)) { continue; }
-            hash_map_push_u64_u64(temp.arena, &visited_sections_hm, section_number, 1);
+              // push associated section
+              for EachNode(associated_n, U32Node, ref_symbol.obj->associated_sections[section_number]) {
+                if (hash_map_search_u64_u64(&visited_sections_hm, associated_n->data)) { continue; }
+                U32Node *stack_n = push_array(temp.arena, U32Node, 1);
+                stack_n->data = associated_n->data;
+                SLLStackPush(stack, stack_n);
+              }
 
-            // push associated section
-            for EachNode(associated_n, U32Node, ref_symbol.obj->associated_sections[section_number]) {
-              if (hash_map_search_u64_u64(&visited_sections_hm, associated_n->data)) { continue; }
-              U32Node *stack_n = push_array(temp.arena, U32Node, 1);
-              stack_n->data = associated_n->data;
-              SLLStackPush(stack, stack_n);
-            }
+              COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(ref_symbol.obj, section_number);
 
-            COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(ref_symbol.obj, section_number);
+              // is section eligible for walking?
+              if (section_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
+              if (section_header->flags & COFF_SectionFlag_LnkInfo)   { continue; }
+              if (section_header->flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
 
-            // is section eligible for walking?
-            if (section_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
-            if (section_header->flags & COFF_SectionFlag_LnkInfo)   { continue; }
-            if (section_header->flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
+              // on first section visit, set live flag and enqueue section
+              U8 was_visited = ins_atomic_u8_eval_assign(&is_live[ref_symbol.obj->input_idx][section_number], 1);
+              if (was_visited) { continue; }
 
-            // on first section visit set live flag and queue new section to walk
-            U8 was_visited = ins_atomic_u8_eval_assign(&is_live[ref_symbol.obj->input_idx][section_number], 1);
-            if (was_visited) { continue; }
+              LNK_RelocRefs refs = {0};
+              refs.obj    = ref_symbol.obj;
+              refs.relocs = lnk_coff_reloc_info_from_section_number(ref_symbol.obj, section_number);
 
-            LNK_RelocRefsNode *node;
-            if (free_list.head.node) {
-              node = lnk_reloc_refs_list_pop_node(&free_list);
-            } else {
-              node    = push_array(scratch.arena, LNK_RelocRefsNode, 1);
-              node->v = push_array(scratch.arena, LNK_RelocRefs,     1);
-            }
+              // get a batch node
+              LNK_RelocRefsBatch *batch = last_batch;
+              if (last_batch == 0 || last_batch->count >= ArrayCount(last_batch->v)) {
+                if (free_list.head.node) {
+                  batch = lnk_reloc_ref_batch_list_pop(&free_list);
+                  MemoryZeroStruct(batch);
+                } else {
+                  batch = push_array(scratch.arena, LNK_RelocRefsBatch, 1);
+                }
+                SLLQueuePush(first_batch, last_batch, batch);
+              }
 
-            node->v->obj    = ref_symbol.obj;
-            node->v->relocs = lnk_coff_reloc_info_from_section_number(ref_symbol.obj, section_number);
+              batch->v[batch->count++] = refs;
 
-            if (first_node == 0) {
-              first_node = node, last_node = node;
-            } else {
-              node->next = first_node;
-              first_node = node;
-            }
-          } while (stack);
+            } while (stack);
 
-          temp_end(temp);
+            temp_end(temp);
+          }
         }
       }
-
-      // free walk node
-      lnk_reloc_refs_list_push_node(&free_list, node);
 
       // queue new walks
-      if (first_node && last_node) {
-        lnk_reloc_refs_list_concat_in_place(ref_queue, first_node, last_node);
+      if (first_batch && last_batch) {
+        lnk_reloc_ref_batch_list_concat_in_place_atomic(global_batch_list, first_batch, last_batch);
       }
+
+      // put batch on the free list
+      lnk_reloc_ref_batch_list_push_node(&free_list, batch);
     }
 
     // are all threads done walking?
     {
       U32 c = ins_atomic_u32_dec_eval(active_thread_count);
-      if (c == 0 && ins_atomic_ptr_eval(&ref_queue->head.node) == 0) {
+      if (c == 0 && ins_atomic_ptr_eval(&global_batch_list->head.node) == 0) {
         break;
       }
     }
 
     // comprehensive solution to the waiting problem
-    for (; ins_atomic_ptr_eval(&ref_queue->head.node) == 0; ) {
+    for (; ins_atomic_ptr_eval(&global_batch_list->head.node) == 0; ) {
       // was signaled to exit?
       if (ins_atomic_u32_eval(active_thread_count) == 0) { goto exit; }
     }

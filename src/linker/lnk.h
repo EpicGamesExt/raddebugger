@@ -140,9 +140,7 @@ typedef struct LNK_CommonBlockContrib
   } u;
 } LNK_CommonBlockContrib;
 
-// --- Ref ---------------------------------------------------------------------
-
-#define LNK_RELOCS_PER_TASK 0x1000
+// --- Reloc Ref ---------------------------------------------------------------
 
 typedef struct LNK_RelocRefs
 {
@@ -150,25 +148,27 @@ typedef struct LNK_RelocRefs
   COFF_RelocArray  relocs;
 } LNK_RelocRefs;
 
-typedef struct LNK_RelocRefsNode
+typedef struct LNK_RelocRefsBatch LNK_RelocRefsBatch;
+struct LNK_RelocRefsBatch
 {
-  LNK_RelocRefs *v;
-  struct LNK_RelocRefsNode *next;
-} LNK_RelocRefsNode;
+  LNK_RelocRefsBatch *next;
+  U64                count;
+  LNK_RelocRefs      v[64];
+};
 
-typedef union LNK_RelocRefsPointer
+typedef union
 {
   struct {
-    LNK_RelocRefsNode *node;
+    LNK_RelocRefsBatch *node;
     U64                tag;
   };
   U64 v[2];
-} LNK_RelocRefsPointer;
+} LNK_RelocRefsBatchPointer;
 
-typedef struct AlignType(16) LNK_RelocRefsList
+typedef struct AlignType(16) 
 {
-  LNK_RelocRefsPointer head;
-} LNK_RelocRefsList;
+  LNK_RelocRefsBatchPointer head;
+} LNK_RelocRefsBatchList;
 
 // --- Base Reloc --------------------------------------------------------------
 
