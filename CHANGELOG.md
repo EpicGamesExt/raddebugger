@@ -7,6 +7,8 @@
   instead of the library where the first import reference was found. For example, if the first pass finds the import
   thunk in foo.lib and the second pass resolves symbol to the import address in bar.lib, the linker now always linkes
   the import thunk and import address members from the library where the first reference was found.
+- /OPT:REF:  Fixed an issue with garbage collection of associated sections and weak symbols that led linker to remove
+  live sections.
 
 # v0.9.25-alpha
 
