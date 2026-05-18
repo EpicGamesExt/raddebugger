@@ -80,6 +80,9 @@ d_init(void)
     }
     d_ctrl_state->ctrl_thread_log = log_alloc();
     d_ctrl_state->ctrl_thread = thread_launch(d_ctrl_thread__entry_point, 0);
+    d_ctrl_state->dump_cache.slots_count = 64;
+    d_ctrl_state->dump_cache.slots = push_array(arena, D_DumpSlot, d_ctrl_state->dump_cache.slots_count);
+    d_ctrl_state->dump_cache.stripes = stripe_array_alloc(arena);
   }
   
   //- rjf: set up user state
@@ -111,4 +114,7 @@ d_init(void)
     // rjf: set up run state
     d_user_state->ctrl_last_run_arena = arena_alloc();
   }
+  
+  //- rjf: select user state's entity context
+  d_select_entity_ctx(&d_user_state->ctrl_entity_store->ctx);
 }

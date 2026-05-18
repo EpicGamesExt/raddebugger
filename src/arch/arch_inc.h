@@ -5,6 +5,7 @@
 #define ARCH_INC_H
 
 #include "arch/arch.h"
+#include "arch/os/arch_os.h"
 #if defined(DWARF_H)
 # include "arch/dwarf/arch_dwarf.h"
 #endif

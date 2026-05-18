@@ -10,11 +10,12 @@
 typedef U64 D_MsgID;
 typedef U32 D_MachineID;
 typedef U32 D_ControllerKind;
-enum
+typedef enum D_ControllerKindEnum
 {
   D_ControllerKind_Demon,
   D_ControllerKind_Dump,
-};
+}
+D_ControllerKindEnum;
 
 #define D_MachineID_Local (1)
 
@@ -235,21 +236,6 @@ struct D_EntityCtxLookupAccel
 };
 
 ////////////////////////////////
-//~ rjf: Opened Dump Cache Types
-
-typedef struct D_DumpNode D_DumpNode;
-struct D_DumpNode
-{
-  D_DumpNode *next;
-  D_DumpNode *prev;
-  D_Handle process;
-  File file;
-  FileProperties props;
-  FileMap map;
-  void *base;
-};
-
-////////////////////////////////
 //~ rjf: Tick Input Types
 
 typedef struct D_Target D_Target;
@@ -325,8 +311,8 @@ struct D_TrapList
 typedef struct D_Spoof D_Spoof;
 struct D_Spoof
 {
-  DMN_Handle process;
-  DMN_Handle thread;
+  D_Handle process;
+  D_Handle thread;
   U64 vaddr;
   U64 new_ip_value;
 };

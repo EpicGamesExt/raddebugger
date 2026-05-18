@@ -607,7 +607,7 @@ w32_dmn_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       }
       
       //- rjf: unpack features available on this context
-      if (xstate_enabled)
+      if(xstate_enabled)
       {
         SetXStateFeaturesMask(ctx, XSTATE_MASK_AVX | XSTATE_MASK_AVX512 | XSTATE_MASK_CET_U);
       }

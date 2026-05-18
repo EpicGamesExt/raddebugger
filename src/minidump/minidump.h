@@ -4,6 +4,8 @@
 #ifndef MINIDUMP_H
 #define MINIDUMP_H
 
+#pragma pack(push, 1)
+
 typedef enum MDMP_DumpKind
 {
   MDMP_DumpKind_Normal                                     = 0x00000000,
@@ -225,5 +227,7 @@ struct MDMP_SystemInfo
   U16 padding;
   // CPU_INFORMATION Cpu; (architecture dependent)
 };
+
+#pragma pack(pop)
 
 #endif // MINIDUMP_H

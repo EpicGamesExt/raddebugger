@@ -219,9 +219,7 @@ internal U64 dmn_rsp_from_thread(DMN_Handle thread);
 ////////////////////////////////
 //~ rjf: Process Reading Helper Functions (Helpers, Implemented Once)
 
-internal String8 dmn_process_read_cstring(Arena *arena, DMN_Handle process, U64 addr);
-internal String8 dmn_process_read_block(Arena *arena, DMN_Handle process, Rng1U64 vrange);
-internal void *  dmn_process_read_raw(Arena *arena, DMN_Handle process, Rng1U64 vrange);
+internal String8 dmn_data_from_process_vaddr_range(Arena *arena, DMN_Handle process, Rng1U64 vrange);
 
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)
@@ -262,8 +260,6 @@ internal void dmn_process_memory_release(DMN_Handle process, U64 vaddr, U64 size
 internal void dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, AccessFlags flags);
 internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
 internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
-#define dmn_process_read_struct(process, vaddr, ptr) dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
-#define dmn_process_write_struct(process, vaddr, ptr) dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 
 //- rjf: threads
 internal Arch dmn_arch_from_thread(DMN_Handle handle);

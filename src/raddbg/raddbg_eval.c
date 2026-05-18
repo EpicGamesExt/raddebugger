@@ -267,7 +267,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(locals)
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(registers)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+  D_Entity *thread = d_entity_from_handle(rd_regs()->thread);
   Arch arch = thread->arch;
   ARCH_Info *arch_info = arch_info_from_arch(arch);
   U64 reg_count = arch_info->reg_code_count;
@@ -769,7 +769,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(control)
      str8_match(str8_prefix(rhs->string, 1), str8_lit("$"), 0))
   {
     D_Handle handle = d_handle_from_string(rhs->string);
-    D_Entity *entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, handle);
+    D_Entity *entity = d_entity_from_handle(handle);
     E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
     result.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
     result.type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, d_entity_kind_code_name_table[entity->kind]);
@@ -1103,7 +1103,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(call_stack)
     D_CallStack *call_stack = &accel->call_stack;
     if(0 <= rhs_value.u64 && rhs_value.u64 < call_stack->frames_count)
     {
-      D_Entity *process = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, accel->process);
+      D_Entity *process = d_entity_from_handle(accel->process);
       ARCH_Info *arch_info = arch_info_from_arch(accel->arch);
       D_CallStackFrame *f = &call_stack->frames[rhs_value.u64];
       result.root = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(process, D_EvalSpaceKind_Entity), e_irtree_const_u(arena, arch_ip_from_reg_block(arch_info, f->regs)));
@@ -1565,7 +1565,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
     }
     else
     {
-      machines = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Machine);
+      machines = d_entity_array_from_kind(D_EntityKind_Machine);
     }
     
     //- rjf: gather system processes from this machine
@@ -1662,7 +1662,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(ctrl_entities)
       {
         String8 rhs_name = expr->first->next->string;
         D_Handle handle = d_handle_from_string(rhs_name);
-        entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, handle);
+        entity = d_entity_from_handle(handle);
       }break;
       case E_ExprKind_ArrayIndex:
       {
@@ -1670,7 +1670,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(ctrl_entities)
         D_EntityKind kind = d_entity_kind_from_string(rd_singular_from_code_name_plural(type->name));
         E_Value rhs_value = e_value_from_expr(expr->first->next);
         U64 rhs_idx = rhs_value.u64;
-        D_EntityArray entities = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, kind);
+        D_EntityArray entities = d_entity_array_from_kind(kind);
         if(0 <= rhs_idx && rhs_idx < entities.count)
         {
           entity = entities.v[rhs_idx];
@@ -1712,7 +1712,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
     D_EntityArray array = {0};
     if(scoping_entity == &d_entity_nil)
     {
-      array = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, entity_kind);
+      array = d_entity_array_from_kind(entity_kind);
     }
     else
     {

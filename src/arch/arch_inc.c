@@ -2,6 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #include "arch/arch.c"
+#include "arch/os/arch_os.c"
 #if defined(DWARF_H)
 # include "arch/dwarf/arch_dwarf.c"
 #endif

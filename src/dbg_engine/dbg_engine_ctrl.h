@@ -215,6 +215,55 @@ struct D_ModuleImageInfoCache
 };
 
 ////////////////////////////////
+//~ rjf: Opened Dump Cache Types
+
+typedef struct D_DumpMemoryRange D_DumpMemoryRange;
+struct D_DumpMemoryRange
+{
+  U64 base_vaddr;
+  Rng1U64 foff_range;
+};
+
+typedef struct D_DumpThread D_DumpThread;
+struct D_DumpThread
+{
+  D_Handle thread_handle;
+  U64 context_foff;
+};
+
+typedef struct D_DumpNode D_DumpNode;
+struct D_DumpNode
+{
+  D_DumpNode *next;
+  D_DumpNode *prev;
+  D_Handle process;
+  File file;
+  FileProperties props;
+  FileMap map;
+  void *base;
+  Arena *arena;
+  D_DumpMemoryRange *memory_ranges;
+  U64 memory_ranges_count;
+  D_DumpThread *threads;
+  U64 threads_count;
+};
+
+typedef struct D_DumpSlot D_DumpSlot;
+struct D_DumpSlot
+{
+  D_DumpNode *first;
+  D_DumpNode *last;
+};
+
+typedef struct D_DumpCache D_DumpCache;
+struct D_DumpCache
+{
+  U64 slots_count;
+  D_DumpSlot *slots;
+  StripeArray stripes;
+};
+
+////////////////////////////////
 //~ rjf: Touched Debug Info Directory Cache
 
 typedef struct D_DbgDirNode D_DbgDirNode;
@@ -275,6 +324,7 @@ struct D_CtrlState
   // rjf: caches
   D_ThreadRegCache thread_reg_cache;
   D_ModuleImageInfoCache module_image_info_cache;
+  D_DumpCache dump_cache;
   
   // rjf: generations
   U64 run_gen;
@@ -327,6 +377,7 @@ struct D_CtrlState
 //~ rjf: Globals
 
 global D_CtrlState *d_ctrl_state = 0;
+thread_static D_EntityCtx *d_entity_ctx = 0;
 read_only global D_Entity d_entity_nil =
 {
   &d_entity_nil,
@@ -413,9 +464,12 @@ internal D_Event d_event_from_serialized_string(Arena *arena, String8 string);
 ////////////////////////////////
 //~ rjf: Entity Type Functions
 
+//- rjf: entity context selection
+internal D_EntityCtx *d_select_entity_ctx(D_EntityCtx *ctx);
+
 //- rjf: entity list data structures
 internal void d_entity_list_push(Arena *arena, D_EntityList *list, D_Entity *entity);
-internal D_EntityList d_entity_list_from_handle_list(Arena *arena, D_EntityCtx *ctx, D_HandleList *list);
+internal D_EntityList d_entity_list_from_handle_list(Arena *arena, D_HandleList *list);
 #define d_entity_list_first(list) ((list)->first ? (list)->first->v : &d_entity_nil)
 
 //- rjf: entity array data structure
@@ -423,13 +477,13 @@ internal D_EntityArray d_entity_array_from_list(Arena *arena, D_EntityList *list
 #define d_entity_array_first(array) ((array)->count != 0 ? (array)->v[0] : &d_entity_nil)
 
 //- rjf: entity context (entity group read-only) functions
-internal D_Entity *d_entity_from_handle(D_EntityCtx *ctx, D_Handle handle);
+internal D_Entity *d_entity_from_handle(D_Handle handle);
 internal D_Entity *d_entity_child_from_kind(D_Entity *parent, D_EntityKind kind);
 internal D_Entity *d_entity_ancestor_from_kind(D_Entity *entity, D_EntityKind kind);
 internal D_Entity *d_process_from_entity(D_Entity *entity);
 internal D_Entity *d_module_from_process_vaddr(D_Entity *process, U64 vaddr);
 internal DI_Key d_dbgi_key_from_module(D_Entity *module);
-internal D_Entity *d_module_from_thread_candidates(D_EntityCtx *ctx, D_Entity *thread, D_EntityList *candidates);
+internal D_Entity *d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates);
 internal U64 d_vaddr_from_voff(D_Entity *module, U64 voff);
 internal U64 d_voff_from_vaddr(D_Entity *module, U64 vaddr);
 internal Rng1U64 d_vaddr_range_from_voff_range(D_Entity *module, Rng1U64 voff_range);
@@ -458,9 +512,9 @@ internal void d_entity_equip_string(D_EntityCtxRWStore *store, D_Entity *entity,
 
 //- rjf: accelerated entity context lookups
 internal D_EntityCtxLookupAccel *d_thread_entity_ctx_lookup_accel(void);
-internal D_EntityArray d_entity_array_from_kind(D_EntityCtx *ctx, D_EntityKind kind);
-internal D_EntityList d_modules_from_dbgi_key(Arena *arena, D_EntityCtx *ctx, DI_Key dbgi_key);
-internal D_Entity *d_thread_from_id(D_EntityCtx *ctx, U64 id);
+internal D_EntityArray d_entity_array_from_kind(D_EntityKind kind);
+internal D_EntityList d_modules_from_dbgi_key(Arena *arena, DI_Key dbgi_key);
+internal D_Entity *d_thread_from_id(U64 id);
 
 //- rjf: applying events to entity caches
 internal void d_entity_store_apply_events(D_EntityCtxRWStore *store, D_EventList *list);
@@ -473,14 +527,15 @@ internal void d_set_wakeup_hook(D_WakeupFunctionType *wakeup_hook);
 ////////////////////////////////
 //~ rjf: Thread Register Functions
 
-//- rjf: thread register cache reading
-internal void *d_reg_block_from_thread(Arena *arena, D_EntityCtx *ctx, D_Handle handle);
-internal U64 d_tls_root_vaddr_from_thread(D_EntityCtx *ctx, D_Handle handle);
-internal U64 d_rip_from_thread(D_EntityCtx *ctx, D_Handle handle);
-internal U64 d_rsp_from_thread(D_EntityCtx *ctx, D_Handle handle);
+//- rjf: thread handle read/write
+internal B32 d_thread_read_reg_block(D_Handle handle, void *reg_block);
+internal B32 d_thread_write_reg_block(D_Handle thread, void *reg_block);
 
-//- rjf: thread register writing
-internal B32 d_thread_write_reg_block(D_Handle thread, void *block);
+//- rjf: thread register cache reading
+internal void *d_reg_block_from_thread(Arena *arena, D_Handle handle);
+internal U64 d_tls_root_vaddr_from_thread(D_Handle handle);
+internal U64 d_rip_from_thread(D_Handle handle);
+internal U64 d_rsp_from_thread(D_Handle handle);
 
 ////////////////////////////////
 //~ rjf: Module Image Info Functions
@@ -504,7 +559,7 @@ internal U64 *d_unwind_reg_from_pe_gpr_reg__pe_x64(X64_RegBlock *regs, PE_Unwind
 internal D_UnwindStepResult d_unwind_step__pe_x64(D_Handle process_handle, D_Handle module_handle, U64 module_base_vaddr, X64_RegBlock *regs, U64 endt_us);
 
 //- rjf: abstracted full unwind
-internal D_Unwind d_unwind_from_thread(Arena *arena, D_EntityCtx *ctx, D_Handle thread, U64 endt_us);
+internal D_Unwind d_unwind_from_thread(Arena *arena, D_Handle thread, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Call Stack Building Functions
@@ -551,6 +606,9 @@ internal void d_ctrl_thread__append_program_defined_bp_traps(Arena *arena, D_Ent
 internal void d_ctrl_thread__module_open(D_Handle process, D_Handle module, Rng1U64 vaddr_range, String8 path, Rng1U64 elf_phdr_vrange, U64 elf_phdr_entsize);
 internal void d_ctrl_thread__module_close(D_Handle process, D_Handle module, Rng1U64 vaddr_range);
 
+//- rjf: dump process closing work
+internal void d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process);
+
 //- rjf: attached process running/event gathering
 internal DMN_Event *d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, DMN_RunCtrls *run_ctrls, D_Spoof *spoof);
 
@@ -578,6 +636,14 @@ internal void d_ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 ////////////////////////////////
 //~ rjf: Process Memory Artifact Cache Hooks / Lookups
 
+//- rjf: synchronous process memory reading helpers
+internal U64 d_process_read(D_Handle process, Rng1U64 range, void *dst);
+internal B32 d_process_write(D_Handle process, Rng1U64 range, void *dst);
+internal String8 d_data_from_process_vaddr_range(Arena *arena, D_Handle process, Rng1U64 vaddr_range, B32 zero_terminated);
+#define d_process_read_struct(process, vaddr, ptr) d_process_read((process), r1u64((vaddr), (vaddr) + sizeof(*(ptr))), (ptr))
+#define d_process_write_struct(process, vaddr, ptr) d_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), (ptr))
+
+//- rjf: process memory artifact cache
 internal AC_Artifact d_memory_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *gen_out);
 internal void d_memory_artifact_destroy(AC_Artifact artifact);
 internal C_Key d_key_from_process_vaddr_range(D_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, B32 wait_for_fresh, U64 endt_us, B32 *out_is_stale);
@@ -586,9 +652,6 @@ internal C_Key d_key_from_process_vaddr_range(D_Handle process, Rng1U64 vaddr_ra
 internal D_ProcessMemorySlice d_process_memory_slice_from_vaddr_range(Arena *arena, D_Handle process, Rng1U64 range, B32 wait_for_fresh, U64 endt_us);
 internal B32 d_process_memory_read(D_Handle process, Rng1U64 range, B32 *is_stale_out, void *out, U64 endt_us);
 #define d_process_memory_read_struct(process, vaddr, is_stale_out, ptr, endt_us) d_process_memory_read((process), r1u64((vaddr), (vaddr)+(sizeof(*(ptr)))), (is_stale_out), (ptr), (endt_us))
-
-//- rjf: process memory writing
-internal B32 d_process_write(D_Handle process, Rng1U64 range, void *src);
 
 ////////////////////////////////
 //~ rjf: Call Stack Artifact Cache Hooks / Lookups

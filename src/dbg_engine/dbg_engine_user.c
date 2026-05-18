@@ -297,7 +297,7 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity *thread)
   // rjf: thread => unpacked info
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   Arch arch = thread->arch;
-  U64 ip_vaddr = d_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
+  U64 ip_vaddr = d_rip_from_thread(thread->handle);
   
   // rjf: ip => machine code
   String8 machine_code = {0};
@@ -336,7 +336,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   
   // rjf: thread => info
   Arch arch = thread->arch;
-  U64 ip_vaddr = d_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
+  U64 ip_vaddr = d_rip_from_thread(thread->handle);
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
   DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -549,7 +549,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   
   // rjf: thread => info
   Arch arch = thread->arch;
-  U64 ip_vaddr = d_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
+  U64 ip_vaddr = d_rip_from_thread(thread->handle);
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
   DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -750,11 +750,10 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
     U64 read_endt_us = now_time_us() + 1000000;
     Temp scratch = scratch_begin(&arena, 1);
     Access *access = access_open();
-    D_EntityCtx *entity_ctx = &d_user_state->ctrl_entity_store->ctx;
     
     // rjf: unpack thread
     Arch arch = thread->arch;
-    U64 ip_vaddr = d_rip_from_thread(entity_ctx, thread->handle);
+    U64 ip_vaddr = d_rip_from_thread(thread->handle);
     D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
     D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
     DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -1303,7 +1302,7 @@ internal DI_KeyList
 d_push_active_dbgi_key_list(Arena *arena)
 {
   DI_KeyList dbgis = {0};
-  D_EntityArray modules = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Module);
+  D_EntityArray modules = d_entity_array_from_kind(D_EntityKind_Module);
   for EachIndex(idx, modules.count)
   {
     D_Entity *module = modules.v[idx];
@@ -1328,7 +1327,7 @@ d_query_cached_rip_from_thread_unwind(D_Entity *thread, U64 unwind_count)
   U64 result = 0;
   if(unwind_count == 0)
   {
-    result = d_rip_from_thread(&d_user_state->ctrl_entity_store->ctx, thread->handle);
+    result = d_rip_from_thread(thread->handle);
   }
   else
   {
@@ -1614,7 +1613,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_EventKind_NewProc:
         {
           // rjf: the first process? -> clear session output
-          D_EntityArray existing_processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+          D_EntityArray existing_processes = d_entity_array_from_kind(D_EntityKind_Process);
           if(existing_processes.count == 1)
           {
             MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
@@ -1678,7 +1677,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
     // rjf: build data strings of all param data
     String8List strings = {0};
     {
-      D_EntityArray threads = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Thread);
+      D_EntityArray threads = d_entity_array_from_kind(D_EntityKind_Thread);
       for EachIndex(idx, threads.count)
       {
         D_Entity *thread = threads.v[idx];
@@ -1833,7 +1832,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Kill:
         {
-          D_Entity *process = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->process);
+          D_Entity *process = d_entity_from_handle(params->process);
           if(process == &d_entity_nil)
           {
             log_user_error(str8_lit("Cannot kill; no process was specified."));
@@ -1856,7 +1855,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Detach:
         {
-          D_Entity *process = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->process);
+          D_Entity *process = d_entity_from_handle(params->process);
           if(process == &d_entity_nil)
           {
             log_user_error(str8_lit("Cannot detach; no process specified."));
@@ -1872,7 +1871,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_Continue:
         {
           B32 good_to_run = 0;
-          D_EntityArray threads = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Thread);
+          D_EntityArray threads = d_entity_array_from_kind(D_EntityKind_Thread);
           if(threads.count > 0)
           {
             for EachIndex(idx, threads.count)
@@ -1888,7 +1887,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             {
               need_run = 1;
               run_kind = D_RunKind_Run;
-              run_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->thread);
+              run_thread = d_entity_from_handle(params->thread);
             }
             else
             {
@@ -1902,7 +1901,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_StepOverLine:
         case D_CmdKind_StepOut:
         {
-          D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->thread);
+          D_Entity *thread = d_entity_from_handle(params->thread);
           if(thread == &d_entity_nil)
           {
             log_user_error(str8_lit("Must have a selected thread to step."));
@@ -1969,16 +1968,16 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         {
           need_run   = 1;
           run_kind   = d_user_state->ctrl_last_run_kind;
-          run_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, d_user_state->ctrl_last_run_thread_handle);
+          run_thread = d_entity_from_handle(d_user_state->ctrl_last_run_thread_handle);
           run_flags  = d_user_state->ctrl_last_run_flags;
           run_traps  = d_user_state->ctrl_last_run_traps;
         }break;
         case D_CmdKind_SetThreadIP:
         {
-          D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->thread);
+          D_Entity *thread = d_entity_from_handle(params->thread);
           ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
           U64 vaddr = params->vaddr;
-          void *block = d_reg_block_from_thread(scratch.arena, &d_user_state->ctrl_entity_store->ctx, thread->handle);
+          void *block = d_reg_block_from_thread(scratch.arena, thread->handle);
           arch_reg_block_write_ip(arch_info, block, vaddr);
           B32 result = d_thread_write_reg_block(thread->handle, block);
           (void)result;
@@ -2002,7 +2001,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Run:
         {
-          D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+          D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
           if(processes.count != 0)
           {
             d_cmd(D_CmdKind_Continue, .machine = params->machine, .process = params->process, .thread = params->thread);
@@ -2014,7 +2013,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Restart:
         {
-          D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+          D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
           if(processes.count != 0)
           {
             d_cmd(D_CmdKind_KillAll);
@@ -2024,7 +2023,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_StepInto:
         case D_CmdKind_StepOver:
         {
-          D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+          D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
           if(processes.count != 0)
           {
             D_CmdKind step_cmd_kind = (cmd->kind == D_CmdKind_StepInto
@@ -2074,7 +2073,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_ThawEntity:
         {
           B32 should_freeze = (cmd->kind == D_CmdKind_FreezeEntity);
-          D_Entity *root = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->entity);
+          D_Entity *root = d_entity_from_handle(params->entity);
           for(D_Entity *e = root; e != &d_entity_nil; e = d_entity_rec_depth_first_pre(e, root).next)
           {
             if(e->kind == D_EntityKind_Thread)
@@ -2089,7 +2088,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           {
             need_run   = 1;
             run_kind   = d_user_state->ctrl_last_run_kind;
-            run_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, d_user_state->ctrl_last_run_thread_handle);
+            run_thread = d_entity_from_handle(d_user_state->ctrl_last_run_thread_handle);
             run_flags  = d_user_state->ctrl_last_run_flags;
             run_traps  = d_user_state->ctrl_last_run_traps;
           }
@@ -2098,12 +2097,12 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         //- rjf: entity decoration
         case D_CmdKind_SetEntityColor:
         {
-          D_Entity *entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->entity);
+          D_Entity *entity = d_entity_from_handle(params->entity);
           entity->rgba = params->rgba;
         }break;
         case D_CmdKind_SetEntityName:
         {
-          D_Entity *entity = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, params->entity);
+          D_Entity *entity = d_entity_from_handle(params->entity);
           d_entity_equip_string(d_user_state->ctrl_entity_store, entity, params->string);
         }break;
         

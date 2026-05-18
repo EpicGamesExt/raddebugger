@@ -2028,7 +2028,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               if(reg_num != 0)
               {
                 string_mapped = 1;
-                Arch arch = e_base_ctx->primary_module->arch;
+                Arch arch = e_base_ctx->thread_arch;
                 ARCH_Info *arch_info = arch_info_from_arch(arch);
                 ARCH_RegCode reg_code = reg_num;
                 Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];

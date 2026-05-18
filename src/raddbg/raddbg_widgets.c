@@ -109,7 +109,7 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
         CFG_Node *bp = cfg_node_from_id(stop_event.u64_code);
         if(bp == cfg)
         {
-          D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
+          D_Entity *thread = d_entity_from_handle(stop_event.entity);
           Vec4F32 thread_color = rd_color_from_ctrl_entity(thread);
           if(thread_color.w == 0)
           {
@@ -518,7 +518,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
   if(entity->kind == D_EntityKind_Thread ||
      entity->kind == D_EntityKind_Module)
   {
-    D_EntityArray processes = d_entity_array_from_kind(&d_user_state->ctrl_entity_store->ctx, D_EntityKind_Process);
+    D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
     if(processes.count > 1)
     {
       D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
@@ -1264,12 +1264,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   RD_CodeSliceSignal result = {0};
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  D_Entity *selected_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_regs()->thread);
+  D_Entity *selected_thread = d_entity_from_handle(rd_regs()->thread);
   D_Entity *selected_thread_process = d_entity_ancestor_from_kind(selected_thread, D_EntityKind_Process);
   U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
   D_Entity *selected_thread_module = d_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
   D_Event stop_event = d_ctrl_last_stop_event();
-  D_Entity *stopper_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, stop_event.entity);
+  D_Entity *stopper_thread = d_entity_from_handle(stop_event.entity);
   B32 is_focused = ui_is_focus_active();
   B32 ctrlified = (wm_get_modifiers() & WM_Modifier_Ctrl);
   Vec4F32 code_line_bgs[] =
@@ -1348,7 +1348,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
     {
       drop_can_hit_lines = 1;
-      drop_thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_state->drag_drop_regs->thread);
+      drop_thread = d_entity_from_handle(rd_state->drag_drop_regs->thread);
       drop_color = rd_color_from_ctrl_entity(drop_thread);
       if(drop_color.w == 0)
       {
@@ -2113,8 +2113,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &d_user_state->ctrl_entity_store->ctx, n->v.dbgi_key);
-            D_Entity *module = d_module_from_thread_candidates(&d_user_state->ctrl_entity_store->ctx, thread, &modules);
+            D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, n->v.dbgi_key);
+            D_Entity *module = d_module_from_thread_candidates(thread, &modules);
             if(module != &d_entity_nil)
             {
               new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
@@ -2723,7 +2723,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     Rng1U64 hover_voff_range = hover_regs->voff_range;
     if(hover_voff_range.min == 0 && hover_voff_range.max == 0)
     {
-      D_Entity *module = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, hover_regs->module);
+      D_Entity *module = d_entity_from_handle(hover_regs->module);
       hover_voff_range = d_voff_range_from_vaddr_range(module, hover_regs->vaddr_range);
     }
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
