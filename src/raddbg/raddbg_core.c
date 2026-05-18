@@ -10744,7 +10744,7 @@ rd_frame(void)
           }
           rd_view_state_from_cfg(tab);
         }
-        if(p->selected_tab == &cfg_nil_node)
+        if(p->selected_tab == &cfg_nil_node && first_unfiltered_tab != &cfg_nil_node)
         {
           rd_cmd(RD_CmdKind_FocusTab, .panel = p->cfg->id, .tab = first_unfiltered_tab->id);
         }
