@@ -9460,7 +9460,7 @@ rd_theme_tree_from_name(Arena *arena, Access *access, String8 theme_name)
     }
     if(theme_tree == &md_nil_node)
     {
-      String8 path = str8f(scratch.arena, "%S/raddbg/themes/%S", get_process_info()->user_program_data_path, theme_name);
+      String8 path = push_str8f(scratch.arena, "%S/raddbg/themes/%S", get_process_info()->user_program_config_path, theme_name);
       U64 endt_us = now_time_us()+100;
       if(rd_state->frame_index <= 5)
       {
@@ -10292,10 +10292,15 @@ rd_init(CmdLine *cmdln)
   log_select(rd_state->log);
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 user_program_data_path = get_process_info()->user_program_data_path;
-    String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
-    rd_state->log_path = push_str8f(rd_state->arena, "%S/ui_thread.raddbg_log", user_data_folder);
-    make_directory(user_data_folder);
+    String8 user_program_state_path = get_process_info()->user_program_state_path;
+
+    String8 user_log_folder = push_str8f(scratch.arena, "%S/raddbg", user_program_state_path);
+    make_directory(user_log_folder);
+
+    user_log_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_state_path);
+    rd_state->log_path = push_str8f(rd_state->arena, "%S/ui_thread.raddbg_log", user_log_folder);
+    make_directory(user_log_folder);
+
     write_data_to_file_path(rd_state->log_path, str8_zero());
     scratch_end(scratch);
   }
@@ -10514,8 +10519,8 @@ rd_init(CmdLine *cmdln)
       }
     }
     {
-      String8 user_program_data_path = get_process_info()->user_program_data_path;
-      String8 user_data_folder = push_str8f(scratch2.arena, "%S/raddbg", user_program_data_path);
+      String8 user_program_config_path = get_process_info()->user_program_config_path;
+      String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg", user_program_config_path);
       make_directory(user_data_folder);
       if(user_path.size == 0)
       {
@@ -12982,7 +12987,7 @@ rd_frame(void)
           case RD_CmdKind_RecordUserAsLastOpened:
           {
             String8 file_path = rd_regs()->file_path;
-            String8 last_user_path = str8f(scratch.arena, "%S/raddbg/last_user", get_process_info()->user_program_data_path);
+            String8 last_user_path = push_str8f(scratch.arena, "%S/raddbg/last_user", get_process_info()->user_program_config_path);
             write_data_to_file_path(last_user_path, file_path);
           }break;
           
@@ -15550,7 +15555,7 @@ rd_frame(void)
             String8 name = rd_regs()->string;
             if(name.size != 0)
             {
-              String8 themes_folder = str8f(scratch.arena, "%S/raddbg/themes", get_process_info()->user_program_data_path);
+              String8 themes_folder = push_str8f(scratch.arena, "%S/raddbg/themes", get_process_info()->user_program_config_path);
               if(make_directory(themes_folder))
               {
                 String8 dst_path = push_str8f(scratch.arena, "%S/%S", themes_folder, name);
