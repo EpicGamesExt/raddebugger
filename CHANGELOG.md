@@ -9,6 +9,7 @@
   the import thunk and import address members from the library where the first reference was found.
 - /OPT:REF:  Fixed an issue with garbage collection of associated sections and weak symbols that led linker to remove
   live sections.
+- /OPT:REF Added relocation batching to reduce contention on the global reference list during garbage collection.
 
 # v0.9.25-alpha
 
