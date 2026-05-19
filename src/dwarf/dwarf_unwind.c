@@ -261,8 +261,19 @@ dw_compute_cfa(Arch arch, DW_CFI_Row *row, void *reg_block, MachineOp_MemRead *m
     }break;
     case DW_CFA_Rule_Expression:
     {
-      // TODO: evaluate expression
-      NotImplemented;
+      Temp scratch = scratch_begin(0,0);
+      DW_ExprValue value = {0};
+      DW_Expr expr = dw_expr_from_data(scratch.arena, DW_Format_32Bit, byte_size_from_arch(arch), row->cfa.expr);
+      DW_ExprEvalResult eval_result = dw_eval_expr(scratch.arena, arch, DW_Format_32Bit, 0, 0, 0, 9999, expr, reg_block, mem_read_func, mem_read_ud, &value);
+      if (eval_result == DW_ExprEvalResult_Ok) {
+        if (DW_ExprValueType_IsInt(value.type)) {
+          *cfa_out = value.u64;
+          unwind_status = MachineOpResult_Ok;
+        }
+      } else if (eval_result == DW_ExprEvalResult_Maybe) {
+        unwind_status = MachineOpResult_Maybe;
+      }
+      scratch_end(scratch);
     }break;
   }
   return unwind_status;
