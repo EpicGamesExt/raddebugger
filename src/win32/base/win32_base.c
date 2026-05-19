@@ -1101,6 +1101,7 @@ file_map_view_open(FileMap map, AccessFlags flags, Rng1U64 range)
     }
   }
   void *result = MapViewOfFile(handle, access_flags, off_hi, off_lo, size);
+  DWORD err = GetLastError();
   return result;
 }
 

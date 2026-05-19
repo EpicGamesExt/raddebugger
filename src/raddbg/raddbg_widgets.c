@@ -612,7 +612,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
     if(rdi->raw_data_size == 0)
     {
       dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
-      dr_fstrs_push_new(arena, &result, &params, str8_lit("(Debug information not loaded)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("(Debug info not loaded)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
     }
     access_close(access);
   }

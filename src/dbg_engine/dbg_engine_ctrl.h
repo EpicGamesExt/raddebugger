@@ -228,7 +228,20 @@ typedef struct D_DumpThread D_DumpThread;
 struct D_DumpThread
 {
   D_Handle thread_handle;
+  U32 id;
   U64 context_foff;
+};
+
+typedef struct D_DumpModule D_DumpModule;
+struct D_DumpModule
+{
+  D_Handle module_handle;
+  Rng1U64 vaddr_range;
+  String8 path;
+  File file;
+  FileProperties props;
+  FileMap map;
+  void *base;
 };
 
 typedef struct D_DumpNode D_DumpNode;
@@ -246,6 +259,8 @@ struct D_DumpNode
   U64 memory_ranges_count;
   D_DumpThread *threads;
   U64 threads_count;
+  D_DumpModule *modules;
+  U64 modules_count;
 };
 
 typedef struct D_DumpSlot D_DumpSlot;
@@ -349,6 +364,7 @@ struct D_CtrlState
   CondVar c2u_ring_cv;
   
   // rjf: ctrl thread state
+  U64 ctrl_thread_dump_handle_id_gen;
   U64 ctrl_thread_run_state;
   String8 ctrl_thread_log_path;
   Thread ctrl_thread;

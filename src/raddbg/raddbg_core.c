@@ -5575,11 +5575,11 @@ rd_window_frame(void)
             }
             else if(dbg_info_entity->string.size != 0)
             {
-              ui_labelf("Debug information not found at %S", dbg_info_entity->string);
+              ui_labelf("Debug info not found at %S", dbg_info_entity->string);
             }
             else if(dbg_info_entity->string.size == 0)
             {
-              ui_labelf("Debug information location not found in module file");
+              ui_labelf("Debug info location not found in module file");
             }
             access_close(access);
           }
