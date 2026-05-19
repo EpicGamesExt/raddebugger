@@ -15,7 +15,7 @@
   same name is used for multiple local static variables, even when outside the
   function containing the local static. This can be done by namespacing the
   variable name with the containing function, either using a `::` or `.`
-  operator.
+  operator. (#359)
 - Added a setting, `Transient Tabs`, to disable transient tabs being opened,
   when the debugger automatically snaps to new code locations.
 - Added a setting, `Display Pointer Addresses Before Contents`, to always
@@ -26,13 +26,15 @@
   in debug info to step out of scopes when possible, rather than always exiting
   the current function frame. This makes the command much more useful for
   stepping through larger functions with several scopes of larger work, or for
-  stepping out of loops.
+  stepping out of loops. (#746)
 - Adjusted the debugger's user & project configuration file behavior to be less
   idiosyncratic with other programs. Project files are no longer auto-loaded
   based on the project last loaded during the previous debugger runtime.
   Creating a new user or project also does not immediately require choosing a
   path for the file; these can later be specified using the respective `Save`
-  commands.
+  commands. (#743)
+- Adjusted the debugger to automatically set the current path when loading a
+  project file. (#743)
 - Added syntax highlighting and tab-completion for view identifiers in
   watch expressions.
 - Added more in-debugger documentation for views and their arguments, when
@@ -50,7 +52,7 @@
   ability to use debug info without debugging for features like
   go-to-definition and type evaluation, but it stops the debugger from keeping
   old and unneeded debug info loaded indefinitely (until it is manually
-  unloaded).
+  unloaded). (#711)
 - Adjusted recent project visualization to include the name of the project,
   specified with the `Project Name` setting.
 - Renamed `Switch` to `Open Source File From Debug Info`, to better represent
@@ -70,7 +72,7 @@
   instead of only being colored differently with evaluations reading as zeroed
   memory, the value will explicitly label addresses as unmapped when possible.
 - Fixed a leak which most notably manifested during rapid creation/destruction
-  of new threads.
+  of new threads. (#780)
 - Fixed a leak related to debugger's config state. This was difficult to
   reproduce, but it may fix leaks experienced after running the debugger for an
   extended period of time.
@@ -80,6 +82,8 @@
   other similar UIs.
 - Fixed a bug where panels without tabs were unnecessarily keeping the debugger
   UI awake in some cases.
+- Fixed a bug preventing hover evaluation from working on indexing expressions.
+  (#707)
 - Replaced the DWARF -> RDI converter with a new multithreaded version, which
   should execute much faster on larger DWARF debug info, and produce much
   smaller RDI output, due to the addition of type deduplication.
@@ -94,6 +98,8 @@
   This allows users of RDI to dynamically construct the fully-qualified name as
   needed, and it allows for more reliable and language-agnostic usage of
   partially-qualified symbol names.
+- Adjusted the debugger to not rely on `SynchronizationBarrier` functions on
+  Windows when they're not available (pre-Windows-8). (#739)
 
 
 ## Linker Changes
