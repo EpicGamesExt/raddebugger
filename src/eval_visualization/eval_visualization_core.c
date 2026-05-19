@@ -1849,25 +1849,20 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           //- rjf: step 0: do pre-prefix pointer value if requested
           case 0:
           {
-            if(!(params->flags & EV_StringFlag_DisableAddresses) &&
-               (!ptr_data->addr_is_good || params->flags & EV_StringFlag_AddressesBeforeContent))
+            if(!(params->flags & EV_StringFlag_DisableAddresses) && params->flags & EV_StringFlag_AddressesBeforeContent)
             {
               Temp scratch = scratch_begin(&arena, 1);
               String8 ptr_value_string = str8_from_u64(scratch.arena, ptr_data->value_eval.value.u64,
                                                        ptr_data->value_eval.value.u64 != 0 ? 16 : 10, 0, 0);
-              if(ptr_data->value_eval.value.u64 != 0 && !ptr_data->addr_is_good && params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+              if(params->flags & EV_StringFlag_DisplayAddressUnmappedStatus && ptr_data->value_eval.value.u64 != 0 && !ptr_data->addr_is_good && params->flags & EV_StringFlag_ReadOnlyDisplayRules)
               {
                 ptr_value_string = str8f(scratch.arena, "%S (unmapped)", ptr_value_string);
               }
               *out_string = str8_copy(arena, ptr_value_string);
               ptr_data->did_pre_prefix_ptr = 1;
-              need_pop = !ptr_data->addr_is_good;
               scratch_end(scratch);
             }
-            else
-            {
-              need_pop = 0;
-            }
+            need_pop = 0;
           }break;
           
           //- rjf: step 1 -> try "prefix content", which we want to print before the pointer value,
@@ -2134,7 +2129,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           {
             Temp scratch = scratch_begin(&arena, 1);
             String8 ptr_value_string = str8_from_u64(scratch.arena, ptr_data->value_eval.value.u64, ptr_data->value_eval.value.u64 != 0 ? 16 : 10, 0, 0);
-            if(params->flags & EV_StringFlag_ReadOnlyDisplayRules && ptr_data->value_eval.value.u64 != 0 && !ptr_data->addr_is_good)
+            if(params->flags & EV_StringFlag_DisplayAddressUnmappedStatus && params->flags & EV_StringFlag_ReadOnlyDisplayRules && ptr_data->value_eval.value.u64 != 0 && !ptr_data->addr_is_good)
             {
               ptr_value_string = str8f(scratch.arena, "%S (unmapped)", ptr_value_string);
             }

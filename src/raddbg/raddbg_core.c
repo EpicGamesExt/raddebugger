@@ -12302,6 +12302,10 @@ rd_frame(void)
     {
       rd_state->eval_viz_base_string_flags |= EV_StringFlag_AddressesBeforeContent;
     }
+    if(!d_user_state->ctrl_is_running)
+    {
+      rd_state->eval_viz_base_string_flags |= EV_StringFlag_DisplayAddressUnmappedStatus;
+    }
     
     ////////////////////////////
     //- rjf: autosave if needed

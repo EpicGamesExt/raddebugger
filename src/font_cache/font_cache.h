@@ -10,8 +10,8 @@
 typedef U32 FNT_RasterFlags;
 enum
 {
-  FNT_RasterFlag_Smooth = (1<<0),
-  FNT_RasterFlag_Hinted = (1<<1),
+  FNT_RasterFlag_Smooth  = (1<<0),
+  FNT_RasterFlag_Hinted  = (1<<1),
 };
 
 ////////////////////////////////

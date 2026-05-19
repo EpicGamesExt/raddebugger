@@ -5272,6 +5272,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             String8 module_name_raw_data = str8_prefix(str8_skip(data, off), module_name_size);
             String16 module_name_16 = str16((U16 *)module_name_raw_data.str, module_name_raw_data.size / sizeof(U16));
             module_name = str8_from_16(scratch.arena, module_name_16);
+            module_name = path_normalized_from_string(scratch.arena, module_name);
           }
           
           // rjf: open module
