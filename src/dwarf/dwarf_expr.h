@@ -184,32 +184,32 @@ internal DW_ExprValueType dw_expr_float_type_from_bit_size(U64 bit_size);
 internal U64 dw_expr_byte_size_from_value_type(U64 addr_size, DW_ExprValueType k);
 
 // typer
-internal DW_ExprValueType dw_expr_pick_common_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs);
-internal DW_ExprValueType dw_expr_pick_common_compar_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs);
+internal DW_ExprValueType dw_expr_pick_common_value_type(DW_ExprValueType rhs, DW_ExprValueType lhs);
+internal DW_ExprValueType dw_expr_pick_common_compar_value_type(DW_ExprValueType rhs, DW_ExprValueType lhs);
 internal DW_ExprValue     dw_expr_cast(DW_ExprValue value, DW_ExprValueType type);
 
 // arithmetic operators
-internal DW_ExprValue dw_expr_add(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_minus(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_mul(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_div(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_mod(DW_ExprValue lhs, DW_ExprValue rhs);
+internal DW_ExprValue dw_expr_add  (DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_minus(DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_mul  (DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_div  (DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_mod  (DW_ExprValue rhs, DW_ExprValue lhs);
 
 // comparison operators
-internal DW_ExprValue dw_expr_eq(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_ge(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_gt(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_le(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_lt(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_ne(DW_ExprValue lhs, DW_ExprValue rhs);
+internal DW_ExprValue dw_expr_eq(DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_ge(DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_gt(DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_le(DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_lt(DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_ne(DW_ExprValue rhs, DW_ExprValue lhs);
 
 // bitwise operators
-internal DW_ExprValue dw_expr_xor(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_and(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_or(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_shl(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_shr(DW_ExprValue lhs, DW_ExprValue rhs);
-internal DW_ExprValue dw_expr_shra(DW_ExprValue lhs, DW_ExprValue rhs);
+internal DW_ExprValue dw_expr_xor (DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_and (DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_or  (DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_shl (DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_shr (DW_ExprValue rhs, DW_ExprValue lhs);
+internal DW_ExprValue dw_expr_shra(DW_ExprValue rhs, DW_ExprValue lhs);
 
 // unary operators
 internal DW_ExprValue dw_expr_abs(DW_ExprValue value);

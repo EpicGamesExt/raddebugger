@@ -81,7 +81,7 @@ dw_expr_byte_size_from_value_type(U64 addr_size, DW_ExprValueType k)
 }
 
 internal DW_ExprValueType
-dw_expr_pick_common_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs)
+dw_expr_pick_common_value_type(DW_ExprValueType rhs, DW_ExprValueType lhs)
 {
   if (lhs == rhs) {
     return lhs;
@@ -144,7 +144,7 @@ dw_expr_pick_common_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs)
 }
 
 internal DW_ExprValueType
-dw_expr_pick_common_compar_value_type(DW_ExprValueType lhs, DW_ExprValueType rhs)
+dw_expr_pick_common_compar_value_type(DW_ExprValueType rhs, DW_ExprValueType lhs)
 {
   DW_ExprValueType result;
   if (lhs == DW_ExprValueType_Generic || rhs == DW_ExprValueType_Generic) {
@@ -213,7 +213,7 @@ default: { InvalidPath; } break;                                                
 }
 
 internal DW_ExprValue
-dw_expr_add(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_add(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
@@ -254,7 +254,7 @@ dw_expr_add(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_minus(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_minus(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
@@ -295,7 +295,7 @@ dw_expr_minus(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_mul(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_mul(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
@@ -336,7 +336,7 @@ dw_expr_mul(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_div(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_div(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
@@ -377,7 +377,7 @@ dw_expr_div(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_mod(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_mod(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_value_type(lhs.type, rhs.type);
@@ -418,7 +418,7 @@ dw_expr_mod(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_eq(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_eq(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -460,7 +460,7 @@ dw_expr_eq(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_ge(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_ge(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -502,7 +502,7 @@ dw_expr_ge(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_gt(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_gt(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -544,7 +544,7 @@ dw_expr_gt(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_le(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_le(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -586,7 +586,7 @@ dw_expr_le(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_lt(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_lt(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -628,7 +628,7 @@ dw_expr_lt(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_ne(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_ne(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -670,7 +670,7 @@ dw_expr_ne(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_xor(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_xor(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -712,7 +712,7 @@ dw_expr_xor(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_and(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_and(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -754,7 +754,7 @@ dw_expr_and(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_or(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_or(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -796,7 +796,7 @@ dw_expr_or(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_shl(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_shl(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -838,7 +838,7 @@ dw_expr_shl(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_shr(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_shr(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   DW_ExprValue result = {0};
   result.type = dw_expr_pick_common_compar_value_type(lhs.type, rhs.type);
@@ -879,7 +879,7 @@ dw_expr_shr(DW_ExprValue lhs, DW_ExprValue rhs)
 }
 
 internal DW_ExprValue
-dw_expr_shra(DW_ExprValue lhs, DW_ExprValue rhs)
+dw_expr_shra(DW_ExprValue rhs, DW_ExprValue lhs)
 {
   if (DW_ExprValueType_IsUnsigned(lhs.type)) {
     DW_ExprValueType new_type = dw_expr_signed_value_type_from_bit_size(dw_expr_byte_size_from_value_type(0, lhs.type) * 8);
