@@ -117,15 +117,32 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
   DLLPushBack(lnx_wm_state->first_window, lnx_wm_state->last_window, w);
   
   //- rjf: create window & equip with x11 info
+  Visual *visual = lnx_wm_state->window_visual;
+  int depth = lnx_wm_state->window_depth;
+  Colormap colormap = lnx_wm_state->window_colormap;
+  unsigned long attr_mask = 0;
+  XSetWindowAttributes window_attribs = {0};
+  if(visual == 0)
+  {
+    visual = (Visual *)CopyFromParent;
+    depth = CopyFromParent;
+  }
+  else
+  {
+    window_attribs.background_pixmap = None;
+    window_attribs.border_pixel = 0;
+    window_attribs.colormap = colormap;
+    attr_mask = CWBackPixmap|CWBorderPixel|CWColormap;
+  }
   w->window = XCreateWindow(lnx_wm_state->display,
                             XDefaultRootWindow(lnx_wm_state->display),
                             0, 0, resolution.x, resolution.y,
                             0,
-                            CopyFromParent,
+                            depth,
                             InputOutput,
-                            CopyFromParent,
-                            0,
-                            0);
+                            visual,
+                            attr_mask,
+                            &window_attribs);
   XSelectInput(lnx_wm_state->display, w->window,
                ExposureMask|
                PointerMotionMask|
@@ -190,6 +207,7 @@ wm_window_first_paint(WM_Window handle)
   if(wm_window_match(handle, wm_window_zero())) {return;}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
   XMapWindow(lnx_wm_state->display, w->window);
+  XFlush(lnx_wm_state->display);
 }
 
 internal void

@@ -2858,11 +2858,23 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         DW_LineFile  *src = lookup->file;
         RDIM_SrcFile *dst = rdim_src_file_chunk_list_push(arena, &g_d2r_shared.src_files, D2R_SRC_FILE_CAP);
         
-        // make file path
+        // make file path -- DWARFv5 sec 6.2.4: dir entries other than 0 may be
+        // relative to dir 0 (the compilation directory). prepend dir 0 when
+        // the chosen dir is relative.
         String8 path;
         {
+          String8 dir      = lookup->vm->header.dir_table.v[src->dir_idx];
+          String8 comp_dir = lookup->vm->header.dir_table.v[0];
+          PathStyle dir_style = path_style_from_str8(dir);
+          B32 dir_is_relative = (dir_style == PathStyle_Null || dir_style == PathStyle_Relative);
+          B32 prepend_comp_dir = (src->dir_idx != 0 && dir_is_relative);
           String8List path_list = {0};
-          str8_list_push_node(&path_list, &(String8Node){ .string = lookup->vm->header.dir_table.v[src->dir_idx] });
+          if (prepend_comp_dir) {
+            String8List comp_dir_list = str8_split_path(scratch.arena, comp_dir);
+            str8_list_concat_in_place(&path_list, &comp_dir_list);
+          }
+          String8List dir_list = str8_split_path(scratch.arena, dir);
+          str8_list_concat_in_place(&path_list, &dir_list);
           str8_list_push_node(&path_list, &(String8Node){ .string = src->path });
           path = str8_path_list_join_by_style(arena, &path_list, path_style);
         }
