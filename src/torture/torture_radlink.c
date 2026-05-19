@@ -4645,7 +4645,7 @@ TEST(defer_duplicate_imp_link)
   T_Ok(static_imptab.count == 1);
 
   PE_ParsedStaticDLLImport *dll = &static_imptab.v[0];
-  T_Ok(str8_matchi(dll->name, str8_lit("foo.dll")));
+  T_Ok(str8_match(dll->name, str8_lit("foo.dll"), StringMatchFlag_CaseInsensitive));
 
   T_Ok(dll->import_count == 1);
   PE_ParsedImport *imp = &dll->imports[0];

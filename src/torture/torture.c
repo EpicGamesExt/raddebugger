@@ -35,6 +35,16 @@ t_string_from_result(T_RunStatus v)
   return 0;
 }
 
+internal T_Linker
+t_id_linker(void)
+{
+  String8 name = str8_chop_last_dot(str8_skip_last_slash(g_linker));
+  if (str8_match(name, str8_lit("radlink"),  StringMatchFlag_CaseInsensitive)) { return T_Linker_RAD;  }
+  if (str8_match(name, str8_lit("link"),     StringMatchFlag_CaseInsensitive)) { return T_Linker_MSVC; }
+  if (str8_match(name, str8_lit("lld-link"), StringMatchFlag_CaseInsensitive)) { return T_Linker_LLVM; }
+  return T_Linker_Null;
+}
+
 internal B32
 t_write_file_list(String8 name, String8List data)
 {
