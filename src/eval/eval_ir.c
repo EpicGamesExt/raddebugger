@@ -1900,6 +1900,26 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 // rjf: find match
                 DI_Match match = di_match_from_string(string, match_disambiguating_idx, e_base_ctx->primary_dbg_info->dbgi_key, 0);
                 
+                // rjf: match -> RDI
+                RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);
+                
+                // rjf: ambiguous global/thread variable in primary debug info -> try fully qualifying the name implicitly.
+                if((match.section_kind == RDI_SectionKind_GlobalVariables ||
+                    match.section_kind == RDI_SectionKind_ThreadVariables) &&
+                   match.count != 1 &&
+                   rdi == e_base_ctx->primary_dbg_info->rdi)
+                {
+                  U64 voff = e_base_ctx->thread_ip_voff;
+                  RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, voff);
+                  String8 procedure_name = fully_qualified_str8_from_rdi_symbol(scratch.arena, rdi, procedure);
+                  String8 fully_qualified_name = str8f(scratch.arena, "%S.%S", procedure_name, string);
+                  DI_Match fully_qualified_match_maybe = di_match_from_string(fully_qualified_name, match_disambiguating_idx, e_base_ctx->primary_dbg_info->dbgi_key, 0);
+                  if(fully_qualified_match_maybe.idx != 0)
+                  {
+                    match = fully_qualified_match_maybe;
+                  }
+                }
+                
 #if 0
                 //~ TODO(rjf): vvvvv this used to be used for namespaceifying partially-qualified strings.
                 // now, the debugger just stores partially-qualified strings, so we instead need to do the
@@ -1942,9 +1962,6 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   }
                 }
 #endif
-                
-                // rjf: match -> RDI
-                RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);
                 
                 // rjf: find dbg info from rdi
                 E_DbgInfo *dbg_info = &e_dbg_info_nil;

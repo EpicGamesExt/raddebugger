@@ -1699,6 +1699,7 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
               lane_matches[lane_idx()].key          = dbgi_key;
               lane_matches[lane_idx()].section_kind = name_map_section_kinds[name_map_kind_idx];
               lane_matches[lane_idx()].idx          = filtered_matches[selected_match_idx];
+              lane_matches[lane_idx()].count        = filtered_matches_count;
             }
           }
         }
@@ -1732,7 +1733,7 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *g
     artifact.u64[0] = match.key.u64[0];
     artifact.u64[1] = match.key.u64[1];
     artifact.u64[2] = match.section_kind;
-    artifact.u64[3] = match.idx;
+    artifact.u64[3] = ((U64)(match.idx & 0xffffffffull) << 32) | ((U64)(match.count & 0xffffffffull) << 0);
   }
   
   lane_sync();
@@ -1760,7 +1761,8 @@ di_match_from_string(String8 string, U64 match_index, DI_Key preferred_dbgi_key,
     result.key.u64[0]   = artifact.u64[0];
     result.key.u64[1]   = artifact.u64[1];
     result.section_kind = artifact.u64[2];
-    result.idx          = artifact.u64[3];
+    result.idx          = (artifact.u64[3] & 0xffffffff00000000ull) >> 32;
+    result.count        = (artifact.u64[3] & 0x00000000ffffffffull) >> 0;
   }
   scratch_end(scratch);
   access_close(access);

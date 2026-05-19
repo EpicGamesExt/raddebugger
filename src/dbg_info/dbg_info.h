@@ -202,6 +202,7 @@ struct DI_Match
   DI_Key key;
   RDI_SectionKind section_kind;
   U32 idx;
+  U32 count;
 };
 
 ////////////////////////////////
