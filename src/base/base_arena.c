@@ -168,6 +168,7 @@ arena_release(Arena *arena)
   for(Arena *n = arena->current, *prev = 0; n != 0; n = prev)
   {
     prev = n->prev;
+    AsanUnpoisonMemoryRegion(n, n->cmt);
     release_memory(n, n->res);
   }
 }
@@ -324,6 +325,7 @@ arena_pop_to(Arena *arena, U64 pos)
   for(Arena *prev = 0; current->base_pos >= big_pos; current = prev)
   {
     prev = current->prev;
+    AsanUnpoisonMemoryRegion(current, current->cmt);
     release_memory(current, current->res);
   }
 #endif
