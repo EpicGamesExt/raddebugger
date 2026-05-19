@@ -1,0 +1,34 @@
+// raddbg 0.9.26 project file
+
+name: "The RAD Debugger"
+theme: "VS (Dark)"
+target:
+{
+  executable: "build/raddbg.exe"
+  working_directory: build
+  arguments: "--user:raddbg_test.user --project:raddbg_test.project"
+  enabled: 1
+}
+target:
+{
+  executable: "build/raddbg.exe"
+  working_directory: "../raddebugger"
+  arguments: "project.raddbg"
+}
+target:
+{
+  executable: "build/mule_main.exe"
+  working_directory: build
+}
+target:
+{
+  executable: "build/radbin.exe"
+  working_directory: build
+  arguments: "--rdi simple --thread_count=1"
+}
+target:
+{
+  executable: "build/raddbg.exe"
+  working_directory: "build/dwarf"
+  arguments: "--bin --rdi a.exe"
+}
