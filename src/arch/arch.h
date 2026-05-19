@@ -16,6 +16,7 @@ struct ARCH_Info
   ARCH_RegCode instruction_pointer_reg_code;
   ARCH_RegCode stack_pointer_reg_code;
   U16 reg_code_count;
+  String8 trap_instruction;
   Rng1U16 *reg_code_rng_table;
   String8 *reg_code_name_table;
   U8 *reg_code_base_table;
@@ -29,7 +30,7 @@ global read_only Rng1U16 arch_reg_code_rng_nil = {0};
 global read_only String8 arch_reg_code_name_nil = {0};
 global read_only U8 arch_reg_code_u8_nil = 0;
 global read_only B8 arch_reg_code_b8_nil = 0;
-global read_only ARCH_Info arch_info_nil = {0, 0, 0, 0, &arch_reg_code_rng_nil, &arch_reg_code_name_nil, &arch_reg_code_u8_nil, &arch_reg_code_b8_nil};
+global read_only ARCH_Info arch_info_nil = {0, 0, 0, 0, {0}, &arch_reg_code_rng_nil, &arch_reg_code_name_nil, &arch_reg_code_u8_nil, &arch_reg_code_b8_nil};
 
 ////////////////////////////////
 //~ rjf: Abstracted Architecture Functions

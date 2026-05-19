@@ -546,12 +546,14 @@ internal void d_set_wakeup_hook(D_WakeupFunctionType *wakeup_hook);
 //- rjf: thread handle read/write
 internal B32 d_thread_read_reg_block(D_Handle handle, void *reg_block);
 internal B32 d_thread_write_reg_block(D_Handle thread, void *reg_block);
+internal U64 d_ip_from_thread(D_Handle handle);
+internal U64 d_sp_from_thread(D_Handle handle);
 
 //- rjf: thread register cache reading
-internal void *d_reg_block_from_thread(Arena *arena, D_Handle handle);
-internal U64 d_tls_root_vaddr_from_thread(D_Handle handle);
-internal U64 d_rip_from_thread(D_Handle handle);
-internal U64 d_rsp_from_thread(D_Handle handle);
+internal void *d_cached_reg_block_from_thread(Arena *arena, D_Handle handle);
+internal U64 d_cached_tls_root_vaddr_from_thread(D_Handle handle);
+internal U64 d_cached_ip_from_thread(D_Handle handle);
+internal U64 d_cached_sp_from_thread(D_Handle handle);
 
 ////////////////////////////////
 //~ rjf: Module Image Info Functions

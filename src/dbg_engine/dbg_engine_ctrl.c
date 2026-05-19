@@ -845,7 +845,7 @@ internal D_Entity *
 d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates)
 {
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-  U64 thread_rip_vaddr = d_rip_from_thread(thread->handle);
+  U64 thread_rip_vaddr = d_cached_ip_from_thread(thread->handle);
   D_Entity *src_module = d_module_from_process_vaddr(process, thread_rip_vaddr);
   D_Entity *module = &d_entity_nil;
   for(D_EntityNode *n = candidates->first; n != 0; n = n->next)
@@ -1357,7 +1357,7 @@ d_entity_store_apply_events(D_EntityCtxRWStore *store, D_EventList *list)
           }
           thread->stack_base = event->stack_base;
         }
-        //d_rip_from_thread(&store->ctx, event->entity);
+        //d_cached_ip_from_thread(&store->ctx, event->entity);
       }break;
       case D_EventKind_EndThread:
       {
@@ -1595,10 +1595,46 @@ d_thread_write_reg_block(D_Handle thread, void *block)
   return result;
 }
 
+internal U64
+d_ip_from_thread(D_Handle handle)
+{
+  U64 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  D_Entity *thread = d_entity_from_handle(handle);
+  Arch arch = thread->arch;
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
+  U64 reg_block_size = arch_info->reg_block_size;
+  void *reg_block = push_array(scratch.arena, U8, reg_block_size);
+  if(d_thread_read_reg_block(handle, reg_block))
+  {
+    result = arch_ip_from_reg_block(arch_info, reg_block);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal U64
+d_sp_from_thread(D_Handle handle)
+{
+  U64 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  D_Entity *thread = d_entity_from_handle(handle);
+  Arch arch = thread->arch;
+  ARCH_Info *arch_info = arch_info_from_arch(arch);
+  U64 reg_block_size = arch_info->reg_block_size;
+  void *reg_block = push_array(scratch.arena, U8, reg_block_size);
+  if(d_thread_read_reg_block(handle, reg_block))
+  {
+    result = arch_sp_from_reg_block(arch_info, reg_block);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
 //- rjf: thread register cache reading
 
 internal void *
-d_reg_block_from_thread(Arena *arena, D_Handle handle)
+d_cached_reg_block_from_thread(Arena *arena, D_Handle handle)
 {
   D_ThreadRegCache *cache = &d_ctrl_state->thread_reg_cache;
   D_Entity *thread_entity = d_entity_from_handle(handle);
@@ -1658,7 +1694,7 @@ d_reg_block_from_thread(Arena *arena, D_Handle handle)
 }
 
 internal U64
-d_tls_root_vaddr_from_thread(D_Handle handle)
+d_cached_tls_root_vaddr_from_thread(D_Handle handle)
 {
   DMN_Handle handle_dmn = d_dmn_from_handle(handle);
   U64 result = dmn_tls_root_vaddr_from_thread(handle_dmn);
@@ -1666,26 +1702,26 @@ d_tls_root_vaddr_from_thread(D_Handle handle)
 }
 
 internal U64
-d_rip_from_thread(D_Handle handle)
+d_cached_ip_from_thread(D_Handle handle)
 {
   Temp scratch = scratch_begin(0, 0);
   D_Entity *thread_entity = d_entity_from_handle(handle);
   Arch arch = thread_entity->arch;
   ARCH_Info *arch_info = arch_info_from_arch(arch);
-  void *block = d_reg_block_from_thread(scratch.arena, handle);
+  void *block = d_cached_reg_block_from_thread(scratch.arena, handle);
   U64 result = arch_ip_from_reg_block(arch_info, block);
   scratch_end(scratch);
   return result;
 }
 
 internal U64
-d_rsp_from_thread(D_Handle handle)
+d_cached_sp_from_thread(D_Handle handle)
 {
   Temp scratch = scratch_begin(0, 0);
   D_Entity *thread_entity = d_entity_from_handle(handle);
   Arch arch = thread_entity->arch;
   ARCH_Info *arch_info = arch_info_from_arch(arch);
-  void *block = d_reg_block_from_thread(scratch.arena, handle);
+  void *block = d_cached_reg_block_from_thread(scratch.arena, handle);
   U64 result = arch_sp_from_reg_block(arch_info, block);
   scratch_end(scratch);
   return result;
@@ -2978,7 +3014,7 @@ d_unwind_from_thread(Arena *arena, D_Handle thread, U64 endt_us)
   U64 arch_reg_block_size = arch_info->reg_block_size;
   
   //- rjf: grab initial register block
-  void *regs_block = d_reg_block_from_thread(scratch.arena, thread);
+  void *regs_block = d_cached_reg_block_from_thread(scratch.arena, thread);
   B32 regs_block_good = (arch != Arch_Null && regs_block != 0);
   
   //- rjf: loop & unwind
@@ -3572,7 +3608,7 @@ d_ctrl_thread__entry_point(void *p)
         for EachIndex(idx, threads.count)
         {
           Temp scratch = scratch_begin(0, 0);
-          d_reg_block_from_thread(scratch.arena, threads.v[idx]->handle);
+          d_cached_reg_block_from_thread(scratch.arena, threads.v[idx]->handle);
           scratch_end(scratch);
         }
       }
@@ -4715,7 +4751,7 @@ d_ctrl_eval_space_read(E_Space space, void *out, E_SpaceRangeInfo *out_range_inf
           Temp scratch = scratch_begin(0, 0);
           ARCH_Info *arch_info = arch_info_from_arch(entity->arch);
           U64 regs_size = arch_info->reg_block_size;
-          void *regs = d_reg_block_from_thread(scratch.arena, entity->handle);
+          void *regs = d_cached_reg_block_from_thread(scratch.arena, entity->handle);
           Rng1U64 legal_range = r1u64(0, regs_size);
           Rng1U64 read_range = intersect_1u64(legal_range, range);
           U64 read_size = dim_1u64(read_range);
@@ -4737,14 +4773,13 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
   ProfBeginFunction();
   D_EntityCtx *entity_ctx = &d_ctrl_state->ctrl_thread_entity_store->ctx;
   D_EvalScope *scope = push_array(arena, D_EvalScope, 1);
-  DMN_Handle thread_dmn = d_dmn_from_handle(thread->handle);
   scope->access = access_open();
   
   //////////////////////////////
   //- rjf: unpack thread
   //
   Arch arch = thread->arch;
-  U64 thread_rip_vaddr = dmn_rip_from_thread(thread_dmn);
+  U64 thread_rip_vaddr = d_ip_from_thread(thread->handle);
   D_Entity *process = d_process_from_entity(thread);
   D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
   U64 thread_rip_voff = d_voff_from_vaddr(module, thread_rip_vaddr);
@@ -5709,7 +5744,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   // threads, because otherwise, their stack pointer may change, if single-stepping
   // causes e.g. entrance into a function via a call instruction.
   //
-  U64 sp_check_value = dmn_rsp_from_thread(target_thread_dmn);
+  U64 sp_check_value = d_sp_from_thread(target_thread);
   log_infof("sp_check_value := 0x%I64x\n", sp_check_value);
   
   //////////////////////////////
@@ -5740,7 +5775,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         for(D_Entity *thread = process->first; thread != &d_entity_nil; thread = thread->next)
         {
           if(thread->kind != D_EntityKind_Thread) { continue; }
-          U64 rip = dmn_rip_from_thread(d_dmn_from_handle(thread->handle));
+          U64 rip = d_ip_from_thread(thread->handle);
           
           // rjf: determine if thread is frozen
           B32 thread_is_frozen = thread->is_frozen;
@@ -5788,27 +5823,26 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         node != 0;
         node = node->next)
     {
-      DMN_Handle thread = node->v;
-      U64 thread_pre_rip = dmn_rip_from_thread(thread);
+      D_Handle thread = d_handle_from_dmn(D_MachineID_Local, node->v);
+      U64 thread_pre_rip = d_ip_from_thread(thread);
       U64 thread_post_rip = thread_pre_rip;
       for(B32 done = 0; !done;)
       {
-        log_infof("single_step_stuck_thread([0x%I64x])\n", thread.u64[0]);
         DMN_RunCtrls run_ctrls = {0};
         run_ctrls.run_entities_are_unfrozen = 1;
-        run_ctrls.run_entities = &thread;
+        run_ctrls.run_entities = &node->v;
         run_ctrls.run_entity_count = 1;
         if(thread_post_rip == thread_pre_rip)
         {
-          run_ctrls.single_step_thread = thread;
+          run_ctrls.single_step_thread = node->v;
         }
         DMN_Event *event = d_ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
-        thread_post_rip = dmn_rip_from_thread(thread);
+        thread_post_rip = d_ip_from_thread(thread);
         switch(event->kind)
         {
           default:{}break;
           case DMN_EventKind_ExitThread:
-          if(dmn_handle_match(event->thread, thread))
+          if(d_handle_match(d_handle_from_dmn(D_MachineID_Local, event->thread), thread))
           {
             stop_cause = D_EventCause_Error;
             goto stop;
@@ -6273,7 +6307,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       D_Entity *thread = d_entity_from_handle(d_handle_from_dmn(D_MachineID_Local, event->thread));
       D_Entity *process = d_entity_from_handle(d_handle_from_dmn(D_MachineID_Local, event->process));
       Arch arch = thread->arch;
-      U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
+      U64 thread_rip_vaddr = d_ip_from_thread(thread->handle);
       D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
       
       //////////////////////////
@@ -6441,21 +6475,21 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       D_EventCause cond_bp_single_step_stop_cause = D_EventCause_Null;
       if(hit_conditional_bp_but_filtered) LogInfoNamedBlockF("conditional_bp_hit_single_step")
       {
-        DMN_Handle thread = event->thread;
-        U64 thread_pre_rip = dmn_rip_from_thread(thread);
+        D_Handle thread = d_handle_from_dmn(D_MachineID_Local, event->thread);
+        U64 thread_pre_rip = d_ip_from_thread(thread);
         U64 thread_post_rip = thread_pre_rip;
         for(B32 single_step_done = 0; !single_step_done;)
         {
           DMN_RunCtrls single_step_ctrls = {0};
           single_step_ctrls.run_entities_are_unfrozen = 1;
-          single_step_ctrls.run_entities = &thread;
+          single_step_ctrls.run_entities = &event->thread;
           single_step_ctrls.run_entity_count = 1;
           if(thread_post_rip == thread_pre_rip)
           {
-            single_step_ctrls.single_step_thread = thread;
+            single_step_ctrls.single_step_thread = event->thread;
           }
           DMN_Event *event = d_ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
-          thread_post_rip = dmn_rip_from_thread(thread);
+          thread_post_rip = d_ip_from_thread(thread);
           switch(event->kind)
           {
             default:{}break;
@@ -6471,7 +6505,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             }break;
             case DMN_EventKind_SingleStep:
             {
-              single_step_done = dmn_handle_match(event->thread, thread);
+              single_step_done = d_handle_match(d_handle_from_dmn(D_MachineID_Local, event->thread), thread);
               cond_bp_single_step_stop_cause = d_event_cause_from_dmn_event_kind(event->kind);
             }break;
           }
@@ -6519,7 +6553,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       B32 stack_pointer_matches = 0;
       if(use_trap_net_logic)
       {
-        U64 sp = dmn_rsp_from_thread(d_dmn_from_handle(target_thread));
+        U64 sp = d_sp_from_thread(target_thread);
         stack_pointer_matches = (sp == sp_check_value);
       }
       
@@ -6530,7 +6564,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       {
         if(hit_trap_flags & D_TrapFlag_SingleStepAfterHit) LogInfoNamedBlockF("trap_net__single_step_after_hit")
         {
-          U64 thread_pre_rip = dmn_rip_from_thread(d_dmn_from_handle(target_thread));
+          U64 thread_pre_rip = d_ip_from_thread(target_thread);
           U64 thread_post_rip = thread_pre_rip;
           for(B32 single_step_done = 0; single_step_done == 0;)
           {
@@ -6543,7 +6577,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
               single_step_ctrls.single_step_thread = target_thread_dmn;
             }
             DMN_Event *event = d_ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
-            thread_post_rip = dmn_rip_from_thread(target_thread_dmn);
+            thread_post_rip = d_ip_from_thread(target_thread);
             switch(event->kind)
             {
               default:{}break;
@@ -6576,7 +6610,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         {
           // rjf: setup spoof mode
           begin_spoof_mode = 1;
-          U64 spoof_sp = dmn_rsp_from_thread(target_thread_dmn);
+          U64 spoof_sp = d_sp_from_thread(target_thread);
           spoof_mode = 1;
           spoof.process = target_process;
           spoof.thread  = target_thread;
@@ -6594,7 +6628,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           if(stack_pointer_matches) LogInfoNamedBlockF("trap_net__save_sp")
           {
             save_stack_pointer = 1;
-            sp_check_value = dmn_rsp_from_thread(target_thread_dmn);
+            sp_check_value = d_sp_from_thread(target_thread);
             log_infof("sp_check_value = 0x%I64x\n", sp_check_value);
           }
         }
@@ -6625,21 +6659,21 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       D_EventCause step_past_trap_net_stop_cause = D_EventCause_Null;
       if(step_past_trap_net) LogInfoNamedBlockF("trap_net__single_step_past_trap_net")
       {
-        DMN_Handle thread = event->thread;
-        U64 thread_pre_rip = dmn_rip_from_thread(thread);
+        D_Handle thread = d_handle_from_dmn(D_MachineID_Local, event->thread);
+        U64 thread_pre_rip = d_ip_from_thread(thread);
         U64 thread_post_rip = thread_pre_rip;
         for(B32 single_step_done = 0; single_step_done == 0;)
         {
           DMN_RunCtrls single_step_ctrls = {0};
           single_step_ctrls.run_entities_are_unfrozen = 1;
-          single_step_ctrls.run_entities = &thread;
+          single_step_ctrls.run_entities = &event->thread;
           single_step_ctrls.run_entity_count = 1;
           if(thread_post_rip == thread_pre_rip)
           {
-            single_step_ctrls.single_step_thread = thread;
+            single_step_ctrls.single_step_thread = event->thread;
           }
           DMN_Event *event = d_ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
-          thread_post_rip = dmn_rip_from_thread(thread);
+          thread_post_rip = d_ip_from_thread(thread);
           switch(event->kind)
           {
             default:{}break;
@@ -6654,7 +6688,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             }break;
             case DMN_EventKind_SingleStep:
             {
-              single_step_done = dmn_handle_match(event->thread, thread);
+              single_step_done = d_handle_match(d_handle_from_dmn(D_MachineID_Local, event->thread), thread);
               step_past_trap_net_stop_cause = d_event_cause_from_dmn_event_kind(event->kind);
             }break;
           }
@@ -6751,26 +6785,27 @@ d_ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   }
   
   //- rjf: single step
-  DMN_Handle thread = d_dmn_from_handle(msg->entity);
-  B32 thread_is_valid = !dmn_handle_match(thread, dmn_handle_zero());
+  D_Handle thread = msg->entity;
+  B32 thread_is_valid = !d_handle_match(thread, d_handle_zero());
   DMN_Event *stop_event = 0;
   D_EventCause stop_cause = D_EventCause_Null;
   if(thread_is_valid)
   {
-    U64 thread_pre_rip = dmn_rip_from_thread(thread);
+    U64 thread_pre_rip = d_ip_from_thread(thread);
     U64 thread_post_rip = thread_pre_rip;
     for(B32 done = 0; done == 0;)
     {
+      DMN_Handle thread_dmn = d_dmn_from_handle(thread);
       DMN_RunCtrls run_ctrls = {0};
       run_ctrls.run_entities_are_unfrozen = 1;
-      run_ctrls.run_entities = &thread;
+      run_ctrls.run_entities = &thread_dmn;
       run_ctrls.run_entity_count = 1;
       if(thread_post_rip == thread_pre_rip)
       {
-        run_ctrls.single_step_thread = d_dmn_from_handle(msg->entity);
+        run_ctrls.single_step_thread = thread_dmn;
       }
       DMN_Event *event = d_ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
-      thread_post_rip = dmn_rip_from_thread(d_dmn_from_handle(msg->entity));
+      thread_post_rip = d_ip_from_thread(thread);
       switch(event->kind)
       {
         default:{}break;
@@ -6886,31 +6921,9 @@ d_process_write(D_Handle process, Rng1U64 range, void *src)
     case D_ControllerKind_Demon:
     {
       result = dmn_process_write(d_dmn_from_handle(process), range, src);
-      
-      //- rjf: success -> bump generation
       if(result)
       {
         ins_atomic_u64_inc_eval(&d_ctrl_state->mem_gen);
-      }
-      
-      //- rjf: success -> wait for cache updates, for small regions - prefer relatively seamless
-      // writes within calling frame's "view" of the memory, at the expense of a small amount of
-      // time.
-      if(result)
-      {
-        U64 endt_us = now_time_us()+10000;
-        U64 page_size = get_system_info()->page_size; // TODO(rjf): @page_size_from_process
-        Rng1U64 page_range = r1u64(range.min/page_size, (range.max+page_size-1)/page_size);
-        for EachInRange(page_idx, page_range)
-        {
-          Temp scratch = scratch_begin(0, 0);
-          D_ProcessMemorySlice slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process, r1u64(page_idx*page_size, (page_idx+1)*page_size), 1, endt_us);
-          scratch_end(scratch);
-          if(!slice.stale || now_time_us() >= endt_us)
-          {
-            break;
-          }
-        }
       }
     }break;
     

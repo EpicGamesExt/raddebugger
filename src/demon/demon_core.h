@@ -152,15 +152,6 @@ struct DMN_TrapChunkList
   U64 trap_count;
 };
 
-typedef struct DMN_ActiveTrap DMN_ActiveTrap;
-struct DMN_ActiveTrap
-{
-  DMN_ActiveTrap *next;
-  B32 good;
-  DMN_Trap *trap;
-  String8 swap_bytes;
-};
-
 typedef struct DMN_RunCtrls DMN_RunCtrls;
 struct DMN_RunCtrls
 {
@@ -209,12 +200,6 @@ internal DMN_HandleArray dmn_handle_array_copy(Arena *arena, DMN_HandleArray *sr
 
 //- rjf: event list building
 internal DMN_Event *dmn_event_list_push(Arena *arena, DMN_EventList *list);
-
-////////////////////////////////
-//~ rjf: Thread Reading Helper Functions (Helpers, Implemented Once)
-
-internal U64 dmn_rip_from_thread(DMN_Handle thread);
-internal U64 dmn_rsp_from_thread(DMN_Handle thread);
 
 ////////////////////////////////
 //~ rjf: Process Reading Helper Functions (Helpers, Implemented Once)
@@ -272,10 +257,5 @@ internal B32 dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block);
 internal void dmn_process_iter_begin(DMN_ProcessIter *iter);
 internal B32  dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info_out);
 internal void dmn_process_iter_end(DMN_ProcessIter *iter);
-
-//- arch trap
-internal String8 dmn_get_trap_inst(void);
-
-internal DMN_ActiveTrap * dmn_set_trap(Arena *arena, DMN_Trap *trap);
 
 #endif // DEMON_CORE_H

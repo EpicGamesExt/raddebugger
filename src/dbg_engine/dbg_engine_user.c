@@ -297,7 +297,7 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity *thread)
   // rjf: thread => unpacked info
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   Arch arch = thread->arch;
-  U64 ip_vaddr = d_rip_from_thread(thread->handle);
+  U64 ip_vaddr = d_cached_ip_from_thread(thread->handle);
   
   // rjf: ip => machine code
   String8 machine_code = {0};
@@ -336,7 +336,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   
   // rjf: thread => info
   Arch arch = thread->arch;
-  U64 ip_vaddr = d_rip_from_thread(thread->handle);
+  U64 ip_vaddr = d_cached_ip_from_thread(thread->handle);
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
   DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -549,7 +549,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   
   // rjf: thread => info
   Arch arch = thread->arch;
-  U64 ip_vaddr = d_rip_from_thread(thread->handle);
+  U64 ip_vaddr = d_cached_ip_from_thread(thread->handle);
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
   DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -753,7 +753,7 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
     
     // rjf: unpack thread
     Arch arch = thread->arch;
-    U64 ip_vaddr = d_rip_from_thread(thread->handle);
+    U64 ip_vaddr = d_cached_ip_from_thread(thread->handle);
     D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
     D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
     DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -1327,7 +1327,7 @@ d_query_cached_rip_from_thread_unwind(D_Entity *thread, U64 unwind_count)
   U64 result = 0;
   if(unwind_count == 0)
   {
-    result = d_rip_from_thread(thread->handle);
+    result = d_cached_ip_from_thread(thread->handle);
   }
   else
   {
@@ -1977,7 +1977,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           D_Entity *thread = d_entity_from_handle(params->thread);
           ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
           U64 vaddr = params->vaddr;
-          void *block = d_reg_block_from_thread(scratch.arena, thread->handle);
+          void *block = d_cached_reg_block_from_thread(scratch.arena, thread->handle);
           arch_reg_block_write_ip(arch_info, block, vaddr);
           B32 result = d_thread_write_reg_block(thread->handle, block);
           (void)result;

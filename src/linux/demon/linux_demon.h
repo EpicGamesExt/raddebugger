@@ -285,8 +285,8 @@ typedef struct LNX_DMN_ProcessCtx
   ELF_Class              dl_class;
   HashTable             *loaded_modules_ht;
   LNX_DMN_Probe        **probes;
-  DMN_ActiveTrap        *first_probe_trap;
-  DMN_ActiveTrap        *last_probe_trap;
+  LNX_DMN_ActiveTrap        *first_probe_trap;
+  LNX_DMN_ActiveTrap        *last_probe_trap;
   LNX_DMN_Module        *first_module;
   LNX_DMN_Module        *last_module;
   U64                    module_count;
@@ -330,6 +330,18 @@ typedef struct LNX_DMN_EntityList
   LNX_DMN_EntityNode *first;
   LNX_DMN_EntityNode *last;
 } LNX_DMN_EntityList;
+
+////////////////////////////////
+//~ rjf: Active Trap Data Structure
+
+typedef struct LNX_DMN_ActiveTrap LNX_DMN_ActiveTrap;
+struct LNX_DMN_ActiveTrap
+{
+  LNX_DMN_ActiveTrap *next;
+  B32 good;
+  DMN_Trap *trap;
+  String8 swap_bytes;
+};
 
 ////////////////////////////////
 //~ Global State
@@ -388,6 +400,11 @@ internal String8 lnx_dmn_read_string_capped(Arena *arena, int memory_fd, U64 bas
 internal String8 lnx_dmn_read_string(Arena *arena, int memory_fd, U64 base_vaddr);
 #define lnx_dmn_read_struct(fd, vaddr, ptr)  lnx_dmn_read((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
 #define lnx_dmn_write_struct(fd, vaddr, ptr) lnx_dmn_write((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
+
+////////////////////////////////
+//~ rjf: Trap Setting
+
+internal LNX_DMN_ActiveTrap *lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap);
 
 ////////////////////////////////
 //~ ELF/GNU info
@@ -491,7 +508,7 @@ internal LNX_DMN_Process * lnx_dmn_event_create_process(Arena *arena, DMN_EventL
 internal void              lnx_dmn_event_exit_process(Arena *arena, DMN_EventList *events, pid_t pid);
 internal void              lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr);
 internal void              lnx_dmn_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, U64 rdebug_vaddr);
-internal void              lnx_dmn_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *user_traps, pid_t tid);
+internal void              lnx_dmn_event_breakpoint(Arena *arena, DMN_EventList *events, LNX_DMN_ActiveTrap *user_traps, pid_t tid);
 internal void              lnx_dmn_event_data_breakpoint(Arena *arena, DMN_EventList *events, pid_t tid);
 internal void              lnx_dmn_event_halt(Arena *arena, DMN_EventList *events);
 internal void              lnx_dmn_event_single_step(Arena *arena, DMN_EventList *events, pid_t tid);

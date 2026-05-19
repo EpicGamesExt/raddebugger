@@ -14,12 +14,14 @@ arch_info_from_arch(Arch arch)
 #if defined(X64_H)
     case Arch_x64:
     {
+      local_persist U8 trap_inst_bytes[] = {0xcc};
       local_persist read_only ARCH_Info info =
       {
         .reg_block_size                  = sizeof(X64_RegBlock),
         .instruction_pointer_reg_code    = X64_RegCode_rip,
         .stack_pointer_reg_code          = X64_RegCode_rsp,
         .reg_code_count                  = X64_RegCode_COUNT,
+        .trap_instruction                = {trap_inst_bytes, sizeof(trap_inst_bytes)},
         .reg_code_rng_table              = x64_reg_code_rng_table,
         .reg_code_name_table             = x64_reg_code_name_table,
         .reg_code_base_table             = x64_reg_code_base_table,

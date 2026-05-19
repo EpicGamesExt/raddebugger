@@ -292,6 +292,28 @@ lnx_dmn_process_from_pid(pid_t pid)
   return hash_table_search_u64_raw(lnx_dmn_state->pid_ht, pid);
 }
 
+////////////////////////////////
+//~ rjf: Trap Setting
+
+internal LNX_DMN_ActiveTrap *
+lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap)
+{
+  ARCH_Info *arch = arch_info_from_arch(Arch_CURRENT);
+  String8 trap_inst = arch->trap_instruction;
+  U8 *swap_bytes = push_array(arena, U8, trap_inst.size);
+  B32 good_read = dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), swap_bytes);
+  B32 good_write = 0;
+  if(good_read)
+  {
+    good_write = dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr + trap_inst.size), trap_inst.str);
+  }
+  LNX_DMN_ActiveTrap *result = push_array(arena, LNX_DMN_ActiveTrap, 1);
+  result->good = (good_read && good_write);
+  result->trap = trap;
+  result->swap_bytes = str8(swap_bytes, trap_inst.size);
+  return result;
+}
+
 internal Rng1U64
 lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
 { 
@@ -976,7 +998,7 @@ lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
   }
   
   // clone probe traps
-  for EachNode(src, DMN_ActiveTrap, ctx->first_probe_trap)
+  for EachNode(src, LNX_DMN_ActiveTrap, ctx->first_probe_trap)
   {
     DMN_Trap *src_trap = src->trap;
     DMN_Trap *dst_trap = push_array(result->arena, DMN_Trap, 1);
@@ -986,7 +1008,7 @@ lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
     dst_trap->flags   = src_trap->flags;
     dst_trap->size    = src_trap->size;
     
-    DMN_ActiveTrap *dst = push_array(result->arena, DMN_ActiveTrap, 1);
+    LNX_DMN_ActiveTrap *dst = push_array(result->arena, LNX_DMN_ActiveTrap, 1);
     dst->trap       = dst_trap;
     dst->swap_bytes = str8_copy(result->arena, src->swap_bytes);
     
@@ -1112,7 +1134,7 @@ lnx_dmn_process_trap_probes(LNX_DMN_Process *process)
     trap->vaddr   = process->ctx->probes[i]->pc;
     trap->id      = i;
     
-    DMN_ActiveTrap *active_trap = dmn_set_trap(process->ctx->arena, trap);
+    LNX_DMN_ActiveTrap *active_trap = lnx_dmn_set_trap(process->ctx->arena, trap);
     SLLQueuePush(process->ctx->first_probe_trap, process->ctx->last_probe_trap, active_trap);
     
     if(BUILD_DEBUG && process->ctx->arch == Arch_x64)
@@ -1966,17 +1988,17 @@ lnx_dmn_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process
 }
 
 internal void
-lnx_dmn_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *user_traps, pid_t tid)
+lnx_dmn_event_breakpoint(Arena *arena, DMN_EventList *events, LNX_DMN_ActiveTrap *user_traps, pid_t tid)
 {
   LNX_DMN_Thread  *thread  = lnx_dmn_thread_from_pid(tid);
   LNX_DMN_Process *process = thread->process;
   U64              ip      = lnx_dmn_thread_read_ip(thread);
   
   // is this user trap?
-  DMN_ActiveTrap *hit_user_trap = 0;
+  LNX_DMN_ActiveTrap *hit_user_trap = 0;
   {
     DMN_Handle process_handle = lnx_dmn_handle_from_process(process);
-    for EachNode(active_trap, DMN_ActiveTrap, user_traps)
+    for EachNode(active_trap, LNX_DMN_ActiveTrap, user_traps)
     {
       if(MemoryCompare(&active_trap->trap->process, &process_handle, sizeof(DMN_Handle)) == 0)
       {
@@ -1993,7 +2015,7 @@ lnx_dmn_event_breakpoint(Arena *arena, DMN_EventList *events, DMN_ActiveTrap *us
   LNX_DMN_ProbeType probe_type = LNX_DMN_ProbeType_Null;
   if(hit_user_trap == 0)
   {
-    for EachNode(active_trap, DMN_ActiveTrap, process->ctx->first_probe_trap)
+    for EachNode(active_trap, LNX_DMN_ActiveTrap, process->ctx->first_probe_trap)
     {
       if(active_trap->trap->vaddr == ip-1)
       {
@@ -2397,7 +2419,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   if(lnx_dmn_state->process_count > 0)
   {
     // write traps to memory
-    DMN_ActiveTrap *active_trap_first = 0, *active_trap_last = 0;
+    LNX_DMN_ActiveTrap *active_trap_first = 0, *active_trap_last = 0;
     {
       HashTable *process_ht = hash_table_init(scratch.arena, lnx_dmn_state->process_count);
       for EachNode(n, DMN_TrapChunkNode, ctrls->traps.first)
@@ -2416,7 +2438,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           }
           
           // TODO: ctrl sends down duplicate traps
-          DMN_ActiveTrap *is_set = hash_table_search_u64_raw(active_trap_ht, trap->vaddr);
+          LNX_DMN_ActiveTrap *is_set = hash_table_search_u64_raw(active_trap_ht, trap->vaddr);
           if(is_set) { continue; }
           
           // TODO: ctrl sends down traps for exited process
@@ -2424,7 +2446,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           if(!process) { continue; }
           
           // trap instruction
-          DMN_ActiveTrap *active_trap = dmn_set_trap(scratch.arena, trap);
+          LNX_DMN_ActiveTrap *active_trap = lnx_dmn_set_trap(scratch.arena, trap);
           
           // add trap to the active list
           SLLQueuePush(active_trap_first, active_trap_last, active_trap);
@@ -2854,7 +2876,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     }
     
     // restore original instruction bytes
-    for EachNode(active_trap, DMN_ActiveTrap, active_trap_first)
+    for EachNode(active_trap, LNX_DMN_ActiveTrap, active_trap_first)
     {
       // skip process that exited during the wait
       LNX_DMN_Process *process = lnx_dmn_process_from_handle(active_trap->trap->process);

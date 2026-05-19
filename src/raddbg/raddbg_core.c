@@ -797,7 +797,7 @@ rd_eval_space_read(E_Space space, void *out, E_SpaceRangeInfo *out_range_info, R
           void *regs_block = 0;
           if(e_interpret_ctx->reg_unwind_count == 0)
           {
-            regs_block = d_reg_block_from_thread(scratch.arena, entity->handle);
+            regs_block = d_cached_reg_block_from_thread(scratch.arena, entity->handle);
           }
           else
           {
@@ -1037,6 +1037,26 @@ rd_eval_space_write(E_Space space, void *in, Rng1U64 range)
         case D_EntityKind_Process:
         {
           result = d_process_write(entity->handle, range, in);
+          
+          //- rjf: success -> wait for cache updates, for small regions - prefer relatively seamless
+          // writes within calling frame's "view" of the memory, at the expense of a small amount of
+          // time.
+          if(result)
+          {
+            U64 endt_us = now_time_us()+10000;
+            U64 page_size = get_system_info()->page_size; // TODO(rjf): @page_size_from_process
+            Rng1U64 page_range = r1u64(range.min/page_size, (range.max+page_size-1)/page_size);
+            for EachInRange(page_idx, page_range)
+            {
+              Temp scratch = scratch_begin(0, 0);
+              D_ProcessMemorySlice slice = d_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, r1u64(page_idx*page_size, (page_idx+1)*page_size), 1, endt_us);
+              scratch_end(scratch);
+              if(!slice.stale || now_time_us() >= endt_us)
+              {
+                break;
+              }
+            }
+          }
         }break;
         case D_EntityKind_Thread:
         {
@@ -1046,7 +1066,7 @@ rd_eval_space_write(E_Space space, void *in, Rng1U64 range)
           Rng1U64 legal_range = r1u64(0, regs_size);
           Rng1U64 write_range = intersect_1u64(legal_range, range);
           U64 write_size = dim_1u64(write_range);
-          void *new_regs = d_reg_block_from_thread(scratch.arena, entity->handle);
+          void *new_regs = d_cached_reg_block_from_thread(scratch.arena, entity->handle);
           MemoryCopy((U8 *)new_regs + write_range.min, in, write_size);
           result = d_thread_write_reg_block(entity->handle, new_regs);
           scratch_end(scratch);
@@ -9847,7 +9867,7 @@ rd_gather_auto_exprs(Arena *arena)
       //- rjf: unpack thread / module / debug info / lines
       ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
       D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-      U64 thread_ip_vaddr = d_rip_from_thread(thread_handle);
+      U64 thread_ip_vaddr = d_cached_ip_from_thread(thread_handle);
       D_Entity *module = d_module_from_process_vaddr(process, thread_ip_vaddr);
       DI_Key dbgi_key = d_dbgi_key_from_module(module);
       RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
@@ -11360,7 +11380,7 @@ rd_frame(void)
     U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
     D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
     U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
-    U64 tls_root_vaddr = d_tls_root_vaddr_from_thread(thread->handle);
+    U64 tls_root_vaddr = d_cached_tls_root_vaddr_from_thread(thread->handle);
     ProfEnd();
     
     ////////////////////////////
@@ -15821,7 +15841,7 @@ rd_frame(void)
           {
             D_Entity *thread = d_entity_from_handle(rd_regs()->thread);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            D_Entity *module = d_module_from_process_vaddr(process, d_rip_from_thread(thread->handle));
+            D_Entity *module = d_module_from_process_vaddr(process, d_cached_ip_from_thread(thread->handle));
             D_Entity *machine = d_entity_ancestor_from_kind(process, D_EntityKind_Machine);
             rd_state->base_regs.v.unwind_count = 0;
             rd_state->base_regs.v.inline_depth = 0;
@@ -16664,7 +16684,7 @@ rd_frame(void)
           D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
           D_Entity *module = d_module_from_process_vaddr(process, vaddr);
           U64 voff = d_voff_from_vaddr(module, vaddr);
-          U64 test_cached_vaddr = d_rip_from_thread(thread->handle);
+          U64 test_cached_vaddr = d_cached_ip_from_thread(thread->handle);
           
           // rjf: valid stop thread? -> select & snap
           if(need_refocus && thread->kind == D_EntityKind_Thread && evt->cause != D_EventCause_InterruptedByHalt)
@@ -16734,7 +16754,7 @@ rd_frame(void)
           // rjf: update the autos-determining code range
           {
             D_Handle new_thread_handle = thread->handle;
-            U64 new_sp = d_rsp_from_thread(new_thread_handle);
+            U64 new_sp = d_cached_sp_from_thread(new_thread_handle);
             if(thread == &d_entity_nil)
             {
               new_thread_handle = selected_thread->handle;
