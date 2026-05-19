@@ -10513,10 +10513,10 @@ rd_ipc_make_reply_source_location_from_address(Arena *arena, U64 vaddr)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  D_Entity *process = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->process);
+  D_Entity *process = d_entity_from_handle(rd_base_regs()->process);
   if(process == &d_entity_nil)
   {
-    D_Entity *thread = d_entity_from_handle(&d_user_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
+    D_Entity *thread = d_entity_from_handle(rd_base_regs()->thread);
     process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   }
 
