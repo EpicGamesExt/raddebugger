@@ -5213,6 +5213,27 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           }
         }
         
+        // rjf: allocate parse artifact arena
+        arena = arena_alloc();
+        
+        // rjf: gather memory ranges
+        memory_ranges_count = memories_count + memories64_count;
+        memory_ranges = push_array(arena, D_DumpMemoryRange, memory_ranges_count);
+        for EachIndex(idx, memories_count)
+        {
+          memory_ranges[idx].base_vaddr = memories[idx].start_of_memory_range;
+          memory_ranges[idx].foff_range = r1u64(memories[idx].memory_location.foff, memories[idx].memory_location.foff+memories[idx].memory_location.data_size);
+        }
+        {
+          U64 foff = memories64_base_foff;
+          for EachIndex(idx, memories64_count)
+          {
+            memory_ranges[memories_count + idx].base_vaddr = memories64[memories_count + idx].start_of_memory_range;
+            memory_ranges[memories_count + idx].foff_range = r1u64(foff, foff+memories64[idx].size);
+            foff += memories64[idx].size;
+          }
+        }
+        
         // rjf: system info -> arch
         Arch arch = Arch_Null;
         if(system_info != 0) switch(system_info->processor_architecture)
@@ -5309,27 +5330,6 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             evt->parent     = process;
             evt->timestamp  = debug_info_timestamp;
             evt->string     = initial_debug_info_path;
-          }
-        }
-        
-        // rjf: allocate parse artifact arena
-        arena = arena_alloc();
-        
-        // rjf: gather memory ranges
-        memory_ranges_count = memories_count + memories64_count;
-        memory_ranges = push_array(arena, D_DumpMemoryRange, memory_ranges_count);
-        for EachIndex(idx, memories_count)
-        {
-          memory_ranges[idx].base_vaddr = memories[idx].start_of_memory_range;
-          memory_ranges[idx].foff_range = r1u64(memories[idx].memory_location.foff, memories[idx].memory_location.foff+memories[idx].memory_location.data_size);
-        }
-        {
-          U64 foff = memories64_base_foff;
-          for EachIndex(idx, memories64_count)
-          {
-            memory_ranges[memories_count + idx].base_vaddr = memories64[memories_count + idx].start_of_memory_range;
-            memory_ranges[memories_count + idx].foff_range = r1u64(foff, foff+memories64[idx].size);
-            foff += memories64[idx].size;
           }
         }
       }

@@ -1444,6 +1444,22 @@ str8_from_version(Arena *arena, U64 version)
 //~ rjf: String Path Helpers
 
 internal String8
+program_data_folder_prefix_from_os(OperatingSystem os)
+{
+  String8 result = {0};
+  switch(os)
+  {
+    default:{}break;
+    case OperatingSystem_Linux:
+    case OperatingSystem_Mac:
+    {
+      result = s(".");
+    }break;
+  }
+  return result;
+}
+
+internal String8
 str8_chop_last_slash(String8 string)
 {
   if(string.size > 0)

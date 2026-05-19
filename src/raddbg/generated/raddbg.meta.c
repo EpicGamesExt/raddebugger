@@ -208,7 +208,7 @@ RD_VocabInfo rd_vocab_info_table[360] =
 {str8_lit_comp("set_entity_color"), str8_lit_comp(""), str8_lit_comp("Set Entity Color"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("set_entity_name"), str8_lit_comp(""), str8_lit_comp("Set Entity Name"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("attach"), str8_lit_comp(""), str8_lit_comp("Attach"), str8_lit_comp(""), RD_IconKind_Null},
-{str8_lit_comp("open_crash_dump"), str8_lit_comp(""), str8_lit_comp("Open Crash Dump"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("open_crash_dump"), str8_lit_comp(""), str8_lit_comp("Open Crash Dump"), str8_lit_comp(""), RD_IconKind_FileOutline},
 {str8_lit_comp("exit"), str8_lit_comp(""), str8_lit_comp("Exit"), str8_lit_comp(""), RD_IconKind_X},
 {str8_lit_comp("open_palette"), str8_lit_comp(""), str8_lit_comp("Open Palette"), str8_lit_comp(""), RD_IconKind_List},
 {str8_lit_comp("run_command"), str8_lit_comp(""), str8_lit_comp("Run Command"), str8_lit_comp(""), RD_IconKind_Null},

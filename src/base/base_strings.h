@@ -319,6 +319,8 @@ g_path_style_map[] =
   { str8_lit_comp("system"),   PathStyle_SystemAbsolute  },
 };
 
+internal String8 program_data_folder_prefix_from_os(OperatingSystem os);
+
 internal String8 str8_chop_last_slash(String8 string);
 internal String8 str8_skip_last_slash(String8 string);
 internal String8 str8_chop_last_dot(String8 string);
