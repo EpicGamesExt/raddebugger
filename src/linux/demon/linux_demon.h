@@ -277,6 +277,15 @@ typedef struct LNX_DMN_ProcessPtrList
   LNX_DMN_ProcessPtrNode *last;
 } LNX_DMN_ProcessPtrList;
 
+typedef struct LNX_DMN_ActiveTrap LNX_DMN_ActiveTrap;
+struct LNX_DMN_ActiveTrap
+{
+  LNX_DMN_ActiveTrap *next;
+  B32 good;
+  DMN_Trap *trap;
+  String8 swap_bytes;
+};
+
 typedef struct LNX_DMN_ProcessCtx
 {
   Arena                 *arena;
@@ -330,18 +339,6 @@ typedef struct LNX_DMN_EntityList
   LNX_DMN_EntityNode *first;
   LNX_DMN_EntityNode *last;
 } LNX_DMN_EntityList;
-
-////////////////////////////////
-//~ rjf: Active Trap Data Structure
-
-typedef struct LNX_DMN_ActiveTrap LNX_DMN_ActiveTrap;
-struct LNX_DMN_ActiveTrap
-{
-  LNX_DMN_ActiveTrap *next;
-  B32 good;
-  DMN_Trap *trap;
-  String8 swap_bytes;
-};
 
 ////////////////////////////////
 //~ Global State
