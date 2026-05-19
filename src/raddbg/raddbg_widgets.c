@@ -659,7 +659,7 @@ rd_title_fstrs_from_code_name(Arena *arena, String8 code_name)
 }
 
 internal DR_FStrList
-rd_title_fstrs_from_file_path(Arena *arena, String8 file_path)
+rd_title_fstrs_from_file_path(Arena *arena, String8 file_path, B32 include_folder)
 {
   DR_FStrList fstrs = {0};
   String8 file_name = str8_skip_last_slash(file_path);
@@ -685,6 +685,17 @@ rd_title_fstrs_from_file_path(Arena *arena, String8 file_path)
   }
   dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
   dr_fstrs_push_new(arena, &fstrs, &params, file_name);
+  if(include_folder)
+  {
+    dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+    UI_TagF("weak")
+    {
+      dr_fstrs_push_new(arena, &fstrs, &params,
+                        str8_chop_last_slash(file_path),
+                        .size = params.size*0.9f,
+                        .color = ui_color_from_name(str8_lit("text")));
+    }
+  }
   return fstrs;
 }
 

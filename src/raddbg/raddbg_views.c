@@ -1636,7 +1636,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       //- rjf: files -> button for file
       else if(result.file_path.size != 0)
       {
-        result.expr_fstrs = rd_title_fstrs_from_file_path(arena, result.file_path);
+        B32 need_folder = !str8_match(row_info->group_cfg_name, str8_lit("folder"), 0);
+        result.expr_fstrs = rd_title_fstrs_from_file_path(arena, result.file_path, need_folder);
         result.flags |= RD_WatchCellFlag_Button;
       }
       
