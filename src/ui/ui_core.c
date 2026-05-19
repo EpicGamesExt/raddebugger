@@ -2890,11 +2890,11 @@ ui_signal_from_box(UI_Box *box)
         sig.f |= (UI_SignalFlag_LeftTripleClicked<<evt_mouse_button_kind);
       }
       MemoryCopy(&ui_state->press_timestamp_history_us[evt_mouse_button_kind][1], &ui_state->press_timestamp_history_us[evt_mouse_button_kind][0],
-                 sizeof(ui_state->press_timestamp_history_us[evt_mouse_button_kind][0]) * ArrayCount(ui_state->press_timestamp_history_us[evt_mouse_button_kind])-1);
+                 sizeof(ui_state->press_timestamp_history_us[evt_mouse_button_kind][0]) * (ArrayCount(ui_state->press_timestamp_history_us[evt_mouse_button_kind])-1));
       MemoryCopy(&ui_state->press_key_history[evt_mouse_button_kind][1], &ui_state->press_key_history[evt_mouse_button_kind][0],
-                 sizeof(ui_state->press_key_history[evt_mouse_button_kind][0]) * ArrayCount(ui_state->press_key_history[evt_mouse_button_kind])-1);
+                 sizeof(ui_state->press_key_history[evt_mouse_button_kind][0]) * (ArrayCount(ui_state->press_key_history[evt_mouse_button_kind])-1));
       MemoryCopy(&ui_state->press_pos_history[evt_mouse_button_kind][1], &ui_state->press_pos_history[evt_mouse_button_kind][0],
-                 sizeof(ui_state->press_pos_history[evt_mouse_button_kind][0]) * ArrayCount(ui_state->press_pos_history[evt_mouse_button_kind])-1);
+                 sizeof(ui_state->press_pos_history[evt_mouse_button_kind][0]) * (ArrayCount(ui_state->press_pos_history[evt_mouse_button_kind])-1));
       ui_state->press_timestamp_history_us[evt_mouse_button_kind][0] = evt->timestamp_us;
       ui_state->press_key_history[evt_mouse_button_kind][0] = box->key;
       ui_state->press_pos_history[evt_mouse_button_kind][0] = evt_mouse;

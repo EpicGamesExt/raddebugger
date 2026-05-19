@@ -1,15 +1,114 @@
 # v0.9.26-alpha
 
+## Debugger Changes
+
+- Added scope ending visualizations to the text view, to display the header of
+  a scope at the closing position of the scope. This can be turned off via the
+  `Cursor Scope End Annotations` setting.
+- Added the ability to evaluate `autos`, which is a collection of expressions
+  that the debugger determines refer to symbols which are being (or about to
+  be) changed by the selected thread.
+- Added source-inline and disassembly-inline visualization of auto expressions.
+  This can be turned off via the `Show Auto Watches In Source / Disassembly`
+  setting.
+- Added the ability to evaluate local static variables unambiguously, when the
+  same name is used for multiple local static variables, even when outside the
+  function containing the local static. This can be done by namespacing the
+  variable name with the containing function, either using a `::` or `.`
+  operator.
+- Added a setting, `Transient Tabs`, to disable transient tabs being opened,
+  when the debugger automatically snaps to new code locations.
+- Added a setting, `Display Pointer Addresses Before Contents`, to always
+  force the debugger to show pointer addresses before attempting to visualize
+  to what the pointer points.
+- Adjusted the `Step Out` command to perform scope-granularity stepping, rather
+  than only being function-frame-granularity. This uses scope information found
+  in debug info to step out of scopes when possible, rather than always exiting
+  the current function frame. This makes the command much more useful for
+  stepping through larger functions with several scopes of larger work, or for
+  stepping out of loops.
+- Adjusted the debugger's user & project configuration file behavior to be less
+  idiosyncratic with other programs. Project files are no longer auto-loaded
+  based on the project last loaded during the previous debugger runtime.
+  Creating a new user or project also does not immediately require choosing a
+  path for the file; these can later be specified using the respective `Save`
+  commands.
+- Added syntax highlighting and tab-completion for view identifiers in
+  watch expressions.
+- Added more in-debugger documentation for views and their arguments, when
+  written in a watch expression.
+- Moved configuration data previously treated as project data to being user
+  data, tagged with the associated project. This includes loaded debug info and
+  breakpoints. The effect of this is that project files are much easier to
+  check into source control (they do not change in spurious ways for other
+  users on a project), but project-related user configuration will still be
+  correctly filtered based on whatever project is loaded.
+- Improved the debugger's behavior with respect to keeping previously-loaded
+  debug info around. Now, when the debugger begins a new debugging session, it
+  will unload all loaded debug info, and it will only reload debug info that is
+  actively found to be needed by debuggees. This preserves the debugger's
+  ability to use debug info without debugging for features like
+  go-to-definition and type evaluation, but it stops the debugger from keeping
+  old and unneeded debug info loaded indefinitely (until it is manually
+  unloaded).
+- Adjusted recent project visualization to include the name of the project,
+  specified with the `Project Name` setting.
+- Renamed `Switch` to `Open Source File From Debug Info`, to better represent
+  the command's functionality.
+- Adjusted file path evaluation visualization to include the full path to the
+  containing folder, when it is not obvious from context (for instance, if the
+  file evaluation is a child evaluation of a folder evaluation, the containing
+  folder path is not shown; if the file path is evaluated standalone, as it is
+  in the lister generated for the `Open Source File From Debug Info` command,
+  then the containing folder path is shown).
+- Improved visualization of unmapped addresses in the memory view. Now, instead
+  of bytes at these addresses being displayed as `0` with a special background,
+  they are displayed as `x`, and the annotations for these addresses (displayed
+  at the bottom of the memory view, for the cursor's cell) explicitly label
+  them as being unmapped.
+- Improved visualization of unmapped addresses in watch expressions. Now,
+  instead of only being colored differently with evaluations reading as zeroed
+  memory, the value will explicitly label addresses as unmapped when possible.
+- Fixed a leak which most notably manifested during rapid creation/destruction
+  of new threads.
+- Fixed a leak related to debugger's config state. This was difficult to
+  reproduce, but it may fix leaks experienced after running the debugger for an
+  extended period of time.
+- Fixed a bug where cross-module evaluations would resolve to incorrect
+  addresses, due to using the incorrect module's base virtual address. This was
+  also causing broken behavior sometimes in the `Go To Name` lister, and
+  other similar UIs.
+- Fixed a bug where panels without tabs were unnecessarily keeping the debugger
+  UI awake in some cases.
+- Replaced the DWARF -> RDI converter with a new multithreaded version, which
+  should execute much faster on larger DWARF debug info, and produce much
+  smaller RDI output, due to the addition of type deduplication.
+- Introduced structured namespaces to RDI, which structurally encode namespace
+  hierarchies for debug info symbols, instead of this information being
+  implicitly baked using language-specific conventions into symbol names. This
+  is used to deduplicate repeated namespace prefixes from symbol names, leading
+  to a smaller string footprint for generated RDIs. Symbols now only store
+  their partially-qualified name. For example, for a C++ symbol `A::B::C`, the
+  symbol itself will store its name as `C`, but it will also record its
+  container as being `B`. `B`, then, will record its container as being `A`.
+  This allows users of RDI to dynamically construct the fully-qualified name as
+  needed, and it allows for more reliable and language-agnostic usage of
+  partially-qualified symbol names.
+
+
 ## Linker Changes
 
 - Implemented /DEBUG:GHASH
-- Fixed an issue where an import thunk or import address could be linked from the currently searched library
-  instead of the library where the first import reference was found. For example, if the first pass finds the import
-  thunk in foo.lib and the second pass resolves symbol to the import address in bar.lib, the linker now always linkes
-  the import thunk and import address members from the library where the first reference was found.
-- /OPT:REF:  Fixed an issue with garbage collection of associated sections and weak symbols that led linker to remove
-  live sections.
-- /OPT:REF Added relocation batching to reduce contention on the global reference list during garbage collection.
+- Fixed an issue where an import thunk or import address could be linked from
+  the currently searched library instead of the library where the first import
+  reference was found. For example, if the first pass finds the import thunk in
+  foo.lib and the second pass resolves symbol to the import address in bar.lib,
+  the linker now always linkes the import thunk and import address members from
+  the library where the first reference was found.
+- /OPT:REF:  Fixed an issue with garbage collection of associated sections and
+  weak symbols that led linker to remove live sections.
+- /OPT:REF Added relocation batching to reduce contention on the global
+  reference list during garbage collection.
 
 # v0.9.25-alpha
 
