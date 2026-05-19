@@ -545,7 +545,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
                     .color        = color);
   
   //- rjf: push PID
-  if(entity->kind == D_EntityKind_Process)
+  if(entity->kind == D_EntityKind_Process && entity->id != 0)
   {
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
     dr_fstrs_push_new(arena, &result, &params, push_str8f(arena, " (PID: %I64u)", entity->id), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = secondary_color, .size = ui_top_font_size()*0.85f);

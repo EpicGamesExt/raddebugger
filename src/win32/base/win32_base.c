@@ -1728,7 +1728,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
     SHGetFolderPathW(0, CSIDL_DESKTOP, 0, 0, dump_file_path);
     PathAppendW(dump_file_path, L"raddbg_crash_dump.dmp");
     HANDLE file = CreateFileW(dump_file_path, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-    if (file != INVALID_HANDLE_VALUE)
+    if(file != INVALID_HANDLE_VALUE)
     {
       MINIDUMP_EXCEPTION_INFORMATION info = {0};
       info.ThreadId = GetCurrentThreadId();
@@ -1736,8 +1736,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
       info.ClientPointers = FALSE;
       BOOL dump_successful = dbg_MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpNormal, &info, 0, 0);
       CloseHandle(file);
-      
-      if (dump_successful)
+      if(dump_successful)
       {
 #if !BUILD_CONSOLE_INTERFACE
         // opens explorer and selects file

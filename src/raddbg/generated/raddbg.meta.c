@@ -269,7 +269,7 @@ RD_VocabInfo rd_vocab_info_table[360] =
 {str8_lit_comp("tab_settings"), str8_lit_comp(""), str8_lit_comp("Selected Tab Settings"), str8_lit_comp(""), RD_IconKind_Gear},
 {str8_lit_comp("set_current_path"), str8_lit_comp(""), str8_lit_comp("Set Current Path"), str8_lit_comp(""), RD_IconKind_FileOutline},
 {str8_lit_comp("open"), str8_lit_comp(""), str8_lit_comp("Open"), str8_lit_comp(""), RD_IconKind_FileOutline},
-{str8_lit_comp("switch"), str8_lit_comp(""), str8_lit_comp("Switch"), str8_lit_comp(""), RD_IconKind_FileOutline},
+{str8_lit_comp("open_source_file_from_debug_info"), str8_lit_comp(""), str8_lit_comp("Open Source File From Debug Info"), str8_lit_comp(""), RD_IconKind_FileOutline},
 {str8_lit_comp("switch_to_partner_file"), str8_lit_comp(""), str8_lit_comp("Switch To Partner File"), str8_lit_comp(""), RD_IconKind_FileOutline},
 {str8_lit_comp("show_file_in_explorer"), str8_lit_comp(""), str8_lit_comp("Show File In Explorer"), str8_lit_comp(""), RD_IconKind_FolderClosedFilled},
 {str8_lit_comp("go_to_disassembly"), str8_lit_comp(""), str8_lit_comp("Go To Disassembly"), str8_lit_comp(""), RD_IconKind_Glasses},
@@ -671,7 +671,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[249] =
 { str8_lit_comp("tab_settings"), str8_lit_comp("Opens settings for a tab."), str8_lit_comp("view,options"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("set_current_path"), str8_lit_comp("Sets the debugger's current path, which is used as a starting point when browsing for files."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("open"), str8_lit_comp("Opens a file."), str8_lit_comp("code,source,file"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\""), str8_lit_comp(""), D_EntityKind_Null}},
-{ str8_lit_comp("switch"), str8_lit_comp("Switches to a recent file."), str8_lit_comp("code,source,file"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:source_files"), str8_lit_comp(""), D_EntityKind_Null}},
+{ str8_lit_comp("open_source_file_from_debug_info"), str8_lit_comp("Opens a source file found within loaded debug info."), str8_lit_comp("code,source,file"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:source_files"), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("switch_to_partner_file"), str8_lit_comp("Switches to the focused file's partner; or from header to implementation or vice versa."), str8_lit_comp("code,source,file"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("show_file_in_explorer"), str8_lit_comp("Opens the operating system's file explorer and shows the selected file."), str8_lit_comp(""), str8_lit_comp("$file,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("go_to_disassembly"), str8_lit_comp("Goes to the disassembly, if any, for a given source code line."), str8_lit_comp("code,source,disassembly,disasm"), str8_lit_comp("$text_pt,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*1)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
@@ -871,7 +871,7 @@ struct {String8 string; CFG_Binding binding;} rd_default_binding_table[114] =
 {str8_lit_comp("open_tab"), {WM_Key_T, 0 |WM_Modifier_Ctrl  }},
 {str8_lit_comp("tab_settings"), {WM_Key_T, 0 |WM_Modifier_Ctrl  |WM_Modifier_Alt}},
 {str8_lit_comp("open"), {WM_Key_O, 0 |WM_Modifier_Ctrl  }},
-{str8_lit_comp("switch"), {WM_Key_I, 0 |WM_Modifier_Ctrl  }},
+{str8_lit_comp("open_source_file_from_debug_info"), {WM_Key_I, 0 |WM_Modifier_Ctrl  }},
 {str8_lit_comp("switch_to_partner_file"), {WM_Key_O, 0   |WM_Modifier_Alt}},
 {str8_lit_comp("new_project"), {WM_Key_N, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift }},
 {str8_lit_comp("open_project"), {WM_Key_O, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift }},
@@ -946,7 +946,7 @@ struct {String8 string; CFG_Binding binding;} rd_default_binding_table[114] =
 {str8_lit_comp("toggle_dev_menu"), {WM_Key_D, 0 |WM_Modifier_Ctrl |WM_Modifier_Shift |WM_Modifier_Alt}},
 };
 
-String8 rd_binding_version_remap_old_name_table[8] =
+String8 rd_binding_version_remap_old_name_table[9] =
 {
 str8_lit_comp("commands"),
 str8_lit_comp("load_user"),
@@ -956,9 +956,10 @@ str8_lit_comp("open_profile"),
 str8_lit_comp("address_breakpoint"),
 str8_lit_comp("function_breakpoint"),
 str8_lit_comp("toggle_breakpoint_cursor"),
+str8_lit_comp("switch"),
 };
 
-String8 rd_binding_version_remap_new_name_table[8] =
+String8 rd_binding_version_remap_new_name_table[9] =
 {
 str8_lit_comp("run_command"),
 str8_lit_comp("open_user"),
@@ -968,6 +969,7 @@ str8_lit_comp("open_project"),
 str8_lit_comp("add_address_breakpoint"),
 str8_lit_comp("add_function_breakpoint"),
 str8_lit_comp("toggle_breakpoint"),
+str8_lit_comp("open_source_file_from_debug_info"),
 };
 
 String8 rd_icon_kind_text_table[75] =

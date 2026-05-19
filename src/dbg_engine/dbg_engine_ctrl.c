@@ -1302,6 +1302,7 @@ d_entity_store_apply_events(D_EntityCtxRWStore *store, D_EventList *list)
           D_Entity *process = d_entity_alloc(store, machine, D_EntityKind_Process, event->arch, event->entity, (U64)event->entity_id);
           process->tls_model = event->tls_model;
           process->target_os = event->target_os;
+          d_entity_equip_string(store, process, event->string);
         }
       }break;
       case D_EventKind_EndProc:
@@ -1436,9 +1437,9 @@ d_entity_store_apply_events(D_EntityCtxRWStore *store, D_EventList *list)
         module->tls_index = event->tls_index;
         module->tls_offset = event->tls_offset;
         D_Entity *first_module = d_entity_child_from_kind(process, D_EntityKind_Module);
-        if(first_module == module)
+        if(first_module == module && process->string.size == 0)
         {
-          d_entity_equip_string(store, process, str8_skip_last_slash(event->string));
+          d_entity_equip_string(store, process, event->string);
         }
         scratch_end(scratch);
       }break;
@@ -5156,6 +5157,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         U64 modules_count = 0;
         MDMP_MemoryDescriptor32 *memories = 0;
         U64 memories_count = 0;
+        MDMP_MemoryDescriptor64 *memories64 = 0;
+        U64 memories64_count = 0;
+        U64 memories64_base_foff = 0;
         {
           for EachIndex(idx, directories_count)
           {
@@ -5195,6 +5199,16 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
                 memories = (MDMP_MemoryDescriptor32 *)(data.str + off);
                 memories_count = Min(memories_count_32, memories_count_max);
               }break;
+              case MDMP_StreamKind_Memory64List:
+              {
+                U64 memories64_count = 0;
+                U64 off = dir->location.foff;
+                off += str8_deserial_read_struct(data, off, &memories64_count);
+                off += str8_deserial_read_struct(data, off, &memories64_base_foff);
+                U64 memories64_count_max = (data.size - off) / sizeof(MDMP_MemoryDescriptor64);
+                memories64 = (MDMP_MemoryDescriptor64 *)(data.str + off);
+                memories64_count = Min(memories64_count, memories64_count_max);
+              }break;
             }
           }
         }
@@ -5219,6 +5233,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           evt->entity    = process;
           evt->arch      = arch;
           evt->target_os = OperatingSystem_Windows;
+          evt->string    = path;
         }
         
         // rjf: thread creation
@@ -5245,7 +5260,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         // rjf: module loads
         for EachIndex(idx, modules_count)
         {
+          // rjf: unpack module
           MDMP_Module *module = &modules[idx];
+          Rng1U64 vaddr_range = r1u64(module->image_base_vaddr, module->image_base_vaddr + module->image_size);
           String8 module_name = {0};
           {
             U64 module_name_off = module->module_name_foff;
@@ -5256,32 +5273,74 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             String16 module_name_16 = str16((U16 *)module_name_raw_data.str, module_name_raw_data.size / sizeof(U16));
             module_name = str8_from_16(scratch.arena, module_name_16);
           }
-          D_Event *evt = d_event_list_push(scratch.arena, &evts);
-          evt->kind       = D_EventKind_NewModule;
-          evt->msg_id     = msg->msg_id;
-          evt->entity     = d_dump_handle_make(D_MachineID_Local, handle_id_gen);
-          evt->parent     = process;
-          evt->arch       = arch;
-          evt->vaddr_rng  = r1u64(module->image_base_vaddr, module->image_base_vaddr + module->image_size);
-          evt->string     = module_name;
-          // TODO(rjf): evt->stack_base = ; (use thread->stack)
-          // TODO(rjf): evt->tls_root   = ; (use thread->thread_context)
+          
+          // rjf: open module
+          D_Handle module_handle = d_dump_handle_make(D_MachineID_Local, handle_id_gen);
           handle_id_gen += 1;
+          d_ctrl_thread__module_open(process, module_handle, vaddr_range, module_name, r1u64(0, 0), 0);
+          
+          // rjf: open debug info
+          String8 initial_debug_info_path = d_initial_debug_info_path_from_module(scratch.arena, module_handle);
+          U64 debug_info_timestamp = properties_from_file_path(initial_debug_info_path).modified;
+          DI_Key initial_dbgi_key = di_key_from_path_timestamp(initial_debug_info_path, debug_info_timestamp);
+          di_open(initial_dbgi_key);
+          
+          // rjf: push module load event
+          {
+            D_Event *evt = d_event_list_push(scratch.arena, &evts);
+            evt->kind       = D_EventKind_NewModule;
+            evt->msg_id     = msg->msg_id;
+            evt->entity     = module_handle;
+            evt->parent     = process;
+            evt->arch       = arch;
+            evt->vaddr_rng  = vaddr_range;
+            evt->string     = module_name;
+            // TODO(rjf): evt->stack_base = ; (use thread->stack)
+            // TODO(rjf): evt->tls_root   = ; (use thread->thread_context)
+          }
+          
+          // rjf: push debug info initial path set event
+          {
+            D_Event *evt = d_event_list_push(scratch.arena, &evts);
+            evt->kind       = D_EventKind_ModuleDebugInfoPathChange;
+            evt->msg_id     = msg->msg_id;
+            evt->entity     = module_handle;
+            evt->parent     = process;
+            evt->timestamp  = debug_info_timestamp;
+            evt->string     = initial_debug_info_path;
+          }
         }
         
         // rjf: allocate parse artifact arena
         arena = arena_alloc();
         
         // rjf: gather memory ranges
-        memory_ranges_count = memories_count;
+        memory_ranges_count = memories_count + memories64_count;
         memory_ranges = push_array(arena, D_DumpMemoryRange, memory_ranges_count);
         for EachIndex(idx, memories_count)
         {
           memory_ranges[idx].base_vaddr = memories[idx].start_of_memory_range;
           memory_ranges[idx].foff_range = r1u64(memories[idx].memory_location.foff, memories[idx].memory_location.foff+memories[idx].memory_location.data_size);
         }
+        {
+          U64 foff = memories64_base_foff;
+          for EachIndex(idx, memories64_count)
+          {
+            memory_ranges[memories_count + idx].base_vaddr = memories64[memories_count + idx].start_of_memory_range;
+            memory_ranges[memories_count + idx].foff_range = r1u64(foff, foff+memories64[idx].size);
+            foff += memories64[idx].size;
+          }
+        }
       }
     }
+  }
+  
+  //- rjf: record stop
+  {
+    D_Event *event = d_event_list_push(scratch.arena, &evts);
+    event->kind   = D_EventKind_Stopped;
+    event->cause  = D_EventCause_Finished;
+    event->msg_id = msg->msg_id;
   }
   
   //- rjf: push all events from the parse

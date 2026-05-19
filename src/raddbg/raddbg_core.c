@@ -650,7 +650,7 @@ rd_name_from_ctrl_entity(Arena *arena, D_Entity *entity)
   {
     string = str8_lit("unnamed");
   }
-  if(entity->kind == D_EntityKind_Module)
+  if(entity->kind == D_EntityKind_Module || entity->kind == D_EntityKind_Process)
   {
     string = str8_skip_last_slash(string);
   }
@@ -4426,7 +4426,7 @@ rd_view_ui(Rng2F32 rect)
                           // rjf: is file eval? -> switch to file
                           else if(cell_info.file_path.size != 0)
                           {
-                            rd_cmd(RD_CmdKind_Switch, .cfg = 0, .file_path = cell_info.file_path);
+                            rd_cmd(RD_CmdKind_FindCodeLocation, .cfg = 0, .file_path = cell_info.file_path, .cursor = txt_pt(0, 0));
                           }
                         }
                         
@@ -6710,7 +6710,7 @@ rd_window_frame(void)
                   String8 cmds[] =
                   {
                     rd_cmd_kind_info_table[RD_CmdKind_Open].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Switch].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenSourceFileFromDebugInfo].string,
                     {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_NewProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
@@ -13862,7 +13862,7 @@ rd_frame(void)
               log_user_errorf("Couldn't open file at \"%S\".", path);
             }
           }break;
-          case RD_CmdKind_Switch:
+          case RD_CmdKind_OpenSourceFileFromDebugInfo:
           {
             String8 path = rd_regs()->file_path;
             rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0, .force_focus = 1, .prefer_new_tab = 1);
