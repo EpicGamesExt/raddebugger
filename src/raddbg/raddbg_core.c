@@ -704,9 +704,13 @@ rd_ctrl_entity_from_eval_space(E_Space space)
 internal E_Space
 rd_eval_space_from_ctrl_entity(D_Entity *entity, E_SpaceKind kind)
 {
-  E_Space space = e_space_make(kind);
-  space.u64s[0] = (((U64)entity->handle.machine_id) << 32) | (((U64)entity->handle.controller_kind) << 0);
-  space.u64s[1] = entity->handle.entity_id;
+  E_Space space = {0};
+  if(entity != &d_entity_nil)
+  {
+    space = e_space_make(kind);
+    space.u64s[0] = (((U64)entity->handle.machine_id) << 32) | (((U64)entity->handle.controller_kind) << 0);
+    space.u64s[1] = entity->handle.entity_id;
+  }
   return space;
 }
 

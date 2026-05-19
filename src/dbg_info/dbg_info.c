@@ -1306,7 +1306,7 @@ di_search_artifact_create(String8 key, B32 *cancel_signal, B32 *retry_out, U64 *
     }
     lane_sync();
     
-    //- rjf: sort records if we have a query
+    //- rjf: sort records
     if(!cancelled) ProfScope("sort records")
     {
       //- rjf: set up common data
