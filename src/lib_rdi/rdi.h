@@ -507,7 +507,8 @@ RDI_NameMapKind_Procedures           = 4,
 RDI_NameMapKind_Types                = 5,
 RDI_NameMapKind_LinkNameProcedures   = 6,
 RDI_NameMapKind_NormalSourcePaths    = 7,
-RDI_NameMapKind_COUNT                = 8,
+RDI_NameMapKind_Units                = 8,
+RDI_NameMapKind_COUNT                = 9,
 } RDI_NameMapKindEnum;
 
 #define RDI_Header_XList \
@@ -1010,6 +1011,7 @@ X(Procedures)\
 X(Types)\
 X(LinkNameProcedures)\
 X(NormalSourcePaths)\
+X(Units)\
 
 #define RDI_NameMap_XList \
 X(RDI_U32, bucket_base_idx)\

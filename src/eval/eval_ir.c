@@ -1713,19 +1713,52 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         void *mapped_user_data = 0;
         B32 generated = 0;
         
+        //- rjf: determine the allowed identifier resolution path, if any
+        B32 do_limit_resolve_path = 0;
+        E_IdentifierResolutionPath limit_resolve_path = E_IdentifierResolutionPath_Local;
+        if(qualifier.size != 0)
+        {
+          do_limit_resolve_path = 1;
+          if(str8_match(qualifier, s("member"), 0))
+          {
+            limit_resolve_path = E_IdentifierResolutionPath_ImplicitThisMember;
+          }
+          else if(str8_match(qualifier, s("local"), 0))
+          {
+            limit_resolve_path = E_IdentifierResolutionPath_Local;
+          }
+          else if(str8_match(qualifier, s("symbol"), 0))
+          {
+            limit_resolve_path = E_IdentifierResolutionPath_DebugInfoMatch;
+          }
+          else if(str8_match(qualifier, s("reg"), 0))
+          {
+            limit_resolve_path = E_IdentifierResolutionPath_Registers;
+          }
+          else if(str8_match(qualifier, s("query"), 0) ||
+                  str8_match(qualifier, s("macro"), 0))
+          {
+            limit_resolve_path = E_IdentifierResolutionPath_Macros;
+          }
+          else
+          {
+            do_limit_resolve_path = 0;
+          }
+        }
+        
         //- rjf: iterate identifier resolution rule paths, try to resolve
         // identifier in that order.
         for(U64 path_idx = 0; !generated && path_idx < identifier_resolution_rule->count; path_idx += 1)
         {
           //- rjf: try to map identifier via this path
           E_IdentifierResolutionPath path = identifier_resolution_rule->paths[path_idx];
-          ProfScope("identifier resolution %i", path) switch(path)
+          ProfScope("identifier resolution %i", path) if(!do_limit_resolve_path || limit_resolve_path == path) switch(path)
           {
             default:{}break;
             
             //- rjf: try to map name as a wildcard instance
             case E_IdentifierResolutionPath_WildcardInst:
-            if(!generated && qualifier.size == 0 && !string_mapped && e_cache->first_wildcard_inst != 0)
+            if(!generated && !string_mapped && e_cache->first_wildcard_inst != 0)
             {
               for(E_AutoHookWildcardInst *inst = e_cache->first_wildcard_inst; inst != 0; inst = inst->next)
               {
@@ -1740,7 +1773,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             
             //- rjf: try to map name as parent expression signifier ('$')
             case E_IdentifierResolutionPath_ParentExpr:
-            if(qualifier.size == 0 && !string_mapped && str8_match(string, str8_lit("$"), 0) && parent != 0 && (parent->root != &e_irnode_nil || parent->msgs.first != 0))
+            if(!string_mapped && str8_match(string, str8_lit("$"), 0) && parent != 0 && (parent->root != &e_irnode_nil || parent->msgs.first != 0))
             {
               E_IRTreeAndType *parent_irtree = parent;
               {
@@ -1770,7 +1803,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             
             //- rjf: try to map name as implicit access of overridden expression ('$.member_name', where the $. prefix is omitted)
             case E_IdentifierResolutionPath_ParentExprMember:
-            if(qualifier.size == 0 && !string_mapped && parent != 0 && parent->root != &e_irnode_nil)
+            if(!string_mapped && parent != 0 && parent->root != &e_irnode_nil)
             {
               for(E_IRTreeAndType *prev = parent; prev != 0; prev = prev->prev)
               {
@@ -1796,7 +1829,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             //- rjf: try to map name as member of `this` - if found, string__redirected := "this", and turn
             // on later implicit-member-lookup generation
             case E_IdentifierResolutionPath_ImplicitThisMember:
-            if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("member"), 0)))
+            if(!string_mapped)
             {
               E_Module *module = e_base_ctx->primary_module;
               E_DbgInfo *dbg_info = e_dbg_info_from_module(module);
@@ -1815,7 +1848,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             
             //- rjf: try locals
             case E_IdentifierResolutionPath_Local:
-            if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("local"), 0)))
+            if(!string_mapped)
             {
               E_Module *module = e_base_ctx->primary_module;
               E_DbgInfo *dbg_info = e_dbg_info_from_module(module);
@@ -1852,9 +1885,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             
             //- rjf: built-in constants
             case E_IdentifierResolutionPath_BuiltInConstants:
+            if(!string_mapped)
             {
               // rjf: "true"
-              if(!string_mapped && str8_match(string, str8_lit("true"), 0))
+              if(str8_match(string, str8_lit("true"), 0))
               {
                 string_mapped = 1;
                 E_OpList oplist = {0};
@@ -1865,7 +1899,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               }
               
               // rjf: "false"
-              if(!string_mapped && str8_match(string, str8_lit("false"), 0))
+              else if(str8_match(string, str8_lit("false"), 0))
               {
                 string_mapped = 1;
                 E_OpList oplist = {0};
@@ -1878,6 +1912,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             
             //- rjf: built-in types
             case E_IdentifierResolutionPath_BuiltInTypes:
+            if(!string_mapped)
             {
               mapped_type_key = e_leaf_builtin_type_key_from_name(string);
               string_mapped = !e_type_key_match(mapped_type_key, e_type_key_zero());
@@ -1885,161 +1920,195 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             
             //- rjf: debug info matches
             case E_IdentifierResolutionPath_DebugInfoMatch:
+            if(!string_mapped)
             {
-              if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("symbol"), 0)))
+              Access *access = access_open();
+              
+              // rjf: unpack qualifier (module / debug info / unit info)
+              U64 qualifier_module_num = 0;
+              U64 qualifier_dbg_info_num = 0;
+              String8 leftover = {0};
               {
-                Access *access = access_open();
-                
-                // rjf: determine disambiguating index
-                U64 match_disambiguating_idx = 0;
-                if(disambiguator.size != 0)
+                U64 piece_start_off = 0;
+                for(U64 off = 0; off <= qualifier.size; off += 1)
                 {
-                  try_u64_from_str8_c_rules(disambiguator, &match_disambiguating_idx);
+                  if(off == qualifier.size || qualifier.str[off] == ':' || qualifier.str[off] == '!')
+                  {
+                    String8 piece = str8_substr(qualifier, r1u64(piece_start_off, off));
+                    
+                    // rjf: try to match this piece as a module
+                    B32 was_module = 0;
+                    if(qualifier_module_num == 0)
+                    {
+                      qualifier_module_num = e_num_from_string(e_base_ctx->module_from_name_map, piece);
+                      was_module = (qualifier_module_num != 0);
+                    }
+                    
+                    // rjf: try to match this piece as a debug info
+                    B32 was_dbg_info = 0;
+                    if(qualifier_dbg_info_num == 0)
+                    {
+                      qualifier_dbg_info_num = e_num_from_string(e_base_ctx->dbg_info_from_name_map, piece);
+                      was_dbg_info = (qualifier_dbg_info_num != 0);
+                    }
+                    
+                    // rjf: wasn't a debug info or module name -> keep as leftover
+                    if(!was_module && !was_dbg_info)
+                    {
+                      leftover = piece;
+                    }
+                    
+                    piece_start_off = off+1;
+                  }
                 }
-                
-                // rjf: find match
-                DI_Match match = di_match_from_string(string, match_disambiguating_idx, e_base_ctx->primary_dbg_info->dbgi_key, 0);
-                
-                // rjf: match -> RDI
-                RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);
-                
-                // rjf: ambiguous global/thread variable in primary debug info -> try fully qualifying the name implicitly.
-                if((match.section_kind == RDI_SectionKind_GlobalVariables ||
-                    match.section_kind == RDI_SectionKind_ThreadVariables) &&
-                   match.count != 1 &&
-                   rdi == e_base_ctx->primary_dbg_info->rdi)
+              }
+              
+              // rjf: unpack selected debug info
+              B32 allow_other_dbg_infos = 1;
+              E_DbgInfo *target_dbg_info = e_base_ctx->primary_dbg_info;
+              if(1 <= qualifier_dbg_info_num && qualifier_dbg_info_num <= e_base_ctx->dbg_infos_count)
+              {
+                target_dbg_info = &e_base_ctx->dbg_infos[qualifier_dbg_info_num-1];
+                allow_other_dbg_infos = 0;
+              }
+              else if(1 <= qualifier_module_num && qualifier_module_num <= e_base_ctx->modules_count)
+              {
+                E_Module *module = &e_base_ctx->modules[qualifier_module_num-1];
+                target_dbg_info = e_dbg_info_from_module(module);
+                allow_other_dbg_infos = 0;
+              }
+              
+              // rjf: if we have a leftover -> try to match as a unit name
+              U64 unit_idx = 0;
+              if(leftover.size != 0 && target_dbg_info != &e_dbg_info_nil)
+              {
+                RDI_Parsed *rdi = target_dbg_info->rdi;
+                RDI_NameMap *unit_name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Units);
+                RDI_ParsedNameMap unit_name_map_parsed = {0};
+                rdi_parsed_from_name_map(rdi, unit_name_map, &unit_name_map_parsed);
+                RDI_NameMapNode *match_node = rdi_name_map_lookup(rdi, &unit_name_map_parsed, leftover.str, leftover.size);
+                U32 unit_idx_match_count = 0;
+                U32 *unit_idx_matches = rdi_matches_from_map_node(rdi, match_node, &unit_idx_match_count);
+                if(unit_idx_match_count != 0)
                 {
-                  U64 voff = e_base_ctx->thread_ip_voff;
+                  unit_idx = unit_idx_matches[0];
+                  allow_other_dbg_infos = 0;
+                }
+              }
+              
+              // rjf: determine disambiguating index
+              U64 match_disambiguating_idx = 0;
+              if(disambiguator.size != 0)
+              {
+                try_u64_from_str8_c_rules(disambiguator, &match_disambiguating_idx);
+              }
+              
+              // rjf: find match
+              DI_Match match = di_match_from_string(string, match_disambiguating_idx, (U32)unit_idx, allow_other_dbg_infos, target_dbg_info->dbgi_key, 0);
+              
+              // rjf: match -> RDI
+              RDI_Parsed *rdi = di_rdi_from_key(access, match.key, 0, 0);
+              
+              // rjf: ambiguous global/thread variable in primary debug info -> try fully qualifying the name implicitly.
+              if((match.section_kind == RDI_SectionKind_GlobalVariables ||
+                  match.section_kind == RDI_SectionKind_ThreadVariables) &&
+                 match.count != 1 &&
+                 rdi == e_base_ctx->primary_dbg_info->rdi)
+              {
+                U64 voff = e_base_ctx->thread_ip_voff;
+                U32 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, voff);
+                String8 fully_qualified_name = string;
+                RDI_Symbol *symbol = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, match.section_kind, match.idx);
+                B32 symbol_is_contained = (symbol->container_idx != 0);
+                if(symbol_is_contained)
+                {
                   RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, voff);
                   String8 procedure_name = fully_qualified_str8_from_rdi_symbol(scratch.arena, rdi, procedure);
-                  String8 fully_qualified_name = str8f(scratch.arena, "%S.%S", procedure_name, string);
-                  DI_Match fully_qualified_match_maybe = di_match_from_string(fully_qualified_name, match_disambiguating_idx, e_base_ctx->primary_dbg_info->dbgi_key, 0);
-                  if(fully_qualified_match_maybe.idx != 0)
-                  {
-                    match = fully_qualified_match_maybe;
-                  }
+                  fully_qualified_name = str8f(scratch.arena, "%S.%S", procedure_name, string);
                 }
-                
-#if 0
-                //~ TODO(rjf): vvvvv this used to be used for namespaceifying partially-qualified strings.
-                // now, the debugger just stores partially-qualified strings, so we instead need to do the
-                // reverse: given a fully-qualified name, try to parse out the leaf, and look up the partial
-                // qualified name.
-                if(match.idx == 0)
+                DI_Match fully_qualified_match_maybe = di_match_from_string(fully_qualified_name, match_disambiguating_idx, unit_idx, 0, e_base_ctx->primary_dbg_info->dbgi_key, 0);
+                if(fully_qualified_match_maybe.idx != 0)
                 {
-                  String8List namespaceified_strings = {0};
-                  {
-                    E_Module *module = e_base_ctx->primary_module;
-                    E_DbgInfo *dbg_info = e_dbg_info_from_module(module);
-                    RDI_Parsed *rdi = dbg_info->rdi;
-                    RDI_Symbol *procedure = e_cache->thread_ip_procedure;
-                    U64 name_size = 0;
-                    U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-                    String8 containing_procedure_name = str8(name_ptr, name_size);
-                    U64 last_past_scope_resolution_pos = 0;
-                    for(;;)
-                    {
-                      U64 past_next_dbl_colon_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("::"), 0)+2;
-                      U64 past_next_dot_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("."), 0)+1;
-                      U64 past_next_scope_resolution_pos = Min(past_next_dbl_colon_pos, past_next_dot_pos);
-                      if(past_next_scope_resolution_pos >= containing_procedure_name.size)
-                      {
-                        break;
-                      }
-                      String8 new_namespace_prefix_possibility = str8_prefix(containing_procedure_name, past_next_scope_resolution_pos);
-                      String8 namespaceified_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, string);
-                      str8_list_push_front(scratch.arena, &namespaceified_strings, namespaceified_string);
-                      last_past_scope_resolution_pos = past_next_scope_resolution_pos;
-                    }
-                  }
-                  for(String8Node *n = namespaceified_strings.first; n != 0; n = n->next)
-                  {
-                    match = di_match_from_string(n->string, 0, e_base_ctx->primary_dbg_info->dbgi_key, 0);
-                    if(match.idx != 0)
-                    {
-                      break;
-                    }
-                  }
+                  match = fully_qualified_match_maybe;
                 }
-#endif
-                
-                // rjf: find dbg info from rdi
-                E_DbgInfo *dbg_info = &e_dbg_info_nil;
-                U32 dbg_info_num = 0;
-                for EachIndex(idx, e_base_ctx->dbg_infos_count)
+              }
+              
+              // rjf: find dbg info from rdi
+              E_DbgInfo *dbg_info = &e_dbg_info_nil;
+              U32 dbg_info_num = 0;
+              for EachIndex(idx, e_base_ctx->dbg_infos_count)
+              {
+                if(e_base_ctx->dbg_infos[idx].rdi == rdi)
                 {
-                  if(e_base_ctx->dbg_infos[idx].rdi == rdi)
+                  dbg_info = &e_base_ctx->dbg_infos[idx];
+                  dbg_info_num = idx+1;
+                  break;
+                }
+              }
+              
+              // rjf: find module from dbgi key
+              E_Module *module = &e_module_nil;
+              for EachIndex(idx, e_base_ctx->modules_count)
+              {
+                if(e_base_ctx->modules[idx].dbg_info_num == dbg_info_num)
+                {
+                  module = &e_base_ctx->modules[idx];
+                  if(module == e_base_ctx->primary_module || e_space_match(module->space, e_base_ctx->primary_module->space))
                   {
-                    dbg_info = &e_base_ctx->dbg_infos[idx];
-                    dbg_info_num = idx+1;
                     break;
                   }
                 }
-                
-                // rjf: find module from dbgi key
-                E_Module *module = &e_module_nil;
-                for EachIndex(idx, e_base_ctx->modules_count)
-                {
-                  if(e_base_ctx->modules[idx].dbg_info_num == dbg_info_num)
-                  {
-                    module = &e_base_ctx->modules[idx];
-                    if(module == e_base_ctx->primary_module || e_space_match(module->space, e_base_ctx->primary_module->space))
-                    {
-                      break;
-                    }
-                  }
-                }
-                
-                // rjf: form result
-                if(match.idx != 0 && dbg_info != &e_dbg_info_nil)
-                {
-                  switch(match.section_kind)
-                  {
-                    default:{}break;
-                    case RDI_SectionKind_GlobalVariables:
-                    case RDI_SectionKind_ThreadVariables:
-                    case RDI_SectionKind_Constants:
-                    {
-                      RDI_Symbol *symbol = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, match.section_kind, match.idx);
-                      U64 ip_voff = e_base_ctx->thread_ip_voff;
-                      RDI_Location location = rdi_location_from_location_voff(rdi, symbol->location, ip_voff);
-                      U32 type_idx = symbol->type_idx;
-                      RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-                      string_mapped = 1;
-                      mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, dbg_info_num);
-                      mapped_location = location;
-                      mapped_dbg_info = dbg_info;
-                      mapped_location_module = module;
-                      mapped_bytecode_mode = E_Mode_Offset;
-                    }break;
-                    case RDI_SectionKind_Procedures:
-                    {
-                      RDI_Symbol *procedure = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, match.section_kind, match.idx);
-                      RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
-                      U64 procedure_base_voff = rdi_first_voff_from_procedure(rdi, procedure);
-                      mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, dbg_info_num);
-                      mapped_location = rdi_location_voff(procedure_base_voff);
-                      mapped_dbg_info = dbg_info;
-                      mapped_location_module = module;
-                      mapped_bytecode_mode = E_Mode_Value;
-                    }break;
-                    case RDI_SectionKind_TypeNodes:
-                    {
-                      U32 type_idx = match.idx;
-                      RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-                      mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, dbg_info_num);
-                      mapped_dbg_info = dbg_info;
-                      string_mapped = 1;
-                    }break;
-                  }
-                }
-                access_close(access);
               }
+              
+              // rjf: form result
+              if(match.idx != 0 && dbg_info != &e_dbg_info_nil)
+              {
+                switch(match.section_kind)
+                {
+                  default:{}break;
+                  case RDI_SectionKind_GlobalVariables:
+                  case RDI_SectionKind_ThreadVariables:
+                  case RDI_SectionKind_Constants:
+                  {
+                    RDI_Symbol *symbol = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, match.section_kind, match.idx);
+                    U64 ip_voff = e_base_ctx->thread_ip_voff;
+                    RDI_Location location = rdi_location_from_location_voff(rdi, symbol->location, ip_voff);
+                    U32 type_idx = symbol->type_idx;
+                    RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+                    string_mapped = 1;
+                    mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, dbg_info_num);
+                    mapped_location = location;
+                    mapped_dbg_info = dbg_info;
+                    mapped_location_module = module;
+                    mapped_bytecode_mode = E_Mode_Offset;
+                  }break;
+                  case RDI_SectionKind_Procedures:
+                  {
+                    RDI_Symbol *procedure = (RDI_Symbol *)rdi_section_raw_element_from_kind_idx(rdi, match.section_kind, match.idx);
+                    RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
+                    U64 procedure_base_voff = rdi_first_voff_from_procedure(rdi, procedure);
+                    mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, dbg_info_num);
+                    mapped_location = rdi_location_voff(procedure_base_voff);
+                    mapped_dbg_info = dbg_info;
+                    mapped_location_module = module;
+                    mapped_bytecode_mode = E_Mode_Value;
+                  }break;
+                  case RDI_SectionKind_TypeNodes:
+                  {
+                    U32 type_idx = match.idx;
+                    RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+                    mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, dbg_info_num);
+                    mapped_dbg_info = dbg_info;
+                    string_mapped = 1;
+                  }break;
+                }
+              }
+              access_close(access);
             }break;
             
             //- rjf: try registers
             case E_IdentifierResolutionPath_Registers:
-            if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
+            if(!string_mapped)
             {
               U64 reg_num = e_num_from_string(e_ir_ctx->regs_map, string);
               if(reg_num != 0)

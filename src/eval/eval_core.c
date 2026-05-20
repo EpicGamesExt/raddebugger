@@ -213,25 +213,28 @@ e_string2num_map_make(Arena *arena, U64 slot_count)
 internal void
 e_string2num_map_insert(Arena *arena, E_String2NumMap *map, String8 string, U64 num)
 {
-  U64 hash = e_hash_from_string(5381, string);
-  U64 slot_idx = hash%map->slots_count;
-  E_String2NumMapNode *existing_node = 0;
-  for(E_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
+  if(string.size != 0)
   {
-    if(str8_match(node->string, string, 0) && node->num == num)
+    U64 hash = e_hash_from_string(5381, string);
+    U64 slot_idx = hash%map->slots_count;
+    E_String2NumMapNode *existing_node = 0;
+    for(E_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
     {
-      existing_node = node;
-      break;
+      if(str8_match(node->string, string, 0) && node->num == num)
+      {
+        existing_node = node;
+        break;
+      }
     }
-  }
-  if(existing_node == 0)
-  {
-    E_String2NumMapNode *node = push_array(arena, E_String2NumMapNode, 1);
-    SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
-    SLLQueuePush_N(map->first, map->last, node, order_next);
-    node->string = push_str8_copy(arena, string);
-    node->num = num;
-    map->node_count += 1;
+    if(existing_node == 0)
+    {
+      E_String2NumMapNode *node = push_array(arena, E_String2NumMapNode, 1);
+      SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
+      SLLQueuePush_N(map->first, map->last, node, order_next);
+      node->string = push_str8_copy(arena, string);
+      node->num = num;
+      map->node_count += 1;
+    }
   }
 }
 

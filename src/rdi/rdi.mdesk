@@ -1347,7 +1347,8 @@ RDI_NameMapKindTable:
   {Types              5}
   {LinkNameProcedures 6}
   {NormalSourcePaths  7}
-  {COUNT              8}
+  {Units              8}
+  {COUNT              9}
 }
 
 @table(name type desc)

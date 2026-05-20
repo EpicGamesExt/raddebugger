@@ -1410,6 +1410,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
     name_maps_need_build[RDI_NameMapKind_Types]              = !!(params->subset_flags & RDIM_SubsetFlag_TypeNameMap);
     name_maps_need_build[RDI_NameMapKind_LinkNameProcedures] = !!(params->subset_flags & RDIM_SubsetFlag_LinkNameProcedureNameMap);
     name_maps_need_build[RDI_NameMapKind_NormalSourcePaths]  = !!(params->subset_flags & RDIM_SubsetFlag_NormalSourcePathNameMap);
+    name_maps_need_build[RDI_NameMapKind_Units]              = !!(params->subset_flags & RDIM_SubsetFlag_Units);
   }
   RDIM_BakeNameMapTopology *bake_name_maps_tops = 0;
   RDIM_BakeNameMap **bake_name_maps = 0;
@@ -1440,6 +1441,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           Case(LinkNameProcedures, all_procedures->total_count);
           Case(Types, params->types.total_count);
           Case(NormalSourcePaths, params->src_files.total_count);
+          Case(Units, params->units.total_count);
 #undef Case
         }
         lane_maps[k] = push_array(scratch2.arena, RDIM_BakeNameMap *, lane_count());
@@ -1505,6 +1507,19 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
               RDIM_SrcFile *src_file = &n->v[n_idx];
               RDIM_String8 normalized_path = rdim_normalize_path_str8(scratch.arena, src_file->path);
               rdim_bake_name_map_insert(scratch.arena, top, map, 4, normalized_path, rdim_idx_from_src_file(src_file));
+            }
+          }
+        }break;
+        case RDI_NameMapKind_Units:
+        {
+          RDIM_UnitChunkList *units = &params->units;
+          for EachNode(n, RDIM_UnitChunkNode, units->first)
+          {
+            Rng1U64 n_range = lane_range(n->count);
+            for EachInRange(n_idx, n_range)
+            {
+              RDIM_Unit *unit = &n->v[n_idx];
+              rdim_bake_name_map_insert(scratch.arena, top, map, 4, unit->unit_name, rdim_idx_from_unit(unit));
             }
           }
         }break;

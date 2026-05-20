@@ -9599,7 +9599,7 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
     // rjf: try to map using asynchronous matching system
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      DI_Match match = di_match_from_string(string, 0, di_key_zero(), 0);
+      DI_Match match = di_match_from_string(string, 0, 0, 1, di_key_zero(), 0);
       RDI_SectionKind section_kind = match.section_kind;
       mapped = 1;
       switch(section_kind)
@@ -10416,8 +10416,8 @@ rd_ipc_make_reply_ack(Arena *arena, String8 cmd, B32 ok)
 {
   String8List s = {0};
   rd_ipc_reply_block_begin(arena, &s, "cmd_reply");
-    rd_ipc_reply_push_b32(arena, &s, "ok",  ok);
-    rd_ipc_reply_push    (arena, &s, "cmd", cmd);
+  rd_ipc_reply_push_b32(arena, &s, "ok",  ok);
+  rd_ipc_reply_push    (arena, &s, "cmd", cmd);
   rd_ipc_reply_block_end(arena, &s);
   return str8_list_join(arena, &s, 0);
 }
@@ -10428,10 +10428,10 @@ rd_ipc_make_reply_status(Arena *arena)
   Temp scratch = scratch_begin(&arena, 1);
   String8List s = {0};
   rd_ipc_reply_block_begin(arena, &s, "status");
-    rd_ipc_reply_push_b32 (arena, &s, "ok",      1);
-    rd_ipc_reply_push_b32 (arena, &s, "running", d_ctrl_targets_running());
-    rd_ipc_reply_push_u64 (arena, &s, "run_gen", d_run_gen());
-    rd_ipc_reply_push_u64 (arena, &s, "ip",      d_ctrl_last_stop_event().rip_vaddr);
+  rd_ipc_reply_push_b32 (arena, &s, "ok",      1);
+  rd_ipc_reply_push_b32 (arena, &s, "running", d_ctrl_targets_running());
+  rd_ipc_reply_push_u64 (arena, &s, "run_gen", d_run_gen());
+  rd_ipc_reply_push_u64 (arena, &s, "ip",      d_ctrl_last_stop_event().rip_vaddr);
   rd_ipc_reply_block_end(arena, &s);
   scratch_end(scratch);
   return str8_list_join(arena, &s, 0);
@@ -10441,34 +10441,34 @@ internal String8
 rd_ipc_make_reply_stop_event(Arena *arena)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   D_Event e = d_ctrl_last_stop_event();
-
+  
   String8List stop_cause_list = {0};
   DR_FStrList stop_cause_fstr = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &e);
   for EachNode (n, DR_FStrNode, stop_cause_fstr.first) { str8_list_push(scratch.arena, &stop_cause_list, n->v.string); }
   String8 stop_cause = str8_list_join(arena, &stop_cause_list, &(StringJoin){.sep=str8_lit(" ")});
-
+  
   String8List s = {0};
   rd_ipc_reply_block_begin(arena, &s, "stop_event");
-    rd_ipc_reply_push_b32 (arena, &s, "ok",             1);
-    rd_ipc_reply_push_u64 (arena, &s, "arch",           e.arch);
-    rd_ipc_reply_push_u64 (arena, &s, "vaddr_min",      e.vaddr_rng.min);
-    rd_ipc_reply_push_u64 (arena, &s, "vaddr_max",      e.vaddr_rng.max);
-    rd_ipc_reply_push_u64 (arena, &s, "ip_vaddr",       e.rip_vaddr);
-    rd_ipc_reply_push_u64 (arena, &s, "sp_base",        e.stack_base);
-    rd_ipc_reply_push_u64 (arena, &s, "tls_root",       e.tls_root);
-    rd_ipc_reply_push_u64 (arena, &s, "tls_index",      e.tls_index);
-    rd_ipc_reply_push_u64 (arena, &s, "tls_offset",     e.tls_offset);
-    rd_ipc_reply_push_u64 (arena, &s, "timestamp",      e.timestamp);
-    rd_ipc_reply_push_u64 (arena, &s, "exception_code", e.exception_code);
-    rd_ipc_reply_push_u64 (arena, &s, "bp_flags",       e.bp_flags);
-    rd_ipc_reply_push_str8(arena, &s, "string",         e.string);
-    rd_ipc_reply_push_u64 (arena, &s, "target_os",      e.target_os);
-    rd_ipc_reply_push_u64 (arena, &s, "tls_model",      e.tls_model);
-    rd_ipc_reply_push_str8(arena, &s, "stop_cause",     stop_cause);
+  rd_ipc_reply_push_b32 (arena, &s, "ok",             1);
+  rd_ipc_reply_push_u64 (arena, &s, "arch",           e.arch);
+  rd_ipc_reply_push_u64 (arena, &s, "vaddr_min",      e.vaddr_rng.min);
+  rd_ipc_reply_push_u64 (arena, &s, "vaddr_max",      e.vaddr_rng.max);
+  rd_ipc_reply_push_u64 (arena, &s, "ip_vaddr",       e.rip_vaddr);
+  rd_ipc_reply_push_u64 (arena, &s, "sp_base",        e.stack_base);
+  rd_ipc_reply_push_u64 (arena, &s, "tls_root",       e.tls_root);
+  rd_ipc_reply_push_u64 (arena, &s, "tls_index",      e.tls_index);
+  rd_ipc_reply_push_u64 (arena, &s, "tls_offset",     e.tls_offset);
+  rd_ipc_reply_push_u64 (arena, &s, "timestamp",      e.timestamp);
+  rd_ipc_reply_push_u64 (arena, &s, "exception_code", e.exception_code);
+  rd_ipc_reply_push_u64 (arena, &s, "bp_flags",       e.bp_flags);
+  rd_ipc_reply_push_str8(arena, &s, "string",         e.string);
+  rd_ipc_reply_push_u64 (arena, &s, "target_os",      e.target_os);
+  rd_ipc_reply_push_u64 (arena, &s, "tls_model",      e.tls_model);
+  rd_ipc_reply_push_str8(arena, &s, "stop_cause",     stop_cause);
   rd_ipc_reply_block_end(arena, &s);
-
+  
   String8 result = str8_list_join(arena, &s, 0);
   scratch_end(scratch);
   return result;
@@ -10478,7 +10478,7 @@ internal String8
 rd_ipc_make_reply_eval(Arena *arena, String8 expr, E_Eval eval, U64 cap)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   // gather value & type
   EV_StringParams string_params =
   {
@@ -10487,23 +10487,23 @@ rd_ipc_make_reply_eval(Arena *arena, String8 expr, E_Eval eval, U64 cap)
   };
   String8 value_string = rd_value_string_from_eval2(scratch.arena, str8_zero(), &string_params, cap, eval);
   String8 type_string  = e_type_string_from_key(scratch.arena, eval.irtree.type_key);
-
+  
   String8List errors = {0};
   for EachNode(msg, E_Msg, eval.msgs.first) { str8_list_push(scratch.arena, &errors, msg->text); }
   String8 error_string = str8_list_join(scratch.arena, &errors, &(StringJoin){.sep = str8_lit("; ")});
-
+  
   // format reply
   String8List reply = {0};
   rd_ipc_reply_block_begin(arena, &reply, "eval");
-    rd_ipc_reply_push_b32   (arena, &reply, "ok",    1);
-    rd_ipc_reply_push       (arena, &reply, "cmd",   str8_lit("eval"));
-    rd_ipc_reply_push       (arena, &reply, "expr",  expr);
-    rd_ipc_reply_push       (arena, &reply, "value", value_string);
-    rd_ipc_reply_push       (arena, &reply, "type",  type_string);
-    rd_ipc_reply_push       (arena, &reply, "error", error_string);
+  rd_ipc_reply_push_b32   (arena, &reply, "ok",    1);
+  rd_ipc_reply_push       (arena, &reply, "cmd",   str8_lit("eval"));
+  rd_ipc_reply_push       (arena, &reply, "expr",  expr);
+  rd_ipc_reply_push       (arena, &reply, "value", value_string);
+  rd_ipc_reply_push       (arena, &reply, "type",  type_string);
+  rd_ipc_reply_push       (arena, &reply, "error", error_string);
   rd_ipc_reply_block_end(arena, &reply);
   String8 result = str8_list_join(arena, &reply, 0);
-
+  
   scratch_end(scratch);
   return result;
 }
@@ -10512,14 +10512,14 @@ internal String8
 rd_ipc_make_reply_source_location_from_address(Arena *arena, U64 vaddr)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   D_Entity *process = d_entity_from_handle(rd_base_regs()->process);
   if(process == &d_entity_nil)
   {
     D_Entity *thread = d_entity_from_handle(rd_base_regs()->thread);
     process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   }
-
+  
   D_Entity *module = &d_entity_nil;
   DI_Key dbgi_key = {0};
   U64 voff = 0;
@@ -10539,22 +10539,22 @@ rd_ipc_make_reply_source_location_from_address(Arena *arena, U64 vaddr)
   {
     line = lines.first->v;
   }
-
+  
   B32 is_ok = (process != &d_entity_nil && module != &d_entity_nil && lines.first != 0);
-
+  
   String8List reply = {0};
   rd_ipc_reply_block_begin(arena, &reply, "source_location_from_address");
-    rd_ipc_reply_push_b32 (arena, &reply, "ok",        is_ok);
-    rd_ipc_reply_push_u64 (arena, &reply, "vaddr",     vaddr);
-    rd_ipc_reply_push_u64 (arena, &reply, "voff",      voff);
-    rd_ipc_reply_push_str8(arena, &reply, "file_path", line.file_path);
-    rd_ipc_reply_push_u64 (arena, &reply, "line",      line.pt.line);
-    rd_ipc_reply_push_u64 (arena, &reply, "column",    line.pt.column);
-    rd_ipc_reply_push_u64 (arena, &reply, "voff_min",  line.voff_range.min);
-    rd_ipc_reply_push_u64 (arena, &reply, "voff_max",  line.voff_range.max);
+  rd_ipc_reply_push_b32 (arena, &reply, "ok",        is_ok);
+  rd_ipc_reply_push_u64 (arena, &reply, "vaddr",     vaddr);
+  rd_ipc_reply_push_u64 (arena, &reply, "voff",      voff);
+  rd_ipc_reply_push_str8(arena, &reply, "file_path", line.file_path);
+  rd_ipc_reply_push_u64 (arena, &reply, "line",      line.pt.line);
+  rd_ipc_reply_push_u64 (arena, &reply, "column",    line.pt.column);
+  rd_ipc_reply_push_u64 (arena, &reply, "voff_min",  line.voff_range.min);
+  rd_ipc_reply_push_u64 (arena, &reply, "voff_max",  line.voff_range.max);
   rd_ipc_reply_block_end(arena, &reply);
   String8 result = str8_list_join(arena, &reply, 0);
-
+  
   scratch_end(scratch);
   return result;
 }
@@ -11603,6 +11603,7 @@ rd_frame(void)
       DbgInfoNode *order_next;
       DI_Key key;
       U64 idx;
+      String8 path;
     };
     U64 dbg_info_slots_count = 4096;
     DbgInfoNode **dbg_info_slots = push_array(scratch.arena, DbgInfoNode *, dbg_info_slots_count);
@@ -11638,6 +11639,7 @@ rd_frame(void)
           SLLQueuePush_N(first_dbg_info, last_dbg_info, node, order_next);
           node->key = key;
           node->idx = dbg_infos_count;
+          node->path = path;
           dbg_infos_count += 1;
         }
       }
@@ -11664,6 +11666,8 @@ rd_frame(void)
     U64 eval_dbg_infos_count = Max(1, dbg_infos_count);
     E_DbgInfo *eval_dbg_infos = push_array(scratch.arena, E_DbgInfo, eval_dbg_infos_count);
     E_DbgInfo *eval_dbg_infos_primary = &eval_dbg_infos[0];
+    E_String2NumMap *eval_dbg_info_from_name_map = push_array(scratch.arena, E_String2NumMap, 1);
+    eval_dbg_info_from_name_map[0] = e_string2num_map_make(scratch.arena, eval_dbg_infos_count*2);
     MemoryCopyStruct(eval_dbg_infos_primary, &e_dbg_info_nil);
     {
       U64 idx = 0;
@@ -11671,6 +11675,9 @@ rd_frame(void)
       {
         eval_dbg_infos[idx].dbgi_key = n->key;
         eval_dbg_infos[idx].rdi = di_rdi_from_key(rd_state->frame_access, n->key, 0, 0);
+        eval_dbg_infos[idx].name = n->path;
+        e_string2num_map_insert(scratch.arena, eval_dbg_info_from_name_map, n->path, idx+1);
+        e_string2num_map_insert(scratch.arena, eval_dbg_info_from_name_map, str8_skip_last_slash(n->path), idx+1);
         idx += 1;
       }
     }
@@ -11682,6 +11689,8 @@ rd_frame(void)
     U64 eval_modules_count = Max(1, all_modules.count);
     E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
     E_Module *eval_modules_primary = &e_module_nil;
+    E_String2NumMap *eval_module_from_name_map = push_array(scratch.arena, E_String2NumMap, 1);
+    eval_module_from_name_map[0] = e_string2num_map_make(scratch.arena, eval_modules_count*2);
     ProfScope("produce all eval modules")
     {
       for EachIndex(eval_module_idx, all_modules.count)
@@ -11709,11 +11718,14 @@ rd_frame(void)
         eval_modules[eval_module_idx].arch         = m->arch;
         eval_modules[eval_module_idx].dbg_info_num = dbg_info_num;
         eval_modules[eval_module_idx].space        = rd_eval_space_from_ctrl_entity(d_entity_ancestor_from_kind(m, D_EntityKind_Process), D_EvalSpaceKind_Entity);
+        eval_modules[eval_module_idx].name         = m->string;
         if(module == m)
         {
           eval_modules_primary = &eval_modules[eval_module_idx];
           eval_dbg_infos_primary = (0 < dbg_info_num && dbg_info_num <= eval_dbg_infos_count) ? &eval_dbg_infos[dbg_info_num-1] : &e_dbg_info_nil;
         }
+        e_string2num_map_insert(scratch.arena, eval_module_from_name_map, m->string, eval_module_idx+1);
+        e_string2num_map_insert(scratch.arena, eval_module_from_name_map, str8_skip_last_slash(m->string), eval_module_idx+1);
       }
     }
     
@@ -11738,14 +11750,16 @@ rd_frame(void)
       ctx->thread_unwind_count = unwind_count;
       
       //- rjf: fill debug infos
-      ctx->dbg_infos        = eval_dbg_infos;
-      ctx->dbg_infos_count  = eval_dbg_infos_count;
-      ctx->primary_dbg_info = eval_dbg_infos_primary;
+      ctx->dbg_infos              = eval_dbg_infos;
+      ctx->dbg_infos_count        = eval_dbg_infos_count;
+      ctx->primary_dbg_info       = eval_dbg_infos_primary;
+      ctx->dbg_info_from_name_map = eval_dbg_info_from_name_map;
       
       //- rjf: fill modules
-      ctx->modules          = eval_modules;
-      ctx->modules_count    = eval_modules_count;
-      ctx->primary_module   = eval_modules_primary;
+      ctx->modules                = eval_modules;
+      ctx->modules_count          = eval_modules_count;
+      ctx->primary_module         = eval_modules_primary;
+      ctx->module_from_name_map   = eval_module_from_name_map;
       
       //- rjf: fill space hooks
       ctx->space_gen   = rd_eval_space_gen;
@@ -14668,11 +14682,11 @@ rd_frame(void)
                 DI_Match match = {0};
                 if(match.idx == 0)
                 {
-                  match = di_match_from_string(name, 0, e_base_ctx->primary_dbg_info->dbgi_key, rd_state->frame_eval_memread_endt_us);
+                  match = di_match_from_string(name, 0, 0, 1, e_base_ctx->primary_dbg_info->dbgi_key, rd_state->frame_eval_memread_endt_us);
                 }
                 if(match.idx == 0)
                 {
-                  match = di_match_from_string(name, 0, di_key_zero(), rd_state->frame_eval_memread_endt_us);
+                  match = di_match_from_string(name, 0, 0, 1, di_key_zero(), rd_state->frame_eval_memread_endt_us);
                 }
                 if(match.section_kind == RDI_SectionKind_Procedures)
                 {

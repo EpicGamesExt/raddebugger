@@ -621,7 +621,7 @@ e_leaf_type_key_from_name(String8 name)
   E_TypeKey key = e_leaf_builtin_type_key_from_name(name);
   if(!e_type_key_match(e_type_key_zero(), key))
   {
-    DI_Match match = di_match_from_string(name, 0, e_base_ctx->primary_dbg_info->dbgi_key, 0);
+    DI_Match match = di_match_from_string(name, 0, 0, 1, e_base_ctx->primary_dbg_info->dbgi_key, 0);
     if(match.section_kind == RDI_SectionKind_TypeNodes)
     {
       Access *access = access_open();
@@ -855,32 +855,51 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         //
         String8 resolution_qualifier = {0};
         {
-          E_Token token = e_token_at_it(it, &tokens);
-          String8 token_string = str8_substr(text, token.range);
-          if(token.kind == E_TokenKind_Identifier || token.kind == E_TokenKind_StringLiteral)
+          Rng1U64 resolution_qualifier_chain_range = {0};
+          for(B32 resolution_qualifiers_done = 0; !resolution_qualifiers_done;)
           {
-            // rjf: look for extensions - for qualifiers of the form `foo.dll!bar`
-            U64 token_ext_count = 0;
-            E_Token dot_maybe_token = e_token_at_it(it+1, &tokens);
-            String8 dot_maybe_token_string = str8_substr(text, dot_maybe_token.range);
-            E_Token ext_maybe_token = e_token_at_it(it+2, &tokens);
-            String8 ext_maybe_token_string = str8_substr(text, ext_maybe_token.range);
-            if(dot_maybe_token.kind == E_TokenKind_Symbol &&
-               ext_maybe_token.kind == E_TokenKind_Identifier &&
-               str8_match(dot_maybe_token_string, str8_lit("."), 0))
+            B32 is_qualifier = 0;
+            E_Token token = e_token_at_it(it, &tokens);
+            String8 token_string = str8_substr(text, token.range);
+            if(token.kind == E_TokenKind_Identifier || token.kind == E_TokenKind_StringLiteral)
             {
-              token_ext_count = 2;
+              // rjf: look for extensions - for qualifiers of the form `foo.dll!bar`
+              U64 token_ext_count = 0;
+              E_Token dot_maybe_token = e_token_at_it(it+1, &tokens);
+              String8 dot_maybe_token_string = str8_substr(text, dot_maybe_token.range);
+              E_Token ext_maybe_token = e_token_at_it(it+2, &tokens);
+              String8 ext_maybe_token_string = str8_substr(text, ext_maybe_token.range);
+              if(dot_maybe_token.kind == E_TokenKind_Symbol &&
+                 ext_maybe_token.kind == E_TokenKind_Identifier &&
+                 str8_match(dot_maybe_token_string, str8_lit("."), 0))
+              {
+                token_ext_count = 2;
+              }
+              
+              // rjf: look for : or !
+              E_Token next_token = e_token_at_it(it+1+token_ext_count, &tokens);
+              String8 next_token_string = str8_substr(text, next_token.range);
+              if(next_token.kind == E_TokenKind_Symbol && (str8_match(next_token_string, str8_lit(":"), 0) || str8_match(next_token_string, str8_lit("!"), 0)))
+              {
+                is_qualifier = 1;
+                it += 2 + token_ext_count;
+                Rng1U64 qualifier_range = union_1u64(token.range, r1u64(token.range.min, next_token.range.min));
+                if(resolution_qualifier_chain_range.max == resolution_qualifier_chain_range.min)
+                {
+                  resolution_qualifier_chain_range = qualifier_range;
+                }
+                else
+                {
+                  resolution_qualifier_chain_range = union_1u64(qualifier_range, resolution_qualifier_chain_range);
+                }
+              }
             }
-            
-            // rjf: look for : or !
-            E_Token next_token = e_token_at_it(it+1+token_ext_count, &tokens);
-            String8 next_token_string = str8_substr(text, next_token.range);
-            if(next_token.kind == E_TokenKind_Symbol && (str8_match(next_token_string, str8_lit(":"), 0) || str8_match(next_token_string, str8_lit("!"), 0)))
+            if(!is_qualifier)
             {
-              it += 2 + token_ext_count;
-              resolution_qualifier = str8_substr(text, union_1u64(token.range, r1u64(token.range.min, next_token.range.min)));
+              resolution_qualifiers_done = 1;
             }
           }
+          resolution_qualifier = str8_substr(text, resolution_qualifier_chain_range);
         }
         
         ////////////////////////

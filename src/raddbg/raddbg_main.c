@@ -10,7 +10,6 @@
 // [ ] memory_size(...) view for quickly evaluating memory sizes
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
 //
-// [ ] PDB -> RDI conversion memory usage
 // [ ] more things should move to user data, but project-tagged - like
 //     recent files, watches?, etc.
 //
@@ -20,6 +19,8 @@
 //
 // [ ] many threads hitting conditional breakpoints -> causes 0x8000003 exception!
 // [ ] string conditional breakpoints -> size != 0 check seems to fail, can test w/ "rd_init" subprogram type gen in d2r2
+//
+// [ ] PDB -> RDI conversion memory usage
 //
 //- evaluation space coverage pass
 // [ ] need concrete ways of referring into a space at any offset - e.g. `process.memory + 0x1234`, `file:"foo".data + 0x1234`, `thread.regs + 0x80`, etc.
@@ -499,7 +500,7 @@ internal void
 entry_point(CmdLine *cmd_line)
 {
   Temp scratch = scratch_begin(0, 0);
-
+  
   //- rjf: unpack command line arguments
   ExecMode exec_mode = ExecMode_Normal;
   B32 auto_run = 0;
@@ -532,7 +533,7 @@ entry_point(CmdLine *cmd_line)
     try_u64_from_str8_c_rules(jit_addr_string, &jit_addr);
     jit_attach = (jit_addr != 0);
   }
-
+  
   // init log
   g_logs_folder = cmd_line_string(cmd_line, str8_lit("logs"));
   if(g_logs_folder.size == 0)
@@ -541,7 +542,7 @@ entry_point(CmdLine *cmd_line)
     g_logs_folder = push_str8f(scratch.arena, "%S/%Sraddbg/logs", program_data_folder_prefix_from_os(OperatingSystem_CURRENT), user_program_data_path);
   }
   make_directory(g_logs_folder);
-
+  
   //- rjf: dispatch to top-level codepath based on execution mode
   switch(exec_mode)
   {

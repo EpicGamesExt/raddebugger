@@ -575,6 +575,7 @@ struct E_DbgInfo
 {
   DI_Key dbgi_key;
   RDI_Parsed *rdi;
+  String8 name;
 };
 
 ////////////////////////////////
@@ -587,6 +588,7 @@ struct E_Module
   U32 dbg_info_num;
   Arch arch;
   E_Space space;
+  String8 name;
 };
 
 ////////////////////////////////
@@ -794,11 +796,13 @@ struct E_BaseCtx
   E_DbgInfo *dbg_infos;
   U64 dbg_infos_count;
   E_DbgInfo *primary_dbg_info;
+  E_String2NumMap *dbg_info_from_name_map;
   
   // rjf: modules
   E_Module *modules;
   U64 modules_count;
   E_Module *primary_module;
+  E_String2NumMap *module_from_name_map;
   
   // rjf: space hooks
   E_SpaceGenFunction *space_gen;
