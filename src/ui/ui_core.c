@@ -1823,40 +1823,20 @@ ui_layout_enforce_constraints__in_place(UI_Box *root, Axis2 axis)
       F32 violation = total_size - total_allowed_size;
       if(violation > 0 && total_weighted_size > 0)
       {
-        Temp temp = temp_begin(scratch.arena);
-        
-        // rjf: figure out how much we can take in totality
-        F32 child_fixup_sum = 0;
-        F32 *child_fixups = push_array(temp.arena, F32, box->child_count);
-        {
-          U64 child_idx = 0;
-          for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next, child_idx += 1)
-          {
-            if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
-            {
-              F32 fixup_size_this_child = child->fixed_size.v[axis] * (1-child->pref_size[axis].strictness);
-              fixup_size_this_child = ClampBot(0, fixup_size_this_child);
-              child_fixups[child_idx] = fixup_size_this_child;
-              child_fixup_sum += fixup_size_this_child;
-            }
-          }
-        }
-        
         // rjf: fixup child sizes
         {
-          U64 child_idx = 0;
-          for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next, child_idx += 1)
+          for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next)
           {
             if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
             {
-              F32 fixup_pct = (violation / total_weighted_size);
-              fixup_pct = Clamp(0, fixup_pct, 1);
-              child->fixed_size.v[axis] -= child_fixups[child_idx] * fixup_pct;
+              F32 fixup_pct  = (violation / total_weighted_size);
+              F32 fixup_size = child->fixed_size.v[axis] * (1-child->pref_size[axis].strictness);
+              fixup_size = ClampBot(0, fixup_size);
+              fixup_pct  = Clamp(0, fixup_pct, 1);
+              child->fixed_size.v[axis] -= fixup_size * fixup_pct;
             }
           }
         }
-        
-        temp_end(temp);
       }
     }
     
