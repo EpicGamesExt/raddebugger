@@ -990,6 +990,7 @@ lane_sync(); if(flags & (1ull<<(kind))) ProfScope((char *)rdi_name_title_from_du
     {RDI_DumpSubset_ThreadVariables, RDI_SectionKind_ThreadVariables},
     {RDI_DumpSubset_LocalVariables,  RDI_SectionKind_LocalVariables},
     {RDI_DumpSubset_Constants,       RDI_SectionKind_Constants},
+    {RDI_DumpSubset_LocalVariables,  RDI_SectionKind_LocalVariables},
   };
   for EachElement(symbol_table_idx, symbol_tables)
   {
