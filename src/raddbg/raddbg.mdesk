@@ -1567,85 +1567,75 @@ RD_ThemePresetTable:
     DefaultDark default_dark "Default (Dark)",
     ```theme:
     {
-      theme_color: {tags:"background",                             value: 0x1b1b1bff }
-      theme_color: {tags:"alt background",                         value: 0x222222ff }
-      theme_color: {tags:"pop background",                         value: 0x355b6eff }
-      theme_color: {tags:"fresh background",                       value: 0x31393dff }
-      theme_color: {tags:"match background",                       value: 0x31393dff }
-      theme_color: {tags:"border",                                 value: 0x404040ff }
-      theme_color: {tags:"text",                                   value: 0xe5e5e5ff }
-      theme_color: {tags:"weak text",                              value: 0xa4a4a4ff }
-      theme_color: {tags:"good text",                              value: 0x32a852ff }
-      theme_color: {tags:"neutral text",                           value: 0x3a90bbff }
-      theme_color: {tags:"bad text",                               value: 0xcf5242ff }
-      theme_color: {tags:"hover",                                  value: 0xffffffff }
-      theme_color: {tags:"focus overlay",                          value: 0xfda20012 }
-      theme_color: {tags:"focus border",                           value: 0xfda200ff }
-      theme_color: {tags:"cursor",                                 value: 0x8aff00ff }
-      theme_color: {tags:"selection",                              value: 0x99ccff0f }
-      theme_color: {tags:"inactive background",                    value: 0x0000002f }
-      theme_color: {tags:"drop_shadow",                            value: 0x0000007f }
-      theme_color: {tags:"good_pop background",                    value: 0x2c5b36ff }
-      theme_color: {tags:"good_pop border",                        value: 0x568761ff }
-      theme_color: {tags:"good_pop hover",                         value: 0xe3f5d3ff }
-      theme_color: {tags:"good_pop weak text",                     value: 0xe3f5d3ff }
-      theme_color: {tags:"bad_pop background",                     value: 0x803425ff }
-      theme_color: {tags:"bad_pop hover",                          value: 0xff825cff }
-      theme_color: {tags:"code_default",                           value: 0xcbcbcbff }
-      theme_color: {tags:"code_symbol",                            value: 0x42a2cfff }
-      theme_color: {tags:"code_type",                              value: 0xfec746ff }
-      theme_color: {tags:"code_local",                             value: 0x98bc80ff }
-      theme_color: {tags:"code_register",                          value: 0xb7afd5ff }
-      theme_color: {tags:"code_keyword",                           value: 0xb38d4cff }
-      theme_color: {tags:"code_delimiter_or_operator",             value: 0x767676ff }
-      theme_color: {tags:"code_numeric",                           value: 0x98abb1ff }
-      theme_color: {tags:"code_numeric_alt_digit_group",           value: 0x738287ff }
-      theme_color: {tags:"code_string",                            value: 0x98abb1ff }
-      theme_color: {tags:"code_meta",                              value: 0xd96759ff }
-      theme_color: {tags:"code_comment",                           value: 0x717171ff }
-      theme_color: {tags:"line_info_0",                            value: 0x4f3022ff }
-      theme_color: {tags:"line_info_1",                            value: 0x4f3e15ff }
-      theme_color: {tags:"line_info_2",                            value: 0x434e2aff }
-      theme_color: {tags:"line_info_3",                            value: 0x36241fff }
-      theme_color: {tags:"line_info_4",                            value: 0x4f3022ff }
-      theme_color: {tags:"line_info_5",                            value: 0x4f3e15ff }
-      theme_color: {tags:"line_info_6",                            value: 0x434e2aff }
-      theme_color: {tags:"line_info_7",                            value: 0x36241fff }
-      theme_color: {tags:"thread_0",                               value: 0xffcb7fff }
-      theme_color: {tags:"thread_1",                               value: 0xb2ff65ff }
-      theme_color: {tags:"thread_2",                               value: 0xff99e5ff }
-      theme_color: {tags:"thread_3",                               value: 0x6598ffff }
-      theme_color: {tags:"thread_4",                               value: 0x65ffcbff }
-      theme_color: {tags:"thread_5",                               value: 0xff9819ff }
-      theme_color: {tags:"thread_6",                               value: 0x9932ffff }
-      theme_color: {tags:"thread_7",                               value: 0x65ff4cff }
-      theme_color: {tags:"thread_unwound",                         value: 0xb2ccd8ff }
-      theme_color: {tags:"thread_error",                           value: 0xb23219ff }
-      theme_color: {tags:"breakpoint",                             value: 0xa72911ff }
-      theme_color: {tags:"floating background",                    value: 0x1b1b1baf }
-      theme_color: {tags:"floating background alt",                value: 0x0000005f }
-      theme_color: {tags:"floating background fresh",              value: 0x31393d5f }
-      theme_color: {tags:"floating border",                        value: 0xbfbfbf1f }
-      theme_color: {tags:"floating scroll_bar background",         value: 0x3b3b3b5f }
-      theme_color: {tags:"floating scroll_bar border",             value: 0x5f5f5f5f }
-      theme_color: {tags:"menu_bar background",                    value: 0x2b3740ff }
-      theme_color: {tags:"menu_bar border",                        value: 0x3e4c57ff }
-      theme_color: {tags:"scroll_bar background",                  value: 0x2b2b2bff }
-      theme_color: {tags:"scroll_bar border",                      value: 0x3f3f3fff }
-      theme_color: {tags:"implicit background",                    value: 0x00000000 }
-      theme_color: {tags:"implicit border",                        value: 0x00000000 }
-      theme_color: {tags:"hollow background",                      value: 0x00000000 }
-      theme_color: {tags:"hollow border",                          value: 0xffffff1f }
-      theme_color: {tags:"tab background",                         value: 0x6f5135ff }
-      theme_color: {tags:"tab border",                             value: 0x8a6e54ff }
-      theme_color: {tags:"tab inactive background",                value: 0x2b3740ff }
-      theme_color: {tags:"tab inactive border",                    value: 0x3e4c57ff }
-      theme_color: {tags:"tab auto background",                    value: 0x693847ff }
-      theme_color: {tags:"tab auto border",                        value: 0x9e6274ff }
-      theme_color: {tags:"tab auto inactive background",           value: 0x2f2633ff }
-      theme_color: {tags:"tab auto inactive border",               value: 0x685073ff }
-      theme_color: {tags:"drop_site background",                   value: 0xffffff05 }
-      theme_color: {tags:"drop_site border",                       value: 0xffffff0f }
+      theme_color:{tags: background, value: 0x1f1f1fff}
+      theme_color:{tags: "alt background", value: 0x222222ff}
+      theme_color:{tags: "pop background", value: 0x675331ff}
+      theme_color:{tags: "fresh background", value: 0x3d3631ff}
+      theme_color:{tags: "match background", value: 0x31393dff}
+      theme_color:{tags: border, value: 0x404040ff}
+      theme_color:{tags: text, value: 0xe5e5e5ff}
+      theme_color:{tags: "weak text", value: 0xa4a4a4ff}
+      theme_color:{tags: "good text", value: 0x32a852ff}
+      theme_color:{tags: "neutral text", value: 0x3a90bbff}
+      theme_color:{tags: "bad text", value: 0xcf5242ff}
+      theme_color:{tags: hover, value: 0xabdeffff}
+      theme_color:{tags: "focus overlay", value: 0x2292eb14}
+      theme_color:{tags: "focus border", value: 0x2392ebff}
+      theme_color:{tags: cursor, value: 0x8aff00ff}
+      theme_color:{tags: selection, value: 0x99ccff0f}
+      theme_color:{tags: "inactive background", value: 0x16}
+      theme_color:{tags: drop_shadow, value: 0x0000007f}
+      theme_color:{tags: "good_pop background", value: 0x2c5b36ff}
+      theme_color:{tags: "good_pop border", value: 0x568761ff}
+      theme_color:{tags: "good_pop hover", value: 0xe3f5d3ff}
+      theme_color:{tags: "good_pop weak text", value: 0xe3f5d3ff}
+      theme_color:{tags: "bad_pop background", value: 0x803425ff}
+      theme_color:{tags: "bad_pop hover", value: 0xff825cff}
+      theme_color:{tags: code_default, value: 0xecececff}
+      theme_color:{tags: code_symbol, value: 0xebb624ff}
+      theme_color:{tags: code_type, value: 0xebb624ff}
+      theme_color:{tags: code_local, value: 0xa7dae8ff}
+      theme_color:{tags: code_register, value: 0xb7afd5ff}
+      theme_color:{tags: code_keyword, value: 0x838b8fff}
+      theme_color:{tags: code_delimiter_or_operator, value: 0x838b8fff}
+      theme_color:{tags: code_numeric, value: 0x9cb198ff}
+      theme_color:{tags: code_numeric_alt_digit_group, value: 0x6d8e67ff}
+      theme_color:{tags: code_string, value: 0x9cb198ff}
+      theme_color:{tags: code_meta, value: 0xb9819aff}
+      theme_color:{tags: code_comment, value: 0x627b5eff}
+      theme_color:{tags: line_info_0, value: 0x3c2d25ff}
+      theme_color:{tags: line_info_1, value: 0x3c3925ff}
+      theme_color:{tags: line_info_2, value: 0x2e4837ff}
+      theme_color:{tags: line_info_3, value: 0x2e3d48ff}
+      theme_color:{tags: line_info_4, value: 0x3c2d25ff}
+      theme_color:{tags: line_info_5, value: 0x3c3925ff}
+      theme_color:{tags: line_info_6, value: 0x2e4837ff}
+      theme_color:{tags: line_info_7, value: 0x2e3d48ff}
+      theme_color:{tags: thread_0, value: 0xebb624ff}
+      theme_color:{tags: thread_1, value: 0x26d0d2ff}
+      theme_color:{tags: thread_unwound, value: 0xb2ccd8ff}
+      theme_color:{tags: thread_error, value: 0xb23219ff}
+      theme_color:{tags: breakpoint, value: 0xa72911ff}
+      theme_color:{tags: "floating background", value: 0x1b1b1baf}
+      theme_color:{tags: "floating background alt", value: 0x0000005f}
+      theme_color:{tags: "floating background fresh", value: 0x31393d5f}
+      theme_color:{tags: "floating border", value: 0xbfbfbf1f}
+      theme_color:{tags: "floating scroll_bar background", value: 0x3b3b3b5f}
+      theme_color:{tags: "floating scroll_bar border", value: 0x5f5f5f5f}
+      theme_color:{tags: "scroll_bar background", value: 0x2b2b2bff}
+      theme_color:{tags: "scroll_bar border", value: 0x3f3f3fff}
+      theme_color:{tags: "implicit background", value: 0x00000000}
+      theme_color:{tags: "implicit border", value: 0x00000000}
+      theme_color:{tags: "hollow background", value: 0x00000000}
+      theme_color:{tags: "hollow border", value: 0xffffff1f}
+      theme_color:{tags: "tab background", value: 0x333333ff}
+      theme_color:{tags: "tab border", value: 0x2392ebff}
+      theme_color:{tags: "tab inactive background", value: 0}
+      theme_color:{tags: "tab inactive border", value: 0x42494eff}
+      theme_color:{tags: "tab auto background", value: 0x3e4d6eff}
+      theme_color:{tags: "tab auto inactive background", value: 0x3e4d6e39}
+      theme_color:{tags: "drop_site background", value: 0xffffff05}
+      theme_color:{tags: "drop_site border", value: 0xffffff0f}
     }
     ```
   }
