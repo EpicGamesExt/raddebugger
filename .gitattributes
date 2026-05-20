@@ -1,1 +1,4 @@
 *.sh text=auto eol=lf
+src/lib_rdi/rdi.h  text=auto eol=lf
+src/lib_rdi/rdi.c  text=auto eol=lf
+generated/*.meta.* text=auto eol=lf
