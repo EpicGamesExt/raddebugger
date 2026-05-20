@@ -24,7 +24,7 @@ struct CV_NumericParsed
 typedef struct CV_RecRange CV_RecRange;
 struct CV_RecRange
 {
-  U32          off;
+  U32 off;
   CV_RecHeader hdr;
 };
 
@@ -34,7 +34,7 @@ typedef struct CV_RecRangeChunk CV_RecRangeChunk;
 struct CV_RecRangeChunk
 {
   struct CV_RecRangeChunk *next;
-  CV_RecRange              ranges[CV_REC_RANGE_CHUNK_SIZE];
+  CV_RecRange ranges[CV_REC_RANGE_CHUNK_SIZE];
 };
 
 typedef struct CV_RecRangeStream CV_RecRangeStream;
@@ -42,14 +42,14 @@ struct CV_RecRangeStream
 {
   CV_RecRangeChunk *first_chunk;
   CV_RecRangeChunk *last_chunk;
-  U64               total_count;
+  U64 total_count;
 };
 
 typedef struct CV_RecRangeArray CV_RecRangeArray;
 struct CV_RecRangeArray
 {
   CV_RecRange *ranges;
-  U64          count;
+  U64 count;
 };
 
 ////////////////////////////////
@@ -58,9 +58,9 @@ struct CV_RecRangeArray
 typedef struct CV_SymTopLevelInfo CV_SymTopLevelInfo;
 struct CV_SymTopLevelInfo
 {
-  CV_Arch     arch;
+  CV_Arch arch;
   CV_Language language;
-  String8     compiler_name;
+  String8 compiler_name;
 };
 
 typedef struct CV_SymParsed CV_SymParsed;

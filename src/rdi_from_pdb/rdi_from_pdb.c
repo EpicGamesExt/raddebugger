@@ -401,6 +401,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   //- rjf: do base MSF parse
   //
   MSF_Parsed *msf = 0;
+  ProfScope("do base MSF parse")
   {
     Temp scratch2 = scratch_begin(&scratch.arena, 1);
     
@@ -3135,13 +3136,6 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         //- rjf: unpack sym
         Temp scratch = scratch_begin(&arena, 1);
         CV_SymParsed *sym = all_syms[sym_idx];
-        U64 sym_locations_chunk_cap = 4096;
-        U64 sym_procedures_chunk_cap = 2048;
-        U64 sym_global_variables_chunk_cap = 2048;
-        U64 sym_thread_variables_chunk_cap = 2048;
-        U64 sym_constants_chunk_cap = 2048;
-        U64 sym_scopes_chunk_cap = 4096;
-        U64 sym_inline_sites_chunk_cap = 2048;
         RDIM_Unit *sym_unit = &all_units_ptr->first->v[sym_idx];
         RDIM_SymbolChunkList *sym_procedures = &sym_unit->procedures;
         RDIM_SymbolChunkList *sym_global_variables = &sym_unit->global_variables;
@@ -3150,6 +3144,67 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         RDIM_ScopeChunkList *sym_scopes = &sym_unit->scopes;
         RDIM_InlineSiteChunkList *sym_inline_sites = &sym_unit->inline_sites;
         RDIM_TypeChunkList *typedefs = &syms_typedefs[sym_idx];
+        
+        //////////////////////////
+        //- rjf: symbols pass 0: predict symbol chunk counts by record kinds
+        //
+        U64 sym_procedures_chunk_cap       = sym->sym_ranges.count/4 + 1;
+        U64 sym_global_variables_chunk_cap = sym->sym_ranges.count/12 + 1;
+        U64 sym_thread_variables_chunk_cap = sym->sym_ranges.count/12 + 1;
+        U64 sym_constants_chunk_cap        = sym->sym_ranges.count/6 + 1;
+        U64 sym_scopes_chunk_cap           = sym->sym_ranges.count/4 + 1;
+        U64 sym_inline_sites_chunk_cap     = sym->sym_ranges.count/6 + 1;
+        ProfScope("symbols pass 0: predict symbol chunk counts by record kinds")
+        {
+          U64 procedure_record_count = 0;
+          U64 global_variable_record_count = 0;
+          U64 thread_variable_record_count = 0;
+          U64 constant_record_count = 0;
+          U64 scope_record_count = 0;
+          U64 inline_site_record_count = 0;
+          for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
+          {
+            switch(iter.kind)
+            {
+              default:{}break;
+              case CV_SymKind_LPROC32:
+              case CV_SymKind_GPROC32:
+              {
+                procedure_record_count += 1;
+                scope_record_count += 1;
+              }break;
+              case CV_SymKind_BLOCK32:
+              {
+                scope_record_count += 1;
+              }break;
+              case CV_SymKind_INLINESITE:
+              {
+                scope_record_count += 1;
+                inline_site_record_count += 1;
+              }break;
+              case CV_SymKind_LDATA32:
+              case CV_SymKind_GDATA32:
+              {
+                global_variable_record_count += 1;
+              }break;
+              case CV_SymKind_CONSTANT:
+              {
+                constant_record_count += 1;
+              }break;
+              case CV_SymKind_LTHREAD32:
+              case CV_SymKind_GTHREAD32:
+              {
+                thread_variable_record_count += 1;
+              }break;
+            }
+          }
+          sym_procedures_chunk_cap = Max(1, procedure_record_count);
+          sym_global_variables_chunk_cap = Max(1, global_variable_record_count);
+          sym_thread_variables_chunk_cap = Max(1, thread_variable_record_count);
+          sym_constants_chunk_cap = Max(1, constant_record_count);
+          sym_scopes_chunk_cap = Max(1, scope_record_count);
+          sym_inline_sites_chunk_cap = Max(1, inline_site_record_count);
+        }
         
         //////////////////////////
         //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
