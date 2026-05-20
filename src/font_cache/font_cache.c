@@ -725,7 +725,7 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
           FP_RasterFlags fp_flags = 0;
           if(flags & FNT_RasterFlag_Smooth) { fp_flags |= FP_RasterFlag_Smooth; }
           if(flags & FNT_RasterFlag_Hinted) { fp_flags |= FP_RasterFlag_Hinted; }
-          raster = fp_raster(scratch.arena, font_handle, floor_f32(size), flags, piece_substring);
+          raster = fp_raster(scratch.arena, font_handle, floor_f32(size), fp_flags, piece_substring);
         }
         
         // rjf: allocate portion of an atlas to upload the rasterization
