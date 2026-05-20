@@ -56,28 +56,6 @@ rb_thread_entry_point(void *p)
   log_select(log);
   log_scope_begin();
   
-#if 0
-  ProfScope("work")
-  {
-    for(int i = 0; i < 5; i += 1)
-    {
-      int sum = 0;
-      ProfScope("do work")
-      {
-        for(int x = 0; x < 10000; x += 1)
-        {
-          for(int y = 0; y < 10000; y += 1)
-          {
-            sum += x*y + x-y;
-          }
-        }
-      }
-      lane_sync();
-    }
-  }
-  abort_self(0);
-#endif
-  
   //////////////////////////////
   //- rjf: set up shared state
   //
@@ -314,10 +292,19 @@ rb_thread_entry_point(void *p)
       //////////////////////////
       //- rjf: load recognized files
       //
+      File file = {0};
+      FileMap file_map = {0};
       String8 file_data = {0};
       if(file_format != RB_FileFormat_Null) ProfScope("load recognized file")
       {
-        file_data = data_from_file_path(arena, input_file_path);
+        file = file_open(AccessFlag_ShareRead|AccessFlag_Read, input_file_path);
+        file_map = file_map_open(AccessFlag_Read, file);
+        FileProperties props = properties_from_file(file);
+        void *base = file_map_view_open(file_map, AccessFlag_Read, r1u64(0, props.size));
+        if(base != 0)
+        {
+          file_data = str8((U8 *)base, props.size);
+        }
       }
       
       //////////////////////////
@@ -441,6 +428,8 @@ rb_thread_entry_point(void *p)
         f->format       = file_format;
         f->format_flags = file_format_flags;
         f->path         = input_file_path;
+        f->file         = file;
+        f->file_map     = file_map;
         f->data         = file_data;
         RB_FileNode *file_n = push_array(arena, RB_FileNode, 1);
         file_n->v = f;
