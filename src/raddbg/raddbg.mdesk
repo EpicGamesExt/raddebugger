@@ -765,8 +765,8 @@ RD_VocabTable:
       x:
     {
       'path': @no_relativize path,
-      @query 'guid': string,
       @no_revert @no_expand @default(1) 'enabled': bool,
+      @query 'guid': string,
     }
     ```,
   }
@@ -1594,8 +1594,8 @@ RD_ThemePresetTable:
       theme_color:{tags: "bad_pop background", value: 0x803425ff}
       theme_color:{tags: "bad_pop hover", value: 0xff825cff}
       theme_color:{tags: code_default, value: 0xecececff}
-      theme_color:{tags: code_symbol, value: 0xebb624ff}
-      theme_color:{tags: code_type, value: 0xebb624ff}
+      theme_color:{tags: code_symbol, value: 0xceaf64ff}
+      theme_color:{tags: code_type, value: 0xceaf64ff}
       theme_color:{tags: code_local, value: 0xa7dae8ff}
       theme_color:{tags: code_register, value: 0xb7afd5ff}
       theme_color:{tags: code_keyword, value: 0x838b8fff}

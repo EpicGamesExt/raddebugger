@@ -186,7 +186,9 @@ struct D_ModuleImageInfoCacheNode
   EH_FrameHdr eh_frame_hdr;
   EH_PtrCtx eh_ptr_ctx;
   U64 entry_point_voff;
-  String8 initial_debug_info_path;
+  String8 local_debug_info_path;
+  String8 local_server_cache_debug_info_path;
+  String8 debug_info_unique_identifier;
   U64 raddbg_attached_marker_voff;
   String8 raddbg_data;
 };

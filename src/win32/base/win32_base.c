@@ -1923,11 +1923,29 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
           {
             String16 string16 = str16((U16 *)this_proc_env + start_idx, idx - start_idx);
             String8 string = str8_from_16(arena, string16);
+            if(str8_match(string, s("_NT_SYMBOL_PATH="), StringMatchFlag_RightSideSloppy))
+            {
+              info->symbol_cache_path = str8_skip(string, 16);
+              info->symbol_cache_path = str8_skip_chop_whitespace(info->symbol_cache_path);
+            }
             str8_list_push(arena, &info->environment, string);
             start_idx = idx+1;
           }
         }
       }
+    }
+    if(info->symbol_cache_path.size == 0)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      U64 size = KB(32);
+      U16 *buffer = push_array_no_zero(scratch.arena, U16, size);
+      if(SUCCEEDED(SHGetFolderPathW(0, CSIDL_LOCAL_APPDATA, 0, 0, (WCHAR*)buffer)))
+      {
+        String8 local_appdata = str8_from_16(scratch.arena, str16_cstring(buffer));
+        info->symbol_cache_path = str8f(arena, "%S\\Temp\\SymbolCache", local_appdata);
+        
+      }
+      scratch_end(scratch);
     }
   }
   

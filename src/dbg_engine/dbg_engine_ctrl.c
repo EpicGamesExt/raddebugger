@@ -1834,7 +1834,7 @@ d_initial_debug_info_path_from_module(Arena *arena, D_Handle module_handle)
   {
     if(d_handle_match(n->module, module_handle))
     {
-      result = push_str8_copy(arena, n->initial_debug_info_path);
+      result = str8_copy(arena, n->local_debug_info_path);
       break;
     }
   }
@@ -4110,10 +4110,35 @@ d_ctrl_thread__module_open(D_Handle process, D_Handle module, Rng1U64 vaddr_rang
       FileProperties props = properties_from_file_path(candidate_path);
       if(props.modified != 0 && props.size != 0)
       {
-        initial_debug_info_path = push_str8_copy(arena, path_normalized_from_string(scratch.arena, candidate_path));
+        initial_debug_info_path = str8_copy(arena, path_normalized_from_string(scratch.arena, candidate_path));
         break;
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: determine debug info unique identifier
+  //
+  String8 debug_info_unique_identifier = {0};
+  if(pdb_dbg_path.size != 0)
+  {
+    Guid guid = pdb_dbg_guid;
+    debug_info_unique_identifier = str8f(scratch.arena, "%08X%04X%04X%02X%02X%02X%02X%02X%02X%02X%02X%x",
+                                         guid.data1, guid.data2, guid.data3, guid.data4[0], guid.data4[1], guid.data4[2], guid.data4[3], guid.data4[4], guid.data4[5], guid.data4[6], guid.data4[7], pdb_dbg_age);
+  }
+  
+  //////////////////////////////
+  //- rjf: build local server cache debug info path
+  //
+  String8 local_server_cache_debug_info_path = {0};
+  if(debug_info_unique_identifier.size != 0 && pdb_dbg_path.size != 0)
+  {
+    // TODO(rjf): this is not complete - assuming stripped etc. - just following pattern from ntdll.dll for now
+    String8 symbol_cache_path = get_process_info()->symbol_cache_path;
+    String8 module_name = str8_skip_last_slash(path);
+    String8 dbg_name = str8_skip_last_slash(pdb_dbg_path);
+    String8 path = str8f(scratch.arena, "%S/%S/%S/stripped/%S", symbol_cache_path, module_name, debug_info_unique_identifier, dbg_name);
+    local_server_cache_debug_info_path = path_normalized_from_string(arena, path);
   }
   
   //////////////////////////////
@@ -4149,7 +4174,8 @@ d_ctrl_thread__module_open(D_Handle process, D_Handle module, Rng1U64 vaddr_rang
         node->eh_frame_hdr                = eh_frame_hdr;
         node->eh_ptr_ctx                  = eh_ptr_ctx;
         node->entry_point_voff            = entry_point_voff;
-        node->initial_debug_info_path     = initial_debug_info_path;
+        node->local_debug_info_path       = initial_debug_info_path;
+        node->debug_info_unique_identifier= debug_info_unique_identifier;
         node->raddbg_attached_marker_voff = raddbg_is_attached_section_voff_range.min;
         node->raddbg_data                 = str8_copy(arena, raddbg_data);
       }
