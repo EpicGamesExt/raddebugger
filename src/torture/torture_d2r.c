@@ -11,6 +11,8 @@ internal RDI_Parsed *
 d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
 {
   Temp scratch = scratch_begin(&arena, 1);
+
+  RDI_Parsed *rdi = push_array(arena, RDI_Parsed, 1);
   
   String8 raw_coff;
   {
@@ -33,15 +35,18 @@ d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
   Assert(was_pdb_deleted);
   
   t_invoke(t_radbin_path(), str8_lit("-rdi a.exe -out:a.rdi"), max_U64);
-  Assert(g_last_exit_code == 0);
+  if (g_last_exit_code != 0) {
+    t_errorf("ERROR: failed to invoke radbin: %S\n", g_errors);
+    goto exit;
+  }
   
   String8 raw_rdi = t_read_file(arena, str8_lit("a.rdi"));
   Assert(raw_rdi.size > 0);
   
-  RDI_Parsed *rdi = push_array(arena, RDI_Parsed, 1);
   RDI_ParseStatus rdi_parse_status = rdi_parse(raw_rdi.str, raw_rdi.size, rdi);
   Assert(rdi_parse_status == RDI_ParseStatus_Good);
   
+  exit:;
   scratch_end(scratch);
   return rdi;
 }
