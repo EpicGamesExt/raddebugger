@@ -2313,7 +2313,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       for EachNode(override_n, String8Node, overrides.first)
       {
         String8 file_path = override_n->string;
-        String8 file_path_normalized = rdim_normalize_path_str8(scratch.arena, file_path);
+        String8 file_path_normalized = rdim_normalized_from_path(scratch.arena, file_path);
         B32 good_src_id = 0;
         U32 src_id = 0;
         if(rdi != &rdi_parsed_nil)

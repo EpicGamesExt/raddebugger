@@ -7,6 +7,7 @@ target:
   working_directory: build
   arguments: "--user:raddbg_test.user --project:raddbg_test.project"
   enabled: 1
+  debug_subprocesses: 0
 }
 target:
 {

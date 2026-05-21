@@ -9227,26 +9227,6 @@ rd_value_string_from_eval(Arena *arena, String8 filter, EV_StringParams *params,
   return result;
 }
 
-internal String8
-rd_value_string_from_eval2(Arena *arena, String8 filter, EV_StringParams *params, U64 cap, E_Eval eval)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List strs = {0};
-  EV_StringIter *iter = ev_string_iter_begin(scratch.arena, eval, params);
-  for(String8 string = {0}; ev_string_iter_next(scratch.arena, iter, &string);)
-  {
-    if(strs.total_size + string.size > cap)
-    {
-      str8_list_push(scratch.arena, &strs, str8_lit("..."));
-      break;
-    }
-    str8_list_push(scratch.arena, &strs, string);
-  }
-  String8 result = str8_list_join(arena, &strs, 0);
-  scratch_end(scratch);
-  return result;
-}
-
 ////////////////////////////////
 //~ rjf: Hover Eval
 
@@ -10299,264 +10279,6 @@ rd_next_view_cmd(RD_Cmd **cmd)
     }
   }
   B32 result = !!cmd[0];
-  return result;
-}
-
-////////////////////////////////
-//~ IPC
-
-internal RD_IpcReply
-rd_ipc_mdesk_reply_from_string(Arena *arena, String8 string)
-{
-  MD_ParseResult parse = md_parse_from_text(arena, str8_lit("ipc_reply"), string);
-  return (RD_IpcReply){ .parse = parse, .root = parse.root, parse.root->first };
-}
-
-internal B32
-rd_ipc_parse_string(MD_Node *node, String8 child_name, String8 *out)
-{
-  MD_Node *child = md_child_from_string(node, child_name, 0);
-  if (!md_node_is_nil(child) && !md_node_is_nil(child->first))
-  {
-    if (out) { *out = child->first->string; }
-    return 1;
-  }
-  return 0;
-}
-
-internal B32
-rd_ipc_parse_u32(MD_Node *node, String8 child_name, U32 *out)
-{
-  String8 value = {0};
-  if (rd_ipc_parse_string(node, child_name, &value))
-  {
-    U64 v64 = 0;
-    if (try_u64_from_str8_c_rules(value, &v64))
-    {
-      if (out) { *out = safe_cast_u32(v64); }
-      return 1;
-    }
-  }
-  return 0;
-}
-
-internal B32
-rd_ipc_parse_int_(MD_Node *node, String8 child_name, U64 out_size, void *out)
-{
-  String8 value = {0};
-  if (rd_ipc_parse_string(node, child_name, &value))
-  {
-    U64 v64 = 0;
-    if (try_u64_from_str8_c_rules(value, &v64))
-    {
-      if (out) { MemoryCopy(out, &v64, out_size); }
-      return 1;
-    }
-  }
-  return 0;
-}
-
-internal B32
-rd_ipc_parse_b32(MD_Node *node, String8 child_name, B32 *out)
-{
-  B32     is_ok = 0;
-  String8 s     = {0};
-  U64     value = 0;
-  if (rd_ipc_parse_string(node, child_name, &s))
-  {
-    if      (str8_matchi(s, str8_lit("true")))  { value = 1; is_ok = 1; }
-    else if (str8_matchi(s, str8_lit("false"))) { value = 0; is_ok = 1; }
-    else
-    {
-      is_ok = try_u64_from_str8_c_rules(s, &value);
-      value = !!value;
-    }
-  }
-  if (is_ok && out) { *out = value; }
-  return is_ok;
-}
-
-internal void
-rd_ipc_reply_push(Arena *arena, String8List *out, char *name, String8 value)
-{
-  str8_list_pushf(arena, out, "%s: \"%S\"\n", name, escaped_from_raw_str8(arena, value));
-}
-
-internal void
-rd_ipc_reply_block_begin(Arena *arena, String8List *out, char *name)
-{
-  str8_list_pushf(arena, out, "%s: {\n", name);
-}
-
-internal void
-rd_ipc_reply_block_end(Arena *arena, String8List *out)
-{
-  str8_list_pushf(arena, out, "}\n");
-}
-
-internal void
-rd_ipc_reply_push_u64(Arena *arena, String8List *out, char *name, U64 value)
-{
-  str8_list_pushf(arena, out, "%s: %I64u\n", name, value);
-}
-
-internal void
-rd_ipc_reply_push_str8(Arena *arena, String8List *out, char *name, String8 value)
-{
-  str8_list_pushf(arena, out, "%s: \"%S\"\n", name, escaped_from_raw_str8(arena, value));
-}
-
-internal void
-rd_ipc_reply_push_b32(Arena *arena, String8List *out, char *name, B32 value)
-{
-  rd_ipc_reply_push_u64(arena, out, name, !!value);
-}
-
-internal String8
-rd_ipc_make_reply_ack(Arena *arena, String8 cmd, B32 ok)
-{
-  String8List s = {0};
-  rd_ipc_reply_block_begin(arena, &s, "cmd_reply");
-  rd_ipc_reply_push_b32(arena, &s, "ok",  ok);
-  rd_ipc_reply_push    (arena, &s, "cmd", cmd);
-  rd_ipc_reply_block_end(arena, &s);
-  return str8_list_join(arena, &s, 0);
-}
-
-internal String8
-rd_ipc_make_reply_status(Arena *arena)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List s = {0};
-  rd_ipc_reply_block_begin(arena, &s, "status");
-  rd_ipc_reply_push_b32 (arena, &s, "ok",      1);
-  rd_ipc_reply_push_b32 (arena, &s, "running", d_ctrl_targets_running());
-  rd_ipc_reply_push_u64 (arena, &s, "run_gen", d_run_gen());
-  rd_ipc_reply_push_u64 (arena, &s, "ip",      d_ctrl_last_stop_event().rip_vaddr);
-  rd_ipc_reply_block_end(arena, &s);
-  scratch_end(scratch);
-  return str8_list_join(arena, &s, 0);
-}
-
-internal String8
-rd_ipc_make_reply_stop_event(Arena *arena)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  D_Event e = d_ctrl_last_stop_event();
-  
-  String8List stop_cause_list = {0};
-  DR_FStrList stop_cause_fstr = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &e);
-  for EachNode (n, DR_FStrNode, stop_cause_fstr.first) { str8_list_push(scratch.arena, &stop_cause_list, n->v.string); }
-  String8 stop_cause = str8_list_join(arena, &stop_cause_list, &(StringJoin){.sep=str8_lit(" ")});
-  
-  String8List s = {0};
-  rd_ipc_reply_block_begin(arena, &s, "stop_event");
-  rd_ipc_reply_push_b32 (arena, &s, "ok",             1);
-  rd_ipc_reply_push_u64 (arena, &s, "arch",           e.arch);
-  rd_ipc_reply_push_u64 (arena, &s, "vaddr_min",      e.vaddr_rng.min);
-  rd_ipc_reply_push_u64 (arena, &s, "vaddr_max",      e.vaddr_rng.max);
-  rd_ipc_reply_push_u64 (arena, &s, "ip_vaddr",       e.rip_vaddr);
-  rd_ipc_reply_push_u64 (arena, &s, "sp_base",        e.stack_base);
-  rd_ipc_reply_push_u64 (arena, &s, "tls_root",       e.tls_root);
-  rd_ipc_reply_push_u64 (arena, &s, "tls_index",      e.tls_index);
-  rd_ipc_reply_push_u64 (arena, &s, "tls_offset",     e.tls_offset);
-  rd_ipc_reply_push_u64 (arena, &s, "timestamp",      e.timestamp);
-  rd_ipc_reply_push_u64 (arena, &s, "exception_code", e.exception_code);
-  rd_ipc_reply_push_u64 (arena, &s, "bp_flags",       e.bp_flags);
-  rd_ipc_reply_push_str8(arena, &s, "string",         e.string);
-  rd_ipc_reply_push_u64 (arena, &s, "target_os",      e.target_os);
-  rd_ipc_reply_push_u64 (arena, &s, "tls_model",      e.tls_model);
-  rd_ipc_reply_push_str8(arena, &s, "stop_cause",     stop_cause);
-  rd_ipc_reply_block_end(arena, &s);
-  
-  String8 result = str8_list_join(arena, &s, 0);
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8
-rd_ipc_make_reply_eval(Arena *arena, String8 expr, E_Eval eval, U64 cap)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  // gather value & type
-  EV_StringParams string_params =
-  {
-    .flags = EV_StringFlag_ReadOnlyDisplayRules|rd_state->eval_viz_base_string_flags,
-    .radix = 10,
-  };
-  String8 value_string = rd_value_string_from_eval2(scratch.arena, str8_zero(), &string_params, cap, eval);
-  String8 type_string  = e_type_string_from_key(scratch.arena, eval.irtree.type_key);
-  
-  String8List errors = {0};
-  for EachNode(msg, E_Msg, eval.msgs.first) { str8_list_push(scratch.arena, &errors, msg->text); }
-  String8 error_string = str8_list_join(scratch.arena, &errors, &(StringJoin){.sep = str8_lit("; ")});
-  
-  // format reply
-  String8List reply = {0};
-  rd_ipc_reply_block_begin(arena, &reply, "eval");
-  rd_ipc_reply_push_b32   (arena, &reply, "ok",    1);
-  rd_ipc_reply_push       (arena, &reply, "cmd",   str8_lit("eval"));
-  rd_ipc_reply_push       (arena, &reply, "expr",  expr);
-  rd_ipc_reply_push       (arena, &reply, "value", value_string);
-  rd_ipc_reply_push       (arena, &reply, "type",  type_string);
-  rd_ipc_reply_push       (arena, &reply, "error", error_string);
-  rd_ipc_reply_block_end(arena, &reply);
-  String8 result = str8_list_join(arena, &reply, 0);
-  
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8
-rd_ipc_make_reply_source_location_from_address(Arena *arena, U64 vaddr)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  D_Entity *process = d_entity_from_handle(rd_base_regs()->process);
-  if(process == &d_entity_nil)
-  {
-    D_Entity *thread = d_entity_from_handle(rd_base_regs()->thread);
-    process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-  }
-  
-  D_Entity *module = &d_entity_nil;
-  DI_Key dbgi_key = {0};
-  U64 voff = 0;
-  D_LineList lines = {0};
-  if(process != &d_entity_nil)
-  {
-    module = d_module_from_process_vaddr(process, vaddr);
-    if(module != &d_entity_nil)
-    {
-      dbgi_key = d_dbgi_key_from_module(module);
-      voff = d_voff_from_vaddr(module, vaddr);
-      lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
-    }
-  }
-  D_Line line = {0};
-  if(lines.first != 0)
-  {
-    line = lines.first->v;
-  }
-  
-  B32 is_ok = (process != &d_entity_nil && module != &d_entity_nil && lines.first != 0);
-  
-  String8List reply = {0};
-  rd_ipc_reply_block_begin(arena, &reply, "source_location_from_address");
-  rd_ipc_reply_push_b32 (arena, &reply, "ok",        is_ok);
-  rd_ipc_reply_push_u64 (arena, &reply, "vaddr",     vaddr);
-  rd_ipc_reply_push_u64 (arena, &reply, "voff",      voff);
-  rd_ipc_reply_push_str8(arena, &reply, "file_path", line.file_path);
-  rd_ipc_reply_push_u64 (arena, &reply, "line",      line.pt.line);
-  rd_ipc_reply_push_u64 (arena, &reply, "column",    line.pt.column);
-  rd_ipc_reply_push_u64 (arena, &reply, "voff_min",  line.voff_range.min);
-  rd_ipc_reply_push_u64 (arena, &reply, "voff_max",  line.voff_range.max);
-  rd_ipc_reply_block_end(arena, &reply);
-  String8 result = str8_list_join(arena, &reply, 0);
-  
-  scratch_end(scratch);
   return result;
 }
 
@@ -12857,91 +12579,15 @@ rd_frame(void)
             }
           }break;
           
-          //- rjf: external driver textual commands
+          //- rjf: external drivers
           case RD_CmdKind_RunExternalDriverTextCommand:
           {
-            String8         msg           = rd_regs()->string;
-            String8List     msg_parts     = str8_split(scratch.arena, msg, (U8 *)" ", 1, 0);
-            CmdLine         msg_cmd_line  = cmd_line_from_string_list(scratch.arena, msg_parts);
-            String8         cmd_kind_name = str8_list_first(&msg_cmd_line.inputs);
+            String8 msg = rd_regs()->string;
+            String8List msg_parts = str8_split(scratch.arena, msg, (U8 *)" ", 1, 0);
+            CmdLine msg_cmd_line = cmd_line_from_string_list(scratch.arena, msg_parts);
+            String8 cmd_kind_name = str8_list_first(&msg_cmd_line.inputs);
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_kind_name);
-            U64             cmd_args_pos  = str8_find_needle(msg, 0, cmd_kind_name, StringMatchFlag_CaseInsensitive);
-            String8         cmd_args      = str8_skip_chop_whitespace(str8_skip(msg, cmd_args_pos + cmd_kind_name.size));
-            if(str8_match(cmd_kind_name, str8_lit("status"), 0))
-            {
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_status(rd_state->cmd_output_arena));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("stop_event"), 0))
-            {
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_stop_event(rd_state->cmd_output_arena));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("run"), 0))
-            {
-              rd_cmd(RD_CmdKind_Run);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("run"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("halt"), 0))
-            {
-              rd_cmd(RD_CmdKind_Halt);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("halt"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("kill_all"), 0))
-            {
-              rd_cmd(RD_CmdKind_KillAll);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("kill_all"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("step_over"), 0))
-            {
-              rd_cmd(RD_CmdKind_StepOver);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("step_over"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("step_into"), 0))
-            {
-              rd_cmd(RD_CmdKind_StepInto);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("step_into"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("step_out"), 0))
-            {
-              rd_cmd(RD_CmdKind_StepOut);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("step_out"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("step_over_inst"), 0))
-            {
-              rd_cmd(RD_CmdKind_StepOverInst);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("step_over_inst"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("step_into_inst"), 0))
-            {
-              rd_cmd(RD_CmdKind_StepIntoInst);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("step_into_inst"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("step_over_line"), 0))
-            {
-              rd_cmd(RD_CmdKind_StepOverLine);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("step_over_line"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("step_into_line"), 0))
-            {
-              rd_cmd(RD_CmdKind_StepIntoLine);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_ack(rd_state->cmd_output_arena, str8_lit("step_into_line"), 1));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("eval"), 0))
-            {
-              U64     cap_end = str8_find_needle(cmd_args, 0, str8_lit(" "), 0);
-              String8 cap_str = str8_substr(cmd_args, r1u64(0, cap_end));
-              U64     cap     = 0;
-              try_u64_from_str8_c_rules(cap_str, &cap);
-              String8 expr    = str8_skip(cmd_args, cap_str.size);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_eval(rd_state->cmd_output_arena, expr, e_eval_from_string(expr), cap));
-            }
-            else if(str8_match(cmd_kind_name, str8_lit("source_location_from_address"), 0))
-            {
-              String8 vaddr_str = str8_skip_chop_whitespace(cmd_args);
-              U64 vaddr = 0;
-              try_u64_from_str8_c_rules(vaddr_str, &vaddr);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, rd_ipc_make_reply_source_location_from_address(rd_state->cmd_output_arena, vaddr));
-            }
-            else if(cmd_kind_info != &rd_nil_cmd_kind_info) RD_RegsScope()
+            if(cmd_kind_info != &rd_nil_cmd_kind_info) RD_RegsScope()
             {
               for EachNonZeroEnumVal(RD_RegSlot, s)
               {
@@ -12970,6 +12616,108 @@ rd_frame(void)
             {
               log_user_errorf("`%S` is not a command.", cmd_kind_name);
             }
+          }break;
+          case RD_CmdKind_State:
+          {
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "state:\n{\n");
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " running: %i\n", d_ctrl_targets_running());
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " run_gen: %I64u\n", d_run_gen());
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " ip:      0x%I64x\n", d_ctrl_last_stop_event().rip_vaddr);
+            {
+              D_Event evt = d_ctrl_last_stop_event();
+              DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &evt);
+              String8 explanation_string = dr_string_from_fstrs(scratch.arena, &explanation_fstrs);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " stop_event:\n {\n");
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  arch: %S\n", string_from_arch(evt.arch));
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  vaddr_range: [0x%I64x, 0x%I64x)\n", evt.vaddr_rng.min, evt.vaddr_rng.max);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  ip_vaddr: 0x%I64x\n", evt.rip_vaddr);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  stack_base: 0x%I64x\n", evt.stack_base);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  tls_root: 0x%I64x\n", evt.tls_root);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  tls_index: 0x%I64x\n", evt.tls_index);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  timestamp: 0x%I64x\n", evt.timestamp);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  exception_code: 0x%I64x\n", (U64)evt.exception_code);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  bp_flags: 0x%I64x\n", (U64)evt.bp_flags);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  string: \"%S\"\n", escaped_from_raw_str8(scratch.arena, evt.string));
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  tls_model: 0x%I64x\n", evt.tls_model);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  explanation: \"%S\"\n", escaped_from_raw_str8(scratch.arena, explanation_string));
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
+            }
+            {
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " threads:\n {\n");
+              D_EntityArray threads = d_entity_array_from_kind(D_EntityKind_Thread);
+              for EachIndex(idx, threads.count)
+              {
+                D_Entity *thread = threads.v[idx];
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  {\n");
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   name: \"%S\"\n", escaped_from_raw_str8(scratch.arena, thread->string));
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   id:   %I64u\n", thread->id);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   ip:   0x%I64x\n", d_query_cached_rip_from_thread(thread));
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  }\n");
+              }
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
+            }
+            {
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " modules:\n {\n");
+              D_EntityArray modules = d_entity_array_from_kind(D_EntityKind_Module);
+              for EachIndex(idx, modules.count)
+              {
+                D_Entity *module = modules.v[idx];
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  {\n");
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   name:        \"%S\"\n", escaped_from_raw_str8(scratch.arena, module->string));
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   vaddr_range: [0x%I64x, 0x%I64x)\n", module->vaddr_range.min, module->vaddr_range.max);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  }\n");
+              }
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
+            }
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "}\n");
+          }break;
+          case RD_CmdKind_Eval:
+          {
+            String8 expr = rd_regs()->expr;
+            E_Eval eval = e_eval_from_string(expr);
+            E_Eval type_eval = e_eval_from_stringf("typeof(%S)", expr);
+            EV_StringParams string_params =
+            {
+              .flags = EV_StringFlag_ReadOnlyDisplayRules | rd_state->eval_viz_base_string_flags,
+              .radix = 10,
+            };
+            String8 value_string = ev_value_string_from_eval(scratch.arena, &string_params, eval, 512);
+            String8 type_value_string = ev_value_string_from_eval(scratch.arena, &string_params, type_eval, 512);
+            String8List msgs_strings = {0};
+            for EachNode(msg, E_Msg, eval.msgs.first)
+            {
+              str8_list_push(scratch.arena, &msgs_strings, msg->text);
+            }
+            StringJoin join = {.sep = s(". ")};
+            String8 msgs_string = str8_list_join(scratch.arena, &msgs_strings, &join);
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "eval:\n{\n");
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " expr:  %S\n", expr);
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " value: \"%S\"\n", escaped_from_raw_str8(scratch.arena, value_string));
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " type:  \"%S\"\n", escaped_from_raw_str8(scratch.arena, type_value_string));
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " msgs:  \"%S\"\n", escaped_from_raw_str8(scratch.arena, msgs_string));
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "}\n");
+          }break;
+          case RD_CmdKind_LineFromVAddr:
+          {
+            U64 vaddr = rd_regs()->vaddr;
+            D_Entity *thread = d_entity_from_handle(rd_base_regs()->thread);
+            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+            U64 voff = d_voff_from_vaddr(module, vaddr);
+            DI_Key dbgi_key = d_dbgi_key_from_module(module);
+            D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "lines:\n{\n");
+            for EachNode(n, D_LineNode, lines.first)
+            {
+              D_Line line = n->v;
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " {\n");
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  file_path:  \"%S\"\n", line.file_path);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  line_num:   %I64d\n", line.pt.line);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  column_num: %I64d\n", line.pt.column);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  voff_range: [0x%I64x, 0x%I64x)\n", line.voff_range.min, line.voff_range.max);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
+            }
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "}\n");
           }break;
           
           //- rjf: exiting
@@ -15808,16 +15556,6 @@ rd_frame(void)
             {
               if(rd_cfg_is_project_filtered(n->v)){ continue; }
               cfg_node_release(rd_state->cfg, n->v);
-            }
-          }break;
-          case RD_CmdKind_ListBreakpoints:
-          {
-            CFG_NodePtrList list = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
-            for(CFG_NodePtrNode *n = list.first; n != 0; n = n->next)
-            {
-              if(rd_cfg_is_project_filtered(n->v)){ continue; }
-              String8 string = cfg_string_from_tree(rd_state->cmd_output_arena, rd_state->cfg_schema_table, str8_zero(), n->v);
-              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, string);
             }
           }break;
           

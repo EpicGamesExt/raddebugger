@@ -14,7 +14,6 @@
 #include "base/base_inc.h"
 #include "x64/x64.h"
 #include "linker/hash_table.h"
-#include "linker/lf_hash_table.h"
 #include "linker/base_ext/base_bit_array.h"
 #include "rdi/rdi_local.h"
 #include "rdi_make/rdi_make_local.h"
@@ -36,7 +35,6 @@
 #include "rdi_from_coff/rdi_from_coff.h"
 #include "rdi_from_elf/rdi_from_elf.h"
 #include "rdi_from_pdb/rdi_from_pdb.h"
-#include "rdi_from_dwarf/rdi_from_dwarf.h"
 #include "rdi_from_dwarf/rdi_from_dwarf_2.h"
 #include "radbin/radbin.h"
 
@@ -44,7 +42,6 @@
 #include "base/base_inc.c"
 #include "x64/x64.c"
 #include "linker/hash_table.c"
-#include "linker/lf_hash_table.c"
 #include "linker/base_ext/base_bit_array.c"
 #include "rdi/rdi_local.c"
 #include "rdi_make/rdi_make_local.c"
@@ -66,7 +63,6 @@
 #include "rdi_from_coff/rdi_from_coff.c"
 #include "rdi_from_elf/rdi_from_elf.c"
 #include "rdi_from_pdb/rdi_from_pdb.c"
-#include "rdi_from_dwarf/rdi_from_dwarf.c"
 #include "rdi_from_dwarf/rdi_from_dwarf_2.c"
 #include "radbin/radbin.c"
 

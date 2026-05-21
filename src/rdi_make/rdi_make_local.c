@@ -1202,7 +1202,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
           Rng1U64 range = lane_range(n->count);
           for EachInRange(n_idx, range)
           {
-            RDIM_String8 normalized_path = rdim_normalize_path_str8(scratch.arena, n->v[n_idx].path);
+            RDIM_String8 normalized_path = rdim_normalized_from_path(scratch.arena, n->v[n_idx].path);
             rdim_bake_string_map_loose_insert(scratch.arena, top, lane_map, 1, normalized_path);
           }
         }
@@ -1505,7 +1505,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
             for EachInRange(n_idx, n_range)
             {
               RDIM_SrcFile *src_file = &n->v[n_idx];
-              RDIM_String8 normalized_path = rdim_normalize_path_str8(scratch.arena, src_file->path);
+              RDIM_String8 normalized_path = rdim_normalized_from_path(scratch.arena, src_file->path);
               rdim_bake_name_map_insert(scratch.arena, top, map, 4, normalized_path, rdim_idx_from_src_file(src_file));
             }
           }
@@ -2450,7 +2450,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         
         //- rjf: fill file info
         Temp scratch2 = scratch_begin(&scratch.arena, 1);
-        String8 normalized_path = rdim_normalize_path_str8(scratch2.arena, src->path);
+        String8 normalized_path = rdim_normalized_from_path(scratch2.arena, src->path);
         B32 has_checksum = (RDI_ChecksumKind_NULL < src->checksum_kind && src->checksum_kind < RDI_ChecksumKind_COUNT && src->checksum.size != 0);
         dst->file_path_node_idx = rdim_bake_path_node_idx_from_string(path_tree, src->path);
         dst->normal_full_path_string_idx = rdim_bake_idx_from_string(bake_strings, normalized_path);

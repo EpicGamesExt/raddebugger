@@ -256,7 +256,7 @@ rdim_lower_from_str8(RDIM_Arena *arena, RDIM_String8 string)
 }
 
 RDI_PROC RDIM_String8
-rdim_normalize_path_str8(RDIM_Arena *arena, RDIM_String8 path)
+rdim_normalized_from_path(RDIM_Arena *arena, RDIM_String8 path)
 {
   RDIM_String8 result = rdim_lower_from_str8(arena, path);
   for(RDI_U64 i = 0; i < result.RDIM_String8_SizeMember; i += 1)

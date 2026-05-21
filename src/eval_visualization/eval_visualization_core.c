@@ -2294,3 +2294,27 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
   
   return result;
 }
+
+//- rjf: eval -> string path
+
+internal String8
+ev_value_string_from_eval(Arena *arena, EV_StringParams *params, E_Eval eval, U64 cap)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List strs = {0};
+  EV_StringIter *iter = ev_string_iter_begin(scratch.arena, eval, params);
+  for(String8 string = {0}; ev_string_iter_next(scratch.arena, iter, &string);)
+  {
+    if(strs.total_size + string.size > cap)
+    {
+      String8 allowed_string = str8_chop(string, ((strs.total_size + string.size) - cap) + 3);
+      str8_list_push(scratch.arena, &strs, allowed_string);
+      str8_list_push(scratch.arena, &strs, str8_lit("..."));
+      break;
+    }
+    str8_list_push(scratch.arena, &strs, string);
+  }
+  String8 result = str8_list_join(arena, &strs, 0);
+  scratch_end(scratch);
+  return result;
+}

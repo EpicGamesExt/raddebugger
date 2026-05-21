@@ -383,4 +383,7 @@ internal String8 ev_escaped_from_raw_string(Arena *arena, String8 raw);
 internal EV_StringIter *ev_string_iter_begin(Arena *arena, E_Eval eval, EV_StringParams *params);
 internal B32 ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string);
 
+//- rjf: eval -> string path
+internal String8 ev_value_string_from_eval(Arena *arena, EV_StringParams *params, E_Eval eval, U64 cap);
+
 #endif // EVAL_VISUALIZATION_CORE_H
