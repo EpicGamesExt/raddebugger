@@ -12382,6 +12382,12 @@ rd_frame(void)
         // rjf: request frame
         rd_request_frame();
         
+        // rjf: record 'ack' for this command
+        if(kind != RD_CmdKind_Null)
+        {
+          str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "ack:{cmd:%S}\n", cmd->name);
+        }
+        
         // rjf: process command
         CFG_Node *cfg = &cfg_nil_node;
         String8 dst_path = {0};
