@@ -377,7 +377,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
       rng1u64_list_push(scratch.arena, &all_vaddr_ranges_on_same_line, vaddr_range);
     }
   }
-
+  
   // extend trap-net range across contiguous same-source-line, possibly unsorted, ranges
   //
   // TODO: @ns: converter should never produce these ranges in the first place,
@@ -1628,23 +1628,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             d_user_state->ctrl_last_stop_event.string = push_str8_copy(d_user_state->ctrl_stop_arena, d_user_state->ctrl_last_stop_event.string);
           }
         }break;
-        
-        case D_EventKind_NewProc:
-        {
-          // rjf: the first process? -> clear session output
-          D_EntityArray existing_processes = d_entity_array_from_kind(D_EntityKind_Process);
-          if(existing_processes.count == 1)
-          {
-            MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
-            mtx_push_op(d_user_state->output_log_key, op);
-          }
-        }break;
-        
-        case D_EventKind_DebugString:
-        {
-          MTX_Op op = {r1u64(max_U64, max_U64), event->string};
-          mtx_push_op(d_user_state->output_log_key, op);
-        }break;
       }
       log_infof("}\n\n");
     }
@@ -1822,6 +1805,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               // rjf: push message to launch
               {
                 D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
+                msg->msg_id = target->msg_id;
                 msg->kind = D_MsgKind_Launch;
                 msg->path = str8_copy(scratch.arena, working_directory);
                 msg->cmd_line_string_list = str8_list_copy(scratch.arena, &cmdln_strings);

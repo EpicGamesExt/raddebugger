@@ -6,6 +6,7 @@ target:
   executable: "build/raddbg.exe"
   working_directory: build
   arguments: "--user:raddbg_test.user --project:raddbg_test.project"
+  enabled: 1
 }
 target:
 {
@@ -26,14 +27,13 @@ target:
 }
 target:
 {
-  executable: "build/raddbg.exe"
-  working_directory: "build/dwarf"
-  arguments: "--bin --rdi a.exe"
+  executable: "build/radbin.exe"
+  working_directory: build
+  arguments: "--rdi chrome.dll.pdb --capture"
 }
 target:
 {
   executable: "build/radbin.exe"
-  working_directory: "build/"
-  enabled: 1
-  arguments: "--rdi chrome.dll.pdb"
+  working_directory: build
+  arguments: "--rdi raddbg.pdb"
 }

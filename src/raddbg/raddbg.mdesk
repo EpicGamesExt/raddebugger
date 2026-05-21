@@ -201,6 +201,7 @@ RD_VocabTable:
   {path                 ""                          "Path"                      ""                    FileOutline                                    }
   {guid                 ""                          "GUID"                      ""                    Null                                           }
   {peek_type            _                           "Peek Type"                 _                     Null                                           }
+  {output_label         _                           "Output Label"              _                     List                                           }
 }
 
 @struct RD_VocabInfo:
@@ -707,6 +708,7 @@ RD_VocabTable:
       'arguments':          string,
       'working_directory':  path,
       'entry_point':        expr_string,
+      @default("output") 'output_label': code_string,
       'stdout_path':        @no_relativize path,
       'stderr_path':        @no_relativize path,
       'stdin_path':         @no_relativize path,

@@ -86,8 +86,7 @@ d_init(void)
     d_user_state = push_array(arena, D_UserState, 1);
     d_user_state->arena = arena;
     d_user_state->cmds_arena = arena_alloc();
-    d_user_state->output_log_key = c_key_make(c_root_alloc(), c_id_make(0, 0));
-    c_submit_data(d_user_state->output_log_key, 0, str8_zero());
+    d_user_state->output_log_root = c_root_alloc();
     d_user_state->ctrl_entity_store = d_entity_ctx_rw_store_alloc();
     d_user_state->ctrl_stop_arena = arena_alloc();
     d_user_state->ctrl_msg_arena = arena_alloc();

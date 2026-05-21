@@ -54,6 +54,7 @@ D_EntityKind_Process,
 D_EntityKind_Thread,
 D_EntityKind_Module,
 D_EntityKind_EntryPoint,
+D_EntityKind_LaunchMsgID,
 D_EntityKind_DebugInfoPath,
 D_EntityKind_PendingThreadName,
 D_EntityKind_PendingThreadColor,
@@ -127,8 +128,8 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
 C_LINKAGE_BEGIN
-extern String8 d_entity_kind_code_name_table[12];
-extern String8 d_entity_kind_display_string_table[12];
+extern String8 d_entity_kind_code_name_table[13];
+extern String8 d_entity_kind_display_string_table[13];
 extern U32 d_exception_code_kind_code_table[38];
 extern String8 d_exception_code_kind_display_string_table[38];
 extern String8 d_exception_code_kind_lowercase_code_string_table[38];

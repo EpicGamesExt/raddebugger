@@ -344,8 +344,8 @@ struct D_UserState
   Arena *cmds_arena;
   D_CmdList cmds;
   
-  // rjf: output log key
-  C_Key output_log_key;
+  // rjf: output log root
+  C_Root output_log_root;
   
   // rjf: per-run caches
   U64 tls_base_cache_reggen_idx;

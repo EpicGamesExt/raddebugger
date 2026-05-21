@@ -270,6 +270,7 @@ rd_target_from_cfg(Arena *arena, CFG_Node *cfg)
   target.stdout_path                = cfg_node_child_from_string(cfg, str8_lit("stdout_path"))->first->string;
   target.stderr_path                = cfg_node_child_from_string(cfg, str8_lit("stderr_path"))->first->string;
   target.stdin_path                 = cfg_node_child_from_string(cfg, str8_lit("stdin_path"))->first->string;
+  target.msg_id                     = cfg->id;
   target.debug_subprocesses         = !!e_value_from_string(cfg_node_child_from_string(cfg, str8_lit("debug_subprocesses"))->first->string).u64;
   for(CFG_Node *child = cfg->first; child != &cfg_nil_node; child = child->next)
   {
@@ -12332,21 +12333,33 @@ rd_frame(void)
         e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
       }
       
-      //- rjf: add macro for output log
+      //- rjf: add macro for output logs
       {
-        Access *access = access_open();
-        C_Key key = d_user_state->output_log_key;
-        U128 hash = c_hash_from_key(key, 0);
-        String8 data = c_data_from_hash(access, hash);
-        E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
-        space.u64_0 = key.root.u64[0];
-        space.u128 = key.id.u128[0];
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
-        expr->space    = space;
-        expr->mode     = E_Mode_Offset;
-        expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
-        e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("output"), expr);
-        access_close(access);
+        CFG_NodePtrList targets = cfg_node_top_level_list_from_string(scratch.arena, s("target"));
+        for EachNode(n, CFG_NodePtrNode, targets.first)
+        {
+          Access *access = access_open();
+          CFG_Node *target = n->v;
+          CFG_Node *output_label = cfg_node_child_from_string(target, s("output_label"));
+          String8 output_label_string = output_label->first->string;
+          if(output_label_string.size == 0)
+          {
+            output_label_string = rd_default_setting_from_names(s("target"), s("output_label"));
+          }
+          C_ID id = {u128_hash_from_str8(output_label_string)};
+          C_Key key = c_key_make(d_user_state->output_log_root, id);
+          U128 hash = c_hash_from_key(key, 0);
+          String8 data = c_data_from_hash(access, hash);
+          E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
+          space.u64_0 = key.root.u64[0];
+          space.u128 = key.id.u128[0];
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
+          expr->space    = space;
+          expr->mode     = E_Mode_Offset;
+          expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
+          e_string2expr_map_insert(scratch.arena, macro_map, output_label_string, expr);
+          access_close(access);
+        }
       }
       
       //- rjf: (DEBUG) add macro for cfg strings
@@ -15810,8 +15823,16 @@ rd_frame(void)
           //- rjf: output
           case RD_CmdKind_ClearOutput:
           {
+            // rjf: get output label
+            String8 output_label = rd_regs()->string;
+            
+            // rjf: output label -> key
+            C_ID id = {u128_hash_from_str8(output_label)};
+            C_Key key = c_key_make(d_user_state->output_log_root, id);
+            
+            // rjf: clear
             MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("")};
-            mtx_push_op(d_user_state->output_log_key, op);
+            mtx_push_op(key, op);
           }break;
           
           //- rjf: watch pins
@@ -16955,6 +16976,11 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: tick debug engine
     //
+    U64 process_count_pre_tick = 0;
+    {
+      D_EntityArray all_processes = d_entity_array_from_kind(D_EntityKind_Process);
+      process_count_pre_tick = all_processes.count;
+    }
     U64 cmd_count_pre_tick = rd_state->cmds[0].count;
     B32 soft_halt_issued = d_user_state->ctrl_soft_halt_issued;
     D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints, &path_maps, exception_code_filters);
@@ -16971,9 +16997,34 @@ rd_frame(void)
         case D_EventKind_NewProc:
         {
           D_EntityArray all_processes = d_entity_array_from_kind(D_EntityKind_Process);
-          if(all_processes.count == 1)
+          
+          // rjf: no processes before this one -> new session
+          if(process_count_pre_tick == 0)
           {
+            D_Entity *process = all_processes.v[0];
+            CFG_Node *target = cfg_node_from_id(process->src_msg_id);
+            
+            // rjf: target -> output label
+            String8 output_label = cfg_node_child_from_string(target, s("output_label"))->first->string;
+            if(output_label.size == 0)
+            {
+              output_label = rd_default_setting_from_names(s("target"), s("output_label"));
+            }
+            
+            // rjf: output label -> key
+            C_ID id = {u128_hash_from_str8(output_label)};
+            C_Key key = c_key_make(d_user_state->output_log_root, id);
+            
+            // rjf: reset output log for associated target
+            {
+              MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
+              mtx_push_op(key, op);
+            }
+            
+            // rjf: reset external window
             MemoryZeroStruct(&rd_state->prestop_focused_window);
+            
+            // rjf: eliminate all previously loaded debug infos
             CFG_NodePtrList dbg_infos = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("debug_info"));
             for EachNode(n, CFG_NodePtrNode, dbg_infos.first)
             {
@@ -17137,6 +17188,26 @@ rd_frame(void)
             rd_state->last_stop_selected_thread_ip = vaddr;
             rd_state->last_stop_selected_thread_sp = new_sp;
           }
+        }break;
+        case D_EventKind_DebugString:
+        {
+          // rjf: process -> src target's output label
+          D_Entity *process = d_entity_from_handle(evt->parent);
+          D_MsgID src_msg_id = process->src_msg_id;
+          CFG_Node *target = cfg_node_from_id(src_msg_id);
+          String8 output_label = cfg_node_child_from_string(target, s("output_label"))->first->string;
+          if(output_label.size == 0)
+          {
+            output_label = rd_default_setting_from_names(s("target"), s("output_label"));
+          }
+          
+          // rjf: output label -> key
+          C_ID id = {u128_hash_from_str8(output_label)};
+          C_Key key = c_key_make(d_user_state->output_log_root, id);
+          
+          // rjf: push to keyed output
+          MTX_Op op = {r1u64(max_U64, max_U64), evt->string};
+          mtx_push_op(key, op);
         }break;
       }
     }

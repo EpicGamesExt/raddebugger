@@ -74,6 +74,7 @@ enum
   E_IRExtKind_Bytecode = RDI_EvalOp_COUNT,
   E_IRExtKind_SetSpace,
   E_IRExtKind_SetBaseOff,
+  E_IRExtKind_SetTLSOff,
   E_IRExtKind_COUNT
 };
 

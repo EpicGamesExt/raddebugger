@@ -62,7 +62,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[360] =
+RD_VocabInfo rd_vocab_info_table[361] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -176,6 +176,7 @@ RD_VocabInfo rd_vocab_info_table[360] =
 {str8_lit_comp("path"), str8_lit_comp(""), str8_lit_comp("Path"), str8_lit_comp(""), RD_IconKind_FileOutline},
 {str8_lit_comp("guid"), str8_lit_comp(""), str8_lit_comp("GUID"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("peek_type"), str8_lit_comp("peek_types"), str8_lit_comp("Peek Type"), str8_lit_comp("Peek Types"), RD_IconKind_Null},
+{str8_lit_comp("output_label"), str8_lit_comp("output_labels"), str8_lit_comp("Output Label"), str8_lit_comp("Output Labels"), RD_IconKind_List},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_step_into"), str8_lit_comp(""), str8_lit_comp("Launch and Step Into"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},
@@ -456,7 +457,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("color"), 1, str8_lit_comp("@inherit(tab) x:\n{\n  @display_name(\"Value\") @description(\"An expression to describe the value or location of the color.\")\n  'expression': expr_string,\n}\n")},
 {str8_lit_comp("geo3d"), 1, str8_lit_comp("@inherit(tab) x:\n{\n  @display_name(\"Expression\") @description(\"An expression to describe the base address of the index buffer.\")\n  'expression': expr_string,\n  'count': expr_string,\n  'vtx': expr_string,\n  'vtx_size': expr_string,\n  'yaw': @range[0, 1] f32,\n  'pitch': @range[-0.5, 0] f32,\n  'zoom': @range[0, 100] f32,\n}\n")},
 {str8_lit_comp("getting_started"), 0, str8_lit_comp("@inherit(tab) x:\n{\n}\n")},
-{str8_lit_comp("target"), 0, str8_lit_comp("@row_commands(@cmd_line save_cfg_to_project, enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        expr_string,\n  'stdout_path':        @no_relativize path,\n  'stderr_path':        @no_relativize path,\n  'stdin_path':         @no_relativize path,\n  'environment':        set,\n  'debug_subprocesses': bool,\n  @no_revert @no_expand @default(0) 'enabled': bool,\n}\n")},
+{str8_lit_comp("target"), 0, str8_lit_comp("@row_commands(@cmd_line save_cfg_to_project, enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        expr_string,\n  @default(\"output\") 'output_label': code_string,\n  'stdout_path':        @no_relativize path,\n  'stderr_path':        @no_relativize path,\n  'stdin_path':         @no_relativize path,\n  'environment':        set,\n  'debug_subprocesses': bool,\n  @no_revert @no_expand @default(0) 'enabled': bool,\n}\n")},
 {str8_lit_comp("breakpoint"), 0, str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint, clear_breakpoints)\nx:\n{\n  'label':            code_string,\n  'condition':        expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("watch_pin"), 0, str8_lit_comp("@row_commands(duplicate_cfg, remove_cfg)\n@collection_commands(add_watch_pin, toggle_watch_pin)\nx:\n{\n  'expression':       expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n}\n")},
 {str8_lit_comp("debug_info"), 0, str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(load_debug_info)\nx:\n{\n  'path': @no_relativize path,\n  @query 'guid': string,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},

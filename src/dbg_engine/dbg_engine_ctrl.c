@@ -1302,6 +1302,7 @@ d_entity_store_apply_events(D_EntityCtxRWStore *store, D_EventList *list)
           D_Entity *process = d_entity_alloc(store, machine, D_EntityKind_Process, event->arch, event->entity, (U64)event->entity_id);
           process->tls_model = event->tls_model;
           process->target_os = event->target_os;
+          process->src_msg_id = event->msg_id;
           d_entity_equip_string(store, process, event->string);
         }
       }break;
@@ -1314,7 +1315,8 @@ d_entity_store_apply_events(D_EntityCtxRWStore *store, D_EventList *list)
             entry = next)
         {
           next = entry->next;
-          if(entry->kind == D_EntityKind_EntryPoint && entry->id == process->id)
+          if(entry->id == process->id &&
+             (entry->kind == D_EntityKind_EntryPoint || entry->kind == D_EntityKind_LaunchMsgID))
           {
             d_entity_release(store, entry);
           }
@@ -4536,9 +4538,21 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
     default:{}break;
     case DMN_EventKind_CreateProcess:
     {
+      D_MsgID msg_id = 0;
+      for(D_Entity *entry = d_ctrl_state->ctrl_thread_entity_store->ctx.root->first;
+          entry != &d_entity_nil;
+          entry = entry->next)
+      {
+        if(entry->id == event->code && entry->kind == D_EntityKind_LaunchMsgID)
+        {
+          msg_id = entry->src_msg_id;
+          d_entity_release(d_ctrl_state->ctrl_thread_entity_store, entry);
+          break;
+        }
+      }
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind      = D_EventKind_NewProc;
-      out_evt->msg_id    = msg->msg_id;
+      out_evt->msg_id    = msg_id;
       out_evt->entity    = d_handle_from_dmn(D_MachineID_Local, event->process);
       out_evt->arch      = event->arch;
       out_evt->entity_id = event->code;
@@ -5081,15 +5095,21 @@ d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   file_close(stderr_handle);
   file_close(stdin_handle);
   
-  //- rjf: record (id -> entry points), so that we know custom entry points for this PID
+  //- rjf: record (id -> entry points), and (id -> msg_id) so that we know custom entry points for this PID
   D_EntityCtxRWStore *entity_ctx_rw_store = d_ctrl_state->ctrl_thread_entity_store;
   MutexScopeW(d_ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
   {
     for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
     {
-      String8 string = n->string;
-      D_Entity *entry = d_entity_alloc(entity_ctx_rw_store, entity_ctx_rw_store->ctx.root, D_EntityKind_EntryPoint, Arch_Null, d_handle_zero(), (U64)id);
-      d_entity_equip_string(entity_ctx_rw_store, entry, string);
+      {
+        String8 string = n->string;
+        D_Entity *entry = d_entity_alloc(entity_ctx_rw_store, entity_ctx_rw_store->ctx.root, D_EntityKind_EntryPoint, Arch_Null, d_handle_zero(), (U64)id);
+        d_entity_equip_string(entity_ctx_rw_store, entry, string);
+      }
+      {
+        D_Entity *entry = d_entity_alloc(entity_ctx_rw_store, entity_ctx_rw_store->ctx.root, D_EntityKind_LaunchMsgID, Arch_Null, d_handle_zero(), (U64)id);
+        entry->src_msg_id = msg->msg_id;
+      }
     }
   }
   

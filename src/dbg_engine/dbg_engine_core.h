@@ -140,6 +140,7 @@ struct D_Entity
   U64 tls_index;
   U64 tls_offset;
   OperatingSystem target_os;
+  D_MsgID src_msg_id;
 };
 
 typedef struct D_EntityNode D_EntityNode;
@@ -248,6 +249,7 @@ struct D_Target
   String8 stdout_path;
   String8 stderr_path;
   String8 stdin_path;
+  D_MsgID msg_id;
   B32 debug_subprocesses;
   String8List env;
 };

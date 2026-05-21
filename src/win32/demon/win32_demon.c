@@ -2474,6 +2474,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               // rjf: unpack event
               W32_DMN_Entity *process = w32_dmn_entity_from_kind_id(W32_DMN_EntityKind_Process, evt.dwProcessId);
               W32_DMN_Entity *thread = w32_dmn_entity_from_kind_id(W32_DMN_EntityKind_Thread, evt.dwThreadId);
+              DMN_Handle process_handle = w32_dmn_handle_from_entity(process);
+              DMN_Handle thread_handle = w32_dmn_handle_from_entity(thread);
               U64 string_address = (U64)evt.u.DebugString.lpDebugStringData;
               U64 string_size = (U64)evt.u.DebugString.nDebugStringLength;
               
@@ -2489,9 +2491,23 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 debug_string.size -= 1;
               }
               
-              // rjf: make debug string event
-              debug_strings_event = dmn_event_list_push(arena, &events);
-              debug_strings_event->kind = DMN_EventKind_DebugString;
+              // rjf: complete last debug string event, if we need to
+              if(debug_strings_event != 0 && !dmn_handle_match(process_handle, debug_strings_event->process))
+              {
+                String8 debug_strings_joined = str8_list_join(arena, &debug_strings, 0);
+                debug_strings_event->string = debug_strings_joined;
+                debug_strings_event = 0;
+                MemoryZeroStruct(&debug_strings);
+              }
+              
+              // rjf: make debug string event if we need one
+              if(debug_strings_event == 0)
+              {
+                debug_strings_event = dmn_event_list_push(arena, &events);
+                debug_strings_event->kind = DMN_EventKind_DebugString;
+                debug_strings_event->process = process_handle;
+                debug_strings_event->thread  = thread_handle;
+              }
               
               // rjf: push into debug strings
               str8_list_push(scratch.arena, &debug_strings, debug_string);
