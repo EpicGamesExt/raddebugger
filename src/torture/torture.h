@@ -101,7 +101,7 @@ internal void t_break_if_debugger_present(void);
 #define ENDT_MS(x)  TIMEOUT_US((x)*1000ull)
 #define ENDT_SEC(x) TIMEOUT_MS((x)*1000ull)
 
-////////////////////////////////
+////////////////////////////////////////////////////////////////
 
 // output directory
 internal B32 t_write_file_list(String8 name, String8List data);
@@ -115,6 +115,7 @@ internal void        t_run_caller(void *raw_ctx);
 internal void        t_run_fail_handler(void *raw_ctx);
 internal T_RunResult t_run(T_Run run, String8 user_data);
 
+// tools
 internal String8 t_radbin_path(void);
 internal String8 t_cl_path(void);
 internal String8 t_clang_path(void);
@@ -128,7 +129,20 @@ internal B32 t_invoke_cl(char *fmt, ...);
 internal B32 t_invoke_linkerf(char *fmt, ...);
 internal B32 t_invoke_radbin(char *fmt, ...);
 internal void t_kill_all(String8 pattern);
-
 #define t_invoke_linker_timeout(c, t)       T_Ok(t_invoke(t_radlink_path(), c, t))
 #define t_invoke_linker_timeoutf(t, f, ...) t_invoke_linker_timeout(push_str8f(arena, f, ##__VA_ARGS__), t)
 #define t_invoke_linker(c)                  t_invoke_linker_timeout(c, max_U64)
+
+internal void t_kill_all(String8 pattern);
+
+internal String8 t_chop_line(String8 *string);
+internal B32 t_match_line(String8 *output, String8 expected_line);
+internal B32 t_match_linef(String8 *output, char *fmt, ...);
+
+// files helper
+internal String8List t_file_paths_from_dir(Arena *arena, String8 dir);
+
+// printer
+internal void t_infof(char *fmt, ...);
+internal void t_errorf(char *fmt, ...);
+

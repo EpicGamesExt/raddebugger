@@ -38,6 +38,7 @@ typedef enum
   T_DbgScriptCmdKind_KillAll,
   T_DbgScriptCmdKind_At,
   T_DbgScriptCmdKind_Eval,
+  T_DbgScriptCmdKind_Count
 } T_DbgScriptCmdKind;
 
 typedef struct T_DbgScriptCmd
@@ -107,6 +108,7 @@ typedef struct
   T_DbgScriptFileList       files;
   U64                       program_count;
   T_DbgScriptProgram      **programs;
+  B32                       skip;
 } T_DbgScript;
 
 ////////////////////////////////

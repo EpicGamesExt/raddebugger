@@ -14,6 +14,7 @@ global String8      g_test_data;
 U64      g_torture_test_count;
 T_Test **g_torture_tests;
 T_Test   g_torture_tests_[0xffffff];
+B32      g_is_first_print;
 
 // invoke
 global U64      g_last_exit_code;
@@ -159,21 +160,27 @@ internal void
 t_run_caller(void *raw_ctx)
 {
   Temp scratch = scratch_begin(0,0);
+  
+  g_is_first_print = 1;
+
   T_RunCtx *ctx = raw_ctx;  
-  String8List test_out = {0};
   ctx->result.status = T_RunStatus_Pass;
+
+  String8List test_out = {0};
   ctx->run(scratch.arena, ctx->user_data, &ctx->result, &test_out);
+
   if (ctx->result.status == T_RunStatus_Fail || ctx->result.status == T_RunStatus_Crash) {
     for EachNode(n, String8Node, test_out.first) {
-      fprintf(stderr, "%.*s", str8_varg(n->string));
+      t_errorf("%S", n->string);
     }
     if (g_errors.size) {
-      fprintf(stderr, "stderr: \"%.*s\"\n", str8_varg(g_errors));
+      t_errorf("stderr: \"%S\"\n", g_errors);
     }
     if (g_output.size) {
-      fprintf(stderr, "stdout: \"%.*s\"\n", str8_varg(g_output));
+      t_errorf("stdout: \"%S\"\n", g_output);
     }
   }
+
   scratch_end(scratch);
 }
 
@@ -479,11 +486,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
   };
   str8_list_push_front(scratch.arena, &launch_opts.cmd_line, exe_path);
 
-  if (g_verbose) {
-    String8 full_cmd_line = str8_list_join(scratch.arena, &launch_opts.cmd_line, &(StringJoin){ .sep = str8_lit(" ") });
-    fprintf(stdout, "Command Line: %.*s\n", str8_varg(full_cmd_line));
-    fprintf(stdout, "Working Dir:  %.*s\n", str8_varg(g_wdir));
-  }
+  String8 full_cmd_line = str8_list_join(scratch.arena, &launch_opts.cmd_line, &(StringJoin){ .sep = str8_lit(" ") });
 
   // invoke exe
   Process process_handle = process_launch(&launch_opts);
@@ -757,6 +760,12 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
   }
 #endif
 
+  t_infof("Invoke: {\n");
+  t_infof("  CMDL: %S\n", full_cmd_line);
+  t_infof("  WDIR: %S\n", g_wdir);
+  t_infof("  Exit: %u\n", g_last_exit_code);
+  t_infof("}\n");
+
   // update output global
   g_output = str8_list_join(g_output_arena, &stdout_parts, 0);
   g_errors = str8_list_join(g_output_arena, &stderr_parts, 0);
@@ -969,6 +978,40 @@ t_match_folders(String8 a, String8 b)
   
   scratch_end(scratch);
   return is_match;
+}
+
+internal void
+t_infof(char *fmt, ...)
+{
+  if (g_verbose) {
+    Temp scratch = scratch_begin(0,0);
+    va_list args;
+    va_start(args, fmt);
+    String8 result = push_str8fv(scratch.arena, fmt, args);
+    if (g_is_first_print) {
+      g_is_first_print = 0;
+      fprintf(stderr, "\n");
+    }
+    fprintf(stderr, "%.*s", str8_varg(result));
+    va_end(args);
+    scratch_end(scratch);
+  }
+}
+
+internal void
+t_errorf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0,0);
+  va_list args;
+  va_start(args, fmt);
+  String8 result = push_str8fv(scratch.arena, fmt, args);
+  if (g_is_first_print) {
+    g_is_first_print = 0;
+    fprintf(stderr, "\n");
+  }
+  fprintf(stderr, "%.*s", str8_varg(result));
+  va_end(args);
+  scratch_end(scratch);
 }
 
 internal void
