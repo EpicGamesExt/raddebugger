@@ -1817,6 +1817,65 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             dr_fstrs_push_new(arena, &eval_fstrs, &params, string);
             result.flags |= RD_WatchCellFlag_IsNonCode;
           }
+          
+          // rjf: equip line info for functions
+          {
+            E_TypeKey undecorated_type_key = e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
+            E_TypeKey direct_type_key = e_type_key_unwrap(undecorated_type_key, E_TypeUnwrapFlag_All);
+            E_TypeKey fn_type_key = {0};
+            if(e_type_kind_from_key(undecorated_type_key) == E_TypeKind_Function)
+            {
+              fn_type_key = undecorated_type_key;
+            }
+            else if(e_type_kind_from_key(undecorated_type_key) == E_TypeKind_Ptr &&
+                    e_type_kind_from_key(direct_type_key) == E_TypeKind_Function)
+            {
+              fn_type_key = direct_type_key;
+            }
+            if(e_type_kind_from_key(fn_type_key) == E_TypeKind_Function)
+            {
+              Access *access = access_open();
+              
+              // rjf: eval -> voff / dbgi key
+              E_Eval eval = cell->eval;
+              U64 voff = 0;
+              DI_Key dbgi_key = {0};
+              if(eval.space.kind == D_EvalSpaceKind_Entity)
+              {
+                U64 vaddr = eval.value.u64;
+                D_Entity *process = rd_ctrl_entity_from_eval_space(eval.space);
+                D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+                dbgi_key = d_dbgi_key_from_module(module);
+                voff = d_voff_from_vaddr(module, vaddr);
+              }
+              else
+              {
+                voff = eval.value.u64;
+                E_DbgInfo *dbg_info = e_dbg_info_from_type_key(eval.irtree.type_key);
+                dbgi_key = dbg_info->dbgi_key;
+              }
+              
+              // rjf: dbgi key -> rdi
+              RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
+              
+              // rjf: voff -> line
+              RDI_Line line = rdi_line_from_voff(rdi, voff);
+              RDI_SourceFile *src_file = rdi_element_from_name_idx(rdi, SourceFiles, line.file_idx);
+              RDI_FilePathNode *path_node = rdi_element_from_name_idx(rdi, FilePathNodes, src_file->file_path_node_idx);
+              String8 file_name = str8_from_rdi_string_idx(rdi, path_node->name_string_idx);
+              
+              // rjf: push line location
+              if(file_name.size != 0) UI_TagF("weak")
+              {
+                String8 loc = str8f(arena, "%S:%i", file_name, line.line_num);
+                DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size*0.85f, 0, 0};
+                dr_fstrs_push_new(arena, &eval_fstrs, &params, str8_lit(" @ "));
+                dr_fstrs_push_new(arena, &eval_fstrs, &params, loc);
+              }
+              
+              access_close(access);
+            }
+          }
         }
         
         //- rjf: if we have only the expression, then use the expression as the value
