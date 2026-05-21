@@ -757,7 +757,7 @@ T_RunSig(dbg_script_runner)
 
   // debugger is ready -- now invoke script
   if (t_dbg_script_invoke(&script, T_Dbg_DefaultTimeout) == 0) {
-    t_errrof("ERROR: %S: failed to run to completion\n", user_data);
+    t_errorf("ERROR: %S: failed to run to completion\n", user_data);
     T_Ok(0);
   }
 
@@ -782,7 +782,7 @@ t_dbg_register_script_tests(Arena *arena, String8 folder_path)
   Temp scratch = scratch_begin(&arena, 1);
 
   if ( ! folder_path_exists(folder_path)) {
-    t_errof("ERROR: this folder does not exists: %S\n", folder_path);
+    t_errorf("ERROR: this folder does not exists: %S\n", folder_path);
     return;
   }
 
