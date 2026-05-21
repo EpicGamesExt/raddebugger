@@ -172,7 +172,6 @@
 #include "torture_dwarf.c"
 #include "torture_d2r.c"
 #include "torture_p2r.c"
-#include "torture_eval.c"
 #include "torture_dbg.c"
 
 internal B32 frame(void) { return 0; }
