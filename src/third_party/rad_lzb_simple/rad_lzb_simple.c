@@ -424,7 +424,8 @@ static SINTa rr_lzb_simple_decode_notexpanded(const void * comp, void * raw, SIN
 
 SINTa rr_lzb_simple_decode(const void * comp, SINTa compLen, void * raw, SINTa rawLen)
 {
-	RR_ASSERT_ALWAYS( compLen <= rawLen );
+	if_unlikely( comp == NULL || raw == NULL || compLen <= 0 || rawLen <= 0 || compLen > rawLen )
+		return -1;
 	if ( compLen == rawLen )
 	{
 		memcpy(raw,comp,rawLen);
