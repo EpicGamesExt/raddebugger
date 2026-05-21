@@ -2281,6 +2281,7 @@ rdim_bake(Arena *arena, RDIM_BakeParams *params)
         radsort(keys, map->line_count, rdim_sort_key_is_before);
       }
     }
+    lane_sync();
   }
   
   //////////////////////////////////////////////////////////////
