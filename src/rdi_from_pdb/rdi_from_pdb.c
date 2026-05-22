@@ -396,7 +396,7 @@ internal RDIM_BakeParams
 p2r_convert(Arena *arena, P2R_ConvertParams *params)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   Arena *scratch_conflicts[2] = { scratch.arena, arena };
   
   //////////////////////////////////////////////////////////////
@@ -2045,6 +2045,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     
     //- rjf: find all unique namespaces on this lane
     U64 namespace_slots_count = (U64)itype_opl / lane_count();
+    namespace_slots_count = Max(1, namespace_slots_count);
     String8Node **namespace_slots = push_array(scratch2.arena, String8Node *, namespace_slots_count);
     U64 namespace_count = 0;
     Rng1U64 range = lane_range(itype_opl);
@@ -2170,6 +2171,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
       if(lane_idx() == 0)
       {
         all_namespace_slots_count = *total_namespace_count_ptr / 3;
+        all_namespace_slots_count = Max(all_namespace_slots_count, 1);
         all_namespace_slots = push_array(scratch.arena, P2R_NamespaceNode *, all_namespace_slots_count);
         for EachIndex(l_idx, lane_count())
         {
