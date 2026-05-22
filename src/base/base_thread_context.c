@@ -79,6 +79,7 @@ tctx_get_scratch(Arena **conflicts, U64 count)
       break;
     }
   }
+  Assert(result);
   return result;
 }
 

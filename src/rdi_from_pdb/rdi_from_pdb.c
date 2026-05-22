@@ -396,6 +396,8 @@ internal RDIM_BakeParams
 p2r_convert(Arena *arena, P2R_ConvertParams *params)
 {
   Temp scratch = scratch_begin(&arena, 1);
+
+  Arena *scratch_conflicts[2] = { scratch.arena, arena };
   
   //////////////////////////////////////////////////////////////
   //- rjf: do base MSF parse
@@ -403,7 +405,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   MSF_Parsed *msf = 0;
   ProfScope("do base MSF parse")
   {
-    Temp scratch2 = scratch_begin(&scratch.arena, 1);
+    Temp scratch2 = scratch_begin(scratch_conflicts, ArrayCount(scratch_conflicts));
     
     // rjf: setup output buckets
     MSF_RawStreamTable *msf_raw_stream_table = 0;
@@ -675,7 +677,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   //
   U64 exe_voff_max = 0;
   {
-    Temp scratch2 = scratch_begin(&scratch.arena, 1);
+    Temp scratch2 = scratch_begin(scratch_conflicts, ArrayCount(scratch_conflicts));
     
     // rjf: set up
     U64 *lane_voff_maxes = 0;
@@ -825,7 +827,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
     //- rjf: do wide gather
     ProfScope("do wide gather")
     {
-      Temp scratch2 = scratch_begin(&scratch.arena, 1);
+      Temp scratch2 = scratch_begin(scratch_conflicts, ArrayCount(scratch_conflicts));
       
       //- rjf: build local hash table to dedup files within this lane
       U64 hit_path_slots_count = 4096;
@@ -1756,7 +1758,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
         }
         
         //- rjf: walk dependent types, push to chain
-        Temp scratch2 = scratch_begin(&scratch.arena, 1);
+        Temp scratch2 = scratch_begin(scratch_conflicts, ArrayCount(scratch_conflicts));
         P2R_TypeIdChain start_walk_task = {0, itype};
         P2R_TypeIdChain *first_walk_task = &start_walk_task;
         P2R_TypeIdChain *last_walk_task = &start_walk_task;
@@ -2039,7 +2041,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
   U64 all_namespace_slots_count = 0;
   ProfScope("gather all unique namespaces from types")
   {
-    Temp scratch2 = scratch_begin(&scratch.arena, 1);
+    Temp scratch2 = scratch_begin(scratch_conflicts, ArrayCount(scratch_conflicts));
     
     //- rjf: find all unique namespaces on this lane
     U64 namespace_slots_count = (U64)itype_opl / lane_count();
@@ -2843,7 +2845,7 @@ p2r_convert(Arena *arena, P2R_ConvertParams *params)
                              RDIM_SubsetFlag_Types))
     ProfScope("gather all namespaces which are only encoded in symbols (not found in types)")
   {
-    Temp scratch2 = scratch_begin(&scratch.arena, 1);
+    Temp scratch2 = scratch_begin(scratch_conflicts, ArrayCount(scratch_conflicts));
     U64 lane_namespace_slots_count = 4096;
     String8Node **lane_namespace_slots = push_array(scratch2.arena, String8Node *, lane_namespace_slots_count);
     
