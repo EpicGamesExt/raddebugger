@@ -12964,6 +12964,7 @@ rd_frame(void)
               }
               rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_kind_info->query.expr, primary_args_string);
               rd_push_cmd(cmd_kind_name, rd_regs());
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "ack:{cmd:%S}\n", cmd_kind_name);
             }
             else
             {
