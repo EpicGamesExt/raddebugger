@@ -172,9 +172,9 @@ t_dbg_state(Arena *arena, U64 timeout_us)
   MD_Node *threads_md    = md_child_from_string(state_md, str8_lit("threads"),    0);
   MD_Node *modules_md    = md_child_from_string(state_md, str8_lit("modules"),    0);
   T_DbgState v = {0};
-  if (!rd_ipc_parse_int(state_md, str8_lit("running"), &v.running)) { Assert(0); goto exit; }
-  if (!rd_ipc_parse_int(state_md, str8_lit("run_gen"), &v.run_gen)) { Assert(0); goto exit; }
-  if (!rd_ipc_parse_int(state_md, str8_lit("ip"), &v.ip))           { Assert(0); goto exit; }
+  if (!rd_ipc_parse_int(state_md, str8_lit("running"), &v.running)) { t_infof("INFO: 'state' is missing 'running'\n"); goto exit; }
+  if (!rd_ipc_parse_int(state_md, str8_lit("run_gen"), &v.run_gen)) { t_infof("INFO: 'state' is missing 'run_gen'\n"); goto exit; }
+  if (!rd_ipc_parse_int(state_md, str8_lit("ip"), &v.ip))           { t_infof("INFO: 'state' is missing 'ip'\n");      goto exit; }
   
   result = push_array(arena, T_DbgState, 1);
   *result = v;
@@ -201,11 +201,11 @@ t_dbg_src_line(Arena *arena, U64 vaddr, T_DbgLineArray *lines_out, U64 timeout_u
   U64 line_count = 0;
   for MD_EachNode(n, lines_md->first) {
     T_DbgLine line = {0};
-    if ( ! rd_ipc_parse_string(lines_md, str8_lit("file_path"), &line.file_path))        { Assert(0); goto exit; }
-    if ( ! rd_ipc_parse_int(lines_md, str8_lit("line_num"), &line.line_num))             { Assert(0); goto exit; }
-    if ( ! rd_ipc_parse_int(lines_md, str8_lit("column_num"), &line.column_num))         { Assert(0); goto exit; }
-    if ( ! rd_ipc_parse_int(lines_md, str8_lit("voff_range_min"), &line.voff_range.min)) { Assert(0); goto exit; }
-    if ( ! rd_ipc_parse_int(lines_md, str8_lit("voff_range_max"), &line.voff_range.max)) { Assert(0); goto exit; }
+    if ( ! rd_ipc_parse_string(n, str8_lit("file_path"), &line.file_path))        { t_infof("INFO: 'lines' is missing 'file_path'\n");      goto exit; }
+    if ( ! rd_ipc_parse_int(n, str8_lit("line_num"), &line.line_num))             { t_infof("INFO: 'lines' is missing 'line_num'\n");       goto exit; }
+    if ( ! rd_ipc_parse_int(n, str8_lit("column_num"), &line.column_num))         { t_infof("INFO: 'lines' is missing 'column_num'\n");     goto exit; }
+    if ( ! rd_ipc_parse_int(n, str8_lit("voff_range_min"), &line.voff_range.min)) { t_infof("INFO: 'lines' is missing 'voff_range_min'\n"); goto exit; }
+    if ( ! rd_ipc_parse_int(n, str8_lit("voff_range_max"), &line.voff_range.max)) { t_infof("INFO: 'lines' is missing 'voff_range_max'\n"); goto exit; }
 
     Node *n = push_array(scratch.arena, Node, 1);
     n->v = line;
