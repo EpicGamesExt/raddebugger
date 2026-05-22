@@ -1164,7 +1164,7 @@ internal B32
 wm_window_is_focused(WM_Window handle)
 {
   W32_WM_Window *window = w32_wm_window_from_handle(handle);
-  HWND active_hwnd = GetActiveWindow();
+  HWND active_hwnd = GetForegroundWindow();
   return active_hwnd == window->hwnd;
 }
 
