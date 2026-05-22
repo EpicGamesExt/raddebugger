@@ -753,9 +753,17 @@ lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_Me
 internal String8
 lnk_get_image_name(LNK_Config *config)
 {
-  String8 image_name = config->image_alt_path.size ? config->image_alt_path : config->out_path;
-  image_name = str8_skip_last_slash(image_name);
+  String8 image_path = config->image_alt_path.size ? config->image_alt_path : config->out_path;
+  String8 image_name = str8_skip_last_slash(image_path);
   return image_name;
+}
+
+internal String8
+lnk_get_pdb_name(LNK_Config *config)
+{
+  String8 pdb_path = config->pdb_alt_path.size ? config->pdb_alt_path : config->pdb_name;
+  String8 pdb_name = str8_skip_last_slash(pdb_path);
+  return pdb_name;
 }
 
 internal U64

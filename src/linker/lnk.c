@@ -58,13 +58,6 @@
 #include "llvm/llvm.c"
 #include "dwarf/x64/dwarf_x64.c"
 
-// --- RDI ---------------------------------------------------------------------
-
-#include "rdi/rdi_local.h"
-#include "arch/arch_inc.h"
-#include "rdi/rdi_local.c"
-#include "arch/arch_inc.c"
-
 // --- Code Base Extensions ----------------------------------------------------
 
 #include "base_ext/base_inc.h"
@@ -83,15 +76,21 @@
 #include "pdb_ext/pdb_helpers.c"
 #include "pdb_ext/pdb_builder.c"
 
-// --- RDI Builder -------------------------------------------------------------
+// --- RDI ---------------------------------------------------------------------
 
-#include "rdi/rdi_builder.h"
-#include "rdi/rdi_coff.h" 
-#include "rdi/rdi_cv.h"
+#include "pdb/pdb_parse.h"
+#include "rdi/rdi_local.h"
+#include "rdi_make/rdi_make_local.h"
+#include "rdi_from_coff/rdi_from_coff.h"
+#include "rdi_from_pdb/rdi_from_pdb.h"
+#include "arch/arch_inc.h"
 
-#include "rdi/rdi_builder.c"
-#include "rdi/rdi_coff.c"
-#include "rdi/rdi_cv.c"
+#include "pdb/pdb_parse.c"
+#include "rdi/rdi_local.c"
+#include "rdi_make/rdi_make_local.c"
+#include "rdi_from_coff/rdi_from_coff.c"
+#include "rdi_from_pdb/rdi_from_pdb.c"
+#include "arch/arch_inc.c"
 
 // --- Linker ------------------------------------------------------------------
 
@@ -5259,6 +5258,40 @@ lnk_log_timers(void)
   scratch_end(scratch);
 }
 
+internal
+THREAD_POOL_TASK_FUNC(lnk_p2r_worker)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  LNK_P2R *ctx = raw_task;
+
+  P2R_ConvertParams p2r_params = {0};
+  if (task_id == 0) {
+    p2r_params.input_pdb_name = lnk_get_pdb_name(ctx->config);
+    p2r_params.input_pdb_data = ctx->pdb_data;
+    p2r_params.input_exe_name = lnk_get_image_name(ctx->config);
+    p2r_params.input_exe_data = ctx->image_data;
+    p2r_params.subset_flags   = max_U32;
+  }
+  tp_broadcast(&p2r_params);
+
+  LaneCtx lctx = { .lane_idx = task_id, .lane_count = tp->worker_count, .barrier = tp->barrier, .broadcast_memory = tp->broadcast };
+  lane_ctx(lctx);
+
+  Arena *bake_arena = arena_alloc();
+  RDIM_BakeParams bake_params = p2r_convert(bake_arena, &p2r_params);
+  barrier_wait(tp->barrier);
+
+  RDIM_BakeResults bake_results = rdim_bake(arena, &bake_params);
+  barrier_wait(tp->barrier);
+
+  if (task_id == 0) {
+    ctx->bake_results = bake_results;
+  }
+
+  scratch_end(scratch);
+}
+
 internal void
 lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 {
@@ -5349,51 +5382,45 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     LNK_MergedTypes   cv_types = lnk_merge_types(tp, arena, &cv);
 
     //
-    // RDI
-    //
-    if (config->rad_debug == LNK_SwitchState_Yes) {
-      lnk_timer_begin(LNK_Timer_Rdi);
-
-      String8List rdi_data = lnk_build_rad_debug_info(tp,
-                                                      arena,
-                                                      OperatingSystem_Windows,
-                                                      rdi_arch_from_coff_machine(config->machine),
-                                                      lnk_get_image_name(config),
-                                                      image_ctx.image_data,
-                                                      debug_info_objs_count,
-                                                      debug_info_objs,
-                                                      cv.debug_s_arr,
-                                                      cv.symbol_input_count,
-                                                      cv.symbol_inputs,
-                                                      (CV_SymbolListArray[]){0},
-                                                      cv_types);
-
-      lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_data);
-
-      lnk_timer_end(LNK_Timer_Rdi);
-    }
-
-    //
-    // PDB
+    // Debug Info
     //
     // TODO: Parallel debug info builds are currently blocked by the patch
     // strings in $$FILE_CHECKSUM step in `lnk_process_c13_data_task`.
-    if (config->debug_mode == LNK_DebugMode_Full) {
-      lnk_timer_begin(LNK_Timer_Pdb);
+    if (config->debug_mode == LNK_DebugMode_Full || config->rad_debug == LNK_SwitchState_Yes) {
+      Temp huge_arena_temp = temp_begin(lnk_get_huge_arena());
 
-      if (config->pdb_hash_type_names != LNK_TypeNameHashMode_Null && config->pdb_hash_type_names != LNK_TypeNameHashMode_None) {
-        lnk_replace_type_names_with_hashes(tp,
-                                           arena,
-                                           cv_types.count[CV_TypeIndexSource_TPI],
-                                           cv_types.v    [CV_TypeIndexSource_TPI],
-                                           config->pdb_hash_type_names,
-                                           config->pdb_hash_type_name_length,
-                                           config->pdb_hash_type_name_map);
+      String8List pdb_data = {0};
+      {
+        lnk_timer_begin(LNK_Timer_Pdb);
+        if (config->pdb_hash_type_names != LNK_TypeNameHashMode_Null && config->pdb_hash_type_names != LNK_TypeNameHashMode_None) {
+          lnk_replace_type_names_with_hashes(tp,
+                                             arena,
+                                             cv_types.count[CV_TypeIndexSource_TPI],
+                                             cv_types.v    [CV_TypeIndexSource_TPI],
+                                             config->pdb_hash_type_names,
+                                             config->pdb_hash_type_name_length,
+                                             config->pdb_hash_type_name_map);
+        }
+        pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types);
+        if (config->debug_mode == LNK_DebugMode_Full) {
+          lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb_data);
+        }
+        lnk_timer_end(LNK_Timer_Pdb);
       }
 
-      String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types);
-      lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb_data);
-      lnk_timer_end(LNK_Timer_Pdb);
+      if (config->rad_debug == LNK_SwitchState_Yes) {
+        lnk_timer_begin(LNK_Timer_Rdi);
+
+        LNK_P2R p2r = { .config = config, .pdb_data = str8_list_join(lnk_get_huge_arena(), &pdb_data, 0), .image_data = image_ctx.image_data };
+        tp_for_parallel(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r);
+
+        String8List rdi_blobs = rdim_file_blobs_from_section_bundle(scratch.arena, &p2r.bake_results.section_bundle);
+        lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_blobs);
+
+        lnk_timer_end(LNK_Timer_Rdi);
+      }
+
+      temp_end(huge_arena_temp);
     }
 
     //

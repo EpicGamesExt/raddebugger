@@ -309,6 +309,14 @@ typedef struct
   U128    *hashes;
 } LNK_Blake3Hasher;
 
+typedef struct
+{
+  RDIM_BakeResults   bake_results;
+  LNK_Config        *config;
+  String8            pdb_data;
+  String8            image_data;
+} LNK_P2R;
+
 // --- Config -----------------------------------------------------------------
 
 internal LNK_Config * lnk_config_from_argcv(Arena *arena, int argc, char **argv);
