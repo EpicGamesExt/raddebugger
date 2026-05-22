@@ -12635,7 +12635,8 @@ rd_frame(void)
               String8 explanation_string = dr_string_from_fstrs(scratch.arena, &explanation_fstrs);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " stop_event:\n {\n");
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  arch: %S\n", string_from_arch(evt.arch));
-              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  vaddr_range: [0x%I64x, 0x%I64x)\n", evt.vaddr_rng.min, evt.vaddr_rng.max);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  vaddr_range_min: 0x%I64x\n", evt.vaddr_rng.min);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  vaddr_range_max: 0x%I64x\n", evt.vaddr_rng.max);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  ip_vaddr: 0x%I64x\n", evt.rip_vaddr);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  stack_base: 0x%I64x\n", evt.stack_base);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  tls_root: 0x%I64x\n", evt.tls_root);
@@ -12670,7 +12671,8 @@ rd_frame(void)
                 D_Entity *module = modules.v[idx];
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  {\n");
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   name:        \"%S\"\n", escaped_from_raw_str8(scratch.arena, module->string));
-                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   vaddr_range: [0x%I64x, 0x%I64x)\n", module->vaddr_range.min, module->vaddr_range.max);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   vaddr_range_min: 0x%I64x\n",  module->vaddr_range.min);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   vaddr_range_max: 0x%I64x\n",  module->vaddr_range.max);
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  }\n");
               }
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");

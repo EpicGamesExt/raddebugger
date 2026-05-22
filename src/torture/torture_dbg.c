@@ -53,6 +53,7 @@ rd_ipc_parse_u32(MD_Node *node, String8 child_name, U32 *out)
   return 0;
 }
 
+#define rd_ipc_parse_int(n, c, ptr) rd_ipc_parse_int_(n, c, sizeof(*ptr), ptr)
 internal B32
 rd_ipc_parse_int_(MD_Node *node, String8 child_name, U64 out_size, void *out)
 {
@@ -95,7 +96,7 @@ rd_ipc_parse_b32(MD_Node *node, String8 child_name, B32 *out)
 internal U32 g_dbg_pid;
 
 internal B32
-t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *reply_out)
+t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, MD_ParseResult *reply_out)
 {
   Temp scratch = scratch_begin(&reply_arena, 1);
   B32 is_sent = 0;
@@ -122,16 +123,15 @@ t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *rep
   
   if (has_reply) {
     // parse reply
-    Arena       *a          = reply_arena ? reply_arena : scratch.arena;
-    String8      reply_text = str8_copy(a, g_output);
-    RD_IpcReply  reply      = rd_ipc_mdesk_reply_from_string(a, reply_text);
-    
-    //fprintf(stderr, "Reply: %.*s\n", str8_varg(reply_text));
+    Arena   *a          = reply_arena ? reply_arena : scratch.arena;
+    String8  reply_text = str8_copy(a, g_output);
+
+    t_infof("IPC-Reply: \"%S\"\n", reply_text);
+    MD_ParseResult reply = md_parse_from_text(a, str8_lit("ipc_reply"), reply_text);
     
     // validate reply
-    if (reply.parse.msgs.worst_message_kind >= MD_MsgKind_Error) { goto exit; }
-    if (md_node_is_nil(reply.msg))                               { goto exit; }
-    //if ( ! str8_matchi(reply.parse.root->first->string, cmd))    { Assert(0); goto exit; }
+    if (reply.msgs.worst_message_kind >= MD_MsgKind_Error) { goto exit; }
+    if (md_node_is_nil(reply.root))                        { goto exit; }
     
     if (reply_arena && reply_out) { *reply_out = reply; }
   }
@@ -143,7 +143,7 @@ t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, RD_IpcReply *rep
 }
 
 internal B32
-t_dbg_send_cmdf(U64 timeout_us, Arena *reply_arena, RD_IpcReply *reply_out, char *fmt, ...)
+t_dbg_send_cmdf(U64 timeout_us, Arena *reply_arena, MD_ParseResult *reply_out, char *fmt, ...)
 {
   Temp scratch = scratch_begin(&reply_arena, 1);
   va_list args;
@@ -155,92 +155,73 @@ t_dbg_send_cmdf(U64 timeout_us, Arena *reply_arena, RD_IpcReply *reply_out, char
   return is_ok;
 }
 
-internal B32
-t_dbg_status(T_DbgStatus *status_out, U64 timeout_us)
+internal T_DbgState *
+t_dbg_state(Arena *arena, U64 timeout_us)
 {
-  Temp scratch = scratch_begin(0, 0);
-  
-  B32         is_ok  = 0;
-  T_DbgStatus status = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+
+  T_DbgState *result = 0;
   
   // send status request
-  RD_IpcReply reply = {0};
-  if ( ! t_dbg_send_cmd(str8_lit("status"), timeout_us, scratch.arena, &reply)) { goto exit; }
-  
+  MD_ParseResult reply = {0};
+  if ( ! t_dbg_send_cmd(str8_lit("state"), timeout_us, arena ? arena : scratch.arena, &reply)) { goto exit; }
+
   // parse reply
-  if ( ! rd_ipc_parse_b32(reply.msg, str8_lit("ok"),      &is_ok))          { t_errorf("ERROR: failed to parse reply member: ok\n");      Assert(0); goto exit; }
-  if ( ! rd_ipc_parse_b32(reply.msg, str8_lit("running"), &status.running)) { t_errorf("ERROR: failed to parse reply member: running\n"); Assert(0); goto exit; }
-  if ( ! rd_ipc_parse_int(reply.msg, str8_lit("run_gen"), &status.run_gen)) { t_errorf("ERROR: failed to parse reply member: run_gen\n"); Assert(0); goto exit; }
-  if ( ! rd_ipc_parse_int(reply.msg, str8_lit("ip"),      &status.ip))      { t_errorf("ERROR: failed to parse reply member: ip\n");      Assert(0); goto exit; }
-  if (status_out != 0) { *status_out = status; }
+  MD_Node *state_md      = md_child_from_string(reply.root, str8_lit("state"), 0);
+  MD_Node *stop_event_md = md_child_from_string(state_md, str8_lit("stop_event"), 0);
+  MD_Node *threads_md    = md_child_from_string(state_md, str8_lit("threads"),    0);
+  MD_Node *modules_md    = md_child_from_string(state_md, str8_lit("modules"),    0);
+  T_DbgState v = {0};
+  if (!rd_ipc_parse_int(state_md, str8_lit("running"), &v.running)) { Assert(0); goto exit; }
+  if (!rd_ipc_parse_int(state_md, str8_lit("run_gen"), &v.run_gen)) { Assert(0); goto exit; }
+  if (!rd_ipc_parse_int(state_md, str8_lit("ip"), &v.ip))           { Assert(0); goto exit; }
   
+  result = push_array(arena, T_DbgState, 1);
+  *result = v;
   exit:;
-  if ( ! is_ok && reply.parse.root) {
-    t_errorf("\tReply: %S\n", reply.parse.root->raw_string);
-  }
-  scratch_end(scratch);
-  return is_ok;
+  return result;
 }
 
 internal B32
-t_dbg_stop_event(Arena *arena, T_DbgStopEvent *out, U64 timeout_us)
-{
-  Temp scratch = scratch_begin(0, 0);
-  
-  T_DbgStopEvent v = {0};
-  B32 is_ok = 0;
-  
-  // send status request
-  RD_IpcReply reply = {0};
-  if ( ! t_dbg_send_cmd(str8_lit("stop_event"), timeout_us, arena ? arena : scratch.arena, &reply)) { goto exit; }
-  
-  // parse reply
-  if ( ! rd_ipc_parse_b32    (reply.msg, str8_lit("ok"),             &is_ok))            { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("arch"),           &v.arch))           { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("vaddr_min"),      &v.vaddr_min))      { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("vaddr_max"),      &v.vaddr_max))      { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("ip_vaddr"),       &v.ip_vaddr))       { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("sp_base"),        &v.sp_base))        { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("tls_root"),       &v.tls_root))       { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("tls_index"),      &v.tls_index))      { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("tls_offset"),     &v.tls_offset))     { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("timestamp"),      &v.timestamp))      { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("exception_code"), &v.exception_code)) { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("bp_flags"),       &v.bp_flags))       { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_string (reply.msg, str8_lit("string"),         &v.string))         { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("target_os"),      &v.target_os))      { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int    (reply.msg, str8_lit("tls_model"),      &v.tls_model))      { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_string (reply.msg, str8_lit("stop_cause"),     &v.stop_cause))     { AssertAlways(0); goto exit; }
-  
-  if (arena && out != 0) { *out = v; }
-  
-  exit:;
-  return is_ok;
-}
-
-internal B32
-t_dbg_src_line(Arena *arena, U64 vaddr, T_DbgSourceLocation *loc_out, U64 timeout_us)
+t_dbg_src_line(Arena *arena, U64 vaddr, T_DbgLineArray *lines_out, U64 timeout_us)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
   B32 is_ok = 0;
   
-  RD_IpcReply reply = {0};
-  if(!t_dbg_send_cmdf(timeout_us, arena, &reply, "source_location_from_address 0x%llx", vaddr)) { goto exit; }
+  // send line map request
+  MD_ParseResult reply = {0};
+  if(!t_dbg_send_cmdf(timeout_us, arena, &reply, "line_from_vaddr 0x%llx", vaddr)) { goto exit; }
+
+  // parse reply
+  MD_Node *lines_md = md_child_from_string(reply.root, str8_lit("lines"), 0);
+
+  typedef struct Node { struct Node *next; T_DbgLine v; } Node;
+  Node *first_line = 0, *last_line = 0;
+  U64 line_count = 0;
+  for MD_EachNode(n, lines_md->first) {
+    T_DbgLine line = {0};
+    if ( ! rd_ipc_parse_string(lines_md, str8_lit("file_path"), &line.file_path))        { Assert(0); goto exit; }
+    if ( ! rd_ipc_parse_int(lines_md, str8_lit("line_num"), &line.line_num))             { Assert(0); goto exit; }
+    if ( ! rd_ipc_parse_int(lines_md, str8_lit("column_num"), &line.column_num))         { Assert(0); goto exit; }
+    if ( ! rd_ipc_parse_int(lines_md, str8_lit("voff_range_min"), &line.voff_range.min)) { Assert(0); goto exit; }
+    if ( ! rd_ipc_parse_int(lines_md, str8_lit("voff_range_max"), &line.voff_range.max)) { Assert(0); goto exit; }
+
+    Node *n = push_array(scratch.arena, Node, 1);
+    n->v = line;
+    SLLQueuePush(first_line, last_line, n);
+    line_count += 1;
+  }
+
+  if (lines_out && line_count > 0) {
+    lines_out->count = 0;
+    lines_out->v     = push_array(arena, T_DbgLine, line_count);
+    for EachNode(n, Node, first_line) {
+      lines_out->v[lines_out->count++] = n->v;
+    }
+  }
   
-  T_DbgSourceLocation loc = {0};
-  
-  if ( ! rd_ipc_parse_b32   (reply.msg, str8_lit("ok"),        &is_ok))             { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int   (reply.msg, str8_lit("vaddr"),     &loc.vaddr))         { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int   (reply.msg, str8_lit("voff"),      &loc.voff))          { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("file_path"), &loc.file_path))     { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int   (reply.msg, str8_lit("line"),      &loc.pt.line))       { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int   (reply.msg, str8_lit("column"),    &loc.pt.column))     { AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int   (reply.msg, str8_lit("voff_min"),  &loc.voff_range.min)){ AssertAlways(0); goto exit; }
-  if ( ! rd_ipc_parse_int   (reply.msg, str8_lit("voff_max"),  &loc.voff_range.max)){ AssertAlways(0); goto exit; }
-  
-  if (loc_out != 0) { *loc_out = loc; }
-  
+  is_ok = 1;
   exit:;
   scratch_end(scratch);
   return is_ok;
@@ -274,8 +255,8 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   B32 is_stopped = 0;
   
   // snapshot status
-  T_DbgStatus status_before = {0};
-  if (t_dbg_status(&status_before, max_U64) == 0) { Assert(0 && "failed to snapshot status"); goto exit; }
+  T_DbgState *status_before = t_dbg_state(scratch.arena, max_U64);
+  if (status_before == 0) { Assert(0 && "failed to snapshot status"); goto exit; }
   
   // send command
   if (t_dbg_send_cmd(cmd, max_U64, 0, 0) == 0) { Assert(0 && "failed to the command"); goto exit; }
@@ -284,11 +265,11 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   U64 t = ENDT_US(timeout_us);
   for (;;) {
     // query debugger status
-    T_DbgStatus status = {0};
-    if (t_dbg_status(&status, t) == 0) { Assert(0 && "failed to acquire debugger status"); goto exit; }
+    T_DbgState *status = t_dbg_state(scratch.arena, t);
+    if (status == 0) { Assert(0 && "failed to acquire debugger status"); goto exit; }
     
     // did state change? -> break
-    if (!status.running && status.run_gen != status_before.run_gen) {
+    if (!status->running && status->run_gen != status_before->run_gen) {
       is_stopped = 1;
       break;
     }
@@ -300,8 +281,7 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   
   //--- Status ---------------------
   if (0 && is_stopped) {
-    T_DbgStatus status = {0};
-    AssertAlways(t_dbg_status(&status, T_Dbg_DefaultTimeout));
+    T_DbgState *state = t_dbg_state(scratch.arena, T_Dbg_DefaultTimeout);
     
     String8 process_id     = str8_skip(str8_chop(t_dbg_value_from_exprf(scratch.arena, "query:current_process.id"), 2), 2);
     String8 process_label  = str8_chop(str8_skip(t_dbg_value_from_exprf(scratch.arena, "query:current_process.label"), 2), 2);
@@ -312,22 +292,26 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
     String8 ip             = t_dbg_value_from_exprf(scratch.arena, "hex(reg:rip)");
     String8 sp             = t_dbg_value_from_exprf(scratch.arena, "hex(reg:rsp)");
     
-    T_DbgStopEvent last_stop = {0};
-    AssertAlways(t_dbg_stop_event(scratch.arena, &last_stop, T_Dbg_DefaultTimeout));
+    T_DbgState *last_stop = t_dbg_state(scratch.arena, T_Dbg_DefaultTimeout);
+    AssertAlways(last_stop);
     
-    T_DbgSourceLocation loc = {0};
-    AssertAlways(t_dbg_src_line(scratch.arena, last_stop.ip_vaddr, &loc, T_Dbg_DefaultTimeout));
+    T_DbgLineArray lines = {0};
+    AssertAlways(t_dbg_src_line(scratch.arena, last_stop->ip_vaddr, &lines, T_Dbg_DefaultTimeout));
     
-    printf("------------------------------------------------------------------------------------------------------------------------\n");
-    printf("  Process:    %.*s [%.*s] (Active: %.*s)\n", str8_varg(process_id), str8_varg(process_label), str8_varg(process_active));
-    printf("  Thread:     %.*s [%.*s] (Active: %.*s)\n", str8_varg(thread_id), str8_varg(thread_label), str8_varg(thread_active));
-    printf("  IP:         %.*s\n", str8_varg(ip));
-    printf("  SP:         %.*s\n", str8_varg(sp));
-    printf("  File Path:  %.*s\n", str8_varg(loc.file_path));
-    printf("  Line:       %lld\n", (long long)loc.pt.line);
-    printf("  Column:     %lld\n", (long long)loc.pt.column);
-    printf("  Run Gen:    %llu\n", (unsigned long long)status.run_gen);
-    printf("  Stop Cause: \"%.*s\"\n", str8_varg(last_stop.stop_cause));
+    t_infof("------------------------------------------------------------------------------------------------------------------------\n");
+    t_infof("  Process:    %.*s [%.*s] (Active: %.*s)\n", str8_varg(process_id), str8_varg(process_label), str8_varg(process_active));
+    t_infof("  Thread:     %.*s [%.*s] (Active: %.*s)\n", str8_varg(thread_id), str8_varg(thread_label), str8_varg(thread_active));
+    t_infof("  IP:         %.*s\n", str8_varg(ip));
+    t_infof("  SP:         %.*s\n", str8_varg(sp));
+    t_infof("  Run Gen:    %llu\n", (unsigned long long)state->run_gen);
+    t_infof("  Stop Cause: \"%.*s\"\n", str8_varg(last_stop->stop_cause));
+    for EachIndex(i, lines.count) {
+      t_infof("  {\n");
+      t_infof("    File Path:  %.*s\n", str8_varg(lines.v[i].file_path));
+      t_infof("    Line:       %lld\n", (long long)lines.v[i].line_num);
+      t_infof("    Column:     %lld\n", (long long)lines.v[i].column_num);
+      t_infof("  }\n");
+    }
     fflush(stdout);
   }
   //--------------------------------
@@ -337,7 +321,15 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   return is_stopped;
 }
 
-internal B32 t_dbg_ping       (U64 timeout_us)         { return t_dbg_status(0, timeout_us); }
+internal B32
+t_dbg_ping(U64 timeout_us) 
+{
+  Temp scratch = scratch_begin(0,0);
+  T_DbgState *state = t_dbg_state(scratch.arena, timeout_us);
+  B32 did_reply = state != 0;
+  scratch_end(scratch);
+  return did_reply;
+}
 internal B32 t_dbg_bp_add_line(String8 file, U64 line) { return t_dbg_send_cmdf(0,0,0, "add_breakpoint \"%S\":%llu", file, line); }
 internal B32 t_dbg_bp_add_func(String8 func_name)      { return t_dbg_send_cmdf(0,0,0, "add_function_breakpoint %S", func_name);  }
 internal B32 t_dbg_bp_add_addr(U64 addr)               { return t_dbg_send_cmdf(0,0,0, "add_address_breakpoint 0x%llx", addr);    }
@@ -396,15 +388,15 @@ t_dbg_eval(Arena *arena, String8 expr, T_Eval *eval_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
-  RD_IpcReply reply = {0};
-  String8     cmd   = str8f(scratch.arena, "eval %llu %S", /* value char cap: */ 10000, expr);
-  B32         is_ok = t_dbg_send_cmd(cmd, T_Dbg_DefaultTimeout, arena, &reply);
+  MD_ParseResult reply = {0};
+  String8        cmd   = str8f(scratch.arena, "eval %llu %S", /* value char cap: */ 10000, expr);
+  B32            is_ok = t_dbg_send_cmd(cmd, T_Dbg_DefaultTimeout, arena, &reply);
   
   T_Eval e = {0};
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("expr"),  &e.expr))  { t_errorf("ERROR: failed to parse reply member: expr\n");  Assert(0); goto exit; }
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("value"), &e.value)) { t_errorf("ERROR: failed to parse reply member: value\n"); Assert(0); goto exit; }
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("type"),  &e.type))  { t_errorf("ERROR: failed to parse reply member: type\n");  Assert(0); goto exit; }
-  if ( ! rd_ipc_parse_string(reply.msg, str8_lit("error"), &e.error)) { t_errorf("ERROR: failed to parse reply member: error\n"); Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_string(reply.root, str8_lit("expr"),  &e.expr))  { t_errorf("ERROR: failed to parse reply member: expr\n");  Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_string(reply.root, str8_lit("value"), &e.value)) { t_errorf("ERROR: failed to parse reply member: value\n"); Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_string(reply.root, str8_lit("type"),  &e.type))  { t_errorf("ERROR: failed to parse reply member: type\n");  Assert(0); goto exit; }
+  if ( ! rd_ipc_parse_string(reply.root, str8_lit("error"), &e.error)) { t_errorf("ERROR: failed to parse reply member: error\n"); Assert(0); goto exit; }
   if (eval_out) { *eval_out = e; }
   
   exit:;
@@ -700,17 +692,17 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
               goto exit;
             }
 #else
-            T_DbgStatus temp_status = {0};
-            if ( ! t_dbg_status(&temp_status, T_Dbg_DefaultTimeout)) {
+            T_DbgState *temp_status = t_dbg_state(scratch.arena, T_Dbg_DefaultTimeout);
+            if (temp_status == 0) {
               t_errorf("ERROR: %S:%llu: failed to query IP\n", script->file_path, (unsigned long long)cmd->line);
               goto exit;
             }
-            U64 ip = temp_status.ip;
+            U64 ip = temp_status->ip;
 #endif
             
             // map IP -> source location
-            T_DbgSourceLocation loc = {0};
-            if (t_dbg_src_line(scratch.arena, ip, &loc, T_Dbg_DefaultTimeout) == 0) {
+            T_DbgLineArray lines = {0};
+            if (t_dbg_src_line(scratch.arena, ip, &lines, T_Dbg_DefaultTimeout) == 0) {
               t_errorf("ERROR: %S:%llu: IP (0x%llx) does not map to a source line\n", script->file_path, (unsigned long long)cmd->line, (unsigned long long)ip);
               goto exit;
             }
@@ -721,14 +713,17 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
             AssertAlways(at_line_u64 > 0);
             
             // match expected vs current debugger locations
-            B32 mismatch = loc.pt.line != at_line_u64 || 
-              !str8_match(loc.file_path, program->file->path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
-            if (mismatch) {
-              t_errorf("ERROR: %S:%llu: location check did not pass:\n", script->file_path, (unsigned long long)cmd->line);
-              t_errorf("  Expected: %S:%llu\n", program->file->path, (unsigned long long)at_line_u64);
-              t_errorf("  Got     : %S:%llu\n", loc.file_path, (unsigned long long)loc.pt.line);
-              t_errorf("  IP      : 0x%llx\n",  (unsigned long long)ip);
-              goto exit;
+
+            for EachIndex(i, lines.count) {
+              B32 mismatch = lines.v[i].line_num != at_line_u64 || 
+                             !str8_match(lines.v[i].file_path, program->file->path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
+              if (mismatch) {
+                t_errorf("ERROR: %S:%llu: location check did not pass:\n", script->file_path, (unsigned long long)cmd->line);
+                t_errorf("  Expected: %S:%llu\n", program->file->path, (unsigned long long)at_line_u64);
+                t_errorf("  Got     : %S:%llu\n", lines.v[i].file_path, (unsigned long long)lines.v[i].line_num);
+                t_errorf("  IP      : 0x%llx\n",  (unsigned long long)ip);
+                goto exit;
+              }
             }
           } break;
           case T_DbgScriptCmdKind_Eval: NotImplemented; break;

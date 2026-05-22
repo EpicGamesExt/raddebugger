@@ -116,22 +116,9 @@ typedef struct
 
 typedef struct
 {
-  B32 running;
-  U64 run_gen;
-  U64 ip;
-} T_DbgStatus;
-
-typedef struct
-{
-  U64     vaddr;
-  U64     voff;
-  String8 file_path;
-  TxtPt   pt;
-  Rng1U64 voff_range;
-} T_DbgSourceLocation;
-
-typedef struct
-{
+  B32             running;
+  U64             run_gen;
+  U64             ip;
   Arch            arch;
   U64             vaddr_min;
   U64             vaddr_max;
@@ -147,7 +134,21 @@ typedef struct
   OperatingSystem target_os;
   U64             tls_model;
   String8         stop_cause;
-} T_DbgStopEvent;
+} T_DbgState;
+
+typedef struct
+{
+  String8 file_path;
+  U64     line_num;
+  U64     column_num;
+  Rng1U64 voff_range;
+} T_DbgLine;
+
+typedef struct
+{
+  U64        count;
+  T_DbgLine *v;
+} T_DbgLineArray;
 
 typedef struct
 {
@@ -180,5 +181,5 @@ internal B32 t_dbg_step_into_line(U64 timeout_us);
 internal B32 t_dbg_launch(String8 cmdline, U64 timeout_us);
 internal B32 t_dbg_eval(Arena *arena, String8 expr, T_Eval *eval_out);
 // TODO: need a source location query in eval
-internal B32 t_dbg_src_line(Arena *arena, U64 vaddr, T_DbgSourceLocation *loc_out, U64 timeout_us);
+internal B32 t_dbg_src_line(Arena *arena, U64 vaddr, T_DbgLineArray *lines, U64 timeout_us);
 
