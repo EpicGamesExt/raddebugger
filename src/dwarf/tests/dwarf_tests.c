@@ -43,23 +43,23 @@ t_dw_test_sleb128(U64 v, U64 expected_length)
   return is_ok;
 }
 
-TEST(test_leb128)
+Test(test_leb128)
 {
-  T_Ok(t_dw_test_uleb128(0, 1));
-  T_Ok(t_dw_test_sleb128(0, 1));
-  T_Ok(t_dw_test_sleb128(-1, 1));
+  TestCheck(t_dw_test_uleb128(0, 1));
+  TestCheck(t_dw_test_sleb128(0, 1));
+  TestCheck(t_dw_test_sleb128(-1, 1));
   
-  T_Ok(t_dw_test_uleb128(max_U64, 10));
-  T_Ok(t_dw_test_sleb128(min_S64, 10));
-  T_Ok(t_dw_test_sleb128(max_S64, 10));
+  TestCheck(t_dw_test_uleb128(max_U64, 10));
+  TestCheck(t_dw_test_sleb128(min_S64, 10));
+  TestCheck(t_dw_test_sleb128(max_S64, 10));
   
-  T_Ok(t_dw_test_uleb128(0xDEADBEEFCAFEBABE, 10));
+  TestCheck(t_dw_test_uleb128(0xDEADBEEFCAFEBABE, 10));
   
   for EachIndex(i, 64) {
-    T_Ok(t_dw_test_uleb128((1ull << i), 1 + (i / 7)));
+    TestCheck(t_dw_test_uleb128((1ull << i), 1 + (i / 7)));
   }
   for EachIndex(i, 64) {
-    T_Ok(t_dw_test_sleb128((1ull << i), 1 + (i + 1) / 7));
+    TestCheck(t_dw_test_sleb128((1ull << i), 1 + (i + 1) / 7));
   }
 }
 
@@ -132,7 +132,7 @@ dw_input_from_writer(Arena *arena, DW_Writer *writer)
   return input;
 }
 
-TEST(dwarf_32bit)
+Test(dwarf_32bit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
@@ -148,19 +148,19 @@ TEST(dwarf_32bit)
       Rng1U64 range = unit_ranges.v[range_idx];
       
       U32 first_four_bytes = 0;
-      T_Ok(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &first_four_bytes) == sizeof(first_four_bytes));
-      T_Ok(first_four_bytes + 4 == dim_1u64(range));
+      TestCheck(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &first_four_bytes) == sizeof(first_four_bytes));
+      TestCheck(first_four_bytes + 4 == dim_1u64(range));
       
       U32 unit_length = 0;
-      T_Ok(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &unit_length) == sizeof(U32));
-      T_Ok(unit_length + 4 == dim_1u64(range));
+      TestCheck(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &unit_length) == sizeof(U32));
+      TestCheck(unit_length + 4 == dim_1u64(range));
     }
   }
   
   dw_writer_end(&writer);
 }
 
-TEST(dwarf_64bit)
+Test(dwarf_64bit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_64Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   dw_writer_tag_begin(writer, DW_TagKind_CompileUnit);
@@ -176,19 +176,19 @@ TEST(dwarf_64bit)
       Rng1U64 range = unit_ranges.v[range_idx];
       
       U32 first_four_bytes = 0;
-      T_Ok(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &first_four_bytes) == sizeof(first_four_bytes));
-      T_Ok(first_four_bytes == max_U32);
+      TestCheck(str8_deserial_read_struct(input.sec[sec_idx].data, range.min, &first_four_bytes) == sizeof(first_four_bytes));
+      TestCheck(first_four_bytes == max_U32);
       
       U64 unit_length = 0;
-      T_Ok(str8_deserial_read_struct(input.sec[sec_idx].data, range.min + sizeof(U32), &unit_length) == sizeof(U64));
-      T_Ok(unit_length + 12 == dim_1u64(range));
+      TestCheck(str8_deserial_read_struct(input.sec[sec_idx].data, range.min + sizeof(U32), &unit_length) == sizeof(U64));
+      TestCheck(unit_length + 12 == dim_1u64(range));
     }
   }
   
   dw_writer_end(&writer);
 }
 
-TEST(dwarf_line_opcodes)
+Test(dwarf_line_opcodes)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/devel/");
@@ -238,126 +238,126 @@ TEST(dwarf_line_opcodes)
   DW_CompUnit   cu        = dw_cu_from_info_off(arena, &input, (DW_ListUnitInput){0}, cu_ranges.v[0].min, 0);
   DW_LineVM    *line_vm   = dw_line_vm_init(&input, &cu);
   
-  T_Ok(line_vm->header.dir_table.count == 2);
-  T_Ok(line_vm->header.file_table.count == 2);
+  TestCheck(line_vm->header.dir_table.count == 2);
+  TestCheck(line_vm->header.file_table.count == 2);
   
-  T_Ok(str8_match(line_vm->header.dir_table.v[0], str8_lit("c:/devel"), 0));
-  T_Ok(str8_match(line_vm->header.dir_table.v[1], str8_lit("d:/foobar"), 0));
+  TestCheck(str8_match(line_vm->header.dir_table.v[0], str8_lit("c:/devel"), 0));
+  TestCheck(str8_match(line_vm->header.dir_table.v[1], str8_lit("d:/foobar"), 0));
   
   DW_LineFile *file_reader = &line_vm->header.file_table.v[0];
-  T_Ok(str8_match(file_reader->path, comp_name, 0));
-  T_Ok(file_reader->dir_idx == 0);
-  T_Ok(file_reader->time_stamp == file->time_stamp);
-  T_Ok(u128_match(file_reader->md5, file->md5));
-  T_Ok(str8_match(file_reader->source, file->source, 0));
+  TestCheck(str8_match(file_reader->path, comp_name, 0));
+  TestCheck(file_reader->dir_idx == 0);
+  TestCheck(file_reader->time_stamp == file->time_stamp);
+  TestCheck(u128_match(file_reader->md5, file->md5));
+  TestCheck(str8_match(file_reader->source, file->source, 0));
   
   DW_LineFile *file2_reader = &line_vm->header.file_table.v[1];
-  T_Ok(str8_match(file2_reader->path, str8_lit("qwe.c"), 0));
-  T_Ok(file2_reader->dir_idx == 1);
-  T_Ok(file2_reader->time_stamp == file2->time_stamp);
-  T_Ok(u128_match(file2_reader->md5, file2->md5));
-  T_Ok(str8_match(file2_reader->source, file2->source, 0));
+  TestCheck(str8_match(file2_reader->path, str8_lit("qwe.c"), 0));
+  TestCheck(file2_reader->dir_idx == 1);
+  TestCheck(file2_reader->time_stamp == file2->time_stamp);
+  TestCheck(u128_match(file2_reader->md5, file2->md5));
+  TestCheck(str8_match(file2_reader->source, file2->source, 0));
   
-  T_Ok(line_vm->new_line == 0);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_Copy);
-  T_Ok(line_vm->new_line == 1);
-  T_Ok(line_vm->state.discriminator == 0);
-  T_Ok(line_vm->state.basic_block == 0);
-  T_Ok(line_vm->state.prologue_end == 0);
-  T_Ok(line_vm->state.epilogue_begin == 0);
+  TestCheck(line_vm->new_line == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_Copy);
+  TestCheck(line_vm->new_line == 1);
+  TestCheck(line_vm->state.discriminator == 0);
+  TestCheck(line_vm->state.basic_block == 0);
+  TestCheck(line_vm->state.prologue_end == 0);
+  TestCheck(line_vm->state.epilogue_begin == 0);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
-  T_Ok(line_vm->state.address == 7);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_AdvancePc);
+  TestCheck(line_vm->state.address == 7);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
-  T_Ok(line_vm->state.address == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_AdvancePc);
+  TestCheck(line_vm->state.address == 0);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-  T_Ok(line_vm->state.line == 5);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+  TestCheck(line_vm->state.line == 5);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-  T_Ok(line_vm->state.line == 1);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+  TestCheck(line_vm->state.line == 1);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_SetFile);
-  T_Ok(line_vm->state.file_index == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_SetFile);
+  TestCheck(line_vm->state.file_index == 0);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_SetColumn);
-  T_Ok(line_vm->state.column == max_U64);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_SetColumn);
+  TestCheck(line_vm->state.column == max_U64);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_SetColumn);
-  T_Ok(line_vm->state.column == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_SetColumn);
+  TestCheck(line_vm->state.column == 0);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_NegateStmt);
-  T_Ok(line_vm->state.is_stmt == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_NegateStmt);
+  TestCheck(line_vm->state.is_stmt == 0);
   
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_NegateStmt);
-  T_Ok(line_vm->state.is_stmt == 1);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_NegateStmt);
+  TestCheck(line_vm->state.is_stmt == 1);
   
-  T_Ok(line_vm->state.basic_block == 0);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_SetBasicBlock);
-  T_Ok(line_vm->state.basic_block == 1);
+  TestCheck(line_vm->state.basic_block == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_SetBasicBlock);
+  TestCheck(line_vm->state.basic_block == 1);
   
   {
     U64 addr_before = line_vm->state.address;
     U64 const_advance = (0xffu - line_vm->header.opcode_base) / line_vm->header.line_range;
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(!line_vm->new_line);
-    T_Ok(line_vm->state.address == addr_before + const_advance);
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(!line_vm->new_line);
+    TestCheck(line_vm->state.address == addr_before + const_advance);
   }
   
-  T_Ok(line_vm->state.address == 0x11);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_FixedAdvancePc);
-  T_Ok(line_vm->state.address == max_U16 + 0x11);
+  TestCheck(line_vm->state.address == 0x11);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_FixedAdvancePc);
+  TestCheck(line_vm->state.address == max_U16 + 0x11);
   
-  T_Ok(line_vm->state.prologue_end == 0);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_SetPrologueEnd);
-  T_Ok(line_vm->state.prologue_end == 1);
+  TestCheck(line_vm->state.prologue_end == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_SetPrologueEnd);
+  TestCheck(line_vm->state.prologue_end == 1);
   
-  T_Ok(line_vm->state.epilogue_begin == 0);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_SetEpilogueBegin);
-  T_Ok(line_vm->state.epilogue_begin == 1);
+  TestCheck(line_vm->state.epilogue_begin == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_SetEpilogueBegin);
+  TestCheck(line_vm->state.epilogue_begin == 1);
   
-  T_Ok(line_vm->state.isa == 0);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_SetIsa);
-  T_Ok(line_vm->state.isa == max_U64);
+  TestCheck(line_vm->state.isa == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_SetIsa);
+  TestCheck(line_vm->state.isa == max_U64);
   
-  T_Ok(line_vm->state.address != address);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
-  T_Ok(line_vm->ext_opcode == DW_ExtOpcode_SetAddress);
-  T_Ok(line_vm->state.address == address);
+  TestCheck(line_vm->state.address != address);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+  TestCheck(line_vm->ext_opcode == DW_ExtOpcode_SetAddress);
+  TestCheck(line_vm->state.address == address);
   
-  T_Ok(line_vm->state.discriminator == 0);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
-  T_Ok(line_vm->ext_opcode == DW_ExtOpcode_SetDiscriminator);
-  T_Ok(line_vm->state.discriminator == 2);
+  TestCheck(line_vm->state.discriminator == 0);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+  TestCheck(line_vm->ext_opcode == DW_ExtOpcode_SetDiscriminator);
+  TestCheck(line_vm->state.discriminator == 2);
   
-  T_Ok(!line_vm->state.end_sequence);
-  T_Ok(dw_line_vm_step(line_vm));
-  T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
-  T_Ok(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
-  T_Ok(line_vm->state.end_sequence);
+  TestCheck(!line_vm->state.end_sequence);
+  TestCheck(dw_line_vm_step(line_vm));
+  TestCheck(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+  TestCheck(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
+  TestCheck(line_vm->state.end_sequence);
   
   dw_writer_end(&writer);
 }
 
-TEST(dwarf_line_emit)
+Test(dwarf_line_emit)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/devel/");
@@ -416,25 +416,25 @@ TEST(dwarf_line_emit)
   
   // check init sequence
   {
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(line_vm->opcode == DW_StdOpcode_SetFile);
-    T_Ok(line_vm->state.file_index == 0);
-    T_Ok(line_vm->new_line == 0);
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(line_vm->opcode == DW_StdOpcode_SetFile);
+    TestCheck(line_vm->state.file_index == 0);
+    TestCheck(line_vm->new_line == 0);
     
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
-    T_Ok(line_vm->state.address == 1000);
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(line_vm->opcode == DW_StdOpcode_AdvancePc);
+    TestCheck(line_vm->state.address == 1000);
     
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-    T_Ok(line_vm->state.line == 10000);
-    T_Ok(line_vm->new_line == 0);
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+    TestCheck(line_vm->state.line == 10000);
+    TestCheck(line_vm->new_line == 0);
     
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(line_vm->opcode == DW_StdOpcode_Copy);
-    T_Ok(line_vm->state.line == 10000);
-    T_Ok(line_vm->state.address == 1000);
-    T_Ok(line_vm->new_line == 1);
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(line_vm->opcode == DW_StdOpcode_Copy);
+    TestCheck(line_vm->state.line == 10000);
+    TestCheck(line_vm->state.address == 1000);
+    TestCheck(line_vm->new_line == 1);
   }
   
   {
@@ -442,122 +442,122 @@ TEST(dwarf_line_emit)
     for EachIndex(i, abs_s64(writer->line.line_base) + 1) {
       pc += 1;
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == 0x20 - i);
-      T_Ok(line_vm->state.line == 10000 - i);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(line_vm->new_line == 1);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == 0x20 - i);
+      TestCheck(line_vm->state.line == 10000 - i);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(line_vm->new_line == 1);
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-      T_Ok(line_vm->state.line == 10000);
-      T_Ok(line_vm->state.address == pc);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      TestCheck(line_vm->state.line == 10000);
+      TestCheck(line_vm->state.address == pc);
     }
     
     // line window underflow check
     {
       pc += 1;
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
-      T_Ok(line_vm->state.line == 10000);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(!line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_AdvancePc);
+      TestCheck(line_vm->state.line == 10000);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(!line_vm->new_line);
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-      T_Ok(line_vm->state.line == 9994);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(!line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      TestCheck(line_vm->state.line == 9994);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(!line_vm->new_line);
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_Copy);
-      T_Ok(line_vm->state.line == 9994);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_Copy);
+      TestCheck(line_vm->state.line == 9994);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(line_vm->new_line);
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-      T_Ok(line_vm->state.line == 10000);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(!line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      TestCheck(line_vm->state.line == 10000);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(!line_vm->new_line);
     }
     
     for EachIndex(i, writer->line.line_range + writer->line.line_base) {
       pc += 1;
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == 0x20 + i);
-      T_Ok(line_vm->state.line == 10000 + i);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == 0x20 + i);
+      TestCheck(line_vm->state.line == 10000 + i);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(line_vm->new_line);
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-      T_Ok(line_vm->state.line == 10000);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(!line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      TestCheck(line_vm->state.line == 10000);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(!line_vm->new_line);
     }
     
     // line window overflow check
     {
       pc += 1;
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_AdvancePc);
-      T_Ok(line_vm->state.line == 10000);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(!line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_AdvancePc);
+      TestCheck(line_vm->state.line == 10000);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(!line_vm->new_line);
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-      T_Ok(line_vm->state.line == 10009);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(!line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      TestCheck(line_vm->state.line == 10009);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(!line_vm->new_line);
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_Copy);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(line_vm->state.line == 10009);
-      T_Ok(line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_Copy);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(line_vm->state.line == 10009);
+      TestCheck(line_vm->new_line);
       
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->opcode == DW_StdOpcode_AdvanceLine);
-      T_Ok(line_vm->state.line == 10000);
-      T_Ok(line_vm->state.address == pc);
-      T_Ok(!line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->opcode == DW_StdOpcode_AdvanceLine);
+      TestCheck(line_vm->state.line == 10000);
+      TestCheck(line_vm->state.address == pc);
+      TestCheck(!line_vm->new_line);
     }
     
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
-    T_Ok(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
-    T_Ok(line_vm->state.line == 10000);
-    T_Ok(line_vm->state.address == pc);
-    T_Ok(line_vm->new_line);
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+    TestCheck(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
+    TestCheck(line_vm->state.line == 10000);
+    TestCheck(line_vm->state.address == pc);
+    TestCheck(line_vm->new_line);
   }
   
   {
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(dw_line_vm_step(line_vm));
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(dw_line_vm_step(line_vm));
     
     for EachIndex(i, line_addr_count/*first line is a noop*/-1) {
-      T_Ok(dw_line_vm_step(line_vm));
-      T_Ok(line_vm->header.opcode_base < line_vm->opcode);
-      T_Ok(line_vm->new_line);
+      TestCheck(dw_line_vm_step(line_vm));
+      TestCheck(line_vm->header.opcode_base < line_vm->opcode);
+      TestCheck(line_vm->new_line);
     }
     
-    T_Ok(dw_line_vm_step(line_vm));
-    T_Ok(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
-    T_Ok(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
-    T_Ok(line_vm->state.line == 1586);
-    T_Ok(line_vm->state.address == 1161);
-    T_Ok(line_vm->new_line);
+    TestCheck(dw_line_vm_step(line_vm));
+    TestCheck(line_vm->opcode == DW_StdOpcode_ExtendedOpcode);
+    TestCheck(line_vm->ext_opcode == DW_ExtOpcode_EndSequence);
+    TestCheck(line_vm->state.line == 1586);
+    TestCheck(line_vm->state.address == 1161);
+    TestCheck(line_vm->new_line);
   }
 }
 
-TEST(dwarf_writer)
+Test(dwarf_writer)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   // info
@@ -627,237 +627,237 @@ TEST(dwarf_writer)
   
   // validate the writer
   
-  T_Ok(writer->current == 0);
-  T_Ok(writer->format == DW_Format_32Bit);
-  T_Ok(writer->cu_kind == DW_CompUnitKind_Compile);
-  T_Ok(writer->version == DW_Version_5);
-  T_Ok(writer->address_size == 8);
-  T_Ok(writer->abbrev_base_info_off == 8);
-  T_Ok(writer->fixups.count == 0);
-  T_Ok(writer->abbrev_id_map->count == 7);
+  TestCheck(writer->current == 0);
+  TestCheck(writer->format == DW_Format_32Bit);
+  TestCheck(writer->cu_kind == DW_CompUnitKind_Compile);
+  TestCheck(writer->version == DW_Version_5);
+  TestCheck(writer->address_size == 8);
+  TestCheck(writer->abbrev_base_info_off == 8);
+  TestCheck(writer->fixups.count == 0);
+  TestCheck(writer->abbrev_id_map->count == 7);
   
   DW_WriterTag *comp_unit_tag  = writer->root;
   {
-    T_Ok(comp_unit_tag->kind == DW_TagKind_CompileUnit);
-    T_Ok(comp_unit_tag->next == 0);
-    T_Ok(comp_unit_tag->parent == 0);
-    T_Ok(comp_unit_tag->attrib_count == 5);
-    T_Ok(comp_unit_tag->abbrev_id == 1);
-    T_Ok(comp_unit_tag->info_off == 0xc);
+    TestCheck(comp_unit_tag->kind == DW_TagKind_CompileUnit);
+    TestCheck(comp_unit_tag->next == 0);
+    TestCheck(comp_unit_tag->parent == 0);
+    TestCheck(comp_unit_tag->attrib_count == 5);
+    TestCheck(comp_unit_tag->abbrev_id == 1);
+    TestCheck(comp_unit_tag->info_off == 0xc);
     
     DW_WriterAttrib *producer_attrib = comp_unit_tag->first_attrib;
-    T_Ok(producer_attrib->kind == DW_AttribKind_Producer);
-    T_Ok(producer_attrib->form.reader.kind == DW_Form_String);
-    T_Ok(str8_match(producer_attrib->form.writer.string, str8_lit("RAD DWARF WRITER"), 0));
+    TestCheck(producer_attrib->kind == DW_AttribKind_Producer);
+    TestCheck(producer_attrib->form.reader.kind == DW_Form_String);
+    TestCheck(str8_match(producer_attrib->form.writer.string, str8_lit("RAD DWARF WRITER"), 0));
     
     DW_WriterAttrib *language_attrib = producer_attrib->next;
-    T_Ok(language_attrib->kind == DW_AttribKind_Language);
-    T_Ok(language_attrib->form.reader.kind == DW_Form_Data1);
-    T_Ok(language_attrib->form.reader.data.size == 1);
-    T_Ok(*(U8 *)language_attrib->form.reader.data.str == DW_Language_C99);
+    TestCheck(language_attrib->kind == DW_AttribKind_Language);
+    TestCheck(language_attrib->form.reader.kind == DW_Form_Data1);
+    TestCheck(language_attrib->form.reader.data.size == 1);
+    TestCheck(*(U8 *)language_attrib->form.reader.data.str == DW_Language_C99);
     
     DW_WriterAttrib *use_utf8_attrib = language_attrib->next;
-    T_Ok(use_utf8_attrib->kind == DW_AttribKind_UseUtf8);
-    T_Ok(use_utf8_attrib->form.reader.kind == DW_Form_Flag);
-    T_Ok(use_utf8_attrib->form.reader.flag == 1);
+    TestCheck(use_utf8_attrib->kind == DW_AttribKind_UseUtf8);
+    TestCheck(use_utf8_attrib->form.reader.kind == DW_Form_Flag);
+    TestCheck(use_utf8_attrib->form.reader.flag == 1);
   }
   
   DW_WriterTag *char_type_tag = comp_unit_tag->first_child;
   {
-    T_Ok(char_type_tag->kind == DW_TagKind_BaseType);
-    T_Ok(char_type_tag->next != 0);
-    T_Ok(char_type_tag->parent == comp_unit_tag);
-    T_Ok(char_type_tag->attrib_count == 3);
-    T_Ok(char_type_tag->abbrev_id == 2);
-    T_Ok(char_type_tag->info_off == 0x30);
-    T_Ok(char_type_tag->first_attrib != char_type_tag->last_attrib);
+    TestCheck(char_type_tag->kind == DW_TagKind_BaseType);
+    TestCheck(char_type_tag->next != 0);
+    TestCheck(char_type_tag->parent == comp_unit_tag);
+    TestCheck(char_type_tag->attrib_count == 3);
+    TestCheck(char_type_tag->abbrev_id == 2);
+    TestCheck(char_type_tag->info_off == 0x30);
+    TestCheck(char_type_tag->first_attrib != char_type_tag->last_attrib);
     
     DW_WriterAttrib *byte_size_attrib = char_type_tag->first_attrib;
-    T_Ok(byte_size_attrib->kind == DW_AttribKind_ByteSize);
-    T_Ok(byte_size_attrib->form.reader.kind == DW_Form_Data1);
-    T_Ok(byte_size_attrib->form.reader.data.size == 1);
-    T_Ok(*(U8 *)byte_size_attrib->form.reader.data.str == 1);
+    TestCheck(byte_size_attrib->kind == DW_AttribKind_ByteSize);
+    TestCheck(byte_size_attrib->form.reader.kind == DW_Form_Data1);
+    TestCheck(byte_size_attrib->form.reader.data.size == 1);
+    TestCheck(*(U8 *)byte_size_attrib->form.reader.data.str == 1);
     
     DW_WriterAttrib *encoding_attrib  = byte_size_attrib->next;
-    T_Ok(encoding_attrib->kind == DW_AttribKind_Encoding);
-    T_Ok(encoding_attrib->form.reader.kind == DW_Form_Data1);
-    T_Ok(encoding_attrib->form.reader.data.size == 1);
-    T_Ok(*(U8 *)encoding_attrib->form.reader.data.str == DW_ATE_SignedChar);
+    TestCheck(encoding_attrib->kind == DW_AttribKind_Encoding);
+    TestCheck(encoding_attrib->form.reader.kind == DW_Form_Data1);
+    TestCheck(encoding_attrib->form.reader.data.size == 1);
+    TestCheck(*(U8 *)encoding_attrib->form.reader.data.str == DW_ATE_SignedChar);
     
     DW_WriterAttrib *name_attrib = encoding_attrib->next;
-    T_Ok(name_attrib->kind == DW_AttribKind_Name);
-    T_Ok(name_attrib->form.reader.kind == DW_Form_String);
-    T_Ok(str8_match(name_attrib->form.reader.string, str8_lit("char"), 0));
+    TestCheck(name_attrib->kind == DW_AttribKind_Name);
+    TestCheck(name_attrib->form.reader.kind == DW_Form_String);
+    TestCheck(str8_match(name_attrib->form.reader.string, str8_lit("char"), 0));
   }
   
   DW_WriterTag *const_type_tag = char_type_tag->next;
   {
-    T_Ok(const_type_tag->kind == DW_TagKind_ConstType);
-    T_Ok(const_type_tag->next != 0);
-    T_Ok(const_type_tag->parent == comp_unit_tag);
-    T_Ok(const_type_tag->attrib_count == 1);
-    T_Ok(const_type_tag->abbrev_id == 3);
-    T_Ok(const_type_tag->info_off == 0x38);
-    T_Ok(const_type_tag->first_attrib && const_type_tag->first_attrib == const_type_tag->last_attrib);
+    TestCheck(const_type_tag->kind == DW_TagKind_ConstType);
+    TestCheck(const_type_tag->next != 0);
+    TestCheck(const_type_tag->parent == comp_unit_tag);
+    TestCheck(const_type_tag->attrib_count == 1);
+    TestCheck(const_type_tag->abbrev_id == 3);
+    TestCheck(const_type_tag->info_off == 0x38);
+    TestCheck(const_type_tag->first_attrib && const_type_tag->first_attrib == const_type_tag->last_attrib);
     
     DW_WriterAttrib *type_attrib = const_type_tag->first_attrib;
-    T_Ok(type_attrib->kind == DW_AttribKind_Type);
-    T_Ok(type_attrib->form.writer.kind == DW_WriterFormKind_Ref);
-    T_Ok(type_attrib->form.writer.ref == char_type_tag);
+    TestCheck(type_attrib->kind == DW_AttribKind_Type);
+    TestCheck(type_attrib->form.writer.kind == DW_WriterFormKind_Ref);
+    TestCheck(type_attrib->form.writer.ref == char_type_tag);
   }
   
   DW_WriterTag *dup_char_type_tag = const_type_tag->next;
   {
-    T_Ok(dup_char_type_tag->kind == DW_TagKind_BaseType);
-    T_Ok(dup_char_type_tag->next != 0);
-    T_Ok(dup_char_type_tag->parent == comp_unit_tag);
-    T_Ok(dup_char_type_tag->attrib_count == 3);
-    T_Ok(dup_char_type_tag->abbrev_id == 2);
-    T_Ok(dup_char_type_tag->info_off == 0x3a);
-    T_Ok(dup_char_type_tag->first_attrib != dup_char_type_tag->last_attrib);
+    TestCheck(dup_char_type_tag->kind == DW_TagKind_BaseType);
+    TestCheck(dup_char_type_tag->next != 0);
+    TestCheck(dup_char_type_tag->parent == comp_unit_tag);
+    TestCheck(dup_char_type_tag->attrib_count == 3);
+    TestCheck(dup_char_type_tag->abbrev_id == 2);
+    TestCheck(dup_char_type_tag->info_off == 0x3a);
+    TestCheck(dup_char_type_tag->first_attrib != dup_char_type_tag->last_attrib);
     
     DW_WriterAttrib *byte_size_attrib = dup_char_type_tag->first_attrib;
-    T_Ok(byte_size_attrib->kind == DW_AttribKind_ByteSize);
-    T_Ok(byte_size_attrib->form.reader.kind == DW_Form_Data1);
-    T_Ok(byte_size_attrib->form.reader.data.size == 1);
-    T_Ok(*(U8 *)byte_size_attrib->form.reader.data.str == 1);
+    TestCheck(byte_size_attrib->kind == DW_AttribKind_ByteSize);
+    TestCheck(byte_size_attrib->form.reader.kind == DW_Form_Data1);
+    TestCheck(byte_size_attrib->form.reader.data.size == 1);
+    TestCheck(*(U8 *)byte_size_attrib->form.reader.data.str == 1);
     
     DW_WriterAttrib *encoding_attrib  = byte_size_attrib->next;
-    T_Ok(encoding_attrib->kind == DW_AttribKind_Encoding);
-    T_Ok(encoding_attrib->form.reader.kind == DW_Form_Data1);
-    T_Ok(encoding_attrib->form.reader.data.size == 1);
-    T_Ok(*(U8 *)encoding_attrib->form.reader.data.str == DW_ATE_SignedChar);
+    TestCheck(encoding_attrib->kind == DW_AttribKind_Encoding);
+    TestCheck(encoding_attrib->form.reader.kind == DW_Form_Data1);
+    TestCheck(encoding_attrib->form.reader.data.size == 1);
+    TestCheck(*(U8 *)encoding_attrib->form.reader.data.str == DW_ATE_SignedChar);
     
     DW_WriterAttrib *name_attrib = encoding_attrib->next;
-    T_Ok(name_attrib->kind == DW_AttribKind_Name);
-    T_Ok(name_attrib->form.reader.kind == DW_Form_String);
-    T_Ok(str8_match(name_attrib->form.reader.string, str8_lit("char"), 0));
+    TestCheck(name_attrib->kind == DW_AttribKind_Name);
+    TestCheck(name_attrib->form.reader.kind == DW_Form_String);
+    TestCheck(str8_match(name_attrib->form.reader.string, str8_lit("char"), 0));
   }
   
   DW_WriterTag *simple_struct_tag = dup_char_type_tag->next;
   {
-    T_Ok(simple_struct_tag->kind == DW_TagKind_StructureType);
-    T_Ok(simple_struct_tag->next != 0);
-    T_Ok(simple_struct_tag->parent == comp_unit_tag);
-    T_Ok(simple_struct_tag->attrib_count == 2);
-    T_Ok(simple_struct_tag->abbrev_id == 4);
-    T_Ok(simple_struct_tag->info_off == 0x42);
+    TestCheck(simple_struct_tag->kind == DW_TagKind_StructureType);
+    TestCheck(simple_struct_tag->next != 0);
+    TestCheck(simple_struct_tag->parent == comp_unit_tag);
+    TestCheck(simple_struct_tag->attrib_count == 2);
+    TestCheck(simple_struct_tag->abbrev_id == 4);
+    TestCheck(simple_struct_tag->info_off == 0x42);
     
     DW_WriterAttrib *simple_struct_name = simple_struct_tag->first_attrib;
-    T_Ok(simple_struct_name->kind == DW_AttribKind_Name);
-    T_Ok(simple_struct_name->form.reader.kind == DW_Form_String);
-    T_Ok(str8_match(simple_struct_name->form.reader.string, str8_lit("FooBar"), 0));
+    TestCheck(simple_struct_name->kind == DW_AttribKind_Name);
+    TestCheck(simple_struct_name->form.reader.kind == DW_Form_String);
+    TestCheck(str8_match(simple_struct_name->form.reader.string, str8_lit("FooBar"), 0));
     
     DW_WriterTag *m0_tag = simple_struct_tag->first_child;
     {
-      T_Ok(m0_tag->kind == DW_TagKind_Member);
-      T_Ok(m0_tag->parent == simple_struct_tag);
-      T_Ok(m0_tag->attrib_count == 3);
-      T_Ok(m0_tag->info_off == 0x4b);
-      T_Ok(m0_tag->abbrev_id == 5);
+      TestCheck(m0_tag->kind == DW_TagKind_Member);
+      TestCheck(m0_tag->parent == simple_struct_tag);
+      TestCheck(m0_tag->attrib_count == 3);
+      TestCheck(m0_tag->info_off == 0x4b);
+      TestCheck(m0_tag->abbrev_id == 5);
       
       DW_WriterAttrib *name = m0_tag->first_attrib;
-      T_Ok(name->kind == DW_AttribKind_Name);
-      T_Ok(name->form.reader.kind == DW_Form_String);
-      T_Ok(str8_match(name->form.reader.string, str8_lit("m0"), 0));
+      TestCheck(name->kind == DW_AttribKind_Name);
+      TestCheck(name->form.reader.kind == DW_Form_String);
+      TestCheck(str8_match(name->form.reader.string, str8_lit("m0"), 0));
       
       DW_WriterAttrib *type = name->next;
-      T_Ok(type->kind == DW_AttribKind_Type);
-      T_Ok(type->form.reader.kind == DW_Form_Ref1);
-      T_Ok(type->form.reader.ref == 0x30);
+      TestCheck(type->kind == DW_AttribKind_Type);
+      TestCheck(type->form.reader.kind == DW_Form_Ref1);
+      TestCheck(type->form.reader.ref == 0x30);
       
       DW_WriterAttrib *data_loc = type->next;
-      T_Ok(data_loc->kind == DW_AttribKind_DataMemberLocation);
-      T_Ok(data_loc->form.reader.kind == DW_Form_Data1);
-      T_Ok(data_loc->form.reader.data.size == 1);
-      T_Ok(*(U8 *)data_loc->form.reader.data.str == 0);
+      TestCheck(data_loc->kind == DW_AttribKind_DataMemberLocation);
+      TestCheck(data_loc->form.reader.kind == DW_Form_Data1);
+      TestCheck(data_loc->form.reader.data.size == 1);
+      TestCheck(*(U8 *)data_loc->form.reader.data.str == 0);
     }
     
     DW_WriterTag *m1_tag = m0_tag->next;
     {
-      T_Ok(m1_tag->kind == DW_TagKind_Member);
-      T_Ok(m1_tag->parent == simple_struct_tag);
-      T_Ok(m1_tag->attrib_count == 4);
-      T_Ok(m1_tag->info_off == 0x51);
-      T_Ok(m1_tag->abbrev_id == 6);
+      TestCheck(m1_tag->kind == DW_TagKind_Member);
+      TestCheck(m1_tag->parent == simple_struct_tag);
+      TestCheck(m1_tag->attrib_count == 4);
+      TestCheck(m1_tag->info_off == 0x51);
+      TestCheck(m1_tag->abbrev_id == 6);
       
       DW_WriterAttrib *name = m1_tag->first_attrib;
-      T_Ok(name->kind == DW_AttribKind_Name);
-      T_Ok(name->form.reader.kind == DW_Form_String);
-      T_Ok(str8_match(name->form.reader.string, str8_lit("m1"), 0));
+      TestCheck(name->kind == DW_AttribKind_Name);
+      TestCheck(name->form.reader.kind == DW_Form_String);
+      TestCheck(str8_match(name->form.reader.string, str8_lit("m1"), 0));
       
       DW_WriterAttrib *type = name->next;
-      T_Ok(type->kind == DW_AttribKind_Type);
-      T_Ok(type->form.reader.kind == DW_Form_Ref1);
-      T_Ok(type->form.reader.ref == 0x30);
+      TestCheck(type->kind == DW_AttribKind_Type);
+      TestCheck(type->form.reader.kind == DW_Form_Ref1);
+      TestCheck(type->form.reader.ref == 0x30);
       
       DW_WriterAttrib *data_loc = type->next;
-      T_Ok(data_loc->kind == DW_AttribKind_DataMemberLocation);
-      T_Ok(data_loc->form.reader.kind == DW_Form_Data1);
-      T_Ok(data_loc->form.reader.data.size == 1);
-      T_Ok(*(U8 *)data_loc->form.reader.data.str == 10);
+      TestCheck(data_loc->kind == DW_AttribKind_DataMemberLocation);
+      TestCheck(data_loc->form.reader.kind == DW_Form_Data1);
+      TestCheck(data_loc->form.reader.data.size == 1);
+      TestCheck(*(U8 *)data_loc->form.reader.data.str == 10);
       
       DW_WriterAttrib *byte_size = data_loc->next;
-      T_Ok(byte_size->kind == DW_AttribKind_ByteSize);
-      T_Ok(byte_size->form.reader.kind == DW_Form_ImplicitConst);
-      T_Ok(byte_size->form.reader.implicit_const == 123);
+      TestCheck(byte_size->kind == DW_AttribKind_ByteSize);
+      TestCheck(byte_size->form.reader.kind == DW_Form_ImplicitConst);
+      TestCheck(byte_size->form.reader.implicit_const == 123);
     }
   }
   
   DW_WriterTag *main_tag = simple_struct_tag->next;
-  T_Ok(main_tag->next == 0);
-  T_Ok(main_tag->kind == DW_TagKind_SubProgram);
-  T_Ok(main_tag->parent == main_tag->parent);
-  T_Ok(main_tag->abbrev_id == 7);
+  TestCheck(main_tag->next == 0);
+  TestCheck(main_tag->kind == DW_TagKind_SubProgram);
+  TestCheck(main_tag->parent == main_tag->parent);
+  TestCheck(main_tag->abbrev_id == 7);
   {
     DW_WriterAttrib *external = main_tag->first_attrib;
-    T_Ok(external->kind == DW_AttribKind_External);
-    T_Ok(external->form.reader.kind == DW_Form_Flag);
-    T_Ok(external->form.reader.flag);
+    TestCheck(external->kind == DW_AttribKind_External);
+    TestCheck(external->form.reader.kind == DW_Form_Flag);
+    TestCheck(external->form.reader.flag);
     
     DW_WriterAttrib *prototyped = external->next;
-    T_Ok(prototyped->kind == DW_AttribKind_Prototyped);
-    T_Ok(prototyped->form.reader.kind == DW_Form_Flag);
-    T_Ok(prototyped->form.reader.flag);
+    TestCheck(prototyped->kind == DW_AttribKind_Prototyped);
+    TestCheck(prototyped->form.reader.kind == DW_Form_Flag);
+    TestCheck(prototyped->form.reader.flag);
     
     DW_WriterAttrib *low_pc = prototyped->next;
-    T_Ok(low_pc->kind == DW_AttribKind_LowPc);
-    T_Ok(low_pc->form.reader.kind == DW_Form_Addr);
-    T_Ok(low_pc->form.reader.addr.size == sizeof(U64));
-    T_Ok(*(U64 *)low_pc->form.reader.addr.str == 0x140001000);
+    TestCheck(low_pc->kind == DW_AttribKind_LowPc);
+    TestCheck(low_pc->form.reader.kind == DW_Form_Addr);
+    TestCheck(low_pc->form.reader.addr.size == sizeof(U64));
+    TestCheck(*(U64 *)low_pc->form.reader.addr.str == 0x140001000);
     
     DW_WriterAttrib *high_pc = low_pc->next;
-    T_Ok(high_pc->kind == DW_AttribKind_HighPc);
-    T_Ok(high_pc->form.reader.kind == DW_Form_Addr);
-    T_Ok(high_pc->form.reader.addr.size == sizeof(U64));
-    T_Ok(*(U64 *)high_pc->form.reader.addr.str == 0x140001004);
+    TestCheck(high_pc->kind == DW_AttribKind_HighPc);
+    TestCheck(high_pc->form.reader.kind == DW_Form_Addr);
+    TestCheck(high_pc->form.reader.addr.size == sizeof(U64));
+    TestCheck(*(U64 *)high_pc->form.reader.addr.str == 0x140001004);
     
     DW_WriterAttrib *name = high_pc->next;
-    T_Ok(name->kind == DW_AttribKind_Name);
-    T_Ok(name->form.reader.kind == DW_Form_String);
-    T_Ok(str8_match(name->form.reader.string, str8_lit("main"), 0));
+    TestCheck(name->kind == DW_AttribKind_Name);
+    TestCheck(name->form.reader.kind == DW_Form_String);
+    TestCheck(str8_match(name->form.reader.string, str8_lit("main"), 0));
     
     DW_WriterAttrib *type = name->next;
-    T_Ok(type->kind == DW_AttribKind_Type);
-    T_Ok(type->form.reader.kind == DW_Form_Ref1);
-    T_Ok(type->form.reader.ref == simple_struct_tag->info_off);
+    TestCheck(type->kind == DW_AttribKind_Type);
+    TestCheck(type->form.reader.kind == DW_Form_Ref1);
+    TestCheck(type->form.reader.ref == simple_struct_tag->info_off);
     
     DW_WriterAttrib *frame_base = type->next;
-    T_Ok(frame_base->kind == DW_AttribKind_FrameBase);
-    T_Ok(frame_base->form.reader.kind == DW_Form_ExprLoc);
+    TestCheck(frame_base->kind == DW_AttribKind_FrameBase);
+    TestCheck(frame_base->form.reader.kind == DW_Form_ExprLoc);
     DW_Expr frame_base_expr = dw_expr_from_data(arena, writer->format, writer->address_size, frame_base->form.reader.exprloc);
-    T_Ok(frame_base_expr.count == 1);
-    T_Ok(frame_base_expr.first->opcode == DW_ExprOp_Reg7);
-    T_Ok(frame_base_expr.first->operands == 0);
-    T_Ok(frame_base_expr.first->size == 1);
-    T_Ok(frame_base_expr.first->next == 0);
-    T_Ok(frame_base_expr.first->prev == 0);
+    TestCheck(frame_base_expr.count == 1);
+    TestCheck(frame_base_expr.first->opcode == DW_ExprOp_Reg7);
+    TestCheck(frame_base_expr.first->operands == 0);
+    TestCheck(frame_base_expr.first->size == 1);
+    TestCheck(frame_base_expr.first->next == 0);
+    TestCheck(frame_base_expr.first->prev == 0);
   }
   
   dw_writer_end(&writer);
 }
 
-TEST(value_in_register)
+Test(value_in_register)
 {
   // setup register context
   X64_RegBlock regs = {0};
@@ -877,12 +877,12 @@ TEST(value_in_register)
   DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, &regs, 0, 0, &expr_value);
   
   // validate eval result
-  T_Ok(expr_eval == DW_ExprEvalResult_Ok);
-  T_Ok(expr_value.type == DW_ExprValueType_U64);
-  T_Ok(expr_value.u64 == value);
+  TestCheck(expr_eval == DW_ExprEvalResult_Ok);
+  TestCheck(expr_value.type == DW_ExprValueType_U64);
+  TestCheck(expr_value.u64 == value);
 }
 
-TEST(value_in_x_register)
+Test(value_in_x_register)
 {
   // setup register context
   X64_RegBlock regs = {0};
@@ -902,12 +902,12 @@ TEST(value_in_x_register)
   DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, &regs, 0, 0, &expr_value);
   
   // validate eval result
-  T_Ok(expr_eval == DW_ExprEvalResult_Ok);
-  T_Ok(expr_value.type == DW_ExprValueType_U64);
-  T_Ok(expr_value.u64 == value);
+  TestCheck(expr_eval == DW_ExprEvalResult_Ok);
+  TestCheck(expr_value.type == DW_ExprValueType_U64);
+  TestCheck(expr_value.u64 == value);
 }
 
-TEST(address_of_value)
+Test(address_of_value)
 {
   // compile a simple program which reads address
   U64 addr = 0xdeadbeef;
@@ -920,12 +920,12 @@ TEST(address_of_value)
   DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, 0, 0, &expr_value);
   
   // validate eval result
-  T_Ok(expr_eval == DW_ExprEvalResult_Ok);
-  T_Ok(expr_value.type == DW_ExprValueType_Addr);
-  T_Ok(expr_value.addr == addr);
+  TestCheck(expr_eval == DW_ExprEvalResult_Ok);
+  TestCheck(expr_value.type == DW_ExprValueType_Addr);
+  TestCheck(expr_value.addr == addr);
 }
 
-TEST(register_relative_variable)
+Test(register_relative_variable)
 {
   ARCH_Info *arch_info = arch_info_from_arch(Arch_x64);
   
@@ -945,12 +945,12 @@ TEST(register_relative_variable)
   DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, &regs, 0, 0, &expr_value);
   
   // validate eval result
-  T_Ok(expr_eval == DW_ExprEvalResult_Ok);
-  T_Ok(expr_value.type == DW_ExprValueType_Addr);
-  T_Ok(expr_value.addr == (1 + 44));
+  TestCheck(expr_eval == DW_ExprEvalResult_Ok);
+  TestCheck(expr_value.type == DW_ExprValueType_Addr);
+  TestCheck(expr_value.addr == (1 + 44));
 }
 
-TEST(frame_relative_variable)
+Test(frame_relative_variable)
 {
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(FBReg), DW_ExprEnc_SLEB128(-50) };
   String8    expr_data   = dw_encode_expr(arena, Arch_x64, DW_Format_64Bit, expr_encs, ArrayCount(expr_encs));
@@ -960,9 +960,9 @@ TEST(frame_relative_variable)
   DW_ExprValue      expr_value;
   DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, frame_base, 0, 0, max_U64, expr, 0, 0, 0, &expr_value);
   
-  T_Ok(expr_eval == DW_ExprEvalResult_Ok);
-  T_Ok(expr_value.type == DW_ExprValueType_Addr);
-  T_Ok(expr_value.addr == frame_base -50);
+  TestCheck(expr_eval == DW_ExprEvalResult_Ok);
+  TestCheck(expr_value.type == DW_ExprValueType_Addr);
+  TestCheck(expr_value.addr == frame_base -50);
 }
 
 internal
@@ -972,7 +972,7 @@ MACHINE_OP_MEM_READ(t_machine_op_mem_read)
   return MachineOpResult_Ok;
 }
 
-TEST(call_by_reference)
+Test(call_by_reference)
 {
   U8 *memory = push_array(arena, U8, 128);
   U64 value = 0xc0ffee;
@@ -992,12 +992,12 @@ TEST(call_by_reference)
   DW_ExprValue      expr_value = { 0 };
   DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, &regs, t_machine_op_mem_read, 0, &expr_value);
   
-  T_Ok(expr_value.type == DW_ExprValueType_Generic);
-  T_Ok(expr_value.generic.size == sizeof(U64));
-  T_Ok(*(U64 *)expr_value.generic.str == value);
+  TestCheck(expr_value.type == DW_ExprValueType_Generic);
+  TestCheck(expr_value.generic.size == sizeof(U64));
+  TestCheck(*(U64 *)expr_value.generic.str == value);
 }
 
-TEST(plus_uconst)
+Test(plus_uconst)
 {
   U64 struct_addr = 0x123;
   DW_ExprEnc expr_encs[] = { DW_ExprEnc_Op(Addr), DW_ExprEnc_Addr(struct_addr), DW_ExprEnc_Op(PlusUConst), DW_ExprEnc_ULEB128(4) };
@@ -1007,12 +1007,12 @@ TEST(plus_uconst)
   DW_ExprValue      expr_value;
   DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, 0, t_machine_op_mem_read, 0, &expr_value);
   
-  T_Ok(expr_value.type == DW_ExprValueType_Addr);
-  T_Ok(expr_value.addr == 0x123 + 4);
+  TestCheck(expr_value.type == DW_ExprValueType_Addr);
+  TestCheck(expr_value.addr == 0x123 + 4);
 }
 
 #if 0
-TEST(reg_split_spill)
+Test(reg_split_spill)
 {
   // setup register context
   X64_RegBlock regs      = {0};
@@ -1037,4 +1037,3 @@ TEST(reg_split_spill)
   DW_ExprEvalResult expr_eval = dw_eval_expr(arena, Arch_x64, DW_Format_64Bit, 0, 0, 0, max_U64, expr, regs_read_dwarf_x64, &regs, 0, 0, &expr_value);
 }
 #endif
-

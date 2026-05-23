@@ -157,6 +157,16 @@ w32_thread_entry_point(void *ptr)
 }
 
 ////////////////////////////////
+//~ rjf: @per_os_impl Debugger Attachment Checking
+
+internal B32
+debugger_is_attached(void)
+{
+  B32 result = IsDebuggerPresent();
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: @per_os_impl Platform Time Functions
 
 internal U64

@@ -6,6 +6,7 @@
 
 #define BUILD_TITLE "TORTURE"
 
+#define BUILD_TESTS 1
 #define BUILD_CONSOLE_INTERFACE 1
 #define OS_FEATURE_GRAPHICAL 1
 #define DMN_INIT_MANUAL 1
@@ -94,8 +95,6 @@
 #include "linker/lnk_log.h"
 #include "linker/lnk_debug_helper.h"
 #include "torture.h"
-#include "torture_radlink.h"
-#include "torture_dbg.h"
 
 #include "base/base_inc.c"
 #include "x64/x64.c"
@@ -167,15 +166,15 @@
 #include "linker/pdb_ext/pdb_helpers.c"
 #include "linker/pdb_ext/pdb_builder.c"
 #include "linker/lnk_debug_helper.c"
-
 #include "torture.c"
-#include "torture_base.c"
-#include "torture_md.c"
-#include "torture_radlink.c"
-#include "torture_dwarf.c"
-#include "torture_d2r.c"
-#include "torture_p2r.c"
-#include "torture_dbg.c"
+
+#include "base/tests/base_tests.c"
+#include "mdesk/tests/mdesk_tests.c"
+#include "linker/tests/linker_tests.c"
+#include "dwarf/tests/dwarf_tests.c"
+#include "rdi_from_dwarf/tests/rdi_from_dwarf_tests.c"
+#include "rdi_from_pdb/tests/rdi_from_pdb_tests.c"
+#include "raddbg/tests/raddbg_tests.c"
 
 internal B32 frame(void) { return 0; }
 

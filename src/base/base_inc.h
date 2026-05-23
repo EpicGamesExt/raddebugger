@@ -27,6 +27,7 @@
 #include "base_markup.h"
 #include "base_meta.h"
 #include "base_log.h"
+#include "base_test.h"
 #include "base_entry_point.h"
 
 #if OS_WINDOWS

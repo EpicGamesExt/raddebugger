@@ -423,12 +423,20 @@ str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags
     {
       needle_first_char_adjusted = upper_from_char(needle_first_char_adjusted);
     }
+    if(adjusted_flags & StringMatchFlag_SlashInsensitive)
+    {
+      needle_first_char_adjusted = correct_slash_from_char(needle_first_char_adjusted);
+    }
     for(;p < stop_p; p += 1)
     {
       U8 haystack_char_adjusted = *p;
       if(adjusted_flags & StringMatchFlag_CaseInsensitive)
       {
         haystack_char_adjusted = upper_from_char(haystack_char_adjusted);
+      }
+      if(adjusted_flags & StringMatchFlag_SlashInsensitive)
+      {
+        haystack_char_adjusted = correct_slash_from_char(haystack_char_adjusted);
       }
       if(haystack_char_adjusted == needle_first_char_adjusted)
       {

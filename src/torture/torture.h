@@ -11,31 +11,8 @@
 #define T_YELLOW "\x1b[33m"
 #define T_BLUE   "\x1b[34m"
 
-//#define X(n, c)
-#define T_Run_XList \
-  X(Fail,  T_RED)   \
-  X(Crash, T_RED)   \
-  X(Pass,  T_GREEN) \
-  X(Skip,  T_RESET)
-
-typedef enum
-{
-#define X(n,...) T_RunStatus_##n,
-T_Run_XList
-#undef X
-  T_RunStatus_Count
-} T_RunStatus;
-
-typedef struct
-{
-  T_RunStatus status;
-  char       *fail_file;
-  int         fail_line;
-  char       *fail_cond;
-} T_RunResult;
-
-#define T_RunSig(name) void t_##name(Arena *arena, String8 user_data, T_RunResult *result_out, String8List *test_out)
-typedef                void (*T_Run)(Arena *arena, String8 user_data, T_RunResult *result_out, String8List *test_out);
+#define T_RunSig(name) void t_##name(Arena *arena, String8 user_data, TestResult *result_out, String8List *test_out)
+typedef                void (*T_Run)(Arena *arena, String8 user_data, TestResult *result_out, String8List *test_out);
 
 typedef struct
 {
@@ -50,25 +27,9 @@ typedef struct
 typedef struct
 {
   T_Test     *test;
-  String8     user_data;
-  T_RunResult result;
+  String8    user_data;
+  TestResult result;
 } T_RunCtx;
-
-typedef enum
-{
-  T_Compiler_Null,
-  T_Compiler_Cl,
-  T_Compiler_Clang,
-  T_Compiler_Gcc,
-} T_Compiler;
-
-typedef enum
-{
-  T_Linker_Null,
-  T_Linker_RAD,
-  T_Linker_MSVC,
-  T_Linker_LLVM
-} T_Linker;
 
 extern U64      g_torture_test_count;
 extern T_Test **g_torture_tests;
@@ -77,34 +38,30 @@ extern T_Test   g_torture_tests_[0xffffff];
 internal void t_break_if_debugger_present(void);
 
 #define T_AddTest(name, f, l, skip, ...)      \
-  T_RunSig(name);                          \
-  __VA_ARGS__ void t_add_test_##name(void) \
-  {                                        \
-    g_torture_tests_[g_torture_test_count++] = (T_Test){ f, Stringify(name), l, &t_##name, skip }; \
-  }
+T_RunSig(name);                          \
+__VA_ARGS__ void t_add_test_##name(void) \
+{                                        \
+g_torture_tests_[g_torture_test_count++] = (T_Test){ f, Stringify(name), l, &t_##name, skip }; \
+}
 
 #if COMPILER_MSVC
 # pragma section(".CRT$XCU", read)
 # define TEST_(name, skip)                                                    \
-  T_AddTest(name, __FILE__, __LINE__, skip)                                   \
-  __declspec(allocate(".CRT$XCU")) void(*r_##name)(void) = t_add_test_##name; \
-  __pragma(comment(linker, "/include:" Stringify(r_##name)))
+T_AddTest(name, __FILE__, __LINE__, skip)                                   \
+__declspec(allocate(".CRT$XCU")) void(*r_##name)(void) = t_add_test_##name; \
+__pragma(comment(linker, "/include:" Stringify(r_##name)))
 #else
 # define TEST_(name, skip) T_AddTest(name, __FILE__, __LINE__, skip, __attribute__((constructor)))
 #endif
 
 #define TEST(name) \
-  TEST_(name, 0)   \
-  T_RunSig(name)
+TEST_(name, 0)   \
+T_RunSig(name)
 #define SKIP(name) \
-  TEST_(name, 1)   \
-  T_RunSig(name)
+TEST_(name, 1)   \
+T_RunSig(name)
 
-#define T_Ok(c) do { if (!(c)) {                                                                          \
-  *result_out = (T_RunResult){ .fail_file = __FILE__, .fail_line = __LINE__, .fail_cond = Stringify(c) }; \
-  t_break_if_debugger_present();                                                                          \
-  return;                                                                                                 \
-} } while(0)
+#define T_Ok(c) TestCheck(c)
 
 #define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
 #define t_outf(...) str8_list_pushf(arena, test_out, ## __VA_ARGS__)
@@ -129,9 +86,9 @@ internal B32     t_delete_file(String8 name);
 internal String8 t_make_file_path(Arena *arena, String8 name);
 
 // test runner
-internal void        t_run_caller(void *raw_ctx);
-internal void        t_run_fail_handler(void *raw_ctx);
-internal T_RunResult t_run(T_Test *test, String8 user_data);
+internal void       t_run_caller(void *raw_ctx);
+internal void       t_run_fail_handler(void *raw_ctx);
+internal TestResult t_run(T_Test *test, String8 user_data);
 
 // tools
 internal String8 t_radbin_path(void);

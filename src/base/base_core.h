@@ -670,6 +670,16 @@ Compiler;
 # define Compiler_CURRENT Compiler_Null
 #endif
 
+typedef enum Linker
+{
+  Linker_Null,
+  Linker_radlink,
+  Linker_msvc,
+  Linker_lld,
+  Linker_COUNT
+}
+Linker;
+
 ////////////////////////////////
 //~ rjf: Access Flags
 
@@ -1075,6 +1085,11 @@ internal DenseTime dense_time_from_date_time(DateTime date_time);
 internal DateTime  date_time_from_dense_time(DenseTime time);
 internal DateTime  date_time_from_micro_seconds(U64 time);
 internal DateTime  date_time_from_unix_time(U64 unix_time);
+
+////////////////////////////////
+//~ rjf: @per_os_impl Debugger Attachment Checking
+
+internal B32 debugger_is_attached(void);
 
 ////////////////////////////////
 //~ rjf: @per_os_impl Platform Time Functions

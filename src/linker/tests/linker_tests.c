@@ -644,14 +644,14 @@ TEST(merge)
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.test entry.obj test.obj");
   T_Ok(g_last_exit_code != 0);
 
-  if (t_id_linker() == T_Linker_RAD) {
+  if (t_id_linker() == Linker_radlink) {
     T_Ok(g_last_exit_code == LNK_Error_CircularMerge);
   }
 
   // circular merge with extra link
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.data /merge:.data=.test entry.obj test.obj");
   T_Ok(g_last_exit_code != 0);
-  if (t_id_linker() == T_Linker_RAD) {
+  if (t_id_linker() == Linker_radlink) {
     T_Ok(g_last_exit_code == LNK_Error_CircularMerge);
   }
 
@@ -677,14 +677,14 @@ TEST(merge)
   // illegal merge with .reloc
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.reloc entry.obj test.obj");
   T_Ok(g_last_exit_code != 0);
-  if (t_id_linker() == T_Linker_RAD) {
+  if (t_id_linker() == Linker_radlink) {
     T_Ok(g_last_exit_code == LNK_Error_IllegalSectionMerge);
   }
 
   // illegal merge with .rsrc
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.rsrc entry.obj test.obj");
   T_Ok(g_last_exit_code != 0);
-  if (t_id_linker() == T_Linker_RAD) {
+  if (t_id_linker() == Linker_radlink) {
     T_Ok(g_last_exit_code == LNK_Error_IllegalSectionMerge);
   }
 
@@ -1784,7 +1784,7 @@ TEST(abs_vs_common)
   if (g_last_exit_code == 0) {
     // TODO: validate that linker issues multiply defined symbol error
     t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe common.obj abs.obj entry.obj");
-    if (t_id_linker() == T_Linker_RAD) {
+    if (t_id_linker() == Linker_radlink) {
       T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol);
     } else {
       T_Ok(g_last_exit_code != 0);
@@ -2092,7 +2092,7 @@ TEST(undef_reloc_section)
   T_Ok(t_write_file(str8_lit("sec_defn.obj"), sec_defn_obj));
 
   t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe main.obj sec_defn.obj");
-  if (t_id_linker() == T_Linker_RAD) {
+  if (t_id_linker() == Linker_radlink) {
     T_Ok(g_last_exit_code == LNK_Error_SectRefsDiscardedMemory);
   } else {
     T_Ok(g_last_exit_code != 0);
@@ -2420,7 +2420,7 @@ TEST(base_relocs)
 
   // it is illegal to merge .reloc with other sections
   t_invoke_linkerf("/subsystem:console /entry:my_entry /dynamicbase /largeaddressaware:no /out:a.exe /merge:.reloc=.rdata main.obj func.obj");
-  if (t_id_linker() == T_Linker_RAD) {
+  if (t_id_linker() == Linker_radlink) {
     T_Ok(g_last_exit_code == LNK_Error_IllegalSectionMerge);
   } else {
     T_Ok(g_last_exit_code != 0);
@@ -2428,7 +2428,7 @@ TEST(base_relocs)
 
   // the other way around is illegal too
   t_invoke_linkerf("/subsystem:console /entry:my_entry /dynamicbase /largeaddressaware:no /out:a.exe /merge:.rdata=.reloc main.obj func.obj");
-  if (t_id_linker() == T_Linker_RAD) {
+  if (t_id_linker() == Linker_radlink) {
     T_Ok(g_last_exit_code == LNK_Error_IllegalSectionMerge);
   } else {
     T_Ok(g_last_exit_code != 0);
@@ -2610,7 +2610,7 @@ TEST(import_export)
   T_Ok(g_last_exit_code == 0);
 
   // validate export table in export.dll
-  if (t_id_linker() == T_Linker_RAD) {
+  if (t_id_linker() == Linker_radlink) {
     // validate export table in export.dll
     {
       String8              dll           = t_read_file(arena, str8_lit("export.dll"));
@@ -2905,7 +2905,7 @@ TEST(comdat_no_duplicates)
 
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.obj entry.obj");
   T_Ok(g_last_exit_code != 0);
-  if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol); }
+  if (t_id_linker() == Linker_radlink) { T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol); }
 
   t_invoke_linkerf("/subsystem:console /entry:entry /out:b.exe a.obj entry.obj");
   T_Ok(g_last_exit_code == 0);
@@ -3001,7 +3001,7 @@ TEST(comdat_same_size)
 
   t_invoke_linkerf("/subsystem:console /entry:entry /out:b.exe a.obj b.obj c.obj entry.obj");
   T_Ok(g_last_exit_code != 0);
-  if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol); }
+  if (t_id_linker() == Linker_radlink) { T_Ok(g_last_exit_code == LNK_Error_MultiplyDefinedSymbol); }
 }
 
 TEST(comdat_exact_match)
@@ -3313,7 +3313,7 @@ TEST(comdat_associative_loop)
 
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe loop.obj entry.obj");
   T_Ok(g_last_exit_code != 0);
-  if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_AssociativeLoop); }
+  if (t_id_linker() == Linker_radlink) { T_Ok(g_last_exit_code == LNK_Error_AssociativeLoop); }
 }
 
 TEST(comdat_associative_non_comdat)
@@ -3430,7 +3430,7 @@ TEST(comdat_associative_out_of_bounds)
 
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj bad.obj");
   T_Ok(g_last_exit_code != 0);
-  if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_IllData); }
+  if (t_id_linker() == Linker_radlink) { T_Ok(g_last_exit_code == LNK_Error_IllData); }
 }
 
 TEST(comdat_with_offset)
@@ -3790,7 +3790,7 @@ TEST(include)
   // test unresolved include
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /include:ewq entry.obj");
   T_Ok(g_last_exit_code != 0);
-  if (t_id_linker() == T_Linker_RAD) { T_Ok(g_last_exit_code == LNK_Error_UnresolvedSymbol); }
+  if (t_id_linker() == Linker_radlink) { T_Ok(g_last_exit_code == LNK_Error_UnresolvedSymbol); }
 }
 
 TEST(communal_var_vs_regular)
@@ -4811,7 +4811,7 @@ TEST(fail_if_mismatch)
   T_Ok(t_write_file(str8_lit("a2.obj"), a2));
 
   t_invoke_linkerf("entry.obj a1.obj a2.obj /entry:entry /subsystem:console /out:a2.exe");
-  if (t_id_linker() == T_Linker_RAD) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
+  if (t_id_linker() == Linker_radlink) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
   else                               T_Ok(g_last_exit_code != 0);
 
   // ------------------------------------------------------------
@@ -4829,14 +4829,14 @@ TEST(fail_if_mismatch)
   T_Ok(t_write_file(str8_lit("conf_dirs.obj"), conf_dirs));
 
   t_invoke_linkerf("entry.obj conf_dirs.obj /entry:entry /subsystem:console /out:conf_dirs.exe");
-  if (t_id_linker() == T_Linker_RAD) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
+  if (t_id_linker() == Linker_radlink) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
   else                               T_Ok(g_last_exit_code != 0);
 
   // ------------------------------------------------------------
   // passing switch on command line
 
   t_invoke_linkerf("entry.obj a1.obj /FAILIFMISMATCH:a=2 /out:cmddir.exe");
-  if (t_id_linker() == T_Linker_RAD) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
+  if (t_id_linker() == Linker_radlink) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
   else                               T_Ok(g_last_exit_code != 0);
 }
 

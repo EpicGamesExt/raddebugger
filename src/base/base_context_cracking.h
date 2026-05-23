@@ -138,6 +138,10 @@
 # define BUILD_DEBUG 1
 #endif
 
+#if !defined(BUILD_TESTS)
+# define BUILD_TESTS 0
+#endif
+
 #if !defined(BUILD_SUPPLEMENTARY_UNIT)
 # define BUILD_SUPPLEMENTARY_UNIT 0
 #endif

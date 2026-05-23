@@ -72,31 +72,6 @@ t_test_group_from_name(Arena *arena, String8 pattern)
 
 ////////////////////////////////
 
-internal char *
-t_string_from_result(T_RunStatus v)
-{
-  switch (v) {
-    case T_RunStatus_Fail:  return "FAIL";
-    case T_RunStatus_Crash: return "CRASH";
-    case T_RunStatus_Pass:  return "PASS";
-    case T_RunStatus_Skip:  return "SKIP";
-    default: break;
-  }
-  return 0;
-}
-
-internal char *
-t_color_from_result(T_RunStatus v)
-{
-  switch (v) {
-#define X(n,c,...) case T_RunStatus_##n: return c;
-    T_Run_XList
-#undef X
-  default: break;
-  }
-  return "null";
-}
-
 internal void
 t_break_if_debugger_present(void)
 {
@@ -108,14 +83,14 @@ t_break_if_debugger_present(void)
 #endif
 }
 
-internal T_Linker
+internal Linker
 t_id_linker(void)
 {
   String8 name = str8_chop_last_dot(str8_skip_last_slash(g_linker_path));
-  if (str8_match(name, str8_lit("radlink"),  StringMatchFlag_CaseInsensitive)) { return T_Linker_RAD;  }
-  if (str8_match(name, str8_lit("link"),     StringMatchFlag_CaseInsensitive)) { return T_Linker_MSVC; }
-  if (str8_match(name, str8_lit("lld-link"), StringMatchFlag_CaseInsensitive)) { return T_Linker_LLVM; }
-  return T_Linker_Null;
+  if (str8_match(name, str8_lit("radlink"),  StringMatchFlag_CaseInsensitive)) { return Linker_radlink;  }
+  if (str8_match(name, str8_lit("link"),     StringMatchFlag_CaseInsensitive)) { return Linker_msvc; }
+  if (str8_match(name, str8_lit("lld-link"), StringMatchFlag_CaseInsensitive)) { return Linker_lld; }
+  return Linker_Null;
 }
 
 internal B32
@@ -212,19 +187,19 @@ t_run_caller(void *raw_ctx)
   Temp scratch = scratch_begin(0,0);
   
   g_is_first_print = 1;
-
+  
   T_RunCtx *ctx = raw_ctx;  
-  ctx->result.status = T_RunStatus_Pass;
-
+  ctx->result.status = TestStatus_Pass;
+  
   String8List test_out = {0};
-
+  
   if (ctx->test->skip) {
-    ctx->result.status = T_RunStatus_Skip;
+    ctx->result.status = TestStatus_Skip;
   } else {
     ctx->test->r(scratch.arena, ctx->user_data, &ctx->result, &test_out);
   }
-
-  if (ctx->result.status == T_RunStatus_Fail || ctx->result.status == T_RunStatus_Crash) {
+  
+  if (ctx->result.status == TestStatus_Fail || ctx->result.status == TestStatus_Crash) {
     for EachNode(n, String8Node, test_out.first) {
       t_errorf("%S", n->string);
     }
@@ -235,27 +210,27 @@ t_run_caller(void *raw_ctx)
       t_errorf("%S\n", g_output);
     }
   }
-
+  
   scratch_end(scratch);
 }
 
-internal T_RunResult
+internal TestResult
 t_run(T_Test *test, String8 user_data)
 {
-  T_RunCtx ctx = { .test = test, .user_data = user_data, .result.status = T_RunStatus_Fail };
+  T_RunCtx ctx = { .test = test, .user_data = user_data, .result.status = TestStatus_Fail };
   t_run_caller(&ctx);
-
-  if (ctx.result.status == T_RunStatus_Fail || ctx.result.status == T_RunStatus_Crash) {
+  
+  if (ctx.result.status == TestStatus_Fail || ctx.result.status == TestStatus_Crash) {
     if (g_output.size > 0 || g_errors.size > 0) {
       t_errorf("Last captured output:\n");
       if (g_output.size) { t_errorf("%S\n", g_output); }
       if (g_errors.size) { t_errorf("%S\n", g_errors); }
     }
   }
-
+  
   fflush(stdout);
   fflush(stderr);
-
+  
   return ctx.result;
 }
 
@@ -336,7 +311,7 @@ t_cl_version(void)
   
   if ( ! version.size) {
     Temp scratch = scratch_begin(0, 0);
-
+    
     t_invoke_cl("");
     AssertAlways(g_last_exit_code == 0);
     
@@ -344,10 +319,10 @@ t_cl_version(void)
     U64 version_lo = str8_find_needle(g_output, 0, needle, 0);
     version_lo += needle.size + 1;
     AssertAlways(version_lo < g_output.size);
-
+    
     U64 version_hi = str8_find_needle(g_output, version_lo, str8_lit(" "), 0);
     AssertAlways(version_hi < g_output.size);
-
+    
     version = str8_substr(g_output, r1u64(version_lo, version_hi));
     AssertAlways(version.size > 0);
     
@@ -355,7 +330,7 @@ t_cl_version(void)
     ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
     Arena *arena = arena_alloc_(&params);
     version = str8_copy(arena, version);
-
+    
     MemoryZeroStruct(&g_output);
     scratch_end(scratch);
   }
@@ -413,7 +388,7 @@ t_cwd_path(void)
   if (path[0] == 0) {
     Temp scratch = scratch_begin(0, 0);
     String8 cwd = get_current_path(scratch.arena);
-
+    
     // TODO: linux and windows return two different things, we need to settle what to do here
     // should get_current_path return directory paths with slash or no slash
     if ((str8_match_wildcard(cwd, str8_lit("*\\"), 0) && str8_match_wildcard(cwd, str8_lit("*/"), 0))) {
@@ -422,7 +397,7 @@ t_cwd_path(void)
     } else {
       cwd = str8_chop_last_slash(cwd);
     }
-
+    
     MemoryCopyStr8(path, cwd);
     path[cwd.size] = 0;
     scratch_end(scratch);
@@ -448,19 +423,19 @@ internal B32
 t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
 {
   Temp scratch = scratch_begin(&g_output_arena,1);
-
+  
   B32 is_ok = 0;
-
+  
   // clean up global state
   arena_clear(g_output_arena);
   MemoryZeroStruct(&g_output);
   g_last_exit_code = max_U64;
-
+  
   String8List stdout_parts = {0};
   String8List stderr_parts = {0};
   U64 stdout_idx = 0;
   U64 stderr_idx = 1;
-
+  
 #if OS_WINDOWS
   typedef enum {
     Win32CaptureState_Null,
@@ -478,7 +453,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
     String8List       *parts;
     Win32CaptureState  state;
   } Win32Capture;
-
+  
   Win32Capture captures_win32[2] = {0};
   for EachElement(i, captures_win32) {
     // create read pipe
@@ -488,23 +463,23 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
     SECURITY_ATTRIBUTES read_at  = { .nLength = sizeof(read_at),  .bInheritHandle = 0 };
     captures_win32[i].read_pipe_handle = CreateNamedPipeW(pipe_name16.str, PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, PIPE_TYPE_BYTE | PIPE_WAIT, 1, MB(1), MB(1), 0, &read_at);
     AssertAlways(captures_win32[i].read_pipe_handle != INVALID_HANDLE_VALUE);
-
+    
     // create overlapped write file
     SECURITY_ATTRIBUTES write_at = { .nLength = sizeof(write_at), .bInheritHandle = 1 };
     captures_win32[i].write_pipe_handle = CreateFileW(pipe_name16.str, GENERIC_WRITE, 0, &write_at, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
     AssertAlways(captures_win32[i].write_pipe_handle != INVALID_HANDLE_VALUE);
-
+    
     // create event for overlapped
     captures_win32[i].event = CreateEventW(0, 1, 0, 0);
     AssertAlways(captures_win32[i].event != NULL);
-
+    
     // alloc capture buffer
     captures_win32[i].buffer_size = MB(1);
     captures_win32[i].buffer = push_array(scratch.arena, U8, captures_win32[i].buffer_size);
   }
   captures_win32[stdout_idx].parts = &stdout_parts;
   captures_win32[stderr_idx].parts = &stderr_parts;
-
+  
   File read_capture_handles [ArrayCount(captures_win32)] = {0};
   File write_capture_handles[ArrayCount(captures_win32)] = {0};
   for EachElement(i, captures_win32) { read_capture_handles[i]  = (File){ (U64)captures_win32[i].read_pipe_handle  }; }
@@ -516,7 +491,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
     B32            is_live;
     struct pollfd *poll_fd;
   } LinuxCapture;
-
+  
   LinuxCapture captures_linux[2] = {0};
   for EachElement(i, captures_linux) {
     if (pipe2(captures_linux[i].fds, 0) != 0) {
@@ -525,10 +500,10 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
     }
     captures_linux[i].is_live = 1;
   }
-
+  
   captures_linux[0].parts = &stdout_parts;
   captures_linux[1].parts = &stderr_parts;
-
+  
   File read_capture_handles[2] = {0}, write_capture_handles[2] = {0};
   read_capture_handles[0].u64[0] = captures_linux[0].fds[0];
   read_capture_handles[1].u64[0] = captures_linux[1].fds[0];
@@ -546,13 +521,13 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
     .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline),
   };
   str8_list_push_front(scratch.arena, &launch_opts.cmd_line, exe_path);
-
+  
   String8 full_cmd_line = str8_list_join(scratch.arena, &launch_opts.cmd_line, &(StringJoin){ .sep = str8_lit(" ") });
-
+  
   // invoke exe
   Process process_handle = process_launch(&launch_opts);
   if (process_match(process_handle, process_zero())) { goto exit; }
-
+  
   // capture process output
 #if OS_WINDOWS
   {
@@ -561,24 +536,24 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
       CloseHandle(captures_win32[i].write_pipe_handle);
       MemoryZeroStruct(&write_capture_handles[i]);
     }
-
+    
     B32 is_process_live = 1;
     for (U64 endt_us = ENDT_US(timeout_us);;) {
       HANDLE wait_handles[ArrayCount(captures_win32) + 1] = {0};
       U64    wait_handle_count = 0;
-
+      
       // queue process
       if (is_process_live) {
         wait_handles[wait_handle_count++] = (HANDLE)process_handle.u64[0];
       }
-
+      
       for EachElement(capture_idx, captures_win32) {
         while (captures_win32[capture_idx].state == Win32CaptureState_Null) {
           // init overlapped so when child writes to capture buffer this event is signaled
           AssertAlways(ResetEvent(captures_win32[capture_idx].event));
           MemoryZeroStruct(&captures_win32[capture_idx].overlapped);
           captures_win32[capture_idx].overlapped.hEvent = captures_win32[capture_idx].event;
-
+          
           // begin overlapped read
           DWORD read_size = 0;
           if (ReadFile(captures_win32[capture_idx].read_pipe_handle, captures_win32[capture_idx].buffer, captures_win32[capture_idx].buffer_size, &read_size, &captures_win32[capture_idx].overlapped)) {
@@ -600,7 +575,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
             break;
           }
         }
-
+        
         if (captures_win32[capture_idx].state == Win32CaptureState_Pending) {
           // event now should signal whenever pipe has data to read
           captures_win32[capture_idx].wait_idx = wait_handle_count++;
@@ -609,23 +584,23 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
           captures_win32[capture_idx].wait_idx = max_U64;
         }
       }
-
+      
       // exit if there are no handles
       if (wait_handle_count == 0) { break; }
-
+      
       // compute wait time
       DWORD wait_ms = INFINITE;
       if (timeout_us != max_U64) {
         U64 now_us = now_time_us();
         wait_ms = now_us < endt_us ? ClampTop((endt_us - now_us + 999) / 1000, max_U32-1) : 0;
       }
-
+      
       // wait on process and read pipes
       DWORD wait_result = WaitForMultipleObjects(wait_handle_count, wait_handles, 0, wait_ms);
-
+      
       if (wait_result >= WAIT_OBJECT_0 && wait_result < WAIT_OBJECT_0 + wait_handle_count) {
         DWORD wait_idx = wait_result - WAIT_OBJECT_0;
-
+        
         if (is_process_live && wait_idx == 0) {
           DWORD exit_code = 0;
           if(GetExitCodeProcess((HANDLE)process_handle.u64[0], &exit_code)) {
@@ -641,7 +616,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
             }
           }
           AssertAlways(pipe_idx != max_U64);
-
+          
           DWORD read_size;
           if (GetOverlappedResult(captures_win32[pipe_idx].read_pipe_handle, &captures_win32[pipe_idx].overlapped, &read_size, 0)) {
             if (read_size > 0) {
@@ -649,7 +624,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
               String8 string      = str8(captures_win32[pipe_idx].buffer, read_size);
               String8 string_copy = str8_copy(scratch.arena, string);
               str8_list_push(scratch.arena, captures_win32[pipe_idx].parts, string_copy);
-
+              
               // queue next overlapped read
               captures_win32[pipe_idx].state = Win32CaptureState_Null;
             } else {
@@ -664,7 +639,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
         break;
       }
     }
-
+    
     // (timeout) kill process if alive so we can safeley cancel async IO
     if (is_process_live) {
       if (TerminateProcess((HANDLE)process_handle.u64[0], 999)) {
@@ -672,20 +647,20 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
           Assert(0 && "process is taking too long to exit");
         }
       } else { Assert(0 && "failed to kill process"); }
-
+      
       DWORD exit_code = 0;
       if (GetExitCodeProcess((HANDLE)process_handle.u64[0], &exit_code)) {
         g_last_exit_code = exit_code;
       } else { Assert(0 && "failed to get process exit code"); }
     }
-
+    
     // (timeout) cancel pending async IO
     for EachElement(i, captures_win32) {
       if (captures_win32[i].state == Win32CaptureState_Pending) {
         BOOL  cancel_ok    = CancelIoEx(captures_win32[i].read_pipe_handle, &captures_win32[i].overlapped);
         DWORD cancel_error = cancel_ok ? ERROR_SUCCESS : GetLastError();
         AssertAlways(cancel_ok || cancel_error == ERROR_NOT_FOUND);
-
+        
         DWORD read_size = 0;
         if (GetOverlappedResult(captures_win32[i].read_pipe_handle, &captures_win32[i].overlapped, &read_size, 1)) {
           if (read_size > 0) {
@@ -700,7 +675,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
         captures_win32[i].state = Win32CaptureState_EOF;
       }
     }
-
+    
     // close windows specific handles
     CloseHandle((HANDLE)process_handle.u64[0]);
     for EachElement(i, captures_win32) {
@@ -713,14 +688,14 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
     close((int)write_capture_handles[i].u64[0]);
     MemoryZeroStruct(&write_capture_handles[i]);
   }
-
+  
   pid_t pid   = (pid_t)process_handle.u64[0];
   int   pidfd = syscall(SYS_pidfd_open, pid, 0);
   if (pidfd < 0) {
     fprintf(stderr, "ERROR: failed to translate pid(%d) to pidfd\n", pid);
     goto exit;
   }
-
+  
   B32  is_process_live          = 1;
   U64  endt_us                  = ENDT_US(timeout_us);
   U64  read_buffer_default_size = MB(1);
@@ -729,12 +704,12 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
   for (;;) {
     struct pollfd fds[3] = {0};
     int           nfds   = 0;
-
+    
     // append process
     if (is_process_live) {
       fds[nfds++] = (struct pollfd){ .fd = pidfd, .events = POLLIN | POLLHUP };
     }
-
+    
     // append pipes
     for EachElement(i, captures_linux) {
       if (captures_linux[i].is_live) {
@@ -742,17 +717,17 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
         fds[nfds++] = (struct pollfd){ .fd = captures_linux[i].fds[0], .events = POLLIN | POLLHUP };
       }
     }
-
+    
     // exit if there are no more handles to poll
     if (nfds == 0) { break; }
-
+    
     // compute wait time
     int wait_ms = -1;
     if (timeout_us != max_U64) {
       U64 now_us = now_time_us();
       wait_ms = now_us < endt_us ? ClampTop((endt_us - now_us + 999) / 1000, max_U32-1) : 0;
     }
-
+    
     // wait for kernel to signal any of the wait handles
     int poll_result = poll(fds, nfds, wait_ms);
     if (poll_result < 0) {
@@ -773,12 +748,12 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
         } else {
           fprintf(stderr, "ERROR: failed to reap process %d\n", pid);
         }
-
+        
         // signal on process fd means exit
         is_process_live = 0;
       }
     }
-
+    
     for EachElement(i, captures_linux) {
       if (captures_linux[i].is_live) {
         if (captures_linux[i].poll_fd->revents & POLLIN) {
@@ -787,7 +762,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
               read_buffer_size = read_buffer_default_size;
               read_buffer      = push_array(scratch.arena, U8, read_buffer_default_size);
             }
-
+            
             ssize_t read_size = LNX_RETRY_ON_EINTR(read(captures_linux[i].poll_fd->fd, read_buffer, read_buffer_size));
             if (read_size > 0) {
               str8_list_push(scratch.arena, captures_linux[i].parts, str8(read_buffer, read_size));
@@ -807,40 +782,40 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
             }
           }
         }
-
+        
         if (captures_linux[i].poll_fd->revents & POLLHUP) {
           captures_linux[i].is_live = 0;
         }
       }
     }
   }
-
+  
   // close process handle
   if (close(pidfd) < 0) {
     fprintf(stderr, "ERROR: failed to close process handle %d\n", pidfd);
   }
 #endif
-
+  
   t_infof("Invoke: {\n");
   t_infof("  CMDL: %S\n", full_cmd_line);
   t_infof("  WDIR: %S\n", g_wdir);
   t_infof("  Exit: %u\n", g_last_exit_code);
   t_infof("}\n");
-
+  
   // update output global
   g_output = str8_list_join(g_output_arena, &stdout_parts, 0);
   g_errors = str8_list_join(g_output_arena, &stderr_parts, 0);
-
+  
   // write to the output file
   if (g_redirect_stdout) {
     write_data_to_file_path(g_stdout_file_name, g_output);
   }
-
+  
   is_ok = 1; // process was launched (does not mean exited successfully)
   exit:;
   for EachElement(i, read_capture_handles)  { file_close(read_capture_handles[i]);  }
   for EachElement(i, write_capture_handles) { file_close(write_capture_handles[i]); }
-
+  
   scratch_end(scratch);
   return is_ok;
 }
@@ -1104,6 +1079,8 @@ t_help(void)
   fprintf(stderr, "    torture +*               Force-run all tests\n");
 }
 
+internal void t_dbg_register_script_tests(Arena *arena, String8 folder_path);
+
 internal void
 t_entry_point(CmdLine *cmdline)
 {
@@ -1127,25 +1104,25 @@ t_entry_point(CmdLine *cmdline)
   //
   {
     B32 print_help = cmd_line_has_flag(cmdline, str8_lit("help")) ||
-                     cmd_line_has_flag(cmdline, str8_lit("h"));
+      cmd_line_has_flag(cmdline, str8_lit("h"));
     if (print_help) {
       t_help();
       goto exit;
     }
   }
-
+  
   // Gather tests
   {
     // register debugger tests
     String8 test_folder_path = str8f(scratch.arena, "%S/torture/dbg_tests", t_src_path());
     t_dbg_register_script_tests(scratch.arena, test_folder_path);
-
+    
     // sort tests
     g_torture_tests = push_array(scratch.arena, T_Test *, g_torture_test_count);
     for EachIndex(i, g_torture_test_count) { g_torture_tests[i] = &g_torture_tests_[i]; }
     radsort(g_torture_tests, g_torture_test_count, t_test_ptr_is_before);
   }
-
+  
   //
   // Handle -list
   //
@@ -1167,7 +1144,7 @@ t_entry_point(CmdLine *cmdline)
   g_clang_path    = cmd_line_string(cmdline, str8_lit("clang"));
   g_gcc_path      = cmd_line_string(cmdline, str8_lit("gcc"));
   g_linker_path   = cmd_line_string(cmdline, str8_lit("linker"));
-
+  
   //
   // Handle -test_data
   //
@@ -1185,63 +1162,63 @@ t_entry_point(CmdLine *cmdline)
   U64List targets = {0};
   {
     String8List inputs = {0};
-
+    
     CmdLineOpt *target_opt = 0;
     if (target_opt == 0) { target_opt = cmd_line_opt_from_string(cmdline, str8_lit("target")); }
     if (target_opt == 0) { target_opt = cmd_line_opt_from_string(cmdline, str8_lit("t"));      }
-
+    
     // handle explicit target switch 
     if (target_opt) {
       str8_list_concat_in_place(&inputs, &target_opt->value_strings);
     }
-
+    
     // accept inputs from the command line as target tests to run
     str8_list_concat_in_place(&inputs, &cmdline->inputs);
-
+    
     // no inputs -> print help and exit
     if (inputs.node_count == 0) {
       t_help();
       goto exit;
     }
-
+    
     HashMap hm = {0};
     for EachNode(input_n, String8Node, inputs.first) {
       String8 t = input_n->string;
-
+      
       // parse mode
       typedef enum { Mode_Default, Mode_Skip, Mode_Force, } Mode;
       Mode mode = Mode_Default;
       if      (str8_match_wildcard(t, str8_lit("+*"), 0)) { mode = Mode_Force; t = str8_skip(t, 1); }
       else if (str8_match_wildcard(t, str8_lit("!*"), 0)) { mode = Mode_Skip;  t = str8_skip(t, 1); }
-
+      
       if (str8_find_needle(t, 0, str8_lit("/"), 0) >= t.size) {
         t = str8f(scratch.arena, "*/%S", t);
       }
-
+      
       U64 match_count = 0;
-
+      
       for EachIndex(test_idx, g_torture_test_count) {
         // match test names
         String8 test_name = t_test_name_from_idx(scratch.arena, test_idx);
-
+        
         if (str8_match_wildcard(test_name, t, StringMatchFlag_CaseInsensitive)) {
           // set skip flag
           switch (mode) {
-          case Mode_Default: break;
-          case Mode_Skip:  g_torture_tests[test_idx]->skip = 1; break;
-          case Mode_Force: g_torture_tests[test_idx]->skip = 0; break;
+            case Mode_Default: break;
+            case Mode_Skip:  g_torture_tests[test_idx]->skip = 1; break;
+            case Mode_Force: g_torture_tests[test_idx]->skip = 0; break;
           }
-
+          
           // append test when not in skipping mode
           if ( ! hash_map_search_string_u64(&hm, test_name)) {
             hash_map_push_string_u64(scratch.arena, &hm, test_name, 1);
             u64_list_push(scratch.arena, &targets, test_idx);
           }
-
+          
           match_count += 1;
         }
       }
-
+      
       if (match_count == 0) {
         fprintf(stderr, "WARNING: no matches found for input: %.*s\n", str8_varg(input_n->string));
       }
@@ -1253,13 +1230,13 @@ t_entry_point(CmdLine *cmdline)
   g_stop_on_first_fail_or_crash = !cmd_line_has_flag(cmdline, str8_lit("keep_going"));
   g_build_only                  = cmd_line_has_flag(cmdline, str8_lit("build_only"));
   g_output_arena                = arena_alloc();
-
+  
   // default options when running under debugger
 #if OS_WINDOWS
   if (!cmd_line_has_flag(cmdline, str8_lit("print_stdout")) && IsDebuggerPresent()) {
     g_redirect_stdout = 0;
   }
-
+  
   // automatically close child processes on exit
   {
     HANDLE job_handle = CreateJobObjectA(0, 0);
@@ -1310,19 +1287,19 @@ t_entry_point(CmdLine *cmdline)
       max_group_size = Max(max_group_size, t_group_from_test_idx(test_idx).size);
     }
     
-    U64 run_counters[T_RunStatus_Count] = {0};
+    U64 run_counters[TestStatus_COUNT] = {0};
     U64 max_digit_count  = count_digits_u64(target_indices.count, 10);
     U64 total_time_start = now_time_us();
-
+    
     typedef struct { U64 target_idx, d; } Slowest;
     Slowest slowest[5] = {0};
     for EachElement(i, slowest) { slowest[i].target_idx = max_U64; }
-
+    
     U64List skipped_tests = {0};
-
+    
     for EachIndex(i, target_indices.count) {
       if (i == 0) { PrintHeader("Tests"); }
-
+      
       U64 target_idx = target_indices.v[i];
       T_Test *test = g_torture_tests[target_idx];
       
@@ -1335,11 +1312,11 @@ t_entry_point(CmdLine *cmdline)
       fprintf(stdout, "%.*s %.*s/ %s", str8_varg(t_group_from_test(test)), (int)(max_group_size - t_group_from_test(test).size), spaces, test->label);
       fprintf(stdout, " %.*s ", (int)dots_count, dots);
       fflush(stdout);
-
+      
       // setup output directory
       g_wdir = push_str8f(scratch.arena, "%S/%s", g_out, test->label);
       g_wdir = full_path_from_path(scratch.arena, g_wdir);
-
+      
       // delete files from last run in the work directory
       if (folder_path_exists(g_wdir)) {
         t_delete_dir(g_wdir);
@@ -1353,21 +1330,32 @@ t_entry_point(CmdLine *cmdline)
       
       // run test
       U64 run_start_time = now_time_us();
-      T_RunResult result = t_run(test, test->user_data);
+      TestResult result = t_run(test, test->user_data);
       U64 run_end_time = now_time_us();
-
+      
       // update
       run_counters[result.status] += 1;
-
-      // print run status
-      fprintf(stdout, "%s%s" T_RESET, t_color_from_result(result.status), t_string_from_result(result.status));
       
-      if (result.status == T_RunStatus_Pass) {
+      // rjf: map status -> color / string
+      char *status_name_cstr = 0;
+      char *color_cstr = 0;
+      switch(result.status)
+      {
+        default:
+        case TestStatus_Pass: {status_name_cstr = "PASS";  color_cstr = T_GREEN;}break;
+        case TestStatus_Fail: {status_name_cstr = "FAIL";  color_cstr = T_RED;}break;
+        case TestStatus_Crash:{status_name_cstr = "CRASH"; color_cstr = T_RED;}break;
+      }
+      
+      // print run status
+      fprintf(stdout, "%s%s" T_RESET, color_cstr, status_name_cstr);
+      
+      if (result.status == TestStatus_Pass) {
         U64      d = run_end_time - run_start_time;
         DateTime t = date_time_from_micro_seconds(d);
         String8  s = string_from_elapsed_time(scratch.arena, t);
         fprintf(stdout, " %.*s", str8_varg(s));
-
+        
         fflush(stdout);
         
         U64 insert_idx = max_U64;
@@ -1387,15 +1375,15 @@ t_entry_point(CmdLine *cmdline)
       }
       fprintf(stdout, "\n");
       
-      if (result.status == T_RunStatus_Fail) {
+      if (result.status == TestStatus_Fail) {
         fprintf(stdout, "  ERROR: %s:%d: condition: \"%s\"\n", result.fail_file, result.fail_line, result.fail_cond);
       }
       
-      if (result.status == T_RunStatus_Fail || result.status == T_RunStatus_Crash) {
+      if (result.status == TestStatus_Fail || result.status == TestStatus_Crash) {
         if (g_stop_on_first_fail_or_crash) { goto exit; }
       }
-
-      if (result.status == T_RunStatus_Skip) {
+      
+      if (result.status == TestStatus_Skip) {
         u64_list_push(scratch.arena, &skipped_tests, target_idx);
       }
     }
@@ -1404,22 +1392,22 @@ t_entry_point(CmdLine *cmdline)
     if (target_indices.count > 0 && sum_array_u64(ArrayCount(run_counters), run_counters) > 0) {
       U64     total_time_dt  = total_time_end - total_time_start;
       String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
-
+      
       fprintf(stderr, "\n");
       PrintHeader("Summary");
-      fprintf(stderr, "  Passed   %llu\n", (unsigned long long)run_counters[T_RunStatus_Pass]);
-      fprintf(stderr, "  Failed   %llu\n", (unsigned long long)run_counters[T_RunStatus_Fail]);
-      fprintf(stderr, "  Crashed  %llu\n", (unsigned long long)run_counters[T_RunStatus_Crash]);
-      fprintf(stderr, "  Skipped  %llu\n", (unsigned long long)run_counters[T_RunStatus_Skip]);
+      fprintf(stderr, "  Passed   %llu\n", (unsigned long long)run_counters[TestStatus_Pass]);
+      fprintf(stderr, "  Failed   %llu\n", (unsigned long long)run_counters[TestStatus_Fail]);
+      fprintf(stderr, "  Crashed  %llu\n", (unsigned long long)run_counters[TestStatus_Crash]);
+      fprintf(stderr, "  Skipped  %llu\n", (unsigned long long)run_counters[TestStatus_Skip]);
       fprintf(stderr, "  Time     %.*s\n", str8_varg(total_time_str));
-    
+      
       U64 slow_count = 0;
       for EachElement(i, slowest) {
         Slowest s = slowest[i];
         if (s.target_idx >= g_torture_test_count) { break; }
         slow_count += 1;
       }
-
+      
       if (slow_count > 3) {
         U64 label_max = 0;
         U64 group_max = 0;
@@ -1428,7 +1416,7 @@ t_entry_point(CmdLine *cmdline)
           label_max = Max(strlen(g_torture_tests[s.target_idx]->label), label_max);
           group_max = Max(t_group_from_test_idx(s.target_idx).size, group_max);
         }
-
+        
         fprintf(stderr, "  \nSlow Tests\n");
         for EachElement(i, slowest) {
           Slowest s = slowest[i];
@@ -1444,10 +1432,10 @@ t_entry_point(CmdLine *cmdline)
       }
     }
     
-    exit_code = run_counters[T_RunStatus_Fail] + run_counters[T_RunStatus_Crash];
+    exit_code = run_counters[TestStatus_Fail] + run_counters[TestStatus_Crash];
     exit:;
   }
-
+  
   scratch_end(scratch);
   exit(exit_code);
 }

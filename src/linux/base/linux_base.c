@@ -128,6 +128,17 @@ lnx_thread_entry_point(void *ptr)
 }
 
 ////////////////////////////////
+//~ rjf: @per_os_impl Debugger Attachment Checking
+
+internal B32
+debugger_is_attached(void)
+{
+  B32 result = 0;
+  // TODO(rjf)
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: @per_os_impl Platform Time Functions
 
 internal U64
@@ -1292,13 +1303,13 @@ internal B32
 process_join(Process process, U64 endt_us, U64 *exit_code_out)
 {
   B32 result = 0;
-
+  
   pid_t pid = (pid_t)process.u64[0];
   for(;;)
   {
     int status = 0;
     pid_t wait_result = LNX_RETRY_ON_EINTR(waitpid(pid, &status, (endt_us == max_U64) ? 0 : WNOHANG));
-
+    
     if((wait_result == pid) && (WIFEXITED(status) || WIFSIGNALED(status)))
     {
       result = 1;
@@ -1309,13 +1320,13 @@ process_join(Process process, U64 endt_us, U64 *exit_code_out)
       }
       break;
     }
-
+    
     if(wait_result == -1) { break; }
     if(endt_us == 0)      { break; }
-
+    
     U64 now_us = now_time_us();
     if(now_us >= endt_us) { break; }
-
+    
     U64 left_us  = endt_us - now_us;
     U64 sleep_us = Min(left_us, Thousand(1));
     usleep((useconds_t)sleep_us);

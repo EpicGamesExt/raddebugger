@@ -1,6 +1,7 @@
-#define T_Group "MD" 
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
 
-SKIP(md_tokenizer)
+SkippedTest(md_tokenizer)
 {
   MD_TokenizeResult result;
   
@@ -126,5 +127,3 @@ SKIP(md_tokenizer)
     T_Ok(result.tokens.v[1].flags & MD_TokenFlag_Identifier);
   }
 }
-
-#undef T_Group
