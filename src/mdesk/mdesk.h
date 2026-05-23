@@ -86,6 +86,8 @@ struct MD_Token
 {
   Rng1U64 range;
   MD_TokenFlags flags;
+  U64 line_num;
+  U64 col_num;
 };
 
 typedef struct MD_TokenChunkNode MD_TokenChunkNode;
@@ -182,6 +184,8 @@ struct MD_Node
   
   // rjf: source code info
   U64 src_offset;
+  U64 line_num;
+  U64 col_num;
   
   // rjf: user-controlled generation number
   //
@@ -284,7 +288,7 @@ internal MD_NodeRec md_node_rec_depth_first(MD_Node *node, MD_Node *subtree_root
 #define md_node_rec_depth_first_pre_rev(node, subtree_root) md_node_rec_depth_first((node), (subtree_root), OffsetOf(MD_Node, last), OffsetOf(MD_Node, prev))
 
 //- rjf: tree building
-internal MD_Node *md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flags, String8 string, String8 raw_string, U64 src_offset);
+internal MD_Node *md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flags, String8 string, String8 raw_string, U64 src_offset, U64 line_num, U64 col_num);
 internal void md_node_insert_child(MD_Node *parent, MD_Node *prev_child, MD_Node *node);
 internal void md_node_insert_tag(MD_Node *parent, MD_Node *prev_child, MD_Node *node);
 internal void md_node_push_child(MD_Node *parent, MD_Node *node);

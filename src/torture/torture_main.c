@@ -168,6 +168,7 @@
 
 #include "torture.c"
 #include "torture_base.c"
+#include "torture_md.c"
 #include "torture_radlink.c"
 #include "torture_dwarf.c"
 #include "torture_d2r.c"
