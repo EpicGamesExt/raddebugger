@@ -185,7 +185,7 @@ md_node_rec_depth_first(MD_Node *node, MD_Node *subtree_root, U64 child_off, U64
 //- rjf: tree building
 
 internal MD_Node *
-md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flags, String8 string, String8 raw_string, U64 src_offset, U64 line_num, U64 col_num)
+md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flags, String8 string, String8 raw_string, U64 src_offset)
 {
   MD_Node *node = push_array(arena, MD_Node, 1);
   node->first = node->last = node->parent = node->next = node->prev = node->first_tag = node->last_tag = &md_nil_node;
@@ -194,8 +194,6 @@ md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flags, String8 string,
   node->string     = string;
   node->raw_string = raw_string;
   node->src_offset = src_offset;
-  node->line_num   = line_num;
-  node->col_num    = col_num;
   return node;
 }
 
@@ -524,24 +522,9 @@ md_tokenize_from_text(Arena *arena, String8 text)
   Temp scratch = scratch_begin(&arena, 1);
   MD_TokenChunkList tokens = {0};
   MD_MsgList msgs = {0};
-
   U8 *byte_first = text.str;
   U8 *byte_opl = byte_first + text.size;
   U8 *byte = byte_first;
-
-  U64 line_num = 1;
-  U64 col_num = 1;
-
-#define Advance(n) do {                              \
-  for(U64 i = 0; i < n && byte < byte_opl; i += 1) { \
-    if(*byte == '\n') {                              \
-      line_num += 1;                                 \
-      col_num   = 0;                                 \
-    }                                                \
-    col_num += 1;                                    \
-    byte    += 1;                                    \
-  }                                                  \
-} while(0)
   
   //- rjf: scan string & produce tokens
   for(;byte < byte_opl;)
@@ -549,22 +532,22 @@ md_tokenize_from_text(Arena *arena, String8 text)
     MD_TokenFlags token_flags = 0;
     U8 *token_start = 0;
     U8 *token_opl = 0;
-
-    U64 token_line_num = line_num;
-    U64 token_col_num = col_num;
     
     //- rjf: whitespace
     if(token_flags == 0 && (*byte == ' ' || *byte == '\t' || *byte == '\v' || *byte == '\r'))
     {
       token_flags = MD_TokenFlag_Whitespace;
       token_start = byte;
-
-      for(; byte < byte_opl && (*byte == ' ' || *byte == '\t' || *byte == '\v' || *byte == '\r');)
-      {
-        Advance(1);
-      }
-
       token_opl = byte;
+      byte += 1;
+      for(;byte <= byte_opl; byte += 1)
+      {
+        token_opl += 1;
+        if(byte == byte_opl || (*byte != ' ' && *byte != '\t' && *byte != '\v' && *byte != '\r'))
+        {
+          break;
+        }
+      }
     }
     
     //- rjf: newlines
@@ -572,8 +555,8 @@ md_tokenize_from_text(Arena *arena, String8 text)
     {
       token_flags = MD_TokenFlag_Newline;
       token_start = byte;
-      Advance(1);
-      token_opl = byte;
+      token_opl = byte+1;
+      byte += 1;
     }
     
     //- rjf: single-line comments
@@ -581,11 +564,16 @@ md_tokenize_from_text(Arena *arena, String8 text)
     {
       token_flags = MD_TokenFlag_Comment;
       token_start = byte;
-      Advance(2);
-
+      token_opl = byte+2;
+      byte += 2;
       B32 escaped = 0;
-      for(;byte < byte_opl;)
+      for(;byte <= byte_opl; byte += 1)
       {
+        token_opl += 1;
+        if(byte == byte_opl)
+        {
+          break;
+        }
         if(escaped)
         {
           escaped = 0;
@@ -601,10 +589,7 @@ md_tokenize_from_text(Arena *arena, String8 text)
             escaped = 1;
           }
         }
-        Advance(1);
       }
-
-      token_opl = byte;
     }
     
     //- rjf: multi-line comments
@@ -612,27 +597,22 @@ md_tokenize_from_text(Arena *arena, String8 text)
     {
       token_flags = MD_TokenFlag_Comment;
       token_start = byte;
-      
-      Advance(2);
-
-      B32 missing_close = 1;
-      for(;byte < byte_opl;)
+      token_opl = byte+2;
+      byte += 2;
+      for(;byte <= byte_opl; byte += 1)
       {
-        if(byte+1 < byte_opl && byte[0] == '*' && byte[1] == '/')
+        token_opl += 1;
+        if(byte == byte_opl)
         {
-          missing_close = 0;
-          Advance(2);
+          token_flags |= MD_TokenFlag_BrokenComment;
           break;
         }
-        Advance(1);
+        if(byte+1 < byte_opl && byte[0] == '*' && byte[1] == '/')
+        {
+          token_opl += 2;
+          break;
+        }
       }
-
-      if(missing_close)
-      {
-        token_flags |= MD_TokenFlag_BrokenComment;
-      }
-
-      token_opl = byte;
     }
     
     //- rjf: identifiers
@@ -643,11 +623,11 @@ md_tokenize_from_text(Arena *arena, String8 text)
     {
       token_flags = MD_TokenFlag_Identifier;
       token_start = byte;
-
-      Advance(1);
-
-      for(;byte <= byte_opl; )
+      token_opl = byte;
+      byte += 1;
+      for(;byte <= byte_opl; byte += 1)
       {
+        token_opl += 1;
         if(byte == byte_opl ||
            (!('A' <= *byte && *byte <= 'Z') &&
             !('a' <= *byte && *byte <= 'z') &&
@@ -657,10 +637,7 @@ md_tokenize_from_text(Arena *arena, String8 text)
         {
           break;
         }
-        Advance(1);
       }
-
-      token_opl = byte;
     }
     
     //- rjf: numerics
@@ -671,11 +648,11 @@ md_tokenize_from_text(Arena *arena, String8 text)
     {
       token_flags = MD_TokenFlag_Numeric;
       token_start = byte;
-
-      Advance(1);
-
-      for(;byte <= byte_opl;)
+      token_opl = byte;
+      byte += 1;
+      for(;byte <= byte_opl; byte += 1)
       {
+        token_opl += 1;
         if(byte == byte_opl ||
            (!('A' <= *byte && *byte <= 'Z') &&
             !('a' <= *byte && *byte <= 'z') &&
@@ -685,10 +662,7 @@ md_tokenize_from_text(Arena *arena, String8 text)
         {
           break;
         }
-        Advance(1);
       }
-
-      token_opl = byte;
     }
     
     //- rjf: triplet string literals
@@ -703,10 +677,9 @@ md_tokenize_from_text(Arena *arena, String8 text)
       token_flags |= (literal_style ==  '"')*MD_TokenFlag_StringDoubleQuote;
       token_flags |= (literal_style ==  '`')*MD_TokenFlag_StringTick;
       token_start = byte;
-
-      Advance(3);
-
-      for(;byte <= byte_opl;)
+      token_opl = byte+3;
+      byte += 3;
+      for(;byte <= byte_opl; byte += 1)
       {
         if(byte == byte_opl)
         {
@@ -716,14 +689,11 @@ md_tokenize_from_text(Arena *arena, String8 text)
         }
         if(byte+2 < byte_opl && (byte[0] == literal_style && byte[1] == literal_style && byte[2] == literal_style))
         {
-          Advance(3);
+          byte += 3;
+          token_opl = byte;
           break;
         }
-
-        Advance(1);
       }
-
-      token_opl = byte;
     }
     
     //- rjf: singlet string literals
@@ -735,14 +705,14 @@ md_tokenize_from_text(Arena *arena, String8 text)
       token_flags |= (literal_style ==  '"')*MD_TokenFlag_StringDoubleQuote;
       token_flags |= (literal_style ==  '`')*MD_TokenFlag_StringTick;
       token_start = byte;
-
-      Advance(1);
-
+      token_opl = byte+1;
+      byte += 1;
       B32 escaped = 0;
-      for(;byte <= byte_opl;)
+      for(;byte <= byte_opl; byte += 1)
       {
         if(byte == byte_opl || *byte == '\n')
         {
+          token_opl = byte;
           token_flags |= MD_TokenFlag_BrokenStringLiteral;
           break;
         }
@@ -752,17 +722,15 @@ md_tokenize_from_text(Arena *arena, String8 text)
         }
         else if(!escaped && byte[0] == literal_style)
         {
-          Advance(1);
+          token_opl = byte+1;
+          byte += 1;
           break;
         }
         else if(escaped)
         {
           escaped = 0;
         }
-        Advance(1);
       }
-
-      token_opl = byte;
     }
     
     //- rjf: non-reserved symbols
@@ -773,9 +741,11 @@ md_tokenize_from_text(Arena *arena, String8 text)
     {
       token_flags = MD_TokenFlag_Symbol;
       token_start = byte;
-      Advance(1);
-      for(;byte <= byte_opl;)
+      token_opl = byte;
+      byte += 1;
+      for(;byte <= byte_opl; byte += 1)
       {
+        token_opl += 1;
         if(byte == byte_opl ||
            (*byte != '~' && *byte != '!' && *byte != '$' && *byte != '%' && *byte != '^' &&
             *byte != '&' && *byte != '*' && *byte != '-' && *byte != '=' && *byte != '+' &&
@@ -784,9 +754,7 @@ md_tokenize_from_text(Arena *arena, String8 text)
         {
           break;
         }
-        Advance(1);
       }
-      token_opl = byte;
     }
     
     //- rjf: reserved symbols
@@ -796,8 +764,8 @@ md_tokenize_from_text(Arena *arena, String8 text)
     {
       token_flags = MD_TokenFlag_Reserved;
       token_start = byte;
-      Advance(1);
-      token_opl = byte;
+      token_opl = byte+1;
+      byte += 1;
     }
     
     //- rjf: bad characters in all other cases
@@ -805,21 +773,21 @@ md_tokenize_from_text(Arena *arena, String8 text)
     {
       token_flags = MD_TokenFlag_BadCharacter;
       token_start = byte;
-      Advance(1);
-      token_opl = byte;
+      token_opl = byte+1;
+      byte += 1;
     }
     
     //- rjf; push token if formed
     if(token_flags != 0 && token_start != 0 && token_opl > token_start)
     {
-      MD_Token token = {{(U64)(token_start - byte_first), (U64)(token_opl - byte_first)}, token_flags, token_line_num, token_col_num};
+      MD_Token token = {{(U64)(token_start - byte_first), (U64)(token_opl - byte_first)}, token_flags};
       md_token_chunk_list_push(scratch.arena, &tokens, 4096, token);
     }
     
     //- rjf: push errors on unterminated comments
     if(token_flags & MD_TokenFlag_BrokenComment)
     {
-      MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, str8_lit(""), str8_lit(""), token_start - byte_first, token_line_num, token_col_num);
+      MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, str8_lit(""), str8_lit(""), token_start - byte_first);
       String8 error_string = str8_lit("Unterminated comment.");
       md_msg_list_push(arena, &msgs, error, MD_MsgKind_Error, error_string);
     }
@@ -827,13 +795,11 @@ md_tokenize_from_text(Arena *arena, String8 text)
     //- rjf: push errors on unterminated strings
     if(token_flags & MD_TokenFlag_BrokenStringLiteral)
     {
-      MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, str8_lit(""), str8_lit(""), token_start - byte_first, token_line_num, token_col_num);
+      MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, str8_lit(""), str8_lit(""), token_start - byte_first);
       String8 error_string = str8_lit("Unterminated string literal.");
       md_msg_list_push(arena, &msgs, error, MD_MsgKind_Error, error_string);
     }
   }
-
-#undef Advance
   
   //- rjf: bake, fill & return
   MD_TokenizeResult result = {0};
@@ -855,7 +821,7 @@ md_parse_from_text_tokens(Arena *arena, String8 filename, String8 text, MD_Token
   
   //- rjf: set up outputs
   MD_MsgList msgs = {0};
-  MD_Node *root = md_push_node(arena, MD_NodeKind_File, 0, filename, text, 0, 0, 0);
+  MD_Node *root = md_push_node(arena, MD_NodeKind_File, 0, filename, text, 0);
   
   //- rjf: set up parse rule stack
   typedef enum MD_ParseWorkKind
@@ -976,7 +942,7 @@ if(work_top == 0) {work_top = &broken_work;}\
         str8_match(token_string, str8_lit("\\"), 0) ||
         str8_match(token_string, str8_lit(":"), 0)))
     {
-      MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, token_string, token_string, token->range.min, token->line_num, token->col_num);
+      MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, token_string, token_string, token->range.min);
       String8 error_string = push_str8f(arena, "Unexpected reserved symbol \"%S\".", token_string);
       md_msg_list_push(arena, &msgs, error, MD_MsgKind_Error, error_string);
       token += 1;
@@ -990,7 +956,7 @@ if(work_top == 0) {work_top = &broken_work;}\
       if(token+1 >= tokens_opl ||
          !(token[1].flags & MD_TokenGroup_Label))
       {
-        MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, token_string, token_string, token->range.min, token->line_num, token->col_num);
+        MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, token_string, token_string, token->range.min);
         String8 error_string = str8_lit("Tag label expected after @ symbol.");
         md_msg_list_push(arena, &msgs, error, MD_MsgKind_Error, error_string);
         token += 1;
@@ -1000,7 +966,7 @@ if(work_top == 0) {work_top = &broken_work;}\
       {
         String8 tag_name_raw = str8_substr(text, token[1].range);
         String8 tag_name = md_content_string_from_token_flags_str8(token[1].flags, tag_name_raw);
-        MD_Node *node = md_push_node(arena, MD_NodeKind_Tag, md_node_flags_from_token_flags(token[1].flags), tag_name, tag_name_raw, token[0].range.min, token[0].line_num, token[0].col_num);
+        MD_Node *node = md_push_node(arena, MD_NodeKind_Tag, md_node_flags_from_token_flags(token[1].flags), tag_name, tag_name_raw, token[0].range.min);
         DLLPushBack_NPZ(&md_nil_node, work_top->first_gathered_tag, work_top->last_gathered_tag, node, next, prev);
         if(token+2 < tokens_opl && token[2].flags & MD_TokenFlag_Reserved &&
            (str8_match(str8_substr(text, token[2].range), str8_lit("("), 0) ||
@@ -1026,7 +992,7 @@ if(work_top == 0) {work_top = &broken_work;}\
       String8 node_string = md_content_string_from_token_flags_str8(token->flags, node_string_raw);
       MD_NodeFlags flags = md_node_flags_from_token_flags(token->flags)|work_top->gathered_node_flags;
       work_top->gathered_node_flags = 0;
-      MD_Node *node = md_push_node(arena, MD_NodeKind_Main, flags, node_string, node_string_raw, token[0].range.min, token[0].line_num, token[0].col_num);
+      MD_Node *node = md_push_node(arena, MD_NodeKind_Main, flags, node_string, node_string_raw, token[0].range.min);
       node->first_tag = work_top->first_gathered_tag;
       node->last_tag = work_top->last_gathered_tag;
       for(MD_Node *tag = work_top->first_gathered_tag; !md_node_is_nil(tag); tag = tag->next)
@@ -1051,7 +1017,7 @@ if(work_top == 0) {work_top = &broken_work;}\
       flags |= MD_NodeFlag_HasBracketLeft*!!str8_match(token_string, str8_lit("["), 0);
       flags |=   MD_NodeFlag_HasParenLeft*!!str8_match(token_string, str8_lit("("), 0);
       work_top->gathered_node_flags = 0;
-      MD_Node *node = md_push_node(arena, MD_NodeKind_Main, flags, str8_lit(""), str8_lit(""), token[0].range.min, token[0].line_num, token[0].col_num);
+      MD_Node *node = md_push_node(arena, MD_NodeKind_Main, flags, str8_lit(""), str8_lit(""), token[0].range.min);
       node->first_tag = work_top->first_gathered_tag;
       node->last_tag = work_top->last_gathered_tag;
       for(MD_Node *tag = work_top->first_gathered_tag; !md_node_is_nil(tag); tag = tag->next)
@@ -1114,7 +1080,7 @@ if(work_top == 0) {work_top = &broken_work;}\
       if(work_top->counted_newlines >= 2)
       {
         MD_Node *node = work_top->parent;
-        MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, token_string, token_string, token->range.min, token->line_num, token->col_num);
+        MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, token_string, token_string, token->range.min);
         String8 error_string = push_str8f(arena, "More than two newlines following \"%S\", which has implicitly-delimited children, resulting in an empty list of children.", node->string);
         md_msg_list_push(arena, &msgs, error, MD_MsgKind_Warning, error_string);
         MD_ParseWorkPop();
@@ -1155,7 +1121,7 @@ if(work_top == 0) {work_top = &broken_work;}\
     
     //- rjf: no consumption -> unexpected token! we don't know what to do with this.
     {
-      MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, token_string, token_string, token->range.min, token->line_num, token->col_num);
+      MD_Node *error = md_push_node(arena, MD_NodeKind_ErrorMarker, 0, token_string, token_string, token->range.min);
       String8 error_string = push_str8f(arena, "Unexpected \"%S\" token.", token_string);
       md_msg_list_push(arena, &msgs, error, MD_MsgKind_Error, error_string);
       token += 1;
