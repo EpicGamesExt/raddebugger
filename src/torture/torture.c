@@ -8,6 +8,7 @@ global String8      g_out = str8_lit_comp("torture_artifacts");
 global B32          g_verbose;
 global B32          g_redirect_stdout = 1;
 global B32          g_stop_on_first_fail_or_crash = 1;
+global B32          g_build_only = 0;
 global String8      g_test_data;
 
 // tests
@@ -1091,6 +1092,7 @@ t_help(void)
   fprintf(stderr, "   -linker:<path>        Path to PE/COFF linker\n");
   fprintf(stderr, "   -print_stdout         Print to console stdout and stderr of a run\n");
   fprintf(stderr, "   -out:<path>           Directory path for test outputs (default \"%.*s\")\n", str8_varg(g_out));
+  fprintf(stderr, "   -build_only           Build debugger harness without running the tests\n");
   fprintf(stderr, "   -verbose              Enable verbose mode\n");
   fprintf(stderr, "   -help                 Print help menu and exit\n");
   fprintf(stderr, "\nInputs are wildcard expressions. Prefix with ! to skip matches, or + to force-run matches.\n");
@@ -1249,6 +1251,7 @@ t_entry_point(CmdLine *cmdline)
   g_verbose                     = cmd_line_has_flag(cmdline, str8_lit("verbose"));
   g_redirect_stdout             = !cmd_line_has_flag(cmdline, str8_lit("print_stdout"));
   g_stop_on_first_fail_or_crash = !cmd_line_has_flag(cmdline, str8_lit("keep_going"));
+  g_build_only                  = cmd_line_has_flag(cmdline, str8_lit("build_only"));
   g_output_arena                = arena_alloc();
 
   // default options when running under debugger
@@ -1285,13 +1288,34 @@ t_entry_point(CmdLine *cmdline)
   make_directory(g_out);
   if (!folder_path_exists(g_out)) {
     fprintf(stderr, "ERROR: unable to create output directory \"%.*s\"\n", str8_varg(g_out));
-    abort_self(1);
+    goto exit;
   }
   
   //
   // Clean up output from previous run
   //
   delete_file_at_path(g_stdout_file_name);
+
+  //
+  // Check tools
+  //
+  String8 tools[] = {
+    t_raddbg_path(),
+    t_radbin_path(),
+    t_radlink_path(),
+    t_clang_path(),
+#if OS_WINDOWS
+    t_cl_path(),
+#elif OS_LINUX
+    t_gcc_path(),
+#endif
+  };
+  for EachElement(i, tools) {
+    if ( ! file_path_exists(tools[i])) {
+      fprintf(stderr, "ERROR: failed to find tool \"%.*s\"\n", str8_varg(tools[i]));
+      goto exit;
+    }
+  }
   
   //
   // Run tests

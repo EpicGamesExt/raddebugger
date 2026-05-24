@@ -4,24 +4,9 @@
 #define T_Dbg_DefaultTimeout TIMEOUT_SEC(5)
 
 extern B32 g_stop_on_first_fail_or_crash;
+extern B32 g_build_only;
 
 ////////////////////////////////
-
-internal void
-t_find_line_and_col(String8 source, MD_Node *n, U64 *line_out, U64 *col_out)
-{
-  U64 line = 1;
-  U64 col  = 1;
-  for (U64 cursor = 0; cursor < source.size && cursor < n->src_offset; cursor += 1) {
-    if (source.str[cursor] == '\n') {
-      line += 1;
-      col   = 0;
-    }
-    col += 1;
-  }
-  if (line_out) { *line_out = line; }
-  if (col_out)  { *col_out  = col;  }
-}
 
 internal void
 t_errorf_md(String8 file_name, String8 source, MD_Node *n, char *fmt, ...)
@@ -30,22 +15,16 @@ t_errorf_md(String8 file_name, String8 source, MD_Node *n, char *fmt, ...)
   va_list args;
   va_start(args, fmt);
   String8 result = push_str8fv(scratch.arena, fmt, args);
-  U64 line = 0, col = 0;
-  t_find_line_and_col(source, n, &line, &col);
-  t_errorf("ERROR: %S:%llu%llu: %S\n", file_name, (unsigned long long)line, (unsigned long long)col, result);
+  TxtPt pt = mg_txt_pt_from_string_off(source, n->src_offset);
+  t_errorf("ERROR: %S:%llu%llu: %S\n", file_name, (unsigned long long)pt.line, (unsigned long long)pt.column, result);
   va_end(args);
   scratch_end(scratch);
 }
 
 ////////////////////////////////
-// Debugger IPC Replies
+// IPC Controller
 
-typedef struct
-{
-  MD_ParseResult parse;
-  MD_Node *root;
-  MD_Node *msg;
-} T_IpcReply;
+internal U32 g_dbg_pid;
 
 internal B32
 t_ipc_parse_string(MD_Node *node, String8 child_name, String8 *out)
@@ -75,7 +54,6 @@ t_ipc_parse_u32(MD_Node *node, String8 child_name, U32 *out)
   return 0;
 }
 
-#define t_ipc_parse_int(n, c, ptr) t_ipc_parse_int_(n, c, sizeof(*ptr), ptr)
 internal B32
 t_ipc_parse_int_(MD_Node *node, String8 child_name, U64 out_size, void *out)
 {
@@ -112,17 +90,11 @@ t_ipc_parse_b32(MD_Node *node, String8 child_name, B32 *out)
   return is_ok;
 }
 
-////////////////////////////////
-// IPC Controller
-
-internal U32 g_dbg_pid;
-
 internal B32
 t_dbg_send_cmd(String8 cmd, U64 timeout_us, Arena *reply_arena, MD_ParseResult *reply_out)
 {
   Temp scratch = scratch_begin(&reply_arena, 1);
   B32 is_sent = 0;
-  
   
   // send command
   String8 cmdline = str8f(scratch.arena, "--gen_crash_dump --ipc --pid:%u %S", g_dbg_pid, cmd);
@@ -186,7 +158,7 @@ t_dbg_state(Arena *arena, U64 timeout_us)
   
   // send status request
   MD_ParseResult reply = {0};
-  if ( ! t_dbg_send_cmd(str8_lit("state"), timeout_us, arena ? arena : scratch.arena, &reply)) { goto exit; }
+  if ( ! t_dbg_send_cmd(str8_lit("state"), timeout_us, arena, &reply)) { goto exit; }
 
   // parse reply
   MD_Node *state_md      = md_child_from_string(reply.root, str8_lit("state"), 0);
@@ -221,13 +193,14 @@ t_dbg_src_line(Arena *arena, U64 vaddr, T_DbgLineArray *lines_out, U64 timeout_u
   typedef struct Node { struct Node *next; T_DbgLine v; } Node;
   Node *first_line = 0, *last_line = 0;
   U64 line_count = 0;
+
   for MD_EachNode(n, lines_md->first) {
     T_DbgLine line = {0};
-    if ( ! t_ipc_parse_string(n, str8_lit("file_path"), &line.file_path))        { t_infof("INFO: 'lines' is missing 'file_path'\n");      goto exit; }
-    if ( ! t_ipc_parse_int(n, str8_lit("line_num"), &line.line_num))             { t_infof("INFO: 'lines' is missing 'line_num'\n");       goto exit; }
-    if ( ! t_ipc_parse_int(n, str8_lit("column_num"), &line.column_num))         { t_infof("INFO: 'lines' is missing 'column_num'\n");     goto exit; }
-    if ( ! t_ipc_parse_int(n, str8_lit("voff_range_min"), &line.voff_range.min)) { t_infof("INFO: 'lines' is missing 'voff_range_min'\n"); goto exit; }
-    if ( ! t_ipc_parse_int(n, str8_lit("voff_range_max"), &line.voff_range.max)) { t_infof("INFO: 'lines' is missing 'voff_range_max'\n"); goto exit; }
+    if ( ! t_ipc_parse_string(n, str8_lit("file_path"),      &line.file_path))      { t_infof("INFO: 'lines' is missing 'file_path'\n");      goto exit; }
+    if ( ! t_ipc_parse_int   (n, str8_lit("line_num"),       &line.pt.line))        { t_infof("INFO: 'lines' is missing 'line_num'\n");       goto exit; }
+    if ( ! t_ipc_parse_int   (n, str8_lit("column_num"),     &line.pt.column))      { t_infof("INFO: 'lines' is missing 'column_num'\n");     goto exit; }
+    if ( ! t_ipc_parse_int   (n, str8_lit("voff_range_min"), &line.voff_range.min)) { t_infof("INFO: 'lines' is missing 'voff_range_min'\n"); goto exit; }
+    if ( ! t_ipc_parse_int   (n, str8_lit("voff_range_max"), &line.voff_range.max)) { t_infof("INFO: 'lines' is missing 'voff_range_max'\n"); goto exit; }
 
     Node *n = push_array(scratch.arena, Node, 1);
     n->v = line;
@@ -276,32 +249,44 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
   Temp scratch = scratch_begin(0,0);
   B32 is_stopped = 0;
   
-  // snapshot status
-  T_DbgState *status_before = t_dbg_state(scratch.arena, max_U64);
-  if (status_before == 0) { Assert(0 && "failed to snapshot status"); goto exit; }
+  // snapshot state
+  T_DbgState *state_before = t_dbg_state(scratch.arena, max_U64);
+  if (state_before == 0) {
+    t_errorf("ERROR: failed to snapshot state\n");
+    goto exit;
+  }
   
   // send command
-  if (t_dbg_send_cmd(cmd, max_U64, 0, 0) == 0) { Assert(0 && "failed to the command"); goto exit; }
+  if (t_dbg_send_cmd(cmd, max_U64, 0, 0) == 0) {
+    t_errorf("ERROR: failed to send command \"%S\"", cmd);
+    goto exit;
+  }
   
   // wait for debugger to stop
   U64 t = ENDT_US(timeout_us);
   for (;;) {
-    // query debugger status
-    T_DbgState *status = t_dbg_state(scratch.arena, t);
-    if (status == 0) { Assert(0 && "failed to acquire debugger status"); goto exit; }
+    // query debugger state
+    T_DbgState *state = t_dbg_state(scratch.arena, t);
+    if (state == 0) {
+      t_errorf("ERROR: failed to fetch debugger state\n");
+      goto exit;
+    }
     
     // did state change? -> break
-    if (!status->running && status->run_gen != status_before->run_gen) {
+    if (!state->running && state->run_gen != state_before->run_gen) {
       is_stopped = 1;
       break;
     }
     
     // "solve" the wait problem
-    if (now_time_us() >= t) { Assert(0 && "timeout"); goto exit; }
+    if (now_time_us() >= t) {
+      t_errorf("ERROR: command \"%S\" hit timeout\n", cmd);
+      goto exit;
+    }
     sleep_ms(10);
   }
   
-  //--- Status ---------------------
+  //--- state ---------------------
   if (0 && is_stopped) {
     T_DbgState *state = t_dbg_state(scratch.arena, T_Dbg_DefaultTimeout);
     
@@ -315,10 +300,16 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
     String8 sp             = t_dbg_value_from_exprf(scratch.arena, "hex(reg:rsp)");
     
     T_DbgState *last_stop = t_dbg_state(scratch.arena, T_Dbg_DefaultTimeout);
-    AssertAlways(last_stop);
+    if ( ! last_stop) {
+      t_errorf("ERROR: debugger state fetch failed\n");
+      goto exit;
+    }
     
     T_DbgLineArray lines = {0};
-    AssertAlways(t_dbg_src_line(scratch.arena, last_stop->ip_vaddr, &lines, T_Dbg_DefaultTimeout));
+    if  ( ! t_dbg_src_line(scratch.arena, last_stop->ip_vaddr, &lines, T_Dbg_DefaultTimeout)) {
+      t_errorf("ERROR: failed t map IP(0x%llx) to a source location\n", last_stop->ip_vaddr);
+      goto exit;
+    }
     
     t_infof("------------------------------------------------------------------------------------------------------------------------\n");
     t_infof("  Process:    %.*s [%.*s] (Active: %.*s)\n", str8_varg(process_id), str8_varg(process_label), str8_varg(process_active));
@@ -330,8 +321,8 @@ t_dbg_send_cmd_and_wait_stop(String8 cmd, U64 timeout_us)
     for EachIndex(i, lines.count) {
       t_infof("  {\n");
       t_infof("    File Path:  %.*s\n", str8_varg(lines.v[i].file_path));
-      t_infof("    Line:       %lld\n", (long long)lines.v[i].line_num);
-      t_infof("    Column:     %lld\n", (long long)lines.v[i].column_num);
+      t_infof("    Line:       %lld\n", (long long)lines.v[i].pt.line);
+      t_infof("    Column:     %lld\n", (long long)lines.v[i].pt.column);
       t_infof("  }\n");
     }
     fflush(stdout);
@@ -348,13 +339,27 @@ t_dbg_ping(U64 timeout_us)
 {
   Temp scratch = scratch_begin(0,0);
   T_DbgState *state = t_dbg_state(scratch.arena, timeout_us);
-  B32 did_reply = state != 0;
   scratch_end(scratch);
-  return did_reply;
+  return state != 0;
 }
-internal B32 t_dbg_bp_add_line(String8 file, U64 line) { return t_dbg_send_cmdf(0,0,0, "add_breakpoint \"%S\":%llu", file, line); }
-internal B32 t_dbg_bp_add_func(String8 func_name)      { return t_dbg_send_cmdf(0,0,0, "add_function_breakpoint %S", func_name);  }
-internal B32 t_dbg_bp_add_addr(U64 addr)               { return t_dbg_send_cmdf(0,0,0, "add_address_breakpoint 0x%llx", addr);    }
+
+internal B32
+t_dbg_bp_add_line(String8 file, U64 line)
+{
+  return t_dbg_send_cmdf(0,0,0, "add_breakpoint \"%S\":%llu", file, line);
+}
+
+internal B32
+t_dbg_bp_add_func(String8 func_name)
+{
+  return t_dbg_send_cmdf(0,0,0, "add_function_breakpoint %S", func_name);
+}
+
+internal B32
+t_dbg_bp_add_addr(U64 addr)
+{
+  return t_dbg_send_cmdf(0,0,0, "add_address_breakpoint 0x%llx", addr);
+}
 
 internal B32
 t_dbg_launch(String8 cmdline, U64 timeout_us)
@@ -374,7 +379,10 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
     .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, cmdline),
   };
   Process dbg_handle = process_launch(&launch_opts);
-  if (process_match(dbg_handle, process_zero())) { AssertAlways(0 && "failed to launch debugger"); goto exit; }
+  if (process_match(dbg_handle, process_zero())) {
+    t_errorf("ERROR: failed to launch debugger with this CMDL: %S\n", cmdline);
+    goto exit;
+  }
   
 #if OS_WINDOWS
   // cache debugger PID
@@ -396,7 +404,10 @@ t_dbg_launch(String8 cmdline, U64 timeout_us)
     if (dbg_ready) { break; }
     
     // "solve" the wait problem
-    if (now_time_us() >= t) { Assert(0 && "timeout"); break; }
+    if (now_time_us() >= t) {
+      t_errorf("ERROR: failed to launch debugger, because operation timed out\n");
+      break;
+    }
     sleep_ms(10);
   }
   
@@ -415,10 +426,10 @@ t_dbg_eval(Arena *arena, String8 expr, T_Eval *eval_out)
   B32            is_ok = t_dbg_send_cmd(cmd, T_Dbg_DefaultTimeout, arena, &reply);
   
   T_Eval e = {0};
-  if ( ! t_ipc_parse_string(reply.root, str8_lit("expr"),  &e.expr))  { t_errorf_md(str8_lit("IPC"), str8_zero(), reply.root, "ERROR: failed to parse reply member: expr\n");  Assert(0); goto exit; }
-  if ( ! t_ipc_parse_string(reply.root, str8_lit("value"), &e.value)) { t_errorf_md(str8_lit("IPC"), str8_zero(), reply.root, "ERROR: failed to parse reply member: value\n"); Assert(0); goto exit; }
-  if ( ! t_ipc_parse_string(reply.root, str8_lit("type"),  &e.type))  { t_errorf_md(str8_lit("IPC"), str8_zero(), reply.root, "ERROR: failed to parse reply member: type\n");  Assert(0); goto exit; }
-  if ( ! t_ipc_parse_string(reply.root, str8_lit("error"), &e.error)) { t_errorf_md(str8_lit("IPC"), str8_zero(), reply.root, "ERROR: failed to parse reply member: error\n"); Assert(0); goto exit; }
+  if ( ! t_ipc_parse_string(reply.root, str8_lit("expr"),  &e.expr))  { t_errorf_md(str8_lit("IPC"), str8_zero(), reply.root, "ERROR: failed to parse reply member: expr\n");  goto exit; }
+  if ( ! t_ipc_parse_string(reply.root, str8_lit("value"), &e.value)) { t_errorf_md(str8_lit("IPC"), str8_zero(), reply.root, "ERROR: failed to parse reply member: value\n"); goto exit; }
+  if ( ! t_ipc_parse_string(reply.root, str8_lit("type"),  &e.type))  { t_errorf_md(str8_lit("IPC"), str8_zero(), reply.root, "ERROR: failed to parse reply member: type\n");  goto exit; }
+  if ( ! t_ipc_parse_string(reply.root, str8_lit("error"), &e.error)) { t_errorf_md(str8_lit("IPC"), str8_zero(), reply.root, "ERROR: failed to parse reply member: error\n"); goto exit; }
   if (eval_out) { *eval_out = e; }
   
   exit:;
@@ -465,146 +476,213 @@ t_dbg_script_cmd_kind_from_string(String8 cmd)
 }
 
 internal B32
-t_dbg_script_from_source(Arena *arena, String8 file_path, String8 source, T_DbgScript *script_out)
+t_dbg_parse_script(Arena *arena, String8 file_path, String8 source, T_DbgScript *script_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
+
   B32 is_ok = 0;
-  
+
   T_DbgScript script = { .file_path = push_str8_copy(arena, file_path) };
   
-  // scrape MD comment tokens out of source while preserving original source offsets
-  MD_TokenArray script_tokens = {0};
-  {
-    MD_TokenizeResult source_tokens       = md_tokenize_from_text(scratch.arena, source);
-    MD_TokenChunkList script_token_chunks = {0};
-    for EachIndex(token_idx, source_tokens.tokens.count) {
-      MD_Token token = source_tokens.tokens.v[token_idx];
-      if (token.flags & MD_TokenFlag_Comment) {
-        String8 token_string = str8_substr(source, token.range);
-        String8 comment      = str8_skip_chop_whitespace(token_string);
-        String8 prefix       = str8_lit("///");
-        if (str8_matchi(str8_prefix(comment, prefix.size), prefix)) {
-          String8           script_part               = str8_skip(comment, prefix.size);
-          U64               script_part_base_off      = (U64)(script_part.str - source.str);
-          MD_TokenizeResult script_part_tokenize      = md_tokenize_from_text(scratch.arena, script_part);
-          for EachIndex(script_token_idx, script_part_tokenize.tokens.count) {
-            MD_Token script_token = script_part_tokenize.tokens.v[script_token_idx];
-            script_token.range.min += script_part_base_off;
-            script_token.range.max += script_part_base_off;
-            md_token_chunk_list_push(scratch.arena, &script_token_chunks, 4096, script_token);
-          }
-          MD_Token newline_token = md_token_make(r1u64(token.range.max, token.range.max), MD_TokenFlag_Newline);
-          md_token_chunk_list_push(scratch.arena, &script_token_chunks, 4096, newline_token);
-        }
+  // parse out mdesk out of the comments
+  MD_TokenizeResult source_tokens = md_tokenize_from_text(scratch.arena, source);
+  MD_TokenChunkList annot_chunks = {0};
+  for EachIndex(token_idx, source_tokens.tokens.count) {
+    MD_Token source_token = source_tokens.tokens.v[token_idx];
+
+    // skip non-comment tokens
+    if (~source_token.flags & MD_TokenFlag_Comment) { continue; }
+
+    // read token string
+    String8 source_token_string = str8_substr(source, source_token.range);
+
+    if (str8_match_wildcard(source_token_string, str8_lit("*///*"), 0)) {
+
+      // drop comment prefix
+      String8 raw_annots = str8_skip(str8_skip_chop_whitespace(source_token_string), 3);
+
+      // parse annotations
+      MD_TokenizeResult annot_parse = md_tokenize_from_text(scratch.arena, raw_annots);
+
+      for EachIndex(i, annot_parse.tokens.count) {
+        MD_Token annot_token = annot_parse.tokens.v[i];
+
+        // adjust token range so they point back into the source file
+        annot_token.range = shift_1u64(annot_token.range, (U64)(raw_annots.str - source.str));
+
+        // append annotation token
+        md_token_chunk_list_push(scratch.arena, &annot_chunks, 4096, annot_token);
       }
+
+      // append new line token
+      MD_Token newline_token = md_token_make(r1u64(source_token.range.max, source_token.range.max), MD_TokenFlag_Newline);
+      md_token_chunk_list_push(scratch.arena, &annot_chunks, 4096, newline_token);
     }
-    script_tokens = md_token_array_from_chunk_list(scratch.arena, &script_token_chunks);
   }
-  
-  // script tokens -> mdesk tree
-  MD_ParseResult script_parse  = md_parse_from_text_tokens(scratch.arena, file_path, source, script_tokens);
-  AssertAlways(script_parse.msgs.worst_message_kind < MD_MsgKind_Error);
-  
-  // test
-  {
-    MD_Node *test = script_parse.root->first;
-    AssertAlways( ! md_node_is_nil(test));
-    if (str8_matchi(test->string, str8_lit("test"))) {
-      for MD_EachNode(n, test->first) {
-        OperatingSystem os = operating_system_from_string(n->string);
-        AssertAlways(os != OperatingSystem_Null);
-        
-        for MD_EachNode(field, n->first) {
-          T_DbgScriptDirectiveKind kind = T_DbgScriptDirectiveKind_Null;
-          if      (str8_matchi(field->string, str8_lit("compile"))) { kind = T_DbgScriptDirectiveKind_Compile; }
-          else if (str8_matchi(field->string, str8_lit("link")))    { kind = T_DbgScriptDirectiveKind_Link;    }
-          else if (str8_matchi(field->string, str8_lit("launch")))  { kind = T_DbgScriptDirectiveKind_Launch;  }
-          else if (str8_matchi(field->string, str8_lit("skip")))    { kind = T_DbgScriptDirectiveKind_Skip;    }
 
-          if (kind == T_DbgScriptDirectiveKind_Null) {
-            t_errorf_md(file_path, source, n, "unknown field in test header \"%S\"\n", field->string);
-            goto exit;
-          }
+  // script annotations -> mdesk tree
+  MD_TokenArray  annot_tokens = md_token_array_from_chunk_list(scratch.arena, &annot_chunks);
+  MD_ParseResult script_parse = md_parse_from_text_tokens(scratch.arena, file_path, source, annot_tokens);
 
-          T_DbgScriptDirective *dir = push_array(arena, T_DbgScriptDirective, 1);
-          dir->kind = kind;
-          t_find_line_and_col(source, field, &dir->line, 0);
-
-          if (field->flags & MD_NodeFlag_HasBraceLeft) {
-            if (kind == T_DbgScriptDirectiveKind_Compile) {
-              for MD_EachNode(sub_field, field->first) {
-                if (str8_matchi(sub_field->string, str8_lit("cc"))) {
-                  MD_Node *cc = sub_field->first;
-                  if (cc->flags & MD_NodeFlag_StringLiteral) {
-                    if      (str8_matchi(cc->string, str8_lit("clang"))) { dir->compile.cc = T_Compiler_Clang; }
-                    else if (str8_matchi(cc->string, str8_lit("cl")))    { dir->compile.cc = T_Compiler_Cl;    }
-                    else {
-                      t_errorf_md(file_path, source, cc, "unknown compiler name: \"%S\"\n", sub_field->string);
-                      goto exit;
-                    }
-                  } else {
-                    t_errorf_md(file_path, source, sub_field, "value of CC must be a string literal e.g. CC: \"clang\"\n");
-                    goto exit;
-                  }
-                } else if (str8_matchi(sub_field->string, str8_lit("args"))) {
-                  MD_Node *args = sub_field->first;
-                  if (args->flags & MD_NodeFlag_StringLiteral) {
-                    dir->args = str8_copy(arena, args->string);
-                  } else {
-                    t_errorf_md(file_path, source, args, "value of ARGS must be a string literal\n");
-                    goto exit;
-                  }
-                } else {
-                  t_errorf_md(file_path, source, sub_field, "unknown field \"%S\"\n", sub_field->string);
-                  goto exit;
-                }
-              }
-            }
-          } else {
-            if (md_node_is_nil(field->first)) {
-              t_errorf_md(file_path, source, field, "missing value on field %S\n", field->string);
-              goto exit;
-            }
-            if ( ! md_node_is_nil(field->first->next)) {
-              t_errorf_md(file_path, source, field, "field %S accepts only one value\n", field->string);
-              goto exit;
-            }
-            if (~field->first->flags & MD_NodeFlag_StringLiteral) {
-              t_errorf_md(file_path, source, field, "field %S accepts only strings\n", field->string);
-              goto exit;
-            }
-            dir->args = str8_copy(arena, field->first->string);
-          }
-
-          T_DbgScriptDirectiveList *list = &script.directives[os][kind];
-          SLLQueuePush(list->first, list->last, dir);
-          list->count += 1;
-        }
+  // was parse ok? -> error
+  if (script_parse.msgs.worst_message_kind >= MD_MsgKind_Error) {
+    t_errorf("ERROR: cannot tokenize mdesk file: \"%S\"\n", file_path);
+    for EachNode(msg, MD_Msg, script_parse.msgs.first) {
+      String8 msg_kind_string = {0};
+      switch(msg->kind)
+      {
+      default:{}break;
+      case MD_MsgKind_Note:        {msg_kind_string = str8_lit("note");}break;
+      case MD_MsgKind_Warning:     {msg_kind_string = str8_lit("warning");}break;
+      case MD_MsgKind_Error:       {msg_kind_string = str8_lit("error");}break;
+      case MD_MsgKind_FatalError:  {msg_kind_string = str8_lit("fatal error");}break;
       }
-    } else {
+      TxtPt   pt  = mg_txt_pt_from_string_off(source, msg->node->src_offset);
+      String8 loc = push_str8f(scratch.arena, "%S:%I64d:%I64d", file_path, pt.line, pt.column);
+      t_errorf("  [%S] %S: %S\n", msg_kind_string, loc, msg->string);
+    }
+    goto exit;
+  }
+
+  // @test:
+  {
+    // first child node of the root must be a test header
+    MD_Node *test = script_parse.root->first;
+
+    // is node test? -> error
+    if ( ! str8_matchi(test->string, str8_lit("test"))) {
       t_errorf("ERROR: %S: missing test header\n", file_path);
       goto exit;
     }
-  }
-  
-  // file
-  {
-    MD_NodePtrList files = {0};
-    for MD_EachNode(n, script_parse.root->first->next) {
-      if (str8_matchi(n->string, str8_lit("file"))) {
-        AssertAlways( ! md_node_is_nil(n->first));
 
-        if ( ! md_node_is_nil(n->first->next) || ! (n->first->flags & MD_NodeFlag_StringLiteral)) {
-          U32 line = 0;
-          for EachIndex(idx, n->first->src_offset) { line += (source.str[idx] == '\n'); }
-          t_errorf_md(file_path, source, n, "value of the 'file' must be a string, (e.g. file: \"main.c\")\n", file_path, line);
+    for MD_EachNode(n, test->first) {
+      OperatingSystem os = operating_system_from_string(n->string);
+
+      // is OS string correct? -> error
+      if (os == OperatingSystem_Null && n->string.size > 0) {
+        t_errorf_md(file_path, source, n, "test is defined for unknown os: \"%S\"\n", n->string);
+        goto exit;
+      }
+
+      for MD_EachNode(field, n->first) {
+        // define table for mapping string to a directive kind
+        struct {
+          T_DbgScriptDirectiveKind kind;
+          String8                  string;
+        } dir_string_map[] = {
+          #define X(q,w) { T_DbgScriptDirectiveKind_##q, str8_lit(w) },
+          T_DbgScriptDirectiveKind_XList
+          #undef X
+        };
+
+        // string -> directive
+        T_DbgScriptDirectiveKind kind = T_DbgScriptDirectiveKind_Null;
+        for EachElement(i, dir_string_map) {
+          if (str8_matchi(field->string, dir_string_map[i].string))  {
+            kind = dir_string_map[i].kind;
+            break;
+          }
+        }
+
+        // was directive found? -> error
+        if (kind == T_DbgScriptDirectiveKind_Null) {
+          t_errorf_md(file_path, source, n, "unknown field in test header \"%S\"\n", field->string);
           goto exit;
         }
 
+        // alloc directive node
+        T_DbgScriptDirective *dir = push_array(arena, T_DbgScriptDirective, 1);
+        dir->kind = kind;
+        dir->pt   = mg_txt_pt_from_string_off(source, field->src_offset);
+
+        // TODO: collapse
+        if (field->flags & MD_NodeFlag_HasBraceLeft) {
+          // walk each sub-field of the MD node, and find nodes for the directive
+          if (kind == T_DbgScriptDirectiveKind_Compile) {
+            for MD_EachNode(sub_field, field->first) {
+              // compiler override
+              if (str8_matchi(sub_field->string, str8_lit("cc"))) {
+                MD_Node *cc = sub_field->first;
+                if (~cc->flags & MD_NodeFlag_StringLiteral) {
+                  t_errorf_md(file_path, source, sub_field, "value of CC must be a string literal e.g. CC: \"clang\"\n");
+                  goto exit;
+                }
+
+                if      (str8_matchi(cc->string, str8_lit("clang"))) { dir->compile.cc = T_Compiler_Clang; }
+                else if (str8_matchi(cc->string, str8_lit("cl")))    { dir->compile.cc = T_Compiler_Cl;    }
+                else {
+                  t_errorf_md(file_path, source, cc, "unknown compiler name: \"%S\"\n", sub_field->string);
+                  goto exit;
+                }
+              }
+              // commnad line for the compiler
+              else if (str8_matchi(sub_field->string, str8_lit("args"))) {
+                MD_Node *args = sub_field->first;
+                if (~args->flags & MD_NodeFlag_StringLiteral) {
+                  t_errorf_md(file_path, source, args, "value of ARGS must be a string literal\n");
+                  goto exit;
+                }
+                dir->args = str8_copy(arena, args->string);
+              }
+              // unknown field
+              else {
+                t_errorf_md(file_path, source, sub_field, "unknown field \"%S\"\n", sub_field->string);
+                goto exit;
+              }
+            }
+          }
+        }
+        // MD node is a string
+        else {
+          // is value present? -> error
+          if (md_node_is_nil(field->first)) {
+            t_errorf_md(file_path, source, field, "missing value on field %S\n", field->string);
+            goto exit;
+          }
+
+          // more than one node? -> error
+          if ( ! md_node_is_nil(field->first->next)) {
+            t_errorf_md(file_path, source, field, "field %S accepts only one value\n", field->string);
+            goto exit;
+          }
+
+          // node is not a string literal? -> error
+          if (~field->first->flags & MD_NodeFlag_StringLiteral) {
+            t_errorf_md(file_path, source, field, "field %S accepts only strings\n", field->string);
+            goto exit;
+          }
+
+          // copy string from MD node
+          dir->args = str8_copy(arena, field->first->string);
+        }
+
+        // append new directive
+        T_DbgScriptDirectiveList *list = &script.directives[os][kind];
+        SLLQueuePush(list->first, list->last, dir);
+        list->count += 1;
+      }
+    }
+  }
+  
+  // @file:
+  {
+    // collect file nodes
+    MD_NodePtrList files = {0};
+    for MD_EachNode(n, script_parse.root->first->next) {
+      if (str8_matchi(n->string, str8_lit("file"))) {
+
+        // is file value a string? -> error
+        if ( ! md_node_is_nil(n->first->next) || ! (n->first->flags & MD_NodeFlag_StringLiteral)) {
+          t_errorf_md(file_path, source, n, "value of the 'file' must be a string, (e.g. file: \"main.c\")\n");
+          goto exit;
+        }
+
+        // append file node
         md_node_ptr_list_push(scratch.arena, &files, n);
       }
     }
 
+    // no nodes? -> treat whole file as a script
     if (files.count == 0) {
       MD_Node *whole_file             = push_array(scratch.arena, MD_Node, 1);
       whole_file->first               = push_array(scratch.arena, MD_Node, 1);
@@ -618,77 +696,106 @@ t_dbg_script_from_source(Arena *arena, String8 file_path, String8 source, T_DbgS
     for EachNode(n_ptr, MD_NodePtrNode, files.first) {
       MD_Node *n = n_ptr->v;
 
+      // get file name
+      String8 file_name = n->first->string;
+
+      // was file seen? -> error
+      MD_Node *is_declared = hash_map_search_string_raw(&files_hm, file_name);
+      if (is_declared) {
+        TxtPt pt = mg_txt_pt_from_string_off(source, is_declared->src_offset);
+        t_errorf_md(file_path, source, n, "file %S is already declared at line %llu", file_name, pt.line);
+        goto exit;
+      }
+      hash_map_push_string_raw(scratch.arena, &files_hm, file_name, n);
+
+      // file ends at EOF or before the next file directive
       U64 src_opl = source.size;
       if (n_ptr->next) {
         src_opl = n_ptr->next->v->src_offset;
       }
 
+      // sub-string the source file
       String8 sub_source = str8_substr(source, r1u64(n->src_offset, src_opl));
       U64     file_min   = str8_find_needle(sub_source, 0, str8_lit("\n"), 0) + 1;
       U64     file_max   = str8_find_needle_reverse(sub_source, 0, str8_lit("\n"), 0);
       sub_source = str8_substr(sub_source, r1u64(file_min, file_max));
 
+      // append new file node
       T_DbgScriptFile *file = push_array(arena, T_DbgScriptFile, 1);
-      file->path   = t_make_file_path(arena, n->first->string);
+      file->path   = t_make_file_path(arena, file_name);
       file->source = sub_source;
-      t_find_line_and_col(source, n, &file->line, 0);
+      file->pt     = mg_txt_pt_from_string_off(source, n->src_offset);
       SLLQueuePush(script.files.first, script.files.last, file);
       script.files.count += 1;
-
-      hash_map_push_raw_raw(scratch.arena, &files_hm, n, file);
     }
   }
   
-  // programs
+  // @program:
   {
-    HashMap hm = {0}; // <U64, T_DbgScriptProgram>
+    HashMap hm = {0}; // (U64, T_DbgScriptProgram)
     for MD_EachNode(n, script_parse.root->first->next) {
+      // find order number nodes
       U64 order = 0;
-      if (try_u64_from_str8_c_rules(n->string, &order)) {
-        T_DbgScriptFile *file = 0;
-        for (file = script.files.first; file != 0; file = file->next) {
-          if (file->source.str <= n->string.str && n->string.str < (file->source.str + file->source.size)) {
-            break;
-          }
+      if ( ! try_u64_from_str8_c_rules(n->string, &order)) {
+          continue;
+      }
+
+      // correlate MD node to the script file
+      T_DbgScriptFile *file = 0;
+      for (file = script.files.first; file != 0; file = file->next) {
+        if (file->source.str <= n->string.str && n->string.str < (file->source.str + file->source.size)) {
+          break;
         }
-        AssertAlways(file != 0);
+      }
+
+      // found file? -> error
+      if (file == 0) {
+        t_errorf_md(file_path, source, n, "failed to correlate MD node to the script source file\n");
+        goto exit;
+      }
+      
+      // is order number unique? -> error
+      T_DbgScriptProgram *p = hash_map_search_u64_raw(&hm, order);
+      if (p) {
+        t_errorf_md(file_path, source, n, "duplicate order number %llu found, previous defined at %llu\n", order, p->pt.line);
+        goto exit;
+      }
+
+      // alloc & fill out program
+      p = push_array(arena, T_DbgScriptProgram, 1);
+      p->pt    = mg_txt_pt_from_string_off(source, n->src_offset);
+      p->order = order;
+      p->os    = OperatingSystem_CURRENT;
+      p->file  = file;
+      hash_map_push_u64_raw(scratch.arena, &hm, order, p);
+      
+      for MD_EachNode(cmd_n, n->first) {
+        // alloc & fill out command
+        T_DbgScriptCmd *cmd = push_array(arena, T_DbgScriptCmd, 1);
+        cmd->kind = t_dbg_script_cmd_kind_from_string(cmd_n->string);
+        cmd->pt   = mg_txt_pt_from_string_off(source, n->src_offset);
+        SLLQueuePush(p->first, p->last, cmd);
+        p->count += 1;
         
-        T_DbgScriptProgram *p = hash_map_search_u64_raw(&hm, order);
-        if (p == 0) {
-          p = push_array(arena, T_DbgScriptProgram, 1);
-          t_find_line_and_col(source, n, &p->line, 0);
-          p->order = order;
-          p->os    = OperatingSystem_CURRENT;
-          p->file  = file;
-          hash_map_push_u64_raw(scratch.arena, &hm, order, p);
-        } else {
-          t_errorf("ERROR: duplicate order number %llu found on line %llu\n", (unsigned long long)order, (unsigned long long)p->line);
-        }
-        
-        for MD_EachNode(cmd_n, n->first) {
-          // push new cmd
-          T_DbgScriptCmd *cmd = push_array(arena, T_DbgScriptCmd, 1);
-          cmd->kind = t_dbg_script_cmd_kind_from_string(cmd_n->string);
-          t_find_line_and_col(source, n, &cmd->line_num, &cmd->col_num);
-          Assert(cmd->kind != T_DbgScriptCmdKind_Null);
-          SLLQueuePush(p->first, p->last, cmd);
-          p->count += 1;
-          
-          // parse cmd args
-          MD_Node *cmd_arg = cmd_n->first;
-          if ( ! md_node_is_nil(cmd_arg)) {
-            if (cmd->kind == T_DbgScriptCmdKind_At) {
-              AssertAlways(try_s64_from_str8_c_rules(cmd_arg->string, &cmd->at.delta));
-            } else if (cmd->kind == T_DbgScriptCmdKind_Eval) {
-              NotImplemented;
-            } else if (cmd->kind == T_DbgScriptCmdKind_Breakpoint) {
-              NotImplemented;
-            }
+        // parse cmd args
+        MD_Node *cmd_arg = cmd_n->first;
+
+        if (md_node_is_nil(cmd_arg)) { continue; }
+
+        if (cmd->kind == T_DbgScriptCmdKind_At) {
+          if ( ! try_s64_from_str8_c_rules(cmd_arg->string, &cmd->at_delta)) {
+            t_errorf_md(file_path, source, cmd_arg, "failed to parse \"%S\"", cmd_arg->string);
+            goto exit;
           }
+        } else if (cmd->kind == T_DbgScriptCmdKind_Eval) {
+          t_errorf_md(file_path, source, cmd_arg, "TODO: Eval\n");
+        } else if (cmd->kind == T_DbgScriptCmdKind_Breakpoint) {
+          t_errorf_md(file_path, source, cmd_arg, "TODO: Breakpoint\n");
         }
       }
     }
     
+    // extract commands and sort based on order number
     script.program_count = hm.count;
     script.programs      = values_from_hash_map_raw(arena, &hm);
     radsort(script.programs, script.program_count, t_dbg_script_program_is_before);
@@ -696,9 +803,7 @@ t_dbg_script_from_source(Arena *arena, String8 file_path, String8 source, T_DbgS
   
   is_ok = 1;
   exit:;
-  if (script_out) {
-    *script_out = script;
-  }
+  if (script_out) { *script_out = script; }
   scratch_end(scratch);
   return is_ok;
 }
@@ -715,7 +820,7 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
     
     if (program->os == OperatingSystem_CURRENT) {
       for EachNode(cmd, T_DbgScriptCmd, program->first) {
-        t_infof("[%llu] Command: %S:%llu %S\n", program->order, script->file_path, (unsigned long long)cmd->line_num, t_string_from_dbg_script_cmd_kind(cmd->kind));
+        t_infof("[%llu] Command: %S:%llu %S\n", program->order, script->file_path, cmd->pt.line, t_string_from_dbg_script_cmd_kind(cmd->kind));
         
         switch (cmd->kind) {
           case T_DbgScriptCmdKind_Null:             break;
@@ -731,9 +836,12 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
           case T_DbgScriptCmdKind_Breakpoint:       NotImplemented; break;
           case T_DbgScriptCmdKind_ClearBreakpoints: t_dbg_send_cmdf(0,0,0, "clear_breakpoints"); break;
           case T_DbgScriptCmdKind_Run:              t_dbg_send_cmd(str8_lit("run"),  timeout_us, 0, 0); break;
+          case T_DbgScriptCmdKind_RunToLine: {
+            U64 line = cmd->pt.line - program->file->pt.line;
+            t_dbg_send_cmd_and_wait_stop(str8f(scratch.arena, "run_to_line \"%S:%llu\"", program->file->path, line), timeout_us);
+          } break;
           case T_DbgScriptCmdKind_At: {
-            // TODO: debugger does not populate eval cache with registers before first frame,
-            // so this racy, for now use lower level option
+            // TODO: debugger does not populate eval cache with registers before first frame -- for now use lower level option
 #if 0
             U64 ip = u64_from_str8(t_dbg_value_from_exprf(scratch.arena, "reg:rip"), 10);
             if (ip == 0) {
@@ -743,7 +851,7 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
 #else
             T_DbgState *temp_status = t_dbg_state(scratch.arena, T_Dbg_DefaultTimeout);
             if (temp_status == 0) {
-              t_errorf("ERROR: %S:%llu: failed to query IP\n", script->file_path, (unsigned long long)cmd->line_num);
+              t_errorf("ERROR: %S:%llu: failed to query IP\n", script->file_path, cmd->pt.line);
               goto exit;
             }
             U64 ip = temp_status->ip;
@@ -752,29 +860,29 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
             // map IP -> source location
             T_DbgLineArray lines = {0};
             if (t_dbg_src_line(scratch.arena, ip, &lines, T_Dbg_DefaultTimeout) == 0) {
-              t_errorf("ERROR: %S:%llu: IP (0x%llx) does not map to a source line\n", script->file_path, (unsigned long long)cmd->line_num, (unsigned long long)ip);
+              t_errorf("ERROR: %S:%llu: IP (0x%llx) does not map to a source line\n", script->file_path, cmd->pt.line, ip);
               goto exit;
             }
             
             // compute line where debugger must be
-            S64 at_line_s64 = (S64)(program->line - program->file->line) + cmd->at.delta;
+            S64 at_line_s64 = (S64)(program->pt.line - program->file->pt.line) + cmd->at_delta;
             U64 at_line_u64 = at_line_s64 >= 0 ? (U64)at_line_s64 : 0;
             AssertAlways(at_line_u64 > 0);
 
             if (lines.count == 0) {
-              t_errorf("ERROR: %S:%llu:%llu: no source location maps for vaddr: 0x%llx\n", script->file_path, (unsigned long long)cmd->line_num, (unsigned long long)cmd->col_num, (unsigned long long)ip);
+              t_errorf("ERROR: %S:%llu:%llu: no source location maps for vaddr: 0x%llx\n", script->file_path, cmd->pt.line, cmd->pt.column, ip);
               goto exit;
             }
             
             // match expected vs current debugger locations
             for EachIndex(i, lines.count) {
-              B32 mismatch = lines.v[i].line_num != at_line_u64 || 
+              B32 mismatch = lines.v[i].pt.line != at_line_u64 || 
                              !str8_match(lines.v[i].file_path, program->file->path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
               if (mismatch) {
-                t_errorf("ERROR: %S:%llu: location check did not pass:\n", script->file_path, (unsigned long long)cmd->line_num);
-                t_errorf("  Expected: %S:%llu\n", program->file->path, (unsigned long long)at_line_u64);
-                t_errorf("  Got     : %S:%llu\n", lines.v[i].file_path, (unsigned long long)lines.v[i].line_num);
-                t_errorf("  IP      : 0x%llx\n",  (unsigned long long)ip);
+                t_errorf("ERROR: %S:%llu: location check did not pass:\n", script->file_path, cmd->pt.line);
+                t_errorf("  Expected: %S:%llu\n", program->file->path, at_line_u64);
+                t_errorf("  Got     : %S:%llu\n", lines.v[i].file_path, lines.v[i].pt.line);
+                t_errorf("  IP      : 0x%llx\n",  ip);
                 goto exit;
               }
             }
@@ -796,11 +904,6 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
 internal
 T_RunSig(dbg_script_runner)
 {
-  if ( ! file_path_exists(t_raddbg_path())) {
-    t_errorf("ERROR: failed to find debugger \"%S\"\n", t_raddbg_path());
-    T_Ok(0);
-  }
-  
   // read source file
   String8 source = data_from_file_path(arena, user_data);
   if (source.size == 0) {
@@ -810,7 +913,7 @@ T_RunSig(dbg_script_runner)
   
   // source -> script
   T_DbgScript script = {0};
-  if ( ! t_dbg_script_from_source(arena, user_data, source, &script)) {
+  if ( ! t_dbg_parse_script(arena, user_data, source, &script)) {
     result_out->status = T_RunStatus_Fail;
     goto exit;
   }
@@ -818,20 +921,16 @@ T_RunSig(dbg_script_runner)
   // write source files to test folder
   for EachNode(file, T_DbgScriptFile, script.files.first) {
     if (write_data_to_file_path(file->path, file->source) == 0) {
-      t_errorf("ERROR: %S:%llu: failed to write: \"%S\"\n", user_data, (unsigned long long)file->line, file->path);
+      t_errorf("ERROR: %S:%llu: failed to write: \"%S\"\n", user_data, file->pt.line, file->path);
       T_Ok(0);
     }
-  }
-
-  if (script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Skip].count) {
-    result_out->status = T_RunStatus_Skip;
-    goto exit;
   }
 
   // compiler vars
   HashTable *script_vars = hash_table_init(arena, 1000);
   hash_table_push_path_string(arena, script_vars, str8_lit("FILE"), user_data);
   hash_table_push_path_string(arena, script_vars, str8_lit("CWD"), g_wdir);
+  hash_table_push_path_string(arena, script_vars, str8_lit("SRC"), t_src_path());
   
   // run compilers
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Compile].first) {
@@ -867,7 +966,7 @@ T_RunSig(dbg_script_runner)
     if (compiler == T_Compiler_Cl) { g_output = str8_skip(g_output, str8_chop_line(&g_output).size); } // file name print
 
     if (g_last_exit_code) {
-      t_errorf("ERROR: %S:%llu: %S\n", script.file_path, (unsigned long long)directive->line, g_errors);
+      t_errorf("ERROR: %S:%llu: %S\n", script.file_path, (unsigned long long)directive->pt.line, g_errors);
       if (g_stop_on_first_fail_or_crash) {
         T_Ok(0);
       }
@@ -883,11 +982,17 @@ T_RunSig(dbg_script_runner)
       T_Ok(0);
     }
     if (g_last_exit_code != 0) {
-      t_errorf("ERROR: %S:%llu: %S\n", script.file_path, (unsigned long long)directive->line, g_errors);
+      t_errorf("ERROR: %S:%llu: %S\n", script.file_path, (unsigned long long)directive->pt.line, g_errors);
       T_Ok(0);
     }
   }
-  
+
+  // is skip flag set? -> exit
+  if (g_build_only || script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Skip].count) {
+    result_out->status = T_RunStatus_Skip;
+    goto exit;
+  }
+
   // launch targets
   for EachNode(directive, T_DbgScriptDirective, script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Launch].first) {
     String8 expanded_args = lnk_expand_env_vars_windows(arena, script_vars, directive->args);

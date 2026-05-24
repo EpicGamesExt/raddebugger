@@ -281,7 +281,7 @@ SKIP(d2r_line_table)
   for EachElement(i, test_table) {
     for EachIndex(k, test_table[i].line_size) {
       String8 cmdl = str8f(arena, "-voff2line -voff:0x%llx %S", test_table[i].voff + k, t_make_file_path(arena, str8_lit("a.rdi")));
-      t_invoke_radbin(cmdl.str);
+      t_invoke_radbin((char *)cmdl.str);
 
       if (g_last_exit_code != 0) {
         t_errorf("radbin exited with %llu on \"%S\"\n", (unsigned long long)g_last_exit_code, cmdl);
