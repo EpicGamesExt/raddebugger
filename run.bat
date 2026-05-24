@@ -27,6 +27,7 @@ if "%TORTURE_ARGS:~0,3%" == "-- " set "TORTURE_ARGS=%TORTURE_ARGS:~3%" && goto p
 set "TORTURE_ARGS=%TORTURE_ARGS:* -- =%"
 
 :parse_done
+if not defined TORTURE_ARGS set "TORTURE_ARGS=*
 
 for %%m in (%MODE_VALUES%) do for %%c in (%CC_VALUES%) do (
   setlocal

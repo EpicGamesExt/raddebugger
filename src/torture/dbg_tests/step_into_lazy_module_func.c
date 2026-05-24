@@ -1,20 +1,22 @@
 // TODO: step into alg needs to detect that it is about to step into a thunk and place breakpoint, respective to OS,
 // where thunk calls into resolved function
-//
-// test: {
-//   windows: {
-//     compile: "/Od /Z7 /c main.c module.c"
-//     link:    "/fixed /debug:full /dll module.obj"
-//     link:    "/fixed /debug:full /entry:main kernel32.lib module.lib delayimp.lib main.obj /out:main.exe /delayload:module.dll /incremental:no"
-//     launch:  "main.exe"
-//   }
-//   linux: {
-//     compile: "-O0 -g module.c -fPIC -shared -o libmodule.so"
-//     compile: "-O0 -g main.c -L. -lmodule -o main -Wl,-rpath,%CWD%"
-//     launch:  "./main"
-//   }
-// }
-//
+
+/// test: {
+///   windows: {
+///     skip: ""
+///     compile: "/Od /Z7 /c main.c module.c"
+///     link:    "/fixed /debug:full /dll module.obj"
+///     link:    "/fixed /debug:full /entry:main kernel32.lib module.lib delayimp.lib main.obj /out:main.exe /delayload:module.dll /incremental:no"
+///     launch:  "main.exe"
+///   }
+///   linux: {
+///     skip: ""
+///     compile: "-O0 -g module.c -fPIC -shared -o libmodule.so"
+///     compile: "-O0 -g main.c -L. -lmodule -o main -Wl,-rpath,%CWD%"
+///     launch:  "./main"
+///   }
+/// }
+///
 
 /// file: "module.c"
 

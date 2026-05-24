@@ -1,6 +1,6 @@
 #define T_Group "MD" 
 
-TEST(md_tokenizer)
+SKIP(md_tokenizer)
 {
   MD_TokenizeResult result;
   

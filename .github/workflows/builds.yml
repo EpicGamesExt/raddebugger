@@ -8,9 +8,8 @@ on:
     paths-ignore:
       - '**.md'
 
-# TODO: fix skips
 env:
-  TORTURE_FLAGS: "--gen_crash_dump -s:d2r::d2r_line_table,d2r::d2r_checksums" 
+  TORTURE_FLAGS: "* --gen_crash_dump" 
 
 jobs:
   build-ubuntu-24-04:

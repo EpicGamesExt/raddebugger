@@ -1,8 +1,6 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#define T_Group "Dwarf"
-
 internal U64
 t_dw_test_uleb128(U64 v, U64 expected_length)
 {
@@ -1040,4 +1038,3 @@ TEST(reg_split_spill)
 }
 #endif
 
-#undef T_Group

@@ -5,8 +5,6 @@
 //
 // [ ] d2r_types alias size and byte size on __float80 typedef mismatch
 
-#define T_Group "d2r"
-
 internal RDI_Parsed *
 d2r_rdi_from_dwarf_writer(Arena *arena, DW_Writer *writer)
 {
@@ -232,7 +230,7 @@ T_Ok(str8_match(str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx), s
   dw_writer_end(&writer);
 }
 
-TEST(d2r_line_table)
+SKIP(d2r_line_table)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   String8 comp_dir  = str8_lit("c:/DEVEL/");
@@ -303,7 +301,7 @@ TEST(d2r_line_table)
   dw_writer_end(&writer);
 }
 
-TEST(d2r_checksums)
+SKIP(d2r_checksums)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
   
@@ -553,4 +551,3 @@ TEST(d2r_general)
   dw_writer_end(&writer);
 }
 
-#undef T_Group

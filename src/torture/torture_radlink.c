@@ -433,8 +433,6 @@ t_write_entry_obj(void)
 
 ////////////////////////////////
 
-#define T_Group "Linker" 
-
 TEST(machine_compat_check)
 {
   // unknown.obj
@@ -4712,7 +4710,7 @@ TEST(relocate_undefined_section_symbol)
     T_Ok(t_write_def_obj(obj_name, (T_COFF_DefObj){
       .machine = T_COFF_DefSetMachine(X64),
       .sections = (T_COFF_DefSection[]){
-        { target_name, sect_name, target_name, .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+        { target_name, sect_name, str8_cstring(target_name), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
         {0}
       },
       .symbols = (T_COFF_DefSymbol[]){
@@ -7203,4 +7201,3 @@ TEST(lib_member_reloc_apply_off_out_of_bounds)
 }
 #endif
 
-#undef T_Group

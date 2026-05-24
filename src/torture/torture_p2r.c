@@ -1,5 +1,3 @@
-#define T_Group "p2r"
-
 #if OS_WINDOWS
 
 // TODO: location is not baked consistently
@@ -126,6 +124,4 @@ TEST(p2r_determ)
 }
 #endif
 #endif
-
-#undef T_Group
 

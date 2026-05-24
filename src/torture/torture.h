@@ -5,11 +5,25 @@
 
 ////////////////////////////////
 
+#define T_RESET  "\x1b[0m"
+#define T_RED    "\x1b[31m"
+#define T_GREEN  "\x1b[32m"
+#define T_YELLOW "\x1b[33m"
+#define T_BLUE   "\x1b[34m"
+
+//#define X(n, c)
+#define T_Run_XList \
+  X(Fail,  T_RED)   \
+  X(Crash, T_RED)   \
+  X(Pass,  T_GREEN) \
+  X(Skip,  T_RESET)
+
 typedef enum
 {
-  T_RunStatus_Fail,
-  T_RunStatus_Crash,
-  T_RunStatus_Pass,
+#define X(n,...) T_RunStatus_##n,
+T_Run_XList
+#undef X
+  T_RunStatus_Count
 } T_RunStatus;
 
 typedef struct
@@ -25,19 +39,20 @@ typedef                void (*T_Run)(Arena *arena, String8 user_data, T_RunResul
 
 typedef struct
 {
-  T_Run       run;
-  String8     user_data;
-  T_RunResult result;
-} T_RunCtx;
-
-typedef struct
-{
-  char   *group;
+  char   *file;
   char   *label;
   int     decl_line;
   T_Run   r;
+  B32     skip;
   String8 user_data;
 } T_Test;
+
+typedef struct
+{
+  T_Test     *test;
+  String8     user_data;
+  T_RunResult result;
+} T_RunCtx;
 
 typedef enum
 {
@@ -61,25 +76,28 @@ extern T_Test   g_torture_tests_[0xffffff];
 
 internal void t_break_if_debugger_present(void);
 
-#define T_AddTest(name, l, ...)            \
+#define T_AddTest(name, f, l, skip, ...)      \
   T_RunSig(name);                          \
   __VA_ARGS__ void t_add_test_##name(void) \
   {                                        \
-    g_torture_tests_[g_torture_test_count++] = (T_Test){ .group = T_Group, .label = Stringify(name), .r = &t_##name, .decl_line = l }; \
+    g_torture_tests_[g_torture_test_count++] = (T_Test){ f, Stringify(name), l, &t_##name, skip }; \
   }
 
 #if COMPILER_MSVC
 # pragma section(".CRT$XCU", read)
-# define TEST_(name)                                                          \
-  T_AddTest(name, __LINE__)                                                   \
+# define TEST_(name, skip)                                                    \
+  T_AddTest(name, __FILE__, __LINE__, skip)                                   \
   __declspec(allocate(".CRT$XCU")) void(*r_##name)(void) = t_add_test_##name; \
   __pragma(comment(linker, "/include:" Stringify(r_##name)))
 #else
-# define TEST_(name) T_AddTest(name, __LINE__, __attribute__((constructor)))
+# define TEST_(name, skip) T_AddTest(name, __FILE__, __LINE__, skip, __attribute__((constructor)))
 #endif
 
 #define TEST(name) \
-  TEST_(name)      \
+  TEST_(name, 0)   \
+  T_RunSig(name)
+#define SKIP(name) \
+  TEST_(name, 1)   \
   T_RunSig(name)
 
 #define T_Ok(c) do { if (!(c)) {                                                                          \
@@ -113,7 +131,7 @@ internal String8 t_make_file_path(Arena *arena, String8 name);
 // test runner
 internal void        t_run_caller(void *raw_ctx);
 internal void        t_run_fail_handler(void *raw_ctx);
-internal T_RunResult t_run(T_Run run, String8 user_data);
+internal T_RunResult t_run(T_Test *test, String8 user_data);
 
 // tools
 internal String8 t_radbin_path(void);

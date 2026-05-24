@@ -21,31 +21,37 @@ typedef struct
   T_DbgScriptFile *last;
 } T_DbgScriptFileList;
 
+#define T_DbgScriptCmdKind_XList          \
+    X(Breakpoint,       "bp")             \
+    X(ClearBreakpoints, "bp_clear")       \
+    X(Run,              "run")            \
+    X(Halt,             "halt")           \
+    X(StepOver,         "step_over")      \
+    X(StepInto,         "step_into")      \
+    X(StepOut,          "step_out")       \
+    X(StepOverInst,     "step_over_inst") \
+    X(StepIntoInst,     "step_over_inst") \
+    X(StepOverLine,     "step_over_line") \
+    X(StepIntoLine,     "step_into_line") \
+    X(KillAll,          "kll_all")        \
+    X(At,               "at")             \
+    X(Eval,             "eval")
+
 typedef enum
 {
   T_DbgScriptCmdKind_Null,
-  T_DbgScriptCmdKind_Breakpoint,
-  T_DbgScriptCmdKind_ClearBreakpoints,
-  T_DbgScriptCmdKind_Run,
-  T_DbgScriptCmdKind_Halt,
-  T_DbgScriptCmdKind_StepOver,
-  T_DbgScriptCmdKind_StepInto,
-  T_DbgScriptCmdKind_StepOut,
-  T_DbgScriptCmdKind_StepOverInst,
-  T_DbgScriptCmdKind_StepIntoInst,
-  T_DbgScriptCmdKind_StepOverLine,
-  T_DbgScriptCmdKind_StepIntoLine,
-  T_DbgScriptCmdKind_KillAll,
-  T_DbgScriptCmdKind_At,
-  T_DbgScriptCmdKind_Eval,
+#define X(n,...) T_DbgScriptCmdKind_##n,
+  T_DbgScriptCmdKind_XList
+#undef X
   T_DbgScriptCmdKind_Count
 } T_DbgScriptCmdKind;
 
 typedef struct T_DbgScriptCmd
 {
   struct T_DbgScriptCmd *next;
-  T_DbgScriptCmdKind  kind;
-  U64 line;
+  T_DbgScriptCmdKind kind;
+  U64 line_num;
+  U64 col_num;
   union {
     struct {
       S64 delta; 
@@ -78,6 +84,7 @@ typedef enum
   T_DbgScriptDirectiveKind_Compile,
   T_DbgScriptDirectiveKind_Link,
   T_DbgScriptDirectiveKind_Launch,
+  T_DbgScriptDirectiveKind_Skip,
   T_DbgScriptDirectiveKind_Count,
 } T_DbgScriptDirectiveKind;
 
@@ -89,7 +96,7 @@ typedef struct T_DbgScriptDirective
   String8                  args;
   union {
     struct {
-      T_Compiler compiler;
+      T_Compiler cc;
     } compile;
   };
 } T_DbgScriptDirective;

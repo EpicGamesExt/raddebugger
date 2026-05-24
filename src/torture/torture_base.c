@@ -1,8 +1,6 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#define T_Group "Base"
-
 TEST(str8_list_substr)
 {
   String8List zero_list = {0};
@@ -341,4 +339,3 @@ TEST(hash_map)
   }
 }
 
-#undef T_Group

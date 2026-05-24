@@ -926,7 +926,9 @@ internal void *    keys_from_hash_map_raw   ( Arena *arena, HashMap *hm) { retur
 
 // values
 force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_value_u64) { MemoryCopy(buffer, &kv->value.value_u64, sizeof(kv->value.value_u64)); }
-internal U64 * values_from_hash_map_u64(Arena *arena, HashMap *hm) { return hash_map_extract(arena, hm, 0, 0, hash_map_extract_value_u64, sizeof(U64)).values; }
+force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_value_raw) { MemoryCopy(buffer, &kv->value.value_raw, sizeof(kv->value.value_raw)); }
+internal U64 * values_from_hash_map_u64(Arena *arena, HashMap *hm) { return hash_map_extract(arena, hm, 0, 0, hash_map_extract_value_u64, sizeof(U64)).values;    }
+internal void * values_from_hash_map_raw(Arena *arena, HashMap *hm) {return hash_map_extract(arena, hm, 0, 0, hash_map_extract_value_raw, sizeof(void *)).values; }
 
 ////////////////////////////////
 

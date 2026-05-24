@@ -23,18 +23,53 @@ global String8  g_output;
 global String8  g_errors;
 
 // tools
-global B32     g_dbg_graphical;
+global B32     g_gui;
 global String8 g_radbin_path;
 global String8 g_cl_path;
 global String8 g_clang_path;
 global String8 g_gcc_path;
 global String8 g_linker_path;
 
+////////////////////////////////
+
+internal String8
+t_group_from_test(T_Test *test)
+{
+  String8 file = str8_cstring(test->file);
+  String8 group = str8_chop_last_dot(str8_skip_last_slash(file));
+  if (str8_match_wildcard(group, str8_lit("torture_*"), StringMatchFlag_CaseInsensitive)) {
+    group = str8_skip(group, str8_lit("torture_").size);
+  }
+  return group;
+}
+
+internal String8
+t_group_from_test_idx(U64 test_idx)
+{
+  return t_group_from_test(g_torture_tests[test_idx]);
+}
+
 internal String8
 t_test_name_from_idx(Arena *arena, U64 test_idx)
 {
-  return str8f(arena, "%s::%s", g_torture_tests[test_idx]->group, g_torture_tests[test_idx]->label);
+  return str8f(arena, "%.*s/%s", str8_varg(t_group_from_test_idx(test_idx)), g_torture_tests[test_idx]->label);
 }
+
+internal String8List
+t_test_group_from_name(Arena *arena, String8 pattern)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List matches = {0};
+  for EachIndex(i, g_torture_test_count) {
+    if (str8_match_wildcard(t_test_name_from_idx(scratch.arena, i), pattern, 0)) {
+      str8_list_push(arena, &matches, t_group_from_test_idx(i));
+    }
+  }
+  scratch_end(scratch);
+  return matches;
+}
+
+////////////////////////////////
 
 internal char *
 t_string_from_result(T_RunStatus v)
@@ -43,8 +78,22 @@ t_string_from_result(T_RunStatus v)
     case T_RunStatus_Fail:  return "FAIL";
     case T_RunStatus_Crash: return "CRASH";
     case T_RunStatus_Pass:  return "PASS";
+    case T_RunStatus_Skip:  return "SKIP";
+    default: break;
   }
   return 0;
+}
+
+internal char *
+t_color_from_result(T_RunStatus v)
+{
+  switch (v) {
+#define X(n,c,...) case T_RunStatus_##n: return c;
+    T_Run_XList
+#undef X
+  default: break;
+  }
+  return "null";
 }
 
 internal void
@@ -167,17 +216,22 @@ t_run_caller(void *raw_ctx)
   ctx->result.status = T_RunStatus_Pass;
 
   String8List test_out = {0};
-  ctx->run(scratch.arena, ctx->user_data, &ctx->result, &test_out);
+
+  if (ctx->test->skip) {
+    ctx->result.status = T_RunStatus_Skip;
+  } else {
+    ctx->test->r(scratch.arena, ctx->user_data, &ctx->result, &test_out);
+  }
 
   if (ctx->result.status == T_RunStatus_Fail || ctx->result.status == T_RunStatus_Crash) {
     for EachNode(n, String8Node, test_out.first) {
       t_errorf("%S", n->string);
     }
     if (g_errors.size) {
-      t_errorf("stderr: \"%S\"\n", g_errors);
+      t_errorf("%S\n", g_errors);
     }
     if (g_output.size) {
-      t_errorf("stdout: \"%S\"\n", g_output);
+      t_errorf("%S\n", g_output);
     }
   }
 
@@ -185,9 +239,9 @@ t_run_caller(void *raw_ctx)
 }
 
 internal T_RunResult
-t_run(T_Run run, String8 user_data)
+t_run(T_Test *test, String8 user_data)
 {
-  T_RunCtx ctx = { .run = run, .user_data = user_data, .result.status = T_RunStatus_Fail };
+  T_RunCtx ctx = { .test = test, .user_data = user_data, .result.status = T_RunStatus_Fail };
   t_run_caller(&ctx);
   fflush(stdout);
   fflush(stderr);
@@ -332,7 +386,7 @@ t_raddbg_path(void)
     local_persist U8 buffer[4096];
     ArenaParams params = { .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer };
     Arena *arena = arena_alloc_(&params);
-    String8 raddbg_base_name = g_dbg_graphical ? str8_lit("raddbg") : str8_lit("raddbg_non_graphical");
+    String8 raddbg_base_name = g_gui ? str8_lit("raddbg") : str8_lit("raddbg_non_graphical");
 #if OS_WINDOWS
     Temp scratch = scratch_begin(0, 0);
     path = full_path_from_path(arena, str8f(scratch.arena, "%S.exe", raddbg_base_name));
@@ -779,7 +833,7 @@ t_invoke_env(String8 exe_path, String8 cmdline, String8List env, U64 timeout_us)
   exit:;
   for EachElement(i, read_capture_handles)  { file_close(read_capture_handles[i]);  }
   for EachElement(i, write_capture_handles) { file_close(write_capture_handles[i]); }
-  AssertAlways(is_ok);
+
   scratch_end(scratch);
   return is_ok;
 }
@@ -883,7 +937,9 @@ internal int
 t_test_compar(const void *raw_a, const void *raw_b)
 {
   const T_Test *a = raw_a, *b = raw_b;
-  int cmp = str8_compar(str8_cstring(a->group), str8_cstring(b->group), 0);
+  String8 group_a = t_group_from_test((T_Test *)a);
+  String8 group_b = t_group_from_test((T_Test *)b);
+  int cmp = str8_compar(group_a, group_b, 0);
   if (cmp == 0) {
     cmp = u64_compar(&a->decl_line, &b->decl_line);
   }
@@ -1015,9 +1071,36 @@ t_errorf(char *fmt, ...)
 }
 
 internal void
+t_help(void)
+{
+  fprintf(stderr, "--- Help -------------------------------------------------------\n");
+  fprintf(stderr, " %s\n\n", BUILD_TITLE_STRING_LITERAL);
+  fprintf(stderr, " Usage: torture [Options] <Input>\n\n");
+  fprintf(stderr, " Options:\n");
+  fprintf(stderr, "   -list                 Print available test targets\n");
+  fprintf(stderr, "   --gui                 Launch debugger with window\n");
+  fprintf(stderr, "   -cl:<path>            Override default cl path\n");
+  fprintf(stderr, "   -clang:<path>         Override default clang path\n");
+  fprintf(stderr, "   -gcc:<path>           Override default gcc path\n");
+  fprintf(stderr, "   -linker:<path>        Path to PE/COFF linker\n");
+  fprintf(stderr, "   -print_stdout         Print to console stdout and stderr of a run\n");
+  fprintf(stderr, "   -out:<path>           Directory path for test outputs (default \"%.*s\")\n", str8_varg(g_out));
+  fprintf(stderr, "   -verbose              Enable verbose mode\n");
+  fprintf(stderr, "   -help                 Print help menu and exit\n");
+  fprintf(stderr, "\nInputs are wildcard expressions. Prefix with ! to skip matches, or + to force-run matches.\n");
+  fprintf(stderr, "\nExamples:\n");
+  fprintf(stderr, "    torture *                Run all tests\n");
+  fprintf(stderr, "    torture bit_array        Run 'bit_array' test\n");
+  fprintf(stderr, "    torture !*               Skip all tests\n");
+  fprintf(stderr, "    torture * !bit_array     Run all tests but skip 'bit_array'\n");
+  fprintf(stderr, "    torture +*               Force-run all tests\n");
+}
+
+internal void
 t_entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0,0);
+  U64 exit_code = max_U64;
   
   U64 dashes_size = 9999;
   U8 *dashes = push_array(scratch.arena, U8, dashes_size);
@@ -1036,25 +1119,10 @@ t_entry_point(CmdLine *cmdline)
   //
   {
     B32 print_help = cmd_line_has_flag(cmdline, str8_lit("help")) ||
-      cmd_line_has_flag(cmdline, str8_lit("h"));
+                     cmd_line_has_flag(cmdline, str8_lit("h"));
     if (print_help) {
-      PrintHeader("Help");
-      fprintf(stderr, " %s\n\n", BUILD_TITLE_STRING_LITERAL);
-      fprintf(stderr, " Usage: torture [Options] [Files]\n\n");
-      fprintf(stderr, " Options:\n");
-      fprintf(stderr, "   -target:{name[,name]} Selects targets to test\n");
-      fprintf(stderr, "   -skip:{name[,name]}   Selects targets to skip\n");
-      fprintf(stderr, "   -list                 Print available test targets and exit\n");
-      fprintf(stderr, "   -out:{path}           Directory path for test outputs (default \"%.*s\")\n", str8_varg(g_out));
-      fprintf(stderr, "   -verbose              Enable verbose mode\n");
-      fprintf(stderr, "   -cl:{path}            Override default cl path\n");
-      fprintf(stderr, "   -clang:{path}         Override default clang path\n");
-      fprintf(stderr, "   -gcc:{path}           Override default gcc path\n");
-      fprintf(stderr, "   -linker:{path}        Path to PE/COFF linker\n");
-      fprintf(stderr, "   --dbg_graphical       Launch debugger with window\n");
-      fprintf(stderr, "   -print_stdout         Print to console stdout and stderr of a run\n");
-      fprintf(stderr, "   -help                 Print help menu and exit\n");
-      abort_self(0);
+      t_help();
+      goto exit;
     }
   }
 
@@ -1086,7 +1154,7 @@ t_entry_point(CmdLine *cmdline)
   //
   // Compiler overrides
   //
-  g_dbg_graphical = cmd_line_has_flag(cmdline, str8_lit("dbg_graphical"));
+  g_gui           = cmd_line_has_flag(cmdline, str8_lit("gui"));
   g_cl_path       = cmd_line_string(cmdline, str8_lit("cl"));
   g_clang_path    = cmd_line_string(cmdline, str8_lit("clang"));
   g_gcc_path      = cmd_line_string(cmdline, str8_lit("gcc"));
@@ -1106,44 +1174,68 @@ t_entry_point(CmdLine *cmdline)
   //
   // Handle optional -target
   //
-  String8List target = cmdline->inputs;
+  U64List targets = {0};
   {
-    CmdLineOpt *target_opt = cmd_line_opt_from_string(cmdline, str8_lit("target"));
-    if (target_opt == 0) {
-      target_opt = cmd_line_opt_from_string(cmdline, str8_lit("t"));
-    }
+    String8List inputs = {0};
+
+    CmdLineOpt *target_opt = 0;
+    if (target_opt == 0) { target_opt = cmd_line_opt_from_string(cmdline, str8_lit("target")); }
+    if (target_opt == 0) { target_opt = cmd_line_opt_from_string(cmdline, str8_lit("t"));      }
+
+    // handle explicit target switch 
     if (target_opt) {
-      HashTable *ht = hash_table_init(scratch.arena, g_torture_test_count*2);
+      str8_list_concat_in_place(&inputs, &target_opt->value_strings);
+    }
 
-      String8List targets = target_opt->value_strings;
-      str8_list_concat_in_place(&targets, &cmdline->inputs);
+    // accept inputs from the command line as target tests to run
+    str8_list_concat_in_place(&inputs, &cmdline->inputs);
 
-      if (targets.node_count > 0) {
-        for EachNode(pattern_n, String8Node, targets.first) {
-          B32 do_namespace = str8_find_needle(pattern_n->string, 0, str8_lit("::"), 0) < pattern_n->string.size;
-          for EachIndex(test_idx, g_torture_test_count) {
-            String8 name = str8_cstring(g_torture_tests[test_idx]->label);
-            if (do_namespace) {
-              name = t_test_name_from_idx(scratch.arena, test_idx);
-            }
-            if (str8_match_wildcard(name, pattern_n->string, 0)) {
-              if ( ! hash_table_search_string(ht, name)) {
-                hash_table_push_string_raw(scratch.arena, ht, name, 0);
-                str8_list_push(scratch.arena, &target, str8_cstring(g_torture_tests[test_idx]->label));
-              }
-            }
+    // no inputs -> print help and exit
+    if (inputs.node_count == 0) {
+      t_help();
+      goto exit;
+    }
+
+    HashMap hm = {0};
+    for EachNode(input_n, String8Node, inputs.first) {
+      String8 t = input_n->string;
+
+      // parse mode
+      typedef enum { Mode_Default, Mode_Skip, Mode_Force, } Mode;
+      Mode mode = Mode_Default;
+      if      (str8_match_wildcard(t, str8_lit("+*"), 0)) { mode = Mode_Force; t = str8_skip(t, 1); }
+      else if (str8_match_wildcard(t, str8_lit("!*"), 0)) { mode = Mode_Skip;  t = str8_skip(t, 1); }
+
+      if (str8_find_needle(t, 0, str8_lit("/"), 0) >= t.size) {
+        t = str8f(scratch.arena, "*/%S", t);
+      }
+
+      U64 match_count = 0;
+
+      for EachIndex(test_idx, g_torture_test_count) {
+        // match test names
+        String8 test_name = t_test_name_from_idx(scratch.arena, test_idx);
+
+        if (str8_match_wildcard(test_name, t, StringMatchFlag_CaseInsensitive)) {
+          // set skip flag
+          switch (mode) {
+          case Mode_Default: break;
+          case Mode_Skip:  g_torture_tests[test_idx]->skip = 1; break;
+          case Mode_Force: g_torture_tests[test_idx]->skip = 0; break;
           }
-        }
-        
-        if (ht->count == 0) {
-          fprintf(stderr, "ERROR: -target matches not found for the following patterns: ");
-          for EachNode(n, String8Node, target_opt->value_strings.first) {
-            fprintf(stderr, "\"%.*s\"\n", str8_varg(n->string));
+
+          // append test when not in skipping mode
+          if ( ! hash_map_search_string_u64(&hm, test_name)) {
+            hash_map_push_string_u64(scratch.arena, &hm, test_name, 1);
+            u64_list_push(scratch.arena, &targets, test_idx);
           }
-          abort_self(1);
+
+          match_count += 1;
         }
-      } else {
-        fprintf(stderr, "ERROR: -target has invalid number of arguments\n");
+      }
+
+      if (match_count == 0) {
+        fprintf(stderr, "WARNING: no matches found for input: %.*s\n", str8_varg(input_n->string));
       }
     }
   }
@@ -1199,68 +1291,25 @@ t_entry_point(CmdLine *cmdline)
   // Run tests
   //
   {  
-    U64List target_indices_list = {0};
-    if (target.node_count == 0) {
-      for EachIndex(i, g_torture_test_count) { u64_list_push(scratch.arena, &target_indices_list, i); }
-    } else {
-      for EachNode(target_n, String8Node, target.first) {
-        B32 is_target_unknown = 1;
-        for EachIndex(i, g_torture_test_count) {
-          if (str8_match(str8_cstring(g_torture_tests[i]->label), target_n->string, 0)) {
-            u64_list_push(scratch.arena, &target_indices_list, i);
-            is_target_unknown = 0;
-            break;
-          }
-        }
-        if (is_target_unknown) {
-          fprintf(stderr, "ERROR: unknown target \"%.*s\"\n", str8_varg(target_n->string));
-        }
-      }
-    }
-    
-    //
-    // -skip
-    //
-    U64List final_target_list = {0};
-    CmdLineOpt *skip_opt   = cmd_line_opt_from_string(cmdline, str8_lit("skip"));
-    CmdLineOpt *s_opt      = cmd_line_opt_from_string(cmdline, str8_lit("s"));
-    String8List skip_list = skip_opt ? skip_opt->value_strings : s_opt ? s_opt->value_strings : (String8List){0};
-    for EachNode(n, U64Node, target_indices_list.first) {
-      // should test be skipped?
-      B32 include_test = 1;
-      String8 test_name = t_test_name_from_idx(scratch.arena, n->data);
-      for EachNode(pattern_n, String8Node, skip_list.first) {
-        if (str8_match_wildcard(test_name, pattern_n->string, 0)) {
-          include_test = 0;
-          break;
-        }
-      }
-      
-      if (include_test) {
-        u64_list_push(scratch.arena, &final_target_list, n->data);
-      }
-    }
-    
-    U64 skip_count = target_indices_list.count - final_target_list.count;
-    U64Array target_indices = u64_array_from_list(scratch.arena, &final_target_list);
+    U64Array target_indices = u64_array_from_list(scratch.arena, &targets);
     
     U64 max_label_size = 0;
     U64 max_group_size = 0;
     for EachIndex(i, target_indices.count) {
       U64 test_idx = target_indices.v[i];
       max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[test_idx]->label));
-      max_group_size = Max(max_group_size, cstring8_length((U8*)g_torture_tests[test_idx]->group));
+      max_group_size = Max(max_group_size, t_group_from_test_idx(test_idx).size);
     }
     
-    U64 pass_count       = 0;
-    U64 fail_count       = 0;
-    U64 crash_count      = 0;
+    U64 run_counters[T_RunStatus_Count] = {0};
     U64 max_digit_count  = count_digits_u64(target_indices.count, 10);
     U64 total_time_start = now_time_us();
 
     typedef struct { U64 target_idx, d; } Slowest;
     Slowest slowest[5] = {0};
     for EachElement(i, slowest) { slowest[i].target_idx = max_U64; }
+
+    U64List skipped_tests = {0};
 
     for EachIndex(i, target_indices.count) {
       if (i == 0) { PrintHeader("Tests"); }
@@ -1274,7 +1323,7 @@ t_entry_point(CmdLine *cmdline)
       U64 curr_digit_count = count_digits_u64(i+1, 10);
       int idx_align_space_count = (int)(max_digit_count - curr_digit_count);
       fprintf(stdout, "[%.*s%llu/%llu] ", idx_align_space_count, spaces, (unsigned long long)i+1, (unsigned long long)target_indices.count);
-      fprintf(stdout, "%s %.*s:: %s", test->group, (int)(max_group_size - cstring8_length((U8*)test->group)), spaces, test->label);
+      fprintf(stdout, "%.*s %.*s/ %s", str8_varg(t_group_from_test(test)), (int)(max_group_size - t_group_from_test(test).size), spaces, test->label);
       fprintf(stdout, " %.*s ", (int)dots_count, dots);
       fflush(stdout);
 
@@ -1295,19 +1344,14 @@ t_entry_point(CmdLine *cmdline)
       
       // run test
       U64 run_start_time = now_time_us();
-      T_RunResult result = t_run(test->r, test->user_data);
+      T_RunResult result = t_run(test, test->user_data);
       U64 run_end_time = now_time_us();
-      // print result
-      if (result.status == T_RunStatus_Pass) {
-        fprintf(stdout, "\x1b[32m" "%s" "\x1b[0m", t_string_from_result(result.status));
-        pass_count += 1;
-      } else if (result.status == T_RunStatus_Fail) {
-        fprintf(stdout, "\x1b[31m" "%s" "\x1b[0m", t_string_from_result(result.status));
-        fail_count += 1;
-      } else if (result.status == T_RunStatus_Crash) {
-        fprintf(stdout, "\x1b[33m" "%s" "\x1b[0m", t_string_from_result(result.status));
-        crash_count += 1;
-      }
+
+      // update
+      run_counters[result.status] += 1;
+
+      // print run status
+      fprintf(stdout, "%s%s" T_RESET, t_color_from_result(result.status), t_string_from_result(result.status));
       
       if (result.status == T_RunStatus_Pass) {
         U64      d = run_end_time - run_start_time;
@@ -1341,18 +1385,23 @@ t_entry_point(CmdLine *cmdline)
       if (result.status == T_RunStatus_Fail || result.status == T_RunStatus_Crash) {
         if (g_stop_on_first_fail_or_crash) { goto exit; }
       }
+
+      if (result.status == T_RunStatus_Skip) {
+        u64_list_push(scratch.arena, &skipped_tests, target_idx);
+      }
     }
     U64 total_time_end = now_time_us();
     
-    if (target_indices.count > 0 && (pass_count > 0 || fail_count > 0 || crash_count > 0 || skip_count > 0)) {
+    if (target_indices.count > 0 && sum_array_u64(ArrayCount(run_counters), run_counters) > 0) {
+      U64     total_time_dt  = total_time_end - total_time_start;
+      String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
+
       fprintf(stderr, "\n");
       PrintHeader("Summary");
-      U64 total_time_dt = total_time_end - total_time_start;
-      String8 total_time_str = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(total_time_dt));
-      fprintf(stderr, "  Passed   %llu\n", (unsigned long long)pass_count);
-      fprintf(stderr, "  Failed   %llu\n", (unsigned long long)fail_count);
-      fprintf(stderr, "  Crashed  %llu\n", (unsigned long long)crash_count);
-      fprintf(stderr, "  Skipped  %llu\n", (unsigned long long)skip_count);
+      fprintf(stderr, "  Passed   %llu\n", (unsigned long long)run_counters[T_RunStatus_Pass]);
+      fprintf(stderr, "  Failed   %llu\n", (unsigned long long)run_counters[T_RunStatus_Fail]);
+      fprintf(stderr, "  Crashed  %llu\n", (unsigned long long)run_counters[T_RunStatus_Crash]);
+      fprintf(stderr, "  Skipped  %llu\n", (unsigned long long)run_counters[T_RunStatus_Skip]);
       fprintf(stderr, "  Time     %.*s\n", str8_varg(total_time_str));
     
       U64 slow_count = 0;
@@ -1368,17 +1417,17 @@ t_entry_point(CmdLine *cmdline)
         for EachElement(i, slowest) {
           Slowest s = slowest[i];
           label_max = Max(strlen(g_torture_tests[s.target_idx]->label), label_max);
-          group_max = Max(strlen(g_torture_tests[s.target_idx]->group), group_max);
+          group_max = Max(t_group_from_test_idx(s.target_idx).size, group_max);
         }
 
-        fprintf(stderr, "  Slow Tests\n");
+        fprintf(stderr, "  \nSlow Tests\n");
         for EachElement(i, slowest) {
           Slowest s = slowest[i];
           if (s.target_idx >= g_torture_test_count) { break; }
           String8 elapsed_time = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(s.d));
-          fprintf(stderr, "    %s %.*s:: %s %.*s %.*s\n",
-                  g_torture_tests[s.target_idx]->group,
-                  (int)(group_max - strlen(g_torture_tests[s.target_idx]->group)), spaces,
+          fprintf(stderr, "    %.*s %.*s/ %s %.*s %.*s\n",
+                  str8_varg(t_group_from_test_idx(s.target_idx)),
+                  (int)(group_max - t_group_from_test_idx(s.target_idx).size), spaces,
                   g_torture_tests[s.target_idx]->label,
                   (int)(label_max - strlen(g_torture_tests[s.target_idx]->label)) + 4, dots,
                   str8_varg(elapsed_time));
@@ -1386,12 +1435,10 @@ t_entry_point(CmdLine *cmdline)
       }
     }
     
+    exit_code = run_counters[T_RunStatus_Fail] + run_counters[T_RunStatus_Crash];
     exit:;
-    if (fail_count + crash_count != 0) {
-      fflush(stdout);
-      abort_self(fail_count + crash_count);
-    }
   }
-  
+
   scratch_end(scratch);
+  // TODO: return exit_code;
 }

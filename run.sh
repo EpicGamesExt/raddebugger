@@ -38,6 +38,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "${#torture_args[@]}" == "0" ]]; then
+  torture_args=("*")
+fi
+
 for m in "${mode_values[@]}"; do
   for c in "${cc_values[@]}"; do
     # nuke artifacts from last run
