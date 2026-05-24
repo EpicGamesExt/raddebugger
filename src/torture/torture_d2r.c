@@ -280,18 +280,33 @@ SKIP(d2r_line_table)
   
   for EachElement(i, test_table) {
     for EachIndex(k, test_table[i].line_size) {
-      t_invoke_radbin("-voff2line -voff:0x%llx a.rdi", test_table[i].voff + k);
-      T_Ok(g_last_exit_code == 0);
+      String8 cmdl = str8f(arena, "-voff2line -voff:0x%llx %S", test_table[i].voff + k, t_make_file_path(arena, str8_lit("a.rdi")));
+      t_invoke_radbin(cmdl.str);
+
+      if (g_last_exit_code != 0) {
+        t_errorf("radbin exited with %llu on \"%S\"\n", (unsigned long long)g_last_exit_code, cmdl);
+        T_Ok(0);
+      }
 
       if ( ! t_match_linef(&g_output, "%S:%llu", test_table[i].file->path, test_table[i].ln)) {
+        t_errorf("ERROR: conversion produced unexpected output for \"radbin %S\"\n" \
+                "  Expected: %S:%llu\n" \
+                "  Got:      %S\n",
+                cmdl,
+                test_table[i].file->path, (unsigned long long)test_table[i].ln,
+                g_output);
 
-        fprintf(stderr,
-                "ERROR: conversion produced unexpected lines for voff 0x%llx\n" \
-                "\tExpected: %.*s:%llu\n" \
-                "\tGot:      %.*s\n",
-                (unsigned long long)test_table[i].voff,
-                str8_varg(test_table[i].file->path), (unsigned long long)test_table[i].ln,
-                str8_varg(g_output));
+        if (g_verbose) {
+          t_invoke_radbin("-dump -only:line_tables a.rdi");
+          t_errorf("\n================================================================================\n");
+          t_errorf("RDI:\n%S\n", g_output);
+
+          t_errorf("================================================================================\n");
+          t_invoke_radbin("-dump -only:debug_line a.exe");
+          t_errorf("DWARF:\n%S\n", g_output);
+
+          g_output = str8_zero();
+        }
 
         T_Ok(0);
       }
@@ -304,6 +319,8 @@ SKIP(d2r_line_table)
 SKIP(d2r_checksums)
 {
   DW_Writer *writer = dw_writer_begin(DW_Format_32Bit, DW_Version_5, DW_CompUnitKind_Compile, Arch_x64);
+
+  B32 is_ok = 0;
   
   DW_WriterFile *foo_file  = dw_writer_new_file(writer, str8_lit("/mnt/c/devel/foo.c"));
   DW_WriterFile *comp_file = dw_writer_new_file(writer, str8_lit("/home/main.c"));
@@ -321,18 +338,45 @@ SKIP(d2r_checksums)
   RDI_Parsed *rdi            = d2r_rdi_from_dwarf_writer(arena, writer);
   U64         checksum_count = 0;
   RDI_MD5    *checksums      = rdi_table_from_name(rdi, MD5Checksums, &checksum_count);
-  T_Ok(checksum_count == writer->line.file_count + 1);
+  if (checksum_count != writer->line.file_count + 1) { goto exit; }
   
   RDI_SourceFile *foo_src_file = rdi_source_file_from_normal_path_cstr(rdi, (char *)foo_file->path.str);
-  T_Ok(foo_src_file);
-  T_Ok(foo_src_file->checksum_kind == RDI_ChecksumKind_MD5);
-  T_Ok(MemoryMatch(&foo_file->md5, &checksums[foo_src_file->checksum_idx], sizeof(U128)));
+  if (foo_src_file == 0) {
+    t_errorf("ERROR: RDI is missing file %S\n", foo_file->path);
+    goto exit;
+  }
+  if (foo_src_file->checksum_kind != RDI_ChecksumKind_MD5) {
+    t_errorf("ERROR: File %S has unexpected checksum value %u, expected %u\n", foo_file->path, foo_src_file->checksum_kind, RDI_ChecksumKind_MD5);
+    goto exit;
+  }
+  if (MemoryMatch(&foo_file->md5, &checksums[foo_src_file->checksum_idx], sizeof(U128)) != 1) {
+    t_errorf("ERROR mismatched checksum in file %S\n", foo_file->path);
+    goto exit;
+  }
   
   RDI_SourceFile *comp_src_file = rdi_source_file_from_normal_path_cstr(rdi, (char *)comp_file->path.str);
-  T_Ok(comp_src_file);
-  T_Ok(comp_src_file->checksum_kind == RDI_ChecksumKind_MD5);
-  T_Ok(MemoryMatch(&comp_file->md5, &checksums[comp_src_file->checksum_idx], sizeof(U128)));
+  if (comp_src_file == 0) {
+    t_errorf("ERROR: RDI is missing file %S\n", comp_file->path);
+    goto exit;
+  }
+  if (comp_src_file->checksum_kind != RDI_ChecksumKind_MD5) {
+    t_errorf("ERROR: File %S has unexpected checksum value %u, expected %u\n", comp_file->path, comp_src_file->checksum_kind, RDI_ChecksumKind_MD5);
+    goto exit;
+  }
+  if (MemoryMatch(&comp_file->md5, &checksums[comp_src_file->checksum_idx], sizeof(U128)) != 1) {
+    t_errorf("ERROR mismatched checksum in file %S\n", comp_file->path);
+    goto exit;
+  }
   
+  is_ok = 1;
+  exit:;
+  if ( ! is_ok) {
+    t_errorf("Converter repro: \"radbin -rdi %S\"\n", t_make_file_path(arena, str8_lit("a.exe")));
+    t_invoke(t_radbin_path(), str8_lit("-dump -only:source_files a.rdi"), max_U64);
+    t_errorf("RDI:\n%S\n", g_output);
+    t_invoke(t_radbin_path(), str8_lit("-dump -only:debug_line a.exe"), max_U64);
+    t_errorf("DWARF:\n%S\n", g_output);
+  }
   dw_writer_end(&writer);
 }
 

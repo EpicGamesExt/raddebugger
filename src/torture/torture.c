@@ -243,12 +243,18 @@ t_run(T_Test *test, String8 user_data)
 {
   T_RunCtx ctx = { .test = test, .user_data = user_data, .result.status = T_RunStatus_Fail };
   t_run_caller(&ctx);
+
+  if (ctx.result.status == T_RunStatus_Fail || ctx.result.status == T_RunStatus_Crash) {
+    if (g_output.size > 0 || g_errors.size > 0) {
+      t_errorf("Last captured output:\n");
+      if (g_output.size) { t_errorf("%S\n", g_output); }
+      if (g_errors.size) { t_errorf("%S\n", g_errors); }
+    }
+  }
+
   fflush(stdout);
   fflush(stderr);
 
-  if (ctx.result.status == T_RunStatus_Fail || ctx.result.status == T_RunStatus_Crash) {
-    fprintf(stderr, "Last captured output:\n%.*s\n", str8_varg(g_output));
-  }
   return ctx.result;
 }
 
