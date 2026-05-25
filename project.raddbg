@@ -7,6 +7,7 @@ target:
   working_directory: build
   arguments: "--user:raddbg_test.user --project:raddbg_test.project"
   debug_subprocesses: 0
+  enabled: 1
 }
 target:
 {
@@ -41,5 +42,4 @@ target:
 {
   executable: "build/torture.exe"
   working_directory: "build/"
-  enabled: 1
 }

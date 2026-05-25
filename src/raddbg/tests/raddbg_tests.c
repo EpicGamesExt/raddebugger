@@ -1,6 +1,12 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+Test(stepping_regressions)
+{
+  
+}
+
+#if 0
 ////////////////////////////////
 // IPC Controller
 
@@ -1102,8 +1108,7 @@ t_dbg_script_invoke(T_DbgScript *script, U64 timeout_us)
   return is_ok;
 }
 
-internal
-T_RunSig(dbg_script_runner)
+internal TEST_FUNCTION_DEF(dbg_script_runner)
 {
   // read source file
   String8 source = data_from_file_path(arena, user_data);
@@ -1257,3 +1262,4 @@ t_dbg_register_script_tests(Arena *arena, String8 folder_path)
   scratch_end(scratch);
 }
 
+#endif

@@ -23,7 +23,7 @@ struct TestResult
   char *fail_cond;
 };
 
-#define TEST_FUNCTION_SIG(name) void name(Arena *arena, String8 user_data, TestResult *result_out, String8List *test_out)
+#define TEST_FUNCTION_SIG(name) void name(Arena *arena, TestResult *result_out, String8List *test_out)
 #define TEST_FUNCTION_DEF(name) TEST_FUNCTION_SIG(test__##name)
 typedef TEST_FUNCTION_SIG(TestFunctionType);
 
@@ -32,7 +32,7 @@ struct TestInfo
 {
   String8 layer;
   String8 label;
-  int decl_line;
+  S64 decl_line;
   B32 skip;
   TestFunctionType *test_fn;
 };

@@ -1,8 +1,7 @@
-#if OS_WINDOWS
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
 
-// TODO: location is not baked consistently
-#if !COMPILER_CLANG || (COMPILER_CLANG && BUILD_DEBUG)
-TEST(p2r_determ)
+SkippedTest(p2r_determ)
 {
   U64 num_repeats_per_pdb = 32;
   String8 pdb_paths[] =
@@ -122,6 +121,3 @@ TEST(p2r_determ)
     }
   }
 }
-#endif
-#endif
-

@@ -4,6 +4,12 @@
 ////////////////////////////////
 //~ rjf: post-0.9.26 TODO notes
 //
+// [ ] jeff stepping bug
+// [ ] wassim memory bug
+// [ ] test concepts -> base
+// [ ] switch off spoofs for step-over
+// [ ] debugger, d2r, p2r exemplar / determinism testing
+//
 // [ ] symbol server
 // [ ] core dump saving/loading
 //

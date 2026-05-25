@@ -12,10 +12,8 @@ global B32          g_build_only = 0;
 global String8      g_test_data;
 
 // tests
-U64      g_torture_test_count;
-T_Test **g_torture_tests;
-T_Test   g_torture_tests_[0xffffff];
-B32      g_is_first_print;
+global TestInfo *g_sorted_test_infos[ArrayCount(test_infos)] = {0};
+global B32      g_is_first_print;
 
 // invoke
 global U64      g_last_exit_code;
@@ -34,26 +32,10 @@ global String8 g_linker_path;
 ////////////////////////////////
 
 internal String8
-t_group_from_test(T_Test *test)
+t_name_from_test_info(Arena *arena, TestInfo *test_info)
 {
-  String8 file = str8_cstring(test->file);
-  String8 group = str8_chop_last_dot(str8_skip_last_slash(file));
-  if (str8_match_wildcard(group, str8_lit("torture_*"), StringMatchFlag_CaseInsensitive)) {
-    group = str8_skip(group, str8_lit("torture_").size);
-  }
-  return group;
-}
-
-internal String8
-t_group_from_test_idx(U64 test_idx)
-{
-  return t_group_from_test(g_torture_tests[test_idx]);
-}
-
-internal String8
-t_test_name_from_idx(Arena *arena, U64 test_idx)
-{
-  return str8f(arena, "%.*s/%s", str8_varg(t_group_from_test_idx(test_idx)), g_torture_tests[test_idx]->label);
+  String8 result = str8f(arena, "%S/%S", test_info->layer, test_info->label);
+  return result;
 }
 
 internal String8List
@@ -61,9 +43,10 @@ t_test_group_from_name(Arena *arena, String8 pattern)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List matches = {0};
-  for EachIndex(i, g_torture_test_count) {
-    if (str8_match_wildcard(t_test_name_from_idx(scratch.arena, i), pattern, 0)) {
-      str8_list_push(arena, &matches, t_group_from_test_idx(i));
+  for EachIndex(i, test_infos_count) {
+    TestInfo *test_info = g_sorted_test_infos[i];
+    if (str8_match_wildcard(t_name_from_test_info(scratch.arena, test_info), pattern, 0)) {
+      str8_list_push(arena, &matches, test_info->layer);
     }
   }
   scratch_end(scratch);
@@ -71,17 +54,6 @@ t_test_group_from_name(Arena *arena, String8 pattern)
 }
 
 ////////////////////////////////
-
-internal void
-t_break_if_debugger_present(void)
-{
-#if OS_WINDOWS
-  if(IsDebuggerPresent())
-  {
-    DebugBreak();
-  }
-#endif
-}
 
 internal Linker
 t_id_linker(void)
@@ -196,7 +168,7 @@ t_run_caller(void *raw_ctx)
   if (ctx->test->skip) {
     ctx->result.status = TestStatus_Skip;
   } else {
-    ctx->test->r(scratch.arena, ctx->user_data, &ctx->result, &test_out);
+    ctx->test->test_fn(scratch.arena, &ctx->result, &test_out);
   }
   
   if (ctx->result.status == TestStatus_Fail || ctx->result.status == TestStatus_Crash) {
@@ -215,7 +187,7 @@ t_run_caller(void *raw_ctx)
 }
 
 internal TestResult
-t_run(T_Test *test, String8 user_data)
+t_run(TestInfo *test, String8 user_data)
 {
   T_RunCtx ctx = { .test = test, .user_data = user_data, .result.status = TestStatus_Fail };
   t_run_caller(&ctx);
@@ -915,29 +887,17 @@ t_match_linef(String8 *output, char *fmt, ...)
   return is_match;
 }
 
-internal int
-t_test_compar(const void *raw_a, const void *raw_b)
+force_inline int
+t_test_info_is_before(TestInfo **a, TestInfo **b)
 {
-  const T_Test *a = raw_a, *b = raw_b;
-  String8 group_a = t_group_from_test((T_Test *)a);
-  String8 group_b = t_group_from_test((T_Test *)b);
-  int cmp = str8_compar(group_a, group_b, 0);
-  if (cmp == 0) {
-    cmp = u64_compar(&a->decl_line, &b->decl_line);
+  String8 layer_a = a[0]->layer;
+  String8 layer_b = b[0]->layer;
+  int cmp = str8_compar(layer_a, layer_b, 0);
+  if(cmp == 0)
+  {
+    cmp = u64_compar(&a[0]->decl_line, &b[0]->decl_line);
   }
   return cmp;
-}
-
-force_inline int
-t_test_is_before(void *raw_a, void *raw_b)
-{
-  return t_test_compar(raw_a, raw_b) < 0;
-}
-
-force_inline int
-t_test_ptr_is_before(void *raw_a, void *raw_b)
-{
-  return t_test_compar(*((T_Test * const *)raw_a), *((T_Test * const *)raw_b)) < 0;
 }
 
 internal String8List
@@ -1079,8 +1039,6 @@ t_help(void)
   fprintf(stderr, "    torture +*               Force-run all tests\n");
 }
 
-internal void t_dbg_register_script_tests(Arena *arena, String8 folder_path);
-
 internal void
 t_entry_point(CmdLine *cmdline)
 {
@@ -1113,14 +1071,8 @@ t_entry_point(CmdLine *cmdline)
   
   // Gather tests
   {
-    // register debugger tests
-    String8 test_folder_path = str8f(scratch.arena, "%S/torture/dbg_tests", t_src_path());
-    t_dbg_register_script_tests(scratch.arena, test_folder_path);
-    
-    // sort tests
-    g_torture_tests = push_array(scratch.arena, T_Test *, g_torture_test_count);
-    for EachIndex(i, g_torture_test_count) { g_torture_tests[i] = &g_torture_tests_[i]; }
-    radsort(g_torture_tests, g_torture_test_count, t_test_ptr_is_before);
+    for EachIndex(i, test_infos_count) { g_sorted_test_infos[i] = &test_infos[i]; }
+    radsort(g_sorted_test_infos, test_infos_count, t_test_info_is_before);
   }
   
   //
@@ -1129,8 +1081,8 @@ t_entry_point(CmdLine *cmdline)
   {
     if (cmd_line_has_flag(cmdline, str8_lit("list"))) {
       PrintHeader("Tests");
-      for EachIndex(i, g_torture_test_count) {
-        fprintf(stdout, "  %s\n", g_torture_tests[i]->label);
+      for EachIndex(i, test_infos_count) {
+        fprintf(stdout, "  %.*s\n", str8_varg(g_sorted_test_infos[i]->label));
       }
       abort_self(0);
     }
@@ -1197,17 +1149,24 @@ t_entry_point(CmdLine *cmdline)
       
       U64 match_count = 0;
       
-      for EachIndex(test_idx, g_torture_test_count) {
+      for EachIndex(test_idx, test_infos_count) {
+        TestInfo *test_info = g_sorted_test_infos[test_idx];
+        
         // match test names
-        String8 test_name = t_test_name_from_idx(scratch.arena, test_idx);
+        String8 test_name = t_name_from_test_info(scratch.arena, test_info);
         
         if (str8_match_wildcard(test_name, t, StringMatchFlag_CaseInsensitive)) {
+          // TODO(rjf): do we really need to mutate the test infos here? this test won't
+          // even run, so I am not sure what setting the bit does - we already collect
+          // the tests that we *will* run
+#if 0
           // set skip flag
           switch (mode) {
             case Mode_Default: break;
             case Mode_Skip:  g_torture_tests[test_idx]->skip = 1; break;
             case Mode_Force: g_torture_tests[test_idx]->skip = 0; break;
           }
+#endif
           
           // append test when not in skipping mode
           if ( ! hash_map_search_string_u64(&hm, test_name)) {
@@ -1283,8 +1242,9 @@ t_entry_point(CmdLine *cmdline)
     U64 max_group_size = 0;
     for EachIndex(i, target_indices.count) {
       U64 test_idx = target_indices.v[i];
-      max_label_size = Max(max_label_size, cstring8_length((U8*)g_torture_tests[test_idx]->label));
-      max_group_size = Max(max_group_size, t_group_from_test_idx(test_idx).size);
+      TestInfo *test_info = g_sorted_test_infos[test_idx];
+      max_label_size = Max(max_label_size, test_info->label.size);
+      max_group_size = Max(max_group_size, test_info->layer.size);
     }
     
     U64 run_counters[TestStatus_COUNT] = {0};
@@ -1301,20 +1261,20 @@ t_entry_point(CmdLine *cmdline)
       if (i == 0) { PrintHeader("Tests"); }
       
       U64 target_idx = target_indices.v[i];
-      T_Test *test = g_torture_tests[target_idx];
+      TestInfo *test = g_sorted_test_infos[target_idx];
       
       // print run progress
       U64 dots_min = 10;
-      U64 dots_count = (max_label_size - cstring8_length((U8*)test->label)) + dots_min;
+      U64 dots_count = (max_label_size - test->label.size) + dots_min;
       U64 curr_digit_count = count_digits_u64(i+1, 10);
       int idx_align_space_count = (int)(max_digit_count - curr_digit_count);
       fprintf(stdout, "[%.*s%llu/%llu] ", idx_align_space_count, spaces, (unsigned long long)i+1, (unsigned long long)target_indices.count);
-      fprintf(stdout, "%.*s %.*s/ %s", str8_varg(t_group_from_test(test)), (int)(max_group_size - t_group_from_test(test).size), spaces, test->label);
+      fprintf(stdout, "%.*s %.*s/ %.*s", str8_varg(test->layer), (int)(max_group_size - test->layer.size), spaces, str8_varg(test->label));
       fprintf(stdout, " %.*s ", (int)dots_count, dots);
       fflush(stdout);
       
       // setup output directory
-      g_wdir = push_str8f(scratch.arena, "%S/%s", g_out, test->label);
+      g_wdir = str8f(scratch.arena, "%S/%S", g_out, test->label);
       g_wdir = full_path_from_path(scratch.arena, g_wdir);
       
       // delete files from last run in the work directory
@@ -1330,7 +1290,7 @@ t_entry_point(CmdLine *cmdline)
       
       // run test
       U64 run_start_time = now_time_us();
-      TestResult result = t_run(test, test->user_data);
+      TestResult result = t_run(test, str8_zero());
       U64 run_end_time = now_time_us();
       
       // update
@@ -1345,6 +1305,7 @@ t_entry_point(CmdLine *cmdline)
         case TestStatus_Pass: {status_name_cstr = "PASS";  color_cstr = T_GREEN;}break;
         case TestStatus_Fail: {status_name_cstr = "FAIL";  color_cstr = T_RED;}break;
         case TestStatus_Crash:{status_name_cstr = "CRASH"; color_cstr = T_RED;}break;
+        case TestStatus_Skip: {status_name_cstr = "SKIP";  color_cstr = T_YELLOW;}break;
       }
       
       // print run status
@@ -1404,7 +1365,7 @@ t_entry_point(CmdLine *cmdline)
       U64 slow_count = 0;
       for EachElement(i, slowest) {
         Slowest s = slowest[i];
-        if (s.target_idx >= g_torture_test_count) { break; }
+        if (s.target_idx >= test_infos_count) { break; }
         slow_count += 1;
       }
       
@@ -1413,20 +1374,21 @@ t_entry_point(CmdLine *cmdline)
         U64 group_max = 0;
         for EachElement(i, slowest) {
           Slowest s = slowest[i];
-          label_max = Max(strlen(g_torture_tests[s.target_idx]->label), label_max);
-          group_max = Max(t_group_from_test_idx(s.target_idx).size, group_max);
+          label_max = Max(g_sorted_test_infos[s.target_idx]->label.size, label_max);
+          group_max = Max(g_sorted_test_infos[s.target_idx]->layer.size, group_max);
         }
         
         fprintf(stderr, "  \nSlow Tests\n");
         for EachElement(i, slowest) {
           Slowest s = slowest[i];
-          if (s.target_idx >= g_torture_test_count) { break; }
+          if (s.target_idx >= test_infos_count) { break; }
+          TestInfo *test_info = g_sorted_test_infos[i];
           String8 elapsed_time = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(s.d));
-          fprintf(stderr, "    %.*s %.*s/ %s %.*s %.*s\n",
-                  str8_varg(t_group_from_test_idx(s.target_idx)),
-                  (int)(group_max - t_group_from_test_idx(s.target_idx).size), spaces,
-                  g_torture_tests[s.target_idx]->label,
-                  (int)(label_max - strlen(g_torture_tests[s.target_idx]->label)) + 4, dots,
+          fprintf(stderr, "    %.*s %.*s/ %.*s %.*s %.*s\n",
+                  str8_varg(test_info->layer),
+                  (int)(group_max - test_info->layer.size), spaces,
+                  str8_varg(test_info->label),
+                  (int)(label_max - test_info->layer.size) + 4, dots,
                   str8_varg(elapsed_time));
         }
       }
