@@ -28,6 +28,7 @@ cc_link="-lpthread -lm -lrt -ldl"
 cc_link_dll="-fPIC"
 
 # --- External Libraries ------------------------------------------------------
+# sudo apt install -y pkg-config libfreetype6-dev libx11-dev libxext-dev libgl-dev libegl-dev
 if [[ -x "$(command -v pkg-config)" ]]; then
   cc_font_provider="$(pkg-config --cflags --libs freetype2)"  
   cc_os_gfx="$(pkg-config --cflags --libs x11 xext)"
