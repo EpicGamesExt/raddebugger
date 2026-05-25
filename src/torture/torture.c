@@ -1295,27 +1295,6 @@ t_entry_point(CmdLine *cmdline)
   // Clean up output from previous run
   //
   delete_file_at_path(g_stdout_file_name);
-
-  //
-  // Check tools
-  //
-  String8 tools[] = {
-    t_raddbg_path(),
-    t_radbin_path(),
-    t_radlink_path(),
-    t_clang_path(),
-#if OS_WINDOWS
-    t_cl_path(),
-#elif OS_LINUX
-    t_gcc_path(),
-#endif
-  };
-  for EachElement(i, tools) {
-    if ( ! file_path_exists(tools[i])) {
-      fprintf(stderr, "ERROR: failed to find tool \"%.*s\"\n", str8_varg(tools[i]));
-      goto exit;
-    }
-  }
   
   //
   // Run tests
