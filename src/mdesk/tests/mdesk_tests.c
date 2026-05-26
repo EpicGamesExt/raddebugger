@@ -1,7 +1,7 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-SkippedTest(md_tokenizer)
+SkippedTest(tokenizer)
 {
   MD_TokenizeResult result;
   

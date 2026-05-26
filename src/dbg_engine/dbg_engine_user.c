@@ -2002,6 +2002,13 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           }
           d_cmd(D_CmdKind_Run);
         }break;
+        case D_CmdKind_RunToName:
+        {
+          run_extra_bps.count = 1;
+          run_extra_bps.v = push_array(scratch.arena, D_Breakpoint, 1);
+          run_extra_bps.v[0].vaddr_expr = str8_copy(scratch.arena, params->string);
+          d_cmd(D_CmdKind_Run);
+        }break;
         case D_CmdKind_Run:
         {
           D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);

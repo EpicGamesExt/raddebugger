@@ -4830,9 +4830,13 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
   U64 eval_modules_count = Max(1, entity_ctx->entity_kind_counts[D_EntityKind_Module]);
   E_Module *eval_modules = push_array(arena, E_Module, eval_modules_count);
   E_Module *eval_modules_primary = &e_module_nil;
+  E_String2NumMap *eval_module_from_name_map = push_array(arena, E_String2NumMap, 1);
+  eval_module_from_name_map[0] = e_string2num_map_make(arena, eval_modules_count*2);
   U64 eval_dbg_infos_count = Max(1, entity_ctx->entity_kind_counts[D_EntityKind_Module]);
   E_DbgInfo *eval_dbg_infos = push_array(arena, E_DbgInfo, eval_dbg_infos_count);
   E_DbgInfo *eval_dbg_infos_primary = &e_dbg_info_nil;
+  E_String2NumMap *eval_dbg_info_from_name_map = push_array(arena, E_String2NumMap, 1);
+  eval_dbg_info_from_name_map[0] = e_string2num_map_make(arena, eval_dbg_infos_count*2);
   {
     U64 eval_module_idx = 0;
     U64 eval_dbg_info_idx = 0;
@@ -4946,12 +4950,16 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
           }
           
           //- rjf: fill debug info
+          String8 debug_info_path = d_entity_child_from_kind(mod, D_EntityKind_DebugInfoPath)->string;
           eval_dbg_infos[eval_dbg_info_idx].dbgi_key = dbgi_key;
           eval_dbg_infos[eval_dbg_info_idx].rdi      = rdi;
+          eval_dbg_infos[eval_dbg_info_idx].name     = debug_info_path;
           if(mod == module)
           {
             eval_dbg_infos_primary = &eval_dbg_infos[eval_dbg_info_idx];
           }
+          e_string2num_map_insert(arena, eval_dbg_info_from_name_map, debug_info_path, eval_dbg_info_idx+1);
+          e_string2num_map_insert(arena, eval_dbg_info_from_name_map, str8_skip_last_slash(debug_info_path), eval_dbg_info_idx+1);
           eval_dbg_info_idx += 1;
           
           //- rjf: fill evaluation module info
@@ -4960,10 +4968,13 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
           eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
           eval_modules[eval_module_idx].space       = e_space_make(D_EvalSpaceKind_Entity);
           eval_modules[eval_module_idx].space.u64_0 = (U64)process;
+          eval_modules[eval_module_idx].name        = mod->string;
           if(mod == module)
           {
             eval_modules_primary = &eval_modules[eval_module_idx];
           }
+          e_string2num_map_insert(arena, eval_module_from_name_map, mod->string, eval_module_idx+1);
+          e_string2num_map_insert(arena, eval_module_from_name_map, str8_skip_last_slash(mod->string), eval_module_idx+1);
           eval_module_idx += 1;
         }
       }
@@ -4994,11 +5005,13 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
     ctx->dbg_infos        = eval_dbg_infos;
     ctx->dbg_infos_count  = eval_dbg_infos_count;
     ctx->primary_dbg_info = eval_dbg_infos_primary;
+    ctx->dbg_info_from_name_map = eval_dbg_info_from_name_map;
     
     //- rjf: fill modules
     ctx->modules        = eval_modules;
     ctx->modules_count  = eval_modules_count;
     ctx->primary_module = eval_modules_primary;
+    ctx->module_from_name_map = eval_module_from_name_map;
     
     //- rjf: fill space hooks
     ctx->space_gen   = d_ctrl_eval_space_gen;

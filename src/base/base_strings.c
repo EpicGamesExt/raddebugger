@@ -1476,6 +1476,21 @@ str8_from_version(Arena *arena, U64 version)
 //~ rjf: String Path Helpers
 
 internal String8
+default_exe_name_suffix_from_os(OperatingSystem os)
+{
+  String8 result = {0};
+  switch(os)
+  {
+    default:{}break;
+    case OperatingSystem_Windows:
+    {
+      result = s(".exe");
+    }break;
+  }
+  return result;
+}
+
+internal String8
 program_data_folder_prefix_from_os(OperatingSystem os)
 {
   String8 result = {0};

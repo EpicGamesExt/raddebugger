@@ -78,6 +78,7 @@ RD_CmdKind_Halt,
 RD_CmdKind_SoftHaltRefresh,
 RD_CmdKind_SetThreadIP,
 RD_CmdKind_RunToLine,
+RD_CmdKind_RunToName,
 RD_CmdKind_Run,
 RD_CmdKind_Restart,
 RD_CmdKind_StepInto,
@@ -605,7 +606,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[25];
 extern String8 rd_tab_fast_path_query_name_table[25];
-extern RD_VocabInfo rd_vocab_info_table[363];
+extern RD_VocabInfo rd_vocab_info_table[364];
 extern RD_NameSchemaInfo rd_name_schema_info_table[39];
 extern String8 rd_reg_slot_code_name_table[49];
 extern Rng1U64 rd_reg_slot_range_table[49];

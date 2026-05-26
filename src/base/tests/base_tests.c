@@ -1,7 +1,7 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-TEST(str8_list_substr)
+Test(str8_list_substr)
 {
   String8List zero_list = {0};
   

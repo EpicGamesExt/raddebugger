@@ -6,8 +6,6 @@
 ** stepping, breakpoints, evaluation, cross-module calls.
 */
 
-#define EvalTest(expr, match)
-
 #if _WIN32 && _DEBUG
 #pragma comment(linker, "/nodefaultlib:libcmt")
 #pragma comment(lib, "libcmtd")
@@ -492,9 +490,6 @@ type_coverage_eval_tests(void)
     memory_,
     6
   };
-  EvalTest(dynamic[0].i, 100); EvalTest(dynamic[0].f, 1.f);
-  EvalTest(dynamic[1].i, 101); EvalTest(dynamic[1].f, 2.f);
-  EvalTest(dynamic[2].i, 102); EvalTest(dynamic[2].f, 4.f);
   
   TemplatedDynamicArray<Pair> templated_dynamic = {dynamic.pairs, dynamic.count};
   TemplatedDynamicArray<Pair> templated_dynamics[] =
