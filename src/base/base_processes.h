@@ -82,6 +82,7 @@ internal U32 get_process_start_time_unix(void);
 //~ rjf: @per_os_impl Child Processes
 
 internal Process process_launch(ProcessLaunchParams *params);
+internal U64 pid_from_process(Process process);
 internal B32 process_join(Process process, U64 endt_us, U64 *exit_code_out);
 internal void process_detach(Process process);
 internal B32 process_kill(Process process);

@@ -1421,6 +1421,14 @@ process_launch(ProcessLaunchParams *params)
   return result;
 }
 
+internal U64
+pid_from_process(Process process)
+{
+  HANDLE process_handle = (HANDLE)process.u64[0];
+  U64 result = (U64)GetProcessId(process_handle);
+  return result;
+}
+
 internal B32
 process_join(Process process, U64 endt_us, U64 *exit_code_out)
 {

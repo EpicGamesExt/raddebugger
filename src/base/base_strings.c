@@ -1492,6 +1492,21 @@ program_data_folder_prefix_from_os(OperatingSystem os)
 }
 
 internal String8
+program_ext_postfix_from_os(OperatingSystem os)
+{
+  String8 result = {0};
+  switch(os)
+  {
+    default:{}break;
+    case OperatingSystem_Windows:
+    {
+      result = s(".exe");
+    }break;
+  }
+  return result;
+}
+
+internal String8
 str8_chop_last_slash(String8 string)
 {
   if(string.size > 0)

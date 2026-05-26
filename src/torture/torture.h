@@ -13,8 +13,9 @@
 
 typedef struct
 {
-  TestInfo  *test;
-  String8    user_data;
+  TestInfo *test;
+  CmdLine *cmdline;
+  String8 user_data;
   TestResult result;
 } T_RunCtx;
 
@@ -47,7 +48,7 @@ internal String8 t_make_file_path(Arena *arena, String8 name);
 // test runner
 internal void       t_run_caller(void *raw_ctx);
 internal void       t_run_fail_handler(void *raw_ctx);
-internal TestResult t_run(TestInfo *test, String8 user_data);
+internal TestResult t_run(CmdLine *cmdline, TestInfo *test, String8 user_data);
 
 // tools
 internal String8 t_radbin_path(void);

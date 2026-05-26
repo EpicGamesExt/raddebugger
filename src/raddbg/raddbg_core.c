@@ -12382,12 +12382,6 @@ rd_frame(void)
         // rjf: request frame
         rd_request_frame();
         
-        // rjf: record 'ack' for this command
-        if(kind != RD_CmdKind_Null)
-        {
-          str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "ack:{cmd:%S}\n", cmd->name);
-        }
-        
         // rjf: process command
         CFG_Node *cfg = &cfg_nil_node;
         String8 dst_path = {0};
@@ -12647,6 +12641,29 @@ rd_frame(void)
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  string: \"%S\"\n", escaped_from_raw_str8(scratch.arena, evt.string));
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  tls_model: 0x%I64x\n", evt.tls_model);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  explanation: \"%S\"\n", escaped_from_raw_str8(scratch.arena, explanation_string));
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
+            }
+            {
+              D_Event evt = d_ctrl_last_stop_event();
+              U64 vaddr = evt.rip_vaddr;
+              D_Entity *thread = d_entity_from_handle(rd_base_regs()->thread);
+              D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+              D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+              U64 voff = d_voff_from_vaddr(module, vaddr);
+              DI_Key dbgi_key = d_dbgi_key_from_module(module);
+              D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " lines:\n {\n");
+              for EachNode(n, D_LineNode, lines.first)
+              {
+                D_Line line = n->v;
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  {\n");
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   file_path:  \"%S\"\n", line.file_path);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   line_num:   %I64d\n", line.pt.line);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   column_num: %I64d\n", line.pt.column);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   voff_range_min: 0x%I64x\n", line.voff_range.min);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   voff_range_max: 0x%I64x\n", line.voff_range.max);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  }\n");
+              }
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
             }
             {

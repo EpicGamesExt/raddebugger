@@ -23,7 +23,7 @@ struct TestResult
   char *fail_cond;
 };
 
-#define TEST_FUNCTION_SIG(name) void name(Arena *arena, TestResult *result_out, String8List *test_out)
+#define TEST_FUNCTION_SIG(name) void name(Arena *arena, CmdLine *cmdline, String8 test_artifacts_path, TestResult *result_out, String8List *test_out)
 #define TEST_FUNCTION_DEF(name) TEST_FUNCTION_SIG(test__##name)
 typedef TEST_FUNCTION_SIG(TestFunctionType);
 

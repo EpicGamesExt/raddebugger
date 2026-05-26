@@ -1,9 +1,102 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-Test(stepping_regressions)
+internal String8
+rd_test__raddbg_path(Arena *arena, CmdLine *cmdline)
 {
-  
+  String8 raddbg_exe_name = cmd_line_has_flag(cmdline, s("gui")) ? s("raddbg") : s("raddbg_non_graphical");
+  String8 raddbg_exe_filename = str8f(arena, "%S/%S%S", get_process_info()->binary_path, raddbg_exe_name, program_ext_postfix_from_os(OperatingSystem_CURRENT));
+  return raddbg_exe_filename;
+}
+
+internal Process
+rd_test__open_debugger(CmdLine *cmdline, String8 test_artifacts_path, String8 target_cmd_line)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 raddbg_path = rd_test__raddbg_path(scratch.arena, cmdline);
+  String8 user_file_path = str8f(scratch.arena, "%S/test.raddbg_user", test_artifacts_path);\
+  delete_file_at_path(user_file_path);
+  Process process = launch_cmd_linef("%S --gen_crash_dump --user:test.raddbg_user --logs:logs %S", raddbg_path, target_cmd_line);
+  scratch_end(scratch);
+  return process;
+}
+
+internal void
+rd_test__close_debugger(Process process)
+{
+  process_kill(process);
+}
+
+internal String8
+rd_test__ipc_cmd(Arena *arena, CmdLine *cmdline, String8 test_artifacts_path, U64 debugger_pid, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 raddbg_path = rd_test__raddbg_path(scratch.arena, cmdline);
+  String8 stdout_path = str8f(scratch.arena, "%S/ipc_output", test_artifacts_path);
+  Process process = launch_cmd_linef("%S --ipc --pid:%I64u %S > %S", raddbg_path, debugger_pid, string, stdout_path);
+  process_join(process, max_U64, 0);
+  String8 response = data_from_file_path(arena, stdout_path);
+  delete_file_at_path(stdout_path);
+  scratch_end(scratch);
+  return response;
+}
+
+Test(stepping)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 mule_main_exe_path = str8f(scratch.arena, "%S/%S%S", get_process_info()->binary_path, s("mule_main"), program_ext_postfix_from_os(OperatingSystem_CURRENT));
+  struct
+  {
+    String8 cmdline;
+    String8 start_symbol;
+    B32 step_over_on_even;
+  }
+  test_cases[] =
+  {
+    { mule_main_exe_path, s("mule_main"), 0 },
+    { mule_main_exe_path, s("mule_main"), 1 },
+    { mule_main_exe_path, s("control_flow_stepping_tests"), 0 },
+    { mule_main_exe_path, s("control_flow_stepping_tests"), 1 },
+  };
+  for EachElement(test_case_idx, test_cases)
+  {
+    String8 test_cmdline = test_cases[test_case_idx].cmdline;
+    String8 start_symbol = test_cases[test_case_idx].start_symbol;
+    B32 step_over_on_even = test_cases[test_case_idx].step_over_on_even;
+    Process debugger = rd_test__open_debugger(cmdline, test_artifacts_path, test_cmdline);
+    U64 debugger_pid = pid_from_process(debugger);
+    String8 next_step_cmd = {0};
+    rd_test__ipc_cmd(scratch.arena, cmdline, test_artifacts_path, debugger_pid, str8f(scratch.arena, "run_to_name %S", start_symbol));
+    for(U64 cmd_idx = 0;; cmd_idx += 1)
+    {
+      String8 step_cmd = s("step_into");
+      if((cmd_idx % 2 == 0 && step_over_on_even) || (cmd_idx % 2 == 1 && !step_over_on_even))
+      {
+        step_cmd = s("step_over");
+      }
+      if(next_step_cmd.size != 0)
+      {
+        step_cmd = next_step_cmd;
+        MemoryZeroStruct(&next_step_cmd);
+      }
+      String8 step_response = rd_test__ipc_cmd(scratch.arena, cmdline, test_artifacts_path, debugger_pid, step_cmd);
+      String8 state_response = rd_test__ipc_cmd(scratch.arena, cmdline, test_artifacts_path, debugger_pid, s("state"));
+      MD_Node *state_response_tree = md_tree_from_string(scratch.arena, state_response);
+      MD_Node *state = md_child_from_string(state_response_tree, s("state"), 0);
+      U64 ip_vaddr = 0;
+      try_u64_from_str8_c_rules(md_child_from_string(state, s("ip"), 0)->first->string, &ip_vaddr);
+      if(ip_vaddr != 0 && md_child_from_string(state, s("lines"), 0)->first == &md_nil_node)
+      {
+        next_step_cmd = s("step_out");
+      }
+      if(cmd_idx >= 100)
+      {
+        break;
+      }
+    }
+    rd_test__close_debugger(debugger);
+  }
+  scratch_end(scratch);
 }
 
 #if 0

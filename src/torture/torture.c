@@ -168,7 +168,7 @@ t_run_caller(void *raw_ctx)
   if (ctx->test->skip) {
     ctx->result.status = TestStatus_Skip;
   } else {
-    ctx->test->test_fn(scratch.arena, &ctx->result, &test_out);
+    ctx->test->test_fn(scratch.arena, ctx->cmdline, g_wdir, &ctx->result, &test_out);
   }
   
   if (ctx->result.status == TestStatus_Fail || ctx->result.status == TestStatus_Crash) {
@@ -187,9 +187,9 @@ t_run_caller(void *raw_ctx)
 }
 
 internal TestResult
-t_run(TestInfo *test, String8 user_data)
+t_run(CmdLine *cmdline, TestInfo *test, String8 user_data)
 {
-  T_RunCtx ctx = { .test = test, .user_data = user_data, .result.status = TestStatus_Fail };
+  T_RunCtx ctx = { .test = test, .cmdline = cmdline, .user_data = user_data, .result.status = TestStatus_Fail };
   t_run_caller(&ctx);
   
   if (ctx.result.status == TestStatus_Fail || ctx.result.status == TestStatus_Crash) {
@@ -1290,7 +1290,7 @@ t_entry_point(CmdLine *cmdline)
       
       // run test
       U64 run_start_time = now_time_us();
-      TestResult result = t_run(test, str8_zero());
+      TestResult result = t_run(cmdline, test, str8_zero());
       U64 run_end_time = now_time_us();
       
       // update
