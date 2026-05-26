@@ -7,7 +7,7 @@
 #endif
 
 internal DASM_Inst
-x64_dasm_inst_from_code(Arena *arena, U64 vaddr, String8  code, DASM_Syntax syntax)
+x64_dasm_inst_from_code(Arena *arena, U64 vaddr, String8 code, DASM_Syntax syntax)
 {
   DASM_Inst inst = {0};
   

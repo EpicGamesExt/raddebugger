@@ -183,7 +183,7 @@ internal DASM_Inst dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, Strin
 ////////////////////////////////
 //~ rjf: Control Flow Analysis
 
-internal DASM_CtrlFlowInfo dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Arch arch, U64 vaddr, String8 code);
+internal DASM_CtrlFlowInfo dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, B32 include_last_inst, Arch arch, U64 vaddr, String8 code);
 
 ////////////////////////////////
 //~ rjf: Parameter Type Functions

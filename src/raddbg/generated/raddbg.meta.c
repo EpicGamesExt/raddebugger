@@ -62,7 +62,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[364] =
+RD_VocabInfo rd_vocab_info_table[365] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -188,6 +188,7 @@ RD_VocabInfo rd_vocab_info_table[364] =
 {str8_lit_comp("step_into_line"), str8_lit_comp(""), str8_lit_comp("Step Into (Line)"), str8_lit_comp(""), RD_IconKind_StepInto},
 {str8_lit_comp("step_over_line"), str8_lit_comp(""), str8_lit_comp("Step Over (Line)"), str8_lit_comp(""), RD_IconKind_StepOver},
 {str8_lit_comp("step_out"), str8_lit_comp(""), str8_lit_comp("Step Out"), str8_lit_comp(""), RD_IconKind_StepOut},
+{str8_lit_comp("step_to_exit"), str8_lit_comp(""), str8_lit_comp("Step To Exit"), str8_lit_comp(""), RD_IconKind_StepOut},
 {str8_lit_comp("halt"), str8_lit_comp(""), str8_lit_comp("Halt"), str8_lit_comp(""), RD_IconKind_Pause},
 {str8_lit_comp("soft_halt_refresh"), str8_lit_comp(""), str8_lit_comp("Soft Halt Refresh"), str8_lit_comp(""), RD_IconKind_Refresh},
 {str8_lit_comp("set_thread_ip"), str8_lit_comp(""), str8_lit_comp("Set Thread IP"), str8_lit_comp(""), RD_IconKind_Null},
@@ -473,7 +474,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("thread"), 0, str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':set}")},
 };
 
-String8 rd_reg_slot_code_name_table[49] =
+String8 rd_reg_slot_code_name_table[50] =
 {
 {0},
 str8_lit_comp("machine"),
@@ -520,13 +521,14 @@ str8_lit_comp("all_windows"),
 str8_lit_comp("non_graphical"),
 str8_lit_comp("prefer_new_tab"),
 str8_lit_comp("activate_with_single_click"),
+str8_lit_comp("disable_addresses"),
 str8_lit_comp("dir2"),
 str8_lit_comp("string"),
 str8_lit_comp("cmd_name"),
 str8_lit_comp("wm_event"),
 };
 
-Rng1U64 rd_reg_slot_range_table[49] =
+Rng1U64 rd_reg_slot_range_table[50] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(D_Handle)},
@@ -573,13 +575,14 @@ Rng1U64 rd_reg_slot_range_table[49] =
 {OffsetOf(RD_Regs, non_graphical), OffsetOf(RD_Regs, non_graphical) + sizeof(B32)},
 {OffsetOf(RD_Regs, prefer_new_tab), OffsetOf(RD_Regs, prefer_new_tab) + sizeof(B32)},
 {OffsetOf(RD_Regs, activate_with_single_click), OffsetOf(RD_Regs, activate_with_single_click) + sizeof(B32)},
+{OffsetOf(RD_Regs, disable_addresses), OffsetOf(RD_Regs, disable_addresses) + sizeof(B32)},
 {OffsetOf(RD_Regs, dir2), OffsetOf(RD_Regs, dir2) + sizeof(Dir2)},
 {OffsetOf(RD_Regs, string), OffsetOf(RD_Regs, string) + sizeof(String8)},
 {OffsetOf(RD_Regs, cmd_name), OffsetOf(RD_Regs, cmd_name) + sizeof(String8)},
 {OffsetOf(RD_Regs, wm_event), OffsetOf(RD_Regs, wm_event) + sizeof(WM_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[252] =
+RD_CmdKindInfo rd_cmd_kind_info_table[253] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), D_EntityKind_Null}},
@@ -593,6 +596,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[252] =
 { str8_lit_comp("step_into_line"), str8_lit_comp("Performs a step that goes into calls, at the source code line level."), str8_lit_comp("step,thread"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("step_over_line"), str8_lit_comp("Performs a step that skips calls, at the source code line level."), str8_lit_comp("step,thread"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("step_out"), str8_lit_comp("Runs to the first instruction after the current scope is exited."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
+{ str8_lit_comp("step_to_exit"), str8_lit_comp("Runs to the first encountered instruction which will exit the current scope."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("halt"), str8_lit_comp("Halts all attached processes."), str8_lit_comp("pause"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("soft_halt_refresh"), str8_lit_comp("Interrupts all attached processes to collect data, and then resumes them."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},
 { str8_lit_comp("set_thread_ip"), str8_lit_comp("Sets the specified thread's instruction pointer at the specified address."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Vaddr, str8_lit_comp(""), str8_lit_comp(""), D_EntityKind_Null}},

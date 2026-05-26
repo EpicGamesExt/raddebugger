@@ -336,6 +336,8 @@ internal MD_ParseResult md_parse_from_text(Arena *arena, String8 filename, Strin
 //~ rjf: Tree -> Text Functions
 
 internal String8List md_debug_string_list_from_tree(Arena *arena, MD_Node *root);
+internal String8List md_string_list_from_tree(Arena *arena, MD_Node *root);
+internal String8 md_string_from_tree(Arena *arena, MD_Node *root);
 
 ////////////////////////////////
 //~ rjf: Node Pointer List Functions

@@ -426,7 +426,7 @@ struct IPCInfo
 //~ rjf: Globals
 
 //- rjf: IPC resources
-#define IPC_SHARED_MEMORY_BUFFER_SIZE MB(4)
+#define IPC_SHARED_MEMORY_BUFFER_SIZE KB(64)
 StaticAssert(IPC_SHARED_MEMORY_BUFFER_SIZE > sizeof(IPCInfo), ipc_buffer_size_requirement);
 global Semaphore ipc_sender2main_signal_semaphore = {0};
 global Semaphore ipc_sender2main_lock_semaphore = {0};
@@ -434,7 +434,7 @@ global U8 *ipc_sender2main_shared_memory_base = 0;
 global Semaphore ipc_main2sender_signal_semaphore = {0};
 global Semaphore ipc_main2sender_lock_semaphore = {0};
 global U8 *ipc_main2sender_shared_memory_base = 0;
-global U8  ipc_s2m_ring_buffer[MB(4)] = {0};
+global U8  ipc_s2m_ring_buffer[KB(64)] = {0};
 global U64 ipc_s2m_ring_write_pos = 0;
 global U64 ipc_s2m_ring_read_pos = 0;
 global Mutex ipc_s2m_ring_mutex = {0};
@@ -666,6 +666,7 @@ entry_point(CmdLine *cmd_line)
             if(msg.size != 0)
             {
               log_infof("ipc_msg: \"%S\"", msg);
+              String8List cmd_parts_of_msg = str8_split(scratch.arena, msg, (U8 *)";", 1, 0);
               RD_WindowState *dst_ws = rd_state->first_window_state;
               for(RD_WindowState *ws = dst_ws; ws != &rd_nil_window_state; ws = ws->order_next)
               {
@@ -690,7 +691,10 @@ entry_point(CmdLine *cmd_line)
                     rd_regs()->view   = panel_tree.focused->selected_tab->id;
                     scratch_end(scratch);
                   }
-                  rd_cmd(RD_CmdKind_RunExternalDriverTextCommand, .string = msg);
+                  for EachNode(n, String8Node, cmd_parts_of_msg.first)
+                  {
+                    rd_cmd(RD_CmdKind_RunExternalDriverTextCommand, .string = n->string);
+                  }
                   rd_request_frame();
                 }
               }

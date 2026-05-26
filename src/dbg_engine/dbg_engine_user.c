@@ -447,6 +447,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
                                                               DASM_InstFlag_UnconditionalJump|
                                                               DASM_InstFlag_ChangesStackPointer|
                                                               DASM_InstFlag_Return,
+                                                              0,
                                                               arch,
                                                               line_vaddr_rng.min,
                                                               machine_code);
@@ -641,6 +642,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
                                                               DASM_InstFlag_UnconditionalJump|
                                                               DASM_InstFlag_ChangesStackPointer|
                                                               DASM_InstFlag_Return,
+                                                              0,
                                                               arch,
                                                               line_vaddr_rng.min,
                                                               machine_code);
@@ -807,7 +809,7 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
       {
         result.good_read = 1;
         String8 code = code_slice.data;
-        DASM_CtrlFlowInfo ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena, DASM_InstFlag_Branch|DASM_InstFlag_UnconditionalJump|DASM_InstFlag_Return, arch, vaddr_range.min, code);
+        DASM_CtrlFlowInfo ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena, DASM_InstFlag_Branch|DASM_InstFlag_UnconditionalJump|DASM_InstFlag_Return, 0, arch, vaddr_range.min, code);
         
         // rjf: add traps at all jump destinations which do *not* fall into any of the scope's ranges
         for EachNode(exit_pt_n, DASM_CtrlFlowPointNode, ctrl_flow_info.exit_points.first)
@@ -869,6 +871,105 @@ d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread)
     }
     
     // NOTE(rjf): we always want to support missing line info for "step out", because
+    // we should always be able to fall back to just using the unwind, so just always
+    // mark this bit as a success.
+    result.good_line_info = 1;
+    access_close(access);
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+internal D_TrapNet
+d_trap_net_from_thread__step_to_exit(Arena *arena, D_Entity *thread)
+{
+  D_TrapNet result = {0};
+  {
+    U64 read_endt_us = now_time_us() + 1000000;
+    Temp scratch = scratch_begin(&arena, 1);
+    Access *access = access_open();
+    
+    // rjf: unpack thread
+    Arch arch = thread->arch;
+    U64 ip_vaddr = d_cached_ip_from_thread(thread->handle);
+    D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+    D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
+    DI_Key dbgi_key = d_dbgi_key_from_module(module);
+    D_CallStack callstack = d_call_stack_from_thread(access, thread->handle, 1, read_endt_us);
+    
+    // rjf: ip => enclosing scope's list(voff_range)
+    Rng1U64List scope_voff_rngs = {0};
+    {
+      U64 ip_voff = d_voff_from_vaddr(module, ip_vaddr);
+      RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, 0);
+      if(rdi != &rdi_parsed_nil)
+      {
+        RDI_Scope *scope = rdi_scope_from_voff(rdi, ip_voff);
+        U64 all_scope_voffs_count = 0;
+        U64 *all_scope_voffs = rdi_table_from_name(rdi, ScopeVOffData, &all_scope_voffs_count);
+        for(U64 voff_idx = scope->voff_range_first; voff_idx+1 < scope->voff_range_opl; voff_idx += 1)
+        {
+          Rng1U64 voff_range = r1u64(all_scope_voffs[voff_idx], all_scope_voffs[voff_idx+1]);
+          rng1u64_list_push(scratch.arena, &scope_voff_rngs, voff_range);
+        }
+      }
+    }
+    
+    // rjf: place traps at all possible exit points of all scope's ranges
+    result.good_read = 1;
+    for EachNode(n, Rng1U64Node, scope_voff_rngs.first)
+    {
+      Rng1U64 voff_range = n->v;
+      Rng1U64 vaddr_range = d_vaddr_range_from_voff_range(module, voff_range);
+      D_ProcessMemorySlice code_slice = d_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, vaddr_range, 0, read_endt_us);
+      if(!code_slice.any_byte_bad)
+      {
+        result.good_read = 1;
+        String8 code = code_slice.data;
+        DASM_CtrlFlowInfo ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena, DASM_InstFlag_Branch|DASM_InstFlag_UnconditionalJump|DASM_InstFlag_Return, 1, arch, vaddr_range.min, code);
+        
+        // rjf: add traps at all jumps whose destinations do *not* fall into any of the scope's ranges
+        for EachNode(exit_pt_n, DASM_CtrlFlowPointNode, ctrl_flow_info.exit_points.first)
+        {
+          U64 jump_vaddr = exit_pt_n->v.vaddr;
+          U64 jump_dest_vaddr = exit_pt_n->v.jump_dest_vaddr;
+          B32 jump_dest_vaddr_is_out_of_scope = 1;
+          for EachNode(scope_n, Rng1U64Node, scope_voff_rngs.first)
+          {
+            if(contains_1u64(scope_n->v, d_voff_from_vaddr(module, jump_dest_vaddr)))
+            {
+              jump_dest_vaddr_is_out_of_scope = 0;
+              break;
+            }
+          }
+          if(jump_dest_vaddr_is_out_of_scope)
+          {
+            D_Trap trap = {D_TrapFlag_EndStepping|D_TrapFlag_IgnoreStackPointerCheck, jump_vaddr};
+            d_trap_list_push(arena, &result.traps, &trap);
+          }
+        }
+      }
+      else
+      {
+        result.good_read = 0;
+        break;
+      }
+    }
+    
+    // rjf: use first unwind frame to generate trap
+    if(result.good_read && callstack.concrete_frames_count > 1)
+    {
+      ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
+      U64 vaddr = arch_ip_from_reg_block(arch_info, callstack.concrete_frames[1]->regs);
+      D_Trap trap = {D_TrapFlag_EndStepping|D_TrapFlag_IgnoreStackPointerCheck, vaddr};
+      d_trap_list_push(arena, &result.traps, &trap);
+    }
+    else
+    {
+      result.good_read = 0;
+    }
+    
+    // NOTE(rjf): we always want to support missing line info for "step to exit", because
     // we should always be able to fall back to just using the unwind, so just always
     // mark this bit as a success.
     result.good_line_info = 1;
@@ -1315,6 +1416,12 @@ d_ctrl_targets_running(void)
   return d_user_state->ctrl_is_running;
 }
 
+internal U64
+d_stop_count(void)
+{
+  return d_user_state->stop_count;
+}
+
 //- rjf: active entity based queries
 
 internal DI_KeyList
@@ -1610,6 +1717,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         
         case D_EventKind_Stopped:
         {
+          d_user_state->stop_count += 1;
           d_user_state->ctrl_is_running = 0;
           d_user_state->ctrl_thread_run_state = 0;
           d_user_state->ctrl_soft_halt_issued = 0;
@@ -1903,6 +2011,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_StepIntoLine:
         case D_CmdKind_StepOverLine:
         case D_CmdKind_StepOut:
+        case D_CmdKind_StepToExit:
         {
           D_Entity *thread = d_entity_from_handle(params->thread);
           if(thread == &d_entity_nil)
@@ -1931,6 +2040,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               case D_CmdKind_StepIntoLine: {trap_net = d_trap_net_from_thread__step_into_line(scratch.arena, thread);}break;
               case D_CmdKind_StepOverLine: {trap_net = d_trap_net_from_thread__step_over_line(scratch.arena, thread);}break;
               case D_CmdKind_StepOut:      {trap_net = d_trap_net_from_thread__step_out_scope(scratch.arena, thread);}break;
+              case D_CmdKind_StepToExit:   {trap_net = d_trap_net_from_thread__step_to_exit(scratch.arena, thread);}break;
             }
             B32 good_trap_net = (trap_net.good_read || !trap_net.good_line_info);
             if(good_trap_net && trap_net.traps.count != 0)

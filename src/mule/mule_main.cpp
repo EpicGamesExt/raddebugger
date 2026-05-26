@@ -700,12 +700,14 @@ type_coverage_eval_tests(void)
   int_vector.push_back(6);
   int_vector.push_back(7);
   
+#if 0
   std::unordered_map<std::string, int> people =
   {
     {"Peter", 1},
     {"Oliver", 2},
     {"Jack", 3},
   };
+#endif
   
   std::vector<int> *pint_vector = &int_vector;
   std::vector<int> &rint_vector =  int_vector;
@@ -718,9 +720,9 @@ type_coverage_eval_tests(void)
   
   SizedKind sized_kind = SizedKind_C;
   
-  variadic_params("foo", 123, 456);
-  
   int x = (int)(Anonymous_D);
+  
+  variadic_params("foo", 123, 456);
 }
 
 ////////////////////////////////
@@ -3198,7 +3200,6 @@ mule_main(int argc, char** argv)
   
   mule_init();
   
-  // NOTE(allen): Eval Tests
   type_coverage_eval_tests();
   
   mutating_variables_eval_tests();
@@ -3231,9 +3232,6 @@ mule_main(int argc, char** argv)
   
   exception_filter_test();
   
-  markup_tests();
-  
-  // NOTE(allen): Stepping Tests
   control_flow_stepping_tests();
   
   indirect_call_jump_stepping_tests();
@@ -3263,6 +3261,8 @@ mule_main(int argc, char** argv)
   jit_stepping_tests();
   
   interrupt_stepping_tests();
+  
+  markup_tests();
   
   exception_stepping_tests();
   

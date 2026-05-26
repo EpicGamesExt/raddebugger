@@ -10302,6 +10302,7 @@ rd_init(CmdLine *cmdln)
   rd_state->arena = arena;
   rd_state->quit_after_success = (cmd_line_has_flag(cmdln, str8_lit("quit_after_success")) ||
                                   cmd_line_has_flag(cmdln, str8_lit("q")));
+  rd_state->override_focus_on_stop = (cmd_line_has_flag(cmdln, s("no_focus_on_stop")));
   rd_state->user_path_arena = arena_alloc();
   rd_state->project_path_arena = arena_alloc();
   rd_state->theme_path_arena = arena_alloc();
@@ -12584,6 +12585,7 @@ rd_frame(void)
           {
             String8 msg = rd_regs()->string;
             String8List msg_parts = str8_split(scratch.arena, msg, (U8 *)" ", 1, 0);
+            str8_list_push_front(scratch.arena, &msg_parts, s("ipc_command"));
             CmdLine msg_cmd_line = cmd_line_from_string_list(scratch.arena, msg_parts);
             String8 cmd_kind_name = str8_list_first(&msg_cmd_line.inputs);
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_kind_name);
@@ -12609,8 +12611,8 @@ rd_frame(void)
                 primary_args_string = str8_list_join(scratch.arena, &primary_args_strings, &(StringJoin){.sep = str8_lit(" ")});
               }
               rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_kind_info->query.expr, primary_args_string);
+              rd_regs()->disable_addresses = 1;
               rd_push_cmd(cmd_kind_name, rd_regs());
-              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "ack:{cmd:%S}\n", cmd_kind_name);
             }
             else
             {
@@ -12622,15 +12624,32 @@ rd_frame(void)
             str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "state:\n{\n");
             str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " running: %i\n", d_ctrl_targets_running());
             str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " run_gen: %I64u\n", d_run_gen());
-            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " ip:      0x%I64x\n", d_ctrl_last_stop_event().rip_vaddr);
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " stop_count: %I64u\n", d_stop_count());
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " ip: 0x%I64x\n", d_ctrl_last_stop_event().rip_vaddr);
+            {
+              Access *access = access_open();
+              D_Event evt = d_ctrl_last_stop_event();
+              U64 vaddr = evt.rip_vaddr;
+              D_Entity *thread = d_entity_from_handle(rd_base_regs()->thread);
+              D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+              D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+              U64 voff = d_voff_from_vaddr(module, vaddr);
+              DI_Key dbgi_key = d_dbgi_key_from_module(module);
+              RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
+              RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, voff);
+              String8 name = fully_qualified_str8_from_rdi_symbol(scratch.arena, rdi, procedure);
+              name = escaped_from_raw_str8(scratch.arena, name);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " ip_voff: 0x%I64x\n", voff);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " ip_voff_symbol: \"%S\"\n", name);
+              access_close(access);
+            }
             {
               D_Event evt = d_ctrl_last_stop_event();
               DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &evt);
               String8 explanation_string = dr_string_from_fstrs(scratch.arena, &explanation_fstrs);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " stop_event:\n {\n");
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  arch: %S\n", string_from_arch(evt.arch));
-              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  vaddr_range_min: 0x%I64x\n", evt.vaddr_rng.min);
-              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  vaddr_range_max: 0x%I64x\n", evt.vaddr_rng.max);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  vaddr_range: [0x%I64x, 0x%I64x)\n", evt.vaddr_rng.min, evt.vaddr_rng.max);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  ip_vaddr: 0x%I64x\n", evt.rip_vaddr);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  stack_base: 0x%I64x\n", evt.stack_base);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  tls_root: 0x%I64x\n", evt.tls_root);
@@ -12642,6 +12661,25 @@ rd_frame(void)
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  tls_model: 0x%I64x\n", evt.tls_model);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  explanation: \"%S\"\n", escaped_from_raw_str8(scratch.arena, explanation_string));
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
+            }
+            {
+              Access *access = access_open();
+              D_Event evt = d_ctrl_last_stop_event();
+              U64 vaddr = evt.rip_vaddr;
+              D_Entity *thread = d_entity_from_handle(rd_base_regs()->thread);
+              D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+              D_Entity *module = d_module_from_process_vaddr(process, vaddr);
+              U64 voff = d_voff_from_vaddr(module, vaddr);
+              DI_Key dbgi_key = d_dbgi_key_from_module(module);
+              RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
+              E_String2NumMap *locals_map = e_push_locals_map_from_rdi_voff(scratch.arena, rdi, voff);
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " locals:\n {\n");
+              for(E_String2NumMapNode *n = locals_map->first; n != 0; n = n->order_next)
+              {
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " %S\n", n->string);
+              }
+              str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
+              access_close(access);
             }
             {
               D_Event evt = d_ctrl_last_stop_event();
@@ -12656,12 +12694,12 @@ rd_frame(void)
               for EachNode(n, D_LineNode, lines.first)
               {
                 D_Line line = n->v;
+                String8 line_file_path_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, line.file_path, module->string);
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  {\n");
-                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   file_path:  \"%S\"\n", line.file_path);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   file_path:  \"%S\"\n", line_file_path_relative);
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   line_num:   %I64d\n", line.pt.line);
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   column_num: %I64d\n", line.pt.column);
-                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   voff_range_min: 0x%I64x\n", line.voff_range.min);
-                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   voff_range_max: 0x%I64x\n", line.voff_range.max);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   voff_range: [0x%I64x, 0x%I64x)\n", line.voff_range.min, line.voff_range.max);
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  }\n");
               }
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
@@ -12688,8 +12726,7 @@ rd_frame(void)
                 D_Entity *module = modules.v[idx];
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  {\n");
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   name:        \"%S\"\n", escaped_from_raw_str8(scratch.arena, module->string));
-                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   vaddr_range_min: 0x%I64x\n",  module->vaddr_range.min);
-                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   vaddr_range_max: 0x%I64x\n",  module->vaddr_range.max);
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "   vaddr_range: [0x%I64x, 0x%I64x)\n",  module->vaddr_range.min, module->vaddr_range.max);
                 str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "  }\n");
               }
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
@@ -12698,6 +12735,12 @@ rd_frame(void)
           }break;
           case RD_CmdKind_Eval:
           {
+            // TODO(rjf): to use this for evaluation testing, we need some way to temporarily
+            // call the eval system with ctrl-thread-like evaluation rules (e.g. waiting for
+            // memory, never accepting stale results, not looking into caches, etc.). currently
+            // we'd only be able to do that by setting up an entirely new evaluation context,
+            // which is currently a ton of code & laborious & duplicative, so we need to tighten
+            // that up first. @eval_regressions
             String8 expr = rd_regs()->expr;
             E_Eval eval = e_eval_from_string(expr);
             E_Eval type_eval = e_eval_from_stringf("typeof(%S)", expr);
@@ -12706,6 +12749,10 @@ rd_frame(void)
               .flags = EV_StringFlag_ReadOnlyDisplayRules | rd_state->eval_viz_base_string_flags,
               .radix = 10,
             };
+            if(rd_regs()->disable_addresses)
+            {
+              string_params.flags |= EV_StringFlag_DisableAddresses;
+            }
             String8 value_string = ev_value_string_from_eval(scratch.arena, &string_params, eval, 512);
             String8 type_value_string = ev_value_string_from_eval(scratch.arena, &string_params, type_eval, 512);
             String8List msgs_strings = {0};
@@ -16903,7 +16950,7 @@ rd_frame(void)
           }
           
           // rjf: focus window if none focused, and if we have a thread to snap to
-          if(need_refocus && (selected_thread != &d_entity_nil || thread != &d_entity_nil))
+          if(!rd_state->override_focus_on_stop && need_refocus && (selected_thread != &d_entity_nil || thread != &d_entity_nil))
           {
             B32 any_window_is_focused = 0;
             for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)

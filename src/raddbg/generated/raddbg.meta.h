@@ -53,6 +53,7 @@ RD_RegSlot_AllWindows,
 RD_RegSlot_NonGraphical,
 RD_RegSlot_PreferNewTab,
 RD_RegSlot_ActivateWithSingleClick,
+RD_RegSlot_DisableAddresses,
 RD_RegSlot_Dir2,
 RD_RegSlot_String,
 RD_RegSlot_CmdName,
@@ -74,6 +75,7 @@ RD_CmdKind_StepOverInst,
 RD_CmdKind_StepIntoLine,
 RD_CmdKind_StepOverLine,
 RD_CmdKind_StepOut,
+RD_CmdKind_StepToExit,
 RD_CmdKind_Halt,
 RD_CmdKind_SoftHaltRefresh,
 RD_CmdKind_SetThreadIP,
@@ -498,6 +500,7 @@ B32 all_windows;
 B32 non_graphical;
 B32 prefer_new_tab;
 B32 activate_with_single_click;
+B32 disable_addresses;
 Dir2 dir2;
 String8 string;
 String8 cmd_name;
@@ -598,6 +601,7 @@ Z(getting_started)\
 .non_graphical = rd_regs()->non_graphical,\
 .prefer_new_tab = rd_regs()->prefer_new_tab,\
 .activate_with_single_click = rd_regs()->activate_with_single_click,\
+.disable_addresses = rd_regs()->disable_addresses,\
 .dir2 = rd_regs()->dir2,\
 .string = rd_regs()->string,\
 .cmd_name = rd_regs()->cmd_name,\
@@ -606,10 +610,10 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[25];
 extern String8 rd_tab_fast_path_query_name_table[25];
-extern RD_VocabInfo rd_vocab_info_table[364];
+extern RD_VocabInfo rd_vocab_info_table[365];
 extern RD_NameSchemaInfo rd_name_schema_info_table[39];
-extern String8 rd_reg_slot_code_name_table[49];
-extern Rng1U64 rd_reg_slot_range_table[49];
+extern String8 rd_reg_slot_code_name_table[50];
+extern Rng1U64 rd_reg_slot_range_table[50];
 extern String8 rd_binding_version_remap_old_name_table[9];
 extern String8 rd_binding_version_remap_new_name_table[9];
 extern String8 rd_icon_kind_text_table[75];

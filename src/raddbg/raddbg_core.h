@@ -388,6 +388,7 @@ struct RD_State
   Arena *arena;
   B32 quit;
   B32 quit_after_success;
+  B32 override_focus_on_stop;
   S32 frame_depth;
   U64 frame_eval_memread_endt_us;
   
@@ -444,7 +445,7 @@ struct RD_State
   Access *frame_access;
   String8 last_window_title;
   
-  // rjf: evaluation cache
+  // rjf: evaluation caches
   E_Cache *eval_cache;
   
   // rjf: ambiguous path table (constructed from-scratch each frame)

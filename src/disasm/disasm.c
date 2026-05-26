@@ -28,7 +28,7 @@ dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Synta
 //~ rjf: Control Flow Analysis
 
 internal DASM_CtrlFlowInfo
-dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Arch arch, U64 vaddr, String8 code)
+dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, B32 include_last_inst, Arch arch, U64 vaddr, String8 code)
 {
   Temp scratch = scratch_begin(&arena, 1);
   DASM_CtrlFlowInfo info = {0};
@@ -38,7 +38,7 @@ dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_point
     U64 inst_vaddr = vaddr+offset;
     offset += inst.size;
     info.total_size += inst.size;
-    if(inst.flags & exit_points_mask)
+    if(inst.flags & exit_points_mask || (include_last_inst && offset >= code.size))
     {
       DASM_CtrlFlowPoint point = {0};
       point.inst_flags = inst.flags;

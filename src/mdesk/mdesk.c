@@ -1205,6 +1205,110 @@ md_debug_string_list_from_tree(Arena *arena, MD_Node *root)
   return strings;
 }
 
+internal String8List
+md_string_list_from_tree(Arena *arena, MD_Node *root)
+{
+  String8List strings = {0};
+  {
+    char *indentation = "                                                                                                                                ";
+    S32 depth = 0;
+    B32 delimit_with_newlines = 1;
+    for(MD_Node *node = root, *next = &md_nil_node; !md_node_is_nil(node); node = next)
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      
+      // rjf: get next recursion
+      MD_NodeRec rec = md_node_rec_depth_first_pre(node, root);
+      next = rec.next;
+      
+      // rjf: sanitize string
+      String8 node_string_sanitized = node->string;
+      {
+        MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, node_string_sanitized);
+        B32 is_simple_string = (tokenize.tokens.count == 1 && (tokenize.tokens.v[0].flags & (MD_TokenFlag_Identifier|
+                                                                                             MD_TokenFlag_Numeric)));
+        if(tokenize.tokens.count > 0 && !is_simple_string)
+        {
+          node_string_sanitized = str8f(scratch.arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, node_string_sanitized));
+        }
+        if(node_string_sanitized.size == 0 && node->first == &md_nil_node)
+        {
+          node_string_sanitized = s("\"\"");
+        }
+      }
+      
+      // rjf: turn off newline delimiting for implicit child sets
+      B32 next_delimit_with_newlines = delimit_with_newlines;
+      if(node->first != &md_nil_node && !(node->flags & (MD_NodeFlag_HasParenLeft|MD_NodeFlag_HasBracketLeft|MD_NodeFlag_HasBraceLeft)))
+      {
+        next_delimit_with_newlines = 0;
+      }
+      
+      // rjf: push node line
+      if(node_string_sanitized.size != 0)
+      {
+        str8_list_pushf(arena, &strings, "%.*s%S%S%S", delimit_with_newlines ? depth : 1, indentation, node_string_sanitized,
+                        (rec.push_count != 0 && node_string_sanitized.size != 0) ? s(":") : s(""),
+                        next_delimit_with_newlines ? s("\n") : s(""));
+      }
+      
+      // rjf: children -> open brace
+      if(rec.push_count != 0)
+      {
+        String8 opener_symbol = s("");
+        if(node->flags & MD_NodeFlag_HasParenLeft)   { opener_symbol = s("("); }
+        if(node->flags & MD_NodeFlag_HasBracketLeft) { opener_symbol = s("["); }
+        if(node->flags & MD_NodeFlag_HasBraceLeft)   { opener_symbol = s("{"); }
+        if(opener_symbol.size != 0)
+        {
+          str8_list_pushf(arena, &strings, "%.*s%S\n", depth, indentation, opener_symbol);
+        }
+      }
+      
+      // rjf: descend
+      depth += rec.push_count;
+      delimit_with_newlines = next_delimit_with_newlines;
+      
+      // rjf: popping -> close braces
+      {
+        MD_Node *popped = node->parent;
+        for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1, popped = popped->parent)
+        {
+          String8 closer_symbol = s("");
+          if(popped->flags & MD_NodeFlag_HasParenRight)   { closer_symbol = s(")"); }
+          if(popped->flags & MD_NodeFlag_HasBracketRight) { closer_symbol = s("]"); }
+          if(popped->flags & MD_NodeFlag_HasBraceRight)   { closer_symbol = s("}"); }
+          if(!delimit_with_newlines)
+          {
+            str8_list_push(arena, &strings, s("\n"));
+            delimit_with_newlines = 1;
+          }
+          else if(closer_symbol.size != 0)
+          {
+            str8_list_pushf(arena, &strings, "%.*s%S\n", (depth-1-pop_idx), indentation, closer_symbol);
+          }
+        }
+      }
+      
+      // rjf: ascend
+      depth -= rec.pop_count;
+      
+      scratch_end(scratch);
+    }
+  }
+  return strings;
+}
+
+internal String8
+md_string_from_tree(Arena *arena, MD_Node *root)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List strings = md_string_list_from_tree(scratch.arena, root);
+  String8 string = str8_list_join(arena, &strings, 0);
+  scratch_end(scratch);
+  return string;
+}
+
 ////////////////////////////////
 //~ rjf: Node Pointer List Functions
 

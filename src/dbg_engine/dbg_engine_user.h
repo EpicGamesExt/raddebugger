@@ -378,6 +378,7 @@ struct D_UserState
   D_EntityCtxRWStore *ctrl_entity_store;
   Arena *ctrl_stop_arena;
   D_Event ctrl_last_stop_event;
+  U64 stop_count;
 };
 
 ////////////////////////////////
@@ -424,6 +425,7 @@ internal D_TrapNet d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity
 internal D_TrapNet d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread);
 internal D_TrapNet d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread);
 internal D_TrapNet d_trap_net_from_thread__step_out_scope(Arena *arena, D_Entity *thread);
+internal D_TrapNet d_trap_net_from_thread__step_to_exit(Arena *arena, D_Entity *thread);
 
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
@@ -460,6 +462,7 @@ internal U64 d_frame_index(void);
 internal D_RunKind d_ctrl_last_run_kind(void);
 internal U64 d_ctrl_last_run_frame_idx(void);
 internal B32 d_ctrl_targets_running(void);
+internal U64 d_stop_count(void);
 
 //- rjf: active entity based queries
 internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);

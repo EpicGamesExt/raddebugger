@@ -41,6 +41,6 @@ target:
 {
   executable: "build/torture.exe"
   working_directory: build
+  arguments: "raddbg/*"
   enabled: 1
-  arguments: "raddbg/* --gui"
 }
