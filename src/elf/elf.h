@@ -129,7 +129,7 @@ enum
   ELF_PhdrType_Interp      = 3,
   ELF_PhdrType_Note        = 4,
   ELF_PhdrType_ShLib       = 5,
-  ELF_PhdrType_PHdr        = 6,
+  ELF_PhdrType_Phdr        = 6,
   ELF_PhdrType_Tls         = 7,
   ELF_PhdrType_LoOs        = 0x60000000,
   ELF_PhdrType_HiOs        = 0x6fffffff,
@@ -239,44 +239,6 @@ enum
 
 #define ELF_SectionFlag_Extract_MaskOs(f)   (U8)(((f) >> ELF_SectionFlag_MaskOs_Shift)   & ELF_SectionFlag_MaskOs_Mask)
 #define ELF_SectionFlag_Extract_MaskProc(f) (U8)(((f) >> ELF_SectionFlag_MaskProc_shift) & ELF_SectionFlag_MaskProc_Mask)
-typedef U32 ELF_AuxType;
-enum
-{
-  ELF_AuxType_Null              = 0,
-  ELF_AuxType_Phdr              = 3, // program headers
-  ELF_AuxType_Phent             = 4, // size of a program header
-  ELF_AuxType_Phnum             = 5, // number of program headers
-  ELF_AuxType_Pagesz            = 6, // system page size
-  ELF_AuxType_Base              = 7, // interpreter base address
-  ELF_AuxType_Flags             = 8,
-  ELF_AuxType_Entry             = 9, // program entry point
-  ELF_AuxType_Uid               = 11,
-  ELF_AuxType_Euid              = 12,
-  ELF_AuxType_Gid               = 13,
-  ELF_AuxType_Egid              = 14,
-  ELF_AuxType_Platform          = 15,
-  ELF_AuxType_Hwcap             = 16,
-  ELF_AuxType_Clktck            = 17,
-  ELF_AuxType_DCacheBSize       = 19,
-  ELF_AuxType_ICacheBSize       = 20,
-  ELF_AuxType_UCacheBSize       = 21,
-  ELF_AuxType_IgnorePPC         = 22,
-  ELF_AuxType_Secure            = 23,
-  ELF_AuxType_BasePlatform      = 24,
-  ELF_AuxType_Random            = 25,
-  ELF_AuxType_Hwcap2            = 26, // addres to 16 random bytes
-  ELF_AuxType_ExecFn            = 31, 
-  ELF_AuxType_SysInfo           = 32, // file name of executable
-  ELF_AuxType_SysInfoEhdr       = 33,
-  ELF_AuxType_L1I_CacheSize     = 40,
-  ELF_AuxType_L1I_CacheGeometry = 41,
-  ELF_AuxType_L1D_CacheSize     = 42,
-  ELF_AuxType_L1D_CacheGeometry = 43,
-  ELF_AuxType_L2_CacheSize      = 44,
-  ELF_AuxType_L2_CacheGeometry  = 45,
-  ELF_AuxType_L3_CacheSize      = 46,
-  ELF_AuxType_L3_CacheGeometry  = 47,
-};
 
 typedef enum
 {
@@ -675,23 +637,6 @@ typedef struct ELF_Phdr32
 } ELF_Phdr32;
 
 ////////////////////////////////
-// Auxiliary Vectors
-
-// these appear in /proc/<pid>/auxv of a process, they are not in elf files
-
-typedef struct ELF_Auxv32
-{
-  U32 a_type;
-  U32 a_val;
-} ELF_Auxv32;
-
-typedef struct ELF_Auxv64
-{
-  U64 a_type;
-  U64 a_val;
-} ELF_Auxv64;
-
-////////////////////////////////
 // Dynamic Structures
 
 // these appear in the virtual address space of a process, they are not in elf files
@@ -861,7 +806,6 @@ internal ELF_Sym64  elf_sym64_from_sym32  (ELF_Sym32 sym32);
 internal ELF_Rel64  elf_rel64_from_rel32  (ELF_Rel32 rel32);
 internal ELF_Rela64 elf_rela64_from_rela32(ELF_Rela32 rela32);
 internal ELF_Chdr64 elf_chdr64_from_chdr32(ELF_Chdr32 chdr32);
-internal ELF_Auxv64 elf_auxv64_from_auxv32(ELF_Auxv32 auxv32);
 
 ////////////////////////////////
 // enum -> string
@@ -888,5 +832,7 @@ internal MachineOpResult elf_read_phdr  (MachineOp_MemRead *mem_read, void *mem_
 internal MachineOpResult elf_read_shdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Shdr64 *shdr_out);
 internal MachineOpResult elf_read_dyn   (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Dyn64  *dyn_out);
 internal MachineOpResult elf_read_symbol(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Sym64  *symbol_out);
+
+internal B32 elf_read_ehdr_string(String8 string, ELF_Hdr64 *hdr_out);
 
 #endif // ELF_H

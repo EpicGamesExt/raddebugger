@@ -41,7 +41,7 @@ typedef struct timespec timespec;
 ////////////////////////////////
 //~ rjf: Linux Call Interruption Retry Helper
 
-#define LNX_RETRY_ON_EINTR(expr)          \
+#define LNX_RETRY_ON_EINTR(expr)           \
 (__extension__({                           \
 __typeof__(expr) __ret;                    \
 do {                                       \

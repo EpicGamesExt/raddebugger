@@ -204,6 +204,191 @@ lnx_dmn_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
   return dl_path;
 }
 
+internal int
+lnx_dmn_is_process_64bit(pid_t pid, B32 *is_64bit_out)
+{
+#if ARCH_X64
+  LNX_DMN_GprsX64 src;
+  int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, pid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_len = sizeof(src), .iov_base = &src }));
+  if(ptrace_result < 0) { goto exit; }
+
+  // 0x23 -> 32-bit compat/i386 user mode
+  *is_64bit_out = (src.cs == 0x33);
+#else
+# error "TODO: detect process type"
+#endif
+  exit:;
+  return ptrace_result;
+}
+
+internal B32
+lnx_dmn_load_auxv(pid_t pid, LNX_DMN_Auxv *auxv_out)
+{
+  Temp scratch = scratch_begin(0, 0);
+
+  B32 is_ok = 0;
+  
+  // rjf: open aux data
+  String8 auxv_path = str8f(scratch.arena, "/proc/%d/auxv", pid);
+  int auxv_fd = LNX_RETRY_ON_EINTR(open((char *)auxv_path.str, O_RDONLY));
+  if(auxv_fd < 0)
+  {
+    log_user_errorf("ERROR: failed to open /proc/%d/auxv, error code %d\n", pid, errno);
+    goto exit;
+  }
+
+  // pid -> procesms type
+  if(lnx_dmn_is_process_64bit(pid, &auxv_out->is_64bit))
+  {
+    log_user_errorf("ERROR: process type infer failed, unable to parse auxv\n");
+    goto exit;
+  }
+
+  for(;;)
+  {
+    LNX_DMN_Auxv64 auxv = {0};
+
+    // read next auxv entry
+    if(auxv_out->is_64bit)
+    {
+      ssize_t read_size = LNX_RETRY_ON_EINTR(read(auxv_fd, &auxv, sizeof(auxv)));
+      if(read_size != sizeof(auxv))
+      {
+        log_user_errorf("ERROR: failed to read /proc/%d/auxv (64), error code: %d\n", pid, errno);
+        break;
+      }
+    }
+    else
+    {
+      LNX_DMN_Auxv32 auxv32 = {0};
+      ssize_t read_size = LNX_RETRY_ON_EINTR(read(auxv_fd, &auxv32, sizeof(auxv32)));
+      if(read_size != sizeof(auxv32))
+      {
+        log_user_errorf("ERROR: failed to read /proc/%d/auxv (32), error code; %d\n", pid, errno);
+        break;
+      }
+
+      // upconvert auxv
+      auxv.a_type = auxv32.a_type;
+      auxv.a_val  = auxv32.a_val;
+    }
+
+    // last auxv? -> stop
+    if(auxv.a_type == LNX_DMN_AuxType_Null)
+    {
+      break;
+    }
+
+    // unknown auxv? -> skip
+    if(auxv.a_type >= LNX_DMN_AuxType_Count)
+    {
+      log_user_errorf("WARNING: encountered unexpected auxv type %llu, value %llu, in /proc/%d/pid\n", auxv.a_type, auxv.a_val, pid);
+      continue;
+    }
+
+    // store auxv value
+    auxv_out->v[auxv.a_type]      = auxv.a_val;
+    auxv_out->is_set[auxv.a_type] = 1;
+  }
+
+  // close auxv fd
+  LNX_RETRY_ON_EINTR(close(auxv_fd));
+
+  is_ok = 1;
+  exit:;
+  scratch_end(scratch);
+  return is_ok;
+}
+
+internal B32
+lnx_dmn_load_elf_auxv(int fd, LNX_DMN_Auxv auxv, B32 is_rebased, ELF_Bin *elf_out)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  B32 is_ok = 0;
+
+  // check auxv necessary values set
+  if( ! auxv.is_set[LNX_DMN_AuxType_Pagesz])
+  {
+    log_user_errorf("ERROR: failed to load ELF from auxv, missing AT_PAGESZ\n");
+    goto exit;
+  }
+  if( ! auxv.is_set[LNX_DMN_AuxType_Phdr])
+  {
+    log_user_errorf("ERROR: failed to load ELF from auxv, missing AT_PHDR\n");
+    goto exit;
+  }
+  if( ! auxv.is_set[LNX_DMN_AuxType_Phent])
+  {
+    log_user_errorf("ERROR: failed to load ELF from auxv, missing AT_PHENT\n");
+    goto exit;
+  }
+  if ( ! auxv.is_set[LNX_DMN_AuxType_Phnum])
+  {
+    log_user_errorf("ERROR: failed to load ELF from auxv, missing AT_PHNUM\n");
+    goto exit;
+  }
+  if ( ! auxv.is_set[LNX_DMN_AuxType_Entry])
+  {
+    log_user_errorf("ERROR: failed to load ELF from auxv, missing AT_ENTRY\n");
+    goto exit;
+  }
+  if ( ! auxv.is_set[LNX_DMN_AuxType_Platform])
+  {
+    log_user_errorf("ERROR: failed to load ELF from auxv, missing AT_PLATFORM\n");
+    goto exit;
+  }
+
+  // read AT_PLATFORM string
+  Rng1U64 platform_vrange = r1u64_size(auxv.v[LNX_DMN_AuxType_Platform], 32);
+  String8 platform        = {0};
+  if(machine_read_cstring_opl(scratch.arena, platform_vrange.min, platform_vrange.max, lnx_dmn_machine_op_mem_read, &fd, &platform) != MachineOpResult_Ok)
+  {
+    log_user_errorf("ERROR: failed to read AT_PLATFORM string from address 0x%llx\n", auxv.v[LNX_DMN_AuxType_Platform]);
+    goto exit;
+  }
+
+  // infer machine from AT_PLATFORM
+  ELF_MachineKind e_machine = ELF_MachineKind_None;
+  if(str8_match(platform, str8_lit("x86_64"), StringMatchFlag_CaseInsensitive))
+  {
+    e_machine = ELF_MachineKind_X86_64;
+  }
+  else if(str8_match(platform, str8_lit("aarch64"), StringMatchFlag_CaseInsensitive))
+  {
+    e_machine = ELF_MachineKind_AARCH64;
+  }
+  else
+  {
+    log_user_errorf("ERROR: failed to infer machine from AT_PLATFROM string \"%S\"\n", platform);
+    goto exit;
+  }
+
+  ELF_Bin elf          = {0};
+  elf.addr_mode        = ELF_BinAddrMode_Virtual;
+  elf.base             = auxv.v[LNX_DMN_AuxType_Phdr] & ~(auxv.v[LNX_DMN_AuxType_Pagesz]-1);
+  elf.is_rebased       = is_rebased;
+  elf.mem_read         = lnx_dmn_machine_op_mem_read;
+  MemoryCopy(&elf.mem_read_ud[0], &fd, sizeof(fd));
+  elf.ehdr.e_ident[ELF_Identifier_Class] = auxv.is_64bit ? ELF_Class_64 : ELF_Class_32;
+  elf.ehdr.e_machine   = e_machine;
+  elf.ehdr.e_type      = ELF_Type_Dyn;
+  elf.ehdr.e_entry     = auxv.v[LNX_DMN_AuxType_Entry] - elf.base;
+  elf.ehdr.e_phoff     = auxv.v[LNX_DMN_AuxType_Phdr]  - elf.base;
+  elf.ehdr.e_phnum     = auxv.v[LNX_DMN_AuxType_Phnum];
+  elf.ehdr.e_phentsize = auxv.v[LNX_DMN_AuxType_Phent];
+
+  if(elf_out)
+  {
+    *elf_out = elf;
+  }
+
+  is_ok = 1;
+  exit:;
+  scratch_end(scratch);
+  return is_ok;
+}
+
 internal ELF_Hdr64
 lnx_dmn_ehdr_from_pid(pid_t pid)
 {
@@ -224,60 +409,6 @@ lnx_dmn_ehdr_from_pid(pid_t pid)
   Assert(is_read);
   scratch_end(scratch);
   return exe;
-}
-
-internal LNX_DMN_Auxv
-lnx_dmn_auxv_from_pid(pid_t pid, ELF_Class elf_class)
-{
-  Temp scratch = scratch_begin(0, 0);
-  LNX_DMN_Auxv result = {0};
-  
-  // rjf: open aux data
-  String8 auxv_path = str8f(scratch.arena, "/proc/%d/auxv", pid);
-  int auxv_fd = LNX_RETRY_ON_EINTR(open((char *)auxv_path.str, O_RDONLY));
-  
-  // rjf: scan aux data
-  if(auxv_fd >= 0)
-  {
-    for(;;)
-    {
-      // rjf: read next aux
-      ELF_Auxv64 auxv = {0};
-      switch(elf_class)
-      {
-        case ELF_Class_None:{}break;
-        case ELF_Class_32:
-        {
-          ELF_Auxv32 auxv32 = {0};
-          if(read(auxv_fd, &auxv32, sizeof(auxv32)) != sizeof(auxv32)) { goto brkloop; }
-          auxv = elf_auxv64_from_auxv32(auxv32);
-        }break;
-        case ELF_Class_64:
-        {
-          if(read(auxv_fd, &auxv, sizeof(auxv)) != sizeof(auxv)) { goto brkloop; }
-        }break;
-        default:{NotImplemented;}break;
-      }
-      
-      // rjf: fill result
-      switch(auxv.a_type)
-      {
-        default:{}break;
-        case ELF_AuxType_Null:   goto brkloop; break;
-        case ELF_AuxType_Base:   result.base   = auxv.a_val; break;
-        case ELF_AuxType_Phnum:  result.phnum  = auxv.a_val; break;
-        case ELF_AuxType_Phent:  result.phent  = auxv.a_val; break;
-        case ELF_AuxType_Phdr:   result.phdr   = auxv.a_val; break;
-        case ELF_AuxType_ExecFn: result.execfn = auxv.a_val; break;
-        case ELF_AuxType_Pagesz: result.pagesz = auxv.a_val; break;
-      }
-    }
-    brkloop:;
-    LNX_RETRY_ON_EINTR(close(auxv_fd));
-  }
-  
-  scratch_end(scratch);
-  return result;
 }
 
 internal LNX_DMN_Thread *
@@ -339,73 +470,50 @@ lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64
   return result;
 }
 
-internal LNX_DMN_ProbeList
-lnx_dmn_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
+internal MachineOpResult
+lnx_dmn_read_probes(Arena *arena, ELF_Bin *elf_virt, ELF_Bin *elf_file, LNX_DMN_ProbeList *probes_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  
-  LNX_DMN_ProbeList probes = {0};
-  
-  ELF_Hdr64 ehdr = {0};
-  if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &fd, offset, &ehdr) != MachineOpResult_Ok) { goto exit; }
-  
-  U64        strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
-  ELF_Shdr64 strtab_shdr        = {0};
-  if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr) != MachineOpResult_Ok) { goto exit; }
-  
-  B32 found_probes      = 0;
-  B32 found_probes_base = 0;
-  ELF_Shdr64 text_shdr         = {0};
-  ELF_Shdr64 stapsdt_base_shdr = {0};
-  ELF_Shdr64 stapsdt_shdr      = {0};
-  for(U64 shdr_off = offset + ehdr.e_shoff, shdr_opl = shdr_off + ehdr.e_shentsize * ehdr.e_shnum;
-      shdr_off < shdr_opl;
-      shdr_off += ehdr.e_shentsize) {
-    ELF_Shdr64 shdr = {0};
-    if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr) != MachineOpResult_Ok) { goto exit; }
-    
-    if(shdr.sh_type == ELF_ShType_Note)
-    {
-      U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
-      U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
-      String8 name        = lnx_dmn_read_string_capped(scratch.arena, fd, name_offset, name_cap);
-      
-      if(str8_match(name, str8_lit(".note.stapsdt"), 0))
-      {
-        stapsdt_shdr = shdr;
-        found_probes = 1;
-      }
-    }
-    else if(shdr.sh_type == ELF_ShType_ProgBits)
-    {
-      U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
-      U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
-      String8 name        = lnx_dmn_read_string_capped(scratch.arena, fd, name_offset, name_cap);
-      
-      if(str8_match(name, str8_lit(".stapsdt.base"), 0))
-      {
-        stapsdt_base_shdr = shdr;
-        found_probes_base = 1;
-      } else if(str8_match(name, str8_lit(".text"), 0))
-      {
-        text_shdr = shdr;
-      }
-    }
-    
-    if(found_probes && found_probes_base) { break; }
+  Temp rollback = temp_begin(arena);
+
+  MachineOpResult op_result = MachineOpResult_Fail;
+
+  ELF_Shdr64Array shdrs = {0};
+  op_result = elf_parse_shdrs(scratch.arena, elf_file, r1u64(0,max_U16), &shdrs);
+  if(op_result != MachineOpResult_Ok)
+  {
+    log_user_errorf("ERROR: failed to read section table from DL file\n");
+    goto exit;
   }
   
-  if(!found_probes || !found_probes_base) { goto exit; }
-  
-  U64 probes_base = stapsdt_base_shdr.sh_addr;
-  
-  Rng1U64  note_range     = shift_1u64(r1u64(stapsdt_shdr.sh_offset, stapsdt_shdr.sh_offset + stapsdt_shdr.sh_size), offset);
-  void    *raw_note       = push_array(arena, U8, stapsdt_shdr.sh_size);
-  U64      note_read_size = lnx_dmn_read(fd, note_range, raw_note);
-  if(note_read_size != dim_1u64(note_range)) { goto exit; }
-  
-  Arch         arch = arch_from_elf_machine(ehdr.e_machine);
-  ELF_NoteList note = elf_parse_note(scratch.arena, str8(raw_note, dim_1u64(note_range)), ehdr.e_ident[ELF_Identifier_Class], ehdr.e_machine);
+  LNX_DMN_ProbeList probes = {0};
+
+  ELF_Shdr64 stapsdt_note_shdr = {0};
+  op_result = elf_find_shdr_by_name(elf_file, str8_lit(".note.stapsdt"), &stapsdt_note_shdr);
+  if(op_result != MachineOpResult_Ok)
+  {
+    log_user_errorf("ERROR: failed to find .note.stapsdt\n");
+    goto exit;
+  }
+
+  ELF_Shdr64 stapsdt_base_shdr = {0};
+  op_result = elf_find_shdr_by_name(elf_file, str8_lit(".stapsdt.base"), &stapsdt_base_shdr);
+  if(op_result != MachineOpResult_Ok)
+  {
+    log_user_errorf("ERROR: failed to find .stapsdt.base\n");
+    goto exit;
+  }
+
+  String8 raw_note = {0};
+  op_result = elf_parse_shdr_data(scratch.arena, elf_file, &stapsdt_note_shdr, &raw_note);
+  if(op_result != MachineOpResult_Ok)
+  {
+    log_user_errorf("ERROR: failed to read .note.stapsdt\n");
+    goto exit;
+  }
+
+  Arch         arch = arch_from_elf_machine(elf_file->ehdr.e_machine);
+  ELF_NoteList note = elf_parse_note(scratch.arena, elf_file->ehdr, raw_note);
   
   for EachNode(n, ELF_NoteNode, note.first)
   {
@@ -416,7 +524,7 @@ lnx_dmn_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
     LNX_DMN_Probe probe = {0};
     {
       U64 cursor    = 0;
-      U64 addr_size = ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64 ? 8 : 4;
+      U64 addr_size = ELF_HdrIs64Bit(elf_file->ehdr.e_ident) ? 8 : 4;
       
       U64 pc = 0;
       U64 pc_size = str8_deserial_read(note->desc, cursor, &pc, addr_size, addr_size);
@@ -445,10 +553,10 @@ lnx_dmn_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
       cursor += args.size + 1;
       if (cursor > note->desc.size) { goto exit; }
       
-      U64 probe_rebase = image_base + (base_addr - probes_base);
+      U64 probe_rebase = elf_virt->base + (base_addr - stapsdt_base_shdr.sh_addr);
       
-      probe.provider  = provider;
-      probe.name      = name;
+      probe.provider  = str8_copy(arena, provider);
+      probe.name      = str8_copy(arena, name);
       probe.args      = stap_arg_array_from_string(arena, arch, args);
       probe.pc        = pc + probe_rebase;
       probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
@@ -459,10 +567,32 @@ lnx_dmn_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
     SLLQueuePush(probes.first, probes.last, n);
     probes.count += 1;
   }
+
+  if(probes_out)
+  {
+    *probes_out = probes;
+  }
+  else
+  {
+    temp_end(rollback);
+  }
   
   exit:;
   scratch_end(scratch);
-  return probes;
+  return op_result;
+}
+
+internal LNX_DMN_Probe *
+lnx_dmn_probe_copy(Arena *arena, LNX_DMN_Probe *src)
+{
+  LNX_DMN_Probe *dst = push_array(arena, LNX_DMN_Probe, 1);
+  dst->provider    = str8_copy(arena, src->provider);
+  dst->name        = str8_copy(arena, src->name);
+  dst->args_string = str8_copy(arena, src->args_string);
+  dst->args        = stap_arg_array_copy(arena, src->args);
+  dst->pc          = src->pc;
+  dst->semaphore   = src->semaphore;
+  return dst;
 }
 
 internal
@@ -525,35 +655,83 @@ lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *pa
 internal LNX_DMN_ProcessCtx *
 lnx_dmn_process_ctx_alloc(LNX_DMN_Process *process, B32 is_rebased)
 {
-  LNX_DMN_ProcessCtx *ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
-  
-  ELF_Hdr64     exe_ehdr     = lnx_dmn_ehdr_from_pid(process->pid);
-  LNX_DMN_Auxv  auxv         = lnx_dmn_auxv_from_pid(process->pid, exe_ehdr.e_ident[ELF_Identifier_Class]);
-  Arch          arch         = arch_from_elf_machine(exe_ehdr.e_machine);
-  U64           base_vaddr   = (auxv.phdr & ~(auxv.pagesz-1));
-  U64           rebase       = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-  Rng1U64       image_vrange = lnx_dmn_compute_image_vrange(process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
-  Arena        *ctx_arena    = arena_alloc();
+  Temp scratch = scratch_begin(0, 0);
 
-  U64 rdebug_vaddr = 0;
-  if(elf_find_rdebug_vaddr(auxv.base, is_rebased, lnx_dmn_machine_op_mem_read, &process->fd, &rdebug_vaddr) != MachineOpResult_Ok)
+  LNX_DMN_ProcessCtx *ctx = 0;
+
+  // pid -> auxv
+  LNX_DMN_Auxv auxv = {0};
+  if( ! lnx_dmn_load_auxv(process->pid, &auxv))
   {
-    log_user_errorf("ERROR: failed to resolve DL _r_debug symbol (loader base 0x%llx)\n", auxv.base);
+    log_user_errorf("ERROR: failed to load auxv from pid %d\n", process->pid);
     goto exit;
   }
-  
-  ELF_Class dl_class;
+  if( ! auxv.is_set[LNX_DMN_AuxType_Base])
   {
-    ELF_Hdr64 ehdr = {0};
-    if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &process->fd, auxv.base, &ehdr) != MachineOpResult_Ok) { Assert(0 && "failed to read interp's header"); }
-    dl_class = ehdr.e_ident[ELF_Identifier_Class];
+    log_user_errorf("ERROR: /proc/%d/auxv is missing AT_BASE\n", process->pid);
+    goto exit;
+  }
+  if ( ! auxv.is_set[LNX_DMN_AuxType_ExecFn])
+  {
+    log_user_errorf("ERROR: /proc/%d/auxv is missing AT_EXECFN\n", process->pid);
+    goto exit;
+  }
+
+  // auxv -> ELF
+  ELF_Bin exe_elf = {0};
+  if( ! lnx_dmn_load_elf_auxv(process->fd, auxv, is_rebased, &exe_elf))
+  {
+    log_user_errorf("ERROR: failed to load ELF from auxv, aborting process context alloc\n");
+    goto exit;
+  }
+
+  // gather DL info if exe is not static
+  ELF_Class         dl_class     = ELF_Class_None;
+  U64               rdebug_vaddr = 0;
+  LNX_DMN_ProbeList probes       = {0};
+  if(auxv.is_set[LNX_DMN_AuxType_Base])
+  {
+    // load DL module
+    ELF_Bin dl_elf_virt = {0};
+    if(elf_load_virtual(lnx_dmn_machine_op_mem_read, process->fd, auxv.v[LNX_DMN_AuxType_Base], is_rebased, &dl_elf_virt) != MachineOpResult_Ok)
+    {
+      log_user_errorf("ERROR: failed to parse DL ELF (loader base 0x%llx)\n", auxv.v[LNX_DMN_AuxType_Base]);
+      goto exit;
+    }
+
+    // extract DL class
+    dl_class = dl_elf_virt.ehdr.e_ident[ELF_Identifier_Class];
+
+    // extract rendezvous address from DL module
+    if(elf_find_rdebug_vaddr(&dl_elf_virt, &rdebug_vaddr) != MachineOpResult_Ok)
+    {
+      log_user_errorf("ERROR: failed to resolve DL _r_debug symbol (loader base 0x%llx)\n", auxv.v[LNX_DMN_AuxType_Base]);
+      goto exit;
+    }
+
+    // load DL from file because STAP notes do not have SHF_ALLOC
+    String8 dl_path     = lnx_dmn_dl_path_from_pid(scratch.arena, process->pid, auxv.v[LNX_DMN_AuxType_Base]);
+    String8 dl_data     = data_from_file_path(scratch.arena, dl_path);
+    ELF_Bin dl_elf_file = {0};
+    if(elf_load_file(dl_data, &dl_elf_file) != MachineOpResult_Ok)
+    {
+      log_user_errorf("ERROR: failed to load DL ELF from file path %S\n", dl_path);
+      goto exit;
+    }
+
+    // read probes
+    if(lnx_dmn_read_probes(scratch.arena, &dl_elf_virt, &dl_elf_file, &probes) != MachineOpResult_Ok)
+    {
+      log_user_errorf("ERROR: failed to read DL probes (%S)\n", dl_path);
+      goto exit;
+    }
   }
   
-  // query xsave layout
+  // query xsave
+#if ARCH_X64
   U64             xcr0         = 0;
   U64             xsave_size   = 0;
   X64_XSaveLayout xsave_layout = {0};
-  if(arch == Arch_x64)
   {
     X64_XSave xsave = {0};
     if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, process->pid, (void *)NT_X86_XSTATE, &(struct iovec){.iov_base = &xsave, .iov_len = sizeof(xsave) }) >= 0))
@@ -564,56 +742,58 @@ lnx_dmn_process_ctx_alloc(LNX_DMN_Process *process, B32 is_rebased)
       xsave_size   = x64_get_xsave_size();
       xsave_layout = x64_get_xsave_layout(xcr0);
     }
-    else { Assert(0 && "failed to get xstate"); }
-  }
-  
-  // gather probes
-  LNX_DMN_Probe **known_probes = push_array(ctx_arena, LNX_DMN_Probe *, LNX_DMN_ProbeType_Count);
-  {
-    Temp scratch = scratch_begin(0, 0);
-    
-    String8 dl_path = lnx_dmn_dl_path_from_pid(scratch.arena, process->pid, auxv.base);
-    int dl_fd = LNX_RETRY_ON_EINTR(open((char *)dl_path.str, O_RDONLY));
-    
-    LNX_DMN_ProbeList probes = {0};
-    if(dl_fd >= 0)
+    else
     {
-      probes = lnx_dmn_read_probes(ctx_arena, dl_fd, 0, auxv.base);
-      LNX_RETRY_ON_EINTR(close(dl_fd));
+      log_user_errorf("WARNING: failed to read XSave from pid %d\n", process->pid);
     }
-    
-    for EachNode(n, LNX_DMN_ProbeNode, probes.first)
-    {
-      LNX_DMN_Probe *p = &n->v;
-      if(str8_match(p->provider, str8_lit("rtld"), 0))
-      {
-#define X(_N,_A,_S) if(str8_match(p->name, str8_lit(_S), 0)) { AssertAlways(p->args.count == _A); known_probes[LNX_DMN_ProbeType_##_N] = p; continue ; }
-        LNX_DMN_Probe_XList
-#undef X
-      }
-    }
-    
-    scratch_end(scratch);
   }
-  
+#endif
+
   ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
   ctx->arena             = arena_alloc();
-  ctx->arch              = arch;
+  ctx->arch              = arch_from_elf_machine(exe_elf.ehdr.e_machine);
   ctx->rdebug_vaddr      = rdebug_vaddr;
   ctx->dl_class          = dl_class;
-  ctx->loaded_modules_ht = hash_table_init(ctx_arena, 0x1000);
-  ctx->probes            = known_probes;
-  ctx->xcr0              = xcr0;
-  ctx->xsave_size        = Max(xsave_size, sizeof(X64_XSave));
-  ctx->xsave_layout      = xsave_layout;
+  
+  // gather probes we need
+  ctx->probes = push_array(ctx->arena, LNX_DMN_Probe *, LNX_DMN_ProbeType_Count);
+  for EachNode(n, LNX_DMN_ProbeNode, probes.first)
+  {
+    LNX_DMN_Probe *p = &n->v;
+    if(str8_match(p->provider, str8_lit("rtld"), 0))
+    {
+       #define X(_N,_A,_S)                                                          \
+         if(str8_match(p->name, str8_lit(_S), 0)) {                                 \
+           AssertAlways(p->args.count == _A);                                       \
+           ctx->probes[LNX_DMN_ProbeType_##_N] = lnx_dmn_probe_copy(ctx->arena, p); \
+           continue;                                                                \
+         }
+       LNX_DMN_Probe_XList
+       #undef X
+    }
+  }
+
+#if ARCH_X64
+  ctx->xcr0         = xcr0;
+  ctx->xsave_size   = Max(xsave_size, sizeof(X64_XSave));
+  ctx->xsave_layout = xsave_layout;
+#endif
   
   // create main module
-  LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, process->fd, base_vaddr, auxv.execfn, 1, 1);
-  
-  // glibc has a shortcut mapping for the main module
-  hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, 0, main_module);
-  
+  LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, process->fd, exe_elf.base, auxv.v[LNX_DMN_AuxType_ExecFn], 1, 1);
+  if(main_module)
+  {
+    // glibc has a shortcut mapping for the main module
+    hash_map_push_u64_raw(ctx->arena, &ctx->loaded_modules_hm, 0, main_module);
+  }
+  else
+  {
+    log_user_errorf("ERROR: failed to create main module for pid %d\n", process->pid);
+  }
+
+  log_infof("[Linux-Demon] process context created for pid %d\n", process->pid);
   exit:;
+  scratch_end(scratch);
   return ctx;
 }
 
@@ -663,17 +843,28 @@ lnx_dmn_thread_alloc(LNX_DMN_Process *process, LNX_DMN_ThreadState thread_state,
 internal LNX_DMN_Module *
 lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main)
 {
-  LNX_DMN_Module *module = hash_table_search_u64_raw(ctx->loaded_modules_ht, base_vaddr);
-  if(module) { goto exit; }
+  Temp scratch = scratch_begin(0,0);
+
+  LNX_DMN_Module *module = hash_map_search_u64_raw(&ctx->loaded_modules_hm, base_vaddr);
+  if(module)
+  {
+    goto exit;
+  }
   
   // parse out module's ELF header
-  ELF_Hdr64 module_ehdr = {0};
-  if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &memory_fd, base_vaddr, &module_ehdr) != MachineOpResult_Ok) { goto exit; }
+  ELF_Bin module_elf = {0};
+  if(elf_load_virtual(lnx_dmn_machine_op_mem_read, memory_fd, base_vaddr, 1, &module_elf) != MachineOpResult_Ok)
+  {
+    goto exit;
+  }
   
   // gather info about module
-  U64     module_rebase     = module_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-  U64     module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
-  Rng1U64 module_vrange     = lnx_dmn_compute_image_vrange(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
+  ELF_Phdr64Array phdrs = {0};
+  if(elf_parse_phdrs(scratch.arena, &module_elf, r1u64(0,max_U16), &phdrs) != MachineOpResult_Ok)
+  {
+    goto exit;
+  }
+  Rng1U64 module_vrange = elf_image_vrange_from_phdrs(&module_elf, phdrs);
   
   // read TLS index and TLS offset
   U64 tls_index  = max_U64;
@@ -701,9 +892,9 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   module->name_vaddr    = name_vaddr;
   module->name_space_id = name_space_id;
   module->size          = dim_1u64(module_vrange);
-  module->phvaddr       = base_vaddr + module_ehdr.e_phoff;
-  module->phcount       = module_ehdr.e_phnum;
-  module->phentsize     = module_ehdr.e_phentsize;
+  module->phvaddr       = module_elf.base + module_elf.ehdr.e_phoff;
+  module->phcount       = module_elf.ehdr.e_phnum;
+  module->phentsize     = module_elf.ehdr.e_phentsize;
   module->tls_index     = tls_index;
   module->tls_offset    = tls_offset;
   module->is_main       = is_main;
@@ -713,9 +904,10 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   ctx->module_count += 1;
   
   // push base address -> module mapping
-  hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, base_vaddr, module);
+  hash_map_push_u64_raw(ctx->arena, &ctx->loaded_modules_hm, base_vaddr, module);
   
   exit:;
+  scratch_end(scratch);
   return module;
 }
 
@@ -817,7 +1009,7 @@ lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module)
   ctx->module_count -= 1;
   
   // purge base addr -> module mapping
-  hash_table_purge_u64(ctx->loaded_modules_ht, module->base_vaddr);
+  hash_map_purge_u64(&ctx->loaded_modules_hm, module->base_vaddr);
   
   lnx_dmn_entity_release((LNX_DMN_Entity *)module);
 }
@@ -831,7 +1023,6 @@ lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
   result->arch              = ctx->arch;
   result->rdebug_vaddr      = ctx->rdebug_vaddr;
   result->dl_class          = ctx->dl_class;
-  result->loaded_modules_ht = hash_table_init(result->arena, ctx->loaded_modules_ht->cap);
   result->xcr0              = ctx->xcr0;
   result->xsave_size        = ctx->xsave_size;
   result->xsave_layout      = ctx->xsave_layout;
@@ -886,7 +1077,7 @@ lnx_dmn_module_clone(LNX_DMN_ProcessCtx *process_ctx, LNX_DMN_Module *module)
   result->next = result->prev = 0;
   
   // clone base addr mapping
-  hash_table_push_u64_raw(process_ctx->arena, process_ctx->loaded_modules_ht, result->base_vaddr, result);
+  hash_map_push_u64_raw(process_ctx->arena, &process_ctx->loaded_modules_hm, result->base_vaddr, result);
   
   // push module to the list
   DLLPushBack(process_ctx->first_module, process_ctx->last_module, module);
@@ -1770,7 +1961,7 @@ lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *t
     if(gnu_read_link_map(lnx_dmn_machine_op_mem_read, &process->fd, map_vaddr, process->ctx->dl_class, &map) != MachineOpResult_Ok) { break; }
     
     // was module already loaded?
-    LNX_DMN_Module *module = hash_table_search_u64_raw(process->ctx->loaded_modules_ht, map.addr_vaddr);
+    LNX_DMN_Module *module = hash_map_search_u64_raw(&process->ctx->loaded_modules_hm, map.addr_vaddr);
     if(module) { continue; }
     
     // clone process ctx
@@ -1809,7 +2000,7 @@ lnx_dmn_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process
     GNU_LinkMapList link_map_list = gnu_parse_link_map_list(scratch.arena, is_64bit, rdebug_n->v.r_map, lnx_dmn_machine_op_mem_read, &process->fd);
     for EachNode(link_map_n, GNU_LinkMapNode, link_map_list.first)
     {
-      LNX_DMN_Module *module = hash_table_search_u64_raw(ctx->loaded_modules_ht, link_map_n->v.addr_vaddr);
+      LNX_DMN_Module *module = hash_map_search_u64_raw(&ctx->loaded_modules_hm, link_map_n->v.addr_vaddr);
       module->is_live = 1;
     }
   }
@@ -3026,3 +3217,4 @@ dmn_process_iter_end(DMN_ProcessIter *iter)
   }
   MemoryZeroStruct(iter);
 }
+

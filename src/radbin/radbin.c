@@ -335,12 +335,19 @@ rb_thread_entry_point(void *p)
          file_format == RB_FileFormat_ELF64)
       {
         Temp scratch = scratch_begin(&arena, 1);
-        ELF_Bin bin = elf_bin_from_data(scratch.arena, file_data);
-        ELF_GnuDebugLink debug_link = elf_gnu_debug_link_from_bin(file_data, &bin);
-        if(debug_link.path.size != 0)
+        ELF_Bin bin = {0};
+        if(elf_load_file(file_data, &bin) == MachineOpResult_Ok)
         {
-          log_infof("Found reference to separate debug info file in %S (%S) at %S\n", n->string, rb_file_format_display_name_table[file_format], debug_link.path);
-          str8_list_push(arena, &input_file_path_tasks, debug_link.path);
+          ELF_GnuDebugLink debug_link = {0};
+          if(elf_parse_gnu_debug_link(arena, &bin, &debug_link) == MachineOpResult_Ok)
+          {
+            log_infof("Found reference to separate debug info file in %S (%S) at %S\n", n->string, rb_file_format_display_name_table[file_format], debug_link.path);
+            str8_list_push(arena, &input_file_path_tasks, debug_link.path);
+          }
+        }
+        else
+        {
+          log_user_errorf("ERROR: failed to parse ELF Header from file %S\n", input_file_path);
         }
         scratch_end(scratch);
       }
@@ -388,14 +395,15 @@ rb_thread_entry_point(void *p)
       if(file_format == RB_FileFormat_ELF32 ||
          file_format == RB_FileFormat_ELF64)
       {
-        Temp scratch = scratch_begin(&arena, 1);
-        ELF_Bin elf_bin = elf_bin_from_data(scratch.arena, file_data);
-        if(dw_is_dwarf_present_from_elf_bin(file_data, &elf_bin))
+        ELF_Bin bin = {0};
+        if(elf_load_file(file_data, &bin) == MachineOpResult_Ok)
         {
-          log_infof("DWARF data detected in %S (%S)\n", n->string, rb_file_format_display_name_table[file_format]);
-          file_format_flags |= RB_FileFormatFlag_HasDWARF;
+          if(dw_is_dwarf_present_from_elf_bin(&bin))
+          {
+            log_infof("DWARF data detected in %S (%S)\n", n->string, rb_file_format_display_name_table[file_format]);
+            file_format_flags |= RB_FileFormatFlag_HasDWARF;
+          }
         }
-        scratch_end(scratch);
       }
       
       //////////////////////////
@@ -404,20 +412,15 @@ rb_thread_entry_point(void *p)
       if(file_format == RB_FileFormat_ELF32 ||
          file_format == RB_FileFormat_ELF64)
       {
-        Temp scratch = scratch_begin(&arena, 1);
-        ELF_Bin elf_bin = elf_bin_from_data(scratch.arena, file_data);
-        for EachIndex(sect_idx, elf_bin.hdr.e_shnum)
+        ELF_Bin elf_bin = {0};
+        if(elf_load_file(file_data, &elf_bin) == MachineOpResult_Ok)
         {
-          ELF_Shdr64 *shdr = &elf_bin.shdrs.v[sect_idx];
-          String8 name = elf_name_from_shdr64(file_data, &elf_bin, shdr);
-          if(str8_match(name, str8_lit(".eh_frame_hdr"), 0))
+          if(elf_find_shdr_by_name(&elf_bin, str8_lit(".eh_frame_hdr"), 0) == MachineOpResult_Ok)
           {
             log_infof("EH frame data detected in %S (%S)\n", n->string, rb_file_format_display_name_table[file_format]);
             file_format_flags |= RB_FileFormatFlag_HasEhFrame;
-            break;
           }
         }
-        scratch_end(scratch);
       }
       
       //////////////////////////
@@ -821,12 +824,31 @@ rb_thread_entry_point(void *p)
               case ExecutableImageKind_Elf64:
               {
                 Temp scratch = scratch_begin(&arena, 1);
-                ELF_Bin bin = elf_bin_from_data(scratch.arena, dbg_data);
-                convert_params.arch = arch_from_elf_machine(bin.hdr.e_machine);
-                convert_params.base_vaddr = elf_base_addr_from_bin(&bin);
-                convert_params.raw = dw_input_from_elf_bin(scratch.arena, dbg_data, &bin);
-                convert_params.path_style = PathStyle_UnixAbsolute;
-                convert_params.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, dbg_data, &bin, &bin.shdrs);
+
+                ELF_Bin bin = {0};
+                if(elf_load_file(dbg_data, &bin) != MachineOpResult_Ok)
+                {
+                  log_user_errorf("ERROR: failed to parse ELF\n");
+                }
+
+                ELF_Phdr64Array phdrs = {0};
+                if(elf_parse_phdrs(scratch.arena, &bin, r1u64(0, max_U64), &phdrs) != MachineOpResult_Ok)
+                {
+                  log_user_errorf("ERROR: failed to extract program headers from the ELF\n");
+                }
+
+                ELF_Shdr64Array shdrs = {0};
+                if(elf_parse_shdrs(scratch.arena, &bin, r1u64(0, max_U64), &shdrs) != MachineOpResult_Ok)
+                {
+                  log_user_errorf("ERROR: failed to extract section headers from the ELF\n");
+                }
+
+                convert_params.arch            = arch_from_elf_machine(bin.ehdr.e_machine);
+                convert_params.base_vaddr      = elf_base_addr_from_bin(&bin, phdrs);
+                convert_params.raw             = dw_input_from_elf_bin(scratch.arena, &bin);
+                convert_params.path_style      = PathStyle_UnixAbsolute;
+                convert_params.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, dbg_data, &bin, &shdrs);
+
                 scratch_end(scratch);
               }break;
             }
@@ -1411,22 +1433,23 @@ rb_thread_entry_point(void *p)
           }
           else if(f->format == RB_FileFormat_ELF32 || f->format == RB_FileFormat_ELF64)
           {
-            elf = elf_bin_from_data(arena, f->data);
-            arch = arch_from_elf_machine(elf.hdr.e_machine);
-            for EachIndex(sect_idx, elf.hdr.e_shnum)
+            elf_load_file(f->data, &elf);
+            arch = arch_from_elf_machine(elf.ehdr.e_machine);
+
+            // find .eh_frame_hdr
+            ELF_Shdr64 eh_frame_hdr_shdr = {0};
+            if(elf_find_shdr_by_name(&elf, str8_lit(".eh_frame_hdr"), &eh_frame_hdr_shdr) == MachineOpResult_Ok)
             {
-              ELF_Shdr64 *shdr = &elf.shdrs.v[sect_idx];
-              String8 name = elf_name_from_shdr64(f->data, &elf, shdr);
-              if(str8_match(name, str8_lit(".eh_frame_hdr"), 0))
-              {
-                eh_frame_hdr = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
-                eh_frame_hdr_vaddr = shdr->sh_addr;
-              }
-              else if(str8_match(name, str8_lit(".eh_frame"), 0))
-              {
-                eh_frame = str8_substr(f->data, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
-                eh_frame_vaddr = shdr->sh_addr;
-              }
+              eh_frame_hdr       = str8_substr(f->data, r1u64(eh_frame_hdr_shdr.sh_offset, eh_frame_hdr_shdr.sh_offset + eh_frame_hdr_shdr.sh_size));
+              eh_frame_hdr_vaddr = eh_frame_hdr_shdr.sh_addr;
+            }
+
+            // find .eh_frame
+            ELF_Shdr64 eh_frame_shdr = {0};
+            if(elf_find_shdr_by_name(&elf, str8_lit(".eh_frame"), &eh_frame_shdr) == MachineOpResult_Ok)
+            {
+              eh_frame = str8_substr(f->data, r1u64(eh_frame_shdr.sh_offset, eh_frame_shdr.sh_offset + eh_frame_shdr.sh_size));
+              eh_frame_vaddr = eh_frame_shdr.sh_addr;
             }
           }
           if(f->format_flags & RB_FileFormatFlag_HasDWARF)
@@ -1442,7 +1465,7 @@ rb_thread_entry_point(void *p)
             else if(f->format == RB_FileFormat_ELF32 ||
                     f->format == RB_FileFormat_ELF64)
             {
-              dw = dw_input_from_elf_bin(arena, f->data, &elf);
+              dw = dw_input_from_elf_bin(arena, &elf);
             }
           }
         }

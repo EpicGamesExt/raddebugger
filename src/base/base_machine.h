@@ -26,6 +26,6 @@ typedef MACHINE_OP_MEM_WRITE(MachineOp_MemWrite);
 
 ////////////////////////////////
 
-internal MachineOpResult machine_read_cstring_capped(Arena *arena, U64 vaddr, U64 vaddr_opl, MachineOp_MemRead *mem_read, void *mem_read_ud, String8 *cstr_out);
+internal MachineOpResult machine_read_cstring_opl(Arena *arena, U64 vaddr, U64 vaddr_opl, MachineOp_MemRead *mem_read, void *mem_read_ud, String8 *cstr_out);
 
 #endif // BASE_MACHINE_H

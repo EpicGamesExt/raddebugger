@@ -112,15 +112,6 @@ elf_chdr64_from_chdr32(ELF_Chdr32 chdr32)
   return chdr64;
 }
 
-internal ELF_Auxv64
-elf_auxv64_from_auxv32(ELF_Auxv32 auxv32)
-{
-  ELF_Auxv64 auxv64 = {0};
-  auxv64.a_type = auxv32.a_type;
-  auxv64.a_val  = auxv32.a_val;
-  return auxv64;
-}
-
 ////////////////////////////////
 // enum -> string
 
@@ -323,6 +314,12 @@ elf_read_symbol(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Cl
   default: { NotImplemented; } break;
   }
   return result;
+}
+
+internal B32
+elf_read_ehdr_string(String8 string, ELF_Hdr64 *hdr_out)
+{
+  return elf_read_ehdr(machine_op_read_string, &string, 0, hdr_out);
 }
 
 internal ELF_DynTagValueKind

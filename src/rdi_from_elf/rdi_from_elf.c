@@ -4,12 +4,17 @@
 internal RDIM_BinarySectionList
 e2r_rdi_binary_sections_from_elf_section_table(Arena *arena, String8 data, ELF_Bin *bin, ELF_Shdr64Array *shdrs)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+
   RDIM_BinarySectionList result = {0};
+  ELF_Shdr64 shstr = bin->ehdr.e_shstrndx < shdrs->count ? shdrs->v[bin->ehdr.e_shstrndx] : (ELF_Shdr64){0};
+
   for EachIndex(idx, shdrs->count)
   {
     // rjf: unpack section
     ELF_Shdr64 *src_section = &shdrs->v[idx];
-    String8 name = elf_name_from_shdr64(data, bin, src_section);
+    String8 name = {0};
+    elf_parse_shdr_name(scratch.arena, bin, &shstr, src_section, &name);
     U64 voff_first = src_section->sh_addr;
     U64 voff_opl   = voff_first + src_section->sh_size;
     U64 foff_first = src_section->sh_offset;
@@ -32,5 +37,7 @@ e2r_rdi_binary_sections_from_elf_section_table(Arena *arena, String8 data, ELF_B
       dst_section->foff_opl   = foff_opl;
     }
   }
+
+  scratch_end(scratch);
   return result;
 }

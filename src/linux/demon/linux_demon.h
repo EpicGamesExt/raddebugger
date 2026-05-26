@@ -100,18 +100,18 @@ typedef struct LNX_DMN_ProbeList
   LNX_DMN_ProbeNode *last;
 } LNX_DMN_ProbeList;
 
-#define LNX_DMN_Probe_XList             \
-X(InitStart,     2, "init_start")     \
-X(InitComplete,  2, "init_complete")  \
-X(RelocStart,    2, "reloc_start")    \
-X(RelocComplete, 3, "reloc_complete") \
-X(MapStart,      2, "map_start")      \
-X(MapComplete,   3, "map_complete")   \
-X(UnmapStart,    2, "unmap_start")    \
-X(UnmapComplete, 2, "unmap_complete") \
-X(LongJmp,       3, "longjmp")        \
-X(LongJmpTarget, 3, "longjmp_target") \
-X(SetJmp,        3, "setjmp")
+#define LNX_DMN_Probe_XList            \
+ X(InitStart,     2, "init_start")     \
+ X(InitComplete,  2, "init_complete")  \
+ X(RelocStart,    2, "reloc_start")    \
+ X(RelocComplete, 3, "reloc_complete") \
+ X(MapStart,      2, "map_start")      \
+ X(MapComplete,   3, "map_complete")   \
+ X(UnmapStart,    2, "unmap_start")    \
+ X(UnmapComplete, 2, "unmap_complete") \
+ X(LongJmp,       3, "longjmp")        \
+ X(LongJmpTarget, 3, "longjmp_target") \
+ X(SetJmp,        3, "setjmp")
 
 typedef enum
 {
@@ -123,27 +123,74 @@ typedef enum
 } LNX_DMN_ProbeType;
 
 ////////////////////////////////
-//~ Process Info
+////////////////////////////////
+// Auxiliary Vectors
+
+typedef U32 LNX_DMN_AuxType;
+enum
+{
+  // Common
+  LNX_DMN_AuxType_Null              = 0,
+  LNX_DMN_AuxType_Phdr              = 3, // program headers address
+  LNX_DMN_AuxType_Phent             = 4, // size of a program header
+  LNX_DMN_AuxType_Phnum             = 5, // number of program headers
+  LNX_DMN_AuxType_Pagesz            = 6, // system page size
+  LNX_DMN_AuxType_Base              = 7, // interpreter base address
+  LNX_DMN_AuxType_Flags             = 8,
+  LNX_DMN_AuxType_Entry             = 9, // program entry point
+  LNX_DMN_AuxType_Uid               = 11,
+  LNX_DMN_AuxType_Euid              = 12,
+  LNX_DMN_AuxType_Gid               = 13,
+  LNX_DMN_AuxType_Egid              = 14,
+
+  // Linux
+  LNX_DMN_AuxType_Platform          = 15,
+  LNX_DMN_AuxType_Hwcap             = 16,
+  LNX_DMN_AuxType_Clktck            = 17,
+  LNX_DMN_AuxType_DCacheBSize       = 19,
+  LNX_DMN_AuxType_ICacheBSize       = 20,
+  LNX_DMN_AuxType_UCacheBSize       = 21,
+  LNX_DMN_AuxType_IgnorePPC         = 22,
+  LNX_DMN_AuxType_Secure            = 23,
+  LNX_DMN_AuxType_BasePlatform      = 24,
+  LNX_DMN_AuxType_Random            = 25,
+  LNX_DMN_AuxType_Hwcap2            = 26, // addres to 16 random bytes
+  LNX_DMN_AuxType_ExecFn            = 31, // cstring containing the filename/path argument used for execve
+  LNX_DMN_AuxType_SysInfo           = 32, // file name of executable
+  LNX_DMN_AuxType_SysInfoEhdr       = 33,
+  LNX_DMN_AuxType_L1I_CacheSize     = 40,
+  LNX_DMN_AuxType_L1I_CacheGeometry = 41,
+  LNX_DMN_AuxType_L1D_CacheSize     = 42,
+  LNX_DMN_AuxType_L1D_CacheGeometry = 43,
+  LNX_DMN_AuxType_L2_CacheSize      = 44,
+  LNX_DMN_AuxType_L2_CacheGeometry  = 45,
+  LNX_DMN_AuxType_L3_CacheSize      = 46,
+  LNX_DMN_AuxType_L3_CacheGeometry  = 47,
+
+  LNX_Dmn_AuxType_MinSigStkSz = 51,
+
+  LNX_DMN_AuxType_Count,
+};
+
+// these appear in /proc/<pid>/auxv of a process, they are not in elf files
+typedef struct LNX_DMN_Auxv32
+{
+  U32 a_type;
+  U32 a_val;
+} LNX_DMN_Auxv32;
+
+typedef struct LNX_DMN_Auxv64
+{
+  U64 a_type;
+  U64 a_val;
+} LNX_DMN_Auxv64;
 
 typedef struct LNX_DMN_Auxv
 {
-  U64 base;
-  U64 phnum;
-  U64 phent;
-  U64 phdr;
-  U64 execfn;
-  U64 pagesz;
+  B32 is_64bit;
+  B8  is_set[LNX_DMN_AuxType_Count];
+  U64 v[LNX_DMN_AuxType_Count];
 } LNX_DMN_Auxv;
-
-typedef struct LNX_DMN_DynamicInfo
-{
-  U64 hash_vaddr;
-  U64 gnu_hash_vaddr;
-  U64 strtab_vaddr;
-  U64 strtab_size;
-  U64 symtab_vaddr;
-  U64 symtab_entry_size;
-} LNX_DMN_DynamicInfo;
 
 ////////////////////////////////
 //~ Entities
@@ -292,10 +339,10 @@ typedef struct LNX_DMN_ProcessCtx
   Arch                   arch;
   U64                    rdebug_vaddr;
   ELF_Class              dl_class;
-  HashTable             *loaded_modules_ht;
+  HashMap                loaded_modules_hm;
   LNX_DMN_Probe        **probes;
-  LNX_DMN_ActiveTrap        *first_probe_trap;
-  LNX_DMN_ActiveTrap        *last_probe_trap;
+  LNX_DMN_ActiveTrap    *first_probe_trap;
+  LNX_DMN_ActiveTrap    *last_probe_trap;
   LNX_DMN_Module        *first_module;
   LNX_DMN_Module        *last_module;
   U64                    module_count;
@@ -406,9 +453,9 @@ internal LNX_DMN_ActiveTrap *lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap);
 ////////////////////////////////
 //~ ELF/GNU info
 
-internal Rng1U64             lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
-internal LNX_DMN_DynamicInfo lnx_dmn_dynamic_info_from_memory(int memory_fd, ELF_Class elf_Class, U64 rebase, U64 dynamic_vaddr);
-internal U64                 lnx_dmn_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vaddr, B32 is_rebased);
+internal Rng1U64         lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
+internal MachineOpResult lnx_dmn_read_probes(Arena *arena, ELF_Bin *elf_virt, ELF_Bin *elf_file, LNX_DMN_ProbeList *probes_out);
+internal LNX_DMN_Probe * lnx_dmn_probe_copy(Arena *arena, LNX_DMN_Probe *probe);
 
 ////////////////////////////////
 //~ Process Info

@@ -189,18 +189,29 @@ elf_dump(Arena *arena, String8 raw_elf, ELF_DumpSubsetFlags flags)
   Temp scratch = scratch_begin(&arena, 1);
 
   String8List strings = {0};
-  ELF_Bin elf = elf_bin_from_data(scratch.arena, raw_elf);
+
+  ELF_Bin bin = {0};
+  elf_load_file(raw_elf, &bin);
 
   if (flags & ELF_DumpSubsetFlag_Note) {
-    for EachIndex(sect_idx, elf.shdrs.count) {
-      ELF_Shdr64 *shdr = &elf.shdrs.v[sect_idx];
+    ELF_Shdr64Array shdrs = {0};
+    elf_parse_shdrs(scratch.arena, &bin, r1u64(0, max_U64), &shdrs);
+
+    ELF_Shdr64 shstr = bin.ehdr.e_shstrndx < shdrs.count ? shdrs.v[bin.ehdr.e_shstrndx] : (ELF_Shdr64){0};
+
+    for EachIndex(sect_idx, shdrs.count) {
+      ELF_Shdr64 *shdr = &shdrs.v[sect_idx];
       if (shdr->sh_type == ELF_ShType_Note) {
-        String8 raw_notes = str8_substr(raw_elf, r1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size));
-        String8 shdr_name = elf_name_from_shdr64(raw_elf, &elf, shdr);
+        String8 raw_notes = {0};
+        elf_parse_shdr_data(scratch.arena, &bin, shdr, &raw_notes);
+
+        String8 shdr_name = {0};
+        elf_parse_shdr_name(scratch.arena, &bin, &shstr, shdr, &shdr_name);
+
         str8_list_pushf(scratch.arena, &strings, "//");
         str8_list_pushf(scratch.arena, &strings, "// %S", shdr_name);
         str8_list_pushf(scratch.arena, &strings, "//");
-        String8List note_strings = elf_dump_note(scratch.arena, raw_notes, elf.hdr.e_ident[ELF_Identifier_Class], elf.hdr.e_machine);
+        String8List note_strings = elf_dump_note(scratch.arena, raw_notes, bin.ehdr.e_ident[ELF_Identifier_Class], bin.ehdr.e_machine);
         str8_list_concat_in_place(&strings, &note_strings);
       }
     }

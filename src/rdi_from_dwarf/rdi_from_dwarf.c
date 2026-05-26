@@ -2748,14 +2748,21 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       } break;
       case ExecutableImageKind_Elf32:
       case ExecutableImageKind_Elf64: {
-        ELF_Bin bin = elf_bin_from_data(scratch.arena, params->dbg_data);
-        
-        arch       = arch_from_elf_machine(bin.hdr.e_machine);
-        image_base = elf_base_addr_from_bin(&bin);
-        input      = dw_input_from_elf_bin(scratch.arena, params->dbg_data, &bin);
-        path_style = PathStyle_UnixAbsolute;
-        
-        g_d2r_shared.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, params->dbg_data, &bin, &bin.shdrs);
+        ELF_Bin elf = {0};
+        if(elf_load_file(params->dbg_data, &elf) == MachineOpResult_Ok) {
+          ELF_Phdr64Array phdrs = {0};
+          ELF_Shdr64Array shdrs = {0};
+          if(elf_parse_phdrs(scratch.arena, &elf, r1u64(0,max_U32), &phdrs) == MachineOpResult_Ok) {
+            if(elf_parse_shdrs(scratch.arena, &elf, r1u64(0,max_U32), &shdrs) == MachineOpResult_Ok) {
+              arch       = arch_from_elf_machine(elf.ehdr.e_machine);
+              image_base = elf_base_addr_from_bin(&elf, phdrs);
+              input      = dw_input_from_elf_bin(scratch.arena, &elf);
+              path_style = PathStyle_UnixAbsolute;
+
+              g_d2r_shared.binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, params->dbg_data, &elf, &shdrs);
+            }
+          }
+        }
       } break;
       default: { InvalidPath; } break;
     }

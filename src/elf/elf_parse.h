@@ -7,6 +7,24 @@
 ////////////////////////////////
 //~ rjf: Parsed Structure Types
 
+typedef enum
+{
+  ELF_BinAddrMode_Null,
+  ELF_BinAddrMode_Virtual,
+  ELF_BinAddrMode_File
+} ELF_BinAddrMode;
+
+typedef struct ELF_Bin ELF_Bin;
+struct ELF_Bin
+{
+  ELF_BinAddrMode    addr_mode;
+  ELF_Hdr64          ehdr;
+  MachineOp_MemRead *mem_read;
+  U8                 mem_read_ud[16];
+  U64                base;
+  B32                is_rebased;
+};
+
 typedef struct ELF_Shdr64Array ELF_Shdr64Array;
 struct ELF_Shdr64Array
 {
@@ -26,15 +44,6 @@ struct ELF_Dyn64Array
 {
   U64 count;
   ELF_Dyn64 *v;
-};
-
-typedef struct ELF_Bin ELF_Bin;
-struct ELF_Bin
-{
-  ELF_Hdr64 hdr;
-  Rng1U64 sh_name_range;
-  ELF_Shdr64Array shdrs;
-  ELF_Phdr64Array phdrs;
 };
 
 typedef struct ELF_GnuDebugLink ELF_GnuDebugLink;
@@ -70,27 +79,36 @@ struct ELF_NoteList
 ////////////////////////////////
 //~ rjf: Parsing Functions
 
-//- rjf: top-level binary parsing
-internal ELF_Bin elf_bin_from_data(Arena *arena, String8 data);
+// image loaders
+internal MachineOpResult elf_load_virtual(MachineOp_MemRead *mem_read, int memory_fd, U64 base, B32 is_rebased, ELF_Bin *elf_out);
+internal MachineOpResult elf_load_file   (String8 file, ELF_Bin *elf_out);
 
-//- rjf: extra bin info extraction
-internal B32 elf_is_dwarf_present_from_bin(String8 data, ELF_Bin *bin);
-internal String8 elf_name_from_shdr64(String8 raw_data, ELF_Bin *bin, ELF_Shdr64 *shdr);
-internal U64 elf_base_addr_from_bin(ELF_Bin *bin);
-internal ELF_GnuDebugLink elf_gnu_debug_link_from_bin(String8 raw_data, ELF_Bin *bin);
+// image address/layout helpers
+internal U64     elf_rebase_vaddr           (ELF_Bin *elf, U64 vaddr);
+internal U64     elf_base_addr_from_bin     (ELF_Bin *elf, ELF_Phdr64Array phdrs);
+internal Rng1U64 elf_image_vrange_from_phdrs(ELF_Bin *elf, ELF_Phdr64Array phdrs);
 
-internal ELF_NoteList elf_parse_note(Arena *arena, String8 raw_note, ELF_Class elf_class, ELF_MachineKind e_machine);
-
-internal MachineOpResult elf_read_phdrs   (Arena *arena, ELF_Hdr64 ehdr, U64 base, Rng1U64 range, MachineOp_MemRead *mem_read, void *mem_read_ud, ELF_Phdr64Array *phdrs_out);
-internal MachineOpResult elf_read_dyn_tags(Arena *arena, ELF_Hdr64 ehdr, ELF_Phdr64 pt_dynamic, Rng1U64 range, MachineOp_MemRead *mem_read, void *mem_read_ud, ELF_Dyn64Array *dyns_out);
-
-internal MachineOpResult elf_symbol_entry_vaddr_from_memory(ELF_Hdr64 ehdr, U64 base, B32 is_rebased, MachineOp_MemRead *mem_read, void *mem_read_ud, String8 symbol_name, U64 *symbol_entry_vaddr_out);
-internal MachineOpResult elf_find_first_phdr(ELF_Hdr64 ehdr, U64 base, MachineOp_MemRead *mem_read, void *mem_read_ud, ELF_PhdrType phdr_type, ELF_Phdr64 *phdr_out);
-
-// rebase
+// in-place rebasing helpers
 internal void elf_rebase_phdr64_array(ELF_Phdr64Array *arr, U64 rebase);
-internal void elf_rebase_phdr64(ELF_Phdr64 *phdr, U64 rebase);
-internal void elf_rebase_dyn64_array(ELF_Dyn64Array *arr, U64 rebase);
-internal void elf_rebase_dyn64(ELF_Dyn64 *v, U64 rebase);
+internal void elf_rebase_dyn64_array (ELF_Dyn64Array  *arr, U64 rebase);
+internal void elf_rebase_phdr64      (ELF_Phdr64      *v,   U64 rebase);
+internal void elf_rebase_dyn64       (ELF_Dyn64       *v,   U64 rebase);
+
+// low-level format parsers
+internal ELF_NoteList elf_parse_note(Arena *arena, ELF_Hdr64 ehdr, String8 raw_note);
+
+// image structure parsers (section table, program headers, and misc)
+internal MachineOpResult elf_parse_shdrs         (Arena *arena, ELF_Bin *elf, Rng1U64 range, ELF_Shdr64Array *shdrs_out);
+internal MachineOpResult elf_parse_phdrs         (Arena *arena, ELF_Bin *elf, Rng1U64 range, ELF_Phdr64Array *phdrs_out);
+internal MachineOpResult elf_parse_dyns          (Arena *arena, ELF_Bin *elf, Rng1U64 range, ELF_Phdr64 pt_dynamic, ELF_Dyn64Array *dyns_out);
+internal MachineOpResult elf_parse_shdr_name     (Arena *arena, ELF_Bin *elf, ELF_Shdr64 *shstr, ELF_Shdr64 *shdr, String8 *name_out);
+internal MachineOpResult elf_parse_shdr_data     (Arena *arena, ELF_Bin *elf, ELF_Shdr64 *shdr, String8 *data_out);
+internal MachineOpResult elf_parse_gnu_debug_link(Arena *arena, ELF_Bin *elf, ELF_GnuDebugLink *debug_link_out);
+
+// lookup helpers
+internal MachineOpResult elf_find_first_phdr          (ELF_Bin *elf, ELF_PhdrType phdr_type, ELF_Phdr64 *phdr_out);
+internal MachineOpResult elf_find_shdr_by_name        (ELF_Bin *elf, String8 name, ELF_Shdr64 *shdr_out);
+internal MachineOpResult elf_find_symbol_entry_by_name(ELF_Bin *elf, String8 symbol_name, U64 *symbol_entry_vaddr_out);
+internal MachineOpResult elf_find_rdebug_vaddr        (ELF_Bin *elf, U64 *rdebug_vaddr_out);
 
 #endif // ELF_PARSE_H
