@@ -715,6 +715,18 @@ index_of_zero_u64(U64 *ptr, U64 count)
 }
 
 internal U64
+index_of_zero_element(void *ptr, U64 count, U64 element_size)
+{
+  for (U64 cursor = 0, opl = count * element_size; cursor < opl; cursor += element_size) {
+    if (memory_is_zero((U8*)ptr + cursor, element_size)) {
+      U64 idx = cursor / element_size;
+      return idx;
+    }
+  }
+  return max_U64;
+}
+
+internal U64
 count_digits_u64(U64 v, U64 radix)
 {
   if (v == 0) { return 1; }

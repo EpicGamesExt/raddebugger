@@ -120,27 +120,27 @@ enum
   ELF_Type_HiProc = 0xffff
 };
 
-typedef U32 ELF_PType;
+typedef U32 ELF_PhdrType;
 enum
 {
-  ELF_PType_Null        = 0,
-  ELF_PType_Load        = 1,
-  ELF_PType_Dynamic     = 2,
-  ELF_PType_Interp      = 3,
-  ELF_PType_Note        = 4,
-  ELF_PType_ShLib       = 5,
-  ELF_PType_PHdr        = 6,
-  ELF_PType_Tls         = 7,
-  ELF_PType_LoOs        = 0x60000000,
-  ELF_PType_HiOs        = 0x6fffffff,
+  ELF_PhdrType_Null        = 0,
+  ELF_PhdrType_Load        = 1,
+  ELF_PhdrType_Dynamic     = 2,
+  ELF_PhdrType_Interp      = 3,
+  ELF_PhdrType_Note        = 4,
+  ELF_PhdrType_ShLib       = 5,
+  ELF_PhdrType_PHdr        = 6,
+  ELF_PhdrType_Tls         = 7,
+  ELF_PhdrType_LoOs        = 0x60000000,
+  ELF_PhdrType_HiOs        = 0x6fffffff,
   
-  ELF_PType_LowProc     = 0x70000000,
-  ELF_PType_HighProc    = 0x7fffffff,
+  ELF_PhdrType_LowProc     = 0x70000000,
+  ELF_PhdrType_HighProc    = 0x7fffffff,
   
-  ELF_PType_GnuEHFrame  = ELF_PType_LoOs + 0x474E550, // segment with .eh_frame_hdr
-  ELF_PType_GnuStack    = ELF_PType_LoOs + 0x474e551, // frame unwind information
-  ELF_PType_GnuRelro    = ELF_PType_LoOs + 0x474e552, // stack flags
-  ELF_PType_GnuProperty = ELF_PType_LoOs + 0x474e553, // read-only after relocations
+  ELF_PhdrType_GnuEHFrame  = ELF_PhdrType_LoOs + 0x474E550, // segment with .eh_frame_hdr
+  ELF_PhdrType_GnuStack    = ELF_PhdrType_LoOs + 0x474e551, // frame unwind information
+  ELF_PhdrType_GnuRelro    = ELF_PhdrType_LoOs + 0x474e552, // stack flags
+  ELF_PhdrType_GnuProperty = ELF_PhdrType_LoOs + 0x474e553, // read-only after relocations
 };
 
 typedef U32 ELF_PFlag;
@@ -278,86 +278,120 @@ enum
   ELF_AuxType_L3_CacheGeometry  = 47,
 };
 
+typedef enum
+{
+  ELF_DynTagValueKind_Null,
+  ELF_DynTagValueKind_Value,
+  ELF_DynTagValueKind_Address,
+  ELF_DynTagValueKind_Special,
+} ELF_DynTagValueKind;
+
+// ELF Dynamic Tags
+//
+// X(name, id, kind): kind describes how d_un is interpreted.
+#define ELF_DynTag_XList          \
+  X(Needed,          1,  Value  ) \
+  X(PltRelsz,        2,  Value  ) \
+  X(PltGot,          3,  Address) \
+  X(Hash,            4,  Address) \
+  X(Strtab,          5,  Address) \
+  X(Symtab,          6,  Address) \
+  X(Rela,            7,  Address) \
+  X(Relasz,          8,  Value  ) \
+  X(Relaent,         9,  Value  ) \
+  X(Strsz,           10, Value  ) \
+  X(Syment,          11, Value  ) \
+  X(Init,            12, Address) \
+  X(Fini,            13, Address) \
+  X(SoName,          14, Value  ) \
+  X(RPath,           15, Value  ) \
+  X(Symbolic,        16, Value  ) \
+  X(Rel,             17, Address) \
+  X(Relsz,           18, Value  ) \
+  X(Relent,          19, Value  ) \
+  X(Pltrel,          20, Value  ) \
+  X(Debug,           21, Special) \
+  X(TextRel,         22, Value  ) \
+  X(JmpRel,          23, Address) \
+  X(BindNow,         24, Value  ) \
+  X(InitArray,       25, Address) \
+  X(FiniArray,       26, Address) \
+  X(InitArraysz,     27, Value  ) \
+  X(FIniArraysz,     28, Value  ) \
+  X(RunPath,         29, Value  ) \
+  X(Flags,           30, Value  ) \
+  X(PreInitArray,    32, Address) \
+  X(PreInitArraysz,  33, Value  ) \
+  X(SymtabShndx,     34, Address)
+
+// GNU Dynamic Tag Extensions
+#define ELF_DynTag_GNU_XList             \
+  X(PreLinked,      0x6ffffdf5, Value  ) \
+  X(Conflictsz,     0x6ffffdf6, Value  ) \
+  X(LibListsz,      0x6ffffdf7, Value  ) \
+  X(Checksum,       0x6ffffdf8, Value  ) \
+  X(Pltpadsz,       0x6ffffdf9, Value  ) \
+  X(Moveent,        0x6ffffdfa, Value  ) \
+  X(Movesz,         0x6ffffdfb, Value  ) \
+  X(Feature,        0x6ffffdfc, Value  ) \
+  X(SymInSz,        0x6ffffdfe, Value  ) \
+  X(SymInEnt,       0x6ffffdff, Value  ) \
+  X(Hash,           0x6ffffef5, Address) \
+  X(TlsDescPlt,     0x6ffffef6, Address) \
+  X(TlsDescGot,     0x6ffffef7, Address) \
+  X(Conflict,       0x6ffffef8, Address) \
+  X(LibList,        0x6ffffef9, Address) \
+  X(Config,         0x6ffffefa, Address) \
+  X(DepAudit,       0x6ffffefb, Address) \
+  X(Audit,          0x6ffffefc, Address) \
+  X(PltPad,         0x6ffffefd, Address) \
+  X(MoveTab,        0x6ffffefe, Address) \
+  X(SymInfo,        0x6ffffeff, Address) \
+  X(VerSym,         0x6ffffff0, Address) \
+  X(RelaCount,      0x6ffffff9, Value  ) \
+  X(RelCount,       0x6ffffffa, Value  ) \
+  X(VerDef,         0x6ffffffc, Address) \
+  X(VerDefNum,      0x6ffffffd, Value  ) \
+  X(VerNeed,        0x6ffffffe, Address) \
+  X(VerNeedNum,     0x6fffffff, Value  ) \
+  X(PosFlag_1,      0x6ffffdfd, Value  ) \
+  X(Flags_1,        0x6ffffffb, Value  )
+
+#define ELF_DynTag_All_XList \
+  ELF_DynTag_XList           \
+  ELF_DynTag_GNU_XList
+
+
 typedef U32 ELF_DynTag;
 enum
 {
-  ELF_DynTag_Null            = 0,
-  
-  ELF_DynTag_Needed          = 1,
-  ELF_DynTag_PltRelsz        = 2,
-  ELF_DynTag_PltGot          = 3,
-  ELF_DynTag_Hash            = 4,
-  ELF_DynTag_Strtab          = 5,
-  ELF_DynTag_Symtab          = 6,
-  ELF_DynTag_Rela            = 7,
-  ELF_DynTag_Relasz          = 8,
-  ELF_DynTag_Relaent         = 9,
-  ELF_DynTag_Strsz           = 10,
-  ELF_DynTag_Syment          = 11,
-  ELF_DynTag_Init            = 12,
-  ELF_DynTag_Fini            = 13,
-  ELF_DynTag_SoName          = 14,
-  ELF_DynTag_RPath           = 15,
-  ELF_DynTag_Symbolic        = 16,
-  ELF_DynTag_Rel             = 17,
-  ELF_DynTag_Relsz           = 18,
-  ELF_DynTag_Relent          = 19,
-  ELF_DynTag_Pltrel          = 20,
-  ELF_DynTag_Debug           = 21,
-  ELF_DynTag_TextRel         = 22,
-  ELF_DynTag_JmpRel          = 23,
-  ELF_DynTag_BindNow         = 24,
-  ELF_DynTag_InitArray       = 25,
-  ELF_DynTag_FiniArray       = 26,
-  ELF_DynTag_InitArraysz     = 27,
-  ELF_DynTag_FIniArraysz     = 28,
-  ELF_DynTag_RunPath         = 29,
-  ELF_DynTag_Flags           = 30,
-  ELF_DynTag_PreInitArray    = 32,
-  ELF_DynTag_PreInitArraysz  = 33,
-  ELF_DynTag_SymtabShndx     = 34,
-  
-  ELF_DynTag_LoOs            = 0x6000000D,
-  ELF_DynTag_HiOs            = 0x6ffff000,
-  
-  ELF_DynTag_ValRngLo        = 0x6ffffd00,
-  ELF_DynTag_GNU_PreLinked   = 0x6ffffdf5,
-  ELF_DynTag_GNU_Conflictsz  = 0x6ffffdf6,
-  ELF_DynTag_GNU_LibListsz   = 0x6ffffdf7,
-  ELF_DynTag_Checksum        = 0x6ffffdf8,
-  ELF_DynTag_Pltpadsz        = 0x6ffffdf9,
-  ELF_DynTag_Moveent         = 0x6ffffdfa,
-  ELF_DynTag_Movesz          = 0x6ffffdfb,
-  ELF_DynTag_Feature         = 0x6ffffdfc,
-  ELF_DynTag_PosFlag_1       = 0x6ffffdfd,
-  ELF_DynTag_SymInSz         = 0x6ffffdfe,
-  ELF_DynTag_SymInEnt        = 0x6ffffdff,
-  ELF_DynTag_ValRngHi        = ELF_DynTag_SymInEnt,
-  
-  ELF_DynTag_AddrRngLo       = 0x6ffffe00,
-  ELF_DynTag_GNU_Hash        = 0x6ffffef5,
-  ELF_DynTag_TlsDescPlt      = 0x6ffffef6,
-  ELF_DynTag_TlsDescGot      = 0x6ffffef7,
-  ELF_DynTag_GNU_Conflict    = 0x6ffffef8,
-  ELF_DynTag_GNU_LibList     = 0x6ffffef9,
-  ELF_DynTag_Config          = 0x6ffffefa,
-  ELF_DynTag_DepAudit        = 0x6ffffefb,
-  ELF_DynTag_Audit           = 0x6ffffefc,
-  ELF_DynTag_PltPad          = 0x6ffffefd,
-  ELF_DynTag_MoveTab         = 0x6ffffefe,
-  ELF_DynTag_SymInfo         = 0x6ffffeff,
-  ELF_DynTag_AddrRngHi       = ELF_DynTag_SymInfo,
-  
-  ELF_DynTag_RelaCount       = 0x6ffffff9,
-  ELF_DynTag_RelCount        = 0x6ffffffa,
-  ELF_DynTag_Flags_1         = 0x6ffffffb,
-  ELF_DynTag_VerDef          = 0x6ffffffc,
-  ELF_DynTag_VerDefNum       = 0x6ffffffd,
-  ELF_DynTag_VerNeed         = 0x6ffffffe,
-  ELF_DynTag_VerNeedNum      = 0x6fffffff,
-  ELF_DynTag_VerSym          = 0x6ffffff0,
-  ELF_DynTag_LoProc          = 0x70000000,
-  ELF_DynTag_HiProc          = 0x7fffffff,
+  ELF_DynTag_Null = 0,
+
+  // ELF
+#define X(n, id, ...) ELF_DynTag_##n = id,
+  ELF_DynTag_XList
+#undef X
+
+  // GNU
+#define X(n, id, ...) ELF_DynTag_GNU_##n = id,
+  ELF_DynTag_GNU_XList
+#undef X
+
+  // OS range
+  ELF_DynTag_LoOs = 0x6000000D,
+  ELF_DynTag_HiOs = 0x6ffff000,
+
+  // value fallback range
+  ELF_DynTag_ValRngLo = 0x6ffffd00,
+  ELF_DynTag_ValRngHi = ELF_DynTag_GNU_SymInEnt,
+
+  // address fallback range
+  ELF_DynTag_AddrRngLo = 0x6ffffe00,
+  ELF_DynTag_AddrRngHi = ELF_DynTag_GNU_SymInfo,
+
+  // processor specific range
+  ELF_DynTag_LoProc = 0x70000000,
+  ELF_DynTag_HiProc = 0x7fffffff,
 };
 
 typedef U32 ELF_DynFlag;
@@ -817,8 +851,9 @@ typedef struct ELF_Chdr64
 } ELF_Chdr64;
 
 ////////////////////////////////
+// 32 -> 64 bit conversions
 
-internal ELF_Hdr64  elf_hdr64_from_hdr32(ELF_Hdr32 h32);
+internal ELF_Hdr64  elf_hdr64_from_hdr32  (ELF_Hdr32 h32);
 internal ELF_Shdr64 elf_shdr64_from_shdr32(ELF_Shdr32 h32);
 internal ELF_Phdr64 elf_phdr64_from_phdr32(ELF_Phdr32 h32);
 internal ELF_Dyn64  elf_dyn64_from_dyn32  (ELF_Dyn32 h32);
@@ -829,20 +864,24 @@ internal ELF_Chdr64 elf_chdr64_from_chdr32(ELF_Chdr32 chdr32);
 internal ELF_Auxv64 elf_auxv64_from_auxv32(ELF_Auxv32 auxv32);
 
 ////////////////////////////////
+// enum -> string
 
 internal String8 elf_string_from_class(Arena *arena, ELF_Class v);
 
 ////////////////////////////////
-
-internal Arch arch_from_elf_machine(ELF_MachineKind machine);
-
-////////////////////////////////
+// Format Helpers
 
 internal U64 elf_phdr_size_from_class(ELF_Class elf_class);
-internal U64 elf_dyn_size_from_class(ELF_Class elf_class);
+internal U64 elf_dyn_size_from_class (ELF_Class elf_class);
+internal U64 elf_sym_size_from_class (ELF_Class elf_class);
+
+internal U32 elf_hash_sysv_from_string(String8 string);
+internal U32 elf_hash_gnu_from_string (String8 string);
+
+internal ELF_DynTagValueKind elf_value_kind_from_dyn_tag(U64 tag);
 
 ////////////////////////////////
-//~ Compat Readers
+// Compat Readers
 
 internal MachineOpResult elf_read_ehdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Hdr64 *ehdr_out);
 internal MachineOpResult elf_read_phdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Phdr64 *phdr_out);

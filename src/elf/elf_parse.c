@@ -130,7 +130,7 @@ elf_base_addr_from_bin(ELF_Bin *bin)
     for EachIndex(phdr_idx, bin->phdrs.count)
     {
       ELF_Phdr64 *phdr = &bin->phdrs.v[phdr_idx];
-      if(phdr->p_type == ELF_PType_Load &&
+      if(phdr->p_type == ELF_PhdrType_Load &&
          (base_vaddr == 0 || phdr->p_vaddr < base_vaddr))
       {
         base_vaddr = phdr->p_vaddr;
@@ -211,4 +211,448 @@ elf_parse_note(Arena *arena, String8 raw_note, ELF_Class elf_class, ELF_MachineK
   return result;
 }
 
+internal MachineOpResult
+elf_read_phdrs(Arena *arena, ELF_Hdr64 ehdr, U64 base, Rng1U64 range, MachineOp_MemRead *mem_read, void *mem_read_ud, ELF_Phdr64Array *phdrs_out)
+{
+  Temp temp = temp_begin(arena);
 
+  MachineOpResult op = MachineOpResult_Fail;
+
+  Rng1U64 range_clamped = {0};
+  range_clamped.min = Min(range.min, ehdr.e_phnum);
+  range_clamped.max = Min(range.max, ehdr.e_phnum);
+
+  // phdr index -> address
+  U64 ph_lo = base + ehdr.e_phoff + range_clamped.min * ehdr.e_phentsize;
+
+  // phdr index -> address
+  U64 ph_hi = base + ehdr.e_phoff + range_clamped.max * ehdr.e_phentsize;
+
+  // alloc output array
+  ELF_Phdr64Array result = {0};
+  result.count = dim_1u64(range_clamped);
+  result.v     = push_array_no_zero(arena, ELF_Phdr64, result.count);
+
+  // read program header table
+  U64             result_size = ph_hi - ph_lo;
+  if      (ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64) { op = mem_read(ph_lo, result.v, result_size, mem_read_ud); }
+  // TODO: convert to 64-bit
+  else if (ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_32) { NotImplemented; }
+
+  if (op == MachineOpResult_Ok) {
+    *phdrs_out = result;
+  } else {
+    temp_end(temp);
+  }
+  return op;
+}
+
+internal MachineOpResult
+elf_find_first_phdr(ELF_Hdr64          ehdr,
+                    U64                base,
+                    MachineOp_MemRead *mem_read,
+                    void              *mem_read_ud,
+                    ELF_PhdrType       phdr_type,
+                    ELF_Phdr64        *phdr_out)
+{
+  Temp scratch = scratch_begin(0, 0);
+  MachineOpResult op_result = MachineOpResult_Fail;
+
+  for EachIndex(i, ehdr.e_phnum) {
+    Temp temp = temp_begin(scratch.arena);
+
+    ELF_Phdr64Array arr = {0};
+    op_result = elf_read_phdrs(temp.arena, ehdr, base, r1u64(i, i + 1), mem_read, mem_read_ud, &arr);
+    if (op_result != MachineOpResult_Ok) { break; }
+    op_result = MachineOpResult_Fail;
+
+    if (arr.count == 0) { break; }
+
+    if (arr.v[0].p_type == phdr_type) {
+      if (phdr_out) {
+        *phdr_out = arr.v[0];
+      }
+      op_result = MachineOpResult_Ok;
+      break;
+    }
+
+    temp_end(temp);
+  }
+
+  scratch_end(scratch);
+  return op_result;
+}
+
+internal MachineOpResult
+elf_read_dyn_tags(Arena             *arena,
+                  ELF_Hdr64          ehdr,
+                  ELF_Phdr64         pt_dynamic,
+                  Rng1U64            range,
+                  MachineOp_MemRead *mem_read,
+                  void              *mem_read_ud,
+                  ELF_Dyn64Array    *dyns_out)
+{
+  Temp temp = temp_begin(arena);
+
+  Assert(pt_dynamic.p_type == ELF_PhdrType_Dynamic);
+
+  MachineOpResult op = MachineOpResult_Fail;
+
+  U64 dy_ent_size = elf_dyn_size_from_class(ehdr.e_ident[ELF_Identifier_Class]);
+  U64 dy_cap      = pt_dynamic.p_filesz / dy_ent_size;
+
+  // clamp range
+  Rng1U64 range_clamped = {0};
+  range_clamped.min = Min(range.min, dy_cap);
+  range_clamped.max = Min(range.max, dy_cap);
+
+  // map range indices to dynamic entry offsets
+  U64   dy_lo    = pt_dynamic.p_vaddr + range_clamped.min * dy_ent_size;
+  U64   dy_hi    = pt_dynamic.p_vaddr + range_clamped.max * dy_ent_size;
+  U64   dy_size  = dy_hi - dy_lo;
+  U64   dy_count = dy_size / dy_ent_size;
+  void *dy_ptr   = push_array(arena, U8, dy_size);
+
+  // read dynamic tags
+  if (ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64) {
+    op = mem_read(dy_lo, dy_ptr, dy_size, mem_read_ud);
+  }
+  else if (ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_32) {
+    // TODO: 32-bit conversion
+    NotImplemented;
+  }
+
+  if (op == MachineOpResult_Ok && dyns_out) {
+    // scan forward until first null entry
+    dyns_out->count = index_of_zero_element(dy_ptr, dy_count, dy_ent_size);
+    dyns_out->v     = dy_ptr;
+
+    // release null entries
+    U64 pop_count = dy_count - dyns_out->count;
+    arena_pop(arena, pop_count * sizeof(dyns_out->v[0]));
+  } else {
+    temp_end(temp);
+  }
+
+  return op;
+}
+
+internal void
+elf_rebase_phdr64_array(ELF_Phdr64Array *arr, U64 rebase)
+{
+  for EachIndex(i, arr->count) {
+    arr->v[i].p_vaddr += rebase;
+  }
+}
+
+internal void
+elf_rebase_phdr64(ELF_Phdr64 *v, U64 rebase)
+{
+  elf_rebase_phdr64_array(&(ELF_Phdr64Array){ 1, v }, rebase);
+}
+
+internal void
+elf_rebase_dyn64_array(ELF_Dyn64Array *arr, U64 rebase)
+{
+  for EachIndex(i, arr->count) {
+    ELF_DynTagValueKind value_kind = elf_value_kind_from_dyn_tag(arr->v[i].tag);
+    if (value_kind == ELF_DynTagValueKind_Address) {
+      arr->v[i].val += rebase;
+    }
+  }
+}
+
+internal void
+elf_rebase_dyn64(ELF_Dyn64 *v, U64 rebase)
+{
+  elf_rebase_dyn64_array(&(ELF_Dyn64Array){ 1, v }, rebase);
+}
+
+internal MachineOpResult
+elf_symbol_entry_vaddr_from_memory(ELF_Hdr64          ehdr,
+                                   U64                base,
+                                   B32                is_rebased,
+                                   MachineOp_MemRead *mem_read,
+                                   void              *mem_read_ud,
+                                   String8            symbol_name,
+                                   U64               *symbol_entry_vaddr_out)
+{
+  Temp scratch = scratch_begin(0,0);
+  MachineOpResult op_result = MachineOpResult_Fail;
+
+  U64 rebase = (is_rebased && ehdr.e_type == ELF_Type_Dyn) ? base : 0;
+
+  // find PT_DYNAMIC
+  ELF_Phdr64 pt_dynamic = {0};
+  op_result = elf_find_first_phdr(ehdr, base, mem_read, mem_read_ud, ELF_PhdrType_Dynamic, &pt_dynamic);
+  if (op_result != MachineOpResult_Ok) { goto exit; }
+  op_result = MachineOpResult_Fail;
+
+  if(is_rebased)
+  {
+    elf_rebase_phdr64(&pt_dynamic, rebase);
+  }
+
+  // read dynamic tags
+  ELF_Dyn64Array dyns = {0};
+  op_result = elf_read_dyn_tags(scratch.arena, ehdr, pt_dynamic, r1u64(0, max_U16), mem_read, mem_read_ud, &dyns);
+  if (op_result != MachineOpResult_Ok) { goto exit; }
+  op_result = MachineOpResult_Fail;
+
+  // find symbol table tags
+  ELF_Dyn64 *dt_hash_sysv = 0; // SysV hash table tag
+  ELF_Dyn64 *dt_hash_gnu  = 0; // GNU hash table tag
+  ELF_Dyn64 *dt_symtab    = 0; // symbol table address
+  ELF_Dyn64 *dt_syment    = 0; // size of ELF symbol
+  ELF_Dyn64 *dt_strtab    = 0; // string table address
+  ELF_Dyn64 *dt_strsz     = 0; // string table size
+  for EachIndex(i, dyns.count)
+  {
+    if      (dyns.v[i].tag == ELF_DynTag_Hash)     { dt_hash_sysv = &dyns.v[i]; }
+    else if (dyns.v[i].tag == ELF_DynTag_GNU_Hash) { dt_hash_gnu  = &dyns.v[i]; }
+    else if (dyns.v[i].tag == ELF_DynTag_Symtab)   { dt_symtab    = &dyns.v[i]; }
+    else if (dyns.v[i].tag == ELF_DynTag_Syment)   { dt_syment    = &dyns.v[i]; }
+    else if (dyns.v[i].tag == ELF_DynTag_Strtab)   { dt_strtab    = &dyns.v[i]; }
+    else if (dyns.v[i].tag == ELF_DynTag_Strsz)    { dt_strsz     = &dyns.v[i]; }
+  }
+
+  // no symbol table tags? -> exit
+  if(dt_symtab == 0 || dt_strtab == 0 || dt_strsz == 0) { goto exit; }
+
+  // rebase tags
+  elf_rebase_dyn64(dt_symtab, rebase);
+  elf_rebase_dyn64(dt_strtab, rebase);
+  if(dt_hash_sysv != 0) { elf_rebase_dyn64(dt_hash_sysv, rebase); }
+  if(dt_hash_gnu  != 0) { elf_rebase_dyn64(dt_hash_gnu,  rebase); }
+
+  // pick symbol size
+  U64 syment_size = elf_sym_size_from_class(ehdr.e_ident[ELF_Identifier_Class]);
+  if(dt_syment != 0 && dt_syment->val != 0)
+  {
+    syment_size = dt_syment->val;
+  }
+
+  //
+  // GNU variant
+  //
+  if(op_result != MachineOpResult_Ok && op_result != MachineOpResult_Maybe && dt_hash_gnu != 0)
+  {
+    typedef struct ELF_HashHeader_GNU64
+    {
+      U32 nbuckets;
+      U32 symoffset;
+      U32 bloom_size;
+      U32 bloom_shift;
+      // U64 bloom[bloom_size];
+      // U32 buckets[nbuckets];
+      // U32 chains[nchains];
+    } ELF_HashHeader_GNU64;
+
+    // read the header
+    ELF_HashHeader_GNU64 header = {0};
+    op_result = mem_read(dt_hash_gnu->val, &header, sizeof(header), mem_read_ud);
+    if(op_result != MachineOpResult_Ok) { goto skip_gnu; }
+    op_result = MachineOpResult_Fail;
+
+    U32 hash            = elf_hash_gnu_from_string(symbol_name);
+    U64 bloom_word_size = (ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64) ? 8 : 4;
+    U64 buckets_vaddr   = dt_hash_gnu->val + sizeof(header) + header.bloom_size * bloom_word_size;
+    U64 chains_vaddr    = buckets_vaddr + header.nbuckets * sizeof(U32);
+
+    // is the hash table empty? -> skip
+    if(header.nbuckets == 0 || header.bloom_size == 0) { goto skip_gnu; }
+
+    // compute bloom filter word address
+    U64 word_bit_count = bloom_word_size * 8;
+    U64 bloom_idx        = (hash / word_bit_count) % header.bloom_size;
+    U64 bloom_word_vaddr = dt_hash_gnu->val + sizeof(header) + bloom_idx * bloom_word_size;
+    U64 bloom_word       = 0;
+
+    // read bloom word
+    op_result = mem_read(bloom_word_vaddr, &bloom_word, bloom_word_size, mem_read_ud);
+    if(op_result != MachineOpResult_Ok) { goto skip_gnu; }
+    op_result = MachineOpResult_Fail;
+
+    // key is not in the filter? -> skip
+    U64 bloom_mask = (1ull << (hash % word_bit_count)) | (1ull << ((hash >> header.bloom_shift) % word_bit_count));
+    if((bloom_word & bloom_mask) != bloom_mask) { goto skip_gnu; }
+
+    // read symbol index
+    U64 symbol_idx_vaddr = buckets_vaddr + (hash % header.nbuckets) * sizeof(U32);
+    U32 symbol_idx       = 0;
+    op_result = mem_read(symbol_idx_vaddr, &symbol_idx, sizeof(symbol_idx), mem_read_ud);
+    if (op_result != MachineOpResult_Ok) { goto skip_gnu; }
+    op_result = MachineOpResult_Fail;
+
+    if(symbol_idx == 0 || symbol_idx < header.symoffset) { goto skip_gnu; }
+
+    // walk symbol chain
+    for(U64 chain_idx = symbol_idx - header.symoffset;; chain_idx += 1, symbol_idx += 1)
+    {
+      // read chain hash
+      U64 chain_hash_vaddr = chains_vaddr + chain_idx * sizeof(U32);
+      U32 chain_hash       = 0;
+      op_result = mem_read(chain_hash_vaddr, &chain_hash, sizeof(chain_hash), mem_read_ud);
+      if(op_result != MachineOpResult_Ok) { goto skip_gnu; }
+      op_result = MachineOpResult_Fail;
+
+      if((chain_hash | 1) == (hash | 1))
+      {
+        // read symbol
+        U64       symbol_entry_vaddr = dt_symtab->val + symbol_idx * syment_size;
+        ELF_Sym64 symbol             = {0};
+        op_result = elf_read_symbol(mem_read, mem_read_ud, symbol_entry_vaddr, ehdr.e_ident[ELF_Identifier_Class], &symbol);
+        if(op_result != MachineOpResult_Ok) { goto skip_gnu; }
+        op_result = MachineOpResult_Fail;
+
+        if(symbol.st_name != 0 && symbol.st_name < dt_strsz->val && symbol.st_shndx != ELF_SectionIndex_Undef)
+        {
+          U64     string_vaddr     = dt_strtab->val + symbol.st_name;
+          U64     string_vaddr_opl = dt_strtab->val + dt_strsz->val;
+          String8 string           = {0};
+          op_result = machine_read_cstring_capped(scratch.arena, string_vaddr, string_vaddr_opl, mem_read, mem_read_ud, &string);
+
+          // no string? -> skip
+          if(op_result != MachineOpResult_Ok) { goto skip_gnu; }
+          op_result = MachineOpResult_Fail;
+
+          if(str8_match(string, symbol_name, 0))
+          {
+            if(symbol_entry_vaddr_out)
+            {
+              *symbol_entry_vaddr_out = symbol_entry_vaddr;
+            }
+            op_result = MachineOpResult_Ok;
+            goto exit;
+          }
+        }
+      }
+
+      // reached end of the chain marker? -> stop
+      if(chain_hash & 1) { break; }
+    }
+  }
+  skip_gnu:;
+
+  //
+  // SysV variant
+  //
+  if(op_result != MachineOpResult_Ok && op_result != MachineOpResult_Maybe && dt_hash_sysv != 0)
+  {
+    typedef struct ELF_HashHeader_SYSV
+    {
+      U32 nbuckets;
+      U32 nchains;
+      // U32 bucket[nbuckets];
+      // U32 chains[nchains];
+    } ELF_HashHeader_SYSV;
+
+    // read the header
+    ELF_HashHeader_SYSV header = {0};
+    op_result = mem_read(dt_hash_sysv->val, &header, sizeof(header), mem_read_ud);
+    if(op_result != MachineOpResult_Ok) { goto skip_sysv; }
+    op_result = MachineOpResult_Fail;
+
+    // is the hash table empty? -> skip
+    if(header.nbuckets == 0) { goto skip_sysv; }
+
+    U32 hash          = elf_hash_sysv_from_string(symbol_name);
+    U64 buckets_vaddr = dt_hash_sysv->val + sizeof(header);
+    U64 chains_vaddr  = buckets_vaddr + header.nbuckets * sizeof(U32);
+
+    // read symbol index
+    U32 symbol_idx    = 0;
+    op_result = mem_read(buckets_vaddr + (hash % header.nbuckets) * sizeof(U32), &symbol_idx, sizeof(symbol_idx), mem_read_ud);
+    if(op_result != MachineOpResult_Ok) { goto skip_sysv; }
+
+    // walk symbol chain
+    while(symbol_idx != 0 && symbol_idx < header.nchains)
+    {
+      // read symbol
+      U64       symbol_entry_vaddr = dt_symtab->val + symbol_idx * syment_size;
+      ELF_Sym64 symbol             = {0};
+      op_result = elf_read_symbol(mem_read, mem_read_ud, symbol_entry_vaddr, ehdr.e_ident[ELF_Identifier_Class], &symbol);
+      if(op_result != MachineOpResult_Ok) { goto skip_sysv; }
+      op_result = MachineOpResult_Fail;
+
+      if(symbol.st_name != 0 && symbol.st_name < dt_strsz->val && symbol.st_shndx != ELF_SectionIndex_Undef)
+      {
+        U64     string_vaddr     = dt_strtab->val + symbol.st_name;
+        U64     string_vaddr_opl = dt_strtab->val + dt_strsz->val;
+        String8 string           = {0};
+        op_result = machine_read_cstring_capped(scratch.arena, string_vaddr, string_vaddr_opl, mem_read, mem_read_ud, &string);
+
+        // no string? -> skip
+        if(op_result != MachineOpResult_Ok) { goto skip_sysv; }
+        op_result = MachineOpResult_Fail;
+
+        if(str8_match(string, symbol_name, 0))
+        {
+          if(symbol_entry_vaddr_out)
+          {
+            *symbol_entry_vaddr_out = symbol_entry_vaddr;
+          }
+          op_result = MachineOpResult_Ok;
+          goto exit;
+        }
+      }
+
+      // read next symbol index in the chain
+      U64 next_symbol_idx_vaddr = chains_vaddr + symbol_idx * sizeof(U32);
+      op_result = mem_read(next_symbol_idx_vaddr, &symbol_idx, sizeof(symbol_idx), mem_read_ud);
+      if(op_result != MachineOpResult_Ok) { goto skip_sysv; }
+      op_result = MachineOpResult_Fail;
+    }
+  }
+  skip_sysv:;
+
+  exit:;
+  scratch_end(scratch);
+  return op_result;
+}
+
+internal MachineOpResult
+elf_find_rdebug_vaddr(U64 loader_vbase, B32 is_rebased, MachineOp_MemRead *mem_read, void *mem_read_ud, U64 *rdebug_vaddr_out)
+{
+  MachineOpResult op_result = MachineOpResult_Fail;
+
+  // load DL header
+  ELF_Hdr64 ehdr = {0};
+  op_result = elf_read_ehdr(mem_read, mem_read_ud, loader_vbase, &ehdr);
+  if(op_result != MachineOpResult_Ok) { goto exit; }
+  op_result = MachineOpResult_Fail;
+
+  // look up _r_debug symbol table address
+  U64 rdebug_symbol_entry_vaddr = 0;
+  op_result = elf_symbol_entry_vaddr_from_memory(ehdr, loader_vbase, is_rebased, mem_read, mem_read_ud, str8_lit("_r_debug"), &rdebug_symbol_entry_vaddr);
+  if(op_result != MachineOpResult_Ok) { goto exit; }
+  op_result = MachineOpResult_Fail;
+
+  // symbol address -> ELF symbol
+  ELF_Sym64 rdebug_symbol = {0};
+  op_result = elf_read_symbol(mem_read, mem_read_ud, rdebug_symbol_entry_vaddr, ehdr.e_ident[ELF_Identifier_Class], &rdebug_symbol);
+  if(op_result != MachineOpResult_Ok) { goto exit; }
+  op_result = MachineOpResult_Fail;
+
+  // is ELF symbol invalid? -> exit
+  ELF_SymType symbol_type = ELF_ST_TYPE(rdebug_symbol.st_info);
+  if(symbol_type != ELF_SymType_Object || rdebug_symbol.st_size == 0) { goto exit; }
+
+  if(rdebug_vaddr_out)
+  {
+    // rebase address
+    if(rdebug_symbol.st_shndx != ELF_SectionIndex_Abs && is_rebased && ehdr.e_type == ELF_Type_Dyn)
+    {
+      *rdebug_vaddr_out = rdebug_symbol.st_value + loader_vbase;
+    }
+    else
+    {
+      *rdebug_vaddr_out = rdebug_symbol.st_value;
+    }
+  }
+
+  op_result = MachineOpResult_Ok;
+
+  exit:;
+  return op_result;
+}

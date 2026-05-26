@@ -327,7 +327,7 @@ lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64
       Assert(0 && "unable to read a program header");
     }
     
-    if(phdr.p_type  == ELF_PType_Load)
+    if(phdr.p_type  == ELF_PhdrType_Load)
     {
       U64 min = rebase + phdr.p_vaddr;
       U64 max = rebase + phdr.p_vaddr + phdr.p_memsz;
@@ -337,159 +337,6 @@ lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64
   }
   
   return result;
-}
-
-internal LNX_DMN_DynamicInfo
-lnx_dmn_dynamic_info_from_memory(int memory_fd, ELF_Class elf_class, U64 rebase, U64 dynamic_vaddr)
-{
-  LNX_DMN_DynamicInfo dynamic_info = {0};
-  for(U64 dynamic_cursor = dynamic_vaddr; ; dynamic_cursor += elf_dyn_size_from_class(elf_class))
-  {
-    // rjf: read next dyn entry
-    ELF_Dyn64 dyn = {0};
-    if(elf_read_dyn(lnx_dmn_machine_op_mem_read, &memory_fd, dynamic_cursor, elf_class, &dyn) != MachineOpResult_Ok) { Assert(0 && "unable to read dynamic"); }
-    
-    // rjf: break on zero
-    if(dyn.tag == ELF_DynTag_Null) { break; }
-    
-    // extract reuiqred values out of dynamic section
-    if(dyn.tag == ELF_DynTag_Strtab)
-    {
-      dynamic_info.strtab_vaddr = rebase + dyn.val;
-    }
-    else if(dyn.tag == ELF_DynTag_Strsz)
-    {
-      dynamic_info.strtab_size = dyn.val;
-    }
-    else if(dyn.tag == ELF_DynTag_Symtab)
-    {
-      dynamic_info.symtab_vaddr = rebase + dyn.val;
-    }
-    else if(dyn.tag == ELF_DynTag_Syment)
-    {
-      dynamic_info.symtab_entry_size = dyn.val;
-    }
-    else if(dyn.tag == ELF_DynTag_Hash)
-    {
-      dynamic_info.hash_vaddr = rebase + dyn.val;
-    }
-    else if(dyn.tag == ELF_DynTag_GNU_Hash)
-    {
-      dynamic_info.gnu_hash_vaddr = rebase + dyn.val;
-    }
-  }
-  return dynamic_info;
-}
-
-internal U64
-lnx_dmn_find_dynamic_phdr(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
-{
-  U64 result = max_U64;
-  
-  for(U64 ph_cursor = e_phaddr, ph_opl = (e_phaddr + e_phentsize * e_phnum); ph_cursor < ph_opl; ph_cursor += e_phentsize)
-  {
-    ELF_Phdr64 phdr = {0};
-    if(elf_read_phdr(lnx_dmn_machine_op_mem_read, &memory_fd, ph_cursor, elf_class, &phdr) != MachineOpResult_Ok)
-    {
-      Assert(0 && "unable to read a program header");
-    }
-    
-    if(phdr.p_type == ELF_PType_Dynamic)
-    {
-      result = rebase + phdr.p_vaddr;
-      break;
-    }
-  }
-  
-  return result;
-}
-
-internal U64
-lnx_dmn_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased)
-{
-  Temp scratch = scratch_begin(0, 0);
-  
-  U64 rdebug_vaddr = 0;
-  
-  // load DL's header
-  ELF_Hdr64 ehdr = {0};
-  if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &memory_fd, loader_vbase, &ehdr) != MachineOpResult_Ok) { Assert(0 && "failed to read interp's header"); goto exit; }
-  
-  U64       rebase    = ehdr.e_type == ELF_Type_Dyn ? loader_vbase : 0;
-  ELF_Class elf_class = ehdr.e_ident[ELF_Identifier_Class];
-  
-  // find dynamic program header
-  U64 phdr_vaddr    = loader_vbase + ehdr.e_phoff;
-  U64 dynamic_vaddr = lnx_dmn_find_dynamic_phdr(memory_fd, elf_class, rebase, phdr_vaddr, ehdr.e_phentsize, ehdr.e_phentsize);
-  
-  // extract necessary info out of dynamic program header
-  U64                 dynamic_info_rebase = is_rebased ? 0 : rebase;
-  LNX_DMN_DynamicInfo dynamic_info        = lnx_dmn_dynamic_info_from_memory(memory_fd, elf_class, dynamic_info_rebase, dynamic_vaddr);
-  
-  // extract symbol table count from available options
-  U64 symbol_count = 0;
-  if(dynamic_info.hash_vaddr)
-  {
-    U64 hash_entry_size = 4;
-    if(elf_class == ELF_Class_64 && (ehdr.e_machine == ELF_MachineKind_ALPHA || ehdr.e_machine == ELF_MachineKind_S390 || ehdr.e_machine == ELF_MachineKind_S390_OLD))
-    {
-      hash_entry_size = 8;
-    }
-    
-    U64 chain_count = 0;
-    if(lnx_dmn_read(memory_fd, r1u64(dynamic_info.hash_vaddr, dynamic_info.hash_vaddr + hash_entry_size), &chain_count) == hash_entry_size)
-    {
-      symbol_count = chain_count;
-    }
-    else
-    {
-      Assert(0 && "failed to read hash table's chain count out of HASH");
-    }
-  }
-  else
-  {
-    // TODO: extract count from GNU_HASH
-    NotImplemented;
-  }
-  
-  // scan symbol table for the rendezvous symbol
-  if(dynamic_info.symtab_vaddr && dynamic_info.symtab_entry_size && symbol_count)
-  {
-    for EachIndex(symbol_idx, symbol_count)
-    {
-      ELF_Sym64 symbol = {0};
-      if(elf_read_symbol(lnx_dmn_machine_op_mem_read, &memory_fd, dynamic_info.symtab_vaddr + symbol_idx * dynamic_info.symtab_entry_size, elf_class, &symbol) != MachineOpResult_Ok)
-      {
-        Assert(0 && "failed to read symbol table");
-        break;
-      }
-      
-      Temp temp = temp_begin(scratch.arena);
-      
-      String8 symbol_name = {0};
-      if(symbol.st_name < dynamic_info.strtab_size)
-      {
-        U64 cap = dynamic_info.strtab_size - symbol.st_name;
-        symbol_name = lnx_dmn_read_string_capped(temp.arena, memory_fd, dynamic_info.strtab_vaddr + symbol.st_name, cap);
-      }
-      
-      if(str8_match(symbol_name, str8_lit("_r_debug"), 0))
-      {
-        ELF_SymType symbol_type = ELF_ST_TYPE(symbol.st_info);
-        if(symbol_type == ELF_SymType_Object && symbol.st_size > 0)
-        {
-          rdebug_vaddr = rebase + symbol.st_value;
-          break;
-        }
-      }
-      
-      temp_end(temp);
-    }
-  }
-  
-  exit:;
-  scratch_end(scratch);
-  return rdebug_vaddr;
 }
 
 internal LNX_DMN_ProbeList
@@ -683,11 +530,17 @@ lnx_dmn_process_ctx_alloc(LNX_DMN_Process *process, B32 is_rebased)
   ELF_Hdr64     exe_ehdr     = lnx_dmn_ehdr_from_pid(process->pid);
   LNX_DMN_Auxv  auxv         = lnx_dmn_auxv_from_pid(process->pid, exe_ehdr.e_ident[ELF_Identifier_Class]);
   Arch          arch         = arch_from_elf_machine(exe_ehdr.e_machine);
-  U64           rdebug_vaddr = lnx_dmn_rdebug_vaddr_from_memory(process->fd, auxv.base, is_rebased);
   U64           base_vaddr   = (auxv.phdr & ~(auxv.pagesz-1));
   U64           rebase       = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
   Rng1U64       image_vrange = lnx_dmn_compute_image_vrange(process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
   Arena        *ctx_arena    = arena_alloc();
+
+  U64 rdebug_vaddr = 0;
+  if(elf_find_rdebug_vaddr(auxv.base, is_rebased, lnx_dmn_machine_op_mem_read, &process->fd, &rdebug_vaddr) != MachineOpResult_Ok)
+  {
+    log_user_errorf("ERROR: failed to resolve DL _r_debug symbol (loader base 0x%llx)\n", auxv.base);
+    goto exit;
+  }
   
   ELF_Class dl_class;
   {
@@ -760,6 +613,7 @@ lnx_dmn_process_ctx_alloc(LNX_DMN_Process *process, B32 is_rebased)
   // glibc has a shortcut mapping for the main module
   hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, 0, main_module);
   
+  exit:;
   return ctx;
 }
 
@@ -2292,7 +2146,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params)
 {
   Temp scratch = scratch_begin(0, 0);
   
-  // setup target command line 
+  // set up target command line 
   U64    argc = params->cmd_line.node_count + 1;
   char **argv = push_array(scratch.arena, char *, argc);
   {
@@ -2304,7 +2158,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params)
     }
   }
   
-  // setup target environment
+  // set up target environment
   U64    envc = lnx_state.default_env_count + params->env.node_count + 1;
   char **envp = push_array(scratch.arena, char *, envc);
   {
@@ -2326,7 +2180,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params)
   // fork process
   pid_t pid = fork();
   
-  // child process
+  // child process -> @handshake
   if(pid == 0)
   {
     // wait for seize
@@ -2610,7 +2464,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       int wstopsig    = WSTOPSIG(status);
       int event_code  = (status >> 16);
       
-      // intercept initing processes
+      // handle thread @handshake
       {
         LNX_DMN_Process *process = lnx_dmn_process_from_pid(wait_id);
         
@@ -2618,11 +2472,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         {
           switch(process->state)
           {
-            case LNX_DMN_ProcessState_Null:
+            case LNX_DMN_ProcessState_Null: break;
+
             case LNX_DMN_ProcessState_Normal:
             {
               InvalidPath;
             } break;
+
             case LNX_DMN_ProcessState_Launch:
             {
               if(wstopsig == SIGSTOP)

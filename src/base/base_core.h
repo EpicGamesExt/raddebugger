@@ -720,29 +720,6 @@ union Guid
 StaticAssert(sizeof(Guid) == 16, g_guid_size_check);
 
 ////////////////////////////////
-//~ Machine Ops
-
-typedef enum MachineOpResult
-{
-  MachineOpResult_Null,
-  MachineOpResult_Ok,
-  MachineOpResult_Fail,
-  MachineOpResult_Maybe,
-} MachineOpResult;
-
-#define MACHINE_OP_REG_READ(name) MachineOpResult name(U64 reg_id, void *buffer, U64 buffer_max, void *ud)
-typedef MACHINE_OP_REG_READ(MachineOp_RegRead);
-
-#define MACHINE_OP_REG_WRITE(name) MachineOpResult name(U64 reg_id, void *value, U64 value_size, void *ud)
-typedef MACHINE_OP_REG_WRITE(MachineOp_RegWrite);
-
-#define MACHINE_OP_MEM_READ(name) MachineOpResult name(U64 addr, void *buffer, U64 buffer_size, void *ud)
-typedef MACHINE_OP_MEM_READ(MachineOp_MemRead);
-
-#define MACHINE_OP_MEM_WRITE(name) MachineOpResult name(U64 addr, void *value, U64 value_size, void *ud)
-typedef MACHINE_OP_MEM_WRITE(MachineOp_MemWrite);
-
-////////////////////////////////
 //~ rjf: Basic Constants
 
 global U32 sign32     = 0x80000000;
@@ -1112,6 +1089,7 @@ internal U64 u64_array_bsearch(U64 *arr, U64 count, U64 value);
 
 internal U64 index_of_zero_u32(U32 *ptr, U64 count);
 internal U64 index_of_zero_u64(U64 *ptr, U64 count);
+internal U64 index_of_zero_element(void *ptr, U64 count, U64 element_size);
 internal U64 count_digits_u64(U64 v, U64 radix);
 
 #endif // BASE_CORE_H

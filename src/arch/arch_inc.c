@@ -9,3 +9,6 @@
 #if defined(RDI_H)
 # include "arch/rdi/arch_rdi.c"
 #endif
+#if defined(ELF_H)
+# include "arch/elf/arch_elf.c"
+#endif

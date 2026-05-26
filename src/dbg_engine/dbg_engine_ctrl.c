@@ -4037,7 +4037,7 @@ d_ctrl_thread__module_open(D_Handle process, D_Handle module, Rng1U64 vaddr_rang
         for EachIndex(phdr_idx, elf_phcount)
         {
           ELF_Phdr64 *phdr = phdrs64 + phdr_idx;
-          if(phdr->p_type == ELF_PType_GnuEHFrame)
+          if(phdr->p_type == ELF_PhdrType_GnuEHFrame)
           {
             eh_frame_hdr_vrange = r1u64(cfi_rebase + phdr->p_vaddr, cfi_rebase + phdr->p_vaddr + phdr->p_memsz);
             eh_frame_hdr_data   = d_data_from_process_vaddr_range(arena, process, eh_frame_hdr_vrange, 0);

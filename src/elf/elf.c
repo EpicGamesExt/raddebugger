@@ -122,6 +122,7 @@ elf_auxv64_from_auxv32(ELF_Auxv32 auxv32)
 }
 
 ////////////////////////////////
+// enum -> string
 
 internal String8
 elf_string_from_class(Arena *arena, ELF_Class v)
@@ -132,23 +133,6 @@ elf_string_from_class(Arena *arena, ELF_Class v)
   case ELF_Class_64:   return str8_lit("64Bit");
   }
   return push_str8f(arena, "%#x", v);
-}
-
-////////////////////////////////
-
-internal Arch
-arch_from_elf_machine(ELF_MachineKind e_machine)
-{
-  Arch arch = Arch_Null;
-  switch (e_machine) {
-  case ELF_MachineKind_None:    arch = Arch_Null;  break;
-  case ELF_MachineKind_AARCH64: arch = Arch_arm32; break;
-  case ELF_MachineKind_ARM:     arch = Arch_arm32; break;
-  case ELF_MachineKind_386:     arch = Arch_x86;   break;
-  case ELF_MachineKind_X86_64:  arch = Arch_x64;   break;
-  default: NotImplemented; break;
-  }
-  return arch;
 }
 
 ////////////////////////////////
@@ -177,6 +161,56 @@ elf_dyn_size_from_class(ELF_Class elf_class)
   default: { NotImplemented; } break;
   }
   return result;
+}
+
+internal U64
+elf_sym_size_from_class(ELF_Class elf_class)
+{
+  U64 result = 0;
+  switch (elf_class) {
+  case ELF_Class_None: break;
+  case ELF_Class_32: { result = sizeof(ELF_Sym32); } break;
+  case ELF_Class_64: { result = sizeof(ELF_Sym64); } break;
+  default: { NotImplemented; } break;
+  }
+  return result;
+}
+
+internal U32
+elf_hash_sysv_from_string(String8 string)
+{
+  // (ELF 4.3) 8.2 Hashing Function
+  U32 h = 0;
+  for EachIndex(i, string.size) {
+    h = (h << 4) + string.str[i];
+    U32 g = h & 0xf0000000;
+    if (g != 0) {
+      h ^= g >> 24;
+    }
+    h &= ~g;
+  }
+  return h;
+}
+
+internal U32
+elf_hash_gnu_from_string(String8 string)
+{
+  // DT_GNU_HASH uses DJB2-style hashing in glibc's _dl_new_hash
+  U32 h = 5381;
+  for EachIndex(i, string.size) {
+    h = h * 33 + string.str[i];
+  }
+  return h;
+}
+
+internal U64
+elf_dt_hash_entry_size(ELF_Hdr64 ehdr)
+{
+  U64 size = 4;
+  if (ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64 && (ehdr.e_machine == ELF_MachineKind_ALPHA || ehdr.e_machine == ELF_MachineKind_S390 || ehdr.e_machine == ELF_MachineKind_S390_OLD)) {
+    size = 8;
+  }
+  return size;
 }
 
 ////////////////////////////////
@@ -258,7 +292,7 @@ elf_read_dyn(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class
   case ELF_Class_32: {
     ELF_Dyn32 dyn32 = {0};
     result = mem_read(addr, &dyn32, sizeof(dyn32), mem_read_ud);
-    if (result == MachineOpResult_Fail) {
+    if (result == MachineOpResult_Ok) {
       *dyn_out = elf_dyn64_from_dyn32(dyn32);
     }
   } break;
@@ -291,3 +325,18 @@ elf_read_symbol(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Cl
   return result;
 }
 
+internal ELF_DynTagValueKind
+elf_value_kind_from_dyn_tag(U64 tag)
+{
+  switch (tag) {
+#define X(n, id, kind) case id: return ELF_DynTagValueKind_##kind;
+    ELF_DynTag_All_XList
+#undef X
+  }
+
+  // fallback
+  if      (ELF_DynTag_AddrRngLo <= tag && tag < ELF_DynTag_AddrRngHi) { return ELF_DynTagValueKind_Address; }
+  else if (ELF_DynTag_ValRngLo  <= tag && tag < ELF_DynTag_ValRngHi)  { return ELF_DynTagValueKind_Value;   }
+
+  return ELF_DynTagValueKind_Null;
+}

@@ -12,5 +12,8 @@
 #if defined(RDI_H)
 # include "arch/rdi/arch_rdi.h"
 #endif
+#if defined(ELF_H)
+# include "arch/elf/arch_elf.h"
+#endif
 
 #endif // ARCH_INC_H
