@@ -11,7 +11,6 @@ global B32          g_verbose;
 global B32          g_redirect_stdout = 1;
 global B32          g_stop_on_first_fail_or_crash = 1;
 global B32          g_build_only = 0;
-global String8      g_test_data;
 
 // tests
 global TestInfo *g_sorted_test_infos[ArrayCount(test_infos)] = {0};
@@ -1107,17 +1106,6 @@ t_entry_point(CmdLine *cmdline)
   g_clang_path    = cmd_line_string(cmdline, str8_lit("clang"));
   g_gcc_path      = cmd_line_string(cmdline, str8_lit("gcc"));
   g_linker_path   = cmd_line_string(cmdline, str8_lit("linker"));
-  
-  //
-  // Handle -test_data
-  //
-  {
-    g_test_data = cmd_line_string(cmdline, str8_lit("test_data"));
-    if (g_test_data.size == 0) {
-      g_test_data = str8f(scratch.arena, "%S/build", t_cwd_path());
-      //fprintf(stderr, "WARNING: The test data folder path was not specified. Specify the path when running the program, assuming: %.*s --test_data:%.*s\n", str8_varg(cmdline->exe_name), str8_varg(g_test_data));
-    }
-  }
   
   //
   // Handle optional -target
