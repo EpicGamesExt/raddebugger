@@ -68,6 +68,18 @@ rd_test__exemplar_test_finish(Arena *arena, TestCtx *ctx, String8List test_log_s
   make_directory(ctx->exemplars_path);
   String8 exemplar_path = str8f(scratch.arena, "%S/exemplar_%S", ctx->exemplars_path, lower_from_str8(scratch.arena, string_from_operating_system(OperatingSystem_CURRENT)));
   String8 exemplar_data = data_from_file_path(scratch.arena, exemplar_path);
+  String8List exemplar_data_lines = str8_split(scratch.arena, exemplar_data, (U8 *)"\n", 1, StringSplitFlag_KeepEmpties);
+  String8List exemplar_data_lines_sanitized = {0};
+  for EachNode(n, String8Node, exemplar_data_lines.first)
+  {
+    String8 line_trimmed = n->string;
+    if(line_trimmed.size != 0 && line_trimmed.str[line_trimmed.size-1] == '\r')
+    {
+      line_trimmed.size -= 1;
+    }
+    str8_list_push(scratch.arena, &exemplar_data_lines_sanitized, line_trimmed);
+  }
+  exemplar_data = str8_list_join(scratch.arena, &exemplar_data_lines_sanitized, &(StringJoin){.sep = s("\n")});
   
   // rjf: if exemplar data is empty -> just save our output as the new exemplar
   if(exemplar_data.size == 0)
@@ -78,7 +90,7 @@ rd_test__exemplar_test_finish(Arena *arena, TestCtx *ctx, String8List test_log_s
   // rjf: if we have exemplar data, then we need to check that it matches
   if(exemplar_data.size != 0)
   {
-    B32 current_matches_exemplar = str8_match(test_log_current, exemplar_data, 0);
+    B32 current_matches_exemplar = str8_match(str8_skip_chop_whitespace(test_log_current), str8_skip_chop_whitespace(exemplar_data), 0);
     if(!current_matches_exemplar)
     {
       String8 diff_cmd = str8f(scratch.arena, "diff %S %S",
