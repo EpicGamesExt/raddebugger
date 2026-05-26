@@ -987,8 +987,14 @@ T_RunSig(dbg_script_runner)
     }
   }
 
+  // if test does not have any directive -> skip
+  U64 total_directive_count = 0;
+  for EachIndex(i, ArrayCount(script.directives[OperatingSystem_CURRENT])) {
+    total_directive_count += script.directives[OperatingSystem_CURRENT][i].count;
+  }
+
   // is skip flag set? -> exit
-  if (g_build_only || script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Skip].count) {
+  if (g_build_only || total_directive_count == 0 || script.directives[OperatingSystem_CURRENT][T_DbgScriptDirectiveKind_Skip].count) {
     result_out->status = T_RunStatus_Skip;
     goto exit;
   }

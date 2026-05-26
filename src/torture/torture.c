@@ -1449,5 +1449,6 @@ t_entry_point(CmdLine *cmdline)
   }
 
   scratch_end(scratch);
-  // TODO: return exit_code;
+  exit(exit_code);
 }
+
