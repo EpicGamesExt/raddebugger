@@ -1,0 +1,1476 @@
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3193
+  column_num: 1
+  voff_range:
+  [
+   0x1bb0
+   0x1bbd
+  )
+ }
+}
+ip_voff: 0x1bb0
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3194
+  column_num: 1
+  voff_range:
+  [
+   0x1bbd
+   0x1bd0
+  )
+ }
+}
+ip_voff: 0x1bbd
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3195
+  column_num: 1
+  voff_range:
+  [
+   0x1bd0
+   0x1be2
+  )
+ }
+}
+ip_voff: 0x1bd0
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/lib_raddbg_markup/raddbg_markup.h"
+  line_num: 245
+  column_num: 1
+  voff_range:
+  [
+   0x1040
+   0x1044
+  )
+ }
+}
+ip_voff: 0x1040
+ip_voff_symbol: raddbg_thread_id__impl
+lines:
+{
+ {
+  file_path: "../../../../src/lib_raddbg_markup/raddbg_markup.h"
+  line_num: 246
+  column_num: 1
+  voff_range:
+  [
+   0x1044
+   0x104e
+  )
+ }
+}
+ip_voff: 0x1044
+ip_voff_symbol: raddbg_thread_id__impl
+lines
+ip_voff: 0x15890
+ip_voff_symbol: ""
+lines:
+{
+ {
+  file_path: "../../../../src/lib_raddbg_markup/raddbg_markup.h"
+  line_num: 246
+  column_num: 1
+  voff_range:
+  [
+   0x1044
+   0x104e
+  )
+ }
+}
+ip_voff: 0x104a
+ip_voff_symbol: raddbg_thread_id__impl
+lines:
+{
+ {
+  file_path: "../../../../src/lib_raddbg_markup/raddbg_markup.h"
+  line_num: 247
+  column_num: 1
+  voff_range:
+  [
+   0x104e
+   0x1052
+  )
+ }
+}
+ip_voff: 0x104e
+ip_voff_symbol: raddbg_thread_id__impl
+lines:
+{
+ {
+  file_path: "../../../../src/lib_raddbg_markup/raddbg_markup.h"
+  line_num: 248
+  column_num: 1
+  voff_range:
+  [
+   0x1052
+   0x1057
+  )
+ }
+}
+ip_voff: 0x1052
+ip_voff_symbol: raddbg_thread_id__impl
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3195
+  column_num: 1
+  voff_range:
+  [
+   0x1bd0
+   0x1be2
+  )
+ }
+}
+ip_voff: 0x1bd5
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3196
+  column_num: 1
+  voff_range:
+  [
+   0x1be2
+   0x1beb
+  )
+ }
+}
+ip_voff: 0x1be2
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/lib_raddbg_markup/raddbg_markup.h"
+  line_num: 239
+  column_num: 1
+  voff_range:
+  [
+   0x1000
+   0x1004
+  )
+ }
+}
+ip_voff: 0x1000
+ip_voff_symbol: raddbg_is_attached__impl
+lines:
+{
+ {
+  file_path: "../../../../src/lib_raddbg_markup/raddbg_markup.h"
+  line_num: 240
+  column_num: 1
+  voff_range:
+  [
+   0x1004
+   0x102f
+  )
+ }
+}
+ip_voff: 0x1004
+ip_voff_symbol: raddbg_is_attached__impl
+lines:
+{
+ {
+  file_path: "../../../../src/lib_raddbg_markup/raddbg_markup.h"
+  line_num: 241
+  column_num: 1
+  voff_range:
+  [
+   0x102f
+   0x1034
+  )
+ }
+}
+ip_voff: 0x102f
+ip_voff_symbol: raddbg_is_attached__impl
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3196
+  column_num: 1
+  voff_range:
+  [
+   0x1be2
+   0x1beb
+  )
+ }
+}
+ip_voff: 0x1be7
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3198
+  column_num: 1
+  voff_range:
+  [
+   0x1beb
+   0x1bf8
+  )
+ }
+}
+ip_voff: 0x1beb
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3201
+  column_num: 1
+  voff_range:
+  [
+   0x1bf8
+   0x1bfd
+  )
+ }
+}
+ip_voff: 0x1bf8
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 39
+  column_num: 1
+  voff_range:
+  [
+   0x1af0
+   0x1af4
+  )
+ }
+}
+ip_voff: 0x1af0
+ip_voff_symbol: mule_init
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 40
+  column_num: 1
+  voff_range:
+  [
+   0x1af4
+   0x1b08
+  )
+ }
+}
+ip_voff: 0x1af4
+ip_voff_symbol: mule_init
+lines
+ip_voff: 0x20830
+ip_voff_symbol: ""
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 40
+  column_num: 1
+  voff_range:
+  [
+   0x1af4
+   0x1b08
+  )
+ }
+}
+ip_voff: 0x1b01
+ip_voff_symbol: mule_init
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 41
+  column_num: 1
+  voff_range:
+  [
+   0x1b08
+   0x1b0d
+  )
+ }
+}
+ip_voff: 0x1b08
+ip_voff_symbol: mule_init
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 3203
+  column_num: 1
+  voff_range:
+  [
+   0x1bfd
+   0x1c02
+  )
+ }
+}
+ip_voff: 0x1bfd
+ip_voff_symbol: mule_main
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 424
+  column_num: 1
+  voff_range:
+  [
+   0x1d20
+   0x1d42
+  )
+ }
+}
+ip_voff: 0x1d20
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 425
+  column_num: 1
+  voff_range:
+  [
+   0x1d42
+   0x1dd0
+  )
+ }
+}
+ip_voff: 0x1d42
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 426
+  column_num: 1
+  voff_range:
+  [
+   0x1dd0
+   0x1e4a
+  )
+ }
+}
+ip_voff: 0x1dd0
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 428
+  column_num: 1
+  voff_range:
+  [
+   0x1e4a
+   0x1e55
+  )
+ }
+}
+ip_voff: 0x1e4a
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 429
+  column_num: 1
+  voff_range:
+  [
+   0x1e55
+   0x1e60
+  )
+ }
+}
+ip_voff: 0x1e55
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 431
+  column_num: 1
+  voff_range:
+  [
+   0x1e60
+   0x1e68
+  )
+ }
+}
+ip_voff: 0x1e60
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 432
+  column_num: 1
+  voff_range:
+  [
+   0x1e68
+   0x1e74
+  )
+ }
+}
+ip_voff: 0x1e68
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 434
+  column_num: 1
+  voff_range:
+  [
+   0x1e74
+   0x1e90
+  )
+ }
+}
+ip_voff: 0x1e74
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 435
+  column_num: 1
+  voff_range:
+  [
+   0x1e90
+   0x1eac
+  )
+ }
+}
+ip_voff: 0x1e90
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 440
+  column_num: 1
+  voff_range:
+  [
+   0x1eac
+   0x1ec8
+  )
+ }
+}
+ip_voff: 0x1eac
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 445
+  column_num: 1
+  voff_range:
+  [
+   0x1ec8
+   0x1f18
+  )
+ }
+}
+ip_voff: 0x1ec8
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 451
+  column_num: 1
+  voff_range:
+  [
+   0x1f18
+   0x1f31
+  )
+ }
+}
+ip_voff: 0x1f18
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 452
+  column_num: 1
+  voff_range:
+  [
+   0x1f31
+   0x1f4a
+  )
+ }
+}
+ip_voff: 0x1f31
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 454
+  column_num: 1
+  voff_range:
+  [
+   0x1f4a
+   0x1f59
+  )
+ }
+}
+ip_voff: 0x1f4a
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 455
+  column_num: 1
+  voff_range:
+  [
+   0x1f59
+   0x1f75
+  )
+ }
+}
+ip_voff: 0x1f59
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 456
+  column_num: 1
+  voff_range:
+  [
+   0x1f75
+   0x1f84
+  )
+ }
+}
+ip_voff: 0x1f75
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 458
+  column_num: 1
+  voff_range:
+  [
+   0x1f84
+   0x1f93
+  )
+ }
+}
+ip_voff: 0x1f84
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 460
+  column_num: 1
+  voff_range:
+  [
+   0x1f93
+   0x1fa3
+  )
+ }
+}
+ip_voff: 0x1f93
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 461
+  column_num: 1
+  voff_range:
+  [
+   0x1fa3
+   0x1fb3
+  )
+ }
+}
+ip_voff: 0x1fa3
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 462
+  column_num: 1
+  voff_range:
+  [
+   0x1fb3
+   0x1fc3
+  )
+ }
+}
+ip_voff: 0x1fb3
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 467
+  column_num: 1
+  voff_range:
+  [
+   0x1fc3
+   0x1fdf
+  )
+ }
+}
+ip_voff: 0x1fc3
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 468
+  column_num: 1
+  voff_range:
+  [
+   0x1fdf
+   0x1ffb
+  )
+ }
+}
+ip_voff: 0x1fdf
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 469
+  column_num: 1
+  voff_range:
+  [
+   0x1ffb
+   0x2017
+  )
+ }
+}
+ip_voff: 0x1ffb
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 470
+  column_num: 1
+  voff_range:
+  [
+   0x2017
+   0x2033
+  )
+ }
+}
+ip_voff: 0x2017
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 471
+  column_num: 1
+  voff_range:
+  [
+   0x2033
+   0x204f
+  )
+ }
+}
+ip_voff: 0x2033
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 472
+  column_num: 1
+  voff_range:
+  [
+   0x204f
+   0x206b
+  )
+ }
+}
+ip_voff: 0x204f
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 473
+  column_num: 1
+  voff_range:
+  [
+   0x206b
+   0x2087
+  )
+ }
+}
+ip_voff: 0x206b
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 474
+  column_num: 1
+  voff_range:
+  [
+   0x2087
+   0x20a3
+  )
+ }
+}
+ip_voff: 0x2087
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 475
+  column_num: 1
+  voff_range:
+  [
+   0x20a3
+   0x20d3
+  )
+ }
+}
+ip_voff: 0x20a3
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 477
+  column_num: 1
+  voff_range:
+  [
+   0x20d3
+   0x20de
+  )
+ }
+}
+ip_voff: 0x20d3
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 481
+  column_num: 1
+  voff_range:
+  [
+   0x20de
+   0x20fa
+  )
+ }
+}
+ip_voff: 0x20de
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 482
+  column_num: 1
+  voff_range:
+  [
+   0x20fa
+   0x2116
+  )
+ }
+}
+ip_voff: 0x20fa
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 483
+  column_num: 1
+  voff_range:
+  [
+   0x2116
+   0x2132
+  )
+ }
+}
+ip_voff: 0x2116
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 484
+  column_num: 1
+  voff_range:
+  [
+   0x2132
+   0x214e
+  )
+ }
+}
+ip_voff: 0x2132
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 485
+  column_num: 1
+  voff_range:
+  [
+   0x214e
+   0x216a
+  )
+ }
+}
+ip_voff: 0x214e
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 486
+  column_num: 1
+  voff_range:
+  [
+   0x216a
+   0x2186
+  )
+ }
+}
+ip_voff: 0x216a
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 490
+  column_num: 1
+  voff_range:
+  [
+   0x2186
+   0x2193
+  )
+ }
+}
+ip_voff: 0x2186
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 491
+  column_num: 1
+  voff_range:
+  [
+   0x2193
+   0x219b
+  )
+ }
+}
+ip_voff: 0x2193
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 494
+  column_num: 1
+  voff_range:
+  [
+   0x219b
+   0x21b3
+  )
+ }
+}
+ip_voff: 0x219b
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 497
+  column_num: 1
+  voff_range:
+  [
+   0x21b3
+   0x21cb
+  )
+ }
+}
+ip_voff: 0x21b3
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 498
+  column_num: 1
+  voff_range:
+  [
+   0x21cb
+   0x21e3
+  )
+ }
+}
+ip_voff: 0x21cb
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 499
+  column_num: 1
+  voff_range:
+  [
+   0x21e3
+   0x21fb
+  )
+ }
+}
+ip_voff: 0x21e3
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 500
+  column_num: 1
+  voff_range:
+  [
+   0x21fb
+   0x2213
+  )
+ }
+}
+ip_voff: 0x21fb
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 501
+  column_num: 1
+  voff_range:
+  [
+   0x2213
+   0x222b
+  )
+ }
+}
+ip_voff: 0x2213
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 504
+  column_num: 1
+  voff_range:
+  [
+   0x222b
+   0x2243
+  )
+ }
+}
+ip_voff: 0x222b
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 512
+  column_num: 1
+  voff_range:
+  [
+   0x2243
+   0x2257
+  )
+ }
+}
+ip_voff: 0x2243
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 514
+  column_num: 1
+  voff_range:
+  [
+   0x2257
+   0x2262
+  )
+ }
+}
+ip_voff: 0x2257
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 515
+  column_num: 1
+  voff_range:
+  [
+   0x2262
+   0x2273
+  )
+ }
+}
+ip_voff: 0x2262
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 516
+  column_num: 1
+  voff_range:
+  [
+   0x2273
+   0x2287
+  )
+ }
+}
+ip_voff: 0x2273
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 517
+  column_num: 1
+  voff_range:
+  [
+   0x2287
+   0x22a1
+  )
+ }
+}
+ip_voff: 0x2287
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 518
+  column_num: 1
+  voff_range:
+  [
+   0x22a1
+   0x22b5
+  )
+ }
+}
+ip_voff: 0x22a1
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 519
+  column_num: 1
+  voff_range:
+  [
+   0x22b5
+   0x22cf
+  )
+ }
+}
+ip_voff: 0x22b5
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 520
+  column_num: 1
+  voff_range:
+  [
+   0x22cf
+   0x22e3
+  )
+ }
+}
+ip_voff: 0x22cf
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 521
+  column_num: 1
+  voff_range:
+  [
+   0x22e3
+   0x22fd
+  )
+ }
+}
+ip_voff: 0x22e3
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 522
+  column_num: 1
+  voff_range:
+  [
+   0x22fd
+   0x2305
+  )
+ }
+}
+ip_voff: 0x22fd
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 525
+  column_num: 1
+  voff_range:
+  [
+   0x2305
+   0x2315
+  )
+ }
+}
+ip_voff: 0x2305
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 526
+  column_num: 1
+  voff_range:
+  [
+   0x2315
+   0x2326
+  )
+ }
+}
+ip_voff: 0x2315
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 528
+  column_num: 1
+  voff_range:
+  [
+   0x2326
+   0x2331
+  )
+ }
+}
+ip_voff: 0x2326
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 530
+  column_num: 1
+  voff_range:
+  [
+   0x2331
+   0x2368
+  )
+ }
+}
+ip_voff: 0x2331
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 533
+  column_num: 1
+  voff_range:
+  [
+   0x2368
+   0x2377
+  )
+ }
+}
+ip_voff: 0x2368
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 534
+  column_num: 1
+  voff_range:
+  [
+   0x2377
+   0x2387
+  )
+ }
+}
+ip_voff: 0x2377
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 535
+  column_num: 1
+  voff_range:
+  [
+   0x2387
+   0x2396
+  )
+ }
+}
+ip_voff: 0x2387
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 536
+  column_num: 1
+  voff_range:
+  [
+   0x2396
+   0x23a6
+  )
+ }
+}
+ip_voff: 0x2396
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 537
+  column_num: 1
+  voff_range:
+  [
+   0x23a6
+   0x23e0
+  )
+ }
+}
+ip_voff: 0x23a6
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 542
+  column_num: 1
+  voff_range:
+  [
+   0x23e0
+   0x2415
+  )
+ }
+}
+ip_voff: 0x23e0
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 543
+  column_num: 1
+  voff_range:
+  [
+   0x2415
+   0x244a
+  )
+ }
+}
+ip_voff: 0x2415
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 544
+  column_num: 1
+  voff_range:
+  [
+   0x244a
+   0x247f
+  )
+ }
+}
+ip_voff: 0x244a
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 545
+  column_num: 1
+  voff_range:
+  [
+   0x247f
+   0x24b4
+  )
+ }
+}
+ip_voff: 0x247f
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 549
+  column_num: 1
+  voff_range:
+  [
+   0x24b4
+   0x24d6
+  )
+ }
+}
+ip_voff: 0x24b4
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 551
+  column_num: 1
+  voff_range:
+  [
+   0x24d6
+   0x24e6
+  )
+ }
+}
+ip_voff: 0x24d6
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 561
+  column_num: 1
+  voff_range:
+  [
+   0x24e6
+   0x24f7
+  )
+ }
+}
+ip_voff: 0x24e6
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 562
+  column_num: 1
+  voff_range:
+  [
+   0x24f7
+   0x2505
+  )
+ }
+}
+ip_voff: 0x24f7
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 563
+  column_num: 1
+  voff_range:
+  [
+   0x2505
+   0x2513
+  )
+ }
+}
+ip_voff: 0x2505
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 564
+  column_num: 1
+  voff_range:
+  [
+   0x2513
+   0x251f
+  )
+ }
+}
+ip_voff: 0x2513
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 565
+  column_num: 1
+  voff_range:
+  [
+   0x251f
+   0x2530
+  )
+ }
+}
+ip_voff: 0x251f
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 567
+  column_num: 1
+  voff_range:
+  [
+   0x2530
+   0x2544
+  )
+ }
+}
+ip_voff: 0x2530
+ip_voff_symbol: type_coverage_eval_tests
+lines:
+{
+ {
+  file_path: "../../../../src/mule/mule_main.cpp"
+  line_num: 569
+  column_num: 1
+  voff_range:
+  [
+   0x2544
+   0x254f
+  )
+ }
+}
+ip_voff: 0x2544
+ip_voff_symbol: type_coverage_eval_tests

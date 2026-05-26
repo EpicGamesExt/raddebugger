@@ -5,6 +5,7 @@
 global String8      g_stdout_file_name = str8_lit_comp("torture.out");
 global String8      g_wdir;
 global String8      g_exemplar_dir;
+global String8      g_input_data_dir;
 global String8      g_out = str8_lit_comp("torture_artifacts");
 global B32          g_verbose;
 global B32          g_redirect_stdout = 1;
@@ -169,7 +170,16 @@ t_run_caller(void *raw_ctx)
   if (ctx->test->skip) {
     ctx->result.status = TestStatus_Skip;
   } else {
-    ctx->test->test_fn(scratch.arena, ctx->cmdline, g_exemplar_dir, g_wdir, &ctx->result, &test_out);
+    TestCtx test_ctx =
+    {
+      .cmdline = ctx->cmdline,
+      .exemplars_path = g_exemplar_dir,
+      .artifacts_path = g_wdir,
+      .input_data_path = g_input_data_dir,
+      .result_out = &ctx->result,
+      .test_out = &test_out,
+    };
+    ctx->test->test_fn(scratch.arena, &test_ctx);
   }
   
   if (ctx->result.status == TestStatus_Fail || ctx->result.status == TestStatus_Crash) {
@@ -1279,6 +1289,13 @@ t_entry_point(CmdLine *cmdline)
         String8 binary_dir_path = get_process_info()->binary_path;
         String8 root_dir_path = str8_chop_last_slash(binary_dir_path);
         g_exemplar_dir = str8f(scratch.arena, "%S/data/test_exemplars/%S", root_dir_path, test->label);
+      }
+      
+      // rjf: find input data directory
+      {
+        String8 binary_dir_path = get_process_info()->binary_path;
+        String8 root_dir_path = str8_chop_last_slash(binary_dir_path);
+        g_input_data_dir = str8f(scratch.arena, "%S/local/test_data", root_dir_path);
       }
       
       // setup output directory

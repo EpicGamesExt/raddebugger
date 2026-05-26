@@ -24,7 +24,7 @@ typedef struct
 #define T_Ok(c) TestCheck(c)
 
 #define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
-#define t_outf(...) str8_list_pushf(arena, test_out, ## __VA_ARGS__)
+#define t_outf(...) str8_list_pushf(arena, ctx->test_out, ## __VA_ARGS__)
 
 ////////////////////////////////////////////////////////////////
 

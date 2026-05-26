@@ -23,7 +23,18 @@ struct TestResult
   char *fail_cond;
 };
 
-#define TEST_FUNCTION_SIG(name) void name(Arena *arena, CmdLine *cmdline, String8 test_exemplars_path, String8 test_artifacts_path, TestResult *result_out, String8List *test_out)
+typedef struct TestCtx TestCtx;
+struct TestCtx
+{
+  CmdLine *cmdline;
+  String8 exemplars_path;
+  String8 artifacts_path;
+  String8 input_data_path;
+  TestResult *result_out;
+  String8List *test_out;
+};
+
+#define TEST_FUNCTION_SIG(name) void name(Arena *arena, TestCtx *ctx)
 #define TEST_FUNCTION_DEF(name) TEST_FUNCTION_SIG(test__##name)
 typedef TEST_FUNCTION_SIG(TestFunctionType);
 
@@ -76,17 +87,17 @@ TEST_FUNCTION_DEF(name)
 #define SkippedTest(name) DeclareTest(name, 1)\
 TEST_FUNCTION_DEF(name)
 
-#define test_out(string) str8_list_push(arena, test_out, (string))
-#define test_outf(...) str8_list_pushf(arena, test_out, __VA_ARGS__)
+#define test_out(string) str8_list_push(arena, ctx->test_out, (string))
+#define test_outf(...) str8_list_pushf(arena, ctx->test_out, __VA_ARGS__)
 
 #define TestCheck(c) do { if (!(c)) {\
-*result_out = (TestResult){ .fail_file = __FILE__, .fail_line = __LINE__, .fail_cond = Stringify(c) };\
+ctx->result_out[0] = (TestResult){ .fail_file = __FILE__, .fail_line = __LINE__, .fail_cond = Stringify(c) };\
 if(debugger_is_attached()) { Trap(); }\
 return;\
 } } while(0)
 
 #define TestSkip() do {\
-*result_out = (TestResult){ .status = TestStatus_Skip };\
+ctx->result_out[0] = (TestResult){ .status = TestStatus_Skip };\
 return;\
 } while(0)
 
