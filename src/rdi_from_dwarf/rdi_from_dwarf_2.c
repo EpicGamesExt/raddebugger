@@ -839,7 +839,7 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
       //- rjf: set up vm registers
       DW2_LineVMRegs vm_regs = {0};
       {
-        vm_regs.file_index = 1;
+        vm_regs.file_index = (line_table_header->version < DW_Version_5 ? 1 : 0);
         vm_regs.line = 1;
         vm_regs.is_stmt = line_table_header->default_is_stmt;
       }
@@ -1035,9 +1035,28 @@ d2r2_convert(Arena *arena, D2R2_ConvertParams *params)
         
         //- rjf: map file index -> rdim src file
         RDIM_SrcFile *src_file = 0;
-        if(vm_regs.file_index < line_table_header->files.count)
         {
-          src_file = unit_src_file_maps[unit_idx].v[vm_regs.file_index];
+          B32 valid_file = 0;
+          U64 file_array_idx = vm_regs.file_index;
+          if(line_table_header->version < DW_Version_5)
+          {
+            if(vm_regs.file_index >= 1 && vm_regs.file_index <= line_table_header->files.count)
+            {
+              valid_file = 1;
+              file_array_idx = vm_regs.file_index - 1;
+            }
+          }
+          else
+          {
+            if(vm_regs.file_index < line_table_header->files.count)
+            {
+              valid_file = 1;
+            }
+          }
+          if(valid_file)
+          {
+            src_file = unit_src_file_maps[unit_idx].v[file_array_idx];
+          }
         }
         
         //- rjf: sequence ended explicitly, or file change, or end of stream? -> push to line table

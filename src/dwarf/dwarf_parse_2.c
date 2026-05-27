@@ -720,7 +720,8 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
       //- rjf: gather directories
       DW2_LineTableFileList dir_list = {0};
       {
-        // rjf: push compile directory as first list element, always
+        // rjf: push compile directory as first list element, if available
+        if(ctx->unit_dir.size != 0)
         {
           DW2_LineTableFileNode *n = push_array(scratch.arena, DW2_LineTableFileNode, 1);
           SLLQueuePush(dir_list.first, dir_list.last, n);
@@ -750,7 +751,8 @@ dw2_read_line_table_header(Arena *arena, DW2_ParseCtx *ctx, String8 data, U64 of
       //- rjf: gather files
       DW2_LineTableFileList file_list = {0};
       {
-        // rjf: push main compilation unit file as first list element, always
+        // rjf: push main compilation unit file as first list element, if available
+        if(ctx->unit_file.size != 0)
         {
           DW2_LineTableFileNode *n = push_array(scratch.arena, DW2_LineTableFileNode, 1);
           SLLQueuePush(file_list.first, file_list.last, n);
