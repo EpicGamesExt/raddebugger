@@ -97,7 +97,7 @@ jobs:
       - name: Run
         shell: bash
         run: |
-          CC="${{ matrix.compiler }}" ./run.sh clang "${{ matrix.mode }}" -- \* $TORTURE_FLAGS 
+          CC="${{ matrix.compiler }}" ./run_tests.sh clang "${{ matrix.mode }}" -- \* $TORTURE_FLAGS 
       - name: Upload Artifacts
         if: failure()
         uses: actions/upload-artifact@v7
@@ -129,7 +129,7 @@ jobs:
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VS_INSTALL=%%i"
           call "%VS_INSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x64
-          call run.bat ${{ matrix.compiler }} ${{ matrix.mode }} -- * %TORTURE_FLAGS% || exit /b 1
+          call run_tests.bat ${{ matrix.compiler }} ${{ matrix.mode }} -- * %TORTURE_FLAGS% || exit /b 1
       - name: Upload Artifacts
         if: failure()
         uses: actions/upload-artifact@v7
