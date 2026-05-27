@@ -1082,7 +1082,7 @@ t_entry_point(CmdLine *cmdline)
   // Gather tests
   {
     for EachIndex(i, test_infos_count) { g_sorted_test_infos[i] = &test_infos[i]; }
-    radsort(g_sorted_test_infos, test_infos_count, t_test_info_is_before);
+    radsort(g_sorted_test_infos, test_infos_count, (int (*)(void *, void *))t_test_info_is_before);
   }
   
   //
