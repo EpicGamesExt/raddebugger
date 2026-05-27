@@ -1283,7 +1283,7 @@ t_entry_point(CmdLine *cmdline)
       {
         String8 binary_dir_path = get_process_info()->binary_path;
         String8 root_dir_path = str8_chop_last_slash(binary_dir_path);
-        g_input_data_dir = str8f(scratch.arena, "%S/local/test_data", root_dir_path);
+        g_input_data_dir = str8f(scratch.arena, "%S/data/test_inputs", root_dir_path);
       }
       
       // setup output directory
