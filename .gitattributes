@@ -2,3 +2,7 @@
 src/lib_rdi/rdi.h  text=auto eol=lf
 src/lib_rdi/rdi.c  text=auto eol=lf
 *.meta.* text=auto eol=lf
+*.exe filter=lfs diff=lfs merge=lfs -text
+*.pdb filter=lfs diff=lfs merge=lfs -text
+*.elf filter=lfs diff=lfs merge=lfs -text
+*.rdi filter=lfs diff=lfs merge=lfs -text
