@@ -119,5 +119,6 @@ dmn_event_list_push(Arena *arena, DMN_EventList *list)
   SLLQueuePush(list->first, list->last, n);
   list->count += 1;
   DMN_Event *result = &n->v;
+  result->module_info = &dmn_module_info_nil;
   return result;
 }

@@ -69,33 +69,72 @@ struct DMN_HandleArray
 ////////////////////////////////
 //~ rjf: Event Types
 
+typedef struct DMN_ModuleInfo DMN_ModuleInfo;
+struct DMN_ModuleInfo
+{
+  // rjf: image architecture
+  Arch arch;
+  
+  // rjf: image virtual size
+  U64 vsize;
+  
+  // rjf: entry point
+  U64 entry_point_voff;
+  
+  // rjf: module path
+  String8 module_path;
+  
+  // rjf: debug info key
+  String8 debug_info_path;
+  Guid debug_info_guid;
+  U64 debug_info_timestamp;
+  U64 debug_info_age;
+  
+  // rjf: thread-local storage info
+  U64 tls_index;
+  U64 tls_offset;
+  
+  // rjf: unwinding info
+  Rng1U64 pe_intel_pdatas_vaddr_range;
+  Rng1U64 eh_frame_header_vaddr_range;
+  U64 cfi_rebase;
+  
+  // rjf: special raddbg data
+  Rng1U64 raddbg_info_voff_range;
+  U64 raddbg_is_attached_marker_voff;
+};
+
 typedef struct DMN_Event DMN_Event;
 struct DMN_Event
 {
+  // rjf: categories
   DMN_EventKind kind;
   DMN_ErrorKind error_kind;
   DMN_MemoryEventKind memory_kind;
   DMN_ExceptionKind exception_kind;
+  
+  // rjf: entities
   DMN_Handle process;
   DMN_Handle thread;
   DMN_Handle module;
+  
+  // rjf: general event properties
   Arch arch;
   U64 address;
   U64 size;
   String8 string;
-  U32 code; // code gives pid & tid on CreateProcess and CreateThread (respectfully)
+  U32 code;  // code -> exception code (signo on Linux), pid/tid
   U32 flags; // DMN_TrapFlags, if `DMN_EventKind_SetBreakpoint`
-  S32 signo;
-  S32 sigcode;
-  Rng1U64 elf_phdr_vrange;
-  U64 elf_phdr_entsize;
   U64 instruction_pointer;
   U64 stack_pointer;
   U64 user_data;
   B32 exception_repeated;
-  U64 tls_index;
-  U64 tls_offset;
+  
+  // rjf: process info
   DMN_TlsModel tls_model;
+  
+  // rjf: module info
+  DMN_ModuleInfo *module_info;
 };
 
 typedef struct DMN_EventNode DMN_EventNode;
@@ -182,6 +221,11 @@ struct DMN_ProcessInfo
 };
 
 ////////////////////////////////
+//~ rjf: Globals
+
+read_only global DMN_ModuleInfo dmn_module_info_nil = {0};
+
+////////////////////////////////
 //~ rjf: Basic Type Functions (Helpers, Implemented Once)
 
 //- rjf: handles
@@ -247,7 +291,6 @@ internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
 internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
 
 //- rjf: threads
-internal Arch dmn_arch_from_thread(DMN_Handle handle);
 internal U64 dmn_stack_base_vaddr_from_thread(DMN_Handle handle);
 internal U64 dmn_tls_root_vaddr_from_thread(DMN_Handle handle);
 internal B32 dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block);

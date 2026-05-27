@@ -1571,10 +1571,36 @@ main(int argc, char **argv)
         info->initial_path = get_current_path(lnx_state.arena);
       }
       
-      // rjf: grab home directory
+      // rjf: grab program/user data paths
       {
         char *home = getenv("HOME");
-        info->user_program_data_path = str8_cstring(home);
+        char *xdg_config_home = getenv("XDG_CONFIG_HOME");
+        char *xdg_cache_home = getenv("XDG_CACHE_HOME");
+        char *xdg_state_home = getenv("XDG_STATE_HOME");
+        if(xdg_config_home != 0)
+        {
+          info->user_program_config_data_path = str8_cstring(xdg_config_home);
+        }
+        else
+        {
+          info->user_program_config_data_path = str8f(lnx_state.arena, "%s/.config", home);
+        }
+        if(xdg_cache_home != 0)
+        {
+          info->user_program_cache_data_path = str8_cstring(xdg_cache_home);
+        }
+        else
+        {
+          info->user_program_cache_data_path = str8f(lnx_state.arena, "%s/.cache", home);
+        }
+        if(xdg_state_home != 0)
+        {
+          info->user_program_logs_data_path = str8_cstring(xdg_state_home);
+        }
+        else
+        {
+          info->user_program_logs_data_path = str8f(lnx_state.arena, "%s/.local/state", home);
+        }
       }
       
       scratch_end(scratch);

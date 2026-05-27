@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 dmn_event_kind_string_table[21] =
+String8 dmn_event_kind_string_table[22] =
 {
 str8_lit_comp("Null"),
 str8_lit_comp("Error"),
@@ -15,6 +15,7 @@ str8_lit_comp("CreateThread"),
 str8_lit_comp("ExitThread"),
 str8_lit_comp("LoadModule"),
 str8_lit_comp("UnloadModule"),
+str8_lit_comp("ModuleDebugInfo"),
 str8_lit_comp("Breakpoint"),
 str8_lit_comp("Trap"),
 str8_lit_comp("SingleStep"),

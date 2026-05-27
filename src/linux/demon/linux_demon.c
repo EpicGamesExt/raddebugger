@@ -293,6 +293,237 @@ lnx_dmn_process_from_pid(pid_t pid)
 }
 
 ////////////////////////////////
+//~ rjf: Module Info Parsing
+
+internal DMN_ModuleInfo *
+lnx_dmn_module_info_from_process_module(Arena *arena, pid_t pid, int memory_fd, U64 base_vaddr, U64 name_vaddr, B32 is_main)
+{
+  DMN_ModuleInfo *info = push_array(arena, DMN_ModuleInfo, 1);
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    //- rjf: read ELF signature
+    U8 elf_sig_maybe[ELF_Identifier_Max] = {0};
+    lnx_dmn_read(memory_fd, r1u64(base_vaddr, base_vaddr + sizeof(elf_sig_maybe)), elf_sig_maybe);
+    
+    //- rjf: unpack elf header info
+    Arch arch = Arch_Null;
+    U64 entry_point_voff = 0;
+    ELF_Type elf_type = ELF_Type_None;
+    U64 phdrs_off = 0;
+    U64 phdrs_entry_size = 0;
+    U64 phdrs_count = 0;
+    U64 shdrs_off = 0;
+    U64 shdrs_entry_size = 0;
+    U64 shdrs_count = 0;
+    U64 shdrs_strings_idx = 0;
+    {
+      // rjf: read ehdr
+      ELF_Hdr64 ehdr = {0};
+      switch(elf_sig_maybe[ELF_Identifier_Class])
+      {
+        default:
+        case ELF_Class_None:
+        {}break;
+        case ELF_Class_32:
+        {
+          ELF_Hdr32 ehdr32 = {0};
+          lnx_dmn_read_struct(memory_fd, base_vaddr, &ehdr32);
+          MemoryCopy(ehdr.e_ident, ehdr32.e_ident, sizeof(ehdr.e_ident));
+          ehdr.e_type        = ehdr32.e_type;
+          ehdr.e_machine     = ehdr32.e_machine;
+          ehdr.e_version     = ehdr32.e_version;
+          ehdr.e_entry       = (U64)ehdr32.e_entry;
+          ehdr.e_phoff       = (U64)ehdr32.e_phoff;
+          ehdr.e_shoff       = (U64)ehdr32.e_shoff;
+          ehdr.e_flags       = ehdr32.e_flags;
+          ehdr.e_ehsize      = ehdr32.e_ehsize;
+          ehdr.e_phentsize   = ehdr32.e_phentsize;
+          ehdr.e_phnum       = ehdr32.e_phnum;
+          ehdr.e_shentsize   = ehdr32.e_shentsize;
+          ehdr.e_shnum       = ehdr32.e_shnum;
+          ehdr.e_shstrndx    = ehdr32.e_shstrndx;
+        }break;
+        case ELF_Class_64:
+        {
+          lnx_dmn_read_struct(memory_fd, base_vaddr, &ehdr);
+        }break;
+      }
+      
+      // rjf: unpack ehdr
+      arch               = arch_from_elf_machine(ehdr.e_machine);
+      entry_point_voff   = ehdr.e_entry - base_vaddr;
+      elf_type           = ehdr.e_type;
+      phdrs_off          = ehdr.e_phoff;
+      phdrs_entry_size   = ehdr.e_phentsize;
+      phdrs_count        = ehdr.e_phnum;
+      shdrs_off          = ehdr.e_shoff;
+      shdrs_entry_size   = ehdr.e_shentsize;
+      shdrs_count        = ehdr.e_shnum;
+      shdrs_strings_idx  = ehdr.e_shstrndx;
+    }
+    
+    //- rjf: decide on rebase for this module
+    U64 module_rebase = 0;
+    if(elf_type == ELF_Type_Dyn)
+    {
+      module_rebase = base_vaddr;
+    }
+    
+    //- rjf: determine shdrs/phdrs addresses
+    U64 phdrs_vaddr = module_rebase + phdrs_off;
+    U64 phdrs_vaddr_opl = phdrs_vaddr + phdrs_count*phdrs_entry_size;
+    U64 shdrs_vaddr = module_rebase + shdrs_off;
+    
+    //- rjf: scan phdrs, unpack info
+    U64 image_vsize = 0;
+    Rng1U64 eh_frame_header_vaddr_range = {0};
+    {
+      for EachIndex(phdr_idx, phdrs_count)
+      {
+        U64 phdr_vaddr = phdrs_vaddr + phdr_idx*phdrs_entry_size;
+        ELF_Phdr64 phdr = {0};
+        switch(elf_sig_maybe[ELF_Identifier_Class])
+        {
+          default:{}break;
+          case ELF_Class_32:
+          {
+            ELF_Phdr32 phdr32 = {0};
+            lnx_dmn_read_struct(memory_fd, phdr_vaddr, &phdr32);
+            phdr.p_type   = phdr32.p_type;
+            phdr.p_flags  = phdr32.p_flags;
+            phdr.p_offset = (U64)phdr32.p_offset;
+            phdr.p_vaddr  = (U64)phdr32.p_vaddr;
+            phdr.p_paddr  = (U64)phdr32.p_paddr;
+            phdr.p_filesz = (U64)phdr32.p_filesz;
+            phdr.p_memsz  = (U64)phdr32.p_memsz;
+            phdr.p_align  = (U64)phdr32.p_align;
+          }break;
+          case ELF_Class_64:
+          {
+            lnx_dmn_read_struct(memory_fd, phdr_vaddr, &phdr);
+          }break;
+        }
+        if(phdr.p_type == ELF_PType_Load)
+        {
+          image_vsize = (module_rebase + phdr.p_vaddr + phdr.p_memsz) - base_vaddr;
+        }
+        if(phdr.p_type == ELF_PType_GnuEHFrame)
+        {
+          eh_frame_header_vaddr_range = r1u64(module_rebase + phdr.p_vaddr, module_rebase + phdr.p_vaddr + phdr.p_memsz);
+        }
+      }
+    }
+    
+    //- rjf: scan shdrs, unpack info
+    Rng1U64 raddbg_info_voff_range = {0};
+    U64 raddbg_is_attached_marker_voff = 0;
+    {
+      // rjf: read all shdrs
+      ELF_Shdr64 *shdrs = push_array(scratch.arena, ELF_Shdr64, shdrs_count);
+      for EachIndex(shdr_idx, shdrs_count)
+      {
+        U64 shdr_vaddr = shdrs_vaddr + shdr_idx*shdrs_entry_size;
+        switch(elf_sig_maybe[ELF_Identifier_Class])
+        {
+          case ELF_Class_32:
+          {
+            ELF_Shdr32 shdr32 = {0};
+            lnx_dmn_read_struct(memory_fd, shdr_vaddr, &shdr32);
+            shdrs[shdr_idx].sh_name     = shdr32.sh_name;
+            shdrs[shdr_idx].sh_type     = shdr32.sh_type;
+            shdrs[shdr_idx].sh_flags    = (U64)shdr32.sh_flags;
+            shdrs[shdr_idx].sh_addr     = (U64)shdr32.sh_addr;
+            shdrs[shdr_idx].sh_offset   = (U64)shdr32.sh_offset;
+            shdrs[shdr_idx].sh_size     = (U64)shdr32.sh_size;
+            shdrs[shdr_idx].sh_link     = shdr32.sh_link;
+            shdrs[shdr_idx].sh_info     = shdr32.sh_info;
+            shdrs[shdr_idx].sh_addralign= (U64)shdr32.sh_addralign;
+            shdrs[shdr_idx].sh_entsize  = (U64)shdr32.sh_entsize;
+          }break;
+          case ELF_Class_64:
+          {
+            lnx_dmn_read_struct(memory_fd, shdr_vaddr, &shdrs[shdr_idx]);
+          }break;
+        }
+      }
+      
+      // rjf: get string shdr
+      ELF_Shdr64 *string_shdr = 0;
+      if(shdrs_strings_idx < shdrs_count)
+      {
+        string_shdr = &shdrs[shdrs_strings_idx];
+      }
+      
+      // rjf: scan shdrs, using names
+      if(string_shdr != 0)
+      {
+        for EachIndex(shdr_idx, shdrs_count)
+        {
+          ELF_Shdr64 *shdr = &shdrs[shdr_idx];
+          U64 name_vaddr = string_shdr->sh_addr + shdr->sh_name;
+          String8 shdr_name = lnx_dmn_read_string(scratch.arena, memory_fd, name_vaddr);
+          if(str8_match(shdr_name, s(".raddbg"), 0))
+          {
+            raddbg_info_voff_range = r1u64(shdr->sh_addr - base_vaddr, shdr->sh_addr - base_vaddr + shdr->sh_size);
+          }
+          if(str8_match(shdr_name, s(".rdbgia"), 0))
+          {
+            raddbg_is_attached_marker_voff = (shdr->sh_addr - base_vaddr);
+          }
+        }
+      }
+    }
+    
+    //- rjf: unpack tls info
+    U64 tls_index = max_U64;
+    U64 tls_offset = max_U64;
+    if(is_main)
+    {
+      tls_index = 1;
+      tls_offset = 0;
+    }
+    else if(lnx_dmn_state->is_tls_detected)
+    {
+      Rng1U64 tls_modid_range  = r1u64(lnx_dmn_state->tls_modid_desc.offset, lnx_dmn_state->tls_modid_desc.offset + lnx_dmn_state->tls_modid_desc.bit_size / 8);
+      Rng1U64 tls_offset_range = r1u64(lnx_dmn_state->tls_offset_desc.offset, lnx_dmn_state->tls_offset_desc.offset + lnx_dmn_state->tls_offset_desc.bit_size / 8);
+      tls_modid_range  = shift_1u64(tls_modid_range, base_vaddr);
+      tls_offset_range = shift_1u64(tls_offset_range, base_vaddr);
+      tls_modid_range.max = Min(tls_modid_range.max, tls_modid_range.min + sizeof(tls_index));
+      tls_offset_range.max = Min(tls_offset_range.max, tls_offset_range.min + sizeof(tls_offset));
+      lnx_dmn_read(memory_fd, tls_modid_range, &tls_index);
+      lnx_dmn_read(memory_fd, tls_offset_range, &tls_offset);
+    }
+    
+    //- rjf: read module path
+    String8 module_path = lnx_dmn_read_string(arena, memory_fd, name_vaddr);
+    
+    //- rjf: decide on debug info key info
+    String8 debug_info_path = module_path;
+    Guid debug_info_guid = {0};
+    U64 debug_info_timestamp = 0;
+    U64 debug_info_age = 0;
+    
+    //- rjf: fill result
+    info->arch                           = arch;
+    info->vsize                          = image_vsize;
+    info->entry_point_voff               = entry_point_voff;
+    info->module_path                    = module_path;
+    info->debug_info_path                = debug_info_path;
+    info->debug_info_guid                = debug_info_guid;
+    info->debug_info_timestamp           = debug_info_timestamp;
+    info->debug_info_age                 = debug_info_age;
+    info->tls_index                      = tls_index;
+    info->tls_offset                     = tls_offset;
+    info->eh_frame_header_vaddr_range    = eh_frame_header_vaddr_range;
+    info->cfi_rebase                     = module_rebase;
+    info->raddbg_info_voff_range         = raddbg_info_voff_range;
+    info->raddbg_is_attached_marker_voff = raddbg_is_attached_marker_voff;
+  }
+  scratch_end(scratch);
+  return info;
+}
+
+////////////////////////////////
 //~ rjf: Trap Setting
 
 internal LNX_DMN_ActiveTrap *
@@ -1681,7 +1912,9 @@ internal void
 lnx_dmn_push_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, LNX_DMN_Module *module)
 {
   // TODO: reporting this module breaks ctrl thread
-  String8 module_name = lnx_dmn_read_string(arena, thread->process->fd, module->name_vaddr);
+  LNX_DMN_Process *process = thread->process;
+  DMN_ModuleInfo *module_info = lnx_dmn_module_info_from_process_module(arena, process->pid, process->fd, module->base_vaddr, module->name_vaddr, module->is_main);
+  String8 module_name = module_info->module_path;
   if(!str8_match(module_name, str8_lit("linux-vdso.so.1"), 0))
   {
     DMN_Event *e = dmn_event_list_push(arena, events);
@@ -1689,14 +1922,11 @@ lnx_dmn_push_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thre
     e->process          = lnx_dmn_handle_from_process(thread->process);
     e->thread           = lnx_dmn_handle_from_thread(thread);
     e->module           = lnx_dmn_handle_from_module(module);
-    e->arch             = thread->process->ctx->arch;
+    e->arch             = module_info->arch;
     e->address          = module->base_vaddr;
     e->size             = module->size;
     e->string           = module_name;
-    e->elf_phdr_vrange  = r1u64(module->phvaddr, module->phvaddr + module->phentsize * module->phcount);
-    e->elf_phdr_entsize = module->phentsize;
-    e->tls_index        = module->tls_index;
-    e->tls_offset       = module->tls_offset;
+    e->module_info      = module_info;
   }
 }
 
@@ -1787,7 +2017,7 @@ lnx_dmn_push_event_exception(Arena *arena, DMN_EventList *events, LNX_DMN_Thread
   e->thread              = lnx_dmn_handle_from_thread(thread);
   e->instruction_pointer = lnx_dmn_thread_read_ip(thread);
   e->address             = e->instruction_pointer;
-  e->signo               = signo;
+  e->code                = signo;
   e->exception_repeated  = signo < ArrayCount(is_repeatable) ? is_repeatable[signo] : 0;
   
   if(signo == SIGSEGV)
@@ -3008,18 +3238,6 @@ dmn_process_write(DMN_Handle process_handle, Rng1U64 range, void *src)
 }
 
 //- rjf: threads
-
-internal Arch
-dmn_arch_from_thread(DMN_Handle thread_handle)
-{
-  Arch arch = Arch_Null;
-  LNX_DMN_Thread *thread = lnx_dmn_thread_from_handle(thread_handle);
-  if(thread)
-  {
-    arch = thread->process->ctx->arch;
-  }
-  return arch;
-}
 
 internal U64
 dmn_stack_base_vaddr_from_thread(DMN_Handle thread_handle)

@@ -337,11 +337,14 @@ internal String8 w32_dmn_full_path_from_module(Arena *arena, W32_DMN_Entity *mod
 //- rjf: processes
 internal U64 w32_dmn_process_read(HANDLE process, Rng1U64 range, void *dst);
 internal B32 w32_dmn_process_write(HANDLE process, Rng1U64 range, void *src);
+internal String8 w32_dmn_str8_cstring_from_process_vaddr(Arena *arena, HANDLE process, U64 vaddr);
 internal String8 w32_dmn_read_memory_str(Arena *arena, HANDLE process_handle, U64 address);
 internal String16 w32_dmn_read_memory_str16(Arena *arena, HANDLE process_handle, U64 address);
 #define w32_dmn_process_read_struct(process, vaddr, ptr) w32_dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 #define w32_dmn_process_write_struct(process, vaddr, ptr) w32_dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
-internal W32_DMN_ImageInfo w32_dmn_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr);
+
+//- rjf: modules
+internal DMN_ModuleInfo *w32_dmn_module_info_from_process_module(Arena *arena, HANDLE process, HANDLE module, U64 base_vaddr, U64 module_name_vaddr, B32 module_name_is_unicode, B32 is_main_module);
 
 //- rjf: threads
 internal B32 w32_dmn_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block);

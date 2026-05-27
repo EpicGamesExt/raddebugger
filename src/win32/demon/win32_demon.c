@@ -338,6 +338,62 @@ w32_dmn_process_write(HANDLE process, Rng1U64 range, void *src)
 }
 
 internal String8
+w32_dmn_str8_cstring_from_process_vaddr(Arena *arena, HANDLE process, U64 vaddr)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List pieces = {0};
+  U64 chunk_cap = 256;
+  U64 chunk_size = chunk_cap;
+  U64 vaddr_opl = vaddr + 16384;
+  U8 *chunk_buffer = push_array(scratch.arena, U8, chunk_cap);
+  for(U64 read_vaddr = vaddr; read_vaddr < vaddr_opl;)
+  {
+    // rjf: zero / read next chunk - shrink chunk size if needed
+    MemoryZero(chunk_buffer, chunk_size);
+    U64 bytes_read = 0;
+    for(;bytes_read == 0 && chunk_size != 0;)
+    {
+      bytes_read = w32_dmn_process_read(process, r1u64(vaddr, vaddr+chunk_size), chunk_buffer);
+      if(bytes_read == 0)
+      {
+        chunk_size /= 2;
+      }
+    }
+    
+    // rjf: advance
+    vaddr += bytes_read;
+    
+    // rjf: look for null terminator
+    B32 found_null_terminator = 0;
+    U64 read_chunk_size = bytes_read;
+    for(U64 idx = 0; idx < bytes_read; idx += 1)
+    {
+      if(chunk_buffer[idx] == 0)
+      {
+        read_chunk_size = idx;
+        found_null_terminator = 1;
+        break;
+      }
+    }
+    
+    // rjf: nonzero chunk size -> push to piece list
+    if(read_chunk_size != 0)
+    {
+      str8_list_push(scratch.arena, &pieces, str8_copy(scratch.arena, str8(chunk_buffer, read_chunk_size)));
+    }
+    
+    // rjf: if this chunk contained a null terminator, or if we didn't read anything -> we're done
+    if(found_null_terminator || bytes_read == 0)
+    {
+      break;
+    }
+  }
+  String8 result = str8_list_join(arena, &pieces, 0);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
 w32_dmn_read_memory_str(Arena *arena, HANDLE process_handle, U64 address)
 {
   // TODO(rjf): @rewrite
@@ -438,126 +494,319 @@ w32_dmn_read_memory_str16(Arena *arena, HANDLE process_handle, U64 address)
   return(result);
 }
 
-internal W32_DMN_ImageInfo
-w32_dmn_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
+//- rjf: modules
+
+internal DMN_ModuleInfo *
+w32_dmn_module_info_from_process_module(Arena *arena, HANDLE process, HANDLE module, U64 base_vaddr, U64 module_name_vaddr, B32 module_name_is_unicode, B32 is_main_module)
 {
-  // rjf: find PE offset
-  U32 pe_offset = 0;
+  DMN_ModuleInfo *info = push_array(arena, DMN_ModuleInfo, 1);
+  Temp scratch = scratch_begin(&arena, 1);
   {
-    U64 dos_magic_off = base_vaddr;
-    U16 dos_magic     = 0;
-    w32_dmn_process_read_struct(process, dos_magic_off, &dos_magic);
-    if(dos_magic == PE_DOS_MAGIC)
-    {
-      U64 pe_offset_off = base_vaddr + OffsetOf(PE_DosHeader, coff_file_offset);
-      w32_dmn_process_read_struct(process, pe_offset_off, &pe_offset);
-    }
-  }
-  
-  // rjf: get COFF header
-  B32             got_coff_header = 0;
-  U64             coff_header_off = 0;
-  COFF_FileHeader coff_header     = {0};
-  if(pe_offset > 0)
-  {
-    U64 pe_magic_off = base_vaddr + pe_offset;
-    U32 pe_magic     = 0;
-    w32_dmn_process_read_struct(process, pe_magic_off, &pe_magic);
-    if(pe_magic == PE_MAGIC)
-    {
-      coff_header_off = pe_magic_off + sizeof(pe_magic);
-      got_coff_header = w32_dmn_process_read_struct(process, coff_header_off, &coff_header);
-    }
-  }
-  
-  W32_DMN_ImageInfo result = zero_struct;
-  if(got_coff_header)
-  {
-    U64 optional_off = coff_header_off + sizeof(COFF_FileHeader);
+    B32 is_good = 1;
     
-    Arch arch           = arch_from_coff_machine(coff_header.machine);
-    U64  image_size     = 0;
-    U64  data_dir_count = 0;
-    U64  data_dir_off   = max_U64;
-    U64  tls_index      = max_U64;
-    
-    // parse optional header
-    if(pe_has_plus_header(coff_header.machine))
+    //- rjf: read DOS header
+    PE_DosHeader dos_header = {0};
+    if(is_good)
     {
-      PE_OptionalHeader32Plus opt_header = {0};
-      if(w32_dmn_process_read_struct(process, optional_off, &opt_header))
+      w32_dmn_process_read_struct(process, base_vaddr, &dos_header);
+      is_good = (dos_header.magic == PE_DOS_MAGIC);
+    }
+    
+    //- rjf: read PE magic
+    U32 pe_magic = 0;
+    if(is_good)
+    {
+      w32_dmn_process_read_struct(process, base_vaddr + dos_header.coff_file_offset, &pe_magic);
+      is_good = (pe_magic == PE_MAGIC);
+    }
+    
+    //- rjf: read COFF header
+    U64 file_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
+    COFF_FileHeader file_header = {0};
+    if(is_good)
+    {
+      w32_dmn_process_read_struct(process, base_vaddr + file_header_off, &file_header);
+    }
+    
+    //- rjf: get architecture
+    Arch arch = arch_from_coff_machine(file_header.machine);
+    
+    //- rjf: get module path
+    String8 module_path = {0};
+    {
+      String8 module_path8 = {0};
+      String16 module_path16 = {0};
+      
+      // rjf: try to get module path from handle
+      if(module_path16.size == 0 && module != 0)
       {
-        image_size     = opt_header.sizeof_image;
-        data_dir_count = opt_header.data_dir_count;
-        data_dir_off   = optional_off + sizeof(opt_header);
+        DWORD cap16 = GetFinalPathNameByHandleW(module, 0, 0, VOLUME_NAME_DOS);
+        U16 *buffer16 = push_array_no_zero(scratch.arena, U16, cap16);
+        DWORD size16 = GetFinalPathNameByHandleW(module, (WCHAR*)buffer16, cap16, VOLUME_NAME_DOS);
+        module_path16 = str16(buffer16, size16);
       }
-      else { Assert(0 && "failed to read optional header"); }
-    }
-    else
-    {
-      PE_OptionalHeader32 opt_header = {0};
-      if(w32_dmn_process_read_struct(process, optional_off, &opt_header))
+      
+      // rjf: fallback (main module only): process -> full path
+      if(module_path16.size == 0 && is_main_module)
       {
-        image_size     = opt_header.sizeof_image;
-        data_dir_count = opt_header.data_dir_count;
-        data_dir_off   = optional_off + sizeof(opt_header);
-      }
-      else { Assert(0 && "failed to read optional header"); }
-    }
-    
-    // extract TLS index
-    if(PE_DataDirectoryIndex_TLS < data_dir_count)
-    {
-      U64              tls_dir_vaddr = data_dir_off + PE_DataDirectoryIndex_TLS * sizeof(PE_DataDirectory);
-      PE_DataDirectory tls_dir       = {0};
-      if(w32_dmn_process_read_struct(process, tls_dir_vaddr, &tls_dir))
-      {
-        if(pe_has_plus_header(coff_header.machine))
+        DWORD size = 4096;
+        U16 *buf = push_array_no_zero(scratch.arena, U16, size);
+        if(QueryFullProcessImageNameW(process, 0, (WCHAR*)buf, &size))
         {
-          if(tls_dir.virt_size == sizeof(PE_TLSHeader64))
-          {
-            PE_TLSHeader64 tls_header = {0};
-            if(w32_dmn_process_read_struct(process, base_vaddr + tls_dir.virt_off, &tls_header))
-            {
-              U64 tls_index64 = 0;
-              if(w32_dmn_process_read_struct(process, tls_header.index_address, &tls_index64))
-              {
-                tls_index = tls_index64;
-              }
-              else { Assert(0 && "failed to read TLS Index 64"); }
-            }
-            else { Assert(0 && "failed to read TLS Header 64"); }
-          }
+          module_path16 = str16(buf, size);
         }
-        else
+      }
+      
+      // rjf: fallback (any module - no guarantee): address_of_name -> full path
+      if(module_path16.size == 0 && module_name_vaddr != 0)
+      {
+        U64 ptr_size = bit_size_from_arch(arch)/8;
+        U64 name_pointer = 0;
+        if(w32_dmn_process_read(process, r1u64(module_name_vaddr, module_name_vaddr+ptr_size), &name_pointer))
         {
-          if(tls_dir.virt_size == sizeof(PE_TLSHeader32))
+          if(name_pointer != 0)
           {
-            PE_TLSHeader32 tls_header = {0};
-            if(w32_dmn_process_read_struct(process, base_vaddr + tls_dir.virt_off, &tls_header))
+            if(module_name_is_unicode)
             {
-              U32 tls_index32 = 0;
-              if(w32_dmn_process_read_struct(process, tls_header.index_address, &tls_index32))
-              {
-                tls_index = tls_index32;
-              }
-              else { Assert(0 && "failed to read TLS Index 32"); }
+              module_path16 = w32_dmn_read_memory_str16(scratch.arena, process, name_pointer);
             }
-            else { Assert(0 && "failed to read TLS Header32"); }
+            else
+            {
+              module_path8 = w32_dmn_read_memory_str(scratch.arena, process, name_pointer);
+            }
           }
         }
       }
-      else { Assert(0 && "failed to read TLS directory"); }
+      
+      // rjf: skip the extended path thing if necessary
+      {
+        if(module_path16.size >= 4 &&
+           module_path16.str[0] == L'\\' &&
+           module_path16.str[1] == L'\\' &&
+           module_path16.str[2] == L'?' &&
+           module_path16.str[3] == L'\\')
+        {
+          module_path16.size -= 4;
+          module_path16.str += 4;
+        }
+        else if(module_path8.size >= 4 &&
+                module_path8.str[0] == L'\\' &&
+                module_path8.str[1] == L'\\' &&
+                module_path8.str[2] == L'?' &&
+                module_path8.str[3] == L'\\')
+        {
+          module_path8.size -= 4;
+          module_path8.str += 4;
+        }
+      }
+      
+      // rjf: 16 -> 8
+      if(module_path16.size != 0)
+      {
+        module_path = str8_from_16(arena, module_path16);
+      }
+      else if(module_path8.size != 0)
+      {
+        module_path = str8_copy(arena, module_path8);
+      }
     }
     
-    // fill out result
-    result.arch      = arch;
-    result.size      = image_size;
-    result.tls_index = tls_index;
+    //- rjf: unpack range of optional extension header
+    U32 opt_ext_size = file_header.optional_header_size;
+    Rng1U64 opt_ext_off_range = r1u64(file_header_off + sizeof(COFF_FileHeader),
+                                      file_header_off + sizeof(COFF_FileHeader) + opt_ext_size);
+    
+    //- rjf: read optional header
+    U64 image_vsize = 0;
+    U64 entry_point_voff = 0;
+    U64 tls_index = 0;
+    String8 debug_info_path = {0};
+    Guid debug_info_guid = {0};
+    U64 debug_info_timestamp = 0;
+    U64 debug_info_age = 0;
+    Rng1U64 pe_intel_pdatas_vaddr_range = {0};
+    Rng1U64 raddbg_info_voff_range = {0};
+    U64 raddbg_is_attached_marker_voff = 0;
+    if(opt_ext_size > 0)
+    {
+      // rjf: read magic number
+      U16 opt_ext_magic = 0;
+      w32_dmn_process_read_struct(process, base_vaddr + opt_ext_off_range.min, &opt_ext_magic);
+      
+      // rjf: read info
+      U32 reported_data_dir_offset = 0;
+      U32 reported_data_dir_count = 0;
+      switch(opt_ext_magic)
+      {
+        case PE_PE32_MAGIC:
+        {
+          PE_OptionalHeader32 pe_optional = {0};
+          w32_dmn_process_read_struct(process, base_vaddr + opt_ext_off_range.min, &pe_optional);
+          image_vsize = pe_optional.sizeof_image;
+          entry_point_voff = pe_optional.entry_point_va;
+          reported_data_dir_offset = sizeof(pe_optional);
+          reported_data_dir_count = pe_optional.data_dir_count;
+        }break;
+        case PE_PE32PLUS_MAGIC:
+        {
+          PE_OptionalHeader32Plus pe_optional = {0};
+          w32_dmn_process_read_struct(process, base_vaddr + opt_ext_off_range.min, &pe_optional);
+          image_vsize = pe_optional.sizeof_image;
+          entry_point_voff = pe_optional.entry_point_va;
+          reported_data_dir_offset = sizeof(pe_optional);
+          reported_data_dir_count = pe_optional.data_dir_count;
+        }break;
+      }
+      
+      // rjf: find number of data directories
+      U32 data_dir_max = (opt_ext_size - reported_data_dir_offset) / sizeof(PE_DataDirectory);
+      U32 data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
+      
+      // rjf: extract sections
+      U64 sec_array_off = opt_ext_off_range.max;
+      U64 sec_count = file_header.section_count;
+      COFF_SectionHeader *sec = push_array(scratch.arena, COFF_SectionHeader, sec_count);
+      w32_dmn_process_read(process, r1u64(base_vaddr + sec_array_off, base_vaddr + sec_array_off + sec_count*sizeof(COFF_SectionHeader)), sec);
+      
+      // rjf: grab pdatas range from exceptions section
+      if(data_dir_count > PE_DataDirectoryIndex_EXCEPTIONS)
+      {
+        PE_DataDirectory dir = {0};
+        w32_dmn_process_read_struct(process, base_vaddr + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, &dir);
+        Rng1U64 pdatas_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
+        pe_intel_pdatas_vaddr_range = r1u64(pdatas_voff_range.min + base_vaddr, pdatas_voff_range.max + base_vaddr);
+      }
+      
+      // rjf: grab tls info
+      if(data_dir_count > PE_DataDirectoryIndex_TLS)
+      {
+        PE_DataDirectory tls_dir = {0};
+        w32_dmn_process_read_struct(process, base_vaddr + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, &tls_dir);
+        if(tls_dir.virt_size == sizeof(PE_TLSHeader64))
+        {
+          PE_TLSHeader64 tls_header = {0};
+          w32_dmn_process_read_struct(process, base_vaddr + tls_dir.virt_off, &tls_header);
+          U64 tls_index64 = 0;
+          w32_dmn_process_read_struct(process, tls_header.index_address, &tls_index64);
+          tls_index = tls_index64;
+        }
+        else if(tls_dir.virt_size == sizeof(PE_TLSHeader32))
+        {
+          PE_TLSHeader32 tls_header = {0};
+          w32_dmn_process_read_struct(process, base_vaddr + tls_dir.virt_off, &tls_header);
+          U32 tls_index32 = 0;
+          w32_dmn_process_read_struct(process, tls_header.index_address, &tls_index32);
+          tls_index = (U64)tls_index32;
+        }
+      }
+      
+      // rjf: grab data about DWARF debug info, hinted at via symbol array in header
+      {
+        U64 symbol_array_off = file_header.symbol_table_foff;
+        U64 symbol_count = file_header.symbol_count;
+        if(symbol_array_off != 0)
+        {
+          debug_info_path = module_path;
+        }
+      }
+      
+      // rjf: grab data about PDB/RDI debug info, expressed via debug data directory
+      if(debug_info_path.size == 0 && data_dir_count > PE_DataDirectoryIndex_DEBUG)
+      {
+        // rjf: read data dir
+        PE_DataDirectory dir = {0};
+        w32_dmn_process_read_struct(process, base_vaddr + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DEBUG, &dir);
+        
+        U64 dbg_dir_count = dir.virt_size / sizeof(PE_DebugDirectory);
+        for(U64 dbg_dir_idx = 0; dbg_dir_idx < dbg_dir_count; dbg_dir_idx += 1)
+        {
+          // rjf: read debug directory
+          U64 dir_addr = base_vaddr + dir.virt_off + dbg_dir_idx * sizeof(PE_DebugDirectory);
+          PE_DebugDirectory dbg_data = {0};
+          w32_dmn_process_read_struct(process, dir_addr, &dbg_data);
+          
+          // rjf: extract external file info from codeview header
+          if(dbg_data.type == PE_DebugDirectoryType_CODEVIEW)
+          {
+            U32 cv_magic = 0;
+            w32_dmn_process_read_struct(process, base_vaddr + dbg_data.voff, &cv_magic);
+            switch(cv_magic)
+            {
+              default:break;
+              case PE_CODEVIEW_PDB20_MAGIC:
+              {
+                PE_CvHeaderPDB20 cv = {0};
+                U64 read_size = w32_dmn_process_read_struct(process, base_vaddr+dbg_data.voff, &cv);
+                if(read_size == sizeof(cv))
+                {
+                  U64 pdb_dbg_path_vaddr = base_vaddr + dbg_data.voff + sizeof(cv);
+                  debug_info_timestamp = cv.time_stamp;
+                  debug_info_age       = cv.age;
+                  debug_info_path      = w32_dmn_str8_cstring_from_process_vaddr(arena, process, pdb_dbg_path_vaddr);
+                }
+              }break;
+              case PE_CODEVIEW_PDB70_MAGIC:
+              {
+                PE_CvHeaderPDB70 cv = {0};
+                U64 read_size = w32_dmn_process_read_struct(process, base_vaddr + dbg_data.voff, &cv);
+                if(read_size == sizeof(cv))
+                {
+                  U64 pdb_dbg_path_vaddr = base_vaddr + dbg_data.voff + sizeof(cv);
+                  debug_info_guid      = cv.guid;
+                  debug_info_age       = cv.age;
+                  debug_info_path      = w32_dmn_str8_cstring_from_process_vaddr(arena, process, pdb_dbg_path_vaddr);
+                }
+              }break;
+              case PE_CODEVIEW_RDI_MAGIC:
+              {
+                PE_CvHeaderRDI cv = {0};
+                U64 read_size = w32_dmn_process_read_struct(process, base_vaddr + dbg_data.voff, &cv);
+                if(read_size == sizeof(cv))
+                {
+                  U64 rdi_dbg_path_vaddr = base_vaddr + dbg_data.voff + sizeof(cv);
+                  debug_info_guid = cv.guid;
+                  debug_info_path = w32_dmn_str8_cstring_from_process_vaddr(arena, process, rdi_dbg_path_vaddr);
+                }
+              }break;
+            }
+          }
+        }
+      }
+      
+      // rjf: find ranges of special raddbg data
+      {
+        for EachIndex(idx, sec_count)
+        {
+          String8 section_name = str8_cstring((char *)sec[idx].name);
+          if(str8_match(section_name, str8_lit(".raddbg"), 0))
+          {
+            raddbg_info_voff_range.min = sec[idx].voff;
+            raddbg_info_voff_range.max = sec[idx].voff + sec[idx].vsize;
+          }
+          else if(str8_match(section_name, str8_lit(".rdbgia"), 0))
+          {
+            raddbg_is_attached_marker_voff = sec[idx].voff;
+          }
+        }
+      }
+    }
+    
+    //- rjf: fill info
+    info->arch                           = arch;
+    info->vsize                          = image_vsize;
+    info->entry_point_voff               = entry_point_voff;
+    info->module_path                    = module_path;
+    info->debug_info_path                = debug_info_path;
+    info->debug_info_guid                = debug_info_guid;
+    info->debug_info_timestamp           = debug_info_timestamp;
+    info->debug_info_age                 = debug_info_age;
+    info->tls_index                      = tls_index;
+    info->pe_intel_pdatas_vaddr_range    = pe_intel_pdatas_vaddr_range;
+    info->raddbg_info_voff_range         = raddbg_info_voff_range;
+    info->raddbg_is_attached_marker_voff = raddbg_is_attached_marker_voff;
   }
-  else { Assert(0 && "failed to find COFF file header"); }
-  
-  return result;
+  scratch_end(scratch);
+  return info;
 }
 
 //- rjf: threads
@@ -1792,23 +2041,29 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               U64 module_base = (U64)evt.u.CreateProcessInfo.lpBaseOfImage;
               U64 module_name_vaddr = (U64)evt.u.CreateProcessInfo.lpImageName;
               B32 module_name_is_unicode = (evt.u.CreateProcessInfo.fUnicode != 0);
-              W32_DMN_ImageInfo image_info = w32_dmn_image_info_from_process_base_vaddr(process_handle, module_base);
               
-              // rjf: create entities (thread/module are implied for initial - they are not reported by win32)
+              // rjf: parse module info
+              DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process_handle, module_handle, module_base, module_name_vaddr, module_name_is_unicode, 1);
+              
+              // rjf: create process/module entities (module is implied for processes - not reported directly via module events)
               W32_DMN_Entity *process = w32_dmn_entity_alloc(w32_dmn_shared->entities_base, W32_DMN_EntityKind_Process, evt.dwProcessId);
-              W32_DMN_Entity *thread = w32_dmn_entity_alloc(process, W32_DMN_EntityKind_Thread, evt.dwThreadId);
               W32_DMN_Entity *module = w32_dmn_entity_alloc(process, W32_DMN_EntityKind_Module, module_base);
               {
                 process->handle = process_handle;
-                process->arch   = image_info.arch;
-                thread->handle                   = thread_handle;
-                thread->arch                     = image_info.arch;
-                thread->thread.thread_local_base = tls_base;
+                process->arch   = module_info->arch;
                 module->handle                         = module_handle;
-                module->module.vaddr_range             = r1u64(module_base, image_info.size);
+                module->module.vaddr_range             = r1u64(module_base, module_base + module_info->vsize);
                 module->module.is_main                 = 1;
                 module->module.address_of_name_pointer = module_name_vaddr;
                 module->module.name_is_unicode         = module_name_is_unicode;
+              }
+              
+              // rjf: create main thread entity (implied from process event, see above)
+              W32_DMN_Entity *thread = w32_dmn_entity_alloc(process, W32_DMN_EntityKind_Thread, evt.dwThreadId);
+              {
+                thread->handle                   = thread_handle;
+                thread->arch                     = module_info->arch;
+                thread->thread.thread_local_base = tls_base;
               }
               
               // rjf: put thread into suspended state, so it matches expected initial state
@@ -1833,7 +2088,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   DMN_Event *e = dmn_event_list_push(arena, &events);
                   e->kind      = DMN_EventKind_CreateProcess;
                   e->process   = w32_dmn_handle_from_entity(process);
-                  e->arch      = image_info.arch;
+                  e->arch      = module_info->arch;
                   e->code      = evt.dwProcessId;
                   e->tls_model = DMN_TlsModel_WinodwsNt;
                 }
@@ -1844,21 +2099,21 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   e->kind    = DMN_EventKind_CreateThread;
                   e->process = w32_dmn_handle_from_entity(process);
                   e->thread  = w32_dmn_handle_from_entity(thread);
-                  e->arch    = image_info.arch;
+                  e->arch    = module_info->arch;
                   e->code    = evt.dwThreadId;
                 }
                 
                 // rjf: load module
                 {
                   DMN_Event *e = dmn_event_list_push(arena, &events);
-                  e->kind      = DMN_EventKind_LoadModule;
-                  e->process   = w32_dmn_handle_from_entity(process);
-                  e->module    = w32_dmn_handle_from_entity(module);
-                  e->arch      = image_info.arch;
-                  e->address   = module_base;
-                  e->size      = image_info.size;
-                  e->string    = w32_dmn_full_path_from_module(arena, module);
-                  e->tls_index = image_info.tls_index;
+                  e->kind        = DMN_EventKind_LoadModule;
+                  e->process     = w32_dmn_handle_from_entity(process);
+                  e->module      = w32_dmn_handle_from_entity(module);
+                  e->arch        = module_info->arch;
+                  e->address     = module_base;
+                  e->size        = module_info->vsize;
+                  e->string      = module_info->module_path;
+                  e->module_info = module_info;
                 }
               }
             }break;
@@ -2010,29 +2265,32 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               
               // rjf: extract image info
               U64 module_base = (U64)evt.u.LoadDll.lpBaseOfDll;
-              W32_DMN_ImageInfo image_info = w32_dmn_image_info_from_process_base_vaddr(process->handle, module_base);
+              HANDLE module_handle = evt.u.LoadDll.hFile;
+              U64 module_name_vaddr = (U64)evt.u.LoadDll.lpImageName;
+              B32 module_name_is_unicode = (evt.u.LoadDll.fUnicode != 0);
+              DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process->handle, module_handle, module_base, module_name_vaddr, module_name_is_unicode, 0);
               
               // rjf: create module entity
               W32_DMN_Entity *module = w32_dmn_entity_alloc(process, W32_DMN_EntityKind_Module, module_base);
               {
-                module->handle                         = evt.u.LoadDll.hFile;
-                module->arch                           = image_info.arch;
-                module->module.vaddr_range             = r1u64(module_base, module_base+image_info.size);
-                module->module.address_of_name_pointer = (U64)evt.u.LoadDll.lpImageName;
-                module->module.name_is_unicode         = (evt.u.LoadDll.fUnicode != 0);
+                module->handle                         = module_handle;
+                module->arch                           = module_info->arch;
+                module->module.vaddr_range             = r1u64(module_base, module_base+module_info->vsize);
+                module->module.address_of_name_pointer = module_name_vaddr;
+                module->module.name_is_unicode         = module_name_is_unicode;
               }
               
               // rjf: generate event
               {
                 DMN_Event *e = dmn_event_list_push(arena, &events);
-                e->kind      = DMN_EventKind_LoadModule;
-                e->process   = w32_dmn_handle_from_entity(process);
-                e->module    = w32_dmn_handle_from_entity(module);
-                e->arch      = module->arch;
-                e->address   = module_base;
-                e->size      = image_info.size;
-                e->string    = w32_dmn_full_path_from_module(arena, module);
-                e->tls_index = image_info.tls_index;
+                e->kind        = DMN_EventKind_LoadModule;
+                e->process     = w32_dmn_handle_from_entity(process);
+                e->module      = w32_dmn_handle_from_entity(module);
+                e->arch        = module_info->arch;
+                e->address     = module_base;
+                e->size        = module_info->vsize;
+                e->string      = module_info->module_path;
+                e->module_info = module_info;
               }
             }break;
             

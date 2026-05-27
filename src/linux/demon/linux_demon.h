@@ -421,6 +421,11 @@ internal LNX_DMN_Thread *  lnx_dmn_thread_from_pid(pid_t pid);
 internal LNX_DMN_Process * lnx_dmn_process_from_pid(pid_t pid);
 
 ////////////////////////////////
+//~ rjf: Module Info Parsing
+
+internal DMN_ModuleInfo *lnx_dmn_module_info_from_process_module(Arena *arena, pid_t pid, int memory_fd, U64 base_vaddr, U64 link_map_vaddr, B32 is_main);
+
+////////////////////////////////
 //~ Entity
 
 // alloc

@@ -12,7 +12,9 @@ struct ProcessInfo
   String8 binary_file_path;
   String8 binary_path;
   String8 initial_path;
-  String8 user_program_data_path;
+  String8 user_program_config_data_path;
+  String8 user_program_cache_data_path;
+  String8 user_program_logs_data_path;
   String8 symbol_cache_path;
   String8List module_load_paths;
   String8List environment;

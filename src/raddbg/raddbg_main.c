@@ -6,9 +6,9 @@
 //
 // [ ] jeff stepping bug
 // [ ] wassim memory bug
-// [ ] test concepts -> base
 // [ ] switch off spoofs for step-over
-// [ ] debugger, d2r, p2r exemplar / determinism testing
+// [x] test concepts -> base
+// [x] debugger, d2r, p2r exemplar / determinism testing
 //
 // [ ] symbol server
 // [ ] core dump saving/loading
@@ -540,8 +540,8 @@ entry_point(CmdLine *cmd_line)
   g_logs_folder = cmd_line_string(cmd_line, str8_lit("logs"));
   if(g_logs_folder.size == 0)
   {
-    String8 user_program_data_path = get_process_info()->user_program_data_path;
-    g_logs_folder = push_str8f(scratch.arena, "%S/%Sraddbg/logs", program_data_folder_prefix_from_os(OperatingSystem_CURRENT), user_program_data_path);
+    String8 user_program_logs_data_path = get_process_info()->user_program_logs_data_path;
+    g_logs_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_logs_data_path);
   }
   make_directory(g_logs_folder);
   

@@ -181,8 +181,8 @@ struct D_ModuleImageInfoCacheNode
   PE_IntelPdata *pdatas;
   U64 pdatas_count;
   U64 cfi_rebase;
-  B32 is_unwind_eh;
   String8 dwarf_unwind_data;
+  B32 is_unwind_eh;
   EH_FrameHdr eh_frame_hdr;
   EH_PtrCtx eh_ptr_ctx;
   U64 entry_point_voff;
@@ -623,8 +623,8 @@ internal void d_ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena,
 internal void d_ctrl_thread__append_program_defined_bp_traps(Arena *arena, D_Entity *bp, DMN_TrapChunkList *traps_out);
 
 //- rjf: module lifetime open/close work
-internal void d_ctrl_thread__module_open(D_Handle process, D_Handle module, Rng1U64 vaddr_range, String8 path, Rng1U64 elf_phdr_vrange, U64 elf_phdr_entsize);
-internal void d_ctrl_thread__module_close(D_Handle process, D_Handle module, Rng1U64 vaddr_range);
+internal void d_ctrl_thread__module_open(D_Handle process, D_Handle module, U64 base_vaddr, DMN_ModuleInfo *module_info);
+internal void d_ctrl_thread__module_close(D_Handle process, D_Handle module, U64 base_vaddr);
 
 //- rjf: dump process closing work
 internal void d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process);

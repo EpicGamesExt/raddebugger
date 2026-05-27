@@ -8817,16 +8817,15 @@ rd_window_frame(void)
           Vec4F32 hover_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("hover"));
           
           // rjf: brighten
+          if(is_hot)
           {
             Vec4F32 color = hover_color;
-            color.w *= 0.05f;
-            if(!is_hot)
-            {
-              color.w *= t;
-            }
+            color.w *= 0.015f;
             R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), v4f32(0, 0, 0, 0), 0, 0, border_softness*1.f);
             inst->colors[Corner_00] = color;
             inst->colors[Corner_10] = color;
+            inst->colors[Corner_01] = color;
+            inst->colors[Corner_11] = color;
             MemoryCopyArray(inst->corner_radii, box_corner_radii);
           }
           
@@ -8834,7 +8833,7 @@ rd_window_frame(void)
           if(box->hot_t > 0.01f) DR_ClipScope(intersect_2f32(box->rect, dr_top_clip()))
           {
             Vec4F32 color = hover_color;
-            color.w *= 0.02f;
+            color.w *= 0.025f;
             if(!is_hot)
             {
               color.w *= t;
@@ -8842,7 +8841,7 @@ rd_window_frame(void)
             Vec2F32 center = ui_mouse();
             Vec2F32 box_dim = dim_2f32(box->rect);
             F32 max_dim = Max(box_dim.x, box_dim.y);
-            F32 radius = box->font_size*12.f;
+            F32 radius = box->font_size*24.f;
             radius = Min(max_dim, radius);
             dr_rect(pad_2f32(r2f32(center, center), radius), color, radius, 0, radius/3.f);
           }
@@ -9485,7 +9484,7 @@ rd_theme_tree_from_name(Arena *arena, Access *access, String8 theme_name)
     }
     if(theme_tree == &md_nil_node)
     {
-      String8 path = str8f(scratch.arena, "%S/%Sraddbg/themes/%S", program_data_folder_prefix_from_os(OperatingSystem_CURRENT), get_process_info()->user_program_data_path, theme_name);
+      String8 path = str8f(scratch.arena, "%S/raddbg/themes/%S", get_process_info()->user_program_config_data_path, theme_name);
       U64 endt_us = now_time_us()+100;
       if(rd_state->frame_index <= 5)
       {
@@ -10537,8 +10536,8 @@ rd_init(CmdLine *cmdln)
       }
     }
     {
-      String8 user_program_data_path = get_process_info()->user_program_data_path;
-      String8 user_data_folder = push_str8f(scratch2.arena, "%S/raddbg", user_program_data_path);
+      String8 user_program_config_data_path = get_process_info()->user_program_config_data_path;
+      String8 user_data_folder = str8f(scratch2.arena, "%S/raddbg", user_program_config_data_path);
       make_directory(user_data_folder);
       if(user_path.size == 0)
       {
@@ -10546,12 +10545,12 @@ rd_init(CmdLine *cmdln)
       }
       if(user_path.size == 0)
       {
-        String8 last_user_path = push_str8f(scratch2.arena, "%S/last_user", user_data_folder);
+        String8 last_user_path = str8f(scratch2.arena, "%S/last_user", user_data_folder);
         user_path = data_from_file_path(scratch2.arena, last_user_path);
       }
       if(user_path.size == 0)
       {
-        user_path = push_str8f(scratch2.arena, "%S/default.raddbg_user", user_data_folder);
+        user_path = str8f(scratch2.arena, "%S/default.raddbg_user", user_data_folder);
       }
     }
     if(project_path.size == 0)
@@ -13211,7 +13210,7 @@ rd_frame(void)
           case RD_CmdKind_RecordUserAsLastOpened:
           {
             String8 file_path = rd_regs()->file_path;
-            String8 last_user_path = str8f(scratch.arena, "%S/%Sraddbg/last_user", get_process_info()->user_program_data_path, program_data_folder_prefix_from_os(OperatingSystem_CURRENT));
+            String8 last_user_path = str8f(scratch.arena, "%S/raddbg/last_user", get_process_info()->user_program_config_data_path);
             write_data_to_file_path(last_user_path, file_path);
           }break;
           
@@ -15777,7 +15776,7 @@ rd_frame(void)
             String8 name = rd_regs()->string;
             if(name.size != 0)
             {
-              String8 themes_folder = str8f(scratch.arena, "%S/%Sraddbg/themes", get_process_info()->user_program_data_path, program_data_folder_prefix_from_os(OperatingSystem_CURRENT));
+              String8 themes_folder = str8f(scratch.arena, "%S/raddbg/themes", get_process_info()->user_program_config_data_path);
               if(make_directory(themes_folder))
               {
                 String8 dst_path = push_str8f(scratch.arena, "%S/%S", themes_folder, name);
