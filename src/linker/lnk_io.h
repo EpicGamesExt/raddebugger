@@ -3,7 +3,8 @@
 typedef U32 LNK_IO_Flags;
 enum
 {
-  LNK_IO_Flags_MemoryMapFiles = (1 << 0),
+  LNK_IO_Flags_MemoryMapFilesReadOnly  = (1 << 0),
+  LNK_IO_Flags_MemoryMapFilesReadWrite = (1 << 1),
 };
 
 typedef struct

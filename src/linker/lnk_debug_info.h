@@ -130,6 +130,16 @@ typedef struct
 ////////////////////////////////
 // PDB
 
+typedef enum
+{
+  LNK_PDB_BuilderFlag_All         = 0,
+  LNK_PDB_BuilderFlag_Tpi         = (1<<0),
+  LNK_PDB_BuilderFlag_Ipi         = (1<<1),
+  LNK_PDB_BuilderFlag_Modules     = (1<<2),
+  LNK_PDB_BuilderFlag_SC          = (1<<4),
+  LNK_PDB_BuilderFlag_NATVIS      = (1<<5),
+} LNK_PDB_BuilderFlags;
+
 typedef struct
 {
   String8              image_data;
@@ -180,5 +190,5 @@ internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP
 ////////////////////////////////
 // PDB
 
-internal String8List lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types);
+internal String8List lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PDB_BuilderFlags builder_flags);
 

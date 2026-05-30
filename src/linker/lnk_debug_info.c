@@ -2461,10 +2461,14 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
 }
 
 internal String8List
-lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types)
+lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PDB_BuilderFlags builder_flags)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
+
+  if (builder_flags == LNK_PDB_BuilderFlag_All) {
+    builder_flags = ~0;
+  }
 
   LNK_BuildPdb task = {
     .image_data                      = image_data,
@@ -2495,83 +2499,92 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   }
 
   // push types
-  pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_IPI], cv_types.count[CV_TypeIndexSource_IPI], cv_types.v[CV_TypeIndexSource_IPI]);
-  pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_TPI], cv_types.count[CV_TypeIndexSource_TPI], cv_types.v[CV_TypeIndexSource_TPI]);
+  if (builder_flags & LNK_PDB_BuilderFlag_Ipi) {
+    pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_IPI], cv_types.count[CV_TypeIndexSource_IPI], cv_types.v[CV_TypeIndexSource_IPI]);
+  }
+  if (builder_flags & LNK_PDB_BuilderFlag_Tpi) {
+    pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_TPI], cv_types.count[CV_TypeIndexSource_TPI], cv_types.v[CV_TypeIndexSource_TPI]);
+  }
 
   ProfBegin("Merge String Tables");
   task.string_ht = cv_dedup_string_tables(tp_arena, tp, cv->obj_count, cv->debug_s_arr);
   cv_string_hash_table_assign_buffer_offsets(tp, task.string_ht);
   ProfEnd();
 
-  ProfScope ("Alloc Modules")
-    for EachIndex(obj_idx, cv->obj_count) {
-      task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
-    }
+  if (builder_flags & LNK_PDB_BuilderFlag_Modules) {
+    ProfScope ("Alloc Modules")
+      for EachIndex(obj_idx, cv->obj_count)
+        task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
 
-  ProfScope("Move Global Symbols")
-    tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
+    ProfScope("Move Global Symbols")
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
 
-  ProfScope("Build GSI and PSI")
-    pdb_build_gsi_psi(tp, task.pdb);
+      ProfScope("Build GSI and PSI")
+        pdb_build_gsi_psi(tp, task.pdb);
 
-  ProfScope("Write Modules")
-    tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
+    ProfScope("Write Modules")
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
+  }
 
   ProfBegin("Add string tables");
   pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
   ProfEnd();
   
-  ProfBegin("Build Section Contrib Map");
-  {
-    ProfBegin("Build DBI Section Headers");
-    for (U64 sect_idx = 1; sect_idx < task.image_section_table_count; sect_idx += 1) {
-      dbi_push_section(task.pdb->dbi, task.image_section_table[sect_idx]);
+  if (builder_flags & LNK_PDB_BuilderFlag_SC) {
+    ProfBegin("Build Section Contrib Map");
+    {
+      ProfBegin("Build DBI Section Headers");
+      for (U64 sect_idx = 1; sect_idx < task.image_section_table_count; sect_idx += 1) {
+        dbi_push_section(task.pdb->dbi, task.image_section_table[sect_idx]);
+      }
+      ProfEnd();
+
+      for EachIndex(i, task.image_section_table_count) {
+        COFF_SectionHeader *sect_header = task.image_section_table[i];
+        if (~sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+          task.image_section_file_ranges.v[task.image_section_file_ranges.count++] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+        }
+        task.image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
+      }
+
+      task.sc_list = push_array(scratch.arena, PDB_DbiSectionContribList, cv->obj_count);
+      tp_for_parallel(tp, tp_arena, cv->obj_count, lnk_push_dbi_sec_contrib_task, &task);
+      dbi_sec_list_concat_arr(&task.pdb->dbi->sec_contrib_list, cv->obj_count, task.sc_list);
     }
     ProfEnd();
-
-    for EachIndex(i, task.image_section_table_count) {
-      COFF_SectionHeader *sect_header = task.image_section_table[i];
-      if (~sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
-        task.image_section_file_ranges.v[task.image_section_file_ranges.count++] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
-      }
-      task.image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
-    }
-
-    task.sc_list = push_array(scratch.arena, PDB_DbiSectionContribList, cv->obj_count);
-    tp_for_parallel(tp, tp_arena, cv->obj_count, lnk_push_dbi_sec_contrib_task, &task);
-    dbi_sec_list_concat_arr(&task.pdb->dbi->sec_contrib_list, cv->obj_count, task.sc_list);
   }
-  ProfEnd();
 
-  ProfBegin("Build NatVis");
-  {
-    String8Array natvis_file_path_arr = str8_array_from_list(scratch.arena, &config->natvis_list);
-    String8Array natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, config->io_flags, natvis_file_path_arr);
+  if (builder_flags & LNK_PDB_BuilderFlag_NATVIS) {
+    ProfBegin("Build NatVis");
+    {
+      String8Array natvis_file_path_arr = str8_array_from_list(scratch.arena, &config->natvis_list);
+      String8Array natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, config->io_flags, natvis_file_path_arr);
 
-    for EachIndex(i, natvis_file_data_arr.count) {
-      String8 natvis_file_path = natvis_file_path_arr.v[i];
-      String8 natvis_file_data = natvis_file_data_arr.v[i];
+      for EachIndex(i, natvis_file_data_arr.count) {
+        String8 natvis_file_path = natvis_file_path_arr.v[i];
+        String8 natvis_file_data = natvis_file_data_arr.v[i];
 
-      // did we read the file?
-      if (natvis_file_data.size == 0) {
-        lnk_error(LNK_Warning_FileNotFound, "unable to open natvis file \"%S\"", natvis_file_path);
-        continue;
-      }
+        // did we read the file?
+        if (natvis_file_data.size == 0) {
+          lnk_error(LNK_Warning_FileNotFound, "unable to open natvis file \"%S\"", natvis_file_path);
+          continue;
+        }
 
-      // sanity check file extension or VS wont load NatVis
-      String8 ext = str8_skip_last_dot(natvis_file_path);
-      if (!str8_match(ext, str8_lit("natvis"), StringMatchFlag_CaseInsensitive)) {
-        lnk_error(LNK_Warning_Natvis, "Visual Studio expects .natvis extension: \"%S\"", natvis_file_path);
-      }
+        // sanity check file extension or VS wont load NatVis
+        String8 ext = str8_skip_last_dot(natvis_file_path);
+        if (!str8_match(ext, str8_lit("natvis"), StringMatchFlag_CaseInsensitive)) {
+          lnk_error(LNK_Warning_Natvis, "Visual Studio expects .natvis extension: \"%S\"", natvis_file_path);
+        }
 
-      // add natvis to PDB
-      PDB_SrcError error = pdb_add_src(task.pdb->info, task.pdb->msf, natvis_file_path, natvis_file_data, PDB_SrcComp_NULL);
-      if (error != PDB_SrcError_OK) {
-        lnk_error(LNK_Error_Natvis, "%S", pdb_string_from_src_error(error));
+        // add natvis to PDB
+        PDB_SrcError error = pdb_add_src(task.pdb->info, task.pdb->msf, natvis_file_path, natvis_file_data, PDB_SrcComp_NULL);
+        if (error != PDB_SrcError_OK) {
+          lnk_error(LNK_Error_Natvis, "%S", pdb_string_from_src_error(error));
+        }
       }
     }
+    ProfEnd();
   }
-  ProfEnd();
 
   pdb_build(tp, tp_arena, task.pdb, task.string_ht, 0, cv->is_stripped);
 

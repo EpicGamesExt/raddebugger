@@ -319,7 +319,7 @@ typedef struct
 
 // --- Config -----------------------------------------------------------------
 
-internal LNK_Config * lnk_config_from_argcv(Arena *arena, int argc, char **argv);
+internal LNK_Config * lnk_config_from_cmdline(CmdLine *cmdline);
 
 // --- Entry Point -------------------------------------------------------------
 
@@ -375,6 +375,7 @@ internal void                lnk_lib_member_ref_list_concat_in_place_array(LNK_L
 internal int                 lnk_lib_member_ref_is_before(void *raw_a, void *raw_b);
 internal LNK_LibMemberRef ** lnk_array_from_lib_member_list(Arena *arena, LNK_LibMemberRefList list);
 
+internal LNK_Link *     lnk_link_init  (TP_Arena *arena, LNK_Config *config);
 internal LNK_ObjNode *  lnk_load_objs  (TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link, U64 *objs_count_out);
 internal void           lnk_load_libs  (TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_Link *link);
 internal void           lnk_link_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link);

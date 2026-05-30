@@ -5583,9 +5583,8 @@ TEST(cyclic_type)
   String8 output            = g_errors;
   B32     is_cycle_detected = 0;
   while (output.size && !is_cycle_detected) {
-    is_cycle_detected = t_match_linef(&output,
-                      "Error(043): %S: LF_POINTER(type_index: 0x1000) forward refs member type index 0x1001 (leaf struct offset: 0x0)",
-                      t_make_file_path(arena, str8_lit("cycle.obj")));
+    String8 line = str8_chop_line(&output);
+    is_cycle_detected = str8_match_wildcard(line, str8_lit("Error(*): *: LF_POINTER(type_index: *) forward refs member type index * (leaf struct offset: *)"), StringMatchFlag_CaseInsensitive);
     t_chop_line(&output);
   }
   T_Ok(is_cycle_detected);

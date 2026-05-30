@@ -338,26 +338,51 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->associated_sections     = associated_sections;
   obj->self                    = &task->objs[task_id];
   obj->link_member             = input->link_member;
+  obj->debug_t_sect_idx        = ~0;
+  obj->debug_p_sect_idx        = ~0;
+  obj->debug_h_sect_idx        = ~0;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_obj_find_debug_t)
+{
+  LNK_Obj *obj = &((LNK_ObjNode *)raw_task)[task_id].data;
+  COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(obj);
+  for EachIndex(sect_idx, obj->header.section_count_no_null) {
+    COFF_SectionHeader *sect_header = &section_table[sect_idx];
+    String8 sect_name = coff_name_from_section_header(str8_zero(), sect_header);
+    if (str8_match(sect_name, str8_lit(".debug$T"), 0)) {
+      obj->debug_t_sect_idx = sect_idx;
+    } else if (str8_match(sect_name, str8_lit(".debug$P"), 0)) {
+      obj->debug_p_sect_idx = sect_idx;
+    } else if (str8_match(sect_name, str8_lit(".debug$H"), 0)) {
+      obj->debug_h_sect_idx = sect_idx;
+    }
+  }
 }
 
 internal LNK_ObjNode *
-lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, COFF_MachineType machine, U64 inputs_count, LNK_Input **inputs)
+lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, LNK_Config *config, U64 inputs_count, LNK_Input **inputs)
 {
   LNK_ObjNode *objs = 0;
   if (inputs_count) {
     objs = push_array(arena->v[0], LNK_ObjNode, inputs_count);
-    tp_for_parallel(tp, arena, inputs_count, lnk_obj_initer, &(LNK_ObjIniter){ .inputs = inputs, .objs = objs, .machine = machine });
+    tp_for_parallel(tp, arena, inputs_count, lnk_obj_initer, &(LNK_ObjIniter){ .inputs = inputs, .objs = objs, .machine = config->machine });
+
+    if (lnk_do_debug_info(config)) {
+      tp_for_parallel(tp, arena, inputs_count, lnk_obj_find_debug_t, objs);
+    }
   }
   return objs;
 }
 
 internal LNK_ObjNode *
-lnk_obj_from_input(Arena *arena, COFF_MachineType machine, LNK_Input *input)
+lnk_obj_from_input(Arena *arena, LNK_Config *config, LNK_Input *input)
 {
   Temp scratch = scratch_begin(&arena, 1);
   TP_Context  *tp       = tp_alloc(scratch.arena, 1, 1, str8_zero());
   TP_Arena     tp_arena = { .count = 1, .v = &arena };
-  LNK_ObjNode *result   = lnk_obj_from_input_many(tp, &tp_arena, machine, 1, &input);
+  LNK_ObjNode *result   = lnk_obj_from_input_many(tp, &tp_arena, config, 1, &input);
   scratch_end(scratch);
   return result;
 }

@@ -124,75 +124,106 @@
 internal LNK_CmdLine
 lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   LNK_CmdLine cmd_line = {0};
 
-  // default flags
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Align,     "%u", KB(4));
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Debug,     "none");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_FileAlign, "%u", 512);
+  char *default_opts[] = {
+    "/ALIGN:4096",
+    "/DEBUG:none",
+    "/FILEALIGN:512",
+    "/HIGHENTROPYVA",
+    "/MANIFESTUAC:\"level='asInvoker' uiAccess='false'\"",
+    "/NXCOMPAT",
+    "/LARGEADDRESSAWARE",
+    "/PDBALTPATH:%_RAD_PDB_PATH%",
+    "/PDBPAGESIZE:4096",
+    (char*)str8f(scratch.arena, "/HEAP:%llu,%llu", MB(1), KB(4)).str,
+    (char*)str8f(scratch.arena, "/STACK:%llu,%llu", MB(1), KB(4)).str,
+
+    "/RAD_BOOT_MODE:LINKER",
+    //"/RAD_BUILD_EXP",
+    "/RAD_BUILD_IMPLIB",
+    "/RAD_TPYE_HASH_ALG:BLAKE3",
+    "/RAD_AGE:1",
+    "/RAD_CHECK_UNUSED_DELAY_LOAD_DLL",
+    "/RAD_DO_MERGE",
+    "/RAD_ENV_LIB",
+    "/RAD_EXE",
+    "/RAD_GUID:imageblake3",
+    "/RAD_LARGE_PAGES:no",
+    "/RAD_LINK_VER:14.0",
+    "/RAD_OS_VER:6.0",
+    "/RAD_PAGE_SIZE:4096",
+    "/RAD_PATH_STYLE:system",
+    "/RAD_PDB_HASH_TYPE_NAMES:NONE",
+    "/RAD_PDB_HASH_TYPE_NAME_LENGTH:8",
+    "/RAD_DEBUGALTPATH:%_RAD_RDI_PATH%",
+    "/RAD_MEMORY_MAP_FILES",
+    "/RAD_MAP_LINES_FOR_UNRESOLVED_SYMBOLS",
+    "/RAD_UNRESOLVED_SYMBOL_LIMIT:1000",
+    "/RAD_UNRESOLVED_SYMBOL_REF_LIMIT:10",
+    (char*)str8f(scratch.arena, "/RAD_MT_PATH:%s",        LNK_MANIFEST_MERGE_TOOL_NAME).str,
+    (char*)str8f(scratch.arena, "/RAD_DATA_DIR_COUNT:%u", PE_DataDirectoryIndex_COUNT).str,
+  };
+
+  char *push_opts[] = {
+    "/MERGE:.xdata=.rdata",
+    "/MERGE:.00cfg=.rdata",
+    // TODO: .tls must be always first contribution in .data section because compiler generates TLS relative movs
+    //"/MERGE:.tls=.data",
+    "/MERGE:.idata=.data",
+    "/MERGE:.didat=.data",
+    "/MERGE:.edata=.rdata",
+    "/MERGE:.RAD_LINK_PE_DEBUG_DIR=.rdata",
+    "/MERGE:.RAD_LINK_PE_DEBUG_DATA=.rdata",
+
+    "/RAD_REMOVE_SECTION:.debug",
+    "/RAD_REMOVE_SECTION:.gehcont",
+    "/RAD_REMOVE_SECTION:.gfids",
+    "/RAD_REMOVE_SECTION:.gxfg",
+
+    (char*)str8f(scratch.arena, "/RAD_WORKERS:%u", get_system_info()->logical_processor_count).str,
+
+    // errors that are too verbose in release build
+    (char*)str8f(scratch.arena, "/RAD_IGNORE:%d", LNK_Warning_UnknownSwitch    * (BUILD_DEBUG ? -1 : 1)).str,
+    (char*)str8f(scratch.arena, "/RAD_IGNORE:%d", LNK_Warning_UnknownDirective * (BUILD_DEBUG ? -1 : 1)).str,
+    (char*)str8f(scratch.arena, "/RAD_IGNORE:%d", LNK_Error_InvalidTypeIndex   * (BUILD_DEBUG ? -1 : 1)).str,
+
+    #if BUILD_DEBUG
+    "/RAD_LOG:debug",
+    "/RAD_LOG:io_write",
+    #else
+    (char*)str8f(scratch.arena, "/RAD_IGNORE:%u", LNK_Error_InvalidTypeIndex).str,
+    #endif
+  };
+
+#define DefaultOpt(...) do {                                                                     \
+  LNK_CmdLine parsed_cmd_line = lnk_cmd_line_from_stringf_windows_rules(arena, __VA_ARGS__);     \
+  for EachNode(cmd, LNK_CmdOption, parsed_cmd_line.first_option) {                               \
+    if (!lnk_cmd_line_has_switch(user_cmd_line, lnk_cmd_switch_type_from_string(cmd->string))) { \
+      String8List value_strings = str8_list_copy(arena, &cmd->value_strings);                    \
+      lnk_cmd_line_push_option_list(arena, &cmd_line, cmd->string, value_strings);               \
+    }                                                                                            \
+  }                                                                                              \
+} while (0)
+
+#define PushOpt(...) do {                                                                    \
+  LNK_CmdLine parsed_cmd_line = lnk_cmd_line_from_stringf_windows_rules(arena, __VA_ARGS__); \
+  lnk_cmd_line_concat_in_place(&cmd_line, &parsed_cmd_line);                                 \
+} while (0)
+
   if (lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Dll)) {
-    lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_SubSystem, "%S", pe_string_from_subsystem(PE_WindowsSubsystem_WINDOWS_GUI));
+    DefaultOpt("/SUBSYSTEM:%S", pe_string_from_subsystem(PE_WindowsSubsystem_WINDOWS_GUI));
   }
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_HighEntropyVa,               "");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_ManifestUac,                 "\"level='asInvoker' uiAccess='false'\"");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_NxCompat,                    "");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_LargeAddressAware,           "");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_PdbAltPath,                  "%%_RAD_PDB_PATH%%");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_PdbPageSize,                 "%u", KB(4));
   if (!lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Brepro)) {
-    lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp, "%u", get_process_start_time_unix());
+    DefaultOpt("/RAD_TIME_STAMP:%u", get_process_start_time_unix());
   }
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_TypeHashAlg,             "BLAKE3");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_Age,                     "%u", 1);
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll, "");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_DoMerge,                 "");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_EnvLib,                  "");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_Exe,                     "");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_Guid,                    "imageblake3");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_LargePages,              "no");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_LinkVer,                 "14.0");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_OsVer,                   "6.0");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_PageSize,                "%u", KB(4));
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_PathStyle,               "system");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_Workers,                 "%u", get_system_info()->logical_processor_count);
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_DebugAltPath,            "%%_RAD_RDI_PATH%%");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_MemoryMapFiles,          "");
-  if (BUILD_DEBUG) {
-    lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
-    lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "io_write");
-  } else {
-    lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%u", LNK_Error_InvalidTypeIndex);
+  for EachIndex(i, ArrayCount(default_opts)) {
+    DefaultOpt("%s", default_opts[i]);
   }
 
-  // default section merges
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Merge, ".xdata=.rdata");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Merge, ".00cfg=.rdata");
-  // TODO: .tls must be always first contribution in .data section because compiler generates TLS relative movs
-  //lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Merge, ".tls=.data");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Merge, ".idata=.data");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Merge, ".didat=.data");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Merge, ".edata=.rdata");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Merge, ".RAD_LINK_PE_DEBUG_DIR=.rdata");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Merge, ".RAD_LINK_PE_DEBUG_DATA=.rdata");
-
-  // sections to remove from the image
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_RemoveSection, ".debug");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_RemoveSection, ".gehcont");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_RemoveSection, ".gfids");
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_RemoveSection, ".gxfg");
-
-  // set limits on unresolved symbol errors
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols, "");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_UnresolvedSymbolLimit, "1000");
-  lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit, "10");
-
-  // set default max worker count 
-  if (lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Rad_SharedThreadPool)) {
-    lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, "");
-  }
-
-  if ( ! lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Rad_MtPath)) {
-    lnk_cmd_line_push_option_if_not_presentf(arena, &cmd_line, LNK_CmdSwitch_Rad_MtPath, "%s", LNK_MANIFEST_MERGE_TOOL_NAME);
+  for EachIndex(i, ArrayCount(push_opts)) {
+    PushOpt("%s", push_opts[i]);
   }
 
   // when /FORCE is specified on the command line, do not stop on these errors
@@ -202,39 +233,37 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
   }
 #endif
 
-  // errors that are too verbose in release build
-  U64 debug_opt = BUILD_DEBUG ? -1 : 1;
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Warning_UnknownSwitch    * debug_opt);
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Warning_UnknownDirective * debug_opt);
-  lnk_cmd_line_push_optionf(arena, &cmd_line, LNK_CmdSwitch_Rad_Ignore, "%d", LNK_Error_InvalidTypeIndex   * debug_opt);
-
+#undef DefaultOpt
+#undef PushOpt
+  scratch_end(scratch);
   return cmd_line;
 }
 
 internal LNK_Config *
-lnk_config_from_argcv(Arena *arena, int argc, char **argv)
+lnk_config_from_argcv(CmdLine *cmdline)
 {
-  Temp scratch = scratch_begin(&arena, 1);
+  Temp scratch = scratch_begin(0,0);
 
   String8List raw_cmd_line = {0};
-  for (U64 i = 1; i < argc; i += 1) { str8_list_push(arena, &raw_cmd_line, str8_cstring(argv[i])); }
+  for (U64 i = 1; i < cmdline->argc; i += 1) { str8_list_push(scratch.arena, &raw_cmd_line, str8_cstring(cmdline->argv[i])); }
 
 #if PROFILE_TELEMETRY
   tmMessage(0, TMMF_ICON_NOTE, "Command Line: %.*s", str8_varg(str8_list_join(scratch.arena, &raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") })));
 #endif
 
   // make command line
-  LNK_CmdLine cmd_line = {0};
+  LNK_CmdLine cmd_line_msvc = {0};
   {
     String8List unwrapped_cmd_line = lnk_unwrap_rsp(scratch.arena, raw_cmd_line);
     LNK_CmdLine user_cmd_line      = lnk_cmd_line_parse_windows_rules(scratch.arena, unwrapped_cmd_line);
+    user_cmd_line.raw_cmd_line     = raw_cmd_line;
     LNK_CmdLine default_cmd_line   = lnk_make_default_cmd_line(scratch.arena, user_cmd_line);
-    lnk_cmd_line_concat_in_place(&cmd_line, &default_cmd_line);
-    lnk_cmd_line_concat_in_place(&cmd_line, &user_cmd_line);
+    lnk_cmd_line_concat_in_place(&cmd_line_msvc, &default_cmd_line);
+    lnk_cmd_line_concat_in_place(&cmd_line_msvc, &user_cmd_line);
   }
 
   // init config
-  LNK_Config *config = lnk_config_from_cmd_line(raw_cmd_line, cmd_line);
+  LNK_Config *config = lnk_config_init(cmd_line_msvc);
 
   scratch_end(scratch);
   return config;
@@ -1228,6 +1257,20 @@ lnk_array_from_lib_member_list(Arena *arena, LNK_LibMemberRefList list)
   return result;
 }
 
+internal LNK_Link *
+lnk_link_init(TP_Arena *arena, LNK_Config *config)
+{
+  LNK_Link *link = push_array(arena->v[0], LNK_Link, 1);
+  link->arena                      = arena_alloc(.name = "LINK");
+  link->last_symbol_input          = &link->objs.first;
+  link->last_include               = &config->include_symbol_list.first;
+  link->last_default_lib           = &config->input_default_lib_list.first;
+  link->last_obj_lib               = &config->input_obj_lib_list.first;
+  link->last_cmd_lib               = &config->input_list[LNK_Input_Lib].first;
+  link->try_to_resolve_entry_point = 1;
+  return link;
+}
+
 internal LNK_ObjNode *
 lnk_load_objs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab, LNK_Link *link, U64 *objs_count_out)
 {
@@ -1243,7 +1286,7 @@ lnk_load_objs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *
     lnk_log(LNK_Log_InputObj, "[ Obj Input Size %M ]", input_size);
   }
 
-  LNK_ObjNode *new_objs = lnk_obj_from_input_many(tp, arena, config->machine, new_input_objs.count, new_input_objs.v);
+  LNK_ObjNode *new_objs = lnk_obj_from_input_many(tp, arena, config, new_input_objs.count, new_input_objs.v);
 
   // if machine type was unspecified on the command line, derive it from obj file
   if (config->machine == COFF_MachineType_Unknown) {
@@ -1727,7 +1770,7 @@ lnk_link_inputs(TP_Context      *tp,
       B32 link_whole_archive = config->whole_archive_all;
       if ( ! link_whole_archive) {
         String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(lib->path));
-        link_whole_archive = hash_table_search_path(config->whole_archive_ht, lib_name) != 0;
+        link_whole_archive = hash_map_search_path_u64(&config->whole_archive_ht, lib_name) != 0;
       }
 
       ProfBeginV("Search %S", str8_skip_last_slash(lib->path));
@@ -1911,23 +1954,14 @@ lnk_link_inputs(TP_Context      *tp,
   ProfEnd();
 }
 
+
 internal LNK_LinkResult
 lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *inputer, LNK_SymbolTable *symtab)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
 
-  //
-  // init link context
-  //
-  LNK_Link *link = push_array(arena->v[0], LNK_Link, 1);
-  link->arena                      = arena_alloc(.name = "LINK");
-  link->last_symbol_input          = &link->objs.first;
-  link->last_include               = &config->include_symbol_list.first;
-  link->last_default_lib           = &config->input_default_lib_list.first;
-  link->last_obj_lib               = &config->input_obj_lib_list.first;
-  link->last_cmd_lib               = &config->input_list[LNK_Input_Lib].first;
-  link->try_to_resolve_entry_point = 1;
+  LNK_Link *link = lnk_link_init(arena, config); // TODO: factor out
 
   // input :null_obj
   String8 null_obj = lnk_make_null_obj(inputer->arena);
@@ -5292,20 +5326,33 @@ THREAD_POOL_TASK_FUNC(lnk_p2r_worker)
   scratch_end(scratch);
 }
 
+internal LNK_Obj **
+lnk_debug_filter_objs(Arena *arena, LNK_Obj **objs, U64 objs_count, U64 *count_out)
+{
+  U64       debug_info_objs_count = 0;
+  LNK_Obj **debug_info_objs       = push_array(arena, LNK_Obj *, objs_count);
+  for EachIndex(obj_idx, objs_count) {
+    LNK_Obj *obj = objs[obj_idx];
+
+    // filter out internal objs from debug info output
+    if (obj->exclude_from_debug_info) {
+      continue;
+    }
+
+    debug_info_objs[debug_info_objs_count++] = obj;
+  }
+  if (count_out) {
+    *count_out = debug_info_objs_count;
+  }
+  return debug_info_objs;
+}
+
 internal void
-lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
+lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 {
   ProfBeginFunction();
 
   Temp scratch = scratch_begin(arena->v, arena->count);
-
-  if (lnk_get_log_status(LNK_Log_Debug)) {
-    String8 full_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
-    lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
-    lnk_fprintf(stderr, "Command Line: %.*s\n", str8_varg(full_cmd_line));
-    lnk_fprintf(stderr, "Work Dir    : %.*s\n", str8_varg(config->work_dir));
-    lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
-  }
 
   //
   // Input Context
@@ -5368,12 +5415,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     lnk_timer_begin(LNK_Timer_Debug);
 
     U64       debug_info_objs_count = 0;
-    LNK_Obj **debug_info_objs       = push_array(scratch.arena, LNK_Obj *, objs_count);
-    for EachIndex(obj_idx, objs_count) {
-      LNK_Obj *obj = objs[obj_idx];
-      if (obj->exclude_from_debug_info) { continue; }
-      debug_info_objs[debug_info_objs_count++] = obj;
-    }
+    LNK_Obj **debug_info_objs       = lnk_debug_filter_objs(scratch.arena, objs, objs_count, &debug_info_objs_count);
 
     //
     // CodeView
@@ -5401,7 +5443,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
                                              config->pdb_hash_type_name_length,
                                              config->pdb_hash_type_name_map);
         }
-        pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types);
+        pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types, LNK_PDB_BuilderFlag_All);
         if (config->debug_mode == LNK_DebugMode_Full) {
           lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb_data);
         }
@@ -5488,7 +5530,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       stripped_cv.debug_s_arr         = debug_s_arr;
       stripped_cv.symbol_input_ranges = push_array(scratch.arena, Rng1U64, tp->worker_count);
 
-      String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0});
+      String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, LNK_PDB_BuilderFlag_All);
       lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_data);
     }
 
@@ -5511,14 +5553,264 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 }
 
 internal void
+lnk_run_type_server(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(arena->v, arena->count);
+
+  // generate GUID
+  Guid type_server_guid = {0};
+  {
+    blake3_hasher hasher = {0};
+    blake3_hasher_init(&hasher);
+    blake3_hasher_update(&hasher, config->pdb_name.str, config->pdb_name.size);
+    blake3_hasher_update(&hasher, (U8*)&config->time_stamp, sizeof(config->time_stamp));
+    blake3_hasher_finalize(&hasher, type_server_guid.v, sizeof(type_server_guid.v));
+  }
+
+  // push default type-server switches
+  lnk_config_pushf(config, "/PDB:\"%S.type_server.pdb\"", str8_chop_last_dot(config->pdb_name));
+  lnk_config_pushf(config, "/DEBUG:FULL");
+  lnk_config_pushf(config, "/NOD");
+  lnk_config_pushf(config, "/RAD_WRITE_TEMP_FILES");
+  lnk_config_pushf(config, "/RAD_MEMORY_MAP_FILES:READ_WRITE");
+  lnk_config_pushf(config, "/RAD_GUID:%S", string_from_guid(scratch.arena, type_server_guid));
+
+  // load objs
+  U64       objs_count = 0;
+  LNK_Obj **objs       = 0;
+  {
+    LNK_Inputer *inputer = lnk_inputer_init();
+    LNK_Link    *link    = lnk_link_init(arena, config);
+
+    // input :null_obj
+    String8 null_obj = lnk_make_null_obj(inputer->arena);
+    lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Null *"), null_obj);
+
+    // input objs on command line
+    for (String8Node *obj_path = config->input_list[LNK_Input_Obj].first; obj_path != 0; obj_path = obj_path->next) {
+      lnk_inputer_push_obj_thin(inputer, 0, obj_path->string);
+    }
+
+    LNK_ObjNode *obj_nodes  = lnk_load_objs(tp, arena, config, inputer, 0, link, &objs_count);
+    objs = push_array(scratch.arena, LNK_Obj *, objs_count);
+    for EachIndex(obj_idx, objs_count) { objs[obj_idx] = &obj_nodes[obj_idx].data; }
+  }
+
+  // obj filters
+  {
+    // internal filter
+    objs = lnk_debug_filter_objs(scratch.arena, objs, objs_count, &objs_count);
+
+    // command line filter
+    {
+      U64       result_count = 0;
+      LNK_Obj **result       = push_array(scratch.arena, LNK_Obj *, objs_count);
+      for EachIndex(obj_idx, objs_count) {
+        LNK_Obj *obj = objs[obj_idx];
+
+        B32 skip = 0;
+        if (config->type_server_match_obj.node_count) {
+          skip = 1;
+          for EachNode(filter_n, String8Node, config->type_server_match_obj.first) {
+            if (str8_match_wildcard(obj->path, filter_n->string, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive)) {
+              skip = 0;
+              break;
+            }
+          }
+        }
+        if (skip) { continue; }
+
+        result[result_count++] = obj;
+      }
+      objs_count = result_count;
+      objs       = result;
+    }
+  }
+
+  // compute size of objs compiled with /Z7
+  U64 debug_t_total_size = 0;
+  {
+    for EachIndex(obj_idx, objs_count) {
+      LNK_Obj *obj = objs[obj_idx];
+
+      // register debug info sections
+      U64 type_sect_indices_count = 0;
+      U32 type_sect_indices[4]    = {0};
+      if      (obj->debug_t_sect_idx < obj->header.section_count_no_null) { type_sect_indices[type_sect_indices_count++] = obj->debug_t_sect_idx; }
+      else if (obj->debug_p_sect_idx < obj->header.section_count_no_null) { type_sect_indices[type_sect_indices_count++] = obj->debug_p_sect_idx; }
+
+      for EachIndex(i, type_sect_indices_count) {
+        U64                 section_idx    = type_sect_indices[i];
+        COFF_SectionHeader *section_table  = lnk_coff_section_table_from_obj(obj);
+        COFF_SectionHeader *debug_t_header = &section_table[section_idx];
+        String8             debug_t_data   = str8_substr(obj->data, r1u64(debug_t_header->foff, debug_t_header->foff + debug_t_header->fsize));
+        CV_Leaf             first_leaf     = {0};
+        if (cv_read_leaf(debug_t_data, sizeof(CV_Signature), CV_LeafAlign, &first_leaf) >= sizeof(CV_LeafHeader)) {
+          if ( ! cv_is_leaf_type_server(first_leaf.kind)) {
+            debug_t_total_size += debug_t_data.size;
+          }
+        }
+      }
+    }
+  }
+
+  if (debug_t_total_size) {
+    // merge & write types
+    LNK_CodeViewInput cv       = lnk_make_code_view_input(tp, arena, config, objs_count, objs);
+    LNK_MergedTypes   cv_types = lnk_merge_types(tp, arena, &cv);
+    String8List       pdb      = lnk_build_pdb(tp, arena, str8_zero(), config, 0, &cv, cv_types, LNK_PDB_BuilderFlag_Tpi|LNK_PDB_BuilderFlag_Ipi);
+    lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb);
+
+    typedef struct Edit {
+      struct Edit *next;
+      String8  data;
+      U64      offset;
+      LNK_Obj *obj;
+    } Edit;
+    Edit *edits = 0;
+
+    for EachIndex(obj_idx, objs_count) {
+      LNK_Obj *obj = objs[obj_idx];
+
+      // skip objs in libraries
+      if (obj->link_member) { continue; }
+
+      if (obj->debug_t_sect_idx < obj->header.section_count_no_null) {
+        COFF_SectionHeader *section_table  = lnk_coff_section_table_from_obj(obj);
+        COFF_SectionHeader *section_header = &section_table[obj->debug_t_sect_idx];
+
+        // skip type servers
+        if (cv_debug_t_is_type_server_ref(&cv.debug_t_arr[obj_idx])) { continue; }
+
+        CV_LeafTypeServer2 ts_info = { .sig70 = config->guid, .age = 1 };
+        String8List ts_srl = {0};
+        str8_list_push(scratch.arena, &ts_srl, str8_struct(&ts_info));
+        str8_list_push(scratch.arena, &ts_srl, push_cstr(scratch.arena, config->pdb_name));
+
+        // type server srl -> CodeView leaf
+        String8 ts_string = str8_list_join(scratch.arena, &ts_srl, 0);
+        String8 ts_leaf   = cv_make_leaf(scratch.arena, CV_LeafKind_TYPESERVER2, ts_string, CV_LeafAlign);
+
+        // make type server .debug$T
+        String8List debug_t_list = {0};
+        str8_list_push(scratch.arena, &debug_t_list, str8_struct((&(CV_Signature){ CV_Signature_C13 })));
+        str8_list_push(scratch.arena, &debug_t_list, ts_leaf);
+        String8 debug_t = str8_list_join(scratch.arena, &debug_t_list, 0);
+
+        // realloc seciton if there is not enough room in the section header
+        if (debug_t.size > section_header->fsize) {
+          section_header->foff  = obj->data.size;
+          section_header->fsize = debug_t.size;
+
+          // append to the obj
+          struct Edit *e = push_array(scratch.arena, struct Edit, 1);
+          e->data   = debug_t;
+          e->offset = obj->data.size;
+          e->obj    = obj;
+          SLLStackPush(edits, e);
+        } else {
+          section_header->fsize = debug_t.size;
+
+          Rng1U64 section_frange = rng_1u64(section_header->foff, section_header->foff + section_header->fsize);
+          String8 section_data   = str8_substr(obj->data, section_frange);
+          MemoryCopyStr8(section_data.str, debug_t);
+        }
+      }
+
+      // discard precompiled headers types, they are already in the type server
+      if (obj->debug_p_sect_idx < obj->header.section_count_no_null) {
+        COFF_SectionHeader *section_table  = lnk_coff_section_table_from_obj(obj);
+        COFF_SectionHeader *section_header = &section_table[obj->debug_p_sect_idx];
+        section_header->flags |= COFF_SectionFlag_LnkRemove;
+      }
+
+      // discard type hashes sectiosn, there is no /Z7 sections in the file
+      if (obj->debug_h_sect_idx < obj->header.section_count_no_null) {
+        COFF_SectionHeader *section_table  = lnk_coff_section_table_from_obj(obj);
+        COFF_SectionHeader *section_header = &section_table[obj->debug_h_sect_idx];
+        section_header->flags |= COFF_SectionFlag_LnkRemove;
+      }
+
+      // edit obj
+      if (edits) {
+        #if OS_WINDOWS
+        AssertAlways(UnmapViewOfFile(obj->data.str));
+        #else
+        NotImplemented;
+        #endif
+        File handle = file_open(AccessFlag_Append|AccessFlag_Read|AccessFlag_Write, obj->path);
+        for EachNode(e, struct Edit, edits) {
+          AssertAlways(file_write(handle, r1u64(e->offset, e->offset + e->data.size), e->data.str) == e->data.size);
+        }
+        file_close(handle);
+      }
+    }
+  }
+
+#if 0
+  // relaunch the binary with the same command line, but with boot mode set to LINKER
+  if (config->type_server == LNK_SwitchState_Yes) {
+    String8 curr_cmdl   = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){.sep=str8_lit(" ")});
+    String8 linker_cmdl = str8f(scratch.arena, "%S %S /RAD_TYPE_SERVER:NO /RAD_BOOT_MODE:LINKER", get_process_info()->binary_file_path, curr_cmdl);
+
+    ProcessLaunchParams launch_opts = {
+      .path        = get_process_info()->binary_path,
+      .inherit_env = 1,
+      .consoleless = 1,
+      .cmd_line    = lnk_arg_list_parse_windows_rules(scratch.arena, linker_cmdl),
+    };
+    Process process_handle = process_launch(&launch_opts);
+
+    if (process_match(process_handle, process_zero())) {
+      String8 e = str8f(scratch.arena, "failed to launch radlink(%S) after type server step\n");
+      lnk_invalid_path((char*)e.str);
+    }
+  }
+#endif
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal void
 entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0,0);
   lnk_log_begin();
-  LNK_Config *config = lnk_config_from_argcv(scratch.arena, cmdline->argc, cmdline->argv);
+
+  LNK_Config *config   = lnk_config_from_argcv(cmdline);
   TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
   TP_Arena   *tp_arena = tp_arena_alloc(tp);
-  lnk_run(tp, tp_arena, config);
+
+  // detect type server from the environment
+  {
+    HashMap      env             = lnk_env_vars_from_process_info(scratch.arena, get_process_info(), LNK_EnvVarRule_Current);
+    LNK_EnvVar  *type_server_var = lnk_env_var_from_mapf(&env, "RAD_TYPE_SERVER");
+    if (type_server_var) {
+      U64 do_type_server  = 0;
+      if (lnk_env_var_to_u64(&env, type_server_var, &do_type_server)) {
+        if (do_type_server) {
+          lnk_config_pushf(config, "/RAD_TYPE_SERVER");
+          lnk_log(LNK_Log_Debug, "type server mode was enabled from the environment\n");
+        }
+      }
+    }
+  }
+
+  if (lnk_get_log_status(LNK_Log_Debug)) {
+    String8 full_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
+    lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
+    lnk_fprintf(stderr, "Command Line: %.*s\n", str8_varg(full_cmd_line));
+    lnk_fprintf(stderr, "Work Dir    : %.*s\n", str8_varg(config->work_dir));
+    lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
+  }
+
+  switch (config->boot_mode) {
+  case LNK_BootMode_Linker:     lnk_run_linker     (tp, tp_arena, config); break;
+  case LNK_BootMode_TypeServer: lnk_run_type_server(tp, tp_arena, config); break;
+  }
+
   lnk_log_end();
   scratch_end(scratch);
 }

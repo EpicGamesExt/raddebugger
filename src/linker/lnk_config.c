@@ -63,11 +63,15 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
 
   { LNK_CmdSwitch_Rad_Age,                          0, "RAD_AGE",                              ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1."    },
   { LNK_CmdSwitch_Rad_AltPchDir,                    0, "RAD_ALT_PCH_DIR",                      ":PATH",     "Alternative directory to search for PCH object files."                            },
+  //{ LNK_CmdSwitch_Rad_BuildExp,                     0, "RAD_BUILD_EXP",                        "[:NO]",     "Build export data."                                                             },
   { LNK_CmdSwitch_Rad_BuildInfo,                    0, "RAD_BUILD_INFO",                       "",          "Print build info and exit."                                                       },
+  { LNK_CmdSwitch_Rad_BuildImpLib,                  0, "RAD_BUILD_IMPLIB",                     "[:NO]",     "Build import library."                                                            },
   { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,      0, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",      "[:NO]",     "Check for unused delay load dlls."                                                },
+  { LNK_CmdSwitch_Rad_DataDirCount,                 0, "RAD_DATA_DIR_COUNT",                   ":#",        "Internal default for PE optional header data directory count."                    },
   { LNK_CmdSwitch_Rad_Map,                          0, "RAD_MAP",                              ":FILENAME", "Emit file with the output image's layout description."                            },
   { LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols, 0, "RAD_MAP_LINES_FOR_UNRESOLVED_SYMBOLS", "[:NO]",     "Use debug info to print source file location for unresolved symbol"               },
-  { LNK_CmdSwitch_Rad_MemoryMapFiles,               0, "RAD_MEMORY_MAP_FILES",                 "[:NO]",     "When enabled, files are memory-mapped instead of being read entirely on request." },
+  { LNK_CmdSwitch_Rad_MemoryMapFiles,               0, "RAD_MEMORY_MAP_FILES",                 "[:{NO|READ_ONLY|READ_WRITE}]", "When enabled, files are memory-mapped instead of being read entirely on request." },
+  { LNK_CmdSwitch_Rad_BootMode,                     0, "RAD_BOOT_MODE",                        "[:LINKER|TYPE_SERVER]", "Overrides default boot program."                                      },
   { LNK_CmdSwitch_Rad_Debug,                        0, "RAD_DEBUG",                            "[:NO]",     "Emit RAD debug info file."                                                        },
   { LNK_CmdSwitch_Rad_DebugAltPath,                 0, "RAD_DEBUGALTPATH",                     ":PATH",     "Alternative output path fof the RDI."                                             },
   { LNK_CmdSwitch_Rad_DebugName,                    0, "RAD_DEBUG_NAME",                       ":FILENAME", "Set file name for RAD debug info file."                                           },
@@ -98,6 +102,10 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,     0, "RAD_UNRESOLVED_SYMBOL_REF_LIMIT",      ":#",        "Limit number of unresolved symbol references linker reports."                     },
   { LNK_CmdSwitch_Rad_Version,                      0, "RAD_VERSION",                          "",          "Print version and exit."                                                          },
   { LNK_CmdSwitch_Rad_Workers,                      0, "RAD_WORKERS",                          ":#",        "Set number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
+  { LNK_CmdSwitch_Rad_WorkDir,                      0, "RAD_WORK_DIR",                         ":PATH",     "Working directory used for stable debug paths."                                   },
+
+  { LNK_CmdSwitch_RadTypeServer,                   0, "RAD_TYPE_SERVER",           "",          "Boot in type server mode." },
+  { LNK_CmdSwitch_RadTypeServer_MatchObj,          0, "RAD_TYPE_SERVER_MATCH_OBJ", ":OBJ_PATH", "Obj paths that match OBJ_PATH have their type server replaced." },
 
   { LNK_CmdSwitch_Help, 0, "HELP", "", "" },
   { LNK_CmdSwitch_Help, 0, "?",    "", "" },
@@ -210,32 +218,18 @@ lnk_type_name_hash_mode_from_string(String8 name)
   return LNK_TypeNameHashMode_Null;
 }
 
-internal LNK_CmdOption *
-lnk_cmd_line_push_option_if_not_presentf(Arena *arena, LNK_CmdLine *cmd_line, LNK_CmdSwitchType cmd_switch_type, char *param_fmt, ...)
+internal String8List
+lnk_cmd_line_values_from_switch(Arena *arena, LNK_CmdLine cmd_line, LNK_CmdSwitchType cmd_switch)
 {
-  LNK_CmdOption *opt = 0;
-  String8 cmd_switch_name = lnk_string_from_cmd_switch_type(cmd_switch_type);
-  if (!lnk_cmd_line_has_option_string(*cmd_line, cmd_switch_name)) {
-    va_list param_args;
-    va_start(param_args, param_fmt);
-    String8 param_str = push_str8fv(arena, param_fmt, param_args);
-    va_end(param_args);
-
-    opt = lnk_cmd_line_push_option_string(arena, cmd_line, cmd_switch_name, param_str);
-  }
-  return opt;
-}
-
-internal LNK_CmdOption *
-lnk_cmd_line_push_optionf(Arena *arena, LNK_CmdLine *cmd_line, LNK_CmdSwitchType cmd_switch, char *param_fmt, ...)
-{
-  va_list param_args;
-  va_start(param_args, param_fmt);
-  String8 param_str = push_str8fv(arena, param_fmt, param_args);
-  va_end(param_args);
+  String8List values = {0};
   String8 cmd_switch_name = lnk_string_from_cmd_switch_type(cmd_switch);
-  LNK_CmdOption *opt = lnk_cmd_line_push_option_string(arena, cmd_line, cmd_switch_name, param_str);
-  return opt;
+  for EachNode(cmd, LNK_CmdOption, cmd_line.first_option) {
+    if (str8_match(cmd->string, cmd_switch_name, StringMatchFlag_CaseInsensitive)) {
+      String8List value_strings = str8_list_copy(arena, &cmd->value_strings);
+      str8_list_concat_in_place(&values, &value_strings);
+    }
+  }
+  return values;
 }
 
 internal B32
@@ -363,7 +357,7 @@ lnk_cmd_switch_parse_tuple(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8Li
         tuple_out->v[1] = b;
         return 1;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable ot parse second parameter \"%S\"", value_strings.last->string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse second parameter \"%S\"", value_strings.last->string);
       }
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse first parameter \"%S\"", value_strings.first->string);
@@ -930,7 +924,7 @@ lnk_is_section_removed(LNK_Config *config, String8 section_name)
 internal B32
 lnk_is_dll_delay_load(LNK_Config *config, String8 dll_name)
 {
-  return hash_table_search_path_u64(config->delay_load_ht, dll_name, 0);
+  return hash_map_search_path_u64(&config->delay_load_ht, dll_name) != 0;
 }
 
 internal String8
@@ -954,21 +948,21 @@ internal void
 lnk_push_disallow_lib(LNK_Config *config, String8 path)
 {
   String8 lib_name = lnk_get_lib_name(path);
-  hash_table_push_path_u64(config->arena, config->disallow_lib_ht, lib_name, 0);
+  hash_map_push_path_u64(config->arena, &config->disallow_lib_ht, lib_name, 1);
 }
 
 internal B32
 lnk_is_lib_disallowed(LNK_Config *config, String8 path)
 {
   String8 lib_name = lnk_get_lib_name(path);
-  return hash_table_search_path(config->disallow_lib_ht, lib_name) != 0;
+  return hash_map_search_path_u64(&config->disallow_lib_ht, lib_name) != 0;
 }
 
 internal void
 lnk_include_symbol(LNK_Config *config, String8 name, LNK_Obj *obj)
 {
   // is this a duplicate symbol?
-  if (hash_table_search_string_raw(config->include_symbol_ht, name)) {
+  if (hash_map_search_string_raw(&config->include_symbol_ht, name)) {
     return;
   }
 
@@ -981,7 +975,7 @@ lnk_include_symbol(LNK_Config *config, String8 name, LNK_Obj *obj)
   SLLQueuePush(config->include_symbol_list.first, config->include_symbol_list.last, node);
   config->include_symbol_list.count += 1;
 
-  hash_table_push_string_raw(config->arena, config->include_symbol_ht, name, node);
+  hash_map_push_string_raw(config->arena, &config->include_symbol_ht, name, node);
 }
 
 internal void
@@ -1118,6 +1112,23 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
 }
 
 internal void
+lnk_apply_write_temp_files(Arena *arena, LNK_Config *config)
+{
+  if (config->rad_chunk_map_name.size) {
+    config->temp_rad_chunk_map_name = push_str8f(arena, "%S.tmp%x", config->rad_chunk_map_name, config->time_stamp);
+  }
+  if (config->out_path.size) {
+    config->temp_out_path = push_str8f(arena, "%S.tmp%x", config->out_path,           config->time_stamp);
+  }
+  if (config->pdb_name.size) {
+  config->temp_pdb_name = push_str8f(arena, "%S.tmp%x", config->pdb_name,           config->time_stamp);
+  }
+  if (config->rad_debug_name.size) {
+    config->temp_rad_debug_name = push_str8f(arena, "%S.tmp%x", config->rad_debug_name,     config->time_stamp);
+  }
+}
+
+internal void
 lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List value_strings, LNK_Obj *obj)
 {
   Temp scratch = scratch_begin(&config->arena, 1);
@@ -1153,19 +1164,19 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     if (value_strings.node_count == 1) {
       LNK_AltName alt_name;
       if (lnk_parse_alt_name_directive(value_strings.first->string, obj, &alt_name)) {
-        String8 to_extant = {0};
-        if (hash_table_search_string_string(config->alt_name_ht, alt_name.from, &to_extant)) {
-          if (str8_match(to_extant, alt_name.to, 0)) {
+        String8 *to_extant = hash_map_search_string_string(&config->alt_name_ht, alt_name.from);
+        if (to_extant) {
+          if (str8_match(*to_extant, alt_name.to, 0)) {
             // ignore, duplicate
           } else {
-            lnk_error_obj(LNK_Error_AlternateNameConflict, obj, "conflicting alternative name: existing '%S=%S' vs. new '%S=%S'", alt_name.from, to_extant, alt_name.from, alt_name.to);
+            lnk_error_obj(LNK_Error_AlternateNameConflict, obj, "conflicting alternative name: existing '%S=%S' vs. new '%S=%S'", alt_name.from, *to_extant, alt_name.from, alt_name.to);
           }
         } else {
           alt_name.from = push_str8_copy(config->arena, alt_name.from);
           alt_name.to   = push_str8_copy(config->arena, alt_name.to);
 
           lnk_alt_name_list_push(config->arena, &config->alt_name_list, alt_name);
-          hash_table_push_string_string(config->arena, config->alt_name_ht, alt_name.from, alt_name.to);
+          hash_map_push_string_string(config->arena, &config->alt_name_ht, alt_name.from, alt_name.to);
         }
       }
     } else {
@@ -1252,9 +1263,9 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_DelayLoad: {
     for (String8Node *name_n = value_strings.first; name_n != 0; name_n = name_n->next) {
-      if (hash_table_search_path_u64(config->delay_load_ht, name_n->string, 0)) { continue; }
+      if (hash_map_search_path_u64(&config->delay_load_ht, name_n->string)) { continue; }
       String8 name = push_str8_copy(config->arena, name_n->string);
-      hash_table_push_path_u64(config->arena, config->delay_load_ht, name, 0);
+      hash_map_push_path_u64(config->arena, &config->delay_load_ht, name, 1);
       str8_list_push(config->arena, &config->delay_load_dll_list, name);
     }
   } break;
@@ -1283,7 +1294,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     PE_ExportParse export_parse = {0};
     if (lnk_parse_export_directive_ex(config->arena, value_strings, obj, &export_parse)) {
       String8             export_name = pe_name_from_export_parse(&export_parse);
-      PE_ExportParseNode *exp_n       = hash_table_search_string_raw(config->export_ht, export_name);
+      PE_ExportParseNode *exp_n       = hash_map_search_string_raw(&config->export_ht, export_name);
 
       if (exp_n == 0) {
         // make sure export is defined
@@ -1294,7 +1305,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         // push new export
         exp_n = pe_export_parse_list_push(config->arena, &config->export_symbol_list, export_parse);
 
-        hash_table_push_string_raw(config->arena, config->export_ht, export_name, exp_n);
+        hash_map_push_string_raw(config->arena, &config->export_ht, export_name, exp_n);
       } else {
         B32 is_ambiguous = 1;
         PE_ExportParse *extant_export = &exp_n->data;
@@ -1332,7 +1343,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       break;
     }
 
-    LNK_AltName *current = hash_table_search_string_raw(config->fail_if_mismatch_ht, dir.from);
+    LNK_AltName *current = hash_map_search_string_raw(&config->fail_if_mismatch_ht, dir.from);
     if (current) {
       if ( ! str8_match(current->to, dir.to, 0)) {
         lnk_error_cmd_switch(LNK_Error_FailIfMismatch, obj, cmd_switch,
@@ -1347,7 +1358,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       n->from = push_str8_copy(config->arena, dir.from);
       n->to   = push_str8_copy(config->arena, dir.to);
       n->obj  = obj;
-      hash_table_push_string_raw(config->arena, config->fail_if_mismatch_ht, n->from, n);
+      hash_map_push_string_raw(config->arena, &config->fail_if_mismatch_ht, n->from, n);
     }
   } break;
 
@@ -1616,10 +1627,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     } else {
       for (String8Node *lib_n = value_strings.first; lib_n != 0; lib_n = lib_n->next) {
         String8 lib_name = lnk_get_lib_name(lib_n->string);
-        if (hash_table_search_path_raw(config->disallow_lib_ht, lib_name)) {
+        if (hash_map_search_path_u64(&config->disallow_lib_ht, lib_name)) {
           continue;
         }
-        hash_table_push_path_raw(config->arena, config->disallow_lib_ht, lib_name, 0);
+        hash_map_push_path_u64(config->arena, &config->disallow_lib_ht, lib_name, 1);
       }
     }
   } break;
@@ -1782,7 +1793,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       String8 lib_name;
       if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &lib_name)) {
         lib_name = str8_chop_last_dot(str8_skip_last_slash(lib_name));
-        hash_table_push_path_string(config->arena, config->whole_archive_ht, lib_name, str8_zero());
+        hash_map_push_path_u64(config->arena, &config->whole_archive_ht, lib_name, 1);
       }
     }
   } break;
@@ -1800,13 +1811,38 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     str8_list_concat_in_place(&config->alt_pch_dirs, &dirs);
   } break;
 
+  //case LNK_CmdSwitch_Rad_BuildExp: {
+  //  LNK_SwitchState state;
+  //  if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
+  //    config->build_exp = (state == LNK_SwitchState_Yes);
+  //  }
+  //} break;
+
   case LNK_CmdSwitch_Rad_BuildInfo: {
     lnk_print_build_info();
     abort_self(0);
   } break;
 
+  case LNK_CmdSwitch_Rad_BuildImpLib: {
+    LNK_SwitchState state;
+    if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
+      config->build_imp_lib = (state == LNK_SwitchState_Yes);
+    }
+  } break;
+
   case LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll: {
     lnk_cmd_switch_set_flag_64(obj, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_CheckUnusedDelayLoadDll);
+  } break;
+
+  case LNK_CmdSwitch_Rad_DataDirCount: {
+    U64 data_dir_count = 0;
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &data_dir_count, LNK_ParseU64Flag_CheckUnder32bit)) {
+      if (1 <= data_dir_count && data_dir_count <= PE_DataDirectoryIndex_COUNT) {
+        config->data_dir_count = data_dir_count;
+      } else {
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid data directory count %llu, expected 1 through %u", data_dir_count, PE_DataDirectoryIndex_COUNT);
+      }
+    }
   } break;
 
   case LNK_CmdSwitch_Rad_Map: {
@@ -1819,7 +1855,39 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   } break;
 
   case LNK_CmdSwitch_Rad_MemoryMapFiles: {
-    lnk_cmd_switch_set_flag_32(obj, cmd_switch, value_strings, &config->io_flags, LNK_IO_Flags_MemoryMapFiles);
+    if (value_strings.node_count == 0) {
+      config->io_flags &= ~LNK_IO_Flags_MemoryMapFilesReadWrite;
+      config->io_flags |=  LNK_IO_Flags_MemoryMapFilesReadOnly;
+    } else if (value_strings.node_count == 1) {
+      String8 value = value_strings.first->string;
+      if (str8_matchi(value, str8_lit("no"))) {
+        config->io_flags &= ~(LNK_IO_Flags_MemoryMapFilesReadOnly|LNK_IO_Flags_MemoryMapFilesReadWrite);
+      } else if (str8_matchi(value, str8_lit("yes")) || str8_matchi(value, str8_lit("read_only"))) {
+        config->io_flags &= ~LNK_IO_Flags_MemoryMapFilesReadWrite;
+        config->io_flags |=  LNK_IO_Flags_MemoryMapFilesReadOnly;
+      } else if (str8_matchi(value, str8_lit("read_write"))) {
+        config->io_flags &= ~LNK_IO_Flags_MemoryMapFilesReadOnly;
+        config->io_flags |=  LNK_IO_Flags_MemoryMapFilesReadWrite;
+      } else {
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid parameter: \"%S\", expected NO, READ_ONLY, or READ_WRITE", value);
+      }
+    } else {
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
+    }
+  } break;
+
+  case LNK_CmdSwitch_Rad_BootMode: {
+    if (value_strings.node_count == 1) {
+      if (str8_matchi(value_strings.first->string, str8_lit("linker"))) {
+        config->boot_mode = LNK_BootMode_Linker;
+      } else if (str8_matchi(value_strings.first->string, str8_lit("type_server"))) {
+        config->boot_mode = LNK_BootMode_TypeServer;
+      } else {
+        lnk_error_cmd_switch(LNK_Error_Boot, obj, cmd_switch, "unknown value: \"%S\".", value_strings.first->string);
+      }
+    } else {
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Boot, obj, cmd_switch);
+    }
   } break;
 
   case LNK_CmdSwitch_Rad_Debug: {
@@ -2049,6 +2117,9 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Rad_WriteTempFiles: {
     lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->write_temp_files);
+    if (config->write_temp_files == LNK_SwitchState_Yes) {
+      lnk_apply_write_temp_files(config->arena, config);
+    }
   } break;
 
   case LNK_CmdSwitch_Rad_TimeStamp: {
@@ -2086,58 +2157,73 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     }
   } break;
 
+  case LNK_CmdSwitch_Rad_WorkDir: {
+    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value_strings, &config->work_dir);
+  } break;
+
   case LNK_CmdSwitch_Help: {
     lnk_print_help();
     abort_self(0);
+  } break;
+
+  case LNK_CmdSwitch_RadTypeServer: {
+    if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->type_server)) {
+      if (config->type_server == LNK_SwitchState_Yes) {
+        config->boot_mode = LNK_BootMode_TypeServer;
+      }
+    }
+  } break;
+
+  case LNK_CmdSwitch_RadTypeServer_MatchObj: {
+    String8List value_strings_copy = str8_list_copy(config->arena, &value_strings);
+    str8_list_concat_in_place(&config->type_server_match_obj, &value_strings_copy);
   } break;
   }
 
   scratch_end(scratch);
 }
 
+internal void
+lnk_config_pushf(LNK_Config *config, char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  LNK_CmdLine cmd_line = lnk_cmd_line_from_stringfv_windows_rules(config->arena, fmt, args);
+  va_end(args);
+
+  for EachNode(cmd, LNK_CmdOption, cmd_line.first_option) {
+    lnk_apply_cmd_option_to_config(config, cmd->string, cmd->value_strings, &(LNK_Obj){0});
+  }
+}
+
 internal LNK_Config *
-lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
+lnk_config_init(LNK_CmdLine cmd_line)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
+  Temp scratch = scratch_begin(0,0);
   
   Arena      *arena  = arena_alloc();
   LNK_Config *config = push_array(arena, LNK_Config, 1);
-  config->arena                     = arena;
-  config->raw_cmd_line              = str8_list_copy(arena, &raw_cmd_line);
-  config->work_dir                  = get_current_path(arena);
-  config->build_imp_lib             = 1;
-  config->build_exp                 = 1;
-  config->heap_reserve              = MB(1);
-  config->heap_commit               = KB(4);
-  config->stack_reserve             = MB(1);
-  config->stack_commit              = KB(4);
-  config->pdb_hash_type_names       = LNK_TypeNameHashMode_None;
-  config->pdb_hash_type_name_length = 8;
-  config->data_dir_count            = PE_DataDirectoryIndex_COUNT;
-  config->export_ht                 = hash_table_init(arena, max_U16/2);
-  config->alt_name_ht               = hash_table_init(arena, 0x100);
-  config->include_symbol_ht         = hash_table_init(arena, 0x100);
-  config->delay_load_ht             = hash_table_init(arena, 0x100);
-  config->disallow_lib_ht           = hash_table_init(arena, 0x100);
-  config->fail_if_mismatch_ht       = hash_table_init(arena, 0x100);
-  config->whole_archive_ht          = hash_table_init(arena, 0x100);
+  config->arena        = arena;
+  config->raw_cmd_line = str8_list_copy(arena, &cmd_line.raw_cmd_line);
+  config->work_dir     = get_current_path(arena);
 
-  // process command line switches
-  for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
+  // apply command line switches
+  for EachNode(cmd, LNK_CmdOption, cmd_line.first_option) {
     lnk_apply_cmd_option_to_config(config, cmd->string, cmd->value_strings, 0);
+  }
+
+  // in shared thread pool mode force fixed number of workers
+  if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_SharedThreadPool) &&
+      !lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers)) {
+    config->max_worker_count = get_system_info()->logical_processor_count;
   }
 
   // :manifest_input
   if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_ManifestInput)) {
     if (config->manifest_opt == LNK_ManifestOpt_Embed) {
-      for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
-        LNK_CmdSwitchType cmd_switch = lnk_cmd_switch_type_from_string(cmd->string);
-        if (cmd_switch == LNK_CmdSwitch_ManifestInput) {
-          String8List manifest_list = str8_list_copy(arena, &cmd->value_strings);
-          str8_list_concat_in_place(&config->input_list[LNK_Input_Manifest], &manifest_list);
-        }
-      }
+      String8List manifest_list = lnk_cmd_line_values_from_switch(arena, cmd_line, LNK_CmdSwitch_ManifestInput);
+      str8_list_concat_in_place(&config->input_list[LNK_Input_Manifest], &manifest_list);
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, 0, LNK_CmdSwitch_ManifestInput, "missing /MANIFEST:EMBED");
     }
@@ -2153,9 +2239,9 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   }
 
   // input files
-  for (String8Node *input_node = cmd_line.input_list.first; input_node != 0; input_node = input_node->next) {
+  for EachNode(input_node, String8Node, cmd_line.input_list.first) {
     String8 path = push_str8_copy(arena, input_node->string);
-    String8 ext = str8_skip_last_dot(path);
+    String8 ext  = str8_skip_last_dot(path);
 
     // map file extension to input type
     LNK_InputType input_type = lnk_input_type_from_string(ext);
@@ -2285,57 +2371,46 @@ lnk_config_from_cmd_line(String8List raw_cmd_line, LNK_CmdLine cmd_line)
   config->imp_lib_name   = full_path_from_path(arena, config->imp_lib_name);
   config->manifest_name  = full_path_from_path(arena, config->manifest_name);
 
-  // collect env vars
-  HashTable *env_vars = hash_table_init(scratch.arena, 512);
+  // set up env vars
+  HashMap env_vars = lnk_env_vars_from_process_info(scratch.arena, get_process_info(), LNK_EnvVarRule_Batch);
   {
-#if OS_WINDOWS
-    ProcessInfo *process_info = get_process_info();
-    for (String8Node *node = process_info->environment.first; node != 0; node = node->next) {
-      String8List list = str8_split_by_string_chars(scratch.arena, node->string, str8_lit("="), 0);
-
-      String8 key = list.first->string;
-      String8 val = str8_zero();
-      if (list.node_count == 2) {
-        val = list.last->string;
-      } else if (list.node_count > 2) {
-        U64 sep_idx = str8_find_needle(node->string, node->string.size, str8_lit("="), 0);
-        val = str8_skip(node->string, sep_idx+1);
+    // define linker env vars
+    struct { String8 key, value; } key_value_str8_table[] = {
+      { str8_lit("_pdb"),           str8_skip_last_slash(config->pdb_name)       },
+      { str8_lit("_ext"),           str8_skip_last_dot(config->out_path)         },
+      { str8_lit("_rad_pdb_path"),  config->pdb_name                             },
+      { str8_lit("_rad_rdi"),       str8_skip_last_slash(config->rad_debug_name) },
+      { str8_lit("_radi_rdi_path"), config->rad_debug_name                       },
+    };
+    for EachElement(i, key_value_str8_table) {
+      if (lnk_env_var_from_map(&env_vars, key_value_str8_table[i].key)) {
+        lnk_log(LNK_Log_Debug, "Env var already exists: %S\n",key_value_str8_table[i].key);
       }
-
-      hash_table_push_path_string(scratch.arena, env_vars, key, val);
-    }
-#endif
-  }
-
-  // define linker env vars
-  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_pdb"),          str8_skip_last_slash(config->pdb_name));
-  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_ext"),          str8_skip_last_dot(config->out_path));
-  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_pdb_path"), config->pdb_name);
-  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_rdi"),      str8_skip_last_slash(config->rad_debug_name));
-  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_rdi_path"), config->rad_debug_name);
-
-  // collect LIB and LIBPATH
-  if (config->flags & LNK_ConfigFlag_EnvLib) {
-    BucketNode *lib = hash_table_search_path(env_vars, str8_lit("lib"));
-    if (lib) {
-      String8List val_list      = str8_split_by_string_chars(scratch.arena, lib->v.value_string, str8_lit(";"), 0);
-      String8List val_list_copy = str8_list_copy(arena, &val_list);
-      str8_list_concat_in_place(&config->lib_dir_list, &val_list_copy);
+      lnk_env_var_batchf(scratch.arena, &env_vars, "%S=%S", key_value_str8_table[i].key, key_value_str8_table[i].value);
     }
 
-    BucketNode *lib_path = hash_table_search_path(env_vars, str8_lit("libpath"));
-    if (lib_path) {
-      String8List val_list      = str8_split_by_string_chars(scratch.arena, lib->v.value_string, str8_lit(";"), 0);
-      String8List val_list_copy = str8_list_copy(arena, &val_list);
-      str8_list_concat_in_place(&config->lib_dir_list, &val_list_copy);
+    if (config->flags & LNK_ConfigFlag_EnvLib) {
+      // collect LIB and LIBPATH
+      struct { String8List *config_list; char *key; } key_str8_list[] = {
+        { &config->lib_dir_list, "lib"      },
+        { &config->lib_dir_list, "lib_path" },
+      };
+      for EachElement(i, key_str8_list) { 
+        LNK_EnvVar *var = lnk_env_var_from_mapf(&env_vars, key_str8_list[i].key);
+        if (var) {
+          String8List value      = lnk_value_list_from_env_var(arena, var);
+          String8List value_copy = str8_list_copy(config->arena, &value);
+          str8_list_concat_in_place(key_str8_list[i].config_list, &value_copy);
+        }
+      }
     }
   }
   
   // :PdbAltPath
-  config->pdb_alt_path = lnk_expand_env_vars_windows(arena, env_vars, config->pdb_alt_path);
+  config->pdb_alt_path = lnk_expand_env_vars_windows(arena, &env_vars, config->pdb_alt_path);
 
   // :Rad_DebugAltPath
-  config->rad_debug_alt_path = lnk_expand_env_vars_windows(arena, env_vars, config->rad_debug_alt_path);
+  config->rad_debug_alt_path = lnk_expand_env_vars_windows(arena, &env_vars, config->rad_debug_alt_path);
 
   // create temporary files names
   if (config->write_temp_files == LNK_SwitchState_Yes) {

@@ -215,19 +215,36 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
   Temp scratch = scratch_begin(&arena, 1);
 #if OS_WINDOWS
   String16 path16      = str16_from_8(scratch.arena, task->path_arr.v[task_id]);
-  HANDLE   file_handle = CreateFileW(path16.str, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-  if (file_handle != INVALID_HANDLE_VALUE) {
-    HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_WRITECOPY, 0, 0, 0);
-    if (mapping_handle != INVALID_HANDLE_VALUE) {
-      LARGE_INTEGER file_size = {0};
-      GetFileSizeEx(file_handle, &file_size);
-      void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_COPY, 0, 0, file_size.QuadPart);
-      if (file_data) {
-        task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
+  if (task->io_flags & LNK_IO_Flags_MemoryMapFilesReadWrite) {
+    HANDLE file_handle = CreateFileW(path16.str, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if (file_handle != INVALID_HANDLE_VALUE) {
+      HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_READWRITE, 0, 0, 0);
+      if (mapping_handle != INVALID_HANDLE_VALUE) {
+        LARGE_INTEGER file_size = {0};
+        GetFileSizeEx(file_handle, &file_size);
+        void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, file_size.QuadPart);
+        if (file_data) {
+          task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
+        }
+        CloseHandle(mapping_handle);
       }
-      CloseHandle(mapping_handle);
+      CloseHandle(file_handle);
     }
-    CloseHandle(file_handle);
+  } else {
+    HANDLE file_handle = CreateFileW(path16.str, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if (file_handle != INVALID_HANDLE_VALUE) {
+      HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_WRITECOPY, 0, 0, 0);
+      if (mapping_handle != INVALID_HANDLE_VALUE) {
+        LARGE_INTEGER file_size = {0};
+        GetFileSizeEx(file_handle, &file_size);
+        void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_COPY, 0, 0, file_size.QuadPart);
+        if (file_data) {
+          task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
+        }
+        CloseHandle(mapping_handle);
+      }
+      CloseHandle(file_handle);
+    }
   }
 #elif OS_LINUX
   int fd = open((char *)push_cstr(scratch.arena, task->path_arr.v[task_id]).str, O_RDONLY);
@@ -253,7 +270,7 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags
   ProfBeginFunction();
   LNK_DiskReader reader = {0};
 
-  if (io_flags & LNK_IO_Flags_MemoryMapFiles) {
+  if (io_flags & (LNK_IO_Flags_MemoryMapFilesReadWrite|LNK_IO_Flags_MemoryMapFilesReadOnly)) {
     reader.io_flags       = io_flags;
     reader.path_arr       = path_arr;
     reader.data_arr.count = path_arr.count;
