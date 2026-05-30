@@ -2611,14 +2611,14 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
 
               COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(ref_symbol.obj, section_number);
 
+              // on first section visit, set live flag and enqueue section
+              U8 was_visited = ins_atomic_u8_eval_assign(&is_live[ref_symbol.obj->input_idx][section_number], 1);
+              if (was_visited) { continue; }
+
               // is section eligible for walking?
               if (section_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
               if (section_header->flags & COFF_SectionFlag_LnkInfo)   { continue; }
               if (section_header->flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
-
-              // on first section visit, set live flag and enqueue section
-              U8 was_visited = ins_atomic_u8_eval_assign(&is_live[ref_symbol.obj->input_idx][section_number], 1);
-              if (was_visited) { continue; }
 
               LNK_RelocRefs refs = {0};
               refs.obj    = ref_symbol.obj;
