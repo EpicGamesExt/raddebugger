@@ -369,7 +369,7 @@ thread_launch(ThreadEntryPointFunctionType *f, void *p)
   entity->thread.ptr = p;
   {
     int pthread_result = pthread_create(&entity->thread.handle, 0, lnx_thread_entry_point, entity);
-    if(pthread_result == -1)
+    if(pthread_result != 0)
     {
       lnx_entity_release(entity);
       entity = 0;
@@ -407,12 +407,7 @@ internal Mutex
 mutex_alloc(void)
 {
   LNX_Entity *entity = lnx_entity_alloc(LNX_EntityKind_Mutex);
-  int init_result = pthread_mutex_init(&entity->mutex_handle, 0);
-  if(init_result == -1)
-  {
-    lnx_entity_release(entity);
-    entity = 0;
-  }
+  pthread_mutex_init(&entity->mutex_handle, 0);
   Mutex handle = {(U64)entity};
   return handle;
 }
@@ -449,7 +444,7 @@ rw_mutex_alloc(void)
 {
   LNX_Entity *entity = lnx_entity_alloc(LNX_EntityKind_RWMutex);
   int init_result = pthread_rwlock_init(&entity->rwmutex_handle, 0);
-  if(init_result == -1)
+  if(init_result != 0)
   {
     lnx_entity_release(entity);
     entity = 0;
@@ -501,21 +496,14 @@ cond_var_alloc(void)
   pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
   int init_result = pthread_cond_init(&entity->cv.cond_handle, &attr);
   pthread_condattr_destroy(&attr);
-  if(init_result == -1)
+  if(init_result != 0)
   {
     lnx_entity_release(entity);
     entity = 0;
   }
-  int init2_result = 0;
   if(entity)
   {
-    init2_result = pthread_mutex_init(&entity->cv.rwlock_mutex_handle, 0);
-  }
-  if(init2_result == -1)
-  {
-    pthread_cond_destroy(&entity->cv.cond_handle);
-    lnx_entity_release(entity);
-    entity = 0;
+    pthread_mutex_init(&entity->cv.rwlock_mutex_handle, 0);
   }
   CondVar handle = {(U64)entity};
   return handle;
