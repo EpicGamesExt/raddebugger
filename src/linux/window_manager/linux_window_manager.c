@@ -542,7 +542,7 @@ wm_get_events(Arena *arena, B32 wait)
             for(U64 off = 0; off < text_size;)
             {
               UnicodeDecode decode = utf8_decode(text+off, text_size-off);
-              if(decode.codepoint != 0 && (decode.codepoint >= 32 || decode.codepoint == '\t'))
+              if(decode.codepoint != 0 && decode.codepoint != 127 && (decode.codepoint >= 32 || decode.codepoint == '\t'))
               {
                 WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_Text);
                 e->window.u64[0] = (U64)window;
