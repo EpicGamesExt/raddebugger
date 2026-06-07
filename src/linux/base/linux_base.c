@@ -1414,7 +1414,7 @@ lnx_signal_handler(int sig, siginfo_t *info, void *arg)
     dladdr(ips[i], &info);
     
     char cmd[2048];
-    snprintf(cmd, sizeof(cmd), "llvm-symbolizer --relative-address -f -e %s %lu", info.dli_fname, (unsigned long)ips[i] - (unsigned long)info.dli_fbase);
+    snprintf(cmd, sizeof(cmd), "PATH=/usr/bin:/usr/local/bin:/bin llvm-symbolizer --relative-address -f -e %s %lu", info.dli_fname, (unsigned long)ips[i] - (unsigned long)info.dli_fbase);
     FILE *f = popen(cmd, "r");
     if(f)
     {
