@@ -18,7 +18,7 @@ e2_space_map_push(Arena *arena, E2_SpaceMap *map, E2_SpaceID space_id, Rng1U64 a
     map->slots = push_array(arena, E2_SpaceMapNode *, map->slots_count);
   }
   U64 hash = u64_hash_from_str8(str8_struct(&space_id));
-  U64 slot_idx = hash%map->slots_count;
+  U64 slot_idx = hash_index64(hash, map->slots_count);
   E2_SpaceMapNode *node = 0;
   for(E2_SpaceMapNode *n = map->slots[slot_idx]; n != 0; n = n->next)
   {
@@ -42,7 +42,7 @@ e2_space_map_read(E2_SpaceMap *map, E2_SpaceID space_id, Rng1U64 addr_range, voi
   U64 result = 0;
   {
     U64 hash = u64_hash_from_str8(str8_struct(&space_id));
-    U64 slot_idx = hash%map->slots_count;
+    U64 slot_idx = hash_index64(hash, map->slots_count);
     E2_SpaceMapNode *node = 0;
     for(E2_SpaceMapNode *n = map->slots[slot_idx]; n != 0; n = n->next)
     {
@@ -72,7 +72,7 @@ e2_expr_map_push(Arena *arena, E2_ExprMap *map, String8 name, E2_Expr *expr)
     map->slots = push_array(arena, E2_ExprMapNode *, map->slots_count);
   }
   U64 hash = u64_hash_from_str8(name);
-  U64 slot_idx = hash%map->slots_count;
+  U64 slot_idx = hash_index64(hash, map->slots_count);
   E2_ExprMapNode *node = 0;
   for(E2_ExprMapNode *n = map->slots[slot_idx]; n != 0; n = n->next)
   {
@@ -98,7 +98,7 @@ e2_expr_from_name(E2_ExprMap *map, String8 name)
   if(map->slots_count != 0)
   {
     U64 hash = u64_hash_from_str8(name);
-    U64 slot_idx = hash%map->slots_count;
+    U64 slot_idx = hash_index64(hash, map->slots_count);
     E2_ExprMapNode *node = 0;
     for(E2_ExprMapNode *n = map->slots[slot_idx]; n != 0; n = n->next)
     {

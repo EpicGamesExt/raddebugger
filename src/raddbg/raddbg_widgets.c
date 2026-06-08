@@ -197,7 +197,7 @@ rd_title_fstrs_from_cfg(Arena *arena, CFG_Node *cfg, B32 include_extras)
       if(rd_state->ambiguous_path_slots_count != 0)
       {
         U64 hash = d_hash_from_string__case_insensitive(file_name);
-        U64 slot_idx = hash%rd_state->ambiguous_path_slots_count;
+        U64 slot_idx = hash_index64(hash, rd_state->ambiguous_path_slots_count);
         RD_AmbiguousPathNode *node = 0;
         {
           for(RD_AmbiguousPathNode *n = rd_state->ambiguous_path_slots[slot_idx];

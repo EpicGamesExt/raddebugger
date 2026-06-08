@@ -117,7 +117,7 @@ di_key_from_path_timestamp(String8 path, U64 min_timestamp)
 {
   //- rjf: unpack key
   U64 hash = u64_hash_from_str8(path);
-  U64 slot_idx = hash%di_shared->path2key_slots_count;
+  U64 slot_idx = hash_index64(hash, di_shared->path2key_slots_count);
   DI_KeySlot *slot = &di_shared->path2key_slots[slot_idx];
   Stripe *stripe = stripe_from_slot_idx(&di_shared->path2key_stripes, slot_idx);
   
@@ -225,7 +225,7 @@ di_key_from_path_timestamp(String8 path, U64 min_timestamp)
       if(made_key)
       {
         U64 key_hash = u64_hash_from_str8(str8_struct(&key));
-        U64 key_slot_idx = key_hash%di_shared->key2path_slots_count;
+        U64 key_slot_idx = hash_index64(key_hash, di_shared->key2path_slots_count);
         DI_KeySlot *key_slot = &di_shared->key2path_slots[key_slot_idx];
         Stripe *key_stripe = stripe_from_slot_idx(&di_shared->key2path_stripes, key_slot_idx);
         RWMutexScope(key_stripe->rw_mutex, 1)
@@ -271,7 +271,7 @@ di_open(DI_Key key)
 {
   //- rjf: unpack key
   U64 hash = u64_hash_from_str8(str8_struct(&key));
-  U64 slot_idx = hash%di_shared->slots_count;
+  U64 slot_idx = hash_index64(hash, di_shared->slots_count);
   DI_Slot *slot = &di_shared->slots[slot_idx];
   Stripe *stripe = stripe_from_slot_idx(&di_shared->stripes, slot_idx);
   
@@ -329,7 +329,7 @@ di_close(DI_Key key, B32 force_closed)
 {
   //- rjf: unpack key
   U64 hash = u64_hash_from_str8(str8_struct(&key));
-  U64 slot_idx = hash%di_shared->slots_count;
+  U64 slot_idx = hash_index64(hash, di_shared->slots_count);
   DI_Slot *slot = &di_shared->slots[slot_idx];
   Stripe *stripe = stripe_from_slot_idx(&di_shared->stripes, slot_idx);
   
@@ -459,7 +459,7 @@ di_rdi_from_key(Access *access, DI_Key key, B32 high_priority, U64 endt_us)
   RDI_Parsed *rdi = &rdi_parsed_nil;
   {
     U64 hash = u64_hash_from_str8(str8_struct(&key));
-    U64 slot_idx = hash%di_shared->slots_count;
+    U64 slot_idx = hash_index64(hash, di_shared->slots_count);
     DI_Slot *slot = &di_shared->slots[slot_idx];
     Stripe *stripe = stripe_from_slot_idx(&di_shared->stripes, slot_idx);
     RWMutexScope(stripe->rw_mutex, 0) for(;;)
@@ -622,7 +622,7 @@ di_async_tick(void)
         B32 request_is_duplicate = 1;
         {
           U64 hash = u64_hash_from_str8(str8_struct(&key));
-          U64 slot_idx = hash%di_shared->slots_count;
+          U64 slot_idx = hash_index64(hash, di_shared->slots_count);
           DI_Slot *slot = &di_shared->slots[slot_idx];
           Stripe *stripe = stripe_from_slot_idx(&di_shared->stripes, slot_idx);
           RWMutexScope(stripe->rw_mutex, 0)
@@ -669,7 +669,7 @@ di_async_tick(void)
         //- rjf: unpack key
         DI_Key key = t->key;
         U64 key_hash = u64_hash_from_str8(str8_struct(&key));
-        U64 key_slot_idx = key_hash%di_shared->key2path_slots_count;
+        U64 key_slot_idx = hash_index64(key_hash, di_shared->key2path_slots_count);
         DI_KeySlot *key_slot = &di_shared->key2path_slots[key_slot_idx];
         Stripe *key_stripe = stripe_from_slot_idx(&di_shared->key2path_stripes, key_slot_idx);
         
@@ -847,7 +847,7 @@ di_async_tick(void)
         if(ready_to_launch_conversion)
         {
           U64 path2key_hash = u64_hash_from_str8(og_path);
-          U64 path2key_slot_idx = path2key_hash%di_shared->path2key_slots_count;
+          U64 path2key_slot_idx = hash_index64(path2key_hash, di_shared->path2key_slots_count);
           DI_KeySlot *path2key_slot = &di_shared->path2key_slots[path2key_slot_idx];
           Stripe *path2key_stripe = stripe_from_slot_idx(&di_shared->path2key_stripes, path2key_slot_idx);
           RWMutexScope(path2key_stripe->rw_mutex, 0)
@@ -1053,7 +1053,7 @@ di_async_tick(void)
       {
         ProfMsg("commit %.*s", str8_varg(rdi_path));
         U64 hash = u64_hash_from_str8(str8_struct(&key));
-        U64 slot_idx = hash%di_shared->slots_count;
+        U64 slot_idx = hash_index64(hash, di_shared->slots_count);
         DI_Slot *slot = &di_shared->slots[slot_idx];
         Stripe *stripe = stripe_from_slot_idx(&di_shared->stripes, slot_idx);
         RWMutexScope(stripe->rw_mutex, 1)

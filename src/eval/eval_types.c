@@ -361,7 +361,7 @@ internal E_TypeKey
 e_type_key_cons_(E_ConsTypeParams *params)
 {
   U64 content_hash = e_hash_from_cons_type_params(params);
-  U64 content_slot_idx = content_hash%e_cache->cons_content_slots_count;
+  U64 content_slot_idx = hash_index64(content_hash, e_cache->cons_content_slots_count);
   E_ConsTypeSlot *content_slot = &e_cache->cons_content_slots[content_slot_idx];
   E_ConsTypeNode *node = 0;
   for(E_ConsTypeNode *n = content_slot->first; n != 0; n = n->content_next)
@@ -380,7 +380,7 @@ e_type_key_cons_(E_ConsTypeParams *params)
     key.u32[1] = (U32)e_cache->cons_id_gen;
     e_cache->cons_id_gen += 1;
     U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
-    U64 key_slot_idx = key_hash%e_cache->cons_key_slots_count;
+    U64 key_slot_idx = hash_index64(key_hash, e_cache->cons_key_slots_count);
     E_ConsTypeSlot *key_slot = &e_cache->cons_key_slots[key_slot_idx];
     E_ConsTypeNode *node = push_array(e_cache->arena, E_ConsTypeNode, 1);
     SLLQueuePush_N(content_slot->first, content_slot->last, node, content_next);
@@ -647,7 +647,7 @@ e_type_byte_size_from_key(E_TypeKey key)
     case E_TypeKeyKind_Cons:
     {
       U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
-      U64 key_slot_idx = key_hash%e_cache->cons_key_slots_count;
+      U64 key_slot_idx = hash_index64(key_hash, e_cache->cons_key_slots_count);
       E_ConsTypeSlot *key_slot = &e_cache->cons_key_slots[key_slot_idx];
       for(E_ConsTypeNode *node = key_slot->first;
           node != 0;
@@ -693,7 +693,7 @@ e_push_type_from_key(Arena *arena, E_TypeKey key)
       case E_TypeKeyKind_Cons:
       {
         U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
-        U64 key_slot_idx = key_hash%e_cache->cons_key_slots_count;
+        U64 key_slot_idx = hash_index64(key_hash, e_cache->cons_key_slots_count);
         E_ConsTypeSlot *key_slot = &e_cache->cons_key_slots[key_slot_idx];
         for(E_ConsTypeNode *node = key_slot->first;
             node != 0;
@@ -2014,7 +2014,7 @@ e_type_from_key(E_TypeKey key)
   E_Type *type = &e_type_nil;
   {
     U64 hash = e_hash_from_string(5381, str8_struct(&key));
-    U64 slot_idx = hash%e_cache->type_cache_slots_count;
+    U64 slot_idx = hash_index64(hash, e_cache->type_cache_slots_count);
     E_TypeCacheNode *node = 0;
     for(E_TypeCacheNode *n = e_cache->type_cache_slots[slot_idx].first; n != 0; n = n->next)
     {
@@ -2042,7 +2042,7 @@ internal E_MemberCacheNode *
 e_member_cache_node_from_type_key(E_TypeKey key)
 {
   U64 hash = e_hash_from_string(5381, str8_struct(&key));
-  U64 slot_idx = hash%e_cache->member_cache_slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->member_cache_slots_count);
   E_MemberCacheSlot *slot = &e_cache->member_cache_slots[slot_idx];
   E_MemberCacheNode *node = 0;
   for(E_MemberCacheNode *n = slot->first; n != 0; n = n->next)
@@ -2066,7 +2066,7 @@ e_member_cache_node_from_type_key(E_TypeKey key)
     for EachIndex(idx, node->members.count)
     {
       U64 hash = e_hash_from_string(5381, node->members.v[idx].name);
-      U64 slot_idx = hash%node->member_hash_slots_count;
+      U64 slot_idx = hash_index64(hash, node->member_hash_slots_count);
       E_MemberHashNode *n = push_array(e_cache->arena, E_MemberHashNode, 1);
       SLLQueuePush(node->member_hash_slots[slot_idx].first, node->member_hash_slots[slot_idx].last, n);
       n->member_idx = idx;
@@ -2089,7 +2089,7 @@ e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter)
     else
     {
       U64 hash = e_hash_from_string(5381, filter);
-      U64 slot_idx = hash%node->member_filter_slots_count;
+      U64 slot_idx = hash_index64(hash, node->member_filter_slots_count);
       E_MemberFilterSlot *slot = &node->member_filter_slots[slot_idx];
       E_MemberFilterNode *filter_node = 0;
       for(E_MemberFilterNode *n = slot->first; n != 0; n = n->next)
@@ -2144,7 +2144,7 @@ e_type_member_from_key_name__cached(E_TypeKey key, String8 name)
   if(node != 0 && node->member_hash_slots_count != 0)
   {
     U64 hash = e_hash_from_string(5381, name);
-    U64 slot_idx = hash%node->member_hash_slots_count;
+    U64 slot_idx = hash_index64(hash, node->member_hash_slots_count);
     for(E_MemberHashNode *n = node->member_hash_slots[slot_idx].first; n != 0; n = n->next)
     {
       if(str8_match(node->members.v[n->member_idx].name, name, 0))
@@ -2163,7 +2163,7 @@ internal E_EnumValCacheNode *
 e_enum_val_cache_node_from_type_key(E_TypeKey key)
 {
   U64 hash = e_hash_from_string(5381, str8_struct(&key));
-  U64 slot_idx = hash%e_cache->enum_val_cache_slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->enum_val_cache_slots_count);
   E_EnumValCacheSlot *slot = &e_cache->enum_val_cache_slots[slot_idx];
   E_EnumValCacheNode *node = 0;
   for(E_EnumValCacheNode *n = slot->first; n != 0; n = n->next)
@@ -2189,7 +2189,7 @@ e_enum_val_cache_node_from_type_key(E_TypeKey key)
       for EachIndex(idx, type->count)
       {
         U64 hash = e_hash_from_string(5381, type->enum_vals[idx].name);
-        U64 slot_idx = hash%node->val_hash_slots_count;
+        U64 slot_idx = hash_index64(hash, node->val_hash_slots_count);
         E_EnumValHashNode *n = push_array(e_cache->arena, E_EnumValHashNode, 1);
         SLLQueuePush(node->val_hash_slots[slot_idx].first, node->val_hash_slots[slot_idx].last, n);
         n->val_idx = idx;
@@ -2218,7 +2218,7 @@ e_type_enum_vals_from_key_filter__cached(E_TypeKey key, String8 filter)
     else
     {
       U64 hash = e_hash_from_string(5381, filter);
-      U64 slot_idx = hash%node->val_filter_slots_count;
+      U64 slot_idx = hash_index64(hash, node->val_filter_slots_count);
       E_EnumValFilterSlot *slot = &node->val_filter_slots[slot_idx];
       E_EnumValFilterNode *filter_node = 0;
       for(E_EnumValFilterNode *n = slot->first; n != 0; n = n->next)
@@ -2276,7 +2276,7 @@ e_type_enum_val_from_key_name__cached(E_TypeKey key, String8 name)
     String8 name_qualified_0 = push_str8f(scratch.arena, "%S%S", type->name, name);
     String8 name_qualified_1 = push_str8f(scratch.arena, "%S_%S", type->name, name);
     U64 hash = e_hash_from_string(5381, name);
-    U64 slot_idx = hash%node->val_hash_slots_count;
+    U64 slot_idx = hash_index64(hash, node->val_hash_slots_count);
     for(E_EnumValHashNode *n = node->val_hash_slots[slot_idx].first; n != 0; n = n->next)
     {
       if(str8_match(type->enum_vals[n->val_idx].name, name, 0) ||
@@ -2627,7 +2627,7 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status
       B32 hit_cycle = 0;
       {
         U64 hash = u64_hash_from_str8(str8_struct(&off));
-        U64 slot_idx = hash%hit_slots_count;
+        U64 slot_idx = hash_index64(hash, hit_slots_count);
         for(HitOffsetNode *n = hit_slots[slot_idx]; n != 0; n = n->next)
         {
           if(n->off == off)
@@ -2661,7 +2661,7 @@ e_list_gather_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status
       //- rjf: record this offset in our hit-offset table
       {
         U64 hash = u64_hash_from_str8(str8_struct(&off));
-        U64 slot_idx = hash%hit_slots_count;
+        U64 slot_idx = hash_index64(hash, hit_slots_count);
         HitOffsetNode *n = push_array(scratch.arena, HitOffsetNode, 1);
         n->off = off;
         SLLStackPush(hit_slots[slot_idx], n);

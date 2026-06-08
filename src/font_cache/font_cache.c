@@ -59,7 +59,7 @@ internal FP_Handle
 fnt_handle_from_tag(FNT_Tag tag)
 {
   ProfBeginFunction();
-  U64 slot_idx = tag.u64[1] % fnt_state->font_hash_table_size;
+  U64 slot_idx = hash_index64(tag.u64[1], fnt_state->font_hash_table_size);
   FNT_FontHashNode *existing_node = 0;
   {
     for(FNT_FontHashNode *n = fnt_state->font_hash_table[slot_idx].first; n != 0 ; n = n->hash_next)
@@ -84,7 +84,7 @@ internal FP_Metrics
 fnt_fp_metrics_from_tag(FNT_Tag tag)
 {
   ProfBeginFunction();
-  U64 slot_idx = tag.u64[1] % fnt_state->font_hash_table_size;
+  U64 slot_idx = hash_index64(tag.u64[1], fnt_state->font_hash_table_size);
   FNT_FontHashNode *existing_node = 0;
   {
     for(FNT_FontHashNode *n = fnt_state->font_hash_table[slot_idx].first; n != 0 ; n = n->hash_next)
@@ -119,7 +119,7 @@ fnt_tag_from_path(String8 path)
   }
   
   //- rjf: tag -> slot index
-  U64 slot_idx = result.u64[1] % fnt_state->font_hash_table_size;
+  U64 slot_idx = hash_index64(result.u64[1], fnt_state->font_hash_table_size);
   
   //- rjf: slot * tag -> existing node
   FNT_FontHashNode *existing_node = 0;
@@ -172,7 +172,7 @@ fnt_tag_from_static_data_string(String8 *data_ptr)
   }
   
   //- rjf: tag -> slot index
-  U64 slot_idx = result.u64[1] % fnt_state->font_hash_table_size;
+  U64 slot_idx = hash_index64(result.u64[1], fnt_state->font_hash_table_size);
   
   //- rjf: slot * tag -> existing node
   FNT_FontHashNode *existing_node = 0;
@@ -209,7 +209,7 @@ internal String8
 fnt_path_from_tag(FNT_Tag tag)
 {
   //- rjf: tag -> slot index
-  U64 slot_idx = tag.u64[1] % fnt_state->font_hash_table_size;
+  U64 slot_idx = hash_index64(tag.u64[1], fnt_state->font_hash_table_size);
   
   //- rjf: slot * tag -> existing node
   FNT_FontHashNode *existing_node = 0;
@@ -530,7 +530,7 @@ fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags)
   //- rjf: style hash -> style node
   FNT_Hash2StyleRasterCacheNode *hash2style_node = 0;
   {
-    U64 slot_idx = style_hash%fnt_state->hash2style_slots_count;
+    U64 slot_idx = hash_index64(style_hash, fnt_state->hash2style_slots_count);
     FNT_Hash2StyleRasterCacheSlot *slot = &fnt_state->hash2style_slots[slot_idx];
     for(FNT_Hash2StyleRasterCacheNode *n = slot->first;
         n != 0;
@@ -575,7 +575,7 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
   
   //- rjf: unpack run params
   U64 run_hash = fnt_little_hash_from_string(5381, string);
-  U64 run_slot_idx = run_hash%hash2style_node->run_slots_count;
+  U64 run_slot_idx = hash_index64(run_hash, hash2style_node->run_slots_count);
   FNT_RunCacheSlot *run_slot = &hash2style_node->run_slots[run_slot_idx];
   
   //- rjf: find existing run node for this string
@@ -666,7 +666,7 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
         if(piece_substring.size > 1)
         {
           piece_hash = fnt_little_hash_from_string(5381, piece_substring);
-          U64 slot_idx = piece_hash%hash2style_node->hash2info_slots_count;
+          U64 slot_idx = hash_index64(piece_hash, hash2style_node->hash2info_slots_count);
           FNT_Hash2InfoRasterCacheSlot *slot = &hash2style_node->hash2info_slots[slot_idx];
           for(FNT_Hash2InfoRasterCacheNode *node = slot->first; node != 0; node = node->hash_next)
           {
@@ -690,7 +690,7 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
           font_handle_mapped_on_miss = 1;
           
           // rjf: tag -> font slot index
-          U64 font_slot_idx = tag.u64[1] % fnt_state->font_hash_table_size;
+          U64 font_slot_idx = hash_index64(tag.u64[1], fnt_state->font_hash_table_size);
           
           // rjf: tag * slot -> existing node
           FNT_FontHashNode *existing_node = 0;
@@ -786,7 +786,7 @@ fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F
           }
           else
           {
-            U64 slot_idx = piece_hash%hash2style_node->hash2info_slots_count;
+            U64 slot_idx = hash_index64(piece_hash, hash2style_node->hash2info_slots_count);
             FNT_Hash2InfoRasterCacheSlot *slot = &hash2style_node->hash2info_slots[slot_idx];
             FNT_Hash2InfoRasterCacheNode *node = push_array_no_zero(fnt_state->raster_arena, FNT_Hash2InfoRasterCacheNode, 1);
             DLLPushBack_NP(slot->first, slot->last, node, hash_next, hash_prev);

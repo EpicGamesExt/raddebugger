@@ -35,7 +35,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
   AC_Cache *cache = 0;
   {
     U64 cache_hash = u64_hash_from_str8(str8_struct(&params->create));
-    U64 cache_slot_idx = cache_hash%ac_shared->cache_slots_count;
+    U64 cache_slot_idx = hash_index64(cache_hash, ac_shared->cache_slots_count);
     Stripe *cache_stripe = stripe_from_slot_idx(&ac_shared->cache_stripes, cache_slot_idx);
     for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
     {
@@ -70,7 +70,7 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
   
   //- rjf: unpack key
   U64 hash = u64_hash_from_str8(key);
-  U64 slot_idx = hash%cache->slots_count;
+  U64 slot_idx = hash_index64(hash, cache->slots_count);
   AC_Slot *slot = &cache->slots[slot_idx];
   Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
   
@@ -415,7 +415,7 @@ ac_async_tick(void)
         if(status != AC_Status_NeedRetry && lane_idx() == 0)
         {
           U64 cache_hash = u64_hash_from_str8(str8_struct(&r->create));
-          U64 cache_slot_idx = cache_hash%ac_shared->cache_slots_count;
+          U64 cache_slot_idx = hash_index64(cache_hash, ac_shared->cache_slots_count);
           Stripe *cache_stripe = stripe_from_slot_idx(&ac_shared->cache_stripes, cache_slot_idx);
           RWMutexScope(cache_stripe->rw_mutex, 0)
           {
@@ -434,7 +434,7 @@ ac_async_tick(void)
         if(status != AC_Status_NeedRetry && lane_idx() == 0)
         {
           U64 hash = u64_hash_from_str8(r->key);
-          U64 slot_idx = hash%cache->slots_count;
+          U64 slot_idx = hash_index64(hash, cache->slots_count);
           AC_Slot *slot = &cache->slots[slot_idx];
           Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
           RWMutexScope(stripe->rw_mutex, 1)
@@ -542,7 +542,7 @@ ac_async_tick(void)
         if(status != AC_Status_NeedRetry)
         {
           U64 cache_hash = u64_hash_from_str8(str8_struct(&r->create));
-          U64 cache_slot_idx = cache_hash%ac_shared->cache_slots_count;
+          U64 cache_slot_idx = hash_index64(cache_hash, ac_shared->cache_slots_count);
           Stripe *cache_stripe = stripe_from_slot_idx(&ac_shared->cache_stripes, cache_slot_idx);
           RWMutexScope(cache_stripe->rw_mutex, 0)
           {
@@ -561,7 +561,7 @@ ac_async_tick(void)
         if(status != AC_Status_NeedRetry)
         {
           U64 hash = u64_hash_from_str8(r->key);
-          U64 slot_idx = hash%cache->slots_count;
+          U64 slot_idx = hash_index64(hash, cache->slots_count);
           AC_Slot *slot = &cache->slots[slot_idx];
           Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
           RWMutexScope(stripe->rw_mutex, 1)

@@ -1132,4 +1132,12 @@ internal U64 index_of_zero_u32(U32 *ptr, U64 count);
 internal U64 index_of_zero_u64(U64 *ptr, U64 count);
 internal U64 count_digits_u64(U64 v, U64 radix);
 
+////////////////////////////////
+// maps uniform random 32-bit or 64-bit hash value to [0, count) interval
+// this is similar to "hash % count" operation, except it is much faster
+// be aware it will calculate different result than % operation!
+
+internal U32 hash_index32(U32 hash, U32 count);
+internal U64 hash_index64(U64 hash, U64 count);
+
 #endif // BASE_CORE_H

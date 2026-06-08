@@ -447,7 +447,7 @@ dr_mesh(R_Handle mesh_vertices, R_Handle mesh_indices, R_GeoTopologyKind mesh_ge
       (U64)dr_top_tex2d_sample_kind(),
     };
     hash = dr_hash_from_string(str8((U8 *)buffer, sizeof(buffer)));
-    slot_idx = hash%params->mesh_batches.slots_count;
+    slot_idx = hash_index64(hash, params->mesh_batches.slots_count);
   }
   
   // rjf: map hash -> existing batch group node
