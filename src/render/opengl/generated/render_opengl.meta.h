@@ -260,7 +260,7 @@ str8_lit_comp(
 "  \n"
 "  // rjf: sample for corners\n"
 "  float corner_sdf_s = rect_sdf(sdf_sample_pos, rect_half_size, corner_radius);\n"
-"  float corner_sdf_t = smoothstep(0, 2, corner_sdf_s);\n"
+"  float corner_sdf_t = 1-smoothstep(0, 2, corner_sdf_s);\n"
 "  \n"
 "  // rjf: weight output color by sdf\n"
 "  // this is doing alpha testing, leave blurring only where mostly opaque pixels are\n"
