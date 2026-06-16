@@ -146,6 +146,7 @@ internal LNK_Symbol *     lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_n
 
 internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
 internal COFF_ParsedSymbol    lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
+internal COFF_ParsedSymbol    lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx);
 internal U64                  lnk_obj_sect_idx_from_section_number(LNK_Obj *obj, U64 section_number);
 internal U64                  lnk_obj_section_number_from_sect_idx(LNK_Obj *obj, U64 sect_idx);
 internal LNK_ObjSection       lnk_obj_section_from_sect_idx(LNK_Obj *obj, U64 sect_idx);

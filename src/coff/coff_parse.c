@@ -166,11 +166,16 @@ coff_section_header_array_from_name(Arena *arena, String8 string_table, COFF_Sec
 }
 
 
+// NOTE: name-skipping variants. coff_read_symbol_name does a cstr scan over the
+// memory-mapped string table, which is the dominant cost when parsing symbols in
+// bulk; callers that only need the scalar fields (value/section/storage_class/aux,
+// e.g. symbol-value interpretation) should use these to avoid that scan. The full
+// coff_parse_symbol{16,32} below are these plus the name read, so the scalar-field
+// logic lives in exactly one place.
 internal COFF_ParsedSymbol
-coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)
+coff_parse_symbol32_no_name(COFF_Symbol32 *sym32)
 {
   COFF_ParsedSymbol result = {0};
-  result.name              = coff_read_symbol_name(string_table, &sym32->name);
   result.value             = sym32->value;
   result.section_number    = sym32->section_number;
   result.type              = sym32->type;
@@ -181,10 +186,9 @@ coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)
 }
 
 internal COFF_ParsedSymbol
-coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16)
+coff_parse_symbol16_no_name(COFF_Symbol16 *sym16)
 {
   COFF_ParsedSymbol result = {0};
-  result.name              = coff_read_symbol_name(string_table, &sym16->name);
   result.value             = sym16->value;
   if (sym16->section_number == COFF_Symbol_DebugSection16) {
     result.section_number = COFF_Symbol_DebugSection32;
@@ -197,6 +201,22 @@ coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16)
   result.storage_class    = sym16->storage_class;
   result.aux_symbol_count = sym16->aux_symbol_count;
   result.raw_symbol       = sym16;
+  return result;
+}
+
+internal COFF_ParsedSymbol
+coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)
+{
+  COFF_ParsedSymbol result = coff_parse_symbol32_no_name(sym32);
+  result.name              = coff_read_symbol_name(string_table, &sym32->name);
+  return result;
+}
+
+internal COFF_ParsedSymbol
+coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16)
+{
+  COFF_ParsedSymbol result = coff_parse_symbol16_no_name(sym16);
+  result.name              = coff_read_symbol_name(string_table, &sym16->name);
   return result;
 }
 

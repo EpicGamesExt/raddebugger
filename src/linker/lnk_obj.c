@@ -659,7 +659,24 @@ lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
   } else {
     result = coff_parse_symbol16(string_table, (COFF_Symbol16 *)symbol_table.str + symbol_idx);
   }
-  
+
+  return result;
+}
+
+// NOTE: same as above but skips the symbol-name string-table scan; use when only
+// the scalar fields are needed (e.g. symbol-value interpretation).
+internal COFF_ParsedSymbol
+lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx)
+{
+  String8 symbol_table = str8_substr(obj->data, obj->header.symbol_table_range);
+
+  COFF_ParsedSymbol result = {0};
+  if (obj->header.is_big_obj) {
+    result = coff_parse_symbol32_no_name((COFF_Symbol32 *)symbol_table.str + symbol_idx);
+  } else {
+    result = coff_parse_symbol16_no_name((COFF_Symbol16 *)symbol_table.str + symbol_idx);
+  }
+
   return result;
 }
 
