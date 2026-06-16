@@ -1374,12 +1374,13 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
   temp_end(temp);
 }
 
-internal LNK_LeafRef *
-lnk_leaf_hash_table_search(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
+// Probes the leaf hash table for leaf_ref's canonical (deduped) bucket and returns
+// the assigned type index stored on that slot (ti_arr), or 0 if absent. Folds what
+// used to be two lookups (canonical-bucket lookup, then a separate bucket->type-index
+// hash lookup) into a single probe.
+internal CV_TypeIndex
+lnk_leaf_hash_table_search_ti(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
 {
-  LNK_LeafRef *match = 0;
-
-  CV_DebugT *debug_t         = &input->debug_t_arr[leaf_ref.obj_idx];
   CV_DebugH *debug_h         = &input->debug_h_arr[leaf_ref.obj_idx];
   U64        hash            = debug_h->v[leaf_ref.leaf_idx];
   U64        best_bucket_idx = hash % ht->cap;
@@ -1389,14 +1390,13 @@ lnk_leaf_hash_table_search(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_
     if (bucket == 0) { break; }
 
     if (lnk_match_leaf_ref(input, *bucket, leaf_ref)) {
-      match = bucket;
-      break;
+      return ht->ti_arr[bucket_idx];
     }
 
     bucket_idx = (bucket_idx + 1) == ht->cap ? 0 : (bucket_idx + 1);
   } while (bucket_idx != best_bucket_idx);
 
-  return match;
+  return 0;
 }
 
 internal
@@ -1748,55 +1748,36 @@ THREAD_POOL_TASK_FUNC(lnk_assign_type_indices_task)
 {
   LNK_MergeTypes *task  = raw_task;
 
-  CV_TypeIndexSource  ti_source         = task->ti_source;
-  LNK_LeafRefArray    unique_leaf_refs  = task->unique_leaf_refs_arr[ti_source];
-  CV_TypeIndex        min_type_index    = task->min_type_indices[ti_source];
-  U64                 assigned_type_cap = task->assigned_type_caps[ti_source];
-  CV_TypeIndex       *assigned_type_ht  = task->assigned_type_hts[ti_source];
+  CV_TypeIndexSource  ti_source        = task->ti_source;
+  LNK_LeafRefArray    unique_leaf_refs = task->unique_leaf_refs_arr[ti_source];
+  CV_TypeIndex        min_type_index   = task->min_type_indices[ti_source];
+  LNK_LeafHashTable  *leaf_ht          = &task->leaf_ht_arr[ti_source];
+  CV_DebugH          *debug_h_arr      = task->input->debug_h_arr;
 
+  // Store each unique leaf's assigned type index directly on its bucket slot in
+  // the leaf hash table, so later fixups recover the type index with a single
+  // probe (lnk_leaf_hash_table_search_ti) instead of a second hash lookup.
+  // Each unique leaf owns a distinct slot, so writes never collide across workers.
   for EachInRange(i, task->ranges[task_id]) {
     LNK_LeafRef  *leaf_ref   = unique_leaf_refs.v[i];
     CV_TypeIndex  type_index = min_type_index + i;
 
-    U64 hash     = u64_hash_from_str8(str8_struct(leaf_ref));
-    U64 best_idx = hash % assigned_type_cap;
+    U64 hash     = debug_h_arr[leaf_ref->obj_idx].v[leaf_ref->leaf_idx];
+    U64 best_idx = hash % leaf_ht->cap;
     U64 idx      = best_idx;
 
-    B32 is_inserted = 0;
+    B32 is_assigned = 0;
     do {
-      CV_TypeIndex curr_type_index = assigned_type_ht[idx];
-      if (curr_type_index == 0) {
-        CV_TypeIndex cmp_type_index = ins_atomic_u32_eval_cond_assign(&assigned_type_ht[idx], type_index, curr_type_index);
-        if (cmp_type_index == curr_type_index) {
-          is_inserted = 1;
-          break;
-        }
+      if (leaf_ht->bucket_arr[idx] == leaf_ref) {
+        leaf_ht->ti_arr[idx] = type_index;
+        is_assigned = 1;
+        break;
       }
       // advance
-      idx = (idx + 1) == assigned_type_cap ? 0 : (idx + 1);
+      idx = (idx + 1) == leaf_ht->cap ? 0 : (idx + 1);
     } while (idx != best_idx);
-    Assert(is_inserted);
+    Assert(is_assigned);
   }
-}
-
-internal CV_TypeIndex
-lnk_assigned_type_ht_search(U64 cap, CV_TypeIndex *ht, CV_TypeIndex min_type_index, LNK_LeafRefArray unique_leaf_refs, LNK_LeafRef *v, U64 hash)
-{
-  U64 best_idx = hash % cap;
-  U64 idx      = best_idx;
-  do {
-    CV_TypeIndex type_index = ht[idx];
-    if (type_index < min_type_index) { break; }
-
-    U64          leaf_idx = type_index - min_type_index;
-    LNK_LeafRef *compar   = unique_leaf_refs.v[leaf_idx];
-    if (MemoryMatchStruct(compar,v)) { return type_index; }
-      
-    idx = (idx + 1) == cap ? 0 : (idx + 1);
-  } while(idx != best_idx);
-
-  InvalidPath;
-  return 0;
 }
 
 internal void
@@ -1809,21 +1790,11 @@ lnk_fixup_cv_type_indices(LNK_MergeTypes *ctx, U32 obj_idx, String8 data, CV_Typ
     // skip basic types
     if (ti < ctx->input->min_type_indices[n->source]) { continue; }
 
-    CV_TypeIndex final_ti = 0;
-    LNK_LeafRef        leaf_ref   = lnk_leaf_ref_from_ti(ctx->input, obj_idx, n->source, ti);
-    LNK_LeafHashTable *leaf_ht    = &ctx->leaf_ht_arr[n->source];
-    LNK_LeafRef       *final_leaf = lnk_leaf_hash_table_search(leaf_ht, ctx->input, leaf_ref);
-    if (final_leaf) {
-      U64 final_hash = u64_hash_from_str8(str8_struct(final_leaf));
-      final_ti = lnk_assigned_type_ht_search(ctx->assigned_type_caps  [n->source],
-                                             ctx->assigned_type_hts   [n->source],
-                                             ctx->min_type_indices    [n->source],
-                                             ctx->unique_leaf_refs_arr[n->source],
-                                             final_leaf,
-                                             final_hash);
-    }
+    LNK_LeafRef        leaf_ref = lnk_leaf_ref_from_ti(ctx->input, obj_idx, n->source, ti);
+    LNK_LeafHashTable *leaf_ht  = &ctx->leaf_ht_arr[n->source];
+    CV_TypeIndex       final_ti = lnk_leaf_hash_table_search_ti(leaf_ht, ctx->input, leaf_ref);
 #if BUILD_DEBUG
-    else {
+    if (final_ti == 0) {
       lnk_error_obj(LNK_Error_InvalidTypeIndex, ctx->input->obj_arr[obj_idx], "no itype 0x%x", ti);
     }
 #endif
@@ -1992,23 +1963,9 @@ THREAD_POOL_TASK_FUNC(lnk_build_obj_ti_map)
   for EachIndex(leaf_idx, debug_t->count) {
     CV_Leaf            leaf       = cv_debug_t_get_leaf(debug_t, leaf_idx);
     CV_TypeIndexSource source     = cv_type_index_source_from_leaf_kind(leaf.kind);
-    LNK_LeafRef        leaf_ref   = { obj_idx, leaf_idx };
-    LNK_LeafHashTable *leaf_ht    = &task->leaf_ht_arr[source];
-    LNK_LeafRef       *final_leaf = lnk_leaf_hash_table_search(leaf_ht, input, leaf_ref);
-
-    if (final_leaf) {
-      U64          final_hash = u64_hash_from_str8(str8_struct(final_leaf));
-      CV_TypeIndex final_ti   = lnk_assigned_type_ht_search(task->assigned_type_caps  [source],
-                                                            task->assigned_type_hts   [source],
-                                                            task->min_type_indices    [source],
-                                                            task->unique_leaf_refs_arr[source],
-                                                            final_leaf,
-                                                            final_hash);
-
-      obj_ti_map[leaf_idx] = final_ti;
-    } else {
-      obj_ti_map[leaf_idx] = 0;
-    }
+    LNK_LeafRef        leaf_ref = { obj_idx, leaf_idx };
+    LNK_LeafHashTable *leaf_ht  = &task->leaf_ht_arr[source];
+    obj_ti_map[leaf_idx] = lnk_leaf_hash_table_search_ti(leaf_ht, input, leaf_ref);
   }
 
   task->result.obj_ti_maps[obj_idx] = obj_ti_map;
@@ -2096,6 +2053,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     task.leaf_ht_arr[ti_source].cap = total_count;
     task.leaf_ht_arr[ti_source].cap = 1 + ((task.leaf_ht_arr[ti_source].cap * 13) / 10); // * 1.3
     task.leaf_ht_arr[ti_source].bucket_arr = push_array(scratch.arena, LNK_LeafRef *, task.leaf_ht_arr[ti_source].cap);
+    task.leaf_ht_arr[ti_source].ti_arr     = push_array(scratch.arena, CV_TypeIndex, task.leaf_ht_arr[ti_source].cap);
 
 #if PROFILE_TELEMETRY
     tmMessage(0, TMMF_ICON_NOTE, "%.*s Bucket Count: %.*s", str8_varg(cv_string_from_type_index_source(ti_source)), str8_varg(str8_from_count(scratch.arena, task.leaf_ht_arr[ti_source].cap)));
@@ -2250,8 +2208,6 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     ProfBegin("Assign type indices");
     for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
       task.ti_source                     = ti_source;
-      task.assigned_type_caps[ti_source] = (task.unique_leaf_refs_arr[ti_source].count * 13) / 10;
-      task.assigned_type_hts [ti_source] = push_array(scratch.arena, CV_TypeIndex, task.assigned_type_caps[ti_source]);
       task.min_type_indices  [ti_source] = CV_MinComplexTypeIndex;
       task.ranges                        = tp_divide_work(scratch.arena, task.unique_leaf_refs_arr[ti_source].count, tp->worker_count);
       tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_assign_type_indices_task, &task, "Assign Type Indices");
