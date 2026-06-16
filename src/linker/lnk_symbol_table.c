@@ -11,6 +11,7 @@ lnk_make_symbol(Arena *arena, String8 name, LNK_Obj *obj, U32 symbol_idx)
   LNK_Symbol *symbol     = push_array(arena, LNK_Symbol, 1);
   symbol->name           = name;
   symbol->refs           = ref;
+  symbol->refs_tail      = ref;
 
   return symbol;
 }
@@ -353,10 +354,9 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
     }
   }
 
-  // merge symbol refs
-  LNK_ObjSymbolRefNode *src_last_ref;
-  for (src_last_ref = src->refs; src_last_ref->next != 0; src_last_ref = src_last_ref->next);
-  src_last_ref->next = dst->refs;
+  // merge symbol refs (append dst's list onto src's tail; tail pointer keeps this O(1))
+  src->refs_tail->next = dst->refs;
+  src->refs_tail       = dst->refs_tail;
 
   // assert leader section is live
 #if BUILD_DEBUG

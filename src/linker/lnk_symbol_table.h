@@ -21,6 +21,7 @@ typedef struct LNK_Symbol
 {
   String8               name;
   LNK_ObjSymbolRefNode *refs;
+  LNK_ObjSymbolRefNode *refs_tail; // tail of `refs`, so symbol-ref merges are O(1) instead of O(n) tail walks
 } LNK_Symbol;
 
 // --- Symbol Containers -------------------------------------------------------

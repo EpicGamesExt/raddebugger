@@ -1785,6 +1785,7 @@ lnk_link_inputs(TP_Context      *tp,
           if (null_symbol == 0) {
             null_symbol              = push_array(inputer->arena, LNK_Symbol, 1);
             null_symbol->refs        = push_array(inputer->arena, LNK_ObjSymbolRefNode, 1);
+            null_symbol->refs_tail   = null_symbol->refs;
             null_symbol->refs->v.obj = &link->objs.first->data;
           }
           LNK_LibMemberRef *member_refs = push_array(scratch.arena, LNK_LibMemberRef, lib->member_count);
@@ -1880,7 +1881,8 @@ lnk_link_inputs(TP_Context      *tp,
             AssertAlways(member_ref->link_symbol->refs != import_stub->refs);
 
             // replace the import symbol with a stub, which is later replaced with the real import symbol once import obj is ready.
-            member_ref->link_symbol->refs = import_stub->refs;
+            member_ref->link_symbol->refs      = import_stub->refs;
+            member_ref->link_symbol->refs_tail = import_stub->refs_tail;
 
             // push import member for import obj generation
             lnk_lib_member_ref_list_push_node(&link->imports, member_ref);
