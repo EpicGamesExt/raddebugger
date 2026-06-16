@@ -142,7 +142,14 @@ pushd build
 if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %out%raddbg.exe || exit /b 1
 if "%raddbg_non_graphical%"=="1"       set didbuild=1 && %compile% -DWM_STUB=1 -DR_BACKEND=R_BACKEND_STUB ..\src\raddbg\raddbg_main.c %compile_link% %link_icon% %out%raddbg_non_graphical.exe || exit /b 1
 if "%com_shim%"=="1"                   set didbuild=1 && %compile% ..\src\com_shim\com_shim_main.c                           %compile_link% %out%com_shim.exe || exit /b 1
-if "%radlink%"=="1"                    set didbuild=1 && %compile% ..\src\linker\lnk.c                                       %compile_link% %linker% /NOIMPLIB %linker% /NATVIS:"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
+:: NOTE: -DBLAKE3_ATOMICS=1 makes BLAKE3 use C11 _Atomic (plain atomic load) for
+:: get_cpu_features instead of MSVC's _InterlockedOr `lock or` barrier on every
+:: compress dispatch (was a ~5.5s main-thread hot spot). MSVC C11 atomics require
+:: /std:c11 /experimental:c11atomics. Kept external so the vendored blake3 source
+:: stays pristine.
+set radlink_msvc_flags=
+if "%msvc%"=="1" set radlink_msvc_flags=/std:c11 /experimental:c11atomics -DBLAKE3_ATOMICS=1
+if "%radlink%"=="1"                    set didbuild=1 && %compile% %radlink_msvc_flags% ..\src\linker\lnk.c                    %compile_link% %linker% /NOIMPLIB %linker% /NATVIS:"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
 if "%radbin%"=="1"                     set didbuild=1 && %compile% ..\src\radbin\radbin_main.c                               %compile_link% %out%radbin.exe || exit /b 1
 if "%raddump%"=="1"                    set didbuild=1 && %compile% ..\src\raddump\raddump_main.c                             %compile_link% %out%raddump.exe || exit /b 1
 if "%ryan_scratch%"=="1"               set didbuild=1 && %compile% ..\src\scratch\ryan_scratch.c                             %compile_link% %out%ryan_scratch.exe || exit /b 1
