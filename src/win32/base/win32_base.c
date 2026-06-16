@@ -692,6 +692,15 @@ semaphore_drop(Semaphore semaphore)
   ReleaseSemaphore(handle, 1, 0);
 }
 
+internal void
+semaphore_drop_n(Semaphore semaphore, U32 count)
+{
+  if (count > 0) {
+    HANDLE handle = (HANDLE)semaphore.u64[0];
+    ReleaseSemaphore(handle, count, 0);
+  }
+}
+
 //- rjf: barriers
 
 internal Barrier

@@ -68,12 +68,18 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
   Semaphore exec_semaphore = {0};
   if (worker_count > 1) {
     main_semaphore = semaphore_alloc(0, 1, str8_zero());
+    // Max counts carry 2x headroom: tp_for_parallel wakes workers with a single
+    // batched ReleaseSemaphore(drop_count); a batch can land while up to
+    // worker_count-1 previously-woken workers have not yet re-taken their permit,
+    // so the count can transiently reach ~2*worker_count. A tight max (== worker
+    // count) would make that batched release exceed the max and fail outright,
+    // waking no one and deadlocking at the next barrier.
     if (is_shared) {
       AssertAlways(worker_count <= max_worker_count);
-      task_semaphore = semaphore_alloc(0, max_worker_count, name);
-      exec_semaphore = semaphore_alloc(0, worker_count, str8_zero());
+      task_semaphore = semaphore_alloc(0, 2 * max_worker_count, name);
+      exec_semaphore = semaphore_alloc(0, 2 * worker_count, str8_zero());
     } else {
-      task_semaphore = semaphore_alloc(0, worker_count, str8_zero());
+      task_semaphore = semaphore_alloc(0, 2 * worker_count, str8_zero());
     }
   }
 
@@ -210,18 +216,17 @@ tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskF
 
     U64 drop_count = Min(task_count, pool->worker_count);
 
-    // if we are in shared mode ping local semaphore
+    // Wake exactly drop_count workers in a single batched ReleaseSemaphore. The
+    // count MUST be drop_count (not drop_count-1): tasks that nest tp_broadcast_
+    // (e.g. lnk_walk_relocs_and_mark_ref_sections_task) barrier across all
+    // worker_count participants, and under-waking by one leaves the barrier short
+    // -> deadlock. Overflow from the batch is prevented by the 2x semaphore max
+    // headroom set in tp_alloc.
     if (pool->exec_semaphore.u64[0] != 0) {
-      for (U64 worker_idx = 0; worker_idx < drop_count; worker_idx +=1) {
-        semaphore_drop(pool->exec_semaphore);
-      }
+      semaphore_drop_n(pool->exec_semaphore, (U32)drop_count);
     }
-    
-    // ping shared semaphore
-    for (U64 worker_idx = 0; worker_idx < drop_count; worker_idx += 1) {
-      semaphore_drop(pool->task_semaphore);
-    }
-    
+    semaphore_drop_n(pool->task_semaphore, (U32)drop_count);
+
     // run tasks on main worker
     tp_run_tasks(pool, &pool->worker_arr[0]);
     

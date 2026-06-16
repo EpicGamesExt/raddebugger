@@ -129,6 +129,7 @@ internal Semaphore semaphore_open(String8 name);
 internal void      semaphore_close(Semaphore semaphore);
 internal B32       semaphore_take(Semaphore semaphore, U64 endt_us);
 internal void      semaphore_drop(Semaphore semaphore);
+internal void      semaphore_drop_n(Semaphore semaphore, U32 count); // release `count` permits in one syscall
 
 //- rjf: barriers
 internal Barrier barrier_alloc(U64 count);

@@ -707,6 +707,19 @@ semaphore_drop(Semaphore semaphore)
   }
 }
 
+internal void
+semaphore_drop_n(Semaphore semaphore, U32 count)
+{
+  if(semaphore.u64[0] != 0)
+  {
+    for(U32 i = 0; i < count; i += 1)
+    {
+      int err = LNX_RETRY_ON_EINTR(sem_post((sem_t*)semaphore.u64[0]));
+      Assert(err == 0);
+    }
+  }
+}
+
 //- rjf: barriers
 
 internal Barrier
