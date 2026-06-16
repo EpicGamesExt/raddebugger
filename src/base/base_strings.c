@@ -213,7 +213,9 @@ str8_cstring_capped(void *cstr, void *cap)
 {
   char *ptr = (char *)cstr;
   char *opl = (char *)cap;
-  for (;ptr < opl && *ptr != 0; ptr += 1);
+  // memchr is typically SIMD-accelerated; much faster than a byte-by-byte scan
+  char *nul = (char *)memchr(ptr, 0, (U64)(opl - ptr));
+  ptr = nul ? nul : opl;
   U64 size = (U64)(ptr - (char *)cstr);
   String8 result = str8((U8*)cstr, size);
   return result;
