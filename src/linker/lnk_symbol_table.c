@@ -105,12 +105,14 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
   B32 can_replace = 0;
 
-  COFF_ParsedSymbol           dst_parsed = lnk_parsed_from_symbol(dst);
-  COFF_ParsedSymbol           src_parsed = lnk_parsed_from_symbol(src);
-  COFF_SymbolValueInterpType  dst_interp = lnk_interp_from_symbol(dst);
-  COFF_SymbolValueInterpType  src_interp = lnk_interp_from_symbol(src);
+  // only scalar fields + raw_symbol are needed here (names come from dst->name/src->name);
+  // skip the symbol-name string-table scan and avoid re-parsing for interp
   LNK_ObjSymbolRef            dst_ref    = lnk_ref_from_symbol(dst);
   LNK_ObjSymbolRef            src_ref    = lnk_ref_from_symbol(src);
+  COFF_ParsedSymbol           dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dst_ref.obj, dst_ref.symbol_idx);
+  COFF_ParsedSymbol           src_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(src_ref.obj, src_ref.symbol_idx);
+  COFF_SymbolValueInterpType  dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
+  COFF_SymbolValueInterpType  src_interp = coff_interp_from_parsed_symbol(src_parsed);
   LNK_Obj                    *dst_obj    = dst_ref.obj;
   LNK_Obj                    *src_obj    = src_ref.obj;
 
@@ -332,9 +334,10 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 internal void
 lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
 {
-  COFF_ParsedSymbol          dst_parsed = lnk_parsed_from_symbol(dst);
-  COFF_SymbolValueInterpType dst_interp = lnk_interp_from_symbol(dst);
+  // only scalar fields are needed below, so skip the symbol-name string-table scan
   LNK_ObjSymbolRef           dst_ref    = lnk_ref_from_symbol(dst);
+  COFF_ParsedSymbol          dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dst_ref.obj, dst_ref.symbol_idx);
+  COFF_SymbolValueInterpType dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
 
   if (dst_interp == COFF_SymbolValueInterp_Regular) {
     // remove replaced section from the output
@@ -531,7 +534,9 @@ lnk_parsed_from_symbol(LNK_Symbol *symbol)
 internal COFF_SymbolValueInterpType
 lnk_interp_from_symbol(LNK_Symbol *symbol)
 {
-  COFF_ParsedSymbol symbol_parsed = lnk_parsed_from_symbol(symbol); 
+  // interp only needs scalar fields; skip the symbol-name string-table scan
+  LNK_ObjSymbolRef  ref           = lnk_ref_from_symbol(symbol);
+  COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(ref.obj, ref.symbol_idx);
   return coff_interp_from_parsed_symbol(symbol_parsed);
 }
 
