@@ -5265,6 +5265,7 @@ lnk_write_thread(void *raw_ctx)
   ProfEnd();
 }
 
+
 internal void
 lnk_log_timers(void)
 {
@@ -5351,6 +5352,52 @@ lnk_debug_filter_objs(Arena *arena, LNK_Obj **objs, U64 objs_count, U64 *count_o
     *count_out = debug_info_objs_count;
   }
   return debug_info_objs;
+}
+
+// Parallel release of memory-mapped input file views.
+// Inputs are mapped copy-on-write (PAGE_WRITECOPY/FILE_MAP_COPY); pages touched
+// during linking become private-dirty and are reclaimed by the kernel in
+// single-threaded process rundown at exit (~3s for a large link). Unmapping them
+// in parallel before exit moves that reclaim off the serial post-exit path.
+typedef struct LNK_UnmapViewTask
+{
+  String8 *views;
+} LNK_UnmapViewTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_unmap_view_task)
+{
+  LNK_UnmapViewTask *task = raw_task;
+  String8 view = task->views[task_id];
+#if OS_WINDOWS
+  UnmapViewOfFile(view.str);
+#elif OS_LINUX
+  munmap(view.str, view.size);
+#endif
+}
+
+internal void
+lnk_release_input_views(TP_Context *tp, LNK_Inputer *inputer)
+{
+  Temp scratch = scratch_begin(0, 0);
+
+  // collect distinct whole-file mapped views (is_thin); skip lib-member
+  // substrings and linkgen arena data
+  U64 cap = inputer->objs.count + inputer->libs.count;
+  String8 *views = push_array_no_zero(scratch.arena, String8, cap);
+  U64 count = 0;
+  for EachNode(n, LNK_Input, inputer->objs.first) { if (n->is_thin && n->data.size) { views[count++] = n->data; } }
+  for EachNode(n, LNK_Input, inputer->libs.first) { if (n->is_thin && n->data.size) { views[count++] = n->data; } }
+
+  if (count > 0) {
+    U64 begin_us = now_time_us();
+    LNK_UnmapViewTask task = { .views = views };
+    tp_for_parallel(tp, 0, count, lnk_unmap_view_task, &task);
+    U64 end_us = now_time_us();
+    lnk_log(LNK_Log_Timers, "Released %llu input views in %.2f ms", count, (F64)(end_us - begin_us) / 1000.0);
+  }
+
+  scratch_end(scratch);
 }
 
 internal void
@@ -5547,6 +5594,16 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 
   // wait for the thread to finish writing image to disk
   thread_join(image_write_thread, -1);
+
+  // outputs are written and inputs are no longer read; release the copy-on-write
+  // input views in parallel so their dirty pages are reclaimed here (multi-threaded)
+  // instead of in single-threaded process rundown at exit. Only safe for the CoW
+  // (read-only) mapping mode; read-write-shared would flush dirty pages back to the
+  // input files on unmap.
+  if ((config->io_flags & LNK_IO_Flags_MemoryMapFilesReadOnly) &&
+      !(config->io_flags & LNK_IO_Flags_MemoryMapFilesReadWrite)) {
+    lnk_release_input_views(tp, inputer);
+  }
 
   //
   // Timers
