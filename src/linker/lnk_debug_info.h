@@ -115,12 +115,19 @@ typedef struct { U64 count; LNK_LeafRef **v; } LNK_LeafRefArray;
 
 typedef struct
 {
-  U64           cap;
+  U64           cap;        // ~1.3x total (pre-dedup) leaf count
   LNK_LeafRef **bucket_arr;
-  CV_TypeIndex *ti_arr;     // assigned type index per bucket slot (parallel to bucket_arr); 0 = unassigned
-  U64          *hash_arr;   // leaf hash of the occupying bucket (parallel to bucket_arr); lets search_ti
-                            // match by hash without dereferencing *bucket into the scattered debug_h_arr
 } LNK_LeafHashTable;
+
+// Maps leaf hash -> assigned type index, sized to the UNIQUE (post-dedup) leaf count rather than the
+// total leaf count -- folds the canonical-bucket + bucket->ti lookups into one probe (deref-free: the
+// hash is stored on the slot) without the total-sized per-bucket arrays that would add ~3GB to peak.
+typedef struct
+{
+  U64           cap;        // ~1.3x unique leaf count
+  CV_TypeIndex *ti_arr;     // assigned type index per slot; 0 == empty (ti is always >= CV_MinComplexTypeIndex)
+  U64          *hash_arr;   // occupant leaf hash (parallel to ti_arr); disambiguates open-addressing collisions
+} LNK_AssignedTiHash;
 
 typedef struct LNK_LeafRange
 {
@@ -153,6 +160,7 @@ typedef struct
   LNK_CodeViewInput  *input;
   CV_DebugS          *debug_s_arr;
   LNK_LeafHashTable   leaf_ht_arr[CV_TypeIndexSource_COUNT];
+  LNK_AssignedTiHash  assigned_ti_arr[CV_TypeIndexSource_COUNT];
   Arena             **fixed_arenas;
   CV_TypeIndexSource  ti_source;
   U32Array            indices;
@@ -252,7 +260,7 @@ internal B32             lnk_match_leaf_ref                  (LNK_CodeViewInput 
 internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list, B32 discard_cycles);
 internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list);
 internal LNK_LeafRef *   lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInput *input, CV_DebugH *hashes, U64 hash, LNK_LeafRef *new_bucket);
-internal CV_TypeIndex    lnk_leaf_hash_table_search_ti       (LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref); // returns assigned ti for leaf_ref's canonical bucket, 0 if absent
+internal CV_TypeIndex    lnk_leaf_hash_table_search_ti       (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref); // returns assigned ti for leaf_ref's hash class, 0 if absent
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
 internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);
 
