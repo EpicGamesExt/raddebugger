@@ -570,8 +570,11 @@ lnk_obj_section_number_from_sect_idx(LNK_Obj *obj, U64 sect_idx)
   return sect_idx+1;
 }
 
+// NOTE: skips section.name (coff_name_from_section_header does a string-table
+// lookup); use when only the header/flags/ranges are needed (e.g. checking
+// section flags). Callers that need the name should use lnk_obj_section_from_sect_idx.
 internal LNK_ObjSection
-lnk_obj_section_from_sect_idx(LNK_Obj *obj, U64 sect_idx)
+lnk_obj_section_from_sect_idx_no_name(LNK_Obj *obj, U64 sect_idx)
 {
   Assert(sect_idx < obj->header.section_count_no_null);
   LNK_ObjSection section = {0};
@@ -580,10 +583,17 @@ lnk_obj_section_from_sect_idx(LNK_Obj *obj, U64 sect_idx)
   section.section_number = sect_idx+1;
   section.header         = &lnk_coff_section_table_from_obj(obj)[sect_idx];
   section.flags          = &obj->section_flags[sect_idx];
-  section.name           = coff_name_from_section_header(lnk_coff_string_table_from_obj(obj), section.header);
   section.vrange         = rng_1u64(section.header->voff, section.header->voff + section.header->vsize);
   section.frange         = rng_1u64(section.header->foff, section.header->foff + section.header->fsize);
   section.reloc_count    = section.header->reloc_count;
+  return section;
+}
+
+internal LNK_ObjSection
+lnk_obj_section_from_sect_idx(LNK_Obj *obj, U64 sect_idx)
+{
+  LNK_ObjSection section = lnk_obj_section_from_sect_idx_no_name(obj, sect_idx);
+  section.name           = coff_name_from_section_header(lnk_coff_string_table_from_obj(obj), section.header);
   return section;
 }
 
@@ -653,14 +663,11 @@ lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
   String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
   String8 symbol_table = str8_substr(obj->data, obj->header.symbol_table_range);
 
-  COFF_ParsedSymbol result = {0};
   if (obj->header.is_big_obj) {
-    result = coff_parse_symbol32(string_table, (COFF_Symbol32 *)symbol_table.str + symbol_idx);
+    return coff_parse_symbol32(string_table, (COFF_Symbol32 *)symbol_table.str + symbol_idx);
   } else {
-    result = coff_parse_symbol16(string_table, (COFF_Symbol16 *)symbol_table.str + symbol_idx);
+    return coff_parse_symbol16(string_table, (COFF_Symbol16 *)symbol_table.str + symbol_idx);
   }
-
-  return result;
 }
 
 // NOTE: same as above but skips the symbol-name string-table scan; use when only
@@ -670,14 +677,11 @@ lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx)
 {
   String8 symbol_table = str8_substr(obj->data, obj->header.symbol_table_range);
 
-  COFF_ParsedSymbol result = {0};
   if (obj->header.is_big_obj) {
-    result = coff_parse_symbol32_no_name((COFF_Symbol32 *)symbol_table.str + symbol_idx);
+    return coff_parse_symbol32_no_name((COFF_Symbol32 *)symbol_table.str + symbol_idx);
   } else {
-    result = coff_parse_symbol16_no_name((COFF_Symbol16 *)symbol_table.str + symbol_idx);
+    return coff_parse_symbol16_no_name((COFF_Symbol16 *)symbol_table.str + symbol_idx);
   }
-
-  return result;
 }
 
 internal
@@ -773,8 +777,10 @@ lnk_raw_directives_from_obj(Arena *arena, LNK_Obj *obj)
 {
   String8List drectve_data = {0};
   for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
-    LNK_ObjSection section = lnk_obj_section_from_sect_idx(obj, sect_idx);
+    // only LnkInfo sections (rare) need the name; skip the string-table lookup for the rest
+    LNK_ObjSection section = lnk_obj_section_from_sect_idx_no_name(obj, sect_idx);
     if (*section.flags & COFF_SectionFlag_LnkInfo) {
+      section.name = coff_name_from_section_header(lnk_coff_string_table_from_obj(obj), section.header);
       if (str8_match(section.name, str8_lit(".drectve"), 0)) {
         if (*section.flags & COFF_SectionFlag_CntUninitializedData) {
           lnk_error_obj(LNK_Error_IllData, obj, ".drectve section header has flag COFF_SectionFlag_CntUninitializedData");
