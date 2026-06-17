@@ -5881,7 +5881,11 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     ProfBeginV("Alloc Image Buffer [%M]", lnk_section_table_total_fsize(sectab));
     image_data.size = lnk_section_table_total_fsize(sectab) + image_string_table.total_size;
-    image_data.str  = push_array_no_zero(arena->v[0], U8, image_data.size);
+    // Standalone reservation (not the shared link arena) so it can be released the instant the image
+    // is written to disk -- VirtualFree returns fast and the kernel zeroes this ~1GB on its background
+    // thread, overlapping the rest of the run, instead of in the single-threaded exit rundown.
+    image_data.str  = reserve_memory(image_data.size);
+    commit_memory(image_data.str, image_data.size);
     ProfEnd();
 
     ProfBegin("Fill Align Bytes");
@@ -6711,6 +6715,9 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   // wait for the thread to finish writing image to disk
   thread_join(image_write_thread, -1);
 
+  // image is on disk and no longer read by anyone -- release its ~1GB now so the kernel reclaims it
+  // concurrently with the remaining work + exit, not single-threaded in the process rundown.
+  release_memory(image_ctx.image_data.str, image_ctx.image_data.size);
   //
   // Timers
   //
