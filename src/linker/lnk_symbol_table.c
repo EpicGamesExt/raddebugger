@@ -778,17 +778,9 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
           COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
           if (resolve_interp == COFF_SymbolValueInterp_Weak) {
             COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol_ref.obj->header.is_big_obj);
-            if (symbol_ref.obj->header.is_big_obj) {
-              COFF_Symbol32 *symbol32  = symbol_parsed.raw_symbol;
-              symbol32->section_number = COFF_Symbol_UndefinedSection;
-              symbol32->value          = 0;
-              symbol32->storage_class  = COFF_SymStorageClass_External;
-            } else {
-              COFF_Symbol16 *symbol16  = symbol_parsed.raw_symbol;
-              symbol16->section_number = COFF_Symbol_UndefinedSection;
-              symbol16->value          = 0;
-              symbol16->storage_class  = COFF_SymStorageClass_External;
-            }
+            symbol_ref.obj->parsed_symbols[symbol_ref.symbol_idx].section_number = COFF_Symbol_UndefinedSection;
+            symbol_ref.obj->parsed_symbols[symbol_ref.symbol_idx].value          = 0;
+            symbol_ref.obj->parsed_symbols[symbol_ref.symbol_idx].storage_class  = COFF_SymStorageClass_External;
           } else {
             symbol->refs->v = resolve;
           }

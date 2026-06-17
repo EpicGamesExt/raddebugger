@@ -2953,15 +2953,8 @@ THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
             task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx] = 1;
           }
 
-          if (obj->header.is_big_obj) {
-            COFF_Symbol32 *symbol32  = symbol.raw_symbol;
-            symbol32->section_number = section_number;
-            symbol32->value          = value;
-          } else {
-            COFF_Symbol16 *symbol16  = symbol.raw_symbol;
-            symbol16->section_number = (U16)section_number;
-            symbol16->value          = value;
-          }
+          obj->parsed_symbols[symbol_idx].section_number = section_number;
+          obj->parsed_symbols[symbol_idx].value          = value;
         }
       }
     }
@@ -3025,15 +3018,8 @@ THREAD_POOL_TASK_FUNC(lnk_patch_common_block_leaders_task)
     COFF_ParsedSymbol       parsed_symbol  = lnk_parsed_from_symbol(symbol);
     U64                     section_number = task->u.patch_symtabs.common_block_sect->sect_idx + 1;
 
-    if (symbol_ref.obj->header.is_big_obj) {
-      COFF_Symbol32 *symbol32 = parsed_symbol.raw_symbol;
-      symbol32->value          = contrib->u.offset;
-      symbol32->section_number = safe_cast_u32(section_number);
-    } else {
-      COFF_Symbol16 *symbol16 = parsed_symbol.raw_symbol;
-      symbol16->value          = contrib->u.offset;
-      symbol16->section_number = safe_cast_u16(section_number);
-    }
+    symbol_ref.obj->parsed_symbols[symbol_ref.symbol_idx].value          = contrib->u.offset;
+    symbol_ref.obj->parsed_symbols[symbol_ref.symbol_idx].section_number = safe_cast_u32(section_number);
 
     task->u.patch_symtabs.was_symbol_patched[symbol_ref.obj->input_idx][symbol_ref.symbol_idx] = 1;
   }
@@ -3058,17 +3044,9 @@ THREAD_POOL_TASK_FUNC(lnk_patch_common_block_symbols_task)
       COFF_ParsedSymbol defn_parsed = lnk_parsed_from_symbol(defn);
       Assert(lnk_interp_from_symbol(defn) == COFF_SymbolValueInterp_Regular);
       if (defn) {
-        if (obj->header.is_big_obj) {
-          COFF_Symbol32 *symbol32  = symbol.raw_symbol;
-          symbol32->section_number = defn_parsed.section_number;
-          symbol32->value          = safe_cast_u32(defn_parsed.value);
-          symbol32->storage_class  = COFF_SymStorageClass_Static;
-        } else {
-          COFF_Symbol16 *symbol16  = symbol.raw_symbol;
-          symbol16->section_number = safe_cast_u16(defn_parsed.section_number);
-          symbol16->value          = safe_cast_u32(defn_parsed.value);
-          symbol16->storage_class  = COFF_SymStorageClass_Static;
-        }
+        obj->parsed_symbols[symbol_idx].section_number = defn_parsed.section_number;
+        obj->parsed_symbols[symbol_idx].value          = defn_parsed.value;
+        obj->parsed_symbols[symbol_idx].storage_class  = COFF_SymStorageClass_Static;
       }
     }
   }
@@ -3106,15 +3084,8 @@ THREAD_POOL_TASK_FUNC(lnk_patch_regular_symbols_task)
         value          = sc->u.off + symbol.value;
       }
 
-      if (obj->header.is_big_obj) {
-        COFF_Symbol32 *symbol32  = symbol.raw_symbol;
-        symbol32->section_number = section_number;
-        symbol32->value          = value;
-      } else {
-        COFF_Symbol16 *symbol16  = symbol.raw_symbol;
-        symbol16->section_number = safe_cast_u16(section_number);
-        symbol16->value          = value;
-      }
+      obj->parsed_symbols[symbol_idx].section_number = section_number;
+      obj->parsed_symbols[symbol_idx].value          = value;
     }
   }
   ProfEnd();
@@ -3151,17 +3122,9 @@ lnk_patch_obj_symtab(LNK_SymbolTable *symtab, LNK_Obj *obj, B8 *was_symbol_patch
         value          = fixup_src.value;
       }
 
-      if (obj->header.is_big_obj) {
-        COFF_Symbol32 *symbol32  = fixup_dst.raw_symbol;
-        symbol32->section_number = section_number;
-        symbol32->value          = value;
-        symbol32->storage_class  = COFF_SymStorageClass_Static;
-      } else {
-        COFF_Symbol16 *symbol16  = fixup_dst.raw_symbol;
-        symbol16->section_number = (U16)section_number;
-        symbol16->value          = value;
-        symbol16->storage_class  = COFF_SymStorageClass_Static;
-      }
+      obj->parsed_symbols[symbol_idx].section_number = section_number;
+      obj->parsed_symbols[symbol_idx].value          = value;
+      obj->parsed_symbols[symbol_idx].storage_class  = COFF_SymStorageClass_Static;
 
       was_symbol_patched[symbol_idx] = 1;
     }
@@ -3842,17 +3805,9 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
         if (sect && (~sect->flags & COFF_SectionFlag_LnkRemove)) {
           if (~sect->flags & COFF_SectionFlag_MemDiscardable) {
             LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
-            if (obj->header.is_big_obj) {
-              COFF_Symbol32 *symbol32 = symbol.raw_symbol;
-              symbol32->section_number = safe_cast_u32(first_sc->u.sect_idx + 1);
-              symbol32->value          = first_sc->u.off;
-              symbol32->storage_class  = COFF_SymStorageClass_Static;
-            } else {
-              COFF_Symbol16 *symbol16 = symbol.raw_symbol;
-              symbol16->section_number = safe_cast_u16(first_sc->u.sect_idx + 1);
-              symbol16->value          = first_sc->u.off;
-              symbol16->storage_class  = COFF_SymStorageClass_Static;
-            }
+            obj->parsed_symbols[symbol_idx].section_number = safe_cast_u32(first_sc->u.sect_idx + 1);
+            obj->parsed_symbols[symbol_idx].value          = first_sc->u.off;
+            obj->parsed_symbols[symbol_idx].storage_class  = COFF_SymStorageClass_Static;
           } else {
             lnk_error_obj(LNK_Error_SectRefsDiscardedMemory, obj, "symbol %S (No. 0x%llx) references section with discard flag", symbol.name, symbol_idx);
           }
@@ -3870,17 +3825,9 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
           LNK_Section *fallback_sect = task->image_sects.v[task->image_sects.count-1];
           U32 fallback_section_number = safe_cast_u32(fallback_sect->sect_idx + 1);
           U32 fallback_section_offset = safe_cast_u32(fallback_voff - fallback_sect->voff);
-          if (obj->header.is_big_obj) {
-            COFF_Symbol32 *symbol32 = symbol.raw_symbol;
-            symbol32->section_number = fallback_section_number;
-            symbol32->value          = fallback_section_offset;
-            symbol32->storage_class  = COFF_SymStorageClass_Static;
-          } else {
-            COFF_Symbol16 *symbol16 = symbol.raw_symbol;
-            symbol16->section_number = safe_cast_u16(fallback_section_number);
-            symbol16->value          = fallback_section_offset;
-            symbol16->storage_class  = COFF_SymStorageClass_Static;
-          }
+          obj->parsed_symbols[symbol_idx].section_number = fallback_section_number;
+          obj->parsed_symbols[symbol_idx].value          = fallback_section_offset;
+          obj->parsed_symbols[symbol_idx].storage_class  = COFF_SymStorageClass_Static;
 
           lnk_error_obj(LNK_Warning_UndefinedSectionSymbol, obj, "undefined section symbol %S (No. 0x%llx) refers to an image section that doesn't exist; patching to %#llx", symbol.name, symbol_idx, fallback_voff);
         }
@@ -5422,7 +5369,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   LNK_SymbolTable *symtab = lnk_symbol_table_init(arena);
 
   //
-  // Link Image
+  // Link Image (group digests, if any, are synthesized + consumed inside lnk_link_image)
   //
   LNK_LinkResult link = lnk_link_image(tp, arena, config, inputer, symtab);
 
@@ -5907,8 +5854,8 @@ entry_point(CmdLine *cmdline)
   }
 
   switch (config->boot_mode) {
-  case LNK_BootMode_Linker:     lnk_run_linker     (tp, tp_arena, config); break;
-  case LNK_BootMode_TypeServer: lnk_run_type_server(tp, tp_arena, config); break;
+  case LNK_BootMode_Linker:      lnk_run_linker       (tp, tp_arena, config); break;
+  case LNK_BootMode_TypeServer:  lnk_run_type_server  (tp, tp_arena, config); break;
   }
 
   lnk_log_end();
