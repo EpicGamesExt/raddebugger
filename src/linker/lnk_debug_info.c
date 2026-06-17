@@ -1389,7 +1389,9 @@ lnk_leaf_hash_table_search_ti(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, L
     LNK_LeafRef *bucket = ht->bucket_arr[bucket_idx];
     if (bucket == 0) { break; }
 
-    if (lnk_match_leaf_ref(input, *bucket, leaf_ref)) {
+    // match by cached hash (== lnk_match_leaf_ref, which is just a_hash==b_hash) without dereferencing
+    // *bucket into the scattered debug_h_arr
+    if (ht->hash_arr[bucket_idx] == hash) {
       return ht->ti_arr[bucket_idx];
     }
 
@@ -1473,6 +1475,7 @@ THREAD_POOL_TASK_FUNC(lnk_populate_leaf_ht)
         // try to update the bucket
         LNK_LeafRef *cmp = ins_atomic_ptr_eval_cond_assign(&leaf_ht->bucket_arr[idx], bucket, curr);
         if (cmp == curr) {
+          leaf_ht->hash_arr[idx] = debug_h->v[leaf_idx]; // cache occupant's hash for deref-free search_ti
           bucket = 0;
           goto exit;
         }
@@ -1528,6 +1531,7 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
         // try to update the bucket
         LNK_LeafRef *cmp = ins_atomic_ptr_eval_cond_assign(&leaf_ht->bucket_arr[idx], bucket, curr);
         if (cmp == curr) {
+          leaf_ht->hash_arr[idx] = debug_h->v[leaf_idx]; // cache occupant's hash for deref-free search_ti
           bucket = 0;
           goto exit;
         }
@@ -2054,6 +2058,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     task.leaf_ht_arr[ti_source].cap = 1 + ((task.leaf_ht_arr[ti_source].cap * 13) / 10); // * 1.3
     task.leaf_ht_arr[ti_source].bucket_arr = push_array(scratch.arena, LNK_LeafRef *, task.leaf_ht_arr[ti_source].cap);
     task.leaf_ht_arr[ti_source].ti_arr     = push_array(scratch.arena, CV_TypeIndex, task.leaf_ht_arr[ti_source].cap);
+    task.leaf_ht_arr[ti_source].hash_arr   = push_array(scratch.arena, U64, task.leaf_ht_arr[ti_source].cap);
 
 #if PROFILE_TELEMETRY
     tmMessage(0, TMMF_ICON_NOTE, "%.*s Bucket Count: %.*s", str8_varg(cv_string_from_type_index_source(ti_source)), str8_varg(str8_from_count(scratch.arena, task.leaf_ht_arr[ti_source].cap)));
