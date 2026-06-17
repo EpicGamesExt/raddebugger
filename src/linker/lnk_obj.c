@@ -125,13 +125,15 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   //
-  // error check symbol table
+  // error check symbol table (+ memoize parsed symbols)
   //
+  COFF_ParsedSymbol *parsed_symbols = push_array(arena, COFF_ParsedSymbol, header.symbol_count);
   {
     COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(input->data, header.section_table_range).str;
     COFF_ParsedSymbol symbol;
     for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
       symbol = coff_parse_symbol(header, raw_coff_string_table, raw_coff_symbol_table, symbol_idx);
+      parsed_symbols[symbol_idx] = symbol;
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
       if (interp == COFF_SymbolValueInterp_Regular) {
         if (symbol.section_number == 0 || symbol.section_number > header.section_count_no_null) {
@@ -335,6 +337,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->path                    = push_str8_copy(arena, input->path);
   obj->header                  = header;
   obj->section_flags           = section_flags;
+  obj->parsed_symbols          = parsed_symbols;
   obj->comdats                 = comdats;
   obj->exclude_from_debug_info = input->exclude_from_debug_info;
   obj->hotpatch                = hotpatch;
@@ -657,31 +660,20 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
   return &section_table[sect_idx];
 }
 
+// NOTE: returns the memoized parse built in lnk_obj_initer. The struct is mutable: symbol-value
+// patching (lnk_patch_*_task) writes value/section_number/storage_class here, NOT into the mmapped
+// obj->data symbol table -- so obj->data symbol values are never written after load. raw_symbol still
+// points into obj->data (read-only) for aux-record reads (coff_parse_weak_tag / coff_parse_secdef).
 internal COFF_ParsedSymbol
 lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
 {
-  String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
-  String8 symbol_table = str8_substr(obj->data, obj->header.symbol_table_range);
-
-  if (obj->header.is_big_obj) {
-    return coff_parse_symbol32(string_table, (COFF_Symbol32 *)symbol_table.str + symbol_idx);
-  } else {
-    return coff_parse_symbol16(string_table, (COFF_Symbol16 *)symbol_table.str + symbol_idx);
-  }
+  return obj->parsed_symbols[symbol_idx];
 }
 
-// NOTE: same as above but skips the symbol-name string-table scan; use when only
-// the scalar fields are needed (e.g. symbol-value interpretation).
 internal COFF_ParsedSymbol
 lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx)
 {
-  String8 symbol_table = str8_substr(obj->data, obj->header.symbol_table_range);
-
-  if (obj->header.is_big_obj) {
-    return coff_parse_symbol32_no_name((COFF_Symbol32 *)symbol_table.str + symbol_idx);
-  } else {
-    return coff_parse_symbol16_no_name((COFF_Symbol16 *)symbol_table.str + symbol_idx);
-  }
+  return obj->parsed_symbols[symbol_idx];
 }
 
 internal

@@ -12,6 +12,8 @@ typedef struct LNK_Obj
 
   COFF_FileHeaderInfo header;
   COFF_SectionFlags  *section_flags;
+  COFF_ParsedSymbol  *parsed_symbols; // memoized parse per symbol_idx (aux slots zeroed). Mutable: symbol-value
+                                       // patching writes here, NOT into the mmapped obj->data symbol table.
 
   // flags
   B8 hotpatch;
