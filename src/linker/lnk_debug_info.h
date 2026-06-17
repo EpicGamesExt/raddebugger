@@ -118,6 +118,8 @@ typedef struct
   U64           cap;
   LNK_LeafRef **bucket_arr;
   CV_TypeIndex *ti_arr;     // assigned type index per bucket slot (parallel to bucket_arr); 0 = unassigned
+  U64          *hash_arr;   // leaf hash of the occupying bucket (parallel to bucket_arr); lets search_ti
+                            // match by hash without dereferencing *bucket into the scattered debug_h_arr
 } LNK_LeafHashTable;
 
 typedef struct LNK_LeafRange
