@@ -151,6 +151,7 @@ internal U64                  lnk_obj_section_number_from_sect_idx(LNK_Obj *obj,
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);
 internal String8              lnk_obj_section_name_from_sect_idx(LNK_Obj *obj, U64 sect_idx);
 internal LNK_ObjSection       lnk_obj_section_from_sect_idx(LNK_Obj *obj, U64 sect_idx);
+internal LNK_ObjSection       lnk_obj_section_from_sect_idx_no_name(LNK_Obj *obj, U64 sect_idx);
 internal LNK_ObjSection       lnk_obj_section_from_section_number(LNK_Obj *obj, U64 section_number);
 internal COFF_RelocArray      lnk_coff_relocs_from_section_header(LNK_Obj *obj, COFF_SectionHeader *section_header);
 internal String8              lnk_coff_string_table_from_obj(LNK_Obj *obj);
