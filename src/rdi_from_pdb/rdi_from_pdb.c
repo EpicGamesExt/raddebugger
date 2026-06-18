@@ -403,7 +403,7 @@ p2r_convert2(Arena *arena, P2R_ConvertParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: produce cv2r units from pdb's units
   //
-  U64 cv2r_comp_units_count = comp_units->count;
+  U64 cv2r_comp_units_count = comp_units->count + 1; // +1 for global info stream
   CV2R_CompUnit *cv2r_comp_units = 0;
   {
     if(lane_idx() == 0)
@@ -414,9 +414,19 @@ p2r_convert2(Arena *arena, P2R_ConvertParams *params)
     Rng1U64 range = lane_range(cv2r_comp_units_count);
     for EachInRange(idx, range)
     {
-      cv2r_comp_units[idx].obj_name   = comp_units->units[idx]->obj_name;
-      cv2r_comp_units[idx].group_name = comp_units->units[idx]->group_name;
-      cv2r_comp_units[idx].ranges     = unit_ranges[idx+1];
+      if(idx > 0)
+      {
+        PDB_CompUnit *src_unit = comp_units->units[idx-1];
+        cv2r_comp_units[idx].obj_name   = src_unit->obj_name;
+        cv2r_comp_units[idx].group_name = src_unit->group_name;
+      }
+      else
+      {
+        cv2r_comp_units[idx].obj_name = s("*global");
+      }
+      cv2r_comp_units[idx].ranges = unit_ranges[idx];
+      cv2r_comp_units[idx].sym = all_syms[idx];
+      cv2r_comp_units[idx].c13 = all_c13s[idx];
     }
     lane_sync();
   }
@@ -491,9 +501,6 @@ p2r_convert2(Arena *arena, P2R_ConvertParams *params)
     cv2r_params.exe_name                      = params->input_exe_name;
     cv2r_params.exe_data                      = params->input_exe_data;
     cv2r_params.guid                          = pdb_info->auth_guid;
-    cv2r_params.all_syms_count                = all_syms_count;
-    cv2r_params.all_syms                      = all_syms;
-    cv2r_params.all_c13s                      = all_c13s;
     cv2r_params.comp_units_count              = cv2r_comp_units_count;
     cv2r_params.comp_units                    = cv2r_comp_units;
     cv2r_params.comp_unit_contributions_count = cv2r_comp_unit_contributions_count;

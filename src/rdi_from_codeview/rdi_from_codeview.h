@@ -13,6 +13,8 @@ struct CV2R_CompUnit
   String8 obj_name;
   String8 group_name;
   RDIM_Rng1U64ChunkList ranges;
+  CV_SymParsed *sym;
+  CV_C13Parsed *c13;
 };
 
 typedef struct CV2R_Section CV2R_Section;
@@ -69,9 +71,6 @@ struct CV2R_ConvertParams
   String8 exe_name;
   String8 exe_data;
   Guid guid;
-  U64 all_syms_count;
-  CV_SymParsed **all_syms;
-  CV_C13Parsed **all_c13s;
   U64 comp_units_count;
   CV2R_CompUnit *comp_units;
   U64 comp_unit_contributions_count;

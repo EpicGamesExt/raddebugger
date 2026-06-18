@@ -661,9 +661,6 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
   //////////////////////////////////////////////////////////////
   //- rjf: unpack params
   //
-  U64 all_syms_count = params->all_syms_count;
-  CV_SymParsed **all_syms = params->all_syms;
-  CV_C13Parsed **all_c13s = params->all_c13s;
   U64 comp_units_count = params->comp_units_count;
   CV2R_CompUnit *comp_units = params->comp_units;
   U64 sections_count = params->sections_count;
@@ -728,9 +725,9 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
   RDI_Arch arch = RDI_Arch_NULL;
   U64 arch_addr_size = 0;
   {
-    for EachIndex(idx, all_syms_count)
+    for EachIndex(idx, comp_units_count)
     {
-      arch = cv2r_rdi_arch_from_cv_arch(all_syms[idx]->info.arch);
+      arch = cv2r_rdi_arch_from_cv_arch(comp_units[idx].sym->info.arch);
       if(arch != RDI_Arch_NULL)
       {
         break;
@@ -747,10 +744,10 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
     U64 *symbol_count_prediction_ptr = &symbol_count_prediction;
     lane_sync_u64(&symbol_count_prediction_ptr, 0);
     U64 lane_sym_count = 0;
-    Rng1U64 range = lane_range(all_syms_count);
+    Rng1U64 range = lane_range(comp_units_count);
     for EachInRange(idx, range)
     {
-      lane_sym_count += all_syms[idx]->sym_ranges.count;
+      lane_sym_count += comp_units[idx].sym->sym_ranges.count;
     }
     ins_atomic_u64_add_eval(symbol_count_prediction_ptr, lane_sym_count);
     lane_sync();
@@ -761,7 +758,7 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
   //- rjf: build link name map
   //
   CV2R_LinkNameMap *link_name_map = 0;
-  ProfScope("build link name map") if(all_syms_count != 0 && lane_idx() == 0)
+  ProfScope("build link name map") if(comp_units_count != 0 && lane_idx() == 0)
   {
     // rjf: set up
     {
@@ -773,7 +770,7 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
     // rjf: fill
     if(params->subset_flags & RDIM_SubsetFlag_Procedures)
     {
-      CV_SymParsed *sym = all_syms[0];
+      CV_SymParsed *sym = comp_units[0].sym;
       for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
       {
         switch(iter.kind)
@@ -810,8 +807,8 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
     //- rjf: prep outputs
     ProfScope("prep outputs") if(lane_idx() == 0)
     {
-      unit_file_stubs = push_array(scratch.arena, CV2R_SrcFileStubArray, comp_units_count + 1);
-      unit_file_paths_hashes = push_array(scratch.arena, U64Array, comp_units_count + 1);
+      unit_file_stubs = push_array(scratch.arena, CV2R_SrcFileStubArray, comp_units_count);
+      unit_file_paths_hashes = push_array(scratch.arena, U64Array, comp_units_count);
     }
     lane_sync_u64(&unit_file_stubs, 0);
     lane_sync_u64(&unit_file_paths_hashes, 0);
@@ -833,26 +830,15 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
       {
         //- rjf: take next unit
         U64 unit_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
-        if(unit_idx >= comp_units_count + 1)
+        if(unit_idx >= comp_units_count)
         {
           break;
         }
         
         //- rjf: unpack unit
-        CV_SymParsed *sym = all_syms[unit_idx];
-        CV_C13Parsed *c13 = all_c13s[unit_idx];
-        
-        //- rjf: produce obj name/path
-        String8 obj_name = str8_lit("*global*");
-        if(unit_idx > 0)
-        {
-          obj_name = comp_units[unit_idx-1].obj_name;
-          if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
-             str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
-          {
-            MemoryZeroStruct(&obj_name);
-          }
-        }
+        CV_SymParsed *sym = comp_units[unit_idx].sym;
+        CV_C13Parsed *c13 = comp_units[unit_idx].c13;
+        String8 obj_name = comp_units[unit_idx].obj_name;
         String8 obj_folder_path = backslashed_from_str8(scratch2.arena, str8_chop_last_slash(obj_name));
         
         //- rjf: find all inline site symbols & gather file stubs
@@ -1163,13 +1149,13 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
       all_units_ptr = push_array(scratch.arena, RDIM_UnitChunkList, 1);
       if(params->subset_flags & RDIM_SubsetFlag_Units)
       {
-        for EachIndex(idx, comp_units_count + 1)
+        for EachIndex(idx, comp_units_count)
         {
-          rdim_unit_chunk_list_push(arena, all_units_ptr, comp_units_count + 1);
+          rdim_unit_chunk_list_push(arena, all_units_ptr, comp_units_count);
         }
       }
-      units_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, comp_units_count + 1);
-      units_first_inline_site_line_tables = push_array(scratch.arena, RDIM_LineTable *, comp_units_count + 1);
+      units_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, comp_units_count);
+      units_first_inline_site_line_tables = push_array(scratch.arena, RDIM_LineTable *, comp_units_count);
     }
     lane_sync_u64(&all_units_ptr, 0);
     lane_sync_u64(&units_line_tables, 0);
@@ -1195,9 +1181,9 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
         }
         Temp scratch = scratch_begin(&arena, 1);
         RDIM_LineTableChunkList *dst_line_tables = &units_line_tables[unit_idx];
-        CV2R_CompUnit *src_unit = (unit_idx > 0 ? &comp_units[unit_idx-1] : 0);
-        CV_SymParsed *src_unit_sym = all_syms[unit_idx];
-        CV_C13Parsed *src_unit_c13 = all_c13s[unit_idx];
+        CV2R_CompUnit *src_unit = &comp_units[unit_idx];
+        CV_SymParsed *src_unit_sym = comp_units[unit_idx].sym;
+        CV_C13Parsed *src_unit_c13 = comp_units[unit_idx].c13;
         RDIM_Unit *dst_unit = 0;
         if(params->subset_flags & RDIM_SubsetFlag_Units) { dst_unit = &units[unit_idx]; }
         
@@ -1525,7 +1511,7 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
   RDIM_LineTableChunkList *all_line_tables_ptr = &all_line_tables;
   ProfScope("join all line tables") if(lane_idx() == 0)
   {
-    for EachIndex(idx, comp_units_count + 1)
+    for EachIndex(idx, comp_units_count)
     {
       rdim_line_table_chunk_list_concat_in_place(&all_line_tables, &units_line_tables[idx]);
     }
@@ -2818,11 +2804,11 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
     for(;;)
     {
       U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
-      if(sym_idx >= all_syms_count)
+      if(sym_idx >= comp_units_count)
       {
         break;
       }
-      CV_SymParsed *sym = all_syms[sym_idx];
+      CV_SymParsed *sym = comp_units[sym_idx].sym;
       for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
       {
         switch(iter.kind)
@@ -2875,11 +2861,11 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
     for(;;)
     {
       U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
-      if(sym_idx >= all_syms_count)
+      if(sym_idx >= comp_units_count)
       {
         break;
       }
-      CV_SymParsed *sym = all_syms[sym_idx];
+      CV_SymParsed *sym = comp_units[sym_idx].sym;
       for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
       {
         // rjf: get global symbol name
@@ -3123,8 +3109,8 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
     //
     if(lane_idx() == 0)
     {
-      syms_typedefs = push_array(arena, RDIM_TypeChunkList, all_syms_count);
-      syms_scopes_that_are_namespaces = push_array(arena, ScopeNamespaceList, all_syms_count);
+      syms_typedefs = push_array(arena, RDIM_TypeChunkList, comp_units_count);
+      syms_scopes_that_are_namespaces = push_array(arena, ScopeNamespaceList, comp_units_count);
     }
     lane_sync_u64(&syms_typedefs, 0);
     lane_sync_u64(&syms_scopes_that_are_namespaces, 0);
@@ -3150,14 +3136,14 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
       {
         //- rjf: take next sym
         U64 sym_idx = ins_atomic_u64_inc_eval(sym_take_counter) - 1;
-        if(sym_idx >= all_syms_count)
+        if(sym_idx >= comp_units_count)
         {
           break;
         }
         
         //- rjf: unpack sym
         Temp scratch = scratch_begin(&arena, 1);
-        CV_SymParsed *sym = all_syms[sym_idx];
+        CV_SymParsed *sym = comp_units[sym_idx].sym;
         RDIM_Unit *sym_unit = &all_units_ptr->first->v[sym_idx];
         RDIM_SymbolChunkList *sym_procedures = &sym_unit->procedures;
         RDIM_SymbolChunkList *sym_global_variables = &sym_unit->global_variables;
@@ -3429,7 +3415,7 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
               
               //- rjf: UDT (typedefs)
               case CV_SymKind_UDT:
-              if(sym == all_syms[0] && top_scope_node == 0)
+              if(sym == comp_units[0].sym && top_scope_node == 0)
               {
                 if(params->subset_flags & (RDIM_SubsetFlag_Types|RDIM_SubsetFlag_UDTs|RDIM_SubsetFlag_TypeNameMap))
                 {
@@ -4209,7 +4195,7 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
   //
   if(lane_idx() == 0)
   {
-    CV_SymParsed *sym = all_syms[0];
+    CV_SymParsed *sym = comp_units[0].sym;
     for(CV_RecIter iter = {0}; cv_rec_next(sym->data, &sym->sym_ranges, 0, &iter);)
     {
       RDIM_Unit *sym_unit = &all_units_ptr->first->v[0];
@@ -4280,7 +4266,7 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
   //
   if(lane_idx() == 0)
   {
-    for EachIndex(sym_idx, all_syms_count)
+    for EachIndex(sym_idx, comp_units_count)
     {
       ScopeNamespaceList *scopes_that_are_namespaces = &syms_scopes_that_are_namespaces[sym_idx];
       for(ScopeNamespaceNode *scope_n = scopes_that_are_namespaces->first; scope_n != 0; scope_n = scope_n->next)
@@ -4341,7 +4327,7 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
     lane_sync_u64(&all_types_ptr, 0);
     if(lane_idx() == lane_from_task_idx(7)) ProfScope("join typedefs")
     {
-      for EachIndex(idx, all_syms_count)
+      for EachIndex(idx, comp_units_count)
       {
         rdim_type_chunk_list_concat_in_place(all_types__pre_typedefs_ptr, &syms_typedefs[idx]);
       }
