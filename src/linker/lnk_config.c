@@ -119,6 +119,7 @@ global read_only struct
   { "obj",  LNK_Input_Obj },
   { "lib",  LNK_Input_Lib },
   { "rlib", LNK_Input_Lib }, // rust libs
+  { "a",    LNK_Input_Lib }, // GNU ar archives (clang/meson, e.g. libdav1d.a)
   { "res",  LNK_Input_Res },
   { "rrt",  LNK_Input_RRT },
 };
