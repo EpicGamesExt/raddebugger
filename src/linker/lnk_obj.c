@@ -127,13 +127,13 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   //
   // error check symbol table (+ memoize parsed symbols)
   //
-  COFF_ParsedSymbol *parsed_symbols = push_array(arena, COFF_ParsedSymbol, header.symbol_count);
+  LNK_ParsedSymbolLite *parsed_symbols = push_array(arena, LNK_ParsedSymbolLite, header.symbol_count);
   {
     COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(input->data, header.section_table_range).str;
     COFF_ParsedSymbol symbol;
     for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
       symbol = coff_parse_symbol(header, raw_coff_string_table, raw_coff_symbol_table, symbol_idx);
-      parsed_symbols[symbol_idx] = symbol;
+      parsed_symbols[symbol_idx] = (LNK_ParsedSymbolLite){ symbol.value, symbol.section_number, symbol.type, symbol.storage_class, symbol.aux_symbol_count, symbol.raw_symbol };
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
       if (interp == COFF_SymbolValueInterp_Regular) {
         if (symbol.section_number == 0 || symbol.section_number > header.section_count_no_null) {
@@ -665,15 +665,31 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
 // obj->data symbol table -- so obj->data symbol values are never written after load. raw_symbol still
 // points into obj->data (read-only) for aux-record reads (coff_parse_weak_tag / coff_parse_secdef).
 internal COFF_ParsedSymbol
-lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
+lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx)
 {
-  return obj->parsed_symbols[symbol_idx];
+  LNK_ParsedSymbolLite *lite = &obj->parsed_symbols[symbol_idx];
+  COFF_ParsedSymbol result = {0};
+  result.value            = lite->value;
+  result.section_number   = lite->section_number;
+  result.type             = lite->type;
+  result.storage_class    = lite->storage_class;
+  result.aux_symbol_count = lite->aux_symbol_count;
+  result.raw_symbol       = lite->raw_symbol;
+  return result;
 }
 
 internal COFF_ParsedSymbol
-lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx)
+lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
 {
-  return obj->parsed_symbols[symbol_idx];
+  COFF_ParsedSymbol result = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
+  // name is excluded from the memo -- decode it from the (read-only) symbol record on demand. Patching
+  // never touches the name, so re-deriving from raw_symbol stays correct after value/section patches.
+  if (result.raw_symbol) {
+    String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
+    if (obj->header.is_big_obj) { result.name = coff_parse_symbol32(string_table, (COFF_Symbol32 *)result.raw_symbol).name; }
+    else                        { result.name = coff_parse_symbol16(string_table, (COFF_Symbol16 *)result.raw_symbol).name; }
+  }
+  return result;
 }
 
 internal

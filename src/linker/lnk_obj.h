@@ -5,6 +5,20 @@
 
 // --- Input -------------------------------------------------------------------
 
+// Slim memoized symbol parse: every COFF_ParsedSymbol field EXCEPT name (the 16B String8). Sized by
+// total symbol count, so dropping name saves ~16B/sym of peak. The name is the cold path -- it is
+// re-decoded from raw_symbol on demand in lnk_parsed_symbol_from_coff_symbol_idx (the named accessor);
+// the hot _no_name accessor and all symbol-value patching never touch it.
+typedef struct LNK_ParsedSymbolLite
+{
+  U64                  value;
+  U32                  section_number;
+  COFF_SymbolType      type;
+  COFF_SymStorageClass storage_class;
+  U8                   aux_symbol_count;
+  void                *raw_symbol;
+} LNK_ParsedSymbolLite;
+
 typedef struct LNK_Obj
 {
   String8 path;
@@ -12,8 +26,8 @@ typedef struct LNK_Obj
 
   COFF_FileHeaderInfo header;
   COFF_SectionFlags  *section_flags;
-  COFF_ParsedSymbol  *parsed_symbols; // memoized parse per symbol_idx (aux slots zeroed). Mutable: symbol-value
-                                       // patching writes here, NOT into the mmapped obj->data symbol table.
+  LNK_ParsedSymbolLite *parsed_symbols; // memoized parse per symbol_idx (aux slots zeroed), name excluded.
+                                         // Mutable: symbol-value patching writes here, NOT obj->data.
 
   // flags
   B8 hotpatch;
