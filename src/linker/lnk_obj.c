@@ -133,7 +133,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     COFF_ParsedSymbol symbol;
     for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
       symbol = coff_parse_symbol(header, raw_coff_string_table, raw_coff_symbol_table, symbol_idx);
-      parsed_symbols[symbol_idx] = (LNK_ParsedSymbolLite){ symbol.value, symbol.section_number, symbol.type, symbol.storage_class, symbol.aux_symbol_count, symbol.raw_symbol };
+      U32 raw_off = symbol.raw_symbol ? safe_cast_u32((U8 *)symbol.raw_symbol - input->data.str) : 0;
+      parsed_symbols[symbol_idx] = (LNK_ParsedSymbolLite){ raw_off, safe_cast_u32(symbol.value), symbol.section_number, symbol.type, symbol.storage_class, symbol.aux_symbol_count };
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
       if (interp == COFF_SymbolValueInterp_Regular) {
         if (symbol.section_number == 0 || symbol.section_number > header.section_count_no_null) {
@@ -689,7 +690,7 @@ lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx)
   result.type             = lite->type;
   result.storage_class    = lite->storage_class;
   result.aux_symbol_count = lite->aux_symbol_count;
-  result.raw_symbol       = lite->raw_symbol;
+  result.raw_symbol       = lite->raw_symbol_off ? (obj->data.str + lite->raw_symbol_off) : 0; // offset -> ptr
   return result;
 }
 

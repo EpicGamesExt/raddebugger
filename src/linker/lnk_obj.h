@@ -11,12 +11,13 @@
 // the hot _no_name accessor and all symbol-value patching never touch it.
 typedef struct LNK_ParsedSymbolLite
 {
-  U64                  value;
+  U32                  raw_symbol_off;   // byte offset of the COFF symbol record within obj->data (0 = none).
+                                         // stored as an offset, not a pointer, to keep this struct 16B.
+  U32                  value;            // COFF symbol value is U32 (section-relative offset / size / etc.)
   U32                  section_number;
-  COFF_SymbolType      type;
-  COFF_SymStorageClass storage_class;
+  COFF_SymbolType      type;             // U16
+  COFF_SymStorageClass storage_class;    // U8
   U8                   aux_symbol_count;
-  void                *raw_symbol;
 } LNK_ParsedSymbolLite;
 
 typedef struct LNK_Obj
