@@ -3031,6 +3031,296 @@ lnk_pdb_output_enqueue_remaining(LNK_PdbOutput *output, MSF_Context *msf)
   scratch_end(scratch);
 }
 
+////////////////////////////////
+// Type Garbage Collection
+//
+// After type merging, prune merged TPI/IPI leaves that are not reachable from any surviving
+// symbol record (the GC roots), compact them, and remap all type indices. link.exe keeps a
+// large unreferenced-type set; pruning it is a transparent PDB-size win (debug-info only -- the
+// image is untouched). Runs on the final post-fixup type indices in place.
+
+typedef struct LNK_GCTypes
+{
+  LNK_CodeViewInput *cv;
+  U64                min   [CV_TypeIndexSource_COUNT]; // first type index per source
+  U64                orig_n[CV_TypeIndexSource_COUNT]; // pre-GC leaf count per source
+  U8                *mark    [CV_TypeIndexSource_COUNT]; // reachable bitmap, indexed by (ti - min)
+  U8                *expanded[CV_TypeIndexSource_COUNT]; // transitive-closure: already-visited bitmap
+  CV_TypeIndex      *remap   [CV_TypeIndexSource_COUNT]; // old leaf idx -> new type index
+  U8               **leaf_v  [CV_TypeIndexSource_COUNT]; // original leaf pointer arrays
+  U32               *udt_next;                           // TPI fwdref<->definition unique_name ring
+  U32               *changed;                            // set when a closure round marks something new
+  Rng1U64           *sym_ranges;
+  B32                do_rewrite;                         // 0 = mark roots, 1 = rewrite to compacted indices
+  // per-source scratch (set before dispatch)
+  CV_TypeIndexSource cur_source;
+  U8               **cur_leaf_v;
+  Rng1U64           *cur_ranges;
+} LNK_GCTypes;
+
+typedef struct LNK_GCNamePair { U64 hash; U32 idx; } LNK_GCNamePair;
+
+internal int
+lnk_gc_name_pair_is_before(void *raw_a, void *raw_b)
+{
+  LNK_GCNamePair *a = raw_a, *b = raw_b;
+  return a->hash != b->hash ? (a->hash < b->hash) : (a->idx < b->idx);
+}
+
+internal void
+lnk_gc_mark_ti(LNK_GCTypes *g, CV_TypeIndexSource s, CV_TypeIndex ti)
+{
+  U64 lo = g->min[s];
+  if (ti >= lo) { U64 idx = ti - lo; if (idx < g->orig_n[s]) { g->mark[s][idx] = 1; } }
+}
+
+// walk a record's type-index sites; mark roots (do_rewrite==0) or rewrite to compacted indices (==1)
+internal void
+lnk_gc_visit_offsets(LNK_GCTypes *g, String8 data, CV_TypeIndexInfoList ti_info_list)
+{
+  for EachNode(n, CV_TypeIndexInfo, ti_info_list.first) {
+    U8          *p  = data.str + n->offset;
+    CV_TypeIndex ti = memory_read32(p);
+    if (g->do_rewrite) {
+      U64 lo = g->min[n->source];
+      if (ti >= lo) { U64 idx = ti - lo; if (idx < g->orig_n[n->source]) { memory_write32(p, g->remap[n->source][idx]); } }
+    } else {
+      lnk_gc_mark_ti(g, n->source, ti);
+    }
+  }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_gc_syms_task)
+{
+  LNK_GCTypes *g = raw_task;
+  Temp scratch = scratch_begin(0, 0);
+  for EachInRange(i, g->sym_ranges[task_id]) {
+    LNK_SymbolInput symbols = g->cv->symbol_inputs[i];
+    for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
+      Temp temp = temp_begin(scratch.arena);
+      CV_Symbol symbol = {0};
+      TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
+      CV_TypeIndexInfoList l = cv_get_symbol_type_index_offsets(temp.arena, symbol.kind, symbol.data);
+      lnk_gc_visit_offsets(g, symbol.data, l);
+      temp_end(temp);
+    }
+  }
+  scratch_end(scratch);
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_gc_inlines_task)
+{
+  LNK_GCTypes *g = raw_task;
+  U64 obj_idx = task_id;
+  Temp scratch = scratch_begin(0, 0);
+  String8List inlinee_lines = cv_sub_section_from_debug_s(g->cv->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
+  for EachNode(dn, String8Node, inlinee_lines.first) {
+    Temp temp = temp_begin(scratch.arena);
+    CV_TypeIndexInfoList l = cv_get_inlinee_type_index_offsets(temp.arena, dn->string);
+    lnk_gc_visit_offsets(g, dn->string, l);
+    temp_end(temp);
+  }
+  scratch_end(scratch);
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_gc_rewrite_leaves_task)
+{
+  LNK_GCTypes *g = raw_task;
+  Temp scratch = scratch_begin(0, 0);
+  for EachInRange(i, g->cur_ranges[task_id]) {
+    Temp temp = temp_begin(scratch.arena);
+    CV_Leaf leaf = cv_leaf_from_ptr(g->cur_leaf_v[i]);
+    CV_TypeIndexInfoList l = cv_get_leaf_type_index_offsets(temp.arena, leaf.kind, leaf.data);
+    lnk_gc_visit_offsets(g, leaf.data, l);
+    temp_end(temp);
+  }
+  scratch_end(scratch);
+}
+
+typedef struct LNK_GCRingTask
+{
+  U8            **leaf_v;
+  Rng1U64        *ranges;
+  U64            *counts;
+  U64            *offsets;
+  LNK_GCNamePair *pairs;
+} LNK_GCRingTask;
+
+// parallel: count UDT leaves with a unique_name per range (pass 0) / emit (hash,idx) pairs (pass 1)
+internal
+THREAD_POOL_TASK_FUNC(lnk_gc_ring_count_task)
+{
+  LNK_GCRingTask *t = raw_task;
+  U64 n = 0;
+  for EachInRange(i, t->ranges[task_id]) {
+    CV_Leaf leaf = cv_leaf_from_ptr(t->leaf_v[i]);
+    if (cv_is_udt(leaf.kind)) {
+      CV_UDTInfo ui = cv_get_udt_info(leaf.kind, leaf.data);
+      if (ui.props & CV_TypeProp_HasUniqueName) { n += 1; }
+    }
+  }
+  t->counts[task_id] = n;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_gc_ring_fill_task)
+{
+  LNK_GCRingTask *t = raw_task;
+  U64 cur = t->offsets[task_id];
+  for EachInRange(i, t->ranges[task_id]) {
+    CV_Leaf leaf = cv_leaf_from_ptr(t->leaf_v[i]);
+    if (cv_is_udt(leaf.kind)) {
+      CV_UDTInfo ui = cv_get_udt_info(leaf.kind, leaf.data);
+      if (ui.props & CV_TypeProp_HasUniqueName) {
+        U64 h = 14695981039346656037ull;
+        for EachIndex(c, ui.unique_name.size) { h = (h ^ ui.unique_name.str[c]) * 0x100000001b3ull; }
+        t->pairs[cur].hash = h; t->pairs[cur].idx = (U32)i; cur += 1;
+      }
+    }
+  }
+}
+
+// one bulk-synchronous round of transitive closure: visit each marked-but-unexpanded leaf in
+// this source, mark the leaves it references (and its unique_name UDT counterparts). Parallel;
+// `expanded` is grabbed atomically so each leaf is visited once, `changed` flags progress.
+internal
+THREAD_POOL_TASK_FUNC(lnk_gc_expand_task)
+{
+  LNK_GCTypes       *g = raw_task;
+  CV_TypeIndexSource s = g->cur_source;
+  Temp scratch = scratch_begin(0, 0);
+  for EachInRange(i, g->cur_ranges[task_id]) {
+    if (!g->mark[s][i]) { continue; }
+    if (ins_atomic_u8_eval_assign(&g->expanded[s][i], 1)) { continue; } // already visited
+
+    Temp temp = temp_begin(scratch.arena);
+    CV_Leaf leaf = cv_leaf_from_ptr(g->leaf_v[s][i]);
+    CV_TypeIndexInfoList l = cv_get_leaf_type_index_offsets(temp.arena, leaf.kind, leaf.data);
+    for EachNode(n, CV_TypeIndexInfo, l.first) {
+      CV_TypeIndex ti = memory_read32(leaf.data.str + n->offset);
+      U64 lo = g->min[n->source];
+      if (ti >= lo) {
+        U64 ci = ti - lo;
+        if (ci < g->orig_n[n->source] && !g->mark[n->source][ci]) { g->mark[n->source][ci] = 1; ins_atomic_u32_eval_assign(g->changed, 1); }
+      }
+    }
+    temp_end(temp);
+
+    if (s == CV_TypeIndexSource_TPI) {
+      for (U32 j = g->udt_next[i]; j != i; j = g->udt_next[j]) {
+        if (!g->mark[CV_TypeIndexSource_TPI][j]) { g->mark[CV_TypeIndexSource_TPI][j] = 1; ins_atomic_u32_eval_assign(g->changed, 1); }
+      }
+    }
+  }
+  scratch_end(scratch);
+}
+
+internal void
+lnk_gc_types(TP_Context *tp, Arena *arena, LNK_CodeViewInput *cv, LNK_MergedTypes *types)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+
+  LNK_GCTypes g = {0};
+  g.cv = cv;
+  U64 total_leaves = 0;
+  for EachIndex(s, CV_TypeIndexSource_COUNT) {
+    g.min[s]    = types->min_type_indices[s];
+    g.orig_n[s] = types->count[s];
+    g.leaf_v[s] = types->v[s];
+    g.mark[s]   = push_array(scratch.arena, U8, g.orig_n[s] ? g.orig_n[s] : 1); // zeroed
+    total_leaves += g.orig_n[s];
+  }
+
+  // mark roots: every type index referenced by a surviving symbol / inlinee record
+  g.do_rewrite = 0;
+  g.sym_ranges = tp_divide_work(scratch.arena, cv->symbol_input_count, tp->worker_count);
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_gc_syms_task, &g);
+  tp_for_parallel(tp, 0, cv->obj_count,    lnk_gc_inlines_task, &g);
+
+  // link UDT leaves that share a unique_name into rings, so that marking any one (e.g. a
+  // forward ref reached as a member-pointer target) also keeps its full definition -- needed
+  // for the debugger to complete types referenced only by name. TPI only (IPI has no UDTs).
+  U64  n_tpi   = g.orig_n[CV_TypeIndexSource_TPI];
+  g.udt_next   = push_array_no_zero(scratch.arena, U32, n_tpi ? n_tpi : 1);
+  for EachIndex(i, n_tpi) { g.udt_next[i] = (U32)i; }
+  {
+    LNK_GCRingTask rt = {0};
+    rt.leaf_v  = g.leaf_v[CV_TypeIndexSource_TPI];
+    rt.ranges  = tp_divide_work(scratch.arena, n_tpi, tp->worker_count);
+    rt.counts  = push_array(scratch.arena, U64, tp->worker_count);
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_gc_ring_count_task, &rt);
+    rt.offsets = offsets_from_counts_array_u64(scratch.arena, rt.counts, tp->worker_count);
+    U64 np     = sum_array_u64(tp->worker_count, rt.counts);
+    rt.pairs   = push_array_no_zero(scratch.arena, LNK_GCNamePair, np ? np : 1);
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_gc_ring_fill_task, &rt);
+
+    radsort(rt.pairs, np, lnk_gc_name_pair_is_before);
+    for (U64 a = 0; a < np; ) {
+      U64 b = a + 1;
+      while (b < np && rt.pairs[b].hash == rt.pairs[a].hash) { b += 1; }
+      for (U64 k = a; k < b; k += 1) { g.udt_next[rt.pairs[k].idx] = rt.pairs[(k + 1 < b) ? (k + 1) : a].idx; }
+      a = b;
+    }
+  }
+
+  // transitive closure (parallel, bulk-synchronous): repeat rounds that visit each
+  // marked-but-unexpanded leaf and mark what it references, until a round marks nothing new
+  U32     changed = 0;
+  g.changed       = &changed;
+  Rng1U64 *expand_ranges[CV_TypeIndexSource_COUNT];
+  for EachIndex(s, CV_TypeIndexSource_COUNT) {
+    g.expanded[s]    = push_array(scratch.arena, U8, g.orig_n[s] ? g.orig_n[s] : 1);
+    expand_ranges[s] = tp_divide_work(scratch.arena, g.orig_n[s], tp->worker_count);
+  }
+  do {
+    changed = 0;
+    for EachIndex(s, CV_TypeIndexSource_COUNT) {
+      g.cur_source = (CV_TypeIndexSource)s;
+      g.cur_ranges = expand_ranges[s];
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_gc_expand_task, &g);
+    }
+  } while (changed);
+
+  // compact each source: assign new contiguous type indices to the kept leaves. The leaf
+  // pointer array is compacted IN PLACE (kept count only shrinks, so the write cursor never
+  // passes the read cursor) and remap lives in scratch -- so the GC adds nothing to the arena
+  // that survives into the (peak) PDB build.
+  U64 kept_total = 0;
+  for EachIndex(s, CV_TypeIndexSource_COUNT) {
+    g.remap[s]      = push_array_no_zero(scratch.arena, CV_TypeIndex, g.orig_n[s] ? g.orig_n[s] : 1);
+    U8 **v          = g.leaf_v[s];
+    U64  new_n      = 0;
+    for EachIndex(idx, g.orig_n[s]) {
+      if (g.mark[s][idx]) { g.remap[s][idx] = (CV_TypeIndex)(g.min[s] + new_n); v[new_n++] = v[idx]; }
+      else                { g.remap[s][idx] = 0; /* T_NOTYPE; never referenced by a kept record */ }
+    }
+    types->count[s] = new_n;
+    kept_total += new_n;
+  }
+
+  // rewrite all type-index references to the compacted indices
+  g.do_rewrite = 1;
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_gc_syms_task, &g);
+  tp_for_parallel(tp, 0, cv->obj_count,    lnk_gc_inlines_task, &g);
+  for EachIndex(s, CV_TypeIndexSource_COUNT) {
+    g.cur_source = (CV_TypeIndexSource)s;
+    g.cur_leaf_v = types->v[s];
+    g.cur_ranges = tp_divide_work(scratch.arena, types->count[s], tp->worker_count);
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_gc_rewrite_leaves_task, &g);
+  }
+
+  if (lnk_get_log_status(LNK_Log_Debug)) {
+    lnk_log(LNK_Log_Debug, "type GC: kept %llu of %llu leaves (pruned %llu)", kept_total, total_leaves, total_leaves - kept_total);
+  }
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
 internal LNK_FileArtifact
 lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags)
 {

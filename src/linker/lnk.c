@@ -6588,6 +6588,13 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     LNK_CodeViewInput cv        = lnk_make_code_view_input(tp, arena, config, debug_info_objs_count, debug_info_objs, rrt_input);
     LNK_MergedTypes   cv_types  = lnk_merge_types(tp, arena, &cv, 0);
 
+    // prune merged types not reachable from any surviving symbol (PDB-size win). OFF by default:
+    // it removes types that a debugger can still legitimately cast to in the watch window
+    // (reachable-from-symbols is a subset of castable-types). Opt in with /OPT:GCTYPES.
+    if (config->opt_gc_types == LNK_SwitchState_Yes) {
+      lnk_gc_types(tp, arena->v[0], &cv, &cv_types);
+    }
+
     //
     // Debug Info
     //

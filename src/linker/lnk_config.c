@@ -1727,6 +1727,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
         config->opt_lbr = LNK_SwitchState_Yes;
       } else if (str8_match_lit("nolibr", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_lbr = LNK_SwitchState_No;
+      } else if (str8_match_lit("gctypes", param, StringMatchFlag_CaseInsensitive)) {
+        config->opt_gc_types = LNK_SwitchState_Yes;
+      } else if (str8_match_lit("nogctypes", param, StringMatchFlag_CaseInsensitive)) {
+        config->opt_gc_types = LNK_SwitchState_No;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown option \"%S\"", param);
       }

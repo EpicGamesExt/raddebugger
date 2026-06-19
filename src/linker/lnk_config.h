@@ -324,6 +324,7 @@ typedef struct LNK_Config
   LNK_SwitchState             opt_ref;
   LNK_SwitchState             opt_icf;
   LNK_SwitchState             opt_lbr;
+  LNK_SwitchState             opt_gc_types; // /OPT:GCTYPES -- prune unreferenced CodeView types. Default OFF: shrinks PDB but a pruned type can't be cast-to in the debugger watch window.
   U64                         opt_iter_count;
   LNK_SwitchState             import_table_emit_biat;
   LNK_SwitchState             import_table_emit_uiat;
