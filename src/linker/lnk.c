@@ -78,6 +78,8 @@
 #include "pdb_ext/msf_builder.c"
 #include "pdb_ext/pdb.c"
 #include "pdb_ext/pdb_helpers.c"
+// fwd decl: parallel radix sort (defined later in this TU) so pdb_builder.c can use it
+internal void lnk_radix_sort_u64_pairs(TP_Context *tp, Arena *arena, U64 n, U64 *keys, U32 *vals);
 #include "pdb_ext/pdb_builder.c"
 
 // --- RDI ---------------------------------------------------------------------
@@ -2407,6 +2409,13 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   }
 
   //
+  // fold identical code COMDATs (routes followers to a leader; /OPT:REF then GCs them)
+  //
+  if (config->opt_icf == LNK_SwitchState_Yes) {
+    lnk_opt_icf(tp, symtab, config, link->objs);
+  }
+
+  //
   // discard COMDAT sections that are not referenced
   //
   if (config->opt_ref == LNK_SwitchState_Yes) {
@@ -2687,7 +2696,7 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
               if (section_flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
 
               LNK_RelocRefs refs = {0};
-              refs.obj    = ref_symbol.obj;
+              refs.obj         = ref_symbol.obj;
               refs.relocs = lnk_coff_reloc_info_from_section_number(ref_symbol.obj, section_number);
 
               // get a batch node
@@ -2790,6 +2799,485 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
   barrier_wait(tp->barrier);
 
   scratch_end(scratch2);
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal U64
+lnk_icf_mix(U64 h, U64 x)
+{
+  h ^= x;
+  h *= 0x100000001b3ull;
+  h ^= h >> 29;
+  return h;
+}
+
+// Flat open-addressing U64 -> U64 map used by /OPT:ICF. The tree-based HashMap is far too slow
+// for the millions of per-round dense-id lookups; this linear-probing table keeps the hot loops
+// cache-friendly. Empty slots hold key == LNK_ICF_EMPTY (a value the stored hashes never take).
+#define LNK_ICF_EMPTY 0xffffffffffffffffull
+typedef struct LNK_ICFMap
+{
+  U64 *keys;
+  U64 *vals;
+  U64  mask;
+} LNK_ICFMap;
+
+// avalanche so structured keys (e.g. (input_idx<<32)|section_number, whose low bits repeat
+// across objects) scatter across slots instead of clustering into long probe chains
+internal U64
+lnk_icf_scramble(U64 x)
+{
+  x ^= x >> 33;
+  x *= 0xff51afd7ed558ccdull;
+  x ^= x >> 33;
+  x *= 0xc4ceb9fe1a85ec53ull;
+  x ^= x >> 33;
+  return x;
+}
+
+internal LNK_ICFMap
+lnk_icf_map_make(Arena *arena, U64 capacity)
+{
+  U64 cap = 1;
+  while (cap < capacity*2) { cap <<= 1; }
+  LNK_ICFMap m = {0};
+  m.keys = push_array_no_zero(arena, U64, cap);
+  m.vals = push_array_no_zero(arena, U64, cap);
+  m.mask = cap - 1;
+  for EachIndex(i, cap) { m.keys[i] = LNK_ICF_EMPTY; }
+  return m;
+}
+
+// look up key; returns stored value or fallback if absent
+internal U64
+lnk_icf_map_get(LNK_ICFMap *m, U64 key, U64 fallback)
+{
+  U64 slot = lnk_icf_scramble(key) & m->mask;
+  for (;;) {
+    U64 k = m->keys[slot];
+    if (k == key)          { return m->vals[slot]; }
+    if (k == LNK_ICF_EMPTY) { return fallback; }
+    slot = (slot + 1) & m->mask;
+  }
+}
+
+internal void
+lnk_icf_map_put(LNK_ICFMap *m, U64 key, U64 val)
+{
+  U64 slot = lnk_icf_scramble(key) & m->mask;
+  for (;;) {
+    U64 k = m->keys[slot];
+    if (k == LNK_ICF_EMPTY || k == key) { m->keys[slot] = key; m->vals[slot] = val; return; }
+    slot = (slot + 1) & m->mask;
+  }
+}
+
+typedef struct LNK_ICFCand
+{
+  LNK_Obj *obj;
+  U32      sn;          // section number
+  U32      reloc_first; // index into flattened reloc-target arrays
+  U32      reloc_count;
+  U64      key0;        // round-0 content key
+  U64      color;       // current equivalence class
+} LNK_ICFCand;
+
+typedef struct LNK_ICFHashTask
+{
+  Rng1U64         *ranges;
+  LNK_ICFCand     *cands;
+  LNK_ICFMap      *cand_map;
+  LNK_SymbolTable *symtab;
+  U8              *rt_iscand;
+  U64             *rt_target;
+} LNK_ICFHashTask;
+
+// per-candidate content hash + relocation-target resolution (parallel; each candidate writes
+// its own disjoint reloc slice and key0, all reads are of immutable structures)
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_hash_task)
+{
+  LNK_ICFHashTask *task = raw_task;
+  for EachInRange(ci, task->ranges[task_id]) {
+    LNK_ICFCand        *c      = &task->cands[ci];
+    COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(c->obj, c->sn);
+    COFF_RelocArray     relocs = lnk_coff_relocs_from_section_header(c->obj, header);
+    String8             data   = str8_substr(c->obj->data, rng_1u64(header->foff, header->foff + header->fsize));
+
+    blake3_hasher h; blake3_hasher_init(&h);
+    U32 flags_for_hash = c->obj->section_flags[c->sn - 1] & ~(COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_LnkRemove);
+    blake3_hasher_update(&h, &flags_for_hash, sizeof(flags_for_hash));
+    blake3_hasher_update(&h, &header->fsize, sizeof(header->fsize));
+    blake3_hasher_update(&h, data.str, data.size);
+
+    for EachIndex(ri, relocs.count) {
+      COFF_Reloc *reloc = &relocs.v[ri];
+      blake3_hasher_update(&h, &reloc->type, sizeof(reloc->type));
+      blake3_hasher_update(&h, &reloc->apply_off, sizeof(reloc->apply_off));
+
+      COFF_ParsedSymbol          tp   = lnk_parsed_symbol_from_coff_symbol_idx(c->obj, reloc->isymbol);
+      COFF_SymbolValueInterpType ti   = coff_interp_from_parsed_symbol(tp);
+      LNK_ObjSymbolRef           tref = { c->obj, reloc->isymbol };
+      if (ti == COFF_SymbolValueInterp_Undefined || ti == COFF_SymbolValueInterp_Weak) {
+        LNK_ObjSymbolRef resolved = {0};
+        if (lnk_resolve_symbol(task->symtab, tref, &resolved)) {
+          tref = resolved;
+          tp   = lnk_parsed_symbol_from_coff_symbol_idx(tref.obj, tref.symbol_idx);
+          ti   = coff_interp_from_parsed_symbol(tp);
+        }
+      }
+
+      U8  iscand = 0;
+      U64 target = 0;
+      if (ti == COFF_SymbolValueInterp_Regular && tref.obj != 0) {
+        U64 cv = lnk_icf_map_get(task->cand_map, Compose64Bit(tref.obj->input_idx, tp.section_number), 0);
+        if (cv) { iscand = 1; target = cv - 1; }
+        else    { target = lnk_icf_mix(Compose64Bit(tref.obj->input_idx, tp.section_number), tp.value); }
+      } else {
+        U64 nh = 14695981039346656037ull;
+        for (U64 i = 0; i < tp.name.size; i += 1) { nh = lnk_icf_mix(nh, tp.name.str[i]); }
+        target = lnk_icf_mix(nh, tp.value);
+      }
+
+      U64 idx = (U64)c->reloc_first + ri;
+      task->rt_iscand[idx] = iscand;
+      task->rt_target[idx] = target;
+      if (!iscand) { blake3_hasher_update(&h, &target, sizeof(target)); }
+    }
+
+    U8 out[16]; blake3_hasher_finalize(&h, out, sizeof(out));
+    U64 lo = *(U64 *)&out[0], hi = *(U64 *)&out[8];
+    c->key0 = lnk_icf_mix(lo, hi);
+  }
+}
+
+typedef struct LNK_ICFRefineTask
+{
+  Rng1U64     *ranges;
+  LNK_ICFCand *cands;
+  U8          *rt_iscand;
+  U64         *rt_target;
+  U64         *newkey;
+} LNK_ICFRefineTask;
+
+// recompute each candidate's refinement key from its current color and its targets' colors
+// (parallel; reads the immutable color snapshot, writes its own newkey slot)
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_refine_task)
+{
+  LNK_ICFRefineTask *task = raw_task;
+  for EachInRange(ci, task->ranges[task_id]) {
+    LNK_ICFCand *c = &task->cands[ci];
+    U64 k = lnk_icf_mix(0x9e3779b97f4a7c15ull, c->color);
+    for EachIndex(j, c->reloc_count) {
+      U64 idx = (U64)c->reloc_first + j;
+      U64 t   = task->rt_iscand[idx] ? task->cands[task->rt_target[idx]].color : task->rt_target[idx];
+      k = lnk_icf_mix(k, t);
+    }
+    task->newkey[ci] = k;
+  }
+}
+
+// Is an object section an ICF fold candidate? Only externally-defined COMDATs are folded: the
+// follower is redirected at its shared symbol-table node, so every reference (including from other
+// objects) resolves to the leader and /OPT:REF then drops the follower. Returns 1 = candidate.
+internal U32
+lnk_icf_section_kind(LNK_Obj *obj, U64 sect_idx)
+{
+  COFF_SectionFlags flags = obj->section_flags[sect_idx];
+  if (~flags & COFF_SectionFlag_LnkCOMDAT) { return 0; }
+  if ( flags & COFF_SectionFlag_LnkRemove) { return 0; }
+  // fold code and read-only initialized data (const tables, vtables, string literals); folding
+  // identical read-only data lets functions that reference it fold too (cascade). Mutable data
+  // is never folded.
+  B32 is_code   = (flags & COFF_SectionFlag_CntCode) != 0;
+  B32 is_rodata = (flags & COFF_SectionFlag_CntInitializedData) && !(flags & COFF_SectionFlag_MemWrite);
+  if (!is_code && !is_rodata) { return 0; }
+  U32 sn = (U32)sect_idx + 1;
+  COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(obj, sn);
+  if (header->fsize == 0) { return 0; }
+  LNK_Symbol *sym = lnk_obj_get_comdat_symlink(obj, sn);
+  if (sym == 0) { return 0; } // no external defining symbol (static / internal-linkage)
+  LNK_ObjSymbolRef sym_ref = lnk_ref_from_symbol(sym);
+  if (sym_ref.obj != obj) { return 0; } // same-name follower (already removed)
+  COFF_ParsedSymbol sym_parsed = lnk_parsed_from_symbol(sym);
+  if (sym_parsed.section_number != sn || sym_parsed.value != 0) { return 0; }
+  return 1; // external leader
+}
+
+typedef struct LNK_ICFCollectTask
+{
+  LNK_Obj     **objs;
+  U64          *counts;
+  U64          *offsets;
+  LNK_ICFCand  *cands;
+} LNK_ICFCollectTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_count_task)
+{
+  LNK_ICFCollectTask *t = raw_task;
+  LNK_Obj *obj = t->objs[task_id];
+  U64 n = 0;
+  for EachIndex(si, obj->header.section_count_no_null) { if (lnk_icf_section_kind(obj, si)) { n += 1; } }
+  t->counts[task_id] = n;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_fill_task)
+{
+  LNK_ICFCollectTask *t = raw_task;
+  LNK_Obj *obj = t->objs[task_id];
+  U64 cur = t->offsets[task_id];
+  for EachIndex(si, obj->header.section_count_no_null) {
+    if (lnk_icf_section_kind(obj, si)) {
+      LNK_ICFCand *c = &t->cands[cur++];
+      c->obj = obj; c->sn = (U32)si + 1;
+      c->reloc_first = 0; c->reloc_count = 0; c->key0 = 0; c->color = 0;
+    }
+  }
+}
+
+// --- parallel LSD radix sort (U64 key + U32 value), 8 x 8-bit passes -------------------------
+// 8-bit digits keep the serial per-pass offset prefix tiny (256*workers, not 65536*workers);
+// the extra passes are parallel histogram+scatter, so they cost little.
+#define LNK_RADIX_BITS 8
+#define LNK_RADIX_SIZE (1 << LNK_RADIX_BITS)
+typedef struct LNK_RadixSortTask
+{
+  Rng1U64 *ranges;
+  U64     *ksrc; U32 *vsrc; // read
+  U64     *kdst; U32 *vdst; // write (scatter)
+  U32     *hist;            // [worker_count * LNK_RADIX_SIZE], per-worker digit offsets
+  U64      shift;
+} LNK_RadixSortTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_radix_hist_task)
+{
+  LNK_RadixSortTask *t = raw_task;
+  U32 *h = t->hist + (U64)task_id * LNK_RADIX_SIZE;
+  for EachInRange(i, t->ranges[task_id]) { h[(t->ksrc[i] >> t->shift) & (LNK_RADIX_SIZE - 1)] += 1; }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_radix_scatter_task)
+{
+  LNK_RadixSortTask *t = raw_task;
+  U32 *h = t->hist + (U64)task_id * LNK_RADIX_SIZE;
+  for EachInRange(i, t->ranges[task_id]) {
+    U64 d   = (t->ksrc[i] >> t->shift) & (LNK_RADIX_SIZE - 1);
+    U32 pos = h[d]++;
+    t->kdst[pos] = t->ksrc[i];
+    t->vdst[pos] = t->vsrc[i];
+  }
+}
+
+// sort (keys[], vals[]) ascending by key, in place. arena supplies scratch (double buffers + histograms).
+internal void
+lnk_radix_sort_u64_pairs(TP_Context *tp, Arena *arena, U64 n, U64 *keys, U32 *vals)
+{
+  if (n < 2) { return; }
+  U64 W = tp->worker_count;
+
+  Temp scratch = scratch_begin(&arena, 1); // internal buffers freed on return
+  LNK_RadixSortTask t = {0};
+  t.ranges = tp_divide_work(scratch.arena, n, W);
+  t.hist   = push_array_no_zero(scratch.arena, U32, W * LNK_RADIX_SIZE);
+  U64 *kbuf = push_array_no_zero(scratch.arena, U64, n);
+  U32 *vbuf = push_array_no_zero(scratch.arena, U32, n);
+
+  U64 *ksrc = keys, *kdst = kbuf;
+  U32 *vsrc = vals, *vdst = vbuf;
+  for (U64 pass = 0; pass < 64 / LNK_RADIX_BITS; pass += 1) {
+    t.shift = pass * LNK_RADIX_BITS;
+    t.ksrc = ksrc; t.vsrc = vsrc; t.kdst = kdst; t.vdst = vdst;
+
+    MemoryZero(t.hist, sizeof(U32) * W * LNK_RADIX_SIZE);
+    tp_for_parallel(tp, 0, W, lnk_radix_hist_task, &t);
+
+    // exclusive prefix across (bucket, worker) so each worker writes a disjoint contiguous run
+    U64 running = 0;
+    for EachIndex(bucket, LNK_RADIX_SIZE) {
+      for EachIndex(w, W) {
+        U32 *slot = &t.hist[w * LNK_RADIX_SIZE + bucket];
+        U32  c    = *slot;
+        *slot     = (U32)running;
+        running  += c;
+      }
+    }
+
+    tp_for_parallel(tp, 0, W, lnk_radix_scatter_task, &t);
+
+    U64 *kt = ksrc; ksrc = kdst; kdst = kt;
+    U32 *vt = vsrc; vsrc = vdst; vdst = vt;
+  }
+  // even pass count -> sorted data is back in the original keys/vals arrays
+  scratch_end(scratch);
+}
+
+// assign each candidate a dense equivalence-class id from its key, via a parallel sort + a
+// cheap sequential group scan. Returns the number of distinct classes (for convergence).
+internal U64
+lnk_icf_dense_colors(TP_Context *tp, Arena *arena, U64 n, U64 *keys, LNK_ICFCand *cands)
+{
+  Temp t  = temp_begin(arena);
+  U64 *sk = push_array_no_zero(t.arena, U64, n ? n : 1);
+  U32 *sv = push_array_no_zero(t.arena, U32, n ? n : 1);
+  for EachIndex(ci, n) { sk[ci] = keys[ci]; sv[ci] = (U32)ci; }
+  lnk_radix_sort_u64_pairs(tp, t.arena, n, sk, sv);
+  U64 nc = 0;
+  for EachIndex(k, n) {
+    if (k == 0 || sk[k] != sk[k - 1]) { nc += 1; }
+    cands[sv[k]].color = nc - 1;
+  }
+  temp_end(t);
+  return nc;
+}
+
+// relocations point at equivalent targets (iteratively), then folds each group's followers
+// into a single leader by routing them through the existing COMDAT symlink machinery and
+// letting /OPT:REF garbage-collect the now-unreferenced follower sections (and their
+// associated .pdata/.xdata/.debug$S). Mirrors link.exe /OPT:ICF.
+internal void
+lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_ObjList objs_list)
+{
+  if (config->opt_icf != LNK_SwitchState_Yes) { return; }
+
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  Arena *arena = scratch.arena;
+
+  U64        objs_count = objs_list.count;
+  LNK_Obj  **objs       = lnk_array_from_obj_list(arena, objs_list);
+
+  // collect candidate sections (parallel per obj): count, exact-size, then fill at per-obj
+  // offsets. Counting first avoids sizing the array to the total section count (which would be
+  // ~10x larger and waste ~1GB on UE-scale inputs).
+  LNK_ICFCollectTask col = {0};
+  col.objs    = objs;
+  col.counts  = push_array(arena, U64, objs_count ? objs_count : 1);
+  tp_for_parallel(tp, 0, objs_count, lnk_icf_count_task, &col);
+  col.offsets = offsets_from_counts_array_u64(arena, col.counts, objs_count);
+  U64          cand_count = sum_array_u64(objs_count, col.counts);
+  LNK_ICFCand *cands      = push_array_no_zero(arena, LNK_ICFCand, cand_count ? cand_count : 1);
+  col.cands   = cands;
+  tp_for_parallel(tp, 0, objs_count, lnk_icf_fill_task, &col);
+
+  if (cand_count < 2) { goto done; }
+
+  // build target lookup (input_idx, section_number) -> cand_idx+1, sized to the candidate count
+  LNK_ICFMap cand_map = lnk_icf_map_make(arena, cand_count);
+  for EachIndex(ci, cand_count) {
+    lnk_icf_map_put(&cand_map, Compose64Bit(cands[ci].obj->input_idx, cands[ci].sn), ci + 1);
+  }
+
+  // flatten relocation targets and compute content keys
+  // count relocs and assign each candidate a disjoint slice in the flattened arrays
+  U64 total_relocs = 0;
+  for EachIndex(ci, cand_count) {
+    LNK_ICFCand        *c      = &cands[ci];
+    COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(c->obj, c->sn);
+    U64                 rcount = lnk_coff_relocs_from_section_header(c->obj, header).count;
+    c->reloc_first = (U32)total_relocs;
+    c->reloc_count = (U32)rcount;
+    total_relocs += rcount;
+  }
+  U8  *rt_iscand = push_array_no_zero(arena, U8,  total_relocs ? total_relocs : 1);
+  U64 *rt_target = push_array_no_zero(arena, U64, total_relocs ? total_relocs : 1);
+
+  {
+    LNK_ICFHashTask hash_task = {0};
+    hash_task.ranges    = tp_divide_work(arena, cand_count, tp->worker_count);
+    hash_task.cands     = cands;
+    hash_task.cand_map  = &cand_map;
+    hash_task.symtab    = symtab;
+    hash_task.rt_iscand = rt_iscand;
+    hash_task.rt_target = rt_target;
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_hash_task, &hash_task);
+  }
+
+  // assign initial colors from content key (parallel sort + group scan)
+  U64 *newkey = push_array_no_zero(arena, U64, cand_count ? cand_count : 1);
+  for EachIndex(ci, cand_count) { newkey[ci] = cands[ci].key0; }
+  U64 class_count = lnk_icf_dense_colors(tp, arena, cand_count, newkey, cands);
+
+  // iteratively refine classes by relocation-target classes until stable
+  LNK_ICFRefineTask refine_task = {0};
+  refine_task.ranges    = tp_divide_work(arena, cand_count, tp->worker_count);
+  refine_task.cands     = cands;
+  refine_task.rt_iscand = rt_iscand;
+  refine_task.rt_target = rt_target;
+  refine_task.newkey    = newkey;
+  for (U64 round = 0; round < 30; round += 1) {
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_refine_task, &refine_task);
+    U64 new_class_count = lnk_icf_dense_colors(tp, arena, cand_count, newkey, cands);
+    if (new_class_count == class_count) { break; }
+    class_count = new_class_count;
+  }
+
+  // group candidates by final color (parallel sort) and fold followers into a leader
+  U64 *keys = newkey; // reuse
+  U32 *sci  = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+  for EachIndex(ci, cand_count) { keys[ci] = cands[ci].color; sci[ci] = (U32)ci; }
+  lnk_radix_sort_u64_pairs(tp, arena, cand_count, keys, sci);
+
+  U64 fold_count = 0;
+  for (U64 i = 0; i < cand_count; ) {
+    U64 j = i + 1;
+    U64 color = keys[i];
+    while (j < cand_count && keys[j] == color) { j += 1; }
+
+    if (j - i >= 2) {
+      // leader = lowest (input_idx, sn) member, for deterministic output
+      U64 leader_oi = i;
+      for (U64 k = i + 1; k < j; k += 1) {
+        LNK_ICFCand *a = &cands[sci[leader_oi]];
+        LNK_ICFCand *b = &cands[sci[k]];
+        if (Compose64Bit(b->obj->input_idx, b->sn) < Compose64Bit(a->obj->input_idx, a->sn)) { leader_oi = k; }
+      }
+      LNK_ICFCand        *L         = &cands[sci[leader_oi]];
+      COFF_SectionHeader *Lheader   = lnk_coff_section_header_from_section_number(L->obj, L->sn);
+      String8             Ldata     = str8_substr(L->obj->data, rng_1u64(Lheader->foff, Lheader->foff + Lheader->fsize));
+      LNK_SymbolHashTrie *Lnode     = L->obj->symlinks[L->sn];
+
+      for (U64 k = i; k < j; k += 1) {
+        if (k == leader_oi) { continue; }
+        LNK_ICFCand        *F       = &cands[sci[k]];
+        COFF_SectionHeader *Fheader = lnk_coff_section_header_from_section_number(F->obj, F->sn);
+
+        // verify byte-identical content + reloc structure (guards against hash collisions)
+        if (Fheader->fsize != Lheader->fsize) { continue; }
+        if (F->reloc_count != L->reloc_count) { continue; }
+        String8 Fdata = str8_substr(F->obj->data, rng_1u64(Fheader->foff, Fheader->foff + Fheader->fsize));
+        if (!str8_match(Ldata, Fdata, 0)) { continue; }
+        B32 relocs_match = 1;
+        for EachIndex(t, L->reloc_count) {
+          U64 li = L->reloc_first + t, fi = F->reloc_first + t;
+          U64 lt = rt_iscand[li] ? cands[rt_target[li]].color : rt_target[li];
+          U64 ft = rt_iscand[fi] ? cands[rt_target[fi]].color : rt_target[fi];
+          if (lt != ft) { relocs_match = 0; break; }
+        }
+        if (!relocs_match) { continue; }
+
+        // redirect at the shared symbol-table node so every object resolving this name points at
+        // the leader's definition; /OPT:REF then removes the now-unreferenced follower section.
+        LNK_SymbolHashTrie *Fnode = F->obj->symlinks[F->sn];
+        if (Fnode && Fnode != Lnode) {
+          Fnode->symbol = Lnode->symbol;
+          fold_count += 1;
+        }
+      }
+    }
+    i = j;
+  }
+
+  if (lnk_get_log_status(LNK_Log_Debug)) {
+    lnk_log(LNK_Log_Debug, "/OPT:ICF folded %llu of %llu code COMDATs into %llu classes", fold_count, cand_count, class_count);
+  }
+
+  done:;
   scratch_end(scratch);
   ProfEnd();
 }
@@ -5456,6 +5944,11 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     LNK_RRT_Array     rrt_input = lnk_rrt_array_from_config(arena->v[0], config);
     LNK_CodeViewInput cv        = lnk_make_code_view_input(tp, arena, config, debug_info_objs_count, debug_info_objs, rrt_input);
     LNK_MergedTypes   cv_types  = lnk_merge_types(tp, arena, &cv, 0);
+
+    // prune merged types not reachable from any surviving symbol (transparent PDB-size win)
+    if (config->opt_ref == LNK_SwitchState_Yes) {
+      lnk_gc_types(tp, arena->v[0], &cv, &cv_types);
+    }
 
     //
     // Debug Info
