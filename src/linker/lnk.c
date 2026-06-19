@@ -3493,11 +3493,33 @@ lnk_section_contrib_ptr_is_before(void *raw_a, void *raw_b)
   return u64_compar_is_before(&input_idx_a, &input_idx_b);
 }
 
+// chunks at/above this size are sorted by the parallel radix (all threads) before the per-chunk
+// task pass, so one giant section (e.g. merged .text) can't serialize the whole sort on one thread.
+#define LNK_SORT_CONTRIBS_RADIX_MIN (64u*1024u)
+
+// sort one chunk's contribs by Compose64Bit(obj_idx, obj_sect_idx) using the parallel radix sort.
+// The key is unique per contrib (one obj/section pair each), so this matches the radsort order.
+internal void
+lnk_sort_contribs_chunk_radix(TP_Context *tp, Arena *arena, LNK_SectionContribChunk *chunk)
+{
+  U64 n = chunk->count;
+  Temp t = temp_begin(arena);
+  U64 *keys = push_array_no_zero(t.arena, U64, n);
+  U32 *idx  = push_array_no_zero(t.arena, U32, n);
+  for EachIndex(i, n) { keys[i] = Compose64Bit(chunk->v[i]->u.obj_idx, chunk->v[i]->u.obj_sect_idx); idx[i] = (U32)i; }
+  lnk_radix_sort_u64_pairs(tp, t.arena, n, keys, idx);
+  LNK_SectionContrib **sorted = push_array_no_zero(t.arena, LNK_SectionContrib *, n);
+  for EachIndex(i, n) { sorted[i] = chunk->v[idx[i]]; }
+  MemoryCopy(chunk->v, sorted, n * sizeof(sorted[0]));
+  temp_end(t);
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_sort_contribs_task)
 {
   LNK_BuildImageTask *task = raw_task;
   LNK_SectionContribChunk *chunk = task->u.sort_contribs.chunks[task_id];
+  if (chunk->count >= LNK_SORT_CONTRIBS_RADIX_MIN) { return; } // big chunks done via parallel radix
   ProfBeginV("[%llu]", chunk->count);
   radsort(chunk->v, chunk->count, lnk_section_contrib_ptr_is_before);
   ProfEnd();
@@ -5000,6 +5022,14 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         Assert(cursor == total_chunk_count);
       }
 
+      // big chunks (e.g. merged .text) first, each sorted across all threads via parallel radix --
+      // otherwise a single huge chunk serializes on one worker. Small chunks then go one-per-task.
+      for EachIndex(ci, total_chunk_count) {
+        LNK_SectionContribChunk *chunk = task.u.sort_contribs.chunks[ci];
+        if (chunk->count >= LNK_SORT_CONTRIBS_RADIX_MIN) {
+          lnk_sort_contribs_chunk_radix(tp, scratch.arena, chunk);
+        }
+      }
       tp_for_parallel(tp, 0, total_chunk_count, lnk_sort_contribs_task, &task);
 
       ProfEnd();
