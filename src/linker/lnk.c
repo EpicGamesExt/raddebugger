@@ -2952,6 +2952,7 @@ typedef struct LNK_ICFRefineTask
   U8          *rt_iscand;
   U64         *rt_target;
   U64         *newkey;
+  U32         *active; // when set, ranges index into active[] rather than cands[] directly
 } LNK_ICFRefineTask;
 
 // recompute each candidate's refinement key from its current color and its targets' colors
@@ -2960,8 +2961,9 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_icf_refine_task)
 {
   LNK_ICFRefineTask *task = raw_task;
-  for EachInRange(ci, task->ranges[task_id]) {
-    LNK_ICFCand *c = &task->cands[ci];
+  for EachInRange(ai, task->ranges[task_id]) {
+    U64          ci = task->active ? task->active[ai] : ai;
+    LNK_ICFCand *c  = &task->cands[ci];
     U64 k = lnk_icf_mix(0x9e3779b97f4a7c15ull, c->color);
     for EachIndex(j, c->reloc_count) {
       U64 idx = (U64)c->reloc_first + j;
@@ -2970,6 +2972,27 @@ THREAD_POOL_TASK_FUNC(lnk_icf_refine_task)
     }
     task->newkey[ci] = k;
   }
+}
+
+// densify the keys of just the active subset into class ids drawn from `base` upward (so they never
+// collide with the finalized colors of candidates that already dropped out as singletons). Returns
+// the number of distinct classes among the active set. Equal keys land in one class regardless of
+// sort tie order, so color values are deterministic.
+internal U64
+lnk_icf_dense_colors_active(TP_Context *tp, Arena *arena, U32 *active, U64 n, U64 *newkey, LNK_ICFCand *cands, U64 base)
+{
+  Temp t  = temp_begin(arena);
+  U64 *sk = push_array_no_zero(t.arena, U64, n ? n : 1);
+  U32 *sv = push_array_no_zero(t.arena, U32, n ? n : 1); // index into active[]
+  for EachIndex(i, n) { sk[i] = newkey[active[i]]; sv[i] = (U32)i; }
+  lnk_radix_sort_u64_pairs(tp, t.arena, n, sk, sv);
+  U64 nc = 0;
+  for EachIndex(k, n) {
+    if (k == 0 || sk[k] != sk[k - 1]) { nc += 1; }
+    cands[active[sv[k]]].color = base + (nc - 1);
+  }
+  temp_end(t);
+  return nc;
 }
 
 // Is an object section an ICF fold candidate? Only externally-defined COMDATs are folded: the
@@ -3196,19 +3219,48 @@ lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
   U64 *newkey = push_array_no_zero(arena, U64, cand_count ? cand_count : 1);
   for EachIndex(ci, cand_count) { newkey[ci] = cands[ci].key0; }
   U64 class_count = lnk_icf_dense_colors(tp, arena, cand_count, newkey, cands);
+  U64 color_base  = class_count; // next free class id; ids only ever grow, so finalized colors stick
 
-  // iteratively refine classes by relocation-target classes until stable
+  // Active set = candidates still sharing a class with another. A singleton class can never split
+  // or merge, so once a candidate is alone its color is final and it leaves refinement. Each round
+  // re-densifies only the active set, shrinking the per-round sort from all ~N candidates down to
+  // just those that still have a content+reloc twin.
+  U32 *active = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+  U64  active_count = 0, active_class_count = 0;
+  {
+    Temp t = temp_begin(arena);
+    U32 *cls_size = push_array(t.arena, U32, class_count ? class_count : 1);
+    for EachIndex(ci, cand_count) { cls_size[cands[ci].color] += 1; }
+    for EachIndex(ci, cand_count) { if (cls_size[cands[ci].color] > 1) { active[active_count++] = (U32)ci; } }
+    for EachIndex(c, class_count)  { if (cls_size[c] > 1) { active_class_count += 1; } }
+    temp_end(t);
+  }
+
+  // iteratively refine classes by relocation-target classes until no class splits
   LNK_ICFRefineTask refine_task = {0};
-  refine_task.ranges    = tp_divide_work(arena, cand_count, tp->worker_count);
   refine_task.cands     = cands;
   refine_task.rt_iscand = rt_iscand;
   refine_task.rt_target = rt_target;
   refine_task.newkey    = newkey;
-  for (U64 round = 0; round < 30; round += 1) {
+  refine_task.active    = active;
+  for (U64 round = 0; round < 30 && active_count > 0; round += 1) {
+    refine_task.ranges = tp_divide_work(arena, active_count, tp->worker_count);
     tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_refine_task, &refine_task);
-    U64 new_class_count = lnk_icf_dense_colors(tp, arena, cand_count, newkey, cands);
-    if (new_class_count == class_count) { break; }
-    class_count = new_class_count;
+
+    U64 base = color_base;
+    U64 nc   = lnk_icf_dense_colors_active(tp, arena, active, active_count, newkey, cands, base);
+    color_base += nc;
+    if (nc == active_class_count) { break; } // no class split -> fixpoint
+
+    // drop classes that just became singletons; keep the rest active for the next round
+    Temp t = temp_begin(arena);
+    U32 *cls_size = push_array(t.arena, U32, nc ? nc : 1);
+    for EachIndex(i, active_count) { cls_size[cands[active[i]].color - base] += 1; }
+    U64 na = 0, nac = 0;
+    for EachIndex(i, active_count) { if (cls_size[cands[active[i]].color - base] > 1) { active[na++] = active[i]; } }
+    for EachIndex(c, nc) { if (cls_size[c] > 1) { nac += 1; } }
+    active_count = na; active_class_count = nac;
+    temp_end(t);
   }
 
   // group candidates by final color (parallel sort) and fold followers into a leader
