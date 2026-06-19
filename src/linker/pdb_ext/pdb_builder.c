@@ -1783,7 +1783,11 @@ psi_addr_map_compar_is_before(void *raw_a, void *raw_b)
   } else if (a->isect_off.off != b->isect_off.off) {
     is_before = a->isect_off.off < b->isect_off.off;
   } else {
-    is_before = str8_compar_case_sensitive(&a->name, &b->name) < 0;
+    int cmp = str8_compar_case_sensitive(&a->name, &b->name);
+    // unique, element-stable tiebreaker (offset is unique per record and travels with the
+    // element across radsort swaps) so equal-key runs (many ICF-folded symbols at one
+    // address) do not degrade radsort's quicksort to O(n^2)
+    is_before = cmp != 0 ? (cmp < 0) : (a->offset < b->offset);
   }
 
   return is_before;
@@ -1797,12 +1801,22 @@ gsi_record_sort_by_name(PDB_GsiSortRecord *arr, U64 count)
   ProfEnd();
 }
 
-internal void
-gsi_record_sort_by_sc(PDB_GsiSortRecord *arr, U64 count)
+// returns a record-index permutation sorted ascending by (isect, off) -- the PSI address map
+// order. A stable parallel radix sort on the U64 (isect<<32|off) key; equal addresses (e.g.
+// ICF-folded symbols) keep input order, which is fine for an address->symbol map.
+internal U32 *
+gsi_record_sort_by_sc(TP_Context *tp, Arena *arena, PDB_GsiSortRecord *arr, U64 count)
 {
   ProfBeginFunction();
-  radsort(arr, count, psi_addr_map_compar_is_before);
+  U64 *keys = push_array_no_zero(arena, U64, count ? count : 1);
+  U32 *idx  = push_array_no_zero(arena, U32, count ? count : 1);
+  for EachIndex(i, count) {
+    keys[i] = ((U64)arr[i].isect_off.isect << 32) | (U64)arr[i].isect_off.off;
+    idx[i]  = (U32)i;
+  }
+  lnk_radix_sort_u64_pairs(tp, arena, count, keys, idx);
   ProfEnd();
+  return idx;
 }
 
 internal
@@ -1839,7 +1853,9 @@ gsi_symbol_is_before(void *raw_a, void *raw_b)
         }
       }
     }
-    is_before = cmp < 0;
+    // unique, element-stable tiebreaker (symbol pointer travels with the element across
+    // radsort swaps) prevents O(n^2) radsort on equal-key runs (ICF-folded symbols)
+    is_before = cmp != 0 ? (cmp < 0) : ((U64)a < (U64)b);
   }
 
   return is_before;
@@ -1870,7 +1886,9 @@ gsi_pub_symbol_is_before(void *raw_a, void *raw_b)
         }
       }
     }
-    is_before = cmp < 0;
+    // unique, element-stable tiebreaker (symbol pointer travels with the element across
+    // radsort swaps) prevents O(n^2) radsort on equal-key runs (ICF-folded publics)
+    is_before = cmp != 0 ? (cmp < 0) : ((U64)a < (U64)b);
   }
 
   return is_before;
@@ -2209,15 +2227,15 @@ psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumbe
   ProfBegin("Address Map");
   
   ProfBegin("Sort");
-  gsi_record_sort_by_sc(gsi_build.sort_record_arr, gsi_build.hash_record_count);
+  U32 *sorted = gsi_record_sort_by_sc(tp, scratch.arena, gsi_build.sort_record_arr, gsi_build.hash_record_count);
   ProfEnd();
-  
+
   ProfBegin("Offset Fill");
   U64 addr_map_count = gsi_build.hash_record_count;
   U64 addr_map_size = addr_map_count * sizeof(U32);
   U32 *addr_map     = push_array_no_zero(scratch.arena, U32, addr_map_count);
   for (U64 i = 0; i < addr_map_count; i += 1) {
-    addr_map[i] = gsi_build.sort_record_arr[i].offset;
+    addr_map[i] = gsi_build.sort_record_arr[sorted[i]].offset;
   }
   ProfEnd();
 
@@ -2772,12 +2790,39 @@ dbi_build_sec_con(Arena *arena, PDB_DbiContext *dbi)
 
   // sort section contribs so they are binary searchable
   lnk_radix_sort_dbi_sc_array(sc_array, dbi->sec_contrib_list.count, dbi->section_list.count + 1);
-  
+
+  // coalesce adjacent contributions that belong to the same module, section, and
+  // flags and are perfectly contiguous. The section contribution substream is only
+  // used to map an image address range back to its module, so merging contiguous
+  // same-module runs is loss-less (data/reloc CRCs are unused here, always 0). UE
+  // objects emit one COMDAT section per function, so after layout these collapse
+  // heavily -- matching link.exe, which stores one entry per contiguous run.
+  ProfBegin("Coalesce sect contribs");
+  U64 sc_count = 0;
+  for (U64 r = 0; r < dbi->sec_contrib_list.count; r += 1) {
+    PDB_DbiSectionContrib *c = &sc_array[r];
+    if (sc_count > 0) {
+      PDB_DbiSectionContrib *p = &sc_array[sc_count - 1];
+      if (p->base.sec   == c->base.sec   &&
+          p->base.mod   == c->base.mod   &&
+          p->base.flags == c->base.flags &&
+          (U64)c->base.sec_off >= (U64)p->base.sec_off) {
+        // absorb c into the run, extending over any alignment padding gap
+        U64 c_end = (U64)c->base.sec_off + (U64)c->base.size;
+        U64 p_end = (U64)p->base.sec_off + (U64)p->base.size;
+        if (c_end > p_end) { p->base.size = (U32)(c_end - (U64)p->base.sec_off); }
+        continue;
+      }
+    }
+    sc_array[sc_count++] = *c;
+  }
+  ProfEnd();
+
   // push section contrib info
   ProfBegin("List Push");
   String8List sec_con_list = {0};
   str8_list_push(arena, &sec_con_list, str8((U8*)version, sizeof(*version)));
-  str8_list_push(arena, &sec_con_list, str8((U8*)sc_array, sizeof(sc_array[0])*dbi->sec_contrib_list.count));
+  str8_list_push(arena, &sec_con_list, str8((U8*)sc_array, sizeof(sc_array[0])*sc_count));
   ProfEnd();
   
   ProfEnd();
