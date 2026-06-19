@@ -3045,17 +3045,20 @@ typedef struct LNK_GCTypes
   U64                min   [CV_TypeIndexSource_COUNT]; // first type index per source
   U64                orig_n[CV_TypeIndexSource_COUNT]; // pre-GC leaf count per source
   U8                *mark    [CV_TypeIndexSource_COUNT]; // reachable bitmap, indexed by (ti - min)
-  U8                *expanded[CV_TypeIndexSource_COUNT]; // transitive-closure: already-visited bitmap
   CV_TypeIndex      *remap   [CV_TypeIndexSource_COUNT]; // old leaf idx -> new type index
   U8               **leaf_v  [CV_TypeIndexSource_COUNT]; // original leaf pointer arrays
   U32               *udt_next;                           // TPI fwdref<->definition unique_name ring
-  U32               *changed;                            // set when a closure round marks something new
   Rng1U64           *sym_ranges;
   B32                do_rewrite;                         // 0 = mark roots, 1 = rewrite to compacted indices
+  // transitive-closure frontier: indices marked but not yet expanded. Each leaf is appended once
+  // (the atomic mark gates it), so frontier[s] is sized orig_n[s] and fcount[s] is its atomic tail.
+  U32               *frontier[CV_TypeIndexSource_COUNT];
+  U32               *fcount  [CV_TypeIndexSource_COUNT]; // atomic append cursor per source
   // per-source scratch (set before dispatch)
   CV_TypeIndexSource cur_source;
   U8               **cur_leaf_v;
   Rng1U64           *cur_ranges;
+  U64                round_begin, round_end;             // frontier slice processed this round
 } LNK_GCTypes;
 
 typedef struct LNK_GCNamePair { U64 hash; U32 idx; } LNK_GCNamePair;
@@ -3183,18 +3186,29 @@ THREAD_POOL_TASK_FUNC(lnk_gc_ring_fill_task)
   }
 }
 
-// one bulk-synchronous round of transitive closure: visit each marked-but-unexpanded leaf in
-// this source, mark the leaves it references (and its unique_name UDT counterparts). Parallel;
-// `expanded` is grabbed atomically so each leaf is visited once, `changed` flags progress.
+// mark a leaf reachable and, if this is its first mark, append it to its source's frontier so a
+// later round expands it. Atomic mark gates the append, so each leaf lands on the frontier once.
+internal void
+lnk_gc_mark_enqueue(LNK_GCTypes *g, CV_TypeIndexSource ns, U64 ci)
+{
+  if (ci < g->orig_n[ns] && !ins_atomic_u8_eval_assign(&g->mark[ns][ci], 1)) {
+    U32 pos = ins_atomic_u32_inc_eval(g->fcount[ns]) - 1;
+    g->frontier[ns][pos] = (U32)ci;
+  }
+}
+
+// one bulk-synchronous round of transitive closure: expand the frontier slice [round_begin,
+// round_end) of cur_source -- visit each leaf and enqueue the leaves it references (and its
+// unique_name UDT counterparts). Frontier-driven, so total work is O(reachable leaves), not
+// O(rounds * total leaves).
 internal
 THREAD_POOL_TASK_FUNC(lnk_gc_expand_task)
 {
   LNK_GCTypes       *g = raw_task;
   CV_TypeIndexSource s = g->cur_source;
   Temp scratch = scratch_begin(0, 0);
-  for EachInRange(i, g->cur_ranges[task_id]) {
-    if (!g->mark[s][i]) { continue; }
-    if (ins_atomic_u8_eval_assign(&g->expanded[s][i], 1)) { continue; } // already visited
+  for EachInRange(local, g->cur_ranges[task_id]) {
+    U32 i = g->frontier[s][g->round_begin + local];
 
     Temp temp = temp_begin(scratch.arena);
     CV_Leaf leaf = cv_leaf_from_ptr(g->leaf_v[s][i]);
@@ -3202,16 +3216,13 @@ THREAD_POOL_TASK_FUNC(lnk_gc_expand_task)
     for EachNode(n, CV_TypeIndexInfo, l.first) {
       CV_TypeIndex ti = memory_read32(leaf.data.str + n->offset);
       U64 lo = g->min[n->source];
-      if (ti >= lo) {
-        U64 ci = ti - lo;
-        if (ci < g->orig_n[n->source] && !g->mark[n->source][ci]) { g->mark[n->source][ci] = 1; ins_atomic_u32_eval_assign(g->changed, 1); }
-      }
+      if (ti >= lo) { lnk_gc_mark_enqueue(g, n->source, ti - lo); }
     }
     temp_end(temp);
 
     if (s == CV_TypeIndexSource_TPI) {
       for (U32 j = g->udt_next[i]; j != i; j = g->udt_next[j]) {
-        if (!g->mark[CV_TypeIndexSource_TPI][j]) { g->mark[CV_TypeIndexSource_TPI][j] = 1; ins_atomic_u32_eval_assign(g->changed, 1); }
+        lnk_gc_mark_enqueue(g, CV_TypeIndexSource_TPI, j);
       }
     }
   }
@@ -3269,21 +3280,31 @@ lnk_gc_types(TP_Context *tp, Arena *arena, LNK_CodeViewInput *cv, LNK_MergedType
 
   // transitive closure (parallel, bulk-synchronous): repeat rounds that visit each
   // marked-but-unexpanded leaf and mark what it references, until a round marks nothing new
-  U32     changed = 0;
-  g.changed       = &changed;
-  Rng1U64 *expand_ranges[CV_TypeIndexSource_COUNT];
+  // seed the frontier with the root-marked leaves (one O(total leaves) scan), then expand
+  // frontier slices until both sources drain. Each leaf is expanded exactly once.
+  U32 fcount[CV_TypeIndexSource_COUNT] = {0};
+  U64 start [CV_TypeIndexSource_COUNT] = {0};
   for EachIndex(s, CV_TypeIndexSource_COUNT) {
-    g.expanded[s]    = push_array(scratch.arena, U8, g.orig_n[s] ? g.orig_n[s] : 1);
-    expand_ranges[s] = tp_divide_work(scratch.arena, g.orig_n[s], tp->worker_count);
+    g.frontier[s] = push_array_no_zero(scratch.arena, U32, g.orig_n[s] ? g.orig_n[s] : 1);
+    g.fcount[s]   = &fcount[s];
+    for EachIndex(i, g.orig_n[s]) { if (g.mark[s][i]) { g.frontier[s][fcount[s]++] = (U32)i; } }
   }
-  do {
-    changed = 0;
+  for (;;) {
+    B32 any = 0;
     for EachIndex(s, CV_TypeIndexSource_COUNT) {
-      g.cur_source = (CV_TypeIndexSource)s;
-      g.cur_ranges = expand_ranges[s];
-      tp_for_parallel(tp, 0, tp->worker_count, lnk_gc_expand_task, &g);
+      U64 begin = start[s], end = fcount[s]; // fcount may grow during the round (cross-source enqueues)
+      if (begin < end) {
+        any = 1;
+        g.cur_source  = (CV_TypeIndexSource)s;
+        g.round_begin = begin;
+        g.round_end   = end;
+        g.cur_ranges  = tp_divide_work(scratch.arena, end - begin, tp->worker_count);
+        tp_for_parallel(tp, 0, tp->worker_count, lnk_gc_expand_task, &g);
+        start[s] = end;
+      }
     }
-  } while (changed);
+    if (!any) { break; }
+  }
 
   // compact each source: assign new contiguous type indices to the kept leaves. The leaf
   // pointer array is compacted IN PLACE (kept count only shrinks, so the write cursor never
