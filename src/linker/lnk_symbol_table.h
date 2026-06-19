@@ -125,6 +125,7 @@ internal U64 lnk_symbol_table_hasher(String8 string);
 internal LNK_SymbolTable * lnk_symbol_table_init(TP_Arena *arena);
 internal void              lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_Symbol *symbol);
 internal LNK_Symbol *      lnk_symbol_table_search(LNK_SymbolTable *symtab, String8 name);
+internal U64               lnk_symbol_table_search_symbol_count(LNK_SymbolTable *symtab);
 internal LNK_Symbol *      lnk_symbol_table_searchf(LNK_SymbolTable *symtab, char *fmt, ...);
 
 // --- Symbol Contrib Helpers --------------------------------------------------
