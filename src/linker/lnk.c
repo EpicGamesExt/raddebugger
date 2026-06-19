@@ -3005,7 +3005,12 @@ THREAD_POOL_TASK_FUNC(lnk_icf_fill_task)
     if (lnk_icf_section_kind(obj, si)) {
       LNK_ICFCand *c = &t->cands[cur++];
       c->obj = obj; c->sn = (U32)si + 1;
-      c->reloc_first = 0; c->reloc_count = 0; c->key0 = 0; c->color = 0;
+      // count relocs here (parallel, the section is already in hand) so lnk_opt_icf only needs a
+      // cheap serial prefix sum for reloc_first instead of re-parsing every section serially.
+      COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(obj, c->sn);
+      c->reloc_first = 0;
+      c->reloc_count = (U32)lnk_coff_relocs_from_section_header(obj, header).count;
+      c->key0 = 0; c->color = 0;
     }
   }
 }
@@ -3144,16 +3149,12 @@ lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
     lnk_icf_map_put(&cand_map, Compose64Bit(cands[ci].obj->input_idx, cands[ci].sn), ci + 1);
   }
 
-  // flatten relocation targets and compute content keys
-  // count relocs and assign each candidate a disjoint slice in the flattened arrays
+  // assign each candidate a disjoint slice in the flattened reloc-target arrays. reloc_count was
+  // filled in parallel by lnk_icf_fill_task, so this is just a serial prefix sum (no re-parsing).
   U64 total_relocs = 0;
   for EachIndex(ci, cand_count) {
-    LNK_ICFCand        *c      = &cands[ci];
-    COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(c->obj, c->sn);
-    U64                 rcount = lnk_coff_relocs_from_section_header(c->obj, header).count;
-    c->reloc_first = (U32)total_relocs;
-    c->reloc_count = (U32)rcount;
-    total_relocs += rcount;
+    cands[ci].reloc_first = (U32)total_relocs;
+    total_relocs += cands[ci].reloc_count;
   }
   U8  *rt_iscand = push_array_no_zero(arena, U8,  total_relocs ? total_relocs : 1);
   U64 *rt_target = push_array_no_zero(arena, U64, total_relocs ? total_relocs : 1);
