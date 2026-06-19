@@ -1813,16 +1813,32 @@ lnk_link_inputs(TP_Context      *tp,
         } else {
           // search symbols in lib
           MemoryZeroTyped(member_ref_lists, tp->worker_count);
-          LNK_SearchLibTask search_task = {
-            .search_anti_deps = search_anti_deps,
-            .link             = link,
-            .imports_hm       = &imports_hm,
-            .lib              = lib,
-            .symtab           = symtab,
-            .lib_member_infos = lib_member_infos,
-            .member_ref_lists = member_ref_lists
-          };
-          tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &search_task);
+
+          // barrier elision: the search task scans every undefined/weak symbol in search_chunks and
+          // queues any member that resolves one. search_chunks only grows during this loop and the
+          // dedup against already-queued members is idempotent, so if neither the symbol set nor the
+          // anti-dep mode changed since this lib was last searched, the dispatch can only re-queue
+          // (deduped to) nothing. skipping it avoids waking+joining every worker for no work.
+          U64 search_symbol_count = lnk_symbol_table_search_symbol_count(symtab);
+          B32 can_skip_search = lib->was_searched &&
+                                lib->searched_symbol_count == search_symbol_count &&
+                                lib->searched_anti_deps    == search_anti_deps;
+          if ( ! can_skip_search) {
+            LNK_SearchLibTask search_task = {
+              .search_anti_deps = search_anti_deps,
+              .link             = link,
+              .imports_hm       = &imports_hm,
+              .lib              = lib,
+              .symtab           = symtab,
+              .lib_member_infos = lib_member_infos,
+              .member_ref_lists = member_ref_lists
+            };
+            tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &search_task);
+
+            lib->was_searched          = 1;
+            lib->searched_symbol_count = search_symbol_count;
+            lib->searched_anti_deps    = search_anti_deps;
+          }
         }
 
         LNK_LibMemberRefList queued_members = {0};

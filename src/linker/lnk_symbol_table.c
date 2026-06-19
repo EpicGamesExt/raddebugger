@@ -592,6 +592,21 @@ lnk_symbol_table_search(LNK_SymbolTable *symtab, String8 name)
   return trie ? trie->symbol : 0;
 }
 
+internal U64
+lnk_symbol_table_search_symbol_count(LNK_SymbolTable *symtab)
+{
+  // total number of weak/undefined symbols inserted into search_chunks. this only ever grows
+  // during the lib-search loop (symbols are never removed mid-loop), so it serves as a monotonic
+  // version stamp for the set of symbols the lib search would scan.
+  U64 count = 0;
+  for EachIndex(worker_id, symtab->arena->count) {
+    for EachNode(c, LNK_SymbolHashTrieChunk, symtab->search_chunks[worker_id].first) {
+      count += c->count;
+    }
+  }
+  return count;
+}
+
 internal LNK_Symbol *
 lnk_symbol_table_searchf(LNK_SymbolTable *symtab, char *fmt, ...)
 {

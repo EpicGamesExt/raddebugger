@@ -15,6 +15,13 @@ typedef struct LNK_Lib
   String8Array         symbol_names;
   String8              long_names;
   U64                  input_idx;
+
+  // lib-search barrier elision: a re-search of this lib can only queue new members if the set of
+  // undefined/weak symbols grew, or if anti-dep searching was just enabled, since the last search.
+  // these record the state at the last search so identical re-searches can skip the tp dispatch.
+  B32                  was_searched;
+  B32                  searched_anti_deps;
+  U64                  searched_symbol_count;
 } LNK_Lib;
  
 typedef struct LNK_LibNode
