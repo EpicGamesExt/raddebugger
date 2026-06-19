@@ -1638,16 +1638,18 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
     for EachIndex(i, c->count) {
       LNK_Symbol *symbol = c->v[i].symbol;
 
-      LNK_ObjSymbolRef           symbol_ref    = lnk_ref_from_symbol(symbol);
-      // skip the name scan here; the resolved name is already cached on symbol->name
-      COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symbol_ref.obj, symbol_ref.symbol_idx);
-      COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+      // interp is cached on the symbol at push time, so the common case (resolved symbols, which
+      // stay in search_chunks but can never match a lib) costs one field read instead of re-parsing
+      // -- and page-faulting -- the COFF symbol record out of the mmap'd obj on every lib pass.
+      COFF_SymbolValueInterpType symbol_interp = symbol->interp;
       if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
         U32 member_idx;
         if (lnk_search_lib(lib, symbol->name, &member_idx)) {
           lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
         }
       } else if (symbol_interp == COFF_SymbolValueInterp_Weak) {
+        LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
+        COFF_ParsedSymbol  symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symbol_ref.obj, symbol_ref.symbol_idx);
         COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol_parsed, symbol_ref.obj->header.is_big_obj);
         if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
           U32 member_idx;
