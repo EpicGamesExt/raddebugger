@@ -1250,6 +1250,20 @@ lnk_lib_member_ref_is_before(void *raw_a, void *raw_b)
   return lnk_symbol_is_before(g_sort_lib_member_context[(*a)->member_idx].link, g_sort_lib_member_context[(*b)->member_idx].link);
 }
 
+internal int
+lnk_import_ref_is_before(void *raw_a, void *raw_b)
+{
+  // total order over import members, independent of parallel lib-search discovery
+  // round so the generated import objs (and thus IAT/thunk symbol values) are
+  // deterministic. link_symbol is unique per queued import (dedup guarantees it);
+  // member_idx is a stable tie-break.
+  LNK_LibMemberRef **a = raw_a, **b = raw_b;
+  LNK_Symbol *sa = (*a)->link_symbol, *sb = (*b)->link_symbol;
+  if (lnk_symbol_is_before(sa, sb)) { return 1; }
+  if (lnk_symbol_is_before(sb, sa)) { return 0; }
+  return (*a)->member_idx < (*b)->member_idx;
+}
+
 internal LNK_LibMemberRef **
 lnk_array_from_lib_member_list(Arena *arena, LNK_LibMemberRefList list)
 {
@@ -1588,7 +1602,7 @@ lnk_queue_lib_member(Arena                *arena,
     // do not queue second import member link -- flag member and continue
     U8                 flag                = str8_starts_with(link_symbol->name, str8_lit("__imp_")) ? LNK_LibMemberFlag_LinkedImp : LNK_LibMemberFlag_LinkedRegular;
     LNK_LibMemberInfo *import_member_infos = hash_map_search_raw_raw(&lib_member_info_hm, is_queued_import->lib);
-    ins_atomic_u8_or(&import_member_infos[member_idx].flags, flag);
+    ins_atomic_u8_or(&import_member_infos[is_queued_import->member_idx].flags, flag);
   } else {
     B32 do_queue;
     if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
@@ -2006,7 +2020,15 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     String8List  delayed_dll_names  = {0};
     String8List  static_dll_names   = {0};
 
-    for EachNode(member_ref, LNK_LibMemberRef, link->imports.first) {
+    // sort import members into a deterministic total order before generating import
+    // objs: the parallel lib search appends to link->imports in nondeterministic
+    // discovery-round order, which would otherwise make the per-DLL import symbol
+    // layout (IAT slots, jump thunks) -- and every reloc against them -- nonreproducible.
+    LNK_LibMemberRef **import_refs = lnk_array_from_lib_member_list(scratch.arena, link->imports);
+    radsort(import_refs, link->imports.count, lnk_import_ref_is_before);
+
+    for EachIndex(import_ref_idx, link->imports.count) {
+      LNK_LibMemberRef  *member_ref   = import_refs[import_ref_idx];
       LNK_Lib           *lib          = member_ref->lib;
       U64                member_idx   = member_ref->member_idx;
       LNK_LibMemberInfo *member_infos = hash_map_search_raw_raw(&link->lib_member_infos_hm, lib);
