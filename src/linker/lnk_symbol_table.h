@@ -19,9 +19,10 @@ typedef struct LNK_ObjSymbolRefNode
 
 typedef struct LNK_Symbol
 {
-  String8               name;
-  LNK_ObjSymbolRefNode *first_ref;
-  LNK_ObjSymbolRefNode *last_ref;
+  String8                    name;
+  LNK_ObjSymbolRefNode      *first_ref;
+  LNK_ObjSymbolRefNode      *last_ref;
+  COFF_SymbolValueInterpType interp;    // cached at push so the lib search can skip re-parsing (and page-faulting) resolved symbols
 } LNK_Symbol;
 
 // --- Symbol Containers -------------------------------------------------------

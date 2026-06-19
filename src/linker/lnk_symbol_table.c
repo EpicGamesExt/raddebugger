@@ -561,6 +561,7 @@ lnk_symbol_table_push_(LNK_SymbolTable *symtab, Arena *arena, U64 worker_id, LNK
 {
   U64                        hash   = lnk_symbol_table_hasher(symbol->name);
   COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(symbol);
+  symbol->interp = interp; // cache for the lib search hot loop
   LNK_SymbolHashTrieChunkList *chunks;
   if (interp == COFF_SymbolValueInterp_Weak || interp == COFF_SymbolValueInterp_Undefined) {
     chunks = &symtab->search_chunks[worker_id];
