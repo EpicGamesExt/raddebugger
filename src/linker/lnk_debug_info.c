@@ -3191,7 +3191,11 @@ THREAD_POOL_TASK_FUNC(lnk_gc_ring_fill_task)
 internal void
 lnk_gc_mark_enqueue(LNK_GCTypes *g, CV_TypeIndexSource ns, U64 ci)
 {
-  if (ci < g->orig_n[ns] && !ins_atomic_u8_eval_assign(&g->mark[ns][ci], 1)) {
+  if (ci >= g->orig_n[ns]) { return; }
+  if (g->mark[ns][ci])     { return; } // fast non-atomic skip: already reachable (the common edge)
+  // only the worker that wins the 0->1 transition appends, so the atomic runs once per leaf (not
+  // once per reference edge).
+  if (!ins_atomic_u8_eval_assign(&g->mark[ns][ci], 1)) {
     U32 pos = ins_atomic_u32_inc_eval(g->fcount[ns]) - 1;
     g->frontier[ns][pos] = (U32)ci;
   }
