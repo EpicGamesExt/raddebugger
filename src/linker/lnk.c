@@ -2430,7 +2430,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   // fold identical code COMDATs (routes followers to a leader; /OPT:REF then GCs them)
   //
   if (config->opt_icf == LNK_SwitchState_Yes) {
-    lnk_opt_icf(tp, symtab, config, link->objs);
+    lnk_opt_icf(tp, arena->v[0], symtab, config, link->objs);
   }
 
   //
@@ -2545,6 +2545,7 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
   LNK_ObjList      objs   = task->objs;
 
   U8                    **is_live             = 0;
+  LNK_Obj               **objs_by_idx         = 0; // input_idx -> obj, for /OPT:ICF static-fold redirect
   U64                    *active_thread_count = 0;
   LNK_RelocRefsBatchList  *global_batch_list   = 0;
   if (task_id == 0) {
@@ -2552,11 +2553,13 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
     global_batch_list   = push_array(scratch.arena, LNK_RelocRefsBatchList, 1);
 
     // alloc live flags and set live status on every non-COMDAT section
-    is_live = push_array_no_zero(scratch.arena, U8 *, objs.count);
+    is_live     = push_array_no_zero(scratch.arena, U8 *,      objs.count);
+    objs_by_idx = push_array_no_zero(scratch.arena, LNK_Obj *, objs.count ? objs.count : 1);
     {
       U64 obj_idx = 0;
       for EachNode(n, LNK_ObjNode, task->objs.first) {
-        is_live[obj_idx] = push_array(scratch.arena, U8, n->data.header.section_count_no_null + 1);
+        is_live[obj_idx]     = push_array(scratch.arena, U8, n->data.header.section_count_no_null + 1);
+        objs_by_idx[obj_idx] = &n->data;
 
         for EachIndex(sect_idx, n->data.header.section_count_no_null) {
           is_live[obj_idx][sect_idx + 1] = !(n->data.section_flags[sect_idx] & COFF_SectionFlag_LnkCOMDAT);
@@ -2617,6 +2620,7 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
     }
   }
   tp_broadcast(&is_live);
+  tp_broadcast(&objs_by_idx);
   tp_broadcast(&global_batch_list);
   tp_broadcast(&active_thread_count);
 
@@ -2680,32 +2684,86 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
           if (ref_interp == COFF_SymbolValueInterp_Regular) {
             Temp temp = temp_begin(scratch2.arena);
 
+            // /OPT:ICF static-COMDAT redirect: if the referenced section was folded into a leader,
+            // mark the LEADER section live (and walk the LEADER's relocs/associated sections) instead
+            // of the dead follower. The follower then dead-strips, taking its .pdata/.xdata with it.
+            LNK_Obj *walk_obj      = ref_symbol.obj;
+            U32      seed_sn       = ref_parsed.section_number;
+            if (walk_obj->icf_fold && seed_sn != 0 && seed_sn <= walk_obj->header.section_count_no_null &&
+                walk_obj->icf_fold[seed_sn - 1].set) {
+              LNK_ICFFold fold = walk_obj->icf_fold[seed_sn - 1];
+              walk_obj = objs_by_idx[fold.leader_obj_idx];
+              seed_sn  = fold.leader_sn;
+            }
+
             HashMap visited_sections_hm = {0};
             U32Node *stack = push_array(temp.arena, U32Node, 1);
-            stack->data    = ref_parsed.section_number;
+            stack->data    = seed_sn;
             do {
               U32 section_number = stack->data;
               SLLStackPop(stack);
 
               // is section number valid?
-              if (section_number == 0 || section_number > ref_symbol.obj->header.section_count_no_null) { continue; }
+              if (section_number == 0 || section_number > walk_obj->header.section_count_no_null) { continue; }
 
               // detect cyclic associative sections
               if (hash_map_search_u64_u64(&visited_sections_hm, section_number)) { continue; }
               hash_map_push_u64_u64(temp.arena, &visited_sections_hm, section_number, 1);
 
               // push associated section
-              for EachNode(associated_n, U32Node, ref_symbol.obj->associated_sections[section_number]) {
-                if (hash_map_search_u64_u64(&visited_sections_hm, associated_n->data)) { continue; }
+              for EachNode(associated_n, U32Node, walk_obj->associated_sections[section_number]) {
+                U32 assoc_sn = associated_n->data;
+
+                // /OPT:ICF static-COMDAT: an associative section can itself be a folded static
+                // follower (e.g. an associative .text$ funclet/thunk). Keeping the follower live here
+                // would defeat the fold and leave it with relocs into removed targets. Instead skip
+                // the follower and mark its LEADER live (cross-obj), so the follower dead-strips while
+                // its address still resolves to the identical leader.
+                if (walk_obj->icf_fold && assoc_sn >= 1 && assoc_sn <= walk_obj->header.section_count_no_null &&
+                    walk_obj->icf_fold[assoc_sn - 1].set) {
+                  LNK_ICFFold afold      = walk_obj->icf_fold[assoc_sn - 1];
+                  LNK_Obj    *leader_obj = objs_by_idx[afold.leader_obj_idx];
+                  U32         leader_sn  = afold.leader_sn;
+                  // mark the leader .text and each of its associative sections (.pdata/.xdata) live,
+                  // enqueuing each eligible one's relocs so their targets (handler .text, .xdata) are
+                  // kept live too -- exactly as a normal seed-walk of the leader would do.
+                  U32 leader_sns[64];
+                  U32 leader_sn_count = 0;
+                  leader_sns[leader_sn_count++] = leader_sn;
+                  for EachNode(lan, U32Node, leader_obj->associated_sections[leader_sn]) {
+                    if (leader_sn_count < ArrayCount(leader_sns)) { leader_sns[leader_sn_count++] = lan->data; }
+                  }
+                  for EachIndex(lsi, leader_sn_count) {
+                    U32 lsn = leader_sns[lsi];
+                    if (lsn == 0 || lsn > leader_obj->header.section_count_no_null) { continue; }
+                    U8 lseen = ins_atomic_u8_eval_assign(&is_live[leader_obj->input_idx][lsn], 1);
+                    if (lseen) { continue; }
+                    COFF_SectionFlags lflags = leader_obj->section_flags[lsn - 1];
+                    if (lflags & (COFF_SectionFlag_LnkRemove | COFF_SectionFlag_LnkInfo | LNK_SECTION_FLAG_DEBUG)) { continue; }
+                    LNK_RelocRefs lrefs = {0};
+                    lrefs.obj    = leader_obj;
+                    lrefs.relocs = lnk_coff_reloc_info_from_section_number(leader_obj, lsn);
+                    LNK_RelocRefsBatch *lbatch = last_batch;
+                    if (last_batch == 0 || last_batch->count >= ArrayCount(last_batch->v)) {
+                      if (free_list.head.node) { lbatch = lnk_reloc_ref_batch_list_pop(&free_list); MemoryZeroStruct(lbatch); }
+                      else                     { lbatch = push_array(scratch.arena, LNK_RelocRefsBatch, 1); }
+                      SLLQueuePush(first_batch, last_batch, lbatch);
+                    }
+                    lbatch->v[lbatch->count++] = lrefs;
+                  }
+                  continue; // do not mark the follower live
+                }
+
+                if (hash_map_search_u64_u64(&visited_sections_hm, assoc_sn)) { continue; }
                 U32Node *stack_n = push_array(temp.arena, U32Node, 1);
-                stack_n->data = associated_n->data;
+                stack_n->data = assoc_sn;
                 SLLStackPush(stack, stack_n);
               }
 
-              COFF_SectionFlags   section_flags  = ref_symbol.obj->section_flags[section_number-1];
+              COFF_SectionFlags   section_flags  = walk_obj->section_flags[section_number-1];
 
               // on first section visit, set live flag and enqueue section
-              U8 was_visited = ins_atomic_u8_eval_assign(&is_live[ref_symbol.obj->input_idx][section_number], 1);
+              U8 was_visited = ins_atomic_u8_eval_assign(&is_live[walk_obj->input_idx][section_number], 1);
               if (was_visited) { continue; }
 
               // is section eligible for walking?
@@ -2714,8 +2772,8 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
               if (section_flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
 
               LNK_RelocRefs refs = {0};
-              refs.obj         = ref_symbol.obj;
-              refs.relocs = lnk_coff_reloc_info_from_section_number(ref_symbol.obj, section_number);
+              refs.obj         = walk_obj;
+              refs.relocs = lnk_coff_reloc_info_from_section_number(walk_obj, section_number);
 
               // get a batch node
               LNK_RelocRefsBatch *batch = last_batch;
@@ -2899,6 +2957,7 @@ typedef struct LNK_ICFCand
   U32      reloc_count;
   U64      key0;        // round-0 content key
   U64      color;       // current equivalence class
+  B8       is_static;   // static (internal-linkage) COMDAT: folded via icf_fold, not symbol redirect
 } LNK_ICFCand;
 
 typedef struct LNK_ICFHashTask
@@ -3024,7 +3083,7 @@ lnk_icf_dense_colors_active(TP_Context *tp, Arena *arena, U32 *active, U64 n, U6
 // follower is redirected at its shared symbol-table node, so every reference (including from other
 // objects) resolves to the leader and /OPT:REF then drops the follower. Returns 1 = candidate.
 internal U32
-lnk_icf_section_kind(LNK_Obj *obj, U64 sect_idx)
+lnk_icf_section_kind(LNK_Obj *obj, U64 sect_idx, B32 include_static)
 {
   COFF_SectionFlags flags = obj->section_flags[sect_idx];
   if (~flags & COFF_SectionFlag_LnkCOMDAT) { return 0; }
@@ -3039,7 +3098,7 @@ lnk_icf_section_kind(LNK_Obj *obj, U64 sect_idx)
   COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(obj, sn);
   if (header->fsize == 0) { return 0; }
   LNK_Symbol *sym = lnk_obj_get_comdat_symlink(obj, sn);
-  if (sym == 0) { return 0; } // no external defining symbol (static / internal-linkage)
+  if (sym == 0) { return include_static ? 2 : 0; } // static COMDAT: opt-in /OPT:ICFSTATIC, folded via icf_fold + dead-strip
   LNK_ObjSymbolRef sym_ref = lnk_ref_from_symbol(sym);
   if (sym_ref.obj != obj) { return 0; } // same-name follower (already removed)
   COFF_ParsedSymbol sym_parsed = lnk_parsed_from_symbol(sym);
@@ -3053,6 +3112,7 @@ typedef struct LNK_ICFCollectTask
   U64          *counts;
   U64          *offsets;
   LNK_ICFCand  *cands;
+  B32           include_static;
 } LNK_ICFCollectTask;
 
 internal
@@ -3061,7 +3121,7 @@ THREAD_POOL_TASK_FUNC(lnk_icf_count_task)
   LNK_ICFCollectTask *t = raw_task;
   LNK_Obj *obj = t->objs[task_id];
   U64 n = 0;
-  for EachIndex(si, obj->header.section_count_no_null) { if (lnk_icf_section_kind(obj, si)) { n += 1; } }
+  for EachIndex(si, obj->header.section_count_no_null) { if (lnk_icf_section_kind(obj, si, t->include_static)) { n += 1; } }
   t->counts[task_id] = n;
 }
 
@@ -3072,9 +3132,11 @@ THREAD_POOL_TASK_FUNC(lnk_icf_fill_task)
   LNK_Obj *obj = t->objs[task_id];
   U64 cur = t->offsets[task_id];
   for EachIndex(si, obj->header.section_count_no_null) {
-    if (lnk_icf_section_kind(obj, si)) {
+    U32 kind = lnk_icf_section_kind(obj, si, t->include_static);
+    if (kind) {
       LNK_ICFCand *c = &t->cands[cur++];
       c->obj = obj; c->sn = (U32)si + 1;
+      c->is_static = (kind == 2);
       // count relocs here (parallel, the section is already in hand) so lnk_opt_icf only needs a
       // cheap serial prefix sum for reloc_first instead of re-parsing every section serially.
       COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(obj, c->sn);
@@ -3187,21 +3249,28 @@ lnk_icf_dense_colors(TP_Context *tp, Arena *arena, U64 n, U64 *keys, LNK_ICFCand
 // letting /OPT:REF garbage-collect the now-unreferenced follower sections (and their
 // associated .pdata/.xdata/.debug$S). Mirrors link.exe /OPT:ICF.
 internal void
-lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_ObjList objs_list)
+lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *config, LNK_ObjList objs_list)
 {
   if (config->opt_icf != LNK_SwitchState_Yes) { return; }
 
   ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
+  Temp scratch = scratch_begin(&perm, 1);
   Arena *arena = scratch.arena;
 
   U64        objs_count = objs_list.count;
   LNK_Obj  **objs       = lnk_array_from_obj_list(arena, objs_list);
 
+  // allocate the per-section static-fold map on every obj (sn-1 indexed, zeroed = not folded). It
+  // lives on the obj (not scratch) because /OPT:REF and the final section map read it after ICF.
+  for EachIndex(oi, objs_count) {
+    objs[oi]->icf_fold = push_array(perm, LNK_ICFFold, objs[oi]->header.section_count_no_null ? objs[oi]->header.section_count_no_null : 1);
+  }
+
   // collect candidate sections (parallel per obj): count, exact-size, then fill at per-obj
   // offsets. Counting first avoids sizing the array to the total section count (which would be
   // ~10x larger and waste ~1GB on UE-scale inputs).
   LNK_ICFCollectTask col = {0};
+  col.include_static = (config->opt_icf_static == LNK_SwitchState_Yes);
   col.objs    = objs;
   col.counts  = push_array(arena, U64, objs_count ? objs_count : 1);
   tp_for_parallel(tp, 0, objs_count, lnk_icf_count_task, &col);
@@ -3301,12 +3370,18 @@ lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
     while (j < cand_count && keys[j] == color) { j += 1; }
 
     if (j - i >= 2) {
-      // leader = lowest (input_idx, sn) member, for deterministic output
+      // leader = member with the smallest (is_static, input_idx, sn) key, for deterministic output.
+      // Preferring non-static (is_static=0) guarantees a class that has any external member elects it
+      // as leader, so an external follower is never folded into a static leader (external folding
+      // needs a leader that owns a symbol to redirect to). A static leads only an all-static class.
       U64 leader_oi = i;
       for (U64 k = i + 1; k < j; k += 1) {
         LNK_ICFCand *a = &cands[sci[leader_oi]];
         LNK_ICFCand *b = &cands[sci[k]];
-        if (Compose64Bit(b->obj->input_idx, b->sn) < Compose64Bit(a->obj->input_idx, a->sn)) { leader_oi = k; }
+        B32 b_better = (b->is_static <  a->is_static) ||
+                       (b->is_static == a->is_static &&
+                        Compose64Bit(b->obj->input_idx, b->sn) < Compose64Bit(a->obj->input_idx, a->sn));
+        if (b_better) { leader_oi = k; }
       }
       LNK_ICFCand        *L         = &cands[sci[leader_oi]];
       COFF_SectionHeader *Lheader   = lnk_coff_section_header_from_section_number(L->obj, L->sn);
@@ -3332,11 +3407,22 @@ lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
         }
         if (!relocs_match) { continue; }
 
-        // redirect at the shared symbol-table node so every object resolving this name points at
-        // the leader's definition; /OPT:REF then removes the now-unreferenced follower section.
         LNK_SymbolHashTrie *Fnode = F->obj->symlinks[F->sn];
-        if (Fnode && Fnode != Lnode) {
-          Fnode->symbol = Lnode->symbol;
+        if (Fnode) {
+          // external follower: redirect at the shared symbol-table node so every object resolving
+          // this name points at the leader's definition; /OPT:REF then removes the now-unreferenced
+          // follower section. Leader selection guarantees a non-static (Lnode != 0) leader here.
+          if (Lnode && Fnode != Lnode) {
+            Fnode->symbol = Lnode->symbol;
+            fold_count += 1;
+          }
+        } else {
+          // static follower: no external symbol to redirect. Record the leader so (a) /OPT:REF
+          // redirects follower references to mark the LEADER live and (b) the final section map
+          // resolves any residual reloc into the follower to the leader's contrib.
+          F->obj->icf_fold[F->sn - 1].leader_obj_idx = L->obj->input_idx;
+          F->obj->icf_fold[F->sn - 1].leader_sn      = L->sn;
+          F->obj->icf_fold[F->sn - 1].set            = 1;
           fold_count += 1;
         }
       }
@@ -3482,6 +3568,28 @@ THREAD_POOL_TASK_FUNC(lnk_set_comdat_leaders_contribs_task)
     COFF_ParsedSymbol symlink_parsed = lnk_parsed_from_symbol(symlink);
     LNK_ObjSymbolRef  symlink_ref    = lnk_ref_from_symbol(symlink);
     task->sect_map[obj_idx][sect_idx] = task->sect_map[symlink_ref.obj->input_idx][symlink_parsed.section_number - 1];
+  }
+  ProfEnd();
+}
+
+// /OPT:ICF static-COMDAT followers have no external symbol to redirect, so point their section-map
+// entry at the leader's contrib. The follower section is dead-stripped, but any residual reloc to a
+// static symbol in it resolves its address via sect_map[obj][sn-1] -> leader's contrib.
+internal
+THREAD_POOL_TASK_FUNC(lnk_set_icf_static_leader_contribs_task)
+{
+  LNK_BuildImageTask *task    = raw_task;
+  U64                 obj_idx = task_id;
+  LNK_Obj            *obj     = task->objs[obj_idx];
+
+  if (obj->icf_fold == 0) { return; }
+
+  ProfBeginV("Set ICF Static Leader Contribs [%S]", obj->path);
+  for EachIndex(sect_idx, obj->header.section_count_no_null) {
+    LNK_ICFFold fold = obj->icf_fold[sect_idx];
+    if (!fold.set) { continue; }
+    LNK_SectionContrib *leader_sc = task->sect_map[fold.leader_obj_idx][fold.leader_sn - 1];
+    task->sect_map[obj_idx][sect_idx] = leader_sc;
   }
   ProfEnd();
 }
@@ -5106,6 +5214,9 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     }
 
     tp_for_parallel_prof(tp, 0, objs_count, lnk_set_comdat_leaders_contribs_task, &task, "Update Section Map With COMDAT Leader Contribs");
+
+    // /OPT:ICF: redirect folded static-COMDAT followers' section-map entries to their leader contrib
+    tp_for_parallel_prof(tp, 0, objs_count, lnk_set_icf_static_leader_contribs_task, &task, "Update Section Map With ICF Static Leader Contribs");
 
     // build common block
     //

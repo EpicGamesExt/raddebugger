@@ -20,6 +20,18 @@ typedef struct LNK_ParsedSymbolLite
   U8                   aux_symbol_count;
 } LNK_ParsedSymbolLite;
 
+// /OPT:ICF static-COMDAT fold record (one per section, indexed by section_number-1). A static
+// (internal-linkage) COMDAT has no external symbol to redirect, so instead of routing it through
+// the symbol table we record its leader here: /OPT:REF marks the LEADER live (so the follower is
+// dead-stripped with its associated .pdata/.xdata), and the final section map redirects any
+// residual reloc to the leader's contrib. set==0 means the section is not folded.
+typedef struct LNK_ICFFold
+{
+  U32 leader_obj_idx; // input_idx of the leader's obj
+  U32 leader_sn;      // leader section number
+  B8  set;
+} LNK_ICFFold;
+
 typedef struct LNK_Obj
 {
   String8 path;
@@ -40,6 +52,7 @@ typedef struct LNK_Obj
   U32                 *comdats;
   U32Node            **associated_sections;
   LNK_SymbolHashTrie **symlinks;
+  LNK_ICFFold         *icf_fold; // /OPT:ICF static-COMDAT fold map (per section, sn-1 indexed); 0 if ICF off
 
   // link
   struct LNK_LibMemberRef *link_member;

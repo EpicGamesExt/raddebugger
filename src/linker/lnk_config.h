@@ -289,6 +289,7 @@ typedef struct LNK_Config
   B32                         ghash;
   LNK_SwitchState             opt_ref;
   LNK_SwitchState             opt_icf;
+  LNK_SwitchState             opt_icf_static; // /OPT:ICFSTATIC -- also fold static (internal-linkage) COMDATs. Default OFF: runtime-unvalidated, can shrink .text substantially.
   LNK_SwitchState             opt_lbr;
   LNK_SwitchState             opt_gc_types; // /OPT:GCTYPES -- prune unreferenced CodeView types. Default OFF: shrinks PDB but a pruned type can't be cast-to in the debugger watch window.
   U64                         opt_iter_count;

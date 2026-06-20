@@ -1675,6 +1675,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
         config->opt_icf = LNK_SwitchState_Yes;
       } else if (str8_match_lit("noicf", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_icf = LNK_SwitchState_No;
+      } else if (str8_match_lit("icfstatic", param, StringMatchFlag_CaseInsensitive)) {
+        config->opt_icf_static = LNK_SwitchState_Yes;
+      } else if (str8_match_lit("noicfstatic", param, StringMatchFlag_CaseInsensitive)) {
+        config->opt_icf_static = LNK_SwitchState_No;
       } else if (str8_match_lit("lbr", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_lbr = LNK_SwitchState_Yes;
       } else if (str8_match_lit("nolibr", param, StringMatchFlag_CaseInsensitive)) {
