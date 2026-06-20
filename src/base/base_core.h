@@ -272,6 +272,7 @@
 #  error Atomic intrinsics not defined for this compiler / architecture combination.
 # endif
 #elif COMPILER_CLANG || COMPILER_GCC
+#  include <x86intrin.h>
 #  define ins_atomic_u128_eval_cond_assign(x,k,c) (B32)__atomic_compare_exchange_n((__int128 *)(x),(__int128 *)(c),*(__int128 *)(k),0,__ATOMIC_SEQ_CST,__ATOMIC_SEQ_CST)
 #  define ins_atomic_u64_eval(x)                  __atomic_load_n((U64 *)(x), __ATOMIC_SEQ_CST)
 #  define ins_atomic_u64_inc_eval(x)              __atomic_add_fetch((U64 *)(x), 1, __ATOMIC_SEQ_CST)
