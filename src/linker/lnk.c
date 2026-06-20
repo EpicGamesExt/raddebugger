@@ -112,6 +112,7 @@ internal void lnk_radix_sort_u64_pairs(TP_Context *tp, Arena *arena, U64 n, U64 
 #include "lnk_debug_helper.h"
 #include "lnk_obj.h"
 #include "lnk_lib.h"
+#include "codeview_ext/ifc.h"
 #include "lnk_debug_info.h"
 #include "lnk.h"
 
@@ -125,6 +126,7 @@ internal void lnk_radix_sort_u64_pairs(TP_Context *tp, Arena *arena, U64 n, U64 
 #include "lnk_obj.c"
 #include "lnk_debug_helper.c"
 #include "lnk_lib.c"
+#include "codeview_ext/ifc.c"
 #include "lnk_debug_info.c"
 
 // -----------------------------------------------------------------------------
@@ -3008,9 +3010,30 @@ THREAD_POOL_TASK_FUNC(lnk_icf_hash_task)
       U8  iscand = 0;
       U64 target = 0;
       if (ti == COFF_SymbolValueInterp_Regular && tref.obj != 0) {
-        U64 cv = lnk_icf_map_get(task->cand_map, Compose64Bit(tref.obj->input_idx, tp.section_number), 0);
+        // Canonicalize a COMDAT definition to its selected leader so the SAME logical symbol keys
+        // identically regardless of which obj's local copy this reloc happens to name. Two byte-
+        // identical functions that each reference their own copy of a shared COMDAT (writable
+        // static guards, vtables, selectany globals) must otherwise get distinct per-obj keys and
+        // never fold. The symlink leader is the post-resolution canonical definition (built before
+        // ICF, read-only here), so keying by it is strictly more correct than per-obj.
+        // Keep the reloc's own target offset (tp.value): canonicalize only the SECTION IDENTITY
+        // (obj,sn) to the leader, never the offset, so distinct offsets into the same section stay
+        // distinct. The leader symbol itself always has value 0 (the symlink picks the value==0
+        // definition), but a reloc may name an interior offset.
+        LNK_Obj *kobj = tref.obj;
+        U64      ksn  = tp.section_number;
+        if (ksn >= 1 && ksn <= kobj->header.section_count_no_null &&
+            (kobj->section_flags[ksn - 1] & COFF_SectionFlag_LnkCOMDAT)) {
+          LNK_Symbol *leader = lnk_obj_get_comdat_symlink(kobj, ksn);
+          if (leader) {
+            LNK_ObjSymbolRef  lref = lnk_ref_from_symbol(leader);
+            COFF_ParsedSymbol lp   = lnk_parsed_from_symbol(leader);
+            if (lref.obj != 0) { kobj = lref.obj; ksn = lp.section_number; }
+          }
+        }
+        U64 cv = lnk_icf_map_get(task->cand_map, Compose64Bit(kobj->input_idx, ksn), 0);
         if (cv) { iscand = 1; target = cv - 1; }
-        else    { target = lnk_icf_mix(Compose64Bit(tref.obj->input_idx, tp.section_number), tp.value); }
+        else    { target = lnk_icf_mix(Compose64Bit(kobj->input_idx, ksn), tp.value); }
       } else {
         U64 nh = 14695981039346656037ull;
         for (U64 i = 0; i < tp.name.size; i += 1) { nh = lnk_icf_mix(nh, tp.name.str[i]); }

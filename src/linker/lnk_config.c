@@ -106,6 +106,9 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
 
   { LNK_CmdSwitch_RadTypeServer,                   0, "RAD_TYPE_SERVER", ":FILENAME", "Merge types and store them in the specified file. The filename must have the .rrt extension." },
 
+  { LNK_CmdSwitch_IfcMap,          1, "IFCMAP",          ":FILENAME", "Map a header-unit module interface (.ifc) for debug-record resolution (TOML)." },
+  { LNK_CmdSwitch_IfcDebugRecords, 0, "IFCDEBUGRECORDS", "[:NO]",     "Resolve MSVC header-unit IFC debug records into real CodeView types." },
+
   { LNK_CmdSwitch_Help, 0, "HELP", "", "" },
   { LNK_CmdSwitch_Help, 0, "?",    "", "" },
 };
@@ -2185,6 +2188,19 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       }
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "missing type server file path");
+    }
+  } break;
+
+  case LNK_CmdSwitch_IfcMap: {
+    // collect .toml paths (header-unit -> .ifc); parsed lazily during debug-info build
+    String8List copy = str8_list_copy(config->arena, &value_strings);
+    str8_list_concat_in_place(&config->ifc_map_list, &copy);
+  } break;
+
+  case LNK_CmdSwitch_IfcDebugRecords: {
+    LNK_SwitchState state = LNK_SwitchState_Null;
+    if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
+      config->ifc_debug_records = state;
     }
   } break;
   }
