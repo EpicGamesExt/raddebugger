@@ -90,6 +90,7 @@ internal TCTX *tctx_selected(void);
 
 //- rjf: scratch arenas
 internal Arena *tctx_get_scratch(Arena **conflicts, U64 count);
+internal void tctx_scratch_decommit(void);
 #define scratch_begin(conflicts, count) temp_begin(tctx_get_scratch((conflicts), (count)))
 #define scratch_end(scratch) temp_end(scratch)
 

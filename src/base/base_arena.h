@@ -76,6 +76,9 @@ internal void *arena_push(Arena *arena, U64 size, U64 align, B32 zero);
 internal U64   arena_pos(Arena *arena);
 internal void  arena_pop_to(Arena *arena, U64 pos);
 
+//- rjf: arena decommit of unused (rewound/free) pages
+internal void arena_decommit_unused(Arena *arena);
+
 //- rjf: arena push/pop helpers
 internal void arena_clear(Arena *arena);
 internal void arena_pop(Arena *arena, U64 amt);
