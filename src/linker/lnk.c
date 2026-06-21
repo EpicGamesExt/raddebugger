@@ -1645,8 +1645,21 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
   LNK_LibMemberInfo    *lib_member_infos = task->lib_member_infos;
   LNK_LibMemberRefList *member_ref_list  = &task->member_ref_lists[task_id];
 
-  for EachNode(c, LNK_SymbolHashTrieChunk, symtab->search_chunks[task_id].first) {
-    for EachIndex(i, c->count) {
+  // FRONTIER cursor: resume from where this worker last left off for this lib. search_chunks is
+  // append-only across the lib-search loop, so slots before the cursor were already searched and
+  // (search being a pure fn of (lib, symbol->name), member-queue dedup idempotent) can never resolve
+  // a new member. reset_cursor (anti-dep mode flip) forces a full rescan from list first.
+  LNK_SymbolHashTrieChunk *start_chunk = task->reset_cursor ? 0 : lib->search_cursor_chunk[task_id];
+  U64                      start_idx   = task->reset_cursor ? 0 : lib->search_cursor_idx[task_id];
+
+  LNK_SymbolHashTrieChunk *first_chunk = start_chunk ? start_chunk : symtab->search_chunks[task_id].first;
+  LNK_SymbolHashTrieChunk *end_chunk   = symtab->search_chunks[task_id].last;
+  U64                      end_count    = end_chunk ? end_chunk->count : 0;
+
+  for (LNK_SymbolHashTrieChunk *c = first_chunk; c != 0; c = c->next) {
+    U64 i_begin = (c == start_chunk) ? start_idx : 0;
+    U64 i_end   = c->count;
+    for (U64 i = i_begin; i < i_end; i += 1) {
       LNK_Symbol *symbol = c->v[i].symbol;
 
       // interp is cached on the symbol at push time, so the common case (resolved symbols, which
@@ -1685,6 +1698,13 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
       }
     }
   }
+
+  // advance cursor to the end of search_chunks as observed at the start of this scan. the tp dispatch
+  // is a barrier and load_inputs runs serially between dispatches, so no concurrent append occurs;
+  // we stamp the (end_chunk, end_count) snapshot taken before the loop so any slot appended after the
+  // snapshot is rescanned next time, never skipped.
+  lib->search_cursor_chunk[task_id] = end_chunk;
+  lib->search_cursor_idx[task_id]   = end_count;
 }
 
 internal LNK_Lib *
@@ -1834,8 +1854,19 @@ lnk_link_inputs(TP_Context      *tp,
                                 lib->searched_symbol_count == search_symbol_count &&
                                 lib->searched_anti_deps    == search_anti_deps;
           if ( ! can_skip_search) {
+            // lazily alloc the per-worker frontier cursor arrays (cleared = unsearched/start).
+            if (lib->search_cursor_chunk == 0) {
+              lib->search_cursor_chunk = push_array(link->arena, LNK_SymbolHashTrieChunk *, tp->worker_count);
+              lib->search_cursor_idx   = push_array(link->arena, U64,                       tp->worker_count);
+            }
+
+            // anti-dep mode flipped since last search of this lib: anti-dep weak symbols before the
+            // cursor were skipped under the old mode, so they must be re-tried -> rescan from start.
+            B32 reset_cursor = lib->was_searched && lib->searched_anti_deps != search_anti_deps;
+
             LNK_SearchLibTask search_task = {
               .search_anti_deps = search_anti_deps,
+              .reset_cursor     = reset_cursor,
               .link             = link,
               .imports_hm       = &imports_hm,
               .lib              = lib,

@@ -22,6 +22,17 @@ typedef struct LNK_Lib
   B32                  was_searched;
   B32                  searched_anti_deps;
   U64                  searched_symbol_count;
+
+  // lib-search FRONTIER cursor: search_chunks is append-only across the entire lib-search loop
+  // (it is only drained -> chunks AFTER the loop, in lnk_replace_weak_with_default_symbols), so an
+  // already-searched (symbol,lib) pair can never resolve a new member -- searching is a pure
+  // function of (lib, symbol->name) and the member queue dedup is idempotent. each worker records
+  // the position in its search_chunks[worker] list where this lib's last search ended; the next
+  // search rescans only the slots appended since. search_cursor_chunk[worker] == 0 means "start at
+  // list first" (nothing searched yet). reset to 0 when the anti-dep mode flips (anti-dep weak
+  // symbols must be re-tried under the new mode).
+  struct LNK_SymbolHashTrieChunk **search_cursor_chunk; // [worker_count], 0 = unsearched
+  U64                             *search_cursor_idx;    // [worker_count], intra-chunk resume index
 } LNK_Lib;
  
 typedef struct LNK_LibNode
