@@ -2082,7 +2082,7 @@ lnk_leaf_hash_table_search_ti(LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, 
 {
   CV_DebugH *debug_h  = &input->debug_h_arr[leaf_ref.obj_idx];
   U64        hash     = debug_h->v[leaf_ref.leaf_idx];
-  U64        best_idx = hash % ht->cap;
+  U64        best_idx = hash & (ht->cap - 1); // cap is pow2
   U64        idx      = best_idx;
   do {
     if (ht->ti_arr[idx] == 0) { break; } // empty slot -> not present
@@ -2156,7 +2156,7 @@ THREAD_POOL_TASK_FUNC(lnk_populate_leaf_ht)
     CV_LeafKind         kind        = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind)); // leaf header -> leaf kind
     CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
     LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];                           // type stream -> hash table
-    U64                 best_idx    = debug_h->v[leaf_idx] % leaf_ht->cap;                       // leaf ref -> hash -> bucket index
+    U64                 best_idx    = debug_h->v[leaf_idx] & (leaf_ht->cap - 1);                  // leaf ref -> hash -> bucket index (cap pow2)
     U64                 idx         = best_idx;
     do {
       // load leaf ref
@@ -2217,7 +2217,7 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
     CV_LeafKind         kind        = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind)); // leaf header -> leaf kind
     CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
     LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];                           // type stream -> hash table
-    U64                 best_idx    = debug_h->v[leaf_idx] % leaf_ht->cap;                       // leaf ref -> hash -> bucket index
+    U64                 best_idx    = debug_h->v[leaf_idx] & (leaf_ht->cap - 1);                  // leaf ref -> hash -> bucket index (cap pow2)
     U64                 idx         = best_idx;
     do {
       // load leaf ref
@@ -2466,7 +2466,7 @@ THREAD_POOL_TASK_FUNC(lnk_assign_type_indices_task)
     CV_TypeIndex  type_index = min_type_index + i;
 
     U64 hash     = debug_h_arr[leaf_ref->obj_idx].v[leaf_ref->leaf_idx];
-    U64 best_idx = hash % at->cap;
+    U64 best_idx = hash & (at->cap - 1); // cap is pow2
     U64 idx      = best_idx;
 
     B32 is_assigned = 0;
@@ -2757,7 +2757,9 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     for EachIndex(obj_idx, input->count) { total_count += input->debug_t_arr[obj_idx].source_counts[ti_source]; }
 
     task.leaf_ht_arr[ti_source].cap = total_count;
-    task.leaf_ht_arr[ti_source].cap = 1 + ((task.leaf_ht_arr[ti_source].cap * 13) / 10); // * 1.3
+    // pow2 cap so bucket index is hash & (cap-1) (mask) instead of hash % cap (a 64-bit DIV in the
+    // densest dedup probe loop). u64_up_to_pow2(1.3*count) keeps load factor <= ~0.65.
+    task.leaf_ht_arr[ti_source].cap = u64_up_to_pow2(1 + ((task.leaf_ht_arr[ti_source].cap * 13) / 10)); // * 1.3, pow2
     task.leaf_ht_arr[ti_source].bucket_arr = push_array(scratch.arena, LNK_LeafRef *, task.leaf_ht_arr[ti_source].cap);
 
 #if PROFILE_TELEMETRY
@@ -2821,7 +2823,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
 
     // assigned-ti table sized to the unique (deduped) count -- not the total leaf count, which would
     // add the bucket-parallel ti/hash arrays' worth of peak working set (~3GB on large links)
-    task.assigned_ti_arr[ti_source].cap      = 1 + ((task.unique_leaf_refs_arr[ti_source].count * 13) / 10); // * 1.3
+    task.assigned_ti_arr[ti_source].cap      = u64_up_to_pow2(1 + ((task.unique_leaf_refs_arr[ti_source].count * 13) / 10)); // * 1.3, pow2 -> mask index
     task.assigned_ti_arr[ti_source].ti_arr   = push_array(scratch.arena, CV_TypeIndex, task.assigned_ti_arr[ti_source].cap);
     task.assigned_ti_arr[ti_source].hash_arr = push_array(scratch.arena, U64, task.assigned_ti_arr[ti_source].cap);
     task.offsets[ti_source]                    = offsets_from_counts_array_u64(scratch.arena, task.counts[ti_source], tp->worker_count);
