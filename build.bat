@@ -46,6 +46,7 @@ if "%spall%"=="1"                   set auto_compile_flags=%auto_compile_flags% 
 if "%asan%"=="1"                    set auto_compile_flags=%auto_compile_flags% -fsanitize=address && echo [asan enabled]
 if "%ubsan%"=="1"                   set auto_compile_flags=%auto_compile_flags% -fsanitize=undefined && echo [ubsan enabled]
 if "%opengl%"=="1"                  set auto_compile_flags=%auto_compile_flags% -DR_BACKEND=R_BACKEND_OPENGL && echo [opengl render backend]
+if "%worklist_selfcheck%"=="1"      set auto_compile_flags=%auto_compile_flags% -DICF_WORKLIST_SELFCHECK=1 && echo [icf worklist selfcheck enabled]
 if "%dwarf%"=="1" if "%clang%"=="1" set auto_compile_flags=%auto_compile_flags% -gdwarf && echo [dwarf debug info]
 if "%dwarf%"==""  if "%clang%"=="1" set auto_compile_flags=%auto_compile_flags% -gcodeview
 if "%pgo%"=="1" (
