@@ -715,13 +715,162 @@ lnk_parse_ifc_record(String8 leaf_data)
   return rec;
 }
 
+// Per-blob closure + NOTYPE-prune (third pass of lnk_apply_ifc_debug_records). Each blob is fully
+// independent: it reads/writes only its own ref_bits[blob_i] and its own blob DebugT leaves, so the
+// work parallelizes across the ~13 blobs with no shared state. The worklist scratch comes from the
+// per-worker arena. Closure counts are written per-blob and summed afterward (order-independent).
+// Open-addressing U64 hash set keyed by unique_name hash. Used to record which UDT unique_names
+// already have a COMPLETE definition in a non-blob (consuming) obj, so the blob prune can keep a
+// blob's complete definition only for names that NO normal obj completes (blob-only types). cap is
+// a power of two; 0-hash is reserved as the empty sentinel (we OR in a bit so a real 0 can't occur).
+typedef struct LNK_U64Set { U64 *slots; U64 cap; } LNK_U64Set;
+
+internal U64
+lnk_uname_hash(String8 s)
+{
+  U64 h = 5381;
+  for EachIndex(c, s.size) { h = ((h << 5) + h) ^ (U64)s.str[c]; }
+  return h | 1; // never 0 (0 is the empty sentinel)
+}
+
+internal void
+lnk_u64set_add(LNK_U64Set *set, U64 h)
+{
+  U64 i = h & (set->cap - 1);
+  for (;;) {
+    if (set->slots[i] == 0)  { set->slots[i] = h; return; }
+    if (set->slots[i] == h)  { return; }
+    i = (i + 1) & (set->cap - 1);
+  }
+}
+
+internal B32
+lnk_u64set_has(LNK_U64Set *set, U64 h)
+{
+  U64 i = h & (set->cap - 1);
+  for (;;) {
+    if (set->slots[i] == 0) { return 0; }
+    if (set->slots[i] == h) { return 1; }
+    i = (i + 1) & (set->cap - 1);
+  }
+}
+
+// Parallel collect of complete-definition unique_name hashes per non-blob obj. Each obj is scanned
+// independently (read-only over its .debug$T leaves) and emits its hashes into a per-obj list; a
+// serial pass then adds them to the shared open-addressing set. Moves the ~1.25s serial cv_get_udt_info
+// scan off the main thread. Determinism: set membership is order-independent, serial-add reproduces.
+typedef struct LNK_IfcCompleteScanTask
+{
+  LNK_CodeViewInput *input;
+  U64              **out_hashes;  // per-obj hash array (allocated by task)
+  U64               *out_counts;  // per-obj count
+} LNK_IfcCompleteScanTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_ifc_complete_scan_task)
+{
+  LNK_IfcCompleteScanTask *task = raw_task;
+  U64        obj_idx = task_id;
+  CV_DebugT *dt      = &task->input->debug_t_arr[obj_idx];
+  U64       *hashes  = push_array_no_zero(arena, U64, dt->count ? dt->count : 1);
+  U64        n       = 0;
+  for EachIndex(leaf_idx, dt->count) {
+    CV_Leaf    leaf = cv_debug_t_get_leaf(dt, leaf_idx);
+    CV_UDTInfo ui   = cv_get_udt_info(leaf.kind, leaf.data);
+    if (!(ui.props & CV_TypeProp_HasUniqueName) || ui.unique_name.size == 0) { continue; }
+    if (ui.props & CV_TypeProp_FwdRef) { continue; }
+    hashes[n++] = lnk_uname_hash(ui.unique_name);
+  }
+  task->out_hashes[obj_idx] = hashes;
+  task->out_counts[obj_idx] = n;
+}
+
+typedef struct LNK_IfcCloseTask
+{
+  LNK_CodeViewInput *input;
+  U8               **ref_bits;
+  U64               *closure_leaves;  // per-blob output: # leaves surviving in closure
+  LNK_U64Set        *nonblob_complete; // unique_name hashes completed by some non-blob obj
+} LNK_IfcCloseTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_ifc_close_blob_task)
+{
+  LNK_IfcCloseTask  *task    = raw_task;
+  U64                blob_i  = task_id;
+  LNK_CodeViewInput *input   = task->input;
+  U64        blob_obj_idx = input->ifc_obj_range.min + blob_i;
+  CV_DebugT *bdt          = &input->debug_t_arr[blob_obj_idx];
+  U8        *bits         = task->ref_bits[blob_i];
+  U64        closure      = 0;
+  if (bdt->count == 0) { task->closure_leaves[blob_i] = 0; return; }
+
+  Temp  wtemp    = temp_begin(arena);
+
+  // Extra closure roots for forward-ref completion: in CodeView a forward-ref UDT is completed by
+  // ANY same-unique_name complete definition in the PDB. A consuming obj typically emits only a
+  // forward-ref of a header-unit type; the full-merge build incidentally kept the matching complete
+  // definition from the .ifc blob, so the debugger could complete it. On-demand would drop that
+  // definition (nothing references it by TI), leaving the type incomplete vs full-merge. To preserve
+  // fidelity WITHOUT dragging the whole blob, root every blob complete-def UDT whose unique_name has
+  // NO complete definition in any non-blob obj (i.e. blob-only types -- trait/delegate marker structs
+  // etc.). Common types (FString, FGuid, ...) are completed by normal objs, so their redundant blob
+  // copies stay pruned. Members of the kept defs are pulled by the closure walk below.
+  for EachIndex(leaf_idx, bdt->count) {
+    if (bits[leaf_idx >> 3] & (1u << (leaf_idx & 7))) { continue; } // already a root
+    CV_Leaf    leaf = cv_debug_t_get_leaf(bdt, leaf_idx);
+    CV_UDTInfo ui   = cv_get_udt_info(leaf.kind, leaf.data);
+    if (!(ui.props & CV_TypeProp_HasUniqueName) || ui.unique_name.size == 0) { continue; }
+    if (ui.props & CV_TypeProp_FwdRef) { continue; }      // only complete definitions
+    U64 h = lnk_uname_hash(ui.unique_name);
+    if (lnk_u64set_has(task->nonblob_complete, h)) { continue; } // a normal obj already completes it
+    bits[leaf_idx >> 3] |= (U8)(1u << (leaf_idx & 7));
+  }
+
+  U64  *worklist = push_array_no_zero(wtemp.arena, U64, bdt->count);
+  U64   wl_count = 0;
+  for EachIndex(leaf_idx, bdt->count) {
+    if (bits[leaf_idx >> 3] & (1u << (leaf_idx & 7))) { worklist[wl_count++] = leaf_idx; }
+  }
+
+  while (wl_count) {
+    U64     leaf_idx = worklist[--wl_count];
+    CV_Leaf leaf     = cv_debug_t_get_leaf(bdt, leaf_idx);
+    Temp    itemp    = temp_begin(wtemp.arena);
+    CV_TypeIndexInfoList ti_list = cv_get_leaf_type_index_offsets(itemp.arena, leaf.kind, leaf.data);
+    for EachNode(ti_info, CV_TypeIndexInfo, ti_list.first) {
+      CV_TypeIndex *ti_ptr = str8_deserial_get_raw_ptr(leaf.data, ti_info->offset, sizeof(*ti_ptr));
+      if (ti_ptr == 0) { continue; }
+      CV_TypeIndex sub_ti = memory_read32(ti_ptr);
+      if (sub_ti < bdt->ti_ranges[ti_info->source].min ||
+          sub_ti >= bdt->ti_ranges[ti_info->source].max) { continue; }
+      U64 sub_leaf_idx = cv_leaf_idx_from_ti(bdt, ti_info->source, sub_ti);
+      if (sub_leaf_idx >= bdt->count) { continue; }
+      if (bits[sub_leaf_idx >> 3] & (1u << (sub_leaf_idx & 7))) { continue; }
+      bits[sub_leaf_idx >> 3] |= (U8)(1u << (sub_leaf_idx & 7));
+      worklist[wl_count++] = sub_leaf_idx;
+    }
+    temp_end(itemp);
+  }
+  temp_end(wtemp);
+
+  for EachIndex(leaf_idx, bdt->count) {
+    if (bits[leaf_idx >> 3] & (1u << (leaf_idx & 7))) { closure += 1; continue; }
+    CV_LeafHeader *hdr = cv_debug_t_get_leaf_header(bdt, leaf_idx);
+    if (hdr->kind == CV_LeafKind_NOTYPE) { continue; }
+    memory_write16(MemberFromPtr(CV_LeafHeader, hdr, kind), (U16)CV_LeafKind_NOTYPE);
+    memory_write16(MemberFromPtr(CV_LeafHeader, hdr, size), (U16)sizeof(CV_LeafKind));
+  }
+  task->closure_leaves[blob_i] = closure;
+}
+
 // Injects referenced .ifc debug-records blobs as extra "objs" in `input`, scans every
 // consuming obj's .debug$T for LF_IFC_RECORD (0x1522) leaves, registers each placeholder
 // local TI -> blob leaf redirect, and rewrites the 0x1522 leaf to NOTYPE so it is excluded
 // from the output TPI. Must run after .debug$T is parsed and before min-type-index / symbol
 // setup (which iterate input->count).
 internal void
-lnk_apply_ifc_debug_records(TP_Arena *tp_arena, LNK_CodeViewInput *input, LNK_Config *config)
+lnk_apply_ifc_debug_records(TP_Context *tp, TP_Arena *tp_arena, LNK_CodeViewInput *input, LNK_Config *config)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&tp_arena->v[0], 1);
@@ -817,7 +966,17 @@ lnk_apply_ifc_debug_records(TP_Arena *tp_arena, LNK_CodeViewInput *input, LNK_Co
   input->ifc_obj_range = r1u64(prev_count, new_count);
   input->ifc_indices   = ifc_indices; // hashed + deduped before int objs (see lnk_merge_types)
 
-  // --- second pass: register redirects + NOTYPE the 0x1522 leaves ---
+  // --- on-demand pruning state: per blob, a "referenced" bitset of leaf indices that
+  // are reachable from some consuming obj's 0x1522 redirect (the closure roots). Only these
+  // + their transitive blob-internal deps get merged; the rest are rewritten to NOTYPE so the
+  // hash/dedup pipeline skips ~all of the ~1.5M blob leaves that nothing references. ---
+  U8 **ref_bits = push_array(scratch.arena, U8 *, ifc_file_count);
+  for EachIndex(i, ifc_file_count) {
+    U64 c = blob_debug_t[i].count;
+    ref_bits[i] = push_array(scratch.arena, U8, (c + 7) / 8); // zero-init -> nothing referenced yet
+  }
+
+  // --- second pass: register redirects + NOTYPE the 0x1522 leaves + seed closure roots ---
   input->has_ifc_redirects = 1;
   U64 redirect_count = 0;
   for EachIndex(obj_idx, input->obj_count) {
@@ -858,6 +1017,9 @@ lnk_apply_ifc_debug_records(TP_Arena *tp_arena, LNK_CodeViewInput *input, LNK_Co
                                       Compose64Bit(blob_obj_idx, blob_leaf_idx));
                 redirect_count += 1;
                 resolved = 1;
+
+                // seed closure root: this blob leaf is referenced
+                ref_bits[blob_i][blob_leaf_idx >> 3] |= (U8)(1u << (blob_leaf_idx & 7));
               }
             }
           }
@@ -871,7 +1033,56 @@ lnk_apply_ifc_debug_records(TP_Arena *tp_arena, LNK_CodeViewInput *input, LNK_Co
     }
   }
 
-  lnk_log(LNK_Log_Debug, "[IFC] injected %llu .ifc blob(s), %llu record redirect(s)", ifc_file_count, redirect_count);
+  // --- third pass: per blob, close the referenced set over blob-internal sub-TIs, then
+  // NOTYPE every leaf not in the closure. cv_leaf_idx_from_ti on a raw blob is source-agnostic
+  // (source_offsets are 0, all ti_ranges == [0x1000, 0x1000+count)) so a sub-TI maps directly to
+  // leaf_idx = ti - 0x1000 regardless of its CV_TypeIndexSource label. Walk is iterative (worklist).
+  U64 total_blob_leaves = 0, total_closure_leaves = 0;
+  for EachIndex(blob_i, ifc_file_count) {
+    total_blob_leaves += input->debug_t_arr[input->ifc_obj_range.min + blob_i].count;
+  }
+  if (ifc_file_count) {
+    // Build the set of unique_names that already have a COMPLETE definition in some non-blob obj.
+    // The blob prune keeps a blob complete-def only when its name is absent here (blob-only type),
+    // so forward-refs that no normal obj can complete still get their definition (full-merge fidelity)
+    // while redundant blob copies of normally-defined types stay pruned. Size to ~2x the non-blob
+    // complete-def count, rounded up to a power of two, for low load factor.
+    U64 nonblob_complete_estimate = 0;
+    for EachIndex(obj_idx, input->ifc_obj_range.min) {
+      nonblob_complete_estimate += input->debug_t_arr[obj_idx].source_counts[CV_TypeIndexSource_TPI];
+    }
+    LNK_U64Set nonblob_complete = {0};
+    nonblob_complete.cap = 1;
+    while (nonblob_complete.cap < (nonblob_complete_estimate * 2 + 16)) { nonblob_complete.cap <<= 1; }
+    nonblob_complete.slots = push_array(scratch.arena, U64, nonblob_complete.cap);
+    // parallel scan: each non-blob obj emits its complete-def hashes; serial merge adds to the set.
+    U64 nonblob_count = input->ifc_obj_range.min;
+    if (nonblob_count) {
+      LNK_IfcCompleteScanTask scan = {0};
+      scan.input      = input;
+      scan.out_hashes = push_array(scratch.arena, U64 *, nonblob_count);
+      scan.out_counts = push_array(scratch.arena, U64,   nonblob_count);
+      tp_for_parallel(tp, tp_arena, nonblob_count, lnk_ifc_complete_scan_task, &scan);
+      for EachIndex(obj_idx, nonblob_count) {
+        U64 *h = scan.out_hashes[obj_idx];
+        U64  n = scan.out_counts[obj_idx];
+        for EachIndex(t, n) { lnk_u64set_add(&nonblob_complete, h[t]); }
+      }
+    }
+
+    LNK_IfcCloseTask close_task = {0};
+    close_task.input            = input;
+    close_task.ref_bits         = ref_bits;
+    close_task.closure_leaves   = push_array(scratch.arena, U64, ifc_file_count);
+    close_task.nonblob_complete = &nonblob_complete;
+    tp_for_parallel(tp, tp_arena, ifc_file_count, lnk_ifc_close_blob_task, &close_task);
+    for EachIndex(blob_i, ifc_file_count) { total_closure_leaves += close_task.closure_leaves[blob_i]; }
+  }
+  (void)tp;
+
+  lnk_log(LNK_Log_Debug, "[IFC] injected %llu .ifc blob(s), %llu record redirect(s); on-demand closure %llu / %llu blob leaves (%.1f%%)",
+          ifc_file_count, redirect_count, total_closure_leaves, total_blob_leaves,
+          total_blob_leaves ? (100.0 * (F64)total_closure_leaves / (F64)total_blob_leaves) : 0.0);
 
 done:
   scratch_end(scratch);
@@ -1326,7 +1537,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   // resolve MSVC header-unit IFC debug records (LF_IFC_RECORD 0x1522) -> real CodeView types.
   // injects .ifc debug-records blobs as extra objs and registers placeholder-TI redirects.
   if (config->ifc_debug_records == LNK_SwitchState_Yes && config->ifc_map_list.node_count) {
-    lnk_apply_ifc_debug_records(tp_arena, &input, config);
+    lnk_apply_ifc_debug_records(tp, tp_arena, &input, config);
   }
 
   // set default min type index
@@ -1345,18 +1556,20 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
 
   ProfBegin("Make Symbol Inputs");
   {
-    // count symbol blocks
+    // count symbol blocks (cache each obj's Symbols sub-section list so the fill pass below
+    // does not re-decode .debug$S a second time -- cv_sub_section_from_debug_s walks subsections).
+    String8List *per_obj_syms = push_array(scratch.arena, String8List, input.count ? input.count : 1);
     for EachIndex(obj_idx, input.count) {
-      String8List s = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
-      input.symbol_input_count += s.node_count;
+      per_obj_syms[obj_idx] = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+      input.symbol_input_count += per_obj_syms[obj_idx].node_count;
     }
-  
+
     // alloc block pointers
     input.symbol_inputs = push_array_no_zero(tp_arena->v[0], LNK_SymbolInput, input.symbol_input_count);
 
     U64 symbol_input_count = 0;
     for EachIndex(obj_idx, input.count) {
-      String8List s = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+      String8List s = per_obj_syms[obj_idx];
       for EachNode(n, String8Node, s.first) {
         Assert(symbol_input_count < input.symbol_input_count);
         LNK_SymbolInput *in = &input.symbol_inputs[symbol_input_count++];
@@ -1693,8 +1906,12 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_deep_task)
   LNK_MergeTypes *task    = raw_task;
   U64             obj_idx = task->indices.v[task_id];
   CV_DebugT      *debug_t = &task->input->debug_t_arr[obj_idx];
+  // on-demand IFC pruning: leaves the closure didn't reach were rewritten to NOTYPE.
+  // skip them as deep-hash roots so we don't hash/bucket ~all of the ~1.5M blob leaves.
+  B32 is_ifc_blob = task->input->has_ifc_redirects && contains_1u64(task->input->ifc_obj_range, obj_idx);
   for EachIndex(leaf_idx, debug_t->count) {
     if (task->input->debug_h_arr[obj_idx].v[leaf_idx] != 0) { continue; }
+    if (is_ifc_blob && cv_debug_t_get_leaf_header(debug_t, leaf_idx)->kind == CV_LeafKind_NOTYPE) { continue; }
     Temp                 temp    = temp_begin(task->fixed_arenas[worker_id]);
     CV_Leaf              leaf    = cv_debug_t_get_leaf(debug_t, leaf_idx);
     CV_TypeIndexInfoList ti_list = cv_get_leaf_type_index_offsets(temp.arena, leaf.kind, leaf.data);
@@ -1769,8 +1986,14 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
   CV_DebugH      *debug_h = &task->input->debug_h_arr[obj_idx];
   ProfBeginDynamic("dedup in obj 0x%llx (%.*s) leaf count %llu", obj_idx, str8_varg(task->input->obj_arr[obj_idx]->path), debug_t->count);
 
+  // on-demand IFC pruning: NOTYPE'd blob leaves were never hashed (hash==0). skip them so we
+  // don't insert ~1.5M zero-hash leaves into the NULL-source table (whose cap is sized from the
+  // pre-prune source_counts and would overflow). they are never emitted, so nothing references them.
+  B32 is_ifc_blob = task->input->has_ifc_redirects && contains_1u64(task->input->ifc_obj_range, obj_idx);
+
   LNK_LeafRef *bucket = 0;
   for EachIndex(leaf_idx, debug_t->count) {
+    if (is_ifc_blob && cv_debug_t_get_leaf_header(debug_t, leaf_idx)->kind == CV_LeafKind_NOTYPE) { continue; }
     // alloc new bucket and assign type ref
     if (bucket == 0) { bucket = push_array_no_zero(arena, LNK_LeafRef, 1); }
 

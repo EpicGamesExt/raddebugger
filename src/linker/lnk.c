@@ -2958,8 +2958,10 @@ typedef struct LNK_ICFCand
   U32      reloc_first; // index into flattened reloc-target arrays
   U32      reloc_count;
   U64      key0;        // round-0 content key
-  U64      color;       // current equivalence class
   B8       is_static;   // static (internal-linkage) COMDAT: folded via icf_fold, not symbol redirect
+  // NOTE: per-candidate equivalence-class "color" lives in a SEPARATE dense U64 colors[] array
+  // (see lnk_opt_icf), not here -- the refine/scan loops gather colors by candidate index millions
+  // of times; an 8B dense array keeps them cache-dense vs pulling this whole 40B struct per access.
 } LNK_ICFCand;
 
 typedef struct LNK_ICFHashTask
@@ -3027,8 +3029,12 @@ THREAD_POOL_TASK_FUNC(lnk_icf_hash_task)
           LNK_Symbol *leader = lnk_obj_get_comdat_symlink(kobj, ksn);
           if (leader) {
             LNK_ObjSymbolRef  lref = lnk_ref_from_symbol(leader);
-            COFF_ParsedSymbol lp   = lnk_parsed_from_symbol(leader);
-            if (lref.obj != 0) { kobj = lref.obj; ksn = lp.section_number; }
+            // only section_number is needed here; skip the string-table name decode that the
+            // full lnk_parsed_from_symbol does per COMDAT reloc (millions of relocs in this phase).
+            if (lref.obj != 0) {
+              COFF_ParsedSymbol lp = lnk_parsed_symbol_from_coff_symbol_idx_no_name(lref.obj, lref.symbol_idx);
+              kobj = lref.obj; ksn = lp.section_number;
+            }
           }
         }
         U64 cv = lnk_icf_map_get(task->cand_map, Compose64Bit(kobj->input_idx, ksn), 0);
@@ -3052,10 +3058,37 @@ THREAD_POOL_TASK_FUNC(lnk_icf_hash_task)
   }
 }
 
+// Split active[0,n) into worker_count contiguous ranges of ~equal RELOC WEIGHT (refine/verify cost
+// per candidate ~= its reloc_count), instead of equal candidate count. Fixes the load imbalance where
+// a worker holding high-reloc candidates runs long while others idle. Ranges are a pure function of
+// reloc_count[active[]] -> deterministic. Returns worker_count+1 boundary array (dummy tail like
+// tp_divide_work). active==0 means weight by cands[i] directly over [0,n).
+internal Rng1U64 *
+lnk_icf_divide_by_reloc(Arena *arena, U32 *active, U64 n, U32 worker_count, LNK_ICFCand *cands)
+{
+  Rng1U64 *ranges = push_array_no_zero(arena, Rng1U64, worker_count + 1);
+  U64 total_w = 0;
+  for EachIndex(i, n) { total_w += cands[active ? active[i] : i].reloc_count + 1; } // +1 so zero-reloc cands still count
+  U64 per_w = (total_w + worker_count - 1) / (worker_count ? worker_count : 1);
+  U64 cursor = 0, acc = 0, w = 0;
+  for (; w < worker_count; w += 1) {
+    U64 begin = cursor;
+    U64 target = (w + 1) * per_w;
+    while (cursor < n && acc < target) { acc += cands[active ? active[cursor] : cursor].reloc_count + 1; cursor += 1; }
+    ranges[w] = rng_1u64(begin, cursor);
+  }
+  // any remainder from rounding -> last worker
+  if (cursor < n) { ranges[worker_count - 1].max = n; }
+  ranges[worker_count] = rng_1u64(n, n);
+  return ranges;
+}
+
 typedef struct LNK_ICFRefineTask
 {
   Rng1U64     *ranges;
   LNK_ICFCand *cands;
+  U32         *colors; // dense per-candidate color array, U32 (color ids < color_base < 2^32);
+                       // separate from the 40B LNK_ICFCand so the hot color gathers touch 4B/elem.
   U8          *rt_iscand;
   U64         *rt_target;
   U64         *newkey;
@@ -3067,17 +3100,70 @@ typedef struct LNK_ICFRefineTask
 internal
 THREAD_POOL_TASK_FUNC(lnk_icf_refine_task)
 {
-  LNK_ICFRefineTask *task = raw_task;
+  LNK_ICFRefineTask *task   = raw_task;
+  U32               *colors = task->colors;
   for EachInRange(ai, task->ranges[task_id]) {
     U64          ci = task->active ? task->active[ai] : ai;
     LNK_ICFCand *c  = &task->cands[ci];
-    U64 k = lnk_icf_mix(0x9e3779b97f4a7c15ull, c->color);
+    U64 k = lnk_icf_mix(0x9e3779b97f4a7c15ull, colors[ci]);
     for EachIndex(j, c->reloc_count) {
       U64 idx = (U64)c->reloc_first + j;
-      U64 t   = task->rt_iscand[idx] ? task->cands[task->rt_target[idx]].color : task->rt_target[idx];
+      U64 t   = task->rt_iscand[idx] ? colors[task->rt_target[idx]] : task->rt_target[idx];
       k = lnk_icf_mix(k, t);
     }
     task->newkey[ci] = k;
+  }
+}
+
+// Parallel ICF fold: each group of same-colored candidates is independent (its members are distinct
+// (obj,sn) sections -> distinct symlink nodes and distinct icf_fold slots), so leader election +
+// byte/reloc verification + the fold writes can run concurrently across groups with no shared-state
+// races. The dominant cost folded in here is the per-follower byte-compare (str8_match/memcmp), which
+// was the largest single serial main-thread sink. Determinism is preserved: each group elects the
+// same leader (smallest (is_static,input_idx,sn)) and writes the same disjoint slots regardless of
+// which worker runs it. fold_count is accumulated per-worker.
+// parallel helpers for lnk_icf_dense_colors_active: the per-round gather (sk[i]=newkey[active[i]])
+// and the final scatter (cands[active[sv[k]]].color = ...) are random-access over the candidate
+// arrays (cache-miss bound). Spreading them across workers hides the memory latency. The boundary
+// counting between them stays a cheap sequential pass over the sorted keys.
+typedef struct LNK_ICFDenseTask
+{
+  Rng1U64     *ranges;
+  U32         *active;
+  U64         *newkey;
+  U64         *sk;
+  U32         *sv;
+  U32         *color_at; // per-sorted-position final color (filled serially, scattered in parallel)
+  U32         *colors;   // dense per-candidate color array (scatter target)
+  U8          *keep;     // per-sorted-position: 1 if its key-run has size>=2 (survives to next round)
+  U32         *out_slot; // per-sorted-position: exclusive prefix of keep[] -> deterministic emit slot
+  U32         *next_active; // emit target (survivors, in sorted-color order)
+} LNK_ICFDenseTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_dense_gather_task)
+{
+  LNK_ICFDenseTask *t = raw_task;
+  for EachInRange(i, t->ranges[task_id]) { t->sk[i] = t->newkey[t->active[i]]; t->sv[i] = (U32)i; }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_dense_scatter_task)
+{
+  LNK_ICFDenseTask *t = raw_task;
+  for EachInRange(k, t->ranges[task_id]) { t->colors[t->active[t->sv[k]]] = t->color_at[k]; }
+}
+
+// parallel survivor emit: each kept sorted-position writes active[sv[k]] to its precomputed slot
+// out_slot[k]. Slots are a serial exclusive-prefix of keep[] (deterministic), so the emit order is
+// identical regardless of which worker runs which k -> reproducible. This moves the random-access
+// active[sv[k]] gather (the expensive serial part of the old group scan) onto the workers.
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_dense_emit_task)
+{
+  LNK_ICFDenseTask *t = raw_task;
+  for EachInRange(k, t->ranges[task_id]) {
+    if (t->keep[k]) { t->next_active[t->out_slot[k]] = t->active[t->sv[k]]; }
   }
 }
 
@@ -3085,20 +3171,62 @@ THREAD_POOL_TASK_FUNC(lnk_icf_refine_task)
 // collide with the finalized colors of candidates that already dropped out as singletons). Returns
 // the number of distinct classes among the active set. Equal keys land in one class regardless of
 // sort tie order, so color values are deterministic.
+// Densify active subset into class ids from `base` up. ALSO emits, in the same sorted pass (run
+// lengths are free), the compacted next-round active set (members of classes that still have size>=2)
+// into next_active[], and the count of such classes. This fuses the per-round singleton-drop scan
+// (was two random-access colors[active[i]] gathers + a cls_size histogram) into the group scan.
+// Determinism: equal keys land in one class regardless of sort tie order; next_active is emitted in
+// sorted-color order (deterministic). Returns distinct class count nc.
 internal U64
-lnk_icf_dense_colors_active(TP_Context *tp, Arena *arena, U32 *active, U64 n, U64 *newkey, LNK_ICFCand *cands, U64 base)
+lnk_icf_dense_colors_active(TP_Context *tp, Arena *arena, U32 *active, U64 n, U64 *newkey, U32 *colors, U64 base,
+                            U32 *next_active, U64 *out_next_count, U64 *out_next_class_count)
 {
   Temp t  = temp_begin(arena);
-  U64 *sk = push_array_no_zero(t.arena, U64, n ? n : 1);
-  U32 *sv = push_array_no_zero(t.arena, U32, n ? n : 1); // index into active[]
-  for EachIndex(i, n) { sk[i] = newkey[active[i]]; sv[i] = (U32)i; }
+  U64 *sk       = push_array_no_zero(t.arena, U64, n ? n : 1);
+  U32 *sv       = push_array_no_zero(t.arena, U32, n ? n : 1); // index into active[]
+  U32 *color_at = push_array_no_zero(t.arena, U32, n ? n : 1); // per-sorted-position color
+
+  LNK_ICFDenseTask dt = {0};
+  dt.active = active; dt.newkey = newkey; dt.sk = sk; dt.sv = sv; dt.color_at = color_at; dt.colors = colors;
+
+  // parallel gather: random-access newkey[active[i]] -> sk[i], spread across workers. NOTE radix
+  // (next line) allocates scratch on t.arena, so ranges built before radix would be stale -- rebuild
+  // ranges AFTER radix for the scatter. (This stale-ranges trap is why the parallel path was wrong.)
+  dt.ranges = tp_divide_work(t.arena, n, tp->worker_count);
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_dense_gather_task, &dt);
   lnk_radix_sort_u64_pairs(tp, t.arena, n, sk, sv);
-  U64 nc = 0;
+  dt.ranges = tp_divide_work(t.arena, n, tp->worker_count); // rebuilt AFTER radix for scatter
+
+  // serial prefix scan over the SORTED keys (cache-friendly, no random access): compute per-position
+  // color, mark survivors (key-run size>=2), and exclusive-prefix their emit slots. The random-access
+  // parts (color scatter + survivor gather) run parallel afterward, indexed by these precomputed slots.
+  U8  *keep     = push_array_no_zero(t.arena, U8,  n ? n : 1);
+  U32 *out_slot = push_array_no_zero(t.arena, U32, n ? n : 1);
+  U64 nc = 0, next_count = 0, next_class_count = 0;
+  U64 run0 = 0;
   for EachIndex(k, n) {
-    if (k == 0 || sk[k] != sk[k - 1]) { nc += 1; }
-    cands[active[sv[k]]].color = base + (nc - 1);
+    B32 boundary = (k == 0 || sk[k] != sk[k - 1]);
+    if (boundary && k != 0) {
+      U8 survive = (k - run0 >= 2) ? 1 : 0;       // close run [run0,k)
+      if (survive) { next_class_count += 1; }
+      for (U64 m = run0; m < k; m += 1) { keep[m] = survive; out_slot[m] = (U32)next_count; next_count += survive; }
+      run0 = k;
+    }
+    if (boundary) { nc += 1; }
+    color_at[k] = (U32)(base + (nc - 1));
   }
+  { U8 survive = (n - run0 >= 2) ? 1 : 0;          // close final run
+    if (survive) { next_class_count += 1; }
+    for (U64 m = run0; m < n; m += 1) { keep[m] = survive; out_slot[m] = (U32)next_count; next_count += survive; }
+  }
+
+  dt.keep = keep; dt.out_slot = out_slot; dt.next_active = next_active;
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_dense_scatter_task, &dt); // parallel color scatter
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_dense_emit_task, &dt);    // parallel survivor emit
+
   temp_end(t);
+  if (out_next_count)       { *out_next_count       = next_count; }
+  if (out_next_class_count) { *out_next_class_count = next_class_count; }
   return nc;
 }
 
@@ -3165,7 +3293,7 @@ THREAD_POOL_TASK_FUNC(lnk_icf_fill_task)
       COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(obj, c->sn);
       c->reloc_first = 0;
       c->reloc_count = (U32)lnk_coff_relocs_from_section_header(obj, header).count;
-      c->key0 = 0; c->color = 0;
+      c->key0 = 0;
     }
   }
 }
@@ -3212,6 +3340,22 @@ lnk_radix_sort_u64_pairs(TP_Context *tp, Arena *arena, U64 n, U64 *keys, U32 *va
   if (n < 2) { return; }
   U64 W = tp->worker_count;
 
+  // Only sort over the passes that can actually differ: many call sites key by dense color ids
+  // (small ints), so the top 4-6 radix bytes are all zero. Each skipped pass is a full
+  // hist+scatter over n pairs (memory-bound). An even pass_count keeps the result in the
+  // original arrays (the double-buffer swap invariant), so round max_key up to a full byte.
+  U64 max_key = 0;
+  for EachIndex(i, n) { if (keys[i] > max_key) { max_key = keys[i]; } }
+  U64 pass_count = 64 / LNK_RADIX_BITS;
+  if (max_key != 0) {
+    U64 sig_bits   = 64 - clz64(max_key);
+    U64 sig_passes = (sig_bits + LNK_RADIX_BITS - 1) / LNK_RADIX_BITS;
+    pass_count = sig_passes + (sig_passes & 1); // keep even so data lands back in keys/vals
+  } else {
+    pass_count = 0; // all keys equal (0); already trivially sorted, scatter is identity
+  }
+  if (pass_count == 0) { return; }
+
   Temp scratch = scratch_begin(&arena, 1); // internal buffers freed on return
   LNK_RadixSortTask t = {0};
   t.ranges = tp_divide_work(scratch.arena, n, W);
@@ -3221,7 +3365,7 @@ lnk_radix_sort_u64_pairs(TP_Context *tp, Arena *arena, U64 n, U64 *keys, U32 *va
 
   U64 *ksrc = keys, *kdst = kbuf;
   U32 *vsrc = vals, *vdst = vbuf;
-  for (U64 pass = 0; pass < 64 / LNK_RADIX_BITS; pass += 1) {
+  for (U64 pass = 0; pass < pass_count; pass += 1) {
     t.shift = pass * LNK_RADIX_BITS;
     t.ksrc = ksrc; t.vsrc = vsrc; t.kdst = kdst; t.vdst = vdst;
 
@@ -3251,7 +3395,7 @@ lnk_radix_sort_u64_pairs(TP_Context *tp, Arena *arena, U64 n, U64 *keys, U32 *va
 // assign each candidate a dense equivalence-class id from its key, via a parallel sort + a
 // cheap sequential group scan. Returns the number of distinct classes (for convergence).
 internal U64
-lnk_icf_dense_colors(TP_Context *tp, Arena *arena, U64 n, U64 *keys, LNK_ICFCand *cands)
+lnk_icf_dense_colors(TP_Context *tp, Arena *arena, U64 n, U64 *keys, U32 *colors)
 {
   Temp t  = temp_begin(arena);
   U64 *sk = push_array_no_zero(t.arena, U64, n ? n : 1);
@@ -3261,10 +3405,75 @@ lnk_icf_dense_colors(TP_Context *tp, Arena *arena, U64 n, U64 *keys, LNK_ICFCand
   U64 nc = 0;
   for EachIndex(k, n) {
     if (k == 0 || sk[k] != sk[k - 1]) { nc += 1; }
-    cands[sv[k]].color = nc - 1;
+    colors[sv[k]] = (U32)(nc - 1);
   }
   temp_end(t);
   return nc;
+}
+
+// ICF fold VERIFY (parallel, read-only). Per color group: elect the leader, then byte+reloc-verify
+// each follower against it. The dominant cost is the str8_match/memcmp byte compare over millions of
+// candidate sections -- read-only, so it parallelizes across groups with no shared writes. Output:
+// leader_sci[k] = the elected leader's sci-index for sorted position k IF k is a verified follower
+// that folds, else max_U32. The serial apply pass (in lnk_opt_icf) consumes this in group order, so
+// the symlink/icf_fold writes stay serial+deterministic (cross-class symlink chains must not race).
+typedef struct LNK_ICFFoldVerifyTask
+{
+  Rng1U64     *ranges;      // group-index ranges per worker
+  U32         *group_first;
+  U32         *sci;
+  LNK_ICFCand *cands;
+  U8          *rt_iscand;
+  U64         *rt_target;
+  U32         *colors;
+  U32         *leader_sci;  // out: per sorted position -> leader's sci index, or max_U32
+  U32         *group_leader_oi; // out: per group -> elected leader sorted-position (for apply)
+} LNK_ICFFoldVerifyTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_fold_verify_task)
+{
+  LNK_ICFFoldVerifyTask *task = raw_task;
+  for EachInRange(gi, task->ranges[task_id]) {
+    U64 i = task->group_first[gi];
+    U64 j = task->group_first[gi + 1];
+    task->group_leader_oi[gi] = (U32)i;
+    if (j - i < 2) { continue; }
+
+    U64 leader_oi = i;
+    for (U64 k = i + 1; k < j; k += 1) {
+      LNK_ICFCand *a = &task->cands[task->sci[leader_oi]];
+      LNK_ICFCand *b = &task->cands[task->sci[k]];
+      B32 b_better = (b->is_static <  a->is_static) ||
+                     (b->is_static == a->is_static &&
+                      Compose64Bit(b->obj->input_idx, b->sn) < Compose64Bit(a->obj->input_idx, a->sn));
+      if (b_better) { leader_oi = k; }
+    }
+    task->group_leader_oi[gi] = (U32)leader_oi;
+
+    LNK_ICFCand        *L       = &task->cands[task->sci[leader_oi]];
+    COFF_SectionHeader *Lheader = lnk_coff_section_header_from_section_number(L->obj, L->sn);
+    String8             Ldata   = str8_substr(L->obj->data, rng_1u64(Lheader->foff, Lheader->foff + Lheader->fsize));
+
+    for (U64 k = i; k < j; k += 1) {
+      if (k == leader_oi) { continue; }
+      LNK_ICFCand        *F       = &task->cands[task->sci[k]];
+      COFF_SectionHeader *Fheader = lnk_coff_section_header_from_section_number(F->obj, F->sn);
+      if (Fheader->fsize != Lheader->fsize) { continue; }
+      if (F->reloc_count != L->reloc_count) { continue; }
+      String8 Fdata = str8_substr(F->obj->data, rng_1u64(Fheader->foff, Fheader->foff + Fheader->fsize));
+      if (!str8_match(Ldata, Fdata, 0)) { continue; }
+      B32 relocs_match = 1;
+      for EachIndex(t, L->reloc_count) {
+        U64 li = L->reloc_first + t, fi = F->reloc_first + t;
+        U64 lt = task->rt_iscand[li] ? task->colors[task->rt_target[li]] : task->rt_target[li];
+        U64 ft = task->rt_iscand[fi] ? task->colors[task->rt_target[fi]] : task->rt_target[fi];
+        if (lt != ft) { relocs_match = 0; break; }
+      }
+      if (!relocs_match) { continue; }
+      task->leader_sci[k] = task->sci[leader_oi]; // verified fold
+    }
+  }
 }
 
 // relocations point at equivalent targets (iteratively), then folds each group's followers
@@ -3332,23 +3541,31 @@ lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *co
     tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_hash_task, &hash_task);
   }
 
+  // dense per-candidate equivalence-class colors (separate 8B array; hot refine/scan loops gather
+  // these by index millions of times -- keeping them out of the 40B LNK_ICFCand keeps the gathers
+  // cache-dense). zero-init: round 0 assigns real colors.
+  U32 *colors = push_array(arena, U32, cand_count ? cand_count : 1);
+
   // assign initial colors from content key (parallel sort + group scan)
   U64 *newkey = push_array_no_zero(arena, U64, cand_count ? cand_count : 1);
   for EachIndex(ci, cand_count) { newkey[ci] = cands[ci].key0; }
-  U64 class_count = lnk_icf_dense_colors(tp, arena, cand_count, newkey, cands);
+  U64 class_count = lnk_icf_dense_colors(tp, arena, cand_count, newkey, colors);
   U64 color_base  = class_count; // next free class id; ids only ever grow, so finalized colors stick
 
   // Active set = candidates still sharing a class with another. A singleton class can never split
   // or merge, so once a candidate is alone its color is final and it leaves refinement. Each round
   // re-densifies only the active set, shrinking the per-round sort from all ~N candidates down to
   // just those that still have a content+reloc twin.
-  U32 *active = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+  // ping-pong active buffers: refine reads `active`, densify writes compacted survivors into `active2`.
+  // They must be distinct (densify reads active[sv[m]] while writing next_active[]). Swap each round.
+  U32 *active  = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+  U32 *active2 = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
   U64  active_count = 0, active_class_count = 0;
   {
     Temp t = temp_begin(arena);
     U32 *cls_size = push_array(t.arena, U32, class_count ? class_count : 1);
-    for EachIndex(ci, cand_count) { cls_size[cands[ci].color] += 1; }
-    for EachIndex(ci, cand_count) { if (cls_size[cands[ci].color] > 1) { active[active_count++] = (U32)ci; } }
+    for EachIndex(ci, cand_count) { cls_size[colors[ci]] += 1; }
+    for EachIndex(ci, cand_count) { if (cls_size[colors[ci]] > 1) { active[active_count++] = (U32)ci; } }
     for EachIndex(c, class_count)  { if (cls_size[c] > 1) { active_class_count += 1; } }
     temp_end(t);
   }
@@ -3356,101 +3573,88 @@ lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *co
   // iteratively refine classes by relocation-target classes until no class splits
   LNK_ICFRefineTask refine_task = {0};
   refine_task.cands     = cands;
+  refine_task.colors    = colors;
   refine_task.rt_iscand = rt_iscand;
   refine_task.rt_target = rt_target;
   refine_task.newkey    = newkey;
-  refine_task.active    = active;
   for (U64 round = 0; round < 30 && active_count > 0; round += 1) {
-    refine_task.ranges = tp_divide_work(arena, active_count, tp->worker_count);
+    refine_task.active = active;
+    refine_task.ranges = lnk_icf_divide_by_reloc(arena, active, active_count, tp->worker_count, cands);
     tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_refine_task, &refine_task);
 
     U64 base = color_base;
-    U64 nc   = lnk_icf_dense_colors_active(tp, arena, active, active_count, newkey, cands, base);
+    U64 next_count = 0, next_class_count = 0;
+    U64 nc = lnk_icf_dense_colors_active(tp, arena, active, active_count, newkey, colors, base,
+                                         active2, &next_count, &next_class_count);
     color_base += nc;
     if (nc == active_class_count) { break; } // no class split -> fixpoint
 
-    // drop classes that just became singletons; keep the rest active for the next round
-    Temp t = temp_begin(arena);
-    U32 *cls_size = push_array(t.arena, U32, nc ? nc : 1);
-    for EachIndex(i, active_count) { cls_size[cands[active[i]].color - base] += 1; }
-    U64 na = 0, nac = 0;
-    for EachIndex(i, active_count) { if (cls_size[cands[active[i]].color - base] > 1) { active[na++] = active[i]; } }
-    for EachIndex(c, nc) { if (cls_size[c] > 1) { nac += 1; } }
-    active_count = na; active_class_count = nac;
-    temp_end(t);
+    // survivors already compacted into active2 by the fused densify pass; swap buffers for next round
+    U32 *tmp = active; active = active2; active2 = tmp;
+    active_count = next_count; active_class_count = next_class_count;
   }
 
   // group candidates by final color (parallel sort) and fold followers into a leader
   U64 *keys = newkey; // reuse
   U32 *sci  = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
-  for EachIndex(ci, cand_count) { keys[ci] = cands[ci].color; sci[ci] = (U32)ci; }
+  for EachIndex(ci, cand_count) { keys[ci] = colors[ci]; sci[ci] = (U32)ci; }
   lnk_radix_sort_u64_pairs(tp, arena, cand_count, keys, sci);
 
-  U64 fold_count = 0;
+  // serial pass: find group boundaries (cheap O(cand_count) scan over the sorted color keys). Each
+  // group [group_first[g], group_first[g+1]) shares one color. Verification + folding runs in
+  // parallel across groups (groups touch disjoint sections/symlink nodes -> race-free, deterministic).
+  U32 *group_first = push_array_no_zero(arena, U32, cand_count + 1);
+  U64  group_count = 0;
   for (U64 i = 0; i < cand_count; ) {
-    U64 j = i + 1;
+    group_first[group_count++] = (U32)i;
     U64 color = keys[i];
+    U64 j = i + 1;
     while (j < cand_count && keys[j] == color) { j += 1; }
+    i = j;
+  }
+  group_first[group_count] = (U32)cand_count;
 
-    if (j - i >= 2) {
-      // leader = member with the smallest (is_static, input_idx, sn) key, for deterministic output.
-      // Preferring non-static (is_static=0) guarantees a class that has any external member elects it
-      // as leader, so an external follower is never folded into a static leader (external folding
-      // needs a leader that owns a symbol to redirect to). A static leads only an all-static class.
-      U64 leader_oi = i;
-      for (U64 k = i + 1; k < j; k += 1) {
-        LNK_ICFCand *a = &cands[sci[leader_oi]];
-        LNK_ICFCand *b = &cands[sci[k]];
-        B32 b_better = (b->is_static <  a->is_static) ||
-                       (b->is_static == a->is_static &&
-                        Compose64Bit(b->obj->input_idx, b->sn) < Compose64Bit(a->obj->input_idx, a->sn));
-        if (b_better) { leader_oi = k; }
-      }
-      LNK_ICFCand        *L         = &cands[sci[leader_oi]];
-      COFF_SectionHeader *Lheader   = lnk_coff_section_header_from_section_number(L->obj, L->sn);
-      String8             Ldata     = str8_substr(L->obj->data, rng_1u64(Lheader->foff, Lheader->foff + Lheader->fsize));
-      LNK_SymbolHashTrie *Lnode     = L->obj->symlinks[L->sn];
+  // PARALLEL verify (read-only byte+reloc compare across groups) -> SERIAL apply (deterministic,
+  // group-ordered symlink/icf_fold writes; cross-class symlink chains must not race, so writes stay
+  // serial). leader_sci[k] = leader's sci index if sorted position k folds, else max_U32.
+  U32 *leader_sci      = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+  for EachIndex(k, cand_count) { leader_sci[k] = max_U32; }
+  U32 *group_leader_oi = push_array_no_zero(arena, U32, group_count ? group_count : 1);
+  if (group_count) {
+    LNK_ICFFoldVerifyTask vt = {0};
+    vt.ranges          = tp_divide_work(arena, group_count, tp->worker_count);
+    vt.group_first     = group_first;
+    vt.sci             = sci;
+    vt.cands           = cands;
+    vt.rt_iscand       = rt_iscand;
+    vt.rt_target       = rt_target;
+    vt.colors          = colors;
+    vt.leader_sci      = leader_sci;
+    vt.group_leader_oi = group_leader_oi;
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_fold_verify_task, &vt);
+  }
 
-      for (U64 k = i; k < j; k += 1) {
-        if (k == leader_oi) { continue; }
-        LNK_ICFCand        *F       = &cands[sci[k]];
-        COFF_SectionHeader *Fheader = lnk_coff_section_header_from_section_number(F->obj, F->sn);
-
-        // verify byte-identical content + reloc structure (guards against hash collisions)
-        if (Fheader->fsize != Lheader->fsize) { continue; }
-        if (F->reloc_count != L->reloc_count) { continue; }
-        String8 Fdata = str8_substr(F->obj->data, rng_1u64(Fheader->foff, Fheader->foff + Fheader->fsize));
-        if (!str8_match(Ldata, Fdata, 0)) { continue; }
-        B32 relocs_match = 1;
-        for EachIndex(t, L->reloc_count) {
-          U64 li = L->reloc_first + t, fi = F->reloc_first + t;
-          U64 lt = rt_iscand[li] ? cands[rt_target[li]].color : rt_target[li];
-          U64 ft = rt_iscand[fi] ? cands[rt_target[fi]].color : rt_target[fi];
-          if (lt != ft) { relocs_match = 0; break; }
-        }
-        if (!relocs_match) { continue; }
-
-        LNK_SymbolHashTrie *Fnode = F->obj->symlinks[F->sn];
-        if (Fnode) {
-          // external follower: redirect at the shared symbol-table node so every object resolving
-          // this name points at the leader's definition; /OPT:REF then removes the now-unreferenced
-          // follower section. Leader selection guarantees a non-static (Lnode != 0) leader here.
-          if (Lnode && Fnode != Lnode) {
-            Fnode->symbol = Lnode->symbol;
-            fold_count += 1;
-          }
-        } else {
-          // static follower: no external symbol to redirect. Record the leader so (a) /OPT:REF
-          // redirects follower references to mark the LEADER live and (b) the final section map
-          // resolves any residual reloc into the follower to the leader's contrib.
-          F->obj->icf_fold[F->sn - 1].leader_obj_idx = L->obj->input_idx;
-          F->obj->icf_fold[F->sn - 1].leader_sn      = L->sn;
-          F->obj->icf_fold[F->sn - 1].set            = 1;
-          fold_count += 1;
-        }
+  U64 fold_count = 0;
+  for EachIndex(gi, group_count) {
+    U64 i = group_first[gi];
+    U64 j = group_first[gi + 1];
+    if (j - i < 2) { continue; }
+    U64                 leader_oi = group_leader_oi[gi];
+    LNK_ICFCand        *L         = &cands[sci[leader_oi]];
+    LNK_SymbolHashTrie *Lnode     = L->obj->symlinks[L->sn];
+    for (U64 k = i; k < j; k += 1) {
+      if (leader_sci[k] == max_U32) { continue; } // not a verified follower
+      LNK_ICFCand        *F     = &cands[sci[k]];
+      LNK_SymbolHashTrie *Fnode = F->obj->symlinks[F->sn];
+      if (Fnode) {
+        if (Lnode && Fnode != Lnode) { Fnode->symbol = Lnode->symbol; fold_count += 1; }
+      } else {
+        F->obj->icf_fold[F->sn - 1].leader_obj_idx = L->obj->input_idx;
+        F->obj->icf_fold[F->sn - 1].leader_sn      = L->sn;
+        F->obj->icf_fold[F->sn - 1].set            = 1;
+        fold_count += 1;
       }
     }
-    i = j;
   }
 
   if (lnk_get_log_status(LNK_Log_Debug)) {
