@@ -1355,6 +1355,86 @@ done:
   ProfEnd();
 }
 
+////////////////////////////////
+// parallel setup tasks for lnk_make_code_view_input
+
+// Loop 3 (PCH/ext/int classification). The expensive predicates -- the read-only rrt_hm lookup
+// and cv_debug_t_is_type_server_ref -- run in parallel per obj. Each obj's class tag and PCH-merge
+// mutation are fully independent, so this pass is data-parallel. The ordered 3-array compaction
+// and the MultipleDebugTAndDebugP warning are then replayed SERIALLY in obj_idx order, so output
+// (array contents/order + warning order + discarded set) is byte-identical to the serial loop.
+typedef struct LNK_CvClassifyTask
+{
+  LNK_CodeViewInput *input;
+  CV_DebugT         *debug_p_arr;
+  HashMap           *rrt_hm; // read-only after build
+  LNK_Obj          **obj_arr;
+  U8                *class_tag; // 0=debug_p, 1=ext, 2=int
+  U8                *warn_multi;
+} LNK_CvClassifyTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_cv_classify_task)
+{
+  LNK_CvClassifyTask *t       = raw_task;
+  U64                 obj_idx = task_id;
+  CV_DebugT          *debug_t = &t->input->debug_t_arr[obj_idx];
+  CV_DebugT          *debug_p = &t->debug_p_arr[obj_idx];
+
+  // classify (same predicate order/precedence as the serial loop)
+  U8 tag;
+  if      (hash_map_search_path_u64(t->rrt_hm, t->obj_arr[obj_idx]->path)) { tag = 1; }
+  else if (debug_p->count > 0 && debug_t->count == 0)                      { tag = 0; }
+  else if (cv_debug_t_is_type_server_ref(debug_t))                         { tag = 1; }
+  else                                                                     { tag = 2; }
+  t->class_tag[obj_idx] = tag;
+
+  // per-obj independent debug_t mutation (identical to serial)
+  if (debug_t->count == 0 && debug_p->count > 0) {
+    *debug_t = *debug_p;
+  } else if (debug_t->count && debug_p->count) {
+    t->warn_multi[obj_idx] = 1; // defer warning to serial obj-order replay
+    MemoryZeroStruct(debug_t);
+    MemoryZeroStruct(debug_p);
+  }
+}
+
+// Loop 4 (Make Symbol Inputs) count pass. cv_sub_section_from_debug_s is a pure read of the
+// already-parsed data_list, so caching each obj's Symbols sub-section list in parallel is safe.
+typedef struct LNK_CvSymTask
+{
+  LNK_CodeViewInput *input;
+  String8List       *per_obj_syms;
+  U64               *counts;   // per-obj node_count (count pass)
+  U64               *offsets;  // per-obj symbol_inputs offset (fill pass)
+} LNK_CvSymTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_cv_sym_count_task)
+{
+  LNK_CvSymTask *t       = raw_task;
+  U64            obj_idx = task_id;
+  t->per_obj_syms[obj_idx] = cv_sub_section_from_debug_s(t->input->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+  t->counts[obj_idx]       = t->per_obj_syms[obj_idx].node_count;
+}
+
+// Loop 4 fill pass. Each obj writes a disjoint, contiguous range of symbol_inputs starting at its
+// prefix-sum offset, in node order -- byte-identical to the serial append (which walked obj_idx
+// ascending, each obj's nodes in list order).
+internal
+THREAD_POOL_TASK_FUNC(lnk_cv_sym_fill_task)
+{
+  LNK_CvSymTask *t       = raw_task;
+  U64            obj_idx = task_id;
+  U64            cur     = t->offsets[obj_idx];
+  String8List    s       = t->per_obj_syms[obj_idx];
+  for EachNode(n, String8Node, s.first) {
+    LNK_SymbolInput *in = &t->input->symbol_inputs[cur++];
+    in->obj_idx     = obj_idx;
+    in->raw_symbols = n->string;
+  }
+}
+
 internal LNK_CodeViewInput
 lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U64 obj_count, LNK_Obj **obj_arr, LNK_RRT_Array rrt_input)
 {
@@ -1375,47 +1455,51 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
 
   ProfBegin("Apply RRT to Objs");
 
-  // hash map (obj path, obj idx)
+  // hash map (obj path, obj idx). Kept SERIAL: HashMap is a 4-ary trie whose insert mutates shared
+  // child pointers + arena-allocates nodes -> not safe for concurrent insert. Only built (and
+  // consulted) when there is at least one input RRT; the monolithic Engine.dll link has none.
   HashMap obj_path_hm = {0};
-  for EachIndex(obj_idx, obj_count) {
-    hash_map_push_path_u64(scratch.arena, &obj_path_hm, obj_arr[obj_idx]->path, obj_idx);
-  }
+  if (rrt_input.count) {
+    for EachIndex(obj_idx, obj_count) {
+      hash_map_push_path_u64(scratch.arena, &obj_path_hm, obj_arr[obj_idx]->path, obj_idx);
+    }
 
-  for EachIndex(obj_idx, obj_count) {
-    LNK_Obj *obj            = obj_arr[obj_idx];
-    U64     *packed_rrt_idx = hash_map_search_path_u64(&rrt_hm, obj->path);
+    for EachIndex(obj_idx, obj_count) {
+      LNK_Obj *obj            = obj_arr[obj_idx];
+      U64     *packed_rrt_idx = hash_map_search_path_u64(&rrt_hm, obj->path);
 
-    // obj is not part of any input RRT
-    if (packed_rrt_idx == 0) { continue; }
+      // obj is not part of any input RRT
+      if (packed_rrt_idx == 0) { continue; }
 
-    // unpack index
-    U32      rrt_idx     = *packed_rrt_idx >> 32;
-    U32      rrt_obj_idx = *packed_rrt_idx & max_U32;
-    LNK_RRT *rrt         = &rrt_input.v[rrt_idx];
+      // unpack index
+      U32      rrt_idx     = *packed_rrt_idx >> 32;
+      U32      rrt_obj_idx = *packed_rrt_idx & max_U32;
+      LNK_RRT *rrt         = &rrt_input.v[rrt_idx];
 
-    // obj was recompiled, do not apply RRT indirection
-    FileProperties obj_file_props = properties_from_file_path(obj->path);
-    if (rrt->obj_time_stamps[rrt_obj_idx] != obj_file_props.modified) { continue; }
+      // obj was recompiled, do not apply RRT indirection
+      FileProperties obj_file_props = properties_from_file_path(obj->path);
+      if (rrt->obj_time_stamps[rrt_obj_idx] != obj_file_props.modified) { continue; }
 
     // invalidate debug section pointers
     obj->coff.debug_t_section_number = 0;
     obj->coff.debug_p_section_number = 0;
     obj->coff.debug_h_section_number = 0;
 
-    // apply type index map 
-    obj->ti_range = rrt->obj_ti_ranges[rrt_obj_idx];
-    obj->ti_map   = rrt->obj_ti_maps  [rrt_obj_idx];
+      // apply type index map
+      obj->ti_range = rrt->obj_ti_ranges[rrt_obj_idx];
+      obj->ti_map   = rrt->obj_ti_maps  [rrt_obj_idx];
 
-    // apply PCH info
-    U32 rrt_pch_obj_idx = rrt->obj_pch_indices[rrt_obj_idx];
-    if (rrt_pch_obj_idx < rrt->obj_count) {
-      String8  rrt_pch_obj_path = rrt->obj_paths.v[rrt_pch_obj_idx];
-      U64      pch_obj_idx      = *hash_map_search_path_u64(&obj_path_hm, rrt_pch_obj_path);
-      obj->pch_ti_range = rrt->obj_pch_ti_ranges[rrt_obj_idx];
-      obj->pch_obj_idx  = pch_obj_idx;
-    } else {
-      obj->pch_ti_range = r1u64(0,0);
-      obj->pch_obj_idx  = ~0;
+      // apply PCH info
+      U32 rrt_pch_obj_idx = rrt->obj_pch_indices[rrt_obj_idx];
+      if (rrt_pch_obj_idx < rrt->obj_count) {
+        String8  rrt_pch_obj_path = rrt->obj_paths.v[rrt_pch_obj_idx];
+        U64      pch_obj_idx      = *hash_map_search_path_u64(&obj_path_hm, rrt_pch_obj_path);
+        obj->pch_ti_range = rrt->obj_pch_ti_ranges[rrt_obj_idx];
+        obj->pch_obj_idx  = pch_obj_idx;
+      } else {
+        obj->pch_ti_range = r1u64(0,0);
+        obj->pch_obj_idx  = ~0;
+      }
     }
   }
   ProfEnd();
@@ -1520,25 +1604,35 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   ProfEnd();
 
   // sort objs based on type: PCH, /Zi (external), /Z7 (internal)
-  input.debug_p_indices.v = push_array(tp_arena->v[0], U32, obj_count); 
+  input.debug_p_indices.v = push_array(tp_arena->v[0], U32, obj_count);
   input.ext_obj_indices.v = push_array(tp_arena->v[0], U32, obj_count);
   input.int_obj_indices.v = push_array(tp_arena->v[0], U32, obj_count);
-  for EachIndex(obj_idx, obj_count) {
-    CV_DebugT *debug_t = &input.debug_t_arr[obj_idx];
-    CV_DebugT *debug_p = &debug_p_arr[obj_idx];
-    U32Array  *arr_ptr;
-    if      (hash_map_search_path_u64(&rrt_hm, obj_arr[obj_idx]->path)) { arr_ptr = &input.ext_obj_indices; }
-    else if (debug_p->count > 0 && debug_t->count == 0)                 { arr_ptr = &input.debug_p_indices; }
-    else if (cv_debug_t_is_type_server_ref(debug_t))                    { arr_ptr = &input.ext_obj_indices; }
-    else                                                                { arr_ptr = &input.int_obj_indices; }
-    arr_ptr->v[arr_ptr->count++] = obj_idx;
+  ProfScope("Classify Objs")
+  {
+    // parallel: classify each obj + apply per-obj debug_t mutation (see lnk_cv_classify_task)
+    LNK_CvClassifyTask classify = {0};
+    classify.input       = &input;
+    classify.debug_p_arr = debug_p_arr;
+    classify.rrt_hm      = &rrt_hm;
+    classify.obj_arr     = obj_arr;
+    classify.class_tag   = push_array(scratch.arena, U8, obj_count ? obj_count : 1);
+    classify.warn_multi  = push_array(scratch.arena, U8, obj_count ? obj_count : 1);
+    tp_for_parallel_prof(tp, 0, obj_count, lnk_cv_classify_task, &classify, "Classify Objs (parallel)");
 
-    if (debug_t->count == 0 && debug_p->count > 0) {
-      *debug_t = *debug_p;
-    } else if (debug_t->count && debug_p->count) {
-      lnk_error_obj(LNK_Warning_MultipleDebugTAndDebugP, obj_arr[obj_idx], "multiple sections with debug types detected, obj must have either .debug$T or .debug$P; discarding both sections");
-      MemoryZeroStruct(debug_t);
-      MemoryZeroStruct(debug_p);
+    // serial obj-order compaction into the 3 ordered arrays + deterministic warning emission.
+    // Cache-linear single pass; preserves the exact element order + warning order of the old loop.
+    for EachIndex(obj_idx, obj_count) {
+      U32Array *arr_ptr;
+      switch (classify.class_tag[obj_idx]) {
+        case 0:  arr_ptr = &input.debug_p_indices; break;
+        case 1:  arr_ptr = &input.ext_obj_indices; break;
+        default: arr_ptr = &input.int_obj_indices; break;
+      }
+      arr_ptr->v[arr_ptr->count++] = obj_idx;
+
+      if (classify.warn_multi[obj_idx]) {
+        lnk_error_obj(LNK_Warning_MultipleDebugTAndDebugP, obj_arr[obj_idx], "multiple sections with debug types detected, obj must have either .debug$T or .debug$P; discarding both sections");
+      }
     }
   }
 
@@ -1820,25 +1914,24 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
 
   ProfBegin("Make Symbol Inputs");
   {
-    // count symbol blocks
-    for EachIndex(obj_idx, input.count) {
-      String8List s = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
-      input.symbol_input_count += s.node_count;
-    }
-  
-    // alloc block pointers
-    input.symbol_inputs = push_array_no_zero(tp_arena->v[0], LNK_SymbolInput, input.symbol_input_count);
+    // count symbol blocks (cache each obj's Symbols sub-section list so the fill pass below
+    // does not re-decode .debug$S a second time -- cv_sub_section_from_debug_s walks subsections).
+    String8List  *per_obj_syms = push_array(scratch.arena, String8List, input.count ? input.count : 1);
+    LNK_CvSymTask sym_task      = {0};
+    sym_task.input        = &input;
+    sym_task.per_obj_syms = per_obj_syms;
+    sym_task.counts       = push_array(scratch.arena, U64, input.count ? input.count : 1);
 
-    U64 symbol_input_count = 0;
-    for EachIndex(obj_idx, input.count) {
-      String8List s = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
-      for EachNode(n, String8Node, s.first) {
-        Assert(symbol_input_count < input.symbol_input_count);
-        LNK_SymbolInput *in = &input.symbol_inputs[symbol_input_count++];
-        in->obj_idx     = obj_idx;
-        in->raw_symbols = n->string;
-      }
-    }
+    // parallel: cache each obj's Symbols sub-section list + count nodes
+    tp_for_parallel_prof(tp, 0, input.count, lnk_cv_sym_count_task, &sym_task, "Count Symbol Inputs");
+    input.symbol_input_count = sum_array_u64(input.count, sym_task.counts);
+    sym_task.offsets         = offsets_from_counts_array_u64(scratch.arena, sym_task.counts, input.count);
+
+    // alloc block pointers
+    input.symbol_inputs = push_array_no_zero(tp_arena->v[0], LNK_SymbolInput, input.symbol_input_count ? input.symbol_input_count : 1);
+
+    // parallel fill into disjoint per-obj ranges at prefix-sum offsets (byte-identical order)
+    tp_for_parallel_prof(tp, 0, input.count, lnk_cv_sym_fill_task, &sym_task, "Fill Symbol Inputs");
 
     ProfBegin("Make Ranges");
 
