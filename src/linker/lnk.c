@@ -4283,7 +4283,12 @@ lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *co
     // the long near-converged tail (rounds 8..18 re-sort ~10.65M to resolve a few hundred splits). Both
     // compute the unique coarsest stable partition, so the final colors[] partition is identical; the
     // worklist just reaches it in tail work ~= churn instead of ~= active_count.
-    U64 region_cap = 8; // warm-up rounds before worklist handoff
+    // Worklist tail DISABLED by default: its CSR reverse-index (rev_adj = U32 x candidate-edge-count)
+    // costs ~10GB peak on the UE link, which hurts the page-fault-bound critical path more than the
+    // ~3-4s of tail re-sorts it saves. region_cap=64 lets the persistent region run to the true fixpoint
+    // (~19 rounds), so `converged` is set and the worklist handoff below is skipped (no reverse-index).
+    // Lower this back to 8 to re-enable the worklist on memory-rich machines.
+    U64 region_cap = 64; // was 8 (worklist warm-up)
 
 #if defined(ICF_WORKLIST_SELFCHECK)
     // REFERENCE: clone pre-region state and run the region UNCAPPED to the true fixpoint into shadow
