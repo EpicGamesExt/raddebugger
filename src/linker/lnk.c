@@ -3138,6 +3138,17 @@ typedef struct LNK_ICFDenseTask
   U8          *keep;     // per-sorted-position: 1 if its key-run has size>=2 (survives to next round)
   U32         *out_slot; // per-sorted-position: exclusive prefix of keep[] -> deterministic emit slot
   U32         *next_active; // emit target (survivors, in sorted-color order)
+  // parallel prefix-sum group scan (replaces the per-round serial scan over sk[] -- the refine-window
+  // sawtooth bottleneck, lnk_link_image self). boundary (run start) and keep (run size>=2 survivor)
+  // are per-position bits reading only sk[k], sk[k-1], sk[k+1] -> chunk-local. mark: write keep[] +
+  // per-chunk local boundary/keep/surviving-class counts. serial: tiny exclusive prefix over the
+  // worker_count chunk totals (NOT over n). apply: each chunk re-derives color_at[]/out_slot[] from
+  // its prefixed base -> identical values to the old serial running counter regardless of chunk split.
+  U64         *chunk_nc;    // [worker_count] in: local boundary count; serial-prefix -> chunk's exclusive base
+  U64         *chunk_keep;  // [worker_count] in: local keep count;     serial-prefix -> chunk's exclusive base
+  U64         *chunk_scls;  // [worker_count] local surviving-class count (boundary && keep), summed serially
+  U64          base;        // color id base for this round
+  U64          n_total;     // n (for the k+1==N end-of-run test; spans chunk edges read-only)
 } LNK_ICFDenseTask;
 
 internal
@@ -3145,6 +3156,51 @@ THREAD_POOL_TASK_FUNC(lnk_icf_dense_gather_task)
 {
   LNK_ICFDenseTask *t = raw_task;
   for EachInRange(i, t->ranges[task_id]) { t->sk[i] = t->newkey[t->active[i]]; t->sv[i] = (U32)i; }
+}
+
+// mark pass: per sorted position compute boundary (run start) and keep (run size>=2 -> survives);
+// write keep[k]; accumulate this chunk's local boundary/keep/surviving-class counts. boundary/keep
+// read only sk[k-1..k+1] -> chunk-local, so each chunk's local sums are independent (the run that
+// straddles a chunk edge is counted once -- by whichever chunk owns its run-start position).
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_scan_mark_task)
+{
+  LNK_ICFDenseTask *t = raw_task;
+  Rng1U64 r = t->ranges[task_id];
+  U64 N = t->n_total;
+  U64 nloc = 0, kloc = 0, sloc = 0;
+  for (U64 k = r.min; k < r.max; k += 1) {
+    B32 boundary      = (k == 0     || t->sk[k] != t->sk[k - 1]);
+    B32 next_boundary = (k + 1 == N || t->sk[k + 1] != t->sk[k]); // start of next run (or end)
+    U8  survive       = (U8)!(boundary && next_boundary);         // singleton iff boundary && next_boundary
+    t->keep[k] = survive;
+    if (boundary)            { nloc += 1; }
+    if (survive)             { kloc += 1; }
+    if (boundary && survive) { sloc += 1; } // run-start of a surviving run -> one surviving class
+  }
+  t->chunk_nc[task_id]   = nloc;
+  t->chunk_keep[task_id] = kloc;
+  t->chunk_scls[task_id] = sloc;
+}
+
+// apply pass: chunk_nc[task_id]/chunk_keep[task_id] now hold this chunk's exclusive base (the running
+// class id / emit slot at the chunk's first position). Re-derive the per-position bits and run the
+// counters locally from that base to write color_at[k]/out_slot[k] -- byte-identical to the old serial
+// scan regardless of how the chunks split, so the downstream scatter/emit stay deterministic.
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_scan_apply_task)
+{
+  LNK_ICFDenseTask *t = raw_task;
+  Rng1U64 r  = t->ranges[task_id];
+  U64 nc     = t->chunk_nc[task_id];   // boundaries before this chunk (exclusive base)
+  U64 slot   = t->chunk_keep[task_id]; // emit slot at chunk start
+  for (U64 k = r.min; k < r.max; k += 1) {
+    B32 boundary = (k == 0 || t->sk[k] != t->sk[k - 1]);
+    if (boundary) { nc += 1; }
+    t->color_at[k] = (U32)(t->base + (nc - 1));
+    t->out_slot[k] = (U32)slot;
+    slot += t->keep[k];
+  }
 }
 
 internal
@@ -3197,30 +3253,55 @@ lnk_icf_dense_colors_active(TP_Context *tp, Arena *arena, U32 *active, U64 n, U6
   lnk_radix_sort_u64_pairs(tp, t.arena, n, sk, sv);
   dt.ranges = tp_divide_work(t.arena, n, tp->worker_count); // rebuilt AFTER radix for scatter
 
-  // serial prefix scan over the SORTED keys (cache-friendly, no random access): compute per-position
-  // color, mark survivors (key-run size>=2), and exclusive-prefix their emit slots. The random-access
-  // parts (color scatter + survivor gather) run parallel afterward, indexed by these precomputed slots.
-  U8  *keep     = push_array_no_zero(t.arena, U8,  n ? n : 1);
-  U32 *out_slot = push_array_no_zero(t.arena, U32, n ? n : 1);
-  U64 nc = 0, next_count = 0, next_class_count = 0;
-  U64 run0 = 0;
-  for EachIndex(k, n) {
-    B32 boundary = (k == 0 || sk[k] != sk[k - 1]);
-    if (boundary && k != 0) {
-      U8 survive = (k - run0 >= 2) ? 1 : 0;       // close run [run0,k)
-      if (survive) { next_class_count += 1; }
-      for (U64 m = run0; m < k; m += 1) { keep[m] = survive; out_slot[m] = (U32)next_count; next_count += survive; }
-      run0 = k;
-    }
-    if (boundary) { nc += 1; }
-    color_at[k] = (U32)(base + (nc - 1));
-  }
-  { U8 survive = (n - run0 >= 2) ? 1 : 0;          // close final run
-    if (survive) { next_class_count += 1; }
-    for (U64 m = run0; m < n; m += 1) { keep[m] = survive; out_slot[m] = (U32)next_count; next_count += survive; }
-  }
+  // PARALLEL prefix-sum group scan over the SORTED keys (replaces the per-round serial scan that was
+  // the refine-window sawtooth bottleneck). mark: per-position keep bit + per-chunk local counts ->
+  // serial: tiny exclusive prefix over the worker_count chunk totals (NOT over n) -> apply: each chunk
+  // re-derives color_at[]/out_slot[] from its prefixed base. The result is a pure prefix of per-position
+  // bits, byte-identical to the old serial running counter regardless of chunk split -> deterministic.
+  U8  *keep      = push_array_no_zero(t.arena, U8,  n ? n : 1);
+  U32 *out_slot  = push_array_no_zero(t.arena, U32, n ? n : 1);
+  U64 W          = tp->worker_count;
+  U64 *chunk_nc  = push_array_no_zero(t.arena, U64, W ? W : 1);
+  U64 *chunk_kp  = push_array_no_zero(t.arena, U64, W ? W : 1);
+  U64 *chunk_sc  = push_array_no_zero(t.arena, U64, W ? W : 1);
 
   dt.keep = keep; dt.out_slot = out_slot; dt.next_active = next_active;
+  dt.chunk_nc = chunk_nc; dt.chunk_keep = chunk_kp; dt.chunk_scls = chunk_sc;
+  dt.base = base; dt.n_total = n;
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_scan_mark_task, &dt);
+
+  // exclusive prefix over the W chunk totals -> chunk_nc[w]/chunk_kp[w] become the running class id /
+  // emit slot at chunk w's first position (the exclusive base apply counts from); sum surviving classes.
+  U64 nc = 0, next_count = 0, next_class_count = 0;
+  for EachIndex(w, W) {
+    U64 cn = chunk_nc[w], ck = chunk_kp[w], cs = chunk_sc[w];
+    chunk_nc[w] = nc; chunk_kp[w] = next_count;
+    nc += cn; next_count += ck; next_class_count += cs;
+  }
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_scan_apply_task, &dt);
+
+#if defined(ICF_SCAN_SELFCHECK)
+  { // SELF-CHECK (debug-only, gated): recompute the serial scan into shadow arrays, assert byte-exact
+    Temp tc = temp_begin(t.arena);
+    U8  *xkeep = push_array_no_zero(tc.arena, U8,  n ? n : 1);
+    U32 *xslot = push_array_no_zero(tc.arena, U32, n ? n : 1);
+    U32 *xcol  = push_array_no_zero(tc.arena, U32, n ? n : 1);
+    U64 xnc=0, xnext=0, xncls=0, run0=0, mism=0;
+    for EachIndex(k, n) {
+      B32 b = (k == 0 || sk[k] != sk[k - 1]);
+      if (b && k != 0) { U8 s=(k-run0>=2)?1:0; if(s)xncls++; for(U64 m=run0;m<k;m++){xkeep[m]=s;xslot[m]=(U32)xnext;xnext+=s;} run0=k; }
+      if (b) xnc++;
+      xcol[k]=(U32)(base+(xnc-1));
+    }
+    { U8 s=(n-run0>=2)?1:0; if(s)xncls++; for(U64 m=run0;m<n;m++){xkeep[m]=s;xslot[m]=(U32)xnext;xnext+=s;} }
+    for EachIndex(k,n){ if(xkeep[k]!=keep[k]||xslot[k]!=out_slot[k]||xcol[k]!=color_at[k]) mism++; }
+    if(mism||xnc!=nc||xnext!=next_count||xncls!=next_class_count){
+      lnk_log(LNK_Log_Debug,"ICF_SCAN_SELFCHECK MISMATCH n=%llu mism=%llu nc(p=%llu s=%llu) next(p=%llu s=%llu) ncls(p=%llu s=%llu)",n,mism,nc,xnc,next_count,xnext,next_class_count,xncls);
+    }
+    temp_end(tc);
+  }
+#endif
+
   tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_dense_scatter_task, &dt); // parallel color scatter
   tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_dense_emit_task, &dt);    // parallel survivor emit
 
