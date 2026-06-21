@@ -2923,7 +2923,10 @@ lnk_icf_map_make(Arena *arena, U64 capacity)
   m.keys = push_array_no_zero(arena, U64, cap);
   m.vals = push_array_no_zero(arena, U64, cap);
   m.mask = cap - 1;
-  for EachIndex(i, cap) { m.keys[i] = LNK_ICF_EMPTY; }
+  // LNK_ICF_EMPTY is all-0xFF bytes -> a single memset (bandwidth-optimal, vectorized) instead of a
+  // scalar per-U64 store loop. cap can be 32M+ entries (256MB) on the monolithic link; the scalar
+  // loop was a serial first-touch page-fault sink.
+  MemorySet(m.keys, 0xff, cap*sizeof(U64));
   return m;
 }
 
@@ -4932,6 +4935,14 @@ THREAD_POOL_TASK_FUNC(lnk_image_fill_task)
   for EachNode(n, LNK_ImageFillNode, task->u.image_fill.fill_nodes[task_id]) {
     for EachIndex(i, n->sc_count) {
       LNK_SectionContrib *sc = n->sc[i];
+      // fast-path: the vast majority of contribs are a single data-node -> one direct copy, skipping
+      // the list-walk + cursor bookkeeping on the hot 739MB image-write loop.
+      if (sc->first_data_node.next == 0) {
+        U64 image_off = sc->u.off + n->base_foff;
+        Assert(image_off + sc->first_data_node.string.size <= image_data.size);
+        MemoryCopyStr8(image_data.str + image_off, sc->first_data_node.string);
+        continue;
+      }
       U64 cursor = 0;
       for EachNode(data_n, String8Node, &sc->first_data_node) {
         U64 image_off = sc->u.off + n->base_foff + cursor;
