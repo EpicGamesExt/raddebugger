@@ -3386,18 +3386,15 @@ typedef struct LNK_ICFRegion
 internal void
 lnk_icf_divide_by_reloc_into(Rng1U64 *ranges, U32 *active, U64 n, U32 worker_count, LNK_ICFCand *cands)
 {
-  U64 total_w = 0;
-  for EachIndex(i, n) { total_w += cands[active ? active[i] : i].reloc_count + 1; }
-  U64 per_w = (total_w + worker_count - 1) / (worker_count ? worker_count : 1);
-  U64 cursor = 0, acc = 0, w = 0;
-  for (; w < worker_count; w += 1) {
-    U64 begin = cursor;
-    U64 target = (w + 1) * per_w;
-    while (cursor < n && acc < target) { acc += cands[active ? active[cursor] : cursor].reloc_count + 1; cursor += 1; }
-    ranges[w] = rng_1u64(begin, cursor);
+  // Count-based split: O(worker_count), no scan, no random gather. The old reloc-weighted
+  // split did two O(n) cache-miss gathers (cands[active[i]].reloc_count) per round x ~18
+  // rounds = ~5.6s serial. Work-split only -> output independent of it.
+  U64 W = worker_count ? worker_count : 1;
+  for (U64 w = 0; w < worker_count; w += 1) {
+    ranges[w] = rng_1u64((w * n) / W, ((w + 1) * n) / W);
   }
-  if (cursor < n) { ranges[worker_count - 1].max = n; }
   ranges[worker_count] = rng_1u64(n, n);
+  (void)active; (void)cands;
 }
 
 // in-place even division (mirrors tp_divide_work; writes into preallocated ranges)
