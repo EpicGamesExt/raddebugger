@@ -82,6 +82,21 @@ tctx_get_scratch(Arena **conflicts, U64 count)
   return result;
 }
 
+//- rjf: scratch decommit (release committed-but-unused scratch pages back to OS)
+
+internal void
+tctx_scratch_decommit(void)
+{
+  TCTX *tctx = tctx_selected();
+  for(U64 i = 0; i < ArrayCount(tctx->arenas); i += 1)
+  {
+    if(tctx->arenas[i] != 0)
+    {
+      arena_decommit_unused(tctx->arenas[i]);
+    }
+  }
+}
+
 //- rjf: lane metadata
 
 internal LaneCtx

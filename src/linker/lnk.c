@@ -6454,6 +6454,21 @@ lnk_log_timers(void)
 }
 
 internal
+THREAD_POOL_TASK_FUNC(lnk_scratch_decommit_worker)
+{
+  // Each worker decommits the committed-but-unused pages of its OWN equipped
+  // tctx scratch arenas. Runs on the worker thread, so tctx_selected() yields
+  // that worker's scratch. No cross-thread arena access.
+  //
+  // The barrier (dispatched with task_count == worker_count) guarantees every
+  // worker runs the body exactly once -- otherwise the work-stealing loop could
+  // let one fast worker grab several tasks and leave other workers' scratch
+  // committed. All worker_count threads are woken, so all must reach the barrier.
+  tctx_scratch_decommit();
+  barrier_wait(tp->barrier);
+}
+
+internal
 THREAD_POOL_TASK_FUNC(lnk_p2r_worker)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -6595,6 +6610,20 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     // (reachable-from-symbols is a subset of castable-types). Opt in with /OPT:GCTYPES.
     if (config->opt_gc_types == LNK_SwitchState_Yes) {
       lnk_gc_types(tp, arena->v[0], &cv, &cv_types);
+    }
+
+    // merge-types reached the scratch high-water (~9GB of per-thread tctx scratch
+    // stays committed but idle). Release those unused scratch pages back to the OS
+    // before the PDB build re-grows, dropping the recorded peak working set. Each
+    // worker decommits its own scratch; do the main thread's scratch too. Only
+    // pages strictly above each arena's live `pos` are touched, so output stays
+    // byte-identical and the push path re-commits on demand during PDB build.
+    {
+      ProfBegin("Decommit Scratch");
+      // task_count == worker_count + the in-worker barrier => every worker
+      // (worker 0 IS the main thread) runs exactly once, covering main's scratch.
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_scratch_decommit_worker, 0);
+      ProfEnd();
     }
 
     //
