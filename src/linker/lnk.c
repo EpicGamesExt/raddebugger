@@ -2951,6 +2951,33 @@ lnk_icf_map_put(LNK_ICFMap *m, U64 key, U64 val)
   }
 }
 
+// Thread-safe insert for the cand_map build (lnk_opt_icf): the keys are UNIQUE (one entry per
+// (input_idx, sn) candidate -- a 1:1 map), so each insert claims a distinct empty slot. Claim it
+// with an atomic CAS EMPTY->key; only the CAS winner writes vals[slot]. Because keys are unique no
+// two writers ever target the same key, so the CAS is the sole arbiter of slot ownership and the
+// vals[] store has exactly one writer. The map is only READ later (lnk_icf_map_get, after the build
+// barrier), and a key-keyed probe finds its key regardless of WHICH slot collisions placed it in --
+// so the resulting key->val mapping (hence ICF output) is identical for any insertion order.
+internal void
+lnk_icf_map_put_atomic(LNK_ICFMap *m, U64 key, U64 val)
+{
+  U64 slot = lnk_icf_scramble(key) & m->mask;
+  for (;;) {
+    U64 k = m->keys[slot];
+    if (k == LNK_ICF_EMPTY) {
+      // CAS returns the prior value; if it was EMPTY we won the slot.
+      if (ins_atomic_u64_eval_cond_assign(&m->keys[slot], key, LNK_ICF_EMPTY) == LNK_ICF_EMPTY) {
+        m->vals[slot] = val; // sole writer of this slot's value (keys are unique -> one CAS winner)
+        return;
+      }
+      // lost the race for this slot: re-read the same slot (another key may now own it, or it is
+      // still EMPTY-but-someone-else-is-mid-CAS -> the re-read resolves it). do NOT advance yet.
+      continue;
+    }
+    slot = (slot + 1) & m->mask;
+  }
+}
+
 typedef struct LNK_ICFCand
 {
   LNK_Obj *obj;
@@ -2963,6 +2990,26 @@ typedef struct LNK_ICFCand
   // (see lnk_opt_icf), not here -- the refine/scan loops gather colors by candidate index millions
   // of times; an 8B dense array keeps them cache-dense vs pulling this whole 40B struct per access.
 } LNK_ICFCand;
+
+typedef struct LNK_ICFCandMapPutTask
+{
+  Rng1U64     *ranges;
+  LNK_ICFCand *cands;
+  LNK_ICFMap  *cand_map;
+} LNK_ICFCandMapPutTask;
+
+// Parallel build of the (input_idx, sn) -> cand_idx+1 lookup. The serial build was cache-miss-bound
+// (~642ms): each lnk_icf_map_put probes a scrambled (random) slot. Spreading the inserts across the
+// pool with the atomic-CAS claim (lnk_icf_map_put_atomic) parallelizes those misses. Output-neutral
+// because keys are unique and the map is read only by key afterward (see lnk_icf_map_put_atomic).
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_candmap_put_task)
+{
+  LNK_ICFCandMapPutTask *task = raw_task;
+  for EachInRange(ci, task->ranges[task_id]) {
+    lnk_icf_map_put_atomic(task->cand_map, Compose64Bit(task->cands[ci].obj->input_idx, task->cands[ci].sn), ci + 1);
+  }
+}
 
 typedef struct LNK_ICFHashTask
 {
@@ -4184,8 +4231,12 @@ lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *co
 
   // build target lookup (input_idx, section_number) -> cand_idx+1, sized to the candidate count
   LNK_ICFMap cand_map = lnk_icf_map_make(arena, cand_count);
-  for EachIndex(ci, cand_count) {
-    lnk_icf_map_put(&cand_map, Compose64Bit(cands[ci].obj->input_idx, cands[ci].sn), ci + 1);
+  {
+    LNK_ICFCandMapPutTask put_task = {0};
+    put_task.ranges   = tp_divide_work(arena, cand_count, tp->worker_count);
+    put_task.cands    = cands;
+    put_task.cand_map = &cand_map;
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_candmap_put_task, &put_task);
   }
 
   // assign each candidate a disjoint slice in the flattened reloc-target arrays. reloc_count was
