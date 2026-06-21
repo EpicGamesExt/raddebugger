@@ -744,6 +744,26 @@ lnk_u64set_add(LNK_U64Set *set, U64 h)
   }
 }
 
+// Thread-safe insert mirroring lnk_icf_map_put_atomic (lnk.c). The empty sentinel is 0 (not
+// LNK_ICF_EMPTY); h is guaranteed nonzero by lnk_uname_hash (`| 1`) so a real key can never be 0.
+// Claim an empty slot with an atomic CAS 0->h; the CAS winner owns it. On a lost race re-read the
+// same slot (it may now hold our h via a duplicate, or another key) before advancing. Duplicate
+// keys across objs are legal and idempotent (a slot already holding h returns), so any insertion
+// order yields the identical final membership -- the set is read-only (lnk_u64set_has) afterward.
+internal void
+lnk_u64set_add_atomic(LNK_U64Set *set, U64 h)
+{
+  U64 i = h & (set->cap - 1);
+  for (;;) {
+    if (set->slots[i] == 0) {
+      if (ins_atomic_u64_eval_cond_assign(&set->slots[i], h, 0) == 0) { return; }
+      continue;
+    }
+    if (set->slots[i] == h) { return; }
+    i = (i + 1) & (set->cap - 1);
+  }
+}
+
 internal B32
 lnk_u64set_has(LNK_U64Set *set, U64 h)
 {
@@ -783,6 +803,32 @@ THREAD_POOL_TASK_FUNC(lnk_ifc_complete_scan_task)
   }
   task->out_hashes[obj_idx] = hashes;
   task->out_counts[obj_idx] = n;
+}
+
+// Parallel merge of the per-obj complete-def hash lists into the shared set. Replaces the serial
+// lnk_u64set_add loop (the ~914ms hotspot -- 801ms of it first-touch KiPageFault on a single thread
+// faulting a 128MB+ set). lnk_u64set_add_atomic spreads both the random-scatter probes AND the
+// page faults across the pool. Determinism: keys may legitimately duplicate across objs, but the
+// insert is idempotent and the set is read-only afterward (lnk_u64set_has), so insertion order
+// cannot change the final membership -- output is bit-identical to the serial merge.
+typedef struct LNK_IfcSetMergeTask
+{
+  Rng1U64    *ranges;
+  U64       **out_hashes;
+  U64        *out_counts;
+  LNK_U64Set *set;
+  U64         nonblob_count;
+} LNK_IfcSetMergeTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_ifc_set_merge_task)
+{
+  LNK_IfcSetMergeTask *task = raw_task;
+  for EachInRange(obj_idx, task->ranges[task_id]) {
+    U64 *h = task->out_hashes[obj_idx];
+    U64  n = task->out_counts[obj_idx];
+    for EachIndex(t, n) { lnk_u64set_add_atomic(task->set, h[t]); }
+  }
 }
 
 // Parallel second-pass scan: each consuming obj's .debug$T is scanned independently for 0x1522
@@ -1133,11 +1179,15 @@ lnk_apply_ifc_debug_records(TP_Context *tp, TP_Arena *tp_arena, LNK_CodeViewInpu
       scan.out_hashes = push_array(scratch.arena, U64 *, nonblob_count);
       scan.out_counts = push_array(scratch.arena, U64,   nonblob_count);
       tp_for_parallel(tp, tp_arena, nonblob_count, lnk_ifc_complete_scan_task, &scan);
-      for EachIndex(obj_idx, nonblob_count) {
-        U64 *h = scan.out_hashes[obj_idx];
-        U64  n = scan.out_counts[obj_idx];
-        for EachIndex(t, n) { lnk_u64set_add(&nonblob_complete, h[t]); }
-      }
+      // parallel atomic-CAS merge (replaces the serial lnk_u64set_add loop): output-identical
+      // because set membership is order-independent + idempotent (see lnk_u64set_add_atomic).
+      LNK_IfcSetMergeTask merge = {0};
+      merge.ranges        = tp_divide_work(scratch.arena, nonblob_count, tp->worker_count);
+      merge.out_hashes    = scan.out_hashes;
+      merge.out_counts    = scan.out_counts;
+      merge.set           = &nonblob_complete;
+      merge.nonblob_count = nonblob_count;
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_ifc_set_merge_task, &merge);
     }
 
     LNK_IfcCloseTask close_task = {0};
