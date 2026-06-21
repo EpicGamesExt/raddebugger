@@ -3311,6 +3311,322 @@ lnk_icf_dense_colors_active(TP_Context *tp, Arena *arena, U32 *active, U64 n, U6
   return nc;
 }
 
+// radix digit width (also defined at the radix-sort section below; hoisted here so the persistent
+// refine region can size its histogram). Keep both in sync.
+#if !defined(LNK_RADIX_BITS)
+#define LNK_RADIX_BITS 8
+#define LNK_RADIX_SIZE (1 << LNK_RADIX_BITS)
+#endif
+
+// ============================================================================================
+// PERSISTENT-WORKER ICF REFINE REGION
+//
+// The per-round refine loop (refine -> dense_colors_active{gather,radix,scan,scatter,emit}) used to
+// re-enter the thread pool ~10x per round via tp_for_parallel, ~18 rounds => ~126 fork-join cycles.
+// Each phase is tiny, so the pool wake->work->sleep latency dominated lnk_link_image self time (the
+// sawtooth). lnk_icf_refine_region collapses ALL rounds into ONE tp_for_parallel of worker_count
+// participants; every old phase boundary becomes a barrier_wait(tp->barrier) inside the region. The
+// tiny serial glue (radix per-pass 256xW prefix, group-scan W-chunk prefix, convergence/buffer swap)
+// runs on worker 0 behind a barrier while the others wait -- same work, no pool re-entry.
+//
+// ORDER PRESERVATION: every phase keeps its EXACT chunking and math. ranges are rebuilt each round by
+// worker 0 into preallocated buffers (lnk_icf_divide_by_reloc / tp_divide_work logic, in-place) and
+// read by all workers after a barrier -- identical boundaries to the per-round path. The radix sort,
+// scan_mark/apply, scatter and emit bodies are the SAME computations as the standalone tasks; only the
+// dispatch changed (barrier instead of tp_for_parallel). Result is byte-identical to the per-round
+// path (verified by ICF_SCAN_SELFCHECK + the canonical DLL cmp).
+// ============================================================================================
+
+typedef struct LNK_ICFRegion
+{
+  // immutable inputs
+  TP_Context  *tp;
+  LNK_ICFCand *cands;
+  U8          *rt_iscand;
+  U64         *rt_target;
+  U64          cand_count;
+  U32          worker_count;
+
+  // ping-pong active sets + colors/keys (driver owns the buffers; pointers swap each round on worker 0)
+  U32         *active;       // current active set (refine reads)
+  U32         *active2;      // next active set (emit writes)
+  U32         *colors;       // dense per-candidate color (scatter target)
+  U64         *newkey;       // refine writes; gather reads
+
+  // per-round scratch (preallocated to cand_count once; reused every round)
+  U64         *sk;           // sorted keys
+  U32         *sv;           // sorted values (index into active[])
+  U32         *color_at;     // per-sorted-position color
+  U8          *keep;         // per-sorted-position survivor bit
+  U32         *out_slot;     // per-sorted-position emit slot
+  U64         *kbuf;         // radix double-buffer (keys)
+  U32         *vbuf;         // radix double-buffer (vals)
+  U32         *hist;         // radix histogram [worker_count * LNK_RADIX_SIZE]
+  U64         *chunk_nc;     // [worker_count] group-scan boundary counts
+  U64         *chunk_kp;     // [worker_count] group-scan keep counts
+  U64         *chunk_sc;     // [worker_count] group-scan surviving-class counts
+  U64         *chunk_max;    // [worker_count] radix per-pass max-key reduction
+  Rng1U64     *refine_ranges;// [worker_count+1] reloc-weighted (refine)
+  Rng1U64     *work_ranges;  // [worker_count+1] even split over n (gather/scan/scatter/emit/radix)
+
+  // round-loop control (written by worker 0, broadcast via barrier)
+  U64          active_count;
+  U64          active_class_count;
+  U64          color_base;
+  U64          round_n;          // active_count snapshot for the current round's phases
+  U64          radix_pass_count; // passes for current round's radix sort
+  U64         *radix_ksrc;       // current radix source/dest (swap on worker 0 each pass)
+  U32         *radix_vsrc;
+  U64         *radix_kdst;
+  U32         *radix_vdst;
+  B32          converged;        // set by worker 0 -> all break together
+} LNK_ICFRegion;
+
+// in-place reloc-weighted division (mirrors lnk_icf_divide_by_reloc; writes into preallocated ranges)
+internal void
+lnk_icf_divide_by_reloc_into(Rng1U64 *ranges, U32 *active, U64 n, U32 worker_count, LNK_ICFCand *cands)
+{
+  U64 total_w = 0;
+  for EachIndex(i, n) { total_w += cands[active ? active[i] : i].reloc_count + 1; }
+  U64 per_w = (total_w + worker_count - 1) / (worker_count ? worker_count : 1);
+  U64 cursor = 0, acc = 0, w = 0;
+  for (; w < worker_count; w += 1) {
+    U64 begin = cursor;
+    U64 target = (w + 1) * per_w;
+    while (cursor < n && acc < target) { acc += cands[active ? active[cursor] : cursor].reloc_count + 1; cursor += 1; }
+    ranges[w] = rng_1u64(begin, cursor);
+  }
+  if (cursor < n) { ranges[worker_count - 1].max = n; }
+  ranges[worker_count] = rng_1u64(n, n);
+}
+
+// in-place even division (mirrors tp_divide_work; writes into preallocated ranges)
+internal void
+lnk_tp_divide_work_into(Rng1U64 *ranges, U64 item_count, U32 worker_count)
+{
+  U64 per_count = CeilIntegerDiv(item_count, worker_count);
+  for (U64 i = 0; i < worker_count; i += 1) {
+    ranges[i] = rng_1u64(Min(item_count, i * per_count), Min(item_count, i * per_count + per_count));
+  }
+  ranges[worker_count] = rng_1u64(item_count, item_count);
+}
+
+// One persistent parallel region spanning ALL refine rounds. worker_count participants; phase
+// boundaries are barriers; serial glue runs on worker 0. Each worker owns ranges[worker_id].
+internal
+THREAD_POOL_TASK_FUNC(lnk_icf_refine_region_task)
+{
+  LNK_ICFRegion *rs = raw_task;
+  U64 wid = worker_id; // 1:1 worker<->task: every participant blocks on the first barrier before any
+                       // can steal a second task, so task_id == worker_id throughout (see note below).
+  U64 W   = rs->worker_count;
+
+  for (U64 round = 0; round < 30; round += 1) {
+    // -------- round setup (worker 0): build ranges, snapshot active_count --------
+    if (wid == 0) {
+      rs->round_n = rs->active_count;
+      lnk_icf_divide_by_reloc_into(rs->refine_ranges, rs->active, rs->active_count, (U32)W, rs->cands);
+    }
+    barrier_wait(rs->tp->barrier);
+    U64 n = rs->round_n;
+
+    // -------- PHASE: refine (reloc-weighted ranges) --------
+    {
+      Rng1U64 r = rs->refine_ranges[wid];
+      for EachInRange(ai, r) {
+        U64          ci = rs->active[ai];
+        LNK_ICFCand *c  = &rs->cands[ci];
+        U64 k = lnk_icf_mix(0x9e3779b97f4a7c15ull, rs->colors[ci]);
+        for EachIndex(j, c->reloc_count) {
+          U64 idx = (U64)c->reloc_first + j;
+          U64 t   = rs->rt_iscand[idx] ? rs->colors[rs->rt_target[idx]] : rs->rt_target[idx];
+          k = lnk_icf_mix(k, t);
+        }
+        rs->newkey[ci] = k;
+      }
+    }
+    barrier_wait(rs->tp->barrier);
+
+    // -------- build even-split ranges (worker 0) for gather --------
+    if (wid == 0) { lnk_tp_divide_work_into(rs->work_ranges, n, (U32)W); }
+    barrier_wait(rs->tp->barrier);
+
+    // -------- PHASE: gather  sk[i]=newkey[active[i]], sv[i]=i --------
+    {
+      Rng1U64 r = rs->work_ranges[wid];
+      for EachInRange(i, r) { rs->sk[i] = rs->newkey[rs->active[i]]; rs->sv[i] = (U32)i; }
+    }
+    barrier_wait(rs->tp->barrier);
+
+    // -------- PHASE: parallel LSD radix sort of (sk, sv) over n --------
+    // worker 0 establishes pass_count from a parallel max reduction; each pass = parallel hist ->
+    // serial 256xW prefix (worker 0) -> parallel scatter -> pointer swap (worker 0). Identical to
+    // lnk_radix_sort_u64_pairs, just barrier-driven (no temp/scratch alloc inside the region).
+    {
+      // parallel max-key reduction into chunk_max[wid]
+      {
+        Rng1U64 r = rs->work_ranges[wid];
+        U64 m = 0;
+        for EachInRange(i, r) { if (rs->sk[i] > m) m = rs->sk[i]; }
+        rs->chunk_max[wid] = m;
+      }
+      barrier_wait(rs->tp->barrier);
+      if (wid == 0) {
+        U64 max_key = 0;
+        for EachIndex(w, W) { if (rs->chunk_max[w] > max_key) max_key = rs->chunk_max[w]; }
+        U64 pass_count;
+        if (max_key != 0) {
+          U64 sig_bits   = 64 - clz64(max_key);
+          U64 sig_passes = (sig_bits + LNK_RADIX_BITS - 1) / LNK_RADIX_BITS;
+          pass_count = sig_passes + (sig_passes & 1);
+        } else {
+          pass_count = 0;
+        }
+        if (n < 2) { pass_count = 0; }
+        rs->radix_pass_count = pass_count;
+        rs->radix_ksrc = rs->sk;   rs->radix_vsrc = rs->sv;
+        rs->radix_kdst = rs->kbuf; rs->radix_vdst = rs->vbuf;
+      }
+      barrier_wait(rs->tp->barrier);
+
+      U64 pass_count = rs->radix_pass_count;
+      for (U64 pass = 0; pass < pass_count; pass += 1) {
+        U64  shift = pass * LNK_RADIX_BITS;
+        U64 *ksrc  = rs->radix_ksrc; U32 *vsrc = rs->radix_vsrc;
+        U64 *kdst  = rs->radix_kdst; U32 *vdst = rs->radix_vdst;
+
+        // hist (parallel): zero own row, count digits over own range
+        {
+          U32 *h = rs->hist + wid * LNK_RADIX_SIZE;
+          MemoryZero(h, sizeof(U32) * LNK_RADIX_SIZE);
+          Rng1U64 r = rs->work_ranges[wid];
+          for EachInRange(i, r) { h[(ksrc[i] >> shift) & (LNK_RADIX_SIZE - 1)] += 1; }
+        }
+        barrier_wait(rs->tp->barrier);
+
+        // exclusive prefix across (bucket, worker) -- serial, worker 0 (identical order to the task path)
+        if (wid == 0) {
+          U64 running = 0;
+          for EachIndex(bucket, LNK_RADIX_SIZE) {
+            for EachIndex(w, W) {
+              U32 *slot = &rs->hist[w * LNK_RADIX_SIZE + bucket];
+              U32  c    = *slot;
+              *slot     = (U32)running;
+              running  += c;
+            }
+          }
+        }
+        barrier_wait(rs->tp->barrier);
+
+        // scatter (parallel): each worker writes its disjoint contiguous run
+        {
+          U32 *h = rs->hist + wid * LNK_RADIX_SIZE;
+          Rng1U64 r = rs->work_ranges[wid];
+          for EachInRange(i, r) {
+            U64 d   = (ksrc[i] >> shift) & (LNK_RADIX_SIZE - 1);
+            U32 pos = h[d]++;
+            kdst[pos] = ksrc[i];
+            vdst[pos] = vsrc[i];
+          }
+        }
+        barrier_wait(rs->tp->barrier);
+
+        // swap src/dst (worker 0); even pass_count leaves sorted data back in sk/sv
+        if (wid == 0) {
+          rs->radix_ksrc = kdst; rs->radix_vsrc = vdst;
+          rs->radix_kdst = ksrc; rs->radix_vdst = vsrc;
+        }
+        barrier_wait(rs->tp->barrier);
+      }
+      // ranges unchanged across radix; work_ranges already an even split over n for scan/scatter/emit
+    }
+
+    // -------- PHASE: scan mark (per-position keep bit + per-chunk local counts) --------
+    {
+      Rng1U64 r = rs->work_ranges[wid];
+      U64 N = n;
+      U64 nloc = 0, kloc = 0, sloc = 0;
+      for (U64 k = r.min; k < r.max; k += 1) {
+        B32 boundary      = (k == 0     || rs->sk[k] != rs->sk[k - 1]);
+        B32 next_boundary = (k + 1 == N || rs->sk[k + 1] != rs->sk[k]);
+        U8  survive       = (U8)!(boundary && next_boundary);
+        rs->keep[k] = survive;
+        if (boundary)            { nloc += 1; }
+        if (survive)             { kloc += 1; }
+        if (boundary && survive) { sloc += 1; }
+      }
+      rs->chunk_nc[wid] = nloc; rs->chunk_kp[wid] = kloc; rs->chunk_sc[wid] = sloc;
+    }
+    barrier_wait(rs->tp->barrier);
+
+    // -------- serial: exclusive prefix over W chunk totals (worker 0) --------
+    if (wid == 0) {
+      U64 nc = 0, next_count = 0, next_class_count = 0;
+      for EachIndex(w, W) {
+        U64 cn = rs->chunk_nc[w], ck = rs->chunk_kp[w], cs = rs->chunk_sc[w];
+        rs->chunk_nc[w] = nc; rs->chunk_kp[w] = next_count;
+        nc += cn; next_count += ck; next_class_count += cs;
+      }
+      // stash round totals in chunk_max[0..2] (free scratch; radix max-reduce reuses it fresh next
+      // round, and the convergence block below reads it within this same round before the swap).
+      rs->chunk_max[0] = nc; rs->chunk_max[1] = next_count; rs->chunk_max[2] = next_class_count;
+    }
+    barrier_wait(rs->tp->barrier);
+
+    U64 base = rs->color_base;
+
+    // -------- PHASE: scan apply (re-derive color_at[]/out_slot[] from chunk's exclusive base) --------
+    {
+      Rng1U64 r = rs->work_ranges[wid];
+      U64 nc   = rs->chunk_nc[wid];
+      U64 slot = rs->chunk_kp[wid];
+      for (U64 k = r.min; k < r.max; k += 1) {
+        B32 boundary = (k == 0 || rs->sk[k] != rs->sk[k - 1]);
+        if (boundary) { nc += 1; }
+        rs->color_at[k] = (U32)(base + (nc - 1));
+        rs->out_slot[k] = (U32)slot;
+        slot += rs->keep[k];
+      }
+    }
+    barrier_wait(rs->tp->barrier);
+
+    // -------- PHASE: color scatter --------
+    {
+      Rng1U64 r = rs->work_ranges[wid];
+      for EachInRange(k, r) { rs->colors[rs->active[rs->sv[k]]] = rs->color_at[k]; }
+    }
+    barrier_wait(rs->tp->barrier);
+
+    // -------- PHASE: survivor emit --------
+    {
+      Rng1U64 r = rs->work_ranges[wid];
+      for EachInRange(k, r) {
+        if (rs->keep[k]) { rs->active2[rs->out_slot[k]] = rs->active[rs->sv[k]]; }
+      }
+    }
+    barrier_wait(rs->tp->barrier);
+
+    // -------- serial: convergence + buffer swap (worker 0), broadcast via barrier --------
+    if (wid == 0) {
+      U64 nc               = rs->chunk_max[0];
+      U64 next_count       = rs->chunk_max[1];
+      U64 next_class_count = rs->chunk_max[2];
+      rs->color_base += nc;
+      if (nc == rs->active_class_count) {
+        rs->converged = 1;
+      } else {
+        U32 *tmp = rs->active; rs->active = rs->active2; rs->active2 = tmp;
+        rs->active_count       = next_count;
+        rs->active_class_count = next_class_count;
+        if (rs->active_count == 0) { rs->converged = 1; }
+      }
+    }
+    barrier_wait(rs->tp->barrier);
+
+    if (rs->converged) { break; }
+  }
+}
+
 // Is an object section an ICF fold candidate? Only externally-defined COMDATs are folded: the
 // follower is redirected at its shared symbol-table node, so every reference (including from other
 // objects) resolves to the leader and /OPT:REF then drops the follower. Returns 1 = candidate.
@@ -3382,8 +3698,10 @@ THREAD_POOL_TASK_FUNC(lnk_icf_fill_task)
 // --- parallel LSD radix sort (U64 key + U32 value), 8 x 8-bit passes -------------------------
 // 8-bit digits keep the serial per-pass offset prefix tiny (256*workers, not 65536*workers);
 // the extra passes are parallel histogram+scatter, so they cost little.
+#if !defined(LNK_RADIX_BITS)
 #define LNK_RADIX_BITS 8
 #define LNK_RADIX_SIZE (1 << LNK_RADIX_BITS)
+#endif
 typedef struct LNK_RadixSortTask
 {
   Rng1U64 *ranges;
@@ -3651,29 +3969,55 @@ lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *co
     temp_end(t);
   }
 
-  // iteratively refine classes by relocation-target classes until no class splits
-  LNK_ICFRefineTask refine_task = {0};
-  refine_task.cands     = cands;
-  refine_task.colors    = colors;
-  refine_task.rt_iscand = rt_iscand;
-  refine_task.rt_target = rt_target;
-  refine_task.newkey    = newkey;
-  for (U64 round = 0; round < 30 && active_count > 0; round += 1) {
-    refine_task.active = active;
-    refine_task.ranges = lnk_icf_divide_by_reloc(arena, active, active_count, tp->worker_count, cands);
-    tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_refine_task, &refine_task);
+  // iteratively refine classes by relocation-target classes until no class splits.
+  // PERSISTENT-WORKER REGION: collapse the ~18 rounds x ~10 phases of fork-join into ONE parallel
+  // region (lnk_icf_refine_region_task) where every phase boundary is a barrier and the serial glue
+  // (radix prefixes, group-scan prefix, convergence/swap) runs on worker 0. Byte-identical to the
+  // per-round path (preserves chunk boundaries, processing order, and serial-prefix math).
+  if (active_count > 0) {
+    LNK_ICFRegion rs = {0};
+    rs.tp           = tp;
+    rs.cands        = cands;
+    rs.rt_iscand    = rt_iscand;
+    rs.rt_target    = rt_target;
+    rs.cand_count   = cand_count;
+    rs.worker_count = tp->worker_count;
+    rs.active       = active;
+    rs.active2      = active2;
+    rs.colors       = colors;
+    rs.newkey       = newkey;
 
-    U64 base = color_base;
-    U64 next_count = 0, next_class_count = 0;
-    U64 nc = lnk_icf_dense_colors_active(tp, arena, active, active_count, newkey, colors, base,
-                                         active2, &next_count, &next_class_count);
-    color_base += nc;
-    if (nc == active_class_count) { break; } // no class split -> fixpoint
+    // per-round scratch, preallocated once to the max possible size (cand_count); reused every round.
+    U64 W = tp->worker_count;
+    rs.sk        = push_array_no_zero(arena, U64, cand_count ? cand_count : 1);
+    rs.sv        = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+    rs.color_at  = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+    rs.keep      = push_array_no_zero(arena, U8,  cand_count ? cand_count : 1);
+    rs.out_slot  = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+    rs.kbuf      = push_array_no_zero(arena, U64, cand_count ? cand_count : 1);
+    rs.vbuf      = push_array_no_zero(arena, U32, cand_count ? cand_count : 1);
+    rs.hist      = push_array_no_zero(arena, U32, W * LNK_RADIX_SIZE);
+    rs.chunk_nc  = push_array_no_zero(arena, U64, W ? W : 1);
+    rs.chunk_kp  = push_array_no_zero(arena, U64, W ? W : 1);
+    rs.chunk_sc  = push_array_no_zero(arena, U64, W ? W : 1);
+    rs.chunk_max = push_array_no_zero(arena, U64, (W > 3 ? W : 3) ? (W > 3 ? W : 3) : 1);
+    rs.refine_ranges = push_array_no_zero(arena, Rng1U64, W + 1);
+    rs.work_ranges   = push_array_no_zero(arena, Rng1U64, W + 1);
 
-    // survivors already compacted into active2 by the fused densify pass; swap buffers for next round
-    U32 *tmp = active; active = active2; active2 = tmp;
-    active_count = next_count; active_class_count = next_class_count;
+    rs.active_count       = active_count;
+    rs.active_class_count = active_class_count;
+    rs.color_base         = color_base;
+    rs.converged          = 0;
+
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_refine_region_task, &rs);
+
+    // mirror final state back (active/colors already mutated in place; pointers may have swapped)
+    active       = rs.active;
+    active2      = rs.active2;
+    color_base   = rs.color_base;
+    active_count = rs.active_count;
   }
+  (void)active2; (void)color_base; (void)active_count;
 
   // group candidates by final color (parallel sort) and fold followers into a leader
   U64 *keys = newkey; // reuse
