@@ -248,4 +248,48 @@
 # error You tried to build with an unsupported architecture. Currently, only building in x64 mode is supported.
 #endif
 
+////////////////////////////////
+// extra intrinisc includes, so older clang versions are happy
+// when optiona intrinsics like avx2 & avx512 are used later
+// these must come first before any other intrinsic includes
+// otherwise compiler will define macros that prevent declarations
+// of intrinsics when included next time
+
+#if ARCH_X64 && COMPILER_CLANG
+#  if defined(__IMMINTRIN_H)
+#    error "include this header before immintrin.h / x86intrin.h / intrin.h"
+#  endif
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wreserved-macro-identifier"
+#  pragma push_macro("__SHA__")
+#  pragma push_macro("__AVX__")
+#  pragma push_macro("__AVX2__")
+#  pragma push_macro("__BMI2__")
+#  pragma push_macro("__SSE4_1__")
+#  pragma push_macro("__AVX512F__")
+#  pragma push_macro("__AVX512VL__")
+#  pragma push_macro("__AVX512BW__")
+#  pragma push_macro("__AVX512VBMI__")
+#  define __SHA__ 1
+#  define __AVX__ 1
+#  define __AVX2__ 1
+#  define __BMI2__ 1
+#  define __SSE4_1__ 1
+#  define __AVX512F__ 1
+#  define __AVX512VL__ 1
+#  define __AVX512BW__ 1
+#  define __AVX512VBMI__ 1
+#  include <immintrin.h>
+#  pragma pop_macro("__AVX512VBMI__")
+#  pragma pop_macro("__AVX512BW__")
+#  pragma pop_macro("__AVX512VL__")
+#  pragma pop_macro("__AVX512F__")
+#  pragma pop_macro("__SSE4_1__")
+#  pragma pop_macro("__BMI2__")
+#  pragma pop_macro("__AVX2__")
+#  pragma pop_macro("__AVX__")
+#  pragma pop_macro("__SHA__")
+#  pragma clang diagnostic pop
+#endif
+
 #endif // BASE_CONTEXT_CRACKING_H

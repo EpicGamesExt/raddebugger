@@ -4,23 +4,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#if !defined(MEM_NO_ASAN)
+#if !defined(MEM_DISABLE_ASAN)
 #  if defined(__SANITIZE_ADDRESS__)
 #    if defined(_MSC_VER) && !defined(__clang__)
-#      define MEM_NO_ASAN __declspec(no_sanitize_address)
+#      define MEM_DISABLE_ASAN __declspec(no_sanitize_address)
 #    else
-#      define MEM_NO_ASAN __attribute__((no_sanitize("address")))
+#      define MEM_DISABLE_ASAN __attribute__((no_sanitize("address")))
 #    endif
 #  else
-#    define MEM_NO_ASAN
+#    define MEM_DISABLE_ASAN
 #  endif
 #endif
 
 #if !defined(MEM_API)
 #  if defined(MEM_STATIC)
-#    define MEM_API static inline MEM_NO_ASAN
+#    define MEM_API static inline MEM_DISABLE_ASAN
 #  else
-#    define MEM_API extern MEM_NO_ASAN
+#    define MEM_API extern MEM_DISABLE_ASAN
 #  endif
 #endif
 
@@ -257,7 +257,7 @@ static inline __m512i MemToLower64(__m512i x)
 #endif
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 int MemCompare_sse2(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
@@ -435,7 +435,7 @@ int MemCompare_sse2(const void* ptr1, const void* ptr2, size_t size)
     return 0;
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 int MemCompareI_sse2(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
@@ -472,51 +472,51 @@ int MemCompareI_sse2(const void* ptr1, const void* ptr2, size_t size)
             return MemToLower1(p1[0]) - MemToLower1(p2[0]);
         }
 
+        size_t n;
+        __m128i a0, b0, a1, b1;
+
         if (size < 4) // 2 <= size < 4
         {
-            uint64_t a0 = MEM_PTR16U(p1);
-            uint64_t b0 = MEM_PTR16U(p2);
-            uint64_t a1 = MEM_PTR16U(p1 + size - 2);
-            uint64_t b1 = MEM_PTR16U(p2 + size - 2);
-            uint64_t tmp = MEM_BSWAP64(MemToLower8(a0 | (a1 << 16) | (b0 << 32) | (b1 << 48)));
-            uint32_t a = (uint32_t)(tmp >> 32);
-            uint32_t b = (uint32_t)tmp;
-            return (a > b) - (a < b);
+            a0 = _mm_loadu_si16((const __m128i*)p1);
+            b0 = _mm_loadu_si16((const __m128i*)p2);
+            a1 = _mm_loadu_si16((const __m128i*)(p1 + size - 2));
+            b1 = _mm_loadu_si16((const __m128i*)(p2 + size - 2));
+            n = 2;
         }
         else if (size < 8) // 4 <= size < 8
         {
-            uint64_t a0 = MEM_PTR32U(p1);
-            uint64_t b0 = MEM_PTR32U(p2);
-            uint64_t a1 = MEM_PTR32U(p1 + size - 4);
-            uint64_t b1 = MEM_PTR32U(p2 + size - 4);
-            uint64_t a = MEM_BSWAP64(MemToLower8(a0 | (a1 << 32)));
-            uint64_t b = MEM_BSWAP64(MemToLower8(b0 | (b1 << 32)));
-            return (a > b) - (a < b);
+            a0 = _mm_loadu_si32((const __m128i*)p1);
+            b0 = _mm_loadu_si32((const __m128i*)p2);
+            a1 = _mm_loadu_si32((const __m128i*)(p1 + size - 4));
+            b1 = _mm_loadu_si32((const __m128i*)(p2 + size - 4));
+            n = 4;
         }
         else // 8 <= size <= 16
         {
-            __m128i a0 = _mm_loadl_epi64((const __m128i*)p1);
-            __m128i b0 = _mm_loadl_epi64((const __m128i*)p2);
-            __m128i a1 = _mm_loadl_epi64((const __m128i*)(p1 + size - 8));
-            __m128i b1 = _mm_loadl_epi64((const __m128i*)(p2 + size - 8));
-            __m128i a = MemToLower16(_mm_unpacklo_epi64(a0, a1));
-            __m128i b = MemToLower16(_mm_unpacklo_epi64(b0, b1));
-            __m128i r = _mm_cmpeq_epi8(a, b);
-
-            uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r);
-            if (mask)
-            {
-                size_t index = MEM_CTZ32(mask);
-
-                // index = (index < 8) ? index : (index - 8) + (size - 8);
-                size -= 16;
-                index += index < 8 ? 0 : size;
-
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
-
-            return 0;
+            a0 = _mm_loadu_si64((const __m128i*)p1);
+            b0 = _mm_loadu_si64((const __m128i*)p2);
+            a1 = _mm_loadu_si64((const __m128i*)(p1 + size - 8));
+            b1 = _mm_loadu_si64((const __m128i*)(p2 + size - 8));
+            n = 8;
         }
+
+        __m128i a = _mm_unpacklo_epi64(a0, a1);
+        __m128i b = _mm_unpacklo_epi64(b0, b1);
+        __m128i r = _mm_cmpeq_epi8(MemToLower16(a), MemToLower16(b));
+
+        uint16_t mask = (1 + (uint16_t)_mm_movemask_epi8(r));
+        if (mask)
+        {
+            size_t index = MEM_CTZ32(mask);
+
+            // index = (index < 8) ? index : (index - 8) + (size - n);
+            size -= 8 + n;
+            index += index < 8 ? 0 : size;
+
+            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
+        }
+
+        return 0;
     }
 
     while (size >= 64)
@@ -633,7 +633,7 @@ int MemCompareI_sse2(const void* ptr1, const void* ptr2, size_t size)
     return 0;
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 bool MemIsEqual_sse2(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
@@ -771,7 +771,7 @@ bool MemIsEqual_sse2(const void* ptr1, const void* ptr2, size_t size)
     return true;
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 size_t MemFind_sse2(const void* ptr, size_t size, uint8_t value)
 {
     const uint8_t* p = (const uint8_t*)ptr;
@@ -815,7 +815,7 @@ size_t MemFind_sse2(const void* ptr, size_t size, uint8_t value)
             uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
             uint64_t m3 = mask; // if r0=r1=r2=0, then r3=r
 
-            uint64_t m4 = (m3 << 48) | (m2 << 32) | (m1 << 16) | m0;
+            uint64_t m4 = m0 | (m1 << 16) | (m2 << 32) | (m3 << 48);
             size_t index = MEM_CTZ64(m4);
             return offset + index;
         }
@@ -887,7 +887,7 @@ size_t MemFind_sse2(const void* ptr, size_t size, uint8_t value)
     return offset;
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 MEM_TARGET_AVX2
 int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
 {
@@ -932,7 +932,7 @@ int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
             uint32_t b1 = MEM_GET16BE(p2 + size - 2);
             uint32_t a = (a0 != b0 ? a0 : a1);
             uint32_t b = (a0 != b0 ? b0 : b1);
-            return a - b;
+            return (int)a - (int)b;
         }
         else if (size < 8) // 4 <= size < 8
         {
@@ -999,7 +999,7 @@ int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
         uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r);
         if (mask)
         {
-            uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
+            mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
             if (mask)
             {
                 size_t index = 0x00 + _tzcnt_u32(mask);
@@ -1094,7 +1094,7 @@ int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
     return 0;
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 MEM_TARGET_AVX2
 int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
 {
@@ -1131,74 +1131,60 @@ int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
         {
             return MemToLower1(p1[0]) - MemToLower1(p2[0]);
         }
-        else if (size < 4) // 2 <= size < 4
+
+        size_t n;
+        __m128i a0, b0, a1, b1;
+
+        if (size < 4) // 2 <= size < 4
         {
-            uint64_t a0 = MEM_GET16BE(p1);
-            uint64_t b0 = MEM_GET16BE(p2);
-            uint64_t a1 = MEM_GET16BE(p1 + size - 2);
-            uint64_t b1 = MEM_GET16BE(p2 + size - 2);
-            uint64_t tmp = MemToLower8(a0 | (a1 << 16) | (b0 << 32) | (b1 << 48));
-            uint64_t a = (uint32_t)tmp;
-            uint64_t b = (uint32_t)(tmp >> 32);
-            return (a > b) - (a < b);
+            a0 = _mm_loadu_si16((const __m128i*)p1);
+            b0 = _mm_loadu_si16((const __m128i*)p2);
+            a1 = _mm_loadu_si16((const __m128i*)(p1 + size - 2));
+            b1 = _mm_loadu_si16((const __m128i*)(p2 + size - 2));
+            n = 2;
         }
         else if (size < 8) // 4 <= size < 8
         {
-            uint64_t a0 = MEM_GET32BE(p1);
-            uint64_t b0 = MEM_GET32BE(p2);
-            uint64_t a1 = MEM_GET32BE(p1 + size - 4);
-            uint64_t b1 = MEM_GET32BE(p2 + size - 4);
-            uint64_t a = MemToLower8(a0 | (a1 << 32));
-            uint64_t b = MemToLower8(b0 | (b1 << 32));
-            return (a > b) - (a < b);
+            a0 = _mm_loadu_si32((const __m128i*)p1);
+            b0 = _mm_loadu_si32((const __m128i*)p2);
+            a1 = _mm_loadu_si32((const __m128i*)(p1 + size - 4));
+            b1 = _mm_loadu_si32((const __m128i*)(p2 + size - 4));
+            n = 4;
         }
-        else if (size <= 16) // 8 <= size <= 16
+        else if (size < 16) // 8 <= size < 16
         {
-            __m128i a0 = _mm_loadl_epi64((const __m128i*)p1);
-            __m128i b0 = _mm_loadl_epi64((const __m128i*)p2);
-            __m128i a1 = _mm_loadl_epi64((const __m128i*)(p1 + size - 8));
-            __m128i b1 = _mm_loadl_epi64((const __m128i*)(p2 + size - 8));
-            __m128i a = MemToLower16(_mm_unpacklo_epi64(a0, a1));
-            __m128i b = MemToLower16(_mm_unpacklo_epi64(b0, b1));
-            __m128i r = _mm_cmpeq_epi8(a, b);
-
-            uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r);
-            if (mask)
-            {
-                size_t index = MEM_CTZ32(mask);
-
-                // index = (index < 8) ? index : (index - 8) + (size - 8);
-                size -= 16;
-                index += index < 8 ? 0 : size;
-
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
-
-            return 0;
+            a0 = _mm_loadu_si64((const __m128i*)p1);
+            b0 = _mm_loadu_si64((const __m128i*)p2);
+            a1 = _mm_loadu_si64((const __m128i*)(p1 + size - 8));
+            b1 = _mm_loadu_si64((const __m128i*)(p2 + size - 8));
+            n = 8;
         }
-        else // 16 < size <= 32
+        else // 16 <= size <= 32
         {
-            __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
-            __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
-            __m128i a1 = _mm_loadu_si128((const __m128i*)(p1 + size - 16));
-            __m128i b1 = _mm_loadu_si128((const __m128i*)(p2 + size - 16));
-            __m256i a = MemToLower32(_mm256_inserti128_si256(_mm256_castsi128_si256(a0), a1, 1));
-            __m256i b = MemToLower32(_mm256_inserti128_si256(_mm256_castsi128_si256(b0), b1, 1));
-            __m256i r = _mm256_cmpeq_epi8(a, b);
-
-            uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r);
-            if (mask)
-            {
-                size_t index = _tzcnt_u64(mask);
-
-                // index = (index < 16) ? index : (index - 16) + (size - 16);
-                size -= 32;
-                index += index < 16 ? 0 : size;
-
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
-            return 0;
+            a0 = _mm_loadu_si128((const __m128i*)p1);
+            b0 = _mm_loadu_si128((const __m128i*)p2);
+            a1 = _mm_loadu_si128((const __m128i*)(p1 + size - 16));
+            b1 = _mm_loadu_si128((const __m128i*)(p2 + size - 16));
+            n = 16;
         }
+
+        __m256i a = _mm256_inserti128_si256(_mm256_castsi128_si256(a0), a1, 1);
+        __m256i b = _mm256_inserti128_si256(_mm256_castsi128_si256(b0), b1, 1);
+        __m256i r = _mm256_cmpeq_epi8(MemToLower32(a), MemToLower32(b));
+
+        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r);
+        if (mask)
+        {
+            size_t index = _tzcnt_u64(mask);
+
+            // index = (index < 16) ? index : (index - 16) + (size - n);
+            size -= 16 + n;
+            index += index < 16 ? 0 : size;
+
+            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
+        }
+
+        return 0;
     }
 
     while (size >= 128)
@@ -1315,7 +1301,7 @@ int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
     return 0;
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 MEM_TARGET_AVX2
 bool MemIsEqual_avx2(const void* ptr1, const void* ptr2, size_t size)
 {
@@ -1460,7 +1446,7 @@ bool MemIsEqual_avx2(const void* ptr1, const void* ptr2, size_t size)
     return true;
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 MEM_TARGET_AVX2
 size_t MemFind_avx2(const void* ptr, size_t size, uint8_t value)
 {
@@ -1480,7 +1466,7 @@ size_t MemFind_avx2(const void* ptr, size_t size, uint8_t value)
         __m256i a0 = _mm256_loadu_si256((const __m256i*)(p - extra));
         __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
 
-        uint32_t mask = _mm256_movemask_epi8(r0);
+        uint32_t mask = (uint32_t)_mm256_movemask_epi8(r0);
         mask = _bzhi_u32(MEM_SHRX_32(mask, (uint32_t)extra), (uint32_t)size);
 
         return mask ? _tzcnt_u32(mask) : size;
@@ -1507,8 +1493,8 @@ size_t MemFind_avx2(const void* ptr, size_t size, uint8_t value)
             uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
             uint64_t m3 = mask; // if r0=r1=r2=0, then r3=r
 
-            uint64_t m01 = (m1 << 32) | m0;
-            uint64_t m23 = (m3 << 32) | m2;
+            uint64_t m01 = m0 | (m1 << 32);
+            uint64_t m23 = m2 | (m3 << 32);
 
             size_t idx0 = _tzcnt_u64(m01);
             size_t idx1 = _tzcnt_u64(m23);
@@ -1877,7 +1863,7 @@ static inline uint8x16_t MemToLower16(uint8x16_t x)
     return vaddq_u8(x, tmp);
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 int MemCompare_arm64(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
@@ -2033,7 +2019,7 @@ done:;
     return (a > b) - (a < b);
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 int MemCompareI_arm64(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
@@ -2212,7 +2198,7 @@ done:;
     return (a > b) - (a < b);
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 bool MemIsEqual_arm64(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
@@ -2335,7 +2321,7 @@ bool MemIsEqual_arm64(const void* ptr1, const void* ptr2, size_t size)
     return true;
 }
 
-MEM_NO_ASAN
+MEM_DISABLE_ASAN
 size_t MemFind_arm64(const void* ptr, size_t size, uint8_t value)
 {
     const uint8_t* p = (const uint8_t*)ptr;
@@ -2510,8 +2496,8 @@ int MemCompareI_rvv(const void* ptr1, const void* ptr2, size_t size)
         long index = __riscv_vfirst_m_b1(m, vl);
         if (index >= 0)
         {
-            a = __riscv_vslidedown_vx_u8m8(a, index, vl);
-            b = __riscv_vslidedown_vx_u8m8(b, index, vl);
+            a = __riscv_vslidedown_vx_u8m8(a, (unsigned long)index, vl);
+            b = __riscv_vslidedown_vx_u8m8(b, (unsigned long)index, vl);
             return __riscv_vmv_x_s_u8m8_u8(a) - __riscv_vmv_x_s_u8m8_u8(b);
         }
 
@@ -2566,7 +2552,7 @@ size_t MemFind_rvv(const void* ptr, size_t size, uint8_t value)
         long index = __riscv_vfirst_m_b1(m, vl);
         if (index >= 0)
         {
-            return offset + index;
+            return offset + (unsigned long)index;
         }
 
         offset += vl;

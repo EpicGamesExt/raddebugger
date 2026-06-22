@@ -55,7 +55,7 @@ static uint64_t xgetbv(void) {
 }
 
 static void cpuid(uint32_t out[4], uint32_t id) {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
   __cpuid((int *)out, id);
 #elif defined(__i386__) || defined(_M_IX86)
   __asm__ __volatile__("movl %%ebx, %1\n"
@@ -71,7 +71,7 @@ static void cpuid(uint32_t out[4], uint32_t id) {
 }
 
 static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
   __cpuidex((int *)out, id, sid);
 #elif defined(__i386__) || defined(_M_IX86)
   __asm__ __volatile__("movl %%ebx, %1\n"

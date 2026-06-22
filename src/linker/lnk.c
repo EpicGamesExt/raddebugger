@@ -9,11 +9,6 @@
 #define ARENA_FREE_LIST 1
 #define NO_ASYNC 1
 
-// --- Third Party -------------------------------------------------------------
-
-#include "base_ext/base_blake3.h"
-#include "base_ext/base_blake3.c"
-
 // --- Code Base ---------------------------------------------------------------
 
 #include "base/base_inc.h"
@@ -57,6 +52,11 @@
 #include "msvc_crt/msvc_crt.c"
 #include "llvm/llvm.c"
 #include "dwarf/x64/dwarf_x64.c"
+
+// --- Third Party -------------------------------------------------------------
+
+#include "base_ext/base_blake3.h"
+#include "base_ext/base_blake3.c"
 
 // --- Code Base Extensions ----------------------------------------------------
 
