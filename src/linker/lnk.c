@@ -6449,7 +6449,21 @@ lnk_log_timers(void)
   StringJoin new_line_join = { str8_lit_comp(""), str8_lit_comp("\n"), str8_lit_comp("") };
   String8 output = str8_list_join(scratch.arena, &output_list, &new_line_join);
   lnk_log(LNK_Log_Timers, "%S\n", output);
-  
+
+  // Diagnostic: when RADLINK_PHASE_LOG is set, also write machine-parseable raw
+  // per-phase micros to that file (for automated perf A/B). Env-unset -> no-op,
+  // so normal/validation links are byte-identical; this never touches DLL/PDB bytes.
+  char *phase_log_path = getenv("RADLINK_PHASE_LOG");
+  if (phase_log_path != 0 && phase_log_path[0] != 0) {
+    String8List raw_list = {0};
+    for (U64 i = 0; i < LNK_Timer_Count; ++i) {
+      str8_list_pushf(scratch.arena, &raw_list, "%S %llu\n", lnk_string_from_timer_type(i), g_timers[i].end - g_timers[i].begin);
+    }
+    str8_list_pushf(scratch.arena, &raw_list, "TOTAL %llu\n", total_build_time_micro);
+    String8 raw_str = str8_list_join(scratch.arena, &raw_list, 0);
+    lnk_write_data_to_file_path(str8_cstring(phase_log_path), str8_zero(), raw_str);
+  }
+
   scratch_end(scratch);
 }
 
@@ -6759,8 +6773,11 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   //
   // Timers
   //
-  if (lnk_get_log_status(LNK_Log_Timers)) {
-    lnk_log_timers();
+  {
+    char *phase_log_env = getenv("RADLINK_PHASE_LOG");
+    if (lnk_get_log_status(LNK_Log_Timers) || (phase_log_env != 0 && phase_log_env[0] != 0)) {
+      lnk_log_timers();
+    }
   }
   
   scratch_end(scratch);
