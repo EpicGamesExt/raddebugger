@@ -2756,6 +2756,14 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
   }
   ProfEnd();
 
+  // bucket_arr (the ~1.3x-total-leaf-count probe tables) is only live through the dedup + extract
+  // phases: its last read is in lnk_get_present_buckets_task ("Copy present buckets") which copies
+  // bucket pointers into unique_leaf_refs. Allocate it in a dedicated arena so we can release that
+  // multi-GB working set immediately after the extract loop, before the merge-types/PDB-build peak.
+  // (A temp_begin on scratch.arena would not work: many surviving allocations -- unique_leaf_refs,
+  // assigned_ti, radix scratch -- land in scratch.arena after bucket_arr.)
+  Arena *bucket_arena = arena_alloc(.name = "LEAF_BUCKETS");
+
   ProfBegin("Leaf Hash Table Init");
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
     U64 total_count = 0;
@@ -2763,7 +2771,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
 
     task.leaf_ht_arr[ti_source].cap = total_count;
     task.leaf_ht_arr[ti_source].cap = 1 + ((task.leaf_ht_arr[ti_source].cap * 13) / 10); // * 1.3
-    task.leaf_ht_arr[ti_source].bucket_arr = push_array_no_zero(scratch.arena, LNK_LeafRef, task.leaf_ht_arr[ti_source].cap);
+    task.leaf_ht_arr[ti_source].bucket_arr = push_array_no_zero(bucket_arena, LNK_LeafRef, task.leaf_ht_arr[ti_source].cap);
     MemorySet(task.leaf_ht_arr[ti_source].bucket_arr, 0xff, sizeof(LNK_LeafRef) * task.leaf_ht_arr[ti_source].cap);
 
 #if PROFILE_TELEMETRY
@@ -2833,6 +2841,11 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     }
   }
 
+  // bucket_arr is fully consumed (copied into unique_leaf_refs / sorted) -- release the probe tables
+  // now so this multi-GB working set is gone before the merge-types/PDB-build peak.
+  arena_release(bucket_arena);
+  for EachIndex(ti_source, CV_TypeIndexSource_COUNT) { task.leaf_ht_arr[ti_source].bucket_arr = 0; }
+
   #if PROFILE_TELEMETRY
   tmMessage(0, TMMF_ICON_NOTE, "TPI Count: %.*s", str8_varg(str8_from_count(scratch.arena, task.unique_leaf_refs_arr[CV_TypeIndexSource_TPI].count)));
   tmMessage(0, TMMF_ICON_NOTE, "IPI Count: %.*s", str8_varg(str8_from_count(scratch.arena, task.unique_leaf_refs_arr[CV_TypeIndexSource_IPI].count)));
@@ -2848,10 +2861,11 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
       task.assigned_ti_arr[ti_source].cap    = ((task.unique_leaf_refs_arr[ti_source].count * 13) / 10);
       task.assigned_ti_arr[ti_source].ti_arr = push_array(scratch.arena, CV_TypeIndex, task.assigned_ti_arr[ti_source].cap);
 
-      // unique extraction is complete, so the dedup bucket slots can back the
-      // direct hash table without increasing peak memory
-      Assert(task.assigned_ti_arr[ti_source].cap <= task.leaf_ht_arr[ti_source].cap);
-      task.assigned_ti_arr[ti_source].hash_arr = task.leaf_ht_arr[ti_source].bucket_arr;
+      // bucket_arr used to back hash_arr here to avoid a fresh allocation, but the bucket
+      // arena is released right after the extract loop (above) so the probe tables' multi-GB
+      // working set is gone before the merge-types commit peak; allocate hash_arr fresh --
+      // it is sized by the (much smaller) unique count, not the total-based bucket cap
+      task.assigned_ti_arr[ti_source].hash_arr = push_array(scratch.arena, U64, task.assigned_ti_arr[ti_source].cap);
 
       task.min_type_indices[ti_source] = CV_MinComplexTypeIndex;
       task.ranges = tp_divide_work(scratch.arena, task.unique_leaf_refs_arr[ti_source].count, tp->worker_count);
