@@ -2751,6 +2751,14 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
   }
   ProfEnd();
 
+  // bucket_arr (the ~1.3x-total-leaf-count probe tables) is only live through the dedup + extract
+  // phases: its last read is in lnk_get_present_buckets_task ("Copy present buckets") which copies
+  // bucket pointers into unique_leaf_refs. Allocate it in a dedicated arena so we can release that
+  // multi-GB working set immediately after the extract loop, before the merge-types/PDB-build peak.
+  // (A temp_begin on scratch.arena would not work: many surviving allocations -- unique_leaf_refs,
+  // assigned_ti, radix scratch -- land in scratch.arena after bucket_arr.)
+  Arena *bucket_arena = arena_alloc(.name = "LEAF_BUCKETS");
+
   ProfBegin("Leaf Hash Table Init");
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
     U64 total_count = 0;
@@ -2760,7 +2768,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     // pow2 cap so bucket index is hash & (cap-1) (mask) instead of hash % cap (a 64-bit DIV in the
     // densest dedup probe loop). u64_up_to_pow2(1.3*count) keeps load factor <= ~0.65.
     task.leaf_ht_arr[ti_source].cap = u64_up_to_pow2(1 + ((task.leaf_ht_arr[ti_source].cap * 13) / 10)); // * 1.3, pow2
-    task.leaf_ht_arr[ti_source].bucket_arr = push_array(scratch.arena, LNK_LeafRef *, task.leaf_ht_arr[ti_source].cap);
+    task.leaf_ht_arr[ti_source].bucket_arr = push_array(bucket_arena, LNK_LeafRef *, task.leaf_ht_arr[ti_source].cap);
 
 #if PROFILE_TELEMETRY
     tmMessage(0, TMMF_ICON_NOTE, "%.*s Bucket Count: %.*s", str8_varg(cv_string_from_type_index_source(ti_source)), str8_varg(str8_from_count(scratch.arena, task.leaf_ht_arr[ti_source].cap)));
@@ -2911,6 +2919,11 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
 #endif
     }
   }
+
+  // bucket_arr is fully consumed (copied into unique_leaf_refs / sorted) -- release the probe tables
+  // now so this multi-GB working set is gone before the merge-types/PDB-build peak.
+  arena_release(bucket_arena);
+  for EachIndex(ti_source, CV_TypeIndexSource_COUNT) { task.leaf_ht_arr[ti_source].bucket_arr = 0; }
 
   #if PROFILE_TELEMETRY
   tmMessage(0, TMMF_ICON_NOTE, "TPI Count: %.*s", str8_varg(str8_from_count(scratch.arena, task.unique_leaf_refs_arr[CV_TypeIndexSource_TPI].count)));
