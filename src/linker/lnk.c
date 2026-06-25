@@ -3496,8 +3496,15 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_icf_refine_region_task)
 {
   LNK_ICFRegion *rs = raw_task;
-  U64 wid = worker_id; // 1:1 worker<->task: every participant blocks on the first barrier before any
-                       // can steal a second task, so task_id == worker_id throughout (see note below).
+  // LANE = task_id, NOT worker_id. The cohort is `W = rs->worker_count` (the
+  // fair-share cohort C for this barrier pass), and task_ids are the contiguous
+  // [0,C) lane indices assigned by the dispatch. Every participant blocks on the
+  // first barrier before it can steal a second task, so each runs exactly one
+  // lane for the whole region. Using task_id (not worker_id) makes this correct
+  // for ANY set of woken physical workers -- their ids need not be contiguous,
+  // only the lanes do. All per-lane scratch (refine_ranges[wid], work_ranges[wid],
+  // hist+wid*RADIX, chunk_*[wid]) is sized to W and indexed by this lane.
+  U64 wid = task_id;
   U64 W   = rs->worker_count;
 
   for (U64 round = 0; round < rs->max_rounds; round += 1) {
@@ -4329,6 +4336,12 @@ lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *co
   // (radix prefixes, group-scan prefix, convergence/swap) runs on worker 0. Byte-identical to the
   // per-round path (preserves chunk boundaries, processing order, and serial-prefix math).
   if (active_count > 0) {
+    // FAIR-SHARE: pin the barrier-pass cohort BEFORE building the region's
+    // per-worker scratch and rs.worker_count, so all of W / rs.worker_count /
+    // hist[W*..] / chunk_*[W] / ranges[W+1] / the C-sized barrier agree on the
+    // cohort. tp->worker_count now reads the cohort C for the whole region.
+    tp_barrier_begin(tp);
+
     LNK_ICFRegion rs = {0};
     rs.tp           = tp;
     rs.cands        = cands;
@@ -4392,13 +4405,13 @@ lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *co
       ref.active_count = active_count; ref.active_class_count = active_class_count;
       ref.color_base = color_base; ref.converged = 0;
       ref.max_rounds = 64;             // uncapped (true fixpoint)
-      tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_refine_region_task, &ref);
+      tp_for_parallel_reserve(tp, 0, tp->worker_count, lnk_icf_refine_region_task, &ref); // BARRIER pass (path B)
     }
     // colors[] was untouched (ref ran on ref_colors); active/active2 untouched (ref used clones).
 #endif
 
     rs.max_rounds = region_cap;
-    tp_for_parallel(tp, 0, tp->worker_count, lnk_icf_refine_region_task, &rs);
+    tp_for_parallel_reserve(tp, 0, tp->worker_count, lnk_icf_refine_region_task, &rs); // BARRIER pass (path B)
 
     // mirror final state back (active/colors already mutated in place; pointers may have swapped)
     active             = rs.active;
@@ -4406,6 +4419,12 @@ lnk_opt_icf(TP_Context *tp, Arena *perm, LNK_SymbolTable *symtab, LNK_Config *co
     color_base         = rs.color_base;
     active_count       = rs.active_count;
     active_class_count = rs.active_class_count;
+
+    // FAIR-SHARE: close the cohort bracket now -- the region's barrier passes are
+    // done. The worklist tail + fold below are path-A (governor-driven), so they
+    // must NOT run with the cohort pinned (the held slots / barrier_pass=1 would
+    // block path-A workers from returning budget). Restore full width here.
+    tp_barrier_end(tp);
 
     // hand off the tail to the dirty-class worklist if the region stopped at the cap (not yet converged)
     if (!rs.converged && active_count > 0) {
@@ -4521,7 +4540,7 @@ internal void
 lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_ObjList objs)
 {
   ProfScope("Mark Live Sections")
-    tp_for_parallel(tp,
+    tp_for_parallel_reserve(tp, // BARRIER pass (path B): tp_broadcast + barrier_wait
                     0,
                     tp->worker_count,
                     lnk_walk_relocs_and_mark_ref_sections_task,
@@ -7289,7 +7308,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       ProfBegin("Decommit Scratch");
       // task_count == worker_count + the in-worker barrier => every worker
       // (worker 0 IS the main thread) runs exactly once, covering main's scratch.
-      tp_for_parallel(tp, 0, tp->worker_count, lnk_scratch_decommit_worker, 0);
+      tp_for_parallel_reserve(tp, 0, tp->worker_count, lnk_scratch_decommit_worker, 0); // BARRIER pass (path B)
       ProfEnd();
     }
 
@@ -7324,7 +7343,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
         lnk_timer_begin(LNK_Timer_Rdi);
 
         LNK_P2R p2r = { .config = config, .pdb_data = str8_list_join(lnk_get_huge_arena(), &pdb_data, 0), .image_data = image_ctx.image_data };
-        tp_for_parallel(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r);
+        tp_for_parallel_reserve(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r); // BARRIER pass (path B)
 
         String8List rdi_blobs = rdim_file_blobs_from_section_bundle(scratch.arena, &p2r.bake_results.section_bundle);
         lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_blobs);
@@ -7606,7 +7625,7 @@ lnk_run_type_server(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   ProfScope("Pack Type Data & Data Ranges")
   {
     LNK_RRTTypeDataSerializer task = { &cv_types, &rrt.type_data_raw, rrt.type_data_ranges };
-    tp_for_parallel(tp, arena, tp->worker_count, lnk_serialize_rrt_type_data_task, &task);
+    tp_for_parallel_reserve(tp, arena, tp->worker_count, lnk_serialize_rrt_type_data_task, &task); // BARRIER pass (path B)
 
     // pack type index ranges
     for EachIndex(i, CV_TypeIndexSource_COUNT) {
