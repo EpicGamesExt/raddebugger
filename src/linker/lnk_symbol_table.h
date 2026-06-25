@@ -63,6 +63,10 @@ typedef struct LNK_SymbolHashTrie
 {
   String8                   *name;
   LNK_Symbol                *symbol;
+  // full key hash stored at insert; descent fast-rejects on hash mismatch BEFORE
+  // dereferencing name -> String8 -> name bytes (saves 2-3 line misses/level).
+  // str8_match still gates the real match, so this is fast-reject only -> byte-identical.
+  U64                        hash;
   struct LNK_SymbolHashTrie *child[4];
 } LNK_SymbolHashTrie;
 
