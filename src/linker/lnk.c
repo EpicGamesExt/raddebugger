@@ -4436,6 +4436,48 @@ THREAD_POOL_TASK_FUNC(lnk_patch_weak_symbols_task)
   lnk_patch_obj_symtab(task->symtab, task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Weak);
 }
 
+// Non-temporal (streaming) stores for the write-once image buffer. The image is
+// filled, then streamed straight to disk; these bytes are not re-read by the
+// filling thread, so NT stores avoid polluting L2/L3 with ~1GB of write-once
+// data. A later pass (lnk_obj_reloc_patcher) DOES read the image back, so every
+// caller must _mm_sfence() before that pass runs to make the NT stores globally
+// visible. NT stores require 32B alignment; the unaligned head/tail and small
+// (<256B) copies fall back to MemoryCopy/MemorySet (identical bytes either way).
+#define LNK_STREAM_MIN_SIZE 256
+
+// SSE2 (baseline on x86-64, no -mavx required) 16B non-temporal stores.
+internal void
+lnk_stream_copy(void *dst, void *src, U64 size)
+{
+  if (size < LNK_STREAM_MIN_SIZE) { MemoryCopy(dst, src, size); return; }
+  U8 *d = (U8 *)dst, *s = (U8 *)src;
+  U64 head = (U64)(0x10 - ((U64)d & 0xf)) & 0xf; // bytes to reach 16B-aligned dst
+  if (head) { MemoryCopy(d, s, head); d += head; s += head; size -= head; }
+  U64 vec = size & ~(U64)0xf;
+  for (U64 i = 0; i < vec; i += 0x10) {
+    __m128i v = _mm_loadu_si128((__m128i const *)(s + i));
+    _mm_stream_si128((__m128i *)(d + i), v);
+  }
+  U64 tail = size - vec;
+  if (tail) { MemoryCopy(d + vec, s + vec, tail); }
+}
+
+internal void
+lnk_stream_set(void *dst, U8 byte, U64 size)
+{
+  if (size < LNK_STREAM_MIN_SIZE) { MemorySet(dst, byte, size); return; }
+  U8 *d = (U8 *)dst;
+  U64 head = (U64)(0x10 - ((U64)d & 0xf)) & 0xf;
+  if (head) { MemorySet(d, byte, head); d += head; size -= head; }
+  __m128i v = _mm_set1_epi8((char)byte);
+  U64 vec = size & ~(U64)0xf;
+  for (U64 i = 0; i < vec; i += 0x10) {
+    _mm_stream_si128((__m128i *)(d + i), v);
+  }
+  U64 tail = size - vec;
+  if (tail) { MemorySet(d + vec, byte, tail); }
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_image_fill_task)
 {
@@ -4445,15 +4487,26 @@ THREAD_POOL_TASK_FUNC(lnk_image_fill_task)
   for EachNode(n, LNK_ImageFillNode, task->u.image_fill.fill_nodes[task_id]) {
     for EachIndex(i, n->sc_count) {
       LNK_SectionContrib *sc = n->sc[i];
+      // fast-path: the vast majority of contribs are a single data-node -> one direct copy, skipping
+      // the list-walk + cursor bookkeeping on the hot 739MB image-write loop.
+      if (sc->first_data_node.next == 0) {
+        U64 image_off = sc->u.off + n->base_foff;
+        Assert(image_off + sc->first_data_node.string.size <= image_data.size);
+        lnk_stream_copy(image_data.str + image_off, sc->first_data_node.string.str, sc->first_data_node.string.size);
+        continue;
+      }
       U64 cursor = 0;
       for EachNode(data_n, String8Node, &sc->first_data_node) {
         U64 image_off = sc->u.off + n->base_foff + cursor;
         Assert(image_off + data_n->string.size <= image_data.size);
-        MemoryCopyStr8(image_data.str + image_off, data_n->string);
+        lnk_stream_copy(image_data.str + image_off, data_n->string.str, data_n->string.size);
         cursor += data_n->string.size;
       }
     }
   }
+  // NT stores above are not ordered wrt later normal reads on other cores; the
+  // reloc-patch pass reads the image back. Make these stores globally visible.
+  _mm_sfence();
   ProfEnd();
 }
 
@@ -5945,9 +5998,13 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       LNK_Section *sect = &sect_n->data;
       ProfBeginV("Section: %S Size: %M", sect->name, sect->fsize);
       U8 fill_byte = sect->flags & COFF_SectionFlag_CntCode ? coff_code_align_byte_from_machine(config->machine) : 0;
-      MemorySet(image_data.str + sect->foff, fill_byte, sect->fsize);
+      // write-once into the image buffer -> stream past the cache (see lnk_stream_set)
+      lnk_stream_set(image_data.str + sect->foff, fill_byte, sect->fsize);
       ProfEnd();
     }
+    // flush NT stores before the parallel contrib-fill / reloc passes read or
+    // re-write these lines
+    _mm_sfence();
     ProfEnd();
 
     Temp temp = temp_begin(scratch.arena);
