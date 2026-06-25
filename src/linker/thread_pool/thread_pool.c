@@ -1,8 +1,89 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+//
+// DUAL-PATH thread pool.
+//
+//   NON-SHARED mode (no /RAD_SHARED_THREAD_POOL): UPSTREAM's barrier
+//     implementation, VERBATIM. Workers park on a kernel barrier between passes
+//     (zero-syscall steady state, no per-pass semaphore traffic). tp_run_tasks
+//     brackets the work loop in barrier_wait at entry+exit; tp_worker_main loops
+//     calling it; tp_for_parallel just inits state and joins as worker 0. No
+//     governor thread, no budget/wake/governor semaphores, no main_semaphore.
+//
+//   SHARED mode (/RAD_SHARED_THREAD_POOL): OUR cross-process governor. Workers
+//     are PARKED on wake_semaphore and woken one-per-grant; a per-process
+//     governor thread borrows global budget slots and wakes parked workers;
+//     completion is signalled via main_semaphore; path-B barrier passes run a
+//     fair-share cohort (tp_barrier_begin/end + tp_for_parallel_reserve).
+//
+// Dispatch and the worker entry point branch on pool->is_shared (== name.size>0).
+// All governor/budget state is allocated only when is_shared, so non-shared mode
+// has zero extra threads and zero extra synchronization objects vs upstream.
+//
+
+////////////////////////////////////////////////////////////////////////////////
+//~ NON-SHARED (upstream barrier) path -- VERBATIM from origin/dev.
+
 internal void
 tp_run_tasks(TP_Context *pool, TP_Worker *worker)
+{
+  barrier_wait(pool->barrier);
+
+  for (;;) {
+    S64 task_left = ins_atomic_u64_dec_eval(&pool->task_left);
+
+    // are there any tasks left to run?
+    if (task_left < 0) {
+      break;
+    }
+
+    // run task
+    Arena *arena   = pool->task_arena ? pool->task_arena->v[worker->id] : 0;
+    U64    task_id = pool->task_count - (task_left+1);
+    pool->task_func(arena, worker->id, task_id, pool->task_data, pool);
+
+    // cache task count so we dont touch pool memory after atomic inc
+    U64 task_count = pool->task_count;
+
+    // update task done count
+    ins_atomic_u64_inc_eval(&pool->task_done);
+  }
+
+  barrier_wait(pool->barrier);
+}
+
+internal void
+tp_worker_main(void *raw_worker)
+{
+  TP_Worker  *worker = raw_worker;
+  TP_Context *pool   = worker->pool;
+  for (; pool->is_live; ) {
+    tp_run_tasks(pool, worker);
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//~ SHARED (cross-process governor) path -- OURS.
+
+internal void
+tp_for_parallel_init_state(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskFunc *task_func, void *task_data)
+{
+  pool->task_arena = task_arena;
+  pool->task_func  = task_func;
+  pool->task_data  = task_data;
+  pool->task_count = task_count;
+  pool->task_done  = 0;
+  ins_atomic_u64_eval_assign(&pool->task_left, task_count);
+}
+
+//
+// SHARED work loop. Semaphore-completion model (no barrier bracket): pure
+// work-stealing on the atomic task_left decrement; the last finisher pings
+// main_semaphore so the dispatching main thread can return.
+//
+internal void
+tp_run_tasks_shared(TP_Context *pool, TP_Worker *worker)
 {
   for (;;) {
     S64 task_left = ins_atomic_u64_dec_eval(&pool->task_left);
@@ -29,31 +110,16 @@ tp_run_tasks(TP_Context *pool, TP_Worker *worker)
   }
 }
 
-internal void
-tp_worker_main(void *raw_worker)
-{
-  TP_Worker  *worker = raw_worker;
-  TP_Context *pool   = worker->pool;
-  for (; pool->is_live; ) {
-    if (semaphore_take(pool->task_semaphore, max_U64)) {
-      tp_run_tasks(pool, worker);
-    }
-  }
-}
-
 //
-// SHARED (cross-process governor) mode.
-//
-// Workers 1..worker_count-1 are PARKED on wake_semaphore. They run tasks only
-// when woken. Two kinds of wakes:
+// SHARED worker. Parked on wake_semaphore. Woken one-per-grant. Two wake kinds:
 //   - path A (barrier-free, governor-driven): the worker was woken because the
 //     governor acquired a global budget slot for it. When the worker drains
-//     (tp_run_tasks returns), it RETURNS that slot: release(budget) + granted--,
-//     so the slot can flow to another process mid-pass.
-//   - path B (barrier pass): the dispatching thread reserved all worker_count-1
-//     slots up front and woke every worker. The worker just runs the pass and
-//     re-parks; the dispatcher releases the slots in bulk afterwards. The worker
-//     must NOT touch the budget here (cohort must stay live for the barrier).
+//     (tp_run_tasks_shared returns), it RETURNS that slot: release(budget) +
+//     granted--, so the slot can flow to another process mid-pass.
+//   - path B (barrier pass): the dispatching thread reserved cohort slots up
+//     front and woke exactly the cohort's workers. The worker just runs the pass
+//     and re-parks; the dispatcher releases the slots in bulk afterwards. The
+//     worker must NOT touch the budget here (cohort must stay live for the pass).
 //
 internal void
 tp_worker_main_shared(void *raw_worker)
@@ -70,7 +136,7 @@ tp_worker_main_shared(void *raw_worker)
     // capture pass kind at wake time (only one pass kind is active at once)
     B32 barrier_pass = pool->barrier_pass;
 
-    tp_run_tasks(pool, worker);
+    tp_run_tasks_shared(pool, worker);
 
     if (!barrier_pass) {
       // path A: hand my budget slot back so another process can use it
@@ -144,7 +210,10 @@ tp_governor_main(void *raw_pool)
   }
 }
 
-internal TP_Context * 
+////////////////////////////////////////////////////////////////////////////////
+//~ Alloc / release (dual).
+
+internal TP_Context *
 tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
 {
   ProfBeginDynamic("Alloc Thread Pool [Worker Count: %u]", worker_count);
@@ -162,11 +231,13 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
   pool->worker_arr   = push_array(arena, TP_Worker, worker_count);
 
   // alloc semaphores
-  if (worker_count > 1) {
-    pool->main_semaphore = semaphore_alloc(0, 1, str8_zero());
-
-    if (is_shared) {
+  if (is_shared) {
+    // SHARED: governor + budget + wake + completion. Only allocated here, so
+    // non-shared mode pays for none of it.
+    if (worker_count > 1) {
       AssertAlways(worker_count <= max_worker_count);
+
+      pool->main_semaphore = semaphore_alloc(0, 1, str8_zero());
 
       // ONE NAMED cross-process semaphore. CreateSemaphoreW on an existing name
       // returns the existing object (first process inits with this count; later
@@ -178,7 +249,7 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
       // now (best-effort), so multiple processes can run barrier passes
       // concurrently and none can deadlock waiting to amass the machine.
       String8 budget_name = push_str8f(scratch.arena, "%S.budget", name);
-      pool->budget_semaphore       = semaphore_alloc(max_worker_count, max_worker_count, budget_name);
+      pool->budget_semaphore    = semaphore_alloc(max_worker_count, max_worker_count, budget_name);
 
       // local wake/governor signalling. governor_semaphore is a 0/1 "at least one
       // pending pass" flag: main pings it with semaphore_drop_if_room (a redundant
@@ -186,11 +257,6 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
       // signal will make the governor re-evaluate the current pass_active anyway).
       pool->wake_semaphore      = semaphore_alloc(0, worker_count, str8_zero());
       pool->governor_semaphore  = semaphore_alloc(0, 1, str8_zero());
-    } else {
-      // Non-shared mode: EXACTLY as before. 2x headroom on the wake semaphore so
-      // a batched ReleaseSemaphore(drop_count) never overflows the max while up
-      // to worker_count-1 previously-woken workers have not yet re-taken a permit.
-      pool->task_semaphore = semaphore_alloc(0, 2 * worker_count, str8_zero());
     }
   }
 
@@ -245,26 +311,23 @@ tp_release(TP_Context *pool)
       semaphore_release(pool->budget_semaphore);
       semaphore_release(pool->wake_semaphore);
       semaphore_release(pool->governor_semaphore);
+      semaphore_release(pool->main_semaphore);
     }
   } else {
-    for EachIndex(i, pool->worker_count) {
-      semaphore_drop(pool->task_semaphore);
-    }
+    // NON-SHARED: upstream verbatim. Workers are parked on the barrier; flipping
+    // is_live and waking the barrier lets each observe !is_live and exit.
     for (U64 i = 1; i < pool->worker_count; i += 1) {
       thread_detach(pool->worker_arr[i].handle);
-    }
-    if (pool->worker_count > 1) {
-      semaphore_release(pool->task_semaphore);
     }
   }
 
   barrier_release(pool->barrier);
-  if (pool->worker_count > 1) {
-    semaphore_release(pool->main_semaphore);
-  }
 
   MemoryZeroStruct(pool);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//~ Arenas / temps -- shared by both modes (unchanged).
 
 internal TP_Arena *
 tp_arena_alloc(TP_Context *pool)
@@ -328,24 +391,9 @@ tp_temp_end(TP_Temp temp)
   ProfEnd();
 }
 
-internal void
-tp_for_parallel_init_state(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskFunc *task_func, void *task_data)
-{
-  pool->task_arena = task_arena;
-  pool->task_func  = task_func;
-  pool->task_data  = task_data;
-  pool->task_count = task_count;
-  pool->task_done  = 0;
-  ins_atomic_u64_eval_assign(&pool->task_left, task_count);
-}
+////////////////////////////////////////////////////////////////////////////////
+//~ Dispatch (dual).
 
-//
-// PATH A: barrier-free dispatch (the common case). Pure work-stealing via the
-// atomic task_left decrement in tp_run_tasks. Main (worker 0) ALWAYS runs and
-// never consumes a global budget slot -> per-process forward-progress guarantee.
-// The governor opportunistically borrows budget slots and wakes local parked
-// workers; each woken worker returns its slot when it drains.
-//
 internal void
 tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskFunc *task_func, void *task_data)
 {
@@ -353,54 +401,74 @@ tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskF
     return;
   }
 
-  tp_for_parallel_init_state(pool, task_arena, task_count, task_func, task_data);
+  if (!pool->is_shared) {
+    //
+    // NON-SHARED: UPSTREAM verbatim. Init state, then join the barrier as worker
+    // 0; the already-parked workers (looping in tp_run_tasks) rendezvous at the
+    // entry barrier, steal tasks, and rendezvous again at the exit barrier. No
+    // semaphores, no governor.
+    //
+    pool->task_arena = task_arena;
+    pool->task_func  = task_func;
+    pool->task_data  = task_data;
+    pool->task_count = task_count;
+    pool->task_done  = 0;
+    pool->task_left  = task_count;
 
-  if (pool->worker_count == 1) {
-    // no workers: main runs everything inline
+    // run tasks on main worker
     tp_run_tasks(pool, &pool->worker_arr[0]);
     return;
   }
 
-  if (pool->is_shared) {
-    // announce a path-A pass and let the governor recruit workers as budget frees
-    pool->barrier_pass = 0;
-    ins_atomic_u32_eval_assign(&pool->pass_active, 1);
-    semaphore_drop_if_room(pool->governor_semaphore);
+  //
+  // SHARED: OUR governor dispatch.
+  //
+  tp_for_parallel_init_state(pool, task_arena, task_count, task_func, task_data);
 
-    // main always runs (no slot consumed)
-    tp_run_tasks(pool, &pool->worker_arr[0]);
+  if (pool->worker_count == 1) {
+    // no workers: main runs everything inline
+    tp_run_tasks_shared(pool, &pool->worker_arr[0]);
+    return;
+  }
 
-    // all tasks done (last finisher pinged main_semaphore)
-    semaphore_take(pool->main_semaphore, max_U64);
+  // PATH A: barrier-free dispatch (the common case). Pure work-stealing via the
+  // atomic task_left decrement in tp_run_tasks_shared. Main (worker 0) ALWAYS
+  // runs and never consumes a global budget slot -> per-process forward-progress
+  // guarantee. The governor opportunistically borrows budget slots and wakes
+  // local parked workers; each woken worker returns its slot when it drains.
 
-    // End the pass so the governor stops issuing new grants.
-    ins_atomic_u32_eval_assign(&pool->pass_active, 0);
+  // announce a path-A pass and let the governor recruit workers as budget frees
+  pool->barrier_pass = 0;
+  ins_atomic_u32_eval_assign(&pool->pass_active, 1);
+  semaphore_drop_if_room(pool->governor_semaphore);
 
-    // CRITICAL: before returning we must guarantee that no woken worker is still
-    // inside tp_run_tasks. Otherwise the next pass's init_state (which resets
-    // task_left/task_done) would race a straggler still looping on this pass and
-    // corrupt the counters / lose the completion ping -> deadlock.
-    //
-    // Every governor grant is paired with exactly one wake permit and one worker
-    // that, on draining, does `granted--; drop(budget)`. Even grants issued in the
-    // tiny window before pass_active was cleared have a pending wake permit that a
-    // worker will consume, drain immediately (task_left<0), and account for. So
-    // `granted` monotonically drains to 0 once the governor has stopped; spin
-    // until it does. This is brief (workers see task_left<0 and exit at once).
-    for (; ins_atomic_u64_eval((U64 *)&pool->granted) != 0; ) {
-      sleep_ms(0);
-    }
-  } else {
-    // non-shared: EXACTLY as before -- batched wake of drop_count workers.
-    U64 drop_count = Min(task_count, pool->worker_count);
-    semaphore_drop_n(pool->task_semaphore, (U32)drop_count);
-    tp_run_tasks(pool, &pool->worker_arr[0]);
-    semaphore_take(pool->main_semaphore, max_U64);
+  // main always runs (no slot consumed)
+  tp_run_tasks_shared(pool, &pool->worker_arr[0]);
+
+  // all tasks done (last finisher pinged main_semaphore)
+  semaphore_take(pool->main_semaphore, max_U64);
+
+  // End the pass so the governor stops issuing new grants.
+  ins_atomic_u32_eval_assign(&pool->pass_active, 0);
+
+  // CRITICAL: before returning we must guarantee that no woken worker is still
+  // inside tp_run_tasks_shared. Otherwise the next pass's init_state (which resets
+  // task_left/task_done) would race a straggler still looping on this pass and
+  // corrupt the counters / lose the completion ping -> deadlock.
+  //
+  // Every governor grant is paired with exactly one wake permit and one worker
+  // that, on draining, does `granted--; drop(budget)`. Even grants issued in the
+  // tiny window before pass_active was cleared have a pending wake permit that a
+  // worker will consume, drain immediately (task_left<0), and account for. So
+  // `granted` monotonically drains to 0 once the governor has stopped; spin
+  // until it does. This is brief (workers see task_left<0 and exit at once).
+  for (; ins_atomic_u64_eval((U64 *)&pool->granted) != 0; ) {
+    sleep_ms(0);
   }
 }
 
-//
-// FAIR-SHARE barrier-pass cohort bracket.
+////////////////////////////////////////////////////////////////////////////////
+//~ FAIR-SHARE barrier-pass cohort bracket (SHARED path B; no-op in non-shared).
 //
 // A barrier pass (path B) runs at the cohort this process currently holds, NOT
 // the full machine. tp_barrier_begin grabs whatever budget slots are FREE RIGHT
@@ -421,9 +489,9 @@ tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskF
 // no starvation, no deadlock, no barrier-lock. Output is width-independent
 // (proven: w1 == w64), so a cohort-C pass is byte-identical to a full-width pass.
 //
-// Re-entrant: a caller that pre-distributes work by tp->worker_count must open
-// the bracket itself (so its setup sees C); nested tp_barrier_begin calls just
-// return the already-pinned C and tp_for_parallel_reserve will not re-open/close.
+// In NON-SHARED mode tp_barrier_begin/end are no-ops (return pool->worker_count /
+// early-out) and tp_for_parallel_reserve degrades to the plain upstream
+// full-width barrier pass via tp_for_parallel.
 //
 internal U32
 tp_barrier_begin(TP_Context *pool)
@@ -495,6 +563,9 @@ tp_barrier_end(TP_Context *pool)
 // runs, and closes it. The passed task_count is ignored for sizing -- the pass
 // always runs exactly pool->worker_count tasks (== cohort).
 //
+// In NON-SHARED mode this degrades to the plain upstream full-width barrier pass
+// (tp_for_parallel), so non-shared barrier passes behave exactly as upstream.
+//
 internal void
 tp_for_parallel_reserve(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskFunc *task_func, void *task_data)
 {
@@ -503,7 +574,8 @@ tp_for_parallel_reserve(TP_Context *pool, TP_Arena *task_arena, U64 task_count, 
   }
 
   if (!pool->is_shared || pool->worker_count == 1) {
-    // non-shared (or single worker): identical to the plain dispatch
+    // non-shared (or single worker): identical to the plain dispatch (upstream
+    // full-width barrier pass in non-shared mode)
     tp_for_parallel(pool, task_arena, task_count, task_func, task_data);
     return;
   }
@@ -520,7 +592,7 @@ tp_for_parallel_reserve(TP_Context *pool, TP_Arena *task_arena, U64 task_count, 
   if (cohort == 1) {
     // machine fully busy: run serially on main (byte-identical -- width independent)
     tp_for_parallel_init_state(pool, task_arena, cohort, task_func, task_data);
-    tp_run_tasks(pool, &pool->worker_arr[0]);
+    tp_run_tasks_shared(pool, &pool->worker_arr[0]);
   } else {
     tp_for_parallel_init_state(pool, task_arena, cohort, task_func, task_data);
 
@@ -530,7 +602,7 @@ tp_for_parallel_reserve(TP_Context *pool, TP_Arena *task_arena, U64 task_count, 
     semaphore_drop_n(pool->wake_semaphore, cohort - 1);
 
     // main is the cohort-th participant (lane 0)
-    tp_run_tasks(pool, &pool->worker_arr[0]);
+    tp_run_tasks_shared(pool, &pool->worker_arr[0]);
 
     // wait for the cohort to finish
     semaphore_take(pool->main_semaphore, max_U64);
@@ -541,13 +613,16 @@ tp_for_parallel_reserve(TP_Context *pool, TP_Arena *task_arena, U64 task_count, 
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//~ Helpers -- shared by both modes (unchanged).
+
 internal Rng1U64 *
 tp_divide_work(Arena *arena, U64 item_count, U32 worker_count)
 {
   U64      per_count = CeilIntegerDiv(item_count, worker_count);
   Rng1U64 *range_arr = push_array_no_zero(arena, Rng1U64, worker_count + 1);
   for (U64 i = 0; i < worker_count; i += 1) {
-    range_arr[i] = rng_1u64(Min(item_count, i * per_count), 
+    range_arr[i] = rng_1u64(Min(item_count, i * per_count),
                             Min(item_count, i * per_count + per_count));
   }
 
@@ -587,4 +662,3 @@ tp_sum_u64(TP_Context *tp, U64 task_id, U64 v)
   barrier_wait(tp->barrier);
   return result;
 }
-
