@@ -2903,9 +2903,15 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
 {
   ProfBegin("/OPT:REF");
   Temp scratch = scratch_begin(0,0);
-  U32Array *obj_indices = lnk_obj_indices_from_section_counts(scratch.arena, tp->worker_count, objs, objs_count);
+  // BARRIER pass (path B): the task synchronizes with barrier_wait(tp->barrier)/tp_broadcast,
+  // so under /RAD_SHARED_THREAD_POOL it must run at a pinned cohort via the reserve path --
+  // a plain tp_for_parallel admits workers incrementally and the barrier never fills (deadlock).
+  // Pin the cohort BEFORE sizing the per-lane obj distribution so both agree on the width.
+  U32 C = tp_barrier_begin(tp);
+  U32Array *obj_indices = lnk_obj_indices_from_section_counts(scratch.arena, C, objs, objs_count);
   LNK_OptTask task = { .symtab = symtab, .config = config, .objs = objs, .objs_count = objs_count, .obj_indices = obj_indices };
-  tp_for_parallel(tp, 0, tp->worker_count, lnk_opt_ref_task, &task);
+  tp_for_parallel_reserve(tp, 0, C, lnk_opt_ref_task, &task); // BARRIER pass (path B)
+  tp_barrier_end(tp);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -3788,9 +3794,16 @@ lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
   Temp scratch = scratch_begin(0,0);
   
   lnk_log(LNK_Log_Debug, "/OPT:ICF:");
-  U32Array *obj_indices = lnk_obj_indices_from_section_counts(scratch.arena, tp->worker_count, objs, objs_count);
+
+  // BARRIER pass (path B): the task synchronizes with barrier_wait(tp->barrier)/tp_broadcast,
+  // so under /RAD_SHARED_THREAD_POOL it must run at a pinned cohort via the reserve path --
+  // a plain tp_for_parallel admits workers incrementally and the barrier never fills (deadlock).
+  // Pin the cohort BEFORE sizing the per-lane obj distribution so both agree on the width.
+  U32 C = tp_barrier_begin(tp);
+  U32Array *obj_indices = lnk_obj_indices_from_section_counts(scratch.arena, C, objs, objs_count);
   LNK_OptTask task = { .symtab = symtab, .config = config, .objs = objs, .objs_count = objs_count, .obj_indices = obj_indices };
-  tp_for_parallel(tp, 0, tp->worker_count, lnk_opt_icf_task, &task);
+  tp_for_parallel_reserve(tp, 0, C, lnk_opt_icf_task, &task); // BARRIER pass (path B)
+  tp_barrier_end(tp);
 
   scratch_end(scratch);
   ProfEnd();
@@ -5637,10 +5650,18 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     ProfScope("Gather Sections")
     {
       TP_Temp temp = tp_temp_begin(arena);
+      // BARRIER pass (path B): the task synchronizes with barrier_wait(tp->barrier), so under
+      // /RAD_SHARED_THREAD_POOL it must run at a pinned cohort via the reserve path -- a plain
+      // tp_for_parallel admits workers incrementally and the barrier never fills (deadlock).
+      // Pin the cohort BEFORE sizing the per-lane ranges/defns so everything agrees on the width.
+      U32 C = tp_barrier_begin(tp);
       task.u.gather_sects.arena  = arena->v[0];
-      task.u.gather_sects.ranges = tp_divide_work(arena->v[0], objs_count, tp->worker_count);
-      task.u.gather_sects.defns  = push_array(arena->v[0], HashTable *, tp->worker_count);
-      tp_for_parallel_prof(tp, arena, tp->worker_count, lnk_gather_sections_task, &task, "Gather Sections");
+      task.u.gather_sects.ranges = tp_divide_work(arena->v[0], objs_count, C);
+      task.u.gather_sects.defns  = push_array(arena->v[0], HashTable *, C);
+      ProfBegin("Gather Sections");
+      tp_for_parallel_reserve(tp, arena, C, lnk_gather_sections_task, &task); // BARRIER pass (path B)
+      ProfEnd();
+      tp_barrier_end(tp);
       tp_temp_end(temp);
     }
 
@@ -6636,7 +6657,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       ProfBegin("Decommit Scratch");
       // task_count == worker_count + the in-worker barrier => every worker
       // (worker 0 IS the main thread) runs exactly once, covering main's scratch.
-      tp_for_parallel(tp, 0, tp->worker_count, lnk_scratch_decommit_worker, 0);
+      tp_for_parallel_reserve(tp, 0, tp->worker_count, lnk_scratch_decommit_worker, 0); // BARRIER pass (path B)
       ProfEnd();
     }
 
@@ -6671,7 +6692,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
         lnk_timer_begin(LNK_Timer_Rdi);
 
         LNK_P2R p2r = { .config = config, .pdb_data = lnk_data_from_file_artifact(lnk_get_huge_arena(), &pdb_artifact), .image_data = image_ctx.image_data };
-        tp_for_parallel(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r);
+        tp_for_parallel_reserve(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r); // BARRIER pass (path B)
 
         String8List rdi_blobs = rdim_file_blobs_from_section_bundle(scratch.arena, &p2r.bake_results.section_bundle);
         lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_blobs);
@@ -6953,7 +6974,7 @@ lnk_run_type_server(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   ProfScope("Pack Type Data & Data Ranges")
   {
     LNK_RRTTypeDataSerializer task = { &cv_types, &rrt.type_data_raw, rrt.type_data_ranges };
-    tp_for_parallel(tp, arena, tp->worker_count, lnk_serialize_rrt_type_data_task, &task);
+    tp_for_parallel_reserve(tp, arena, tp->worker_count, lnk_serialize_rrt_type_data_task, &task); // BARRIER pass (path B)
 
     // pack type index ranges
     for EachIndex(i, CV_TypeIndexSource_COUNT) {

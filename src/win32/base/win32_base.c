@@ -698,6 +698,55 @@ semaphore_drop_count(Semaphore semaphore, U64 drop_count)
   ReleaseSemaphore((HANDLE)*semaphore.u64, drop_count, 0);
 }
 
+// Best-effort post: succeed if there is room, silently no-op if the count is
+// already at max (ERROR_TOO_MANY_POSTS). Use ONLY for "at least one pending
+// signal" wakeups (e.g. the governor ping) where redundant posts are harmless.
+// Any OTHER failure is still a hard error.
+internal void
+semaphore_drop_if_room(Semaphore semaphore)
+{
+  HANDLE handle = (HANDLE)semaphore.u64[0];
+  BOOL ok = ReleaseSemaphore(handle, 1, 0);
+  if (!ok) {
+    DWORD err = GetLastError();
+    AssertAlways(err == ERROR_TOO_MANY_POSTS);
+  }
+}
+
+internal void
+semaphore_drop_n(Semaphore semaphore, U32 count)
+{
+  if (count > 0) {
+    HANDLE handle = (HANDLE)semaphore.u64[0];
+    BOOL ok = ReleaseSemaphore(handle, count, 0);
+    if (!ok) {
+      // The non-shared thread pool intentionally batches a wake of up to
+      // worker_count permits onto a semaphore that may still hold un-retaken
+      // permits from a prior pass; the surplus clamps at the max and the OS
+      // returns ERROR_TOO_MANY_POSTS. That is a benign over-wake (workers are
+      // already runnable), so tolerate it -- but ONLY it. Any other failure
+      // (e.g. a bad handle) is a real bug and must not be swallowed.
+      DWORD err = GetLastError();
+      AssertAlways(err == ERROR_TOO_MANY_POSTS);
+    }
+  }
+}
+
+internal B32
+semaphore_take_n(Semaphore semaphore, U32 count, U64 endt_us)
+{
+  // Blocking acquire of `count` permits, one at a time. Off the hot path only:
+  // used by the shared thread-pool barrier-reserve path to gather budget slots.
+  for (U32 i = 0; i < count; i += 1) {
+    if (!semaphore_take(semaphore, endt_us)) {
+      // partial failure: give back what we took so we don't leak permits
+      semaphore_drop_n(semaphore, i);
+      return 0;
+    }
+  }
+  return 1;
+}
+
 //- rjf: barriers
 
 internal Barrier

@@ -4181,6 +4181,23 @@ lnk_gc_types(TP_Context *tp, Arena *arena, LNK_CodeViewInput *cv, LNK_MergedType
   ProfEnd();
 }
 
+// FAIR-SHARE: round-robin cv->obj_count objs across `worker_count` lane buckets.
+// Rebuilt per barrier pass so the distribution matches the cohort C that pass
+// runs at (lnk_move_global_symbols_to_gsi / lnk_write_pdb_modules read
+// task->obj_indices[task_id] for lanes [0,C)). Output is width-independent, so any
+// C produces byte-identical PDB bytes; only the per-lane partitioning changes.
+internal void
+lnk_build_pdb_distribute_obj_indices(Arena *arena, LNK_BuildPdb *task, U64 obj_count, U32 worker_count)
+{
+  U64 objs_per_worker = CeilIntegerDiv(obj_count, worker_count);
+  task->obj_indices = push_array(arena, U32Array, worker_count);
+  for EachIndex(i, worker_count)  { task->obj_indices[i].v = push_array(arena, U32, objs_per_worker ? objs_per_worker : 1); }
+  for EachIndex(obj_idx, obj_count) {
+    U32Array *obj_indices = &task->obj_indices[obj_idx % worker_count];
+    obj_indices->v[obj_indices->count++] = (U32)obj_idx;
+  }
+}
+
 internal LNK_FileArtifact
 lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags)
 {
@@ -4227,16 +4244,13 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   // set min type indices
   for EachElement(ti_source, cv_types.min_type_indices) { task.pdb->type_servers[ti_source]->ti_lo = cv_types.min_type_indices[ti_source]; }
 
-  // per worker obj indices
-  {
-    U64 objs_per_worker = CeilIntegerDiv(cv->obj_count, tp->worker_count);
-    task.obj_indices = push_array(scratch.arena, U32Array, tp->worker_count);
-    for EachIndex(i, tp->worker_count)    { task.obj_indices[i].v = push_array(scratch.arena, U32, objs_per_worker); }
-    for EachIndex(obj_idx, cv->obj_count) {
-      U32Array *obj_indices = &task.obj_indices[obj_idx % tp->worker_count];
-      obj_indices->v[obj_indices->count++] = obj_idx;
-    }
-  }
+  // per-worker obj indices are (re)distributed per barrier pass to the cohort
+  // that pass actually runs at (FAIR-SHARE: tp->worker_count is pinned to the
+  // cohort C inside each tp_barrier_begin/end bracket, and the lnk_move_global_
+  // symbols_to_gsi / lnk_write_pdb_modules tasks read task.obj_indices[task_id]
+  // for lanes [0,C)). Distributing to the full worker_count up front would leave
+  // objs in buckets [C,worker_count) unprocessed when C<worker_count. See the
+  // lnk_build_pdb_distribute_obj_indices helper.
 
   // push types
   if (builder_flags & LNK_PDB_BuilderFlag_Ipi) {
@@ -4263,14 +4277,29 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
         task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
       }
 
-    ProfScope("Write Modules")       tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
+    ProfScope("Write Modules")
+    {
+      // FAIR-SHARE: pin the cohort, distribute objs over exactly the cohort lanes,
+      // then run the barrier pass at that cohort. tp_barrier_begin sets
+      // tp->worker_count := C for the bracket.
+      U32 C = tp_barrier_begin(tp);
+      lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C);
+      tp_for_parallel_reserve(tp, 0, C, lnk_write_pdb_modules, &task); // BARRIER pass (path B): barrier_wait/tp_broadcast
+      tp_barrier_end(tp);
+    }
     if (output_ptr != 0) {
       for EachIndex(obj_idx, cv->obj_count) {
         lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.mod_arr[obj_idx]->sn);
       }
     }
-    ProfScope("Move Global Symbols") tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
-    ProfScope("Build GSI and PSI")   pdb_build_gsi_psi(tp, task.pdb);
+    ProfScope("Move Global Symbols")
+    {
+      U32 C = tp_barrier_begin(tp);
+      lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C);
+      tp_for_parallel_reserve(tp, 0, C, lnk_move_global_symbols_to_gsi, &task); // BARRIER pass (path B): tp_sum_u64/tp_broadcast/barrier_wait
+      tp_barrier_end(tp);
+    }
+    ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
     if (output_ptr != 0) {
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->publics_sn);
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->globals_sn);
