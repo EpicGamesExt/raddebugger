@@ -751,6 +751,35 @@ e2_mask_count_from_type_key(E2_TypeKey k)
   return result;
 }
 
+internal U64
+e2_array_count_from_type_key(E2_TypeKey k)
+{
+  U64 result = 0;
+  if(e2_type_kind_from_key(k) == E2_TypeKind_Array)
+  {
+    switch(k.kind)
+    {
+      case E2_TypeKeyKind_Null:{}break;
+      case E2_TypeKeyKind_Basic:{}break;
+      case E2_TypeKeyKind_DbgInfo:
+      {
+        E2_DbgInfo *dbgi = e2_dbgi_from_type_key(k);
+        U32 dbgi_type_idx = e2_dbgi_type_idx_from_key(k);
+        RDI_TypeNode *type_node = rdi_element_from_name_idx(dbgi->rdi, TypeNodes, dbgi_type_idx);
+        result = type_node->constructed.count;
+      }break;
+      case E2_TypeKeyKind_Cons:
+      {
+        U64 id = e2_cons_type_id_from_key(k);
+        E2_ConsTypeNode *node = e2_cons_type_node_from_id(id);
+        result = node->params.count;
+      }break;
+      case E2_TypeKeyKind_Reg:{}break;
+    }
+  }
+  return result;
+}
+
 internal Arch
 e2_arch_from_type_key(E2_TypeKey k)
 {
@@ -778,6 +807,196 @@ e2_arch_from_type_key(E2_TypeKey k)
     }break;
   }
   return arch;
+}
+
+internal String8
+e2_name_from_type_key(Arena *arena, E2_TypeKey k)
+{
+  String8 result = {0};
+  switch(k.kind)
+  {
+    case E2_TypeKeyKind_Null:{}break;
+    case E2_TypeKeyKind_Basic:
+    {
+      E2_TypeKind kind = e2_type_kind_from_key(k);
+      if(E2_TypeKind_FirstBasic <= kind && kind <= E2_TypeKind_LastBasic)
+      {
+        result = e2_type_kind_basic_string_table[kind];
+      }
+    }break;
+    case E2_TypeKeyKind_DbgInfo:
+    {
+      E2_DbgInfo *dbgi = e2_dbgi_from_type_key(k);
+      U32 type_idx = e2_dbgi_type_idx_from_key(k);
+      RDI_TypeNode *type_node = rdi_element_from_name_idx(dbgi->rdi, TypeNodes, type_idx);
+      result = fully_qualified_str8_from_rdi_type(arena, dbgi->rdi, type_node);
+    }break;
+    case E2_TypeKeyKind_Cons:
+    {
+      U64 id = e2_cons_type_id_from_key(k);
+      E2_ConsTypeNode *node = e2_cons_type_node_from_id(id);
+      result = node->params.name;
+    }break;
+    case E2_TypeKeyKind_Reg:
+    {
+      U64 byte_size = e2_byte_size_from_type_key(k);
+      result = str8f(arena, "register_%I64u", byte_size*8);
+    }break;
+  }
+  return result;
+}
+
+//- rjf: type key -> string
+
+internal String8
+e2_string_from_type_key(Arena *arena, E2_TypeKey key)
+{
+  String8 result = {0};
+  {
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      E2_TypeKey key;
+      U32 prec;
+      B32 did_direct;
+    };
+    Task start_task = {0, key};
+    Task *top_task = &start_task;
+    Task *free_task = 0;
+    Temp scratch = scratch_begin(&arena, 1);
+    String8List lhs = {0};
+    String8List rhs = {0};
+    for(;top_task != 0;)
+    {
+      //- rjf: unpack type
+      E2_TypeKey key = top_task->key;
+      E2_TypeKind kind = e2_type_kind_from_key(key);
+      E2_TypeKey direct = e2_type_key_direct(key);
+      String8 name = e2_name_from_type_key(scratch.arena, key);
+      U64 prec = top_task->prec;
+      B32 did_direct = top_task->did_direct;
+      
+      //- rjf: push string for this task
+      U32 next_prec = 0;
+      switch(kind)
+      {
+        default:
+        {
+          String8 keyword = {0};
+          if(E2_TypeKind_FirstIncomplete <= kind && kind <= E2_TypeKind_LastIncomplete)
+          {
+            switch(kind)
+            {
+              default:{}break;
+              case E2_TypeKind_IncompleteStruct:{keyword = s("struct");}break;
+              case E2_TypeKind_IncompleteUnion: {keyword = s("union");}break;
+              case E2_TypeKind_IncompleteClass: {keyword = s("class");}break;
+              case E2_TypeKind_IncompleteEnum:  {keyword = s("enum");}break;
+            }
+          }
+          if(keyword.size != 0)
+          {
+            str8_list_pushf(scratch.arena, &lhs, "%S ", keyword);
+          }
+          str8_list_push(scratch.arena, &lhs, name);
+        }break;
+        case E2_TypeKind_Ptr:
+        if(!did_direct)
+        {
+          next_prec = 1;
+        }
+        else if(did_direct)
+        {
+          str8_list_push(scratch.arena, &lhs, s("*"));
+        }break;
+        case E2_TypeKind_LRef:
+        if(did_direct)
+        {
+          str8_list_push(scratch.arena, &lhs, s("&"));
+        }break;
+        case E2_TypeKind_RRef:
+        if(did_direct)
+        {
+          str8_list_push(scratch.arena, &lhs, s("&&"));
+        }break;
+        case E2_TypeKind_Array:
+        if(!did_direct)
+        {
+          next_prec = 2;
+        }
+        else
+        {
+          U64 count = e2_array_count_from_type_key(key);
+          if(prec == 1)
+          {
+            str8_list_push(scratch.arena, &lhs, s("("));
+            str8_list_push(scratch.arena, &rhs, s(")"));
+          }
+          str8_list_pushf(scratch.arena, &rhs, "[%I64u]", count);
+        }break;
+        case E2_TypeKind_Function:
+        if(!did_direct)
+        {
+          next_prec = 2;
+        }
+        else
+        {
+          U64 count = e2_array_count_from_type_key(key);
+          if(prec == 1)
+          {
+            str8_list_push(scratch.arena, &lhs, s("("));
+            str8_list_push(scratch.arena, &rhs, s(")"));
+          }
+          // TODO(rjf): params here
+          str8_list_pushf(scratch.arena, &rhs, "(...)");
+        }break;
+        case E2_TypeKind_Bitfield:
+        if(did_direct)
+        {
+          U64 mask_count = e2_mask_count_from_type_key(key);
+          str8_list_pushf(scratch.arena, &rhs, ": %I64u", mask_count);
+        }break;
+        case E2_TypeKind_Variadic:
+        {
+          str8_list_push(scratch.arena, &lhs, s("..."));
+        }break;
+      }
+      
+      //- rjf: did direct, or we don't have a direct key? -> we're done with this type, pop
+      if(did_direct || e2_type_key_match(direct, e2_type_key_zero()))
+      {
+        Task *popped = top_task;
+        SLLStackPop(top_task);
+        SLLStackPush(free_task, popped);
+      }
+      
+      //- rjf: didn't do direct? -> push new task for direct type
+      else
+      {
+        top_task->did_direct = 1;
+        Task *t = free_task;
+        if(t != 0)
+        {
+          SLLStackPop(free_task);
+        }
+        else
+        {
+          t = push_array_no_zero(scratch.arena, Task, 1);
+        }
+        MemoryZeroStruct(t);
+        SLLStackPush(top_task, t);
+        t->key = direct;
+        t->prec = next_prec;
+      }
+    }
+    String8List parts = {0};
+    str8_list_concat_in_place(&parts, &lhs);
+    str8_list_concat_in_place(&parts, &rhs);
+    result = str8_list_join(arena, &parts, 0);
+    scratch_end(scratch);
+  }
+  return result;
 }
 
 //- rjf: type deep matches

@@ -611,7 +611,12 @@ internal U32 e2_dbgi_type_idx_from_key(E2_TypeKey k);
 internal U64 e2_cons_type_id_from_key(E2_TypeKey k);
 internal U64 e2_shift_from_type_key(E2_TypeKey k);
 internal U64 e2_mask_count_from_type_key(E2_TypeKey k);
+internal U64 e2_array_count_from_type_key(E2_TypeKey k);
 internal Arch e2_arch_from_type_key(E2_TypeKey k);
+internal String8 e2_name_from_type_key(Arena *arena, E2_TypeKey k);
+
+//- rjf: type key -> string
+internal String8 e2_string_from_type_key(Arena *arena, E2_TypeKey key);
 
 //- rjf: type deep matches
 internal B32 e2_type_deep_match(E2_TypeKey l, E2_TypeKey r);
