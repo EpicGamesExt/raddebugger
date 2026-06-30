@@ -4,18 +4,22 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-B8 e2_expr_kind_allow_type_operands_table[44] =
+B8 e2_expr_kind_allow_type_operands_table[48] =
 {
 0,
 0,
 0,
 0,
-1,
-1,
-1,
 0,
 0,
 0,
+1,
+1,
+1,
+1,
+1,
+1,
+1,
 1,
 0,
 0,
@@ -52,18 +56,22 @@ B8 e2_expr_kind_allow_type_operands_table[44] =
 1,
 };
 
-B8 e2_expr_kind_is_type_expr_table[44] =
+B8 e2_expr_kind_is_type_expr_table[48] =
 {
 0,
 0,
 0,
 1,
-1,
-1,
-1,
 0,
 0,
 0,
+1,
+1,
+1,
+1,
+1,
+1,
+1,
 0,
 0,
 0,
@@ -100,18 +108,22 @@ B8 e2_expr_kind_is_type_expr_table[44] =
 0,
 };
 
-B8 e2_expr_kind_is_first_operand_type_maybe_table[44] =
+B8 e2_expr_kind_is_first_operand_type_maybe_table[48] =
 {
 0,
 0,
 0,
 0,
-1,
-1,
-1,
 0,
 0,
 0,
+1,
+1,
+1,
+1,
+1,
+1,
+1,
 0,
 0,
 0,
@@ -148,8 +160,11 @@ B8 e2_expr_kind_is_first_operand_type_maybe_table[44] =
 0,
 };
 
-U64 e2_expr_kind_target_operand_count_table[44] =
+U64 e2_expr_kind_target_operand_count_table[48] =
 {
+0,
+0,
+0,
 0,
 0,
 0,
@@ -157,9 +172,10 @@ U64 e2_expr_kind_target_operand_count_table[44] =
 1,
 2,
 0xffffffffffffffffull,
-0,
-0,
-0,
+1,
+1,
+1,
+1,
 1,
 2,
 0xffffffffffffffffull,
@@ -201,13 +217,17 @@ E2_LangInfo e2_lang_kind_info_table[1] =
 {ArrayCount(e2_expr_kind_parse_info_table__clike), (e2_expr_kind_parse_info_table__clike)},
 };
 
-E2_ExprKindParseInfo e2_expr_kind_parse_info_table__clike[39] =
+E2_ExprKindParseInfo e2_expr_kind_parse_info_table__clike[43] =
 {
 {E2_ExprKind_Dot, E2_ExprParseKind_Postfix, 1, 0, str8_lit_comp(""), str8_lit_comp("."), str8_lit_comp(""), str8_lit_comp("")},
 {E2_ExprKind_Index, E2_ExprParseKind_Postfix, 1, 0, str8_lit_comp(""), str8_lit_comp("["), str8_lit_comp("]"), str8_lit_comp("")},
 {E2_ExprKind_Call, E2_ExprParseKind_Postfix, 1, 0, str8_lit_comp(""), str8_lit_comp("("), str8_lit_comp(")"), str8_lit_comp(",")},
 {E2_ExprKind_Function, E2_ExprParseKind_Postfix, 1, 0, str8_lit_comp(""), str8_lit_comp("("), str8_lit_comp(")"), str8_lit_comp(",")},
 {E2_ExprKind_DerefAsm, E2_ExprParseKind_Prefix, 1, 0, str8_lit_comp("["), str8_lit_comp(""), str8_lit_comp("]"), str8_lit_comp("")},
+{E2_ExprKind_Unsigned, E2_ExprParseKind_Prefix, 1, 0, str8_lit_comp("unsigned "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("")},
+{E2_ExprKind_Signed, E2_ExprParseKind_Prefix, 1, 0, str8_lit_comp("signed "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("")},
+{E2_ExprKind_Volatile, E2_ExprParseKind_Prefix, 1, 0, str8_lit_comp("volatile "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("")},
+{E2_ExprKind_Const, E2_ExprParseKind_Prefix, 1, 0, str8_lit_comp("const "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("")},
 {E2_ExprKind_SizeOf, E2_ExprParseKind_Prefix, 1, 0, str8_lit_comp("sizeof "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("")},
 {E2_ExprKind_TypeOf, E2_ExprParseKind_Prefix, 1, 0, str8_lit_comp("typeof "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("")},
 {E2_ExprKind_SizeOf, E2_ExprParseKind_Prefix, 1, 0, str8_lit_comp("size_of "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("")},

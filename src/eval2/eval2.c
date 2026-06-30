@@ -2486,6 +2486,64 @@ e2_compile_from_expr(Arena *arena, E2_CompileState *state, E2_IRNode *resolve_re
               scratch_end(scratch);
             }break;
             
+            //- rjf: const type operator
+            case E2_ExprKind_Const:
+            {
+              E2_TypeKey const_type_key = e2_type_key_cons(E2_TypeKind_Modifier, .flags = E2_TypeFlag_Const, .direct = lhs->type_key);
+              finished_root = e2_irnode(arena);
+              finished_root->type_key = const_type_key;
+            }break;
+            
+            //- rjf: volatile type operator
+            case E2_ExprKind_Volatile:
+            {
+              E2_TypeKey volatile_type_key = e2_type_key_cons(E2_TypeKind_Modifier, .flags = E2_TypeFlag_Volatile, .direct = lhs->type_key);
+              finished_root = e2_irnode(arena);
+              finished_root->type_key = volatile_type_key;
+            }break;
+            
+            //- rjf: unsigned type operator
+            case E2_ExprKind_Unsigned:
+            {
+              E2_TypeKey unsigned_type_key = lhs->type_key;
+              E2_TypeKey int_type_key = e2_type_key_undecorate(lhs->type_key);
+              E2_TypeKind int_type_kind = e2_type_kind_from_key(int_type_key);
+              switch(int_type_kind)
+              {
+                default:{}break;
+                case E2_TypeKind_S8:  {unsigned_type_key = e2_type_key_basic(E2_TypeKind_U8);}break;
+                case E2_TypeKind_S16: {unsigned_type_key = e2_type_key_basic(E2_TypeKind_U16);}break;
+                case E2_TypeKind_S32: {unsigned_type_key = e2_type_key_basic(E2_TypeKind_U32);}break;
+                case E2_TypeKind_S64: {unsigned_type_key = e2_type_key_basic(E2_TypeKind_U64);}break;
+                case E2_TypeKind_S128:{unsigned_type_key = e2_type_key_basic(E2_TypeKind_U128);}break;
+                case E2_TypeKind_S256:{unsigned_type_key = e2_type_key_basic(E2_TypeKind_U256);}break;
+                case E2_TypeKind_S512:{unsigned_type_key = e2_type_key_basic(E2_TypeKind_U512);}break;
+              }
+              finished_root = e2_irnode(arena);
+              finished_root->type_key = unsigned_type_key;
+            }break;
+            
+            //- rjf: signed type operator
+            case E2_ExprKind_Signed:
+            {
+              E2_TypeKey signed_type_key = lhs->type_key;
+              E2_TypeKey int_type_key = e2_type_key_undecorate(lhs->type_key);
+              E2_TypeKind int_type_kind = e2_type_kind_from_key(int_type_key);
+              switch(int_type_kind)
+              {
+                default:{}break;
+                case E2_TypeKind_U8:  {signed_type_key = e2_type_key_basic(E2_TypeKind_S8);}break;
+                case E2_TypeKind_U16: {signed_type_key = e2_type_key_basic(E2_TypeKind_S16);}break;
+                case E2_TypeKind_U32: {signed_type_key = e2_type_key_basic(E2_TypeKind_S32);}break;
+                case E2_TypeKind_U64: {signed_type_key = e2_type_key_basic(E2_TypeKind_S64);}break;
+                case E2_TypeKind_U128:{signed_type_key = e2_type_key_basic(E2_TypeKind_S128);}break;
+                case E2_TypeKind_U256:{signed_type_key = e2_type_key_basic(E2_TypeKind_S256);}break;
+                case E2_TypeKind_U512:{signed_type_key = e2_type_key_basic(E2_TypeKind_S512);}break;
+              }
+              finished_root = e2_irnode(arena);
+              finished_root->type_key = signed_type_key;
+            }break;
+            
             //- rjf: leaf numerics
             case E2_ExprKind_Numeric:
             {

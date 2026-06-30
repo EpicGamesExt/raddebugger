@@ -4,15 +4,24 @@
 @table(name  allow_type_operands  is_type_expression  is_first_operand_type_maybe  target_operand_count)
 E2_ExprKindTable:
 {
+  //- rjf: leaves
   {Identifier                0   0   0   0                    }
   {MacroArg                  0   0   0   0                    }
   {TypeIdentifier            0   1   0   0                    }
-  {Ptr                       1   1   1   1                    }
-  {Array                     1   1   1   2                    }
-  {Function                  1   1   1   0xffffffffffffffffull}
   {Numeric                   0   0   0   0                    }
   {StringLiteral             0   0   0   0                    }
   {CharLiteral               0   0   0   0                    }
+  
+  //- rjf: type operators
+  {Ptr                       1   1   1   1                    }
+  {Array                     1   1   1   2                    }
+  {Function                  1   1   1   0xffffffffffffffffull}
+  {Const                     1   1   1   1                    }
+  {Volatile                  1   1   1   1                    }
+  {Unsigned                  1   1   1   1                    }
+  {Signed                    1   1   1   1                    }
+  
+  //- rjf: operators
   {Dot                       1   0   0   1                    }
   {Index                     0   0   0   2                    }
   {Call                      0   0   0   0xffffffffffffffffull}
@@ -117,45 +126,49 @@ E2_LangKindTable:
 @table(name parse_kind precedence pre sep pos chain reverse_children)
 E2_ExprKindParseInfoTable_CLike:
 {
-  {Dot            Postfix                 1 ""         "."  ""  ""   0}
-  {Index          Postfix                 1 ""         "["  "]" ""   0}
-  {Call           Postfix                 1 ""         "("  ")" ","  0}
-  {Function       Postfix                 1 ""         "("  ")" ","  0}
-  {DerefAsm       Prefix                  1 "["        ""   "]" ""   0}
-  {SizeOf         Prefix                  1 "sizeof "  ""   ""  ""   0}
-  {TypeOf         Prefix                  1 "typeof "  ""   ""  ""   0}
-  {SizeOf         Prefix                  1 "size_of " ""   ""  ""   0}
-  {TypeOf         Prefix                  1 "type_of " ""   ""  ""   0}
-  {Cast           Prefix                  1 ""         ""   ""  ""   0}
-  {Deref          Prefix                  2 "*"        ""   ""  ""   0}
-  {Address        Prefix                  2 "&"        ""   ""  ""   0}
-  {Pos            Prefix                  2 "+"        ""   ""  ""   0}
-  {Neg            Prefix                  2 "-"        ""   ""  ""   0}
-  {LogNot         Prefix                  2 "!"        ""   ""  ""   0}
-  {BitNot         Prefix                  2 "~"        ""   ""  ""   0}
-  {Cast           Prefix                  1 "cast "    ""   ""  ""   0}
-  {Cast           Postfix                 1 ""         "as" ""  ""   1}
-  {Ptr            Postfix                 1 ""         ""   "*" ""   0}
-  {Array          Postfix                 1 ""         "["  "]" ""   0}
-  {Mul            Postfix                 3 ""         "*"  ""  ""   0}
-  {Div            Postfix                 3 ""         "/"  ""  ""   0}
-  {Mod            Postfix                 3 ""         "%"  ""  ""   0}
-  {Add            Postfix                 4 ""         "+"  ""  ""   0}
-  {Sub            Postfix                 4 ""         "-"  ""  ""   0}
-  {LShift         Postfix                 5 ""         "<<" ""  ""   0}
-  {RShift         Postfix                 5 ""         ">>" ""  ""   0}
-  {Less           Postfix                 6 ""         "<"  ""  ""   0}
-  {LtEq           Postfix                 6 ""         "<=" ""  ""   0}
-  {Grtr           Postfix                 6 ""         ">"  ""  ""   0}
-  {GrEq           Postfix                 6 ""         ">=" ""  ""   0}
-  {EqEq           Postfix                 7 ""         "==" ""  ""   0}
-  {NtEq           Postfix                 7 ""         "!=" ""  ""   0}
-  {BitAnd         Postfix                 8 ""         "&"  ""  ""   0}
-  {BitXor         Postfix                 9 ""         "^"  ""  ""   0}
-  {BitOr          Postfix                10 ""         "|"  ""  ""   0}
-  {LogAnd         Postfix                11 ""         "&&" ""  ""   0}
-  {LogOr          Postfix                12 ""         "||" ""  ""   0}
-  {Cond           Postfix                14 ""         "?"  ""  ":"  0}
+  {Dot            Postfix                 1 ""          "."  ""  ""   0}
+  {Index          Postfix                 1 ""          "["  "]" ""   0}
+  {Call           Postfix                 1 ""          "("  ")" ","  0}
+  {Function       Postfix                 1 ""          "("  ")" ","  0}
+  {DerefAsm       Prefix                  1 "["         ""   "]" ""   0}
+  {Unsigned       Prefix                  1 "unsigned " ""   ""  ""   0}
+  {Signed         Prefix                  1 "signed "   ""   ""  ""   0}
+  {Volatile       Prefix                  1 "volatile " ""   ""  ""   0}
+  {Const          Prefix                  1 "const "    ""   ""  ""   0}
+  {SizeOf         Prefix                  1 "sizeof "   ""   ""  ""   0}
+  {TypeOf         Prefix                  1 "typeof "   ""   ""  ""   0}
+  {SizeOf         Prefix                  1 "size_of "  ""   ""  ""   0}
+  {TypeOf         Prefix                  1 "type_of "  ""   ""  ""   0}
+  {Cast           Prefix                  1 ""          ""   ""  ""   0}
+  {Deref          Prefix                  2 "*"         ""   ""  ""   0}
+  {Address        Prefix                  2 "&"         ""   ""  ""   0}
+  {Pos            Prefix                  2 "+"         ""   ""  ""   0}
+  {Neg            Prefix                  2 "-"         ""   ""  ""   0}
+  {LogNot         Prefix                  2 "!"         ""   ""  ""   0}
+  {BitNot         Prefix                  2 "~"         ""   ""  ""   0}
+  {Cast           Prefix                  1 "cast "     ""   ""  ""   0}
+  {Cast           Postfix                 1 ""          "as" ""  ""   1}
+  {Ptr            Postfix                 1 ""          ""   "*" ""   0}
+  {Array          Postfix                 1 ""          "["  "]" ""   0}
+  {Mul            Postfix                 3 ""          "*"  ""  ""   0}
+  {Div            Postfix                 3 ""          "/"  ""  ""   0}
+  {Mod            Postfix                 3 ""          "%"  ""  ""   0}
+  {Add            Postfix                 4 ""          "+"  ""  ""   0}
+  {Sub            Postfix                 4 ""          "-"  ""  ""   0}
+  {LShift         Postfix                 5 ""          "<<" ""  ""   0}
+  {RShift         Postfix                 5 ""          ">>" ""  ""   0}
+  {Less           Postfix                 6 ""          "<"  ""  ""   0}
+  {LtEq           Postfix                 6 ""          "<=" ""  ""   0}
+  {Grtr           Postfix                 6 ""          ">"  ""  ""   0}
+  {GrEq           Postfix                 6 ""          ">=" ""  ""   0}
+  {EqEq           Postfix                 7 ""          "==" ""  ""   0}
+  {NtEq           Postfix                 7 ""          "!=" ""  ""   0}
+  {BitAnd         Postfix                 8 ""          "&"  ""  ""   0}
+  {BitXor         Postfix                 9 ""          "^"  ""  ""   0}
+  {BitOr          Postfix                10 ""          "|"  ""  ""   0}
+  {LogAnd         Postfix                11 ""          "&&" ""  ""   0}
+  {LogOr          Postfix                12 ""          "||" ""  ""   0}
+  {Cond           Postfix                14 ""          "?"  ""  ":"  0}
 }
 
 @data(E2_ExprKindParseInfo) e2_expr_kind_parse_info_table__clike:
