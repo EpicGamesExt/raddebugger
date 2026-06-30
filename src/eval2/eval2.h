@@ -147,11 +147,19 @@ struct E2_TypeKeyList
 ////////////////////////////////
 //~ rjf: Constructed Type Cache Types
 
+typedef U32 E2_TypeFlags;
+enum
+{
+  E2_TypeFlag_Const    = (1<<0),
+  E2_TypeFlag_Volatile = (1<<1),
+};
+
 typedef struct E2_ConsTypeParams E2_ConsTypeParams;
 struct E2_ConsTypeParams
 {
   Arch arch;
   E2_TypeKind kind;
+  E2_TypeFlags flags;
   String8 name;
   E2_TypeKey direct;
   U64 count;
