@@ -59,6 +59,11 @@ typedef struct LNK_Obj
   struct LNK_LibMemberRef *link_member;
   struct LNK_ObjNode      *self;
 
+  // Reloc-patched private copies of debug sections, indexed by COFF section
+  // number (slot zero is null). Keeping patches out of the copy-on-write input
+  // view avoids committing private pages for the mapped OBJ.
+  String8 *section_data_copies;
+
   // @type_server
   Rng1U64         ti_range;
   CV_TypeIndex   *ti_map;

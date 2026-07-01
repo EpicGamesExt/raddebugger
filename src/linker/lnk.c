@@ -4566,12 +4566,31 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
     if (section_flags & COFF_SectionFlag_LnkRemove)            { continue; }
     if (section_flags & COFF_SectionFlag_CntUninitializedData) { continue; }
 
+    COFF_RelocArray relocs = lnk_coff_relocs_from_section_header(obj, section_header);
+
     // get section bytes (special case debug info because it is not copied to the image)
     Rng1U64 section_frange = rng_1u64(section_header->foff, section_header->foff + section_header->fsize);
-    String8 section_data   = section_flags & LNK_SECTION_FLAG_DEBUG ? lnk_obj_section_data_from_number(obj, it.v.section_number) : str8_substr(task->image_data, section_frange);
+    String8 section_data;
+    if (section_flags & LNK_SECTION_FLAG_DEBUG) {
+      // Objs excluded from debug output have no later consumer for these bytes.
+      if (obj->exclude_from_debug_info) { continue; }
+
+      // A relocation-free debug section can stay on the clean input view.
+      if (relocs.count == 0) { continue; }
+
+      if (obj->section_data_copies == 0) {
+        obj->section_data_copies = push_array(arena, String8, obj->coff.sections.count_no_null + 1);
+      }
+      String8 src  = str8_substr(obj->coff.data, section_frange);
+      U8     *copy = push_array_no_zero(arena, U8, src.size);
+      MemoryCopy(copy, src.str, src.size);
+      obj->section_data_copies[it.v.section_number] = str8(copy, src.size);
+      section_data = obj->section_data_copies[it.v.section_number];
+    } else {
+      section_data = str8_substr(task->image_data, section_frange);
+    }
 
     // apply relocs (sorted by apply_off for monotone-forward image writes)
-    COFF_RelocArray relocs = lnk_coff_relocs_from_section_header(obj, section_header);
     Temp reloc_temp = temp_begin(scratch.arena);
     LNK_RelocSortKey *sorted_relocs = push_array_no_zero(reloc_temp.arena, LNK_RelocSortKey, relocs.count);
     for EachIndex(reloc_idx, relocs.count) {
@@ -6069,7 +6088,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     // patch relocs
     {
       LNK_ObjRelocPatcher task = { .image_data = image_data, .objs = objs, .image_base = pe.image_base, .image_section_table = image_section_table };
-      tp_for_parallel_prof(tp, 0, objs_count, lnk_obj_reloc_patcher, &task, "Patch Relocs");
+      tp_for_parallel_prof(tp, arena, objs_count, lnk_obj_reloc_patcher, &task, "Patch Relocs");
     }
 
     // patch load config

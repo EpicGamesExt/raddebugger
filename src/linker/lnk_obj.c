@@ -677,6 +677,9 @@ internal String8
 lnk_obj_section_data_from_number(LNK_Obj *obj, U64 section_number)
 {
   Assert(1 <= section_number && section_number <= obj->coff.sections.count_no_null);
+  if (obj->section_data_copies != 0 && obj->section_data_copies[section_number].size != 0) {
+    return obj->section_data_copies[section_number];
+  }
   COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->coff.data, obj->coff.header.section_table_range).str;
   COFF_SectionHeader *section       = &section_table[section_number-1];
   return str8_substr(obj->coff.data, r1u64s(section->foff, section->fsize));
