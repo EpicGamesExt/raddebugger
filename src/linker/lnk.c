@@ -6859,9 +6859,11 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
               TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
               if (symbol.kind == CV_SymKind_SKIP) { continue; }
               if (cv_is_lproc(symbol)) {
-                CV_SymProc32 *src_proc = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*src_proc));
-                memory_write32(&src_proc->itype, 0); // strip type index
+                // strip the type index in the DESTINATION copy -- the source $$S stays untouched
+                // (patching the source would dirty its private/CoW backing pages for no reason)
+                U64 rec_off = buffer_cursor;
                 buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &symbol, CV_SymbolAlign);
+                memory_write32(buffer + rec_off + sizeof(CV_SymbolHeader) + OffsetOf(CV_SymProc32, itype), 0);
                 buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &(CV_Symbol){ .kind = CV_SymKind_END }, CV_SymbolAlign);
               }
             }
