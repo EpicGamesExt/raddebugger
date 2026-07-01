@@ -12,6 +12,42 @@ lnk_get_huge_arena(void)
   return g_huge_arena;
 }
 
+// Handle of the in-flight background arena-release thread (at most one). Joined
+// (a) before launching the next reaper and (b) at the end of the link, next to
+// the image-write-thread join. NOTE: do NOT thread_detach right after
+// thread_launch -- that releases the W32_Entity the new thread's entry point is
+// about to read (startup race).
+static Thread g_arena_reaper_thread = {0};
+
+internal void
+lnk_arena_release_thread(void *raw_arena)
+{
+  // REAPER: releasing a huge arena costs ~50-100ms/GB of committed pages in the
+  // kernel (MiDeleteVaDirect/MiDecommitFreePage walk every PTE under
+  // VirtualFree(MEM_RELEASE)), and that work serializes on the process
+  // address-space lock -- chunking it across the thread pool does NOT make it
+  // faster (measured: 8 GiB in 860 ms chunked-parallel vs 371 ms serial). So
+  // instead take it off the critical path entirely: release on a background
+  // thread while the main thread proceeds. Caller must hand over EXCLUSIVE
+  // ownership -- no reference to the arena (or memory inside it) may survive
+  // the thread_launch.
+  ProfBeginFunction();
+  U64 begin_us = now_time_us();
+  Arena *arena = raw_arena;
+
+  U64 committed_size = 0;
+  for (Arena *n = arena->current; n != 0; n = n->prev)   { committed_size += n->cmt; }
+#if ARENA_FREE_LIST
+  for (Arena *n = arena->free_last; n != 0; n = n->prev) { committed_size += n->cmt; }
+#endif
+
+  arena_release(arena);
+
+  lnk_log(LNK_Log_Timers, "[teardown] background release of %llu MiB arena took %.2f ms (off main thread)",
+          committed_size / MB(1), (F64)(now_time_us() - begin_us) / 1000.0);
+  ProfEnd();
+}
+
 internal void
 lnk_discard_cv_debug_info(LNK_CodeViewInput *input, U64 obj_idx)
 {
@@ -2842,9 +2878,14 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
   }
 
   // bucket_arr is fully consumed (copied into unique_leaf_refs / sorted) -- release the probe tables
-  // now so this multi-GB working set is gone before the merge-types/PDB-build peak.
-  arena_release(bucket_arena);
+  // now so this multi-GB working set is gone before the merge-types/PDB-build peak. Handed to a
+  // background reaper thread: a serial VirtualFree(MEM_RELEASE) of these multi-GB committed blocks
+  // costs ~350ms+ of main-thread kernel time (MiDeleteVaDirect/MiDecommitFreePage), which otherwise
+  // sits on the critical path between dedup and the type-index fixup passes. All pointers into the
+  // arena are dropped below before the launch returns ownership to the reaper.
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) { task.leaf_ht_arr[ti_source].bucket_arr = 0; }
+  if (g_arena_reaper_thread.u64[0] != 0) { thread_join(g_arena_reaper_thread, max_U64); }
+  g_arena_reaper_thread = thread_launch(lnk_arena_release_thread, bucket_arena);
 
   #if PROFILE_TELEMETRY
   tmMessage(0, TMMF_ICON_NOTE, "TPI Count: %.*s", str8_varg(str8_from_count(scratch.arena, task.unique_leaf_refs_arr[CV_TypeIndexSource_TPI].count)));

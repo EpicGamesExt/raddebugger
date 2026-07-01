@@ -6585,6 +6585,14 @@ THREAD_POOL_TASK_FUNC(lnk_scratch_decommit_worker)
   // worker runs the body exactly once -- otherwise the work-stealing loop could
   // let one fast worker grab several tasks and leave other workers' scratch
   // committed. All worker_count threads are woken, so all must reach the barrier.
+  //
+  // NOTE(perf): redistributing these decommits in chunks across the pool does
+  // NOT help: MEM_DECOMMIT serializes in the kernel on the process address-space
+  // lock (~14 GB/s aggregate no matter the thread count; measured 9.3 GiB in
+  // 677 ms chunked-parallel vs ~500 ms with this per-worker scheme). And handing
+  // the decommit to a background thread is UNSAFE here: workers push to these
+  // scratch arenas as soon as the PDB build starts, and a push would re-commit
+  // pages that the background decommit then rips out.
   tctx_scratch_decommit();
   barrier_wait(tp->barrier);
 }
@@ -6741,9 +6749,11 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     // byte-identical and the push path re-commits on demand during PDB build.
     {
       ProfBegin("Decommit Scratch");
+      U64 decommit_begin_us = now_time_us();
       // task_count == worker_count + the in-worker barrier => every worker
       // (worker 0 IS the main thread) runs exactly once, covering main's scratch.
       tp_for_parallel_reserve(tp, 0, tp->worker_count, lnk_scratch_decommit_worker, 0); // BARRIER pass (path B)
+      lnk_log(LNK_Log_Timers, "[teardown] scratch decommit pass in %.2f ms", (F64)(now_time_us() - decommit_begin_us) / 1000.0);
       ProfEnd();
     }
 
@@ -6873,6 +6883,12 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 
   // wait for the thread to finish writing image to disk
   thread_join(image_write_thread, -1);
+
+  // reap the background arena-release thread, if one is still in flight
+  if (g_arena_reaper_thread.u64[0] != 0) {
+    thread_join(g_arena_reaper_thread, max_U64);
+    MemoryZeroStruct(&g_arena_reaper_thread);
+  }
 
   // image is on disk and no longer read by anyone -- release its ~1GB now so the kernel reclaims it
   // concurrently with the remaining work + exit, not single-threaded in the process rundown.
