@@ -2649,20 +2649,29 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
   LNK_Obj        **objs       = task->objs;
   U64              objs_count = task->objs_count;
 
-  U8                     **is_live             = 0;
-  U64                     *active_thread_count = 0;
+  // "Remove Unreachable Sections" per-task stat accumulators (reduced on task 0 for the log)
+  typedef struct { U64 vsize; U64 fsize; U64 section_count; } LNK_OptRefStat;
+  enum { LNK_OptRefStat_Null, LNK_OptRefStat_Code, LNK_OptRefStat_Data, LNK_OptRefStat_Debug, LNK_OptRefStat_Count };
+
+  U8                    **is_live             = 0;
+  LNK_Obj               **objs_by_idx         = 0; // input_idx -> obj, for the strided removal pass
+  U64                    *active_thread_count = 0;
   LNK_RelocRefsBatchList  *global_batch_list   = 0;
+  LNK_OptRefStat          *remove_stats        = 0;
   if (task_id == 0) {
-    active_thread_count = push_array(scratch.arena, U64,                    1);
+    remove_stats = push_array(scratch.arena, LNK_OptRefStat, LNK_OptRefStat_Count * tp->worker_count);
+    active_thread_count = push_array(scratch.arena, U64,                   1);
     global_batch_list   = push_array(scratch.arena, LNK_RelocRefsBatchList, 1);
 
     // alloc live flags and set live status on every non-COMDAT section
-    is_live = push_array_no_zero(scratch.arena, U8 *, objs_count);
+    is_live     = push_array_no_zero(scratch.arena, U8 *,      objs_count);
+    objs_by_idx = push_array_no_zero(scratch.arena, LNK_Obj *, objs_count ? objs_count : 1);
     {
       for EachIndex(obj_idx, objs_count) {
         LNK_Obj *obj = objs[obj_idx];
 
-        is_live[obj_idx] = push_array(scratch.arena, U8, obj->coff.sections.count_no_null + 1);
+        is_live[obj_idx]     = push_array(scratch.arena, U8, obj->coff.sections.count_no_null + 1);
+        objs_by_idx[obj_idx] = obj;
 
         for LNK_EachCoffSection(it, obj) {
           is_live[obj_idx][it.v.section_number] = !(*it.v.flags & COFF_SectionFlag_LnkCOMDAT);
@@ -2722,8 +2731,10 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
     }
   }
   tp_broadcast(&is_live);
+  tp_broadcast(&objs_by_idx);
   tp_broadcast(&global_batch_list);
   tp_broadcast(&active_thread_count);
+  tp_broadcast(&remove_stats);
 
   // Per-worker memo: (obj input idx << 32 | coff symbol idx) -> final ref of the reloc-symbol
   // resolve chain below. A symbol is referenced by one reloc per call site, so the chain
@@ -2955,74 +2966,63 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
   exit:;
   barrier_wait(tp->barrier);
 
-  // TODO: thread
-  if (task_id == 0) {
+  // Remove unreachable sections. Section flags are per-obj (disjoint writes), so the obj list is
+  // strided across tasks via objs_by_idx; stats accumulate per task and are reduced on task 0, so
+  // the debug log totals are identical regardless of cohort width or schedule.
+  {
     ProfBegin("Remove Unreachable Sections");
+    LNK_OptRefStat *stats = remove_stats + task_id * LNK_OptRefStat_Count;
+    for (U64 obj_idx = task_id; obj_idx < objs_count; obj_idx += tp->worker_count) {
+      LNK_Obj *obj = objs_by_idx[obj_idx];
 
-    for EachIndex(obj_idx, objs_count) {
-      LNK_Obj *obj = objs[obj_idx];
       for LNK_EachCoffSection(it, obj) {
-        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, it.v.section_number);
-        if ( ! is_live[obj->input_idx][it.v.section_number]) {
-          *it.v.flags |= COFF_SectionFlag_LnkRemove;
+        U32 section_number = it.v.section_number;
+        if (is_live[obj->input_idx][section_number]) { continue; }
+
+        COFF_SectionHeader *section_header = it.v.header;
+        *it.v.flags |= COFF_SectionFlag_LnkRemove;
+        COFF_SectionFlags section_flags = *it.v.flags;
+
+        U64 stat_kind = LNK_OptRefStat_Null;
+        if      (section_flags & LNK_SECTION_FLAG_DEBUG)   { stat_kind = LNK_OptRefStat_Debug; }
+        else if (section_flags & COFF_SectionFlag_CntCode) { stat_kind = LNK_OptRefStat_Code;  }
+        else                                                { stat_kind = LNK_OptRefStat_Data;  }
+
+        if (section_flags & COFF_SectionFlag_CntUninitializedData) {
+          stats[stat_kind].vsize += section_header->vsize;
+        } else {
+          stats[stat_kind].fsize += section_header->fsize;
         }
+        stats[stat_kind].section_count += 1;
       }
     }
-
-    if (lnk_get_log_status(LNK_Log_Debug)) {
-      typedef struct { U64 vsize; U64 fsize; U64 section_count; U64 live_count; U64 live_fsize; U64 live_vsize; } Stat;
-      enum { Stat_Null, Stat_Code, Stat_Data, Stat_Debug, Stat_Count };
-      Stat stats[Stat_Count] = {0};
-
-      for EachIndex(obj_idx, objs_count) {
-        LNK_Obj *obj = objs[obj_idx];
-
-        for LNK_EachCoffSection(it, obj) {
-          COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, it.v.section_number);
-
-          U64 stat_kind = Stat_Null;
-          if      (*it.v.flags & LNK_SECTION_FLAG_DEBUG)   { stat_kind = Stat_Debug; }
-          else if (*it.v.flags & COFF_SectionFlag_CntCode) { stat_kind = Stat_Code;  }
-          else                                             { stat_kind = Stat_Data;  }
-
-          if (is_live[obj->input_idx][it.v.section_number]) {
-            stats[stat_kind].live_count += 1;
-            if (*it.v.flags & COFF_SectionFlag_CntUninitializedData) {
-              stats[stat_kind].live_vsize += section_header->vsize;
-            } else {
-              stats[stat_kind].live_fsize += section_header->fsize;
-            }
-          } else {
-            if (*it.v.flags & COFF_SectionFlag_CntUninitializedData) {
-              stats[stat_kind].vsize += section_header->vsize;
-            } else {
-              stats[stat_kind].fsize += section_header->fsize;
-            }
-            stats[stat_kind].section_count += 1;
-          }
-        }
-      }
-
-      U64 total_fsize = 0, total_section_count = 0;
-      U64 total_fsize_live = 0, total_section_count_live = 0;
-      for EachElement(i, stats) {
-        total_fsize              += stats[i].fsize;
-        total_section_count      += stats[i].section_count;
-        total_fsize_live         += stats[i].live_fsize;
-        total_section_count_live += stats[i].live_count;
-      }
-      String8List stat_list = {0};
-      str8_list_pushf(scratch.arena, &stat_list, "Code : removed %M, %S sections; live %M, %S sections", stats[Stat_Code].fsize,  str8_from_count(scratch.arena, stats[Stat_Code].section_count ), stats[Stat_Code].live_fsize, str8_from_count(scratch.arena, stats[Stat_Code].live_count));
-      str8_list_pushf(scratch.arena, &stat_list, "Data : removed %M, %S sections; live %M, %S sections", stats[Stat_Data].fsize,  str8_from_count(scratch.arena, stats[Stat_Data].section_count ), stats[Stat_Data].live_fsize, str8_from_count(scratch.arena, stats[Stat_Data].live_count));
-      str8_list_pushf(scratch.arena, &stat_list, "Debug: removed %M, %S sections; live %M, %S sections", stats[Stat_Debug].fsize, str8_from_count(scratch.arena, stats[Stat_Debug].section_count), stats[Stat_Debug].live_fsize, str8_from_count(scratch.arena, stats[Stat_Debug].live_count));
-      str8_list_pushf(scratch.arena, &stat_list, "Total: removed %M, %S sections; live %M, %S sections", total_fsize,             str8_from_count(scratch.arena, total_section_count), total_fsize_live, str8_from_count(scratch.arena, total_section_count_live));
-      String8 stat_str = str8_list_join(scratch.arena, &stat_list, &(StringJoin){.pre = str8_lit("  "), .sep = str8_lit("\n  ")});
-      lnk_log(LNK_Log_Debug, "/OPT:REF Stats:\n%S", stat_str);
-    }
-
     ProfEnd();
   }
   barrier_wait(tp->barrier);
+
+  if (task_id == 0 && lnk_get_log_status(LNK_Log_Debug)) {
+    LNK_OptRefStat stats[LNK_OptRefStat_Count] = {0};
+    for EachIndex(reduce_task_idx, tp->worker_count) {
+      for EachIndex(stat_idx, (U64)LNK_OptRefStat_Count) {
+        stats[stat_idx].vsize         += remove_stats[reduce_task_idx * LNK_OptRefStat_Count + stat_idx].vsize;
+        stats[stat_idx].fsize         += remove_stats[reduce_task_idx * LNK_OptRefStat_Count + stat_idx].fsize;
+        stats[stat_idx].section_count += remove_stats[reduce_task_idx * LNK_OptRefStat_Count + stat_idx].section_count;
+      }
+    }
+
+    U64 total_fsize = 0, total_section_count = 0;
+    for EachElement(i, stats) {
+      total_fsize         += stats[i].fsize;
+      total_section_count += stats[i].section_count;
+    }
+    String8List stat_list = {0};
+    str8_list_pushf(scratch.arena, &stat_list, "Code : %M, %S sections", stats[LNK_OptRefStat_Code].fsize,  str8_from_count(scratch.arena, stats[LNK_OptRefStat_Code].section_count ));
+    str8_list_pushf(scratch.arena, &stat_list, "Data : %M, %S sections", stats[LNK_OptRefStat_Data].fsize,  str8_from_count(scratch.arena, stats[LNK_OptRefStat_Data].section_count ));
+    str8_list_pushf(scratch.arena, &stat_list, "Debug: %M, %S sections", stats[LNK_OptRefStat_Debug].fsize, str8_from_count(scratch.arena, stats[LNK_OptRefStat_Debug].section_count));
+    str8_list_pushf(scratch.arena, &stat_list, "Total: %M, %S sections", total_fsize,             str8_from_count(scratch.arena, total_section_count));
+    String8 stat_str = str8_list_join(scratch.arena, &stat_list, &(StringJoin){.pre = str8_lit("  "), .sep = str8_lit("\n  ")});
+    lnk_log(LNK_Log_Debug, "/OPT:REF Stats:\n%S", stat_str);
+  }
 
   scratch_end(scratch2);
   scratch_end(scratch);
