@@ -4476,20 +4476,74 @@ lnk_gc_types(TP_Context *tp, Arena *arena, LNK_CodeViewInput *cv, LNK_MergedType
   ProfEnd();
 }
 
-// FAIR-SHARE: round-robin cv->obj_count objs across `worker_count` lane buckets.
+typedef struct
+{
+  U64 weight;
+  U32 obj_idx;
+} LNK_ObjDistWeight;
+
+force_inline int
+lnk_obj_dist_weight_is_before(void *raw_a, void *raw_b)
+{
+  LNK_ObjDistWeight *a = raw_a, *b = raw_b;
+  if (a->weight != b->weight) { return a->weight > b->weight; }
+  return a->obj_idx < b->obj_idx; // deterministic total order
+}
+
+// FAIR-SHARE: distribute cv->obj_count objs across `worker_count` lane buckets.
 // Rebuilt per barrier pass so the distribution matches the cohort C that pass
 // runs at (lnk_move_global_symbols_to_gsi / lnk_write_pdb_modules read
-// task->obj_indices[task_id] for lanes [0,C)). Output is width-independent, so any
-// C produces byte-identical PDB bytes; only the per-lane partitioning changes.
+// task->obj_indices[task_id] for lanes [0,C)). Output is width- and
+// assignment-independent -- per-obj results land in per-obj slots (module
+// streams) or in GSI bucket chains that are content-sorted at serialization
+// (gsi_symbol_is_before radsorts every chain) -- so any deterministic partition
+// produces byte-identical PDB bytes; only the per-lane balance changes.
+//
+// `weights` (optional, [obj_count]) upgrades the round-robin to a greedy LPT
+// (longest-processing-time) assignment: objs are taken in weight-descending
+// order (obj_idx tie-break -> deterministic) and each goes to the least-loaded
+// lane. Round-robin ignores per-obj symbol-stream size, so a lane that draws
+// several giant objs holds the whole barrier pass at the final barrier while
+// the other lanes idle.
 internal void
-lnk_build_pdb_distribute_obj_indices(Arena *arena, LNK_BuildPdb *task, U64 obj_count, U32 worker_count)
+lnk_build_pdb_distribute_obj_indices(Arena *arena, LNK_BuildPdb *task, U64 obj_count, U32 worker_count, U64 *weights)
 {
-  U64 objs_per_worker = CeilIntegerDiv(obj_count, worker_count);
   task->obj_indices = push_array(arena, U32Array, worker_count);
-  for EachIndex(i, worker_count)  { task->obj_indices[i].v = push_array(arena, U32, objs_per_worker ? objs_per_worker : 1); }
-  for EachIndex(obj_idx, obj_count) {
-    U32Array *obj_indices = &task->obj_indices[obj_idx % worker_count];
-    obj_indices->v[obj_indices->count++] = (U32)obj_idx;
+  if (weights == 0) {
+    U64 objs_per_worker = CeilIntegerDiv(obj_count, worker_count);
+    for EachIndex(i, worker_count)  { task->obj_indices[i].v = push_array(arena, U32, objs_per_worker ? objs_per_worker : 1); }
+    for EachIndex(obj_idx, obj_count) {
+      U32Array *obj_indices = &task->obj_indices[obj_idx % worker_count];
+      obj_indices->v[obj_indices->count++] = (U32)obj_idx;
+    }
+  } else {
+    Temp scratch = scratch_begin(&arena, 1);
+
+    LNK_ObjDistWeight *order = push_array_no_zero(scratch.arena, LNK_ObjDistWeight, obj_count);
+    for EachIndex(obj_idx, obj_count) { order[obj_idx] = (LNK_ObjDistWeight){ .weight = weights[obj_idx], .obj_idx = (U32)obj_idx }; }
+    radsort(order, obj_count, lnk_obj_dist_weight_is_before);
+
+    U64 *loads  = push_array(scratch.arena, U64, worker_count);
+    U32 *assign = push_array_no_zero(scratch.arena, U32, obj_count);
+    for EachIndex(i, obj_count) {
+      U32 min_lane = 0;
+      for (U32 lane = 1; lane < worker_count; lane += 1) { if (loads[lane] < loads[min_lane]) { min_lane = lane; } }
+      assign[order[i].obj_idx] = min_lane;
+      loads[min_lane] += order[i].weight + 1; // +1 spreads zero-weight objs too
+      task->obj_indices[min_lane].count += 1;
+    }
+
+    for EachIndex(lane, worker_count) {
+      task->obj_indices[lane].v     = push_array_no_zero(arena, U32, task->obj_indices[lane].count);
+      task->obj_indices[lane].count = 0;
+    }
+    // fill in ascending obj order per lane (deterministic, cache-friendly iteration)
+    for EachIndex(obj_idx, obj_count) {
+      U32Array *obj_indices = &task->obj_indices[assign[obj_idx]];
+      obj_indices->v[obj_indices->count++] = (U32)obj_idx;
+    }
+
+    scratch_end(scratch);
   }
 }
 
@@ -4574,13 +4628,23 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
     ProfScope("Write Modules")
     {
+      U64 phase_begin_us = now_time_us();
       // FAIR-SHARE: pin the cohort, distribute objs over exactly the cohort lanes,
       // then run the barrier pass at that cohort. tp_barrier_begin sets
       // tp->worker_count := C for the bracket.
       U32 C = tp_barrier_begin(tp);
-      lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C);
+      // weight = total debug$S byte size: the module-stream write walks every
+      // subsection of the obj (symbols + lines + checksums + ...)
+      U64 *weights = push_array_no_zero(scratch.arena, U64, cv->obj_count);
+      for EachIndex(obj_idx, cv->obj_count) {
+        U64 total = 0;
+        for EachIndex(k, CV_C13SubSectionIdxKind_COUNT) { total += cv->debug_s_arr[obj_idx].data_list[k].total_size; }
+        weights[obj_idx] = total;
+      }
+      lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C, weights);
       tp_for_parallel_reserve(tp, 0, C, lnk_write_pdb_modules, &task); // BARRIER pass (path B): barrier_wait/tp_broadcast
       tp_barrier_end(tp);
+      lnk_log(LNK_Log_Timers, "[pdb] write modules in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
     }
     if (output_ptr != 0) {
       for EachIndex(obj_idx, cv->obj_count) {
@@ -4589,10 +4653,16 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     }
     ProfScope("Move Global Symbols")
     {
+      U64 phase_begin_us = now_time_us();
       U32 C = tp_barrier_begin(tp);
-      lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C);
+      // weight = per-obj symbols-subsection byte size: both proc-refs passes walk
+      // exactly these bytes per obj, and String8List.total_size makes it O(1)
+      U64 *weights = push_array_no_zero(scratch.arena, U64, cv->obj_count);
+      for EachIndex(obj_idx, cv->obj_count) { weights[obj_idx] = cv_sub_section_from_debug_s(cv->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols).total_size; }
+      lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C, weights);
       tp_for_parallel_reserve(tp, 0, C, lnk_move_global_symbols_to_gsi, &task); // BARRIER pass (path B): tp_sum_u64/tp_broadcast/barrier_wait
       tp_barrier_end(tp);
+      lnk_log(LNK_Log_Timers, "[pdb] move global symbols in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
     }
     ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
     if (output_ptr != 0) {
