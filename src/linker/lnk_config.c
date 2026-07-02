@@ -104,6 +104,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_WriteTempFiles,               0, LNK_CmdValueKind_Scalar, "RAD_WRITE_TEMP_FILES",                 "[:NO]",                "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
   { LNK_CmdSwitch_Rad_TimeStamp,                    0, LNK_CmdValueKind_Scalar, "RAD_TIME_STAMP",                       ":#",                   "Time stamp embeded in EXE and PDB."                                               },
   { LNK_CmdSwitch_Rad_DebugTypeHash,                0, LNK_CmdValueKind_Scalar, "RAD_DEBUG_TYPE_HASH",                  ":{BLAKE3|XXHASH}",     "Sets hashing algorithm for debug type merging."                                   },
+  { LNK_CmdSwitch_Rad_DebugTypeHash,                0, LNK_CmdValueKind_Scalar, "RAD_TYPEHASHALG",                      ":{BLAKE3|XXHASH}",     "Alias of RAD_DEBUG_TYPE_HASH (spelling used by UnrealBuildTool)."                  },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,        0, LNK_CmdValueKind_Scalar, "RAD_UNRESOLVED_SYMBOL_LIMIT",          ":#",                   "Limits number of unresolved symbol errors linker reports."                        },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,     0, LNK_CmdValueKind_Scalar, "RAD_UNRESOLVED_SYMBOL_REF_LIMIT",      ":#",                   "Limit number of unresolved symbol references linker reports."                     },
   { LNK_CmdSwitch_Rad_Version,                      0, LNK_CmdValueKind_Null,   "RAD_VERSION",                          "",                     "Print version and exit."                                                          },
@@ -1210,7 +1211,17 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
 
   switch (cmd_switch) {
   case LNK_CmdSwitch_Null: {
-    lnk_error_obj(LNK_Warning_UnknownSwitch, obj, "unknown switch: \"/%S%s%S\"", cmd_name, value.size ? ":" : "", value);
+    // Unknown /RAD_* switches on the command line warn and are ignored: the
+    // RAD_ namespace is owned by this linker, but newer build scripts must
+    // keep working against older radlink binaries (forward compatibility),
+    // so an unrecognized /RAD_* switch must not fail the link. Use
+    // LNK_Warning_Cmdl so the warning stays visible even though the
+    // release-default /RAD_IGNORE mutes LNK_Warning_UnknownSwitch.
+    if (obj == 0 && str8_match_lit("RAD_", str8_prefix(cmd_name, 4), StringMatchFlag_CaseInsensitive)) {
+      lnk_error(LNK_Warning_Cmdl, "unknown switch \"/%S%s%S\"; this radlink build does not support it -- switch ignored", cmd_name, value.size ? ":" : "", value);
+    } else {
+      lnk_error_obj(LNK_Warning_UnknownSwitch, obj, "unknown switch: \"/%S%s%S\"", cmd_name, value.size ? ":" : "", value);
+    }
   } break;
 
   default: break;
