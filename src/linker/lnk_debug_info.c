@@ -3466,7 +3466,16 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         CV_SymbolNode *n = &global_nodes[i];
         n->prev = n->next = 0;
         n->data = cv_symbol_from_ptr(symbol_arr[i]);
-        n->data.offset = i;
+        // deterministic same-name tie-break for the per-bucket sort in gsi_serialize_symbols_task
+        // (gsi_symbol_is_before compares name -> offset -> kind -> data bytes): key on the content
+        // hash of the full raw record instead of the compacted deduper slot index. Slot order is
+        // CAS-arrival order in cv_symbol_deduper_insert_or_update and can flip between same-name
+        // different-content records (e.g. duplicate S_UDTs with distinct type indices) whenever the
+        // lane->worker schedule changes (shared-pool cohorts) or probe chains contend, permuting
+        // symrec bytes run-to-run. The hash is schedule-independent; on collision the comparator's
+        // kind/data-bytes fallback stays content-deterministic, and byte-identical records cannot
+        // reach the sort (the deduper folds them), so the pointer tiebreaker stays unreachable.
+        n->data.offset = u64_hash_from_str8(cv_raw_from_symbol(symbol_arr[i]));
         cv_symbol_list_push_node(&gsi->bucket_arr[bucket_idx], n);
       }
     }
