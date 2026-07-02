@@ -17,15 +17,21 @@ C_LINKAGE thread_static TCTX *tctx_thread_local = 0;
 internal TCTX *
 tctx_alloc(void)
 {
+  // 2MB commit quantum for scratch arenas (vs the 64KB default): scratch takes
+  // heavy churn on every thread (the linker pushes tens of GB through these);
+  // the larger quantum cuts VirtualAlloc(MEM_COMMIT) calls -- all serialized on
+  // the process address-space lock -- ~32x. Slack is <= 2MB per scratch arena
+  // past its high-water mark (2 arenas per thread), and arena_decommit_unused
+  // still trims page-granular, independent of the commit quantum.
 #if PROFILE_TELEMETRY
   thread_static static char name[2][1024];
   raddbg_snprintf(name[0], sizeof(name[0]), "Scratch/0[TID:%u]", tid());
   raddbg_snprintf(name[1], sizeof(name[1]), "Scratch/1[TID:%u]", tid());
-  Arena *arena_0 = arena_alloc(.name = name[0]);
-  Arena *arena_1 = arena_alloc(.name = name[1]);
+  Arena *arena_0 = arena_alloc(.commit_size = MB(2), .name = name[0]);
+  Arena *arena_1 = arena_alloc(.commit_size = MB(2), .name = name[1]);
 #else
-  Arena *arena_0 = arena_alloc();
-  Arena *arena_1 = arena_alloc();
+  Arena *arena_0 = arena_alloc(.commit_size = MB(2));
+  Arena *arena_1 = arena_alloc(.commit_size = MB(2));
 #endif
   TCTX *tctx = push_array(arena_0, TCTX, 1);
   tctx->arenas[0] = arena_0;

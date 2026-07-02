@@ -335,7 +335,12 @@ tp_arena_alloc(TP_Context *pool)
   Temp scratch = scratch_begin(0,0);
   Arena **arr = push_array(scratch.arena, Arena *, pool->worker_count);
   for (U64 i = 0; i < pool->worker_count; ++i) {
-    arr[i] = arena_alloc("THREAD_POOL");
+    // 2MB commit quantum: these per-worker arenas take the bulk of the link's
+    // ~50GB of MEM_COMMIT growth; the default 64KB quantum turns that into
+    // ~800K NtAllocateVirtualMemory calls from 64 threads serialized on the
+    // process address-space lock. Slack is bounded by workers x live arenas x
+    // quantum (single-digit MBs per worker), far below the syscall cost.
+    arr[i] = arena_alloc(.commit_size = MB(2), .name = "THREAD_POOL");
   }
   Arena **dst = push_array(arr[0], Arena *, pool->worker_count);
   MemoryCopy(dst, arr, sizeof(Arena*) * pool->worker_count);

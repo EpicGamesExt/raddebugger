@@ -7,7 +7,11 @@ internal Arena *
 lnk_get_huge_arena(void)
 {
   if (g_huge_arena == 0) {
-    g_huge_arena = arena_alloc(.name = "HUGE");
+    // 2MB commit quantum (vs the 64KB default): this arena backs multi-GB debug
+    // info merges; the larger quantum cuts VirtualAlloc(MEM_COMMIT) syscalls
+    // (all serialized on the process address-space lock) ~32x for at most 2MB
+    // of slack past the high-water mark.
+    g_huge_arena = arena_alloc(.commit_size = MB(2), .name = "HUGE");
   }
   return g_huge_arena;
 }
