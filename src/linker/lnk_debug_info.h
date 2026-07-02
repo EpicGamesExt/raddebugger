@@ -208,6 +208,17 @@ typedef struct
   U64        pop_obj_idx;
   Rng1U64   *pop_range;
 
+  // deterministic unique-leaf estimate: distinct-hash bitmaps (per ti source) filled with
+  // commutative atomic ORs over the precomputed debug_h hashes -> same input, same bits, same
+  // estimate every run. sized pow2 so bit index is hash & (bits-1).
+  U32 *estimate_bitmap     [CV_TypeIndexSource_COUNT]; // [estimate_bitmap_bits/32]
+  U64  estimate_bitmap_bits[CV_TypeIndexSource_COUNT]; // pow2
+
+  // set when a probe wraps without finding a slot (estimate-sized table overflowed); dedup is
+  // retried once with the always-sufficient total-based caps. deterministic: overflow happens
+  // iff the unique count exceeds cap, which is a function of the input alone.
+  U32  leaf_ht_overflow;
+
   LNK_MergedTypes result;
 } LNK_MergeTypes;
 
