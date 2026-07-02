@@ -1349,14 +1349,15 @@ pdb_load_types_from_leaf_list(PDB_TypeServer **type_server_arr, CV_LeafList leaf
       
       // get offsets for type indices in data blob
       CV_Leaf *leaf = &node->data;
-      CV_TypeIndexInfoList ti_info_list = cv_get_leaf_type_index_offsets(temp.arena, leaf->kind, leaf->data);
-      
-      for (CV_TypeIndexInfo *ti_info = ti_info_list.first; ti_info != 0; ti_info = ti_info->next) {
-        Assert(ti_info->offset + sizeof(CV_TypeIndex) <= leaf->data.size);
-        CV_TypeIndex *ti_ptr = (CV_TypeIndex *)(leaf->data.str + ti_info->offset);
+      CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf->kind, leaf->data);
+
+      for (U64 ti_idx = 0, ti_count = cv_ti_offsets_count(&ti_offs); ti_idx < ti_count; ti_idx += 1) {
+        CV_TiOff ti_info = cv_ti_offset_at(&ti_offs, ti_idx);
+        Assert(ti_info.offset + sizeof(CV_TypeIndex) <= leaf->data.size);
+        CV_TypeIndex *ti_ptr = (CV_TypeIndex *)(leaf->data.str + ti_info.offset);
         CV_TypeIndex external_ti = *ti_ptr;
-        
-        B32 is_complex_type = external_ti >= ti_map->min_itype[ti_info->source];
+
+        B32 is_complex_type = external_ti >= ti_map->min_itype[ti_info.source];
         if (is_complex_type) {
           // search external type index
           CV_TypeIndex internal_tpi_idx = pdb_type_index_map_search(ti_map, CV_TypeIndexSource_TPI, external_ti);
