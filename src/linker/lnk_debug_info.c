@@ -3402,41 +3402,92 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
     U64    bucket_cap;
     void **buckets;
+    U64   *collect_counts; // [worker_count]
+    void **flat_symbols;   // [global_symbol_count]
     if (task_id == 0) {
-      bucket_cap = global_symbol_count * 13 / 10;
-      buckets    = push_array(scratch.arena, void *, bucket_cap);
+      bucket_cap     = global_symbol_count * 13 / 10;
+      buckets        = push_array(scratch.arena, void *, bucket_cap);
+      collect_counts = push_array(scratch.arena, U64, tp->worker_count);
+      flat_symbols   = push_array_no_zero(scratch.arena, void *, global_symbol_count ? global_symbol_count : 1);
     }
     tp_broadcast(&bucket_cap);
     tp_broadcast(&buckets);
+    tp_broadcast(&collect_counts);
+    tp_broadcast(&flat_symbols);
 
-    // insert symbols into hash table
-    for EachNode(n, VoidNode, global_symbols.first) {
-      String8 raw  = cv_raw_from_symbol(n->v);
-      U64     hash = u64_hash_from_str8(raw);
-      cv_symbol_deduper_insert_or_update(buckets, bucket_cap, hash, n->v);
+    // BALANCE: per-lane global-symbol density varies a lot (the collect partition above is
+    // weighted by raw symbol bytes, not by global-symbol count), which skewed the insert phase
+    // by ~2x. Flatten the per-worker lists (in worker order) into one array and re-divide the
+    // INSERTS evenly. The deduper is CAS-based and content-keyed: any insert partition yields
+    // the same deduped content set, and downstream order is already schedule-independent (the
+    // per-chain sort keys on the content hash written into n->data.offset below), so this only
+    // changes who performs an insert, never the output.
+    ProfBegin("Insert Global Symbols");
+    collect_counts[task_id] = global_symbols.count;
+    barrier_wait(tp->barrier);
+    {
+      U64 flat_off = 0;
+      for (U64 w = 0; w < task_id; w += 1) { flat_off += collect_counts[w]; }
+      for EachNode(n, VoidNode, global_symbols.first) { flat_symbols[flat_off++] = n->v; }
     }
     barrier_wait(tp->barrier);
 
-    U64       symbol_count  = 0;
-    void    **symbol_arr    = 0; // [symbol_count]
-    Rng1U64  *symbol_ranges = 0; // [worker_count]
-    U32      *symbol_hashes = 0; // [symbol_count]
-    if (task_id == 0) {
-      ProfBeginV("Compact Buckets [bucket_cap %llu]", bucket_cap);
-      for EachIndex(src, bucket_cap) {
-        buckets[symbol_count] = buckets[src];
-        symbol_count += buckets[src] != 0;
+    // insert symbols into hash table (even split of the flattened array)
+    {
+      U64 ins_lo = (task_id * global_symbol_count) / tp->worker_count;
+      U64 ins_hi = ((task_id + 1) * global_symbol_count) / tp->worker_count;
+      for (U64 i = ins_lo; i < ins_hi; i += 1) {
+        String8 raw  = cv_raw_from_symbol(flat_symbols[i]);
+        U64     hash = u64_hash_from_str8(raw);
+        cv_symbol_deduper_insert_or_update(buckets, bucket_cap, hash, flat_symbols[i]);
       }
-      ProfEnd();
+    }
+    barrier_wait(tp->barrier);
+    ProfEnd();
 
-      symbol_arr    = buckets;
+    // compact buckets in parallel: each worker owns a contiguous slot range, counts its
+    // occupied slots, then copies them to its prefix-sum offset. Concatenated ranges preserve
+    // ascending slot order, so symbol_arr is byte-identical to the old task-0-serial compaction
+    // (which stalled the other workers at the next barrier for the whole bucket_cap sweep).
+    U64       symbol_count   = 0;
+    void    **symbol_arr     = 0; // [symbol_count]
+    Rng1U64  *symbol_ranges  = 0; // [worker_count]
+    U32      *symbol_hashes  = 0; // [symbol_count]
+    U64      *compact_counts = 0; // [worker_count]
+    if (task_id == 0) {
+      compact_counts = push_array(scratch.arena, U64, tp->worker_count);
+    }
+    tp_broadcast(&compact_counts);
+
+    ProfBeginV("Compact Buckets [bucket_cap %llu]", bucket_cap);
+    U64 slot_lo = (task_id * bucket_cap) / tp->worker_count;
+    U64 slot_hi = ((task_id + 1) * bucket_cap) / tp->worker_count;
+    {
+      U64 c = 0;
+      for (U64 slot = slot_lo; slot < slot_hi; slot += 1) { c += buckets[slot] != 0; }
+      compact_counts[task_id] = c;
+    }
+    barrier_wait(tp->barrier);
+
+    for EachIndex(w, tp->worker_count) { symbol_count += compact_counts[w]; } // same value on every worker
+    if (task_id == 0) {
+      symbol_arr    = push_array_no_zero(scratch.arena, void *, symbol_count ? symbol_count : 1);
       symbol_ranges = tp_divide_work(scratch.arena, symbol_count, tp->worker_count);
       symbol_hashes = push_array_no_zero(scratch.arena, U32, symbol_count);
     }
-    tp_broadcast(&symbol_count);
     tp_broadcast(&symbol_arr);
     tp_broadcast(&symbol_ranges);
     tp_broadcast(&symbol_hashes);
+
+    {
+      U64 dst = 0;
+      for (U64 w = 0; w < task_id; w += 1) { dst += compact_counts[w]; }
+      for (U64 slot = slot_lo; slot < slot_hi; slot += 1) {
+        if (buckets[slot]) { symbol_arr[dst++] = buckets[slot]; }
+      }
+    }
+    barrier_wait(tp->barrier);
+    ProfEnd();
 
     // hash symbols
     Rng1U64 symbol_range = symbol_ranges[task_id];
