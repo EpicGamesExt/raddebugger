@@ -1976,7 +1976,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
 
     U64 max_weight = CeilIntegerDiv(total_input_size, tp->worker_count);
     U64 cursor     = 0;
-    input.symbol_input_ranges = push_array(tp_arena->v[0], Rng1U64, tp->worker_count);
+    input.symbol_input_ranges      = push_array(tp_arena->v[0], Rng1U64, tp->worker_count);
+    input.symbol_input_range_count = tp->worker_count;
     for EachIndex(i, tp->worker_count) {
       if (cursor >= input.symbol_input_count) { break; }
       U64 begin  = cursor;
@@ -3322,23 +3323,30 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
   ProfBegin("Global Symbols");
   {
+    // FAIR-SHARE: symbol_input_ranges is a FIXED [symbol_input_range_count] partition built at
+    // full pool width, but this barrier pass runs at the pinned cohort C == tp->worker_count
+    // (C <= fixed). Walk the fixed lanes strided by the cohort so every fixed lane is processed
+    // exactly once for any C; at C == fixed this degenerates to lane == task_id (one lane each,
+    // identical to the old direct indexing).
     VoidList global_symbols = {0};
-    for EachInRange(i, task->cv->symbol_input_ranges[task_id]) {
-      LNK_SymbolInput symbols = task->cv->symbol_inputs[i];
-      for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
-        CV_Symbol symbol = {0};
-        TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
+    for (U64 lane = task_id; lane < task->cv->symbol_input_range_count; lane += tp->worker_count) {
+      for EachInRange(i, task->cv->symbol_input_ranges[lane]) {
+        LNK_SymbolInput symbols = task->cv->symbol_inputs[i];
+        for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
+          CV_Symbol symbol = {0};
+          TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
 
-        if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) {
-          void *ptr = cv_ptr_from_symbol(symbol);
-          void_list_push(scratch.arena, &global_symbols, ptr);
-        }
+          if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) {
+            void *ptr = cv_ptr_from_symbol(symbol);
+            void_list_push(scratch.arena, &global_symbols, ptr);
+          }
 
-        if (cv_is_scope_symbol(symbol.kind)) {
-          depth += 1;
-        } else if (cv_is_end_symbol(symbol.kind)) {
-          if (depth == 0) { Assert(0 && "malformed symbol stream"); break; }
-          depth -= 1;
+          if (cv_is_scope_symbol(symbol.kind)) {
+            depth += 1;
+          } else if (cv_is_end_symbol(symbol.kind)) {
+            if (depth == 0) { Assert(0 && "malformed symbol stream"); break; }
+            depth -= 1;
+          }
         }
       }
     }
@@ -3393,17 +3401,31 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
 
-    // push global symbols
+    // push global symbols, sharded by bucket range: worker i owns buckets [i*B/W, (i+1)*B/W) and
+    // walks the FULL symbol sequence in global order, inserting only symbols whose bucket lands in
+    // its range. each bucket has a single owner and receives its inserts in global sequence order,
+    // so per-chain order (which is serialized into the PDB) is byte-identical to a serial loop, for
+    // any worker count -- no locks, no atomics.
+    CV_SymbolNode *global_nodes = 0;
     if (task_id == 0) {
-      CV_SymbolNode *nodes = push_array_no_zero(gsi->arena, CV_SymbolNode, symbol_count);
+      global_nodes = push_array_no_zero(gsi->arena, CV_SymbolNode, symbol_count);
+    }
+    tp_broadcast(&global_nodes);
+    {
+      U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
+      U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
       for EachIndex(i, symbol_count) {
-        CV_SymbolNode *n = &nodes[i];
+        U64 bucket_idx = symbol_hashes[i] % gsi->bucket_count;
+        if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
+        CV_SymbolNode *n = &global_nodes[i];
         n->prev = n->next = 0;
         n->data = cv_symbol_from_ptr(symbol_arr[i]);
         n->data.offset = i;
-        gsi_push_(gsi, symbol_hashes[i], n);
+        cv_symbol_list_push_node(&gsi->bucket_arr[bucket_idx], n);
       }
     }
+    barrier_wait(tp->barrier);
+    if (task_id == 0) { gsi->symbol_count += symbol_count; }
   }
   ProfEnd();
 
@@ -3495,59 +3517,76 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
 
-    // push proc refs
-    if (task_id == 0) {
-      U64 total_proc_ref_count = sum_array_u64(tp->worker_count, proc_ref_counts);
-      for EachIndex(i, total_proc_ref_count) { gsi_push_(gsi, proc_ref_hashes[i], &proc_ref_nodes[i]); }
+    // push proc refs, sharded by bucket range (single owner per bucket, inserts in global node
+    // order -> per-chain order identical to a serial loop for any worker count)
+    {
+      U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
+      U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
+      for EachIndex(i, total_proc_ref_count) {
+        U64 bucket_idx = (U32)proc_ref_hashes[i] % gsi->bucket_count;
+        if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
+        cv_symbol_list_push_node(&gsi->bucket_arr[bucket_idx], &proc_ref_nodes[i]);
+      }
     }
     barrier_wait(tp->barrier);
+    if (task_id == 0) { gsi->symbol_count += total_proc_ref_count; }
   }
   ProfEnd();
 
   ProfBegin("Public Symbols");
   {
-    U64 *public_symbol_sizes       = 0; // [worker_count]
-    U64 *public_symbol_node_counts = 0; // [worker_count]
+    // FAIR-SHARE: task->symtab->chunks is a FIXED [symtab->arena->count] partition built at
+    // full pool width, but this barrier pass runs at the pinned cohort C == tp->worker_count
+    // (C <= fixed). Walk the fixed lanes strided by the cohort so every fixed lane is
+    // processed exactly once for any C, and keep every per-lane array in FIXED-lane order so
+    // the flattened global order below (which feeds the sharded PSI insert) is byte-identical
+    // to a full-width run. At C == fixed the strided loops degenerate to lane == task_id.
+    U64 fixed_lane_count = task->symtab->arena->count;
+
+    U64 *public_symbol_sizes       = 0; // [fixed_lane_count]
+    U64 *public_symbol_node_counts = 0; // [fixed_lane_count]
     if (task_id == 0) {
-      public_symbol_sizes       = push_array(scratch.arena, U64, tp->worker_count);
-      public_symbol_node_counts = push_array(scratch.arena, U64, tp->worker_count);
+      public_symbol_sizes       = push_array(scratch.arena, U64, fixed_lane_count);
+      public_symbol_node_counts = push_array(scratch.arena, U64, fixed_lane_count);
     }
     tp_broadcast(&public_symbol_sizes);
     tp_broadcast(&public_symbol_node_counts);
 
     // compute buffer size for CV public symbols
-    LNK_SymbolHashTrieChunkList symbol_chunks       = task->symtab->chunks[task_id];
-    U64                         public_symbol_size  = 0;
-    U64                         public_symbol_count = 0;
-    for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
-      for EachIndex(i, chunk->count) {
-        LNK_Symbol        *symbol        = chunk->v[i].symbol;
-        LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
-        COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
+    for (U64 lane = task_id; lane < fixed_lane_count; lane += tp->worker_count) {
+      LNK_SymbolHashTrieChunkList symbol_chunks       = task->symtab->chunks[lane];
+      U64                         public_symbol_size  = 0;
+      U64                         public_symbol_count = 0;
+      for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
+        for EachIndex(i, chunk->count) {
+          LNK_Symbol        *symbol        = chunk->v[i].symbol;
+          LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
+          COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
 
-        if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol_ref.obj)) { continue; }
-        COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-        if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
+          if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol_ref.obj)) { continue; }
+          COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+          if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
 
-        public_symbol_size  += AlignPow2(sizeof(CV_SymPub32) + symbol->name.size + 1, sizeof(void *));
-        public_symbol_count += 1;
-        public_symbol_node_counts[task_id] += 1;
+          public_symbol_size  += AlignPow2(sizeof(CV_SymPub32) + symbol->name.size + 1, sizeof(void *));
+          public_symbol_count += 1;
+          public_symbol_node_counts[lane] += 1;
+        }
       }
+      public_symbol_sizes      [lane] += public_symbol_size;
+      public_symbol_node_counts[lane] += public_symbol_count;
     }
-    public_symbol_sizes      [task_id] += public_symbol_size;
-    public_symbol_node_counts[task_id] += public_symbol_count;
     barrier_wait(tp->barrier);
 
     Arena         **public_symbol_arenas      = 0;
     Arena         **public_symbol_node_arenas = 0;
-    CV_SymbolList  *public_symbols            = 0; // [worker_count]
-    U32           **public_symbol_hashes      = 0; // [worker_count][public_symbol.count]
+    CV_SymbolList  *public_symbols            = 0; // [fixed_lane_count]
+    U32           **public_symbol_hashes      = 0; // [fixed_lane_count][public_symbol.count]
     if (task_id == 0) {
-      U64 public_symbol_total_count  = sum_array_u64(tp->worker_count, public_symbol_node_counts);
-      public_symbol_arenas      = alloc_arena_many(psi->gsi->arena, tp->worker_count, public_symbol_sizes);
-      public_symbol_node_arenas = alloc_arena_array(psi->gsi->arena, tp->worker_count, public_symbol_node_counts, CV_SymbolNode);
-      public_symbols            = push_array(scratch.arena, CV_SymbolList, tp->worker_count);
-      public_symbol_hashes      = push_array(scratch.arena, U32 *, tp->worker_count);
+      U64 public_symbol_total_count  = sum_array_u64(fixed_lane_count, public_symbol_node_counts);
+      public_symbol_arenas      = alloc_arena_many(psi->gsi->arena, fixed_lane_count, public_symbol_sizes);
+      public_symbol_node_arenas = alloc_arena_array(psi->gsi->arena, fixed_lane_count, public_symbol_node_counts, CV_SymbolNode);
+      public_symbols            = push_array(scratch.arena, CV_SymbolList, fixed_lane_count);
+      public_symbol_hashes      = push_array(scratch.arena, U32 *, fixed_lane_count);
     }
     tp_broadcast(&public_symbol_arenas);
     tp_broadcast(&public_symbol_node_arenas);
@@ -3555,52 +3594,87 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     tp_broadcast(&public_symbol_hashes);
 
     // make CV public symbols
-    Arena         *public_symbol_arena      = public_symbol_arenas     [task_id];
-    Arena         *public_symbol_node_arena = public_symbol_node_arenas[task_id];
-    CV_SymbolList *public_symbol_list       = &public_symbols          [task_id];
-    for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
-      for EachIndex(i, chunk->count) {
-        LNK_Symbol        *symbol        = chunk->v[i].symbol;
-        LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
-        COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
+    for (U64 lane = task_id; lane < fixed_lane_count; lane += tp->worker_count) {
+      LNK_SymbolHashTrieChunkList symbol_chunks           = task->symtab->chunks[lane];
+      Arena                      *public_symbol_arena      = public_symbol_arenas     [lane];
+      Arena                      *public_symbol_node_arena = public_symbol_node_arenas[lane];
+      CV_SymbolList              *public_symbol_list       = &public_symbols          [lane];
+      for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
+        for EachIndex(i, chunk->count) {
+          LNK_Symbol        *symbol        = chunk->v[i].symbol;
+          LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
+          COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
 
-        // discard removed and non-section symbols
-        if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol_ref.obj)) { continue; }
-        COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-        if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
+          // discard removed and non-section symbols
+          if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol_ref.obj)) { continue; }
+          COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+          if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
 
-        CV_Pub32Flags flags      = COFF_SymbolType_IsFunc(symbol_parsed.type) ? CV_Pub32Flag_Function : 0;
-        ISectOff      sc         = lnk_sc_from_symbol(symbol);
-        CV_Symbol     pub_symbol = cv_make_pub32(public_symbol_arena, flags, safe_cast_u32(sc.off), safe_cast_u16(sc.isect), symbol->name);
-        cv_symbol_list_push(public_symbol_node_arena, public_symbol_list, pub_symbol);
+          CV_Pub32Flags flags      = COFF_SymbolType_IsFunc(symbol_parsed.type) ? CV_Pub32Flag_Function : 0;
+          ISectOff      sc         = lnk_sc_from_symbol(symbol);
+          CV_Symbol     pub_symbol = cv_make_pub32(public_symbol_arena, flags, safe_cast_u32(sc.off), safe_cast_u16(sc.isect), symbol->name);
+          cv_symbol_list_push(public_symbol_node_arena, public_symbol_list, pub_symbol);
+        }
       }
     }
     barrier_wait(tp->barrier);
 
     // hash public symbols
-    {
+    for (U64 lane = task_id; lane < fixed_lane_count; lane += tp->worker_count) {
       U64  hash_idx = 0;
-      U32 *hashes   = push_array(scratch.arena, U32, public_symbols[task_id].count);
-      for EachNode(n, CV_SymbolNode, public_symbols[task_id].first) {
+      U32 *hashes   = push_array(scratch.arena, U32, public_symbols[lane].count);
+      for EachNode(n, CV_SymbolNode, public_symbols[lane].first) {
         String8 name = cv_name_from_symbol(n->data.kind, n->data.data);
         hashes[hash_idx++] = gsi_hash(gsi, name);
       }
-      public_symbol_hashes[task_id] = hashes;
+      public_symbol_hashes[lane] = hashes;
     }
     barrier_wait(tp->barrier);
 
-    // insert public symbols into PSI
+    // flatten the per-worker symbol lists (in worker order, matching the old serial walk) into one
+    // global-order node/hash array, so the sharded insert below can walk it without racing on the
+    // list links
+    U64             public_symbol_total_count = 0;
+    U64            *public_symbol_offsets     = 0; // [fixed_lane_count]
+    CV_SymbolNode **public_symbol_flat_nodes  = 0; // [public_symbol_total_count]
+    U32            *public_symbol_flat_hashes = 0; // [public_symbol_total_count]
     if (task_id == 0) {
-      for EachIndex(i, tp->worker_count) {
-        U64 k = 0;
-        for (CV_SymbolNode *curr = public_symbols[i].first, *next = 0; curr != 0; curr = next, k += 1) {
-          next = curr->next;
-          curr->next = 0;
-          gsi_push_(psi->gsi, public_symbol_hashes[i][k], curr);
-        }
+      U64 *list_counts = push_array_no_zero(scratch.arena, U64, fixed_lane_count);
+      for EachIndex(i, fixed_lane_count) { list_counts[i] = public_symbols[i].count; }
+      public_symbol_offsets     = offsets_from_counts_array_u64(scratch.arena, list_counts, fixed_lane_count);
+      public_symbol_total_count = sum_array_u64(fixed_lane_count, list_counts);
+      public_symbol_flat_nodes  = push_array_no_zero(scratch.arena, CV_SymbolNode *, public_symbol_total_count);
+      public_symbol_flat_hashes = push_array_no_zero(scratch.arena, U32, public_symbol_total_count);
+    }
+    tp_broadcast(&public_symbol_total_count);
+    tp_broadcast(&public_symbol_offsets);
+    tp_broadcast(&public_symbol_flat_nodes);
+    tp_broadcast(&public_symbol_flat_hashes);
+    for (U64 lane = task_id; lane < fixed_lane_count; lane += tp->worker_count) {
+      U64 cursor = public_symbol_offsets[lane];
+      U64 k      = 0;
+      for (CV_SymbolNode *curr = public_symbols[lane].first; curr != 0; curr = curr->next, k += 1) {
+        public_symbol_flat_nodes [cursor] = curr;
+        public_symbol_flat_hashes[cursor] = public_symbol_hashes[lane][k];
+        cursor += 1;
       }
     }
     barrier_wait(tp->barrier);
+
+    // insert public symbols into PSI, sharded by bucket range (single owner per bucket, inserts in
+    // global order -> per-chain order identical to a serial loop for any worker count)
+    {
+      PDB_GsiContext *pub_gsi   = psi->gsi;
+      U64             shard_min = (task_id * pub_gsi->bucket_count) / tp->worker_count;
+      U64             shard_max = ((task_id + 1) * pub_gsi->bucket_count) / tp->worker_count;
+      for EachIndex(i, public_symbol_total_count) {
+        U64 bucket_idx = public_symbol_flat_hashes[i] % pub_gsi->bucket_count;
+        if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
+        cv_symbol_list_push_node(&pub_gsi->bucket_arr[bucket_idx], public_symbol_flat_nodes[i]);
+      }
+    }
+    barrier_wait(tp->barrier);
+    if (task_id == 0) { psi->gsi->symbol_count += public_symbol_total_count; }
   }
   ProfEnd();
 
