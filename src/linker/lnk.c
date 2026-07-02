@@ -4510,6 +4510,25 @@ THREAD_POOL_TASK_FUNC(lnk_image_fill_task)
   ProfEnd();
 }
 
+typedef struct
+{
+  U8 *dst;
+  U64 size;
+  U8  byte;
+} LNK_FillAlignRange;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_fill_align_bytes_task)
+{
+  ProfBeginFunction();
+  LNK_FillAlignRange *range = &((LNK_FillAlignRange *)raw_task)[task_id];
+  lnk_stream_set(range->dst, range->byte, range->size);
+  // make this task's NT stores globally visible before the completion counter is
+  // bumped, so every thread past the join (contrib-fill / reloc passes) sees them
+  _mm_sfence();
+  ProfEnd();
+}
+
 internal U64
 lnk_compute_win32_image_header_size(LNK_Config *config, U64 sect_count)
 {
@@ -6013,17 +6032,49 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     ProfEnd();
 
     ProfBegin("Fill Align Bytes");
-    for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
-      LNK_Section *sect = &sect_n->data;
-      ProfBeginV("Section: %S Size: %M", sect->name, sect->fsize);
-      U8 fill_byte = sect->flags & COFF_SectionFlag_CntCode ? coff_code_align_byte_from_machine(config->machine) : 0;
-      // write-once into the image buffer -> stream past the cache (see lnk_stream_set)
-      lnk_stream_set(image_data.str + sect->foff, fill_byte, sect->fsize);
-      ProfEnd();
+    {
+      // This is the first touch of the freshly committed ~image-size buffer: every
+      // page is a demand-zero fault. Serial on main, that soft-fault storm (plus the
+      // stream-set itself) parks all workers for the duration; range-split it across
+      // the pool instead. Split points are PAGE-ALIGNED in the image buffer (the
+      // reservation is page-aligned) so no two workers ever touch the same 4K page.
+      // Writes are value-identical to the serial loop and byte-disjoint -> byte-safe.
+      Temp fill_temp = temp_begin(scratch.arena);
+      U64  range_quantum = MB(4);
+
+      // upper bound on range count
+      U64 range_cap = 0;
+      for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+        range_cap += CeilIntegerDiv(sect_n->data.fsize, range_quantum) + 1;
+      }
+
+      LNK_FillAlignRange *ranges      = push_array_no_zero(fill_temp.arena, LNK_FillAlignRange, range_cap);
+      U64                 range_count = 0;
+      for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+        LNK_Section *sect      = &sect_n->data;
+        U8           fill_byte = sect->flags & COFF_SectionFlag_CntCode ? coff_code_align_byte_from_machine(config->machine) : 0;
+        U64          pos       = sect->foff;
+        U64          end       = sect->foff + sect->fsize;
+        for (; pos < end; ) {
+          U64 next = AlignDownPow2(pos + range_quantum, KB(4));
+          next     = ClampTop(next, end);
+          if (next <= pos) { next = end; }
+          Assert(range_count < range_cap);
+          LNK_FillAlignRange *range = &ranges[range_count++];
+          range->dst  = image_data.str + pos;
+          range->size = next - pos;
+          range->byte = fill_byte;
+          pos = next;
+        }
+      }
+
+      // write-once into the image buffer -> stream past the cache (see lnk_stream_set);
+      // each task sfences its own NT stores before signalling completion, so after the
+      // join every fill below is globally visible to the contrib-fill / reloc passes
+      tp_for_parallel(tp, 0, range_count, lnk_fill_align_bytes_task, ranges);
+
+      temp_end(fill_temp);
     }
-    // flush NT stores before the parallel contrib-fill / reloc passes read or
-    // re-write these lines
-    _mm_sfence();
     ProfEnd();
 
     Temp temp = temp_begin(scratch.arena);
