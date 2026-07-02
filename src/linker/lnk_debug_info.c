@@ -2374,6 +2374,25 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_deep_task)
   ProfEnd();
 }
 
+// Deterministic sampling for the unique-leaf estimator: process every K-th leaf POSITION per obj.
+// Position-based (leaf_idx % K), never value-based, so the sampled set -- and therefore the
+// estimate and the table caps -- is a pure function of the input, schedule-independent. The
+// dominant duplication pattern is whole-stream duplication (the same PCH/type-server leaf sequence
+// repeated across objs), where a unique hash sits at the SAME position in every copy: the sampled
+// distinct count then scales ~1/K, which LNK_ESTIMATE_SAMPLE_SCALE compensates for. The scale is
+// calibrated (see the estimate block in lnk_merge_types); an undershoot is caught by the existing
+// deterministic overflow-retry at total-based caps, an overshoot is clamped by Min(fallback cap).
+//
+// SCALE calibration: sampled-distinct is between distinct (fully position-scattered duplication)
+// and distinct/K (whole-stream duplication or unique-heavy input), so the true ratio is in [1, K].
+// SCALE * 1.9 (the downstream safety factor) must cover the worst-case ratio K to keep the
+// overflow-retry off for every duplication pattern: SCALE = 5.0 gives 5.0*1.9 = 9.5 >= K = 8
+// (1.19x margin over the bound, which also absorbs linear-counting noise). Measured on the FN
+// editor-scale link: ratio 3.99 (TPI) / 6.13 (IPI); SCALE = 5.0 reproduces the unsampled
+// estimator's caps exactly (64M/16M) at load factors 0.35/0.39.
+#define LNK_ESTIMATE_SAMPLE_STRIDE 8
+#define LNK_ESTIMATE_SAMPLE_SCALE  5.0
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_estimate_unique_leaves_task)
 {
@@ -2385,7 +2404,7 @@ THREAD_POOL_TASK_FUNC(lnk_estimate_unique_leaves_task)
   // same prune rule as lnk_leaf_dedup_task: NOTYPE'd IFC blob leaves were never hashed and are
   // never inserted, so they must not contribute to the estimate either
   B32 is_ifc_blob = task->input->has_ifc_redirects && contains_1u64(task->input->ifc_obj_range, obj_idx);
-  for EachIndex(leaf_idx, debug_t->count) {
+  for (U64 leaf_idx = 0; leaf_idx < debug_t->count; leaf_idx += LNK_ESTIMATE_SAMPLE_STRIDE) {
     CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
     CV_LeafKind    kind   = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind));
     if (is_ifc_blob && kind == CV_LeafKind_NOTYPE) { continue; }
@@ -2886,6 +2905,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     // that instead. Everything here is a pure function of the input hashes, so the caps -- and the
     // overflow/retry decision below -- are identical run to run.
     ProfBegin("Estimate Unique Leaves");
+    U64 estimate_begin_us = now_time_us();
     {
       // sweep exactly the objs whose leaves get inserted: prepopulate + the four dedup passes
       U32Array sweep_arrs[] = { input->debug_p_indices, input->int_obj_indices, input->type_server_indices, input->ifc_indices };
@@ -2899,9 +2919,11 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
       }
 
       for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
-        // bits >= total >= unique keeps the bitmap load < 1, where linear counting is accurate;
+        // at most ceil(total/K) hashes are inserted under K-th-position sampling, so bits >=
+        // total/K >= sampled-unique keeps the bitmap load < 1, where linear counting is accurate;
         // clamp keeps the transient bitmap allocation bounded (16MB per source at the top end)
-        task.estimate_bitmap_bits[ti_source] = u64_up_to_pow2(Clamp(1ull << 16, total_counts[ti_source], 1ull << 27));
+        U64 sampled_total = (total_counts[ti_source] + LNK_ESTIMATE_SAMPLE_STRIDE - 1) / LNK_ESTIMATE_SAMPLE_STRIDE;
+        task.estimate_bitmap_bits[ti_source] = u64_up_to_pow2(Clamp(1ull << 16, sampled_total, 1ull << 27));
         task.estimate_bitmap     [ti_source] = push_array(scratch.arena, U32, task.estimate_bitmap_bits[ti_source] / 32);
       }
 
@@ -2925,14 +2947,20 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
           // linear counting: distinct ~= m * ln(m / zeros)
           F64 estimate = (F64)bit_count * log((F64)bit_count / (F64)zero_count);
           if (estimate < (F64)set_count) { estimate = (F64)set_count; }
+          // scale the sampled distinct count back up to a full-population estimate (see the
+          // sampling comment above lnk_estimate_unique_leaves_task)
+          estimate *= LNK_ESTIMATE_SAMPLE_SCALE;
           // 1.9x safety keeps the load factor <= ~0.55 even before pow2 rounding; overflow (only
           // possible if the estimate undershoots by >1.8x) is caught and retried deterministically
           U64 target = (U64)(estimate * 1.9) + 4096;
           cap = Min(u64_up_to_pow2(target), leaf_ht_cap_fallback[ti_source]);
+          lnk_log(LNK_Log_Timers, "[typededup] estimate src=%llu: set=%llu est=%.0f cap=%llu (fallback %llu)",
+                  ti_source, set_count, estimate, cap, leaf_ht_cap_fallback[ti_source]);
         }
         task.leaf_ht_arr[ti_source].cap = cap;
       }
     }
+    lnk_log(LNK_Log_Timers, "[typededup] unique-leaf estimate in %.2f ms", (F64)(now_time_us() - estimate_begin_us) / 1000.0);
     ProfEnd();
 
     for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
@@ -3020,6 +3048,10 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     task.unique_leaf_refs_arr[ti_source].v     = push_array_no_zero(scratch.arena, LNK_LeafRef, task.unique_leaf_refs_arr[ti_source].count);
     task.offsets[ti_source]                    = offsets_from_counts_array_u64(scratch.arena, task.counts[ti_source], tp->worker_count);
     tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_get_present_buckets_task, &task, "Copy present buckets");
+
+    lnk_log(LNK_Log_Timers, "[typededup] src=%llu: unique=%llu cap=%llu load=%.3f",
+            ti_source, task.unique_leaf_refs_arr[ti_source].count, task.leaf_ht_arr[ti_source].cap,
+            task.leaf_ht_arr[ti_source].cap ? (F64)task.unique_leaf_refs_arr[ti_source].count / (F64)task.leaf_ht_arr[ti_source].cap : 0.0);
 
     // sort output leaves based on { location index, leaf index } to guarantee determinism
     ProfScope("Radix Sort") {
