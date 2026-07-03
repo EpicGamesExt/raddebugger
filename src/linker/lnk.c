@@ -6775,6 +6775,11 @@ lnk_log_timers(void)
   scratch_end(scratch);
 }
 
+// scratch free-list blocks detached during the decommit pass, released on a
+// background thread (see lnk_scratch_decommit_worker)
+global Arena *g_detached_scratch_blocks = 0;
+global Thread g_scratch_freelist_reaper = {0};
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_scratch_decommit_worker)
 {
@@ -6791,11 +6796,64 @@ THREAD_POOL_TASK_FUNC(lnk_scratch_decommit_worker)
   // NOT help: MEM_DECOMMIT serializes in the kernel on the process address-space
   // lock (~14 GB/s aggregate no matter the thread count; measured 9.3 GiB in
   // 677 ms chunked-parallel vs ~500 ms with this per-worker scheme). And handing
-  // the decommit to a background thread is UNSAFE here: workers push to these
-  // scratch arenas as soon as the PDB build starts, and a push would re-commit
-  // pages that the background decommit then rips out.
-  tctx_scratch_decommit();
+  // the ACTIVE-CHAIN decommit to a background thread is UNSAFE here: workers push
+  // to these scratch arenas as soon as the PDB build starts, and a push would
+  // re-commit pages that the background decommit then rips out.
+  //
+  // The FREE-LIST blocks are different: they hold no live data and are only
+  // touched again when a grow pops them. On the editor link ~84% of the
+  // decommitted bytes (9.4 of 11.3 GiB) sit in free-list blocks, so instead of
+  // decommitting them here (serialized kernel work on the critical path), each
+  // worker DETACHES its arenas' free chains (pointer ops, same thread => safe)
+  // onto a global list that a background thread releases while the PDB build
+  // runs. A post-detach grow simply sees an empty free list and reserves a
+  // fresh block -- same cost as the re-commit it would have paid anyway.
+  TCTX *tctx = tctx_selected();
+  for EachIndex(arena_idx, ArrayCount(tctx->arenas)) {
+    Arena *arena = tctx->arenas[arena_idx];
+    if (arena == 0) { continue; }
+#if ARENA_FREE_LIST
+    // detach this arena's free chain and publish the blocks for background release
+    for (Arena *block = arena->free_last, *block_next = 0; block != 0; block = block_next) {
+      block_next = block->prev;
+      for (;;) {
+        Arena *head = (Arena *)ins_atomic_u64_eval(&g_detached_scratch_blocks);
+        block->prev = head;
+        if ((Arena *)ins_atomic_u64_eval_cond_assign((U64 *)&g_detached_scratch_blocks, (U64)block, (U64)head) == head) { break; }
+      }
+    }
+    arena->free_last = 0;
+#endif
+    // decommit the committed-but-unused pages above the live pos (active chain)
+    arena_decommit_unused(arena);
+  }
   barrier_wait(tp->barrier);
+}
+
+// Releases the scratch free-list blocks detached by lnk_scratch_decommit_worker.
+// Runs in the background: MEM_RELEASE serializes on the process address-space
+// lock in the kernel, so on the main thread this would extend the decommit
+// window 1:1; off the main thread it overlaps the PDB build.
+internal void
+lnk_detached_scratch_release_thread(void *raw)
+{
+  ProfBeginFunction();
+  U64 begin_us = now_time_us();
+
+  U64    released_bytes = 0;
+  U64    released_count = 0;
+  Arena *chain          = (Arena *)ins_atomic_u64_eval_assign((U64 *)&g_detached_scratch_blocks, 0);
+  for (Arena *block = chain, *block_next = 0; block != 0; block = block_next) {
+    block_next      = block->prev;
+    released_bytes += block->cmt;
+    released_count += 1;
+    AsanUnpoisonMemoryRegion(block, block->cmt);
+    release_memory(block, block->res);
+  }
+
+  lnk_log(LNK_Log_Timers, "[teardown] background release of %llu detached scratch blocks (%llu MiB committed) took %.2f ms (off main thread)",
+          released_count, released_bytes / MB(1), (F64)(now_time_us() - begin_us) / 1000.0);
+  ProfEnd();
 }
 
 internal
@@ -6954,6 +7012,9 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       // task_count == worker_count + the in-worker barrier => every worker
       // (worker 0 IS the main thread) runs exactly once, covering main's scratch.
       tp_for_parallel_reserve(tp, 0, tp->worker_count, lnk_scratch_decommit_worker, 0); // BARRIER pass (path B)
+      if (g_detached_scratch_blocks != 0) {
+        g_scratch_freelist_reaper = thread_launch(lnk_detached_scratch_release_thread, 0);
+      }
       lnk_log(LNK_Log_Timers, "[teardown] scratch decommit pass in %.2f ms", (F64)(now_time_us() - decommit_begin_us) / 1000.0);
       ProfEnd();
     }
@@ -7091,6 +7152,12 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   if (g_arena_reaper_thread.u64[0] != 0) {
     thread_join(g_arena_reaper_thread, max_U64);
     MemoryZeroStruct(&g_arena_reaper_thread);
+  }
+
+  // reap the background scratch free-list release thread, if one was launched
+  if (g_scratch_freelist_reaper.u64[0] != 0) {
+    thread_join(g_scratch_freelist_reaper, max_U64);
+    MemoryZeroStruct(&g_scratch_freelist_reaper);
   }
 
   // image is on disk and no longer read by anyone -- release its ~1GB now so the kernel reclaims it
