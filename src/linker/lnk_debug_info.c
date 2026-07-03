@@ -52,6 +52,117 @@ lnk_arena_release_thread(void *raw_arena)
   ProfEnd();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//~ Fault-storm mitigation: batched PrefetchVirtualMemory over mapped input
+//  ranges. The .debug$S/$T parse and type-merge loops first-touch tens of GB of
+//  memory-mapped obj sections one 4K page fault at a time; with ~100+ links in
+//  flight on a build farm those per-page traps saturate the kernel machine-wide
+//  (prod, 126 concurrent links: dbg phase 682s kernel vs 303s user, 42M faults
+//  in mcvi alone). PrefetchVirtualMemory populates the ranges in bulk (large MM
+//  batches, no per-page trap), so issue it over each phase's input ranges right
+//  before the parse walk. Purely a paging hint: no output byte depends on it,
+//  failure is silently ignored (pre-Win8 OS / memory pressure), and prefetching
+//  an already-resident page is a cheap no-op -- so no residency tracking,
+//  blanket prefetch per phase.
+
+#if OS_WINDOWS
+// declared locally so we do not depend on the SDK's _WIN32_WINNT gate for
+// WIN32_MEMORY_RANGE_ENTRY; layout matches memoryapi.h exactly
+typedef struct LNK_Win32MemoryRangeEntry
+{
+  void  *VirtualAddress;
+  SIZE_T NumberOfBytes;
+} LNK_Win32MemoryRangeEntry;
+typedef BOOL LNK_Win32PrefetchVirtualMemoryFunc(HANDLE process, ULONG_PTR count, LNK_Win32MemoryRangeEntry *ranges, ULONG flags); // WINAPI omitted: x64-only convention
+
+// entries per task: the kernel's per-page population work dominates the
+// syscall overhead, so small batches fanned out over the pool parallelize the
+// MM work (14 GiB of mcvi input: ~0.9 s serial -> a wide parallel burst)
+#define LNK_PREFETCH_BATCH_SIZE 256
+
+typedef struct
+{
+  LNK_Win32PrefetchVirtualMemoryFunc *proc;
+  U64                                 entry_count;
+  LNK_Win32MemoryRangeEntry          *entries;
+} LNK_PrefetchTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_prefetch_task)
+{
+  LNK_PrefetchTask *task = raw_task;
+  U64 lo = task_id * LNK_PREFETCH_BATCH_SIZE;
+  U64 hi = Min(lo + LNK_PREFETCH_BATCH_SIZE, task->entry_count);
+  if (lo < hi) {
+    task->proc(GetCurrentProcess(), (ULONG_PTR)(hi - lo), task->entries + lo, 0);
+  }
+}
+#endif
+
+internal void
+lnk_prefetch_ranges(TP_Context *tp, U64 range_count, Rng1U64 *ranges)
+{
+#if OS_WINDOWS
+  // resolve once (Win8+; on older OS fall through silently). Only called from
+  // serial phase-setup code, so the local_persist init has no race.
+  local_persist LNK_Win32PrefetchVirtualMemoryFunc *prefetch_proc          = 0;
+  local_persist B32                                 prefetch_proc_resolved = 0;
+  if (!prefetch_proc_resolved) {
+    prefetch_proc_resolved = 1;
+    HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+    if (kernel32 != 0) {
+      prefetch_proc = (LNK_Win32PrefetchVirtualMemoryFunc *)GetProcAddress(kernel32, "PrefetchVirtualMemory");
+    }
+  }
+  if (prefetch_proc == 0 || range_count == 0) { return; }
+
+  Temp scratch = scratch_begin(0,0);
+
+  // Coalesce page-aligned neighbors with a single linear pass: ranges arrive
+  // obj-by-obj in file-offset order, so adjacent sections of the same mapped
+  // obj (the common case by far) fold into one entry. No sort -- the API does
+  // not require ordered or disjoint ranges, overlap just costs a cheap re-walk.
+  LNK_Win32MemoryRangeEntry *entries     = push_array_no_zero(scratch.arena, LNK_Win32MemoryRangeEntry, range_count);
+  U64                        entry_count = 0;
+  U64 pending_min = 0, pending_max = 0;
+  for EachIndex(range_idx, range_count) {
+    if (ranges[range_idx].min >= ranges[range_idx].max) { continue; }
+    U64 min = AlignDownPow2(ranges[range_idx].min, KB(4));
+    U64 max = AlignPow2    (ranges[range_idx].max, KB(4));
+    if (pending_max != 0 && min <= pending_max && max >= pending_min) {
+      pending_min = Min(pending_min, min);
+      pending_max = Max(pending_max, max);
+      continue;
+    }
+    if (pending_max != 0) {
+      entries[entry_count].VirtualAddress = (void *)pending_min;
+      entries[entry_count].NumberOfBytes  = (SIZE_T)(pending_max - pending_min);
+      entry_count += 1;
+    }
+    pending_min = min;
+    pending_max = max;
+  }
+  if (pending_max != 0) {
+    entries[entry_count].VirtualAddress = (void *)pending_min;
+    entries[entry_count].NumberOfBytes  = (SIZE_T)(pending_max - pending_min);
+    entry_count += 1;
+  }
+
+  // fan the batches out over the pool: population is per-page kernel work, so
+  // this turns a serial ~1 s stall into a wide parallel burst. Purely advisory
+  // syscalls with no output -- any batch interleaving is fine.
+  LNK_PrefetchTask task        = { .proc = prefetch_proc, .entry_count = entry_count, .entries = entries };
+  U64              batch_count = CeilIntegerDiv(entry_count, LNK_PREFETCH_BATCH_SIZE);
+  if (tp != 0 && batch_count > 1) {
+    tp_for_parallel(tp, 0, batch_count, lnk_prefetch_task, &task);
+  } else {
+    for EachIndex(batch_idx, batch_count) { lnk_prefetch_task(0, 0, batch_idx, &task, 0); }
+  }
+
+  scratch_end(scratch);
+#endif
+}
+
 internal void
 lnk_discard_cv_debug_info(LNK_CodeViewInput *input, U64 obj_idx)
 {
@@ -1549,6 +1660,50 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   input.debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0);
   ProfEnd();
 
+  // batch-populate the mapped .debug$S/$T/$P/$H input ranges before the parse
+  // loops below first-touch them page by page (see lnk_prefetch_ranges)
+  ProfScope("Prefetch CodeView")
+  {
+    Temp temp = temp_begin(scratch.arena);
+
+    U64 range_cap = 3 * obj_count; // debug$T + debug$P + debug$H
+    for EachIndex(obj_idx, obj_count) { range_cap += input.debug_s_list_arr[obj_idx].node_count; }
+
+    Rng1U64 *ranges      = push_array_no_zero(temp.arena, Rng1U64, range_cap);
+    U64      range_count = 0;
+    for EachIndex(obj_idx, obj_count) {
+      LNK_Obj *obj = obj_arr[obj_idx];
+
+      for EachNode(n, String8Node, input.debug_s_list_arr[obj_idx].first) {
+        if (n->string.size) { ranges[range_count++] = rng_1u64((U64)n->string.str, (U64)n->string.str + n->string.size); }
+      }
+      if (obj->debug_t_sect_idx < obj->header.section_count_no_null) {
+        LNK_ObjSection sect = lnk_obj_section_from_sect_idx(obj, obj->debug_t_sect_idx);
+        String8        data = lnk_obj_get_sect_data(obj, obj->debug_t_sect_idx, sect.frange);
+        if (data.size) { ranges[range_count++] = rng_1u64((U64)data.str, (U64)data.str + data.size); }
+      }
+      if (obj->debug_p_sect_idx < obj->header.section_count_no_null) {
+        LNK_ObjSection sect = lnk_obj_section_from_sect_idx(obj, obj->debug_p_sect_idx);
+        String8        data = lnk_obj_get_sect_data(obj, obj->debug_p_sect_idx, sect.frange);
+        if (data.size) { ranges[range_count++] = rng_1u64((U64)data.str, (U64)data.str + data.size); }
+      }
+      if (config->ghash && obj->debug_h_sect_idx < obj->header.section_count_no_null) {
+        LNK_ObjSection sect = lnk_obj_section_from_sect_idx(obj, obj->debug_h_sect_idx);
+        String8        data = lnk_obj_get_sect_data(obj, obj->debug_h_sect_idx, sect.frange);
+        if (data.size) { ranges[range_count++] = rng_1u64((U64)data.str, (U64)data.str + data.size); }
+      }
+    }
+    Assert(range_count <= range_cap);
+    U64 prefetch_begin_us = now_time_us();
+    U64 prefetch_bytes    = 0;
+    for EachIndex(range_idx, range_count) { prefetch_bytes += dim_1u64(ranges[range_idx]); }
+    lnk_prefetch_ranges(tp, range_count, ranges);
+    lnk_log(LNK_Log_Timers, "[mcvi] prefetched %llu debug section ranges (%llu MiB) in %.2f ms",
+            range_count, prefetch_bytes / MB(1), (F64)(now_time_us() - prefetch_begin_us) / 1000.0);
+
+    temp_end(temp);
+  }
+
   // profiler info
   if (lnk_get_log_status(LNK_Log_Debug) || PROFILE_TELEMETRY) {
     U64 total_debug_s_size = 0, total_debug_t_size = 0, total_debug_p_size = 0, total_debug_h_size = 0;
@@ -2847,6 +3002,34 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
       }
     }
     ProfEnd();
+
+    // batch-populate the .debug$T/$P leaf data the hashers below walk leaf by
+    // leaf; under farm-wide memory pressure these mapped pages were trimmed
+    // since the parse phase touched them (see lnk_prefetch_ranges)
+    ProfScope("Prefetch Type Data")
+    {
+      Temp temp = temp_begin(scratch.arena);
+
+      U64 range_cap = 0;
+      for EachElement(i, hash_targets) { range_cap += hash_targets[i].hash_indices.count; }
+
+      Rng1U64 *ranges      = push_array_no_zero(temp.arena, Rng1U64, range_cap);
+      U64      range_count = 0;
+      for EachElement(i, hash_targets) {
+        for EachIndex(k, hash_targets[i].hash_indices.count) {
+          String8 data = input->debug_t_arr[hash_targets[i].hash_indices.v[k]].data;
+          if (data.size) { ranges[range_count++] = rng_1u64((U64)data.str, (U64)data.str + data.size); }
+        }
+      }
+      U64 prefetch_begin_us = now_time_us();
+      U64 prefetch_bytes    = 0;
+      for EachIndex(range_idx, range_count) { prefetch_bytes += dim_1u64(ranges[range_idx]); }
+      lnk_prefetch_ranges(tp, range_count, ranges);
+      lnk_log(LNK_Log_Timers, "[merge] prefetched %llu type data ranges (%llu MiB) in %.2f ms",
+              range_count, prefetch_bytes / MB(1), (F64)(now_time_us() - prefetch_begin_us) / 1000.0);
+
+      temp_end(temp);
+    }
 
     for EachElement(i, hash_targets) {
       task.indices = hash_targets[i].hash_indices;
