@@ -4617,6 +4617,11 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     builder_flags = ~0;
   }
 
+  // ini= bucket: pdb_alloc_ commits the MSF + type-server tables (fresh pages,
+  // ~132K faults on the editor link) -- under a storm every fresh commit pays
+  // the page-repurpose path, so this span needs its own attribution
+  lnk_summary_phase_begin(LNK_SummaryPhase_PdbIni);
+
   LNK_BuildPdb task = {
     .image_data                         = image_data,
     .symtab                             = symtab,
@@ -4661,18 +4666,24 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   // objs in buckets [C,worker_count) unprocessed when C<worker_count. See the
   // lnk_build_pdb_distribute_obj_indices helper.
 
+  lnk_summary_phase_end(LNK_SummaryPhase_PdbIni);
+
   // push types
+  lnk_summary_phase_begin(LNK_SummaryPhase_PdbTpi);
   if (builder_flags & LNK_PDB_BuilderFlag_Ipi) {
     pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_IPI], cv_types.count[CV_TypeIndexSource_IPI], cv_types.v[CV_TypeIndexSource_IPI]);
   }
   if (builder_flags & LNK_PDB_BuilderFlag_Tpi) {
     pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_TPI], cv_types.count[CV_TypeIndexSource_TPI], cv_types.v[CV_TypeIndexSource_TPI]);
   }
+  lnk_summary_phase_end(LNK_SummaryPhase_PdbTpi);
 
+  lnk_summary_phase_begin(LNK_SummaryPhase_PdbStr);
   ProfBegin("Merge String Tables");
   task.string_ht = cv_dedup_string_tables(tp_arena, tp, cv->obj_count, cv->debug_s_arr);
   cv_string_hash_table_assign_buffer_offsets(tp, task.string_ht);
   ProfEnd();
+  lnk_summary_phase_end(LNK_SummaryPhase_PdbStr);
 
   task.string_table_base_offset = task.pdb->info->strtab.size;
   ProfBegin("Add string tables");
@@ -4688,6 +4699,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
     ProfScope("Write Modules")
     {
+      lnk_summary_phase_begin(LNK_SummaryPhase_PdbGsi);
       U64 phase_begin_us = now_time_us();
       // FAIR-SHARE: pin the cohort, distribute objs over exactly the cohort lanes,
       // then run the barrier pass at that cohort. tp_barrier_begin sets
@@ -4705,6 +4717,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
       tp_for_parallel_reserve(tp, 0, C, lnk_write_pdb_modules, &task); // BARRIER pass (path B): barrier_wait/tp_broadcast
       tp_barrier_end(tp);
       lnk_log(LNK_Log_Timers, "[pdb] write modules in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
+      lnk_summary_phase_end(LNK_SummaryPhase_PdbMod);
     }
     if (output_ptr != 0) {
       for EachIndex(obj_idx, cv->obj_count) {
@@ -4733,6 +4746,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   }
   
   if (builder_flags & LNK_PDB_BuilderFlag_SC) {
+    lnk_summary_phase_begin(LNK_SummaryPhase_PdbSc);
     ProfBegin("Build Section Contrib Map");
     {
       ProfBegin("Build DBI Section Headers");
@@ -4774,6 +4788,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
       sec_contribs->cap   = new_count;
     }
     ProfEnd();
+    lnk_summary_phase_end(LNK_SummaryPhase_PdbSc);
   }
 
   if (builder_flags & LNK_PDB_BuilderFlag_NATVIS) {
@@ -4809,6 +4824,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     ProfEnd();
   }
 
+  lnk_summary_phase_begin(LNK_SummaryPhase_PdbMsf);
   pdb_build_dbi_info(tp, task.pdb, task.string_ht, 0, cv->is_stripped, &build_hooks);
 
   MSF_Error msf_err = msf_build(task.pdb->msf);
@@ -4827,6 +4843,8 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   if (output_ptr != 0) {
     lnk_background_file_writer_end_file(output_ptr->writer, output_ptr->file, artifact.data.total_size);
   }
+  lnk_summary_phase_end(LNK_SummaryPhase_PdbMsf);
+
 
   // NOTE: linker is about to exit so we can skip memory release
   // and let windows free memory since it does this faster

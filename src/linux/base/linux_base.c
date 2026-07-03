@@ -718,6 +718,20 @@ semaphore_drop_if_room(Semaphore semaphore)
   semaphore_drop(semaphore);
 }
 
+internal B32
+semaphore_drop_prev(Semaphore semaphore, U32 *prev_count_out)
+{
+  // best-effort: sem_getvalue+sem_post is not atomic (unlike win32
+  // ReleaseSemaphore's lpPreviousCount); callers use this for advisory
+  // counters only
+  *prev_count_out = 0;
+  if(semaphore.u64[0] == 0) { return 0; }
+  int value = 0;
+  if(sem_getvalue((sem_t*)*semaphore.u64, &value) == 0 && value > 0) { *prev_count_out = (U32)value; }
+  int err = LNX_RETRY_ON_EINTR(sem_post((sem_t*)*semaphore.u64));
+  return err == 0;
+}
+
 internal void
 semaphore_drop_n(Semaphore semaphore, U32 count)
 {

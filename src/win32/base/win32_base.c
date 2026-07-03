@@ -698,6 +698,15 @@ semaphore_drop_count(Semaphore semaphore, U64 drop_count)
   ReleaseSemaphore((HANDLE)*semaphore.u64, drop_count, 0);
 }
 
+internal B32
+semaphore_drop_prev(Semaphore semaphore, U32 *prev_count_out)
+{
+  LONG prev = 0;
+  BOOL ok = ReleaseSemaphore((HANDLE)*semaphore.u64, 1, &prev);
+  *prev_count_out = ok ? (U32)prev : 0;
+  return !!ok;
+}
+
 // Best-effort post: succeed if there is room, silently no-op if the count is
 // already at max (ERROR_TOO_MANY_POSTS). Use ONLY for "at least one pending
 // signal" wakeups (e.g. the governor ping) where redundant posts are harmless.

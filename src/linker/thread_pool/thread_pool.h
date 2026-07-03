@@ -56,6 +56,8 @@ typedef struct TP_Context
   U32          barrier_saved_workers;  // worker_count to restore at tp_barrier_end
   U32          barrier_cohort_extra;   // budget slots held for this barrier pass (cohort = 1 + this)
   Barrier      barrier_saved;          // pool->barrier to restore at tp_barrier_end
+  U64          barrier_begin_us;       // stats: bracket open time (for park accounting)
+  U32          barrier_shortfall;      // stats: budget slots we wanted but could not grab for this pass
 
   U32          worker_count;
   TP_Worker   *worker_arr;
@@ -98,3 +100,55 @@ internal void         tp_for_parallel_reserve(TP_Context *pool, TP_Arena *arena,
 #define tp_for_parallel_reserve_prof(pool, arena, task_count, task_func, task_data, zone_name) ProfBegin(zone_name); tp_for_parallel_reserve(pool, arena, task_count, task_func, task_data); ProfEnd();
 internal Rng1U64 *    tp_divide_work(Arena *arena, U64 item_count, U32 worker_count);
 #define tp_broadcast(p) tp_broadcast_(tp, task_id, p, sizeof(*p))
+
+// SHARED-mode governor stats (for the end-of-link summary line). All counters
+// are only ever touched from shared-mode-only code paths, so the non-shared
+// pool pays zero cost. `level` is the count of global budget slots this
+// process currently HOLDS (path-A grants + path-B cohort extras); it is
+// integrated over time (area_us = sum level x dt, QPC-stamped on every
+// grant/release transition) so grant_avg = area/wall. `park_us` accumulates
+// worker-microseconds spent waiting on budget while this process had pending
+// demand (path A: governor budget waits x wanted-worker count; path B: pass
+// duration x cohort shortfall).
+typedef struct TP_SharedStats
+{
+  volatile U64 lock;      // spinlock for the {last_us, level, area_us} integrator
+  U64          begin_us;  // pool alloc time (grant_avg denominator start)
+  U64          last_us;   // last transition stamp
+  S64          level;     // budget slots currently held
+  U64          area_us;   // integral of level over time
+  volatile U64 park_us;   // worker-us parked on budget while work was available
+} TP_SharedStats;
+
+internal void tp_stats_level_add(S64 delta);
+internal void tp_stats_park_add(U64 worker_us);
+internal void tp_stats_snapshot(F64 *grant_avg_out, F64 *park_seconds_out);
+
+// SHARED-mode cross-process attach counter (summary line: procs=<n>/<maxseen>).
+// Lives in a named counter SEMAPHORE "<pool_name>.nproc.v3"; the budget
+// semaphore is "<pool_name>.budget.v2". Names carry a version suffix so an old
+// radlink pointed at the SAME /RAD_SHARED_THREAD_POOL name never shares kernel
+// objects with a new one: mixed old/new farms run independent pools instead of
+// corrupting one.
+//
+// WHY A SEMAPHORE: UBA detours CreateFileMapping and VIRTUALIZES named
+// sections per-process, so the previous "<pool_name>.procs.v2" shared-memory
+// block reported procs=1/1 under UBA. Named SEMAPHORES pass through the detour
+// (the budget semaphore is demonstrably shared in prod: fair grants across
+// processes), so the counter is the semaphore's own count:
+//   attach = release(+1, &prev) -> n = prev+1 (each attached process holds one permit)
+//   detach = 0-timeout wait (-1)
+//   read   = release(+1, &prev) -> n = prev (prev already counts our own
+//            permit), then 0-timeout wait to undo
+// The transient read +1 can inflate a concurrent reader's n by 1 -- advisory
+// counter, acceptable. Peak cannot be tracked exactly cross-process without
+// shm, so `maxseen` is this process's local max of n observed at attach and at
+// the summary read. Best-effort: a process that dies without detaching leaves
+// the count high until the semaphore object itself dies with its last handle.
+#define TP_SHARED_V     "v2"
+#define TP_NPROC_V      "v3"
+#define TP_NPROC_MAX    (1u << 20) // far above any plausible concurrent-link count
+
+internal void tp_procs_snapshot(U32 *attached_out, U32 *maxseen_out); // 0/0 when no shared pool
+internal void tp_procs_detach(void);                                  // give the permit back + close (idempotent)
+

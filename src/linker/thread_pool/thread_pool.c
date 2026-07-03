@@ -61,6 +61,100 @@ tp_worker_main(void *raw_worker)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+//~ SHARED-mode governor stats (summary line). Zero cost when the pool is off:
+//  every call site below is on a shared-mode-only path.
+
+global TP_SharedStats g_tp_shared_stats;
+
+internal void
+tp_stats_level_add(S64 delta)
+{
+  // transitions are rare (one per grant/release, thousands per link), so a tiny
+  // spinlock around the integrator is cheaper than any clever lock-free scheme
+  for (; ins_atomic_u64_eval_cond_assign(&g_tp_shared_stats.lock, 1, 0) != 0; ) { }
+  U64 now_us = now_time_us();
+  g_tp_shared_stats.area_us += (U64)(g_tp_shared_stats.level * (S64)(now_us - g_tp_shared_stats.last_us));
+  g_tp_shared_stats.last_us  = now_us;
+  g_tp_shared_stats.level   += delta;
+  ins_atomic_u64_eval_assign(&g_tp_shared_stats.lock, 0);
+}
+
+internal void
+tp_stats_park_add(U64 worker_us)
+{
+  ins_atomic_u64_add_eval(&g_tp_shared_stats.park_us, worker_us);
+}
+
+internal void
+tp_stats_snapshot(F64 *grant_avg_out, F64 *park_seconds_out)
+{
+  *grant_avg_out    = 0;
+  *park_seconds_out = 0;
+  if (g_tp_shared_stats.begin_us != 0) {
+    tp_stats_level_add(0); // finalize the integral up to now
+    U64 wall_us = g_tp_shared_stats.last_us - g_tp_shared_stats.begin_us;
+    if (wall_us > 0) {
+      *grant_avg_out = (F64)g_tp_shared_stats.area_us / (F64)wall_us;
+    }
+    *park_seconds_out = (F64)g_tp_shared_stats.park_us / 1000000.0;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//~ SHARED-mode cross-process attach counter (summary line procs=). Counter
+//  SEMAPHORE, not a named section -- see the "<pool_name>.nproc.v3" comment in
+//  thread_pool.h for why (UBA virtualizes named sections per-process).
+
+global Semaphore g_tp_procs_sem;      // zero handle = not attached
+global U32       g_tp_procs_maxseen;  // process-local max of observed n
+
+internal void
+tp_procs_attach(Arena *scratch_arena, String8 name)
+{
+  String8   sem_name = push_str8f(scratch_arena, "%S.nproc." TP_NPROC_V, name);
+  Semaphore sem      = semaphore_alloc(0, TP_NPROC_MAX, sem_name); // create-or-open, count starts at 0
+  if (sem.u64[0] == 0) {
+    return; // best-effort: no semaphore, procs= prints 0/0
+  }
+  U32 prev = 0;
+  if (!semaphore_drop_prev(sem, &prev)) { // attach: hold one permit
+    semaphore_release(sem);
+    return;
+  }
+  g_tp_procs_sem     = sem;
+  g_tp_procs_maxseen = prev + 1;
+}
+
+internal void
+tp_procs_snapshot(U32 *attached_out, U32 *maxseen_out)
+{
+  *attached_out = 0;
+  *maxseen_out  = 0;
+  if (g_tp_procs_sem.u64[0] != 0) {
+    U32 prev = 0;
+    if (semaphore_drop_prev(g_tp_procs_sem, &prev)) { // read: +1 ...
+      semaphore_take(g_tp_procs_sem, 0);              // ... then undo (0-timeout, count > 0 by construction)
+      // prev = count BEFORE the transient release = #attached, which already
+      // includes THIS process's attach permit -- no +1 (unlike attach)
+      U32 n = prev;
+      g_tp_procs_maxseen = Max(g_tp_procs_maxseen, n);
+      *attached_out      = n;
+    }
+    *maxseen_out = g_tp_procs_maxseen;
+  }
+}
+
+internal void
+tp_procs_detach(void)
+{
+  if (g_tp_procs_sem.u64[0] != 0) {
+    semaphore_take(g_tp_procs_sem, 0); // give the attach permit back (0-timeout: never block an exit path)
+    semaphore_release(g_tp_procs_sem);
+    MemoryZeroStruct(&g_tp_procs_sem);
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 //~ SHARED (cross-process governor) path -- OURS.
 
 internal void
@@ -137,6 +231,7 @@ tp_worker_main_shared(void *raw_worker)
 
     if (!barrier_pass) {
       // path A: hand my budget slot back so another process can use it
+      tp_stats_level_add(-1);
       ins_atomic_u64_dec_eval(&pool->granted);
       semaphore_drop(pool->budget_semaphore);
     }
@@ -175,7 +270,11 @@ tp_governor_main(void *raw_pool)
       if (want > 0) {
         // Bounded wait so we re-check pass_active/demand and never block forever
         // on budget that may never free if the pass ends first.
-        if (semaphore_take(pool->budget_semaphore, now_time_us() + 1000)) {
+        U64 wait_begin_us = now_time_us();
+        B32 got_slot      = semaphore_take(pool->budget_semaphore, wait_begin_us + 1000);
+        // stats: while we waited here, `want` runnable workers sat parked on budget
+        tp_stats_park_add((now_time_us() - wait_begin_us) * (U64)want);
+        if (got_slot) {
           // Publish the grant (granted++) BEFORE checking pass_active, and ABORT
           // with granted-- if the pass already ended. This makes main's path-A
           // drain-spin (waits granted==0) observe any in-flight grant and block
@@ -192,6 +291,7 @@ tp_governor_main(void *raw_pool)
           // all workers parked). granted++ first closes that window.
           ins_atomic_u64_inc_eval(&pool->granted);
           if (ins_atomic_u32_eval(&pool->pass_active)) {
+            tp_stats_level_add(+1);
             semaphore_drop(pool->wake_semaphore);
           } else {
             ins_atomic_u64_dec_eval(&pool->granted);   // abort: pass ended
@@ -246,7 +346,10 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
       // does NOT amass the full cohort; it runs at whatever budget is free right
       // now (best-effort), so multiple processes can run barrier passes
       // concurrently and none can deadlock waiting to amass the machine.
-      String8 budget_name = push_str8f(scratch.arena, "%S.budget", name);
+      // ".v2" LAYOUT-VERSION suffix: see TP_SharedBlock in thread_pool.h -- old
+      // exes ("%S.budget", no procs section) and new exes must never share
+      // kernel objects for the same pool name
+      String8 budget_name = push_str8f(scratch.arena, "%S.budget." TP_SHARED_V, name);
       pool->budget_semaphore    = semaphore_alloc(max_worker_count, max_worker_count, budget_name);
 
       // local wake/governor signalling. governor_semaphore is a 0/1 "at least one
@@ -277,6 +380,12 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
   // launch the per-process governor (shared mode only)
   if (is_shared && worker_count > 1) {
     pool->governor_handle = thread_launch(tp_governor_main, pool);
+  }
+
+  // stats: start the grant_avg integration window (shared mode only)
+  if (is_shared) {
+    g_tp_shared_stats.begin_us = g_tp_shared_stats.last_us = now_time_us();
+    tp_procs_attach(scratch.arena, name); // summary line procs= (attach counter + peak watermark)
   }
 
   scratch_end(scratch);
@@ -530,6 +639,13 @@ tp_barrier_begin(TP_Context *pool)
   pool->worker_count          = cohort;
   pool->barrier_pass          = 1;
   pool->barrier_depth         = 1;
+
+  // stats: cohort slots are held for the whole bracket; the shortfall is the
+  // budget we wanted but could not grab (parked lanes while this pass runs)
+  pool->barrier_begin_us  = now_time_us();
+  pool->barrier_shortfall = want - extra;
+  if (extra > 0) { tp_stats_level_add((S64)extra); }
+
   return cohort;
 }
 
@@ -545,6 +661,14 @@ tp_barrier_end(TP_Context *pool)
   }
 
   U32 extra = pool->barrier_cohort_extra;
+
+  // stats: release the held slots from the integral; account parked lanes
+  if (extra > 0) { tp_stats_level_add(-(S64)extra); }
+  if (pool->barrier_shortfall > 0) {
+    tp_stats_park_add((now_time_us() - pool->barrier_begin_us) * (U64)pool->barrier_shortfall);
+  }
+  pool->barrier_begin_us  = 0;
+  pool->barrier_shortfall = 0;
 
   // restore the full-width pool + the original barrier
   barrier_release(pool->barrier);

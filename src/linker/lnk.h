@@ -409,3 +409,9 @@ internal LNK_ImageContext lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_C
 
 internal void lnk_log_link_stats(LNK_ObjList obj_list, LNK_LibList *lib_index, LNK_SectionTable *sectab);
 internal void lnk_log_timers(void);
+
+// One-line end-of-link summary for production triage (always on). Prints
+// exactly once; safe to call from any exit path (values best-effort on early
+// error exits). Defined in lnk.c; called from lnk_exit and entry_point.
+internal void lnk_print_summary(int exit_code);
+

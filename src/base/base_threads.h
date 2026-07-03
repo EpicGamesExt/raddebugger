@@ -133,6 +133,7 @@ internal void      semaphore_drop(Semaphore semaphore);
 internal void      semaphore_drop_count(Semaphore semaphore, U64 drop_count);
 internal void      semaphore_drop_if_room(Semaphore semaphore); // best-effort post; no-op if already at max
 internal void      semaphore_drop_n(Semaphore semaphore, U32 count); // release `count` permits in one syscall
+internal B32       semaphore_drop_prev(Semaphore semaphore, U32 *prev_count_out); // release 1 permit + report the pre-release count (win32: exact, from ReleaseSemaphore; posix: best-effort sem_getvalue)
 
 //- rjf: barriers
 internal Barrier barrier_alloc(U64 count);
