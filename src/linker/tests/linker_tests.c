@@ -3,15 +3,15 @@
 
 // TODO:
 //  [x] defer_duplicate_imp_link
+//  [x] fold_two_funcs
+//  [x] same_but_different
+//  [x] fold_diamond
+//  [x] cyclic_icf
+//  [x] fold_with_largest_align
 //  [ ] opt_ref_comdat_undef_section
 //  [ ] opt_ref_weak_alias_comdat
 //  [ ] reloc_apply_off_out_of_bounds
 //  [ ] lib_member_reloc_apply_off_out_of_bounds
-//  [ ] fold_two_funcs
-//  [ ] same_but_different
-//  [ ] fold_diamond
-//  [ ] cyclic_icf
-//  [ ] fold_with_largest_align
 //  [ ] relocate_undefined_section_symbol
 
 ////////////////////////////////
@@ -2510,6 +2510,63 @@ TEST(simple_lib_test)
   T_Ok(*data_addr32nb == data_sect->voff);
 }
 
+TEST(lib_member_imp_and_regular_symbol_queued_once)
+{
+  T_Ok(t_write_def_lib("rust_style.rlib", (T_COFF_DefLib){
+    .emit_second_member = 1,
+    .members = (T_COFF_DefLibMember[]){
+      {
+        .type = T_COFF_DefLibMember_Obj,
+        .obj = {
+          .path = str8_lit("core-9f9efb2036858c45.core.78298229696da45f-cgu.0.rcgu.o"),
+          .machine = T_COFF_DefSetMachine(X64),
+          .sections = (T_COFF_DefSection[]){
+            { "text", ".text", str8_lit_comp("\xc3"), .flags = "rx:code@1" },
+            { "idata", ".idata", str8_lit_comp("\x00\x00\x00\x00\x00\x00\x00\x00"), .flags = "r:data@8" },
+            {0}
+          },
+          .symbols = (T_COFF_DefSymbol[]){
+            T_COFF_DefSymbol_ExternFunc("foo", "text", 0),
+            T_COFF_DefSymbol_Extern("__imp_foo", "idata", 0),
+            {0}
+          }
+        }
+      },
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {
+        "text", ".text",
+        str8_lit_comp(
+          "\x48\xC7\xC0\x00\x00\x00\x00"
+          "\x48\xC7\xC1\x00\x00\x00\x00"
+          "\xC3"
+        ),
+        .flags = "rx:code@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, 3,  "foo"),
+          T_COFF_DefReloc(X64_Addr32Nb, 10, "__imp_foo"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      T_COFF_DefSymbol_Undef("foo"),
+      T_COFF_DefSymbol_Undef("__imp_foo"),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj rust_style.rlib");
+  T_Ok(g_last_exit_code == 0);
+}
+
 #if OS_WINDOWS
 TEST(import_export)
 {
@@ -4750,6 +4807,87 @@ TEST(relocate_undefined_section_symbol)
 #endif
 
 #if 1
+TEST(weak_alias_comdat_duplicate_fallback)
+{
+  U64 dummy_count = 64;
+
+  for EachIndex(obj_idx, 2) {
+    char prefix = obj_idx == 0 ? 'a' : 'b';
+    T_COFF_DefSection *sections = push_array(arena, T_COFF_DefSection, dummy_count + 5);
+    T_COFF_DefSymbol  *symbols  = push_array(arena, T_COFF_DefSymbol, dummy_count*2 + 11);
+    U64 section_idx = 0;
+    U64 symbol_idx = 0;
+
+    for EachIndex(i, dummy_count) {
+      char *id = (char *)str8f(arena, "dummy_%c_%I64u", prefix, i).str;
+      char *name = (char *)str8f(arena, "?dummy_%c_%I64u@@YAXXZ", prefix, i).str;
+      sections[section_idx++] = (T_COFF_DefSection){ id, ".text", str8_lit_comp("\xC3"), .flags = "rx:code@16", .raw_flags = COFF_SectionFlag_LnkCOMDAT };
+      symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Secdef(id, COFF_ComdatSelect_Any);
+      symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_ExternFunc(name, id, 0);
+    }
+
+    sections[section_idx++] = (T_COFF_DefSection){ "text0", ".text",  str8_lit_comp("\x33\xC0"), .flags = "rx:code@16", .raw_flags = COFF_SectionFlag_LnkCOMDAT };
+    sections[section_idx++] = (T_COFF_DefSection){ "text1", ".text",  str8_lit_comp("\x33\xC0"), .flags = "rx:code@16", .raw_flags = COFF_SectionFlag_LnkCOMDAT };
+    sections[section_idx++] = (T_COFF_DefSection){ "xdata0", ".xdata", str8_lit_comp("\x01\x00\x00\x00"), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT };
+    sections[section_idx++] = (T_COFF_DefSection){ "text2", ".text",  str8_lit_comp("\x33\xC0\xC3"), .flags = "rx:code@16", .raw_flags = COFF_SectionFlag_LnkCOMDAT };
+
+    symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Secdef("text0", COFF_ComdatSelect_Any);
+    symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_ExternFunc("??_G__shared_count@__Cr@std@@MEAAPEAXI@Z", "text0", 0);
+    symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Secdef("text1", COFF_ComdatSelect_Any);
+    symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_ExternFunc("??_G__shared_weak_count@__Cr@std@@MEAAPEAXI@Z", "text1", 0);
+    symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Associative("xdata0", "text0");
+    symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Secdef("text2", COFF_ComdatSelect_Any);
+
+    if (obj_idx == 0) {
+      symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_ExternFunc("??_G?$__shared_ptr_emplace@A@@UEAAPEAXI@Z", "text2", 0);
+      symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Weak("??_E?$__shared_ptr_emplace@A@@UEAAPEAXI@Z", COFF_WeakExt_SearchAlias, "??_G?$__shared_ptr_emplace@A@@UEAAPEAXI@Z");
+    } else {
+      symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_ExternFunc("??_G?$__shared_ptr_emplace@B@@UEAAPEAXI@Z", "text2", 0);
+      symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Weak("??_E?$__shared_ptr_emplace@B@@UEAAPEAXI@Z", COFF_WeakExt_SearchAlias, "??_G?$__shared_ptr_emplace@B@@UEAAPEAXI@Z");
+    }
+    symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Weak("??_E__shared_count@__Cr@std@@MEAAPEAXI@Z", COFF_WeakExt_SearchAlias, "??_G__shared_count@__Cr@std@@MEAAPEAXI@Z");
+    symbols[symbol_idx++] = (T_COFF_DefSymbol)T_COFF_DefSymbol_Weak("??_E__shared_weak_count@__Cr@std@@MEAAPEAXI@Z", COFF_WeakExt_SearchAlias, "??_G__shared_weak_count@__Cr@std@@MEAAPEAXI@Z");
+
+    T_Ok(t_write_def_obj(obj_idx == 0 ? "a.obj" : "b.obj", (T_COFF_DefObj){
+      .machine = T_COFF_DefSetMachine(X64),
+      .sections = sections,
+      .symbols = symbols,
+    }));
+  }
+
+  T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {
+        "text", ".text",
+        str8_lit_comp(
+          "\x48\xC7\xC0\x00\x00\x00\x00" // mov rax, $imm
+          "\xC3" // ret
+        ),
+        .flags = "rx:code",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, 3, "??_E__shared_count@__Cr@std@@MEAAPEAXI@Z"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      T_COFF_DefSymbol_Undef("??_E__shared_count@__Cr@std@@MEAAPEAXI@Z"),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.obj entry.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe b.obj a.obj entry.obj");
+  T_Ok(g_last_exit_code == 0);
+}
+#endif
+
+#if 1
 TEST(opt_ref_weak_alias_comdat)
 {
   T_Ok(t_write_def_obj("weak.obj", (T_COFF_DefObj){
@@ -4838,6 +4976,18 @@ TEST(fail_if_mismatch)
   t_invoke_linkerf("entry.obj a1.obj /FAILIFMISMATCH:a=2 /out:cmddir.exe");
   if (t_id_linker() == Linker_radlink) T_Ok(g_last_exit_code == LNK_Error_FailIfMismatch);
   else                               T_Ok(g_last_exit_code != 0);
+}
+
+TEST(guardsym_directive)
+{
+  T_Ok(t_write_entry_obj());
+
+  // MSVC link accepts GUARDSYM without treating the named symbol as /INCLUDE.
+  String8 guardsym = t_make_obj_with_directive(arena, str8_lit("/GUARDSYM:missing,S"));
+  T_Ok(t_write_file(str8_lit("guardsym.obj"), guardsym));
+
+  t_invoke_linkerf("entry.obj guardsym.obj /entry:entry /subsystem:console /out:guardsym.exe");
+  T_Ok(g_last_exit_code == 0);
 }
 
 TEST(long_section_name)
@@ -6963,9 +7113,236 @@ TEST(determ_test)
 
 #endif
 
-#if 0
+internal B32 t_read_exe_data_vaddrs(Arena *arena, String8 exe_path, U64 *vaddrs, U64 count);
 
-TEST(fold_two_funcs)
+#if OS_WINDOWS
+TEST(ms_link_icfs_identical_comdats)
+{
+  U8 same_text[] = {
+    0x48, 0x31, 0xc0, // xor rax, rax
+    0xc3              // ret
+  };
+  U8 entry_text[] = {
+    0xc3, // ret
+  };
+  U8 addresses[] = {
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+  };
+
+  T_Ok(t_write_def_obj("ms_icf.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text$mn", str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      { "a",     ".text$mn", str8_array_fixed(same_text),  .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "b",     ".text$mn", str8_array_fixed(same_text),  .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64, 0, "a"),
+          T_COFF_DefReloc(X64_Addr64, 8, "b"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("a", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("b", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_ExternFunc("a", "a", 0),
+      T_COFF_DefSymbol_ExternFunc("b", "b", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  B32 is_invoke_ok = t_invoke(str8_lit("link.exe"), str8_lit("/nologo /nodefaultlib /subsystem:console /entry:entry /out:ms_icf.exe /opt:ref,icf /include:a /include:b /include:addresses ms_icf.obj"), max_U64);
+  T_Ok(is_invoke_ok);
+  T_Ok(g_last_exit_code == 0);
+
+  String8 exe = t_read_file(arena, str8_lit("ms_icf.exe"));
+  T_Ok(exe.size);
+
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  T_Ok(data_section != 0);
+  T_Ok(data_section->foff + sizeof(addresses) <= exe.size);
+
+  String8 data = str8_substr(exe, r1u64(data_section->foff, data_section->foff + sizeof(addresses)));
+  U64 a_addr = 0;
+  U64 b_addr = 0;
+  str8_deserial_read_struct(data, 0, &a_addr);
+  str8_deserial_read_struct(data, 8, &b_addr);
+  T_Ok(a_addr != 0);
+  T_Ok(a_addr == b_addr); // COMDAT are folded
+}
+
+#if 0
+TEST(ms_link_icf_section_flag_eligibility)
+{
+  U8 ret_text[] = {
+    0xc3, // ret
+  };
+  U8 data_bytes[] = {
+    1, 2, 3, 4, 5, 6, 7, 8,
+  };
+  U8 addresses[] = {
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+  };
+
+  T_Ok(t_write_def_obj("ms_icf_flags.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text$mn", str8_array_fixed(ret_text), .flags = "rx:code@1" },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64,  0, "code_comdat_a"),
+          T_COFF_DefReloc(X64_Addr64,  8, "code_comdat_b"),
+          T_COFF_DefReloc(X64_Addr64, 16, "code_plain_a"),
+          T_COFF_DefReloc(X64_Addr64, 24, "code_plain_b"),
+          T_COFF_DefReloc(X64_Addr64, 32, "rdata_comdat_a"),
+          T_COFF_DefReloc(X64_Addr64, 40, "rdata_comdat_b"),
+          T_COFF_DefReloc(X64_Addr64, 48, "wdata_comdat_a"),
+          T_COFF_DefReloc(X64_Addr64, 56, "wdata_comdat_b"),
+          T_COFF_DefReloc(X64_Addr64, 64, "ro_code_comdat_a"),
+          T_COFF_DefReloc(X64_Addr64, 72, "ro_code_comdat_b"),
+          T_COFF_DefReloc(X64_Addr64, 80, "rw_code_comdat_a"),
+          T_COFF_DefReloc(X64_Addr64, 88, "rw_code_comdat_b"),
+          {0}
+        }
+      },
+      { "code_comdat_a",    ".text$mn", str8_array_fixed(ret_text),    .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "code_comdat_b",    ".text$mn", str8_array_fixed(ret_text),    .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "code_plain_a",     ".text$mn", str8_array_fixed(ret_text),    .flags = "rx:code@1" },
+      { "code_plain_b",     ".text$mn", str8_array_fixed(ret_text),    .flags = "rx:code@1" },
+      { "ro_code_comdat_a", ".text$mn", str8_array_fixed(ret_text),    .flags = "r:code@1",  .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "ro_code_comdat_b", ".text$mn", str8_array_fixed(ret_text),    .flags = "r:code@1",  .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "rw_code_comdat_a", ".text$mn", str8_array_fixed(ret_text),    .flags = "rw:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "rw_code_comdat_b", ".text$mn", str8_array_fixed(ret_text),    .flags = "rw:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "rdata_comdat_a",   ".rdata$mn", str8_array_fixed(data_bytes), .flags = "r:data@1",  .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "rdata_comdat_b",   ".rdata$mn", str8_array_fixed(data_bytes), .flags = "r:data@1",  .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "wdata_comdat_a",   ".data$mn", str8_array_fixed(data_bytes),  .flags = "rw:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "wdata_comdat_b",   ".data$mn", str8_array_fixed(data_bytes),  .flags = "rw:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("code_comdat_a", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("code_comdat_b", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("rdata_comdat_a", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("rdata_comdat_b", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("wdata_comdat_a", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("wdata_comdat_b", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("ro_code_comdat_a", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("ro_code_comdat_b", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("rw_code_comdat_a", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("rw_code_comdat_b", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_ExternFunc("code_comdat_a", "code_comdat_a", 0),
+      T_COFF_DefSymbol_ExternFunc("code_comdat_b", "code_comdat_b", 0),
+      T_COFF_DefSymbol_ExternFunc("code_plain_a", "code_plain_a", 0),
+      T_COFF_DefSymbol_ExternFunc("code_plain_b", "code_plain_b", 0),
+      T_COFF_DefSymbol_ExternFunc("ro_code_comdat_a", "ro_code_comdat_a", 0),
+      T_COFF_DefSymbol_ExternFunc("ro_code_comdat_b", "ro_code_comdat_b", 0),
+      T_COFF_DefSymbol_ExternFunc("rw_code_comdat_a", "rw_code_comdat_a", 0),
+      T_COFF_DefSymbol_ExternFunc("rw_code_comdat_b", "rw_code_comdat_b", 0),
+      T_COFF_DefSymbol_Extern("rdata_comdat_a", "rdata_comdat_a", 0),
+      T_COFF_DefSymbol_Extern("rdata_comdat_b", "rdata_comdat_b", 0),
+      T_COFF_DefSymbol_Extern("wdata_comdat_a", "wdata_comdat_a", 0),
+      T_COFF_DefSymbol_Extern("wdata_comdat_b", "wdata_comdat_b", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  B32 is_invoke_ok = t_invoke(str8_lit("link.exe"), str8_lit("/nologo /nodefaultlib /subsystem:console /entry:entry /out:ms_icf_flags.exe /opt:ref,icf /include:addresses ms_icf_flags.obj"), max_U64);
+  T_Ok(is_invoke_ok);
+  T_Ok(g_last_exit_code == 0);
+
+  String8 exe = t_read_file(arena, str8_lit("ms_icf_flags.exe"));
+  T_Ok(exe.size);
+
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  T_Ok(data_section != 0);
+  T_Ok(data_section->foff + sizeof(addresses) <= exe.size);
+
+  String8 data = str8_substr(exe, r1u64(data_section->foff, data_section->foff + sizeof(addresses)));
+  U64 code_comdat_a_addr = 0;
+  U64 code_comdat_b_addr = 0;
+  U64 code_plain_a_addr  = 0;
+  U64 code_plain_b_addr  = 0;
+  U64 rdata_comdat_a_addr = 0;
+  U64 rdata_comdat_b_addr = 0;
+  U64 wdata_comdat_a_addr = 0;
+  U64 wdata_comdat_b_addr = 0;
+  U64 ro_code_comdat_a_addr = 0;
+  U64 ro_code_comdat_b_addr = 0;
+  U64 rw_code_comdat_a_addr = 0;
+  U64 rw_code_comdat_b_addr = 0;
+  str8_deserial_read_struct(data,  0, &code_comdat_a_addr);
+  str8_deserial_read_struct(data,  8, &code_comdat_b_addr);
+  str8_deserial_read_struct(data, 16, &code_plain_a_addr);
+  str8_deserial_read_struct(data, 24, &code_plain_b_addr);
+  str8_deserial_read_struct(data, 32, &rdata_comdat_a_addr);
+  str8_deserial_read_struct(data, 40, &rdata_comdat_b_addr);
+  str8_deserial_read_struct(data, 48, &wdata_comdat_a_addr);
+  str8_deserial_read_struct(data, 56, &wdata_comdat_b_addr);
+  str8_deserial_read_struct(data, 64, &ro_code_comdat_a_addr);
+  str8_deserial_read_struct(data, 72, &ro_code_comdat_b_addr);
+  str8_deserial_read_struct(data, 80, &rw_code_comdat_a_addr);
+  str8_deserial_read_struct(data, 88, &rw_code_comdat_b_addr);
+
+  T_Ok(code_comdat_a_addr != 0);
+  T_Ok(code_comdat_a_addr == code_comdat_b_addr); // executable code COMDATs fold
+  T_Ok(ro_code_comdat_a_addr == ro_code_comdat_b_addr); // read-only code COMDATs fold
+  T_Ok(code_plain_a_addr != code_plain_b_addr);   // non-COMDAT code does not fold
+  T_Ok(wdata_comdat_a_addr != wdata_comdat_b_addr); // writable data COMDATs do not fold
+  T_Ok(rw_code_comdat_a_addr != rw_code_comdat_b_addr); // writable code COMDATs do not 
+  T_Ok(rdata_comdat_a_addr == rdata_comdat_b_addr); // read-only data COMDATs fold
+}
+#endif
+
+#endif
+
+#if 1
+
+internal B32
+t_read_exe_data_vaddrs(Arena *arena, String8 exe_path, U64 *vaddrs, U64 count)
+{
+  B32 result = 0;
+  String8 exe = t_read_file(arena, exe_path);
+  if (exe.size) {
+    PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    String8             string_table  = str8_substr(exe, pe.string_table_range);
+    COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+    if (data_section != 0 && data_section->foff + count*sizeof(U64) <= exe.size) {
+      String8 data = str8_substr(exe, r1u64(data_section->foff, data_section->foff + count*sizeof(U64)));
+      result = str8_deserial_read_array(data, 0, vaddrs, count);
+    }
+  }
+  return result;
+}
+
+TEST(icf_fold_two_funcs)
 {
   U8 same_text[] = {
     0x48, 0x31, 0xc0, // xor rax, rax
@@ -7004,7 +7381,7 @@ TEST(fold_two_funcs)
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:icf ident_funcs.obj");
   T_Ok(g_last_exit_code == 0);
 
-  String8 exe = t_read_file(arena, str8_lit("ident_funcs.exe"));
+  String8 exe = t_read_file(arena, str8_lit("a.exe"));
   T_Ok(exe.size);
 
   PE_BinInfo           pe            = pe_bin_info_from_data(arena, exe);
@@ -7036,8 +7413,7 @@ TEST(fold_two_funcs)
   T_Ok(str8_match(text_data, str8_array_fixed(expected_text), 0));
 }
 
-
-TEST(same_but_different)
+TEST(icf_same_but_different)
 {
   U8 text[] = {
     0xe8, 0x00, 0x00, 0x00, 0x00, // call $
@@ -7138,8 +7514,7 @@ TEST(same_but_different)
   }
 }
 
-
-TEST(fold_diamond)
+TEST(icf_fold_diamond)
 {
   U8 call_b_and_c[] = {
     0xe8, 0x00, 0x00, 0x00, 0x00,
@@ -7231,8 +7606,7 @@ TEST(fold_diamond)
   }
 }
 
-
-TEST(cyclic_icf)
+TEST(icf_cyclic_icf)
 {
   U8 text[] = {
     0xe8, 0x00, 0x00, 0x00, 0x00,
@@ -7242,14 +7616,14 @@ TEST(cyclic_icf)
     .machine = T_COFF_DefSetMachine(X64),
     .sections = (T_COFF_DefSection[]){
       {
-        "a", ".text", str8_array_fixed(text), .flags = "rx:code",
+        "a", ".text", str8_array_fixed(text), .flags = "rx:code", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
         .relocs = (T_COFF_DefReloc[]){
           T_COFF_DefReloc(X64_Rel32, 1, "b"),
           {0}
         }
       },
       {
-        "b", ".text", str8_array_fixed(text), .flags = "rx:code",
+        "b", ".text", str8_array_fixed(text), .flags = "rx:code", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
         .relocs = (T_COFF_DefReloc[]){
           T_COFF_DefReloc(X64_Rel32, 1, "a"),
           {0}
@@ -7258,6 +7632,8 @@ TEST(cyclic_icf)
       {0}
     },
     .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("b", COFF_ComdatSelect_NoDuplicates),
       T_COFF_DefSymbol_Extern("a", "a", 0),
       T_COFF_DefSymbol_Static("b", "b", 0),
       {0}
@@ -7270,11 +7646,8 @@ TEST(cyclic_icf)
   // validate output
   {
     U8 expected_text[] = {
-      0xe8, 0x0b, 0x00, 0x00, 0x00, // a
+      0xe8, 0xfb, 0xff, 0xff, 0xff, // a and b folded into a self-call
       0xc3,
-      0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
-      0xe8, 0xeb, 0xff, 0xff, 0xff, // b
-      0xc3,            
     };
 
     String8 exe = t_read_file(arena, str8_lit("a.exe"));
@@ -7293,8 +7666,190 @@ TEST(cyclic_icf)
   }
 }
 
+// ICF must preserve identical sections with different symbol targets
+TEST(icf_reloc_target_symbol_types_do_not_fold)
+{
+  U8 reloc_text[] = {
+    0x48, 0xc7, 0xc0, 0x00, 0x00, 0x00, 0x00, // mov rax, target
+    0xc3                                      // ret
+  };
+  U8 ret_text[] = {
+    0xc3, // ret
+  };
+  U8 target_data[] = {
+    0x00,
+  };
+  U8 addresses[3 * sizeof(U64)] = {0};
 
-TEST(fold_with_largest_align)
+  T_Ok(t_write_def_obj("icf_interp_entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(ret_text), .flags = "rx:code@1" },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64,  0, "fn_regular"),
+          T_COFF_DefReloc(X64_Addr64,  8, "fn_common"),
+          T_COFF_DefReloc(X64_Addr64, 16, "fn_abs"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      T_COFF_DefSymbol_Undef("fn_regular"),
+      T_COFF_DefSymbol_Undef("fn_common"),
+      T_COFF_DefSymbol_Undef("fn_abs"),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_interp_regular.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "fn",     ".text$mn",  str8_array_fixed(reloc_text),  .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 3, "target_regular"), {0} } },
+      { "target", ".rdata$mn", str8_array_fixed(target_data), .flags = "r:data@1" },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("fn_regular", "fn", 0),
+      T_COFF_DefSymbol_Extern("target_regular", "target", 0),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_interp_common.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "fn", ".text$mn", str8_array_fixed(reloc_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 3, "target_common"), {0} } },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("fn_common", "fn", 0),
+      T_COFF_DefSymbol_Common("target_common", 8),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_interp_abs.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "fn", ".text$mn", str8_array_fixed(reloc_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 3, "target_abs"), {0} } },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("fn_abs", "fn", 0),
+      T_COFF_DefSymbol_AbsExtern("target_abs", 0x1234),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf icf_interp_entry.obj icf_interp_regular.obj icf_interp_common.obj icf_interp_abs.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64     fn_vaddrs[ArrayCount(addresses) / sizeof(U64)] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), fn_vaddrs, ArrayCount(fn_vaddrs)));
+
+  for EachElement(i, fn_vaddrs) {
+    for (U64 j = i + 1; j < ArrayCount(fn_vaddrs); j += 1) {
+      T_Ok(fn_vaddrs[i] != fn_vaddrs[j]);
+    }
+  }
+}
+
+// ICF must preserve sections with unresolved target symbols (with /FORCE)
+TEST(icf_unresolved_reloc_targets_do_not_fold)
+{
+  U8 reloc_text[] = {
+    0x48, 0xc7, 0xc0, 0x00, 0x00, 0x00, 0x00, // mov rax, target
+    0xc3                                      // ret
+  };
+  U8 ret_text[] = {
+    0xc3, // ret
+  };
+  U8 addresses[2 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_unresolved_entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(ret_text), .flags = "rx:code@1" },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64, 0, "fn_undef"),
+          T_COFF_DefReloc(X64_Addr64, 8, "fn_weak"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      T_COFF_DefSymbol_Undef("fn_undef"),
+      T_COFF_DefSymbol_Undef("fn_weak"),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_unresolved_undef.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "fn", ".text$mn", str8_array_fixed(reloc_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 3, "target_undef"), {0} } },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("fn_undef", "fn", 0),
+      T_COFF_DefSymbol_Undef("target_undef"),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_unresolved_weak.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "fn", ".text$mn", str8_array_fixed(reloc_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 3, "target_weak"), {0} } },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("fn_weak", "fn", 0),
+      T_COFF_DefSymbol_AbsExtern("target_weak_fallback", 0),
+      T_COFF_DefSymbol_Weak("target_weak", COFF_WeakExt_NoLibrary, "target_weak_fallback"),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/force /subsystem:console /entry:entry /out:a.exe /opt:ref,icf icf_unresolved_entry.obj icf_unresolved_undef.obj icf_unresolved_weak.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8 exe = t_read_file(arena, str8_lit("a.exe"));
+  T_Ok(exe.size);
+
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  T_Ok(data_section != 0);
+  T_Ok(data_section->foff + sizeof(addresses) <= exe.size);
+
+  String8 data = str8_substr(exe, r1u64(data_section->foff, data_section->foff + sizeof(addresses)));
+  U64 undef_vaddr = 0;
+  U64 weak_vaddr  = 0;
+  str8_deserial_read_struct(data, 0, &undef_vaddr);
+  str8_deserial_read_struct(data, 8, &weak_vaddr);
+  T_Ok(undef_vaddr != 0);
+  T_Ok(weak_vaddr != 0);
+  T_Ok(undef_vaddr != weak_vaddr);
+}
+
+TEST(icf_fold_with_largest_align)
 {
   U8 text[] = {
     0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, // mov rax, 1
@@ -7360,10 +7915,10 @@ TEST(fold_with_largest_align)
   T_Ok(t_write_file(str8_lit("a.obj"), a_obj));
   T_Ok(t_write_file(str8_lit("b.obj"), b_obj));
 
-  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:icf a.obj");
   T_Ok(g_last_exit_code == 0);
 
-  t_invoke_linkerf("/subsystem:console /entry:entry /out:b.exe b.obj");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:b.exe /opt:icf b.obj");
   T_Ok(g_last_exit_code == 0);
 
   U8 expected_text[] = {
@@ -7413,6 +7968,563 @@ TEST(fold_with_largest_align)
     String8 text = str8_substr(exe, r1u64(text_section->foff, text_section->foff + text_section->vsize));
     T_Ok(str8_match(text, str8_array_fixed(expected_text), 0));
   }
+}
+
+TEST(icf_identical_bytes_different_color_spaces_do_not_fold)
+{
+  U8 same_bytes[] = {
+    0xc3,
+  };
+  U8 entry_text[] = {
+    0xc3,
+  };
+  U8 addresses[2 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_color_spaces.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry",   ".text",    str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      { "text",    ".text$mn",  str8_array_fixed(same_bytes), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "vftable", ".rdata$mn", str8_array_fixed(same_bytes), .flags = "r:data@1",  .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64, 0, "text"),
+          T_COFF_DefReloc(X64_Addr64, 8, "??_7type@@6B@"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("text", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("vftable", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_ExternFunc("text", "text", 0),
+      T_COFF_DefSymbol_Extern("??_7type@@6B@", "vftable", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_color_spaces.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8 exe = t_read_file(arena, str8_lit("a.exe"));
+  T_Ok(exe.size);
+
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  T_Ok(data_section != 0);
+  T_Ok(data_section->foff + sizeof(addresses) <= exe.size);
+
+  String8 data = str8_substr(exe, r1u64(data_section->foff, data_section->foff + sizeof(addresses)));
+  U64 text_vaddr = 0;
+  U64 vftable_vaddr = 0;
+  str8_deserial_read_struct(data, 0, &text_vaddr);
+  str8_deserial_read_struct(data, 8, &vftable_vaddr);
+  T_Ok(text_vaddr != 0);
+  T_Ok(vftable_vaddr != 0);
+  T_Ok(text_vaddr != vftable_vaddr);
+}
+
+TEST(icf_multihop_reloc_target_colors_do_not_fold)
+{
+  U8 call_text[] = {
+    0xe8, 0x00, 0x00, 0x00, 0x00,
+    0xc3,
+  };
+  U8 return_1[] = {
+    0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00,
+    0xc3,
+  };
+  U8 return_2[] = {
+    0x48, 0xc7, 0xc0, 0x02, 0x00, 0x00, 0x00,
+    0xc3,
+  };
+  U8 entry_text[] = {
+    0xc3,
+  };
+  U8 addresses[6 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_multihop.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      {
+        "top_a", ".text$mn", str8_array_fixed(call_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+        .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 1, "mid_a"), {0} }
+      },
+      {
+        "top_b", ".text$mn", str8_array_fixed(call_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+        .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 1, "mid_b"), {0} }
+      },
+      {
+        "mid_a", ".text$mn", str8_array_fixed(call_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+        .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 1, "leaf_a"), {0} }
+      },
+      {
+        "mid_b", ".text$mn", str8_array_fixed(call_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+        .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Rel32, 1, "leaf_b"), {0} }
+      },
+      { "leaf_a", ".text$mn", str8_array_fixed(return_1), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "leaf_b", ".text$mn", str8_array_fixed(return_2), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64,  0, "top_a"),
+          T_COFF_DefReloc(X64_Addr64,  8, "top_b"),
+          T_COFF_DefReloc(X64_Addr64, 16, "mid_a"),
+          T_COFF_DefReloc(X64_Addr64, 24, "mid_b"),
+          T_COFF_DefReloc(X64_Addr64, 32, "leaf_a"),
+          T_COFF_DefReloc(X64_Addr64, 40, "leaf_b"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("top_a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("top_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("mid_a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("mid_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("leaf_a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("leaf_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_ExternFunc("top_a", "top_a", 0),
+      T_COFF_DefSymbol_ExternFunc("top_b", "top_b", 0),
+      T_COFF_DefSymbol_ExternFunc("mid_a", "mid_a", 0),
+      T_COFF_DefSymbol_ExternFunc("mid_b", "mid_b", 0),
+      T_COFF_DefSymbol_ExternFunc("leaf_a", "leaf_a", 0),
+      T_COFF_DefSymbol_ExternFunc("leaf_b", "leaf_b", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_multihop.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[ArrayCount(addresses) / sizeof(U64)] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), vaddrs, ArrayCount(vaddrs)));
+  for EachIndex(i, ArrayCount(vaddrs)) {
+    T_Ok(vaddrs[i] != 0);
+  }
+  T_Ok(vaddrs[0] != vaddrs[1]);
+  T_Ok(vaddrs[2] != vaddrs[3]);
+  T_Ok(vaddrs[4] != vaddrs[5]);
+}
+
+TEST(icf_comdat_symlink_chain)
+{
+  U8 ret_small[] = { 0xc3 };
+  U8 ret_large[] = { 0xc3, 0x90 };
+  U8 entry_text[] = { 0xc3 };
+  U8 addresses[2 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_chain_leader.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "leader", ".text$mn", str8_array_fixed(ret_large), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("leader", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("leader", "leader", 0),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_chain_duplicate.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "dup", ".text$mn", str8_array_fixed(ret_small), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64, 0, "local_dup"),
+          T_COFF_DefReloc(X64_Addr64, 8, "leader"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("dup", COFF_ComdatSelect_Largest),
+      T_COFF_DefSymbol_ExternFunc("dup", "dup", 0),
+      T_COFF_DefSymbol_Static("local_dup", "dup", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      T_COFF_DefSymbol_UndefFunc("leader"),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_chain_selected.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "dup", ".text$mn", str8_array_fixed(ret_large), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("dup", COFF_ComdatSelect_Largest),
+      T_COFF_DefSymbol_ExternFunc("dup", "dup", 0),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_chain_entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_chain_leader.obj icf_chain_duplicate.obj icf_chain_selected.obj icf_chain_entry.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[ArrayCount(addresses) / sizeof(U64)] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), vaddrs, ArrayCount(vaddrs)));
+  T_Ok(vaddrs[0] != 0);
+  T_Ok(vaddrs[0] == vaddrs[1]);
+}
+
+TEST(icf_llvm_addrsig)
+{
+  char *main_c = "int foo() { return 123; }\n"
+                 "int bar() { return 123; }\n"
+                 "int main() {\n"
+                 "int (*fn)() = &foo;\n"
+                 "return fn != bar;\n"
+                 "}\n";
+  String8 main_path = t_make_file_path(arena, str8_lit("main.c"));
+  T_Ok(write_data_to_file_path(main_path, str8_cstring(main_c)));
+
+  String8 main_obj_path = t_make_file_path(arena, str8_lit("main.obj"));;
+  t_invoke(t_clang_path(), str8f(arena, "%S -o %S -c -ffunction-sections -target x86_64-pc-windows-msvc", main_path, main_obj_path), max_U64);
+  T_Ok(g_last_exit_code == 0);
+
+  t_invoke_linkerf("%S /opt:icf /out:a.exe libcmt.lib", main_obj_path);
+  T_Ok(g_last_exit_code == 0);
+
+  String8 a_path = t_make_file_path(arena, str8_lit("a.exe"));
+  t_invoke(a_path, str8_zero(), max_U64);
+  if (t_id_linker() == Linker_radlink) {
+    T_Ok(g_last_exit_code == 1);
+  } else {
+    T_Ok(g_last_exit_code == 0);
+  }
+
+  if (t_id_linker() == Linker_radlink) {
+    t_invoke_linkerf("%S /opt:icf /out:a.exe libcmt.lib /llvm_addrsig:no", main_obj_path);
+    T_Ok(g_last_exit_code == 0);
+
+    t_invoke(a_path, str8_zero(), max_U64);
+    T_Ok(g_last_exit_code == 0);
+  }
+
+}
+
+// .llvm_addrsig can name an undefined external whose definition is in another
+// object; ICF must parse and mark the resolved symbol's object, not the referrer.
+TEST(icf_llvm_addrsig_external_symbol)
+{
+  char *ref_c = "extern int ext_sig();\n"
+                "int (*ext_sig_addr)() = &ext_sig;\n"
+                "int entry() { return ext_sig_addr(); }\n";
+  char *def_c = "int dummy0() { return 0; }\n"
+                "int dummy1() { return 1; }\n"
+                "int dummy2() { return 2; }\n"
+                "int dummy3() { return 3; }\n"
+                "int dummy4() { return 4; }\n"
+                "int ext_sig() { return 0; }\n";
+  String8 ref_path = t_make_file_path(arena, str8_lit("ref.c"));
+  String8 def_path = t_make_file_path(arena, str8_lit("def.c"));
+  T_Ok(write_data_to_file_path(ref_path, str8_cstring(ref_c)));
+  T_Ok(write_data_to_file_path(def_path, str8_cstring(def_c)));
+
+  String8 ref_obj_path = t_make_file_path(arena, str8_lit("ref.obj"));
+  String8 def_obj_path = t_make_file_path(arena, str8_lit("def.obj"));
+  t_invoke(t_clang_path(), str8f(arena, "%S -o %S -c -ffunction-sections -target x86_64-pc-windows-msvc", ref_path, ref_obj_path), max_U64);
+  T_Ok(g_last_exit_code == 0);
+  t_invoke(t_clang_path(), str8f(arena, "%S -o %S -c -ffunction-sections -target x86_64-pc-windows-msvc", def_path, def_obj_path), max_U64);
+  T_Ok(g_last_exit_code == 0);
+
+  t_invoke_linkerf("%S %S /subsystem:console /entry:entry /opt:icf /out:addrsig_ext.exe libcmt.lib", ref_obj_path, def_obj_path);
+  T_Ok(g_last_exit_code == 0);
+}
+
+TEST(icf_pdata_xdata_fold)
+{
+  U8 ret_text[] = { 0xc3 };
+  U8 xdata[] = { 0x01, 0x00, 0x00, 0x00 };
+  PE_IntelPdata pdata = {0};
+  U8 entry_text[] = { 0xc3 };
+  U8 addresses[4 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_pdata_xdata_fold.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      { "fn_a", ".text$mn", str8_array_fixed(ret_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "fn_b", ".text$mn", str8_array_fixed(ret_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "xdata_a", ".xdata", str8_array_fixed(xdata), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "xdata_b", ".xdata", str8_array_fixed(xdata), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {
+        "pdata_a", ".pdata", str8_struct(&pdata), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, OffsetOf(PE_IntelPdata, voff_first), "fn_a"),
+          T_COFF_DefReloc(X64_Addr32Nb, OffsetOf(PE_IntelPdata, voff_one_past_last), "fn_a"),
+          T_COFF_DefReloc(X64_Addr32Nb, OffsetOf(PE_IntelPdata, voff_unwind_info), "$unwind$a"),
+          {0}
+        }
+      },
+      {
+        "pdata_b", ".pdata", str8_struct(&pdata), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, OffsetOf(PE_IntelPdata, voff_first), "fn_b"),
+          T_COFF_DefReloc(X64_Addr32Nb, OffsetOf(PE_IntelPdata, voff_one_past_last), "fn_b"),
+          T_COFF_DefReloc(X64_Addr32Nb, OffsetOf(PE_IntelPdata, voff_unwind_info), "$unwind$b"),
+          {0}
+        }
+      },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64,  0, "$pdata$a"),
+          T_COFF_DefReloc(X64_Addr64,  8, "$pdata$b"),
+          T_COFF_DefReloc(X64_Addr64, 16, "$unwind$a"),
+          T_COFF_DefReloc(X64_Addr64, 24, "$unwind$b"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn_a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("fn_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("xdata_a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("xdata_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("pdata_a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("pdata_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_ExternFunc("fn_a", "fn_a", 0),
+      T_COFF_DefSymbol_ExternFunc("fn_b", "fn_b", 0),
+      T_COFF_DefSymbol_Extern("$unwind$a", "xdata_a", 0),
+      T_COFF_DefSymbol_Extern("$unwind$b", "xdata_b", 0),
+      T_COFF_DefSymbol_Extern("$pdata$a", "pdata_a", 0),
+      T_COFF_DefSymbol_Extern("$pdata$b", "pdata_b", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_pdata_xdata_fold.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[4] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), vaddrs, ArrayCount(vaddrs)));
+  T_Ok(vaddrs[0] != 0);
+  T_Ok(vaddrs[0] == vaddrs[1]);
+  T_Ok(vaddrs[2] != 0);
+  T_Ok(vaddrs[2] == vaddrs[3]);
+}
+
+TEST(icf_pdata_differs_by_function_color)
+{
+  U8 ret_1[] = { 0xb8, 1, 0, 0, 0, 0xc3 };
+  U8 ret_2[] = { 0xb8, 2, 0, 0, 0, 0xc3 };
+  U8 xdata[] = { 0x01, 0x00, 0x00, 0x00 };
+  PE_IntelPdata pdata = {0};
+  U8 entry_text[] = { 0xc3 };
+  U8 addresses[3 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_pdata_diff.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      { "fn_a", ".text$mn", str8_array_fixed(ret_1), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "fn_b", ".text$mn", str8_array_fixed(ret_2), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "xdata_a", ".xdata", str8_array_fixed(xdata), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "xdata_b", ".xdata", str8_array_fixed(xdata), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "pdata_a", ".pdata", str8_struct(&pdata), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr32Nb, 0, "fn_a"), T_COFF_DefReloc(X64_Addr32Nb, 4, "fn_a"), T_COFF_DefReloc(X64_Addr32Nb, 8, "$unwind$a"), {0} } },
+      { "pdata_b", ".pdata", str8_struct(&pdata), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr32Nb, 0, "fn_b"), T_COFF_DefReloc(X64_Addr32Nb, 4, "fn_b"), T_COFF_DefReloc(X64_Addr32Nb, 8, "$unwind$b"), {0} } },
+      { "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1", .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 0, "$pdata$a"), T_COFF_DefReloc(X64_Addr64, 8, "$pdata$b"), T_COFF_DefReloc(X64_Addr64, 16, "$unwind$a"), {0} } },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn_a", COFF_ComdatSelect_NoDuplicates), T_COFF_DefSymbol_Secdef("fn_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("xdata_a", COFF_ComdatSelect_NoDuplicates), T_COFF_DefSymbol_Secdef("xdata_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("pdata_a", COFF_ComdatSelect_NoDuplicates), T_COFF_DefSymbol_Secdef("pdata_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0), T_COFF_DefSymbol_ExternFunc("fn_a", "fn_a", 0), T_COFF_DefSymbol_ExternFunc("fn_b", "fn_b", 0),
+      T_COFF_DefSymbol_Extern("$unwind$a", "xdata_a", 0), T_COFF_DefSymbol_Extern("$unwind$b", "xdata_b", 0),
+      T_COFF_DefSymbol_Extern("$pdata$a", "pdata_a", 0), T_COFF_DefSymbol_Extern("$pdata$b", "pdata_b", 0), T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_pdata_diff.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[3] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), vaddrs, ArrayCount(vaddrs)));
+  T_Ok(vaddrs[0] != 0);
+  T_Ok(vaddrs[1] != 0);
+  T_Ok(vaddrs[0] != vaddrs[1]);
+}
+
+TEST(icf_vftable_and_vbtable_policy)
+{
+  U8 table_bytes[sizeof(U64)] = {0};
+  U8 target_a[] = { 1 };
+  U8 target_b[] = { 2 };
+  U8 entry_text[] = { 0xc3 };
+  U8 addresses[8 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_tables.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      { "vf_a", ".rdata$mn", str8_array_fixed(table_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "vf_b", ".rdata$mn", str8_array_fixed(table_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "vb_a", ".rdata$mn", str8_array_fixed(table_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "vb_b", ".rdata$mn", str8_array_fixed(table_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "rtti_a", ".rdata$mn", str8_array_fixed(target_a), .flags = "r:data@1" },
+      { "rtti_b", ".rdata$mn", str8_array_fixed(target_b), .flags = "r:data@1" },
+      { "vf_ref_a", ".rdata$mn", str8_array_fixed(table_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 0, "rtti_a"), {0} } },
+      { "vf_ref_b", ".rdata$mn", str8_array_fixed(table_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 0, "rtti_b"), {0} } },
+      { "vb_ref_a", ".rdata$mn", str8_array_fixed(table_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 0, "rtti_a"), {0} } },
+      { "vb_ref_b", ".rdata$mn", str8_array_fixed(table_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 0, "rtti_b"), {0} } },
+      { "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Addr64, 0, "??_7a@@6B@"), T_COFF_DefReloc(X64_Addr64, 8, "??_7b@@6B@"),
+        T_COFF_DefReloc(X64_Addr64, 16, "??_8a@@7B@"), T_COFF_DefReloc(X64_Addr64, 24, "??_8b@@7B@"),
+        T_COFF_DefReloc(X64_Addr64, 32, "??_7ra@@6B@"), T_COFF_DefReloc(X64_Addr64, 40, "??_7rb@@6B@"),
+        T_COFF_DefReloc(X64_Addr64, 48, "??_8ra@@7B@"), T_COFF_DefReloc(X64_Addr64, 56, "??_8rb@@7B@"), {0} } },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("vf_a", COFF_ComdatSelect_NoDuplicates), T_COFF_DefSymbol_Secdef("vf_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("vb_a", COFF_ComdatSelect_NoDuplicates), T_COFF_DefSymbol_Secdef("vb_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("vf_ref_a", COFF_ComdatSelect_NoDuplicates), T_COFF_DefSymbol_Secdef("vf_ref_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("vb_ref_a", COFF_ComdatSelect_NoDuplicates), T_COFF_DefSymbol_Secdef("vb_ref_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_Extern("??_7a@@6B@", "vf_a", 0), T_COFF_DefSymbol_Extern("??_7b@@6B@", "vf_b", 0),
+      T_COFF_DefSymbol_Extern("??_8a@@7B@", "vb_a", 0), T_COFF_DefSymbol_Extern("??_8b@@7B@", "vb_b", 0),
+      T_COFF_DefSymbol_Extern("??_7ra@@6B@", "vf_ref_a", 0), T_COFF_DefSymbol_Extern("??_7rb@@6B@", "vf_ref_b", 0),
+      T_COFF_DefSymbol_Extern("??_8ra@@7B@", "vb_ref_a", 0), T_COFF_DefSymbol_Extern("??_8rb@@7B@", "vb_ref_b", 0),
+      T_COFF_DefSymbol_Extern("rtti_a", "rtti_a", 0), T_COFF_DefSymbol_Extern("rtti_b", "rtti_b", 0), T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_tables.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[8] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), vaddrs, ArrayCount(vaddrs)));
+  T_Ok(vaddrs[0] == vaddrs[1]);
+  T_Ok(vaddrs[2] != vaddrs[3]);
+  T_Ok(vaddrs[4] != vaddrs[5]);
+  T_Ok(vaddrs[6] != vaddrs[7]);
+}
+
+TEST(icf_readonly_non_vftable_data_policy)
+{
+  U8 data_bytes[] = { 1, 2, 3, 4 };
+  U8 entry_text[] = { 0xc3 };
+  U8 addresses[2 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_rdata_policy.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      { "data_a", ".rdata$mn", str8_array_fixed(data_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "data_b", ".rdata$mn", str8_array_fixed(data_bytes), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1", .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 0, "data_a"), T_COFF_DefReloc(X64_Addr64, 8, "data_b"), {0} } },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("data_a", COFF_ComdatSelect_NoDuplicates), T_COFF_DefSymbol_Secdef("data_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0), T_COFF_DefSymbol_Extern("data_a", "data_a", 0), T_COFF_DefSymbol_Extern("data_b", "data_b", 0), T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_rdata_policy.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[2] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), vaddrs, ArrayCount(vaddrs)));
+  T_Ok(vaddrs[0] != 0);
+  T_Ok(vaddrs[1] != 0);
+  T_Ok(vaddrs[0] != vaddrs[1]);
+}
+
+TEST(icf_cpp_identical_functions_fold)
+{
+  char source[] =
+    "extern \"C\" __declspec(noinline) int a(void) { return 42; }\n"
+    "extern \"C\" __declspec(noinline) int b(void) { return 42; }\n"
+    "extern \"C\" int (* volatile pa)(void) = a;\n"
+    "extern \"C\" int (* volatile pb)(void) = b;\n"
+    "extern \"C\" int entry(void) { return pa == pb ? 0 : 1; }\n";
+
+  T_Ok(t_write_file(str8_lit("icf_cpp_fold.cpp"), str8_cstring(source)));
+  T_Ok(t_invoke_cl("/nologo /c /O2 /Gy /Zc:preprocessor /Fo:icf_cpp_fold.obj icf_cpp_fold.cpp"));
+  T_Ok(g_last_exit_code == 0);
+
+  t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /out:icf_cpp_fold.exe /opt:ref,icf /include:pa /include:pb icf_cpp_fold.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[2] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("icf_cpp_fold.exe"), vaddrs, ArrayCount(vaddrs)));
+  T_Ok(vaddrs[0] != 0);
+  T_Ok(vaddrs[0] == vaddrs[1]);
+}
+
+TEST(icf_cpp_multihop_functions_do_not_fold)
+{
+  char source[] =
+    "__declspec(noinline) int leaf_a(void) { return 1; }\n"
+    "__declspec(noinline) int leaf_b(void) { return 2; }\n"
+    "__declspec(noinline) int mid_a(void) { return leaf_a(); }\n"
+    "__declspec(noinline) int mid_b(void) { return leaf_b(); }\n"
+    "__declspec(noinline) int top_a(void) { return mid_a(); }\n"
+    "__declspec(noinline) int top_b(void) { return mid_b(); }\n"
+    "int (* volatile p_top_a)(void) = top_a;\n"
+    "int (* volatile p_top_b)(void) = top_b;\n"
+    "int (* volatile p_mid_a)(void) = mid_a;\n"
+    "int (* volatile p_mid_b)(void) = mid_b;\n"
+    "int (* volatile p_leaf_a)(void) = leaf_a;\n"
+    "int (* volatile p_leaf_b)(void) = leaf_b;\n"
+    "int entry(void) {\n"
+    "  if (p_top_a == p_top_b) { return 1; }\n"
+    "  if (p_mid_a == p_mid_b) { return 2; }\n"
+    "  if (p_leaf_a == p_leaf_b) { return 3; }\n"
+    "  return 0;\n"
+    "}\n";
+
+  T_Ok(t_write_file(str8_lit("icf_cpp_multihop.c"), str8_cstring(source)));
+  T_Ok(t_invoke_cl("/nologo /c /O2 /Gy /Zc:preprocessor /Fo:icf_cpp_multihop.obj icf_cpp_multihop.c"));
+  T_Ok(g_last_exit_code == 0);
+
+  t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /out:icf_cpp_multihop.exe /opt:ref,icf /include:p_top_a /include:p_top_b /include:p_mid_a /include:p_mid_b /include:p_leaf_a /include:p_leaf_b icf_cpp_multihop.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[6] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("icf_cpp_multihop.exe"), vaddrs, ArrayCount(vaddrs)));
+  for EachIndex(i, ArrayCount(vaddrs)) {
+    T_Ok(vaddrs[i] != 0);
+  }
+  T_Ok(vaddrs[0] != vaddrs[1]);
+  T_Ok(vaddrs[2] != vaddrs[3]);
+  T_Ok(vaddrs[4] != vaddrs[5]);
 }
 
 #endif

@@ -74,6 +74,7 @@ typedef struct LNK_Inputer
 #define LNK_NULL_SYMBOL "*** RAD_NULL_SYMBOL ***"
 
 #define LNK_SECTION_FLAG_DEBUG (1 << 0)
+#define LNK_SECTION_FLAG_NOICF (1 << 1)
 
 typedef U8 LNK_LibMemberFlags;
 enum
@@ -215,10 +216,12 @@ typedef struct
 
 typedef struct
 {
-  LNK_SymbolTable *symtab;
-  LNK_Config      *config;
-  LNK_ObjList      objs;
-} LNK_OptRefTask;
+  LNK_SymbolTable  *symtab;
+  LNK_Config       *config;
+  LNK_Obj         **objs;
+  U64               objs_count;
+  U32Array         *obj_indices;
+} LNK_OptTask;
 
 typedef struct
 {
@@ -390,7 +393,8 @@ internal LNK_LinkResult lnk_link_image (TP_Context *tp, TP_Arena *arena, LNK_Con
 
 // --- Optimizations -----------------------------------------------------------
 
-internal void lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_ObjList objs);
+internal void lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj **objs, U64 objs_count);
+internal void lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj **objs, U64 objs_count);
 
 // --- Win32 Image -------------------------------------------------------------
 

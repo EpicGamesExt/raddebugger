@@ -22,7 +22,7 @@ typedef struct LNK_Obj
   // COMDAT
   U32                 *comdats;
   U32Node            **associated_sections;
-  LNK_SymbolHashTrie **symlinks;
+  LNK_ObjSymbolRef   *symlinks;
 
   // link
   struct LNK_LibMemberRef *link_member;
@@ -32,6 +32,9 @@ typedef struct LNK_Obj
   U32 debug_t_sect_idx;
   U32 debug_p_sect_idx;
   U32 debug_h_sect_idx;
+
+  // ICF
+  U32 llvm_addrsig_sect_idx;
 
   // @type_server
   Rng1U64         ti_range;
@@ -139,7 +142,7 @@ internal U32              lnk_obj_get_vol_md(LNK_Obj *obj);
 internal struct LNK_Lib * lnk_obj_get_lib(LNK_Obj *obj);
 internal String8          lnk_obj_get_lib_path(LNK_Obj *obj);
 internal U32              lnk_obj_get_removed_section_number(LNK_Obj *obj);
-internal LNK_Symbol *     lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number);
+internal B32              lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number, LNK_ObjSymbolRef *symlink_out);
 
 // --- Symbol & Section Helpers ------------------------------------------------
 
