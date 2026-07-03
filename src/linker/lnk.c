@@ -1571,6 +1571,11 @@ lnk_queue_lib_member(Arena                *arena,
                      LNK_LibMemberInfo    *member_infos,
                      U32                   member_idx)
 {
+  U32                member_offset = memory_read32(lib->member_offsets + member_idx);
+  COFF_ArchiveMember member_info   = coff_archive_member_from_offset(lib->data, member_offset);
+  COFF_DataType      member_type   = coff_data_type_from_data(member_info.data);
+  B32                is_import_member = (member_type == COFF_DataType_Import);
+
   // associate link symbol to lib member
   for (LNK_Symbol *leader = link_symbol;;) {
     LNK_Symbol *slot = ins_atomic_ptr_eval_assign(&member_infos[member_idx].link, 0);
@@ -1606,14 +1611,14 @@ lnk_queue_lib_member(Arena                *arena,
   LNK_LibMemberRef *is_queued_import = is_thunk_import ? is_thunk_import :
                                        is_addr_import  ? is_addr_import  : 0;
 
-  if (is_queued_import) {
+  if (is_import_member && is_queued_import) {
     // do not queue second import member link -> flag member and continue
     U8                 flag                = str8_starts_with(link_symbol->name, str8_lit("__imp_")) ? LNK_LibMemberFlag_LinkedImp : LNK_LibMemberFlag_LinkedRegular;
     LNK_LibMemberInfo *import_member_infos = hash_map_search_raw_raw(&lib_member_info_hm, is_queued_import->lib);
     ins_atomic_u8_or(&import_member_infos[is_queued_import->member_idx].flags, flag);
   } else {
     B32 do_queue;
-    if (str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
+    if (is_import_member && str8_starts_with(link_symbol->name, str8_lit("__imp_"))) {
       U8 member_flags = ins_atomic_u8_or(&member_infos[member_idx].flags, LNK_LibMemberFlag_LinkedImp);
       do_queue = !(member_flags & LNK_LibMemberFlag_LinkedImp);
     } else {
