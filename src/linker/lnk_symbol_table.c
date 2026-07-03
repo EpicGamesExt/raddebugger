@@ -209,7 +209,13 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
         lnk_error_multiply_defined_symbol(dst, src);
       }
     } else if (dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics == COFF_WeakExt_SearchAlias) {
-      lnk_error_multiply_defined_symbol(dst, src);
+      COFF_ParsedSymbol dst_tag = lnk_parsed_symbol_from_coff_symbol_idx(dst_ref.obj, dst_ext->tag_index);
+      COFF_ParsedSymbol src_tag = lnk_parsed_symbol_from_coff_symbol_idx(src_ref.obj, src_ext->tag_index);
+      if (str8_match(dst_tag.name, src_tag.name, 0)) {
+        can_replace = lnk_symbol_is_before(src, dst);
+      } else {
+        lnk_error_multiply_defined_symbol(dst, src);
+      }
     } else {
       can_replace = lnk_symbol_is_before(src, dst);
     }
