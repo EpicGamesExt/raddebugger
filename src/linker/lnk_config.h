@@ -143,6 +143,8 @@ typedef enum
   LNK_CmdSwitch_RadTypeServer,
   LNK_CmdSwitch_RadTypeServer_MatchObj,
 
+  LNK_CmdSwitch_LLVM_AddrSig,
+
   LNK_CmdSwitch_Help,
 
   LNK_CmdSwitch_Count
@@ -316,6 +318,7 @@ typedef struct LNK_Config
   U64                         function_pad_min;
   U64                        *manifest_resource_id;
   B32                         no_default_libs;
+  B32                         force;
   LNK_SwitchState             infer_asan_libs;
   Version                     link_ver;
   Version                     os_ver;
@@ -387,6 +390,7 @@ typedef struct LNK_Config
   String8                     type_server_name;
   LNK_SwitchState             type_server;
   LNK_SwitchState             sort_imports;
+  LNK_SwitchState             llvm_addrsig;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------

@@ -24,6 +24,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_FailIfMismatch,     1, "FAILIFMISMATCH",       "{id=value}",                     "Fails to link if same ids have conflicting values."           },
   { LNK_CmdSwitch_FileAlign,          0, "FILEALIGN",            ":#",                             "Set section alignment in the file."                           },
   { LNK_CmdSwitch_Fixed,              0, "FIXED",                "[:NO]",                          "Load the image at the default base address."                  },
+  { LNK_CmdSwitch_Force,              0, "FORCE",                "",                               "Force image output despite errors."                           },
   { LNK_CmdSwitch_FunctionPadMin,     0, "FUNCTIONPADMIN",       ":#",                             "Minimum function byte size."                                  },
   { LNK_CmdSwitch_Heap,               0, "HEAP",                 "RESERVE[,COMMIT]",               "Set reserve and commit size for the heap."                    },
   { LNK_CmdSwitch_HighEntropyVa,      0, "HIGHENTROPYVA",        "[:NO]",                          "Indicate that image supports full 64-bit address space ASLR." },
@@ -105,6 +106,8 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_WorkDir,                      0, "RAD_WORK_DIR",                         ":PATH",     "Working directory used for stable debug paths."                                   },
 
   { LNK_CmdSwitch_RadTypeServer,                   0, "RAD_TYPE_SERVER", ":FILENAME", "Merge types and store them in the specified file. The filename must have the .rrt extension." },
+
+  { LNK_CmdSwitch_LLVM_AddrSig, 0, "LLVM_ADDRSIG", "[:NO]", "Use .llvm_addrsig to guide ICF." },
 
   { LNK_CmdSwitch_Help, 0, "HELP", "", "" },
   { LNK_CmdSwitch_Help, 0, "?",    "", "" },
@@ -2179,6 +2182,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "missing type server file path");
     }
   } break;
+
+  case LNK_CmdSwitch_LLVM_AddrSig: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->llvm_addrsig);
+  } break;
   }
 
   scratch_end(scratch);
@@ -2208,6 +2215,7 @@ lnk_config_init(LNK_CmdLine cmd_line)
   config->arena        = arena;
   config->raw_cmd_line = str8_list_copy(arena, &cmd_line.raw_cmd_line);
   config->work_dir     = get_current_path(arena);
+  config->force        = lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Force);
 
   // apply command line switches
   for EachNode(cmd, LNK_CmdOption, cmd_line.first_option) {

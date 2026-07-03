@@ -717,8 +717,8 @@ lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymb
   COFF_SymbolValueInterpType symbol_interp = coff_interp_symbol(symbol_parsed.section_number, symbol_parsed.value, symbol_parsed.storage_class);
   switch (symbol_interp) {
   case COFF_SymbolValueInterp_Regular: { 
-    LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(symbol.obj, symbol_parsed.section_number);
-    *symbol_out = symlink ? lnk_ref_from_symbol(symlink) : symbol;
+    LNK_ObjSymbolRef symlink = {0};
+    *symbol_out = lnk_obj_get_comdat_symlink(symbol.obj, symbol_parsed.section_number, &symlink) ? symlink : symbol;
   } break;
   case COFF_SymbolValueInterp_Weak: {
     LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, symbol_parsed.name);

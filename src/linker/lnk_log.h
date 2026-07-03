@@ -24,6 +24,7 @@ typedef enum
   LNK_Log_Count
 } LNK_LogType;
 
+// TODO: factor into an xlist with explicitly defined error levels and warnings
 typedef enum
 {
   LNK_Error_Null,

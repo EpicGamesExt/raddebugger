@@ -4,7 +4,7 @@
 internal void
 tp_run_tasks(TP_Context *pool, TP_Worker *worker)
 {
-  barrier_wait(pool->barrier);
+  barrier_wait(pool->run_barrier);
 
   for (;;) {
     S64 task_left = ins_atomic_u64_dec_eval(&pool->task_left);
@@ -19,14 +19,11 @@ tp_run_tasks(TP_Context *pool, TP_Worker *worker)
     U64    task_id = pool->task_count - (task_left+1);
     pool->task_func(arena, worker->id, task_id, pool->task_data, pool);
 
-    // cache task count so we dont touch pool memory after atomic inc
-    U64 task_count = pool->task_count;
-
     // update task done count
     ins_atomic_u64_inc_eval(&pool->task_done);
   }
 
-  barrier_wait(pool->barrier);
+  barrier_wait(pool->run_barrier);
 }
 
 internal void
@@ -74,6 +71,7 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
   // init pool
   TP_Context *pool      = push_array(arena, TP_Context, 1);
   pool->exec_semaphore  = exec_semaphore;
+  pool->run_barrier     = barrier_alloc(worker_count);
   pool->barrier         = barrier_alloc(worker_count);
   pool->is_live         = 1;
   pool->worker_count    = worker_count;
@@ -113,6 +111,7 @@ tp_release(TP_Context *pool)
   if (is_shared) {
     semaphore_release(pool->exec_semaphore);
   }
+  barrier_release(pool->run_barrier);
   barrier_release(pool->barrier);
 
   MemoryZeroStruct(pool);
@@ -194,13 +193,14 @@ tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskF
 
     // if we are in shared mode -> ping
     if (*pool->exec_semaphore.u64) {
-      U64 drop_count64 = Min(task_count, pool->worker_count);
+      U64 drop_count64 = pool->worker_count - 1;
       U32 drop_count   = safe_cast_u32(drop_count64);
       semaphore_drop_count(pool->exec_semaphore, drop_count);
     }
 
     // run tasks on main worker
     tp_run_tasks(pool, pool->worker_arr);
+    Assert(pool->task_done == task_count);
   }
 }
 

@@ -100,7 +100,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   COFF_SectionFlags  *section_flags      = push_array_no_zero(arena, COFF_SectionFlags, header.section_count_no_null);
   for (U64 sect_idx = 0; sect_idx < header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *coff_sect_header = &coff_section_table[sect_idx];
-    section_flags[sect_idx]              = coff_sect_header->flags;
+    section_flags[sect_idx]              = coff_sect_header->flags & ~3; // linker reserves low 2 bits for internal flags
     String8             sect_name        = coff_name_from_section_header(raw_coff_string_table, coff_sect_header);
     if (~section_flags[sect_idx] & COFF_SectionFlag_CntUninitializedData) {
       if (coff_sect_header->fsize > 0) {
@@ -344,6 +344,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->debug_t_sect_idx        = ~0;
   obj->debug_p_sect_idx        = ~0;
   obj->debug_h_sect_idx        = ~0;
+  obj->llvm_addrsig_sect_idx   = ~0;
 }
 
 internal
@@ -362,6 +363,19 @@ THREAD_POOL_TASK_FUNC(lnk_obj_find_debug_t)
   }
 }
 
+internal
+THREAD_POOL_TASK_FUNC(lnk_obj_find_llvm_addrsig)
+{
+  LNK_Obj *obj = &((LNK_ObjNode *)raw_task)[task_id].data;
+  for EachIndex(sect_idx, obj->header.section_count_no_null) {
+    String8 section_name = lnk_obj_section_name_from_sect_idx(obj, sect_idx);
+    if (str8_match(section_name, str8_lit(".llvm_addrsig"), 0)) {
+      obj->llvm_addrsig_sect_idx = sect_idx;
+      break;
+    }
+  }
+}
+
 internal LNK_ObjNode *
 lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, LNK_Config *config, U64 inputs_count, LNK_Input **inputs)
 {
@@ -369,9 +383,11 @@ lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, LNK_Config *config, U64
   if (inputs_count) {
     objs = push_array(arena->v[0], LNK_ObjNode, inputs_count);
     tp_for_parallel(tp, arena, inputs_count, lnk_obj_initer, &(LNK_ObjIniter){ .inputs = inputs, .objs = objs, .machine = config->machine });
-
     if (lnk_do_debug_info(config)) {
       tp_for_parallel(tp, arena, inputs_count, lnk_obj_find_debug_t, objs);
+    }
+    if (config->opt_icf == LNK_SwitchState_Yes) {
+      tp_for_parallel(tp, arena, inputs_count, lnk_obj_find_llvm_addrsig, objs);
     }
   }
   return objs;
@@ -451,19 +467,26 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
   }
 }
 
-internal LNK_SymbolHashTrie **
+internal LNK_ObjSymbolRef *
 lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
 {
-  LNK_SymbolHashTrie **symlinks = push_array(arena, LNK_SymbolHashTrie *, obj->header.section_count_no_null+1);
+  LNK_ObjSymbolRef *symlinks = push_array(arena, LNK_ObjSymbolRef, obj->header.section_count_no_null+1);
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-    if (interp == COFF_SymbolValueInterp_Regular && symbol.aux_symbol_count == 0 && symbol.storage_class == COFF_SymStorageClass_External) {
+    if (interp == COFF_SymbolValueInterp_Regular) {
       LNK_ObjSection section = lnk_obj_section_from_section_number(obj, symbol.section_number);
       if (*section.flags & COFF_SectionFlag_LnkCOMDAT) {
-        if (symlinks[symbol.section_number] == 0 || symbol.value == 0) {
-          symlinks[symbol.section_number] = lnk_symbol_table_search_(symtab, symbol.name);
+        if (symbol.aux_symbol_count == 0 && symbol.storage_class == COFF_SymStorageClass_External) {
+          if (symlinks[symbol.section_number].obj == 0 || symbol.value == 0) {
+            LNK_SymbolHashTrie *link_symbol = lnk_symbol_table_search_(symtab, symbol.name);
+            if (link_symbol) {
+              symlinks[symbol.section_number] = lnk_ref_from_symbol(link_symbol->symbol);
+            }
+          }
+        } else if (symlinks[symbol.section_number].obj == 0 && symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
+          symlinks[symbol.section_number] = (LNK_ObjSymbolRef){ obj, symbol_idx };
         }
       }
     }
@@ -543,11 +566,15 @@ lnk_obj_get_removed_section_number(LNK_Obj *obj)
   return obj->header.is_big_obj ? LNK_REMOVED_SECTION_NUMBER_32 : LNK_REMOVED_SECTION_NUMBER_16;
 }
 
-internal LNK_Symbol *
-lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number)
+internal B32
+lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number, LNK_ObjSymbolRef *symlink_out)
 {
-  LNK_SymbolHashTrie *symlink = obj->symlinks[section_number];
-  return symlink ? symlink->symbol : 0;
+  LNK_ObjSymbolRef symlink = obj->symlinks[section_number];
+  B32 is_valid = symlink.obj != 0;
+  if (is_valid && symlink_out) {
+    *symlink_out = symlink;
+  }
+  return is_valid;
 }
 
 internal COFF_SectionHeader *

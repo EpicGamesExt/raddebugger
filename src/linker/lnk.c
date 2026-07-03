@@ -171,6 +171,8 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
     "/RAD_SORT_IMPORTS",
     (char*)str8f(scratch.arena, "/RAD_MT_PATH:%s",        LNK_MANIFEST_MERGE_TOOL_NAME).str,
     (char*)str8f(scratch.arena, "/RAD_DATA_DIR_COUNT:%u", PE_DataDirectoryIndex_COUNT).str,
+
+    "/LLVM_ADDRSIG",
   };
 
   char *push_opts[] = {
@@ -234,11 +236,10 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
   }
 
   // when /FORCE is specified on the command line, do not stop on these errors
-#if 0
-  if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Force)) {
+  if (lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Force)) {
     g_error_mode_arr[LNK_Error_UnresolvedSymbol] = LNK_ErrorMode_Continue;
+    g_error_mode_arr[LNK_Error_RelocationAgainstRemovedSection] = LNK_ErrorMode_Continue;
   }
-#endif
 
 #undef DefaultOpt
 #undef PushOpt
@@ -2397,19 +2398,31 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
       scratch_end(debug_scratch);
     }
 
-    // TODO: /FORCE
-    if (unresolved_symbols_count) {
+    if (unresolved_symbols_count && !config->force) {
       lnk_exit(LNK_Error_UnresolvedSymbol);
     }
 
     ProfEnd();
   }
 
-  //
-  // discard COMDAT sections that are not referenced
-  //
-  if (config->opt_ref == LNK_SwitchState_Yes) {
-    lnk_opt_ref(tp, symtab, config, link->objs);
+  {
+    LNK_Obj **objs = 0;
+
+    //
+    // discard COMDAT sections that are not referenced
+    //
+    if (config->opt_ref == LNK_SwitchState_Yes) {
+      if (objs == 0) { objs = lnk_array_from_obj_list(scratch.arena, link->objs); }
+      lnk_opt_ref(tp, symtab, config, objs, link->objs.count);
+    }
+
+    //
+    // fold duplicate sections
+    //
+    if (config->opt_icf == LNK_SwitchState_Yes) {
+      if (objs == 0) { objs = lnk_array_from_obj_list(scratch.arena, link->objs); }
+      lnk_opt_icf(tp, symtab, config, objs, link->objs.count);
+    }
   }
 
   //
@@ -2503,38 +2516,128 @@ lnk_reloc_ref_batch_list_concat_in_place_atomic(LNK_RelocRefsBatchList *list, LN
   }
 }
 
+internal U32Array *
+lnk_obj_indices_from_section_counts(Arena *arena, U64 worker_count, LNK_Obj **objs, U64 objs_count)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64      *worker_section_counts = push_array(scratch.arena, U64, worker_count);
+  U64      *worker_obj_counts     = push_array(scratch.arena, U64, worker_count);
+  U32Array *obj_indices           = push_array(arena, U32Array, worker_count);
+
+  for EachIndex(obj_idx, objs_count) {
+    U64 min_worker_idx = 0;
+    for (U64 worker_idx = 1; worker_idx < worker_count; worker_idx += 1) {
+      if (worker_section_counts[worker_idx] < worker_section_counts[min_worker_idx]) {
+        min_worker_idx = worker_idx;
+      }
+    }
+
+    worker_section_counts[min_worker_idx] += objs[obj_idx]->header.section_count_no_null;
+    worker_obj_counts[min_worker_idx]     += 1;
+  }
+
+  for EachIndex(worker_idx, worker_count) {
+    obj_indices[worker_idx].v = push_array_no_zero(arena, U32, worker_obj_counts[worker_idx]);
+  }
+
+  MemoryZero(worker_section_counts, sizeof(worker_section_counts[0])*worker_count);
+  MemoryZero(worker_obj_counts,     sizeof(worker_obj_counts[0])*worker_count);
+
+  for EachIndex(obj_idx, objs_count) {
+    U64 min_worker_idx = 0;
+    for (U64 worker_idx = 1; worker_idx < worker_count; worker_idx += 1) {
+      if (worker_section_counts[worker_idx] < worker_section_counts[min_worker_idx]) {
+        min_worker_idx = worker_idx;
+      }
+    }
+
+    U32Array *worker_obj_indices = &obj_indices[min_worker_idx];
+    worker_obj_indices->v[worker_obj_counts[min_worker_idx]++] = (U32)obj_idx;
+    worker_obj_indices->count += 1;
+    worker_section_counts[min_worker_idx] += objs[obj_idx]->header.section_count_no_null;
+  }
+
+  scratch_end(scratch);
+  return obj_indices;
+}
+
+internal B32
+lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, String8 pass_name, LNK_ObjSymbolRef *resolved_symbol_out)
+{
+  B32 is_resolved = 1;
+
+  Temp    temp           = temp_begin(arena);
+  HashMap seen_hm        = {0};
+  B32     keep_walking   = 1;
+  LNK_ObjSymbolRef result = symbol;
+  do {
+    // detect cyclic chains
+    U64 symbol_key = ((U64)result.obj->input_idx << 32ull) | (U64)result.symbol_idx;
+    if (hash_map_search_u64_u64(&seen_hm, symbol_key) == 0) {
+      hash_map_push_u64_u64(temp.arena, &seen_hm, symbol_key, 1);
+    } else {
+      COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
+      lnk_error_obj(LNK_Warning_CyclicSymbol, symbol.obj, "symbol %S forms a cyclic chain (%S)", symbol_parsed.name, pass_name);
+      MemoryZeroStruct(&result);
+      is_resolved = 0;
+      break;
+    }
+
+    // unpack symbol
+    COFF_ParsedSymbol          result_parsed = lnk_parsed_symbol_from_coff_symbol_idx(result.obj, result.symbol_idx);
+    COFF_SymbolValueInterpType result_interp = coff_interp_from_parsed_symbol(result_parsed);
+
+    // resolve symbol
+    LNK_ObjSymbolRef next_ref = {0};
+    if (lnk_resolve_symbol(symtab, result, &next_ref)) {
+      keep_walking = (result_interp == COFF_SymbolValueInterp_Weak || result_interp == COFF_SymbolValueInterp_Undefined);
+      result       = next_ref;
+    } else {
+      keep_walking = 0;
+    }
+  } while (keep_walking);
+
+  if (resolved_symbol_out) {
+    *resolved_symbol_out = result;
+  }
+
+  temp_end(temp);
+  return is_resolved;
+}
+
 internal
-THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
+THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
 {
   ProfBeginFunction();
 
   Temp scratch  = scratch_begin(0,0);
   Temp scratch2 = scratch_begin(&scratch.arena, 1);
 
-  LNK_OptRefTask  *task   = raw_task;
-  LNK_SymbolTable *symtab = task->symtab;
-  LNK_Config      *config = task->config;
-  LNK_ObjList      objs   = task->objs;
+  LNK_OptTask     *task       = raw_task;
+  LNK_SymbolTable *symtab     = task->symtab;
+  LNK_Config      *config     = task->config;
+  LNK_Obj        **objs       = task->objs;
+  U64              objs_count = task->objs_count;
 
-  U8                    **is_live             = 0;
-  U64                    *active_thread_count = 0;
+  U8                     **is_live             = 0;
+  U64                     *active_thread_count = 0;
   LNK_RelocRefsBatchList  *global_batch_list   = 0;
   if (task_id == 0) {
-    active_thread_count = push_array(scratch.arena, U64,                   1);
+    active_thread_count = push_array(scratch.arena, U64,                    1);
     global_batch_list   = push_array(scratch.arena, LNK_RelocRefsBatchList, 1);
 
     // alloc live flags and set live status on every non-COMDAT section
-    is_live = push_array_no_zero(scratch.arena, U8 *, objs.count);
+    is_live = push_array_no_zero(scratch.arena, U8 *, objs_count);
     {
-      U64 obj_idx = 0;
-      for EachNode(n, LNK_ObjNode, task->objs.first) {
-        is_live[obj_idx] = push_array(scratch.arena, U8, n->data.header.section_count_no_null + 1);
+      for EachIndex(obj_idx, objs_count) {
+        LNK_Obj *obj = objs[obj_idx];
 
-        for EachIndex(sect_idx, n->data.header.section_count_no_null) {
-          is_live[obj_idx][sect_idx + 1] = !(n->data.section_flags[sect_idx] & COFF_SectionFlag_LnkCOMDAT);
+        is_live[obj_idx] = push_array(scratch.arena, U8, obj->header.section_count_no_null + 1);
+
+        for EachIndex(sect_idx, obj->header.section_count_no_null) {
+          is_live[obj_idx][sect_idx + 1] = !(obj->section_flags[sect_idx] & COFF_SectionFlag_LnkCOMDAT);
         }
-
-        obj_idx += 1;
       }
     }
 
@@ -2561,8 +2664,9 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
       }
 
       // push task for every non-COMDAT section
-      for EachNode(obj_n, LNK_ObjNode, objs.first) {
-        LNK_Obj *obj = &obj_n->data;
+      for EachIndex(obj_idx, objs_count) {
+        LNK_Obj *obj = objs[obj_idx];
+
         for EachIndex(sect_idx, obj->header.section_count_no_null) {
           U32                 section_number = sect_idx+1;
           COFF_SectionFlags   section_flags  = obj->section_flags[sect_idx];
@@ -2610,37 +2714,7 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
 
           // reloc -> symbol
           LNK_ObjSymbolRef ref_symbol = (LNK_ObjSymbolRef){ .obj = batch->v[i].obj, .symbol_idx = reloc->isymbol };
-          {
-            Temp    temp         = temp_begin(scratch2.arena);
-            HashMap seen_hm      = {0};
-            B32     keep_walking = 1;
-            do {
-              // detect cyclic chains
-              U64 symbol_key = ((U64)ref_symbol.obj->input_idx << 32ull) | (U64)ref_symbol.symbol_idx;
-              if (hash_map_search_u64_u64(&seen_hm, symbol_key) == 0) {
-                hash_map_push_u64_u64(temp.arena, &seen_hm, symbol_key, 1);
-              } else {
-                COFF_ParsedSymbol reloc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(batch->v[i].obj, reloc->isymbol);
-                lnk_error_obj(LNK_Warning_CyclicSymbol, batch->v[i].obj, "symbol %S forms a cyclic chain (/OPT:REF)", reloc_parsed.name);
-                MemoryZeroStruct(&ref_symbol);
-                break;
-              }
-
-              // unpack symbol
-              COFF_ParsedSymbol          ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
-              COFF_SymbolValueInterpType ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
-
-              // resolve symbol
-              LNK_ObjSymbolRef next_ref = {0};
-              if (lnk_resolve_symbol(symtab, ref_symbol, &next_ref)) {
-                keep_walking = (ref_interp == COFF_SymbolValueInterp_Weak || ref_interp == COFF_SymbolValueInterp_Undefined);
-                ref_symbol   = next_ref;
-              } else {
-                keep_walking = 0;
-              }
-            } while (keep_walking);
-            temp_end(temp);
-          }
+          lnk_resolve_reloc_target_symbol(scratch2.arena, symtab, ref_symbol, str8_lit("/OPT:REF"), &ref_symbol);
 
           // skip unresolved symbol
           if (ref_symbol.obj == 0) { continue; }
@@ -2674,7 +2748,7 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
                 SLLStackPush(stack, stack_n);
               }
 
-              COFF_SectionFlags   section_flags  = ref_symbol.obj->section_flags[section_number-1];
+              COFF_SectionFlags section_flags = ref_symbol.obj->section_flags[section_number-1];
 
               // on first section visit, set live flag and enqueue section
               U8 was_visited = ins_atomic_u8_eval_assign(&is_live[ref_symbol.obj->input_idx][section_number], 1);
@@ -2740,8 +2814,8 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
   if (task_id == 0) {
     ProfBegin("Remove Unreachable Sections");
 
-    for EachNode(obj_n, LNK_ObjNode, objs.first) {
-      LNK_Obj *obj = &obj_n->data;
+    for EachIndex(obj_idx, objs_count) {
+      LNK_Obj *obj = objs[obj_idx];
       for EachIndex(sect_idx, obj->header.section_count_no_null) {
         U32                 section_number = sect_idx+1;
         COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
@@ -2756,8 +2830,8 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
       enum { Stat_Null, Stat_Code, Stat_Data, Stat_Debug, Stat_Count };
       Stat stats[Stat_Count] = {0};
 
-      for EachNode(obj_n, LNK_ObjNode, objs.first) {
-        LNK_Obj *obj = &obj_n->data;
+      for EachIndex(obj_idx, objs_count) {
+        LNK_Obj *obj = objs[obj_idx];
 
         for EachIndex(sect_idx, obj->header.section_count_no_null) {
           U32                 section_number = sect_idx+1;
@@ -2813,14 +2887,503 @@ THREAD_POOL_TASK_FUNC(lnk_walk_relocs_and_mark_ref_sections_task)
 }
 
 internal void
-lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_ObjList objs)
+lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj **objs, U64 objs_count)
 {
-  ProfScope("Mark Live Sections")
-    tp_for_parallel(tp,
-                    0,
-                    tp->worker_count,
-                    lnk_walk_relocs_and_mark_ref_sections_task,
-                    &(LNK_OptRefTask){ .symtab = symtab, .config = config, .objs = objs });
+  Temp scratch = scratch_begin(0,0);
+  U32Array *obj_indices = lnk_obj_indices_from_section_counts(scratch.arena, tp->worker_count, objs, objs_count);
+
+  ProfScope("/OPT:REF")
+  {
+    LNK_OptTask task = { .symtab = symtab, .config = config, .objs = objs, .objs_count = objs_count, .obj_indices = obj_indices };
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_opt_ref_task, &task);
+  }
+
+  scratch_end(scratch);
+}
+
+typedef enum LNK_ICF_ColorSpace
+{
+  LNK_ICF_ColorSpace_Null,
+  LNK_ICF_ColorSpace_Code,
+  LNK_ICF_ColorSpace_Unwind,
+  LNK_ICF_ColorSpace_VFTable,
+  LNK_ICF_ColorSpace_COUNT,
+} LNK_ICF_ColorSpace;
+
+internal String8
+lnk_string_from_icf_color_space(LNK_ICF_ColorSpace color_space)
+{
+  String8 result = str8_lit("Unknown");
+  switch (color_space) {
+  case LNK_ICF_ColorSpace_Null:      { result = str8_lit("Null");      } break;
+  case LNK_ICF_ColorSpace_Code:      { result = str8_lit("Code");      } break;
+  case LNK_ICF_ColorSpace_Unwind:    { result = str8_lit("Unwind");    } break;
+  case LNK_ICF_ColorSpace_VFTable:   { result = str8_lit("VFTables");  } break;
+  case LNK_ICF_ColorSpace_COUNT:     { result = str8_lit("Unknown");   } break;
+  }
+  return result;
+}
+
+internal LNK_ICF_ColorSpace
+lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
+{
+  LNK_ICF_ColorSpace result = LNK_ICF_ColorSpace_Null;
+
+  // fold read-only COMDAT sections
+  COFF_SectionFlags expected_flags = COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_MemRead;
+  COFF_SectionFlags exclude_flags  = COFF_SectionFlag_LnkRemove | COFF_SectionFlag_MemWrite | LNK_SECTION_FLAG_NOICF;
+
+  if ((obj->section_flags[sect_idx] & expected_flags) == expected_flags && (obj->section_flags[sect_idx] & exclude_flags) == 0) {
+    // fold code
+    if (obj->section_flags[sect_idx] & COFF_SectionFlag_CntCode) {
+      result = LNK_ICF_ColorSpace_Code;
+    }
+    // fold data
+    else if (obj->section_flags[sect_idx] & COFF_SectionFlag_CntInitializedData) {
+      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx + 1);
+      String8             section_name   = str8_cstring_capped(section_header->name, section_header->name + sizeof(section_header->name));
+
+      // fold unwind info
+      if (str8_match(section_name, str8_lit(".xdata"), 0) || str8_match(section_name, str8_lit(".pdata"), 0)) {
+        result = LNK_ICF_ColorSpace_Unwind;
+      } else {
+        // fold MSVC vftables separately from other read-only data
+        LNK_ObjSymbolRef symlink_ref = {0};
+        if (lnk_obj_get_comdat_symlink(obj, sect_idx + 1, &symlink_ref)) {
+          COFF_ParsedSymbol symlink_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+          if (str8_starts_with(symlink_symbol.name, str8_lit("??_7"))) {
+            result = LNK_ICF_ColorSpace_VFTable;
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena,1);
+
+  //
+  // OPT uses a color-refinement algorithm for folding duplicate sections.
+  // If a color group contains multiple distinct hashes, the group is split
+  // and a new refinement pass is run. By default, the algorithm loops until
+  // partitions stabilize. Equivalence is established by comparing cryptographic
+  // 128-bit hashes; in theory, the chance of collisions are near the birthday
+  // paradox with BLAKE3 and the other downside it is susceptible to adversarial
+  // inputs.
+  //
+
+  LNK_OptTask  *task = raw_task;
+  LNK_Obj     **objs = task->objs;
+
+  if (task_id == 0) {
+    lnk_log(LNK_Log_Debug, "/OPT:ICF:");
+  }
+
+  if (task->config->llvm_addrsig == LNK_SwitchState_Yes) {
+    // .llvm_addrsig is an array of ULEB128 symbol indices, which mark sections
+    // whose addresses are significant
+    for EachIndex(i, task->obj_indices[task_id].count) {
+      U64      obj_idx = task->obj_indices[task_id].v[i];
+      LNK_Obj *obj     = task->objs[obj_idx];
+
+      if (obj->llvm_addrsig_sect_idx >= obj->header.section_count_no_null) { continue; }
+
+      String8             symbol_table   = lnk_coff_symbol_table_from_obj(obj);
+      String8             string_table   = lnk_coff_string_table_from_obj(obj);
+      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, obj->llvm_addrsig_sect_idx + 1);
+      String8             section_data   = str8_substr(obj->data, r1u64s(section_header->foff, section_header->fsize));
+
+      // parse symbol indices and mark selected sections with NOICF flag
+      for (U64 off = 0; off < section_data.size;) {
+        U64 symbol_off = off;
+        U64 symbol_idx = 0;
+        off += str8_deserial_read_uleb128(section_data, off, &symbol_idx);
+        if (symbol_off == off) { break; }
+
+        if (symbol_idx < obj->header.symbol_count) {
+          LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = symbol_idx };
+          B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
+          if (is_symbol_found) {
+            COFF_ParsedSymbol symbol = coff_parse_symbol(target_ref.obj->header, string_table, symbol_table, target_ref.symbol_idx);
+            if (coff_interp_from_parsed_symbol(symbol) == COFF_SymbolValueInterp_Regular) {
+              obj->section_flags[symbol.section_number - 1] |= LNK_SECTION_FLAG_NOICF;
+            } else {
+              lnk_error_obj(LNK_Error_IllData, obj, ".llvm_addrsig: skip symbol 0x%x at offset 0x%x; symbol index must address a section-based symbol\n", symbol_idx, symbol_off);
+            }
+          }
+        } else {
+          lnk_error_obj(LNK_Error_IllData, obj, ".llvm_addrsig: contains out of bounds symbol index 0x%x at offset 0x%x\n", symbol_idx, symbol_off);
+        }
+      }
+    }
+    barrier_wait(tp->barrier);
+  }
+
+  //
+  // step 1: fill out color map and contributions
+  //
+
+  // alloc total section counter
+  U64 *contrib_counts = 0;
+  if (task_id == 0) {
+    contrib_counts = push_array(scratch.arena, U64, task->objs_count);
+  }
+  tp_broadcast(&contrib_counts);
+
+  // count contributions
+  for EachIndex(i, task->obj_indices[task_id].count) {
+    U64      obj_idx = task->obj_indices[task_id].v[i];
+    LNK_Obj *obj     = objs[obj_idx];
+    for EachIndex(sect_idx, obj->header.section_count_no_null) {
+      if (lnk_icf_color_space_from_section(obj, sect_idx)) {
+        contrib_counts[obj_idx] += 1;
+      }
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  typedef struct {
+    struct {
+      U128 hash;
+      U64  old_color;
+    } key;
+    U32  obj_idx;
+    U32  sect_idx;
+  } Contrib;
+
+  U64       contrib_count   = sum_array_u64(task->objs_count, contrib_counts);
+  U64      *contrib_offsets = 0;
+  U64     **color_map       = 0;
+  Contrib  *contribs        = 0;
+  U32      *is_part_stable  = 0;
+  U64      *next_color      = 0;
+  if (task_id == 0) {
+    contrib_offsets = offsets_from_counts_array_u64(scratch.arena, contrib_counts, task->objs_count);
+    color_map       = push_array(scratch.arena, U64 *, task->objs_count);
+    for EachIndex(obj_idx, task->objs_count) {
+      LNK_Obj *obj = objs[obj_idx];
+      color_map[obj_idx] = push_array(scratch.arena, U64, obj->header.section_count_no_null);
+    }
+    contribs       = push_array(scratch.arena, Contrib,   contrib_count);
+    is_part_stable = push_array(scratch.arena, U32, 1);
+    next_color     = push_array(scratch.arena, U64, 1);
+    *next_color    = LNK_ICF_ColorSpace_COUNT;
+
+    lnk_log(LNK_Log_Debug, "  Contrib count: %S", str8_from_count(scratch.arena, contrib_count));
+  }
+  tp_broadcast(&contrib_offsets);
+  tp_broadcast(&color_map);
+  tp_broadcast(&contribs);
+  tp_broadcast(&is_part_stable);
+  tp_broadcast(&next_color);
+
+  for EachIndex(i, task->obj_indices[task_id].count) {
+    U64      obj_idx = task->obj_indices[task_id].v[i];
+    LNK_Obj *obj     = objs[obj_idx];
+    U64      cursor  = 0;
+    for EachIndex(sect_idx, obj->header.section_count_no_null) {
+      LNK_ICF_ColorSpace color_space = lnk_icf_color_space_from_section(obj, sect_idx);
+      if (color_space == LNK_ICF_ColorSpace_Null) {
+        // assign unique color to sections that are not foldable
+        color_map[obj_idx][sect_idx] = ins_atomic_u64_inc_eval(next_color);
+      }
+      else {
+        // compute contribution index
+        U64 contrib_idx = contrib_offsets[obj_idx] + cursor++;
+
+        // seed foldable sections with a content-derived color
+        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx + 1);
+        String8             section_data   = str8_substr(obj->data, r1u64s(section_header->foff, section_header->fsize));
+        XXH3_state_t hasher;
+        XXH3_64bits_reset(&hasher);
+        XXH3_64bits_update(&hasher, &color_space,     sizeof(color_space));
+        XXH3_64bits_update(&hasher, section_data.str, section_data.size);
+
+        // fill out contribution
+        contribs[contrib_idx] = (Contrib){
+          .obj_idx  = safe_cast_u32(obj->input_idx),
+          .sect_idx = safe_cast_u32(sect_idx),
+        };
+
+        // assign content-derived starting color value
+        color_map[obj_idx][sect_idx] = XXH3_64bits_digest(&hasher) | (1ull << 63);
+      }
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  //
+  // step 2: refine equivalence classes
+  //
+
+  U64 iter_count = 0;
+  for (;; iter_count += 1) {
+    barrier_wait(tp->barrier);
+    // reset color status tracker
+    if (task_id == 0) {
+      *is_part_stable = 1;
+    }
+    barrier_wait(tp->barrier);
+
+    // compute colored hashes
+    for EachIndex(i, task->obj_indices[task_id].count) {
+      U64                 obj_idx        = task->obj_indices[task_id].v[i];
+      LNK_Obj            *obj            = objs[obj_idx];
+      COFF_SectionHeader *section_table  = lnk_coff_section_table_from_obj(obj);
+      U64                 contrib_cursor = 0;
+      for EachIndex(sect_idx, obj->header.section_count_no_null) {
+        LNK_ICF_ColorSpace color_space = lnk_icf_color_space_from_section(obj, sect_idx);
+        if (color_space == LNK_ICF_ColorSpace_Null) { continue; }
+
+        // parse relocations
+        COFF_SectionHeader *section_header = section_table + sect_idx;
+        COFF_RelocArray     relocs         = lnk_coff_relocs_from_section_header(obj, section_header);
+
+        U64 contrib_idx = contrib_offsets[obj_idx] + contrib_cursor;
+        contrib_cursor += 1;
+        contribs[contrib_idx].key.old_color = color_map[obj_idx][sect_idx];
+
+        // parse section data
+        String8 section_data = str8_substr(obj->data, r1u64s(section_header->foff, section_header->fsize));
+
+        blake3_hasher hasher; blake3_hasher_init(&hasher);
+
+        // mix section non-recursive properties
+        blake3_hasher_update(&hasher, section_data.str, section_data.size);
+        blake3_hasher_update(&hasher, &relocs.count,    sizeof(relocs.count));
+        blake3_hasher_update(&hasher, &color_space,     sizeof(color_space));
+
+        for EachIndex(reloc_idx, relocs.count) {
+          COFF_Reloc *r = &relocs.v[reloc_idx];
+
+          // resolve symbol referenced by the relocation
+          LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = r->isymbol };
+          B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
+
+          COFF_SymbolValueInterpType target_interp;
+          U64                        target_id;
+          U32                        target_value;
+
+          if (is_symbol_found) {
+            // parse COFF symbol and interpret the target symbol kind 
+            COFF_ParsedSymbol target_symbol = lnk_parsed_symbol_from_coff_symbol_idx(target_ref.obj, target_ref.symbol_idx);
+            target_interp = coff_interp_from_parsed_symbol(target_symbol);
+
+            switch (target_interp) {
+            case COFF_SymbolValueInterp_Regular: {
+              // color relocation with the referenced section
+              target_id    = color_map[target_ref.obj->input_idx][target_symbol.section_number - 1];
+              target_value = target_symbol.value;
+            } break;
+            default: {
+              // color relocation with unique symbol ref
+              target_id    = Compose64Bit(target_ref.obj->input_idx, target_ref.symbol_idx);
+              target_value = target_symbol.value;
+            } break;
+            }
+          } else {
+            // color relocation with unique symbol ref
+            target_interp = max_U32;
+            target_id     = Compose64Bit(obj_idx, r->isymbol);
+            target_value  = 0;
+          }
+
+          // mix relocation properties
+          blake3_hasher_update(&hasher, &r->apply_off,  sizeof(r->apply_off));
+          blake3_hasher_update(&hasher, &r->type,       sizeof(r->type));
+          blake3_hasher_update(&hasher, &target_interp, sizeof(target_interp));
+          blake3_hasher_update(&hasher, &target_id,     sizeof(target_id));
+          blake3_hasher_update(&hasher, &target_value,  sizeof(target_value));
+        }
+
+        // finalize section hash
+        U128 hash;
+        blake3_hasher_finalize(&hasher, (U8*)&hash, sizeof(hash));
+
+        // update contribution hash and color
+        contribs[contrib_idx].key.hash = hash;
+      }
+    }
+    barrier_wait(tp->barrier);
+
+    // group sections by (color, hash) and handle color splits
+    if (task_id == 0) {
+      Temp temp = temp_begin(scratch.arena);
+
+      HashMap new_color_hm     = {0};
+      HashMap old_color_hm     = {0};
+      U64     start_next_color = *next_color;
+
+      for EachIndex(contrib_idx, contrib_count) {
+        Contrib *contrib       = &contribs[contrib_idx];
+        U64         *new_color_ptr = hash_map_search_string_u64(&new_color_hm, str8_struct(&contrib->key));
+        if (new_color_ptr == 0) {
+          U64 color;
+          if (hash_map_search_u64_u64(&old_color_hm, contrib->key.old_color) == 0) {
+            color = contrib->key.old_color;
+            hash_map_push_u64_u64(temp.arena, &old_color_hm, contrib->key.old_color, color);
+          } else {
+            // generate a new color for the hash
+            color = ++*next_color;
+            *is_part_stable = 0;
+          }
+          new_color_ptr = &hash_map_push_string_u64(temp.arena, &new_color_hm, str8_struct(&contrib->key), color)->v.value.value_u64;
+        }
+        color_map[contrib->obj_idx][contrib->sect_idx] = *new_color_ptr;
+      }
+
+      U64 split_count = *next_color - start_next_color;
+      lnk_log(LNK_Log_Debug, "  Pass %llu found %S splits", iter_count, str8_from_count(scratch.arena, split_count));
+
+      temp_end(temp);
+    }
+    barrier_wait(tp->barrier);
+
+    // stop iterating when partitions stabilize
+    if (*is_part_stable) { break; }
+  }
+  barrier_wait(tp->barrier);
+
+  //
+  // step 3: flag folded sections for removal
+  //
+
+  if (task_id == 0) {
+    HashMap leader_hm = { 0 };
+    for EachIndex(contrib_idx, contrib_count) {
+      Contrib *contrib = &contribs[contrib_idx];
+      U64          color   = color_map[contrib->obj_idx][contrib->sect_idx];
+      if (hash_map_search_u64_raw(&leader_hm, color) == 0) {
+        hash_map_push_u64_raw(scratch.arena, &leader_hm, color, contrib);
+      }
+    }
+
+    typedef struct { U64 count; U64 size; } FoldStats;
+    FoldStats fold_stats[LNK_ICF_ColorSpace_COUNT] = {0};
+
+    for EachIndex(contrib_idx, contrib_count) {
+      Contrib *contrib = &contribs[contrib_idx];
+      Contrib *leader  = hash_map_search_u64_raw(&leader_hm, color_map[contrib->obj_idx][contrib->sect_idx]);
+      if (leader == 0 || leader == contrib) { continue; }
+
+      LNK_Obj *contrib_obj = objs[contrib->obj_idx];
+      LNK_Obj *leader_obj  = objs[leader->obj_idx];
+
+      // update fold stats
+      if (lnk_get_log_status(LNK_Log_Debug)) {
+        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(contrib_obj, contrib->sect_idx + 1);
+        LNK_ICF_ColorSpace  color_space    = lnk_icf_color_space_from_section(contrib_obj, contrib->sect_idx);
+        fold_stats[color_space].count += 1;
+        fold_stats[color_space].size  += section_header->fsize;
+      }
+
+      // update leader with largest alignment
+      U64 leader_align  = coff_align_size_from_section_flags(leader_obj->section_flags[leader->sect_idx]);
+      U64 contrib_align = coff_align_size_from_section_flags(contrib_obj->section_flags[contrib->sect_idx]);
+      if (leader_align < contrib_align) {
+        leader_obj->section_flags[leader->sect_idx] &= ~(COFF_SectionFlag_AlignMask << COFF_SectionFlag_AlignShift);
+        leader_obj->section_flags[leader->sect_idx] |= coff_section_flag_from_align_size(contrib_align);
+      }
+
+      // update COMDAT leader symbol link
+      Assert(leader_obj->comdats[leader->sect_idx] != max_U32);
+      LNK_ObjSymbolRef leader_symlink = { leader_obj, leader_obj->comdats[leader->sect_idx] };
+      contrib_obj->symlinks[contrib->sect_idx + 1] = leader_symlink;
+
+      // discard folded section
+      contrib_obj->section_flags[contrib->sect_idx] |= COFF_SectionFlag_LnkRemove;
+
+      #if LNK_PARANOID
+      String8 section_name = lnk_obj_section_name_from_section_number(contrib_obj, contrib->sect_idx+1);
+      String8 leader_name  = lnk_obj_section_name_from_section_number(leader_obj, leader->sect_idx+1);
+      lnk_log(LNK_Log_Debug, "fold %.*s[SECT%X \"%.*s\"] ==> %.*s[SECT%X \"%.*s\"]", str8_varg(lnk_loc_from_obj(scratch.arena, contrib_obj)), contrib->sect_idx+1, str8_varg(section_name), str8_varg(lnk_loc_from_obj(scratch.arena, leader_obj)), leader->sect_idx+1, str8_varg(leader_name));
+      #endif
+    }
+
+    if (lnk_get_log_status(LNK_Log_Debug)) {
+      U64 total_count = 0, total_size = 0;
+      for (LNK_ICF_ColorSpace color_space = (LNK_ICF_ColorSpace)(LNK_ICF_ColorSpace_Null + 1); color_space < LNK_ICF_ColorSpace_COUNT; color_space += 1) {
+        lnk_log(LNK_Log_Debug, "  %-8S: %M, %.*s sections", lnk_string_from_icf_color_space(color_space), fold_stats[color_space].size, str8_varg(str8_from_count(scratch.arena, fold_stats[color_space].count)));
+        total_count += fold_stats[color_space].count;
+        total_size  += fold_stats[color_space].size;
+      }
+      lnk_log(LNK_Log_Debug, "  %-8s: %M, %.*s sections", "Total", total_size, str8_varg(str8_from_count(scratch.arena, total_count)));
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  //
+  // step 4: flatten COMDAT symlink chains so subsequent passes can assume symlinks are single hop
+  //
+
+  for EachIndex(i, task->obj_indices[task_id].count) {
+    U64      obj_idx = task->obj_indices[task_id].v[i];
+    LNK_Obj *obj     = objs[obj_idx];
+    for EachIndex(sect_idx, obj->header.section_count_no_null) {
+      U64 section_number = sect_idx + 1;
+
+      LNK_ObjSymbolRef symlink_ref = {0};
+      if (!lnk_obj_get_comdat_symlink(obj, section_number, &symlink_ref)) { continue; }
+
+      {
+        Temp temp = temp_begin(scratch.arena);
+
+        HashMap seen_hm   = {0};
+        U64     hop_count = 0;
+        U64     hop_cap   = 1024;
+        for(; hop_count < hop_cap; hop_count += 1) {
+          COFF_ParsedSymbol symlink_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+
+          LNK_ObjSymbolRef next_symlink_ref = {0};
+          if (!lnk_obj_get_comdat_symlink(symlink_ref.obj, symlink_parsed.section_number, &next_symlink_ref)) { break; }
+
+          if (MemoryMatchStruct(&next_symlink_ref, &symlink_ref)) { break; }
+
+          if (hash_map_search_string_u64(&seen_hm, str8_struct(&next_symlink_ref)) != 0) {
+            lnk_error_obj(LNK_Error_IllData, obj, "recursive COMDAT symlink in SECT%X", section_number);
+            MemoryZeroStruct(&symlink_ref);
+            break;
+          }
+
+          symlink_ref = next_symlink_ref;
+          hash_map_push_string_u64(temp.arena, &seen_hm, str8_copy(temp.arena, str8_struct(&symlink_ref)), 1);
+        }
+        if (hop_count >= hop_cap) {
+          lnk_error_obj(LNK_Error_IllData, obj, "failed to flatten symlink for SECT%X; max number of hops reached", section_number);
+          MemoryZeroStruct(&symlink_ref);
+        }
+
+        temp_end(temp);
+      }
+
+      obj->symlinks[section_number] = symlink_ref;
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal void
+lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj **objs, U64 objs_count)
+{
+  Temp scratch = scratch_begin(0,0);
+  U32Array *obj_indices = lnk_obj_indices_from_section_counts(scratch.arena, tp->worker_count, objs, objs_count);
+
+  ProfScope("/OPT:ICF")
+  {
+    LNK_OptTask task = { .symtab = symtab, .config = config, .objs = objs, .objs_count = objs_count, .obj_indices = obj_indices };
+    tp_for_parallel(tp, 0, tp->worker_count, lnk_opt_icf_task, &task);
+  }
+
+  scratch_end(scratch);
 }
 
 internal
@@ -2935,11 +3498,10 @@ THREAD_POOL_TASK_FUNC(lnk_set_comdat_leaders_contribs_task)
 
     if (~obj->section_flags[sect_idx] & COFF_SectionFlag_LnkCOMDAT) { continue; }
 
-    LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(obj, section_number);
-    if (symlink == 0) { continue; }
+    LNK_ObjSymbolRef symlink_ref = {0};
+    if ( ! lnk_obj_get_comdat_symlink(obj, section_number, &symlink_ref)) { continue; }
 
-    COFF_ParsedSymbol symlink_parsed = lnk_parsed_from_symbol(symlink);
-    LNK_ObjSymbolRef  symlink_ref    = lnk_ref_from_symbol(symlink);
+    COFF_ParsedSymbol symlink_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
     task->sect_map[obj_idx][sect_idx] = task->sect_map[symlink_ref.obj->input_idx][symlink_parsed.section_number - 1];
   }
   ProfEnd();
@@ -2981,35 +3543,30 @@ THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
 
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-    if (interp == COFF_SymbolValueInterp_Regular) {
-      LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(obj, symbol.section_number);
-      if (symlink) {
-        LNK_ObjSymbolRef symlink_ref = lnk_ref_from_symbol(symlink);
-        if (symlink_ref.obj != obj) {
-          U32 section_number;
-          U32 value;
-          if (symbol.storage_class == COFF_SymStorageClass_External) {
-            // COMDAT leader may be at a different offset, so update this symbol with leader's offset
-            COFF_ParsedSymbol parsed_symlink = lnk_parsed_from_symbol(symlink);
-            section_number = symbol.section_number;
-            value          = parsed_symlink.value;
-          } else {
-            // COMDAT section may have static symbols which are now invalid to relocate against
-            section_number = lnk_obj_get_removed_section_number(obj);
-            value          = max_U32;
-            task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx] = 1;
-          }
+    if (interp != COFF_SymbolValueInterp_Regular) { continue; }
 
-          if (obj->header.is_big_obj) {
-            COFF_Symbol32 *symbol32  = symbol.raw_symbol;
-            symbol32->section_number = section_number;
-            symbol32->value          = value;
-          } else {
-            COFF_Symbol16 *symbol16  = symbol.raw_symbol;
-            symbol16->section_number = (U16)section_number;
-            symbol16->value          = value;
-          }
-        }
+    LNK_ObjSymbolRef symlink_ref = {0};
+    if ( ! lnk_obj_get_comdat_symlink(obj, symbol.section_number, &symlink_ref)) { continue; }
+
+    COFF_ParsedSymbol parsed_symlink = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+    if (symlink_ref.obj == obj && parsed_symlink.section_number == symbol.section_number) { continue; }
+
+    B32 is_static_comdat_leader = symbol.storage_class == COFF_SymStorageClass_Static &&
+                                  obj->comdats[symbol.section_number-1] == symbol_idx;
+
+    if (symbol.storage_class == COFF_SymStorageClass_External || is_static_comdat_leader) {
+      // COMDAT leader may be at a different offset, so update this symbol with leader's offset
+      U32 section_number = symbol.section_number;
+      U32 value          = parsed_symlink.value;
+
+      if (obj->header.is_big_obj) {
+        COFF_Symbol32 *symbol32  = symbol.raw_symbol;
+        symbol32->section_number = section_number;
+        symbol32->value          = value;
+      } else {
+        COFF_Symbol16 *symbol16  = symbol.raw_symbol;
+        symbol16->section_number = (U16)section_number;
+        symbol16->value          = value;
       }
     }
   }
