@@ -164,6 +164,73 @@ struct TXT_LineTokensSlice
 };
 
 ////////////////////////////////
+//~ rjf: Value Modification Patches
+
+typedef struct TXT_Patch TXT_Patch;
+struct TXT_Patch
+{
+  Rng1U64 range;
+  String8 replace;
+};
+
+typedef struct TXT_PatchNode TXT_PatchNode;
+struct TXT_PatchNode
+{
+  TXT_PatchNode *next;
+  TXT_PatchNode *prev;
+  TXT_Patch v;
+};
+
+typedef struct TXT_PatchList TXT_PatchList;
+struct TXT_PatchList
+{
+  TXT_PatchNode *first;
+  TXT_PatchNode *last;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Value Reading Types
+
+typedef struct TXT_LineMapRangeNode TXT_LineMapRangeNode;
+struct TXT_LineMapRangeNode
+{
+  TXT_LineMapRangeNode *next;
+  Rng1U64 idx_range;
+  Rng1U64 *ranges;
+  S64 delta;
+};
+
+typedef struct TXT_LineMap TXT_LineMap;
+struct TXT_LineMap
+{
+  TXT_LineMapRangeNode *first_range;
+  TXT_LineMapRangeNode *last_range;
+  U64 total_line_count;
+};
+
+typedef struct TXT_Patched TXT_Patched;
+struct TXT_Patched
+{
+  MemoryMap memory_map;
+  U64 size;
+  TXT_LineMap line_map;
+};
+
+typedef struct TXT_Line TXT_Line;
+struct TXT_Line
+{
+  Rng1U64 range;
+};
+
+typedef struct TXT_LineArray TXT_LineArray;
+struct TXT_LineArray
+{
+  TXT_Line *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Generated Code
 
 #include "generated/text.meta.h"
@@ -203,6 +270,11 @@ internal TXT_TokenArray txt_token_array_from_chunk_list(Arena *arena, TXT_TokenC
 internal TXT_TokenArray txt_token_array_from_list(Arena *arena, TXT_TokenList *list);
 
 ////////////////////////////////
+//~ rjf: Patch Functions
+
+internal void txt_patch_list_push_new(Arena *arena, TXT_PatchList *list, Rng1U64 range, String8 replace);
+
+////////////////////////////////
 //~ rjf: Lexing Functions
 
 internal TXT_TokenArray txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, String8 string);
@@ -217,17 +289,27 @@ internal TXT_TokenArray txt_token_array_from_string__disasm_x64_intel(Arena *are
 ////////////////////////////////
 //~ rjf: Text Info Extractor Helpers
 
-internal U64 txt_off_from_info_pt(TXT_TextInfo *info, TxtPt pt);
-internal TxtPt txt_pt_from_info_off__linear_scan(TXT_TextInfo *info, U64 off);
+internal U64 txt_patched_off_from_base_off(TXT_PatchList *patches, U64 base_off);
+internal Rng1U64 txt_patched_range_from_base_range(TXT_PatchList *patches, Rng1U64 base_range);
+internal void txt_line_map_push(Arena *arena, TXT_LineMap *map, Rng1U64 idx_range, Rng1U64 *ranges, S64 delta);
+internal U64 txt_line_num_from_off(TXT_LineMap *map, U64 off);
+internal Rng1U64 txt_range_from_line_idx(TXT_LineMap *map, U64 idx);
+internal TXT_Patched txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 data, TXT_PatchList *patches);
+
+
+//~ TODO(rjf): old unpatched text viz code:
+
+internal U64 txt_off_from_pt(TXT_TextInfo *info, TXT_PatchList *patches, TxtPt pt);
+internal TxtPt txt_pt_from_off__linear_scan(TXT_TextInfo *info, TXT_PatchList *patches, U64 off);
 internal TXT_TokenArray txt_token_array_from_info_line_num__linear_scan(TXT_TextInfo *info, S64 line_num);
 internal Rng1U64 txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXT_TokenArray *line_tokens);
 internal Rng1U64 txt_expr_off_range_from_info_data_pt(TXT_TextInfo *info, String8 data, TxtPt pt);
-internal String8 txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 data, TxtRng rng);
+internal String8 txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 data, TXT_PatchList *patches, TxtRng rng);
 internal String8 txt_string_from_info_data_line_num(TXT_TextInfo *info, String8 data, S64 line_num);
 internal TXT_LineTokensSlice txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info, String8 data, Rng1S64 line_range);
 internal TXT_ScopeNode *txt_scope_node_from_info_num(TXT_TextInfo *info, U64 num);
 internal TXT_ScopeNode *txt_scope_node_from_info_off(TXT_TextInfo *info, U64 off);
-internal TXT_ScopeNode *txt_scope_node_from_info_pt(TXT_TextInfo *info, TxtPt pt);
+internal TXT_ScopeNode *txt_scope_node_from_info_pt(TXT_TextInfo *info, TXT_PatchList *patches, TxtPt pt);
 
 ////////////////////////////////
 //~ rjf: Artifact Cache Hooks / Lookups

@@ -108,6 +108,7 @@ struct RD_CodeSliceParams
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;
   TXT_TextInfo *text_info;
+  TXT_PatchList *patches;
   String8 text_data;
   
   // rjf: visual parameters
@@ -174,7 +175,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions);
 internal RD_CodeSliceSignal rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
 internal RD_CodeSliceSignal rd_code_slicef(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
 
-internal B32 rd_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
+internal B32 rd_do_txt_controls(TXT_TextInfo *info, String8 data, TXT_PatchList *patches, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Labels

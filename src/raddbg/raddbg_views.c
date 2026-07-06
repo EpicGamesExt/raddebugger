@@ -12,6 +12,7 @@ rd_code_view_init(RD_CodeViewState *cv)
   {
     cv->initialized = 1;
     cv->preferred_column = 1;
+    cv->patch_arena = rd_push_view_arena();
     cv->find_text_arena = rd_push_view_arena();
     cv->center_cursor = 1;
     rd_store_view_loading_info(1, 0, 0);
@@ -120,6 +121,201 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   }
   
   //////////////////////////////
+  //- rjf: do keyboard interaction
+  //
+  B32 snap[Axis2_COUNT] = {0};
+  UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
+  {
+    U64 line_count_per_page = ClampBot(num_possible_visible_lines, 10) - 10;
+    TxtPt *cursor = &rd_regs()->cursor;
+    TxtPt *mark = &rd_regs()->mark;
+    S64 *preferred_column = &cv->preferred_column;
+    B32 change = 0;
+    for(UI_Event *evt = 0; ui_next_event(&evt);)
+    {
+      if(evt->kind != UI_EventKind_Navigate && evt->kind != UI_EventKind_Edit && evt->kind != UI_EventKind_Text)
+      {
+        continue;
+      }
+      B32 taken = 0;
+      String8 line = txt_string_from_info_data_line_num(text_info, text_data, cursor->line);
+      UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, *cursor, *mark);
+      
+      //- rjf: invalid single-line op or endpoint units => try multiline
+      if(evt->delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
+      {
+        U64 line_count = text_info->lines_count;
+        String8 prev_line = txt_string_from_info_data_line_num(text_info, text_data, cursor->line-1);
+        String8 next_line = txt_string_from_info_data_line_num(text_info, text_data, cursor->line+1);
+        Vec2S32 delta = evt->delta_2s32;
+        
+        //- rjf: wrap lines right
+        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
+        {
+          cursor->line += 1;
+          cursor->column = 1;
+          *preferred_column = 1;
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: wrap lines left
+        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
+        {
+          cursor->line -= 1;
+          cursor->column = prev_line.size+1;
+          *preferred_column = prev_line.size+1;
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: movement down (plain)
+        if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && cursor->line+1 <= line_count)
+        {
+          cursor->line += 1;
+          cursor->column = Min(*preferred_column, next_line.size+1);
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: movement up (plain)
+        if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
+        {
+          cursor->line -= 1;
+          cursor->column = Min(*preferred_column, prev_line.size+1);
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: movement down (chunk)
+        if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
+        {
+          for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
+          {
+            String8 line = txt_string_from_info_data_line_num(text_info, text_data, line_num);
+            U64 line_size = line.size;
+            if(line_size == 0)
+            {
+              cursor->line = line_num;
+              cursor->column = 1;
+              break;
+            }
+            else if(line_num == line_count)
+            {
+              cursor->line = line_num;
+              cursor->column = line_size+1;
+            }
+          }
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: movement up (chunk)
+        if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
+        {
+          for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
+          {
+            String8 line = txt_string_from_info_data_line_num(text_info, text_data, line_num);
+            U64 line_size = line.size;
+            if(line_size == 0)
+            {
+              cursor->line = line_num;
+              cursor->column = 1;
+              break;
+            }
+            else if(line_num == 1)
+            {
+              cursor->line = line_num;
+              cursor->column = 1;
+            }
+          }
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: movement down (page)
+        if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
+        {
+          cursor->line += line_count_per_page;
+          cursor->column = 1;
+          cursor->line = Clamp(1, cursor->line, line_count);
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: movement up (page)
+        if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
+        {
+          cursor->line -= line_count_per_page;
+          cursor->column = 1;
+          cursor->line = Clamp(1, cursor->line, line_count);
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: movement to endpoint (+)
+        if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
+        {
+          *cursor = txt_pt(line_count, text_info->lines_count ? dim_1u64(text_info->lines_ranges[text_info->lines_count-1])+1 : 1);
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: movement to endpoint (-)
+        if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
+        {
+          *cursor = txt_pt(1, 1);
+          change = 1;
+          taken = 1;
+        }
+        
+        //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
+        if(!(evt->flags & UI_EventFlag_KeepMark))
+        {
+          *mark = *cursor;
+        }
+      }
+      
+      //- rjf: valid single-line op => do single-line op
+      else
+      {
+#if 0
+        if(single_line_op.replace.size != 0)
+        {
+          Rng1U64 range = r1u64(txt_off_from_pt(text_info, &cv->patches, *cursor),
+                                txt_off_from_pt(text_info, &cv->patches, *mark));
+          txt_patch_list_push_new(cv->patch_arena, &cv->patches, range, single_line_op.replace);
+        }
+#endif
+        *cursor = single_line_op.cursor;
+        *mark = single_line_op.mark;
+        *preferred_column = cursor->column;
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: copy
+      if(evt->flags & UI_EventFlag_Copy)
+      {
+        String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, &cv->patches, txt_rng(*cursor, *mark));
+        wm_set_clipboard_text(text);
+        taken = 1;
+      }
+      
+      //- rjf: consume
+      if(taken)
+      {
+        ui_eat_event(evt);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: compute current patched text state
+  //
+  TXT_Patched text_patched = txt_patched_from_info_data_patches(scratch.arena, text_info, text_data, &cv->patches);
+  
+  //////////////////////////////
   //- rjf: determine visible line range / count
   //
   Rng1S64 visible_line_num_range = r1s64(scroll_pos.y.idx + (S64)(scroll_pos.y.off) + 1 - !!(scroll_pos.y.off < 0),
@@ -180,7 +376,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     {
       CFG_Node *query = cfg_node_child_from_string_or_alloc(rd_state->cfg, view, str8_lit("query"));
       CFG_Node *input = cfg_node_child_from_string_or_alloc(rd_state->cfg, query, str8_lit("input"));
-      String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, txt_rng(rd_regs()->cursor, rd_regs()->mark));
+      String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, &cv->patches, txt_rng(rd_regs()->cursor, rd_regs()->mark));
       if(text.size < 256)
       {
         cfg_node_new_replace(rd_state->cfg, input, text);
@@ -243,7 +439,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
           visible_line_idx < visible_line_count && line_idx < text_info->lines_count;
           visible_line_idx += 1, line_idx += 1, line_num += 1)
       {
-        code_slice_params.line_text[visible_line_idx]   = str8_substr(text_data, text_info->lines_ranges[line_idx]);
+        code_slice_params.line_text[visible_line_idx]   = txt_string_from_info_data_line_num(text_info, text_data, line_num);
         code_slice_params.line_ranges[visible_line_idx] = text_info->lines_ranges[line_idx];
         code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
       }
@@ -612,18 +808,6 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   }
   
   //////////////////////////////
-  //- rjf: do keyboard interaction
-  //
-  B32 snap[Axis2_COUNT] = {0};
-  UI_Focus(UI_FocusKind_On)
-  {
-    if(ui_is_focus_active() && visible_line_num_range.max >= visible_line_num_range.min)
-    {
-      snap[Axis2_X] = snap[Axis2_Y] = rd_do_txt_controls(text_info, text_data, ClampBot(num_possible_visible_lines, 10) - 10, &rd_regs()->cursor, &rd_regs()->mark, &cv->preferred_column);
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: build container contents
   //
   UI_Parent(container_box)
@@ -662,14 +846,14 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     if(ui_pressed(sig.base) && sig.base.event_flags & WM_Modifier_Ctrl)
     {
       ui_kill_action();
-      rd_cmd(RD_CmdKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
+      rd_cmd(RD_CmdKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, &cv->patches, sig.mouse_expr_rng));
     }
     
     //- rjf: watch expr at mouse
     if(cv->watch_expr_at_mouse)
     {
       cv->watch_expr_at_mouse = 0;
-      rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
+      rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = txt_string_from_info_data_txt_rng(text_info, text_data, &cv->patches, sig.mouse_expr_rng));
     }
   }
   
