@@ -47,6 +47,10 @@ struct RD_CodeViewState
   B32 drifted_for_search;
   U128 last_hash;
   
+  // rjf: patch state
+  Arena *patch_arena;
+  TXT_PatchList patches;
+  
   // rjf: per-frame command info
   S64 goto_line_num;
   B32 center_cursor;

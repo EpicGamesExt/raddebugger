@@ -16583,10 +16583,11 @@ rd_frame(void)
             U128 hash = {0};
             TXT_TextInfo info = txt_text_info_from_key_lang(access, text_key, lang_kind, &hash);
             String8 data = c_data_from_hash(access, hash);
+            TXT_PatchList patches = {0};
             Rng1U64 expr_off_range = {0};
             if(range.min.column != range.max.column)
             {
-              expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
+              expr_off_range = r1u64(txt_off_from_pt(&info, &patches, range.min), txt_off_from_pt(&info, &patches, range.max));
             }
             else
             {
