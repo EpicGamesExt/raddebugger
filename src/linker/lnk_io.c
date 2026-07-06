@@ -217,6 +217,50 @@ THREAD_POOL_TASK_FUNC(lnk_data_from_file_path_task)
   }
 }
 
+#if OS_WINDOWS
+// Input views are mapped from PAGE_WRITECOPY sections with FILE_MAP_READ access, so an
+// untouched view carries no pagefile commit charge. Mapping with FILE_MAP_COPY instead
+// would charge commit for the ENTIRE view at map time -- even for pages never written --
+// so N concurrent big links would hold input-set-sized commit for their whole runtime
+// (measured 22.4 GiB of a 49.7 GiB peak on a large editor DLL link) and feed build-farm
+// memory admission limits for no benefit.
+//
+// The few remaining writers that patch input bytes in place (IFC 0x1522 LF_IFC_RECORD
+// NOTYPE pokes, LF_ENDPRECOMP removal in debug$P; a couple of bytes per page, a handful
+// of pages per link) hit this vectored handler, which promotes JUST the faulting page to
+// PAGE_WRITECOPY and retries. Commit is then charged per dirtied page instead of per
+// view. Write semantics are identical to the old FILE_MAP_COPY mapping: the first write
+// makes the page private, the input file is never modified. Pages of ordinary allocations
+// or of read-write mappings never reach the handler (they do not fault on write), so
+// /RAD_MEMORY_MAP_FILES:READ_WRITE and no-map modes are unaffected.
+global volatile LONG g_lnk_cow_veh_installed;
+global volatile LONG g_lnk_cow_promoted_pages;
+
+internal LONG NTAPI
+lnk_cow_page_promote_veh(EXCEPTION_POINTERS *info)
+{
+  EXCEPTION_RECORD *er = info->ExceptionRecord;
+  if (er->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2 && er->ExceptionInformation[0] == 1) {
+    void *addr = (void *)er->ExceptionInformation[1];
+    MEMORY_BASIC_INFORMATION mbi = {0};
+    if (VirtualQuery(addr, &mbi, sizeof(mbi)) >= sizeof(mbi) && mbi.Type == MEM_MAPPED) {
+      if (mbi.Protect == PAGE_READONLY) {
+        void *page = (void *)((UINT_PTR)addr & ~(UINT_PTR)(KB(4) - 1));
+        DWORD old_protect = 0;
+        if (VirtualProtect(page, KB(4), PAGE_WRITECOPY, &old_protect)) {
+          InterlockedIncrement(&g_lnk_cow_promoted_pages);
+          return EXCEPTION_CONTINUE_EXECUTION;
+        }
+      } else if (mbi.Protect == PAGE_WRITECOPY || mbi.Protect == PAGE_READWRITE) {
+        // another thread promoted this page between our fault and the query; retry the write
+        return EXCEPTION_CONTINUE_EXECUTION;
+      }
+    }
+  }
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 {
@@ -254,11 +298,16 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
   } else {
     HANDLE file_handle = CreateFileW(path16.str, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
     if (file_handle != INVALID_HANDLE_VALUE) {
+      if (InterlockedCompareExchange(&g_lnk_cow_veh_installed, 1, 0) == 0) {
+        AddVectoredExceptionHandler(1, lnk_cow_page_promote_veh);
+      }
       HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_WRITECOPY, 0, 0, 0);
       if (mapping_handle != INVALID_HANDLE_VALUE) {
         LARGE_INTEGER file_size = {0};
         GetFileSizeEx(file_handle, &file_size);
-        void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_COPY, 0, 0, file_size.QuadPart);
+        // FILE_MAP_READ view of a WRITECOPY section: zero commit charge at map time;
+        // pages become writable one at a time through lnk_cow_page_promote_veh
+        void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, file_size.QuadPart);
         if (file_data) {
           task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
           if (task->was_read) {
