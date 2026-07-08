@@ -129,8 +129,8 @@ typedef struct UI_LineEditDrawData UI_LineEditDrawData;
 struct UI_LineEditDrawData
 {
   String8 edited_string;
-  TxtPt cursor;
-  TxtPt mark;
+  U64 cursor;
+  U64 mark;
   B32 trail;
 };
 
@@ -148,11 +148,11 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   trail_color.w *= 0.25f;
   Vec2F32 text_position = ui_box_text_position(box);
   String8 edited_string = draw_data->edited_string;
-  TxtPt cursor = draw_data->cursor;
-  TxtPt mark = draw_data->mark;
-  F32 cursor_pixel_off = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor.column-1)).x;
+  U64 cursor = draw_data->cursor;
+  U64 mark = draw_data->mark;
+  F32 cursor_pixel_off = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor)).x;
   F32 cursor_pixel_off__animated = ui_anim(ui_key_from_stringf(box->key, "cursor_off_px"), cursor_pixel_off);
-  F32 mark_pixel_off   = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark.column-1)).x;
+  F32 mark_pixel_off   = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark)).x;
   F32 cursor_thickness = ClampBot(1.f, floor_f32(font_size/10.f));
   Rng2F32 cursor_rect =
   {
@@ -196,7 +196,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
 }
 
 internal UI_Signal
-ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, String8 string)
+ui_line_edit(U64 *cursor, U64 *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, String8 string)
 {
   //- rjf: make key
   UI_Key key = ui_key_from_string(ui_active_seed_key(), string);
@@ -241,9 +241,9 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
       UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, *cursor, *mark);
       
       // rjf: perform replace range
-      if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
+      if(op.range.min != op.range.max || op.replace.size != 0)
       {
-        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, op.range, op.replace);
         new_string.size = Min(edit_buffer_size, new_string.size);
         MemoryCopy(edit_buffer, new_string.str, new_string.size);
         edit_string_size_out[0] = new_string.size;
@@ -269,7 +269,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   }
   
   //- rjf: build contents
-  TxtPt mouse_pt = {0};
+  U64 mouse_off = {0};
   F32 cursor_off = 0;
   UI_Parent(box)
   {
@@ -289,14 +289,14 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
       ui_set_next_pref_width(ui_px(total_text_width+ui_top_font_size()*5, 1.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
-      draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
+      draw_data->edited_string = str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = *cursor;
       draw_data->mark = *mark;
       draw_data->trail = 1;
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
-      mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
+      mouse_off = ui_box_char_pos_from_xy(editstr_box, ui_mouse());
+      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, *cursor)).x;
     }
   }
   
@@ -310,8 +310,8 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
     edit_string_size_out[0] = edit_string.size;
     ui_set_auto_focus_active_key(key);
     ui_kill_action();
-    *cursor = txt_pt(1, edit_string.size+1);
-    *mark = txt_pt(1, 1);
+    *cursor = edit_string.size;
+    *mark = 0;
   }
   if(is_focus_active && sig.f&UI_SignalFlag_KeyboardPressed)
   {
@@ -322,9 +322,9 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   {
     if(ui_pressed(sig))
     {
-      *mark = mouse_pt;
+      *mark = mouse_off;
     }
-    *cursor = mouse_pt;
+    *cursor = mouse_off;
   }
   
   //- rjf: focus cursor
@@ -349,7 +349,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
 }
 
 internal UI_Signal
-ui_line_editf(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, char *fmt, ...)
+ui_line_editf(U64 *cursor, U64 *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;

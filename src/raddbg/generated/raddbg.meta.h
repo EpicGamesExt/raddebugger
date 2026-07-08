@@ -28,6 +28,8 @@ RD_RegSlot_InlineDepth,
 RD_RegSlot_FilePath,
 RD_RegSlot_Cursor,
 RD_RegSlot_Mark,
+RD_RegSlot_LineNum,
+RD_RegSlot_ColumnNum,
 RD_RegSlot_TextKey,
 RD_RegSlot_LangKind,
 RD_RegSlot_Lines,
@@ -478,8 +480,10 @@ E_Space eval_space;
 U64 unwind_count;
 U64 inline_depth;
 String8 file_path;
-TxtPt cursor;
-TxtPt mark;
+U64 cursor;
+U64 mark;
+U64 line_num;
+U64 column_num;
 C_Key text_key;
 TXT_LangKind lang_kind;
 D_LineList lines;
@@ -581,6 +585,8 @@ Z(getting_started)\
 .file_path = rd_regs()->file_path,\
 .cursor = rd_regs()->cursor,\
 .mark = rd_regs()->mark,\
+.line_num = rd_regs()->line_num,\
+.column_num = rd_regs()->column_num,\
 .text_key = rd_regs()->text_key,\
 .lang_kind = rd_regs()->lang_kind,\
 .lines = rd_regs()->lines,\
@@ -619,8 +625,8 @@ extern String8 rd_tab_fast_path_view_name_table[25];
 extern String8 rd_tab_fast_path_query_name_table[25];
 extern RD_VocabInfo rd_vocab_info_table[368];
 extern RD_NameSchemaInfo rd_name_schema_info_table[39];
-extern String8 rd_reg_slot_code_name_table[52];
-extern Rng1U64 rd_reg_slot_range_table[52];
+extern String8 rd_reg_slot_code_name_table[54];
+extern Rng1U64 rd_reg_slot_range_table[54];
 extern String8 rd_binding_version_remap_old_name_table[9];
 extern String8 rd_binding_version_remap_new_name_table[9];
 extern String8 rd_icon_kind_text_table[75];

@@ -72,8 +72,8 @@ struct RD_CellParams
   B32 *revert_out;
   
   //- rjf: text editing r/w info
-  TxtPt *cursor;
-  TxtPt *mark;
+  U64 *cursor;
+  U64 *mark;
   U8 *edit_buffer;
   U64 edit_buffer_size;
   U64 *edit_string_size_out;
@@ -128,8 +128,8 @@ typedef struct RD_CodeSliceSignal RD_CodeSliceSignal;
 struct RD_CodeSliceSignal
 {
   UI_Signal base;
-  TxtPt mouse_pt;
-  TxtRng mouse_expr_rng;
+  U64 mouse_off;
+  Rng1U64 mouse_expr_rng;
 };
 
 ////////////////////////////////
@@ -172,8 +172,8 @@ internal UI_Signal rd_icon_buttonf(RD_IconKind kind, FuzzyMatchRangeList *matche
 internal UI_BOX_CUSTOM_DRAW(rd_code_slice_text_draw_extensions);
 internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions);
 internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions);
-internal RD_CodeSliceSignal rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
-internal RD_CodeSliceSignal rd_code_slicef(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
+internal RD_CodeSliceSignal rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred_column, String8 string);
+internal RD_CodeSliceSignal rd_code_slicef(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred_column, char *fmt, ...);
 
 internal B32 rd_do_txt_controls(TXT_TextInfo *info, String8 data, TXT_PatchList *patches, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 

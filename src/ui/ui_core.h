@@ -184,9 +184,9 @@ struct UI_TxtOp
   UI_TxtOpFlags flags;
   String8 replace;
   String8 copy;
-  TxtRng range;
-  TxtPt cursor;
-  TxtPt mark;
+  Rng1U64 range;
+  U64 cursor;
+  U64 mark;
 };
 
 ////////////////////////////////
@@ -776,8 +776,8 @@ internal void ui_eat_event_node(UI_EventList *list, UI_EventNode *node);
 
 internal B32 ui_char_is_scan_boundary(U8 c);
 internal S64 ui_scanned_column_from_column(String8 string, S64 start_column, Side side);
-internal UI_TxtOp ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, TxtPt cursor, TxtPt mark);
-internal String8 ui_push_string_replace_range(Arena *arena, String8 string, Rng1S64 range, String8 replace);
+internal UI_TxtOp ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, U64 cursor, U64 mark);
+internal String8 ui_push_string_replace_range(Arena *arena, String8 string, Rng1U64 range, String8 replace);
 
 ////////////////////////////////
 //~ rjf: Size Type Functions

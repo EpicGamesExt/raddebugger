@@ -2329,14 +2329,14 @@ txt_patched_range_from_base_range(TXT_PatchList *patches, Rng1U64 base_range)
 }
 
 internal void
-txt_line_map_push(Arena *arena, TXT_LineMap *map, Rng1U64 idx_range, Rng1U64 *ranges, S64 delta)
+txt_line_map_push(Arena *arena, TXT_LineMap *map, Rng1U64 num_range, Rng1U64 *ranges, S64 delta)
 {
   TXT_LineMapRangeNode *n = push_array(arena, TXT_LineMapRangeNode, 1);
-  n->idx_range = idx_range;
+  n->num_range = num_range;
   n->ranges = ranges;
   n->delta = delta;
   SLLQueuePush(map->first_range, map->last_range, n);
-  map->total_line_count += dim_1u64(idx_range);
+  map->total_line_count += dim_1u64(num_range);
 }
 
 internal U64
@@ -2345,13 +2345,13 @@ txt_line_num_from_off(TXT_LineMap *map, U64 off)
   U64 result = 0;
   for(TXT_LineMapRangeNode *n = map->first_range; n != 0; n = n->next)
   {
-    for EachInRange(idx, n->idx_range)
+    for EachInRange(num, n->num_range)
     {
-      Rng1U64 line_range = n->ranges[idx-n->idx_range.min];
+      Rng1U64 line_range = n->ranges[num-n->num_range.min];
       Rng1U64 line_range_shifted = r1u64(line_range.min + n->delta, line_range.max + n->delta);
       if(line_range_shifted.min <= off && off <= line_range_shifted.max)
       {
-        result = idx+1;
+        result = num;
         goto break_all;
       }
     }
@@ -2361,14 +2361,14 @@ txt_line_num_from_off(TXT_LineMap *map, U64 off)
 }
 
 internal Rng1U64
-txt_range_from_line_idx(TXT_LineMap *map, U64 idx)
+txt_range_from_line_num(TXT_LineMap *map, U64 num)
 {
   Rng1U64 result = {0};
   for(TXT_LineMapRangeNode *n = map->first_range; n != 0; n = n->next)
   {
-    if(contains_1u64(n->idx_range, idx))
+    if(contains_1u64(n->num_range, num))
     {
-      result = n->ranges[idx - n->idx_range.min];
+      result = n->ranges[num - n->num_range.min];
       result.min = (U64)((S64)result.min + n->delta);
       result.max = (U64)((S64)result.max + n->delta);
     }
@@ -2386,7 +2386,7 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
   U64 last_size = data.size;
   TXT_LineMap last_line_map = {0};
   memory_map_push(scratch.arena, &last_memory_map, r1u64(0, data.size), data.str);
-  txt_line_map_push(scratch.arena, &last_line_map, r1u64(0, info->lines_count), info->lines_ranges, 0);
+  txt_line_map_push(scratch.arena, &last_line_map, r1u64(1, info->lines_count+1), info->lines_ranges, 0);
   
   // rjf: apply the patches in order, each being able to slice/dice the previous memory map
   for EachNode(n, TXT_PatchNode, patches->first)
@@ -2405,7 +2405,7 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
       replace_line_num_range.max = txt_line_num_from_off(&last_line_map, n->v.range.max);
     }
     
-    // rjf: compute portion of lines before/after this replace-range
+    // rjf: compute ranges of (unchanged) lines before/after this replace-range
     Rng1U64 pre_replace_line_num_range = r1u64(1, replace_line_num_range.min);
     Rng1U64 post_replace_line_num_range = r1u64(replace_line_num_range.max+1, last_line_map.total_line_count+1);
     
@@ -2433,10 +2433,7 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
           last_line_start_off = idx+1;
         }
       }
-      if(last_line_start_off < n->v.replace.size)
-      {
-        rng1u64_list_push(scratch.arena, &replace_line_ranges, r1u64(last_line_start_off, n->v.replace.size));
-      }
+      rng1u64_list_push(scratch.arena, &replace_line_ranges, r1u64(last_line_start_off, n->v.replace.size));
     }
     
     // rjf: push all portions of pre-replace / post-replace ranges in previous memory map
@@ -2469,56 +2466,62 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
     {
       for EachNode(map_n, TXT_LineMapRangeNode, last_line_map.first_range)
       {
-        Rng1U64 num_range = shift_1u64(map_n->idx_range, 1);
+        Rng1U64 num_range = map_n->num_range;
         Rng1U64 range_x_pre = intersect_1u64(pre_replace_line_num_range, num_range);
         Rng1U64 range_x_post = intersect_1u64(post_replace_line_num_range, num_range);
         if(range_x_pre.max > range_x_pre.min)
         {
-          txt_line_map_push(scratch.arena, &next_line_map, r1u64(range_x_pre.min-1, range_x_pre.max-1), map_n->ranges + (range_x_pre.min - num_range.min), map_n->delta);
+          txt_line_map_push(scratch.arena, &next_line_map, r1u64(range_x_pre.min, range_x_pre.max), map_n->ranges + (range_x_pre.min - num_range.min), map_n->delta);
         }
         if(range_x_post.max > range_x_post.min)
         {
           Rng1U64 range_x_post_shifted = range_x_post;
           range_x_post_shifted.min = (U64)((S64)range_x_post_shifted.min + line_delta);
           range_x_post_shifted.max = (U64)((S64)range_x_post_shifted.max + line_delta);
-          txt_line_map_push(scratch.arena, &next_line_map, r1u64(range_x_post_shifted.min-1, range_x_post_shifted.max-1), map_n->ranges + (range_x_post.min - num_range.min), map_n->delta + size_delta);
+          txt_line_map_push(scratch.arena, &next_line_map, r1u64(range_x_post_shifted.min, range_x_post_shifted.max), map_n->ranges + (range_x_post.min - num_range.min), map_n->delta + size_delta);
         }
       }
     }
     
     // rjf: compute affected line ranges
-    U64 affected_line_count = dim_1u64(replace_line_num_range)+1;
+    U64 affected_line_count = replace_line_ranges.count;
     Rng1U64 *affected_line_ranges = push_array(arena, Rng1U64, affected_line_count);
     {
       Rng1U64Node *replace_line_range_n = replace_line_ranges.first;
       for EachIndex(affected_line_idx, affected_line_count)
       {
-        Rng1U64 replace_line_range = replace_line_range_n->v;
-        Rng1U64 affected_line_range = r1u64(replace_line_range.min + n->v.range.min, replace_line_range.max + n->v.range.min);
+        Rng1U64 affected_line_range = {0};
+        if(replace_line_range_n != 0)
+        {
+          Rng1U64 replace_line_range = replace_line_range_n->v;
+          affected_line_range = r1u64(replace_line_range.min + n->v.range.min, replace_line_range.max + n->v.range.min);
+          replace_line_range_n = replace_line_range_n->next;
+        }
         
         // rjf: the first line in the range -> take min from original line map
         if(affected_line_idx == 0)
         {
-          Rng1U64 og_line_range = txt_range_from_line_idx(&last_line_map, replace_line_num_range.min + affected_line_idx - 1);
+          Rng1U64 og_line_range = txt_range_from_line_num(&last_line_map, replace_line_num_range.min + affected_line_idx);
           affected_line_range.min = og_line_range.min;
         }
         
         // rjf: the last line in the range -> take max from original line map, shift
         if(affected_line_idx == affected_line_count-1)
         {
-          Rng1U64 og_line_range = txt_range_from_line_idx(&last_line_map, replace_line_num_range.min + affected_line_idx - 1);
-          affected_line_range.max = og_line_range.max + size_delta;
+          Rng1U64 og_line_range = txt_range_from_line_num(&last_line_map, replace_line_num_range.min + affected_line_idx);
+          if(dim_1u64(og_line_range) != 0)
+          {
+            affected_line_range.max += dim_1u64(og_line_range);
+          }
         }
         
         // rjf: commit
         affected_line_ranges[affected_line_idx] = affected_line_range;
-        
-        replace_line_range_n = replace_line_range_n->next;
       }
     }
     
     // rjf: push affected line ranges
-    txt_line_map_push(scratch.arena, &next_line_map, r1u64(replace_line_num_range.min-1, (replace_line_num_range.max+1) - 1), affected_line_ranges, 0);
+    txt_line_map_push(scratch.arena, &next_line_map, r1u64(replace_line_num_range.min, replace_line_num_range.min + affected_line_count), affected_line_ranges, 0);
     
     // rjf: advance to the next memory map
     last_memory_map = next_memory_map;
@@ -2536,7 +2539,7 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
     result.size = last_size;
     for EachNode(n, TXT_LineMapRangeNode, last_line_map.first_range)
     {
-      txt_line_map_push(arena, &result.line_map, n->idx_range, n->ranges, n->delta);
+      txt_line_map_push(arena, &result.line_map, n->num_range, n->ranges, n->delta);
     }
   }
   

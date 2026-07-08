@@ -196,7 +196,7 @@ typedef struct TXT_LineMapRangeNode TXT_LineMapRangeNode;
 struct TXT_LineMapRangeNode
 {
   TXT_LineMapRangeNode *next;
-  Rng1U64 idx_range;
+  Rng1U64 num_range;
   Rng1U64 *ranges;
   S64 delta;
 };
@@ -291,11 +291,10 @@ internal TXT_TokenArray txt_token_array_from_string__disasm_x64_intel(Arena *are
 
 internal U64 txt_patched_off_from_base_off(TXT_PatchList *patches, U64 base_off);
 internal Rng1U64 txt_patched_range_from_base_range(TXT_PatchList *patches, Rng1U64 base_range);
-internal void txt_line_map_push(Arena *arena, TXT_LineMap *map, Rng1U64 idx_range, Rng1U64 *ranges, S64 delta);
+internal void txt_line_map_push(Arena *arena, TXT_LineMap *map, Rng1U64 num_range, Rng1U64 *ranges, S64 delta);
 internal U64 txt_line_num_from_off(TXT_LineMap *map, U64 off);
-internal Rng1U64 txt_range_from_line_idx(TXT_LineMap *map, U64 idx);
+internal Rng1U64 txt_range_from_line_num(TXT_LineMap *map, U64 num);
 internal TXT_Patched txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 data, TXT_PatchList *patches);
-
 
 //~ TODO(rjf): old unpatched text viz code:
 
