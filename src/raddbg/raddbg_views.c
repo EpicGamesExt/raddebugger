@@ -48,6 +48,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   D_Entity *thread = d_entity_from_handle(rd_regs()->thread);
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   B32 do_line_numbers = rd_setting_b32_from_name(str8_lit("show_line_numbers"));
+  B32 text_is_ready = (text_info->lines_count != 0);
   
   //////////////////////////////
   //- rjf: unpack information about the viewed source file, if any
@@ -66,7 +67,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       default: break;
       case RD_CmdKind_GoToLine:
       {
-        cv->goto_line_num = cmd->regs->cursor.line;
+        cv->goto_line_num = cmd->regs->line_num;
       }break;
       case RD_CmdKind_CenterCursor:
       {
@@ -121,14 +122,17 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   }
   
   //////////////////////////////
-  //- rjf: do keyboard interaction
+  //- rjf: do keyboard interaction, compute patched text state
   //
+  TXT_Patched text_patched = txt_patched_from_info_data_patches(scratch.arena, text_info, text_data, &cv->patches);
   B32 snap[Axis2_COUNT] = {0};
   UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
   {
+    rd_state->text_edit_mode = 1;
+    rd_state->text_edit_mode_multiline = 1;
     U64 line_count_per_page = ClampBot(num_possible_visible_lines, 10) - 10;
-    TxtPt *cursor = &rd_regs()->cursor;
-    TxtPt *mark = &rd_regs()->mark;
+    U64 *cursor = &rd_regs()->cursor;
+    U64 *mark = &rd_regs()->mark;
     S64 *preferred_column = &cv->preferred_column;
     B32 change = 0;
     for(UI_Event *evt = 0; ui_next_event(&evt);)
@@ -138,96 +142,108 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         continue;
       }
       B32 taken = 0;
-      String8 line = txt_string_from_info_data_line_num(text_info, text_data, cursor->line);
-      UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, *cursor, *mark);
+      U64 line_num = txt_line_num_from_off(&text_patched.line_map, *cursor);
+      Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, line_num);
+      String8 line = {0};
+      line.size = dim_1u64(line_range);
+      line.str = push_array(scratch.arena, U8, line.size);
+      memory_map_read(&text_patched.memory_map, line_range, line.str);
+      
+      //- rjf: try to treat event as single-line operation; map into multi-line space
+      U64 line_cursor = *cursor - line_range.min;
+      U64 line_mark = *mark - line_range.min;
+      UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, line_cursor, line_mark);
+      single_line_op.range = shift_1u64(single_line_op.range, line_range.min);
+      single_line_op.cursor += line_range.min;
+      single_line_op.mark += line_range.min;
       
       //- rjf: invalid single-line op or endpoint units => try multiline
       if(evt->delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
       {
-        U64 line_count = text_info->lines_count;
-        String8 prev_line = txt_string_from_info_data_line_num(text_info, text_data, cursor->line-1);
-        String8 next_line = txt_string_from_info_data_line_num(text_info, text_data, cursor->line+1);
+        U64 line_count = text_patched.line_map.total_line_count;
         Vec2S32 delta = evt->delta_2s32;
         
         //- rjf: wrap lines right
-        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
+        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && *cursor == line_range.max+1 && line_num+1 <= line_count)
         {
-          cursor->line += 1;
-          cursor->column = 1;
+          Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
+          *cursor = next_line_range.min;
           *preferred_column = 1;
           change = 1;
           taken = 1;
         }
         
         //- rjf: wrap lines left
-        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
+        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && *cursor == line_range.min && line_num-1 >= 1)
         {
-          cursor->line -= 1;
-          cursor->column = prev_line.size+1;
-          *preferred_column = prev_line.size+1;
+          Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
+          *cursor = prev_line_range.max;
+          *preferred_column = (S64)dim_1u64(prev_line_range)+1;
           change = 1;
           taken = 1;
         }
         
         //- rjf: movement down (plain)
-        if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && cursor->line+1 <= line_count)
+        if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && line_num+1 <= line_count)
         {
-          cursor->line += 1;
-          cursor->column = Min(*preferred_column, next_line.size+1);
+          Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
+          *cursor = next_line_range.min + *preferred_column;
+          *cursor = clamp_1u64(next_line_range, *cursor);
           change = 1;
           taken = 1;
         }
         
         //- rjf: movement up (plain)
-        if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
+        if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && line_num > 1)
         {
-          cursor->line -= 1;
-          cursor->column = Min(*preferred_column, prev_line.size+1);
+          Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
+          *cursor = prev_line_range.min + *preferred_column;
+          *cursor = clamp_1u64(prev_line_range, *cursor);
           change = 1;
           taken = 1;
         }
         
         //- rjf: movement down (chunk)
-        if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
+        if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && line_num+1 <= line_count)
         {
-          for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
+          for(U64 scan_line_num = line_num+1; scan_line_num <= line_count; scan_line_num += 1)
           {
-            String8 line = txt_string_from_info_data_line_num(text_info, text_data, line_num);
-            U64 line_size = line.size;
-            if(line_size == 0)
+            Temp scratch = scratch_begin(&arena, 1);
+            Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, scan_line_num);
+            String8 line = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, line_range);
+            String8 line_without_whitespace = str8_skip_chop_whitespace(line);
+            if(line_without_whitespace.size == 0)
             {
-              cursor->line = line_num;
-              cursor->column = 1;
-              break;
+              *cursor = line_range.min + (U64)(line_without_whitespace.str - line.str);
             }
-            else if(line_num == line_count)
+            else if(scan_line_num == line_count)
             {
-              cursor->line = line_num;
-              cursor->column = line_size+1;
+              *cursor = text_patched.size;
             }
+            scratch_end(scratch);
           }
           change = 1;
           taken = 1;
         }
         
         //- rjf: movement up (chunk)
-        if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
+        if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && line_num > 1)
         {
-          for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
+          for(U64 scan_line_num = line_num-1; scan_line_num > 0; scan_line_num -= 1)
           {
-            String8 line = txt_string_from_info_data_line_num(text_info, text_data, line_num);
-            U64 line_size = line.size;
-            if(line_size == 0)
+            Temp scratch = scratch_begin(&arena, 1);
+            Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, scan_line_num);
+            String8 line = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, line_range);
+            String8 line_without_whitespace = str8_skip_chop_whitespace(line);
+            if(line_without_whitespace.size == 0)
             {
-              cursor->line = line_num;
-              cursor->column = 1;
-              break;
+              *cursor = line_range.min + (U64)(line_without_whitespace.str - line.str);
             }
-            else if(line_num == 1)
+            else if(scan_line_num == 1)
             {
-              cursor->line = line_num;
-              cursor->column = 1;
+              *cursor = 0;
             }
+            scratch_end(scratch);
           }
           change = 1;
           taken = 1;
@@ -236,9 +252,11 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         //- rjf: movement down (page)
         if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
         {
-          cursor->line += line_count_per_page;
-          cursor->column = 1;
-          cursor->line = Clamp(1, cursor->line, line_count);
+          U64 advance = line_count_per_page;
+          U64 next_line = line_num + advance;
+          U64 next_line_clamped = Clamp(1, next_line, text_patched.line_map.total_line_count);
+          Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, next_line_clamped);
+          *cursor = next_line_range.min;
           change = 1;
           taken = 1;
         }
@@ -246,9 +264,15 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         //- rjf: movement up (page)
         if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
         {
-          cursor->line -= line_count_per_page;
-          cursor->column = 1;
-          cursor->line = Clamp(1, cursor->line, line_count);
+          S64 advance = -line_count_per_page;
+          if(line_num < line_count_per_page)
+          {
+            advance = -(line_num - 1);
+          }
+          U64 next_line = (U64)((S64)line_num + line_count_per_page);
+          U64 next_line_clamped = Clamp(1, next_line, text_patched.line_map.total_line_count);
+          Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, next_line_clamped);
+          *cursor = next_line_range.min;
           change = 1;
           taken = 1;
         }
@@ -256,7 +280,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         //- rjf: movement to endpoint (+)
         if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
         {
-          *cursor = txt_pt(line_count, text_info->lines_count ? dim_1u64(text_info->lines_ranges[text_info->lines_count-1])+1 : 1);
+          *cursor = txt_range_from_line_num(&text_patched.line_map, text_patched.line_map.total_line_count).max;
           change = 1;
           taken = 1;
         }
@@ -264,7 +288,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         //- rjf: movement to endpoint (-)
         if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
         {
-          *cursor = txt_pt(1, 1);
+          *cursor = 0;
           change = 1;
           taken = 1;
         }
@@ -279,17 +303,16 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       //- rjf: valid single-line op => do single-line op
       else
       {
-#if 0
-        if(single_line_op.replace.size != 0)
+        if(single_line_op.range.min != single_line_op.range.max || single_line_op.replace.size != 0)
         {
-          Rng1U64 range = r1u64(txt_off_from_pt(text_info, &cv->patches, *cursor),
-                                txt_off_from_pt(text_info, &cv->patches, *mark));
-          txt_patch_list_push_new(cv->patch_arena, &cv->patches, range, single_line_op.replace);
+          txt_patch_list_push_new(cv->patch_arena, &cv->patches, single_line_op.range, single_line_op.replace);
+          text_patched = txt_patched_from_info_data_patches(scratch.arena, text_info, text_data, &cv->patches);
         }
-#endif
         *cursor = single_line_op.cursor;
         *mark = single_line_op.mark;
-        *preferred_column = cursor->column;
+        U64 line_num = txt_line_num_from_off(&text_patched.line_map, *cursor);
+        Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, line_num);
+        *preferred_column = (*cursor - line_range.min);
         change = 1;
         taken = 1;
       }
@@ -297,7 +320,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       //- rjf: copy
       if(evt->flags & UI_EventFlag_Copy)
       {
-        String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, &cv->patches, txt_rng(*cursor, *mark));
+        String8 text = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(*cursor, *mark));
         wm_set_clipboard_text(text);
         taken = 1;
       }
@@ -311,11 +334,6 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   }
   
   //////////////////////////////
-  //- rjf: compute current patched text state
-  //
-  TXT_Patched text_patched = txt_patched_from_info_data_patches(scratch.arena, text_info, text_data, &cv->patches);
-  
-  //////////////////////////////
   //- rjf: determine visible line range / count
   //
   Rng1S64 visible_line_num_range = r1s64(scroll_pos.y.idx + (S64)(scroll_pos.y.off) + 1 - !!(scroll_pos.y.off < 0),
@@ -324,12 +342,12 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
                                                 scroll_pos.y.idx + 1 + num_possible_visible_lines);
   U64 visible_line_count = 0;
   {
-    visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)text_info->lines_count);
-    visible_line_num_range.max = Clamp(1, visible_line_num_range.max, (S64)text_info->lines_count);
+    visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)text_patched.line_map.total_line_count);
+    visible_line_num_range.max = Clamp(1, visible_line_num_range.max, (S64)text_patched.line_map.total_line_count);
     visible_line_num_range.min = Max(1, visible_line_num_range.min);
     visible_line_num_range.max = Max(1, visible_line_num_range.max);
-    target_visible_line_num_range.min = Clamp(1, target_visible_line_num_range.min, (S64)text_info->lines_count);
-    target_visible_line_num_range.max = Clamp(1, target_visible_line_num_range.max, (S64)text_info->lines_count);
+    target_visible_line_num_range.min = Clamp(1, target_visible_line_num_range.min, (S64)text_patched.line_map.total_line_count);
+    target_visible_line_num_range.max = Clamp(1, target_visible_line_num_range.max, (S64)text_patched.line_map.total_line_count);
     target_visible_line_num_range.min = Max(1, target_visible_line_num_range.min);
     target_visible_line_num_range.max = Max(1, target_visible_line_num_range.max);
     visible_line_count = (U64)dim_1s64(visible_line_num_range)+1;
@@ -345,7 +363,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     line_size_x = ClampBot(line_size_x, (S64)big_glyph_advance*120);
     line_size_x = ClampBot(line_size_x, (S64)code_area_dim.x);
     scroll_idx_rng[Axis2_X] = r1s64(0, line_size_x-(S64)code_area_dim.x);
-    scroll_idx_rng[Axis2_Y] = r1s64(0, (S64)text_info->lines_count-1);
+    scroll_idx_rng[Axis2_Y] = r1s64(0, (S64)text_patched.line_map.total_line_count-1);
   }
   
   //////////////////////////////
@@ -368,22 +386,28 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: selection on single line, no query? -> set search text
   //
-  if(rd_regs()->cursor.line == rd_regs()->mark.line)
   {
-    CFG_Node *view = cfg_node_from_id(rd_regs()->view);
-    RD_ViewState *vs = rd_view_state_from_cfg(view);
-    if(!vs->query_is_open)
+    U64 cursor = rd_regs()->cursor;
+    U64 mark = rd_regs()->mark;
+    U64 cursor_line_num = txt_line_num_from_off(&text_patched.line_map, cursor);
+    Rng1U64 cursor_line_range = txt_range_from_line_num(&text_patched.line_map, cursor_line_num);
+    if(cursor_line_range.min <= mark && mark <= cursor_line_range.max)
     {
-      CFG_Node *query = cfg_node_child_from_string_or_alloc(rd_state->cfg, view, str8_lit("query"));
-      CFG_Node *input = cfg_node_child_from_string_or_alloc(rd_state->cfg, query, str8_lit("input"));
-      String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, &cv->patches, txt_rng(rd_regs()->cursor, rd_regs()->mark));
-      if(text.size < 256)
+      CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+      RD_ViewState *vs = rd_view_state_from_cfg(view);
+      if(!vs->query_is_open)
       {
-        cfg_node_new_replace(rd_state->cfg, input, text);
-      }
-      else
-      {
-        cfg_node_new_replace(rd_state->cfg, input, str8_zero());
+        CFG_Node *query = cfg_node_child_from_string_or_alloc(rd_state->cfg, view, str8_lit("query"));
+        CFG_Node *input = cfg_node_child_from_string_or_alloc(rd_state->cfg, query, str8_lit("input"));
+        String8 text = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(cursor, mark));
+        if(text.size < 256)
+        {
+          cfg_node_new_replace(rd_state->cfg, input, text);
+        }
+        else
+        {
+          cfg_node_new_replace(rd_state->cfg, input, str8_zero());
+        }
       }
     }
   }
@@ -436,12 +460,18 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       S64 line_num = visible_line_num_range.min;
       U64 line_idx = visible_line_num_range.min-1;
       for(U64 visible_line_idx = 0;
-          visible_line_idx < visible_line_count && line_idx < text_info->lines_count;
+          visible_line_idx < visible_line_count && line_idx < text_patched.line_map.total_line_count;
           visible_line_idx += 1, line_idx += 1, line_num += 1)
       {
-        code_slice_params.line_text[visible_line_idx]   = txt_string_from_info_data_line_num(text_info, text_data, line_num);
-        code_slice_params.line_ranges[visible_line_idx] = text_info->lines_ranges[line_idx];
-        code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
+        Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, line_num);
+        String8 line_text = {0};
+        line_text.size = dim_1u64(line_range);
+        line_text.str = push_array(scratch.arena, U8, line_text.size);
+        memory_map_read(&text_patched.memory_map, line_range, line_text.str);
+        code_slice_params.line_text[visible_line_idx]   = line_text;
+        code_slice_params.line_ranges[visible_line_idx] = line_range;
+        // TODO(rjf): tokens
+        // code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
       }
     }
     
@@ -683,111 +713,75 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //- rjf: do searching operations
   //
   {
+    U64 search_chunk_size = KB(4);
+    
     //- rjf: find text (forward)
     if(cv->find_text_fwd.size != 0)
     {
-      B32 found = 0;
-      B32 first = 1;
-      S64 line_num_start = rd_regs()->cursor.line;
-      S64 line_num_last = (S64)text_info->lines_count;
-      for(S64 line_num = line_num_start; 1 <= line_num && line_num <= line_num_last; first = 0)
+      String8 needle = cv->find_text_fwd;
+      B32 done = 0;
+      for(U64 off = rd_regs()->cursor+1; !done && off < text_patched.size; off += search_chunk_size)
       {
-        // rjf: gather line info
-        String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
-        U64 search_start = 0;
-        if(rd_regs()->cursor.line == line_num && first)
+        Temp scratch = scratch_begin(&arena, 1);
+        String8 data = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(off, off+search_chunk_size));
+        U64 needle_pos = str8_find_needle(data, 0, needle, StringMatchFlag_CaseInsensitive);
+        if(needle_pos < data.size)
         {
-          search_start = rd_regs()->cursor.column;
+          done = 1;
+          rd_regs()->mark = needle_pos;
+          rd_regs()->cursor = rd_regs()->mark + needle.size;
         }
-        
-        // rjf: search string
-        U64 needle_pos = str8_find_needle(line_string, search_start, cv->find_text_fwd, StringMatchFlag_CaseInsensitive);
-        if(needle_pos < line_string.size)
-        {
-          rd_regs()->mark.line = line_num;
-          rd_regs()->mark.column = needle_pos+1;
-          rd_regs()->cursor = rd_regs()->mark;
-          rd_regs()->cursor.column += cv->find_text_fwd.size;
-          found = 1;
-          break;
-        }
-        
-        // rjf: break if circled back around to cursor
-        else if(line_num == line_num_start && !first)
-        {
-          break;
-        }
-        
-        // rjf: increment
-        line_num += 1;
-        if(line_num > line_num_last)
-        {
-          line_num = 1;
-        }
+        scratch_end(scratch);
       }
-      cv->center_cursor = found;
-      if(found == 0)
+      if(!done)
       {
-        log_user_errorf("Could not find `%S`", cv->find_text_fwd);
+        log_user_errorf("Could not find `%S`", needle);
       }
+      cv->center_cursor = done;
     }
     
     //- rjf: find text (backward)
-    if(cv->find_text_bwd.size != 0)
+    if(cv->find_text_bwd.size != 0 && rd_regs()->cursor > 0)
     {
-      B32 found = 0;
-      B32 first = 1;
-      TxtRng rng = txt_rng(rd_regs()->cursor, rd_regs()->mark);
-      S64 line_num_start = rng.min.line;
-      S64 line_num_last = (S64)text_info->lines_count;
-      for(S64 line_num = line_num_start; 1 <= line_num && line_num <= line_num_last; first = 0)
+      String8 needle = cv->find_text_bwd;
+      B32 done = 0;
+      for(U64 off = rd_regs()->cursor-1, next_off = 0; !done; off = next_off)
       {
-        // rjf: gather line info
-        String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
-        if(rng.min.line == line_num && first)
+        U64 advance = Min(search_chunk_size, off);
+        next_off = off - advance;
+        Temp scratch = scratch_begin(&arena, 1);
+        String8 data = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(off, off+search_chunk_size));
+        U64 needle_pos = 0;
         {
-          line_string = str8_prefix(line_string, rng.min.column-1);
-        }
-        
-        // rjf: search string
-        U64 next_needle_pos = line_string.size;
-        for(U64 needle_pos = 0; needle_pos < line_string.size;)
-        {
-          needle_pos = str8_find_needle(line_string, needle_pos, cv->find_text_bwd, StringMatchFlag_CaseInsensitive);
-          if(needle_pos < line_string.size)
+          U64 start_search_pos = 0;
+          for(;;)
           {
-            next_needle_pos = needle_pos;
-            needle_pos += 1;
+            U64 next_needle_pos = str8_find_needle(data, start_search_pos, needle, StringMatchFlag_CaseInsensitive);
+            if(next_needle_pos < data.size)
+            {
+              needle_pos = next_needle_pos;
+            }
+            else
+            {
+              needle_pos = data.size;
+              break;
+            }
+            start_search_pos = next_needle_pos+1;
           }
         }
-        if(next_needle_pos < line_string.size)
+        if(needle_pos < data.size)
         {
-          rd_regs()->mark.line = line_num;
-          rd_regs()->mark.column = next_needle_pos+1;
-          rd_regs()->cursor = rd_regs()->mark;
-          rd_regs()->cursor.column += cv->find_text_bwd.size;
-          found = 1;
-          break;
+          done = 1;
+          rd_regs()->mark = needle_pos;
+          rd_regs()->cursor = rd_regs()->mark + needle.size;
         }
-        
-        // rjf: break if circled back around to cursor line
-        else if(line_num == line_num_start && !first)
-        {
-          break;
-        }
-        
-        // rjf: increment
-        line_num -= 1;
-        if(line_num == 0)
-        {
-          line_num = line_num_last;
-        }
+        scratch_end(scratch);
       }
-      cv->center_cursor = found;
-      if(found == 0)
+      if(!done)
       {
-        log_user_errorf("Could not find `%S`", cv->find_text_bwd);
+        log_user_errorf("Could not find `%S`", needle);
       }
+      cv->center_cursor = done;
     }
     
     MemoryZeroStruct(&cv->find_text_fwd);
@@ -798,12 +792,13 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: do goto line
   //
-  if(cv->goto_line_num != 0 && text_info->lines_count != 0)
+  if(cv->goto_line_num != 0 && text_is_ready)
   {
     S64 line_num = cv->goto_line_num;
     cv->goto_line_num = 0;
-    line_num = Clamp(1, line_num, text_info->lines_count);
-    rd_regs()->cursor = rd_regs()->mark = txt_pt(line_num, 1);
+    line_num = Clamp(1, line_num, text_patched.line_map.total_line_count);
+    Rng1U64 range = txt_range_from_line_num(&text_patched.line_map, line_num);
+    rd_regs()->cursor = rd_regs()->mark = range.min;
     cv->center_cursor = !cv->force_contain_only && (!cv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num));
   }
   
@@ -846,27 +841,28 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     if(ui_pressed(sig.base) && sig.base.event_flags & WM_Modifier_Ctrl)
     {
       ui_kill_action();
-      rd_cmd(RD_CmdKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, &cv->patches, sig.mouse_expr_rng));
+      rd_cmd(RD_CmdKind_GoToName, .string = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, sig.mouse_expr_rng));
     }
     
     //- rjf: watch expr at mouse
     if(cv->watch_expr_at_mouse)
     {
       cv->watch_expr_at_mouse = 0;
-      rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = txt_string_from_info_data_txt_rng(text_info, text_data, &cv->patches, sig.mouse_expr_rng));
+      rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, sig.mouse_expr_rng));
     }
   }
   
   //////////////////////////////
   //- rjf: apply post-build view snapping rules
   //
-  if(text_info->lines_count != 0)
+  if(text_is_ready)
   {
-    TxtPt cursor = rd_regs()->cursor;
-    B32 cursor_in_range = (1 <= cursor.line && cursor.line <= text_info->lines_count);
+    U64 cursor = rd_regs()->cursor;
+    U64 cursor_line_num = txt_line_num_from_off(&text_patched.line_map, cursor);
+    B32 cursor_in_range = (1 <= cursor_line_num && cursor_line_num <= text_patched.line_map.total_line_count);
     
     // rjf: contain => snap
-    if(cv->contain_cursor && text_info->lines_count != 0)
+    if(cv->contain_cursor)
     {
       cv->contain_cursor = 0;
       snap[Axis2_X] = 1;
@@ -874,13 +870,14 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     }
     
     // rjf: center cursor
-    if(cv->center_cursor && text_info->lines_count != 0)
+    if(cv->center_cursor)
     {
       cv->center_cursor = 0;
       if(cursor_in_range)
       {
-        String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[cursor.line-1]);
-        F32 cursor_advance = fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cursor.column-1)).x;
+        Rng1U64 cursor_line_range = txt_range_from_line_num(&text_patched.line_map, cursor_line_num);
+        String8 cursor_line = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, cursor_line_range);
+        F32 cursor_advance = fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cursor-cursor_line_range.min)).x;
         
         // rjf: scroll x
         {
@@ -892,7 +889,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         
         // rjf: scroll y
         {
-          S64 new_idx = (cursor.line-1) - num_possible_visible_lines/2 + 2;
+          S64 new_idx = ((S64)cursor_line_num-1) - num_possible_visible_lines/2 + 2;
           new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
           ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
           snap[Axis2_Y] = 0;
@@ -903,8 +900,9 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: snap in X
     if(snap[Axis2_X] && cursor_in_range)
     {
-      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[cursor.line-1]);
-      S64 cursor_off = (S64)(fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
+      Rng1U64 cursor_line_range = txt_range_from_line_num(&text_patched.line_map, cursor_line_num);
+      String8 cursor_line = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, cursor_line_range);
+      S64 cursor_off = (S64)(fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cursor-cursor_line_range.min)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         scroll_pos.x.idx,
@@ -925,13 +923,13 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: snap in Y
     if(snap[Axis2_Y])
     {
-      Rng1S64 cursor_visibility_range = r1s64(cursor.line-4, cursor.line+4);
+      Rng1S64 cursor_visibility_range = r1s64((S64)cursor_line_num-4, (S64)cursor_line_num+4);
       cursor_visibility_range.min = ClampBot(0, cursor_visibility_range.min);
       cursor_visibility_range.max = ClampBot(0, cursor_visibility_range.max);
       S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
       S64 max_delta = Max(0, cursor_visibility_range.max-(target_visible_line_num_range.min+num_possible_visible_lines));
       S64 new_idx = scroll_pos.y.idx+min_delta+max_delta;
-      new_idx = Clamp(0, new_idx, (S64)text_info->lines_count-1);
+      new_idx = Clamp(0, new_idx, (S64)text_patched.line_map.total_line_count-1);
       ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
     }
   }
@@ -973,7 +971,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: top-level container interaction (scrolling)
   //
-  if(text_info->lines_count != 0)
+  if(text_is_ready)
   {
     UI_Signal sig = ui_signal_from_box(container_box);
     if(sig.scroll.x != 0)
@@ -2263,14 +2261,8 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   rd_regs()->file_path     = rd_file_path_from_eval(rd_frame_arena(), eval);
   rd_regs()->vaddr         = 0;
   rd_regs()->prefer_disasm = 0;
-  rd_regs()->cursor.line   = rd_view_setting_value_from_name(str8_lit("cursor_line")).s64;
-  rd_regs()->cursor.column = rd_view_setting_value_from_name(str8_lit("cursor_column")).s64;
-  rd_regs()->mark.line     = rd_view_setting_value_from_name(str8_lit("mark_line")).s64;
-  rd_regs()->mark.column   = rd_view_setting_value_from_name(str8_lit("mark_column")).s64;
-  if(rd_regs()->cursor.line == 0)   { rd_regs()->cursor.line = 1; }
-  if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
-  if(rd_regs()->mark.line == 0)     { rd_regs()->mark.line = 1; }
-  if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
+  rd_regs()->cursor        = rd_view_setting_value_from_name(s("cursor")).u64;
+  rd_regs()->mark          = rd_view_setting_value_from_name(s("mark")).u64;
   String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, rd_regs()->file_path);
   Rng1U64 range = rd_space_range_from_eval(eval);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
@@ -2405,13 +2397,19 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   }
   
   //////////////////////////////
+  //- rjf: produced patched text info, unpack cursor info in patched text
+  //
+  TXT_Patched patched = txt_patched_from_info_data_patches(scratch.arena, &info, data, &cv->patches);
+  U64 cursor_line_num = txt_line_num_from_off(&patched.line_map, rd_regs()->cursor);
+  
+  //////////////////////////////
   //- rjf: unpack cursor info
   //
   if(rd_regs()->file_path.size != 0)
   {
     D_Entity *module = d_entity_from_handle(rd_regs()->module);
     DI_Key dbgi_key = d_dbgi_key_from_module(module);
-    rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, rd_regs()->file_path, rd_regs()->cursor.line, 8);
+    rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, rd_regs()->file_path, (S64)cursor_line_num, 8);
   }
   
   //////////////////////////////
@@ -2521,7 +2519,8 @@ RD_VIEW_UI_FUNCTION_DEF(text)
           ui_label(rd_regs()->file_path);
           ui_spacer(ui_em(1.5f, 1));
         }
-        ui_labelf("Line: %I64d, Column: %I64d", rd_regs()->cursor.line, rd_regs()->cursor.column);
+        Rng1U64 cursor_line_range = txt_range_from_line_num(&patched.line_map, cursor_line_num);
+        ui_labelf("Line: %I64d, Column: %I64d", cursor_line_num, 1 + rd_regs()->cursor - cursor_line_range.min);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
         ui_labelf("%s",
@@ -2535,10 +2534,8 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: store params
   //
-  rd_store_view_param_s64(str8_lit("cursor_line"), rd_regs()->cursor.line);
-  rd_store_view_param_s64(str8_lit("cursor_column"), rd_regs()->cursor.column);
-  rd_store_view_param_s64(str8_lit("mark_line"), rd_regs()->mark.line);
-  rd_store_view_param_s64(str8_lit("mark_column"), rd_regs()->mark.column);
+  rd_store_view_param_u64(s("cursor"), rd_regs()->cursor);
+  rd_store_view_param_u64(s("mark"), rd_regs()->mark);
   
   access_close(access);
   scratch_end(scratch);
@@ -2551,8 +2548,8 @@ typedef struct RD_DisasmViewState RD_DisasmViewState;
 struct RD_DisasmViewState
 {
   B32 initialized;
-  TxtPt cursor;
-  TxtPt mark;
+  U64 cursor;
+  U64 mark;
   D_Handle temp_look_process;
   U64 temp_look_vaddr;
   U64 temp_look_run_gen;
@@ -2574,8 +2571,8 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   if(dv->initialized == 0)
   {
     dv->initialized = 1;
-    dv->cursor = txt_pt(1, 1);
-    dv->mark = txt_pt(1, 1);
+    dv->cursor = 0;
+    dv->mark = 0;
     rd_code_view_init(&dv->cv);
   }
   RD_CodeViewState *cv = &dv->cv;
@@ -2748,12 +2745,18 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   }
   
   //////////////////////////////
+  //- rjf: produced patched text info, unpack cursor info in patched text
+  //
+  TXT_Patched patched = txt_patched_from_info_data_patches(scratch.arena, &dasm_text_info, dasm_text_data, &cv->patches);
+  U64 cursor_line_num = txt_line_num_from_off(&patched.line_map, rd_regs()->cursor);
+  
+  //////////////////////////////
   //- rjf: unpack cursor info / fill regs
   //
   rd_regs()->prefer_disasm = 1;
   if(!is_loading && has_disasm)
   {
-    U64 off = dasm_line_array_code_off_from_idx(&dasm_info.lines, rd_regs()->cursor.line-1);
+    U64 off = dasm_line_array_code_off_from_idx(&dasm_info.lines, cursor_line_num-1);
     rd_regs()->vaddr = range.min+off;
     rd_regs()->vaddr_range = r1u64(range.min+off, range.min+off);
     rd_regs()->voff_range = d_voff_range_from_vaddr_range(dasm_module, rd_regs()->vaddr_range);
@@ -2773,13 +2776,14 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
       UI_TagF("weak")
       RD_Font(RD_FontSlot_Code)
     {
-      U64 cursor_vaddr = (1 <= rd_regs()->cursor.line && rd_regs()->cursor.line <= dasm_info.lines.count) ? (range.min+dasm_info.lines.v[rd_regs()->cursor.line-1].code_off) : 0;
+      U64 cursor_vaddr = (1 <= cursor_line_num && cursor_line_num <= dasm_info.lines.count) ? (range.min+dasm_info.lines.v[cursor_line_num-1].code_off) : 0;
       if(dasm_module != &d_entity_nil)
       {
         ui_labelf("%S", dasm_module->string);
         ui_spacer(ui_em(1.5f, 1));
       }
-      ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, rd_regs()->cursor.line, rd_regs()->cursor.column);
+      Rng1U64 cursor_line_range = txt_range_from_line_num(&patched.line_map, cursor_line_num);
+      ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, cursor_line_num, 1 + rd_regs()->cursor - cursor_line_range.min);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
       ui_labelf("bin");
@@ -2813,8 +2817,8 @@ struct RD_MemoryViewState
   B32 snap_scroll;
   B32 cell_value_edit_in_progress;
   U8 cell_value_edit_first_digit;
-  TxtPt addrbar_cursor;
-  TxtPt addrbar_mark;
+  U64 addrbar_cursor;
+  U64 addrbar_mark;
   U8 addrbar_buffer[1024];
   U64 addrbar_string_size;
   B32 addrbar_is_focused;
@@ -4587,8 +4591,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     mv->addrbar_is_focused = 1;
     mv->addrbar_string_size = Min(sizeof(mv->addrbar_buffer), cursor_addr->first->string.size);
     MemoryCopy(mv->addrbar_buffer, cursor_addr->first->string.str, mv->addrbar_string_size);
-    mv->addrbar_cursor = txt_pt(1, mv->addrbar_string_size+1);
-    mv->addrbar_mark = txt_pt(1, 1);
+    mv->addrbar_cursor = mv->addrbar_string_size+1;
+    mv->addrbar_mark = 0;
   }
   if(commit_addrbar)
   {

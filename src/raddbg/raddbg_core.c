@@ -1671,13 +1671,6 @@ rd_view_ui(Rng2F32 rect)
     vs->query_string_size = Min(sizeof(vs->query_buffer), current_input.size);
     MemoryCopy(vs->query_buffer, current_input.str, vs->query_string_size);
     
-    //- rjf: clamp cursor
-    if(vs->query_cursor.column == 0)
-    {
-      vs->query_mark = txt_pt(1, 1);
-      vs->query_cursor = txt_pt(1, vs->query_string_size+1);
-    }
-    
     //- rjf: determine dimensions
     F32 search_row_height_target = ui_top_px_height();
     F32 search_row_height = search_row_open_t*search_row_height_target;
@@ -2622,8 +2615,8 @@ rd_view_ui(Rng2F32 rect)
                     RD_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState, 1);
                     SLLStackPush_N(ewv->text_edit_state_slots[slot_idx], edit_state, pt_hash_next);
                     edit_state->pt           = pt;
-                    edit_state->cursor       = txt_pt(1, string.size+1);
-                    edit_state->mark         = txt_pt(1, 1);
+                    edit_state->cursor       = string.size;
+                    edit_state->mark         = 0;
                     edit_state->input_size   = string.size;
                     MemoryCopy(edit_state->input_buffer, string.str, string.size);
                     edit_state->initial_size = string.size;
@@ -2748,11 +2741,11 @@ rd_view_ui(Rng2F32 rect)
                       CFG_Node *window = cfg_node_from_id(rd_regs()->window);
                       RD_WindowState *ws = rd_window_state_from_cfg(window);
                       RD_AutocompCursorInfo *autocomp_cursor_info = &ws->autocomp_cursor_info;
-                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(autocomp_cursor_info->replaced_range.min+1, autocomp_cursor_info->replaced_range.max+1), autocomplete_string);
+                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, autocomp_cursor_info->replaced_range, autocomplete_string);
                       new_string.size = Min(sizeof(edit_state->input_buffer), new_string.size);
                       MemoryCopy(edit_state->input_buffer, new_string.str, new_string.size);
                       edit_state->input_size = new_string.size;
-                      edit_state->cursor = edit_state->mark = txt_pt(1, 1+autocomp_cursor_info->replaced_range.min+autocomplete_string.size);
+                      edit_state->cursor = edit_state->mark = autocomp_cursor_info->replaced_range.min+autocomplete_string.size;
                       string = str8(edit_state->input_buffer, edit_state->input_size);
                       op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
                     }
@@ -2765,9 +2758,9 @@ rd_view_ui(Rng2F32 rect)
                     
                     // rjf: obtain edited string
                     String8 new_string = string;
-                    if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
+                    if(op.range.min != op.range.max || op.replace.size != 0)
                     {
-                      new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(op.range.min.column, op.range.max.column), op.replace);
+                      new_string = ui_push_string_replace_range(scratch.arena, string, op.range, op.replace);
                     }
                     
                     // rjf: commit to edit state
@@ -4235,7 +4228,7 @@ rd_view_ui(Rng2F32 rect)
                           }
                           if(ui_is_focus_active() &&
                              selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
-                             txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
+                             cell_edit_state->cursor == cell_edit_state->mark)
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
                             rd_set_autocomp_regs(cell->eval, .ui_key = line_edit_key, .string = input, .cursor = cell_edit_state->cursor);
@@ -4548,7 +4541,11 @@ rd_view_ui(Rng2F32 rect)
                             {
                               String8 file_path = lines.first->v.file_path;
                               TxtPt pt = lines.first->v.pt;
-                              rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file_path, .cursor = pt, .vaddr = vaddr,
+                              rd_cmd(RD_CmdKind_FindCodeLocation,
+                                     .file_path = file_path,
+                                     .line_num = (U64)pt.line,
+                                     .column_num = (U64)pt.column,
+                                     .vaddr = vaddr,
                                      .process = process->handle,
                                      .module = module->handle,
                                      .dbgi_key = dbgi_key);
@@ -4562,7 +4559,11 @@ rd_view_ui(Rng2F32 rect)
                             RD_Location loc = rd_location_from_cfg(cfg);
                             if(loc.file_path.size != 0)
                             {
-                              rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = 0, .file_path = loc.file_path, .cursor = loc.pt);
+                              rd_cmd(RD_CmdKind_FindCodeLocation,
+                                     .vaddr = 0,
+                                     .file_path = loc.file_path,
+                                     .line_num = (U64)loc.pt.line,
+                                     .column_num = (U64)loc.pt.column);
                             }
                             else if(loc.expr.size != 0)
                             {
@@ -4594,7 +4595,7 @@ rd_view_ui(Rng2F32 rect)
                           // rjf: is file eval? -> switch to file
                           else if(cell_info.file_path.size != 0)
                           {
-                            rd_cmd(RD_CmdKind_FindCodeLocation, .cfg = 0, .file_path = cell_info.file_path, .cursor = txt_pt(0, 0));
+                            rd_cmd(RD_CmdKind_FindCodeLocation, .cfg = 0, .file_path = cell_info.file_path, .line_num = 0, .column_num = 0);
                           }
                         }
                         
@@ -5943,8 +5944,10 @@ rd_window_frame(void)
 #undef Handle
           ui_labelf("file_path: \"%S\"", regs->file_path);
           ui_labelf("expr: \"%S\"", regs->expr);
-          ui_labelf("cursor: (L:%I64d, C:%I64d)", regs->cursor.line, regs->cursor.column);
-          ui_labelf("mark: (L:%I64d, C:%I64d)", regs->mark.line, regs->mark.column);
+          ui_labelf("cursor: %I64u", regs->cursor);
+          ui_labelf("mark: %I64u", regs->mark);
+          ui_labelf("line_num: %I64u", regs->line_num);
+          ui_labelf("column_num: %I64u", regs->column_num);
           ui_labelf("unwind_count: %I64u", regs->unwind_count);
           ui_labelf("inline_depth: %I64u", regs->inline_depth);
           ui_labelf("text_key: [0x%I64x / 0x%I64x:0x%I64x]", regs->text_key.root.u64[0], regs->text_key.id.u128[0].u64[0], regs->text_key.id.u128[0].u64[1]);
@@ -9597,7 +9600,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       U64 cursor_arg_idx = 0;
       if(expr_based_replace)
       {
-        U64 cursor_off = (U64)(regs->cursor.column-1);
+        U64 cursor_off = regs->cursor;
         E_Parse parse = e_parse_from_string(regs->string);
         
         //- rjf: cursor offset -> cursor containing node
@@ -10478,20 +10481,21 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 strin
     case RD_RegSlot_FilePath:
     {
       String8TxtPtPair pair = str8_txt_pt_pair_from_string(string);
-      rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
+      rd_regs()->string = str8_copy(rd_frame_arena(), string);
       if(pair.pt.line != 0)
       {
-        rd_regs()->file_path = push_str8_copy(rd_frame_arena(), pair.string);
-        rd_regs()->cursor = pair.pt;
+        rd_regs()->file_path = str8_copy(rd_frame_arena(), pair.string);
+        rd_regs()->line_num = (U64)pair.pt.line;
+        rd_regs()->column_num = (U64)pair.pt.column;
       }
     }break;
     case RD_RegSlot_Expr:
     {
-      rd_regs()->expr = push_str8_copy(rd_frame_arena(), string);
+      rd_regs()->expr = str8_copy(rd_frame_arena(), string);
     }break;
     case RD_RegSlot_CmdName:
     {
-      rd_regs()->cmd_name = push_str8_copy(rd_frame_arena(), string);
+      rd_regs()->cmd_name = str8_copy(rd_frame_arena(), string);
     }break;
     
     //- rjf: ctrl entities
@@ -10563,13 +10567,12 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 strin
     }break;
     
     //- rjf: line numbers
-    case RD_RegSlot_Cursor:
+    case RD_RegSlot_LineNum:
     {
       E_Eval eval = e_value_eval_from_eval(e_eval_from_string(string));
       if(eval.msgs.max_kind == E_MsgKind_Null)
       {
-        rd_regs()->cursor.column = 1;
-        rd_regs()->cursor.line   = (S64)eval.value.u64;
+        rd_regs()->line_num = eval.value.u64;
       }
       else
       {
@@ -11168,7 +11171,9 @@ rd_frame(void)
     rd_state->hover_regs_slot = RD_RegSlot_Null;
   }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
+  B32 allow_text_multiline_hotkeys = !rd_state->text_edit_mode_multiline;
   rd_state->text_edit_mode = 0;
+  rd_state->text_edit_mode_multiline = 0;
   if(rd_state->frame_depth == 1)
   {
     arena_clear(rd_state->cmd_output_arena);
@@ -11688,7 +11693,7 @@ rd_frame(void)
         if(key_map_nodes.first != 0)
         {
           U32 hit_char = wm_codepoint_from_modifiers_and_key(event->modifiers, event->key);
-          if(hit_char == 0 || allow_text_hotkeys)
+          if((allow_text_hotkeys || hit_char == 0 || (hit_char == '\n' && allow_text_multiline_hotkeys)))
           {
             String8 cmd_name = key_map_nodes.first->v->name;
             for(U64 idx = 0; idx < ArrayCount(rd_binding_version_remap_old_name_table); idx += 1)
@@ -11699,11 +11704,8 @@ rd_frame(void)
               }
             }
             rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_name);
-            if(allow_text_hotkeys)
-            {
-              wm_text(&events, event->window, hit_char);
-              next = event->next;
-            }
+            wm_text(&events, event->window, hit_char);
+            next = event->next;
             take = 1;
             if(event->modifiers & WM_Modifier_Alt)
             {
@@ -11719,7 +11721,7 @@ rd_frame(void)
       }
       
       //- rjf: try text events
-      if(!take && event->kind == WM_EventKind_Text)
+      if(!take && event->kind == WM_EventKind_Text && (event->character != '\n' || !allow_text_multiline_hotkeys))
       {
         String32 insertion32 = str32(&event->character, 1);
         String8 insertion8 = str8_from_32(scratch.arena, insertion32);
@@ -13028,7 +13030,8 @@ rd_frame(void)
               params.entity        = rd_regs()->ctrl_entity;
               params.string        = rd_regs()->string;
               params.file_path     = rd_regs()->file_path;
-              params.cursor        = rd_regs()->cursor;
+              params.line_num      = rd_regs()->line_num;
+              params.column_num    = rd_regs()->column_num;
               params.vaddr         = rd_regs()->vaddr;
               params.prefer_disasm = rd_regs()->prefer_disasm;
               params.pid           = rd_regs()->pid;
@@ -14655,7 +14658,7 @@ rd_frame(void)
           case RD_CmdKind_OpenSourceFileFromDebugInfo:
           {
             String8 path = rd_regs()->file_path;
-            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0, .force_focus = 1, .prefer_new_tab = 1);
+            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .line_num = 0, .vaddr = 0, .force_focus = 1, .prefer_new_tab = 1);
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
           {
@@ -14682,7 +14685,7 @@ rd_frame(void)
                 FileProperties candidate_props = properties_from_file_path(candidate_path);
                 if(candidate_props.modified != 0)
                 {
-                  rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = candidate_path, .cursor = txt_pt(0, 0), .vaddr = 0, .prefer_new_tab = 1);
+                  rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = candidate_path, .line_num = 0, .vaddr = 0, .prefer_new_tab = 1);
                   break;
                 }
               }
@@ -14718,7 +14721,8 @@ rd_frame(void)
             {
               rd_cmd(RD_CmdKind_FindCodeLocation,
                      .file_path = rd_regs()->lines.first->v.file_path,
-                     .cursor    = rd_regs()->lines.first->v.pt,
+                     .line_num  = (U64)rd_regs()->lines.first->v.pt.line,
+                     .column_num= (U64)rd_regs()->lines.first->v.pt.column,
                      .vaddr     = 0,
                      .process   = d_handle_zero(),
                      .prefer_disasm = 0);
@@ -15020,7 +15024,8 @@ rd_frame(void)
             {
               rd_cmd(RD_CmdKind_FindCodeLocation,
                      .file_path    = line.file_path,
-                     .cursor       = line.pt,
+                     .line_num     = (U64)line.pt.line,
+                     .column_num   = (U64)line.pt.column,
                      .process      = process->handle,
                      .voff         = rip_voff,
                      .vaddr        = rip_vaddr,
@@ -15168,7 +15173,8 @@ rd_frame(void)
                   }
                   rd_cmd(RD_CmdKind_FindCodeLocation,
                          .file_path = lines.first->v.file_path,
-                         .cursor    = lines.first->v.pt,
+                         .line_num  = (U64)lines.first->v.pt.line,
+                         .column_num= (U64)lines.first->v.pt.column,
                          .process   = process->handle,
                          .module    = module->handle,
                          .vaddr     = module->vaddr_range.min + lines.first->v.voff_range.min);
@@ -15178,7 +15184,7 @@ rd_frame(void)
               // rjf: name resolved to a file path
               if(name_resolved && file_path.size != 0)
               {
-                rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file_path, .cursor = txt_pt(1, 1), .vaddr = 0);
+                rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file_path, .line_num = 0, .vaddr = 0);
               }
             }
           }break;
@@ -15230,7 +15236,8 @@ rd_frame(void)
             
             //- rjf: grab things to find. path * point, process * address, etc.
             String8 file_path = {0};
-            TxtPt point = {0};
+            U64 line_num = 0;
+            U64 column_num = 0;
             D_Entity *thread = &d_entity_nil;
             D_Entity *process = &d_entity_nil;
             U64 vaddr = 0;
@@ -15238,7 +15245,8 @@ rd_frame(void)
             B32 prefer_new_tab = 0;
             {
               file_path      = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
-              point          = rd_regs()->cursor;
+              line_num       = rd_regs()->line_num;
+              column_num     = rd_regs()->column_num;
               thread         = d_entity_from_handle(rd_regs()->thread);
               process        = d_entity_from_handle(rd_regs()->process);
               vaddr          = rd_regs()->vaddr;
@@ -15267,7 +15275,7 @@ rd_frame(void)
             // try to map the src coordinates to a vaddr via line info
             if(vaddr == 0 && file_path.size != 0)
             {
-              D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, point.line, max_U64);
+              D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, (S64)line_num, max_U64);
               for(D_LineNode *n = lines.first; n != 0; n = n->next)
               {
                 D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, n->v.dbgi_key);
@@ -15774,9 +15782,9 @@ rd_frame(void)
                     rd_cmd(RD_CmdKind_FocusPanel);
                   }
                   rd_cmd(RD_CmdKind_FocusTab);
-                  if(point.line != 0)
+                  if(line_num != 0)
                   {
-                    rd_cmd(RD_CmdKind_GoToLine, .cursor = point);
+                    rd_cmd(RD_CmdKind_GoToLine, .line_num = line_num);
                   }
                   rd_cmd(cursor_snap_kind);
                 }
@@ -16042,12 +16050,12 @@ rd_frame(void)
               {
                 if(!vs->query_is_open && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
                 {
-                  vs->query_cursor = txt_pt(1, 1+input->first->string.size);
-                  vs->query_mark = txt_pt(1, 1);
+                  vs->query_cursor = input->first->string.size;
+                  vs->query_mark = 0;
                 }
                 else
                 {
-                  vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+                  vs->query_cursor = input->first->string.size;
                   vs->query_mark = vs->query_cursor;
                 }
                 if(!str8_match(current_query_cmd_name, cmd_name, 0))
@@ -16119,8 +16127,8 @@ rd_frame(void)
             CFG_Node *input = cfg_node_child_from_string_or_alloc(rd_state->cfg, query, str8_lit("input"));
             cfg_node_new_replace(rd_state->cfg, input, rd_regs()->string);
             RD_ViewState *vs = rd_view_state_from_cfg(view);
-            vs->query_cursor = vs->query_mark = txt_pt(1, rd_regs()->string.size+1);
             vs->query_string_size = Min(sizeof(vs->query_buffer), rd_regs()->string.size);
+            vs->query_cursor = vs->query_mark = vs->query_string_size;
             MemoryCopy(vs->query_buffer, rd_regs()->string.str, vs->query_string_size);
           }break;
           
@@ -16227,17 +16235,18 @@ rd_frame(void)
             // rjf: attach new location info
             {
               String8 file_path = rd_regs()->file_path;
-              TxtPt pt = rd_regs()->cursor;
+              U64 line_num = rd_regs()->line_num;
+              U64 column_num = rd_regs()->column_num;
               String8 expr_string = rd_regs()->expr;
               U64 vaddr = rd_regs()->vaddr;
               if(expr_string.size == 0 && vaddr != 0)
               {
                 expr_string = push_str8f(scratch.arena, "0x%I64x", vaddr);
               }
-              if(file_path.size != 0 && pt.line != 0)
+              if(file_path.size != 0 && line_num != 0)
               {
                 CFG_Node *src_loc = cfg_node_new(rd_state->cfg, cfg, str8_lit("source_location"));
-                cfg_node_newf(rd_state->cfg, src_loc, "%S:%I64d:%I64d", file_path, pt.line, pt.column);
+                cfg_node_newf(rd_state->cfg, src_loc, "%S:%I64u:%I64u", file_path, line_num, column_num);
               }
               else if(expr_string.size != 0)
               {
@@ -16259,12 +16268,13 @@ rd_frame(void)
           case RD_CmdKind_ToggleBreakpoint:
           {
             String8 file_path = rd_regs()->file_path;
-            TxtPt pt = rd_regs()->cursor;
+            U64 line_num = rd_regs()->line_num;
+            U64 column_num = rd_regs()->column_num;
             U64 vaddr = rd_regs()->vaddr;
             String8 expr = rd_regs()->expr;
             if(expr.size == 0 && vaddr != 0)
             {
-              expr = push_str8f(scratch.arena, "0x%I64x", vaddr);
+              expr = str8f(scratch.arena, "0x%I64x", vaddr);
             }
             if(file_path.size != 0 || expr.size != 0)
             {
@@ -16276,7 +16286,7 @@ rd_frame(void)
                 CFG_Node *bp = n->v;
                 CFG_Node *cnd = cfg_node_child_from_string(bp, str8_lit("condition"));
                 RD_Location loc = rd_location_from_cfg(bp);
-                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == pt.line);
+                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == line_num);
                 B32 loc_matches_expr    = (expr.size != 0 && str8_match(expr, loc.expr, 0));
                 if((loc_matches_file_pt || loc_matches_expr) && cnd->first->string.size == 0)
                 {
@@ -16341,7 +16351,8 @@ rd_frame(void)
           case RD_CmdKind_ToggleWatchPin:
           {
             String8 file_path = rd_regs()->file_path;
-            TxtPt pt = rd_regs()->cursor;
+            U64 line_num = rd_regs()->line_num;
+            U64 column_num = rd_regs()->column_num;
             String8 expr_string = rd_regs()->expr;
             U64 vaddr = rd_regs()->vaddr;
             B32 removed_already_existing = 0;
@@ -16353,7 +16364,7 @@ rd_frame(void)
                 CFG_Node *wp = n->v;
                 CFG_Node *expr = cfg_node_child_from_string(wp, str8_lit("expression"));
                 RD_Location loc = rd_location_from_cfg(wp);
-                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == pt.line);
+                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == (S64)line_num);
                 B32 loc_matches_expr    = (expr_string.size != 0 && str8_match(expr_string, loc.expr, 0));
                 if((loc_matches_file_pt || loc_matches_expr) && str8_match(expr->first->string, expr_string, 0))
                 {
@@ -16579,21 +16590,11 @@ rd_frame(void)
             RD_Regs *regs = rd_regs();
             C_Key text_key = regs->text_key;
             TXT_LangKind lang_kind = regs->lang_kind;
-            TxtRng range = txt_rng(regs->cursor, regs->mark);
+            Rng1U64 range = r1u64(regs->cursor, regs->mark);
             U128 hash = {0};
             TXT_TextInfo info = txt_text_info_from_key_lang(access, text_key, lang_kind, &hash);
             String8 data = c_data_from_hash(access, hash);
-            TXT_PatchList patches = {0};
-            Rng1U64 expr_off_range = {0};
-            if(range.min.column != range.max.column)
-            {
-              expr_off_range = r1u64(txt_off_from_pt(&info, &patches, range.min), txt_off_from_pt(&info, &patches, range.max));
-            }
-            else
-            {
-              expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
-            }
-            String8 expr = str8_substr(data, expr_off_range);
+            String8 expr = str8_substr(data, range);
             rd_cmd((kind == RD_CmdKind_GoToNameAtCursor ? RD_CmdKind_GoToName :
                     kind == RD_CmdKind_ToggleWatchExpressionAtCursor ? RD_CmdKind_ToggleWatchExpression :
                     RD_CmdKind_GoToName),

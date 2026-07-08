@@ -91,6 +91,7 @@ wm_codepoint_from_modifiers_and_key(WM_Modifiers modifiers, WM_Key key)
   // rjf: special-case map
   local_persist read_only struct {U32 character; WM_Key key; WM_Modifiers modifiers;} map[] =
   {
+    {'\n', WM_Key_Return, 0},
     {'!', WM_Key_1, WM_Modifier_Shift},
     {'@', WM_Key_2, WM_Modifier_Shift},
     {'#', WM_Key_3, WM_Modifier_Shift},

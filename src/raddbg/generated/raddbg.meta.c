@@ -477,7 +477,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("thread"), 0, str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':set}")},
 };
 
-String8 rd_reg_slot_code_name_table[52] =
+String8 rd_reg_slot_code_name_table[54] =
 {
 {0},
 str8_lit_comp("machine"),
@@ -499,6 +499,8 @@ str8_lit_comp("inline_depth"),
 str8_lit_comp("file_path"),
 str8_lit_comp("cursor"),
 str8_lit_comp("mark"),
+str8_lit_comp("line_num"),
+str8_lit_comp("column_num"),
 str8_lit_comp("text_key"),
 str8_lit_comp("lang_kind"),
 str8_lit_comp("lines"),
@@ -533,7 +535,7 @@ str8_lit_comp("cmd_name"),
 str8_lit_comp("wm_event"),
 };
 
-Rng1U64 rd_reg_slot_range_table[52] =
+Rng1U64 rd_reg_slot_range_table[54] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(D_Handle)},
@@ -553,8 +555,10 @@ Rng1U64 rd_reg_slot_range_table[52] =
 {OffsetOf(RD_Regs, unwind_count), OffsetOf(RD_Regs, unwind_count) + sizeof(U64)},
 {OffsetOf(RD_Regs, inline_depth), OffsetOf(RD_Regs, inline_depth) + sizeof(U64)},
 {OffsetOf(RD_Regs, file_path), OffsetOf(RD_Regs, file_path) + sizeof(String8)},
-{OffsetOf(RD_Regs, cursor), OffsetOf(RD_Regs, cursor) + sizeof(TxtPt)},
-{OffsetOf(RD_Regs, mark), OffsetOf(RD_Regs, mark) + sizeof(TxtPt)},
+{OffsetOf(RD_Regs, cursor), OffsetOf(RD_Regs, cursor) + sizeof(U64)},
+{OffsetOf(RD_Regs, mark), OffsetOf(RD_Regs, mark) + sizeof(U64)},
+{OffsetOf(RD_Regs, line_num), OffsetOf(RD_Regs, line_num) + sizeof(U64)},
+{OffsetOf(RD_Regs, column_num), OffsetOf(RD_Regs, column_num) + sizeof(U64)},
 {OffsetOf(RD_Regs, text_key), OffsetOf(RD_Regs, text_key) + sizeof(C_Key)},
 {OffsetOf(RD_Regs, lang_kind), OffsetOf(RD_Regs, lang_kind) + sizeof(TXT_LangKind)},
 {OffsetOf(RD_Regs, lines), OffsetOf(RD_Regs, lines) + sizeof(D_LineList)},
@@ -755,7 +759,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[256] =
 { str8_lit_comp("insert_text"), str8_lit_comp("Inserts the text that was used to cause this command."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_next"), str8_lit_comp("Moves the cursor or selection to the next element."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_prev"), str8_lit_comp("Moves the cursor or selection to the previous element."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
-{ str8_lit_comp("goto_line"), str8_lit_comp("Jumps to a line number in the current code file."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Cursor, str8_lit_comp("")}},
+{ str8_lit_comp("goto_line"), str8_lit_comp("Jumps to a line number in the current code file."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_LineNum, str8_lit_comp("")}},
 { str8_lit_comp("goto_address"), str8_lit_comp("Jumps to an address in the current memory or disassembly view."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Vaddr, str8_lit_comp("")}},
 { str8_lit_comp("center_cursor"), str8_lit_comp("Snaps the current code view to center the cursor."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("contain_cursor"), str8_lit_comp("Snaps the current code view to contain the cursor."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
