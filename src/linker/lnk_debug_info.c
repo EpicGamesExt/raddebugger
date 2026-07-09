@@ -206,6 +206,31 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
       lnk_error_obj(LNK_Warning_IllData, task->obj_arr[obj_idx], ".debug$S has %u file checksum sub-sections defined, picking first sub-section", checksum_data_list.node_count);
     }
   }
+
+  // ICF-folded functions' associated .debug$S (dead-stripped, excluded from the list above):
+  // merge ONLY their Lines subsections. The reloc patcher patched them to the fold leader's RVA,
+  // so source breakpoints on folded bodies bind; symbol records stay dropped (that is the bulk
+  // of link.exe's size cost for the same feature). File ids in these Lines index the obj-wide
+  // FILECHKSMS merged above, so they stay consistent within this module. Mark 2 (fold joins a
+  // different source location and has locals) keeps the WHOLE record tree instead, so the watch
+  // window labels a folded frame with that source's own variable names.
+  {
+    LNK_Obj *obj = task->obj_arr[obj_idx];
+    if (obj->icf_lines_only != 0) {
+      for (U32 section_number = 1; section_number <= obj->coff.sections.count_no_null; section_number += 1) {
+        if (!obj->icf_lines_only[section_number]) { continue; }
+        String8        raw_data = lnk_obj_section_data_from_number(obj, section_number);
+        CV_DebugS      ds       = cv_debug_s_from_data(arena, raw_data);
+        if (obj->icf_lines_only[section_number] == 2) {
+          cv_debug_s_concat_in_place(debug_s, &ds);
+        } else {
+          String8List  lines = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_Lines);
+          String8List *dst   = cv_sub_section_ptr_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
+          str8_list_concat_in_place(dst, &lines);
+        }
+      }
+    }
+  }
 }
 
 internal int
@@ -1677,19 +1702,16 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       for EachNode(n, String8Node, input.debug_s_list_arr[obj_idx].first) {
         if (n->string.size) { ranges[range_count++] = rng_1u64((U64)n->string.str, (U64)n->string.str + n->string.size); }
       }
-      if (obj->debug_t_sect_idx < obj->header.section_count_no_null) {
-        LNK_ObjSection sect = lnk_obj_section_from_sect_idx(obj, obj->debug_t_sect_idx);
-        String8        data = lnk_obj_get_sect_data(obj, obj->debug_t_sect_idx, sect.frange);
+      if (obj->coff.debug_t_section_number) {
+        String8 data = lnk_obj_section_data_from_number(obj, obj->coff.debug_t_section_number);
         if (data.size) { ranges[range_count++] = rng_1u64((U64)data.str, (U64)data.str + data.size); }
       }
-      if (obj->debug_p_sect_idx < obj->header.section_count_no_null) {
-        LNK_ObjSection sect = lnk_obj_section_from_sect_idx(obj, obj->debug_p_sect_idx);
-        String8        data = lnk_obj_get_sect_data(obj, obj->debug_p_sect_idx, sect.frange);
+      if (obj->coff.debug_p_section_number) {
+        String8 data = lnk_obj_section_data_from_number(obj, obj->coff.debug_p_section_number);
         if (data.size) { ranges[range_count++] = rng_1u64((U64)data.str, (U64)data.str + data.size); }
       }
-      if (config->ghash && obj->debug_h_sect_idx < obj->header.section_count_no_null) {
-        LNK_ObjSection sect = lnk_obj_section_from_sect_idx(obj, obj->debug_h_sect_idx);
-        String8        data = lnk_obj_get_sect_data(obj, obj->debug_h_sect_idx, sect.frange);
+      if (config->ghash && obj->coff.debug_h_section_number) {
+        String8 data = lnk_obj_section_data_from_number(obj, obj->coff.debug_h_section_number);
         if (data.size) { ranges[range_count++] = rng_1u64((U64)data.str, (U64)data.str + data.size); }
       }
     }
