@@ -191,8 +191,19 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
   }
   
   //- rjf: form next cursor
+  B32 cursor_out_of_bounds = 0;
   if(cursor == mark || !(event->flags & UI_EventFlag_ZeroDeltaOnSelect))
   {
+    if(delta.x < -(S32)next_cursor)
+    {
+      delta.x = -(S32)next_cursor;
+      cursor_out_of_bounds = 1;
+    }
+    if(cursor + delta.x > string.size)
+    {
+      delta.x = (S32)((S64)string.size - (S64)cursor);
+      cursor_out_of_bounds = 1;
+    }
     next_cursor += delta.x;
   }
   
@@ -255,7 +266,7 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
   
   //- rjf: determine if this event should be taken, based on bounds of cursor
   {
-    if(next_cursor > string.size+replace.size || event->delta_2s32.y != 0)
+    if(next_cursor > string.size+replace.size || event->delta_2s32.y != 0 || cursor_out_of_bounds)
     {
       flags |= UI_TxtOpFlag_Invalid;
     }

@@ -2505,13 +2505,13 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
           affected_line_range.min = og_line_range.min;
         }
         
-        // rjf: the last line in the range -> take max from original line map, shift
-        if(affected_line_idx == affected_line_count-1)
+        // rjf: the last line in the range -> take remaining suffix from original line map
+        if(affected_line_idx == affected_line_count-1 && affected_line_idx >= ClampBot(0, line_delta))
         {
-          Rng1U64 og_line_range = txt_range_from_line_num(&last_line_map, replace_line_num_range.min + affected_line_idx);
-          if(dim_1u64(og_line_range) != 0)
+          Rng1U64 og_line_range = txt_range_from_line_num(&last_line_map, replace_line_num_range.max);
+          if(og_line_range.max > n->v.range.max)
           {
-            affected_line_range.max += dim_1u64(og_line_range);
+            affected_line_range.max += og_line_range.max - n->v.range.max;
           }
         }
         
