@@ -134,7 +134,6 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     U64 *cursor = &rd_regs()->cursor;
     U64 *mark = &rd_regs()->mark;
     S64 *preferred_column = &cv->preferred_column;
-    B32 change = 0;
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
       if(evt->kind != UI_EventKind_Navigate && evt->kind != UI_EventKind_Edit && evt->kind != UI_EventKind_Text)
@@ -142,6 +141,9 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         continue;
       }
       B32 taken = 0;
+      U64 start_cursor = *cursor;
+      Vec2S32 delta = evt->delta_2s32;
+      U64 line_count = text_patched.line_map.total_line_count;
       U64 line_num = txt_line_num_from_off(&text_patched.line_map, *cursor);
       Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, line_num);
       String8 line = {0};
@@ -149,196 +151,180 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       line.str = push_array(scratch.arena, U8, line.size);
       memory_map_read(&text_patched.memory_map, line_range, line.str);
       
-      //- rjf: try to treat event as single-line operation; map into multi-line space
-      U64 line_cursor = *cursor - line_range.min;
-      U64 line_mark = *mark - line_range.min;
-      UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, line_cursor, line_mark);
-      single_line_op.range = shift_1u64(single_line_op.range, line_range.min);
-      single_line_op.cursor += line_range.min;
-      single_line_op.mark += line_range.min;
+      //- rjf: interpret event as single-line text op
+      UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, line_range, *cursor, *mark);
       
-      //- rjf: invalid single-line op or endpoint units => try multiline
-      if(evt->delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
+      //- rjf: apply single-line navigations
+      *cursor = single_line_op.cursor;
+      *mark = single_line_op.mark;
+      
+      //- rjf: wrap lines right
+      if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && start_cursor == line_range.max && line_num+1 <= line_count)
       {
-        U64 start_cursor = *cursor;
-        U64 line_count = text_patched.line_map.total_line_count;
-        Vec2S32 delta = evt->delta_2s32;
-        
-        //- rjf: wrap lines right
-        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && *cursor == line_range.max && line_num+1 <= line_count)
+        Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
+        *cursor = next_line_range.min;
+        *preferred_column = 1;
+      }
+      
+      //- rjf: wrap lines left
+      if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && start_cursor == line_range.min && line_num-1 >= 1)
+      {
+        Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
+        *cursor = prev_line_range.max;
+        *preferred_column = (S64)dim_1u64(prev_line_range)+1;
+      }
+      
+      //- rjf: movement down (plain)
+      if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && line_num+1 <= line_count)
+      {
+        Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
+        *cursor = next_line_range.min + *preferred_column;
+        *cursor = clamp_1u64(next_line_range, *cursor);
+      }
+      
+      //- rjf: movement up (plain)
+      if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && line_num > 1)
+      {
+        Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
+        *cursor = prev_line_range.min + *preferred_column;
+        *cursor = clamp_1u64(prev_line_range, *cursor);
+      }
+      
+      //- rjf: movement down (chunk)
+      if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && line_num+1 <= line_count)
+      {
+        for(U64 scan_line_num = line_num+1; scan_line_num <= line_count; scan_line_num += 1)
         {
-          Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
-          *cursor = next_line_range.min;
-          *preferred_column = 1;
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: wrap lines left
-        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && *cursor == line_range.min && line_num-1 >= 1)
-        {
-          Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
-          *cursor = prev_line_range.max;
-          *preferred_column = (S64)dim_1u64(prev_line_range)+1;
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: movement down (plain)
-        if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && line_num+1 <= line_count)
-        {
-          Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
-          *cursor = next_line_range.min + *preferred_column;
-          *cursor = clamp_1u64(next_line_range, *cursor);
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: movement up (plain)
-        if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && line_num > 1)
-        {
-          Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
-          *cursor = prev_line_range.min + *preferred_column;
-          *cursor = clamp_1u64(prev_line_range, *cursor);
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: movement down (chunk)
-        if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && line_num+1 <= line_count)
-        {
-          for(U64 scan_line_num = line_num+1; scan_line_num <= line_count; scan_line_num += 1)
+          Temp scratch = scratch_begin(&arena, 1);
+          Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, scan_line_num);
+          String8 line = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, line_range);
+          String8 line_without_whitespace = str8_skip_chop_whitespace(line);
+          if(line_without_whitespace.size == 0)
           {
-            Temp scratch = scratch_begin(&arena, 1);
-            Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, scan_line_num);
-            String8 line = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, line_range);
-            String8 line_without_whitespace = str8_skip_chop_whitespace(line);
-            if(line_without_whitespace.size == 0)
-            {
-              *cursor = line_range.min + (U64)(line_without_whitespace.str - line.str);
-            }
-            else if(scan_line_num == line_count)
-            {
-              *cursor = text_patched.size;
-            }
-            scratch_end(scratch);
+            *cursor = line_range.min + (U64)(line_without_whitespace.str - line.str);
           }
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: movement up (chunk)
-        if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && line_num > 1)
-        {
-          for(U64 scan_line_num = line_num-1; scan_line_num > 0; scan_line_num -= 1)
+          else if(scan_line_num == line_count)
           {
-            Temp scratch = scratch_begin(&arena, 1);
-            Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, scan_line_num);
-            String8 line = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, line_range);
-            String8 line_without_whitespace = str8_skip_chop_whitespace(line);
-            if(line_without_whitespace.size == 0)
-            {
-              *cursor = line_range.min + (U64)(line_without_whitespace.str - line.str);
-            }
-            else if(scan_line_num == 1)
-            {
-              *cursor = 0;
-            }
-            scratch_end(scratch);
+            *cursor = text_patched.size;
           }
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: movement down (page)
-        if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
-        {
-          U64 advance = line_count_per_page;
-          U64 next_line = line_num + advance;
-          U64 next_line_clamped = Clamp(1, next_line, text_patched.line_map.total_line_count);
-          Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, next_line_clamped);
-          *cursor = next_line_range.min;
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: movement up (page)
-        if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
-        {
-          S64 advance = -line_count_per_page;
-          if(line_num < line_count_per_page)
-          {
-            advance = -(line_num - 1);
-          }
-          U64 next_line = (U64)((S64)line_num + line_count_per_page);
-          U64 next_line_clamped = Clamp(1, next_line, text_patched.line_map.total_line_count);
-          Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, next_line_clamped);
-          *cursor = next_line_range.min;
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: movement to endpoint (+)
-        if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
-        {
-          *cursor = text_patched.size;
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: movement to endpoint (-)
-        if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
-        {
-          *cursor = 0;
-          change = 1;
-          taken = 1;
-        }
-        
-        //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
-        if(!(evt->flags & UI_EventFlag_KeepMark))
-        {
-          *mark = *cursor;
-        }
-        
-        //- rjf: push patch if we have one
-        if(evt->flags & UI_EventFlag_Delete)
-        {
-          Rng1U64 range = r1u64(start_cursor, *cursor);
-          txt_patch_list_push_new(cv->patch_arena, &cv->patches, range, single_line_op.replace);
-          text_patched = txt_patched_from_info_data_patches(scratch.arena, text_info, text_data, &cv->patches);
-          *cursor = *mark = range.min;
+          scratch_end(scratch);
         }
       }
       
-      //- rjf: valid single-line op => do single-line op
-      else
+      //- rjf: movement up (chunk)
+      if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && line_num > 1)
       {
-        if(single_line_op.range.min != single_line_op.range.max || single_line_op.replace.size != 0)
+        for(U64 scan_line_num = line_num-1; scan_line_num > 0; scan_line_num -= 1)
         {
-          txt_patch_list_push_new(cv->patch_arena, &cv->patches, single_line_op.range, single_line_op.replace);
-          text_patched = txt_patched_from_info_data_patches(scratch.arena, text_info, text_data, &cv->patches);
+          Temp scratch = scratch_begin(&arena, 1);
+          Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, scan_line_num);
+          String8 line = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, line_range);
+          String8 line_without_whitespace = str8_skip_chop_whitespace(line);
+          if(line_without_whitespace.size == 0)
+          {
+            *cursor = line_range.min + (U64)(line_without_whitespace.str - line.str);
+          }
+          else if(scan_line_num == 1)
+          {
+            *cursor = 0;
+          }
+          scratch_end(scratch);
         }
-        *cursor = single_line_op.cursor;
-        *mark = single_line_op.mark;
-        U64 line_num = txt_line_num_from_off(&text_patched.line_map, *cursor);
-        Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, line_num);
-        *preferred_column = (*cursor - line_range.min);
-        change = 1;
-        taken = 1;
       }
       
-      //- rjf: copy
+      //- rjf: movement down (page)
+      if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
+      {
+        U64 advance = line_count_per_page;
+        U64 next_line = line_num + advance;
+        U64 next_line_clamped = Clamp(1, next_line, text_patched.line_map.total_line_count);
+        Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, next_line_clamped);
+        *cursor = next_line_range.min;
+      }
+      
+      //- rjf: movement up (page)
+      if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
+      {
+        S64 advance = -line_count_per_page;
+        if(line_num < line_count_per_page)
+        {
+          advance = -(line_num - 1);
+        }
+        U64 next_line = (U64)((S64)line_num + line_count_per_page);
+        U64 next_line_clamped = Clamp(1, next_line, text_patched.line_map.total_line_count);
+        Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, next_line_clamped);
+        *cursor = next_line_range.min;
+      }
+      
+      //- rjf: movement to endpoint (+)
+      if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
+      {
+        *cursor = text_patched.size;
+      }
+      
+      //- rjf: movement to endpoint (-)
+      if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
+      {
+        *cursor = 0;
+      }
+      
+      //- rjf: get replaced-range; adjust based on multi-line logic
+      Rng1U64 replaced_range = single_line_op.range;
+      if(*cursor != single_line_op.cursor && (evt->flags & UI_EventFlag_Delete || evt->string.size != 0))
+      {
+        replaced_range = r1u64(*mark, *cursor);
+      }
+      
+      //- rjf: in some cases, we want to pick a selection side based on the delta
+      if(*cursor != *mark && evt->flags & UI_EventFlag_PickSelectSide)
+      {
+        if(delta.x < 0 || delta.y < 0)
+        {
+          *cursor = *mark = Min(*cursor, *mark);
+        }
+        else if(delta.x > 0 || delta.y > 0)
+        {
+          *cursor = *mark = Max(*cursor, *mark);
+        }
+      }
+      
+      //- rjf: do copy if needed
       if(evt->flags & UI_EventFlag_Copy)
       {
         String8 text = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(*cursor, *mark));
         wm_set_clipboard_text(text);
-        taken = 1;
+      }
+      
+      //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
+      if(!(evt->flags & UI_EventFlag_KeepMark))
+      {
+        *mark = *cursor;
+      }
+      
+      //- rjf: push patch if we have one
+      if(replaced_range.max != replaced_range.min || single_line_op.replace.size != 0)
+      {
+        txt_patch_list_push_new(cv->patch_arena, &cv->patches, replaced_range, single_line_op.replace);
+        text_patched = txt_patched_from_info_data_patches(scratch.arena, text_info, text_data, &cv->patches);
+        *cursor = *mark = replaced_range.min + single_line_op.replace.size;
+        U64 line_num = txt_line_num_from_off(&text_patched.line_map, *cursor);
+        Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, line_num);
+        *preferred_column = (*cursor - line_range.min);
       }
       
       //- rjf: consume
-      if(taken)
+      ui_eat_event(evt);
+      
+      //- rjf: changed cursor -> snap in X
+      if(*cursor != start_cursor)
       {
-        ui_eat_event(evt);
+        snap[Axis2_X] = 1;
+      }
+      
+      //- rjf: changed cursor line -> snap in Y
+      if(*cursor < line_range.min || line_range.max < *cursor)
+      {
+        snap[Axis2_Y] = 1;
       }
     }
   }

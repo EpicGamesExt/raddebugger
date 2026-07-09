@@ -238,7 +238,7 @@ ui_line_edit(U64 *cursor, U64 *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 
       }
       
       // rjf: map this action to an op
-      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, *cursor, *mark);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, r1u64(0, edit_string.size), *cursor, *mark);
       
       // rjf: perform replace range
       if(op.range.min != op.range.max || op.replace.size != 0)
@@ -250,7 +250,7 @@ ui_line_edit(U64 *cursor, U64 *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 
       }
       
       // rjf: perform copy
-      if(op.flags & UI_TxtOpFlag_Copy)
+      if(evt->flags & UI_EventFlag_Copy)
       {
         wm_set_clipboard_text(op.copy);
       }

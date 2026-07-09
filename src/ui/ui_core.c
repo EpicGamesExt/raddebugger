@@ -142,14 +142,13 @@ ui_scanned_column_from_column(String8 string, S64 start_column, Side side)
 }
 
 internal UI_TxtOp
-ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, U64 cursor, U64 mark)
+ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, Rng1U64 cursor_range, U64 cursor, U64 mark)
 {
   U64 next_cursor = cursor;
   U64 next_mark = mark;
   Rng1U64 range = {0};
   String8 replace = {0};
   String8 copy = {0};
-  UI_TxtOpFlags flags = 0;
   Vec2S32 delta = event->delta_2s32;
   Vec2S32 original_delta = delta;
   
@@ -164,7 +163,7 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
     }break;
     case UI_EventDeltaUnit_Word:
     {
-      delta.x = (S32)(ui_scanned_column_from_column(string, (S64)cursor+1, delta.x > 0 ? Side_Max : Side_Min)-1 - (S64)cursor);
+      delta.x = (S32)(ui_scanned_column_from_column(string, (S64)(cursor - cursor_range.min)+1, delta.x > 0 ? Side_Max : Side_Min)-1 - (S64)(cursor - cursor_range.min));
     }break;
     case UI_EventDeltaUnit_Line:
     case UI_EventDeltaUnit_Whole:
@@ -179,8 +178,8 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
           break;
         }
       }
-      U64 home_dest_off = (cursor == first_nonwhitespace_off) ? 0 : first_nonwhitespace_off;
-      delta.x = (delta.x > 0) ? ((S64)string.size - (S64)cursor) : ((S64)home_dest_off - (S64)cursor);
+      U64 home_dest_off = (cursor - cursor_range.min == first_nonwhitespace_off) ? 0 : first_nonwhitespace_off;
+      delta.x = (delta.x > 0) ? ((S64)string.size - (S64)(cursor - cursor_range.min)) : ((S64)home_dest_off - (S64)(cursor - cursor_range.min));
     }break;
   }
   
@@ -191,26 +190,17 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
   }
   
   //- rjf: form next cursor
-  B32 cursor_out_of_bounds = 0;
   if(cursor == mark || !(event->flags & UI_EventFlag_ZeroDeltaOnSelect))
   {
-    if(delta.x < -(S32)next_cursor)
-    {
-      delta.x = -(S32)next_cursor;
-      cursor_out_of_bounds = 1;
-    }
-    if(cursor + delta.x > string.size)
-    {
-      delta.x = (S32)((S64)string.size - (S64)cursor);
-      cursor_out_of_bounds = 1;
-    }
+    delta.x = Max(delta.x, -(S32)(next_cursor - cursor_range.min));
+    delta.x = Min(delta.x, +(S32)(cursor_range.max - next_cursor));
     next_cursor += delta.x;
   }
   
   //- rjf: cap at line
   if(event->flags & UI_EventFlag_CapAtLine)
   {
-    next_cursor = Clamp(0, next_cursor, string.size);
+    next_cursor = Clamp(cursor_range.min, next_cursor, cursor_range.max+1);
   }
   
   //- rjf: in some cases, we want to pick a selection side based on the delta
@@ -229,16 +219,7 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
   //- rjf: copying
   if(event->flags & UI_EventFlag_Copy)
   {
-    copy = str8_substr(string, r1u64(cursor, mark));
-    flags |= UI_TxtOpFlag_Copy;
-  }
-  
-  //- rjf: pasting
-  if(event->flags & UI_EventFlag_Paste)
-  {
-    range = r1u64(cursor, mark);
-    replace = wm_get_clipboard_text(arena);
-    next_cursor = next_mark = cursor + replace.size;
+    copy = str8_substr(string, r1u64(cursor - cursor_range.min, mark - cursor_range.min));
   }
   
   //- rjf: deletion
@@ -264,20 +245,9 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
     next_cursor = next_mark = range.min + event->string.size;
   }
   
-  //- rjf: determine if this event should be taken, based on bounds of cursor
-  {
-    if(next_cursor > string.size+replace.size || event->delta_2s32.y != 0 || cursor_out_of_bounds)
-    {
-      flags |= UI_TxtOpFlag_Invalid;
-    }
-    next_cursor = Clamp(0, next_cursor, string.size+replace.size);
-    next_mark = Clamp(0, next_mark, string.size+replace.size);
-  }
-  
   //- rjf: build+fill
   UI_TxtOp op = {0};
   {
-    op.flags   = flags;
     op.replace = replace;
     op.copy    = copy;
     op.range   = range;

@@ -2860,7 +2860,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
         if(line_range.min <= *cursor && *cursor <= line_range.max)
         {
           Vec2F32 advance = fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, *cursor - line_range.min));
-          F32 cursor_y = line_box->rect.y0-params->font_size*0.125f;
+          F32 cursor_y = text_container_box->rect.y0 + line_idx*params->line_height_px - params->font_size*0.125f;
           F32 cursor_y__animated = ui_anim(ui_key_from_stringf(text_container_box->key, "cursor_y_px"), cursor_y);
           F32 cursor_off_pixels = advance.x;
           F32 cursor_off_pixels__animated = ui_anim(ui_key_from_stringf(text_container_box->key, "cursor_off_px"), cursor_off_pixels);
@@ -3885,7 +3885,7 @@ rd_cell(RD_CellParams *params, String8 string)
       }
       
       // rjf: map this action to an op
-      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, params->cursor[0], params->mark[0]);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, r1u64(0, edit_string.size), params->cursor[0], params->mark[0]);
       
       // rjf: any valid *additive* op & autocomplete hint? -> perform autocomplete first, then re-compute op
       if(!(evt->flags & UI_EventFlag_Delete) && autocomplete_hint_string.size != 0)
@@ -3899,7 +3899,7 @@ rd_cell(RD_CellParams *params, String8 string)
         params->edit_string_size_out[0] = new_string.size;
         params->cursor[0] = params->mark[0] = autocomp_cursor_info->replaced_range.min+autocomplete_hint_string.size;
         edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
-        op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, params->cursor[0], params->mark[0]);
+        op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, r1u64(0, edit_string.size), params->cursor[0], params->mark[0]);
         MemoryZeroStruct(&autocomplete_hint_string);
       }
       
@@ -3913,7 +3913,7 @@ rd_cell(RD_CellParams *params, String8 string)
       }
       
       // rjf: perform copy
-      if(op.flags & UI_TxtOpFlag_Copy)
+      if(evt->flags & UI_EventFlag_Copy)
       {
         wm_set_clipboard_text(op.copy);
       }
