@@ -160,11 +160,12 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       //- rjf: invalid single-line op or endpoint units => try multiline
       if(evt->delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
       {
+        U64 start_cursor = *cursor;
         U64 line_count = text_patched.line_map.total_line_count;
         Vec2S32 delta = evt->delta_2s32;
         
         //- rjf: wrap lines right
-        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && *cursor == line_range.max+1 && line_num+1 <= line_count)
+        if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && *cursor == line_range.max && line_num+1 <= line_count)
         {
           Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
           *cursor = next_line_range.min;
@@ -280,7 +281,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         //- rjf: movement to endpoint (+)
         if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
         {
-          *cursor = txt_range_from_line_num(&text_patched.line_map, text_patched.line_map.total_line_count).max;
+          *cursor = text_patched.size;
           change = 1;
           taken = 1;
         }
@@ -297,6 +298,15 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         if(!(evt->flags & UI_EventFlag_KeepMark))
         {
           *mark = *cursor;
+        }
+        
+        //- rjf: push patch if we have one
+        if(evt->flags & UI_EventFlag_Delete)
+        {
+          Rng1U64 range = r1u64(start_cursor, *cursor);
+          txt_patch_list_push_new(cv->patch_arena, &cv->patches, range, single_line_op.replace);
+          text_patched = txt_patched_from_info_data_patches(scratch.arena, text_info, text_data, &cv->patches);
+          *cursor = *mark = range.min;
         }
       }
       
