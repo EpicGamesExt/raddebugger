@@ -2293,41 +2293,6 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
 ////////////////////////////////
 //~ rjf: Text Info Extractor Helpers
 
-internal U64
-txt_patched_off_from_base_off(TXT_PatchList *patches, U64 base_off)
-{
-  U64 result = base_off;
-  for EachNode(n, TXT_PatchNode, patches->first)
-  {
-    // rjf: this patch occurred before our result -> shift our offset
-    if(n->v.range.max < result)
-    {
-      S64 delta = (S64)n->v.replace.size - (S64)dim_1u64(n->v.range);
-      S64 result_adjusted = (S64)result + delta;
-      result_adjusted = ClampBot(0, result_adjusted);
-      result = (U64)result_adjusted;
-    }
-    
-    // rjf: if this patch covers our offset -> just reset to the beginning of the patch range
-    else if(contains_1u64(n->v.range, result))
-    {
-      result = n->v.range.min;
-    }
-    
-    // NOTE(rjf): otherwise, this patch occurs *after* our offset, and so our offset remains
-    // valid.
-  }
-  return result;
-}
-
-internal Rng1U64
-txt_patched_range_from_base_range(TXT_PatchList *patches, Rng1U64 base_range)
-{
-  Rng1U64 result = r1u64(txt_patched_off_from_base_off(patches, base_range.min),
-                         txt_patched_off_from_base_off(patches, base_range.max));
-  return result;
-}
-
 internal void
 txt_line_map_push(Arena *arena, TXT_LineMap *map, Rng1U64 num_range, Rng1U64 *ranges, S64 delta)
 {
@@ -2345,14 +2310,30 @@ txt_line_num_from_off(TXT_LineMap *map, U64 off)
   U64 result = 0;
   for(TXT_LineMapRangeNode *n = map->first_range; n != 0; n = n->next)
   {
-    for EachInRange(num, n->num_range)
+    if(n->num_range.max != n->num_range.min)
     {
-      Rng1U64 line_range = n->ranges[num-n->num_range.min];
-      Rng1U64 line_range_shifted = r1u64(line_range.min + n->delta, line_range.max + n->delta);
-      if(line_range_shifted.min <= off && off <= line_range_shifted.max)
+      Rng1U64 off_range = r1u64(n->ranges[0].min + n->delta, n->ranges[n->num_range.max-n->num_range.min-1].max + n->delta);
+      if(off_range.min <= off && off <= off_range.max)
       {
-        result = num;
-        goto break_all;
+        U64 min_idx = 0;
+        U64 max_idx = dim_1u64(n->num_range)-1;
+        for(;min_idx <= max_idx;)
+        {
+          U64 mid_idx = (max_idx + min_idx) / 2;
+          if(n->ranges[mid_idx].max + n->delta < off)
+          {
+            min_idx = mid_idx + 1;
+          }
+          else if(off < n->ranges[mid_idx].min + n->delta)
+          {
+            max_idx = mid_idx - 1;
+          }
+          else if(n->ranges[mid_idx].min + n->delta <= off && off <= n->ranges[mid_idx].max + n->delta)
+          {
+            result = n->num_range.min + mid_idx;
+            goto break_all;
+          }
+        }
       }
     }
   }

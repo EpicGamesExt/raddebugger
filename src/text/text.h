@@ -289,8 +289,6 @@ internal TXT_TokenArray txt_token_array_from_string__disasm_x64_intel(Arena *are
 ////////////////////////////////
 //~ rjf: Text Info Extractor Helpers
 
-internal U64 txt_patched_off_from_base_off(TXT_PatchList *patches, U64 base_off);
-internal Rng1U64 txt_patched_range_from_base_range(TXT_PatchList *patches, Rng1U64 base_range);
 internal void txt_line_map_push(Arena *arena, TXT_LineMap *map, Rng1U64 num_range, Rng1U64 *ranges, S64 delta);
 internal U64 txt_line_num_from_off(TXT_LineMap *map, U64 off);
 internal Rng1U64 txt_range_from_line_num(TXT_LineMap *map, U64 num);
