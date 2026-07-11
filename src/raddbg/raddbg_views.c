@@ -254,7 +254,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         {
           advance = -(line_num - 1);
         }
-        U64 next_line = (U64)((S64)line_num + line_count_per_page);
+        U64 next_line = (U64)((S64)line_num + advance);
         U64 next_line_clamped = Clamp(1, next_line, text_patched.line_map.total_line_count);
         Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, next_line_clamped);
         *cursor = next_line_range.min;
