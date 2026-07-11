@@ -197,7 +197,8 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       //- rjf: movement down (chunk)
       if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && line_num+1 <= line_count)
       {
-        for(U64 scan_line_num = line_num+1; scan_line_num <= line_count; scan_line_num += 1)
+        B32 done = 0;
+        for(U64 scan_line_num = line_num+1; !done && scan_line_num <= line_count; scan_line_num += 1)
         {
           Temp scratch = scratch_begin(&arena, 1);
           Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, scan_line_num);
@@ -206,6 +207,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
           if(line_without_whitespace.size == 0)
           {
             *cursor = line_range.min + (U64)(line_without_whitespace.str - line.str);
+            done = 1;
           }
           else if(scan_line_num == line_count)
           {
@@ -218,7 +220,8 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       //- rjf: movement up (chunk)
       if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && line_num > 1)
       {
-        for(U64 scan_line_num = line_num-1; scan_line_num > 0; scan_line_num -= 1)
+        B32 done = 0;
+        for(U64 scan_line_num = line_num-1; !done && scan_line_num > 0; scan_line_num -= 1)
         {
           Temp scratch = scratch_begin(&arena, 1);
           Rng1U64 line_range = txt_range_from_line_num(&text_patched.line_map, scan_line_num);
@@ -227,6 +230,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
           if(line_without_whitespace.size == 0)
           {
             *cursor = line_range.min + (U64)(line_without_whitespace.str - line.str);
+            done = 1;
           }
           else if(scan_line_num == 1)
           {
