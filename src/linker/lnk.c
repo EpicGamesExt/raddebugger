@@ -2967,21 +2967,17 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
   return result;
 }
 
-internal
+// NOTE: OPT uses a color-refinement algorithm for folding duplicate sections.
+// If a color group contains multiple distinct hashes, the group is split
+// and a new refinement round is run. By default, the algorithm loops until
+// partitions stabilize. Equivalence is established by comparing cryptographic
+// 128-bit hashes; in theory, the chance of collisions are near the birthday
+// paradox with BLAKE3 and the other downside it is susceptible to adversarial
+// inputs.
 THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena,1);
-
-  //
-  // OPT uses a color-refinement algorithm for folding duplicate sections.
-  // If a color group contains multiple distinct hashes, the group is split
-  // and a new refinement pass is run. By default, the algorithm loops until
-  // partitions stabilize. Equivalence is established by comparing cryptographic
-  // 128-bit hashes; in theory, the chance of collisions are near the birthday
-  // paradox with BLAKE3 and the other downside it is susceptible to adversarial
-  // inputs.
-  //
 
   LNK_OptTask  *task = raw_task;
   LNK_Obj     **objs = task->objs;
@@ -3004,7 +3000,8 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, obj->llvm_addrsig_sect_idx + 1);
       String8             section_data   = str8_substr(obj->data, r1u64s(section_header->foff, section_header->fsize));
 
-      // parse symbol indices and mark selected sections with NOICF flag
+      // parse symbol indices and mark selected sections with NOICF flag,
+      // the selected symbols maybe undefined/weak which need to be resolved
       for (U64 off = 0; off < section_data.size;) {
         U64 symbol_off = off;
         U64 symbol_idx = 0;
@@ -3015,11 +3012,16 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
           LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = symbol_idx };
           B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
           if (is_symbol_found) {
-            COFF_ParsedSymbol symbol = coff_parse_symbol(target_ref.obj->header, string_table, symbol_table, target_ref.symbol_idx);
+            COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx(target_ref.obj, target_ref.symbol_idx);
             if (coff_interp_from_parsed_symbol(symbol) == COFF_SymbolValueInterp_Regular) {
-              obj->section_flags[symbol.section_number - 1] |= LNK_SECTION_FLAG_NOICF;
+              target_ref.obj->section_flags[symbol.section_number - 1] |= LNK_SECTION_FLAG_NOICF;
+            }
+          } else {
+            COFF_ParsedSymbol original_symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+            if (coff_interp_from_parsed_symbol(original_symbol) == COFF_SymbolValueInterp_Regular) {
+              obj->section_flags[original_symbol.section_number - 1] |= LNK_SECTION_FLAG_NOICF;
             } else {
-              lnk_error_obj(LNK_Error_IllData, obj, ".llvm_addrsig: skip symbol 0x%x at offset 0x%x; symbol index must address a section-based symbol\n", symbol_idx, symbol_off);
+              lnk_log(LNK_Log_Debug, "%S: .llvm_addrsig: contains an unresolved symbol index 0x%x at offset 0x%x", lnk_loc_from_obj(scratch.arena, obj), symbol_idx, symbol_off);
             }
           }
         } else {
@@ -3034,24 +3036,26 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   // step 1: fill out color map and contributions
   //
 
-  // alloc total section counter
   U64 *contrib_counts = 0;
-  if (task_id == 0) {
-    contrib_counts = push_array(scratch.arena, U64, task->objs_count);
-  }
-  tp_broadcast(&contrib_counts);
+  {
+    // alloc total section counter
+    if (task_id == 0) {
+      contrib_counts = push_array(scratch.arena, U64, task->objs_count);
+    }
+    tp_broadcast(&contrib_counts);
 
-  // count contributions
-  for EachIndex(i, task->obj_indices[task_id].count) {
-    U64      obj_idx = task->obj_indices[task_id].v[i];
-    LNK_Obj *obj     = objs[obj_idx];
-    for EachIndex(sect_idx, obj->header.section_count_no_null) {
-      if (lnk_icf_color_space_from_section(obj, sect_idx)) {
-        contrib_counts[obj_idx] += 1;
+    // count contributions
+    for EachIndex(i, task->obj_indices[task_id].count) {
+      U64      obj_idx = task->obj_indices[task_id].v[i];
+      LNK_Obj *obj     = objs[obj_idx];
+      for EachIndex(sect_idx, obj->header.section_count_no_null) {
+        if (lnk_icf_color_space_from_section(obj, sect_idx)) {
+          contrib_counts[obj_idx] += 1;
+        }
       }
     }
+    barrier_wait(tp->barrier);
   }
-  barrier_wait(tp->barrier);
 
   typedef struct {
     struct {
@@ -3244,7 +3248,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       }
 
       U64 split_count = *next_color - start_next_color;
-      lnk_log(LNK_Log_Debug, "  Pass %llu found %S splits", iter_count, str8_from_count(scratch.arena, split_count));
+      lnk_log(LNK_Log_Debug, "  Round %llu found %S splits", iter_count, str8_from_count(scratch.arena, split_count));
 
       temp_end(temp);
     }
