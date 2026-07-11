@@ -3088,6 +3088,7 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
           }
           U64 line_size = dim_1u64(line_range);
           shared->info.lines_ranges[lane_line_base_idxs[lane_idx()] + lane_line_idx] = line_range;
+          // TODO(rjf): this is a race:
           shared->info.lines_max_size = Max(shared->info.lines_max_size, line_size);
           lane_line_idx += 1;
           line_start_idx = idx+1;
