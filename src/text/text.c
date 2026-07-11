@@ -3004,19 +3004,21 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
     
     //- rjf: count # of lines
     U64 lane_line_count = 0;
+    U64 *lane_line_counts = 0;
     if(lane_idx() == 0)
     {
-      lane_line_count = 1;
+      lane_line_counts = push_array(scratch.arena, U64, lane_count());
     }
+    lane_sync_u64(&lane_line_counts, 0);
     {
-      Rng1U64 range = lane_range(data.size);
+      Rng1U64 range = lane_range(data.size+1);
       for EachInRange(idx, range)
       {
         if(idx%1000 == 0 && ins_atomic_u32_eval(cancel_signal))
         {
           break;
         }
-        if(data.str[idx] == '\n')
+        if(idx == data.size || data.str[idx] == '\n')
         {
           lane_line_count += 1;
         }
@@ -3027,16 +3029,35 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
       }
     }
     ins_atomic_u64_add_eval(&shared->info.lines_count, lane_line_count);
+    lane_line_counts[lane_idx()] = lane_line_count;
     lane_sync();
     set_progress(Min(data.size, 1024) + data.size);
+    
+    //- rjf: figure out which starting line idx each lane will take
+    U64 *lane_line_base_idxs = 0;
+    if(lane_idx() == 0)
+    {
+      lane_line_base_idxs = push_array(scratch.arena, U64, lane_count());
+      U64 idx = 0;
+      for EachIndex(l_idx, lane_count())
+      {
+        lane_line_base_idxs[l_idx] = idx;
+        idx += lane_line_counts[l_idx];
+      }
+    }
+    lane_sync_u64(&lane_line_base_idxs, 0);
     
     //- rjf: allocate & store line ranges
     if(lane_idx() == 0)
     {
       shared->info.lines_ranges = push_array_no_zero(shared->arena, Rng1U64, shared->info.lines_count);
-      U64 line_idx = 0;
-      U64 line_start_idx = 0;
-      for(U64 idx = 0; idx <= data.size; idx += 1)
+    }
+    lane_sync();
+    {
+      Rng1U64 range = lane_range(data.size+1);
+      U64 lane_line_idx = 0;
+      U64 line_start_idx = range.min;
+      for EachInRange(idx, range)
       {
         if(idx%1000 == 0 && ins_atomic_u32_eval(cancel_signal))
         {
@@ -3044,15 +3065,31 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
         }
         if(idx == data.size || data.str[idx] == '\n')
         {
+          if(lane_line_idx == 0 && line_start_idx > 0)
+          {
+            for(U64 idx2 = line_start_idx - 1; idx2 < data.size; idx2 -= 1)
+            {
+              if(data.str[idx2] == '\n')
+              {
+                line_start_idx = idx2+1;
+                break;
+              }
+              else if(idx2 == 0)
+              {
+                line_start_idx = idx2;
+                break;
+              }
+            }
+          }
           Rng1U64 line_range = r1u64(line_start_idx, idx);
           if(idx > 0 && data.str[idx-1] == '\r' && line_range.max > line_range.min)
           {
             line_range.max -= 1;
           }
           U64 line_size = dim_1u64(line_range);
-          shared->info.lines_ranges[line_idx] = line_range;
+          shared->info.lines_ranges[lane_line_base_idxs[lane_idx()] + lane_line_idx] = line_range;
           shared->info.lines_max_size = Max(shared->info.lines_max_size, line_size);
-          line_idx += 1;
+          lane_line_idx += 1;
           line_start_idx = idx+1;
         }
         if(idx && idx%1000 == 0)
