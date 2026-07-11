@@ -142,6 +142,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       B32 taken = 0;
       U64 start_cursor = *cursor;
+      U64 start_mark = *mark;
       Vec2S32 delta = evt->delta_2s32;
       U64 line_count = text_patched.line_map.total_line_count;
       U64 line_num = txt_line_num_from_off(&text_patched.line_map, *cursor);
@@ -158,8 +159,11 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       *cursor = single_line_op.cursor;
       *mark = single_line_op.mark;
       
+      //- rjf: determine if we need to navigate
+      B32 need_nav = (start_cursor == start_mark || !(evt->flags & UI_EventFlag_ZeroDeltaOnSelect));
+      
       //- rjf: wrap lines right
-      if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && start_cursor == line_range.max && line_num+1 <= line_count)
+      if(need_nav && evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && start_cursor == line_range.max && line_num+1 <= line_count)
       {
         Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
         *cursor = next_line_range.min;
@@ -167,7 +171,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: wrap lines left
-      if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && start_cursor == line_range.min && line_num-1 >= 1)
+      if(need_nav && evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && start_cursor == line_range.min && line_num-1 >= 1)
       {
         Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
         *cursor = prev_line_range.max;
@@ -175,7 +179,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: movement down (plain)
-      if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && line_num+1 <= line_count)
+      if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && line_num+1 <= line_count)
       {
         Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
         *cursor = next_line_range.min + *preferred_column;
@@ -183,7 +187,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: movement up (plain)
-      if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && line_num > 1)
+      if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && line_num > 1)
       {
         Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
         *cursor = prev_line_range.min + *preferred_column;
@@ -191,7 +195,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: movement down (chunk)
-      if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && line_num+1 <= line_count)
+      if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && line_num+1 <= line_count)
       {
         for(U64 scan_line_num = line_num+1; scan_line_num <= line_count; scan_line_num += 1)
         {
@@ -212,7 +216,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: movement up (chunk)
-      if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && line_num > 1)
+      if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && line_num > 1)
       {
         for(U64 scan_line_num = line_num-1; scan_line_num > 0; scan_line_num -= 1)
         {
@@ -233,7 +237,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: movement down (page)
-      if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
+      if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
       {
         U64 advance = line_count_per_page;
         U64 next_line = line_num + advance;
@@ -243,7 +247,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: movement up (page)
-      if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
+      if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
       {
         S64 advance = -line_count_per_page;
         if(line_num < line_count_per_page)
@@ -257,13 +261,13 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: movement to endpoint (+)
-      if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
+      if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
       {
         *cursor = text_patched.size;
       }
       
       //- rjf: movement to endpoint (-)
-      if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
+      if(need_nav && evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
       {
         *cursor = 0;
       }
