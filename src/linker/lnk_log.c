@@ -1,6 +1,11 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+#if OS_WINDOWS
+#include <fcntl.h> // _O_BINARY
+#include <io.h>    // _setmode
+#endif
+
 static Mutex               g_log_mutex;
 static B32                 g_log_status           [LNK_Log_Count];
 static LNK_ErrorMode       g_error_mode_arr       [LNK_Error_Count];
@@ -36,7 +41,14 @@ lnk_log_begin(void)
   for (int i = LNK_Error_StopFirst;     i < LNK_Error_StopLast;     ++i) { g_error_mode_arr[i] = LNK_ErrorMode_Stop;     }
   for (int i = LNK_Error_ContinueFirst; i < LNK_Error_ContinueLast; ++i) { g_error_mode_arr[i] = LNK_ErrorMode_Continue; }
   for (int i = LNK_Warning_First;       i < LNK_Warning_Last;       ++i) { g_error_mode_arr[i] = LNK_ErrorMode_Warn;     }
+
   g_log_mutex = mutex_alloc();
+
+  // ninja mangles CRLF in captured linker output, so force LF-only output
+#if OS_WINDOWS
+  _setmode(_fileno(stdout), _O_BINARY);
+  _setmode(_fileno(stderr), _O_BINARY);
+#endif
 }
 
 internal void
