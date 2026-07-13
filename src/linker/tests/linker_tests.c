@@ -710,6 +710,58 @@ TEST(merge)
   }
 }
 
+TEST(section_directive_read_only_grouped_section)
+{
+  T_Ok(t_write_entry_obj());
+
+  T_Ok(t_write_def_obj("prot.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "prot_a",   "prot$a",   str8_lit_comp("A"),   .flags = "rw:data@1" },
+      { "prot_mem", "prot$mem", str8_lit_comp("mem"), .flags = "rw:data@1" },
+      { "prot_z",   "prot$z",   str8_lit_comp("Z"),   .flags = "rw:data@1" },
+      {0}
+    },
+    .directives = (char *[]){ "/SECTION:prot,R", 0 },
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj prot.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  COFF_SectionHeader *sect          = coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit("prot"));
+  T_Ok(sect != 0);
+  T_Ok(sect->flags == (COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead));
+}
+
+TEST(section_directive_align_grouped_section)
+{
+  if (t_id_linker() != Linker_radlink) { return; }
+
+  T_Ok(t_write_entry_obj());
+
+  T_Ok(t_write_def_obj("prot.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "prot_mem", "prot$mem", str8_lit_comp("mem"), .flags = "rw:data@1" },
+      {0}
+    },
+    .directives = (char *[]){ "/SECTION:prot,R,ALIGN=8192", 0 },
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj prot.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  COFF_SectionHeader *sect          = coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit("prot"));
+  T_Ok(sect != 0);
+  T_Ok(sect->flags == (COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_Align8192Bytes));
+}
+
 TEST(link_undef)
 {
   T_Ok(t_write_def_obj("undef.obj", (T_COFF_DefObj){
@@ -2153,6 +2205,48 @@ TEST(find_merged_pdata)
   T_Ok(dim_1u64(pe.data_dir_franges[PE_DataDirectoryIndex_EXCEPTIONS]) == 0xC);
 }
 
+TEST(guard_cf_pulls_load_config)
+{
+  U8  load_config_data[0x40] = {0};
+  U32 load_config_size       = sizeof(load_config_data);
+  MemoryCopy(load_config_data, &load_config_size, sizeof(load_config_size));
+
+  T_Ok(t_write_entry_obj());
+  T_Ok(t_write_def_lib("loadcfg.lib", (T_COFF_DefLib){
+    .emit_second_member = 1,
+    .members = (T_COFF_DefLibMember[]){
+      {
+        .type = T_COFF_DefLibMember_Obj,
+        .obj = {
+          .path = str8_lit("loadcfg.obj"),
+          .machine = T_COFF_DefSetMachine(X64),
+          .sections = (T_COFF_DefSection[]){
+            { "loadcfg", ".rdata", str8_array_fixed(load_config_data), .flags = "r:data@8" },
+            {0}
+          },
+          .symbols = (T_COFF_DefSymbol[]){
+            T_COFF_DefSymbol_Extern("_load_config_used", "loadcfg", 0),
+            {0}
+          }
+        }
+      },
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /out:a.exe /guard:cf entry.obj loadcfg.lib");
+  T_Ok(g_last_exit_code == 0);
+
+  String8    exe = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo pe  = pe_bin_info_from_data(arena, exe);
+  T_Ok(dim_1u64(pe.data_dir_franges[PE_DataDirectoryIndex_LOAD_CONFIG]) == load_config_size);
+
+  PE_OptionalHeader32Plus *opt = str8_deserial_get_raw_ptr(exe, pe.optional_header_off, sizeof(*opt));
+  if (t_id_linker() == Linker_radlink) {
+    T_Ok(!(opt->dll_characteristics & PE_DllCharacteristic_GUARD_CF));
+  }
+}
+
 TEST(section_sort)
 {
   COFF_SectionFlags data_flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemRead|COFF_SectionFlag_Align1Bytes;
@@ -2790,6 +2884,112 @@ TEST(import_export)
 
   //T_Ok(t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /delayload:export.dll /export:entry kernel32.Lib delayimp.lib libcmt.lib export.lib import.obj entry.obj") == 0);
   // TODO: check import table
+}
+
+TEST(def_file_full)
+{
+  if (t_id_linker() == Linker_lld) { return; }
+
+  T_Ok(t_write_def_obj("def_full.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "data", ".rdata", str8_lit("test"), .flags = "rw:data" },
+      { "text", ".text", str8_lit_comp("\xc3"), .flags = "rx:code" },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      T_COFF_DefSymbol_Extern("foo", "data", 0),
+      {0}
+    },
+  }));
+
+  T_Ok(t_write_file(str8_lit("full.def"), str8_lit(
+    "; leading comment\n"
+    "NAME \"def full.exe\" BASE=0x140020000\n"
+    "VERSION 7.8\n"
+    "HEAPSIZE 0x30000, 0x4000\n"
+    "STACKSIZE 0x50000,0x6000\n"
+    "SECTIONS .rdata READ\n"
+    "EXPORTS foo @ 2 DATA\n")));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /def:full.def def_full.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("def full.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  PE_OptionalHeader32Plus *opt      = str8_deserial_get_raw_ptr(exe, pe.optional_header_off, sizeof(*opt));
+
+  T_Ok(opt->image_base == 0x140020000);
+  T_Ok(opt->major_img_ver == 7);
+  T_Ok(opt->minor_img_ver == 8);
+  T_Ok(opt->sizeof_heap_reserve == 0x30000);
+  T_Ok(opt->sizeof_heap_commit == 0x4000);
+  T_Ok(opt->sizeof_stack_reserve == 0x50000);
+  T_Ok(opt->sizeof_stack_commit == 0x6000);
+
+  COFF_SectionHeader *rdata = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".rdata"));
+  T_Ok(rdata != 0);
+  T_Ok(rdata->flags == (COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead));
+
+  PE_ParsedExportTable export_table = pe_exports_from_data(arena, pe.section_count, section_table, exe, pe.data_dir_franges[PE_DataDirectoryIndex_EXPORT], pe.data_dir_vranges[PE_DataDirectoryIndex_EXPORT]);
+  T_Ok(export_table.export_count == 1);
+  T_Ok(str8_match(export_table.exports[0].name, str8_lit("foo"), 0));
+  T_Ok(export_table.exports[0].ordinal == 2);
+
+  T_Ok(t_write_file(str8_lit("bad_base_space.def"), str8_lit(
+    "NAME bad_base_space BASE = 0x140020000\n"
+    "EXPORTS foo @2 DATA\n")));
+  T_Ok(t_write_file(str8_lit("bad_base_colon.def"), str8_lit(
+    "NAME bad_base_colon BASE:0x140020000\n"
+    "EXPORTS foo @2 DATA\n")));
+  T_Ok(t_write_file(str8_lit("bad_section_align.def"), str8_lit(
+    "NAME bad_section_align\n"
+    "SECTIONS .rdata READ ALIGN=8192\n"
+    "EXPORTS foo @2 DATA\n")));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /def:bad_base_space.def /out:bad_base_space.exe def_full.obj");
+  T_Ok(g_last_exit_code != 0);
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /def:bad_base_colon.def /out:bad_base_colon.exe def_full.obj");
+  T_Ok(g_last_exit_code != 0);
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /def:bad_section_align.def /out:bad_section_align.exe def_full.obj");
+  T_Ok(g_last_exit_code != 0);
+
+  T_Ok(t_write_def_obj("def_full_dll.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "data", ".data", str8_lit("test"), .flags = "rw:data" },
+      { "text", ".text", str8_lit_comp("\xc3"), .flags = "rx:code" },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("_DllMainCRTStartup", "text", 0),
+      T_COFF_DefSymbol_Extern("dll_foo", "data", 0),
+      {0}
+    },
+  }));
+
+  T_Ok(t_write_file(str8_lit("full_dll.def"), str8_lit(
+    "LIBRARY folded BASE=0x180020000\n"
+    "EXPORTS\n"
+    "  dll_foo DATA\n")));
+
+  t_invoke_linkerf("/dll /subsystem:console /def:full_dll.def def_full_dll.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8              dll              = t_read_file(arena, str8_lit("folded.dll"));
+  PE_BinInfo           dll_pe           = pe_bin_info_from_data(arena, dll);
+  COFF_SectionHeader  *dll_section_table = (COFF_SectionHeader *)str8_substr(dll, dll_pe.section_table_range).str;
+  PE_OptionalHeader32Plus *dll_opt       = str8_deserial_get_raw_ptr(dll, dll_pe.optional_header_off, sizeof(*dll_opt));
+  PE_ParsedExportTable dll_export_table  = pe_exports_from_data(arena, dll_pe.section_count, dll_section_table, dll, dll_pe.data_dir_franges[PE_DataDirectoryIndex_EXPORT], dll_pe.data_dir_vranges[PE_DataDirectoryIndex_EXPORT]);
+
+  T_Ok(dll_opt->image_base == 0x180020000);
+  T_Ok(dll_export_table.export_count == 1);
+  T_Ok(str8_match(dll_export_table.exports[0].name, str8_lit("dll_foo"), 0));
 }
 
 TEST(utf16_rsp)
