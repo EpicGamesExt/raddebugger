@@ -3067,67 +3067,60 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   PDB_DbiModule *mod     = task->mod_arr    [obj_idx];
   LNK_Obj       *obj     = task->cv->obj_arr[obj_idx];
 
-  PDB_DbiSectionContribNode *sc_arr   = push_array_no_zero(arena, PDB_DbiSectionContribNode, obj->header.section_count_no_null);
-  U64                        sc_count = 0;
-  
+  PDB_DbiSCNode *sc_arr   = push_array_no_zero(arena, PDB_DbiSCNode, obj->header.section_count_no_null);
+  U64            sc_count = 0;
+
   for EachIndex(sect_idx, obj->header.section_count_no_null) {
-    LNK_ObjSection section = lnk_obj_section_from_sect_idx(obj, sect_idx);
 
-    if (*section.flags & COFF_SectionFlag_LnkInfo)   { continue; }
-    if (*section.flags & COFF_SectionFlag_LnkRemove) { continue; }
-    if (*section.flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
+    // filter by section flags
+    if (obj->section_flags[sect_idx] & (COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkRemove | LNK_SECTION_FLAG_DEBUG)) { continue; }
 
+    // skip unwind info for the section contribution
     String8 section_name = lnk_obj_section_name_from_sect_idx(obj, sect_idx);
     if (str8_match(section_name, str8_lit(".pdata"), 0)) { continue; }
 
-    U64     sect_number;
-    String8 sect_data;
-    U32     sect_off;
-    U32     data_crc;
-    if (*section.flags & COFF_SectionFlag_CntUninitializedData) {
-      if (dim_1u64(section.vrange) == 0) { continue; }
+    // load section and determine its type
+    LNK_ObjSection  section = lnk_obj_section_from_sect_idx(obj, sect_idx);
+    B32             is_virt = !!(*section.flags & COFF_SectionFlag_CntUninitializedData);
 
-      U64 search_result = rng1u64_array_num_from_value__binary_search(&task->image_section_virt_ranges, section.vrange.min);
-      sect_number = search_result-1;
-      Assert(sect_number < task->image_section_virt_ranges.count);
-      
-      sect_data   = str8_zero();
-      sect_off    = section.vrange.min - task->image_section_virt_ranges.v[sect_number].min;
-      data_crc    = 0;
-    } else {
-      if (dim_1u64(section.frange) == 0) { continue; }
+    // pick section range
+    Rng1U64 section_range = is_virt ? section.vrange : section.frange;
+    if (dim_1u64(section_range) == 0) { continue; }
 
-      U64 search_result = rng1u64_array_num_from_value__binary_search(&task->image_section_file_ranges, section.frange.min);
-      sect_number = search_result-1;
-      Assert(sect_number < task->image_section_file_ranges.count);
+    // map the SC offset to the image section range that contains it
+    Rng1U64Array *image_ranges  = is_virt ? &task->image_section_virt_ranges : &task->image_section_file_ranges;
+    U64           search_result = rng1u64_array_num_from_value__binary_search(image_ranges, section_range.min);
 
-      sect_data   = str8_substr(task->image_data, section.frange);
-      sect_off    = section.frange.min - task->image_section_file_ranges.v[sect_number].min;
-      data_crc    = update_crc32(0, sect_data.str, sect_data.size);
+    // log & skip SC offsets that failed to map
+    if (search_result == 0) {
+      Temp scratch = scratch_begin(0,0);
+      lnk_log(LNK_Log_Debug, "%S: failed to map section offset 0x%llx into the linked image; skipping this section", lnk_loc_from_obj(scratch.arena, obj), section_range.min);
+      scratch_end(scratch);
+      continue;
     }
 
-    // fill out SC
-    PDB_DbiSectionContribNode *sc = sc_arr + sc_count++;
-    sc->data.base.sec             = (U16)sect_number;
-    sc->data.base.pad0            = 0;
-    sc->data.base.sec_off         = sect_off;
-    sc->data.base.size            = dim_1u64(section.vrange);
-    sc->data.base.flags           = *section.flags;
-    sc->data.base.mod             = mod->imod;
-    sc->data.base.pad1            = 0;
-    sc->data.data_crc             = 0;
-    sc->data.reloc_crc            = 0; 
+    // unpack image range index
+    U64 range_idx = search_result - 1;
 
+    // fill out & push section contribution
+    PDB_DbiSCNode *sc = sc_arr + sc_count++;
+    sc->data.base.sec     = (U16)(is_virt ? range_idx : task->image_section_file_section_numbers[range_idx]);
+    sc->data.base.pad0    = 0;
+    sc->data.base.sec_off = section_range.min - image_ranges->v[range_idx].min;
+    sc->data.base.size    = dim_1u64(section_range);
+    sc->data.base.flags   = *section.flags;
+    sc->data.base.mod     = mod->imod;
+    sc->data.base.pad1    = 0;
+    sc->data.data_crc     = is_virt ? 0 : crc32_from_string(str8_substr(task->image_data, section_range));
+    sc->data.reloc_crc    = 0;
     dbi_sec_contrib_list_push_node(&task->sc_list[obj_idx], sc);
   }
 
-  // Mod1::fUpdateSecContrib
-  if (sc_count > 0) {
-    for (U64 sc_idx = 0; sc_idx < sc_count; ++sc_idx) {
-      if (sc_arr[sc_idx].data.base.flags & COFF_SectionFlag_CntCode) {
-        mod->first_sc = sc_arr[sc_idx].data;
-        break;
-      }
+  // find first code section contribution for the Mod1::fUpdateSecContrib
+  for EachIndex(i, sc_count) {
+    if (sc_arr[i].data.base.flags & COFF_SectionFlag_CntCode) {
+      mod->first_sc = sc_arr[i].data;
+      break;
     }
   }
 }
@@ -3143,17 +3136,18 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   }
 
   LNK_BuildPdb task = {
-    .image_data                      = image_data,
-    .symtab                          = symtab,
-    .cv                              = cv,
-    .pdb                             = pdb_alloc_(lnk_get_huge_arena(), config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid),
-    .mod_arr                         = push_array(scratch.arena, PDB_DbiModule *, cv->obj_count),
-    .pe                              = pe_bin_info_from_data(scratch.arena, image_data),
-    .image_section_table             = coff_section_table_from_data(scratch.arena, image_data, task.pe.section_table_range),
-    .image_section_table_count       = task.pe.section_count+1,
-    .image_section_virt_ranges.count = task.image_section_table_count,
-    .image_section_virt_ranges.v     = push_array(scratch.arena, Rng1U64, task.image_section_table_count),
-    .image_section_file_ranges.v     = push_array(scratch.arena, Rng1U64, task.image_section_table_count),
+    .image_data                         = image_data,
+    .symtab                             = symtab,
+    .cv                                 = cv,
+    .pdb                                = pdb_alloc_(lnk_get_huge_arena(), config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid),
+    .mod_arr                            = push_array(scratch.arena, PDB_DbiModule *, cv->obj_count),
+    .pe                                 = pe_bin_info_from_data(scratch.arena, image_data),
+    .image_section_table                = coff_section_table_from_data(scratch.arena, image_data, task.pe.section_table_range),
+    .image_section_table_count          = task.pe.section_count+1,
+    .image_section_virt_ranges.count    = task.image_section_table_count,
+    .image_section_virt_ranges.v        = push_array(scratch.arena, Rng1U64, task.image_section_table_count),
+    .image_section_file_ranges.v        = push_array(scratch.arena, Rng1U64, task.image_section_table_count),
+    .image_section_file_section_numbers = push_array(scratch.arena, U64, task.image_section_table_count),
   };
 
   // set min type indices
@@ -3185,17 +3179,13 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
   if (builder_flags & LNK_PDB_BuilderFlag_Modules) {
     ProfScope ("Alloc Modules")
-      for EachIndex(obj_idx, cv->obj_count)
+      for EachIndex(obj_idx, cv->obj_count) {
         task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
+      }
 
-    ProfScope("Move Global Symbols")
-      tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
-
-      ProfScope("Build GSI and PSI")
-        pdb_build_gsi_psi(tp, task.pdb);
-
-    ProfScope("Write Modules")
-      tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
+    ProfScope("Move Global Symbols") tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
+    ProfScope("Build GSI and PSI")   pdb_build_gsi_psi(tp, task.pdb);
+    ProfScope("Write Modules")       tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
   }
 
   ProfBegin("Add string tables");
@@ -3213,13 +3203,17 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
       for EachIndex(i, task.image_section_table_count) {
         COFF_SectionHeader *sect_header = task.image_section_table[i];
+
         if (~sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
-          task.image_section_file_ranges.v[task.image_section_file_ranges.count++] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+          U64 section_file_idx = task.image_section_file_ranges.count++;
+          task.image_section_file_ranges.v[section_file_idx]        = r1u64s(sect_header->foff, sect_header->fsize);
+          task.image_section_file_section_numbers[section_file_idx] = i;
         }
+
         task.image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
       }
 
-      task.sc_list = push_array(scratch.arena, PDB_DbiSectionContribList, cv->obj_count);
+      task.sc_list = push_array(scratch.arena, PDB_DbiSCList, cv->obj_count);
       tp_for_parallel(tp, tp_arena, cv->obj_count, lnk_push_dbi_sec_contrib_task, &task);
       dbi_sec_list_concat_arr(&task.pdb->dbi->sec_contrib_list, cv->obj_count, task.sc_list);
     }

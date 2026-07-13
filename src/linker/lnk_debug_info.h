@@ -215,12 +215,13 @@ typedef struct
   U64 symbol_count;
 
   // push DBI SC Map
-  PE_BinInfo                  pe;
-  COFF_SectionHeader        **image_section_table;
-  U64                         image_section_table_count;
-  Rng1U64Array                image_section_file_ranges;
-  Rng1U64Array                image_section_virt_ranges;
-  PDB_DbiSectionContribList  *sc_list; // [obj_count]
+  PE_BinInfo           pe;
+  COFF_SectionHeader **image_section_table;
+  U64                  image_section_table_count;
+  Rng1U64Array         image_section_virt_ranges;
+  Rng1U64Array         image_section_file_ranges;
+  U64                 *image_section_file_section_numbers;
+  PDB_DbiSCList       *sc_list; // [obj_count]
 } LNK_BuildPdb;
 
 typedef struct
