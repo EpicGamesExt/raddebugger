@@ -700,9 +700,9 @@ pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data, COFF_Sect
 {
   PDB_CompUnitContribution *contributions = 0;
   U64 count = 0;
-  if(data.size >= sizeof(PDB_DbiSectionContribVersion))
+  if(data.size >= sizeof(PDB_DbiSCVersion))
   {
-    PDB_DbiSectionContribVersion *version = (PDB_DbiSectionContribVersion*)data.str;
+    PDB_DbiSCVersion *version = (PDB_DbiSCVersion*)data.str;
     
     // determine array layout from version
     U32 item_size = 0;
@@ -712,16 +712,16 @@ pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data, COFF_Sect
       default:
       {
         // TODO(allen): do we have a test case for this?
-        item_size = sizeof(PDB_DbiSectionContrib40);
+        item_size = sizeof(PDB_DbiSC40);
       }break;
-      case PDB_DbiSectionContribVersion_1:
+      case PDB_DbiSCVersion_1:
       {
-        item_size = sizeof(PDB_DbiSectionContrib);
+        item_size = sizeof(PDB_DbiSC);
         array_off = sizeof(*version);
       }break;
-      case PDB_DbiSectionContribVersion_2:
+      case PDB_DbiSCVersion_2:
       {
-        item_size = sizeof(PDB_DbiSectionContrib2);
+        item_size = sizeof(PDB_DbiSC2);
         array_off = sizeof(*version);
       }break;
     }
@@ -739,7 +739,7 @@ pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data, COFF_Sect
     U64 cursor = array_off;
     for(; cursor + item_size <= data.size; cursor += item_size)
     {
-      PDB_DbiSectionContrib40 *sc = (PDB_DbiSectionContrib40*)(data.str + cursor);
+      PDB_DbiSC40 *sc = (PDB_DbiSC40*)(data.str + cursor);
       if(sc->size > 0 && 1 <= sc->sec && sc->sec <= section_count)
       {
         U64 voff = section_headers[sc->sec - 1].voff + sc->sec_off;

@@ -2263,24 +2263,24 @@ psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String
 ////////////////////////////////
 
 internal void
-dbi_sec_contrib_list_push_node(PDB_DbiSectionContribList *list, PDB_DbiSectionContribNode *node)
+dbi_sec_contrib_list_push_node(PDB_DbiSCList *list, PDB_DbiSCNode *node)
 {
   node->next = 0;
   SLLQueuePush(list->first, list->last, node);
   list->count += 1;
 }
 
-internal PDB_DbiSectionContribNode *
-dbi_sec_contrib_list_push(Arena *arena, PDB_DbiSectionContribList *list)
+internal PDB_DbiSCNode *
+dbi_sec_contrib_list_push(Arena *arena, PDB_DbiSCList *list)
 {
-  PDB_DbiSectionContribNode *node = push_array_no_zero(arena, PDB_DbiSectionContribNode, 1);
+  PDB_DbiSCNode *node = push_array_no_zero(arena, PDB_DbiSCNode, 1);
   node->next = 0;
   dbi_sec_contrib_list_push_node(list, node);
   return node;
 }
 
 internal void
-dbi_sec_list_concat_arr(PDB_DbiSectionContribList *list, U64 count, PDB_DbiSectionContribList *to_concat)
+dbi_sec_list_concat_arr(PDB_DbiSCList *list, U64 count, PDB_DbiSCList *to_concat)
 {
   SLLConcatInPlaceArray(list, to_concat, count);
 }
@@ -2405,14 +2405,14 @@ dbi_open_module_info(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_Db
   return list;
 }
 
-internal PDB_DbiSectionContribList
+internal PDB_DbiSCList
 dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header)
 {
   ProfBeginFunction();
   
-  PDB_DbiSectionContribList sec_contrib = {0};
+  PDB_DbiSCList sec_contrib = {0};
   
-  if (dbi_header->sec_con_size > sizeof(PDB_DbiSectionContrib)) {
+  if (dbi_header->sec_con_size > sizeof(PDB_DbiSC)) {
     Temp scratch = scratch_begin(&arena, 1);
     
     // seek to start of section contrib info
@@ -2420,25 +2420,25 @@ dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_Db
     msf_stream_seek(msf, sn, sec_con_pos);
     
     // read header
-    PDB_DbiSectionContribVersion version = 0;
+    PDB_DbiSCVersion version = 0;
     msf_stream_read_struct(msf, sn, &version);
     
     // parse contrib items
     switch (version) {
-    case PDB_DbiSectionContribVersion_1: {
-      U64 contrib_count = dbi_header->sec_con_size / sizeof(PDB_DbiSectionContrib);
-      PDB_DbiSectionContrib *src_contrib_array = push_array(scratch.arena, PDB_DbiSectionContrib, contrib_count);
+    case PDB_DbiSCVersion_1: {
+      U64 contrib_count = dbi_header->sec_con_size / sizeof(PDB_DbiSC);
+      PDB_DbiSC *src_contrib_array = push_array(scratch.arena, PDB_DbiSC, contrib_count);
       MSF_UInt sec_con_read = msf_stream_read_array(msf, sn, &src_contrib_array[0], contrib_count);
       Assert(sec_con_read == sizeof(src_contrib_array[0]) * contrib_count);
       
-      PDB_DbiSectionContribNode *dst_contrib_array = push_array_no_zero(arena, PDB_DbiSectionContribNode, contrib_count);
+      PDB_DbiSCNode *dst_contrib_array = push_array_no_zero(arena, PDB_DbiSCNode, contrib_count);
       for (U64 icontrib = 0; icontrib < contrib_count; icontrib += 1) {
         dst_contrib_array[icontrib].next = 0;
         dst_contrib_array[icontrib].data = src_contrib_array[icontrib];
         dbi_sec_contrib_list_push_node(&sec_contrib, &dst_contrib_array[icontrib]);
       }
     } break;
-    case PDB_DbiSectionContribVersion_2: {
+    case PDB_DbiSCVersion_2: {
       NotImplemented;
     } break;
     default: Assert(!"unknown section contrib version"); break;
@@ -2595,7 +2595,7 @@ dbi_build_module_info(Arena *arena, PDB_DbiContext *dbi, MSF_Context *msf)
 
 #if 0
 int 
-dbi_sc_compar(const PDB_DbiSectionContrib *a, const PDB_DbiSectionContrib *b)
+dbi_sc_compar(const PDB_DbiSC *a, const PDB_DbiSC *b)
 {
 #if 0
   int cmp = 0;
@@ -2622,7 +2622,7 @@ dbi_sc_compar(const PDB_DbiSectionContrib *a, const PDB_DbiSectionContrib *b)
 #endif
 
 internal void
-lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_count)
+lnk_radix_sort_dbi_sc_array(PDB_DbiSC *arr, U64 sc_count, U64 sect_count)
 {
   ProfBeginFunction();
 
@@ -2638,9 +2638,9 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   Temp scratch = scratch_begin(0,0);
 
-  PDB_DbiSectionContrib *temp_arr = push_array_no_zero(scratch.arena, PDB_DbiSectionContrib, sc_count);
-  PDB_DbiSectionContrib *src_arr = arr;
-  PDB_DbiSectionContrib *dst_arr = temp_arr;
+  PDB_DbiSC *temp_arr = push_array_no_zero(scratch.arena, PDB_DbiSC, sc_count);
+  PDB_DbiSC *src_arr = arr;
+  PDB_DbiSC *dst_arr = temp_arr;
 
   ProfBegin("Count Memzero");
   U32 count_8lo[256]; MemoryZeroArray(count_8lo);
@@ -2651,7 +2651,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   ProfBegin("Histogram");
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = src_arr + i;
+    PDB_DbiSC *sc = src_arr + i;
     count_arr[sc->base.sec] += 1;
 
     U64 digit_8lo = (sc->base.sec_off >> 0) % ArrayCount(count_8lo);
@@ -2693,7 +2693,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   ProfBegin("Order 8 Lo");
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = &src_arr[i];
+    PDB_DbiSC *sc = &src_arr[i];
     U64 digit = (sc->base.sec_off >> 0) % ArrayCount(count_8lo);
     dst_arr[count_8lo[digit]++] = *sc;
   }
@@ -2701,7 +2701,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   ProfBegin("Order 8 Hi");
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = &dst_arr[i];
+    PDB_DbiSC *sc = &dst_arr[i];
     U64 digit = (sc->base.sec_off >> 8) % ArrayCount(count_8hi);
     src_arr[count_8hi[digit]++] = *sc;
   }
@@ -2709,7 +2709,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   ProfBegin("Order 16");
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = &src_arr[i];
+    PDB_DbiSC *sc = &src_arr[i];
     U64 digit = (sc->base.sec_off >> 16) % ArrayCount(count_16);
     dst_arr[count_16[digit]++] = *sc;
   }
@@ -2731,7 +2731,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
   count_arr[0] = 0;
 
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = dst_arr + i;
+    PDB_DbiSC *sc = dst_arr + i;
     src_arr[count_arr[sc->base.sec]++] = *sc;
   }
 
@@ -2758,14 +2758,14 @@ dbi_build_sec_con(Arena *arena, PDB_DbiContext *dbi)
 {
   ProfBeginFunction();
 
-  PDB_DbiSectionContribVersion *version = push_array(arena, PDB_DbiSectionContribVersion, 1);
-  *version = PDB_DbiSectionContribVersion_1;
+  PDB_DbiSCVersion *version = push_array(arena, PDB_DbiSCVersion, 1);
+  *version = PDB_DbiSCVersion_1;
   
   // push section contribs V1
   ProfBegin("Push sect contribs [Count %llu]", dbi->sec_contrib_list.count);
-  PDB_DbiSectionContrib *sc_array = push_array_no_zero(arena, PDB_DbiSectionContrib, dbi->sec_contrib_list.count);
-  PDB_DbiSectionContrib *dst = &sc_array[0];
-  for (PDB_DbiSectionContribNode *src = dbi->sec_contrib_list.first; src != 0; src = src->next, dst += 1) {
+  PDB_DbiSC *sc_array = push_array_no_zero(arena, PDB_DbiSC, dbi->sec_contrib_list.count);
+  PDB_DbiSC *dst = &sc_array[0];
+  for (PDB_DbiSCNode *src = dbi->sec_contrib_list.first; src != 0; src = src->next, dst += 1) {
     *dst = src->data;
   }
   ProfEnd();
@@ -2956,7 +2956,7 @@ dbi_module_push_section_contrib(PDB_DbiContext *dbi,
 {
   ProfBeginFunction();
 
-  PDB_DbiSectionContrib sc;
+  PDB_DbiSC sc;
   sc.base.sec     = safe_cast_u16(isect_off.isect);
   sc.base.sec_off = isect_off.off;
   sc.base.size    = size;
@@ -2965,7 +2965,7 @@ dbi_module_push_section_contrib(PDB_DbiContext *dbi,
   sc.data_crc     = data_crc;
   sc.reloc_crc    = reloc_crc;
 
-  PDB_DbiSectionContribNode *node = push_array_no_zero(dbi->arena, PDB_DbiSectionContribNode, 1);
+  PDB_DbiSCNode *node = push_array_no_zero(dbi->arena, PDB_DbiSCNode, 1);
   node->data = sc;
   dbi_sec_contrib_list_push_node(&dbi->sec_contrib_list, node);
   
