@@ -3674,52 +3674,65 @@ THREAD_POOL_TASK_FUNC(lnk_flag_debug_symbols_task)
 internal
 THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
 {
-  Temp scratch = scratch_begin(&arena, 1);
-
   LNK_BuildImageTask *task    = raw_task;
   U64                 obj_idx = task_id;
   LNK_Obj            *obj     = task->objs[obj_idx];
 
-  ProfBeginV("%S", obj->path);
-
-  ProfBegin("Patch COMDAT Offsets");
+  ProfBeginV("Patch COMDAT Offsets in %S", obj->path);
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
 
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+    COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
     if (interp != COFF_SymbolValueInterp_Regular) { continue; }
 
     LNK_ObjSymbolRef symlink_ref = {0};
     if ( ! lnk_obj_get_comdat_symlink(obj, symbol.section_number, &symlink_ref)) { continue; }
 
-    COFF_ParsedSymbol parsed_symlink = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
-    if (symlink_ref.obj == obj && parsed_symlink.section_number == symbol.section_number) { continue; }
+    COFF_ParsedSymbol leader_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+    if (symlink_ref.obj == obj && leader_symbol.section_number == symbol.section_number) { continue; }
 
-    B32 is_static_comdat_leader = symbol.storage_class == COFF_SymStorageClass_Static &&
-                                  obj->comdats[symbol.section_number-1] == symbol_idx;
+    B32 is_external = symbol.storage_class == COFF_SymStorageClass_External;
+    B32 is_same_obj = symlink_ref.obj == obj;
 
-    if (symbol.storage_class == COFF_SymStorageClass_External || is_static_comdat_leader) {
-      // COMDAT leader may be at a different offset, so update this symbol with leader's offset
-      U32 section_number = symbol.section_number;
-      U32 value          = parsed_symlink.value;
+    U32 section_number = symbol.section_number;
+    U32 value          = symbol.value;
+    B32 should_patch   = 0;
 
+    if (is_same_obj) {
+      B32 is_static_comdat_leader = symbol.storage_class == COFF_SymStorageClass_Static && obj->comdats[symbol.section_number-1] == symbol_idx;
+      if (is_external || is_static_comdat_leader) {
+        section_number = leader_symbol.section_number;
+        value          = leader_symbol.value;
+
+        // ICF folds sections by linking to the leader section definition; preserve
+        // public symbol offsets inside identical folded sections
+        if (is_external && leader_symbol.storage_class == COFF_SymStorageClass_Static && leader_symbol.aux_symbol_count > 0) {
+          value = symbol.value;
+        }
+
+        should_patch = 1;
+      }
+    } else {
+      if (is_external && str8_match(symbol.name, leader_symbol.name, 0)) {
+        value = leader_symbol.value;
+        should_patch = 1;
+      }
+    }
+
+    if (should_patch) {
       if (obj->header.is_big_obj) {
         COFF_Symbol32 *symbol32  = symbol.raw_symbol;
         symbol32->section_number = section_number;
         symbol32->value          = value;
       } else {
         COFF_Symbol16 *symbol16  = symbol.raw_symbol;
-        symbol16->section_number = (U16)section_number;
+        symbol16->section_number = safe_cast_u16(section_number);
         symbol16->value          = value;
       }
     }
   }
   ProfEnd();
-
-  ProfEnd();
-
-  scratch_end(scratch);
 }
 
 internal int
