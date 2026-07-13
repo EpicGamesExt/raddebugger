@@ -1,3 +1,20 @@
+# v0.9.28-alpha
+
+## Linker Changes
+- Implemented `/OPT:ICF` identical COMDAT folding.
+- Added DEF, and SECTION configuration support.
+- Improved COMDAT handling for weak symbols, ICF, and zero-sized COMDAT
+  anchors, and stopped emitting empty marker sections that could produce invalid
+  PE images.
+- Fixed import/export edge cases, including import data-directory bounds and
+  archive member handling for `__imp_*` symbols.
+- Accepted duplicate identical weak search aliases without reporting multiply
+  defined symbols.
+- Add support for UTF-16 encoded response files.
+- Fixed DBI section-contribution image-section range mapping.
+- Improved debug logging for `/OPT:REF` liveness stats and unresolved symbols
+  referenced by `.llvm_addrsig`.
+
 # v0.9.27-alpha
 
 ## Debugger Changes
