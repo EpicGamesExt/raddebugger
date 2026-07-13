@@ -149,6 +149,8 @@ typedef enum
   LNK_CmdSwitch_RadTypeServer_MatchObj,
 
   LNK_CmdSwitch_LLVM_AddrSig,
+  LNK_CmdSwitch_IfcMap,
+  LNK_CmdSwitch_IfcDebugRecords,
 
   LNK_CmdSwitch_Help,
 
@@ -426,6 +428,8 @@ typedef struct LNK_Config
   LNK_SwitchState             type_server;
   LNK_SwitchState             sort_imports;
   LNK_SwitchState             llvm_addrsig;
+  LNK_SwitchState             ifc_debug_records; // resolve LF_IFC_RECORD (0x1522) into real CodeView types
+  String8List                 ifc_map_list;      // .toml paths from /ifcMap (header-unit -> .ifc)
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------

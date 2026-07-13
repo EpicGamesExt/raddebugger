@@ -113,6 +113,8 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_RadTypeServer,                   0, LNK_CmdValueKind_Scalar, "RAD_TYPE_SERVER", ":FILENAME", "Merge types and store them in the specified file. The filename must have the .rrt extension." },
 
   { LNK_CmdSwitch_LLVM_AddrSig, 0, LNK_CmdValueKind_Scalar, "LLVM_ADDRSIG", "[:NO]", "Use .llvm_addrsig to guide ICF." },
+  { LNK_CmdSwitch_IfcMap,       1, LNK_CmdValueKind_Scalar, "IFCMAP",          ":FILENAME", "Map a header-unit module interface (.ifc) for debug-record resolution (TOML)." },
+  { LNK_CmdSwitch_IfcDebugRecords, 0, LNK_CmdValueKind_Scalar, "IFCDEBUGRECORDS", "[:NO]",     "Resolve MSVC header-unit IFC debug records into real CodeView types." },
 
   { LNK_CmdSwitch_Help, 0, LNK_CmdValueKind_Null, "HELP", "", "" },
   { LNK_CmdSwitch_Help, 0, LNK_CmdValueKind_Null, "?",    "", "" },
@@ -2335,6 +2337,17 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
 
   case LNK_CmdSwitch_LLVM_AddrSig: {
     lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->llvm_addrsig);
+  } break;
+  case LNK_CmdSwitch_IfcMap: {
+    // collect .toml paths (header-unit -> .ifc); parsed lazily during debug-info build
+    String8List copy = str8_list_copy(config->arena, &value_strings);
+    str8_list_concat_in_place(&config->ifc_map_list, &copy);
+  } break;
+  case LNK_CmdSwitch_IfcDebugRecords: {
+    LNK_SwitchState state = LNK_SwitchState_Null;
+    if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
+      config->ifc_debug_records = state;
+    }
   } break;
   }
 

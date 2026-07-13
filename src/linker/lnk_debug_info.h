@@ -108,6 +108,16 @@ typedef struct
   Rng1U64             *symbol_input_ranges; // [worker_count]
   U64                  symbol_patch_task_count; //
   LNK_SymbolInputTask *symbol_patch_task; // [symbol_patch_task_count]
+
+  // IFC (header-unit debug-record) resolution:
+  // redirects a consuming obj's local LF_IFC_RECORD placeholder TI to a leaf in
+  // an injected .ifc debug-records blob "obj". Consulted first in lnk_leaf_ref_from_ti.
+  // key   = Compose64Bit(obj_idx, local_ti)
+  // value = Compose64Bit(blob_obj_idx, blob_leaf_idx)
+  B32      has_ifc_redirects;
+  HashMap  ifc_redirect_hm;
+  Rng1U64  ifc_obj_range; // [min,max) range of injected blob objs in the parallel arrays
+  U32Array ifc_indices;   // obj indices of injected .ifc blob objs (hashed/deduped first)
 } LNK_CodeViewInput;
 
 typedef struct

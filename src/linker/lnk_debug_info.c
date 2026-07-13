@@ -656,6 +656,270 @@ lnk_rrt_array_from_config(Arena *arena, LNK_Config *config)
   return rrt_arr;
 }
 
+////////////////////////////////
+// IFC header-unit debug-record resolution
+
+typedef struct LNK_IfcMapEntry
+{
+  String8 ifc_path; // absolute .ifc path
+} LNK_IfcMapEntry;
+
+// Parse the trivial /ifcMap TOML by hand:
+//   [[header-unit]]
+//   name = ["quote", '<header-unit-path>']
+//   ifc  = "<abs .ifc path>"
+// Registers basename(header-unit-path) -> .ifc path in `hm` (hash_map of path->raw LNK_IfcMapEntry*).
+internal void
+lnk_parse_ifc_map_toml(Arena *arena, HashMap *hm, String8 toml_data)
+{
+  U64 cursor = 0;
+  String8 cur_name = {0};
+  while (cursor < toml_data.size) {
+    // read a line
+    U64 line_end = cursor;
+    while (line_end < toml_data.size && toml_data.str[line_end] != '\n') { line_end += 1; }
+    String8 line = str8_skip_chop_whitespace(str8_substr(toml_data, r1u64(cursor, line_end)));
+    cursor = line_end + 1;
+
+    if (line.size == 0 || line.str[0] == '#') { continue; }
+
+    if (str8_match(str8_prefix(line, 4), str8_lit("name"), 0)) {
+      // name = ["quote", '<path>']  -- extract the last single-quoted token
+      U64 q0 = str8_find_needle(line, 0, str8_lit("'"), 0);
+      if (q0 < line.size) {
+        U64 q1 = str8_find_needle(line, q0 + 1, str8_lit("'"), 0);
+        if (q1 < line.size) {
+          cur_name = str8_substr(line, r1u64(q0 + 1, q1));
+        }
+      }
+    } else if (str8_match(str8_prefix(line, 3), str8_lit("ifc"), 0)) {
+      U64 q0 = str8_find_needle(line, 0, str8_lit("\""), 0);
+      if (q0 < line.size && cur_name.size) {
+        U64 q1 = str8_find_needle(line, q0 + 1, str8_lit("\""), 0);
+        if (q1 < line.size) {
+          String8 ifc_path = str8_substr(line, r1u64(q0 + 1, q1));
+          // key by basename of the header-unit path (matches LF_IFC_RECORD header_unit_path basename)
+          String8 base = str8_skip_last_slash(cur_name);
+          // header-unit paths use backslashes; normalize to last path component
+          U64 bs = str8_find_needle_reverse(base, 0, str8_lit("\\"), 0);
+          if (bs) { base = str8_skip(base, bs); }
+          LNK_IfcMapEntry *e = push_array(arena, LNK_IfcMapEntry, 1);
+          e->ifc_path = push_str8_copy(arena, ifc_path);
+          hash_map_push_string_raw(arena, hm, push_str8_copy(arena, base), e);
+        }
+      }
+      cur_name = str8_zero();
+    }
+  }
+}
+
+// Reads every /ifcMap toml, materializes the union of header-unit basename -> .ifc path.
+internal HashMap
+lnk_build_ifc_map(Arena *arena, LNK_Config *config)
+{
+  HashMap hm = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  for EachNode(n, String8Node, config->ifc_map_list.first) {
+    String8 toml = lnk_read_data_from_file_path(scratch.arena, 0, n->string);
+    if (toml.size == 0) {
+      lnk_error(LNK_Error_Cmdl, "/ifcMap: unable to read TOML '%S'", n->string);
+      continue;
+    }
+    lnk_parse_ifc_map_toml(arena, &hm, toml);
+  }
+  scratch_end(scratch);
+  return hm;
+}
+
+// LF_IFC_RECORD (0x1522) body layout (header {len,kind} already stripped from leaf.data):
+//   u16 version (==2); u32 ifc_type_index X; u8[16] guid; u8[16] hash; char[] header_unit_path NUL
+typedef struct LNK_IfcRecord
+{
+  U32     ifc_type_index;  // X: TI into the .ifc debug-records blob (base 0x1000)
+  U8      guid[16];
+  U8      hash[16];
+  String8 header_unit_path;
+  B32     is_valid;
+} LNK_IfcRecord;
+
+internal LNK_IfcRecord
+lnk_parse_ifc_record(String8 leaf_data)
+{
+  LNK_IfcRecord rec = {0};
+  if (leaf_data.size < 2 + 4 + 16 + 16) { return rec; }
+  U64 off = 0;
+  U16 version; off += str8_deserial_read_struct(leaf_data, off, &version);
+  off += str8_deserial_read_struct(leaf_data, off, &rec.ifc_type_index);
+  MemoryCopy(rec.guid, leaf_data.str + off, 16); off += 16;
+  MemoryCopy(rec.hash, leaf_data.str + off, 16); off += 16;
+  rec.header_unit_path = str8_cstring_capped(leaf_data.str + off, leaf_data.str + leaf_data.size);
+  rec.is_valid = 1;
+  return rec;
+}
+
+// Injects referenced .ifc debug-records blobs as extra "objs" in `input`, scans every
+// consuming obj's .debug$T for LF_IFC_RECORD (0x1522) leaves, registers each placeholder
+// local TI -> blob leaf redirect, and rewrites the 0x1522 leaf to NOTYPE so it is excluded
+// from the output TPI. Must run after .debug$T is parsed and before min-type-index / symbol
+// setup (which iterate input->count).
+internal void
+lnk_apply_ifc_debug_records(TP_Arena *tp_arena, LNK_CodeViewInput *input, LNK_Config *config)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&tp_arena->v[0], 1);
+  Arena *arena = tp_arena->v[0];
+
+  // basename -> .ifc path
+  HashMap ifc_map_hm = lnk_build_ifc_map(scratch.arena, config);
+
+  // first pass: discover which .ifc files are actually referenced and by which records.
+  // de-dup .ifc reads by path; parse blob to a CV_DebugT once per .ifc.
+  HashMap   ifc_path_to_blobidx = {0}; // path -> (blob slot index + 1)
+  IFC_File *ifc_files           = push_array(scratch.arena, IFC_File, 256);
+  U64       ifc_file_count      = 0;
+  CV_DebugT blob_debug_t[256]   = {0};
+
+  // scan all consuming objs for 0x1522 leaves; collect the .ifc paths needed
+  for EachIndex(obj_idx, input->obj_count) {
+    CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
+    for EachIndex(leaf_idx, debug_t->count) {
+      CV_LeafHeader *hdr = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
+      if (hdr->kind != 0x1522) { continue; }
+
+      CV_Leaf       leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+      LNK_IfcRecord rec  = lnk_parse_ifc_record(leaf.data);
+      if (!rec.is_valid) { continue; }
+
+      String8 base = str8_skip_last_slash(rec.header_unit_path);
+      U64 bs = str8_find_needle_reverse(base, 0, str8_lit("\\"), 0);
+      if (bs) { base = str8_skip(base, bs); }
+
+      LNK_IfcMapEntry *e = hash_map_search_string_raw(&ifc_map_hm, base);
+      if (e == 0) { continue; }
+
+      if (hash_map_search_string_u64(&ifc_path_to_blobidx, e->ifc_path) == 0) {
+        if (ifc_file_count >= 256) { continue; }
+        String8  err = {0};
+        IFC_File f   = ifc_file_read(arena, e->ifc_path, &err);
+        if (!f.is_valid) {
+          lnk_error(LNK_Error_Cmdl, "/ifcDebugRecords: %S", err);
+          // still reserve a slot so we don't retry
+          hash_map_push_string_u64(scratch.arena, &ifc_path_to_blobidx, e->ifc_path, ifc_file_count + 1);
+          ifc_files[ifc_file_count] = f;
+          blob_debug_t[ifc_file_count] = (CV_DebugT){0};
+          ifc_file_count += 1;
+          continue;
+        }
+        // parse the raw CV leaf stream (no signature, TI base 0x1000)
+        CV_DebugT dt = cv_debug_t_from_data(arena, f.debug_records, 1);
+        hash_map_push_string_u64(scratch.arena, &ifc_path_to_blobidx, e->ifc_path, ifc_file_count + 1);
+        ifc_files[ifc_file_count]    = f;
+        blob_debug_t[ifc_file_count] = dt;
+        ifc_file_count += 1;
+      }
+    }
+  }
+
+  if (ifc_file_count == 0) { goto done; }
+
+  // --- inject blob objs into the parallel arrays (like type servers, but in ifc_obj_range) ---
+  U64 prev_count = input->count;
+  U64 new_count  = prev_count + ifc_file_count;
+
+  LNK_Obj  **obj_arr2     = push_array(arena, LNK_Obj *, new_count);
+  CV_DebugS *debug_s_arr2 = push_array(arena, CV_DebugS, new_count);
+  CV_DebugT *debug_t_arr2 = push_array(arena, CV_DebugT, new_count);
+  CV_DebugH *debug_h_arr2 = push_array(arena, CV_DebugH, new_count);
+  U64       *obj_to_ts2   = push_array(arena, U64,       new_count);
+
+  MemoryCopyTyped(obj_arr2,     input->obj_arr,     prev_count);
+  MemoryCopyTyped(debug_s_arr2, input->debug_s_arr, prev_count);
+  MemoryCopyTyped(debug_t_arr2, input->debug_t_arr, prev_count);
+  MemoryCopyTyped(debug_h_arr2, input->debug_h_arr, prev_count);
+  MemoryCopyTyped(obj_to_ts2,   input->obj_to_ts,   prev_count);
+  MemorySet(obj_to_ts2 + prev_count, 0xff, ifc_file_count * sizeof(U64)); // blobs are not type servers
+
+  // blob obj indices + index list for hash-deep / dedup
+  U32Array ifc_indices = { .v = push_array(arena, U32, ifc_file_count) };
+  for EachIndex(i, ifc_file_count) {
+    U64 blob_obj_idx = prev_count + i;
+    LNK_Obj *blob_obj = push_array(arena, LNK_Obj, 1);
+    blob_obj->path = ifc_files[i].path;
+    obj_arr2[blob_obj_idx]     = blob_obj;
+    debug_t_arr2[blob_obj_idx] = blob_debug_t[i];
+    ifc_indices.v[ifc_indices.count++] = (U32)blob_obj_idx;
+  }
+
+  input->count       = new_count;
+  input->obj_arr     = obj_arr2;
+  input->debug_s_arr = debug_s_arr2;
+  input->debug_t_arr = debug_t_arr2;
+  input->debug_h_arr = debug_h_arr2;
+  input->obj_to_ts   = obj_to_ts2;
+  input->ifc_obj_range = r1u64(prev_count, new_count);
+  input->ifc_indices   = ifc_indices; // hashed + deduped before int objs (see lnk_merge_types)
+
+  // --- second pass: register redirects + NOTYPE the 0x1522 leaves ---
+  input->has_ifc_redirects = 1;
+  U64 redirect_count = 0;
+  for EachIndex(obj_idx, input->obj_count) {
+    CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
+    for EachIndex(leaf_idx, debug_t->count) {
+      CV_LeafHeader *hdr = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
+      if (hdr->kind != 0x1522) { continue; }
+
+      CV_Leaf       leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+      LNK_IfcRecord rec  = lnk_parse_ifc_record(leaf.data);
+
+      // the leaf's own local TI K (the placeholder other leaves reference)
+      CV_TypeIndex K = cv_ti_from_leaf_idx(debug_t, CV_TypeIndexSource_TPI, leaf_idx);
+
+      B32 resolved = 0;
+      if (rec.is_valid) {
+        String8 base = str8_skip_last_slash(rec.header_unit_path);
+        U64 bs = str8_find_needle_reverse(base, 0, str8_lit("\\"), 0);
+        if (bs) { base = str8_skip(base, bs); }
+        LNK_IfcMapEntry *e = hash_map_search_string_raw(&ifc_map_hm, base);
+        if (e) {
+          U64 *slot = hash_map_search_string_u64(&ifc_path_to_blobidx, e->ifc_path);
+          if (slot) {
+            U64       blob_i       = *slot - 1;
+            IFC_File *f            = &ifc_files[blob_i];
+            U64       blob_obj_idx = input->ifc_obj_range.min + blob_i;
+            CV_DebugT *bdt         = &input->debug_t_arr[blob_obj_idx];
+
+            // verify GUID++hash matches this .ifc's content hash (32 bytes)
+            B32 hash_ok = MemoryMatch(rec.guid, f->content_hash, 16) &&
+                          MemoryMatch(rec.hash, f->content_hash + 16, 16);
+
+            if (f->is_valid && hash_ok) {
+              U64 blob_leaf_idx = cv_leaf_idx_from_ti(bdt, CV_TypeIndexSource_TPI, rec.ifc_type_index);
+              if (blob_leaf_idx < bdt->count) {
+                hash_map_push_u64_u64(arena, &input->ifc_redirect_hm,
+                                      Compose64Bit(obj_idx, K),
+                                      Compose64Bit(blob_obj_idx, blob_leaf_idx));
+                redirect_count += 1;
+                resolved = 1;
+              }
+            }
+          }
+        }
+      }
+      (void)resolved;
+
+      // exclude the placeholder leaf from output regardless: rewrite to NOTYPE.
+      // NOTYPE routes to CV_TypeIndexSource_NULL which is never emitted to TPI/IPI.
+      memory_write16(MemberFromPtr(CV_LeafHeader, hdr, kind), (U16)CV_LeafKind_NOTYPE);
+    }
+  }
+
+  lnk_log(LNK_Log_Debug, "[IFC] injected %llu .ifc blob(s), %llu record redirect(s)", ifc_file_count, redirect_count);
+
+done:
+  scratch_end(scratch);
+  ProfEnd();
+}
+
 internal LNK_CodeViewInput
 lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U64 obj_count, LNK_Obj **obj_arr, LNK_RRT_Array rrt_input)
 {
@@ -1099,6 +1363,12 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   }
   ProfEnd();
 
+  // resolve MSVC header-unit IFC debug records (LF_IFC_RECORD 0x1522) -> real CodeView types.
+  // injects .ifc debug-records blobs as extra objs and registers placeholder-TI redirects.
+  if (config->ifc_debug_records == LNK_SwitchState_Yes && config->ifc_map_list.node_count) {
+    lnk_apply_ifc_debug_records(tp_arena, &input, config);
+  }
+
   // set default min type index
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) { input.min_type_indices[ti_source] = CV_MinComplexTypeIndex; }
 
@@ -1213,6 +1483,16 @@ lnk_leaf_ref_leaf_idx(LNK_LeafRef ref)
 internal LNK_LeafRef
 lnk_leaf_ref_from_ti(LNK_CodeViewInput *input, U32 obj_idx, CV_TypeIndexSource source, CV_TypeIndex ti)
 {
+  // IFC redirect: a consuming obj's local LF_IFC_RECORD placeholder TI is mapped
+  // to a leaf inside an injected .ifc debug-records blob obj. The blob leaves then
+  // dedup/hash/fixup natively through the rest of this function.
+  if (input->has_ifc_redirects && source == CV_TypeIndexSource_TPI) {
+    U64 *packed = hash_map_search_u64_u64(&input->ifc_redirect_hm, Compose64Bit(obj_idx, ti));
+    if (packed) {
+      return (LNK_LeafRef){ (U32)(*packed >> 32), (U32)(*packed & max_U32) };
+    }
+  }
+
   // ti range: external type server
   U64 ts_idx = input->obj_to_ts[obj_idx];
   if (ts_idx != max_U64) {
@@ -1882,6 +2162,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
       U32Array     indices;
       U32Array     hash_indices;
     } hash_targets[] = {
+      { lnk_hash_debug_t_deep_task, input->ifc_indices         }, // hash .ifc blobs first: int-obj leaves redirect into them
       { lnk_hash_debug_t_task,      input->debug_p_indices     }, // hash .debug$P first so we can mix in hashes for precompiled sub leaves when hashing leaves in .debug$T
       { lnk_hash_debug_t_task,      input->int_obj_indices     },
       { lnk_hash_debug_t_deep_task, input->type_server_indices },
@@ -1991,6 +2272,9 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
 
   task.indices = dedup_type_server_indices;
   tp_for_parallel_prof(tp, tp_temp, task.indices.count, lnk_leaf_dedup_task, &task, "Type Servers");
+
+  task.indices = input->ifc_indices;
+  tp_for_parallel_prof(tp, tp_temp, task.indices.count, lnk_leaf_dedup_task, &task, "IFC Blobs");
   ProfEnd();
 
   ProfBegin("Extract present buckets from the leaf hash tables");
