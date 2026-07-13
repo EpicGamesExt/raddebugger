@@ -2965,7 +2965,7 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
         LNK_ObjSymbolRef symlink_ref = {0};
         if (lnk_obj_get_comdat_symlink(obj, sect_idx + 1, &symlink_ref)) {
           COFF_ParsedSymbol symlink_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
-          if (str8_starts_with(symlink_symbol.name, str8_lit("??_7"))) {
+          if (str8_starts_with(symlink_symbol.name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX))) {
             result = LNK_ICF_ColorSpace_VFTable;
           }
         }

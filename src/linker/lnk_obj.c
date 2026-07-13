@@ -470,25 +470,50 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
 internal LNK_ObjSymbolRef *
 lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
 {
-  LNK_ObjSymbolRef *symlinks = push_array(arena, LNK_ObjSymbolRef, obj->header.section_count_no_null+1);
-  COFF_ParsedSymbol symbol;
+  LNK_ObjSymbolRef *symlinks = push_array(arena, LNK_ObjSymbolRef, obj->header.section_count_no_null + 1);
+  COFF_ParsedSymbol symbol = {0};
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-    if (interp == COFF_SymbolValueInterp_Regular) {
-      LNK_ObjSection section = lnk_obj_section_from_section_number(obj, symbol.section_number);
-      if (*section.flags & COFF_SectionFlag_LnkCOMDAT) {
-        if (symbol.aux_symbol_count == 0 && symbol.storage_class == COFF_SymStorageClass_External) {
-          if (symlinks[symbol.section_number].obj == 0 || symbol.value == 0) {
-            LNK_SymbolHashTrie *link_symbol = lnk_symbol_table_search_(symtab, symbol.name);
-            if (link_symbol) {
-              symlinks[symbol.section_number] = lnk_ref_from_symbol(link_symbol->symbol);
-            }
-          }
-        } else if (symlinks[symbol.section_number].obj == 0 && symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
-          symlinks[symbol.section_number] = (LNK_ObjSymbolRef){ obj, symbol_idx };
+    COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
+    if (interp != COFF_SymbolValueInterp_Regular) { continue; }
+
+    COFF_SectionFlags section_flags = obj->section_flags[symbol.section_number - 1];
+    if (~section_flags & COFF_SectionFlag_LnkCOMDAT) { continue; }
+
+    LNK_ObjSymbolRef *symlink = &symlinks[symbol.section_number];
+
+    // external symbols
+    if (symbol.storage_class == COFF_SymStorageClass_External && symbol.aux_symbol_count == 0) {
+      B32 can_set_symlink = (symlink->obj == 0 || symbol.value == 0);
+      if (!can_set_symlink && symlink->obj == obj) {
+        // NOTE: The section definition is a fallback symlink. Public symbols inside a
+        // discarded COMDAT need to target the selected public symbol's offset,
+        // not the selected section base plus the discarded symbol's offset.
+        // MSVC vftables are also preferred over other public symbols in the
+        // same section so ICF can keep vftable COMDATs in their own color space.
+        COFF_ParsedSymbol symlink_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symlink->obj, symlink->symbol_idx);
+        B32 symlink_is_section_defn = (symlink_symbol.section_number == symbol.section_number &&
+                                       symlink_symbol.storage_class == COFF_SymStorageClass_Static &&
+                                       symlink_symbol.aux_symbol_count > 0);
+        B32 symlink_is_non_vftable = (symlink_symbol.section_number == symbol.section_number &&
+                                      !str8_starts_with(symlink_symbol.name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX)));
+        B32 symbol_is_vftable = str8_starts_with(symbol.name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX));
+        can_set_symlink = (symlink_is_section_defn || (symbol_is_vftable && symlink_is_non_vftable));
+      }
+
+      if (can_set_symlink) {
+        LNK_SymbolHashTrie *link_symbol = lnk_symbol_table_search_(symtab, symbol.name);
+        if (link_symbol) {
+          *symlink = lnk_ref_from_symbol(link_symbol->symbol);
         }
       }
+
+      continue;
+    }
+
+    // section definitions
+    if (symlink->obj == 0 && symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
+      *symlink = (LNK_ObjSymbolRef){ obj, symbol_idx };
     }
   }
   return symlinks;
