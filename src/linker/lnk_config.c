@@ -1734,6 +1734,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
           }
         }
         config->opt_icf = LNK_SwitchState_Yes;
+      } else if (str8_match_lit("icfstatic", param, StringMatchFlag_CaseInsensitive)) {
+        // compatibility: build systems that drove the fork's /OPT:ICFSTATIC. Internal-linkage
+        // COMDATs are always fold candidates here, so this is plain ICF.
+        config->opt_icf = LNK_SwitchState_Yes;
       } else if (str8_match_lit("noicf", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_icf = LNK_SwitchState_No;
       } else if (str8_match_lit("lbr", param, StringMatchFlag_CaseInsensitive)) {
