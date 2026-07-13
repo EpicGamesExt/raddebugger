@@ -25,6 +25,6 @@ typedef struct LLVM_GHash
 
 internal String8 llvm_string_from_ghash_alg(LLVM_GHashAlg v);
 internal U64     llvm_hash_size_from_alg(LLVM_GHashAlg v);
+internal B32     llvm_is_bitcode(String8 data);
 
 #endif // LLVM_H
-
