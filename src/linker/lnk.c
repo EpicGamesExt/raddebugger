@@ -3404,28 +3404,65 @@ lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
   scratch_end(scratch);
 }
 
+internal int
+lnk_section_definition_is_before(void *raw_a, void *raw_b)
+{
+  LNK_SectionDefinition **a = raw_a, **b = raw_b;
+  U64 input_idx_a = Compose64Bit((*a)->obj->input_idx, (*a)->obj_sect_idx);
+  U64 input_idx_b = Compose64Bit((*b)->obj->input_idx, (*b)->obj_sect_idx);
+  return u64_compar_is_before(&input_idx_a, &input_idx_b);
+}
+
+internal B32
+lnk_should_gather_section(COFF_SectionHeader *sect_header, COFF_SectionFlags sect_flags)
+{
+  // removed sections were eliminated before image layout
+  if (sect_flags & COFF_SectionFlag_LnkRemove) {
+    return 0;
+  }
+
+  // linker-info sections carry metadata but are not copied to the image
+  if (sect_flags & COFF_SectionFlag_LnkInfo) {
+    return 0;
+  }
+
+  // non-COMDAT empty sections do not need image contributions
+  if (sect_header->fsize == 0) {
+    if (~sect_flags & COFF_SectionFlag_LnkCOMDAT) {
+      return 0;
+    }
+
+    // keep zero-size COMDATs so symbols at offset zero still get mapped
+  }
+
+  return 1;
+}
+
 internal
-THREAD_POOL_TASK_FUNC(lnk_gather_section_definitions_task)
+THREAD_POOL_TASK_FUNC(lnk_gather_sections_task)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  LNK_BuildImageTask *task    = raw_task;
-  U64                 obj_idx = task_id;
+  LNK_BuildImageTask *task         = raw_task;
+  Rng1U64             range        = task->u.gather_sects.ranges[task_id];
+  HashTable          *sect_defn_ht = hash_table_init(arena, 128);
+  task->u.gather_sects.defns[task_id] = sect_defn_ht;
 
-  HashTable          *sect_defn_ht  = task->u.gather_sects.defns[worker_id];
-  LNK_Obj            *obj           = task->objs[obj_idx];
-  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
-  String8             string_table  = str8_substr(obj->data, obj->header.string_table_range);
+  ProfBegin("Gather Section Definitions");
+  for EachInRange(obj_idx, range) {
+    LNK_Obj            *obj           = task->objs[obj_idx];
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+    String8             string_table  = str8_substr(obj->data, obj->header.string_table_range);
 
-  for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
-    COFF_SectionHeader *sect_header = &section_table[sect_idx];
-    COFF_SectionFlags   sect_flags  = obj->section_flags[sect_idx];
+    for EachIndex(sect_idx, obj->header.section_count_no_null) {
+      COFF_SectionHeader *sect_header = &section_table[sect_idx];
 
-    if (~sect_flags & COFF_SectionFlag_LnkRemove && ~sect_flags & COFF_SectionFlag_LnkInfo && sect_header->fsize > 0) {
+      if ( ! lnk_should_gather_section(sect_header, obj->section_flags[sect_idx])) { continue; }
+
       Temp temp = temp_begin(scratch.arena);
 
       // was section defined?
-      COFF_SectionFlags      image_sect_flags     = sect_flags & ~(COFF_SectionFlags_LnkFlags | COFF_SectionFlags_Reserved);
+      COFF_SectionFlags      image_sect_flags     = obj->section_flags[sect_idx] & ~(COFF_SectionFlags_LnkFlags | COFF_SectionFlags_Reserved);
       String8                sect_name            = coff_name_from_section_header(string_table, sect_header);
       image_sect_flags = lnk_apply_section_directives_to_flags(task->config, sect_name, image_sect_flags);
       String8                sect_name_with_flags = lnk_make_name_with_flags(temp.arena, sect_name, image_sect_flags);
@@ -3449,28 +3486,113 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_definitions_task)
       temp_end(temp);
     }
   }
+  ProfEnd();
 
-  scratch_end(scratch);
-}
+  barrier_wait(tp->barrier);
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_gather_section_contribs_task)
-{
-  Temp scratch = scratch_begin(&arena, 1);
+  if (task_id == 0) {
+    Arena            *main_arena = task->u.gather_sects.arena;
+    LNK_Config       *config     = task->config;
+    LNK_SectionTable *sectab     = task->sectab;
 
-  LNK_BuildImageTask *task    = raw_task;
-  U64                 obj_idx = task_id;
+    ProfBegin("Merge Section Definitions Hash Tables");
+    for (U64 worker_idx = 1; worker_idx < tp->worker_count; worker_idx += 1) {
+      U64                     sect_defns_count = task->u.gather_sects.defns[worker_idx]->count;
+      LNK_SectionDefinition **sect_defns       = values_from_hash_table_raw(main_arena, task->u.gather_sects.defns[worker_idx]);
+      radsort(sect_defns, sect_defns_count, lnk_section_definition_is_before);
 
-  LNK_Obj            *obj           = task->objs[obj_idx];
-  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
-  String8             string_table  = str8_substr(obj->data, obj->header.string_table_range);
+      for EachIndex(defn_idx, sect_defns_count) {
+        LNK_SectionDefinition *defn            = sect_defns[defn_idx];
+        String8                name_with_flags = lnk_make_name_with_flags(main_arena, defn->name, defn->flags);
+        LNK_SectionDefinition *main_defn       = hash_table_search_string_raw(task->u.gather_sects.defns[0], name_with_flags);
+        if (main_defn == 0) {
+          main_defn = sect_defns[defn_idx];
+          hash_table_push_string_raw(main_arena, task->u.gather_sects.defns[0], name_with_flags, main_defn);
+        } else {
+          if (lnk_section_definition_is_before(&sect_defns[defn_idx], &main_defn)) {
+            main_defn->obj = sect_defns[defn_idx]->obj;
+            main_defn->obj_sect_idx = sect_defns[defn_idx]->obj_sect_idx;
+          }
+          main_defn->contribs_count += sect_defns[defn_idx]->contribs_count;
+        }
+      }
+    }
+    U64                     sect_defns_count = task->u.gather_sects.defns[0]->count;
+    LNK_SectionDefinition **sect_defns       = values_from_hash_table_raw(main_arena, task->u.gather_sects.defns[0]);
+    ProfEnd();
 
-  ProfBeginV("Gather Section Contribs [%S]", obj->path);
-  for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
-    LNK_SectionContrib *sc          = task->null_sc;
-    COFF_SectionHeader *sect_header = &section_table[sect_idx];
-    COFF_SectionFlags   sect_flags  = obj->section_flags[sect_idx];
-    if (~sect_flags & COFF_SectionFlag_LnkRemove && ~sect_flags & COFF_SectionFlag_LnkInfo && sect_header->fsize > 0) {
+    ProfBegin("Sort Sections Definitions");
+    radsort(sect_defns, sect_defns_count, lnk_section_definition_is_before);
+    ProfEnd();
+
+    ProfBegin("Push Sections And Reserve Section Contrib Memory");
+    task->contribs_ht = hash_table_init(sectab->arena, sect_defns_count);
+    for EachIndex(defn_idx, sect_defns_count) {
+      LNK_SectionDefinition *sect_defn = sect_defns[defn_idx];
+
+      // parse section name
+      String8 sect_name, sort_idx;
+      coff_parse_section_name(sect_defn->name, &sect_name, &sort_idx);
+
+      // do not create definitions for sections that are removed from the image
+      if (lnk_is_section_removed(config, sect_name)) { continue; }
+
+      // warn about conflicting section flags
+      for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+        if (str8_match(sect_n->data.name, sect_name, 0) && sect_n->data.flags != sect_defn->flags) {
+          LNK_Obj            *obj                = sect_defn->obj;
+          U32                 sect_number        = sect_defn->obj_sect_idx + 1;
+          COFF_SectionHeader *sect_header        = lnk_coff_section_header_from_section_number(obj, sect_number);
+          String8             sect_name          = coff_name_from_section_header(str8_substr(obj->data, obj->header.string_table_range), sect_header);
+          String8             expected_flags_str = coff_string_from_section_flags(main_arena, sect_n->data.flags);
+          String8             current_flags_str  = coff_string_from_section_flags(main_arena, sect_defn->flags);
+          lnk_error_obj(LNK_Warning_SectionFlagsConflict, sect_defn->obj, "detected section flags conflict in %S(No. %X); expected {%S} but got {%S}", sect_name, sect_number, expected_flags_str, current_flags_str);
+        }
+      }
+
+      {
+        ProfBeginV("Reserve Section Contrib Chunks [%S]", sect_defn->name);
+
+        LNK_Section *sect = lnk_section_table_search(sectab, sect_name, sect_defn->flags);
+        if (!sect) {
+          sect = lnk_section_table_push(sectab, sect_name, sect_defn->flags);
+        }
+
+        String8                  defn_name_with_flags = lnk_make_name_with_flags(sectab->arena, sect_defn->name, sect_defn->flags);
+        LNK_SectionContribChunk *contrib_chunk        = hash_table_search_string_raw(task->contribs_ht, defn_name_with_flags);
+        if (!contrib_chunk) {
+          contrib_chunk = lnk_section_contrib_chunk_list_push_chunk(main_arena, &sect->contribs, sect_defn->contribs_count, sort_idx);
+          hash_table_push_string_raw(sectab->arena, task->contribs_ht, defn_name_with_flags, contrib_chunk);
+        }
+
+        ProfEnd();
+      }
+    }
+    ProfEnd();
+
+    ProfBegin("Alloc Section Map");
+    task->sect_map = push_array(main_arena, LNK_SectionContrib **, task->objs_count);
+    for EachIndex(obj_idx, task->objs_count) { task->sect_map[obj_idx] = push_array(main_arena, LNK_SectionContrib *, task->objs[obj_idx]->header.section_count_no_null); }
+    ProfEnd();
+  }
+
+  barrier_wait(tp->barrier);
+
+  ProfBegin("Gather Section Contribs");
+  for EachInRange(obj_idx, range) {
+    LNK_Obj            *obj           = task->objs[obj_idx];
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+    String8             string_table  = str8_substr(obj->data, obj->header.string_table_range);
+
+    ProfBeginV("Gather Section Contribs [%S]", obj->path);
+    for EachIndex(sect_idx, obj->header.section_count_no_null) {
+      LNK_SectionContrib *sc          = task->null_sc;
+      COFF_SectionHeader *sect_header = &section_table[sect_idx];
+      COFF_SectionFlags   sect_flags  = obj->section_flags[sect_idx];
+      task->sect_map[obj_idx][sect_idx] = sc;
+
+      if ( ! lnk_should_gather_section(sect_header, sect_flags)) { continue; }
+
       LNK_SectionContribChunk *sc_chunk = 0;
       {
         Temp temp = temp_begin(scratch.arena);
@@ -3499,8 +3621,9 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_contribs_task)
         sc->u.obj_idx              = obj_idx;
         sc->u.obj_sect_idx         = sect_idx;
       }
+      task->sect_map[obj_idx][sect_idx] = sc;
     }
-    task->sect_map[obj_idx][sect_idx] = sc;
+    ProfEnd();
   }
   ProfEnd();
 
@@ -3966,15 +4089,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
   }
 
   ProfEnd();
-}
-
-internal int
-lnk_section_definition_is_before(void *raw_a, void *raw_b)
-{
-  LNK_SectionDefinition **a = raw_a, **b = raw_b;
-  U64 input_idx_a = Compose64Bit((*a)->obj->input_idx, (*a)->obj_sect_idx);
-  U64 input_idx_b = Compose64Bit((*b)->obj->input_idx, (*b)->obj_sect_idx);
-  return u64_compar_is_before(&input_idx_a, &input_idx_b);
 }
 
 internal
@@ -5057,108 +5171,21 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     .null_sc          = push_array(arena->v[0], LNK_SectionContrib, 1),
   };
 
-  {
-    ProfBegin("Define And Count Sections");
-    TP_Temp temp = tp_temp_begin(arena);
-
-    ProfBegin("Init Hash Tables For Gathering Section Definitions");
-    task.u.gather_sects.defns = push_array(arena->v[0], HashTable *, tp->worker_count);
-    for EachIndex(worker_id, tp->worker_count) { task.u.gather_sects.defns[worker_id] = hash_table_init(arena->v[0], 128); }
-    ProfEnd();
-
-    tp_for_parallel_prof(tp, arena, objs_count, lnk_gather_section_definitions_task, &task, "Gather Section Definitions");
-
-    ProfBegin("Merge Section Definitions Hash Tables");
-    for (U64 worker_idx = 1; worker_idx < tp->worker_count; worker_idx += 1) {
-      U64                     sect_defns_count = task.u.gather_sects.defns[worker_idx]->count;
-      LNK_SectionDefinition **sect_defns       = values_from_hash_table_raw(arena->v[0], task.u.gather_sects.defns[worker_idx]);
-      radsort(sect_defns, sect_defns_count, lnk_section_definition_is_before);
-
-      for EachIndex(defn_idx, sect_defns_count) {
-        LNK_SectionDefinition *defn            = sect_defns[defn_idx];
-        String8                name_with_flags = lnk_make_name_with_flags(arena->v[0], defn->name, defn->flags);
-        LNK_SectionDefinition *main_defn       = hash_table_search_string_raw(task.u.gather_sects.defns[0], name_with_flags);
-        if (main_defn == 0) {
-          main_defn = sect_defns[defn_idx];
-          hash_table_push_string_raw(arena->v[0], task.u.gather_sects.defns[0], name_with_flags, main_defn);
-        } else {
-          if (lnk_section_definition_is_before(&sect_defns[defn_idx], &main_defn)) {
-            main_defn->obj = sect_defns[defn_idx]->obj;
-            main_defn->obj_sect_idx = sect_defns[defn_idx]->obj_sect_idx;
-          }
-          main_defn->contribs_count += sect_defns[defn_idx]->contribs_count;
-        }
-      }
-    }
-    U64                     sect_defns_count = task.u.gather_sects.defns[0]->count;
-    LNK_SectionDefinition **sect_defns       = values_from_hash_table_raw(arena->v[0], task.u.gather_sects.defns[0]);
-    ProfEnd();
-
-    ProfBegin("Sort Sections Definitions");
-    radsort(sect_defns, sect_defns_count, lnk_section_definition_is_before);
-    ProfEnd();
-
-    ProfBegin("Push Sections And Reserve Section Contrib Memory");
-    task.contribs_ht = hash_table_init(sectab->arena, sect_defns_count);
-    for EachIndex(defn_idx, sect_defns_count) {
-      LNK_SectionDefinition *sect_defn = sect_defns[defn_idx];
-
-      // parse section name
-      String8 sect_name, sort_idx;
-      coff_parse_section_name(sect_defn->name, &sect_name, &sort_idx);
-
-      // do not create definitions for sections that are removed from the image
-      if (lnk_is_section_removed(config, sect_name)) { continue; }
-
-      // warn about conflicting section flags
-      for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-        if (str8_match(sect_n->data.name, sect_name, 0) && sect_n->data.flags != sect_defn->flags) {
-          LNK_Obj            *obj                = sect_defn->obj;
-          U32                 sect_number        = sect_defn->obj_sect_idx + 1;
-          COFF_SectionHeader *sect_header        = lnk_coff_section_header_from_section_number(obj, sect_number);
-          String8             sect_name          = coff_name_from_section_header(str8_substr(obj->data, obj->header.string_table_range), sect_header);
-          String8             expected_flags_str = coff_string_from_section_flags(arena->v[0], sect_n->data.flags);
-          String8             current_flags_str  = coff_string_from_section_flags(arena->v[0], sect_defn->flags);
-          lnk_error_obj(LNK_Warning_SectionFlagsConflict, sect_defn->obj, "detected section flags conflict in %S(No. %X); expected {%S} but got {%S}", sect_name, sect_number, expected_flags_str, current_flags_str);
-        }
-      }
-
-      {
-        ProfBeginV("Reserve Section Contrib Chunks [%S]", sect_defn->name);
-
-        LNK_Section *sect = lnk_section_table_search(sectab, sect_name, sect_defn->flags);
-        if (!sect) {
-          sect = lnk_section_table_push(sectab, sect_name, sect_defn->flags);
-        }
-
-        String8                  defn_name_with_flags = lnk_make_name_with_flags(sectab->arena, sect_defn->name, sect_defn->flags);
-        LNK_SectionContribChunk *contrib_chunk        = hash_table_search_string_raw(task.contribs_ht, defn_name_with_flags);
-        if (!contrib_chunk) {
-          contrib_chunk = lnk_section_contrib_chunk_list_push_chunk(arena->v[0], &sect->contribs, sect_defn->contribs_count, sort_idx);
-          hash_table_push_string_raw(sectab->arena, task.contribs_ht, defn_name_with_flags, contrib_chunk);
-        }
-        
-        ProfEnd();
-      }
-    }
-    ProfEnd();
-
-    tp_temp_end(temp);
-    ProfEnd();
-  }
-
   U64 expected_image_header_size;
   {
-    ProfBegin("Alloc Section Map");
-    task.sect_map = push_array(scratch.arena, LNK_SectionContrib **, objs_count);
-    for EachIndex(obj_idx, objs_count) { task.sect_map[obj_idx] = push_array(scratch.arena, LNK_SectionContrib *, objs[obj_idx]->header.section_count_no_null); }
-    ProfEnd();
-
-    tp_for_parallel_prof(tp, 0, objs_count, lnk_gather_section_contribs_task, &task, "Gather Section Contribs");
+    ProfScope("Gather Sections")
+    {
+      TP_Temp temp = tp_temp_begin(arena);
+      task.u.gather_sects.arena  = arena->v[0];
+      task.u.gather_sects.ranges = tp_divide_work(arena->v[0], objs_count, tp->worker_count);
+      task.u.gather_sects.defns  = push_array(arena->v[0], HashTable *, tp->worker_count);
+      tp_for_parallel_prof(tp, arena, tp->worker_count, lnk_gather_sections_task, &task, "Gather Sections");
+      tp_temp_end(temp);
+    }
 
     // ensure determinism by sorting section contribs in chunks by input index
+    ProfScope("Sort Section Contribs")
     {
-      ProfBegin("Sort Section Contribs");
 
       U64 total_chunk_count = 0;
       {
@@ -5179,8 +5206,6 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       }
 
       tp_for_parallel(tp, 0, total_chunk_count, lnk_sort_contribs_task, &task);
-
-      ProfEnd();
     }
 
     tp_for_parallel_prof(tp, 0, objs_count, lnk_set_comdat_leaders_contribs_task, &task, "Update Section Map With COMDAT Leader Contribs");
