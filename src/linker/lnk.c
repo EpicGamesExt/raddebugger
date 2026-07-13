@@ -5564,14 +5564,14 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         LNK_SectionContrib *idata_first_contrib     = lnk_get_first_section_contrib(idata_sect);
         PE_DataDirectory   *import_dir              = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_IMPORT);
         import_dir->virt_off  = image_section_table[idata_first_contrib->u.sect_idx + 1]->voff + idata_first_contrib->u.off;
-        import_dir->virt_size = null_import_desc_parsed.value - idata_first_contrib->u.off;
+        import_dir->virt_size = null_import_desc_parsed.value - idata_first_contrib->u.off + sizeof(PE_ImportEntry);
 
         COFF_ParsedSymbol  null_thunk_data_parsed = lnk_parsed_from_symbol(null_thunk_data);
         U64                null_thunk_data_voff   = image_section_table[null_thunk_data_parsed.section_number]->voff + null_thunk_data_parsed.value;
         U64                first_import_foff      = image_section_table[idata_first_contrib->u.sect_idx+1]->foff + idata_first_contrib->u.off;
         PE_ImportEntry    *first_import           = str8_deserial_get_raw_ptr(image_data, first_import_foff, sizeof(*first_import));
         PE_DataDirectory  *import_addr_dir        = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_IMPORT_ADDR);
-        import_addr_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, idata_sect);
+        import_addr_dir->virt_off  = first_import->import_addr_table_voff;
         import_addr_dir->virt_size = null_thunk_data_voff - first_import->import_addr_table_voff /* null */ + coff_word_size_from_machine(config->machine);
       }
     }
