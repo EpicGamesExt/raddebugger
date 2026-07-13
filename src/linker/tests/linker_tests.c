@@ -3132,6 +3132,457 @@ TEST(comdat_any)
   }
 }
 
+// MSVC vftables use COMDAT sections whose public symbol can start past the
+// section definition symbol; references to a replaced copy must target the winner.
+TEST(comdat_external_symbol_at_nonzero_offset)
+{
+  U8 data[16] = {0};
+  U8 ptr[8] = {0};
+  U8 text[] = {
+    0x48, 0x8D, 0x05, 0, 0, 0, 0, // lea rax, [rip + foo]
+    0xC3
+  };
+
+  T_Ok(t_write_def_obj("leader.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "data", ".rdata", str8_array_fixed(data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("data", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("foo", "data", 8),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("ref.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "data", ".rdata", str8_array_fixed(data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "ptr", ".data", str8_array_fixed(ptr), .flags = "rw:data@8", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Addr64, 0, "foo"),
+        {0}
+      }},
+      { "text", ".text", str8_array_fixed(text), .flags = "rx:code@1", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Rel32, 3, "foo"),
+        {0}
+      }},
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("data", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("foo", "data", 8),
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /out:a.exe leader.obj ref.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *rdata_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".rdata"));
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  COFF_SectionHeader *text_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+  T_Ok(rdata_section != 0);
+  T_Ok(data_section != 0);
+  T_Ok(text_section != 0);
+
+  U64 actual_ptr = 0;
+  str8_deserial_read_struct(exe, data_section->foff, &actual_ptr);
+  U64 expected_ptr = pe.image_base + rdata_section->voff + 8;
+  T_Ok(actual_ptr == expected_ptr);
+
+  S32 lea_disp = 0;
+  str8_deserial_read_struct(exe, text_section->foff + 3, &lea_disp);
+  U64 actual_lea_target = text_section->voff + 7 + lea_disp;
+  U64 expected_lea_target = rdata_section->voff + 8;
+  T_Ok(actual_lea_target == expected_lea_target);
+}
+
+TEST(comdat_external_symbol_at_zero_offset)
+{
+  U8 data[8] = {0};
+  U8 ptr[8] = {0};
+  U8 text[] = {
+    0x48, 0x8D, 0x05, 0, 0, 0, 0, // lea rax, [rip + foo]
+    0xC3
+  };
+
+  T_Ok(t_write_def_obj("leader.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "data", ".rdata", str8_array_fixed(data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("data", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("foo", "data", 0),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("ref.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "data", ".rdata", str8_array_fixed(data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "ptr", ".data", str8_array_fixed(ptr), .flags = "rw:data@8", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Addr64, 0, "foo"),
+        {0}
+      }},
+      { "text", ".text", str8_array_fixed(text), .flags = "rx:code@1", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Rel32, 3, "foo"),
+        {0}
+      }},
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("data", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("foo", "data", 0),
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /out:a.exe leader.obj ref.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *rdata_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".rdata"));
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  COFF_SectionHeader *text_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+  T_Ok(rdata_section != 0);
+  T_Ok(data_section != 0);
+  T_Ok(text_section != 0);
+
+  U64 actual_ptr = 0;
+  str8_deserial_read_struct(exe, data_section->foff, &actual_ptr);
+  U64 expected_ptr = pe.image_base + rdata_section->voff;
+  T_Ok(actual_ptr == expected_ptr);
+
+  S32 lea_disp = 0;
+  str8_deserial_read_struct(exe, text_section->foff + 3, &lea_disp);
+  U64 actual_lea_target = text_section->voff + 7 + lea_disp;
+  U64 expected_lea_target = rdata_section->voff;
+  T_Ok(actual_lea_target == expected_lea_target);
+}
+
+// Duplicate COMDAT sections can have identical bytes while their symbol tables
+// disagree about where a same-named public symbol points inside the section.
+// This mirrors MSVC vftable COMDATs: the selected copy may have leading RTTI data
+// at offset 0 and the vftable symbol at offset 8, while a discarded copy's
+// vftable symbol is at offset 0. Relocations against the discarded symbol must
+// use the selected symbol's value, not just the selected section contribution
+// plus the discarded symbol's original offset.
+TEST(comdat_external_symbol_uses_leader_offset)
+{
+  U8 leader_data[16] = {0};
+  U8 ref_data[16] = {0};
+  U8 ptr[8] = {0};
+  U8 text[] = {
+    0x48, 0x8D, 0x05, 0, 0, 0, 0, // lea rax, [rip + ??_7X]
+    0xC3
+  };
+
+  T_Ok(t_write_def_obj("leader.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "vftable", ".rdata", str8_array_fixed(leader_data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("vftable", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("??_7X@@6B@", "vftable", 8),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("ref.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "vftable", ".rdata", str8_array_fixed(ref_data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "ptr", ".data", str8_array_fixed(ptr), .flags = "rw:data@8", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Addr64, 0, "??_7X@@6B@"),
+        {0}
+      }},
+      { "text", ".text", str8_array_fixed(text), .flags = "rx:code@1", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Rel32, 3, "??_7X@@6B@"),
+        {0}
+      }},
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("vftable", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("??_7X@@6B@", "vftable", 0),
+      T_COFF_DefSymbol_ExternFunc("entry", "text", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /out:a.exe leader.obj ref.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *rdata_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".rdata"));
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  COFF_SectionHeader *text_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+  T_Ok(rdata_section != 0);
+  T_Ok(data_section != 0);
+  T_Ok(text_section != 0);
+
+  U64 actual_ptr = 0;
+  str8_deserial_read_struct(exe, data_section->foff, &actual_ptr);
+  U64 expected_ptr = pe.image_base + rdata_section->voff + 8;
+  T_Ok(actual_ptr == expected_ptr);
+
+  S32 lea_disp = 0;
+  str8_deserial_read_struct(exe, text_section->foff + 3, &lea_disp);
+  U64 actual_lea_target = text_section->voff + 7 + lea_disp;
+  U64 expected_lea_target = rdata_section->voff + 8;
+  T_Ok(actual_lea_target == expected_lea_target);
+}
+
+// Chromium has duplicate vftable COMDATs where the referencing copy is an
+// IMAGE_COMDAT_SELECT_ANY section with the public vftable at offset 0, while
+// the selected IMAGE_COMDAT_SELECT_LARGEST copy has the same public symbol at
+// offset 8. Relocations in the discarded object must resolve to the selected
+// public symbol, not to the discarded section.
+TEST(comdat_largest_external_symbol_uses_selected_offset)
+{
+  U8 discarded_data[16] = {0};
+  U8 selected_data[24] = {0};
+  U8 ptr[16] = {0};
+  U8 selected_text[] = { 0xC3 };
+  U8 text[] = {
+    0x48, 0x8D, 0x05, 0, 0, 0, 0, // lea rax, [rip + ??_7X]
+    0xC3
+  };
+
+  T_Ok(t_write_def_obj("discarded.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "vftable", ".rdata", str8_array_fixed(discarded_data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "ptr", ".data", str8_array_fixed(ptr), .flags = "rw:data@8", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Addr64, 0, "??_7X@@6B@"),
+        T_COFF_DefReloc(X64_Addr64, 8, "force_selected"),
+        {0}
+      }},
+      { "text", ".text", str8_array_fixed(text), .flags = "rx:code@1", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Rel32, 3, "??_7X@@6B@"),
+        {0}
+      }},
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("vftable", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("??_7X@@6B@", "vftable", 0),
+      T_COFF_DefSymbol_Undef("force_selected"),
+      T_COFF_DefSymbol_ExternFunc("entry", "text", 0),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_lib("selected.lib", (T_COFF_DefLib){
+    .emit_second_member = 1,
+    .members = (T_COFF_DefLibMember[]){
+      {
+        .type = T_COFF_DefLibMember_Obj,
+        .obj = {
+          .path = str8_lit("selected.obj"),
+          .machine = T_COFF_DefSetMachine(X64),
+          .sections = (T_COFF_DefSection[]){
+            { "vftable", ".rdata", str8_array_fixed(selected_data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+            { "force_text", ".text", str8_array_fixed(selected_text), .flags = "rx:code@1" },
+            {0}
+          },
+          .symbols = (T_COFF_DefSymbol[]){
+            T_COFF_DefSymbol_Secdef("vftable", COFF_ComdatSelect_Largest),
+            T_COFF_DefSymbol_Extern("??_7X@@6B@", "vftable", 8),
+            T_COFF_DefSymbol_ExternFunc("force_selected", "force_text", 0),
+            {0}
+          }
+        }
+      },
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /out:a.exe /opt:ref,noicf discarded.obj selected.lib");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *rdata_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".rdata"));
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  COFF_SectionHeader *text_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+  T_Ok(rdata_section != 0);
+  T_Ok(data_section != 0);
+  T_Ok(text_section != 0);
+
+  U64 actual_ptr = 0;
+  str8_deserial_read_struct(exe, data_section->foff, &actual_ptr);
+  U64 expected_ptr = pe.image_base + rdata_section->voff + 8;
+  T_Ok(actual_ptr == expected_ptr);
+
+  S32 lea_disp = 0;
+  str8_deserial_read_struct(exe, text_section->foff + 3, &lea_disp);
+  U64 actual_lea_target = text_section->voff + 7 + lea_disp;
+  U64 expected_lea_target = rdata_section->voff + 8;
+  T_Ok(actual_lea_target == expected_lea_target);
+}
+
+TEST(icf_vftable_external_symbol_at_nonzero_offset)
+{
+  U8 entry_text[] = {
+    0x48, 0x8D, 0x05, 0, 0, 0, 0, // lea rax, [rip + ??_7B]
+    0xC3, // ret
+  };
+  U8 vftable_data[16] = {0};
+  U8 addresses[16] = {0};
+
+  T_Ok(t_write_def_obj("vftable.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Rel32, 3, "??_7B@@6B@"),
+        {0}
+      }},
+      { "vftable_a", ".rdata$vt", str8_array_fixed(vftable_data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "vftable_b", ".rdata$vt", str8_array_fixed(vftable_data), .flags = "r:data@8", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@8", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Addr64, 0, "??_7A@@6B@"),
+        T_COFF_DefReloc(X64_Addr64, 8, "??_7B@@6B@"),
+        {0}
+      }},
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("vftable_a", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("vftable_b", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("??_R4A@@6B@", "vftable_a", 0),
+      T_COFF_DefSymbol_Extern("??_7A@@6B@", "vftable_a", 8),
+      T_COFF_DefSymbol_Extern("??_R4B@@6B@", "vftable_b", 0),
+      T_COFF_DefSymbol_Extern("??_7B@@6B@", "vftable_b", 8),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses vftable.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *rdata_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".rdata"));
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  COFF_SectionHeader *text_section  = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+  T_Ok(rdata_section != 0);
+  T_Ok(data_section != 0);
+  T_Ok(text_section != 0);
+
+  U64 a_vftable_ptr = 0;
+  U64 b_vftable_ptr = 0;
+  str8_deserial_read_struct(exe, data_section->foff + 0, &a_vftable_ptr);
+  str8_deserial_read_struct(exe, data_section->foff + 8, &b_vftable_ptr);
+  T_Ok(a_vftable_ptr != 0);
+  T_Ok(b_vftable_ptr != 0);
+  T_Ok((a_vftable_ptr - pe.image_base - rdata_section->voff) % sizeof(vftable_data) == 8);
+  T_Ok((b_vftable_ptr - pe.image_base - rdata_section->voff) % sizeof(vftable_data) == 8);
+
+  S32 lea_disp = 0;
+  str8_deserial_read_struct(exe, text_section->foff + 3, &lea_disp);
+  U64 actual_lea_target = text_section->voff + 7 + lea_disp;
+  T_Ok(actual_lea_target == b_vftable_ptr - pe.image_base);
+}
+
+TEST(zero_length_comdat_referenced_by_reloc)
+{
+  if (t_id_linker() != Linker_radlink) { return; }
+
+  U8 data[8] = {0};
+
+  T_Ok(t_write_entry_obj());
+  T_Ok(t_write_def_obj("leader.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "empty", ".rdata", str8_zero(), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("empty", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("EMPTY", "empty", 0),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("ref.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "empty", ".rdata", str8_zero(), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "data", ".data", str8_array_fixed(data), .flags = "rw:data", .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Addr64, 0, "EMPTY"),
+        {0}
+      }},
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("empty", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Extern("EMPTY", "empty", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref entry.obj leader.obj ref.obj");
+  T_Ok(g_last_exit_code == 0);
+}
+
+TEST(zero_length_static_comdat_referenced_by_reloc)
+{
+  if (t_id_linker() != Linker_radlink) { return; }
+
+  U8 text[] = {
+    0x48, 0x8D, 0x05, 0, 0, 0, 0, // lea rax, [rip + EMPTY]
+    0xC3
+  };
+
+  T_Ok(t_write_def_obj("test.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "empty", ".rdata", str8_zero(), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "text", ".text", str8_array_fixed(text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){
+        T_COFF_DefReloc(X64_Rel32, 3, "EMPTY"),
+        {0}
+      }},
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("empty", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Static("EMPTY", "empty", 0),
+      T_COFF_DefSymbol_Secdef("text", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Extern("entry", "text", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,noicf test.obj");
+  T_Ok(g_last_exit_code == 0);
+}
+
 TEST(comdat_no_duplicates)
 {
   T_Ok(t_write_def_obj("entry.obj", (T_COFF_DefObj){
