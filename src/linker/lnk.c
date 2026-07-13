@@ -5199,24 +5199,19 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     // ensure determinism by sorting section contribs in chunks by input index
     ProfScope("Sort Section Contribs")
     {
-
       U64 total_chunk_count = 0;
-      {
-        for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-          total_chunk_count += sect_n->data.contribs.chunk_count;
-        }
+      for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+        total_chunk_count += sect_n->data.contribs.chunk_count;
       }
 
-      {
-        U64 cursor = 0;
-        task.u.sort_contribs.chunks = push_array(scratch.arena, LNK_SectionContribChunk *, total_chunk_count);
-        for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-          for (LNK_SectionContribChunk *chunk_n = sect_n->data.contribs.first; chunk_n != 0; chunk_n = chunk_n->next) {
-            task.u.sort_contribs.chunks[cursor++] = chunk_n;
-          }
+      U64 cursor = 0;
+      task.u.sort_contribs.chunks = push_array(scratch.arena, LNK_SectionContribChunk *, total_chunk_count);
+      for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+        for EachNode(chunk_n, LNK_SectionContribChunk, sect_n->data.contribs.first) {
+          task.u.sort_contribs.chunks[cursor++] = chunk_n;
         }
-        Assert(cursor == total_chunk_count);
       }
+      Assert(cursor == total_chunk_count);
 
       tp_for_parallel(tp, 0, total_chunk_count, lnk_sort_contribs_task, &task);
     }
@@ -5303,30 +5298,30 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       }
 
       // assign contribs offsets, sizes, and section indices
-      for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
+      for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
         lnk_finalize_section_layout(&sect_n->data, config->file_align, config->function_pad_min);
       }
 
       // remove empty sections
       {
         String8List empty_sect_list = {0};
-        for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-          if (sect_n->data.vsize == 0) {
+        for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+          if (sect_n->data.vsize == 0 && sect_n->data.contribs.chunk_count == 0) {
             str8_list_push(scratch.arena, &empty_sect_list, sect_n->data.name);
           }
         }
-        for (String8Node *name_n = empty_sect_list.first; name_n != 0; name_n = name_n->next) {
+        for EachNode(name_n, String8Node, empty_sect_list.first) {
           lnk_section_table_purge(sectab, name_n->string);
         }
       }
 
       // assign section indices to sections
-      for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
+      for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
         lnk_assign_section_index(&sect_n->data, sectab->next_sect_idx++);
       }
 
       // assing layout offsets and sizes to merged sections
-      for (LNK_SectionNode *sect_n = sectab->merge_list.first; sect_n != 0; sect_n = sect_n->next) {
+      for EachNode(sect_n, LNK_SectionNode, sectab->merge_list.first) {
         LNK_Section        *sect         = &sect_n->data;
         LNK_SectionContrib *first_sc     = lnk_get_first_section_contrib(sect);
         LNK_SectionContrib *last_sc      = lnk_get_last_section_contrib(sect);
