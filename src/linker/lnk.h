@@ -261,6 +261,7 @@ typedef struct LNK_ImageFillNode
 
 typedef struct
 {
+  LNK_Config                *config;
   LNK_SymbolTable           *symtab;
   LNK_SectionTable          *sectab;
   U64                        objs_count;

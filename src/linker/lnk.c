@@ -2008,11 +2008,12 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_CmdLine, (*link->last_cmd_lib)->string);
   }
 
+  if (config->guard_flags != LNK_Guard_None) {
+    lnk_include_symbol(config, str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME), 0);
+  }
+
   // link inputer
   lnk_link_inputs(tp, arena, config, inputer, symtab, link);
-
-  // TODO: need to figure out under what condition to include load config
-  //lnk_include_symbol(config, str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME), 0);
 
   {
     ProfBegin("Push Linker Symbols");
@@ -3424,8 +3425,10 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_definitions_task)
       Temp temp = temp_begin(scratch.arena);
 
       // was section defined?
+      COFF_SectionFlags      image_sect_flags     = sect_flags & ~(COFF_SectionFlags_LnkFlags | COFF_SectionFlags_Reserved);
       String8                sect_name            = coff_name_from_section_header(string_table, sect_header);
-      String8                sect_name_with_flags = lnk_make_name_with_flags(temp.arena, sect_name, sect_flags & ~COFF_SectionFlags_LnkFlags);
+      image_sect_flags = lnk_apply_section_directives_to_flags(task->config, sect_name, image_sect_flags);
+      String8                sect_name_with_flags = lnk_make_name_with_flags(temp.arena, sect_name, image_sect_flags);
       LNK_SectionDefinition *sect_defn            = hash_table_search_string_raw(sect_defn_ht, sect_name_with_flags);
 
       // push new section definition
@@ -3434,7 +3437,7 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_definitions_task)
         sect_defn->name         = sect_name;
         sect_defn->obj          = obj;
         sect_defn->obj_sect_idx = sect_idx;
-        sect_defn->flags        = sect_flags & ~COFF_SectionFlags_LnkFlags;
+        sect_defn->flags        = image_sect_flags;
 
         sect_name_with_flags = push_str8_copy(arena, sect_name_with_flags);
         hash_table_push_string_raw(arena, sect_defn_ht, sect_name_with_flags, sect_defn);
@@ -3471,9 +3474,11 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_contribs_task)
       LNK_SectionContribChunk *sc_chunk = 0;
       {
         Temp temp = temp_begin(scratch.arena);
-        String8 sect_name            = coff_name_from_section_header(string_table, sect_header);
-        String8 sect_name_with_flags = lnk_make_name_with_flags(temp.arena, sect_name, sect_flags & ~COFF_SectionFlags_LnkFlags);
-        sc_chunk = hash_table_search_string_raw(task->contribs_ht, sect_name_with_flags);
+        COFF_SectionFlags sect_flags_clean = sect_flags & ~(COFF_SectionFlags_LnkFlags | COFF_SectionFlags_Reserved);
+        String8           sect_name        = coff_name_from_section_header(string_table, sect_header);
+        sect_flags_clean = lnk_apply_section_directives_to_flags(task->config, sect_name, sect_flags_clean);
+        String8           sect_key         = lnk_make_name_with_flags(temp.arena, sect_name, sect_flags_clean);
+        sc_chunk = hash_table_search_string_raw(task->contribs_ht, sect_key);
         temp_end(temp);
       }
 
@@ -5005,6 +5010,22 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
   return result;
 }
 
+internal LNK_Section *
+lnk_image_section_table_push(LNK_Config *config, LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags)
+{
+  flags = lnk_apply_section_directives_to_flags(config, name, flags);
+  LNK_Section *sect = lnk_section_table_push(sectab, name, flags);
+  return sect;
+}
+
+internal LNK_Section *
+lnk_image_section_table_search(LNK_Config *config, LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags)
+{
+  flags = lnk_apply_section_directives_to_flags(config, name, flags);
+  LNK_Section *sect = lnk_section_table_search(sectab, name, flags);
+  return sect;
+}
+
 internal LNK_ImageContext
 lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs)
 {
@@ -5017,14 +5038,15 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   // init section table
   //
   LNK_SectionTable *sectab = lnk_section_table_alloc();
-  lnk_section_table_push(sectab, str8_lit(".text" ), PE_TEXT_SECTION_FLAGS );
-  lnk_section_table_push(sectab, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS);
-  lnk_section_table_push(sectab, str8_lit(".data" ), PE_DATA_SECTION_FLAGS );
-  lnk_section_table_push(sectab, str8_lit(".bss"  ), PE_BSS_SECTION_FLAGS  );
-  lnk_section_table_push(sectab, str8_lit(".pdata"), PE_PDATA_SECTION_FLAGS);
-  LNK_Section *common_block_sect = lnk_section_table_search(sectab, str8_lit(".bss"), PE_BSS_SECTION_FLAGS);
+  lnk_image_section_table_push(config, sectab, str8_lit(".text" ), PE_TEXT_SECTION_FLAGS );
+  lnk_image_section_table_push(config, sectab, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS);
+  lnk_image_section_table_push(config, sectab, str8_lit(".data" ), PE_DATA_SECTION_FLAGS );
+  lnk_image_section_table_push(config, sectab, str8_lit(".bss"  ), PE_BSS_SECTION_FLAGS  );
+  lnk_image_section_table_push(config, sectab, str8_lit(".pdata"), PE_PDATA_SECTION_FLAGS);
+  LNK_Section *common_block_sect = lnk_image_section_table_search(config, sectab, str8_lit(".bss"), PE_BSS_SECTION_FLAGS);
 
   LNK_BuildImageTask task = {
+    .config           = config,
     .symtab           = symtab,
     .sectab           = sectab,
     .objs_count       = objs_count,
@@ -5322,7 +5344,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     if (~config->flags & LNK_ConfigFlag_Fixed) {
       String8 base_relocs_data = lnk_build_base_relocs(tp, arena, config, objs_count, objs);
       if (base_relocs_data.size) {
-        LNK_Section             *reloc          = lnk_section_table_push(sectab, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
+        LNK_Section             *reloc          = lnk_image_section_table_push(config, sectab, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
         LNK_SectionContribChunk *first_sc_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &reloc->contribs, 1, str8_zero());
         LNK_SectionContrib      *sc             = lnk_section_contrib_chunk_push(first_sc_chunk, 1);
         sc->first_data_node.string = base_relocs_data;
@@ -5454,6 +5476,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
         U32 load_config_size = 0;
         if (sizeof(load_config_size) <= load_config_data.size) {
+          MemoryCopyStruct(&load_config_size, load_config_data.str); // TODO: load config
           PE_DataDirectory *load_config_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_LOAD_CONFIG);
           load_config_dir->virt_off  = lnk_voff_from_symbol(image_section_table, load_config_symbol);
           load_config_dir->virt_size = load_config_size;
@@ -5465,7 +5488,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch exceptions
     {
-      LNK_Section *pdata_sect = lnk_section_table_search(sectab, str8_lit(".pdata"), PE_PDATA_SECTION_FLAGS);
+      LNK_Section *pdata_sect = lnk_image_section_table_search(config, sectab, str8_lit(".pdata"), PE_PDATA_SECTION_FLAGS);
       if (pdata_sect) {
         String8 raw_pdata = str8_substr(image_data, rng_1u64(pdata_sect->foff, pdata_sect->foff + pdata_sect->vsize));
         pe_pdata_sort(config->machine, raw_pdata);
@@ -5478,7 +5501,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch export
     {
-      LNK_Section *edata_sect = lnk_section_table_search(sectab, str8_lit(".edata"), PE_EDATA_SECTION_FLAGS);
+      LNK_Section *edata_sect = lnk_image_section_table_search(config, sectab, str8_lit(".edata"), PE_EDATA_SECTION_FLAGS);
       if (edata_sect) {
         PE_DataDirectory   *export_dir          = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_EXPORT);
         LNK_SectionContrib *edata_first_contrib = lnk_get_first_section_contrib(edata_sect);
@@ -5490,7 +5513,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch base relocs
     {
-      LNK_Section *reloc_sect = lnk_section_table_search(sectab, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
+      LNK_Section *reloc_sect = lnk_image_section_table_search(config, sectab, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
       if (reloc_sect) {
         PE_DataDirectory *reloc_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_BASE_RELOC);
         reloc_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, reloc_sect);
@@ -5500,7 +5523,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch import and import addr
     {
-      LNK_Section *idata_sect       = lnk_section_table_search(sectab, str8_lit(".idata"), PE_IDATA_SECTION_FLAGS);
+      LNK_Section *idata_sect       = lnk_image_section_table_search(config, sectab, str8_lit(".idata"), PE_IDATA_SECTION_FLAGS);
       LNK_Symbol  *null_import_desc = lnk_symbol_table_searchf(symtab, "__NULL_IMPORT_DESCRIPTOR");
       LNK_Symbol  *null_thunk_data  = lnk_symbol_table_searchf(symtab, "\x7f%S_NULL_THUNK_DATA", lnk_get_image_name(config));
       if (idata_sect && null_import_desc && null_thunk_data) {
@@ -5522,7 +5545,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch delay imports
     {
-      LNK_Section *didat_sect       = lnk_section_table_search(sectab, str8_lit(".didat"), PE_IDATA_SECTION_FLAGS);
+      LNK_Section *didat_sect       = lnk_image_section_table_search(config, sectab, str8_lit(".didat"), PE_IDATA_SECTION_FLAGS);
       LNK_Symbol  *null_import_desc = lnk_symbol_table_search(symtab, str8_lit("__NULL_DELAY_IMPORT_DESCRIPTOR"));
       LNK_Symbol  *last_null_thunk  = lnk_symbol_table_searchf(symtab,"\x7f%S_NULL_THUNK_DATA_DLA", lnk_get_image_name(config));
       if (didat_sect && null_import_desc && last_null_thunk) {
@@ -5542,7 +5565,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
         // find max align in .tls
         U64          tls_align = 0;
-        LNK_Section *tls_sect  = lnk_section_table_search(sectab, str8_lit(".tls"), PE_TLS_SECTION_FLAGS);
+        LNK_Section *tls_sect  = lnk_image_section_table_search(config, sectab, str8_lit(".tls"), PE_TLS_SECTION_FLAGS);
         for (LNK_SectionContribChunk *sc_chunk = tls_sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
           for EachIndex (sc_idx, sc_chunk->count) {
             Assert(IsPow2(sc_chunk->v[sc_idx]->align));
@@ -5572,7 +5595,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch debug
     {
-      LNK_Section *debug_dir_sect = lnk_section_table_search(sectab, str8_lit(".RAD_LINK_PE_DEBUG_DIR"), PE_RDATA_SECTION_FLAGS);
+      LNK_Section *debug_dir_sect = lnk_image_section_table_search(config, sectab, str8_lit(".RAD_LINK_PE_DEBUG_DIR"), PE_RDATA_SECTION_FLAGS);
       if (debug_dir_sect) {
         // patch directory
         PE_DataDirectory *debug_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_DEBUG);
@@ -5599,7 +5622,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch resources
     {
-      LNK_Section *rsrc_sect = lnk_section_table_search(sectab, str8_lit(".rsrc"), PE_RSRC_SECTION_FLAGS);
+      LNK_Section *rsrc_sect = lnk_image_section_table_search(config, sectab, str8_lit(".rsrc"), PE_RSRC_SECTION_FLAGS);
       if (rsrc_sect) {
         PE_DataDirectory *rsrc_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_RESOURCES);
         rsrc_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, rsrc_sect);

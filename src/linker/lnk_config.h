@@ -47,6 +47,7 @@ typedef enum
   LNK_CmdSwitch_Brepro,
   LNK_CmdSwitch_Debug,
   LNK_CmdSwitch_DefaultLib,
+  LNK_CmdSwitch_Def,
   LNK_CmdSwitch_Delay,
   LNK_CmdSwitch_DelayLoad,
   LNK_CmdSwitch_DisallowLib,
@@ -59,6 +60,8 @@ typedef enum
   LNK_CmdSwitch_Fixed,
   LNK_CmdSwitch_Force,
   LNK_CmdSwitch_FunctionPadMin,
+  LNK_CmdSwitch_Guard,
+  LNK_CmdSwitch_GuardSym,
   LNK_CmdSwitch_Heap,
   LNK_CmdSwitch_HighEntropyVa,
   LNK_CmdSwitch_Ignore,
@@ -88,6 +91,7 @@ typedef enum
   LNK_CmdSwitch_PdbPageSize,
   LNK_CmdSwitch_PdbStripped,
   LNK_CmdSwitch_Release,
+  LNK_CmdSwitch_Section,
   LNK_CmdSwitch_Stack,
   LNK_CmdSwitch_SubSystem,
   LNK_CmdSwitch_Time,
@@ -267,6 +271,26 @@ typedef struct LNK_MergeDirectiveList
   LNK_MergeDirectiveNode *last;
 } LNK_MergeDirectiveList;
 
+typedef struct LNK_SectionDirective
+{
+  String8           name;
+  COFF_SectionFlags set_flags;
+  COFF_SectionFlags clear_flags;
+} LNK_SectionDirective;
+
+typedef struct LNK_SectionDirectiveNode
+{
+  struct LNK_SectionDirectiveNode *next;
+  LNK_SectionDirective             v;
+} LNK_SectionDirectiveNode;
+
+typedef struct LNK_SectionDirectiveList
+{
+  U64                       count;
+  LNK_SectionDirectiveNode *first;
+  LNK_SectionDirectiveNode *last;
+} LNK_SectionDirectiveList;
+
 typedef enum
 {
   LNK_DebugInfoGuid_Null,
@@ -363,6 +387,7 @@ typedef struct LNK_Config
   LNK_IncludeSymbolList       include_symbol_list;
   LNK_AltNameList             alt_name_list;
   LNK_MergeDirectiveList      merge_list;
+  LNK_SectionDirectiveList    section_list;
   U64                         data_dir_count;
   B32                         build_imp_lib;
   B32                         build_exp;
@@ -574,6 +599,8 @@ internal B32 lnk_do_debug_info        (LNK_Config *config);
 internal B32 lnk_is_thread_pool_shared(LNK_Config *config);
 internal B32 lnk_is_section_removed   (LNK_Config *config, String8 section_name);
 internal B32 lnk_is_dll_delay_load    (LNK_Config *config, String8 dll_name);
+
+internal COFF_SectionFlags lnk_apply_section_directives_to_flags(LNK_Config *config, String8 full_section_name, COFF_SectionFlags flags);
 
 internal String8 lnk_get_lib_name     (String8 path);
 internal void    lnk_push_disallow_lib(LNK_Config *config, String8 path);
