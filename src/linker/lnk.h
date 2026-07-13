@@ -275,6 +275,8 @@ typedef struct
   LNK_SectionArray           image_sects;
   union {
     struct {
+      Arena     *arena;
+      Rng1U64   *ranges;
       HashTable **defns;
     } gather_sects;
     struct {
