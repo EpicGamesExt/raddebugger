@@ -486,19 +486,15 @@ lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
     if (symbol.storage_class == COFF_SymStorageClass_External && symbol.aux_symbol_count == 0) {
       B32 can_set_symlink = (symlink->obj == 0 || symbol.value == 0);
       if (!can_set_symlink && symlink->obj == obj) {
-        // NOTE: The section definition is a fallback symlink. Public symbols inside a
-        // discarded COMDAT need to target the selected public symbol's offset,
-        // not the selected section base plus the discarded symbol's offset.
-        // MSVC vftables are also preferred over other public symbols in the
-        // same section so ICF can keep vftable COMDATs in their own color space.
-        COFF_ParsedSymbol symlink_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symlink->obj, symlink->symbol_idx);
-        B32 symlink_is_section_defn = (symlink_symbol.section_number == symbol.section_number &&
-                                       symlink_symbol.storage_class == COFF_SymStorageClass_Static &&
-                                       symlink_symbol.aux_symbol_count > 0);
-        B32 symlink_is_non_vftable = (symlink_symbol.section_number == symbol.section_number &&
-                                      !str8_starts_with(symlink_symbol.name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX)));
-        B32 symbol_is_vftable = str8_starts_with(symbol.name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX));
-        can_set_symlink = (symlink_is_section_defn || (symbol_is_vftable && symlink_is_non_vftable));
+        COFF_ParsedSymbol leader = lnk_parsed_symbol_from_coff_symbol_idx(symlink->obj, symlink->symbol_idx);
+        B32 leader_is_same_section  = leader.section_number == symbol.section_number;
+        B32 leader_is_static_anchor = (leader_is_same_section && leader.storage_class == COFF_SymStorageClass_Static && leader.aux_symbol_count == 0);
+        B32 leader_is_vftable       = str8_starts_with(leader.name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX));
+        B32 current_is_vftable      = str8_starts_with(symbol.name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX));
+
+        // prefer public symbols to local static anchors; prefer vftable public
+        // symbols to other public symbols so ICF keeps vftables in their own color space
+        can_set_symlink = (leader_is_static_anchor || (leader_is_same_section && current_is_vftable && !leader_is_vftable));
       }
 
       if (can_set_symlink) {
@@ -507,15 +503,17 @@ lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
           *symlink = lnk_ref_from_symbol(link_symbol->symbol);
         }
       }
-
-      continue;
     }
-
-    // section definitions
-    if (symlink->obj == 0 && symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
-      *symlink = (LNK_ObjSymbolRef){ obj, symbol_idx };
+    // static symbols
+    else if (symbol.storage_class == COFF_SymStorageClass_Static) {
+      if (symbol.aux_symbol_count == 0) {
+        if (symlink->obj == 0) {
+          *symlink = (LNK_ObjSymbolRef){ obj, symbol_idx };
+        }
+      }
     }
   }
+
   return symlinks;
 }
 

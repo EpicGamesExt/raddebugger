@@ -3414,8 +3414,10 @@ lnk_section_definition_is_before(void *raw_a, void *raw_b)
 }
 
 internal B32
-lnk_should_gather_section(COFF_SectionHeader *sect_header, COFF_SectionFlags sect_flags)
+lnk_should_gather_section(LNK_Obj *obj, U64 sect_idx, COFF_SectionHeader *sect_header)
 {
+  COFF_SectionFlags sect_flags = obj->section_flags[sect_idx];
+
   // removed sections were eliminated before image layout
   if (sect_flags & COFF_SectionFlag_LnkRemove) {
     return 0;
@@ -3426,13 +3428,19 @@ lnk_should_gather_section(COFF_SectionHeader *sect_header, COFF_SectionFlags sec
     return 0;
   }
 
-  // non-COMDAT empty sections do not need image contributions
+  // empty COMDATs with symlinks can still anchor symbols at offset zero
   if (sect_header->fsize == 0) {
     if (~sect_flags & COFF_SectionFlag_LnkCOMDAT) {
       return 0;
     }
 
-    // keep zero-size COMDATs so symbols at offset zero still get mapped
+    LNK_ObjSymbolRef symlink_ref = {0};
+    if (!lnk_obj_get_comdat_symlink(obj, sect_idx + 1, &symlink_ref)) {
+      return 0;
+    }
+
+    // gather only COMDAT leaders
+    AssertAlways(symlink_ref.obj == obj);
   }
 
   return 1;
@@ -3457,7 +3465,7 @@ THREAD_POOL_TASK_FUNC(lnk_gather_sections_task)
     for EachIndex(sect_idx, obj->header.section_count_no_null) {
       COFF_SectionHeader *sect_header = &section_table[sect_idx];
 
-      if ( ! lnk_should_gather_section(sect_header, obj->section_flags[sect_idx])) { continue; }
+      if ( ! lnk_should_gather_section(obj, sect_idx, sect_header)) { continue; }
 
       Temp temp = temp_begin(scratch.arena);
 
@@ -3591,7 +3599,7 @@ THREAD_POOL_TASK_FUNC(lnk_gather_sections_task)
       COFF_SectionFlags   sect_flags  = obj->section_flags[sect_idx];
       task->sect_map[obj_idx][sect_idx] = sc;
 
-      if ( ! lnk_should_gather_section(sect_header, sect_flags)) { continue; }
+      if ( ! lnk_should_gather_section(obj, sect_idx, sect_header)) { continue; }
 
       LNK_SectionContribChunk *sc_chunk = 0;
       {
@@ -3849,14 +3857,10 @@ THREAD_POOL_TASK_FUNC(lnk_patch_regular_symbols_task)
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
 
-    if (task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx]) {
-      continue;
-    }
+    if (task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx]) { continue; }
 
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
     if (interp == COFF_SymbolValueInterp_Regular) {
-      COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-
       LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
       U32                 section_number;
       U32                 value;

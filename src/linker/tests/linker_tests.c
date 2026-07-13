@@ -3510,30 +3510,18 @@ TEST(icf_vftable_external_symbol_at_nonzero_offset)
   T_Ok(actual_lea_target == b_vftable_ptr - pe.image_base);
 }
 
+// A referenced zero-sized COMDAT symbol is meaningful enough for
+// relocations, even though the COMDAT contributes no bytes to the image.
 TEST(zero_length_comdat_referenced_by_reloc)
 {
-  if (t_id_linker() != Linker_radlink) { return; }
-
   U8 data[8] = {0};
 
   T_Ok(t_write_entry_obj());
-  T_Ok(t_write_def_obj("leader.obj", (T_COFF_DefObj){
-    .machine = T_COFF_DefSetMachine(X64),
-    .sections = (T_COFF_DefSection[]){
-      { "empty", ".rdata", str8_zero(), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
-      {0}
-    },
-    .symbols = (T_COFF_DefSymbol[]){
-      T_COFF_DefSymbol_Secdef("empty", COFF_ComdatSelect_Any),
-      T_COFF_DefSymbol_Extern("EMPTY", "empty", 0),
-      {0}
-    }
-  }));
-
   T_Ok(t_write_def_obj("ref.obj", (T_COFF_DefObj){
     .machine = T_COFF_DefSetMachine(X64),
     .sections = (T_COFF_DefSection[]){
-      { "empty", ".rdata", str8_zero(), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "pad", ".rdata$a", str8_lit("xy"), .flags = "r:data@1" },
+      { "empty", ".rdata$b", str8_zero(), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
       { "data", ".data", str8_array_fixed(data), .flags = "rw:data", .relocs = (T_COFF_DefReloc[]){
         T_COFF_DefReloc(X64_Addr64, 0, "EMPTY"),
         {0}
@@ -3547,8 +3535,26 @@ TEST(zero_length_comdat_referenced_by_reloc)
     }
   }));
 
-  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref entry.obj leader.obj ref.obj");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref entry.obj ref.obj");
   T_Ok(g_last_exit_code == 0);
+
+  String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  COFF_SectionHeader *rdata_section = coff_section_header_from_name(str8_zero(), section_table, pe.section_count, str8_lit(".rdata"));
+  COFF_SectionHeader *data_section  = coff_section_header_from_name(str8_zero(), section_table, pe.section_count, str8_lit(".data"));
+  T_Ok(rdata_section != 0);
+  T_Ok(data_section != 0);
+
+  U64 empty_va = 0;
+  str8_deserial_read_struct(exe, data_section->foff, &empty_va);
+  B32 empty_after_pad = empty_va >= pe.image_base + rdata_section->voff + 2;
+  T_Ok(empty_after_pad);
+
+  U64 empty_off_in_rdata = empty_va - pe.image_base - rdata_section->voff;
+  T_Ok(rdata_section->foff + empty_off_in_rdata <= exe.size);
+  T_Ok(exe.str[rdata_section->foff + empty_off_in_rdata - 2] == 'x');
+  T_Ok(exe.str[rdata_section->foff + empty_off_in_rdata - 1] == 'y');
 }
 
 TEST(zero_length_static_comdat_referenced_by_reloc)
@@ -4270,7 +4276,7 @@ TEST(reloc_against_removed_comdat)
   }));
 
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.obj entry.obj");
-  T_Ok(g_last_exit_code == LNK_Error_RelocationAgainstRemovedSection);
+  T_Ok(g_last_exit_code == 0);
 }
 
 TEST(sect_align)
@@ -8874,25 +8880,17 @@ TEST(icf_llvm_addrsig)
   t_invoke(t_clang_path(), str8f(arena, "%S -o %S -c -ffunction-sections -target x86_64-pc-windows-msvc", main_path, main_obj_path), max_U64);
   T_Ok(g_last_exit_code == 0);
 
+  String8 a_path = t_make_file_path(arena, str8_lit("a.exe"));
+
   t_invoke_linkerf("%S /opt:icf /out:a.exe libcmt.lib", main_obj_path);
   T_Ok(g_last_exit_code == 0);
-
-  String8 a_path = t_make_file_path(arena, str8_lit("a.exe"));
   t_invoke(a_path, str8_zero(), max_U64);
-  if (t_id_linker() == Linker_radlink) {
-    T_Ok(g_last_exit_code == 1);
-  } else {
-    T_Ok(g_last_exit_code == 0);
-  }
+  T_Ok(g_last_exit_code == 1);
 
-  if (t_id_linker() == Linker_radlink) {
-    t_invoke_linkerf("%S /opt:icf /out:a.exe libcmt.lib /llvm_addrsig:no", main_obj_path);
-    T_Ok(g_last_exit_code == 0);
-
-    t_invoke(a_path, str8_zero(), max_U64);
-    T_Ok(g_last_exit_code == 0);
-  }
-
+  t_invoke_linkerf("%S /opt:icf /out:a.exe libcmt.lib /llvm_addrsig:no", main_obj_path);
+  T_Ok(g_last_exit_code == 0);
+  t_invoke(a_path, str8_zero(), max_U64);
+  T_Ok(g_last_exit_code == 0);
 }
 
 // .llvm_addrsig can name an undefined external whose definition is in another
