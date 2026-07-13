@@ -2791,6 +2791,19 @@ TEST(import_export)
   //T_Ok(t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /delayload:export.dll /export:entry kernel32.Lib delayimp.lib libcmt.lib export.lib import.obj entry.obj") == 0);
   // TODO: check import table
 }
+
+TEST(utf16_rsp)
+{
+  T_Ok(t_write_entry_obj());
+
+  String8  rsp_text = str8_lit("/subsystem:console /entry:entry /out:a.exe entry.obj\n");
+  String16 rsp16    = str16_from_8(arena, rsp_text);
+  String8  rsp_file = str8_cat(arena, str8_lit("\xff\xfe"), str8_array(rsp16.str, rsp16.size));
+  T_Ok(t_write_file(str8_lit("args.rsp"), rsp_file));
+
+  t_invoke_linkerf("@args.rsp");
+  T_Ok(g_last_exit_code == 0);
+}
 #endif
 
 TEST(image_base)

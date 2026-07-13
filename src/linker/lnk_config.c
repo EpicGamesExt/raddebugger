@@ -711,6 +711,18 @@ lnk_parse_export_directive(Arena *arena, String8 directive, LNK_Obj *obj, PE_Exp
   return is_parsed;
 }
 
+internal String8
+lnk_text_file_string_from_data(Arena *arena, String8 data)
+{
+  String8 result = data;
+  if (data.size >= 2 && data.str[0] == 0xff && data.str[1] == 0xfe) {
+    result = str8_from_16(arena, str16((U16 *)(data.str + 2), (data.size - 2) / sizeof(U16)));
+  } else if (data.size >= 3 && data.str[0] == 0xef && data.str[1] == 0xbb && data.str[2] == 0xbf) {
+    result = str8_skip(data, 3);
+  }
+  return result;
+}
+
 internal B32
 lnk_parse_merge_directive(String8 string, LNK_Obj *obj, LNK_MergeDirective *out)
 {
@@ -1091,6 +1103,7 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
       if (file_path_exists(name)) {
         // read rsp from disk
         String8 file = lnk_read_data_from_file_path(scratch.arena, 0, name);
+        file = lnk_text_file_string_from_data(scratch.arena, file);
         
         // parse rsp
         String8List rsp_args = lnk_arg_list_parse_windows_rules(scratch.arena, file);
