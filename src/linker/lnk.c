@@ -2272,6 +2272,14 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   lnk_replace_weak_with_default_symbols(tp, symtab);
 
   //
+  // assign COMDAT leaders
+  //
+  {
+    LNK_Obj **objs = lnk_array_from_obj_list(scratch.arena, link->objs);
+    lnk_assign_comdat_symlinks(tp, arena, symtab, link->objs.count, objs);
+  }
+
+  //
   // was entry point resolved?
   //
   if (config->entry_point_name.size == 0 || link->try_to_resolve_entry_point) {

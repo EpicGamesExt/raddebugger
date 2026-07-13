@@ -503,12 +503,20 @@ THREAD_POOL_TASK_FUNC(lnk_assign_comdat_symlinks_task)
 }
 
 internal void
+lnk_assign_comdat_symlinks(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs)
+{
+  ProfBeginFunction();
+  LNK_InputCoffSymbolTable task = { .symtab = symtab, .objs = objs };
+  tp_for_parallel(tp, arena, objs_count, lnk_assign_comdat_symlinks_task, &task);
+  ProfEnd();
+}
+
+internal void
 lnk_push_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs)
 {
   ProfBeginFunction();
   LNK_InputCoffSymbolTable task = { .symtab = symtab, .objs = objs };
   tp_for_parallel(tp, arena, objs_count, lnk_input_coff_symbol_table, &task);
-  tp_for_parallel(tp, arena, objs_count, lnk_assign_comdat_symlinks_task, &task);
   ProfEnd();
 }
 
