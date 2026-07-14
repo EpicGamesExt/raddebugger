@@ -205,6 +205,7 @@ typedef struct LNK_BaseRelocPageArray
 typedef struct
 {
   B32                   search_anti_deps;
+  B32                   reset_search_cursor;
   LNK_Link             *link;
   HashMap              *imports_hm;
   LNK_SymbolTable      *symtab;
@@ -410,4 +411,3 @@ internal LNK_ImageContext lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_C
 
 internal void lnk_log_link_stats(LNK_ObjList obj_list, LNK_LibList *lib_index, LNK_SectionTable *sectab);
 internal void lnk_log_timers(void);
-
