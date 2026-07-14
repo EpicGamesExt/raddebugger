@@ -5,6 +5,13 @@
 
 // --- Input -------------------------------------------------------------------
 
+typedef struct LNK_SymbolNameCache
+{
+  U64 *masks;
+  U32 *block_bases;
+  U32 *name_sizes;
+} LNK_SymbolNameCache;
+
 typedef struct LNK_Obj
 {
   String8 path;
@@ -12,6 +19,7 @@ typedef struct LNK_Obj
 
   COFF_FileHeaderInfo header;
   COFF_SectionFlags  *section_flags;
+  LNK_SymbolNameCache symbol_name_cache;
 
   // flags
   B8 hotpatch;
@@ -148,7 +156,9 @@ internal U32List          lnk_obj_collect_associated_sections(Arena *arena, LNK_
 // --- Symbol & Section Helpers ------------------------------------------------
 
 internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
-internal COFF_ParsedSymbol    lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
+internal force_inline COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
+internal force_inline COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx);
+internal force_inline String8           lnk_symbol_name_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
 internal U64                  lnk_obj_sect_idx_from_section_number(LNK_Obj *obj, U64 section_number);
 internal U64                  lnk_obj_section_number_from_sect_idx(LNK_Obj *obj, U64 sect_idx);
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);
