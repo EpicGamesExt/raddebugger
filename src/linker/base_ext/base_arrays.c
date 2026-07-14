@@ -35,6 +35,23 @@ void_list_push(Arena *arena, VoidList *list, void *v)
 }
 
 internal void
+u32_list_push_node(U32List *list, U32Node *n)
+{
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal U32Node *
+u32_list_push(Arena *arena, U32List *list, U32 data)
+{
+  U32Node *n = push_array(arena, U32Node, 1);
+  n->next = 0;
+  n->data = data;
+  u32_list_push_node(list, n);
+  return n;
+}
+
+internal void
 u64_list_push_node(U64List *list, U64Node *n)
 {
   SLLQueuePush(list->first, list->last, n);
@@ -264,4 +281,3 @@ s64_array_from_list(Arena *arena, S64List *list)
   for EachNode(n, S64Node, list->first) { result.v[result.count++] = n->v; }
   return result;
 }
-

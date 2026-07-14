@@ -143,6 +143,7 @@ internal struct LNK_Lib * lnk_obj_get_lib(LNK_Obj *obj);
 internal String8          lnk_obj_get_lib_path(LNK_Obj *obj);
 internal U32              lnk_obj_get_removed_section_number(LNK_Obj *obj);
 internal B32              lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number, LNK_ObjSymbolRef *symlink_out);
+internal U32List          lnk_obj_collect_associated_sections(Arena *arena, LNK_Obj *obj, U32 root_section, COFF_SectionFlags skip_flags);
 
 // --- Symbol & Section Helpers ------------------------------------------------
 
