@@ -517,6 +517,45 @@ lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
   return symlinks;
 }
 
+internal U32List
+lnk_obj_collect_associated_sections(Arena *arena, LNK_Obj *obj, U32 root_section, COFF_SectionFlags skip_flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  // track each child before enqueueing it because COFF associations can cycle
+  HashMap  seen_hm = {0};
+  U32List  queue   = {0};
+
+  U32Node root_n = { root_section };
+  u32_list_push_node(&queue, &root_n);
+  hash_map_push_u64_u64(scratch.arena, &seen_hm, root_section, 1);
+
+  // walk the complete descendant chain because associated COMDATs can nest
+  for EachNode(parent_n, U32Node, queue.first) {
+    for EachNode(associated_n, U32Node, obj->associated_sections[parent_n->data]) {
+      U32 child_section = associated_n->data;
+
+      if (child_section == 0)                                 { continue; }
+      if (hash_map_search_u64_u64(&seen_hm, child_section))   { continue; }
+      if (obj->section_flags[child_section - 1] & skip_flags) { continue; }
+
+      hash_map_push_u64_u64(scratch.arena, &seen_hm, child_section, 1);
+      u32_list_push(arena, &queue, child_section);
+    }
+  }
+
+  // return only child sections so callers choose whether the root participates
+  U32List result = {0};
+  if (queue.count > 1) {
+    result.first = queue.first->next;
+    result.last  = queue.last;
+    result.count = queue.count - 1;
+  }
+
+  scratch_end(scratch);
+  return result;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_assign_comdat_symlinks_task)
 {

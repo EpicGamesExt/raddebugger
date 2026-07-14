@@ -8083,6 +8083,123 @@ TEST(icf_fold_two_funcs)
   T_Ok(str8_match(text_data, str8_array_fixed(expected_text), 0));
 }
 
+TEST(icf_associative_child_prevents_fold)
+{
+  U8 ret_text[] = { 0xc3 };
+  U8 handler_a[] = { 1, 2, 3, 4 };
+  U8 handler_b[] = { 4, 3, 2, 1 };
+  U8 addresses[2 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_associative_child.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(ret_text), .flags = "rx:code@1" },
+      { "fn_a", ".text$mn", str8_array_fixed(ret_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "fn_b", ".text$mn", str8_array_fixed(ret_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "handler_a", ".xdata", str8_array_fixed(handler_a), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      { "handler_b", ".xdata", str8_array_fixed(handler_b), .flags = "r:data@4", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {
+        "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1",
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr64, 0, "fn_a"),
+          T_COFF_DefReloc(X64_Addr64, sizeof(U64), "fn_b"),
+          {0}
+        }
+      },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn_a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("fn_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Associative("handler_a", "fn_a"),
+      T_COFF_DefSymbol_Associative("handler_b", "fn_b"),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_ExternFunc("fn_a", "fn_a", 0),
+      T_COFF_DefSymbol_ExternFunc("fn_b", "fn_b", 0),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_associative_child.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[ArrayCount(addresses) / sizeof(U64)] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), vaddrs, ArrayCount(vaddrs)));
+  T_Ok(vaddrs[0] != 0);
+  T_Ok(vaddrs[1] != 0);
+  T_Ok(vaddrs[0] != vaddrs[1]);
+}
+
+TEST(icf_comdat_reloc_targets_fold)
+{
+  U8 fn_text[] = {
+    0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, shared
+    0xc3,                                 // ret
+  };
+  U8 shared_data[] = { 0 };
+  U8 entry_text[] = { 0xc3 };
+  U8 addresses[2 * sizeof(U64)] = {0};
+
+  T_Ok(t_write_def_obj("icf_comdat_reloc_a.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "fn_a", ".text$mn", str8_array_fixed(fn_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 2, "shared_local_a"), {0} } },
+      { "shared", ".rdata", str8_array_fixed(shared_data), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn_a", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("shared", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_ExternFunc("fn_a", "fn_a", 0),
+      T_COFF_DefSymbol_Extern("shared", "shared", 0),
+      T_COFF_DefSymbol_Static("shared_local_a", "shared", 0),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_comdat_reloc_b.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "fn_b", ".text$mn", str8_array_fixed(fn_text), .flags = "rx:code@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT, .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 2, "shared_local_b"), {0} } },
+      { "shared", ".rdata", str8_array_fixed(shared_data), .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("fn_b", COFF_ComdatSelect_NoDuplicates),
+      T_COFF_DefSymbol_Secdef("shared", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_ExternFunc("fn_b", "fn_b", 0),
+      T_COFF_DefSymbol_Extern("shared", "shared", 0),
+      T_COFF_DefSymbol_Static("shared_local_b", "shared", 0),
+      {0}
+    }
+  }));
+
+  T_Ok(t_write_def_obj("icf_comdat_reloc_entry.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1" },
+      { "addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@1", .relocs = (T_COFF_DefReloc[]){ T_COFF_DefReloc(X64_Addr64, 0, "fn_a"), T_COFF_DefReloc(X64_Addr64, sizeof(U64), "fn_b"), {0} } },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_UndefFunc("fn_a"),
+      T_COFF_DefSymbol_UndefFunc("fn_b"),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /opt:ref,icf /include:addresses icf_comdat_reloc_entry.obj icf_comdat_reloc_a.obj icf_comdat_reloc_b.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  U64 vaddrs[ArrayCount(addresses) / sizeof(U64)] = {0};
+  T_Ok(t_read_exe_data_vaddrs(arena, str8_lit("a.exe"), vaddrs, ArrayCount(vaddrs)));
+  T_Ok(vaddrs[0] != 0);
+  T_Ok(vaddrs[0] == vaddrs[1]);
+}
+
 TEST(icf_same_but_different)
 {
   U8 text[] = {
@@ -9350,4 +9467,3 @@ TEST(lib_member_reloc_apply_off_out_of_bounds)
   T_Ok(g_last_exit_code != 0);
 }
 #endif
-
