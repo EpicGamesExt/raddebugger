@@ -169,8 +169,15 @@ coff_section_header_array_from_name(Arena *arena, String8 string_table, COFF_Sec
 internal COFF_ParsedSymbol
 coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)
 {
-  COFF_ParsedSymbol result = {0};
+  COFF_ParsedSymbol result = coff_parse_symbol32_no_name(sym32);
   result.name              = coff_read_symbol_name(string_table, &sym32->name);
+  return result;
+}
+
+internal force_inline COFF_ParsedSymbol
+coff_parse_symbol32_no_name(COFF_Symbol32 *sym32)
+{
+  COFF_ParsedSymbol result = {0};
   result.value             = sym32->value;
   result.section_number    = sym32->section_number;
   result.type              = sym32->type;
@@ -183,8 +190,15 @@ coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)
 internal COFF_ParsedSymbol
 coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16)
 {
-  COFF_ParsedSymbol result = {0};
+  COFF_ParsedSymbol result = coff_parse_symbol16_no_name(sym16);
   result.name              = coff_read_symbol_name(string_table, &sym16->name);
+  return result;
+}
+
+internal force_inline COFF_ParsedSymbol
+coff_parse_symbol16_no_name(COFF_Symbol16 *sym16)
+{
+  COFF_ParsedSymbol result = {0};
   result.value             = sym16->value;
   if (sym16->section_number == COFF_Symbol_DebugSection16) {
     result.section_number = COFF_Symbol_DebugSection32;
@@ -208,6 +222,18 @@ coff_parse_symbol(COFF_FileHeaderInfo header, String8 string_table, String8 symb
     symbol = coff_parse_symbol32(string_table, (COFF_Symbol32 *)symbol_table.str + symbol_idx);
   } else {
     symbol = coff_parse_symbol16(string_table, (COFF_Symbol16 *)symbol_table.str + symbol_idx);
+  }
+  return symbol;
+}
+
+internal force_inline COFF_ParsedSymbol
+coff_parse_symbol_no_name(COFF_FileHeaderInfo header, String8 symbol_table, U32 symbol_idx)
+{
+  COFF_ParsedSymbol symbol;
+  if (header.is_big_obj) {
+    symbol = coff_parse_symbol32_no_name((COFF_Symbol32 *)symbol_table.str + symbol_idx);
+  } else {
+    symbol = coff_parse_symbol16_no_name((COFF_Symbol16 *)symbol_table.str + symbol_idx);
   }
   return symbol;
 }

@@ -1703,7 +1703,7 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
     for (U64 i = i_begin; i < i_end; i += 1) {
       LNK_Symbol                *symbol        = c->v[i].symbol;
       LNK_ObjSymbolRef           symbol_ref    = lnk_ref_from_symbol(symbol);
-      COFF_ParsedSymbol          symbol_parsed = lnk_parsed_from_symbol(symbol);
+      COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symbol_ref.obj, symbol_ref.symbol_idx);
       COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
 
       if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
@@ -1722,11 +1722,11 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
           if (search_anti_deps) {
             LNK_ObjSymbolRef dep_symbol = {0};
             if (lnk_resolve_weak_symbol(symtab, symbol_ref, &dep_symbol)) {
-              COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dep_symbol.obj, dep_symbol.symbol_idx);
+              COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dep_symbol.obj, dep_symbol.symbol_idx);
               COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
               if (dep_interp == COFF_SymbolValueInterp_Weak) {
                 U32 member_idx;
-                if (lnk_search_lib(lib, symbol_parsed.name, &member_idx)) {
+                if (lnk_search_lib(lib, symbol->name, &member_idx)) {
                   lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
                 }
               }
@@ -2668,7 +2668,7 @@ lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSy
     }
 
     // unpack symbol
-    COFF_ParsedSymbol          result_parsed = lnk_parsed_symbol_from_coff_symbol_idx(result.obj, result.symbol_idx);
+    COFF_ParsedSymbol          result_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(result.obj, result.symbol_idx);
     COFF_SymbolValueInterpType result_interp = coff_interp_from_parsed_symbol(result_parsed);
 
     // resolve symbol
@@ -2803,7 +2803,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
           if (ref_symbol.obj == 0) { continue; }
 
           // unpack resolved symbol
-          COFF_ParsedSymbol           ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
+          COFF_ParsedSymbol           ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(ref_symbol.obj, ref_symbol.symbol_idx);
           COFF_SymbolValueInterpType  ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
 
           if (ref_interp == COFF_SymbolValueInterp_Regular) {
@@ -3018,8 +3018,8 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
         // fold MSVC vftables separately from other read-only data
         LNK_ObjSymbolRef symlink_ref = {0};
         if (lnk_obj_get_comdat_symlink(obj, sect_idx + 1, &symlink_ref)) {
-          COFF_ParsedSymbol symlink_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
-          if (str8_starts_with(symlink_symbol.name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX))) {
+          String8 symlink_name = lnk_symbol_name_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+          if (str8_starts_with(symlink_name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX))) {
             result = LNK_ICF_ColorSpace_VFTable;
           }
         }
@@ -3126,12 +3126,12 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
           LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = symbol_idx };
           B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
           if (is_symbol_found) {
-            COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx(target_ref.obj, target_ref.symbol_idx);
+            COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(target_ref.obj, target_ref.symbol_idx);
             if (coff_interp_from_parsed_symbol(symbol) == COFF_SymbolValueInterp_Regular) {
               target_ref.obj->section_flags[symbol.section_number - 1] |= LNK_SECTION_FLAG_NOICF;
             }
           } else {
-            COFF_ParsedSymbol original_symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+            COFF_ParsedSymbol original_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
             if (coff_interp_from_parsed_symbol(original_symbol) == COFF_SymbolValueInterp_Regular) {
               obj->section_flags[original_symbol.section_number - 1] |= LNK_SECTION_FLAG_NOICF;
             } else {
@@ -3283,7 +3283,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
             LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = r->isymbol };
             B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch2.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
             if (is_symbol_found) {
-              COFF_ParsedSymbol target_symbol = lnk_parsed_symbol_from_coff_symbol_idx(target_ref.obj, target_ref.symbol_idx);
+              COFF_ParsedSymbol target_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(target_ref.obj, target_ref.symbol_idx);
               target->interp = coff_interp_from_parsed_symbol(target_symbol);
               target->value  = target_symbol.value;
 
@@ -3297,7 +3297,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
                     target_obj->section_flags[target_sect - 1] & COFF_SectionFlag_LnkCOMDAT) {
                   LNK_ObjSymbolRef leader_ref = {0};
                   if (lnk_obj_get_comdat_symlink(target_obj, target_sect, &leader_ref)) {
-                    COFF_ParsedSymbol leader_symbol = lnk_parsed_symbol_from_coff_symbol_idx(leader_ref.obj, leader_ref.symbol_idx);
+                    COFF_ParsedSymbol leader_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(leader_ref.obj, leader_ref.symbol_idx);
                     if (leader_symbol.section_number != 0 && leader_symbol.section_number <= leader_ref.obj->header.section_count_no_null) {
                       target_obj  = leader_ref.obj;
                       target_sect = leader_symbol.section_number;
@@ -3650,7 +3650,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       U64     hop_count = 0;
       U64     hop_cap   = 1024;
       for(; hop_count < hop_cap; hop_count += 1) {
-        COFF_ParsedSymbol symlink_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+        COFF_ParsedSymbol symlink_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symlink_ref.obj, symlink_ref.symbol_idx);
         LNK_ObjSymbolRef next_symlink_ref = {0};
         if (!lnk_obj_get_comdat_symlink(symlink_ref.obj, symlink_parsed.section_number, &next_symlink_ref)) { break; }
         if (MemoryMatchStruct(&next_symlink_ref, &symlink_ref)) { break; }
@@ -3944,7 +3944,7 @@ THREAD_POOL_TASK_FUNC(lnk_set_comdat_leaders_contribs_task)
     LNK_ObjSymbolRef symlink_ref = {0};
     if ( ! lnk_obj_get_comdat_symlink(obj, section_number, &symlink_ref)) { continue; }
 
-    COFF_ParsedSymbol symlink_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+    COFF_ParsedSymbol symlink_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symlink_ref.obj, symlink_ref.symbol_idx);
     task->sect_map[obj_idx][sect_idx] = task->sect_map[symlink_ref.obj->input_idx][symlink_parsed.section_number - 1];
   }
   ProfEnd();
@@ -3959,7 +3959,7 @@ THREAD_POOL_TASK_FUNC(lnk_flag_debug_symbols_task)
 
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
     if (interp == COFF_SymbolValueInterp_Regular) {
       if (obj->section_flags[symbol.section_number-1] & LNK_SECTION_FLAG_DEBUG) {
@@ -3979,7 +3979,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
   ProfBeginV("Patch COMDAT Offsets in %S", obj->path);
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
 
     COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
     if (interp != COFF_SymbolValueInterp_Regular) { continue; }
@@ -3987,7 +3987,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
     LNK_ObjSymbolRef symlink_ref = {0};
     if ( ! lnk_obj_get_comdat_symlink(obj, symbol.section_number, &symlink_ref)) { continue; }
 
-    COFF_ParsedSymbol leader_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+    COFF_ParsedSymbol leader_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symlink_ref.obj, symlink_ref.symbol_idx);
     if (symlink_ref.obj == obj && leader_symbol.section_number == symbol.section_number) { continue; }
 
     B32 is_external = symbol.storage_class == COFF_SymStorageClass_External;
@@ -4012,7 +4012,9 @@ THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
         should_patch = 1;
       }
     } else {
-      if (is_external && str8_match(symbol.name, leader_symbol.name, 0)) {
+      String8 symbol_name = lnk_symbol_name_from_coff_symbol_idx(obj, symbol_idx);
+      String8 leader_name = lnk_symbol_name_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+      if (is_external && str8_match(symbol_name, leader_name, 0)) {
         value = leader_symbol.value;
         should_patch = 1;
       }
@@ -4111,10 +4113,10 @@ THREAD_POOL_TASK_FUNC(lnk_patch_common_block_symbols_task)
   ProfBeginV("Patch Common Block Symbols [%S]", obj->path);
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
     if (interp == COFF_SymbolValueInterp_Common) {
-      LNK_Symbol       *defn        = lnk_symbol_table_search(task->symtab, symbol.name);
+      LNK_Symbol       *defn        = lnk_symbol_table_search(task->symtab, lnk_symbol_name_from_coff_symbol_idx(obj, symbol_idx));
       COFF_ParsedSymbol defn_parsed = lnk_parsed_from_symbol(defn);
       Assert(lnk_interp_from_symbol(defn) == COFF_SymbolValueInterp_Regular);
       if (defn) {
@@ -4145,7 +4147,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_regular_symbols_task)
   ProfBeginV("Patch Regular Symbols [%S]", obj->path);
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
 
     if (task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx]) { continue; }
 
@@ -4183,7 +4185,7 @@ lnk_patch_obj_symtab(LNK_SymbolTable *symtab, LNK_Obj *obj, B8 *was_symbol_patch
 
   COFF_ParsedSymbol fixup_dst;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + fixup_dst.aux_symbol_count)) {
-    fixup_dst = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    fixup_dst = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
     if (was_symbol_patched[symbol_idx]) { continue; }
 
     COFF_SymbolValueInterpType fixup_dst_type = coff_interp_symbol(fixup_dst.section_number, fixup_dst.value, fixup_dst.storage_class);
@@ -4193,7 +4195,7 @@ lnk_patch_obj_symtab(LNK_SymbolTable *symtab, LNK_Obj *obj, B8 *was_symbol_patch
     LNK_ObjSymbolRef fixup_symbol      = {0};
     B32               is_resolved       = lnk_resolve_symbol(symtab, symbol_to_resolve, &fixup_symbol);
     if (is_resolved) {
-      COFF_ParsedSymbol          fixup_src          = lnk_parsed_symbol_from_coff_symbol_idx(fixup_symbol.obj, fixup_symbol.symbol_idx);
+      COFF_ParsedSymbol          fixup_src          = lnk_parsed_symbol_from_coff_symbol_idx_no_name(fixup_symbol.obj, fixup_symbol.symbol_idx);
       COFF_SymbolValueInterpType fixup_type         = coff_interp_symbol(fixup_src.section_number, fixup_src.value, fixup_src.storage_class);
       B32                         was_fixup_removed = fixup_src.section_number == lnk_obj_get_removed_section_number(fixup_symbol.obj);
 
@@ -4341,13 +4343,14 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
       U32 symbol_secoff = 0;
       S64 symbol_voff   = 0;
       {
-        COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, reloc->isymbol);
+        COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, reloc->isymbol);
         COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
         if (interp == COFF_SymbolValueInterp_Regular) {
           if (symbol.section_number == lnk_obj_get_removed_section_number(obj)) {
             if (~section_flags & LNK_SECTION_FLAG_DEBUG) {
               String8 sect_name = coff_name_from_section_header(string_table, &section_table[sect_idx]);
-              lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc-index: 0x%llx)", symbol.name, sect_name, sect_idx+1, reloc_idx);
+              String8 symbol_name = lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol);
+              lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc-index: 0x%llx)", symbol_name, sect_name, sect_idx+1, reloc_idx);
             }
             continue;
           }
@@ -4358,7 +4361,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
           // There aren't enough bits in COFF symbol to store full image base address,
           // so we special case __ImageBase. A better solution would be to add
           // a 64-bit symbol format to COFF.
-          if (str8_match(symbol.name, str8_lit("__ImageBase"), 0)) {
+          if (str8_match(lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol), str8_lit("__ImageBase"), 0)) {
             symbol.value = task->image_base;
           }
           symbol_secnum = 0;
@@ -4447,7 +4450,7 @@ THREAD_POOL_TASK_FUNC(lnk_flag_hotpatch_contribs_task)
   if (obj->hotpatch) {
     COFF_ParsedSymbol symbol;
     for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-      symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+      symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
       if (interp == COFF_SymbolValueInterp_Regular && COFF_SymbolType_IsFunc(symbol.type)) {
         LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
@@ -4862,7 +4865,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
   ProfBegin("Patch Section Symbols [%S]", obj->path);
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
     if (interp == COFF_SymbolValueInterp_Undefined) {
       if (symbol.storage_class == COFF_SymStorageClass_Section) {
@@ -4885,7 +4888,8 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
         }
         if (!is_referenced) { continue; }
 
-        LNK_Section *sect = lnk_section_table_search(task->sectab, symbol.name, symbol.value);
+        String8      symbol_name = lnk_symbol_name_from_coff_symbol_idx(obj, symbol_idx);
+        LNK_Section *sect        = lnk_section_table_search(task->sectab, symbol_name, symbol.value);
         if (sect && (~sect->flags & COFF_SectionFlag_LnkRemove)) {
           if (~sect->flags & COFF_SectionFlag_MemDiscardable) {
             LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
@@ -4901,7 +4905,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
               symbol16->storage_class  = COFF_SymStorageClass_Static;
             }
           } else {
-            lnk_error_obj(LNK_Error_SectRefsDiscardedMemory, obj, "symbol %S (No. 0x%llx) references section with discard flag", symbol.name, symbol_idx);
+            lnk_error_obj(LNK_Error_SectRefsDiscardedMemory, obj, "symbol %S (No. 0x%llx) references section with discard flag", symbol_name, symbol_idx);
           }
         } else {
           U64 fallback_voff = 0;
@@ -4929,7 +4933,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
             symbol16->storage_class  = COFF_SymStorageClass_Static;
           }
 
-          lnk_error_obj(LNK_Warning_UndefinedSectionSymbol, obj, "undefined section symbol %S (No. 0x%llx) refers to an image section that doesn't exist; patching to %#llx", symbol.name, symbol_idx, fallback_voff);
+          lnk_error_obj(LNK_Warning_UndefinedSectionSymbol, obj, "undefined section symbol %S (No. 0x%llx) refers to an image section that doesn't exist; patching to %#llx", symbol_name, symbol_idx, fallback_voff);
         }
       }
     }
@@ -4955,7 +4959,7 @@ THREAD_POOL_TASK_FUNC(lnk_gather_base_reloc_pages_task)
     for EachIndex(reloc_idx, relocs.count) {
       COFF_Reloc *r = &relocs.v[reloc_idx];
 
-      COFF_ParsedSymbol          symbol        = lnk_parsed_symbol_from_coff_symbol_idx(obj, r->isymbol);
+      COFF_ParsedSymbol          symbol        = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, r->isymbol);
       COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol);
       if (symbol_interp == COFF_SymbolValueInterp_Abs) { continue; }
 
@@ -4983,7 +4987,7 @@ THREAD_POOL_TASK_FUNC(lnk_gather_base_reloc_pages_task)
       switch (is_addr) {
       case 4: {
         if (task->is_large_addr_aware) {
-          lnk_error_obj(LNK_Error_LargeAddrAwareRequired, obj, "found out of range ADDR32 relocation for '%S', link with /LARGEADDRESSAWARE:NO", symbol.name);
+          lnk_error_obj(LNK_Error_LargeAddrAwareRequired, obj, "found out of range ADDR32 relocation for '%S', link with /LARGEADDRESSAWARE:NO", lnk_symbol_name_from_coff_symbol_idx(obj, r->isymbol));
         } else {
           u64_list_push(arena, page->v.entries_addr32, reloc_voff);
         }

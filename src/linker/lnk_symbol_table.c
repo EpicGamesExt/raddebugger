@@ -105,12 +105,12 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
   B32 can_replace = 0;
 
-  COFF_ParsedSymbol           dst_parsed = lnk_parsed_from_symbol(dst);
-  COFF_ParsedSymbol           src_parsed = lnk_parsed_from_symbol(src);
-  COFF_SymbolValueInterpType  dst_interp = lnk_interp_from_symbol(dst);
-  COFF_SymbolValueInterpType  src_interp = lnk_interp_from_symbol(src);
   LNK_ObjSymbolRef            dst_ref    = lnk_ref_from_symbol(dst);
   LNK_ObjSymbolRef            src_ref    = lnk_ref_from_symbol(src);
+  COFF_ParsedSymbol           dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dst_ref.obj, dst_ref.symbol_idx);
+  COFF_ParsedSymbol           src_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(src_ref.obj, src_ref.symbol_idx);
+  COFF_SymbolValueInterpType  dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
+  COFF_SymbolValueInterpType  src_interp = coff_interp_from_parsed_symbol(src_parsed);
   LNK_Obj                    *dst_obj    = dst_ref.obj;
   LNK_Obj                    *src_obj    = src_ref.obj;
 
@@ -338,9 +338,9 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 internal void
 lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
 {
-  COFF_ParsedSymbol          dst_parsed = lnk_parsed_from_symbol(dst);
-  COFF_SymbolValueInterpType dst_interp = lnk_interp_from_symbol(dst);
   LNK_ObjSymbolRef           dst_ref    = lnk_ref_from_symbol(dst);
+  COFF_ParsedSymbol          dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dst_ref.obj, dst_ref.symbol_idx);
+  COFF_SymbolValueInterpType dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
 
   if (dst_interp == COFF_SymbolValueInterp_Regular) {
     // remove replaced section from the output
@@ -537,7 +537,8 @@ lnk_parsed_from_symbol(LNK_Symbol *symbol)
 internal COFF_SymbolValueInterpType
 lnk_interp_from_symbol(LNK_Symbol *symbol)
 {
-  COFF_ParsedSymbol symbol_parsed = lnk_parsed_from_symbol(symbol); 
+  LNK_ObjSymbolRef  ref           = lnk_ref_from_symbol(symbol);
+  COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(ref.obj, ref.symbol_idx);
   return coff_interp_from_parsed_symbol(symbol_parsed);
 }
 
@@ -662,7 +663,7 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_Ob
       goto exit;
     }
 
-    COFF_ParsedSymbol          current_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, current_symbol.symbol_idx);
+    COFF_ParsedSymbol          current_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(current_symbol.obj, current_symbol.symbol_idx);
     COFF_SymbolValueInterpType current_interp = coff_interp_symbol(current_parsed.section_number, current_parsed.value, current_parsed.storage_class);
     if (current_interp == COFF_SymbolValueInterp_Weak) {
       // record visited symbol
@@ -671,7 +672,7 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_Ob
       SLLQueuePush(sf, sl, s);
 
       // does weak symbol have a definition?
-      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, current_parsed.name);
+      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, lnk_symbol_name_from_coff_symbol_idx(current_symbol.obj, current_symbol.symbol_idx));
       COFF_ParsedSymbol           defn_parsed = lnk_parsed_from_symbol(defn_symbol);
       COFF_SymbolValueInterpType  defn_interp = coff_interp_symbol(defn_parsed.section_number, defn_parsed.value, defn_parsed.storage_class);
       if (defn_interp != COFF_SymbolValueInterp_Weak) {
@@ -682,19 +683,19 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_Ob
       COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(current_parsed, current_symbol.obj->header.is_big_obj);
 
       // no definition -- fallback to default symbol
-      COFF_ParsedSymbol           tag_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, weak_ext->tag_index);
+      COFF_ParsedSymbol           tag_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(current_symbol.obj, weak_ext->tag_index);
       COFF_SymbolValueInterpType  tag_interp = coff_interp_symbol(tag_parsed.section_number, tag_parsed.value, tag_parsed.storage_class);
       current_symbol = (LNK_ObjSymbolRef){ .obj = current_symbol.obj, .symbol_idx = weak_ext->tag_index };
 
       if (weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
         if (tag_interp == COFF_SymbolValueInterp_Undefined || tag_interp == COFF_SymbolValueInterp_Weak) {
-          LNK_Symbol *dep_symbol = lnk_symbol_table_search(symtab, tag_parsed.name);
+          LNK_Symbol *dep_symbol = lnk_symbol_table_search(symtab, lnk_symbol_name_from_coff_symbol_idx(current_symbol.obj, weak_ext->tag_index));
           tag_interp = lnk_interp_from_symbol(dep_symbol);
         }
         if (tag_interp == COFF_SymbolValueInterp_Weak) { break; }
       }
     } else if (current_interp == COFF_SymbolValueInterp_Undefined) {
-      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, current_parsed.name);
+      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, lnk_symbol_name_from_coff_symbol_idx(current_symbol.obj, current_symbol.symbol_idx));
       COFF_SymbolValueInterpType  defn_interp = lnk_interp_from_symbol(defn_symbol);
 
       // unresolved undefined symbol
@@ -719,7 +720,7 @@ internal B32
 lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymbolRef *symbol_out)
 {
   B32                        is_resolved   = 1;
-  COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
+  COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symbol.obj, symbol.symbol_idx);
   COFF_SymbolValueInterpType symbol_interp = coff_interp_symbol(symbol_parsed.section_number, symbol_parsed.value, symbol_parsed.storage_class);
   switch (symbol_interp) {
   case COFF_SymbolValueInterp_Regular: { 
@@ -727,7 +728,7 @@ lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymb
     *symbol_out = lnk_obj_get_comdat_symlink(symbol.obj, symbol_parsed.section_number, &symlink) ? symlink : symbol;
   } break;
   case COFF_SymbolValueInterp_Weak: {
-    LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, symbol_parsed.name);
+    LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, lnk_symbol_name_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx));
     COFF_ParsedSymbol           defn_parsed = lnk_parsed_from_symbol(defn);
     COFF_SymbolValueInterpType  defn_interp = lnk_interp_from_symbol(defn);
     if (defn_interp != COFF_SymbolValueInterp_Undefined) {
@@ -737,7 +738,7 @@ lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymb
     }
   } break;
   case COFF_SymbolValueInterp_Undefined: {
-    LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
+    LNK_Symbol *defn = lnk_symbol_table_search(symtab, lnk_symbol_name_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx));
     if (defn) {
       *symbol_out = lnk_ref_from_symbol(defn);
     } else {
@@ -745,12 +746,12 @@ lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymb
     }
   } break;
   case COFF_SymbolValueInterp_Common: {
-    LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
+    LNK_Symbol *defn = lnk_symbol_table_search(symtab, lnk_symbol_name_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx));
     *symbol_out = lnk_ref_from_symbol(defn);
   } break;
   case COFF_SymbolValueInterp_Abs: {
     if (symbol_parsed.storage_class == COFF_SymStorageClass_External) { 
-      LNK_Symbol *defn = lnk_symbol_table_search(symtab, symbol_parsed.name);
+      LNK_Symbol *defn = lnk_symbol_table_search(symtab, lnk_symbol_name_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx));
       *symbol_out = lnk_ref_from_symbol(defn);
     } else {
       *symbol_out = symbol;
@@ -769,12 +770,12 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
     for EachIndex(i, c->count) {
       LNK_Symbol                 *symbol        = c->v[i].symbol;
       LNK_ObjSymbolRef            symbol_ref    = lnk_ref_from_symbol(symbol);
-      COFF_ParsedSymbol           symbol_parsed = lnk_parsed_from_symbol(symbol);
+      COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symbol_ref.obj, symbol_ref.symbol_idx);
       COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
       if (symbol_interp == COFF_SymbolValueInterp_Weak) {
         LNK_ObjSymbolRef resolve = {0};
         if (lnk_resolve_weak_symbol(symtab, symbol_ref, &resolve)) {
-          COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx(resolve.obj, resolve.symbol_idx);
+          COFF_ParsedSymbol          resolve_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(resolve.obj, resolve.symbol_idx);
           COFF_SymbolValueInterpType resolve_interp = coff_interp_from_parsed_symbol(resolve_parsed);
           if (resolve_interp == COFF_SymbolValueInterp_Weak) {
             COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(resolve_parsed, symbol_ref.obj->header.is_big_obj);
