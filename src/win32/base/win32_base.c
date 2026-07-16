@@ -272,14 +272,19 @@ internal B32
 commit_memory(void *ptr, U64 size)
 {
   B32 result = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+
+#if !NO_WIN32_RIO
   if(w32_rio_functions.RIORegisterBuffer)
   {
     // wine does not implement these functions
     w32_rio_functions.RIODeregisterBuffer(w32_rio_functions.RIORegisterBuffer(ptr, size));
   }
+#endif
+
 #if PROFILE_TELEMETRY
   tmAlloc(0, ptr, size / 1024, "Win32 Commit");
 #endif
+
   return result;
 }
 

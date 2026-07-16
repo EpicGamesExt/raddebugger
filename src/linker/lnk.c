@@ -8,6 +8,7 @@
 
 #define ARENA_FREE_LIST 1
 #define NO_ASYNC 1
+#define NO_WIN32_RIO 1
 
 // --- Code Base ---------------------------------------------------------------
 
