@@ -34,6 +34,7 @@ typedef struct LNK_Input
   String8           data;
   B32               disallow;
   B32               is_thin;
+  B32               owns_file_map;
   B32               has_disk_read_failed;
   B32               exclude_from_debug_info;
   LNK_LibMemberRef *link_member;
@@ -381,6 +382,7 @@ internal LNK_Input * lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config 
 
 internal B32               lnk_inputer_has_items(LNK_Inputer *inputer);
 internal LNK_InputPtrArray lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Flags io_flags, LNK_InputList *all_inputs, LNK_InputList *new_inputs);
+internal void               lnk_inputer_release_file_maps(TP_Context *tp, LNK_Inputer *inputer);
 
 // --- Link Context ------------------------------------------------------------
 

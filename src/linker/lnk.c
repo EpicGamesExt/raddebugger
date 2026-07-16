@@ -1211,8 +1211,10 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Fla
 
   ProfBegin("Load Inputs From Disk"); 
   String8Array thin_input_datas  = lnk_read_data_from_file_path_parallel(tp, inputer->arena, io_flags, thin_input_paths);
+  B32 is_mapped = !!(io_flags & (LNK_IO_Flags_MemoryMapFilesReadWrite|LNK_IO_Flags_MemoryMapFilesReadOnly));
   for EachIndex(thin_input_idx, thin_inputs_count) {
     thin_inputs[thin_input_idx]->has_disk_read_failed = thin_input_datas.v[thin_input_idx].size == 0;
+    thin_inputs[thin_input_idx]->owns_file_map         = is_mapped && !thin_inputs[thin_input_idx]->has_disk_read_failed;
     thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
   }
   ProfEnd();
@@ -1232,6 +1234,48 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Fla
   scratch_end(scratch);
   ProfEnd();
   return result;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_release_file_map_task)
+{
+  LNK_Input **mapped_inputs = raw_task;
+  LNK_Input  *input         = mapped_inputs[task_id];
+  file_map_view_close((FileMap){0}, input->data.str, r1u64(0, input->data.size));
+  input->data          = str8_zero();
+  input->owns_file_map = 0;
+}
+
+internal void
+lnk_inputer_release_file_maps(TP_Context *tp, LNK_Inputer *inputer)
+{
+  Temp scratch = scratch_begin(0, 0);
+
+  U64 mapped_input_count = 0;
+  for EachNode(input, LNK_Input, inputer->objs.first) {
+    mapped_input_count += input->owns_file_map;
+  }
+  for EachNode(input, LNK_Input, inputer->libs.first) {
+    mapped_input_count += input->owns_file_map;
+  }
+
+  LNK_Input **mapped_inputs = push_array_no_zero(scratch.arena, LNK_Input *, mapped_input_count);
+  U64 mapped_input_idx = 0;
+  for EachNode(input, LNK_Input, inputer->objs.first) {
+    if (input->owns_file_map) {
+      mapped_inputs[mapped_input_idx++] = input;
+    }
+  }
+  for EachNode(input, LNK_Input, inputer->libs.first) {
+    if (input->owns_file_map) {
+      mapped_inputs[mapped_input_idx++] = input;
+    }
+  }
+  Assert(mapped_input_idx == mapped_input_count);
+
+  tp_for_parallel(tp, 0, mapped_input_count, lnk_release_file_map_task, mapped_inputs);
+
+  scratch_end(scratch);
 }
 
 internal void
@@ -6470,6 +6514,13 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     lnk_timer_end(LNK_Timer_Debug);
     ProfEnd();
   }
+
+#if OS_WINDOWS
+  // for unexplained reasons, file mappings on Windows cause slow process exit times
+  ProfBegin("Release Input File Maps");
+  lnk_inputer_release_file_maps(tp, inputer);
+  ProfEnd();
+#endif
 
   // wait for the thread to finish writing image to disk
   thread_join(image_write_thread, -1);
