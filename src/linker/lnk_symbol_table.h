@@ -17,12 +17,24 @@ typedef struct LNK_ObjSymbolRefNode
   LNK_ObjSymbolRef             v;
 } LNK_ObjSymbolRefNode;
 
+typedef U32 LNK_SymbolSearchType;
+enum
+{
+  LNK_SymbolSearch_Null,
+  LNK_SymbolSearch_Undefined,
+  LNK_SymbolSearch_WeakLibrary,
+  LNK_SymbolSearch_WeakAntiDependency,
+  LNK_SymbolSearch_WeakOther,
+};
+
 typedef struct LNK_Symbol
 {
   String8               name;
   LNK_ObjSymbolRefNode *first_ref;
-  LNK_ObjSymbolRefNode *last_ref;
+  U64                   last_ref_and_search_type; // Tail pointer with search type in its low bits.
 } LNK_Symbol;
+
+StaticAssert(sizeof(LNK_Symbol) == 32, lnk_symbol_size_check);
 
 // --- Symbol Containers -------------------------------------------------------
 
@@ -89,7 +101,12 @@ typedef struct
 
 // --- Symbol -----------------------------------------------------------------
 
-internal LNK_Symbol * lnk_make_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx);
+internal LNK_SymbolSearchType     lnk_symbol_search_type_from_coff(struct LNK_Obj *obj, COFF_ParsedSymbol symbol, COFF_SymbolValueInterpType interp);
+internal LNK_Symbol *             lnk_make_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx, LNK_SymbolSearchType search_type);
+internal LNK_ObjSymbolRefNode *   lnk_last_ref_from_symbol(LNK_Symbol *symbol);
+internal LNK_SymbolSearchType     lnk_search_type_from_symbol(LNK_Symbol *symbol);
+internal void                     lnk_symbol_set_last_ref(LNK_Symbol *symbol, LNK_ObjSymbolRefNode *last_ref);
+internal void                     lnk_symbol_set_search_type(LNK_Symbol *symbol, LNK_SymbolSearchType search_type);
 
 internal int lnk_obj_symbol_ref_is_before(void *raw_a, void *raw_b);
 internal int lnk_obj_symbol_ref_ptr_is_before(void *raw_a, void *raw_b);
@@ -138,4 +155,3 @@ internal B32 lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef s
 internal B32 lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymbolRef *symbol_out);
 
 internal void lnk_replace_weak_with_default_symbols(TP_Context *tp, LNK_SymbolTable *symtab);
-

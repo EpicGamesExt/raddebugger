@@ -1,18 +1,66 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+#define LNK_SYMBOL_SEARCH_TYPE_MASK 7ull
+
+internal LNK_SymbolSearchType
+lnk_symbol_search_type_from_coff(LNK_Obj *obj, COFF_ParsedSymbol symbol, COFF_SymbolValueInterpType interp)
+{
+  LNK_SymbolSearchType search_type = LNK_SymbolSearch_Null;
+  if (interp == COFF_SymbolValueInterp_Undefined) {
+    search_type = LNK_SymbolSearch_Undefined;
+  } else if (interp == COFF_SymbolValueInterp_Weak) {
+    COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol, obj->header.is_big_obj);
+    switch (weak_ext->characteristics) {
+    case COFF_WeakExt_SearchLibrary:  search_type = LNK_SymbolSearch_WeakLibrary;        break;
+    case COFF_WeakExt_AntiDependency: search_type = LNK_SymbolSearch_WeakAntiDependency; break;
+    default:                          search_type = LNK_SymbolSearch_WeakOther;           break;
+    }
+  }
+  return search_type;
+}
+
 internal LNK_Symbol *
-lnk_make_symbol(Arena *arena, String8 name, LNK_Obj *obj, U32 symbol_idx)
+lnk_make_symbol(Arena *arena, String8 name, LNK_Obj *obj, U32 symbol_idx, LNK_SymbolSearchType search_type)
 {
   LNK_ObjSymbolRefNode *ref = push_array(arena, LNK_ObjSymbolRefNode, 1);
   ref->v.obj                = obj;
   ref->v.symbol_idx         = symbol_idx;
 
-  LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
-  symbol->name       = name;
-  SLLQueuePush(symbol->first_ref, symbol->last_ref, ref);
+  LNK_Symbol *symbol    = push_array(arena, LNK_Symbol, 1);
+  symbol->name          = name;
+  symbol->first_ref     = ref;
+  Assert((IntFromPtr(ref) & LNK_SYMBOL_SEARCH_TYPE_MASK) == 0);
+  Assert(search_type <= LNK_SymbolSearch_WeakOther);
+  symbol->last_ref_and_search_type = IntFromPtr(ref) | search_type;
 
   return symbol;
+}
+
+internal LNK_ObjSymbolRefNode *
+lnk_last_ref_from_symbol(LNK_Symbol *symbol)
+{
+  return PtrFromInt(symbol->last_ref_and_search_type & ~LNK_SYMBOL_SEARCH_TYPE_MASK);
+}
+
+internal LNK_SymbolSearchType
+lnk_search_type_from_symbol(LNK_Symbol *symbol)
+{
+  return safe_cast_u32(symbol->last_ref_and_search_type & LNK_SYMBOL_SEARCH_TYPE_MASK);
+}
+
+internal void
+lnk_symbol_set_last_ref(LNK_Symbol *symbol, LNK_ObjSymbolRefNode *last_ref)
+{
+  Assert((IntFromPtr(last_ref) & LNK_SYMBOL_SEARCH_TYPE_MASK) == 0);
+  symbol->last_ref_and_search_type = IntFromPtr(last_ref) | lnk_search_type_from_symbol(symbol);
+}
+
+internal void
+lnk_symbol_set_search_type(LNK_Symbol *symbol, LNK_SymbolSearchType search_type)
+{
+  Assert(search_type <= LNK_SymbolSearch_WeakOther);
+  symbol->last_ref_and_search_type = (symbol->last_ref_and_search_type & ~LNK_SYMBOL_SEARCH_TYPE_MASK) | search_type;
 }
 
 internal int
@@ -357,8 +405,8 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
   }
 
   // merge symbol refs
-  src->last_ref->next = dst->first_ref;
-  src->last_ref = dst->last_ref;
+  lnk_last_ref_from_symbol(src)->next = dst->first_ref;
+  lnk_symbol_set_last_ref(src, lnk_last_ref_from_symbol(dst));
 
   // assert leader section is live
 #if BUILD_DEBUG
@@ -561,10 +609,10 @@ lnk_symbol_table_init(TP_Arena *arena)
 internal void
 lnk_symbol_table_push_(LNK_SymbolTable *symtab, Arena *arena, U64 worker_id, LNK_Symbol *symbol)
 {
-  U64                        hash   = lnk_symbol_table_hasher(symbol->name);
-  COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(symbol);
+  U64                         hash        = lnk_symbol_table_hasher(symbol->name);
+  LNK_SymbolSearchType        search_type = lnk_search_type_from_symbol(symbol);
   LNK_SymbolHashTrieChunkList *chunks;
-  if (interp == COFF_SymbolValueInterp_Weak || interp == COFF_SymbolValueInterp_Undefined) {
+  if (search_type != LNK_SymbolSearch_Null) {
     chunks = &symtab->search_chunks[worker_id];
   } else {
     chunks = &symtab->chunks[worker_id];
@@ -790,8 +838,10 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
               symbol16->value          = 0;
               symbol16->storage_class  = COFF_SymStorageClass_External;
             }
+            lnk_symbol_set_search_type(symbol, LNK_SymbolSearch_Undefined);
           } else {
             symbol->first_ref->v = resolve;
+            lnk_symbol_set_search_type(symbol, LNK_SymbolSearch_Null);
           }
         }
       }
