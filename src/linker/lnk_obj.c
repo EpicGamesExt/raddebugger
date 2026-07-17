@@ -94,14 +94,44 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   //
-  // error check section headers
+  // section table pass
+  //  - error check headers fields
+  //  - collect section header flags
+  //  - find debug info and meta-data leaders
   //
-  COFF_SectionHeader *coff_section_table = (COFF_SectionHeader *)raw_coff_section_table.str;
-  COFF_SectionFlags  *section_flags      = push_array_no_zero(arena, COFF_SectionFlags, header.section_count_no_null);
+  COFF_SectionHeader *coff_section_table    = (COFF_SectionHeader *)raw_coff_section_table.str;
+  COFF_SectionFlags  *section_flags         = push_array_no_zero(arena, COFF_SectionFlags, header.section_count_no_null);
+  U32                 debug_t_sect_idx      = ~0;
+  U32                 debug_p_sect_idx      = ~0;
+  U32                 debug_h_sect_idx      = ~0;
+  U32                 llvm_addrsig_sect_idx = ~0;
   for (U64 sect_idx = 0; sect_idx < header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *coff_sect_header = &coff_section_table[sect_idx];
     section_flags[sect_idx]              = coff_sect_header->flags & ~3; // linker reserves low 2 bits for internal flags
     String8             sect_name        = coff_name_from_section_header(raw_coff_string_table, coff_sect_header);
+
+    if (str8_starts_with(sect_name, str8_lit(".debug$"))) {
+      section_flags[sect_idx] |= LNK_SECTION_FLAG_DEBUG;
+    }
+    if (str8_ends_with(sect_name, str8_lit("$fo$"), 0) ||
+        str8_ends_with(sect_name, str8_lit("$fo_rvas$"), 0) ||
+        str8_ends_with(sect_name, str8_lit("$fo_bdd$"), 0)) {
+      section_flags[sect_idx] |= COFF_SectionFlag_LnkInfo;
+    }
+    if (task->find_debug_t) {
+      if (str8_match(sect_name, str8_lit(".debug$T"), 0)) {
+        debug_t_sect_idx = sect_idx;
+      } else if (str8_match(sect_name, str8_lit(".debug$P"), 0)) {
+        debug_p_sect_idx = sect_idx;
+      } else if (str8_match(sect_name, str8_lit(".debug$H"), 0)) {
+        debug_h_sect_idx = sect_idx;
+      }
+    }
+    if (task->find_llvm_addrsig && llvm_addrsig_sect_idx == max_U32 &&
+        str8_match(sect_name, str8_lit(".llvm_addrsig"), 0)) {
+      llvm_addrsig_sect_idx = sect_idx;
+    }
+
     if (~section_flags[sect_idx] & COFF_SectionFlag_CntUninitializedData) {
       if (coff_sect_header->fsize > 0) {
         Rng1U64 sect_range = rng_1u64(coff_sect_header->foff, coff_sect_header->foff + coff_sect_header->fsize);
@@ -290,28 +320,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     }
   }
 
-  //
-  // mark sections
-  //
-  {
-    for EachIndex(sect_idx, header.section_count_no_null) {
-      COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
-      String8             sect_name   = coff_name_from_section_header(raw_coff_string_table, sect_header);
-
-      // debug info
-      if (str8_starts_with(sect_name, str8_lit(".debug$"))) {
-        section_flags[sect_idx] |= LNK_SECTION_FLAG_DEBUG;
-      }
-
-      // function overrides
-      if (str8_ends_with(sect_name, str8_lit("$fo$"), 0) ||
-          str8_ends_with(sect_name, str8_lit("$fo_rvas$"), 0) ||
-          str8_ends_with(sect_name, str8_lit("$fo_bdd$"), 0)) {
-        section_flags[sect_idx] |= COFF_SectionFlag_LnkInfo;
-      }
-    }
-  }
-  
   B8 hotpatch = 0;
   if (header.machine == COFF_MachineType_X64) {
     hotpatch = 1;
@@ -370,39 +378,10 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->associated_sections     = associated_sections;
   obj->self                    = &task->objs[task_id];
   obj->link_member             = input->link_member;
-  obj->debug_t_sect_idx        = ~0;
-  obj->debug_p_sect_idx        = ~0;
-  obj->debug_h_sect_idx        = ~0;
-  obj->llvm_addrsig_sect_idx   = ~0;
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_obj_find_debug_t)
-{
-  LNK_Obj *obj = &((LNK_ObjNode *)raw_task)[task_id].data;
-  for EachIndex(sect_idx, obj->header.section_count_no_null) {
-    String8 section_name = lnk_obj_section_name_from_sect_idx(obj, sect_idx);
-    if (str8_match(section_name, str8_lit(".debug$T"), 0)) {
-      obj->debug_t_sect_idx = sect_idx;
-    } else if (str8_match(section_name, str8_lit(".debug$P"), 0)) {
-      obj->debug_p_sect_idx = sect_idx;
-    } else if (str8_match(section_name, str8_lit(".debug$H"), 0)) {
-      obj->debug_h_sect_idx = sect_idx;
-    }
-  }
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_obj_find_llvm_addrsig)
-{
-  LNK_Obj *obj = &((LNK_ObjNode *)raw_task)[task_id].data;
-  for EachIndex(sect_idx, obj->header.section_count_no_null) {
-    String8 section_name = lnk_obj_section_name_from_sect_idx(obj, sect_idx);
-    if (str8_match(section_name, str8_lit(".llvm_addrsig"), 0)) {
-      obj->llvm_addrsig_sect_idx = sect_idx;
-      break;
-    }
-  }
+  obj->debug_t_sect_idx        = debug_t_sect_idx;
+  obj->debug_p_sect_idx        = debug_p_sect_idx;
+  obj->debug_h_sect_idx        = debug_h_sect_idx;
+  obj->llvm_addrsig_sect_idx   = llvm_addrsig_sect_idx;
 }
 
 internal LNK_ObjNode *
@@ -411,13 +390,14 @@ lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, LNK_Config *config, U64
   LNK_ObjNode *objs = 0;
   if (inputs_count) {
     objs = push_array(arena->v[0], LNK_ObjNode, inputs_count);
-    tp_for_parallel(tp, arena, inputs_count, lnk_obj_initer, &(LNK_ObjIniter){ .inputs = inputs, .objs = objs, .machine = config->machine });
-    if (lnk_do_debug_info(config)) {
-      tp_for_parallel(tp, arena, inputs_count, lnk_obj_find_debug_t, objs);
-    }
-    if (config->opt_icf == LNK_SwitchState_Yes) {
-      tp_for_parallel(tp, arena, inputs_count, lnk_obj_find_llvm_addrsig, objs);
-    }
+    LNK_ObjIniter task = {
+      .inputs            = inputs,
+      .objs              = objs,
+      .machine           = config->machine,
+      .find_debug_t      = lnk_do_debug_info(config),
+      .find_llvm_addrsig = config->opt_icf == LNK_SwitchState_Yes,
+    };
+    tp_for_parallel(tp, arena, inputs_count, lnk_obj_initer, &task);
   }
   return objs;
 }

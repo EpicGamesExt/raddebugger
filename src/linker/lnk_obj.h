@@ -112,6 +112,8 @@ typedef struct
   LNK_ObjNode       *objs;
   U64                obj_id_base;
   U32                machine;
+  B32                find_debug_t;
+  B32                find_llvm_addrsig;
 } LNK_ObjIniter;
 
 typedef struct
