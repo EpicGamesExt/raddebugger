@@ -118,6 +118,11 @@ typedef struct
   HashMap  ifc_redirect_hm;
   Rng1U64  ifc_obj_range; // [min,max) range of injected blob objs in the parallel arrays
   U32Array ifc_indices;   // obj indices of injected .ifc blob objs (hashed/deduped first)
+  // exact per-obj key filter for ifc_redirect_hm: bit set iff Compose64Bit(obj_idx, ti) was pushed.
+  // lets lnk_leaf_ref_from_ti skip the (miss-dominated) hash-map search entirely; on a set bit the
+  // original map is searched unchanged, so results are bit-identical to always searching.
+  U64    **ifc_redirect_bits;   // [count]; null == obj has no redirect keys
+  Rng1U64 *ifc_redirect_ti_rng; // [count]; [min,max) local-TI span covered by the obj's bitset
 } LNK_CodeViewInput;
 
 typedef struct
