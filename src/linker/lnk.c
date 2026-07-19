@@ -1792,6 +1792,8 @@ lnk_link_inputs(TP_Context      *tp,
   LNK_LibMemberRefList *member_ref_lists = push_array(scratch.arena, LNK_LibMemberRefList, tp->worker_count);
   B32                   search_anti_deps = 0;
   for (U64 resolved_members_count = 0; ; resolved_members_count = 0) {
+    ProfBegin("Search Pass");
+
     lnk_load_inputs(tp, arena, config, inputer, symtab, link);
 
     for EachNode(lib_n, LNK_LibNode, link->libs.first) {
@@ -2047,6 +2049,7 @@ lnk_link_inputs(TP_Context      *tp,
       resolved_members_count = lnk_inputer_has_items(inputer);
     }
 
+    ProfEnd();
     if (resolved_members_count == 0) { break; }
   }
 

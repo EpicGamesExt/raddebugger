@@ -68,6 +68,12 @@ typedef struct LNK_SymbolInput
   String8 raw_symbols;
 } LNK_SymbolInput;
 
+typedef struct LNK_SymbolInputTask
+{
+  Rng1U64 input_range;
+  U64     weight;
+} LNK_SymbolInputTask;
+
 typedef struct
 {
   LNK_Config  *config;
@@ -95,9 +101,11 @@ typedef struct
   B32                 *is_type_server_discarded; // [ts_arr.count]
   CV_TypeIndex         min_type_indices[CV_TypeIndexSource_COUNT];
 
-  U64              symbol_input_count;
-  LNK_SymbolInput *symbol_inputs;       // [symbol_input_count]
-  Rng1U64         *symbol_input_ranges; // [worker_count]
+  U64                  symbol_input_count;
+  LNK_SymbolInput     *symbol_inputs;       // [symbol_input_count]
+  Rng1U64             *symbol_input_ranges; // [worker_count]
+  U64                  symbol_patch_task_count; //
+  LNK_SymbolInputTask *symbol_patch_task; // [symbol_patch_task_count]
 } LNK_CodeViewInput;
 
 typedef struct
@@ -118,6 +126,13 @@ typedef struct
   U64           cap;
   LNK_LeafRef **bucket_arr;
 } LNK_LeafHashTable;
+
+typedef struct
+{
+  U64           cap;
+  CV_TypeIndex *ti_arr;
+  U64          *hash_arr;
+} LNK_AssignedTiHash;
 
 typedef struct LNK_LeafRange
 {
@@ -150,6 +165,7 @@ typedef struct
   LNK_CodeViewInput  *input;
   CV_DebugS          *debug_s_arr;
   LNK_LeafHashTable   leaf_ht_arr[CV_TypeIndexSource_COUNT];
+  LNK_AssignedTiHash  assigned_ti_arr[CV_TypeIndexSource_COUNT];
   Arena             **fixed_arenas;
   CV_TypeIndexSource  ti_source;
   U32Array            indices;
@@ -173,11 +189,8 @@ typedef struct
   LNK_LeafRef **src;
   U64           pass_idx;
 
-  // assign type indices
-  U64                 assigned_type_caps  [CV_TypeIndexSource_COUNT];
-  CV_TypeIndex       *assigned_type_hts   [CV_TypeIndexSource_COUNT];
-  CV_TypeIndex        min_type_indices    [CV_TypeIndexSource_COUNT];
-  LNK_LeafRefArray    unique_leaf_refs_arr[CV_TypeIndexSource_COUNT];
+  CV_TypeIndex     min_type_indices    [CV_TypeIndexSource_COUNT];
+  LNK_LeafRefArray unique_leaf_refs_arr[CV_TypeIndexSource_COUNT];
 
   U64          *obj_ti_map_counts;
   U64          *obj_ti_map_offsets;
@@ -252,7 +265,7 @@ internal B32             lnk_match_leaf_ref                  (LNK_CodeViewInput 
 internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list, B32 discard_cycles);
 internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list);
 internal LNK_LeafRef *   lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInput *input, CV_DebugH *hashes, U64 hash, LNK_LeafRef *new_bucket);
-internal LNK_LeafRef *   lnk_leaf_hash_table_search          (LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
+internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
 internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);
 
