@@ -4058,21 +4058,45 @@ lnk_icf_debug_s_child_from_section(LNK_Obj *obj, U32 fn_sn)
 
 
 // FILECHKSMS of the obj-wide (non-COMDAT) .debug$S -- the table every per-function
-// Lines fragment's file_off indexes into
+// Lines fragment's file_off indexes into. Direct header walk with early-out instead of
+// cv_debug_s_from_data: the obj-wide .debug$S is megabytes of subsections and the full
+// parse pushes a list node per subsection; here we only need one slice.
 internal String8
-lnk_icf_obj_file_chksms(Arena *scratch, LNK_Obj *obj)
+lnk_icf_obj_file_chksms_scan(LNK_Obj *obj)
 {
   for LNK_EachCoffSection(it, obj) {
     COFF_SectionFlags flags = *it.v.flags;
     if (~flags & LNK_SECTION_FLAG_DEBUG)    { continue; }
     if ( flags & COFF_SectionFlag_LnkCOMDAT) { continue; }
     if (!str8_match(lnk_obj_section_name_from_section_number(obj, it.v.section_number), str8_lit(".debug$S"), 0)) { continue; }
-    String8        raw  = lnk_obj_section_data_from_number(obj, it.v.section_number);
-    CV_DebugS      ds   = cv_debug_s_from_data(scratch, raw);
-    String8List    ck   = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_FileChksms);
-    if (ck.node_count) { return ck.first->string; }
+    String8 raw = lnk_obj_section_data_from_number(obj, it.v.section_number);
+    if (raw.size < sizeof(CV_Signature) || cv_signature_from_debug_s(raw) != CV_Signature_C13) { continue; }
+    for (U64 cursor = sizeof(CV_Signature); cursor + sizeof(CV_C13SubSectionHeader) <= raw.size; ) {
+      CV_C13SubSectionHeader header = {0};
+      cursor += str8_deserial_read_struct(raw, cursor, &header);
+      if (header.kind == CV_C13SubSectionKind_FileChksms) {
+        return str8_substr(raw, r1u64(cursor, cursor + header.size));
+      }
+      cursor += header.size;
+      cursor = AlignPow2(cursor, CV_C13SubSectionAlign);
+    }
   }
   return str8_zero();
+}
+
+// Memoized per obj: leaders are shared across many follower objs, so without the memo the
+// scan reruns once per (follower obj x leader switch). The result slices the immutable
+// obj->data mapping, so the racy fill is idempotent (every worker writes identical bytes);
+// the init flag is published last.
+internal String8
+lnk_icf_obj_file_chksms(LNK_Obj *obj)
+{
+  if (!ins_atomic_u32_eval((U32 *)&obj->icf_file_chksms_init)) {
+    String8 chksms = lnk_icf_obj_file_chksms_scan(obj);
+    obj->icf_file_chksms = chksms;
+    ins_atomic_u32_eval_assign((U32 *)&obj->icf_file_chksms_init, 1);
+  }
+  return obj->icf_file_chksms;
 }
 
 // source identity of a function: (checksum of its file, first line). Two ICF fold members
@@ -4149,11 +4173,6 @@ THREAD_POOL_TASK_FUNC(lnk_icf_mark_folded_lines_task)
   LNK_Obj                    *obj  = task->objs[task_id];
   if (obj->icf_fold == 0) { scratch_end(scratch); return; }
 
-  String8  follower_chksms      = str8_zero();
-  B32      follower_chksms_init = 0;
-  LNK_Obj *cached_leader        = 0;
-  String8  leader_chksms        = str8_zero();
-
   for (U32 section_number = 1; section_number <= obj->coff.sections.count_no_null; section_number += 1) {
     LNK_ICFFold fold = obj->icf_fold[section_number];
     if (!fold.set)                                                    { continue; }
@@ -4171,16 +4190,8 @@ THREAD_POOL_TASK_FUNC(lnk_icf_mark_folded_lines_task)
       Temp fold_temp = temp_begin(scratch.arena);
       U32 child_sn = lnk_icf_debug_s_child_from_section(obj, section_number);
       if (child_sn != 0) {
-        // the returned String8s slice the objs' section data (only the parse's list nodes live
-        // on the temp arena), so caching them across fold_temp scopes is safe
-        if (!follower_chksms_init) {
-          follower_chksms      = lnk_icf_obj_file_chksms(fold_temp.arena, obj);
-          follower_chksms_init = 1;
-        }
-        if (leader_obj != cached_leader) {
-          cached_leader = leader_obj;
-          leader_chksms = lnk_icf_obj_file_chksms(fold_temp.arena, leader_obj);
-        }
+        String8 follower_chksms = lnk_icf_obj_file_chksms(obj);        // per-obj memo -- leaders
+        String8 leader_chksms   = lnk_icf_obj_file_chksms(leader_obj); // shared across follower objs
         LNK_ICFSrcKey fk = lnk_icf_src_key_from_fn(fold_temp.arena, obj, section_number, follower_chksms);
         LNK_ICFSrcKey lk = lnk_icf_src_key_from_fn(fold_temp.arena, leader_obj, fold.leader_sn, leader_chksms);
         B32 same_src = fk.valid && lk.valid &&
