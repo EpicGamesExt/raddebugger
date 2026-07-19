@@ -7114,6 +7114,38 @@ TEST(validate_psi)
   T_Ok(pub32_count > 0);
 }
 
+TEST(psi_addr_map_radix_sort)
+{
+  String8 names[] = {
+    str8_lit("alpha"),
+    str8_lit("bravo"),
+    str8_lit("charlie"),
+    str8_lit("delta"),
+  };
+  U64 address_count = (1 << 15) + 1;
+  U64 record_count  = address_count * ArrayCount(names);
+
+  PDB_GsiSortRecord *records  = push_array_no_zero(arena, PDB_GsiSortRecord, record_count);
+  PDB_GsiSortRecord *expected = push_array_no_zero(arena, PDB_GsiSortRecord, record_count);
+  for EachIndex(i, record_count) {
+    U64 address_idx = address_count - 1 - i / ArrayCount(names);
+    records[i].isect_off.isect = 1 + address_idx % 257;
+    records[i].isect_off.off   = address_idx / 257;
+    records[i].name            = names[ArrayCount(names) - 1 - i % ArrayCount(names)];
+    records[i].offset          = i * sizeof(U32);
+  }
+  MemoryCopyTyped(expected, records, record_count);
+  radsort(expected, record_count, psi_addr_map_compar_is_before);
+
+  TP_Context *tp = tp_alloc(arena, 1, 1, str8_lit("psi addr map sort test"));
+  U32 *addr_map = psi_addr_map_from_gsi_records(tp, arena, records, record_count);
+
+  for EachIndex(i, record_count) {
+    T_Ok(addr_map[i] == expected[i].offset);
+  }
+  tp_release(tp);
+}
+
 TEST(pdbstripped)
 {
   String8 debug_obj;

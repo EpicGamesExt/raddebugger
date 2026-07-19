@@ -1805,6 +1805,274 @@ gsi_record_sort_by_sc(PDB_GsiSortRecord *arr, U64 count)
   ProfEnd();
 }
 
+#define PDB_PSI_ADDR_MAP_RADIX_BITS      11
+#define PDB_PSI_ADDR_MAP_RADIX_COUNT     (1 << PDB_PSI_ADDR_MAP_RADIX_BITS)
+#define PDB_PSI_ADDR_MAP_RADIX_MIN_COUNT (1 << 17)
+
+typedef struct PDB_PsiAddrMapSortRecord
+{
+  U64                key;
+  PDB_GsiSortRecord *record;
+} PDB_PsiAddrMapSortRecord;
+
+typedef struct PDB_PsiAddrMapSortTask
+{
+  Rng1U64                 *ranges;
+  PDB_GsiSortRecord       *gsi_record_arr;
+  PDB_PsiAddrMapSortRecord *src;
+  PDB_PsiAddrMapSortRecord *dst;
+  U64                     *counts;
+  U32                      digit_shift;
+  U32                      digit_count;
+} PDB_PsiAddrMapSortTask;
+
+typedef struct PDB_PsiAddrMapNameSortTask
+{
+  PDB_PsiAddrMapSortRecord *record_arr;
+  Rng1U64                  *run_arr;
+  Rng1U64                  *batch_arr;
+} PDB_PsiAddrMapNameSortTask;
+
+force_inline U64
+psi_addr_map_sort_key(PDB_GsiSortRecord *record)
+{
+  U64 key = ((U64)record->isect_off.isect << 32) | record->isect_off.off;
+  return key;
+}
+
+force_inline int
+psi_addr_map_name_compar_is_before(void *raw_a, void *raw_b)
+{
+  PDB_PsiAddrMapSortRecord *a = raw_a;
+  PDB_PsiAddrMapSortRecord *b = raw_b;
+  int is_before = str8_compar_case_sensitive(&a->record->name, &b->record->name) < 0;
+  return is_before;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(psi_addr_map_radix_init_task)
+{
+  ProfBeginFunction();
+
+  PDB_PsiAddrMapSortTask *task  = raw_task;
+  Rng1U64                 range = task->ranges[task_id];
+  for EachInRange(i, range) {
+    PDB_GsiSortRecord *record = &task->gsi_record_arr[i];
+    task->src[i].key          = psi_addr_map_sort_key(record);
+    task->src[i].record       = record;
+  }
+
+  ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(psi_addr_map_radix_histogram_task)
+{
+  ProfBeginFunction();
+
+  PDB_PsiAddrMapSortTask *task   = raw_task;
+  Rng1U64                 range  = task->ranges[task_id];
+  U64                    *counts = task->counts + task_id * PDB_PSI_ADDR_MAP_RADIX_COUNT;
+  U32                     mask   = task->digit_count - 1;
+
+  MemoryZeroTyped(counts, task->digit_count);
+  for EachInRange(i, range) {
+    U64 digit = (task->src[i].key >> task->digit_shift) & mask;
+    counts[digit] += 1;
+  }
+
+  ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(psi_addr_map_radix_sort_task)
+{
+  ProfBeginFunction();
+
+  PDB_PsiAddrMapSortTask *task   = raw_task;
+  Rng1U64                 range  = task->ranges[task_id];
+  U64                    *offsets = task->counts + task_id * PDB_PSI_ADDR_MAP_RADIX_COUNT;
+  U32                     mask    = task->digit_count - 1;
+
+  for EachInRange(i, range) {
+    PDB_PsiAddrMapSortRecord record = task->src[i];
+    U64 digit = (record.key >> task->digit_shift) & mask;
+    task->dst[offsets[digit]++] = record;
+  }
+
+  ProfEnd();
+}
+
+force_inline U64
+psi_addr_map_name_sort_work(Rng1U64 run)
+{
+  U64 count = dim_1u64(run);
+  U64 work = count * (64 - clz64(count));
+  return work;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(psi_addr_map_name_sort_task)
+{
+  ProfBeginFunction();
+
+  PDB_PsiAddrMapNameSortTask *task  = raw_task;
+  Rng1U64                     batch = task->batch_arr[task_id];
+  for EachInRange(run_idx, batch) {
+    Rng1U64 run = task->run_arr[run_idx];
+    radsort(task->record_arr + run.min, dim_1u64(run), psi_addr_map_name_compar_is_before);
+  }
+
+  ProfEnd();
+}
+
+internal U32 *
+psi_addr_map_from_gsi_records(TP_Context *tp, Arena *arena, PDB_GsiSortRecord *gsi_record_arr, U64 count)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+
+  PDB_PsiAddrMapSortRecord *radix_record_arr = 0;
+
+  ProfBegin("Sort");
+  if (count >= PDB_PSI_ADDR_MAP_RADIX_MIN_COUNT) {
+    PDB_PsiAddrMapSortTask task = {0};
+    task.ranges         = tp_divide_work(scratch.arena, count, tp->worker_count);
+    task.gsi_record_arr = gsi_record_arr;
+    task.src            = push_array_no_zero(scratch.arena, PDB_PsiAddrMapSortRecord, count);
+    task.dst            = push_array_no_zero(scratch.arena, PDB_PsiAddrMapSortRecord, count);
+    task.counts         = push_array_no_zero(scratch.arena, U64, tp->worker_count * PDB_PSI_ADDR_MAP_RADIX_COUNT);
+
+    tp_for_parallel_prof(tp, 0, tp->worker_count, psi_addr_map_radix_init_task, &task, "psi_addr_map_radix_init_task");
+
+    ProfBegin("Radix");
+    U32 digit_shift[] = { 0, 11, 22, 32, 43 };
+    U32 digit_count[] = { 1 << 11, 1 << 11, 1 << 10, 1 << 11, 1 << 5 };
+    for EachIndex(pass_idx, ArrayCount(digit_shift)) {
+      ProfBeginV("Pass %llu", pass_idx);
+
+      task.digit_shift = digit_shift[pass_idx];
+      task.digit_count = digit_count[pass_idx];
+
+      tp_for_parallel_prof(tp, 0, tp->worker_count, psi_addr_map_radix_histogram_task, &task, "psi_addr_map_radix_histogram_task");
+
+      U64 cursor = 0;
+      for EachIndex(digit_idx, task.digit_count) {
+        for EachIndex(task_id, tp->worker_count) {
+          U64 *count_ptr = &task.counts[task_id * PDB_PSI_ADDR_MAP_RADIX_COUNT + digit_idx];
+          U64  digit_item_count = *count_ptr;
+          *count_ptr = cursor;
+          cursor += digit_item_count;
+        }
+      }
+      Assert(cursor == count);
+
+      tp_for_parallel_prof(tp, 0, tp->worker_count, psi_addr_map_radix_sort_task, &task, "psi_addr_map_radix_sort_task");
+      Swap(PDB_PsiAddrMapSortRecord *, task.src, task.dst);
+
+      ProfEnd();
+    }
+    radix_record_arr = task.src;
+    ProfEnd();
+
+    ProfBegin("Get Name Run Count");
+    U64 name_run_count       = 0;
+    U64 total_name_sort_work = 0;
+    for (U64 run_first = 0; run_first < count;) {
+      U64 run_opl = run_first + 1;
+      while (run_opl < count && radix_record_arr[run_opl].key == radix_record_arr[run_first].key) {
+        run_opl += 1;
+      }
+      if (run_opl - run_first > 1) {
+        Rng1U64 run = rng_1u64(run_first, run_opl);
+        name_run_count += 1;
+        total_name_sort_work += psi_addr_map_name_sort_work(run);
+      }
+      run_first = run_opl;
+    }
+    ProfEnd();
+
+    if (name_run_count) {
+      ProfBegin("Name Runs");
+
+      PDB_PsiAddrMapNameSortTask name_task = {0};
+      name_task.record_arr = radix_record_arr;
+      name_task.run_arr    = push_array_no_zero(scratch.arena, Rng1U64, name_run_count);
+
+      ProfBegin("Gather Run Ranges");
+      U64 name_run_idx = 0;
+      for (U64 run_first = 0; run_first < count;) {
+        U64 run_opl = run_first + 1;
+        while (run_opl < count && radix_record_arr[run_opl].key == radix_record_arr[run_first].key) {
+          run_opl += 1;
+        }
+        if (run_opl - run_first > 1) {
+          name_task.run_arr[name_run_idx++] = rng_1u64(run_first, run_opl);
+        }
+        run_first = run_opl;
+      }
+      Assert(name_run_idx == name_run_count);
+      ProfEnd();
+
+      ProfBegin("Batching");
+
+      U64 batch_count = Min(name_run_count, (U64)tp->worker_count * 4);
+      name_task.batch_arr = push_array_no_zero(scratch.arena, Rng1U64, batch_count);
+
+      U64 run_idx        = 0;
+      U64 remaining_work = total_name_sort_work;
+
+      for EachIndex(batch_idx, batch_count) {
+        U64 batch_first   = run_idx;
+        U64 batches_left  = batch_count - batch_idx;
+        U64 run_opl_limit = name_run_count - (batches_left - 1);
+        U64 target_work   = CeilIntegerDiv(remaining_work, batches_left);
+        U64 batch_work    = 0;
+        while (run_idx < run_opl_limit) {
+          U64 run_work = psi_addr_map_name_sort_work(name_task.run_arr[run_idx]);
+          if (run_idx > batch_first && batch_work + run_work > target_work) {
+            break;
+          }
+          batch_work += run_work;
+          run_idx += 1;
+          if (batch_work >= target_work) {
+            break;
+          }
+        }
+        name_task.batch_arr[batch_idx] = rng_1u64(batch_first, run_idx);
+        remaining_work -= batch_work;
+      }
+      Assert(run_idx == name_run_count);
+
+      ProfEnd();
+
+      tp_for_parallel_prof(tp, 0, batch_count, psi_addr_map_name_sort_task, &name_task, "psi_addr_map_name_sort_task");
+
+      ProfEnd();
+    }
+  } else {
+    gsi_record_sort_by_sc(gsi_record_arr, count);
+  }
+  ProfEnd();
+
+  ProfBegin("Offset Fill");
+  U32 *addr_map = push_array_no_zero(arena, U32, count);
+  if (radix_record_arr) {
+    for EachIndex(i, count) {
+      addr_map[i] = safe_cast_u32(radix_record_arr[i].record->offset);
+    }
+  } else {
+    for EachIndex(i, count) {
+      addr_map[i] = safe_cast_u32(gsi_record_arr[i].offset);
+    }
+  }
+  ProfEnd();
+
+  scratch_end(scratch);
+  ProfEnd();
+  return addr_map;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
 {
@@ -2207,19 +2475,10 @@ psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumbe
   PDB_GsiBuildResult gsi_build = gsi_build_ex(tp, scratch.arena, psi->gsi, symbol_data_base, /* is_pub32: */ 1, msf->page_size);
   
   ProfBegin("Address Map");
-  
-  ProfBegin("Sort");
-  gsi_record_sort_by_sc(gsi_build.sort_record_arr, gsi_build.hash_record_count);
-  ProfEnd();
-  
-  ProfBegin("Offset Fill");
+
   U64 addr_map_count = gsi_build.hash_record_count;
   U64 addr_map_size = addr_map_count * sizeof(U32);
-  U32 *addr_map     = push_array_no_zero(scratch.arena, U32, addr_map_count);
-  for (U64 i = 0; i < addr_map_count; i += 1) {
-    addr_map[i] = gsi_build.sort_record_arr[i].offset;
-  }
-  ProfEnd();
+  U32 *addr_map = psi_addr_map_from_gsi_records(tp, scratch.arena, gsi_build.sort_record_arr, addr_map_count);
 
   ProfEnd();
   
