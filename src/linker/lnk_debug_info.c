@@ -1126,9 +1126,10 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       input.symbol_input_ranges[i] = r1u64(begin, cursor);
     }
 
+    ProfEnd();
 
     if (input.symbol_input_count) {
-      ProfBegin("");
+      ProfBegin("Balance Symbol Inputs");
 
       U64 task_cap    = Min(input.symbol_input_count, tp->worker_count * 16);
       U64 task_weight = Max(1, CeilIntegerDiv(total_input_size, task_cap));
@@ -1150,10 +1151,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       }
 
       radsort(input.symbol_patch_task, input.symbol_patch_task_count, lnk_symbol_input_task_is_before);
+
+      ProfEnd();
     }
-
-
-    ProfEnd();
   }
   ProfEnd();
 
