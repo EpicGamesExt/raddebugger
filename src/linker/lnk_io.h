@@ -18,6 +18,23 @@ typedef struct
   U8          *buffer;
 } LNK_DiskReader;
 
+typedef struct
+{
+  String8List data;
+} LNK_FileArtifact;
+
+typedef struct LNK_BackgroundFile LNK_BackgroundFile;
+
+typedef struct
+{
+  Arena              *queue_arena;
+  GuardedRing        *queue;
+  Thread              thread;
+  LNK_BackgroundFile *file_first;
+  LNK_BackgroundFile *file_last;
+  B32                 is_running;
+} LNK_BackgroundFileWriter;
+
 // --- Shared File API ---------------------------------------------------------
 
 shared_function int      lnk_open_file_read(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max);
@@ -38,4 +55,12 @@ internal String8Array lnk_read_data_from_file_path_parallel(TP_Context *tp, Aren
 
 internal void lnk_write_data_list_to_file_path(String8 path, String8 temp_path, String8List list);
 internal void lnk_write_data_to_file_path(String8 path, String8 temp_path, String8 data);
+internal String8 lnk_data_from_file_artifact(Arena *arena, LNK_FileArtifact *artifact);
 
+// --- Background Writer -------------------------------------------------------
+
+internal void lnk_background_file_writer_begin      (LNK_BackgroundFileWriter *writer);
+internal LNK_BackgroundFile *lnk_background_file_writer_begin_file(LNK_BackgroundFileWriter *writer, String8 path, String8 temp_path);
+internal void lnk_background_file_writer_enqueue    (LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 file_off, String8 data);
+internal void lnk_background_file_writer_end_file   (LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 expected_byte_count);
+internal void lnk_background_file_writer_end        (LNK_BackgroundFileWriter *writer);

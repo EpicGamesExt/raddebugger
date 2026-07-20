@@ -28,6 +28,8 @@ global ArenaTableNode *free_arena_table_node = 0;
 internal Arena *
 arena_alloc_(ArenaParams *params)
 {
+  ProfBeginFunction();
+
   U64 reserve_size = params->reserve_size;
   U64 commit_size  = params->commit_size;
   
@@ -133,12 +135,15 @@ arena_alloc_(ArenaParams *params)
   }
 #endif
   
+  ProfEnd();
   return arena;
 }
 
 internal void
 arena_release(Arena *arena)
 {
+  ProfBeginFunction();
+
 #if PROFILE_TELEMETRY
   {
     Arena *base_arena = arena;
@@ -171,6 +176,8 @@ arena_release(Arena *arena)
     AsanUnpoisonMemoryRegion(n, n->cmt);
     release_memory(n, n->res);
   }
+
+  ProfEnd();
 }
 
 //- rjf: arena push/pop core functions

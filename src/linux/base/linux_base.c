@@ -364,6 +364,7 @@ set_platform_thread_name(String8 name)
 internal Thread
 thread_launch(ThreadEntryPointFunctionType *f, void *p)
 {
+  ProfBeginFunction();
   LNX_Entity *entity = lnx_entity_alloc(LNX_EntityKind_Thread);
   entity->thread.func = f;
   entity->thread.ptr = p;
@@ -376,6 +377,7 @@ thread_launch(ThreadEntryPointFunctionType *f, void *p)
     }
   }
   Thread handle = {(U64)entity};
+  ProfEnd();
   return handle;
 }
 

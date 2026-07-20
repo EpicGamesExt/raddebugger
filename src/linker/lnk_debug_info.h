@@ -241,6 +241,13 @@ typedef struct
 
 typedef struct
 {
+  LNK_BackgroundFileWriter *file_writer;
+  String8                   output_path;
+  String8                   temp_output_path;
+} LNK_PdbWriter;
+
+typedef struct
+{
   U64          leaf_count;
   U8         **leaf_arr;
   Rng1U64     *ranges;
@@ -274,4 +281,4 @@ internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP
 ////////////////////////////////
 // PDB
 
-internal String8List lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, String8 output_path, String8 temp_output_path, LNK_PDB_BuilderFlags builder_flags);
+internal LNK_FileArtifact lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags);

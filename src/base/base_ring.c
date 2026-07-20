@@ -46,18 +46,22 @@ ring_try_read(Ring *ring, U64 size, void *ptr)
 internal GuardedRing *
 guarded_ring_alloc(Arena *arena, U64 size)
 {
+  ProfBeginFunction();
   GuardedRing *gr = push_array(arena, GuardedRing, 1);
   gr->ring = make_ring(arena, size);
   gr->mutex = mutex_alloc();
   gr->cv = cond_var_alloc();
+  ProfEnd();
   return gr;
 }
 
 internal void
 guarded_ring_release(GuardedRing *ring)
 {
+  ProfBeginFunction();
   mutex_release(ring->mutex);
   cond_var_release(ring->cv);
+  ProfEnd();
 }
 
 internal RingGuard
