@@ -2880,10 +2880,127 @@ dbi_sc_compar(const PDB_DbiSC *a, const PDB_DbiSC *b)
 }
 #endif
 
+typedef struct
+{
+  PDB_DbiSC *src;
+  PDB_DbiSC *dst;
+  Rng1U64   *range_arr;
+  U32       *count_arr;
+  U64        digit_count;
+  U64        shift;
+  B32        is_sec_pass;
+} LNK_DbiScRadixPass;
+
+internal U64
+lnk_dbi_sc_radix_digit(LNK_DbiScRadixPass *pass, PDB_DbiSC *sc)
+{
+  if (pass->is_sec_pass) {
+    return sc->base.sec;
+  }
+  return (sc->base.sec_off >> pass->shift) % pass->digit_count;
+}
+
+typedef struct
+{
+  PDB_DbiSC *src;
+  PDB_DbiSC *dst;
+  Rng1U64   *range_arr;
+} LNK_DbiScCopy;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_dbi_sc_copy_task)
+{
+  LNK_DbiScCopy *copy = raw_task;
+  Rng1U64 range = copy->range_arr[task_id];
+  MemoryCopy(copy->dst + range.min, copy->src + range.min, sizeof(copy->src[0]) * dim_1u64(range));
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_dbi_sc_radix_histo_task)
+{
+  LNK_DbiScRadixPass *pass = raw_task;
+  U32     *count = pass->count_arr + task_id * pass->digit_count;
+  Rng1U64  range = pass->range_arr[task_id];
+  for EachInRange(i, range) {
+    count[lnk_dbi_sc_radix_digit(pass, &pass->src[i])] += 1;
+  }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_dbi_sc_radix_scatter_task)
+{
+  LNK_DbiScRadixPass *pass = raw_task;
+  U32     *count = pass->count_arr + task_id * pass->digit_count;
+  Rng1U64  range = pass->range_arr[task_id];
+  for EachInRange(i, range) {
+    PDB_DbiSC *sc = &pass->src[i];
+    pass->dst[count[lnk_dbi_sc_radix_digit(pass, sc)]++] = *sc;
+  }
+}
+
 internal void
-lnk_radix_sort_dbi_sc_array(PDB_DbiSC *arr, U64 sc_count, U64 sect_count)
+lnk_dbi_sc_radix_pass_parallel(TP_Context *tp, Arena *arena, U64 task_count, Rng1U64 *range_arr, PDB_DbiSC **src, PDB_DbiSC **dst, U64 digit_count, U64 shift, B32 is_sec_pass)
+{
+  Temp temp = temp_begin(arena);
+
+  LNK_DbiScRadixPass pass = {
+    .src         = *src,
+    .dst         = *dst,
+    .range_arr   = range_arr,
+    .count_arr   = push_array(temp.arena, U32, task_count * digit_count),
+    .digit_count = digit_count,
+    .shift       = shift,
+    .is_sec_pass = is_sec_pass,
+  };
+
+  tp_for_parallel(tp, 0, task_count, lnk_dbi_sc_radix_histo_task, &pass);
+
+  U32 cursor = 0;
+  for EachIndex(digit, digit_count) {
+    for EachIndex(worker_idx, task_count) {
+      U32 *slot  = &pass.count_arr[worker_idx * digit_count + digit];
+      U32  count = *slot;
+      *slot = cursor;
+      cursor += count;
+    }
+  }
+
+  tp_for_parallel(tp, 0, task_count, lnk_dbi_sc_radix_scatter_task, &pass);
+  temp_end(temp);
+
+  Swap(PDB_DbiSC *, *src, *dst);
+}
+
+internal void
+lnk_radix_sort_dbi_sc_array(TP_Context *tp, PDB_DbiSC *arr, U64 sc_count, U64 sect_count)
 {
   ProfBeginFunction();
+
+  if (tp != 0 && tp->worker_count > 1 && sc_count >= KB(64)) {
+    Temp scratch = scratch_begin(0, 0);
+
+    PDB_DbiSC *src        = arr;
+    PDB_DbiSC *dst        = push_array_no_zero(scratch.arena, PDB_DbiSC, sc_count);
+    U64        task_count = tp->worker_count;
+    Rng1U64   *range_arr  = tp_divide_work(scratch.arena, sc_count, task_count);
+
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, 256, 0, 0);
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, 256, 8, 0);
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, 256, 16, 0);
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, 256, 24, 0);
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, sect_count, 0, 1);
+
+    LNK_DbiScCopy copy = { .src = src, .dst = arr, .range_arr = range_arr };
+    tp_for_parallel(tp, 0, task_count, lnk_dbi_sc_copy_task, &copy);
+
+    scratch_end(scratch);
+    ProfEnd();
+    return;
+  }
+
+  //
+  // on small inputs the serial path is 4x faster
+  //
 
 #if 1
   // faster but uses more memory
@@ -3013,7 +3130,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSC *arr, U64 sc_count, U64 sect_count)
 }
 
 internal String8List
-dbi_build_sec_con(Arena *arena, PDB_DbiContext *dbi)
+dbi_build_sec_con(Arena *arena, TP_Context *tp, PDB_DbiContext *dbi)
 {
   ProfBeginFunction();
 
@@ -3030,13 +3147,35 @@ dbi_build_sec_con(Arena *arena, PDB_DbiContext *dbi)
   ProfEnd();
 
   // sort section contribs so they are binary searchable
-  lnk_radix_sort_dbi_sc_array(sc_array, dbi->sec_contrib_list.count, dbi->section_list.count + 1);
-  
+  lnk_radix_sort_dbi_sc_array(tp, sc_array, dbi->sec_contrib_list.count, dbi->section_list.count + 1);
+
+  // DBI contribution maps an address range to its module, so adjacent same-module runs can share one record
+  ProfBegin("Coalesce sect contribs");
+  U64 sc_count = 0;
+  for EachIndex(read_idx, dbi->sec_contrib_list.count) {
+    PDB_DbiSC *current = &sc_array[read_idx];
+    if (sc_count > 0) {
+      PDB_DbiSC *previous = &sc_array[sc_count - 1];
+      if (previous->base.sec == current->base.sec &&
+          previous->base.mod == current->base.mod &&
+          previous->base.flags == current->base.flags) {
+        U64 current_end  = (U64)current->base.sec_off + (U64)current->base.size;
+        U64 previous_end = (U64)previous->base.sec_off + (U64)previous->base.size;
+        if (current_end > previous_end) {
+          previous->base.size = (U32)(current_end - (U64)previous->base.sec_off);
+        }
+        continue;
+      }
+    }
+    sc_array[sc_count++] = *current;
+  }
+  ProfEnd();
+
   // push section contrib info
   ProfBegin("List Push");
   String8List sec_con_list = {0};
   str8_list_push(arena, &sec_con_list, str8((U8*)version, sizeof(*version)));
-  str8_list_push(arena, &sec_con_list, str8((U8*)sc_array, sizeof(sc_array[0])*dbi->sec_contrib_list.count));
+  str8_list_push(arena, &sec_con_list, str8((U8*)sc_array, sizeof(sc_array[0])*sc_count));
   ProfEnd();
   
   ProfEnd();
@@ -3121,7 +3260,7 @@ dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumbe
   
   ProfBegin("Build");
   String8List module_info_list = dbi_build_module_info(scratch.arena, dbi, msf);
-  String8List sec_con_list     = dbi_build_sec_con(scratch.arena, dbi);
+  String8List sec_con_list     = dbi_build_sec_con(scratch.arena, tp, dbi);
   String8List sec_map_list     = dbi_build_sec_map(scratch.arena, dbi);
   String8List file_info_list   = dbi_build_file_info(scratch.arena, tp, dbi->module_list, string_ht);
   String8List dbg_header_list  = dbi_build_dbg_header(scratch.arena, dbi, msf);
