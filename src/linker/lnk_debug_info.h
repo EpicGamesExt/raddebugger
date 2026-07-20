@@ -223,6 +223,7 @@ typedef struct
   LNK_CodeViewInput   *cv;
   PDB_Context         *pdb;
   CV_StringHashTable   string_ht;
+  U64                  string_table_base_offset;
   PDB_DbiModule      **mod_arr;     // [obj_count]
   U32Array            *obj_indices; // [obj_count]
 
@@ -273,4 +274,4 @@ internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP
 ////////////////////////////////
 // PDB
 
-internal String8List lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PDB_BuilderFlags builder_flags);
+internal String8List lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, String8 output_path, String8 temp_output_path, LNK_PDB_BuilderFlags builder_flags);

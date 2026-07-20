@@ -310,6 +310,13 @@ typedef struct PDB_Context
   PDB_TypeServer  *type_servers[CV_TypeIndexSource_COUNT];
 } PDB_Context;
 
+typedef void PDB_StreamFinalizeFunc(void *user_data, MSF_Context *msf, MSF_StreamNumber sn);
+typedef struct PDB_BuildHooks
+{
+  PDB_StreamFinalizeFunc *stream_finalize;
+  void                   *user_data;
+} PDB_BuildHooks;
+
 ////////////////////////////////
 
 typedef struct
@@ -334,7 +341,9 @@ typedef struct
 
 internal PDB_Context *    pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid);
 internal void             pdb_release(PDB_Context *pdb);
-internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped);
+internal void             pdb_build_types(TP_Context *tp, PDB_Context *pdb, PDB_BuildHooks *hooks);
+internal void             pdb_build_dbi_info(TP_Context *tp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks);
+internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks);
 internal void             pdb_set_machine(PDB_Context *pdb, COFF_MachineType machine);
 internal void             pdb_set_guid(PDB_Context *pdb, Guid guid);
 internal void             pdb_set_time_stamp(PDB_Context *pdb, COFF_TimeStamp time_stamp);
@@ -461,5 +470,3 @@ internal PDB_TypeHashStreamInfo  pdb_type_hash_stream_build(TP_Context *tp, PDB_
 // Enum -> String
 
 internal String8 pdb_string_from_src_error(PDB_SrcError error);
-
-
