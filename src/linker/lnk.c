@@ -4058,11 +4058,115 @@ lnk_section_contrib_ptr_is_before(void *raw_a, void *raw_b)
   return u64_compar_is_before(&input_idx_a, &input_idx_b);
 }
 
+#define LNK_SORT_CONTRIBS_RADIX_BITS 8
+#define LNK_SORT_CONTRIBS_RADIX_SIZE (1 << LNK_SORT_CONTRIBS_RADIX_BITS)
+#define LNK_SORT_CONTRIBS_RADIX_MIN  (64u*1024u)
+
+typedef struct LNK_SortContribsRadixTask
+{
+  Rng1U64 *ranges;
+  U64     *keys_src;
+  U32     *indices_src;
+  U64     *keys_dst;
+  U32     *indices_dst;
+  U32     *hist;
+  U64      shift;
+} LNK_SortContribsRadixTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_sort_contribs_radix_hist_task)
+{
+  LNK_SortContribsRadixTask *task = raw_task;
+  U32 *hist = task->hist + (U64)task_id * LNK_SORT_CONTRIBS_RADIX_SIZE;
+  for EachInRange(i, task->ranges[task_id]) {
+    hist[(task->keys_src[i] >> task->shift) & (LNK_SORT_CONTRIBS_RADIX_SIZE - 1)] += 1;
+  }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_sort_contribs_radix_scatter_task)
+{
+  LNK_SortContribsRadixTask *task = raw_task;
+  U32 *hist = task->hist + (U64)task_id * LNK_SORT_CONTRIBS_RADIX_SIZE;
+  for EachInRange(i, task->ranges[task_id]) {
+    U64 digit   = (task->keys_src[i] >> task->shift) & (LNK_SORT_CONTRIBS_RADIX_SIZE - 1);
+    U32 dst_idx = hist[digit]++;
+    task->keys_dst[dst_idx]    = task->keys_src[i];
+    task->indices_dst[dst_idx] = task->indices_src[i];
+  }
+}
+
+internal void
+lnk_sort_contribs_chunk_radix(TP_Context *tp, Arena *arena, LNK_SectionContribChunk *chunk)
+{
+  ProfBeginFunction();
+
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64  count        = chunk->count;
+  U64  worker_count = tp->worker_count;
+
+  U64 *keys    = push_array_no_zero(scratch.arena, U64, count);
+  U32 *indices = push_array_no_zero(scratch.arena, U32, count);
+  U64  max_key = 0;
+  for EachIndex(i, count) {
+    U64 key = Compose64Bit(chunk->v[i]->u.obj_idx, chunk->v[i]->u.obj_sect_idx);
+    keys[i] = key;
+    indices[i] = (U32)i;
+    max_key = Max(max_key, key);
+  }
+
+  U64      significant_pass_count = (64 - clz64(max_key) + LNK_SORT_CONTRIBS_RADIX_BITS - 1) / LNK_SORT_CONTRIBS_RADIX_BITS;
+  U64      pass_count             = significant_pass_count + (significant_pass_count & 1);
+  U64     *keys_buffer            = push_array_no_zero(scratch.arena, U64, count);
+  U32     *indices_buffer         = push_array_no_zero(scratch.arena, U32, count);
+  U32     *hist                   = push_array_no_zero(scratch.arena, U32, worker_count * LNK_SORT_CONTRIBS_RADIX_SIZE);
+  Rng1U64 *ranges                 = tp_divide_work(scratch.arena, count, worker_count);
+
+  U64 *keys_src = keys, *keys_dst = keys_buffer;
+  U32 *indices_src = indices, *indices_dst = indices_buffer;
+  LNK_SortContribsRadixTask task = { .ranges = ranges, .hist = hist };
+  for EachIndex(pass, pass_count) {
+    task.keys_src    = keys_src;
+    task.indices_src = indices_src;
+    task.keys_dst    = keys_dst;
+    task.indices_dst = indices_dst;
+    task.shift       = pass * LNK_SORT_CONTRIBS_RADIX_BITS;
+
+    MemoryZero(hist, sizeof(U32) * worker_count * LNK_SORT_CONTRIBS_RADIX_SIZE);
+    tp_for_parallel(tp, 0, worker_count, lnk_sort_contribs_radix_hist_task, &task);
+
+    U64 offset = 0;
+    for EachIndex(digit, LNK_SORT_CONTRIBS_RADIX_SIZE) {
+      for EachIndex(worker_idx, worker_count) {
+        U32 *slot  = &hist[worker_idx * LNK_SORT_CONTRIBS_RADIX_SIZE + digit];
+        U32  count = *slot;
+        *slot = (U32)offset;
+        offset += count;
+      }
+    }
+    tp_for_parallel(tp, 0, worker_count, lnk_sort_contribs_radix_scatter_task, &task);
+
+    Swap(U64 *, keys_src, keys_dst);
+    Swap(U32 *, indices_src, indices_dst);
+  }
+
+  LNK_SectionContrib **sorted = push_array_no_zero(scratch.arena, LNK_SectionContrib *, count);
+  for EachIndex(i, count) {
+    sorted[i] = chunk->v[indices[i]];
+  }
+  MemoryCopy(chunk->v, sorted, count * sizeof(*sorted));
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_sort_contribs_task)
 {
   LNK_BuildImageTask *task = raw_task;
   LNK_SectionContribChunk *chunk = task->u.sort_contribs.chunks[task_id];
+  if (chunk->count >= LNK_SORT_CONTRIBS_RADIX_MIN) { return; }
   ProfBeginV("[%llu]", chunk->count);
   radsort(chunk->v, chunk->count, lnk_section_contrib_ptr_is_before);
   ProfEnd();
@@ -5525,6 +5629,12 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       }
       Assert(cursor == total_chunk_count);
 
+      for EachIndex(chunk_idx, total_chunk_count) {
+        LNK_SectionContribChunk *chunk = task.u.sort_contribs.chunks[chunk_idx];
+        if (chunk->count >= LNK_SORT_CONTRIBS_RADIX_MIN) {
+          lnk_sort_contribs_chunk_radix(tp, scratch.arena, chunk);
+        }
+      }
       tp_for_parallel(tp, 0, total_chunk_count, lnk_sort_contribs_task, &task);
     }
 
