@@ -2648,38 +2648,37 @@ lnk_obj_indices_from_section_counts(Arena *arena, U64 worker_count, LNK_Obj **ob
 internal B32
 lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, String8 pass_name, LNK_ObjSymbolRef *resolved_symbol_out)
 {
-  B32 is_resolved = 1;
-
-  Temp    temp           = temp_begin(arena);
-  HashMap seen_hm        = {0};
-  B32     keep_walking   = 1;
-  LNK_ObjSymbolRef result = symbol;
-  do {
-    // detect cyclic chains
-    U64 symbol_key = ((U64)result.obj->input_idx << 32ull) | (U64)result.symbol_idx;
-    if (hash_map_search_u64_u64(&seen_hm, symbol_key) == 0) {
-      hash_map_push_u64_u64(temp.arena, &seen_hm, symbol_key, 1);
-    } else {
-      COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
-      lnk_error_obj(LNK_Warning_CyclicSymbol, symbol.obj, "symbol %S forms a cyclic chain (%S)", symbol_parsed.name, pass_name);
-      MemoryZeroStruct(&result);
-      is_resolved = 0;
-      break;
-    }
-
+  Temp             temp        = temp_begin(arena);
+  B32              is_resolved = 1;
+  HashMap          seen_hm     = {0};
+  LNK_ObjSymbolRef result      = symbol;
+  for (;;) {
     // unpack symbol
     COFF_ParsedSymbol          result_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(result.obj, result.symbol_idx);
     COFF_SymbolValueInterpType result_interp = coff_interp_from_parsed_symbol(result_parsed);
 
     // resolve symbol
     LNK_ObjSymbolRef next_ref = {0};
-    if (lnk_resolve_symbol(symtab, result, &next_ref)) {
-      keep_walking = (result_interp == COFF_SymbolValueInterp_Weak || result_interp == COFF_SymbolValueInterp_Undefined);
-      result       = next_ref;
-    } else {
-      keep_walking = 0;
+    if (!lnk_resolve_symbol(symtab, result, &next_ref)) {
+      break;
     }
-  } while (keep_walking);
+    if (result_interp != COFF_SymbolValueInterp_Weak && result_interp != COFF_SymbolValueInterp_Undefined) {
+      result = next_ref;
+      break;
+    }
+
+    // most relocations resolve in one step; only allocate cycle tracking for chains
+    U64 symbol_key = ((U64)result.obj->input_idx << 32ull) | (U64)result.symbol_idx;
+    if (hash_map_search_u64_u64(&seen_hm, symbol_key) != 0) {
+      COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
+      lnk_error_obj(LNK_Warning_CyclicSymbol, symbol.obj, "symbol %S forms a cyclic chain (%S)", symbol_parsed.name, pass_name);
+      MemoryZeroStruct(&result);
+      is_resolved = 0;
+      break;
+    }
+    hash_map_push_u64_u64(temp.arena, &seen_hm, symbol_key, 1);
+    result = next_ref;
+  }
 
   if (resolved_symbol_out) {
     *resolved_symbol_out = result;
