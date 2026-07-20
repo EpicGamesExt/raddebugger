@@ -351,6 +351,7 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
       // kernel objects for the same pool name
       String8 budget_name = push_str8f(scratch.arena, "%S.budget." TP_SHARED_V, name);
       pool->budget_semaphore    = semaphore_alloc(max_worker_count, max_worker_count, budget_name);
+      pool->max_worker_count    = max_worker_count;
 
       // local wake/governor signalling. governor_semaphore is a 0/1 "at least one
       // pending pass" flag: main pings it with semaphore_drop_if_room (a redundant
@@ -627,6 +628,35 @@ tp_barrier_begin(TP_Context *pool)
       extra += 1;
     } else {
       break; // no more free slots right now
+    }
+  }
+
+  // FAIR-SHARE FLOOR: the cohort is pinned for the whole bracket, so a bracket
+  // opened at a bad instant (siblings momentarily holding the machine) would run
+  // a long phase at width 1-2 even after the machine empties. If the free-slot
+  // sweep landed below this process's fair share (machine budget / attached
+  // processes), keep taking with bounded waits until we reach it or the deadline
+  // expires. Slots flow back continuously as sibling path-A workers drain, so
+  // this normally fills within a few ms; if every sibling is pinned in its own
+  // long bracket the deadline bounds the wait and we proceed with what we hold --
+  // never a deadlock, cohort >= 1 always.
+  if (extra < want) {
+    U32 procs = 0, procs_maxseen = 0;
+    tp_procs_snapshot(&procs, &procs_maxseen);
+    if (procs > 1) {
+      U32 fair = pool->max_worker_count / procs;
+      fair     = Clamp(1, fair, want + 1);
+      if (1 + extra < fair) {
+        U64 deadline_us = now_time_us() + TP_BARRIER_FLOOR_WAIT_US;
+        for (; 1 + extra < fair; ) {
+          U64 now_us = now_time_us();
+          if (now_us >= deadline_us) { break; }
+          U64 slice_us = Min(deadline_us - now_us, 5000);
+          if (semaphore_take(pool->budget_semaphore, now_us + slice_us)) {
+            extra += 1;
+          }
+        }
+      }
     }
   }
 

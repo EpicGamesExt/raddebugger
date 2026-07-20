@@ -47,6 +47,7 @@ typedef struct TP_Context
   volatile U32 pass_active;            // 1 while a path-A (barrier-free) pass is in flight
   volatile U32 barrier_pass;           // 1 while the current wake cohort is a path-B barrier pass
   volatile S64 granted;                // budget slots currently held by woken path-A workers
+  U32          max_worker_count;       // machine core budget (budget_semaphore init/max)
 
   // FAIR-SHARE barrier-pass cohort state (path B). A barrier pass runs at the
   // cohort the governor currently allows this process to hold: main + however
@@ -148,6 +149,7 @@ internal void tp_stats_snapshot(F64 *grant_avg_out, F64 *park_seconds_out);
 #define TP_SHARED_V     "v2"
 #define TP_NPROC_V      "v3"
 #define TP_NPROC_MAX    (1u << 20) // far above any plausible concurrent-link count
+#define TP_BARRIER_FLOOR_WAIT_US 200000 // tp_barrier_begin: max wait to reach the fair-share cohort floor
 
 internal void tp_procs_snapshot(U32 *attached_out, U32 *maxseen_out); // 0/0 when no shared pool
 internal void tp_procs_detach(void);                                  // give the permit back + close (idempotent)
