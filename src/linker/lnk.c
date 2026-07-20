@@ -103,6 +103,7 @@
 
 #include "lnk_log.h"
 #include "lnk_timer.h"
+#include "lnk_hasher.h"
 #include "lnk_io.h"
 #include "lnk_cmd_line.h"
 #include "lnk_config.h"
@@ -116,6 +117,7 @@
 
 #include "lnk_log.c"
 #include "lnk_timer.c"
+#include "lnk_hasher.c"
 #include "lnk_io.c"
 #include "lnk_cmd_line.c"
 #include "lnk_config.c"
@@ -150,7 +152,6 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
     "/RAD_BOOT_MODE:LINKER",
     //"/RAD_BUILD_EXP",
     "/RAD_BUILD_IMPLIB",
-    "/RAD_TPYE_HASH_ALG:BLAKE3",
     "/RAD_AGE:1",
     "/RAD_CHECK_UNUSED_DELAY_LOAD_DLL",
     "/RAD_DO_MERGE",
@@ -173,6 +174,13 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
     (char*)str8f(scratch.arena, "/RAD_MT_PATH:%s",        LNK_MANIFEST_MERGE_TOOL_NAME).str,
     (char*)str8f(scratch.arena, "/RAD_DATA_DIR_COUNT:%u", PE_DataDirectoryIndex_COUNT).str,
 
+    // Set BLAKE3 as the default to match the LLVM default.
+    //
+    // When hash kinds conflict, radlink discards any .debug$H sections
+    // whose hash kind does not match the selected default.
+    "/RAD_DEBUG_TYPE_HASH:BLAKE3",
+
+    // Use LLVM significant addresses hints for the /OPT:ICF.
     "/LLVM_ADDRSIG",
   };
 
@@ -6696,7 +6704,7 @@ lnk_run_type_server(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     include_objs = u64_array_from_list(scratch.arena, &include_obj_list);
   }
 
-  LNK_RRT rrt = {0};
+  LNK_RRT rrt = { .debug_types_hash = config->debug_types_hash };
   ProfScope("Pack Type Data & Data Ranges")
   {
     LNK_RRTTypeDataSerializer task = { &cv_types, &rrt.type_data_raw, rrt.type_data_ranges };

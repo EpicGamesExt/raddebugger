@@ -136,7 +136,7 @@ typedef enum
   LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,
   LNK_CmdSwitch_Rad_SortImports,
   LNK_CmdSwitch_Rad_TimeStamp,
-  LNK_CmdSwitch_Rad_TypeHashAlg,
+  LNK_CmdSwitch_Rad_DebugTypeHash,
   LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,
   LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,
   LNK_CmdSwitch_Rad_Version,
@@ -305,7 +305,6 @@ typedef enum
   LNK_TypeNameHashMode_Full,
 } LNK_TypeNameHashMode;
 
-
 typedef struct LNK_Config
 {
   Arena                      *arena;
@@ -411,7 +410,7 @@ typedef struct LNK_Config
   U64                         unresolved_symbol_limit;
   U64                         unresolved_symbol_ref_limit;
   LNK_SwitchState             map_lines_for_unresolved_symbols;
-  LLVM_GHashAlg               type_hash_alg;
+  LNK_HashKind                debug_types_hash;
   String8                     type_server_name;
   LNK_SwitchState             type_server;
   LNK_SwitchState             sort_imports;
@@ -616,4 +615,3 @@ internal void lnk_apply_cmd_option_to_config(LNK_Config *config, String8 name, S
 internal void lnk_config_pushf(LNK_Config *config, char *fmt, ...);
 
 internal LNK_Config * lnk_config_init(LNK_CmdLine cmd_line);
-
