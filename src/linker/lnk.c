@@ -6424,10 +6424,9 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
                                              config->pdb_hash_type_name_length,
                                              config->pdb_hash_type_name_map);
         }
-        pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types, LNK_PDB_BuilderFlag_All);
-        if (config->debug_mode == LNK_DebugMode_Full) {
-          lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb_data);
-        }
+        String8 pdb_output_path      = config->debug_mode == LNK_DebugMode_Full ? config->pdb_name      : str8_zero();
+        String8 pdb_temp_output_path = config->debug_mode == LNK_DebugMode_Full ? config->temp_pdb_name : str8_zero();
+        pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types, pdb_output_path, pdb_temp_output_path, LNK_PDB_BuilderFlag_All);
         lnk_timer_end(LNK_Timer_Pdb);
       }
 
@@ -6511,7 +6510,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       stripped_cv.debug_s_arr         = debug_s_arr;
       stripped_cv.symbol_input_ranges = push_array(scratch.arena, Rng1U64, tp->worker_count);
 
-      String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, LNK_PDB_BuilderFlag_All);
+      String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, str8_zero(), str8_zero(), LNK_PDB_BuilderFlag_All);
       lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_data);
     }
 

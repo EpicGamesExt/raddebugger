@@ -6843,7 +6843,7 @@ data_from_pdb(Arena *arena, PDB_Context *pdb)
 {
   TP_Context *tp       = tp_alloc(arena, 1, 1, str8_lit("foo"));
   TP_Arena   *tp_arena = tp_arena_alloc(tp);
-  pdb_build(tp, tp_arena, pdb, (CV_StringHashTable){0}, 1, 0);
+  pdb_build(tp, tp_arena, pdb, (CV_StringHashTable){0}, 1, 0, 0);
 
   AssertAlways(msf_build(pdb->msf) == MSF_Error_OK);
   String8List raw_msf_list = msf_get_page_data_nodes(arena, pdb->msf);

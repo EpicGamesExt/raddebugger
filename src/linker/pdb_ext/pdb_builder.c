@@ -3418,28 +3418,61 @@ pdb_build_gsi_psi(TP_Context *tp, PDB_Context *pdb)
 }
 
 internal void
-pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped)
+pdb_build_types(TP_Context *tp, PDB_Context *pdb, PDB_BuildHooks *hooks)
 {
   ProfBeginFunction();
-  
+
   PDB_InfoContext *info   = pdb->info;
   PDB_StringTable *strtab = &info->strtab;
-  PDB_DbiContext  *dbi    = pdb->dbi;
   PDB_TypeServer  *tpi    = pdb->type_servers[CV_TypeIndexSource_TPI];
   PDB_TypeServer  *ipi    = pdb->type_servers[CV_TypeIndexSource_IPI];
-  
+
   pdb_type_server_build(tp, tpi, strtab, pdb->msf, PDB_FixedStream_Tpi);
+  if (hooks && hooks->stream_finalize) {
+    hooks->stream_finalize(hooks->user_data, pdb->msf, PDB_FixedStream_Tpi);
+    hooks->stream_finalize(hooks->user_data, pdb->msf, tpi->hash_sn);
+  }
   if (info->flags & PDB_FeatureFlag_HAS_ID_STREAM) {
     pdb_type_server_build(tp, ipi, strtab, pdb->msf, PDB_FixedStream_Ipi);
+    if (hooks && hooks->stream_finalize) {
+      hooks->stream_finalize(hooks->user_data, pdb->msf, PDB_FixedStream_Ipi);
+      hooks->stream_finalize(hooks->user_data, pdb->msf, ipi->hash_sn);
+    }
   }
+
+  ProfEnd();
+}
+
+internal void
+pdb_build_dbi_info(TP_Context *tp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks)
+{
+  ProfBeginFunction();
 
   if (build_gsi) {
     pdb_build_gsi_psi(tp, pdb);
   }
 
   dbi_build(tp, pdb->dbi, pdb->msf, PDB_FixedStream_Dbi, string_ht, is_stripped);
+  if (hooks && hooks->stream_finalize) {
+    hooks->stream_finalize(hooks->user_data, pdb->msf, PDB_FixedStream_Dbi);
+    for EachElement(i, pdb->dbi->dbg_streams) {
+      hooks->stream_finalize(hooks->user_data, pdb->msf, pdb->dbi->dbg_streams[i]);
+    }
+  }
   pdb_info_build(pdb->info, pdb->msf, PDB_FixedStream_Info);
+  if (hooks && hooks->stream_finalize) {
+    hooks->stream_finalize(hooks->user_data, pdb->msf, PDB_FixedStream_Info);
+  }
 
+  ProfEnd();
+}
+
+internal void
+pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks)
+{
+  ProfBeginFunction();
+  pdb_build_types(tp, pdb, hooks);
+  pdb_build_dbi_info(tp, pdb, string_ht, build_gsi, is_stripped, hooks);
   ProfEnd();
 }
 
