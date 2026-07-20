@@ -53,13 +53,15 @@ if "%pgo%"=="1" (
   where llvm-profdata /q || echo llvm-profdata is not in the PATH || exit /b 1 
   if "%clang%"=="1" (
     if "%pgo_run%" == "1" (
-      call llvm-profdata merge %LLVM_PROFILE_FILE% -output=%~dp0build\build.profdata || exit /b 1
+      call llvm-profdata merge %~dp0build\pgo_raw\*.profraw -output=%~dp0build\build.profdata || exit /b 1
       set auto_compile_flags=%auto_compile_flags% -fprofile-use=%~dp0build\build.profdata
       set pgo_run=0
     ) else (
       echo [pgo enabled]
       set auto_compile_flags=%auto_compile_flags% -fprofile-generate -mllvm -vp-counters-per-site=5
-      set LLVM_PROFILE_FILE=%~dp0build\build.profraw
+      if not exist %~dp0build\pgo_raw mkdir %~dp0build\pgo_raw
+      del /q %~dp0build\pgo_raw\*.profraw 2>nul
+      set LLVM_PROFILE_FILE=%~dp0build\pgo_raw\build.%%p.profraw
       set pgo_run=1
     )
   ) else (
@@ -200,6 +202,10 @@ if "%pgo_run%"=="1" (
   if "%radlink%"=="1" (
     pushd local\lyra_pgo
     call %~dp0build\radlink @lyra.rsp || exit /b 1
+    rem lyra.rsp trains with /OPT:NOREF /OPT:NOICF; run a second link with REF+ICF on
+    rem (later switches win) so the profile also covers the /OPT:REF walk and the ICF
+    rem refinement -- otherwise PGO marks them cold and the build regresses on real links
+    call %~dp0build\radlink @lyra.rsp /OPT:REF /OPT:ICF || exit /b 1
     popd
   )
   goto restart
