@@ -7,11 +7,12 @@
 // RRT
 
 global read_only String8 g_rrt_magic   = str8_lit_comp("RAD-TYPE-SERVER\0");
-global read_only U64     g_rrt_version = 2;
+global read_only U64     g_rrt_version = 3;
 
 typedef struct LNK_RRT
 {
   String8 path;
+  LNK_HashKind debug_types_hash;
 
   String8 type_data_raw;
   union {

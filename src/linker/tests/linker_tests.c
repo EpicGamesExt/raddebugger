@@ -7423,7 +7423,7 @@ TEST(ghash_check_hash_alg)
 
   B32     is_warning_found = 0;
   String8 debug_obj_path   = t_make_file_path(arena, str8_lit("debug.obj"));
-  String8 expected_line    = str8f(arena, "Warning(*): *: mismatched .debug$H hash algorithm: got SHA1_8, expected BLAKE3");
+  String8 expected_line    = str8f(arena, "Warning(*): *: mismatched .debug$H hash algorithm: got SHA1_8, expected *");
   for (String8 i = g_errors; i.size > 0 && !is_warning_found; ) {
     String8 line = t_chop_line(&i);
     is_warning_found = str8_match_wildcard(line, expected_line, StringMatchFlag_CaseInsensitive);

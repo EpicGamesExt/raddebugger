@@ -107,11 +107,11 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_h_task)
     }
 
     // validate hashing algorithm
-    if (ghash.hash_alg != task->config->type_hash_alg) {
+    if (lnk_hash_kind_from_llvm(ghash.hash_alg) != task->config->debug_types_hash) {
       lnk_error_obj(LNK_Warning_GHash, task->obj_arr[obj_idx],
-                    "mismatched .debug$H hash algorithm: got %S, expected %S",
+                    "mismatched .debug$H hash algorithm: got %S, expected %S; types will be rehashed",
                     llvm_string_from_ghash_alg(ghash.hash_alg),
-                    llvm_string_from_ghash_alg(task->config->type_hash_alg));
+                    lnk_string_hash_kind(task->config->debug_types_hash));
       goto exit;
     }
 
@@ -320,42 +320,45 @@ lnk_string_list_from_rrt(Arena *arena, LNK_RRT *rrt)
   str8_list_push(arena, &rrt_data, g_rrt_magic);
 
   // (2) version
-  str8_list_push(arena, &rrt_data, str8_struct(&g_rrt_version));
+  str8_list_push(arena, &rrt_data, str8_struct(push_u64(arena, g_rrt_version)));
 
-  // (3) type data ranges
+  // (3) debug types hash
+  str8_list_push(arena, &rrt_data, str8_struct(&rrt->debug_types_hash));
+
+  // (4) type data ranges
   str8_list_push(arena, &rrt_data, str8_array_fixed(rrt->type_data_ranges));
 
-  // (4) type data
+  // (5) type data
   str8_list_push(arena, &rrt_data, rrt->type_data_raw);
 
-  // (5) type index ranges
+  // (6) type index ranges
   str8_list_push(arena, &rrt_data, str8_array_fixed(rrt->ti_ranges));
 
-  // (6) type hashes size
+  // (7) type hashes size
   U64 total_hash_count = 0;
   for EachIndex(i, CV_TypeIndexSource_COUNT) { total_hash_count += dim_1u64(rrt->ti_ranges[i]); }
   U64 type_hashes_size = sizeof(**rrt->type_hashes_unpacked) * total_hash_count;
   str8_list_push(arena, &rrt_data, str8_struct(push_u64(arena, type_hashes_size)));
 
-  // (7) type hashes
+  // (8) type hashes
   for EachIndex(i, CV_TypeIndexSource_COUNT) {
     U64 type_count = dim_1u64(rrt->ti_ranges[i]);
     str8_list_push(arena, &rrt_data, str8_array(rrt->type_hashes_unpacked[i], type_count));
   }
 
-  // (8) object count
+  // (9) object count
   str8_list_push(arena, &rrt_data, str8_struct(&rrt->obj_count));
 
-  // (9) per object type index ranges
+  // (10) per object type index ranges
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_ti_ranges, rrt->obj_count));
 
-  // (10) per object time stamps
+  // (11) per object time stamps
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_time_stamps, rrt->obj_count));
 
-  // (11) per object leaf counts
+  // (12) per object leaf counts
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_leaf_counts, rrt->obj_count));
 
-  // (12) per object file reverse lookup table for type indices
+  // (13) per object file reverse lookup table for type indices
   for EachIndex(obj_idx, rrt->obj_count) {
     CV_TypeIndex *obj_ti_map   = rrt->obj_ti_maps[obj_idx];
     U64           obj_ti_count = rrt->obj_leaf_counts[obj_idx];
@@ -363,16 +366,16 @@ lnk_string_list_from_rrt(Arena *arena, LNK_RRT *rrt)
     str8_list_push(arena, &rrt_data, str8_array(obj_ti_map, obj_ti_count));
   }
 
-  // (13) object file paths size
+  // (14) object file paths size
   str8_list_push(arena, &rrt_data, str8_struct(push_u64(arena, obj_paths.size)));
 
-  // (14) object file paths block
+  // (15) object file paths block
   str8_list_push(arena, &rrt_data, obj_paths);
 
-  // (15) PCH type index ranges
+  // (16) PCH type index ranges
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_pch_ti_ranges, rrt->obj_count));
 
-  // (16) PCH object indices
+  // (17) PCH object indices
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_pch_indices, rrt->obj_count));
 
   ProfEnd();
@@ -404,11 +407,27 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
 
   // match version
   if (version != g_rrt_version) {
-    lnk_error(LNK_Error_IllData, "ERROR: %S: RRT version mismatch, got %llu, expected %llu", path, version, g_rrt_version);
+    lnk_error(LNK_Error_IllData, "ERROR: %S: RRT version mismatch, got %llu, expected 2 or %llu", path, version, g_rrt_version);
     goto exit;
   }
 
-  // (3) type data ranges
+  // (3) debug types hash
+  LNK_HashKind debug_types_hash = LNK_HashKind_BLAKE3;
+  if (version == g_rrt_version) {
+    U64 debug_types_hash_size = str8_deserial_read_struct(rrt_data, cursor, &debug_types_hash);
+    if (debug_types_hash_size != sizeof(debug_types_hash)) {
+      lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file does not contain enough bytes to read the debug types hash", path);
+      goto exit;
+    }
+    cursor += debug_types_hash_size;
+
+    if (debug_types_hash != LNK_HashKind_BLAKE3 && debug_types_hash != LNK_HashKind_XXHash) {
+      lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file has invalid debug types hash %u", path, debug_types_hash);
+      goto exit;
+    }
+  }
+
+  // (4) type data ranges
   Rng1U64 type_data_ranges[CV_TypeIndexSource_COUNT] = {0};
   U64 type_data_ranges_size = str8_deserial_read_array(rrt_data, cursor, type_data_ranges, ArrayCount(type_data_ranges));
   if (type_data_ranges_size != sizeof(type_data_ranges)) {
@@ -421,7 +440,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   U64 total_type_data_size = 0;
   for EachElement(i, type_data_ranges) total_type_data_size += dim_1u64(type_data_ranges[i]);
 
-  // (4) type data
+  // (5) type data
   String8 type_data_raw      = {0};
   U64     type_data_raw_size = str8_deserial_read_block(rrt_data, cursor, total_type_data_size, &type_data_raw);
   if (type_data_raw_size != total_type_data_size) {
@@ -430,7 +449,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += type_data_raw_size;
 
-  // (5) type index ranges
+  // (6) type index ranges
   Rng1U64 ti_ranges[CV_TypeIndexSource_COUNT] = {0};
   U64 ti_ranges_size = str8_deserial_read_array(rrt_data, cursor, ti_ranges, ArrayCount(ti_ranges));
   if (ti_ranges_size != sizeof(ti_ranges)) {
@@ -439,7 +458,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += ti_ranges_size;
 
-  // (6) type hashes size
+  // (7) type hashes size
   U64 type_hashes_size      = 0;
   U64 type_hashes_size_size = str8_deserial_read_struct(rrt_data, cursor, &type_hashes_size);
   if (type_hashes_size_size != sizeof(type_hashes_size)) {
@@ -459,7 +478,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
     }
   }
 
-  // (7) type hashes
+  // (8) type hashes
   String8 type_hashes = {0};
   U64 type_hashes_read_size = str8_deserial_read_block(rrt_data, cursor, type_hashes_size, &type_hashes);
   if (type_hashes_read_size != type_hashes_size) {
@@ -479,7 +498,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
     }
   }
 
-  // (8) object count
+  // (9) object count
   U64 obj_count = 0;
   U64 obj_count_size = str8_deserial_read_struct(rrt_data, cursor, &obj_count);
   if (obj_count_size == 0) {
@@ -488,7 +507,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += obj_count_size;
 
-  // (9) per object type index ranges
+  // (10) per object type index ranges
   Rng1U64 *obj_ti_ranges = str8_deserial_get_raw_ptr(rrt_data, cursor, sizeof(*obj_ti_ranges) * obj_count); 
   if (obj_ti_ranges == 0) {
     lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file is missing the object type index ranges", path);
@@ -496,7 +515,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += sizeof(*obj_ti_ranges) * obj_count;
 
-  // (10) last observed time stamp of the object files
+  // (11) last observed time stamp of the object files
   U64 *obj_time_stamps = str8_deserial_get_raw_ptr(rrt_data, cursor, sizeof(*obj_time_stamps) * obj_count);
   if (obj_time_stamps == 0) {
     lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file is missing the object timestamps", path);
@@ -504,7 +523,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += sizeof(*obj_time_stamps) * obj_count;
 
-  // (11) per object leaf counts
+  // (12) per object leaf counts
   U64 *obj_leaf_counts = str8_deserial_get_raw_ptr(rrt_data, cursor, sizeof(*obj_leaf_counts) * obj_count);
   if (obj_leaf_counts == 0) {
     lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file is missing the object leaf counts", path);
@@ -512,7 +531,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += sizeof(*obj_leaf_counts) * obj_count;
 
-  // (12) per object file reverse lookup table for type indices
+  // (13) per object file reverse lookup table for type indices
   CV_TypeIndex **obj_ti_maps = push_array(arena, CV_TypeIndex *, obj_count);
   for EachIndex(obj_idx, obj_count) {
     U64 obj_ti_count = obj_leaf_counts[obj_idx];
@@ -524,7 +543,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
     cursor += obj_ti_count * sizeof(*obj_ti_maps[obj_idx]);
   }
 
-  // (13) object file paths size
+  // (14) object file paths size
   U64 obj_file_paths_size = 0;
   U64 obj_file_paths_size_size = str8_deserial_read_struct(rrt_data, cursor, &obj_file_paths_size);
   if (obj_file_paths_size_size == 0) {
@@ -533,7 +552,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += obj_file_paths_size_size;
 
-  // (14) object file paths block
+  // (15) object file paths block
   String8 obj_file_paths_block = {0};
   U64 obj_file_paths_block_size = str8_deserial_read_block(rrt_data, cursor, obj_file_paths_size, &obj_file_paths_block);
   if (obj_file_paths_block_size != obj_file_paths_size) {
@@ -542,7 +561,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += obj_file_paths_block_size;
 
-  // (15) PCH type index ranges
+  // (16) PCH type index ranges
   Rng1U64 *obj_pch_ti_ranges = str8_deserial_get_raw_ptr(rrt_data, cursor, obj_count * sizeof(*obj_pch_ti_ranges));
   if (obj_pch_ti_ranges == 0) {
     lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file is too small to read object PCH type index ranges");
@@ -584,6 +603,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   // fill out result
   if (rrt_out) {
     rrt_out->path                = path;
+    rrt_out->debug_types_hash    = debug_types_hash;
     rrt_out->type_data_raw       = type_data_raw;
     rrt_out->type_hashes         = type_hashes;
     MemoryCopyArray(rrt_out->type_data_ranges, type_data_ranges);
@@ -937,7 +957,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     // wire RRT hashes to type servers .debug$H
     for EachIndex(ts_idx, ts_arr.count) {
       LNK_TypeServer *ts = &ts_arr.v[ts_idx];
-      if (ts->rrt) {
+      if (ts->rrt && ts->rrt->debug_types_hash == config->debug_types_hash) {
         U64        ts_obj_idx = input.ts_obj_range.min + ts_idx;
         CV_DebugT *debug_t    = &input.debug_t_arr[ts_obj_idx];
         CV_DebugH *debug_h    = &input.debug_h_arr[ts_obj_idx];
@@ -1248,7 +1268,8 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
   CV_TypeIndex        curr_ti        = cv_ti_from_leaf_idx(debug_t, curr_ti_source, leaf_ref.leaf_idx);
 
   // init hasher
-  blake3_hasher hasher; blake3_hasher_init(&hasher);
+  LNK_Hasher hasher;
+  lnk_hasher_init(&hasher, input->config->debug_types_hash);
 
   // hash bytes around indices
   {
@@ -1256,14 +1277,14 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
     for EachNode(ti_info, CV_TypeIndexInfo, ti_info_list.first) {
       U8 *bytes = leaf.data.str + last_ti_off;
       U64 size  = ti_info->offset - last_ti_off;
-      blake3_hasher_update(&hasher, bytes, size);
+      lnk_hasher_update(&hasher, bytes, size);
       last_ti_off = ti_info->offset + sizeof(CV_TypeIndex);
     }
 
     Assert(leaf.data.size >= last_ti_off);
     U8 *bytes = leaf.data.str + last_ti_off;
     U64 size  = leaf.data.size - last_ti_off;
-    blake3_hasher_update(&hasher, bytes, size);
+    lnk_hasher_update(&hasher, bytes, size);
   }
 
   // mix-in sub leaf hashes
@@ -1273,7 +1294,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
     
     // simple indices are stable across compile units 
     if (sub_ti < debug_t->ti_ranges[sub_ti_n->source].min) {
-      blake3_hasher_update(&hasher, &sub_ti, sizeof(sub_ti));
+      lnk_hasher_update_struct(&hasher, &sub_ti);
       continue;
     }
 
@@ -1285,7 +1306,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
       memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
 
       // reset hasher
-      blake3_hasher_init(&hasher);
+      lnk_hasher_init(&hasher, input->config->debug_types_hash);
 
       // log error
       Temp    scratch       = scratch_begin(0,0);
@@ -1307,7 +1328,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
       memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
 
       // reset hasher
-      blake3_hasher_init(&hasher);
+      lnk_hasher_init(&hasher, input->config->debug_types_hash);
 
       // log error
       Temp    scratch       = scratch_begin(0,0);
@@ -1324,20 +1345,21 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
     U64         sub_hash = input->debug_h_arr[sub_ref.obj_idx].v[sub_ref.leaf_idx];
 
     // mix-in sub-type hash
-    blake3_hasher_update(&hasher, &sub_hash, sizeof(sub_hash));
+    lnk_hasher_update_struct(&hasher, &sub_hash);
   }
 
   // hash leaf header
-  CV_LeafHeader *leaf_header = cv_debug_t_get_leaf_header(debug_t, leaf_ref.leaf_idx);
-  blake3_hasher_update(&hasher, leaf_header, sizeof(*leaf_header));
+  CV_LeafHeader *leaf_header_ptr = cv_debug_t_get_leaf_header(debug_t, leaf_ref.leaf_idx);
+  lnk_hasher_update_struct(&hasher, leaf_header_ptr);
 
-  U64 hash;
-  blake3_hasher_finalize(&hasher, (U8 *) &hash, sizeof(hash));
+  // finalize the type hash
+  U64 hash = lnk_hasher_digest(&hasher);
 
   Assert(hash != 0);
   Assert(input->debug_h_arr[leaf_ref.obj_idx].v[leaf_ref.leaf_idx] == 0 ||
          input->debug_h_arr[leaf_ref.obj_idx].v[leaf_ref.leaf_idx] == 1);
   input->debug_h_arr[leaf_ref.obj_idx].v[leaf_ref.leaf_idx] = hash;
+
   return hash;
 }
 
