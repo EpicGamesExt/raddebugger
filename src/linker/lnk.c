@@ -182,6 +182,9 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
 
     // Use LLVM significant addresses hints for the /OPT:ICF.
     "/LLVM_ADDRSIG",
+
+    // By default keep full type names, override when TPI/IPI streams overflow.
+    "/RAD_PDB_HASH_TYPE_NAMES:NONE",
   };
 
   char *push_opts[] = {
@@ -6366,6 +6369,11 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   image_write_ctx->data      = image_ctx.image_data;
   Thread image_write_thread = thread_launch(lnk_write_thread, image_write_ctx);
 
+  LNK_BackgroundFileWriter background_file_writer = {0};
+  LNK_PdbWriter            pdb_writer = { .file_writer = &background_file_writer };
+  Temp                     pdb_huge_temp = temp_begin(lnk_get_huge_arena());
+  lnk_background_file_writer_begin(pdb_writer.file_writer);
+
   //
   // RAD Map
   //
@@ -6410,12 +6418,11 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     // TODO: Parallel debug info builds are currently blocked by the patch
     // strings in $$FILE_CHECKSUM step in `lnk_process_c13_data_task`.
     if (config->debug_mode == LNK_DebugMode_Full || config->rad_debug == LNK_SwitchState_Yes) {
-      Temp huge_arena_temp = temp_begin(lnk_get_huge_arena());
-
-      String8List pdb_data = {0};
+      LNK_FileArtifact pdb_artifact = {0};
       {
         lnk_timer_begin(LNK_Timer_Pdb);
-        if (config->pdb_hash_type_names != LNK_TypeNameHashMode_Null && config->pdb_hash_type_names != LNK_TypeNameHashMode_None) {
+
+        if (config->pdb_hash_type_names != LNK_TypeNameHashMode_None) {
           lnk_replace_type_names_with_hashes(tp,
                                              arena,
                                              cv_types.count[CV_TypeIndexSource_TPI],
@@ -6424,16 +6431,18 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
                                              config->pdb_hash_type_name_length,
                                              config->pdb_hash_type_name_map);
         }
-        String8 pdb_output_path      = config->debug_mode == LNK_DebugMode_Full ? config->pdb_name      : str8_zero();
-        String8 pdb_temp_output_path = config->debug_mode == LNK_DebugMode_Full ? config->temp_pdb_name : str8_zero();
-        pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types, pdb_output_path, pdb_temp_output_path, LNK_PDB_BuilderFlag_All);
+
+        pdb_writer.output_path      = config->debug_mode == LNK_DebugMode_Full ? config->pdb_name      : str8_zero();
+        pdb_writer.temp_output_path = config->debug_mode == LNK_DebugMode_Full ? config->temp_pdb_name : str8_zero();
+        pdb_artifact                = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types, pdb_writer, LNK_PDB_BuilderFlag_All);
+
         lnk_timer_end(LNK_Timer_Pdb);
       }
 
       if (config->rad_debug == LNK_SwitchState_Yes) {
         lnk_timer_begin(LNK_Timer_Rdi);
 
-        LNK_P2R p2r = { .config = config, .pdb_data = str8_list_join(lnk_get_huge_arena(), &pdb_data, 0), .image_data = image_ctx.image_data };
+        LNK_P2R p2r = { .config = config, .pdb_data = lnk_data_from_file_artifact(lnk_get_huge_arena(), &pdb_artifact), .image_data = image_ctx.image_data };
         tp_for_parallel(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r);
 
         String8List rdi_blobs = rdim_file_blobs_from_section_bundle(scratch.arena, &p2r.bake_results.section_bundle);
@@ -6441,8 +6450,6 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 
         lnk_timer_end(LNK_Timer_Rdi);
       }
-
-      temp_end(huge_arena_temp);
     }
 
     //
@@ -6510,8 +6517,8 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       stripped_cv.debug_s_arr         = debug_s_arr;
       stripped_cv.symbol_input_ranges = push_array(scratch.arena, Rng1U64, tp->worker_count);
 
-      String8List pdb_data = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, str8_zero(), str8_zero(), LNK_PDB_BuilderFlag_All);
-      lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_data);
+      LNK_FileArtifact pdb_artifact = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, (LNK_PdbWriter){0}, LNK_PDB_BuilderFlag_All);
+      lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_artifact.data);
     }
 
     lnk_timer_end(LNK_Timer_Debug);
@@ -6524,6 +6531,10 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   lnk_inputer_release_file_maps(tp, inputer);
   ProfEnd();
 #endif
+
+  // PDB output borrows pages from the huge arena, so drain after map release
+  lnk_background_file_writer_end(pdb_writer.file_writer);
+  temp_end(pdb_huge_temp);
 
   // wait for the thread to finish writing image to disk
   thread_join(image_write_thread, -1);

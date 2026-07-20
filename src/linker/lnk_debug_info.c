@@ -3138,29 +3138,14 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   }
 }
 
-typedef struct LNK_PdbWriteJob
+typedef struct
 {
-  U64     file_off;
-  String8 data;
-} LNK_PdbWriteJob;
-
-typedef struct LNK_PdbWriter
-{
-  Arena            *queue_arena;
-  String8           path;
-  String8           temp_path;
-  String8           open_path;
-  File              file;
-  GuardedRing      *queue;
-  Thread            thread;
-  MSF_StreamNumber *sealed_streams;
-  U64               sealed_stream_count;
-  U64               sealed_stream_cap;
-  U64               bytes_written;
-  B32               open_with_rename;
-  B32               is_open;
-  B32               write_failed;
-} LNK_PdbWriter;
+  LNK_BackgroundFileWriter *writer;
+  LNK_BackgroundFile       *file;
+  MSF_StreamNumber         *sealed_streams;
+  U64                       sealed_stream_count;
+  U64                       sealed_stream_cap;
+} LNK_PdbOutput;
 
 typedef struct LNK_MsfPageCursor
 {
@@ -3186,94 +3171,15 @@ lnk_msf_data_from_pn(LNK_MsfPageCursor *cursor, MSF_Context *msf, MSF_PageNumber
 }
 
 internal void
-lnk_pdb_writer_thread(void *raw_writer)
+lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *msf, MSF_StreamNumber sn)
 {
-  ProfBeginFunction();
-  LNK_PdbWriter *writer = raw_writer;
-  for (;;) {
-    LNK_PdbWriteJob job = {0};
-    RingGuard guard = guarded_ring_open(writer->queue);
-    B32 is_read = guarded_ring_read_struct_or_wait(&guard, &job, max_U64);
-    guarded_ring_close(&guard);
-    Assert(is_read);
-
-    if (job.data.str == 0) { break; }
-
-    U64 write_size = lnk_write_file(&writer->file, job.file_off, job.data.str, job.data.size);
-    if (write_size != job.data.size) {
-      writer->write_failed = 1;
-    }
-    writer->bytes_written += write_size;
-  }
-  ProfEnd();
-}
-
-internal B32
-lnk_pdb_writer_begin(Arena *arena, LNK_PdbWriter *writer, String8 path, String8 temp_path, U64 stream_cap)
-{
-  ProfBegin("PDB Writer Begin");
-
-  B32 is_ok = 1;
-
-  writer->path              = path;
-  writer->temp_path         = temp_path;
-  writer->open_with_rename  = (temp_path.size > 0);
-  writer->sealed_stream_cap = stream_cap;
-  writer->sealed_streams    = push_array_no_zero(arena, MSF_StreamNumber, stream_cap);
-
-  if (writer->open_with_rename) {
-    writer->file      = lnk_file_open_with_rename_permissions(temp_path);
-    writer->open_path = temp_path;
-  } else {
-    lnk_open_file_write((char *)path.str, path.size, &writer->file, sizeof(writer->file));
-    writer->open_path = path;
-  }
-
-  writer->is_open = !file_match(writer->file, file_zero());
-  if (!writer->is_open) {
-    lnk_error(LNK_Error_NoAccess, "don't have access to write to %S", path);
-    goto exit;
-  }
-
-  if (writer->open_with_rename && !lnk_file_set_delete_on_close(writer->file, 1)) {
-    lnk_error(LNK_Error_IO, "failed to update file disposition on %S", writer->open_path);
-  }
-
-  writer->queue_arena = arena_alloc(.reserve_size = MB(2), .commit_size = MB(2), .name = "PDB_WRITE_QUEUE");
-  writer->queue  = guarded_ring_alloc(writer->queue_arena, MB(1));
-  writer->thread = thread_launch(lnk_pdb_writer_thread, writer);
-
-  is_ok = 1;
-  exit:;
-  ProfEnd();
-  return is_ok;
-}
-
-internal void
-lnk_pdb_writer_enqueue_job(LNK_PdbWriter *writer, U64 file_off, U8 *data, U64 size)
-{
-  ProfBegin("PDB Writer Enqueue Job");
-
-  if (writer->is_open && size > 0) {
-    LNK_PdbWriteJob job = { .file_off = file_off, .data = str8(data, size) };
-    RingGuard guard = guarded_ring_open(writer->queue);
-    B32 is_written = guarded_ring_write_struct_or_wait(&guard, &job, max_U64);
-    guarded_ring_close(&guard);
-    Assert(is_written);
-  }
-
-  ProfEnd();
-}
-
-internal void
-lnk_pdb_writer_enqueue_stream(LNK_PdbWriter *writer, MSF_Context *msf, MSF_StreamNumber sn)
-{
-  if (!writer->is_open || sn == MSF_INVALID_STREAM_NUMBER) { return; }
-  Assert(writer->sealed_stream_count < writer->sealed_stream_cap);
-  writer->sealed_streams[writer->sealed_stream_count++] = sn;
+  if (sn == MSF_INVALID_STREAM_NUMBER) { return; }
+  Assert(output->sealed_stream_count < output->sealed_stream_cap);
+  output->sealed_streams[output->sealed_stream_count++] = sn;
 
   MSF_Stream *stream = msf_find_stream(msf, sn);
-  if (stream == 0 || stream->page_list.count == 0) { return; }
+  Assert(stream != 0);
+  if (stream->page_list.count == 0) { return; }
 
   LNK_MsfPageCursor cursor = {
     .node           = msf->page_data_list.first,
@@ -3290,7 +3196,7 @@ lnk_pdb_writer_enqueue_stream(LNK_PdbWriter *writer, MSF_Context *msf, MSF_Strea
       run_size += msf->page_size;
     } else {
       if (run_data != 0) {
-        lnk_pdb_writer_enqueue_job(writer, (U64)run_first_pn * msf->page_size, run_data, run_size);
+        lnk_background_file_writer_enqueue(output->writer, output->file, (U64)run_first_pn * msf->page_size, str8(run_data, run_size));
       }
       run_first_pn = run_last_pn = page->pn;
       run_data = page_data;
@@ -3298,28 +3204,27 @@ lnk_pdb_writer_enqueue_stream(LNK_PdbWriter *writer, MSF_Context *msf, MSF_Strea
     }
   }
   if (run_data != 0) {
-    lnk_pdb_writer_enqueue_job(writer, (U64)run_first_pn * msf->page_size, run_data, run_size);
+    lnk_background_file_writer_enqueue(output->writer, output->file, (U64)run_first_pn * msf->page_size, str8(run_data, run_size));
   }
 }
 
 internal void
-lnk_pdb_writer_finalize_stream(void *user_data, MSF_Context *msf, MSF_StreamNumber sn)
+lnk_pdb_output_finalize_stream(void *user_data, MSF_Context *msf, MSF_StreamNumber sn)
 {
-  lnk_pdb_writer_enqueue_stream(user_data, msf, sn);
+  lnk_pdb_output_enqueue_stream(user_data, msf, sn);
 }
 
-internal B32
-lnk_pdb_writer_finish(LNK_PdbWriter *writer, MSF_Context *msf)
+internal void
+lnk_pdb_output_enqueue_remaining(LNK_PdbOutput *output, MSF_Context *msf)
 {
-  if (!writer->is_open) { return 0; }
   Temp scratch = scratch_begin(0,0);
   U64 save_size  = msf_get_save_size(msf);
   U64 page_count = CeilIntegerDiv(save_size, msf->page_size);
   U8 *is_written = push_array(scratch.arena, U8, page_count);
 
-  for EachIndex(i, writer->sealed_stream_count) {
-    MSF_Stream *stream = msf_find_stream(msf, writer->sealed_streams[i]);
-    if (stream == 0) { continue; }
+  for EachIndex(i, output->sealed_stream_count) {
+    MSF_Stream *stream = msf_find_stream(msf, output->sealed_streams[i]);
+    Assert(stream != 0);
     for EachNode(page, MSF_PageNode, stream->page_list.first) {
       Assert(page->pn < page_count);
       is_written[page->pn] = 1;
@@ -3341,54 +3246,26 @@ lnk_pdb_writer_finish(LNK_PdbWriter *writer, MSF_Context *msf)
         run_size += page_size;
       } else {
         if (run_data != 0) {
-          lnk_pdb_writer_enqueue_job(writer, run_first_pn * msf->page_size, run_data, run_size);
+          lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
         }
         run_first_pn = pn;
         run_data = page_data;
         run_size = page_size;
       }
     } else if (run_data != 0) {
-      lnk_pdb_writer_enqueue_job(writer, run_first_pn * msf->page_size, run_data, run_size);
+      lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
       run_data = 0;
       run_size = 0;
     }
   }
   if (run_data != 0) {
-    lnk_pdb_writer_enqueue_job(writer, run_first_pn * msf->page_size, run_data, run_size);
-  }
-
-  LNK_PdbWriteJob stop = {0};
-  RingGuard guard = guarded_ring_open(writer->queue);
-  B32 is_written_stop = guarded_ring_write_struct_or_wait(&guard, &stop, max_U64);
-  guarded_ring_close(&guard);
-  Assert(is_written_stop);
-  thread_join(writer->thread, -1);
-
-  B32 is_complete = !writer->write_failed && writer->bytes_written == save_size;
-  if (is_complete && writer->open_with_rename) {
-    if (!lnk_file_set_delete_on_close(writer->file, 0)) {
-      lnk_error(LNK_Error_IO, "failed to update file disposition on %S", writer->open_path);
-      is_complete = 0;
-    } else if (!lnk_file_rename(writer->file, writer->path)) {
-      lnk_error(LNK_Error_IO, "failed to rename %S -> %S", writer->temp_path, writer->path);
-      is_complete = 0;
-    }
-  }
-
-  lnk_close_file(&writer->file);
-  guarded_ring_release(writer->queue);
-  arena_release(writer->queue_arena);
-  if (!is_complete) {
-    lnk_error(LNK_Error_IO, "incomplete PDB write, %M written, expected %M, file %S", writer->bytes_written, save_size, writer->path);
-  } else if (lnk_get_log_status(LNK_Log_IO_Write)) {
-    lnk_log(LNK_Log_IO_Write, "File \"%S\" %M written", writer->path, save_size);
+    lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
   }
   scratch_end(scratch);
-  return is_complete;
 }
 
-internal String8List
-lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, String8 output_path, String8 temp_output_path, LNK_PDB_BuilderFlags builder_flags)
+internal LNK_FileArtifact
+lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
@@ -3412,14 +3289,23 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     .image_section_file_section_numbers = push_array(scratch.arena, U64, task.image_section_table_count),
   };
 
-  LNK_PdbWriter writer = {0};
-  if (output_path.size > 0) {
-    lnk_pdb_writer_begin(scratch.arena, &writer, output_path, temp_output_path, cv->obj_count + 128);
+  LNK_PdbOutput  output     = {0};
+  LNK_PdbOutput *output_ptr = 0;
+  if (writer.output_path.size > 0) {
+    output.writer            = writer.file_writer;
+    output.file              = lnk_background_file_writer_begin_file(output.writer, writer.output_path, writer.temp_output_path);
+    if (output.file != 0) {
+      output.sealed_stream_cap = cv->obj_count + 128;
+      output.sealed_streams    = push_array_no_zero(scratch.arena, MSF_StreamNumber, output.sealed_stream_cap);
+      output_ptr               = &output;
+    }
   }
-  PDB_BuildHooks build_hooks = {
-    .stream_finalize = lnk_pdb_writer_finalize_stream,
-    .user_data       = &writer,
-  };
+
+  PDB_BuildHooks build_hooks = {0};
+  if (output_ptr != 0) {
+    build_hooks.stream_finalize = lnk_pdb_output_finalize_stream;
+    build_hooks.user_data       = output_ptr;
+  }
 
   // set min type indices
   for EachElement(ti_source, cv_types.min_type_indices) { task.pdb->type_servers[ti_source]->ti_lo = cv_types.min_type_indices[ti_source]; }
@@ -3449,12 +3335,10 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   ProfEnd();
 
   task.string_table_base_offset = task.pdb->info->strtab.size;
-  if (writer.is_open) {
-    ProfBegin("Add string tables");
-    pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
-    ProfEnd();
-    pdb_build_types(tp, task.pdb, &build_hooks);
-  }
+  ProfBegin("Add string tables");
+  pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
+  ProfEnd();
+  pdb_build_types(tp, task.pdb, &build_hooks);
 
   if (builder_flags & LNK_PDB_BuilderFlag_Modules) {
     ProfScope ("Alloc Modules")
@@ -3463,20 +3347,18 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
       }
 
     ProfScope("Write Modules")       tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
-    for EachIndex(obj_idx, cv->obj_count) {
-      lnk_pdb_writer_enqueue_stream(&writer, task.pdb->msf, task.mod_arr[obj_idx]->sn);
+    if (output_ptr != 0) {
+      for EachIndex(obj_idx, cv->obj_count) {
+        lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.mod_arr[obj_idx]->sn);
+      }
     }
     ProfScope("Move Global Symbols") tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
     ProfScope("Build GSI and PSI")   pdb_build_gsi_psi(tp, task.pdb);
-    lnk_pdb_writer_enqueue_stream(&writer, task.pdb->msf, task.pdb->dbi->publics_sn);
-    lnk_pdb_writer_enqueue_stream(&writer, task.pdb->msf, task.pdb->dbi->globals_sn);
-    lnk_pdb_writer_enqueue_stream(&writer, task.pdb->msf, task.pdb->dbi->symbols_sn);
-  }
-
-  if (!writer.is_open) {
-    ProfBegin("Add string tables");
-    pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
-    ProfEnd();
+    if (output_ptr != 0) {
+      lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->publics_sn);
+      lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->globals_sn);
+      lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->symbols_sn);
+    }
   }
   
   if (builder_flags & LNK_PDB_BuilderFlag_SC) {
@@ -3539,25 +3421,25 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     ProfEnd();
   }
 
-  if (writer.is_open) {
-    pdb_build_dbi_info(tp, task.pdb, task.string_ht, 0, cv->is_stripped, &build_hooks);
-  } else {
-    pdb_build(tp, tp_arena, task.pdb, task.string_ht, 0, cv->is_stripped, 0);
-  }
+  pdb_build_dbi_info(tp, task.pdb, task.string_ht, 0, cv->is_stripped, &build_hooks);
 
   MSF_Error msf_err = msf_build(task.pdb->msf);
   if (msf_err != MSF_Error_OK) {
     lnk_error(LNK_Error_UnableToSerializeMsf, "unable to serialize MSF: %s", msf_error_to_string(msf_err));
   }
 
+  if (output_ptr != 0) {
+    lnk_pdb_output_enqueue_remaining(output_ptr, task.pdb->msf);
+  }
+
   ProfBegin("Get Page Nodes");
-  String8List page_data_list = msf_get_page_data_nodes(tp_arena->v[0], task.pdb->msf);
+  LNK_FileArtifact artifact = { .data = msf_get_page_data_nodes(tp_arena->v[0], task.pdb->msf) };
   ProfEnd();
 
-  if (writer.is_open) {
-    lnk_pdb_writer_finish(&writer, task.pdb->msf);
+  if (output_ptr != 0) {
+    lnk_background_file_writer_end_file(output_ptr->writer, output_ptr->file, artifact.data.total_size);
   }
-  
+
   // NOTE: linker is about to exit so we can skip memory release
   // and let windows free memory since it does this faster
 #if 0
@@ -3568,5 +3450,5 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
   scratch_end(scratch);
   ProfEnd();
-  return page_data_list;
+  return artifact;
 }

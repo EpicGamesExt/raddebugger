@@ -446,11 +446,13 @@ set_platform_thread_name(String8 name)
 internal Thread
 thread_launch(ThreadEntryPointFunctionType *f, void *p)
 {
+  ProfBeginFunction();
   W32_Entity *entity = w32_entity_alloc(W32_EntityKind_Thread);
   entity->thread.func = f;
   entity->thread.ptr = p;
   entity->thread.handle = CreateThread(0, 0, w32_thread_entry_point, entity, 0, &entity->thread.tid);
   Thread result = {IntFromPtr(entity)};
+  ProfEnd();
   return result;
 }
 
