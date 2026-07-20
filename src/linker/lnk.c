@@ -2977,6 +2977,7 @@ typedef enum LNK_ICF_ColorSpace
   LNK_ICF_ColorSpace_Code,
   LNK_ICF_ColorSpace_Unwind,
   LNK_ICF_ColorSpace_VFTable,
+  LNK_ICF_ColorSpace_ConstData, // string literals, float consts, const tables (/Gw and /GF)
   LNK_ICF_ColorSpace_COUNT,
 } LNK_ICF_ColorSpace;
 
@@ -2989,6 +2990,7 @@ lnk_string_from_icf_color_space(LNK_ICF_ColorSpace color_space)
   case LNK_ICF_ColorSpace_Code:      { result = str8_lit("Code");      } break;
   case LNK_ICF_ColorSpace_Unwind:    { result = str8_lit("Unwind");    } break;
   case LNK_ICF_ColorSpace_VFTable:   { result = str8_lit("VFTables");  } break;
+  case LNK_ICF_ColorSpace_ConstData: { result = str8_lit("ConstData"); } break;
   case LNK_ICF_ColorSpace_COUNT:     { result = str8_lit("Unknown");   } break;
   }
   return result;
@@ -3017,12 +3019,22 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
       if (str8_match(section_name, str8_lit(".xdata"), 0) || str8_match(section_name, str8_lit(".pdata"), 0)) {
         result = LNK_ICF_ColorSpace_Unwind;
       } else {
-        // fold MSVC vftables separately from other read-only data
         LNK_ObjSymbolRef symlink_ref = {0};
         if (lnk_obj_get_comdat_symlink(obj, sect_idx + 1, &symlink_ref)) {
           String8 symlink_name = lnk_symbol_name_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
+          // fold MSVC vftables separately from other read-only data
           if (str8_starts_with(symlink_name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX))) {
             result = LNK_ICF_ColorSpace_VFTable;
+          }
+          // fold ordinary read-only data COMDATs; do not fold declarations and vtables that require unique addresses
+          else if (!str8_starts_with(symlink_name, str8_lit(MSCRT_VBTABLE_SYMBOL_PREFIX))) {
+            COFF_ComdatSelectType select = COFF_ComdatSelect_Null;
+            if (lnk_try_comdat_props_from_section_number(obj, sect_idx + 1, &select, 0, 0, 0)) {
+              if (select == COFF_ComdatSelect_Any || select == COFF_ComdatSelect_SameSize ||
+                  select == COFF_ComdatSelect_ExactMatch || select == COFF_ComdatSelect_Largest) {
+                result = LNK_ICF_ColorSpace_ConstData;
+              }
+            }
           }
         }
       }

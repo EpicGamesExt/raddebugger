@@ -35,6 +35,7 @@
 
 // MSVC C++ vftable symbols start with this decorated-name prefix.
 #define MSCRT_VFTABLE_SYMBOL_PREFIX "??_7"
+#define MSCRT_VBTABLE_SYMBOL_PREFIX "??_8"
 
 ////////////////////////////////
 
@@ -380,4 +381,3 @@ mscrt_catch_blocks_from_data_x8664(Arena              *arena,
 internal String8 mscrt_string_from_eh_adjectives(Arena *arena, MSCRT_EhHandlerTypeFlags adjectives);
 
 #endif // MSVC_CRT
-
