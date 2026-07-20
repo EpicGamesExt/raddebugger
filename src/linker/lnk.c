@@ -1742,6 +1742,25 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
   lib->search_cursor_indices[task_id] = end_count;
 }
 
+internal U64
+lnk_search_lib_task_work_count(LNK_SearchLibTask *task, U64 task_id)
+{
+  LNK_Lib                 *lib         = task->lib;
+  LNK_SymbolTable         *symtab      = task->symtab;
+  LNK_SymbolHashTrieChunk *start_chunk = task->reset_search_cursor ? 0 : lib->search_cursor_chunks[task_id];
+  U64                      start_idx   = task->reset_search_cursor ? 0 : lib->search_cursor_indices[task_id];
+  LNK_SymbolHashTrieChunk *end_chunk   = symtab->search_chunks[task_id].last;
+  U64                      end_count   = end_chunk ? end_chunk->count : 0;
+
+  U64 work_count = 0;
+  for EachNode(c, LNK_SymbolHashTrieChunk, start_chunk ? start_chunk : symtab->search_chunks[task_id].first) {
+    U64 i_begin = (c == start_chunk) ? start_idx : 0;
+    U64 i_end   = (c == end_chunk)   ? end_count : c->count;
+    work_count += i_end - i_begin;
+  }
+  return work_count;
+}
+
 internal LNK_Lib *
 lnk_find_first_crt_lib(LNK_Config *config, LNK_Inputer *inputer)
 {
@@ -1899,7 +1918,23 @@ lnk_link_inputs(TP_Context      *tp,
             .lib_member_infos    = lib_member_infos,
             .member_ref_lists    = member_ref_lists
           };
-          tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &search_task);
+          enum { serial_work_limit = 16384 };
+          U64 search_work_count = 0;
+          for EachIndex(task_id, tp->worker_count) {
+            search_work_count += lnk_search_lib_task_work_count(&search_task, task_id);
+            if (search_work_count > serial_work_limit) {
+              break;
+            }
+          }
+          if (search_work_count <= serial_work_limit) {
+            // thread pool barrier waits dominate small library searches,
+            // search small tasks on the main thread
+            for EachIndex(task_id, tp->worker_count) {
+              lnk_search_lib_task(arena->v[0], 0, task_id, &search_task, tp);
+            }
+          } else {
+            tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &search_task);
+          }
 
           // cache last search mode, if the mode changes then skipped weak anti-dependency must be searched again
           lib->searched_anti_deps = search_anti_deps;
